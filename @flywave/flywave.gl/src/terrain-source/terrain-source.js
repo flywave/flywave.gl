@@ -1,0 +1,131 @@
+import {
+    quadTreeSubdivisionScheme,
+    webMercatorProjection,
+    TilingScheme,
+} from '@flywave/flywave-geoutils'
+import { Math2D } from "@flywave/flywave-utils";
+import { MapViewEventNames } from "@flywave/flywave-mapview";
+import { TileDataSource } from '@flywave/flywave-mapview-decoder'
+import config from "../config";
+
+export class TerrainSource extends TileDataSource {
+
+    constructor(options) {
+        super(options.tileFactory, {
+            tilingScheme: options.tilingScheme || new TilingScheme(quadTreeSubdivisionScheme, webMercatorProjection),
+            dataProvider: options.dataProvider,
+            enablePicking: false,
+            useWorker: true,
+            concurrentDecoderScriptUrl: config.DECODER_URL,
+            ...options
+        })
+
+        this.dataProvider().bindDataSource(this);
+
+        this.options = options
+
+        this.elevationRangeSource = options.elevationRangeSource;
+        this.elevationProvider = options.elevationProvider;
+
+        this.elevationRangeSource.bindDataSource(this);
+        this.elevationProvider.bindDataSource(this);
+    }
+
+    onCameraChange = () => {
+        this._onCameraChange = true;
+    }
+
+    afterRender = () => {
+        this._onCameraChange = false;
+    }
+
+    addMaterialProviders(provider) {
+        this.application.addMaterialProviders(provider);
+    }
+
+    removeMaterialProviders(provider) {
+        provider.remove();
+    }
+
+    getMaterialProviders() {
+        return this.application.materialProviders;
+    }
+
+    connect() {
+        return Promise.all([this.decoder.connect()]).then(() => {
+            this.mapView.addEventListener(MapViewEventNames.CameraPositionChanged, this.onCameraChange);
+            this.mapView.addEventListener(MapViewEventNames.Render, this.afterRender);
+        });
+    }
+
+    ready() {
+        return true
+    }
+
+    taskIsRuning = false;
+
+    updateTileJobs = {};
+
+    updateTileOverlayer = (tile) => {
+        var job = () => {
+            const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
+            const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
+            var fbbox = new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat);
+            if (this.isDetached()) return;
+            this.mapView.clearTileCache(this.name, (tile) => {
+                const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
+                const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
+                return new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat).intersects(fbbox);
+            });
+        }
+        if (this._onCameraChange && tile.tileKey.level > 10) {
+            this.updateTileJobs[tile.tileKey.mortonCode()] = { job, tile };
+
+            if (!this.taskIsRuning) {
+                if (this.isDetached()) return;
+                this.taskIsRuning = true;
+                this.mapView.taskQueue.add({
+                    execute: () => {
+                        try {
+                            this.taskIsRuning = false;
+                            for (var i in this.updateTileJobs) {
+                                this.updateTileJobs[i].job(this.updateTileJobs[i].tile);
+                            }
+                            this.updateTileJobs = {};
+                            return
+                        } catch {
+                            reject();
+                        }
+                    },
+                    getPriority: () => {
+                        return 100;
+                    },
+                    group: "create"
+                });
+            }
+        } else {
+            job();
+        }
+
+    }
+
+    shouldSubdivide(zoomLevel, tileKey) {
+        return tileKey.level <= zoomLevel;
+    }
+
+    canGetTile(zoomLevel, tileKey) {
+        return tileKey.level <= zoomLevel;
+    }
+
+    getElevationRangeSource() {
+        return this.elevationRangeSource;
+    }
+
+    getElevationProvider() {
+        return this.elevationProvider;
+    }
+
+    get wireframe() {
+        return this.application.terrainWireframe;
+    }
+}

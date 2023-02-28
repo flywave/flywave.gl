@@ -1,0 +1,21 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "sourceMap": true,
+        "composite": true,
+        "incremental": true,
+        "declarationMap": true
+    },
+    "exclude": ["dist/**", "test/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-geometry"
+        },
+        {
+            "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-utils"
+        }
+    ]
+}

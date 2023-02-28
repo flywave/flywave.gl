@@ -1,0 +1,13 @@
+{
+    "extends": "./tsconfig.base.json",
+    "compilerOptions": {
+        "sourceMap": true,
+        "baseUrl": ".",
+        "rootDir": ".",
+        "outDir": "./dist/node_modules/",
+        "resolveJsonModule": true,
+        "downlevelIteration": true,
+        "newLine": "LF"
+    },
+    "exclude": ["node_modules", "@flywave/*/node_modules", "dist"]
+}

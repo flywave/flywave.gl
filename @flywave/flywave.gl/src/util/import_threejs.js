@@ -1,0 +1,2 @@
+
+importScripts("three.js");

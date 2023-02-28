@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+        "module": "CommonJS",
+        "target": "ES2017",
+        "strict": true,
+        "useUnknownInCatchVariables": false
+    },
+    "exclude": ["node_modules"]
+}

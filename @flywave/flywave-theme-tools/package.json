@@ -1,0 +1,42 @@
+{
+    "name": "@flywave/flywave-theme-tools",
+    "version": "0.28.0",
+    "description": "Tools for flywave.gl-theme optimiziation.",
+    "bin": {
+        "flywave-theme-optimizer": "lib/cli-build-theme.js"
+    },
+    "scripts": {
+        "build": "tsc --build",
+        "watch": "tsc --build -w",
+        "buildTheme": "ts-node src/cli-build-theme.ts",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/heremaps/flywave.gl.git",
+        "directory": "@flywave/flywave-theme-tools"
+    },
+    "author": {
+        "name": "HERE Europe B.V.",
+        "url": "https://here.com"
+    },
+    "license": "Apache-2.0",
+    "keywords": [
+        "here",
+        "flywave.gl",
+        "theme"
+    ],
+    "dependencies": {
+        "@flywave/flywave-mapview": "^0.28.0",
+        "commander": "^5.1.0",
+        "glob": "^7.1.4",
+        "path": "^0.12.7"
+    },
+    "devDependencies": {
+        "ts-node": "^9.1.1",
+        "typescript": "^4.1.2"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

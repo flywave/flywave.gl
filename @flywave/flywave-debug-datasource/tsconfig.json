@@ -1,0 +1,24 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "sourceMap": true,
+        "composite": true,
+        "incremental": true,
+        "declarationMap": true
+    },
+    "exclude": ["dist/**", "test/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-lrucache"
+        },
+        {
+            "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-text-canvas"
+        }
+    ]
+}

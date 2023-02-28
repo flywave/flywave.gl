@@ -1,0 +1,16 @@
+{
+    "packages": [
+        "@flywave/*"
+    ],
+    "version": "0.28.0",
+    "npmClient": "yarn",
+    "useWorkspaces": true,
+    "command": {
+        "publish": {
+            "ignoreChanges": [
+                "test/**",
+                "README.md"
+            ]
+        }
+    }
+}

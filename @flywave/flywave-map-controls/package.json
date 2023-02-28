@@ -1,0 +1,51 @@
+{
+    "name": "@flywave/flywave-map-controls",
+    "version": "0.28.0",
+    "description": "Camera controller which implements a common default set of camera functionality in a map context.",
+    "main": "index.js",
+    "typings": "index",
+    "directories": {
+        "test": "test"
+    },
+    "scripts": {
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+        "build": "tsc --build $EXTRA_TSC_ARGS",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/heremaps/flywave.gl.git",
+        "directory": "@flywave/flywave-map-controls"
+    },
+    "author": {
+        "name": "HERE Europe B.V.",
+        "url": "https://here.com"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@flywave/flywave-geoutils": "^0.28.0",
+        "@flywave/flywave-mapview": "^0.28.0",
+        "@flywave/flywave-utils": "^0.28.0",
+        "@tweenjs/tween.js": "^18.6.4"
+    },
+    "devDependencies": {
+        "@types/chai": "^4.2.14",
+        "@types/mocha": "^8.2.0",
+        "@types/node": "^14.0.5",
+        "@types/sinon": "^9.0.10",
+        "@types/three": "^0.129.0",
+        "chai": "^4.0.2",
+        "cross-env": "^7.0.2",
+        "mocha": "^8.2.1",
+        "sinon": "^9.2.2",
+        "source-map-support": "^0.5.19",
+        "three": "^0.129.0",
+        "typescript": "^4.1.2"
+    },
+    "peerDependencies": {
+        "three": "^0.129.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

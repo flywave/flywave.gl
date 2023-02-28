@@ -1,0 +1,77 @@
+{
+    "name": "@flywave/flywave-examples",
+    "version": "0.28.0",
+    "description": "flywave.gl Examples",
+    "keywords": [
+        "examples",
+        "map",
+        "map-renderer",
+        "vector-tiles",
+        "geojson",
+        "typescript",
+        "webgl",
+        "harpgl"
+    ],
+    "scripts": {
+        "test": "exit 0",
+        "prebuild": "node scripts/postinstall.js",
+        "build": "webpack",
+        "start": "webpack serve",
+        "publish-html": "node scripts/publish-html.js",
+        "prepare": "node scripts/postinstall.js && cross-env PREPARE_ONLY=true NODE_ENV=production webpack"
+    },
+    "author": {
+        "name": "HERE Europe B.V.",
+        "url": "https://here.com"
+    },
+    "license": "Apache-2.0",
+    "devDependencies": {
+        "@flywave/flywave-datasource-protocol": "^0.28.0",
+        "@flywave/flywave-debug-datasource": "^0.28.0",
+        "@flywave/flywave-features-datasource": "^0.28.0",
+        "@flywave/flywave-geoutils": "^0.28.0",
+        "@flywave/flywave-lines": "^0.28.0",
+        "@flywave/flywave-lrucache": "^0.28.0",
+        "@flywave/flywave-map-controls": "^0.28.0",
+        "@flywave/flywave-map-theme": "^0.28.0",
+        "@flywave/flywave-mapview": "^0.28.0",
+        "@flywave/flywave-mapview-decoder": "^0.28.0",
+        "@flywave/flywave-materials": "^0.28.0",
+        "@flywave/flywave-text-canvas": "^0.28.0",
+        "@flywave/flywave-utils": "^0.28.0",
+        "@flywave/flywave-vectortile-datasource": "^0.28.0",
+        "@flywave/flywave-webtile-datasource": "^0.28.0",
+        "@types/dat.gui": "^0.7.1",
+        "@types/long": "^4.0.1",
+        "@types/three": "^0.129.0",
+        "copy-webpack-plugin": "^7.0.0",
+        "cross-env": "^7.0.2",
+        "css-loader": "^5.0.1",
+        "dat.gui": "^0.7.7",
+        "highlight.js": "^10.4.1",
+        "html-webpack-plugin": "^5.0.0-alpha.14",
+        "ncp": "^2.0.0",
+        "stats.js": "^0.17.0",
+        "style-loader": "^2.0.0",
+        "suncalc": "^1.8.0",
+        "three": "^0.129.0",
+        "ts-loader": "^8.0.7",
+        "typescript": "^4.1.2",
+        "webpack": "^5.12.3",
+        "webpack-cli": "^4.3.1",
+        "webpack-dev-server": "^3.11.0",
+        "webpack-merge": "^5.7.3"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/heremaps/flywave.gl.git",
+        "directory": "@flywave/flywave-examples"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "dependencies": {
+        "@turf/turf": "^5.1.6"
+    },
+    "private": true
+}

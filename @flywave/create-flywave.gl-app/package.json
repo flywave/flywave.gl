@@ -1,0 +1,51 @@
+{
+    "name": "@flywave/create-flywave.gl-app",
+    "version": "0.28.0",
+    "description": "Create flywave.gl projects",
+    "main": "src/index.js",
+    "bin": {
+        "create-harpgl-app": "src/index.js"
+    },
+    "scripts": {
+        "build":"clear"
+    },
+    "files": [
+        "src/index.js"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/heremaps/flywave.gl.git",
+        "directory": "@flywave/create-flywave.gl-app"
+    },
+    "author": {
+        "name": "HERE Europe B.V.",
+        "url": "https://here.com"
+    },
+    "license": "Apache-2.0",
+    "keywords": [
+        "map",
+        "map-renderer",
+        "vector-tiles",
+        "geojson",
+        "typescript",
+        "webgl",
+        "harpgl"
+    ],
+    "engines": {
+        "node": ">=8.0.0",
+        "npm": ">=6.14.15"
+    },
+    "dependencies": {
+        "ansi-bold": "^0.1.1",
+        "global-dirs": "^2.1.0",
+        "import-from": "^3.0.0",
+        "inquirer": "^7.1.0",
+        "log-symbols": "^4.0.0"
+    },
+    "devDependencies": {
+        "mocha": "^8.2.1"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

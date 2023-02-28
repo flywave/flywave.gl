@@ -1,0 +1,44 @@
+{
+    "name": "@flywave/flywave-webpack-utils",
+    "version": "0.28.0",
+    "description": "flywave.gl webpack utilities",
+    "scripts": {
+        "build": "tsc --build $EXTRA_TSC_ARGS",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/heremaps/flywave.gl.git",
+        "directory": "@flywave/flywave-webpack-utils"
+    },
+    "author": {
+        "name": "HERE Europe B.V.",
+        "url": "https://here.com"
+    },
+    "license": "Apache-2.0",
+    "keywords": [
+        "map",
+        "map-renderer",
+        "vector-tiles",
+        "geojson",
+        "typescript",
+        "webgl",
+        "harpgl"
+    ],
+    "dependencies": {
+        "copy-webpack-plugin": "^7.0.0",
+        "html-webpack-plugin": "^5.0.0-alpha.14",
+        "webpack-merge": "^5.7.3"
+    },
+    "peerDependencies": {
+        "webpack": "^5.12.3"
+    },
+    "devDependencies": {
+        "cross-env": "^7.0.2",
+        "ts-node": "^9.1.1",
+        "typescript": "^4.1.2"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

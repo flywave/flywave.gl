@@ -1,0 +1,49 @@
+{
+    "name": "@flywave/flywave-lines",
+    "version": "0.28.0",
+    "description": "Create three.js geometries for wide lines",
+    "main": "index.js",
+    "typings": "index",
+    "directories": {
+        "test": "test",
+        "lib": "lib"
+    },
+    "scripts": {
+        "test": "echo \"The testing of this package is handled by the image based comparison tests by the sdk\"",
+        "build": "tsc --build $EXTRA_TSC_ARGS",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/heremaps/flywave.gl.git",
+        "directory": "@flywave/flywave-lines"
+    },
+    "author": {
+        "name": "HERE Europe B.V.",
+        "url": "https://here.com"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@flywave/flywave-geoutils": "^0.28.0",
+        "@flywave/flywave-materials": "^0.28.0",
+        "@flywave/flywave-utils": "^0.28.0"
+    },
+    "devDependencies": {
+        "@flywave/flywave-test-utils": "^0.28.0",
+        "@types/chai": "^4.2.14",
+        "@types/mocha": "^8.2.0",
+        "@types/three": "^0.129.0",
+        "chai": "^4.0.2",
+        "cross-env": "^7.0.2",
+        "mocha": "^8.2.1",
+        "source-map-support": "^0.5.19",
+        "three": "^0.129.0",
+        "typescript": "^4.1.2"
+    },
+    "peerDependencies": {
+        "three": "^0.129.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

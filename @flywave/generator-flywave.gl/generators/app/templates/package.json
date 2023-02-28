@@ -1,0 +1,12 @@
+{
+    "name": "<%= packagename %>",
+    "version": "0.1.0",
+    "description": "Generated with generator-flywave.gl <%= generator_version %>",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "build": "webpack",
+        "start": "webpack serve"
+    },
+    "author": "",
+    "private": true
+}
