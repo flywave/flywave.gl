@@ -71656,6 +71656,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _objects_line_LineGeometry__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../objects/line/LineGeometry */ "./src/objects/line/LineGeometry.js");
 /* harmony import */ var _turf_turf__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @turf/turf */ "../../node_modules/@turf/turf/turf.min.js");
 /* harmony import */ var _turf_turf__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(_turf_turf__WEBPACK_IMPORTED_MODULE_5__);
+function _defineProperty(obj, key, value) { key = _toPropertyKey(key); if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+function _toPropertyKey(arg) { var key = _toPrimitive(arg, "string"); return typeof key === "symbol" ? key : String(key); }
+function _toPrimitive(input, hint) { if (typeof input !== "object" || input === null) return input; var prim = input[Symbol.toPrimitive]; if (prim !== undefined) { var res = prim.call(input, hint || "default"); if (typeof res !== "object") return res; throw new TypeError("@@toPrimitive must return a primitive value."); } return (hint === "string" ? String : Number)(input); }
 
 
 
@@ -71708,6 +71711,8 @@ class DefaultLine extends three__WEBPACK_IMPORTED_MODULE_0__.Object3D {
     this.mesh.geometry = geo;
   }
 }
+_defineProperty(DefaultLine, "LineMaterial", _objects_line_LineMaterial__WEBPACK_IMPORTED_MODULE_3__.LineMaterial);
+_defineProperty(DefaultLine, "LineGeometry", _objects_line_LineGeometry__WEBPACK_IMPORTED_MODULE_4__.LineGeometry);
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (DefaultLine);
 
 /***/ }),
