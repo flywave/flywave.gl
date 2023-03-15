@@ -8,6 +8,10 @@ import { LineGeometry } from "../objects/line/LineGeometry";
 import * as turf from "@turf/turf";
 
 class DefaultLine extends THREE.Object3D {
+
+    static LineMaterial = LineMaterial;
+    static LineGeometry = LineGeometry;
+
     constructor(path, userData, application) {
         super();
 
