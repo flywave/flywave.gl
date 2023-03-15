@@ -307,6 +307,7 @@ function getTextStyle() {
             font-size: 22px;
             font-weight: bold;
             outline: none;
+            text-align:center!important;
             margin:0;
             border: none;
             color: rgba(255, 255, 255, 0.8);

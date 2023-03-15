@@ -2,7 +2,7 @@
     "name": "@flywave/flywave.gl",
     "version": "0.0.1",
     "description": "WebGl GIS",
-    "main": "dist/flywave.gl.js",
+    "main": "dist/mapview.bundle.js",
     "scripts": {
         "build-dev": "webpack",
         "build:svg:sprite": "svg-sprite --symbol --symbol-dest . --shape-id-generator \"iD-%s\" --symbol-sprite src/menu/sprite.svg \"src/image/icon/**/*.svg\"",

@@ -3,39 +3,40 @@ import Application from "./application";
 export { Application };
 
 //topo creators
-import TopoServerPipe from "./server-pipe";
-import TopoPrism from "./prism";
-import TopoCrossPoint from "./cross-point";
-import TopoDefault from "./default";
-import TopoDefaultLine from "./default-line";
-import TopoCustomTopoDefault from "./custom-point";
-import TopoDefaultPoint from "./default-point";
-import TopoDefaultPolygon from "./default-polygon";
-import TopoMultiPoint from "./multi-point";
-import TopoCatenary from "./catenary";
-import TopoBoard from "./board-point";
-import TopoDecal from "./decal-point";
-import TopoDecalLine from "./decal-line";
-import TopoDefaultMulitiLine from "./default-multi-line";
-import TopoSweepPath from "./sweep-path";
-import TopoSymbolPath from "./symbol-path";
-import TopoGroundHole from "./ground-hole";
-import TopoSurfacePolygon from "./surface-polygon";
-import TopoParticle from "./particle";
+import TopoServerPipe from "./topo/server-pipe";
+import TopoPrism from "./topo/prism";
+import TopoCrossPoint from "./topo/cross-point";
+import TopoDefault from "./topo/default";
+import TopoDefaultLine from "./topo/default-line";
+import TopoCustomTopoDefault from "./topo/custom-point";
+import TopoDefaultPoint from "./topo/default-point";
+import TopoDefaultPolygon from "./topo/default-polygon";
+import TopoMultiPoint from "./topo/multi-point";
+import TopoCatenary from "./topo/catenary";
+import TopoBoard from "./topo/board-point";
+import TopoDecal from "./topo/decal-point";
+import TopoDecalLine from "./topo/decal-line";
+import TopoDefaultMulitiLine from "./topo/default-multi-line";
+import TopoSweepPath from "./topo/sweep-path";
+import TopoSymbolPath from "./topo/symbol-path";
+import TopoGroundHole from "./topo/ground-hole";
+import TopoSurfacePolygon from "./topo/surface-polygon";
+import TopoParticle from "./topo/particle";
 
 export {
-    TopoServerPipe,TopoPrism,TopoCrossPoint,
-    TopoDefault,TopoDefaultLine,TopoCustomTopoDefault,
-    TopoDefaultPoint,TopoDefaultPolygon,TopoMultiPoint,
-    TopoCatenary,TopoBoard,TopoDecal,TopoDecalLine,TopoDefaultMulitiLine,
-    TopoSweepPath,TopoSymbolPath,TopoGroundHole,TopoSurfacePolygon,
+    TopoServerPipe, TopoPrism, TopoCrossPoint,
+    TopoDefault, TopoDefaultLine, TopoCustomTopoDefault,
+    TopoDefaultPoint, TopoDefaultPolygon, TopoMultiPoint,
+    TopoCatenary, TopoBoard, TopoDecal, TopoDecalLine, TopoDefaultMulitiLine,
+    TopoSweepPath, TopoSymbolPath, TopoGroundHole, TopoSurfacePolygon,
     TopoParticle
 };
 
 //objects
+import Line2 from "./objects/line2";
 import Water from "./objects/water";
 import DefaultLine from "./objects/default-line";
-export { Water,DefaultLine };
+export { Line2, Water, DefaultLine };
 
 //loader
 import GLTFLoader from "./loaders/gltf-loader";
@@ -60,7 +61,7 @@ export {
     MapboxMvtMaterialProvider,
     MaterialProvider
 };
- 
+
 //utils
 import { SnapshotGltf } from "./util/snapshot";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
@@ -78,15 +79,16 @@ export {
     APIFormat
 };
 
-import { randomPointInPolygon, polygonOutlinePoints,lineChunkPoints } from "./util/random-points";
+import { randomPointInPolygon, polygonOutlinePoints, lineChunkPoints } from "./util/random-points";
 import lineStringChunk from "./util/line-chunk";
+import PickRangeHandler from "./pick-range-handler";
 
-export {randomPointInPolygon, polygonOutlinePoints,lineChunkPoints,lineStringChunk};
+export { PickRangeHandler,randomPointInPolygon, polygonOutlinePoints, lineChunkPoints, lineStringChunk };
 
 
 import config from "./config";
 export default {
- 
+
     setGlobeUrlVariable(key, value) {
         config.GLOBEVARIABLE[key] = value;
     },
