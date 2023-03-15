@@ -74,6 +74,8 @@ async function init() {
 init();
 window.app = app;
 
+app.setHeightMapSource('https://api.mapbox.com/v4/mapbox.terrain-rgb.json?sku=1010P4cihgpwr&access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY5YzJzczA2ejIzM29hNGQ3emFsMXgifQ.az9JUrQP7klCgD3W-ueILQ');
+
 window.bg = new MapboxSatelliteMaterialProvider("pk.eyJ1IjoidzEyNTk0ODIyIiwiYSI6IkVfSkVqMGMifQ.av8k0fqnXvMFo1ThyV9KMQ");
 app.addMaterialProviders(window.bg);
 
