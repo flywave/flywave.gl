@@ -4,6 +4,8 @@ import { LineMaterial } from './line/LineMaterial.js';
 
 class Line2 extends LineSegments2 {
 
+    static LineMaterial = LineMaterial;
+
     constructor(geometry = new LineGeometry(), material = new LineMaterial({ color: Math.random() * 0xffffff })) {
 
         super(geometry, material);
