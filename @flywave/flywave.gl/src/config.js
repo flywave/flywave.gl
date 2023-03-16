@@ -17,7 +17,7 @@ class Config {
     }
 
     get DECODER_URL() {
-        return `${this._BASE_PATH}/decoder.bundle.js`
+        return `${this._BASE_PATH}/flywave.decoders.js`
     }
 
     get BASE_PATH() {

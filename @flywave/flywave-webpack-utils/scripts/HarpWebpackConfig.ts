@@ -96,7 +96,7 @@ export function addHarpWebpackConfig(config?: Configuration, harpConfig?: HarpWe
         bundles[0] = WebpackMergeMatchLoader(
             {
                 entry: {
-                    mapview: mainEntry
+                    "flywave.gl": mainEntry
                 }
             },
             bundles[0]
@@ -111,7 +111,7 @@ export function addHarpWebpackConfig(config?: Configuration, harpConfig?: HarpWe
                 {
                     target: "webworker",
                     entry: {
-                        decoder: harpConfig.decoderEntry
+                        "flywave.decoder": harpConfig.decoderEntry
                     },
                     ...decoderConfig
                 },

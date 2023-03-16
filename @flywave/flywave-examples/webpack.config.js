@@ -256,13 +256,13 @@ const assets = [
     require.resolve("three/build/three.min.js"),
     {
         from: resolveOptional(
-            `@flywave/flywave.gl/dist/flywave${harpBundleSuffix}.js`,
+            `@flywave/flywave.gl/dist/flywave.gl${harpBundleSuffix}.js`,
             "bundle examples require `yarn build-bundle`"
         ),
         to: "flywave.js"
     },
     {
-        from: resolveOptional(`@flywave/flywave.gl/dist/flywave-decoders${harpBundleSuffix}.js`),
+        from: resolveOptional(`@flywave/flywave.gl/dist/flywave.decoder${harpBundleSuffix}.js`),
         to: "flywave-decoders.js"
     }
 ].filter(asset => {

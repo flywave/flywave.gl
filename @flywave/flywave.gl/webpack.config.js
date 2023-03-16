@@ -25,7 +25,7 @@ const plugins = [
 
 var exports = addHarpWebpackConfig({
   output: {
-    filename: "[name].bundle.js",
+    filename: "[name].js",
     library: "FlywaveGl"
   },
   optimization: {

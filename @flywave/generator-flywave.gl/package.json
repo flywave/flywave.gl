@@ -6,6 +6,7 @@
         "generators"
     ],
     "scripts": {
+        "build":"\n",
         "test": "mocha $EXTRA_MOCHA_ARGS ./test/*.js"
     },
     "repository": {

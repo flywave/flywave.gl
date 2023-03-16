@@ -13,3 +13,4 @@ rendering-test-results/
 /markdown/
 /temp/
 credentials.js
+@flywave/flywave.gl/dist

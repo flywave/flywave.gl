@@ -6,6 +6,9 @@
         "name": "HERE Europe B.V.",
         "url": "https://here.com"
     },
+    "scripts": {
+        "build":"\n"
+    },
     "devDependencies": {
         "@flywave/flywave-datasource-protocol": "^0.28.0",
         "@flywave/flywave-examples": "^0.28.0",

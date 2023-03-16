@@ -29,7 +29,7 @@ class Application {
 
     id = hat()
 
-    dispatch = dispatch("ready", "modechange", "preperform", "perform", "redo", "undo", "onclick", "mousedown", "mouseup");
+    dispatch = dispatch("ready", "onclick", "mousedown", "mouseup","camera-changed");
 
     Added3DTileSource = { map: new Map, mainSource: null, index: 1, scene: new Scene };
 
@@ -141,6 +141,8 @@ class Application {
         } else {
             this.atmosphere.enabled = true;
         }
+
+        this.dispatch.call("camera-changed",this);
     }
 
     reset() {
