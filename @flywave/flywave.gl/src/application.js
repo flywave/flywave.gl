@@ -159,7 +159,7 @@ class Application {
             theme: makeMapDefaultTheme(),
             ...options,
             enableShadows: true,
-            decoderUrl: `${config.BASE_PATH}/decoder.bundle.js`,
+            decoderUrl: `${config.DECODER_URL}`,
             projection: sphereProjection,
             throttlingEnabled: true,
             maxVisibleDataSourceTiles: 100,

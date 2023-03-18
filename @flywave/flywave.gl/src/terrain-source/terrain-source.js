@@ -1,28 +1,29 @@
 import {
     quadTreeSubdivisionScheme,
     webMercatorProjection,
-    TilingScheme,
-} from '@flywave/flywave-geoutils'
+    TilingScheme
+} from "@flywave/flywave-geoutils";
 import { Math2D } from "@flywave/flywave-utils";
 import { MapViewEventNames } from "@flywave/flywave-mapview";
-import { TileDataSource } from '@flywave/flywave-mapview-decoder'
+import { TileDataSource } from "@flywave/flywave-mapview-decoder";
 import config from "../config";
 
 export class TerrainSource extends TileDataSource {
-
     constructor(options) {
         super(options.tileFactory, {
-            tilingScheme: options.tilingScheme || new TilingScheme(quadTreeSubdivisionScheme, webMercatorProjection),
+            tilingScheme:
+                options.tilingScheme ||
+                new TilingScheme(quadTreeSubdivisionScheme, webMercatorProjection),
             dataProvider: options.dataProvider,
             enablePicking: false,
             useWorker: true,
             concurrentDecoderScriptUrl: config.DECODER_URL,
             ...options
-        })
+        });
 
         this.dataProvider().bindDataSource(this);
 
-        this.options = options
+        this.options = options;
 
         this.elevationRangeSource = options.elevationRangeSource;
         this.elevationProvider = options.elevationProvider;
@@ -33,11 +34,11 @@ export class TerrainSource extends TileDataSource {
 
     onCameraChange = () => {
         this._onCameraChange = true;
-    }
+    };
 
     afterRender = () => {
         this._onCameraChange = false;
-    }
+    };
 
     addMaterialProviders(provider) {
         this.application.addMaterialProviders(provider);
@@ -53,31 +54,36 @@ export class TerrainSource extends TileDataSource {
 
     connect() {
         return Promise.all([this.decoder.connect()]).then(() => {
-            this.mapView.addEventListener(MapViewEventNames.CameraPositionChanged, this.onCameraChange);
+            this.mapView.addEventListener(
+                MapViewEventNames.CameraPositionChanged,
+                this.onCameraChange
+            );
             this.mapView.addEventListener(MapViewEventNames.Render, this.afterRender);
         });
     }
 
     ready() {
-        return true
+        return true;
     }
 
     taskIsRuning = false;
 
     updateTileJobs = {};
-
-    updateTileOverlayer = (tile) => {
+  
+    updateTileOverlayer = tile => {
         var job = () => {
             const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
             const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
             var fbbox = new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat);
             if (this.isDetached()) return;
-            this.mapView.clearTileCache(this.name, (tile) => {
+            this.mapView.clearTileCache(this.name, tile => {
                 const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
                 const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
-                return new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat).intersects(fbbox);
+                return new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat).intersects(
+                    fbbox
+                );
             });
-        }
+        };
         if (this._onCameraChange && tile.tileKey.level > 10) {
             this.updateTileJobs[tile.tileKey.mortonCode()] = { job, tile };
 
@@ -92,7 +98,7 @@ export class TerrainSource extends TileDataSource {
                                 this.updateTileJobs[i].job(this.updateTileJobs[i].tile);
                             }
                             this.updateTileJobs = {};
-                            return
+                            return;
                         } catch {
                             reject();
                         }
@@ -106,14 +112,15 @@ export class TerrainSource extends TileDataSource {
         } else {
             job();
         }
-
-    }
+    };
 
     shouldSubdivide(zoomLevel, tileKey) {
+        if(zoomLevel==undefined)return false;
         return tileKey.level <= zoomLevel;
     }
 
     canGetTile(zoomLevel, tileKey) {
+        if(zoomLevel==undefined)return false;
         return tileKey.level <= zoomLevel;
     }
 

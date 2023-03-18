@@ -14,7 +14,8 @@
     "clean-publish": {
       "fields": ["dependencies","devDependencies"],
       "files": ["src","webpack.config","index.html"],
-      "packageManager": "cnpm"
+      "packageManager": "yarn",
+      "access":"public"
     },
     "keywords": [
         "3d",

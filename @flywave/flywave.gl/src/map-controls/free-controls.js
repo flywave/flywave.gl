@@ -45,7 +45,7 @@ class FreeControl {
     _this.prevMouseY = 0;
     _this.prevMouseZ = 0;
     _this.omouseDown = [false, false, false];
-    _this.tilt_limit = Math.PI * 0.00;
+    _this.tilt_limit = Math.PI * 0.01;
     _this.distance_limit = 50;//0.000001067855942887398;
     _this.limit_zoomout = 1.5;
     _this.heading_set = undefined;
