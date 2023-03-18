@@ -208,9 +208,10 @@ export class MaterialProvider {
         const column = tileKey.column;
         const row = tileKey.row;
         const quadKey = tileKey.toQuadKey();
+        var mortonCode = tileKey.mortonCode();
         return this.options.url.replace("{x}", column).
             replace("{y}", row).
-            replace("{z}", level).replace("{quadKey}", quadKey);
+            replace("{z}", level).replace("{quadKey}", quadKey).replace("{server}",mortonCode%4);
     }
 
     fetchTileMaterial(tileKey, abortSignal) {
