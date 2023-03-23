@@ -33,7 +33,7 @@ export {
 };
 
 //objects
-import Line2 from "./objects/line2";
+import { Line2 } from "./objects/line2";
 import Water from "./objects/water";
 import DefaultLine from "./objects/default-line";
 export { Line2, Water, DefaultLine };

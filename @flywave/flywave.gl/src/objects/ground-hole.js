@@ -1,15 +1,18 @@
 import { BackSide, DoubleSide, FrontSide, MeshLambertMaterial, MeshPhongMaterial } from "three";
-import { BufferAttribute, BufferGeometry, Vector3, ShapeUtils, Mesh, Box3, Color } from "three"
+import { BufferAttribute, BufferGeometry, Vector3, ShapeUtils, Mesh, Box3, Color } from "three";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MeshBasicMaterial } from "three";
 
 //up (0,0,1)
 class GroundHole extends THREE.Group {
-    type = "ground-hole"
+    type = "ground-hole";
 
     stBackMaterials = new MeshLambertMaterial({
-        emissive: new Color(0xF0900A), transparent: true,
-        emissiveIntensity: 0.3, roughness: 0, color: new Color(0x2e240a),
+        emissive: new Color(0xf0900a),
+        transparent: true,
+        emissiveIntensity: 0.3,
+        roughness: 0,
+        color: new Color(0x2e240a),
 
         side: BackSide,
         transparent: true,
@@ -28,40 +31,48 @@ class GroundHole extends THREE.Group {
     });
 
     backMaterials = new MeshLambertMaterial({
-        side: THREE.BackSide, emissive: new Color(0xF0900A), transparent: true,
-        emissiveIntensity: 0.3, roughness: 0, color: new Color(0x2e240a),
-        stencilWrite: true, 
-        stencilRef: 7, 
-        stencilZPass: THREE.ReplaceStencilOp, 
-        // stencilFail:THREE.ReplaceStencilOp, 
-        // stencilZFail:THREE.ReplaceStencilOp, 
+        side: THREE.BackSide,
+        emissive: new Color(0xf0900a),
+        transparent: true,
+        emissiveIntensity: 0.3,
+        roughness: 0,
+        color: new Color(0x2e240a),
+        stencilWrite: true,
+        stencilRef: 7,
+        stencilZPass: THREE.ReplaceStencilOp
+        // stencilFail:THREE.ReplaceStencilOp,
+        // stencilZFail:THREE.ReplaceStencilOp,
     });
 
     fontMaterials = new MeshBasicMaterial({
-        side: THREE.FrontSide, color: new Color(0xffffff), transparent: true,
-        stencilWrite: true, 
-        stencilZPass: THREE.ReplaceStencilOp, 
-        // stencilFail:THREE.ReplaceStencilOp, 
-        // stencilZFail:THREE.ReplaceStencilOp, 
+        side: THREE.FrontSide,
+        color: new Color(0xffffff),
+        transparent: true,
+        stencilWrite: true,
+        stencilZPass: THREE.ReplaceStencilOp,
+        // stencilFail:THREE.ReplaceStencilOp,
+        // stencilZFail:THREE.ReplaceStencilOp,
         stencilRef: 1
     });
 
     constructor(path, depth, feature, application) {
         super();
         this.path = path;
-        this.depth = depth;
+        this.depth = depth || 1;
         this.application = application;
 
-        this.meshStencil = new Mesh(new BufferGeometry,this.stBackMaterials);
+        this.meshStencil = new Mesh(new BufferGeometry(), this.stBackMaterials);
         this.meshStencil.renderOrder = Number.MIN_SAFE_INTEGER;
         // this.add(this.meshStencil);
 
-        this.maskWallMesh = new Mesh(new BufferGeometry, [this.backMaterials,this.fontMaterials]);
+        this.maskWallMesh = new Mesh(new BufferGeometry(), [
+            this.backMaterials,
+            this.fontMaterials
+        ]);
         this.add(this.maskWallMesh);
-        this.maskWallMesh.renderOrder = Number.MIN_SAFE_INTEGER + 1; 
+        this.maskWallMesh.renderOrder = Number.MIN_SAFE_INTEGER + 1;
         this.maskWallMesh.userData = feature;
     }
-
 
     projectVertexs = (vertexs, geoPosition) => {
         const { projection } = this.application.mapView;
@@ -74,7 +85,7 @@ class GroundHole extends THREE.Group {
             vertexs[i + 2] = xyz.z;
         }
         return vertexs;
-    }
+    };
 
     computeGeometry() {
         var top = this.path.map(e => new Vector3(e.longitude, e.latitude, e.altitude));
@@ -82,12 +93,14 @@ class GroundHole extends THREE.Group {
             top.reverse();
         }
         var bottoms = top.map(e => {
-            return new Vector3().copy(e).add(new Vector3(0, 0, -this.depth));
+            return new Vector3()
+                .copy(e)
+                .add(new Vector3(0, 0, Number.isNaN(-this.depth) ? -1 : -this.depth));
         });
 
         var box = new Box3();
         bottoms.forEach(element => {
-            box.expandByPoint(element)
+            box.expandByPoint(element);
         });
 
         var vertexs = [];
@@ -117,14 +130,13 @@ class GroundHole extends THREE.Group {
             vertexs.push(t.c.x, t.c.y, t.c.z);
         });
 
-        var wall = { start: 0, count: indices.length, materialIndex: 0 }
+        var wall = { start: 0, count: indices.length, materialIndex: 0 };
         triangles.length = 0;
         const faces = ShapeUtils.triangulateShape(bottoms, []);
 
         faces.forEach(([a, b, c]) => {
             triangles.push(new THREE.Triangle(bottoms[c], bottoms[b], bottoms[a]));
         });
-
 
         triangles.forEach((t, i) => {
             var len = vertexs.length / 3;
@@ -134,7 +146,8 @@ class GroundHole extends THREE.Group {
             vertexs.push(t.c.x, t.c.y, t.c.z);
         });
 
-        var worldPosition = box.getCenter();
+        var worldPosition = new Vector3();
+        box.getCenter(worldPosition);
         var geoPosition = new GeoCoordinates(worldPosition.y, worldPosition.x, worldPosition.z);
         this.projectVertexs(vertexs, geoPosition);
 
@@ -145,9 +158,13 @@ class GroundHole extends THREE.Group {
 
         buffer.computeVertexNormals();
         this.anchor = geoPosition;
-        return { buffer, all: { start: 0, count: indices.length }, wall, ground: { start: wall.count, count: indices.length - wall.count } };
+        return {
+            buffer,
+            all: { start: 0, count: indices.length },
+            wall,
+            ground: { start: wall.count, count: indices.length - wall.count }
+        };
     }
-
 
     setPath(path, depth) {
         this.depth = depth;
@@ -167,18 +184,19 @@ class GroundHole extends THREE.Group {
         // this.maskWallMesh.geometry.groups.length = 0;
         this.maskWallMesh.geometry.groups.push({ ...all, materialIndex: 0 });
         this.maskWallMesh.geometry.groups.push({ ...all, materialIndex: 1 });
-
     }
 
     updateFeature({ geometry: { coordinates }, topology }) {
         const { depth } = topology || {};
-        this.setPath(coordinates[0].map(e => GeoCoordinates.fromGeoPoint(e)), depth || 1);
+        this.setPath(
+            coordinates[0].map(e => GeoCoordinates.fromGeoPoint(e)),
+            depth || 1
+        );
     }
 
     setQuaternion(quaternion) {
         this.mesh.quaternion.copy(quaternion);
     }
-
 }
 
 export default GroundHole;

@@ -89,7 +89,7 @@ class DefaultPolygon extends THREE.Object3D {
         buffer.push(vertexs[0].x, vertexs[0].y, vertexs[0].z);
 
         var uv = [];
-        var size = box.getSize();
+        var size = box.getSize(new Vector3());
         for (var i = 0; i < vertexs.length; i++) {
             var coord = new THREE.Vector3().copy(vertexs[i]).applyMatrix4(invert).sub(box.min);
             uv.push(coord.x / size.x, coord.y / size.y);

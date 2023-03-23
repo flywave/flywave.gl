@@ -1,16 +1,31 @@
-import { BufferAttribute, BufferGeometry, Vector3, ShapeUtils, Mesh, Vector2, Box3, Box2, Color } from "three"
+import {
+    BufferAttribute,
+    BufferGeometry,
+    Vector3,
+    ShapeUtils,
+    Mesh,
+    Vector2,
+    Box3,
+    Box2,
+    Color
+} from "three";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MeshBasicMaterial } from "three";
 
-//up (0,0,1) 
+//up (0,0,1)
 var order = 1;
 class SurfacePolygon extends THREE.Group {
-    type = "surface-polygon" 
+    type = "surface-polygon";
 
-    materials = new MeshBasicMaterial({ side: THREE.FrontSide, color: new Color(0xff0000), transparent: true,opacity: 0.5 });
+    materials = new MeshBasicMaterial({
+        side: THREE.FrontSide,
+        color: new Color(0xff0000),
+        transparent: true,
+        opacity: 0.5
+    });
     stencilBackMaterials = new MeshBasicMaterial({ side: THREE.BackSide, transparent: true });
     stencilFontMaterials = new MeshBasicMaterial({ side: THREE.FrontSide, transparent: true });
-    clearStencilMaterials = new MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true});
+    clearStencilMaterials = new MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true });
 
     constructor(path, feature, application) {
         super();
@@ -19,10 +34,10 @@ class SurfacePolygon extends THREE.Group {
 
         this.mesh = this.makeMesh();
         this.configMaterial();
-        this.add(this.mesh); 
+        this.add(this.mesh);
         this.mesh.userData = feature;
         this.mesh.onBeforeRender = this.onUpdateVolumnHeight(application);
-        this.mesh.renderOrder = Number.MIN_SAFE_INTEGER+257;
+        this.mesh.renderOrder = Number.MIN_SAFE_INTEGER + 257;
         this.configBackStencilMaterial();
         this.configFontStencilMaterial();
     }
@@ -37,21 +52,32 @@ class SurfacePolygon extends THREE.Group {
         var _this = this;
         return function () {
             if (!_this.anchor) return;
-            const { mapView: { visibleTileSet }, terrainSource } = application;
+            const {
+                mapView: { visibleTileSet },
+                terrainSource
+            } = application;
             let t = visibleTileSet.dataSourceTileList.find(e => e.dataSource == terrainSource);
-            let max = Number.MIN_SAFE_INTEGER, min = Number.MAX_SAFE_INTEGER;
-            t.renderedTiles.forEach(({ geoBox: { northEast, southWest }, elevationRange: { maxElevation, minElevation } }) => {
-                let tileBox = new Box2(new Vector2(southWest.lng, southWest.lat),
-                    new Vector2(northEast.lng, northEast.lat));
-                if (tileBox.intersectsBox(_this.box)) {
-                    max = Math.max(maxElevation, max);
-                    min = Math.min(minElevation, min)
+            let max = Number.MIN_SAFE_INTEGER,
+                min = Number.MAX_SAFE_INTEGER;
+            t.renderedTiles.forEach(
+                ({
+                    geoBox: { northEast, southWest },
+                    elevationRange: { maxElevation, minElevation }
+                }) => {
+                    let tileBox = new Box2(
+                        new Vector2(southWest.lng, southWest.lat),
+                        new Vector2(northEast.lng, northEast.lat)
+                    );
+                    if (tileBox.intersectsBox(_this.box)) {
+                        max = Math.max(maxElevation, max);
+                        min = Math.min(minElevation, min);
+                    }
                 }
-            });
+            );
             let height = Math.max(max, 1000);
             _this.mesh.scale.set(1, 1, height);
             _this.mesh.updateMatrixWorld();
-        }
+        };
     }
 
     configBackStencilMaterial = () => {
@@ -60,9 +86,9 @@ class SurfacePolygon extends THREE.Group {
         // this.stencilBackMaterials.stencilZFail = THREE.DecrementWrapStencilOp;
         // this.stencilBackMaterials.stencilFail = THREE.DecrementWrapStencilOp;
         this.stencilBackMaterials.stencilZPass = THREE.IncrementWrapStencilOp;
-        this.stencilBackMaterials.stencilRef = 3; 
-        this.stencilBackMaterials.stencilFunc = THREE.LessEqualStencilFunc; 
-    }
+        this.stencilBackMaterials.stencilRef = 3;
+        this.stencilBackMaterials.stencilFunc = THREE.LessEqualStencilFunc;
+    };
 
     configFontStencilMaterial = () => {
         this.stencilFontMaterials.stencilWrite = true;
@@ -72,8 +98,8 @@ class SurfacePolygon extends THREE.Group {
         this.stencilFontMaterials.stencilZPass = THREE.DecrementWrapStencilOp;
 
         // this.stencilFontMaterials.stencilFunc = THREE.LessEqualStencilFunc;
-        // this.stencilFontMaterials.stencilRef = 3; 
-    }
+        // this.stencilFontMaterials.stencilRef = 3;
+    };
 
     configMaterial = () => {
         this.materials.stencilWrite = true;
@@ -83,7 +109,7 @@ class SurfacePolygon extends THREE.Group {
         // this.materials.stencilFuncMask = 0x2;
         this.materials.stencilZPass = THREE.KeepStencilOp;
         // this.materials.stencilWriteMask = 0x0;
-    }
+    };
 
     projectVertexs = (vertexs, geoPosition) => {
         const { projection } = this.application.mapView;
@@ -95,13 +121,16 @@ class SurfacePolygon extends THREE.Group {
         ps.applyQuaternion(this.__meshQuaternion);
         for (var i = 0; i < vertexs.length; i += 3) {
             var p = new GeoCoordinates(vertexs[i + 1], vertexs[i], vertexs[i + 2]);
-            var xyz = projection.projectPoint(p, new Vector3()).applyQuaternion(this.__meshQuaternion).sub(ps);
+            var xyz = projection
+                .projectPoint(p, new Vector3())
+                .applyQuaternion(this.__meshQuaternion)
+                .sub(ps);
             vertexs[i] = xyz.x;
             vertexs[i + 1] = xyz.y;
             vertexs[i + 2] = xyz.z;
         }
         return vertexs;
-    }
+    };
 
     __meshQuaternion = new THREE.Quaternion();
 
@@ -117,7 +146,7 @@ class SurfacePolygon extends THREE.Group {
 
         var box = new Box3();
         bottoms.forEach(element => {
-            box.expandByPoint(element)
+            box.expandByPoint(element);
         });
 
         var vertexs = [];
@@ -152,8 +181,8 @@ class SurfacePolygon extends THREE.Group {
             vertexs.push(t.b.x, t.b.y, t.b.z);
             vertexs.push(t.c.x, t.c.y, t.c.z);
         });
-
-        var worldPosition = box.getCenter();
+        var worldPosition = new Vector3();
+        box.getCenter(worldPosition);
         var geoPosition = new GeoCoordinates(worldPosition.y, worldPosition.x, worldPosition.z);
 
         this.projectVertexs(vertexs, geoPosition);
@@ -163,15 +192,19 @@ class SurfacePolygon extends THREE.Group {
         // buffer.setAttribute("uv", new BufferAttribute(new Float32Array(uvs), 2))
         buffer.setIndex(new BufferAttribute(new Uint16Array(indices), 1));
 
-        buffer.groups.push({start:0,count:indices.length,materialIndex:0});
-        buffer.groups.push({start:0,count:indices.length,materialIndex:1});
-        buffer.groups.push({start:0,count:indices.length,materialIndex:2}); 
+        buffer.groups.push({ start: 0, count: indices.length, materialIndex: 0 });
+        buffer.groups.push({ start: 0, count: indices.length, materialIndex: 1 });
+        buffer.groups.push({ start: 0, count: indices.length, materialIndex: 2 });
         this.anchor = geoPosition;
         return buffer;
     }
 
     makeMesh() {
-        var mesh = new Mesh(this.computeGeometry(), [this.stencilBackMaterials,this.stencilFontMaterials,this.materials]);
+        var mesh = new Mesh(this.computeGeometry(), [
+            this.stencilBackMaterials,
+            this.stencilFontMaterials,
+            this.materials
+        ]);
         mesh.quaternion.copy(this.__meshQuaternion.invert());
         return mesh;
     }
@@ -191,7 +224,6 @@ class SurfacePolygon extends THREE.Group {
     setQuaternion(quaternion) {
         this.mesh.quaternion.copy(quaternion);
     }
-
 }
 
 export default SurfacePolygon;
