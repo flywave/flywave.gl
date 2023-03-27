@@ -8,7 +8,7 @@
         "build:svg:sprite": "svg-sprite --symbol --symbol-dest . --shape-id-generator \"iD-%s\" --symbol-sprite src/menu/sprite.svg \"src/image/icon/**/*.svg\"",
         "build": " webpack",
         "debug": "webpack",
-        "publish": "yarn run cleanpublish",
+        "publish": "clean-publish",
         "cleanpublish":"clean-publish",
         "dev-server": "webpack serve  --config webpack.config.js --config-name main"
     },

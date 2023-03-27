@@ -56,7 +56,6 @@ class TopoSource {
 
     application.dataProvider.on(`tileLoaded.${this.id}`, this.featuresLoaded);
     application.dataProvider.on(`update.${this.id}`, this.featureLoaded);
-    this.bindHisotryEvent();
   }
 
   clear() {
@@ -111,22 +110,6 @@ class TopoSource {
         }
       }
     });
-  }
-
-  bindHisotryEvent() {
-    var updateChange = (change) => {
-      change.forEach((e) => {
-        var feat = this.application.history.get(e.id);
-        if (feat) {
-          this.recreate(feat);
-        } else {
-          this.setTopoMesh(e.id);
-        }
-      });
-    };
-
-    this.application.on(`redo.${this.id}`, updateChange);
-    this.application.on(`undo.${this.id}`, updateChange);
   }
 
   getTopoMesh(id, usePromise) {
