@@ -141,6 +141,18 @@ class Application {
         return this.materialProviders;
     }
 
+    addAnchorMesh(mesh) {
+        this.mapView.mapAnchors.add(mesh);
+        mesh.map = this;
+        this.mapView.update();
+    }
+
+    removeAnchorMesh(mesh) {
+        this.mapView.mapAnchors.remove(mesh);
+        this.mapView.update();
+        delete mesh.map;
+    }
+
     onCameraChange = () => {
         if (this.mapView.zoomLevel >= 22) {
             this.atmosphere.enabled = false;
@@ -224,8 +236,8 @@ class Application {
         this.mapView.removeEventListener(
             MapViewEventNames.CameraPositionChanged,
             this.onCameraChange
-        ); 
-        if(this.mapControl){
+        );
+        if (this.mapControl) {
             this.mapControl.dispose();
         }
         this.mapView.dispose();

@@ -1,4 +1,3 @@
-
 import Application from "./application";
 export { Application };
 
@@ -24,11 +23,24 @@ import TopoSurfacePolygon from "./topo/surface-polygon";
 import TopoParticle from "./topo/particle";
 
 export {
-    TopoServerPipe, TopoPrism, TopoCrossPoint,
-    TopoDefault, TopoDefaultLine, TopoCustomTopoDefault,
-    TopoDefaultPoint, TopoDefaultPolygon, TopoMultiPoint,
-    TopoCatenary, TopoBoard, TopoDecal, TopoDecalLine, TopoDefaultMulitiLine,
-    TopoSweepPath, TopoSymbolPath, TopoGroundHole, TopoSurfacePolygon,
+    TopoServerPipe,
+    TopoPrism,
+    TopoCrossPoint,
+    TopoDefault,
+    TopoDefaultLine,
+    TopoCustomTopoDefault,
+    TopoDefaultPoint,
+    TopoDefaultPolygon,
+    TopoMultiPoint,
+    TopoCatenary,
+    TopoBoard,
+    TopoDecal,
+    TopoDecalLine,
+    TopoDefaultMulitiLine,
+    TopoSweepPath,
+    TopoSymbolPath,
+    TopoGroundHole,
+    TopoSurfacePolygon,
     TopoParticle
 };
 
@@ -64,31 +76,26 @@ export {
 
 //utils
 import { SnapshotGltf } from "./util/snapshot";
-import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MapViewEventNames } from "@flywave/flywave-mapview";
 import { TransferManager } from "@flywave/flywave-transfer-manager";
-import {
-    APIFormat,
-} from "@flywave/flywave-vectortile-datasource";
+import { APIFormat } from "@flywave/flywave-vectortile-datasource";
 
-export {
-    SnapshotGltf,
-    GeoCoordinates,
-    MapViewEventNames,
-    TransferManager,
-    APIFormat
-};
+export { SnapshotGltf, MapViewEventNames, TransferManager, APIFormat };
 
 import { randomPointInPolygon, polygonOutlinePoints, lineChunkPoints } from "./util/random-points";
 import lineStringChunk from "./util/line-chunk";
 import PickRangeHandler from "./pick-range-handler";
 
-export { PickRangeHandler,randomPointInPolygon, polygonOutlinePoints, lineChunkPoints, lineStringChunk };
-
+export {
+    PickRangeHandler,
+    randomPointInPolygon,
+    polygonOutlinePoints,
+    lineChunkPoints,
+    lineStringChunk
+};
 
 import config from "./config";
 export default {
-
     setGlobeUrlVariable(key, value) {
         config.GLOBEVARIABLE[key] = value;
     },
@@ -132,4 +139,9 @@ export default {
     get decoderUrl(): ?string {
         return config.DECODER_URL;
     }
-}
+};
+
+//mapview
+import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/lib/SphericalGeometrySubdivisionModifier";
+export { SphericalGeometrySubdivisionModifier };
+export * from "@flywave/flywave-geoutils";
