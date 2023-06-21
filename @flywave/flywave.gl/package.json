@@ -6,7 +6,7 @@
     "scripts": {
         "build-dev": "webpack",
         "build:svg:sprite": "svg-sprite --symbol --symbol-dest . --shape-id-generator \"iD-%s\" --symbol-sprite src/menu/sprite.svg \"src/image/icon/**/*.svg\"",
-        "build": " webpack",
+        "build": "webpack",
         "debug": "webpack",
         "publish": "clean-publish",
         "cleanpublish":"clean-publish",

@@ -1,14 +1,12 @@
-import { EarthFreeControl } from './earth-free-control';
-import { MapViewEventNames } from '@flywave/flywave-mapview';
+import { EarthFreeControl } from "./earth-free-control";
+import { MapViewEventNames } from "@flywave/flywave-mapview";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
-import * as THREE from 'three';
-import { Vector3 } from 'three';
+import * as THREE from "three";
+import { Vector3 } from "three";
 import gsap from "gsap";
-import {
-    MapViewUtils
-} from "@flywave/flywave-mapview";
+import { MapViewUtils } from "@flywave/flywave-mapview";
 
-MapViewUtils.MAX_TILT_RAD = 60 * Math.PI / 180;
+MapViewUtils.MAX_TILT_RAD = (60 * Math.PI) / 180;
 class MapOrbitControl {
     zoomLevelDeltaOnControl = 1;
 
@@ -16,23 +14,33 @@ class MapOrbitControl {
         const { mapView } = application;
         this._control = new EarthFreeControl(application, application.window);
 
-
         this.mapView = application.mapView;
         this.window = application.window;
         this.mapView.addEventListener(MapViewEventNames.Render, this.onUpdate);
 
-        var geocoord = mapView.projection.unprojectPoint(mapView.camera.position)
-        this._control.setTo(geocoord.longitude, geocoord.latitude, geocoord.altitude, 0, Math.PI / 10, 0);
+        var geocoord = mapView.projection.unprojectPoint(mapView.camera.position);
+        this._control.setTo(
+            geocoord.longitude,
+            geocoord.latitude,
+            geocoord.altitude,
+            0,
+            Math.PI / 10,
+            0
+        );
     }
 
     onEventUpdate = () => {
-        if (this._control.omouseDown[0] || this._control.omouseDown[1] || this._control.omouseDown[2]) {
+        if (
+            this._control.omouseDown[0] ||
+            this._control.omouseDown[1] ||
+            this._control.omouseDown[2]
+        ) {
             this.onUpdate();
             return true;
         }
 
         return false;
-    }
+    };
 
     flyPath = (lineString, duration) => {
         if (this.__pathAnimation) {
@@ -41,9 +49,13 @@ class MapOrbitControl {
         const { projection } = this.mapView;
 
         var linePos = [];
-        lineString.geometry.coordinates.forEach((c) => linePos = linePos.concat(new GeoCoordinates(c[1], c[0], c[2])));
+        lineString.geometry.coordinates.forEach(
+            c => (linePos = linePos.concat(new GeoCoordinates(c[1], c[0], c[2])))
+        );
 
-        const curve = new THREE.CatmullRomCurve3(linePos.map(e => projection.projectPoint(e, new THREE.Vector3())));
+        const curve = new THREE.CatmullRomCurve3(
+            linePos.map(e => projection.projectPoint(e, new THREE.Vector3()))
+        );
 
         const animationProgress = { value: 0 };
 
@@ -74,11 +86,20 @@ class MapOrbitControl {
                     var lnglat = projection.unprojectPoint(_tmp);
                     if (dir.length() == 0) return;
 
-                    this._control.setToWithVector(lnglat.lng, lnglat.lat, lnglat.altitude, dir.length() != 0 && dir.normalize().toArray())
+                    this._control.setToWithVector(
+                        lnglat.lng,
+                        lnglat.lat,
+                        lnglat.altitude,
+                        dir.length() != 0 && dir.normalize().toArray()
+                    );
                     const { cameraToWorld } = this._control.camera;
                     var mat = new THREE.Matrix4();
                     mat.elements = cameraToWorld;
-                    mat.decompose(this.mapView.camera.position, this.mapView.camera.quaternion, this.mapView.camera.scale);
+                    mat.decompose(
+                        this.mapView.camera.position,
+                        this.mapView.camera.quaternion,
+                        this.mapView.camera.scale
+                    );
 
                     if (pathAnimation && pathAnimation.onUpdate) {
                         pathAnimation.onUpdate(value);
@@ -95,20 +116,19 @@ class MapOrbitControl {
                 onStart: () => {
                     this.disable = true;
                     this.panEnabled = false;
-
                 },
                 onComplete: () => {
                     this.disable = false;
                     this.panEnabled = true;
                     pathAnimation.completed = true;
-                    pathAnimation.onComplete && pathAnimation.onComplete()
+                    pathAnimation.onComplete && pathAnimation.onComplete();
                     this._control.updateCenter();
                 }
             }
         );
         pathAnimation.play(0);
 
-        pathAnimation.pauseCamera = (rel) => {
+        pathAnimation.pauseCamera = rel => {
             pathAnimation.pause();
             if (rel) {
                 this.disable = false;
@@ -122,11 +142,11 @@ class MapOrbitControl {
             this.disable = false;
             this.panEnabled = true;
             this._control.updateCenter();
-        }
+        };
 
         this.__pathAnimation = pathAnimation;
         return pathAnimation;
-    }
+    };
 
     onUpdate = () => {
         if (this.disable) return;
@@ -136,8 +156,12 @@ class MapOrbitControl {
 
         var mat = new THREE.Matrix4();
         mat.elements = cameraToWorld;
-        mat.decompose(this.mapView.camera.position, this.mapView.camera.quaternion, this.mapView.camera.scale);
-    }
+        mat.decompose(
+            this.mapView.camera.position,
+            this.mapView.camera.quaternion,
+            this.mapView.camera.scale
+        );
+    };
 
     dispose() {
         this.mapView.removeEventListener(MapViewEventNames.Render, this.onUpdate);
@@ -145,57 +169,65 @@ class MapOrbitControl {
 
     enableCameraSwivel(v) {
         this._control.camera_swivel = v;
-    };
+    }
 
     lockCenterPoint(x, y, z) {
         this._control.lockCenterPoint = [x, y, z];
-    };
+    }
 
     clearLockCenterPoint() {
         this._control.lockCenterPoint = null;
-    };
+    }
 
-    flyTo(
-        lng, lat, camVdistance, speed, centerDistance, theta, phi, toCityMode, completeCallBack) {
+    flyTo(lng, lat, camVdistance, speed, centerDistance, theta, phi, toCityMode, completeCallBack) {
         this._control.flyTo(
-            lat, lng, camVdistance, speed, centerDistance, theta, phi, toCityMode, completeCallBack);
-    };
+            lat,
+            lng,
+            camVdistance,
+            speed,
+            centerDistance,
+            theta,
+            phi,
+            toCityMode,
+            completeCallBack
+        );
+    }
 
     setTo(lon, lat, z, alt, theta, phi, x) {
         this._control.setTo(lon, lat, z, alt, theta, phi, x);
-    };
+    }
 
     animateTilt(t) {
         this._control.animateTilt(t);
-    };
+    }
 
     animateZoom(t) {
         this._control.animateZoom(t);
-    };
+    }
 
     setTilt(t) {
         this._control.setTilt(t);
-    };
+    }
 
     getHeading() {
         return this._control.getHeading();
-    };
+    }
 
     getTilt() {
         return this._control.getTilt();
-    };
+    }
 
     animateHeading(h) {
         this._control.animateHeading(h);
-    };
+    }
 
     setHeading(h) {
         this._control.setHeading(h);
-    };
+    }
 
     animatePan(x, y) {
         this._control.animatePan(x, y);
-    };
+    }
 
     pointToNorth() {
         this._control.setHeading(0);
@@ -209,11 +241,21 @@ class MapOrbitControl {
         const { width, height } = this.mapView.getCanvasClientSize();
         this.window.lastMouseX = width / 2;
         this.window.lastMouseY = height / 2;
-        this.window.lastMouseZ += (t - this.mapView.zoomLevel) / Math.abs(t - this.mapView.zoomLevel) * 10;
+        this.window.lastMouseZ +=
+            ((t - this.mapView.zoomLevel) / Math.abs(t - this.mapView.zoomLevel)) * 10;
     }
 
     rayCastToGlobeAndSceneAt(reslut, origin, target, x, y, hitCountPrecision, noPickMap) {
-        return this._control.rayCastToGlobeAndScene(reslut, origin, target, x, y, hitCountPrecision, false, noPickMap);
+        return this._control.rayCastToGlobeAndScene(
+            reslut,
+            origin,
+            target,
+            x,
+            y,
+            hitCountPrecision,
+            false,
+            noPickMap
+        );
     }
 
     getWorldPositionAt(layerX, layerY, noPickMap) {
@@ -221,7 +263,13 @@ class MapOrbitControl {
         var F = [];
         var v = [];
         this._control.camera.getOrigin(F);
-        this._control.camera.unprojectToWorld(z, this._control, this._control.width - layerX, this._control.height - layerY, -1);
+        this._control.camera.unprojectToWorld(
+            z,
+            this._control,
+            this._control.width - layerX,
+            this._control.height - layerY,
+            -1
+        );
         var C = this.rayCastToGlobeAndSceneAt(v, F, z, layerX, layerY, 0.001, noPickMap);
 
         return this.mapView.projection.unprojectPoint(new THREE.Vector3().fromArray(v));
@@ -230,7 +278,7 @@ class MapOrbitControl {
     flyToBox(geoBox) {
         const { projection, camera } = this.mapView;
         var box = projection.projectBox(geoBox);
-        var d = (box.min.distanceTo(box.max) * 0.5) / Math.tan(camera.fov / 2 * Math.PI / 180);
+        var d = (box.min.distanceTo(box.max) * 0.5) / Math.tan(((camera.fov / 2) * Math.PI) / 180);
         const { longitude, latitude } = geoBox.center;
         this.flyTo(longitude, latitude, 0, 0.1, d, 0, 0);
     }
@@ -241,8 +289,7 @@ class MapOrbitControl {
 
     set zoomEnabled(v) {
         this.window.zoomEnabled = v;
-        if (!v)
-            this.window.lastMouseZ -= 10;
+        if (!v) this._control.smooth_zoom = this._control.prevMouseZ = this.window.lastMouseZ = 0;
     }
 
     set panEnabled(v) {

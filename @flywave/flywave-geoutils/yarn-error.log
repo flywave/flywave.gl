@@ -1,8 +1,8 @@
 Arguments: 
-  /usr/local/lib/nodejs/node-v16.19.0-linux-x64/bin/node /mnt/c/Users/wh/AppData/Roaming/npm/node_modules/yarn/bin/yarn.js install --force --registry=https://registry.npm.taobao.org
+  C:\Program Files\nodejs\node.exe C:\Users\wh\AppData\Roaming\npm\node_modules\yarn\bin\yarn.js publish
 
 PATH: 
-  /usr/local/lib/nodejs/node-v16.19.0-linux-x64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/Windows/system32:/mnt/c/Windows:/mnt/c/Windows/System32/Wbem:/mnt/c/Windows/System32/WindowsPowerShell/v1.0/:/mnt/c/Windows/System32/OpenSSH/:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/Microsoft SQL Server/150/Tools/Binn/:/mnt/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files/nodejs/:/mnt/c/Users/wh/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/wh/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Users/wh/.dotnet/tools:/mnt/c/Users/wh/AppData/Roaming/npm:/snap/bin
+  C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\Git\cmd;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files\dotnet\;C:\Program Files\nodejs\;C:\Users\wh\AppData\Local\Microsoft\WindowsApps;;C:\Users\wh\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\wh\.dotnet\tools;C:\Users\wh\AppData\Roaming\npm
 
 Yarn version: 
   1.22.19
@@ -11,118 +11,62 @@ Node version:
   16.19.0
 
 Platform: 
-  linux x64
+  win32 x64
 
 Trace: 
-  Error: connect EHOSTUNREACH 192.168.1.18:10000
-      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1278:16)
+  Error: canceled
+      at Interface.<anonymous> (C:\Users\wh\AppData\Roaming\npm\node_modules\yarn\lib\cli.js:137150:13)
+      at Interface.emit (node:events:513:28)
+      at Interface._ttyWrite (node:readline:1085:16)
+      at ReadStream.onkeypress (node:readline:291:10)
+      at ReadStream.emit (node:events:513:28)
+      at emitKeys (node:internal/readline/utils:357:14)
+      at emitKeys.next (<anonymous>)
+      at ReadStream.onData (node:internal/readline/emitKeypressEvents:61:36)
+      at ReadStream.emit (node:events:513:28)
+      at addChunk (node:internal/streams/readable:315:12)
 
 npm manifest: 
   {
-    "name": "flywave.gl",
-    "version": "1.0.0",
-    "description": "Core render components of harp.gl, an open-source 3D map rendering engine.",
-    "workspaces": [
-      "@flywave/*",
-      "www/",
-      "test/performance",
-      "test/rendering"
-    ],
-    "devDependencies": {
-      "@ismarslomic/mermaid.cli": "^0.5.5",
-      "@microsoft/api-documenter": "^7.8.10",
-      "@microsoft/api-extractor": "^7.8.10",
-      "@strictsoftware/typedoc-plugin-monorepo": "^0.3.1",
-      "@types/chai": "^4.2.14",
-      "@types/express": "^4.17.6",
-      "@types/fs-extra": "^9.0.1",
-      "@types/glob": "^7.1.3",
-      "@types/semver": "^7.3.4",
-      "@types/stats.js": "^0.17.0",
-      "@types/three": "^0.129.0",
-      "@typescript-eslint/eslint-plugin": "^4.11.1",
-      "@typescript-eslint/parser": "^4.11.1",
-      "chai": "^4.2.0",
-      "commander": "^5.1.0",
-      "eslint": "^7.17.0",
-      "eslint-config-prettier": "^7.1.0",
-      "eslint-config-standard-with-typescript": "^19.0.1",
-      "eslint-plugin-import": "^2.21.2",
-      "eslint-plugin-node": "^11.1.0",
-      "eslint-plugin-prettier": "^3.3.0",
-      "eslint-plugin-promise": "^4.2.1",
-      "eslint-plugin-simple-import-sort": "^7.0.0",
-      "eslint-plugin-standard": "^5.0.0",
-      "express": "^4.17.1",
-      "fork-ts-checker-webpack-plugin": "^6.0.5", 
-      "glob": "^7.1.4",
-      "karma": "^6.3.2",
-      "karma-chrome-launcher": "^3.1.0",
-      "karma-coverage-istanbul-reporter": "^3.0.3",
-      "karma-firefox-launcher": "^2.1.0",
-      "karma-mocha": "^2.0.1",
-      "karma-typescript": "^5.5.1",
-      "mkpath": "^1.0.0",
-      "mocha": "^8.2.1",
-      "mocha-webdriver-runner": "^0.6.2",
-      "node-fetch": "^2.6.1",
-      "nyc": "^15.0.1",
-      "prettier": "^2.2.1",
-      "semver": "^7.3.2",
-      "three": "^0.129.0",
-      "ts-mocha": "^8.0.0",
-      "typedoc": "^0.17.7",
-      "typescript": "^4.1.2",
-      "webpack": "^5.12.3",
-      "webpack-cli": "^4.3.1",
-      "webpack-dev-server": "^3.11.0"
-    },
-    "scripts": {
-      "pre-test": "yarn run code-pre-tests --forbid-only && yarn run prettier && yarn eslint",
-      "code-pre-tests": "ts-mocha --no-timeouts ./test/*.ts",
-      "test": "yarn karma-headless",
-      "test-debug": "karma start --browser ChromeDebug --no-single-run --auto-watch",
-      "performance-test-node": "ts-mocha ./test/performance/**/*.ts",
-      "cleanup": "./scripts/cleanup.sh",
-      "test-cov": "yarn karma-headless --coverage",
-      "start": "ts-node ./scripts/credentials.ts -- . && webpack serve --config @flywave/flywave-examples/webpack.config.js",
-      "build": "yarn workspaces run build& npm run build-bundle",
-      "build-examples": "ts-node ./scripts/credentials.ts -- dist/examples && webpack --config @flywave/flywave-examples/webpack.config.js",
-      "build-bundle": "cd @flywave/flywave.gl && webpack", 
-      "start-tests": "webpack serve --config ./webpack.tests.config.js",
-      "test-browser": "yarn karma-browser",
-      "build-tests": "webpack --config ./webpack.tests.config.js",
-      "run-rendering-tests": "./scripts/rendering-tests-reference-platform.sh",
-      "save-reference-rendering-tests": "npx ts-node @flywave/flywave-test-utils/lib/rendering/RenderingTestResultCli.ts save-reference",
-      "approve-reference-rendering-tests": "npx ts-node @flywave/flywave-test-utils/lib/rendering/RenderingTestResultCli.ts approve",
-      "typedoc": "ts-node ./scripts/setup-docs.ts && typedoc --disableOutputCheck --options typedoc.json",
-      "docs": "ts-node ./scripts/apidocs.ts",
-      "prettier": "prettier -l \"**/*.(ts|tsx|json)\"",
-      "prettier:fix": "prettier --write \"**/*.(ts|tsx|json)\"",
-      "eslint": "eslint --ext .ts ./@flywave test scripts",
-      "eslint:fix": "eslint --fix --ext .ts ./@flywave test scripts",
-      "postinstall": "yarn workspace @flywave/flywave-datasource-protocol generate-json-schema",
-      "prepare-doc-deploy": "ts-node ./scripts/prepare_doc_deploy.ts",
-      "karma-headless": "karma start --browsers ChromeHeadless",
-      "karma-headless-firefox": "karma start --browsers FirefoxHeadless",
-      "karma-browser": "karma start --browsers Chrome --no-single-run"
-    },
-    "engines": {
-      "node": ">=10.5.0",
-      "npm": ">=6.14.15",
-      "yarn": ">=1.11.1"
-    },
-    "repository": {
-      "type": "git",
-      "url": "https://github.com/heremaps/harp.gl.git"
-    },
-    "private": true,
-    "author": {
-      "name": "HERE Europe B.V.",
-      "url": "https://here.com"
-    },
-    "license": "Apache-2.0",
-    "__npminstall_done": true
+      "name": "@flywave/flywave-geoutils",
+      "version": "0.28.0",
+      "description": "Utility classes for working with geospatial data",
+      "main": "index.js",
+      "typings": "index",
+      "scripts": {
+          "build": "tsc --build $EXTRA_TSC_ARGS",
+          "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+          "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS"
+      },
+      "repository": {
+          "type": "git",
+          "url": "https://github.com/heremaps/flywave.gl.git",
+          "directory": "@flywave/flywave-geoutils"
+      },
+      "author": {
+          "name": "HERE Europe B.V.",
+          "url": "https://here.com"
+      },
+      "license": "Apache-2.0",
+      "devDependencies": {
+          "@types/chai": "^4.2.14",
+          "@types/mocha": "^8.2.0",
+          "@types/sinon": "^9.0.10",
+          "@types/three": "^0.129.0",
+          "chai": "^4.0.2",
+          "cross-env": "^7.0.2",
+          "mocha": "^8.2.1",
+          "sinon": "^9.2.2",
+          "source-map-support": "^0.5.19",
+          "three": "^0.129.0",
+          "typescript": "^4.1.2"
+      },
+      "peerDependencies": {
+          "three": "^0.129.0"
+      },
+      "publishConfig": {
+          "access": "public"
+      }
   }
 
 yarn manifest: 

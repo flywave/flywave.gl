@@ -234,6 +234,7 @@ class HeightMapMeshTile extends Tile {
         tileMesh.displacement = this.center.clone().multiplyScalar(-1).add(basePost.multiplyScalar(6378137));
         // tileMesh.castShadow = true; 
         tileMesh.receiveShadow = true;
+        tileMesh.renderOrder = Number.MIN_SAFE_INTEGER;
         this.objects.push(tileMesh);
     }
 

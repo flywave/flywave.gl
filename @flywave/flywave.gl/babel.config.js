@@ -4,9 +4,7 @@ const config = {
     ],
     plugins: [
         '@babel/syntax-dynamic-import', '@babel/plugin-proposal-class-properties'
-    ],
-    include: [/src/, /node_modules/],
-    ignore: []
+    ]
 };
 
 // Jest needs module transformation

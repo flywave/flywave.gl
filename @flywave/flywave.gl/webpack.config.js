@@ -81,7 +81,7 @@ var exports = addHarpWebpackConfig({
     ]
   },
   plugins
-}, { mainEntry: (DEV && NPM_TARGET != "debug") ? "./src/dev-index.js" : "./src/index.js", decoderEntry: "./src/decoder.js", htmlTemplate: DEV ? "./index.html" : undefined });
+}, { mainEntry: "./src/index.js" , decoderEntry: "./src/decoder.js", htmlTemplate: DEV ? "./index.html" : undefined });
 
 exports[0].name="main"
 exports.forEach(config => {
