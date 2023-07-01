@@ -52,6 +52,7 @@ export const SkyAtmosphereShader: THREE.Shader = {
     precision highp float;
     precision highp int;
 
+    #include <common>  
     attribute vec4 position;
 
     uniform mat4 u_modelViewProjection;
@@ -80,6 +81,7 @@ export const SkyAtmosphereShader: THREE.Shader = {
     varying vec3 v_rayleighColor;
     varying vec3 v_mieColor;
     varying vec3 v_vertToCamera;
+    #include <logdepthbuf_pars_vertex>
 
     ${AtmosphereShaderChunks.atmosphere_vertex_utils}
 
@@ -184,6 +186,7 @@ export const SkyAtmosphereShader: THREE.Shader = {
         v_vertToCamera = u_eyePositionWorld - position.xyz;
 
         gl_Position = u_modelViewProjection * position;
+        #include <logdepthbuf_vertex>
     }
     `,
 
@@ -194,6 +197,7 @@ export const SkyAtmosphereShader: THREE.Shader = {
     precision highp float;
     precision highp int;
 
+    #include <common>  
     #ifdef CORRECT_COLOR
     uniform vec3 u_hsvCorrection; // Hue, saturation, brightness
     #endif
@@ -211,6 +215,7 @@ export const SkyAtmosphereShader: THREE.Shader = {
 
     ${AtmosphereShaderChunks.atmosphere_fragment_utils}
 
+    #include <logdepthbuf_pars_fragment>
     void main(void)
     {
         float fInnerRadius = u_atmosphereEnv.x;
@@ -253,6 +258,7 @@ export const SkyAtmosphereShader: THREE.Shader = {
         fAtmosphereAlpha *= pow(fNightAlpha, 0.5);
 
         gl_FragColor = vec4(cRgb, mix(cRgb.b, 1.0, fAtmosphereAlpha));
+        #include <logdepthbuf_fragment>
     }
     `
 };

@@ -2,15 +2,38 @@ import { dispatch } from "d3-dispatch";
 import { Vector2 } from "three";
 
 class Window {
-
     dispatch = dispatch(
-        'mousemove', 'mouseup', 'mouseout', 'dblclick', 'premouseclick', 'mouseclick', 'realclick',
-        'rightclick', 'keydown', 'keyup', 'premousedown', 'mousedown', 'mousewheel', "mousedraw");
+        "mousemove",
+        "mouseup",
+        "mouseout",
+        "dblclick",
+        "premouseclick",
+        "mouseclick",
+        "realclick",
+        "rightclick",
+        "keydown",
+        "keyup",
+        "premousedown",
+        "mousedown",
+        "mousewheel",
+        "mousedraw"
+    );
 
     mouseDown = [false, false, false];
 
-    panEnabled = true;
+    _panEnabled = true;
     zoomEnabled = true;
+
+    set panEnabled(v) {
+        this._panEnabled = v;
+        this.mouseDown[0] = false;
+        this.mouseDown[1] = false;
+        this.mouseDown[2] = false;
+    }
+
+    get panEnabled() {
+        return this._panEnabled;
+    }
 
     lastMouseX = 0;
     lastMouseY = 0;
@@ -27,64 +50,64 @@ class Window {
         this.bindEvent();
     }
 
-    onMouseWheel = (event) => {
+    onMouseWheel = event => {
         if (!this.zoomEnabled) {
             return;
         }
         var wheelDelta = 0;
         if (!event) {
-            event = window.event
+            event = window.event;
         }
         if (event.wheelDelta) {
-            wheelDelta = event.wheelDelta / 120 * 2;
+            wheelDelta = (event.wheelDelta / 120) * 2;
             if (window.opera) {
                 wheelDelta = -wheelDelta;
             }
         } else {
             if (event.deltaY) {
-                wheelDelta = -event.deltaY / 3 * 2;
+                wheelDelta = (-event.deltaY / 3) * 2;
             }
         }
         if (wheelDelta) {
             this.lastMouseZ += wheelDelta;
         }
         if (event.preventDefault) {
-            event.preventDefault()
+            event.preventDefault();
         }
-        event.returnValue = false
+        event.returnValue = false;
         this.fire("mousewheel", event);
-    }
+    };
 
     onResize = () => {
         var offsetWidth, offsetHeight;
         if (dom.parentNode && dom.parentNode.offsetWidth) {
-            offsetWidth = dom.parentNode.offsetWidth
+            offsetWidth = dom.parentNode.offsetWidth;
         } else {
-            offsetWidth = dom.innerWidth || 320
+            offsetWidth = dom.innerWidth || 320;
         }
         if (dom.parentNode && dom.parentNode.offsetHeight) {
             offsetHeight = dom.parentNode.offsetHeight;
         } else {
-            offsetHeight = dom.innerHeight || 320
+            offsetHeight = dom.innerHeight || 320;
         }
-        this.setSize(offsetWidth, offsetHeight)
-    }
+        this.setSize(offsetWidth, offsetHeight);
+    };
 
-    onContextMenu = (event) => {
+    onContextMenu = event => {
         event.preventDefault();
-    }
+    };
 
-    onMousedown = (event) => {
+    onMousedown = event => {
         var button = event.button,
             mouseDown = this.mouseDown;
 
         this.lastMouseX = event.layerX;
-        this.lastMouseY = event.layerY; 
+        this.lastMouseY = event.layerY;
 
         this.fire("premousedown", event);
 
         if (button === 0) {
-            mouseDown[0] = this.panEnabled;
+            mouseDown[0] = this._panEnabled;
         } else {
             if (button === 1) {
                 mouseDown[1] = true;
@@ -97,9 +120,9 @@ class Window {
 
         this._lastMouseDownPoint = new Vector2(event.layerX, event.layerY);
         this.fire("mousedown", event);
-    }
+    };
 
-    onMousemove = (event) => {
+    onMousemove = event => {
         if (event.preventDefault) {
             event.preventDefault();
         }
@@ -109,9 +132,9 @@ class Window {
         this._lastMouseMovePoint = new Vector2(event.layerX, event.layerY);
 
         this.fire("mousemove", event);
-    }
+    };
 
-    onMouseOut = (event) => {
+    onMouseOut = event => {
         var mouseDown = this.mouseDown;
 
         this.lastMouseX = event.layerX;
@@ -121,10 +144,11 @@ class Window {
         mouseDown[2] = false;
         event.stopPropagation();
         this.fire("mouseout", event);
-    }
+    };
 
-    onMouseUp = (event) => {
-        var button = event.button, mouseDown = this.mouseDown;
+    onMouseUp = event => {
+        var button = event.button,
+            mouseDown = this.mouseDown;
 
         this.lastMouseX = event.layerX;
         this.lastMouseY = event.layerY;
@@ -136,40 +160,39 @@ class Window {
                 mouseDown[1] = false;
             } else {
                 if (button === 2) {
-                    mouseDown[2] = false;;
+                    mouseDown[2] = false;
                 }
             }
         }
         this.fire("mouseup", event);
         this.onRightClick(event);
-    }
+    };
 
-    onClick = (event) => {
+    onClick = event => {
         var point = new Vector2(event.layerX, event.layerY);
         if (this._lastMouseDownPoint && this._lastMouseDownPoint.distanceTo(point) <= 3) {
             this._clickTimeId = setTimeout(() => {
                 if (this._clickTimeId) {
-                    this.fire("premouseclick", event)
+                    this.fire("premouseclick", event);
                     this.fire("mouseclick", event);
                 }
-            }, 200)
+            }, 200);
 
             this.fire("realclick", event);
             this._lastMouseClickPoint = point;
         }
+    };
 
-    }
-
-    onRightClick = (event) => {
+    onRightClick = event => {
         if (event.button == 2) {
             var point = new Vector2(event.layerX, event.layerY);
             if (this._lastMouseDownPoint && this._lastMouseDownPoint.distanceTo(point) <= 3) {
                 this.fire("rightclick", event);
             }
         }
-    }
+    };
 
-    onDoubleClick = (event) => {
+    onDoubleClick = event => {
         if (!this.zoomEnabled) {
             return;
         }
@@ -182,101 +205,100 @@ class Window {
         this.lastMouseY = event.layerY;
         this.lastMouseZ += 10;
         this.fire("dblclick", event);
-    }
+    };
 
-
-    onKeydown = (event) => {
+    onKeydown = event => {
         this.fire("keydown", event);
     };
 
-    onKeyup = (event) => {
+    onKeyup = event => {
         this.fire("keyup", event);
     };
 
-    touchMove = (event) => {
+    touchMove = event => {
         if (event.changedTouches.length > 1) {
             return;
         }
         event.changedTouches[0].button = 0;
         event.preventDefault();
         this.onMousemove(event.changedTouches[0]);
-    }
+    };
 
-    touchUp = (event) => {
+    touchUp = event => {
         if (event.changedTouches.length > 1) {
             return;
         }
         event.preventDefault();
         event.changedTouches[0].button = 0;
         this.onMouseUp(event.changedTouches[0]);
-    }
+    };
 
-    touchDown = (event) => {
+    touchDown = event => {
         if (event.changedTouches.length > 1) {
             return;
         }
         event.preventDefault();
         event.changedTouches[0].button = 0;
         this.onMousedown(event.changedTouches[0]);
-    }
+    };
 
     bindEvent() {
         var el = this.el;
-        el.addEventListener('contextmenu', this.onContextMenu);
-        el.addEventListener('resize', this.onResize)
-        el.addEventListener('onload', this.onResize, false);
+        el.addEventListener("contextmenu", this.onContextMenu);
+        el.addEventListener("resize", this.onResize);
+        el.addEventListener("onload", this.onResize, false);
 
-        el.addEventListener('onkeydown', this.onKeydown);
-        el.addEventListener('onkeyup', this.onKeyup);
+        el.addEventListener("onkeydown", this.onKeydown);
+        el.addEventListener("onkeyup", this.onKeyup);
 
-        el.addEventListener('wheel', this.onMouseWheel);
-        el.addEventListener('mousedown', this.onMousedown);
-        el.addEventListener('mousemove', this.onMousemove);
-        el.addEventListener('mouseout', this.onMouseOut);
-        el.addEventListener('mouseup', this.onMouseUp);
-        el.addEventListener('click', this.onClick, false);
-        el.addEventListener('dblclick', this.onDoubleClick, false);
+        el.addEventListener("wheel", this.onMouseWheel);
+        el.addEventListener("mousedown", this.onMousedown);
+        el.addEventListener("mousemove", this.onMousemove);
+        el.addEventListener("mouseout", this.onMouseOut);
+        el.addEventListener("mouseup", this.onMouseUp);
+        el.addEventListener("click", this.onClick, false);
+        el.addEventListener("dblclick", this.onDoubleClick, false);
 
-        el.addEventListener('touchstart', this.touchDown);
-        el.addEventListener('touchmove', this.touchMove);
-        el.addEventListener('touchend', this.touchUp);
+        el.addEventListener("touchstart", this.touchDown);
+        el.addEventListener("touchmove", this.touchMove);
+        el.addEventListener("touchend", this.touchUp);
     }
 
     clearEvent = () => {
         var el = this.el;
-        el.removeEventListener('contextmenu', this.onContextMenu);
-        el.removeEventListener('resize', this.onResize)
-        el.removeEventListener('onload', this.onResize);
+        el.removeEventListener("contextmenu", this.onContextMenu);
+        el.removeEventListener("resize", this.onResize);
+        el.removeEventListener("onload", this.onResize);
 
-        el.removeEventListener('onkeydown', this.onKeydown);
-        el.removeEventListener('onkeyup', this.onKeyup);
+        el.removeEventListener("onkeydown", this.onKeydown);
+        el.removeEventListener("onkeyup", this.onKeyup);
 
-        el.removeEventListener('wheel', this.onMouseWheel);
-        el.removeEventListener('mousedown', this.onMousedown);
-        el.removeEventListener('mousemove', this.onMousemove);
-        el.removeEventListener('mouseout', this.onMouseOut);
-        el.removeEventListener('mouseup', this.onMouseOut);
-        el.removeEventListener('click', this.onClick);
-        el.removeEventListener('dblclick', this.onDoubleClick);
+        el.removeEventListener("wheel", this.onMouseWheel);
+        el.removeEventListener("mousedown", this.onMousedown);
+        el.removeEventListener("mousemove", this.onMousemove);
+        el.removeEventListener("mouseout", this.onMouseOut);
+        el.removeEventListener("mouseup", this.onMouseOut);
+        el.removeEventListener("click", this.onClick);
+        el.removeEventListener("dblclick", this.onDoubleClick);
 
-        el.removeEventListener('touchstart', this.touchDown);
-        el.removeEventListener('touchmove', this.touchMove);
-        el.removeEventListener('touchend', this.touchUp);
-    }
+        el.removeEventListener("touchstart", this.touchDown);
+        el.removeEventListener("touchmove", this.touchMove);
+        el.removeEventListener("touchend", this.touchUp);
+    };
 
     setSize(w, h) {
         this.width = w;
         this.height = h;
         this.center_x = w * 0.5;
         this.center_y = h * 0.5;
-        this.dom.style.width = w + 'px';
-        this.dom.style.height = h + 'px';
+        this.dom.style.width = w + "px";
+        this.dom.style.height = h + "px";
     }
 
     on() {
         this.dispatch.on.apply(this.dispatch, arguments);
         return this;
-    };
+    }
 
     fire(name, ...argument) {
         this.dispatch.call(name, this, ...argument);
@@ -322,7 +344,7 @@ class Window {
             return true;
         }
         return false;
-    }
+    };
 }
 
 export default Window;

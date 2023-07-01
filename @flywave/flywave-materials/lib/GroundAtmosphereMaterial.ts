@@ -58,6 +58,7 @@ export const GroundAtmosphereShader: THREE.Shader = {
 
     attribute vec4 position;
 
+    #include <common>  
     // Base mandatory uniforms
     uniform mat4 u_modelViewProjection;
     uniform vec3 u_eyePositionWorld;
@@ -86,6 +87,7 @@ export const GroundAtmosphereShader: THREE.Shader = {
     varying vec3 v_mieColor;
     varying vec3 v_vertToCamera;
     varying vec3 v_vertToOrigin;
+    #include <logdepthbuf_pars_vertex>
 
     ${AtmosphereShaderChunks.atmosphere_vertex_utils}
 
@@ -216,6 +218,8 @@ export const GroundAtmosphereShader: THREE.Shader = {
         v_vertToOrigin = normalize(position.xyz);
 
         gl_Position = u_modelViewProjection * position;
+        #include <logdepthbuf_vertex>
+
     }
     `,
 
@@ -229,6 +233,7 @@ export const GroundAtmosphereShader: THREE.Shader = {
     precision highp float;
     precision highp int;
 
+    #include <common>  
     #ifdef CORRECT_COLOR
     uniform vec3 u_hsvCorrection; // Hue, saturation, brightness
     #endif
@@ -244,7 +249,7 @@ export const GroundAtmosphereShader: THREE.Shader = {
     varying vec3 v_mieColor;
     varying vec3 v_vertToCamera;
     varying vec3 v_vertToOrigin;
-
+    #include <logdepthbuf_pars_fragment>
     ${AtmosphereShaderChunks.atmosphere_fragment_utils}
 
     void main(void)
@@ -337,6 +342,7 @@ export const GroundAtmosphereShader: THREE.Shader = {
 
         // Integrate all features
         gl_FragColor = vec4(cRgb, fAtmosphereAlpha);
+        #include <logdepthbuf_fragment>
     }
     `
 };
