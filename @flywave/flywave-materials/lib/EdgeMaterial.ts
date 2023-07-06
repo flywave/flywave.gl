@@ -30,6 +30,9 @@ attribute vec4 color;
 uniform vec3 color;
 #endif
 
+#include <common>  
+#include <logdepthbuf_pars_vertex>
+
 // SHADER_NAME may be defined by THREE.JS own shaders in which case these attributes & uniforms are
 // already defined
 #ifndef SHADER_NAME
@@ -82,6 +85,7 @@ void main() {
     // space is between: -inf < z < 1
     float depthOffset = step(-1.0, -gl_Position.z / gl_Position.w) * EDGE_DEPTH_OFFSET;
     gl_Position.z -= depthOffset;
+    #include <logdepthbuf_vertex>
 
     #ifdef USE_FADING
     #include <fading_vertex>
@@ -91,6 +95,9 @@ void main() {
 const fragmentSource: string = `
 precision highp float;
 precision highp int;
+
+#include <common>  
+#include <logdepthbuf_pars_fragment>
 
 varying vec3 vColor;
 
@@ -102,7 +109,9 @@ varying vec3 vColor;
 #include <fading_pars_fragment>
 #endif
 
+
 void main() {
+    #include <logdepthbuf_fragment>
     float alphaValue = 1.0;
     gl_FragColor = vec4(vColor, alphaValue);
 

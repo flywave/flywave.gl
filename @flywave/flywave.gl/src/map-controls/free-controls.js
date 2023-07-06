@@ -13,7 +13,7 @@ class FreeControl {
     var dispatch = _dispatch('pandone', 'zoomdone', 'rotatedone', 'flydone'),
       disableTilt = false, disableHeading = false;
 
-    this.mapView = application.mapView;
+    this.mapView = application;
     this.application = application;
     this.view = window;
 
@@ -542,7 +542,7 @@ class FreeControl {
   getAltitude(x, y, df) {
     if (this.mapView.zoomLevel < 13) return 0;
     else
-      return this.application.elevationProvider ? this.application.elevationProvider.getHeight(new GeoCoordinates(y, x, df), true) : 0;
+      return this.application.elevation ? this.application.elevation.getHeight(new GeoCoordinates(y, x, df), true) : 0;
   }
 
   getDistanceAndNormal(result, xyz) {
@@ -604,7 +604,7 @@ class FreeControl {
 
         if (this.mapView.zoomLevel < 13) af = 0;
         else
-          af = this.application.elevationProvider ? this.application.elevationProvider.getHeight(lt) || 0 : 0;
+          af = this.application.elevation ? this.application.elevation.getHeight(lt) || 0 : 0;
         if (ai[2] < af) {
           N = af;
           break

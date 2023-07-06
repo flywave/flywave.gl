@@ -68,6 +68,8 @@ const vertexShaderChunk2 = `
   gl_Position = calculateOutline( gl_Position, objectNormal, vec4( transformed, 1.0 ) );
 #endif
 
+#include <logdepthbuf_vertex>
+
 #include <fog_vertex>`;
 
 const fragmentShader = `
@@ -84,9 +86,11 @@ const fragmentShader = `
 
 uniform vec3 outlineColor;
 uniform float outlineAlpha;
-
+#include <logdepthbuf_pars_fragment>
+ 
 void main() {
 
+    #include <logdepthbuf_fragment>
     gl_FragColor = vec4( outlineColor, outlineAlpha );
 
     #include <fog_fragment>

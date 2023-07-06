@@ -12,8 +12,6 @@ import {
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MeshBasicMaterial } from "three";
 
-//up (0,0,1)
-var order = 1;
 class SurfacePolygon extends THREE.Group {
     type = "surface-polygon";
 
@@ -112,7 +110,7 @@ class SurfacePolygon extends THREE.Group {
     };
 
     projectVertexs = (vertexs, geoPosition) => {
-        const { projection } = this.application.mapView;
+        const { projection } = this.application;
         var ps = projection.projectPoint(geoPosition, new Vector3());
 
         var up = new Vector3(0, 0, 1);

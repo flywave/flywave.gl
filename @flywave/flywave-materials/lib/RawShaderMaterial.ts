@@ -53,12 +53,19 @@ export class RawShaderMaterial extends THREE.RawShaderMaterial {
         }
         super(shaderParams);
         this.invalidateFog();
+        this.invalidateLogarithmicDepthBuffer(params?.rendererCapabilities.logarithmicDepthBuffer as boolean);
         this.setOpacity(shaderParams?.opacity);
     }
 
     invalidateFog() {
         if (this.defines !== undefined && this.fog !== getShaderMaterialDefine(this, "USE_FOG")) {
             setShaderMaterialDefine(this, "USE_FOG", this.fog);
+        }
+    }
+
+    invalidateLogarithmicDepthBuffer(logarithmicDepthBuffer:boolean){
+    if (this.defines !== undefined && logarithmicDepthBuffer !== getShaderMaterialDefine(this, "USE_LOGDEPTHBUF")) {
+            setShaderMaterialDefine(this, "USE_LOGDEPTHBUF", logarithmicDepthBuffer);
         }
     }
 

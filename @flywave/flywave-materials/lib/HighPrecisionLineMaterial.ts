@@ -15,6 +15,7 @@ attribute vec4 color;
 varying vec3 vColor;
 #endif
 
+#include <common>  
 // uniforms to implement double-precision
 uniform mat4 u_mvp;             // combined modelView and projection matrix
 uniform vec3 u_eyepos;          // eye position major
@@ -25,6 +26,7 @@ attribute vec3 position;        // high part
 attribute vec3 positionLow;     // low part
 
 #include <high_precision_vert_func>
+#include <logdepthbuf_pars_vertex>
 
 void main() {
     #ifdef USE_COLOR
@@ -33,12 +35,14 @@ void main() {
 
     vec3 pos = subtractDblEyePos(position);
     gl_Position = u_mvp * vec4(pos, 1.0);
+    #include <logdepthbuf_vertex>
 }`;
 
 const fragmentSource: string = `
 precision highp float;
 precision highp int;
 
+#include <common>  
 uniform vec3 diffuseColor;
 uniform float opacity;
 
@@ -46,12 +50,14 @@ uniform float opacity;
 varying vec3 color;
 #endif
 
+#include <logdepthbuf_pars_fragment>
 void main() {
     #ifdef USE_COLOR
     gl_FragColor = vec4( diffuseColor * vColor, opacity );
     #else
     gl_FragColor = vec4( diffuseColor, opacity );
     #endif
+    #include <logdepthbuf_fragment>
 }`;
 
 /**

@@ -75,6 +75,7 @@ const tmpColor = new THREE.Color();
 const vertexSource: string = `
 #define SEGMENT_OFFSET 0.1
 
+#include <common>  
 attribute vec3 extrusionCoord;
 attribute vec3 position;
 attribute vec4 biTangent;
@@ -109,6 +110,7 @@ varying vec3 vColor;
 #endif
 
 #include <fog_pars_vertex>
+#include <logdepthbuf_pars_vertex>
 
 #include <extrude_line_vert_func>
 
@@ -176,12 +178,14 @@ void main() {
     #endif
 
     #include <fog_vertex>
+    #include <logdepthbuf_vertex>
 }`;
 
 const fragmentSource: string = `
 precision highp float;
 precision highp int;
 
+#include <common>  
 uniform vec3 diffuseColor;
 uniform vec3 outlineColor;
 uniform float opacity;
@@ -218,6 +222,7 @@ varying vec3 vColor;
 #endif
 
 #include <fog_pars_fragment>
+#include <logdepthbuf_pars_fragment>
 
 void main() {
     float alpha = opacity;
@@ -314,6 +319,7 @@ void main() {
     #include <fading_fragment>
     #endif
 
+    #include <logdepthbuf_fragment>
 
 }`;
 

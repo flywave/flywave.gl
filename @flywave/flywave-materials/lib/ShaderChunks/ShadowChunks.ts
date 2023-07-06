@@ -13,9 +13,24 @@
  */
 export const simpleLightingShadowChunk = `
     struct PhysicalMaterial {
-        vec3	diffuseColor;
-        float	specularRoughness;
-        vec3	specularColor;
+
+        vec3 diffuseColor;
+        float roughness;
+        vec3 specularColor;
+        float specularF90;
+
+        #ifdef USE_CLEARCOAT
+            float clearcoat;
+            float clearcoatRoughness;
+            vec3 clearcoatF0;
+            float clearcoatF90;
+        #endif
+
+        #ifdef USE_SHEEN
+            vec3 sheenColor;
+            float sheenRoughness;
+        #endif
+
     };
 
     #define DEFAULT_SPECULAR_COEFFICIENT 0.04

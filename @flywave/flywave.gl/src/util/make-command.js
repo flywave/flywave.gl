@@ -14,7 +14,7 @@ export function makeMultiPointDefaultLookup(application, feature, newPoint) {
     var mat = new THREE.Object3D;
     coordinates.concat(newPoint ? [newPoint] : []).forEach((e, i) => {
         if (!ntopology.matrixs[i]) {
-            mat.lookAt(application.mapView.projection.projectPoint(
+            mat.lookAt(application.projection.projectPoint(
                 new GeoCoordinates(e[1], e[0], e[2]), new THREE.Vector3));
             mat.updateMatrix()
             ntopology.matrixs[i] = mat.matrix.elements;

@@ -8,7 +8,7 @@ var vec3 = Vec3(), matrix = Matrix();
 class EarthFreeControl extends FreeControl {
     constructor(application, window) {
         super(application, window);
-        this.camera = new EarthCamera(application.mapView);
+        this.camera = new EarthCamera(application);
     }
 
     pan_velocity(D, ak) {
@@ -45,7 +45,7 @@ class EarthFreeControl extends FreeControl {
                         point = pointOnLine;
                     }
                     if (feature || _3dtile) {
-                        const { position } = this.application.mapView.camera;
+                        const { position } = this.application.camera;
                         reslut[0] = position.x + point.x;
                         reslut[1] = position.y + point.y;
                         reslut[2] = position.z + point.z;
@@ -72,8 +72,8 @@ class EarthFreeControl extends FreeControl {
                 x = this.width / 2;
                 y = this.height / 2;
             }
-            if (this.application.elevationProvider) {
-                var rayRet = this.application.elevationProvider.rayCast(x, y);
+            if (this.application.elevation) {
+                var rayRet = this.application.elevation.rayCast(x, y);
                 if (rayRet) {
                     reslut[0] = rayRet.point.x;
                     reslut[1] = rayRet.point.y;

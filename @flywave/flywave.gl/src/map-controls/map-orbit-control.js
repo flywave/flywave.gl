@@ -11,14 +11,13 @@ class MapOrbitControl {
     zoomLevelDeltaOnControl = 1;
 
     constructor(application) {
-        const { mapView } = application;
         this._control = new EarthFreeControl(application, application.window);
 
-        this.mapView = application.mapView;
+        this.mapView = application;
         this.window = application.window;
         this.mapView.addEventListener(MapViewEventNames.Render, this.onUpdate);
 
-        var geocoord = mapView.projection.unprojectPoint(mapView.camera.position);
+        var geocoord = this.mapView.projection.unprojectPoint(this.mapView.camera.position);
         this._control.setTo(
             geocoord.longitude,
             geocoord.latitude,

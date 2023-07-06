@@ -78,6 +78,10 @@ export class MaterialProvider {
         this.options = options || {};
     }
 
+    get baseUrl(){
+        return this.options.url;
+    }
+
     bindDataSource(dataSource) {
         this.dataSource = dataSource;
         if(dataSource)

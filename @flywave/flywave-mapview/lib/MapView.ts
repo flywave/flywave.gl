@@ -247,6 +247,7 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
 
     useMapRenderingManager?:(width:number,height:number)=>MapRenderingManager
 
+    logarithmicDepthBuffer?: boolean;
     /**
      * `Projection` used by the `MapView`.
      *
@@ -993,7 +994,7 @@ export class MapView extends EventDispatcher {
             context: this.m_options.context,
             antialias: this.nativeWebglAntialiasEnabled,
             alpha: this.m_options.alpha,
-            logarithmicDepthBuffer:true,
+            logarithmicDepthBuffer: this.m_options.logarithmicDepthBuffer==undefined?true:this.m_options.logarithmicDepthBuffer,
             preserveDrawingBuffer: this.m_options.preserveDrawingBuffer === true,
             powerPreference:
                 this.m_options.powerPreference === undefined

@@ -75,7 +75,7 @@ class GroundHole extends THREE.Group {
     }
 
     projectVertexs = (vertexs, geoPosition) => {
-        const { projection } = this.application.mapView;
+        const { projection } = this.application;
         var ps = projection.projectPoint(geoPosition, new Vector3());
         for (var i = 0; i < vertexs.length; i += 3) {
             var p = new GeoCoordinates(vertexs[i + 1], vertexs[i], vertexs[i + 2]);

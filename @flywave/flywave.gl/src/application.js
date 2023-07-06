@@ -9,11 +9,8 @@ import {
     MapViewEventNames
 } from "@flywave/flywave-mapview";
 import { MapObjectAdapter } from "@flywave/flywave-mapview/lib/MapObjectAdapter";
-import FeatureTheme from "./theme/feature";
 import { dispatch } from "d3-dispatch";
 import Window from "./window";
-import { GeoServerFeatureDataSource } from "./feature_datasource";
-import TopoSource from "./topo-source";
 import SunLight from "./util/make-light";
 import hat from "hat";
 import { MapOrbitControl } from "./map-controls/map-orbit-control";
@@ -31,47 +28,48 @@ class BaseMapObjectAdapter extends MapObjectAdapter {
         return false;
     }
 }
-class Application {
+class Application extends MapView {
     id = hat();
 
-    dispatch = dispatch("ready", "onclick", "mousedown", "mouseup", "camera-changed");
+    dispatch = dispatch("onclick", "mousedown", "mouseup", "camera-changed");
 
-    Added3DTileSource = { map: new Map(), mainSource: null, index: 1, scene: new Scene() };
+    added3DTileSource = { map: new Map(), mainSource: null, index: 1, scene: new Scene() };
 
     materialProviders = [];
 
-    __ready = null;
-
-    getReady() {
-        return this.__ready;
-    }
-
     constructor(options) {
-        this.initlizeMapView(options);
-
-        this.sunLight = new SunLight(this.mapView);
-
-        this.__ready = Promise.all([this.initlizeDataSource(options)]).then(async () => {
-            this.topoSource = new TopoSource(this, options);
-            await this.topoSource.connect();
-
-            this.mapView.scene.add(this.Added3DTileSource.scene);
-
-            this.heightMapSource = new HeightMapSource({});
-            this.heightMapSource.emptySource();
-            this.__updateTerrainSource(this.heightMapSource);
-            this.dispatch.call("ready", this);
+        super({
+            theme: makeMapDefaultTheme(),
+            enableShadows: options.enableShadows === undefined ? true : options.enableShadows,
+            decoderUrl: `${config.DECODER_URL}`,
+            projection: sphereProjection,
+            throttlingEnabled: true,
+            maxVisibleDataSourceTiles: options.maxVisibleDataSourceTiles || 100,
+            enablePolarDataSource: options.enablePolarDataSource,
+            addBackgroundDatasource: options.addBackgroundDatasource,
+            clipPlanesEvaluator: new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.5, 1000),
+            lodMinTilePixelSize: options.lodMinTilePixelSize || 1024,
+            ...options
         });
 
-        this._terrain_promise = this.__ready;
+        this.initlize(options);
 
-        const { camera, projection, mapAnchors } = this.mapView;
-        const updateCallback = () => this.mapView.update();
+        this.sunLight = new SunLight(this);
+
+        this.scene.add(this.added3DTileSource.scene);
+
+        this.heightMapSource = new HeightMapSource({});
+        this.heightMapSource.emptySource();
+        this.__updateTerrainSource(this.heightMapSource);
+
+        const { camera, projection, mapAnchors } = this;
+
+        const updateCallback = () => this.update();
         const atmosphere = new MapViewAtmosphere(
             mapAnchors,
             camera,
             projection,
-            this.mapView.renderer.capabilities,
+            this.renderer.capabilities,
             updateCallback
         );
 
@@ -80,7 +78,7 @@ class Application {
         atmosphere.skyMesh.userData.mapAdapter = mapAdapter;
         atmosphere.lightMode = AtmosphereLightMode.LightDynamic;
         this.atmosphere = atmosphere;
-        this.mapView.addEventListener(MapViewEventNames.CameraPositionChanged, this.onCameraChange);
+        this.addEventListener(MapViewEventNames.CameraPositionChanged, this.onCameraChange);
     }
 
     clearElevationSource() {
@@ -95,11 +93,12 @@ class Application {
     }
 
     async __updateTerrainSource(terrainSource) {
-        await this.mapView.setElevationSource(
+        await this.setElevationSource(
             terrainSource,
             terrainSource.getElevationRangeSource()
         );
-        this.elevationProvider = terrainSource.getElevationProvider();
+        
+        this.elevation = terrainSource.getElevationProvider();
         this.terrainSource = terrainSource;
         this.terrainSource.application = this;
 
@@ -107,12 +106,11 @@ class Application {
             provider.bindDataSource(this.terrainSource);
         });
     }
+
     async setHeightMapSource(source) {
         this.__enableTerrain = true;
-        await this._terrain_promise.then(async () => {
-            this._terrain_promise = this.heightMapSource.setSourceTerrain(source).then(() => {
-                return this.__updateTerrainSource(this.heightMapSource);
-            });
+        this._terrain_promise = this.heightMapSource.setSourceTerrain(source).then(() => {
+            return this.__updateTerrainSource(this.heightMapSource);
         });
     }
 
@@ -142,60 +140,28 @@ class Application {
     }
 
     addAnchorMesh(mesh) {
-        this.mapView.mapAnchors.add(mesh);
+        this.mapAnchors.add(mesh);
         mesh.map = this;
-        this.mapView.update();
+        this.update();
     }
 
     removeAnchorMesh(mesh) {
-        this.mapView.mapAnchors.remove(mesh);
-        this.mapView.update();
+        this.mapAnchors.remove(mesh);
+        this.update();
         delete mesh.map;
     }
 
     onCameraChange = () => {
-        if (this.mapView.zoomLevel >= 22) {
-            this.atmosphere.enabled = false;
-        } else {
-            this.atmosphere.enabled = true;
-        }
-
         this.dispatch.call("camera-changed", this);
     };
 
-    reset() {
-        this.history.reset();
-        this.topoSource.reset();
-    }
-
-    updateFeatureTopoMesh = id => {
-        this.topoSource.recreate(this.history.get(id));
-    };
-
-    initlizeMapView(options) {
-        this.mapView = new MapView({
-            theme: makeMapDefaultTheme(),
-            ...options,
-            enableShadows: true,
-            decoderUrl: `${config.DECODER_URL}`,
-            projection: sphereProjection,
-            throttlingEnabled: true,
-            maxVisibleDataSourceTiles: 100,
-            enablePolarDataSource: false,
-            addBackgroundDatasource: false,
-            clipPlanesEvaluator: new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.5, 1000),
-            lodMinTilePixelSize: 1024
-        });
-
-        // this.mapView.renderer.outputEncoding = THREE.sRGBEncoding;
-
-        this.mapView.pickHandler.superRaycasterFromScreenPoint =
-            this.mapView.pickHandler.raycasterFromScreenPoint;
-        this.mapView.pickHandler.raycasterFromScreenPoint = this.raycasterFromScreenPoint;
-        this.window = new Window(this.mapView.canvas);
+    initlize(options) {
+        this.pickHandler.superRaycasterFromScreenPoint = this.pickHandler.raycasterFromScreenPoint;
+        this.pickHandler.raycasterFromScreenPoint = this.raycasterFromScreenPoint;
+        this.window = new Window(this.canvas);
 
         this.window.on(`mousedraw.${this.id}`, () => {
-            this.mapView.update();
+            this.update();
         });
 
         const mapOrbitControl = new MapOrbitControl(this);
@@ -212,7 +178,7 @@ class Application {
                     zoomLevel: "input"
                 });
 
-                this.mapView.canvas.parentElement.appendChild(ui.domElement);
+                this.canvas.parentElement.appendChild(ui.domElement);
                 this.mapControl = ui;
             }
         } else {
@@ -232,34 +198,21 @@ class Application {
         return ray;
     }
 
-    exit() {
-        this.mapView.removeEventListener(
-            MapViewEventNames.CameraPositionChanged,
-            this.onCameraChange
-        );
+    dispose() {
+        super.dispose();
+        this.removeEventListener(MapViewEventNames.CameraPositionChanged, this.onCameraChange);
         if (this.mapControl) {
             this.mapControl.dispose();
         }
-        this.mapView.dispose();
-    }
-
-    initlizeDataSource(options) {
-        const datasource = new GeoServerFeatureDataSource({ ...options });
-        this.dataProvider = datasource.dataProvider();
-
-        return this.mapView.addDataSource(datasource).then(() => {
-            datasource.setTheme(FeatureTheme);
-            this.datasource = datasource;
-        });
     }
 
     intersectMapObjects(screenX, screenY) {
-        let usableIntersections = this.mapView.intersectMapObjects(screenX, screenY);
-        var rayCaster = this.mapView.pickHandler.setupRaycaster(screenX, screenY);
+        let usableIntersections = super.intersectMapObjects(screenX, screenY);
+        var rayCaster = this.pickHandler.setupRaycaster(screenX, screenY);
 
         var intersects = [];
 
-        rayCaster.intersectObject(this.Added3DTileSource.scene, true, intersects);
+        rayCaster.intersectObject(this.added3DTileSource.scene, true, intersects);
 
         return usableIntersections
             .concat(
@@ -283,17 +236,17 @@ class Application {
         var frustum = new Frustum();
         frustum.setFromProjectionMatrix(
             new Matrix4().multiplyMatrices(
-                this.mapView.m_rteCamera.projectionMatrix,
-                this.mapView.m_rteCamera.matrixWorldInverse
+                this.m_rteCamera.projectionMatrix,
+                this.m_rteCamera.matrixWorldInverse
             )
         );
 
-        var frustum = makePickFrustum(x, y, width, height, this.mapView.m_rteCamera, (x, y) => {
-            return this.mapView.getNormalizedScreenCoordinates(x, y);
+        var frustum = makePickFrustum(x, y, width, height, this.m_rteCamera, (x, y) => {
+            return this.getNormalizedScreenCoordinates(x, y);
         });
 
         var intersects = [];
-        for (const child of this.mapView.mapAnchors.children) {
+        for (const child of this.mapAnchors.children) {
             if (child.userData.feature) {
                 var box = new Box3().setFromObject(child);
                 if (frustum.intersectsBox(box)) {
@@ -306,55 +259,54 @@ class Application {
     };
 
     get3DTileSource(url) {
-        return this.Added3DTileSource.map.get(url);
+        return this.added3DTileSource.map.get(url);
+    }
+
+    get3DTileSourceList() {
+        return this.added3DTileSource.map.keys();
     }
 
     add3DTileSource(url, flyto = true) {
-        if (!this.Added3DTileSource.map.has(url)) {
-            const { camera, renderer } = this.mapView;
-            this.Added3DTileSource.index++;
-            const tilesRenderer = new F3dTilesRenderer(
-                url,
-                this.mapView,
-                DebugTilesRenderer,
-                tile => {
-                    if (flyto) {
-                        const [milng, milat, mxlng, mxlat] = tile.boundingVolume.region;
-                        var toA = 180 / Math.PI;
-                        this.mapOrbitControl.flyToBox(
-                            GeoBox.fromCoordinates(
-                                new GeoCoordinates(milat * toA, milng * toA, 0),
-                                new GeoCoordinates(mxlat * toA, mxlng * toA, 0)
-                            )
-                        );
-                    }
+        if (!this.added3DTileSource.map.has(url)) {
+            const { camera, renderer } = this;
+            this.added3DTileSource.index++;
+            const tilesRenderer = new F3dTilesRenderer(url, this, DebugTilesRenderer, tile => {
+                if (flyto) {
+                    const [milng, milat, mxlng, mxlat] = tile.boundingVolume.region;
+                    var toA = 180 / Math.PI;
+                    this.mapOrbitControl.flyToBox(
+                        GeoBox.fromCoordinates(
+                            new GeoCoordinates(milat * toA, milng * toA, 0),
+                            new GeoCoordinates(mxlat * toA, mxlng * toA, 0)
+                        )
+                    );
                 }
-            );
+            });
             tilesRenderer.setCamera(camera);
             tilesRenderer.setResolutionFromRenderer(camera, renderer);
 
-            this.Added3DTileSource.map.set(url, tilesRenderer);
-            this.Added3DTileSource.scene.add(tilesRenderer.object);
+            this.added3DTileSource.map.set(url, tilesRenderer);
+            this.added3DTileSource.scene.add(tilesRenderer.object);
 
-            if (this.Added3DTileSource.mainSource) {
-                tilesRenderer.lruCache = this.Added3DTileSource.mainSource.lruCache;
-                tilesRenderer.downloadQueue = this.Added3DTileSource.mainSource.downloadQueue;
-                tilesRenderer.parseQueue = this.Added3DTileSource.mainSource.parseQueue;
+            if (this.added3DTileSource.mainSource) {
+                tilesRenderer.lruCache = this.added3DTileSource.mainSource.lruCache;
+                tilesRenderer.downloadQueue = this.added3DTileSource.mainSource.downloadQueue;
+                tilesRenderer.parseQueue = this.added3DTileSource.mainSource.parseQueue;
             } else {
-                this.Added3DTileSource.mainSource = tilesRenderer;
+                this.added3DTileSource.mainSource = tilesRenderer;
             }
             return tilesRenderer;
         } else {
-            return this.Added3DTileSource.map.get(url);
+            return this.added3DTileSource.map.get(url);
         }
     }
 
     remove3DTileSource(url) {
-        if (this.Added3DTileSource.map.has(url)) {
-            var ti = this.Added3DTileSource.map.get(url);
+        if (this.added3DTileSource.map.has(url)) {
+            var ti = this.added3DTileSource.map.get(url);
             ti.off();
-            this.Added3DTileSource.scene.remove(this.Added3DTileSource.map.get(url).object);
-            this.Added3DTileSource.map.delete(url);
+            this.added3DTileSource.scene.remove(this.added3DTileSource.map.get(url).object);
+            this.added3DTileSource.map.delete(url);
         }
     }
 
@@ -379,25 +331,23 @@ class Application {
         return {
             heading: this.mapOrbitControl.getHeading(),
             tilt: this.mapOrbitControl.getTilt(),
-            cameraGeoLocation: this.mapView.projection.unprojectPoint(this.mapView.camera.position),
-            centerDistance: this.mapView.camera.position.distanceTo(this.mapOrbitControl.center)
+            cameraGeoLocation: this.projection.unprojectPoint(this.camera.position),
+            centerDistance: this.camera.position.distanceTo(this.mapOrbitControl.center)
         };
     }
 
     getScreenPositionFromGeoCoordinate(longitude, latitude, altitude) {
-        const { mapView } = this;
-        var position = mapView.projection.projectPoint(
+        var position = this.projection.projectPoint(
             new GeoCoordinates(latitude, longitude, altitude)
         );
         return this.getScreenPositionFromXYZ(position.x, position.y, position.z);
     }
 
     getScreenPositionFromXYZ(worldX, worldY, worldZ) {
-        const { mapView } = this;
-        var { width, height } = mapView.getCanvasClientSize();
-        mapView.m_screenProjector.update(mapView.camera, width, height);
+        var { width, height } = this.getCanvasClientSize();
+        this.m_screenProjector.update(this.camera, width, height);
         var position = new Vector3(worldX, worldY, worldZ);
-        var { x, y } = mapView.getScreenPosition(position);
+        var { x, y } = this.getScreenPosition(position);
 
         if (
             new Box2(new Vector2(0, 0), new Vector2(width, height)).containsPoint(new Vector2(x, y))

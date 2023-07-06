@@ -20,12 +20,16 @@ uniform mat4 projectionMatrix;
 
 attribute vec3 position;
 
+#include <common>
+#include <logdepthbuf_pars_vertex>
 void main() {
     vec3 transformed = vec3(position);
     vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
 
     gl_Position = projectionMatrix * mvPosition;
     gl_PointSize = size;
+
+    #include <logdepthbuf_vertex>
 }
 `;
 
@@ -35,6 +39,9 @@ precision highp int;
 
 uniform vec3 diffuseColor;
 uniform float opacity;
+
+#include <common>  
+#include <logdepthbuf_pars_fragment>
 
 void main() {
     float alpha = opacity;
@@ -47,6 +54,7 @@ void main() {
     alpha *= threshold;
 
     gl_FragColor = vec4(diffuseColor, alpha);
+    #include <logdepthbuf_fragment>
 }`;
 
 /**

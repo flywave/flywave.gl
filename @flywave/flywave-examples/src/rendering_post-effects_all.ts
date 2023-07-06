@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GeoCoordinates } from "@flywave/flywave-geoutils";
+import { GeoCoordinates,sphereProjection } from "@flywave/flywave-geoutils";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import {
@@ -37,6 +37,7 @@ export namespace EffectsAllExample {
 
         const mapView = new MapView({
             canvas,
+            projection: sphereProjection,
             theme: "resources/berlin_tilezen_base.json"
         });
 
