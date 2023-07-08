@@ -293,6 +293,15 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
     theme?: string | Theme | FlatTheme | Promise<Theme>;
 
     /**
+     * 
+     */
+    useThemeManager?: (mapView:MapView,uriResolver:UriResolver|undefined)=>MapViewThemeManager;
+
+    /** 
+     * 
+     */
+    useMapViewEnvironment?:(mapView:MapView,options:MapViewOptions)=>MapViewEnvironment;
+    /**
      * Resolve `URI` referenced in `MapView` assets using this resolver.
      *
      * Use, to support application/deployment specific `URI`s into actual `URLs` that can be loaded
@@ -1049,7 +1058,7 @@ export class MapView extends EventDispatcher {
         // this.m_visibleTiles is set in createVisibleTileSet, set it here again only to let tsc
         // know the member is set in the constructor.
         this.m_visibleTiles = this.createVisibleTileSet();
-        this.m_sceneEnvironment = new MapViewEnvironment(this, options);
+        this.m_sceneEnvironment = this.m_options.useMapViewEnvironment? this.m_options.useMapViewEnvironment(this, options) : new MapViewEnvironment(this, options);
 
         // setup camera with initial position
         this.setupCamera();
@@ -1099,7 +1108,7 @@ export class MapView extends EventDispatcher {
             this.m_taskScheduler.throttlingEnabled = options.throttlingEnabled;
         }
 
-        this.m_themeManager = new MapViewThemeManager(this, this.m_uriResolver);
+        this.m_themeManager = this.m_options.useThemeManager? this.m_options.useThemeManager(this, this.uriResolver) : new MapViewThemeManager(this, this.m_uriResolver);
 
         // will initialize with an empty theme and updated when theme is loaded and set
         this.m_textElementsRenderer = this.createTextRenderer();

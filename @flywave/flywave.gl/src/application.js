@@ -11,17 +11,17 @@ import {
 import { MapObjectAdapter } from "@flywave/flywave-mapview/lib/MapObjectAdapter";
 import { dispatch } from "d3-dispatch";
 import Window from "./window";
-import SunLight from "./util/make-light";
 import hat from "hat";
 import { MapOrbitControl } from "./map-controls/map-orbit-control";
 import { Box3, Matrix4, Scene, Vector3 } from "three";
-import makeMapDefaultTheme from "./theme/map-default-theme";
 import config from "./config";
 import { Frustum, Vector2, Box2 } from "three";
 import { HeightMapSource, TinTerrainSource } from "./terrain-source";
 import { DebugTilesRenderer } from "./3dtiles-render/three/DebugTilesRenderer";
 import makePickFrustum from "./util/rang-frustum";
 import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
+import { ThemeManager } from "./theme-manager";
+import { Environment } from "./environment";
 
 class BaseMapObjectAdapter extends MapObjectAdapter {
     isPickable() {
@@ -39,22 +39,22 @@ class Application extends MapView {
 
     constructor(options) {
         super({
-            theme: makeMapDefaultTheme(),
             enableShadows: options.enableShadows === undefined ? true : options.enableShadows,
-            decoderUrl: `${config.DECODER_URL}`,
-            projection: sphereProjection,
-            throttlingEnabled: true,
-            maxVisibleDataSourceTiles: options.maxVisibleDataSourceTiles || 100,
-            enablePolarDataSource: options.enablePolarDataSource,
-            addBackgroundDatasource: options.addBackgroundDatasource,
-            clipPlanesEvaluator: new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.5, 1000),
+            // maxVisibleDataSourceTiles: options.maxVisibleDataSourceTiles || 100,
+            // enablePolarDataSource: options.enablePolarDataSource,
+            // addBackgroundDatasource: options.addBackgroundDatasource,
             lodMinTilePixelSize: options.lodMinTilePixelSize || 1024,
-            ...options
+            ...options,
+            useThemeManager: (mapView, uriResolver) => new ThemeManager(mapView, uriResolver),
+            useMapViewEnvironment: (mapView, options) => new Environment(mapView, options),
+            projection: sphereProjection,
+            decoderUrl: `${config.DECODER_URL}`,
+            throttlingEnabled:
+                options.throttlingEnabled == undefined ? true : options.throttlingEnabled,
+            clipPlanesEvaluator: new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.5, 1000)
         });
 
         this.initlize(options);
-
-        this.sunLight = new SunLight(this);
 
         this.scene.add(this.added3DTileSource.scene);
 
@@ -93,11 +93,8 @@ class Application extends MapView {
     }
 
     async __updateTerrainSource(terrainSource) {
-        await this.setElevationSource(
-            terrainSource,
-            terrainSource.getElevationRangeSource()
-        );
-        
+        await this.setElevationSource(terrainSource, terrainSource.getElevationRangeSource());
+
         this.elevation = terrainSource.getElevationProvider();
         this.terrainSource = terrainSource;
         this.terrainSource.application = this;
@@ -117,7 +114,9 @@ class Application extends MapView {
     async setTinTerrainSource(options) {
         this.__enableTerrain = true;
         await this._terrain_promise.then(async () => {
-            await this.__updateTerrainSource(new TinTerrainSource(options));
+            if (!this.terrainSource || this.terrainSource.baseUrl != options.url) {
+                await this.__updateTerrainSource(new TinTerrainSource(options));
+            }
         });
     }
 
@@ -131,24 +130,16 @@ class Application extends MapView {
         provider.remove();
     }
 
-    setTerrainWireframe(v) {
-        this.terrainWireframe = v;
-    }
-
     getMaterialProviders() {
         return this.materialProviders;
     }
 
     addAnchorMesh(mesh) {
         this.mapAnchors.add(mesh);
-        mesh.map = this;
-        this.update();
     }
 
     removeAnchorMesh(mesh) {
         this.mapAnchors.remove(mesh);
-        this.update();
-        delete mesh.map;
     }
 
     onCameraChange = () => {

@@ -32,6 +32,10 @@ export class TerrainSource extends TileDataSource {
         this.elevationProvider.bindDataSource(this);
     }
 
+    get baseUrl(){
+        return this._baseUrl;
+    }
+
     onCameraChange = () => {
         this._onCameraChange = true;
     };
@@ -133,6 +137,7 @@ export class TerrainSource extends TileDataSource {
     }
 
     get wireframe() {
-        return this.application.terrainWireframe;
+        return this.terrainWireframe;
     }
+
 }

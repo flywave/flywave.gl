@@ -56,8 +56,9 @@ Object.assign(THREE.ShaderChunk, {
 
         float height_u = uv.x*uUvTransform.x + uUvTransform.z;
         float height_v = uv.y*uUvTransform.x + uUvTransform.y;  
-
+        #ifdef USE_UV
         vUv =  vec2(height_u, height_v);  
+        #endif
     `,
     "beginnormal_terrain_vertex": `  
  

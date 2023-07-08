@@ -33,6 +33,8 @@ export class TinTerrainSource extends TerrainSource {
         });
 
         this.dataTerrainProvider = new DataTerrainProvider({ ...options, requestVertexNormals: true }, this);
+
+        this._baseUrl = options.url;
     }
 
     connect() {

@@ -7,7 +7,7 @@
 import { GradientSky } from "@flywave/flywave-datasource-protocol";
 import { ProjectionType } from "@flywave/flywave-geoutils";
 import { getOptionValue } from "@flywave/flywave-utils";
-import { Color, CubeTexture, DataTexture, Line3, Plane, RGBFormat, Texture, Vector3 } from "three";
+import { Color, CubeTexture, DataTexture, Line3, Plane, RGBAFormat, Texture, Vector3 } from "three";
 
 export const DEFAULT_TEXTURE_SIZE = 512;
 export const DEFAULT_MONOMIAL_POWER = 1;
@@ -79,12 +79,12 @@ export class SkyGradientTexture {
         this.m_faceCount = this.m_projectionType === ProjectionType.Planar ? 1.0 : 6.0;
         this.m_faces = [];
         for (let i = 0; i < this.m_faceCount; ++i) {
-            const data = new Uint8Array(3 * this.m_width * this.m_height);
+            const data = new Uint8Array(4 * this.m_width * this.m_height);
             this.fillTextureData(data, i, topColor, bottomColor, groundColor, sky.monomialPower);
 
-            const texture = new DataTexture(data, this.m_width, this.m_height, RGBFormat);
+            const texture = new DataTexture(data, this.m_width, this.m_height, RGBAFormat);
             texture.needsUpdate = true;
-            texture.unpackAlignment = 1;
+            // texture.unpackAlignment = 4;
             this.m_faces.push(texture);
         }
 
@@ -211,9 +211,10 @@ export class SkyGradientTexture {
                     }
                 }
 
-                data[i * this.m_width * 3 + j * 3] = color.r;
-                data[i * this.m_width * 3 + j * 3 + 1] = color.g;
-                data[i * this.m_width * 3 + j * 3 + 2] = color.b;
+                data[i * this.m_width * 4 + j * 4] = color.r;
+                data[i * this.m_width * 4 + j * 4 + 1] = color.g;
+                data[i * this.m_width * 4 + j * 4 + 2] = color.b;
+                data[i * this.m_width * 4 + j * 4 + 3] = 255;
             }
         }
     }

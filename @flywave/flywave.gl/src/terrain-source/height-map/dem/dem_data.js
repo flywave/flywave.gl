@@ -97,6 +97,7 @@ export default class DEMData {
         // texture.generateMipmaps = false; 
         texture.flipY = true;
         texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.needsUpdate = true;
         this.texture = texture;
     }
 

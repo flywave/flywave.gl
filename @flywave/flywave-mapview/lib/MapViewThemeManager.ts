@@ -86,7 +86,7 @@ export class MapViewThemeManager {
         return loadedTheme;
     }
 
-    private async updateTheme(theme: Theme): Promise<void> {
+    async updateTheme(theme: Theme): Promise<void> {
         const environment = this.m_mapView.sceneEnvironment;
         // Fog and sky.
         this.m_theme.fog = theme.fog;

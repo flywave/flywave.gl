@@ -117,6 +117,10 @@ export class MapViewEnvironment {
         }
     }
 
+    createLight(lightDescription: Light){
+        return createLight(lightDescription)
+    }
+
     updateLighting(lights?: Light[]) {
         if (this.m_createdLights) {
             this.m_createdLights.forEach((light: THREE.Light) => {
@@ -136,7 +140,7 @@ export class MapViewEnvironment {
             this.m_overlayCreatedLights = [];
 
             lights.forEach((lightDescription: Light) => {
-                const light = createLight(lightDescription);
+                const light = this.createLight(lightDescription);
                 if (!light) {
                     logger.warn(
                         `MapView: failed to create light ${lightDescription.name} of type ${lightDescription.type}`
