@@ -160,7 +160,7 @@ class FullScreenQuad {
     private readonly m_camera: THREE.Camera;
     constructor(material: THREE.Material) {
         this.m_camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-        const geometry = new THREE.PlaneBufferGeometry(2, 2);
+        const geometry = new THREE.PlaneGeometry(2, 2);
         this.m_mesh = new THREE.Mesh(geometry, material);
     }
 

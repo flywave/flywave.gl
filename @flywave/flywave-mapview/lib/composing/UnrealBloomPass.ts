@@ -41,7 +41,7 @@ export class BloomPass extends Pass {
 
     private readonly m_scene: THREE.Scene = new THREE.Scene();
     private m_basic = new THREE.MeshBasicMaterial();
-    private m_quad = new THREE.Mesh(new THREE.PlaneBufferGeometry(2, 2));
+    private m_quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
 
     private readonly m_bloomTintColors: THREE.Vector3[] = [
         new THREE.Vector3(1, 1, 1),

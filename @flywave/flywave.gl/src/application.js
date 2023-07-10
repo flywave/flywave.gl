@@ -37,6 +37,8 @@ class Application extends MapView {
 
     materialProviders = [];
 
+    _terrain_promise = Promise.resolve();
+
     constructor(options) {
         super({
             enableShadows: options.enableShadows === undefined ? true : options.enableShadows,
@@ -51,7 +53,7 @@ class Application extends MapView {
             decoderUrl: `${config.DECODER_URL}`,
             throttlingEnabled:
                 options.throttlingEnabled == undefined ? true : options.throttlingEnabled,
-            clipPlanesEvaluator: new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.5, 1000)
+            clipPlanesEvaluator:options.clipPlanesEvaluator === undefined ? undefined : new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.5, 1000)
         });
 
         this.initlize(options);
@@ -60,7 +62,7 @@ class Application extends MapView {
 
         this.heightMapSource = new HeightMapSource({});
         this.heightMapSource.emptySource();
-        this.__updateTerrainSource(this.heightMapSource);
+        this._terrain_promise = this.__updateTerrainSource(this.heightMapSource);
 
         const { camera, projection, mapAnchors } = this;
 

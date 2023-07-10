@@ -1,10 +1,9 @@
-
 import { Tile, TileLoaderState } from "@flywave/flywave-mapview";
 import { TileLoader, TileFactory } from "@flywave/flywave-mapview-decoder";
 
 import { sphereTileGridGeometry } from "./geometry/sphere-tile-geometry";
 import { TileKey } from "@flywave/flywave-geoutils";
-import "./shader"
+import "./shader";
 
 export class HeightMapDemTileLoader extends TileLoader {
     loadImpl(
@@ -27,7 +26,7 @@ export class HeightMapDemTileLoader extends TileLoader {
                 if (payload) {
                     this.onLoaded(payload, onDone, onError);
                 } else {
-                    throw "Net error"
+                    throw "Net error";
                 }
             })
             .catch(error => {
@@ -49,12 +48,13 @@ export class HeightMapMeshTileFactory extends TileFactory {
 const emptyTexture = new THREE.DataTexture();
 
 class HeightMapMeshTile extends Tile {
-
     willRender = () => {
-        this.shaders.forEach((shader) => {
+        this.shaders.forEach(shader => {
             if (shader.uniforms.uGlobePosition) {
                 const inv = this.mapView.camera.matrixWorldInverse.elements;
-                shader.uniforms.uGlobePosition.value.copy(new THREE.Vector4(inv[12], inv[13], inv[14], this.mapView.zoomLevel));
+                shader.uniforms.uGlobePosition.value.copy(
+                    new THREE.Vector4(inv[12], inv[13], inv[14], this.mapView.zoomLevel)
+                );
             }
         });
         if (this.dataSource.wireframe != this.wireframe) {
@@ -64,7 +64,7 @@ class HeightMapMeshTile extends Tile {
             this.wireframe = this.dataSource.wireframe;
         }
         return true;
-    }
+    };
 
     shaders = [];
 
@@ -93,7 +93,8 @@ class HeightMapMeshTile extends Tile {
                 `#include <uv_pars_vertex>
                 #include <terrain_common_pars>
                 #include <terrain_common>
-                #include <terrain_pars_vert>`);
+                #include <terrain_pars_vert>`
+            );
 
             // shader.fragmentShader = shader.fragmentShader.replace(
             //     `#include <premultiplied_alpha_fragment>`,
@@ -107,6 +108,12 @@ class HeightMapMeshTile extends Tile {
                 shader.uniforms.uPatchPos = { value: _this.uPatchPos };
             }
             shader.uniforms.uNormal = { value: _this.center };
+            if(!shader.defines){
+              shader.defines={};
+            }
+            shader.defines["USE_UV"] = ""; 
+            shader.defines["USE_GT_151"] = parseInt(__THREE__)>=151;
+            
             var uUvTransform = _this.computeUvTransfrom(tileKey, materialTile);
 
             // shader.uniforms.uUvTransform = { value: uUvTransform };
@@ -139,10 +146,12 @@ class HeightMapMeshTile extends Tile {
                 mat.elements[10] = uHeightMapPos.z;
 
                 const inv = _this.mapView.camera.matrixWorldInverse.elements;
-                shader.uniforms.uGlobePosition = { value: new THREE.Vector4(inv[12], inv[13], inv[14], tileObj.mapView.zoomLevel) }
+                shader.uniforms.uGlobePosition = {
+                    value: new THREE.Vector4(inv[12], inv[13], inv[14], tileObj.mapView.zoomLevel)
+                };
                 _this.shaders.push(shader);
             } else {
-                var uDemUnpack = new THREE.Vector4(.0, .0, 0, 0);
+                var uDemUnpack = new THREE.Vector4(0.0, 0.0, 0, 0);
                 mat.elements[4] = uDemUnpack.x;
                 mat.elements[5] = uDemUnpack.y;
                 mat.elements[6] = uDemUnpack.z;
@@ -150,8 +159,8 @@ class HeightMapMeshTile extends Tile {
                 shader.uniforms.uHeighMapTexture = { value: emptyTexture };
             }
 
-            shader.uniforms.pack = { value: mat }
-        }
+            shader.uniforms.pack = { value: mat };
+        };
     };
 
     constructor(dataSource, tileKey) {
@@ -166,7 +175,7 @@ class HeightMapMeshTile extends Tile {
 
             this.demTile = demTile;
 
-            this.bindDemTileOwnerTexture(demTile)
+            this.bindDemTileOwnerTexture(demTile);
 
             var textSet = new Set();
             materialProvders.forEach(provider => {
@@ -177,10 +186,10 @@ class HeightMapMeshTile extends Tile {
                 if (materialTile) {
                     this.bindMaterialTileOwnerTexture(materialTile);
                     this.builderMesh(materialTile, provider, tileKey, demTile);
-                    materialTile.textElementGroups.forEach((ele) => {
+                    materialTile.textElementGroups.forEach(ele => {
                         if (!textSet.has(ele.featureId)) {
                             this.addTextElement(ele);
-                            textSet.add(ele.featureId)
+                            textSet.add(ele.featureId);
                         }
                     });
                 }
@@ -188,54 +197,71 @@ class HeightMapMeshTile extends Tile {
         }
     }
 
-    clearTextElements() {
-
-    }
+    clearTextElements() {}
 
     computeUvTransfrom(tileKey, materialTile) {
-        tileKey = TileKey.fromRowColumnLevel((1 << tileKey.level) - 1 - tileKey.row, tileKey.column, tileKey.level)
-        var ah = 1, P, M;
-        var H = tileKey.level, ae = tileKey.row, J = tileKey.column;
+        tileKey = TileKey.fromRowColumnLevel(
+            (1 << tileKey.level) - 1 - tileKey.row,
+            tileKey.column,
+            tileKey.level
+        );
+        var ah = 1,
+            P,
+            M;
+        var H = tileKey.level,
+            ae = tileKey.row,
+            J = tileKey.column;
         for (; H > materialTile.tileKey.level; H--) {
             ah *= 2;
             ae >>= 1;
-            J >>= 1
+            J >>= 1;
         }
         P = 1 / ah;
 
-        return new THREE.Vector3(P, (tileKey.row - ae * ah) * P, (tileKey.column - J * ah) * P)
+        return new THREE.Vector3(P, (tileKey.row - ae * ah) * P, (tileKey.column - J * ah) * P);
     }
 
     builderMesh(materialTile, materialProvider, tileKey, demTile) {
         var { uHeighMapTexture, uHeightMapPos } = demTile || {};
-        tileKey = TileKey.fromRowColumnLevel((1 << tileKey.level) - 1 - tileKey.row, tileKey.column, tileKey.level)
+        tileKey = TileKey.fromRowColumnLevel(
+            (1 << tileKey.level) - 1 - tileKey.row,
+            tileKey.column,
+            tileKey.level
+        );
         var basePost = sphereTileGridGeometry.computeSphereTileBasePosition(tileKey);
 
         var geometry = sphereTileGridGeometry.getTileModel(tileKey);
         const tileMesh = new THREE.Mesh(geometry, materialProvider.getMaterialByTile(materialTile));
 
-        tileMesh.renderOrder = Number.MIN_SAFE_INTEGER+256;
+        tileMesh.renderOrder = Number.MIN_SAFE_INTEGER + 256;
 
         this.is_simple_patch = geometry.mode.is_simple_patch;
         if (!geometry.mode.is_simple_patch) {
-            tileMesh.rotateZ(Math.PI * 2 * (tileKey.column) / (1 << tileKey.level));
+            tileMesh.rotateZ((Math.PI * 2 * tileKey.column) / (1 << tileKey.level));
         } else {
             var uPatchPos = sphereTileGridGeometry.computeSimpleROT(tileKey, basePost);
             this.uPatchPos = uPatchPos;
         }
 
-        tileMesh.material.onBeforeCompile = this.onBeforeMaterialCompile(materialTile, this.tileKey, this);
+        tileMesh.material.onBeforeCompile = this.onBeforeMaterialCompile(
+            materialTile,
+            this.tileKey,
+            this
+        );
         if (uHeighMapTexture) {
             this.uHeightMapPos = uHeightMapPos;
             this.uHeighMapTexture = uHeighMapTexture;
         }
 
         tileMesh.scale.copy(new THREE.Vector3(6378137, 6378137, 6378137));
-        tileMesh.displacement = this.center.clone().multiplyScalar(-1).add(basePost.multiplyScalar(6378137));
-        // tileMesh.castShadow = true; 
+        tileMesh.displacement = this.center
+            .clone()
+            .multiplyScalar(-1)
+            .add(basePost.multiplyScalar(6378137));
+        // tileMesh.castShadow = true;
         tileMesh.receiveShadow = true;
-        tileMesh.renderOrder = Number.MIN_SAFE_INTEGER;
-        this.objects.push(tileMesh);
+        // tileMesh.renderOrder = Number.MIN_SAFE_INTEGER;
+        this.objects.push(tileMesh); 
     }
 
     bindMaterialTileOwnerTexture(materialTile) {
@@ -243,7 +269,6 @@ class HeightMapMeshTile extends Tile {
             this.addOwnedTexture(materialTile.material);
         }
     }
-
 
     bindDemTileOwnerTexture(demTile) {
         if (demTile && demTile.tile.tileKey.mortonCode() == this.tileKey.mortonCode()) {

@@ -33,7 +33,7 @@ export class LowResRenderPass extends Pass {
 
     private readonly m_quadMaterial: THREE.ShaderMaterial = new CopyMaterial(this.m_quadUniforms);
     private readonly m_quad: THREE.Mesh = new THREE.Mesh(
-        new THREE.PlaneBufferGeometry(2, 2),
+        new THREE.PlaneGeometry(2, 2),
         this.m_quadMaterial
     );
 

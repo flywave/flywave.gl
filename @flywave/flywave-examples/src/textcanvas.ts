@@ -144,7 +144,7 @@ export namespace TextCanvasDynamicExample {
         gridScene.add(
             new THREE.LineSegments(
                 new THREE.WireframeGeometry(
-                    new THREE.PlaneBufferGeometry(
+                    new THREE.PlaneGeometry(
                         window.innerWidth - 1,
                         window.innerHeight - 1,
                         window.innerWidth / 16,
@@ -159,7 +159,7 @@ export namespace TextCanvasDynamicExample {
             ),
             new THREE.LineSegments(
                 new THREE.WireframeGeometry(
-                    new THREE.PlaneBufferGeometry(
+                    new THREE.PlaneGeometry(
                         window.innerWidth - 1,
                         window.innerHeight - 1,
                         2,
