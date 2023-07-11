@@ -4,6 +4,8 @@ import F3dTilesRenderer from "./tiles-render";
 import {
     MapView,
     MapViewAtmosphere,
+    AtmosphereVariant,
+    AtmosphereShadingVariant,
     AtmosphereLightMode,
     TiltViewClipPlanesEvaluator,
     MapViewEventNames
@@ -53,7 +55,7 @@ class Application extends MapView {
             decoderUrl: `${config.DECODER_URL}`,
             throttlingEnabled:
                 options.throttlingEnabled == undefined ? true : options.throttlingEnabled,
-            clipPlanesEvaluator:options.clipPlanesEvaluator === undefined ? undefined : new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.5, 1000)
+            clipPlanesEvaluator:options.clipPlanesEvaluator === undefined ? undefined : new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.05, 10.0)
         });
 
         this.initlize(options);

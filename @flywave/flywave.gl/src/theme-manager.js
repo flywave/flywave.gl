@@ -8,9 +8,11 @@ class ThemeManager extends MapViewThemeManager {
         const environment = this.m_mapView.sceneEnvironment;
 
         if (environment instanceof Environment) {
-            environment.update3DTileSources(theme.fw3dtiles || []);
-            environment.updateMapViewAtmosphere(theme.atmosphere || {});
-            environment.updateTerrainDatasource(theme.terrain || {});
+            if (theme.fw3dtiles) environment.update3DTileSources(theme.fw3dtiles || []);
+
+            if (theme.atmosphere) environment.updateMapViewAtmosphere(theme.atmosphere || {});
+
+            if (theme.terrain) environment.updateTerrainDatasource(theme.terrain || {});
         }
     }
 }

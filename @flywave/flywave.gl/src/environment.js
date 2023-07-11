@@ -9,7 +9,7 @@ class Environment extends MapViewEnvironment {
 
         switch (lightDescription.type) {
             case "sun-light": {
-                return SunLight(this.m_mapView).fromOptions(lightDescription);
+                return new SunLight(this.m_mapView).fromOptions(lightDescription);
             }
         }
     }

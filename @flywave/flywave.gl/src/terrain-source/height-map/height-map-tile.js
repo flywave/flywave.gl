@@ -48,15 +48,7 @@ export class HeightMapMeshTileFactory extends TileFactory {
 const emptyTexture = new THREE.DataTexture();
 
 class HeightMapMeshTile extends Tile {
-    willRender = () => {
-        this.shaders.forEach(shader => {
-            if (shader.uniforms.uGlobePosition) {
-                const inv = this.mapView.camera.matrixWorldInverse.elements;
-                shader.uniforms.uGlobePosition.value.copy(
-                    new THREE.Vector4(inv[12], inv[13], inv[14], this.mapView.zoomLevel)
-                );
-            }
-        });
+    willRender = () => { 
         if (this.dataSource.wireframe != this.wireframe) {
             this.objects.forEach(m => {
                 m.material.wireframe = this.dataSource.wireframe;
@@ -143,12 +135,7 @@ class HeightMapMeshTile extends Tile {
 
                 mat.elements[8] = uHeightMapPos.x;
                 mat.elements[9] = uHeightMapPos.y;
-                mat.elements[10] = uHeightMapPos.z;
-
-                const inv = _this.mapView.camera.matrixWorldInverse.elements;
-                shader.uniforms.uGlobePosition = {
-                    value: new THREE.Vector4(inv[12], inv[13], inv[14], tileObj.mapView.zoomLevel)
-                };
+                mat.elements[10] = uHeightMapPos.z; 
                 _this.shaders.push(shader);
             } else {
                 var uDemUnpack = new THREE.Vector4(0.0, 0.0, 0, 0);

@@ -16,7 +16,7 @@ import { MapAnchor, MapAnchors } from "./MapAnchors";
 /**
  * Atmosphere effect variants.
  */
-enum AtmosphereVariant {
+export enum AtmosphereVariant {
     Ground = 0x1,
     Sky = 0x2,
     SkyAndGround = 0x3
@@ -25,7 +25,7 @@ enum AtmosphereVariant {
 /**
  * Atmosphere shader variants.
  */
-enum AtmosphereShadingVariant {
+export enum AtmosphereShadingVariant {
     ScatteringShader,
     SimpleColor,
     Wireframe
@@ -469,7 +469,7 @@ export class MapViewAtmosphere {
         c.near = viewRanges.near;
         // Small margin ensures that we never cull small triangles just below or at
         // horizon - possible due to frustum culling in-precisions.
-        c.far = viewRanges.far + EarthConstants.EQUATORIAL_RADIUS * 0.1;
+        c.far = viewRanges.far + EarthConstants.EQUATORIAL_RADIUS * 0.3;
         c.updateProjectionMatrix();
     }
 

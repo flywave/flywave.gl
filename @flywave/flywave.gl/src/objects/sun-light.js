@@ -6,8 +6,20 @@ import "../debug/ShadowMapViewer";
 import "../debug/UnpackDepthRGBAShader";
 import { computeTemeToPseudoFixedMatrix } from "../util/math-transfrom";
 
-class SunLight extends THREE.Object3D {
+const points = [
+    // near plane points
+    { x: -1, y: -1, z: -1 },
+    { x: 1, y: -1, z: -1 },
+    { x: -1, y: 1, z: -1 },
+    { x: 1, y: 1, z: -1 },
+    // far planes points
+    { x: -1, y: -1, z: 1 },
+    { x: 1, y: -1, z: 1 },
+    { x: -1, y: 1, z: 1 },
+    { x: 1, y: 1, z: 1 }
+];
 
+class SunLight extends THREE.Object3D {
     light = new THREE.DirectionalLight(new THREE.Color(255, 255, 255), 0.005);
 
     _debug = false;
@@ -28,6 +40,9 @@ class SunLight extends THREE.Object3D {
         this.directionalLightHelper = new THREE.DirectionalLightHelper(this.light, 10000);
         this.mapView = mapView;
 
+        this.light.shadow.mapSize.x = 4096;
+        this.light.shadow.mapSize.y = 4096;
+
         this.addEventListener("removed", this.onRemoved);
         this.addEventListener("added", this.onAdded);
     }
@@ -45,7 +60,7 @@ class SunLight extends THREE.Object3D {
     }
 
     set castShadow(v) {
-        this.light.castShadow = v;
+        this.light && (this.light.castShadow = v);
     }
 
     get castShadow() {
@@ -54,7 +69,17 @@ class SunLight extends THREE.Object3D {
 
     currenTime = new Date("2021 11 23 10:00");
 
-    update() {
+    viewToLightSpace(viewPos, camera) {
+        return viewPos.applyMatrix4(camera.matrixWorldInverse);
+    }
+
+    intensity = 1;
+
+    update = () => {
+        this.light.intensity =
+            parseFloat(this.intensity == undefined ? 1 : this.intensity) *
+            (1 / Math.max(Math.abs(this.currenTime.getHours() - 12), 1));
+
         var t = JulianDate.fromDate(this.currenTime);
         var position = Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
             t,
@@ -72,10 +97,10 @@ class SunLight extends THREE.Object3D {
             .addScaledVector(position.normalize(), 10000)
             .sub(this.mapView.camera.position);
 
-        this.direction = this.light.position.clone().normalize().multiplyScalar(-1);
+        this.direction = this.light.position.clone().normalize();
 
         this.mapView.atmosphere.m_lightDirection.copy(this.direction);
-        
+
         // debug.position.copy(this.light.position);
         // this.light.position.copy(position).sub(this.mapView.camera.position);
         // this.light.target.position.copy(this.mapView.worldTarget).sub(this.mapView.camera.position);
@@ -110,15 +135,34 @@ class SunLight extends THREE.Object3D {
         camera.far = -box.min.z;
 
         camera.updateProjectionMatrix();
+    };
+
+    fromOptions({ color, intensity, hours, castShadow, mapSize }) {
+        this.light.color.set(color == undefined ? 0xffffff : color);
+        if (hours == undefined) {
+            hours = 5;
+        }
+        this.intensity = intensity || this.intensity;
+        this.currenTime.setHours(hours);
+        this.light.castShadow = castShadow;
+        if (mapSize) {
+            this.mapSize.fromArray(mapSize);
+        }
+        return this;
     }
 
-    fromOptions({ color, intensity, currenTime, castShadow, mapSize }) {
-        this.light.color.set(color);
-        this.light.intensity = parseFloat(intensity);
-        this.currenTime = new Date(currenTime);
-        this.light.castShadow = castShadow;
-        this.mapSize.fromArray(mapSize);
-        return this;
+    toOptions() {
+        return {
+            color: `#${this.light.color.getHexString()}`,
+            intensity: this.light.intensity,
+            currenTime: this.currenTime.getTime(),
+            castShadow: this.castShadow,
+            mapSize: this.mapSize.toArray()
+        };
+    }
+
+    clone() {
+        return new THREE.Object3D();
     }
 }
 
