@@ -1,6 +1,7 @@
 import { MapViewEnvironment } from "@flywave/flywave-mapview";
 import { SunLight } from "./objects/sun-light";
 import { MaterialProvider } from "./terrain-source/material-provider";
+import { VectorTileDataSource, GeoJsonDataProvider } from "@flywave/flywave-vectortile-datasource";
 
 class Environment extends MapViewEnvironment {
     createLight(lightDescription) {
@@ -42,14 +43,15 @@ class Environment extends MapViewEnvironment {
         const { url, type, layers } = terrinOptions;
         if (!url) {
             this.m_mapView.clearElevationSource();
-            return;
-        }
-
-        if (type == "hightmap") {
-            this.m_mapView.setHeightMapSource(url);
-        }
-        if (type == "tin") {
-            this.m_mapView.setTinTerrainSource({ url, requestWaterMask: true });
+        } else {
+            if (type == "hightmap") {
+                if (this.m_mapView.heightMapSource.baseUr != url)
+                    this.m_mapView.setHeightMapSource(url);
+            }
+            if (type == "tin") {
+                if (this.m_mapView.terrainSource.baseUr != url)
+                    this.m_mapView.setTinTerrainSource({ url, requestWaterMask: true });
+            }
         }
 
         const materialProviders = this.m_mapView.getMaterialProviders();
@@ -71,12 +73,59 @@ class Environment extends MapViewEnvironment {
 
         needsRemoveProviders.forEach(provider => provider.remove());
         needAddProivders.forEach(layer => {
-            map.addMaterialProviders(new MaterialProvider({ url: layer.url }));
+            this.m_mapView.addMaterialProviders(new MaterialProvider({ url: layer.url }));
         });
     }
 
-    updateMapViewAtmosphere({ enable }) {
-        this.m_mapView.atmosphere.enabled = enable;
+    updateVectorDataSource(vectorSourceSettings = []) {
+        const vectorDataSourceList = this.m_mapView.dataSources.filter(
+            datasource => datasource instanceof VectorTileDataSource
+        );
+
+        var needsRemoveVectorDatasource = [];
+        var needAddVectorDatasources = [];
+
+        vectorDataSourceList.forEach(datasource => {
+            if (!vectorSourceSettings.find(srv => datasource.name == srv.name)) {
+                needsRemoveVectorDatasource.push(datasource);
+            }
+        });
+
+        vectorSourceSettings.forEach(setting => {
+            if (!vectorDataSourceList.find(datasource => datasource.name == setting.name)) {
+                needAddVectorDatasources.push(setting);
+            }
+        });
+
+        needsRemoveVectorDatasource.forEach(datasource => this.m_mapView.removeDataSource(datasource));
+        needAddVectorDatasources.forEach(setting => {
+            var config = {
+                name: setting.name,
+                styleSetName: setting.styleSetName,
+                maxDataLevel: setting.maxDataLevel,
+                addGroundPlane: setting.addGroundPlane
+            };
+            if (setting.geoJson) {
+                config.dataProvider = new GeoJsonDataProvider(
+                    setting.name,
+                    typeof setting.geoJson == "string" ? new URL(setting.geoJson) : setting.geoJson
+                );
+            } else {
+                config = {
+                    ...config,
+                    baseUrl: setting.baseUrl,
+                    apiFormat: setting.apiFormat,
+                    authenticationCode: setting.authenticationCode,
+                    authenticationMethod: setting.authenticationMethod
+                };
+            }
+
+            this.m_mapView.addDataSource(new VectorTileDataSource(config));
+        });
+    }
+
+    updateMapViewAtmosphere({ enabled }) {
+        this.m_mapView.atmosphere.enabled = enabled;
     }
 }
 

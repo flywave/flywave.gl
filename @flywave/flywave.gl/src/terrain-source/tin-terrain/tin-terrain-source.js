@@ -37,6 +37,10 @@ export class TinTerrainSource extends TerrainSource {
         this._baseUrl = options.url;
     }
 
+    get baseUrl() {
+        return this._baseUrl;
+    }
+
     connect() {
         return super.connect().then(() => {
             return this.dataTerrainProvider.connect();

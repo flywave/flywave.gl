@@ -25,6 +25,7 @@ export const SkyAtmosphereShader: THREE.Shader = {
         u_eyePositionWorld: new THREE.Uniform(new THREE.Vector3()),
         u_lightDirectionWorld: new THREE.Uniform(new THREE.Vector3(0, 1, 0)),
         u_modelViewProjection: new THREE.Uniform(new THREE.Matrix4()),
+        projectionMatrix:new THREE.Uniform(new THREE.Matrix4()),
         // Environment settings:
         // atmosphere inner and outer radius, camera height
         u_atmosphereEnv: new THREE.Uniform(
@@ -56,6 +57,7 @@ export const SkyAtmosphereShader: THREE.Shader = {
     attribute vec4 position;
 
     uniform mat4 u_modelViewProjection;
+    uniform mat4 projectionMatrix;
     uniform vec3 u_eyePositionWorld;
     uniform vec3 u_lightDirectionWorld;
 
@@ -186,7 +188,7 @@ export const SkyAtmosphereShader: THREE.Shader = {
         v_vertToCamera = u_eyePositionWorld - position.xyz;
 
         gl_Position = u_modelViewProjection * position;
-        #include <logdepthbuf_vertex>
+       // #include <logdepthbuf_vertex>
     }
     `,
 
@@ -258,7 +260,7 @@ export const SkyAtmosphereShader: THREE.Shader = {
         fAtmosphereAlpha *= pow(fNightAlpha, 0.5);
 
         gl_FragColor = vec4(cRgb, mix(cRgb.b, 1.0, fAtmosphereAlpha));
-        #include <logdepthbuf_fragment>
+        //#include <logdepthbuf_fragment>
     }
     `
 };
@@ -352,6 +354,7 @@ export class SkyAtmosphereMaterial extends RawShaderMaterial {
                 shaderMaterial.uniforms.u_atmosphereEnv &&
                 shaderMaterial.uniforms.u_hsvCorrection &&
                 shaderMaterial.uniforms.u_eyePositionWorld &&
+                shaderMaterial.uniforms.projectionMatrix &&
                 shaderMaterial.uniforms.u_modelViewProjection &&
                 shaderMaterial.uniforms.u_lightDirectionWorld
             ) {
@@ -361,6 +364,7 @@ export class SkyAtmosphereMaterial extends RawShaderMaterial {
 
                 shaderMaterial.uniforms.u_eyePositionWorld.value.copy(eyePos);
                 shaderMaterial.uniforms.u_modelViewProjection.value.copy(mvp);
+                shaderMaterial.uniforms.projectionMatrix.value.copy(cameraInfo.projectionMatrix);
 
                 shaderMaterial.uniforms.u_atmosphereEnv.value.z = cameraHeight;
                 shaderMaterial.uniforms.u_lightDirectionWorld.value = lightDirection.clone();
@@ -396,7 +400,7 @@ export class SkyAtmosphereMaterial extends RawShaderMaterial {
         object: THREE.Object3D,
         camera: THREE.Camera,
         reverse: boolean = false
-    ): { modelViewProjection: THREE.Matrix4; eyePos: THREE.Vector3; eyeHeight: number } {
+    ): { modelViewProjection: THREE.Matrix4; eyePos: THREE.Vector3; eyeHeight: number,projectionMatrix:THREE.Matrix4; } {
         if (reverse) {
             const modelMatrix = new THREE.Matrix4().identity();
             const viewMatrix = new THREE.Matrix4().copy(object.matrixWorld).invert().transpose();
@@ -415,7 +419,8 @@ export class SkyAtmosphereMaterial extends RawShaderMaterial {
             return {
                 modelViewProjection: mvpMatrix,
                 eyePos,
-                eyeHeight
+                eyeHeight,
+                projectionMatrix
             };
         } else {
             const modelMatrix = object.matrixWorld;
@@ -438,7 +443,8 @@ export class SkyAtmosphereMaterial extends RawShaderMaterial {
             return {
                 modelViewProjection: mvpMatrix,
                 eyePos,
-                eyeHeight
+                eyeHeight,
+                projectionMatrix
             };
         }
     }

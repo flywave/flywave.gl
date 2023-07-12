@@ -20,6 +20,8 @@ const points = [
 ];
 
 class SunLight extends THREE.Object3D {
+    lightType = "sun-light";
+
     light = new THREE.DirectionalLight(new THREE.Color(255, 255, 255), 0.005);
 
     _debug = false;

@@ -33,7 +33,7 @@ export class TerrainSource extends TileDataSource {
     }
 
     get baseUrl(){
-        return this._baseUrl;
+        throw  "no imple"
     }
 
     onCameraChange = () => {

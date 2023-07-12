@@ -469,7 +469,7 @@ export class MapViewAtmosphere {
         c.near = viewRanges.near;
         // Small margin ensures that we never cull small triangles just below or at
         // horizon - possible due to frustum culling in-precisions.
-        c.far = viewRanges.far + EarthConstants.EQUATORIAL_RADIUS * 0.3;
+        c.far = viewRanges.far + EarthConstants.EQUATORIAL_RADIUS * 0.5;
         c.updateProjectionMatrix();
     }
 

@@ -11,7 +11,6 @@ import { Box2, Vector2 } from "three";
 var id = 0;
 var downloadManager = TransferManager.instance();
 export class HeightMapSource extends TerrainSource {
-
     levelRange = [];
 
     scheme = "xyz";
@@ -31,18 +30,17 @@ export class HeightMapSource extends TerrainSource {
         });
     }
 
-    decodeSourceFile = (source) => {
+    decodeSourceFile = source => {
         const { tiles, scheme, bounds, minzoom, maxzoom, tileSize } = source;
         this.levelRange = range(minzoom, maxzoom, 1).sort((a, b) => b - a);
         this.tileUriList = tiles;
         this.scheme = scheme;
-        this.enableHD = (tileSize == 512);
+        this.enableHD = tileSize == 512;
         const [milng, milat, mxlng, mxlat] = bounds;
         this.bounds = new Box2(new Vector2(milng, milat), new Vector2(mxlng, mxlat));
         this.dataProvider().clear();
-        if (!this.isDetached())
-            this.mapView.markTilesDirty(this);
-    }
+        if (!this.isDetached()) this.mapView.markTilesDirty(this);
+    };
 
     containsTile(tileKey: TileKey) {
         var geoBox = this.getTilingScheme().getGeoBox(tileKey);
@@ -52,11 +50,16 @@ export class HeightMapSource extends TerrainSource {
     }
 
     async connect() {
-        await super.connect()
+        await super.connect();
+    }
+
+    get baseUrl() {
+        return this._source;
     }
 
     async setSourceTerrain(source) {
-        if ((typeof source) == "string")
+        this._source = source;
+        if (typeof source == "string")
             return await downloadManager.downloadJson(source).then(this.decodeSourceFile);
         return Promise.resolve(source).then(this.decodeSourceFile);
     }
@@ -75,23 +78,27 @@ export class HeightMapSource extends TerrainSource {
         }
         var url = this.tileUriList[tileKey.mortonCode() % this.tileUriList.length];
         if (this.scheme == "xyz") {
-            url = url.replace("{x}", String(tileKey.column))
+            url = url
+                .replace("{x}", String(tileKey.column))
                 .replace("{y}", `${String(tileKey.row)}`)
                 .replace("{z}", String(tileKey.level));
         }
 
-        return window.fetch(url, {
-            headers: {}
-        }).then(res => {
-            if (res.status !== 200) {
-                throw new Error(`Unable to load tile ${url}`)
-            }
+        return window
+            .fetch(url, {
+                headers: {}
+            })
+            .then(res => {
+                if (res.status !== 200) {
+                    throw new Error(`Unable to load tile ${url}`);
+                }
 
-            return res.arrayBuffer()
-        }).catch(err => {
-            console.log(err)
-        })
-    }
+                return res.arrayBuffer();
+            })
+            .catch(err => {
+                console.log(err);
+            });
+    };
 
     get size() {
         return this.enableHD ? 512 : 256;
