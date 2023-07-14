@@ -45,11 +45,11 @@ class Environment extends MapViewEnvironment {
             this.m_mapView.clearElevationSource();
         } else {
             if (type == "hightmap") {
-                if (this.m_mapView.heightMapSource.baseUr != url)
+                if (this.m_mapView.heightMapSource.baseUrl != url)
                     this.m_mapView.setHeightMapSource(url);
             }
             if (type == "tin") {
-                if (this.m_mapView.terrainSource.baseUr != url)
+                if (this.m_mapView.terrainSource.baseUrl != url)
                     this.m_mapView.setTinTerrainSource({ url, requestWaterMask: true });
             }
         }

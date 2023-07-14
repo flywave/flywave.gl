@@ -22,9 +22,8 @@ Object.assign(THREE.ShaderChunk, {
             float height = elevation(vec2(.0,.0))+position.z;
 
             pos += height * vec4(tNormal,.0)/6378137.0; 
-            pos.w=1.0; 
-            vec4 cPos4 = modelViewMatrix * pos;  
-            return cPos4; 
+            pos.w=1.0;  
+            return pos; 
     }
     `,
     // "terrain_color_pars_fragment": ` 
@@ -47,12 +46,20 @@ Object.assign(THREE.ShaderChunk, {
     //     #endif 
     // `,
     "terrain_proj": `
-        vec4 mvPosition = vec4( transformed, 1.0 );  
-    `,
-    "terrain_simple_vert": `    
-        gl_Position = projectionMatrix * computeMvPos(uv); 
+        vec4 mvPosition = vec4( transformed, 1.0 );
+
+        #ifdef USE_INSTANCING
         
-        transformed = (inverse(modelViewMatrix)*computeMvPos(uv)).xyz;
+            mvPosition = instanceMatrix * mvPosition;
+        
+        #endif
+        
+        mvPosition = modelViewMatrix * mvPosition;
+        
+        gl_Position = projectionMatrix * mvPosition;
+    `,
+    "terrain_simple_vert": `      
+        transformed = computeMvPos(uv).xyz;
         
         vec3 uUvTransform = pack[0].xyz;
 
@@ -88,11 +95,12 @@ Object.assign(THREE.ShaderChunk, {
         vec4 pos;
         bool uIsSimplePatch = pack[0][3]>0.0;
        if(uIsSimplePatch){ 
-          objectNormal = vec3(0.0,0.0,-1.0); 
-        }else{
-            vec3 modelPos = mat3_emu(modelMatrix)*position;
-          objectNormal = vec3(0.0,0.0,-1.0); 
-        }
+            objectNormal = normalize(cross(uPatchPos[0].xyz,uPatchPos[3].xyz));
+       }
+    //    else{
+    //         vec3 modelPos = mat3_emu(modelMatrix)*position;
+    //       objectNormal = normalize(position.xyz); 
+    //     }
     `,
     "terrain_common_pars": `
         uniform vec4 uGlobePosition;

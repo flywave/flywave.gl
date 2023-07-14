@@ -48,7 +48,7 @@ export class HeightMapMeshTileFactory extends TileFactory {
 const emptyTexture = new THREE.DataTexture();
 
 class HeightMapMeshTile extends Tile {
-    willRender = () => { 
+    willRender = () => {
         if (this.dataSource.wireframe != this.wireframe) {
             this.objects.forEach(m => {
                 m.material.wireframe = this.dataSource.wireframe;
@@ -72,7 +72,7 @@ class HeightMapMeshTile extends Tile {
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <begin_vertex>`,
                 `#include <begin_vertex>
-                #include <terrain_simple_vert>`
+                 #include <terrain_simple_vert>`
             );
 
             shader.vertexShader = shader.vertexShader.replace(
@@ -100,12 +100,12 @@ class HeightMapMeshTile extends Tile {
                 shader.uniforms.uPatchPos = { value: _this.uPatchPos };
             }
             shader.uniforms.uNormal = { value: _this.center };
-            if(!shader.defines){
-              shader.defines={};
+            if (!shader.defines) {
+                shader.defines = {};
             }
-            shader.defines["USE_UV"] = ""; 
-            shader.defines["USE_GT_151"] = parseInt(__THREE__)>=151;
-            
+            shader.defines["USE_UV"] = "";
+            shader.defines["USE_GT_151"] = parseInt(__THREE__) >= 151;
+
             var uUvTransform = _this.computeUvTransfrom(tileKey, materialTile);
 
             // shader.uniforms.uUvTransform = { value: uUvTransform };
@@ -135,7 +135,7 @@ class HeightMapMeshTile extends Tile {
 
                 mat.elements[8] = uHeightMapPos.x;
                 mat.elements[9] = uHeightMapPos.y;
-                mat.elements[10] = uHeightMapPos.z; 
+                mat.elements[10] = uHeightMapPos.z;
                 _this.shaders.push(shader);
             } else {
                 var uDemUnpack = new THREE.Vector4(0.0, 0.0, 0, 0);
@@ -217,7 +217,7 @@ class HeightMapMeshTile extends Tile {
         );
         var basePost = sphereTileGridGeometry.computeSphereTileBasePosition(tileKey);
 
-        var geometry = sphereTileGridGeometry.getTileModel(tileKey);
+        var geometry = sphereTileGridGeometry.getTileModel(tileKey); 
         const tileMesh = new THREE.Mesh(geometry, materialProvider.getMaterialByTile(materialTile));
 
         tileMesh.renderOrder = Number.MIN_SAFE_INTEGER + 256;
@@ -248,7 +248,7 @@ class HeightMapMeshTile extends Tile {
         // tileMesh.castShadow = true;
         tileMesh.receiveShadow = true;
         // tileMesh.renderOrder = Number.MIN_SAFE_INTEGER;
-        this.objects.push(tileMesh); 
+        this.objects.push(tileMesh);
     }
 
     bindMaterialTileOwnerTexture(materialTile) {

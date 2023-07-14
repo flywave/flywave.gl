@@ -163,6 +163,111 @@ class SphereTileGrids {
     return new Vector3(v * C, u * C, t);
   }
 
+  
+	computeVertexNormals(geometry,skritMap) {
+
+		const index = geometry.index;
+		const positionAttribute = geometry.getAttribute( 'position' );
+
+		if ( positionAttribute !== undefined ) {
+
+			let normalAttribute = geometry.getAttribute( 'normal' );
+
+			if ( normalAttribute === undefined ) {
+
+				normalAttribute = new BufferAttribute( new Float32Array( positionAttribute.count * 3 ), 3 );
+				geometry.setAttribute( 'normal', normalAttribute );
+
+			} else {
+
+				// reset existing normals to zero
+
+				for ( let i = 0, il = normalAttribute.count; i < il; i ++ ) {
+
+					normalAttribute.setXYZ( i, 0, 0, 0 );
+
+				}
+
+			}
+
+			const pA = new Vector3(), pB = new Vector3(), pC = new Vector3();
+			const nA = new Vector3(), nB = new Vector3(), nC = new Vector3();
+			const cb = new Vector3(), ab = new Vector3();
+
+			// indexed elements
+
+			if ( index ) {
+
+				for ( let i = 0, il = index.count; i < il; i += 3 ) {
+
+					const vA = index.getX( i + 0 );
+					const vB = index.getX( i + 1 );
+					const vC = index.getX( i + 2 );
+
+
+					pA.fromBufferAttribute( positionAttribute, vA );
+					pB.fromBufferAttribute( positionAttribute, vB );
+					pC.fromBufferAttribute( positionAttribute, vC );
+
+          if(skritMap[vA]!==false){
+            pA.fromArray(skritMap[vA]);
+          }
+
+          if(skritMap[vB]!==false){
+            pB.fromArray(skritMap[vB]);
+          }
+
+          if(skritMap[vC]!==false){
+            pC.fromArray(skritMap[vC]);
+          }
+
+					cb.subVectors( pC, pB );
+					ab.subVectors( pA, pB );
+					cb.cross( ab );
+
+					nA.fromBufferAttribute( normalAttribute, vA );
+					nB.fromBufferAttribute( normalAttribute, vB );
+					nC.fromBufferAttribute( normalAttribute, vC );
+
+					nA.add( cb );
+					nB.add( cb );
+					nC.add( cb ); 
+          normalAttribute.setXYZ( vA, nA.x, nA.y, nA.z );
+          normalAttribute.setXYZ( vB, nB.x, nB.y, nB.z );
+          normalAttribute.setXYZ( vC, nC.x, nC.y, nC.z ); 
+
+				}
+
+			} else {
+
+				// non-indexed elements (unconnected triangle soup)
+
+				for ( let i = 0, il = positionAttribute.count; i < il; i += 3 ) {
+
+					pA.fromBufferAttribute( positionAttribute, i + 0 );
+					pB.fromBufferAttribute( positionAttribute, i + 1 );
+					pC.fromBufferAttribute( positionAttribute, i + 2 );
+
+					cb.subVectors( pC, pB );
+					ab.subVectors( pA, pB );
+					cb.cross( ab );
+
+					normalAttribute.setXYZ( i + 0, cb.x, cb.y, cb.z );
+					normalAttribute.setXYZ( i + 1, cb.x, cb.y, cb.z );
+					normalAttribute.setXYZ( i + 2, cb.x, cb.y, cb.z );
+
+				}
+
+			}
+
+			geometry.normalizeNormals();
+
+			normalAttribute.needsUpdate = true;
+
+		}
+
+	}
+
   getTileModel(tileKey) {
     var y = tileKey.row, z = tileKey.level;
     var models = this.models;
@@ -175,6 +280,7 @@ class SphereTileGrids {
     }
 
     var mode;
+    var calNormal;
     if (z >= radmaxLevel) {
       name = 'simple.patch/' + sub;
       if (!models[name]) {
@@ -188,6 +294,7 @@ class SphereTileGrids {
     } else {
       name = z + '/' + y + '/patch';
       if (!models[name]) {
+        calNormal = true;
         if (z >= radminLevel) {
           mode = models[name] = this.generate_patch_buckets_skirt(
             true, sub, y, 0, tileCount, tileCount, true)
@@ -209,12 +316,13 @@ class SphereTileGrids {
       geometry.setAttribute(
         'position', mode.sources[0].xyz_coords_float);
       geoCache[name] = geometry; 
+      if(calNormal)
+      this.computeVertexNormals(geometry,mode.skritMap);
     }
 
     return geoCache[name];
   }
-
-
+   
   generate_patch_simple_skirt(
     segX, segY, offsetX, offsetY, paddingX, paddingY, skirt, bol, aa) {
     var W = segX, ag = segY, V = offsetX, U = offsetY, M = paddingX,
@@ -319,6 +427,7 @@ class SphereTileGrids {
       number_of_sources: 1,
       sources: [{
         number_of_verts: au,
+        xyz_has_skirt: [],
         xyz_coords_float: new BufferAttribute(new Float32Array(au * 3), 3),
         uv_coords_float: new BufferAttribute(new Float32Array(au * 2), 2)
       }],
@@ -331,7 +440,8 @@ class SphereTileGrids {
         bucket_count: r,
         bucket_offsets: new Uint16Array(r + 1)
       }],
-      bucket_levels: ap
+      bucket_levels: ap,
+      skritMap:[]
     };
 
     var O = ar.sources[0], Q = O.xyz_coords_float.array,
@@ -401,7 +511,8 @@ class SphereTileGrids {
     }
     J += at;
     ag[al] = J;
-    var ai = 0.2 / T;
+    var ai = 0.2 / T; 
+    var skritMap=ar.skritMap;
     for (aj = 0; aj < an; aj++) {
       for (ak = 0; ak < ad; ak++, I += 3, X += 2) {
         H = 0;
@@ -441,6 +552,13 @@ class SphereTileGrids {
         Q[I] = G - P;
         Q[I + 1] = F - M;
         Q[I + 2] = E - L;
+        {
+          G = -Math.cos(q) * K * (C);
+          F = -Math.sin(q) * K * (C);
+          E = -V * (C * (1 - this.e)); 
+          skritMap[I]=(H!=0)?[(G - P),(F - M),(E - L)]:false; 
+        }
+
         W[X] = af;
         W[X + 1] = ae;
         if (ak > 0 && aj > 0) {
@@ -476,10 +594,10 @@ class SphereTileGrids {
           z[am + 2] = (aj) * ad + (ak - 1);
           z[am + 3] = (aj - 1) * ad + (ak);
           z[am + 4] = (aj) * ad + (ak);
-          z[am + 5] = (aj) * ad + (ak - 1)
+          z[am + 5] = (aj) * ad + (ak - 1); 
         }
       }
-    }
+    } 
     return ar
   };
 
