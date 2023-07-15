@@ -209,16 +209,18 @@ class SphereTileGrids {
 					pB.fromBufferAttribute( positionAttribute, vB );
 					pC.fromBufferAttribute( positionAttribute, vC );
 
-          if(skritMap[vA]!==false){
-            pA.fromArray(skritMap[vA]);
-          }
+          if(skritMap){
+            if(skritMap[vA*3]!==false){
+              pA.fromArray(skritMap[vA*3]);
+            }
 
-          if(skritMap[vB]!==false){
-            pB.fromArray(skritMap[vB]);
-          }
+            if(skritMap[vB*3]!==false){
+              pB.fromArray(skritMap[vB*3]);
+            }
 
-          if(skritMap[vC]!==false){
-            pC.fromArray(skritMap[vC]);
+            if(skritMap[vC*3]!==false){
+              pC.fromArray(skritMap[vC*3]);
+            } 
           }
 
 					cb.subVectors( pC, pB );

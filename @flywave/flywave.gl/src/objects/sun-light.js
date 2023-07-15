@@ -77,10 +77,21 @@ class SunLight extends THREE.Object3D {
 
     intensity = 1;
 
+    interIntensity(x) {
+        var start = 0 * 3600;
+        var end = 24 * 3600;
+        var max = 12 * 3600;
+        var a = this.intensity / ((max - start) * (max - end));
+        return a * (x - start) * (x - end);
+    }
+
     update = () => {
-        this.light.intensity =
-            parseFloat(this.intensity == undefined ? 1 : this.intensity) *
-            (1 / Math.max(Math.abs(this.currenTime.getHours() - 12), 1));
+        var d = new Date(this.currenTime.getTime());
+        d.setHours(0);
+        d.setMinutes(0);
+        d.setSeconds(0);
+
+        this.light.intensity = this.interIntensity((this.currenTime.getTime() - d.getTime())/1000);
 
         var t = JulianDate.fromDate(this.currenTime);
         var position = Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
@@ -101,7 +112,7 @@ class SunLight extends THREE.Object3D {
 
         this.direction = this.light.position.clone().normalize();
 
-        this.mapView.atmosphere.m_lightDirection.copy(this.direction);
+        this.mapView.atmosphere.m_lightDirection.copy(position.normalize());
 
         // debug.position.copy(this.light.position);
         // this.light.position.copy(position).sub(this.mapView.camera.position);
@@ -139,13 +150,10 @@ class SunLight extends THREE.Object3D {
         camera.updateProjectionMatrix();
     };
 
-    fromOptions({ color, intensity, hours, castShadow, mapSize }) {
+    fromOptions({ color, intensity, time, castShadow, mapSize }) {
         this.light.color.set(color == undefined ? 0xffffff : color);
-        if (hours == undefined) {
-            hours = 5;
-        }
         this.intensity = intensity || this.intensity;
-        this.currenTime.setHours(hours);
+        this.currenTime.setTime(time);
         this.light.castShadow = castShadow;
         if (mapSize) {
             this.mapSize.fromArray(mapSize);
@@ -157,7 +165,7 @@ class SunLight extends THREE.Object3D {
         return {
             color: `#${this.light.color.getHexString()}`,
             intensity: this.light.intensity,
-            currenTime: this.currenTime.getTime(),
+            time: this.currenTime.getTime(),
             castShadow: this.castShadow,
             mapSize: this.mapSize.toArray()
         };
