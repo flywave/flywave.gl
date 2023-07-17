@@ -248,10 +248,10 @@ export class MapViewAtmosphere {
     private addToMapAnchors(mapAnchors: MapAnchors) {
         assert(!MapViewAtmosphere.isPresent(mapAnchors), "Atmosphere already added");
         if (this.m_skyMesh !== undefined) {
-            mapAnchors.add(createMapAnchor(this.m_skyMesh, Number.MIN_SAFE_INTEGER+512));
+            mapAnchors.add(createMapAnchor(this.m_skyMesh, Number.MIN_SAFE_INTEGER));
         }
         if (this.m_groundMesh !== undefined) {
-            mapAnchors.add(createMapAnchor(this.m_groundMesh, Number.MAX_SAFE_INTEGER+512));
+            mapAnchors.add(createMapAnchor(this.m_groundMesh, Number.MAX_SAFE_INTEGER));
         }
 
         // Request an update once the anchor is added to {@link MapView}.

@@ -246,8 +246,7 @@ class HeightMapMeshTile extends Tile {
             .multiplyScalar(-1)
             .add(basePost.multiplyScalar(6378137));
         // tileMesh.castShadow = true;
-        tileMesh.receiveShadow = true;
-        // tileMesh.renderOrder = Number.MIN_SAFE_INTEGER;
+        tileMesh.receiveShadow = true; 
         this.objects.push(tileMesh);
     }
 

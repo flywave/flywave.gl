@@ -71,6 +71,8 @@ class SunLight extends THREE.Object3D {
 
     currenTime = new Date("2021 11 23 10:00");
 
+    startColor = "#ffffff";
+
     viewToLightSpace(viewPos, camera) {
         return viewPos.applyMatrix4(camera.matrixWorldInverse);
     }
@@ -91,7 +93,16 @@ class SunLight extends THREE.Object3D {
         d.setMinutes(0);
         d.setSeconds(0);
 
-        this.light.intensity = this.interIntensity((this.currenTime.getTime() - d.getTime())/1000);
+        this.light.intensity = this.interIntensity(
+            (this.currenTime.getTime() - d.getTime()) / 1000
+        );
+
+        this.light.color.set(
+            new THREE.Color(this.startColor).lerp(
+                new THREE.Color(0xffffff),
+                this.light.intensity / this.intensity
+            )
+        );
 
         var t = JulianDate.fromDate(this.currenTime);
         var position = Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
@@ -151,7 +162,7 @@ class SunLight extends THREE.Object3D {
     };
 
     fromOptions({ color, intensity, time, castShadow, mapSize }) {
-        this.light.color.set(color == undefined ? 0xffffff : color);
+        this.startColor = color == undefined ? 0xffffff : color;
         this.intensity = intensity || this.intensity;
         this.currenTime.setTime(time);
         this.light.castShadow = castShadow;
@@ -163,7 +174,7 @@ class SunLight extends THREE.Object3D {
 
     toOptions() {
         return {
-            color: `#${this.light.color.getHexString()}`,
+            color: this.startColor,
             intensity: this.light.intensity,
             time: this.currenTime.getTime(),
             castShadow: this.castShadow,
