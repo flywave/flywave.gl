@@ -3370,6 +3370,11 @@
   resolved "https://registry.npmmirror.com/@ungap/promise-all-settled/-/promise-all-settled-1.1.2.tgz#aa58042711d6e3275dd37dc597e5d31e8c290a44"
   integrity sha512-sL/cEvJWAnClXw0wHk85/2L0G6Sj8UB0Ctc1TEMbKSsmpRosqhwj9gWgFRZSrBr2f9tiXISwNhCPmlfqUqyb9Q==
 
+"@vitaly-z/hilbert-geohash@^0.0.5":
+  version "0.0.5"
+  resolved "https://registry.npmmirror.com/@vitaly-z/hilbert-geohash/-/hilbert-geohash-0.0.5.tgz#64be8456f30da810f16da7c9bc0bd5980fe58ca9"
+  integrity sha512-xDFDoNLUKz2WgodHZPrQaM+zqe1O9BWUY3nUFXUKLqwNN3JnNWxXFxXWKODfB4r1Yht0e/4WXwzPDKFCWAeVAw==
+
 "@webassemblyjs/ast@1.11.6", "@webassemblyjs/ast@^1.11.5":
   version "1.11.6"
   resolved "https://registry.npmmirror.com/@webassemblyjs/ast/-/ast-1.11.6.tgz#db046555d3c413f8966ca50a95176a0e2c642e24"
@@ -7545,11 +7550,6 @@ highlight.js@^9.15.6:
   version "9.18.5"
   resolved "https://registry.npmmirror.com/highlight.js/-/highlight.js-9.18.5.tgz#d18a359867f378c138d6819edfc2a8acd5f29825"
   integrity sha512-a5bFyofd/BHCX52/8i8uJkjr9DYwXIPnM/plwI6W7ezItLGqzt7X2G2nXuYSfsIJdkwwj/g9DG1LkcGJI/dDoA==
-
-hilbert@^2.0.0:
-  version "2.0.0"
-  resolved "https://registry.npmmirror.com/hilbert/-/hilbert-2.0.0.tgz#546f7d8b28f851d29d7444f954b3ce8964db5f85"
-  integrity sha512-APsHGDMMUF69iUCQyHg3JkfyeSnV3Wi6HsAh7M9U+O2r5nGKy6dHV0ykWXv5FRNIyFxmSDUFT6Do7LQTvxIDgw==
 
 hmac-drbg@^1.0.1:
   version "1.0.1"

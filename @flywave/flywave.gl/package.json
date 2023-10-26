@@ -42,7 +42,7 @@
         "@flywave/flywave-debug-datasource": "^0.28.0",
         "gsap": "3.10.4",
         "@flywave/flywave-lrucache": "^0.28.0",
-        "hilbert": "^2.0.0",
+        "@vitaly-z/hilbert-geohash": "^0.0.5",
         "@turf/turf": "^5.1.6",
         "d3-dispatch": "~3.0.1",
         "d3-transition": "^3.0.1",

@@ -26,11 +26,13 @@ const plugins = [
 var exports = addHarpWebpackConfig({
   output: {
     filename: "[name].js",
-    library: "FlywaveGl"
+    library: "FlywaveGl",
+    libraryTarget:"umd"
   },
   optimization: {
     minimize: !DEV
   },
+  target: 'web',
   devServer: {
     hot: false,
     headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Credentials": "true" },
