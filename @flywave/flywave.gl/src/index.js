@@ -26,6 +26,11 @@ export {
     MaterialProvider
 };
 
+import { 
+    TiltViewClipPlanesEvaluator, 
+} from "@flywave/flywave-mapview";
+
+export { TiltViewClipPlanesEvaluator }
 //utils
 import { MapViewEventNames } from "@flywave/flywave-mapview";
 import { TransferManager } from "@flywave/flywave-transfer-manager";

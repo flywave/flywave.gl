@@ -124,7 +124,7 @@ Object.assign(THREE.ShaderChunk, {
         }
 
         float decodeElevation(vec4 v) {   
-        vec4 uDemUnpack = pack[1];
+            vec4 uDemUnpack = pack[1];
             return dot(vec4(v.xyz * 255.0, -1.0), uDemUnpack);
         }
 

@@ -4,8 +4,6 @@ import F3dTilesRenderer from "./tiles-render";
 import {
     MapView,
     MapViewAtmosphere,
-    AtmosphereVariant,
-    AtmosphereShadingVariant,
     AtmosphereLightMode,
     TiltViewClipPlanesEvaluator,
     MapViewEventNames
@@ -48,14 +46,17 @@ class Application extends MapView {
             // enablePolarDataSource: options.enablePolarDataSource,
             // addBackgroundDatasource: options.addBackgroundDatasource,
             lodMinTilePixelSize: options.lodMinTilePixelSize || 1024,
-            ...options,
             useThemeManager: (mapView, uriResolver) => new ThemeManager(mapView, uriResolver),
             useMapViewEnvironment: (mapView, options) => new Environment(mapView, options),
             projection: sphereProjection,
             decoderUrl: `${config.DECODER_URL}`,
             throttlingEnabled:
                 options.throttlingEnabled == undefined ? true : options.throttlingEnabled,
-            clipPlanesEvaluator:options.clipPlanesEvaluator === undefined ? undefined : new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.05, 10.0)
+            clipPlanesEvaluator:
+                options.clipPlanesEvaluator === undefined
+                    ? undefined
+                    : new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.05, 10.0),
+            ...options
         });
 
         this.initlize(options);
@@ -150,6 +151,10 @@ class Application extends MapView {
         this.dispatch.call("camera-changed", this);
     };
 
+    onResize = () => {
+        this.resize(this.canvas.offsetWidth, this.canvas.offsetHeight);
+    };
+
     initlize(options) {
         this.pickHandler.superRaycasterFromScreenPoint = this.pickHandler.raycasterFromScreenPoint;
         this.pickHandler.raycasterFromScreenPoint = this.raycasterFromScreenPoint;
@@ -158,6 +163,7 @@ class Application extends MapView {
         this.window.on(`mousedraw.${this.id}`, () => {
             this.update();
         });
+        window.addEventListener("resize", this.onResize, false);
 
         const mapOrbitControl = new MapOrbitControl(this);
         this.mapOrbitControl = mapOrbitControl;
@@ -199,6 +205,7 @@ class Application extends MapView {
         if (this.mapControl) {
             this.mapControl.dispose();
         }
+        window.removeEventListener("resize", this.onResize, false);
     }
 
     intersectMapObjects(screenX, screenY) {

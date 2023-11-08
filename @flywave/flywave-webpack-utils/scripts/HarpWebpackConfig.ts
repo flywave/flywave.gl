@@ -96,7 +96,13 @@ export function addHarpWebpackConfig(config?: Configuration, harpConfig?: HarpWe
         bundles[0] = WebpackMergeMatchLoader(
             {
                 entry: {
-                    "flywave.gl": mainEntry
+                    "flywave.gl": {
+                        import :mainEntry,
+                    library: {
+                        // all options under `output.library` can be used here
+                        name: config?.output?.library,
+                        type: 'umd'
+                      }}
                 }
             },
             bundles[0]

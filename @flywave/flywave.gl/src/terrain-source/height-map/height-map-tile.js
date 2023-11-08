@@ -103,8 +103,8 @@ class HeightMapMeshTile extends Tile {
             if (!shader.defines) {
                 shader.defines = {};
             }
-            shader.defines["USE_UV"] = "";
-            shader.defines["USE_GT_151"] = parseInt(__THREE__) >= 151;
+            shader.defines["USE_UV"] = true;
+            if (parseInt(__THREE__) >= 151) shader.defines["USE_GT_151"] = true;
 
             var uUvTransform = _this.computeUvTransfrom(tileKey, materialTile);
 
@@ -119,7 +119,7 @@ class HeightMapMeshTile extends Tile {
             mat.elements[3] = _this.is_simple_patch ? 1 : 0;
 
             if (_this.uHeighMapTexture) {
-                shader.defines = {};
+                // shader.defines = {};
                 shader.defines["TERRAIN_ENABLE"] = true;
                 shader.uniforms.uHeighMapTexture = { value: _this.uHeighMapTexture };
                 // shader.uniforms.uHeightMapPos = { value: _this.uHeightMapPos };
@@ -143,7 +143,9 @@ class HeightMapMeshTile extends Tile {
                 mat.elements[5] = uDemUnpack.y;
                 mat.elements[6] = uDemUnpack.z;
                 mat.elements[7] = uDemUnpack.w;
-                shader.uniforms.uHeighMapTexture = { value: emptyTexture };
+                shader.uniforms.uHeighMapTexture = {
+                    value: parseInt(__THREE__) >= 151 ? null : emptyTexture
+                };
             }
 
             shader.uniforms.pack = { value: mat };
@@ -217,7 +219,7 @@ class HeightMapMeshTile extends Tile {
         );
         var basePost = sphereTileGridGeometry.computeSphereTileBasePosition(tileKey);
 
-        var geometry = sphereTileGridGeometry.getTileModel(tileKey); 
+        var geometry = sphereTileGridGeometry.getTileModel(tileKey);
         const tileMesh = new THREE.Mesh(geometry, materialProvider.getMaterialByTile(materialTile));
 
         tileMesh.renderOrder = Number.MIN_SAFE_INTEGER + 256;
@@ -246,7 +248,7 @@ class HeightMapMeshTile extends Tile {
             .multiplyScalar(-1)
             .add(basePost.multiplyScalar(6378137));
         // tileMesh.castShadow = true;
-        tileMesh.receiveShadow = true; 
+        tileMesh.receiveShadow = true;
         this.objects.push(tileMesh);
     }
 
