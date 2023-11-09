@@ -103,8 +103,11 @@ class HeightMapMeshTile extends Tile {
             if (!shader.defines) {
                 shader.defines = {};
             }
-            shader.defines["USE_UV"] = true;
-            if (parseInt(__THREE__) >= 151) shader.defines["USE_GT_151"] = true;
+            shader.defines["USE_UV"] = false;
+            if (parseInt(__THREE__) >= 151) {
+                shader.defines["USE_GT_151"] = true;
+                shader.defines["USE_UV"] = true;
+            }
 
             var uUvTransform = _this.computeUvTransfrom(tileKey, materialTile);
 
