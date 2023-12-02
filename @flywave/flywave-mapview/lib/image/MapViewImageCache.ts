@@ -142,7 +142,9 @@ export class MapViewImageCache {
      */
     private registerImage(name: string, url?: string, image?: TexturizableImage): ImageItem {
         if (this.hasName(name)) {
-            throw new Error("duplicate name in cache");
+            // throw new Error("duplicate name in cache");
+            console.warn("duplicate name in cache");
+            return this.findImageByName(name) as ImageItem;
         }
 
         if (url === undefined) {

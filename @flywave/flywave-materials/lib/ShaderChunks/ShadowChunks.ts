@@ -18,6 +18,7 @@ export const simpleLightingShadowChunk = `
         float roughness;
         vec3 specularColor;
         float specularF90;
+        float specularRoughness;
 
         #ifdef USE_CLEARCOAT
             float clearcoat;

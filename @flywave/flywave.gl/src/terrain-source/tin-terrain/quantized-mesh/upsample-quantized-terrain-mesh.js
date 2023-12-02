@@ -15,10 +15,7 @@ import { fromVertices } from "../math/sphere";
 
 import * as THREE from "three";
 
-import {
-    GeoCoordinates,
-    GeoBox
-} from "@flywave/flywave-geoutils";
+import { GeoCoordinates, GeoBox } from "@flywave/flywave-geoutils";
 
 var ARC = Math.PI / 180;
 var TWO_PI = 2.0 * Math.PI;
@@ -41,8 +38,7 @@ var boundingSphereScratch = new THREE.Sphere();
 var decodeTexCoordsScratch = new THREE.Vector2();
 var octEncodedNormalScratch = new THREE.Vector3();
 
-export function upsampleQuantizedTerrainMesh(parameters, transferableObjects,
-    projection, tileKey) {
+export function upsampleQuantizedTerrainMesh(parameters, transferableObjects, projection, tileKey) {
     var isEastChild = parameters.isEastChild;
     var isNorthChild = parameters.isNorthChild;
 
@@ -88,9 +84,7 @@ export function upsampleQuantizedTerrainMesh(parameters, transferableObjects,
     var parentUBuffer = new Array(quantizedVertexCount);
     var parentVBuffer = new Array(quantizedVertexCount);
     var parentHeightBuffer = new Array(quantizedVertexCount);
-    var parentNormalBuffer = hasVertexNormals
-        ? new Array(quantizedVertexCount * 2)
-        : undefined;
+    var parentNormalBuffer = hasVertexNormals ? new Array(quantizedVertexCount * 2) : undefined;
 
     var threshold = 20;
     var height;
@@ -98,17 +92,19 @@ export function upsampleQuantizedTerrainMesh(parameters, transferableObjects,
     var i, n;
     var u, v;
     for (i = 0, n = 0; i < quantizedVertexCount; ++i, n += 2) {
-        var texCoords = decodeTexCoordsScratch.fromArray(parentTextureCoordAndEncodedNormals, i * 4);
+        var texCoords = decodeTexCoordsScratch.fromArray(
+            parentTextureCoordAndEncodedNormals,
+            i * 4
+        );
 
         height = heights[i] / exaggeration;
 
         u = THREE.Math.clamp((texCoords.x * maxShort) | 0, 0, maxShort);
         v = THREE.Math.clamp((texCoords.y * maxShort) | 0, 0, maxShort);
         parentHeightBuffer[i] = THREE.Math.clamp(
-            (((height - parentMinimumHeight) /
-                (parentMaximumHeight - parentMinimumHeight)) *
+            (((height - parentMinimumHeight) / (parentMaximumHeight - parentMinimumHeight)) *
                 maxShort) |
-            0,
+                0,
             0,
             maxShort
         );
@@ -146,10 +142,8 @@ export function upsampleQuantizedTerrainMesh(parameters, transferableObjects,
         }
 
         if (
-            ((isEastChild && u >= halfMaxShort) ||
-                (!isEastChild && u <= halfMaxShort)) &&
-            ((isNorthChild && v >= halfMaxShort) ||
-                (!isNorthChild && v <= halfMaxShort))
+            ((isEastChild && u >= halfMaxShort) || (!isEastChild && u <= halfMaxShort)) &&
+            ((isNorthChild && v >= halfMaxShort) || (!isNorthChild && v <= halfMaxShort))
         ) {
             vertexMap[i] = vertexCount;
             uBuffer.push(u);
@@ -317,7 +311,10 @@ export function upsampleQuantizedTerrainMesh(parameters, transferableObjects,
 
     // var ellipsoid = Ellipsoid.clone(parameters.ellipsoid);
     //   var rectangle = GeoBox.fromCoordinates .clone(parameters.childRectangle);
-    var rectangle = new GeoBox(GeoCoordinates.fromObject((parameters.childRectangle.southWest)), GeoCoordinates.fromObject((parameters.childRectangle.northEast)));
+    var rectangle = new GeoBox(
+        GeoCoordinates.fromObject(parameters.childRectangle.southWest),
+        GeoCoordinates.fromObject(parameters.childRectangle.northEast)
+    );
 
     var north = rectangle.north * ARC;
     var south = rectangle.south * ARC;
@@ -369,8 +366,8 @@ export function upsampleQuantizedTerrainMesh(parameters, transferableObjects,
 
         heightBuffer[i] = height;
 
-        cartographicScratch.longitude = THREE.MathUtils.lerp(west, east, u / maxShort)/ARC;
-        cartographicScratch.latitude = THREE.MathUtils.lerp(south, north, v / maxShort)/ARC;
+        cartographicScratch.longitude = THREE.MathUtils.lerp(west, east, u / maxShort) / ARC;
+        cartographicScratch.latitude = THREE.MathUtils.lerp(south, north, v / maxShort) / ARC;
         cartographicScratch.altitude = height;
 
         // ellipsoid.cartographicToCartesian(cartographicScratch, cartesian3Scratch);
@@ -384,7 +381,7 @@ export function upsampleQuantizedTerrainMesh(parameters, transferableObjects,
 
     var boundingSphere = fromVertices(
         cartesianVertices,
-        new THREE.Vector3,
+        new THREE.Vector3(),
         3,
         boundingSphereScratch
     );
@@ -408,9 +405,7 @@ export function upsampleQuantizedTerrainMesh(parameters, transferableObjects,
 
     var heightRange = maximumHeight - minimumHeight;
 
-    var vertices = new Uint16Array(
-        uBuffer.length + vBuffer.length + heightBuffer.length
-    );
+    var vertices = new Uint16Array(uBuffer.length + vBuffer.length + heightBuffer.length);
 
     for (i = 0; i < uBuffer.length; ++i) {
         vertices[i] = uBuffer[i];
@@ -425,23 +420,15 @@ export function upsampleQuantizedTerrainMesh(parameters, transferableObjects,
     start += vBuffer.length;
 
     for (i = 0; i < heightBuffer.length; ++i) {
-        vertices[start + i] =
-            (maxShort * (heightBuffer[i] - minimumHeight)) / heightRange;
+        vertices[start + i] = (maxShort * (heightBuffer[i] - minimumHeight)) / heightRange;
     }
 
-    var indicesTypedArray = IndexDatatype.createTypedArray(
-        uBuffer.length,
-        indices
-    );
+    var indicesTypedArray = IndexDatatype.createTypedArray(uBuffer.length, indices);
 
     var encodedNormals;
     if (hasVertexNormals) {
         var normalArray = new Uint8Array(normalBuffer);
-        transferableObjects.push(
-            vertices.buffer,
-            indicesTypedArray.buffer,
-            normalArray.buffer
-        );
+        transferableObjects.push(vertices.buffer, indicesTypedArray.buffer, normalArray.buffer);
         encodedNormals = normalArray.buffer;
     } else {
         transferableObjects.push(vertices.buffer, indicesTypedArray.buffer);
@@ -460,7 +447,7 @@ export function upsampleQuantizedTerrainMesh(parameters, transferableObjects,
         southIndices: southIndices,
         eastIndices: eastIndices,
         northIndices: northIndices,
-        boundingSphere: boundingSphere,
+        boundingSphere: boundingSphere
         // orientedBoundingBox: orientedBoundingBox,
         // horizonOcclusionPoint: horizonOcclusionPoint,
     };
@@ -508,11 +495,7 @@ Vertex.prototype.initializeIndexed = function (
     this.ratio = undefined;
 };
 
-Vertex.prototype.initializeFromClipResult = function (
-    clipResult,
-    index,
-    vertices
-) {
+Vertex.prototype.initializeFromClipResult = function (clipResult, index, vertices) {
     var nextIndex = index + 1;
 
     if (clipResult[index] !== -1) {
@@ -538,7 +521,7 @@ Vertex.prototype.getKey = function () {
     return JSON.stringify({
         first: this.first.getKey(),
         second: this.second.getKey(),
-        ratio: this.ratio,
+        ratio: this.ratio
     });
 };
 
@@ -700,4 +683,4 @@ function addClippedPolygon(
         indices.push(polygonVertices[2].newIndex);
         indices.push(polygonVertices[3].newIndex);
     }
-} 
+}

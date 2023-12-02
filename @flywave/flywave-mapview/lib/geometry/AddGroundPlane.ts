@@ -138,6 +138,32 @@ function toLocalTargetCoords(geom: THREE.BufferGeometry, srcProjection: Projecti
     attr.needsUpdate = true;
 }
 
+function copyVector3sArray( vectors:THREE.Vector3[],buffer:THREE.BufferAttribute ):THREE.BufferAttribute {
+
+    let array = buffer.array as Float32Array;
+    let offset = 0;
+
+    for ( let i = 0, l = vectors.length; i < l; i ++ ) {
+
+        let vector = vectors[ i ];
+
+        if ( vector === undefined ) {
+
+            console.warn( 'THREE.BufferAttribute.copyVector3sArray(): vector is undefined', i );
+            vector = new THREE.Vector3();
+
+        }
+
+        array[ offset ++ ] = vector.x;
+        array[ offset ++ ] = vector.y;
+        array[ offset ++ ] = vector.z;
+
+    }
+
+    return buffer;
+
+}
+
 function createGroundPlaneGeometry(
     tile: Tile,
     useLocalTargetCoords: boolean,
@@ -159,15 +185,13 @@ function createGroundPlaneGeometry(
     // Use 64bits floats for world coordinates to avoid precision issues on coordinate
     // tranformations. The array must be converted to single precision before rendering.
     const bufferArray = useLocalTargetCoords ? new Float32Array(12) : new Float64Array(12);
-    const posAttr = new THREE.BufferAttribute(bufferArray, 3).copyVector3sArray(cornersArray);
+    const posAttr = copyVector3sArray(cornersArray,new THREE.BufferAttribute(bufferArray, 3));
     geometry.setAttribute("position", posAttr);
 
     if (receiveShadow) {
         // Webmercator needs to have it negated to work correctly.
         sourceProjection.surfaceNormal(tileCorners.sw, tmpV).negate();
-        const normAttr = new THREE.BufferAttribute(new Float32Array(12), 3).copyVector3sArray(
-            Array(4).fill(tmpV)
-        );
+        const normAttr = copyVector3sArray( Array(4).fill(tmpV),new THREE.BufferAttribute(new Float32Array(12), 3));
         geometry.setAttribute("normal", normAttr);
     }
     geometry.setIndex(new THREE.BufferAttribute(new Uint16Array([0, 1, 2, 2, 1, 3]), 1));

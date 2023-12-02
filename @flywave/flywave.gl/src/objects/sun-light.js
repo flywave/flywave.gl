@@ -164,7 +164,7 @@ class SunLight extends THREE.Object3D {
     fromOptions({ color, intensity, time, castShadow, mapSize }) {
         this.startColor = color == undefined ? 0xffffff : color;
         this.intensity = intensity || this.intensity;
-        this.currenTime.setTime(time);
+        this.currenTime.setTime(time || this.currenTime.getTime());
         this.light.castShadow = castShadow;
         if (mapSize) {
             this.mapSize.fromArray(mapSize);
