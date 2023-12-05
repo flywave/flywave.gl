@@ -32,8 +32,8 @@ export class TerrainSource extends TileDataSource {
         this.elevationProvider.bindDataSource(this);
     }
 
-    get baseUrl(){
-        throw  "no imple"
+    get baseUrl() {
+        throw "no imple";
     }
 
     onCameraChange = () => {
@@ -73,20 +73,28 @@ export class TerrainSource extends TileDataSource {
     taskIsRuning = false;
 
     updateTileJobs = {};
-  
+
     updateTileOverlayer = tile => {
         var job = () => {
             const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
             const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
             var fbbox = new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat);
             if (this.isDetached()) return;
-            this.mapView.clearTileCache(this.name, tile => {
-                const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
-                const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
-                return new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat).intersects(
-                    fbbox
-                );
-            });
+            this.mapView.clearTileCache(
+                this.name,
+                tile
+                    ? tile => {
+                          const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
+                          const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
+                          return new Math2D.Box(
+                              minLng,
+                              minLat,
+                              maxLng - minLng,
+                              maxLat - minLat
+                          ).intersects(fbbox);
+                      }
+                    : null
+            );
         };
         if (this._onCameraChange && tile.tileKey.level > 10) {
             this.updateTileJobs[tile.tileKey.mortonCode()] = { job, tile };
@@ -119,12 +127,12 @@ export class TerrainSource extends TileDataSource {
     };
 
     shouldSubdivide(zoomLevel, tileKey) {
-        if(zoomLevel==undefined)return false;
+        if (zoomLevel == undefined) return false;
         return tileKey.level <= zoomLevel;
     }
 
     canGetTile(zoomLevel, tileKey) {
-        if(zoomLevel==undefined)return false;
+        if (zoomLevel == undefined) return false;
         return tileKey.level <= zoomLevel;
     }
 
@@ -139,5 +147,4 @@ export class TerrainSource extends TileDataSource {
     get wireframe() {
         return this.terrainWireframe;
     }
-
 }

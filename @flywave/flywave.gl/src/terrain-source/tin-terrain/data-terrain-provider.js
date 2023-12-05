@@ -423,7 +423,10 @@ class DataTerrainProvider {
         this._requestMetadata = defaultValue(options.requestMetadata, true);
 
         this.url = options.url;
-        this.request = { headers: { ...options.headers, accept: "application/json" },queryString:options.queryString||"" };
+        this.request = {
+            headers: { ...options.headers, accept: "application/json" },
+            queryString: options.queryString || ""
+        };
         this._heightmapWidth = 65;
         this.dataSource = dataSource;
 
@@ -436,7 +439,10 @@ class DataTerrainProvider {
         return new Promise((reslove, reject) => {
             this._readyPromise = { reslove, reject };
             return downloadManager
-                .downloadJson(`${this.url}/layer.json${this.request.queryString}`, this.request.headers)
+                .downloadJson(
+                    `${this.url}/layer.json${this.request.queryString}`,
+                    this.request.headers
+                )
                 .then(this.metadataSuccess)
                 .then(reslove)
                 .catch(reject);
@@ -464,6 +470,7 @@ class DataTerrainProvider {
     getTileDataAvailable = function (tileKey) {
         var { column: x, row: y, level } = tileKey;
         level = level - 1;
+        if (level < 0) return false;
         if (!defined(this._availability)) {
             return undefined;
         }
@@ -764,7 +771,10 @@ class DataTerrainProvider {
             }
 
             return downloadManager
-                .downloadJson(`${parentUrl}/layer.json${this.request.queryString}`,this.request.headers)
+                .downloadJson(
+                    `${parentUrl}/layer.json${this.request.queryString}`,
+                    this.request.headers
+                )
                 .catch(parseMetadataFailure)
                 .then(() => {
                     return parentMetadata;

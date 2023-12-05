@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  GeoCoordinates,
-} from "@flywave/flywave-geoutils";
 import { createVerticesFromQuantizedTerrainMesh } from "./quantized-mesh/create-vertices-from-quantized-terrain-mesh";
 import { upsampleQuantizedTerrainMesh } from "./quantized-mesh/upsample-quantized-terrain-mesh";
 
@@ -23,8 +20,8 @@ export class QuantizedMeshTileDecoder {
   decodeTile(data, tileKey, projection) {
 
     var transferableObjects = [];
-    var tileTerrain = data.upsample ? upsampleQuantizedTerrainMesh(data, transferableObjects, projection, tileKey) :
-      createVerticesFromQuantizedTerrainMesh(data, transferableObjects, projection, tileKey);
+    var tileTerrain = data.upsample ? upsampleQuantizedTerrainMesh(data, transferableObjects, projection, tileKey,data.offScreenCanvas) :
+      createVerticesFromQuantizedTerrainMesh(data, transferableObjects, projection, tileKey,data.offScreenCanvas);
     const verityTile = {
       techniques: [],
       geometries: [],

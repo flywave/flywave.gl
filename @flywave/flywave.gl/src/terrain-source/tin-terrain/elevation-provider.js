@@ -62,7 +62,7 @@ class ElevationProvider {
     *              If undefined, the view's visible tile containing the point will be used.
     * @returns The height at geoPoint or undefined if no tile was found that covers the geoPoint.
     */
-    getHeight(geoPoint, unnecessary) {
+    getHeight(geoPoint, unnecessary) {return 0
         if (unnecessary)
             return 0;
         return this.getAtPointOrZero(geoPoint, 0);
@@ -75,7 +75,7 @@ class ElevationProvider {
      * @param y - The Y position in css/client coordinates (without applied display ratio).
      * @returns World coordinate of the intersection or undefined if no intersection detected.
      */
-    rayCast(x, y) {
+    rayCast(x, y) {return false;
         if (!this.pickingRaycaster) {
             this.pickingRaycaster = new PickLocal(this.dataSource.mapView);
         }

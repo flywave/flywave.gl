@@ -283,7 +283,7 @@ QuantizedMeshTerrainData.prototype.createMesh = function (options, task) {
     rectangle: rectangle,
     relativeToCenter: this._boundingSphere.center,
     ellipsoid: ellipsoid,
-    exaggeration: exaggeration,
+    exaggeration: exaggeration
   });
 
   if (!defined(verticesPromise)) {

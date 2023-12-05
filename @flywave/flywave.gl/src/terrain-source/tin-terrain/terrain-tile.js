@@ -107,7 +107,7 @@ class TerrainTile extends Tile {
 
   onBeforeMaterialCompile = (tinTile, tile, imageUv, isWebMercator) => {
     var _this = this;
-    const { width, height } = this.dataSource.mapView.getCanvasClientSize();
+    // const { width, height } = this.dataSource.mapView.getCanvasClientSize();
     return function (shader) {
       shader.vertexShader = shader.vertexShader.replace(
         `#include <beginnormal_vertex>`,

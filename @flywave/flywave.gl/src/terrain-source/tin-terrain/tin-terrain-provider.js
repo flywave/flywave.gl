@@ -97,6 +97,7 @@ export class TinTerrainProvider {
                 this.requestTile(tk);
                 break;
             } else {
+                if(tk.level==0)break;
                 var parent = tk.parent();
                 if (this.tinCache.has(parent.mortonCode())) {
                     var tile = this.tinCache.get(parent.mortonCode());

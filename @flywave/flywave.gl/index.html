@@ -25,7 +25,7 @@
     zoomLevel: 17,
     addBackgroundDatasource: false,
     enablePolarDataSource: false,
-    lodMinTilePixelSize: 512,
+    lodMinTilePixelSize: 1024,
     maxVisibleDataSourceTiles: 100,
     throttlingEnabled: false,
     logarithmicDepthBuffer: true,
@@ -37,8 +37,9 @@
     36.82749, 117.59765
   )
   app.setTinTerrainSource({
-    url:`http://127.0.0.1:86/hill_tin/` 
+    url: `http://127.0.0.1:86/hill_tin/`
   });
+  // app.setHeightMapSource("https://api.mapbox.com/v4/mapbox.terrain-rgb.json?secure&access_token=pk.eyJ1IjoiYW5pbmdnbyIsImEiOiJjbGY5Y283N3IyZjB3M3ZyMGs4emJoYWNkIn0.MRcTQs3Z9OA0EQOB40xBqQ\n")
   app.addAnchorMesh(l);
   app.addMaterialProviders(new FlywaveGl.MaterialProvider({ url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` }));
 </script>
