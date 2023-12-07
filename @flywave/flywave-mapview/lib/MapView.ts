@@ -245,7 +245,7 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
      */
     customAntialiasSettings?: IMapAntialiasSettings;
 
-    useMapRenderingManager?:(width:number,height:number)=>MapRenderingManager
+    useMapRenderingManager?:(width:number,height:number,mapView:MapView)=>MapRenderingManager
 
     logarithmicDepthBuffer?: boolean;
     /**
@@ -1080,7 +1080,7 @@ export class MapView extends EventDispatcher {
 
         const mapPassAntialiasSettings = this.m_options.customAntialiasSettings;
         const useMapRenderingManager = this.m_options.useMapRenderingManager;
-        this.mapRenderingManager =useMapRenderingManager?useMapRenderingManager(width,height): new MapRenderingManager(
+        this.mapRenderingManager =useMapRenderingManager?useMapRenderingManager(width,height,this): new MapRenderingManager(
             width,
             height,
             this.m_options.dynamicPixelRatio,

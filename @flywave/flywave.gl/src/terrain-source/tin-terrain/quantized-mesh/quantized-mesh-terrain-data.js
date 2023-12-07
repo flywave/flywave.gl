@@ -9,6 +9,7 @@ import Intersections2D from "../math/intersections2D";
 import TerrainEncoding from "./terrain-encoding";
 import TerrainMesh from "./terrain-mesh";
 import { TileKey } from "@flywave/flywave-geoutils";
+import { HeightMap } from "./render-heightmap";
 
 /**
  * Terrain data for a single tile where the terrain data is represented as a quantized mesh.  A quantized
@@ -348,7 +349,7 @@ QuantizedMeshTerrainData.prototype.createMesh = function (options, task) {
       result.eastIndicesNorthToSouth,
       result.northIndicesWestToEast
     );
-
+    that.heightMap = new HeightMap(result.heightMapBuffer,minimumHeight,maximumHeight);
     // Free memory received from server after mesh is created.
     that._quantizedVertices = undefined;
     that._encodedNormals = undefined;
@@ -539,13 +540,13 @@ QuantizedMeshTerrainData.prototype.interpolateHeight = function (
 ) {
   var width = rectangle.east - rectangle.west;
   var height = rectangle.north - rectangle.south;
-  var u = THREE.Math.clamp(
+  var u = (THREE.Math||THREE.MathUtils).clamp(
     (longitude - rectangle.west) / width,
     0.0,
     1.0
   );
   u *= maxShort;
-  var v = THREE.Math.clamp(
+  var v = (THREE.Math||THREE.MathUtils).clamp(
     (latitude - rectangle.south) / height,
     0.0,
     1.0

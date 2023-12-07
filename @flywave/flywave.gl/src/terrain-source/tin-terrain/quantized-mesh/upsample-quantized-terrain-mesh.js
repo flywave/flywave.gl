@@ -99,9 +99,9 @@ export function upsampleQuantizedTerrainMesh(parameters, transferableObjects, pr
 
         height = heights[i] / exaggeration;
 
-        u = THREE.Math.clamp((texCoords.x * maxShort) | 0, 0, maxShort);
-        v = THREE.Math.clamp((texCoords.y * maxShort) | 0, 0, maxShort);
-        parentHeightBuffer[i] = THREE.Math.clamp(
+        u = (THREE.Math||THREE.MathUtils).clamp((texCoords.x * maxShort) | 0, 0, maxShort);
+        v = (THREE.Math||THREE.MathUtils).clamp((texCoords.y * maxShort) | 0, 0, maxShort);
+        parentHeightBuffer[i] = (THREE.Math||THREE.MathUtils).clamp(
             (((height - parentMinimumHeight) / (parentMaximumHeight - parentMinimumHeight)) *
                 maxShort) |
                 0,

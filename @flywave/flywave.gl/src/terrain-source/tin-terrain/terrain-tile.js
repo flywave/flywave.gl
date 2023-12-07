@@ -145,6 +145,13 @@ class TerrainTile extends Tile {
 
       var waterMaskTile = tile.getWaterMaskTile();
       shader.defines["SHOW_REFLECTIVE_OCEAN"] = true;
+
+      shader.defines["USE_UV"] = false;
+      if (parseInt(__THREE__) >= 151) {
+          shader.defines["USE_GT_151"] = true;
+          shader.defines["USE_UV"] = true;
+      }
+
       if (waterMaskTile) {
         shader.uniforms.u_waterMask = { value: waterMaskTile.waterMask };
         shader.uniforms.normalSampler = { value: waterNormal };

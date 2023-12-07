@@ -72,15 +72,15 @@ class EarthFreeControl extends FreeControl {
                 x = this.width / 2;
                 y = this.height / 2;
             }
-            if (this.application.elevation) {
-                var rayRet = this.application.elevation.rayCast(x, y);
-                if (rayRet) {
-                    reslut[0] = rayRet.point.x;
-                    reslut[1] = rayRet.point.y;
-                    reslut[2] = rayRet.point.z;
-                    return rayRet.distance;
-                }
-            }
+            // if (this.application.elevation) {
+            //     var rayRet = this.application.elevation.rayCast(x, y);
+            //     if (rayRet) {
+            //         reslut[0] = rayRet.point.x;
+            //         reslut[1] = rayRet.point.y;
+            //         reslut[2] = rayRet.point.z;
+            //         return rayRet.distance;
+            //     }
+            // }
         }
         return super.rayCastToGlobe(reslut, origin, target, hitCountPrecision)
     };

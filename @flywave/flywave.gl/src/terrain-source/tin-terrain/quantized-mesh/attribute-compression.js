@@ -25,7 +25,7 @@ var signNotZero = function (value) {
 var toSNorm = function (value, rangeMaximum) {
   rangeMaximum = defaultValue(rangeMaximum, 255);
   return Math.round(
-    (THREE.Math.clamp(value, -1.0, 1.0) * 0.5 + 0.5) * rangeMaximum
+    ((THREE.Math||THREE.MathUtils).clamp(value, -1.0, 1.0) * 0.5 + 0.5) * rangeMaximum
   );
 };
 

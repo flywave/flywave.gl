@@ -141,9 +141,6 @@ export function createVerticesFromQuantizedTerrainMesh(
         maxLatitude = Math.max(cartographicScratch.latitudeInRadians, maxLatitude);
         maxAltitude = Math.max(cartographicScratch.altitude, maxAltitude);
 
-        // if(cartographicScratch.longitude==135&&cartographicScratch.latitude==0){
-        //   console.log();
-        // }
         var position = projection.projectPoint(cartographicScratch);
 
         uvs[i] = new THREE.Vector2(u, v);
@@ -165,8 +162,8 @@ export function createVerticesFromQuantizedTerrainMesh(
         minimum.min(cartesian3Scratch);
         maximum.max(cartesian3Scratch);
     }
-
-    renderHeightMap(canvas,[minLongitude,minLatitude,minAltitude,maxLongitude,maxLatitude,maxAltitude],cartographicScratchs,parameters.indices);
+ 
+    let heightMapBuffer = renderHeightMap(canvas,[minLongitude,minLatitude,minAltitude,maxLongitude,maxLatitude,maxAltitude],cartographicScratchs,parameters.indices);
 
     var westIndicesSouthToNorth = copyAndSort(parameters.westIndices, function (a, b) {
         return uvs[a].y - uvs[b].y;
@@ -442,6 +439,7 @@ export function createVerticesFromQuantizedTerrainMesh(
 
     return {
         // displacementMapBuffer,
+        heightMapBuffer,
         position3DAndHeight: position,
         altitudes,
         textureCoordAndEncodedNormals: uv,
