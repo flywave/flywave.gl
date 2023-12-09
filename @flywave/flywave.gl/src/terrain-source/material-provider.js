@@ -245,7 +245,7 @@ export class MaterialProvider {
 
     getMaterialByTile(tile) {
         var mtl = this.makeMaterial(tile);
-        this.openStencil(mtl);
+        // this.openStencil(mtl);
         return mtl;
     }
 
