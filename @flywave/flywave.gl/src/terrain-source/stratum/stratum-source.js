@@ -1,40 +1,33 @@
-import { TinTerrainProvider } from "./tin-terrain-provider";
-import { TinTileFactory } from "./terrain-tile";
-import { ElevationRangeSource } from "./elevation-range-source";
-import { ElevationProvider } from "./elevation-provider";
-
 import { TerrainSource } from "../terrain-source";
 import {
     halfQuadTreeSubdivisionScheme,
     normalizedEquirectangularProjection,
     TilingScheme
 } from "@flywave/flywave-geoutils";
-import { DataTerrainProvider } from "./data-terrain-provider";
-import { QUANTIZED_MESH_TILE_DECODER_ID } from "./constants";
-import { TinWorkerBasedDecoder } from "./work-tile-decoder";
+import { TinTerrainProvider } from "../tin-terrain/tin-terrain-provider";
+import { StratumTileFactory } from "./stratum-tile";
+import { DataStratumProvider } from "./data-stratum-provider";
+import { QUANTIZED_MESH_TILE_DECODER_ID } from "../tin-terrain/constants";
 import config from "../../config";
+import { DoubleSide } from "three";
 
-export class TinTerrainSource extends TerrainSource { 
-
+class StratumSource extends TerrainSource {
     constructor(options) {
         super({
             concurrentDecoderServiceName: QUANTIZED_MESH_TILE_DECODER_ID,
-            name: "terrain_data_source",
+            name: "stratum_terrain_data_source",
             maxDisplayLevel: 22,
-            requestWaterMask: options.requestWaterMask,
             ...options,
             tilingScheme: new TilingScheme(
                 halfQuadTreeSubdivisionScheme,
                 normalizedEquirectangularProjection
             ),
-            tileFactory: new TinTileFactory(),
-            dataProvider: new TinTerrainProvider(options),
-            elevationRangeSource: new ElevationRangeSource(),
-            elevationProvider: new ElevationProvider(),
-            decoder: new TinWorkerBasedDecoder(QUANTIZED_MESH_TILE_DECODER_ID, config.DECODER_URL)
+            tileFactory: new StratumTileFactory(),
+            dataProvider: new TinTerrainProvider({ ...options, requestWaterMask: false }),
+            decoderUrl: config.DECODER_URL
         });
 
-        this.dataTerrainProvider = new DataTerrainProvider(
+        this.dataTerrainProvider = new DataStratumProvider(
             { ...options, requestVertexNormals: true },
             this
         );
@@ -70,4 +63,12 @@ export class TinTerrainSource extends TerrainSource {
         if (zoomLevel == undefined) return false;
         return tileKey.level <= zoomLevel;
     }
+
+    getMaterialProviders() {}
+
+    getMaterialById(id) {
+        return new THREE.MeshPhongMaterial({side:DoubleSide,color:0xffffff*Math.random()});
+    }
 }
+
+export default StratumSource;

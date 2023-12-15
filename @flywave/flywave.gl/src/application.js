@@ -16,7 +16,7 @@ import { MapOrbitControl } from "./map-controls/map-orbit-control";
 import { Box3, Matrix4, Scene, Vector3 } from "three";
 import config from "./config";
 import { Frustum, Vector2, Box2 } from "three";
-import { HeightMapSource, TinTerrainSource } from "./terrain-source";
+import { HeightMapSource, TinTerrainSource, StratumSource } from "./terrain-source";
 import { DebugTilesRenderer } from "./3dtiles-render/three/DebugTilesRenderer";
 import makePickFrustum from "./util/rang-frustum";
 import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
@@ -123,6 +123,14 @@ class Application extends MapView {
                 await this.__updateTerrainSource(new TinTerrainSource(options));
             }
         });
+    }
+
+    __stratumSource = null;
+    async setStratumSource(url) {
+        if (this.__stratumSource) {
+            this.removeDataSource(this.__stratumSource);
+        }
+        this.addDataSource(new StratumSource({ url }));
     }
 
     addMaterialProviders(provider) {

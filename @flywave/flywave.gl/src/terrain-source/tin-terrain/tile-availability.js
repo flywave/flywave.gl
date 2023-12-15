@@ -17,9 +17,10 @@ import { TileKey } from "@flywave/flywave-geoutils";
  * @param {TilingScheme} tilingScheme The tiling scheme in which to report availability.
  * @param {Number} maximumLevel The maximum tile level that is potentially available.
  */
-function TileAvailability(tilingScheme, maximumLevel) {
+function TileAvailability(tilingScheme,minimumLevel, maximumLevel) {
   this._tilingScheme = tilingScheme;
   this._maximumLevel = maximumLevel;
+  this._minimumLevel = minimumLevel;
 
   this._rootNodes = [];
 }

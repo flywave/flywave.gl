@@ -76,6 +76,7 @@ export function getOffScreenCanvas() {
 
 export default function renderHeightMap(canvas, extents, positions, indeic) {
     if (!renderer) {
+        if (!canvas) return new Uint8ClampedArray();
         renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas });
         renderer.setSize(WIDTH, HEIGHT, false);
     }

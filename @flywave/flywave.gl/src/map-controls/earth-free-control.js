@@ -1,10 +1,12 @@
-import { mathUtils } from './math-utils';
+import { mathUtils } from "./math-utils";
 
-import { FreeControl } from './free-controls';
-import { EarthCamera } from './earth-camera';
-var Vec3 = mathUtils.Vec3, Matrix = mathUtils.Matrix;
+import { FreeControl } from "./free-controls";
+import { EarthCamera } from "./earth-camera";
+var Vec3 = mathUtils.Vec3,
+    Matrix = mathUtils.Matrix;
 
-var vec3 = Vec3(), matrix = Matrix();
+var vec3 = Vec3(),
+    matrix = Matrix();
 class EarthFreeControl extends FreeControl {
     constructor(application, window) {
         super(application, window);
@@ -15,33 +17,56 @@ class EarthFreeControl extends FreeControl {
         var W = [0, 0, 0];
         this.camera.getDown(W);
         this.camera.rotateAroundPivot(
-            ak[0], ak[1], ak[2], W[0],
-            W[1], W[2], this.pan_velocity_x * D);
+            ak[0],
+            ak[1],
+            ak[2],
+            W[0],
+            W[1],
+            W[2],
+            this.pan_velocity_x * D
+        );
         this.camera.getRight(W);
-        this.camera.rotateAroundPivot(ak[0], ak[1], ak[2], W[0], W[1], W[2], -this.pan_velocity_y * D);
-    };
+        this.camera.rotateAroundPivot(
+            ak[0],
+            ak[1],
+            ak[2],
+            W[0],
+            W[1],
+            W[2],
+            -this.pan_velocity_y * D
+        );
+    }
 
     rotationLookDown(result, y) {
         matrix.rotationLookDown(result, [0, 0, -1], y);
-    };
+    }
 
     setTorotationLookDown(D, E) {
         matrix.rotationLookDown(D, [0, 0, -1], E);
-    };
+    }
 
     flyTorotationLookDown(a, b) {
         matrix.rotationLookDown(a, [0, 0, -1], b);
-    };
+    }
 
-    rayCastToGlobeAndScene(reslut, origin, target, x, y, hitCountPrecision,noLineNear,noPickMap) {
-        if (this.mapView.zoomLevel >= 17 && x && y&&!noPickMap) {
+    rayCastToGlobeAndScene(reslut, origin, target, x, y, hitCountPrecision, noLineNear, noPickMap) {
+        if (this.mapView.zoomLevel >= 17 && x && y && !noPickMap) {
             var selections = this.application.pickMap(x, y);
             for (var selectId = 0; selectId < selections.length; selectId++) {
                 var selection = selections[selectId];
                 if (selection && selection.intersection) {
-                    var { distance, point, intersection: { pointOnLine,object: { userData: { feature, _3dtile } } } } = selection;
-                    
-                    if(pointOnLine&&!noLineNear){
+                    var {
+                        distance,
+                        point,
+                        intersection: {
+                            pointOnLine,
+                            object: {
+                                userData: { feature, _3dtile }
+                            }
+                        }
+                    } = selection;
+
+                    if (pointOnLine && !noLineNear) {
                         point = pointOnLine;
                     }
                     if (feature || _3dtile) {
@@ -60,7 +85,7 @@ class EarthFreeControl extends FreeControl {
             }
         }
 
-        if (this.mapView.zoomLevel >= 17 && this.lastCast&&!noPickMap) {
+        if (this.mapView.zoomLevel >= 17 && this.lastCast && !noPickMap) {
             reslut[0] = this.lastCast[0];
             reslut[1] = this.lastCast[1];
             reslut[2] = this.lastCast[2];
@@ -82,28 +107,30 @@ class EarthFreeControl extends FreeControl {
             //     }
             // }
         }
-        return super.rayCastToGlobe(reslut, origin, target, hitCountPrecision)
-    };
+        return super.rayCastToGlobe(reslut, origin, target, hitCountPrecision);
+    }
 
     getLocationAtCenter(z, v) {
-        var y = this, A = y.camera, B;
+        var y = this,
+            A = y.camera,
+            B;
         var w = [0, 0, 0];
         A.getOrigin(w);
         if (y.lasthitd_center > 0) {
-            B = y.lasthit_center
+            B = y.lasthit_center;
         } else {
             if (!v && !y.last_view) {
-                return false
+                return false;
             } else {
                 if (!v) {
-                    v = y.last_view
+                    v = y.last_view;
                 }
 
                 var C = [0, 0, 0];
                 B = [0, 0, -1];
                 A.unprojectToWorld(C, this, v.center_x, v.center_y, 1);
                 if (this.rayCastToGlobeAndScene(B, w, C, v.center_x, v.center_y) < 0) {
-                    return false
+                    return false;
                 }
             }
         }
@@ -113,15 +140,15 @@ class EarthFreeControl extends FreeControl {
         z[3] = vec3.distance(B, w);
 
         if (z[2] < 0) {
-            z[2] = 0
+            z[2] = 0;
         } else {
             z[2];
         }
 
         z[3];
 
-        return true
-    };
+        return true;
+    }
 
     getCenterToCameraDistance() {
         var org = [];
@@ -130,8 +157,20 @@ class EarthFreeControl extends FreeControl {
             return vec3.length(org) - 1;
         }
         return vec3.distance(this.lasthit_center, org);
-    };
-}
+    }
 
+    __ellipsoidMaximumDepth = 0;
+    getEquatorialRadius() {
+        return super.getEquatorialRadius() - this.__ellipsoidMaximumDepth;
+    }
+
+    setEllipsoidMaximumDepth(maximumDepth) {
+        this.__ellipsoidMaximumDepth = maximumDepth;
+    }
+
+    getEllipsoidMaximumDepth() {
+        return this.__ellipsoidMaximumDepth;
+    }
+}
 
 export { EarthFreeControl };

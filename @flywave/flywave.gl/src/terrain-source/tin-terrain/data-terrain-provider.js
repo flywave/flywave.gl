@@ -63,7 +63,11 @@ var QuantizedMeshExtensionIds = {
      * @constant
      * @default 4
      */
-    METADATA: 4
+    METADATA: 4,
+    /**
+     *
+     */
+    STRATUM_GROUP: 8
 };
 
 function createQuantizedMeshTerrainData(provider, buffer, level, x, y, layer) {
@@ -197,6 +201,7 @@ function createQuantizedMeshTerrainData(provider, buffer, level, x, y, layer) {
 
     var encodedNormalBuffer;
     var waterMaskBuffer;
+    var stratumGroups;
     while (pos < view.byteLength) {
         var extensionId = view.getUint8(pos, true);
         pos += Uint8Array.BYTES_PER_ELEMENT;
@@ -213,6 +218,15 @@ function createQuantizedMeshTerrainData(provider, buffer, level, x, y, layer) {
             provider._requestWaterMask
         ) {
             waterMaskBuffer = new Uint8Array(buffer, pos, extensionLength);
+        } else if (extensionId === QuantizedMeshExtensionIds.STRATUM_GROUP) {
+            var stringLength = view.getUint32(pos, true);
+            if (stringLength > 0) {
+                stratumGroups = getJsonFromTypedArray(
+                    new Uint8Array(buffer),
+                    pos + Uint32Array.BYTES_PER_ELEMENT,
+                    stringLength
+                );
+            }
         } else if (
             extensionId === QuantizedMeshExtensionIds.METADATA &&
             provider._requestMetadata
@@ -261,7 +275,7 @@ function createQuantizedMeshTerrainData(provider, buffer, level, x, y, layer) {
         pos += extensionLength;
     }
 
-    var skirtHeight = provider.getLevelMaximumGeometricError(level) * 50.0;
+    var skirtHeight = 0;//provider.getLevelMaximumGeometricError(level) * 50.0;
 
     // The skirt is not included in the OBB computation. If this ever
     // causes any rendering artifacts (cracks), they are expected to be
@@ -294,6 +308,7 @@ function createQuantizedMeshTerrainData(provider, buffer, level, x, y, layer) {
     }
     return new QuantizedMeshTerrainData({
         center: center,
+        stratumGroups,
         minimumHeight: minimumHeight,
         maximumHeight: maximumHeight,
         boundingSphere: boundingSphere,
@@ -474,6 +489,11 @@ class DataTerrainProvider {
         if (!defined(this._availability)) {
             return undefined;
         }
+
+        if (level < this._availability._minimumLevel) {
+            return false;
+        }
+
         if (level > this._availability._maximumLevel) {
             return false;
         }
@@ -570,6 +590,8 @@ class DataTerrainProvider {
 
     overallMaxZoom = 0;
 
+    overallMinZoom = Number.MAX_SAFE_INTEGER;
+
     metadataSuccess = data => {
         var overallAvailability = this.overallAvailability;
         return this.parseMetadataSuccess(data).then(() => {
@@ -581,10 +603,18 @@ class DataTerrainProvider {
             if (length > 0) {
                 var availability = (this._availability = new TileAvailability(
                     this.tilingScheme,
+                    this.overallMinZoom,
                     this.overallMaxZoom
                 ));
                 for (var level = 0; level < length; ++level) {
-                    var levelRanges = overallAvailability[level];
+                    var levelRanges =
+                        overallAvailability[level] ||
+                        (level == 0
+                            ? [
+                                  [1, 0, 1, 0],
+                                  [0, 1, 0, 1]
+                              ]
+                            : []);
                     for (var i = 0; i < levelRanges.length; ++i) {
                         var range = levelRanges[i];
                         availability.addAvailableTileRange(
@@ -642,6 +672,8 @@ class DataTerrainProvider {
         var tileUrlTemplates = data.tiles;
 
         var maxZoom = data.maxzoom;
+        var minZoom = data.minzoom;
+        this.overallMinZoom = Math.min(this.overallMinZoom, minZoom);
         this.overallMaxZoom = Math.max(this.overallMaxZoom, maxZoom);
         // Keeps track of which of the availablity containing tiles have been loaded
 
@@ -707,8 +739,9 @@ class DataTerrainProvider {
         var availability;
         if (defined(availableTiles) && !defined(availabilityLevels)) {
             availability = new TileAvailability(that.tilingScheme, availableTiles.length);
-            for (var level = 0; level < availableTiles.length; ++level) {
-                var rangesAtLevel = availableTiles[level];
+            for (var level = minZoom || 0; level < minZoom + availableTiles.length; ++level) {
+                let index = level - minZoom;
+                var rangesAtLevel = availableTiles[index];
                 var yTiles = that.tilingScheme.subdivisionScheme.getLevelDimensionY(level);
                 if (!defined(overallAvailability[level])) {
                     overallAvailability[level] = [];
@@ -729,8 +762,8 @@ class DataTerrainProvider {
                 }
             }
         } else if (defined(availabilityLevels)) {
-            availabilityTilesLoaded = new TileAvailability(this.tilingScheme, maxZoom);
-            availability = new TileAvailability(that.tilingScheme, maxZoom);
+            availabilityTilesLoaded = new TileAvailability(this.tilingScheme, minZoom, maxZoom);
+            availability = new TileAvailability(that.tilingScheme, minZoom, maxZoom);
             overallAvailability[0] = [[0, 0, 1, 0]];
             availability.addAvailableTileRange(0, 0, 0, 1, 0);
         }

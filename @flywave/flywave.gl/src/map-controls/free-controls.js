@@ -1,7 +1,7 @@
 import { dispatch as _dispatch, } from 'd3-dispatch';
 import * as THREE from 'three';
 import { mathUtils } from './math-utils';
-import { GeoCoordinates } from "@flywave/flywave-geoutils";
+import { GeoCoordinates,EarthConstants } from "@flywave/flywave-geoutils";
 import { Vector3 } from 'three';
 
 var Vec3 = mathUtils.Vec3, Matrix = mathUtils.Matrix,
@@ -71,9 +71,8 @@ class FreeControl {
       return panddng || zooming || rotating;
     };
 
-    var p = (C, x, y) => {
-      var B = this.getDistanceToGlobe(y[0], y[1], y[2], C);
-      return B;
+    var p = (C, x, y) => { 
+      return  this.getDistanceToGlobe(y[0], y[1], y[2], C);
     }
 
     _this.update = function () {
@@ -123,7 +122,7 @@ class FreeControl {
           aw = _this.zoom_time;
           ao = aw * aw * (3 - 2 * aw);
           am = aw * (1 - aw * 0.5) * 2;
-          if (_this.zoom_distance > 0.1 * 6378137) {
+          if (_this.zoom_distance > 0.1 * this.getEquatorialRadius()) {
             var H;
             A = _this.zoom_distance * 0.75;
             aG = _this.zoom_start[2] + (A - _this.zoom_start[2]) * ao;
@@ -286,7 +285,7 @@ class FreeControl {
         zooming = true;
         if (aq > 0 || _this.prevMouseZ == view.lastMouseZ && _this.lasthitd > 0) {
           var af = (_this.smooth_zoom - ac) * 0.08,
-            y = vec3.distance(_this.lasthit, ae) / 6378137, D = 1;
+            y = vec3.distance(_this.lasthit, ae) / this.getEquatorialRadius(), D = 1;
 
           if (af < 0 && y > _this.limit_zoomout) {
             D = (_this.limit_zoomout * 2 - y) / _this.limit_zoomout
@@ -479,6 +478,22 @@ class FreeControl {
     };
   }
 
+  projectPoint(geoCoordinates,out){
+    let _s = this.mapView.projection.unitScale;
+    this.mapView.projection.unitScale = this.getEquatorialRadius();
+    let p = this.mapView.projection.projectPoint(geoCoordinates, out);
+    this.mapView.projection.unitScale = _s;
+    return p;
+  }
+
+  unprojectPoint(xyz){
+    let _s = this.mapView.projection.unitScale;
+    this.mapView.projection.unitScale = this.getEquatorialRadius();
+    let p = this.mapView.projection.unprojectPoint(xyz);
+    this.mapView.projection.unitScale = _s;
+    return p;
+  }
+
   updateCenter(){ 
     var ae = [0, 0, 0];
     this.camera.getOrigin(ae);
@@ -514,7 +529,7 @@ class FreeControl {
   }
 
   getXYZ(result, lon, lat, alt) {
-    var xyz = this.mapView.projection.projectPoint(new GeoCoordinates(lat, lon, alt));
+    var xyz = this.projectPoint(new GeoCoordinates(lat, lon, alt));
     result[0] = xyz.x;
     result[1] = xyz.y;
     result[2] = xyz.z;
@@ -533,7 +548,7 @@ class FreeControl {
   }
 
   getLatLonAlt(r, x, y, z) {
-    var _r = this.mapView.projection.unprojectPoint({ x: x, y: y, z: z });
+    var _r = this.unprojectPoint({ x: x, y: y, z: z });
     r[0] = _r.latitude;
     r[1] = _r.longitude;
     r[2] = _r.altitude;
@@ -552,11 +567,11 @@ class FreeControl {
     result.x = x * s;
     result.y = y * s;
     result.z = z * s;
-    return t - 6378137;
+    return t - this.getEquatorialRadius();
   };
 
   rayCastToGlobe(result, sourc, tar, hitCountPrecision) {
-    var s = 1 / 6378137;
+    var s = 1 / this.getEquatorialRadius();
     sourc = [sourc[0] * s, sourc[1] * s, sourc[2] * s];
     tar = [tar[0] * s, tar[1] * s, tar[2] * s];
 
@@ -594,7 +609,7 @@ class FreeControl {
         var X = sourc[0] + Z[0] * V, W = sourc[1] + Z[1] * V,
           U = sourc[2] + Z[2] * V;
 
-        var lt = this.mapView.projection.unprojectPoint(new THREE.Vector3(X / s, W / s, U / s));
+        var lt = this.unprojectPoint(new THREE.Vector3(X / s, W / s, U / s));
         ai[0] = lt.longitude;
         ai[1] = lt.latitude;
         ai[2] = lt.altitude;
@@ -612,7 +627,7 @@ class FreeControl {
         V += hitCountPrecision;
       }
       var ae = 1,
-        lt = this.mapView.projection.unprojectPoint(new THREE.Vector3(sourc[0] / s, sourc[1] / s, sourc[2] / s));
+        lt = this.unprojectPoint(new THREE.Vector3(sourc[0] / s, sourc[1] / s, sourc[2] / s));
       var R = lt.altitude - ae;
       ai[0] = lt.longitude;
       ai[1] = lt.latitude;
@@ -764,7 +779,7 @@ class FreeControl {
     C.getOrigin(E);
 
     var tar = new Vector3();
-    this.mapView.projection.projectPoint(new GeoCoordinates(lat, lng, 0), tar);
+    this.projectPoint(new GeoCoordinates(lat, lng, 0), tar);
     tar.normalize()
     var current = new Vector3().fromArray(this.lasthit_center).normalize();
 
@@ -856,6 +871,10 @@ class FreeControl {
   animateZoom(v) {
     this.zoom_velocity = v;
   };
+
+  getEquatorialRadius(){
+    return EarthConstants.EQUATORIAL_RADIUS;
+  }
 }
 
 export { FreeControl };

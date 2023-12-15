@@ -17,7 +17,7 @@ class MapOrbitControl {
         this.window = application.window;
         this.mapView.addEventListener(MapViewEventNames.Render, this.onUpdate);
 
-        var geocoord = this.mapView.projection.unprojectPoint(this.mapView.camera.position);
+        var geocoord = this._control.unprojectPoint(this.mapView.camera.position);
         this._control.setTo(
             geocoord.longitude,
             geocoord.latitude,
@@ -44,8 +44,7 @@ class MapOrbitControl {
     flyPath = (lineString, duration) => {
         if (this.__pathAnimation) {
             this.__pathAnimation.kill();
-        }
-        const { projection } = this.mapView;
+        } 
 
         var linePos = [];
         lineString.geometry.coordinates.forEach(
@@ -53,7 +52,7 @@ class MapOrbitControl {
         );
 
         const curve = new THREE.CatmullRomCurve3(
-            linePos.map(e => projection.projectPoint(e, new THREE.Vector3()))
+            linePos.map(e => this._control.projectPoint(e, new THREE.Vector3()))
         );
 
         const animationProgress = { value: 0 };
@@ -68,7 +67,9 @@ class MapOrbitControl {
                 value: 1,
                 duration: duration || 10,
                 paused: true,
-                ease: "power0",
+                ease: "none",
+                immediateRender: true,
+                lazy: false,
                 onUpdateParams: [animationProgress],
                 onUpdate: ({ value }) => {
                     if (value == 1) {
@@ -82,7 +83,7 @@ class MapOrbitControl {
                     var position2 = _tmp.clone();
                     var dir = position1.sub(position2);
 
-                    var lnglat = projection.unprojectPoint(_tmp);
+                    var lnglat = this._control.unprojectPoint(_tmp);
                     if (dir.length() == 0) return;
 
                     this._control.setToWithVector(
@@ -271,7 +272,7 @@ class MapOrbitControl {
         );
         var C = this.rayCastToGlobeAndSceneAt(v, F, z, layerX, layerY, 0.001, noPickMap);
 
-        return this.mapView.projection.unprojectPoint(new THREE.Vector3().fromArray(v));
+        return this._control.unprojectPoint(new THREE.Vector3().fromArray(v));
     }
 
     flyToBox(geoBox) {
@@ -308,7 +309,15 @@ class MapOrbitControl {
     }
 
     get geoCenter() {
-        return this.mapView.projection.unprojectPoint(this.center);
+        return this._control.unprojectPoint(this.center);
+    }
+
+    setEllipsoidMaximumDepth(maximumDepth) {
+        this._control.setEllipsoidMaximumDepth(maximumDepth);
+    }
+
+    getEllipsoidMaximumDepth() {
+        return this._control.getEllipsoidMaximumDepth();
     }
 }
 

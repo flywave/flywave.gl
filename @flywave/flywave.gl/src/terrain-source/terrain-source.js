@@ -27,9 +27,8 @@ export class TerrainSource extends TileDataSource {
 
         this.elevationRangeSource = options.elevationRangeSource;
         this.elevationProvider = options.elevationProvider;
-
-        this.elevationRangeSource.bindDataSource(this);
-        this.elevationProvider.bindDataSource(this);
+        if (this.elevationRangeSource) this.elevationRangeSource.bindDataSource(this);
+        if (this.elevationProvider) this.elevationProvider.bindDataSource(this);
     }
 
     get baseUrl() {
