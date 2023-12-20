@@ -42,7 +42,7 @@ class StratumTile extends Tile {
 
         this.builderMeshByMaterialProvider(objects);
     }
-  
+
     onBeforeMaterialCompile = isWebMercator => {
         return function (shader) {
             shader.vertexShader = shader.vertexShader.replace(
@@ -90,9 +90,9 @@ class StratumTile extends Tile {
             shader.uniforms.normalSampler = { value: emptyTexture };
         };
     };
- 
+
     builderMeshByMaterialProvider = objects => {
-        objects.add(this.builderMesh(this.builderMeshMaterial()));
+        objects.add(this.builderMesh());
     };
 
     builderMeshMaterial = () => {
@@ -101,15 +101,31 @@ class StratumTile extends Tile {
         return material;
     };
 
-    builderMesh(material) {
+    builderMesh() {
         var wrap = new THREE.Object3D();
         wrap.position.copy(this.center).multiplyScalar(-1);
-        this.bindedStratumTile.geometry.computeVertexNormals()
-        const tileMesh = new THREE.Mesh(this.bindedStratumTile.geometry, material);
-        tileMesh.renderOrder = this.tileKey.level;
-        tileMesh.position.copy(this.bindedStratumTile.tinCenter);
-        tileMesh.receiveShadow = true;
-        wrap.add(tileMesh);
+        const {
+            tinData: { _stratumGroups }
+        } = this.bindedStratumTile;
+
+        if (_stratumGroups) {
+            for (var { Start, End, Id } of Object.values(_stratumGroups)) {
+                const tileMesh = new THREE.Mesh(
+                    this.bindedStratumTile.geometry,
+                    this.builderMeshMaterial(Id)
+                );
+                tileMesh.position.copy(this.bindedStratumTile.tinCenter);
+                tileMesh.onBeforeRender = (function (Start, End, geometry) {
+                    return () => {
+                        geometry.setDrawRange(Start, End - Start);
+                    };
+                })(Start, End, tileMesh.geometry);
+                //hidden
+                // tileMesh.visible=false;
+                wrap.add(tileMesh);
+            }
+        }
+
         return wrap;
     }
 

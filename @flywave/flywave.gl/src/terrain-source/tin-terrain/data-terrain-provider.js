@@ -275,7 +275,7 @@ function createQuantizedMeshTerrainData(provider, buffer, level, x, y, layer) {
         pos += extensionLength;
     }
 
-    var skirtHeight = 0;//provider.getLevelMaximumGeometricError(level) * 50.0;
+    var skirtHeight = provider.getLevelMaximumGeometricError(level) * 50.0;
 
     // The skirt is not included in the OBB computation. If this ever
     // causes any rendering artifacts (cracks), they are expected to be

@@ -1,6 +1,7 @@
 import "./util/import_threejs";
 
 import QuantizedMeshTileDecoderService from "./terrain-source/tin-terrain/tile-decoder-worker";
+import CsgStratumDecoderService from "./terrain-source/stratum/csg-worker";
 import DemTileDecoderService from "./terrain-source/height-map/dem/dem-decoder-worker";
 import {
   GeoJsonTilerService,
@@ -12,6 +13,7 @@ VectorTileDecoderService.start();
 GeoJsonTilerService.start();
 QuantizedMeshTileDecoderService.start();
 DemTileDecoderService.start();
+CsgStratumDecoderService.start();
 // ObjectDecoderService.start();
 
 //Following code is only needed for datasource_custom example.

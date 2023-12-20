@@ -1,9 +1,6 @@
 const config = {
     presets: [ 
         ['@babel/preset-flow'],
-    ],
-    plugins: [
-        '@babel/syntax-dynamic-import', '@babel/plugin-proposal-class-properties'
     ]
 };
 

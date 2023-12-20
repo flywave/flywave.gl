@@ -144,7 +144,7 @@ Object.assign(THREE.ShaderChunk, {
         vUv =  vec2(height_u, height_v);  
         #endif
         #ifdef USE_GT_151
-        vMapUv = vec2(height_u, height_v);  
+        vUv = vec2(height_u, height_v);  
         #endif
         v_positionEC = (modelMatrix * vec4(position, 1.0)).xyz;
         v_positionMC = position;  // position in model coordinates

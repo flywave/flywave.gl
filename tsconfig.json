@@ -1,7 +1,7 @@
 {
     "extends": "./tsconfig.base.json",
     "compilerOptions": {
-        "sourceMap": true,
+        "sourceMap": false,
         "baseUrl": ".",
         "rootDir": ".",
         "outDir": "./dist/node_modules/",

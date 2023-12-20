@@ -126,11 +126,17 @@ class Application extends MapView {
     }
 
     __stratumSource = null;
-    async setStratumSource(url) {
+    async setStratumSource(url, materialProvider) {
         if (this.__stratumSource) {
             this.removeDataSource(this.__stratumSource);
         }
-        this.addDataSource(new StratumSource({ url }));
+
+        this.__stratumSource = new StratumSource({ url, materialProvider });
+        this.addDataSource(this.__stratumSource);
+    }
+
+    get stratumSource() {
+        return this.__stratumSource;
     }
 
     addMaterialProviders(provider) {

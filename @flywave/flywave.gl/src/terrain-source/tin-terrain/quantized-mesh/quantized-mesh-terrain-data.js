@@ -170,6 +170,7 @@ function QuantizedMeshTerrainData(options) {
   this._createdByUpsampling = defaultValue(options.createdByUpsampling, false);
   this._waterMask = options.waterMask;
 
+  this._stratumGroups = options.stratumGroups;
   this._mesh = undefined;
 }
 

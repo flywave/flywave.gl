@@ -86,7 +86,7 @@ var exports = addHarpWebpackConfig({
 
 exports[0].name="main"
 exports.forEach(config => {
-  config.devtool = DEV ? "source-map" : undefined;
+  config.devtool = undefined//DEV ? "source-map" : undefined;
 });
 
 module.exports = exports;

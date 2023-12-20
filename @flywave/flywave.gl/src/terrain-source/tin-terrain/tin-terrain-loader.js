@@ -174,7 +174,6 @@ class TinMeshResourceTile extends Tile {
             "textureCoordAndEncodedNormals",
             new THREE.BufferAttribute(textureCoordAndEncodedNormals, 4)
         );
-
         this.geometry = geometry;
 
         this.tinCenter = new THREE.Vector3(center.x, center.y, center.z);

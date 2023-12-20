@@ -8,29 +8,11 @@ import SurfacePolygon from "./objects/surface-polygon";
 export { GroundHole, SurfacePolygon };
 
 //image layers
-import {
-    MapboxSatelliteMaterialProvider,
-    BingMaterialProvider,
-    OpenStreetMapMaterialProvider,
-    HarpApiMaterialProvider,
-    MapboxMvtMaterialProvider,
-    MaterialProvider
-} from "./terrain-source";
+export * from "./terrain-source";
 
-export {
-    MapboxSatelliteMaterialProvider,
-    BingMaterialProvider,
-    OpenStreetMapMaterialProvider,
-    HarpApiMaterialProvider,
-    MapboxMvtMaterialProvider,
-    MaterialProvider
-};
+import { TiltViewClipPlanesEvaluator } from "@flywave/flywave-mapview";
 
-import { 
-    TiltViewClipPlanesEvaluator, 
-} from "@flywave/flywave-mapview";
-
-export { TiltViewClipPlanesEvaluator }
+export { TiltViewClipPlanesEvaluator };
 //utils
 import { MapViewEventNames } from "@flywave/flywave-mapview";
 import { TransferManager } from "@flywave/flywave-transfer-manager";
@@ -62,3 +44,8 @@ export default {
 import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/lib/SphericalGeometrySubdivisionModifier";
 export { SphericalGeometrySubdivisionModifier };
 export * from "@flywave/flywave-geoutils";
+
+//utils
+import { makeGeoBox } from "./util/make-geobox-mesh";
+
+export { makeGeoBox };

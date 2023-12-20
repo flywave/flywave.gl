@@ -6,9 +6,10 @@ import { OpenStreetMapMaterialProvider } from "./material-providers/openstreetma
 import HarpApiMaterialProvider from "./material-providers/flywave-api-material-provider";
 import MapboxMvtMaterialProvider from "./material-providers/mapbox-mvt-material-provider";
 import { MapboxSatelliteMaterialProvider } from "./material-providers/mapbox-satellite-material-provider";
-import { StratumSource } from "./stratum";
- 
-export { 
+import { StratumSource, CSGData } from "./stratum";
+
+export {
+    CSGData,
     StratumSource,
     TinTerrainSource,
     HeightMapSource,
@@ -18,5 +19,4 @@ export {
     OpenStreetMapMaterialProvider,
     HarpApiMaterialProvider,
     MapboxMvtMaterialProvider
-}
-
+};

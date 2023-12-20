@@ -8,8 +8,18 @@ import { TinTerrainProvider } from "../tin-terrain/tin-terrain-provider";
 import { StratumTileFactory } from "./stratum-tile";
 import { DataStratumProvider } from "./data-stratum-provider";
 import { QUANTIZED_MESH_TILE_DECODER_ID } from "../tin-terrain/constants";
+import { CSG_STRATUM_DECODER } from "./constants";
 import config from "../../config";
-import { DoubleSide } from "three";
+import { FrontSide } from "three";
+import { StratumCSGDecoder } from "./stratum-csg-decoder";
+
+class MaterialProvider {
+    getMaterial(gropuId) {
+        return new THREE.MeshPhongMaterial({ side: FrontSide, color: 0xffffff * Math.random() });
+    }
+}
+
+export { MaterialProvider };
 
 class StratumSource extends TerrainSource {
     constructor(options) {
@@ -26,6 +36,7 @@ class StratumSource extends TerrainSource {
             dataProvider: new TinTerrainProvider({ ...options, requestWaterMask: false }),
             decoderUrl: config.DECODER_URL
         });
+        this.csgDecoder = new StratumCSGDecoder(CSG_STRATUM_DECODER, config.DECODER_URL);
 
         this.dataTerrainProvider = new DataStratumProvider(
             { ...options, requestVertexNormals: true },
@@ -33,6 +44,8 @@ class StratumSource extends TerrainSource {
         );
 
         this._baseUrl = options.url;
+
+        this._materialProvider = options.materialProvider || new MaterialProvider();
     }
 
     get baseUrl() {
@@ -42,6 +55,8 @@ class StratumSource extends TerrainSource {
     connect() {
         return super.connect().then(() => {
             return this.dataTerrainProvider.connect();
+        }).then(()=>{
+            return this.csgDecoder.connect();
         });
     }
 
@@ -56,18 +71,26 @@ class StratumSource extends TerrainSource {
             this.dataTerrainProvider.getTileDataAvailable(tileKey) &&
             !this.dataProvider().tileIsAvailable(tileKey)
         );
-        return shouldSubdivide && tileKey.level <= zoomLevel;
+        return shouldSubdivide && tileKey.level < this.dataTerrainProvider.overallMaxZoom + 1;
     }
 
     canGetTile(zoomLevel, tileKey) {
         if (zoomLevel == undefined) return false;
-        return tileKey.level <= zoomLevel;
+        return tileKey.level <= this.dataTerrainProvider.overallMaxZoom + 1;
     }
 
     getMaterialProviders() {}
 
-    getMaterialById(id) {
-        return new THREE.MeshPhongMaterial({side:DoubleSide,color:0xffffff*Math.random()});
+    getMaterialById(gropuId) {
+        return this._materialProvider.getMaterial(gropuId);
+    }
+
+    addCsgData(csgdata) {
+        this.dataTerrainProvider.addCsgData(csgdata);
+    }
+
+    removeCsgData(id) {
+        this.dataTerrainProvider.removeCsgData(id);
     }
 }
 

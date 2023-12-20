@@ -75,10 +75,12 @@ export class TerrainSource extends TileDataSource {
 
     updateTileOverlayer = tile => {
         var job = () => {
-            const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
-            const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
-            var fbbox = new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat);
             if (this.isDetached()) return;
+            if (tile) {
+                const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
+                const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
+                var fbbox = new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat);
+            }
             this.mapView.clearTileCache(
                 this.name,
                 tile
