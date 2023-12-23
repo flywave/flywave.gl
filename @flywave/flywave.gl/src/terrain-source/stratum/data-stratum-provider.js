@@ -3,6 +3,7 @@ import { TinMeshResourceTile, TinMeshLoader } from "../tin-terrain/tin-terrain-l
 import { TileLoader } from "@flywave/flywave-mapview-decoder";
 import { Box3 } from "three";
 import { isEqualWith } from "lodash";
+import CsgData from "./csg-data";
 
 class CsgTinMeshLoader extends TileLoader {
     constructor(dataSource, tileKey, tile) {
@@ -12,7 +13,8 @@ class CsgTinMeshLoader extends TileLoader {
 
     loadImpl(abortSignal, onDone, onError) {
         const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center } =
-        this.tile.tinData._mesh;
+            this.tile.tinData._mesh;
+        const { _stratumGroups } = this.tile.tinData;
 
         this.onLoaded(
             {
@@ -20,6 +22,7 @@ class CsgTinMeshLoader extends TileLoader {
                     position3DAndHeight,
                     textureCoordAndEncodedNormals,
                     indices,
+                    stratumGroups: _stratumGroups,
                     center
                 },
                 target: this.__intersectsCsgDatas.map(d => d.toJSON())
@@ -64,7 +67,21 @@ class StratumResourceTile extends TinMeshResourceTile {
     }
 
     builderCsgGeometry(csgData) {
-        this.csgGeometry = csgData;
+        const { _stratumGroups } = this.tinData;
+        var csg = new CsgData().fromJSON(csgData);
+        this.csgGeometry = csg.mesh.geometry;
+        const { groups } = this.csgGeometry;
+        var stratumGroups = {};
+        if (groups) {
+            groups.forEach(group => {
+                stratumGroups[group.materialIndex] = {
+                    ..._stratumGroups[group.materialIndex],
+                    Start: group.start,
+                    End: group.start + group.count
+                };
+            });
+        }
+        this.tinData._stratumGroups = stratumGroups;
     }
 
     __prevIntersectsCsgDatas = [];
@@ -93,8 +110,8 @@ class StratumResourceTile extends TinMeshResourceTile {
         this.csgTinMeshLoader.setIntersectsCsgDatas(intersectsCsgDatas);
         this.csgTinMeshLoader.load();
         this.csgTinMeshLoader.donePromise.then(() => {
-            this.builderCsgGeometry(tile.csgTinMeshLoader.csgData);
-            this.dataSource.updateTileOverlayer(tile);
+            this.builderCsgGeometry(this.csgTinMeshLoader.decodedTile.csgData);
+            this.dataSource.updateTileOverlayer(this);
         });
     }
 

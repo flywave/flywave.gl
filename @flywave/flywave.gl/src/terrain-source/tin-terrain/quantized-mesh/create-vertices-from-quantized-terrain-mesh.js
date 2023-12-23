@@ -162,8 +162,13 @@ export function createVerticesFromQuantizedTerrainMesh(
         minimum.min(cartesian3Scratch);
         maximum.max(cartesian3Scratch);
     }
- 
-    let heightMapBuffer = renderHeightMap(canvas,[minLongitude,minLatitude,minAltitude,maxLongitude,maxLatitude,maxAltitude],cartographicScratchs,parameters.indices);
+
+    let heightMapBuffer = renderHeightMap(
+        canvas,
+        [minLongitude, minLatitude, minAltitude, maxLongitude, maxLatitude, maxAltitude],
+        cartographicScratchs,
+        parameters.indices
+    );
 
     var westIndicesSouthToNorth = copyAndSort(parameters.westIndices, function (a, b) {
         return uvs[a].y - uvs[b].y;
@@ -319,6 +324,25 @@ export function createVerticesFromQuantizedTerrainMesh(
     );
     indexBuffer.set(parameters.indices, 0);
 
+    {
+        var geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(vertexBuffer, 8));
+        geometry.setIndex(new THREE.BufferAttribute(indexBuffer, 1));
+        geometry.computeVertexNormals();
+
+        {
+            const normalBuffer = geometry.getAttribute("normal").array;
+            let normal = new THREE.Vector3();
+            for (var i = 0, j = 0; i < normalBuffer.length; i += 3, j++) {
+                normal.fromArray(normalBuffer, i);
+                if (normal.length() == 0) {
+                    normal.fromArray(position, i).normalize();
+                }
+                vertexBuffer[j * 8 + 7] = AttributeCompression.octEncodeFloat(normal);
+            }
+        }
+    }
+
     var percentage = 0.0001;
     var lonOffset = (maxLongitude - minLongitude) * percentage;
     var latOffset = (maxLatitude - minLatitude) * percentage;
@@ -332,88 +356,102 @@ export function createVerticesFromQuantizedTerrainMesh(
     var southLatitudeOffset = -latOffset;
 
     // Add skirts.
-    var vertexBufferIndex = quantizedVertexCount * vertexStride;
-    addSkirt(
-        vertexBuffer,
-        vertexBufferIndex,
-        westIndicesSouthToNorth,
-        encoding,
-        heights,
-        uvs,
-        octEncodedNormals,
-        projection,
-        rectangle,
-        parameters.westSkirtHeight,
-        exaggeration,
-        southMercatorY,
-        oneOverMercatorHeight,
-        westLongitudeOffset,
-        westLatitudeOffset
-    );
-    vertexBufferIndex += parameters.westIndices.length * vertexStride;
-    addSkirt(
-        vertexBuffer,
-        vertexBufferIndex,
-        southIndicesEastToWest,
-        encoding,
-        heights,
-        uvs,
-        octEncodedNormals,
-        projection,
-        rectangle,
-        parameters.southSkirtHeight,
-        exaggeration,
-        southMercatorY,
-        oneOverMercatorHeight,
-        southLongitudeOffset,
-        southLatitudeOffset
-    );
-    vertexBufferIndex += parameters.southIndices.length * vertexStride;
-    addSkirt(
-        vertexBuffer,
-        vertexBufferIndex,
-        eastIndicesNorthToSouth,
-        encoding,
-        heights,
-        uvs,
-        octEncodedNormals,
-        projection,
-        rectangle,
-        parameters.eastSkirtHeight,
-        exaggeration,
-        southMercatorY,
-        oneOverMercatorHeight,
-        eastLongitudeOffset,
-        eastLatitudeOffset
-    );
-    vertexBufferIndex += parameters.eastIndices.length * vertexStride;
-    addSkirt(
-        vertexBuffer,
-        vertexBufferIndex,
-        northIndicesWestToEast,
-        encoding,
-        heights,
-        uvs,
-        octEncodedNormals,
-        projection,
-        rectangle,
-        parameters.northSkirtHeight,
-        exaggeration,
-        southMercatorY,
-        oneOverMercatorHeight,
-        northLongitudeOffset,
-        northLatitudeOffset
-    );
 
-    TerrainProvider.addSkirtIndices(
-        westIndicesSouthToNorth,
-        southIndicesEastToWest,
-        eastIndicesNorthToSouth,
-        northIndicesWestToEast,
-        quantizedVertexCount,
-        indexBuffer,
-        parameters.indices.length
-    );
+    if (parameters.westSkirtHeight) {
+        var vertexBufferIndex = quantizedVertexCount * vertexStride;
+        addSkirt(
+            vertexBuffer,
+            vertexBufferIndex,
+            westIndicesSouthToNorth,
+            encoding,
+            heights,
+            uvs,
+            octEncodedNormals,
+            projection,
+            rectangle,
+            parameters.westSkirtHeight,
+            exaggeration,
+            southMercatorY,
+            oneOverMercatorHeight,
+            westLongitudeOffset,
+            westLatitudeOffset
+        );
+    }
+
+    if (parameters.southSkirtHeight) {
+        vertexBufferIndex += parameters.westIndices.length * vertexStride;
+        addSkirt(
+            vertexBuffer,
+            vertexBufferIndex,
+            southIndicesEastToWest,
+            encoding,
+            heights,
+            uvs,
+            octEncodedNormals,
+            projection,
+            rectangle,
+            parameters.southSkirtHeight,
+            exaggeration,
+            southMercatorY,
+            oneOverMercatorHeight,
+            southLongitudeOffset,
+            southLatitudeOffset
+        );
+    }
+
+    if (parameters.eastSkirtHeight) {
+        vertexBufferIndex += parameters.southIndices.length * vertexStride;
+        addSkirt(
+            vertexBuffer,
+            vertexBufferIndex,
+            eastIndicesNorthToSouth,
+            encoding,
+            heights,
+            uvs,
+            octEncodedNormals,
+            projection,
+            rectangle,
+            parameters.eastSkirtHeight,
+            exaggeration,
+            southMercatorY,
+            oneOverMercatorHeight,
+            eastLongitudeOffset,
+            eastLatitudeOffset
+        );
+    }
+
+    if (parameters.northSkirtHeight) {
+        vertexBufferIndex += parameters.eastIndices.length * vertexStride;
+        addSkirt(
+            vertexBuffer,
+            vertexBufferIndex,
+            northIndicesWestToEast,
+            encoding,
+            heights,
+            uvs,
+            octEncodedNormals,
+            projection,
+            rectangle,
+            parameters.northSkirtHeight,
+            exaggeration,
+            southMercatorY,
+            oneOverMercatorHeight,
+            northLongitudeOffset,
+            northLatitudeOffset
+        );
+    }
+
+    if (parameters.northSkirtHeight) {
+        TerrainProvider.addSkirtIndices(
+            westIndicesSouthToNorth,
+            southIndicesEastToWest,
+            eastIndicesNorthToSouth,
+            northIndicesWestToEast,
+            quantizedVertexCount,
+            indexBuffer,
+            parameters.indices.length
+        );
+    }
 
     transferableObjects.push(vertexBuffer.buffer, indexBuffer.buffer);
 

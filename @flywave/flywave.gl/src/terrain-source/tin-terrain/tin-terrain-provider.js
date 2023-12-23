@@ -23,6 +23,7 @@ export class TinTerrainProvider {
         this.tinCache = new LRUCache(5000);
 
         this.tinCache.evictionCallback = this.evictionCallback;
+ 
     }
 
     bindDataSource(dataSource) {

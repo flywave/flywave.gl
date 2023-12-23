@@ -12,7 +12,7 @@ export class StratumTileFactory extends TileFactory {
 }
 
 const clipUvTransfrom = new THREE.Vector3(1, 0, 0);
-const imageUvTransfrom = new THREE.Vector3();
+const imageUvTransfrom = new THREE.Vector4(1, 1, 0, 0);
 
 class StratumTile extends Tile {
     maxHeight = 0;
@@ -29,6 +29,11 @@ class StratumTile extends Tile {
 
         this.bindedStratumTile = stratumTile;
 
+        const {
+            tinData: { _stratumGroups }
+        } = this.bindedStratumTile;
+        this.stratumGroups = { ..._stratumGroups };
+
         this.geoBox.southWest.altitude = stratumTile.minimumHeight;
         this.geoBox.northEast.altitude = stratumTile.maximumHeight;
         this.updateBoundingBox();
@@ -43,24 +48,24 @@ class StratumTile extends Tile {
         this.builderMeshByMaterialProvider(objects);
     }
 
-    onBeforeMaterialCompile = isWebMercator => {
+    onBeforeMaterialCompile = (isWebMercator, material) => {
         return function (shader) {
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <beginnormal_vertex>`,
                 `#include <beginnormal_vertex>
-                #include <beginnormal_tinterrain_vertex>`
+                 #include <beginnormal_tinterrain_vertex>`
             );
 
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <uv_pars_vertex>`,
                 `#include <uv_pars_vertex>
-                #include <tinterrain_common>`
+                 #include <tinterrain_common>`
             );
 
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <begin_vertex>`,
                 `#include <begin_vertex>
-                #include <begin_tinterrain_vertex>`
+                 #include <begin_tinterrain_vertex>`
             );
 
             shader.fragmentShader = shader.fragmentShader.replace(
@@ -71,21 +76,27 @@ class StratumTile extends Tile {
 
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <premultiplied_alpha_fragment>`,
-                `#include <premultiplied_alpha_fragment>
-                 #include <discard_out_range_frag>`
+                `#include <premultiplied_alpha_fragment>`
             );
 
             shader.defines = {};
             shader.uniforms.clipUvTransfrom = {
                 value: clipUvTransfrom
             };
-            shader.uniforms.imageUvTransfrom = { value: imageUvTransfrom };
+            var uvTransform = new THREE.Vector4();
+            if (material.map) {
+                const { x, y } = material.map.repeat;
+                uvTransform.set(x, y, 0, 0);
+            } else {
+                uvTransform = imageUvTransfrom;
+            }
+            shader.uniforms.imageUvTransfrom = { value: uvTransform };
             shader.uniforms.isWebMercator = { value: isWebMercator };
 
-            shader.defines["USE_UV"] = true;
+            // shader.defines["USE_UV"] = true;
             if (parseInt(__THREE__) >= 151) {
                 shader.defines["USE_GT_151"] = true;
-                shader.defines["USE_UV"] = true;
+                if (!material.map) shader.defines["USE_UV"] = true;
             }
             shader.uniforms.normalSampler = { value: emptyTexture };
         };
@@ -95,21 +106,19 @@ class StratumTile extends Tile {
         objects.add(this.builderMesh());
     };
 
-    builderMeshMaterial = () => {
-        var material: Material = this.dataSource.getMaterialById("aaa");
-        material.onBeforeCompile = this.onBeforeMaterialCompile(true);
+    builderMeshMaterial = Id => {
+        var material: Material = this.dataSource.getMaterialById(Id);
+        material.onBeforeCompile = this.onBeforeMaterialCompile(true, material);
         return material;
     };
 
     builderMesh() {
         var wrap = new THREE.Object3D();
         wrap.position.copy(this.center).multiplyScalar(-1);
-        const {
-            tinData: { _stratumGroups }
-        } = this.bindedStratumTile;
+        const { stratumGroups } = this;
 
-        if (_stratumGroups) {
-            for (var { Start, End, Id } of Object.values(_stratumGroups)) {
+        if (stratumGroups) {
+            for (var { Start, End, Id } of Object.values(stratumGroups)) {
                 const tileMesh = new THREE.Mesh(
                     this.bindedStratumTile.geometry,
                     this.builderMeshMaterial(Id)

@@ -141,10 +141,10 @@ Object.assign(THREE.ShaderChunk, {
         float height_v = v_textureCoordinates.y*imageUvTransfrom.y + imageUvTransfrom.w;  
 
         #ifdef USE_UV
-        vUv =  vec2(height_u, height_v);  
+        vUv =  (vec3(height_u, height_v,1.0)).xy;  
         #endif
         #ifdef USE_GT_151
-        vUv = vec2(height_u, height_v);  
+        vUv = (vec3(height_u, height_v,1.0)).xy;  
         #endif
         v_positionEC = (modelMatrix * vec4(position, 1.0)).xyz;
         v_positionMC = position;  // position in model coordinates
@@ -157,7 +157,7 @@ Object.assign(THREE.ShaderChunk, {
     `,
     "beginnormal_tinterrain_vertex": `
         float encodedNormal = textureCoordAndEncodedNormals.w;
-        objectNormal = -czm_octDecode(encodedNormal);
+        objectNormal = czm_octDecode(encodedNormal);
         vObjectNormal = objectNormal;
     `,
     "tinterrain_color_pars_fragment": `

@@ -1,4 +1,4 @@
-import { Vector3, BufferGeometry, BufferAttribute } from "three";
+import { Vector3, BufferGeometry, BufferAttribute, BoxGeometry } from "three";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 
 export function makeGeoBox(
@@ -10,33 +10,33 @@ export function makeGeoBox(
         .projectPoint(new GeoCoordinates(north, east, maxAltitude), new Vector3())
         .sub(center);
     var a1 = projection
-        .projectPoint(new GeoCoordinates(south, east, maxAltitude), new Vector3())
+        .projectPoint(new GeoCoordinates(north, west, maxAltitude), new Vector3())
         .sub(center);
     var a2 = projection
         .projectPoint(new GeoCoordinates(south, west, maxAltitude), new Vector3())
         .sub(center);
-
     var a3 = projection
-        .projectPoint(new GeoCoordinates(north, west, maxAltitude), new Vector3())
+        .projectPoint(new GeoCoordinates(south, east, maxAltitude), new Vector3())
         .sub(center);
 
     var a4 = projection
         .projectPoint(new GeoCoordinates(north, east, minAltitude), new Vector3())
         .sub(center);
     var a5 = projection
-        .projectPoint(new GeoCoordinates(south, east, minAltitude), new Vector3())
+        .projectPoint(new GeoCoordinates(north, west, minAltitude), new Vector3())
         .sub(center);
     var a6 = projection
         .projectPoint(new GeoCoordinates(south, west, minAltitude), new Vector3())
         .sub(center);
     var a7 = projection
-        .projectPoint(new GeoCoordinates(north, west, minAltitude), new Vector3())
+        .projectPoint(new GeoCoordinates(south, east, minAltitude), new Vector3())
         .sub(center);
 
     var geometry = new BufferGeometry();
 
     var index = [
-        1, 2, 3, 1, 3, 0, 0, 3, 7, 0, 7, 4, 7, 6, 5, 5, 4, 7, 6, 2, 1, 1, 5, 6, 0, 4, 5, 1, 0, 5
+        1, 2, 3, 1, 3, 0, 7, 4, 3, 3, 4, 0, 4, 7, 6, 4, 6, 5, 5, 6, 2, 5, 2, 1, 0, 5, 1, 4, 5, 0, 7,
+        3, 6, 6, 3, 2
     ];
     var position = [
         ...a0.toArray(),
@@ -49,8 +49,12 @@ export function makeGeoBox(
         ...a7.toArray()
     ];
 
-    geometry.setAttribute("position", new BufferAttribute(new Float32Array(position), 3));
-    geometry.setIndex(new BufferAttribute(new Uint16Array(index), 1));
+    var uv = [0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0];
 
-    return { geometry, center };
+    geometry.setAttribute("position", new BufferAttribute(new Float32Array(position), 3));
+    geometry.setAttribute("uv", new BufferAttribute(new Float32Array(uv), 2));
+    geometry.setIndex(new BufferAttribute(new Uint16Array(index), 1));
+    geometry.computeVertexNormals();
+
+    return { geometry, center, anchor: geoCenter };
 }

@@ -1,4 +1,4 @@
-import StratumSource from "./stratum-source";
+import StratumSource, { MaterialProvider } from "./stratum-source";
 import CSGData from "./csg-data";
 
-export { StratumSource, CSGData };
+export { StratumSource, CSGData, MaterialProvider };

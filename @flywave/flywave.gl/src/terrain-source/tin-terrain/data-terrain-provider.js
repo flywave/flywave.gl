@@ -443,6 +443,9 @@ class DataTerrainProvider {
             queryString: options.queryString || ""
         };
         this._heightmapWidth = 65;
+
+        this._skirtHeight = options.skirtHeight;
+
         this.dataSource = dataSource;
 
         this._requestVertexNormals = options.requestVertexNormals || false;
@@ -465,7 +468,9 @@ class DataTerrainProvider {
     }
 
     getLevelMaximumGeometricError = function (level) {
-        return this._levelZeroMaximumGeometricError / (1 << level);
+        return this._skirtHeight != undefined
+            ? this._skirtHeight
+            : this._levelZeroMaximumGeometricError / (1 << level);
     };
 
     makeLoaderTile(tileKey, parentTileTinData) {

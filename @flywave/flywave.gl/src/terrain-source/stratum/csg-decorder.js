@@ -1,6 +1,8 @@
 export const CSG_STRATUM_DECODER = "csg-stratum-decoder";
 import CSGData from "./csg-data";
 import * as THREE from "three";
+import AttributeCompression from "../tin-terrain/quantized-mesh/attribute-compression";
+import { mergeGeometries } from "../../loaders/BufferGeometryUtils";
 
 export class CSGStratumTileDecoder {
     connect() {
@@ -17,7 +19,13 @@ export class CSGStratumTileDecoder {
         };
         const {
             target,
-            source: { position3DAndHeight, textureCoordAndEncodedNormals, indices, center }
+            source: {
+                position3DAndHeight,
+                textureCoordAndEncodedNormals,
+                indices,
+                center,
+                stratumGroups
+            }
         } = data;
 
         var buffer = new THREE.BufferGeometry();
@@ -28,8 +36,8 @@ export class CSGStratumTileDecoder {
             2
         );
         for (var i = 0, j = 0; i < textureCoordAndEncodedNormals.length; i += 4, j += 2) {
-            uv.array[j] = textureCoordAndEncodedNormals[j];
-            uv.array[j + 1] = textureCoordAndEncodedNormals[j + 2];
+            uv.array[j] = textureCoordAndEncodedNormals[i];
+            uv.array[j + 1] = textureCoordAndEncodedNormals[i + 2];
         }
         buffer.setAttribute("uv", uv);
 
@@ -37,31 +45,58 @@ export class CSGStratumTileDecoder {
             new Float32Array((textureCoordAndEncodedNormals.length / 4) * 3),
             3
         );
-        for (var i = 0, j = 0; i < textureCoordAndEncodedNormals.length; i += 4, j += 2) {
+        for (var i = 0, j = 0; i < textureCoordAndEncodedNormals.length; i += 4, j += 3) {
             //todo decode normal
-            var decode = textureCoordAndEncodedNormals[j + 3];
+            var decode = AttributeCompression.octDecodeFloat(
+                textureCoordAndEncodedNormals[i + 3],
+                new THREE.Vector3()
+            );
             normal.array[j] = decode.x;
             normal.array[j + 1] = decode.y;
             normal.array[j + 2] = decode.z;
         }
         buffer.setAttribute("normal", normal);
 
-
         buffer.setIndex(new THREE.BufferAttribute(indices, 1));
+
         var mesh = new THREE.Mesh(buffer);
         mesh.position.copy(center);
-
         var sourceCSG = new CSGData(mesh);
 
         if (!target) {
             target = [];
         }
 
-        target.forEach(target => {
-            sourceCSG.union(new CSGData().fromJSON(target));
+        if (stratumGroups) {
+            var groups = Object.values(stratumGroups);
+            groups.pop();
+
+            var geometries = [];
+            var groupsIndex = {};
+            var j = 0;
+            for (var { Start, End, Id } of groups) {
+                buffer.addGroup(Start, End - Start);
+                target.forEach(target => {
+                    var ret = sourceCSG.subtract(new CSGData().fromJSON(target));
+                    const { geometry, position } = ret;
+                    position.sub(center);
+                    geometry.translate(position.x, position.y, position.z);
+                    if (geometry.index) {
+                        geometries.push(geometry);
+                        groupsIndex[j] = Id;
+                    }
+                });
+                buffer.clearGroups();
+                j++;
+            }
+        }
+
+        sourceCSG.mesh.geometry = mergeGeometries(geometries, true);
+        sourceCSG.mesh.geometry.groups.forEach((group, index) => {
+            group.materialIndex = groupsIndex[index];
         });
 
-        verityTile.csgData = sourceCSG.toJSON();
+        verityTile.csgData = sourceCSG.encodeTextureUvNormal().toJSON();
         return Promise.resolve(verityTile);
     }
 }

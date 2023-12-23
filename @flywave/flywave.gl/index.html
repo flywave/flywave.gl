@@ -32,26 +32,61 @@
     canvas: document.getElementById("container")
   });
 
-  var l = new THREE.PointLight();
-  l.anchor = new FlywaveGl.GeoCoordinates(
-    36.82749, 117.59765, 1000
-  )
+  {
+    var l = new THREE.PointLight();
+    l.anchor = new FlywaveGl.GeoCoordinates(
+      36.82749, 117.59765, 1000
+    )
+    app.addAnchorMesh(l);
+  }
+
+  {
+    var l = new THREE.AmbientLight(0xff,0.2);
+    l.anchor = new FlywaveGl.GeoCoordinates(
+      36.82749, 117.59765, 1000
+    )
+    app.addAnchorMesh(l);
+  }
+
   // app.setTinTerrainSource({
   //   url: `http://127.0.0.1:86/hill_tin/`
   // });
 
 
-  app.setStratumSource(`http://127.0.0.1:86/stratum/`);
+  var loader = new THREE.TextureLoader();
+  class TestMaterialProvider extends FlywaveGl.MaterialProvider {
+    map = [
+      loader.load('http://127.0.0.1:86/%E8%B4%B4%E5%9B%BE/cc.jpg'), 
+      loader.load('http://127.0.0.1:86/%E8%B4%B4%E5%9B%BE/q.jpg'),
+      loader.load('http://127.0.0.1:86/%E8%B4%B4%E5%9B%BE/p2.jpg'),
+      loader.load('http://127.0.0.1:86/%E8%B4%B4%E5%9B%BE/cc.jpg')].map(t => {
+        t.wrapT = t.wrapS = THREE.RepeatWrapping
+        t.repeat.set(1, 5);
+        return t;
+      })
+    getMaterial(gropuId) {
+      return new THREE.MeshPhongMaterial({ map: this.map[gropuId] });
+    }
+  };
+
+  app.setStratumSource(`http://127.0.0.1:86/stratum/`, new TestMaterialProvider);
 
   const { GeoBox, GeoCoordinates, makeGeoBox, CSGData } = FlywaveGl;
-  const { geometry, center } = makeGeoBox(new GeoBox(new GeoCoordinates(36.82442324607886, 117.58952266955495, 150.8112550266087),
-    new GeoCoordinates(36.825236959997, 117.59256197996073, 212.90300916600972)), app.projection);
+  const { geometry, center, anchor } = makeGeoBox(new GeoBox(new GeoCoordinates(36.82442324607886, 117.58952266955495, -400.0),
+    new GeoCoordinates(36.825236959997, 117.59256197996073, 412.90300916600972)), app.projection);
   var mesh = new THREE.Mesh(geometry);
   mesh.position.copy(center);
   app.stratumSource.addCsgData(new CSGData(mesh));
+  // {
+  //   const { geometry, center,anchor } = makeGeoBox(new GeoBox(new GeoCoordinates(36.82442324607886, 117.58952266955495, 400.8112550266087),
+  //     new GeoCoordinates(36.825236959997, 117.59256197996073, 462.90300916600972)), app.projection);
+  //   var mesh = new THREE.Mesh(geometry);
+  //   mesh.position.copy(center);
+  //   app.stratumSource.addCsgData(new CSGData(mesh));
+  // }
 
-  app.setHeightMapSource("https://api.mapbox.com/v4/mapbox.terrain-rgb.json?secure&access_token=pk.eyJ1IjoiYW5pbmdnbyIsImEiOiJjbGY5Y283N3IyZjB3M3ZyMGs4emJoYWNkIn0.MRcTQs3Z9OA0EQOB40xBqQ\n")
-  app.addAnchorMesh(l);
+  // app.setHeightMapSource("https://api.mapbox.com/v4/mapbox.terrain-rgb.json?secure&access_token=pk.eyJ1IjoiYW5pbmdnbyIsImEiOiJjbGY5Y283N3IyZjB3M3ZyMGs4emJoYWNkIn0.MRcTQs3Z9OA0EQOB40xBqQ\n")
+
   app.addMaterialProviders(new FlywaveGl.MaterialProvider({ url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` }));
 
   /*

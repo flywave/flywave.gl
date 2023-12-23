@@ -10,12 +10,12 @@ import { DataStratumProvider } from "./data-stratum-provider";
 import { QUANTIZED_MESH_TILE_DECODER_ID } from "../tin-terrain/constants";
 import { CSG_STRATUM_DECODER } from "./constants";
 import config from "../../config";
-import { FrontSide } from "three";
+import { DoubleSide, FrontSide } from "three";
 import { StratumCSGDecoder } from "./stratum-csg-decoder";
 
 class MaterialProvider {
     getMaterial(gropuId) {
-        return new THREE.MeshPhongMaterial({ side: FrontSide, color: 0xffffff * Math.random() });
+        return new THREE.MeshPhongMaterial({ side: DoubleSide, color: 0xffffff * Math.random() });
     }
 }
 
@@ -33,13 +33,16 @@ class StratumSource extends TerrainSource {
                 normalizedEquirectangularProjection
             ),
             tileFactory: new StratumTileFactory(),
-            dataProvider: new TinTerrainProvider({ ...options, requestWaterMask: false }),
+            dataProvider: new TinTerrainProvider({
+                ...options,
+                requestWaterMask: false
+            }),
             decoderUrl: config.DECODER_URL
         });
         this.csgDecoder = new StratumCSGDecoder(CSG_STRATUM_DECODER, config.DECODER_URL);
 
         this.dataTerrainProvider = new DataStratumProvider(
-            { ...options, requestVertexNormals: true },
+            { ...options, requestVertexNormals: true, skirtHeight: 0 },
             this
         );
 
@@ -53,11 +56,14 @@ class StratumSource extends TerrainSource {
     }
 
     connect() {
-        return super.connect().then(() => {
-            return this.dataTerrainProvider.connect();
-        }).then(()=>{
-            return this.csgDecoder.connect();
-        });
+        return super
+            .connect()
+            .then(() => {
+                return this.dataTerrainProvider.connect();
+            })
+            .then(() => {
+                return this.csgDecoder.connect();
+            });
     }
 
     ready() {
