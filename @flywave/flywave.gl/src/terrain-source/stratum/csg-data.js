@@ -1,7 +1,8 @@
-import { BufferAttribute, BufferGeometry, Vector3 } from "three";
-import { CSG } from "three-csg-ts";
+import { BoxGeometry, BufferAttribute, BufferGeometry, Vector3 } from "three";
+import { SUBTRACTION, ADDITION, INTERSECTION, Brush, Evaluator } from "three-bvh-csg";
 import AttributeCompression from "../tin-terrain/quantized-mesh/attribute-compression";
-
+import { mergeGeometries, toTrianglesDrawMode } from "../../loaders/BufferGeometryUtils";
+import { TriangleStripDrawMode } from "three";
 class CSGData {
     box = new THREE.Box3();
 
@@ -19,6 +20,9 @@ class CSGData {
     }
 
     geometryToJSON(geometry) {
+        if (!geometry) {
+            return null;
+        }
         var data = { attributes: {} };
         const attributes = geometry.attributes;
         const index = geometry.index;
@@ -53,12 +57,13 @@ class CSGData {
             geometry
         } = this.mesh;
         var n = new Vector3();
-        var buffer = new Float32Array(normal.count * 4);
+        var buffer = new Float32Array(normal ? normal.count * 4 : 0);
         for (var i = 0, j = 0; i < buffer.length; i += 4, j++) {
             buffer[i] = uv.array[j * 2];
             buffer[i + 1] = uv.array[j * 2 + 1];
             buffer[i + 2] = uv.array[j * 2 + 1];
             n.fromArray(normal.array, j * 3);
+            n.normalize();
             buffer[i + 3] = AttributeCompression.octEncodeFloat(n);
         }
 
@@ -88,22 +93,79 @@ class CSGData {
         return buffer;
     }
 
-    subtract(csgData) {
-        this.mesh.updateMatrix();
-        csgData.mesh.updateMatrix();
-        return CSG.subtract(this.mesh, csgData.mesh);
+    splitGeometries() {
+        const { groups, index, attributes } = this.mesh.geometry;
+        var geometries = [];
+        groups.forEach(group => {
+            var buffer = new BufferGeometry();
+            geometries.push(buffer);
+            {
+                let position = new THREE.BufferAttribute(new Float32Array(group.count * 3), 3);
+                let normal = new THREE.BufferAttribute(new Float32Array(group.count * 3), 3);
+                let uv = new THREE.BufferAttribute(new Float32Array(group.count * 2), 2);
+
+                for (var i = group.start, j = 0; i < group.start + group.count; i++, j++) {
+                    var _index = index.getX(i);
+                    position.setX(j, attributes["position"].getX(_index));
+                    position.setY(j, attributes["position"].getY(_index));
+                    position.setZ(j, attributes["position"].getZ(_index));
+
+                    normal.setX(j, attributes["normal"].getX(_index));
+                    normal.setY(j, attributes["normal"].getY(_index));
+                    normal.setZ(j, attributes["normal"].getZ(_index));
+
+                    uv.setX(j, attributes["uv"].getX(_index));
+                    uv.setY(j, attributes["uv"].getY(_index));
+                }
+
+                buffer.setAttribute("position", position);
+                buffer.setAttribute("normal", normal);
+                buffer.setAttribute("uv", uv);
+            }
+        });
+        if (groups.length == 0) {
+            geometries.push(this.mesh.geometry);
+        }
+        return geometries;
     }
 
-    union(csgData) {
-        this.mesh.updateMatrix();
-        csgData.mesh.updateMatrix();
-        return CSG.union(this.mesh, csgData.mesh);
+    doCsg(csgDatas, operator) {
+        var geometries = [];
+        this.splitGeometries().forEach(source => {
+            var a = new Brush(source);
+            a.position.copy(this.mesh.position);
+            a.quaternion.copy(this.mesh.quaternion);
+            a.scale.copy(this.mesh.scale);
+            a.updateMatrixWorld();
+
+            const evaluator = new Evaluator();
+            evaluator.useGroups = false;
+            csgDatas.forEach(csgData => {
+                var b = new Brush(csgData.mesh.geometry);
+                b.position.copy(csgData.mesh.position);
+                b.quaternion.copy(csgData.mesh.quaternion);
+                b.scale.copy(csgData.mesh.scale);
+                b.updateMatrixWorld();
+                const { geometry } = evaluator.evaluate(a, b, operator);
+                a.geometry = geometry;
+                var p = a.position.clone().multiplyScalar(-1);
+                geometry.translate(p.x, p.y, p.z);
+            });
+            a.geometry&&geometries.push(a.geometry);
+        });
+        return geometries.length ? mergeGeometries(geometries, true) : null;
     }
 
-    intersect(csgData) {
-        this.mesh.updateMatrix();
-        csgData.mesh.updateMatrix();
-        return CSG.intersect(this.mesh, csgData.mesh);
+    subtract(csgDatas) {
+        return this.doCsg(csgDatas, SUBTRACTION);
+    }
+
+    union(csgDatas) {
+        return this.doCsg(csgDatas, ADDITION);
+    }
+
+    intersect(csgDatas) {
+        return this.doCsg(csgDatas, INTERSECTION);
     }
 
     toJSON() {

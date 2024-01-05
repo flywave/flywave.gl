@@ -155,7 +155,7 @@ export class FrustumIntersection {
         const targetTileArea = Math.pow(this.m_tilePixelSize / this.mapView.viewportHeight, 2);
         const useElevationRangeSource: boolean =
             elevationRangeSource !== undefined &&
-            elevationRangeSource.getTilingScheme() === tilingScheme;
+            elevationRangeSource.getTilingScheme(dataSources) === tilingScheme;
         const obbIntersections =
             this.mapView.projection.type === ProjectionType.Spherical || useElevationRangeSource;
         const uniqueZoomLevels = new Set(zoomLevels);
@@ -191,6 +191,7 @@ export class FrustumIntersection {
                 cache,
                 minGeometryHeight,
                 maxGeometryHeight,
+                dataSources,
                 useElevationRangeSource ? elevationRangeSource : undefined
             );
 
@@ -248,6 +249,7 @@ export class FrustumIntersection {
                     cache,
                     minGeometryHeight,
                     maxGeometryHeight,
+                    dataSources,
                     useElevationRangeSource ? elevationRangeSource : undefined
                 );
 
@@ -281,6 +283,7 @@ export class FrustumIntersection {
         cache: { calculationFinal: boolean; tileBounds: OrientedBox3 | THREE.Box3 },
         minGeometryHeight: number,
         maxGeometryHeight: number,
+        dataSources: DataSource[],
         elevationRangeSource?: ElevationRangeSource
     ): TileKeyEntry | undefined {
         const geoBox = getGeoBox(tilingScheme, tileKey, offset);
@@ -290,7 +293,7 @@ export class FrustumIntersection {
         // min and max elevation, these tiles most probably contains features that
         // lays directly on the ground surface.
         if (elevationRangeSource !== undefined) {
-            const range = elevationRangeSource!.getElevationRange(tileKey);
+            const range = elevationRangeSource!.getElevationRange(tileKey,dataSources);
             geoBox.southWest.altitude = range.minElevation;
             geoBox.northEast.altitude = range.maxElevation;
             cache.calculationFinal =

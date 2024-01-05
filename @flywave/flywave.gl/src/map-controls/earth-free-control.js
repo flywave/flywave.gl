@@ -13,6 +13,13 @@ class EarthFreeControl extends FreeControl {
         this.camera = new EarthCamera(application);
     }
 
+    bindApplication(application) {
+        this.mapView = application;
+        this.application = application;
+        this.view = application.window;
+        this.camera.mapView = application;
+    }
+
     pan_velocity(D, ak) {
         var W = [0, 0, 0];
         this.camera.getDown(W);
@@ -165,6 +172,7 @@ class EarthFreeControl extends FreeControl {
     }
 
     setEllipsoidMaximumDepth(maximumDepth) {
+        this.distance_limit = -maximumDepth;
         this.__ellipsoidMaximumDepth = maximumDepth;
     }
 

@@ -52,8 +52,7 @@
         "immutable": "^4.0.0",
         "kdbush": "^3.0.0",
         "keymirror": "^0.1.1",
-        "lodash.debounce": "^4.0.8",
-        "three": "^0.129.0",
+        "lodash.debounce": "^4.0.8", 
         "assert": "~2.0.0",
         "gl-matrix": "~3.4.3",
         "d3-selection": "~3.0.0",
@@ -62,7 +61,8 @@
         "lodash.clonedeep": "4.5.0",
         "lodash.range": "3.2.0",
         "@davidcmeier/string-to-color": "^2.0.0",
-        "three-csg-ts":"^3.1.13"
+        "three-bvh-csg":"~0.0.15",
+        "three-mesh-bvh":"~0.6.8"
     }, 
     "devDependencies": {
         "@babel/cli": "^7.8.4",

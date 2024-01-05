@@ -23,7 +23,6 @@ export class TinTerrainProvider {
         this.tinCache = new LRUCache(5000);
 
         this.tinCache.evictionCallback = this.evictionCallback;
- 
     }
 
     bindDataSource(dataSource) {
@@ -45,8 +44,13 @@ export class TinTerrainProvider {
         tile.tileLoader.donePromise.then(() => {
             tile.builderQuantized(tile.tileLoader.decodedTile);
             this.dataSource.updateTileOverlayer(tile);
+
+            this.dataSource
+                .getElevationRangeSource()
+                .updateMinMaxCache(tileKey, tile.minimumHeight, tile.maximumHeight);
         });
         this.tinCache.set(tileKey.mortonCode(), tile);
+
         return tile;
     }
 
@@ -98,7 +102,7 @@ export class TinTerrainProvider {
                 this.requestTile(tk);
                 break;
             } else {
-                if(tk.level==0)break;
+                if (tk.level == 0) break;
                 var parent = tk.parent();
                 if (this.tinCache.has(parent.mortonCode())) {
                     var tile = this.tinCache.get(parent.mortonCode());

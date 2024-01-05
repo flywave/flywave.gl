@@ -1,4 +1,3 @@
-const CopyWebpackPlugin = require("copy-webpack-plugin");
 const { addHarpWebpackConfig } = require("@flywave/flywave-webpack-utils/scripts/HarpWebpackConfig"); 
 
 const NPM_TARGET = process.env.npm_lifecycle_event; // eslint-disable-line no-process-env
@@ -10,16 +9,6 @@ var webpack = require("webpack")
 const plugins = [
   new webpack.DefinePlugin({
     'process.env': {}
-  }),
-  new CopyWebpackPlugin({
-    patterns: [
-      require.resolve("three/build/three.js"), 
-      {
-        from: "src/loaders/libs",
-        to: "libs/",
-        toType: "dir"
-      }
-    ]
   })
 ];
 

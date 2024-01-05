@@ -1,9 +1,48 @@
-import { MapViewEnvironment } from "@flywave/flywave-mapview";
+import {
+    MapViewEnvironment,
+    BackgroundDataSource,
+    addGroundPlane,
+    Tile
+} from "@flywave/flywave-mapview";
 import { SunLight } from "./objects/sun-light";
 import { MaterialProvider } from "./terrain-source/material-provider";
 import { VectorTileDataSource, GeoJsonDataProvider } from "@flywave/flywave-vectortile-datasource";
 
+class SphereBackgroundDataSource extends BackgroundDataSource { 
+
+    getTile(tileKey: TileKey): Tile | undefined {
+        const tile = new Tile(this, tileKey);
+        tile.forceHasGeometry(true);
+        addGroundPlane(tile, BackgroundDataSource.GROUND_RENDER_ORDER + 1);
+
+        tile.objects.forEach(object => {
+            if (object.material) {
+                object.material.depthTest = false;
+                object.material.transparent = true;
+            }
+        });
+        return tile;
+    }
+}
+
 class Environment extends MapViewEnvironment {
+    constructor(m_mapView, options) {
+        var addBackgroundDatasource = options.addBackgroundDatasource;
+        super(m_mapView, { ...options, addBackgroundDatasource: false });
+        if (addBackgroundDatasource) {
+            if (addBackgroundDatasource !== false) {
+                this.m_backgroundDataSource = new SphereBackgroundDataSource();
+                this.m_mapView.addDataSource(this.m_backgroundDataSource);
+            }
+            if (
+                options.backgroundTilingScheme !== undefined &&
+                this.m_backgroundDataSource !== undefined
+            ) {
+                this.m_backgroundDataSource.setTilingScheme(options.backgroundTilingScheme);
+            }
+        }
+    }
+
     createLight(lightDescription) {
         let light = super.createLight(lightDescription);
         if (light) return light;
@@ -97,7 +136,9 @@ class Environment extends MapViewEnvironment {
             }
         });
 
-        needsRemoveVectorDatasource.forEach(datasource => this.m_mapView.removeDataSource(datasource));
+        needsRemoveVectorDatasource.forEach(datasource =>
+            this.m_mapView.removeDataSource(datasource)
+        );
         needAddVectorDatasources.forEach(setting => {
             var config = {
                 name: setting.name,

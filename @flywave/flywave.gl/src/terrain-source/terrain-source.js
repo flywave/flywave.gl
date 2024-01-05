@@ -94,10 +94,10 @@ export class TerrainSource extends TileDataSource {
                               maxLat - minLat
                           ).intersects(fbbox);
                       }
-                    : null
+                    : undefined
             );
         };
-        if (this._onCameraChange && tile.tileKey.level > 10) {
+        if (this._onCameraChange && tile && tile.tileKey.level > 10) {
             this.updateTileJobs[tile.tileKey.mortonCode()] = { job, tile };
 
             if (!this.taskIsRuning) {

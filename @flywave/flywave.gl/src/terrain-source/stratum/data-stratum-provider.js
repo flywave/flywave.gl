@@ -67,9 +67,19 @@ class StratumResourceTile extends TinMeshResourceTile {
     }
 
     builderCsgGeometry(csgData) {
+        if (!csgData) {
+            delete this.csgGeometry;
+            delete this.tinData.csgStratumGroups;
+            return;
+        }
         const { _stratumGroups } = this.tinData;
         var csg = new CsgData().fromJSON(csgData);
-        this.csgGeometry = csg.mesh.geometry;
+        if (this.csgGeometry) {
+            this.csgGeometry.dispose();
+            this.csgGeometry = csg.mesh.geometry;
+        } else {
+            this.csgGeometry = csg.mesh.geometry;
+        }
         const { groups } = this.csgGeometry;
         var stratumGroups = {};
         if (groups) {
@@ -81,7 +91,7 @@ class StratumResourceTile extends TinMeshResourceTile {
                 };
             });
         }
-        this.tinData._stratumGroups = stratumGroups;
+        this.tinData.csgStratumGroups = stratumGroups;
     }
 
     __prevIntersectsCsgDatas = [];
@@ -125,6 +135,10 @@ class StratumResourceTile extends TinMeshResourceTile {
         }
         return this._geometry;
     }
+
+    clearCsgGeometry() {
+        this.__prevIntersectsCsgDatas.length = [];
+    }
 }
 
 class DataStratumProvider extends DataTerrainProvider {
@@ -137,6 +151,14 @@ class DataStratumProvider extends DataTerrainProvider {
 
     removeCsgData(id) {
         this.csgDatas = this.csgDatas.filter(csg => csg.id != id);
+    }
+
+    updateCsgData() {
+        this.dataSource.dataProvider().tinCache.forEach(e => {
+            e.clearCsgGeometry();
+        });
+
+        this.dataSource.updateTileOverlayer();
     }
 
     makeLoaderTile(tileKey, parentTileTinData) {

@@ -10,8 +10,9 @@ MapViewUtils.MAX_TILT_RAD = (60 * Math.PI) / 180;
 class MapOrbitControl {
     zoomLevelDeltaOnControl = 1;
 
-    constructor(application) {
-        this._control = new EarthFreeControl(application, application.window);
+    constructor(application, earthFreeControl) {
+        this._control = earthFreeControl || new EarthFreeControl();
+        this._control.bindApplication(application, application.window);
 
         this.mapView = application;
         this.window = application.window;
@@ -44,7 +45,7 @@ class MapOrbitControl {
     flyPath = (lineString, duration) => {
         if (this.__pathAnimation) {
             this.__pathAnimation.kill();
-        } 
+        }
 
         var linePos = [];
         lineString.geometry.coordinates.forEach(

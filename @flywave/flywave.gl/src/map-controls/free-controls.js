@@ -236,7 +236,7 @@ class FreeControl {
       var iswheel = _this.prevMouseZ !== view.lastMouseZ;
       if (iswheel || K) {
         _camera.unprojectToWorld(v, _this, L, J, -1);
-        aq = this.rayCastZoomPoint(ad, ae, v, iswheel);
+        aq =   this.rayCastZoomPoint(ad, ae, v, iswheel);
         if (aq > 0) {
           _this.lasthitd = aq;
           _this.lasthit[0] = ad[0];
@@ -508,7 +508,7 @@ class FreeControl {
         h = this.height*0.1;
       }
       camera.unprojectToWorld(z, ctrl, this.width / 2, h, -1);
-      C = this.rayCastToGlobeAndScene(v, F, z);
+      C = this.rayCastToGlobeAndScene(v, F, z,this.width / 2, h);
     } else {
       var aA = [0, 0, 0];
       camera.getOrigin(aA);

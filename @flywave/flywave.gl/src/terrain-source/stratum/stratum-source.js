@@ -12,6 +12,7 @@ import { CSG_STRATUM_DECODER } from "./constants";
 import config from "../../config";
 import { DoubleSide, FrontSide } from "three";
 import { StratumCSGDecoder } from "./stratum-csg-decoder";
+import { ElevationRangeSource } from "../tin-terrain/elevation-range-source";
 
 class MaterialProvider {
     getMaterial(gropuId) {
@@ -33,6 +34,7 @@ class StratumSource extends TerrainSource {
                 normalizedEquirectangularProjection
             ),
             tileFactory: new StratumTileFactory(),
+            elevationRangeSource: new ElevationRangeSource(),
             dataProvider: new TinTerrainProvider({
                 ...options,
                 requestWaterMask: false
@@ -93,6 +95,10 @@ class StratumSource extends TerrainSource {
 
     addCsgData(csgdata) {
         this.dataTerrainProvider.addCsgData(csgdata);
+    }
+
+    updateCsgData() {
+        this.dataTerrainProvider.updateCsgData();
     }
 
     removeCsgData(id) {

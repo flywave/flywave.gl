@@ -5,6 +5,7 @@
  */
 import { TilingScheme } from "@flywave/flywave-geoutils";
 import { TileKey } from "@flywave/flywave-geoutils/lib/tiling/TileKey";
+import { DataSource } from "./DataSource";
 
 /**
  * Status of the elevation range calculation.
@@ -34,7 +35,7 @@ export interface ElevationRangeSource {
      * Compute the elevation range for a given {@link @flywave/flywave-geoutils#TileKey}.
      * @param tileKey - The tile for which the elevation range should be computed.
      */
-    getElevationRange(tileKey: TileKey): ElevationRange;
+    getElevationRange(tileKey: TileKey,dataSources:DataSource[]): ElevationRange;
 
     /**
      * The tiling scheme of this {@link ElevationRangeSource}.
@@ -44,7 +45,7 @@ export interface ElevationRangeSource {
      * ranges returned by [[getElevationRange]] that have
      * the same {@link @flywave/flywave-geoutils#TilingScheme}.
      */
-    getTilingScheme(): TilingScheme;
+    getTilingScheme(dataSources:DataSource[]): TilingScheme;
 
     /**
      * Connects to the underlying data.

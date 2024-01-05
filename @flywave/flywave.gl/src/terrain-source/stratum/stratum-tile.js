@@ -25,14 +25,21 @@ class StratumTile extends Tile {
 
         var stratumTile = this.dataSource.dataProvider().getBestAvailableTile(tileKey);
 
-        if (!stratumTile) return;
+        if (!stratumTile) {
+            var { minElevation, maxElevation } = this.dataSource
+                .getElevationRangeSource()
+                .getElevationRange(tileKey);
+            this.geoBox.southWest.altitude = minElevation || 0;
+            this.geoBox.northEast.altitude = maxElevation || 0;
+            return;
+        }
 
         this.bindedStratumTile = stratumTile;
 
         const {
-            tinData: { _stratumGroups }
+            tinData: { _stratumGroups, csgStratumGroups }
         } = this.bindedStratumTile;
-        this.stratumGroups = { ..._stratumGroups };
+        this.stratumGroups = { ...(csgStratumGroups || _stratumGroups) };
 
         this.geoBox.southWest.altitude = stratumTile.minimumHeight;
         this.geoBox.northEast.altitude = stratumTile.maximumHeight;
@@ -96,7 +103,7 @@ class StratumTile extends Tile {
             // shader.defines["USE_UV"] = true;
             if (parseInt(__THREE__) >= 151) {
                 shader.defines["USE_GT_151"] = true;
-                if (!material.map) shader.defines["USE_UV"] = true;
+                shader.defines["USE_UV"] = true;
             }
             shader.uniforms.normalSampler = { value: emptyTexture };
         };

@@ -1,6 +1,10 @@
 import Application from "./application";
 export { Application };
 
+//camera control
+import { EarthFreeControl } from "./map-controls/earth-free-control";
+export { EarthFreeControl };
+
 //objects
 import GroundHole from "./objects/ground-hole";
 import SurfacePolygon from "./objects/surface-polygon";

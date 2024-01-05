@@ -71,32 +71,24 @@ export class CSGStratumTileDecoder {
             var groups = Object.values(stratumGroups);
             groups.pop();
 
-            var geometries = [];
-            var groupsIndex = {};
-            var j = 0;
             for (var { Start, End, Id } of groups) {
                 buffer.addGroup(Start, End - Start);
-                target.forEach(target => {
-                    var ret = sourceCSG.subtract(new CSGData().fromJSON(target));
-                    const { geometry, position } = ret;
-                    position.sub(center);
-                    geometry.translate(position.x, position.y, position.z);
-                    if (geometry.index) {
-                        geometries.push(geometry);
-                        groupsIndex[j] = Id;
-                    }
-                });
-                buffer.clearGroups();
-                j++;
             }
         }
+        var geometry = sourceCSG.subtract(
+            target.map(t => {
+                return new CSGData().fromJSON(t);
+            })
+        );
 
-        sourceCSG.mesh.geometry = mergeGeometries(geometries, true);
-        sourceCSG.mesh.geometry.groups.forEach((group, index) => {
-            group.materialIndex = groupsIndex[index];
-        });
+        sourceCSG.mesh.geometry = geometry;
+        if (sourceCSG.mesh.geometry) {
+            // sourceCSG.mesh.geometry.groups.forEach((group, index) => {
+            //     group.materialIndex = groupsIndex[index];
+            // });
 
-        verityTile.csgData = sourceCSG.encodeTextureUvNormal().toJSON();
+            verityTile.csgData = sourceCSG.encodeTextureUvNormal().toJSON();
+        }
         return Promise.resolve(verityTile);
     }
 }

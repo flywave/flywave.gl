@@ -22,6 +22,7 @@ import makePickFrustum from "./util/rang-frustum";
 import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { ThemeManager } from "./theme-manager";
 import { Environment } from "./environment";
+import { ElevationRangeSource, ElevationProvider } from "./terrain-source/elevation-range-source";
 
 class BaseMapObjectAdapter extends MapObjectAdapter {
     isPickable() {
@@ -58,6 +59,8 @@ class Application extends MapView {
                     : new TiltViewClipPlanesEvaluator(828, 0, 1.0, 0.05, 10.0),
             ...options
         });
+
+        this.elevationProviderProxy = new ElevationProvider(this, options.elevationProvider);
 
         this.initlize(options);
 
@@ -98,7 +101,11 @@ class Application extends MapView {
     }
 
     async __updateTerrainSource(terrainSource) {
-        await this.setElevationSource(terrainSource, terrainSource.getElevationRangeSource());
+        await this.setElevationSource(
+            terrainSource,
+            new ElevationRangeSource(this),
+            this.elevationProviderProxy
+        );
 
         this.elevation = terrainSource.getElevationProvider();
         this.terrainSource = terrainSource;
@@ -179,7 +186,7 @@ class Application extends MapView {
         });
         window.addEventListener("resize", this.onResize, false);
 
-        const mapOrbitControl = new MapOrbitControl(this);
+        const mapOrbitControl = new MapOrbitControl(this, options.earthFreeControl);
         this.mapOrbitControl = mapOrbitControl;
 
         this.showMapControlsUI = options.showMapControl;

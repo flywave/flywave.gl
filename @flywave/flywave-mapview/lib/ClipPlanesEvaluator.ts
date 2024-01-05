@@ -83,7 +83,7 @@ namespace SphericalProj {
         // the tangent line by te (see graph above).
         const te = getHorizonDistance(maxR, minR);
 
-        const normalToTanAngle = Math.asin(minR / d); // Angle OCT
+        const normalToTanAngle = Math.asin(d<minR? d / minR:minR / d); // Angle OCT
         // Angle between fwd vector (CF) and tangent (CT) in camera's up direction: FCT (= FCE)
         const fwdToTanAngle = Math.abs(
             normalToTanAngle - SphericalProj.getNormalToFwdAngle(camera)
