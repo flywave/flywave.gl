@@ -54,8 +54,7 @@ export function createVerticesFromQuantizedTerrainMesh(
     parameters,
     transferableObjects,
     projection,
-    tileKey,
-    canvas
+    tileKey
 ) {
     var quantizedVertices = parameters.quantizedVertices;
     var quantizedVertexCount = quantizedVertices.length / 3;
@@ -65,6 +64,21 @@ export function createVerticesFromQuantizedTerrainMesh(
         parameters.eastIndices.length +
         parameters.southIndices.length +
         parameters.northIndices.length;
+
+    if (!parameters.westSkirtHeight) {
+        edgeVertexCount -= parameters.westIndices.length;
+    }
+    if (!parameters.southSkirtHeight) {
+        edgeVertexCount -= parameters.southIndices.length;
+    }
+
+    if (!parameters.eastSkirtHeight) {
+        edgeVertexCount -= parameters.eastIndices.length;
+    }
+    if (!parameters.northSkirtHeight) {
+        edgeVertexCount -= parameters.northIndices.length;
+    }
+
     var includeWebMercatorT = parameters.includeWebMercatorT;
 
     var rectangle = new GeoBox(
@@ -128,7 +142,11 @@ export function createVerticesFromQuantizedTerrainMesh(
 
         var u = rawU / maxShort;
         var v = rawV / maxShort;
-        var height = THREE.MathUtils.lerp(minimumHeight, maximumHeight, heightBuffer[i] / maxShort);
+        var height = THREE.MathUtils.lerp(
+            minimumHeight,
+            maximumHeight,
+            new Int16Array(new Uint16Array([heightBuffer[i]]).buffer)[0] / maxShort
+        );
 
         cartographicScratch.longitude = THREE.MathUtils.lerp(west, east, u) / ARC;
         cartographicScratch.latitude = THREE.MathUtils.lerp(south, north, v) / ARC;
@@ -164,7 +182,7 @@ export function createVerticesFromQuantizedTerrainMesh(
     }
 
     let heightMapBuffer = renderHeightMap(
-        canvas,
+        parameters.offScreenCanvasId,
         [minLongitude, minLatitude, minAltitude, maxLongitude, maxLatitude, maxAltitude],
         cartographicScratchs,
         parameters.indices
@@ -271,7 +289,7 @@ export function createVerticesFromQuantizedTerrainMesh(
         hMin,
         maximumHeight,
         fromENU,
-        hasVertexNormals,
+        true,
         includeWebMercatorT
     );
     var vertexStride = encoding.getStride();
@@ -326,19 +344,24 @@ export function createVerticesFromQuantizedTerrainMesh(
 
     {
         var geometry = new THREE.BufferGeometry();
-        geometry.setAttribute("position", new THREE.BufferAttribute(vertexBuffer, 8));
+        geometry.setAttribute("position", new THREE.BufferAttribute(vertexBuffer, vertexStride));
         geometry.setIndex(new THREE.BufferAttribute(indexBuffer, 1));
         geometry.computeVertexNormals();
 
         {
             const normalBuffer = geometry.getAttribute("normal").array;
+            const positionBuffer = geometry.getAttribute("position");
             let normal = new THREE.Vector3();
             for (var i = 0, j = 0; i < normalBuffer.length; i += 3, j++) {
                 normal.fromArray(normalBuffer, i);
                 if (normal.length() == 0) {
-                    normal.fromArray(position, i).normalize();
+                    normal
+                        .set(positionBuffer.getX(j), positionBuffer.getY(j), positionBuffer.getZ(j))
+                        .add(center)
+                        .normalize();
                 }
-                vertexBuffer[j * 8 + 7] = AttributeCompression.octEncodeFloat(normal);
+                vertexBuffer[j * vertexStride + vertexStride - 1] =
+                    AttributeCompression.octEncodeFloat(normal);
             }
         }
     }
@@ -457,12 +480,16 @@ export function createVerticesFromQuantizedTerrainMesh(
 
     var pos = center.clone(); // projection.projectPoint(new GeoCoordinates(center.y, center.x, center.z));
     var vertexs = new Float32Array(vertexBuffer.buffer);
-    var position = new Float32Array((vertexs.length / 8) * 3);
-    var altitudes = new Float32Array(vertexs.length / 8);
+    var position = new Float32Array((vertexs.length / vertexStride) * 3);
+    var altitudes = new Float32Array(vertexs.length / vertexStride);
     var uv = new Float32Array(vertexs.length / 2);
 
     // pos.set(0,0,0);
-    for (var i = 0, j = 0, k = 0, u = 0; i < vertexs.length; i += 8, j += 4, k += 3, u++) {
+    for (
+        var i = 0, j = 0, k = 0, u = 0;
+        i < vertexs.length;
+        i += vertexStride, j += 4, k += 3, u++
+    ) {
         position[k] = vertexs[i] - pos.x;
         position[k + 1] = vertexs[i + 1] - pos.y;
         position[k + 2] = vertexs[i + 2] - pos.z;

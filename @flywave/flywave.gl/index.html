@@ -20,7 +20,7 @@
 
   var app = new FlywaveGl.Application({
     target: new FlywaveGl.GeoCoordinates(
-      36.82749, 117.59765
+      36.37292967525023, 112.84844082640775
     ),
     zoomLevel: 17,
     addBackgroundDatasource: false,
@@ -35,15 +35,23 @@
   {
     var l = new THREE.PointLight();
     l.anchor = new FlywaveGl.GeoCoordinates(
+      36.82749, 112.59765, 1000
+    )
+    app.addAnchorMesh(l);
+  }
+
+  {
+    var l = new THREE.AmbientLight(0xffffff,0.2);
+    l.anchor = new FlywaveGl.GeoCoordinates(
       36.82749, 117.59765, 1000
     )
     app.addAnchorMesh(l);
   }
 
   {
-    var l = new THREE.AmbientLight(0xff,0.2);
+    var l = new THREE.Mesh(new THREE.BoxGeometry(100,100,10),new THREE.MeshStandardMaterial);
     l.anchor = new FlywaveGl.GeoCoordinates(
-      36.82749, 117.59765, 1000
+      36.82749, 112.59765, 1000
     )
     app.addAnchorMesh(l);
   }
@@ -65,18 +73,18 @@
         return t;
       })
     getMaterial(gropuId) {
-      return new THREE.MeshPhongMaterial({ map: this.map[gropuId] });
+      return new THREE.MeshPhongMaterial({ map: this.map[gropuId],side:THREE.DoubleSide });
     }
   };
 
   app.setStratumSource(`http://127.0.0.1:86/stratum/`, new TestMaterialProvider);
 
   const { GeoBox, GeoCoordinates, makeGeoBox, CSGData } = FlywaveGl;
-  const { geometry, center, anchor } = makeGeoBox(new GeoBox(new GeoCoordinates(36.82442324607886, 117.58952266955495, -400.0),
-    new GeoCoordinates(36.825236959997, 117.59256197996073, 412.90300916600972)), app.projection);
+  const { geometry, center, anchor } = makeGeoBox(new GeoBox(new GeoCoordinates(36.37457611241094, 112.84695494145687, -400.0),
+    new GeoCoordinates(36.37559300305968, 112.84946713067295, 412.90300916600972)), app.projection);
   var mesh = new THREE.Mesh(geometry);
   mesh.position.copy(center);
-  app.stratumSource.addCsgData(new CSGData(mesh));
+  // app.stratumSource.addCsgData(new CSGData(mesh));
   // {
   //   const { geometry, center,anchor } = makeGeoBox(new GeoBox(new GeoCoordinates(36.82442324607886, 117.58952266955495, 400.8112550266087),
   //     new GeoCoordinates(36.825236959997, 117.59256197996073, 462.90300916600972)), app.projection);

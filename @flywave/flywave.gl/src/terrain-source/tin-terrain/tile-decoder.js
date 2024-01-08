@@ -7,27 +7,57 @@
 import { createVerticesFromQuantizedTerrainMesh } from "./quantized-mesh/create-vertices-from-quantized-terrain-mesh";
 import { upsampleQuantizedTerrainMesh } from "./quantized-mesh/upsample-quantized-terrain-mesh";
 
-export const QUANTIZED_MESH_TILE_DECODER_ID = 'quantized-mesh-tile-decoder'
-
+export const QUANTIZED_MESH_TILE_DECODER_ID = "quantized-mesh-tile-decoder";
+import { offScreenCanvasManagerRender } from "./quantized-mesh/render-heightmap";
 
 export class QuantizedMeshTileDecoder {
-  connect() {
-    return Promise.resolve()
-  }
-
-  configure() { }
-
-  decodeTile(data, tileKey, projection) {
-
-    var transferableObjects = [];
-    var tileTerrain = data.upsample ? upsampleQuantizedTerrainMesh(data, transferableObjects, projection, tileKey,data.offScreenCanvas) :
-      createVerticesFromQuantizedTerrainMesh(data, transferableObjects, projection, tileKey,data.offScreenCanvas);
-    const verityTile = {
-      techniques: [],
-      geometries: [],
-      tileTerrain
+    constructor() {
+        this.configurePromise = new Promise((reslove, reject) => {
+            this._reslove = reslove;
+            this._reject = reject;
+        });
     }
 
-    return Promise.resolve(verityTile)
-  }
+    connect() {
+        return Promise.resolve();
+    }
+
+    configure({ options }) {
+        offScreenCanvasManagerRender.addOffScreenCanvas(
+            options.offScreenCanvasId,
+            options.offScreenCanvas
+        );
+
+        this.offScreenCanvasId = options.offScreenCanvasId;
+        this._reslove();
+    }
+
+    decodeTile(data, tileKey, projection) {
+        return this.configurePromise.then(() => {
+            data.offScreenCanvasId = this.offScreenCanvasId;
+            var transferableObjects = [];
+            var tileTerrain = data.upsample
+                ? upsampleQuantizedTerrainMesh(
+                      data,
+                      transferableObjects,
+                      projection,
+                      tileKey,
+                      data.offScreenCanvas
+                  )
+                : createVerticesFromQuantizedTerrainMesh(
+                      data,
+                      transferableObjects,
+                      projection,
+                      tileKey,
+                      data.offScreenCanvas
+                  );
+            const verityTile = {
+                techniques: [],
+                geometries: [],
+                tileTerrain
+            };
+
+            return Promise.resolve(verityTile);
+        });
+    }
 }

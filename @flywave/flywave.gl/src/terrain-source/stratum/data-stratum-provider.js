@@ -4,6 +4,7 @@ import { TileLoader } from "@flywave/flywave-mapview-decoder";
 import { Box3 } from "three";
 import { isEqualWith } from "lodash";
 import CsgData from "./csg-data";
+import { HeightMap } from "../tin-terrain/quantized-mesh/render-heightmap";
 
 class CsgTinMeshLoader extends TileLoader {
     constructor(dataSource, tileKey, tile) {
@@ -18,6 +19,9 @@ class CsgTinMeshLoader extends TileLoader {
 
         this.onLoaded(
             {
+                geoBox: this.tile.geoBox.southWest
+                    .toGeoPoint()
+                    .concat(this.tile.geoBox.northEast.toGeoPoint()),
                 source: {
                     position3DAndHeight,
                     textureCoordAndEncodedNormals,
@@ -66,7 +70,7 @@ class StratumResourceTile extends TinMeshResourceTile {
         this._box.setFromObject(tempMesh);
     }
 
-    builderCsgGeometry(csgData) {
+    builderCsgGeometry(csgData, hightBuffer) {
         if (!csgData) {
             delete this.csgGeometry;
             delete this.tinData.csgStratumGroups;
@@ -91,6 +95,12 @@ class StratumResourceTile extends TinMeshResourceTile {
                 };
             });
         }
+
+        this.tinData.csgHeightMap = new HeightMap(
+            hightBuffer.buffer,
+            hightBuffer.minimumHeight,
+            hightBuffer.maximumHeight
+        );
         this.tinData.csgStratumGroups = stratumGroups;
     }
 
@@ -120,12 +130,27 @@ class StratumResourceTile extends TinMeshResourceTile {
         this.csgTinMeshLoader.setIntersectsCsgDatas(intersectsCsgDatas);
         this.csgTinMeshLoader.load();
         this.csgTinMeshLoader.donePromise.then(() => {
-            this.builderCsgGeometry(this.csgTinMeshLoader.decodedTile.csgData);
+            const { hightBuffer, csgData } = this.csgTinMeshLoader.decodedTile;
+            this.builderCsgGeometry(csgData, hightBuffer);
             this.dataSource.updateTileOverlayer(this);
         });
     }
 
+    isEmptyStratum() {
+        const { _stratumGroups } = this.tinData;
+        return !_stratumGroups || Object.values(_stratumGroups).length == 1;
+    }
+
+    get heightMap() {
+        const { csgHeightMap, heightMap } = this.tinData;
+        if (csgHeightMap) {
+            return csgHeightMap;
+        }
+        return heightMap;
+    }
+
     get geometry() {
+        if (this.isEmptyStratum()) return this._geometry;
         let getintersectsCsgDatas = this.getintersectsCsgDatas();
         if (getintersectsCsgDatas.length) {
             this.loadCsgGeometry(getintersectsCsgDatas);

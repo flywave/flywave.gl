@@ -22,15 +22,19 @@ class ElevationRangeSource {
 export { ElevationRangeSource };
 
 class ElevationProvider {
-    constructor(mapView, elevationProvider) {
+    constructor(mapView) {
         this.mapView = mapView;
-        this.elevationProvider = elevationProvider;
     }
 
-    getHeight(coordinates) {
-        return this.elevationProvider
-            ? this.elevationProvider.getHeight(coordinates)
-            : -this.mapView.mapOrbitControl.getEllipsoidMaximumDepth();
+    getHeight(coordinates, defaultIfNotLoaded) {
+        var elevationProvider = this.mapView.terrainSource.getElevationProvider();
+        if (this.mapView.stratumSource) {
+            elevationProvider = this.mapView.stratumSource.getElevationProvider();
+        }
+        var h = elevationProvider.getHeight(coordinates);
+        return h == defaultIfNotLoaded
+            ? this.mapView.terrainSource.getElevationProvider().getHeight(coordinates)
+            : h;
     }
 
     clearCache() {}

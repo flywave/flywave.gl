@@ -6,34 +6,37 @@ export class TinWorkerBasedDecoder extends WorkerBasedDecoder {
     constructor(decoderServiceType, scriptUrl) {
         const workerSet = ConcurrentDecoderFacade.getWorkerSet(scriptUrl);
         super(workerSet, decoderServiceType);
-        workerSet.m_workers.forEach(w => {
-            w.offScreenCanvas = getOffScreenCanvas();
-        });
     }
 
-    decodeTile(data, tileKey, projection, requestController) {
-        const tileKeyCode = tileKey.mortonCode();
-        const message = {
-            type: WorkerDecoderProtocol.Requests.DecodeTileRequest,
-            tileKey: tileKeyCode,
-            data,
-            projection: getProjectionName(projection)
-        };
-        const currentWork =
-            this.workerSet.m_availableWorkers[this.workerSet.m_availableWorkers.length - 1];
-
-        let transferList;
-        if (currentWork&&currentWork.offScreenCanvas) {
-            transferList = [currentWork.offScreenCanvas];
-            data.offScreenCanvas = currentWork.offScreenCanvas;
-            delete currentWork.offScreenCanvas;
-        }
-
-        return this.workerSet.invokeRequest(
-            this.serviceId,
-            message,
-            transferList,
-            requestController
+    async configure(options, customOptions) {
+        const message = Object.assign(
+            Object.assign(
+                {
+                    service: this.serviceId,
+                    type: WorkerDecoderProtocol.DecoderMessageName.Configuration
+                },
+                options
+            ),
+            {
+                options: {
+                    ...customOptions
+                }
+            }
         );
+        return this.broadcastMessage(message);
+    }
+
+    broadcastMessage(message) {
+        const { m_workers } = this.workerSet;
+        this.workerSet.ensureStarted();
+        m_workers.forEach(worker => {
+            var offScreenCanvas = getOffScreenCanvas();
+            message.options = {
+                ...message.options,
+                offScreenCanvas,
+                offScreenCanvasId: offScreenCanvas.id
+            };
+            worker.postMessage(message, [offScreenCanvas]);
+        });
     }
 }

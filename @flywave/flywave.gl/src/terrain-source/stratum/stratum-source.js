@@ -11,8 +11,10 @@ import { QUANTIZED_MESH_TILE_DECODER_ID } from "../tin-terrain/constants";
 import { CSG_STRATUM_DECODER } from "./constants";
 import config from "../../config";
 import { DoubleSide, FrontSide } from "three";
-import { StratumCSGDecoder } from "./stratum-csg-decoder";
+import { TinWorkerBasedDecoder } from "../tin-terrain/work-tile-decoder";
 import { ElevationRangeSource } from "../tin-terrain/elevation-range-source";
+import { ElevationProvider } from "../tin-terrain/elevation-provider";
+import { StratumCSGDecoder } from "./stratum-csg-decoder";
 
 class MaterialProvider {
     getMaterial(gropuId) {
@@ -39,9 +41,10 @@ class StratumSource extends TerrainSource {
                 ...options,
                 requestWaterMask: false
             }),
-            decoderUrl: config.DECODER_URL
+            elevationProvider: new ElevationProvider(),
+            decoder: new TinWorkerBasedDecoder(QUANTIZED_MESH_TILE_DECODER_ID, config.DECODER_URL)
         });
-        this.csgDecoder = new StratumCSGDecoder(CSG_STRATUM_DECODER, config.DECODER_URL);
+        this.csgDecoder = new TinWorkerBasedDecoder(CSG_STRATUM_DECODER, config.DECODER_URL);
 
         this.dataTerrainProvider = new DataStratumProvider(
             { ...options, requestVertexNormals: true, skirtHeight: 0 },
@@ -57,6 +60,12 @@ class StratumSource extends TerrainSource {
         return this._baseUrl;
     }
 
+    configure() {
+        return super.configure().then(() => {
+            return this.csgDecoder.configure();
+        });
+    }
+
     connect() {
         return super
             .connect()
@@ -65,6 +74,9 @@ class StratumSource extends TerrainSource {
             })
             .then(() => {
                 return this.csgDecoder.connect();
+            })
+            .then(() => {
+                this.csgDecoder.configure({});
             });
     }
 

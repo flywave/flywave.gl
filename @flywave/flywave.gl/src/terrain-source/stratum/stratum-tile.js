@@ -52,7 +52,7 @@ class StratumTile extends Tile {
 
         this.rayTestMesh = this.builderRayTestMesh(stratumTile);
 
-        this.builderMeshByMaterialProvider(objects);
+        if (!stratumTile.isEmptyStratum()) this.builderMeshByMaterialProvider(objects);
     }
 
     onBeforeMaterialCompile = (isWebMercator, material) => {
@@ -125,7 +125,8 @@ class StratumTile extends Tile {
         const { stratumGroups } = this;
 
         if (stratumGroups) {
-            for (var { Start, End, Id } of Object.values(stratumGroups)) {
+            var groups = Object.values(stratumGroups); 
+            for (var { Start, End, Id } of groups) {
                 const tileMesh = new THREE.Mesh(
                     this.bindedStratumTile.geometry,
                     this.builderMeshMaterial(Id)
@@ -138,7 +139,7 @@ class StratumTile extends Tile {
                 })(Start, End, tileMesh.geometry);
                 //hidden
                 // tileMesh.visible=false;
-                wrap.add(tileMesh);
+                wrap.add(tileMesh); 
             }
         }
 

@@ -277,6 +277,10 @@ class TinMeshResourceTile extends Tile {
         return _horizonOcclusionPoint;
     }
 
+    get heightMap() {
+        return this.tinData.heightMap;
+    }
+
     onDispose = tile => {
         var _this = this;
         return () => {

@@ -39,21 +39,18 @@ class ElevationProvider {
         if (!this.dataSource.dataTerrainProvider._availability) {
             return defaultIfNotLoaded;
         }
-        const terrTile = this.dataSource
-            .dataProvider()
-            .getBestAvailableTile(
-                TileKeyUtils.geoCoordinatesToTileKey(
-                    this.dataSource.getTilingScheme(),
-                    geoPoint,
-                    this.dataSource.dataTerrainProvider._availability._maximumLevel
-                )
-            );
+        var tk = TileKeyUtils.geoCoordinatesToTileKey(
+            this.dataSource.getTilingScheme(),
+            geoPoint,
+            this.dataSource.dataTerrainProvider._availability._maximumLevel + 1
+        );
+        const terrTile = this.dataSource.dataProvider().getBestAvailableTile(tk);
 
         if (!(terrTile && terrTile.tinData)) {
             return defaultIfNotLoaded;
         }
 
-        const { heightMap } = terrTile.tinData;
+        const { heightMap } = terrTile;
         if (!heightMap) return defaultIfNotLoaded;
         const {
             geoBox: { southWest, longitudeSpan, latitudeSpan }

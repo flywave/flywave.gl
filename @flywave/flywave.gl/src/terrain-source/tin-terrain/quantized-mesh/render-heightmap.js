@@ -20,7 +20,7 @@ class HeightMapShader extends THREE.RawShaderMaterial {
                 uniform mat4 modelViewMatrix; 
 
                 void main() {  
-                    gl_Position = projectionMatrix *modelViewMatrix* vec4(position.xy,0.0, 1.0);
+                    gl_Position = projectionMatrix *modelViewMatrix* vec4(position.xyz, 1.0);
                     vheight = position.z;
                 }
             `,
@@ -36,20 +36,7 @@ class HeightMapShader extends THREE.RawShaderMaterial {
                     vec4 res = fract(value * bitSh);
                     res -= res.xxyz * bitMsk;
                     return res;
-                  }
-                vec4 encodeElevation(float h) {    
-                    float UNPACK_MAPBOX[4];
-                    UNPACK_MAPBOX[0]=6553.6;
-                    UNPACK_MAPBOX[1]=25.6;
-                    UNPACK_MAPBOX[2]=0.1;
-                    UNPACK_MAPBOX[3]=10000.0;
-                    
-                    float val = (h + UNPACK_MAPBOX[3]) / UNPACK_MAPBOX[2];
-                    float r = floor(floor(val/256.0)/256.0)/256.0 - floor(floor(floor(val/256.0)/256.0)/256.0);
-                    float g = floor(val/256.0)/256.0 -floor(floor(val/256.0)/256.0);
-                    float b = val/256.0 - floor(val/256.0);
-                    return vec4(r,g,b,1.0);
-                }
+                  } 
                 void main() { 
                     gl_FragColor = packFloatToVec4i((vheight-minMaxAltitude.x)/(minMaxAltitude.y-minMaxAltitude.x)); 
                 }
@@ -60,27 +47,48 @@ class HeightMapShader extends THREE.RawShaderMaterial {
 
 const WIDTH = 512;
 const HEIGHT = 512;
-var renderer;
-var webglRenderTarget = new THREE.WebGLRenderTarget(WIDTH, HEIGHT);
-var shader = new HeightMapShader();
-var geometry = new THREE.BufferGeometry();
-
 export function getOffScreenCanvas() {
     let offScreenCanvas = document.createElement("canvas");
-    // document.body.appendChild(offScreenCanvas);
+    document.body.appendChild(offScreenCanvas);
     offScreenCanvas.width = WIDTH;
     offScreenCanvas.height = HEIGHT;
     let offScreenCanvasContext = offScreenCanvas.transferControlToOffscreen();
+    offScreenCanvasContext.id = THREE.MathUtils.generateUUID();
     return offScreenCanvasContext;
 }
 
-export default function renderHeightMap(canvas, extents, positions, indeic) {
+class OffScreenCanvasManagerRender {
+    renderers = {};
+
+    addOffScreenCanvas(offScreenCanvasId, offScreenCanvas) {
+        var renderer = new THREE.WebGLRenderer({ antialias: true, canvas: offScreenCanvas });
+        renderer.setSize(WIDTH, HEIGHT, false);
+        this.renderers[offScreenCanvasId] = renderer;
+    }
+
+    getRenderer(offScreenCanvasId) {
+        return this.renderers[offScreenCanvasId];
+    }
+}
+
+var offScreenCanvasManagerRender = new OffScreenCanvasManagerRender();
+
+export { offScreenCanvasManagerRender };
+
+export function initlizeCanvas(canvas) {
     if (!renderer) {
-        if (!canvas) return new Uint8ClampedArray();
         renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas });
         renderer.setSize(WIDTH, HEIGHT, false);
     }
+}
 
+export default function renderHeightMap(offScreenCanvasId, extents, positions, indeic) {
+    let renderer = offScreenCanvasManagerRender.getRenderer(offScreenCanvasId);
+
+    var shader = new HeightMapShader();
+    var geometry = new THREE.BufferGeometry();
+
+    var webglRenderTarget = new THREE.WebGLRenderTarget(WIDTH, HEIGHT);
     const [minLongitude, minLatitude, minAltitude, maxLongitude, maxLatitude, maxAltitude] =
         extents;
     let geobox = GeoBox.fromCoordinates(
@@ -104,14 +112,14 @@ export default function renderHeightMap(canvas, extents, positions, indeic) {
     }
     //buildGeometry
     geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(_positions), 3));
-    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indeic), 1));
+    indeic && geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indeic), 1));
     var buffer = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
 
     //build camera
     let w = geobox.longitudeSpan,
         h = geobox.latitudeSpan;
-    var camera = new THREE.OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, 0.001, 10);
-    camera.position.z = 2.0;
+    var camera = new THREE.OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, 0.001, 10000);
+    camera.position.z = maxAltitude * 2;
 
     let scene = new THREE.Scene();
     let m = new THREE.Mesh(geometry, shader);
@@ -156,6 +164,7 @@ export class HeightMap {
 
     get(x, y, clampToEdge) {
         const pixels = this.buffer;
+        if (!pixels) return 0;
         if (clampToEdge) {
             x = clamp(x, -1, WIDTH);
             y = clamp(y, -1, HEIGHT);

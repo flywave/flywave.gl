@@ -101,13 +101,16 @@ class Application extends MapView {
     }
 
     async __updateTerrainSource(terrainSource) {
+        if (!this.elevationProviderProxy.elevationProvider) {
+            this.elevationProviderProxy.elevationProvider = terrainSource.elevationProvider;
+        }
         await this.setElevationSource(
             terrainSource,
             new ElevationRangeSource(this),
             this.elevationProviderProxy
         );
 
-        this.elevation = terrainSource.getElevationProvider();
+        this.elevation = this.elevationProviderProxy;
         this.terrainSource = terrainSource;
         this.terrainSource.application = this;
 
@@ -134,12 +137,14 @@ class Application extends MapView {
 
     __stratumSource = null;
     async setStratumSource(url, materialProvider) {
-        if (this.__stratumSource) {
-            this.removeDataSource(this.__stratumSource);
-        }
+        await this._terrain_promise.then(async () => {
+            if (this.__stratumSource) {
+                this.removeDataSource(this.__stratumSource);
+            }
 
-        this.__stratumSource = new StratumSource({ url, materialProvider });
-        this.addDataSource(this.__stratumSource);
+            this.__stratumSource = new StratumSource({ url, materialProvider });
+            this.addDataSource(this.__stratumSource);
+        });
     }
 
     get stratumSource() {
