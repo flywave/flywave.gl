@@ -125,7 +125,7 @@ class StratumTile extends Tile {
         const { stratumGroups } = this;
 
         if (stratumGroups) {
-            var groups = Object.values(stratumGroups); 
+            var groups = Object.values(stratumGroups);
             for (var { Start, End, Id } of groups) {
                 const tileMesh = new THREE.Mesh(
                     this.bindedStratumTile.geometry,
@@ -139,7 +139,7 @@ class StratumTile extends Tile {
                 })(Start, End, tileMesh.geometry);
                 //hidden
                 // tileMesh.visible=false;
-                wrap.add(tileMesh); 
+                wrap.add(tileMesh);
             }
         }
 
@@ -150,6 +150,30 @@ class StratumTile extends Tile {
         const tileMesh = new THREE.Mesh(tinTile.geometry);
         tileMesh.position.copy(tinTile.tinCenter);
         return tileMesh;
+    }
+
+    rayCastTest(ray) {
+        if (!this.bindedStratumTile) return [];
+        const {
+            tinData: { _stratumGroups }
+        } = this.bindedStratumTile;
+        const tileMesh = new THREE.Mesh(this.bindedStratumTile._geometry);
+        tileMesh.position.copy(this.bindedStratumTile.tinCenter);
+        tileMesh.updateMatrixWorld()
+
+        var groups = Object.values(_stratumGroups);
+
+        var intersectObjects = [];
+        for (var { Start, End, Id } of groups) {
+            tileMesh.geometry.setDrawRange(Start, End - Start);
+
+            var intersectObject = ray.intersectObject(tileMesh);
+            if (intersectObject&&intersectObject.length) {
+                intersectObjects.push({ ...intersectObject[0], StratumId: Id });
+            }
+        }
+
+        return intersectObjects;
     }
 
     getRayTestMesh(camPosition) {

@@ -6,12 +6,18 @@ import { TriangleStripDrawMode } from "three";
 class CSGData {
     box = new THREE.Box3();
 
-    constructor(mesh) {
+    constructor(mesh, samplePoints) {
         if (mesh) {
             this.mesh = mesh;
             this.id = mesh.uuid;
             this.box.setFromObject(mesh);
         }
+        this.samplePoints = samplePoints;
+    }
+
+    updateBoundBox() {
+        this.box = new THREE.Box3();
+        return this.box.setFromObject(this.mesh);
     }
 
     get hash() {
@@ -151,7 +157,7 @@ class CSGData {
                 var p = a.position.clone().multiplyScalar(-1);
                 geometry.translate(p.x, p.y, p.z);
             });
-            a.geometry&&geometries.push(a.geometry);
+            a.geometry && geometries.push(a.geometry);
         });
         return geometries.length ? mergeGeometries(geometries, true) : null;
     }
@@ -174,16 +180,18 @@ class CSGData {
             scale: this.mesh.scale.toArray(),
             quaternion: this.mesh.quaternion.toArray(),
             geometry: this.geometryToJSON(this.mesh.geometry),
+            samplePoints: this.samplePoints,
             id: this.id
         };
     }
 
-    fromJSON({ position, scale, quaternion, geometry, id }) {
+    fromJSON({ position, scale, quaternion, geometry, id, samplePoints }) {
         this.mesh = new THREE.Mesh(this.geometryFromJSON(geometry));
         this.mesh.position.fromArray(position);
         this.mesh.scale.fromArray(scale);
         this.mesh.quaternion.fromArray(quaternion);
         this.box.setFromObject(this.mesh);
+        this.samplePoints = samplePoints;
         this.id = id;
         return this;
     }

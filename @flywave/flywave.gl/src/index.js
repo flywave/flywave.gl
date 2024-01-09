@@ -14,6 +14,8 @@ export { GroundHole, SurfacePolygon };
 //image layers
 export * from "./terrain-source";
 
+import { TileDataSource } from "@flywave/flywave-mapview-decoder";
+
 import { TiltViewClipPlanesEvaluator } from "@flywave/flywave-mapview";
 
 export { TiltViewClipPlanesEvaluator };
@@ -22,7 +24,7 @@ import { MapViewEventNames } from "@flywave/flywave-mapview";
 import { TransferManager } from "@flywave/flywave-transfer-manager";
 import { APIFormat, VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 
-export { MapViewEventNames, TransferManager, APIFormat, VectorTileDataSource };
+export { MapViewEventNames, TransferManager, APIFormat, VectorTileDataSource, TileDataSource };
 
 import { makeMapTheme } from "./make-theme";
 
