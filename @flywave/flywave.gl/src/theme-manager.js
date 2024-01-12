@@ -17,7 +17,7 @@ class ThemeManager extends MapViewThemeManager {
 
             if (theme.terrain) environment.updateTerrainDatasource(theme.terrain || {});
 
-            if (theme.dataSources) environment.updateVectorDataSource(theme.dataSources || []);
+            // if (theme.dataSources) environment.updateVectorDataSource(theme.dataSources || []);
         }
     }
 }

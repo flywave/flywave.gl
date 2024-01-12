@@ -162,7 +162,7 @@ class TinMeshResourceTile extends Tile {
 
     // hi = new Hilbert2d();
 
-    builderQuantized(tinData) {
+    async builderQuantized(tinData) {
         this.tinData = tinData;
         const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center } =
             tinData._mesh;

@@ -20,7 +20,7 @@ export class ConcurrentTilerFacade {
      * The URL containing a script to fall back (default) to when looking for worker sets
      * and tilers.
      */
-    static defaultScriptUrl: string = "./decoder.bundle.js";
+    static defaultScriptUrl: string = "./flywave.decoder.js";
 
     /**
      * The default number of workers.

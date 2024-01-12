@@ -38,5 +38,7 @@ class ElevationProvider {
     }
 
     clearCache() {}
+
+    getDisplacementMap(){}
 }
 export { ElevationProvider };

@@ -7,7 +7,7 @@
         "create-harpgl-app": "src/index.js"
     },
     "scripts": {
-        "build":"clear"
+        "build":" "
     },
     "files": [
         "src/index.js"

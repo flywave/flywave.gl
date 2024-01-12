@@ -49,7 +49,7 @@ const WIDTH = 512;
 const HEIGHT = 512;
 export function getOffScreenCanvas() {
     let offScreenCanvas = document.createElement("canvas");
-    document.body.appendChild(offScreenCanvas);
+    // document.body.appendChild(offScreenCanvas);
     offScreenCanvas.width = WIDTH;
     offScreenCanvas.height = HEIGHT;
     let offScreenCanvasContext = offScreenCanvas.transferControlToOffscreen();

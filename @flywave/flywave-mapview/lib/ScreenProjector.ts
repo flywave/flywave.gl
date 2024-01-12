@@ -69,6 +69,7 @@ export class ScreenProjector {
         target: THREE.Vector2 = new THREE.Vector2()
     ): THREE.Vector2 | undefined {
         const p = this.projectVector(source, ScreenProjector.tempV3);
+        (target as any)._depth = p.z;
         return this.ndcToScreen(p, target);
     }
 

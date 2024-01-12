@@ -14,8 +14,8 @@ class CsgTinMeshLoader extends TileLoader {
 
     loadImpl(abortSignal, onDone, onError) {
         const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center } =
-            this.tile.tinData._mesh;
-        const { _stratumGroups } = this.tile.tinData;
+            this.tile._tempTinData._mesh;
+        const { _stratumGroups } = this.tile._tempTinData;
 
         this.onLoaded(
             {
@@ -47,8 +47,7 @@ class CsgTinMeshLoader extends TileLoader {
 }
 
 class StratumResourceTile extends TinMeshResourceTile {
-    builderQuantized(tinData) {
-        this.tinData = tinData;
+    async builderQuantized(tinData) {
         const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center } =
             tinData._mesh;
         var geometry = new THREE.BufferGeometry();
@@ -59,24 +58,26 @@ class StratumResourceTile extends TinMeshResourceTile {
             "textureCoordAndEncodedNormals",
             new THREE.BufferAttribute(textureCoordAndEncodedNormals, 4)
         );
-        this._geometry = geometry;
-
         this.tinCenter = new THREE.Vector3(center.x, center.y, center.z);
 
         var tempMesh = new THREE.Mesh(geometry);
         tempMesh.position.copy(this.tinCenter);
         tempMesh.updateMatrixWorld();
         this._box = new Box3();
-        this._box.setFromObject(tempMesh);
+        this._box.setFromObject(tempMesh);;
+        this._tempTinData = tinData;
+        await this.loadCsg(tinData);
+        this.tinData = tinData;
+        this._geometry = geometry;
     }
 
-    builderCsgGeometry(csgData, hightBuffer) {
+    builderCsgGeometry(tinData,csgData, hightBuffer) {
         if (!csgData) {
             delete this.csgGeometry;
-            delete this.tinData.csgStratumGroups;
+            delete tinData.csgStratumGroups;
             return;
         }
-        const { _stratumGroups } = this.tinData;
+        const { _stratumGroups } = tinData;
         var csg = new CsgData().fromJSON(csgData);
         if (this.csgGeometry) {
             this.csgGeometry.dispose();
@@ -96,12 +97,12 @@ class StratumResourceTile extends TinMeshResourceTile {
             });
         }
 
-        this.tinData.csgHeightMap = new HeightMap(
+        tinData.csgHeightMap = new HeightMap(
             hightBuffer.buffer,
             hightBuffer.minimumHeight,
             hightBuffer.maximumHeight
         );
-        this.tinData.csgStratumGroups = stratumGroups;
+        tinData.csgStratumGroups = stratumGroups;
     }
 
     __prevIntersectsCsgDatas = [];
@@ -125,19 +126,28 @@ class StratumResourceTile extends TinMeshResourceTile {
         return [];
     }
 
-    loadCsgGeometry(intersectsCsgDatas) {
+    loadCsgGeometry(intersectsCsgDatas, tinData) {
         this.__prevIntersectsCsgDatas = intersectsCsgDatas.map(cd => cd.hash);
         this.csgTinMeshLoader.setIntersectsCsgDatas(intersectsCsgDatas);
         this.csgTinMeshLoader.load();
-        this.csgTinMeshLoader.donePromise.then(() => {
+        return this.csgTinMeshLoader.donePromise.then(() => {
             const { hightBuffer, csgData } = this.csgTinMeshLoader.decodedTile;
-            this.builderCsgGeometry(csgData, hightBuffer);
-            this.dataSource.updateTileOverlayer(this);
+            this.builderCsgGeometry(tinData, csgData, hightBuffer);
         });
     }
 
-    isEmptyStratum() {
-        const { _stratumGroups } = this.tinData;
+    loadCsg(tinData) {
+        if (this.isEmptyStratum(tinData)) return this._geometry;
+        let getintersectsCsgDatas = this.getintersectsCsgDatas();
+        if (getintersectsCsgDatas.length) {
+            return this.loadCsgGeometry(getintersectsCsgDatas, tinData);
+        }
+
+        return Promise.resolve();
+    }
+
+    isEmptyStratum(tinData) {
+        const { _stratumGroups } = tinData||this.tinData;
         return !_stratumGroups || Object.values(_stratumGroups).length == 1;
     }
 
@@ -150,11 +160,8 @@ class StratumResourceTile extends TinMeshResourceTile {
     }
 
     get geometry() {
-        if (this.isEmptyStratum()) return this._geometry;
-        let getintersectsCsgDatas = this.getintersectsCsgDatas();
-        if (getintersectsCsgDatas.length) {
-            this.loadCsgGeometry(getintersectsCsgDatas);
-        }
+        if (this.isEmptyStratum(this.tinData)) return this._geometry;
+        this.loadCsg(this.tinData);
         if (this.csgGeometry) {
             return this.csgGeometry;
         }

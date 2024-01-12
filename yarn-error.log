@@ -38,7 +38,7 @@ npm manifest:
       "@types/glob": "^7.1.3",
       "@types/semver": "^7.3.4",
       "@types/stats.js": "^0.17.0",
-      "@types/three": "^0.129.0",
+      "@types/three": "^0.151.0",
       "@typescript-eslint/eslint-plugin": "^4.11.1",
       "@typescript-eslint/parser": "^4.11.1",
       "chai": "^4.2.0",
@@ -68,7 +68,7 @@ npm manifest:
       "nyc": "^15.0.1",
       "prettier": "^2.2.1",
       "semver": "^7.3.2",
-      "three": "^0.129.0",
+      "three": "^0.151.0",
       "ts-mocha": "^8.0.0",
       "typedoc": "^0.17.7",
       "typescript": "^4.1.2",
@@ -3362,6 +3362,11 @@ Lockfile:
     resolved "https://registry.npmmirror.com/@types/source-list-map/-/source-list-map-0.1.2.tgz#0078836063ffaf17412349bba364087e0ac02ec9"
     integrity sha512-K5K+yml8LTo9bWJI/rECfIPrGgxdpeNbj+d53lwN4QjW1MCwlkhUms+gtdzigTeUyBr09+u8BwOIY3MXvHdcsA==
   
+  "@types/stats.js@*":
+    version "0.17.3"
+    resolved "http://192.168.1.18:10000/@types%2fstats.js/-/stats.js-0.17.3.tgz#705446e12ce0fad618557dd88236f51148b7a935"
+    integrity sha512-pXNfAD3KHOdif9EQXZ9deK82HVNaXP5ZIF5RP2QG6OQFNTaY2YIetfrE9t528vEreGQvEPRDDc8muaoYeK0SxQ==
+  
   "@types/stats.js@^0.17.0":
     version "0.17.0"
     resolved "https://registry.npmmirror.com/@types/stats.js/-/stats.js-0.17.0.tgz#0ed81d48e03b590c24da85540c1d952077a9fe20"
@@ -3376,6 +3381,16 @@ Lockfile:
     version "0.129.2"
     resolved "https://registry.npmmirror.com/@types/three/-/three-0.129.2.tgz#26d9e4ecffc8e31becfb119c494123f343f31f8f"
     integrity sha512-fZDNRtUFnq3baNjDiAzi4QoHYcczWtEdsduH/tpiwk91fbVk8COJiT/iLoN3tIOjLKMySoYsjUfP0VTmUfZKLw==
+  
+  "@types/three@^0.151.0":
+    version "0.151.0"
+    resolved "http://192.168.1.18:10000/@types%2fthree/-/three-0.151.0.tgz#ed2f5a9f6716a80ab284435aad056641b98ec695"
+    integrity sha512-hwOyN4szaikHsNzqbYLBfGvXi+TA/1TIKvK3ujJi+cQXzYzE5ZymzlDnOA6/cTSozY1juPFE3u5agToVQKb9TQ==
+    dependencies:
+      "@types/stats.js" "*"
+      "@types/webxr" "*"
+      fflate "~0.6.9"
+      lil-gui "~0.17.0"
   
   "@types/ua-parser-js@^0.7.32":
     version "0.7.36"
@@ -3417,6 +3432,11 @@ Lockfile:
       "@types/webpack-sources" "*"
       anymatch "^3.0.0"
       source-map "^0.6.0"
+  
+  "@types/webxr@*":
+    version "0.5.10"
+    resolved "http://192.168.1.18:10000/@types%2fwebxr/-/webxr-0.5.10.tgz#19c76208ec015ca3f139505e14d94d6b740f518a"
+    integrity sha512-n3u5sqXQJhf1CS68mw3Wf16FQ4cRPNBBwdYLFzq3UddiADOim1Pn3Y6PBdDilz1vOJF3ybLxJ8ZEDlLIzrOQZg==
   
   "@types/xml2js@^0.4.5":
     version "0.4.11"
@@ -6768,6 +6788,11 @@ Lockfile:
     dependencies:
       pend "~1.2.0"
   
+  fflate@~0.6.9:
+    version "0.6.10"
+    resolved "http://192.168.1.18:10000/fflate/-/fflate-0.6.10.tgz#5f40f9659205936a2d18abf88b2e7781662b6d43"
+    integrity sha512-IQrh3lEPM93wVCEczc9SaAOvkmcoQn/G8Bo1e8ZPlY3X3bnAxWaBdvTdvM1hP62iZp0BXWDy4vTAy4fF0+Dlpg==
+  
   figures@^3.0.0:
     version "3.2.0"
     resolved "https://registry.npmmirror.com/figures/-/figures-3.2.0.tgz#625c18bd293c604dc4a8ddb2febf0c88341746af"
@@ -9117,6 +9142,11 @@ Lockfile:
     integrity sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==
     dependencies:
       immediate "~3.0.5"
+  
+  lil-gui@~0.17.0:
+    version "0.17.0"
+    resolved "http://192.168.1.18:10000/lil-gui/-/lil-gui-0.17.0.tgz#b41ae55d0023fcd9185f7395a218db0f58189663"
+    integrity sha512-MVBHmgY+uEbmJNApAaPbtvNh1RCAeMnKym82SBjtp5rODTYKWtM+MXHCifLe2H2Ti1HuBGBtK/5SyG4ShQ3pUQ==
   
   lilconfig@^2.1.0:
     version "2.1.0"
@@ -13083,15 +13113,25 @@ Lockfile:
     resolved "https://registry.npmmirror.com/textextensions/-/textextensions-5.16.0.tgz#57dd60c305019bba321e848b1fdf0f99bfa59ec1"
     integrity sha512-7D/r3s6uPZyU//MCYrX6I14nzauDwJ5CxazouuRGNuvSCihW87ufN6VLoROLCrHg6FblLuJrT6N2BVaPVzqElw==
   
-  three-csg-ts@^3.1.13:
-    version "3.1.13"
-    resolved "http://192.168.1.18:10000/three-csg-ts/-/three-csg-ts-3.1.13.tgz#090eda7120185505d0433f8fa043529629df61c7"
-    integrity sha512-CzqE7NmXQimVh2cnG62/wbWWiRVg0TaGhBbn0Km9Zwt+ZUVN5rYhDf0y/XN52MyxPD5apdaeFJcCQcmhmA+o/Q==
+  three-bvh-csg@~0.0.15:
+    version "0.0.15"
+    resolved "http://192.168.1.18:10000/three-bvh-csg/-/three-bvh-csg-0.0.15.tgz#bd900087113ff0e9ca6bcb57bb32e350d63468f7"
+    integrity sha512-7g06lPs4NYO0NzIekKLU+ff6DcOWp4a3mYLLVCXOaEJbCKK43PgMuc/n/vGNq9AH6/vGZr0rLE70Wi8YCWOSVA==
+  
+  three-mesh-bvh@~0.6.8:
+    version "0.6.8"
+    resolved "http://192.168.1.18:10000/three-mesh-bvh/-/three-mesh-bvh-0.6.8.tgz#f27d18ca75bdc59316dff0f561af8fb316621a54"
+    integrity sha512-EGebF9DZx1S8+7OZYNNTT80GXJZVf+UYXD/HyTg/e2kR/ApofIFfUS4ZzIHNnUVIadpnLSzM4n96wX+l7GMbnQ==
   
   three@^0.129.0:
     version "0.129.0"
     resolved "https://registry.npmmirror.com/three/-/three-0.129.0.tgz#f5e530bbc96eac5d5b4749cb5da886ef0d42f554"
     integrity sha512-wiWio1yVRg2Oj6WEWsTHQo5eSzYpEwSBtPSi3OofNpvFbf26HFfb9kw4FZJNjII4qxzp0b1xLB11+tKkBGB1ZA==
+  
+  three@^0.151.0:
+    version "0.151.3"
+    resolved "http://192.168.1.18:10000/three/-/three-0.151.3.tgz#0b3c7de4b070d5b66b15217f42465d67cbfa6004"
+    integrity sha512-+vbuqxFy8kzLeO5MgpBHUvP/EAiecaDwDuOPPDe6SbrZr96kccF0ktLngXc7xA7bzyd3N0t2f6mw3Z9y6JCojQ==
   
   through2@^2.0.1, through2@~2.0.0:
     version "2.0.5"

@@ -1,5 +1,10 @@
 import Application from "./application";
 export { Application };
+import {
+    MapView
+} from "@flywave/flywave-mapview";
+
+export { MapView }
 
 //camera control
 import { EarthFreeControl } from "./map-controls/earth-free-control";
@@ -55,3 +60,11 @@ export * from "@flywave/flywave-geoutils";
 import { makeGeoBox } from "./util/make-geobox-mesh";
 
 export { makeGeoBox };
+
+THREE.Vector3.prototype.fromBufferAttribute=function (attribute,index){
+    this.x = attribute.getX( index );
+    this.y = attribute.getY( index );
+    this.z = attribute.getZ( index )||0;
+
+    return this;
+}

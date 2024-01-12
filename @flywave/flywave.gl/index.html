@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=11" />
+  <script defer src="flywave.gl.js"></script>
 </head>
 
 <body data-test="body">
@@ -41,7 +42,7 @@
   }
 
   {
-    var l = new THREE.AmbientLight(0xffffff,0.2);
+    var l = new THREE.AmbientLight(0xffffff, 0.2);
     l.anchor = new FlywaveGl.GeoCoordinates(
       36.82749, 117.59765, 1000
     )
@@ -49,7 +50,7 @@
   }
 
   {
-    var l = new THREE.Mesh(new THREE.BoxGeometry(100,100,10),new THREE.MeshStandardMaterial);
+    var l = new THREE.Mesh(new THREE.BoxGeometry(100, 100, 10), new THREE.MeshStandardMaterial);
     l.anchor = new FlywaveGl.GeoCoordinates(
       36.82749, 112.59765, 1000
     )
@@ -64,7 +65,7 @@
   var loader = new THREE.TextureLoader();
   class TestMaterialProvider extends FlywaveGl.MaterialProvider {
     map = [
-      loader.load('http://127.0.0.1:86/%E8%B4%B4%E5%9B%BE/cc.jpg'), 
+      loader.load('http://127.0.0.1:86/%E8%B4%B4%E5%9B%BE/cc.jpg'),
       loader.load('http://127.0.0.1:86/%E8%B4%B4%E5%9B%BE/q.jpg'),
       loader.load('http://127.0.0.1:86/%E8%B4%B4%E5%9B%BE/p2.jpg'),
       loader.load('http://127.0.0.1:86/%E8%B4%B4%E5%9B%BE/cc.jpg')].map(t => {
@@ -73,18 +74,20 @@
         return t;
       })
     getMaterial(gropuId) {
-      return new THREE.MeshPhongMaterial({ map: this.map[gropuId],side:THREE.DoubleSide });
+      return new THREE.MeshPhongMaterial({ map: this.map[gropuId], side: THREE.DoubleSide });
     }
   };
 
-  app.setStratumSource(`http://127.0.0.1:86/stratum/`, new TestMaterialProvider);
+  app.setStratumSource(`http://127.0.0.1:86/stratum/`, new TestMaterialProvider).then(() => {
 
-  const { GeoBox, GeoCoordinates, makeGeoBox, CSGData } = FlywaveGl;
-  const { geometry, center, anchor } = makeGeoBox(new GeoBox(new GeoCoordinates(36.37457611241094, 112.84695494145687, -400.0),
-    new GeoCoordinates(36.37559300305968, 112.84946713067295, 412.90300916600972)), app.projection);
-  var mesh = new THREE.Mesh(geometry);
-  mesh.position.copy(center);
-  // app.stratumSource.addCsgData(new CSGData(mesh));
+    const { GeoBox, GeoCoordinates, makeGeoBox, CSGData } = FlywaveGl;
+    const { geometry, center, anchor } = makeGeoBox(new GeoBox(new GeoCoordinates(36.37457611241094, 112.84695494145687, -400.0),
+      new GeoCoordinates(36.37559300305968, 112.84946713067295, 412.90300916600972)), app.projection);
+    var mesh = new THREE.Mesh(geometry);
+    mesh.position.copy(center);
+    app.stratumSource.addCsgData(new CSGData(mesh));
+  });
+
   // {
   //   const { geometry, center,anchor } = makeGeoBox(new GeoBox(new GeoCoordinates(36.82442324607886, 117.58952266955495, 400.8112550266087),
   //     new GeoCoordinates(36.825236959997, 117.59256197996073, 462.90300916600972)), app.projection);

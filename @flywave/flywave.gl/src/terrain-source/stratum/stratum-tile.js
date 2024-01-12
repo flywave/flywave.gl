@@ -11,7 +11,6 @@ export class StratumTileFactory extends TileFactory {
     }
 }
 
-const clipUvTransfrom = new THREE.Vector3(1, 0, 0);
 const imageUvTransfrom = new THREE.Vector4(1, 1, 0, 0);
 
 class StratumTile extends Tile {
@@ -55,7 +54,7 @@ class StratumTile extends Tile {
         if (!stratumTile.isEmptyStratum()) this.builderMeshByMaterialProvider(objects);
     }
 
-    onBeforeMaterialCompile = (isWebMercator, material) => {
+    onBeforeMaterialCompile = (tinTile, tile, isWebMercator, material) => {
         return function (shader) {
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <beginnormal_vertex>`,
@@ -88,7 +87,7 @@ class StratumTile extends Tile {
 
             shader.defines = {};
             shader.uniforms.clipUvTransfrom = {
-                value: clipUvTransfrom
+                value: tile.computeClipUvTransfrom(tinTile.tileKey, tile.tileKey)
             };
             var uvTransform = new THREE.Vector4();
             if (material.map) {
@@ -109,13 +108,36 @@ class StratumTile extends Tile {
         };
     };
 
+    computeClipUvTransfrom(ptileKey, tileKey) {
+        const tinTileKey = ptileKey;
+        var ah = 1,
+            P,
+            M;
+        var H = tileKey.level,
+            ae = tileKey.row,
+            J = tileKey.column;
+        for (; H > tinTileKey.level + 1; H--) {
+            ah *= 2;
+            ae >>= 1;
+            J >>= 1;
+        }
+        P = 1 / ah;
+
+        return new THREE.Vector3(P, (tileKey.row - ae * ah) * P, (tileKey.column - J * ah) * P);
+    }
+
     builderMeshByMaterialProvider = objects => {
         objects.add(this.builderMesh());
     };
 
     builderMeshMaterial = Id => {
         var material: Material = this.dataSource.getMaterialById(Id);
-        material.onBeforeCompile = this.onBeforeMaterialCompile(true, material);
+        material.onBeforeCompile = this.onBeforeMaterialCompile(
+            this.bindedStratumTile,
+            this,
+            true,
+            material
+        );
         return material;
     };
 
@@ -137,6 +159,7 @@ class StratumTile extends Tile {
                         geometry.setDrawRange(Start, End - Start);
                     };
                 })(Start, End, tileMesh.geometry);
+                tileMesh.receiveShadow = true;
                 //hidden
                 // tileMesh.visible=false;
                 wrap.add(tileMesh);
@@ -154,12 +177,13 @@ class StratumTile extends Tile {
 
     rayCastTest(ray) {
         if (!this.bindedStratumTile) return [];
+        if (!this.bindedStratumTile.tinData) return [];
         const {
             tinData: { _stratumGroups }
         } = this.bindedStratumTile;
         const tileMesh = new THREE.Mesh(this.bindedStratumTile._geometry);
         tileMesh.position.copy(this.bindedStratumTile.tinCenter);
-        tileMesh.updateMatrixWorld()
+        tileMesh.updateMatrixWorld();
 
         var groups = Object.values(_stratumGroups);
 
@@ -168,8 +192,8 @@ class StratumTile extends Tile {
             tileMesh.geometry.setDrawRange(Start, End - Start);
 
             var intersectObject = ray.intersectObject(tileMesh);
-            if (intersectObject&&intersectObject.length) {
-                intersectObjects.push({ ...intersectObject[0], StratumId: Id });
+            if (intersectObject && intersectObject.length) {
+                intersectObjects.push({ ...intersectObject[0], stratumId: Id });
             }
         }
 

@@ -43,7 +43,7 @@ export function setDisplacementMapToMaterial(
     displacementMap: TileDisplacementMap | null,
     material: THREE.Mesh["material"]
 ) {
-    if (hasDisplacementFeature(material) && material.displacementMap !== displacementMap) {
+    if (hasDisplacementFeature(material) && material.displacementMap !== displacementMap.texture) {
         material.displacementMap = displacementMap?.texture as THREE.Texture;
         (material as any).displacementMapUvMatrix = displacementMap?.uvMatrix
         material.needsUpdate = true;

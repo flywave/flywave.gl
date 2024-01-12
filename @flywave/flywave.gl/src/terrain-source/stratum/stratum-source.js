@@ -14,7 +14,7 @@ import { DoubleSide, FrontSide } from "three";
 import { TinWorkerBasedDecoder } from "../tin-terrain/work-tile-decoder";
 import { ElevationRangeSource } from "../tin-terrain/elevation-range-source";
 import { ElevationProvider } from "../tin-terrain/elevation-provider";
-import { StratumCSGDecoder } from "./stratum-csg-decoder";
+import StratumDrillSource from "./stratum-drill-source";
 
 class MaterialProvider {
     getMaterial(gropuId) {
@@ -54,10 +54,52 @@ class StratumSource extends TerrainSource {
         this._baseUrl = options.url;
 
         this._materialProvider = options.materialProvider || new MaterialProvider();
+
+        this._stratumDrillSource = new StratumDrillSource(
+            config.DECODER_URL,
+            this,
+            options.stratumTheme
+        );
+
+        this.displayDrill = options.displayDrill || true;
     }
 
     get baseUrl() {
         return this._baseUrl;
+    }
+
+    _displayDrill = false;
+    get displayDrill() {
+        return this._displayDrill;
+    }
+
+    _displayDrillPromise;
+    set displayDrill(enable) {
+        this._displayDrill = enable;
+        return (this._displayDrillPromise || Promise.resolve()).then(() => {
+            if (this.isDetached()) {
+                return;
+            }
+            if (this._displayDrill) {
+                if (this._stratumDrillSource.isDetached()) {
+                    this._displayDrillPromise = this.mapView
+                        .addDataSource(this._stratumDrillSource)
+                        .then(() => {
+                            delete this._displayDrillPromise;
+                            this._stratumDrillSource.updateTheme();
+                        });
+                }
+            } else {
+                if (!this._stratumDrillSource.isDetached()) {
+                    this._displayDrillPromise = this.mapView
+                        .removeDataSource(this._stratumDrillSource)
+                        .then(() => {
+                            delete this._displayDrillPromise;
+                            this._stratumDrillSource.updateTheme();
+                        });
+                }
+            }
+        });
     }
 
     configure() {
@@ -77,6 +119,10 @@ class StratumSource extends TerrainSource {
             })
             .then(() => {
                 this.csgDecoder.configure({});
+            })
+            .then(() => {
+                this._stratumDrillSource.updateSourceDrill();
+                this.displayDrill = this.displayDrill;
             });
     }
 

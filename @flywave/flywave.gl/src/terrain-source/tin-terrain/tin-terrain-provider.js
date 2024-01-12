@@ -41,8 +41,8 @@ export class TinTerrainProvider {
 
         var tile = this.dataSource.dataTerrainProvider.makeLoaderTile(tileKey);
         tile.tileLoader.load();
-        tile.tileLoader.donePromise.then(() => {
-            tile.builderQuantized(tile.tileLoader.decodedTile);
+        tile.tileLoader.donePromise.then(async () => {
+            await tile.builderQuantized(tile.tileLoader.decodedTile);
             this.dataSource.updateTileOverlayer(tile);
 
             this.dataSource
@@ -60,8 +60,8 @@ export class TinTerrainProvider {
             this.tinCache.get(parentTileKey.mortonCode())
         );
         tile.tileLoader.load();
-        tile.tileLoader.donePromise.then(() => {
-            tile.builderQuantized(tile.tileLoader.decodedTile);
+        tile.tileLoader.donePromise.then(async () => {
+            await tile.builderQuantized(tile.tileLoader.decodedTile);
             this.dataSource.updateTileOverlayer(tile);
         });
         this.tinCache.set(tileKey.mortonCode(), tile);

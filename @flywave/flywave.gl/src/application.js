@@ -106,8 +106,7 @@ class Application extends MapView {
         }
         await this.setElevationSource(
             terrainSource,
-            new ElevationRangeSource(this),
-            this.elevationProviderProxy
+            new ElevationRangeSource(this) 
         );
 
         this.elevation = this.elevationProviderProxy;
