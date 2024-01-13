@@ -207,6 +207,11 @@ class DataStratumProvider extends DataTerrainProvider {
         tile.csgTinMeshLoader = new CsgTinMeshLoader(this.dataSource, tileKey, tile);
         return tile;
     }
+
+    parseMetadataSuccess(data){
+        this.stratum_data = data.stratum_data;
+        return super.parseMetadataSuccess(data);
+    }
 }
 
 export { DataStratumProvider };

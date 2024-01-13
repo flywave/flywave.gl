@@ -9,24 +9,17 @@ class StratumDrillSource extends FeaturesDataSource {
 
     constructor(decodeUrl, stratumSource, theme) {
         super({
-            // tileFactory: new StratumDrillTileFactory(),
+            tileFactory: new StratumDrillTileFactory(),
             concurrentDecoderScriptUrl: decodeUrl,
             styleSetName: "stratum-drill",
             gatherFeatureAttributes: true
         });
         this._stratumSource = stratumSource;
         this.theme = theme;
+    }
 
-        this.addFeature({
-            type: "Feature",
-            geometry: {
-                type: "Point",
-                coordinates: [112.8145795436628, 36.272557145701626, 2000]
-            },
-            properties: {
-                name: "Dinagat Islands"
-            }
-        });
+    get stratumSource() {
+        return this._stratumSource;
     }
 
     updateTheme() {
@@ -34,7 +27,18 @@ class StratumDrillSource extends FeaturesDataSource {
     }
 
     async updateSourceDrill() {
-        this._stratumSource.dataTerrainProvider;
+        const { stratum_data } = this._stratumSource.dataTerrainProvider;
+        var id = 0;
+        stratum_data.forEach(({ features }, index) => {
+            features.forEach(feature => {
+                if (!feature.properties) {
+                    feature.properties = {};
+                }
+                feature.properties.layer = index;
+                feature.id = id++;
+                this.addFeature(feature);
+            });
+        });
     }
 }
 

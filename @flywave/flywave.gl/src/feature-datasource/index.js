@@ -169,8 +169,7 @@ export class FeaturesDataSource extends VectorTileDataSource {
             geometry,
             properties: {
                 ...feature.properties
-            },
-            topology: feature.topology
+            }
         };
 
         this.dataProvider().updateInput(geojsonFeature);

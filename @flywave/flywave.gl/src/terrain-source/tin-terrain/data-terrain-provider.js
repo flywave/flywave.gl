@@ -638,7 +638,7 @@ class DataTerrainProvider {
         });
     };
 
-    parseMetadataSuccess = data => {
+    parseMetadataSuccess(data) {
         var overallAvailability = this.overallAvailability;
         var message;
         var that = this;
