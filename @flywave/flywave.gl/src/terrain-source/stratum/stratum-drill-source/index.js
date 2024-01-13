@@ -1,4 +1,4 @@
-import { FeaturesDataSource } from "@flywave/flywave-features-datasource";
+import { FeaturesDataSource } from "../../../feature-datasource";
 import { StratumDrillTileFactory } from "./tile";
 import defaultStyles from "./default-style";
 
@@ -11,26 +11,21 @@ class StratumDrillSource extends FeaturesDataSource {
         super({
             // tileFactory: new StratumDrillTileFactory(),
             concurrentDecoderScriptUrl: decodeUrl,
-            styleSetName: "geojson",
+            styleSetName: "stratum-drill",
             gatherFeatureAttributes: true
         });
         this._stratumSource = stratumSource;
         this.theme = theme;
 
-        this.setFromGeojson({
-            type: "FeatureCollection",
-            features: [
-                {
-                    type: "Feature",
-                    geometry: {
-                        type: "Point",
-                        coordinates: [112.8145795436628, 36.272557145701626, 2000]
-                    },
-                    properties: {
-                        name: "Dinagat Islands"
-                    }
-                }
-            ]
+        this.addFeature({
+            type: "Feature",
+            geometry: {
+                type: "Point",
+                coordinates: [112.8145795436628, 36.272557145701626, 2000]
+            },
+            properties: {
+                name: "Dinagat Islands"
+            }
         });
     }
 

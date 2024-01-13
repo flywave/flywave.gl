@@ -2,20 +2,18 @@ import icon from "./icons8-drill.png";
 
 var defaultStyles = {
     styles: {
-        geojson: [
+        "stratum-drill": [
             {
-                when: "$geometryType == 'point'",
-                technique: "text",
-                renderOrder: 10000,
+                when: ["==", ["geometry-type"], "Point"],
+                technique: "labeled-icon",
                 text: ["get", "name"],
-                attr: {
-                    constantHeight: true,
-                    "color": "#000",
-                    backgroundColor: "#ffffff",
-                    backgroundSize: 10,
-                    fontStyle: "Bold",
-                    size: 16,
-                }
+                priority: 10000, // Displace other labels
+                size: 14,
+                imageTexture: "farm-15",
+                screenHeight: 32,
+                iconScale: 0.5,
+                distanceScale: 1,
+                iconYOffset: 20
             }
         ]
     },

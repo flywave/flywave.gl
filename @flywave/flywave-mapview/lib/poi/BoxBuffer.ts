@@ -289,10 +289,12 @@ export class BoxBuffer {
         positionAttribute.setXYZ(baseVertex + 2, x, y + h, distance);
         positionAttribute.setXYZ(baseVertex + 3, x + w, y + h, distance);
 
+        colorAttribute.normalized = false;
         colorAttribute.setXYZW(baseVertex, r, g, b, a);
         colorAttribute.setXYZW(baseVertex + 1, r, g, b, a);
         colorAttribute.setXYZW(baseVertex + 2, r, g, b, a);
         colorAttribute.setXYZW(baseVertex + 3, r, g, b, a);
+        colorAttribute.normalized = true;
 
         uvAttribute.setXY(baseVertex, s0, t0);
         uvAttribute.setXY(baseVertex + 1, s1, t0);
