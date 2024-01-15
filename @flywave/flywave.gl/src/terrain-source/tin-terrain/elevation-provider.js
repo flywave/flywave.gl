@@ -25,6 +25,10 @@ class ElevationProvider {
         return this.getAtPoint(point, defaultIfNotLoaded) || 0;
     }
 
+    getBestAvailableTile(tk) {
+        return this.dataSource.dataProvider().getBestAvailableTile(tk);
+    }
+
     /**
      * Altitude above sea level in meters at specified point.
      * @param {MercatorCoordinate} point Mercator coordinate of the point.
@@ -44,7 +48,7 @@ class ElevationProvider {
             geoPoint,
             this.dataSource.dataTerrainProvider._availability._maximumLevel + 1
         );
-        const terrTile = this.dataSource.dataProvider().getBestAvailableTile(tk);
+        const terrTile = this.getBestAvailableTile(tk);
 
         if (!(terrTile && terrTile.tinData)) {
             return defaultIfNotLoaded;

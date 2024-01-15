@@ -8,7 +8,7 @@ var defaultStyles = {
                 technique: "labeled-icon",
                 text: ["get", "name"],
                 priority: 10000, // Displace other labels
-                size: 14,
+                size: 12,
                 imageTexture: "farm-15",
                 screenHeight: 32,
                 iconScale: 0.5,

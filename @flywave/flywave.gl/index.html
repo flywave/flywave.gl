@@ -74,7 +74,7 @@
         return t;
       })
     getMaterial(gropuId) {
-      return new THREE.MeshPhongMaterial({ map: this.map[gropuId], side: THREE.DoubleSide });
+      return new THREE.MeshPhongMaterial({ map: this.map[gropuId], side: THREE.DoubleSide,transparent:true,opacity:0.5 });
     }
   };
 

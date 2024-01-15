@@ -31,7 +31,7 @@ class ElevationProvider {
         if (this.mapView.stratumSource) {
             elevationProvider = this.mapView.stratumSource.getElevationProvider();
         }
-        var h = elevationProvider.getHeight(coordinates);
+        var h = elevationProvider.getAtPoint(coordinates, defaultIfNotLoaded);
         return h == defaultIfNotLoaded
             ? this.mapView.terrainSource.getElevationProvider().getHeight(coordinates)
             : h;
@@ -39,6 +39,6 @@ class ElevationProvider {
 
     clearCache() {}
 
-    getDisplacementMap(){}
+    getDisplacementMap() {}
 }
 export { ElevationProvider };

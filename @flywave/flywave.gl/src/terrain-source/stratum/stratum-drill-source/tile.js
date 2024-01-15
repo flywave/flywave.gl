@@ -4,28 +4,66 @@ import { TileLoader } from "@flywave/flywave-mapview-decoder";
 import * as THREE from "three";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 
-var cylinderGeometry = new THREE.CylinderGeometry(20.5, 20.5, 1, 30);
-
+var cylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 30);
+cylinderGeometry.translate(0, 0.5, 0);
+cylinderGeometry.rotateX(Math.PI / 2);
 var tempV3 = new THREE.Vector3();
+var tempObject = new THREE.Object3D();
 class StratumDrillTileLoader extends TileLoader {
     buildTileDrillMesh({ features }) {
         const { projection } = this.dataSource.mapView;
 
         var wrap = new THREE.Object3D();
         wrap.position.copy(this.tile.center).multiplyScalar(-1);
+        var layerMeshies = {};
+        var position;
+        features.forEach(({ geometry: { coordinates }, properties: { layer, thickness } }) => {
+            if(!thickness)return;
+            if (!layerMeshies[layer]) {
+                layerMeshies[layer] = { matrixs: [] };
+            }
+            if (!position) {
+                position = new THREE.Vector3();
+                projection.projectPoint(GeoCoordinates.fromGeoPoint(coordinates), position);
+            }
 
-        features.forEach(({ geometry: { coordinates }, properties: { layer } }) => {
-            var mesh = new THREE.Mesh(
-                cylinderGeometry,
-                this.dataSource.stratumSource.getMaterialById(layer)
-            );
             projection.projectPoint(GeoCoordinates.fromGeoPoint(coordinates), tempV3);
-            mesh.scale.set(1, 1, coordinates[2]);
-            mesh.lookAt(tempV3);
-            mesh.position.copy(tempV3);
-            wrap.add(mesh);
+            tempObject.lookAt(tempV3);
+            tempObject.scale.set(this.dataSource.radius, this.dataSource.radius, thickness);
+            layerMeshies[layer].matrixs.push(
+                new THREE.Matrix4().compose(
+                    tempV3.sub(this.tile.center),
+                    tempObject.quaternion,
+                    tempObject.scale
+                )
+            );
         });
+
+        for (var layer in layerMeshies) {
+            var mesh;
+            if (!layerMeshies[layer].mesh) {
+                mesh = layerMeshies[layer].mesh = new THREE.InstancedMesh(
+                    cylinderGeometry,
+                    this.dataSource.stratumSource.getMaterialById(layer),
+                    layerMeshies[layer].matrixs.length
+                );
+                mesh.position.copy(this.tile.center);
+                wrap.add(mesh);
+            } else {
+                mesh = layerMeshies[layer].mesh;
+            }
+            layerMeshies[layer].matrixs.forEach((matrixs, index) => {
+                mesh.setMatrixAt(index, matrixs);
+            });
+        }
+
         this.tile.baseObject.add(wrap);
+    }
+
+    fliterLables(features) {
+        return features.filter(({ properties }) => {
+            return properties && properties.name;
+        });
     }
 
     loadImpl(abortSignal, onDone, onError) {
@@ -38,7 +76,11 @@ class StratumDrillTileLoader extends TileLoader {
                     err.name = "AbortError";
                     throw err;
                 }
-                this.onLoaded(payload, onDone, onError);
+                this.onLoaded(
+                    { type: "FeatureCollection", features: this.fliterLables(payload.features) },
+                    onDone,
+                    onError
+                );
                 this.buildTileDrillMesh(payload);
             })
             .catch(error => {

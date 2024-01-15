@@ -7,15 +7,36 @@ class StratumDrillSource extends FeaturesDataSource {
 
     minGeometryHeight = -800;
 
-    constructor(decodeUrl, stratumSource, theme) {
+    constructor(decodeUrl, stratumSource, theme, maxDataLevel) {
         super({
             tileFactory: new StratumDrillTileFactory(),
             concurrentDecoderScriptUrl: decodeUrl,
             styleSetName: "stratum-drill",
-            gatherFeatureAttributes: true
+            gatherFeatureAttributes: true,
+            maxDataLevel
         });
         this._stratumSource = stratumSource;
         this.theme = theme;
+    }
+
+    _radius = 10;
+
+    get radius() {
+        return this._radius;
+    }
+
+    set radius(t) {
+        this._radius = t;
+
+        if (this.m_isAttached) {
+            // var { visibleTiles } = this.mapView.visibleTileSet.dataSourceTileList.find(
+            //     ({ dataSource }) => dataSource == this
+            // );
+
+            // visibleTiles.forEach();
+
+            this.mapView.clearTileCache(this.name);
+        }
     }
 
     get stratumSource() {
@@ -23,7 +44,7 @@ class StratumDrillSource extends FeaturesDataSource {
     }
 
     updateTheme() {
-        this.setTheme({ ...defaultStyles, ...this.theme });
+        // this.setTheme({ ...defaultStyles, ...this.theme });
     }
 
     async updateSourceDrill() {

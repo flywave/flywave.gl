@@ -82,24 +82,25 @@ class StratumTile extends Tile {
 
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <premultiplied_alpha_fragment>`,
-                `#include <premultiplied_alpha_fragment>`
+                `#include <discard_out_range_frag>
+                #include <premultiplied_alpha_fragment>`
             );
 
             shader.defines = {};
             shader.uniforms.clipUvTransfrom = {
                 value: tile.computeClipUvTransfrom(tinTile.tileKey, tile.tileKey)
             };
-            var uvTransform = new THREE.Vector4();
-            if (material.map) {
-                const { x, y } = material.map.repeat;
-                uvTransform.set(x, y, 0, 0);
-            } else {
-                uvTransform = imageUvTransfrom;
-            }
+            var uvTransform = new THREE.Vector4(1,1,0,0);
+            // if (material.map) {
+            //     const { x, y } = material.map.repeat;
+            //     uvTransform.set(x, y, 0, 0);
+            // } else {
+            //     uvTransform = imageUvTransfrom;
+            // }
             shader.uniforms.imageUvTransfrom = { value: uvTransform };
             shader.uniforms.isWebMercator = { value: isWebMercator };
 
-            // shader.defines["USE_UV"] = true;
+            shader.defines["USE_UV"] = true;
             if (parseInt(__THREE__) >= 151) {
                 shader.defines["USE_GT_151"] = true;
                 shader.defines["USE_UV"] = true;

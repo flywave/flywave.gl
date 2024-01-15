@@ -13,8 +13,12 @@ import config from "../../config";
 import { DoubleSide, FrontSide } from "three";
 import { TinWorkerBasedDecoder } from "../tin-terrain/work-tile-decoder";
 import { ElevationRangeSource } from "../tin-terrain/elevation-range-source";
-import { ElevationProvider } from "../tin-terrain/elevation-provider";
+import StratumElevationProvider from "./elevation-provider";
 import StratumDrillSource from "./stratum-drill-source";
+
+class TinStratumTerrainProvider extends TinTerrainProvider {
+    requestUpsampleTile() {}
+}
 
 class MaterialProvider {
     getMaterial(gropuId) {
@@ -37,11 +41,11 @@ class StratumSource extends TerrainSource {
             ),
             tileFactory: new StratumTileFactory(),
             elevationRangeSource: new ElevationRangeSource(),
-            dataProvider: new TinTerrainProvider({
+            dataProvider: new TinStratumTerrainProvider({
                 ...options,
                 requestWaterMask: false
             }),
-            elevationProvider: new ElevationProvider(),
+            elevationProvider: new StratumElevationProvider(),
             decoder: new TinWorkerBasedDecoder(QUANTIZED_MESH_TILE_DECODER_ID, config.DECODER_URL)
         });
         this.csgDecoder = new TinWorkerBasedDecoder(CSG_STRATUM_DECODER, config.DECODER_URL);
@@ -55,11 +59,7 @@ class StratumSource extends TerrainSource {
 
         this._materialProvider = options.materialProvider || new MaterialProvider();
 
-        this._stratumDrillSource = new StratumDrillSource(
-            config.DECODER_URL,
-            this,
-            options.stratumTheme
-        );
+        this._stratumTheme = options.stratumTheme;
 
         this.displayDrill = options.displayDrill || true;
     }
@@ -76,6 +76,7 @@ class StratumSource extends TerrainSource {
     _displayDrillPromise;
     set displayDrill(enable) {
         this._displayDrill = enable;
+        if (!this._stratumDrillSource) return;
         return (this._displayDrillPromise || Promise.resolve()).then(() => {
             if (this.isDetached()) {
                 return;
@@ -121,6 +122,13 @@ class StratumSource extends TerrainSource {
                 this.csgDecoder.configure({});
             })
             .then(() => {
+                this._stratumDrillSource = new StratumDrillSource(
+                    config.DECODER_URL,
+                    this,
+                    this._stratumTheme,
+                    this.dataTerrainProvider.overallMaxZoom
+                );
+
                 this._stratumDrillSource.updateSourceDrill();
                 this.displayDrill = this.displayDrill;
             });
