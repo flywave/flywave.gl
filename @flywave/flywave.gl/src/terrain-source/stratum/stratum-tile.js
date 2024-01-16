@@ -82,7 +82,8 @@ class StratumTile extends Tile {
 
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <premultiplied_alpha_fragment>`,
-                `#include <discard_out_range_frag>
+                `
+                #include <discard_out_range_frag>
                 #include <premultiplied_alpha_fragment>`
             );
 
@@ -103,7 +104,7 @@ class StratumTile extends Tile {
             shader.defines["USE_UV"] = true;
             if (parseInt(__THREE__) >= 151) {
                 shader.defines["USE_GT_151"] = true;
-                shader.defines["USE_UV"] = true;
+                shader.defines["USE_UV"] = !!material.map;
             }
             shader.uniforms.normalSampler = { value: emptyTexture };
         };

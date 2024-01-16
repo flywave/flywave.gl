@@ -135,13 +135,13 @@ class Application extends MapView {
     }
 
     __stratumSource = null;
-    async setStratumSource(url, materialProvider) {
+    async setStratumSource(url, materialProvider,options) {
         await this._terrain_promise.then(async () => {
             if (this.__stratumSource) {
                 this.removeDataSource(this.__stratumSource);
             }
 
-            this.__stratumSource = new StratumSource({ url, materialProvider });
+            this.__stratumSource = new StratumSource({ url, materialProvider,...options });
             this.addDataSource(this.__stratumSource);
         });
     }
