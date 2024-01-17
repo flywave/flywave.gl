@@ -55,6 +55,11 @@ class StratumDrillSource extends FeaturesDataSource {
                 if (!feature.properties) {
                     feature.properties = {};
                 }
+                if (index == 0) {
+                    feature.properties.thickness =
+                        feature.geometry.coordinates[2] -
+                        stratum_data[1].features[index].geometry.coordinates[2];
+                }
                 feature.properties.layer = index;
                 feature.id = id++;
                 this.addFeature(feature);

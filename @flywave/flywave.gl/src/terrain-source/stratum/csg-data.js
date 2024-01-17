@@ -6,13 +6,13 @@ import { TriangleStripDrawMode } from "three";
 class CSGData {
     box = new THREE.Box3();
 
-    constructor(mesh, samplePoints) {
+    constructor(mesh, levelThreshold = 0.01) {
         if (mesh) {
             this.mesh = mesh;
             this.id = mesh.uuid;
             this.box.setFromObject(mesh);
         }
-        this.samplePoints = samplePoints;
+        this.levelThreshold = levelThreshold;
     }
 
     updateBoundBox() {
@@ -137,7 +137,8 @@ class CSGData {
 
     doCsg(csgDatas, operator) {
         var geometries = [];
-        this.splitGeometries().forEach(source => {
+        var splitGeometries = this.splitGeometries();
+        splitGeometries.forEach((source, index) => {
             var a = new Brush(source);
             a.position.copy(this.mesh.position);
             a.quaternion.copy(this.mesh.quaternion);
@@ -150,7 +151,11 @@ class CSGData {
                 var b = new Brush(csgData.mesh.geometry);
                 b.position.copy(csgData.mesh.position);
                 b.quaternion.copy(csgData.mesh.quaternion);
-                b.scale.copy(csgData.mesh.scale);
+                b.scale
+                    .copy(csgData.mesh.scale)
+                    .multiplyScalar(
+                        1 - this.levelThreshold * (index / (splitGeometries.length - 1))
+                    );
                 b.updateMatrixWorld();
                 const { geometry } = evaluator.evaluate(a, b, operator);
                 a.geometry = geometry;
@@ -180,19 +185,18 @@ class CSGData {
             scale: this.mesh.scale.toArray(),
             quaternion: this.mesh.quaternion.toArray(),
             geometry: this.geometryToJSON(this.mesh.geometry),
-            samplePoints: this.samplePoints,
+            levelThreshold: this.levelThreshold,
             id: this.id
         };
     }
 
-    fromJSON({ position, scale, quaternion, geometry, id, samplePoints }) {
+    fromJSON({ position, scale, quaternion, geometry, id, levelThreshold }) {
         this.mesh = new THREE.Mesh(this.geometryFromJSON(geometry));
         this.mesh.position.fromArray(position);
         this.mesh.scale.fromArray(scale);
         this.mesh.quaternion.fromArray(quaternion);
         this.box.setFromObject(this.mesh);
-        this.samplePoints = samplePoints;
-        this.id = id;
+        (this.levelThreshold = levelThreshold), (this.id = id);
         return this;
     }
 

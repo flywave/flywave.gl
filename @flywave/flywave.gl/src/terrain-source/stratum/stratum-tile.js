@@ -91,7 +91,7 @@ class StratumTile extends Tile {
             shader.uniforms.clipUvTransfrom = {
                 value: tile.computeClipUvTransfrom(tinTile.tileKey, tile.tileKey)
             };
-            var uvTransform = new THREE.Vector4(1,1,0,0);
+            var uvTransform = new THREE.Vector4(1, 1, 0, 0);
             // if (material.map) {
             //     const { x, y } = material.map.repeat;
             //     uvTransform.set(x, y, 0, 0);
@@ -162,6 +162,7 @@ class StratumTile extends Tile {
                     };
                 })(Start, End, tileMesh.geometry);
                 tileMesh.receiveShadow = true;
+                tileMesh.renderOrder = this.dataSourceOrder;
                 //hidden
                 // tileMesh.visible=false;
                 wrap.add(tileMesh);

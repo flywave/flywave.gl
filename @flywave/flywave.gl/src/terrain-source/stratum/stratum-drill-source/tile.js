@@ -12,13 +12,12 @@ var tempObject = new THREE.Object3D();
 class StratumDrillTileLoader extends TileLoader {
     buildTileDrillMesh({ features }) {
         const { projection } = this.dataSource.mapView;
-
         var wrap = new THREE.Object3D();
         wrap.position.copy(this.tile.center).multiplyScalar(-1);
         var layerMeshies = {};
         var position;
         features.forEach(({ geometry: { coordinates }, properties: { layer, thickness } }) => {
-            if(!thickness)return;
+            if (!thickness) return;
             if (!layerMeshies[layer]) {
                 layerMeshies[layer] = { matrixs: [] };
             }
