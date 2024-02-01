@@ -16,10 +16,14 @@ class StratumDrillTileLoader extends TileLoader {
         wrap.position.copy(this.tile.center).multiplyScalar(-1);
         var layerMeshies = {};
         var position;
-        features.forEach(({ geometry: { coordinates }, properties: { layer, thickness } }) => {
+        features.forEach(feature => {
+            const {
+                geometry: { coordinates },
+                properties: { layer, thickness }
+            } = feature;
             if (!thickness) return;
             if (!layerMeshies[layer]) {
-                layerMeshies[layer] = { matrixs: [] };
+                layerMeshies[layer] = { matrixs: [], features: [] };
             }
             if (!position) {
                 position = new THREE.Vector3();
@@ -36,6 +40,7 @@ class StratumDrillTileLoader extends TileLoader {
                     tempObject.scale
                 )
             );
+            layerMeshies[layer].features.push(feature);
         });
 
         for (var layer in layerMeshies) {
@@ -46,6 +51,10 @@ class StratumDrillTileLoader extends TileLoader {
                     this.dataSource.stratumSource.getMaterialById(layer),
                     layerMeshies[layer].matrixs.length
                 );
+                mesh.userData = {
+                    dataSource: this.dataSource.name,
+                    features: layerMeshies[layer].features
+                };
                 mesh.position.copy(this.tile.center);
                 wrap.add(mesh);
             } else {

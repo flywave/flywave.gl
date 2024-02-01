@@ -104,10 +104,7 @@ class Application extends MapView {
         if (!this.elevationProviderProxy.elevationProvider) {
             this.elevationProviderProxy.elevationProvider = terrainSource.elevationProvider;
         }
-        await this.setElevationSource(
-            terrainSource,
-            new ElevationRangeSource(this) 
-        );
+        await this.setElevationSource(terrainSource, new ElevationRangeSource(this));
 
         this.elevation = this.elevationProviderProxy;
         this.terrainSource = terrainSource;
@@ -135,13 +132,13 @@ class Application extends MapView {
     }
 
     __stratumSource = null;
-    async setStratumSource(url, materialProvider,options) {
+    async setStratumSource(url, materialProvider, options) {
         await this._terrain_promise.then(async () => {
             if (this.__stratumSource) {
                 this.removeDataSource(this.__stratumSource);
             }
 
-            this.__stratumSource = new StratumSource({ url, materialProvider,...options });
+            this.__stratumSource = new StratumSource({ url, materialProvider, ...options });
             this.addDataSource(this.__stratumSource);
         });
     }
@@ -233,7 +230,7 @@ class Application extends MapView {
         window.removeEventListener("resize", this.onResize, false);
     }
 
-    intersectMapObjects(screenX, screenY) {
+    _intersectMapObjects(screenX, screenY) {
         let usableIntersections = super.intersectMapObjects(screenX, screenY);
         var rayCaster = this.pickHandler.setupRaycaster(screenX, screenY);
 
@@ -254,8 +251,15 @@ class Application extends MapView {
             .sort((a, b) => a.distance - b.distance);
     }
 
+    pick3DTilesMap(screenX, screenY) {
+        var rayCaster = this.pickHandler.setupRaycaster(screenX, screenY);
+        var intersects = [];
+        rayCaster.intersectObject(this.added3DTileSource.scene, true, intersects);
+        return intersects;
+    }
+
     pickMap(screenX, screenY) {
-        let usableIntersections = this.intersectMapObjects(screenX, screenY);
+        let usableIntersections = this._intersectMapObjects(screenX, screenY);
         return usableIntersections;
     }
 

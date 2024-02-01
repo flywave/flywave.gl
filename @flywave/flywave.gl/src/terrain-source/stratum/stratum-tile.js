@@ -79,7 +79,7 @@ class StratumTile extends Tile {
                 `#include <color_pars_fragment>
                  #include <tinterrain_color_pars_fragment>`
             );
-
+  
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <premultiplied_alpha_fragment>`,
                 `
@@ -104,7 +104,7 @@ class StratumTile extends Tile {
             shader.defines["USE_UV"] = true;
             if (parseInt(__THREE__) >= 151) {
                 shader.defines["USE_GT_151"] = true;
-                shader.defines["USE_UV"] = !!material.map;
+                shader.defines["USE_UV"] = true;
             }
             shader.uniforms.normalSampler = { value: emptyTexture };
         };
@@ -149,25 +149,26 @@ class StratumTile extends Tile {
         const { stratumGroups } = this;
 
         if (stratumGroups) {
-            var groups = Object.values(stratumGroups);
-            for (var { Start, End, Id } of groups) {
-                const tileMesh = new THREE.Mesh(
-                    this.bindedStratumTile.geometry,
-                    this.builderMeshMaterial(Id)
-                );
-                tileMesh.position.copy(this.bindedStratumTile.tinCenter);
-                tileMesh.onBeforeRender = (function (Start, End, geometry) {
-                    return () => {
-                        geometry.setDrawRange(Start, End - Start);
-                    };
-                })(Start, End, tileMesh.geometry);
-                tileMesh.receiveShadow = true;
-                tileMesh.renderOrder = this.dataSourceOrder;
-                //hidden
-                // tileMesh.visible=false;
-                wrap.add(tileMesh);
-            }
+            // var groups = Object.values(stratumGroups);
+            // for (var { Start, End, Id } of groups) {
+
+            const tileMesh = new THREE.Mesh(
+                this.bindedStratumTile.geometry,
+                this.builderMeshMaterial(0)
+            );
+            tileMesh.position.copy(this.bindedStratumTile.tinCenter);
+            // tileMesh.onBeforeRender = (function (Start, End, geometry) {
+            //     return () => {
+            //         geometry.setDrawRange(Start, End - Start);
+            //     };
+            // })(Start, End, tileMesh.geometry);
+            // tileMesh.receiveShadow = true;
+            // tileMesh.renderOrder = this.dataSourceOrder;
+            //hidden
+            // tileMesh.visible=false;
+            wrap.add(tileMesh);
         }
+        // }
 
         return wrap;
     }

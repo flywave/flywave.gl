@@ -42,7 +42,7 @@ class MapOrbitControl {
         return false;
     };
 
-    flyPath = (lineString, duration) => {
+    flyPath = (lineString, duration, tension) => {
         if (this.__pathAnimation) {
             this.__pathAnimation.kill();
         }
@@ -53,7 +53,10 @@ class MapOrbitControl {
         );
 
         const curve = new THREE.CatmullRomCurve3(
-            linePos.map(e => this._control.projectPoint(e, new THREE.Vector3()))
+            linePos.map(e => this._control.projectPoint(e, new THREE.Vector3())),
+            false,
+            undefined,
+            tension
         );
 
         const animationProgress = { value: 0 };
@@ -136,6 +139,12 @@ class MapOrbitControl {
                 this.panEnabled = true;
                 this._control.updateCenter();
             }
+        };
+
+        pathAnimation.progressCamera = v => {
+            pathAnimation.progress(v);
+            this.disable = true;
+            this.panEnabled = false;
         };
 
         pathAnimation.killCameraAnim = () => {

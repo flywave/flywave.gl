@@ -12,6 +12,7 @@ class StratumDrillSource extends FeaturesDataSource {
             tileFactory: new StratumDrillTileFactory(),
             concurrentDecoderScriptUrl: decodeUrl,
             styleSetName: "stratum-drill",
+            name: "stratum-drill",
             gatherFeatureAttributes: true,
             maxDataLevel
         });

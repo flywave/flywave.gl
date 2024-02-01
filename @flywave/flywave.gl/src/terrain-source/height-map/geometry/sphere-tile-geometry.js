@@ -288,7 +288,7 @@ class SphereTileGrids {
       if (!models[name]) {
         var count = (1 << sub) + 1, X = count;
         mode = models[name] =
-          this.generate_patch_simple_skirt(count * 4, X * 4, 0, 0, 1, 1, 200, true);
+          this.generate_patch_simple_skirt(count * 4, X * 4, 0, 0, 1, 1, 2000, true);
         mode.is_simple_patch = true;
       } else {
         mode = models[name];

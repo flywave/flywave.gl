@@ -26,6 +26,7 @@ class CsgTinMeshLoader extends TileLoader {
                     position3DAndHeight,
                     textureCoordAndEncodedNormals,
                     indices,
+                    colorScheme: this.dataSource._colorScheme.map(e => e.toArray()),
                     stratumGroups: _stratumGroups,
                     center
                 },
@@ -48,12 +49,12 @@ class CsgTinMeshLoader extends TileLoader {
 
 class StratumResourceTile extends TinMeshResourceTile {
     async builderQuantized(tinData) {
-        const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center } =
+        const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center, color } =
             tinData._mesh;
         var geometry = new THREE.BufferGeometry();
         geometry.setIndex(new THREE.BufferAttribute(indices, 1));
         geometry.setAttribute("position", new THREE.BufferAttribute(position3DAndHeight, 3));
-        // geometry.setAttribute("position3DAndHeight", new THREE.BufferAttribute(position3DAndHeight, 4));
+        if (color) geometry.setAttribute("color", new THREE.BufferAttribute(color, 3));
         geometry.setAttribute(
             "textureCoordAndEncodedNormals",
             new THREE.BufferAttribute(textureCoordAndEncodedNormals, 4)
@@ -64,14 +65,14 @@ class StratumResourceTile extends TinMeshResourceTile {
         tempMesh.position.copy(this.tinCenter);
         tempMesh.updateMatrixWorld();
         this._box = new Box3();
-        this._box.setFromObject(tempMesh);;
+        this._box.setFromObject(tempMesh);
         this._tempTinData = tinData;
         await this.loadCsg(tinData);
         this.tinData = tinData;
         this._geometry = geometry;
     }
 
-    builderCsgGeometry(tinData,csgData, hightBuffer) {
+    builderCsgGeometry(tinData, csgData, hightBuffer) {
         if (!csgData) {
             delete this.csgGeometry;
             delete tinData.csgStratumGroups;
@@ -147,7 +148,7 @@ class StratumResourceTile extends TinMeshResourceTile {
     }
 
     isEmptyStratum(tinData) {
-        const { _stratumGroups } = tinData||this.tinData;
+        const { _stratumGroups } = tinData || this.tinData;
         return !_stratumGroups || Object.values(_stratumGroups).length == 1;
     }
 
@@ -208,7 +209,7 @@ class DataStratumProvider extends DataTerrainProvider {
         return tile;
     }
 
-    parseMetadataSuccess(data){
+    parseMetadataSuccess(data) {
         this.stratum_data = data.stratum_data;
         return super.parseMetadataSuccess(data);
     }

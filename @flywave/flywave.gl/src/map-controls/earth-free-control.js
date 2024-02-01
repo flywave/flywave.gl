@@ -58,7 +58,7 @@ class EarthFreeControl extends FreeControl {
 
     rayCastToGlobeAndScene(reslut, origin, target, x, y, hitCountPrecision, noLineNear, noPickMap) {
         if (this.mapView.zoomLevel >= 17 && x && y && !noPickMap) {
-            var selections = this.application.pickMap(x, y);
+            var selections = this.application.pick3DTilesMap(x, y);
             for (var selectId = 0; selectId < selections.length; selectId++) {
                 var selection = selections[selectId];
                 if (selection && selection.intersection) {

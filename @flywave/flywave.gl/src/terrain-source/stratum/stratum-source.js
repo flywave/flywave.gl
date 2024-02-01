@@ -15,6 +15,7 @@ import { TinWorkerBasedDecoder } from "../tin-terrain/work-tile-decoder";
 import { ElevationRangeSource } from "../tin-terrain/elevation-range-source";
 import StratumElevationProvider from "./elevation-provider";
 import StratumDrillSource from "./stratum-drill-source";
+import { Math2D } from "@flywave/flywave-utils";
 
 class TinStratumTerrainProvider extends TinTerrainProvider {
     requestUpsampleTile() {}
@@ -59,6 +60,8 @@ class StratumSource extends TerrainSource {
 
         this._materialProvider = options.materialProvider || new MaterialProvider();
 
+        this._colorScheme = options.colorScheme || [new THREE.Color(0xff00ff)];
+
         this._stratumTheme = options.stratumTheme;
 
         this.displayDrill = options.displayDrill || true;
@@ -92,12 +95,11 @@ class StratumSource extends TerrainSource {
                 }
             } else {
                 if (!this._stratumDrillSource.isDetached()) {
-                    this._displayDrillPromise = this.mapView
-                        .removeDataSource(this._stratumDrillSource)
-                        .then(() => {
-                            delete this._displayDrillPromise;
-                            this._stratumDrillSource.updateTheme();
-                        });
+                    this._displayDrillPromise = this.mapView.removeDataSource(
+                        this._stratumDrillSource
+                    );
+                    delete this._displayDrillPromise;
+                    this._stratumDrillSource.updateTheme();
                 }
             }
         });
@@ -150,13 +152,31 @@ class StratumSource extends TerrainSource {
 
     canGetTile(zoomLevel, tileKey) {
         if (zoomLevel == undefined) return false;
+        if (this._geobox) {
+            var geobox = this.getTilingScheme().getGeoBox(tileKey);
+            const { latitude: minLat, longitude: minLng } = geobox.southWest;
+            const { latitude: maxLat, longitude: maxLng } = geobox.northEast;
+            var fbbox = new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat);
+            {
+                const { latitude: minLat, longitude: minLng } = this._geobox.southWest;
+                const { latitude: maxLat, longitude: maxLng } = this._geobox.northEast;
+                return new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat).intersects(
+                    fbbox
+                );
+            }
+        }
         return tileKey.level <= this.dataTerrainProvider.overallMaxZoom + 1;
     }
 
     getMaterialProviders() {}
 
-    getMaterialById(gropuId) {
-        return this._materialProvider.getMaterial(gropuId);
+    getMaterialById() {
+        return this._materialProvider.getMaterial();
+    }
+
+    _geobox = null;
+    setDisplayGeobox(geobox) {
+        this._geobox = geobox;
     }
 
     addCsgData(csgdata) {

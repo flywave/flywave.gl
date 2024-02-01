@@ -132,6 +132,11 @@ Object.assign(THREE.ShaderChunk, {
         uniform vec3 clipUvTransfrom;   
         uniform vec4 u_waterMaskTranslationAndScale;   
         uniform bool isWebMercator; 
+        #ifdef USE_GT_151
+        #ifndef USE_MAP
+        varying vec2 vMapUv;
+        #endif
+        #endif
  
 
     `,
@@ -181,7 +186,11 @@ Object.assign(THREE.ShaderChunk, {
         uniform float frameNumber; 
         uniform vec4 u_waterMaskTranslationAndScale;   
         uniform vec4 u_waterMaskNoisyTranslationAndScale;   
-         
+        #ifdef USE_GT_151
+        #ifndef USE_MAP
+        varying vec2 vMapUv;
+        #endif
+        #endif
         uniform mat3 normalMatrix; 
  
         varying vec3 v_positionEC;

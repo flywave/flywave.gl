@@ -3,16 +3,18 @@ import { SUBTRACTION, ADDITION, INTERSECTION, Brush, Evaluator } from "three-bvh
 import AttributeCompression from "../tin-terrain/quantized-mesh/attribute-compression";
 import { mergeGeometries, toTrianglesDrawMode } from "../../loaders/BufferGeometryUtils";
 import { TriangleStripDrawMode } from "three";
+
 class CSGData {
     box = new THREE.Box3();
 
-    constructor(mesh, levelThreshold = 0.01) {
+    constructor(mesh, options = { levelThreshold: 0.01, colorScheme: [] }) {
         if (mesh) {
             this.mesh = mesh;
             this.id = mesh.uuid;
             this.box.setFromObject(mesh);
         }
-        this.levelThreshold = levelThreshold;
+        this.levelThreshold = options.levelThreshold || 0.01;
+        this.colorScheme = options.colorScheme;
     }
 
     updateBoundBox() {
@@ -102,7 +104,7 @@ class CSGData {
     splitGeometries() {
         const { groups, index, attributes } = this.mesh.geometry;
         var geometries = [];
-        groups.forEach(group => {
+        groups.forEach((group, gIndex) => {
             var buffer = new BufferGeometry();
             geometries.push(buffer);
             {
@@ -162,6 +164,26 @@ class CSGData {
                 var p = a.position.clone().multiplyScalar(-1);
                 geometry.translate(p.x, p.y, p.z);
             });
+            if (a.geometry) {
+                let color = new THREE.BufferAttribute(
+                    new Float32Array(a.geometry.attributes.position.count * 3),
+                    3
+                );
+
+                var _color = this.colorScheme[index];
+                for (var j = 0; j < a.geometry.attributes.position.count; j++) {
+                    if (!_color) {
+                        color.setX(j, 1);
+                        color.setY(j, 1);
+                        color.setZ(j, 1);
+                    } else {
+                        color.setX(j, _color.r);
+                        color.setY(j, _color.g);
+                        color.setZ(j, _color.b);
+                    }
+                }
+                a.geometry.setAttribute("color", color);
+            }
             a.geometry && geometries.push(a.geometry);
         });
         return geometries.length ? mergeGeometries(geometries, true) : null;
@@ -186,16 +208,20 @@ class CSGData {
             quaternion: this.mesh.quaternion.toArray(),
             geometry: this.geometryToJSON(this.mesh.geometry),
             levelThreshold: this.levelThreshold,
+            colorScheme: this.colorScheme.map(e => e.toArray()),
             id: this.id
         };
     }
 
-    fromJSON({ position, scale, quaternion, geometry, id, levelThreshold }) {
+    fromJSON({ position, scale, quaternion, geometry, id, levelThreshold, colorScheme }) {
         this.mesh = new THREE.Mesh(this.geometryFromJSON(geometry));
         this.mesh.position.fromArray(position);
         this.mesh.scale.fromArray(scale);
         this.mesh.quaternion.fromArray(quaternion);
         this.box.setFromObject(this.mesh);
+        this.colorScheme = colorScheme.map(e => {
+            return new THREE.Color().fromArray(e);
+        });
         (this.levelThreshold = levelThreshold), (this.id = id);
         return this;
     }

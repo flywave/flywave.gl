@@ -8,8 +8,7 @@ import { SunLight } from "./objects/sun-light";
 import { MaterialProvider } from "./terrain-source/material-provider";
 import { VectorTileDataSource, GeoJsonDataProvider } from "@flywave/flywave-vectortile-datasource";
 
-class SphereBackgroundDataSource extends BackgroundDataSource { 
-
+class SphereBackgroundDataSource extends BackgroundDataSource {
     getTile(tileKey: TileKey): Tile | undefined {
         const tile = new Tile(this, tileKey);
         tile.forceHasGeometry(true);
@@ -74,7 +73,7 @@ class Environment extends MapViewEnvironment {
 
         needsRemove3DTiles.forEach(baseUrl => this.m_mapView.remove3DTileSource(baseUrl));
         needAdd3DTiles.forEach(srvUrl => {
-            this.m_mapView.add3DTileSource(srvUrl);
+            this.m_mapView.add3DTileSource(srvUrl, false);
         });
     }
 
