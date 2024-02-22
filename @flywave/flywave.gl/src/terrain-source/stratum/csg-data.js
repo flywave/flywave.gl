@@ -7,14 +7,15 @@ import { TriangleStripDrawMode } from "three";
 class CSGData {
     box = new THREE.Box3();
 
-    constructor(mesh, options = { levelThreshold: 0.01, colorScheme: [] }) {
+    constructor(mesh, options = { levelThreshold: 0.01, colorScheme: {}, stratum_data: [] }) {
         if (mesh) {
             this.mesh = mesh;
             this.id = mesh.uuid;
             this.box.setFromObject(mesh);
         }
         this.levelThreshold = options.levelThreshold || 0.01;
-        this.colorScheme = options.colorScheme;
+        this.colorScheme = options.colorScheme || {};
+        this.stratum_data = options.stratum_data || [];
     }
 
     updateBoundBox() {
@@ -170,7 +171,7 @@ class CSGData {
                     3
                 );
 
-                var _color = this.colorScheme[index];
+                var _color = new THREE.Color(this.colorScheme[this.stratum_data[index]]);
                 for (var j = 0; j < a.geometry.attributes.position.count; j++) {
                     if (!_color) {
                         color.setX(j, 1);
@@ -208,20 +209,29 @@ class CSGData {
             quaternion: this.mesh.quaternion.toArray(),
             geometry: this.geometryToJSON(this.mesh.geometry),
             levelThreshold: this.levelThreshold,
-            colorScheme: this.colorScheme.map(e => e.toArray()),
+            colorScheme: this.colorScheme,
+            stratum_data: this.stratum_data,
             id: this.id
         };
     }
 
-    fromJSON({ position, scale, quaternion, geometry, id, levelThreshold, colorScheme }) {
+    fromJSON({
+        position,
+        scale,
+        quaternion,
+        geometry,
+        id,
+        levelThreshold,
+        colorScheme,
+        stratum_data
+    }) {
         this.mesh = new THREE.Mesh(this.geometryFromJSON(geometry));
         this.mesh.position.fromArray(position);
         this.mesh.scale.fromArray(scale);
         this.mesh.quaternion.fromArray(quaternion);
         this.box.setFromObject(this.mesh);
-        this.colorScheme = colorScheme.map(e => {
-            return new THREE.Color().fromArray(e);
-        });
+        this.colorScheme = colorScheme;
+        this.stratum_data = stratum_data;
         (this.levelThreshold = levelThreshold), (this.id = id);
         return this;
     }

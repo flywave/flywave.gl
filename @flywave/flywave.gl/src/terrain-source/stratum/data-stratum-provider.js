@@ -17,6 +17,7 @@ class CsgTinMeshLoader extends TileLoader {
             this.tile._tempTinData._mesh;
         const { _stratumGroups } = this.tile._tempTinData;
 
+        const { stratum_data } = this.dataSource.dataTerrainProvider;
         this.onLoaded(
             {
                 geoBox: this.tile.geoBox.southWest
@@ -26,7 +27,11 @@ class CsgTinMeshLoader extends TileLoader {
                     position3DAndHeight,
                     textureCoordAndEncodedNormals,
                     indices,
-                    colorScheme: this.dataSource._colorScheme.map(e => e.toArray()),
+                    stratum_data: stratum_data.map(({ properties }) => {
+                        const { name: layerName } = properties || {};
+                        return layerName;
+                    }),
+                    colorScheme: this.dataSource._colorScheme,
                     stratumGroups: _stratumGroups,
                     center
                 },

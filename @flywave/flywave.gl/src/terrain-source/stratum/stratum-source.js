@@ -25,6 +25,10 @@ class MaterialProvider {
     getMaterial(gropuId) {
         return new THREE.MeshPhongMaterial({ side: DoubleSide, color: 0xffffff * Math.random() });
     }
+
+    getDrillMaterialByLayer() {
+        return new THREE.MeshPhongMaterial({ side: DoubleSide, color: 0xffffff * Math.random() });
+    }
 }
 
 export { MaterialProvider };
@@ -60,7 +64,7 @@ class StratumSource extends TerrainSource {
 
         this._materialProvider = options.materialProvider || new MaterialProvider();
 
-        this._colorScheme = options.colorScheme || [new THREE.Color(0xff00ff)];
+        this._colorScheme = options.colorScheme || {};
 
         this._stratumTheme = options.stratumTheme;
 
@@ -172,6 +176,10 @@ class StratumSource extends TerrainSource {
 
     getMaterialById() {
         return this._materialProvider.getMaterial();
+    }
+
+    getDrillMaterialById(layer) {
+        return this._materialProvider.getDrillMaterialByLayer(layer);
     }
 
     _geobox = null;

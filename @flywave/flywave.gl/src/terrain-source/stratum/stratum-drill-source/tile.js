@@ -8,9 +8,8 @@ var cylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 30);
 cylinderGeometry.translate(0, 0.5, 0);
 cylinderGeometry.rotateX(Math.PI / 2);
 var tempV3 = new THREE.Vector3();
-var tempObject = new THREE.Object3D();
 class StratumDrillTileLoader extends TileLoader {
-    buildTileDrillMesh({ features }) {
+    buildTileDrillMesh({ features, properties }) {
         const { projection } = this.dataSource.mapView;
         var wrap = new THREE.Object3D();
         wrap.position.copy(this.tile.center).multiplyScalar(-1);
@@ -19,11 +18,11 @@ class StratumDrillTileLoader extends TileLoader {
         features.forEach(feature => {
             const {
                 geometry: { coordinates },
-                properties: { layer, thickness }
+                properties: { layer, layerName, thickness }
             } = feature;
             if (!thickness) return;
             if (!layerMeshies[layer]) {
-                layerMeshies[layer] = { matrixs: [], features: [] };
+                layerMeshies[layer] = { matrixs: [], layerName, features: [] };
             }
             if (!position) {
                 position = new THREE.Vector3();
@@ -31,6 +30,7 @@ class StratumDrillTileLoader extends TileLoader {
             }
 
             projection.projectPoint(GeoCoordinates.fromGeoPoint(coordinates), tempV3);
+            var tempObject = new THREE.Object3D();
             tempObject.lookAt(tempV3);
             tempObject.scale.set(this.dataSource.radius, this.dataSource.radius, thickness);
             layerMeshies[layer].matrixs.push(
@@ -48,7 +48,7 @@ class StratumDrillTileLoader extends TileLoader {
             if (!layerMeshies[layer].mesh) {
                 mesh = layerMeshies[layer].mesh = new THREE.InstancedMesh(
                     cylinderGeometry,
-                    this.dataSource.stratumSource.getMaterialById(layer),
+                    this.dataSource.stratumSource.getDrillMaterialById(layerMeshies[layer].layerName),
                     layerMeshies[layer].matrixs.length
                 );
                 mesh.userData = {

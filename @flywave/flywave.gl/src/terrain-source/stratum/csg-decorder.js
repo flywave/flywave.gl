@@ -44,6 +44,7 @@ export class CSGStratumTileDecoder {
                     indices,
                     colorScheme,
                     center,
+                    stratum_data,
                     stratumGroups
                 }
             } = data;
@@ -82,7 +83,8 @@ export class CSGStratumTileDecoder {
             var mesh = new THREE.Mesh(buffer);
             mesh.position.copy(center);
             var sourceCSG = new CSGData(mesh, {
-                colorScheme: colorScheme.map(e => new THREE.Color().fromArray(e))
+                colorScheme,
+                stratum_data
             });
 
             if (!target) {
