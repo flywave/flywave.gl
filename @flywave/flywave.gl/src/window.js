@@ -23,6 +23,7 @@ class Window {
 
     _panEnabled = true;
     zoomEnabled = true;
+    doubleZoomEnable = true;
 
     set panEnabled(v) {
         this._panEnabled = v;
@@ -201,9 +202,11 @@ class Window {
             clearTimeout(this._clickTimeId);
             this._clickTimeId = 0;
         }
-        this.lastMouseX = event.layerX;
-        this.lastMouseY = event.layerY;
-        this.lastMouseZ += 10;
+        if (this.doubleZoomEnable) {
+            this.lastMouseX = event.layerX;
+            this.lastMouseY = event.layerY;
+            this.lastMouseZ += 10;
+        }
         this.fire("dblclick", event);
     };
 

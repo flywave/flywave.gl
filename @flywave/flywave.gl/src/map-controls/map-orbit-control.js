@@ -62,6 +62,7 @@ class MapOrbitControl {
         const animationProgress = { value: 0 };
 
         const _tmp = new THREE.Vector3();
+        var _preValue = -1;
         var pathAnimation = gsap.fromTo(
             animationProgress,
             {
@@ -79,6 +80,9 @@ class MapOrbitControl {
                     if (value == 1) {
                         return;
                     }
+                    var inv = value < _preValue;
+
+                    _preValue = value;
                     if (_tmp.length() == 0) {
                         curve.getPoint(value, _tmp);
                     }
@@ -86,6 +90,9 @@ class MapOrbitControl {
                     curve.getPoint(value, _tmp);
                     var position2 = _tmp.clone();
                     var dir = position1.sub(position2);
+                    if(inv){
+                        dir.negate();
+                    }
 
                     var lnglat = this._control.unprojectPoint(_tmp);
                     if (dir.length() == 0) return;

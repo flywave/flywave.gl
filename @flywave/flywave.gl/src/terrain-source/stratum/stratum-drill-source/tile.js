@@ -21,15 +21,17 @@ class StratumDrillTileLoader extends TileLoader {
                 properties: { layer, layerName, thickness }
             } = feature;
             if (!thickness) return;
+            var cloneCoordinate = coordinates.slice();
+            cloneCoordinate[2] -= thickness/2;
             if (!layerMeshies[layer]) {
                 layerMeshies[layer] = { matrixs: [], layerName, features: [] };
             }
             if (!position) {
                 position = new THREE.Vector3();
-                projection.projectPoint(GeoCoordinates.fromGeoPoint(coordinates), position);
+                projection.projectPoint(GeoCoordinates.fromGeoPoint(cloneCoordinate), position);
             }
 
-            projection.projectPoint(GeoCoordinates.fromGeoPoint(coordinates), tempV3);
+            projection.projectPoint(GeoCoordinates.fromGeoPoint(cloneCoordinate), tempV3);
             var tempObject = new THREE.Object3D();
             tempObject.lookAt(tempV3);
             tempObject.scale.set(this.dataSource.radius, this.dataSource.radius, thickness);
@@ -48,7 +50,9 @@ class StratumDrillTileLoader extends TileLoader {
             if (!layerMeshies[layer].mesh) {
                 mesh = layerMeshies[layer].mesh = new THREE.InstancedMesh(
                     cylinderGeometry,
-                    this.dataSource.stratumSource.getDrillMaterialById(layerMeshies[layer].layerName),
+                    this.dataSource.stratumSource.getDrillMaterialById(
+                        layerMeshies[layer].layerName
+                    ),
                     layerMeshies[layer].matrixs.length
                 );
                 mesh.userData = {

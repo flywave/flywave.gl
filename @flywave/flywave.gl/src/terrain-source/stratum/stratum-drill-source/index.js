@@ -52,12 +52,13 @@ class StratumDrillSource extends FeaturesDataSource {
         const { stratum_data } = this._stratumSource.dataTerrainProvider;
         var id = 0;
         stratum_data.forEach(({ features, properties }, index) => {
-            const { name: layerName } = properties || {};
+            const { name: layerName, id: layerId } = properties || {};
             features.forEach(feature => {
                 if (!feature.properties) {
                     feature.properties = {};
                 }
                 feature.properties.layerName = layerName;
+                feature.properties.layerId = layerId;
                 // if (index == 0) {
                 //     feature.properties.thickness =
                 //         feature.geometry.coordinates[2] -
@@ -65,6 +66,23 @@ class StratumDrillSource extends FeaturesDataSource {
                 // }
                 feature.properties.layer = index;
                 feature.id = id++;
+
+                const [a, b, c] = feature.geometry.coordinates;
+                const { thickness } = feature.properties;
+
+                if (id == 1) {
+                    this.addFeature({
+                        geometry: { type: "Point", coordinates: [a, b, c + thickness] },
+                        type: "Feature",
+                        properties: {
+                            name: feature.properties.name
+                        }
+                    });
+                }
+
+                feature.geometry.coordinates = [a, b, c + thickness / 2];
+                feature.properties.name = layerName;
+
                 this.addFeature(feature);
             });
         });

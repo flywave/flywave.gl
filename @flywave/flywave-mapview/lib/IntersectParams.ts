@@ -14,4 +14,6 @@ export interface IntersectParams {
      * by reversed render order (topmost/highest render order first).
      */
     maxResultCount?: number;
+    
+    pickAnchor?:boolean;
 }
