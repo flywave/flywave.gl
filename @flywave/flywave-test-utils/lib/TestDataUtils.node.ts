@@ -111,10 +111,10 @@ export function loadTestResourceNode(
                     resolve(new Uint8Array(data as Buffer).buffer);
                     break;
                 case "json":
-                    resolve(JSON.parse(data as string));
+                    resolve(JSON.parse(data as unknown as string));
                     break;
                 case "text":
-                    resolve(data as string);
+                    resolve(data as unknown as string);
                     break;
                 default:
                     throw new Error(`Unrecognized response type: ${type}`);
