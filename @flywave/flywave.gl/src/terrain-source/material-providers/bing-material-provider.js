@@ -11,5 +11,5 @@ export class BingMaterialProvider extends MaterialProvider {
         const quadKey = tileKey.toQuadKey();
         return this.options.url.
             replace("{quadKey}", quadKey);
-    } 
+    }
 }

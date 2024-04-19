@@ -198,6 +198,8 @@ class Window {
             return;
         }
 
+        event.stopPropagation();
+        event.preventDefault();
         if (this._clickTimeId) {
             clearTimeout(this._clickTimeId);
             this._clickTimeId = 0;
