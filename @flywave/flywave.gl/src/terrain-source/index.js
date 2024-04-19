@@ -7,6 +7,8 @@ import HarpApiMaterialProvider from "./material-providers/flywave-api-material-p
 import MapboxMvtMaterialProvider from "./material-providers/mapbox-mvt-material-provider";
 import { MapboxSatelliteMaterialProvider } from "./material-providers/mapbox-satellite-material-provider";
 import { StratumSource, CSGData } from "./stratum";
+import VectorMaterialProvider from "./vector-material-provider";
+
 
 export {
     CSGData,
@@ -18,5 +20,6 @@ export {
     MaterialProvider,
     OpenStreetMapMaterialProvider,
     HarpApiMaterialProvider,
-    MapboxMvtMaterialProvider
+    MapboxMvtMaterialProvider,
+    VectorMaterialProvider
 };

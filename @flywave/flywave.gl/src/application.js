@@ -349,6 +349,10 @@ class Application extends MapView {
         return this.mapOrbitControl.geoCenter;
     }
 
+    set geoCenter(v){
+        super.geoCenter = v;
+    }
+
     get center() {
         return this.mapOrbitControl.center;
     }

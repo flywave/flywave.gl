@@ -292,12 +292,12 @@ class MapOrbitControl {
         return this._control.unprojectPoint(new THREE.Vector3().fromArray(v));
     }
 
-    flyToBox(geoBox) {
+    flyToBox(geoBox,speed,theta,phi) {
         const { projection, camera } = this.mapView;
         var box = projection.projectBox(geoBox);
         var d = (box.min.distanceTo(box.max) * 0.5) / Math.tan(((camera.fov / 2) * Math.PI) / 180);
         const { longitude, latitude } = geoBox.center;
-        this.flyTo(longitude, latitude, 0, 0.1, d, 0, 0);
+        this.flyTo(longitude, latitude, 0, speed||0.1, d, theta, phi);
     }
 
     get zoomLevelTargeted() {
