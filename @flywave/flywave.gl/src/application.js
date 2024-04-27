@@ -345,32 +345,18 @@ class Application extends MapView {
         this.dispatch.on.apply(this.dispatch, arguments);
     }
 
-    get geoCenter() {
-        return this.mapOrbitControl.geoCenter;
+    updateLookAtSettings() {
+        super.updateLookAtSettings();
+        if (this.mapOrbitControl)
+            this.mapOrbitControl._control.camera.setMatrix(this.camera.matrixWorld.elements);
     }
 
-    set geoCenter(v){
-        super.geoCenter = v;
+    setCameraGeolocationAndZoom(geoPos, zoomLevel, deltaYawDeg, pitchDeg) {
+        super.setCameraGeolocationAndZoom(geoPos, zoomLevel, deltaYawDeg, pitchDeg);
+        if (this.mapOrbitControl)
+            this.mapOrbitControl._control.camera.setMatrix(this.camera.matrixWorld.elements); 
     }
-
-    get center() {
-        return this.mapOrbitControl.center;
-    }
-
-    setCameraPos({ heading, tilt, cameraGeoLocation, centerDistance }) {
-        const { latitude, longitude, altitude } = cameraGeoLocation;
-        this.mapOrbitControl.setTo(longitude, latitude, altitude, 0, tilt, heading);
-    }
-
-    getCameraPos() {
-        return {
-            heading: this.mapOrbitControl.getHeading(),
-            tilt: this.mapOrbitControl.getTilt(),
-            cameraGeoLocation: this.projection.unprojectPoint(this.camera.position),
-            centerDistance: this.camera.position.distanceTo(this.mapOrbitControl.center)
-        };
-    }
-
+  
     getScreenPositionFromGeoCoordinate(longitude, latitude, altitude) {
         var position = this.projection.projectPoint(
             new GeoCoordinates(latitude, longitude, altitude)

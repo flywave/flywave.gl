@@ -90,7 +90,7 @@ class MapOrbitControl {
                     curve.getPoint(value, _tmp);
                     var position2 = _tmp.clone();
                     var dir = position1.sub(position2);
-                    if(inv){
+                    if (inv) {
                         dir.negate();
                     }
 
@@ -292,12 +292,12 @@ class MapOrbitControl {
         return this._control.unprojectPoint(new THREE.Vector3().fromArray(v));
     }
 
-    flyToBox(geoBox,speed,theta,phi) {
+    flyToBox(geoBox, speed, theta, phi) {
         const { projection, camera } = this.mapView;
         var box = projection.projectBox(geoBox);
         var d = (box.min.distanceTo(box.max) * 0.5) / Math.tan(((camera.fov / 2) * Math.PI) / 180);
         const { longitude, latitude } = geoBox.center;
-        this.flyTo(longitude, latitude, 0, speed||0.1, d, theta, phi);
+        this.flyTo(longitude, latitude, 0, speed || 0.1, d, theta, phi);
     }
 
     get zoomLevelTargeted() {
@@ -327,6 +327,11 @@ class MapOrbitControl {
 
     get geoCenter() {
         return this._control.unprojectPoint(this.center);
+    }
+
+    set geoCenter(geoCenter) {
+        const [lon, lat, z] = geoCenter.toGeoPoint();
+        return this._control.setTo(lon, lat, z, 0, this.getTilt(), this.getHeading());
     }
 
     setEllipsoidMaximumDepth(maximumDepth) {

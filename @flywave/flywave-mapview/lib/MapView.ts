@@ -3239,7 +3239,7 @@ export class MapView extends EventDispatcher {
     /**
      * Derive the look at settings (i.e. target, zoom, ...) from the current camera.
      */
-    private updateLookAtSettings() {
+    protected updateLookAtSettings() {
         let { target, distance, final } = MapViewUtils.getTargetAndDistance(
             this.projection,
             this.camera,
