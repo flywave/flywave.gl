@@ -289,6 +289,7 @@ class Window {
         el.removeEventListener("touchstart", this.touchDown);
         el.removeEventListener("touchmove", this.touchMove);
         el.removeEventListener("touchend", this.touchUp);
+        this.dispatch = undefined;
     };
 
     setSize(w, h) {

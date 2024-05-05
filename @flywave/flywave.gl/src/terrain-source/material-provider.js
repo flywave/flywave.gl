@@ -78,14 +78,14 @@ export class MaterialProvider {
         this.options = options || {};
     }
 
-    get baseUrl(){
+    get baseUrl() {
         return this.options.url;
     }
 
     bindDataSource(dataSource) {
         this.dataSource = dataSource;
-        if(dataSource)
-        dataSource.mapView.visibleTileSet.clearTileCache();
+        if (dataSource)
+            dataSource.mapView.visibleTileSet.clearTileCache();
     }
 
     tileMaterialCache = new LRUCache(500);
@@ -217,7 +217,7 @@ export class MaterialProvider {
         var mortonCode = tileKey.mortonCode();
         return this.options.url.replace("{x}", column).
             replace("{y}", row).
-            replace("{z}", level).replace("{quadKey}", quadKey).replace("{server}",mortonCode%4);
+            replace("{z}", level).replace("{quadKey}", quadKey).replace("{server}", mortonCode % 4);
     }
 
     fetchTileMaterial(tileKey, abortSignal) {
@@ -249,7 +249,7 @@ export class MaterialProvider {
         return mtl;
     }
 
-    openStencil(mtl: Material) { 
+    openStencil(mtl: Material) {
         mtl.stencilFunc = THREE.NotEqualStencilFunc;
         mtl.stencilZPass = THREE.ReplaceStencilOp;
         // mtl.stencilFail = THREE.ReplaceStencilOp;
@@ -267,12 +267,13 @@ export class MaterialProvider {
     }
 
     remove() {
-        var index = this.dataSource.getMaterialProviders().indexOf(this);
-        if (index != -1) {
-            this.dataSource.getMaterialProviders().splice(index, 1);
+        if (this.dataSource) {
+            var index = this.dataSource.getMaterialProviders().indexOf(this);
+            if (index != -1) {
+                this.dataSource.getMaterialProviders().splice(index, 1);
+            }
+            this.dataSource.mapView.markTilesDirty(this.dataSource);
         }
-        this.dataSource.mapView.markTilesDirty(this.dataSource);
-
         this.tileMaterialCache.clear();
     }
 

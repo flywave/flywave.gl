@@ -72,13 +72,13 @@ class Application extends MapView {
 
         const { camera, projection, mapAnchors } = this;
 
-        const updateCallback = () => this.update();
+        // const updateCallback = () => this.update();
         const atmosphere = new MapViewAtmosphere(
             mapAnchors,
             camera,
             projection,
             this.renderer.capabilities,
-            updateCallback
+            // updateCallback
         );
 
         var mapAdapter = new BaseMapObjectAdapter(atmosphere, {});
@@ -228,6 +228,7 @@ class Application extends MapView {
             this.mapControl.dispose();
         }
         window.removeEventListener("resize", this.onResize, false);
+        this.window&&this.window.clearEvent(); 
     }
 
     _intersectMapObjects(screenX, screenY) {
@@ -377,6 +378,7 @@ class Application extends MapView {
         }
         return false;
     }
+ 
 }
 
 export default Application;

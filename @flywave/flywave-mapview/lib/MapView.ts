@@ -1291,6 +1291,11 @@ export class MapView extends EventDispatcher {
 
         this.m_taskScheduler.clearQueuedTasks();
 
+        this.overlayScene.clear();
+        this.scene.clear();
+        this.m_sceneRoot.clear();
+        //@ts-ignore
+        delete this.renderer.mapView;
         // Remove all event handlers.
         super.dispose();
     }
