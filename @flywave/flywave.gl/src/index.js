@@ -1,9 +1,7 @@
 import Application from "./application";
 export { Application };
-import { MapView, Tile } from "@flywave/flywave-mapview";
-
-export { MapView, Tile };
-
+export * from "@flywave/flywave-mapview";
+ 
 //camera control
 import { EarthFreeControl } from "./map-controls/earth-free-control";
 export { EarthFreeControl };
