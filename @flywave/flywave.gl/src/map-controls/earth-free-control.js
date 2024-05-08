@@ -8,9 +8,12 @@ var Vec3 = mathUtils.Vec3,
 var vec3 = Vec3(),
     matrix = Matrix();
 class EarthFreeControl extends FreeControl {
-    constructor(application, window) {
-        super(application, window);
-        this.camera = new EarthCamera(application);
+
+    camera = new EarthCamera();
+
+    constructor(mapOrbitControl) {  
+        super();
+        this.mapOrbitControl = mapOrbitControl;
     }
 
     bindApplication(application) {
@@ -58,7 +61,7 @@ class EarthFreeControl extends FreeControl {
 
     rayCastToGlobeAndScene(reslut, origin, target, x, y, hitCountPrecision, noLineNear, noPickMap) {
         if (this.mapView.zoomLevel >= 17 && x && y && !noPickMap) {
-            var selections = this.application.pick3DTilesMap(x, y);
+            var selections = this.mapOrbitControl.pickMap(x, y);
             for (var selectId = 0; selectId < selections.length; selectId++) {
                 var selection = selections[selectId];
                 if (selection && selection.intersection) {

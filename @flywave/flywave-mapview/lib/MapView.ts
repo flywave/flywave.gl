@@ -245,7 +245,11 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
      */
     customAntialiasSettings?: IMapAntialiasSettings;
 
-    useMapRenderingManager?:(width:number,height:number,mapView:MapView)=>MapRenderingManager
+    useMapRenderingManager?: (
+        width: number,
+        height: number,
+        mapView: MapView
+    ) => MapRenderingManager;
 
     logarithmicDepthBuffer?: boolean;
     /**
@@ -293,14 +297,17 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
     theme?: string | Theme | FlatTheme | Promise<Theme>;
 
     /**
-     * 
+     *
      */
-    useThemeManager?: (mapView:MapView,uriResolver:UriResolver|undefined)=>MapViewThemeManager;
+    useThemeManager?: (
+        mapView: MapView,
+        uriResolver: UriResolver | undefined
+    ) => MapViewThemeManager;
 
-    /** 
-     * 
+    /**
+     *
      */
-    useMapViewEnvironment?:(mapView:MapView,options:MapViewOptions)=>MapViewEnvironment;
+    useMapViewEnvironment?: (mapView: MapView, options: MapViewOptions) => MapViewEnvironment;
     /**
      * Resolve `URI` referenced in `MapView` assets using this resolver.
      *
@@ -596,6 +603,10 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
      * If set, the view will constrained within the given bounds in geo coordinates.
      */
     maxBounds?: GeoBox;
+
+    maxGeometryHeight?: number;
+
+    minGeometryHeight?: number;
 }
 
 /**
@@ -825,6 +836,9 @@ export class MapView extends EventDispatcher {
 
     private readonly m_mapAnchors: MapAnchors = new MapAnchors();
 
+    private readonly m_maxGeometryHeight: number = 0;
+    private readonly m_minGeometryHeight: number = 0;
+
     private m_animationCount: number = 0;
     private m_animationFrameHandle: number | undefined;
     private m_drawing: boolean = false;
@@ -991,6 +1005,12 @@ export class MapView extends EventDispatcher {
             this.m_tileWrappingEnabled = this.m_options.tileWrappingEnabled;
         }
 
+        if (options.maxGeometryHeight != undefined) {
+            this.m_maxGeometryHeight = this.m_options.maxGeometryHeight;
+        }
+        if (options.minGeometryHeight != undefined) {
+            this.m_minGeometryHeight = this.m_options.minGeometryHeight;
+        }
         // Initialization of the stats
         this.setupStats(this.m_options.enableStatistics);
 
@@ -1003,7 +1023,10 @@ export class MapView extends EventDispatcher {
             context: this.m_options.context,
             antialias: this.nativeWebglAntialiasEnabled,
             alpha: this.m_options.alpha,
-            logarithmicDepthBuffer: this.m_options.logarithmicDepthBuffer==undefined?true:this.m_options.logarithmicDepthBuffer,
+            logarithmicDepthBuffer:
+                this.m_options.logarithmicDepthBuffer == undefined
+                    ? true
+                    : this.m_options.logarithmicDepthBuffer,
             preserveDrawingBuffer: this.m_options.preserveDrawingBuffer === true,
             powerPreference:
                 this.m_options.powerPreference === undefined
@@ -1061,7 +1084,9 @@ export class MapView extends EventDispatcher {
         // this.m_visibleTiles is set in createVisibleTileSet, set it here again only to let tsc
         // know the member is set in the constructor.
         this.m_visibleTiles = this.createVisibleTileSet();
-        this.m_sceneEnvironment = this.m_options.useMapViewEnvironment? this.m_options.useMapViewEnvironment(this, options) : new MapViewEnvironment(this, options);
+        this.m_sceneEnvironment = this.m_options.useMapViewEnvironment
+            ? this.m_options.useMapViewEnvironment(this, options)
+            : new MapViewEnvironment(this, options);
 
         // setup camera with initial position
         this.setupCamera();
@@ -1080,12 +1105,14 @@ export class MapView extends EventDispatcher {
 
         const mapPassAntialiasSettings = this.m_options.customAntialiasSettings;
         const useMapRenderingManager = this.m_options.useMapRenderingManager;
-        this.mapRenderingManager =useMapRenderingManager?useMapRenderingManager(width,height,this): new MapRenderingManager(
-            width,
-            height,
-            this.m_options.dynamicPixelRatio,
-            mapPassAntialiasSettings
-        );
+        this.mapRenderingManager = useMapRenderingManager
+            ? useMapRenderingManager(width, height, this)
+            : new MapRenderingManager(
+                  width,
+                  height,
+                  this.m_options.dynamicPixelRatio,
+                  mapPassAntialiasSettings
+              );
 
         this.m_animatedExtrusionHandler = new AnimatedExtrusionHandler(this);
 
@@ -1111,7 +1138,9 @@ export class MapView extends EventDispatcher {
             this.m_taskScheduler.throttlingEnabled = options.throttlingEnabled;
         }
 
-        this.m_themeManager = this.m_options.useThemeManager? this.m_options.useThemeManager(this, this.uriResolver) : new MapViewThemeManager(this, this.m_uriResolver);
+        this.m_themeManager = this.m_options.useThemeManager
+            ? this.m_options.useThemeManager(this, this.uriResolver)
+            : new MapViewThemeManager(this, this.m_uriResolver);
 
         // will initialize with an empty theme and updated when theme is loaded and set
         this.m_textElementsRenderer = this.createTextRenderer();
@@ -3202,13 +3231,17 @@ export class MapView extends EventDispatcher {
         // constantHeight property of extruded polygon technique is set as default false,
         // otherwise the near plane margins will be bigger then required, but still correct.
         const projectionScale = this.projection.getScaleFactor(this.camera.position);
-        const maxGeometryHeightScaled =
+        const maxGeometryHeightScaled = Math.max(
+            this.m_maxGeometryHeight,
             projectionScale *
-            this.m_tileDataSources.reduce((r, ds) => Math.max(r, ds.maxGeometryHeight), 0);
+                this.m_tileDataSources.reduce((r, ds) => Math.max(r, ds.maxGeometryHeight), 0)
+        );
 
-        const minGeometryHeightScaled =
+        const minGeometryHeightScaled = Math.max(
+            this.m_minGeometryHeight,
             projectionScale *
-            this.m_tileDataSources.reduce((r, ds) => Math.min(r, ds.minGeometryHeight), 0);
+                this.m_tileDataSources.reduce((r, ds) => Math.min(r, ds.minGeometryHeight), 0)
+        );
 
         // Copy all properties from new view ranges to our readonly object.
         // This allows to keep all view ranges references valid and keeps up-to-date
@@ -3443,6 +3476,8 @@ export class MapView extends EventDispatcher {
 
         // TBD: Update renderList only any of its params (camera, etc...) has changed.
         if (!this.lockVisibleTileSet) {
+            this.m_visibleTiles.minGeometryHeight = this.m_minGeometryHeight;
+            this.m_visibleTiles.maxGeometryHeight = this.m_maxGeometryHeight;
             const viewRangesStatus = this.m_visibleTiles.updateRenderList(
                 this.storageLevel,
                 Math.floor(this.zoomLevel),

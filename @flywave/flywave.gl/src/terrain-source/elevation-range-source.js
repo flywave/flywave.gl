@@ -12,6 +12,8 @@ class ElevationRangeSource {
     getElevationRange = (tikeKey, dataSources) => {
         if (!dataSources[0].getElevationRangeSource) {
             return {
+                minElevation:0,
+                maxElevation:0,
                 calculationStatus: CalculationStatus.PendingApproximate
             };
         }

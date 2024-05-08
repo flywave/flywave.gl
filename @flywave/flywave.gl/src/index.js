@@ -29,6 +29,8 @@ import { APIFormat, VectorTileDataSource } from "@flywave/flywave-vectortile-dat
 
 export { MapViewEventNames, TransferManager, APIFormat, VectorTileDataSource, TileDataSource };
 
+export { MapOrbitControl } from "./map-controls/map-orbit-control";
+
 import { makeMapTheme } from "./make-theme";
 
 export { makeMapTheme };

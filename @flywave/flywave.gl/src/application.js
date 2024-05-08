@@ -187,8 +187,7 @@ class Application extends MapView {
         });
         window.addEventListener("resize", this.onResize, false);
 
-        const mapOrbitControl = new MapOrbitControl(this, options.earthFreeControl);
-        this.mapOrbitControl = mapOrbitControl;
+        this.mapOrbitControl = options.mapOrbitControl ? new options.mapOrbitControl(this) : new MapOrbitControl(this);
 
         this.showMapControlsUI = options.showMapControl;
     }
@@ -228,7 +227,7 @@ class Application extends MapView {
             this.mapControl.dispose();
         }
         window.removeEventListener("resize", this.onResize, false);
-        this.window&&this.window.clearEvent(); 
+        this.window && this.window.clearEvent();
     }
 
     _intersectMapObjects(screenX, screenY) {
@@ -355,9 +354,9 @@ class Application extends MapView {
     setCameraGeolocationAndZoom(geoPos, zoomLevel, deltaYawDeg, pitchDeg) {
         super.setCameraGeolocationAndZoom(geoPos, zoomLevel, deltaYawDeg, pitchDeg);
         if (this.mapOrbitControl)
-            this.mapOrbitControl._control.camera.setMatrix(this.camera.matrixWorld.elements); 
+            this.mapOrbitControl._control.camera.setMatrix(this.camera.matrixWorld.elements);
     }
-  
+
     getScreenPositionFromGeoCoordinate(longitude, latitude, altitude) {
         var position = this.projection.projectPoint(
             new GeoCoordinates(latitude, longitude, altitude)
@@ -378,7 +377,7 @@ class Application extends MapView {
         }
         return false;
     }
- 
+
 }
 
 export default Application;

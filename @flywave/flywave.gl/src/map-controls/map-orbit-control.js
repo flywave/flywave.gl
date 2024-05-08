@@ -10,8 +10,8 @@ MapViewUtils.MAX_TILT_RAD = (60 * Math.PI) / 180;
 class MapOrbitControl {
     zoomLevelDeltaOnControl = 1;
 
-    constructor(application, earthFreeControl) {
-        this._control = earthFreeControl || new EarthFreeControl();
+    constructor(application) {
+        this._control = new EarthFreeControl(this);
         this._control.bindApplication(application, application.window);
 
         this.mapView = application;
@@ -27,6 +27,10 @@ class MapOrbitControl {
             Math.PI / 10,
             0
         );
+    }
+
+    pickMap(x, y) {
+        return this.mapView.pick3DTilesMap(x, y);
     }
 
     onEventUpdate = () => {

@@ -39,6 +39,8 @@ class ElevationRangeSource {
         const range = this.getMinMaxForTile(tikeKey);
         if (!range) {
             return {
+                minElevation:0,
+                maxElevation:0,
                 calculationStatus: CalculationStatus.PendingApproximate
             }
         } else {

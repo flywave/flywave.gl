@@ -541,6 +541,10 @@ export class VisibleTileSet {
         return this.m_viewRange;
     }
 
+    maxGeometryHeight: number = 0;
+
+    minGeometryHeight: number = 0;
+
     /**
      * Calculates a new set of visible tiles.
      * @param storageLevel - The camera storage level, see {@link MapView.storageLevel}.
@@ -626,8 +630,8 @@ export class VisibleTileSet {
 
         this.m_dataSourceCache.shrinkToCapacity();
 
-        let minElevation: number | undefined;
-        let maxElevation: number | undefined;
+        let minElevation: number | undefined = this.minGeometryHeight;
+        let maxElevation: number | undefined = this.maxGeometryHeight;
         this.dataSourceTileList.forEach(renderListEntry => {
             // Calculate min/max elevation from every data source tiles,
             // data sources without elevationRangeSource will contribute to
