@@ -301,7 +301,7 @@ class MapOrbitControl {
         var box = projection.projectBox(geoBox);
         var d = (box.min.distanceTo(box.max) * 0.5) / Math.tan(((camera.fov / 2) * Math.PI) / 180);
         const { longitude, latitude } = geoBox.center;
-        this.flyTo(longitude, latitude, 0, speed || 0.1, d, theta, phi);
+        this.flyTo(longitude, latitude, 0, speed || 0.1, d, theta|0, phi|0);
     }
 
     get zoomLevelTargeted() {
