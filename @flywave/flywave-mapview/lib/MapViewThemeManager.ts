@@ -15,7 +15,9 @@ import { LoggerManager, UriResolver } from "@flywave/flywave-utils";
 import { MapViewImageCache } from "./image/MapViewImageCache";
 import { MapView } from "./MapView";
 import { ThemeLoader } from "./ThemeLoader";
+import * as _ from "lodash.isequal";
 
+const isEqual = _;
 const logger = LoggerManager.instance.create("MapViewThemeManager");
 
 /**
@@ -103,23 +105,32 @@ export class MapViewThemeManager {
         environment.updateClearColor(theme.clearColor, theme.clearAlpha);
 
         // Images.
-        this.m_theme.images = theme.images;
-        this.m_theme.imageTextures = theme.imageTextures;
-        await this.updateImages(theme.images, theme.imageTextures);
+        if(!isEqual(this.m_theme.images,theme.images)||!isEqual(this.m_theme.imageTextures,theme.imageTextures)){
+            this.m_theme.images = theme.images;
+            this.m_theme.imageTextures = theme.imageTextures;
+            await this.updateImages(theme.images, theme.imageTextures);
+        }
 
         // POI tables.
-        this.m_theme.poiTables = theme.poiTables;
-        await this.loadPoiTables(theme.poiTables);
+        if(!isEqual(this.m_theme.poiTables,theme.poiTables)){
+            this.m_theme.poiTables = theme.poiTables;
+            await this.loadPoiTables(theme.poiTables);
+        }
         // Text.
-        this.m_theme.textStyles = theme.textStyles;
-        this.m_theme.defaultTextStyle = theme.defaultTextStyle;
-        this.m_theme.fontCatalogs = theme.fontCatalogs;
+        
+        if(!isEqual(this.m_theme.textStyles,theme.textStyles)||
+        !isEqual(this.m_theme.defaultTextStyle,theme.defaultTextStyle)||
+        !isEqual(this.m_theme.fontCatalogs,theme.fontCatalogs)){
+            this.m_theme.textStyles = theme.textStyles;
+            this.m_theme.defaultTextStyle = theme.defaultTextStyle;
+            this.m_theme.fontCatalogs = theme.fontCatalogs;
 
-        await this.m_mapView.resetTextRenderer(
-            theme.fontCatalogs,
-            theme.textStyles,
-            theme.defaultTextStyle
-        );
+            await this.m_mapView.resetTextRenderer(
+                theme.fontCatalogs,
+                theme.textStyles,
+                theme.defaultTextStyle
+            );
+        }
 
         if (Array.isArray(theme.priorities)) {
             this.m_theme.priorities = theme.priorities;

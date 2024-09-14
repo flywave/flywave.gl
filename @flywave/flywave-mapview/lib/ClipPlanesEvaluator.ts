@@ -764,7 +764,7 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         const topDist = SphericalProj.getProjSphereIntersectionDistance(
             camera,
             this.m_tmpV2.set(ndcX, 1),
-            minR
+            minR- this.maxElevation
         );
         const bottomDist = checkBottomIntersection
             ? SphericalProj.getProjSphereIntersectionDistance(
@@ -774,9 +774,9 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
               )
             : 0;
         const largestDist = Math.max(topDist ?? Infinity, bottomDist ?? Infinity);
-        if (largestDist !== Infinity) {
-            return largestDist;
-        }
+        // if (largestDist !== Infinity) {
+        //     return largestDist;
+        // }
 
         // If any frustum edge does not intersect (i.e horizon is visible in that viewport corner),
         // use the horizon distance at the maximum elevation.

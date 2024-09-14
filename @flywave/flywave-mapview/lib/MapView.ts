@@ -1034,8 +1034,10 @@ export class MapView extends EventDispatcher {
                     : this.m_options.powerPreference
         });
 
-        (this.m_renderer as any).mapView = this;
 
+        (this.m_renderer as any).mapView = this;
+        this.m_renderer.localClippingEnabled = true
+        
         this.m_renderer.autoClear = false;
         this.m_renderer.debug.checkShaderErrors = !isProduction;
 

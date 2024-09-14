@@ -6,7 +6,8 @@ import {
     MapViewAtmosphere,
     AtmosphereLightMode,
     TiltViewClipPlanesEvaluator,
-    MapViewEventNames
+    MapViewEventNames,
+    MapViewUtils
 } from "@flywave/flywave-mapview";
 import { MapObjectAdapter } from "@flywave/flywave-mapview/lib/MapObjectAdapter";
 import { dispatch } from "d3-dispatch";
@@ -77,7 +78,7 @@ class Application extends MapView {
             mapAnchors,
             camera,
             projection,
-            this.renderer.capabilities,
+            this.renderer.capabilities
             // updateCallback
         );
 
@@ -187,7 +188,9 @@ class Application extends MapView {
         });
         window.addEventListener("resize", this.onResize, false);
 
-        this.mapOrbitControl = options.mapOrbitControl ? new options.mapOrbitControl(this) : new MapOrbitControl(this);
+        this.mapOrbitControl = options.mapOrbitControl
+            ? new options.mapOrbitControl(this)
+            : new MapOrbitControl(this);
 
         this.showMapControlsUI = options.showMapControl;
     }
@@ -346,9 +349,22 @@ class Application extends MapView {
     }
 
     updateLookAtSettings() {
-        super.updateLookAtSettings();
-        if (this.mapOrbitControl)
+        if (this.mapOrbitControl) {
+            this.m_targetWorldPos.copy(this.mapOrbitControl.center);
+            this.m_targetGeoPos = this.projection.unprojectPoint(this.m_targetWorldPos);
+            this.m_targetDistance = this.camera.position.distanceTo(this.mapOrbitControl.center);
+            this.m_zoomLevel = MapViewUtils.calculateZoomLevelFromDistance(
+                this,
+                this.m_targetDistance
+            );
+
+            const { yaw, pitch, roll } = this.extractAttitude();
+            this.m_yaw = yaw;
+            this.m_pitch = pitch;
+            this.m_roll = roll;
+
             this.mapOrbitControl._control.camera.setMatrix(this.camera.matrixWorld.elements);
+        }
     }
 
     setCameraGeolocationAndZoom(geoPos, zoomLevel, deltaYawDeg, pitchDeg) {
@@ -377,7 +393,6 @@ class Application extends MapView {
         }
         return false;
     }
-
 }
 
 export default Application;

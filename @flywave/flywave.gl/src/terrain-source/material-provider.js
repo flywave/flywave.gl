@@ -3,21 +3,17 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import {
-    webMercatorProjection
-} from '@flywave/flywave-geoutils'
-import {
-    webMercatorTilingScheme,
-} from "@flywave/flywave-geoutils";
+import { webMercatorProjection } from "@flywave/flywave-geoutils";
+import { webMercatorTilingScheme } from "@flywave/flywave-geoutils";
 import { TileLoader } from "@flywave/flywave-mapview-decoder";
 import { Tile, TileLoaderState } from "@flywave/flywave-mapview";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
-import * as THREE from 'three'
-import { Material } from 'three';
+import * as THREE from "three";
+import { Material } from "three";
 
-const textureLoader = new THREE.TextureLoader()
-textureLoader.crossOrigin = ''
+const textureLoader = new THREE.TextureLoader();
+textureLoader.crossOrigin = "";
 
 export class TileMaterialLoader extends TileLoader {
     constructor(dataSource, tile, dataProvider, decoder) {
@@ -56,7 +52,6 @@ export class TileMaterialLoader extends TileLoader {
 }
 
 export class MaterialProvider {
-
     levelRange = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 
     maxLodLevel = 3;
@@ -84,13 +79,12 @@ export class MaterialProvider {
 
     bindDataSource(dataSource) {
         this.dataSource = dataSource;
-        if (dataSource)
-            dataSource.mapView.visibleTileSet.clearTileCache();
+        if (dataSource) dataSource.mapView.visibleTileSet.clearTileCache();
     }
 
     tileMaterialCache = new LRUCache(500);
 
-    clipGeobox(geobox: GeoBox) {
+    clipGeobox(geobox) {
         var geoboxCopy = geobox.clone();
         const MAXIMUM_LATITUDE_ANGLE = (1.48442222974 * 180) / Math.PI;
         geoboxCopy.southWest.latitude = THREE.MathUtils.clamp(
@@ -120,10 +114,10 @@ export class MaterialProvider {
 
     loadNeareastRectangleLevel(geoBox, level) {
         var tileKeys = this.tileScheme.getTileKeys(this.clipGeobox(geoBox), level);
-        tileKeys.forEach(this.loadNeareastTile)
+        tileKeys.forEach(this.loadNeareastTile);
     }
 
-    loadNeareastTile = (tileKey) => {
+    loadNeareastTile = tileKey => {
         var maxLodLevel = this.maxLodLevel;
         var level = Math.ceil(tileKey.level / maxLodLevel);
         var tileLevel = tileKey.level;
@@ -131,10 +125,18 @@ export class MaterialProvider {
 
         var loadTileKey = TileKey.fromRowColumnLevel(tileKey.row, tileKey.column, tileKey.level);
         while (curLevel <= maxLodLevel) {
-            var nextLevel = THREE.MathUtils.clamp(curLevel * level, this.sortedLevelRange[this.sortedLevelRange.length - 1], tileLevel);
+            var nextLevel = THREE.MathUtils.clamp(
+                curLevel * level,
+                this.sortedLevelRange[this.sortedLevelRange.length - 1],
+                tileLevel
+            );
 
-            var offet = (tileKey.level - nextLevel);
-            loadTileKey = TileKey.fromRowColumnLevel(tileKey.row >> offet, tileKey.column >> offet, nextLevel);
+            var offet = tileKey.level - nextLevel;
+            loadTileKey = TileKey.fromRowColumnLevel(
+                tileKey.row >> offet,
+                tileKey.column >> offet,
+                nextLevel
+            );
 
             {
                 var levels = this.sortedLevelRange;
@@ -142,19 +144,28 @@ export class MaterialProvider {
                 for (var e = 0; e < levels.length; e++) {
                     nearLevel = levels[e];
                     if (loadTileKey.level >= levels[e]) {
-                        break
+                        break;
                     }
                 }
 
                 if (nearLevel) {
-                    var offet = (loadTileKey.level - nearLevel);
-                    let tileKey = TileKey.fromRowColumnLevel(loadTileKey.row >> offet, loadTileKey.column >> offet, nearLevel);
+                    var offet = loadTileKey.level - nearLevel;
+                    let tileKey = TileKey.fromRowColumnLevel(
+                        loadTileKey.row >> offet,
+                        loadTileKey.column >> offet,
+                        nearLevel
+                    );
 
                     if (!this.tileMaterialCache.has(tileKey.mortonCode())) {
                         var tile = new Tile(this.dataSource, tileKey);
                         tile.geoBox = this.tileScheme.getGeoBox(tileKey);
                         tile.updateBoundingBox();
-                        tile.tileLoader = new TileMaterialLoader(this.dataSource, tile, this, this.dataSource.decoder);
+                        tile.tileLoader = new TileMaterialLoader(
+                            this.dataSource,
+                            tile,
+                            this,
+                            this.dataSource.decoder
+                        );
                         tile.tileLoader.load();
                         tile.tileLoader.donePromise.then(() => {
                             this.dataSource.updateTileOverlayer({
@@ -178,28 +189,32 @@ export class MaterialProvider {
             }
             curLevel++;
         }
-    }
+    };
 
     getNeareastRectangleByLevel(geoBox, level) {
-        var tileKeys = this.tileScheme.getTileKeys(this.clipGeobox(geoBox), level)
+        var tileKeys = this.tileScheme.getTileKeys(this.clipGeobox(geoBox), level);
         return tileKeys.map(this.getNeareastMaterialTile).filter(e => e);
     }
 
-    getNeareastMaterialTile = (tileKey) => {
+    getNeareastMaterialTile = tileKey => {
         var levels = this.sortedLevelRange.slice();
         if (tileKey.level < levels[levels.length - 1]) {
             return false;
         }
 
         var level;
-        while (level = levels.shift()) {
+        while ((level = levels.shift())) {
             if (tileKey.level < level) {
                 continue;
             }
             var offset = tileKey.level - level;
-            var offTileKey = TileKey.fromRowColumnLevel(tileKey.row >> offset, tileKey.column >> offset, level)
+            var offTileKey = TileKey.fromRowColumnLevel(
+                tileKey.row >> offset,
+                tileKey.column >> offset,
+                level
+            );
             if (this.tileMaterialCache.has(offTileKey.mortonCode())) {
-                var tile = this.tileMaterialCache.get(offTileKey.mortonCode())
+                var tile = this.tileMaterialCache.get(offTileKey.mortonCode());
                 if (!tile.material) {
                     continue;
                 }
@@ -207,7 +222,7 @@ export class MaterialProvider {
             }
         }
         return false;
-    }
+    };
 
     getTileTextureUrl(tileKey) {
         const level = tileKey.level;
@@ -215,16 +230,19 @@ export class MaterialProvider {
         const row = tileKey.row;
         const quadKey = tileKey.toQuadKey();
         var mortonCode = tileKey.mortonCode();
-        return this.options.url.replace("{x}", column).
-            replace("{y}", row).
-            replace("{z}", level).replace("{quadKey}", quadKey).replace("{server}", mortonCode % 4);
+        return this.options.url
+            .replace("{x}", column)
+            .replace("{y}", row)
+            .replace("{z}", level)
+            .replace("{quadKey}", quadKey)
+            .replace("{server}", mortonCode % 4);
     }
 
     fetchTileMaterial(tileKey, abortSignal) {
         var url = this.getTileTextureUrl(tileKey);
         return new Promise((resolve, reject) => {
-            textureLoader.load(url, resolve, undefined, reject)
-        }).then((texture) => {
+            textureLoader.load(url, resolve, undefined, reject);
+        }).then(texture => {
             texture.minFilter = THREE.LinearFilter;
             texture.magFilter = THREE.LinearFilter;
             texture.generateMipmaps = false;
@@ -235,31 +253,25 @@ export class MaterialProvider {
 
     evictionCallback = (k, tile) => {
         const { material } = tile;
-        if (material)
-            material.dispose();
-    }
+        if (material) material.dispose();
+    };
 
     makeMaterial(tile) {
-        return new THREE.MeshLambertMaterial({ map: tile.material, wireframe: false, depthTest: true, fog: true, transparent: true, opacity: this.opacity });
+        return new THREE.MeshLambertMaterial({
+            map: tile.material,
+            wireframe: false,
+            depthTest: true,
+            fog: true,
+            transparent: true,
+            opacity: this.opacity,
+            clippingPlanes: this.dataSource.currentClips,
+            clipIntersection: this.dataSource.clipIntersection
+        });
     }
 
     getMaterialByTile(tile) {
         var mtl = this.makeMaterial(tile);
-        // this.openStencil(mtl);
         return mtl;
-    }
-
-    openStencil(mtl: Material) {
-        mtl.stencilFunc = THREE.NotEqualStencilFunc;
-        mtl.stencilZPass = THREE.ReplaceStencilOp;
-        // mtl.stencilFail = THREE.ReplaceStencilOp;
-        // mtl.stencilZFail = THREE.ReplaceStencilOp;
-        // mtl.stencilFail = THREE.DecrementStencilOp;
-        // mtl.stencilZFail = THREE.DecrementStencilOp;
-        mtl.stencilRef = 7;
-        mtl.stencilWrite = true;
-        mtl.stencilWriteMask = 0x3;
-        mtl.stencilFuncMask = 0x7;
     }
 
     getLevelRange() {
@@ -282,12 +294,14 @@ export class MaterialProvider {
             return v;
         }
         this._opacity = v;
-        var cache = this.dataSource.mapView.visibleTileSet.dataSourceTileList.find(e => this.dataSource === e.dataSource);
+        var cache = this.dataSource.mapView.visibleTileSet.dataSourceTileList.find(
+            e => this.dataSource === e.dataSource
+        );
         if (!cache) return;
         cache.visibleTiles.forEach(tile => {
             tile.objects.forEach(m => {
                 m.material.opacity = v;
-                m.material.transparent = (v != 1);
+                m.material.transparent = v != 1;
             });
         });
     }

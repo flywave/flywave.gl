@@ -7,7 +7,9 @@ import { Math2D } from "@flywave/flywave-utils";
 import { MapViewEventNames } from "@flywave/flywave-mapview";
 import { TileDataSource } from "@flywave/flywave-mapview-decoder";
 import config from "../config";
+import { Matrix4 } from "three";
 
+let tempMaterix = new Matrix4();
 export class TerrainSource extends TileDataSource {
     constructor(options) {
         super(options.tileFactory, {
@@ -41,7 +43,34 @@ export class TerrainSource extends TileDataSource {
 
     afterRender = () => {
         this._onCameraChange = false;
+        tempMaterix.identity();
+        tempMaterix.setPosition(this.mapView.camera.position);
+        tempMaterix.invert();
+        this._rawClipPlanes.forEach((clip, index) => {
+            this._clipPlanes[index] = clip.clone().applyMatrix4(tempMaterix);
+        });
     };
+
+    _rawClipPlanes = [];
+    _clipPlanes = [];
+    _clipIntersection = false;
+    setClipPlanes(clips, clipIntersection) {
+        this._rawClipPlanes = clips;
+        this._clipPlanes = clips.map(clip => {
+            return clip.clone();
+        });
+        this._clipIntersection = clipIntersection;
+        this.mapView.clearTileCache(this.name);
+    }
+
+    get clipIntersection() {
+        return this._clipIntersection;
+    }
+
+    get currentClips() {
+        return this._clipPlanes;
+    }
+ 
 
     addMaterialProviders(provider) {
         this.application.addMaterialProviders(provider);

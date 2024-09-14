@@ -8,10 +8,9 @@ var Vec3 = mathUtils.Vec3,
 var vec3 = Vec3(),
     matrix = Matrix();
 class EarthFreeControl extends FreeControl {
-
     camera = new EarthCamera();
 
-    constructor(mapOrbitControl) {  
+    constructor(mapOrbitControl) {
         super();
         this.mapOrbitControl = mapOrbitControl;
     }
@@ -59,64 +58,34 @@ class EarthFreeControl extends FreeControl {
         matrix.rotationLookDown(a, [0, 0, -1], b);
     }
 
-    rayCastToGlobeAndScene(reslut, origin, target, x, y, hitCountPrecision, noLineNear, noPickMap) {
-        if (this.mapView.zoomLevel >= 17 && x && y && !noPickMap) {
-            var selections = this.mapOrbitControl.pickMap(x, y);
-            for (var selectId = 0; selectId < selections.length; selectId++) {
-                var selection = selections[selectId];
-                if (selection && selection.intersection) {
-                    var {
-                        distance,
-                        point,
-                        intersection: {
-                            pointOnLine,
-                            object: {
-                                userData: { feature, _3dtile }
-                            }
-                        }
-                    } = selection;
+    adjustGPUPoint(p, x, y) {
+        let ret = [];
+        this.camera.unprojectToWorld(ret, this, this.width - x, this.height - y, -1);
+        let J = this.camera.cameraToWorld;
+        let source = [J[12], J[13], J[14]];
+        let v = vec3.normalize(p);
+        this.camera.collisionTo(p, source, ret, v);
+        vec3.normalize(p);
+        p[0] =  p[0] *v;
+        p[1] =  p[1] *v;
+        p[2] =  p[2] *v; 
+    }
 
-                    if (pointOnLine && !noLineNear) {
-                        point = pointOnLine;
-                    }
-                    if (feature || _3dtile) {
-                        const { position } = this.application.camera;
-                        reslut[0] = position.x + point.x;
-                        reslut[1] = position.y + point.y;
-                        reslut[2] = position.z + point.z;
-                        this.lastCast = reslut.slice();
-                        this.lastCast.push(distance);
-                        return distance;
-                    }
-                }
-            }
-            if (x && y) {
-                this.lastCast = null;
+    rayCastToGlobeAndScene(reslut, origin, target, x, y, hitCountPrecision) {
+        var selections = this.mapOrbitControl.pickMap(x, y);
+        for (var selectId = 0; selectId < selections.length; selectId++) {
+            var selection = selections[selectId];
+            if (selection && selection.intersection) {
+                var { distance, point } = selection;
+                const { position } = this.application.camera;
+                reslut[0] = position.x + point.x;
+                reslut[1] = position.y + point.y;
+                reslut[2] = position.z + point.z;
+                this.adjustGPUPoint(reslut, x, y);
+                return distance;
             }
         }
 
-        if (this.mapView.zoomLevel >= 17 && this.lastCast && !noPickMap) {
-            reslut[0] = this.lastCast[0];
-            reslut[1] = this.lastCast[1];
-            reslut[2] = this.lastCast[2];
-            return this.lastCast[3];
-        }
-
-        {
-            if (x == undefined && y == undefined) {
-                x = this.width / 2;
-                y = this.height / 2;
-            }
-            // if (this.application.elevation) {
-            //     var rayRet = this.application.elevation.rayCast(x, y);
-            //     if (rayRet) {
-            //         reslut[0] = rayRet.point.x;
-            //         reslut[1] = rayRet.point.y;
-            //         reslut[2] = rayRet.point.z;
-            //         return rayRet.distance;
-            //     }
-            // }
-        }
         return super.rayCastToGlobe(reslut, origin, target, hitCountPrecision);
     }
 

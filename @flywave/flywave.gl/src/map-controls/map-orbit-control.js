@@ -16,7 +16,7 @@ class MapOrbitControl {
 
         this.mapView = application;
         this.window = application.window;
-        this.mapView.addEventListener(MapViewEventNames.Render, this.onUpdate);
+        this.mapView.addEventListener(MapViewEventNames.Render, this.onUpdate.bind(this));
 
         var geocoord = this._control.unprojectPoint(this.mapView.camera.position);
         this._control.setTo(
@@ -169,7 +169,7 @@ class MapOrbitControl {
         return pathAnimation;
     };
 
-    onUpdate = () => {
+    onUpdate() {
         if (this.disable) return;
         this._control.cameraToUnit = this.mapView.camera.projectionMatrix.elements;
         this._control.update();
@@ -182,7 +182,7 @@ class MapOrbitControl {
             this.mapView.camera.quaternion,
             this.mapView.camera.scale
         );
-    };
+    }
 
     dispose() {
         this.mapView.removeEventListener(MapViewEventNames.Render, this.onUpdate);
@@ -216,6 +216,19 @@ class MapOrbitControl {
 
     setTo(lon, lat, z, alt, theta, phi, x) {
         this._control.setTo(lon, lat, z, alt, theta, phi, x);
+    }
+
+    getCameraState() {
+        var geocoord = this._control.unprojectPoint(this.mapView.camera.position);
+
+        return [
+            geocoord.longitude,
+            geocoord.latitude,
+            geocoord.altitude,
+            this.center.distanceTo(this.mapView.camera.position),
+            this.getTilt(),
+            this.getHeading()
+        ];
     }
 
     animateTilt(t) {
@@ -300,8 +313,8 @@ class MapOrbitControl {
         const { projection, camera } = this.mapView;
         var box = projection.projectBox(geoBox);
         var d = (box.min.distanceTo(box.max) * 0.5) / Math.tan(((camera.fov / 2) * Math.PI) / 180);
-        const { longitude, latitude } = geoBox.center;
-        this.flyTo(longitude, latitude, 0, speed || 0.1, d, theta|0, phi|0);
+        const { longitude, latitude, altitude } = geoBox.center;
+        this.flyTo(longitude, latitude, altitude, speed || 0.1, d, theta | 0, phi | 0);
     }
 
     get zoomLevelTargeted() {

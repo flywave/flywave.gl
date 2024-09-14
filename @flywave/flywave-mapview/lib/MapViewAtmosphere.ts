@@ -396,9 +396,11 @@ export class MapViewAtmosphere {
             onBeforeCallback = (camera: THREE.Camera, material: THREE.Material) => {
                 this.overrideClipPlanes(camera);
                 // Check material wasn't swapped.
-                assert(material instanceof SkyAtmosphereMaterial);
-                const mat = this.m_skyMaterial as SkyAtmosphereMaterial;
-                mat.updateUniforms(mat, this.m_skyMesh!, camera, this.m_lightDirection);
+                if (material instanceof SkyAtmosphereMaterial) {
+                    assert(material instanceof SkyAtmosphereMaterial);
+                    const mat = this.m_skyMaterial as SkyAtmosphereMaterial;
+                    mat.updateUniforms(mat, this.m_skyMesh!, camera, this.m_lightDirection);
+                }
             };
         }
 
@@ -446,9 +448,11 @@ export class MapViewAtmosphere {
             material: THREE.Material,
             _group: THREE.Group
         ) => {
-            assert(material instanceof GroundAtmosphereMaterial);
-            const mat = this.m_groundMaterial as GroundAtmosphereMaterial;
-            mat.updateUniforms(mat, this.m_groundMesh!, camera, this.m_lightDirection);
+            if(material instanceof GroundAtmosphereMaterial){
+                assert(material instanceof GroundAtmosphereMaterial);
+                const mat = this.m_groundMaterial as GroundAtmosphereMaterial;
+                mat.updateUniforms(mat, this.m_groundMesh!, camera, this.m_lightDirection);
+            }
         };
     }
 
