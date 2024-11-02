@@ -1,8 +1,7 @@
-import { BoxGeometry, BufferAttribute, BufferGeometry, Vector3 } from "three";
+import {  BufferAttribute, BufferGeometry, Vector3 } from "three";
 import { SUBTRACTION, ADDITION, INTERSECTION, Brush, Evaluator } from "three-bvh-csg";
 import AttributeCompression from "../tin-terrain/quantized-mesh/attribute-compression";
-import { mergeGeometries, toTrianglesDrawMode } from "../../loaders/BufferGeometryUtils";
-import { TriangleStripDrawMode } from "three";
+import { mergeGeometries } from "../../loaders/BufferGeometryUtils";
 
 class CSGData {
     box = new THREE.Box3();

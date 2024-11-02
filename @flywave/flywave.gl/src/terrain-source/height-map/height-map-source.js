@@ -72,7 +72,7 @@ export class HeightMapSource extends TerrainSource {
         });
     }
 
-    fetchDemData = (tileKey: TileKey) => {
+    fetchDemData = (tileKey: TileKey, abortSignal) => {
         if (!this.containsTile(tileKey)) {
             return Promise.reject({ name: "AbortError" });
         }
@@ -84,20 +84,7 @@ export class HeightMapSource extends TerrainSource {
                 .replace("{z}", String(tileKey.level));
         }
 
-        return window
-            .fetch(url, {
-                headers: {}
-            })
-            .then(res => {
-                if (res.status !== 200) {
-                    throw new Error(`Unable to load tile ${url}`);
-                }
-
-                return res.arrayBuffer();
-            })
-            .catch(err => {
-                console.log(err);
-            });
+        return downloadManager.downloadArrayBuffer(url, { signal: abortSignal });
     };
 
     get size() {

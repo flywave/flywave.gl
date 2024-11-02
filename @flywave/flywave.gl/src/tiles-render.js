@@ -1,23 +1,18 @@
-
-import {
-    GeoCoordinates, GeoBox
-} from "@flywave/flywave-geoutils";
-import { TilesRenderer } from './3dtiles-render/three/TilesRenderer';
+import { GeoCoordinates, GeoBox } from "@flywave/flywave-geoutils";
+import { TilesRenderer } from "./3dtiles-render/three/TilesRenderer";
 import { Sphere, Box3 } from "three";
 import { Vector3 } from "three";
 import { MapViewEventNames } from "@flywave/flywave-mapview";
-import {
-    OrientedBox3
-} from "@flywave/flywave-geoutils";
-import { PriorityQueue } from './3dtiles-render/utilities/PriorityQueue';
+import { OrientedBox3 } from "@flywave/flywave-geoutils";
+import { PriorityQueue } from "./3dtiles-render/utilities/PriorityQueue";
 
 import { DRACOLoader } from "./loaders/DRACOLoader";
-import config from './config';
+import config from "./config";
 import SelectionEffect from "./3dtiles-render/selection";
-
+import { ObserveObjectChange } from "./3dtiles-render/observe-object-change";
 
 class F3dTilesRenderer extends TilesRenderer {
-    constructor(url, mapView, DebugTilesRenderer,onLoaded) {
+    constructor(url, mapView, DebugTilesRenderer, onLoaded) {
         super(url);
         this.mapView = mapView;
         this.onLoaded = onLoaded;
@@ -28,6 +23,7 @@ class F3dTilesRenderer extends TilesRenderer {
         this.lruCache.minSize = 2000;
 
         this.displayActiveTiles = true;
+        this.observeObjectChange = new ObserveObjectChange();
 
         this.object = new THREE.Object3D();
         this.selectionEffect = new SelectionEffect(this);
@@ -38,7 +34,9 @@ class F3dTilesRenderer extends TilesRenderer {
         this.autoDisableRendererCulling = false;
 
         const parseQueue = new PriorityQueue();
-        parseQueue.priorityCallback = (a, b) => { return b.__t - a.__t; }
+        parseQueue.priorityCallback = (a, b) => {
+            return b.__t - a.__t;
+        };
         parseQueue.maxJobs = 100;
 
         this.manager.dracoLoader = new DRACOLoader(this.manager, parseQueue);
@@ -48,7 +46,7 @@ class F3dTilesRenderer extends TilesRenderer {
         this.DebugTilesRenderer = DebugTilesRenderer;
     }
 
-    openDebug = (debug) => {
+    openDebug = debug => {
         this.debug = debug;
 
         if (this.debugRender) {
@@ -63,21 +61,33 @@ class F3dTilesRenderer extends TilesRenderer {
             this.debugRender.setResolutionFromRenderer(this.mapView.camera, this.mapView.renderer);
             this.object.parent.add(this.debugRender.object);
         }
-    }
+    };
 
     getB3dmIdByBatchId(batchId, object) {
         var classId = object.batchTable.header.HIERARCHY.classIds[batchId];
         var classes = object.batchTable.header.HIERARCHY.classes[classId];
         try {
-            const { instances: { id: [b3dmId] } } = classes;
+            const {
+                instances: {
+                    id: [b3dmId]
+                }
+            } = classes;
             return b3dmId;
         } catch (e) {
-            return '';
+            return "";
         }
     }
- 
+
+    addObserveId(id, callback) {
+        this.observeObjectChange.addObserveId(id, callback);
+    }
+
+    deleteObserveId(id) {
+        this.observeObjectChange.deleteObserveId(id);
+    }
+
     raycast = (raycaster, intersects) => {
-        var oldRayOrigin = new THREE.Vector3;
+        var oldRayOrigin = new THREE.Vector3();
         // raycaster.far = this.mapView.camera.far * 0.3;
         oldRayOrigin.copy(raycaster.ray.origin);
         raycaster.ray.origin.copy(this.mapView.camera.position);
@@ -99,12 +109,16 @@ class F3dTilesRenderer extends TilesRenderer {
                 var classId = e.object.batchTable.header.HIERARCHY.classIds[index];
                 var classes = e.object.batchTable.header.HIERARCHY.classes[classId];
                 e.classes = classes;
-                e.b3dmId = this.getB3dmIdByBatchId(index, e.object); 
+                e.b3dmId = this.getB3dmIdByBatchId(index, e.object);
                 e.tilesUrl = this.rootURL;
             } else {
                 if (e.object.userData.i3dm) {
                     const { instanceId } = e;
-                    var { batchTable: { header: { id } } } = e.object.userData.i3dm;
+                    var {
+                        batchTable: {
+                            header: { id }
+                        }
+                    } = e.object.userData.i3dm;
 
                     e.i3dmId = id[instanceId];
                     e.batchId = instanceId;
@@ -115,7 +129,7 @@ class F3dTilesRenderer extends TilesRenderer {
 
         raycaster.ray.origin.set(0, 0, 0);
         raycaster.ray.origin.copy(oldRayOrigin);
-    }
+    };
 
     lastUpdateTime = Date.now();
 
@@ -142,38 +156,39 @@ class F3dTilesRenderer extends TilesRenderer {
 
         this.update();
         this.selectionEffect.onUpdate(this.object);
+        this.observeObjectChange.onUpdate(this.object);
         this.lastUpdateTime = Date.now();
         // }
-    }
+    };
 
     onLoadModel = (scene, tile) => {
         scene.tile = tile;
-        scene.traverse((m => {
+        scene.traverse(m => {
             m.userData = { _3dtile: tile.content, ...m.userData };
-        }));
-    }
+        });
+    };
 
     preprocessNode(tile, parentTile, tileSetDir) {
-        if ('region' in tile.boundingVolume) {
-
+        if ("region" in tile.boundingVolume) {
             const [milng, milat, mxlng, mxlat, miAlt, mxAlt] = tile.boundingVolume.region;
 
-            let box = new GeoBox(GeoCoordinates.fromRadians(milat, milng, miAlt), GeoCoordinates.fromRadians(mxlat, mxlng, mxAlt));
+            let box = new GeoBox(
+                GeoCoordinates.fromRadians(milat, milng, miAlt),
+                GeoCoordinates.fromRadians(mxlat, mxlng, mxAlt)
+            );
             var boundingBox = new Box3();
-            var center = new Vector3;
+            var center = new Vector3();
             this.mapView.projection.projectPoint(box.southWest, boundingBox.min);
             this.mapView.projection.projectPoint(box.northEast, boundingBox.max);
             this.mapView.projection.projectPoint(box.center, center);
 
-
-
             if (!parentTile) {
                 //     this.group.anchor = box.center.clone();
                 this.rootPosition = center.clone();
-                if(this.onLoaded){
+                if (this.onLoaded) {
                     this.onLoaded(tile);
                 }
-                // this.group.position.copy(this.rootPosition ); 
+                // this.group.position.copy(this.rootPosition );
 
                 //     // var bHelper = new THREE.Mesh(
                 //     //     new THREE.SphereGeometry(100, 16, 8),
@@ -190,7 +205,10 @@ class F3dTilesRenderer extends TilesRenderer {
             // if(sphere.radius>10000){
             //     console.log(tile.boundingVolume['region'],tile);
             // }
-            tile.boundingVolume['orientedBox'] = this.mapView.projection.projectBox(box, new OrientedBox3())
+            tile.boundingVolume["orientedBox"] = this.mapView.projection.projectBox(
+                box,
+                new OrientedBox3()
+            );
             // tile.boundingVolume['_region'] = tile.boundingVolume['region'];
             // delete tile.boundingVolume['region'];
 
@@ -238,9 +256,8 @@ class F3dTilesRenderer extends TilesRenderer {
             this.debugRender.off();
         }
     }
-
 }
 
-export { F3dTilesRenderer }
+export { F3dTilesRenderer };
 
 export default F3dTilesRenderer;

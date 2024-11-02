@@ -5,6 +5,9 @@ import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
 // import { Hilbert2d } from "hilbert";
 import { encode, decode } from "@vitaly-z/hilbert-geohash";
+import CsgData from "../stratum/csg-data";
+import { isEqualWith } from "lodash";
+import { HeightMap } from "./quantized-mesh/render-heightmap";
 
 export class TinMeshLoader extends TileLoader {
     constructor(dataSource, tileKey, tile, decoder, parentTile) {
@@ -161,22 +164,110 @@ class TinMeshResourceTile extends Tile {
     lru = new LRUCache(100);
 
     // hi = new Hilbert2d();
-
     async builderQuantized(tinData) {
-        this.tinData = tinData;
-        const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center } =
+        const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center, color } =
             tinData._mesh;
         var geometry = new THREE.BufferGeometry();
         geometry.setIndex(new THREE.BufferAttribute(indices, 1));
         geometry.setAttribute("position", new THREE.BufferAttribute(position3DAndHeight, 3));
-        // geometry.setAttribute("position3DAndHeight", new THREE.BufferAttribute(position3DAndHeight, 4));
+        if (color) geometry.setAttribute("color", new THREE.BufferAttribute(color, 3));
         geometry.setAttribute(
             "textureCoordAndEncodedNormals",
             new THREE.BufferAttribute(textureCoordAndEncodedNormals, 4)
         );
-        this.geometry = geometry;
-
         this.tinCenter = new THREE.Vector3(center.x, center.y, center.z);
+
+        var tempMesh = new THREE.Mesh(geometry);
+        tempMesh.position.copy(this.tinCenter);
+        tempMesh.updateMatrixWorld();
+        this._box = new THREE.Box3();
+        this._box.setFromObject(tempMesh);
+        this._tempTinData = tinData;
+        await this.loadCsg(tinData);
+        this.tinData = tinData;
+        this._geometry = geometry;
+    }
+
+    builderCsgGeometry(tinData, csgData, hightBuffer) {
+        if (!csgData) {
+            delete this.csgGeometry;
+            delete tinData.csgStratumGroups;
+            return;
+        }
+        var csg = new CsgData().fromJSON(csgData);
+        if (this.csgGeometry) {
+            this.csgGeometry.dispose();
+            this.csgGeometry = csg.mesh.geometry;
+        } else {
+            this.csgGeometry = csg.mesh.geometry;
+        }
+        const { groups } = this.csgGeometry;
+
+        tinData.csgHeightMap = new HeightMap(
+            hightBuffer.buffer,
+            hightBuffer.minimumHeight,
+            hightBuffer.maximumHeight
+        );
+    }
+
+    __prevIntersectsCsgDatas = [];
+    getintersectsCsgDatas() {
+        const { csgDatas } = this.dataSource.dataTerrainProvider;
+        var updatedDatas = csgDatas.filter(csg => {
+            return this._box.intersectsBox(csg.box);
+        });
+
+        if (this.__prevIntersectsCsgDatas.length == updatedDatas.length) {
+            return [];
+        }
+
+        if (
+            !isEqualWith(this.__prevIntersectsCsgDatas, csgDatas, (a, b) => {
+                return a == b.hash;
+            })
+        ) {
+            return updatedDatas;
+        }
+        return [];
+    }
+
+    loadCsgGeometry(intersectsCsgDatas, tinData) {
+        this.__prevIntersectsCsgDatas = intersectsCsgDatas.map(cd => cd.hash);
+        this.csgTinMeshLoader.setIntersectsCsgDatas(intersectsCsgDatas);
+        this.csgTinMeshLoader.load();
+        return this.csgTinMeshLoader.donePromise.then(() => {
+            const { hightBuffer, csgData } = this.csgTinMeshLoader.decodedTile;
+            this.builderCsgGeometry(tinData, csgData, hightBuffer);
+        });
+    }
+
+    loadCsg(tinData) {
+        let getintersectsCsgDatas = this.getintersectsCsgDatas();
+        if (getintersectsCsgDatas.length) {
+            return this.loadCsgGeometry(getintersectsCsgDatas, tinData);
+        }
+
+        return Promise.resolve();
+    }
+
+    get heightMap() {
+        const { csgHeightMap, heightMap } = this.tinData;
+        if (csgHeightMap) {
+            return csgHeightMap;
+        }
+        return heightMap;
+    }
+
+    get geometry() {
+        this.loadCsg(this.tinData);
+        if (this.csgGeometry) {
+            return this.csgGeometry;
+        }
+        return this._geometry;
+    }
+
+    clearCsgGeometry() {
+        this.__prevIntersectsCsgDatas.length = [];
     }
 
     rayTest(ray, target) {

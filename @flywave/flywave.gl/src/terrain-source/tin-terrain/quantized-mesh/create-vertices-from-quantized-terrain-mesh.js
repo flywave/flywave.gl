@@ -357,8 +357,9 @@ export function createVerticesFromQuantizedTerrainMesh(
                 if (normal.length() == 0) {
                     normal
                         .set(positionBuffer.getX(j), positionBuffer.getY(j), positionBuffer.getZ(j))
-                        .add(center)
+                        .sub(center)
                         .normalize();
+                        continue;
                 }
                 vertexBuffer[j * vertexStride + vertexStride - 1] =
                     AttributeCompression.octEncodeFloat(normal);

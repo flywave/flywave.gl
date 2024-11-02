@@ -763,7 +763,7 @@ class FreeControl {
 
   flyTo(
     lat, lng, camVdistance, speed, centerDistance, theta, phi, toCity = false, I) {
-    var D = lat, w = lng, A = camVdistance, x = speed, v = centerDistance,
+    var D = lat, w = lng, A = camVdistance, x = speed, v = centerDistance||0,
       H = theta, J = phi;
 
     var G = this, C = G.camera;
@@ -795,7 +795,7 @@ class FreeControl {
       G.zoom_end[0] = D;
       G.zoom_end[1] = w;
       G.zoom_end[2] = A || 0;
-      G.zoom_end[3] = (v || 2000);
+      G.zoom_end[3] = (v);
       G.zoom_end[4] = H || 0;
       G.zoom_end[5] = J || 0;
       this.getXYZ(B, w, D, A || 0);
@@ -824,7 +824,7 @@ class FreeControl {
         G.zoom_mid_matrix, G.zoom_start_matrix, G.zoom_mid_matrix, 0.5)
     }
     matrix.rotateX(G.zoom_end_matrix, (H));
-    matrix.translate(G.zoom_end_matrix, 0, 0, (v || 2000));
+    matrix.translate(G.zoom_end_matrix, 0, 0, (v));
   };
 
   animateTilt(v) {

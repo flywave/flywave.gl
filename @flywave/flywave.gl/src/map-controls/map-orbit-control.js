@@ -17,15 +17,26 @@ class MapOrbitControl {
         this.mapView = application;
         this.window = application.window;
         this.mapView.addEventListener(MapViewEventNames.Render, this.onUpdate.bind(this));
+        const {
+            camera: { cameraToWorld }
+        } = this._control;
+        cameraToWorld.set(this.mapView.camera.matrixWorld.elements);
+    }
 
-        var geocoord = this._control.unprojectPoint(this.mapView.camera.position);
-        this._control.setTo(
-            geocoord.longitude,
-            geocoord.latitude,
-            geocoord.altitude,
-            0,
-            Math.PI / 10,
-            0
+    asyncCamera(mat) {
+        const {
+            camera: { cameraToWorld }
+        } = this._control;
+        cameraToWorld.set(mat.elements);
+    }
+
+    hasCameraMouseInterfere() {
+        let view = this.window;
+        var iswheel = this._control.prevMouseZ !== this.window.lastMouseZ;
+        return (
+            iswheel ||
+            (view.mouseDown[0] && !this._control.omouseDown[0]) ||
+            (view.mouseDown[2] && !this._control.omouseDown[2])
         );
     }
 
@@ -225,7 +236,6 @@ class MapOrbitControl {
             geocoord.longitude,
             geocoord.latitude,
             geocoord.altitude,
-            this.center.distanceTo(this.mapView.camera.position),
             this.getTilt(),
             this.getHeading()
         ];

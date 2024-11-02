@@ -42,6 +42,7 @@ export class HeightMapProvider {
 
     evictionCallback(key, dtmTile) {
         dtmTile.dispose();
+        dtmTile.tileLoader.cancel();
         if (dtmTile.dem)
             dtmTile.dem.dispose();
     }

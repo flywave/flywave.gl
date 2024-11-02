@@ -10,7 +10,9 @@ import { Tile, TileLoaderState } from "@flywave/flywave-mapview";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
 import * as THREE from "three";
-import { Material } from "three";
+import { TransferManager } from "@flywave/flywave-transfer-manager";
+
+var downloadManager = TransferManager.instance();
 
 const textureLoader = new THREE.TextureLoader();
 textureLoader.crossOrigin = "";
@@ -26,7 +28,7 @@ export class TileMaterialLoader extends TileLoader {
         abortSignal: AbortSignal,
         onDone: (doneState: TileLoaderState) => void,
         onError: (error: Error) => void
-    ): void {
+    ): void { 
         this.dataProvider
             .fetchTileMaterial(this.tileKey, abortSignal)
             .then(material => {
@@ -37,7 +39,7 @@ export class TileMaterialLoader extends TileLoader {
                     throw err;
                 }
 
-                this.tile.material = material;
+                this.tile.material = material; 
 
                 onDone(TileLoaderState.Ready);
             })
@@ -240,8 +242,25 @@ export class MaterialProvider {
 
     fetchTileMaterial(tileKey, abortSignal) {
         var url = this.getTileTextureUrl(tileKey);
+
         return new Promise((resolve, reject) => {
-            textureLoader.load(url, resolve, undefined, reject);
+            this.dataSource.mapView.taskQueue.add({
+                execute: async () => {
+                    if(abortSignal.aborted){
+                        return;
+                    }
+                    let response = await downloadManager.download(url, { signal: abortSignal });
+                    if (response) {
+                        const fileBlob = await response.blob();
+                        const image = URL.createObjectURL(fileBlob);
+                        textureLoader.load(image, resolve);
+                    }
+                },
+                getPriority: () => {
+                    return 100 - tileKey.level;
+                },
+                group: "fetch"
+            });
         }).then(texture => {
             texture.minFilter = THREE.LinearFilter;
             texture.magFilter = THREE.LinearFilter;
@@ -252,7 +271,8 @@ export class MaterialProvider {
     }
 
     evictionCallback = (k, tile) => {
-        const { material } = tile;
+        const { material,tileLoader } = tile;
+        tileLoader.cancel();
         if (material) material.dispose();
     };
 

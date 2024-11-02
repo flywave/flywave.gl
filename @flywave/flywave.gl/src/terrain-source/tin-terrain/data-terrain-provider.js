@@ -9,6 +9,7 @@ import {
     TilingScheme
 } from "@flywave/flywave-geoutils";
 import { TinMeshLoader, TinMeshResourceTile } from "./tin-terrain-loader";
+import { TileLoader } from "@flywave/flywave-mapview-decoder";
 
 import TileAvailability from "./tile-availability";
 import { defined, defaultValue, formatUrl } from "./utils";
@@ -431,6 +432,44 @@ function LayerInformation(layer) {
     this.availabilityPromiseCache = {};
 }
 
+export class CsgTinMeshLoader extends TileLoader {
+    constructor(dataSource, tileKey, tile) {
+        super(dataSource, tileKey, dataSource.dataTerrainProvider, dataSource.csgDecoder);
+        this.tile = tile;
+    }
+
+    loadImpl(abortSignal, onDone, onError) {
+        const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center } =
+            this.tile._tempTinData._mesh;
+
+        this.onLoaded(
+            {
+                geoBox: this.tile.geoBox.southWest
+                    .toGeoPoint()
+                    .concat(this.tile.geoBox.northEast.toGeoPoint()),
+                source: {
+                    position3DAndHeight,
+                    textureCoordAndEncodedNormals,
+                    indices, 
+                    center
+                },
+                target: this.__intersectsCsgDatas.map(d => d.toJSON())
+            },
+            doneState => {
+                onDone(doneState);
+            },
+            err => {
+                onError(err);
+            }
+        );
+    }
+
+    __intersectsCsgDatas = [];
+    setIntersectsCsgDatas(intersectsCsgDatas) {
+        this.__intersectsCsgDatas = intersectsCsgDatas;
+    }
+}
+
 class DataTerrainProvider {
     constructor(options, dataSource) {
         this._requestWaterMask = defaultValue(options.requestWaterMask, false);
@@ -449,6 +488,25 @@ class DataTerrainProvider {
         this.dataSource = dataSource;
 
         this._requestVertexNormals = options.requestVertexNormals || false;
+    }
+
+    csgDatas = [];
+
+    addCsgData(csgdata) {
+        this.csgDatas.push(csgdata);
+        this.dataSource.updateTileOverlayer();
+    }
+
+    removeCsgData(id) {
+        this.csgDatas = this.csgDatas.filter(csg => csg.id != id);
+    }
+
+    updateCsgData() {
+        this.dataSource.dataProvider().tinCache.forEach(e => {
+            e.clearCsgGeometry();
+        });
+
+        this.dataSource.updateTileOverlayer();
     }
 
     _layers = [];
@@ -484,6 +542,7 @@ class DataTerrainProvider {
             this.dataSource.decoder,
             parentTileTinData
         );
+        tile.csgTinMeshLoader = new CsgTinMeshLoader(this.dataSource, tileKey, tile);
         return tile;
     }
 
@@ -821,7 +880,7 @@ class DataTerrainProvider {
         }
 
         return Promise.resolve();
-    };
+    }
 }
 
 function requestTileGeometry(provider, x, y, level, layerToUse) {

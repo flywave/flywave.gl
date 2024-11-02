@@ -1,12 +1,13 @@
 import { DataTerrainProvider } from "../tin-terrain/data-terrain-provider";
 import { TinMeshResourceTile, TinMeshLoader } from "../tin-terrain/tin-terrain-loader";
-import { TileLoader } from "@flywave/flywave-mapview-decoder";
 import { Box3 } from "three";
 import { isEqualWith } from "lodash";
 import CsgData from "./csg-data";
 import { HeightMap } from "../tin-terrain/quantized-mesh/render-heightmap";
+import { TileLoader } from "@flywave/flywave-mapview-decoder";
 
-class CsgTinMeshLoader extends TileLoader {
+
+export class CsgTinMeshLoader extends TileLoader {
     constructor(dataSource, tileKey, tile) {
         super(dataSource, tileKey, dataSource.dataTerrainProvider, dataSource.csgDecoder);
         this.tile = tile;
@@ -180,25 +181,6 @@ class StratumResourceTile extends TinMeshResourceTile {
 }
 
 class DataStratumProvider extends DataTerrainProvider {
-    csgDatas = [];
-
-    addCsgData(csgdata) {
-        this.csgDatas.push(csgdata);
-        this.dataSource.updateTileOverlayer();
-    }
-
-    removeCsgData(id) {
-        this.csgDatas = this.csgDatas.filter(csg => csg.id != id);
-    }
-
-    updateCsgData() {
-        this.dataSource.dataProvider().tinCache.forEach(e => {
-            e.clearCsgGeometry();
-        });
-
-        this.dataSource.updateTileOverlayer();
-    }
-
     makeLoaderTile(tileKey, parentTileTinData) {
         var tile = new StratumResourceTile(this.dataSource, tileKey);
         tile.tileKey.level = tile.tileKey.level - 1;

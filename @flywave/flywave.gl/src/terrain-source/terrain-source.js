@@ -42,6 +42,7 @@ export class TerrainSource extends TileDataSource {
     };
 
     afterRender = () => {
+        if(this.isDetached())return;
         this._onCameraChange = false;
         tempMaterix.identity();
         tempMaterix.setPosition(this.mapView.camera.position);
@@ -146,7 +147,7 @@ export class TerrainSource extends TileDataSource {
                         }
                     },
                     getPriority: () => {
-                        return 100;
+                        return 100-tile.tileKey.level;
                     },
                     group: "create"
                 });
