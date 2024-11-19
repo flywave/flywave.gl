@@ -39,6 +39,7 @@ export default class DEMData {
         this.stride = data.height;
         const dim = this.dim = data.height - 2;
         this.data = new Uint32Array(data.data.buffer);
+        this.pixels = new Uint8Array(this.data.buffer);
         this.encoding = encoding || 'mapbox';
         this.borderReady = borderReady;
 
@@ -65,6 +66,8 @@ export default class DEMData {
         if (buildQuadTree) {
             this._buildQuadTree();
         }
+
+    
     }
 
     _buildDisplacementMap() {
@@ -108,7 +111,7 @@ export default class DEMData {
     }
 
     get(x: number, y: number, clampToEdge: boolean = false) {
-        const pixels = new Uint8Array(this.data.buffer);
+        const pixels = this.pixels;
         if (clampToEdge) {
             x = clamp(x, -1, this.dim);
             y = clamp(y, -1, this.dim);

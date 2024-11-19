@@ -7,7 +7,8 @@ import { TerrainSource } from "../terrain-source";
 import range from "lodash.range";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { TransferManager } from "@flywave/flywave-transfer-manager";
-import { Box2, Vector2 } from "three";
+import { Box2, Vector2, ImageLoader } from "three";
+
 var id = 0;
 var downloadManager = TransferManager.instance();
 export class HeightMapSource extends TerrainSource {
@@ -84,7 +85,9 @@ export class HeightMapSource extends TerrainSource {
                 .replace("{z}", String(tileKey.level));
         }
 
-        return downloadManager.downloadArrayBuffer(url, { signal: abortSignal });
+        return downloadManager.downloadArrayBuffer(url, { signal: abortSignal }).catch(e => {
+            console.log();
+        });
     };
 
     get size() {

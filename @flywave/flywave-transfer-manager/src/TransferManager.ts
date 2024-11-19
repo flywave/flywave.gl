@@ -166,7 +166,11 @@ export class TransferManager implements ITransferManager {
     download(url: RequestInfo, init?: RequestInit): Promise<Response> {
         if (this.activeDownloadCount >= TransferManager.maxParallelDownloads) {
             const deferred = new DeferredPromise<Response>(() => this.doDownload(url, init));
+            //@ts-ignore 
+            deferred.init = init;
             this.downloadQueue.push(deferred);
+             //@ts-ignore 
+            this.downloadQueue = this.downloadQueue.filter(d=>!d.init||!d.init.signal||!d.init.signal.aborted)
             return deferred.promise;
         }
         return this.doDownload(url, init);
@@ -175,6 +179,9 @@ export class TransferManager implements ITransferManager {
     private async doDownload(url: RequestInfo, init?: RequestInit): Promise<Response> {
         try {
             ++this.activeDownloadCount;
+            if(init&&init.signal&&init.signal.aborted){
+                throw "aborted"
+            }
             const response = await TransferManager.fetchRepeatedly(
                 this.fetchFunction,
                 0,

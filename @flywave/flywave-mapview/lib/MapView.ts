@@ -3267,6 +3267,7 @@ export class MapView extends EventDispatcher {
         this.m_rteCamera.copy(this.m_camera);
         this.m_rteCamera.position.setScalar(0);
         this.m_rteCamera.updateMatrixWorld(true);
+        this.m_rteCamera.projectionMatrix.copy(this.m_camera.projectionMatrix);
 
         this.m_textElementsRenderer?.updateCamera();
 

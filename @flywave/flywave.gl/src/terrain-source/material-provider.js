@@ -12,10 +12,10 @@ import { LRUCache } from "@flywave/flywave-lrucache";
 import * as THREE from "three";
 import { TransferManager } from "@flywave/flywave-transfer-manager";
 
-var downloadManager = TransferManager.instance();
-
-const textureLoader = new THREE.TextureLoader();
-textureLoader.crossOrigin = "";
+var imageLoader = new THREE.TextureLoader();
+var downloadImageManager = new TransferManager(url => {
+    return { data: imageLoader.loadAsync(url), status: 200 };
+});
 
 export class TileMaterialLoader extends TileLoader {
     constructor(dataSource, tile, dataProvider, decoder) {
@@ -28,9 +28,9 @@ export class TileMaterialLoader extends TileLoader {
         abortSignal: AbortSignal,
         onDone: (doneState: TileLoaderState) => void,
         onError: (error: Error) => void
-    ): void { 
+    ): void {
         this.dataProvider
-            .fetchTileMaterial(this.tileKey, abortSignal)
+            .fetchTileMaterial(this.tileKey, abortSignal, this)
             .then(material => {
                 if (abortSignal.aborted) {
                     // safety belt if getTile doesn't really support cancellation tokens
@@ -39,7 +39,7 @@ export class TileMaterialLoader extends TileLoader {
                     throw err;
                 }
 
-                this.tile.material = material; 
+                this.tile.material = material;
 
                 onDone(TileLoaderState.Ready);
             })
@@ -240,20 +240,32 @@ export class MaterialProvider {
             .replace("{server}", mortonCode % 4);
     }
 
-    fetchTileMaterial(tileKey, abortSignal) {
+    fetchTileMaterial(tileKey, abortSignal, tileLoader) {
         var url = this.getTileTextureUrl(tileKey);
 
         return new Promise((resolve, reject) => {
             this.dataSource.mapView.taskQueue.add({
                 execute: async () => {
-                    if(abortSignal.aborted){
+                    if (abortSignal.aborted) {
                         return;
                     }
-                    let response = await downloadManager.download(url, { signal: abortSignal });
-                    if (response) {
-                        const fileBlob = await response.blob();
-                        const image = URL.createObjectURL(fileBlob);
-                        textureLoader.load(image, resolve);
+                    let { data: texture } = await downloadImageManager.download(url);
+                    if (texture) {
+                        texture.minFilter = THREE.LinearFilter;
+                        texture.magFilter = THREE.LinearFilter;
+                        texture.generateMipmaps = false;
+                        texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+
+                        this.dataSource.mapView.taskQueue.add({
+                            execute: async () => {
+                                texture.needsUpdate = true;
+                                resolve(texture);
+                            },
+                            getPriority: () => {
+                                return 100 - tileKey.level;
+                            },
+                            group: "create"
+                        });
                     }
                 },
                 getPriority: () => {
@@ -262,17 +274,14 @@ export class MaterialProvider {
                 group: "fetch"
             });
         }).then(texture => {
-            texture.minFilter = THREE.LinearFilter;
-            texture.magFilter = THREE.LinearFilter;
-            texture.generateMipmaps = false;
-            texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
             return texture;
         });
     }
 
     evictionCallback = (k, tile) => {
-        const { material,tileLoader } = tile;
+        const { material, tileLoader } = tile;
         tileLoader.cancel();
+        tileLoader.canceled = true;
         if (material) material.dispose();
     };
 

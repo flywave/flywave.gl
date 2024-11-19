@@ -40,14 +40,14 @@ export class HeightMapProvider {
         this.tileDemCache.evictionCallback = this.evictionCallback;
     }
 
-    evictionCallback(key, dtmTile) {
-        dtmTile.dispose();
+    evictionCallback(key, dtmTile) { 
         dtmTile.tileLoader.cancel();
         if (dtmTile.dem)
             dtmTile.dem.dispose();
+        dtmTile.dispose();
     }
 
-    tileDemCache = new LRUCache(2000);
+    tileDemCache = new LRUCache(1500);
 
     clear=()=>{
         this.tileDemCache.clear();
@@ -97,10 +97,10 @@ export class HeightMapProvider {
                             tile.dem = new DEMData(dem.uid, dem, dem.encoding, dem.borderReady, false);
                             Object.assign(tile.dem, dem);
 
-                            tile.dem._buildQuadTree();
+                            // tile.dem._buildQuadTree();
                             tile.dem._buildTexture(this.dataSource.size);
                             tile.dem._buildDisplacementMapTexture(this.dataSource.size);
-                            this._backfillDEM(tile);
+                            // this._backfillDEM(tile);
                             this.dataSource.updateTileOverlayer(tile);
                         }).catch((err) => {
                             tile.error = err;
