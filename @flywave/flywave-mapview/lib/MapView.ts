@@ -111,6 +111,8 @@ export enum MapViewEventNames {
     Resize = "resize",
     /** Called when the frame is about to be rendered. */
     Render = "render",
+    /** Called when the frame is about to be rendered. */
+    WillRender = "will-render",
     /** Called after a frame has been rendered. */
     AfterRender = "didrender",
     /** Called after the first frame has been rendered. */
@@ -724,6 +726,7 @@ export class MapView extends EventDispatcher {
      */
     private readonly UPDATE_EVENT: RenderEvent = { type: MapViewEventNames.Update };
     private readonly RENDER_EVENT: RenderEvent = { type: MapViewEventNames.Render };
+    private readonly WILL_RENDER_EVENT: RenderEvent = { type: MapViewEventNames.WillRender };
     private readonly DID_RENDER_EVENT: RenderEvent = { type: MapViewEventNames.AfterRender };
     private readonly FIRST_FRAME_EVENT: RenderEvent = { type: MapViewEventNames.FirstFrame };
     private readonly FRAME_COMPLETE_EVENT: RenderEvent = {
@@ -3572,7 +3575,8 @@ export class MapView extends EventDispatcher {
         if (gatherStatistics) {
             textPlacementTime = PerformanceTimer.now();
         }
-
+ 
+        this.dispatchEvent(this.WILL_RENDER_EVENT);
         this.mapRenderingManager.render(
             this.m_renderer,
             this.m_scene,

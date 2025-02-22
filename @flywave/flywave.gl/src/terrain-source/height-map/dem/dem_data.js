@@ -94,7 +94,7 @@ export default class DEMData {
 
     _buildTexture(size) {
         var _size = size+2;
-        var texture = new THREE.DataTexture(new Uint8Array(this.data.buffer), _size, _size, THREE.RGBAFormat);
+        var texture = new THREE.DataTexture(new Uint8Array(this.pixels.buffer), _size, _size, THREE.RGBAFormat);
         texture.minFilter = THREE.LinearFilter;
         texture.magFilter = THREE.LinearFilter;
         // texture.generateMipmaps = false; 
@@ -192,7 +192,12 @@ export default class DEMData {
         const oy = -dy * this.dim;
         for (let y = yMin; y < yMax; y++) {
             for (let x = xMin; x < xMax; x++) {
-                this.data[this._idx(x, y)] = borderTile.data[this._idx(x + ox, y + oy)];
+                const i = 4 * this._idx(x, y);
+                const j = 4 * this._idx(x + ox, y + oy);
+                this.pixels[i + 0] = borderTile.pixels[j + 0];
+                this.pixels[i + 1] = borderTile.pixels[j + 1];
+                this.pixels[i + 2] = borderTile.pixels[j + 2];
+                this.pixels[i + 3] = borderTile.pixels[j + 3];
             }
         }
     }

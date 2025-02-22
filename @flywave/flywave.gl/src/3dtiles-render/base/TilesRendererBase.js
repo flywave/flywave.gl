@@ -53,7 +53,7 @@ const priorityCallback = ( a, b ) => {
  */
 // const lruPriorityCallback = (tile) => ((tile.__inFrustum?10:1)*1 / (tile.__distanceFromCamera ));
 const lruPriorityCallback = ( tile ) => 1 / ( tile.__depthFromRenderedParent + 1 );
-export class TilesRendererBase {
+export class TilesRendererBase extends THREE.EventDispatcher {
 
 	get rootTileSet() {
 
@@ -78,7 +78,7 @@ export class TilesRendererBase {
 	}
 
 	constructor(url) {
-
+		super();
 		// state
 		this.tileSets = {};
 		this.rootURL = url;

@@ -9,7 +9,8 @@ import { PriorityQueue } from "./3dtiles-render/utilities/PriorityQueue";
 import { DRACOLoader } from "./loaders/DRACOLoader";
 import config from "./config";
 import SelectionEffect from "./3dtiles-render/selection";
-import { ObserveObjectChange } from "./3dtiles-render/observe-object-change";
+
+export const F3dTilesRendererUpdateEvent = "update";
 
 class F3dTilesRenderer extends TilesRenderer {
     constructor(url, mapView, DebugTilesRenderer, onLoaded) {
@@ -23,7 +24,6 @@ class F3dTilesRenderer extends TilesRenderer {
         this.lruCache.minSize = 2000;
 
         this.displayActiveTiles = true;
-        this.observeObjectChange = new ObserveObjectChange();
 
         this.object = new THREE.Object3D();
         this.selectionEffect = new SelectionEffect(this);
@@ -76,14 +76,6 @@ class F3dTilesRenderer extends TilesRenderer {
         } catch (e) {
             return "";
         }
-    }
-
-    addObserveId(id, callback) {
-        this.observeObjectChange.addObserveId(id, callback);
-    }
-
-    deleteObserveId(id) {
-        this.observeObjectChange.deleteObserveId(id);
     }
 
     raycast = (raycaster, intersects) => {
@@ -156,7 +148,7 @@ class F3dTilesRenderer extends TilesRenderer {
 
         this.update();
         this.selectionEffect.onUpdate(this.object);
-        this.observeObjectChange.onUpdate(this.object);
+        this.dispatchEvent(F3dTilesRendererUpdateEvent, this.object);
         this.lastUpdateTime = Date.now();
         // }
     };

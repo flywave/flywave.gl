@@ -100,7 +100,7 @@ Object.assign(THREE.ShaderChunk, {
     "terrain_common": `
 
         uniform mat4 uPatchPos;
-        uniform vec3 uNormal;
+        // uniform vec3 uNormal;
         uniform float opacity;  
 
         // uniform bool uIsSimplePatch; 

@@ -5,9 +5,9 @@ export class ObserveObjectChange {
     _watchNodifyed = {};
     nodifyCallBack = m => {
         if (m instanceof InstancedMesh) {
-            this._nodifyCallBack&&this._nodifyCallBack(m);
+            this._nodifyCallBack && this._nodifyCallBack(m);
             for (let watchId in this._watchIds) {
-                if(!m.userData.i3dm)return;
+                if (!m.userData.i3dm) return;
                 const {
                     i3dm: {
                         batchTable: { header }
@@ -36,7 +36,7 @@ export class ObserveObjectChange {
         }
 
         if (m instanceof Mesh) {
-            this._nodifyCallBack&&this._nodifyCallBack(m);
+            this._nodifyCallBack && this._nodifyCallBack(m);
             for (let watchId in this._watchIds) {
                 let batchId = -1;
                 object.batchTable.header.HIERARCHY.classes.some((e, index) => {
@@ -45,10 +45,10 @@ export class ObserveObjectChange {
                         return true;
                     }
                 });
-                if (index == -1) continue
+                if (index == -1) continue;
 
                 if (this._watchNodifyed[watchId] && this._watchNodifyed[watchId].has(m.uuid)) {
-                    continue
+                    continue;
                 }
 
                 this._watchIds[watchId]({
@@ -64,19 +64,13 @@ export class ObserveObjectChange {
         }
     };
 
-    addObserveId(id, callback) {
-        this._watchIds[id] = callback;
+    subscribe(id, callback) {
+        if (callback) this._watchIds[id] = callback;
+        else {
+            delete this._watchIds[id];
+            delete this._watchNodifyed[id];
+        }
     }
-
-    deleteObserveId(id) {
-        delete this._watchIds[id];
-        delete this._watchNodifyed[id];
-    }
-
-    _nodifyCallBack=null
-    setNodifyAll(n){
-        this._nodifyCallBack = n;
-    } 
 
     onUpdate(object) {
         if (!Object.keys(this._watchIds).length) return;

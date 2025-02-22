@@ -114,6 +114,7 @@ class Application extends MapView {
         this.materialProviders.forEach(provider => {
             provider.bindDataSource(this.terrainSource);
         });
+        return this.terrainSource;
     }
 
     async setHeightMapSource(source) {
@@ -125,9 +126,9 @@ class Application extends MapView {
 
     async setTinTerrainSource(options) {
         this.__enableTerrain = true;
-        await this._terrain_promise.then(async () => {
+        await this._terrain_promise.then(async (reslove) => {
             if (!this.terrainSource || this.terrainSource.baseUrl != options.url) {
-                await this.__updateTerrainSource(new TinTerrainSource(options));
+                reslove(await this.__updateTerrainSource(new TinTerrainSource(options))); 
             }
         });
     }

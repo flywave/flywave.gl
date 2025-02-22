@@ -1,4 +1,5 @@
-import { BufferAttribute, BufferGeometry, Vector3 } from "three"
+import { BufferAttribute, BufferGeometry, Vector3, BoxGeometry, PlaneGeometry } from "three"
+import { mergeGeometries } from "../../../loaders/BufferGeometryUtils";
 
 class SphereTileGrids {
   geometryCache = {};
@@ -163,117 +164,153 @@ class SphereTileGrids {
     return new Vector3(v * C, u * C, t);
   }
 
-  
-	computeVertexNormals(geometry,skritMap) {
 
-		const index = geometry.index;
-		const positionAttribute = geometry.getAttribute( 'position' );
+  computeVertexNormals(geometry, skritMap) {
 
-		if ( positionAttribute !== undefined ) {
+    const index = geometry.index;
+    const positionAttribute = geometry.getAttribute('position');
 
-			let normalAttribute = geometry.getAttribute( 'normal' );
+    if (positionAttribute !== undefined) {
 
-			if ( normalAttribute === undefined ) {
+      let normalAttribute = geometry.getAttribute('normal');
 
-				normalAttribute = new BufferAttribute( new Float32Array( positionAttribute.count * 3 ), 3 );
-				geometry.setAttribute( 'normal', normalAttribute );
+      if (normalAttribute === undefined) {
 
-			} else {
+        normalAttribute = new BufferAttribute(new Float32Array(positionAttribute.count * 3), 3);
+        geometry.setAttribute('normal', normalAttribute);
 
-				// reset existing normals to zero
+      } else {
 
-				for ( let i = 0, il = normalAttribute.count; i < il; i ++ ) {
+        // reset existing normals to zero
 
-					normalAttribute.setXYZ( i, 0, 0, 0 );
+        for (let i = 0, il = normalAttribute.count; i < il; i++) {
 
-				}
+          normalAttribute.setXYZ(i, 0, 0, 0);
 
-			}
+        }
 
-			const pA = new Vector3(), pB = new Vector3(), pC = new Vector3();
-			const nA = new Vector3(), nB = new Vector3(), nC = new Vector3();
-			const cb = new Vector3(), ab = new Vector3();
+      }
 
-			// indexed elements
+      const pA = new Vector3(), pB = new Vector3(), pC = new Vector3();
+      const nA = new Vector3(), nB = new Vector3(), nC = new Vector3();
+      const cb = new Vector3(), ab = new Vector3();
 
-			if ( index ) {
+      // indexed elements
 
-				for ( let i = 0, il = index.count; i < il; i += 3 ) {
+      if (index) {
 
-					const vA = index.getX( i + 0 );
-					const vB = index.getX( i + 1 );
-					const vC = index.getX( i + 2 );
+        for (let i = 0, il = index.count; i < il; i += 3) {
+
+          const vA = index.getX(i + 0);
+          const vB = index.getX(i + 1);
+          const vC = index.getX(i + 2);
 
 
-					pA.fromBufferAttribute( positionAttribute, vA );
-					pB.fromBufferAttribute( positionAttribute, vB );
-					pC.fromBufferAttribute( positionAttribute, vC );
+          pA.fromBufferAttribute(positionAttribute, vA);
+          pB.fromBufferAttribute(positionAttribute, vB);
+          pC.fromBufferAttribute(positionAttribute, vC);
 
-          if(skritMap){
-            if(skritMap[vA*3]!==false){
-              pA.fromArray(skritMap[vA*3]);
+          if (skritMap) {
+            if (skritMap[vA * 3] !== false) {
+              pA.fromArray(skritMap[vA * 3]);
             }
 
-            if(skritMap[vB*3]!==false){
-              pB.fromArray(skritMap[vB*3]);
+            if (skritMap[vB * 3] !== false) {
+              pB.fromArray(skritMap[vB * 3]);
             }
 
-            if(skritMap[vC*3]!==false){
-              pC.fromArray(skritMap[vC*3]);
-            } 
+            if (skritMap[vC * 3] !== false) {
+              pC.fromArray(skritMap[vC * 3]);
+            }
           }
 
-					cb.subVectors( pC, pB );
-					ab.subVectors( pA, pB );
-					cb.cross( ab );
+          cb.subVectors(pC, pB);
+          ab.subVectors(pA, pB);
+          cb.cross(ab);
 
-					nA.fromBufferAttribute( normalAttribute, vA );
-					nB.fromBufferAttribute( normalAttribute, vB );
-					nC.fromBufferAttribute( normalAttribute, vC );
+          nA.fromBufferAttribute(normalAttribute, vA);
+          nB.fromBufferAttribute(normalAttribute, vB);
+          nC.fromBufferAttribute(normalAttribute, vC);
 
-					nA.add( cb );
-					nB.add( cb );
-					nC.add( cb ); 
-          normalAttribute.setXYZ( vA, nA.x, nA.y, nA.z );
-          normalAttribute.setXYZ( vB, nB.x, nB.y, nB.z );
-          normalAttribute.setXYZ( vC, nC.x, nC.y, nC.z ); 
+          nA.add(cb);
+          nB.add(cb);
+          nC.add(cb);
+          normalAttribute.setXYZ(vA, nA.x, nA.y, nA.z);
+          normalAttribute.setXYZ(vB, nB.x, nB.y, nB.z);
+          normalAttribute.setXYZ(vC, nC.x, nC.y, nC.z);
 
-				}
+        }
 
-			} else {
+      } else {
 
-				// non-indexed elements (unconnected triangle soup)
+        // non-indexed elements (unconnected triangle soup)
 
-				for ( let i = 0, il = positionAttribute.count; i < il; i += 3 ) {
+        for (let i = 0, il = positionAttribute.count; i < il; i += 3) {
 
-					pA.fromBufferAttribute( positionAttribute, i + 0 );
-					pB.fromBufferAttribute( positionAttribute, i + 1 );
-					pC.fromBufferAttribute( positionAttribute, i + 2 );
+          pA.fromBufferAttribute(positionAttribute, i + 0);
+          pB.fromBufferAttribute(positionAttribute, i + 1);
+          pC.fromBufferAttribute(positionAttribute, i + 2);
 
-					cb.subVectors( pC, pB );
-					ab.subVectors( pA, pB );
-					cb.cross( ab );
+          cb.subVectors(pC, pB);
+          ab.subVectors(pA, pB);
+          cb.cross(ab);
 
-					normalAttribute.setXYZ( i + 0, cb.x, cb.y, cb.z );
-					normalAttribute.setXYZ( i + 1, cb.x, cb.y, cb.z );
-					normalAttribute.setXYZ( i + 2, cb.x, cb.y, cb.z );
+          normalAttribute.setXYZ(i + 0, cb.x, cb.y, cb.z);
+          normalAttribute.setXYZ(i + 1, cb.x, cb.y, cb.z);
+          normalAttribute.setXYZ(i + 2, cb.x, cb.y, cb.z);
 
-				}
+        }
 
-			}
+      }
 
-			geometry.normalizeNormals();
+      geometry.normalizeNormals();
 
-			normalAttribute.needsUpdate = true;
+      normalAttribute.needsUpdate = true;
 
-		}
+    }
 
-	}
+  }
 
-  getTileModel(tileKey) {
+  simple_skirt_depth = 3000
+
+  getTileModelClosedBackGeometry(tileKey) {
+    var y = tileKey.row, z = tileKey.level;
+    const { radmaxLevel } = this;
+
+    var sub = 7 - z, tileCount = 1 << z;
+    if (sub < 4) {
+      sub = 4
+    }
+
+    if (z >= radmaxLevel) {
+      let p = new PlaneGeometry(1, 1, 1, 1);
+      p.translate(0.5, 0.5, -this.simple_skirt_depth);
+      p.deleteAttribute("normal")
+
+      p.index.array.reverse();
+  
+      return p;
+    } else {
+      let mode = this.generate_patch_buckets(
+        true, sub, y, 0, tileCount, tileCount, true, 0.2 / tileCount)
+
+      var geometry = new BufferGeometry();
+      geometry.mode = mode;
+      geometry.setIndex(mode.materials[0].indices_uint);
+      geometry.setAttribute('uv', mode.sources[0].uv_coords_float);
+      geometry.setAttribute(
+        'position', mode.sources[0].xyz_coords_float);
+      this.computeVertexNormals(geometry, mode.skritMap);
+
+      geometry.index.array.reverse();
+  
+      return geometry;
+    }
+  }
+
+  getTileModelGeometry(tileKey) {
     var y = tileKey.row, z = tileKey.level;
     var models = this.models;
-    var geoCache = this.geometryCache;
     const { radmaxLevel, radminLevel } = this;
 
     var sub = 7 - z, tileCount = 1 << z, name;
@@ -288,7 +325,7 @@ class SphereTileGrids {
       if (!models[name]) {
         var count = (1 << sub) + 1, X = count;
         mode = models[name] =
-          this.generate_patch_simple_skirt(count * 4, X * 4, 0, 0, 1, 1, 2000, true);
+          this.generate_patch_simple_skirt(count * 4, X * 4, 0, 0, 1, 1, this.simple_skirt_depth, true);
         mode.is_simple_patch = true;
       } else {
         mode = models[name];
@@ -310,21 +347,43 @@ class SphereTileGrids {
       }
     }
 
+    var geometry = new BufferGeometry();
+    geometry.mode = mode;
+    geometry.setIndex(mode.materials[0].indices_uint);
+    geometry.setAttribute('uv', mode.sources[0].uv_coords_float);
+    geometry.setAttribute(
+      'position', mode.sources[0].xyz_coords_float);
+    if (calNormal) {
+      this.computeVertexNormals(geometry, mode.skritMap);
+      return geometry
+    } else {
+      return geometry
+    }
+
+  }
+
+  getTileModel(tileKey) {
+    var y = tileKey.row;
+    let z = tileKey.level;
+    const { radmaxLevel } = this;
+    var sub = 7 - z
+    let name;
+    if (z >= radmaxLevel) {
+      name = 'simple.patch/' + sub;
+    } else {
+      name = z + '/' + y + '/patch';
+    }
+
+    var geoCache = this.geometryCache;
     if (!geoCache[name]) {
-      var geometry = new BufferGeometry();
-      geometry.mode = mode;
-      geometry.setIndex(mode.materials[0].indices_uint);
-      geometry.setAttribute('uv', mode.sources[0].uv_coords_float);
-      geometry.setAttribute(
-        'position', mode.sources[0].xyz_coords_float);
-      geoCache[name] = geometry; 
-      if(calNormal)
-      this.computeVertexNormals(geometry,mode.skritMap);
+      let model = this.getTileModelGeometry(tileKey)
+      geoCache[name] = model;//mergeGeometries([model, /*this.getTileModelClosedBackGeometry(tileKey)*/]);
+      geoCache[name].mode = model.mode;
     }
 
     return geoCache[name];
   }
-   
+
   generate_patch_simple_skirt(
     segX, segY, offsetX, offsetY, paddingX, paddingY, skirt, bol, aa) {
     var W = segX, ag = segY, V = offsetX, U = offsetY, M = paddingX,
@@ -443,7 +502,8 @@ class SphereTileGrids {
         bucket_offsets: new Uint16Array(r + 1)
       }],
       bucket_levels: ap,
-      skritMap:[]
+      skritMap: [],
+      skritOffset: 0.2 / T
     };
 
     var O = ar.sources[0], Q = O.xyz_coords_float.array,
@@ -513,8 +573,8 @@ class SphereTileGrids {
     }
     J += at;
     ag[al] = J;
-    var ai = 0.2 / T; 
-    var skritMap=ar.skritMap;
+    var ai = ar.skritOffset;
+    var skritMap = ar.skritMap;
     for (aj = 0; aj < an; aj++) {
       for (ak = 0; ak < ad; ak++, I += 3, X += 2) {
         H = 0;
@@ -557,8 +617,8 @@ class SphereTileGrids {
         {
           G = -Math.cos(q) * K * (C);
           F = -Math.sin(q) * K * (C);
-          E = -V * (C * (1 - this.e)); 
-          skritMap[I]=(H!=0)?[(G - P),(F - M),(E - L)]:false; 
+          E = -V * (C * (1 - this.e));
+          skritMap[I] = (H != 0) ? [(G - P), (F - M), (E - L)] : false;
         }
 
         W[X] = af;
@@ -596,15 +656,15 @@ class SphereTileGrids {
           z[am + 2] = (aj) * ad + (ak - 1);
           z[am + 3] = (aj - 1) * ad + (ak);
           z[am + 4] = (aj) * ad + (ak);
-          z[am + 5] = (aj) * ad + (ak - 1); 
+          z[am + 5] = (aj) * ad + (ak - 1);
         }
       }
-    } 
+    }
     return ar
   };
 
   generate_patch_buckets(
-    use, level, x, _ab, countX, countY, bol) {
+    use, level, x, _ab, countX, countY, bol, offset = 0) {
     var C = use, am = level, aa = x, Z = _ab, R = countX, Q = countY, P = bol;
     var model = this.getModel();
     var ai, aj, V, H, ah, ag, ad, ac, an, al, q, Y, I, T, B, F, E, D, X, af, M,
@@ -671,9 +731,9 @@ class SphereTileGrids {
         I = Math.sin(Y);
         T = Math.cos(Y);
         B = 1 / Math.sqrt(1 - this.e * T * T);
-        F = -Math.cos(q) * I * (B);
-        E = -Math.sin(q) * I * (B);
-        D = -T * (B * (1 - this.e));
+        F = -Math.cos(q) * I * (B - offset);
+        E = -Math.sin(q) * I * (B - offset);
+        D = -T * (B * (1 - this.e) - offset);
 
         O[H] = F - M;
         O[H + 1] = E - K;

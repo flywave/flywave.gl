@@ -11,6 +11,7 @@ import { TileKey } from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
 import * as THREE from "three";
 import { TransferManager } from "@flywave/flywave-transfer-manager";
+import { TerrainMeshLambertMaterial } from "./height-map/height-map-material";
 
 var imageLoader = new THREE.TextureLoader();
 var downloadImageManager = new TransferManager(url => {
@@ -84,7 +85,7 @@ export class MaterialProvider {
         if (dataSource) dataSource.mapView.visibleTileSet.clearTileCache();
     }
 
-    tileMaterialCache = new LRUCache(500);
+    tileMaterialCache = new LRUCache(1000);
 
     clipGeobox(geobox) {
         var geoboxCopy = geobox.clone();
@@ -285,22 +286,14 @@ export class MaterialProvider {
         if (material) material.dispose();
     };
 
-    makeMaterial(tile) {
-        return new THREE.MeshLambertMaterial({
+    getMaterialByTile(tile) {
+        return new TerrainMeshLambertMaterial({
             map: tile.material,
             wireframe: false,
             depthTest: true,
             fog: true,
-            transparent: true,
-            opacity: this.opacity,
-            clippingPlanes: this.dataSource.currentClips,
-            clipIntersection: this.dataSource.clipIntersection
+            transparent: false
         });
-    }
-
-    getMaterialByTile(tile) {
-        var mtl = this.makeMaterial(tile);
-        return mtl;
     }
 
     getLevelRange() {

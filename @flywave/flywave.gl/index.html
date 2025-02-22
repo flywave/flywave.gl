@@ -57,21 +57,21 @@
     app.addAnchorMesh(l);
   }
 
-  app.setTinTerrainSource({
-    url: `http://127.0.0.1:86/hill_tin/`
-  }).then(() => {
-    const { CSGData } = FlywaveGl;
+  // app.setTinTerrainSource({
+  //   url: `http://127.0.0.1:86/hill_tin/`
+  // }).then(() => {
+  //   const { CSGData } = FlywaveGl;
 
-    var mesh = new THREE.Mesh(new THREE.BoxGeometry(1000, 1000, 1000));
-    mesh.position.set(-2368785.952497984, 4524737.696318891, 3821845.096115053)
+  //   var mesh = new THREE.Mesh(new THREE.BoxGeometry(1000, 1000, 1000));
+  //   mesh.position.set(-2368785.952497984, 4524737.696318891, 3821845.096115053)
 
     
-    var mesh2 = new THREE.Mesh(new THREE.BoxGeometry(1000, 1000, 1000));
-    mesh2.anchor = app.projection.unprojectPoint(mesh.position) 
-    mesh2.material.wireframe = true;
-    app.addAnchorMesh(mesh2)
-    app.terrainSource.addCsgData(new CSGData(mesh));
-  });
+  //   var mesh2 = new THREE.Mesh(new THREE.BoxGeometry(1000, 1000, 1000));
+  //   mesh2.anchor = app.projection.unprojectPoint(mesh.position) 
+  //   mesh2.material.wireframe = true;
+  //   app.addAnchorMesh(mesh2)
+  //   app.terrainSource.addCsgData(new CSGData(mesh));
+  // });
 
 
   var loader = new THREE.TextureLoader();
@@ -108,7 +108,7 @@
   //   app.stratumSource.addCsgData(new CSGData(mesh));
   // }
 
-  // app.setHeightMapSource("https://api.mapbox.com/v4/mapbox.terrain-rgb.json?secure&access_token=pk.eyJ1IjoiYW5pbmdnbyIsImEiOiJjbGY5Y283N3IyZjB3M3ZyMGs4emJoYWNkIn0.MRcTQs3Z9OA0EQOB40xBqQ\n")
+  app.setHeightMapSource("https://api.mapbox.com/v4/mapbox.terrain-rgb.json?secure&access_token=pk.eyJ1IjoiYW5pbmdnbyIsImEiOiJjbGY5Y283N3IyZjB3M3ZyMGs4emJoYWNkIn0.MRcTQs3Z9OA0EQOB40xBqQ\n")
 
   app.addMaterialProviders(new FlywaveGl.MaterialProvider({ url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` }));
 

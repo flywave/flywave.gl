@@ -45,74 +45,20 @@ export class HeightMapMeshTileFactory extends TileFactory {
     }
 }
 
+
+
+var uDemUnpack0 = new THREE.Vector4(6553.6, 25.6, 0.1, 10000.0);
+var uDemUnpack1 = new THREE.Vector4(0.0, 0.0, 0, 0);
 const emptyTexture = new THREE.DataTexture();
-
 class HeightMapMeshTile extends Tile {
-    willRender = () => {
-        if (this.dataSource.wireframe != this.wireframe) {
-            this.objects.forEach(m => {
-                m.material.wireframe = this.dataSource.wireframe;
-            });
-            this.wireframe = this.dataSource.wireframe;
-        }
-        return true;
-    };
-
-    shaders = [];
-
-    onBeforeMaterialCompile = (materialTile, tileKey, tileObj) => {
-        var _this = this;
-        return function (shader) {
-            shader.vertexShader = shader.vertexShader.replace(
-                `#include <beginnormal_vertex>`,
-                `#include <beginnormal_vertex>
-                 #include <beginnormal_terrain_vertex>`
-            );
-
-            shader.vertexShader = shader.vertexShader.replace(
-                `#include <begin_vertex>`,
-                `#include <begin_vertex>
-                 #include <terrain_simple_vert>`
-            );
-
-            shader.vertexShader = shader.vertexShader.replace(
-                `#include <project_vertex>`,
-                `#include <terrain_proj>`
-            );
-
-            shader.vertexShader = shader.vertexShader.replace(
-                `#include <uv_pars_vertex>`,
-                `#include <uv_pars_vertex>
-                #include <terrain_common_pars>
-                #include <terrain_common>
-                #include <terrain_pars_vert>`
-            );
-
-            // shader.fragmentShader = shader.fragmentShader.replace(
-            //     `#include <premultiplied_alpha_fragment>`,
-            //     `#include <terrain_premultiplied_alpha_fragment>`);
-
-            // shader.fragmentShader = shader.fragmentShader.replace(
-            //     `#include <color_pars_fragment>`,
-            //     `#include <terrain_color_pars_fragment>`);
-
-            if (_this.is_simple_patch) {
-                shader.uniforms.uPatchPos = { value: _this.uPatchPos };
-            }
-            shader.uniforms.uNormal = { value: _this.center };
-            if (!shader.defines) {
-                shader.defines = {};
-            }
-            shader.defines["USE_UV"] = false;
-            if (parseInt(__THREE__) >= 151) {
-                shader.defines["USE_GT_151"] = true;
-                shader.defines["USE_UV"] = true;
-            }
-
-            var uUvTransform = _this.computeUvTransfrom(tileKey, materialTile);
-
-            // shader.uniforms.uUvTransform = { value: uUvTransform };
-            // shader.uniforms.uIsSimplePatch = { value: _this.is_simple_patch };
+    onMeshBeforeRender = (material, materialTile, tileKey) => {
+        let _this = this;
+        var uUvTransform = _this.computeUvTransfrom(tileKey, materialTile);
+        return (renderer, scene, camera, geometry) => {
+            const { commonUniform } = material;
+            // if (!commonUniform) return;
+            if (_this.uPatchPos) commonUniform.uPatchPos.value.copy(_this.uPatchPos);
+            // commonUniform.uNormal.value.copy(_this.center);
 
             var mat = new THREE.Matrix4();
 
@@ -121,37 +67,28 @@ class HeightMapMeshTile extends Tile {
             mat.elements[2] = uUvTransform.z;
             mat.elements[3] = _this.is_simple_patch ? 1 : 0;
 
-            if (_this.uHeighMapTexture) {
-                // shader.defines = {};
-                shader.defines["TERRAIN_ENABLE"] = true;
-                shader.uniforms.uHeighMapTexture = { value: _this.uHeighMapTexture };
-                // shader.uniforms.uHeightMapPos = { value: _this.uHeightMapPos };
-                // shader.uniforms.uDemUnpack = { value: new THREE.Vector4(6553.6, 25.6, 0.1, 10000.0) };
-
-                var uDemUnpack = new THREE.Vector4(6553.6, 25.6, 0.1, 10000.0);
+            if (_this.uHeighMapTexture) { 
                 var uHeightMapPos = _this.uHeightMapPos;
 
-                mat.elements[4] = uDemUnpack.x;
-                mat.elements[5] = uDemUnpack.y;
-                mat.elements[6] = uDemUnpack.z;
-                mat.elements[7] = uDemUnpack.w;
+                mat.elements[4] = uDemUnpack0.x;
+                mat.elements[5] = uDemUnpack0.y;
+                mat.elements[6] = uDemUnpack0.z;
+                mat.elements[7] = uDemUnpack0.w;
 
                 mat.elements[8] = uHeightMapPos.x;
                 mat.elements[9] = uHeightMapPos.y;
                 mat.elements[10] = uHeightMapPos.z;
-                _this.shaders.push(shader);
+                commonUniform.uHeighMapTexture.value = _this.uHeighMapTexture;
+                // _this.shaders.push(shader);
             } else {
-                var uDemUnpack = new THREE.Vector4(0.0, 0.0, 0, 0);
-                mat.elements[4] = uDemUnpack.x;
-                mat.elements[5] = uDemUnpack.y;
-                mat.elements[6] = uDemUnpack.z;
-                mat.elements[7] = uDemUnpack.w;
-                shader.uniforms.uHeighMapTexture = {
-                    value: parseInt(__THREE__) >= 151 ? null : emptyTexture
-                };
+                commonUniform.uHeighMapTexture.value = emptyTexture;
+                mat.elements[4] = uDemUnpack1.x;
+                mat.elements[5] = uDemUnpack1.y;
+                mat.elements[6] = uDemUnpack1.z;
+                mat.elements[7] = uDemUnpack1.w;
             }
 
-            shader.uniforms.pack = { value: mat };
+            commonUniform.pack.value.copy(mat);
         };
     };
 
@@ -176,7 +113,7 @@ class HeightMapMeshTile extends Tile {
                 provider.loadNeareastTile(tileKey);
 
                 if (materialTile) {
-                    this.bindMaterialTileOwnerTexture(materialTile);
+                    // this.bindMaterialTileOwnerTexture(materialTile);
                     this.builderMesh(materialTile, provider, tileKey, demTile);
                     materialTile.textElementGroups.forEach(ele => {
                         if (!textSet.has(ele.featureId)) {
@@ -190,6 +127,14 @@ class HeightMapMeshTile extends Tile {
     }
 
     clearTextElements() {}
+
+    shouldDisposeObjectMaterial() {
+        return false;
+    }
+
+    shouldDisposeObjectGeometry() {
+        return false;
+    }
 
     computeUvTransfrom(tileKey, materialTile) {
         tileKey = TileKey.fromRowColumnLevel(
@@ -235,11 +180,18 @@ class HeightMapMeshTile extends Tile {
             this.uPatchPos = uPatchPos;
         }
 
-        tileMesh.material.onBeforeCompile = this.onBeforeMaterialCompile(
+        // tileMesh.material.onBeforeCompile = this.onBeforeMaterialCompile(
+        //     materialTile,
+        //     this.tileKey,
+        //     this
+        // );
+
+        tileMesh.onBeforeRender = this.onMeshBeforeRender(
+            tileMesh.material,
             materialTile,
-            this.tileKey,
-            this
+            this.tileKey
         );
+
         if (uHeighMapTexture) {
             this.uHeightMapPos = uHeightMapPos;
             this.uHeighMapTexture = uHeighMapTexture;
@@ -256,9 +208,9 @@ class HeightMapMeshTile extends Tile {
     }
 
     bindMaterialTileOwnerTexture(materialTile) {
-        if (materialTile && materialTile.tileKey.mortonCode() == this.tileKey.mortonCode()) {
-            this.addOwnedTexture(materialTile.material);
-        }
+        // if (materialTile && materialTile.tileKey.mortonCode() == this.tileKey.mortonCode()) {
+        // this.addOwnedTexture(materialTile.material);
+        // }
     }
 
     bindDemTileOwnerTexture(demTile) {

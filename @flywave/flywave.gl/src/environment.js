@@ -53,8 +53,9 @@ class Environment extends MapViewEnvironment {
         }
     }
 
+    current3Dtiles=[];
     update3DTileSources(fW3DTiles = []) {
-        const fw3DTileList = Array.from(this.m_mapView.get3DTileSourceList());
+        const fw3DTileList = this.current3Dtiles;
 
         var needsRemove3DTiles = [];
         var needAdd3DTiles = [];
@@ -75,6 +76,8 @@ class Environment extends MapViewEnvironment {
         needAdd3DTiles.forEach(srvUrl => {
             this.m_mapView.add3DTileSource(srvUrl, false);
         });
+
+        this.current3Dtiles = fW3DTiles;
     }
 
     updateTerrainDatasource(terrinOptions = { layers: [] }) {
