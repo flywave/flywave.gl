@@ -21,6 +21,9 @@ export class OverlayerHeightMap {
     }
 
     getDigAltitude(lng, lat) {
+        if(!this.geojson){
+            return 0;
+        }
         if (
             turf.booleanPointInPolygon(
                 turf.point([lng, lat]),
@@ -33,6 +36,9 @@ export class OverlayerHeightMap {
     }
 
     getTileBoxDigAltitude(geoBox) {
+        if (!this.geoBox) {
+            return 0;
+        }
         let boxA = new Box2();
         boxA.expandByPoint(new Vector2().fromArray(geoBox.southWest.toGeoPoint()));
         boxA.expandByPoint(new Vector2().fromArray(geoBox.northEast.toGeoPoint()));
@@ -113,6 +119,9 @@ export class OverlayerHeightMap {
     }
 
     getBindTexture(tile) {
+        if(!this.geoBox){
+            return [this.texture, new THREE.Vector4(0, 0, 0, 0)];
+        }
         let boxA = new Box2();
         boxA.expandByPoint(new Vector2().fromArray(tile.geoBox.southWest.toGeoPoint()));
         boxA.expandByPoint(new Vector2().fromArray(tile.geoBox.northEast.toGeoPoint()));
