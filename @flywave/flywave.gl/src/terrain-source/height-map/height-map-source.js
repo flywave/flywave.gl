@@ -8,6 +8,7 @@ import range from "lodash.range";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { TransferManager } from "@flywave/flywave-transfer-manager";
 import { Box2, Vector2, ImageLoader } from "three";
+import { OverlayerHeightMap } from "./overlayer-height-map";
 
 var id = 0;
 var downloadManager = TransferManager.instance();
@@ -17,6 +18,8 @@ export class HeightMapSource extends TerrainSource {
     scheme = "xyz";
 
     enableHD = true;
+
+    overlayerHeightMapTexture = null;
 
     constructor(options) {
         super({
@@ -29,6 +32,8 @@ export class HeightMapSource extends TerrainSource {
             elevationRangeSource: new ElevationRangeSource(),
             elevationProvider: new ElevationProvider()
         });
+
+        this.overlayerHeightMapTexture = new OverlayerHeightMap(this);
     }
 
     decodeSourceFile = source => {

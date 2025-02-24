@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 Object.assign(THREE.ShaderChunk, {
-    "terrain_pars_vert": ` 
+    terrain_pars_vert: ` 
     vec4 computeMvPos(vec2 uv,vec3 position,float h){
         float dx = position.x;
         vec4 pos;
@@ -21,19 +21,21 @@ Object.assign(THREE.ShaderChunk, {
         if(h==1.0){
           hi = 0.0;
         }
-        float height = hi+position.z;
+
+        float v = currentOverlayerElevation(uv);
+        float height = hi+position.z- v; 
 
         pos += height * vec4(tNormal,.0)/6378137.0; 
         pos.w=1.0;  
         return pos; 
     }
     `,
-    // "terrain_color_pars_fragment": ` 
-    //     varying vec2 uvRaw; 
-    //     #if defined( USE_COLOR_ALPHA ) 
-    //         varying vec4 vColor; 
-    //     #elif defined( USE_COLOR ) 
-    //         varying vec3 vColor; 
+    // "terrain_color_pars_fragment": `
+    //     varying vec2 uvRaw;
+    //     #if defined( USE_COLOR_ALPHA )
+    //         varying vec4 vColor;
+    //     #elif defined( USE_COLOR )
+    //         varying vec3 vColor;
     //     #endif
     // `,
     // "terrain_premultiplied_alpha_fragment": `
@@ -45,9 +47,9 @@ Object.assign(THREE.ShaderChunk, {
     //         // Get get normal blending with premultipled, use with CustomBlending, OneFactor, OneMinusSrcAlphaFactor, AddEquation.
     //         gl_FragColor.rgb *= gl_FragColor.a;
 
-    //     #endif 
+    //     #endif
     // `,
-    "terrain_proj": `
+    terrain_proj: `
         vec4 mvPosition = vec4( transformed, 1.0 );
 
         #ifdef USE_INSTANCING
@@ -60,7 +62,7 @@ Object.assign(THREE.ShaderChunk, {
         
         gl_Position = projectionMatrix * mvPosition;
     `,
-    "terrain_simple_vert": `      
+    terrain_simple_vert: `      
         transformed = computeMvPos(uv,position,0.0).xyz;
         
         vec3 uUvTransform = pack[0].xyz;
@@ -74,8 +76,24 @@ Object.assign(THREE.ShaderChunk, {
         #ifdef USE_GT_151
         vMapUv = vec2(height_u, height_v);  
         #endif
+        vDigMapUv = uv;
+        
+        vDigColor = digColor; 
+ 
+        isDig = currentOverlayerElevation(uv);
     `,
-    "beginnormal_terrain_vertex": `  
+    dig_color_pars_fragment:`
+        varying vec3 vDigColor;
+        varying vec2 vDigMapUv;
+        uniform sampler2D uDigTexture; 
+        varying float isDig;
+    `,
+    dig_color_fragment: `
+        if(isDig!=0.0){
+            diffuseColor.xyz = mix(texture2D( uDigTexture, vDigMapUv ).xyz,vDigColor,0.1);
+        } 
+    `,
+    beginnormal_terrain_vertex: `  
     bool uIsSimplePatch = pack[0][3]>0.0; 
     if(uIsSimplePatch){
         vec3 uHeightMapPos = pack[2].xyz;
@@ -93,21 +111,27 @@ Object.assign(THREE.ShaderChunk, {
         objectNormal = normalize(cross((n2-n1),(n4-n3)));
     }
     `,
-    "terrain_common_pars": `
+    terrain_common_pars: `
         uniform vec4 uGlobePosition;
         uniform sampler2D uHeighMapTexture; 
+        uniform sampler2D overlayerHeightMap;
+        uniform vec4 overlayerHeightMapUvTransform;
+        varying vec3 vDigColor;
+        uniform vec3 digColor;
+        varying float isDig;
     `,
-    "terrain_common": `
+    terrain_common: `
 
         uniform mat4 uPatchPos;
         // uniform vec3 uNormal;
         uniform float opacity;  
+        varying vec2 vDigMapUv;
 
         // uniform bool uIsSimplePatch; 
         // uniform vec3 uUvTransform;
         // uniform vec4 uDemUnpack; 
         // uniform vec3 uHeightMapPos; 
-        uniform mat4 pack; 
+        uniform mat4 pack;  
 
         mat3 mat3_emu(mat4 m4) {
             return mat3(
@@ -115,6 +139,7 @@ Object.assign(THREE.ShaderChunk, {
                 m4[1][0], m4[1][1], m4[1][2],
                 m4[2][0], m4[2][1], m4[2][2]);
         } 
+ 
 
         vec2 tileUvToDemSample(vec2 uv) {
             vec3 uHeightMapPos = pack[2].xyz;
@@ -123,8 +148,16 @@ Object.assign(THREE.ShaderChunk, {
             return vec2(height_u, height_v);
         }
 
-        float decodeElevation(vec4 v) {   
-            vec4 uDemUnpack = pack[1];
+        float decodeElevation(vec4 v) {    
+            vec4 uDemUnpack = pack[1]; 
+            return dot(vec4(v.xyz * 255.0, -1.0), uDemUnpack);
+        }
+
+        float decodeOverlayerElevation(vec4 v) { 
+        if(v.a!=1.0){
+            return 0.0;
+}
+            vec4 uDemUnpack = pack[1]; 
             return dot(vec4(v.xyz * 255.0, -1.0), uDemUnpack);
         }
 
@@ -132,6 +165,12 @@ Object.assign(THREE.ShaderChunk, {
             vec2 pos = tileUvToDemSample(uv);
             return decodeElevation(texture2D(uHeighMapTexture, pos)); 
         } 
+
+        float currentOverlayerElevation(vec2 uv) { 
+            uv = uv*overlayerHeightMapUvTransform.xy + overlayerHeightMapUvTransform.zw;
+            return decodeOverlayerElevation(texture2D(overlayerHeightMap, uv)); 
+        } 
+
         float elevation(vec2 uv) {
             return currentElevation(uv);
         } 

@@ -146,7 +146,7 @@ export default class DEMData {
         return ((r * 256 + g + b / 256) - 32768.0);
     }
 
-    static pack(altitude: number, encoding: DEMEncoding): [number, number, number, number] {
+    static pack(altitude: number, encoding: DEMEncoding="mapbox"): [number, number, number, number] {
         const color = [0, 0, 0, 0];
         const vector = DEMData.getUnpackVector(encoding);
         let v = Math.floor((altitude + vector[3]) / vector[2]);

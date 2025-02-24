@@ -45,8 +45,6 @@ export class HeightMapMeshTileFactory extends TileFactory {
     }
 }
 
-
-
 var uDemUnpack0 = new THREE.Vector4(6553.6, 25.6, 0.1, 10000.0);
 var uDemUnpack1 = new THREE.Vector4(0.0, 0.0, 0, 0);
 const emptyTexture = new THREE.DataTexture();
@@ -54,11 +52,10 @@ class HeightMapMeshTile extends Tile {
     onMeshBeforeRender = (material, materialTile, tileKey) => {
         let _this = this;
         var uUvTransform = _this.computeUvTransfrom(tileKey, materialTile);
+        let overlayerHeightMap = _this.dataSource.overlayerHeightMapTexture.getBindTexture(this); 
         return (renderer, scene, camera, geometry) => {
             const { commonUniform } = material;
-            // if (!commonUniform) return;
             if (_this.uPatchPos) commonUniform.uPatchPos.value.copy(_this.uPatchPos);
-            // commonUniform.uNormal.value.copy(_this.center);
 
             var mat = new THREE.Matrix4();
 
@@ -67,7 +64,7 @@ class HeightMapMeshTile extends Tile {
             mat.elements[2] = uUvTransform.z;
             mat.elements[3] = _this.is_simple_patch ? 1 : 0;
 
-            if (_this.uHeighMapTexture) { 
+            if (_this.uHeighMapTexture) {
                 var uHeightMapPos = _this.uHeightMapPos;
 
                 mat.elements[4] = uDemUnpack0.x;
@@ -89,6 +86,13 @@ class HeightMapMeshTile extends Tile {
             }
 
             commonUniform.pack.value.copy(mat);
+            if (overlayerHeightMap) {
+                const [texture, transform] = overlayerHeightMap;
+                commonUniform.overlayerHeightMapUvTransform.value = transform;
+                commonUniform.overlayerHeightMap.value = texture;
+            }
+            commonUniform.uDigTexture.value = _this.dataSource.overlayerHeightMapTexture.digTexture;
+            commonUniform.digColor.value = _this.dataSource.overlayerHeightMapTexture.digColor;
         };
     };
 

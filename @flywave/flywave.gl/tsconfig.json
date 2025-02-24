@@ -1,0 +1,42 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "sourceMap": true,
+        "composite": true,
+        "incremental": true,
+        "declarationMap": true
+    },
+    "exclude": ["dist/**", "test/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-datasource-protocol"
+        },
+        {
+            "path": "../flywave-fetch"
+        },
+        {
+            "path": "../flywave-geometry"
+        },
+        {
+            "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-lines"
+        },
+        {
+            "path": "../flywave-lrucache"
+        },
+        {
+            "path": "../flywave-materials"
+        },
+        {
+            "path": "../flywave-text-canvas"
+        },
+        {
+            "path": "../flywave-transfer-manager"
+        },
+        {
+            "path": "../flywave-utils"
+        }
+    ]
+}

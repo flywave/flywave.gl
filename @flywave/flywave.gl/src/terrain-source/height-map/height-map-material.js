@@ -12,7 +12,23 @@ export class TerrainMeshLambertMaterial extends THREE.MeshLambertMaterial {
         },
         uPatchPos: {
             value: new THREE.Matrix4()
+        },
+        overlayerHeightMap: {
+            value: emptyTexture
+        },
+        uDigTexture: {
+            value: null
+        },
+        digColor: {
+            value: new THREE.Color(0xffffff) 
+        },
+        overlayerHeightMapUvTransform:{
+            value: new THREE.Vector4()
         }
+    };
+
+    defines = {
+        useColor: true
     };
 
     onBeforeCompile = shader => {
@@ -27,6 +43,19 @@ export class TerrainMeshLambertMaterial extends THREE.MeshLambertMaterial {
             `#include <begin_vertex>
              #include <terrain_simple_vert>`
         );
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+            `#include <color_pars_fragment>`,
+            `#include <color_pars_fragment>
+             #include <dig_color_pars_fragment>`
+        );
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+            `#include <color_fragment>`,
+            `#include <color_fragment>
+             #include <dig_color_fragment>`
+        );
+       
 
         shader.vertexShader = shader.vertexShader.replace(
             `#include <project_vertex>`,
@@ -53,9 +82,9 @@ export class TerrainMeshLambertMaterial extends THREE.MeshLambertMaterial {
         Object.assign(shader.uniforms, this.commonUniform);
     };
 
-    copy(source) { 
-        super.copy(source)
-        this.commonUniform = source.commonUniform; 
+    copy(source) {
+        super.copy(source);
+        this.commonUniform = source.commonUniform;
 
         return this;
     }

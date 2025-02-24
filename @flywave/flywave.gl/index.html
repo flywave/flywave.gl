@@ -21,7 +21,7 @@
 
   var app = new FlywaveGl.Application({
     target: new FlywaveGl.GeoCoordinates(
-      36.37292967525023, 112.84844082640775
+      36.432367988153544, 112.77345013804586
     ),
     zoomLevel: 17,
     addBackgroundDatasource: false,
@@ -34,9 +34,9 @@
   });
 
   {
-    var l = new THREE.PointLight();
+    var l = new THREE.PointLight(0xffffff,2,100000,0);
     l.anchor = new FlywaveGl.GeoCoordinates(
-      36.82749, 112.59765, 1000
+      36.432367988153544, 112.77345013804586, 1000
     )
     app.addAnchorMesh(l);
   }
@@ -65,7 +65,7 @@
   //   var mesh = new THREE.Mesh(new THREE.BoxGeometry(1000, 1000, 1000));
   //   mesh.position.set(-2368785.952497984, 4524737.696318891, 3821845.096115053)
 
-    
+
   //   var mesh2 = new THREE.Mesh(new THREE.BoxGeometry(1000, 1000, 1000));
   //   mesh2.anchor = app.projection.unprojectPoint(mesh.position) 
   //   mesh2.material.wireframe = true;
@@ -111,6 +111,48 @@
   app.setHeightMapSource("https://api.mapbox.com/v4/mapbox.terrain-rgb.json?secure&access_token=pk.eyJ1IjoiYW5pbmdnbyIsImEiOiJjbGY5Y283N3IyZjB3M3ZyMGs4emJoYWNkIn0.MRcTQs3Z9OA0EQOB40xBqQ\n")
 
   app.addMaterialProviders(new FlywaveGl.MaterialProvider({ url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` }));
+
+
+  let geojson = {
+      "type": "Feature",
+      "properties": {},
+      "geometry": {
+        "coordinates": [
+          [
+            [
+              112.77345013804586,
+              36.432367988153544
+            ],
+            [
+              112.77407775484625,
+              36.432547049237215
+            ],
+            [
+              112.77398846727021,
+              36.432900014872544
+            ],
+            [
+              112.77306609175179,
+              36.433026240192646
+            ],
+            [
+              112.77288049733448,
+              36.4327338526046
+            ],
+            [
+              112.77345013804586,
+              36.432367988153544
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      }
+    }
+  app.heightMapSource.overlayerHeightMapTexture.setGeojson(geojson, 100)
+  // document.body.appendChild(app.heightMapSource.overlayerHeightMapTexture.canvas)
+  app.addAnchorMesh(new THREE.AmbientLight(0xffffff, 0.5))
+
+
 
   /*
     app.mapOrbitControl.flyPath({
