@@ -90,7 +90,7 @@ Object.assign(THREE.ShaderChunk, {
     `,
     dig_color_fragment: `
         if(isDig!=0.0){
-            diffuseColor.xyz = mix(texture2D( uDigTexture, vDigMapUv ).xyz,vDigColor,0.1);
+            diffuseColor.xyz = mix(texture2D( uDigTexture, vDigMapUv ).xyz,vDigColor,0.8);
         } 
     `,
     beginnormal_terrain_vertex: `  

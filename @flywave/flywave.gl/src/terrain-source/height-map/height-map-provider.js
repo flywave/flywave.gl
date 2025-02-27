@@ -8,16 +8,16 @@ import { TileKey } from "@flywave/flywave-geoutils";
 import { HeightMapDemTileLoader } from "./height-map-tile";
 import { Tile } from "@flywave/flywave-mapview";
 import { arrayBufferToImageBitmap, arrayBufferToImage, prevPowerOfTwo } from "../../util/util";
-import offscreenCanvasSupported from '../../util/offscreen_canvas_supported.js';
+import offscreenCanvasSupported from "../../util/offscreen_canvas_supported.js";
 import DEMData from "./dem/dem_data";
 import { LRUCache } from "@flywave/flywave-lrucache";
+import { Math2D } from "@flywave/flywave-utils";
 
 export class HeightMapProvider {
-  
     maxLodLevel = 3;
 
     getMaxZoom() {
-        return this.dataSource.levelRange[0]||0;
+        return this.dataSource.levelRange[0] || 0;
     }
 
     bindDataSource(dataSource) {
@@ -25,41 +25,59 @@ export class HeightMapProvider {
     }
 
     connect() {
-        return Promise.resolve()
+        return Promise.resolve();
     }
 
     ready() {
-        return true
+        return true;
     }
 
-    unregister() {
+    unregister() {}
 
-    }
-
-    constructor() { 
+    constructor() {
         this.tileDemCache.evictionCallback = this.evictionCallback;
     }
 
-    evictionCallback(key, dtmTile) { 
+    evictionCallback(key, dtmTile) {
         dtmTile.tileLoader.cancel();
-        if (dtmTile.dem)
-            dtmTile.dem.dispose();
+        if (dtmTile.dem) dtmTile.dem.dispose();
         dtmTile.dispose();
     }
 
     tileDemCache = new LRUCache(1500);
 
-    clear=()=>{
+    clear = () => {
         this.tileDemCache.clear();
+    };
+
+    clearTree(clearGeoBox) {
+        this.tileDemCache.forEach(({ dem, geoBox }) => {
+            if (dem) {
+                let fbbox = new Math2D.Box(
+                    geoBox.southWest.longitude,
+                    geoBox.southWest.latitude,
+                    geoBox.northEast.longitude - geoBox.southWest.longitude,
+                    geoBox.northEast.latitude - geoBox.southWest.latitude
+                );
+                const { latitude: minLat, longitude: minLng } = clearGeoBox.southWest;
+                const { latitude: maxLat, longitude: maxLng } = clearGeoBox.northEast;
+                if (
+                    new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat).intersects(
+                        fbbox
+                    )
+                ) {
+                    dem.clearTree();
+                }
+            }
+        });
     }
 
     touchData(tileKey, targetLevel) {
         // var nearLevel = ~~(tileKey.level * (this.lodLevel / targetLevel)) * ~~((targetLevel / this.lodLevel))
         // var offet = (tileKey.level - nearLevel)
         // var lodTileKey = TileKey.fromRowColumnLevel(tileKey.row >> offet, tileKey.column >> offet, nearLevel);
-        this.loadNeareastTile(tileKey)
+        this.loadNeareastTile(tileKey);
     }
-
 
     loadNeareastTile(tileKey) {
         var maxLodLevel = this.maxLodLevel;
@@ -69,10 +87,18 @@ export class HeightMapProvider {
 
         var loadTileKey = TileKey.fromRowColumnLevel(tileKey.row, tileKey.column, tileKey.level);
         while (curLevel <= maxLodLevel) {
-            var nextLevel = THREE.MathUtils.clamp(curLevel * level, this.dataSource.levelRange[this.dataSource.levelRange.length - 1], tileLevel);
+            var nextLevel = THREE.MathUtils.clamp(
+                curLevel * level,
+                this.dataSource.levelRange[this.dataSource.levelRange.length - 1],
+                tileLevel
+            );
 
-            var offet = (tileKey.level - nextLevel);
-            loadTileKey = TileKey.fromRowColumnLevel(tileKey.row >> offet, tileKey.column >> offet, nextLevel);
+            var offet = tileKey.level - nextLevel;
+            loadTileKey = TileKey.fromRowColumnLevel(
+                tileKey.row >> offet,
+                tileKey.column >> offet,
+                nextLevel
+            );
 
             {
                 var levels = this.dataSource.levelRange;
@@ -80,38 +106,59 @@ export class HeightMapProvider {
                 for (var e = 0; e < levels.length; e++) {
                     nearLevel = levels[e];
                     if (loadTileKey.level >= levels[e]) {
-                        break
+                        break;
                     }
                 }
 
                 if (nearLevel) {
-                    var offet = (loadTileKey.level - nearLevel);
-                    let tileKey = TileKey.fromRowColumnLevel(loadTileKey.row >> offet, loadTileKey.column >> offet, nearLevel);
+                    var offet = loadTileKey.level - nearLevel;
+                    let tileKey = TileKey.fromRowColumnLevel(
+                        loadTileKey.row >> offet,
+                        loadTileKey.column >> offet,
+                        nearLevel
+                    );
 
                     if (!this.tileDemCache.has(tileKey.mortonCode())) {
                         var tile = new Tile(this.dataSource, tileKey);
-                        tile.tileLoader = new HeightMapDemTileLoader(this.dataSource, tileKey, this, this.dataSource.decoder);
+                        tile.tileLoader = new HeightMapDemTileLoader(
+                            this.dataSource,
+                            tileKey,
+                            this,
+                            this.dataSource.decoder
+                        );
                         tile.tileLoader.load();
-                        tile.tileLoader.donePromise.then(() => {
-                            var dem = tile.tileLoader.decodedTile.dem;
-                            tile.dem = new DEMData(dem.uid, dem, dem.encoding, dem.borderReady, false);
-                            Object.assign(tile.dem, dem);
+                        tile.tileLoader.donePromise
+                            .then(() => {
+                                var dem = tile.tileLoader.decodedTile.dem;
+                                tile.dem = new DEMData(
+                                    dem.uid,
+                                    dem,
+                                    dem.encoding,
+                                    dem.borderReady,
+                                    false
+                                );
+                                Object.assign(tile.dem, dem);
+                                tile.dem.setOverlayerHeight(
+                                    tile.geoBox,
+                                    this.dataSource.overlayerHeightMapTexture
+                                );
 
-                            // tile.dem._buildQuadTree();
-                            tile.dem._buildTexture(this.dataSource.size);
-                            tile.dem._buildDisplacementMapTexture(this.dataSource.size);
-                            // this._backfillDEM(tile);
-                            this.dataSource.updateTileOverlayer(tile);
-                        }).catch((err) => {
-                            tile.error = err;
-                            this.dataSource.updateTileOverlayer(tile);
-                        });
+                                // tile.dem._buildQuadTree();
+                                tile.dem._buildTexture(this.dataSource.size);
+                                tile.dem._buildDisplacementMapTexture(this.dataSource.size);
+                                // this._backfillDEM(tile);
+                                this.dataSource.updateTileOverlayer(tile);
+                            })
+                            .catch(err => {
+                                tile.error = err;
+                                this.dataSource.updateTileOverlayer(tile);
+                            });
 
                         this.tileDemCache.set(tileKey.mortonCode(), tile);
                         break;
                     } else {
                         const tile = this.tileDemCache.get(tileKey.mortonCode());
-                        if (tile.dem||tile.error) {
+                        if (tile.dem || tile.error) {
                             curLevel++;
                             continue;
                         } else {
@@ -124,7 +171,6 @@ export class HeightMapProvider {
         }
     }
 
-
     _getNeighboringTiles(tileID: TileKey) {
         const dim = Math.pow(2, tileID.level);
 
@@ -133,33 +179,50 @@ export class HeightMapProvider {
 
         const neighboringTiles = {};
         // add adjacent tiles TileKey.fromRowColumnLevel(tileKey.row >> offet, tileKey.column >> offet, nearLevel)
-        neighboringTiles[TileKey.fromRowColumnLevel(tileID.row, px, tileID.level).mortonCode()] = { backfilled: false };
-        neighboringTiles[TileKey.fromRowColumnLevel(tileID.row, nx, tileID.level).mortonCode()] = { backfilled: false };
+        neighboringTiles[TileKey.fromRowColumnLevel(tileID.row, px, tileID.level).mortonCode()] = {
+            backfilled: false
+        };
+        neighboringTiles[TileKey.fromRowColumnLevel(tileID.row, nx, tileID.level).mortonCode()] = {
+            backfilled: false
+        };
 
         // Add upper neighboringTiles
         if (tileID.row > 0) {
-            neighboringTiles[TileKey.fromRowColumnLevel(tileID.row - 1, px, tileID.level,).mortonCode()] = { backfilled: false };
-            neighboringTiles[TileKey.fromRowColumnLevel(tileID.row - 1, tileID.column, tileID.level,).mortonCode()] = { backfilled: false };
-            neighboringTiles[TileKey.fromRowColumnLevel(tileID.row - 1, nx, tileID.level).mortonCode()] = { backfilled: false };
+            neighboringTiles[
+                TileKey.fromRowColumnLevel(tileID.row - 1, px, tileID.level).mortonCode()
+            ] = { backfilled: false };
+            neighboringTiles[
+                TileKey.fromRowColumnLevel(tileID.row - 1, tileID.column, tileID.level).mortonCode()
+            ] = { backfilled: false };
+            neighboringTiles[
+                TileKey.fromRowColumnLevel(tileID.row - 1, nx, tileID.level).mortonCode()
+            ] = { backfilled: false };
         }
         // Add lower neighboringTiles
         if (tileID.row + 1 < dim) {
-            neighboringTiles[TileKey.fromRowColumnLevel(tileID.row + 1, px, tileID.level).mortonCode()] = { backfilled: false };
-            neighboringTiles[TileKey.fromRowColumnLevel(tileID.row + 1, tileID.column, tileID.level).mortonCode()] = { backfilled: false };
-            neighboringTiles[TileKey.fromRowColumnLevel(tileID.row + 1, nx, tileID.level).mortonCode()] = { backfilled: false };
+            neighboringTiles[
+                TileKey.fromRowColumnLevel(tileID.row + 1, px, tileID.level).mortonCode()
+            ] = { backfilled: false };
+            neighboringTiles[
+                TileKey.fromRowColumnLevel(tileID.row + 1, tileID.column, tileID.level).mortonCode()
+            ] = { backfilled: false };
+            neighboringTiles[
+                TileKey.fromRowColumnLevel(tileID.row + 1, nx, tileID.level).mortonCode()
+            ] = { backfilled: false };
         }
 
         return neighboringTiles;
     }
 
     _backfillDEM(tile: Tile) {
-        tile.neighboringTiles && Object.keys(tile.neighboringTiles).forEach(tileKey => {
-            const borderTile = this.tileDemCache.get(parseInt(tileKey));
-            if (borderTile) {
-                fillBorder(tile, borderTile);
-                fillBorder(borderTile, tile);
-            }
-        });
+        tile.neighboringTiles &&
+            Object.keys(tile.neighboringTiles).forEach(tileKey => {
+                const borderTile = this.tileDemCache.get(parseInt(tileKey));
+                if (borderTile) {
+                    fillBorder(tile, borderTile);
+                    fillBorder(borderTile, tile);
+                }
+            });
 
         function fillBorder(tile, borderTile) {
             if (!tile.dem || tile.dem.borderReady) return;
@@ -190,17 +253,25 @@ export class HeightMapProvider {
     }
 
     computeHeightMapPos(tileKey, demTileKey) {
-        tileKey = TileKey.fromRowColumnLevel((1 << tileKey.level) - 1 - tileKey.row, tileKey.column, tileKey.level)
-        var ah = 1, P, M;
-        var H = tileKey.level, ae = tileKey.row, J = tileKey.column;
+        tileKey = TileKey.fromRowColumnLevel(
+            (1 << tileKey.level) - 1 - tileKey.row,
+            tileKey.column,
+            tileKey.level
+        );
+        var ah = 1,
+            P,
+            M;
+        var H = tileKey.level,
+            ae = tileKey.row,
+            J = tileKey.column;
         for (; H > demTileKey.level; H--) {
             ah *= 2;
             ae >>= 1;
-            J >>= 1
+            J >>= 1;
         }
         P = 1 / ah;
 
-        return new THREE.Vector3(P, (tileKey.row - ae * ah) * P, (tileKey.column - J * ah) * P)
+        return new THREE.Vector3(P, (tileKey.row - ae * ah) * P, (tileKey.column - J * ah) * P);
     }
 
     getNeareastDemTileTexture(tileKey) {
@@ -210,15 +281,19 @@ export class HeightMapProvider {
         }
 
         var level;
-        while (level = levels.shift()) {
+        while ((level = levels.shift())) {
             if (tileKey.level < level) {
                 continue;
             }
             var offset = tileKey.level - level;
-            var offTileKey = TileKey.fromRowColumnLevel(tileKey.row >> offset, tileKey.column >> offset, level)
+            var offTileKey = TileKey.fromRowColumnLevel(
+                tileKey.row >> offset,
+                tileKey.column >> offset,
+                level
+            );
             if (this.tileDemCache.has(offTileKey.mortonCode())) {
-                var tile = this.tileDemCache.get(offTileKey.mortonCode())
-            
+                var tile = this.tileDemCache.get(offTileKey.mortonCode());
+
                 if (!tile.dem) {
                     continue;
                 }
@@ -233,17 +308,25 @@ export class HeightMapProvider {
     }
 
     computeDisplacementMapPos(tileKey, demTileKey) {
-        tileKey = TileKey.fromRowColumnLevel((1 << tileKey.level) - 1 - tileKey.row, tileKey.column, tileKey.level)
-        var ah = 1, P, M;
-        var H = tileKey.level, ae = tileKey.row, J = tileKey.column;
+        tileKey = TileKey.fromRowColumnLevel(
+            (1 << tileKey.level) - 1 - tileKey.row,
+            tileKey.column,
+            tileKey.level
+        );
+        var ah = 1,
+            P,
+            M;
+        var H = tileKey.level,
+            ae = tileKey.row,
+            J = tileKey.column;
         for (; H > demTileKey.level; H--) {
             ah *= 2;
             ae >>= 1;
-            J >>= 1
+            J >>= 1;
         }
         P = 1 / ah;
 
-        return new THREE.Vector3(P, (tileKey.column - J * ah) * P, (tileKey.row - ae * ah) * P)
+        return new THREE.Vector3(P, (tileKey.column - J * ah) * P, (tileKey.row - ae * ah) * P);
     }
 
     getNeareastDisplacementMap(tileKey) {
@@ -253,24 +336,36 @@ export class HeightMapProvider {
         }
 
         var level;
-        while (level = levels.shift()) {
+        while ((level = levels.shift())) {
             if (tileKey.level < level) {
                 continue;
             }
             var offset = tileKey.level - level;
-            var offTileKey = TileKey.fromRowColumnLevel(tileKey.row >> offset, tileKey.column >> offset, level)
+            var offTileKey = TileKey.fromRowColumnLevel(
+                tileKey.row >> offset,
+                tileKey.column >> offset,
+                level
+            );
             if (this.tileDemCache.has(offTileKey.mortonCode())) {
-                var tile = this.tileDemCache.get(offTileKey.mortonCode())
+                var tile = this.tileDemCache.get(offTileKey.mortonCode());
                 if (!tile.dem) {
                     continue;
                 }
 
-                var map = tile.dem.displacementMapTexture;//.clone();
+                var map = tile.dem.displacementMapTexture; //.clone();
                 var transfrom = this.computeDisplacementMapPos(tileKey, tile.tileKey);
                 return {
                     tile,
                     displacementMap: map,
-                    uvMatrix: new THREE.Matrix3().setUvTransform(transfrom.y, transfrom.z, transfrom.x, transfrom.x, 0, 0, 0)
+                    uvMatrix: new THREE.Matrix3().setUvTransform(
+                        transfrom.y,
+                        transfrom.z,
+                        transfrom.x,
+                        transfrom.x,
+                        0,
+                        0,
+                        0
+                    )
                 };
             }
         }
@@ -278,21 +373,25 @@ export class HeightMapProvider {
     }
 
     getNeareastDemTile(tileKey) {
-        if(!tileKey)return false;
+        if (!tileKey) return false;
         var levels = this.dataSource.levelRange.slice();
         if (tileKey.level < levels[levels.length - 1]) {
             return false;
         }
 
         var level;
-        while (level = levels.shift()) {
+        while ((level = levels.shift())) {
             if (tileKey.level < level) {
                 continue;
             }
             var offset = tileKey.level - level;
-            var offTileKey = TileKey.fromRowColumnLevel(tileKey.row >> offset, tileKey.column >> offset, level)
+            var offTileKey = TileKey.fromRowColumnLevel(
+                tileKey.row >> offset,
+                tileKey.column >> offset,
+                level
+            );
             if (this.tileDemCache.has(offTileKey.mortonCode())) {
-                var tile = this.tileDemCache.get(offTileKey.mortonCode())
+                var tile = this.tileDemCache.get(offTileKey.mortonCode());
                 if (!tile.dem) {
                     continue;
                 }
@@ -302,41 +401,46 @@ export class HeightMapProvider {
         return false;
     }
 
-
     fetchTileDem(tileKey, abortSignal) {
-        return this.dataSource.fetchDemData(tileKey, abortSignal).then((buffer) => {
-            return new Promise((reslove => {
-                if (window.createImageBitmap) {
-                    arrayBufferToImageBitmap(buffer, (err, imgBitmap) => reslove(imgBitmap));
-                } else {
-                    arrayBufferToImage(buffer, (err, img) => reslove(img));
+        return this.dataSource
+            .fetchDemData(tileKey, abortSignal)
+            .then(buffer => {
+                return new Promise(reslove => {
+                    if (window.createImageBitmap) {
+                        arrayBufferToImageBitmap(buffer, (err, imgBitmap) => reslove(imgBitmap));
+                    } else {
+                        arrayBufferToImage(buffer, (err, img) => reslove(img));
+                    }
+                });
+            })
+            .then(img => {
+                if (!img) {
+                    return;
                 }
-            }))
-        }).then(img => {
-            if (!img) {
-                return;
-            }
-            const transfer = window.ImageBitmap && img instanceof window.ImageBitmap && offscreenCanvasSupported();
-            // DEMData uses 1px padding. Handle cases with image buffer of 1 and 2 pxs, the rest assume default buffer 0
-            // in order to keep the previous implementation working (no validation against tileSize).
-            const buffer = (img.width - prevPowerOfTwo(img.width)) / 2;
-            // padding is used in getImageData. As DEMData has 1px padding, if DEM tile buffer is 2px, discard outermost pixels.
-            const padding = 1 - buffer;
-            const borderReady = padding < 1;
-            var tile = this.tileDemCache.get(tileKey.mortonCode())
+                const transfer =
+                    window.ImageBitmap &&
+                    img instanceof window.ImageBitmap &&
+                    offscreenCanvasSupported();
+                // DEMData uses 1px padding. Handle cases with image buffer of 1 and 2 pxs, the rest assume default buffer 0
+                // in order to keep the previous implementation working (no validation against tileSize).
+                const buffer = (img.width - prevPowerOfTwo(img.width)) / 2;
+                // padding is used in getImageData. As DEMData has 1px padding, if DEM tile buffer is 2px, discard outermost pixels.
+                const padding = 1 - buffer;
+                const borderReady = padding < 1;
+                var tile = this.tileDemCache.get(tileKey.mortonCode());
 
-            if (tile && !borderReady && !tile.neighboringTiles) {
-                tile.neighboringTiles = this._getNeighboringTiles(tile.tileKey);
-            }
-            const rawImageData = transfer ? img : browser.getImageData(img, padding);
-            return {
-                coord: tileKey,
-                rawImageData,
-                encoding: this.encoding,
-                padding,
-                height: img.height,
-                width: img.width
-            };
-        });
+                if (tile && !borderReady && !tile.neighboringTiles) {
+                    tile.neighboringTiles = this._getNeighboringTiles(tile.tileKey);
+                }
+                const rawImageData = transfer ? img : browser.getImageData(img, padding);
+                return {
+                    coord: tileKey,
+                    rawImageData,
+                    encoding: this.encoding,
+                    padding,
+                    height: img.height,
+                    width: img.width
+                };
+            });
     }
 }

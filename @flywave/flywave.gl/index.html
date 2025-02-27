@@ -148,7 +148,8 @@
         "type": "Polygon"
       }
     }
-  app.heightMapSource.overlayerHeightMapTexture.setGeojson(geojson, 100)
+    app.heightMapSource.overlayerHeightMapTexture.setColor("#ff00ff")
+  app.heightMapSource.overlayerHeightMapTexture.setGeojson(geojson, 1)
   // document.body.appendChild(app.heightMapSource.overlayerHeightMapTexture.canvas)
   app.addAnchorMesh(new THREE.AmbientLight(0xffffff, 0.5))
 

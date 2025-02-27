@@ -33,16 +33,11 @@ class ElevationRangeSource {
             xOffset = xOffset % 1;
             yOffset = yOffset % 1;
         }
-
-        let digAlt = 0;
-        if (this.dataSource.overlayerHeightMapTexture) {
-            digAlt =
-                this.dataSource.overlayerHeightMapTexture.getTileBoxDigAltitude(
-                    webMercatorTilingScheme.getGeoBox(tileID)
-                ) || 0;
-        }
-
-        return { min: tree.minimums[index] - digAlt, max: tree.maximums[index] };
+ 
+        return {
+            min: tree.minimums[index],
+            max: tree.maximums[index]
+        };
     }
 
     getElevationRange = tikeKey => {

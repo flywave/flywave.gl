@@ -1,10 +1,11 @@
 // @flow
-import { RGBAImage } from '../util/image.js';
+import { RGBAImage } from "../util/image.js";
 
-import { warnOnce, clamp } from '../../../util/util.js';
-import DemMinMaxQuadTree from './dem_tree.js';
-import assert from 'assert';
+import { warnOnce, clamp } from "../../../util/util.js";
+import DemMinMaxQuadTree from "./dem_tree.js";
+import assert from "assert";
 import * as THREE from "three";
+import { GeoBox } from "@flywave/flywave-geoutils"; 
 
 export type DEMEncoding = "mapbox" | "terrarium";
 
@@ -21,26 +22,44 @@ export default class DEMData {
     encoding: DEMEncoding;
     borderReady: boolean;
     _tree: DemMinMaxQuadTree;
+    geoBox: GeoBox;
+    overlayerHeightMap:OverlayerHeightMap;
     get tree(): DemMinMaxQuadTree {
         if (!this._tree) this._buildQuadTree();
         return this._tree;
     }
 
+    setOverlayerHeight(geoBox,overlayerHeightMap) {
+        this.geoBox = geoBox;
+        this.overlayerHeightMap = overlayerHeightMap;
+    }
+
+    clearTree() {
+        this._tree = null; 
+    }
+
     // RGBAImage data has uniform 1px padding on all sides: square tile edge size defines stride
     // and dim is calculated as stride - 2.
-    constructor(uid: number, data: RGBAImage, encoding: DEMEncoding, borderReady: boolean = false, buildQuadTree: boolean = false) {
+    constructor(
+        uid: number,
+        data: RGBAImage,
+        encoding: DEMEncoding,
+        borderReady: boolean = false,
+        buildQuadTree: boolean = false
+    ) {
         this.uid = uid;
         this.height = data.height;
         this.width = data.width;
-        if (data.height !== data.width) throw new RangeError('DEM tiles must be square');
-        if (encoding && encoding !== "mapbox" && encoding !== "terrarium") return warnOnce(
-            `"${encoding}" is not a valid encoding type. Valid types include "mapbox" and "terrarium".`
-        );
+        if (data.height !== data.width) throw new RangeError("DEM tiles must be square");
+        if (encoding && encoding !== "mapbox" && encoding !== "terrarium")
+            return warnOnce(
+                `"${encoding}" is not a valid encoding type. Valid types include "mapbox" and "terrarium".`
+            );
         this.stride = data.height;
-        const dim = this.dim = data.height - 2;
+        const dim = (this.dim = data.height - 2);
         this.data = new Uint32Array(data.data.buffer);
         this.pixels = new Uint8Array(this.data.buffer);
-        this.encoding = encoding || 'mapbox';
+        this.encoding = encoding || "mapbox";
         this.borderReady = borderReady;
 
         if (borderReady) return;
@@ -66,8 +85,6 @@ export default class DEMData {
         if (buildQuadTree) {
             this._buildQuadTree();
         }
-
-    
     }
 
     _buildDisplacementMap() {
@@ -76,28 +93,44 @@ export default class DEMData {
         var buffer = new Uint8Array(this.data.buffer);
         var j = 0;
         for (var i = 0; i < buffer.length; i += 4) {
-            displacementMap[j++] = new THREE.Vector4(buffer[i], buffer[i + 1], buffer[i + 2], -1.0).dot(q)
+            displacementMap[j++] = new THREE.Vector4(
+                buffer[i],
+                buffer[i + 1],
+                buffer[i + 2],
+                -1.0
+            ).dot(q);
         }
         this.displacementMap = displacementMap;
     }
 
     _buildDisplacementMapTexture(size) {
-        var _size = size+2;
-        var texture = new THREE.DataTexture(this.displacementMap, _size,_size, THREE.LuminanceFormat, THREE.FloatType);
+        var _size = size + 2;
+        var texture = new THREE.DataTexture(
+            this.displacementMap,
+            _size,
+            _size,
+            THREE.LuminanceFormat,
+            THREE.FloatType
+        );
         // texture.minFilter = THREE.LinearFilter;
         // texture.magFilter = THREE.LinearFilter;
-        // // texture.generateMipmaps = false; 
+        // // texture.generateMipmaps = false;
         texture.flipY = true;
         // texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
         this.displacementMapTexture = texture;
     }
 
     _buildTexture(size) {
-        var _size = size+2;
-        var texture = new THREE.DataTexture(new Uint8Array(this.pixels.buffer), _size, _size, THREE.RGBAFormat);
+        var _size = size + 2;
+        var texture = new THREE.DataTexture(
+            new Uint8Array(this.pixels.buffer),
+            _size,
+            _size,
+            THREE.RGBAFormat
+        );
         texture.minFilter = THREE.LinearFilter;
         texture.magFilter = THREE.LinearFilter;
-        // texture.generateMipmaps = false; 
+        // texture.generateMipmaps = false;
         texture.flipY = true;
         texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
         texture.needsUpdate = true;
@@ -118,7 +151,21 @@ export default class DEMData {
         }
         const index = this._idx(x, y) * 4;
         const unpack = this.encoding === "terrarium" ? this._unpackTerrarium : this._unpackMapbox;
-        return unpack(pixels[index], pixels[index + 1], pixels[index + 2]);
+        return unpack(pixels[index], pixels[index + 1], pixels[index + 2])-this.getOverlayerHeight(x,y);
+    }
+
+    getOverlayerHeight(minx: number, miny: number) {
+        let box = new THREE.Box2();
+        box.expandByPoint(new THREE.Vector2().fromArray(this.geoBox.southWest.toGeoPoint()));
+        box.expandByPoint(new THREE.Vector2().fromArray(this.geoBox.northEast.toGeoPoint()));
+
+        let boxSize = box.getSize(new THREE.Vector2());
+        let ret = new THREE.Box2(
+            new THREE.Vector2(minx, this.dim - miny).divideScalar(this.dim).multiply(boxSize).add(box.min),
+            new THREE.Vector2(minx + 1, this.dim - (miny + 1)).divideScalar(this.dim).multiply(boxSize).add(box.min)
+        );
+
+        return this.overlayerHeightMap.getBoxAltitude(ret)
     }
 
     static getUnpackVector(encoding: DEMEncoding): [number, number, number, number] {
@@ -130,23 +177,27 @@ export default class DEMData {
     }
 
     _idx(x: number, y: number) {
-        if (x < -1 || x >= this.dim + 1 || y < -1 || y >= this.dim + 1) throw new RangeError('out of range source coordinates for DEM data');
+        if (x < -1 || x >= this.dim + 1 || y < -1 || y >= this.dim + 1)
+            throw new RangeError("out of range source coordinates for DEM data");
         return (y + 1) * this.stride + (x + 1);
     }
 
     _unpackMapbox(r: number, g: number, b: number) {
         // unpacking formula for mapbox.terrain-rgb:
         // https://www.mapbox.com/help/access-elevation-data/#mapbox-terrain-rgb
-        return ((r * 256 * 256 + g * 256.0 + b) / 10.0 - 10000.0);
+        return (r * 256 * 256 + g * 256.0 + b) / 10.0 - 10000.0;
     }
 
     _unpackTerrarium(r: number, g: number, b: number) {
         // unpacking formula for mapzen terrarium:
         // https://aws.amazon.com/public-datasets/terrain/
-        return ((r * 256 + g + b / 256) - 32768.0);
+        return r * 256 + g + b / 256 - 32768.0;
     }
 
-    static pack(altitude: number, encoding: DEMEncoding="mapbox"): [number, number, number, number] {
+    static pack(
+        altitude: number,
+        encoding: DEMEncoding = "mapbox"
+    ): [number, number, number, number] {
         const color = [0, 0, 0, 0];
         const vector = DEMData.getUnpackVector(encoding);
         let v = Math.floor((altitude + vector[3]) / vector[2]);
@@ -163,7 +214,7 @@ export default class DEMData {
     }
 
     backfillBorder(borderTile: DEMData, dx: number, dy: number) {
-        if (this.dim !== borderTile.dim) throw new Error('dem dimension mismatch');
+        if (this.dim !== borderTile.dim) throw new Error("dem dimension mismatch");
 
         let xMin = dx * this.dim,
             xMax = dx * this.dim + this.dim,
@@ -202,7 +253,7 @@ export default class DEMData {
         }
     }
 
-    dispose(){
+    dispose() {
         this.texture.dispose();
     }
 
@@ -211,4 +262,4 @@ export default class DEMData {
     }
 }
 
-export { DEMData, DemMinMaxQuadTree } 
+export { DEMData, DemMinMaxQuadTree };

@@ -11,17 +11,12 @@ export class OverlayerHeightMap {
     canvasContext = this.canvas.getContext("2d");
     setGeojson(geojson, digDepth) {
         this.geojson = geojson;
-        const [a, b, c, d] = turf.bbox(geojson);
-        this.geoBox = new GeoBox(
-            GeoCoordinates.fromGeoPoint([a, b, 0]),
-            GeoCoordinates.fromGeoPoint([c, d, 0])
-        );
         this.digDepth = digDepth;
         this.draw();
     }
 
     getDigAltitude(lng, lat) {
-        if(!this.geojson){
+        if (!this.geojson) {
             return 0;
         }
         if (
@@ -35,10 +30,11 @@ export class OverlayerHeightMap {
         return 0;
     }
 
-    getTileBoxDigAltitude(geoBox) {
-        if (!this.geoBox) {
+    getDigPixelAltitude(geoBox) {
+        if (!this.geojson) {
             return 0;
         }
+
         let boxA = new Box2();
         boxA.expandByPoint(new Vector2().fromArray(geoBox.southWest.toGeoPoint()));
         boxA.expandByPoint(new Vector2().fromArray(geoBox.northEast.toGeoPoint()));
@@ -50,14 +46,46 @@ export class OverlayerHeightMap {
         if (boxA.intersectsBox(boxB)) {
             return this.digDepth;
         }
+
         return 0;
     }
 
+    getBoxAltitude(box) {
+        if (!this.geojson) {
+            return 0;
+        }
+        let boxB = new Box2();
+        boxB.expandByPoint(new Vector2().fromArray(this.geoBox.southWest.toGeoPoint()));
+        boxB.expandByPoint(new Vector2().fromArray(this.geoBox.northEast.toGeoPoint()));
+        if (box.intersectsBox(boxB)) {
+            return this.digDepth;
+        }
+
+        return 0;
+    }
+
+    setDepth(digDepth) {
+        this.digDepth = digDepth;
+    }
+
     draw() {
+        if (!this.geojson) {
+            this.texture = new Texture();
+            this.heightMapSource.updateTileOverlayer();
+            return;
+        }
+        {
+            const [a, b, c, d] = turf.bbox(this.geojson);
+            this.geoBox = new GeoBox(
+                GeoCoordinates.fromGeoPoint([a, b, 0]),
+                GeoCoordinates.fromGeoPoint([c, d, 0])
+            );
+        }
+
         let canvas = this.canvas;
         let canvasContext = this.canvasContext;
-        canvas.width = 1024;
-        canvas.height = 1024;
+        canvas.width = 256;
+        canvas.height = 256;
 
         const { geojson } = this;
 
@@ -93,6 +121,8 @@ export class OverlayerHeightMap {
         });
         texture.needsUpdate = true;
         this.texture = texture;
+        this.heightMapSource.updateTileOverlayer();
+        this.heightMapSource.dataProvider().clearTree(this.geoBox);
     }
 
     projectPointToPixel(point, box, canvas) {
@@ -107,7 +137,7 @@ export class OverlayerHeightMap {
 
     _color = new THREE.Color(0xffffff);
     setColor(color) {
-        this.digColor.copy(color);
+        this.digColor.set(color);
     }
 
     get digColor() {
@@ -119,7 +149,7 @@ export class OverlayerHeightMap {
     }
 
     getBindTexture(tile) {
-        if(!this.geoBox){
+        if (!this.geoBox) {
             return [this.texture, new THREE.Vector4(0, 0, 0, 0)];
         }
         let boxA = new Box2();

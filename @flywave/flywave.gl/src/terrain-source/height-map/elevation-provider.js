@@ -58,21 +58,10 @@ class ElevationProvider {
         const i = Math.floor(x);
         const j = Math.floor(y);
 
-        let digAlt = 0;
-        if (this.dataSource.overlayerHeightMapTexture) {
-            digAlt =
-                this.dataSource.overlayerHeightMapTexture.getDigAltitude(
-                    geoPoint.longitude,
-                    geoPoint.latitude
-                ) || 0;
-        }
-
-        return (
-            interpolate(
-                interpolate(dem.get(i, j), dem.get(i, j + 1), y - j),
-                interpolate(dem.get(i + 1, j), dem.get(i + 1, j + 1), y - j),
-                x - i
-            ) - digAlt
+        return interpolate(
+            interpolate(dem.get(i, j), dem.get(i, j + 1), y - j),
+            interpolate(dem.get(i + 1, j), dem.get(i + 1, j + 1), y - j),
+            x - i
         );
     }
 

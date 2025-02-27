@@ -70,7 +70,7 @@ class Application extends MapView {
         this.heightMapSource = new HeightMapSource({});
         this.heightMapSource.emptySource();
         this._terrain_promise = this.__updateTerrainSource(this.heightMapSource);
-
+ 
         const { camera, projection, mapAnchors } = this;
 
         // const updateCallback = () => this.update();
