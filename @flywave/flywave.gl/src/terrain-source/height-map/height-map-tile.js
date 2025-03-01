@@ -4,6 +4,7 @@ import { TileLoader, TileFactory } from "@flywave/flywave-mapview-decoder";
 import { sphereTileGridGeometry } from "./geometry/sphere-tile-geometry";
 import { TileKey } from "@flywave/flywave-geoutils";
 import "./shader";
+import { BoxGeometry } from "three";
 
 export class HeightMapDemTileLoader extends TileLoader {
     loadImpl(
@@ -95,7 +96,7 @@ class HeightMapMeshTile extends Tile {
             commonUniform.digColor.value = _this.dataSource.overlayerHeightMapTexture.digColor;
         };
     };
-
+ 
     constructor(dataSource, tileKey) {
         super(dataSource, tileKey);
 
@@ -108,7 +109,7 @@ class HeightMapMeshTile extends Tile {
 
             this.demTile = demTile;
 
-            this.bindDemTileOwnerTexture(demTile);
+            this.bindDemTileOwnerTexture(demTile); 
 
             var textSet = new Set();
             materialProvders.forEach(provider => {

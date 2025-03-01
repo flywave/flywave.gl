@@ -12,52 +12,33 @@ export class OverlayerHeightMap {
     setGeojson(geojson, digDepth) {
         this.geojson = geojson;
         this.digDepth = digDepth;
+        if (this.geojson) this.turfPolygon = turf.polygon(this.geojson.geometry.coordinates);
         this.draw();
+
+        let boxB = new Box2();
+        boxB.expandByPoint(new Vector2().fromArray(this.geoBox.southWest.toGeoPoint()));
+        boxB.expandByPoint(new Vector2().fromArray(this.geoBox.northEast.toGeoPoint()));
+        this.box = boxB;
     }
 
     getDigAltitude(lng, lat) {
         if (!this.geojson) {
             return 0;
         }
-        if (
-            turf.booleanPointInPolygon(
-                turf.point([lng, lat]),
-                turf.polygon(this.geojson.geometry.coordinates)
-            )
-        ) {
+        if (turf.booleanPointInPolygon(turf.point([lng, lat]), this.turfPolygon)) {
             return this.digDepth;
         }
         return 0;
     }
 
-    getDigPixelAltitude(geoBox) {
+    getBoxAltitude(geobox) {
         if (!this.geojson) {
             return 0;
         }
+        let [minx, miny] = geobox.min.toArray()
+        let [maxx, maxy] = geobox.max.toArray()
 
-        let boxA = new Box2();
-        boxA.expandByPoint(new Vector2().fromArray(geoBox.southWest.toGeoPoint()));
-        boxA.expandByPoint(new Vector2().fromArray(geoBox.northEast.toGeoPoint()));
-
-        let boxB = new Box2();
-        boxB.expandByPoint(new Vector2().fromArray(this.geoBox.southWest.toGeoPoint()));
-        boxB.expandByPoint(new Vector2().fromArray(this.geoBox.northEast.toGeoPoint()));
-
-        if (boxA.intersectsBox(boxB)) {
-            return this.digDepth;
-        }
-
-        return 0;
-    }
-
-    getBoxAltitude(box) {
-        if (!this.geojson) {
-            return 0;
-        }
-        let boxB = new Box2();
-        boxB.expandByPoint(new Vector2().fromArray(this.geoBox.southWest.toGeoPoint()));
-        boxB.expandByPoint(new Vector2().fromArray(this.geoBox.northEast.toGeoPoint()));
-        if (box.intersectsBox(boxB)) {
+        if (turf.booleanIntersects(this.turfPolygon, turf.bboxPolygon([minx, miny, maxx, maxy]))) {
             return this.digDepth;
         }
 

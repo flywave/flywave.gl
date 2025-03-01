@@ -23,6 +23,7 @@ class RasterDEMTileWorkerSource {
     const imagePixels = (ImageBitmap && rawImageData instanceof ImageBitmap) ? this.getImageData(rawImageData, padding) : rawImageData;
     const dem = new DEMData(uid, imagePixels, encoding, padding < 1, buildQuadTree);
     dem._buildDisplacementMap();
+    dem._buildQuadTree();
     return Promise.resolve({dem,geometries:[],techniques:[]})
   }
 

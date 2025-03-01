@@ -5,7 +5,7 @@ import { warnOnce, clamp } from "../../../util/util.js";
 import DemMinMaxQuadTree from "./dem_tree.js";
 import assert from "assert";
 import * as THREE from "three";
-import { GeoBox } from "@flywave/flywave-geoutils"; 
+import { GeoBox } from "@flywave/flywave-geoutils";
 
 export type DEMEncoding = "mapbox" | "terrarium";
 
@@ -23,21 +23,21 @@ export default class DEMData {
     borderReady: boolean;
     _tree: DemMinMaxQuadTree;
     geoBox: GeoBox;
-    overlayerHeightMap:OverlayerHeightMap;
+    overlayerHeightMap: OverlayerHeightMap;
     get tree(): DemMinMaxQuadTree {
         if (!this._tree) this._buildQuadTree();
         return this._tree;
     }
 
-    setOverlayerHeight(geoBox,overlayerHeightMap) {
+    setOverlayerHeight(geoBox, overlayerHeightMap) {
         this.geoBox = geoBox;
         this.overlayerHeightMap = overlayerHeightMap;
     }
 
-    clearTree() {
-        this._tree = null; 
+    clearTree() { 
+        this._tree = null;
     }
-
+  
     // RGBAImage data has uniform 1px padding on all sides: square tile edge size defines stride
     // and dim is calculated as stride - 2.
     constructor(
@@ -151,21 +151,21 @@ export default class DEMData {
         }
         const index = this._idx(x, y) * 4;
         const unpack = this.encoding === "terrarium" ? this._unpackTerrarium : this._unpackMapbox;
-        return unpack(pixels[index], pixels[index + 1], pixels[index + 2])-this.getOverlayerHeight(x,y);
+        return unpack(pixels[index], pixels[index + 1], pixels[index + 2]);
     }
 
-    getOverlayerHeight(minx: number, miny: number) {
+    getDigBoxHeight(x: number, y: number) {
+        if (this.overlayerHeightMap == null) {
+            return 0;
+        }
         let box = new THREE.Box2();
         box.expandByPoint(new THREE.Vector2().fromArray(this.geoBox.southWest.toGeoPoint()));
         box.expandByPoint(new THREE.Vector2().fromArray(this.geoBox.northEast.toGeoPoint()));
 
         let boxSize = box.getSize(new THREE.Vector2());
-        let ret = new THREE.Box2(
-            new THREE.Vector2(minx, this.dim - miny).divideScalar(this.dim).multiply(boxSize).add(box.min),
-            new THREE.Vector2(minx + 1, this.dim - (miny + 1)).divideScalar(this.dim).multiply(boxSize).add(box.min)
-        );
+        let ret = new THREE.Vector2(x, 1 - y).multiply(boxSize).add(box.min);
 
-        return this.overlayerHeightMap.getBoxAltitude(ret)
+        return this.overlayerHeightMap.getDigAltitude(ret.x, ret.y);
     }
 
     static getUnpackVector(encoding: DEMEncoding): [number, number, number, number] {

@@ -1,9 +1,9 @@
 // @flow
 
 import DEMData from "./dem_data.js";
-import {vec3} from 'gl-matrix';
-import {number as interpolate} from '../util/interpolate.js';
-import {clamp} from '../../../util/util.js';
+import { vec3 } from "gl-matrix";
+import { number as interpolate } from "../util/interpolate.js";
+import { clamp } from "../../../util/util.js";
 
 type vec3Like = vec3 | [number, number, number];
 
@@ -20,7 +20,7 @@ class MipLevel {
         this.leaves = [];
     }
 
-    getElevation(x: number, y: number): { min: number, max: number} {
+    getElevation(x: number, y: number): { min: number, max: number } {
         const idx = this.toIdx(x, y);
         return {
             min: this.minimums[idx],
@@ -46,8 +46,7 @@ function aabbRayIntersect(min: vec3Like, max: vec3Like, pos: vec3Like, dir: vec3
     for (let i = 0; i < 3; i++) {
         if (Math.abs(dir[i]) < epsilon) {
             // Parallel ray
-            if (pos[i] < min[i] || pos[i] > max[i])
-                return null;
+            if (pos[i] < min[i] || pos[i] > max[i]) return null;
         } else {
             const ood = 1.0 / dir[i];
             let t1 = (min[i] - pos[i]) * ood;
@@ -57,19 +56,28 @@ function aabbRayIntersect(min: vec3Like, max: vec3Like, pos: vec3Like, dir: vec3
                 t1 = t2;
                 t2 = temp;
             }
-            if (t1 > tMin)
-                tMin = t1;
-            if (t2 < tMax)
-                tMax = t2;
-            if (tMin > tMax)
-                return null;
+            if (t1 > tMin) tMin = t1;
+            if (t2 < tMax) tMax = t2;
+            if (tMin > tMax) return null;
         }
     }
 
     return tMin;
 }
 
-function triangleRayIntersect(ax, ay, az, bx, by, bz, cx, cy, cz, pos: vec3Like, dir: vec3Like): ?number {
+function triangleRayIntersect(
+    ax,
+    ay,
+    az,
+    bx,
+    by,
+    bz,
+    cx,
+    cy,
+    cz,
+    pos: vec3Like,
+    dir: vec3Like
+): ?number {
     // Compute barycentric coordinates u and v to find the intersection
     const abX = bx - ax;
     const abY = by - ay;
@@ -85,8 +93,7 @@ function triangleRayIntersect(ax, ay, az, bx, by, bz, cx, cy, cz, pos: vec3Like,
     const pvecZ = dir[0] * acY - dir[1] * acX;
     const det = abX * pvecX + abY * pvecY + abZ * pvecZ;
 
-    if (Math.abs(det) < 1e-15)
-        return null;
+    if (Math.abs(det) < 1e-15) return null;
 
     const invDet = 1.0 / det;
     const tvecX = pos[0] - ax;
@@ -94,8 +101,7 @@ function triangleRayIntersect(ax, ay, az, bx, by, bz, cx, cy, cz, pos: vec3Like,
     const tvecZ = pos[2] - az;
     const u = (tvecX * pvecX + tvecY * pvecY + tvecZ * pvecZ) * invDet;
 
-    if (u < 0.0 || u > 1.0)
-        return null;
+    if (u < 0.0 || u > 1.0) return null;
 
     // qvec = cross(tvec, ab)
     const qvecX = tvecY * abZ - tvecZ * abY;
@@ -103,8 +109,7 @@ function triangleRayIntersect(ax, ay, az, bx, by, bz, cx, cy, cz, pos: vec3Like,
     const qvecZ = tvecX * abY - tvecY * abX;
     const v = (dir[0] * qvecX + dir[1] * qvecY + dir[2] * qvecZ) * invDet;
 
-    if (v < 0.0 || u + v > 1.0)
-        return null;
+    if (v < 0.0 || u + v > 1.0) return null;
 
     return (acX * qvecX + acY * qvecY + acZ * qvecZ) * invDet;
 }
@@ -118,10 +123,10 @@ function decodeBounds(x, y, depth, boundsMinx, boundsMiny, boundsMaxx, boundsMax
     const rangex = boundsMaxx - boundsMinx;
     const rangey = boundsMaxy - boundsMiny;
 
-    const minX = (x + 0) / scale * rangex + boundsMinx;
-    const maxX = (x + 1) / scale * rangex + boundsMinx;
-    const minY = (y + 0) / scale * rangey + boundsMiny;
-    const maxY = (y + 1) / scale * rangey + boundsMiny;
+    const minX = ((x + 0) / scale) * rangex + boundsMinx;
+    const maxX = ((x + 1) / scale) * rangex + boundsMinx;
+    const minY = ((y + 0) / scale) * rangey + boundsMiny;
+    const maxY = ((y + 1) / scale) * rangey + boundsMiny;
 
     outMin[0] = minX;
     outMin[1] = minY;
@@ -160,8 +165,7 @@ export default class DemMinMaxQuadTree {
             [1, 1]
         ];
 
-        if (!this.dem)
-            return;
+        if (!this.dem) return;
 
         const mips = buildDemMipmap(this.dem);
         const maxLvl = mips.length - 1;
@@ -178,40 +182,66 @@ export default class DemMinMaxQuadTree {
     }
 
     // Performs raycast against the tree root only. Min and max coordinates defines the size of the root node
-    raycastRoot(minx: number, miny: number, maxx: number, maxy: number, p: vec3Like, d: vec3Like, exaggeration: number = 1): ?number {
+    raycastRoot(
+        minx: number,
+        miny: number,
+        maxx: number,
+        maxy: number,
+        p: vec3Like,
+        d: vec3Like,
+        exaggeration: number = 1
+    ): ?number {
         const min = [minx, miny, -aabbSkirtPadding];
         const max = [maxx, maxy, this.maximums[0] * exaggeration];
         return aabbRayIntersect(min, max, p, d);
     }
 
-    raycast(rootMinx: number, rootMiny: number, rootMaxx: number, rootMaxy: number, p: vec3Like, d: vec3Like, exaggeration: number = 1): ?number {
-        if (!this.nodeCount)
-            return null;
+    raycast(
+        rootMinx: number,
+        rootMiny: number,
+        rootMaxx: number,
+        rootMaxy: number,
+        p: vec3Like,
+        d: vec3Like,
+        exaggeration: number = 1
+    ): ?number {
+        if (!this.nodeCount) return null;
 
         const t = this.raycastRoot(rootMinx, rootMiny, rootMaxx, rootMaxy, p, d, exaggeration);
-        if (t == null)
-            return null;
+        if (t == null) return null;
 
         const tHits = [];
         const sortedHits = [];
         const boundsMin = [];
         const boundsMax = [];
 
-        const stack = [{
-            idx: 0,
-            t,
-            nodex: 0,
-            nodey: 0,
-            depth: 0
-        }];
+        const stack = [
+            {
+                idx: 0,
+                t,
+                nodex: 0,
+                nodey: 0,
+                depth: 0
+            }
+        ];
 
         // Traverse the tree until something is hit or the ray escapes
         while (stack.length > 0) {
-            const {idx, t, nodex, nodey, depth} = stack.pop();
+            const { idx, t, nodex, nodey, depth } = stack.pop();
 
             if (this.leaves[idx]) {
                 // Create 2 triangles to approximate the surface plane for more precise tests
-                decodeBounds(nodex, nodey, depth, rootMinx, rootMiny, rootMaxx, rootMaxy, boundsMin, boundsMax);
+                decodeBounds(
+                    nodex,
+                    nodey,
+                    depth,
+                    rootMinx,
+                    rootMiny,
+                    rootMaxx,
+                    rootMaxy,
+                    boundsMin,
+                    boundsMax
+                );
 
                 const scale = 1 << depth;
                 const minxUv = (nodex + 0) / scale;
@@ -226,20 +256,37 @@ export default class DemMinMaxQuadTree {
                 const dz = sampleElevation(minxUv, maxyUv, this.dem) * exaggeration;
 
                 const t0: any = triangleRayIntersect(
-                    boundsMin[0], boundsMin[1], az,     // A
-                    boundsMax[0], boundsMin[1], bz,     // B
-                    boundsMax[0], boundsMax[1], cz,     // C
-                    p, d);
+                    boundsMin[0],
+                    boundsMin[1],
+                    az, // A
+                    boundsMax[0],
+                    boundsMin[1],
+                    bz, // B
+                    boundsMax[0],
+                    boundsMax[1],
+                    cz, // C
+                    p,
+                    d
+                );
 
                 const t1: any = triangleRayIntersect(
-                    boundsMax[0], boundsMax[1], cz,
-                    boundsMin[0], boundsMax[1], dz,
-                    boundsMin[0], boundsMin[1], az,
-                    p, d);
+                    boundsMax[0],
+                    boundsMax[1],
+                    cz,
+                    boundsMin[0],
+                    boundsMax[1],
+                    dz,
+                    boundsMin[0],
+                    boundsMin[1],
+                    az,
+                    p,
+                    d
+                );
 
                 const tMin = Math.min(
                     t0 !== null ? t0 : Number.MAX_VALUE,
-                    t1 !== null ? t1 : Number.MAX_VALUE);
+                    t1 !== null ? t1 : Number.MAX_VALUE
+                );
 
                 // The ray might go below the two surface triangles but hit one of the sides.
                 // This covers the case of skirt geometry between two dem tiles of different zoom level
@@ -248,8 +295,7 @@ export default class DemMinMaxQuadTree {
                     const fracx = frac(hitPos[0], boundsMin[0], boundsMax[0]);
                     const fracy = frac(hitPos[1], boundsMin[1], boundsMax[1]);
 
-                    if (bilinearLerp(az, bz, dz, cz, fracx, fracy) >= hitPos[2])
-                        return t;
+                    if (bilinearLerp(az, bz, dz, cz, fracx, fracy) >= hitPos[2]) return t;
                 } else {
                     return tMin;
                 }
@@ -261,12 +307,21 @@ export default class DemMinMaxQuadTree {
             let hitCount = 0;
 
             for (let i = 0; i < this._siblingOffset.length; i++) {
-
                 const childNodeX = (nodex << 1) + this._siblingOffset[i][0];
                 const childNodeY = (nodey << 1) + this._siblingOffset[i][1];
 
                 // Decode node aabb from the morton code
-                decodeBounds(childNodeX, childNodeY, depth + 1, rootMinx, rootMiny, rootMaxx, rootMaxy, boundsMin, boundsMax);
+                decodeBounds(
+                    childNodeX,
+                    childNodeY,
+                    depth + 1,
+                    rootMinx,
+                    rootMiny,
+                    rootMaxx,
+                    rootMaxy,
+                    boundsMin,
+                    boundsMax
+                );
 
                 boundsMin[2] = -aabbSkirtPadding;
                 boundsMax[2] = this.maximums[this.childOffsets[idx] + i] * exaggeration;
@@ -285,8 +340,7 @@ export default class DemMinMaxQuadTree {
                             added = true;
                         }
                     }
-                    if (!added)
-                        sortedHits[hitCount] = i;
+                    if (!added) sortedHits[hitCount] = i;
                     hitCount++;
                 }
             }
@@ -321,8 +375,7 @@ export default class DemMinMaxQuadTree {
         }
 
         // Update parent offset
-        if (!this.childOffsets[parentIdx])
-            this.childOffsets[parentIdx] = this.nodeCount;
+        if (!this.childOffsets[parentIdx]) this.childOffsets[parentIdx] = this.nodeCount;
 
         // Construct all 4 children and place them next to each other in memory
         const childLvl = lvl - 1;
@@ -339,26 +392,27 @@ export default class DemMinMaxQuadTree {
             const leaf = childMip.isLeaf(childX, childY);
             const nodeIdx = this._addNode(elevation.min, elevation.max, leaf);
 
-            if (leaf)
-                leafMask |= 1 << i;
-            if (!firstNodeIdx)
-                firstNodeIdx = nodeIdx;
+            if (leaf) leafMask |= 1 << i;
+            if (!firstNodeIdx) firstNodeIdx = nodeIdx;
         }
 
         // Continue construction of the tree recursively to non-leaf nodes.
         for (let i = 0; i < this._siblingOffset.length; i++) {
             if (!(leafMask & (1 << i))) {
-                this._construct(mips, x * 2 + this._siblingOffset[i][0], y * 2 + this._siblingOffset[i][1], childLvl, firstNodeIdx + i);
+                this._construct(
+                    mips,
+                    x * 2 + this._siblingOffset[i][0],
+                    y * 2 + this._siblingOffset[i][1],
+                    childLvl,
+                    firstNodeIdx + i
+                );
             }
         }
     }
 }
 
 function bilinearLerp(p00: any, p10: any, p01: any, p11: any, x: number, y: number): any {
-    return interpolate(
-        interpolate(p00, p01, y),
-        interpolate(p10, p11, y),
-        x);
+    return interpolate(interpolate(p00, p01, y), interpolate(p10, p11, y), x);
 }
 
 // Sample elevation in normalized uv-space ([0, 0] is the top left)
@@ -417,12 +471,13 @@ export function buildDemMipmap(dem: DEMData): Array<MipLevel> {
 
         blockSamples(x, y, blockSize, false, blockBounds);
 
-        const e0 = sampleElevation(blockBounds[0], blockBounds[1], dem);    // minx, miny
-        const e1 = sampleElevation(blockBounds[2], blockBounds[1], dem);    // maxx, miny
-        const e2 = sampleElevation(blockBounds[2], blockBounds[3], dem);    // maxx, maxy
-        const e3 = sampleElevation(blockBounds[0], blockBounds[3], dem);    // minx, maxy
+        const e0 = sampleElevation(blockBounds[0], blockBounds[1], dem)- dem.getDigBoxHeight(blockBounds[0], blockBounds[1]); // minx, miny
+        const e1 = sampleElevation(blockBounds[2], blockBounds[1], dem)- dem.getDigBoxHeight(blockBounds[2], blockBounds[1]); // maxx, miny
+        const e2 = sampleElevation(blockBounds[2], blockBounds[3], dem)- dem.getDigBoxHeight(blockBounds[2], blockBounds[3]); // maxx, maxy
+        const e3 = sampleElevation(blockBounds[0], blockBounds[3], dem)- dem.getDigBoxHeight(blockBounds[0], blockBounds[3]); // minx, maxy
+ 
 
-        mip.minimums.push(Math.min(e0, e1, e2, e3));
+        mip.minimums.push(Math.min(e0, e1, e2, e3) );
         mip.maximums.push(Math.max(e0, e1, e2, e3));
         mip.leaves.push(1);
     }

@@ -21,7 +21,8 @@
 
   var app = new FlywaveGl.Application({
     target: new FlywaveGl.GeoCoordinates(
-      36.432367988153544, 112.77345013804586
+      35.99281348081891,
+      117.32738391933924,
     ),
     zoomLevel: 17,
     addBackgroundDatasource: false,
@@ -36,7 +37,8 @@
   {
     var l = new THREE.PointLight(0xffffff,2,100000,0);
     l.anchor = new FlywaveGl.GeoCoordinates(
-      36.432367988153544, 112.77345013804586, 1000
+      35.99281348081891,
+      117.32738391933924, 1000
     )
     app.addAnchorMesh(l);
   }
@@ -120,36 +122,40 @@
         "coordinates": [
           [
             [
-              112.77345013804586,
-              36.432367988153544
+              117.30540873458023,
+              36.017641442224175
             ],
             [
-              112.77407775484625,
-              36.432547049237215
+              117.28210500773065,
+              36.00127566052585
             ],
             [
-              112.77398846727021,
-              36.432900014872544
+              117.31677139920475,
+              35.98315688113925
             ],
             [
-              112.77306609175179,
-              36.433026240192646
+              117.32738391933924,
+              35.99281348081891
             ],
             [
-              112.77288049733448,
-              36.4327338526046
+              117.33064641918605,
+              35.99964720534035
             ],
             [
-              112.77345013804586,
-              36.432367988153544
+              117.31897548784337,
+              36.012175491235624
+            ],
+            [
+              117.30540873458023,
+              36.017641442224175
             ]
           ]
         ],
         "type": "Polygon"
       }
     }
-    app.heightMapSource.overlayerHeightMapTexture.setColor("#ff00ff")
-  app.heightMapSource.overlayerHeightMapTexture.setGeojson(geojson, 1)
+    app.heightMapSource.overlayerHeightMapTexture.setColor("#00ff00")
+  app.heightMapSource.overlayerHeightMapTexture.setGeojson(geojson, 600)
   // document.body.appendChild(app.heightMapSource.overlayerHeightMapTexture.canvas)
   app.addAnchorMesh(new THREE.AmbientLight(0xffffff, 0.5))
 

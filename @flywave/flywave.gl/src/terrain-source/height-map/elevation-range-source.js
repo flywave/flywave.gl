@@ -13,10 +13,14 @@ class ElevationRangeSource {
     getTilingScheme = () => this.dataSource.getTilingScheme();
 
     getMinMaxForTile(tileID: TileKey): ?{ min: number, max: number } {
+     
         const demTile = this.dataSource.dataProvider().getNeareastDemTile(tileID);
         if (!(demTile && demTile.dem)) {
             return null;
         }
+        // if(tileID.mortonCode()==1544793){
+        //     console.log(tileID)
+        // }
         const dem: DEMData = demTile.dem;
         const tree = dem.tree;
         const demTileID = demTile.tileKey;

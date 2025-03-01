@@ -51,25 +51,39 @@ export class HeightMapProvider {
     };
 
     clearTree(clearGeoBox) {
-        this.tileDemCache.forEach(({ dem, geoBox }) => {
-            if (dem) {
-                let fbbox = new Math2D.Box(
-                    geoBox.southWest.longitude,
-                    geoBox.southWest.latitude,
-                    geoBox.northEast.longitude - geoBox.southWest.longitude,
-                    geoBox.northEast.latitude - geoBox.southWest.latitude
-                );
-                const { latitude: minLat, longitude: minLng } = clearGeoBox.southWest;
-                const { latitude: maxLat, longitude: maxLng } = clearGeoBox.northEast;
-                if (
-                    new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat).intersects(
-                        fbbox
-                    )
-                ) {
+        this.tileDemCache.forEach(tile => {
+            const { dem, geoBox } = tile;
+            let fbbox = new Math2D.Box(
+                geoBox.southWest.longitude,
+                geoBox.southWest.latitude,
+                geoBox.northEast.longitude - geoBox.southWest.longitude,
+                geoBox.northEast.latitude - geoBox.southWest.latitude
+            );
+            const { latitude: minLat, longitude: minLng } = clearGeoBox.southWest;
+            const { latitude: maxLat, longitude: maxLng } = clearGeoBox.northEast;
+            if (
+                new Math2D.Box(minLng, minLat, maxLng - minLng, maxLat - minLat).intersects(fbbox)
+            ) {
+                if (dem) {
                     dem.clearTree();
+                } else {
+                    tile.markClearTree = true;
                 }
             }
         });
+    }
+
+    isNeedsUpdateDemTree(geoBox) {
+        if (this.dataSource.overlayerHeightMapTexture.box) {
+            const { box } = this.dataSource.overlayerHeightMapTexture;
+
+            let fbbox = new THREE.Box2();
+            fbbox.expandByPoint(new THREE.Vector2().fromArray(geoBox.southWest.toGeoPoint()));
+            fbbox.expandByPoint(new THREE.Vector2().fromArray(geoBox.northEast.toGeoPoint()));
+
+            return box.intersectsBox(fbbox);
+        }
+        return false;
     }
 
     touchData(tileKey, targetLevel) {
@@ -138,6 +152,10 @@ export class HeightMapProvider {
                                     false
                                 );
                                 Object.assign(tile.dem, dem);
+
+                                if (this.isNeedsUpdateDemTree(tile.geoBox)) {
+                                    tile.dem.clearTree();
+                                }
                                 tile.dem.setOverlayerHeight(
                                     tile.geoBox,
                                     this.dataSource.overlayerHeightMapTexture

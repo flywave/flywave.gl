@@ -592,8 +592,10 @@ class FreeControl {
     } else {
       Y = 1e+32
     }
+
+    let scale = (1-this.mapView.heightMapSource.overlayerHeightMapTexture.digDepth/6378137)||1
     var M = mathUtils.rayCastToEllipsoid(
-      result, sourc, tar, 1, 1) * s;
+      result, sourc, tar, scale, scale) * s;
 
 
     vec3.sub(Z, result, sourc);
