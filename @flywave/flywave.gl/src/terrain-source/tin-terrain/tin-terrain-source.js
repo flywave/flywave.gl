@@ -11,7 +11,7 @@ import {
 } from "@flywave/flywave-geoutils";
 import { DataTerrainProvider } from "./data-terrain-provider";
 import { QUANTIZED_MESH_TILE_DECODER_ID } from "./constants";
-import {  CSG_STRATUM_DECODER } from "../stratum/constants";
+import { CSG_STRATUM_DECODER } from "../stratum/constants";
 import { TinWorkerBasedDecoder } from "./work-tile-decoder";
 import config from "../../config";
 
@@ -64,7 +64,14 @@ export class TinTerrainSource extends TerrainSource {
                 this.csgDecoder.configure({});
             })
             .then(() => {
-                return this.dataTerrainProvider.connect();
+                try {
+                    return this.dataTerrainProvider.connect();
+                }
+                catch (e) {
+                    this.connected = false
+                    throw e;
+                }
+
             });
     }
 

@@ -82,7 +82,7 @@ export class MaterialProvider {
 
     bindDataSource(dataSource) {
         this.dataSource = dataSource;
-        if (dataSource) dataSource.mapView.visibleTileSet.clearTileCache();
+        if (dataSource) dataSource.application.visibleTileSet.clearTileCache();
     }
 
     tileMaterialCache = new LRUCache(1000);
