@@ -91,7 +91,7 @@ class Application extends MapView {
     }
 
     clearElevationSource() {
-        if (!this.terrainEnabled) return;
+        // if (!this.terrainEnabled) return;
         this.heightMapSource.emptySource();
         this.__updateTerrainSource(this.heightMapSource);
         this.__enableTerrain = false;
@@ -105,11 +105,7 @@ class Application extends MapView {
         if (!this.elevationProviderProxy.elevationProvider) {
             this.elevationProviderProxy.elevationProvider = terrainSource.elevationProvider;
         }
-        await this.setElevationSource(
-            terrainSource,
-            new ElevationRangeSource(this),
-            terrainSource.elevationProvider
-        );
+        await this.setElevationSource(terrainSource, new ElevationRangeSource(this), terrainSource.elevationProvider);
 
         this.elevation = this.elevationProviderProxy;
         this.terrainSource = terrainSource;
@@ -124,7 +120,11 @@ class Application extends MapView {
     async setHeightMapSource(source) {
         this.__enableTerrain = true;
         this._terrain_promise = this.heightMapSource.setSourceTerrain(source).then(() => {
-            return this.__updateTerrainSource(this.heightMapSource);
+            try {
+                return this.__updateTerrainSource(this.heightMapSource);
+            } catch {
+                this.clearElevationSource();
+            }
         });
     }
 
@@ -132,7 +132,14 @@ class Application extends MapView {
         this.__enableTerrain = true;
         await this._terrain_promise.then(async reslove => {
             if (!this.terrainSource || this.terrainSource.baseUrl != options.url) {
-                reslove(await this.__updateTerrainSource(new TinTerrainSource(options)));
+                try {
+                    await this.__updateTerrainSource(new TinTerrainSource(options))
+                    if (!this.terrainSource.connected) {
+                        throw "not connected"
+                    }
+                } catch {
+                    this.clearElevationSource();
+                }
             }
         });
     }
