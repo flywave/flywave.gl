@@ -78,6 +78,17 @@ class F3dTilesRenderer extends TilesRenderer {
         }
     }
 
+    setObserveTileChange = observeTileChange => {
+        this.observeTileChange = observeTileChange;
+    };
+
+    setTileActive(tile, active) {
+        super.setTileActive(tile, active);
+        if (this.observeTileChange) {
+            this.observeTileChange._watchTileChange(tile,this.activeTiles);
+        }
+    }
+
     raycast = (raycaster, intersects) => {
         var oldRayOrigin = new THREE.Vector3();
         // raycaster.far = this.mapView.camera.far * 0.3;
@@ -160,6 +171,38 @@ class F3dTilesRenderer extends TilesRenderer {
         });
     };
 
+    async flyTo(duration) {
+        var tile = await this.getRootTile();
+        if (!tile) return;
+        const [milng, milat, mxlng, mxlat] = tile.boundingVolume.region;
+        var toA = 180 / Math.PI;
+        this.mapView.mapOrbitControl.flyToBox(
+            GeoBox.fromCoordinates(
+                new GeoCoordinates(milat * toA, milng * toA, 0),
+                new GeoCoordinates(mxlat * toA, mxlng * toA, 0)
+            ),
+            duration
+        );
+    }
+
+    readyPromise = null;
+    readyPromiseResolve = null;
+
+    getRootTile() {
+        if (this.rootTile) {
+            return Promise.resolve(this.rootTile);
+        } else {
+            if (!this.readyPromise) {
+                this.readyPromise = new Promise(resolve => {
+                    this.readyPromiseResolve = resolve;
+                });
+            } else {
+                return this.readyPromise;
+            }
+        }
+        return this.rootTile;
+    }
+
     preprocessNode(tile, parentTile, tileSetDir) {
         if ("region" in tile.boundingVolume) {
             const [milng, milat, mxlng, mxlat, miAlt, mxAlt] = tile.boundingVolume.region;
@@ -180,6 +223,7 @@ class F3dTilesRenderer extends TilesRenderer {
                 if (this.onLoaded) {
                     this.onLoaded(tile);
                 }
+                this.rootTile = tile;
                 // this.group.position.copy(this.rootPosition );
 
                 //     // var bHelper = new THREE.Mesh(

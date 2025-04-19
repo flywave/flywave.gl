@@ -13,8 +13,13 @@ export class OverlayerHeightMap {
         this.geojson = geojson;
         this.digDepth = digDepth;
         if (this.geojson) this.turfPolygon = turf.polygon(this.geojson.geometry.coordinates);
+        let preGeoBox = this.geoBox;
+        if (preGeoBox) this.heightMapSource.dataProvider().clearTree(preGeoBox);
         this.draw();
 
+        if (!this.geoBox) {
+            return;
+        }
         let boxB = new Box2();
         boxB.expandByPoint(new Vector2().fromArray(this.geoBox.southWest.toGeoPoint()));
         boxB.expandByPoint(new Vector2().fromArray(this.geoBox.northEast.toGeoPoint()));
@@ -35,8 +40,8 @@ export class OverlayerHeightMap {
         if (!this.geojson) {
             return 0;
         }
-        let [minx, miny] = geobox.min.toArray()
-        let [maxx, maxy] = geobox.max.toArray()
+        let [minx, miny] = geobox.min.toArray();
+        let [maxx, maxy] = geobox.max.toArray();
 
         if (turf.booleanIntersects(this.turfPolygon, turf.bboxPolygon([minx, miny, maxx, maxy]))) {
             return this.digDepth;

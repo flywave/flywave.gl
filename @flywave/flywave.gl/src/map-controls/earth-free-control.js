@@ -75,7 +75,7 @@ class EarthFreeControl extends FreeControl {
         var selections = this.mapOrbitControl.pickMap(x, y);
         for (var selectId = 0; selectId < selections.length; selectId++) {
             var selection = selections[selectId];
-            if (selection && selection.intersection) {
+            if (selection) {
                 var { distance, point } = selection;
                 const { position } = this.application.camera;
                 reslut[0] = position.x + point.x;

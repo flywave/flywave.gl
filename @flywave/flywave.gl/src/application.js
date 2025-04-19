@@ -70,7 +70,7 @@ class Application extends MapView {
         this.heightMapSource = new HeightMapSource({});
         this.heightMapSource.emptySource();
         this._terrain_promise = this.__updateTerrainSource(this.heightMapSource);
- 
+
         const { camera, projection, mapAnchors } = this;
 
         // const updateCallback = () => this.update();
@@ -105,7 +105,11 @@ class Application extends MapView {
         if (!this.elevationProviderProxy.elevationProvider) {
             this.elevationProviderProxy.elevationProvider = terrainSource.elevationProvider;
         }
-        await this.setElevationSource(terrainSource, new ElevationRangeSource(this),terrainSource.elevationProvider);
+        await this.setElevationSource(
+            terrainSource,
+            new ElevationRangeSource(this),
+            terrainSource.elevationProvider
+        );
 
         this.elevation = this.elevationProviderProxy;
         this.terrainSource = terrainSource;
@@ -126,9 +130,9 @@ class Application extends MapView {
 
     async setTinTerrainSource(options) {
         this.__enableTerrain = true;
-        await this._terrain_promise.then(async (reslove) => {
+        await this._terrain_promise.then(async reslove => {
             if (!this.terrainSource || this.terrainSource.baseUrl != options.url) {
-                reslove(await this.__updateTerrainSource(new TinTerrainSource(options))); 
+                reslove(await this.__updateTerrainSource(new TinTerrainSource(options)));
             }
         });
     }
@@ -301,22 +305,11 @@ class Application extends MapView {
         return this.added3DTileSource.map.keys();
     }
 
-    add3DTileSource(url, flyto = true) {
+    add3DTileSource(url) {
         if (!this.added3DTileSource.map.has(url)) {
             const { camera, renderer } = this;
             this.added3DTileSource.index++;
-            const tilesRenderer = new F3dTilesRenderer(url, this, DebugTilesRenderer, tile => {
-                if (flyto) {
-                    const [milng, milat, mxlng, mxlat] = tile.boundingVolume.region;
-                    var toA = 180 / Math.PI;
-                    this.mapOrbitControl.flyToBox(
-                        GeoBox.fromCoordinates(
-                            new GeoCoordinates(milat * toA, milng * toA, 0),
-                            new GeoCoordinates(mxlat * toA, mxlng * toA, 0)
-                        )
-                    );
-                }
-            });
+            const tilesRenderer = new F3dTilesRenderer(url, this, DebugTilesRenderer);
             tilesRenderer.setCamera(camera);
             tilesRenderer.setResolutionFromRenderer(camera, renderer);
 

@@ -1,7 +1,7 @@
 import Application from "./application";
 export { Application };
 export * from "@flywave/flywave-mapview";
- 
+
 //camera control
 import { EarthFreeControl } from "./map-controls/earth-free-control";
 export { EarthFreeControl };
@@ -38,6 +38,8 @@ export { makeMapTheme };
 import { FeaturesDataSource } from "./feature-datasource";
 export { FeaturesDataSource };
 
+export { Observe3DTileChange } from "./3dtiles-render/observe-tile-change";
+
 import config from "./config";
 
 export default {
@@ -53,8 +55,7 @@ export default {
         return config.DECODER_URL;
     }
 };
-if(window.FLYWAVE_BASE_URL)
-config.BASE_PATH = window.FLYWAVE_BASE_URL
+if (window.FLYWAVE_BASE_URL) config.BASE_PATH = window.FLYWAVE_BASE_URL;
 
 //mapview
 import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/lib/SphericalGeometrySubdivisionModifier";
