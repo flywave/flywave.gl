@@ -105,7 +105,11 @@ class Application extends MapView {
         if (!this.elevationProviderProxy.elevationProvider) {
             this.elevationProviderProxy.elevationProvider = terrainSource.elevationProvider;
         }
-        await this.setElevationSource(terrainSource, new ElevationRangeSource(this), terrainSource.elevationProvider);
+        await this.setElevationSource(
+            terrainSource,
+            new ElevationRangeSource(this),
+            terrainSource.elevationProvider
+        );
 
         this.elevation = this.elevationProviderProxy;
         this.terrainSource = terrainSource;
@@ -133,9 +137,9 @@ class Application extends MapView {
         await this._terrain_promise.then(async reslove => {
             if (!this.terrainSource || this.terrainSource.baseUrl != options.url) {
                 try {
-                    await this.__updateTerrainSource(new TinTerrainSource(options))
+                    await this.__updateTerrainSource(new TinTerrainSource(options));
                     if (!this.terrainSource.connected) {
-                        throw "not connected"
+                        throw "not connected";
                     }
                 } catch {
                     this.clearElevationSource();
@@ -266,10 +270,14 @@ class Application extends MapView {
             .sort((a, b) => a.distance - b.distance);
     }
 
-    pick3DTilesMap(screenX, screenY) {
+    pick3DTilesMap(screenX, screenY, tilesetUri) {
         var rayCaster = this.pickHandler.setupRaycaster(screenX, screenY);
         var intersects = [];
-        rayCaster.intersectObject(this.added3DTileSource.scene, true, intersects);
+        if (!tilesetUri) rayCaster.intersectObject(this.added3DTileSource.scene, true, intersects);
+        else {
+            var tilesRenderer = this.get3DTileSource(tilesetUri);
+            if (tilesRenderer) rayCaster.intersectObject(tilesRenderer.object, true, intersects);
+        }
         return intersects;
     }
 

@@ -322,6 +322,7 @@ export class SdfTextMaterial extends RawShaderMaterial {
               }
             : undefined;
         super(shaderParams);
+        //@ts-ignore
         this.extensions.derivatives = true;
     }
 }

@@ -424,8 +424,10 @@ export class TextCanvas {
         clear?: boolean
     ) {
         this.m_fontCatalog.update(this.m_renderer);
-        let oldTarget: THREE.RenderTarget | null = null;
+        let oldTarget: THREE.WebGLRenderTarget | null = null;
         if (target !== undefined) {
+
+            //@ts-ignore
             oldTarget = this.m_renderer.getRenderTarget();
             this.m_renderer.setRenderTarget(target);
         }

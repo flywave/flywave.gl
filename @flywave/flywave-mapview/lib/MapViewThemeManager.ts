@@ -105,22 +105,27 @@ export class MapViewThemeManager {
         environment.updateClearColor(theme.clearColor, theme.clearAlpha);
 
         // Images.
-        if(!isEqual(this.m_theme.images,theme.images)||!isEqual(this.m_theme.imageTextures,theme.imageTextures)){
+        if (
+            !isEqual(this.m_theme.images, theme.images) ||
+            !isEqual(this.m_theme.imageTextures, theme.imageTextures)
+        ) {
             this.m_theme.images = theme.images;
             this.m_theme.imageTextures = theme.imageTextures;
             await this.updateImages(theme.images, theme.imageTextures);
         }
 
         // POI tables.
-        if(!isEqual(this.m_theme.poiTables,theme.poiTables)){
+        if (!isEqual(this.m_theme.poiTables, theme.poiTables)) {
             this.m_theme.poiTables = theme.poiTables;
             await this.loadPoiTables(theme.poiTables);
         }
         // Text.
-        
-        if(!isEqual(this.m_theme.textStyles,theme.textStyles)||
-        !isEqual(this.m_theme.defaultTextStyle,theme.defaultTextStyle)||
-        !isEqual(this.m_theme.fontCatalogs,theme.fontCatalogs)){
+
+        if (
+            !isEqual(this.m_theme.textStyles, theme.textStyles) ||
+            !isEqual(this.m_theme.defaultTextStyle, theme.defaultTextStyle) ||
+            !isEqual(this.m_theme.fontCatalogs, theme.fontCatalogs)
+        ) {
             this.m_theme.textStyles = theme.textStyles;
             this.m_theme.defaultTextStyle = theme.defaultTextStyle;
             this.m_theme.fontCatalogs = theme.fontCatalogs;
@@ -180,8 +185,11 @@ export class MapViewThemeManager {
 
     private cancelThemeUpdate() {
         for (var i = 0; i < this.m_abortControllers.length; i++) {
-            this.m_abortControllers[i].abort();
+            try {
+                // this.m_abortControllers[i].abort();
+            } catch (e) {}
         }
+
         this.m_abortControllers = [];
         this.m_imageCache.clear();
         this.m_mapView.poiManager.clear();

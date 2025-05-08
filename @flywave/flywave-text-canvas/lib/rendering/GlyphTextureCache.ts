@@ -263,12 +263,14 @@ export class GlyphTextureCache {
      * @param renderer - WebGLRenderer.
      */
     update(renderer: THREE.WebGLRenderer): void {
-        let oldRenderTarget: THREE.RenderTarget | null = null;
+        let oldRenderTarget: THREE.WebGLRenderTarget | null = null;
 
         const willClearGeometry = this.m_clearGeometryDrawCount > 0;
         const willCopyGeometry = this.m_copyGeometryDrawCount > 0;
 
         if (willClearGeometry || willCopyGeometry) {
+
+            //@ts-ignore
             oldRenderTarget = renderer.getRenderTarget();
             renderer.setRenderTarget(this.m_rt);
         }
@@ -285,11 +287,23 @@ export class GlyphTextureCache {
                 throw new Error("GlyphTextureCache clear geometry index is uninitialized!");
             }
             this.m_clearPositionAttribute.needsUpdate = true;
-            this.m_clearPositionAttribute.updateRange.offset = 0;
-            this.m_clearPositionAttribute.updateRange.count = this.m_clearGeometryDrawCount * 8;
+            // this.m_clearPositionAttribute.updateRange.offset = 0;
+            // this.m_clearPositionAttribute.updateRange.count = this.m_clearGeometryDrawCount * 8;
+
+            //@ts-ignore
+            this.m_clearPositionAttribute.addUpdateRange(
+                0,
+                this.m_clearGeometryDrawCount * 8,
+            )
             this.m_clearGeometry.index.needsUpdate = true;
-            this.m_clearGeometry.index.updateRange.offset = 0;
-            this.m_clearGeometry.index.updateRange.count = this.m_clearGeometryDrawCount * 6;
+            // this.m_clearGeometry.index.updateRange.offset = 0;
+            // this.m_clearGeometry.index.updateRange.count = this.m_clearGeometryDrawCount * 6;
+
+            //@ts-ignore
+            this.m_clearGeometry.index.addUpdateRange(
+                0,
+                this.m_clearGeometryDrawCount * 6,
+            )
             this.m_clearGeometry.setDrawRange(0, this.m_clearGeometryDrawCount * 6);
 
             this.m_clearMesh.visible = true;
@@ -312,11 +326,24 @@ export class GlyphTextureCache {
                 throw new Error("GlyphTextureCache copy geometry index is uninitialized!");
             }
             this.m_copyVertexBuffer.needsUpdate = true;
-            this.m_copyVertexBuffer.updateRange.offset = 0;
-            this.m_copyVertexBuffer.updateRange.count = this.m_copyGeometryDrawCount * 20;
+            // this.m_copyVertexBuffer.updateRange.offset = 0;
+            // this.m_copyVertexBuffer.updateRange.count = this.m_copyGeometryDrawCount * 20;
+
+            //@ts-ignore
+            this.m_copyVertexBuffer.addUpdateRange(
+                0,
+                this.m_copyGeometryDrawCount * 20,
+            )
+
             this.m_copyGeometry.index.needsUpdate = true;
-            this.m_copyGeometry.index.updateRange.offset = 0;
-            this.m_copyGeometry.index.updateRange.count = this.m_copyGeometryDrawCount * 6;
+            // this.m_copyGeometry.index.updateRange.offset = 0;
+            // this.m_copyGeometry.index.updateRange.count = this.m_copyGeometryDrawCount * 6;
+
+            //@ts-ignore
+            this.m_copyGeometry.index.addUpdateRange(
+                0,
+                this.m_copyGeometryDrawCount * 6,
+            )
             this.m_copyGeometry.setDrawRange(0, this.m_copyGeometryDrawCount * 6);
 
             this.m_copyMesh.visible = true;

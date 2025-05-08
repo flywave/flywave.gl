@@ -189,7 +189,7 @@ export function raycastTraverse( tile, group, activeTiles, raycaster, intersects
 	const cached = tile.cached;
 	const groupMatrixWorld = group.matrixWorld;
 
-	_mat.copy( groupMatrixWorld );
+	_mat.identity();
 
 	// Early out if we don't hit this tile sphere
 	const sphere = cached.sphere;

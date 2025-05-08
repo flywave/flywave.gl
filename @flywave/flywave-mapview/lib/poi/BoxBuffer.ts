@@ -330,27 +330,39 @@ export class BoxBuffer {
 
         if (positionAttribute.count > 0) {
             positionAttribute.needsUpdate = true;
-            positionAttribute.updateRange.offset = 0;
-            positionAttribute.updateRange.count =
-                positionAttribute.count * NUM_VERTICES_PER_ELEMENT;
+            // positionAttribute.updateRange.offset = 0;
+            // positionAttribute.updateRange.count =
+            //     positionAttribute.count * NUM_VERTICES_PER_ELEMENT;
+
+            //@ts-ignore
+            positionAttribute.addUpdateRange(0, positionAttribute.count * NUM_VERTICES_PER_ELEMENT);
         }
 
         if (colorAttribute.count > 0) {
             colorAttribute.needsUpdate = true;
-            colorAttribute.updateRange.offset = 0;
-            colorAttribute.updateRange.count = colorAttribute.count * NUM_VERTICES_PER_ELEMENT;
+            // colorAttribute.updateRange.offset = 0;
+            // colorAttribute.updateRange.count = colorAttribute.count * NUM_VERTICES_PER_ELEMENT;
+
+            //@ts-ignore
+            colorAttribute.addUpdateRange(0, colorAttribute.count * NUM_VERTICES_PER_ELEMENT);
         }
 
         if (uvAttribute.count > 0) {
             uvAttribute.needsUpdate = true;
-            uvAttribute.updateRange.offset = 0;
-            uvAttribute.updateRange.count = uvAttribute.count * NUM_VERTICES_PER_ELEMENT;
+            // uvAttribute.updateRange.offset = 0;
+            // uvAttribute.updateRange.count = uvAttribute.count * NUM_VERTICES_PER_ELEMENT;
+
+            //@ts-ignore
+            uvAttribute.addUpdateRange(0, uvAttribute.count * NUM_VERTICES_PER_ELEMENT);
         }
 
         if (indexAttribute.count > 0) {
             indexAttribute.needsUpdate = true;
-            indexAttribute.updateRange.offset = 0;
-            indexAttribute.updateRange.count = indexAttribute.count;
+            // indexAttribute.updateRange.offset = 0;
+            // indexAttribute.updateRange.count = indexAttribute.count;
+
+            //@ts-ignore
+            indexAttribute.addUpdateRange(0, indexAttribute.count);
         }
 
         if (this.m_geometry !== undefined) {

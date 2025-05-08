@@ -36,9 +36,9 @@ export class MipMapGenerator {
     constructor() {
         if (!isNode) {
             this.m_paddingCanvas = document.createElement("canvas");
-            this.m_paddingContext = this.m_paddingCanvas.getContext("2d")!;
+            this.m_paddingContext = this.m_paddingCanvas.getContext("2d",{willReadFrequently:true})!;
             this.m_resizeCanvas = document.createElement("canvas");
-            this.m_resizeContext = this.m_resizeCanvas.getContext("2d")!;
+            this.m_resizeContext = this.m_resizeCanvas.getContext("2d",{willReadFrequently:true})!;
         }
     }
 

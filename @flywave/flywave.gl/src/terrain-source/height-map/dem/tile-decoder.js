@@ -32,7 +32,7 @@ class RasterDEMTileWorkerSource {
     if (!this.offscreenCanvas || !this.offscreenCanvasContext) {
       // Dem tiles are typically 256x256
       this.offscreenCanvas = new OffscreenCanvas(imgBitmap.width, imgBitmap.height);
-      this.offscreenCanvasContext = this.offscreenCanvas.getContext('2d');
+      this.offscreenCanvasContext = this.offscreenCanvas.getContext('2d',{offscreenCanvasContext:true,willReadFrequently:true});
       this.offscreenCanvas.imageSmoothingEnabled = true;
     }
 

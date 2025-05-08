@@ -1,6 +1,6 @@
 import { GeoCoordinates, GeoBox } from "@flywave/flywave-geoutils";
 import { TilesRenderer } from "./3dtiles-render/three/TilesRenderer";
-import { Sphere, Box3 } from "three";
+import { Sphere, Box3, LoadingManager } from "three";
 import { Vector3 } from "three";
 import { MapViewEventNames } from "@flywave/flywave-mapview";
 import { OrientedBox3 } from "@flywave/flywave-geoutils";
@@ -11,6 +11,14 @@ import config from "./config";
 import SelectionEffect from "./3dtiles-render/selection";
 
 export const F3dTilesRendererUpdateEvent = "update";
+
+const parseQueue = new PriorityQueue();
+parseQueue.priorityCallback = (a, b) => {
+    return b.__t - a.__t;
+};
+parseQueue.maxJobs = 100;
+
+let dracoLoader = new DRACOLoader(new LoadingManager(), parseQueue);
 
 class F3dTilesRenderer extends TilesRenderer {
     constructor(url, mapView, DebugTilesRenderer, onLoaded) {
@@ -33,13 +41,7 @@ class F3dTilesRenderer extends TilesRenderer {
 
         this.autoDisableRendererCulling = false;
 
-        const parseQueue = new PriorityQueue();
-        parseQueue.priorityCallback = (a, b) => {
-            return b.__t - a.__t;
-        };
-        parseQueue.maxJobs = 100;
-
-        this.manager.dracoLoader = new DRACOLoader(this.manager, parseQueue);
+        this.manager.dracoLoader = dracoLoader;
         this.manager.dracoLoader.setDecoderPath(config.DRACO_PATH);
         this.errorTarget = 16;
 
@@ -85,7 +87,7 @@ class F3dTilesRenderer extends TilesRenderer {
     setTileActive(tile, active) {
         super.setTileActive(tile, active);
         if (this.observeTileChange) {
-            this.observeTileChange._watchTileChange(tile,this.activeTiles);
+            this.observeTileChange._watchTileChange(tile, this.activeTiles, active);
         }
     }
 
@@ -95,7 +97,7 @@ class F3dTilesRenderer extends TilesRenderer {
         oldRayOrigin.copy(raycaster.ray.origin);
         raycaster.ray.origin.copy(this.mapView.camera.position);
         // raycaster.firstHitOnly = true;
-        this.object.position.add(this.mapView.camera.position);
+        this.object.position.set(0,0,0)
         this.object.updateMatrixWorld();
         var _intersects = [];
         try {
@@ -193,14 +195,13 @@ class F3dTilesRenderer extends TilesRenderer {
             return Promise.resolve(this.rootTile);
         } else {
             if (!this.readyPromise) {
-                this.readyPromise = new Promise(resolve => {
+                return (this.readyPromise = new Promise(resolve => {
                     this.readyPromiseResolve = resolve;
-                });
+                }));
             } else {
                 return this.readyPromise;
             }
         }
-        return this.rootTile;
     }
 
     preprocessNode(tile, parentTile, tileSetDir) {
@@ -224,6 +225,7 @@ class F3dTilesRenderer extends TilesRenderer {
                     this.onLoaded(tile);
                 }
                 this.rootTile = tile;
+                if (this.readyPromiseResolve) this.readyPromiseResolve(tile);
                 // this.group.position.copy(this.rootPosition );
 
                 //     // var bHelper = new THREE.Mesh(

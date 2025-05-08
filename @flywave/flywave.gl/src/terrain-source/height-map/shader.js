@@ -168,6 +168,9 @@ Object.assign(THREE.ShaderChunk, {
 
         float currentOverlayerElevation(vec2 uv) { 
             uv = uv*overlayerHeightMapUvTransform.xy + overlayerHeightMapUvTransform.zw;
+            if(uv.x<=0.00001||uv.y<=0.00001||uv.x>1.0||uv.y>1.0){
+                return 0.0;
+            }
             return decodeOverlayerElevation(texture2D(overlayerHeightMap, uv)); 
         } 
 

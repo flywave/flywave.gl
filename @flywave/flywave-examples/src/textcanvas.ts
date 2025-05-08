@@ -251,8 +251,9 @@ export namespace TextCanvasDynamicExample {
         }
 
         boundsVertexBuffer.needsUpdate = true;
-        boundsVertexBuffer.updateRange.offset = 0;
-        boundsVertexBuffer.updateRange.count = arrayIdx;
+        // boundsVertexBuffer.updateRange.offset = 0;
+        // boundsVertexBuffer.updateRange.count = arrayIdx;
+        boundsVertexBuffer.addUpdateRange(0, arrayIdx);
         boundsGeometry.setDrawRange(0, arrayIdx / 4);
 
         boundsObject.position.x = position.x;

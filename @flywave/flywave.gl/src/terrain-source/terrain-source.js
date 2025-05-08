@@ -37,6 +37,10 @@ export class TerrainSource extends TileDataSource {
         throw "no imple";
     }
 
+    async getTheme() {
+        return;
+    }
+
     onCameraChange = () => {
         this._onCameraChange = true;
     };

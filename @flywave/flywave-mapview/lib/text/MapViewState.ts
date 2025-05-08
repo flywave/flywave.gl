@@ -73,6 +73,7 @@ export class MapViewState implements ViewState {
     }
 
     get elevationProvider(): ElevationProvider | undefined {
-        return this.m_mapView.elevationProvider;
+        return undefined;
+        // return this.m_mapView.elevationProvider;
     }
 }

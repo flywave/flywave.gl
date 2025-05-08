@@ -162,15 +162,27 @@ export class TextGeometry {
     update() {
         if (this.drawCount > this.m_updateOffset) {
             this.m_vertexBuffer.needsUpdate = true;
-            this.m_vertexBuffer.updateRange.offset =
-                this.m_updateOffset * QUAD_VERTEX_MEMORY_FOOTPRINT;
-            this.m_vertexBuffer.updateRange.count =
-                (this.m_drawCount - this.m_updateOffset) * QUAD_VERTEX_MEMORY_FOOTPRINT;
+            // this.m_vertexBuffer.updateRange.offset =
+            //     this.m_updateOffset * QUAD_VERTEX_MEMORY_FOOTPRINT;
+            // this.m_vertexBuffer.updateRange.count =
+            //     (this.m_drawCount - this.m_updateOffset) * QUAD_VERTEX_MEMORY_FOOTPRINT;
+
+            //@ts-ignore
+            this.m_vertexBuffer.addUpdateRange(
+                this.m_updateOffset * QUAD_VERTEX_MEMORY_FOOTPRINT,
+                (this.m_drawCount - this.m_updateOffset) * QUAD_VERTEX_MEMORY_FOOTPRINT
+            );
+
             this.m_indexBuffer.needsUpdate = true;
-            this.m_indexBuffer.updateRange.offset =
-                this.m_updateOffset * QUAD_INDEX_MEMORY_FOOTPRINT;
-            this.m_indexBuffer.updateRange.count =
-                (this.m_drawCount - this.m_updateOffset) * QUAD_INDEX_MEMORY_FOOTPRINT;
+            // this.m_indexBuffer.updateRange.offset =
+            //     this.m_updateOffset * QUAD_INDEX_MEMORY_FOOTPRINT;
+            // this.m_indexBuffer.updateRange.count =
+            //     (this.m_drawCount - this.m_updateOffset) * QUAD_INDEX_MEMORY_FOOTPRINT;
+            //@ts-ignore
+            this.m_indexBuffer.addUpdateRange(
+                this.m_updateOffset * QUAD_INDEX_MEMORY_FOOTPRINT,
+                (this.m_drawCount - this.m_updateOffset) * QUAD_INDEX_MEMORY_FOOTPRINT
+            );
         }
         this.m_updateOffset = this.m_drawCount;
         this.m_geometry.setDrawRange(0, this.m_drawCount * INDICES_PER_QUAD);

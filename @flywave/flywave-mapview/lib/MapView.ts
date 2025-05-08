@@ -3261,10 +3261,10 @@ export class MapView extends EventDispatcher {
                 : viewRanges
         );
         this.m_viewRanges.far = Math.max(
-            this.m_viewRanges.far,10000
+            this.m_viewRanges.far,1000000
         )
         this.m_viewRanges.maximum = Math.max(
-            this.m_viewRanges.maximum,10000
+            this.m_viewRanges.maximum,1000000
         )
         this.m_camera.near = this.m_viewRanges.near;
         this.m_camera.far = this.m_viewRanges.far;
