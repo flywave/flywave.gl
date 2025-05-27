@@ -41,7 +41,6 @@
 		}`
 
 };
-
-THREE.UnpackDepthRGBAShader = UnpackDepthRGBAShader;
+ 
 
 export { UnpackDepthRGBAShader };

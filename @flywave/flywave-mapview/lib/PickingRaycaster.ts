@@ -17,7 +17,8 @@ function intersectObject(
     if (object.layers.test(raycaster.layers) && object.visible) {
         const mapObjectAdapter = MapObjectAdapter.get(object);
         if (!mapObjectAdapter || mapObjectAdapter.isPickable()) {
-            object.raycast(raycaster, intersects);
+            //@ts-ignore
+          recursive =  object.raycast(raycaster, intersects) ===false ? false : recursive;
         }
     }
 

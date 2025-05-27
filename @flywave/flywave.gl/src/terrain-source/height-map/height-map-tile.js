@@ -55,7 +55,17 @@ class HeightMapMeshTile extends Tile {
         var uUvTransform = _this.computeUvTransfrom(tileKey, materialTile);
         let overlayerHeightMap = _this.dataSource.overlayerHeightMapTexture.getBindTexture(this); 
         return (renderer, scene, camera, geometry) => {
+
+
+            ////if  scene.overrideMaterial instaceof THREE.MeshDepthMaterial
+
             const { commonUniform } = material;
+            if(scene.overrideMaterial && scene.overrideMaterial instanceof THREE.MeshDepthMaterial){
+                commonUniform.depth_packing_value.value = scene.overrideMaterial.depthPacking;
+            }else{
+                commonUniform.depth_packing_value.value = 0;
+            }
+
             if (_this.uPatchPos) commonUniform.uPatchPos.value.copy(_this.uPatchPos);
 
             var mat = new THREE.Matrix4();
@@ -175,7 +185,7 @@ class HeightMapMeshTile extends Tile {
         var geometry = sphereTileGridGeometry.getTileModel(tileKey);
         const tileMesh = new THREE.Mesh(geometry, materialProvider.getMaterialByTile(materialTile));
 
-        tileMesh.renderOrder = Number.MIN_SAFE_INTEGER + 256;
+        // tileMesh.renderOrder = Number.MIN_SAFE_INTEGER + 256;
 
         this.is_simple_patch = geometry.mode.is_simple_patch;
         if (!geometry.mode.is_simple_patch) {

@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { MapViewEventNames } from "@flywave/flywave-mapview";
 import Simon1994PlanetaryPositions from "./simon1994planetarypositions";
 import JulianDate from "./julian-date"
-import "../debug/ShadowMapViewer";
+import { ShadowMapViewer } from "../debug/ShadowMapViewer";
 import "../debug/UnpackDepthRGBAShader";
 import { computeTemeToPseudoFixedMatrix, computeIcrfToFixedMatrix } from "../util/math-transfrom";
 
@@ -58,7 +58,7 @@ export default class SunLight {
         // shadowCameraHelper.renderOrder = 5000;
         // mapView.scene.add(shadowCameraHelper);
 
-        // var debugLight = new THREE.ShadowMapViewer(light);
+        // var debugLight = new ShadowMapViewer(light);
 
 
         mapView.addEventListener(MapViewEventNames.Render, () => {

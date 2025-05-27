@@ -3,6 +3,8 @@ import * as THREE from "three";
 const emptyTexture = new THREE.DataTexture();
 
 export class TerrainMeshLambertMaterial extends THREE.MeshLambertMaterial {
+    allowOverride = false;
+
     commonUniform = {
         uHeighMapTexture: {
             value: emptyTexture
@@ -20,10 +22,13 @@ export class TerrainMeshLambertMaterial extends THREE.MeshLambertMaterial {
             value: null
         },
         digColor: {
-            value: new THREE.Color(0xffffff) 
+            value: new THREE.Color(0xffffff)
         },
-        overlayerHeightMapUvTransform:{
+        overlayerHeightMapUvTransform: {
             value: new THREE.Vector4()
+        },
+        depth_packing_value: {
+            value: 0
         }
     };
 
@@ -55,8 +60,35 @@ export class TerrainMeshLambertMaterial extends THREE.MeshLambertMaterial {
             `#include <color_fragment>
              #include <dig_color_fragment>`
         );
-       
 
+
+        //depth packing
+        shader.vertexShader = shader.vertexShader.replace(
+            `#include <common>`,
+            `#include <common>
+             #include <depth_packing_pars_vertex>
+            `
+        );
+        shader.vertexShader = shader.vertexShader.replace(
+            `#include <fog_vertex>`,
+            `#include <fog_vertex>
+             #include <depth_packing_vertex>
+            `
+        );
+        shader.fragmentShader = shader.fragmentShader.replace(
+            `#include <packing>`,
+            `#include <packing>
+             #include <depth_packing_pars_fragment>
+            `
+        );
+        shader.fragmentShader = shader.fragmentShader.replace(
+            `#include <dithering_fragment>`,
+            `#include <dithering_fragment>
+             #include <depth_packing_fragment>`
+        );
+
+
+        ///terrain proj
         shader.vertexShader = shader.vertexShader.replace(
             `#include <project_vertex>`,
             `#include <terrain_proj>`

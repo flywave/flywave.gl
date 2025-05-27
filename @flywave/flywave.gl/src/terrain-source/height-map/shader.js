@@ -93,6 +93,31 @@ Object.assign(THREE.ShaderChunk, {
             diffuseColor.xyz = mix(texture2D( uDigTexture, vDigMapUv ).xyz,vDigColor,0.8);
         } 
     `,
+    depth_packing_pars_vertex:`
+        varying vec2 vHighPrecisionZW;
+    `,
+    depth_packing_vertex:`
+        vHighPrecisionZW = gl_Position.zw;
+    `,
+    depth_packing_pars_fragment:`
+        varying vec2 vHighPrecisionZW;
+        uniform int depth_packing_value;
+    `,
+    depth_packing_fragment: `
+        float fragCoordZ = 0.5 * vHighPrecisionZW[0] / vHighPrecisionZW[1] + 0.5;
+        if(depth_packing_value == 3200){
+            gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );
+        }
+        if(depth_packing_value == 3201){
+            gl_FragColor = packDepthToRGBA( fragCoordZ );
+        }
+        if(depth_packing_value == 3202){
+            gl_FragColor = vec4( packDepthToRGB( fragCoordZ ), 1.0 );
+        }
+        if(depth_packing_value == 3203){
+            gl_FragColor = vec4( packDepthToRG( fragCoordZ ), 0.0, 1.0 );
+        }
+    `,
     beginnormal_terrain_vertex: `  
     bool uIsSimplePatch = pack[0][3]>0.0; 
     if(uIsSimplePatch){

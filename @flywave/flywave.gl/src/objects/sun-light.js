@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { MapViewEventNames } from "@flywave/flywave-mapview";
 import Simon1994PlanetaryPositions from "../util/simon1994planetarypositions";
 import JulianDate from "../util/julian-date";
-import "../debug/ShadowMapViewer";
+import { ShadowMapViewer } from "../debug/ShadowMapViewer";
 import "../debug/UnpackDepthRGBAShader";
 import { computeTemeToPseudoFixedMatrix } from "../util/math-transfrom";
 
