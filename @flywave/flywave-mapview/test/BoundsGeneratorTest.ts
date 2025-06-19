@@ -17,11 +17,11 @@ import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { BoundsGenerator } from "../lib/BoundsGenerator";
-import { projectTilePlaneCorners } from "../lib/geometry/ProjectTilePlaneCorners";
-import { LookAtParams, MapView, MapViewOptions } from "../lib/MapView";
-import { Tile } from "../lib/Tile";
-import { MapViewUtils } from "../lib/Utils";
+import { BoundsGenerator } from "../src/BoundsGenerator";
+import { projectTilePlaneCorners } from "../src/geometry/ProjectTilePlaneCorners";
+import { LookAtParams, MapView, MapViewOptions } from "../src/MapView";
+import { Tile } from "../src/Tile";
+import { MapViewUtils } from "../src/Utils";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

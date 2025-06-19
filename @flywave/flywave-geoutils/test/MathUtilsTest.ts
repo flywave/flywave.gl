@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { MathUtils } from "../lib/math/MathUtils";
+import { MathUtils } from "../src/math/MathUtils";
 
 const epsilon = 0.000001;
 

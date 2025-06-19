@@ -6,7 +6,7 @@
 
 import { assert } from "chai";
 
-import { MathUtils } from "../lib/MathUtils";
+import { MathUtils } from "../src/MathUtils";
 
 describe("MathUtils", () => {
     describe("General math utils", () => {

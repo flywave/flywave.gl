@@ -20,6 +20,7 @@
         "@typescript-eslint/eslint-plugin": "catalog:",
         "@typescript-eslint/parser": "catalog:",
         "lodash.isequal": "catalog:",
+        "cross-env": "catalog:",
         "chai": "catalog:",
         "commander": "catalog:",
         "eslint": "catalog:",

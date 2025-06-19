@@ -11,8 +11,8 @@ import { SolidLineMaterial } from "@flywave/flywave-materials";
 import { expect } from "chai";
 import * as THREE from "three";
 
-import { DisplacedBufferGeometry } from "../lib/geometry/DisplacedBufferGeometry";
-import { SolidLineMesh } from "../lib/geometry/SolidLineMesh";
+import { DisplacedBufferGeometry } from "../src/geometry/DisplacedBufferGeometry";
+import { SolidLineMesh } from "../src/geometry/SolidLineMesh";
 
 class BufferGeometryBuilder {
     indices?: THREE.BufferAttribute;

@@ -26,16 +26,16 @@ chai.use(chaiAsPromised);
 // Needed for using assert.isFulfilled for example
 const { expect, assert } = chai;
 
-import { DisplacedMesh } from "../lib/geometry/DisplacedMesh";
-import { toTextureFilter, toWrappingMode } from "../lib/ThemeHelpers";
+import { DisplacedMesh } from "../src/geometry/DisplacedMesh";
+import { toTextureFilter, toWrappingMode } from "../src/ThemeHelpers";
 import {
     applyBaseColorToMaterial,
     buildObject,
     createMaterial,
     evaluateColorProperty,
     usesObject3D
-} from "./../lib/DecodedTileHelpers";
-import { Tile } from "./../lib/Tile";
+} from "./../src/DecodedTileHelpers";
+import { Tile } from "./../src/Tile";
 import { FakeOmvDataSource } from "./FakeOmvDataSource";
 
 const itBrowserOnly = typeof Blob !== "undefined" ? it : xit;

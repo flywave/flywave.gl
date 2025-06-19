@@ -9,13 +9,13 @@
 import { assert, expect } from "chai";
 import * as THREE from "three";
 
-import { GeoCoordinates } from "../lib/coordinates/GeoCoordinates";
-import { OrientedBox3 } from "../lib/math/OrientedBox3";
-import { EarthConstants } from "../lib/projection/EarthConstants";
-import { sphereProjection } from "../lib/projection/SphereProjection";
-import { TileKey } from "../lib/tiling/TileKey";
-import { TilingScheme } from "../lib/tiling/TilingScheme";
-import { webMercatorTilingScheme } from "../lib/tiling/WebMercatorTilingScheme";
+import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";
+import { OrientedBox3 } from "../src/math/OrientedBox3";
+import { EarthConstants } from "../src/projection/EarthConstants";
+import { sphereProjection } from "../src/projection/SphereProjection";
+import { TileKey } from "../src/tiling/TileKey";
+import { TilingScheme } from "../src/tiling/TilingScheme";
+import { webMercatorTilingScheme } from "../src/tiling/WebMercatorTilingScheme";
 
 /**
  * Visits the tile tree.

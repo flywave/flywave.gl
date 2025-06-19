@@ -7,7 +7,7 @@
 import { expect } from "chai";
 import * as THREE from "three";
 
-import { Object3DUtils } from "../lib/geometry/Object3DUtils";
+import { Object3DUtils } from "../src/geometry/Object3DUtils";
 
 describe("Object3DUtils", function () {
     it("estimate size of world with one cube", async function () {

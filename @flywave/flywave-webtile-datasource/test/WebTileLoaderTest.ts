@@ -14,8 +14,8 @@ import * as chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { WebTileDataProvider, WebTileDataSource } from "../lib/WebTileDataSource";
-import { WebTileLoader } from "../lib/WebTileLoader";
+import { WebTileDataProvider, WebTileDataSource } from "../src/WebTileDataSource";
+import { WebTileLoader } from "../src/WebTileLoader";
 
 chai.use(chaiAsPromised);
 const { expect } = chai;

@@ -4,6 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export * from "./lib/TestDataUtils.web";
-export * from "./lib/TestUtils";
-export * from "./lib/rendering/RenderingTestHelper";
+export * from "./TestDataUtils.web";
+export * from "./TestUtils";
+export * from "./rendering/RenderingTestHelper";

@@ -9,12 +9,12 @@
 import { assert } from "chai";
 import * as sinon from "sinon";
 
-import { ConsoleChannel } from "../lib/Logger/ConsoleChannel";
-import { ILogger, LogLevel } from "../lib/Logger/ILogger";
-import { ILoggerManager } from "../lib/Logger/ILoggerManager";
-import { LoggerManager } from "../lib/Logger/LoggerManager";
-import { LoggerManagerImpl } from "../lib/Logger/LoggerManagerImpl";
-import { MultiChannel } from "../lib/Logger/MultiChannel";
+import { ConsoleChannel } from "../src/Logger/ConsoleChannel";
+import { ILogger, LogLevel } from "../src/Logger/ILogger";
+import { ILoggerManager } from "../src/Logger/ILoggerManager";
+import { LoggerManager } from "../src/Logger/LoggerManager";
+import { LoggerManagerImpl } from "../src/Logger/LoggerManagerImpl";
+import { MultiChannel } from "../src/Logger/MultiChannel";
 
 describe("LoggerManager", function () {
     function printAll(logger: ILogger, msg: string) {

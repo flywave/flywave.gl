@@ -8,9 +8,9 @@
 
 import { assert, expect } from "chai";
 
-import { GeoBox } from "../lib/coordinates/GeoBox";
-import { GeoCoordinates } from "../lib/coordinates/GeoCoordinates";
-import { MathUtils } from "../lib/math/MathUtils";
+import { GeoBox } from "../src/coordinates/GeoBox";
+import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";
+import { MathUtils } from "../src/math/MathUtils";
 
 const GEOCOORDS_EPSILON = 0.000001;
 

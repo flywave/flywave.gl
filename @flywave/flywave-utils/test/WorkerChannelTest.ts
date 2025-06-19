@@ -9,13 +9,13 @@
 import { assert } from "chai";
 import * as sinon from "sinon";
 
-import { LogLevel } from "../lib/Logger/ILogger";
-import { LoggerManager } from "../lib/Logger/LoggerManager";
+import { LogLevel } from "../src/Logger/ILogger";
+import { LoggerManager } from "../src/Logger/LoggerManager";
 import {
     IWorkerChannelMessage,
     WorkerChannel,
     WORKERCHANNEL_MSG_TYPE
-} from "../lib/Logger/WorkerChannel";
+} from "../src/Logger/WorkerChannel";
 
 declare const global: any;
 

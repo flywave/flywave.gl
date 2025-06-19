@@ -8,9 +8,9 @@
 
 import { assert } from "chai";
 
-import { MapEnv } from "../lib/Env";
-import { Expr, JsonArray } from "../lib/Expr";
-import { getPropertyValue } from "../lib/PropertyValue";
+import { MapEnv } from "../src/Env";
+import { Expr, JsonArray } from "../src/Expr";
+import { getPropertyValue } from "../src/PropertyValue";
 
 const makeNumberInterpolation = (mode: JsonArray) => {
     return Expr.fromJSON(["interpolate", mode, ["zoom"], 0, 0, 5, 100, 10, 500]);

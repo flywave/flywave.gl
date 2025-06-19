@@ -13,9 +13,9 @@ import {
     webMercatorTilingScheme
 } from "@flywave/flywave-geoutils";
 
-import { DataSource, DataSourceOptions } from "../lib/DataSource";
-import { ITileLoader, TileLoaderState } from "../lib/ITileLoader";
-import { Tile } from "../lib/Tile";
+import { DataSource, DataSourceOptions } from "../src/DataSource";
+import { ITileLoader, TileLoaderState } from "../src/ITileLoader";
+import { Tile } from "../src/Tile";
 
 export class FakeTileLoader implements ITileLoader {
     state: TileLoaderState = TileLoaderState.Initialized;

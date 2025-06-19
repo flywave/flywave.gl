@@ -9,7 +9,7 @@ import * as THREE from "three";
 /**
  * The shader used in the [[UnrealBloomPass]] for the bloom/glow effect.
  */
-export const LuminosityHighPassShader: THREE.Shader = {
+export const LuminosityHighPassShader: THREE.ShaderMaterialParameters = {
     uniforms: {
         tDiffuse: { value: null },
         luminosityThreshold: { value: 1.0 },

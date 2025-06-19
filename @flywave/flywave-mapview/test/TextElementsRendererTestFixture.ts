@@ -11,18 +11,18 @@ import { assert, expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { PoiRenderer } from "../lib/poi/PoiRenderer";
-import { ScreenCollisions } from "../lib/ScreenCollisions";
-import { ScreenProjector } from "../lib/ScreenProjector";
-import * as FontCatalogLoader from "../lib/text/FontCatalogLoader";
-import { TextCanvasFactory } from "../lib/text/TextCanvasFactory";
-import { TextElement } from "../lib/text/TextElement";
-import { TextElementsRenderer } from "../lib/text/TextElementsRenderer";
-import { TextElementsRendererOptions } from "../lib/text/TextElementsRendererOptions";
-import { TextElementType } from "../lib/text/TextElementType";
-import { ViewState } from "../lib/text/ViewState";
-import { Tile } from "../lib/Tile";
-import { DataSourceTileList } from "../lib/VisibleTileSet";
+import { PoiRenderer } from "../src/poi/PoiRenderer";
+import { ScreenCollisions } from "../src/ScreenCollisions";
+import { ScreenProjector } from "../src/ScreenProjector";
+import * as FontCatalogLoader from "../src/text/FontCatalogLoader";
+import { TextCanvasFactory } from "../src/text/TextCanvasFactory";
+import { TextElement } from "../src/text/TextElement";
+import { TextElementsRenderer } from "../src/text/TextElementsRenderer";
+import { TextElementsRendererOptions } from "../src/text/TextElementsRendererOptions";
+import { TextElementType } from "../src/text/TextElementType";
+import { ViewState } from "../src/text/ViewState";
+import { Tile } from "../src/Tile";
+import { DataSourceTileList } from "../src/VisibleTileSet";
 import { FakeOmvDataSource } from "./FakeOmvDataSource";
 import {
     ElevationProviderStub,

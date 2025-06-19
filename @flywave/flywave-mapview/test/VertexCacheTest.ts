@@ -8,7 +8,7 @@
 
 import { expect } from "chai";
 
-import { VertexCache } from "../lib/geometry/VertexCache";
+import { VertexCache } from "../src/geometry/VertexCache";
 
 describe("VertexCache", function () {
     it("get returns a previously set and non-evicted vertex", function () {

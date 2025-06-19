@@ -28,7 +28,7 @@ import {
     VerticalAlignment,
     VerticalPlacement,
     WrappingMode
-} from "../lib/rendering/TextStyle";
+} from "../src/rendering/TextStyle";
 
 describe("TextRenderStyle", () => {
     let renderParams: TextRenderParameters;

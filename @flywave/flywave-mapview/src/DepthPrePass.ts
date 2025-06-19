@@ -5,7 +5,7 @@
  */
 
 import { Env, ExtrudedPolygonTechnique } from "@flywave/flywave-datasource-protocol/src";
-import { ColorUtils } from "@flywave/flywave-datasource-protocol/lib/ColorUtils";
+import { ColorUtils } from "@flywave/flywave-datasource-protocol/ColorUtils";
 import { enforceBlending, MapMeshStandardMaterial } from "@flywave/flywave-materials";
 import * as THREE from "three";
 

@@ -12,8 +12,8 @@ import { expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { MapObjectAdapter } from "../lib/MapObjectAdapter";
-import { PickingRaycaster } from "../lib/PickingRaycaster";
+import { MapObjectAdapter } from "../src/MapObjectAdapter";
+import { PickingRaycaster } from "../src/PickingRaycaster";
 
 function createFakeObject<T extends THREE.Object3D>(type: new () => T): T {
     const object = new type();

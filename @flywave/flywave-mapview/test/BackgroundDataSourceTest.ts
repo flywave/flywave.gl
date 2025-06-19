@@ -10,8 +10,8 @@ import { hereTilingScheme, mercatorTilingScheme } from "@flywave/flywave-geoutil
 import { expect } from "chai";
 import * as sinon from "sinon";
 
-import { BackgroundDataSource } from "../lib/BackgroundDataSource";
-import { MapView } from "../lib/MapView";
+import { BackgroundDataSource } from "../src/BackgroundDataSource";
+import { MapView } from "../src/MapView";
 import { FakeOmvDataSource } from "./FakeOmvDataSource";
 
 describe("BackgroundDataSource", function () {

@@ -8,7 +8,7 @@ import { SolidLineMaterial } from "@flywave/flywave-materials";
 import { assert } from "chai";
 import { BoxGeometry, Fog, Mesh, Scene } from "three";
 
-import { MapViewFog } from "../lib/MapViewFog";
+import { MapViewFog } from "../src/MapViewFog";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

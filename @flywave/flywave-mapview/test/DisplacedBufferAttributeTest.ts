@@ -9,7 +9,7 @@
 import { expect } from "chai";
 import * as THREE from "three";
 
-import { DisplacedBufferAttribute } from "../lib/geometry/DisplacedBufferAttribute";
+import { DisplacedBufferAttribute } from "../src/geometry/DisplacedBufferAttribute";
 
 function createBuffer(array: number[], itemSize: number) {
     return new THREE.BufferAttribute(new Uint32Array(array), itemSize);

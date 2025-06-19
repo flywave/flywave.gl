@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { FlatTheme, Theme, ValueMap } from "@flywave/flywave-datasource-protocol/src";
-import { ExprPool } from "@flywave/flywave-datasource-protocol/lib/ExprPool";
+import { ExprPool } from "@flywave/flywave-datasource-protocol/ExprPool";
 import { Projection, TileKey, TilingScheme } from "@flywave/flywave-geoutils";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three";

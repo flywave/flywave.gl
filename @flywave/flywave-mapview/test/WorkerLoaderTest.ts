@@ -20,7 +20,7 @@ chai.use(chaiAsPromised);
 const { expect, assert } = chai;
 import * as sinon from "sinon";
 
-import { WorkerLoader } from "../lib/workers/WorkerLoader";
+import { WorkerLoader } from "../src/workers/WorkerLoader";
 import { FakeWebWorker, willExecuteWorkerScript } from "./FakeWebWorker";
 
 declare const global: any;

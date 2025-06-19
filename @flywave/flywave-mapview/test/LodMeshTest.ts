@@ -11,7 +11,7 @@ import { expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { LodMesh } from "../lib/geometry/LodMesh";
+import { LodMesh } from "../src/geometry/LodMesh";
 
 describe("LodMesh", function () {
     describe("constructor()", function () {

@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { GroupedPriorityList } from "../lib/GroupedPriorityList";
+import { GroupedPriorityList } from "../src/GroupedPriorityList";
 
 interface Item {
     priority: number;

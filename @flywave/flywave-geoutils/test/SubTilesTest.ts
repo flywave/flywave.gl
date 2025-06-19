@@ -8,8 +8,8 @@
 
 import { assert } from "chai";
 
-import { SubTiles } from "../lib/tiling/SubTiles";
-import { TileKey } from "../lib/tiling/TileKey";
+import { SubTiles } from "../src/tiling/SubTiles";
+import { TileKey } from "../src/tiling/TileKey";
 
 describe("SubTiles", function () {
     it("iterates through all subtiles", function () {

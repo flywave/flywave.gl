@@ -8,7 +8,7 @@ import { FeatureCollection } from "@flywave/flywave-datasource-protocol/src";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
 
-import { GeoJsonTiler } from "../lib/GeoJsonTiler";
+import { GeoJsonTiler } from "../src/GeoJsonTiler";
 
 const featureCollectionWithIds: FeatureCollection = {
     type: "FeatureCollection",

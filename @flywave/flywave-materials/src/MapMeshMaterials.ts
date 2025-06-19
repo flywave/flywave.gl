@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ViewRanges } from "@flywave/flywave-datasource-protocol/lib/ViewRanges";
+import { ViewRanges } from "./ViewRanges";
 import { applyMixinsWithoutProperties, assert, chainCallbacks } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
@@ -86,7 +86,7 @@ export interface UniformsType {
  *
  * @hidden
  */
-type CompileCallback = (shader: THREE.Shader, renderer: any) => void;
+type CompileCallback = (shader: THREE.WebGLProgramParameters, renderer: any) => void;
 
 /**
  * Material properties used from THREE, which may not be defined in the type.
@@ -203,7 +203,7 @@ function linkMixinWithMaterial(
  * @param mixin - The mixin feature being applied to the material.
  * @param shader - The actual shader linked to the [[THREE.Material]].
  */
-function linkMixinWithShader(mixin: MixinShaderProperties, shader: THREE.Shader) {
+function linkMixinWithShader(mixin: MixinShaderProperties, shader: THREE.WebGLProgramParametersWithUniforms) {
     Object.assign(shader.uniforms, mixin.shaderUniforms);
     mixin.shaderUniforms = shader.uniforms;
 }
@@ -306,39 +306,33 @@ namespace DisplacementFeature {
      */
     export function onBeforeCompile(
         displacementMaterial: DisplacementFeature & MixinShaderProperties,
-        shader: THREE.Shader
+        shader: THREE.WebGLProgramParametersWithUniforms
     ) {
         if (!isEnabled(displacementMaterial)) {
             return;
         }
         assert(displacementMaterial.shaderUniforms !== undefined);
 
-        // The vertex and fragment shaders have been constructed dynamically. The uniforms and
-        // the shader includes are now appended to them.
-        //
-        // The object "defines" are required for this material, we use one define working as a flag,
-        // which enables/disables some chunks of shader code.
         linkMixinWithShader(displacementMaterial, shader);
 
-        // Append the displacement map chunk to the vertex shader.
+        // Update displacement map handling for r174
         shader.vertexShader = shader.vertexShader.replace(
-            "#include <skinbase_vertex>",
-            `#include <skinbase_vertex>
-#ifndef USE_ENVMAP
-    vec3 objectNormal = vec3( normal );
-#endif`
-        );
-        shader.vertexShader = insertShaderInclude(
-            shader.vertexShader,
-            "uv2_pars_vertex",
-            "displacementmap_pars_vertex"
+            "#include <common>",
+            `#include <common>
+            #ifdef USE_DISPLACEMENTMAP
+                uniform mat3 displacementUvTransform;
+                uniform sampler2D displacementMap;
+                uniform float displacementScale;
+                uniform float displacementBias;
+            #endif`
         );
 
-        shader.vertexShader = insertShaderInclude(
-            shader.vertexShader,
-            "skinning_vertex",
-            "displacementmap_vertex",
-            true
+        shader.vertexShader = shader.vertexShader.replace(
+            "#include <begin_vertex>",
+            `#include <begin_vertex>
+            #ifdef USE_DISPLACEMENTMAP
+                transformed += normalize( objectNormal ) * ( texture2D( displacementMap, ( displacementUvTransform * vec3( uv, 1 ) ).xy ).x * displacementScale + displacementBias );
+            #endif`
         );
     }
 }
@@ -352,14 +346,10 @@ export class DisplacementFeatureMixin implements DisplacementFeature, MixinShade
     onBeforeCompile?: CompileCallback;
     private m_displacementMap: THREE.Texture | null = null;
 
-    // This is here to keep tslint from reporting a missing property, the getter that's actually
-    // used by materials is added in [[addDisplacementProperties]].
     get displacementMap(): THREE.Texture | null {
         return this.m_displacementMap;
     }
 
-    // This is here to keep tslint from reporting a missing property, the setter that's actually
-    // used by materials is added in [[addDisplacementProperties]].
     set displacementMap(map: THREE.Texture | null) {
         this.setDisplacementMap(map);
     }
@@ -398,12 +388,12 @@ export class DisplacementFeatureMixin implements DisplacementFeature, MixinShade
         assert(this.shaderDefines !== undefined);
         assert(this.shaderUniforms !== undefined);
 
-        // Create uniforms with default values, this ensures they are always set created,
-        // so no need for checks in setters.
+        // Create uniforms with default values
         const uniforms = this.shaderUniforms!;
         uniforms.displacementMap = new THREE.Uniform(emptyTexture);
         uniforms.displacementScale = new THREE.Uniform(1);
         uniforms.displacementBias = new THREE.Uniform(0);
+        uniforms.displacementUvTransform = new THREE.Uniform(new THREE.Matrix3());
 
         // Apply initial parameter values.
         if (params !== undefined) {
@@ -412,11 +402,10 @@ export class DisplacementFeatureMixin implements DisplacementFeature, MixinShade
             }
         }
 
-        this.onBeforeCompile = chainCallbacks(this.onBeforeCompile, (shader: THREE.Shader) => {
+        this.onBeforeCompile = chainCallbacks(this.onBeforeCompile, (shader: THREE.WebGLProgramParametersWithUniforms) => {
             DisplacementFeature.onBeforeCompile(this, shader);
         });
 
-        // Require material update at least once, because of new shader chunks added.
         this.needsUpdate = DisplacementFeature.isEnabled(this);
     }
 
@@ -449,8 +438,6 @@ export namespace FadingFeature {
      * @param fadingMaterial - FadingFeature.
      */
     export function isEnabled(fadingMaterial: FadingFeature) {
-        // NOTE: We could also check if full fade is not achieved, then feature could be
-        // disabled, but causing material re-compile.
         return (
             fadingMaterial.fadeNear !== undefined &&
             fadingMaterial.fadeFar !== undefined &&
@@ -474,7 +461,7 @@ export namespace FadingFeature {
      * Patch the THREE.ShaderChunk on first call with some extra shader chunks.
      */
     export function patchGlobalShaderChunks() {
-        if (THREE.ShaderChunk.fading_pars_vertex === undefined) {
+        if (THREE.ShaderChunk["fading_pars_vertex"] === undefined) {
             Object.assign(THREE.ShaderChunk, fadingShaderChunk);
         }
     }
@@ -489,27 +476,19 @@ export namespace FadingFeature {
         assert(fadingMaterial.shaderDefines !== undefined);
         assert(fadingMaterial.shaderUniforms !== undefined);
 
-        // Update entire material to add/remove shader fading chunks, this happens when we
-        // enable/disable fading after material creation. Feature is marked via dummy define, which
-        // informs about fading feature state, even if such define is not required to control
-        // feature state, it makes it easy to check for shader changes.
         const useFading = isEnabled(fadingMaterial);
         const needsUpdate = setShaderDefine(
             fadingMaterial.shaderDefines,
             "FADING_MATERIAL",
             useFading
         );
-        // Enable/disable entire feature with material re-compile, this will also cause
-        // new uniforms injection.
         fadingMaterial.needsUpdate = needsUpdate;
 
-        // Check if shader uniforms references are already set in onBeforeCompile callback.
         assert(
             fadingMaterial.shaderUniforms!.fadeNear !== undefined &&
                 fadingMaterial.shaderUniforms!.fadeFar !== undefined
         );
 
-        // Update shader internal uniforms only if fading is enabled.
         if (useFading) {
             fadingMaterial.shaderUniforms!.fadeNear.value = fadingMaterial.fadeNear;
             fadingMaterial.shaderUniforms!.fadeFar.value = fadingMaterial.fadeFar;
@@ -517,7 +496,6 @@ export namespace FadingFeature {
                 enableBlending(fadingMaterial as THREE.Material);
             }
         }
-        // Perform one time update of uniforms to defaults when feature disabled (for clarity).
         else if (needsUpdate) {
             fadingMaterial.shaderUniforms!.fadeNear.value = FadingFeature.DEFAULT_FADE_NEAR;
             fadingMaterial.shaderUniforms!.fadeFar.value = FadingFeature.DEFAULT_FADE_FAR;
@@ -534,22 +512,14 @@ export namespace FadingFeature {
      * @param shader - [[THREE.WebGLShader]] containing the vertex and fragment shaders to add the
      *                  special includes to.
      */
-    export function onBeforeCompile(fadingMaterial: FadingFeature, shader: THREE.Shader) {
+    export function onBeforeCompile(fadingMaterial: FadingFeature, shader: THREE.WebGLProgramParametersWithUniforms) {
         if (!isEnabled(fadingMaterial)) {
             return;
         }
         assert(fadingMaterial.shaderUniforms !== undefined);
 
-        // The vertex and fragment shaders have been constructed dynamically. The uniforms and
-        // the shader includes are now appended to them.
-        //
-        // The object "defines" are not required for this material, so the fading shader chunks
-        // have no #ifdef preprocessed chunks. Feature utilized one define just to denote feature
-        // attached and easy control its state, but this define may be stripped out if needed.
         linkMixinWithShader(fadingMaterial, shader);
 
-        // Append the new fading shader cod directly after the fog code. This is done by adding an
-        // include directive for the fading code.
         shader.vertexShader = insertShaderInclude(
             shader.vertexShader,
             "fog_pars_vertex",
@@ -651,16 +621,10 @@ export class FadingFeatureMixin implements FadingFeature {
     private m_fadeNear: number = FadingFeature.DEFAULT_FADE_NEAR;
     private m_fadeFar: number = FadingFeature.DEFAULT_FADE_FAR;
 
-    /**
-     * @see [[FadingFeature#fadeNear]]
-     */
     protected getFadeNear(): number {
         return this.m_fadeNear;
     }
 
-    /**
-     * @see [[FadingFeature#fadeNear]]
-     */
     protected setFadeNear(value: number) {
         const needsUpdate = value !== this.m_fadeNear;
         if (needsUpdate) {
@@ -669,16 +633,10 @@ export class FadingFeatureMixin implements FadingFeature {
         }
     }
 
-    /**
-     * @see [[FadingFeature#fadeFar]]
-     */
     protected getFadeFar(): number {
         return this.m_fadeFar;
     }
 
-    /**
-     * @see [[FadingFeature#fadeFar]]
-     */
     protected setFadeFar(value: number) {
         const needsUpdate = value !== this.m_fadeFar;
         if (needsUpdate) {
@@ -687,10 +645,6 @@ export class FadingFeatureMixin implements FadingFeature {
         }
     }
 
-    /**
-     * The mixin classes should call this method to register the properties [[fadeNear]] and
-     * [[fadeFar]].
-     */
     protected addFadingProperties(): void {
         Object.defineProperty(this, "fadeNear", {
             get: () => {
@@ -710,24 +664,15 @@ export class FadingFeatureMixin implements FadingFeature {
         });
     }
 
-    /**
-     * Apply the fadeNear/fadeFar values from the parameters to the respective properties.
-     *
-     * @param params - `FadingMeshBasicMaterial` parameters.
-     */
     protected applyFadingParameters(params?: FadingFeatureParameters) {
-        // Prepare maps for holding uniforms and defines references from the actual material.
         linkMixinWithMaterial(this, this);
 
         assert(this.shaderDefines !== undefined);
         assert(this.shaderUniforms !== undefined);
 
-        // Create uniforms with default values, this ensures they are always set created,
-        // so no need for checks in setters.
         this.shaderUniforms!.fadeNear = new THREE.Uniform(FadingFeature.DEFAULT_FADE_NEAR);
         this.shaderUniforms!.fadeFar = new THREE.Uniform(FadingFeature.DEFAULT_FADE_FAR);
 
-        // Apply initial parameter values.
         if (params !== undefined) {
             if (params.fadeNear !== undefined) {
                 this.setFadeNear(params.fadeNear);
@@ -737,18 +682,12 @@ export class FadingFeatureMixin implements FadingFeature {
             }
         }
 
-        this.onBeforeCompile = chainCallbacks(this.onBeforeCompile, (shader: THREE.Shader) => {
+        this.onBeforeCompile = chainCallbacks(this.onBeforeCompile, (shader: THREE.WebGLProgramParametersWithUniforms) => {
             FadingFeature.onBeforeCompile(this, shader);
         });
-        // Update (re-compile) shader code to include new shader chunks only if feature is enabled.
         this.needsUpdate = FadingFeature.isEnabled(this);
     }
 
-    /**
-     * Copy fadeNear/fadeFar values from other FadingFeature.
-     *
-     * @param source - The material to copy property values from.
-     */
     protected copyFadingParameters(source: FadingFeature) {
         this.setFadeNear(
             source.fadeNear === undefined ? FadingFeature.DEFAULT_FADE_NEAR : source.fadeNear
@@ -777,7 +716,7 @@ export namespace ExtrusionFeature {
      * Patch the THREE.ShaderChunk on first call with some extra shader chunks.
      */
     export function patchGlobalShaderChunks() {
-        if (THREE.ShaderChunk.extrusion_pars_vertex === undefined) {
+        if (THREE.ShaderChunk["extrusion_pars_vertex"] === undefined) {
             Object.assign(THREE.ShaderChunk, extrusionShaderChunk);
         }
     }
@@ -791,24 +730,18 @@ export namespace ExtrusionFeature {
         assert(extrusionMaterial.shaderDefines !== undefined);
         assert(extrusionMaterial.shaderUniforms !== undefined);
 
-        // Setup shader define that when changed will force material re-compile.
         const useExtrusion = isEnabled(extrusionMaterial);
-        // Use shader define as marker if feature is enabled/disabled, this is not necessary
-        // required, but material requires update (re-compile) anyway to add/remove shader chunks.
         const needsUpdate = setShaderDefine(
             extrusionMaterial.shaderDefines,
             "EXTRUSION_MATERIAL",
             useExtrusion
         );
-        // Enable/disable entire feature with material re-compile.
         extrusionMaterial.needsUpdate = needsUpdate;
 
-        // Update uniform with new value
         if (useExtrusion) {
             extrusionMaterial.shaderUniforms!.extrusionRatio.value =
                 extrusionMaterial.extrusionRatio;
         }
-        // Reset uniform to default, one time only, when feature is disabled (just for clarity).
         else if (needsUpdate) {
             extrusionMaterial.shaderUniforms!.extrusionRatio.value =
                 ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
@@ -824,17 +757,12 @@ export namespace ExtrusionFeature {
      * @param shader - [[THREE.WebGLShader]] containing the vertex and fragment shaders to add the
      *                  special includes to.
      */
-    export function onBeforeCompile(extrusionMaterial: ExtrusionFeature, shader: THREE.Shader) {
+    export function onBeforeCompile(extrusionMaterial: ExtrusionFeature, shader: THREE.WebGLProgramParametersWithUniforms) {
         if (!isEnabled(extrusionMaterial)) {
             return;
         }
         assert(extrusionMaterial.shaderUniforms !== undefined);
 
-        // The vertex and fragment shaders have been constructed dynamically. The uniforms and
-        // the shader includes are now appended to them. No defines are required to preprocess
-        // shader chunks, but we utilize one just to note the feature is enabled/disabled
-        // (easier debugging), this define may be easily stripped out or replaced with simple
-        // boolean flag.
         linkMixinWithShader(extrusionMaterial, shader);
 
         shader.vertexShader = insertShaderInclude(
@@ -888,16 +816,10 @@ export class ExtrusionFeatureMixin implements ExtrusionFeature {
     onBeforeCompile?: CompileCallback;
     private m_extrusion: number = ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
 
-    /**
-     * @see [[ExtrusionFeature#extrusion]]
-     */
     protected getExtrusionRatio(): number {
         return this.m_extrusion;
     }
 
-    /**
-     * @see [[ExtrusionFeature#extrusion]]
-     */
     protected setExtrusionRatio(value: number) {
         const needsUpdate = value !== this.m_extrusion;
         if (needsUpdate) {
@@ -906,9 +828,6 @@ export class ExtrusionFeatureMixin implements ExtrusionFeature {
         }
     }
 
-    /**
-     * The mixin class should call this method to register the property [[extrusionRatio]]
-     */
     protected addExtrusionProperties(): void {
         Object.defineProperty(this, "extrusionRatio", {
             get: () => {
@@ -920,11 +839,7 @@ export class ExtrusionFeatureMixin implements ExtrusionFeature {
         });
     }
 
-    /**
-     * Apply the extrusionRatio value from the parameters to the respective properties.
-     */
     protected applyExtrusionParameters(params?: ExtrusionFeatureParameters) {
-        // Prepare maps for holding uniforms and defines references from the actual material.
         linkMixinWithMaterial(this, this);
 
         assert(this.shaderDefines !== undefined);
@@ -934,31 +849,23 @@ export class ExtrusionFeatureMixin implements ExtrusionFeature {
             this.shaderDefines.ZFIGHTING_WORKAROUND = "";
         }
 
-        // Create uniform with default value, this ensures that it is always created,
-        // so no need for checks in setters.
         this.shaderUniforms!.extrusionRatio = new THREE.Uniform(
             ExtrusionFeatureDefs.DEFAULT_RATIO_MAX
         );
 
-        // Apply initial parameter values.
         if (params !== undefined) {
             if (params.extrusionRatio !== undefined) {
                 this.setExtrusionRatio(params.extrusionRatio);
             }
         }
 
-        this.onBeforeCompile = chainCallbacks(this.onBeforeCompile, (shader: THREE.Shader) => {
+        this.onBeforeCompile = chainCallbacks(this.onBeforeCompile, (shader: THREE.WebGLProgramParametersWithUniforms) => {
             ExtrusionFeature.onBeforeCompile(this, shader);
         });
 
         this.needsUpdate = ExtrusionFeature.isEnabled(this);
     }
 
-    /**
-     * Copy extrusionRatio values from other ExtrusionFeature.
-     *
-     * @param source - The material to copy property values from.
-     */
     protected copyExtrusionParameters(source: ExtrusionFeature) {
         if (source.extrusionRatio !== undefined) {
             this.setExtrusionRatio(source.extrusionRatio);
@@ -979,11 +886,6 @@ export class ExtrusionFeatureMixin implements ExtrusionFeature {
 export class MapMeshBasicMaterial
     extends THREE.MeshBasicMaterial
     implements FadingFeature, ExtrusionFeature, DisplacementFeature {
-    /**
-     * Constructs a new `FadingMeshBasicMaterial`.
-     *
-     * @param params - `FadingMeshBasicMaterial` parameters.
-     */
     constructor(
         params?: THREE.MeshBasicMaterialParameters &
             FadingFeatureParameters &
@@ -993,12 +895,10 @@ export class MapMeshBasicMaterial
         super(params);
 
         FadingFeature.patchGlobalShaderChunks();
-
         this.addFadingProperties();
         this.applyFadingParameters(params);
 
         ExtrusionFeature.patchGlobalShaderChunks();
-
         this.addExtrusionProperties();
         this.applyExtrusionParameters({ ...params, zFightingWorkaround: true });
 
@@ -1006,12 +906,10 @@ export class MapMeshBasicMaterial
         this.applyDisplacementParameters(params);
     }
 
-    // overrides with THREE.js base classes are not recognized by tslint.
     clone(): this {
         return new MapMeshBasicMaterial().copy(this);
     }
 
-    // overrides with THREE.js base classes are not recognized by tslint.
     copy(source: this): any {
         super.copy(source);
         this.copyFadingParameters(source);
@@ -1020,86 +918,42 @@ export class MapMeshBasicMaterial
         return this;
     }
 
-    // Only here to make the compiler happy, these methods will be overriden: The actual
-    // implementations are those in FadingFeatureMixin and ExtrusionFeatureMixin, see below:
-    //
-    // applyMixinsWithoutProperties(FadingMeshBasicMaterial, [FadingFeatureMixin]);
-    // applyMixinsWithoutProperties(ExtrudionMeshBasicMaterial, [ExtrusionFeatureMixin]);
-    //
-    // Mixin declarations start ---------------------------------------------------------
-
+    // Mixin implementations
     get fadeNear(): number {
         return FadingFeature.DEFAULT_FADE_NEAR;
     }
 
-    set fadeNear(value: number) {
-        // to be overridden
-    }
+    set fadeNear(value: number) {}
 
     get fadeFar(): number {
         return FadingFeature.DEFAULT_FADE_FAR;
     }
 
-    set fadeFar(value: number) {
-        // to be overridden
-    }
+    set fadeFar(value: number) {}
 
     get extrusionRatio(): number {
         return ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
     }
 
-    set extrusionRatio(value: number) {
-        // to be overridden
-    }
+    set extrusionRatio(value: number) {}
 
     get displacementMap(): THREE.Texture | null {
         return null;
     }
 
-    set displacementMap(value: THREE.Texture | null) {
-        // to be overridden
-    }
+    set displacementMap(value: THREE.Texture | null) {}
 
-    setDisplacementMap(value: THREE.Texture | null) {
-        // to be overridden
-    }
+    setDisplacementMap(value: THREE.Texture | null) {}
 
-    protected addFadingProperties(): void {
-        // to be overridden
-    }
-
-    protected applyFadingParameters(params?: FadingFeatureParameters) {
-        // to be overridden
-    }
-
-    protected copyFadingParameters(source: FadingFeature) {
-        // to be overridden
-    }
-
-    protected addExtrusionProperties(): void {
-        // to be overridden
-    }
-
-    protected applyExtrusionParameters(params?: ExtrusionFeatureParameters) {
-        // to be overridden
-    }
-
-    protected copyExtrusionParameters(source: FadingFeature) {
-        // to be overridden
-    }
-
-    protected addDisplacementProperties(): void {
-        // to be overridden
-    }
-
-    protected applyDisplacementParameters(params?: DisplacementFeatureParameters) {
-        // to be overridden
-    }
-
-    protected copyDisplacementParameters(source: DisplacementFeature) {
-        // to be overridden
-    }
-    // Mixin declarations end -----------------------------------------------------------
+    protected addFadingProperties(): void {}
+    protected applyFadingParameters(params?: FadingFeatureParameters) {}
+    protected copyFadingParameters(source: FadingFeature) {}
+    protected addExtrusionProperties(): void {}
+    protected applyExtrusionParameters(params?: ExtrusionFeatureParameters) {}
+    protected copyExtrusionParameters(source: FadingFeature) {}
+    protected addDisplacementProperties(): void {}
+    protected applyDisplacementParameters(params?: DisplacementFeatureParameters) {}
+    protected copyDisplacementParameters(source: DisplacementFeature) {}
 }
 
 export class MapMeshDepthMaterial extends THREE.MeshDepthMaterial implements ExtrusionFeature {
@@ -1107,42 +961,20 @@ export class MapMeshDepthMaterial extends THREE.MeshDepthMaterial implements Ext
         super(params);
 
         ExtrusionFeature.patchGlobalShaderChunks();
-
         this.addExtrusionProperties();
-
-        // We need to set these to false, because otherwise three.js complains that there are
-        // outputs of the vertex shader not used in the pixel shader, the properties in question
-        // are `vExtrusionRatio` and `vExtrusionAxis`.
         this.applyExtrusionParameters({ ...params, zFightingWorkaround: false });
     }
 
-    // Only here to make the compiler happy, these methods will be overriden: The actual
-    // implementations are those in{@link ExtrusionFeatureMixin}, see below:
-    //
-    // applyMixinsWithoutProperties(...);
-    //
-
-    // Mixin declarations start ---------------------------------------------------------
+    // Mixin implementations
     get extrusionRatio(): number {
         return ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
     }
 
-    set extrusionRatio(value: number) {
-        // to be overridden
-    }
+    set extrusionRatio(value: number) {}
 
-    protected addExtrusionProperties(): void {
-        // to be overridden
-    }
-
-    protected applyExtrusionParameters(params?: ExtrusionFeatureParameters) {
-        // to be overridden
-    }
-
-    protected copyExtrusionParameters(source: FadingFeature) {
-        // to be overridden
-    }
-    // Mixin declarations end -----------------------------------------------------------
+    protected addExtrusionProperties(): void {}
+    protected applyExtrusionParameters(params?: ExtrusionFeatureParameters) {}
+    protected copyExtrusionParameters(source: FadingFeature) {}
 }
 
 /**
@@ -1159,11 +991,6 @@ export class MapMeshStandardMaterial
     implements FadingFeature, ExtrusionFeature, DisplacementFeature {
     uniformsNeedUpdate?: boolean;
 
-    /**
-     * Constructs a new `FadingMeshStandardMaterial`.
-     *
-     * @param params - `FadingMeshStandardMaterial` parameters.
-     */
     constructor(
         params?: THREE.MeshStandardMaterialParameters &
             FadingFeatureParameters &
@@ -1173,55 +1000,28 @@ export class MapMeshStandardMaterial
         super(params);
 
         FadingFeature.patchGlobalShaderChunks();
-
         this.addFadingProperties();
         this.applyFadingParameters(params);
 
         ExtrusionFeature.patchGlobalShaderChunks();
-
         this.addExtrusionProperties();
         this.applyExtrusionParameters({ ...params, zFightingWorkaround: true });
 
-        let _this = this;
         this.onBeforeCompile = chainCallbacks(this.onBeforeCompile, shaderParameters => {
-            const shader = shaderParameters as THREE.Shader;
+            const shader = shaderParameters as THREE.WebGLProgramParametersWithUniforms;
             if (params?.removeDiffuseLight === true) {
-                shader.fragmentShader = THREE.ShaderChunk.meshphysical_frag.replace(
-                    "#include <lights_physical_pars_fragment>",
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    "#include <lights_physical_fragment>",
                     simpleLightingShadowChunk
                 );
             }
-            shader.vertexShader = shader.vertexShader.replace(
-                "#include <displacementmap_pars_vertex>",
-                `#ifdef USE_DISPLACEMENTMAP
-
-                uniform mat3 displacementUvMat;
-                uniform sampler2D displacementMap;
-                uniform float displacementScale;
-                uniform float displacementBias;
-            
-                #endif`
-            );
-
-            shader.vertexShader = shader.vertexShader.replace(
-                "#include <displacementmap_vertex>",
-                `#ifdef USE_DISPLACEMENTMAP 
-                transformed += normalize( objectNormal ) * ( texture2D( displacementMap, (displacementUvMat*vec3(uv,1.0)).xy ).x * displacementScale + displacementBias );
-                #endif`
-            );
-
-            shader.uniforms.displacementUvMat = { value : (_this as any).displacementMapUvMatrix||new THREE.Matrix3};
-
-            (_this as any).displacementUvMat = shader.uniforms.displacementUvMat;
         });
     }
 
-    // overrides with THREE.js base classes are not recognized by tslint.
     clone(): this {
         return new MapMeshStandardMaterial().copy(this);
     }
 
-    // overrides with THREE.js base classes are not recognized by tslint.
     copy(source: this): any {
         super.copy(source);
         this.copyFadingParameters(source);
@@ -1229,88 +1029,37 @@ export class MapMeshStandardMaterial
         return this;
     }
 
-    // Only here to make the compiler happy, these methods will be overriden: The actual
-    // implementations are those in FadingFeatureMixin and ExtrusionFeatureMixin, see below:
-    //
-    // applyMixinsWithoutProperties(FadingMeshBasicMaterial, [FadingFeatureMixin]);
-    // applyMixinsWithoutProperties(ExtrudionMeshBasicMaterial, [ExtrusionFeatureMixin]);
-    //
-    // Mixin declarations start ---------------------------------------------------------
-
+    // Mixin implementations
     get fadeNear(): number {
         return FadingFeature.DEFAULT_FADE_NEAR;
     }
 
-    set fadeNear(value: number) {
-        // to be overridden
-    }
+    set fadeNear(value: number) {}
 
     get fadeFar(): number {
         return FadingFeature.DEFAULT_FADE_FAR;
     }
 
-    set fadeFar(value: number) {
-        // to be overridden
-    }
+    set fadeFar(value: number) {}
 
     get extrusionRatio(): number {
         return ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
     }
 
-    set extrusionRatio(value: number) {
-        // to be overridden
-    }
+    set extrusionRatio(value: number) {}
 
-    /**
-     * This is needed to simplify the lighting calculation, currently there is no support for
-     * switching this at runtime. It is required here to be a property because the parameters
-     * are applied to this material, and if this isn't here, three.js will complain that the
-     * property is missing.
-     * @internal
-     */
     get removeDiffuseLight(): boolean {
         return false;
     }
 
-    /** @internal */
-    set removeDiffuseLight(val: boolean) {
-        // Stays empty.
-    }
+    set removeDiffuseLight(val: boolean) {}
 
-    set displacementMapUvMatrix(matrix: THREE.Matrix3){
-        (this as any).uVMat = matrix;
-        if((this as any).displacementUvMat)
-        (this as any).displacementUvMat.value = matrix;
-    }
-
-    get displacementMapUvMatrix(){
-        return (this as any).uVMat
-    }
-
-    protected addFadingProperties(): void {
-        // to be overridden
-    }
-
-    protected applyFadingParameters(params?: FadingFeatureParameters) {
-        // to be overridden
-    }
-
-    protected copyFadingParameters(source: FadingFeature) {
-        // to be overridden
-    }
-
-    protected addExtrusionProperties(): void {
-        // to be overridden
-    }
-
-    protected applyExtrusionParameters(params?: ExtrusionFeatureParameters) {
-        // to be overridden
-    }
-
-    protected copyExtrusionParameters(source: FadingFeature) {
-        // to be overridden
-    }
-    // Mixin declarations end -----------------------------------------------------------
+    protected addFadingProperties(): void {}
+    protected applyFadingParameters(params?: FadingFeatureParameters) {}
+    protected copyFadingParameters(source: FadingFeature) {}
+    protected addExtrusionProperties(): void {}
+    protected applyExtrusionParameters(params?: ExtrusionFeatureParameters) {}
+    protected copyExtrusionParameters(source: FadingFeature) {}
 }
 
 /**

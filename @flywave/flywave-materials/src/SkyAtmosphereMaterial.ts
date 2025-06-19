@@ -20,7 +20,7 @@ const EQUATORIAL_RADIUS: number = 6378137.0;
  *
  * Describes shading of atmosphere as seen from outer space.
  */
-export const SkyAtmosphereShader: THREE.Shader = {
+export const SkyAtmosphereShader: THREE.ShaderMaterialParameters = {
     uniforms: {
         u_eyePositionWorld: new THREE.Uniform(new THREE.Vector3()),
         u_lightDirectionWorld: new THREE.Uniform(new THREE.Vector3(0, 1, 0)),

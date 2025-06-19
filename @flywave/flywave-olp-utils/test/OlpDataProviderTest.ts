@@ -13,7 +13,7 @@ import { assertRejected } from "@flywave/flywave-test-utils";
 import { VersionedLayerClient } from "@here/olp-sdk-dataservice-read";
 import * as sinon from "sinon";
 
-import { OlpDataProvider } from "../lib/OlpDataProvider";
+import { OlpDataProvider } from "../src/OlpDataProvider";
 
 describe("OlpDataProvider", function () {
     let sandbox: sinon.SinonSandbox;

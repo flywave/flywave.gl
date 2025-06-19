@@ -9,8 +9,8 @@
 import { assert } from "chai";
 import * as sinon from "sinon";
 
-import { ConcurrentWorkerSet } from "../lib/ConcurrentWorkerSet";
-import { WorkerBasedDecoder } from "../lib/WorkerBasedDecoder";
+import { ConcurrentWorkerSet } from "../src/ConcurrentWorkerSet";
+import { WorkerBasedDecoder } from "../src/WorkerBasedDecoder";
 
 describe("WorkerBasedDecoder", function () {
     it("#dispose releases associates workerSet", function () {

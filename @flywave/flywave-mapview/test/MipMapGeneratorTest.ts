@@ -13,8 +13,8 @@
 import { getTestResourceUrl } from "@flywave/flywave-test-utils";
 import { expect } from "chai";
 
-import { ImageItem } from "../lib/image/Image";
-import { MipMapGenerator } from "../lib/image/MipMapGenerator";
+import { ImageItem } from "../src/image/Image";
+import { MipMapGenerator } from "../src/image/MipMapGenerator";
 
 const isNode = typeof window === "undefined";
 

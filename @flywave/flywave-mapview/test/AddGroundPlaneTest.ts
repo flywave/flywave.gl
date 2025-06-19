@@ -15,12 +15,12 @@ import { assert, expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { DataSource } from "../lib/DataSource";
-import { addGroundPlane } from "../lib/geometry/AddGroundPlane";
-import { LodMesh } from "../lib/geometry/LodMesh";
-import { MapObjectAdapter } from "../lib/MapObjectAdapter";
-import { MapView } from "../lib/MapView";
-import { Tile } from "../lib/Tile";
+import { DataSource } from "../src/DataSource";
+import { addGroundPlane } from "../src/geometry/AddGroundPlane";
+import { LodMesh } from "../src/geometry/LodMesh";
+import { MapObjectAdapter } from "../src/MapObjectAdapter";
+import { MapView } from "../src/MapView";
+import { Tile } from "../src/Tile";
 
 class MockDataSource extends DataSource {
     /** @override */

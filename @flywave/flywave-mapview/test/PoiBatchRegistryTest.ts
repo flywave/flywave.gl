@@ -8,8 +8,8 @@ import { expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { PoiBatchRegistry, PoiLayer } from "../lib/poi/PoiRenderer";
-import { TextElement } from "../lib/text/TextElement";
+import { PoiBatchRegistry, PoiLayer } from "../src/poi/PoiRenderer";
+import { TextElement } from "../src/text/TextElement";
 import { PoiInfoBuilder } from "./PoiInfoBuilder";
 
 describe("PoiBatchRegistry", () => {

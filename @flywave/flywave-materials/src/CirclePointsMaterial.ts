@@ -114,7 +114,7 @@ export class CirclePointsMaterial extends RawShaderMaterial {
             shaderParams.depthTest = false;
             shaderParams.extensions = {
                 ...shaderParams.extensions,
-                derivatives: true
+                // derivatives: true
             };
             shaderParameters = shaderParams;
         }

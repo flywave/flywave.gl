@@ -6,7 +6,7 @@
 
 import { assert } from "chai";
 
-import { Entry, LRUCache } from "../lib/LRUCache";
+import { Entry, LRUCache } from "../src/LRUCache";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

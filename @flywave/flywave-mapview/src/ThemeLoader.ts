@@ -16,7 +16,7 @@ import {
     Styles,
     StyleSet,
     Theme
-} from "@flywave/flywave-datasource-protocol/lib/Theme";
+} from "@flywave/flywave-datasource-protocol/Theme";
 import {
     composeUriResolvers,
     ContextLogger,

@@ -12,9 +12,9 @@
  * @packageDocumentation
  */
 
-export * from "./lib/OmvDataFilter";
-export * from "./lib/VectorTileDataSource";
-export * from "./lib/OmvDecoderDefs";
-export * from "./lib/OmvDebugLabelsTile";
-export * from "./lib/OmvRestClient";
-export * from "./lib/GeoJsonDataProvider";
+export * from "./OmvDataFilter";
+export * from "./VectorTileDataSource";
+export * from "./OmvDecoderDefs";
+export * from "./OmvDebugLabelsTile";
+export * from "./OmvRestClient";
+export * from "./GeoJsonDataProvider";

@@ -8,8 +8,8 @@
 
 import { assert } from "chai";
 
-import { Expr, JsonArray } from "../lib/Expr";
-import { ExprPool } from "../lib/ExprPool";
+import { Expr, JsonArray } from "../src/Expr";
+import { ExprPool } from "../src/ExprPool";
 
 describe("ExprPool", function () {
     const expressions = [

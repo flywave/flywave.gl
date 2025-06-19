@@ -7,8 +7,8 @@
 import { Env, IndexedTechniqueParams, PoiTechnique } from "@flywave/flywave-datasource-protocol/src";
 import { expect } from "chai";
 
-import { PoiBuilder } from "../lib/poi/PoiBuilder";
-import { TextElement } from "../lib/text/TextElement";
+import { PoiBuilder } from "../src/poi/PoiBuilder";
+import { TextElement } from "../src/text/TextElement";
 
 describe("PoiBuilder", function () {
     const env = new Env();

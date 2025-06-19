@@ -26,4 +26,4 @@ export {
  */
 export type OmvDataSourceParameters = VectorTileDataSourceParameters;
 
-export * from "./lib/OmvDataSource";
+export * from "./OmvDataSource";

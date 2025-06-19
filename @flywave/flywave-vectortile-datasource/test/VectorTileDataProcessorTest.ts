@@ -10,13 +10,13 @@ import { expect } from "chai";
 import * as sinon from "sinon";
 import { Vector2, Vector3 } from "three";
 
-import { VectorTileDataProcessor, VectorTileDataProcessorOptions } from "../index-worker";
-import { DataAdapter } from "../lib/DataAdapter";
-import { DecodeInfo } from "../lib/DecodeInfo";
-import { IGeometryProcessor, ILineGeometry, IPolygonGeometry } from "../lib/IGeometryProcessor";
-import { OmvFeatureFilter } from "../lib/OmvDataFilter";
-import { OmvGeometryType } from "../lib/OmvDecoderDefs";
-import { VectorTileDataEmitter } from "../lib/VectorTileDataEmitter";
+import { VectorTileDataProcessor, VectorTileDataProcessorOptions } from "../src/index-worker";
+import { DataAdapter } from "../src/DataAdapter";
+import { DecodeInfo } from "../src/DecodeInfo";
+import { IGeometryProcessor, ILineGeometry, IPolygonGeometry } from "../src/IGeometryProcessor";
+import { OmvFeatureFilter } from "../src/OmvDataFilter";
+import { OmvGeometryType } from "../src/OmvDecoderDefs";
+import { VectorTileDataEmitter } from "../src/VectorTileDataEmitter";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

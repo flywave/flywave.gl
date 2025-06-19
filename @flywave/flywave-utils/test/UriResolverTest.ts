@@ -6,7 +6,7 @@
 
 import { assert } from "chai";
 
-import { PrefixMapUriResolver, RelativeUriResolver } from "../lib/UriResolver";
+import { PrefixMapUriResolver, RelativeUriResolver } from "../src/UriResolver";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

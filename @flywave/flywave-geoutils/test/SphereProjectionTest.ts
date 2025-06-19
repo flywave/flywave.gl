@@ -9,14 +9,14 @@
 import { assert } from "chai";
 import { Vector3 } from "three";
 
-import { GeoBox } from "../lib/coordinates/GeoBox";
-import { GeoCoordinates } from "../lib/coordinates/GeoCoordinates";
-import { GeoCoordinatesLike } from "../lib/coordinates/GeoCoordinatesLike";
-import { OrientedBox3 } from "../lib/math/OrientedBox3";
-import { Vector3Like } from "../lib/math/Vector3Like";
-import { EarthConstants } from "../lib/projection/EarthConstants";
-import { sphereProjection } from "../lib/projection/SphereProjection";
-import { webMercatorTilingScheme } from "../lib/tiling/WebMercatorTilingScheme";
+import { GeoBox } from "../src/coordinates/GeoBox";
+import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";
+import { GeoCoordinatesLike } from "../src/coordinates/GeoCoordinatesLike";
+import { OrientedBox3 } from "../src/math/OrientedBox3";
+import { Vector3Like } from "../src/math/Vector3Like";
+import { EarthConstants } from "../src/projection/EarthConstants";
+import { sphereProjection } from "../src/projection/SphereProjection";
+import { webMercatorTilingScheme } from "../src/tiling/WebMercatorTilingScheme";
 
 const epsilon = 0.000001;
 

@@ -120,7 +120,7 @@ export class ShaderPass extends Pass {
     uniforms: { [uniform: string]: THREE.IUniform };
     material: THREE.Material;
     fsQuad: FullScreenQuad;
-    constructor(shader: THREE.Shader, private readonly textureID: string = "tDiffuse") {
+    constructor(shader: THREE.ShaderMaterialParameters, private readonly textureID: string = "tDiffuse") {
         super();
         if (shader instanceof THREE.ShaderMaterial) {
             this.uniforms = shader.uniforms;

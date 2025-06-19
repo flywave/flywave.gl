@@ -12,9 +12,9 @@ import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
 
-import { VectorTileDecoder } from "../index-worker";
-import { OmvDataAdapter } from "../lib/adapters/omv/OmvDataAdapter";
-import { DataAdapter } from "../lib/DataAdapter";
+import { VectorTileDecoder } from "../src/index-worker";
+import { OmvDataAdapter } from "../src/adapters/omv/OmvDataAdapter";
+import { DataAdapter } from "../src/DataAdapter";
 chai.use(chaiAsPromised);
 const { expect } = chai;
 

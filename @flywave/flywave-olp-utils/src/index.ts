@@ -12,5 +12,5 @@
  * @packageDocumentation
  */
 
-export * from "./lib/OlpCopyrightProvider";
-export * from "./lib/OlpDataProvider";
+export * from "./OlpCopyrightProvider";
+export * from "./OlpDataProvider";

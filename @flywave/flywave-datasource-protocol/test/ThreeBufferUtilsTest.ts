@@ -9,8 +9,8 @@
 import { assert, expect } from "chai";
 import * as THREE from "three";
 
-import { BufferAttribute, Geometry } from "../lib/DecodedTile";
-import { ThreeBufferUtils } from "../lib/ThreeBufferUtils";
+import { BufferAttribute, Geometry } from "../src/DecodedTile";
+import { ThreeBufferUtils } from "../src/ThreeBufferUtils";
 
 describe("ThreeBufferUtils", function () {
     function bufferElementSize(type: string) {

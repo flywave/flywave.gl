@@ -13,7 +13,7 @@ import * as THREE from "three";
 import {
     DisplacedBufferGeometry,
     DisplacementRange
-} from "../lib/geometry/DisplacedBufferGeometry";
+} from "../src/geometry/DisplacedBufferGeometry";
 
 function createBuffer(array: number[], itemSize: number) {
     return new THREE.BufferAttribute(new Uint32Array(array), itemSize);

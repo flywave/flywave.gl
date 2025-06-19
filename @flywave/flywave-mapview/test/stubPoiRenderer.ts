@@ -9,9 +9,9 @@ import { Math2D } from "@flywave/flywave-utils";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { PoiRenderer } from "../lib/poi/PoiRenderer";
-import { ScreenCollisions } from "../lib/ScreenCollisions";
-import { PoiInfo } from "../lib/text/TextElement";
+import { PoiRenderer } from "../src/poi/PoiRenderer";
+import { ScreenCollisions } from "../src/ScreenCollisions";
+import { PoiInfo } from "../src/text/TextElement";
 
 /**
  * Creates a PoiRenderer stub.

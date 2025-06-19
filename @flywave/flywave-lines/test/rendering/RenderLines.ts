@@ -9,7 +9,7 @@ import { SolidLineMaterial, SolidLineMaterialParameters } from "@flywave/flywave
 import { RenderingTestHelper } from "@flywave/flywave-test-utils";
 import * as THREE from "three";
 
-import { createLineGeometry, LineGroup } from "../../lib/Lines";
+import { createLineGeometry, LineGroup } from "../../src/Lines";
 
 function createFakeDisplacementMap(sideSize: number): THREE.DataTexture {
     const array = new Float32Array(sideSize * sideSize);

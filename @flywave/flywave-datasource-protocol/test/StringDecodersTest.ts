@@ -10,8 +10,8 @@
 
 import { assert } from "chai";
 
-import { ColorUtils } from "../lib/ColorUtils";
-import { parseStringEncodedNumeral } from "../lib/StringEncodedNumeral";
+import { ColorUtils } from "../src/ColorUtils";
+import { parseStringEncodedNumeral } from "../src/StringEncodedNumeral";
 
 describe("StringEncodedNumeral", function () {
     it("Meters", () => {

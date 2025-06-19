@@ -13,7 +13,7 @@ import {
     RingBuffer,
     SampledTimer,
     Statistics
-} from "../lib/Statistics";
+} from "../src/Statistics";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

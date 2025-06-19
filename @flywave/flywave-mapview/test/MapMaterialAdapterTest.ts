@@ -9,7 +9,7 @@ import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { MapMaterialAdapter } from "../lib/MapMaterialAdapter";
+import { MapMaterialAdapter } from "../src/MapMaterialAdapter";
 
 describe("MapMaterialAdapter", function () {
     const sandbox = sinon.createSandbox();

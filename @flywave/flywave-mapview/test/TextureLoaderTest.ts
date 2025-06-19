@@ -15,7 +15,7 @@ import "@flywave/flywave-fetch";
 
 import * as THREE from "three";
 
-import { TextureLoader } from "../lib/TextureLoader";
+import { TextureLoader } from "../src/TextureLoader";
 
 const inNodeContext = typeof window === "undefined";
 const texturePath = getTestResourceUrl("@flywave/flywave-mapview", "test/resources/headshot.png");

@@ -7,7 +7,7 @@
 import { assert, expect } from "chai";
 import * as THREE from "three";
 
-import { ScreenProjector } from "../lib/ScreenProjector";
+import { ScreenProjector } from "../src/ScreenProjector";
 
 describe("ScreenProjector", () => {
     const screenSize: number = 10;

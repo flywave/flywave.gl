@@ -9,9 +9,9 @@ import { expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { MapView } from "../lib/MapView";
-import { PickHandler } from "../lib/PickHandler";
-import { Tile } from "../lib/Tile";
+import { MapView } from "../src/MapView";
+import { PickHandler } from "../src/PickHandler";
+import { Tile } from "../src/Tile";
 
 describe("PickHandler", function () {
     let pickHandler: PickHandler;

@@ -5,7 +5,8 @@
  */
 
 import { HiddenThreeJSMaterialProperties } from "./MapMeshMaterials";
-import { TileDisplacementMap } from "@flywave/flywave-mapview";
+import { TileDisplacementMap } from "./DisplacementMap";
+import * as THREE from "three";
 /**
  * Parameters used when constructing a new implementor of {@link DisplacementFeature}.
  */

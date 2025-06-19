@@ -7,23 +7,23 @@
 import { assert } from "chai";
 import * as THREE from "three";
 
-import { GeoBox } from "../lib/coordinates/GeoBox";
-import { GeoCoordinates } from "../lib/coordinates/GeoCoordinates";
-import { Box3Like } from "../lib/math/Box3Like";
-import { MathUtils } from "../lib/math/MathUtils";
-import { OrientedBox3 } from "../lib/math/OrientedBox3";
-import { Vector3Like } from "../lib/math/Vector3Like";
-import { equirectangularProjection } from "../lib/projection/EquirectangularProjection";
-import { identityProjection } from "../lib/projection/IdentityProjection";
-import { mercatorProjection, webMercatorProjection } from "../lib/projection/MercatorProjection";
-import { Projection } from "../lib/projection/Projection";
-import { sphereProjection } from "../lib/projection/SphereProjection";
-import { transverseMercatorProjection } from "../lib/projection/TransverseMercatorProjection";
-import { hereTilingScheme } from "../lib/tiling/HereTilingScheme";
-import { mercatorTilingScheme } from "../lib/tiling/MercatorTilingScheme";
-import { polarTilingScheme } from "../lib/tiling/PolarTilingScheme";
-import { TileKey } from "../lib/tiling/TileKey";
-import { webMercatorTilingScheme } from "../lib/tiling/WebMercatorTilingScheme";
+import { GeoBox } from "../src/coordinates/GeoBox";
+import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";
+import { Box3Like } from "../src/math/Box3Like";
+import { MathUtils } from "../src/math/MathUtils";
+import { OrientedBox3 } from "../src/math/OrientedBox3";
+import { Vector3Like } from "../src/math/Vector3Like";
+import { equirectangularProjection } from "../src/projection/EquirectangularProjection";
+import { identityProjection } from "../src/projection/IdentityProjection";
+import { mercatorProjection, webMercatorProjection } from "../src/projection/MercatorProjection";
+import { Projection } from "../src/projection/Projection";
+import { sphereProjection } from "../src/projection/SphereProjection";
+import { transverseMercatorProjection } from "../src/projection/TransverseMercatorProjection";
+import { hereTilingScheme } from "../src/tiling/HereTilingScheme";
+import { mercatorTilingScheme } from "../src/tiling/MercatorTilingScheme";
+import { polarTilingScheme } from "../src/tiling/PolarTilingScheme";
+import { TileKey } from "../src/tiling/TileKey";
+import { webMercatorTilingScheme } from "../src/tiling/WebMercatorTilingScheme";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

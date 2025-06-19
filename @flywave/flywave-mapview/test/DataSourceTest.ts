@@ -13,9 +13,9 @@ import * as chai_as_promised from "chai-as-promised";
 chai.use(chai_as_promised);
 import * as sinon from "sinon";
 
-import { DataSource } from "../lib/DataSource";
-import { MapView } from "../lib/MapView";
-import { Tile } from "../lib/Tile";
+import { DataSource } from "../src/DataSource";
+import { MapView } from "../src/MapView";
+import { Tile } from "../src/Tile";
 
 class TestDataSource extends DataSource {
     /** @override */

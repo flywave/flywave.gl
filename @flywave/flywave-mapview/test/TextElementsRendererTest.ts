@@ -8,9 +8,9 @@ import { expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { TextElement } from "../lib/text/TextElement";
-import { DEFAULT_FONT_CATALOG_NAME } from "../lib/text/TextElementsRenderer";
-import { TextElementType } from "../lib/text/TextElementType";
+import { TextElement } from "../src/text/TextElement";
+import { DEFAULT_FONT_CATALOG_NAME } from "../src/text/TextElementsRenderer";
+import { TextElementType } from "../src/text/TextElementType";
 import { PoiInfoBuilder } from "./PoiInfoBuilder";
 import {
     createPath,

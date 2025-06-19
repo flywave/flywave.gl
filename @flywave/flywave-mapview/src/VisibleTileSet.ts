@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { ViewRanges } from "@flywave/flywave-datasource-protocol/lib/ViewRanges";
+import { ViewRanges } from "@flywave/flywave-datasource-protocol/ViewRanges";
 import {
     GeoCoordinates,
     Projection,

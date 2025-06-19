@@ -19,22 +19,22 @@ import {
     ObjectLiteralExpr,
     Value,
     ValueMap
-} from "../lib/Expr";
-import { ExprEvaluatorContext } from "../lib/ExprEvaluator";
+} from "../src/Expr";
+import { ExprEvaluatorContext } from "../src/ExprEvaluator";
 import {
     InterpolatedPropertyDefinition,
     interpolatedPropertyDefinitionToJsonExpr
-} from "../lib/InterpolatedPropertyDefs";
-import { MiscOperators } from "../lib/operators/MiscOperators";
-import { StyleSetEvaluator } from "../lib/StyleSetEvaluator";
-import { AttrEvaluationContext, evaluateTechniqueAttr } from "../lib/TechniqueAttr";
+} from "../src/InterpolatedPropertyDefs";
+import { MiscOperators } from "../src/operators/MiscOperators";
+import { StyleSetEvaluator } from "../src/StyleSetEvaluator";
+import { AttrEvaluationContext, evaluateTechniqueAttr } from "../src/TechniqueAttr";
 import {
     FillTechnique,
     isSolidLineTechnique,
     PoiTechnique,
     SolidLineTechnique
-} from "../lib/Techniques";
-import { Definitions, Style, StyleSet } from "../lib/Theme";
+} from "../src/Techniques";
+import { Definitions, Style, StyleSet } from "../src/Theme";
 
 describe("StyleSetEvaluator", function () {
     const basicStyleSetAutoOrder: StyleSet = [

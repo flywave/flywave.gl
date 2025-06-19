@@ -6,8 +6,8 @@
 import { assert, expect } from "chai";
 import * as sinon from "sinon";
 
-import { EventDispatcher } from "../lib/EventDispatcher";
-import { MapViewEventNames } from "../lib/MapView";
+import { EventDispatcher } from "../src/EventDispatcher";
+import { MapViewEventNames } from "../src/MapView";
 
 //    expect-type assertions are unused expressions and are perfectly valid
 

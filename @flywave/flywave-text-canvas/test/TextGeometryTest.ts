@@ -8,10 +8,10 @@ import { expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { Font, FontMetrics } from "../lib/rendering/FontCatalog";
-import { GlyphData } from "../lib/rendering/GlyphData";
-import { TextGeometry } from "../lib/rendering/TextGeometry";
-import { TextRenderStyle } from "../lib/rendering/TextStyle";
+import { Font, FontMetrics } from "../src/rendering/FontCatalog";
+import { GlyphData } from "../src/rendering/GlyphData";
+import { TextGeometry } from "../src/rendering/TextGeometry";
+import { TextRenderStyle } from "../src/rendering/TextStyle";
 
 describe("TextGeometry", () => {
     let style: TextRenderStyle;

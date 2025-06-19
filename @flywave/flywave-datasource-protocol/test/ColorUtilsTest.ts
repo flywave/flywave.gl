@@ -6,7 +6,7 @@
 
 import { assert } from "chai";
 
-import { ColorUtils } from "../lib/ColorUtils";
+import { ColorUtils } from "../src/ColorUtils";
 
 describe("ColorUtils", function () {
     it("support rgba in signed int range", function () {

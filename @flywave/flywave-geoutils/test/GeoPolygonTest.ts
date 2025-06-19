@@ -5,8 +5,8 @@
  */
 import { assert } from "chai";
 
-import { GeoCoordinates } from "../lib/coordinates/GeoCoordinates";
-import { GeoPolygon, GeoPolygonCoordinates } from "../lib/coordinates/GeoPolygon";
+import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";
+import { GeoPolygon, GeoPolygonCoordinates } from "../src/coordinates/GeoPolygon";
 
 // tslint:disable:only-arrow-functions
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions

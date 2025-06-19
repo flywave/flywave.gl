@@ -2,6 +2,7 @@
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
         "outDir": "./lib",
+        "rootDir": "./src",
         "sourceMap": true,
         "composite": true,
         "incremental": true,
@@ -9,6 +10,7 @@
         "paths": {
             "@flywave/flywave-geometry": ["../flywave-geometry/src"],
             "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-geoutils/*": ["../flywave-geoutils/src/*"],
             "@flywave/flywave-utils": ["../flywave-utils/src"]
         }
     },

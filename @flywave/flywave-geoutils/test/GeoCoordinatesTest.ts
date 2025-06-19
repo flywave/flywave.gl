@@ -8,8 +8,8 @@
 
 import { assert } from "chai";
 
-import { GeoCoordinates } from "../lib/coordinates/GeoCoordinates";
-import { GeoPointLike, isGeoPointLike } from "../lib/coordinates/GeoPointLike";
+import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";
+import { GeoPointLike, isGeoPointLike } from "../src/coordinates/GeoPointLike";
 
 describe("GeoCoordinates", function () {
     const tests = [

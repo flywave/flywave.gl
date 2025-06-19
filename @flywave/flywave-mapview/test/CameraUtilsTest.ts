@@ -7,8 +7,8 @@
 import { expect } from "chai";
 import * as THREE from "three";
 
-import { CameraUtils } from "../lib/CameraUtils";
-import { MAX_FOV_RAD, MIN_FOV_RAD } from "../lib/FovCalculation";
+import { CameraUtils } from "../src/CameraUtils";
+import { MAX_FOV_RAD, MIN_FOV_RAD } from "../src/FovCalculation";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 describe("CameraUtils", function () {

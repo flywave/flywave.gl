@@ -13,7 +13,7 @@ import {
     StyleSet
 } from "@flywave/flywave-datasource-protocol/src";
 import { StyleSetEvaluator, ThreeBufferUtils } from "@flywave/flywave-datasource-protocol/src/index-decoder";
-import { ViewRanges } from "@flywave/flywave-datasource-protocol/lib/ViewRanges";
+import { ViewRanges } from "@flywave/flywave-datasource-protocol/src/ViewRanges";
 import {
     mercatorProjection,
     TileKey,
@@ -31,12 +31,12 @@ chai.use(chaiAsPromised);
 // Needed for using assert(...).isFulfilled for example
 const { expect, assert } = chai;
 
-import { DataSource } from "../lib/DataSource";
-import { isDepthPrePassMesh } from "../lib/DepthPrePass";
-import { DisplacementMap } from "../lib/DisplacementMap";
-import { TileGeometryCreator } from "../lib/geometry/TileGeometryCreator";
-import { MapObjectAdapter } from "../lib/MapObjectAdapter";
-import { Tile } from "../lib/Tile";
+import { DataSource } from "../src/DataSource";
+import { isDepthPrePassMesh } from "../src/DepthPrePass";
+import { DisplacementMap } from "../src/DisplacementMap";
+import { TileGeometryCreator } from "../src/geometry/TileGeometryCreator";
+import { MapObjectAdapter } from "../src/MapObjectAdapter";
+import { Tile } from "../src/Tile";
 
 class FakeMapView {
     private readonly m_scene = new THREE.Scene();

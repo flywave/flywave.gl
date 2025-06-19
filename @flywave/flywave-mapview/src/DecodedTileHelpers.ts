@@ -27,7 +27,7 @@ import {
 import {
     getTechniqueAutomaticAttrs,
     getTechniqueDescriptor
-} from "@flywave/flywave-datasource-protocol/lib/TechniqueDescriptors";
+} from "@flywave/flywave-datasource-protocol/TechniqueDescriptors";
 import {
     CirclePointsMaterial,
     disableBlending,

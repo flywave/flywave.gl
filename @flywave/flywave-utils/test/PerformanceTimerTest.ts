@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { PerformanceTimer } from "../lib/PerformanceTimer";
+import { PerformanceTimer } from "../src/PerformanceTimer";
 
 describe("PerformanceTimer", function () {
     it("#now", async function () {

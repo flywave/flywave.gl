@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { inBrowserContext, inNodeContext, inWebWorkerContext } from "../lib/TestUtils";
+import { inBrowserContext, inNodeContext, inWebWorkerContext } from "../src/TestUtils";
 
 describe("@flywave/flywave-test-utils", function () {
     describe("#in(Node,Browser, WebWorker)Context", function () {

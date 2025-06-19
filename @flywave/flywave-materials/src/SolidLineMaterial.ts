@@ -495,7 +495,7 @@ export class SolidLineMaterial
                         fadeNear: new THREE.Uniform(FadingFeature.DEFAULT_FADE_NEAR),
                         fadeFar: new THREE.Uniform(FadingFeature.DEFAULT_FADE_FAR),
                         displacementMap: new THREE.Uniform(
-                            displacementMap !== undefined ? displacementMap : new THREE.DataTexture(new ArrayBuffer(0),0,0)
+                            displacementMap !== undefined ? displacementMap : new THREE.DataTexture(new Uint8Array(0),0,0)
                         ),
                         displacementMapUvMatrix: new THREE.Uniform(params.displacementMapUvMatrix),
                         drawRange: new THREE.Uniform(
@@ -535,7 +535,7 @@ export class SolidLineMaterial
         this.stencilWrite = false;
 
         enforceBlending(this);
-        this.extensions.derivatives = true;
+        // this.extensions.derivatives = true;
 
         // Apply initial parameter values.
         if (params) {

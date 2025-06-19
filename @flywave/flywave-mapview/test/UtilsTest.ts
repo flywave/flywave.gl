@@ -18,10 +18,10 @@ import { assert, expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { CameraUtils } from "../lib/CameraUtils";
-import { ElevationProvider } from "../lib/ElevationProvider";
-import { MapView } from "../lib/MapView";
-import { MapViewUtils } from "../lib/Utils";
+import { CameraUtils } from "../src/CameraUtils";
+import { ElevationProvider } from "../src/ElevationProvider";
+import { MapView } from "../src/MapView";
+import { MapViewUtils } from "../src/Utils";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

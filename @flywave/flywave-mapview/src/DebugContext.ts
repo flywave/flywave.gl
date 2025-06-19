@@ -9,7 +9,7 @@ import * as THREE from "three";
 /**
  * Usage in Modules:
  *
- * import { DebugContext, debugContext } from "../lib/DebugContext";
+ * import { DebugContext, debugContext } from "./DebugContext";
  *
  * Declare a debug option:
  * debugContext.settings.setOption("MY_DBG_OPT", "default");

@@ -8,7 +8,7 @@
 
 import * as sinon from "sinon";
 
-import { PoiManager } from "../lib/poi/PoiManager";
+import { PoiManager } from "../src/poi/PoiManager";
 
 /**
  * Stubs poi manager.

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ViewRanges } from "@flywave/flywave-datasource-protocol/lib/ViewRanges";
+import { ViewRanges } from "@flywave/flywave-datasource-protocol/ViewRanges";
 import { EarthConstants, Projection, ProjectionType } from "@flywave/flywave-geoutils";
 import { assert } from "@flywave/flywave-utils";
 import * as THREE from "three";

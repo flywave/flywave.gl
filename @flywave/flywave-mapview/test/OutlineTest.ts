@@ -7,7 +7,7 @@ import { assert, expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { OutlineEffect } from "../lib/composing/Outline";
+import { OutlineEffect } from "../src/composing/Outline";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

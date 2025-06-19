@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { safeParseDecimalInt } from "../lib/Utils";
+import { safeParseDecimalInt } from "../src/Utils";
 
 describe("MapControls", function () {
     describe("Utils", function () {

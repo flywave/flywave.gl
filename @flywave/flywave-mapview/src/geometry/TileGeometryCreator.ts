@@ -48,7 +48,7 @@ import {
 import {
     ExprEvaluatorContext,
     OperatorDescriptor
-} from "@flywave/flywave-datasource-protocol/lib/ExprEvaluator";
+} from "@flywave/flywave-datasource-protocol/ExprEvaluator";
 import { EarthConstants, ProjectionType } from "@flywave/flywave-geoutils";
 import {
     EdgeMaterial,
@@ -1161,7 +1161,7 @@ export class TileGeometryCreator {
         }
 
         // Render terrain using height-based colors.
-        (material as any).onBeforeCompile = (shader: THREE.Shader) => {
+        (material as any).onBeforeCompile = (shader: THREE.ShaderMaterialParameters) => {
             shader.fragmentShader = shader.fragmentShader.replace(
                 "#include <map_pars_fragment>",
                 `#include <map_pars_fragment>

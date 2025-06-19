@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ViewRanges } from "@flywave/flywave-datasource-protocol/lib/ViewRanges";
+import { ViewRanges } from "@flywave/flywave-datasource-protocol/ViewRanges";
 import { Projection } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 

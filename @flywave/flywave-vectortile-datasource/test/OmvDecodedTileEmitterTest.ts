@@ -24,10 +24,10 @@ import {
 import { assert } from "chai";
 import { Vector2, Vector3 } from "three";
 
-import { DecodeInfo } from "../lib/DecodeInfo";
-import { IPolygonGeometry } from "../lib/IGeometryProcessor";
-import { tile2world, world2tile } from "../lib/OmvUtils";
-import { VectorTileDataEmitter } from "../lib/VectorTileDataEmitter";
+import { DecodeInfo } from "../src/DecodeInfo";
+import { IPolygonGeometry } from "../src/IGeometryProcessor";
+import { tile2world, world2tile } from "../src/OmvUtils";
+import { VectorTileDataEmitter } from "../src/VectorTileDataEmitter";
 
 class OmvDecodedTileEmitterTest extends VectorTileDataEmitter {
     splitJaggyLinesTest(

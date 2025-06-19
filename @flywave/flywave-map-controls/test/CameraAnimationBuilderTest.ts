@@ -9,8 +9,8 @@ import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { CameraAnimationBuilder } from "../lib/CameraAnimationBuilder";
-import { CameraKeyTrackAnimationOptions, ControlPoint } from "../lib/CameraKeyTrackAnimation";
+import { CameraAnimationBuilder } from "../src/CameraAnimationBuilder";
+import { CameraKeyTrackAnimationOptions, ControlPoint } from "../src/CameraKeyTrackAnimation";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

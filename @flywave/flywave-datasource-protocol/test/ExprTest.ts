@@ -8,8 +8,8 @@
 
 import { assert } from "chai";
 
-import { CallExpr, Env, Expr, JsonExpr, MapEnv, Value, ValueMap } from "../lib/Expr";
-import { Definitions } from "../lib/Theme";
+import { CallExpr, Env, Expr, JsonExpr, MapEnv, Value, ValueMap } from "../src/Expr";
+import { Definitions } from "../src/Theme";
 
 function evaluate(expr: string | JsonExpr | Expr, env?: Env | ValueMap): Value {
     if (typeof env === "object" && !(env instanceof Env)) {

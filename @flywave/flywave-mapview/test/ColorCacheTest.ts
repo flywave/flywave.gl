@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { ColorCache } from "../lib/ColorCache";
+import { ColorCache } from "../src/ColorCache";
 
 describe("ColorCache", function () {
     this.beforeEach(() => {

@@ -9,16 +9,16 @@ import { mercatorProjection, TileKey } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
 import * as sinon from "sinon";
 
-import { OmvDataAdapter } from "../lib/adapters/omv/OmvDataAdapter";
-import { com } from "../lib/adapters/omv/proto/vector_tile";
-import { DecodeInfo } from "../lib/DecodeInfo";
-import { OmvFeatureFilterDescriptionBuilder } from "../lib/OmvDataFilter";
+import { OmvDataAdapter } from "../src/adapters/omv/OmvDataAdapter";
+import { com } from "../src/adapters/omv/proto/vector_tile";
+import { DecodeInfo } from "../src/DecodeInfo";
+import { OmvFeatureFilterDescriptionBuilder } from "../src/OmvDataFilter";
 import {
     OmvFeatureFilterDescription,
     OmvFilterDescription,
     OmvFilterString,
     OmvGeometryType
-} from "../lib/OmvDecoderDefs";
+} from "../src/OmvDecoderDefs";
 import { MockGeometryProcessor } from "./MockGeometryProcessor";
 
 enum VTJsonGeometryType {

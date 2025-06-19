@@ -12,13 +12,13 @@
  * @packageDocumentation
  */
 
-export * from "./lib/rendering/FontCatalog";
-export * from "./lib/rendering/GlyphData";
-export * from "./lib/rendering/TextStyle";
-export * from "./lib/rendering/TextBufferObject";
-export * from "./lib/TextCanvas";
+export * from "./rendering/FontCatalog";
+export * from "./rendering/GlyphData";
+export * from "./rendering/TextStyle";
+export * from "./rendering/TextBufferObject";
+export * from "./TextCanvas";
 
-export * from "./lib/utils/ContextualArabicConverter";
-export * from "./lib/utils/MaterialUtils";
-export * from "./lib/utils/TypesettingUtils";
-export * from "./lib/utils/UnicodeUtils";
+export * from "./utils/ContextualArabicConverter";
+export * from "./utils/MaterialUtils";
+export * from "./utils/TypesettingUtils";
+export * from "./utils/UnicodeUtils";

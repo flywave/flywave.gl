@@ -8,8 +8,8 @@ import { mercatorProjection, TileKey } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
 import * as sinon from "sinon";
 
-import { GeoJsonVtDataAdapter } from "../lib/adapters/geojson-vt/GeoJsonVtDataAdapter";
-import { DecodeInfo } from "../lib/DecodeInfo";
+import { GeoJsonVtDataAdapter } from "../src/adapters/geojson-vt/GeoJsonVtDataAdapter";
+import { DecodeInfo } from "../src/DecodeInfo";
 import { MockGeometryProcessor } from "./MockGeometryProcessor";
 
 enum VTJsonGeometryType {

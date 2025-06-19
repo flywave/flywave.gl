@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { Task, TaskQueue } from "../lib/TaskQueue";
+import { Task, TaskQueue } from "../src/TaskQueue";
 
 describe("TaskQueue", function () {
     it("create TaskQueue", function () {

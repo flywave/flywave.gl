@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { debugContext } from "../lib/DebugContext";
+import { debugContext } from "../src/DebugContext";
 
 describe("debug-context", function () {
     it("ok", function () {

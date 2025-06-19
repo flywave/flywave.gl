@@ -62,7 +62,7 @@ function tryTranspile(source: string, silent = false): boolean {
 
 function validate(type: string, response: any, validationExpectedToFail: boolean = false) {
     const source =
-        `import { ${type} } from "../lib/Theme";\n` +
+        `import { ${type} } from "../src/Theme";\n` +
         `const reply: ${type} = ${JSON.stringify(response)};`;
 
     const result = tryTranspile(source, validationExpectedToFail);

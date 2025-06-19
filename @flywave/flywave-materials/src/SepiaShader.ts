@@ -8,7 +8,7 @@ import * as THREE from "three";
 /**
  * `SepiaShader`.
  */
-export const SepiaShader: THREE.Shader = {
+export const SepiaShader: THREE.ShaderMaterialParameters = {
     uniforms: {
         tDiffuse: { value: null },
         amount: { value: 1.0 }

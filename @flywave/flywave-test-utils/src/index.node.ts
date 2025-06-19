@@ -4,5 +4,5 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export * from "./lib/TestDataUtils.node";
-export * from "./lib/TestUtils";
+export * from "./TestDataUtils.node";
+export * from "./TestUtils";

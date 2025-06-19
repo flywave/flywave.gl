@@ -20,8 +20,8 @@ import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
 
-import { DataProvider } from "../lib/DataProvider";
-import { TileLoader } from "../lib/TileLoader";
+import { DataProvider } from "../src/DataProvider";
+import { TileLoader } from "../src/TileLoader";
 
 chai.use(chaiAsPromised);
 // Needed for using expect(...).true for example

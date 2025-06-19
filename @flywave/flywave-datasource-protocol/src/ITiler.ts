@@ -6,7 +6,7 @@
 
 import { TileKey } from "@flywave/flywave-geoutils";
 
-import { GeoJson } from "../lib/GeoJsonDataType";
+import { GeoJson } from "./GeoJsonDataType";
 
 /**
  * General type tiler which can be used to provide tile untiled payloads.

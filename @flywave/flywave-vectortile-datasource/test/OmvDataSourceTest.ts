@@ -28,7 +28,7 @@ import {
     VectorTileDataSource
 } from "../index";
 import { VectorTileDecoder } from "../index-worker";
-import { GeoJsonDataProvider } from "../lib/GeoJsonDataProvider";
+import { GeoJsonDataProvider } from "../src/GeoJsonDataProvider";
 
 class MockDataProvider extends DataProvider {
     /** Overriding abstract method, in this case doing nothing. */

@@ -8,15 +8,15 @@
 
 import { assert } from "chai";
 
-import { GeoBox } from "../lib/coordinates/GeoBox";
-import { GeoCoordinates } from "../lib/coordinates/GeoCoordinates";
-import { GeoCoordinatesLike } from "../lib/coordinates/GeoCoordinatesLike";
-import { OrientedBox3Like } from "../lib/math/OrientedBox3Like";
-import { Vector3Like } from "../lib/math/Vector3Like";
+import { GeoBox } from "../src/coordinates/GeoBox";
+import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";
+import { GeoCoordinatesLike } from "../src/coordinates/GeoCoordinatesLike";
+import { OrientedBox3Like } from "../src/math/OrientedBox3Like";
+import { Vector3Like } from "../src/math/Vector3Like";
 import {
     transverseMercatorProjection,
     TransverseMercatorUtils
-} from "../lib/projection/TransverseMercatorProjection";
+} from "../src/projection/TransverseMercatorProjection";
 
 const epsilon = 0.000001;
 

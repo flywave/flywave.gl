@@ -17,7 +17,7 @@ import {
 } from "@flywave/flywave-utils";
 import { assert } from "chai";
 
-import { ThemeLoader } from "../lib/ThemeLoader";
+import { ThemeLoader } from "../src/ThemeLoader";
 
 describe("ThemeLoader", function () {
     describe("#isThemeLoaded", function () {

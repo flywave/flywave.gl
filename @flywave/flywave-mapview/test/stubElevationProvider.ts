@@ -7,8 +7,8 @@
 import { GeoCoordinates, mercatorTilingScheme, TileKey, TilingScheme } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 
-import { DisplacementMap, TileDisplacementMap } from "../lib/DisplacementMap";
-import { ElevationProvider } from "../lib/ElevationProvider";
+import { DisplacementMap, TileDisplacementMap } from "../src/DisplacementMap";
+import { ElevationProvider } from "../src/ElevationProvider";
 
 class ElevationProviderFake implements ElevationProvider {
     getHeight(_geoPoint: GeoCoordinates, _level?: number): number | undefined {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GeoJson } from "../lib/GeoJsonDataType";
+import { GeoJson } from "./GeoJsonDataType";
 import { WorkerServiceProtocol } from "./WorkerServiceProtocol";
 
 /**

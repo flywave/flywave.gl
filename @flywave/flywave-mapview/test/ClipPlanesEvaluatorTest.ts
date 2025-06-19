@@ -15,9 +15,9 @@ import {
 import { expect } from "chai";
 import * as THREE from "three";
 
-import { CameraUtils } from "../lib/CameraUtils";
-import { TiltViewClipPlanesEvaluator } from "../lib/ClipPlanesEvaluator";
-import { MapViewUtils } from "../lib/Utils";
+import { CameraUtils } from "../src/CameraUtils";
+import { TiltViewClipPlanesEvaluator } from "../src/ClipPlanesEvaluator";
+import { MapViewUtils } from "../src/Utils";
 
 function setupPerspectiveCamera(
     projection: Projection,

@@ -2,9 +2,12 @@
     "compilerOptions": {
         "lib": ["ESNext", "DOM"],
         "module": "CommonJS",
+        "moduleResolution": "node",
         "skipLibCheck": true,
         "target": "ES2017",
         "strict": false,
+        "declaration": true,
+        "incremental": true,
         "useUnknownInCatchVariables": false
     },
     "exclude": ["node_modules"]

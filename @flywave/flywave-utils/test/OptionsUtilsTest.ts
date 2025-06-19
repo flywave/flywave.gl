@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { getOptionValue } from "../lib/OptionsUtils";
+import { getOptionValue } from "../src/OptionsUtils";
 
 describe("OptionsUtils", function () {
     describe("#getOptionValue", function () {

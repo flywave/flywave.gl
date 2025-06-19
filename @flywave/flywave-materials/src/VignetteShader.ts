@@ -8,7 +8,7 @@ import * as THREE from "three";
 /**
  * `VignetteShader`.
  */
-export const VignetteShader: THREE.Shader = {
+export const VignetteShader: THREE.ShaderMaterialParameters = {
     uniforms: {
         tDiffuse: { value: null },
         offset: { value: 1.0 },

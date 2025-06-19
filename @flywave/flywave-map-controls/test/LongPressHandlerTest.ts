@@ -7,7 +7,7 @@
 import { expect } from "chai";
 import * as sinon from "sinon";
 
-import { LongPressHandler } from "../lib/LongPressHandler";
+import { LongPressHandler } from "../src/LongPressHandler";
 
 describe("LongPressHandler", function () {
     const longPressTimeout = 10;

@@ -37,18 +37,18 @@ import * as path from "path";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { PoiBuffer } from "../lib/poi/PoiRenderer";
-import { ScreenCollisions } from "../lib/ScreenCollisions";
+import { PoiBuffer } from "../src/poi/PoiRenderer";
+import { ScreenCollisions } from "../src/ScreenCollisions";
 import {
     checkReadyForPlacement,
     placeIcon,
     PlacementResult,
     placePointLabel,
     PrePlacementResult
-} from "../lib/text/Placement";
-import { RenderState } from "../lib/text/RenderState";
-import { LoadingState, TextElement } from "../lib/text/TextElement";
-import { TextElementState } from "../lib/text/TextElementState";
+} from "../src/text/Placement";
+import { RenderState } from "../src/text/RenderState";
+import { LoadingState, TextElement } from "../src/text/TextElement";
+import { TextElementState } from "../src/text/TextElementState";
 
 const inNodeContext = typeof window === "undefined";
 const screenWidth: number = 1024;

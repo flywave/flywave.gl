@@ -10,7 +10,7 @@ import { mercatorProjection } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
 import * as THREE from "three";
 
-import { FixedClipPlanesEvaluator } from "../lib/FixedClipPlanesEvaluator";
+import { FixedClipPlanesEvaluator } from "../src/FixedClipPlanesEvaluator";
 
 describe("FixedClipPlanesEvaluator", function () {
     it("constructor sets valid default clip planes", function () {

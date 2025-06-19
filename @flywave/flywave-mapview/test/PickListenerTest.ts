@@ -10,8 +10,8 @@
 import { expect } from "chai";
 import * as THREE from "three";
 
-import { PickObjectType, PickResult } from "../lib/PickHandler";
-import { PickListener } from "../lib/PickListener";
+import { PickObjectType, PickResult } from "../src/PickHandler";
+import { PickListener } from "../src/PickListener";
 
 function createIntersection(dataSource: string | undefined): THREE.Intersection {
     const object = new THREE.Object3D();

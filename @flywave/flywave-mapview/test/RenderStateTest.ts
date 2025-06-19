@@ -8,7 +8,7 @@
 
 import { expect } from "chai";
 
-import { DEFAULT_FADE_TIME, FadingState, RenderState } from "../lib/text/RenderState";
+import { DEFAULT_FADE_TIME, FadingState, RenderState } from "../src/text/RenderState";
 
 describe("RenderState", function () {
     describe("constructor", function () {

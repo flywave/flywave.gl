@@ -13,10 +13,10 @@ import { ExtrusionFeature } from "@flywave/flywave-materials";
 import { expect } from "chai";
 import * as sinon from "sinon";
 
-import { AnimatedExtrusionHandler } from "../lib/AnimatedExtrusionHandler";
-import { DataSource } from "../lib/DataSource";
-import { MapView } from "../lib/MapView";
-import { Tile } from "../lib/Tile";
+import { AnimatedExtrusionHandler } from "../src/AnimatedExtrusionHandler";
+import { DataSource } from "../src/DataSource";
+import { MapView } from "../src/MapView";
+import { Tile } from "../src/Tile";
 
 class FakeMapView {
     visibleTileSet = { options: { quadTreeSearchDistanceDown: 2, quadTreeSearchDistanceUp: 3 } };

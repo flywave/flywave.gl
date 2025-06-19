@@ -18,7 +18,7 @@ chai.use(chaiAsPromised);
 // Needed for using expect(...).true for example
 const { expect } = chai;
 
-import { MapControls } from "../lib/MapControls";
+import { MapControls } from "../src/MapControls";
 
 declare const global: any;
 

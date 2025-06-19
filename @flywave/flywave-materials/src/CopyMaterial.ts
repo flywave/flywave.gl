@@ -9,7 +9,7 @@ import * as THREE from "three";
  * The base shader to use for {@link @flywave/flywave-mapview#MapView}'s
  * composing passes, like {@link MSAAMaterial}.
  */
-export const CopyShader: THREE.Shader = {
+export const CopyShader: THREE.ShaderMaterialParameters = {
     uniforms: {
         tDiffuse: { value: null },
         opacity: { value: 1.0 }

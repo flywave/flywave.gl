@@ -10,7 +10,7 @@ import * as geo from "@flywave/flywave-geoutils";
 import { assert } from "chai";
 import * as THREE from "three";
 
-import { SphericalGeometrySubdivisionModifier } from "../lib/SphericalGeometrySubdivisionModifier";
+import { SphericalGeometrySubdivisionModifier } from "../src/SphericalGeometrySubdivisionModifier";
 
 describe("SphericalGeometrySubdivisionModifier", function () {
     it("SubdivideTileBounds", function () {

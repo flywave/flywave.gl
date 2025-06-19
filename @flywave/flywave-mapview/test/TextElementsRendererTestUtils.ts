@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { DEFAULT_FADE_TIME } from "../lib/text/RenderState";
+import { DEFAULT_FADE_TIME } from "../src/text/RenderState";
 import { TextElementBuilder } from "./TextElementBuilder";
 
 /**

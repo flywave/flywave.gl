@@ -9,8 +9,8 @@
 import { assert } from "chai";
 import * as sinon from "sinon";
 
-import { ILogger, LogLevel } from "../lib/Logger/ILogger";
-import { Logger } from "../lib/Logger/Logger";
+import { ILogger, LogLevel } from "../src/Logger/ILogger";
+import { Logger } from "../src/Logger/Logger";
 
 describe("Logger", function () {
     const sandbox = sinon.createSandbox();

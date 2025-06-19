@@ -13,8 +13,8 @@ import { LoggerManager } from "@flywave/flywave-utils";
 import { expect } from "chai";
 import * as sinon from "sinon";
 
-import { CopyrightInfo } from "../lib/copyrights/CopyrightInfo";
-import { UrlCopyrightProvider } from "../lib/copyrights/UrlCopyrightProvider";
+import { CopyrightInfo } from "../src/copyrights/CopyrightInfo";
+import { UrlCopyrightProvider } from "../src/copyrights/UrlCopyrightProvider";
 
 describe("CopyrightProviders", function () {
     describe("#UrlCopyrightProvider", function () {

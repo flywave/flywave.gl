@@ -16,7 +16,7 @@ import {
     IBox,
     LineWithBound,
     ScreenCollisions
-} from "../lib/ScreenCollisions";
+} from "../src/ScreenCollisions";
 
 const tempGlyphBox2D = new Math2D.Box();
 

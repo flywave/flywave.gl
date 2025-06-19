@@ -17,8 +17,8 @@ import { LogLevel } from "@flywave/flywave-utils";
 import { expect } from "chai";
 import { Vector3 } from "three";
 
-import { TextElementBuilder } from "../lib/text/TextElementBuilder";
-import { TileTextStyleCache } from "../lib/text/TileTextStyleCache";
+import { TextElementBuilder } from "../src/text/TextElementBuilder";
+import { TileTextStyleCache } from "../src/text/TileTextStyleCache";
 
 describe("TextElementBuilder", function () {
     const env = new Env();

@@ -6,7 +6,7 @@
 
 import { expect } from "chai";
 
-import { Math2D } from "../lib/Math2D";
+import { Math2D } from "../src/Math2D";
 
 describe("Math2D", () => {
     describe("intersectLineAndCircle", () => {

@@ -7,9 +7,9 @@ import { getTestResourceUrl, silenceLoggingAroundFunction } from "@flywave/flywa
 import { LogLevel } from "@flywave/flywave-utils";
 import { assert } from "chai";
 
-import { ImageItem } from "../lib/image/Image";
-import { ImageCache } from "../lib/image/ImageCache";
-import { MapViewImageCache } from "../lib/image/MapViewImageCache";
+import { ImageItem } from "../src/image/Image";
+import { ImageCache } from "../src/image/ImageCache";
+import { MapViewImageCache } from "../src/image/MapViewImageCache";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

@@ -9,7 +9,7 @@ import "@flywave/flywave-fetch";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { loadTestResource } from "@flywave/flywave-test-utils";
 
-import { DataProvider } from "../lib/DataProvider";
+import { DataProvider } from "../src/DataProvider";
 
 /**
  * Data provider that loads test tile using [[loadTestResource]].

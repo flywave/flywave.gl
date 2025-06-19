@@ -8,12 +8,12 @@
 
 import { assert } from "chai";
 
-import { GeoBox } from "../lib/coordinates/GeoBox";
-import { GeoCoordinates } from "../lib/coordinates/GeoCoordinates";
-import { hereTilingScheme } from "../lib/tiling/HereTilingScheme";
-import { TileKey } from "../lib/tiling/TileKey";
-import { TileKeyUtils } from "../lib/tiling/TileKeyUtils";
-import { webMercatorTilingScheme } from "../lib/tiling/WebMercatorTilingScheme";
+import { GeoBox } from "../src/coordinates/GeoBox";
+import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";
+import { hereTilingScheme } from "../src/tiling/HereTilingScheme";
+import { TileKey } from "../src/tiling/TileKey";
+import { TileKeyUtils } from "../src/tiling/TileKeyUtils";
+import { webMercatorTilingScheme } from "../src/tiling/WebMercatorTilingScheme";
 
 describe("TileKey", function () {
     it("toHereTile", function () {

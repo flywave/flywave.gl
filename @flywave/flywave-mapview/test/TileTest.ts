@@ -19,12 +19,12 @@ import { assert, expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { DataSource } from "../lib/DataSource";
-import { TileGeometryLoader } from "../lib/geometry/TileGeometryLoader";
-import { ITileLoader, TileLoaderState } from "../lib/ITileLoader";
-import { MapView, TileTaskGroups } from "../lib/MapView";
-import { TextElement } from "../lib/text/TextElement";
-import { Tile } from "../lib/Tile";
+import { DataSource } from "../src/DataSource";
+import { TileGeometryLoader } from "../src/geometry/TileGeometryLoader";
+import { ITileLoader, TileLoaderState } from "../src/ITileLoader";
+import { MapView, TileTaskGroups } from "../src/MapView";
+import { TextElement } from "../src/text/TextElement";
+import { Tile } from "../src/Tile";
 
 class FakeTileLoader implements ITileLoader {
     state: TileLoaderState = TileLoaderState.Ready;

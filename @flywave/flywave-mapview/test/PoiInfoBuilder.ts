@@ -6,10 +6,10 @@
 import { ImageTexture, LineMarkerTechnique, PoiTechnique } from "@flywave/flywave-datasource-protocol/src";
 import * as THREE from "three";
 
-import { ImageItem } from "../lib/image/Image";
-import { BoxBuffer } from "../lib/poi/BoxBuffer";
-import { PoiBuffer, PoiLayer } from "../lib/poi/PoiRenderer";
-import { PoiInfo, TextElement } from "../lib/text/TextElement";
+import { ImageItem } from "../src/image/Image";
+import { BoxBuffer } from "../src/poi/BoxBuffer";
+import { PoiBuffer, PoiLayer } from "../src/poi/PoiRenderer";
+import { PoiInfo, TextElement } from "../src/text/TextElement";
 
 export class PoiInfoBuilder {
     static readonly DEF_ICON_TEXT_MIN_ZL: number = 0;

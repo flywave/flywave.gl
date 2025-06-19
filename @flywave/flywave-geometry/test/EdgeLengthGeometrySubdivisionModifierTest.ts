@@ -14,7 +14,7 @@ import * as THREE from "three";
 import {
     EdgeLengthGeometrySubdivisionModifier,
     SubdivisionMode
-} from "../lib/EdgeLengthGeometrySubdivisionModifier";
+} from "../src/EdgeLengthGeometrySubdivisionModifier";
 
 function checkVerticalAndHorizontalLines(
     a: THREE.Vector3,

@@ -9,9 +9,9 @@
 import { assert } from "chai";
 import * as sinon from "sinon";
 
-import { SubdivisionScheme } from "../lib/tiling/SubdivisionScheme";
-import { TileKey } from "../lib/tiling/TileKey";
-import { TileTreeTraverse } from "../lib/tiling/TileTreeTraverse";
+import { SubdivisionScheme } from "../src/tiling/SubdivisionScheme";
+import { TileKey } from "../src/tiling/TileKey";
+import { TileTreeTraverse } from "../src/tiling/TileTreeTraverse";
 
 /**
  * A stub scheme definition, all member functions will be overriden for each test case

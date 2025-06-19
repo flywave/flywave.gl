@@ -13,7 +13,7 @@ import { Logger, LogLevel, WorkerChannel, WORKERCHANNEL_MSG_TYPE } from "@flywav
 import { assert } from "chai";
 import * as sinon from "sinon";
 
-import { ConcurrentWorkerSet, isLoggingMessage } from "../lib/ConcurrentWorkerSet";
+import { ConcurrentWorkerSet, isLoggingMessage } from "../src/ConcurrentWorkerSet";
 import { FakeWebWorker, willExecuteWorkerScript } from "./FakeWebWorker";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions

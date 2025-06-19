@@ -8,10 +8,10 @@ import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import { expect } from "chai";
 import * as THREE from "three";
 
-import { TextElementGroup } from "../lib/text/TextElementGroup";
-import { TextElementFilter } from "../lib/text/TextElementGroupState";
-import { TextElementState } from "../lib/text/TextElementState";
-import { TextElementStateCache } from "../lib/text/TextElementStateCache";
+import { TextElementGroup } from "../src/text/TextElementGroup";
+import { TextElementFilter } from "../src/text/TextElementGroupState";
+import { TextElementState } from "../src/text/TextElementState";
+import { TextElementStateCache } from "../src/text/TextElementStateCache";
 import { lineMarkerBuilder, pointTextBuilder, TextElementBuilder } from "./TextElementBuilder";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions

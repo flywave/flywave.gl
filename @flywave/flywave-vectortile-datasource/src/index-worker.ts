@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export * from "./lib/VectorTileDecoder";
-export * from "./lib/GeoJsonTilerService";
-export * from "./lib/OmvDecoderDefs";
-export * from "./lib/DataAdapter";
+export * from "./VectorTileDecoder";
+export * from "./GeoJsonTilerService";
+export * from "./OmvDecoderDefs";
+export * from "./DataAdapter";

@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { cloneDeep } from "../lib/ObjectUtils";
+import { cloneDeep } from "../src/ObjectUtils";
 
 describe("ObjectUtils", function () {
     describe("#cloneDeep", function () {

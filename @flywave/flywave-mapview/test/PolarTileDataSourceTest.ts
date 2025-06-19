@@ -18,9 +18,9 @@ import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { MapView } from "../lib/MapView";
-import { PolarTileDataSource } from "../lib/PolarTileDataSource";
-import { Tile } from "../lib/Tile";
+import { MapView } from "../src/MapView";
+import { PolarTileDataSource } from "../src/PolarTileDataSource";
+import { Tile } from "../src/Tile";
 
 const MAXIMUM_LATITUDE = THREE.MathUtils.radToDeg(MercatorConstants.MAXIMUM_LATITUDE);
 

@@ -16,9 +16,9 @@ import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { DataSource } from "../lib/DataSource";
-import { projectTilePlaneCorners } from "../lib/geometry/ProjectTilePlaneCorners";
-import { Tile } from "../lib/Tile";
+import { DataSource } from "../src/DataSource";
+import { projectTilePlaneCorners } from "../src/geometry/ProjectTilePlaneCorners";
+import { Tile } from "../src/Tile";
 
 class MockDataSource extends DataSource {
     /** @override */

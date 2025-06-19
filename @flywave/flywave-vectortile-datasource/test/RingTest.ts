@@ -14,7 +14,7 @@ import { clipPolygon } from "@flywave/flywave-geometry/ClipPolygon";
 import { assert } from "chai";
 import { Vector2 } from "three";
 
-import { Ring } from "../lib/Ring";
+import { Ring } from "../src/Ring";
 
 const DEFAULT_EXTENTS = 4 * 1024;
 

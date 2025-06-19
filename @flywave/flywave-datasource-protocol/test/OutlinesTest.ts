@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { addPolygonEdges } from "../lib/Outliner";
+import { addPolygonEdges } from "../src/Outliner";
 
 describe("Outlines", function () {
     const indices: number[] = [];

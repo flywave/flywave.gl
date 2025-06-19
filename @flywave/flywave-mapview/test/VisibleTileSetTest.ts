@@ -20,21 +20,21 @@ import { assert, expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { BackgroundDataSource } from "../lib/BackgroundDataSource";
-import { createDefaultClipPlanesEvaluator } from "../lib/ClipPlanesEvaluator";
-import { DataSource, DataSourceOptions } from "../lib/DataSource";
-import { FrustumIntersection, TileKeyEntry } from "../lib/FrustumIntersection";
-import { TileGeometryCreator } from "../lib/geometry/TileGeometryCreator";
-import { TileGeometryManager } from "../lib/geometry/TileGeometryManager";
-import { TileLoaderState } from "../lib/ITileLoader";
-import { MapView, TileTaskGroups } from "../lib/MapView";
-import { Tile } from "../lib/Tile";
+import { BackgroundDataSource } from "../src/BackgroundDataSource";
+import { createDefaultClipPlanesEvaluator } from "../src/ClipPlanesEvaluator";
+import { DataSource, DataSourceOptions } from "../src/DataSource";
+import { FrustumIntersection, TileKeyEntry } from "../src/FrustumIntersection";
+import { TileGeometryCreator } from "../src/geometry/TileGeometryCreator";
+import { TileGeometryManager } from "../src/geometry/TileGeometryManager";
+import { TileLoaderState } from "../src/ITileLoader";
+import { MapView, TileTaskGroups } from "../src/MapView";
+import { Tile } from "../src/Tile";
 import {
     DataSourceTileList,
     ResourceComputationType,
     VisibleTileSet,
     VisibleTileSetOptions
-} from "../lib/VisibleTileSet";
+} from "../src/VisibleTileSet";
 import { FakeOmvDataSource } from "./FakeOmvDataSource";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions

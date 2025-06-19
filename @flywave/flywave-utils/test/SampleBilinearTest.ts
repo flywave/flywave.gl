@@ -6,7 +6,7 @@
 
 import { expect } from "chai";
 
-import { sampleBilinear } from "../lib/SampleBilinear";
+import { sampleBilinear } from "../src/SampleBilinear";
 
 describe("sampleBilinearTest", () => {
     // prettier-ignore

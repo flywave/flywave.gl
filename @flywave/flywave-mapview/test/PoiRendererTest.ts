@@ -14,11 +14,11 @@ import { Env } from "@flywave/flywave-datasource-protocol/src";
 import { Math2D } from "@flywave/flywave-utils";
 import { expect } from "chai";
 
-import { MapViewImageCache } from "../lib/image/MapViewImageCache";
-import { MapView } from "../lib/MapView";
-import { PoiManager } from "../lib/poi/PoiManager";
-import { PoiBuffer, PoiRenderer } from "../lib/poi/PoiRenderer";
-import { TextElement } from "../lib/text/TextElement";
+import { MapViewImageCache } from "../src/image/MapViewImageCache";
+import { MapView } from "../src/MapView";
+import { PoiManager } from "../src/poi/PoiManager";
+import { PoiBuffer, PoiRenderer } from "../src/poi/PoiRenderer";
+import { TextElement } from "../src/text/TextElement";
 
 import sinon = require("sinon");
 import * as THREE from "three";

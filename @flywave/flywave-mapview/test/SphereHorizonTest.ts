@@ -7,9 +7,9 @@ import { GeoCoordinates, sphereProjection, Vector2Like } from "@flywave/flywave-
 import { expect } from "chai";
 import { MathUtils, PerspectiveCamera, Vector3 } from "three";
 
-import { CameraUtils } from "../lib/CameraUtils";
-import { CanvasSide, previousCanvasSide, SphereHorizon } from "../lib/SphereHorizon";
-import { MapViewUtils } from "../lib/Utils";
+import { CameraUtils } from "../src/CameraUtils";
+import { CanvasSide, previousCanvasSide, SphereHorizon } from "../src/SphereHorizon";
+import { MapViewUtils } from "../src/Utils";
 
 describe("SphereHorizon", function () {
     const eps = 1e-10;

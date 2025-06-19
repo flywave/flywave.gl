@@ -42,8 +42,8 @@ import * as sinon from "sinon";
 import * as THREE from "three";
 
 import { VectorTileDecoder } from "../index-worker";
-import { GeoJsonDataProvider } from "../lib/GeoJsonDataProvider";
-import { VectorTileDataSource } from "../lib/VectorTileDataSource";
+import { GeoJsonDataProvider } from "../src/GeoJsonDataProvider";
+import { VectorTileDataSource } from "../src/VectorTileDataSource";
 import { GEOJSON_DATA, THEME } from "./resources/geoJsonData";
 
 declare const global: any;

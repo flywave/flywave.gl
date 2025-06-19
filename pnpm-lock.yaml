@@ -467,6 +467,9 @@ importers:
       commander:
         specifier: 'catalog:'
         version: 5.1.0
+      cross-env:
+        specifier: 'catalog:'
+        version: 7.0.3
       eslint:
         specifier: 'catalog:'
         version: 7.32.0

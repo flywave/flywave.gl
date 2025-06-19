@@ -7,7 +7,7 @@
 import { TextLayoutParameters, TextRenderParameters } from "@flywave/flywave-text-canvas";
 import * as THREE from "three";
 
-import { TextElement } from "../lib/text/TextElement";
+import { TextElement } from "../src/text/TextElement";
 import { PoiInfoBuilder } from "./PoiInfoBuilder";
 
 export const DEF_TEXT: string = "Text";

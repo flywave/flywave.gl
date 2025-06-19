@@ -16,7 +16,7 @@ import {
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { TextCanvasFactory } from "../lib/text/TextCanvasFactory";
+import { TextCanvasFactory } from "../src/text/TextCanvasFactory";
 
 /**
  * Creates a TextCanvas stub.

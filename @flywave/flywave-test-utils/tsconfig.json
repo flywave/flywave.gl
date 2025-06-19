@@ -1,14 +1,21 @@
 {
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
+        "rootDir": "./src",
         "outDir": "./lib",
         "sourceMap": true,
         "composite": true,
         "incremental": true,
-        "declarationMap": true
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-utils": ["../flywave-utils/src"]
+        }
     },
-    "include": [
-        "src/**/*"
-    ],
-    "exclude": ["dist/**", "test/**", "node_modules"]
+    "include": ["src/**/*"],
+    "exclude": ["dist/**", "test/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-utils"
+        }
+    ]
 }

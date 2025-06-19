@@ -9,7 +9,7 @@
 import { expect } from "chai";
 import * as THREE from "three";
 
-import { CirclePointsMaterial } from "../lib/CirclePointsMaterial";
+import { CirclePointsMaterial } from "../src/CirclePointsMaterial";
 
 describe("CirclePointsMaterial", function () {
     describe("#constructor()", function () {

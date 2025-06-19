@@ -11,7 +11,7 @@ import { expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { WebTileDataSource } from "../index";
+import { WebTileDataSource } from "../src/index";
 
 describe("WebTileDataSource", function () {
     const fakeWebTileProvider = {

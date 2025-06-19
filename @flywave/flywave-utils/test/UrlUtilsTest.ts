@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { baseUrl, getUrlOrigin, resolveReferenceUri } from "../lib/UrlUtils";
+import { baseUrl, getUrlOrigin, resolveReferenceUri } from "../src/UrlUtils";
 
 describe("UrlUtils", function () {
     describe("#resolveReferenceUrl", function () {

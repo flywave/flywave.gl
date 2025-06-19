@@ -22,9 +22,9 @@ import {
     ObjectLiteralExpr,
     Value,
     ValueMap
-} from "../lib/Expr";
-import { getPropertyValue } from "../lib/PropertyValue";
-import { Definitions } from "../lib/Theme";
+} from "../src/Expr";
+import { getPropertyValue } from "../src/PropertyValue";
+import { Definitions } from "../src/Theme";
 
 const EPSILON = 1e-8;
 
