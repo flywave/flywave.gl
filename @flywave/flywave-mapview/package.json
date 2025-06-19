@@ -11,8 +11,8 @@
         "webgl",
         "harpgl"
     ],
-    "main": "index.js",
-    "typings": "index",
+    "main": "lib/index.js",
+    "typings": "lib/index",
     "directories": {
         "test": "test"
     },

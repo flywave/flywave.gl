@@ -11,8 +11,8 @@ import {
     IndexedTechnique,
     MapEnv,
     StyleSet
-} from "@flywave/flywave-datasource-protocol";
-import { StyleSetEvaluator, ThreeBufferUtils } from "@flywave/flywave-datasource-protocol/index-decoder";
+} from "@flywave/flywave-datasource-protocol/src";
+import { StyleSetEvaluator, ThreeBufferUtils } from "@flywave/flywave-datasource-protocol/src/index-decoder";
 import { ViewRanges } from "@flywave/flywave-datasource-protocol/lib/ViewRanges";
 import {
     mercatorProjection,

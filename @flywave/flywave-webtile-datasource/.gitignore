@@ -5,3 +5,4 @@ dist
 *.js
 *.js.map
 *.tgz
+lib/

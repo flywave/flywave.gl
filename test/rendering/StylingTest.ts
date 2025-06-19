@@ -21,7 +21,7 @@ import {
     TextureCoordinateType,
     Theme,
     Value
-} from "@flywave/flywave-datasource-protocol";
+} from "@flywave/flywave-datasource-protocol/src";
 import { FeaturesDataSource } from "@flywave/flywave-features-datasource";
 import { GeoBox, OrientedBox3, ProjectionType } from "@flywave/flywave-geoutils";
 import { LookAtParams, MapAnchor, MapView, MapViewEventNames } from "@flywave/flywave-mapview";

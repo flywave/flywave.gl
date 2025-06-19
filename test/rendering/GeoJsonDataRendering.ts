@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Feature, FeatureCollection, FlatTheme, StyleSet } from "@flywave/flywave-datasource-protocol";
+import { Feature, FeatureCollection, FlatTheme, StyleSet } from "@flywave/flywave-datasource-protocol/src";
 import { clipLineString } from "@flywave/flywave-geometry/lib/ClipLineString";
 import { wrapLineString } from "@flywave/flywave-geometry/lib/WrapLineString";
 import { wrapPolygon } from "@flywave/flywave-geometry/lib/WrapPolygon";

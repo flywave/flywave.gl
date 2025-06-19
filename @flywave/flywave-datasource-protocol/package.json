@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-datasource-protocol",
     "version": "0.28.0",
     "description": "Components used for the decoding and styling of data that is used by the Datasources.",
-    "main": "index.js",
-    "typings": "index",
+    "main": "./lib/index.js",
+    "typings": "./lib/index",
     "directories": {
         "test": "test"
     },

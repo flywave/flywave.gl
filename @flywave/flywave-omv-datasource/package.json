@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-omv-datasource",
     "version": "0.28.0",
     "description": "HERE OMV Data source",
-    "main": "index.js",
-    "typings": "index",
+    "main": "lib/index.js",
+    "typings": "lib/index",
     "worker": {
         "name": "@flywave/flywave-omv-datasource-worker",
         "main": "index-worker.js"

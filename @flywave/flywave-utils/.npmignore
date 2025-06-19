@@ -7,3 +7,4 @@ tsconfig.json
 *.tgz
 *.map
 *.tsbuildinfo
+lib/

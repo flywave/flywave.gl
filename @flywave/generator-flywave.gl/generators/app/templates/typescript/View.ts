@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Theme } from "@flywave/flywave-datasource-protocol";
+import { Theme } from "@flywave/flywave-datasource-protocol/src";
 import { MapControls } from "@flywave/flywave-map-controls";
 import { MapView } from "@flywave/flywave-mapview";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";

@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-map-controls",
     "version": "0.28.0",
     "description": "Camera controller which implements a common default set of camera functionality in a map context.",
-    "main": "index.js",
-    "typings": "index",
+    "main": "lib/index.js", 
+    "typings": "lib/index", 
     "directories": {
         "test": "test"
     },

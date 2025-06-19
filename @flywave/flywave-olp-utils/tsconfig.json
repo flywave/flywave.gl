@@ -1,11 +1,16 @@
 {
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
+        "outDir": "./lib",
         "sourceMap": true,
         "composite": true,
         "incremental": true,
         "declarationMap": true
     },
+    "include": [
+        "src/**/*",
+        "test/**/*"
+    ],
     "exclude": ["dist/**", "test/**", "node_modules"],
     "references": [
         {

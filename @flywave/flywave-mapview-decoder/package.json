@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-mapview-decoder",
     "version": "0.28.0",
     "description": "Decoder worker for mapview",
-    "main": "index.js",
-    "typings": "index",
+    "main": "lib/index.js",
+    "typings": "lib/index",
     "worker": {
         "name": "@flywave/flywave-mapview-decoder-worker",
         "main": "index-worker.js"

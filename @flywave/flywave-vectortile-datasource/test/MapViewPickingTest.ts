@@ -10,7 +10,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { DecodedTile, Geometry, GeometryType } from "@flywave/flywave-datasource-protocol";
+import { DecodedTile, Geometry, GeometryType } from "@flywave/flywave-datasource-protocol/src";
 import {
     GeoCoordinates,
     mercatorProjection,

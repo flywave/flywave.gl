@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-geometry",
     "version": "0.28.0",
     "description": "Algorithms and data structures for processing geometries",
-    "main": "index.js",
-    "typings": "index",
+    "main": "lib/index.js",
+    "typings": "lib/index",
     "directories": {
         "test": "test"
     },

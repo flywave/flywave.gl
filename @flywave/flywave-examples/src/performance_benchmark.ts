@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Theme } from "@flywave/flywave-datasource-protocol";
+import { Theme } from "@flywave/flywave-datasource-protocol/src";
 import {
     MapViewPowerPreference,
     SimpleFrameStatistics,
@@ -13,8 +13,8 @@ import {
 import { getAppBaseUrl, LoggerManager } from "@flywave/flywave-utils";
 import { GUI, GUIController } from "dat.gui";
 
-import { PerformanceTestData } from "../lib/PerformanceConfig";
-import { PerformanceUtils } from "../lib/PerformanceUtils";
+import { PerformanceTestData } from "./lib/PerformanceConfig";
+import { PerformanceUtils } from "./lib/PerformanceUtils";
 
 interface ThemeList {
     [name: string]: string;

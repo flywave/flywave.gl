@@ -2,9 +2,9 @@
     "name": "@flywave/flywave-fetch",
     "version": "0.28.0",
     "description": "This module adds a subset of the fetch API for Node.js",
-    "main": "index.js",
-    "browser": "index.web.js",
-    "typings": "index.web",
+    "main": "lib/index.js",
+    "browser": "lib/index.web.js",
+    "typings": "lib/index.web",
     "directories": {
         "test": "test"
     },

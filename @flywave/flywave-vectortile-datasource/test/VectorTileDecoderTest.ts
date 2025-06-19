@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/index-decoder";
+import { StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/src/index-decoder";
 import { mercatorProjection, TileKey } from "@flywave/flywave-geoutils";
 import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import * as chai from "chai";

@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-debug-datasource",
     "version": "0.28.0",
     "description": "Overlay useful for debugging map data",
-    "main": "index.js",
-    "typings": "index",
+    "main": "./lib/index.js",
+    "typings": "./lib/index",
     "directories": {
         "lib": "lib"
     },

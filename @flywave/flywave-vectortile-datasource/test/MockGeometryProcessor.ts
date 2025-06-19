@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ValueMap } from "@flywave/flywave-datasource-protocol";
+import { ValueMap } from "@flywave/flywave-datasource-protocol/src";
 import { Vector3 } from "three";
 
 import { IGeometryProcessor, ILineGeometry, IPolygonGeometry } from "../lib/IGeometryProcessor";

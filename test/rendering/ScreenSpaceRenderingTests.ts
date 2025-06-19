@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { FeatureCollection, Style } from "@flywave/flywave-datasource-protocol";
+import { FeatureCollection, Style } from "@flywave/flywave-datasource-protocol/src";
 import { EarthConstants, sphereProjection } from "@flywave/flywave-geoutils";
 
 import { GeoJsonTest } from "./utils/GeoJsonTest";

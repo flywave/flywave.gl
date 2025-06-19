@@ -7,3 +7,4 @@ theme.schema.json
 *.js
 *.js.map
 *.tgz
+lib

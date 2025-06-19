@@ -6,7 +6,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { DecodedTile } from "@flywave/flywave-datasource-protocol";
+import { DecodedTile } from "@flywave/flywave-datasource-protocol/src";
 import {
     mercatorProjection,
     OrientedBox3,

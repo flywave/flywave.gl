@@ -10,7 +10,7 @@ import {
     LineMarkerTechnique,
     PoiTechnique,
     TextTechnique
-} from "@flywave/flywave-datasource-protocol";
+} from "@flywave/flywave-datasource-protocol/src";
 import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import { TextLayoutStyle, TextRenderStyle } from "@flywave/flywave-text-canvas";
 import { LogLevel } from "@flywave/flywave-utils";

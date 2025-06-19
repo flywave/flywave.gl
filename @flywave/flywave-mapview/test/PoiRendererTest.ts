@@ -10,7 +10,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { Env } from "@flywave/flywave-datasource-protocol";
+import { Env } from "@flywave/flywave-datasource-protocol/src";
 import { Math2D } from "@flywave/flywave-utils";
 import { expect } from "chai";
 

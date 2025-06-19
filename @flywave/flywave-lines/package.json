@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-lines",
     "version": "0.28.0",
     "description": "Create three.js geometries for wide lines",
-    "main": "index.js",
-    "typings": "index",
+    "main": "lib/index.js",
+    "typings": "lib/index",
     "directories": {
         "test": "test",
         "lib": "lib"

@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-materials",
     "version": "0.28.0",
     "description": "flywave.gl Materials defining the appearance of objects",
-    "main": "index.js",
-    "typings": "index",
+    "main": "lib/index.js",
+    "typings": "lib/index",
     "scripts": {
         "build": "tsc --build $EXTRA_TSC_ARGS",
         "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",

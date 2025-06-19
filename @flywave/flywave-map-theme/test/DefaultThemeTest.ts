@@ -8,13 +8,13 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { Definitions, Theme } from "@flywave/flywave-datasource-protocol";
+import { Definitions, Theme } from "@flywave/flywave-datasource-protocol/src";
 import {
     Expr,
     isJsonExpr,
     JsonExpr,
     StyleSetEvaluator
-} from "@flywave/flywave-datasource-protocol/index-decoder";
+} from "@flywave/flywave-datasource-protocol/src/index-decoder";
 import { loadTestResource } from "@flywave/flywave-test-utils";
 import * as Ajv from "ajv";
 import { assert } from "chai";

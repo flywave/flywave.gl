@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Fog as FogConfig } from "@flywave/flywave-datasource-protocol";
+import { Fog as FogConfig } from "@flywave/flywave-datasource-protocol/src";
 import { SolidLineMaterial } from "@flywave/flywave-materials";
 import { assert } from "chai";
 import { BoxGeometry, Fog, Mesh, Scene } from "three";

@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { GeometryKind } from "@flywave/flywave-datasource-protocol";
+import { GeometryKind } from "@flywave/flywave-datasource-protocol/src";
 import { mercatorProjection, TileKey } from "@flywave/flywave-geoutils";
 import { CopyrightInfo, MapView, Tile } from "@flywave/flywave-mapview";
 import { LoggerManager } from "@flywave/flywave-utils";

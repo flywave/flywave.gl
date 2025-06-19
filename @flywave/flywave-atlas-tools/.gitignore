@@ -5,3 +5,4 @@ package
 *.d.ts
 *.js
 *.js.map
+lib

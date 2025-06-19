@@ -5,3 +5,4 @@ resources/
 *.d.ts
 *.js
 *.js.map
+lib/

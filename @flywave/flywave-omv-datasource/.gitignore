@@ -9,3 +9,4 @@ dist
 !./lib/proto/vector_tile.js
 !./lib/proto/vector_tile.d.ts
 *.tgz
+lib/

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/index-decoder";
+import { StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/src/index-decoder";
 import { mercatorProjection, TileKey } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
 import * as sinon from "sinon";

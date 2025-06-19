@@ -6,7 +6,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { MapEnv, Value } from "@flywave/flywave-datasource-protocol/index-decoder";
+import { MapEnv, Value } from "@flywave/flywave-datasource-protocol/src/index-decoder";
 import { assert } from "chai";
 
 import {

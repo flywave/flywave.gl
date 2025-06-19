@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Env, IndexedTechniqueParams, PoiTechnique } from "@flywave/flywave-datasource-protocol";
+import { Env, IndexedTechniqueParams, PoiTechnique } from "@flywave/flywave-datasource-protocol/src";
 import { expect } from "chai";
 
 import { PoiBuilder } from "../lib/poi/PoiBuilder";

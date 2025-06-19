@@ -6,7 +6,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { Style, Theme } from "@flywave/flywave-datasource-protocol";
+import { Style, Theme } from "@flywave/flywave-datasource-protocol/src";
 import {
     GeoCoordinates,
     MercatorConstants,

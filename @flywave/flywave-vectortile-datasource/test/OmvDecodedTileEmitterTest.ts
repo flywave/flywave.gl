@@ -12,8 +12,8 @@ import {
     isStandardTechnique,
     StyleSet,
     TextureCoordinateType
-} from "@flywave/flywave-datasource-protocol";
-import { MapEnv, StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/index-decoder";
+} from "@flywave/flywave-datasource-protocol/src";
+import { MapEnv, StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/src/index-decoder";
 import {
     GeoCoordinates,
     mercatorProjection,

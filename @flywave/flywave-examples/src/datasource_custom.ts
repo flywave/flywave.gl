@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Theme } from "@flywave/flywave-datasource-protocol";
+import { Theme } from "@flywave/flywave-datasource-protocol/src";
 import { DebugTileDataSource } from "@flywave/flywave-debug-datasource";
 import { GeoCoordinates, TileKey, webMercatorTilingScheme } from "@flywave/flywave-geoutils";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";

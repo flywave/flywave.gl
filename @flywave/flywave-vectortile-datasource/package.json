@@ -2,11 +2,11 @@
     "name": "@flywave/flywave-vectortile-datasource",
     "version": "0.28.0",
     "description": "HERE Vector Tile Data Source",
-    "main": "index.js",
-    "typings": "index",
+    "main": "lib/index.js",
+    "typings": "lib/index",
     "worker": {
         "name": "@flywave/flywave-vectortile-datasource-worker",
-        "main": "index-worker.js"
+        "main": "lib/index-worker.js"
     },
     "directories": {
         "test": "test"

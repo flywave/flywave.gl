@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { FlatTheme, ImageTexture, Light, Style } from "@flywave/flywave-datasource-protocol";
+import { FlatTheme, ImageTexture, Light, Style } from "@flywave/flywave-datasource-protocol/src";
 import { getAppBaseUrl, resolveReferenceUri } from "@flywave/flywave-utils";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions

@@ -8,7 +8,7 @@
 
 import "@flywave/flywave-fetch";
 
-import { FeatureCollection } from "@flywave/flywave-datasource-protocol";
+import { FeatureCollection } from "@flywave/flywave-datasource-protocol/src";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { DataProvider } from "@flywave/flywave-mapview-decoder";
 import { GeoJsonTiler } from "@flywave/flywave-mapview-decoder/index-worker";

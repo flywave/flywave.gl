@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { MapEnv, Theme } from "@flywave/flywave-datasource-protocol";
+import { MapEnv, Theme } from "@flywave/flywave-datasource-protocol/src";
 import { identityProjection, TileKey, TileKeyUtils } from "@flywave/flywave-geoutils";
 import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import { FontCatalog, TextCanvas } from "@flywave/flywave-text-canvas";

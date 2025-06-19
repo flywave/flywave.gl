@@ -13,7 +13,7 @@ import {
     StandardTechnique,
     Technique,
     TextureProperties
-} from "@flywave/flywave-datasource-protocol";
+} from "@flywave/flywave-datasource-protocol/src";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { MapMeshStandardMaterial, SolidLineMaterial } from "@flywave/flywave-materials";
 import { assertLogsSync } from "@flywave/flywave-test-utils";

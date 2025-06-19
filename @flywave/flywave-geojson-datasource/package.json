@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-geojson-datasource",
     "version": "0.28.0",
     "description": "Provides support for GeoJSON datasource",
-    "main": "index.js",
-    "typings": "index",
+    "main": "./lib/index.js",
+    "typings": "./lib/index",
     "worker": {
         "name": "@flywave/flywave-geojson-datasource-worker",
         "main": "index-worker.js"

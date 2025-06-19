@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { StyleSet, Theme } from "@flywave/flywave-datasource-protocol";
+import { StyleSet, Theme } from "@flywave/flywave-datasource-protocol/src";
 import { FeaturesDataSource } from "@flywave/flywave-features-datasource";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";

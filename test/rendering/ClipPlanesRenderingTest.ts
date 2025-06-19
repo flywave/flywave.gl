@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { FeatureCollection, StyleSet } from "@flywave/flywave-datasource-protocol";
+import { FeatureCollection, StyleSet } from "@flywave/flywave-datasource-protocol/src";
 import { mercatorProjection, Projection, sphereProjection } from "@flywave/flywave-geoutils";
 import { CameraUtils } from "@flywave/flywave-mapview";
 import * as THREE from "three";

@@ -12,7 +12,7 @@ import {
     LineCaps,
     SolidLineTechniqueParams,
     Style
-} from "@flywave/flywave-datasource-protocol";
+} from "@flywave/flywave-datasource-protocol/src";
 import { GeoPointLike } from "@flywave/flywave-geoutils";
 import { LookAtParams } from "@flywave/flywave-mapview";
 import * as turf from "@turf/turf";

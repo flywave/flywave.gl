@@ -12,7 +12,7 @@ import {
     ITileDecoder,
     StyleSet,
     TileInfo
-} from "@flywave/flywave-datasource-protocol";
+} from "@flywave/flywave-datasource-protocol/src";
 import {
     Projection,
     TileKey,

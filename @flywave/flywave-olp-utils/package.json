@@ -2,7 +2,7 @@
     "name": "@flywave/flywave-olp-utils",
     "version": "0.28.0",
     "description": "HERE OLP utilities",
-    "main": "index.js",
+    "main": "lib/index.js",
     "scripts": {
         "build": "tsc --build $EXTRA_TSC_ARGS",
         "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",

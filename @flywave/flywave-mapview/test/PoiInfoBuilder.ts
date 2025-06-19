@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { ImageTexture, LineMarkerTechnique, PoiTechnique } from "@flywave/flywave-datasource-protocol";
+import { ImageTexture, LineMarkerTechnique, PoiTechnique } from "@flywave/flywave-datasource-protocol/src";
 import * as THREE from "three";
 
 import { ImageItem } from "../lib/image/Image";

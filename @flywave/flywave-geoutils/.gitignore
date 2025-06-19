@@ -6,3 +6,4 @@ doc
 *.js
 *.js.map
 *.tgz
+lib/

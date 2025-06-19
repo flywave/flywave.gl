@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { TextureCoordinateType, Theme } from "@flywave/flywave-datasource-protocol";
+import { TextureCoordinateType, Theme } from "@flywave/flywave-datasource-protocol/src";
 import { isJsonExpr } from "@flywave/flywave-datasource-protocol/lib/Expr";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";

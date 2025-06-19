@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { DecodedTile } from "@flywave/flywave-datasource-protocol";
+import { DecodedTile } from "@flywave/flywave-datasource-protocol/src";
 import {
     mercatorProjection,
     Projection,

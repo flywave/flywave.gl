@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { TextStyleDefinition } from "@flywave/flywave-datasource-protocol";
+import { TextStyleDefinition } from "@flywave/flywave-datasource-protocol/src";
 import { expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";

@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-webtile-datasource",
     "version": "0.28.0",
     "description": "WebTile Data source",
-    "main": "index.js",
-    "typings": "index",
+    "main": "lib/index.js",
+    "typings": "lib/index",
     "directories": {
         "test": "test"
     },

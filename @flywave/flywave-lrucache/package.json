@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-lrucache",
     "version": "0.28.0",
     "description": "LRU cache",
-    "main": "index.js",
-    "typings": "index",
+    "main": "lib/index.js",
+    "typings": "lib/index",
     "directories": {
         "test": "test"
     },

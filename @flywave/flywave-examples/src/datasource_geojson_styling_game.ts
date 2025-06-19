@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Feature } from "@flywave/flywave-datasource-protocol";
+import { Feature } from "@flywave/flywave-datasource-protocol/src";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import {

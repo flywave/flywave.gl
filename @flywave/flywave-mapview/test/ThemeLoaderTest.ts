@@ -6,7 +6,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { FlatTheme, SolidLineStyle, StyleSet, Theme } from "@flywave/flywave-datasource-protocol";
+import { FlatTheme, SolidLineStyle, StyleSet, Theme } from "@flywave/flywave-datasource-protocol/src";
 import { getTestResourceUrl } from "@flywave/flywave-test-utils";
 import {
     cloneDeep,
