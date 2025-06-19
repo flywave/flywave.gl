@@ -1,2 +1,1 @@
-
-importScripts("three.js");
+require('./three.b.js')
