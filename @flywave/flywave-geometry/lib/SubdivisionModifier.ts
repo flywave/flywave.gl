@@ -34,16 +34,19 @@ export abstract class SubdivisionModifier {
         const positionAttr = geometry.getAttribute("position") as BufferAttribute;
         const position = Array.from(positionAttr.array);
 
-        const uvAttr = geometry.getAttribute("uv") as BufferAttribute;
-        const uv = uvAttr !== undefined ? Array.from(uvAttr.array) : undefined;
+        const uvAttr = geometry.getAttribute("uv") as BufferAttribute | null;
+        const uv = uvAttr !== null ? Array.from(uvAttr.array) : undefined;
 
-        const edgeAttr = geometry.getAttribute("edge") as BufferAttribute;
-        const edge = edgeAttr !== undefined ? Array.from(edgeAttr.array) : undefined;
+        const edgeAttr = geometry.getAttribute("edge") as BufferAttribute | null;
+        const edge = edgeAttr !== null ? Array.from(edgeAttr.array) : undefined;
 
-        const wallAttr = geometry.getAttribute("wall") as BufferAttribute;
-        const wall = wallAttr !== undefined ? Array.from(wallAttr.array) : undefined;
+        const wallAttr = geometry.getAttribute("wall") as BufferAttribute | null;
+        const wall = wallAttr !== null ? Array.from(wallAttr.array) : undefined;
 
-        const indexAttr = geometry.getIndex() as BufferAttribute;
+        const indexAttr = geometry.getIndex();
+        if (!indexAttr) {
+            throw new Error("Geometry must have an index buffer");
+        }
         const indices = Array.from(indexAttr.array);
 
         // A cache containing the indices of the vertices added
@@ -153,25 +156,25 @@ export abstract class SubdivisionModifier {
             }
         }
 
-        positionAttr.array =
-            positionAttr.array instanceof Float32Array
-                ? new Float32Array(position)
-                : new Float64Array(position);
-        positionAttr.count = position.length / positionAttr.itemSize;
+        // Update geometry attributes
+        positionAttr.copyArray(position);
         positionAttr.needsUpdate = true;
 
         geometry.setIndex(newIndices);
 
-        if (uv !== undefined) {
-            uvAttr.array = new Float32Array(uv);
-            uvAttr.count = uv.length / uvAttr.itemSize;
+        if (uv !== undefined && uvAttr) {
+            uvAttr.copyArray(uv);
             uvAttr.needsUpdate = true;
         }
 
-        if (edge !== undefined) {
-            edgeAttr.array = new Float32Array(edge);
-            edgeAttr.count = edge.length / edgeAttr.itemSize;
+        if (edge !== undefined && edgeAttr) {
+            edgeAttr.copyArray(edge);
             edgeAttr.needsUpdate = true;
+        }
+
+        if (wall !== undefined && wallAttr) {
+            wallAttr.copyArray(wall);
+            wallAttr.needsUpdate = true;
         }
 
         return geometry;

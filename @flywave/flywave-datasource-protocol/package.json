@@ -24,26 +24,23 @@
     },
     "license": "Apache-2.0",
     "dependencies": {
-        "@flywave/flywave-geometry": "^0.28.0",
-        "@flywave/flywave-geoutils": "^0.28.0",
-        "@flywave/flywave-utils": "^0.28.0",
-        "csscolorparser": "^1.0.3"
+        "@flywave/flywave-geometry": "workspace:*",
+        "@flywave/flywave-geoutils": "workspace:*",
+        "@flywave/flywave-utils": "workspace:*",
+        "csscolorparser": "catalog:"
     },
     "devDependencies": {
-        "@flywave/flywave-test-utils": "^0.28.0",
-        "@types/chai": "^4.2.14",
-        "@types/mocha": "^8.2.0",
-        "@types/three": "^0.129.0",
-        "chai": "^4.0.2",
-        "cross-env": "^7.0.2",
-        "mocha": "^8.2.1",
-        "source-map-support": "^0.5.19",
-        "three": "^0.151.0",
-        "typeconv": "^1.7.0",
-        "typescript": "^4.1.2"
-    },
-    "peerDependencies": {
-        "three": "^0.151.0"
+        "@flywave/flywave-test-utils": "workspace:*",
+        "@types/chai": "catalog:",
+        "@types/mocha": "catalog:",
+        "@types/three": "catalog:",
+        "chai": "catalog:",
+        "cross-env": "catalog:",
+        "mocha": "catalog:",
+        "source-map-support": "catalog:",
+        "three": "catalog:",
+        "typeconv": "catalog:",
+        "typescript": "catalog:"
     },
     "publishConfig": {
         "access": "public"

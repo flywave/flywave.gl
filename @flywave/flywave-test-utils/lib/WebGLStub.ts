@@ -5,6 +5,7 @@
  */
 
 import * as sinon from "sinon";
+import { Color } from "three";
 
 interface Size {
     width: number;
@@ -26,7 +27,7 @@ function getSize(): { width: number; height: number } {
  */
 export function getWebGLRendererStub(sandbox: sinon.SinonSandbox, clearColorStub: sinon.SinonStub) {
     return {
-        getClearColor: (target: THREE.Color) => undefined,
+        getClearColor: (target: Color) => undefined,
         setClearColor: clearColorStub,
         setSize,
         getSize,

@@ -36,14 +36,14 @@
         "npm": ">=6.14.15"
     },
     "dependencies": {
-        "ansi-bold": "^0.1.1",
-        "global-dirs": "^2.1.0",
-        "import-from": "^3.0.0",
-        "inquirer": "^7.1.0",
-        "log-symbols": "^4.0.0"
+        "ansi-bold": "catalog:",
+        "global-dirs": "catalog:",
+        "import-from": "catalog:",
+        "inquirer": "catalog:", 
+        "log-symbols": "catalog:"
     },
     "devDependencies": {
-        "mocha": "^8.2.1"
+        "mocha": "catalog:"
     },
     "publishConfig": {
         "access": "public"
