@@ -10,7 +10,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { clipPolygon } from "@flywave/flywave-geometry/lib/ClipPolygon";
+import { clipPolygon } from "@flywave/flywave-geometry/ClipPolygon";
 import { assert } from "chai";
 import { Vector2 } from "three";
 

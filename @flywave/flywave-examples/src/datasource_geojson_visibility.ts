@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { FeatureCollection } from "@flywave/flywave-datasource-protocol/src";
+import { FeatureCollection } from "@flywave/flywave-datasource-protocol";
 import { GeoPointLike } from "@flywave/flywave-geoutils";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
-import { GeoJsonTiler } from "@flywave/flywave-mapview-decoder/lib/GeoJsonTiler";
+import { GeoJsonTiler } from "@flywave/flywave-mapview-decoder/GeoJsonTiler";
 import { GeoJsonDataProvider, VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 import { VectorTileDecoder } from "@flywave/flywave-vectortile-datasource/index-worker";
 import * as turf from "@turf/turf";

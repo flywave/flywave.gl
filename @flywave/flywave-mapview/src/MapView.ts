@@ -12,8 +12,8 @@ import {
     TextStyleDefinition,
     Theme,
     Value
-} from "@flywave/flywave-datasource-protocol/src";
-import { ViewRanges } from "@flywave/flywave-datasource-protocol/lib/ViewRanges";
+} from "@flywave/flywave-datasource-protocol";
+import { ViewRanges } from "@flywave/flywave-datasource-protocol/ViewRanges";
 import {
     EarthConstants,
     GeoBox,
@@ -30,7 +30,7 @@ import {
     TilingScheme,
     Vector3Like
 } from "@flywave/flywave-geoutils";
-import { GeoCoordLike } from "@flywave/flywave-geoutils/lib/coordinates/GeoCoordLike";
+import { GeoCoordLike } from "@flywave/flywave-geoutils/coordinates/GeoCoordLike";
 import {
     assert,
     getOptionValue,

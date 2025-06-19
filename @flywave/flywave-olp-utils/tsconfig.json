@@ -5,7 +5,13 @@
         "sourceMap": true,
         "composite": true,
         "incremental": true,
-        "declarationMap": true
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-utils": ["../flywave-utils/lib"],
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/lib"],
+            "@flywave/flywave-mapview": ["../flywave-mapview/lib"], 
+            "@flywave/flywave-mapview-decoder": ["../flywave-mapview-decoder/lib"],
+        }
     },
     "include": [
         "src/**/*",

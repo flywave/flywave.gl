@@ -8,7 +8,7 @@
 
 import { GeoCoordinates, mercatorProjection, sphereProjection } from "@flywave/flywave-geoutils";
 import { MapView, MapViewEventNames, MapViewOptions, MapViewUtils } from "@flywave/flywave-mapview";
-import * as TestUtils from "@flywave/flywave-test-utils/lib/WebGLStub";
+import * as TestUtils from "@flywave/flywave-test-utils/WebGLStub";
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";

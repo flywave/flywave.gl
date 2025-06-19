@@ -10,7 +10,7 @@ import {
     MapViewPolygonFeature
 } from "@flywave/flywave-features-datasource";
 import { GeoBox, GeoCoordinates, GeoPolygon, mercatorProjection } from "@flywave/flywave-geoutils";
-import { geoCoordLikeToGeoPointLike } from "@flywave/flywave-geoutils/lib/coordinates/GeoCoordLike";
+import { geoCoordLikeToGeoPointLike } from "@flywave/flywave-geoutils/coordinates/GeoCoordLike";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { BoundsGenerator, CameraUtils, CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";

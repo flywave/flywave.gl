@@ -18,30 +18,30 @@ import {
     sphereProjection,
     webMercatorTilingScheme
 } from "@flywave/flywave-geoutils";
-import { GeoCoordLike } from "@flywave/flywave-geoutils/lib/coordinates/GeoCoordLike";
+import { GeoCoordLike } from "@flywave/flywave-geoutils/coordinates/GeoCoordLike";
 import {
     getTestResourceUrl,
     silenceLoggingAroundFunction,
     waitForEvent
 } from "@flywave/flywave-test-utils";
-import * as TestUtils from "@flywave/flywave-test-utils/lib/WebGLStub";
+import * as TestUtils from "@flywave/flywave-test-utils/WebGLStub";
 import { assert, expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { BackgroundDataSource } from "../lib/BackgroundDataSource";
-import { CameraUtils } from "../lib/CameraUtils";
-import { DataSource } from "../lib/DataSource";
-import { ElevationProvider } from "../lib/ElevationProvider";
-import { CalculationStatus, ElevationRangeSource } from "../lib/ElevationRangeSource";
-import { MapMaterialAdapter } from "../lib/MapMaterialAdapter";
-import { MapObjectAdapter } from "../lib/MapObjectAdapter";
-import { LookAtParams, MapView, MapViewEventNames, MapViewOptions } from "../lib/MapView";
-import { DEFAULT_CLEAR_COLOR } from "../lib/MapViewEnvironment";
-import { MapViewFog } from "../lib/MapViewFog";
-import * as FontCatalogLoader from "../lib/text/FontCatalogLoader";
-import { MapViewUtils } from "../lib/Utils";
-import { VisibleTileSet } from "../lib/VisibleTileSet";
+import { BackgroundDataSource } from "../src/BackgroundDataSource";
+import { CameraUtils } from "../src/CameraUtils";
+import { DataSource } from "../src/DataSource";
+import { ElevationProvider } from "../src/ElevationProvider";
+import { CalculationStatus, ElevationRangeSource } from "../src/ElevationRangeSource";
+import { MapMaterialAdapter } from "../src/MapMaterialAdapter";
+import { MapObjectAdapter } from "../src/MapObjectAdapter";
+import { LookAtParams, MapView, MapViewEventNames, MapViewOptions } from "../src/MapView";
+import { DEFAULT_CLEAR_COLOR } from "../src/MapViewEnvironment";
+import { MapViewFog } from "../src/MapViewFog";
+import * as FontCatalogLoader from "../src/text/FontCatalogLoader";
+import { MapViewUtils } from "../src/Utils";
+import { VisibleTileSet } from "../src/VisibleTileSet";
 import { FakeOmvDataSource } from "./FakeOmvDataSource";
 
 //    expect-type assertions are unused expressions and are perfectly valid

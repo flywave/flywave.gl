@@ -8,8 +8,8 @@ import { GeometryKind, Pickability } from "@flywave/flywave-datasource-protocol/
 import {
     EdgeLengthGeometrySubdivisionModifier,
     SubdivisionMode
-} from "@flywave/flywave-geometry/lib/EdgeLengthGeometrySubdivisionModifier";
-import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/lib/SphericalGeometrySubdivisionModifier";
+} from "@flywave/flywave-geometry/EdgeLengthGeometrySubdivisionModifier";
+import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/SphericalGeometrySubdivisionModifier";
 import { Projection, ProjectionType } from "@flywave/flywave-geoutils";
 import { MapMeshBasicMaterial, MapMeshStandardMaterial } from "@flywave/flywave-materials";
 import * as THREE from "three";

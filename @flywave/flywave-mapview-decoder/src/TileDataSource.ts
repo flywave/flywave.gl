@@ -10,7 +10,7 @@ import {
     StyleSet,
     Theme,
     TileInfo
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { TileKey, TilingScheme } from "@flywave/flywave-geoutils";
 import {
     ConcurrentDecoderFacade,
@@ -21,7 +21,7 @@ import {
     Tile,
     TileLoaderState
 } from "@flywave/flywave-mapview";
-import { ThemeLoader } from "@flywave/flywave-mapview/lib/ThemeLoader";
+import { ThemeLoader } from "@flywave/flywave-mapview/ThemeLoader";
 import { ILogger, LoggerManager } from "@flywave/flywave-utils";
 
 import { DataProvider } from "./DataProvider";

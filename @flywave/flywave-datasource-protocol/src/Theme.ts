@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Vector3Like } from "@flywave/flywave-geoutils/lib/math/Vector3Like";
+import { Vector3Like } from "@flywave/flywave-geoutils/math/Vector3Like";
 
 import { JsonExpr, JsonValue } from "./Expr";
 import { InterpolatedPropertyDefinition } from "./InterpolatedPropertyDefs";

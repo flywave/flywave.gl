@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Theme } from "@flywave/flywave-datasource-protocol/src";
+import { Theme } from "@flywave/flywave-datasource-protocol";
 import {
     MapViewPowerPreference,
     SimpleFrameStatistics,

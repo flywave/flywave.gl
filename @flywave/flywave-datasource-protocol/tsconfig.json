@@ -5,7 +5,12 @@
         "sourceMap": true,
         "composite": true,
         "incremental": true,
-        "declarationMap": true
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-geometry": ["../flywave-geometry/src"],
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-utils": ["../flywave-utils/src"]
+        }
     },
     "include": [
         "src/**/*"

@@ -3,9 +3,9 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Fog } from "@flywave/flywave-datasource-protocol/src";
+import { Fog } from "@flywave/flywave-datasource-protocol";
 import { HighPrecisionLineMaterial } from "@flywave/flywave-materials";
-import { RawShaderMaterial } from "@flywave/flywave-materials/lib/RawShaderMaterial";
+import { RawShaderMaterial } from "@flywave/flywave-materials/RawShaderMaterial";
 import { assert, MathUtils } from "@flywave/flywave-utils";
 import * as THREE from "three";
 

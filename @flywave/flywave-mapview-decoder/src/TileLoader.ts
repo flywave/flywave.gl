@@ -10,10 +10,10 @@ import {
     ITileDecoder,
     RequestController,
     TileInfo
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { BaseTileLoader, DataSource } from "@flywave/flywave-mapview";
-import { TileLoaderState } from "@flywave/flywave-mapview/lib/ITileLoader";
+import { TileLoaderState } from "@flywave/flywave-mapview/ITileLoader";
 import { LoggerManager } from "@flywave/flywave-utils";
 
 import { DataProvider } from "./DataProvider";

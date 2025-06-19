@@ -41,23 +41,23 @@ import {
     TextTechnique,
     TextureCoordinateType,
     textureCoordinateType
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import {
     Env,
     IMeshBuffers,
     StyleSetEvaluator,
     Value
-} from "@flywave/flywave-datasource-protocol/src/index-decoder";
+} from "@flywave/flywave-datasource-protocol/index-decoder";
 import {
     AttrEvaluationContext,
     evaluateTechniqueAttr
-} from "@flywave/flywave-datasource-protocol/lib/TechniqueAttr";
-import { clipPolygon } from "@flywave/flywave-geometry/lib/ClipPolygon";
+} from "@flywave/flywave-datasource-protocol/TechniqueAttr";
+import { clipPolygon } from "@flywave/flywave-geometry/ClipPolygon";
 import {
     EdgeLengthGeometrySubdivisionModifier,
     SubdivisionMode
-} from "@flywave/flywave-geometry/lib/EdgeLengthGeometrySubdivisionModifier";
-import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/lib/SphericalGeometrySubdivisionModifier";
+} from "@flywave/flywave-geometry/EdgeLengthGeometrySubdivisionModifier";
+import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/SphericalGeometrySubdivisionModifier";
 import {
     GeoBox,
     GeoCoordinates,
@@ -66,9 +66,9 @@ import {
     Vector3Like,
     webMercatorProjection
 } from "@flywave/flywave-geoutils";
-import { LineGroup } from "@flywave/flywave-lines/lib/Lines";
-import { triangulateLine } from "@flywave/flywave-lines/lib/TriangulateLines";
-import { ExtrusionFeatureDefs } from "@flywave/flywave-materials/lib/MapMeshMaterialsDefs";
+import { LineGroup } from "@flywave/flywave-lines/Lines";
+import { triangulateLine } from "@flywave/flywave-lines/TriangulateLines";
+import { ExtrusionFeatureDefs } from "@flywave/flywave-materials/MapMeshMaterialsDefs";
 import { assert, getOptionValue, LoggerManager, Math2D } from "@flywave/flywave-utils";
 import earcut from "earcut";
 import * as THREE from "three";

@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { mercatorProjection } from "@flywave/flywave-geoutils/lib/projection/MercatorProjection";
-import { TileKey } from "@flywave/flywave-geoutils/lib/tiling/TileKey";
+import { mercatorProjection } from "@flywave/flywave-geoutils/projection/MercatorProjection";
+import { TileKey } from "@flywave/flywave-geoutils/tiling/TileKey";
 import { expect } from "chai";
 import * as sinon from "sinon";
 
 import {
     GeoJsonDataAdapter,
     GeoJsonFeatureCollection
-} from "../lib/adapters/geojson/GeoJsonDataAdapter";
-import { DecodeInfo } from "../lib/DecodeInfo";
+} from "../src/adapters/geojson/GeoJsonDataAdapter";
+import { DecodeInfo } from "../src/DecodeInfo";
 import { MockGeometryProcessor } from "./MockGeometryProcessor";
 
 const featureCollection: GeoJsonFeatureCollection = {

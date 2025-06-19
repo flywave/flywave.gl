@@ -5,7 +5,10 @@
         "sourceMap": true,
         "composite": true,
         "incremental": true,
-        "declarationMap": true
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-lrucache": ["../flywave-lrucache/src"], 
+        }
     },
     "include": [
         "src/**/*"

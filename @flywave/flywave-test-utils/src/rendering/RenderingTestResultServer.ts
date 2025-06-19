@@ -151,7 +151,7 @@ export function getReferenceImage(req: express.Request, res: express.Response) {
  *       before: function(app) {
  *         require('ts-node/register'); // so we can load typescript seamlessly
  *         const RenderingTestResultServer = require(
- *          "coresdk/@flywave/flywave-test-utils/lib/rendering/RenderingTestResultServer"
+ *          "coresdk/@flywave/flywave-test-utils/rendering/RenderingTestResultServer"
  *         );
  *         RenderingTestResultServer.installMiddleware(app);
  *       }

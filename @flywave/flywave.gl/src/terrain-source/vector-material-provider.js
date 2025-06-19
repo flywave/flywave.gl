@@ -1,7 +1,7 @@
 
 import * as THREE from 'three'
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
-import { TileObjectRenderer } from "@flywave/flywave-mapview/lib/TileObjectsRenderer";
+import { TileObjectRenderer } from "@flywave/flywave-mapview/TileObjectsRenderer";
 import { mercatorProjection } from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
 import { TileTaskGroups } from "@flywave/flywave-mapview";

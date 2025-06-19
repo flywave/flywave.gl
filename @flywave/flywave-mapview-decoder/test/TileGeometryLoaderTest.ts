@@ -18,9 +18,9 @@ import {
     Tile,
     TileLoaderState
 } from "@flywave/flywave-mapview";
-import { TileGeometryCreator } from "@flywave/flywave-mapview/lib/geometry/TileGeometryCreator";
-import { TileGeometryLoader } from "@flywave/flywave-mapview/lib/geometry/TileGeometryLoader";
-import { TileTaskGroups } from "@flywave/flywave-mapview/lib/MapView";
+import { TileGeometryCreator } from "@flywave/flywave-mapview/geometry/TileGeometryCreator";
+import { TileGeometryLoader } from "@flywave/flywave-mapview/geometry/TileGeometryLoader";
+import { TileTaskGroups } from "@flywave/flywave-mapview/MapView";
 import { TaskQueue } from "@flywave/flywave-utils";
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";

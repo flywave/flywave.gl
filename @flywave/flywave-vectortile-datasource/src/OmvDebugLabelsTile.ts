@@ -3,12 +3,12 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { getPropertyValue, isTextTechnique } from "@flywave/flywave-datasource-protocol/src";
-import { TileKey } from "@flywave/flywave-geoutils/lib/tiling/TileKey";
+import { getPropertyValue, isTextTechnique } from "@flywave/flywave-datasource-protocol";
+import { TileKey } from "@flywave/flywave-geoutils/tiling/TileKey";
 import { DataSource, TextElement, Tile } from "@flywave/flywave-mapview";
-import { debugContext } from "@flywave/flywave-mapview/lib/DebugContext";
-import { TileGeometryCreator } from "@flywave/flywave-mapview/lib/geometry/TileGeometryCreator";
-import { TextElementType } from "@flywave/flywave-mapview/lib/text/TextElementType";
+import { debugContext } from "@flywave/flywave-mapview/DebugContext";
+import { TileGeometryCreator } from "@flywave/flywave-mapview/geometry/TileGeometryCreator";
+import { TextElementType } from "@flywave/flywave-mapview/text/TextElementType";
 import {
     ContextualArabicConverter,
     FontUnit,

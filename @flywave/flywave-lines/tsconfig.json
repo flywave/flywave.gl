@@ -5,7 +5,10 @@
         "sourceMap": true,
         "composite": true,
         "incremental": true,
-        "declarationMap": true
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-materials": ["../flywave-materials/src"], 
+        }
     },
     "exclude": ["dist/**", "test/**", "node_modules"],
     "include": [ "src/**/*","test/**/*" ],

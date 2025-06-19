@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ClippedVertex } from "@flywave/flywave-geometry/lib/ClipPolygon";
+import { ClippedVertex } from "@flywave/flywave-geometry/ClipPolygon";
 import { ShapeUtils, Vector2 } from "three";
 
 /**

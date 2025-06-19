@@ -12,7 +12,7 @@ import {
     sphereProjection,
     TileKey
 } from "@flywave/flywave-geoutils";
-import * as TestUtils from "@flywave/flywave-test-utils/lib/WebGLStub";
+import * as TestUtils from "@flywave/flywave-test-utils/WebGLStub";
 import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";

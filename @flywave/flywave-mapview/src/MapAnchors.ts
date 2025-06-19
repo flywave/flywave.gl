@@ -11,7 +11,7 @@ import {
     Projection,
     Vector3Like
 } from "@flywave/flywave-geoutils";
-import { GeoCoordLike } from "@flywave/flywave-geoutils/lib/coordinates/GeoCoordLike";
+import { GeoCoordLike } from "@flywave/flywave-geoutils/coordinates/GeoCoordLike";
 import * as THREE from "three";
 
 /**

@@ -12,12 +12,12 @@ import {
     HorizontalPlacement,
     VerticalAlignment,
     VerticalPlacement
-} from "@flywave/flywave-text-canvas/lib/rendering/TextStyle";
+} from "@flywave/flywave-text-canvas/rendering/TextStyle";
 import { expect } from "chai";
 import * as THREE from "three";
 
-import { TextElementState } from "../lib/text/TextElementState";
-import { TextElementType } from "../lib/text/TextElementType";
+import { TextElementState } from "../src/text/TextElementState";
+import { TextElementType } from "../src/text/TextElementType";
 
 describe("TextElementState", function () {
     describe("initialized", function () {

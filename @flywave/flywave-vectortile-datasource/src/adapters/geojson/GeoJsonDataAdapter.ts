@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ValueMap } from "@flywave/flywave-datasource-protocol/lib/Env";
-import { clipLineString } from "@flywave/flywave-geometry/lib/ClipLineString";
+import { ValueMap } from "@flywave/flywave-datasource-protocol/Env";
+import { clipLineString } from "@flywave/flywave-geometry/ClipLineString";
 import { GeoCoordinates, GeoPointLike, webMercatorProjection } from "@flywave/flywave-geoutils";
-import { Vector2Like } from "@flywave/flywave-geoutils/lib/math/Vector2Like";
+import { Vector2Like } from "@flywave/flywave-geoutils/math/Vector2Like";
 import { ShapeUtils, Vector2, Vector3 } from "three";
 
 import { DataAdapter } from "../../DataAdapter";

@@ -5,7 +5,7 @@
  */
 import "three/examples/js/controls/TrackballControls";
 
-import { Theme } from "@flywave/flywave-datasource-protocol/src";
+import { Theme } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView, MapViewEventNames } from "@flywave/flywave-mapview";

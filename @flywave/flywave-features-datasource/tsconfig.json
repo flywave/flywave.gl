@@ -5,7 +5,15 @@
         "sourceMap": true,
         "composite": true,
         "incremental": true,
-        "declarationMap": true
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],
+            "@flywave/flywave-geojson-datasource": ["../flywave-geojson-datasource/src"],
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-omv-datasource": ["../flywave-omv-datasource/src"],
+            "@flywave/flywave-mapview": ["../flywave-mapview/src"]
+        }
     },
     "include": [ "src/**/*" ],
     "exclude": ["dist/**", "test/**", "node_modules"],

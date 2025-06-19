@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { BaseTileLoader, Tile, TileLoaderState } from "@flywave/flywave-mapview";
-import { addGroundPlane } from "@flywave/flywave-mapview/lib/geometry/AddGroundPlane";
+import { addGroundPlane } from "@flywave/flywave-mapview/geometry/AddGroundPlane";
 import { enableBlending } from "@flywave/flywave-materials";
 import * as THREE from "three";
 

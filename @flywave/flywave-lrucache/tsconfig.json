@@ -5,7 +5,10 @@
         "sourceMap": true,
         "composite": true,
         "incremental": true,
-        "declarationMap": true
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-utils": ["../flywave-utils/src"]
+        }
     },
     "include": [ "src/**/*","test/**/*" ],
     "exclude": ["dist/**", "test/**", "node_modules"],

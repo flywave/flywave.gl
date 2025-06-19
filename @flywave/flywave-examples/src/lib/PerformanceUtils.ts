@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { GeometryKind } from "@flywave/flywave-datasource-protocol/src";
+import { GeometryKind } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MapControls } from "@flywave/flywave-map-controls";
 import {
@@ -17,7 +17,7 @@ import {
     RenderEvent,
     SimpleFrameStatistics
 } from "@flywave/flywave-mapview";
-import { debugContext } from "@flywave/flywave-mapview/lib/DebugContext";
+import { debugContext } from "@flywave/flywave-mapview/DebugContext";
 import { assert, LoggerManager, PerformanceTimer } from "@flywave/flywave-utils";
 import {
     APIFormat,

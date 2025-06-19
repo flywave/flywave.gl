@@ -58,7 +58,7 @@ export default {
 if (window.FLYWAVE_BASE_URL) config.BASE_PATH = window.FLYWAVE_BASE_URL;
 
 //mapview
-import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/lib/SphericalGeometrySubdivisionModifier";
+import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/SphericalGeometrySubdivisionModifier";
 export { SphericalGeometrySubdivisionModifier };
 export * from "@flywave/flywave-geoutils";
 

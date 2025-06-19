@@ -5,7 +5,11 @@
         "sourceMap": true,
         "composite": true,
         "incremental": true,
-        "declarationMap": true
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/lib"],
+            "@flywave/flywave-utils": ["../flywave-utils/lib"],
+        }
     },
     "include": [
         "src/**/*"

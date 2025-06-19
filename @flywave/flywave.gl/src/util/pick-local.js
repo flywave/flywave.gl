@@ -1,5 +1,5 @@
 import { MapViewUtils } from "@flywave/flywave-mapview";
-import { PickingRaycaster } from "@flywave/flywave-mapview/lib/PickingRaycaster";
+import { PickingRaycaster } from "@flywave/flywave-mapview/PickingRaycaster";
 import * as THREE from "three";
 
 const tmpV3 = new THREE.Vector3();

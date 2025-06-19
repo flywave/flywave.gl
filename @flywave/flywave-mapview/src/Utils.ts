@@ -16,8 +16,8 @@ import {
     Vector2Like,
     Vector3Like
 } from "@flywave/flywave-geoutils";
-import { GeoCoordLike } from "@flywave/flywave-geoutils/lib/coordinates/GeoCoordLike";
-import { EarthConstants } from "@flywave/flywave-geoutils/lib/projection/EarthConstants";
+import { GeoCoordLike } from "@flywave/flywave-geoutils/coordinates/GeoCoordLike";
+import { EarthConstants } from "@flywave/flywave-geoutils/projection/EarthConstants";
 import { assert, DOMUtils, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three";
 

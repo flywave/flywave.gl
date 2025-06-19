@@ -28,13 +28,13 @@ import {
     MapViewEventNames,
     TileLoaderState
 } from "@flywave/flywave-mapview";
-import { GeoJsonTiler } from "@flywave/flywave-mapview-decoder/lib/GeoJsonTiler";
+import { GeoJsonTiler } from "@flywave/flywave-mapview-decoder/GeoJsonTiler";
 import {
     getTestResourceUrl,
     silenceLoggingAroundFunction,
     waitForEvent
 } from "@flywave/flywave-test-utils";
-import * as TestUtils from "@flywave/flywave-test-utils/lib/WebGLStub";
+import * as TestUtils from "@flywave/flywave-test-utils/WebGLStub";
 import { FontCatalog } from "@flywave/flywave-text-canvas";
 import { getAppBaseUrl } from "@flywave/flywave-utils";
 import { assert } from "chai";

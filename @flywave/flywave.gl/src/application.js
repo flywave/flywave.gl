@@ -9,7 +9,7 @@ import {
     MapViewEventNames,
     MapViewUtils
 } from "@flywave/flywave-mapview";
-import { MapObjectAdapter } from "@flywave/flywave-mapview/lib/MapObjectAdapter";
+import { MapObjectAdapter } from "@flywave/flywave-mapview/MapObjectAdapter";
 import { dispatch } from "d3-dispatch";
 import Window from "./window";
 import hat from "hat";

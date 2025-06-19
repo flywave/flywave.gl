@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { TilingScheme } from "@flywave/flywave-geoutils";
-import { TileKey } from "@flywave/flywave-geoutils/lib/tiling/TileKey";
+import { TileKey } from "@flywave/flywave-geoutils/tiling/TileKey";
 import { DataSource } from "./DataSource";
 
 /**
