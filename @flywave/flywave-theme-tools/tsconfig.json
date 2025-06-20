@@ -8,16 +8,18 @@
         "incremental": true,
         "declarationMap": true,
         "paths": {
-            "@flywave/flywave-mapview": ["../flywave-mapview/src"], 
+            "@flywave/flywave-mapview": ["../flywave-mapview/src"],
+            "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"]
         }
     },
-    "include": [
-        "src/**/*"
-    ],
+    "include": ["src/**/*"],
     "exclude": ["dist/**", "test/**", "node_modules"],
     "references": [
         {
             "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-datasource-protocol"
         }
     ]
 }

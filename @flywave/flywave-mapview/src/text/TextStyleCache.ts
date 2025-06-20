@@ -34,7 +34,7 @@ import {
     WrappingMode
 } from "@flywave/flywave-text-canvas";
 import { getOptionValue, LoggerManager } from "@flywave/flywave-utils";
-
+import * as THREE from "three";
 import { ColorCache } from "../ColorCache";
 import { evaluateColorProperty } from "../DecodedTileHelpers";
 import { Tile } from "../Tile";

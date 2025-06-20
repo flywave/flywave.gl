@@ -17,7 +17,7 @@ import { EventDispatcher } from "three";
  * loader which is only responsible for loading the data of a specific tile,
  * without any relation to displaying or even decoding the data.
  */
-export abstract class DataProvider extends EventDispatcher {
+export abstract class DataProvider extends EventDispatcher<{ [k: string]: any }> {
     private readonly m_clients: Set<Object> = new Set();
     private m_connectPromise: Promise<void> | undefined;
 

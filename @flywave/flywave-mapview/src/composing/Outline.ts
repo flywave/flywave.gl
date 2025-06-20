@@ -223,11 +223,11 @@ export class OutlineEffect {
 
     renderOutline(scene: THREE.Scene, camera: THREE.Camera) {
         const currentAutoClear = this.m_renderer.autoClear;
-        const currentSceneAutoUpdate = scene.autoUpdate;
+        const currentSceneAutoUpdate = scene.matrixWorldAutoUpdate;
         const currentSceneBackground = scene.background;
         const currentShadowMapEnabled = this.m_renderer.shadowMap.enabled;
 
-        scene.autoUpdate = false;
+        scene.matrixWorldAutoUpdate = false;
         scene.background = null;
         this.m_renderer.autoClear = false;
         this.m_renderer.shadowMap.enabled = false;
@@ -240,7 +240,7 @@ export class OutlineEffect {
 
         this.cleanupCache();
 
-        scene.autoUpdate = currentSceneAutoUpdate;
+        scene.matrixWorldAutoUpdate = currentSceneAutoUpdate;
         scene.background = currentSceneBackground;
         this.m_renderer.autoClear = currentAutoClear;
         this.m_renderer.shadowMap.enabled = currentShadowMapEnabled;
@@ -343,8 +343,8 @@ export class OutlineEffect {
             vertexShader,
             fragmentShader,
             side: THREE.BackSide,
-            morphTargets: false,
-            morphNormals: false,
+            // morphTargets: false,
+            // morphNormals: false,
             fog: false,
             blending: THREE.CustomBlending,
             blendSrc: THREE.SrcAlphaFactor,
@@ -429,14 +429,14 @@ export class OutlineEffect {
                 i < il;
                 i++
             ) {
-                ((object as THREE.Mesh).material as THREE.Material[])[i] = this.m_originalMaterials[
-                    ((object as THREE.Mesh).material as THREE.Material[])[i].uuid
-                ];
+                ((object as THREE.Mesh).material as THREE.Material[])[i] =
+                    this.m_originalMaterials[
+                        ((object as THREE.Mesh).material as THREE.Material[])[i].uuid
+                    ];
             }
         } else {
-            (object as THREE.Mesh).material = this.m_originalMaterials[
-                ((object as THREE.Mesh).material as THREE.Material).uuid
-            ];
+            (object as THREE.Mesh).material =
+                this.m_originalMaterials[((object as THREE.Mesh).material as THREE.Material).uuid];
         }
 
         object.onBeforeRender = this.m_originalOnBeforeRenders[object.uuid];
@@ -514,6 +514,7 @@ export class OutlineEffect {
         (material as any).skinning = (originalMaterial as any).skinning;
         (material as any).morphTargets = (originalMaterial as any).morphTargets;
         (material as any).morphNormals = (originalMaterial as any).morphNormals;
+        //@ts-ignore
         material.fog = originalMaterial.fog;
 
         if (outlineParameters !== undefined) {

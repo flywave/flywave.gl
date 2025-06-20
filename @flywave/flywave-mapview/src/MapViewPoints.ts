@@ -61,9 +61,14 @@ export abstract class MapViewPoints extends THREE.Points {
      * @param raycaster - The raycaster.
      * @param intersects - The array to fill with the results.
      */
-    raycast(raycaster: PickingRaycaster, intersects: THREE.Intersection[]) {
+    raycast(raycaster: any, intersects: THREE.Intersection[]) {
         if (!this.enableRayTesting) {
             return;
+        }
+
+        if (!(raycaster instanceof PickingRaycaster)) {
+            // Fall back to default THREE.Points behavior if not our custom raycaster
+            return super.raycast(raycaster, intersects);
         }
 
         const geometry = this.geometry;
@@ -95,11 +100,11 @@ export abstract class MapViewPoints extends THREE.Points {
         if (index !== null) {
             const indices = index.array;
             for (let i = 0, il = indices.length; i < il; i++) {
-                testPoint(point.fromArray(positions as number[], indices[i] * 3), i);
+                testPoint(point.fromArray(positions, indices[i] * 3), i);
             }
         } else {
             for (let i = 0, l = positions.length / 3; i < l; i++) {
-                testPoint(point.fromArray(positions as number[], i * 3), i);
+                testPoint(point.fromArray(positions, i * 3), i);
             }
         }
     }

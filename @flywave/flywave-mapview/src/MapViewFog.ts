@@ -148,17 +148,13 @@ export class MapViewFog {
             if (object instanceof THREE.Mesh) {
                 const material = object.material;
                 if (
-                    material instanceof THREE.Material &&
-                    // HighPrecisionLineMaterial does not support fog:
+                    // 检查 material 是否有 'fog' 属性（排除 HighPrecisionLineMaterial）
+                    "fog" in material &&
                     !(material instanceof HighPrecisionLineMaterial) &&
-                    // We may skip redundant updates:
                     material.fog !== enableFog
                 ) {
                     material.fog = enableFog;
                     if (material instanceof RawShaderMaterial) {
-                        // Fog properties can't be easily changed at runtime (once the material
-                        // is rendered at least once) and thus requires building of new shader
-                        // program - force material update.
                         material.invalidateFog();
                     }
                 }

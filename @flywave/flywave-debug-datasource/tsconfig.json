@@ -5,25 +5,18 @@
         "rootDir": "./src",
         "sourceMap": true,
         "composite": true,
-        "incremental": true,
         "declarationMap": true,
         "paths": {
             "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
-            "@flywave/flywave-lrucache": ["../flywave-lrucache/src"],
             "@flywave/flywave-mapview": ["../flywave-mapview/src"],
             "@flywave/flywave-text-canvas": ["../flywave-text-canvas/src"]
         }
     },
-    "include": [
-        "src/**/*"
-    ],
+    "include": ["src/**/*"],
     "exclude": ["dist/**", "test/**", "node_modules"],
     "references": [
         {
             "path": "../flywave-geoutils"
-        },
-        {
-            "path": "../flywave-lrucache"
         },
         {
             "path": "../flywave-mapview"

@@ -12,7 +12,7 @@ import {
     vPlacementFromAlignment
 } from "@flywave/flywave-text-canvas";
 import { assert } from "@flywave/flywave-utils";
-
+import * as THREE from "three";
 import { LayoutState } from "./LayoutState";
 import { RenderState } from "./RenderState";
 import { TextElement } from "./TextElement";

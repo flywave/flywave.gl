@@ -42,7 +42,7 @@ const isNode = typeof window === "undefined";
  * A `DebugOption` is a pair that consists of an option value and an array of change listeners.
  * Listeners are called up when setting the option's value.
  */
-class DebugOption extends THREE.EventDispatcher {
+class DebugOption extends THREE.EventDispatcher<{ [key: string]: { name: string; value: any } }> {
     static SET_EVENT_TYPE: string = "set";
 
     /**

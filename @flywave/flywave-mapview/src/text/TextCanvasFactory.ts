@@ -6,6 +6,7 @@
 
 import { FontCatalog, TextCanvas } from "@flywave/flywave-text-canvas";
 import { assert } from "@flywave/flywave-utils";
+import * as THREE from "three";
 
 export class TextCanvasFactory {
     private m_minGlyphCount: number = 0; //Min amount of glyphs each [[TextCanvas]] layer can store.

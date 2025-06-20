@@ -78,7 +78,7 @@ export class BoxBufferMesh extends THREE.Mesh {
     constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[]) {
         super(geometry, material);
 
-        this.type = "BoxBufferMesh";
+        // this.type = "BoxBufferMesh";
     }
 
     /**
@@ -185,10 +185,10 @@ export class BoxBuffer {
      */
     reset() {
         if (this.m_positionAttribute !== undefined) {
-            this.m_positionAttribute.count = 0;
-            this.m_colorAttribute!.count = 0;
-            this.m_uvAttribute!.count = 0;
-            this.m_indexAttribute!.count = 0;
+            this.m_positionAttribute.array = new Float32Array(0);
+            this.m_colorAttribute!.array = new Float32Array(0);
+            this.m_uvAttribute!.array = new Float32Array(0);
+            this.m_indexAttribute!.array = new Float32Array(0);
             this.m_pickInfos!.length = 0;
         }
     }
@@ -238,9 +238,13 @@ export class BoxBuffer {
      * @param state - [[State]] struct describing a previous attribute state.
      */
     restoreState(state: State) {
+        //@ts-ignore
         this.m_positionAttribute!.count = state.positionAttributeCount;
+        //@ts-ignore
         this.m_colorAttribute!.count = state.colorAttributeCount;
+        //@ts-ignore
         this.m_uvAttribute!.count = state.uvAttributeCount;
+        //@ts-ignore
         this.m_indexAttribute!.count = state.indexAttributeCount;
         this.m_pickInfos!.length = state.pickInfoCount;
     }
@@ -308,9 +312,13 @@ export class BoxBuffer {
         indexAttribute.setX(baseIndex + 4, baseVertex + 1);
         indexAttribute.setX(baseIndex + 5, baseVertex + 3);
 
+        //@ts-ignore
         positionAttribute.count += NUM_VERTICES_PER_ELEMENT;
+        //@ts-ignore
         colorAttribute.count += NUM_VERTICES_PER_ELEMENT;
+        //@ts-ignore
         uvAttribute.count += NUM_VERTICES_PER_ELEMENT;
+        //@ts-ignore
         indexAttribute.count += NUM_INDICES_PER_ELEMENT;
 
         this.m_pickInfos.push(pickInfo);
@@ -536,7 +544,8 @@ export class BoxBuffer {
         canvas?: HTMLCanvasElement
     ): boolean {
         const { u, v } = screenToUvCoordinates(xScreenPos, yScreenPos, box, uvBox);
-        const { width, height } = image instanceof SVGImageElement ? image.getBBox() : image;
+        const { width, height } =
+            image instanceof SVGImageElement ? image.getBBox() : (image as ImageBitmap);
         const x = width * u;
         const y = height * v;
 
@@ -571,12 +580,14 @@ export class BoxBuffer {
             const positionAttributeCount = this.m_positionAttribute.count;
             newPositionArray.set(this.m_positionAttribute.array);
             this.m_positionAttribute.array = newPositionArray;
+            //@ts-ignore
             this.m_positionAttribute.count = positionAttributeCount;
         } else {
             this.m_positionAttribute = new THREE.BufferAttribute(
                 newPositionArray,
                 NUM_POSITION_VALUES_PER_VERTEX
             );
+            //@ts-ignore
             this.m_positionAttribute.count = 0;
             this.m_positionAttribute.setUsage(THREE.DynamicDrawUsage);
         }
@@ -589,6 +600,7 @@ export class BoxBuffer {
             const colorAttributeCount = this.m_colorAttribute.count;
             newColorArray.set(this.m_colorAttribute.array);
             this.m_colorAttribute.array = newColorArray;
+            //@ts-ignore
             this.m_colorAttribute.count = colorAttributeCount;
         } else {
             this.m_colorAttribute = new THREE.BufferAttribute(
@@ -596,6 +608,7 @@ export class BoxBuffer {
                 NUM_COLOR_VALUES_PER_VERTEX,
                 true
             );
+            //@ts-ignore
             this.m_colorAttribute.count = 0;
             this.m_colorAttribute.setUsage(THREE.DynamicDrawUsage);
         }
@@ -608,9 +621,11 @@ export class BoxBuffer {
             const uvAttributeCount = this.m_uvAttribute.count;
             newUvArray.set(this.m_uvAttribute.array);
             this.m_uvAttribute.array = newUvArray;
+            //@ts-ignore
             this.m_uvAttribute.count = uvAttributeCount;
         } else {
             this.m_uvAttribute = new THREE.BufferAttribute(newUvArray, NUM_UV_VALUES_PER_VERTEX);
+            //@ts-ignore
             this.m_uvAttribute.count = 0;
             this.m_uvAttribute.setUsage(THREE.DynamicDrawUsage);
         }
@@ -626,12 +641,14 @@ export class BoxBuffer {
             const indexAttributeCount = this.m_indexAttribute.count;
             newIndexArray.set(this.m_indexAttribute.array);
             this.m_indexAttribute.array = newIndexArray;
+            //@ts-ignore
             this.m_indexAttribute.count = indexAttributeCount;
         } else {
             this.m_indexAttribute = new THREE.BufferAttribute(
                 newIndexArray,
                 NUM_INDEX_VALUES_PER_VERTEX
             );
+            //@ts-ignore
             this.m_indexAttribute.count = 0;
             this.m_indexAttribute.setUsage(THREE.DynamicDrawUsage);
         }

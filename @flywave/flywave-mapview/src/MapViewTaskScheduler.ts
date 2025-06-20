@@ -13,7 +13,7 @@ const DEFAULT_MAX_FPS = 60;
 const DEFAULT_PROCESSING_ESTIMATE_TIME = 2;
 const UPDATE_EVENT = { type: "update" };
 
-export class MapViewTaskScheduler extends THREE.EventDispatcher {
+export class MapViewTaskScheduler extends THREE.EventDispatcher<{ [key: string]: any }> {
     private readonly m_taskQueue: TaskQueue;
     private m_throttlingEnabled: boolean = false;
 

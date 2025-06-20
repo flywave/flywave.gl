@@ -5,23 +5,26 @@
         "rootDir": "./src",
         "sourceMap": true,
         "composite": true,
-        "incremental": true,
+        "declaration": true,
         "declarationMap": true,
         "paths": {
             "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],
+            "@flywave/flywave-datasource-protocol/*": ["../flywave-datasource-protocol/src/*"],
             "@flywave/flywave-fetch": ["../flywave-fetch/src"],
             "@flywave/flywave-geometry": ["../flywave-geometry/src"],
+            "@flywave/flywave-geometry/*": ["../flywave-geometry/src/*"],
             "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-geoutils/*": ["../flywave-geoutils/src/*"],
             "@flywave/flywave-lines": ["../flywave-lines/src"],
             "@flywave/flywave-lrucache": ["../flywave-lrucache/src"],
             "@flywave/flywave-materials": ["../flywave-materials/src"],
+            "@flywave/flywave-materials/*": ["../flywave-materials/src/*"],
             "@flywave/flywave-text-canvas": ["../flywave-text-canvas/src"],
             "@flywave/flywave-transfer-manager": ["../flywave-transfer-manager/src"],
             "@flywave/flywave-utils": ["../flywave-utils/src"]
         }
     },
-    "include": [ "src/**/*","test/**/*" ],
-    "exclude": ["dist/**", "test/**", "node_modules"],
+    "include": ["src/**/*"],
     "references": [
         {
             "path": "../flywave-datasource-protocol"

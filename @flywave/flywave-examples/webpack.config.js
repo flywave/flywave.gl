@@ -33,13 +33,15 @@ const themeList = {
 
 function getCacheConfig(name) {
     // Use a separate cache for each configuration, otherwise cache writing fails.
-    return process.env.HARP_NO_HARD_SOURCE_CACHE ? false :{
-        type: "filesystem",
-        buildDependencies: {
-            config: [ __filename ]
-        },
-        name: "flywave-examples_" + name
-    }
+    return process.env.HARP_NO_HARD_SOURCE_CACHE
+        ? false
+        : {
+              type: "filesystem",
+              buildDependencies: {
+                  config: [__filename]
+              },
+              name: "flywave-examples_" + name
+          };
 }
 
 function resolveOptional(path, message) {
@@ -216,7 +218,7 @@ const allEntries = Object.assign({}, webpackEntries, htmlEntries);
  *     [examplePage: string]: string // maps example page to example source
  * }
  */
-const exampleDefs = Object.keys(allEntries).reduce(function(r, entry) {
+const exampleDefs = Object.keys(allEntries).reduce(function (r, entry) {
     r[entry + ".html"] = path.relative(__dirname, allEntries[entry]);
     return r;
 }, {});
@@ -253,7 +255,7 @@ const assets = [
         to: "resources/fonts",
         toType: "dir"
     },
-    require.resolve("three/build/three.min.js"),
+    require.resolve("three"),
     {
         from: resolveOptional(
             `@flywave/flywave.gl/dist/flywave.gl${harpBundleSuffix}.js`,

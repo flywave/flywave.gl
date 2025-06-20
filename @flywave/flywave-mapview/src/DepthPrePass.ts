@@ -43,7 +43,7 @@ export function isRenderDepthPrePassEnabled(technique: ExtrudedPolygonTechnique,
         return false;
     }
     let transparent =
-        technique.opacity !== undefined && technique.opacity > 0.0 && technique.opacity < 1.0;
+        technique.opacity !== undefined && technique.opacity as number > 0.0 && technique.opacity as number < 1.0;
     // If not opaque then check if transparency may be modified via alpha in base color.
     // Otherwise we don't need to even test base color because opacity mixed with any base alpha,
     // will always produce some transparency effect.

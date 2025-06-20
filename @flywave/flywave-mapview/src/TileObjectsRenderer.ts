@@ -17,6 +17,7 @@ import { BackgroundDataSource } from "./BackgroundDataSource";
 import { SolidLineMesh } from "./geometry/SolidLineMesh";
 import { MapObjectAdapter } from "./MapObjectAdapter";
 import { Tile, TileFeatureData, TileObject } from "./Tile";
+import * as THREE from "three";
 
 const DEFAULT_STENCIL_VALUE = 1;
 

@@ -119,7 +119,7 @@ export class DisplacedMesh extends THREE.Mesh {
         } else {
             super.raycast(raycaster, intersects);
         }
-        super.geometry = this.displacedGeometry.originalGeometry;
+        this.geometry = this.displacedGeometry.originalGeometry;
     }
 
     private get firstMaterial(): THREE.Material {

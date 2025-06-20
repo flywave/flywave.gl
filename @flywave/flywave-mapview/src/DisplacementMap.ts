@@ -5,6 +5,7 @@
  */
 
 import { GeoBox, TileKey } from "@flywave/flywave-geoutils";
+import * as THREE from "three";
 
 export interface DisplacementMap {
     xCountVertices: number;

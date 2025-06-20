@@ -119,7 +119,7 @@ function createTextureFromRawImage(
         const buffer = getTextureBuffer(textureBuffer.buffer, textureDataType);
 
         const texture = new THREE.DataTexture(
-            buffer,
+            buffer as ArrayBufferView<ArrayBufferLike>,
             properties.width,
             properties.height,
             properties.format ? toPixelFormat(properties.format) : undefined,
@@ -142,7 +142,7 @@ function initTextureProperties(texture: THREE.Texture, properties?: TexturePrope
         texture.wrapT = toWrappingMode(properties.wrapT);
     }
     if (properties.magFilter !== undefined) {
-        texture.magFilter = toTextureFilter(properties.magFilter);
+        texture.magFilter = toTextureFilter(properties.magFilter) as THREE.MagnificationTextureFilter;
     }
     if (properties.minFilter !== undefined) {
         texture.minFilter = toTextureFilter(properties.minFilter);
@@ -663,7 +663,7 @@ function applyShaderTechniqueToMaterial(technique: ShaderTechnique, material: TH
     if (hasBaseColor) {
         const propColor = baseColorPropName as keyof THREE.Material;
         // Finally apply base color and related properties to material (opacity, transparent)
-        applyBaseColorToMaterial(material, material[propColor], technique, params[propColor]);
+        applyBaseColorToMaterial(material, material[propColor] as THREE.Color, technique, params[propColor]);
     }
 }
 
@@ -689,7 +689,7 @@ function applyTechniquePropertyToMaterial(
     const m = material as any;
     if (m[propertyName] instanceof THREE.Color) {
         applySecondaryColorToMaterial(
-            material[propertyName as keyof THREE.Material],
+            material[propertyName as keyof THREE.Material] as THREE.Color,
             techniqueAttrValue,
             env
         );

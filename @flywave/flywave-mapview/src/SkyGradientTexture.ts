@@ -8,6 +8,7 @@ import { GradientSky } from "@flywave/flywave-datasource-protocol/src";
 import { ProjectionType } from "@flywave/flywave-geoutils";
 import { getOptionValue } from "@flywave/flywave-utils";
 import { Color, CubeTexture, DataTexture, Line3, Plane, RGBAFormat, Texture, Vector3 } from "three";
+import * as THREE from "three";
 
 export const DEFAULT_TEXTURE_SIZE = 512;
 export const DEFAULT_MONOMIAL_POWER = 1;
@@ -166,7 +167,7 @@ export class SkyGradientTexture {
     // But, when updating the texture, a Uint8ClampedArray is passed as argument, because
     // this.m_texture.image.data returns a Uint8ClampedArray. That's why this method accepts both.
     private fillTextureData(
-        data: Uint8ClampedArray | Uint8Array,
+        data: ArrayBufferView,
         faceIdx: number,
         topColor: Color,
         bottomColor: Color,

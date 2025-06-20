@@ -11,9 +11,11 @@
             "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],
             "@flywave/flywave-geometry": ["../flywave-geometry/src"],
             "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
-             "@flywave/flywave-lrucache": ["../flywave-lrucache/src"],
+            "@flywave/flywave-lrucache": ["../flywave-lrucache/src"],
             "@flywave/flywave-mapview": ["../flywave-mapview/src"],
-             "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"],
+            "@flywave/flywave-materials": ["../flywave-materials/src"],
+            "@flywave/flywave-utils": ["../flywave-utils/src"]
         }
     },
     "exclude": ["dist/**", "test/**", "node_modules"],
@@ -32,6 +34,9 @@
         },
         {
             "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-materials"
         },
         {
             "path": "../flywave-utils"

@@ -118,7 +118,7 @@ export interface DataSourceOptions {
 /**
  * Derive a class from `DataSource` to contribute data and geometries to the {@link MapView}.
  */
-export abstract class DataSource extends THREE.EventDispatcher {
+export abstract class DataSource extends THREE.EventDispatcher<{ update: {} }> {
     /**
      * Keep the update event here to avoid a global reference to the datasource (and thus prevent garbage collection).
      */
@@ -722,6 +722,6 @@ export abstract class DataSource extends THREE.EventDispatcher {
      * Sends a request to the {@link MapView} to redraw the scene.
      */
     requestUpdate() {
-        this.dispatchEvent(this.UPDATE_EVENT);
+        this.dispatchEvent(this.UPDATE_EVENT as THREE.BaseEvent<"update">);
     }
 }

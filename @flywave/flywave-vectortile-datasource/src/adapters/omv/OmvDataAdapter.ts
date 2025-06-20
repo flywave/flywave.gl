@@ -199,6 +199,7 @@ function createFeatureModifier(
         case FeatureModifierId.default:
             return new OmvGenericFeatureModifier(filterDescription);
         default:
+            //@ts-ignore
             assert(!"Unrecognized feature modifier id, using default!");
             return new OmvGenericFeatureModifier(filterDescription);
     }

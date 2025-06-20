@@ -27,6 +27,7 @@ import { PoiBuilder } from "../poi/PoiBuilder";
 import { TextElement } from "./TextElement";
 import { DEFAULT_TEXT_DISTANCE_SCALE } from "./TextElementsRenderer";
 import { TileTextStyleCache } from "./TileTextStyleCache";
+import * as THREE from "three";
 
 const logger = LoggerManager.instance.create("TextElementBuilder");
 

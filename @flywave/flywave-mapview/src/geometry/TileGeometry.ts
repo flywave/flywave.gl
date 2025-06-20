@@ -282,7 +282,7 @@ export abstract class BufferedGeometryAccessor extends BufferedGeometryAccessorB
     clear(): void {
         assert(this.checkSetUp(), "BufferedGeometryAccessor not setup");
 
-        const positionsArray = this.position.array as number[];
+        const positionsArray = this.position.array as unknown as number[];
 
         const start = this.start * this.itemSize;
         const end = this.end * this.itemSize;
@@ -323,7 +323,8 @@ export abstract class BufferedGeometryAccessor extends BufferedGeometryAccessorB
  */
 export class BufferedGeometryLineAccessor
     extends BufferedGeometryAccessor
-    implements ILineAccessor {
+    implements ILineAccessor
+{
     constructor(
         readonly object: THREE.Mesh,
         readonly geometryType: GeometryType,
@@ -348,7 +349,8 @@ export class BufferedGeometryLineAccessor
  */
 export class BufferedGeometryObject3dAccessor
     extends BufferedGeometryAccessor
-    implements IObject3dAccessor {
+    implements IObject3dAccessor
+{
     constructor(
         readonly object: THREE.Mesh,
         readonly geometryType: GeometryType,
@@ -393,8 +395,8 @@ export abstract class IndexedBufferedGeometryAccessor extends BufferedGeometryAc
 
         this.indices =
             this.bufferGeometry.index !== null
-                ? (this.bufferGeometry.index.array as number[])
-                : ((undefined as any) as number[]);
+                ? (this.bufferGeometry.index.array as unknown as number[])
+                : (undefined as any as number[]);
 
         if (!this.indices) {
             logger.warn(
@@ -440,7 +442,8 @@ export abstract class IndexedBufferedGeometryAccessor extends BufferedGeometryAc
  */
 export class IndexedBufferedGeometryLineAccessor
     extends IndexedBufferedGeometryAccessor
-    implements ILineAccessor {
+    implements ILineAccessor
+{
     constructor(
         readonly object: THREE.Mesh,
         readonly geometryType: GeometryType,

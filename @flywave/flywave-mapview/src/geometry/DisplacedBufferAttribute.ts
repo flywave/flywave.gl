@@ -59,6 +59,7 @@ export class DisplacedBufferAttribute extends THREE.BufferAttribute {
     ) {
         this.array = originalAttribute.array;
         this.itemSize = originalAttribute.itemSize;
+        //@ts-ignore
         this.count = this.array.length / this.itemSize;
         this.normalized = originalAttribute.normalized;
         this.originalAttribute = originalAttribute;

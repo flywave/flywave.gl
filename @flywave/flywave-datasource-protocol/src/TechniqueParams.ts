@@ -1622,7 +1622,6 @@ export type PixelFormat =
     | "RGBA"
     | "Luminance"
     | "LuminanceAlpha"
-    | "RGBE"
     | "Depth"
     | "DepthStencil"
     | "Red";

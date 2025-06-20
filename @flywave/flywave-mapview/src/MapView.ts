@@ -54,7 +54,7 @@ import { CopyrightInfo } from "./copyrights/CopyrightInfo";
 import { DataSource } from "./DataSource";
 import { ElevationProvider } from "./ElevationProvider";
 import { ElevationRangeSource } from "./ElevationRangeSource";
-import { EventDispatcher } from "./EventDispatcher";
+import { DispatcherEvent, EventDispatcher } from "./EventDispatcher";
 import {
     DEFAULT_FOV_CALCULATION,
     FovCalculation,
@@ -169,7 +169,7 @@ const DEFAULT_POLAR_STYLE_SET_NAME = "polar";
 /**
  * The type of `RenderEvent`.
  */
-export interface RenderEvent extends THREE.Event {
+export interface RenderEvent extends DispatcherEvent {
     type: MapViewEventNames;
     time?: number;
 }
@@ -1037,10 +1037,9 @@ export class MapView extends EventDispatcher {
                     : this.m_options.powerPreference
         });
 
-
         (this.m_renderer as any).mapView = this;
-        this.m_renderer.localClippingEnabled = true
-        
+        this.m_renderer.localClippingEnabled = true;
+
         this.m_renderer.autoClear = false;
         this.m_renderer.debug.checkShaderErrors = !isProduction;
 
@@ -2700,11 +2699,11 @@ export class MapView extends EventDispatcher {
      * @param x - The X position in css/client coordinates (without applied display ratio).
      * @param y - The Y position in css/client coordinates (without applied display ratio).
      */
-    getNormalizedScreenCoordinates(x: number, y: number): THREE.Vector3 {
+    getNormalizedScreenCoordinates(x: number, y: number): THREE.Vector2 {
         // use clientWidth and clientHeight as it does not apply the pixelRatio and
         // therefore supports also HiDPI devices
         const { width, height } = this.getCanvasClientSize();
-        return new THREE.Vector3((x / width) * 2 - 1, -((y / height) * 2) + 1, 0);
+        return new THREE.Vector2((x / width) * 2 - 1, -((y / height) * 2) + 1);
     }
 
     /**
@@ -3260,12 +3259,8 @@ export class MapView extends EventDispatcher {
                   )
                 : viewRanges
         );
-        this.m_viewRanges.far = Math.max(
-            this.m_viewRanges.far,1000000
-        )
-        this.m_viewRanges.maximum = Math.max(
-            this.m_viewRanges.maximum,1000000
-        )
+        this.m_viewRanges.far = Math.max(this.m_viewRanges.far, 1000000);
+        this.m_viewRanges.maximum = Math.max(this.m_viewRanges.maximum, 1000000);
         this.m_camera.near = this.m_viewRanges.near;
         this.m_camera.far = this.m_viewRanges.far;
 
@@ -3581,7 +3576,7 @@ export class MapView extends EventDispatcher {
         if (gatherStatistics) {
             textPlacementTime = PerformanceTimer.now();
         }
- 
+
         this.dispatchEvent(this.WILL_RENDER_EVENT);
         this.mapRenderingManager.render(
             this.m_renderer,

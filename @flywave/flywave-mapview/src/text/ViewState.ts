@@ -6,7 +6,7 @@
 
 import { Env, GeometryKindSet } from "@flywave/flywave-datasource-protocol/src";
 import { Projection } from "@flywave/flywave-geoutils";
-
+import * as THREE from "three";
 import { ElevationProvider } from "../ElevationProvider";
 
 /**

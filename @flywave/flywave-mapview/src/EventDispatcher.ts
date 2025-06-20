@@ -13,6 +13,9 @@ import * as THREE from "three";
  * Will be replaced by `THREE.EventDispatcher` once https://github.com/mrdoob/three.js/pull/19844
  * is released.
  */
+
+export interface DispatcherEvent extends Partial<THREE.Event & Record<string, any>> {}
+
 export class EventDispatcher {
     private readonly m_listeners: Map<string, Array<(event: THREE.Event) => void>> = new Map();
 
@@ -46,7 +49,7 @@ export class EventDispatcher {
      * @param type - The type of event to listen to.
      * @param listener - The function that gets called when the event is fired.
      */
-    addEventListener(type: string, listener: (event: THREE.Event) => void): void {
+    addEventListener(type: string, listener: (event: DispatcherEvent) => void): void {
         let listeners = this.m_listeners.get(type);
         if (listeners === undefined) {
             listeners = [];
@@ -107,7 +110,7 @@ export class EventDispatcher {
      * @param type - The type of event to listen to.
      * @returns Array of event listeners.
      */
-    listeners(type: string): Array<(event: THREE.Event) => void> | undefined {
+    listeners(type: string): Array<(event: DispatcherEvent) => void> | undefined {
         return this.m_listeners.get(type);
     }
 
@@ -116,9 +119,10 @@ export class EventDispatcher {
      *
      * @param event - The event to dispatch.
      */
-    dispatchEvent(event: THREE.Event) {
+    dispatchEvent(event: DispatcherEvent) {
         const listeners = this.m_listeners.get(event.type);
         if (listeners !== undefined) {
+            //@ts-ignore
             event.target = this;
 
             // Make a copy, in case listeners are removed while iterating.

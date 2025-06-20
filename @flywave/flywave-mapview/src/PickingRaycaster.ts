@@ -18,7 +18,7 @@ function intersectObject(
         const mapObjectAdapter = MapObjectAdapter.get(object);
         if (!mapObjectAdapter || mapObjectAdapter.isPickable()) {
             //@ts-ignore
-          recursive =  object.raycast(raycaster, intersects) ===false ? false : recursive;
+            recursive = object.raycast(raycaster, intersects) === false ? false : recursive;
         }
     }
 
@@ -48,12 +48,12 @@ export class PickingRaycaster extends THREE.Raycaster {
 
     // HARP-9585: Override of base class method, however tslint doesn't recognize overrides of
     // three.js classes.
-    intersectObject(
+    intersectObject<TIntersected extends THREE.Object3D>(
         object: THREE.Object3D,
         recursive?: boolean,
-        optionalTarget?: THREE.Intersection[]
-    ): THREE.Intersection[] {
-        const intersects: THREE.Intersection[] = optionalTarget ?? [];
+        optionalTarget?: Array<THREE.Intersection<TIntersected>>
+    ): Array<THREE.Intersection<TIntersected>> {
+        const intersects: Array<THREE.Intersection<TIntersected>> = optionalTarget ?? [];
 
         intersectObject(object, this, intersects, recursive);
 
@@ -62,12 +62,12 @@ export class PickingRaycaster extends THREE.Raycaster {
 
     // HARP-9585: Override of base class method, however tslint doesn't recognize overrides of
     // three.js classes.
-    intersectObjects(
+    intersectObjects<TIntersected extends THREE.Object3D>(
         objects: THREE.Object3D[],
         recursive?: boolean,
-        optionalTarget?: THREE.Intersection[]
-    ): THREE.Intersection[] {
-        const intersects: THREE.Intersection[] = optionalTarget ?? [];
+        optionalTarget?: Array<THREE.Intersection<TIntersected>>
+    ): Array<THREE.Intersection<TIntersected>> {
+        const intersects: Array<THREE.Intersection<TIntersected>> = optionalTarget ?? [];
 
         for (const object of objects) {
             intersectObject(object, this, intersects, recursive);

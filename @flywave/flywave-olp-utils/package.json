@@ -19,6 +19,7 @@
     },
     "license": "Apache-2.0",
     "dependencies": {
+        "@here/olp-sdk-core": "catalog:",
         "@flywave/flywave-geoutils": "workspace:*",
         "@flywave/flywave-mapview": "workspace:*",
         "@flywave/flywave-mapview-decoder": "workspace:*",

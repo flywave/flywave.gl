@@ -3,7 +3,11 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { ImageTexture, LineMarkerTechnique, PoiTechnique } from "@flywave/flywave-datasource-protocol/src";
+import {
+    ImageTexture,
+    LineMarkerTechnique,
+    PoiTechnique
+} from "@flywave/flywave-datasource-protocol/src";
 import * as THREE from "three";
 
 import { ImageItem } from "../src/image/Image";
@@ -108,7 +112,7 @@ export class PoiInfoBuilder {
             height: this.m_height,
             width: this.m_width,
             data: new Uint8ClampedArray(this.m_height * this.m_width * 4)
-        });
+        } as ImageData);
 
         return this;
     }

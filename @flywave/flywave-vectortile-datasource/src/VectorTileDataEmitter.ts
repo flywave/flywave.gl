@@ -1546,8 +1546,8 @@ export class VectorTileDataEmitter {
                     const index = createIndexBufferAttribute(triangles, posAttr.count - 1);
                     const indexAttr =
                         index.type === "uint32"
-                            ? new THREE.Uint32BufferAttribute(index.buffer, 1)
-                            : new THREE.Uint16BufferAttribute(index.buffer, 1);
+                            ? new THREE.Uint32BufferAttribute(index.buffer as ArrayBuffer, 1)
+                            : new THREE.Uint16BufferAttribute(index.buffer as ArrayBuffer, 1);
                     geom.setIndex(indexAttr);
 
                     // Increase tesselation of polygons for certain zoom levels

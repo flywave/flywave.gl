@@ -8,6 +8,6 @@
         "incremental": true,
         "declarationMap": true
     },
-    "include": [ "src/**/*","test/**/*" ],
+    "include": [ "src/**/*"],
     "exclude": ["dist/**", "test/**", "node_modules"]
 }

@@ -8,7 +8,7 @@
         "lib": "lib"
     },
     "scripts": {
-        "build": "tsc --build $EXTRA_TSC_ARGS",
+        "build": "tsc --build --verbose $EXTRA_TSC_ARGS ",
         "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS"
     },
     "repository": {
@@ -39,7 +39,7 @@
         "typescript": "catalog:"
     },
     "peerDependencies": {
-        "three": "^0.151.0"
+        "three": "catalog:"
     },
     "publishConfig": {
         "access": "public"

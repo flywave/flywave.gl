@@ -17,8 +17,7 @@
         "prebuild": "node scripts/postinstall.js",
         "build": " ",
         "start": "webpack serve",
-        "publish-html": "node scripts/publish-html.js",
-        "prepare": "node scripts/postinstall.js && cross-env PREPARE_ONLY=true NODE_ENV=production webpack"
+        "publish-html": "node scripts/publish-html.js"
     },
     "author": {
         "name": "HERE Europe B.V.",

@@ -71,7 +71,8 @@ export function getPixelFromCanvasImageSource(
     yPos: number,
     canvas: HTMLCanvasElement
 ): Uint8ClampedArray | undefined {
-    const { width, height } = image instanceof SVGImageElement ? image.getBBox() : image;
+    const { width, height } =
+        image instanceof SVGImageElement ? image.getBBox() : (image as HTMLImageElement);
 
     if (xPos > width || xPos < 0 || yPos > height || yPos < 0) {
         return undefined;

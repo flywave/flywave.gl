@@ -20,11 +20,11 @@ function asyncCopyfiles(source, destination) {
 }
 
 function getModuleDir() {
-    const tscRealPath = require.resolve("typescript");
-    return path.resolve(path.dirname(tscRealPath), "../..");
+    return path.resolve(path.dirname(__dirname), "../../");
 }
 
 const moduleDir = getModuleDir();
+const threeModuleDir = require.resolve("three");
 
 async function copyResources() {
     if (!fs.existsSync("dist")) fs.mkdirSync("dist");
@@ -32,7 +32,7 @@ async function copyResources() {
     await asyncCopyfiles(moduleDir + "/@flywave/flywave-map-theme/resources", "dist/resources");
     await asyncCopyfiles("resources", "dist/resources");
 
-    fs.copyFileSync(moduleDir + "/three/build/three.min.js", "dist/three.min.js");
+    fs.copyFileSync(threeModuleDir, "dist/three.min.js");
 }
 
 copyResources().catch(err => {

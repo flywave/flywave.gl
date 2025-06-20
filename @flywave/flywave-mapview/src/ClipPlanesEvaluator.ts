@@ -83,7 +83,7 @@ namespace SphericalProj {
         // the tangent line by te (see graph above).
         const te = getHorizonDistance(maxR, minR);
 
-        const normalToTanAngle = Math.asin(d<minR? d / minR:minR / d); // Angle OCT
+        const normalToTanAngle = Math.asin(d < minR ? d / minR : minR / d); // Angle OCT
         // Angle between fwd vector (CF) and tangent (CT) in camera's up direction: FCT (= FCE)
         const fwdToTanAngle = Math.abs(
             normalToTanAngle - SphericalProj.getNormalToFwdAngle(camera)
@@ -737,7 +737,7 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
               )
             : Infinity;
         const near = Math.min(bottomDist ?? Infinity, topDist ?? Infinity);
-        if(near == Infinity)return defaultNear;
+        if (near == Infinity) return defaultNear;
         assert(near !== Infinity, "No reference point for near distance found");
         return near ?? defaultNear;
     }
@@ -764,7 +764,7 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         const topDist = SphericalProj.getProjSphereIntersectionDistance(
             camera,
             this.m_tmpV2.set(ndcX, 1),
-            minR- this.maxElevation
+            minR - this.maxElevation
         );
         const bottomDist = checkBottomIntersection
             ? SphericalProj.getProjSphereIntersectionDistance(

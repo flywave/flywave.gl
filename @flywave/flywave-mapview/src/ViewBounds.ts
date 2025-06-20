@@ -5,6 +5,7 @@
  */
 
 import { GeoPolygon, Projection } from "@flywave/flywave-geoutils";
+import * as THREE from "three";
 
 /**
  * View bounds for a given camera and world space projection.
