@@ -7,7 +7,7 @@
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 //    Chai uses properties instead of functions for some expect checks.
 
-import { Pickability } from "@flywave/flywave-datasource-protocol/src";
+import { Pickability } from "@flywave/flywave-datasource-protocol";
 import { expect } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";

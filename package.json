@@ -45,6 +45,7 @@
         "ts-mocha": "catalog:",
         "typedoc": "catalog:",
         "typescript": "catalog:",
+        "ts-loader": "catalog:",
         "webpack": "catalog:",
         "webpack-cli": "catalog:",
         "webpack-dev-server": "catalog:"

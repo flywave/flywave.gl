@@ -1,5 +1,5 @@
 import { MapControlsUI } from "@flywave/flywave-map-controls";
-import { sphereProjection } from "@flywave/flywave-geoutils";
+import { sphereProjection, GeoCoordinates } from "@flywave/flywave-geoutils";
 import F3dTilesRenderer from "./tiles-render";
 import {
     MapView,
@@ -20,7 +20,6 @@ import { Frustum, Vector2, Box2 } from "three";
 import { HeightMapSource, TinTerrainSource, StratumSource } from "./terrain-source";
 import { DebugTilesRenderer } from "./3dtiles-render/three/DebugTilesRenderer";
 import makePickFrustum from "./util/rang-frustum";
-import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { ThemeManager } from "./theme-manager";
 import { Environment } from "./environment";
 import { ElevationRangeSource, ElevationProvider } from "./terrain-source/elevation-range-source";

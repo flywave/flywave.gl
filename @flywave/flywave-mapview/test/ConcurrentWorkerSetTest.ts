@@ -7,7 +7,7 @@ import {
     RequestController,
     WorkerDecoderProtocol,
     WorkerServiceProtocol
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { assertRejected, stubGlobalConstructor, willEventually } from "@flywave/flywave-test-utils";
 import { Logger, LogLevel, WorkerChannel, WORKERCHANNEL_MSG_TYPE } from "@flywave/flywave-utils";
 import { assert } from "chai";

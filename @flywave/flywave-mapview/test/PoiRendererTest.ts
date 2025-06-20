@@ -10,7 +10,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { Env } from "@flywave/flywave-datasource-protocol/src";
+import { Env } from "@flywave/flywave-datasource-protocol";
 import { Math2D } from "@flywave/flywave-utils";
 import { expect } from "chai";
 
@@ -139,7 +139,7 @@ describe("PoiRenderer", function () {
         let mapEnv: Env;
         let testCache: MapViewImageCache;
         beforeEach(() => {
-            poiManager = new PoiManager((mapViewStub as any) as MapView);
+            poiManager = new PoiManager(mapViewStub as any as MapView);
             mapEnv = new Env();
             testCache = new MapViewImageCache();
         });

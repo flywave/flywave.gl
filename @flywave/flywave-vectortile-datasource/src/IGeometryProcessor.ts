@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ValueMap } from "@flywave/flywave-datasource-protocol/src/index-decoder";
+import { ValueMap } from "@flywave/flywave-datasource-protocol/index-decoder";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { Vector2, Vector3 } from "three";
 

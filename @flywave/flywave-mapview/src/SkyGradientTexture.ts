@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GradientSky } from "@flywave/flywave-datasource-protocol/src";
+import { GradientSky } from "@flywave/flywave-datasource-protocol";
 import { ProjectionType } from "@flywave/flywave-geoutils";
 import { getOptionValue } from "@flywave/flywave-utils";
 import { Color, CubeTexture, DataTexture, Line3, Plane, RGBAFormat, Texture, Vector3 } from "three";

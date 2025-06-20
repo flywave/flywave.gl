@@ -4,6 +4,16 @@
     "description": "Provides utilities: logging, debugging.",
     "main": "lib/index.node.js",
     "browser": "lib/index.js",
+    "exports": {
+        ".": {
+            "import": "./lib/index.js",
+            "require": "./lib/index.js"
+        },
+        "./*": {
+            "import": "./lib/*",
+            "require": "./lib/*"
+        }
+    },
     "scripts": {
         "build": "tsc --build $EXTRA_TSC_ARGS",
         "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",

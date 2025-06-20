@@ -9,8 +9,8 @@ import {
     StyleSet,
     Technique,
     Theme
-} from "@flywave/flywave-datasource-protocol/src";
-import { MapEnv, StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/src/index-decoder";
+} from "@flywave/flywave-datasource-protocol";
+import { MapEnv, StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/index-decoder";
 import {
     GeoCoordinates,
     MercatorConstants,

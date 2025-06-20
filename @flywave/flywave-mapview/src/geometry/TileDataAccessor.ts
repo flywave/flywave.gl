@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GeometryType, getFeatureId } from "@flywave/flywave-datasource-protocol/src";
+import { GeometryType, getFeatureId } from "@flywave/flywave-datasource-protocol";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
@@ -411,7 +411,7 @@ export class TileDataAccessor {
                 case GeometryType.ExtrudedLine:
                 case GeometryType.TextPath:
                     assert(isLineAccessor(geometryAccessor));
-                    this.visitor.visitLine(featureId, (geometryAccessor as any) as ILineAccessor);
+                    this.visitor.visitLine(featureId, geometryAccessor as any as ILineAccessor);
                     break;
                 case GeometryType.Polygon:
                 case GeometryType.ExtrudedPolygon:
@@ -421,7 +421,7 @@ export class TileDataAccessor {
                     assert(isObject3dAccessor(geometryAccessor));
                     this.visitor.visitObject3D(
                         featureId,
-                        (geometryAccessor as any) as IObject3dAccessor
+                        geometryAccessor as any as IObject3dAccessor
                     );
                     break;
                 default:

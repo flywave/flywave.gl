@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ITiler } from "@flywave/flywave-datasource-protocol/src";
+import { ITiler } from "@flywave/flywave-datasource-protocol";
 
 import { ConcurrentWorkerSet } from "./ConcurrentWorkerSet";
 import { WorkerBasedTiler } from "./WorkerBasedTiler";

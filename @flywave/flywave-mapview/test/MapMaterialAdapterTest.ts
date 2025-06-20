@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Expr, MapEnv } from "@flywave/flywave-datasource-protocol/src";
+import { Expr, MapEnv } from "@flywave/flywave-datasource-protocol";
 import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";

@@ -7,7 +7,7 @@
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 //    Chai uses properties instead of functions for some expect checks.
 
-import { MapEnv, Technique } from "@flywave/flywave-datasource-protocol/src";
+import { MapEnv, Technique } from "@flywave/flywave-datasource-protocol";
 import { TileKey, webMercatorTilingScheme } from "@flywave/flywave-geoutils";
 import { ExtrusionFeature } from "@flywave/flywave-materials";
 import { expect } from "chai";

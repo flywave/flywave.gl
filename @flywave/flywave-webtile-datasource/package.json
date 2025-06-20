@@ -42,7 +42,7 @@
         "typescript": "catalog:"
     },
     "peerDependencies": {
-        "three": "^0.151.0"
+        "three": "catalog:"
     },
     "publishConfig": {
         "access": "public"

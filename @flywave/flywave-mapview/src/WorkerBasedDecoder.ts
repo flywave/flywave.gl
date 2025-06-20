@@ -13,7 +13,7 @@ import {
     TileInfo,
     WorkerDecoderProtocol,
     WorkerServiceProtocol
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { Projection, TileKey } from "@flywave/flywave-geoutils";
 
 import { ConcurrentWorkerSet } from "./ConcurrentWorkerSet";

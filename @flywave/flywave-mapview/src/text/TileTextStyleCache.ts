@@ -9,7 +9,7 @@ import {
     LineMarkerTechnique,
     PoiTechnique,
     TextTechnique
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { TextLayoutStyle, TextRenderStyle } from "@flywave/flywave-text-canvas";
 
 import { Tile } from "../Tile";
@@ -33,12 +33,11 @@ export class TileTextStyleCache {
     ): TextRenderStyle {
         let style = this.textRenderStyles[technique._index];
         if (style === undefined) {
-            style = this.textRenderStyles[
-                technique._index
-            ] = this.tile.mapView.textElementsRenderer.styleCache.createRenderStyle(
-                this.tile,
-                technique
-            );
+            style = this.textRenderStyles[technique._index] =
+                this.tile.mapView.textElementsRenderer.styleCache.createRenderStyle(
+                    this.tile,
+                    technique
+                );
         }
         return style;
     }
@@ -48,12 +47,11 @@ export class TileTextStyleCache {
     ): TextLayoutStyle {
         let style = this.textLayoutStyles[technique._index];
         if (style === undefined) {
-            style = this.textLayoutStyles[
-                technique._index
-            ] = this.tile.mapView.textElementsRenderer.styleCache.createLayoutStyle(
-                this.tile,
-                technique
-            );
+            style = this.textLayoutStyles[technique._index] =
+                this.tile.mapView.textElementsRenderer.styleCache.createLayoutStyle(
+                    this.tile,
+                    technique
+                );
         }
         return style;
     }

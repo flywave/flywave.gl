@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Env, getPropertyValue, ImageTexture } from "@flywave/flywave-datasource-protocol/src";
+import { Env, getPropertyValue, ImageTexture } from "@flywave/flywave-datasource-protocol";
 import { IconMaterial } from "@flywave/flywave-materials";
 import { MemoryUsage } from "@flywave/flywave-text-canvas";
 import { assert, LoggerManager, Math2D } from "@flywave/flywave-utils";

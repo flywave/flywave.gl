@@ -12,7 +12,7 @@ import {
     MultiPolygon,
     Point,
     Polygon
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three";
 
 /**

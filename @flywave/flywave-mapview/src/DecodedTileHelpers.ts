@@ -23,7 +23,7 @@ import {
     TextureProperties,
     TRANSPARENCY_PROPERTY_KEYS,
     Value
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import {
     getTechniqueAutomaticAttrs,
     getTechniqueDescriptor
@@ -142,7 +142,9 @@ function initTextureProperties(texture: THREE.Texture, properties?: TexturePrope
         texture.wrapT = toWrappingMode(properties.wrapT);
     }
     if (properties.magFilter !== undefined) {
-        texture.magFilter = toTextureFilter(properties.magFilter) as THREE.MagnificationTextureFilter;
+        texture.magFilter = toTextureFilter(
+            properties.magFilter
+        ) as THREE.MagnificationTextureFilter;
     }
     if (properties.minFilter !== undefined) {
         texture.minFilter = toTextureFilter(properties.minFilter);
@@ -663,7 +665,12 @@ function applyShaderTechniqueToMaterial(technique: ShaderTechnique, material: TH
     if (hasBaseColor) {
         const propColor = baseColorPropName as keyof THREE.Material;
         // Finally apply base color and related properties to material (opacity, transparent)
-        applyBaseColorToMaterial(material, material[propColor] as THREE.Color, technique, params[propColor]);
+        applyBaseColorToMaterial(
+            material,
+            material[propColor] as THREE.Color,
+            technique,
+            params[propColor]
+        );
     }
 }
 

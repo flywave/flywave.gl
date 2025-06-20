@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { FeatureCollection } from "@flywave/flywave-datasource-protocol/src";
+import { FeatureCollection } from "@flywave/flywave-datasource-protocol";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
 

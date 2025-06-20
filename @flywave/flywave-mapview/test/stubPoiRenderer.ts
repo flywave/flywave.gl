@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Env } from "@flywave/flywave-datasource-protocol/src";
+import { Env } from "@flywave/flywave-datasource-protocol";
 import { Math2D } from "@flywave/flywave-utils";
 import * as sinon from "sinon";
 import * as THREE from "three";

@@ -6,7 +6,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { Style, Theme } from "@flywave/flywave-datasource-protocol/src";
+import { Style, Theme } from "@flywave/flywave-datasource-protocol";
 import {
     GeoCoordinates,
     MercatorConstants,
@@ -148,7 +148,7 @@ describe("PolarTileDataSource", function () {
             sinon.stub(mapViewStub, "renderer").get(function () {
                 return renderer;
             });
-            dataSource.attach((mapViewStub as unknown) as MapView);
+            dataSource.attach(mapViewStub as unknown as MapView);
         });
 
         it("Creates empty tile if no pole styles set", function () {
@@ -227,7 +227,7 @@ describe("PolarTileDataSource", function () {
             sinon.stub(mapViewStub, "renderer").get(function () {
                 return renderer;
             });
-            dataSource.attach((mapViewStub as unknown) as MapView);
+            dataSource.attach(mapViewStub as unknown as MapView);
             await dataSource.setTheme(theme_both);
         });
 

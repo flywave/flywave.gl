@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { LineCaps, LineDashes } from "@flywave/flywave-datasource-protocol/src";
+import { LineCaps, LineDashes } from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three";
 
 import { DisplacementFeature, DisplacementFeatureParameters } from "./DisplacementFeature";
@@ -37,7 +37,7 @@ const DefinesLineCapsMapping: { [key: number]: LineCaps } = Object.keys(
     const defineValue: number = LineCapsDefinesMapping[defineKey];
     r[defineValue] = defineKey;
     return r;
-}, ({} as any) as { [key: number]: LineCaps });
+}, {} as any as { [key: number]: LineCaps });
 
 export enum LineDashesModes {
     DASHES_SQUARE = 0,
@@ -58,7 +58,7 @@ const DefinesLineDashesMapping: { [key: number]: LineDashes } = Object.keys(
     const defineValue: number = LineDashesDefinesMapping[defineKey];
     r[defineValue] = defineKey;
     return r;
-}, ({} as any) as { [key: number]: LineDashes });
+}, {} as any as { [key: number]: LineDashes });
 
 /**
  * The vLength contains the actual line length, it's needed for the creation of line caps by
@@ -421,7 +421,8 @@ export interface SolidLineMaterialParameters
  */
 export class SolidLineMaterial
     extends RawShaderMaterial
-    implements DisplacementFeature, FadingFeature {
+    implements DisplacementFeature, FadingFeature
+{
     static DEFAULT_COLOR: number = 0xff0000;
     static DEFAULT_WIDTH: number = 1.0;
     static DEFAULT_OUTLINE_WIDTH: number = 0.0;
@@ -495,7 +496,9 @@ export class SolidLineMaterial
                         fadeNear: new THREE.Uniform(FadingFeature.DEFAULT_FADE_NEAR),
                         fadeFar: new THREE.Uniform(FadingFeature.DEFAULT_FADE_FAR),
                         displacementMap: new THREE.Uniform(
-                            displacementMap !== undefined ? displacementMap : new THREE.DataTexture(new Uint8Array(0),0,0)
+                            displacementMap !== undefined
+                                ? displacementMap
+                                : new THREE.DataTexture(new Uint8Array(0), 0, 0)
                         ),
                         displacementMapUvMatrix: new THREE.Uniform(params.displacementMapUvMatrix),
                         drawRange: new THREE.Uniform(
@@ -809,11 +812,11 @@ export class SolidLineMaterial
         setShaderMaterialDefine(this, "USE_DISPLACEMENTMAP", useDisplacementMap);
     }
 
-    get displacementMapUvMatrix(){
+    get displacementMapUvMatrix() {
         return this.uniforms.displacementMapUvMatrix.value;
     }
-    
-    set displacementMapUvMatrix(matrix){ 
+
+    set displacementMapUvMatrix(matrix) {
         this.uniforms.displacementMapUvMatrix.value = matrix;
     }
 

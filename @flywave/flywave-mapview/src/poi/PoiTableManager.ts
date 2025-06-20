@@ -8,7 +8,7 @@ import {
     PoiTableDef,
     PoiTableEntryDef,
     PoiTableRef
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { LoggerManager } from "@flywave/flywave-utils";
 
 import { MapView } from "../MapView";

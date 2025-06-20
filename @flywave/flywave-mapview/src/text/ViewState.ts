@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Env, GeometryKindSet } from "@flywave/flywave-datasource-protocol/src";
+import { Env, GeometryKindSet } from "@flywave/flywave-datasource-protocol";
 import { Projection } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 import { ElevationProvider } from "../ElevationProvider";

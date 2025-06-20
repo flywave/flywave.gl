@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { getProjectionName } from "@flywave/flywave-datasource-protocol/src";
+import { getProjectionName } from "@flywave/flywave-datasource-protocol";
 import {
     EarthConstants,
     GeoBox,
@@ -65,7 +65,7 @@ describe("MapViewUtils", function () {
             focalLength: 256,
             pixelRatio: 1.0
         };
-        const mapView = (mapViewMock as any) as MapView;
+        const mapView = mapViewMock as any as MapView;
 
         it("only changes zoom on center", () => {
             const geoTarget = new GeoCoordinates(52.5, 13.5);
@@ -75,10 +75,8 @@ describe("MapViewUtils", function () {
 
             MapViewUtils.zoomOnTargetPosition(mapView, 0, 0, 11);
 
-            const {
-                target: newWorldTarget,
-                distance: newDistance
-            } = MapViewUtils.getTargetAndDistance(mapView.projection, mapView.camera);
+            const { target: newWorldTarget, distance: newDistance } =
+                MapViewUtils.getTargetAndDistance(mapView.projection, mapView.camera);
 
             const newZoomLevel = MapViewUtils.calculateZoomLevelFromDistance(mapView, newDistance);
             expect(newZoomLevel).to.be.closeTo(11, 1e-13);
@@ -114,10 +112,8 @@ describe("MapViewUtils", function () {
             // Now zoom in
             MapViewUtils.zoomOnTargetPosition(mapView, 0, 0, 11);
 
-            const {
-                target: newWorldTarget,
-                distance: newDistance
-            } = MapViewUtils.getTargetAndDistance(mapView.projection, mapView.camera);
+            const { target: newWorldTarget, distance: newDistance } =
+                MapViewUtils.getTargetAndDistance(mapView.projection, mapView.camera);
 
             const newZoomLevel = MapViewUtils.calculateZoomLevelFromDistance(mapView, newDistance);
             expect(newZoomLevel).to.be.closeTo(11, Number.EPSILON);
@@ -144,7 +140,7 @@ describe("MapViewUtils", function () {
                 focalLength: 256,
                 pixelRatio: 1.0
             };
-            const mapView = (mapViewMock as any) as MapView;
+            const mapView = mapViewMock as any as MapView;
             const target = new GeoCoordinates(52.5, 13.5);
             const maxTiltAngle = THREE.MathUtils.degToRad(45);
 
@@ -160,10 +156,8 @@ describe("MapViewUtils", function () {
                     ppalPoint
                 );
 
-                const {
-                    target: oldWorldTarget,
-                    distance: oldDistance
-                } = MapViewUtils.getTargetAndDistance(mapView.projection, mapView.camera);
+                const { target: oldWorldTarget, distance: oldDistance } =
+                    MapViewUtils.getTargetAndDistance(mapView.projection, mapView.camera);
 
                 const deltaTilt = THREE.MathUtils.degToRad(45);
                 const deltaAzimuth = THREE.MathUtils.degToRad(42);
@@ -173,10 +167,8 @@ describe("MapViewUtils", function () {
                     maxTiltAngle
                 });
 
-                const {
-                    target: newWorldTarget,
-                    distance: newDistance
-                } = MapViewUtils.getTargetAndDistance(mapView.projection, mapView.camera);
+                const { target: newWorldTarget, distance: newDistance } =
+                    MapViewUtils.getTargetAndDistance(mapView.projection, mapView.camera);
 
                 expect(oldWorldTarget.distanceTo(newWorldTarget)).to.be.closeTo(
                     0,
@@ -334,7 +326,7 @@ describe("MapViewUtils", function () {
             focalLength: 256,
             pixelRatio: 1.0
         };
-        const mapView = (mapViewMock as any) as MapView;
+        const mapView = mapViewMock as any as MapView;
         it("calculates zoom level", function () {
             let result = MapViewUtils.calculateZoomLevelFromDistance(mapView, 0);
             expect(result).to.be.equal(20);
@@ -372,7 +364,7 @@ describe("MapViewUtils", function () {
             focalLength: 256,
             pixelRatio: 1.0
         };
-        const mapView = (mapViewMock as any) as MapView;
+        const mapView = mapViewMock as any as MapView;
         const cameraHeight =
             MapViewUtils.calculateDistanceToGroundFromZoomLevel(mapView, xyzView.zoom) /
             Math.cos(THREE.MathUtils.degToRad(xyzView.pitch));
@@ -481,7 +473,7 @@ describe("MapViewUtils", function () {
     ]) {
         describe(`${projName} projection`, function () {
             describe("getTargetAndDistance", function () {
-                const elevationProvider = ({} as any) as ElevationProvider;
+                const elevationProvider = {} as any as ElevationProvider;
                 let sandbox: sinon.SinonSandbox;
                 let camera: THREE.PerspectiveCamera;
                 const geoTarget = GeoCoordinates.fromDegrees(0, 0);
@@ -569,7 +561,7 @@ describe("MapViewUtils", function () {
                         }
                     }
                 };
-                const mapView = (mapViewMock as any) as MapView;
+                const mapView = mapViewMock as any as MapView;
 
                 it("target and distance are unchanged when no bounds set", function () {
                     const geoTarget = GeoCoordinates.fromDegrees(0, 0);

@@ -6,7 +6,12 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { DecodedTile, Geometry, ITileDecoder, TileInfo } from "@flywave/flywave-datasource-protocol/src";
+import {
+    DecodedTile,
+    Geometry,
+    ITileDecoder,
+    TileInfo
+} from "@flywave/flywave-datasource-protocol";
 import {
     Projection,
     TileKey,
@@ -91,11 +96,11 @@ class MockTileDecoder implements ITileDecoder {
 }
 
 function createMockMapView() {
-    return ({
+    return {
         projection: webMercatorProjection,
         getDataSourceByName() {},
         statistics: new Statistics()
-    } as any) as MapView;
+    } as any as MapView;
 }
 
 describe("TileLoader", function () {

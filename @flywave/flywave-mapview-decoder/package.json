@@ -4,6 +4,16 @@
     "description": "Decoder worker for mapview",
     "main": "lib/index.js",
     "typings": "lib/index",
+    "exports": {
+        ".": {
+            "import": "./lib/index.js",
+            "require": "./lib/index.js"
+        },
+        "./*": {
+            "import": "./lib/*",
+            "require": "./lib/*"
+        }
+    },
     "worker": {
         "name": "@flywave/flywave-mapview-decoder-worker",
         "main": "index-worker.js"

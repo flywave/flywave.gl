@@ -9,8 +9,11 @@ import {
     ITileDecoder,
     OptionsMap,
     TileInfo
-} from "@flywave/flywave-datasource-protocol/src";
-import { StyleSetEvaluator, StyleSetOptions } from "@flywave/flywave-datasource-protocol/src/index-decoder";
+} from "@flywave/flywave-datasource-protocol";
+import {
+    StyleSetEvaluator,
+    StyleSetOptions
+} from "@flywave/flywave-datasource-protocol/index-decoder";
 import { Projection, TileKey } from "@flywave/flywave-geoutils";
 import { LoggerManager } from "@flywave/flywave-utils";
 

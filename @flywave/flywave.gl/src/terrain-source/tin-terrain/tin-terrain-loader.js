@@ -6,7 +6,7 @@ import { LRUCache } from "@flywave/flywave-lrucache";
 // import { Hilbert2d } from "hilbert";
 import { encode, decode } from "@vitaly-z/hilbert-geohash";
 import CsgData from "../stratum/csg-data";
-import { isEqualWith } from "lodash";
+import { isEqualWith } from "lodash.isequalwith";
 import { HeightMap } from "./quantized-mesh/render-heightmap";
 
 export class TinMeshLoader extends TileLoader {

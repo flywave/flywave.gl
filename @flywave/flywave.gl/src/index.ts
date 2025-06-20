@@ -1,4 +1,6 @@
 import Application from "./application";
+import * as THREE from "three";
+
 export { Application };
 export * from "@flywave/flywave-mapview";
 
@@ -51,21 +53,12 @@ export default {
         config.BASE_PATH = url;
     },
 
-    get decoderUrl(): ?string {
+    get decoderUrl(): string {
         return config.DECODER_URL;
     }
 };
-if (window.FLYWAVE_BASE_URL) config.BASE_PATH = window.FLYWAVE_BASE_URL;
 
-//mapview
-import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/SphericalGeometrySubdivisionModifier";
-export { SphericalGeometrySubdivisionModifier };
 export * from "@flywave/flywave-geoutils";
-
-//utils
-import { makeGeoBox } from "./util/make-geobox-mesh";
-
-export { makeGeoBox };
 
 THREE.Vector3.prototype.fromBufferAttribute = function (attribute, index) {
     this.x = attribute.getX(index);

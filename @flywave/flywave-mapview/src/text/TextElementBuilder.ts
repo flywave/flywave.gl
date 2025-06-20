@@ -15,7 +15,7 @@ import {
     MapEnv,
     PoiTechnique,
     TextTechnique
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import {
     ContextualArabicConverter,
     TextLayoutStyle,

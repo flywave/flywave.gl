@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GeometryType, getFeatureId, Technique } from "@flywave/flywave-datasource-protocol/src";
+import { GeometryType, getFeatureId, Technique } from "@flywave/flywave-datasource-protocol";
 import { OrientedBox3, TileKey } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 
@@ -228,7 +228,7 @@ export class PickHandler {
             }
         }
 
-        if (!parameters||parameters.pickAnchor!==false) {
+        if (!parameters || parameters.pickAnchor !== false) {
             // Intersect any objects added by the user.
             for (const child of this.mapView.mapAnchors.children) {
                 intersects.length = 0;

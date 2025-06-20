@@ -4,6 +4,16 @@
     "description": "HERE Vector Tile Data Source",
     "main": "lib/index.js",
     "typings": "lib/index",
+    "exports": {
+        ".": {
+            "import": "./lib/index.js",
+            "require": "./lib/index.js"
+        },
+        "./*": {
+            "import": "./lib/*",
+            "require": "./lib/*"
+        }
+    },
     "worker": {
         "name": "@flywave/flywave-vectortile-datasource-worker",
         "main": "lib/index-worker.js"
@@ -62,7 +72,7 @@
         "typescript": "catalog:"
     },
     "peerDependencies": {
-        "three": "^0.151.0"
+        "three": "catalog:"
     },
     "publishConfig": {
         "access": "public"

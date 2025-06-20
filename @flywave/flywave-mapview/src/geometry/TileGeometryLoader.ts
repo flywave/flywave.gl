@@ -17,7 +17,7 @@ import {
     isSolidLineTechnique,
     isTextTechnique,
     Technique
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { PerformanceTimer, TaskQueue } from "@flywave/flywave-utils";
 
 import { TileTaskGroups } from "../MapView";

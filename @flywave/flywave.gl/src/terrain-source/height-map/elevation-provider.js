@@ -1,6 +1,5 @@
 import { webMercatorTilingScheme, TileKeyUtils, TileKey } from "@flywave/flywave-geoutils";
 import { number as interpolate } from "./util/interpolate";
-import { CalculationStatus } from "@flywave/flywave-mapview";
 
 class ElevationProvider {
     bindDataSource(dataSource) {

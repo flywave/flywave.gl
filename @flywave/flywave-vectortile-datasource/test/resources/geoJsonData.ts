@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { FeatureCollection, Theme } from "@flywave/flywave-datasource-protocol/src";
+import { FeatureCollection, Theme } from "@flywave/flywave-datasource-protocol";
 
 export const GEOJSON_DATA: FeatureCollection = {
     type: "FeatureCollection",

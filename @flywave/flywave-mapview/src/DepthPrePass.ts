@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Env, ExtrudedPolygonTechnique } from "@flywave/flywave-datasource-protocol/src";
+import { Env, ExtrudedPolygonTechnique } from "@flywave/flywave-datasource-protocol";
 import { ColorUtils } from "@flywave/flywave-datasource-protocol/ColorUtils";
 import { enforceBlending, MapMeshStandardMaterial } from "@flywave/flywave-materials";
 import * as THREE from "three";
@@ -43,7 +43,9 @@ export function isRenderDepthPrePassEnabled(technique: ExtrudedPolygonTechnique,
         return false;
     }
     let transparent =
-        technique.opacity !== undefined && technique.opacity as number > 0.0 && technique.opacity as number < 1.0;
+        technique.opacity !== undefined &&
+        (technique.opacity as number) > 0.0 &&
+        (technique.opacity as number) < 1.0;
     // If not opaque then check if transparency may be modified via alpha in base color.
     // Otherwise we don't need to even test base color because opacity mixed with any base alpha,
     // will always produce some transparency effect.

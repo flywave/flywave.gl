@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { GradientSky, Light, Sky } from "@flywave/flywave-datasource-protocol/src";
+import { GradientSky, Light, Sky } from "@flywave/flywave-datasource-protocol";
 import { ProjectionType, Vector3Like } from "@flywave/flywave-geoutils";
 import { getOptionValue, LoggerManager } from "@flywave/flywave-utils";
 import THREE = require("three");
@@ -117,8 +117,8 @@ export class MapViewEnvironment {
         }
     }
 
-    createLight(lightDescription: Light){
-        return createLight(lightDescription)
+    createLight(lightDescription: Light) {
+        return createLight(lightDescription);
     }
 
     updateLighting(lights?: Light[]) {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GeometryKind, GeometryKindSet } from "@flywave/flywave-datasource-protocol/src";
+import { GeometryKind, GeometryKindSet } from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three";
 
 import { MapObjectAdapter, MapObjectAdapterParams } from "../MapObjectAdapter";

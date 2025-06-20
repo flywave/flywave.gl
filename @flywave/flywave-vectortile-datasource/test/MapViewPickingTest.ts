@@ -10,7 +10,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { DecodedTile, Geometry, GeometryType } from "@flywave/flywave-datasource-protocol/src";
+import { DecodedTile, Geometry, GeometryType } from "@flywave/flywave-datasource-protocol";
 import {
     GeoCoordinates,
     mercatorProjection,
@@ -109,12 +109,12 @@ describe("MapView Picking", async function () {
             };
         });
 
-        canvas = ({
+        canvas = {
             clientWidth: 800,
             clientHeight: 600,
             addEventListener: sinon.stub(),
             removeEventListener: sinon.stub()
-        } as unknown) as HTMLCanvasElement;
+        } as unknown as HTMLCanvasElement;
 
         sandbox
             .stub(THREE, "WebGLRenderer")
@@ -274,8 +274,9 @@ describe("MapView Picking", async function () {
 
         const pickPolygonAt: number[] = [13.084716796874998, 22.61401087437029];
         const pickPolyOutlineAt: number[] = [-1.0, 29.0];
-        const pickLineAt: number[] = ((GEOJSON_DATA.features[1].geometry as any)
-            .coordinates as number[][])[0];
+        const pickLineAt: number[] = (
+            (GEOJSON_DATA.features[1].geometry as any).coordinates as number[][]
+        )[0];
         const pickLabelAt: number[] = (GEOJSON_DATA.features[2].geometry as any).coordinates;
         const offCenterLabelLookAt: number[] = [pickLabelAt[0] + 10.0, pickLabelAt[1] + 10.0];
 

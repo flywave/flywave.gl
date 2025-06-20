@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { MapEnv, Theme } from "@flywave/flywave-datasource-protocol/src";
+import { MapEnv, Theme } from "@flywave/flywave-datasource-protocol";
 import { identityProjection, TileKey, TileKeyUtils } from "@flywave/flywave-geoutils";
 import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import { FontCatalog, TextCanvas } from "@flywave/flywave-text-canvas";
@@ -170,8 +170,8 @@ export class TestFixture {
             sinon.createStubInstance(THREE.WebGLRenderer),
             [],
             this.m_options,
-            (this.m_textCanvasFactoryStub as unknown) as TextCanvasFactory,
-            (this.m_poiRendererStub as unknown) as PoiRenderer,
+            this.m_textCanvasFactoryStub as unknown as TextCanvasFactory,
+            this.m_poiRendererStub as unknown as PoiRenderer,
             this.m_screenCollisions
         );
         this.m_textRenderer.updateTextStyles(this.m_theme.textStyles);
@@ -328,9 +328,9 @@ export class TestFixture {
             this.m_screenCollisionTestStub.restore();
             this.m_screenCollisionTestStub = undefined;
         } else if (!collisionEnabled && this.m_screenCollisionTestStub === undefined) {
-            this.m_screenCollisionTestStub = (this.sandbox
+            this.m_screenCollisionTestStub = this.sandbox
                 .stub(this.m_screenCollisions, "intersectsDetails")
-                .returns(false) as unknown) as sinon.SinonStub;
+                .returns(false) as unknown as sinon.SinonStub;
         }
         if (this.textRenderer.loading) {
             await this.textRenderer.waitLoaded();

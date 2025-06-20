@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GeometryType } from "@flywave/flywave-datasource-protocol/src";
+import { GeometryType } from "@flywave/flywave-datasource-protocol";
 import { reconstructLineWidth } from "@flywave/flywave-lines";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three";

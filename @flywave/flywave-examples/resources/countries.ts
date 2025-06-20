@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { MultiPolygon } from "@flywave/flywave-datasource-protocol/src";
+import { MultiPolygon } from "@flywave/flywave-datasource-protocol";
 
 const italy = [
     [

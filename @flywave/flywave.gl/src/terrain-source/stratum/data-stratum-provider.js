@@ -1,11 +1,10 @@
 import { DataTerrainProvider } from "../tin-terrain/data-terrain-provider";
 import { TinMeshResourceTile, TinMeshLoader } from "../tin-terrain/tin-terrain-loader";
 import { Box3 } from "three";
-import { isEqualWith } from "lodash";
+import isEqualWith from "lodash.isequalwith";
 import CsgData from "./csg-data";
 import { HeightMap } from "../tin-terrain/quantized-mesh/render-heightmap";
 import { TileLoader } from "@flywave/flywave-mapview-decoder";
-
 
 export class CsgTinMeshLoader extends TileLoader {
     constructor(dataSource, tileKey, tile) {

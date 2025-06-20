@@ -10,7 +10,7 @@ import {
     getPropertyValue,
     TEXTURE_PROPERTY_KEYS,
     Value
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { disableBlending, enableBlending, RawShaderMaterial } from "@flywave/flywave-materials";
 import * as THREE from "three";
 

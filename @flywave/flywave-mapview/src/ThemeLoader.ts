@@ -5,7 +5,7 @@
  */
 import "@flywave/flywave-fetch";
 
-import { isJsonExpr } from "@flywave/flywave-datasource-protocol/src";
+import { isJsonExpr } from "@flywave/flywave-datasource-protocol";
 import {
     Definitions,
     FlatTheme,
@@ -627,9 +627,8 @@ export class ThemeLoader {
                         texturePropertyName => {
                             const textureProperty = (style.attr! as any)[texturePropertyName];
                             if (textureProperty && typeof textureProperty === "string") {
-                                (style.attr! as any)[
-                                    texturePropertyName
-                                ] = childUrlResolver.resolveUri(textureProperty);
+                                (style.attr! as any)[texturePropertyName] =
+                                    childUrlResolver.resolveUri(textureProperty);
                             }
                         }
                     );

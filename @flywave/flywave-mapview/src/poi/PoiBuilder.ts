@@ -12,7 +12,7 @@ import {
     LineMarkerTechnique,
     MapEnv,
     PoiTechnique
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
 
 import { ColorCache } from "../ColorCache";

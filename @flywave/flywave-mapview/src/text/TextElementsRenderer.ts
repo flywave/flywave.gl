@@ -7,7 +7,7 @@ import {
     FontCatalogConfig,
     LineMarkerTechnique,
     TextStyleDefinition
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { TileKey, Vector3Like } from "@flywave/flywave-geoutils";
 import {
     AdditionParameters,
@@ -357,9 +357,8 @@ export class TextElementsRenderer {
     private m_defaultFontCatalogConfig: FontCatalogConfig | undefined;
     private m_poiRenderer: PoiRenderer;
     private readonly m_textStyleCache: TextStyleCache = new TextStyleCache();
-    private readonly m_screenCollisions:
-        | ScreenCollisions
-        | ScreenCollisionsDebug = new ScreenCollisions();
+    private readonly m_screenCollisions: ScreenCollisions | ScreenCollisionsDebug =
+        new ScreenCollisions();
 
     private readonly m_textCanvasFactory: TextCanvasFactory;
 

@@ -14,7 +14,7 @@ import {
     isPoiTechnique,
     MapEnv,
     PoiGeometry
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { assert, assertExists, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three";
 

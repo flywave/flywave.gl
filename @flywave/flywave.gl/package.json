@@ -22,6 +22,7 @@
     "license": "",
     "homepage": "#",
     "dependencies": {
+        "@flywave/flywave-geoutils": "workspace:*",
         "@flywave/flywave-features-datasource": "workspace:*",
         "@flywave/flywave-map-controls": "workspace:*",
         "@flywave/flywave-map-theme": "workspace:*",
@@ -32,7 +33,11 @@
         "@flywave/flywave-webpack-utils": "workspace:*",
         "@flywave/flywave-debug-datasource": "workspace:*",
         "@flywave/flywave-lrucache": "workspace:*",
+        "@flywave/flywave-transfer-manager": "workspace:*",
+        "@flywave/flywave-datasource-protocol": "workspace:*",
         "@here/quantized-mesh-decoder": "catalog:",
+        "csscolorparser": "catalog:",
+        "lodash.isequalwith": "catalog:",
         "gsap": "catalog:",
         "@vitaly-z/hilbert-geohash": "catalog:",
         "@turf/turf": "catalog:",
@@ -44,7 +49,7 @@
         "immutable": "catalog:",
         "kdbush": "catalog:",
         "keymirror": "catalog:",
-        "lodash.debounce": "catalog:", 
+        "lodash.debounce": "catalog:",
         "assert": "catalog:",
         "gl-matrix": "catalog:",
         "d3-selection": "catalog:",
@@ -54,7 +59,7 @@
         "lodash.range": "catalog:",
         "@davidcmeier/string-to-color": "catalog:",
         "three-bvh-csg": "catalog:"
-    }, 
+    },
     "devDependencies": {
         "@babel/cli": "catalog:",
         "@babel/core": "catalog:",

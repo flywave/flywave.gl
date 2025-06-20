@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { WorkerServiceProtocol } from "@flywave/flywave-datasource-protocol/src";
+import { WorkerServiceProtocol } from "@flywave/flywave-datasource-protocol";
 import { LoggerManager } from "@flywave/flywave-utils";
 
 const logger = LoggerManager.instance.create("WorkerService", { enabled: true });

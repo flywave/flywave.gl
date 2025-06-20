@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Theme } from "@flywave/flywave-datasource-protocol/src";
+import { Theme } from "@flywave/flywave-datasource-protocol";
 import { EarthConstants, Projection, ProjectionType } from "@flywave/flywave-geoutils";
 import { GroundAtmosphereMaterial, SkyAtmosphereMaterial } from "@flywave/flywave-materials";
 import { assert } from "@flywave/flywave-utils";
@@ -448,7 +448,7 @@ export class MapViewAtmosphere {
             material: THREE.Material,
             _group: THREE.Group
         ) => {
-            if(material instanceof GroundAtmosphereMaterial){
+            if (material instanceof GroundAtmosphereMaterial) {
                 assert(material instanceof GroundAtmosphereMaterial);
                 const mat = this.m_groundMaterial as GroundAtmosphereMaterial;
                 mat.updateUniforms(mat, this.m_groundMesh!, camera, this.m_lightDirection);

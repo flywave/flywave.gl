@@ -11,7 +11,7 @@ import {
     InterleavedBufferAttribute,
     ITileDecoder,
     WorkerDecoderProtocol
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { LoggerManager } from "@flywave/flywave-utils";
 

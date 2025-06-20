@@ -11,9 +11,12 @@ import {
     IndexedTechnique,
     MapEnv,
     StyleSet
-} from "@flywave/flywave-datasource-protocol/src";
-import { StyleSetEvaluator, ThreeBufferUtils } from "@flywave/flywave-datasource-protocol/src/index-decoder";
-import { ViewRanges } from "@flywave/flywave-datasource-protocol/src/ViewRanges";
+} from "@flywave/flywave-datasource-protocol";
+import {
+    StyleSetEvaluator,
+    ThreeBufferUtils
+} from "@flywave/flywave-datasource-protocol/index-decoder";
+import { ViewRanges } from "@flywave/flywave-datasource-protocol/ViewRanges";
 import {
     mercatorProjection,
     TileKey,
@@ -244,7 +247,7 @@ describe("TileGeometryCreator", () => {
         sandbox.stub(mockDatasource, "mapView").get(() => mapView);
         textureCallback = sandbox.stub();
         newTile = new Tile(
-            (mockDatasource as unknown) as DataSource,
+            mockDatasource as unknown as DataSource,
             TileKey.fromRowColumnLevel(0, 0, 0)
         );
     });

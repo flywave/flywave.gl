@@ -10,7 +10,7 @@ import {
     LineMarkerTechnique,
     PoiTechnique,
     TextTechnique
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import { TextLayoutStyle, TextRenderStyle } from "@flywave/flywave-text-canvas";
 import { LogLevel } from "@flywave/flywave-utils";
@@ -24,10 +24,10 @@ describe("TextElementBuilder", function () {
     const env = new Env();
     const renderStyle = new TextRenderStyle();
     const layoutStyle = new TextLayoutStyle();
-    const styleCache = ({
+    const styleCache = {
         getRenderStyle: () => renderStyle,
         getLayoutStyle: () => layoutStyle
-    } as any) as TileTextStyleCache;
+    } as any as TileTextStyleCache;
     const dataSourceName = "anonymous";
     const dataSourceOrder = 0;
 

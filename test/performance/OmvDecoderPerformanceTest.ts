@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Theme, ValueMap } from "@flywave/flywave-datasource-protocol/src";
-import { MapEnv, StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/src/index-decoder";
+import { Theme, ValueMap } from "@flywave/flywave-datasource-protocol";
+import { MapEnv, StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/index-decoder";
 import { apikey } from "@flywave/flywave-examples/config";
 import {
     mercatorProjection,
@@ -236,17 +236,9 @@ createOMVDecoderPerformanceTest("theme=berlin tiles=4 region=berlin data=osmbase
 });
 
 const NEW_YORK_TILES = [
-    327439127,
-    327439124,
-    327439125,
-    327439168,
-    327439170,
+    327439127, 327439124, 327439125, 327439168, 327439170,
 
-    327438781,
-    327438783,
-    327438826,
-    327438782,
-    327438824
+    327438781, 327438783, 327438826, 327438782, 327438824
 ];
 
 createOMVDecoderPerformanceTest("theme=berlin tiles=10 region=ny data=herebase", {

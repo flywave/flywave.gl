@@ -4,6 +4,16 @@
     "description": "Overlay useful for debugging map data",
     "main": "./lib/index.js",
     "typings": "./lib/index",
+    "exports": {
+        ".": {
+            "import": "./lib/index.js",
+            "require": "./lib/index.js"
+        },
+        "./*": {
+            "import": "./lib/*",
+            "require": "./lib/*"
+        }
+    },
     "directories": {
         "lib": "lib"
     },

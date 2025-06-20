@@ -9,7 +9,7 @@ import {
     ITiler,
     WorkerServiceProtocol,
     WorkerTilerProtocol
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { TileKey } from "@flywave/flywave-geoutils";
 
 import { ConcurrentWorkerSet } from "./ConcurrentWorkerSet";

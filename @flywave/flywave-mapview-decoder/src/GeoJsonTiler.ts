@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GeoJson, isFeatureGeometry, ITiler } from "@flywave/flywave-datasource-protocol/src";
+import { GeoJson, isFeatureGeometry, ITiler } from "@flywave/flywave-datasource-protocol";
 import { TileKey } from "@flywave/flywave-geoutils";
 // @ts-ignore
 import * as geojsonvtExport from "geojson-vt";

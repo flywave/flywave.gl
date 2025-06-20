@@ -9,7 +9,7 @@ import {
     IOutlineEffect,
     ISepiaEffect,
     IVignetteEffect
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { SepiaShader, VignetteShader } from "@flywave/flywave-materials";
 import * as THREE from "three";
 

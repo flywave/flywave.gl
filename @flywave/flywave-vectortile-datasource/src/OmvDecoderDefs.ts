@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Value } from "@flywave/flywave-datasource-protocol/src/index-decoder";
+import { Value } from "@flywave/flywave-datasource-protocol/index-decoder";
 
 /**
  * Feature Modifier ids to choose which OmvFeatureModifer should be used in OmvDecoder.

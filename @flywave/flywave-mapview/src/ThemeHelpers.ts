@@ -11,7 +11,7 @@ import {
     PixelFormat,
     TextureDataType,
     WrappingMode
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three";
 
 /**

@@ -9,7 +9,7 @@ import {
     isExtrudedPolygonTechnique,
     MapEnv,
     Technique
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { ExtrusionFeature, ExtrusionFeatureDefs } from "@flywave/flywave-materials";
 import { MathUtils } from "@flywave/flywave-utils";

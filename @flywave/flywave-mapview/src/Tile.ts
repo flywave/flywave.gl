@@ -8,7 +8,7 @@ import {
     GeometryKindSet,
     GeometryType,
     TextPathGeometry
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { GeoBox, OrientedBox3, Projection, TileKey, TileKeyUtils } from "@flywave/flywave-geoutils";
 import { assert, CachedResource, chainCallbacks, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three";

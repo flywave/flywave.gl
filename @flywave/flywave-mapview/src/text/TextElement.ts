@@ -11,7 +11,7 @@ import {
     LineMarkerTechnique,
     PoiStackMode,
     PoiTechnique
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import {
     GlyphData,
     TextBufferObject,

@@ -4,6 +4,16 @@
     "description": "Create three.js geometries for wide lines",
     "main": "lib/index.js",
     "typings": "lib/index",
+    "exports": {
+        ".": {
+            "import": "./lib/index.js",
+            "require": "./lib/index.js"
+        },
+        "./*": {
+            "import": "./lib/*",
+            "require": "./lib/*"
+        }
+    },
     "directories": {
         "test": "test",
         "lib": "lib"
@@ -41,7 +51,7 @@
         "typescript": "catalog:"
     },
     "peerDependencies": {
-        "three": "^0.151.0"
+        "three": "catalog:"
     },
     "publishConfig": {
         "access": "public"

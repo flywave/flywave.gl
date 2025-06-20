@@ -1,7 +1,7 @@
 import RBush from "geojson-rbush";
 import { dispatch } from "d3-dispatch";
 import { DataProvider } from "@flywave/flywave-mapview-decoder";
-import { lengthToDegrees } from "@turf/helpers";
+import { lengthToDegrees } from "@turf/turf";
 
 import { webMercatorTilingScheme } from "@flywave/flywave-geoutils";
 import * as turf from "@turf/turf";

@@ -9,7 +9,7 @@ import {
     StyleSetEvaluator,
     Value,
     ValueMap
-} from "@flywave/flywave-datasource-protocol/src/index-decoder";
+} from "@flywave/flywave-datasource-protocol/index-decoder";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { assert, ILogger, LoggerManager } from "@flywave/flywave-utils";
 import * as Long from "long";

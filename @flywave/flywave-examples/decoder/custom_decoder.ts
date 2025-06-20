@@ -9,13 +9,18 @@ import {
     Geometry,
     GeometryType,
     InterleavedBufferAttribute
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import {
     MapEnv,
     StyleSetEvaluator,
     ThreeBufferUtils
-} from "@flywave/flywave-datasource-protocol/src/index-decoder";
-import { GeoCoordinates, Projection, TileKey, webMercatorTilingScheme } from "@flywave/flywave-geoutils";
+} from "@flywave/flywave-datasource-protocol/index-decoder";
+import {
+    GeoCoordinates,
+    Projection,
+    TileKey,
+    webMercatorTilingScheme
+} from "@flywave/flywave-geoutils";
 import { LineGroup } from "@flywave/flywave-lines";
 import {
     ThemedTileDecoder,

@@ -9,7 +9,7 @@ import {
     FeatureCollection,
     FeatureGeometry,
     GeometryCollection
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MapView } from "@flywave/flywave-mapview";
 import { LoggerManager } from "@flywave/flywave-utils";

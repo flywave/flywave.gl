@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { FontCatalogConfig } from "@flywave/flywave-datasource-protocol/src";
+import { FontCatalogConfig } from "@flywave/flywave-datasource-protocol";
 import { FontCatalog } from "@flywave/flywave-text-canvas";
 import { LoggerManager } from "@flywave/flywave-utils";
 

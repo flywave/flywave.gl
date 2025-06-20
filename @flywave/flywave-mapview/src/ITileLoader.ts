@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { DecodedTile } from "@flywave/flywave-datasource-protocol/src";
+import { DecodedTile } from "@flywave/flywave-datasource-protocol";
 
 /**
  * The state the {@link ITileLoader}.

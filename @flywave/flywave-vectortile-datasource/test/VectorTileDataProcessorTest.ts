@@ -3,8 +3,8 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { GeometryKind, IndexedTechnique } from "@flywave/flywave-datasource-protocol/src";
-import { StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/src/index-decoder";
+import { GeometryKind, IndexedTechnique } from "@flywave/flywave-datasource-protocol";
+import { StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/index-decoder";
 import { mercatorProjection, TileKey } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
 import * as sinon from "sinon";

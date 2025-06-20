@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Expr, getProjectionName } from "@flywave/flywave-datasource-protocol/src";
+import { Expr, getProjectionName } from "@flywave/flywave-datasource-protocol";
 import {
     GeoBox,
     GeoBoxExtentLike,
@@ -84,12 +84,12 @@ describe("MapView", function () {
         }
         addEventListenerSpy = sinon.stub();
         removeEventListenerSpy = sinon.stub();
-        canvas = ({
+        canvas = {
             clientWidth: 400,
             clientHeight: 300,
             addEventListener: addEventListenerSpy,
             removeEventListener: removeEventListenerSpy
-        } as unknown) as HTMLCanvasElement;
+        } as unknown as HTMLCanvasElement;
         mapViewOptions = {
             canvas,
             // Both options cause the `addDataSource` method to be called, which we can't `await` on
@@ -856,7 +856,7 @@ describe("MapView", function () {
         const fov = 45;
         mapView = new MapView({
             ...mapViewOptions,
-            canvas: (customCanvas as any) as HTMLCanvasElement,
+            canvas: customCanvas as any as HTMLCanvasElement,
             fovCalculation: { type: "fixed", fov }
         });
         mapView.resize(100, 100);
@@ -876,7 +876,7 @@ describe("MapView", function () {
         const fov = 45;
         mapView = new MapView({
             ...mapViewOptions,
-            canvas: (customCanvas as any) as HTMLCanvasElement,
+            canvas: customCanvas as any as HTMLCanvasElement,
             fovCalculation: { type: "fixed", fov }
         });
 
@@ -898,7 +898,7 @@ describe("MapView", function () {
         const fov = 45;
         mapView = new MapView({
             ...mapViewOptions,
-            canvas: (customCanvas as any) as HTMLCanvasElement,
+            canvas: customCanvas as any as HTMLCanvasElement,
             fovCalculation: { type: "dynamic", fov }
         });
 
@@ -920,7 +920,7 @@ describe("MapView", function () {
         const fov = 45;
         mapView = new MapView({
             ...mapViewOptions,
-            canvas: (customCanvas as any) as HTMLCanvasElement,
+            canvas: customCanvas as any as HTMLCanvasElement,
             fovCalculation: { type: "dynamic", fov }
         });
 
@@ -948,7 +948,7 @@ describe("MapView", function () {
 
         const customMapViewOptions = {
             ...mapViewOptions,
-            canvas: (customCanvas as any) as HTMLCanvasElement
+            canvas: customCanvas as any as HTMLCanvasElement
         };
         for (let x = -100; x <= 100; x += 100) {
             for (let y = -100; y <= 100; y += 100) {
@@ -982,7 +982,7 @@ describe("MapView", function () {
 
         const customMapViewOptions = {
             ...mapViewOptions,
-            canvas: (customCanvas as any) as HTMLCanvasElement
+            canvas: customCanvas as any as HTMLCanvasElement
         };
         for (let x = -100; x <= 100; x += 100) {
             for (let y = -100; y <= 100; y += 100) {

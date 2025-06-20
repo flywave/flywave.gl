@@ -6,7 +6,7 @@
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
-import { FlatTheme, SolidLineStyle, StyleSet, Theme } from "@flywave/flywave-datasource-protocol/src";
+import { FlatTheme, SolidLineStyle, StyleSet, Theme } from "@flywave/flywave-datasource-protocol";
 import { getTestResourceUrl } from "@flywave/flywave-test-utils";
 import {
     cloneDeep,
@@ -147,7 +147,7 @@ describe("ThemeLoader", function () {
             const roadStyle = r.find(s => s.description === "roads")!;
             assert.exists(roadStyle);
             assert.equal(roadStyle.technique, "solid-line");
-            const roadStyleCasted = (roadStyle as any) as SolidLineStyle;
+            const roadStyleCasted = roadStyle as any as SolidLineStyle;
             assert.equal(roadStyleCasted.attr?.lineColor, "#f00");
             assert.equal(roadStyleCasted.attr?.lineWidth, 123);
             assert.equal(roadStyleCasted.attr?.outlineWidth, 33);
@@ -183,7 +183,7 @@ describe("ThemeLoader", function () {
             const roadStyle = r.find(s => s.description === "roads")!;
             assert.exists(roadStyle);
             assert.equal(roadStyle.technique, "solid-line");
-            const roadStyleCasted = (roadStyle as any) as SolidLineStyle;
+            const roadStyleCasted = roadStyle as any as SolidLineStyle;
             assert.equal(roadStyleCasted.description, "roads");
             assert.deepEqual(roadStyleCasted.when!, theme.definitions!.roadCondition);
             assert.equal(roadStyleCasted.attr!.lineColor, "#f00");
@@ -220,7 +220,7 @@ describe("ThemeLoader", function () {
             assert.exists(roadStyle);
             assert.equal(roadStyle.technique, "solid-line");
 
-            const roadStyleCasted = (roadStyle as any) as SolidLineStyle;
+            const roadStyleCasted = roadStyle as any as SolidLineStyle;
 
             assert.deepEqual(roadStyleCasted.when, [
                 "all",
@@ -553,7 +553,7 @@ describe("ThemeLoader", function () {
             };
 
             const source: FlatTheme = {
-                extends: [(baseTheme as unknown) as Theme],
+                extends: [baseTheme as unknown as Theme],
                 styles: [
                     {
                         styleSet: "tilezen",
@@ -603,7 +603,7 @@ describe("ThemeLoader", function () {
             };
 
             const source: FlatTheme = {
-                extends: [(baseTheme as unknown) as Theme],
+                extends: [baseTheme as unknown as Theme],
                 styles: [
                     {
                         styleSet: "tilezen",
@@ -666,7 +666,7 @@ describe("ThemeLoader", function () {
             };
 
             const source: FlatTheme = {
-                extends: [(baseTheme as unknown) as Theme],
+                extends: [baseTheme as unknown as Theme],
                 styles: [
                     {
                         styleSet: "tilezen",
@@ -732,7 +732,7 @@ describe("ThemeLoader", function () {
             // the styleset `terrain` unmodified.
 
             const source: FlatTheme = {
-                extends: [(baseTheme as unknown) as Theme],
+                extends: [baseTheme as unknown as Theme],
                 styles: [
                     {
                         styleSet: "tilezen",

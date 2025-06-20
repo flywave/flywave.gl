@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Env, getPropertyValue, PoiTechnique } from "@flywave/flywave-datasource-protocol/src";
+import { Env, getPropertyValue, PoiTechnique } from "@flywave/flywave-datasource-protocol";
 import { OrientedBox3, Projection, ProjectionType } from "@flywave/flywave-geoutils";
 import {
     hAlignFromPlacement,

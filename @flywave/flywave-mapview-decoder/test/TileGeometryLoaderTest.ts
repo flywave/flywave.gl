@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { DecodedTile } from "@flywave/flywave-datasource-protocol/src";
+import { DecodedTile } from "@flywave/flywave-datasource-protocol";
 import {
     TileKey,
     TilingScheme,
@@ -71,7 +71,7 @@ class MockDataSource extends DataSource {
 }
 
 function createFakeMapView() {
-    return ({
+    return {
         projection: webMercatorProjection,
         getDataSourceByName() {},
         statistics: new Statistics(),
@@ -81,7 +81,7 @@ function createFakeMapView() {
         taskQueue: new TaskQueue({
             groups: [TileTaskGroups.CREATE, TileTaskGroups.FETCH_AND_DECODE]
         })
-    } as any) as MapView;
+    } as any as MapView;
 }
 
 function createFakeDecodedTile(): DecodedTile {

@@ -9,7 +9,7 @@ import {
     ImageTexture,
     PoiTableRef,
     Theme
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import { LoggerManager, UriResolver } from "@flywave/flywave-utils";
 
 import { MapViewImageCache } from "./image/MapViewImageCache";

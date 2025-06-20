@@ -7,6 +7,16 @@
     "directories": {
         "test": "test"
     },
+    "exports": {
+        ".": {
+            "import": "./lib/index.js",
+            "require": "./lib/index.js"
+        },
+        "./*": {
+            "import": "./lib/*",
+            "require": "./lib/*"
+        }
+    },
     "scripts": {
         "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
         "build": "tsc --build $EXTRA_TSC_ARGS",
@@ -39,7 +49,7 @@
         "typescript": "catalog:"
     },
     "peerDependencies": {
-        "three": "^0.151.0"
+        "three": "catalog:"
     },
     "dependencies": {
         "@flywave/flywave-geoutils": "workspace:*",

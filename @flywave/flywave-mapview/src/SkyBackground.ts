@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CubemapSky, GradientSky } from "@flywave/flywave-datasource-protocol/src";
+import { CubemapSky, GradientSky } from "@flywave/flywave-datasource-protocol";
 import { ProjectionType } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 

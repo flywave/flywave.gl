@@ -1,6 +1,4 @@
-// @flow
-
-import {parseCSSColor} from 'csscolorparser';
+import { parseCSSColor } from "csscolorparser";
 
 /**
  * An RGBA color value. Create instances from color strings using the static
@@ -45,7 +43,7 @@ class Color {
             return input;
         }
 
-        if (typeof input !== 'string') {
+        if (typeof input !== "string") {
             return undefined;
         }
 
@@ -55,9 +53,9 @@ class Color {
         }
 
         return new Color(
-            rgba[0] / 255 * rgba[3],
-            rgba[1] / 255 * rgba[3],
-            rgba[2] / 255 * rgba[3],
+            (rgba[0] / 255) * rgba[3],
+            (rgba[1] / 255) * rgba[3],
+            (rgba[2] / 255) * rgba[3],
             rgba[3]
         );
     }
@@ -78,13 +76,8 @@ class Color {
     }
 
     toArray(): [number, number, number, number] {
-        const {r, g, b, a} = this;
-        return a === 0 ? [0, 0, 0, 0] : [
-            r * 255 / a,
-            g * 255 / a,
-            b * 255 / a,
-            a
-        ];
+        const { r, g, b, a } = this;
+        return a === 0 ? [0, 0, 0, 0] : [(r * 255) / a, (g * 255) / a, (b * 255) / a, a];
     }
 }
 

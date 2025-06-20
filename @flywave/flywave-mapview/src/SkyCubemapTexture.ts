@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CubemapSky } from "@flywave/flywave-datasource-protocol/src";
+import { CubemapSky } from "@flywave/flywave-datasource-protocol";
 import { LoggerManager } from "@flywave/flywave-utils";
 import { CubeTexture, CubeTextureLoader, Texture } from "three";
 

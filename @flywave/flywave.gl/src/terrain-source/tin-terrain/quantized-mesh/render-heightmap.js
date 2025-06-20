@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GeoCoordinates, GeoBox } from "@flywave/flywave-geoutils";
-import { warnOnce, clamp } from "../../../util/util.js";
+import { clamp } from "../../../util/util.js";
 import { number as interpolate } from "../../height-map/util/interpolate";
 import { Vector2 } from "three";
 

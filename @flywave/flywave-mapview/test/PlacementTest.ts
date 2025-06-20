@@ -12,7 +12,7 @@
 
 import "@flywave/flywave-fetch";
 
-import { Env } from "@flywave/flywave-datasource-protocol/src";
+import { Env } from "@flywave/flywave-datasource-protocol";
 import { getTestResourceUrl } from "@flywave/flywave-test-utils";
 import {
     FontCatalog,

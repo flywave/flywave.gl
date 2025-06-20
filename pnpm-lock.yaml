@@ -288,6 +288,9 @@ catalogs:
     lodash.isequal:
       specifier: ^4.5.0
       version: 4.5.0
+    lodash.isequalwith:
+      specifier: ^4.4.0
+      version: 4.4.0
     lodash.range:
       specifier: 3.2.0
       version: 3.2.0
@@ -533,6 +536,9 @@ importers:
       three:
         specifier: 'catalog:'
         version: 0.174.0
+      ts-loader:
+        specifier: 'catalog:'
+        version: 8.4.0(typescript@5.8.3)(webpack@5.99.9)
       ts-mocha:
         specifier: 'catalog:'
         version: 8.0.0(mocha@8.4.0)
@@ -839,8 +845,8 @@ importers:
         specifier: workspace:*
         version: link:../flywave-vectortile-datasource
       three:
-        specifier: ^0.151.0
-        version: 0.151.3
+        specifier: 'catalog:'
+        version: 0.174.0
     devDependencies:
       '@types/chai':
         specifier: 'catalog:'
@@ -1486,8 +1492,8 @@ importers:
         specifier: workspace:*
         version: link:../flywave-vectortile-datasource
       three:
-        specifier: ^0.151.0
-        version: 0.151.3
+        specifier: 'catalog:'
+        version: 0.174.0
     devDependencies:
       '@flywave/flywave-fetch':
         specifier: workspace:*
@@ -1815,8 +1821,8 @@ importers:
         specifier: 'catalog:'
         version: 6.11.4
       three:
-        specifier: ^0.151.0
-        version: 0.151.3
+        specifier: 'catalog:'
+        version: 0.174.0
     devDependencies:
       '@flywave/flywave-fetch':
         specifier: workspace:*
@@ -1913,8 +1919,8 @@ importers:
         specifier: workspace:*
         version: link:../flywave-utils
       three:
-        specifier: ^0.151.0
-        version: 0.151.3
+        specifier: 'catalog:'
+        version: 0.174.0
     devDependencies:
       '@types/chai':
         specifier: 'catalog:'
@@ -1949,12 +1955,18 @@ importers:
       '@davidcmeier/string-to-color':
         specifier: 'catalog:'
         version: 2.0.0
+      '@flywave/flywave-datasource-protocol':
+        specifier: workspace:*
+        version: link:../flywave-datasource-protocol
       '@flywave/flywave-debug-datasource':
         specifier: workspace:*
         version: link:../flywave-debug-datasource
       '@flywave/flywave-features-datasource':
         specifier: workspace:*
         version: link:../flywave-features-datasource
+      '@flywave/flywave-geoutils':
+        specifier: workspace:*
+        version: link:../flywave-geoutils
       '@flywave/flywave-lrucache':
         specifier: workspace:*
         version: link:../flywave-lrucache
@@ -1970,6 +1982,9 @@ importers:
       '@flywave/flywave-mapview-decoder':
         specifier: workspace:*
         version: link:../flywave-mapview-decoder
+      '@flywave/flywave-transfer-manager':
+        specifier: workspace:*
+        version: link:../flywave-transfer-manager
       '@flywave/flywave-utils':
         specifier: workspace:*
         version: link:../flywave-utils
@@ -1991,6 +2006,9 @@ importers:
       assert:
         specifier: 'catalog:'
         version: 2.0.0
+      csscolorparser:
+        specifier: 'catalog:'
+        version: 1.0.3
       d3-dispatch:
         specifier: 'catalog:'
         version: 3.0.1
@@ -2030,6 +2048,9 @@ importers:
       lodash.debounce:
         specifier: 'catalog:'
         version: 4.0.8
+      lodash.isequalwith:
+        specifier: 'catalog:'
+        version: 4.4.0
       lodash.range:
         specifier: 'catalog:'
         version: 3.2.0
@@ -5811,6 +5832,9 @@ packages:
   lodash.isequal@4.5.0:
     resolution: {integrity: sha512-pDo3lu8Jhfjqls6GkMgpahsF9kCyayhgykjyLMNFTKWrpVdAQtYyB4muAMWozBB4ig/dtWAmsMxLEI8wuz+DYQ==}
 
+  lodash.isequalwith@4.4.0:
+    resolution: {integrity: sha512-dcZON0IalGBpRmJBmMkaoV7d3I80R2O+FrzsZyHdNSFrANq/cgDqKQNmAHE8UEj4+QYWwwhkQOVdLHiAopzlsQ==}
+
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
 
@@ -7285,9 +7309,6 @@ packages:
     resolution: {integrity: sha512-xAwZj0hZknpwVsdK5BBJTIAZDjDPZCRzURY1o+z/JHBON/jc2UetK1CzPeQZiiOVSfI4jV2z7sXnnGtgsgnjaA==}
     peerDependencies:
       three: '>= 0.159.0'
-
-  three@0.151.3:
-    resolution: {integrity: sha512-+vbuqxFy8kzLeO5MgpBHUvP/EAiecaDwDuOPPDe6SbrZr96kccF0ktLngXc7xA7bzyd3N0t2f6mw3Z9y6JCojQ==}
 
   three@0.174.0:
     resolution: {integrity: sha512-p+WG3W6Ov74alh3geCMkGK9NWuT62ee21cV3jEnun201zodVF4tCE5aZa2U122/mkLRmhJJUQmLLW1BH00uQJQ==}
@@ -12596,6 +12617,8 @@ snapshots:
 
   lodash.isequal@4.5.0: {}
 
+  lodash.isequalwith@4.4.0: {}
+
   lodash.merge@4.6.2: {}
 
   lodash.range@3.2.0: {}
@@ -14272,8 +14295,6 @@ snapshots:
   three-mesh-bvh@0.9.0(three@0.174.0):
     dependencies:
       three: 0.174.0
-
-  three@0.151.3: {}
 
   three@0.174.0: {}
 

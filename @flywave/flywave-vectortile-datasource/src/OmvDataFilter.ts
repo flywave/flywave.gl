@@ -3,8 +3,8 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { GeometryKind, GeometryKindSet } from "@flywave/flywave-datasource-protocol/src";
-import { MapEnv } from "@flywave/flywave-datasource-protocol/src/index-decoder";
+import { GeometryKind, GeometryKindSet } from "@flywave/flywave-datasource-protocol";
+import { MapEnv } from "@flywave/flywave-datasource-protocol/index-decoder";
 
 import {
     OmvFeatureFilterDescription,

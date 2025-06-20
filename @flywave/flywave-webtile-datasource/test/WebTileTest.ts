@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { GeometryKind } from "@flywave/flywave-datasource-protocol/src";
+import { GeometryKind } from "@flywave/flywave-datasource-protocol";
 import { mercatorProjection, TileKey } from "@flywave/flywave-geoutils";
 import { CopyrightInfo, MapView, Tile } from "@flywave/flywave-mapview";
 import { LoggerManager } from "@flywave/flywave-utils";
@@ -16,7 +16,7 @@ import { WebTileDataSource } from "../src/index";
 describe("WebTileDataSource", function () {
     const fakeWebTileProvider = {
         getTexture: sinon.spy((tile: Tile) => {
-            return Promise.resolve(([{}, []] as unknown) as [THREE.Texture, CopyrightInfo[]]);
+            return Promise.resolve([{}, []] as unknown as [THREE.Texture, CopyrightInfo[]]);
         })
     };
 

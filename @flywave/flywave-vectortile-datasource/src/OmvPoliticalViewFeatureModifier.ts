@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { MapEnv } from "@flywave/flywave-datasource-protocol/src/index-decoder";
+import { MapEnv } from "@flywave/flywave-datasource-protocol/index-decoder";
 import { LoggerManager } from "@flywave/flywave-utils";
 
 import { OmvFeatureModifier } from "./OmvDataFilter";

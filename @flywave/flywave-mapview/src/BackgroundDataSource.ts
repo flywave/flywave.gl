@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { FlatTheme, Theme } from "@flywave/flywave-datasource-protocol/src";
+import { FlatTheme, Theme } from "@flywave/flywave-datasource-protocol";
 import { TileKey, TilingScheme, webMercatorTilingScheme } from "@flywave/flywave-geoutils";
 
 import { DataSource } from "./DataSource";

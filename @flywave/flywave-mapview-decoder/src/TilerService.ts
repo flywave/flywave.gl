@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ITiler, WorkerTilerProtocol } from "@flywave/flywave-datasource-protocol/src";
+import { ITiler, WorkerTilerProtocol } from "@flywave/flywave-datasource-protocol";
 import { TileKey } from "@flywave/flywave-geoutils";
 
 import { GeoJsonTiler } from "./GeoJsonTiler";

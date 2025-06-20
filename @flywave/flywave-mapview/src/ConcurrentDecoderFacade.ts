@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ITileDecoder } from "@flywave/flywave-datasource-protocol/src";
+import { ITileDecoder } from "@flywave/flywave-datasource-protocol";
 
 import { ConcurrentWorkerSet } from "./ConcurrentWorkerSet";
 import { WorkerBasedDecoder } from "./WorkerBasedDecoder";

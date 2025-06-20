@@ -7,7 +7,7 @@ import {
     ImageTexture,
     LineMarkerTechnique,
     PoiTechnique
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three";
 
 import { ImageItem } from "../src/image/Image";

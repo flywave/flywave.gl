@@ -3,7 +3,7 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { RequestController, WorkerServiceProtocol } from "@flywave/flywave-datasource-protocol/src";
+import { RequestController, WorkerServiceProtocol } from "@flywave/flywave-datasource-protocol";
 import {
     getOptionValue,
     IWorkerChannelMessage,

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GeometryKind } from "@flywave/flywave-datasource-protocol/src";
+import { GeometryKind } from "@flywave/flywave-datasource-protocol";
 import { Projection } from "@flywave/flywave-geoutils";
 import { setDisplacementMapToMaterial } from "@flywave/flywave-materials";
 import { assert } from "@flywave/flywave-utils";

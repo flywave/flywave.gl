@@ -12,7 +12,7 @@ import {
     ITileDecoder,
     StyleSet,
     TileInfo
-} from "@flywave/flywave-datasource-protocol/src";
+} from "@flywave/flywave-datasource-protocol";
 import {
     Projection,
     TileKey,
@@ -82,13 +82,13 @@ function createMockTileDecoder() {
 }
 
 function createMockMapView() {
-    return ({
+    return {
         projection: webMercatorProjection,
         getDataSourceByName() {},
         statistics: new Statistics(),
         frameNumber: 0,
         clearTileCache: () => {}
-    } as any) as MapView;
+    } as any as MapView;
 }
 
 describe("TileDataSource", function () {

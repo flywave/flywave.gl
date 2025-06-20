@@ -6,7 +6,7 @@
 
 import "@flywave/flywave-fetch";
 
-import { GeoJson, ITiler, WorkerServiceProtocol } from "@flywave/flywave-datasource-protocol/src";
+import { GeoJson, ITiler, WorkerServiceProtocol } from "@flywave/flywave-datasource-protocol";
 import { TileKey } from "@flywave/flywave-geoutils";
 import { ConcurrentTilerFacade } from "@flywave/flywave-mapview";
 import { DataProvider } from "@flywave/flywave-mapview-decoder";

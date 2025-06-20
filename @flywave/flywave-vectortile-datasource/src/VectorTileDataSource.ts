@@ -3,7 +3,11 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { DecoderOptions, OptionsMap, WorkerServiceProtocol } from "@flywave/flywave-datasource-protocol/src";
+import {
+    DecoderOptions,
+    OptionsMap,
+    WorkerServiceProtocol
+} from "@flywave/flywave-datasource-protocol";
 import { EarthConstants, TileKey, webMercatorTilingScheme } from "@flywave/flywave-geoutils";
 import { DataSourceOptions, Tile } from "@flywave/flywave-mapview";
 import {
