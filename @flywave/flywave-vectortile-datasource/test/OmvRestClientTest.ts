@@ -13,7 +13,12 @@ import { TransferManager } from "@flywave/flywave-transfer-manager";
 import { assert } from "chai";
 import * as sinon from "sinon";
 
-import { APIFormat, AuthenticationMethod, AuthenticationTypeBearer, OmvRestClient } from "../index";
+import {
+    APIFormat,
+    AuthenticationMethod,
+    AuthenticationTypeBearer,
+    OmvRestClient
+} from "../src/index";
 
 function createMockDownloadResponse(tileUrl: string) {
     const mock = {
@@ -32,7 +37,7 @@ function createMockDownloadResponse(tileUrl: string) {
 class MockTransferManager extends TransferManager {
     /** @override */
     download(tileUrl: string): Promise<Response> {
-        return Promise.resolve((createMockDownloadResponse(tileUrl) as any) as Response);
+        return Promise.resolve(createMockDownloadResponse(tileUrl) as any as Response);
     }
 }
 const mockDownloadManager = new MockTransferManager();
@@ -41,7 +46,7 @@ describe("OmvRestClient", function () {
     let downloadSpy: sinon.SinonSpy;
 
     beforeEach(function () {
-        downloadSpy = (sinon.spy(mockDownloadManager, "download") as any) as sinon.SinonSpy;
+        downloadSpy = sinon.spy(mockDownloadManager, "download") as any as sinon.SinonSpy;
     });
 
     afterEach(function () {

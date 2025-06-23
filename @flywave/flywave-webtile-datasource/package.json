@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-webtile-datasource",
     "version": "0.28.0",
     "description": "WebTile Data source",
-    "main": "lib/index.js",
-    "typings": "lib/index",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
     "directories": {
         "test": "test"
     },
@@ -39,7 +39,9 @@
         "cross-env": "catalog:",
         "mocha": "catalog:",
         "source-map-support": "catalog:",
-        "typescript": "catalog:"
+        "typescript": "catalog:",
+        "chai-as-promised": "catalog:",
+        "@types/chai-as-promised": "catalog:"
     },
     "peerDependencies": {
         "three": "catalog:"

@@ -16,7 +16,7 @@ import {
     StyleSetEvaluator
 } from "@flywave/flywave-datasource-protocol/index-decoder";
 import { loadTestResource } from "@flywave/flywave-test-utils";
-import * as Ajv from "ajv";
+import Ajv from "ajv";
 import { assert } from "chai";
 import * as path from "path";
 

@@ -2,8 +2,8 @@
     "name": "@flywave/flywave-transfer-manager",
     "version": "0.28.0",
     "description": "Provides a manager that orchestrates downloading URLs, particularly static map resources.",
-    "main": "lib/index.js",
-    "typings": "lib/index",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
     "directories": {
         "test": "test",
         "lib": "src"

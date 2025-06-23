@@ -18,7 +18,7 @@ import {
 } from "@flywave/flywave-vectortile-datasource";
 import { HereTileProvider, HereWebTileDataSource } from "@flywave/flywave-webtile-datasource";
 
-import { apikey, copyrightInfo } from "../config";
+import { apikey, copyrightInfo } from "./config";
 
 export namespace GlobeAtmosphereExample {
     enum DataSourceVariant {

@@ -1,15 +1,25 @@
 {
     "compilerOptions": {
-        "lib": ["es2022", "DOM", "dom.iterable"],
-        "module": "CommonJS",
-        "moduleResolution": "node",
-        "skipLibCheck": true,
-        "target": "ES2017",
         "isolatedModules": false,
+        "resolveJsonModule": true,
+        "moduleResolution": "node",
         "strict": false,
-        "declaration": true,
-        "incremental": true,
-        "useUnknownInCatchVariables": false
+        "noImplicitAny": false,
+        "allowJs": true,
+        "preserveConstEnums": true,
+        "removeComments": true,
+        "esModuleInterop": true,
+        "sourceMap": true,
+        "skipLibCheck": true,
+        "declaration": true /* Generates corresponding '.d.ts' file. */,
+        "target": "es2017",
+        "module": "commonjs",
+        "lib": ["es2017", "DOM", "dom.iterable"],
+        "allowSyntheticDefaultImports": true,
+        "experimentalDecorators": true,
+        "useUnknownInCatchVariables": false,
+        "downlevelIteration": true,
+        "types": ["node", "@types/mocha"]
     },
     "exclude": ["node_modules"]
 }

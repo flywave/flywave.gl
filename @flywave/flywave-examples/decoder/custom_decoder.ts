@@ -27,7 +27,7 @@ import {
     TileDecoderService,
     WorkerServiceManager
 } from "@flywave/flywave-mapview-decoder/index-worker";
-import { BoxBufferGeometry, Matrix4, Vector3 } from "three";
+import { BoxGeometry, Matrix4, Vector3 } from "three";
 
 import { CUSTOM_DECODER_SERVICE_TYPE } from "./custom_decoder_defs";
 
@@ -186,7 +186,7 @@ class CustomDecoder extends ThemedTileDecoder {
 
         // Scale the mesh so that its size is relative to the tile size.
         const scale = (1 << 20) / (1 << tileKey.level);
-        const boxGeometry = new BoxBufferGeometry(1.0 * scale, 5.0 * scale, 5.0 * scale);
+        const boxGeometry = new BoxGeometry(1.0 * scale, 5.0 * scale, 5.0 * scale);
         const matrix = new Matrix4();
         matrix.makeTranslation(2.0 * scale, 1.0 * scale, 0);
         boxGeometry.applyMatrix4(matrix);

@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { HereTileProvider, HereWebTileDataSource, WebTileDataSource } from "../index";
+import { HereTileProvider, HereWebTileDataSource, WebTileDataSource } from "../src/index";
 
 describe("HereWebTileDataSource", function () {
     it("#createWebTileDataSource has default values", async function () {

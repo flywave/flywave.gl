@@ -1,12 +1,13 @@
 {
     "extends": "../../tsconfig.json",
     "compilerOptions": {
+        "outDir": "./lib",
         "sourceMap": true,
         "composite": true,
         "incremental": true,
         "declarationMap": true
     },
-    "exclude": ["dist/**", "test/**", "node_modules"],
+    "exclude": ["dist/**", "test/**", "src/**/*.*", "node_modules"],
     "references": [
         {
             "path": "../flywave-datasource-protocol"

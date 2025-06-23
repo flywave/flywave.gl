@@ -1,12 +1,9 @@
 {
-    "extends": "../../tsconfig.base.json",
+    "extends": "../../tsconfig.json",
     "compilerOptions": {
-        "outDir": "./lib", 
-        "rootDir": ".",
-        "sourceMap": true,
-        "composite": true,
-        "incremental": true,
-        "declarationMap": true
+        "outDir": "./lib",
+        "composite": true
     },
-    "exclude": ["dist/**", "test/**", "node_modules"]
+    "include": ["index.ts", "index.web.ts", "test/**/*"],
+    "exclude": ["dist/**", "node_modules"]
 }

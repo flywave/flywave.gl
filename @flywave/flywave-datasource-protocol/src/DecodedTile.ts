@@ -25,6 +25,7 @@ import {
     Technique
 } from "./Techniques";
 import { TileInfo } from "./TileInfo";
+import { TypedArray } from "three";
 
 /**
  * This object has geometry data in the form of geometries buffers ready to be used by WebGL.
@@ -245,7 +246,7 @@ export type BufferElementType =
  */
 export interface BufferAttribute {
     name: string;
-    buffer: ArrayBufferLike;
+    buffer: ArrayBufferLike | TypedArray;
     type: BufferElementType;
     itemCount: number;
     normalized?: boolean;

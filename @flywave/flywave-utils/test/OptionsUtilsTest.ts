@@ -13,11 +13,11 @@ import { getOptionValue } from "../src/OptionsUtils";
 describe("OptionsUtils", function () {
     describe("#getOptionValue", function () {
         it("returns first defined", function () {
-            assert.equal(getOptionValue(), undefined);
-            assert.equal(getOptionValue(undefined), undefined);
-            assert.equal(getOptionValue(1), 1);
-            assert.equal(getOptionValue(undefined, 2, 3), 2);
-            assert.equal(getOptionValue(undefined, 2), 2);
+            assert.equal(getOptionValue<number>(), undefined);
+            assert.equal(getOptionValue<number>(undefined), undefined);
+            assert.equal(getOptionValue<number>(1), 1);
+            assert.equal(getOptionValue<number>(undefined, 2, 3), 2);
+            assert.equal(getOptionValue<number>(undefined, 2), 2);
         });
         it("erases 'undefined' from type if last param is defined", function () {
             const r1: number = getOptionValue(undefined, 2);

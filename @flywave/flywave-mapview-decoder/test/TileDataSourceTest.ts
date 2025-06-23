@@ -24,7 +24,7 @@ import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import { assert, expect } from "chai";
 import * as sinon from "sinon";
 
-import { DataProvider, TileDataSource, TileFactory } from "../index";
+import { DataProvider, TileDataSource, TileFactory } from "../src/index";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

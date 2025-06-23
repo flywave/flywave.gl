@@ -10,7 +10,7 @@ import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 /**
  * In this example we avail ourselves of the [[FeaturesDataSource]] and its `setFromGeoJson` method
@@ -100,9 +100,8 @@ export namespace GeoJsonExample {
     function processGeoJsonFile(file: File) {
         const reader = new FileReader();
         reader.onload = () => {
-            (document.querySelector(
-                "#editor textarea"
-            ) as HTMLTextAreaElement).value = reader.result as string;
+            (document.querySelector("#editor textarea") as HTMLTextAreaElement).value =
+                reader.result as string;
             featuresDataSource.setFromGeojson(JSON.parse(reader.result as string));
             map.update();
         };

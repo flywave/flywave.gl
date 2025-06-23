@@ -6,7 +6,7 @@
         "generators"
     ],
     "scripts": {
-        "build":"\n",
+        "build": "\n",
         "test": "mocha $EXTRA_MOCHA_ARGS ./test/*.js"
     },
     "repository": {
@@ -28,7 +28,8 @@
     "devDependencies": {
         "chai": "catalog:",
         "fs.extra": "catalog:",
-        "mocha": "catalog:"
+        "mocha": "catalog:",
+        "@flywave/flywave-vectortile-datasource": "workspace:*"
     },
     "publishConfig": {
         "access": "public"

@@ -14,7 +14,7 @@ import { HereWebTileDataSource } from "@flywave/flywave-webtile-datasource";
 import { GUI } from "dat.gui";
 import * as THREE from "three";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 const SunCalc = require("suncalc");
 

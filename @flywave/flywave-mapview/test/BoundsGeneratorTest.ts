@@ -46,9 +46,6 @@ describe("BoundsGenerator", function () {
         sandbox
             .stub(THREE, "WebGLRenderer")
             .returns(TestUtils.getWebGLRendererStub(sandbox, clearColorStub));
-        sandbox
-            .stub(THREE, "WebGL1Renderer")
-            .returns(TestUtils.getWebGLRendererStub(sandbox, clearColorStub));
         if (inNodeContext) {
             const theGlobal: any = global;
             theGlobal.window = { window: { devicePixelRatio: 10 } };
@@ -60,12 +57,12 @@ describe("BoundsGenerator", function () {
         }
         addEventListenerSpy = sinon.stub();
         removeEventListenerSpy = sinon.stub();
-        canvas = ({
+        canvas = {
             clientWidth: 1200,
             clientHeight: 800,
             addEventListener: addEventListenerSpy,
             removeEventListener: removeEventListenerSpy
-        } as unknown) as HTMLCanvasElement;
+        } as unknown as HTMLCanvasElement;
         mapViewOptions = {
             canvas,
             // Both options cause the `addDataSource` method to be called, which we can't `await` on

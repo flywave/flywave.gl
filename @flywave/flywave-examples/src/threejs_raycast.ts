@@ -14,7 +14,7 @@ import {
 } from "@flywave/flywave-vectortile-datasource";
 import * as THREE from "three";
 
-import { apikey, copyrightInfo } from "../config";
+import { apikey, copyrightInfo } from "./config";
 
 /**
  * This example shows how we can pick the scene and add a [three.js](https://threejs.org/) object.

@@ -8,7 +8,7 @@
 
 import { assert } from "chai";
 
-import { loadTestResource } from "../index.web";
+import { loadTestResource } from "../src/index.web";
 
 describe("@flywave/flywave-test-utils", function () {
     describe("#loadTestResource", function () {

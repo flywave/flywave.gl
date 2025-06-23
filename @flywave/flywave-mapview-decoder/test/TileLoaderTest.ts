@@ -22,7 +22,7 @@ import {
 import { DataSource, MapView, Statistics, Tile, TileLoaderState } from "@flywave/flywave-mapview";
 import { LoggerManager } from "@flywave/flywave-utils";
 import * as chai from "chai";
-import * as chaiAsPromised from "chai-as-promised";
+import chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
 
 import { DataProvider } from "../src/DataProvider";

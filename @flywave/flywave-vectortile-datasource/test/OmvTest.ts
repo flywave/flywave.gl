@@ -17,7 +17,7 @@ import {
     OmvFilterString,
     OmvGenericFeatureModifier,
     OmvGeometryType
-} from "../index";
+} from "../src/index";
 
 /**
  * Until we have some proper mock datasources, the OmvFeatureFilter/OmvFeatureModifier tests here

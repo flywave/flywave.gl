@@ -25,7 +25,7 @@ import {
 } from "@flywave/flywave-geoutils";
 import { MapMeshBasicMaterial } from "@flywave/flywave-materials";
 import * as chai from "chai";
-import * as chaiAsPromised from "chai-as-promised";
+import chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
 import * as THREE from "three";
 import { RawShaderMaterial } from "three";
@@ -295,7 +295,7 @@ describe("TileGeometryCreator", () => {
 
         expect(userData).to.have.property("texture");
         expect(userData.texture).to.be.an.instanceOf(THREE.DataTexture);
-        const imageData: ImageData = (userData.texture as THREE.DataTexture).image;
+        const imageData: ImageData = (userData.texture as THREE.DataTexture).image as ImageData;
         assert.equal(imageData.width, decodedDisplacementMap.xCountVertices);
         assert.equal(imageData.height, decodedDisplacementMap.yCountVertices);
     });
@@ -436,7 +436,7 @@ describe("TileGeometryCreator", () => {
         )[0];
 
         // create a three.js box geometry
-        const boxGeometry = new THREE.BoxBufferGeometry(100, 100, 1);
+        const boxGeometry = new THREE.BoxGeometry(100, 100, 1);
 
         // encode the three.js geometry so it can be trasferred using
         // DecodedTile.
@@ -474,10 +474,10 @@ describe("TileGeometryCreator", () => {
         ) as THREE.Mesh;
 
         const mainObjectGeometry = mainObject.geometry as THREE.BufferGeometry;
-        assert.isTrue(mainObjectGeometry.isBufferGeometry);
+        expect(assert.isTrue(mainObjectGeometry.isBufferGeometry));
 
         const attachmentObjectGeometry = mainObject.geometry as THREE.BufferGeometry;
-        assert.isTrue(attachmentObjectGeometry.isBufferGeometry);
+        expect(assert.isTrue(attachmentObjectGeometry.isBufferGeometry));
 
         assert.isObject(mainObjectGeometry.getAttribute("position"));
         assert.isObject(mainObjectGeometry.getAttribute("normal"));
@@ -552,10 +552,10 @@ describe("TileGeometryCreator", () => {
                 tgc.createObjects(newTile, decodedTile, textureCallback);
                 assert.equal(newTile.objects.length, 1);
                 const object = newTile.objects[0] as THREE.Mesh;
-                assert.isTrue(object.isMesh);
+                expect(assert.isTrue(object.isMesh));
                 const material = object.material as THREE.Material;
-                assert.isObject(material);
-                assert.isTrue(material.isMaterial);
+                expect(assert.isObject(material));
+                expect(assert.isTrue(material.isMaterial));
                 assert.strictEqual(material.side, THREE.DoubleSide);
             });
         });
@@ -585,19 +585,19 @@ describe("TileGeometryCreator", () => {
             });
 
             await wait();
-            assert.isFalse(promiseResolved);
+            expect(assert.isFalse(promiseResolved));
 
             initTextures!();
             await assert.isFulfilled(texturesPromise);
 
-            assert.isTrue(promiseResolved);
-            assert.equal(newTile.objects.length, 1);
+            expect(assert.isTrue(promiseResolved));
+            expect(assert.equal(newTile.objects.length, 1));
             const material = (newTile.objects[0] as THREE.Mesh).material as any;
-            assert.isDefined(material.map);
-            assert.isTrue(newTile.shouldDisposeTexture(material.map as THREE.Texture));
-            assert.isDefined(material.alphaMap);
-            assert.isTrue(newTile.shouldDisposeTexture(material.alphaMap as THREE.Texture));
-            assert.isTrue(initTexturesStub.called);
+            expect(assert.isDefined(material.map));
+            expect(assert.isTrue(newTile.shouldDisposeTexture(material.map as THREE.Texture)));
+            expect(assert.isDefined(material.alphaMap));
+            expect(assert.isTrue(newTile.shouldDisposeTexture(material.alphaMap as THREE.Texture)));
+            expect(assert.isTrue(initTexturesStub.called));
         });
 
         it("ignores rejected textures and uploads all those resolved", async function () {
@@ -608,13 +608,13 @@ describe("TileGeometryCreator", () => {
 
             await tgc.createAllGeometries(newTile, decodedTile);
 
-            assert.equal(newTile.objects.length, 1);
+            expect(assert.equal(newTile.objects.length, 1));
             const material = (newTile.objects[0] as THREE.Mesh).material as any;
-            assert.isNull(material.map);
-            assert.isFalse(newTile.shouldDisposeTexture(material.map as THREE.Texture));
-            assert.isDefined(material.alphaMap);
-            assert.isTrue(newTile.shouldDisposeTexture(material.alphaMap as THREE.Texture));
-            assert.isTrue(initTexturesStub.called);
+            expect(assert.isNull(material.map));
+            expect(assert.isFalse(newTile.shouldDisposeTexture(material.map as THREE.Texture)));
+            expect(assert.isDefined(material.alphaMap));
+            expect(assert.isTrue(newTile.shouldDisposeTexture(material.alphaMap as THREE.Texture)));
+            expect(assert.isTrue(initTexturesStub.called));
         });
     });
 });

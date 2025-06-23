@@ -14,7 +14,7 @@ import {
     VectorTileDataSource
 } from "@flywave/flywave-vectortile-datasource";
 
-import { apikey, copyrightInfo } from "../config";
+import { apikey, copyrightInfo } from "./config";
 import * as geojson from "../resources/italy.json";
 
 /**

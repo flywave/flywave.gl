@@ -18,11 +18,13 @@ import { TileKey } from "@flywave/flywave-geoutils";
 import { MapMeshStandardMaterial, SolidLineMaterial } from "@flywave/flywave-materials";
 import { assertLogsSync } from "@flywave/flywave-test-utils";
 import { LoggerManager } from "@flywave/flywave-utils";
-import * as chai from "chai";
-import * as chaiAsPromised from "chai-as-promised";
+import chai from "chai";
+import chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
 import * as THREE from "three";
+
 chai.use(chaiAsPromised);
+
 // Needed for using assert.isFulfilled for example
 const { expect, assert } = chai;
 
@@ -66,7 +68,7 @@ describe("DecodedTileHelpers", function () {
                 technique,
                 env
             })! as SolidLineMaterial;
-            assert.exists(material);
+            expect(assert.exists(material));
 
             assert.approximately(material.opacity, 7 / 15, 0.00001);
             assert.equal(material.blending, THREE.CustomBlending);
@@ -85,7 +87,7 @@ describe("DecodedTileHelpers", function () {
                 technique,
                 env
             })! as SolidLineMaterial;
-            assert.exists(material);
+            expect(assert.exists(material));
 
             assert.equal(material.opacity, 1);
             assert.equal(material.blending, THREE.CustomBlending);
@@ -104,7 +106,7 @@ describe("DecodedTileHelpers", function () {
                     technique,
                     env
                 })! as SolidLineMaterial;
-                assert.exists(material);
+                expect(assert.exists(material));
             }, /Unsupported color format/);
         });
 
@@ -119,8 +121,8 @@ describe("DecodedTileHelpers", function () {
                 technique,
                 env
             })! as SolidLineMaterial;
-            assert.exists(material);
-            assert.isFalse(material.depthTest);
+            expect(assert.exists(material));
+            expect(assert.isFalse(material.depthTest));
         });
 
         it("enables depthTest for solid lines if specified in the technique", function () {
@@ -135,8 +137,8 @@ describe("DecodedTileHelpers", function () {
                 technique,
                 env
             })! as SolidLineMaterial;
-            assert.exists(material);
-            assert.isTrue(material.depthTest);
+            expect(assert.exists(material));
+            expect(assert.isTrue(material.depthTest));
         });
 
         it("ShaderTechnique", function () {
@@ -156,24 +158,28 @@ describe("DecodedTileHelpers", function () {
             };
             const env = new MapEnv({ $zoom: 14 });
             const shaderMaterial = createMaterial(rendererCapabilities, { technique, env });
-            assert.isTrue(
-                shaderMaterial instanceof THREE.ShaderMaterial,
-                "expected a THREE.ShaderMaterial"
+            expect(
+                assert.isTrue(
+                    shaderMaterial instanceof THREE.ShaderMaterial,
+                    "expected a THREE.ShaderMaterial"
+                )
             );
             if (shaderMaterial instanceof THREE.ShaderMaterial) {
                 assert.isObject(
                     shaderMaterial.uniforms.lineColor,
                     "expected a uniform named lineColor"
                 );
-                assert.isTrue(
-                    shaderMaterial.uniforms.lineColor.value instanceof THREE.Color,
-                    "expected a uniform of type THREE.Color"
+                expect(
+                    assert.isTrue(
+                        shaderMaterial.uniforms.lineColor.value instanceof THREE.Color,
+                        "expected a uniform of type THREE.Color"
+                    )
                 );
                 assert.isString(shaderMaterial.vertexShader);
                 assert.isString(shaderMaterial.fragmentShader);
-                assert.isTrue(shaderMaterial.clipping);
+                expect(assert.isTrue(shaderMaterial.clipping));
             }
-            assert.isTrue(usesObject3D(technique));
+            expect(assert.isTrue(usesObject3D(technique)));
             const object = buildObject(
                 technique,
                 new THREE.BufferGeometry(),
@@ -181,7 +187,7 @@ describe("DecodedTileHelpers", function () {
                 tile,
                 false
             );
-            assert.isTrue(object instanceof THREE.Line, "expected a THREE.Line object");
+            expect(assert.isTrue(object instanceof THREE.Line, "expected a THREE.Line object"));
         });
 
         it("creates texture from url", async function () {
@@ -210,8 +216,8 @@ describe("DecodedTileHelpers", function () {
                 },
                 callbackSpy
             ) as MapMeshStandardMaterial;
-            assert.isDefined(onImageLoad);
-            assert.isTrue(callbackSpy.called);
+            expect(assert.isDefined(onImageLoad));
+            expect(assert.isTrue(callbackSpy.called));
 
             // Check that texture promised is not yet resolved.
             let textureLoaded = false;
@@ -220,15 +226,15 @@ describe("DecodedTileHelpers", function () {
             });
 
             await wait();
-            assert.isFalse(textureLoaded);
-            assert.exists(material);
-            assert.notExists(material!.map);
+            expect(assert.isFalse(textureLoaded));
+            expect(assert.exists(material));
+            expect(assert.notExists(material!.map));
 
             // Call image load callback, promise must now be resolved and texture set in material.
             onImageLoad!(fakeImageElement);
-            await assert.isFulfilled(texturePromise);
-            assert.isTrue(textureLoaded);
-            assert.exists(material!.map);
+            expect(await assert.isFulfilled(texturePromise));
+            expect(assert.isTrue(textureLoaded));
+            expect(assert.exists(material!.map));
             assert.strictEqual(material!.map!.image, fakeImageElement);
         });
 
@@ -254,9 +260,9 @@ describe("DecodedTileHelpers", function () {
                 },
                 callbackSpy
             ) as MapMeshStandardMaterial;
-            assert.exists(material);
-            assert.exists(material.map);
-            assert.isTrue(callbackSpy.called);
+            expect(assert.exists(material));
+            expect(assert.exists(material.map));
+            expect(assert.isTrue(callbackSpy.called));
             const texturePromise = callbackSpy.firstCall.args[0];
             return assert.isFulfilled(texturePromise);
         });
@@ -279,9 +285,9 @@ describe("DecodedTileHelpers", function () {
                 },
                 callbackSpy
             ) as MapMeshStandardMaterial;
-            assert.exists(material);
-            assert.notExists(material.map);
-            assert.isTrue(callbackSpy.called);
+            expect(assert.exists(material));
+            expect(assert.notExists(material.map));
+            expect(assert.isTrue(callbackSpy.called));
             const texturePromise = callbackSpy.firstCall.args[0];
             return assert.isRejected(texturePromise);
         });
@@ -312,7 +318,7 @@ describe("DecodedTileHelpers", function () {
                 technique,
                 env
             }) as MapMeshStandardMaterial;
-            assert.exists(material?.map);
+            expect(assert.exists(material?.map));
             const map = material!.map!;
             const expectedProps = technique.mapProperties! as TextureProperties;
             assert.equal(map.wrapS, toWrappingMode(expectedProps.wrapS!));
@@ -356,12 +362,12 @@ describe("DecodedTileHelpers", function () {
                 callbackSpy
             ) as MapMeshStandardMaterial;
 
-            assert.exists(material);
-            assert.exists(material.map);
-            assert.isTrue(callbackSpy.called);
-            assert.isDefined(objectURL);
+            expect(assert.exists(material));
+            expect(assert.exists(material.map));
+            expect(assert.isTrue(callbackSpy.called));
+            expect(assert.isDefined(objectURL));
             material.map?.dispose();
-            assert.isTrue(revokeObjectURLSpy.calledWith(objectURL));
+            expect(assert.isTrue(revokeObjectURLSpy.calledWith(objectURL)));
         });
 
         it("creates texture from dynamic property with HTML element", function () {
@@ -380,9 +386,9 @@ describe("DecodedTileHelpers", function () {
                 },
                 callbackSpy
             ) as MapMeshStandardMaterial;
-            assert.exists(material);
-            assert.exists(material.map);
-            assert.isTrue(callbackSpy.called);
+            expect(assert.exists(material));
+            expect(assert.exists(material.map));
+            expect(assert.isTrue(callbackSpy.called));
         });
 
         it("creates default texture when dynamic property evaluates to null", function () {
@@ -401,9 +407,9 @@ describe("DecodedTileHelpers", function () {
                 },
                 callbackSpy
             ) as MapMeshStandardMaterial;
-            assert.exists(material);
-            assert.exists(material.map);
-            assert.isTrue(callbackSpy.called);
+            expect(assert.exists(material));
+            expect(assert.exists(material.map));
+            expect(assert.isTrue(callbackSpy.called));
         });
     });
     it("applyBaseColorToMaterial toggles opacity with material", function () {
@@ -618,9 +624,9 @@ describe("DecodedTileHelpers", function () {
                 const technique = test.technique;
                 const objClass = test.object;
                 if (objClass === undefined) {
-                    assert.isFalse(usesObject3D(technique));
+                    expect(assert.isFalse(usesObject3D(technique)));
                 } else {
-                    assert.isTrue(usesObject3D(technique));
+                    expect(assert.isTrue(usesObject3D(technique)));
                     const obj = buildObject(technique, geometry, material, tile, test.elevation);
                     expect(obj).to.be.instanceOf(objClass);
                 }

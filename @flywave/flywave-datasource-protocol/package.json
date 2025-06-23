@@ -2,16 +2,16 @@
     "name": "@flywave/flywave-datasource-protocol",
     "version": "0.28.0",
     "description": "Components used for the decoding and styling of data that is used by the Datasources.",
-    "main": "./lib/index.js",
-    "typings": "./lib/index",
+    "main": "./lib/src/index.js",
+    "typings": "./lib/src/index",
     "exports": {
         ".": {
-            "import": "./lib/index.js",
-            "require": "./lib/index.js"
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
         },
         "./*": {
-            "import": "./lib/*",
-            "require": "./lib/*"
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
         }
     },
     "directories": {
@@ -50,7 +50,9 @@
         "source-map-support": "catalog:",
         "three": "catalog:",
         "typeconv": "catalog:",
-        "typescript": "catalog:"
+        "typescript": "catalog:",
+        "sinon": "catalog:",
+        "@types/sinon": "catalog:"
     },
     "publishConfig": {
         "access": "public"

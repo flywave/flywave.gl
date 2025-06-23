@@ -100,8 +100,8 @@ export function loadTestResourceNode(
     const filePath = path.join(modulePath, fileName);
 
     return new Promise((resolve, reject) => {
-        const encoding = type === "arraybuffer" ? null : "utf-8";
-        return fs.readFile(filePath, { encoding }, (err, data:Buffer) => {
+        const encoding = type === "arraybuffer" ? null : undefined; //"utf-8";
+        return fs.readFile(filePath, { encoding }, (err, data: Buffer) => {
             if (err) {
                 reject(err);
                 return;

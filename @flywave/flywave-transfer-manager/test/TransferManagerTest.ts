@@ -11,7 +11,7 @@ import "@flywave/flywave-fetch";
 import { assert, expect } from "chai";
 import * as sinon from "sinon";
 
-import { TransferManager } from "../index";
+import { TransferManager } from "../src/index";
 
 describe("TransferManager", function () {
     const fakeDataUrl = `https://download.example.url`;
@@ -58,7 +58,7 @@ describe("TransferManager", function () {
         // Act
         try {
             await downloadMgr.download(fakeDataUrl);
-        } catch (err) {
+        } catch (err: any) {
             // Assert
             assert(fetchStub.called);
             assert(fetchStub.callCount === 1);
@@ -108,7 +108,7 @@ describe("TransferManager", function () {
         // Act
         try {
             await downloadMgr.download(fakeDataUrl);
-        } catch (err) {
+        } catch (err: any) {
             // Assert
             assert(fetchStub.called);
             assert(fetchStub.callCount === 1);

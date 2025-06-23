@@ -10,7 +10,7 @@ const CopyWebpackPlugin: any = require("copy-webpack-plugin");
 // Uncomment this when the above issue is fixed.
 // import * as CopyWebpackPlugin from "copy-webpack-plugin";
 
-import * as HtmlWebpackPlugin from "html-webpack-plugin";
+import HtmlWebpackPlugin from "html-webpack-plugin";
 import { Configuration, WebpackPluginInstance } from "webpack";
 // As above, the typings don't work for webpack-merge, see:
 // https://github.com/DefinitelyTyped/DefinitelyTyped/issues/49757
@@ -97,12 +97,13 @@ export function addHarpWebpackConfig(config?: Configuration, harpConfig?: HarpWe
             {
                 entry: {
                     "flywave.gl": {
-                        import :mainEntry,
-                    library: {
-                        // all options under `output.library` can be used here
-                        name: config?.output?.library,
-                        type: 'umd'
-                      }}
+                        import: mainEntry,
+                        library: {
+                            // all options under `output.library` can be used here
+                            name: config?.output?.library,
+                            type: "umd"
+                        }
+                    }
                 }
             },
             bundles[0]

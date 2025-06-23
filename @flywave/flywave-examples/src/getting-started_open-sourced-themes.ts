@@ -9,7 +9,7 @@ import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 import { GUI } from "dat.gui";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 /**
  * This example copies the base example and adds a GUI allowing to switch between all the open-

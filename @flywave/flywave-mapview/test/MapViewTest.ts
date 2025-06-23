@@ -70,9 +70,6 @@ describe("MapView", function () {
         sandbox
             .stub(THREE, "WebGLRenderer")
             .returns(TestUtils.getWebGLRendererStub(sandbox, clearColorStub));
-        sandbox
-            .stub(THREE, "WebGL1Renderer")
-            .returns(TestUtils.getWebGLRendererStub(sandbox, clearColorStub));
         sandbox.stub(FontCatalogLoader, "loadFontCatalog").resolves();
         if (inNodeContext) {
             const theGlobal: any = global;

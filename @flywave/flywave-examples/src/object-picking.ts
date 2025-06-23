@@ -9,7 +9,7 @@ import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView, PickResult } from "@flywave/flywave-mapview";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 /**
  * This example showcases how picking works.

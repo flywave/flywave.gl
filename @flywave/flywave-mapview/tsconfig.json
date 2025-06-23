@@ -1,8 +1,7 @@
 {
-    "extends": "../../tsconfig.base.json",
+    "extends": "../../tsconfig.json",
     "compilerOptions": {
         "outDir": "./lib",
-        "rootDir": "./src",
         "sourceMap": true,
         "composite": true,
         "declaration": true,
@@ -20,11 +19,13 @@
             "@flywave/flywave-materials": ["../flywave-materials/src"],
             "@flywave/flywave-materials/*": ["../flywave-materials/src/*"],
             "@flywave/flywave-text-canvas": ["../flywave-text-canvas/src"],
+            "@flywave/flywave-text-canvas/*": ["../flywave-text-canvas/src/*"],
             "@flywave/flywave-transfer-manager": ["../flywave-transfer-manager/src"],
-            "@flywave/flywave-utils": ["../flywave-utils/src"]
+            "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-test-utils/*": ["../flywave-test-utils/src/*"]
         }
     },
-    "include": ["src/**/*"],
+    "include": ["src/**/*", "test/**/*.ts"],
     "references": [
         {
             "path": "../flywave-datasource-protocol"
@@ -55,6 +56,9 @@
         },
         {
             "path": "../flywave-utils"
+        },
+        {
+            "path": "../flywave-test-utils"
         }
     ]
 }

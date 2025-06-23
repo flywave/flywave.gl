@@ -1,8 +1,7 @@
 {
-    "extends": "../../tsconfig.base.json",
+    "extends": "../../tsconfig.json",
     "compilerOptions": {
         "outDir": "./lib",
-        "rootDir": "./src",
         "sourceMap": true,
         "composite": true,
         "incremental": true,
@@ -12,7 +11,7 @@
             "@flywave/flywave-geoutils": ["../flywave-geoutils/src"]
         }
     },
-    "include": [ "src/**/*","test/**/*" ],
+    "include": ["src/**/*", "test/**/*"],
     "exclude": ["dist/**", "test/**", "node_modules"],
     "references": [
         {

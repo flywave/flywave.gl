@@ -2,17 +2,17 @@
     "name": "@flywave/flywave-test-utils",
     "version": "0.28.0",
     "description": "Provides utilities for tests",
-    "main": "lib/index.node.js",
-    "browser": "lib/index.web.js",
-    "typings": "lib/index.web",
+    "main": "lib/src/index.node.js",
+    "browser": "lib/src/index.web.js",
+    "typings": "lib/src/index.web",
     "exports": {
         ".": {
-            "import": "./lib/index.js",
-            "require": "./lib/index.js"
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
         },
         "./*": {
-            "import": "./lib/*",
-            "require": "./lib/*"
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
         }
     },
     "scripts": {
@@ -53,6 +53,7 @@
         "@types/node": "catalog:",
         "@types/serve-static": "catalog:",
         "@types/three": "catalog:",
+        "@types/mkpath": "catalog:",
         "body-parser": "catalog:",
         "cross-env": "catalog:",
         "express": "catalog:",

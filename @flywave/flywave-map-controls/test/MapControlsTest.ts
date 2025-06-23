@@ -10,7 +10,7 @@ import { GeoCoordinates, mercatorProjection, sphereProjection } from "@flywave/f
 import { MapView, MapViewEventNames, MapViewOptions, MapViewUtils } from "@flywave/flywave-mapview";
 import * as TestUtils from "@flywave/flywave-test-utils/WebGLStub";
 import * as chai from "chai";
-import * as chaiAsPromised from "chai-as-promised";
+import chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
@@ -390,16 +390,20 @@ describe("MapControls", function () {
                         mapControls.maxTiltAngle = 90;
 
                         mapControls.zoomOnTargetPosition(0, 0.1, 6);
-                        const oldTarget = MapViewUtils.getTargetAndDistance(projection, camera)
-                            .target;
+                        const oldTarget = MapViewUtils.getTargetAndDistance(
+                            projection,
+                            camera
+                        ).target;
                         const expAzimuth = MapViewUtils.extractSphericalCoordinatesFromLocation(
                             mapView,
                             camera,
                             projection.unprojectPoint(oldTarget)
                         ).azimuth;
                         mapControls.zoomOnTargetPosition(0, 0.2, 7);
-                        const newTarget = MapViewUtils.getTargetAndDistance(projection, camera)
-                            .target;
+                        const newTarget = MapViewUtils.getTargetAndDistance(
+                            projection,
+                            camera
+                        ).target;
                         const actualAzimuth = MapViewUtils.extractSphericalCoordinatesFromLocation(
                             mapView,
                             camera,
@@ -555,15 +559,12 @@ describe("MapControls", function () {
             sandbox
                 .stub(THREE, "WebGLRenderer")
                 .returns(TestUtils.getWebGLRendererStub(sandbox, clearColorStub));
-            sandbox
-                .stub(THREE, "WebGL1Renderer")
-                .returns(TestUtils.getWebGLRendererStub(sandbox, clearColorStub));
-            canvas = ({
+            canvas = {
                 clientWidth: 1,
                 clientHeight: 1,
                 addEventListener: sinon.stub(),
                 removeEventListener: sinon.stub()
-            } as unknown) as HTMLCanvasElement;
+            } as unknown as HTMLCanvasElement;
             mapViewOptions = {
                 canvas,
                 // Both options cause the `addDataSource` method to be called, which we can't

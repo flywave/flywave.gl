@@ -8,9 +8,9 @@ import { GeoCoordinates, mercatorProjection, sphereProjection } from "@flywave/f
 import { CopyrightElementHandler, MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 import { GUI } from "dat.gui";
-import * as Stats from "stats.js";
+import Stats from "stats.js";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 /**
  * In this example we simply use the `lookAt` method to make the camera orbit around a geolocation.

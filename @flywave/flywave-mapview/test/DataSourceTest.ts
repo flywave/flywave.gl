@@ -9,7 +9,7 @@
 import { TileKey, webMercatorTilingScheme } from "@flywave/flywave-geoutils";
 import * as chai from "chai";
 const { expect } = chai;
-import * as chai_as_promised from "chai-as-promised";
+import chai_as_promised from "chai-as-promised";
 chai.use(chai_as_promised);
 import * as sinon from "sinon";
 

@@ -13,7 +13,7 @@ import {
     VectorTileDataSource
 } from "@flywave/flywave-vectortile-datasource";
 
-import { apikey, copyrightInfo } from "../config";
+import { apikey, copyrightInfo } from "./config";
 
 /**
  * An example showing triple map view build with 3 [[MapView]]s each with a different theme and/or

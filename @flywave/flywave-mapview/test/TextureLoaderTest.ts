@@ -8,7 +8,7 @@
 
 import { getTestResourceUrl } from "@flywave/flywave-test-utils";
 import * as chai from "chai";
-import * as chai_as_promised from "chai-as-promised";
+import chai_as_promised from "chai-as-promised";
 chai.use(chai_as_promised);
 const { expect } = chai;
 import "@flywave/flywave-fetch";
@@ -19,7 +19,10 @@ import { TextureLoader } from "../src/TextureLoader";
 
 const inNodeContext = typeof window === "undefined";
 const texturePath = getTestResourceUrl("@flywave/flywave-mapview", "test/resources/headshot.png");
-const jpgTexturePath = getTestResourceUrl("@flywave/flywave-mapview", "test/resources/headshot.jpg");
+const jpgTexturePath = getTestResourceUrl(
+    "@flywave/flywave-mapview",
+    "test/resources/headshot.jpg"
+);
 
 describe("TextureLoader", function () {
     describe("load", function () {

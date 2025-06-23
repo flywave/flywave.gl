@@ -2,16 +2,16 @@
     "name": "@flywave/flywave-vectortile-datasource",
     "version": "0.28.0",
     "description": "HERE Vector Tile Data Source",
-    "main": "lib/index.js",
-    "typings": "lib/index",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
     "exports": {
         ".": {
-            "import": "./lib/index.js",
-            "require": "./lib/index.js"
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
         },
         "./*": {
-            "import": "./lib/*",
-            "require": "./lib/*"
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
         }
     },
     "worker": {
@@ -51,7 +51,9 @@
         "@flywave/flywave-utils": "workspace:*",
         "earcut": "catalog:",
         "long": "catalog:",
-        "protobufjs": "catalog:"
+        "protobufjs": "catalog:",
+        "chai-as-promised": "catalog:",
+        "@types/chai-as-promised": "catalog:"
     },
     "devDependencies": {
         "@flywave/flywave-fetch": "workspace:*",

@@ -2,16 +2,16 @@
     "name": "@flywave/flywave-materials",
     "version": "0.28.0",
     "description": "flywave.gl Materials defining the appearance of objects",
-    "main": "lib/index.js",
-    "typings": "lib/index",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
     "exports": {
         ".": {
-            "import": "./lib/index.js",
-            "require": "./lib/index.js"
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
         },
         "./*": {
-            "import": "./lib/*",
-            "require": "./lib/*"
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
         }
     },
     "scripts": {

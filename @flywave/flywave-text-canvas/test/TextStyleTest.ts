@@ -16,7 +16,7 @@ import {
     FontVariant,
     TextRenderParameters,
     TextRenderStyle
-} from "../index";
+} from "../src/index";
 import {
     hAlignFromPlacement,
     HorizontalAlignment,

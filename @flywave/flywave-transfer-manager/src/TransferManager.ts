@@ -14,6 +14,9 @@ import "@flywave/flywave-fetch";
 
 import { DeferredPromise } from "./DeferredPromise";
 
+interface DeferredWithInit<T> extends DeferredPromise<T> {
+    init?: RequestInit;
+}
 /**
  * Abstract interface for a transfer manager.
  *
@@ -99,7 +102,7 @@ export class TransferManager implements ITransferManager {
             } else {
                 throw new Error("Max number of retries reached");
             }
-        } catch (err) {
+        } catch (err: any) {
             if (
                 err.hasOwnProperty("isCancelled") ||
                 err.name === "AbortError" ||
@@ -165,12 +168,17 @@ export class TransferManager implements ITransferManager {
      */
     download(url: RequestInfo, init?: RequestInit): Promise<Response> {
         if (this.activeDownloadCount >= TransferManager.maxParallelDownloads) {
-            const deferred = new DeferredPromise<Response>(() => this.doDownload(url, init));
-            //@ts-ignore 
+            const deferred = new DeferredPromise<Response>(() =>
+                this.doDownload(url, init)
+            ) as DeferredWithInit<Response>;
+
             deferred.init = init;
             this.downloadQueue.push(deferred);
-             //@ts-ignore 
-            this.downloadQueue = this.downloadQueue.filter(d=>!d.init||!d.init.signal||!d.init.signal.aborted)
+            //@ts-ignore
+            this.downloadQueue = this.downloadQueue.filter(
+                (d: DeferredWithInit<Response>) =>
+                    !d.init || !d.init.signal || !d.init.signal.aborted
+            );
             return deferred.promise;
         }
         return this.doDownload(url, init);
@@ -179,8 +187,8 @@ export class TransferManager implements ITransferManager {
     private async doDownload(url: RequestInfo, init?: RequestInit): Promise<Response> {
         try {
             ++this.activeDownloadCount;
-            if(init&&init.signal&&init.signal.aborted){
-                throw "aborted"
+            if (init && init.signal && init.signal.aborted) {
+                throw "aborted";
             }
             const response = await TransferManager.fetchRepeatedly(
                 this.fetchFunction,

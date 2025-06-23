@@ -9,7 +9,7 @@
 import { expect } from "chai";
 import * as sinon from "sinon";
 
-import { DataProvider } from "../index";
+import { DataProvider } from "../src/index";
 
 class FakeDataProvider extends DataProvider {
     /** @override */ async connect() {

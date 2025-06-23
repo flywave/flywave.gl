@@ -9,7 +9,7 @@ import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import { HereWebTileDataSource, WebTileDataSource } from "@flywave/flywave-webtile-datasource";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 const FLAT_THEME: Theme = {
     clearColor: "#f8fbfd"

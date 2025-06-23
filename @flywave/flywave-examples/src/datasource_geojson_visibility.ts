@@ -13,7 +13,7 @@ import { GeoJsonDataProvider, VectorTileDataSource } from "@flywave/flywave-vect
 import { VectorTileDecoder } from "@flywave/flywave-vectortile-datasource/index-worker";
 import * as turf from "@turf/turf";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 export namespace GeoJsonVisibilityExample {
     async function main(id: string): Promise<MapView> {

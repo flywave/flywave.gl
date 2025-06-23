@@ -73,7 +73,7 @@ describe("ThreeBufferUtils", function () {
         }
     }
     it("convert buffer geometry w/ index buffer", function () {
-        const threeBufferGeometry = new THREE.BoxBufferGeometry();
+        const threeBufferGeometry = new THREE.BoxGeometry();
         const techniqueIndex = 42;
 
         const harpBufferGeometry = ThreeBufferUtils.fromThreeBufferGeometry(

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GeoCoordinates,sphereProjection } from "@flywave/flywave-geoutils";
+import { GeoCoordinates, sphereProjection } from "@flywave/flywave-geoutils";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@flywave/flywave-vectortile-datasource";
 import { GUI } from "dat.gui";
 
-import { apikey, copyrightInfo } from "../config";
+import { apikey, copyrightInfo } from "./config";
 
 /**
  * Harp's effects playground example with GUI to tweak values in one's own map. The effects are

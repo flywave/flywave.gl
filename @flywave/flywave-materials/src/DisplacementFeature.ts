@@ -15,7 +15,7 @@ export interface DisplacementFeatureParameters {
      * Texture used for vertex displacement along their normals.
      */
     displacementMap?: THREE.Texture;
-    displacementMapUvMatrix?:THREE.Matrix3;
+    displacementMapUvMatrix?: THREE.Matrix3;
 }
 
 /**
@@ -44,9 +44,9 @@ export function setDisplacementMapToMaterial(
     displacementMap: TileDisplacementMap | null,
     material: THREE.Mesh["material"]
 ) {
-    if (hasDisplacementFeature(material) && material.displacementMap !== displacementMap.texture) {
+    if (hasDisplacementFeature(material) && material.displacementMap !== displacementMap?.texture) {
         material.displacementMap = displacementMap?.texture as THREE.Texture;
-        (material as any).displacementMapUvMatrix = displacementMap?.uvMatrix
+        (material as any).displacementMapUvMatrix = displacementMap?.uvMatrix;
         material.needsUpdate = true;
         if (material.displacementMap !== null) {
             material.displacementMap.needsUpdate = true;

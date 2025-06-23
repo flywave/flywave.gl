@@ -154,7 +154,8 @@ export interface EdgeMaterialParameters
  */
 export class EdgeMaterial
     extends RawShaderMaterial
-    implements FadingFeature, ExtrusionFeature, DisplacementFeature {
+    implements FadingFeature, ExtrusionFeature, DisplacementFeature
+{
     static DEFAULT_COLOR: number = 0x000000;
     static DEFAULT_COLOR_MIX: number = 0.0;
 
@@ -195,7 +196,7 @@ export class EdgeMaterial
                     displacementMap: new THREE.Uniform(
                         params.displacementMap ?? new THREE.Texture()
                     ),
-                    displacementMapUvMatrix: new THREE.Uniform(params.displacementMapUvMatrix),
+                    displacementMapUvMatrix: new THREE.Uniform(params.displacementMapUvMatrix)
                 },
                 depthWrite: false,
                 defines,
@@ -351,11 +352,11 @@ export class EdgeMaterial
         setShaderMaterialDefine(this, "USE_DISPLACEMENTMAP", useDisplacementMap);
     }
 
-    get displacementMapUvMatrix(){
+    get displacementMapUvMatrix() {
         return this.uniforms.displacementMapUvMatrix.value;
     }
-    
-    set displacementMapUvMatrix(matrix){ 
+
+    set displacementMapUvMatrix(matrix) {
         this.uniforms.displacementMapUvMatrix.value = matrix;
     }
 }

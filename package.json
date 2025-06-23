@@ -16,9 +16,11 @@
         "@types/glob": "catalog:",
         "@types/semver": "catalog:",
         "@types/stats.js": "catalog:",
+        "@types/node": "catalog:",
         "@types/three": "catalog:",
         "@typescript-eslint/eslint-plugin": "catalog:",
         "@typescript-eslint/parser": "catalog:",
+        "@types/mocha": "catalog:",
         "lodash.isequal": "catalog:",
         "cross-env": "catalog:",
         "chai": "catalog:",
@@ -48,7 +50,17 @@
         "ts-loader": "catalog:",
         "webpack": "catalog:",
         "webpack-cli": "catalog:",
-        "webpack-dev-server": "catalog:"
+        "@babel/preset-typescript": "catalog:",
+        "webpack-dev-server": "catalog:",
+        "karma": "6.4.4",
+        "karma-typescript": "4.1.1",
+        "karma-chrome-launcher": "catalog:",
+        "karma-mocha": "catalog:",
+        "karma-chai": "catalog:",
+        "karma-coverage": "catalog:",
+        "karma-typescript-es6-transform": "4.1.1",
+        "sinon": "catalog:",
+        "@types/sinon": "catalog:"
     },
     "peerDependencies": {
         "three": "catalog:"
@@ -56,7 +68,7 @@
     "scripts": {
         "pre-test": "yarn run code-pre-tests --forbid-only && yarn run prettier && yarn eslint",
         "code-pre-tests": "ts-mocha --no-timeouts ./test/*.ts",
-        "test": "yarn karma-headless",
+        "test": "pnpm karma-headless",
         "test-debug": "karma start --browser ChromeDebug --no-single-run --auto-watch",
         "performance-test-node": "ts-mocha ./test/performance/**/*.ts",
         "cleanup": "./scripts/cleanup.sh",
@@ -66,7 +78,7 @@
         "build-examples": "ts-node ./scripts/credentials.ts -- dist/examples && webpack --config @flywave/flywave-examples/webpack.config.js",
         "build-bundle": "cd @flywave/flywave.gl && webpack",
         "start-tests": "webpack serve --config ./webpack.tests.config.js",
-        "test-browser": "yarn karma-browser",
+        "test-browser": "pnpm  karma-browser",
         "build-tests": "webpack --config ./webpack.tests.config.js",
         "run-rendering-tests": "./scripts/rendering-tests-reference-platform.sh",
         "save-reference-rendering-tests": "npx ts-node @flywave/flywave-test-utils/lib/rendering/RenderingTestResultCli.ts save-reference",
@@ -79,7 +91,8 @@
         "eslint:fix": "eslint --fix --ext .ts ./@flywave test scripts",
         "postinstall": "pnpm --filter  @flywave/flywave-datasource-protocol run generate-json-schema",
         "prepare-doc-deploy": "ts-node ./scripts/prepare_doc_deploy.ts",
-        "karma-headless": "karma start --browsers ChromeHeadless",
+        "karma-headless": "karma start --browsers ChromeHeadless --log-level=DEBUG",
+        "karma": "karma start  --log-level=DEBUG",
         "karma-headless-firefox": "karma start --browsers FirefoxHeadless",
         "karma-browser": "karma start --browsers Chrome --no-single-run"
     },

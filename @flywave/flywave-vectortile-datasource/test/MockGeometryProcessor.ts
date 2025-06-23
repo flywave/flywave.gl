@@ -7,7 +7,7 @@
 import { ValueMap } from "@flywave/flywave-datasource-protocol";
 import { Vector3 } from "three";
 
-import { IGeometryProcessor, ILineGeometry, IPolygonGeometry } from "../lib/IGeometryProcessor";
+import { IGeometryProcessor, ILineGeometry, IPolygonGeometry } from "../src/IGeometryProcessor";
 
 export class MockGeometryProcessor implements IGeometryProcessor {
     storageLevelOffset?: number | undefined;

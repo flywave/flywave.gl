@@ -10,7 +10,7 @@ const webpack = require("webpack");
 const glob = require("glob");
 const path = require("path");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
-const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
+const ForkTsCheckerWebpackPlugin = require("fork-ts-checker-webpack-plugin");
 
 const testResourceDirs = glob.sync(path.join(__dirname, "@flywave/*/test/resources"));
 const testResources = testResourceDirs.map(dir => {
@@ -79,8 +79,8 @@ const browserTestsConfig = {
             NODE_ENV: "development"
         }),
         new webpack.DefinePlugin({
-            'process.platform': JSON.stringify(process.platform)
-            }),
+            "process.platform": JSON.stringify(process.platform)
+        }),
         new CopyWebpackPlugin({
             patterns: [
                 path.join(__dirname, "test/index.html"),
@@ -137,7 +137,7 @@ const browserTestsConfig = {
         hints: false
     },
     devServer: {
-        before: function(app) {
+        before: function (app) {
             require("ts-node/register");
 
             const RenderingTestResultServer = require("./@flywave/flywave-test-utils/lib/rendering/RenderingTestResultServer");
@@ -156,12 +156,14 @@ const browserTestsConfig = {
     },
     // @ts-ignore
     mode: process.env.NODE_ENV || "development",
-    cache: process.env.HARP_NO_HARD_SOURCE_CACHE ? false :{
-        type: "filesystem",
-        buildDependencies: {
-            config: [ __filename ]
-        }
-    }
+    cache: process.env.HARP_NO_HARD_SOURCE_CACHE
+        ? false
+        : {
+              type: "filesystem",
+              buildDependencies: {
+                  config: [__filename]
+              }
+          }
 };
 
 module.exports = browserTestsConfig;

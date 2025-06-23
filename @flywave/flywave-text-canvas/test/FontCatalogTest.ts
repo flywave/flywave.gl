@@ -9,7 +9,7 @@ import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { FontCatalog, FontStyle, GlyphData, TextRenderStyle } from "../index";
+import { FontCatalog, FontStyle, GlyphData, TextRenderStyle } from "../src/index";
 
 async function loadTexture(url: string): Promise<THREE.Texture> {
     return await new Promise(resolve => {
@@ -57,7 +57,7 @@ function createFontCatalogStub(
         replacementFont!
     );
 
-    return ({
+    return {
         url: stub_url,
         name: stub_name,
         type: stub_type,
@@ -106,7 +106,7 @@ function createFontCatalogStub(
         loadAssets: (FontCatalog.prototype as any).loadAssets,
         loadPage: (FontCatalog.prototype as any).loadPage,
         getAssetsPath: (FontCatalog.prototype as any).getAssetsPath
-    } as any) as FontCatalog;
+    } as any as FontCatalog;
 }
 
 const textSamples = [

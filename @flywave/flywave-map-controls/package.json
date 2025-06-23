@@ -2,16 +2,16 @@
     "name": "@flywave/flywave-map-controls",
     "version": "0.28.0",
     "description": "Camera controller which implements a common default set of camera functionality in a map context.",
-    "main": "lib/index.js",
-    "typings": "lib/index",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
     "exports": {
         ".": {
-            "import": "./lib/index.js",
-            "require": "./lib/index.js"
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
         },
         "./*": {
-            "import": "./lib/*",
-            "require": "./lib/*"
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
         }
     },
     "directories": {
@@ -50,7 +50,9 @@
         "sinon": "catalog:",
         "source-map-support": "catalog:",
         "three": "catalog:",
-        "typescript": "catalog:"
+        "typescript": "catalog:",
+        "chai-as-promised": "catalog:",
+        "@types/chai-as-promised": "catalog:"
     },
     "peerDependencies": {
         "three": "catalog:"

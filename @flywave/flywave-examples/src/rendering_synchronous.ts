@@ -11,7 +11,7 @@ import {
     VectorTileDataSource
 } from "@flywave/flywave-vectortile-datasource";
 import THREE = require("three");
-import { apikey, copyrightInfo } from "../config";
+import { apikey, copyrightInfo } from "./config";
 
 /**
  * The example shows how to render map synchronously within your own render loop.

@@ -129,7 +129,7 @@ export function willEventually<T = void>(test: () => T): Promise<T> {
                 const r = test();
                 lastWaitedError = undefined;
                 resolve(r);
-            } catch (error) {
+            } catch (error: any) {
                 if (error.constructor.name === "AssertionError") {
                     lastWaitedError = error;
                     setTimeout(iteration, 1);
@@ -156,7 +156,7 @@ export async function assertRejected(
     let r: any;
     try {
         r = await Promise.resolve(typeof v === "function" ? v() : v);
-    } catch (error) {
+    } catch (error: any) {
         if (typeof errorMessagePattern === "string") {
             errorMessagePattern = new RegExp(errorMessagePattern);
         }

@@ -14,7 +14,7 @@ import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 import { GUI } from "dat.gui";
 import THREE = require("three");
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 interface GeoLocations {
     [key: string]: GeoCoordinates;
@@ -122,7 +122,7 @@ export namespace CameraAnimationExample {
         discrete: THREE.InterpolateDiscrete
     })
         .onChange(value => {
-            animationOptions.interpolation = parseInt(value, 10);
+            animationOptions.interpolation = parseInt(value, 10) as typeof THREE.InterpolateSmooth;
             alert("This will only take effect for the next animation created");
         })
         .listen();
@@ -140,9 +140,9 @@ export namespace CameraAnimationExample {
         pingpong: THREE.LoopPingPong,
         repeat: THREE.LoopRepeat
     }).onChange(value => {
-        animationOptions.loop = parseInt(value, 10);
+        animationOptions.loop = parseInt(value, 10) as typeof THREE.LoopOnce;
         if (cameraAnimation) {
-            cameraAnimation.loop = parseInt(value, 10);
+            cameraAnimation.loop = parseInt(value, 10) as THREE.AnimationActionLoopStyles;
         }
     });
 

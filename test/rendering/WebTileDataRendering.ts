@@ -14,6 +14,7 @@ import {
 } from "@flywave/flywave-mapview";
 import { RenderingTestHelper, waitForEvent } from "@flywave/flywave-test-utils";
 import { WebTileDataSource, WebTileDataSourceOptions } from "@flywave/flywave-webtile-datasource";
+import * as THREE from "three";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

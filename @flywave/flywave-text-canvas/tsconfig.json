@@ -1,8 +1,7 @@
 {
-    "extends": "../../tsconfig.base.json",
+    "extends": "../../tsconfig.json",
     "compilerOptions": {
         "outDir": "./lib",
-        "rootDir": "./src",
         "sourceMap": true,
         "composite": true,
         "incremental": true,

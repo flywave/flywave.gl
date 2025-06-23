@@ -8,11 +8,11 @@
 
 import { LoggerManager } from "@flywave/flywave-utils";
 import * as bodyParser from "body-parser";
-import * as express from "express";
+import express from "express";
 import * as fs from "fs";
-import * as mkpath from "mkpath";
+import mkpath from "mkpath";
 import * as path from "path";
-import * as serveStatic from "serve-static";
+import serveStatic from "serve-static";
 import * as util from "util";
 
 import { genHtmlReport } from "./HtmlReport";
@@ -129,7 +129,7 @@ export async function getIbctReport(req: express.Request, res: express.Response)
         const [failed, report] = await genHtmlReport(currentResults, {}, outputBasePath);
         logger.log("Tests failed: ", failed);
         res.status(200).contentType("text/html").send(report);
-    } catch (error) {
+    } catch (error: any) {
         logger.error("error", error);
         res.status(500).send(`error: ${error}\n${error.stack}`);
     }

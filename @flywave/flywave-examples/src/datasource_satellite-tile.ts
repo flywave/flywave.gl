@@ -7,7 +7,7 @@ import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import { HereTileProvider, HereWebTileDataSource } from "@flywave/flywave-webtile-datasource";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 /**
  * A simple example using the webtile data source. Tiles are retrieved from

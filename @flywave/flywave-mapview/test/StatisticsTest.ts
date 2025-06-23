@@ -493,7 +493,7 @@ describe("mapview-statistics", function () {
 
         curFrame.addMessage("testMessage");
         assert.isDefined(curFrame.messages);
-        assert.equal(curFrame.messages!.length, 1);
+        assert.equal((curFrame.messages as string[]).length, 1);
 
         curFrame.reset();
         assert.isUndefined(curFrame.messages);

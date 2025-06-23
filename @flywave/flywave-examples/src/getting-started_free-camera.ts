@@ -19,7 +19,8 @@ import * as THREE from "three";
 import { TrackballControls } from "three/examples/jsm/controls/TrackballControls";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
+import { Object3D } from "three";
 
 /**
  * This app adds another freely moveable camera into the map view scene.
@@ -171,7 +172,7 @@ export namespace FreeCameraAppDebuggingToolExample {
                 this.mapView.update();
             });
 
-            this.mapView.scene.add(transformControls);
+            this.mapView.scene.add(transformControls as unknown as Object3D);
 
             const cameraHelper = new THREE.CameraHelper(cameraRelativeToEye);
 

@@ -128,7 +128,7 @@ export namespace PerformanceUtils {
             }
         });
 
-        const glInfo = getVendorFomContext(mapView.renderer.context);
+        const glInfo = getVendorFomContext(mapView.renderer.getContext());
         PerformanceStatistics.instance.configs.set("gl.vendor", glInfo.vendor);
         PerformanceStatistics.instance.configs.set("gl.renderer", glInfo.renderer);
 

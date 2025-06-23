@@ -1,11 +1,11 @@
 {
-    "name": "harp.gl",
+    "name": "flywave.gl",
     "mode": "modules",
     "module": "commonjs",
     "out": "dist/doc",
     "exclude": [
         "**/node_modules/**",
-        "**/@flywave/harp.gl/lib/*.ts",
+        "**/@flywave/flywave.gl/src/*.ts",
         "**/test/**/*.ts",
         "**/www/**/*.ts",
         "**/dist/**/*.ts",
@@ -17,8 +17,6 @@
     "media": "dist/media",
     "readme": "README.md",
     "target": "ES6",
-    "excludePrivate": "true",
-    "excludeExternals": "true",
     "excludeNotExported": "true",
     "external-modulemap": ".*/(?:@flywave|docs)/(@docs/[\\w\\-_]+|[\\w\\-_]+)/"
 }

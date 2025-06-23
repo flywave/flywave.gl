@@ -10,7 +10,7 @@ import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import { GeoJsonDataProvider, VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 import * as THREE from "three";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 /**
  * This example demonstrates how to generate a heatmap-like [[StyleSet]] for a GeoJson. To do so,

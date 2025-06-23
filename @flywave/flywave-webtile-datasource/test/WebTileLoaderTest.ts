@@ -10,7 +10,7 @@ import { TileKey, webMercatorProjection } from "@flywave/flywave-geoutils";
 import { CopyrightInfo, MapView, Tile, TileLoaderState } from "@flywave/flywave-mapview";
 import { LoggerManager } from "@flywave/flywave-utils";
 import * as chai from "chai";
-import * as chaiAsPromised from "chai-as-promised";
+import chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
@@ -22,9 +22,9 @@ const { expect } = chai;
 
 describe("WebTileLoader", function () {
     const tileKey: TileKey = TileKey.fromRowColumnLevel(0, 0, 0);
-    const mapView = ({
+    const mapView = {
         projection: webMercatorProjection
-    } as any) as MapView;
+    } as any as MapView;
     const texture = new THREE.Texture();
     const copyRightInfo: CopyrightInfo[] = [];
     const renderOrder: number = 42;

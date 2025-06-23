@@ -1,11 +1,36 @@
 {
-    "extends": "../../tsconfig.base.json",
+    "extends": "../../tsconfig.json",
     "compilerOptions": {
         "outDir": "./lib",
-        "sourceMap": true,
-        "declaration": false,
-        "resolveJsonModule": true,
-        "skipLibCheck": true,
-        "baseUrl": "../../"
-    }
+        "composite": true,
+        "paths": {
+            "@flywave/flywave-vectortile-datasource": ["../flywave-vectortile-datasource/src"],
+            "@flywave/flywave-vectortile-datasource/*": ["../flywave-vectortile-datasource/src/*"],
+            "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],
+            "@flywave/flywave-datasource-protocol/*": ["../flywave-datasource-protocol/src/*"],
+            "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"],
+            "@flywave/flywave-mapview-decoder": ["../flywave-mapview-decoder/src"],
+            "@flywave/flywave-mapview-decoder/*": ["../flywave-mapview-decoder/src/*"],
+            "@flywave/flywave-webtile-datasource": ["../flywave-webtile-datasource/src"],
+            "@flywave/flywave-webtile-datasource/*": ["../flywave-webtile-datasource/src/*"]
+        }
+    },
+    "include": ["src/**/*", "decoder/**/*"],
+    "references": [
+        {
+            "path": "../flywave-datasource-protocol"
+        },
+        {
+            "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-mapview-decoder"
+        },
+        {
+            "path": "../flywave-vectortile-datasource"
+        },
+        {
+            "path": "../flywave-webtile-datasource"
+        }
+    ]
 }

@@ -14,8 +14,8 @@ import {
     silenceLoggingAroundFunction,
     stubGlobalConstructor
 } from "@flywave/flywave-test-utils";
-import * as chai from "chai";
-import * as chaiAsPromised from "chai-as-promised";
+import chai from "chai";
+import chaiAsPromised from "chai-as-promised";
 chai.use(chaiAsPromised);
 const { expect, assert } = chai;
 import * as sinon from "sinon";
@@ -28,7 +28,10 @@ declare const global: any;
 const workerDefined = typeof Worker !== "undefined" && typeof Blob !== "undefined";
 const describeWithWorker = workerDefined ? describe : xdescribe;
 
-const testWorkerUrl = getTestResourceUrl("@flywave/flywave-mapview", "test/resources/testWorker.js");
+const testWorkerUrl = getTestResourceUrl(
+    "@flywave/flywave-mapview",
+    "test/resources/testWorker.js"
+);
 
 describeWithWorker("Web Worker API", function () {
     it("Worker is able to load worker from blob", done => {
@@ -40,14 +43,14 @@ describeWithWorker("Web Worker API", function () {
         const script = `
             self.postMessage({ hello: 'world' });
         `;
-        assert.isDefined(Blob);
+        expect(assert.isDefined(Blob));
 
         const blob = new Blob([script], { type: "application/javascript" });
-        assert.isTrue(blob.size > 0);
+        expect(assert.isTrue(blob.size > 0));
         const worker = new Worker(URL.createObjectURL(blob));
         worker.addEventListener("message", event => {
-            assert.isDefined(event.data);
-            assert.equal(event.data.hello, "world");
+            expect(assert.isDefined(event.data));
+            expect(assert.equal(event.data.hello, "world"));
             done();
         });
         worker.addEventListener("error", msg => {
@@ -58,7 +61,7 @@ describeWithWorker("Web Worker API", function () {
     it("Worker is able to load worker from URL", done => {
         const worker = new Worker(testWorkerUrl);
         worker.addEventListener("message", event => {
-            assert.isDefined(event.data);
+            expect(assert.isDefined(event.data));
             assert.equal(event.data.hello, "world");
             done();
         });
@@ -96,8 +99,8 @@ describe("WorkerLoader", function () {
             const worker = await WorkerLoader.startWorker(testWorkerUrl);
             await new Promise<void>((resolve, reject) => {
                 worker.addEventListener("message", event => {
-                    assert.isDefined(event.data);
-                    assert.equal(event.data.hello, "world");
+                    expect(assert.isDefined(event.data));
+                    expect(assert.equal(event.data.hello, "world"));
                     resolve();
                 });
                 worker.addEventListener("error", msg => {
@@ -142,15 +145,15 @@ describe("WorkerLoader", function () {
                 const script = `
                     self.postMessage({ hello: 'world' });
                 `;
-                assert.isDefined(Blob);
+                expect(assert.isDefined(Blob));
 
                 const blob = new Blob([script], { type: "application/javascript" });
 
                 const worker = await WorkerLoader.startWorker(URL.createObjectURL(blob));
                 await new Promise<void>((resolve, reject) => {
                     worker.addEventListener("message", event => {
-                        assert.isDefined(event.data);
-                        assert.equal(event.data.hello, "world");
+                        expect(assert.isDefined(event.data));
+                        expect(assert.equal(event.data.hello, "world"));
                         resolve();
                     });
                     worker.addEventListener("error", msg => {
@@ -164,7 +167,7 @@ describe("WorkerLoader", function () {
                     // workerLoader.
                     //self.postMessage({ hello: 'world' });
                 `;
-                assert.isDefined(Blob);
+                expect(assert.isDefined(Blob));
 
                 const blob = new Blob([script], { type: "application/javascript" });
 
@@ -180,7 +183,7 @@ describe("WorkerLoader", function () {
                     // should raise timeout error.
                     null.foo = "aa";
                 `;
-                assert.isDefined(Blob);
+                expect(assert.isDefined(Blob));
 
                 const blob = new Blob([script], { type: "application/javascript" });
 
@@ -227,7 +230,7 @@ describe("WorkerLoader", function () {
                     const worker = await WorkerLoader.startWorker(cspTestScriptUrl);
                     await new Promise<void>((resolve, reject) => {
                         worker.addEventListener("message", event => {
-                            assert.isDefined(event.data);
+                            expect(assert.isDefined(event.data));
                             assert.equal(event.data.hello, "world");
                             resolve();
                         });
@@ -236,10 +239,10 @@ describe("WorkerLoader", function () {
                         });
                     });
 
-                    assert.isTrue(fetchStub.calledOnce);
+                    expect(assert.isTrue(fetchStub.calledOnce));
                     assert.equal(workerConstructorStub.callCount, 2);
                     assert.equal(workerConstructorStub.firstCall.args[0], cspTestScriptUrl);
-                    assert(workerConstructorStub.secondCall.args[0].startsWith, "blob:");
+                    expect(assert(workerConstructorStub.secondCall.args[0].startsWith, "blob:"));
                 });
             });
 
@@ -275,7 +278,7 @@ describe("WorkerLoader", function () {
 
                     await new Promise<void>((resolve, reject) => {
                         worker.addEventListener("message", event => {
-                            assert.isDefined(event.data);
+                            expect(assert.isDefined(event.data));
                             assert.equal(event.data.hello, "world");
                             resolve();
                         });
@@ -283,10 +286,10 @@ describe("WorkerLoader", function () {
                             reject(new Error("received error event"));
                         });
                     });
-                    assert.isTrue(fetchStub.calledOnce);
+                    expect(assert.isTrue(fetchStub.calledOnce));
                     assert.equal(workerConstructorStub.callCount, 2);
                     assert.equal(workerConstructorStub.firstCall.args[0], cspTestScriptUrl);
-                    assert(workerConstructorStub.secondCall.args[0].startsWith, "blob:");
+                    expect(assert(workerConstructorStub.secondCall.args[0].startsWith, "blob:"));
                 });
             });
         });

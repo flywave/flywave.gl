@@ -1,7 +1,6 @@
 {
-    "extends": "../../tsconfig.base.json",
+    "extends": "../../tsconfig.json",
     "compilerOptions": {
-        "rootDir": "./src",
         "outDir": "./lib",
         "sourceMap": true,
         "composite": true,
@@ -16,7 +15,7 @@
             "@flywave/flywave-mapview": ["../flywave-mapview/src"]
         }
     },
-    "include": [ "src/**/*" ],
+    "include": ["src/**/*"],
     "exclude": ["dist/**", "test/**", "node_modules"],
     "references": [
         {

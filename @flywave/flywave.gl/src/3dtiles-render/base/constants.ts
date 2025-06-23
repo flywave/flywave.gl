@@ -6,5 +6,5 @@ export const FAILED = 4;
 
 // https://en.wikipedia.org/wiki/World_Geodetic_System
 // https://en.wikipedia.org/wiki/Flattening
-export const WGS84_RADIUS = 6378137; 
+export const WGS84_RADIUS = 6378137;
 export const WGS84_HEIGHT = -WGS84_RADIUS;

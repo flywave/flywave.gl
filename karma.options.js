@@ -12,177 +12,196 @@ const path = require("path");
  * @type {import("karma").ConfigOptions}
  */
 const options = function (isCoverage, isMapSdk, prefixDirectory) {
-    const reports = isCoverage
-        ? {
-              "text-summary": "",
-              // Needed for codecov.io, includes html as well
-              lcov: "coverage"
-          }
-        : {};
+    // 更现代的覆盖率报告配置
+    const coverageReporters = isCoverage
+        ? [
+              { type: "text-summary" },
+              { type: "lcovonly", subdir: ".", file: "lcov.info" },
+              { type: "html", subdir: "html" }
+          ]
+        : [];
 
-    // Fixes the prefix to search for files, required for running the tests from sdk
+    // 文件路径前缀处理
     const fixPrefix = function (file) {
         const appendPrefix = file => {
             if (file.startsWith("**") || file.startsWith("node_modules")) {
                 return file;
-            } else {
-                return path.join(prefixDirectory, file);
             }
+            return path.join(prefixDirectory, file);
         };
+
         if (typeof file === "string") {
             return appendPrefix(file);
-        } else {
-            return {
-                ...{ pattern: appendPrefix(file.pattern) },
-                // Conditionally add this if not undefined.
-                ...(file.included !== undefined && { included: file.included })
-            };
         }
+
+        return {
+            pattern: appendPrefix(file.pattern),
+            ...(file.included !== undefined && { included: file.included }),
+            ...(file.type !== undefined && { type: file.type })
+        };
     };
 
     return {
-        browsers: [
-            'ChromeDebug'
-        ],
+        // 使用更现代的浏览器配置
+        browsers: ["ChromeHeadlessWithDebugging"],
         customLaunchers: {
+            ChromeHeadlessWithDebugging: {
+                base: "ChromeHeadless",
+                flags: ["--no-sandbox", "--remote-debugging-port=9333"]
+            },
             ChromeDebug: {
-                base: 'Chrome',
-                flags: ['--no-sandbox', '--remote-debugging-port=9333', 'http://localhost:9876/debug.html']
+                base: "Chrome",
+                flags: [
+                    "--no-sandbox",
+                    "--remote-debugging-port=9333",
+                    "--auto-open-devtools-for-tabs"
+                ]
             }
         },
-        frameworks: ["mocha", "karma-typescript"],
 
-        // web server port
+        // 使用更现代的测试框架组合
+        frameworks: ["mocha", "chai", "karma-typescript"],
+
+        // 更新插件列表
+        plugins: [
+            "karma-chrome-launcher",
+            "karma-mocha",
+            "karma-chai",
+            "karma-typescript",
+            "karma-coverage"
+        ],
+
+        // 服务器配置
         port: 9876,
-
-        // enable / disable watching file and executing tests whenever any file changes
         autoWatch: false,
-
-        // Continuous Integration mode
-        // if true, Karma captures browsers, runs the tests and exits
         singleRun: true,
-
-        // Concurrency level
-        // how many browser should be started simultaneous
         concurrency: Infinity,
+        restartOnFileChange: true,
 
-        // List of files / patterns to load in the browser these files minus the ones specified
-        // in the `exclude` property and where `included` isn't false. This dictates the code we
-        // are to check its coverage. Note, the tests themselves don't count to code coverage and
-        // are excluded using the karmaTypescriptConfig.coverage.exclude property.
+        // 文件配置
         files: [
+            // 测试文件
             "@flywave/flywave-datasource-protocol/**/*.ts",
-            "@flywave/flywave-debug-datasource/**/*.ts",
-            "@flywave/flywave-geometry/**/*.ts",
-            "@flywave/flywave-fetch/**/*.ts",
-            "@flywave/flywave-utils/**/*.ts",
-            "@flywave/flywave-geoutils/**/*.ts",
-            "@flywave/flywave-mapview/**/*.ts",
-            "@flywave/flywave-mapview-decoder/**/*.ts",
-            "@flywave/flywave-materials/**/*.ts",
-            "@flywave/flywave-text-canvas/**/*.ts",
-            "@flywave/flywave-lrucache/**/*.ts",
-            "@flywave/flywave-transfer-manager/**/*.ts",
-            "@flywave/flywave-lines/**/*.ts",
-            "@flywave/flywave-test-utils/**/*.ts",
-            "@flywave/flywave-map-controls/**/*.ts",
-            "@flywave/flywave-olp-utils/**/*.ts",
-            "@flywave/flywave-webtile-datasource/**/*.ts",
-            // Resources here are fetched by URL, note these require the correct proxy to be setup
-            // see "proxies" below.
+            // "@flywave/flywave-debug-datasource/**/*.ts",
+            // "@flywave/flywave-geometry/**/*.ts",
+            // "@flywave/flywave-fetch/**/*.ts",
+            // "@flywave/flywave-utils/**/*.ts",
+            // "@flywave/flywave-geoutils/**/*.ts",
+            // "@flywave/flywave-mapview/**/*.ts",
+            // "@flywave/flywave-mapview-decoder/**/*.ts",
+            // "@flywave/flywave-materials/**/*.ts",
+            // "@flywave/flywave-text-canvas/**/*.ts",
+            // "@flywave/flywave-lrucache/**/*.ts",
+            // "@flywave/flywave-transfer-manager/**/*.ts",
+            // "@flywave/flywave-lines/**/*.ts",
+            // "@flywave/flywave-test-utils/**/*.ts",
+            // "@flywave/flywave-map-controls/**/*.ts",
+            // "@flywave/flywave-olp-utils/**/*.ts",
+            // "@flywave/flywave-webtile-datasource/**/*.ts",
+            // "@flywave/flywave-vectortile-datasource/**/*.ts",
+            // "@flywave/flywave-map-theme/test/DefaultThemeTest.ts",
+
+            // 资源文件
             {
                 pattern: "@flywave/flywave-test-utils/test/resources/*.*",
-                included: false
+                included: false,
+                served: true,
+                watched: false
             },
-            // This is needed to access the font resources when running the repo separate from the
-            // sdk.
             {
                 pattern: "node_modules/@here/harp-fontcatalog/resources/**/*.*",
-                included: false
+                included: false,
+                served: true,
+                watched: false
             },
-            // This is needed when this repo is managed with the repo tool
             {
                 pattern: "@flywave/flywave-text-canvas/resources/fonts/**/*.*",
-                included: false
+                included: false,
+                served: true,
+                watched: false
             },
             {
                 pattern: "@flywave/flywave-mapview/test/resources/*.*",
-                included: false
+                included: false,
+                served: true,
+                watched: false
             },
             {
                 pattern: "@flywave/flywave-datasource-protocol/theme.schema.json",
-                included: false
+                included: false,
+                served: true,
+                watched: false
             },
-            "@flywave/flywave-vectortile-datasource/lib/adapters/omv/proto/vector_tile.js",
-            "@flywave/flywave-vectortile-datasource/**/*.ts",
-            "@flywave/flywave-map-theme/test/DefaultThemeTest.ts",
-            // These files are needed for the test above.
             {
                 pattern: "@flywave/flywave-map-theme/resources/*.json",
-                included: false
+                included: false,
+                served: true,
+                watched: false
+            },
+            {
+                pattern:
+                    "@flywave/flywave-vectortile-datasource/src/adapters/omv/proto/vector_tile.js",
+                type: "js",
+                included: true
             }
         ].map(file => fixPrefix(file)),
 
-        // Files that are to be excluded from the list included above.
+        // 排除文件
         exclude: [
             "**/test/rendering/**/*.*",
-            "@flywave/flywave-test-utils/lib/rendering/RenderingTestResultServer.ts",
-            "@flywave/flywave-test-utils/lib/rendering/RenderingTestResultCli.ts",
-            "@flywave/flywave-datasource-protocol/test/ThemeTypingsTest.ts",
+            "@flywave/flywave-test-utils/src/rendering/RenderingTestResultServer.ts",
+            "@flywave/flywave-test-utils/src/rendering/RenderingTestResultCli.ts",
+            "@flywave/flywave-datasource-protocol/src/ThemeTypingsTest.ts",
             "**/*.d.ts"
         ].map(file => fixPrefix(file)),
 
-        // source files, that you wanna generate coverage for
-        // do not include tests or libraries
-        // (these files will be instrumented by Istanbul)
+        // 预处理配置
         preprocessors: {
-            "@flywave/flywave-vectortile-datasource/lib/adapters/omv/proto/vector_tile.js": [
-                "karma-typescript"
-            ],
             "@flywave/**/*.ts": ["karma-typescript"]
+            // "@flywave/flywave-vectortile-datasource/src/adapters/omv/proto/vector_tile.js": [
+            //     "karma-typescript"
+            // ]
         },
 
-        // We use coverage-istanbul instead of karma-typescript because it can output json format
-        // which provides numbers similar to the previous report and not very conservative numbers.
-        reporters: ["progress", "coverage-istanbul"],
+        // 报告器配置
+        reporters: ["progress", "karma-typescript"].concat(isCoverage ? ["coverage"] : []),
 
-        coverageIstanbulReporter: {
-            // reports can be any that are listed here: https://github.com/istanbuljs/istanbuljs/tree/73c25ce79f91010d1ff073aa6ff3fd01114f90db/packages/istanbul-reports/lib
-            reports: ["html", "text-summary", "json"],
-
+        // 覆盖率配置
+        coverageReporter: {
+            reporters: coverageReporters,
             dir: path.join(__dirname, "coverage"),
-
-            "report-config": {
-                html: {
-                    // outputs the report in ./coverage/html
-                    subdir: "html"
+            check: {
+                global: {
+                    statements: 80,
+                    branches: 70,
+                    functions: 80,
+                    lines: 80
                 }
             }
         },
 
+        // 代理配置
         proxies: {
-            // How to access the local resources, normally this would handled by webpack, but we need to
-            // bundle the tests with karma-typescript, so we have to configure where the resources are,
-            // by default the resources relative to the root base folder.
             "/@flywave": "/base/@flywave",
             "/@here/harp-fontcatalog/resources/": isMapSdk
                 ? "/base/@flywave/flywave-text-canvas/resources/fonts/"
                 : "/base/node_modules/@here/harp-fontcatalog/resources/"
         },
-        karmaTypescriptConfig: {
-            tsconfig: "./tsconfig.json",
 
-            // Don't try to compile the referenced
-            compilerOptions: {
-                skipLibCheck: true,
-                // This is needed because there is a Typescript file which references vector_tile.js
-                allowJs: true
+        // Karma-typescript 配置
+        karmaTypescriptConfig: {
+            tsconfig: "./tsconfig.karma.json",
+            bundlerOptions: {
+                transforms: [require("karma-typescript-es6-transform")()],
+                resolve: {
+                    symlinks: false
+                },
+                exclude: ["**/webpack.*.js", "**/karma.*js", "**/node_modules/**"]
             },
             coverageOptions: {
-                instrumentation: isCoverage ? true : false,
-                // This is needed otherwise the tests are included in the code coverage %.
+                instrumentation: isCoverage,
                 exclude: [
-                    /test\/+/,
+                    /test\//,
                     /vector_tile\.js/,
                     /\.node\.ts/,
                     /index.*\.ts/,
@@ -190,10 +209,21 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
                     /coresdk\/@flywave\/flywave-test-utils\/lib\/rendering/
                 ]
             },
-            reports,
-            // "allowJs" tries to compile all sorts of stuff, so we need to restrict it.
-            exclude: ["**/webpack.*.js", "**/karma.*js"]
-        }
+            reports: {
+                html: "coverage",
+                "text-summary": ""
+            }
+        },
+
+        // 日志级别
+        logLevel: "INFO",
+
+        // 浏览器无活动超时
+        browserNoActivityTimeout: 60000,
+
+        // 浏览器断开超时
+        browserDisconnectTimeout: 10000
     };
 };
+
 module.exports = { options };

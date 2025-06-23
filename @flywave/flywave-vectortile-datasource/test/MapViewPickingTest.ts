@@ -41,7 +41,7 @@ import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three";
 
-import { VectorTileDecoder } from "../index-worker";
+import { VectorTileDecoder } from "../src/index-worker";
 import { GeoJsonDataProvider } from "../src/GeoJsonDataProvider";
 import { VectorTileDataSource } from "../src/VectorTileDataSource";
 import { GEOJSON_DATA, THEME } from "./resources/geoJsonData";
@@ -118,10 +118,6 @@ describe("MapView Picking", async function () {
 
         sandbox
             .stub(THREE, "WebGLRenderer")
-            .returns(TestUtils.getWebGLRendererStub(sandbox, sandbox.stub()));
-
-        sandbox
-            .stub(THREE, "WebGL1Renderer")
             .returns(TestUtils.getWebGLRendererStub(sandbox, sandbox.stub()));
 
         fakeElevationSource = {

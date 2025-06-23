@@ -14,7 +14,7 @@ import {
     TextRenderStyle
 } from "@flywave/flywave-text-canvas";
 import { GUI } from "dat.gui";
-import * as Stats from "stats.js";
+import Stats from "stats.js";
 import * as THREE from "three";
 /**
  * This example showcases how [[TextCanvas]] can handle dynamic loading of multiple [[FontCatalog]]
@@ -159,12 +159,7 @@ export namespace TextCanvasDynamicExample {
             ),
             new THREE.LineSegments(
                 new THREE.WireframeGeometry(
-                    new THREE.PlaneGeometry(
-                        window.innerWidth - 1,
-                        window.innerHeight - 1,
-                        2,
-                        2
-                    )
+                    new THREE.PlaneGeometry(window.innerWidth - 1, window.innerHeight - 1, 2, 2)
                 ),
                 new THREE.LineBasicMaterial({
                     color: 0xff0000,
@@ -175,7 +170,7 @@ export namespace TextCanvasDynamicExample {
         );
 
         penObject = new THREE.Mesh(
-            new THREE.SphereBufferGeometry(4, 4, 4),
+            new THREE.SphereGeometry(4, 4, 4),
             new THREE.MeshBasicMaterial({ color: 0xff0000 })
         );
         gridScene.add(penObject);

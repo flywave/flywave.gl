@@ -14,7 +14,7 @@ import {
     TextCanvas,
     TextLayoutStyle,
     TextRenderStyle
-} from "../../index";
+} from "../../src/index";
 
 describe("TextCanvas", function () {
     let renderer: THREE.WebGLRenderer;

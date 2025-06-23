@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import * as Jimp from "jimp";
+import Jimp from "jimp";
 
 import { ColorUtils } from "./ColorUtils";
 import { FileSystem, ImageFormat } from "./FileSystem";

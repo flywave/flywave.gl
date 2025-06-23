@@ -15,7 +15,7 @@ import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 import * as THREE from "three";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 import { COUNTRIES } from "../resources/countries";
 
 /**
@@ -231,11 +231,10 @@ export namespace PolygonsFeaturesExample {
         }
     }
 
-    function generateStyleSet(options: {
-        thresholds: number[];
-        color: string;
-        property: string;
-    }): { styleSet: StyleSet; colorRamp: string[] } {
+    function generateStyleSet(options: { thresholds: number[]; color: string; property: string }): {
+        styleSet: StyleSet;
+        colorRamp: string[];
+    } {
         const styles: StyleSet = [];
         const colorStrings: string[] = [];
         const length = options.thresholds.length;

@@ -13,7 +13,7 @@ import {
     VectorTileDataSource
 } from "@flywave/flywave-vectortile-datasource";
 
-import { apikey, copyrightInfo } from "../config";
+import { apikey, copyrightInfo } from "./config";
 
 /**
  * This example shows how to customize builtin `Berlin` theme using [Theme] `definition` mechanism.

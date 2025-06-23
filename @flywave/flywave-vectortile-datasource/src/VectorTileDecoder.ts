@@ -12,7 +12,7 @@ import {
     ValueMap
 } from "@flywave/flywave-datasource-protocol";
 import { MapEnv, StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/index-decoder";
-import { AttrEvaluationContext } from "@flywave/flywave-datasource-protocol/lib/TechniqueAttr";
+import { AttrEvaluationContext } from "@flywave/flywave-datasource-protocol/TechniqueAttr";
 import { Projection, TileKey } from "@flywave/flywave-geoutils";
 import {
     ThemedTileDecoder,

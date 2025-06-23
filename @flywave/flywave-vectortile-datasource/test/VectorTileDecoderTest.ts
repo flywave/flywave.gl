@@ -9,7 +9,7 @@ import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import * as chai from "chai";
 // Install chai-as-promised plugin to support promise assertions like:
 // expect(promise).to.eventually.be.rejectedWith()
-import * as chaiAsPromised from "chai-as-promised";
+import chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
 
 import { VectorTileDecoder } from "../src/index-worker";

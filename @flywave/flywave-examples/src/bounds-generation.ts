@@ -12,11 +12,16 @@ import {
 import { GeoBox, GeoCoordinates, GeoPolygon, mercatorProjection } from "@flywave/flywave-geoutils";
 import { geoCoordLikeToGeoPointLike } from "@flywave/flywave-geoutils/coordinates/GeoCoordLike";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
-import { BoundsGenerator, CameraUtils, CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
+import {
+    BoundsGenerator,
+    CameraUtils,
+    CopyrightElementHandler,
+    MapView
+} from "@flywave/flywave-mapview";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 import { GUI, GUIController } from "dat.gui";
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 export namespace BoundsExample {
     // Create a new MapView for the HTMLCanvasElement of the given id.

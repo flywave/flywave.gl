@@ -5,12 +5,17 @@
  */
 import { GeoCoordinates, mercatorProjection, sphereProjection } from "@flywave/flywave-geoutils";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
-import { CopyrightElementHandler, MapAnchor, MapView, MapViewEventNames } from "@flywave/flywave-mapview";
+import {
+    CopyrightElementHandler,
+    MapAnchor,
+    MapView,
+    MapViewEventNames
+} from "@flywave/flywave-mapview";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 import { GUI } from "dat.gui";
 import THREE = require("three");
 
-import { apikey } from "../config";
+import { apikey } from "./config";
 
 export namespace GeoToScreenExample {
     document.body.innerHTML += `
@@ -149,7 +154,7 @@ export namespace GeoToScreenExample {
 
     function addMapAnchor(mapView: MapView): MapAnchor<THREE.Object3D> {
         const mapAnchor = new THREE.Mesh(
-            new THREE.BoxBufferGeometry(100, 100, 100),
+            new THREE.BoxGeometry(100, 100, 100),
             new THREE.MeshBasicMaterial({ color: "green" })
         ) as MapAnchor;
         mapAnchor.anchor = BERLIN;

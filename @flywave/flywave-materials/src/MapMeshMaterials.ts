@@ -86,7 +86,7 @@ export interface UniformsType {
  *
  * @hidden
  */
-type CompileCallback = (shader: THREE.WebGLProgramParameters, renderer: any) => void;
+type CompileCallback = (shader: THREE.WebGLProgramParametersWithUniforms, renderer: any) => void;
 
 /**
  * Material properties used from THREE, which may not be defined in the type.
@@ -203,7 +203,10 @@ function linkMixinWithMaterial(
  * @param mixin - The mixin feature being applied to the material.
  * @param shader - The actual shader linked to the [[THREE.Material]].
  */
-function linkMixinWithShader(mixin: MixinShaderProperties, shader: THREE.WebGLProgramParametersWithUniforms) {
+function linkMixinWithShader(
+    mixin: MixinShaderProperties,
+    shader: THREE.WebGLProgramParametersWithUniforms
+) {
     Object.assign(shader.uniforms, mixin.shaderUniforms);
     mixin.shaderUniforms = shader.uniforms;
 }
@@ -306,14 +309,17 @@ namespace DisplacementFeature {
      */
     export function onBeforeCompile(
         displacementMaterial: DisplacementFeature & MixinShaderProperties,
-        shader: THREE.WebGLProgramParametersWithUniforms
+        shader: THREE.WebGLProgramParameters
     ) {
         if (!isEnabled(displacementMaterial)) {
             return;
         }
         assert(displacementMaterial.shaderUniforms !== undefined);
 
-        linkMixinWithShader(displacementMaterial, shader);
+        linkMixinWithShader(
+            displacementMaterial,
+            shader as THREE.WebGLProgramParametersWithUniforms
+        );
 
         // Update displacement map handling for r174
         shader.vertexShader = shader.vertexShader.replace(
@@ -402,9 +408,15 @@ export class DisplacementFeatureMixin implements DisplacementFeature, MixinShade
             }
         }
 
-        this.onBeforeCompile = chainCallbacks(this.onBeforeCompile, (shader: THREE.WebGLProgramParametersWithUniforms) => {
-            DisplacementFeature.onBeforeCompile(this, shader);
-        });
+        this.onBeforeCompile = chainCallbacks(
+            this.onBeforeCompile,
+            (shader: THREE.WebGLProgramParameters) => {
+                DisplacementFeature.onBeforeCompile(
+                    this,
+                    shader as THREE.WebGLProgramParametersWithUniforms
+                );
+            }
+        );
 
         this.needsUpdate = DisplacementFeature.isEnabled(this);
     }
@@ -461,6 +473,7 @@ export namespace FadingFeature {
      * Patch the THREE.ShaderChunk on first call with some extra shader chunks.
      */
     export function patchGlobalShaderChunks() {
+        //@ts-ignore
         if (THREE.ShaderChunk["fading_pars_vertex"] === undefined) {
             Object.assign(THREE.ShaderChunk, fadingShaderChunk);
         }
@@ -493,13 +506,14 @@ export namespace FadingFeature {
             fadingMaterial.shaderUniforms!.fadeNear.value = fadingMaterial.fadeNear;
             fadingMaterial.shaderUniforms!.fadeFar.value = fadingMaterial.fadeFar;
             if (needsUpdate) {
-                enableBlending(fadingMaterial as THREE.Material);
+                if (fadingMaterial instanceof THREE.Material)
+                    enableBlending(fadingMaterial as THREE.Material);
             }
-        }
-        else if (needsUpdate) {
+        } else if (needsUpdate) {
             fadingMaterial.shaderUniforms!.fadeNear.value = FadingFeature.DEFAULT_FADE_NEAR;
             fadingMaterial.shaderUniforms!.fadeFar.value = FadingFeature.DEFAULT_FADE_FAR;
-            disableBlending(fadingMaterial as THREE.Material);
+            if (fadingMaterial instanceof THREE.Material)
+                disableBlending(fadingMaterial as THREE.Material);
         }
     }
 
@@ -512,13 +526,16 @@ export namespace FadingFeature {
      * @param shader - [[THREE.WebGLShader]] containing the vertex and fragment shaders to add the
      *                  special includes to.
      */
-    export function onBeforeCompile(fadingMaterial: FadingFeature, shader: THREE.WebGLProgramParametersWithUniforms) {
+    export function onBeforeCompile(
+        fadingMaterial: FadingFeature,
+        shader: THREE.WebGLProgramParameters
+    ) {
         if (!isEnabled(fadingMaterial)) {
             return;
         }
         assert(fadingMaterial.shaderUniforms !== undefined);
 
-        linkMixinWithShader(fadingMaterial, shader);
+        linkMixinWithShader(fadingMaterial, shader as THREE.WebGLProgramParametersWithUniforms);
 
         shader.vertexShader = insertShaderInclude(
             shader.vertexShader,
@@ -682,9 +699,12 @@ export class FadingFeatureMixin implements FadingFeature {
             }
         }
 
-        this.onBeforeCompile = chainCallbacks(this.onBeforeCompile, (shader: THREE.WebGLProgramParametersWithUniforms) => {
-            FadingFeature.onBeforeCompile(this, shader);
-        });
+        this.onBeforeCompile = chainCallbacks(
+            this.onBeforeCompile,
+            (shader: THREE.WebGLProgramParameters) => {
+                FadingFeature.onBeforeCompile(this, shader);
+            }
+        );
         this.needsUpdate = FadingFeature.isEnabled(this);
     }
 
@@ -716,6 +736,7 @@ export namespace ExtrusionFeature {
      * Patch the THREE.ShaderChunk on first call with some extra shader chunks.
      */
     export function patchGlobalShaderChunks() {
+        //@ts-ignore
         if (THREE.ShaderChunk["extrusion_pars_vertex"] === undefined) {
             Object.assign(THREE.ShaderChunk, extrusionShaderChunk);
         }
@@ -741,8 +762,7 @@ export namespace ExtrusionFeature {
         if (useExtrusion) {
             extrusionMaterial.shaderUniforms!.extrusionRatio.value =
                 extrusionMaterial.extrusionRatio;
-        }
-        else if (needsUpdate) {
+        } else if (needsUpdate) {
             extrusionMaterial.shaderUniforms!.extrusionRatio.value =
                 ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
         }
@@ -757,13 +777,16 @@ export namespace ExtrusionFeature {
      * @param shader - [[THREE.WebGLShader]] containing the vertex and fragment shaders to add the
      *                  special includes to.
      */
-    export function onBeforeCompile(extrusionMaterial: ExtrusionFeature, shader: THREE.WebGLProgramParametersWithUniforms) {
+    export function onBeforeCompile(
+        extrusionMaterial: ExtrusionFeature,
+        shader: THREE.WebGLProgramParameters
+    ) {
         if (!isEnabled(extrusionMaterial)) {
             return;
         }
         assert(extrusionMaterial.shaderUniforms !== undefined);
 
-        linkMixinWithShader(extrusionMaterial, shader);
+        linkMixinWithShader(extrusionMaterial, shader as THREE.WebGLProgramParametersWithUniforms);
 
         shader.vertexShader = insertShaderInclude(
             shader.vertexShader,
@@ -859,9 +882,15 @@ export class ExtrusionFeatureMixin implements ExtrusionFeature {
             }
         }
 
-        this.onBeforeCompile = chainCallbacks(this.onBeforeCompile, (shader: THREE.WebGLProgramParametersWithUniforms) => {
-            ExtrusionFeature.onBeforeCompile(this, shader);
-        });
+        this.onBeforeCompile = chainCallbacks(
+            this.onBeforeCompile,
+            (shader: THREE.WebGLProgramParameters) => {
+                ExtrusionFeature.onBeforeCompile(
+                    this,
+                    shader as THREE.WebGLProgramParametersWithUniforms
+                );
+            }
+        );
 
         this.needsUpdate = ExtrusionFeature.isEnabled(this);
     }
@@ -885,7 +914,8 @@ export class ExtrusionFeatureMixin implements ExtrusionFeature {
  */
 export class MapMeshBasicMaterial
     extends THREE.MeshBasicMaterial
-    implements FadingFeature, ExtrusionFeature, DisplacementFeature {
+    implements FadingFeature, ExtrusionFeature, DisplacementFeature
+{
     constructor(
         params?: THREE.MeshBasicMaterialParameters &
             FadingFeatureParameters &
@@ -988,7 +1018,8 @@ export class MapMeshDepthMaterial extends THREE.MeshDepthMaterial implements Ext
  */
 export class MapMeshStandardMaterial
     extends THREE.MeshStandardMaterial
-    implements FadingFeature, ExtrusionFeature, DisplacementFeature {
+    implements FadingFeature, ExtrusionFeature, DisplacementFeature
+{
     uniformsNeedUpdate?: boolean;
 
     constructor(

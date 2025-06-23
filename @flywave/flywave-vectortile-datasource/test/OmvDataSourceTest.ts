@@ -17,7 +17,7 @@ import * as chai from "chai";
 const { expect, assert } = chai;
 // Install chai-as-promised plugin to support promise assertions like:
 // expect(promise).to.eventually.be.rejectedWith()
-import * as chai_as_promised from "chai-as-promised";
+import chai_as_promised from "chai-as-promised";
 chai.use(chai_as_promised);
 import * as sinon from "sinon";
 
@@ -26,8 +26,8 @@ import {
     AuthenticationTypeAccessToken,
     OmvRestClient,
     VectorTileDataSource
-} from "../index";
-import { VectorTileDecoder } from "../index-worker";
+} from "../src/index";
+import { VectorTileDecoder } from "../src/index-worker";
 import { GeoJsonDataProvider } from "../src/GeoJsonDataProvider";
 
 class MockDataProvider extends DataProvider {
@@ -61,7 +61,7 @@ describe("DataProviders", function () {
             dataProvider: mockDataProvider
         });
         assert.equal(omvDataSource.dataProvider(), mockDataProvider);
-        assert.isTrue(omvDataSource.dataProvider() instanceof MockDataProvider);
+        expect(assert.isTrue(omvDataSource.dataProvider() instanceof MockDataProvider)).to.be.true;
     });
 
     it("Creates a OmvDataSource with a REST based DataProvider with proper params", function () {
@@ -73,7 +73,7 @@ describe("DataProviders", function () {
             authenticationMethod: AuthenticationTypeAccessToken
         });
         const provider = omvDataSource.dataProvider();
-        assert.instanceOf(provider, OmvRestClient);
+        expect(assert.instanceOf(provider, OmvRestClient));
 
         const omvRestClientProvider = provider as OmvRestClient;
         assert.equal(
@@ -97,7 +97,7 @@ describe("DataProviders", function () {
             authenticationCode: "123",
             dataProvider: mockDataProvider
         });
-        assert.isTrue(omvDataSource.dataProvider() instanceof MockDataProvider);
+        expect(assert.isTrue(omvDataSource.dataProvider() instanceof MockDataProvider)).to.be.true;
     });
 
     it("supports deprecated minZoomLevel and maxZoomLevel in constructor", function () {
@@ -192,18 +192,18 @@ describe("DataProviders", function () {
             features: []
         });
 
-        assert.isTrue(markTilesDirty.called);
+        expect(assert.isTrue(markTilesDirty.called));
 
         markTilesDirty.resetHistory();
 
-        assert.isFalse(markTilesDirty.called);
+        expect(assert.isFalse(markTilesDirty.called));
 
         dataProvider.updateInput({
             type: "FeatureCollection",
             features: []
         });
 
-        assert.isTrue(markTilesDirty.called);
+        expect(assert.isTrue(markTilesDirty.called));
 
         markTilesDirty.resetHistory();
 
@@ -214,7 +214,7 @@ describe("DataProviders", function () {
             features: []
         });
 
-        assert.isFalse(markTilesDirty.called);
+        expect(assert.isFalse(markTilesDirty.called));
     });
 
     it("connect returns promise rejection as error", function () {

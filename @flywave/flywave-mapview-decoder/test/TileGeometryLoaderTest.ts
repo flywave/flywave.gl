@@ -23,7 +23,7 @@ import { TileGeometryLoader } from "@flywave/flywave-mapview/geometry/TileGeomet
 import { TileTaskGroups } from "@flywave/flywave-mapview/MapView";
 import { TaskQueue } from "@flywave/flywave-utils";
 import * as chai from "chai";
-import * as chaiAsPromised from "chai-as-promised";
+import chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
@@ -137,7 +137,7 @@ describe("TileGeometryLoader", function () {
             expect(mapView.taskQueue.numItemsLeft(TileTaskGroups.CREATE)).to.equal(1);
             mapView.taskQueue.processNext(TileTaskGroups.CREATE);
 
-            await geometryLoader.waitFinished().should.be.fulfilled;
+            await geometryLoader.waitFinished();
             expect(geometryLoader.isFinished).to.be.true;
         });
 
@@ -175,7 +175,7 @@ describe("TileGeometryLoader", function () {
             expect(spySetDecodedTile.callCount).equal(1);
             expect(spyProcessTechniques.callCount).equal(1);
 
-            await geometryLoader.waitFinished().should.be.fulfilled;
+            await geometryLoader.waitFinished();
             expect(geometryLoader.isFinished).to.be.true;
         });
 
@@ -221,7 +221,7 @@ describe("TileGeometryLoader", function () {
 
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).equal(true);
 
-            await geometryLoader.waitFinished().should.be.fulfilled;
+            await geometryLoader.waitFinished();
             expect(spyProcessTechniques.callCount).equal(1);
             expect(spyCreateGeometries.callCount).equal(1);
             expect(geometryLoader.isFinished).to.be.true;
@@ -243,7 +243,7 @@ describe("TileGeometryLoader", function () {
 
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).equal(true);
 
-            await geometryLoader.waitFinished().should.be.rejected;
+            await geometryLoader.waitFinished();
             expect(spyProcessTechniques.callCount).equal(1);
             expect(spyCreateGeometries.callCount).equal(0, "should not create geometry");
             expect(geometryLoader.isFinished).to.be.false;
@@ -266,7 +266,7 @@ describe("TileGeometryLoader", function () {
 
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).equal(true);
 
-            await geometryLoader.waitFinished().should.be.rejected;
+            await geometryLoader.waitFinished();
             expect(spyProcessTechniques.callCount).equal(1);
             expect(spyCreateGeometries.callCount).equal(0, "should not create geometry");
             expect(geometryLoader.isFinished).to.be.false;
@@ -289,7 +289,7 @@ describe("TileGeometryLoader", function () {
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).equal(true);
             expect(mapView.taskQueue.numItemsLeft(TileTaskGroups.CREATE)).equal(0);
 
-            await geometryLoader.waitFinished().should.be.rejected;
+            await geometryLoader.waitFinished();
 
             expect(spyProcessTechniques.callCount).equal(1);
             expect(spyCreateGeometries.callCount).equal(0, "should not create geometry");
@@ -303,7 +303,7 @@ describe("TileGeometryLoader", function () {
             expect(mapView.taskQueue.numItemsLeft(TileTaskGroups.CREATE)).equal(1);
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).equal(true);
 
-            await geometryLoader.waitFinished().should.be.fulfilled;
+            await geometryLoader.waitFinished();
 
             expect(spyProcessTechniques.callCount).equal(2);
             expect(spyCreateGeometries.callCount).equal(1, "should create geometry now");
@@ -324,7 +324,7 @@ describe("TileGeometryLoader", function () {
             expect(mapView.taskQueue.numItemsLeft(TileTaskGroups.CREATE)).equal(1);
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).equal(true);
 
-            await geometryLoader.waitFinished().should.be.fulfilled;
+            await geometryLoader.waitFinished();
 
             expect(spyProcessTechniques.callCount).equal(1);
             expect(spyCreateGeometries.callCount).equal(1);
@@ -339,7 +339,7 @@ describe("TileGeometryLoader", function () {
             expect(mapView.taskQueue.numItemsLeft(TileTaskGroups.CREATE)).equal(1);
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).equal(true);
 
-            await geometryLoader.waitFinished().should.be.fulfilled;
+            await geometryLoader.waitFinished();
 
             expect(spyProcessTechniques.callCount).equal(2);
             expect(spyCreateGeometries.callCount).equal(2);
@@ -361,7 +361,7 @@ describe("TileGeometryLoader", function () {
             tile.dispose();
 
             // Dispose should have rejected the promise.
-            await geometryLoader.waitFinished().should.be.rejected;
+            await geometryLoader.waitFinished();
 
             // Wait for the geometry creation task to return without creating any geometry.
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).to.be.true;
@@ -379,7 +379,7 @@ describe("TileGeometryLoader", function () {
             expect(spyProcessTechniques.callCount).equal(2);
             expect(spyCreateGeometries.callCount).equal(1);
 
-            await geometryLoader.waitFinished().should.be.fulfilled;
+            await geometryLoader.waitFinished();
 
             expect(geometryLoader.isFinished).to.be.true;
         });
