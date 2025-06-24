@@ -177,6 +177,7 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
 
         webpack: {
             mode: "development",
+            devtool: "inline-source-map",
             module: {
                 rules: [
                     {
