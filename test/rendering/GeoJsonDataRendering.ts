@@ -9,9 +9,9 @@ import {
     FlatTheme,
     StyleSet
 } from "@flywave/flywave-datasource-protocol";
-import { clipLineString } from "@flywave/flywave-geometry/lib/ClipLineString";
-import { wrapLineString } from "@flywave/flywave-geometry/lib/WrapLineString";
-import { wrapPolygon } from "@flywave/flywave-geometry/lib/WrapPolygon";
+import { clipLineString } from "@flywave/flywave-geometry/src/ClipLineString";
+import { wrapLineString } from "@flywave/flywave-geometry/src/WrapLineString";
+import { wrapPolygon } from "@flywave/flywave-geometry/src/WrapPolygon";
 import {
     EarthConstants,
     GeoBox,
@@ -875,7 +875,7 @@ describe("MapView + OmvDataSource + GeoJsonDataProvider rendering test", functio
                 const { x, y } = webMercatorProjection.projectPoint(
                     GeoCoordinates.fromGeoPoint(geoPos)
                 );
-                return new Vector2(x, y);
+                return new Vector3(x, y, 0);
             });
 
             const lineStrings = clipLineString(points, min.x, min.y, max.x, max.y);

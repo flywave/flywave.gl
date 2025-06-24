@@ -7,6 +7,6 @@
         "incremental": true,
         "declarationMap": true
     },
-    "include": ["src/**/*"],
-    "exclude": ["dist/**", "test/**", "node_modules"]
+    "include": ["src/**/*", "test/**/*"],
+    "exclude": ["dist/**", "node_modules"]
 }

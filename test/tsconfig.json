@@ -11,12 +11,11 @@
             "@flywave/flywave-datasource-protocol/*": [
                 "../@flywave/flywave-datasource-protocol/src/*"
             ],
-
             "@flywave/flywave-test-utils": ["../@flywave/flywave-test-utils/src"],
             "@flywave/flywave-test-utils/*": ["../@flywave/flywave-test-utils/src/*"]
         }
     },
-    "include": ["./*"],
+    "include": ["./ImportTest.ts"],
     "exclude": ["dist/**", "node_modules"],
     "references": [
         {

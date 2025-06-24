@@ -12,7 +12,7 @@ import { clipPolygon } from "../src/ClipPolygon";
 
 describe("ClipPolygon", () => {
     const extents = 4 * 1024;
-
+    console.log("-------------------------------------------");
     const tileBounds = [
         new Vector2(0, 0),
         new Vector2(extents, 0),

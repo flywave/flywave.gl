@@ -9,6 +9,7 @@
 import { getTestResourceUrl } from "@flywave/flywave-test-utils";
 import * as chai from "chai";
 import chai_as_promised from "chai-as-promised";
+
 chai.use(chai_as_promised);
 const { expect } = chai;
 import "@flywave/flywave-fetch";

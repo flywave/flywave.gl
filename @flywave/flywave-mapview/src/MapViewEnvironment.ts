@@ -6,7 +6,7 @@
 import { GradientSky, Light, Sky } from "@flywave/flywave-datasource-protocol";
 import { ProjectionType, Vector3Like } from "@flywave/flywave-geoutils";
 import { getOptionValue, LoggerManager } from "@flywave/flywave-utils";
-import THREE = require("three");
+import * as THREE from "three";
 
 import { BackgroundDataSource } from "./BackgroundDataSource";
 import { MapView, MapViewOptions } from "./MapView";

@@ -16,4 +16,6 @@ module.exports = function (config) {
     config.set({
         ...options(config.coverage, false, "")
     });
+
+    console.log("Matched test files:", config.files);
 };

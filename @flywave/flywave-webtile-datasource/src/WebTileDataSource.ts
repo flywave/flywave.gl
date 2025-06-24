@@ -6,7 +6,7 @@
 import { TileKey, TilingScheme, webMercatorTilingScheme } from "@flywave/flywave-geoutils";
 import { CopyrightInfo, DataSource, DataSourceOptions, Tile } from "@flywave/flywave-mapview";
 import { getOptionValue } from "@flywave/flywave-utils";
-import THREE = require("three");
+import * as THREE from "three";
 import { WebTileLoader } from "./WebTileLoader";
 
 /**

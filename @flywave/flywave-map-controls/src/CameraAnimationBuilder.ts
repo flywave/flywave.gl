@@ -5,7 +5,7 @@
  */
 import { GeoCoordinates, MathUtils } from "@flywave/flywave-geoutils";
 import { LookAtParams, MapView } from "@flywave/flywave-mapview";
-import THREE = require("three");
+import * as THREE from "three";
 
 import { CameraKeyTrackAnimationOptions, ControlPoint } from "./CameraKeyTrackAnimation";
 

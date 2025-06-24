@@ -46,7 +46,7 @@ describe("Rendering lines: ", function () {
     beforeEach(() => {
         canvas = document.createElement("canvas");
         // Enable backward compatibility with three.js <= 0.117
-        webglRenderer = new ((THREE as any).WebGL1Renderer ?? THREE.WebGLRenderer)({ canvas });
+        webglRenderer = new THREE.WebGLRenderer({ canvas });
     });
 
     afterEach(() => {

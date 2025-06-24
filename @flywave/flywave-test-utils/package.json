@@ -7,8 +7,8 @@
     "typings": "lib/src/index.web",
     "exports": {
         ".": {
-            "import": "./lib/src/index.js",
-            "require": "./lib/src/index.js"
+            "import": "./lib/src/index.web.js",
+            "require": "./lib/src/index.web.js"
         },
         "./*": {
             "import": "./lib/src/*",

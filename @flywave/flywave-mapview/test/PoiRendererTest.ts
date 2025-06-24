@@ -20,7 +20,7 @@ import { PoiManager } from "../src/poi/PoiManager";
 import { PoiBuffer, PoiRenderer } from "../src/poi/PoiRenderer";
 import { TextElement } from "../src/text/TextElement";
 
-import sinon = require("sinon");
+import sinon from "sinon";
 import * as THREE from "three";
 
 describe("PoiRenderer", function () {

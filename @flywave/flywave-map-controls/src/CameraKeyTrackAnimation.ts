@@ -12,7 +12,7 @@ import {
     RenderEvent
 } from "@flywave/flywave-mapview";
 import { LoggerManager } from "@flywave/flywave-utils";
-import THREE = require("three");
+import * as THREE from "three";
 
 const logger = LoggerManager.instance.create("CameraKeyTrackAnimation");
 const MIN_DISTANCE = 0;
@@ -38,7 +38,8 @@ export interface ControlPointOptions
  * @beta
  */
 export class ControlPoint
-    implements Pick<LookAtParams, "target" | "tilt" | "heading" | "distance"> {
+    implements Pick<LookAtParams, "target" | "tilt" | "heading" | "distance">
+{
     /**
      * The time, when this ControlPoint should be reached in the animation flow, in seconds.
      */

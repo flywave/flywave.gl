@@ -8,7 +8,7 @@
 
 import * as fs from "fs";
 import { URL } from "url";
-const node_fetch = require("node-fetch");
+import * as node_fetch from "node-fetch";
 
 declare const global: any;
 
@@ -98,7 +98,7 @@ function fetchWithFileSupport(input: RequestInfo, init?: RequestInit): Promise<R
                         return Object.assign({}, this);
                     }
                 };
-                resolve((response as any) as Response);
+                resolve(response as any as Response);
             });
         });
     } else {

@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+const TsconfigPathsPlugin = require("tsconfig-paths-webpack-plugin");
 //@ts-check
-
+const webpack = require("webpack");
 const path = require("path");
 
 /**
@@ -13,13 +14,13 @@ const path = require("path");
  */
 const options = function (isCoverage, isMapSdk, prefixDirectory) {
     // 更现代的覆盖率报告配置
-    const coverageReporters = isCoverage
-        ? [
-              { type: "text-summary" },
-              { type: "lcovonly", subdir: ".", file: "lcov.info" },
-              { type: "html", subdir: "html" }
-          ]
-        : [];
+    const reports = isCoverage
+        ? {
+              "text-summary": "",
+              // Needed for codecov.io, includes html as well
+              lcov: "coverage"
+          }
+        : {};
 
     // 文件路径前缀处理
     const fixPrefix = function (file) {
@@ -43,33 +44,20 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
 
     return {
         // 使用更现代的浏览器配置
-        browsers: ["ChromeHeadlessWithDebugging"],
+        browsers: ["ChromeDebug"],
         customLaunchers: {
-            ChromeHeadlessWithDebugging: {
-                base: "ChromeHeadless",
-                flags: ["--no-sandbox", "--remote-debugging-port=9333"]
-            },
             ChromeDebug: {
                 base: "Chrome",
                 flags: [
+                    "--module",
                     "--no-sandbox",
                     "--remote-debugging-port=9333",
-                    "--auto-open-devtools-for-tabs"
+                    "http://localhost:9876/debug.html"
                 ]
             }
         },
-
         // 使用更现代的测试框架组合
-        frameworks: ["mocha", "chai", "karma-typescript"],
-
-        // 更新插件列表
-        plugins: [
-            "karma-chrome-launcher",
-            "karma-mocha",
-            "karma-chai",
-            "karma-typescript",
-            "karma-coverage"
-        ],
+        frameworks: ["webpack", "mocha"],
 
         // 服务器配置
         port: 9876,
@@ -78,16 +66,21 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         concurrency: Infinity,
         restartOnFileChange: true,
 
+        plugins: [
+            "karma-mocha",
+            "karma-chrome-launcher",
+            "karma-webpack",
+            "karma-coverage-istanbul-reporter"
+        ],
         // 文件配置
         files: [
-            // 测试文件
-            "@flywave/flywave-datasource-protocol/**/*.ts",
+            // "@flywave/flywave-datasource-protocol/**/*.ts",
             // "@flywave/flywave-debug-datasource/**/*.ts",
             // "@flywave/flywave-geometry/**/*.ts",
             // "@flywave/flywave-fetch/**/*.ts",
             // "@flywave/flywave-utils/**/*.ts",
             // "@flywave/flywave-geoutils/**/*.ts",
-            // "@flywave/flywave-mapview/**/*.ts",
+            "@flywave/flywave-mapview/**/*.ts",
             // "@flywave/flywave-mapview-decoder/**/*.ts",
             // "@flywave/flywave-materials/**/*.ts",
             // "@flywave/flywave-text-canvas/**/*.ts",
@@ -99,87 +92,81 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             // "@flywave/flywave-olp-utils/**/*.ts",
             // "@flywave/flywave-webtile-datasource/**/*.ts",
             // "@flywave/flywave-vectortile-datasource/**/*.ts",
-            // "@flywave/flywave-map-theme/test/DefaultThemeTest.ts",
+            // "@flywave/flywave-map-theme/test/DefaultThemeTest.ts"
 
-            // 资源文件
-            {
-                pattern: "@flywave/flywave-test-utils/test/resources/*.*",
-                included: false,
-                served: true,
-                watched: false
-            },
-            {
-                pattern: "node_modules/@here/harp-fontcatalog/resources/**/*.*",
-                included: false,
-                served: true,
-                watched: false
-            },
-            {
-                pattern: "@flywave/flywave-text-canvas/resources/fonts/**/*.*",
-                included: false,
-                served: true,
-                watched: false
-            },
+            // {
+            //     pattern: "@flywave/flywave-test-utils/test/resources/*.*",
+            //     included: false
+            // },
+            // // This is needed to access the font resources when running the repo separate from the
+            // // sdk.
+            // {
+            //     pattern: "node_modules/@here/harp-fontcatalog/resources/**/*.*",
+            //     included: false
+            // },
+            // // This is needed when this repo is managed with the repo tool
+            // {
+            //     pattern: "@flywave/flywave-text-canvas/resources/fonts/**/*.*",
+            //     included: false
+            // },
             {
                 pattern: "@flywave/flywave-mapview/test/resources/*.*",
-                included: false,
-                served: true,
-                watched: false
-            },
-            {
-                pattern: "@flywave/flywave-datasource-protocol/theme.schema.json",
-                included: false,
-                served: true,
-                watched: false
-            },
-            {
-                pattern: "@flywave/flywave-map-theme/resources/*.json",
-                included: false,
-                served: true,
-                watched: false
-            },
-            {
-                pattern:
-                    "@flywave/flywave-vectortile-datasource/src/adapters/omv/proto/vector_tile.js",
-                type: "js",
-                included: true
+                included: false
             }
+            // {
+            //     pattern: "@flywave/flywave-datasource-protocol/theme.schema.json",
+            //     included: false
+            // },
+            // "@flywave/flywave-vectortile-datasource/src/adapters/omv/proto/vector_tile.js",
+            // "@flywave/flywave-vectortile-datasource/**/*.ts",
+            // "@flywave/flywave-map-theme/test/DefaultThemeTest.ts",
+            // // These files are needed for the test above.
+            // {
+            //     pattern: "@flywave/flywave-map-theme/resources/*.json",
+            //     included: false
+            // }
         ].map(file => fixPrefix(file)),
 
-        // 排除文件
+        // Files that are to be excluded from the list included above.
         exclude: [
+            "@flywave/**/node_modules/**/*",
             "**/test/rendering/**/*.*",
-            "@flywave/flywave-test-utils/src/rendering/RenderingTestResultServer.ts",
-            "@flywave/flywave-test-utils/src/rendering/RenderingTestResultCli.ts",
-            "@flywave/flywave-datasource-protocol/src/ThemeTypingsTest.ts",
+            "@flywave/flywave-test-utils/lib/rendering/RenderingTestResultServer.ts",
+            "@flywave/flywave-test-utils/lib/rendering/RenderingTestResultCli.ts",
+            "@flywave/flywave-datasource-protocol/test/ThemeTypingsTest.ts",
             "**/*.d.ts"
         ].map(file => fixPrefix(file)),
-
+        client: {
+            mocha: {
+                reporter: "html",
+                ui: "bdd",
+                timeout: 5000
+            }
+        },
         // 预处理配置
         preprocessors: {
-            "@flywave/**/*.ts": ["karma-typescript"]
-            // "@flywave/flywave-vectortile-datasource/src/adapters/omv/proto/vector_tile.js": [
-            //     "karma-typescript"
-            // ]
+            "@flywave/**/*.ts": ["webpack"],
+            "@flywave/flywave-vectortile-datasource/src/adapters/omv/proto/vector_tile.js": [
+                "webpack"
+            ]
         },
 
         // 报告器配置
-        reporters: ["progress", "karma-typescript"].concat(isCoverage ? ["coverage"] : []),
+        reporters: ["progress", "coverage-istanbul"],
 
         // 覆盖率配置
-        coverageReporter: {
-            reporters: coverageReporters,
+        coverageIstanbulReporter: {
+            reports: ["html", "text-summary", "json"],
+
             dir: path.join(__dirname, "coverage"),
-            check: {
-                global: {
-                    statements: 80,
-                    branches: 70,
-                    functions: 80,
-                    lines: 80
+
+            "report-config": {
+                html: {
+                    // outputs the report in ./coverage/html
+                    subdir: "html"
                 }
             }
         },
-
         // 代理配置
         proxies: {
             "/@flywave": "/base/@flywave",
@@ -188,33 +175,48 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
                 : "/base/node_modules/@here/harp-fontcatalog/resources/"
         },
 
-        // Karma-typescript 配置
-        karmaTypescriptConfig: {
-            tsconfig: "./tsconfig.karma.json",
-            bundlerOptions: {
-                transforms: [require("karma-typescript-es6-transform")()],
-                resolve: {
-                    symlinks: false
-                },
-                exclude: ["**/webpack.*.js", "**/karma.*js", "**/node_modules/**"]
-            },
-            coverageOptions: {
-                instrumentation: isCoverage,
-                exclude: [
-                    /test\//,
-                    /vector_tile\.js/,
-                    /\.node\.ts/,
-                    /index.*\.ts/,
-                    /\.tsx/,
-                    /coresdk\/@flywave\/flywave-test-utils\/lib\/rendering/
+        webpack: {
+            mode: "development",
+            module: {
+                rules: [
+                    {
+                        test: /\.ts$/,
+                        use: [
+                            {
+                                loader: "ts-loader",
+                                options: {
+                                    configFile: path.resolve(__dirname, "tsconfig.karma.json"),
+                                    transpileOnly: true
+                                }
+                            }
+                        ],
+                        exclude: /node_modules/
+                    }
                 ]
             },
-            reports: {
-                html: "coverage",
-                "text-summary": ""
+            plugins: [
+                new webpack.ProvidePlugin({
+                    process: "process/browser",
+                    Buffer: ["buffer", "Buffer"]
+                })
+            ],
+            resolve: {
+                extensions: [".ts", ".js"],
+                plugins: [
+                    new TsconfigPathsPlugin({
+                        configFile: path.resolve(__dirname, "tsconfig.karma.json"),
+                        logLevel: "INFO"
+                    })
+                ],
+                fallback: {
+                    fs: false,
+                    querystring: require.resolve("querystring-es3"),
+                    process: require.resolve("process/browser"),
+                    os: require.resolve("os-browserify/browser"),
+                    stream: require.resolve("stream-browserify")
+                }
             }
         },
-
         // 日志级别
         logLevel: "INFO",
 

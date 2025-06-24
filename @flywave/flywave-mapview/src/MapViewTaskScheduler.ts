@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { PerformanceTimer, Task, TaskQueue } from "@flywave/flywave-utils";
-import THREE = require("three");
+import * as THREE from "three";
 
 import { TileTaskGroups } from "./MapView";
 import { PerformanceStatistics } from "./Statistics";
