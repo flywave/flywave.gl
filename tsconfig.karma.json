@@ -44,6 +44,7 @@
     },
     "include": [
         "@flywave/**/*.ts",
+        "@flywave/flywave.gl/**/*.ts",
         "@flywave/flywave-vectortile-datasource/src/adapters/omv/proto/vector_tile.js"
     ],
     "exclude": [

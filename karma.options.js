@@ -80,7 +80,7 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             // "@flywave/flywave-fetch/**/*.ts",
             // "@flywave/flywave-utils/**/*.ts",
             // "@flywave/flywave-geoutils/**/*.ts",
-            "@flywave/flywave-mapview/**/*.ts",
+            // "@flywave/flywave-mapview/**/*.ts",
             // "@flywave/flywave-mapview-decoder/**/*.ts",
             // "@flywave/flywave-materials/**/*.ts",
             // "@flywave/flywave-text-canvas/**/*.ts",
@@ -93,7 +93,6 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             // "@flywave/flywave-webtile-datasource/**/*.ts",
             // "@flywave/flywave-vectortile-datasource/**/*.ts",
             // "@flywave/flywave-map-theme/test/DefaultThemeTest.ts"
-
             // {
             //     pattern: "@flywave/flywave-test-utils/test/resources/*.*",
             //     included: false
@@ -109,10 +108,10 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             //     pattern: "@flywave/flywave-text-canvas/resources/fonts/**/*.*",
             //     included: false
             // },
-            {
-                pattern: "@flywave/flywave-mapview/test/resources/*.*",
-                included: false
-            }
+            // {
+            //     pattern: "@flywave/flywave-mapview/test/resources/*.*",
+            //     included: false
+            // }
             // {
             //     pattern: "@flywave/flywave-datasource-protocol/theme.schema.json",
             //     included: false

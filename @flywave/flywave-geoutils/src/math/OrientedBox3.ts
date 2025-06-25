@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Frustum, Matrix4, Plane, Ray, Vector3 } from "three";
+import { Frustum, Matrix4, Plane, Quaternion, Ray, Vector3 } from "three";
 
 import { OrientedBox3Like } from "./OrientedBox3Like";
 
@@ -259,5 +259,60 @@ export class OrientedBox3 implements OrientedBox3Like {
         }
 
         return result;
+    }
+
+    /**
+     * 从3D Tiles orientedBox数组初始化OrientedBox3
+     * @param array 12元素数组 [中心X,Y,Z, X轴X,Y,Z, Y轴X,Y,Z, Z轴X,Y,Z]
+     */
+    static fromArray(array: number[]): OrientedBox3 {
+        const position = new Vector3(array[0], array[1], array[2]);
+
+        const xAxis = new Vector3(array[3], array[4], array[5]);
+        const yAxis = new Vector3(array[6], array[7], array[8]);
+        const zAxis = new Vector3(array[9], array[10], array[11]);
+
+        // 创建临时矩阵用于提取缩放值
+        const matrix = new Matrix4();
+        matrix.makeBasis(xAxis, yAxis, zAxis);
+        const scale = new Vector3();
+        matrix.decompose(new Vector3(), new Quaternion(), scale);
+
+        // 标准化轴向向量
+        xAxis.normalize();
+        yAxis.normalize();
+        zAxis.normalize();
+
+        const orientedBox = new OrientedBox3(
+            position,
+            matrix,
+            new Vector3(scale.x, scale.y, scale.z)
+        );
+
+        return orientedBox;
+    }
+
+    /**
+     * 转换为3D Tiles orientedBox数组格式
+     * @returns 12元素数组 [中心X,Y,Z, X轴X,Y,Z, Y轴X,Y,Z, Z轴X,Y,Z]
+     */
+    toArray(): number[] {
+        const matrix = this.getRotationMatrix();
+        matrix.scale(this.extents); // 将缩放值应用到轴向
+
+        return [
+            this.position.x,
+            this.position.y,
+            this.position.z,
+            matrix.elements[0],
+            matrix.elements[4],
+            matrix.elements[8],
+            matrix.elements[1],
+            matrix.elements[5],
+            matrix.elements[9],
+            matrix.elements[2],
+            matrix.elements[6],
+            matrix.elements[10]
+        ];
     }
 }
