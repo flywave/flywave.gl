@@ -12,7 +12,7 @@ import {
 import { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { BatchTableHeader } from "../utilities/FeatureTable";
-import { Tile } from "../base/tile";
+import { Tile } from "../base/Tile";
 import { TileGLTF } from "../base/LoaderBase";
 
 interface PrimitiveDef {

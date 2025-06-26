@@ -15,7 +15,7 @@ import { CMPTLoaderBase } from "./base/CMPTLoaderBase";
 import { LRUCache } from "./utilities/LRUCache";
 import { PriorityQueue } from "./utilities/PriorityQueue";
 
-export * from "./tiles-render";
+export * from "./TilesRenderer";
 
 export {
     DebugTilesRenderer,

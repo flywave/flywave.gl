@@ -1,5 +1,5 @@
 import { Matrix4, Sphere, Ray, Vector3, Object3D, Intersection, Raycaster } from "three";
-import { Tile } from "../base/tile";
+import { Tile } from "../base/Tile";
 
 const _sphere = new Sphere();
 const _mat = new Matrix4();

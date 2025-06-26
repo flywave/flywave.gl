@@ -12,7 +12,7 @@ import {
 } from "./traverseFunctions";
 import { UNLOADED, LOADING, PARSING, LOADED, FAILED } from "./constants";
 import * as THREE from "three";
-import { Tile } from "./tile";
+import { Tile } from "./Tile";
 
 interface TilesRendererStats {
     parsing: number;

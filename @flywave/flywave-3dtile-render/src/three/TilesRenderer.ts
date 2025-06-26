@@ -27,7 +27,7 @@ import {
     Mesh
 } from "three";
 import { raycastTraverse, raycastTraverseFirstHit } from "./raycastTraverse";
-import { Tile, TileCache } from "../base/tile";
+import { Tile, TileCache } from "../base/Tile";
 import { GeoBox, GeoCoordinates, OrientedBox3, Projection } from "@flywave/flywave-geoutils";
 import { Description, TileGLTF } from "../base/LoaderBase";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";

@@ -1,1484 +1,1228 @@
-/*
- * Copyright (C) 2019-2021 HERE Europe B.V.
- * Licensed under Apache 2.0, see full license in LICENSE
- * SPDX-License-Identifier: Apache-2.0
- */
+import { dispatch as _dispatch } from "d3-dispatch";
+import { Matrix4, Vector3, Quaternion, Spherical, Vector4 } from "three";
+import { GeoCoordinates, EarthConstants } from "@flywave/flywave-geoutils";
+import { CameraTransform } from "./CameraTransform";
+import { slerpMatrices, sphericalLerp, rayCastToEllipsoid } from "./math";
 
-import * as geoUtils from "@flywave/flywave-geoutils";
-import {
-    CameraUtils,
-    EventDispatcher,
-    MapView,
-    MapViewEventNames,
-    MapViewUtils
-} from "@flywave/flywave-mapview";
-import * as THREE from "three";
-
-import * as utils from "./Utils";
-
-enum State {
-    NONE,
-    PAN,
-    ROTATE,
-    ORBIT,
-    TOUCH
+interface ZoomAnimationState {
+    time: number;
+    speed: number;
+    mode: number;
+    toCity: boolean;
+    distance: number;
+    heightRatio: number;
+    startMatrix: Matrix4;
+    endMatrix: Matrix4;
+    midMatrix: Matrix4;
+    start: number[];
+    end: number[];
+    globeCenter: Vector3;
+    finishCallback?: (controller: FreeControls) => void;
 }
 
-export enum TiltState {
-    Tilted,
-    Down
+interface MouseState {
+    x: number;
+    y: number;
+    z: number;
+    down: [boolean, boolean, boolean];
+    prevDown: [boolean, boolean, boolean];
 }
 
-interface TouchState {
-    currentTouchPoint: THREE.Vector2;
-    lastTouchPoint: THREE.Vector2;
-    currentWorldPosition: THREE.Vector3;
-    initialWorldPosition: THREE.Vector3;
-}
+export abstract class FreeControls {
+    // Application references
+    private mapView: any;
+    private application: any;
+    private view: any;
+    private camera: CameraTransform;
 
-/**
- * Map interaction events' names.
- */
-export enum EventNames {
-    Update = "update",
-    BeginInteraction = "begin-interaction",
-    EndInteraction = "end-interaction"
-}
+    // Control state
+    private inertialDeltaX: number = 0;
+    private inertialDeltaY: number = 0;
+    private inertialAxis: Vector4 = new Vector4();
 
-// cast needed to workaround wrong three.js typings.
-const MAPCONTROL_EVENT: THREE.Event = { type: EventNames.Update } as any;
-const MAPCONTROL_EVENT_BEGIN_INTERACTION: THREE.Event = {
-    type: EventNames.BeginInteraction
-} as any;
-const MAPCONTROL_EVENT_END_INTERACTION: THREE.Event = {
-    type: EventNames.EndInteraction
-} as any;
+    // Hit detection
+    private lastHitDistance: number = -1;
+    private lastHit: Vector3 = new Vector3();
+    private isPanHit: boolean = false;
+    private panHit: Vector3 = new Vector3();
+    private lastHitCenterDistance: number = -1;
+    private lastHitCenter: Vector3 = new Vector3();
+    private lastHitCenterClick: Vector3 = new Vector3();
+    private lastHitGravity: Vector3 = new Vector3(); // Rotate pivot
+    private lastHitDistToGlobe: number = 0;
 
-/**
- * The number of user's inputs to consider for panning inertia, to reduce erratic inputs.
- */
-const USER_INPUTS_TO_CONSIDER = 5;
+    // Animation controls
+    private smoothZoom: number = 0;
+    private panVelocityX: number = 0;
+    private panVelocityY: number = 0;
+    private zoomVelocity: number = 0;
+    private tiltVelocity: number = 0;
+    private headingVelocity: number = 0;
 
-/**
- * The default maximum for the camera tilt. This value avoids seeing the horizon.
- */
-const DEFAULT_MAX_TILT_ANGLE = THREE.MathUtils.degToRad(89);
-
-/**
- * Epsilon value to rule out when a number can be considered 0.
- */
-const EPSILON = 0.01;
-
-/**
- * Maximum duration between start and end touch events to define a finger tap.
- */
-const MAX_TAP_DURATION = 120;
-
-/**
- * This map control provides basic map-related building blocks to interact with the map. It also
- * provides a default way of handling user input. Currently we support basic mouse interaction and
- * touch input interaction.
- *
- * Mouse interaction:
- *  - Left mouse button + move = Panning the map.
- *  - Right mouse button + move = Orbits the camera around the focus point.
- *  - Middle mouse button + move = Rotating the view. Up down movement changes the pitch. Left/right
- *    movement changes the yaw.
- *  - Mouse wheel = Zooms up and down by one zoom level, zooms on target.
- *
- * Touch interaction:
- *  - One finger = Panning the map.
- *  - Two fingers = Scale, rotate and panning the map.
- *  - Three fingers = Orbiting the map. Up down movements influences the current orbit altitude.
- *    Left/right changes the azimuth.
- */
-export class MapControls extends EventDispatcher {
-    /**
-     * Creates MapControls object and attaches it specified [[MapView]].
-     *
-     * @param mapView - [[MapView]] object to which MapControls should be attached to.
-     * @param disposeWithMapView - If `true`, an event with MapView is registered to dispose of
-     * `MapControls` if MapView itself is disposed.
-     */
-    static create(mapView: MapView, disposeWithMapView = true) {
-        return new MapControls(mapView, disposeWithMapView);
-    }
-
-    /**
-     * This factor will be applied to the delta of the current mouse pointer position and the last
-     * mouse pointer position: The result then will be used as an offset for the rotation then.
-     * Default value is `0.1`.
-     */
-    rotationMouseDeltaFactor = 0.1;
-
-    /**
-     * This factor will be applied to the delta of the current mouse pointer position and the last
-     * mouse pointer position: The result then will be used as an offset to orbit the camera.
-     * Default value is `0.1`.
-     */
-    orbitingMouseDeltaFactor = 0.1 * THREE.MathUtils.DEG2RAD;
-
-    /**
-     * This factor will be applied to the delta of the current touch pointer position and the last
-     * touch pointer position: The result then will be used as an offset to orbit the camera.
-     * Default value is `0.1`.
-     */
-    orbitingTouchDeltaFactor = 0.1 * THREE.MathUtils.DEG2RAD;
-
-    /**
-     * Set to `true` to enable input handling through this map control, `false` to disable input
-     * handling. Even when disabling input handling, you can manually use the public functions to
-     * change the view to the current map.
-     */
-    enabled = true;
-
-    /**
-     * Set to `true` to enable zooming through these controls, `false` otherwise.
-     */
-    zoomEnabled = true;
-
-    /**
-     * Set to `true` to enable panning through these controls, `false` otherwise.
-     */
-    panEnabled = true;
-
-    /**
-     * Set to `true` to enable tilting through these controls, `false` otherwise.
-     */
-    tiltEnabled = true;
-
-    /**
-     * Set to `true` to enable rotation through this map control, `false` to disable rotation.
-     */
-    rotateEnabled = true;
-
-    /**
-     * Set to `true` to enable an inertia dampening on zooming and panning. `false` cancels inertia.
-     */
-    inertiaEnabled = true;
-
-    /**
-     * Inertia damping duration for the zoom, in seconds.
-     */
-    zoomInertiaDampingDuration = 0.6;
-
-    /**
-     * Inertia damping duration for the panning, in seconds.
-     */
-    panInertiaDampingDuration = 1.0;
-
-    /**
-     * Duration in seconds of the camera animation when the tilt button is clicked. Independent of
-     * inertia.
-     */
-    tiltToggleDuration = 0.5;
-
-    /**
-     * Camera tilt to the target when tilting from the `toggleTilt` public method.
-     */
-    tiltAngle = Math.PI / 4;
-
-    /**
-     * Duration of the animation to reset the camera to looking north, in seconds. Independent of
-     * inertia.
-     */
-    northResetAnimationDuration = 1.5;
-
-    /**
-     * Determines the zoom level delta for single mouse wheel movement. So after each mouse wheel
-     * movement the current zoom level will be added or subtracted by this value.
-     *
-     * The default values are:
-     * - `0.2` when `inertiaEnabled` is `false` - this means that every 5th mouse wheel movement
-     * you will cross a zoom level.
-     * - `0.8`, otherwise.
-     */
-    get zoomLevelDeltaOnMouseWheel(): number {
-        return this.m_zoomLevelDeltaOnMouseWheel !== undefined
-            ? this.m_zoomLevelDeltaOnMouseWheel
-            : this.inertiaEnabled
-            ? 0.8
-            : 0.2;
-    }
-
-    /**
-     * Set the zoom level delta for a single mouse wheel movement.
-     *
-     * **Note**: To reverse the zoom direction, you can provide a negative value.
-     */
-    set zoomLevelDeltaOnMouseWheel(delta: number) {
-        this.m_zoomLevelDeltaOnMouseWheel = delta;
-    }
-
-    /**
-     * @private
-     */
-    private m_zoomLevelDeltaOnMouseWheel?: number;
-
-    /**
-     * Zoom level delta when using the UI controls.
-     */
-    zoomLevelDeltaOnControl = 1.0;
-
-    /**
-     * Determines the minimum zoom level we can zoom to.
-     */
-    minZoomLevel = 0;
-
-    /**
-     * Determines the maximum zoom level we can zoom to.
-     */
-    maxZoomLevel = 20;
-
-    /**
-     * Determines the minimum camera height in meter.
-     */
-    minCameraHeight = 3;
-
-    /**
-     * Zoom level delta to apply when double clicking or double tapping. `0` disables the feature.
-     */
-    zoomLevelDeltaOnDoubleClick = 1.0;
-
-    /**
-     * Double click uses the OS delay through the double click event. Tapping is implemented locally
-     * here in `MapControls` with this duration setting the maximum delay to define a double tap.
-     * The value is in seconds. `300ms` is picked as the default value as jQuery does.
-     */
-    doubleTapTime = 0.3;
-
-    /**
-     * Three.js camera that this controller affects.
-     */
-    readonly camera: THREE.Camera;
-
-    /**
-     * Map's HTML DOM element.
-     */
-    readonly domElement: HTMLCanvasElement;
-
-    private readonly m_currentViewDirection = new THREE.Vector3();
-
-    private readonly m_lastMousePosition = new THREE.Vector2(0, 0);
-    private readonly m_initialMousePosition = new THREE.Vector2(0, 0);
-    private readonly m_mouseDelta = new THREE.Vector2(0, 0);
-
-    private m_needsRenderLastFrame: boolean = true;
-
-    // Internal variables for animating panning (planar + spherical panning).
-    private m_panIsAnimated: boolean = false;
-    private readonly m_panDistanceFrameDelta: THREE.Vector3 = new THREE.Vector3();
-    private m_panAnimationTime: number = 0;
-    private m_panAnimationStartTime: number = 0;
-    private m_lastAveragedPanDistanceOrAngle: number = 0;
-    private m_currentInertialPanningSpeed: number = 0;
-    private readonly m_lastPanVector: THREE.Vector3 = new THREE.Vector3();
-    private readonly m_rotateGlobeQuaternion: THREE.Quaternion = new THREE.Quaternion();
-    private readonly m_lastRotateGlobeAxis: THREE.Vector3 = new THREE.Vector3();
-    private m_lastRotateGlobeAngle: number = 0;
-    private readonly m_lastRotateGlobeFromVector: THREE.Vector3 = new THREE.Vector3();
-    private m_recentPanDistancesOrAngles: [number, number, number, number, number] = [
-        0,
-        0,
-        0,
-        0,
-        0
-    ];
-
-    private m_currentPanDistanceOrAngleIndex: number = 0;
-
-    // Internal variables for animating zoom.
-    private m_zoomIsAnimated: boolean = false;
-    private m_zoomDeltaRequested: number = 0;
-    private readonly m_zoomTargetNormalizedCoordinates: THREE.Vector2 = new THREE.Vector2();
-    private m_zoomAnimationTime: number = 0;
-    private m_zoomAnimationStartTime: number = 0;
-    private m_startZoom: number = 0;
-    private m_targetedZoom?: number;
-    private m_currentZoom?: number;
-
-    // Internal variables for animating tilt.
-    private m_tiltIsAnimated: boolean = false;
-    private m_tiltRequested?: number = undefined;
-    private m_tiltAnimationTime: number = 0;
-    private m_tiltAnimationStartTime: number = 0;
-    private m_startTilt: number = 0;
-    private m_targetedTilt?: number;
-    private m_currentTilt?: number;
-
-    private m_tiltState?: TiltState;
-    private m_state: State = State.NONE;
-
-    private readonly m_tmpVector2: THREE.Vector2 = new THREE.Vector2();
-    private readonly m_tmpVector3: THREE.Vector3 = new THREE.Vector3();
-
-    // Internal variables for animating double tap.
-    private m_tapStartTime: number = 0;
-    private m_lastSingleTapTime: number = 0;
-    private m_fingerMoved: boolean = false;
-    private m_isDoubleTap: boolean = false;
-
-    // Internal variables for animating the movement resetting the north.
-    private m_resetNorthStartTime: number = 0;
-    private m_resetNorthIsAnimated: boolean = false;
-    private m_resetNorthAnimationDuration: number = 0;
-    private m_currentAzimuth: number = 0;
-    private m_lastAzimuth: number = 0;
-    private m_startAzimuth: number = 0;
-
-    /**
-     * Determines the maximum angle the camera can tilt to. It is defined in radians.
-     */
-    private m_maxTiltAngle = DEFAULT_MAX_TILT_ANGLE;
-
-    private m_cleanupMouseEventListeners?: () => void;
-
-    private m_touchState: {
-        touches: TouchState[];
-        currentRotation: number;
-        initialRotation: number;
-    } = {
-        touches: [],
-        currentRotation: 0,
-        initialRotation: 0
+    // Mouse state
+    private mouseState: MouseState = {
+        x: 0,
+        y: 0,
+        z: 0,
+        down: [false, false, false],
+        prevDown: [false, false, false]
     };
 
-    /**
-     * Constructs a new `MapControls` object.
-     *
-     * @param mapView - [[MapView]] this controller modifies.
-     * @param disposeWithMapView - If `true`, an event with MapView is registered to dispose of
-     * `MapControls` if MapView itself is disposed.
-     */
-    constructor(readonly mapView: MapView, disposeWithMapView = true) {
-        super();
+    // Control limits
+    private tiltLimit: number = Math.PI * 0.01;
+    private distanceLimit: number = 50;
+    private limitZoomOut: number = 1.5;
 
-        this.camera = mapView.camera;
-        this.domElement = mapView.renderer.domElement;
-        this.maxZoomLevel = mapView.maxZoomLevel;
-        this.minZoomLevel = mapView.minZoomLevel;
-        this.minCameraHeight = mapView.minCameraHeight;
-        this.bindInputEvents(this.domElement);
-        this.handleZoom = this.handleZoom.bind(this);
-        this.handlePan = this.handlePan.bind(this);
-        this.tilt = this.tilt.bind(this);
-        this.resetNorth = this.resetNorth.bind(this);
-        this.assignZoomAfterTouchZoomRender = this.assignZoomAfterTouchZoomRender.bind(this);
+    // Camera state
+    private headingSet?: number;
+    private tiltSet?: number;
+    private zoomAnimationState?: ZoomAnimationState;
+    private lockCenterPoint: Vector3 | null = null;
+    private cameraSwivel: boolean = false;
 
-        if (disposeWithMapView) {
-            // Catch the disposal of `MapView`.
-            mapView.addEventListener(MapViewEventNames.Dispose, () => {
-                this.dispose();
-            });
+    // Viewport dimensions
+    private width: number = 0;
+    private height: number = 0;
+
+    // Disable flags
+    private _disableTilt: boolean = false;
+    private _disableHeading: boolean = false;
+
+    protected abstract getCameraTransform(): CameraTransform;
+
+    constructor(application: any, window: any) {
+        this.mapView = application;
+        this.application = application;
+        this.view = window;
+    }
+
+    get cameraTransform() {
+        return this.getCameraTransform();
+    }
+
+    public update(): boolean {
+        // Update viewport dimensions
+        const { width, height } = this.mapView.getCanvasClientSize();
+        this.width = width;
+        this.height = height;
+
+        // Get current mouse state
+        const mouseX = this.width - this.view.lastMouseX;
+        const mouseY = this.height - this.view.lastMouseY;
+        const mouseDown = this.view.mouseDown;
+        const mouseZ = this.view.lastMouseZ;
+
+        // Handle zoom animations
+        if (this.zoomAnimationState) {
+            return this.handleZoomAnimation(mouseDown, mouseZ);
         }
-    }
 
-    /**
-     * Destroy this `MapControls` instance.
-     *
-     * Unregisters all global event handlers used. This is method should be called when you stop
-     * using `MapControls`.
-     * @override
-     */
-    dispose = () => {
-        // replaced with real code in bindInputEvents
-    };
+        // Get camera position and calculate globe distance
+        const cameraPos = new Vector3();
+        this.camera.getOrigin(cameraPos);
 
-    /**
-     * Current viewing angles yaw/pitch/roll in degrees.
-     */
-    get attitude(): MapViewUtils.Attitude {
-        const attitude = MapViewUtils.extractAttitude(this.mapView, this.camera);
-        return {
-            yaw: THREE.MathUtils.radToDeg(attitude.yaw),
-            pitch: THREE.MathUtils.radToDeg(attitude.pitch),
-            roll: THREE.MathUtils.radToDeg(attitude.roll)
-        };
-    }
-
-    /**
-     * Reset the camera to looking north, in an orbiting movement around the target point instead
-     * of changing the yaw (which would be the camera rotating on itself).
-     */
-    pointToNorth() {
-        // Use pre-calculated target coordinates, otherwise we could call utility method to evaluate
-        // geo-coordinates here:
-        // targetGeoCoords = MapViewUtils.getTargetCoordinatesFromCamera(camera, projection)
-        this.m_startAzimuth =
-            Math.PI +
-            MapViewUtils.extractSphericalCoordinatesFromLocation(
-                this.mapView,
-                this.camera,
-                this.mapView.target
-            ).azimuth;
-        // Wrap between -PI and PI.
-        this.m_startAzimuth = Math.atan2(
-            Math.sin(this.m_startAzimuth),
-            Math.cos(this.m_startAzimuth)
+        const normal = new Vector3();
+        const distanceToGlobe = this.getDistanceToGlobe(
+            cameraPos.x,
+            cameraPos.y,
+            cameraPos.z,
+            normal
         );
-        if (this.m_startAzimuth === 0) {
-            return;
-        }
-        this.stopExistingAnimations();
-        this.m_resetNorthAnimationDuration = this.northResetAnimationDuration;
-        this.m_currentAzimuth = this.m_startAzimuth;
-        this.m_resetNorthStartTime = performance.now();
-        this.resetNorth();
-    }
 
-    /**
-     * Zooms and moves the map in such a way that the given target position remains at the same
-     * position after the zoom.
-     *
-     * @param targetPositionOnScreenXinNDC - Target x position in NDC space.
-     * @param targetPositionOnScreenYinNDC - Target y position in NDC space.
-     */
-    zoomOnTargetPosition(
-        targetPositionOnScreenXinNDC: number,
-        targetPositionOnScreenYinNDC: number,
-        zoomLevel: number
-    ) {
-        MapViewUtils.zoomOnTargetPosition(
-            this.mapView,
-            targetPositionOnScreenXinNDC,
-            targetPositionOnScreenYinNDC,
-            zoomLevel,
-            this.m_maxTiltAngle
+        // Handle mouse interactions
+        const hitPoint = new Vector3();
+        const hitDistance = this.handleMouseInteractions(
+            mouseX,
+            mouseY,
+            mouseDown,
+            mouseZ,
+            cameraPos,
+            hitPoint
         );
-    }
 
-    /**
-     * Zooms to the desired location by the provided value.
-     *
-     * @param zoomLevel - Zoom level.
-     * @param screenTarget - Zoom target on screen.
-     */
-    setZoomLevel(
-        zoomLevel: number,
-        screenTarget: { x: number; y: number } | THREE.Vector2 = { x: 0, y: 0 }
-    ) {
-        if (!this.enabled || !this.zoomEnabled) {
-            return;
-        }
+        // Handle panning operations
+        this.handlePanning(mouseDown, cameraPos, hitPoint, distanceToGlobe);
 
-        this.dispatchEvent(MAPCONTROL_EVENT_BEGIN_INTERACTION);
+        // Handle zoom operations
+        this.handleZoomOperations(mouseZ, hitDistance, cameraPos);
 
-        // Register the zoom request
-        this.m_startZoom = this.currentZoom;
-        this.m_zoomDeltaRequested = zoomLevel - this.zoomLevelTargeted;
+        if (mouseDown[2]) {
+            // 右键按下
+            // 只有当不禁用tilt和heading时才处理旋转
+            const canRotate = !this._disableTilt && !this._disableHeading;
 
-        this.stopExistingAnimations();
+            // 更新prevDown状态（对应原始代码中的R[2]）
+            this.mouseState.prevDown[2] = canRotate;
 
-        // Assign the new animation start time.
-        this.m_zoomAnimationStartTime = performance.now();
-
-        this.m_zoomTargetNormalizedCoordinates.set(screenTarget.x, screenTarget.y);
-
-        this.handleZoom();
-
-        this.dispatchEvent(MAPCONTROL_EVENT_END_INTERACTION);
-    }
-
-    /**
-     * Toggles the camera tilt between 0 (looking down) and the value at `this.tiltAngle`.
-     */
-    toggleTilt(): void {
-        if (!this.enabled || !this.tiltEnabled) {
-            return;
-        }
-
-        this.stopExistingAnimations();
-        this.m_startTilt = this.currentTilt;
-        const aimTilt = this.m_startTilt < EPSILON;
-        this.m_tiltRequested = aimTilt ? this.tiltAngle : 0;
-        this.m_tiltState = aimTilt ? TiltState.Tilted : TiltState.Down;
-        this.m_tiltAnimationStartTime = performance.now();
-        this.tilt();
-    }
-
-    /**
-     * Set the camera height.
-     */
-    set cameraHeight(height: number) {
-        //Set the cameras height according to the given zoom level.
-        this.camera.position.setZ(height);
-        this.camera.matrixWorldNeedsUpdate = true;
-    }
-
-    /**
-     * Get the current camera height.
-     */
-    get cameraHeight(): number {
-        // ### Sync with the way geoviz is computing the zoom level.
-        return this.mapView.camera.position.z;
-    }
-
-    /**
-     * Set camera max tilt angle. The value is clamped between 0 and 89 degrees. In sphere
-     * projection, at runtime, the value is also clamped so that the camera does not look above the
-     * horizon.
-     *
-     * @param angle - Angle in degrees.
-     */
-    set maxTiltAngle(angle: number) {
-        this.m_maxTiltAngle = Math.max(
-            0,
-            Math.min(DEFAULT_MAX_TILT_ANGLE, THREE.MathUtils.degToRad(angle))
-        );
-    }
-
-    /**
-     * Get the camera max tilt angle in degrees.
-     */
-    get maxTiltAngle(): number {
-        return THREE.MathUtils.radToDeg(this.m_maxTiltAngle);
-    }
-
-    /**
-     * Get the zoom level targeted by `MapControls`. Useful when inertia is on, to add incremented
-     * values to the target instead of getting the random zoomLevel value during the interpolation.
-     */
-    get zoomLevelTargeted(): number {
-        return this.m_targetedZoom === undefined ? this.currentZoom : this.m_targetedZoom;
-    }
-
-    /**
-     * Handy getter to know if the view is in the process of looking down or not.
-     */
-    get tiltState(): TiltState {
-        if (this.m_tiltState === undefined) {
-            this.m_tiltState =
-                this.currentTilt < EPSILON || this.m_tiltState === TiltState.Down
-                    ? TiltState.Tilted
-                    : TiltState.Down;
-        }
-        return this.m_tiltState;
-    }
-
-    private set currentZoom(zoom: number) {
-        this.m_currentZoom = zoom;
-    }
-
-    private get currentZoom(): number {
-        return this.m_currentZoom !== undefined ? this.m_currentZoom : this.mapView.zoomLevel;
-    }
-
-    private set currentTilt(tilt: number) {
-        this.m_currentTilt = tilt;
-    }
-
-    private get currentTilt(): number {
-        return THREE.MathUtils.degToRad(this.mapView.tilt);
-    }
-
-    private get targetedTilt(): number {
-        return this.m_targetedTilt === undefined
-            ? this.m_currentTilt === undefined
-                ? this.currentTilt
-                : this.m_currentTilt
-            : this.m_targetedTilt;
-    }
-
-    private assignZoomAfterTouchZoomRender() {
-        this.m_currentZoom = this.mapView.zoomLevel;
-        this.m_targetedZoom = this.mapView.zoomLevel;
-        this.mapView.removeEventListener(
-            MapViewEventNames.AfterRender,
-            this.assignZoomAfterTouchZoomRender
-        );
-    }
-
-    private stopExistingAnimations() {
-        this.stopResetNorth();
-        this.stopZoom();
-        this.stopPan();
-        this.stopTilt();
-    }
-
-    private resetNorth() {
-        const currentTime = performance.now();
-        const animationTime = (currentTime - this.m_resetNorthStartTime) / 1000;
-        if (this.inertiaEnabled) {
-            if (!this.m_resetNorthIsAnimated) {
-                this.m_resetNorthIsAnimated = true;
-                this.mapView.addEventListener(MapViewEventNames.AfterRender, this.resetNorth);
+            // 只有当允许旋转时才处理旋转操作
+            if (canRotate) {
+                this.handleRotationOperations(mouseDown, mouseX, mouseY);
             }
-            const resetNorthFinished = animationTime > this.m_resetNorthAnimationDuration;
-            if (resetNorthFinished) {
-                if (this.m_needsRenderLastFrame) {
-                    this.m_needsRenderLastFrame = false;
-                    this.stopResetNorth();
-                }
+        }
+
+        // Apply tilt and heading changes
+        this.applyTiltAndHeadingChanges();
+
+        // Apply distance limits
+        this.applyDistanceLimits(cameraPos, normal, distanceToGlobe);
+
+        // Update previous mouse state
+        this.updateMouseState(mouseX, mouseY, mouseZ, mouseDown);
+
+        return false;
+    }
+
+    // ======================
+    // Animation Handling
+    // ======================
+
+    private handleZoomAnimation(mouseDown: boolean[], mouseZ: number): boolean {
+        if (!this.zoomAnimationState) return false;
+
+        const { time, speed, toCity } = this.zoomAnimationState;
+
+        if (time > 1) {
+            this.completeZoomAnimation();
+            return false;
+        }
+
+        if (toCity) {
+            this.handleCityZoomAnimation();
+        } else {
+            this.handleStandardZoomAnimation();
+        }
+
+        // Check for interruption
+        const isWheel = mouseZ !== this.mouseState.z;
+        if (
+            isWheel ||
+            (mouseDown[0] && !this.mouseState.prevDown[0]) ||
+            (mouseDown[2] && !this.mouseState.prevDown[2])
+        ) {
+            this.cancelZoomAnimation();
+        }
+
+        return true;
+    }
+
+    private cancelZoomAnimation(): void {
+        if (!this.zoomAnimationState) return;
+
+        // 如果有回调函数则执行
+        if (this.zoomAnimationState.finishCallback) {
+            this.zoomAnimationState.finishCallback(this);
+        }
+
+        // 重置动画状态
+        this.zoomAnimationState = undefined;
+
+        // 重置其他相关状态
+        this.inertialDeltaX = 0;
+        this.inertialDeltaY = 0;
+        this.lastHitCenterDistance = -1;
+        this.lastHitDistance = -1;
+
+        // 更新焦点中心
+        this.updateCenter();
+    }
+
+    private completeZoomAnimation(): void {
+        if (!this.zoomAnimationState) return;
+
+        this.zoomAnimationState.time = 1;
+        this.zoomAnimationState = undefined;
+
+        if (this.zoomAnimationState?.finishCallback) {
+            this.zoomAnimationState.finishCallback(this);
+        }
+
+        this.updateCenter();
+    }
+
+    private handleCityZoomAnimation(): void {
+        if (!this.zoomAnimationState) return;
+
+        const { time, start, end, distance } = this.zoomAnimationState;
+        const cameraPos = new Vector3();
+        this.camera.getOrigin(cameraPos);
+
+        // Calculate eased time values
+        const easeInOut = time * time * (3 - 2 * time);
+        const linear = time * (1 - time * 0.5) * 2;
+
+        // Handle different distance cases
+        if (distance > 0.1 * this.getEquatorialRadius()) {
+            this.handleLongDistanceZoom(easeInOut, linear);
+        } else {
+            this.handleShortDistanceZoom(easeInOut);
+        }
+    }
+
+    private handleShortDistanceZoom(easeInOut: number): void {
+        if (
+            !this.zoomAnimationState ||
+            !this.zoomAnimationState.start ||
+            !this.zoomAnimationState.end
+        ) {
+            console.warn("Invalid zoom animation state");
+            return;
+        }
+
+        const { start, end } = this.zoomAnimationState;
+
+        // 1. 直接插值高度（不需要峰值过渡）
+        const currentAltitude = start[2] + (end[2] - start[2]) * easeInOut;
+
+        // 2. 平滑插值俯仰角（tilt）
+        const currentTilt = start[4] + (end[4] - start[4]) * easeInOut;
+
+        // 3. 线性插值经纬度
+        const currentLon = start[1] + (end[1] - start[1]) * easeInOut;
+        const currentLat = start[0] + (end[0] - start[0]) * easeInOut;
+
+        // 4. 插值相机距离
+        const currentDistance = start[3] + (end[3] - start[3]) * easeInOut;
+
+        // 5. 处理航向角（heading）的最短路径
+        let headingDelta = end[5] - start[5];
+        if (headingDelta > Math.PI) headingDelta -= 2 * Math.PI;
+        if (headingDelta < -Math.PI) headingDelta += 2 * Math.PI;
+        const currentHeading = start[5] + headingDelta * this.zoomAnimationState.time;
+
+        // 6. 应用计算结果
+        this.setTo(
+            currentLat,
+            currentLon,
+            currentAltitude,
+            currentDistance,
+            currentTilt,
+            currentHeading
+        );
+
+        // 7. 恒定速度动画（近距离不需要动态速度）
+        const speedFactor = this.zoomAnimationState.speed * 0.05;
+        this.zoomAnimationState.time += speedFactor;
+    }
+
+    private handleLongDistanceZoom(easeInOut: number, linear: number): void {
+        if (!this.zoomAnimationState) return;
+
+        const { start, end, distance } = this.zoomAnimationState;
+        const equatorialRadius = this.getEquatorialRadius();
+
+        // 1. 计算中间过渡点（峰值高度）
+        const peakAltitude = distance * 0.75;
+
+        // 2. 分阶段插值高度
+        const startToPeak = start[2] + (peakAltitude - start[2]) * easeInOut;
+        const peakToEnd = peakAltitude + (end[2] - peakAltitude) * easeInOut;
+        const currentAltitude = startToPeak + (peakToEnd - startToPeak) * easeInOut;
+
+        // 3. 处理俯仰角变化（tilt）
+        let currentTilt = 0;
+        const tiltTransitionPoint = 0.9;
+
+        if (this.zoomAnimationState.time < tiltTransitionPoint) {
+            const t = this.zoomAnimationState.time / tiltTransitionPoint;
+            const easedT = t * t * (3 - 2 * t); // 平滑过渡
+            currentTilt = start[4] + (0 - start[4]) * easedT; // 从当前tilt过渡到0（俯视）
+        } else {
+            const t =
+                (this.zoomAnimationState.time - tiltTransitionPoint) / (1 - tiltTransitionPoint);
+            const easedT = t * t * (3 - 2 * t);
+            currentTilt = end[4] * easedT; // 从0过渡到目标tilt
+        }
+
+        // 4. 线性插值经纬度（比高度变化更快）
+        const currentLon = start[1] + (end[1] - start[1]) * linear;
+        const currentLat = start[0] + (end[0] - start[0]) * linear;
+
+        // 5. 计算距离插值（带缓动）
+        const currentDistance = start[3] + (end[3] - start[3]) * easeInOut;
+
+        // 6. 处理航向角（heading）的最短路径插值
+        let headingDelta = end[5] - start[5];
+        if (headingDelta > Math.PI) headingDelta -= 2 * Math.PI;
+        if (headingDelta < -Math.PI) headingDelta += 2 * Math.PI;
+        const currentHeading = start[5] + headingDelta * this.zoomAnimationState.time;
+
+        // 7. 应用计算结果
+        this.setTo(
+            currentLat,
+            currentLon,
+            currentAltitude,
+            currentDistance,
+            currentTilt,
+            currentHeading
+        );
+
+        // 8. 动态调整动画速度（距离越远速度越快）
+        const speedFactor = (currentDistance / 30) * this.zoomAnimationState.speed;
+        this.zoomAnimationState.time += speedFactor * 0.05;
+    }
+
+    private getMatrixPositionDistance(mat1: Matrix4, mat2: Matrix4): number {
+        // 提取两个矩阵的平移分量
+        const pos1 = new Vector3().setFromMatrixPosition(mat1);
+        const pos2 = new Vector3().setFromMatrixPosition(mat2);
+
+        // 返回两点之间的欧氏距离
+        return pos1.distanceTo(pos2);
+    }
+
+    private handleStandardZoomAnimation(): void {
+        if (!this.zoomAnimationState) return;
+
+        const { time, speed, startMatrix, endMatrix, midMatrix } = this.zoomAnimationState;
+        const cameraPos = new Vector3();
+        this.camera.getOrigin(cameraPos);
+
+        const distance = this.getDistanceToGlobe(cameraPos.x, cameraPos.y, cameraPos.z);
+        const matrixDistance = this.getMatrixPositionDistance(startMatrix, endMatrix);
+
+        // Calculate animation step
+        const step = (speed * 0.05 * distance) / matrixDistance;
+        this.zoomAnimationState.time += step;
+
+        if (this.zoomAnimationState.time >= 1) {
+            this.completeZoomAnimation();
+            this.camera.setMatrix(endMatrix);
+        } else {
+            if (this.zoomAnimationState.mode === 1) {
+                this.camera.followMatrix(endMatrix, time, startMatrix);
             } else {
-                this.m_needsRenderLastFrame = true;
+                const pivot = new Vector3().fromArray(
+                    this.zoomAnimationState.globeCenter.toArray()
+                );
+                const radius = this.getDistanceToGlobe(pivot.x, pivot.y, pivot.z);
+
+                this.camera.followMatrixGreatCircle(
+                    startMatrix,
+                    endMatrix,
+                    time,
+                    pivot,
+                    radius,
+                    midMatrix,
+                    0.5
+                );
             }
         }
-        this.m_lastAzimuth = this.m_currentAzimuth;
-        this.m_currentAzimuth = this.inertiaEnabled
-            ? this.easeOutCubic(
-                  this.m_startAzimuth,
-                  0,
-                  Math.min(1, animationTime / this.m_resetNorthAnimationDuration)
+    }
+
+    // ======================
+    // Interaction Handling
+    // ======================
+
+    private handleMouseInteractions(
+        mouseX: number,
+        mouseY: number,
+        mouseDown: boolean[],
+        mouseZ: number,
+        cameraPos: Vector3,
+        hitPoint: Vector3
+    ): number {
+        const isClick = mouseDown[0] && !this.mouseState.prevDown[0];
+        const isWheel = mouseZ !== this.mouseState.z;
+
+        if (isWheel || isClick) {
+            const target = new Vector3();
+            this.camera.unprojectToWorld(target, mouseX, mouseY, -1);
+
+            const hitDistance = this.rayCastZoomPoint(hitPoint, cameraPos, target, isWheel);
+
+            if (hitDistance > 0) {
+                this.lastHitDistance = hitDistance;
+                this.lastHit.copy(hitPoint);
+
+                if (isClick) {
+                    this.isPanHit = true;
+                    this.panHit.copy(hitPoint);
+                }
+                return hitDistance;
+            }
+        }
+        return -1;
+    }
+
+    private handlePanning(
+        mouseDown: boolean[],
+        cameraPos: Vector3,
+        hitPoint: Vector3,
+        distanceToGlobe: number
+    ): void {
+        if (mouseDown[0] && this.isPanHit) {
+            const target = new Vector3();
+            this.camera.unprojectToWorld(
+                target,
+                this.width - this.view.lastMouseX,
+                this.height - this.view.lastMouseY,
+                -1
+            );
+
+            this.camera.pan(this.panHit, cameraPos, target, this.inertialAxis, 0.2);
+        } else if (this.inertialAxis.length() > 0) {
+            this.camera.inertialPan(cameraPos, this.inertialAxis, 0.075);
+        }
+
+        if (this.panVelocityX !== 0 || this.panVelocityY !== 0) {
+            const panStep = distanceToGlobe * 0.03 * 0.025;
+            this.applyPanVelocity(panStep, cameraPos);
+        }
+    }
+
+    private handleZoomOperations(mouseZ: number, hitDistance: number, cameraPos: Vector3): void {
+        // Smooth zoom interpolation
+        const prevSmoothZoom = this.smoothZoom;
+        this.smoothZoom += (mouseZ - this.smoothZoom) * 0.3;
+
+        if (this.smoothZoom !== prevSmoothZoom) {
+            if (hitDistance > 0 || (mouseZ === this.mouseState.z && this.lastHitDistance > 0)) {
+                const zoomDelta = (this.smoothZoom - prevSmoothZoom) * 0.08;
+                const distanceRatio =
+                    this.lastHit.distanceTo(cameraPos) / this.getEquatorialRadius();
+
+                let damping = 1;
+                if (zoomDelta < 0 && distanceRatio > this.limitZoomOut) {
+                    damping = (this.limitZoomOut * 2 - distanceRatio) / this.limitZoomOut;
+                }
+
+                this.camera.zoom(this.lastHit, zoomDelta * damping);
+            }
+        }
+
+        // Velocity-based zoom
+        if (this.zoomVelocity !== 0 && this.lastHitCenterDistance > 0) {
+            const zoomDelta = this.zoomVelocity * 0.03;
+            const distance = this.lastHitCenter.distanceTo(cameraPos);
+
+            let damping = 1;
+            if (zoomDelta < 0 && distance > this.limitZoomOut) {
+                damping = (this.limitZoomOut * 2 - distance) / this.limitZoomOut;
+            }
+
+            this.camera.zoom(this.lastHitCenter, zoomDelta * damping);
+        }
+    }
+
+    private handleRotationOperations(mouseDown: boolean[], mouseX: number, mouseY: number): void {
+        const rotationDamping = 0.1;
+
+        if (mouseDown[2] && this.mouseState.prevDown[2]) {
+            const deltaX = mouseX - this.mouseState.x;
+            const deltaY = mouseY - this.mouseState.y;
+
+            // Apply inertia with different damping based on acceleration
+            if (Math.abs(deltaX) > Math.abs(this.inertialDeltaX)) {
+                this.inertialDeltaX += (deltaX - this.inertialDeltaX) * rotationDamping * 2.5;
+            } else {
+                this.inertialDeltaX += (deltaX - this.inertialDeltaX) * rotationDamping * 2;
+            }
+
+            if (Math.abs(deltaY) > Math.abs(this.inertialDeltaY)) {
+                this.inertialDeltaY += (deltaY - this.inertialDeltaY) * rotationDamping * 2.5;
+            } else {
+                this.inertialDeltaY += (deltaY - this.inertialDeltaY) * rotationDamping * 2;
+            }
+        } else {
+            // Deceleration when not rotating
+            this.inertialDeltaX += (0 - this.inertialDeltaX) * rotationDamping * 0.75;
+            this.inertialDeltaY += (0 - this.inertialDeltaY) * rotationDamping * 0.75;
+        }
+
+        // Apply rotation if we have a center point
+        if (
+            this.lastHitCenterDistance > 0 &&
+            (this.inertialDeltaX !== 0 || this.inertialDeltaY !== 0)
+        ) {
+            const rotationStep = 0.0045;
+            const tiltStep = rotationStep * 0.5;
+
+            let pivotPoint = this.lastHitCenter;
+
+            const camPos = new Vector3();
+            this.camera.getOrigin(camPos);
+            if (this.cameraSwivel) {
+                // 使用相机位置或点击位置作为旋转中心
+                pivotPoint = this.lastHitCenterClick || camPos;
+            }
+
+            let gravityPoint = this.lastHitGravity;
+
+            if (this.cameraSwivel) {
+                pivotPoint = camPos;
+                this.getDistanceToGlobe(camPos.x, camPos.y, camPos.z, gravityPoint);
+            }
+
+            this.camera.rotateAroundPivotAndTilt(
+                pivotPoint.x,
+                pivotPoint.y,
+                pivotPoint.z,
+                gravityPoint.x,
+                gravityPoint.y,
+                gravityPoint.z,
+                -this.inertialDeltaX * rotationStep,
+                this.inertialDeltaY * tiltStep,
+                this.tiltLimit
+            );
+        }
+    }
+
+    // ======================
+    // Helper Methods
+    // ======================
+
+    private applyTiltAndHeadingChanges(): void {
+        if (
+            (this.headingSet !== undefined || this.tiltSet !== undefined) &&
+            this.lastHitCenterDistance > 0
+        ) {
+            if (this.headingSet !== undefined) {
+                this.applyHeadingChange();
+            }
+
+            if (this.tiltSet !== undefined) {
+                this.applyTiltChange();
+            }
+
+            this.headingSet = undefined;
+            this.tiltSet = undefined;
+        } else if (this.tiltVelocity !== 0 || this.headingVelocity !== 0) {
+            const rotationStep = 0.03;
+            if (this.lastHitCenterDistance > 0) {
+                this.camera.rotateAroundPivotAndTilt(
+                    this.lastHitCenter.x,
+                    this.lastHitCenter.y,
+                    this.lastHitCenter.z,
+                    this.lastHitGravity.x,
+                    this.lastHitGravity.y,
+                    this.lastHitGravity.z,
+                    this.headingVelocity * rotationStep,
+                    this.tiltVelocity * rotationStep,
+                    this.tiltLimit
+                );
+            }
+        }
+    }
+
+    private applyHeadingChange(): void {
+        const right = new Vector3();
+        this.camera.getRight(right);
+
+        const rotationMatrix = new Matrix4();
+        this.setRotationLookDown(rotationMatrix, this.lastHitGravity);
+        rotationMatrix.multiply(new Matrix4().makeRotationZ(this.headingSet || 0));
+
+        const angle = Math.acos(
+            Math.min(
+                Math.max(
+                    right.x * rotationMatrix.elements[0] +
+                        right.y * rotationMatrix.elements[1] +
+                        right.z * rotationMatrix.elements[2],
+                    -1
+                ),
+                1
+            )
+        );
+
+        const direction =
+            right.x * rotationMatrix.elements[4] +
+            right.y * rotationMatrix.elements[5] +
+            right.z * rotationMatrix.elements[6];
+
+        this.camera.rotateAroundPivot(
+            this.lastHitCenter.x,
+            this.lastHitCenter.y,
+            this.lastHitCenter.z,
+            this.lastHitGravity.x,
+            this.lastHitGravity.y,
+            this.lastHitGravity.z,
+            direction > 0 ? -angle : angle
+        );
+
+        this.inertialDeltaX = 0;
+    }
+
+    private applyTiltChange(): void {
+        const down = new Vector3();
+        const forward = new Vector3();
+        this.camera.getDown(down);
+        this.camera.getForward(forward);
+
+        const downDot =
+            this.lastHitGravity.x * down.x +
+            this.lastHitGravity.y * down.y +
+            this.lastHitGravity.z * down.z;
+
+        const forwardDot =
+            this.lastHitGravity.x * forward.x +
+            this.lastHitGravity.y * forward.y +
+            this.lastHitGravity.z * forward.z;
+
+        let angle = Math.acos(Math.min(Math.max(downDot, -1), 1));
+        if (forwardDot > 0) angle = -angle;
+
+        this.camera.rotateAroundPivotAndTilt(
+            this.lastHitCenter.x,
+            this.lastHitCenter.y,
+            this.lastHitCenter.z,
+            this.lastHitGravity.x,
+            this.lastHitGravity.y,
+            this.lastHitGravity.z,
+            0,
+            angle - (Math.PI * 0.5 - (this.tiltSet || 0)),
+            this.tiltLimit
+        );
+
+        this.inertialDeltaY = 0;
+    }
+
+    private applyDistanceLimits(
+        cameraPos: Vector3,
+        normal: Vector3,
+        distanceToGlobe: number
+    ): void {
+        const geoCoords = [0, 0, 0];
+        this.getLatLonAlt(geoCoords, cameraPos.x, cameraPos.y, cameraPos.z);
+
+        const altitude = geoCoords[2];
+        const limitAltitude = altitude - this.distanceLimit;
+        const terrainHeight = this.getAltitude(geoCoords[1], geoCoords[0], limitAltitude);
+        const actualDistance = altitude - terrainHeight;
+
+        if (actualDistance < this.distanceLimit) {
+            const correction = this.distanceLimit - actualDistance;
+            cameraPos.x -= correction * normal.x;
+            cameraPos.y -= correction * normal.y;
+            cameraPos.z -= correction * normal.z;
+            this.camera.setOrigin(cameraPos.x, cameraPos.y, cameraPos.z);
+        }
+    }
+
+    private updateMouseState(x: number, y: number, z: number, down: boolean[]): void {
+        this.mouseState.x = x;
+        this.mouseState.y = y;
+        this.mouseState.z = z;
+        this.mouseState.prevDown = [...this.mouseState.down];
+        this.mouseState.down = [...down] as [boolean, boolean, boolean];
+    }
+
+    private applyPanVelocity(step: number, cameraPos: Vector3): void {
+        const right = new Vector3();
+        const up = new Vector3();
+        this.camera.getRight(right);
+        this.camera.getUp(up);
+
+        cameraPos.add(right.multiplyScalar(this.panVelocityX * step));
+        cameraPos.add(up.multiplyScalar(this.panVelocityY * step));
+        this.camera.setOrigin(cameraPos.x, cameraPos.y, cameraPos.z);
+    }
+
+    // ========================
+    // Public Interface Methods
+    // ========================
+
+    public isPanning(): boolean {
+        return (
+            this.zoomAnimationState?.time !== undefined ||
+            this.panVelocityX !== 0 ||
+            this.panVelocityY !== 0
+        );
+    }
+
+    public disableTilt(): void {
+        this._disableTilt = true;
+    }
+
+    public disableHeading(): void {
+        this._disableHeading = true;
+    }
+
+    // =====================
+    // Coordinate Conversion
+    // =====================
+
+    public projectPoint(geoCoordinates: GeoCoordinates, out?: Vector3): Vector3 {
+        const originalScale = this.mapView.projection.unitScale;
+        this.mapView.projection.unitScale = this.getEquatorialRadius();
+        const projected = this.mapView.projection.projectPoint(geoCoordinates, out);
+        this.mapView.projection.unitScale = originalScale;
+        return projected;
+    }
+
+    public unprojectPoint(xyz: Vector3): GeoCoordinates {
+        const originalScale = this.mapView.projection.unitScale;
+        this.mapView.projection.unitScale = this.getEquatorialRadius();
+        const unprojected = this.mapView.projection.unprojectPoint(xyz);
+        this.mapView.projection.unitScale = originalScale;
+        return unprojected;
+    }
+
+    public getXYZ(result: Vector3, lon: number, lat: number, alt: number): void {
+        const xyz = this.projectPoint(new GeoCoordinates(lat, lon, alt));
+        result.copy(xyz);
+    }
+
+    public getLatLonAlt(result: number[], x: number, y: number, z: number): void {
+        const geo = this.unprojectPoint(new Vector3(x, y, z));
+        result[0] = geo.latitude;
+        result[1] = geo.longitude;
+        result[2] = geo.altitude;
+    }
+
+    // ====================
+    // Distance Calculations
+    // ====================
+
+    public getDistanceToGlobe(x: number, y: number, z: number, normal?: Vector3): number {
+        const position = new Vector3(x, y, z);
+        const normalVector = new Vector3();
+        const distance = this.getDistanceAndNormal(normalVector, position);
+
+        if (normal) {
+            normal.set(-normalVector.x, -normalVector.y, -normalVector.z);
+        }
+        return distance;
+    }
+
+    public getDistanceAndNormal(result: Vector3, position: Vector3): number {
+        const distance = position.length();
+        const scale = 1 / distance;
+
+        result.copy(position).multiplyScalar(scale);
+        return distance - this.getEquatorialRadius();
+    }
+
+    public getAltitude(lon: number, lat: number, defaultHeight: number): number {
+        if (this.mapView.zoomLevel < 13) return 0;
+        return this.application.elevation
+            ? this.application.elevation.getHeight(
+                  new GeoCoordinates(lat, lon, defaultHeight),
+                  true
               )
             : 0;
-
-        const deltaAzimuth = this.m_currentAzimuth - this.m_lastAzimuth;
-
-        MapViewUtils.orbitAroundScreenPoint(this.mapView, {
-            deltaAzimuth,
-            maxTiltAngle: this.m_maxTiltAngle
-        });
-        this.updateMapView();
     }
 
-    private stopResetNorth() {
-        this.mapView.removeEventListener(MapViewEventNames.AfterRender, this.resetNorth);
-        this.m_resetNorthIsAnimated = false;
+    // =================
+    // Camera Operations
+    // =================
+
+    public updateCenter(): void {
+        const cameraPosition = new Vector3();
+        this.camera.getOrigin(cameraPosition);
+        this.focusCenter(cameraPosition);
     }
 
-    private tilt() {
-        if (this.m_tiltRequested !== undefined) {
-            this.m_targetedTilt = Math.max(Math.min(this.m_tiltRequested, this.maxTiltAngle), 0);
-            this.m_tiltRequested = undefined;
+    private focusCenter(cameraPos: Vector3): number {
+        const centerPoint = new Vector3();
+        const screenCenter = new Vector3();
+        let hitDistance = 0;
+        if (!this.lockCenterPoint) {
+            let screenY = this.height / 2;
+            if (this.getTilt() > (Math.PI * 80) / 180) {
+                screenY = this.height * 0.1;
+            }
+
+            this.camera.unprojectToWorld(screenCenter, this.width / 2, screenY, -1);
+
+            hitDistance = this.rayCastToGlobeAndScene(
+                centerPoint,
+                cameraPos,
+                screenCenter,
+                this.width / 2,
+                screenY
+            );
+            return hitDistance;
+        } else {
+            const cameraOrigin = new Vector3();
+            this.camera.getOrigin(cameraOrigin);
+            hitDistance = centerPoint.distanceTo(this.lockCenterPoint);
+            centerPoint.copy(this.lockCenterPoint);
         }
 
-        // Whether the tilt animation has reached full duration & a final frame is rendered. We need
-        // this to know when to stop the tilt (and hence deregister the methon )
-        let tiltAnimationFinished = false;
-        if (this.inertiaEnabled) {
-            if (!this.m_tiltIsAnimated) {
-                this.m_tiltIsAnimated = true;
-                this.mapView.addEventListener(MapViewEventNames.AfterRender, this.tilt);
+        if (hitDistance > 0) {
+            this.lastHitCenterDistance = hitDistance;
+            this.lastHitCenter.copy(centerPoint);
+            this.lastHitDistToGlobe = this.getDistanceToGlobe(
+                centerPoint.x,
+                centerPoint.y,
+                centerPoint.z,
+                this.lastHitGravity
+            );
+        }
+
+        return hitDistance;
+    }
+
+    // ==============
+    // Ray Casting
+    // ==============
+
+    public rayCastToGlobe(
+        result: Vector3,
+        source: Vector3,
+        target: Vector3,
+        hitCountPrecision: number = 0.01
+    ): number {
+        const scale = 1 / this.getEquatorialRadius();
+        const scaledSource = source.clone().multiplyScalar(scale);
+        const scaledTarget = target.clone().multiplyScalar(scale);
+
+        const direction = new Vector3().subVectors(scaledTarget, scaledSource);
+        const normal = new Vector3();
+        const distance = this.getDistanceAndNormal(normal, source) * scale;
+
+        const cross = new Vector3().crossVectors(direction, normal);
+        const crossLength = cross.length();
+
+        let stepSize = 1e32;
+        if (crossLength > 0) {
+            stepSize = distance * (1 << 13) - 50;
+            if (stepSize < 1) stepSize = 1;
+            stepSize *= 1 / ((1 << 19) * crossLength);
+        }
+
+        // Adjust for height map if available
+        const heightScale =
+            1 - this.mapView.heightMapSource.overlayerHeightMapTexture.digDepth / 6378137 || 1;
+        let intersection =
+            rayCastToEllipsoid(result, scaledSource, scaledTarget, heightScale, heightScale) *
+            scale;
+
+        if (intersection >= 0) {
+            if (stepSize > intersection) {
+                stepSize = intersection;
             }
-            const currentTime = performance.now();
-            this.m_tiltAnimationTime = (currentTime - this.m_tiltAnimationStartTime) / 1000;
-            const tiltFinished = this.m_tiltAnimationTime >= this.tiltToggleDuration;
-            if (tiltFinished) {
-                if (this.m_needsRenderLastFrame) {
-                    this.m_needsRenderLastFrame = false;
-                    this.m_tiltAnimationTime = this.tiltToggleDuration;
-                    tiltAnimationFinished = true;
+
+            // Check for terrain collisions
+            let terrainHeight = 0;
+            let currentStep = 0;
+            const testPoint = new Vector3();
+            const geoCoords = new GeoCoordinates(0, 0, 0);
+
+            while (currentStep <= 1) {
+                testPoint.copy(scaledSource).add(direction.clone().multiplyScalar(currentStep));
+                geoCoords.copy(this.unprojectPoint(testPoint.clone().divideScalar(scale)));
+
+                geoCoords.altitude = 50; // Default altitude
+                if (this.mapView.zoomLevel >= 13 && this.application.elevation) {
+                    const height = this.application.elevation.getHeight(geoCoords) || 0;
+                    if (geoCoords.altitude < height) {
+                        terrainHeight = height;
+                        break;
+                    }
                 }
-            } else {
-                this.m_needsRenderLastFrame = true;
-            }
-        }
-
-        this.m_currentTilt = this.inertiaEnabled
-            ? this.easeOutCubic(
-                  this.m_startTilt,
-                  this.targetedTilt,
-                  Math.min(1, this.m_tiltAnimationTime / this.tiltToggleDuration)
-              )
-            : this.targetedTilt;
-
-        const initialTilt = this.currentTilt;
-        const deltaTilt = this.m_currentTilt - initialTilt;
-
-        MapViewUtils.orbitAroundScreenPoint(this.mapView, {
-            deltaTilt,
-            maxTiltAngle: this.m_maxTiltAngle
-        });
-        this.updateMapView();
-
-        if (tiltAnimationFinished) {
-            this.stopTilt();
-        }
-    }
-
-    private stopTilt() {
-        this.mapView.removeEventListener(MapViewEventNames.AfterRender, this.tilt);
-        this.m_tiltIsAnimated = false;
-        this.m_targetedTilt = this.m_currentTilt = undefined;
-    }
-
-    private easeOutCubic(startValue: number, endValue: number, time: number): number {
-        // https://easings.net/#easeOutCubic
-        return startValue + (endValue - startValue) * (1 - Math.pow(1 - time, 3));
-    }
-
-    private easeOutCirc(startValue: number, endValue: number, time: number): number {
-        // https://easings.net/#easeOutCirc
-        const easing = Math.sqrt(1 - Math.pow(time - 1, 2));
-        return startValue + (endValue - startValue) * easing;
-    }
-
-    private handleZoom() {
-        let resetZoomState = false;
-        if (this.m_zoomDeltaRequested !== 0) {
-            this.m_targetedZoom = Math.max(
-                Math.min(this.zoomLevelTargeted + this.m_zoomDeltaRequested, this.maxZoomLevel),
-                this.minZoomLevel
-            );
-            this.m_zoomDeltaRequested = 0;
-        }
-        if (this.inertiaEnabled && this.zoomInertiaDampingDuration > 0) {
-            if (!this.m_zoomIsAnimated) {
-                this.m_zoomIsAnimated = true;
-                this.mapView.addEventListener(MapViewEventNames.AfterRender, this.handleZoom);
-            }
-            const currentTime = performance.now();
-            this.m_zoomAnimationTime = (currentTime - this.m_zoomAnimationStartTime) / 1000;
-            const zoomFinished = this.m_zoomAnimationTime > this.zoomInertiaDampingDuration;
-            if (zoomFinished) {
-                if (this.m_needsRenderLastFrame) {
-                    this.m_needsRenderLastFrame = false;
-                    this.m_zoomAnimationTime = this.zoomInertiaDampingDuration;
-
-                    resetZoomState = true;
-                    this.stopZoom();
-                }
-            } else {
-                this.m_needsRenderLastFrame = true;
-            }
-        }
-
-        this.currentZoom =
-            !this.inertiaEnabled || Math.abs(this.zoomLevelTargeted - this.m_startZoom) < EPSILON
-                ? this.zoomLevelTargeted
-                : this.easeOutCirc(
-                      this.m_startZoom,
-                      this.zoomLevelTargeted,
-                      Math.min(1, this.m_zoomAnimationTime / this.zoomInertiaDampingDuration)
-                  );
-
-        const success = MapViewUtils.zoomOnTargetPosition(
-            this.mapView,
-            this.m_zoomTargetNormalizedCoordinates.x,
-            this.m_zoomTargetNormalizedCoordinates.y,
-            this.currentZoom,
-            this.m_maxTiltAngle
-        );
-
-        if (resetZoomState || !success) {
-            this.m_targetedZoom = undefined;
-            this.m_currentZoom = undefined;
-        }
-        this.updateMapView();
-    }
-
-    private stopZoom() {
-        this.mapView.removeEventListener(MapViewEventNames.AfterRender, this.handleZoom);
-        this.m_zoomIsAnimated = false;
-    }
-
-    /**
-     * Method to flip crêpes.
-     */
-    private handlePan() {
-        if (this.m_state === State.NONE && this.m_lastAveragedPanDistanceOrAngle === 0) {
-            return;
-        }
-
-        if (this.inertiaEnabled && !this.m_panIsAnimated) {
-            this.m_panIsAnimated = true;
-            this.mapView.addEventListener(MapViewEventNames.AfterRender, this.handlePan);
-        }
-
-        const applyInertia =
-            this.inertiaEnabled &&
-            this.panInertiaDampingDuration > 0 &&
-            this.m_state === State.NONE &&
-            this.m_lastAveragedPanDistanceOrAngle > 0;
-
-        if (applyInertia) {
-            const currentTime = performance.now();
-            this.m_panAnimationTime = (currentTime - this.m_panAnimationStartTime) / 1000;
-            const panFinished = this.m_panAnimationTime > this.panInertiaDampingDuration;
-
-            if (panFinished) {
-                if (this.m_needsRenderLastFrame) {
-                    this.m_needsRenderLastFrame = false;
-                    this.m_panAnimationTime = this.panInertiaDampingDuration;
-                    this.mapView.removeEventListener(MapViewEventNames.AfterRender, this.handlePan);
-                    this.m_panIsAnimated = false;
-                }
-            } else {
-                this.m_needsRenderLastFrame = true;
+                currentStep += hitCountPrecision;
             }
 
-            const animationTime = this.m_panAnimationTime / this.panInertiaDampingDuration;
-            this.m_currentInertialPanningSpeed = this.easeOutCubic(
-                this.m_lastAveragedPanDistanceOrAngle,
-                0,
-                Math.min(1, animationTime)
-            );
-            if (this.m_currentInertialPanningSpeed === 0) {
-                this.m_lastAveragedPanDistanceOrAngle = 0;
+            // Adjust for terrain if needed
+            if (terrainHeight > 0) {
+                const terrainScale = 1 + terrainHeight * scale;
+                intersection =
+                    rayCastToEllipsoid(result, scaledSource, scaledTarget, 1, terrainScale) * scale;
             }
-            if (this.mapView.projection.type === geoUtils.ProjectionType.Planar) {
-                this.m_panDistanceFrameDelta
-                    .copy(this.m_lastPanVector)
-                    .setLength(this.m_currentInertialPanningSpeed);
-            } else if (this.mapView.projection.type === geoUtils.ProjectionType.Spherical) {
-                this.m_rotateGlobeQuaternion
-                    .setFromAxisAngle(
-                        this.m_lastRotateGlobeAxis,
-                        this.m_currentInertialPanningSpeed
-                    )
-                    .normalize();
-            }
-        } else {
-            let panDistanceOrAngle: number = 0;
-            if (this.mapView.projection.type === geoUtils.ProjectionType.Planar) {
-                panDistanceOrAngle = this.m_lastPanVector
-                    .copy(this.m_panDistanceFrameDelta)
-                    .length();
-            } else if (this.mapView.projection.type === geoUtils.ProjectionType.Spherical) {
-                panDistanceOrAngle = this.m_lastRotateGlobeAngle;
-                this.m_rotateGlobeQuaternion.setFromAxisAngle(
-                    this.m_lastRotateGlobeAxis,
-                    this.m_lastRotateGlobeAngle
-                );
-                this.m_rotateGlobeQuaternion.normalize();
-            }
-            this.m_currentPanDistanceOrAngleIndex =
-                (this.m_currentPanDistanceOrAngleIndex + 1) % USER_INPUTS_TO_CONSIDER;
-            this.m_recentPanDistancesOrAngles[
-                this.m_currentPanDistanceOrAngleIndex
-            ] = panDistanceOrAngle;
-            this.m_lastAveragedPanDistanceOrAngle =
-                this.m_recentPanDistancesOrAngles.reduce((a, b) => a + b) / USER_INPUTS_TO_CONSIDER;
+
+            result.divideScalar(scale);
+            return intersection / scale;
         }
 
-        if (this.mapView.projection.type === geoUtils.ProjectionType.Planar) {
-            MapViewUtils.panCameraAboveFlatMap(
-                this.mapView,
-                this.m_panDistanceFrameDelta.x,
-                this.m_panDistanceFrameDelta.y
-            );
-        } else if (this.mapView.projection.type === geoUtils.ProjectionType.Spherical) {
-            MapViewUtils.panCameraAroundGlobe(
-                this.mapView,
-                this.m_lastRotateGlobeFromVector,
-                this.m_tmpVector3
-                    .copy(this.m_lastRotateGlobeFromVector)
-                    .applyQuaternion(this.m_rotateGlobeQuaternion)
-            );
-        }
-        if (!applyInertia) {
-            this.m_panDistanceFrameDelta.set(0, 0, 0);
-            this.m_lastRotateGlobeAngle = 0;
-        }
-
-        this.updateMapView();
+        return -1;
     }
 
-    private stopPan() {
-        this.m_panDistanceFrameDelta.set(0, 0, 0);
-        this.m_lastAveragedPanDistanceOrAngle = 0;
-    }
-
-    private bindInputEvents(domElement: HTMLCanvasElement) {
-        const onContextMenu = this.contextMenu.bind(this);
-        const onMouseDown = this.mouseDown.bind(this);
-        const onMouseWheel = this.mouseWheel.bind(this);
-        const onTouchStart = this.touchStart.bind(this);
-        const onTouchEnd = this.touchEnd.bind(this);
-        const onTouchMove = this.touchMove.bind(this);
-        const onMouseDoubleClick = this.mouseDoubleClick.bind(this);
-
-        domElement.addEventListener("dblclick", onMouseDoubleClick, false);
-        domElement.addEventListener("contextmenu", onContextMenu, false);
-        domElement.addEventListener("mousedown", onMouseDown, false);
-        domElement.addEventListener("wheel", onMouseWheel, false);
-        domElement.addEventListener("touchstart", onTouchStart, false);
-        domElement.addEventListener("touchend", onTouchEnd, false);
-        domElement.addEventListener("touchmove", onTouchMove, false);
-
-        this.dispose = () => {
-            domElement.removeEventListener("dblclick", onMouseDoubleClick, false);
-            domElement.removeEventListener("contextmenu", onContextMenu, false);
-            domElement.removeEventListener("mousedown", onMouseDown, false);
-            domElement.removeEventListener("wheel", onMouseWheel, false);
-            domElement.removeEventListener("touchstart", onTouchStart, false);
-            domElement.removeEventListener("touchend", onTouchEnd, false);
-            domElement.removeEventListener("touchmove", onTouchMove, false);
-        };
-    }
-
-    private updateMapView() {
-        this.dispatchEvent(MAPCONTROL_EVENT);
-        this.mapView.update();
-    }
-
-    private mouseDoubleClick(event: MouseEvent) {
-        if (!this.enabled || !this.zoomEnabled) {
-            return;
-        }
-        const mousePos = this.getPointerPosition(event);
-        this.zoomOnDoubleClickOrTap(mousePos.x, mousePos.y);
-    }
-
-    private mouseDown(event: MouseEvent) {
-        if (this.enabled === false) {
-            return;
-        }
-
-        if (event.shiftKey) {
-            return;
-        }
-
-        event.stopPropagation();
-
-        if (this.m_state !== State.NONE) {
-            return;
-        }
-
-        // Support mac users who press ctrl key when wanting to right click
-        if (event.button === 0 && !event.ctrlKey && this.panEnabled) {
-            this.m_state = State.PAN;
-        } else if (event.button === 1) {
-            this.m_state = State.ROTATE;
-        } else if ((event.button === 2 || event.ctrlKey) && this.tiltEnabled) {
-            this.m_state = State.ORBIT;
-        } else {
-            return;
-        }
-
-        this.dispatchEvent(MAPCONTROL_EVENT_BEGIN_INTERACTION);
-
-        const mousePos = this.getPointerPosition(event);
-        this.m_lastMousePosition.copy(mousePos);
-        if (event.altKey === true) {
-            const { width, height } = utils.getWidthAndHeightFromCanvas(this.domElement);
-            this.m_initialMousePosition.copy(
-                utils.calculateNormalizedDeviceCoordinates(mousePos.x, mousePos.y, width, height)
+    public rayCastZoomPoint(
+        result: Vector3,
+        origin: Vector3,
+        target: Vector3,
+        isWheel: boolean
+    ): number {
+        if (!this.lockCenterPoint || !isWheel) {
+            return this.rayCastToGlobeAndScene(
+                result,
+                origin,
+                target,
+                this.view.lastMouseX,
+                this.view.lastMouseY,
+                false,
+                true
             );
         } else {
-            CameraUtils.getPrincipalPoint(this.mapView.camera, this.m_initialMousePosition);
+            const cameraPos = new Vector3();
+            this.camera.getOrigin(cameraPos);
+            const distance = cameraPos.distanceTo(this.lockCenterPoint);
+            result.copy(this.lockCenterPoint);
+            return distance;
         }
-
-        const onMouseMove = this.mouseMove.bind(this);
-        const onMouseUp = this.mouseUp.bind(this);
-
-        window.addEventListener("mousemove", onMouseMove, false);
-        window.addEventListener("mouseup", onMouseUp, false);
-
-        this.m_cleanupMouseEventListeners = () => {
-            window.removeEventListener("mousemove", onMouseMove);
-            window.removeEventListener("mouseup", onMouseUp);
-        };
     }
 
-    private mouseMove(event: MouseEvent) {
-        if (this.enabled === false) {
-            return;
+    // ==============
+    // Camera Control
+    // ==============
+
+    public setTo(
+        lon: number,
+        lat: number,
+        altitude: number,
+        distance: number,
+        theta: number,
+        phi: number
+    ): void {
+        const position = new Vector3();
+        this.getXYZ(position, lon, lat, altitude || 0);
+
+        const normal = new Vector3();
+        this.getDistanceToGlobe(position.x, position.y, position.z, normal);
+
+        const matrix = new Matrix4();
+        matrix.makeTranslation(position.x, position.y, position.z);
+        this.setRotationLookDown(matrix, normal);
+
+        if (phi !== undefined) {
+            matrix.multiply(new Matrix4().makeRotationZ(phi));
         }
 
-        const mousePos = this.getPointerPosition(event);
-        this.m_mouseDelta.set(
-            mousePos.x - this.m_lastMousePosition.x,
-            mousePos.y - this.m_lastMousePosition.y
-        );
+        matrix.multiply(new Matrix4().makeRotationX(theta !== undefined ? theta : Math.PI * 0.25));
+        matrix.multiply(new Matrix4().makeTranslation(0, 0, distance));
 
-        if (this.m_state === State.PAN) {
-            const vectors = this.getWorldPositionWithElevation(
-                this.m_lastMousePosition.x,
-                this.m_lastMousePosition.y,
-                mousePos.x,
-                mousePos.y
-            );
-            if (vectors === undefined) {
-                return;
-            }
-            const { fromWorld, toWorld } = vectors;
-            this.panFromTo(fromWorld, toWorld);
-        } else if (this.m_state === State.ROTATE) {
-            this.stopExistingAnimations();
-            MapViewUtils.rotate(
-                this.mapView,
-                -this.rotationMouseDeltaFactor * this.m_mouseDelta.x,
-                this.rotationMouseDeltaFactor * this.m_mouseDelta.y,
-                this.m_maxTiltAngle
-            );
-        } else if (this.m_state === State.ORBIT) {
-            this.stopExistingAnimations();
-
-            MapViewUtils.orbitAroundScreenPoint(this.mapView, {
-                center: this.m_tmpVector2.set(
-                    this.m_initialMousePosition.x,
-                    this.m_initialMousePosition.y
-                ),
-                deltaAzimuth: this.orbitingMouseDeltaFactor * this.m_mouseDelta.x,
-                deltaTilt: -this.orbitingMouseDeltaFactor * this.m_mouseDelta.y,
-                maxTiltAngle: this.m_maxTiltAngle
-            });
-        }
-
-        this.m_lastMousePosition.set(mousePos.x, mousePos.y);
-        this.m_zoomAnimationStartTime = performance.now();
-
-        this.updateMapView();
-        event.preventDefault();
-        event.stopPropagation();
+        this.camera.setMatrix(matrix);
+        this.inertialDeltaX = 0;
+        this.inertialDeltaY = 0;
     }
 
-    private mouseUp(event: MouseEvent) {
-        if (this.enabled === false) {
-            return;
+    public setToWithVector(lon: number, lat: number, altitude: number, lookVector: Vector3): void {
+        const position = new Vector3();
+        this.getXYZ(position, lon, lat, altitude || 0);
+
+        const matrix = new Matrix4();
+        matrix.makeTranslation(position.x, position.y, position.z);
+
+        if (lookVector) {
+            const target = position.clone().add(lookVector);
+            matrix.lookAt(position, target, new Vector3(0, 1, 0));
         }
 
-        this.updateMapView();
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        this.m_state = State.NONE;
-
-        if (this.m_cleanupMouseEventListeners) {
-            this.m_cleanupMouseEventListeners();
-        }
-
-        this.dispatchEvent(MAPCONTROL_EVENT_END_INTERACTION);
+        matrix.multiply(new Matrix4().makeTranslation(0, 0, 0));
+        this.camera.setMatrix(matrix);
+        this.inertialDeltaX = 0;
+        this.inertialDeltaY = 0;
     }
 
-    private mouseWheel(event: WheelEvent) {
-        if (!this.enabled || !this.zoomEnabled) {
-            return;
-        }
-
-        const { width, height } = utils.getWidthAndHeightFromCanvas(this.domElement);
-        const screenTarget = utils.calculateNormalizedDeviceCoordinates(
-            event.offsetX,
-            event.offsetY,
-            width,
-            height
-        );
-
-        this.setZoomLevel(
-            this.mapView.zoomLevel - this.zoomLevelDeltaOnMouseWheel * Math.sign(event.deltaY),
-            screenTarget
-        );
-
-        event.preventDefault();
-        event.stopPropagation();
-    }
-
-    /**
-     * Calculates the angle of the vector, which is formed by two touch points in world space
-     * against the X axis in world space on the map. The resulting angle is in radians and between
-     * `-PI` and `PI`.
-     */
-    private updateCurrentRotation() {
-        if (
-            this.m_touchState.touches.length < 2 ||
-            this.m_touchState.touches[1].currentWorldPosition.length() === 0 ||
-            this.m_touchState.touches[0].currentWorldPosition.length() === 0
-        ) {
-            return;
-        }
-        let x = 0;
-        let y = 0;
-        if (this.mapView.projection.type === geoUtils.ProjectionType.Planar) {
-            // Planar uses world space coordinates to return the angle of the vector between the two
-            // fingers' locations from the north direction.
-            x =
-                this.m_touchState.touches[1].currentWorldPosition.x -
-                this.m_touchState.touches[0].currentWorldPosition.x;
-            y =
-                this.m_touchState.touches[1].currentWorldPosition.y -
-                this.m_touchState.touches[0].currentWorldPosition.y;
-        } else if (this.mapView.projection.type === geoUtils.ProjectionType.Spherical) {
-            // Globe uses screen space coordinates, as the 3d coordinate system cannot define a
-            // reference rotation scalar for the vector between the two fingers' locations.
-            x =
-                this.m_touchState.touches[1].currentTouchPoint.x -
-                this.m_touchState.touches[0].currentTouchPoint.x;
-            // Below the subtraction is inverted, because the Y coordinate in screen space in HTML
-            // has its origin at the top and increases downwards.
-            y =
-                this.m_touchState.touches[0].currentTouchPoint.y -
-                this.m_touchState.touches[1].currentTouchPoint.y;
-            this.m_touchState.initialRotation = this.m_touchState.currentRotation;
-        }
-        this.m_touchState.currentRotation = Math.atan2(y, x);
-    }
-
-    /**
-     * Calculates the difference of the current distance of two touch points against their initial
-     * distance in world space.
-     */
-    private calculatePinchDistanceInWorldSpace(): number {
-        if (this.m_touchState.touches.length < 2) {
-            return 0;
-        }
-        const previousDistance = this.m_tmpVector3
-            .subVectors(
-                this.m_touchState.touches[0].initialWorldPosition,
-                this.m_touchState.touches[1].initialWorldPosition
-            )
-            .length();
-
-        const currentDistance = this.m_tmpVector3
-            .subVectors(
-                this.m_touchState.touches[0].currentWorldPosition,
-                this.m_touchState.touches[1].currentWorldPosition
-            )
-            .length();
-        return currentDistance - previousDistance;
-    }
-
-    private convertTouchPoint(touch: Touch, oldTouchState?: TouchState): TouchState | undefined {
-        // Acquire touch coordinates relative to canvas, this coordinates
-        // are then used to calculate NDC values.
-        const newTouchPoint = this.getPointerPosition(touch);
-
-        if (oldTouchState !== undefined) {
-            const oldTouchPoint = oldTouchState.currentTouchPoint;
-            const vectors = this.getWorldPositionWithElevation(
-                oldTouchPoint.x,
-                oldTouchPoint.y,
-                newTouchPoint.x,
-                newTouchPoint.y
-            );
-            const toWorld = vectors === undefined ? new THREE.Vector3() : vectors.toWorld;
-            // Unless the user is tilting, considering a finger losing the surface as a touchEnd
-            // event. Inertia will get triggered.
-            if (
-                toWorld.length() === 0 &&
-                !(this.m_touchState.touches.length === 3 && this.tiltEnabled)
-            ) {
-                this.setTouchState([] as any);
-                this.m_state = State.NONE;
-                this.dispatchEvent(MAPCONTROL_EVENT_END_INTERACTION);
-                return;
-            }
-            if (this.m_state !== State.TOUCH) {
-                this.dispatchEvent(MAPCONTROL_EVENT_BEGIN_INTERACTION);
-            }
-            this.m_state = State.TOUCH;
-            return {
-                currentTouchPoint: newTouchPoint,
-                lastTouchPoint: newTouchPoint,
-                currentWorldPosition: toWorld,
-                initialWorldPosition: toWorld
-            };
-        } else {
-            const { width, height } = utils.getWidthAndHeightFromCanvas(this.domElement);
-            const to = utils.calculateNormalizedDeviceCoordinates(
-                newTouchPoint.x,
-                newTouchPoint.y,
-                width,
-                height
-            );
-            const result = MapViewUtils.rayCastWorldCoordinates(this.mapView, to.x, to.y);
-            const toWorld = result === null ? new THREE.Vector3() : result;
-            // Unless the user is tilting, considering a finger losing the surface as a touchEnd
-            // event. Inertia will get triggered.
-            if (
-                toWorld.length() === 0 &&
-                !(this.m_touchState.touches.length === 3 && this.tiltEnabled)
-            ) {
-                this.setTouchState([] as any);
-                this.m_state = State.NONE;
-                this.dispatchEvent(MAPCONTROL_EVENT_END_INTERACTION);
-                return;
-            }
-            if (this.m_state !== State.TOUCH) {
-                this.dispatchEvent(MAPCONTROL_EVENT_BEGIN_INTERACTION);
-            }
-            this.m_state = State.TOUCH;
-            return {
-                currentTouchPoint: newTouchPoint,
-                lastTouchPoint: newTouchPoint,
-                currentWorldPosition: toWorld,
-                initialWorldPosition: toWorld
+    public flyTo(
+        lat: number,
+        lng: number,
+        cameraDistance: number,
+        speed: number,
+        centerDistance: number,
+        theta: number,
+        phi: number,
+        toCity: boolean = false,
+        callback?: (controller: FreeControls) => void
+    ): void {
+        if (!this.zoomAnimationState) {
+            this.zoomAnimationState = {
+                time: 0,
+                speed: speed || 1,
+                mode: 0,
+                toCity: false,
+                distance: 0,
+                heightRatio: 0.25,
+                startMatrix: new Matrix4(),
+                endMatrix: new Matrix4(),
+                midMatrix: new Matrix4(),
+                start: [90, 0, 0, 1000],
+                end: [90, 0, 0, 1000],
+                globeCenter: new Vector3(),
+                finishCallback: callback
             };
         }
-    }
 
-    private setTouchState(touches: TouchList) {
-        this.m_touchState.touches = [];
+        const currentPos = new Vector3();
+        this.camera.getOrigin(currentPos);
 
-        // TouchList doesn't conform to iterator interface so we cannot use 'for of'
-        for (let i = 0; i < touches.length; ++i) {
-            const touchState = this.convertTouchPoint(touches[i]);
-            if (touchState !== undefined) {
-                this.m_touchState.touches.push(touchState);
-            }
+        const targetPos = new Vector3();
+        this.projectPoint(new GeoCoordinates(lat, lng, 0), targetPos);
+        targetPos.normalize();
+
+        const currentCenter = new Vector3().fromArray(this.lastHitCenter.toArray()).normalize();
+
+        // Check if we need city mode
+        if (Math.acos(targetPos.dot(currentCenter)) > Math.PI / 4) {
+            toCity = true;
+            this.zoomAnimationState.speed = 0.4;
         }
 
-        if (this.m_touchState.touches.length !== 0) {
-            this.updateCurrentRotation();
-            this.m_touchState.initialRotation = this.m_touchState.currentRotation;
-        }
-    }
+        if (toCity && this.getLocationAtCenter(this.zoomAnimationState.start)) {
+            this.zoomAnimationState.toCity = true;
+            this.zoomAnimationState.start[4] = this.getTilt();
+            this.zoomAnimationState.start[5] = this.getHeading();
 
-    private updateTouches(touches: TouchList) {
-        const length = Math.min(touches.length, this.m_touchState.touches.length);
-        for (let i = 0; i < length; ++i) {
-            const oldTouchState = this.m_touchState.touches[i];
-            const newTouchState = this.convertTouchPoint(touches[i], oldTouchState);
-            if (newTouchState !== undefined && oldTouchState !== undefined) {
-                newTouchState.initialWorldPosition = oldTouchState.initialWorldPosition;
-                newTouchState.lastTouchPoint = oldTouchState.currentTouchPoint;
-                this.m_touchState.touches[i] = newTouchState;
-            }
-        }
-    }
+            this.zoomAnimationState.end[0] = lat;
+            this.zoomAnimationState.end[1] = lng;
+            this.zoomAnimationState.end[2] = cameraDistance || 0;
+            this.zoomAnimationState.end[3] = centerDistance || 0;
+            this.zoomAnimationState.end[4] = theta || 0;
+            this.zoomAnimationState.end[5] = phi || 0;
 
-    private zoomOnDoubleClickOrTap(x: number, y: number) {
-        if (this.zoomLevelDeltaOnDoubleClick === 0) {
-            return;
-        }
-        const { width, height } = utils.getWidthAndHeightFromCanvas(this.domElement);
-        const ndcCoords = utils.calculateNormalizedDeviceCoordinates(x, y, width, height);
-        this.setZoomLevel(this.currentZoom + this.zoomLevelDeltaOnDoubleClick, ndcCoords);
-    }
-
-    private touchStart(event: TouchEvent) {
-        if (this.enabled === false) {
+            const targetXYZ = new Vector3();
+            this.getXYZ(targetXYZ, lng, lat, cameraDistance || 0);
+            this.zoomAnimationState.distance = currentPos.distanceTo(targetXYZ);
             return;
         }
 
-        this.m_tapStartTime = performance.now();
-        this.m_fingerMoved = false;
+        this.zoomAnimationState.speed *= 5;
+        const targetXYZ = new Vector3();
+        this.getXYZ(targetXYZ, lng, lat, cameraDistance || 0);
 
-        this.m_state = State.TOUCH;
+        const normal = new Vector3();
+        this.getDistanceToGlobe(targetXYZ.x, targetXYZ.y, targetXYZ.z, normal);
 
-        this.dispatchEvent(MAPCONTROL_EVENT_BEGIN_INTERACTION);
-        this.setTouchState(event.touches);
-        this.updateTouches(event.touches);
+        this.camera.getMatrix(this.zoomAnimationState.startMatrix);
 
-        event.preventDefault();
-        event.stopPropagation();
-    }
+        this.zoomAnimationState.endMatrix.identity();
+        this.zoomAnimationState.endMatrix.makeTranslation(targetXYZ.x, targetXYZ.y, targetXYZ.z);
+        this.setRotationLookDown(this.zoomAnimationState.endMatrix, normal);
 
-    private touchMove(event: TouchEvent) {
-        if (this.enabled === false) {
-            return;
+        if (phi !== undefined) {
+            this.zoomAnimationState.endMatrix.multiply(new Matrix4().makeRotationZ(phi));
         }
 
-        this.m_fingerMoved = true;
-        this.updateTouches(event.touches);
-
-        if (
-            this.panEnabled &&
-            this.m_touchState.touches.length <= 2 &&
-            this.m_touchState.touches[0] !== undefined
-        ) {
-            this.panFromTo(
-                this.m_touchState.touches[0].initialWorldPosition,
-                this.m_touchState.touches[0].currentWorldPosition
+        if (this.zoomAnimationState.mode !== 1) {
+            this.zoomAnimationState.midMatrix.copy(this.zoomAnimationState.endMatrix);
+            slerpMatrices(
+                this.zoomAnimationState.midMatrix,
+                this.zoomAnimationState.startMatrix,
+                this.zoomAnimationState.midMatrix,
+                0.5
             );
         }
 
-        if (this.m_touchState.touches.length === 2) {
-            const touches = this.m_touchState.touches;
-            const center = new THREE.Vector2();
-
-            if (this.zoomEnabled === true || this.rotateEnabled === true) {
-                const { width, height } = utils.getWidthAndHeightFromCanvas(this.domElement);
-                touches.forEach(touch => {
-                    const ndcPoint = utils.calculateNormalizedDeviceCoordinates(
-                        touch.currentTouchPoint.x,
-                        touch.currentTouchPoint.y,
-                        width,
-                        height
-                    );
-                    center.add(ndcPoint);
-                });
-                center.divideScalar(touches.length);
-            }
-            if (this.zoomEnabled) {
-                const pinchDistance = this.calculatePinchDistanceInWorldSpace();
-                if (Math.abs(pinchDistance) < EPSILON) {
-                    return;
-                }
-                const newZL = MapViewUtils.calculateZoomLevelFromDistance(
-                    this.mapView,
-                    this.mapView.targetDistance - pinchDistance
-                );
-
-                MapViewUtils.zoomOnTargetPosition(
-                    this.mapView,
-                    center.x,
-                    center.y,
-                    newZL,
-                    this.m_maxTiltAngle
-                );
-            }
-
-            if (this.rotateEnabled) {
-                this.updateCurrentRotation();
-                const deltaAzimuth =
-                    this.m_touchState.currentRotation - this.m_touchState.initialRotation;
-                this.stopExistingAnimations();
-
-                MapViewUtils.orbitAroundScreenPoint(this.mapView, {
-                    center: this.m_tmpVector2.set(center.x, center.y),
-                    deltaAzimuth,
-                    maxTiltAngle: this.m_maxTiltAngle
-                });
-            }
-        }
-
-        // Tilting
-        if (this.m_touchState.touches.length === 3 && this.tiltEnabled) {
-            const firstTouch = this.m_touchState.touches[0];
-            const diff = this.m_tmpVector2.subVectors(
-                firstTouch.currentTouchPoint,
-                firstTouch.lastTouchPoint
-            );
-            this.stopExistingAnimations();
-            MapViewUtils.orbitAroundScreenPoint(this.mapView, {
-                deltaAzimuth: this.orbitingTouchDeltaFactor * diff.x,
-                deltaTilt: -this.orbitingTouchDeltaFactor * diff.y,
-                maxTiltAngle: this.m_maxTiltAngle
-            });
-        }
-
-        this.m_zoomAnimationStartTime = performance.now();
-
-        this.updateMapView();
-        event.preventDefault();
-        event.stopPropagation();
-    }
-
-    private touchEnd(event: TouchEvent) {
-        if (this.enabled === false) {
-            return;
-        }
-        this.m_state = State.NONE;
-
-        this.handleDoubleTap();
-
-        this.setTouchState(event.touches);
-
-        this.dispatchEvent(MAPCONTROL_EVENT_END_INTERACTION);
-        this.updateMapView();
-
-        event.preventDefault();
-        event.stopPropagation();
-    }
-
-    private handleDoubleTap() {
-        // Continue only if no touchmove happened and zoom's enabled.
-        if (this.m_fingerMoved || !this.zoomEnabled) {
-            return;
-        }
-
-        const now = performance.now();
-        const tapDuration = now - this.m_tapStartTime;
-
-        // Continue only if proper tap.
-        if (tapDuration > MAX_TAP_DURATION) {
-            return;
-        }
-
-        // Continue only if this is the second valid tap.
-        if (!this.m_isDoubleTap) {
-            this.m_isDoubleTap = true;
-            this.m_lastSingleTapTime = now;
-            return;
-        }
-
-        // Continue only if the delay between the two taps is short enough.
-        if (now - this.m_lastSingleTapTime > this.doubleTapTime * 1000) {
-            // If too long, restart double tap validator too.
-            this.m_isDoubleTap = false;
-            return;
-        }
-
-        this.zoomOnDoubleClickOrTap(
-            this.m_touchState.touches[0].currentTouchPoint.x,
-            this.m_touchState.touches[0].currentTouchPoint.y
+        this.zoomAnimationState.endMatrix.multiply(new Matrix4().makeRotationX(theta));
+        this.zoomAnimationState.endMatrix.multiply(
+            new Matrix4().makeTranslation(0, 0, centerDistance || 0)
         );
-
-        // Prevent a string of X valid taps and only consider pairs.
-        this.m_isDoubleTap = false;
     }
 
-    private contextMenu(event: Event) {
-        event.preventDefault();
+    // ==============
+    // Helper Methods
+    // ==============
+
+    private setRotationLookDown(matrix: Matrix4, normal: Vector3): void {
+        const up = new Vector3(0, 1, 0);
+        const right = new Vector3().crossVectors(up, normal).normalize();
+        const newUp = new Vector3().crossVectors(normal, right).normalize();
+
+        matrix.elements[0] = right.x;
+        matrix.elements[1] = right.y;
+        matrix.elements[2] = right.z;
+
+        matrix.elements[4] = newUp.x;
+        matrix.elements[5] = newUp.y;
+        matrix.elements[6] = newUp.z;
+
+        matrix.elements[8] = -normal.x;
+        matrix.elements[9] = -normal.y;
+        matrix.elements[10] = -normal.z;
     }
 
-    private getWorldPositionWithElevation(
-        fromX: number,
-        fromY: number,
-        toX: number,
-        toY: number
-    ): { fromWorld: THREE.Vector3; toWorld: THREE.Vector3 } | undefined {
-        const { width, height } = utils.getWidthAndHeightFromCanvas(this.domElement);
-
-        const from = utils.calculateNormalizedDeviceCoordinates(fromX, fromY, width, height);
-        const to = utils.calculateNormalizedDeviceCoordinates(toX, toY, width, height);
-
-        let toWorld: THREE.Vector3 | null;
-        let fromWorld: THREE.Vector3 | null;
-
-        let elevationProviderResult: THREE.Vector3 | undefined;
-
-        if (this.mapView.elevationProvider !== undefined) {
-            elevationProviderResult = this.mapView.elevationProvider.rayCast(fromX, fromY);
-        }
-
-        if (elevationProviderResult === undefined) {
-            fromWorld = MapViewUtils.rayCastWorldCoordinates(this.mapView, from.x, from.y);
-            toWorld = MapViewUtils.rayCastWorldCoordinates(this.mapView, to.x, to.y);
-        } else {
-            fromWorld = elevationProviderResult;
-            const fromGeoAltitude = this.mapView.projection.unprojectAltitude(fromWorld);
-
-            // We can ensure that points under the mouse stay there by projecting the to point onto
-            // a plane with the altitude based on the initial point.
-            toWorld = MapViewUtils.rayCastWorldCoordinates(
-                this.mapView,
-                to.x,
-                to.y,
-                fromGeoAltitude
-            );
-        }
-        if (fromWorld === null || toWorld === null) {
-            return;
-        }
-        return { fromWorld, toWorld };
+    private getEquatorialRadius(): number {
+        return EarthConstants.EQUATORIAL_RADIUS;
     }
 
-    private panFromTo(fromWorld: THREE.Vector3, toWorld: THREE.Vector3): void {
-        this.stopExistingAnimations();
+    // ===================
+    // Animation Controls
+    // ===================
 
-        // Assign the new animation start time.
-        this.m_panAnimationStartTime = performance.now();
+    public animatePan(x: number, y: number): void {
+        this.panVelocityX = x;
+        this.panVelocityY = y;
+    }
 
-        if (this.mapView.projection.type === geoUtils.ProjectionType.Planar) {
-            this.m_panDistanceFrameDelta.subVectors(fromWorld, toWorld);
-        } else if (this.mapView.projection.type === geoUtils.ProjectionType.Spherical) {
-            this.m_lastRotateGlobeFromVector.copy(fromWorld);
-            this.m_lastRotateGlobeAxis.crossVectors(fromWorld, toWorld).normalize();
-            this.m_lastRotateGlobeAngle = fromWorld.angleTo(toWorld);
-            // When fromWorld and toWorld are too close, there is a risk of getting an NaN
-            // value. The following ensures that the controls don't break.
-            if (isNaN(this.m_lastRotateGlobeAngle)) {
-                this.m_lastRotateGlobeAngle = 0;
+    public animateHeading(v: number): void {
+        this.headingVelocity = v;
+    }
+
+    public setHeading(v: number): void {
+        this.headingSet = v;
+    }
+
+    public animateTilt(v: number): void {
+        this.tiltVelocity = v;
+    }
+
+    public setTilt(v: number): void {
+        this.tiltSet = v;
+    }
+
+    public animateZoom(v: number): void {
+        this.zoomVelocity = v;
+    }
+
+    // ===================
+    // State Query Methods
+    // ===================
+
+    public getHeading(): number {
+        if (this.headingSet !== undefined) {
+            return this.headingSet;
+        }
+
+        if (this.lastHitCenterDistance > 0) {
+            const right = new Vector3();
+            this.camera.getRight(right);
+
+            const matrix = new Matrix4();
+            this.setRotationLookDown(matrix, this.lastHitGravity);
+            matrix.multiply(new Matrix4().makeRotationZ(this.headingSet || 0));
+
+            const rightDot =
+                right.x * matrix.elements[0] +
+                right.y * matrix.elements[1] +
+                right.z * matrix.elements[2];
+
+            let angle = Math.acos(Math.min(Math.max(rightDot, -1), 1));
+            if (
+                right.x * matrix.elements[4] +
+                    right.y * matrix.elements[5] +
+                    right.z * matrix.elements[6] >
+                0
+            ) {
+                angle = -angle;
             }
+
+            if (angle < 0) angle += 2 * Math.PI;
+            return angle;
         }
 
-        this.handlePan();
+        return 0;
     }
 
-    /**
-     * Acquire mouse or touch pointer position relative to canvas for `MouseEvent` or `Touch` event.
-     *
-     * Function takes into account canvas position in client space (including scrolling) as also
-     * canvas scaling factor.
-     *
-     * @param event - The mouse event.
-     * @returns [[THREE.Vector2]] containing _x_, _y_ mouse pointer position.
-     */
-    private getPointerPosition(event: MouseEvent | Touch): THREE.Vector2 {
-        const canvasSize = utils.getWidthAndHeightFromCanvas(this.domElement);
-        // Absolute size of a canvas
-        const rect = this.domElement.getBoundingClientRect();
-        // TODO: Test if scaling is needed and works on HiDPI devices.
-        const scaleX = Math.round(rect.width) / canvasSize.width;
-        const scaleY = Math.round(rect.height) / canvasSize.height;
+    public getTilt(): number {
+        if (this.tiltSet !== undefined) {
+            return this.tiltSet;
+        }
 
-        // Scale mouse coordinates after they have, been adjusted to be relative to element.
-        return new THREE.Vector2(
-            (event.clientX - Math.floor(rect.left)) * scaleX,
-            (event.clientY - Math.floor(rect.top)) * scaleY
-        );
+        if (this.lastHitCenterDistance > 0) {
+            const down = new Vector3();
+            const forward = new Vector3();
+
+            this.camera.getDown(down);
+            this.camera.getForward(forward);
+
+            const downDot =
+                this.lastHitGravity.x * down.x +
+                this.lastHitGravity.y * down.y +
+                this.lastHitGravity.z * down.z;
+
+            const forwardDot =
+                this.lastHitGravity.x * forward.x +
+                this.lastHitGravity.y * forward.y +
+                this.lastHitGravity.z * forward.z;
+
+            let angle = Math.acos(Math.min(Math.max(downDot, -1), 1));
+            if (forwardDot > 0) angle = -angle;
+            if (angle < 0) angle += 2 * Math.PI;
+
+            return angle - Math.PI * 0.5;
+        }
+
+        return 0;
     }
 }
