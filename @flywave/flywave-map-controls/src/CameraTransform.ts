@@ -1,5 +1,6 @@
 import { Vector3, Matrix4, Quaternion, Spherical, Vector4 } from "three";
 import { slerpMatrices, sphericalLerp } from "./math";
+import { ElevationProvider } from "@flywave/flywave-mapview";
 
 /**
  * A camera controller that provides smooth transitions and advanced movement controls
@@ -77,25 +78,35 @@ export abstract class CameraTransform {
         intermediateMatrix?: Matrix4,
         intermediateStart?: number
     ): void {
-        // Get start and end positions
+        // 1. 提取起始和结束位置
         const startPos = new Vector3().setFromMatrixPosition(start);
         const endPos = new Vector3().setFromMatrixPosition(end);
-        const pivotPos = pivot;
 
-        // Interpolate spherical coordinates
-        const interpolatedPos = new Vector3().setFromSpherical(
-            sphericalLerp(
-                new Spherical().setFromVector3(startPos),
-                new Spherical().setFromVector3(endPos),
-                interpolationFactor
-            )
+        // 2. 线性插值位置 (与原始版本一致)
+        const interpPos = new Vector3(
+            startPos.x + (endPos.x - startPos.x) * interpolationFactor,
+            startPos.y + (endPos.y - startPos.y) * interpolationFactor,
+            startPos.z + (endPos.z - startPos.z) * interpolationFactor
         );
 
-        // Handle matrix interpolation
+        // 3. 计算距离缩放因子 (与原始版本一致)
+        const startDist = startPos.length();
+        const endDist = endPos.length();
+        const delta = new Vector3().subVectors(endPos, startPos);
+        const deltaLength = delta.length();
+
+        let scaleFactor = 1 - interpolationFactor * 2;
+        scaleFactor = 1 - scaleFactor * scaleFactor;
+        scaleFactor =
+            (startDist +
+                (endDist - startDist) * interpolationFactor +
+                deltaLength * radius * scaleFactor) /
+            interpPos.distanceTo(pivot);
+
+        // 4. 矩阵插值 (保持与原始版本相同的逻辑)
         let resultMatrix: Matrix4;
         if (intermediateMatrix) {
             if (intermediateStart === undefined) {
-                // Two-stage interpolation
                 const firstStep = slerpMatrices(
                     this.cameraToWorld,
                     intermediateMatrix,
@@ -108,7 +119,6 @@ export abstract class CameraTransform {
                 );
                 resultMatrix = slerpMatrices(firstStep, secondStep, interpolationFactor);
             } else {
-                // Phased interpolation
                 if (interpolationFactor < intermediateStart) {
                     resultMatrix = slerpMatrices(
                         this.cameraToWorld,
@@ -124,13 +134,16 @@ export abstract class CameraTransform {
                 }
             }
         } else {
-            // Direct interpolation
             resultMatrix = slerpMatrices(this.cameraToWorld, end, interpolationFactor);
         }
 
-        // Set final position along great circle path
-        const direction = interpolatedPos.sub(pivotPos).normalize();
-        resultMatrix.setPosition(pivotPos.clone().add(direction.multiplyScalar(radius)));
+        // 5. 设置最终位置 (考虑缩放因子)
+        const finalPos = new Vector3(
+            pivot.x + (interpPos.x - pivot.x) * scaleFactor,
+            pivot.y + (interpPos.y - pivot.y) * scaleFactor,
+            pivot.z + (interpPos.z - pivot.z) * scaleFactor
+        );
+        resultMatrix.setPosition(finalPos);
 
         this.cameraToWorld.copy(resultMatrix);
     }
@@ -368,56 +381,68 @@ export abstract class CameraTransform {
         this.cameraToWorld.setPosition(position.add(pivot));
         return needsCorrection;
     }
-
     /**
      * Gets the inverse of the camera's world matrix (world-to-camera transform)
-     * @param outMatrix Output matrix
+     * @param outMatrix Output matrix that will store the inverted world-to-camera transform
      */
     public getWorldToCamera(outMatrix: Matrix4): void {
-        outMatrix.copy(this.cameraToWorld).invert();
+        outMatrix.copy(this.cameraToWorld).invert(); // Copies and inverts the current camera matrix
     }
 
     /**
-     * Gets the camera's origin position
-     * @param out Output array [x,y,z]
+     * Gets the camera's origin position in world space
+     * @param out Vector3 that will store the camera's position [x,y,z]
      */
     public getOrigin(out: Vector3): void {
+        // Extracts position from the matrix (elements 12,13,14 are the translation components)
         out.fromArray(this.cameraToWorld.elements, 12);
     }
 
     /**
-     * Gets the camera's right vector
-     * @param out Output array [x,y,z]
+     * Gets the camera's normalized right vector (X-axis in camera space)
+     * @param out Vector3 that will store the right direction vector
      */
     public getRight(out: Vector3): void {
+        // Gets first column of matrix (right vector) and normalizes it
         out.setFromMatrixColumn(this.cameraToWorld, 0).normalize();
     }
 
     /**
-     * Gets the camera's up vector
-     * @param out Output array [x,y,z]
+     * Gets the camera's normalized up vector (Y-axis in camera space)
+     * @param out Vector3 that will store the up direction vector
      */
     public getUp(out: Vector3): void {
+        // Gets second column of matrix (up vector) and normalizes it
         out.setFromMatrixColumn(this.cameraToWorld, 1).normalize();
     }
 
     /**
-     * Gets the camera's down vector
-     * @param out Output array [x,y,z]
+     * Gets the camera's normalized down vector (negative Y-axis in camera space)
+     * @param out Vector3 that will store the down direction vector
      */
     public getDown(out: Vector3): void {
-        this.getUp(out);
-        out.negate();
+        this.getUp(out); // First get the up vector
+        out.negate(); // Then negate it to get down
     }
 
     /**
-     * Gets the camera's forward vector
-     * @param out Output array [x,y,z]
+     * Gets the camera's forward vector (Z-axis in camera space)
+     * Note: This is not normalized as it typically contains scale information
+     * @param out Vector3 that will store the forward direction vector
      */
     public getForward(out: Vector3): void {
+        // Gets third column of matrix (forward vector)
         out.setFromMatrixColumn(this.cameraToWorld, 2);
     }
 
+    /**
+     * Checks for collision between a ray and the projection surface
+     * @param outTarget Output vector for collision point if collision occurs
+     * @param sourcePoint Origin point of the ray
+     * @param targetPoint End point of the ray
+     * @param radius Collision radius/threshold
+     * @returns Boolean indicating if collision occurred
+     */
     protected abstract collisionTo(
         outTarget: Vector3,
         sourcePoint: Vector3,
@@ -425,17 +450,77 @@ export abstract class CameraTransform {
         radius: number
     ): boolean;
 
+    /**
+     * Performs inertial panning with damping effect
+     * @param targetPoint The pivot point to pan around
+     * @param inertialAxis The axis and amount of rotation [x,y,z,angle]
+     * @param inertial The damping factor (0=no damping, 1=full damping)
+     */
     abstract inertialPan(targetPoint: Vector3, inertialAxis: Vector4, inertial: number): void;
 
-    abstract pan(
-        target: Vector3,
-        startPoint: Vector3,
-        targetPoint: Vector3,
+    /**
+     * Pans the camera around a target point
+     * @param moveToTargetPoint The reference target point for movement
+     * @param cameraPosition Current camera position in world space
+     * @param rayTargetPoint Current mouse/touch position in world coordinates
+     * @param inertialAxis Output parameter storing inertial rotation data [x,y,z,angle]
+     * @param step The damping/step factor controlling smoothness (0-1)
+     */
+    public abstract pan(
+        moveToTargetPoint: Vector3,
+        cameraPosition: Vector3,
+        rayTargetPoint: Vector3,
         inertialAxis: Vector4,
         step: number
     );
 
+    /**
+     * Gets a copy of the camera's world transformation matrix
+     * @param outMatrix Optional matrix to store the result (avoids allocation if provided)
+     * @returns The camera's world transformation matrix
+     */
+    public getMatrix(outMatrix?: Matrix4): Matrix4 {
+        if (outMatrix) {
+            outMatrix.copy(this.cameraToWorld); // Copy to existing matrix if provided
+            return outMatrix;
+        }
+        return this.cameraToWorld.clone(); // Return new copy if no output matrix provided
+    }
+
+    /**
+     * Gets the camera's projection matrix
+     * @returns The 4x4 projection matrix
+     */
     protected abstract getCameraProjectionMatrix(): Matrix4;
 
+    /**
+     * Gets the current viewport dimensions
+     * @returns Vector4 containing viewport parameters [x,y,width,height]
+     */
     protected abstract getViewPort(): Vector4;
+
+    /**
+     * Applies panning velocity to the camera
+     * @param step The time step/factor for movement
+     * @param panVelocityX Horizontal pan velocity
+     * @param panVelocityY Vertical pan velocity
+     */
+    public abstract applyPanVelocity(
+        step: number,
+        panVelocityX: number,
+        panVelocityY: number
+    ): void;
+
+    /**
+     * Performs ray casting against the projection surface
+     * @param result Output vector for intersection point
+     * @param origin Origin point of the ray in world space
+     * @param target End point of the ray in world space
+     * @returns The intersection distance (0-1) along the ray, or -1 if no intersection
+     */
+    public abstract rayCastProjectionWorld(
+        result: Vector3,
+        origin: Vector3,
+        target: Vector3
+    ): number;
 }

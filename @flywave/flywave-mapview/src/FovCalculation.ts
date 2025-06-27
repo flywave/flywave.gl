@@ -41,7 +41,7 @@ export interface FovCalculation {
     fov: number;
 }
 
-export const DEFAULT_FOV_CALCULATION: FovCalculation = { type: "dynamic", fov: 40 };
+export const DEFAULT_FOV_CALCULATION: FovCalculation = { type: "fixed", fov: 40 };
 export const MIN_FOV_DEG = 10;
 export const MAX_FOV_DEG = 140;
 export const MIN_FOV_RAD = THREE.MathUtils.degToRad(MIN_FOV_DEG);

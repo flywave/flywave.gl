@@ -1,13 +1,31 @@
 import { Vector3, Matrix4, Vector4 } from "three";
 import { CameraTransform } from "./CameraTransform";
 import { rayCastToEllipsoid } from "./math";
+import { ElevationProvider, MapView } from "@flywave/flywave-mapview";
 
 export class EllipsoidCameraTransform extends CameraTransform {
+    constructor(
+        protected mapView: MapView,
+        private options: {
+            hitCountPrecision: number;
+        }
+    ) {
+        super();
+    }
+
     protected getCameraProjectionMatrix(): Matrix4 {
-        throw new Error("Method not implemented.");
+        return this.mapView.camera.projectionMatrix;
     }
     protected getViewPort(): Vector4 {
-        throw new Error("Method not implemented.");
+        return this.mapView.renderer.getViewport(new Vector4());
+    }
+
+    protected getElevationProvider(): ElevationProvider {
+        return this.mapView.elevationProvider;
+    }
+
+    private get projection() {
+        return this.mapView.projection;
     }
 
     /**
@@ -47,7 +65,7 @@ export class EllipsoidCameraTransform extends CameraTransform {
      * @param inertialAxis Axis and amount of rotation [x,y,z,angle]
      * @param inertial Damping factor (0-1)
      */
-    protected inertialPan(targetPoint: Vector3, inertialAxis: Vector4, inertial: number): void {
+    inertialPan(targetPoint: Vector3, inertialAxis: Vector4, inertial: number): void {
         const rotationAmount = inertialAxis.w || 0;
         inertialAxis.w += (0 - rotationAmount) * inertial;
 
@@ -71,30 +89,30 @@ export class EllipsoidCameraTransform extends CameraTransform {
 
     /**
      * Pans the camera around a target point
-     * @param target Target point to pan around
-     * @param startPoint Starting point of the pan gesture
-     * @param targetPoint Current point of the pan gesture
+     * @param moveToTargetPoint Target point to move to
+     * @param cameraPosition Camera position
+     * @param rayTargetPoint Ray target point
      * @param inertialAxis Axis for inertial rotation [x,y,z,angle]
      * @param step Damping/step factor
      */
-    protected pan(
-        target: Vector3,
-        startPoint: Vector3,
-        targetPoint: Vector3,
-        inertialAxis: Vector4, // Added w for rotation angle
+    public pan(
+        moveToTargetPoint: Vector3,
+        cameraPosition: Vector3,
+        rayTargetPoint: Vector3,
+        inertialAxis: Vector4,
         step: number
     ): void {
         // 1. Get current camera position from matrix
         const cameraPos = new Vector3().setFromMatrixPosition(this.cameraToWorld);
 
         // 2. Calculate direction vectors (matches original variable names)
-        const F = target.clone();
-        const D = startPoint.x,
-            C = startPoint.y,
-            z = startPoint.z;
-        const x = targetPoint.x,
-            w = targetPoint.y,
-            u = targetPoint.z;
+        const F = moveToTargetPoint.clone();
+        const D = cameraPosition.x,
+            C = cameraPosition.y,
+            z = cameraPosition.z;
+        const x = rayTargetPoint.x,
+            w = rayTargetPoint.y,
+            u = rayTargetPoint.z;
 
         // Original code reference:
         // B = [F[0] - D, F[1] - C, F[2] - z]
@@ -111,7 +129,7 @@ export class EllipsoidCameraTransform extends CameraTransform {
 
         // 3. Find intersection point (matches original collision check)
         const G = new Vector3();
-        if (!this.collisionTo(G, M, y, this.getEquatorialRadius())) {
+        if (!this.collisionTo(G, M, y, this.projection.unitScale)) {
             inertialAxis.w! += (0 - inertialAxis.w!) * step;
             if (Math.abs(inertialAxis.w!) < 1e-15) {
                 inertialAxis.w = 0;
@@ -183,12 +201,76 @@ export class EllipsoidCameraTransform extends CameraTransform {
         }
     }
 
-    /**
-     * Gets the equatorial radius of the ellipsoid (globe)
-     * @returns Radius in world units
-     */
-    private getEquatorialRadius(): number {
-        // This should be replaced with your actual globe radius
-        return 6378137; // Default Earth radius in meters
+    public applyPanVelocity(step: number, panVelocityX: number, panVelocityY: number): void {
+        const pivot = new Vector3(0, 0, 0); // 旋转中心（如地球中心）
+        const down = new Vector3();
+        const right = new Vector3();
+
+        this.getDown(down);
+        this.getRight(right);
+
+        // X 方向：绕 Down 轴旋转
+        this.rotateAroundPivot(
+            pivot.x,
+            pivot.y,
+            pivot.z,
+            down.x,
+            down.y,
+            down.z,
+            panVelocityX * step
+        );
+
+        // Y 方向：绕 Right 轴旋转（反向）
+        this.rotateAroundPivot(
+            pivot.x,
+            pivot.y,
+            pivot.z,
+            right.x,
+            right.y,
+            right.z,
+            -panVelocityY * step
+        );
+    }
+
+    rayCastProjectionWorld(result: Vector3, origin: Vector3, target: Vector3): number {
+        const radius = this.projection.unitScale;
+        const scale = 1 / radius;
+
+        // Convert to unit sphere space
+        const scaledOrigin = origin.clone().multiplyScalar(scale);
+        const scaledTarget = target.clone().multiplyScalar(scale);
+
+        // Initial ellipsoid intersection
+        const t = rayCastToEllipsoid(result, scaledOrigin, scaledTarget, 1, 1);
+        if (t < 0) return -1;
+
+        // Terrain adjustment
+        if (this.getElevationProvider()) {
+            const direction = scaledTarget.clone().sub(scaledOrigin);
+            let terrainHeight = 0;
+
+            // Step through ray to find terrain collision
+            for (let step = 0; step <= t; step += this.options.hitCountPrecision ?? 0.01) {
+                const testPoint = scaledOrigin.clone().addScaledVector(direction, step);
+                let _scratchGeoCoords = this.projection.unprojectPoint(
+                    testPoint.clone().multiplyScalar(radius)
+                );
+                _scratchGeoCoords.altitude = 0;
+
+                const height = this.getElevationProvider().getHeight(_scratchGeoCoords) ?? 0;
+                if (height > 0) {
+                    terrainHeight = height;
+                    break;
+                }
+            }
+
+            if (terrainHeight > 0) {
+                const adjustedScale = 1 + terrainHeight * scale;
+                rayCastToEllipsoid(result, scaledOrigin, scaledTarget, 1, adjustedScale);
+            }
+        }
+
+        result.multiplyScalar(radius);
+        return t;
     }
 }

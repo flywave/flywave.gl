@@ -80,6 +80,7 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             // "@flywave/flywave-fetch/**/*.ts",
             // "@flywave/flywave-utils/**/*.ts",
             // "@flywave/flywave-geoutils/**/*.ts",
+            "@flywave/flywave-map-controls/**/*.ts"
             // "@flywave/flywave-mapview/**/*.ts",
             // "@flywave/flywave-mapview-decoder/**/*.ts",
             // "@flywave/flywave-materials/**/*.ts",

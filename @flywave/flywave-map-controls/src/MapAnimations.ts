@@ -10,7 +10,7 @@ import { PerformanceTimer } from "@flywave/flywave-utils";
 import * as TWEEN from "@tweenjs/tween.js";
 import * as THREE from "three";
 
-import { EventNames, MapControls } from "./MapControls";
+import { EventNames, MapControls } from "./BaseMapControls";
 
 /**
  * Functions used for specifying animations' speed.

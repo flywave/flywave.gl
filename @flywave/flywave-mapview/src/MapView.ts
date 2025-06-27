@@ -3931,7 +3931,7 @@ export class MapView extends EventDispatcher {
      * Supports canvases not attached to DOM, which have 0 as `clientWidth` and `clientHeight` by
      * calculating it from actual canvas size and current pixel ratio.
      */
-    private getCanvasClientSize(): { width: number; height: number } {
+    public getCanvasClientSize(): { width: number; height: number } {
         const { clientWidth, clientHeight } = this.canvas;
         if (
             clientWidth === 0 ||

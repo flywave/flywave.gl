@@ -7,7 +7,7 @@
 import { mercatorProjection, ProjectionType, sphereProjection } from "@flywave/flywave-geoutils";
 import { MapViewEventNames } from "@flywave/flywave-mapview";
 
-import { MapControls } from "./MapControls";
+import { MapControls } from "./BaseMapControls";
 
 /**
  * Option for MapControlsUI.

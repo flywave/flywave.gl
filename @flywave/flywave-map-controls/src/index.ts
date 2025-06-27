@@ -12,7 +12,7 @@
  * @packageDocumentation
  */
 
-export * from "./MapControls";
+export * from "./BaseMapControls";
 export * from "./MapControlsUI";
 export * from "./LongPressHandler";
 export * from "./Utils";

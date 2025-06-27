@@ -18,13 +18,13 @@ type WindowEventMap = {
 };
 
 class WindowEventHandler extends EventDispatcher<WindowEventMap> {
-    private mouseDown: [boolean, boolean, boolean] = [false, false, false];
+    mouseDown: [boolean, boolean, boolean] = [false, false, false];
     private _panEnabled: boolean = true;
     public zoomEnabled: boolean = true;
     public doubleZoomEnable: boolean = true;
-    private lastMouseX: number = 0;
-    private lastMouseY: number = 0;
-    private lastMouseZ: number = 0;
+    lastMouseX: number = 0;
+    lastMouseY: number = 0;
+    lastMouseZ: number = 0;
     public center_x: number = 0;
     public center_y: number = 0;
     public width: number = 600;
