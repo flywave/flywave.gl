@@ -90,113 +90,66 @@ export class EllipsoidCameraTransform extends CameraTransform {
     /**
      * Pans the camera around a target point
      * @param moveToTargetPoint Target point to move to
-     * @param cameraPosition Camera position
      * @param rayTargetPoint Ray target point
      * @param inertialAxis Axis for inertial rotation [x,y,z,angle]
      * @param step Damping/step factor
      */
     public pan(
         moveToTargetPoint: Vector3,
-        cameraPosition: Vector3,
         rayTargetPoint: Vector3,
         inertialAxis: Vector4,
         step: number
     ): void {
-        // 1. Get current camera position from matrix
+        // 1. 获取当前相机位置
         const cameraPos = new Vector3().setFromMatrixPosition(this.cameraToWorld);
 
-        // 2. Calculate direction vectors (matches original variable names)
-        const F = moveToTargetPoint.clone();
-        const D = cameraPosition.x,
-            C = cameraPosition.y,
-            z = cameraPosition.z;
-        const x = rayTargetPoint.x,
-            w = rayTargetPoint.y,
-            u = rayTargetPoint.z;
+        // 2. 计算方向向量（对应原始 B/M/y 变量）
+        const B = moveToTargetPoint.clone(); // 原始 F 参数
+        const M = cameraPos.clone(); // 相机当前位置
+        const y = rayTargetPoint.clone(); // 射线目标点
 
-        // Original code reference:
-        // B = [F[0] - D, F[1] - C, F[2] - z]
-        const B = new Vector3(F.x - D, F.y - C, F.z - z);
-
-        // Original: M = [J[12] - D, J[13] - C, J[14] - z]
-        const M = new Vector3(cameraPos.x - D, cameraPos.y - C, cameraPos.z - z);
-
-        // Original: y = [x - D, w - C, u - z]
-        const y = new Vector3(x - D, w - C, u - z);
-
-        // Original: v = vec3.normalize(B)
-        const v = B.clone().normalize();
-
-        // 3. Find intersection point (matches original collision check)
+        // 3. 碰撞检测（对应原始 globeCollisionTo）
         const G = new Vector3();
-        if (!this.collisionTo(G, M, y, this.projection.unitScale)) {
-            inertialAxis.w! += (0 - inertialAxis.w!) * step;
-            if (Math.abs(inertialAxis.w!) < 1e-15) {
+        if (!this.collisionTo(G, M, y, -moveToTargetPoint.z)) {
+            // 无碰撞时衰减惯性
+            inertialAxis.w += (0 - inertialAxis.w) * step;
+            if (Math.abs(inertialAxis.w) < 1e-15) {
                 inertialAxis.w = 0;
             }
             return;
         }
 
-        // 4. Calculate rotation axis (matches original cross product)
-        G.normalize();
-        const s = new Vector3();
-        s.crossVectors(B, G); // Original: vec3.cross(s, B, G)
-
-        const K = s.dot(s); // Original: vec3.dot(s, s)
+        // 4. 计算移动方向（对应原始 s 向量）
+        const s = new Vector3().subVectors(B, G).normalize();
+        const K = B.distanceTo(G); // 移动距离
 
         if (K > 0) {
-            const L = s.length(); // Original: L = vec3.normalize(s)
-            s.normalize();
+            // 5. 应用平移（对应原始矩阵操作）
+            const translation = s.clone().multiplyScalar(K * 0.25);
 
-            let I: number; // Rotation angle
-            if (L <= -1) {
-                I = -Math.PI * 0.5;
-            } else if (L >= 1) {
-                I = Math.PI * 0.5;
-            } else {
-                I = Math.asin(L);
-            }
+            // 更新相机位置（等效于原始 J[12/13/14] 操作）
+            cameraPos.add(translation);
+            this.cameraToWorld.setPosition(cameraPos);
 
-            // 5. Apply rotation (matches original matrix operations)
-            // Original: J[12] -= D; J[13] -= C; J[14] -= z
-            const currentPos = new Vector3().setFromMatrixPosition(this.cameraToWorld);
-            this.cameraToWorld.setPosition(currentPos.sub(new Vector3(D, C, z)));
-
-            if (this.smoothPan) {
-                I *= 0.25;
-                const L_smooth = Math.sin(I);
-                const A = Math.cos(I);
-                // Original: matrix.rotateAxisAngleT(J, s[0], s[1], s[2], I)
-                this.rotate(s.x, s.y, s.z, I);
-            } else {
-                const A = G.dot(B); // Original: A = vec3.dot(G, B)
-                // Original: matrix.rotateAxisSinCosT(J, s[0], s[1], s[2], L, A)
-                // Using Three.js rotation from axis and cos/sin
-                const rotMatrix = new Matrix4().makeRotationAxis(s, Math.asin(L));
-                this.cameraToWorld.multiply(rotMatrix);
-            }
-
-            // Original: J[12] += D; J[13] += C; J[14] += z
-            this.cameraToWorld.setPosition(currentPos.add(new Vector3(D, C, z)));
-
-            // 6. Update inertial rotation (matches original E[3] handling)
-            I *= 0.7;
-            if (I > Math.abs(inertialAxis.w!)) {
+            // 6. 更新惯性（对应原始 E 数组处理）
+            const I = K * 0.7;
+            if (I > Math.abs(inertialAxis.w)) {
                 inertialAxis.set(s.x, s.y, s.z, I);
             } else {
-                const H = step; // Original damping factor
-                inertialAxis.x += (s.x - inertialAxis.x) * H;
-                inertialAxis.y += (s.y - inertialAxis.y) * H;
-                inertialAxis.z += (s.z - inertialAxis.z) * H;
+                // 惯性平滑过渡
+                inertialAxis.x += (s.x - inertialAxis.x) * step;
+                inertialAxis.y += (s.y - inertialAxis.y) * step;
+                inertialAxis.z += (s.z - inertialAxis.z) * step;
                 inertialAxis.normalize();
-                inertialAxis.w! += (I - inertialAxis.w!) * H;
+                inertialAxis.w += (I - inertialAxis.w) * step;
             }
         } else {
-            inertialAxis.w! += (0 - inertialAxis.w!) * step;
+            // 无有效移动时衰减惯性
+            inertialAxis.w += (0 - inertialAxis.w) * step;
         }
 
-        // Final cleanup (matches original)
-        if (Math.abs(inertialAxis.w!) < 1e-15) {
+        // 7. 清理微小的惯性值
+        if (Math.abs(inertialAxis.w) < 1e-15) {
             inertialAxis.w = 0;
         }
     }

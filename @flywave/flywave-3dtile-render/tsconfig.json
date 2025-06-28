@@ -4,7 +4,10 @@
         "outDir": "./lib",
         "composite": true,
         "paths": {
-            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"]
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-geoutils/*": ["../flywave-geoutils/src/*"],
+            "@flywave/flywave-mapview": ["../flywave-mapview/src"],
+            "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"]
         }
     },
     "include": ["src/**/*"],
@@ -12,6 +15,9 @@
     "references": [
         {
             "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-mapview"
         }
     ]
 }

@@ -133,7 +133,7 @@ export namespace DataDrivenThemeExample {
             copyrightInfo
         });
 
-        const mapControls = MapControls.create(map);
+        const mapControls = new MapControls(map);
 
         const ui = new MapControlsUI(mapControls);
         map.canvas.parentElement!.appendChild(ui.domElement);

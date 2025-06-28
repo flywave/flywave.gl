@@ -2,10 +2,7 @@
     "extends": "../../tsconfig.json",
     "compilerOptions": {
         "outDir": "./lib",
-        "sourceMap": true,
         "composite": true,
-        "incremental": true,
-        "declarationMap": true,
         "paths": {
             "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],
             "@flywave/flywave-geometry": ["../flywave-geometry/src"],

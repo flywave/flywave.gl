@@ -63,6 +63,9 @@ catalogs:
     '@types/chai-as-promised':
       specifier: ^7.1.1
       version: 7.1.8
+    '@types/copy-webpack-plugin':
+      specifier: 8.0.1
+      version: 8.0.1
     '@types/dat.gui':
       specifier: ^0.7.1
       version: 0.7.13
@@ -628,6 +631,15 @@ importers:
         specifier: 'catalog:'
         version: 11.7.0
 
+  '@flywave/flywave-3dtile-render':
+    dependencies:
+      '@flywave/flywave-geoutils':
+        specifier: workspace:*
+        version: link:../flywave-geoutils
+      '@flywave/flywave-mapview':
+        specifier: workspace:*
+        version: link:../flywave-mapview
+
   '@flywave/flywave-atlas-tools':
     dependencies:
       '@types/mkpath':
@@ -820,6 +832,9 @@ importers:
       '@flywave/flywave-webtile-datasource':
         specifier: workspace:*
         version: link:../flywave-webtile-datasource
+      '@types/copy-webpack-plugin':
+        specifier: 'catalog:'
+        version: 8.0.1(webpack-cli@4.10.0)
       '@types/dat.gui':
         specifier: 'catalog:'
         version: 0.7.13
@@ -3266,6 +3281,9 @@ packages:
 
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
+
+  '@types/copy-webpack-plugin@8.0.1':
+    resolution: {integrity: sha512-TwEeGse0/wq+t3SFW0DEwroMS/cDkwVZT+vj7tMAYTp7llt/yz6NuW2n04X2M5P/kSfBQOORhrHAN2mqZdmybg==}
 
   '@types/cors@2.8.19':
     resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
@@ -10005,6 +10023,17 @@ snapshots:
   '@types/connect@3.4.38':
     dependencies:
       '@types/node': 16.18.126
+
+  '@types/copy-webpack-plugin@8.0.1(webpack-cli@4.10.0)':
+    dependencies:
+      '@types/node': 24.0.3
+      tapable: 2.2.2
+      webpack: 5.99.9(webpack-cli@4.10.0)
+    transitivePeerDependencies:
+      - '@swc/core'
+      - esbuild
+      - uglify-js
+      - webpack-cli
 
   '@types/cors@2.8.19':
     dependencies:

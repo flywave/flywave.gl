@@ -2,7 +2,6 @@ import { GeoCoordinates, GeoBox } from "@flywave/flywave-geoutils";
 import { TilesRenderer as ThreeTilesRenderer } from "./three/TilesRenderer";
 import { Vector3, Object3D, Raycaster, Intersection } from "three";
 import { MapView, MapViewEventNames } from "@flywave/flywave-mapview";
-import { PriorityQueue } from "./utilities/PriorityQueue";
 import { DebugTilesRenderer } from "./three/DebugTilesRenderer";
 import { Tile } from "./base/Tile";
 

@@ -118,7 +118,7 @@ export namespace PerformanceUtils {
             zoomLevel
         });
 
-        const mapControls = MapControls.create(mapView);
+        const mapControls = new MapControls(mapView);
 
         mapView.resize(window.innerWidth, window.innerHeight);
 

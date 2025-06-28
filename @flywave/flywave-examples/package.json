@@ -15,7 +15,8 @@
     "scripts": {
         "test": "exit 0",
         "prebuild": "node scripts/postinstall.js",
-        "build": " ",
+        "tsc": "tsc --build $EXTRA_TSC_ARGS",
+        "build": "webpack --config webpack.config.ts",
         "start": "webpack serve",
         "publish-html": "node scripts/publish-html.js"
     },
@@ -40,6 +41,7 @@
         "@flywave/flywave-utils": "workspace:*",
         "@flywave/flywave-vectortile-datasource": "workspace:*",
         "@flywave/flywave-webtile-datasource": "workspace:*",
+        "@types/copy-webpack-plugin": "catalog:",
         "@types/dat.gui": "catalog:",
         "@types/long": "catalog:",
         "@types/three": "catalog:",

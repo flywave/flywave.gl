@@ -19,3 +19,4 @@ export * from "./Utils";
 export * from "./MapAnimations";
 export * from "./CameraKeyTrackAnimation";
 export * from "./CameraAnimationBuilder";
+export * from "./MapControls";

@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//@ts-check
-
-const webpack = require("webpack");
-const { merge } = require("webpack-merge");
-const path = require("path");
-const glob = require("glob");
-const HtmlWebpackPlugin = require("html-webpack-plugin");
-const CopyWebpackPlugin = require("copy-webpack-plugin");
+import * as webpack from "webpack";
+import { merge } from "webpack-merge";
+import * as path from "path";
+import * as glob from "glob";
+import HtmlWebpackPlugin from "html-webpack-plugin";
+import CopyWebpackPlugin from "copy-webpack-plugin";
+import TsconfigPathsPlugin from "tsconfig-paths-webpack-plugin";
 
 const exampleFilter = process.env["FILTER_EXAMPLE"];
 const prepareOnly = process.env["PREPARE_ONLY"] === "true";
@@ -31,7 +30,15 @@ const themeList = {
     berlinOutlines: "resources/berlin_tilezen_effects_outlines.json"
 };
 
-function getCacheConfig(name) {
+interface CacheConfig {
+    type: "filesystem";
+    buildDependencies: {
+        config: string[];
+    };
+    name: string;
+}
+
+function getCacheConfig(name: string): CacheConfig | false {
     // Use a separate cache for each configuration, otherwise cache writing fails.
     return process.env.HARP_NO_HARD_SOURCE_CACHE
         ? false
@@ -44,7 +51,7 @@ function getCacheConfig(name) {
           };
 }
 
-function resolveOptional(path, message) {
+function resolveOptional(path: string, message?: string): string | undefined {
     try {
         return require.resolve(path);
     } catch (error) {
@@ -56,14 +63,13 @@ function resolveOptional(path, message) {
     }
 }
 
-/** @type{webpack.Configuration} */
-const commonConfig = {
+const commonConfig: webpack.Configuration = {
     context: __dirname,
     devtool: prepareOnly ? undefined : "source-map",
     externals: [
-        {
-            three: "THREE"
-        },
+        // {
+        //     three: "THREE"
+        // },
         ({ context, request }, cb) => {
             return /three\.module\.js$/.test(request)
                 ? cb(null, "THREE")
@@ -75,6 +81,12 @@ const commonConfig = {
         alias: {
             "react-native": "react-native-web"
         },
+        plugins: [
+            new TsconfigPathsPlugin({
+                configFile: path.resolve(__dirname, "./tsconfig.json"),
+                logLevel: "INFO"
+            })
+        ],
         fallback: {
             fs: false
         }
@@ -87,13 +99,8 @@ const commonConfig = {
                 exclude: /node_modules/,
                 options: {
                     configFile: path.join(process.cwd(), "tsconfig.json"),
-                    onlyCompileBundledFiles: true,
                     transpileOnly: prepareOnly,
-                    projectReferences: true,
-                    compilerOptions: {
-                        sourceMap: !prepareOnly,
-                        declaration: false
-                    }
+                    projectReferences: true
                 }
             }
         ]
@@ -113,8 +120,7 @@ const commonConfig = {
         entrypoints: true,
         warnings: true
     },
-    // @ts-ignore
-    mode: process.env.NODE_ENV || "development",
+    mode: (process.env.NODE_ENV as webpack.Configuration["mode"]) || "development",
     plugins: [
         new webpack.DefinePlugin({
             THEMES: JSON.stringify(themeList)
@@ -126,14 +132,12 @@ const decoderConfig = merge(commonConfig, {
     target: "webworker",
     entry: {
         decoder: "./decoder/decoder.ts"
-    },
-    // @ts-ignore
-    cache: getCacheConfig("decoder")
+    }
 });
 
 const webpackEntries = glob
     .sync(path.join(__dirname, "./src/*.{ts,tsx}"))
-    .reduce((result, entry) => {
+    .reduce((result: Record<string, string>, entry: string) => {
         const name = path.basename(entry).replace(/.tsx?$/, "");
         if (name.startsWith("common")) {
             return result;
@@ -142,13 +146,15 @@ const webpackEntries = glob
         return result;
     }, {});
 
-const htmlEntries = glob.sync(path.join(__dirname, "./src/*.html")).reduce((result, entry) => {
-    result[path.basename(entry).replace(/.html$/, "")] = entry;
-    return result;
-}, {});
+const htmlEntries = glob
+    .sync(path.join(__dirname, "./src/*.html"))
+    .reduce((result: Record<string, string>, entry: string) => {
+        result[path.basename(entry).replace(/.html$/, "")] = entry;
+        return result;
+    }, {});
 
-function filterExamples(pattern) {
-    function filterEntries(entries) {
+function filterExamples(pattern: string) {
+    function filterEntries(entries: Record<string, string>) {
         Object.keys(entries).forEach(entryName => {
             if (entryName.indexOf(pattern) == -1) {
                 delete entries[entryName];
@@ -178,7 +184,6 @@ const browserConfig = merge(commonConfig, {
             name: "common"
         }
     },
-    // @ts-ignore
     cache: getCacheConfig("browser")
 });
 
@@ -186,7 +191,6 @@ const exampleBrowserConfig = merge(commonConfig, {
     entry: {
         "example-browser": "./example-browser.ts"
     },
-    // @ts-ignore
     cache: getCacheConfig("example_browser")
 });
 
@@ -194,14 +198,14 @@ const codeBrowserConfig = merge(commonConfig, {
     entry: {
         codebrowser: "./codebrowser.ts"
     },
-    // @ts-ignore
     cache: getCacheConfig("code_browser")
 });
 
-browserConfig.plugins.push(
-    ...Object.keys(browserConfig.entry).map(
+browserConfig.plugins!.push(
+    ...Object.keys(browserConfig.entry as Record<string, string>).map(
         chunk =>
             new HtmlWebpackPlugin({
+                title: "flywave",
                 template: "template/example.html",
                 chunks: ["common", chunk],
                 filename: `${chunk}.html`
@@ -212,35 +216,50 @@ browserConfig.plugins.push(
 const allEntries = Object.assign({}, webpackEntries, htmlEntries);
 
 /**
- * Geterate example definitions for 'index.html' in following form:
+ * Generate example definitions for 'index.html' in following form:
  *
  * {
  *     [examplePage: string]: string // maps example page to example source
  * }
  */
-const exampleDefs = Object.keys(allEntries).reduce(function (r, entry) {
+const exampleDefs = Object.keys(allEntries).reduce(function (
+    r: Record<string, string>,
+    entry: string
+) {
     r[entry + ".html"] = path.relative(__dirname, allEntries[entry]);
     return r;
-}, {});
+},
+{});
 
-// Workaround for `ERROR in unable to locate` on Windows
-// see https://github.com/webpack-contrib/copy-webpack-plugin/issues/317
-const srcFiles = glob.sync(path.join(__dirname, "src", "*.{ts,tsx,html}")).map(from => {
-    return { from, to: "src/[name].[ext]" };
-});
+interface CopyPattern {
+    from: string;
+    to?: string;
+    toType?: "dir" | "file" | "template";
+    transform?: (content: Buffer) => string | Buffer;
+    globOptions?: {
+        dot?: boolean;
+        ignore?: string[];
+    };
+}
 
-const htmlFiles = glob.sync(path.join(__dirname, "src/*.html")).map(from => {
+const srcFiles: CopyPattern[] = glob
+    .sync(path.join(__dirname, "src", "*.{ts,tsx,html}"))
+    .map(from => {
+        return { from, to: "src/[name].[ext]" };
+    });
+
+const htmlFiles: CopyPattern[] = glob.sync(path.join(__dirname, "src/*.html")).map(from => {
     return {
         from,
         to: "[name].[ext]"
     };
 });
 
-const assets = [
+const assets: (string | CopyPattern)[] = [
     {
         from: __dirname + "/example-definitions.js.in",
         to: "example-definitions.js",
-        transform: content => {
+        transform: (content: Buffer) => {
             return content.toString().replace("{{EXAMPLES}}", JSON.stringify(exampleDefs, null, 4));
         }
     },
@@ -255,18 +274,7 @@ const assets = [
         to: "resources/fonts",
         toType: "dir"
     },
-    require.resolve("three"),
-    {
-        from: resolveOptional(
-            `@flywave/flywave.gl/dist/flywave.gl${harpBundleSuffix}.js`,
-            "bundle examples require `yarn build-bundle`"
-        ),
-        to: "flywave.js"
-    },
-    {
-        from: resolveOptional(`@flywave/flywave.gl/dist/flywave.decoder${harpBundleSuffix}.js`),
-        to: "flywave-decoders.js"
-    }
+    require.resolve("three")
 ].filter(asset => {
     // ignore stuff that is not found
     if (asset === undefined || asset === null) {
@@ -276,7 +284,8 @@ const assets = [
     } else if (typeof asset === "object") {
         return asset.from;
     }
-});
+    return false;
+}) as (string | CopyPattern)[];
 
 assets.forEach(asset => {
     if (typeof asset === "object") {
@@ -287,7 +296,12 @@ assets.forEach(asset => {
     }
 });
 
-// @ts-ignore
-browserConfig.plugins.push(new CopyWebpackPlugin({ patterns: assets }));
+browserConfig.plugins!.push(new CopyWebpackPlugin({ patterns: assets }));
 
-module.exports = [decoderConfig, browserConfig, codeBrowserConfig, exampleBrowserConfig];
+const configs: webpack.Configuration[] = [
+    decoderConfig,
+    browserConfig,
+    codeBrowserConfig,
+    exampleBrowserConfig
+];
+export default configs;

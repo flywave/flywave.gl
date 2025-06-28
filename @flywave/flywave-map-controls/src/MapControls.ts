@@ -1,7 +1,7 @@
 import { Vector3 } from "three";
 import { EllipsoidCameraTransform } from "./EllipsoidCameraTransform";
 import { PlanarCameraTransform } from "./PlanerCameraTransform";
-import { BaseMapControls } from "./BaseMapControls";
+import { BaseMapControls, EventNames } from "./BaseMapControls";
 import { MapView } from "@flywave/flywave-mapview";
 import { ProjectionType } from "@flywave/flywave-geoutils";
 
@@ -31,3 +31,5 @@ export class MapControls extends BaseMapControls {
         return this.cameraTransform.rayCastProjectionWorld(result, origin, target);
     }
 }
+
+export { EventNames };

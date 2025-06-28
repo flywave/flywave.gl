@@ -205,10 +205,10 @@ export abstract class CameraTransform {
     }
 
     public zoom(target: Vector3, interpolationFactor: number) {
-        var r = this.cameraToWorld;
-        r[12] += (target[0] - r[12]) * interpolationFactor;
-        r[13] += (target[1] - r[13]) * interpolationFactor;
-        r[14] += (target[2] - r[14]) * interpolationFactor;
+        var r = this.cameraToWorld.elements;
+        r[12] += (target.x - r[12]) * interpolationFactor;
+        r[13] += (target.y - r[13]) * interpolationFactor;
+        r[14] += (target.z - r[14]) * interpolationFactor;
     }
 
     /**
@@ -223,14 +223,16 @@ export abstract class CameraTransform {
      */
     public unprojectToWorld(out: Vector3, x: number, y: number, depth: number): void {
         const { width, height } = this.getViewPort();
-        const vector = new Vector3((x / width) * 2 - 1, -(y / height) * 2 + 1, depth);
+        const projMatrix = this.getCameraProjectionMatrix();
+        const projElements = projMatrix.elements;
 
-        const worldMatrix = new Matrix4().multiplyMatrices(
-            this.cameraToWorld,
-            this.getCameraProjectionMatrix()
-        );
+        // 按照原始公式计算
+        const ndcX = (((x / width) * 2 - 1 - projElements[8]) * depth) / projElements[0];
+        const ndcY = (((-y / height) * 2 + 1 - projElements[9]) * depth) / projElements[5];
+        const ndcZ = depth;
 
-        vector.applyMatrix4(worldMatrix);
+        const vector = new Vector3(ndcX, ndcY, ndcZ);
+        vector.applyMatrix4(this.cameraToWorld);
         out.copy(vector);
     }
 
@@ -468,7 +470,6 @@ export abstract class CameraTransform {
      */
     public abstract pan(
         moveToTargetPoint: Vector3,
-        cameraPosition: Vector3,
         rayTargetPoint: Vector3,
         inertialAxis: Vector4,
         step: number

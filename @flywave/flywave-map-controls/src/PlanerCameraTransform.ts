@@ -60,20 +60,22 @@ export class PlanarCameraTransform extends CameraTransform {
      * @param inertial Damping factor (0-1)
      */
     inertialPan(targetPoint: Vector3, inertialAxis: Vector4, inertial: number): void {
-        if (inertialAxis.w === 0) return;
+        const r = this.cameraToWorld;
+        inertialAxis.w += (0 - inertialAxis.w) * inertial;
 
-        // Move to origin relative to target
-        const position = new Vector3().setFromMatrixPosition(this.cameraToWorld);
-        this.cameraToWorld.setPosition(position.sub(targetPoint));
+        if (Math.abs(inertialAxis.w) < (inertial || 1e-8)) {
+            inertialAxis.w = 0;
+        }
 
-        // Apply rotation with damping
-        this.rotate(inertialAxis.x, inertialAxis.y, inertialAxis.z, inertialAxis.w * inertial);
-
-        // Move back to target position
-        this.cameraToWorld.setPosition(position.add(targetPoint));
-
-        // Apply damping to rotation amount
-        inertialAxis.w *= 1 - inertial;
+        r[12] -= targetPoint.x;
+        r[13] -= targetPoint.y;
+        r[14] -= targetPoint.z;
+        r[12] += inertialAxis.x * inertialAxis.w;
+        r[13] += inertialAxis.y * inertialAxis.w;
+        r[14] += inertialAxis.z * inertialAxis.w;
+        r[12] += targetPoint.x;
+        r[13] += targetPoint.y;
+        r[14] += targetPoint.z;
     }
 
     /**
@@ -84,39 +86,63 @@ export class PlanarCameraTransform extends CameraTransform {
      * @param inertialAxis Output parameter for storing inertial rotation data
      * @param step Damping/step factor for smooth movement
      */
-    pan(
+    public pan(
         moveToTargetPoint: Vector3,
-        cameraPosition: Vector3,
         rayTargetPoint: Vector3,
         inertialAxis: Vector4,
         step: number
     ): void {
-        // Calculate movement delta in screen space
-        const deltaX = rayTargetPoint.x - moveToTargetPoint.x;
-        const deltaY = rayTargetPoint.y - moveToTargetPoint.y;
+        // 1. 获取当前相机位置
+        const cameraPos = new Vector3().setFromMatrixPosition(this.cameraToWorld);
 
-        // Apply movement to camera position (planar projection only affects X/Y)
-        const newPosition = new Vector3(
-            cameraPosition.x - deltaX * step, // X movement
-            cameraPosition.y - deltaY * step, // Y movement
-            cameraPosition.z // Z remains unchanged in planar projection
-        );
+        // 2. 计算方向向量（对应原始 B/M/y 变量）
+        const B = moveToTargetPoint.clone(); // 原始 F 参数
+        const M = cameraPos.clone(); // 相机当前位置
+        const y = rayTargetPoint.clone(); // 射线目标点
 
-        // Update camera matrix
-        this.cameraToWorld.setPosition(newPosition);
+        // 3. 碰撞检测（对应原始 globeCollisionTo）
+        const G = new Vector3();
+        if (!this.collisionTo(G, M, y, -moveToTargetPoint.z)) {
+            // 无碰撞时衰减惯性
+            inertialAxis.w += (0 - inertialAxis.w) * step;
+            if (Math.abs(inertialAxis.w) < 1e-15) {
+                inertialAxis.w = 0;
+            }
+            return;
+        }
 
-        // Calculate inertia for smooth follow-through
-        const inertiaMagnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.5;
-        inertialAxis.set(
-            deltaY, // Rotation axis X (perpendicular to movement)
-            -deltaX, // Rotation axis Y (perpendicular to movement)
-            0, // No Z rotation in planar mode
-            inertiaMagnitude * step // Rotation amount
-        );
+        // 4. 计算移动方向（对应原始 s 向量）
+        const s = new Vector3().subVectors(B, G).normalize();
+        const K = B.distanceTo(G); // 移动距离
 
-        // Limit maximum rotation to prevent excessive spinning
-        if (inertialAxis.w > Math.PI / 4) {
-            inertialAxis.w = Math.PI / 4;
+        if (K > 0) {
+            // 5. 应用平移（对应原始矩阵操作）
+            const translation = s.clone().multiplyScalar(K * 0.25);
+
+            // 更新相机位置（等效于原始 J[12/13/14] 操作）
+            cameraPos.add(translation);
+            this.cameraToWorld.setPosition(cameraPos);
+
+            // 6. 更新惯性（对应原始 E 数组处理）
+            const I = K * 0.7;
+            if (I > Math.abs(inertialAxis.w)) {
+                inertialAxis.set(s.x, s.y, s.z, I);
+            } else {
+                // 惯性平滑过渡
+                inertialAxis.x += (s.x - inertialAxis.x) * step;
+                inertialAxis.y += (s.y - inertialAxis.y) * step;
+                inertialAxis.z += (s.z - inertialAxis.z) * step;
+                inertialAxis.normalize();
+                inertialAxis.w += (I - inertialAxis.w) * step;
+            }
+        } else {
+            // 无有效移动时衰减惯性
+            inertialAxis.w += (0 - inertialAxis.w) * step;
+        }
+
+        // 7. 清理微小的惯性值
+        if (Math.abs(inertialAxis.w) < 1e-15) {
+            inertialAxis.w = 0;
         }
     }
 

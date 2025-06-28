@@ -3,7 +3,6 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import "three/examples/js/controls/TrackballControls";
 
 import { Theme } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
@@ -15,6 +14,7 @@ import { GUI } from "dat.gui";
 import * as THREE from "three";
 
 import { apikey } from "./config";
+import { TrackballControls } from "three/examples/jsm/controls/TrackballControls";
 
 const SunCalc = require("suncalc");
 
@@ -83,7 +83,7 @@ function setupDebugStuff() {
     map.scene.add(debugCamera);
     debugCamera.position.set(6000, 2000, 1000);
 
-    trackball = new (THREE as any).TrackballControls(debugCamera, map.canvas);
+    trackball = new TrackballControls(debugCamera, map.canvas);
     trackball.enabled = false;
     trackball.addEventListener("start", () => {
         map.beginAnimation();

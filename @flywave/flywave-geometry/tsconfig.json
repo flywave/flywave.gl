@@ -9,7 +9,7 @@
         }
     },
     "include": ["src/**/*", "test/**/*"],
-    "exclude": ["dist/**", "**/node_modules/**"],
+    "exclude": ["**/node_modules/**"],
     "references": [
         {
             "path": "../flywave-geoutils"

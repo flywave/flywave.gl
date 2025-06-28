@@ -1,5 +1,5 @@
 import { dispatch as _dispatch } from "d3-dispatch";
-import { EventDispatcher, Matrix4, Vector3, Vector4 } from "three";
+import { EventDispatcher, Matrix4, Vector3, Vector4, Event } from "three";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { CameraTransform } from "./CameraTransform";
 import { slerpMatrices } from "./math";
@@ -30,7 +30,31 @@ interface MouseState {
     prevDown: [boolean, boolean, boolean];
 }
 
-export abstract class BaseMapControls extends EventDispatcher<{}> {
+export enum EventNames {
+    Update = "update",
+    BeginInteraction = "begin-interaction",
+    EndInteraction = "end-interaction"
+}
+
+let EventUpdate = {
+    type: EventNames.Update
+} as Event<EventNames.Update, any>;
+
+let BeginInteractionUpdate = {
+    type: EventNames.BeginInteraction
+} as Event<EventNames.BeginInteraction, any>;
+
+let EndInteractionUpdate = {
+    type: EventNames.EndInteraction
+} as Event<EventNames.EndInteraction, any>;
+
+type EventMap = {
+    [EventNames.Update]: typeof EventUpdate;
+    [EventNames.BeginInteraction]: typeof BeginInteractionUpdate;
+    [EventNames.EndInteraction]: typeof EndInteractionUpdate;
+};
+
+export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     // Control state
     private inertialDeltaX: number = 0;
     private inertialDeltaY: number = 0;
@@ -54,6 +78,22 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
     private tiltVelocity: number = 0;
     private headingVelocity: number = 0;
 
+    private distory: boolean = false;
+    private m_animationFrameHandle: number | undefined;
+    private handleRequestAnimationFrame: () => void;
+
+    private renderLoop() {
+        this.update();
+
+        // Continue rendering if update is pending or animation is running
+        if (!this.distory) {
+            this.m_animationFrameHandle = requestAnimationFrame(this.handleRequestAnimationFrame);
+        } else {
+            // Stop rendering if no update is pending
+            this.m_animationFrameHandle = undefined;
+        }
+    }
+
     // Mouse state
     private mouseState: MouseState = {
         x: 0,
@@ -68,6 +108,31 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
     private distanceLimit: number = 50;
     private limitZoomOut: number = 1.5;
 
+    private _tiltEnabled: boolean = true;
+    public get tiltEnabled() {
+        return this._tiltEnabled;
+    }
+
+    public set tiltEnabled(value: boolean) {
+        this._tiltEnabled = value;
+    }
+
+    public get maxTiltAngle() {
+        return (this.tiltLimit * 180) / Math.PI;
+    }
+
+    public set maxTiltAngle(value: number) {
+        this.tiltLimit = (value * Math.PI) / 180;
+    }
+
+    public get maxZoomLevel() {
+        return this.limitZoomOut;
+    }
+
+    public set maxZoomLevel(value: number) {
+        this.limitZoomOut = value;
+    }
+
     // Camera state
     private headingSet?: number;
     private tiltSet?: number;
@@ -81,27 +146,34 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
 
     protected windowEventHandler: WindowEventHandler;
 
-    constructor(protected mapView: MapView, protected cameraTransform: CameraTransform) {
+    private _enabled: boolean = true;
+    public get enabled() {
+        return this._enabled;
+    }
+
+    public set enabled(value: boolean) {
+        this._enabled = value;
+    }
+
+    constructor(public mapView: MapView, protected cameraTransform: CameraTransform) {
         super();
         this.windowEventHandler = new WindowEventHandler(this.mapView.canvas);
-
-        this.applyControlMapviewState();
         this.bindMapView();
     }
 
     public destroy() {
         this.windowEventHandler.clearEvent();
-        this.mapView.removeEventListener(MapViewEventNames.Render, this.update);
-    }
+        this.distory = true;
 
-    protected applyControlMapviewState() {
-        this.cameraTransform.cameraToWorld.copy(this.mapView.camera.matrixWorld);
-        this.updateCenter();
-        this.update();
+        if (this.m_animationFrameHandle !== undefined) {
+            cancelAnimationFrame(this.m_animationFrameHandle);
+            this.m_animationFrameHandle = undefined;
+        }
     }
 
     protected bindMapView() {
-        this.mapView.addEventListener(MapViewEventNames.Render, this.update);
+        this.handleRequestAnimationFrame = this.renderLoop.bind(this);
+        this.renderLoop();
     }
 
     protected get canvasHeight() {
@@ -115,6 +187,12 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
     }
 
     protected update(): boolean {
+        if (!this.enabled) {
+            return false;
+        }
+
+        this.cameraTransform.cameraToWorld.copy(this.mapView.camera.matrixWorld);
+
         // Get current mouse state
         const mouseX = this.canvasWidth - this.windowEventHandler.lastMouseX;
         const mouseY = this.canvasHeight - this.windowEventHandler.lastMouseY;
@@ -147,6 +225,7 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
         // Handle panning operations
         this.handlePanning(mouseDown, cameraPos, hitPoint, distanceToGlobe);
 
+        this.updateCenter();
         // Handle zoom operations
         this.handleZoomOperations(mouseZ, hitDistance, cameraPos);
 
@@ -164,6 +243,10 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
             }
         }
 
+        if ((!mouseDown[0] || !this.isPanHit) && this.lastHitCenterDistance > 0) {
+            this.applyAutoTiltCorrection();
+        }
+
         // Apply tilt and heading changes
         this.applyTiltAndHeadingChanges();
 
@@ -174,6 +257,8 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
         this.updateMouseState(mouseX, mouseY, mouseZ, mouseDown);
 
         this.applyToMapView();
+
+        this.dispatchEvent(EventUpdate);
         return false;
     }
 
@@ -472,7 +557,7 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
                 -1
             );
 
-            this.cameraTransform.pan(this.panHit, cameraPos, target, this.inertialAxis, 0.2);
+            this.cameraTransform.pan(this.panHit, target, this.inertialAxis, 0.2);
         } else if (this.inertialAxis.length() > 0) {
             this.cameraTransform.inertialPan(cameraPos, this.inertialAxis, 0.075);
         }
@@ -615,6 +700,28 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
                 );
             }
         }
+    }
+
+    private applyAutoTiltCorrection(): void {
+        const pivot = this.lastHitCenter;
+        const normal = this.lastHitGravity.clone().normalize();
+        const maxTilt = this.tiltLimit;
+
+        // 1. 直接应用倾斜限制
+        this.cameraTransform.rotateAroundPivotAndTilt(
+            pivot.x,
+            pivot.y,
+            pivot.z,
+            normal.x,
+            normal.y,
+            normal.z,
+            0,
+            0, // 不改变当前旋转和倾斜
+            maxTilt // 仅强制应用限制
+        );
+
+        // 2. 模拟 smartBalance 的平衡效果
+        this.inertialDeltaY *= 0.8; // 垂直惯性阻尼
     }
     /**
      * Applies heading (azimuth) rotation to the camera based on the current heading setting.
@@ -875,7 +982,6 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
             this.cameraTransform.unprojectToWorld(screenCenter, this.canvasWidth / 2, screenY, -1);
 
             hitDistance = this.rayCastWorld(centerPoint, cameraPos, screenCenter);
-            return hitDistance;
         } else {
             const cameraOrigin = new Vector3();
             this.cameraTransform.getOrigin(cameraOrigin);
@@ -1290,5 +1396,31 @@ export abstract class BaseMapControls extends EventDispatcher<{}> {
             tilt: this.getTilt(), // Tilt angle in radians
             heading: this.getHeading() // Heading angle in radians
         };
+    }
+
+    public get zoomLevelTargeted() {
+        return this.mapView.zoomLevel;
+    }
+
+    public get zoomLevelDeltaOnControl() {
+        return 1;
+    }
+
+    public setZoomLevel(targetZoomLevel: number) {
+        const { width, height } = this.mapView.getCanvasClientSize();
+        this.windowEventHandler.lastMouseX = width / 2;
+        this.windowEventHandler.lastMouseY = height / 2;
+        this.windowEventHandler.lastMouseZ +=
+            ((targetZoomLevel - this.mapView.zoomLevel) /
+                Math.abs(targetZoomLevel - this.mapView.zoomLevel)) *
+            10;
+    }
+
+    public toggleTilt() {
+        this.setTilt(-Math.PI / 4);
+    }
+
+    public pointToNorth() {
+        this.setHeading(0);
     }
 }

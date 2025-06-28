@@ -123,6 +123,7 @@ catalog:
     "webpack-merge": "^5.7.3"
     "@turf/turf": "^5.1.6"
     "geojson-vt": "^3.2.1"
+    "@types/copy-webpack-plugin": "8.0.1"
     "copy-webpack-plugin": "^7.0.0"
     "geojson-rbush": "~3.2.0"
     "geokdbush": "^1.1.0"

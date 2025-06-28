@@ -8,7 +8,7 @@ declare let self: Worker & {
     importScripts(..._scripts: string[]): void;
 };
 
-self.importScripts("three.min.js");
+self.importScripts("https://cdn.jsdelivr.net/npm/three/build/three.min.js");
 
 import {
     GeoJsonTilerService,

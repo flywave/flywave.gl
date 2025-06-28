@@ -32,7 +32,7 @@ async function copyResources() {
     await asyncCopyfiles(moduleDir + "/@flywave/flywave-map-theme/resources", "dist/resources");
     await asyncCopyfiles("resources", "dist/resources");
 
-    fs.copyFileSync(threeModuleDir, "dist/three.min.js");
+    fs.copyFileSync(threeModuleDir, "dist/three.cjs");
 }
 
 copyResources().catch(err => {

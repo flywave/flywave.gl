@@ -23,7 +23,10 @@
         "url": "https://flywave.net"
     },
     "license": "Apache-2.0",
-    "dependencies": {},
+    "dependencies": {
+        "@flywave/flywave-geoutils": "workspace:*",
+        "@flywave/flywave-mapview": "workspace:*"
+    },
     "devDependencies": {},
     "publishConfig": {
         "access": "public"

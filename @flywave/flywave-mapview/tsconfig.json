@@ -4,7 +4,6 @@
         "outDir": "./lib",
         "sourceMap": true,
         "composite": true,
-        "declaration": true,
         "declarationMap": true,
         "paths": {
             "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],

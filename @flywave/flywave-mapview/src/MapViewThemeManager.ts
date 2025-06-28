@@ -15,9 +15,8 @@ import { LoggerManager, UriResolver } from "@flywave/flywave-utils";
 import { MapViewImageCache } from "./image/MapViewImageCache";
 import { MapView } from "./MapView";
 import { ThemeLoader } from "./ThemeLoader";
-import * as _ from "lodash.isequal";
+import isEqual from "lodash.isequal";
 
-const isEqual = _;
 const logger = LoggerManager.instance.create("MapViewThemeManager");
 
 /**
