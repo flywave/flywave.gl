@@ -10,6 +10,8 @@ varying vec2 vUv;
 attribute vec2 octNormal;
 
 uniform bool useOctNormal;
+uniform bool isWebMercator;
+uniform vec4 imageUvTransfrom;
 
 #include <fog_pars_vertex>
 
@@ -41,7 +43,12 @@ void main() {
     vNormal = normal;
   }
 
-  vUv = uv;
+  // Add texture coordinate transformation
+  vec2 textureCoordinates = isWebMercator ? textureCoordAndEncodedNormals.xz : textureCoordAndEncodedNormals.xy;
+  float height_u = textureCoordinates.x * imageUvTransfrom.x + imageUvTransfrom.z;
+  float height_v = textureCoordinates.y * imageUvTransfrom.y + imageUvTransfrom.w;
+  vUv = vec2(height_u, height_v);
+
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   
   #include <begin_vertex>
