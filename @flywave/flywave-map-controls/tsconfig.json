@@ -3,6 +3,8 @@
     "compilerOptions": {
         "outDir": "./lib",
         "composite": true,
+        "sourceMap": true,
+        "declarationMap": true,
         "paths": {
             "@flywave/flywave-utils": ["../flywave-utils/src"],
             "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],

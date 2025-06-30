@@ -74,8 +74,9 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         }
 
         let wheelDelta = 0;
+
         if (event.deltaY) {
-            wheelDelta = (-event.deltaY / 3) * 2;
+            wheelDelta = (-event.deltaY / 120) * 2;
         }
 
         if (wheelDelta) {

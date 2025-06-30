@@ -65,7 +65,7 @@ function resolveOptional(path: string, message?: string): string | undefined {
 
 const commonConfig: webpack.Configuration = {
     context: __dirname,
-    devtool: prepareOnly ? undefined : "source-map",
+    devtool: "source-map",
     externals: [
         // {
         //     three: "THREE"
@@ -99,7 +99,7 @@ const commonConfig: webpack.Configuration = {
                 exclude: /node_modules/,
                 options: {
                     configFile: path.join(process.cwd(), "tsconfig.json"),
-                    transpileOnly: prepareOnly,
+                    transpileOnly: true,
                     projectReferences: true
                 }
             }
