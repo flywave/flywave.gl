@@ -25,9 +25,12 @@
     "license": "Apache-2.0",
     "dependencies": {
         "@flywave/flywave-geoutils": "workspace:*",
-        "@flywave/flywave-mapview": "workspace:*"
+        "@flywave/flywave-mapview": "workspace:*",
+        "path-browserify": "^1.0.1"
     },
-    "devDependencies": {},
+    "devDependencies": {
+        "@types/path-browserify": "^1.0.3"
+    },
     "publishConfig": {
         "access": "public"
     }

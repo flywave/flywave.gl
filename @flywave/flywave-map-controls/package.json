@@ -39,20 +39,21 @@
         "@tweenjs/tween.js": "catalog:"
     },
     "devDependencies": {
+        "@types/d3-dispatch": "^3.0.6",
         "@types/chai": "catalog:",
+        "@types/chai-as-promised": "catalog:",
         "@types/mocha": "catalog:",
         "@types/node": "catalog:",
         "@types/sinon": "catalog:",
         "@types/three": "catalog:",
         "chai": "catalog:",
+        "chai-as-promised": "catalog:",
         "cross-env": "catalog:",
         "mocha": "catalog:",
         "sinon": "catalog:",
         "source-map-support": "catalog:",
         "three": "catalog:",
-        "typescript": "catalog:",
-        "chai-as-promised": "catalog:",
-        "@types/chai-as-promised": "catalog:"
+        "typescript": "catalog:"
     },
     "peerDependencies": {
         "three": "catalog:"

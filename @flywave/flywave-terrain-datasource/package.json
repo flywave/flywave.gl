@@ -43,10 +43,10 @@
         "upng-js": "^2.1.0"
     },
     "devDependencies": {
-        "@flywave/flywave-fetch": "workspace:*",
         "@flywave/flywave-datasource-protocol": "workspace:*",
-        "@flywave/flywave-test-utils": "workspace:*",
+        "@flywave/flywave-fetch": "workspace:*",
         "@flywave/flywave-geoutils": "workspace:*",
+        "@flywave/flywave-test-utils": "workspace:*",
         "@types/chai": "catalog:",
         "@types/earcut": "catalog:",
         "@types/long": "catalog:",
@@ -57,6 +57,7 @@
         "chai": "catalog:",
         "copyfiles": "catalog:",
         "cross-env": "catalog:",
+        "eslint-plugin-simple-import-sort": "^12.1.1",
         "mocha": "catalog:",
         "sinon": "catalog:",
         "source-map-support": "catalog:",
