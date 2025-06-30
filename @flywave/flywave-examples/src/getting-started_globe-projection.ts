@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { sphereProjection } from "@flywave/flywave-geoutils";
+import { GeoCoordinates, sphereProjection } from "@flywave/flywave-geoutils";
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
@@ -18,6 +18,8 @@ export namespace GlobeExample {
 
         const mapView = new MapView({
             canvas,
+            target: new GeoCoordinates(36.79460588481734, 117.61746743784798, 0),
+            zoomLevel: 17,
             projection: sphereProjection,
             decoderUrl: "./decoder.bundle.js",
             theme: "resources/berlin_tilezen_base_globe.json"

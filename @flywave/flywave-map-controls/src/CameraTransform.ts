@@ -314,75 +314,229 @@ export abstract class CameraTransform {
     }
 
     /**
-     * Rotates the camera around a pivot point with optional tilt
-     * @param pivotX Pivot X coordinate
-     * @param pivotY Pivot Y coordinate
-     * @param pivotZ Pivot Z coordinate
-     * @param axisX Rotation axis X component
-     * @param axisY Rotation axis Y component
-     * @param axisZ Rotation axis Z component
-     * @param angle Rotation angle in radians
-     * @param tilt Tilt angle in radians
-     * @param maxTilt Optional maximum tilt angle in radians
-     * @returns True if tilt correction was applied
+     * 围绕球心点旋转并倾斜相机
+     * @param startX 起始X坐标
+     * @param startY 起始Y坐标
+     * @param startZ 起始Z坐标
+     * @param pivotX 球心X坐标
+     * @param pivotY 球心Y坐标
+     * @param pivotZ 球心Z坐标
+     * @param velocity 旋转速度（角度）
+     * @param tilt 倾斜角度
+     * @param maxTilt 最大倾斜角度限制（可选）
+     * @returns 是否进行了倾斜调整
      */
     public rotateAroundPivotAndTilt(
+        startX: number,
+        startY: number,
+        startZ: number,
         pivotX: number,
         pivotY: number,
         pivotZ: number,
-        axisX: number,
-        axisY: number,
-        axisZ: number,
-        angle: number,
+        velocity: number,
         tilt: number,
         maxTilt?: number
     ): boolean {
-        const pivot = new Vector3(pivotX, pivotY, pivotZ);
-        const position = new Vector3().fromArray(this.cameraToWorld.elements, 12).sub(pivot);
+        const cameraMatrix = this.cameraToWorld;
 
-        // Main rotation
-        const mainRotation = new Matrix4().makeRotationAxis(
-            new Vector3(axisX, axisY, axisZ).normalize(),
-            angle
-        );
+        // 1. 平移相机到相对原点
+        cameraMatrix.elements[12] -= startX;
+        cameraMatrix.elements[13] -= startY;
+        cameraMatrix.elements[14] -= startZ;
 
-        position.applyMatrix4(mainRotation);
-        this.cameraToWorld.multiply(mainRotation);
+        // 2. 绕球心方向旋转
+        this.rotateAxisAngleT(cameraMatrix, pivotX, pivotY, pivotZ, velocity);
 
-        // Tilt rotation
-        const right = new Vector3().setFromMatrixColumn(this.cameraToWorld, 0).normalize();
-        const tiltRotation = new Matrix4().makeRotationAxis(right, tilt);
-        this.cameraToWorld.multiply(tiltRotation);
+        // 3. 获取并标准化X轴方向
+        const xAxis = new Vector3().fromArray(cameraMatrix.elements).normalize();
 
-        let needsCorrection = false;
+        // 4. 绕X轴倾斜
+        this.rotateAxisAngleT(cameraMatrix, xAxis.x, xAxis.y, xAxis.z, tilt);
 
-        // Tilt limit
+        let adjusted = false;
         if (maxTilt !== undefined) {
-            const forward = new Vector3().setFromMatrixColumn(this.cameraToWorld, 2);
-            const up = new Vector3(axisX, axisY, axisZ).normalize();
+            // 5. 检查并限制倾斜角度
+            const zComponent =
+                cameraMatrix.elements[8] * pivotX +
+                cameraMatrix.elements[9] * pivotY +
+                cameraMatrix.elements[10] * pivotZ;
 
-            const upDot = forward.dot(up);
-            const rightDot = right.dot(up);
+            const yComponent =
+                cameraMatrix.elements[4] * pivotX +
+                cameraMatrix.elements[5] * pivotY +
+                cameraMatrix.elements[6] * pivotZ;
 
-            if (rightDot < 0) {
-                if (upDot > Math.sin(maxTilt)) {
-                    const sign = rightDot > 0 ? -1 : 1;
-                    const correction = sign * (Math.asin(upDot) + maxTilt);
-                    const correctionRotation = new Matrix4().makeRotationAxis(right, correction);
-                    this.cameraToWorld.multiply(correctionRotation);
-                    needsCorrection = true;
+            if (yComponent < 0) {
+                if (zComponent > Math.sin(maxTilt)) {
+                    const adjustDirection = yComponent > 0 ? -1 : 1;
+                    const adjustAngle = adjustDirection * (Math.asin(zComponent) + maxTilt);
+                    this.rotateAxisAngleT(cameraMatrix, xAxis.x, xAxis.y, xAxis.z, adjustAngle);
+                    adjusted = true;
                 }
             } else {
-                const correction = -Math.asin(rightDot);
-                const correctionRotation = new Matrix4().makeRotationAxis(right, correction);
-                this.cameraToWorld.multiply(correctionRotation);
-                needsCorrection = true;
+                const adjustAngle = -Math.asin(yComponent);
+                this.rotateAxisAngleT(cameraMatrix, xAxis.x, xAxis.y, xAxis.z, adjustAngle);
+                adjusted = true;
             }
         }
 
-        this.cameraToWorld.setPosition(position.add(pivot));
-        return needsCorrection;
+        // 6. 平移相机回原位置
+        cameraMatrix.elements[12] += startX;
+        cameraMatrix.elements[13] += startY;
+        cameraMatrix.elements[14] += startZ;
+
+        return adjusted;
     }
+
+    /**
+     * 限制相机相对于球心方向的倾斜角度
+     * @param centerPoint 地图中心点坐标 [x, y, z] (原参数 D)
+     * @param sphereDirection 球心方向向量 [x, y, z] (原参数 r)
+     * @param tiltLimit 最大倾斜角度限制 (原参数 E)
+     */
+    public applyTiltLimit(centerPoint: Vector3, sphereDirection: Vector3, tiltLimit: number): void {
+        const cameraMatrix = this.cameraToWorld;
+
+        // 1. 平移相机到相对原点
+        cameraMatrix.elements[12] -= centerPoint.x;
+        cameraMatrix.elements[13] -= centerPoint.y;
+        cameraMatrix.elements[14] -= centerPoint.z;
+
+        // 2. 获取相机X轴方向并标准化
+        const cameraXAxis = new Vector3(
+            cameraMatrix.elements[0],
+            cameraMatrix.elements[1],
+            cameraMatrix.elements[2]
+        )
+            .normalize()
+            .negate();
+
+        // 3. 计算关键分量
+        const zComponent =
+            cameraMatrix.elements[8] * sphereDirection.x +
+            cameraMatrix.elements[9] * sphereDirection.y +
+            cameraMatrix.elements[10] * sphereDirection.z;
+
+        const yComponent =
+            cameraMatrix.elements[4] * sphereDirection.x +
+            cameraMatrix.elements[5] * sphereDirection.y +
+            cameraMatrix.elements[6] * sphereDirection.z;
+
+        // 4. 应用倾斜限制
+        if (yComponent < 0) {
+            if (zComponent > -Math.sin(tiltLimit)) {
+                const adjustDirection = yComponent > 0 ? -1 : 1;
+                const adjustAngle = adjustDirection * (Math.asin(zComponent) + tiltLimit) * 0.5;
+                this.rotateAxisAngleT(
+                    cameraMatrix,
+                    cameraXAxis.x,
+                    cameraXAxis.y,
+                    cameraXAxis.z,
+                    adjustAngle
+                );
+            }
+        } else {
+            const adjustAngle = -Math.asin(yComponent) * 0.5;
+            this.rotateAxisAngleT(
+                cameraMatrix,
+                cameraXAxis.x,
+                cameraXAxis.y,
+                cameraXAxis.z,
+                adjustAngle
+            );
+        }
+
+        // 5. 平移相机回原位置
+        cameraMatrix.elements[12] += centerPoint.x;
+        cameraMatrix.elements[13] += centerPoint.y;
+        cameraMatrix.elements[14] += centerPoint.z;
+    }
+
+    /**
+     * 智能平衡相机方向
+     * @param pivotPoint 支点坐标 [x, y, z] (原参数 F)
+     * @param sphereDirection 球心方向向量 [x, y, z] (原参数 r)
+     * @param balanceFactor 平衡系数 (原参数 D)
+     */
+    public smartBalance(
+        pivotPoint: Vector3,
+        sphereDirection: Vector3,
+        balanceFactor: number
+    ): void {
+        const cameraMatrix = this.cameraToWorld;
+
+        // 计算相机各轴在球心方向上的投影分量
+        const xProjection =
+            cameraMatrix.elements[0] * sphereDirection.x +
+            cameraMatrix.elements[1] * sphereDirection.y +
+            cameraMatrix.elements[2] * sphereDirection.z;
+
+        const yProjection =
+            cameraMatrix.elements[4] * sphereDirection.x +
+            cameraMatrix.elements[5] * sphereDirection.y +
+            cameraMatrix.elements[6] * sphereDirection.z;
+
+        const zProjection =
+            cameraMatrix.elements[8] * sphereDirection.x +
+            cameraMatrix.elements[9] * sphereDirection.y +
+            cameraMatrix.elements[10] * sphereDirection.z;
+
+        // 限制投影值在[-1, 1]范围内
+        const clampedProjection = Math.max(-1, Math.min(1, xProjection));
+        const rotationAngle = Math.asin(clampedProjection) * balanceFactor;
+
+        // 根据主要倾斜方向选择旋转轴
+        if (Math.abs(yProjection) > Math.abs(zProjection)) {
+            // 绕相机Z轴负方向旋转
+            const rotationAxis = new Vector3(
+                -cameraMatrix.elements[8],
+                -cameraMatrix.elements[9],
+                -cameraMatrix.elements[10]
+            );
+            this.rotateAroundPivot(
+                pivotPoint.x,
+                pivotPoint.y,
+                pivotPoint.z,
+                rotationAxis.x,
+                rotationAxis.y,
+                rotationAxis.z,
+                rotationAngle
+            );
+        } else {
+            // 绕相机Y轴旋转
+            const rotationAxis = new Vector3(
+                cameraMatrix.elements[4],
+                cameraMatrix.elements[5],
+                cameraMatrix.elements[6]
+            );
+            this.rotateAroundPivot(
+                pivotPoint.x,
+                pivotPoint.y,
+                pivotPoint.z,
+                rotationAxis.x,
+                rotationAxis.y,
+                rotationAxis.z,
+                rotationAngle
+            );
+        }
+    }
+
+    /**
+     * Three.js 版本的轴角旋转
+     */
+    private rotateAxisAngleT(
+        matrix: Matrix4,
+        axisX: number,
+        axisY: number,
+        axisZ: number,
+        angle: number
+    ): void {
+        const rotation = new Matrix4();
+        const axis = new Vector3(axisX, axisY, axisZ).normalize();
+        rotation.makeRotationAxis(axis, angle);
+        matrix.premultiply(rotation);
+    }
+
     /**
      * Gets the inverse of the camera's world matrix (world-to-camera transform)
      * @param outMatrix Output matrix that will store the inverted world-to-camera transform

@@ -35,13 +35,13 @@ export abstract class SubdivisionModifier {
         const position = Array.from(positionAttr.array);
 
         const uvAttr = geometry.getAttribute("uv") as BufferAttribute | null;
-        const uv = uvAttr !== null ? Array.from(uvAttr.array) : undefined;
+        const uv = uvAttr !== undefined ? Array.from(uvAttr.array) : undefined;
 
         const edgeAttr = geometry.getAttribute("edge") as BufferAttribute | null;
-        const edge = edgeAttr !== null ? Array.from(edgeAttr.array) : undefined;
+        const edge = edgeAttr !== undefined ? Array.from(edgeAttr.array) : undefined;
 
         const wallAttr = geometry.getAttribute("wall") as BufferAttribute | null;
-        const wall = wallAttr !== null ? Array.from(wallAttr.array) : undefined;
+        const wall = wallAttr !== undefined ? Array.from(wallAttr.array) : undefined;
 
         const indexAttr = geometry.getIndex();
         if (!indexAttr) {
@@ -157,23 +157,23 @@ export abstract class SubdivisionModifier {
         }
 
         // Update geometry attributes
-        positionAttr.copyArray(position);
+        positionAttr.array = new Float32Array(position);
         positionAttr.needsUpdate = true;
 
         geometry.setIndex(newIndices);
 
         if (uv !== undefined && uvAttr) {
-            uvAttr.copyArray(uv);
+            uvAttr.array = new Float32Array(uv);
             uvAttr.needsUpdate = true;
         }
 
         if (edge !== undefined && edgeAttr) {
-            edgeAttr.copyArray(edge);
+            edgeAttr.array = new Float32Array(edge);
             edgeAttr.needsUpdate = true;
         }
 
         if (wall !== undefined && wallAttr) {
-            wallAttr.copyArray(wall);
+            wallAttr.array = new Float32Array(wall);
             wallAttr.needsUpdate = true;
         }
 

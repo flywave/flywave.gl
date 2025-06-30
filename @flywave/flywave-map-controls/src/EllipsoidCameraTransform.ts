@@ -55,7 +55,7 @@ export class EllipsoidCameraTransform extends CameraTransform {
         }
 
         // Scale result back to world space
-        outTarget.multiplyScalar(radius);
+        // outTarget.multiplyScalar(radius);
         return true;
     }
 
@@ -95,63 +95,129 @@ export class EllipsoidCameraTransform extends CameraTransform {
      * @param step Damping/step factor
      */
     public pan(
-        moveToTargetPoint: Vector3,
-        rayTargetPoint: Vector3,
-        inertialAxis: Vector4,
-        step: number
+        targetPosition: Vector3, // 目标位置（原参数 moveToTargetPoint/F）
+        rayHitPoint: Vector3, // 射线命中点（原参数 rayTargetPoint/[x,w,u]）
+        inertiaVector: Vector4, // 惯性向量（原参数 inertialAxis/E）
+        interpolationStep: number // 插值步长（原参数 step/r）
     ): void {
-        // 1. 获取当前相机位置
-        const cameraPos = new Vector3().setFromMatrixPosition(this.cameraToWorld);
+        // 将目标位置转换为数组（保持与原始代码兼容）
+        const targetPosArray = targetPosition.toArray();
 
-        // 2. 计算方向向量（对应原始 B/M/y 变量）
-        const B = moveToTargetPoint.clone(); // 原始 F 参数
-        const M = cameraPos.clone(); // 相机当前位置
-        const y = rayTargetPoint.clone(); // 射线目标点
+        // 获取当前相机世界矩阵和位置
+        const cameraWorldMatrix = this.cameraToWorld;
+        const cameraWorldPosition = new Vector3().setFromMatrixPosition(cameraWorldMatrix);
 
-        // 3. 碰撞检测（对应原始 globeCollisionTo）
-        const G = new Vector3();
-        if (!this.collisionTo(G, M, y, -moveToTargetPoint.z)) {
-            // 无碰撞时衰减惯性
-            inertialAxis.w += (0 - inertialAxis.w) * step;
-            if (Math.abs(inertialAxis.w) < 1e-15) {
-                inertialAxis.w = 0;
-            }
-            return;
+        // 创建方向向量：从相机指向目标位置
+        const directionToTarget = new Vector3().fromArray(targetPosArray);
+        const distanceToTarget = directionToTarget.length();
+        directionToTarget.normalize();
+
+        // 计算碰撞点（如果有碰撞）
+        const collisionPoint = new Vector3();
+        if (!this.collisionTo(collisionPoint, cameraWorldPosition, rayHitPoint, distanceToTarget)) {
+            return; // 无碰撞时直接返回
         }
+        collisionPoint.normalize();
 
-        // 4. 计算移动方向（对应原始 s 向量）
-        const s = new Vector3().subVectors(B, G).normalize();
-        const K = B.distanceTo(G); // 移动距离
+        // 计算旋转轴：directionToTarget × collisionPoint
+        const rotationAxis = new Vector3();
+        rotationAxis.crossVectors(directionToTarget, collisionPoint);
 
-        if (K > 0) {
-            // 5. 应用平移（对应原始矩阵操作）
-            const translation = s.clone().multiplyScalar(K * 0.25);
+        const rotationAxisLengthSquared = rotationAxis.dot(rotationAxis);
+        if (rotationAxisLengthSquared > 0) {
+            const rotationAxisLength = rotationAxis.length();
+            rotationAxis.normalize();
 
-            // 更新相机位置（等效于原始 J[12/13/14] 操作）
-            cameraPos.add(translation);
-            this.cameraToWorld.setPosition(cameraPos);
-
-            // 6. 更新惯性（对应原始 E 数组处理）
-            const I = K * 0.7;
-            if (I > Math.abs(inertialAxis.w)) {
-                inertialAxis.set(s.x, s.y, s.z, I);
+            // 计算旋转角度（限制在[-π/2, π/2]范围内）
+            let rotationAngle;
+            if (rotationAxisLength <= -1) {
+                rotationAngle = -Math.PI * 0.5;
+            } else if (rotationAxisLength >= 1) {
+                rotationAngle = Math.PI * 0.5;
             } else {
-                // 惯性平滑过渡
-                inertialAxis.x += (s.x - inertialAxis.x) * step;
-                inertialAxis.y += (s.y - inertialAxis.y) * step;
-                inertialAxis.z += (s.z - inertialAxis.z) * step;
-                inertialAxis.normalize();
-                inertialAxis.w += (I - inertialAxis.w) * step;
+                rotationAngle = Math.asin(rotationAxisLength);
+            }
+
+            if (this.smoothPan) {
+                // 平滑模式：减小旋转角度
+                rotationAngle *= 0.25;
+                const sinAngle = Math.sin(rotationAngle);
+                const cosAngle = Math.cos(rotationAngle);
+                this.rotateAxisAngle(
+                    cameraWorldMatrix,
+                    rotationAxis.x,
+                    rotationAxis.y,
+                    rotationAxis.z,
+                    rotationAngle
+                );
+            } else {
+                // 普通模式：直接使用计算的角度
+                const cosAngle = collisionPoint.dot(directionToTarget);
+                this.rotateAxisSinCos(
+                    rotationAxis.x,
+                    rotationAxis.y,
+                    rotationAxis.z,
+                    rotationAxisLength,
+                    cosAngle
+                );
+            }
+
+            // 更新惯性向量
+            rotationAngle *= 0.7; // 阻尼系数
+            if (rotationAngle > Math.abs(inertiaVector.w)) {
+                inertiaVector.set(rotationAxis.x, rotationAxis.y, rotationAxis.z, rotationAngle);
+            } else {
+                // 插值更新惯性向量
+                inertiaVector.x += (rotationAxis.x - inertiaVector.x) * interpolationStep;
+                inertiaVector.y += (rotationAxis.y - inertiaVector.y) * interpolationStep;
+                inertiaVector.z += (rotationAxis.z - inertiaVector.z) * interpolationStep;
+                inertiaVector.normalize();
+                inertiaVector.w += (rotationAngle - inertiaVector.w) * interpolationStep;
             }
         } else {
-            // 无有效移动时衰减惯性
-            inertialAxis.w += (0 - inertialAxis.w) * step;
+            // 无有效旋转时衰减惯性
+            inertiaVector.w += (0 - inertiaVector.w) * interpolationStep;
         }
 
-        // 7. 清理微小的惯性值
-        if (Math.abs(inertialAxis.w) < 1e-15) {
-            inertialAxis.w = 0;
+        // 清除微小惯性
+        if (Math.abs(inertiaVector.w) < 1e-15) {
+            inertiaVector.w = 0;
         }
+    }
+
+    // 必须补充的辅助方法（严格对应原始实现）
+    private rotateAxisAngle(
+        matrix: Matrix4,
+        axisX: number,
+        axisY: number,
+        axisZ: number,
+        angle: number
+    ): void {
+        // 创建旋转矩阵
+        const rotation = new Matrix4();
+        const axis = new Vector3(axisX, axisY, axisZ).normalize().negate();
+        rotation.makeRotationAxis(axis, angle);
+
+        // 将旋转矩阵左乘到当前矩阵上 (相当于 rotation * matrix)
+        matrix.premultiply(rotation);
+    }
+
+    private rotateAxisSinCos(
+        axisX: number,
+        axisY: number,
+        axisZ: number,
+        sinAngle: number,
+        cosAngle: number
+    ): void {
+        // 1. 创建旋转矩阵
+        const rotationMatrix = new Matrix4();
+        const axis = new Vector3(axisX, axisY, axisZ).normalize().negate(); // 归一化旋转轴
+
+        // 2. 使用 setFromAxisAngle 构造旋转矩阵（Three.js 内部会自动处理 sin/cos）
+        rotationMatrix.makeRotationAxis(axis, Math.atan2(sinAngle, cosAngle));
+
+        // 3. 左乘旋转矩阵（相当于 rotationMatrix * this.cameraToWorld）
+        this.cameraToWorld.premultiply(rotationMatrix);
     }
 
     public applyPanVelocity(step: number, panVelocityX: number, panVelocityY: number): void {

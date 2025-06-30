@@ -8,6 +8,7 @@ import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
 import { HereTileProvider, HereWebTileDataSource } from "@flywave/flywave-webtile-datasource";
 
 import { apikey } from "./config";
+import { GeoCoordinates, sphereProjection } from "@flywave/flywave-geoutils";
 
 /**
  * A simple example using the webtile data source. Tiles are retrieved from
@@ -31,6 +32,9 @@ export namespace SatelliteDataSourceExample {
         const canvas = document.getElementById(id) as HTMLCanvasElement;
 
         const map = new MapView({
+            projection: sphereProjection,
+            target: new GeoCoordinates(36.79460588481734, 117.61746743784798, 0),
+            zoomLevel: 17,
             canvas,
             theme: "resources/berlin_tilezen_base_globe.json"
         });

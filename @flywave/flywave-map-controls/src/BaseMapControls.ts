@@ -58,7 +58,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     // Control state
     private inertialDeltaX: number = 0;
     private inertialDeltaY: number = 0;
-    private inertialAxis: Vector4 = new Vector4();
+    private inertialAxis: Vector4 = new Vector4(0, 0, 0, 0);
 
     // Hit detection
     private lastHitDistance: number = -1;
@@ -69,6 +69,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private lastHitCenter: Vector3 = new Vector3();
     private lastHitCenterClick: Vector3 = new Vector3();
     private lastHitGravity: Vector3 = new Vector3(); // Rotate pivot
+
+    public smoothPan: boolean = true;
 
     // Animation controls
     private smoothZoom: number = 0;
@@ -176,6 +178,27 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.renderLoop();
     }
 
+    /**
+     * 比较两个4x4矩阵是否有变化（考虑浮点数精度）
+     * @param mat1 第一个矩阵
+     * @param mat2 第二个矩阵
+     * @param precision 比较精度（默认1e-6）
+     * @returns 如果矩阵不同返回true，相同返回false
+     */
+    private haveMatricesChanged(mat1: Matrix4, mat2: Matrix4, precision: number = 1e-6): boolean {
+        const elements1 = mat1.elements;
+        const elements2 = mat2.elements;
+
+        // 比较16个元素
+        for (let i = 0; i < 16; i++) {
+            if (Math.abs(elements1[i] - elements2[i]) > precision) {
+                return true; // 发现不同元素
+            }
+        }
+
+        return false; // 所有元素都在精度范围内相等
+    }
+
     protected get canvasHeight() {
         const { height } = this.mapView.getCanvasClientSize();
         return height;
@@ -225,9 +248,13 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         // Handle panning operations
         this.handlePanning(mouseDown, cameraPos, hitPoint, distanceToGlobe);
 
+        this.cameraTransform.getOrigin(cameraPos);
+
         this.updateCenter();
         // Handle zoom operations
         this.handleZoomOperations(mouseZ, hitDistance, cameraPos);
+
+        this.cameraTransform.getOrigin(cameraPos);
 
         if (mouseDown[2]) {
             // 右键按下
@@ -243,14 +270,24 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             }
         }
 
-        if ((!mouseDown[0] || !this.isPanHit) && this.lastHitCenterDistance > 0) {
-            this.applyAutoTiltCorrection();
-        }
-
         // Apply tilt and heading changes
         this.applyTiltAndHeadingChanges();
 
-        // Apply distance limits
+        if ((!mouseDown[0] || !this.isPanHit) && this.lastHitCenterDistance > 0) {
+            // this.cameraTransform.applyTiltLimit(
+            //     this.lastHitCenter,
+            //     this.lastHitGravity,
+            //     this.tiltLimit
+            // );
+            this.cameraTransform.smartBalance(
+                this.lastHitCenter,
+                this.lastHitGravity,
+                this.tiltLimit
+            );
+        }
+
+        this.cameraTransform.getOrigin(cameraPos);
+        // // Apply distance limits
         this.applyDistanceLimits(cameraPos, normal, distanceToGlobe);
 
         // Update previous mouse state
@@ -264,6 +301,12 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
     private applyToMapView() {
         const cameraToMapViewMatrix = this.cameraTransform.getMatrix();
+
+        if (this.haveMatricesChanged(cameraToMapViewMatrix, this.mapView.camera.matrixWorld)) {
+            this.mapView.update();
+        }
+        this.mapView.camera.updateMatrixWorld();
+
         cameraToMapViewMatrix.decompose(
             this.mapView.camera.position,
             this.mapView.camera.quaternion,
@@ -702,27 +745,6 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         }
     }
 
-    private applyAutoTiltCorrection(): void {
-        const pivot = this.lastHitCenter;
-        const normal = this.lastHitGravity.clone().normalize();
-        const maxTilt = this.tiltLimit;
-
-        // 1. 直接应用倾斜限制
-        this.cameraTransform.rotateAroundPivotAndTilt(
-            pivot.x,
-            pivot.y,
-            pivot.z,
-            normal.x,
-            normal.y,
-            normal.z,
-            0,
-            0, // 不改变当前旋转和倾斜
-            maxTilt // 仅强制应用限制
-        );
-
-        // 2. 模拟 smartBalance 的平衡效果
-        this.inertialDeltaY *= 0.8; // 垂直惯性阻尼
-    }
     /**
      * Applies heading (azimuth) rotation to the camera based on the current heading setting.
      * Rotates the camera around the pivot point (last hit center) in the direction determined
