@@ -1,10 +1,9 @@
-import { DecodedTile, Geometry, GeometryKind } from "@flywave/flywave-datasource-protocol";
+import { DecodedTile, Geometry } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates, Projection, TileKey, TilingScheme } from "@flywave/flywave-geoutils";
 import { DataSource, Tile, TileObject } from "@flywave/flywave-mapview";
 import { TileFactory } from "@flywave/flywave-mapview-decoder";
 import { Box3, BufferAttribute, BufferGeometry, Material, Mesh, Triangle, Vector3 } from "three";
 
-import { registerTileObject } from "../../../flywave-mapview/src/geometry/RegisterTileObject";
 import { ElevationMaterial } from "./elevation-styling";
 
 export interface TerrainTileOptions {
@@ -130,8 +129,6 @@ export class TerrainTile extends Tile {
             tileGeometry.computeVertexNormals();
         }
 
-        registerTileObject(this, tileMesh, GeometryKind.Terrain);
-
         objects.push(tileMesh);
 
         this.dataSource.requestUpdate();
@@ -193,8 +190,6 @@ export class TerrainTile extends Tile {
     addObject(geoCoordinates: GeoCoordinates, object: TileObject) {
         if (this.geoBox.contains(geoCoordinates)) {
             object.displacement = this.calculateLocalDisplacement(geoCoordinates);
-
-            registerTileObject(this, object, GeometryKind.Terrain);
             this.objects.push(object);
         }
     }

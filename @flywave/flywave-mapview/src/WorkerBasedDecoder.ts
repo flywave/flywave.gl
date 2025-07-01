@@ -33,7 +33,7 @@ let nextUniqueServiceId = 0;
  * - configuration.
  */
 export class WorkerBasedDecoder implements ITileDecoder {
-    private readonly serviceId: string;
+    protected readonly serviceId: string;
     private m_serviceCreated: boolean = false;
 
     /**
@@ -43,7 +43,7 @@ export class WorkerBasedDecoder implements ITileDecoder {
      * @param decoderServiceType - Service type identifier.
      */
     constructor(
-        private readonly workerSet: ConcurrentWorkerSet,
+        protected readonly workerSet: ConcurrentWorkerSet,
         private readonly decoderServiceType: string
     ) {
         this.workerSet.addReference();

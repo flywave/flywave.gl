@@ -43,20 +43,19 @@ export class QuantizedMeshTileDecoder implements ITileDecoder {
      */
     constructPositionArray(vertexData) {
         const elementsPerVertex = 3;
-        const vertexCount = vertexData.length / 3;
-        const positionAttributeArray = new Float32Array(vertexData.length);
+        const vertexCount = vertexData.length / elementsPerVertex;
+        const positionArray = new Float32Array(vertexData.length);
 
         const vertexMaxPosition = 32767;
-
         for (let i = 0; i < vertexCount; i++) {
-            positionAttributeArray[i * elementsPerVertex] = vertexData[i] / vertexMaxPosition;
-            positionAttributeArray[i * elementsPerVertex + 1] =
+            positionArray[i * elementsPerVertex] = vertexData[i] / vertexMaxPosition;
+            positionArray[i * elementsPerVertex + 1] =
                 vertexData[i + vertexCount] / vertexMaxPosition;
-            positionAttributeArray[i * elementsPerVertex + 2] =
+            positionArray[i * elementsPerVertex + 2] =
                 vertexData[i + vertexCount * 2] / vertexMaxPosition;
         }
 
-        return positionAttributeArray;
+        return positionArray;
     }
 
     /**

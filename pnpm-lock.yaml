@@ -1911,6 +1911,10 @@ importers:
         version: 5.8.3
 
   '@flywave/flywave-utils':
+    dependencies:
+      csscolorparser:
+        specifier: ^1.0.3
+        version: 1.0.3
     devDependencies:
       '@types/chai':
         specifier: 'catalog:'

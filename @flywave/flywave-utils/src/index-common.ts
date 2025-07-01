@@ -23,3 +23,7 @@ export * from "./Functions";
 export * from "./SampleBilinear";
 export * from "./AuthenticationUtils";
 export * from "./GlslUtils";
+export * from "./Utils";
+export * from "./Interpolate";
+export * from "./Color";
+export * from "./DataType";
