@@ -8,8 +8,8 @@ import {
 } from "@flywave/flywave-datasource-protocol";
 import { Projection, TileKey } from "@flywave/flywave-geoutils";
 
-import { createVerticesFromQuantizedTerrainMesh } from "./quantized-mesh/QuantizedTerrainMesh";
-import { upsampleQuantizedTerrainMesh } from "./quantized-mesh/UpsampleTerrainMesh";
+import { createVerticesFromQuantizedTerrainMesh } from "./decoder/QuantizedTerrainMesh";
+import { upsampleQuantizedTerrainMesh } from "./decoder/UpsampleTerrainMesh";
 import { offScreenCanvasManagerRender } from "./RenderHeightmap";
 
 export const QUANTIZED_MESH_TILE_DECODER_ID = "quantized-mesh-tile-decoder";

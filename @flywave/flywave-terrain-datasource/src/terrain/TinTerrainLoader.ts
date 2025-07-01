@@ -5,7 +5,7 @@ import { TileLoader } from "@flywave/flywave-mapview-decoder";
 import { encode } from "@vitaly-z/hilbert-geohash";
 import * as THREE from "three";
 
-import QuantizedMeshTerrainData from "./quantized-mesh/TerrainData";
+import QuantizedMeshTerrainData from "./decoder/TerrainData";
 import { HeightMap } from "./RenderHeightmap";
 
 interface TinData {

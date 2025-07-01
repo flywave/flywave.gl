@@ -16,8 +16,8 @@ import {
 } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
-import AttributeCompression from "./quantized-mesh/attribute-compression";
-import QuantizedMeshTerrainData from "./quantized-mesh/TerrainData";
+import { zigZagDeltaDecode } from "./decoder/Decoder";
+import QuantizedMeshTerrainData from "./decoder/TerrainData";
 import TileAvailability from "./TileAvailability";
 import { TinMeshLoader, TinMeshResourceTile } from "./TinTerrainLoader";
 
@@ -79,11 +79,7 @@ const QuantizedMeshExtensionIds = {
      * @constant
      * @default 4
      */
-    METADATA: 4,
-    /**
-     *
-     */
-    STRATUM_GROUP: 8
+    METADATA: 4
 };
 
 function createQuantizedMeshTerrainData(
@@ -151,7 +147,7 @@ function createQuantizedMeshTerrainData(
     const vBuffer = encodedVertexBuffer.subarray(vertexCount, 2 * vertexCount);
     const heightBuffer = encodedVertexBuffer.subarray(vertexCount * 2, 3 * vertexCount);
 
-    AttributeCompression.zigZagDeltaDecode(uBuffer, vBuffer, heightBuffer);
+    zigZagDeltaDecode(uBuffer, vBuffer, heightBuffer);
 
     // skip over any additional padding that was added for 2/4 byte alignment
     if (pos % bytesPerIndex !== 0) {
@@ -223,7 +219,6 @@ function createQuantizedMeshTerrainData(
 
     let encodedNormalBuffer: Uint8Array | undefined;
     let waterMaskBuffer: Uint8Array | undefined;
-    let stratumGroups: any;
     while (pos < view.byteLength) {
         const extensionId = view.getUint8(pos);
         pos += Uint8Array.BYTES_PER_ELEMENT;
@@ -240,15 +235,6 @@ function createQuantizedMeshTerrainData(
             provider.requestWaterMask
         ) {
             waterMaskBuffer = new Uint8Array(buffer, pos, extensionLength);
-        } else if (extensionId === QuantizedMeshExtensionIds.STRATUM_GROUP) {
-            const stringLength = view.getUint32(pos, true);
-            if (stringLength > 0) {
-                stratumGroups = getJsonFromTypedArray(
-                    new Uint8Array(buffer),
-                    pos + Uint32Array.BYTES_PER_ELEMENT,
-                    stringLength
-                );
-            }
         } else if (extensionId === QuantizedMeshExtensionIds.METADATA && provider.requestMetadata) {
             const stringLength = view.getUint32(pos, true);
             if (stringLength > 0) {
@@ -313,7 +299,6 @@ function createQuantizedMeshTerrainData(
     }
     return new QuantizedMeshTerrainData({
         center: center,
-        stratumGroups,
         minimumHeight: minimumHeight,
         maximumHeight: maximumHeight,
         boundingSphere: boundingSphere,
@@ -626,7 +611,7 @@ class TerrainDataProvider extends DataProvider {
         this.dataSource.updateTileOverlayer();
     }
 
-    connect(): Promise<boolean> {
+    connect(): Promise<void> {
         return new Promise((resolve, reject) => {
             this._readyPromise = { reslove: resolve, reject };
             return downloadManager
