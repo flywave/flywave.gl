@@ -9,6 +9,10 @@ class PickLocal {
     private readonly m_pickingRaycaster: PickingRaycaster;
     private readonly mapView: MapView;
 
+    public get raycaster(): PickingRaycaster {
+        return this.m_pickingRaycaster;
+    }
+
     constructor(mapView: MapView) {
         this.camera = mapView.getRteCamera();
         this.m_pickingRaycaster = new PickingRaycaster(

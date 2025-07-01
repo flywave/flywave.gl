@@ -27,7 +27,7 @@ export class ElevationProvider {
         this.dataSource = dataSource;
     }
 
-    getAtPointOrZero(point: MercatorCoordinate, defaultIfNotLoaded: number = 0): number {
+    getAtPointOrZero(point: GeoCoordinates, defaultIfNotLoaded: number = 0): number {
         return this.getAtPoint(point, defaultIfNotLoaded) || 0;
     }
 
@@ -91,7 +91,7 @@ export class ElevationProvider {
             const worldOffsetX = tile.computeWorldOffsetX();
             tmpOBB.position.x += worldOffsetX;
 
-            const distance = tmpOBB.intersectsRay(this.pickingRaycaster.m_pickingRaycaster.ray);
+            const distance = tmpOBB.intersectsRay(this.pickingRaycaster.raycaster.ray);
             if (distance !== undefined) {
                 tiles.push({ tile, distance });
             }

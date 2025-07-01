@@ -11,8 +11,6 @@ import {
 } from "@flywave/flywave-mapview-decoder";
 import { Math2D } from "@flywave/flywave-utils";
 
-import resource from "./Resource";
-
 export interface TerrainSourceOptions extends PTileDataSourceOptions {
     elevationRangeSource?: any;
     elevationProvider?: any;
@@ -40,7 +38,6 @@ export class TerrainSource extends TileDataSource {
                 new TilingScheme(quadTreeSubdivisionScheme, webMercatorProjection),
             dataProvider: options.dataProvider,
             enablePicking: false,
-            concurrentDecoderScriptUrl: resource.DECODER_URL,
             ...options
         });
 
@@ -67,18 +64,14 @@ export class TerrainSource extends TileDataSource {
     };
 
     addMaterialProviders(provider: any): void {
-        this.application.addMaterialProviders(provider);
+        //this.application.addMaterialProviders(provider);
     }
 
     removeMaterialProviders(provider: any): void {
         provider.remove();
     }
 
-    getMaterialProviders(): any[] {
-        return this.application.materialProviders;
-    }
-
-    connect(): Promise<void[]> {
+    connect(): Promise<void> | undefined {
         return Promise.all([this.decoder.connect()]).then(() => {
             this.mapView.addEventListener(
                 MapViewEventNames.CameraPositionChanged,
@@ -105,16 +98,16 @@ export class TerrainSource extends TileDataSource {
                 this.name,
                 tile
                     ? (tile: Tile) => {
-                        const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
-                        const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
-                        const tileBox = new Math2D.Box(
-                            minLng,
-                            minLat,
-                            maxLng - minLng,
-                            maxLat - minLat
-                        );
-                        return fbbox ? tileBox.intersects(fbbox) : false;
-                    }
+                          const { latitude: minLat, longitude: minLng } = tile.geoBox.southWest;
+                          const { latitude: maxLat, longitude: maxLng } = tile.geoBox.northEast;
+                          const tileBox = new Math2D.Box(
+                              minLng,
+                              minLat,
+                              maxLng - minLng,
+                              maxLat - minLat
+                          );
+                          return fbbox ? tileBox.intersects(fbbox) : false;
+                      }
                     : undefined
             );
         };
@@ -133,7 +126,7 @@ export class TerrainSource extends TileDataSource {
                                 this.updateTileJobs[i].job(this.updateTileJobs[i].tile);
                             }
                             this.updateTileJobs = {};
-                        } catch (error) { }
+                        } catch (error) {}
                     },
                     getPriority: () => {
                         return 100 - (tile?.tileKey.level || 0);
