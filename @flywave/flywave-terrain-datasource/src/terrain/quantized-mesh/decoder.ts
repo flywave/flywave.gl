@@ -2,13 +2,93 @@ import { DecoderOptions } from "@flywave/flywave-datasource-protocol";
 import { defined } from "@flywave/flywave-utils";
 import { MathUtils, Matrix4, Vector2, Vector3 } from "three";
 
-import TerrainQuantization from "./quantization";
+export enum TerrainQuantization {
+    NONE = 0,
+    BITS12 = 1
+}
 
 // Reusable vectors to avoid allocations
 const cartesian3Scratch = new Vector3();
 const cartesian3DimScratch = new Vector3();
 const cartesian2Scratch = new Vector2();
+const EPSILON6 = 0.000001;
 
+function signNotZero(value: number): number {
+    return value < 0.0 ? -1.0 : 1.0;
+}
+
+function toSNorm(value: number, rangeMaximum: number = 255): number {
+    return Math.round((MathUtils.clamp(value, -1.0, 1.0) * 0.5 + 0.5) * rangeMaximum);
+}
+
+function fromSNorm(value: number, rangeMaximum: number = 255): number {
+    return (MathUtils.clamp(value, 0.0, rangeMaximum) / rangeMaximum) * 2.0 - 1.0;
+}
+
+export function octEncodeInRange(vector: Vector3, rangeMax: number, result: Vector2): Vector2 {
+    const magSquared = vector.lengthSq();
+    if (Math.abs(magSquared - 1.0) > EPSILON6) {
+        throw new Error("vector must be normalized.");
+    }
+
+    result.x = vector.x / (Math.abs(vector.x) + Math.abs(vector.y) + Math.abs(vector.z));
+    result.y = vector.y / (Math.abs(vector.x) + Math.abs(vector.y) + Math.abs(vector.z));
+
+    if (vector.z < 0) {
+        const x = result.x;
+        const y = result.y;
+        result.x = (1.0 - Math.abs(y)) * signNotZero(x);
+        result.y = (1.0 - Math.abs(x)) * signNotZero(y);
+    }
+
+    result.x = toSNorm(result.x, rangeMax);
+    result.y = toSNorm(result.y, rangeMax);
+
+    return result;
+}
+
+export function octDecodeInRange(x: number, y: number, rangeMax: number, result: Vector3): Vector3 {
+    if (x < 0 || x > rangeMax || y < 0 || y > rangeMax) {
+        throw new Error(`x and y must be unsigned normalized integers between 0 and ${rangeMax}`);
+    }
+
+    result.x = fromSNorm(x, rangeMax);
+    result.y = fromSNorm(y, rangeMax);
+    result.z = 1.0 - (Math.abs(result.x) + Math.abs(result.y));
+
+    if (result.z < 0.0) {
+        const oldVX = result.x;
+        result.x = (1.0 - Math.abs(result.y)) * signNotZero(oldVX);
+        result.y = (1.0 - Math.abs(oldVX)) * signNotZero(result.y);
+    }
+
+    return result.normalize();
+}
+
+// 新增ZigZag解码算法
+export function zigZagDeltaDecode(
+    uBuffer: Uint16Array,
+    vBuffer: Uint16Array,
+    heightBuffer?: Uint16Array
+): void {
+    const count = uBuffer.length;
+    let u = 0;
+    let v = 0;
+    let height = 0;
+
+    for (let i = 0; i < count; ++i) {
+        u += decodeZigZag(uBuffer[i]);
+        v += decodeZigZag(vBuffer[i]);
+
+        uBuffer[i] = u;
+        vBuffer[i] = v;
+
+        if (heightBuffer) {
+            height += decodeZigZag(heightBuffer[i]);
+            heightBuffer[i] = height;
+        }
+    }
+}
 export interface TerrainEncoding {
     quantization: TerrainQuantization;
     minimumHeight: number;
@@ -175,7 +255,9 @@ export function octEncode(normal: Vector3, result: Vector2 | Vector3): Vector2 |
     if (normal.z < 0) {
         const x = normal.x;
         const y = normal.y;
-        normal.set((1 - Math.abs(y)) * (x >= 0 ? 1 : -1), (1 - Math.abs(x)) * (y >= 0 ? 1 : -1), 0);
+        normal
+            .set((1 - Math.abs(y)) * (x >= 0 ? 1 : -1), (1 - Math.abs(x)) * (y >= 0 ? 1 : -1), 0)
+            .normalize();
     }
 
     if ((result as any).isVector2) {
@@ -251,39 +333,34 @@ function decodeVertexData(
             const hCompressed = compressedData[i * 3 + 2];
             const height = hCompressed & 0xfff; // 取低12位
 
-            vertexData[i] = u;
-            vertexData[i + vertexCount] = v;
-            vertexData[i + vertexCount * 2] = height;
+            vertexData[i * 3] = u;
+            vertexData[i * 3 + 1] = v;
+            vertexData[i * 3 + 2] = height;
         }
     } else {
-        // 原有非量化处理逻辑
-        const bytesPerArrayElement = Uint16Array.BYTES_PER_ELEMENT;
-        const elementArrayLength = vertexCount * bytesPerArrayElement;
-        const uArrayStartPosition = position;
-        const vArrayStartPosition = uArrayStartPosition + elementArrayLength;
-        const heightArrayStartPosition = vArrayStartPosition + elementArrayLength;
+        // 非量化模式 - 交错数据
+        const elementsPerVertex = 6; // x, y, z, height, u, v
+        const bytesPerElement = Uint16Array.BYTES_PER_ELEMENT;
+        const totalBytes = vertexCount * elementsPerVertex * bytesPerElement;
 
-        let u = 0;
-        let v = 0;
-        let height = 0;
-
+        // 直接读取交错数据
         for (let i = 0; i < vertexCount; i++) {
-            u += decodeZigZag(
-                dataView.getUint16(uArrayStartPosition + bytesPerArrayElement * i, true)
-            );
-            v += decodeZigZag(
-                dataView.getUint16(vArrayStartPosition + bytesPerArrayElement * i, true)
-            );
-            height += decodeZigZag(
-                dataView.getUint16(heightArrayStartPosition + bytesPerArrayElement * i, true)
-            );
+            const base = position + i * elementsPerVertex * bytesPerElement;
 
-            vertexData[i] = u;
-            vertexData[i + vertexCount] = v;
-            vertexData[i + vertexCount * 2] = height;
+            // 直接读取值，没有ZigZag解码
+            //const x = dataView.getUint16(base, true);
+            //const y = dataView.getUint16(base + 2, true);
+            //const z = dataView.getUint16(base + 4, true);
+            const height = dataView.getUint16(base + 6, true);
+            const u = dataView.getUint16(base + 8, true);
+            const v = dataView.getUint16(base + 10, true);
+
+            vertexData[i * 3] = u;
+            vertexData[i * 3 + 1] = v;
+            vertexData[i * 3 + 2] = height;
         }
 
-        position += elementArrayLength * 3;
+        position += totalBytes;
     }
 
     return { vertexData, vertexDataEndPosition: position };
@@ -309,14 +386,15 @@ function decodeIndex(
     }
 
     let highest = 0;
-
     for (let i = 0; i < indices.length; ++i) {
         const code = indices[i];
-
-        indices[i] = highest - code;
-
+        if (code < highest) {
+            indices[i] = highest - code;
+        } else {
+            indices[i] = code - highest;
+        }
         if (code === 0) {
-            ++highest;
+            highest++;
         }
     }
 
@@ -332,7 +410,7 @@ function decodeTriangleIndices(
     const elementsPerVertex = 3;
     const vertexCount = vertexData.length / elementsPerVertex;
     const bytesPerIndex =
-        vertexCount > 65536 ? Uint32Array.BYTES_PER_ELEMENT : Uint16Array.BYTES_PER_ELEMENT;
+        vertexCount >= 65536 ? Uint32Array.BYTES_PER_ELEMENT : Uint16Array.BYTES_PER_ELEMENT;
 
     if (position % bytesPerIndex !== 0) {
         position += bytesPerIndex - (position % bytesPerIndex);
@@ -371,7 +449,7 @@ function decodeEdgeIndices(
     const elementsPerVertex = 3;
     const vertexCount = vertexData.length / elementsPerVertex;
     const bytesPerIndex =
-        vertexCount > 65536 ? Uint32Array.BYTES_PER_ELEMENT : Uint16Array.BYTES_PER_ELEMENT;
+        vertexCount >= 65536 ? Uint32Array.BYTES_PER_ELEMENT : Uint16Array.BYTES_PER_ELEMENT;
 
     const westVertexCount = dataView.getUint32(position, true);
     position += Uint32Array.BYTES_PER_ELEMENT;
@@ -460,10 +538,10 @@ function decodeMetadataExtension(extensionDataView: DataView): any {
 
 // Helper function to replace AttributeCompression.decompressTextureCoordinates
 export function decompressTextureCoordinates(compressed: number, result: Vector2): Vector2 {
-    const temp = compressed / 4096.0;
-    const xZeroTo4095 = Math.floor(temp);
-    result.x = xZeroTo4095 / 4095.0;
-    result.y = (compressed - xZeroTo4095 * 4096) / 4095;
+    const x = (compressed >> 12) & 0xfff; // 高12位
+    const y = compressed & 0xfff; // 低12位
+    result.x = x / 4095.0;
+    result.y = y / 4095.0;
     return result;
 }
 
@@ -523,7 +601,7 @@ export function decodeHeight(
 
     if (encoding.quantization === TerrainQuantization.BITS12) {
         const zh = decompressTextureCoordinates(buffer[index + 1], cartesian2Scratch);
-        return zh.y * (encoding.maximumHeight - encoding.minimumHeight) + encoding.minimumHeight;
+        return MathUtils.lerp(encoding.minimumHeight, encoding.maximumHeight, zh.y);
     }
 
     return buffer[index + 3];
@@ -543,11 +621,11 @@ export function getOctEncodedNormal(
     }
 
     const stride = getStride(encoding);
-    index = (index + 1) * stride - 1;
+    const normalIndex = index * stride + (stride - 1);
+    const packedNormal = buffer[normalIndex];
 
-    const temp = buffer[index + 3] / 256.0;
-    const x = Math.floor(temp);
-    const y = (temp - x) * 256.0;
+    const x = Math.floor(packedNormal / 256); // 高位字节
+    const y = packedNormal % 256; // 低位字节
 
     return result.fromArray([x, y]);
 }
@@ -598,6 +676,9 @@ function decodeExtensions(
         position += Uint8Array.BYTES_PER_ELEMENT;
 
         const extensionLength = dataView.getUint32(position, true);
+        if (position + extensionLength > dataView.byteLength) {
+            throw new Error("Invalid extension length");
+        }
         position += Uint32Array.BYTES_PER_ELEMENT;
 
         const extensionView = new DataView(dataView.buffer, position, extensionLength);

@@ -163,7 +163,7 @@ export class TileLoader extends BaseTileLoader {
      *
      * @param payload - Binary data in form of [[ArrayBufferLike]], or any object.
      */
-    private onLoaded(
+    protected onLoaded(
         payload: ArrayBufferLike | {},
         onDone: (doneState: TileLoaderState) => void,
         onError: (error: Error) => void
@@ -196,7 +196,7 @@ export class TileLoader extends BaseTileLoader {
      *
      * @param decodedTile - The [[DecodedTile]].
      */
-    private onDecoded(
+    protected onDecoded(
         decodedTile: DecodedTile | undefined,
         onDone: (doneState: TileLoaderState) => void
     ) {

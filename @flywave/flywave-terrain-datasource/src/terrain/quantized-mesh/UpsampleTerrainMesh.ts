@@ -1,13 +1,14 @@
 import {
+    BoundingSphere,
     clipTriangleAtAxisAlignedThreshold,
     GeoBox,
-    GeoCoordinates
+    GeoCoordinates,
+    TileKey
 } from "@flywave/flywave-geoutils";
 import { defined, IndexDatatype } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
-import { getOctEncodedNormal, TerrainEncoding } from "./decoder";
-import { fromVertices } from "./sphere";
+import { getOctEncodedNormal, TerrainEncoding } from "./Decoder";
 
 const ARC = Math.PI / 180;
 const TWO_PI = 2.0 * Math.PI;
@@ -272,7 +273,7 @@ export function upsampleQuantizedTerrainMesh(
     projection: {
         projectPoint: (coord: GeoCoordinates) => THREE.Vector3;
     },
-    tileKey?: string
+    tileKey?: TileKey
 ): {
     vertices: ArrayBuffer;
     encodedNormals: ArrayBuffer | undefined;
@@ -283,7 +284,7 @@ export function upsampleQuantizedTerrainMesh(
     southIndices: number[];
     eastIndices: number[];
     northIndices: number[];
-    boundingSphere: THREE.Sphere;
+    boundingSphere: BoundingSphere;
 } {
     const clipScratch: number[] = [];
     const clipScratch2: number[] = [];
@@ -294,7 +295,7 @@ export function upsampleQuantizedTerrainMesh(
     const heightScratch: number[] = [];
     const indicesScratch: number[] = [];
     const normalsScratch: number[] = [];
-    const boundingSphereScratch = new THREE.Sphere();
+    const boundingSphereScratch = new BoundingSphere();
     const decodeTexCoordsScratch = new THREE.Vector2();
     const octEncodedNormalScratch = new THREE.Vector3();
 
@@ -580,7 +581,7 @@ export function upsampleQuantizedTerrainMesh(
         cartesianVertices.push(position.x, position.y, position.z);
     }
 
-    const boundingSphere = fromVertices(
+    const boundingSphere = BoundingSphere.fromVertices(
         cartesianVertices,
         new THREE.Vector3(),
         3,

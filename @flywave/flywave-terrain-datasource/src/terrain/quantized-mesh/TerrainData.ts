@@ -1,13 +1,19 @@
-import { computeBarycentricCoordinates, OrientedBox3, TileKey } from "@flywave/flywave-geoutils";
+import {
+    computeBarycentricCoordinates,
+    OrientedBox3,
+    TileKey,
+    TilingScheme
+} from "@flywave/flywave-geoutils";
 import { defaultValue, defined, IndexDatatype } from "@flywave/flywave-utils";
 import * as THREE from "three";
 import { clamp } from "three/src/math/MathUtils";
 
-import { HeightMap } from "../render-heightmap";
-import { decodeHeight, decodeTextureCoordinates } from "./decoder";
-import TerrainMesh from "./mesh";
+import { HeightMap } from "../RenderHeightmap";
+import { decodeHeight, decodeTextureCoordinates } from "./Decoder";
+import TerrainMesh from "./TerrainMesh";
 
 interface QuantizedMeshTerrainDataOptions {
+    center?: THREE.Vector3;
     quantizedVertices: Uint16Array;
     indices: Uint16Array | Uint32Array;
     minimumHeight: number;
@@ -26,13 +32,14 @@ interface QuantizedMeshTerrainDataOptions {
     childTileMask?: number;
     createdByUpsampling?: boolean;
     encodedNormals?: Uint8Array;
-    waterMask?: Uint8Array;
+    waterMask?: THREE.DataTexture;
     credits?: any[]; // Replace with proper Credit type if available
-    stratumGroups?: any; // Replace with proper type if available
 }
 
 interface CreateMeshOptions {
-    tilingScheme: any; // Replace with proper TilingScheme type
+    tilingScheme: TilingScheme & {
+        ellipsoid: any;
+    };
     x: number;
     y: number;
     level: number;
@@ -62,11 +69,11 @@ class QuantizedMeshTerrainData {
     private readonly _northSkirtHeight: number;
     private readonly _childTileMask: number;
     private readonly _createdByUpsampling: boolean;
-    private readonly _waterMask?: Uint8Array;
-    private readonly _stratumGroups?: any;
+    private readonly _waterMask?: THREE.DataTexture;
     private _mesh?: TerrainMesh;
     private readonly _credits?: any[];
     public heightMap?: HeightMap;
+    public tileTerrain?: TerrainMesh;
 
     // Add this getter method
     get mesh(): TerrainMesh | undefined {
@@ -165,14 +172,13 @@ class QuantizedMeshTerrainData {
         this._childTileMask = defaultValue(options.childTileMask, 15);
         this._createdByUpsampling = defaultValue(options.createdByUpsampling, false);
         this._waterMask = options.waterMask;
-        this._stratumGroups = options.stratumGroups;
     }
 
     get credits(): any[] | undefined {
         return this._credits;
     }
 
-    get waterMask(): Uint8Array | undefined {
+    get waterMask(): THREE.DataTexture | undefined {
         return this._waterMask;
     }
 
@@ -278,7 +284,13 @@ class QuantizedMeshTerrainData {
                 result.eastIndicesNorthToSouth,
                 result.northIndicesWestToEast
             );
-            this.heightMap = new HeightMap(result.heightMapBuffer, minimumHeight, maximumHeight);
+            if (result.heightMapBuffer) {
+                this.heightMap = new HeightMap(
+                    result.heightMapBuffer,
+                    minimumHeight,
+                    maximumHeight
+                );
+            }
 
             // Free memory received from server after mesh is created
             this._quantizedVertices = undefined!;
@@ -555,7 +567,12 @@ function interpolateMeshHeight(
                 uv2.y,
                 barycentricCoordinateScratch
             );
-            if (barycentric.x >= -1e-15 && barycentric.y >= -1e-15 && barycentric.z >= -1e-15) {
+            const epsilon = 1e-10;
+            if (
+                barycentric.x >= -epsilon &&
+                barycentric.y >= -epsilon &&
+                barycentric.z >= -epsilon
+            ) {
                 const h0 = decodeHeight(position3DAndHeight, i0, encoding);
                 const h1 = decodeHeight(position3DAndHeight, i1, encoding);
                 const h2 = decodeHeight(position3DAndHeight, i2, encoding);

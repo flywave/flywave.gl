@@ -27,3 +27,6 @@ export * from "./Utils";
 export * from "./Interpolate";
 export * from "./Color";
 export * from "./DataType";
+export * from "./GetJsonFromTypedArray";
+export * from "./GetStringFromTypedArray";
+export * from "./BinarySearch";

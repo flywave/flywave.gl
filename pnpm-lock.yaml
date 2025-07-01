@@ -1640,6 +1640,9 @@ importers:
       gh-pages:
         specifier: ^3.0.0
         version: 3.2.3
+      lodash.isequalwith:
+        specifier: ^4.4.0
+        version: 4.4.0
       three:
         specifier: 'catalog:'
         version: 0.174.0

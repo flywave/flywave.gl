@@ -3,9 +3,9 @@ import { TileKey, TilingScheme } from "@flywave/flywave-geoutils";
 import { TileDataSource } from "@flywave/flywave-mapview-decoder";
 import { Material } from "three";
 
-import { QuantizedMeshDecoderOptions } from "./quantized-mesh/decoder";
-import { TerrainDataProvider } from "./terrain-data-provider";
-import { TerrainTile, TerrainTileFactory } from "./terrain-tile";
+import { QuantizedMeshDecoderOptions } from "./quantized-mesh/Decoder";
+import { TerrainDataProvider } from "./TerrainDataProvider";
+import { TerrainTile, TerrainTileFactory } from "./TerrainTile";
 
 export interface TerrainDataSourceOptions {
     concurrentDecoderScriptUrl: string;

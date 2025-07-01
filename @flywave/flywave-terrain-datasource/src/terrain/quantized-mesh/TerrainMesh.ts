@@ -1,10 +1,11 @@
+import { OrientedBox3 } from "@flywave/flywave-geoutils";
 import { defaultValue } from "@flywave/flywave-utils";
-import { Vector3 } from "three";
+import { Sphere, Vector3 } from "three";
 
-import { TerrainEncoding } from "./decoder";
+import { TerrainEncoding } from "./Decoder";
 
 class TerrainMesh {
-    center: any;
+    center: Vector3;
     heights: Float32Array;
     textureCoordAndEncodedNormals: Float32Array;
     position3DAndHeight: Float32Array;
@@ -14,9 +15,9 @@ class TerrainMesh {
     vertexCountWithoutSkirts: number;
     minimumHeight: number;
     maximumHeight: number;
-    boundingSphere3D: any;
-    occludeePointInScaledSpace: any;
-    orientedBoundingBox?: any;
+    boundingSphere3D: Sphere;
+    occludeePointInScaledSpace: Vector3;
+    orientedBoundingBox?: OrientedBox3;
     encoding: TerrainEncoding;
     exaggeration: number;
     westIndicesSouthToNorth: Uint16Array | Uint32Array;
@@ -34,10 +35,10 @@ class TerrainMesh {
         vertexCountWithoutSkirts: number,
         minimumHeight: number,
         maximumHeight: number,
-        boundingSphere3D: any,
+        boundingSphere3D: Sphere,
         occludeePointInScaledSpace: Vector3,
         vertexStride?: number,
-        orientedBoundingBox?: any,
+        orientedBoundingBox?: OrientedBox3,
         encoding?: TerrainEncoding,
         exaggeration?: number,
         westIndicesSouthToNorth?: Uint16Array | Uint32Array,

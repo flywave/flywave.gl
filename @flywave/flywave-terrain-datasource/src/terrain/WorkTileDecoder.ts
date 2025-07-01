@@ -1,7 +1,7 @@
 import { WorkerDecoderProtocol } from "@flywave/flywave-datasource-protocol";
 import { ConcurrentDecoderFacade, WorkerBasedDecoder } from "@flywave/flywave-mapview";
 
-import { getOffScreenCanvas } from "./render-heightmap";
+import { getOffScreenCanvas } from "./RenderHeightmap";
 
 interface DecoderOptions {
     [key: string]: any;

@@ -4,7 +4,7 @@ import { DataSource, Tile, TileObject } from "@flywave/flywave-mapview";
 import { TileFactory } from "@flywave/flywave-mapview-decoder";
 import { Box3, BufferAttribute, BufferGeometry, Material, Mesh, Triangle, Vector3 } from "three";
 
-import { ElevationMaterial } from "./elevation-styling";
+import { ElevationMaterial } from "./ElevationMaterial";
 
 export interface TerrainTileOptions {
     getTileMaterial?: (tile: TerrainTile, decodedTile: DecodedTile) => Promise<Material>;

@@ -1,15 +1,18 @@
 import {
     AxisAlignedBox3,
+    BoundingSphere,
     eastNorthUpToFixedFrame,
     GeoBox,
     GeoCoordinates,
+    makeBoundingSphereFromPoints,
     MercatorConstants,
-    OrientedBox3
+    OrientedBox3,
+    TileKey
 } from "@flywave/flywave-geoutils";
 import { defined, IndexDatatype } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
-import renderHeightMap from "../render-heightmap";
+import renderHeightMap from "../RenderHeightmap";
 import {
     createTerrainEncoding,
     encodeTerrainData,
@@ -18,9 +21,8 @@ import {
     octEncode,
     octEncodeFloat,
     TerrainEncoding
-} from "./decoder";
-import { addSkirtIndices } from "./skirt";
-import { makeBoundingSphereFromPoints } from "./sphere";
+} from "./Decoder";
+import { addSkirtIndices } from "./Helper";
 
 const maxShort = 32767;
 const TWO_PI = 2.0 * Math.PI;
@@ -73,9 +75,9 @@ interface CreateVerticesResult {
     center: THREE.Vector3;
     minimumHeight: number;
     maximumHeight: number;
-    boundingSphere?: THREE.Sphere;
-    orientedBoundingBox?: any; // Replace with actual type if available
-    occludeePointInScaledSpace?: any; // Replace with actual type if available
+    boundingSphere?: BoundingSphere;
+    orientedBoundingBox?: OrientedBox3; // Replace with actual type if available
+    occludeePointInScaledSpace?: THREE.Vector3; // Replace with actual type if available
     encoding: TerrainEncoding;
     indexCountWithoutSkirts: number;
 }
@@ -95,7 +97,7 @@ export function createVerticesFromQuantizedTerrainMesh(
     parameters: CreateVerticesParameters,
     transferableObjects: ArrayBuffer[],
     projection: any, // Replace with proper projection type
-    tileKey: string
+    tileKey: TileKey
 ): CreateVerticesResult {
     const quantizedVertices = parameters.quantizedVertices;
     const quantizedVertexCount = quantizedVertices.length / 3;
@@ -245,8 +247,8 @@ export function createVerticesFromQuantizedTerrainMesh(
         (a, b) => uvs[b].x - uvs[a].x
     );
 
-    let orientedBoundingBox: any; // Replace with actual type
-    let boundingSphere: THREE.Sphere | undefined;
+    let orientedBoundingBox: OrientedBox3; // Replace with actual type
+    let boundingSphere: BoundingSphere | undefined;
 
     if (exaggeration !== 1.0) {
         boundingSphere = makeBoundingSphereFromPoints(positions);
