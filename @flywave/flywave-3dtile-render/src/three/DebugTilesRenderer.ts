@@ -7,10 +7,10 @@ import {
     Object3D,
     Material
 } from "three";
-import { getIndexedRandomColor } from "./utilities.js";
-import { TilesRenderer, TilesRendererOptions } from "../TilesRenderer.js";
-import { SphereHelper } from "./SphereHelper.js";
-import { Tile, TileCache } from "../base/Tile.js";
+import { getIndexedRandomColor } from "./utilities";
+import { TilesRenderer, TilesRendererOptions } from "../TilesRenderer";
+import { SphereHelper } from "./SphereHelper";
+import { Tile, TileCache } from "../base/Tile";
 
 // 符号常量定义
 const ORIGINAL_MATERIAL = Symbol("ORIGINAL_MATERIAL");

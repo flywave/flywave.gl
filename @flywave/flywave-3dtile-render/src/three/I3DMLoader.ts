@@ -5,7 +5,6 @@ import {
     InstancedMesh,
     Vector3,
     Quaternion,
-    Scene,
     LoadingManager,
     Mesh,
     Object3D,
@@ -14,6 +13,7 @@ import {
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { TileGLTF } from "../base/LoaderBase";
 import { BatchTableHeader, FeatureComponentType, FeatureType } from "../utilities/FeatureTable";
+import { TilesRenderer } from "./TilesRenderer";
 
 // 临时变量
 const tempFwd = new Vector3();
@@ -32,9 +32,9 @@ export class I3DMLoader<
     BatchTableExtensions extends BatchTableHeader
 > extends I3DMLoaderBase<BatchTableExtensions> {
     public manager: LoadingManager;
-    public tileRender: any;
+    public tileRender: TilesRenderer;
 
-    constructor(manager: LoadingManager = DefaultLoadingManager, tileRender?: any) {
+    constructor(manager: LoadingManager = DefaultLoadingManager, tileRender?: TilesRenderer) {
         super();
         this.manager = manager;
         this.tileRender = tileRender;

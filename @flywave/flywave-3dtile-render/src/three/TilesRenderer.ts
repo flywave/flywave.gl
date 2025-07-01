@@ -29,8 +29,9 @@ import {
 import { raycastTraverse, raycastTraverseFirstHit } from "./raycastTraverse";
 import { Tile, TileCache } from "../base/Tile";
 import { GeoBox, GeoCoordinates, OrientedBox3, Projection } from "@flywave/flywave-geoutils";
-import { Description, TileGLTF } from "../base/LoaderBase";
+import { TileGLTF } from "../base/LoaderBase";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 
 const INITIAL_FRUSTUM_CULLED = Symbol("INITIAL_FRUSTUM_CULLED");
 const tempMat = new Matrix4();
@@ -48,7 +49,7 @@ function updateFrustumCulled(object: Object3D, toInitialValue: boolean): void {
     });
 }
 
-class TilesLoadingManager extends LoadingManager {
+export class TilesLoadingManager extends LoadingManager {
     private dracoLoader: DRACOLoader = new DRACOLoader();
 
     setDracoDecoderPath(path: string) {
@@ -57,6 +58,14 @@ class TilesLoadingManager extends LoadingManager {
 
     getDracoLoader() {
         return this.dracoLoader;
+    }
+}
+
+export class TileRenderGLTFLoader extends GLTFLoader {
+    constructor(loadingManager: TilesLoadingManager) {
+        super(loadingManager);
+
+        this.setDRACOLoader(loadingManager.getDracoLoader());
     }
 }
 

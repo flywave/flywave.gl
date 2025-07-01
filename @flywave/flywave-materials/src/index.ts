@@ -30,3 +30,4 @@ export * from "./SkyAtmosphereMaterial";
 export * from "./SolidLineMaterial";
 export * from "./Utils";
 export * from "./VignetteShader";
+export * from "./VisualBatchMaterial";

@@ -1,19 +1,10 @@
-import { B3DMDescription, B3DMLoaderBase } from "../base/B3DMLoaderBase";
-import {
-    DefaultLoadingManager,
-    Matrix4,
-    Mesh,
-    BufferAttribute,
-    BufferGeometry,
-    LineSegments,
-    Object3D,
-    LoadingManager
-} from "three";
-import { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
-import { BatchTableHeader } from "../utilities/FeatureTable";
+import { B3DMLoaderBase } from "../base/B3DMLoaderBase";
+import { Matrix4 } from "three";
+import { GLTF } from "three/examples/jsm/loaders/GLTFLoader";
+import { BatchTableHeader, FeatureComponentType, FeatureType } from "../utilities/FeatureTable";
 import { Tile } from "../base/Tile";
 import { TileGLTF } from "../base/LoaderBase";
+import { TileRenderGLTFLoader, TilesLoadingManager } from "./TilesRenderer";
 
 interface PrimitiveDef {
     extensions?: Record<string, any>;
@@ -51,54 +42,17 @@ const EXTENSIONS = {
 export class B3DMLoader<
     BatchTableExtensions extends BatchTableHeader
 > extends B3DMLoaderBase<BatchTableExtensions> {
-    manager: LoadingManager;
+    manager: TilesLoadingManager;
     private adjustmentTransform: Matrix4;
     tile: Tile;
     fetchOptions: RequestInit = {};
     workingPath: string = "";
 
-    constructor(manager: LoadingManager = DefaultLoadingManager, tile?: any) {
+    constructor(manager: TilesLoadingManager, tile?: any) {
         super();
         this.manager = manager;
         this.adjustmentTransform = new Matrix4();
         this.tile = tile;
-    }
-
-    private createAttributesKey(attributes: Record<string, any>): string {
-        let attributesKey = "";
-        const keys = Object.keys(attributes).sort();
-
-        for (let i = 0, il = keys.length; i < il; i++) {
-            attributesKey += keys[i] + ":" + attributes[keys[i]] + ";";
-        }
-
-        return attributesKey;
-    }
-
-    private createPrimitiveKey(primitiveDef: PrimitiveDef): string {
-        const dracoExtension = primitiveDef.extensions?.[EXTENSIONS.KHR_DRACO_MESH_COMPRESSION] as
-            | DracoExtension
-            | undefined;
-        let geometryKey: string;
-
-        if (dracoExtension) {
-            geometryKey =
-                "draco:" +
-                dracoExtension.bufferView +
-                ":" +
-                dracoExtension.indices +
-                ":" +
-                this.createAttributesKey(dracoExtension.attributes);
-        } else {
-            geometryKey =
-                (primitiveDef.material ?? "") +
-                ":" +
-                this.createAttributesKey(primitiveDef.attributes) +
-                ":" +
-                (primitiveDef.mode ?? "");
-        }
-
-        return geometryKey;
     }
 
     async parse(buffer: ArrayBuffer): Promise<TileGLTF> {
@@ -108,8 +62,9 @@ export class B3DMLoader<
         return new Promise((resolve, reject) => {
             const manager = this.manager;
             const fetchOptions = this.fetchOptions;
-            const loader: GLTFLoader =
-                (manager.getHandler("path.gltf") as GLTFLoader) || new GLTFLoader(manager);
+            const loader: TileRenderGLTFLoader =
+                (manager.getHandler("path.gltf") as TileRenderGLTFLoader) ||
+                new TileRenderGLTFLoader(manager);
 
             if (fetchOptions.credentials === "include" && fetchOptions.mode === "cors") {
                 loader.setCrossOrigin("use-credentials");
@@ -134,115 +89,32 @@ export class B3DMLoader<
             loader.parse(
                 gltfBuffer,
                 workingPath,
-                (model: GLTF) => {
+                (model: GLTF & { batchTable: any; featureTable: any }) => {
                     const { batchTable, featureTable } = b3dm;
-                    const scene = model.scene;
+                    const { scene } = model;
 
-                    const meshMap = new Map<string, Mesh | LineSegments>();
-                    const indexBuffer = new Map<string, ArrayLike<number>[]>();
-
-                    scene.traverse((e: Object3D) => {
-                        if ((e as Mesh).isMesh || (e as LineSegments).isLine) {
-                            const mesh = e as Mesh | LineSegments;
-                            const key = this.createPrimitiveKey((mesh as any).primitive);
-                            if (!indexBuffer.has(key)) {
-                                indexBuffer.set(key, []);
-                            }
-                            const buffers = indexBuffer.get(key)!;
-                            buffers.push(mesh.geometry.index!.array);
-                        }
-                    });
-
-                    const removedMeshes: (Mesh | LineSegments)[] = [];
-                    scene.traverse((e: Object3D) => {
-                        if ((e as Mesh).isMesh || (e as LineSegments).isLine) {
-                            const mesh = e as Mesh | LineSegments;
-                            const key = this.createPrimitiveKey((mesh as any).primitive);
-
-                            if (!meshMap.has(key)) {
-                                const newGeometry = new BufferGeometry();
-
-                                if (mesh.geometry.attributes.normal) {
-                                    newGeometry.setAttribute(
-                                        "normal",
-                                        mesh.geometry.attributes.normal
-                                    );
-                                }
-
-                                newGeometry.setAttribute(
-                                    "position",
-                                    mesh.geometry.attributes.position
-                                );
-
-                                if (mesh.geometry.attributes.uv) {
-                                    newGeometry.setAttribute("uv", mesh.geometry.attributes.uv);
-                                }
-
-                                if (mesh.geometry.attributes._batchid) {
-                                    const batchIdArray = new Float32Array(
-                                        mesh.geometry.attributes._batchid.array as ArrayLike<number>
-                                    );
-                                    newGeometry.setAttribute(
-                                        "_batchid",
-                                        new BufferAttribute(batchIdArray, 1)
-                                    );
-                                }
-
-                                const newMesh =
-                                    mesh instanceof LineSegments
-                                        ? new LineSegments(newGeometry, mesh.material)
-                                        : new Mesh(newGeometry, mesh.material);
-
-                                newMesh.castShadow = true;
-                                (newMesh as any).tile = this.tile;
-                                (newMesh as any).batchTable = batchTable;
-
-                                if (mesh.geometry.attributes._batchid) {
-                                    (newMesh as any)._batchid =
-                                        mesh.geometry.attributes._batchid.array;
-                                }
-
-                                (newMesh as any).type = "b3dm";
-                                mesh.parent!.add(newMesh);
-                                meshMap.set(key, newMesh);
-                            }
-                            removedMeshes.push(mesh);
-                        }
-                    });
-
-                    removedMeshes.forEach(e => e.removeFromParent());
-
-                    meshMap.forEach((mesh, key) => {
-                        const { geometry } = mesh;
-                        const indexArrays = indexBuffer.get(key)!;
-                        const index = new Uint32Array(
-                            indexArrays.reduce((a, b) => a + b.length, 0)
-                        );
-                        geometry.setIndex(new BufferAttribute(index, 1));
-
-                        let offset = 0;
-                        indexArrays.forEach(buffer => {
-                            index.set(buffer as ArrayLike<number>, offset);
-                            offset += buffer.length;
-                        });
-                    });
-
-                    const rtcCenter = featureTable.getData("RTC_CENTER") as number[] | undefined;
+                    const rtcCenter = featureTable.getData(
+                        "RTC_CENTER",
+                        1,
+                        FeatureComponentType.FLOAT,
+                        FeatureType.VEC3
+                    );
                     if (rtcCenter) {
                         scene.position.x += rtcCenter[0];
                         scene.position.y += rtcCenter[1];
                         scene.position.z += rtcCenter[2];
                     }
 
-                    scene.updateMatrix();
-                    scene.matrix.multiply(adjustmentTransform);
-                    scene.matrix.decompose(scene.position, scene.quaternion, scene.scale);
+                    model.scene.updateMatrix();
+                    model.scene.matrix.multiply(adjustmentTransform);
+                    model.scene.matrix.decompose(
+                        model.scene.position,
+                        model.scene.quaternion,
+                        model.scene.scale
+                    );
 
-                    (model as any).batchTable = batchTable;
-                    (model as any).featureTable = featureTable;
-
-                    (scene as any).batchTable = batchTable;
-                    (scene as any).featureTable = featureTable;
+                    model.batchTable = batchTable;
+                    model.featureTable = featureTable;
 
                     resolve(model as GLTF & { batchTable: any; featureTable: any });
                 },

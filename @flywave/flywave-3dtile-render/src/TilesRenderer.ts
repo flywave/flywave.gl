@@ -48,10 +48,13 @@ export class TilesRenderer extends ThreeTilesRenderer {
         this.setCamera(mapView.camera);
         this.setResolutionFromRenderer(mapView.camera, mapView.renderer);
         mapView.addEventListener(MapViewEventNames.Render, this.update3DTileSource);
+
+        mapView.scene.add(this.object);
     }
 
     disconnectMapView() {
         if (this.mapView) {
+            this.mapView.scene.remove(this.object);
             this.mapView.removeEventListener(MapViewEventNames.Render, this.update3DTileSource);
             this.mapView = undefined;
         }

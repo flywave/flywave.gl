@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+const CopyWebpackPlugin = require("copy-webpack-plugin");
 const TsconfigPathsPlugin = require("tsconfig-paths-webpack-plugin");
 //@ts-check
 const webpack = require("webpack");
@@ -80,7 +81,8 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             // "@flywave/flywave-fetch/**/*.ts",
             // "@flywave/flywave-utils/**/*.ts",
             // "@flywave/flywave-geoutils/**/*.ts",
-            "@flywave/flywave-map-controls/**/*.ts"
+            // "@flywave/flywave-map-controls/**/*.ts",
+            "@flywave/flywave-3dtile-render/**/*.ts",
             // "@flywave/flywave-mapview/**/*.ts",
             // "@flywave/flywave-mapview-decoder/**/*.ts",
             // "@flywave/flywave-materials/**/*.ts",
@@ -109,6 +111,10 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             //     pattern: "@flywave/flywave-text-canvas/resources/fonts/**/*.*",
             //     included: false
             // },
+            {
+                pattern: "node_modules/three/examples/jsm/libs/draco/**/*.*",
+                included: false
+            }
             // {
             //     pattern: "@flywave/flywave-mapview/test/resources/*.*",
             //     included: false
@@ -169,6 +175,7 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         },
         // 代理配置
         proxies: {
+            "/draco": "/base/node_modules/three/examples/jsm/libs/draco",
             "/@flywave": "/base/@flywave",
             "/@here/harp-fontcatalog/resources/": isMapSdk
                 ? "/base/@flywave/flywave-text-canvas/resources/fonts/"
@@ -196,6 +203,15 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
                 ]
             },
             plugins: [
+                // new CopyWebpackPlugin({
+                //     patterns: [
+                //         {
+                //             from: `${__dirname}/node_modules/three/examples/jsm/libs/draco`,
+                //             toType: "dir",
+                //             to: "draco"
+                //         }
+                //     ]
+                // }),
                 new webpack.ProvidePlugin({
                     process: "process/browser",
                     Buffer: ["buffer", "Buffer"]
