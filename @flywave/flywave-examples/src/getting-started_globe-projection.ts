@@ -47,7 +47,7 @@ export namespace GlobeExample {
         map.addDataSource(omvDataSource);
 
         const mapControls = new MapControls(map);
-        mapControls.maxTiltAngle = 90;
+        mapControls.maxTiltAngle = 0;
         const ui = new MapControlsUI(mapControls, { zoomLevel: "input" });
         map.canvas.parentElement!.appendChild(ui.domElement);
     }

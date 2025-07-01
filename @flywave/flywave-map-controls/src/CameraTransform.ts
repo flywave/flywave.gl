@@ -192,18 +192,6 @@ export abstract class CameraTransform {
         this.cameraToWorld.multiply(new Matrix4().makeRotationZ(angle));
     }
 
-    /**
-     * Rotates the camera around an arbitrary axis
-     * @param axisX X component of rotation axis
-     * @param axisY Y component of rotation axis
-     * @param axisZ Z component of rotation axis
-     * @param angle Rotation angle in radians
-     */
-    public rotate(axisX: number, axisY: number, axisZ: number, angle: number): void {
-        const axis = new Vector3(axisX, axisY, axisZ).normalize();
-        this.cameraToWorld.multiply(new Matrix4().makeRotationAxis(axis, angle));
-    }
-
     public zoom(target: Vector3, interpolationFactor: number) {
         var r = this.cameraToWorld.elements;
         r[12] += (target.x - r[12]) * interpolationFactor;
@@ -237,51 +225,6 @@ export abstract class CameraTransform {
     }
 
     /**
-     * Limits the camera tilt relative to a pivot point
-     * @param pivot Pivot point coordinates [x,y,z]
-     * @param up Up vector coordinates [x,y,z]
-     * @param maxTilt Maximum tilt angle in radians
-     */
-    public tiltLimit(pivot: Vector3, up: Vector3, maxTilt: number): void {
-        const position = new Vector3().fromArray(this.cameraToWorld.elements, 12);
-        position.sub(pivot);
-
-        const forward = new Vector3().setFromMatrixColumn(this.cameraToWorld, 2);
-        const right = new Vector3().setFromMatrixColumn(this.cameraToWorld, 0);
-
-        const upDot = forward.dot(up);
-        const rightDot = right.dot(up);
-
-        if (rightDot < 0) {
-            if (upDot > -Math.sin(maxTilt)) {
-                const sign = rightDot > 0 ? -1 : 1;
-                this.rotateAroundPivot(
-                    pivot[0],
-                    pivot[1],
-                    pivot[2],
-                    right.x,
-                    right.y,
-                    right.z,
-                    sign * (Math.asin(upDot) + maxTilt) * 0.5
-                );
-            }
-        } else {
-            this.rotateAroundPivot(
-                pivot[0],
-                pivot[1],
-                pivot[2],
-                right.x,
-                right.y,
-                right.z,
-                -Math.asin(rightDot) * 0.5
-            );
-        }
-
-        position.add(pivot);
-        this.cameraToWorld.setPosition(position);
-    }
-
-    /**
      * Rotates the camera around a pivot point
      * @param pivotX Pivot X coordinate
      * @param pivotY Pivot Y coordinate
@@ -300,17 +243,14 @@ export abstract class CameraTransform {
         axisZ: number,
         angle: number
     ): void {
-        const pivot = new Vector3(pivotX, pivotY, pivotZ);
-        const position = new Vector3().fromArray(this.cameraToWorld.elements, 12).sub(pivot);
-
-        const rotationMatrix = new Matrix4().makeRotationAxis(
-            new Vector3(axisX, axisY, axisZ).normalize(),
-            angle
-        );
-
-        position.applyMatrix4(rotationMatrix);
-        this.cameraToWorld.multiply(rotationMatrix);
-        this.cameraToWorld.setPosition(position.add(pivot));
+        var r = this.cameraToWorld.elements;
+        r[12] -= pivotX;
+        r[13] -= pivotY;
+        r[14] -= pivotZ;
+        this.rotateAxisAngleT(this.cameraToWorld, axisX, axisY, axisZ, -angle);
+        r[12] += pivotX;
+        r[13] += pivotY;
+        r[14] += pivotZ;
     }
 
     /**
@@ -348,10 +288,10 @@ export abstract class CameraTransform {
         this.rotateAxisAngleT(cameraMatrix, pivotX, pivotY, pivotZ, velocity);
 
         // 3. 获取并标准化X轴方向
-        const xAxis = new Vector3().fromArray(cameraMatrix.elements).normalize();
+        const xAxis = new Vector3().fromArray(cameraMatrix.elements).normalize().negate();
 
         // 4. 绕X轴倾斜
-        this.rotateAxisAngleT(cameraMatrix, xAxis.x, xAxis.y, xAxis.z, tilt);
+        this.rotateAxisAngleT(cameraMatrix, xAxis.x, xAxis.y, xAxis.z, -tilt);
 
         let adjusted = false;
         if (maxTilt !== undefined) {

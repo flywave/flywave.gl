@@ -256,32 +256,28 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
         this.cameraTransform.getOrigin(cameraPos);
 
-        if (mouseDown[2]) {
-            // 右键按下
-            // 只有当不禁用tilt和heading时才处理旋转
-            const canRotate = !this._disableTilt && !this._disableHeading;
+        // 右键按下
+        // 只有当不禁用tilt和heading时才处理旋转
+        const canRotate = !this._disableTilt && !this._disableHeading;
 
-            // 更新prevDown状态（对应原始代码中的R[2]）
-            this.mouseState.prevDown[2] = canRotate;
+        // 更新prevDown状态（对应原始代码中的R[2]）
+        this.mouseState.prevDown[2] = canRotate;
 
-            // 只有当允许旋转时才处理旋转操作
-            if (canRotate) {
-                this.handleRotationOperations(mouseDown, mouseX, mouseY);
-            }
-        }
+        // 只有当允许旋转时才处理旋转操作
+        this.handleRotationOperations(mouseDown, mouseX, mouseY);
 
         // Apply tilt and heading changes
         this.applyTiltAndHeadingChanges();
 
         if ((!mouseDown[0] || !this.isPanHit) && this.lastHitCenterDistance > 0) {
-            // this.cameraTransform.applyTiltLimit(
-            //     this.lastHitCenter,
-            //     this.lastHitGravity,
-            //     this.tiltLimit
-            // );
-            this.cameraTransform.smartBalance(
+            this.cameraTransform.applyTiltLimit(
                 this.lastHitCenter,
                 this.lastHitGravity,
+                this.tiltLimit
+            );
+            this.cameraTransform.smartBalance(
+                this.lastHitCenter.clone(),
+                this.lastHitGravity.clone(),
                 this.tiltLimit
             );
         }
@@ -601,7 +597,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             );
 
             this.cameraTransform.pan(this.panHit, target, this.inertialAxis, 0.2);
-        } else if (this.inertialAxis.length() > 0) {
+        } else if (this.inertialAxis.w != 0) {
             this.cameraTransform.inertialPan(cameraPos, this.inertialAxis, 0.075);
         }
 

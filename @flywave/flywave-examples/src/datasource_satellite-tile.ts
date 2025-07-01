@@ -34,7 +34,7 @@ export namespace SatelliteDataSourceExample {
         const map = new MapView({
             projection: sphereProjection,
             target: new GeoCoordinates(36.79460588481734, 117.61746743784798, 0),
-            zoomLevel: 17,
+            zoomLevel: 8,
             canvas,
             theme: "resources/berlin_tilezen_base_globe.json"
         });
