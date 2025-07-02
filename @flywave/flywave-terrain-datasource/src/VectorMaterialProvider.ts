@@ -5,7 +5,7 @@ import {
     webMercatorTilingScheme
 } from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
-import { TileTaskGroups } from "@flywave/flywave-mapview";
+import { Tile, TileTaskGroups } from "@flywave/flywave-mapview";
 import { TileObjectRenderer } from "@flywave/flywave-mapview/src/TileObjectsRenderer";
 import { VectorTileDataSource } from "@flywave/flywave-vectortile-datasource";
 import * as THREE from "three";
@@ -14,28 +14,9 @@ interface VectorMaterialProviderOptions {
     [key: string]: any;
 }
 
-interface TileMaterial {
-    renderTarget?: THREE.WebGLRenderTarget;
+export class TileMaterial extends Tile {
+    renderTarget: THREE.WebGLRenderTarget;
     material?: THREE.Texture;
-    tileKey: TileKey;
-    tileLoader: {
-        waitSettled: () => Promise<void>;
-    };
-    m_tileGeometryLoader: {
-        update: () => Promise<void>;
-        waitFinished: () => Promise<void>;
-    };
-    decodedTile?: {
-        decodeTime: number;
-    };
-    disposed: boolean;
-    geoBox: GeoBox;
-    textElementGroups: Array<{
-        points: THREE.Vector3 | THREE.Vector3[];
-        dispose: () => void;
-    }>;
-    clearTextElements: () => void;
-    dispose: () => void;
 }
 
 class VectorTileDataSourceWrapper extends VectorTileDataSource {
@@ -118,8 +99,8 @@ export class VectorMaterialProvider {
         const tile = this.vectorSource.getTile(tileKey, false) as unknown as TileMaterial;
         this.tileMaterialCache.set(tileKey.mortonCode(), tile);
         tile.tileLoader.waitSettled().then(async () => {
-            await tile.m_tileGeometryLoader.update();
-            await tile.m_tileGeometryLoader.waitFinished();
+            await tile.tileGeometryLoader.update();
+            await tile.tileGeometryLoader.waitFinished();
             this.renderBufferTask(tile);
         });
     };
@@ -142,7 +123,7 @@ export class VectorMaterialProvider {
 
     private buildCamera(tile: TileMaterial): THREE.OrthographicCamera {
         const mbox = this.vectorSource.projection.projectBox(tile.geoBox);
-        const { x, y, z } = mbox.getSize(new THREE.Vector3());
+        const { x, y } = mbox.getSize(new THREE.Vector3());
 
         const camera = new THREE.OrthographicCamera(-x / 2, x / 2, y / 2, -y / 2, 1, 1000);
         mbox.getCenter(camera.position);
@@ -185,17 +166,9 @@ export class VectorMaterialProvider {
         renderer.setRenderTarget(oldRenderTarget);
 
         tile.textElementGroups.forEach(text => {
-            if (Array.isArray(text.points)) {
-                text.points = text.points.map(p => {
-                    const geo = this.vectorSource.projection.unprojectPoint(p);
-                    return this.dataSource.mapView.projection.projectPoint(geo, p);
-                });
-            } else {
-                text.points = this.dataSource.mapView.projection.projectPoint(
-                    this.vectorSource.projection.unprojectPoint(text.points),
-                    text.points
-                );
-            }
+            const sourceMatrix = this.vectorSource.projection.matrix;
+            const targetMatrix = this.dataSource.mapView.projection.matrix;
+            text.transformCoordinates(sourceMatrix, targetMatrix);
         });
 
         const oldClear = tile.clearTextElements;

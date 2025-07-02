@@ -1,198 +1,335 @@
-import { DecodedTile, Geometry } from "@flywave/flywave-datasource-protocol";
-import { GeoCoordinates, Projection, TileKey, TilingScheme } from "@flywave/flywave-geoutils";
-import { DataSource, Tile, TileObject } from "@flywave/flywave-mapview";
+import { TileKey } from "@flywave/flywave-geoutils";
+import { Tile } from "@flywave/flywave-mapview";
 import { TileFactory } from "@flywave/flywave-mapview-decoder";
-import { Box3, BufferAttribute, BufferGeometry, Material, Mesh, Triangle, Vector3 } from "three";
+import * as THREE from "three";
+import { Material } from "three";
 
 import { ElevationMaterial } from "./ElevationMaterial";
+import normalJPEG from "./NormalWaterJpg";
+import { TinTerrainProvider } from "./TinTerrainProvider";
+import { TinTerrainSource } from "./TinTerrainSource";
 
-export interface TerrainTileOptions {
-    getTileMaterial?: (tile: TerrainTile, decodedTile: DecodedTile) => Promise<Material>;
-    getCustomObjects?: (terrainTile: TerrainTile) => Promise<any> | void;
-}
+// Texture loading helper
+const loadWaterNormalTexture = (normalJPEG: string): THREE.Texture => {
+    const texture = new THREE.Texture();
+    const image = new Image();
+    image.src = normalJPEG;
+    image.onload = () => {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        texture.needsUpdate = true;
+    };
+    texture.image = image;
+    return texture;
+};
 
 export class TerrainTileFactory extends TileFactory<TerrainTile> {
-    private readonly options: TerrainTileOptions;
-
-    constructor(options: TerrainTileOptions) {
-        super(TerrainTile);
-        this.options = options;
-    }
-
-    create(dataSource: DataSource, tileKey: TileKey): TerrainTile {
-        return new TerrainTile(dataSource, tileKey, this.options);
+    create(dataSource: any, tileKey: TileKey): TerrainTile {
+        return new TerrainTile(dataSource, tileKey);
     }
 }
 
 export class TerrainTile extends Tile {
-    private readonly getTileMaterial?: (
-        tile: TerrainTile,
-        decodedTile: DecodedTile
-    ) => Promise<Material>;
+    maxHeight: number = 0;
+    minHeight: number = 0;
+    shaders: THREE.ShaderMaterialParameters[] = [];
+    materialTiles: any[] = [];
+    wireframe: boolean = false;
+    rayTestMesh?: THREE.Mesh;
+    bindedTinTile?: any;
 
-    private readonly getCustomObjects?: (tile: TerrainTile) => Promise<any> | void;
-    private decodedTileGeometry: Geometry | null = null;
-    private scaledPositionArray: Float32Array | null = null;
-    private readonly tileSize: Vector3;
+    private readonly waterNormalTexture: THREE.Texture;
+    private readonly emptyTexture: THREE.DataTexture;
+    private readonly elevationMaterials: ElevationMaterial[] = [];
 
-    constructor(dataSource: DataSource, tileKey: TileKey, options?: TerrainTileOptions) {
+    constructor(dataSource: TinTerrainSource, tileKey: TileKey) {
         super(dataSource, tileKey);
 
-        this.getTileMaterial = options.getTileMaterial;
-        this.getCustomObjects = options.getCustomObjects;
+        this.waterNormalTexture = loadWaterNormalTexture(normalJPEG);
+        this.emptyTexture = new THREE.DataTexture();
 
-        this.decodedTileGeometry = null;
-        this.scaledPositionArray = null;
-        this.tileSize = this.getTileSize(
-            this.tileKey,
-            this.projection,
-            this.dataSource.getTilingScheme()
-        );
+        const dataProvider = dataSource.dataProvider() as TinTerrainProvider;
+        dataProvider.loadTile(tileKey);
+        const tinTile = dataProvider.getBestAvailableTile(tileKey);
+
+        if (!tinTile) return;
+
+        this.bindedTinTile = tinTile;
+        this.geoBox.southWest.altitude = tinTile.minimumHeight;
+        this.geoBox.northEast.altitude = tinTile.maximumHeight;
+        this.updateBoundingBox();
+
+        const objects = new THREE.Object3D();
+        objects.position.copy(this.center).multiplyScalar(-1);
+        this.objects.push(objects);
+
+        this.rayTestMesh = this.builderRayTestMesh(tinTile);
+
+        dataSource.getMaterialProviders().forEach(provider => {
+            this.builderMeshByMaterialProvider(provider, objects);
+        });
     }
 
-    generateTileMaterial(decodedTile: DecodedTile) {
-        return this.getTileMaterial
-            ? this.getTileMaterial(this, decodedTile)
-            : Promise.resolve(new ElevationMaterial(decodedTile));
-    }
-
-    getTileSize(tileKey: TileKey, projection: Projection, tilingScheme: TilingScheme) {
-        const boundingBox = new Box3();
-        const size = new Vector3();
-        const geoBox = tilingScheme.getGeoBox(tileKey);
-
-        projection.projectBox(geoBox, boundingBox);
-        boundingBox.getSize(size);
-        return size;
-    }
-
-    scaleVertices(
-        positionArray: Float32Array,
-        tileHeader: { maxHeight: number; minHeight: number },
-        tileSize: Vector3
-    ) {
-        const xScale = tileSize.x;
-        const yScale = tileSize.y;
-        const zScale = tileHeader.maxHeight - tileHeader.minHeight;
-        const scaledPositionArray = new Float32Array(positionArray.length);
-
-        for (let i = 0; i < positionArray.length; i += 3) {
-            scaledPositionArray[i] = positionArray[i] * xScale - tileSize.x / 2;
-            scaledPositionArray[i + 1] = positionArray[i + 1] * yScale - tileSize.y / 2;
-            scaledPositionArray[i + 2] = positionArray[i + 2] * zScale + tileHeader.minHeight;
-        }
-
-        return scaledPositionArray;
-    }
-
-    findVertexAttribute(attributeArray, name) {
-        return attributeArray.find(attr => attr.name === name);
-    }
-
-    createObjects(decodedTile: DecodedTile, objects: TileObject[]) {
-        this.decodedTileGeometry = decodedTile.geometries[0];
-
-        const vertexPosition = this.findVertexAttribute(
-            this.decodedTileGeometry.vertexAttributes,
-            "position"
-        );
-        const buffer = vertexPosition.buffer;
-        const metadata = vertexPosition.metadata;
-
-        this.scaledPositionArray = this.scaleVertices(buffer, metadata, this.tileSize);
-
-        this.generateTileMaterial(decodedTile).then(material =>
-            this.createTileObjects(material, decodedTile.geometries[0], objects)
-        );
-        if (this.getCustomObjects) {
-            Promise.resolve(this.getCustomObjects(this)).then(() =>
-                this.dataSource.requestUpdate()
-            );
-        }
-    }
-
-    createTileObjects(material, decodedTileGeometry, objects) {
-        const tileGeometry = new BufferGeometry();
-        const tileMesh = new Mesh(tileGeometry, material);
-
-        decodedTileGeometry.vertexAttributes.forEach(attr => {
-            const buffer = attr.name === "position" ? this.scaledPositionArray : attr.buffer;
-
-            tileGeometry.setAttribute(attr.name, new BufferAttribute(buffer, attr.itemCount));
+    willRender(): boolean {
+        // Update frame numbers for animation
+        this.elevationMaterials.forEach(material => {
+            material.frameNumber = this.dataSource.mapView.frameNumber;
         });
 
-        if (decodedTileGeometry.index !== undefined) {
-            tileGeometry.setIndex(new BufferAttribute(decodedTileGeometry.index.buffer, 1));
+        const dataSource = this.dataSource as TinTerrainSource;
+
+        // Update wireframe state if changed
+        if (dataSource.wireframe !== this.wireframe) {
+            this.elevationMaterials.forEach(material => {
+                material.wireframe = dataSource.wireframe;
+            });
+            this.wireframe = dataSource.wireframe;
         }
 
-        if (!tileGeometry.attributes.normal && !tileGeometry.attributes.octNormal) {
-            tileGeometry.computeVertexNormals();
-        }
-
-        objects.push(tileMesh);
-
-        this.dataSource.requestUpdate();
+        return true;
     }
 
-    calculateLocalDisplacement(geoCoordinates: GeoCoordinates) {
-        const worldCoordinates = this.projection.projectPoint(geoCoordinates, new Vector3());
-        const localCoordinates = worldCoordinates.sub(this.center);
+    private configureElevationMaterial(material: ElevationMaterial, tinTile: any): void {
+        // Set up material properties based on tile data
+        material.clipUvTransform = this.computeClipUvTransfrom(tinTile.tileKey, this.tileKey);
 
-        const indexBuffer = new Uint32Array(this.decodedTileGeometry.index.buffer); // Convert to typed array
-        const scaledPositionArray = this.scaledPositionArray;
-        const displacement = new Vector3(0, 0, 0);
-
-        for (let i = 0; i < indexBuffer.length; i += 3) {
-            const index1 = indexBuffer[i] * 3;
-            const index2 = indexBuffer[i + 1] * 3;
-            const index3 = indexBuffer[i + 2] * 3;
-
-            const v1 = new Vector3(
-                scaledPositionArray[index1],
-                scaledPositionArray[index1 + 1],
-                scaledPositionArray[index1 + 2]
+        const waterMaskTile = this.getWaterMaskTile();
+        if (waterMaskTile) {
+            material.waterMaskTexture = waterMaskTile.waterMask;
+            material.normalTexture = this.waterNormalTexture;
+            material.waterMaskTranslationAndScale = this.computeWaterMaskTransfrom(
+                waterMaskTile,
+                tinTile
             );
-            const v2 = new Vector3(
-                scaledPositionArray[index2],
-                scaledPositionArray[index2 + 1],
-                scaledPositionArray[index2 + 2]
+            material.waterMaskNoisyTranslationAndScale =
+                this.computeWaterMaskNoisyTransfrom(tinTile);
+        } else {
+            material.waterMaskTexture = this.emptyTexture;
+            material.normalTexture = this.emptyTexture;
+        }
+
+        this.elevationMaterials.push(material);
+    }
+
+    private builderMeshByMaterialProvider(provider: any, objects: THREE.Object3D): void {
+        provider.loadNeareastRectangleLevel(this.geoBox, this.tileKey.level);
+        const textSet = new Set();
+
+        provider
+            .getNeareastRectangleByLevel(this.geoBox, this.tileKey.level)
+            .forEach((materialTile: any) => {
+                objects.add(this.builderMesh(this.builderMeshMaterial(provider, materialTile)));
+
+                materialTile.textElementGroups.forEach((ele: any) => {
+                    if (!textSet.has(ele.featureId)) {
+                        this.addTextElement(ele);
+                        textSet.add(ele.featureId);
+                    }
+                });
+            });
+    }
+
+    private builderMeshMaterial(provider: any, materialTile: any): Material {
+        this.materialTiles.push(materialTile);
+        const material = provider.getMaterialByTile(materialTile);
+
+        if (material instanceof ElevationMaterial) {
+            this.configureElevationMaterial(material, this.bindedTinTile);
+        } else {
+            material.onBeforeCompile = this.createShaderModifier(
+                this.bindedTinTile,
+                this,
+                this.computeTextureUvTransfrom(materialTile, provider),
+                provider.isWebMercator()
             );
-            const v3 = new Vector3(
-                scaledPositionArray[index3],
-                scaledPositionArray[index3 + 1],
-                scaledPositionArray[index3 + 2]
-            );
+        }
 
-            const triangle = new Triangle(v1, v2, v3);
-            const planeTriangle = new Triangle(
-                v1.clone().setZ(0),
-                v2.clone().setZ(0),
-                v3.clone().setZ(0)
-            );
+        return material;
+    }
 
-            if (planeTriangle.containsPoint(localCoordinates)) {
-                const rationVector = planeTriangle.getBarycoord(localCoordinates, new Vector3());
+    private createShaderModifier(
+        tinTile: any,
+        tile: TerrainTile,
+        imageUv: THREE.Vector4,
+        isWebMercator: boolean
+    ) {
+        return (shader: THREE.ShaderMaterialParameters) => {
+            // Vertex shader modifications
+            shader.vertexShader = shader.vertexShader
+                .replace(
+                    `#include <beginnormal_vertex>`,
+                    `#include <beginnormal_vertex>
+                     #include <beginnormal_tinterrain_vertex>`
+                )
+                .replace(
+                    `#include <uv_pars_vertex>`,
+                    `#include <uv_pars_vertex>
+                     #include <tinterrain_common>`
+                )
+                .replace(
+                    `#include <begin_vertex>`,
+                    `#include <begin_vertex>
+                     #include <begin_tinterrain_vertex>`
+                );
 
-                const displacementZ =
-                    rationVector.x * triangle.a.z +
-                    rationVector.y * triangle.b.z +
-                    rationVector.z * triangle.c.z;
+            // Fragment shader modifications
+            shader.fragmentShader = shader.fragmentShader
+                .replace(
+                    `#include <color_pars_fragment>`,
+                    `#include <color_pars_fragment>
+                     #include <tinterrain_color_pars_fragment>
+                     #include <water_mask_pars_fragment>`
+                )
+                .replace(
+                    `#include <premultiplied_alpha_fragment>`,
+                    `#include <premultiplied_alpha_fragment>
+                     #include <discard_out_range_frag>
+                     #include <water_mask_compute_color_fragment>`
+                );
 
-                displacement.set(localCoordinates.x, localCoordinates.y, displacementZ);
+            // Set uniforms
+            shader.uniforms.clipUvTransfrom = {
+                value: tile.computeClipUvTransfrom(tinTile.tileKey, tile.tileKey)
+            };
+            shader.uniforms.imageUvTransfrom = { value: imageUv };
+            shader.uniforms.isWebMercator = { value: isWebMercator };
 
-                break;
+            const waterMaskTile = tile.getWaterMaskTile();
+            if (waterMaskTile) {
+                shader.uniforms.u_waterMask = { value: waterMaskTile.waterMask };
+                shader.uniforms.normalSampler = { value: this.waterNormalTexture };
+                shader.uniforms.u_waterMaskTranslationAndScale = {
+                    value: tile.computeWaterMaskTransfrom(waterMaskTile, tinTile)
+                };
+                shader.uniforms.u_waterMaskNoisyTranslationAndScale = {
+                    value: tile.computeWaterMaskNoisyTransfrom(tinTile)
+                };
+                shader.uniforms.frameNumber = { value: this.dataSource.mapView.frameNumber };
+                this.shaders.push(shader);
+            } else {
+                shader.uniforms.u_waterMask = { value: this.emptyTexture };
+                shader.uniforms.normalSampler = { value: this.emptyTexture };
             }
-        }
-
-        return displacement;
+        };
     }
 
-    addObject(geoCoordinates: GeoCoordinates, object: TileObject) {
-        if (this.geoBox.contains(geoCoordinates)) {
-            object.displacement = this.calculateLocalDisplacement(geoCoordinates);
-            this.objects.push(object);
+    // Geometry builder methods remain largely the same with proper typing
+    private builderMesh(material: Material): THREE.Object3D {
+        const wrap = new THREE.Object3D();
+        wrap.position.copy(this.center).multiplyScalar(-1);
+
+        const tileMesh = new THREE.Mesh(this.bindedTinTile.geometry, material);
+        tileMesh.renderOrder = this.tileKey.level;
+        tileMesh.position.copy(this.bindedTinTile.tinCenter);
+        tileMesh.receiveShadow = true;
+        wrap.add(tileMesh);
+        return wrap;
+    }
+
+    private builderRayTestMesh(tinTile: any): THREE.Mesh {
+        return new THREE.Mesh(tinTile.geometry);
+    }
+
+    getRayTestMesh(camPosition: THREE.Vector3): THREE.Mesh | undefined {
+        if (!this.rayTestMesh || !this.bindedTinTile) return;
+        this.rayTestMesh.position.copy(
+            new THREE.Vector3().copy(this.bindedTinTile.tinCenter).sub(camPosition)
+        );
+        this.rayTestMesh.updateMatrixWorld();
+        return this.rayTestMesh;
+    }
+
+    getWaterMaskTile(): any | undefined {
+        const dataSource = this.dataSource as TinTerrainSource;
+        const waterMaskTile = (
+            dataSource.dataProvider() as TinTerrainProvider
+        ).findAncestorTileWithTerrainData(this.tileKey);
+        return waterMaskTile?.waterMask ? waterMaskTile : undefined;
+    }
+
+    // Existing utility methods with proper typing
+    computeWaterMaskNoisyTransfrom(tile: any): THREE.Vector4 {
+        const tileRectangle = tile.geoBox;
+        const tileWidth = tileRectangle.east - tileRectangle.west;
+        const tileHeight = tileRectangle.north - tileRectangle.south;
+
+        const scaleX = tileWidth / 180;
+        const scaleY = tileHeight / 90;
+
+        return new THREE.Vector4(
+            (scaleX * (tileRectangle.west - 0)) / tileWidth,
+            (scaleY * (tileRectangle.south - 0)) / tileHeight,
+            scaleX,
+            scaleY
+        );
+    }
+
+    computeWaterMaskTransfrom(sourceTile: any, tile: any): THREE.Vector4 {
+        const sourceTileRectangle = sourceTile.geoBox;
+        const tileRectangle = tile.geoBox;
+        const tileWidth = tileRectangle.east - tileRectangle.west;
+        const tileHeight = tileRectangle.north - tileRectangle.south;
+
+        const scaleX = tileWidth / (sourceTileRectangle.east - sourceTileRectangle.west);
+        const scaleY = tileHeight / (sourceTileRectangle.north - sourceTileRectangle.south);
+
+        return new THREE.Vector4(
+            (scaleX * (tileRectangle.west - sourceTileRectangle.west)) / tileWidth,
+            (scaleY * (tileRectangle.south - sourceTileRectangle.south)) / tileHeight,
+            scaleX,
+            scaleY
+        );
+    }
+
+    computeClipUvTransfrom(ptileKey: TileKey, tileKey: TileKey): THREE.Vector3 {
+        let ah = 1;
+        let H = tileKey.level;
+        let ae = tileKey.row;
+        let J = tileKey.column;
+
+        for (; H > ptileKey.level + 1; H--) {
+            ah *= 2;
+            ae >>= 1;
+            J >>= 1;
         }
+
+        const P = 1 / ah;
+        return new THREE.Vector3(P, (tileKey.row - ae * ah) * P, (tileKey.column - J * ah) * P);
+    }
+
+    computeTextureUvTransfrom(materialTile: any, provider: any): THREE.Vector4 {
+        const { geoBox: textuGeobox } = materialTile;
+        const { geoBox: bindTinGeobox } = this.bindedTinTile;
+
+        const textuProjGeobox = new THREE.Box3(
+            provider.tileScheme.projection.projectPoint(textuGeobox.southWest, new THREE.Vector3()),
+            provider.tileScheme.projection.projectPoint(textuGeobox.northEast, new THREE.Vector3())
+        );
+
+        const tinProjGeoBox = new THREE.Box3(
+            provider.tileScheme.projection.projectPoint(
+                bindTinGeobox.southWest,
+                new THREE.Vector3()
+            ),
+            provider.tileScheme.projection.projectPoint(
+                bindTinGeobox.northEast,
+                new THREE.Vector3()
+            )
+        );
+
+        const textuProjGeoboxSize = new THREE.Vector2().subVectors(
+            textuProjGeobox.max,
+            textuProjGeobox.min
+        );
+        const tinProjGeoBoxSize = new THREE.Vector2().subVectors(
+            tinProjGeoBox.max,
+            tinProjGeoBox.min
+        );
+        const w = Math.abs(tinProjGeoBoxSize.x / textuProjGeoboxSize.x);
+        const h = Math.abs(tinProjGeoBoxSize.y / textuProjGeoboxSize.y);
+
+        const offsetY = (tinProjGeoBox.min.y - textuProjGeobox.min.y) / textuProjGeoboxSize.y;
+        const offsetX = (tinProjGeoBox.min.x - textuProjGeobox.min.x) / textuProjGeoboxSize.x;
+
+        return new THREE.Vector4(w, h, offsetX, offsetY);
     }
 }
-
-export { ElevationMaterial };

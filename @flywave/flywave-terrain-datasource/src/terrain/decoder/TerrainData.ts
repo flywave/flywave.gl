@@ -37,9 +37,7 @@ interface QuantizedMeshTerrainDataOptions {
 }
 
 interface CreateMeshOptions {
-    tilingScheme: TilingScheme & {
-        ellipsoid: any;
-    };
+    tilingScheme: TilingScheme;
     x: number;
     y: number;
     level: number;
@@ -199,7 +197,6 @@ class QuantizedMeshTerrainData {
         const level = options.level;
         const exaggeration = defaultValue(options.exaggeration, 1.0);
 
-        const ellipsoid = tilingScheme.ellipsoid;
         const rectangle = tilingScheme.getGeoBox(new TileKey(y, x, level));
 
         const verticesPromise = task({
@@ -222,7 +219,6 @@ class QuantizedMeshTerrainData {
             northSkirtHeight: this._northSkirtHeight,
             rectangle: rectangle,
             relativeToCenter: this._boundingSphere.center,
-            ellipsoid: ellipsoid,
             exaggeration: exaggeration
         });
 
@@ -358,7 +354,6 @@ class QuantizedMeshTerrainData {
         const isEastChild = thisX * 2 !== descendantX;
         const isNorthChild = thisY * 2 === descendantY;
 
-        const ellipsoid = tilingScheme.ellipsoid;
         const childRectangle = tilingScheme.getGeoBox(
             new TileKey((1 << descendantLevel) - 1 - descendantY, descendantX, descendantLevel)
         );
@@ -383,7 +378,6 @@ class QuantizedMeshTerrainData {
             isEastChild: isEastChild,
             isNorthChild: isNorthChild,
             childRectangle: childRectangle,
-            ellipsoid: ellipsoid,
             exaggeration: mesh.exaggeration
         });
 

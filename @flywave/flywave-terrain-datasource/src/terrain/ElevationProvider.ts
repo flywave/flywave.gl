@@ -1,8 +1,9 @@
 import { GeoCoordinates, OrientedBox3, TileKey, TileKeyUtils } from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
-import { DataSource } from "@flywave/flywave-mapview";
 import { Vector3 } from "three";
 
+import { TinTerrainProvider } from "./TinTerrainProvider";
+import { TinTerrainSource } from "./TinTerrainSource";
 import PickLocal from "./utils/pick-local";
 
 const tmpOBB = new OrientedBox3();
@@ -20,10 +21,10 @@ interface CacheItem {
 
 export class ElevationProvider {
     private readonly lru = new LRUCache<CacheItem, CacheItem>(100);
-    private dataSource: DataSource;
+    private dataSource: TinTerrainSource;
     private pickingRaycaster?: PickLocal;
 
-    bindDataSource(dataSource: DataSource): void {
+    bindDataSource(dataSource: TinTerrainSource): void {
         this.dataSource = dataSource;
     }
 
@@ -32,18 +33,18 @@ export class ElevationProvider {
     }
 
     getBestAvailableTile(tk: TileKey): any {
-        return this.dataSource.dataProvider().getBestAvailableTile(tk);
+        return (this.dataSource.dataProvider() as TinTerrainProvider).getBestAvailableTile(tk);
     }
 
     getAtPoint(geoPoint: GeoCoordinates, defaultIfNotLoaded?: number | null): number | null {
-        if (!this.dataSource.dataTerrainProvider._availability) {
+        if (!this.dataSource.dataTerrainProvider.availability) {
             return defaultIfNotLoaded ?? null;
         }
 
         const tk = TileKeyUtils.geoCoordinatesToTileKey(
             this.dataSource.getTilingScheme(),
             geoPoint,
-            this.dataSource.dataTerrainProvider._availability._maximumLevel + 1
+            this.dataSource.dataTerrainProvider.availability.maximumLevel + 1
         );
 
         const terrTile = this.getBestAvailableTile(tk);

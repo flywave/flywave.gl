@@ -507,6 +507,19 @@ export class TextElement {
     }
 
     /**
+     * 转换坐标到目标投影坐标系
+     * @param sourceProj - 源投影坐标系
+     * @param targetProj - 目标投影坐标系
+     */
+    transformCoordinates(sourceProj: THREE.Matrix4, targetProj: THREE.Matrix4) {
+        if (this.points instanceof Array) {
+            this.points.forEach(p => p.applyMatrix4(sourceProj).applyMatrix4(targetProj));
+        } else {
+            this.points.applyMatrix4(sourceProj).applyMatrix4(targetProj);
+        }
+    }
+
+    /**
      * @returns Whether this text element has a valid feature id.
      */
     hasFeatureId(): boolean {

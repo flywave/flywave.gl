@@ -1,5 +1,8 @@
 import { TileKey } from "@flywave/flywave-geoutils";
-import { CalculationStatus, DataSource } from "@flywave/flywave-mapview";
+import { CalculationStatus } from "@flywave/flywave-mapview";
+
+import { TinTerrainProvider } from "./TinTerrainProvider";
+import { TinTerrainSource } from "./TinTerrainSource";
 
 interface MinMaxResult {
     min: number;
@@ -7,10 +10,10 @@ interface MinMaxResult {
 }
 
 class ElevationRangeSource {
-    private dataSource: DataSource;
+    private dataSource: TinTerrainSource;
     private readonly minMaxCache = new Map<number, [number, number]>();
 
-    bindDataSource(dataSource: DataSource): void {
+    bindDataSource(dataSource: TinTerrainSource): void {
         this.dataSource = dataSource;
     }
 
@@ -41,7 +44,8 @@ class ElevationRangeSource {
             const [minimumHeight, maximumHeight] = this.minMaxCache.get(tileID.mortonCode())!;
             return { min: minimumHeight, max: maximumHeight };
         }
-        const tinTile = this.dataSource.dataProvider().getBestAvailableTile(tileID);
+        const dataProvider = this.dataSource.dataProvider() as TinTerrainProvider;
+        const tinTile = dataProvider.getBestAvailableTile(tileID);
         if (!tinTile || !tinTile.tinData) {
             return null;
         }

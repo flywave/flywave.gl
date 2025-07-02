@@ -1,4 +1,4 @@
-import { GeoCoordinates, TilingScheme } from "@flywave/flywave-geoutils";
+import { GeoCoordinates, TileKey, TilingScheme } from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
 import { DataSource, Tile, TileLoaderState } from "@flywave/flywave-mapview";
 import { TileLoader } from "@flywave/flywave-mapview-decoder";
@@ -6,13 +6,16 @@ import { encode } from "@vitaly-z/hilbert-geohash";
 import * as THREE from "three";
 
 import QuantizedMeshTerrainData from "./decoder/TerrainData";
+import TerrainMesh from "./decoder/TerrainMesh";
 import { HeightMap } from "./RenderHeightmap";
+import { TinTerrainSource } from "./TinTerrainSource";
 
 interface TinData {
-    _mesh: {
+    mesh: {
         position3DAndHeight: Float32Array;
         textureCoordAndEncodedNormals: Float32Array;
-        indices: Uint16Array | Uint32Array;
+        // 添加 Uint8Array 类型支持
+        indices: Uint8Array | Uint16Array | Uint32Array;
         center: THREE.Vector3;
         color?: Float32Array;
         indexCountWithoutSkirts?: number;
@@ -37,13 +40,13 @@ interface TinData {
     wasCreatedByUpsampling(): boolean;
 }
 
-export class TinMeshLoader extends TileLoader {
+export class TinTerrainLoader extends TileLoader {
     private readonly parentTile: TinMeshResourceTile | null;
     private readonly tile: TinMeshResourceTile;
     private _decodedTile?: QuantizedMeshTerrainData;
 
     constructor(
-        dataSource: DataSource,
+        dataSource: TinTerrainSource,
         tileKey: any,
         tile: TinMeshResourceTile,
         decoder: any,
@@ -54,16 +57,16 @@ export class TinMeshLoader extends TileLoader {
         this.tile = tile;
     }
 
-    private createMesh(
+    private async createMesh(
         quantizedMeshTerrainData: QuantizedMeshTerrainData,
-        task: (data: any) => Promise<any>
+        task: (data: any) => Promise<TerrainMesh>
     ): Promise<void> {
-        return quantizedMeshTerrainData.createMesh(
+        await quantizedMeshTerrainData.createMesh(
             {
                 x: this.tileKey.column,
                 y: this.tileKey.row,
                 level: this.tileKey.level,
-                tilingScheme: this.dataSource.dataTerrainProvider.tilingScheme
+                tilingScheme: (this.dataSource as TinTerrainSource).dataTerrainProvider.tilingScheme
             },
             task
         );
@@ -77,7 +80,7 @@ export class TinMeshLoader extends TileLoader {
         }
         const { tileKey } = this.parentTile;
         return this.parentTile.tinData.upsample(
-            this.dataSource.dataTerrainProvider.tilingScheme,
+            (this.dataSource as TinTerrainSource).dataTerrainProvider.tilingScheme,
             tileKey.column,
             tileKey.row,
             tileKey.level,
@@ -105,7 +108,7 @@ export class TinMeshLoader extends TileLoader {
         onDone: (doneState: TileLoaderState) => void,
         onError: (error: Error) => void
     ): void {
-        this.dataSource.dataTerrainProvider
+        (this.dataSource as TinTerrainSource).dataTerrainProvider
             .requestTileGeometry(this.tileKey, abortSignal)
             .then((quantizedData: QuantizedMeshTerrainData | undefined) => {
                 if (!quantizedData) {
@@ -210,13 +213,22 @@ export class TinMeshResourceTile extends Tile {
     private _geometry?: THREE.BufferGeometry;
     private tinCenter?: THREE.Vector3;
 
+    constructor(
+        readonly dataSource: DataSource,
+        readonly tileKey: TileKey,
+        offset: number = 0,
+        localTangentSpace?: boolean
+    ) {
+        super(dataSource, tileKey, offset, localTangentSpace);
+    }
+
     public get tinData() {
         return this._tinData;
     }
 
-    async builderQuantized(tinData: TinData): Promise<void> {
+    async builderQuantized(tinData: QuantizedMeshTerrainData): Promise<void> {
         const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center, color } =
-            tinData._mesh;
+            tinData.mesh;
         const geometry = new THREE.BufferGeometry();
         geometry.setIndex(new THREE.BufferAttribute(indices, 1));
         geometry.setAttribute("position", new THREE.BufferAttribute(position3DAndHeight, 3));
@@ -249,7 +261,7 @@ export class TinMeshResourceTile extends Tile {
     rayTest(ray: THREE.Ray, target?: THREE.Vector3): boolean {
         if (!this.tinData || !this.tinCenter) return false;
 
-        const { indices, position3DAndHeight } = this.tinData._mesh;
+        const { indices, position3DAndHeight } = this.tinData.mesh;
         const indicesLength = indices.length;
         const subIndices = indices; //.subarray(0, indexCountWithoutSkirts);
 
@@ -332,15 +344,15 @@ export class TinMeshResourceTile extends Tile {
     }
 
     get maximumHeight(): number | undefined {
-        return this.tinData?._mesh.maximumHeight;
+        return this.tinData?.mesh.maximumHeight;
     }
 
     get minimumHeight(): number | undefined {
-        return this.tinData?._mesh.minimumHeight;
+        return this.tinData?.mesh.minimumHeight;
     }
 
     get horizonOcclusionPoint(): THREE.Vector3 | undefined {
-        return this.tinData?._mesh._horizonOcclusionPoint;
+        return this.tinData?.mesh._horizonOcclusionPoint;
     }
 
     onDispose = (tile: any): (() => void) => {

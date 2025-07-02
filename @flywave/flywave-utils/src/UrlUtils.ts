@@ -154,9 +154,9 @@ export function formatUrl(
         q.push(`${i}=${queryParam[i]}`);
     }
     const formattedUrl = url
-        .replace("{x}", x)
-        .replace("{y}", y)
-        .replace("{z}", z)
+        .replace("{x}", x.toString())
+        .replace("{y}", y.toString())
+        .replace("{z}", z.toString())
         .replace("{version}", version);
 
     return `${formattedUrl}?${q.join("&")}`;

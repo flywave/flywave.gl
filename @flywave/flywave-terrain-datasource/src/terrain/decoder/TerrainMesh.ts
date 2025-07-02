@@ -24,6 +24,7 @@ class TerrainMesh {
     southIndicesEastToWest: Uint16Array | Uint32Array;
     eastIndicesNorthToSouth: Uint16Array | Uint32Array;
     northIndicesWestToEast: Uint16Array | Uint32Array;
+    color?: Float32Array;
 
     constructor(
         center: Vector3,
@@ -44,7 +45,8 @@ class TerrainMesh {
         westIndicesSouthToNorth?: Uint16Array | Uint32Array,
         southIndicesEastToWest?: Uint16Array | Uint32Array,
         eastIndicesNorthToSouth?: Uint16Array | Uint32Array,
-        northIndicesWestToEast?: Uint16Array | Uint32Array
+        northIndicesWestToEast?: Uint16Array | Uint32Array,
+        color?: Float32Array
     ) {
         this.center = center;
         this.heights = heights;
@@ -65,6 +67,7 @@ class TerrainMesh {
         this.southIndicesEastToWest = southIndicesEastToWest || new Uint16Array();
         this.eastIndicesNorthToSouth = eastIndicesNorthToSouth || new Uint16Array();
         this.northIndicesWestToEast = northIndicesWestToEast || new Uint16Array();
+        this.color = color;
     }
 }
 

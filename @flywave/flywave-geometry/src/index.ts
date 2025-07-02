@@ -13,3 +13,4 @@
  */
 
 export * from "./OrientedBox3";
+export * from "./SphereTileGeometry";

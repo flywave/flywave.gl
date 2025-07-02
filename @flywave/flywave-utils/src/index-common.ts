@@ -30,3 +30,6 @@ export * from "./DataType";
 export * from "./GetJsonFromTypedArray";
 export * from "./GetStringFromTypedArray";
 export * from "./BinarySearch";
+export * from "./Image";
+export * from "./OffscreenCanvasSupported";
+export * from "./Browser";

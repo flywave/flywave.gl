@@ -1,92 +1,116 @@
-import { ITileDecoder } from "@flywave/flywave-datasource-protocol";
-import { TileKey, webMercatorProjection, webMercatorTilingScheme } from "@flywave/flywave-geoutils";
+import {
+    TileKey,
+    TilingScheme,
+    webMercatorProjection,
+    webMercatorTilingScheme
+} from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
-import { DataSource, Tile, TileLoaderState } from "@flywave/flywave-mapview";
-import { DataProvider, TileLoader } from "@flywave/flywave-mapview-decoder";
-import { TransferManager } from "@flywave/flywave-transfer-manager";
+import { DataSourceOptions, Tile } from "@flywave/flywave-mapview";
+import { WebTileDataProvider } from "flywave-webtile-datasource";
 import * as THREE from "three";
 
-interface MaterialProviderOptions {
-    url: string;
-    [key: string]: any;
+import { TerrainMeshLambertMaterial } from "./height-map/HeightMapMaterial";
+import { TerrainSource } from "./TerrainSource";
+
+export interface MaterialProviderOptions
+    extends Omit<DataSourceOptions, "enablePicking" | "styleSetName"> {
+    dataProvider: WebTileDataProvider;
+    tilingScheme: TilingScheme;
 }
 
-const imageLoader = new THREE.TextureLoader();
-const downloadImageManager = new TransferManager<
-    string,
-    { data: Promise<THREE.Texture>; status: number }
->(url => {
-    return { data: imageLoader.loadAsync(url), status: 200 };
-});
+export interface TerrainMaterialProvider {
+    isWebMercator(): boolean;
+    getTileMaterial(tileKey: TileKey, abortSignal: AbortSignal): Promise<THREE.Texture>;
+}
 
-export class TileMaterialLoader extends TileLoader {
-    private tile: Tile;
+export class MaterialTile extends Tile {
+    material: THREE.Texture;
+    constructor(dataSource: TerrainSource<MaterialTile>, tileKey: TileKey) {
+        super(dataSource, tileKey);
+    }
 
+    getTerrainMaterial(): TerrainMeshLambertMaterial {
+        if (!this.material) {
+            throw new Error("Tile material is not loaded");
+        }
+
+        return new TerrainMeshLambertMaterial({
+            map: this.material,
+            wireframe: false,
+            depthTest: true,
+            fog: true,
+            transparent: false
+        });
+    }
+}
+
+class WebTileMaterialAdapter implements TerrainMaterialProvider {
     constructor(
-        dataSource: DataSource,
-        tile: Tile,
-        dataProvider: DataProvider,
-        decoder: ITileDecoder
-    ) {
-        super(dataSource, tile.tileKey, dataProvider, decoder);
-        this.tile = tile;
+        private readonly webTileProvider: WebTileDataProvider,
+        private readonly tilingScheme: TilingScheme
+    ) {}
+
+    isWebMercator(): boolean {
+        return this.tilingScheme.projection === webMercatorProjection;
     }
 
-    loadImpl(
-        abortSignal: AbortSignal,
-        onDone: (doneState: TileLoaderState) => void,
-        onError: (error: Error) => void
-    ): void {
-        this.dataProvider
-            .fetchTileMaterial(this.tileKey, abortSignal, this)
-            .then((material: THREE.Texture) => {
-                if (abortSignal.aborted) {
-                    // safety belt if getTile doesn't really support cancellation tokens
-                    const err = new Error("Aborted");
-                    err.name = "AbortError";
-                    throw err;
-                }
+    async getTileMaterial(tileKey: TileKey, abortSignal?: AbortSignal): Promise<THREE.Texture> {
+        const dummyTile = new Tile(null as any, tileKey); // 创建临时Tile对象
+        const result = await this.webTileProvider.getTexture(dummyTile, abortSignal);
 
-                this.tile.material = material;
-                onDone(TileLoaderState.Ready);
-            })
-            .catch((error: Error) => {
-                // Handle abort messages from fetch and also our own.
-                if (error.name === "AbortError" || error.message === "AbortError: Aborted") {
-                    return;
-                }
-                onError(error);
-            });
+        if (!result || !result[0]) {
+            // eslint-disable-next-line prettier/prettier
+            throw new Error("Failed to load web tile texture");
+        }
+
+        const [texture] = result;
+        this.configureTexture(texture!);
+        return texture!;
+    }
+
+    private configureTexture(texture: THREE.Texture) {
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false;
+        texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
     }
 }
 
-export class MaterialProvider {
+export class MaterialProvider implements TerrainMaterialProvider {
+    private readonly providerImpl: TerrainMaterialProvider;
     private readonly levelRange: number[] = [
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
     ];
 
     private readonly sortedLevelRange: number[];
     private readonly tileScheme = webMercatorTilingScheme;
-    private readonly _opacity: number = 1;
+    private _opacity: number = 1;
     private readonly options: MaterialProviderOptions;
-    private dataSource?: DataSource;
+    private dataSource?: TerrainSource<MaterialTile>;
     private readonly maxLodLevel: number = 3;
 
-    public tileMaterialCache: LRUCache<number, Tile> = new LRUCache<number, Tile>(1000);
+    public tileMaterialCache: LRUCache<number, MaterialTile> = new LRUCache<number, MaterialTile>(
+        1000
+    );
 
     constructor(options?: MaterialProviderOptions) {
-        this.options = options || { url: "" };
+        if (options) {
+            this.providerImpl = new WebTileMaterialAdapter(
+                options.dataProvider,
+                options.tilingScheme
+            );
+        } else {
+            throw new Error("Invalid provider configuration");
+        }
+
         this.sortedLevelRange = this.getLevelRange().sort((a, b) => b - a);
+        this.tileMaterialCache = new LRUCache<number, MaterialTile>(1000);
         this.tileMaterialCache.evictionCallback = this.evictionCallback;
     }
 
-    get baseUrl(): string {
-        return this.options.url;
-    }
-
-    bindDataSource(dataSource: DataSource): void {
+    bindDataSource(dataSource: TerrainSource<MaterialTile>): void {
         this.dataSource = dataSource;
-        if (dataSource) dataSource.application.visibleTileSet.clearTileCache();
+        //if (dataSource) dataSource.application.visibleTileSet.clearTileCache();
     }
 
     clipGeobox(geobox: any): any {
@@ -115,7 +139,7 @@ export class MaterialProvider {
     }
 
     isWebMercator(): boolean {
-        return this.tileScheme.projection === webMercatorProjection;
+        return this.providerImpl.isWebMercator();
     }
 
     loadNeareastRectangleLevel(geoBox: any, level: number): void {
@@ -163,34 +187,27 @@ export class MaterialProvider {
                         nearLevel
                     );
 
-                    if (!this.tileMaterialCache.has(tileKey.mortonCode())) {
-                        const tile = new Tile(this.dataSource!, tileKey);
-                        tile.geoBox = this.tileScheme.getGeoBox(tileKey);
-                        tile.updateBoundingBox();
-                        tile.tileLoader = new TileMaterialLoader(
-                            this.dataSource!,
-                            tile,
-                            this,
-                            this.dataSource!.decoder
-                        );
-                        tile.tileLoader.load();
-                        tile.tileLoader.donePromise.then(() => {
-                            this.dataSource!.updateTileOverlayer({
-                                geoBox: this.tileScheme.getGeoBox(tileKey),
-                                tileKey
-                            });
-                        });
+                    const cachedTile = this.tileMaterialCache.get(tileKey.mortonCode());
+                    if (!cachedTile || !cachedTile.material) {
+                        const tile = new MaterialTile(this.dataSource!, tileKey);
 
-                        this.tileMaterialCache.set(tileKey.mortonCode(), tile);
+                        this.providerImpl
+                            .getTileMaterial(tileKey, new AbortController().signal)
+                            .then(material => {
+                                tile.material = material;
+                                this.dataSource!.updateTileOverlayer(tile);
+                                this.tileMaterialCache.set(tileKey.mortonCode(), tile);
+                            })
+                            .catch(error => {
+                                this.tileMaterialCache.delete(tileKey.mortonCode());
+                            });
                         break;
                     } else {
-                        const tile = this.tileMaterialCache.get(tileKey.mortonCode());
-                        if (tile.material) {
+                        if (cachedTile.material) {
                             curLevel++;
                             continue;
-                        } else {
-                            break;
                         }
+                        break;
                     }
                 }
             }
@@ -232,76 +249,14 @@ export class MaterialProvider {
         return false;
     };
 
-    getTileTextureUrl(tileKey: TileKey): string {
-        const level = tileKey.level;
-        const column = tileKey.column;
-        const row = tileKey.row;
-        const quadKey = tileKey.toQuadKey();
-        const mortonCode = tileKey.mortonCode();
-        return this.options.url
-            .replace("{x}", column.toString())
-            .replace("{y}", row.toString())
-            .replace("{z}", level.toString())
-            .replace("{quadKey}", quadKey)
-            .replace("{server}", (mortonCode % 4).toString());
+    getTileMaterial(tileKey: TileKey, abortSignal: AbortSignal): Promise<THREE.Texture> {
+        return this.providerImpl.getTileMaterial(tileKey, abortSignal);
     }
 
-    fetchTileMaterial(
-        tileKey: TileKey,
-        abortSignal: AbortSignal,
-        tileLoader: TileMaterialLoader
-    ): Promise<THREE.Texture> {
-        const url = this.getTileTextureUrl(tileKey);
-
-        return new Promise((resolve, reject) => {
-            this.dataSource!.mapView.taskQueue.add({
-                execute: async () => {
-                    if (abortSignal.aborted) {
-                        return;
-                    }
-                    const { data: texture } = await downloadImageManager.download(url);
-                    if (texture) {
-                        texture.minFilter = THREE.LinearFilter;
-                        texture.magFilter = THREE.LinearFilter;
-                        texture.generateMipmaps = false;
-                        texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
-
-                        this.dataSource!.mapView.taskQueue.add({
-                            execute: async () => {
-                                texture.needsUpdate = true;
-                                resolve(texture);
-                            },
-                            getPriority: () => {
-                                return 100 - tileKey.level;
-                            },
-                            group: "create"
-                        });
-                    }
-                },
-                getPriority: () => {
-                    return 100 - tileKey.level;
-                },
-                group: "fetch"
-            });
-        });
-    }
-
-    evictionCallback = (k: number, tile: Tile): void => {
-        const { material, tileLoader } = tile;
-        tileLoader.cancel();
-        tileLoader.canceled = true;
+    evictionCallback = (k: number, tile: MaterialTile): void => {
+        const { material } = tile;
         if (material) material.dispose();
     };
-
-    getMaterialByTile(tile: Tile): TerrainMeshLambertMaterial {
-        return new TerrainMeshLambertMaterial({
-            map: tile.material,
-            wireframe: false,
-            depthTest: true,
-            fog: true,
-            transparent: false
-        });
-    }
 
     getLevelRange(): number[] {
         return this.levelRange;
@@ -309,33 +264,35 @@ export class MaterialProvider {
 
     remove(): void {
         if (this.dataSource) {
-            const index = this.dataSource.getMaterialProviders().indexOf(this);
+            const providers = this.dataSource.getMaterialProviders();
+            const index = providers.indexOf(this);
             if (index !== -1) {
-                this.dataSource.getMaterialProviders().splice(index, 1);
+                providers.splice(index, 1);
             }
             this.dataSource.mapView.markTilesDirty(this.dataSource);
         }
         this.tileMaterialCache.clear();
     }
 
-    set opacity(v: number) {
-        if (this._opacity === v) {
-            return;
-        }
-        this._opacity = v;
-        if (!this.dataSource) return;
+    set opacity(value: number) {
+        if (this._opacity === value || !this.dataSource) return;
+
+        this._opacity = value;
 
         const cache = this.dataSource.mapView.visibleTileSet.dataSourceTileList.find(
             e => this.dataSource === e.dataSource
         );
+
         if (!cache) return;
 
-        cache.visibleTiles.forEach(tile => {
-            tile.objects.forEach(m => {
-                m.material.opacity = v;
-                m.material.transparent = v !== 1;
-            });
-        });
+        for (const tile of cache.visibleTiles) {
+            for (const obj of tile.objects) {
+                if (obj instanceof THREE.Mesh) {
+                    obj.material.opacity = value;
+                    obj.material.transparent = value !== 1;
+                }
+            }
+        }
     }
 
     get opacity(): number {

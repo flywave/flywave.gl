@@ -4,8 +4,7 @@ import {
     TilingScheme,
     webMercatorProjection
 } from "@flywave/flywave-geoutils";
-import { DataSource } from "@flywave/flywave-mapview";
-import { DataProvider, TileLoader } from "@flywave/flywave-mapview-decoder";
+import { DataProvider } from "@flywave/flywave-mapview-decoder";
 import { TransferManager } from "@flywave/flywave-transfer-manager";
 import {
     defaultValue,
@@ -19,7 +18,9 @@ import * as THREE from "three";
 import { zigZagDeltaDecode } from "./decoder/Decoder";
 import QuantizedMeshTerrainData from "./decoder/TerrainData";
 import TileAvailability from "./TileAvailability";
-import { TinMeshLoader, TinMeshResourceTile } from "./TinTerrainLoader";
+import { TinMeshResourceTile, TinTerrainLoader } from "./TinTerrainLoader";
+import { TinTerrainProvider } from "./TinTerrainProvider";
+import { TinTerrainSource } from "./TinTerrainSource";
 
 const downloadManager = TransferManager.instance();
 
@@ -458,50 +459,6 @@ class LayerInformation {
     }
 }
 
-export class CsgTinMeshLoader extends TileLoader {
-    private __intersectsCsgDatas: any[] = [];
-    private readonly tile: TinMeshResourceTile;
-
-    constructor(dataSource: any, tileKey: any, tile: TinMeshResourceTile) {
-        super(dataSource, tileKey, dataSource.TerrainDataProvider, dataSource.csgDecoder);
-        this.tile = tile;
-    }
-
-    loadImpl(
-        abortSignal: AbortSignal,
-        onDone: (doneState: any) => void,
-        onError: (err: any) => void
-    ): void {
-        const { position3DAndHeight, textureCoordAndEncodedNormals, indices, center } =
-            this.tile._tempTinData._mesh;
-
-        this.onLoaded(
-            {
-                geoBox: this.tile.geoBox.southWest
-                    .toGeoPoint()
-                    .concat(this.tile.geoBox.northEast.toGeoPoint()),
-                source: {
-                    position3DAndHeight,
-                    textureCoordAndEncodedNormals,
-                    indices,
-                    center
-                },
-                target: this.__intersectsCsgDatas.map(d => d.toJSON())
-            },
-            doneState => {
-                onDone(doneState);
-            },
-            err => {
-                onError(err);
-            }
-        );
-    }
-
-    setIntersectsCsgDatas(intersectsCsgDatas: any[]): void {
-        this.__intersectsCsgDatas = intersectsCsgDatas;
-    }
-}
-
 class TerrainDataProvider extends DataProvider {
     private readonly _requestWaterMask: boolean;
     private readonly _requestMetadata: boolean;
@@ -550,7 +507,7 @@ class TerrainDataProvider extends DataProvider {
         queryString: string;
     };
 
-    dataSource: DataSource;
+    dataSource: TinTerrainSource;
     csgDatas: any[] = [];
     attribution: string = "";
     overallAvailability: any[] = [];
@@ -601,11 +558,11 @@ class TerrainDataProvider extends DataProvider {
     }
 
     removeCsgData(id: string): void {
-        this.csgDatas = this.csgDatas.filter(csg => csg.id != id);
+        this.csgDatas = this.csgDatas.filter(csg => csg.id !== id);
     }
 
     updateCsgData(): void {
-        this.dataSource.dataProvider().tinCache.forEach((e: any) => {
+        (this.dataSource.dataProvider() as TinTerrainProvider).tinCache.forEach((e: any) => {
             e.clearCsgGeometry();
         });
         this.dataSource.updateTileOverlayer();
@@ -613,7 +570,10 @@ class TerrainDataProvider extends DataProvider {
 
     connect(): Promise<void> {
         return new Promise((resolve, reject) => {
-            this._readyPromise = { reslove: resolve, reject };
+            this._readyPromise = {
+                reslove: (value: boolean) => resolve(), // Convert boolean resolve to void
+                reject
+            };
             return downloadManager
                 .downloadJson(
                     `${this.url}/layer.json${this.request.queryString}`,
@@ -626,23 +586,28 @@ class TerrainDataProvider extends DataProvider {
     }
 
     getLevelMaximumGeometricError(level: number): number {
-        return this._skirtHeight != undefined
+        return this._skirtHeight !== undefined
             ? this._skirtHeight
             : this._levelZeroMaximumGeometricError / (1 << level);
     }
 
-    makeLoaderTile(tileKey: any, parentTileTinData: any): TinMeshResourceTile {
-        const tile = new TinMeshResourceTile(this.dataSource, tileKey);
-        tile.tileKey.level = tile.tileKey.level - 1;
-        tile.geoBox = this._tilingScheme.getGeoBox(tile.tileKey);
-        tile.tileLoader = new TinMeshLoader(
+    makeLoaderTile(tileKey: any, parentTileTinData?: any): TinMeshResourceTile {
+        // 使用正确的Tile构造函数参数：dataSource, tileKey, offset, localTangentSpace?
+        const tile = new TinMeshResourceTile(
+            this.dataSource,
+            tileKey,
+            0 // 默认offset为0
+        );
+
+        // 初始化loader时传递完整的父级数据
+        tile.tileLoader = new TinTerrainLoader(
             this.dataSource,
             tileKey,
             tile,
             this.dataSource.decoder,
             parentTileTinData
         );
-        tile.csgTinMeshLoader = new CsgTinMeshLoader(this.dataSource, tileKey, tile);
+
         return tile;
     }
 

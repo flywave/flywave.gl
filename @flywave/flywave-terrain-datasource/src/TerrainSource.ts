@@ -11,6 +11,8 @@ import {
 } from "@flywave/flywave-mapview-decoder";
 import { Math2D } from "@flywave/flywave-utils";
 
+import { HeightMapProvider } from "./height-map/HeightMapProvider";
+
 export interface TerrainSourceOptions extends PTileDataSourceOptions {
     elevationRangeSource?: any;
     elevationProvider?: any;
@@ -22,7 +24,7 @@ interface UpdateTileJob {
     tile?: Tile;
 }
 
-export class TerrainSource extends TileDataSource {
+export class TerrainSource<TileType extends Tile = Tile> extends TileDataSource<TileType> {
     private readonly options: TerrainSourceOptions;
     private readonly elevationRangeSource?: any;
     private readonly elevationProvider?: any;
@@ -41,7 +43,7 @@ export class TerrainSource extends TileDataSource {
             ...options
         });
 
-        this.dataProvider().bindDataSource(this);
+        (this.dataProvider() as HeightMapProvider).bindDataSource(this);
 
         this.options = options;
 
@@ -65,6 +67,10 @@ export class TerrainSource extends TileDataSource {
 
     addMaterialProviders(provider: any): void {
         //this.application.addMaterialProviders(provider);
+    }
+
+    getMaterialProviders(): any[] {
+        return [];
     }
 
     removeMaterialProviders(provider: any): void {

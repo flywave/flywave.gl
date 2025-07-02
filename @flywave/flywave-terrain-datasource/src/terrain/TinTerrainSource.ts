@@ -9,12 +9,14 @@ import { TerrainSource } from "../TerrainSource";
 import { ElevationProvider } from "./ElevationProvider";
 import { ElevationRangeSource } from "./ElevationRangeSource";
 import { TerrainDataProvider } from "./TerrainDataProvider";
+import { TerrainTile, TerrainTileFactory } from "./TerrainTile";
 import { QUANTIZED_MESH_TILE_DECODER_ID } from "./TileDecoder";
 import { TinTerrainProvider } from "./TinTerrainProvider";
 import { TinWorkerBasedDecoder } from "./WorkTileDecoder";
 
 interface TinTerrainSourceOptions {
     url: string;
+    scriptUrl?: string;
     requestWaterMask?: boolean;
     requestVertexNormals?: boolean;
     requestMetadata?: boolean;
@@ -22,7 +24,7 @@ interface TinTerrainSourceOptions {
     [key: string]: any; // For additional options
 }
 
-export class TinTerrainSource extends TerrainSource {
+export class TinTerrainSource extends TerrainSource<TerrainTile> {
     private readonly _baseUrl: string;
     public dataTerrainProvider: TerrainDataProvider;
 
@@ -37,11 +39,11 @@ export class TinTerrainSource extends TerrainSource {
                 halfQuadTreeSubdivisionScheme,
                 normalizedEquirectangularProjection
             ),
-            tileFactory: new TinTileFactory(),
+            tileFactory: TerrainTileFactory,
             dataProvider: new TinTerrainProvider(options),
             elevationRangeSource: new ElevationRangeSource(),
             elevationProvider: new ElevationProvider(),
-            decoder: new TinWorkerBasedDecoder(QUANTIZED_MESH_TILE_DECODER_ID, config.DECODER_URL)
+            decoder: new TinWorkerBasedDecoder(QUANTIZED_MESH_TILE_DECODER_ID, options.scriptUrl)
         });
 
         this.dataTerrainProvider = new TerrainDataProvider(
@@ -54,26 +56,17 @@ export class TinTerrainSource extends TerrainSource {
         this._baseUrl = options.url;
     }
 
-    configure(): Promise<void> {
-        return super.configure();
-    }
-
     get baseUrl(): string {
         return this._baseUrl;
     }
 
     async connect(): Promise<void> | undefined {
         await super.connect();
-        try {
-            return this.dataTerrainProvider.connect();
-        } catch (e) {
-            this.connected = false;
-            throw e;
-        }
+        return await this.dataTerrainProvider.connect();
     }
 
     ready(): boolean {
-        return !!this.dataTerrainProvider._ready;
+        return !!this.dataTerrainProvider.ready();
     }
 
     shouldSubdivide(zoomLevel: number | undefined, tileKey: TileKey): boolean {

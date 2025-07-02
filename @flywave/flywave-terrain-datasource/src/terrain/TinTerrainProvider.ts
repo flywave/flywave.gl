@@ -1,11 +1,11 @@
 import { TileKey } from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
-import { DataSource } from "@flywave/flywave-mapview";
 import { DataProvider } from "@flywave/flywave-mapview-decoder";
 import { defaultValue } from "@flywave/flywave-utils";
 
 import TileAvailability from "./TileAvailability";
 import { TinMeshResourceTile } from "./TinTerrainLoader";
+import { TinTerrainSource } from "./TinTerrainSource";
 
 interface TinTerrainProviderOptions {
     url: string;
@@ -21,8 +21,12 @@ export class TinTerrainProvider extends DataProvider {
     private readonly _requestWaterMask: boolean;
     private readonly _requestMetadata: boolean;
     public tinCache: LRUCache<number, TinMeshResourceTile>;
-    public dataSource?: DataSource;
+    public dataSource?: TinTerrainSource;
     private _availability?: TileAvailability; // Replace 'any' with proper type if available
+
+    public get availability() {
+        return this._availability;
+    }
 
     constructor(options: TinTerrainProviderOptions) {
         super();
@@ -51,9 +55,9 @@ export class TinTerrainProvider extends DataProvider {
         throw new Error("Method not implemented.");
     }
 
-    bindDataSource(dataSource: DataSource): void {
+    bindDataSource(dataSource: TinTerrainSource): void {
         this.dataSource = dataSource;
-        this._availability = dataSource._availability;
+        this._availability = dataSource.dataTerrainProvider.availability;
     }
 
     touchData(tileKey: TileKey): void {
@@ -74,13 +78,15 @@ export class TinTerrainProvider extends DataProvider {
             throw new Error("Data source not bound");
         }
 
-        const tile = this.dataSource.dataTerrainProvider.makeLoaderTile(tileKey);
-        tile.tileLoader.load();
-        tile.tileLoader.donePromise.then(async () => {
+        const tile = (this.dataSource as TinTerrainSource).dataTerrainProvider.makeLoaderTile(
+            tileKey
+        );
+        tile.tileLoader.loadAndDecode().then(async () => {
             if (!tile.tileLoader.decodedTile) {
                 throw new Error("No decoded tile available");
             }
-            await tile.builderQuantized(tile.tileLoader.decodedTile);
+
+            await tile.builderQuantized((tile.tileLoader.decodedTile as any).tileTerrain);
             this.dataSource.updateTileOverlayer(tile);
 
             this.dataSource
@@ -103,12 +109,11 @@ export class TinTerrainProvider extends DataProvider {
         }
 
         const tile = this.dataSource.dataTerrainProvider.makeLoaderTile(tileKey, parentTile);
-        tile.tileLoader.load();
-        tile.tileLoader.donePromise.then(async () => {
+        tile.tileLoader.loadAndDecode().then(async () => {
             if (!tile.tileLoader.decodedTile) {
                 throw new Error("No decoded tile available");
             }
-            await tile.builderQuantized(tile.tileLoader.decodedTile);
+            await tile.builderQuantized((tile.tileLoader.decodedTile as any).tileTerrain);
             this.dataSource.updateTileOverlayer(tile);
         });
         this.tinCache.set(tileKey.mortonCode(), tile);

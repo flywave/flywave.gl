@@ -363,6 +363,10 @@ export class Tile implements CachedResource {
         }
     }
 
+    get tileGeometryLoader(): TileGeometryLoader | undefined {
+        return this.m_tileGeometryLoader;
+    }
+
     /**
      * The {@link @flywave/flywave-geoutils#Projection} currently used by the {@link MapView}.
      */
@@ -1130,7 +1134,7 @@ export class Tile implements CachedResource {
      * @param newBoundingBox - The new bounding box to set. If undefined, the bounding box will be
      *                         computed by projecting the tile's geoBox.
      */
-    private updateBoundingBox(newBoundingBox?: OrientedBox3) {
+    protected updateBoundingBox(newBoundingBox?: OrientedBox3) {
         if (newBoundingBox) {
             this.m_boundingBox.copy(newBoundingBox);
             this.m_worldCenter.copy(this.boundingBox.position);
