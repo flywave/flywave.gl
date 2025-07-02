@@ -1,5 +1,5 @@
-import { allPolygons, build, clipTo, fromPolygons, invert } from './bsp';
-import { flipPolygon, Polygon } from './polygon';
+import { allPolygons, build, clipTo, fromPolygons, invert } from './Bsp';
+import { flipPolygon, Polygon } from './Polygon';
 
 export const union = (
   a: readonly Polygon[],

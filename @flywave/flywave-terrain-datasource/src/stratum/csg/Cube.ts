@@ -1,4 +1,4 @@
-import { createPolygon, Polygon } from './polygon';
+import { createPolygon, Polygon } from './Polygon';
 import { Vector } from '../utils/vector';
 
 export const createCube = (options?: {

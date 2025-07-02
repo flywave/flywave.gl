@@ -1,4 +1,4 @@
-import { createPolygon } from './polygon';
+import { createPolygon } from './Polygon';
 
 export const createSquare = () => [
   createPolygon([

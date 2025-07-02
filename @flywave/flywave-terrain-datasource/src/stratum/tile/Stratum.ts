@@ -1,4 +1,4 @@
-import { StratumVoxel } from "./voxel";
+import { StratumVoxel } from "./Voxel";
 import { LayerType } from "../decoder/types";
 import * as THREE from 'three';
 

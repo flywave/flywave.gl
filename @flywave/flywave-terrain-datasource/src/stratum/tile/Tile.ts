@@ -1,18 +1,18 @@
 import { DecodeResult, Header, LayerType } from "../decoder/types";
-import { ColorMap } from "./colormap";
-import { FaultProfile } from "./fault";
-import { Borehole } from "./borehole";
-import { StratumLayer } from "./stratum";
-import { CollapsePillar, CollapseProfile } from "./collapse";
-import { SectionLine } from "./section";
+import { ColorMap } from "./ColorMap";
+import { FaultProfile } from "./Fault";
+import { Borehole } from "./Borehole";
+import { StratumLayer } from "./Stratum";
+import { CollapsePillar, CollapseProfile } from "./Collapse";
+import { SectionLine } from "./Section";
 import { BVH, BVHNode, HybridBuilder } from "../bvh";
-import { StratumVoxel } from "./voxel";
+import { StratumVoxel } from "./Voxel";
 import { cross, dot, lengthV, lerp, minus, normalize, plus, times, Vector, Vector2D } from "../utils/vector";
 import { Matrix } from "../utils/matrix";
 import { FlatArray } from "../utils/flatarray";
 import { weilerAthertonClip } from "../clipping";
 import { triangulate } from "../triangulate";
-import { toTileWorldBBox } from "./project";
+import { toTileWorldBBox } from "./Project";
 import * as THREE from 'three';
 import { GeoBox } from "@flywave/flywave-geoutils";
 

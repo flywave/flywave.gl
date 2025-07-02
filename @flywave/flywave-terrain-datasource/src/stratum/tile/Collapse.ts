@@ -1,5 +1,5 @@
-import { Polygon } from "../csg/polygon";
-import { BSPNode, fromPolygons } from "../csg/bsp";
+import { Polygon } from "../csg/Polygon";
+import { BSPNode, fromPolygons } from "../csg/Bsp";
 import { fromVectors } from "../utils/plane";
 import { cross, dot, lengthV, minus, normalize, Vector } from "../utils/vector";
 import { triangulate } from "../triangulate";

@@ -1,4 +1,4 @@
-import { createPolygon, flipPolygon, Polygon } from './polygon';
+import { createPolygon, flipPolygon, Polygon } from './Polygon';
 import { Matrix, matmul, transpose, translate, vectorsToMatrix } from '../utils/matrix';
 
 export const transform = (

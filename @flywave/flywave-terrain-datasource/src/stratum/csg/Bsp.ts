@@ -1,5 +1,5 @@
 import { flipPlane, Plane } from '../utils/plane';
-import { flipPolygon, Polygon, splitPolygonByPlane } from './polygon';
+import { flipPolygon, Polygon, splitPolygonByPlane } from './Polygon';
 
 export interface BSPNode {
   readonly plane: Plane;

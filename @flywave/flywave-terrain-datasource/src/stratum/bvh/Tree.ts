@@ -1,5 +1,5 @@
-import { BVHNode } from './node';
-import { IBVHBuilder, onLeafCreationCallback } from './builder';
+import { BVHNode } from './Node';
+import { IBVHBuilder, onLeafCreationCallback } from './Builder';
 import { FloatArray, } from "../utils/types";
 import { CoordinateSystem, Frustum, WebGLCoordinateSystem } from '../utils/frustum';
 import { intersectBoxBox, intersectRayBox, intersectSphereBox } from '../utils/intersect';

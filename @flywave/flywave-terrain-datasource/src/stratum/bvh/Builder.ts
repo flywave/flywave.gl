@@ -1,4 +1,4 @@
-import { BVHNode } from './node';
+import { BVHNode } from './Node';
 import { FloatArray, FloatArrayType, } from "../utils/types";
 import { SortedListPriority } from '../utils/sorted';
 import { areaBox, areaFromTwoBoxes, expandBoxByMargin, getLongestAxis, isBoxInsideBox, isExpanded, unionBox, unionBoxChanged } from '../utils/box';

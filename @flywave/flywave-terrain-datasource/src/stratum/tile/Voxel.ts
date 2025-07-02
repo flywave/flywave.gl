@@ -1,5 +1,5 @@
-import { BSPNode, allPolygons, build, clipTo, fromPolygons, invert } from "../csg/bsp";
-import { Polygon } from "../csg/polygon";
+import { BSPNode, allPolygons, build, clipTo, fromPolygons, invert } from "../csg/Bsp";
+import { Polygon } from "../csg/Polygon";
 import { fromVectors } from "../utils/plane";
 import { cross, dot, lengthV, minus, Vector } from "../utils/vector";
 import * as THREE from 'three';
