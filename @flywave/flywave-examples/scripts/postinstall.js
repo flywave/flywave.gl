@@ -24,15 +24,12 @@ function getModuleDir() {
 }
 
 const moduleDir = getModuleDir();
-const threeModuleDir = require.resolve("three");
 
 async function copyResources() {
     if (!fs.existsSync("dist")) fs.mkdirSync("dist");
 
     await asyncCopyfiles(moduleDir + "/@flywave/flywave-map-theme/resources", "dist/resources");
     await asyncCopyfiles("resources", "dist/resources");
-
-    fs.copyFileSync(threeModuleDir, "dist/three.cjs");
 }
 
 copyResources().catch(err => {

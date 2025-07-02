@@ -810,6 +810,9 @@ importers:
       '@turf/turf':
         specifier: 'catalog:'
         version: 5.1.6
+      expose-loader:
+        specifier: 5.0.1
+        version: 5.0.1(webpack@5.99.9)
     devDependencies:
       '@flywave/flywave-datasource-protocol':
         specifier: workspace:*
@@ -4937,6 +4940,12 @@ packages:
   expand-template@2.0.3:
     resolution: {integrity: sha512-XYfuKMvj4O35f/pOXLObndIRvyQ+/+6AhODh+OKWj9S9498pHHn/IMszH+gt0fBCRWMNfk1ZSp5x3AifmnI2vg==}
     engines: {node: '>=6'}
+
+  expose-loader@5.0.1:
+    resolution: {integrity: sha512-5YPZuszN/eWND/B+xuq5nIpb/l5TV1HYmdO6SubYtHv+HenVw9/6bn33Mm5reY8DNid7AVtbARvyUD34edfCtg==}
+    engines: {node: '>= 18.12.0'}
+    peerDependencies:
+      webpack: ^5.0.0
 
   express@4.21.2:
     resolution: {integrity: sha512-28HqgMZAmih1Czt9ny7qr6ek2qddF4FclbMzwhCREB6OFfH+rXAnuNCwo1/wFvrtbgsQDb4kSbX9de9lFbrXnA==}
@@ -11945,6 +11954,10 @@ snapshots:
       - supports-color
 
   expand-template@2.0.3: {}
+
+  expose-loader@5.0.1(webpack@5.99.9):
+    dependencies:
+      webpack: 5.99.9(webpack-cli@4.10.0)
 
   express@4.21.2(supports-color@6.1.0):
     dependencies:

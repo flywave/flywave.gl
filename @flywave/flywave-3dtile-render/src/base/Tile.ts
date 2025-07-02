@@ -93,11 +93,7 @@ export type TileCache = {
     transformInverse: Matrix4;
     active: boolean;
     inFrustum: boolean[];
-    box: Box3;
-    boxTransform: Matrix4;
-    boxTransformInverse: Matrix4;
     sphere: Sphere;
-    region: EllipsoidRegion;
     orientedBox: OrientedBox3;
     scene: Scene | Object3D;
     geometry?: BufferGeometry[];

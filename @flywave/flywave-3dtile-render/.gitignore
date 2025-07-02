@@ -7,3 +7,4 @@ doc
 *.js.map
 *.tgz
 lib/
+test/data

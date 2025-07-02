@@ -4,3 +4,5 @@ dist/
 *.tgz
 lib/
 !src/lib/
+
+resources/3dtile-data

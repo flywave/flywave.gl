@@ -5,8 +5,6 @@ import { I3DMLoader } from "./I3DMLoader";
 import { CMPTLoader } from "./CMPTLoader";
 import { GLTFExtensionLoader } from "./GLTFExtensionLoader";
 import { TilesGroup } from "./TilesGroup";
-import { EllipsoidRegion } from "./math/EllipsoidRegion";
-import { WGS84_HEIGHT, WGS84_RADIUS } from "../base/constants";
 
 import {
     Matrix4,
@@ -98,6 +96,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
     public preprocessURL: ((url: string) => string) | null;
 
     protected abstract getProjection(): Projection;
+    public abstract getRootPosition(): Vector3 | undefined;
 
     get autoDisableRendererCulling(): boolean {
         return this._autoDisableRendererCulling;
@@ -145,42 +144,6 @@ export abstract class TilesRenderer extends TilesRendererBase {
                 Object.getPrototypeOf(this).raycast.call(this, raycaster, intersects);
             }
         };
-    }
-
-    getBounds(box: Box3): boolean {
-        if (!this.root) {
-            return false;
-        }
-
-        const cached = this.root.cached;
-        const boundingBox = cached.box;
-        const obbMat = cached.boxTransform;
-
-        if (boundingBox) {
-            box.copy(boundingBox);
-            box.applyMatrix4(obbMat);
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    getOrientedBounds(box: Box3, matrix: Matrix4): boolean {
-        if (!this.root) {
-            return false;
-        }
-
-        const cached = this.root.cached;
-        const boundingBox = cached.box;
-        const obbMat = cached.boxTransform;
-
-        if (boundingBox) {
-            box.copy(boundingBox);
-            matrix.copy(obbMat);
-            return true;
-        } else {
-            return false;
-        }
     }
 
     getBoundingSphere(sphere: Sphere): boolean {
@@ -365,12 +328,10 @@ export abstract class TilesRenderer extends TilesRendererBase {
     preprocessNode(tile: Tile, parentTile: Tile | null, tileSetDir: string): void {
         super.preprocessNode(tile, parentTile, tileSetDir);
 
+        // Handle transform matrix
         const transform = new Matrix4();
         if (tile.transform) {
-            const transformArr = tile.transform;
-            for (let i = 0; i < 16; i++) {
-                transform.elements[i] = transformArr[i];
-            }
+            transform.fromArray(tile.transform);
         } else {
             transform.identity();
         }
@@ -381,130 +342,56 @@ export abstract class TilesRenderer extends TilesRendererBase {
 
         const transformInverse = new Matrix4().copy(transform).invert();
 
-        let box: Box3 | null = null;
-        let boxTransform: Matrix4 | null = null;
-        let boxTransformInverse: Matrix4 | null = null;
-
-        let orientedBox: OrientedBox3 = null;
-
-        if ("box" in tile.boundingVolume) {
-            const data = tile.boundingVolume.box;
-            box = new Box3();
-            boxTransform = new Matrix4();
-            boxTransformInverse = new Matrix4();
-
-            vecX.set(data[3], data[4], data[5]);
-            vecY.set(data[6], data[7], data[8]);
-            vecZ.set(data[9], data[10], data[11]);
-
-            const scaleX = vecX.length();
-            const scaleY = vecY.length();
-            const scaleZ = vecZ.length();
-
-            vecX.normalize();
-            vecY.normalize();
-            vecZ.normalize();
-
-            if (scaleX === 0) {
-                vecX.crossVectors(vecY, vecZ);
-            }
-
-            if (scaleY === 0) {
-                vecY.crossVectors(vecX, vecZ);
-            }
-
-            if (scaleZ === 0) {
-                vecZ.crossVectors(vecX, vecY);
-            }
-
-            boxTransform.set(
-                vecX.x,
-                vecY.x,
-                vecZ.x,
-                data[0],
-                vecX.y,
-                vecY.y,
-                vecZ.y,
-                data[1],
-                vecX.z,
-                vecY.z,
-                vecZ.z,
-                data[2],
-                0,
-                0,
-                0,
-                1
-            );
-            boxTransform.premultiply(transform);
-            boxTransformInverse.copy(boxTransform).invert();
-
-            box.min.set(-scaleX, -scaleY, -scaleZ);
-            box.max.set(scaleX, scaleY, scaleZ);
-
-            orientedBox = OrientedBox3.fromArray(data);
-        }
-
         let sphere: Sphere | null = null;
-        if ("sphere" in tile.boundingVolume) {
-            const data = tile.boundingVolume.sphere;
+        let orientedBox: OrientedBox3 | null = null;
+
+        // Process bounding volume based on type
+        const boundingVolume = tile.boundingVolume;
+        if ("box" in boundingVolume) {
+            // Process box volume
+            const data = boundingVolume.box;
+
+            // Create oriented box first
+            orientedBox = OrientedBox3.fromArray(data);
+
+            // Create sphere from box
             sphere = new Sphere();
-            sphere.center.set(data[0], data[1], data[2]);
-            sphere.radius = data[3];
-        }
+            orientedBox.getBoundingSphere(sphere);
+        } else if ("region" in boundingVolume) {
+            // Process region volume using Projection
+            const [west, south, east, north, minHeight, maxHeight] = boundingVolume.region;
 
-        let region: EllipsoidRegion | null = null;
-        if ("region" in tile.boundingVolume) {
-            const data = tile.boundingVolume.region;
-            const [west, south, east, north, minHeight, maxHeight] = data;
-
-            region = new EllipsoidRegion(
-                WGS84_RADIUS,
-                WGS84_RADIUS,
-                WGS84_HEIGHT,
-                south,
-                north,
-                west,
-                east,
-                minHeight,
-                maxHeight
+            // Create GeoBox from region
+            const geoBox = new GeoBox(
+                GeoCoordinates.fromRadians(south, west, minHeight),
+                GeoCoordinates.fromRadians(north, east, maxHeight)
             );
 
-            if (sphere === null) {
-                sphere = new Sphere();
-                region.getBoundingSphere(sphere);
-            }
+            // Project to world space using the Projection system
+            orientedBox = this.getProjection().projectBox(geoBox, new OrientedBox3());
 
-            if (box === null) {
-                box = new Box3();
-                boxTransform = new Matrix4();
-                boxTransformInverse = new Matrix4();
-
-                region.getBoundingBox(box, boxTransform);
-                boxTransformInverse.copy(boxTransform).invert();
-            }
-
-            if (!orientedBox) {
-                const [milng, milat, mxlng, mxlat, miAlt, mxAlt] = tile.boundingVolume.region;
-                let box = new GeoBox(
-                    GeoCoordinates.fromRadians(milat, milng, miAlt),
-                    GeoCoordinates.fromRadians(mxlat, mxlng, mxAlt)
-                );
-                orientedBox = this.getProjection().projectBox(box, new OrientedBox3());
-            }
+            sphere = new Sphere();
+            orientedBox.getBoundingSphere(sphere);
+        } else if ("sphere" in boundingVolume) {
+            // Process sphere volume
+            const data = boundingVolume.sphere;
+            sphere = new Sphere(new Vector3(data[0], data[1], data[2]), data[3]);
         }
 
+        // Ensure we have at least a sphere for all volume types
+        if (!sphere) {
+            sphere = new Sphere();
+        }
+
+        // Store cached values
         tile.cached = {
             loadIndex: 0,
             transform,
             transformInverse,
             active: false,
             inFrustum: [],
-            box: box!,
-            boxTransform: boxTransform!,
-            boxTransformInverse: boxTransformInverse!,
-            sphere: sphere!,
-            region: region!,
-            orientedBox,
+            sphere: sphere || new Sphere(),
+            orientedBox: orientedBox || new OrientedBox3(),
             scene: null,
             geometry: null,
             material: null
@@ -707,56 +594,39 @@ export abstract class TilesRenderer extends TilesRendererBase {
         const cameras = this.cameras;
         const cameraInfo = this.cameraInfo;
 
-        const boundingVolume = tile.boundingVolume;
+        const orientedBox = cached.orientedBox;
+        let maxError = -Infinity;
+        let minDistance = Infinity;
 
-        if ("box" in boundingVolume || "sphere" in boundingVolume) {
-            const boundingSphere = cached.sphere;
-            const boundingBox = cached.box;
-            const boxTransformInverse = cached.boxTransformInverse;
-            const transformInverse = cached.transformInverse;
-            const useBox = boundingBox && boxTransformInverse;
-
-            let maxError = -Infinity;
-            let minDistance = Infinity;
-
-            for (let i = 0, l = cameras.length; i < l; i++) {
-                var height = this.cameraMap.get(cameras[i])!.y;
-                if (!inFrustum[i]) {
-                    continue;
-                }
-
-                const info = cameraInfo[i];
-                const invScale = info.invScale;
-
-                let error;
-                if (info.isOrthographic) {
-                    const pixelSize = info.pixelSize;
-                    error = tile.geometricError / (pixelSize * invScale);
-                } else {
-                    tempVector.copy(info.position);
-
-                    let distance;
-                    if (useBox) {
-                        tempVector.applyMatrix4(boxTransformInverse!);
-                        distance = boundingBox!.distanceToPoint(tempVector);
-                    } else {
-                        distance = Math.max(boundingSphere!.distanceToPoint(tempVector), 0.1);
-                    }
-
-                    const scaledDistance = distance * invScale;
-                    const sseDenominator = info.sseDenominator;
-                    error = (tile.geometricError * height) / (scaledDistance * sseDenominator);
-                    minDistance = Math.min(minDistance, scaledDistance);
-                }
-
-                maxError = Math.max(maxError, error);
+        for (let i = 0, l = cameras.length; i < l; i++) {
+            var height = this.cameraMap.get(cameras[i])!.y;
+            if (!inFrustum[i]) {
+                continue;
             }
 
-            tile.__distanceFromCamera = minDistance;
-            tile.__error = maxError;
-        } else if ("region" in boundingVolume) {
-            console.warn("ThreeTilesRenderer : Region bounds not supported.");
+            const info = cameraInfo[i];
+            const invScale = info.invScale;
+
+            let error;
+            if (info.isOrthographic) {
+                const pixelSize = info.pixelSize;
+                error = tile.geometricError / (pixelSize * invScale);
+            } else {
+                tempVector.copy(info.position);
+
+                let distance = Math.max(orientedBox!.distanceToPoint(tempVector), 0.1);
+
+                const scaledDistance = distance * invScale;
+                const sseDenominator = info.sseDenominator;
+                error = (tile.geometricError * height) / (scaledDistance * sseDenominator);
+                minDistance = Math.min(minDistance, scaledDistance);
+            }
+
+            maxError = Math.max(maxError, error);
         }
+
+        tile.__distanceFromCamera = minDistance;
+        tile.__error = maxError;
     }
 
     tileInView(tile: Tile): boolean {

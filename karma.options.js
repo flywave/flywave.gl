@@ -114,6 +114,10 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             {
                 pattern: "node_modules/three/examples/jsm/libs/draco/**/*.*",
                 included: false
+            },
+            {
+                pattern: "@flywave/flywave-3dtile-render/test/data/**/*.*",
+                included: false
             }
             // {
             //     pattern: "@flywave/flywave-mapview/test/resources/*.*",

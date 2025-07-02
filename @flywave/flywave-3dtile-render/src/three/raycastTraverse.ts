@@ -72,13 +72,11 @@ export function raycastTraverseFirstHit(
             }
         }
 
-        const boundingBox = cached.box;
-        const obbMat = cached.boxTransform;
-        if (boundingBox && obbMat) {
-            _mat.multiply(obbMat).invert();
+        const orientedBox = cached.orientedBox;
+        if (orientedBox) {
             _ray.copy(raycaster.ray);
             _ray.applyMatrix4(_mat);
-            if (_ray.intersectBox(boundingBox, _vec)) {
+            if (orientedBox.intersectsRay(_ray, _vec)) {
                 let invScale: number;
                 _vec2.setFromMatrixScale(_mat);
                 invScale = _vec2.x;
@@ -151,7 +149,6 @@ export function raycastTraverse(
     intersects: Intersection[]
 ): void {
     const cached = tile.cached;
-    const groupMatrixWorld = group.matrixWorld;
 
     _mat.identity();
 
@@ -163,12 +160,10 @@ export function raycastTraverse(
         }
     }
 
-    const boundingBox = cached.box;
-    const obbMat = cached.boxTransform;
-    if (boundingBox && obbMat) {
-        _mat.multiply(obbMat).invert();
-        _ray.copy(raycaster.ray).applyMatrix4(_mat);
-        if (!_ray.intersectsBox(boundingBox)) {
+    const orientedBox = cached.orientedBox;
+    if (orientedBox) {
+        _ray.copy(raycaster.ray);
+        if (!orientedBox.intersectsRay(_ray)) {
             return;
         }
     }

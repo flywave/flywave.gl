@@ -17,7 +17,10 @@ const prepareOnly = process.env["PREPARE_ONLY"] === "true";
 
 const harpMapThemePath = path.dirname(require.resolve("@flywave/flywave-map-theme/package.json"));
 const harpFontResourcesPath = path.dirname(require.resolve("@here/harp-fontcatalog/package.json"));
+const threePath = `${path.dirname(require.resolve("three"))}/three.cjs`;
+const threeDracoPath = `${path.dirname(require.resolve("three"))}/../examples/jsm/libs/draco`;
 
+console.log(threeDracoPath);
 const isProduction = process.env.NODE_ENV === "production";
 const harpBundleSuffix = isProduction ? ".min" : "";
 
@@ -67,9 +70,6 @@ const commonConfig: webpack.Configuration = {
     context: __dirname,
     devtool: "source-map",
     externals: [
-        // {
-        //     three: "THREE"
-        // },
         ({ context, request }, cb) => {
             return /three\.module\.js$/.test(request)
                 ? cb(null, "THREE")
@@ -135,6 +135,30 @@ const decoderConfig = merge(commonConfig, {
     }
 });
 
+const threejsConfig = merge(commonConfig, {
+    entry: {
+        three: threePath
+    },
+    optimization: {
+        splitChunks: false,
+        runtimeChunk: false
+    },
+    module: {
+        rules: [
+            {
+                test: threePath, // 或 threePath
+                loader: "expose-loader",
+                options: {
+                    exposes: ["THREE"]
+                }
+            }
+        ]
+    },
+    externals: [],
+    target: "web",
+    devtool: false
+});
+
 const webpackEntries = glob
     .sync(path.join(__dirname, "./src/*.{ts,tsx}"))
     .reduce((result: Record<string, string>, entry: string) => {
@@ -173,10 +197,19 @@ if (exampleFilter) {
 }
 
 const browserConfig = merge(commonConfig, {
+    //@ts-ignore
+    devServer: {
+        headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Credentials": "true" }
+    },
     entry: webpackEntries,
     output: {
         filename: "[name]_bundle.js"
     },
+    externals: [
+        {
+            three: "THREE"
+        }
+    ],
     optimization: {
         splitChunks: {
             chunks: "all",
@@ -188,6 +221,11 @@ const browserConfig = merge(commonConfig, {
 });
 
 const exampleBrowserConfig = merge(commonConfig, {
+    externals: [
+        {
+            three: "THREE"
+        }
+    ],
     entry: {
         "example-browser": "./example-browser.ts"
     },
@@ -195,6 +233,11 @@ const exampleBrowserConfig = merge(commonConfig, {
 });
 
 const codeBrowserConfig = merge(commonConfig, {
+    externals: [
+        {
+            three: "THREE"
+        }
+    ],
     entry: {
         codebrowser: "./codebrowser.ts"
     },
@@ -269,12 +312,13 @@ const assets: (string | CopyPattern)[] = [
     path.join(__dirname, "codebrowser.html"),
     { from: path.join(__dirname, "resources"), to: "resources", toType: "dir" },
     { from: path.join(harpMapThemePath, "resources"), to: "resources", toType: "dir" },
+    { from: path.join(harpMapThemePath, "resources"), to: "resources", toType: "dir" },
+    { from: threeDracoPath, to: "resources", toType: "dir" },
     {
         from: path.join(harpFontResourcesPath, "resources"),
         to: "resources/fonts",
         toType: "dir"
-    },
-    require.resolve("three")
+    }
 ].filter(asset => {
     // ignore stuff that is not found
     if (asset === undefined || asset === null) {
@@ -299,9 +343,11 @@ assets.forEach(asset => {
 browserConfig.plugins!.push(new CopyWebpackPlugin({ patterns: assets }));
 
 const configs: webpack.Configuration[] = [
+    threejsConfig,
     decoderConfig,
     browserConfig,
     codeBrowserConfig,
     exampleBrowserConfig
 ];
+
 export default configs;

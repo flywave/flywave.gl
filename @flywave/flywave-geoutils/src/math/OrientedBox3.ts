@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Frustum, Matrix4, Plane, Quaternion, Ray, Vector3 } from "three";
+import { Frustum, Matrix4, Plane, Quaternion, Ray, Sphere, Vector3 } from "three";
 
 import { OrientedBox3Like } from "./OrientedBox3Like";
 
@@ -188,7 +188,7 @@ export class OrientedBox3 implements OrientedBox3Like {
      * @param ray - The ray to test.
      * @returns distance from ray origin to intersection point if it exist, undefined otherwise.
      */
-    intersectsRay(ray: Ray): number | undefined {
+    intersectsRay(ray: Ray, point?: Vector3): number | undefined {
         // Slabs intersection algorithm.
         tmpT.min = -Infinity;
         tmpT.max = Infinity;
@@ -203,7 +203,11 @@ export class OrientedBox3 implements OrientedBox3Like {
             return undefined;
         }
 
-        return tmpT.min > 0 ? tmpT.min : tmpT.max;
+        let distance = tmpT.min > 0 ? tmpT.min : tmpT.max;
+        if (point) {
+            point.copy(ray.origin).addScaledVector(ray.direction, distance);
+        }
+        return distance;
     }
 
     /**
@@ -259,6 +263,23 @@ export class OrientedBox3 implements OrientedBox3Like {
         }
 
         return result;
+    }
+
+    /**
+     * Gets a bounding sphere that tightly contains this oriented box.
+     * @param result - Optional sphere to store the result.
+     * @returns The bounding sphere.
+     */
+    getBoundingSphere(result?: Sphere): Sphere {
+        const sphere = result || new Sphere();
+
+        // The center of the oriented box is the center of the sphere
+        sphere.center.copy(this.position);
+
+        // The radius is the distance from center to the farthest corner
+        sphere.radius = this.extents.length();
+
+        return sphere;
     }
 
     /**

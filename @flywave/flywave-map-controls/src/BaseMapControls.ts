@@ -1,6 +1,6 @@
 import { dispatch as _dispatch } from "d3-dispatch";
 import { EventDispatcher, Matrix4, Vector3, Vector4, Event } from "three";
-import { GeoCoordinates } from "@flywave/flywave-geoutils";
+import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { CameraTransform } from "./CameraTransform";
 import { slerpMatrices } from "./math";
 import { MapView, MapViewEventNames } from "@flywave/flywave-mapview";
@@ -1350,6 +1350,23 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         return 0;
     }
 
+    /**
+     * Flies the camera to view the specified geographic bounding box
+     * @param geoBox - The geographic bounding box to fly to
+     * @param speed - Optional flight animation speed (default: 0.1)
+     * @param theta - Optional camera tilt angle in radians (default: 0)
+     * @param phi - Optional camera heading angle in radians (default: 0)
+     */
+    flyToBox(geoBox: GeoBox, speed?: number, theta?: number, phi?: number): void {
+        const { projection, camera } = this.mapView;
+        const box = projection.projectBox(geoBox);
+        const d =
+            (new Vector3().copy(box.min).distanceTo(box.max) * 0.5) /
+            Math.tan(((camera.fov / 2) * Math.PI) / 180);
+        const { longitude, latitude, altitude } = geoBox.center;
+
+        this.flyTo(longitude, latitude, altitude, speed || 0.1, d, theta || 0, phi || 0);
+    }
     /**
      * Gets current camera tilt angle
      * @returns Tilt in radians (-π/2 to π/2)

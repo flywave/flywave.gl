@@ -71,8 +71,7 @@ export class TilesRenderer extends ThreeTilesRenderer {
 
         if (debug) {
             this.debugRender = new DebugTilesRenderer(this.options);
-            this.debugRender.setCamera(this.mapView.camera);
-            this.debugRender.setResolutionFromRenderer(this.mapView.camera, this.mapView.renderer);
+            this.debugRender.connectMapView(this.mapView);
             this.object.parent?.add(this.debugRender.object);
         }
     };
@@ -129,20 +128,16 @@ export class TilesRenderer extends ThreeTilesRenderer {
         this.dispatchEvent({ type: TilesRendererUpdateEvent });
     };
 
-    async flyTo(duration: number): Promise<void> {
+    async getRootTileBoundingVolumeRegion(): Promise<GeoBox> {
         const tile = await this.getRootTile();
         if (!tile || !tile.boundingVolume.region) return;
 
         const [milng, milat, mxlng, mxlat] = tile.boundingVolume.region;
         const toA = 180 / Math.PI;
 
-        //@ts-ignore
-        this.mapView.mapOrbitControl.flyToBox(
-            GeoBox.fromCoordinates(
-                new GeoCoordinates(milat * toA, milng * toA, 0),
-                new GeoCoordinates(mxlat * toA, mxlng * toA, 0)
-            ),
-            duration
+        return GeoBox.fromCoordinates(
+            new GeoCoordinates(milat * toA, milng * toA, 0),
+            new GeoCoordinates(mxlat * toA, mxlng * toA, 0)
         );
     }
 
@@ -162,6 +157,12 @@ export class TilesRenderer extends ThreeTilesRenderer {
         }
     }
 
+    public rootPosition: Vector3 = new Vector3();
+
+    public getRootPosition(): Vector3 {
+        return this.rootPosition;
+    }
+
     preprocessNode(tile: Tile, parentTile: Tile | null, tileSetDir: string): void {
         if (!parentTile) {
             this.dispatchEvent({ type: TilesRendererRootOnLoadedEvent });
@@ -170,6 +171,10 @@ export class TilesRenderer extends ThreeTilesRenderer {
         }
 
         super.preprocessNode(tile, parentTile, tileSetDir);
+
+        if (!parentTile) {
+            this.rootPosition.copy(this.rootTile?.cached.sphere.center);
+        }
     }
 
     off(): void {
