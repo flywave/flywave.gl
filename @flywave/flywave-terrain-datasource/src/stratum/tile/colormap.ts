@@ -1,3 +1,5 @@
+import * as THREE from "three";
+
 export type ColorRGBA = {
     r: number;
     g: number;
@@ -44,16 +46,15 @@ export class ColorMap {
     }
 
     // 获取地层纹理路径
-    getStratumTexture(lithologyOrId: string): {
-        data: Uint8Array;
-        width: number;
-        height: number;
-    } | undefined {
-        return {
-            data: new Uint8Array(),
-            width: this.textureSize,
-            height: this.textureSize
-        };
+    getStratumTexture(lithologyOrId: string): THREE.DataTexture | undefined {
+        const texture = new THREE.DataTexture(
+            new Uint8Array(4 * this.textureSize * this.textureSize), // 初始化RGBA数据
+            this.textureSize,
+            this.textureSize,
+            THREE.RGBAFormat
+        );
+        texture.needsUpdate = true;
+        return texture;
     }
 
     // 检查是否存在纹理

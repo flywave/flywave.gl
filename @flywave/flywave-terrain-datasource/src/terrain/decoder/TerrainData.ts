@@ -1,4 +1,5 @@
 import {
+    BoundingSphere,
     computeBarycentricCoordinates,
     OrientedBox3,
     TileKey,
@@ -51,7 +52,7 @@ class QuantizedMeshTerrainData {
     private _indices: Uint16Array | Uint32Array;
     private readonly _minimumHeight: number;
     private readonly _maximumHeight: number;
-    private readonly _boundingSphere: THREE.Sphere;
+    private readonly _boundingSphere: BoundingSphere;
     private readonly _orientedBoundingBox?: OrientedBox3;
     private readonly _horizonOcclusionPoint?: THREE.Vector3;
     private _uValues: Uint16Array;
