@@ -7,6 +7,9 @@
 import { Frustum, Matrix4, Plane, Quaternion, Ray, Sphere, Vector3 } from "three";
 
 import { OrientedBox3Like } from "./OrientedBox3Like";
+import { GeoCoordinates } from "../coordinates/GeoCoordinates";
+import { GeoBox } from "../coordinates/GeoBox";
+import { Projection } from "../projection/Projection";
 
 function intersectsSlab(
     rayDir: Vector3,
@@ -282,6 +285,76 @@ export class OrientedBox3 implements OrientedBox3Like {
         return sphere;
     }
 
+    /**
+     * 将OrientedBox3转换为GeoBox
+     * @param orientedBox 要转换的定向包围盒
+     * @param projection 使用的投影系统
+     * @returns 转换后的地理包围盒
+     */
+    toGeoBox(projection: Projection): GeoBox {
+        // 1. 获取定向包围盒的8个角点
+        const corners = this.getOrientedBoxCorners(this);
+
+        // 2. 初始化地理坐标范围
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+        let minLng = Infinity;
+        let maxLng = -Infinity;
+        let minAlt = Infinity;
+        let maxAlt = -Infinity;
+
+        // 3. 将每个角点转换为地理坐标并计算范围
+        corners.forEach(corner => {
+            const geoCoord = projection.unprojectPoint(corner);
+
+            minLat = Math.min(minLat, geoCoord.latitude);
+            maxLat = Math.max(maxLat, geoCoord.latitude);
+            minLng = Math.min(minLng, geoCoord.longitude);
+            maxLng = Math.max(maxLng, geoCoord.longitude);
+
+            if (geoCoord.altitude !== undefined) {
+                minAlt = Math.min(minAlt, geoCoord.altitude);
+                maxAlt = Math.max(maxAlt, geoCoord.altitude);
+            }
+        });
+
+        // 4. 创建并返回GeoBox
+        const southWest = new GeoCoordinates(minLat, minLng, isFinite(minAlt) ? minAlt : undefined);
+        const northEast = new GeoCoordinates(maxLat, maxLng, isFinite(maxAlt) ? maxAlt : undefined);
+
+        return new GeoBox(southWest, northEast);
+    }
+
+    /**
+     * 获取定向包围盒的8个角点
+     * @param box 定向包围盒
+     * @returns 8个角点的世界坐标数组
+     */
+    private getOrientedBoxCorners(box: OrientedBox3): Vector3[] {
+        const corners: Vector3[] = [];
+        const { position, xAxis, yAxis, zAxis, extents } = box;
+
+        // 计算8个角点的相对位置
+        const dx = new Vector3().copy(xAxis).multiplyScalar(extents.x);
+        const dy = new Vector3().copy(yAxis).multiplyScalar(extents.y);
+        const dz = new Vector3().copy(zAxis).multiplyScalar(extents.z);
+
+        // 生成所有组合
+        for (let x = -1; x <= 1; x += 2) {
+            for (let y = -1; y <= 1; y += 2) {
+                for (let z = -1; z <= 1; z += 2) {
+                    const corner = new Vector3()
+                        .copy(position)
+                        .add(dx.clone().multiplyScalar(x))
+                        .add(dy.clone().multiplyScalar(y))
+                        .add(dz.clone().multiplyScalar(z));
+                    corners.push(corner);
+                }
+            }
+        }
+
+        return corners;
+    }
     /**
      * 从3D Tiles orientedBox数组初始化OrientedBox3
      * @param array 12元素数组 [中心X,Y,Z, X轴X,Y,Z, Y轴X,Y,Z, Z轴X,Y,Z]

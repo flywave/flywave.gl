@@ -8,7 +8,8 @@ import {
     LoadingManager,
     Mesh,
     Object3D,
-    Group
+    Group,
+    BoxGeometry
 } from "three";
 import { TileGLTF } from "../base/LoaderBase";
 import { BatchTableHeader, FeatureComponentType, FeatureType } from "../utilities/FeatureTable";
@@ -21,11 +22,9 @@ const tempUp = new Vector3();
 const tempRight = new Vector3();
 const tempPos = new Vector3();
 const tempQuat = new Quaternion();
-const tempLocalQuat = new Quaternion();
 const tempSca = new Vector3();
 const tempMat = new Matrix4();
 const tempMat2 = new Matrix4();
-const tempGlobePos = new Vector3();
 const adjustmentTransform = new Matrix4();
 
 const Batch4DAttributesName = "topo4d_work";
@@ -212,7 +211,7 @@ export class I3DMLoader extends I3DMLoaderBase<BatchTable4DExtensions> {
                                         child.material,
                                         INSTANCES_LENGTH * instanceCount
                                     );
-                                    newInstancedMesh.position.copy(averageVector);
+                                    // newInstancedMesh.position.copy(averageVector);
                                     newInstancedMesh.updateMatrixWorld();
                                     instances.push(newInstancedMesh);
                                 } else {

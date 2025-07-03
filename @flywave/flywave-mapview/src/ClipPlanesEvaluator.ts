@@ -698,48 +698,47 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
     ): number {
         assert(projection.type === ProjectionType.Spherical);
 
-        // Default near plane approximation.
-        const defaultNear = projection.groundDistance(camera.position) - this.maxElevation;
-        const cameraBelowMaxElevation = defaultNear <= 0;
-        if (cameraBelowMaxElevation) {
-            // Near distance will be adjusted by constraints later.
-            return 0;
+        const r = EarthConstants.EQUATORIAL_RADIUS;
+        const maxR = r + this.maxElevation;
+        const cameraPos = camera.position;
+        const d = cameraPos.length();
+
+        // 1. 计算相机到球体的最小距离（考虑最大高程）
+        const minDist = d - maxR;
+        if (minDist <= 0) {
+            // 相机在球体内部或表面
+            return Math.max(this.nearMin, minDist + epsilon);
         }
 
-        const maxR = EarthConstants.EQUATORIAL_RADIUS + this.maxElevation;
+        // 2. 计算视锥体四个边缘与球体的最近交点
+        const ndcCorners = [
+            new THREE.Vector2(-1, -1), // 左下
+            new THREE.Vector2(1, -1), // 右下
+            new THREE.Vector2(-1, 1), // 左上
+            new THREE.Vector2(1, 1) // 右上
+        ];
 
-        // Angles between bottom plane and eye vector. For centered projections it's equal to half
-        // of the vertical fov.
-        const bottomFov = CameraUtils.getBottomFov(camera);
-
-        // First, use the distance of the near plane's tangent point to the sphere.
-        const nearPlaneTanDist = SphericalProj.getProjNearPlaneTanDistance(camera, bottomFov, maxR);
-        if (nearPlaneTanDist !== undefined) {
-            return nearPlaneTanDist;
+        let minNear = Infinity;
+        for (const corner of ndcCorners) {
+            const dist = SphericalProj.getProjSphereIntersectionDistance(camera, corner, maxR);
+            if (dist !== undefined && dist < minNear) {
+                minNear = dist;
+            }
         }
-        // If near plan tangent is not visible, use the distance to the closest frustum intersection
-        // with the sphere. If principal point has a y offset <= 0, bottom frustum intersection
-        // is at same distance or closer than top intersection, otherwise both need to be checked.
-        // At least one of the sides must intersect, if not the near plane tangent must have been
-        // visible.
-        CameraUtils.getPrincipalPoint(camera, this.m_tmpV2);
-        const checkTopIntersection = this.m_tmpV2.y > 0;
-        const bottomDist = SphericalProj.getProjSphereIntersectionDistance(
-            camera,
-            this.m_tmpV2.setComponent(1, -1),
-            maxR
-        );
-        const topDist = checkTopIntersection
-            ? SphericalProj.getProjSphereIntersectionDistance(
-                  camera,
-                  this.m_tmpV2.setComponent(1, 1),
-                  maxR
-              )
-            : Infinity;
-        const near = Math.min(bottomDist ?? Infinity, topDist ?? Infinity);
-        if (near == Infinity) return defaultNear;
-        assert(near !== Infinity, "No reference point for near distance found");
-        return near ?? defaultNear;
+
+        // 3. 如果没有交点，使用切线距离作为fallback
+        if (minNear === Infinity) {
+            const bottomFov = CameraUtils.getBottomFov(camera);
+            const nearPlaneTanDist = SphericalProj.getProjNearPlaneTanDistance(
+                camera,
+                bottomFov,
+                maxR
+            );
+            return nearPlaneTanDist ?? Math.max(this.nearMin, minDist * 0.1);
+        }
+
+        // 4. 应用安全系数 (类似Cesium的0.1-0.2倍系数)
+        return Math.max(this.nearMin, minNear * 0.1);
     }
 
     private computeFarDistSphericalProj(
@@ -747,40 +746,38 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         projection: Projection
     ): number {
         assert(projection.type === ProjectionType.Spherical);
+
         const r = EarthConstants.EQUATORIAL_RADIUS;
         const minR = r + this.minElevation;
-        const maxR = r + this.maxElevation;
-        const d = camera.position.length();
+        const cameraPos = camera.position;
+        const d = cameraPos.length();
 
-        // If all frustum edges intersect the world, use as far distance the distance to the
-        // farthest intersection projected on eye vector. If principal point has a y offset <= 0,
-        // top frustum intersection is at same distance or farther than bottom intersection,
-        // otherwise both need to be checked.
-        CameraUtils.getPrincipalPoint(camera, this.m_tmpV2);
-        const isRightIntersectionFarther = this.m_tmpV2.x <= 0.0;
-        const ndcX = isRightIntersectionFarther ? 1 : -1;
-        const checkBottomIntersection = this.m_tmpV2.y > 0;
+        // 1. 计算相机到地平线的距离（考虑最小高程）
+        const horizonDist = SphericalProj.getFarDistanceFromElevatedHorizon(camera, d, r, minR);
 
-        const topDist = SphericalProj.getProjSphereIntersectionDistance(
-            camera,
-            this.m_tmpV2.set(ndcX, 1),
-            minR - this.maxElevation
-        );
-        const bottomDist = checkBottomIntersection
-            ? SphericalProj.getProjSphereIntersectionDistance(
-                  camera,
-                  this.m_tmpV2.set(ndcX, -1),
-                  minR
-              )
-            : 0;
-        const largestDist = Math.max(topDist ?? Infinity, bottomDist ?? Infinity);
-        // if (largestDist !== Infinity) {
-        //     return largestDist;
-        // }
+        // 2. 计算视锥体四个边缘与球体的最远交点
+        const ndcCorners = [
+            new THREE.Vector2(-1, -1), // 左下
+            new THREE.Vector2(1, -1), // 右下
+            new THREE.Vector2(-1, 1), // 左上
+            new THREE.Vector2(1, 1) // 右上
+        ];
 
-        // If any frustum edge does not intersect (i.e horizon is visible in that viewport corner),
-        // use the horizon distance at the maximum elevation.
-        return SphericalProj.getFarDistanceFromElevatedHorizon(camera, d, r, maxR);
+        let maxFar = -Infinity;
+        for (const corner of ndcCorners) {
+            const dist = SphericalProj.getProjSphereIntersectionDistance(camera, corner, minR);
+            if (dist !== undefined && dist > maxFar) {
+                maxFar = dist;
+            }
+        }
+
+        // 3. 如果没有交点或交点比地平线近，使用地平线距离
+        if (maxFar === -Infinity || maxFar < horizonDist) {
+            return horizonDist;
+        }
+
+        // 4. 应用安全系数 (1.0-1.5倍)
+        return maxFar * 1.2;
     }
 
     private applyViewRangeConstraints(

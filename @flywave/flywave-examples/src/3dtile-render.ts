@@ -27,12 +27,18 @@ import { HereTileProvider, HereWebTileDataSource } from "@flywave/flywave-webtil
  * [[include:harp_gl_datasource_satellitetile_2.ts]]
  * ```
  */
+
+class MockMapView extends MapView {
+    get isDynamicFrame() {
+        return true;
+    }
+}
 export namespace T3DTileRenderExample {
     // creates a new MapView for the HTMLCanvasElement of the given id
     export function initializeMapView(id: string): [MapView, MapControls] {
         const canvas = document.getElementById(id) as HTMLCanvasElement;
 
-        const map = new MapView({
+        const map = new MockMapView({
             projection: sphereProjection,
             target: new GeoCoordinates(36.10112950120568, 117.0042267735369, 0),
             zoomLevel: 18,
@@ -63,14 +69,16 @@ export namespace T3DTileRenderExample {
     const [mapView, controls] = initializeMapView("mapCanvas");
 
     let tileRender = new TilesRenderer({
-        url: "./resources/3dtile-data/pipe/tileset.json",
+        // url: "./resources/3dtile-data/pipe/tileset.json",
+
+        url: "http://192.168.1.18/flywave-examples/data/%E5%91%A8%E6%9D%91/3dtile_power/tileset.json",
         decoderPath: "./resources/"
     });
     mapView.add3DTileSet(tileRender);
 
-    tileRender.getRootTileBoundingVolumeRegion().then(bbox => {
-        controls.flyToBox(bbox);
-    });
+    // controls.setTo(117.0002378472017, 36.04174517742333, 1171.7782847248018, 0, 0, 0);
+
+    controls.setTo(117.82701769728989, 36.831012861737015, 1171.7782847248018, 0, 0, 0);
 
     // snippet:harp_gl_datasource_satellitetile_1.ts
     const webTileDataSource = new HereWebTileDataSource({
@@ -80,5 +88,5 @@ export namespace T3DTileRenderExample {
     // end:harp_gl_datasource_satellitetile_1.ts
 
     // snippet:harp_gl_datasource_satellitetile_2.ts
-    mapView.addDataSource(webTileDataSource);
+    // mapView.addDataSource(webTileDataSource);
 }

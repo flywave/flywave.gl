@@ -3263,13 +3263,17 @@ export class MapView extends EventDispatcher {
         const maxGeometryHeightScaled = Math.max(
             this.m_maxGeometryHeight,
             projectionScale *
-                this.m_tileDataSources.reduce((r, ds) => Math.max(r, ds.maxGeometryHeight), 0)
+                this.m_tileDataSources.reduce((r, ds) => Math.max(r, ds.maxGeometryHeight), 0),
+            projectionScale *
+                this.m_3dtileRenders.reduce((r, ts) => Math.max(r, ts.getMaxGeometryHeight()), 0)
         );
 
-        const minGeometryHeightScaled = Math.max(
+        const minGeometryHeightScaled = Math.min(
             this.m_minGeometryHeight,
             projectionScale *
-                this.m_tileDataSources.reduce((r, ds) => Math.min(r, ds.minGeometryHeight), 0)
+                this.m_tileDataSources.reduce((r, ds) => Math.min(r, ds.minGeometryHeight), 0),
+            projectionScale *
+                this.m_3dtileRenders.reduce((r, ts) => Math.min(r, ts.getMinGeometryHeight()), 0)
         );
 
         // Copy all properties from new view ranges to our readonly object.

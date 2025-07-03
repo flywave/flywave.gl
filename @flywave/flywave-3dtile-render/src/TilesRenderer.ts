@@ -1,9 +1,10 @@
 import { GeoCoordinates, GeoBox } from "@flywave/flywave-geoutils";
-import { TilesRenderer as ThreeTilesRenderer } from "./three/TilesRenderer";
+import { TilesRenderer as ThreeTilesRenderer, TileIntersection } from "./three/TilesRenderer";
 import { Vector3, Object3D, Raycaster, Intersection } from "three";
 import { MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import { DebugTilesRenderer } from "./three/DebugTilesRenderer";
 import { Tile } from "./base/Tile";
+import { ITilesRenderer } from "@flywave/flywave-mapview/ITilesRenderer";
 
 export const TilesRendererUpdateEvent = "update";
 export const TilesRendererRootOnLoadedEvent = "onRootNodeLoaded";
@@ -13,7 +14,7 @@ export interface TilesRendererOptions {
     decoderPath?: string;
 }
 
-export class TilesRenderer extends ThreeTilesRenderer {
+export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer {
     private debugRender?: any; // Replace with actual DebugTilesRenderer type
     private observeTileChange?: {
         _watchTileChange: (tile: Tile, activeTiles: Set<Tile>, active: boolean) => void;
@@ -21,7 +22,7 @@ export class TilesRenderer extends ThreeTilesRenderer {
     private rootTile?: Tile;
     private debug?: boolean;
     public object: Object3D;
-
+    private geoExtent?: GeoBox;
     private mapView?: MapView;
 
     constructor(private readonly options: TilesRendererOptions) {
@@ -41,6 +42,33 @@ export class TilesRenderer extends ThreeTilesRenderer {
 
         this.manager.setDracoDecoderPath(options.decoderPath);
         this.errorTarget = 16;
+    }
+
+    update(): void {
+        super.update();
+
+        this.activeTiles.forEach(tile => {
+            if (tile.cached.geoBox) {
+                if (!this.geoExtent) {
+                    this.geoExtent = tile.cached.geoBox.clone();
+                }
+                this.geoExtent = this.geoExtent.merge(tile.cached.geoBox);
+            }
+        });
+    }
+
+    getMaxGeometryHeight(): number {
+        if (this.geoExtent) {
+            return this.geoExtent.maxAltitude;
+        }
+        return 0;
+    }
+
+    getMinGeometryHeight(): number {
+        if (this.geoExtent) {
+            return this.geoExtent.minAltitude;
+        }
+        return 0;
     }
 
     connectMapView(mapView: MapView) {
@@ -93,14 +121,14 @@ export class TilesRenderer extends ThreeTilesRenderer {
         }
     }
 
-    raycast = (raycaster: Raycaster, intersects: Intersection[]): void => {
+    raycast = (raycaster: Raycaster, intersects: TileIntersection[]): void => {
         const oldRayOrigin = new Vector3();
         oldRayOrigin.copy(raycaster.ray.origin);
         raycaster.ray.origin.copy(this.mapView.camera.position);
         this.object.position.set(0, 0, 0);
         this.object.updateMatrixWorld();
 
-        const _intersects: Intersection[] = [];
+        const _intersects: TileIntersection[] = [];
         try {
             super.raycast(raycaster, _intersects);
         } catch (e) {
@@ -120,7 +148,7 @@ export class TilesRenderer extends ThreeTilesRenderer {
             this.debugRender.update3DTileSource();
         }
 
-        this.object.position.copy(this.mapView.camera.position.clone().multiplyScalar(-1));
+        this.object.position.copy(this.mapView.camera.position.clone().negate());
 
         this.downloadQueue.maxJobs = this.mapView.cameraIsMoving ? 4 : 16;
 

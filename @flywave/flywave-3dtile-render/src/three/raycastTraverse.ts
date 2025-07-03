@@ -1,5 +1,6 @@
 import { Matrix4, Sphere, Ray, Vector3, Object3D, Intersection, Raycaster } from "three";
 import { Tile } from "../base/Tile";
+import { TileIntersection } from "./TilesRenderer";
 
 const _sphere = new Sphere();
 const _mat = new Matrix4();
@@ -7,7 +8,7 @@ const _vec = new Vector3();
 const _vec2 = new Vector3();
 const _ray = new Ray();
 
-const _hitArray: Intersection[] = [];
+const _hitArray: TileIntersection[] = [];
 
 interface HitData {
     distance: number;
@@ -24,7 +25,8 @@ function distanceSort(a: Intersection | HitData, b: Intersection | HitData): num
 function intersectTileScene(
     scene: Object3D,
     raycaster: Raycaster,
-    intersects: Intersection[]
+    intersects: TileIntersection[],
+    tile: Tile
 ): void {
     scene.traverse((c: Object3D) => {
         Object.getPrototypeOf(c).raycast.call(c, raycaster, intersects);
@@ -36,9 +38,9 @@ export function raycastTraverseFirstHit(
     group: Object3D,
     activeTiles: Set<Tile>,
     raycaster: Raycaster
-): Intersection | null {
+): TileIntersection | null {
     if (activeTiles.has(root)) {
-        intersectTileScene(root.cached.scene, raycaster, _hitArray);
+        intersectTileScene(root.cached.scene, raycaster, _hitArray, root);
 
         if (_hitArray.length > 0) {
             if (_hitArray.length > 1) {
@@ -103,7 +105,7 @@ export function raycastTraverseFirstHit(
     array.sort(distanceSort);
 
     let bestDistanceSquared = Infinity;
-    let bestHit: Intersection | null = null;
+    let bestHit: TileIntersection | null = null;
 
     for (let i = 0, l = array.length; i < l; i++) {
         const data = array[i];
@@ -116,7 +118,7 @@ export function raycastTraverseFirstHit(
 
             let hit: Intersection | null = null;
             if (activeTiles.has(tile)) {
-                intersectTileScene(scene, raycaster, _hitArray);
+                intersectTileScene(scene, raycaster, _hitArray, tile);
                 if (_hitArray.length > 0) {
                     if (_hitArray.length > 1) {
                         _hitArray.sort(distanceSort);
@@ -131,7 +133,8 @@ export function raycastTraverseFirstHit(
                 const hitDistanceSquared = hit.distance * hit.distance;
                 if (hitDistanceSquared < bestDistanceSquared) {
                     bestDistanceSquared = hitDistanceSquared;
-                    bestHit = hit;
+                    bestHit = hit as TileIntersection;
+                    bestHit.tile = tile;
                 }
                 _hitArray.length = 0;
             }
@@ -146,7 +149,7 @@ export function raycastTraverse(
     group: Object3D,
     activeTiles: Set<Tile>,
     raycaster: Raycaster,
-    intersects: Intersection[]
+    intersects: TileIntersection[]
 ): void {
     const cached = tile.cached;
 
@@ -170,7 +173,11 @@ export function raycastTraverse(
 
     const scene = cached.scene;
     if (activeTiles.has(tile)) {
-        intersectTileScene(scene, raycaster, intersects);
+        let localIntersects: TileIntersection[] = [];
+        intersectTileScene(scene, raycaster, localIntersects, tile);
+        localIntersects.forEach(e => {
+            e.tile = tile;
+        });
         return;
     }
 

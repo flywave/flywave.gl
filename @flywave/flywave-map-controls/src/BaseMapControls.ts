@@ -1076,6 +1076,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.cameraTransform.setMatrix(matrix);
         this.inertialDeltaX = 0;
         this.inertialDeltaY = 0;
+        this.applyToMapView();
     }
 
     /**

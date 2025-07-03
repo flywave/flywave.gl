@@ -34,9 +34,6 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 const INITIAL_FRUSTUM_CULLED = Symbol("INITIAL_FRUSTUM_CULLED");
 const tempMat = new Matrix4();
 const tempVector = new Vector3();
-const vecX = new Vector3();
-const vecY = new Vector3();
-const vecZ = new Vector3();
 
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
@@ -58,6 +55,10 @@ export class TilesLoadingManager extends LoadingManager {
         return this.dracoLoader;
     }
 }
+
+export type TileIntersection = Intersection & {
+    tile: Tile;
+};
 
 export class TileRenderGLTFLoader extends GLTFLoader {
     constructor(loadingManager: TilesLoadingManager) {
@@ -173,7 +174,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
         raycaster: Raycaster & {
             firstHitOnly?: boolean;
         },
-        intersects: Intersection[]
+        intersects: TileIntersection[]
     ): void {
         if (!this.root) {
             return;
@@ -390,6 +391,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
             transformInverse,
             active: false,
             inFrustum: [],
+            geoBox: orientedBox?.toGeoBox(this.getProjection()),
             sphere: sphere || new Sphere(),
             orientedBox: orientedBox || new OrientedBox3(),
             scene: null,
@@ -399,8 +401,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
     }
 
     parseTile(buffer: ArrayBuffer, tile: Tile, extension: string): Promise<void> {
-        tile.__loadIndex = tile.__loadIndex || 0;
-        tile.__loadIndex++;
+        //
 
         const uri = tile.content.uri;
         const uriSplits = uri.split(/[\\\/]/g);
@@ -409,7 +410,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
         const fetchOptions = this.fetchOptions;
 
         const manager = this.manager;
-        const loadIndex = tile.__loadIndex;
+        // const loadIndex = tile.__loadIndex;
         let promise: Promise<TileGLTF> | null = null;
 
         switch (extension) {
@@ -457,9 +458,9 @@ export abstract class TilesRenderer extends TilesRendererBase {
 
         return promise.then(res => {
             const scene = res.scene;
-            if (tile.__loadIndex !== loadIndex) {
-                return;
-            }
+            // if (tile.__loadIndex !== loadIndex) {
+            //     return;
+            // }
 
             const upAxis = (this.rootTileSet.asset && this.rootTileSet.asset.gltfUpAxis) || "y";
             const cached = tile.cached;
