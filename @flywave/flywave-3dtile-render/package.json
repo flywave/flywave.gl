@@ -26,7 +26,11 @@
     "dependencies": {
         "@flywave/flywave-geoutils": "workspace:*",
         "@flywave/flywave-mapview": "workspace:*",
-        "path-browserify": "^1.0.1"
+        "@flywave/flywave-draco": "workspace:*",
+        "@flywave/flywave-utils": "workspace:*",
+        "@flywave/flywave-gltf": "workspace:*",
+        "path-browserify": "^1.0.1",
+        "long": "^5.0.0"
     },
     "devDependencies": {
         "@types/path-browserify": "^1.0.3"

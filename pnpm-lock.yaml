@@ -657,12 +657,24 @@ importers:
 
   '@flywave/flywave-3dtile-render':
     dependencies:
+      '@flywave/flywave-draco':
+        specifier: workspace:*
+        version: link:../flywave-draco
       '@flywave/flywave-geoutils':
         specifier: workspace:*
         version: link:../flywave-geoutils
+      '@flywave/flywave-gltf':
+        specifier: workspace:*
+        version: link:../flywave-gltf
       '@flywave/flywave-mapview':
         specifier: workspace:*
         version: link:../flywave-mapview
+      '@flywave/flywave-utils':
+        specifier: workspace:*
+        version: link:../flywave-utils
+      long:
+        specifier: ^5.0.0
+        version: 5.3.2
       path-browserify:
         specifier: ^1.0.1
         version: 1.0.1
@@ -6476,6 +6488,9 @@ packages:
 
   long@4.0.0:
     resolution: {integrity: sha512-XsP+KhQif4bjX1kbuSiySJFNAehNxgLb6hPRGJ9QsUr8ajHkuXGdrHmFUTUUXhDwVX2R5bY4JNZEwbUiMhV+MA==}
+
+  long@5.3.2:
+    resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
@@ -13784,6 +13799,8 @@ snapshots:
   loglevel@1.9.2: {}
 
   long@4.0.0: {}
+
+  long@5.3.2: {}
 
   loose-envify@1.4.0:
     dependencies:

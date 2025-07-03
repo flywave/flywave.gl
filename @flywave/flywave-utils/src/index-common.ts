@@ -41,3 +41,6 @@ export * from "./DataviewCopyUtils";
 export * from "./GetFirstCharacters";
 export * from "./ImageFormat";
 export * from "./ImageUtils";
+export * from "./RGB565";
+export * from "./Path";
+export * from "./GLType";
