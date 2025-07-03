@@ -1,5 +1,5 @@
-import { StratumProfile } from "../tile";
-import { CollapseProfile } from "../tile/Collapse";
+import { CollapseProfile } from "./Collapse";
+import { StratumProfile } from "./Tile";
 
 export interface SectionProfile {
     stratumProfiles: StratumProfile[];

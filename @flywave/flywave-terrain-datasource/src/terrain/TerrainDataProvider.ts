@@ -1,4 +1,5 @@
 import {
+    BoundingSphere,
     normalizedEquirectangularProjection,
     TileKey,
     TilingScheme,
@@ -116,7 +117,7 @@ function createQuantizedMeshTerrainData(
     const maximumHeight = view.getFloat32(pos, true);
     pos += Float32Array.BYTES_PER_ELEMENT;
 
-    const boundingSphere = new THREE.Sphere(
+    const boundingSphere = new BoundingSphere(
         new THREE.Vector3(
             view.getFloat64(pos, true),
             view.getFloat64(pos + 8, true),

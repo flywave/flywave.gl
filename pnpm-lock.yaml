@@ -788,6 +788,76 @@ importers:
         specifier: 'catalog:'
         version: 5.8.3
 
+  '@flywave/flywave-draco':
+    dependencies:
+      '@flywave/flywave-mapview':
+        specifier: workspace:*
+        version: link:../flywave-mapview
+      '@flywave/flywave-mapview-decoder':
+        specifier: workspace:*
+        version: link:../flywave-mapview-decoder
+      three:
+        specifier: 'catalog:'
+        version: 0.174.0
+    devDependencies:
+      '@flywave/flywave-datasource-protocol':
+        specifier: workspace:*
+        version: link:../flywave-datasource-protocol
+      '@flywave/flywave-fetch':
+        specifier: workspace:*
+        version: link:../flywave-fetch
+      '@flywave/flywave-geoutils':
+        specifier: workspace:*
+        version: link:../flywave-geoutils
+      '@flywave/flywave-test-utils':
+        specifier: workspace:*
+        version: link:../flywave-test-utils
+      '@types/chai':
+        specifier: 'catalog:'
+        version: 4.3.20
+      '@types/earcut':
+        specifier: 'catalog:'
+        version: 2.1.4
+      '@types/long':
+        specifier: 'catalog:'
+        version: 4.0.2
+      '@types/mocha':
+        specifier: 'catalog:'
+        version: 10.0.10
+      '@types/node':
+        specifier: 'catalog:'
+        version: 16.18.126
+      '@types/sinon':
+        specifier: 'catalog:'
+        version: 9.0.11
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.174.0
+      chai:
+        specifier: 'catalog:'
+        version: 4.5.0
+      copyfiles:
+        specifier: 'catalog:'
+        version: 2.4.1
+      cross-env:
+        specifier: 'catalog:'
+        version: 7.0.3
+      eslint-plugin-simple-import-sort:
+        specifier: ^12.1.1
+        version: 12.1.1(eslint@7.32.0)
+      mocha:
+        specifier: 'catalog:'
+        version: 11.7.0
+      sinon:
+        specifier: 'catalog:'
+        version: 9.2.4
+      source-map-support:
+        specifier: 'catalog:'
+        version: 0.5.21
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
   '@flywave/flywave-examples':
     dependencies:
       '@turf/turf':
@@ -1131,6 +1201,79 @@ importers:
       three:
         specifier: 'catalog:'
         version: 0.174.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
+  '@flywave/flywave-gltf':
+    dependencies:
+      '@flywave/flywave-draco':
+        specifier: workspace:*
+        version: link:../flywave-draco
+      '@flywave/flywave-mapview':
+        specifier: workspace:*
+        version: link:../flywave-mapview
+      '@flywave/flywave-mapview-decoder':
+        specifier: workspace:*
+        version: link:../flywave-mapview-decoder
+      three:
+        specifier: 'catalog:'
+        version: 0.174.0
+    devDependencies:
+      '@flywave/flywave-datasource-protocol':
+        specifier: workspace:*
+        version: link:../flywave-datasource-protocol
+      '@flywave/flywave-fetch':
+        specifier: workspace:*
+        version: link:../flywave-fetch
+      '@flywave/flywave-geoutils':
+        specifier: workspace:*
+        version: link:../flywave-geoutils
+      '@flywave/flywave-test-utils':
+        specifier: workspace:*
+        version: link:../flywave-test-utils
+      '@types/chai':
+        specifier: 'catalog:'
+        version: 4.3.20
+      '@types/earcut':
+        specifier: 'catalog:'
+        version: 2.1.4
+      '@types/long':
+        specifier: 'catalog:'
+        version: 4.0.2
+      '@types/mocha':
+        specifier: 'catalog:'
+        version: 10.0.10
+      '@types/node':
+        specifier: 'catalog:'
+        version: 16.18.126
+      '@types/sinon':
+        specifier: 'catalog:'
+        version: 9.0.11
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.174.0
+      chai:
+        specifier: 'catalog:'
+        version: 4.5.0
+      copyfiles:
+        specifier: 'catalog:'
+        version: 2.4.1
+      cross-env:
+        specifier: 'catalog:'
+        version: 7.0.3
+      eslint-plugin-simple-import-sort:
+        specifier: ^12.1.1
+        version: 12.1.1(eslint@7.32.0)
+      mocha:
+        specifier: 'catalog:'
+        version: 11.7.0
+      sinon:
+        specifier: 'catalog:'
+        version: 9.2.4
+      source-map-support:
+        specifier: 'catalog:'
+        version: 0.5.21
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
@@ -10211,7 +10354,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 16.18.126
+      '@types/node': 24.0.3
 
   '@types/chai-as-promised@7.1.8':
     dependencies:
@@ -10329,7 +10472,7 @@ snapshots:
   '@types/serve-static@1.15.8':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 16.18.126
+      '@types/node': 24.0.3
       '@types/send': 0.17.5
 
   '@types/sharp@0.25.1':
@@ -10359,7 +10502,7 @@ snapshots:
 
   '@types/xml2js@0.4.14':
     dependencies:
-      '@types/node': 16.18.126
+      '@types/node': 24.0.3
 
   '@typescript-eslint/eslint-plugin@4.33.0(@typescript-eslint/parser@4.33.0(eslint@7.32.0)(typescript@5.8.3))(eslint@7.32.0)(typescript@5.8.3)':
     dependencies:
