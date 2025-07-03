@@ -1,239 +1,264 @@
-import { GeomEdge, Point, getPointOrientation, isEdgeIntersecting, isQuadConvex } from '../utils/geom'
-import { FlatArray } from '../utils/flatarray'
+import { FlatArray } from "@flywave/flywave-utils";
+import { Vector2 } from "three";
 
-export function cdt({ positions, indices }: { positions: FlatArray<number>, indices: FlatArray<number> }): { positions: FlatArray<number>, indices: FlatArray<number> } {
-    const cdt = new CDT(positions, indices)
-    const array = new Array(cdt.triangles.length * 3).fill(0)
+import { GeomEdge, getPointOrientation, isEdgeIntersecting, isQuadConvex } from "./Utils";
+
+export function cdt({
+    positions,
+    indices
+}: {
+    positions: FlatArray<number>;
+    indices: FlatArray<number>;
+}): { positions: FlatArray<number>; indices: FlatArray<number> } {
+    const cdt = new CDT(positions, indices);
+    const array = new Array(cdt.triangles.length * 3).fill(0);
     cdt.triangles.forEach((t, i) => {
-        const j = 3 * i
-        array[j] = t[0]
-        array[j + 1] = t[1]
-        array[j + 2] = t[2]
-    })
+        const j = 3 * i;
+        array[j] = t[0];
+        array[j + 1] = t[1];
+        array[j + 2] = t[2];
+    });
     return {
         positions,
         indices: FlatArray.create<number>({ array, itemSize: 3 })
-    }
+    };
 }
 
 // -------------------------------------------------------------------------------------------------
 
 class CDT {
-    private min_coord = new Point(0, 0)
-    private max_coord = new Point(1, 1)
-    private vert: Point[] = []
-    private scaled_vert: Point[] = []
-    private con_edge: Edge[] = []
-    private vert_to_tri: number[][] = []
-    private bin: BinIndex[] = []
-    private tri: Triangle[] = []
-    private adj: [number, number, number][] = []
-    private screenL = 1
+    private min_coord = new Vector2(0, 0);
+    private max_coord = new Vector2(1, 1);
+    private vert: Vector2[] = [];
+    private scaled_vert: Vector2[] = [];
+    private con_edge: Edge[] = [];
+    private vert_to_tri: number[][] = [];
+    private bin: BinIndex[] = [];
+    private tri: Triangle[] = [];
+    private adj: Array<[number, number, number]> = [];
+    private screenL = 1;
 
     constructor(vertices: FlatArray<number>, edges: FlatArray<number>) {
-        this.setVertices(vertices)
-        this.setEdges(edges)
-        this.scaled_vert = []
-        this.vert_to_tri = []
-        this.bin = []
-        this.tri = []
-        this.adj = []
-        this.triangulate()
+        this.setVertices(vertices);
+        this.setEdges(edges);
+        this.scaled_vert = [];
+        this.vert_to_tri = [];
+        this.bin = [];
+        this.tri = [];
+        this.adj = [];
+        this.triangulate();
     }
 
     get triangles() {
-        return this.tri
+        return this.tri;
     }
 
     // -----------------------------------------------------------------------
 
     private triangulate() {
-        const nVertex = this.vert.length
+        const nVertex = this.vert.length;
         if (nVertex === 0) {
-            printToLog("No input vertices to triangulate.")
-            return
+            printToLog("No input vertices to triangulate.");
+            return;
         }
 
-        let t0 = performance.now()
+        let t0 = performance.now();
 
         //Compute Delaunay triangulation
-        this.delaunay()
-        let t_delaunay = performance.now() - t0
+        this.delaunay();
+        const t_delaunay = performance.now() - t0;
         // printToLog("Delaunay triangulation in " + t_delaunay.toFixed(2) + " ms.")
 
         //Constrain edges if required
         if (this.con_edge.length > 0) {
-            t0 = performance.now()
-            this.constrainEdges()
-            let t_constrain = performance.now() - t0
+            t0 = performance.now();
+            this.constrainEdges();
+            const t_constrain = performance.now() - t0;
 
             // printToLog("Constrained edges in " + t_constrain.toFixed(2) + " ms.")
-            printToLog("Computed cdt in " + (t_delaunay + t_constrain).toFixed(2) + " ms.")
-        }
-        else {
-            printToLog("cdt in " + t_delaunay.toFixed(2) + " ms.")
+            printToLog("Computed cdt in " + (t_delaunay + t_constrain).toFixed(2) + " ms.");
+        } else {
+            printToLog("cdt in " + t_delaunay.toFixed(2) + " ms.");
         }
     }
 
     private setVertices(vertices: FlatArray<number>) {
         if (vertices.itemSize !== 2 && vertices.itemSize !== 3) {
-            throw new Error('vertices must be defined with itemSize = 2 or 3 (coordinates in 2D or 3D)')
+            throw new Error(
+                "vertices must be defined with itemSize = 2 or 3 (coordinates in 2D or 3D)"
+            );
         }
 
-        this.vert = []
-        this.min_coord = new Point(Number.MAX_VALUE, Number.MAX_VALUE)
-        this.max_coord = new Point(-Number.MAX_VALUE, -Number.MAX_VALUE)
+        this.vert = [];
+        this.min_coord = new Vector2(Number.MAX_VALUE, Number.MAX_VALUE);
+        this.max_coord = new Vector2(-Number.MAX_VALUE, -Number.MAX_VALUE);
 
         vertices.forEach(p => {
-            let coords = new Point(Number(p[0]), Number(p[1]))
-            this.vert.push(coords)
-            this.min_coord.x = Math.min(this.min_coord.x, coords.x)
-            this.min_coord.y = Math.min(this.min_coord.y, coords.y)
-            this.max_coord.x = Math.max(this.max_coord.x, coords.x)
-            this.max_coord.y = Math.max(this.max_coord.y, coords.y)
-        })
+            const coords = new Vector2(Number(p[0]), Number(p[1]));
+            this.vert.push(coords);
+            this.min_coord.x = Math.min(this.min_coord.x, coords.x);
+            this.min_coord.y = Math.min(this.min_coord.y, coords.y);
+            this.max_coord.x = Math.max(this.max_coord.x, coords.x);
+            this.max_coord.y = Math.max(this.max_coord.y, coords.y);
+        });
 
-        this.screenL = Math.max(this.max_coord.x - this.min_coord.x, this.max_coord.y - this.min_coord.y);
+        this.screenL = Math.max(
+            this.max_coord.x - this.min_coord.x,
+            this.max_coord.y - this.min_coord.y
+        );
     }
 
     private setEdges(edges: FlatArray<number>) {
         if (edges.itemSize !== 2) {
-            throw new Error('edges must be defined with itemSize = 2 (two vertex ids making the constrained edges)')
+            throw new Error(
+                "edges must be defined with itemSize = 2 (two vertex ids making the constrained edges)"
+            );
         }
 
-        const nVertex = this.vert.length
-        this.con_edge = []
+        const nVertex = this.vert.length;
+        this.con_edge = [];
 
         edges.forEach((edge: number[], i: number) => {
-            if (edge[0] < 0 || edge[0] >= nVertex ||
-                edge[1] < 0 || edge[1] >= nVertex) {
-                throw new Error(`Vertex indices of edge ${i} (${edge}) need to be non-negative and less than the number of input vertices (${nVertex}).`)
+            if (edge[0] < 0 || edge[0] >= nVertex || edge[1] < 0 || edge[1] >= nVertex) {
+                throw new Error(
+                    `Vertex indices of edge ${i} (${edge}) need to be non-negative and less than the number of input vertices (${nVertex}).`
+                );
             }
 
             if (edge[0] === edge[1]) {
-                throw new Error(`Edge ${i} is degenerate!`)
+                throw new Error(`Edge ${i} is degenerate!`);
             }
 
-            const _edge = [edge[0], edge[1]] as Edge
+            const _edge = [edge[0], edge[1]] as Edge;
 
             if (!this.isEdgeValid(_edge)) {
-                throw new Error(`Edge ${i} already exists or intersects with an existing edge!`)
+                throw new Error(`Edge ${i} already exists or intersects with an existing edge!`);
             }
 
-            this.con_edge.push(_edge)
-        })
+            this.con_edge.push(_edge);
+        });
     }
 
     private isEdgeValid(newEdge: Edge) {
-        const edgeList = this.con_edge
-        const vertices = this.vert
+        const edgeList = this.con_edge;
+        const vertices = this.vert;
 
-        const new_edge_verts = [vertices[newEdge[0]], vertices[newEdge[1]]] as GeomEdge
+        const new_edge_verts = [vertices[newEdge[0]], vertices[newEdge[1]]] as GeomEdge;
 
         for (let i = 0; i < edgeList.length; i++) {
             //Not valid if edge already exists
-            if ((edgeList[i][0] == newEdge[0] && edgeList[i][1] == newEdge[1]) ||
-                (edgeList[i][0] == newEdge[1] && edgeList[i][1] == newEdge[0])) {
-                return false
+            if (
+                (edgeList[i][0] === newEdge[0] && edgeList[i][1] === newEdge[1]) ||
+                (edgeList[i][0] === newEdge[1] && edgeList[i][1] === newEdge[0])
+            ) {
+                return false;
             }
 
-            let hasCommonNode = (edgeList[i][0] == newEdge[0] || edgeList[i][0] == newEdge[1] || edgeList[i][1] == newEdge[0] || edgeList[i][1] == newEdge[1])
-            let edge_verts = [vertices[edgeList[i][0]], vertices[edgeList[i][1]]] as GeomEdge
+            const hasCommonNode =
+                edgeList[i][0] === newEdge[0] ||
+                edgeList[i][0] === newEdge[1] ||
+                edgeList[i][1] === newEdge[0] ||
+                edgeList[i][1] === newEdge[1];
+            const edge_verts = [vertices[edgeList[i][0]], vertices[edgeList[i][1]]] as GeomEdge;
 
             if (!hasCommonNode && isEdgeIntersecting(edge_verts, new_edge_verts)) {
-                return false
+                return false;
             }
         }
 
-        return true
+        return true;
     }
 
     private binSorter(a: BinIndex, b: BinIndex) {
-        if (a.bin == b.bin) {
-            return 0
+        if (a.bin === b.bin) {
+            return 0;
         } else {
-            return a.bin < b.bin ? -1 : 1
+            return a.bin < b.bin ? -1 : 1;
         }
     }
 
     private setupDelaunay() {
-        const nVertex = this.vert.length
-        const nBinsX = Math.round(Math.pow(nVertex, 0.25))
-        const nBins = nBinsX * nBinsX
+        const nVertex = this.vert.length;
+        const nBinsX = Math.round(Math.pow(nVertex, 0.25));
 
         //Compute scaled vertex coordinates and assign each vertex to a bin
-        var scaledverts = []
-        var bin_index: BinIndex[] = []
+        var scaledverts = [];
+        var bin_index: BinIndex[] = [];
         for (let i = 0; i < nVertex; i++) {
-            const scaled_x = (this.vert[i].x - this.min_coord.x) / this.screenL
-            const scaled_y = (this.vert[i].y - this.min_coord.y) / this.screenL
-            scaledverts.push(new Point(scaled_x, scaled_y))
+            const scaled_x = (this.vert[i].x - this.min_coord.x) / this.screenL;
+            const scaled_y = (this.vert[i].y - this.min_coord.y) / this.screenL;
+            scaledverts.push(new Vector2(scaled_x, scaled_y));
 
             const ind_i = Math.round((nBinsX - 1) * scaled_x);
             const ind_j = Math.round((nBinsX - 1) * scaled_y);
 
-            let bin_id = 0
+            let bin_id = 0;
             if (ind_j % 2 === 0) {
                 bin_id = ind_j * nBinsX + ind_i;
-            }
-            else {
+            } else {
                 bin_id = (ind_j + 1) * nBinsX - ind_i - 1;
             }
-            bin_index.push({ ind: i, bin: bin_id })
+            bin_index.push({ ind: i, bin: bin_id });
         }
 
         //cAdd super-triangle vertices (far away)
         const D = boundingL;
-        scaledverts.push(new Point(-D + 0.5, -D / Math.sqrt(3) + 0.5))
-        scaledverts.push(new Point(D + 0.5, -D / Math.sqrt(3) + 0.5))
-        scaledverts.push(new Point(0.5, 2 * D / Math.sqrt(3) + 0.5))
+        scaledverts.push(new Vector2(-D + 0.5, -D / Math.sqrt(3) + 0.5));
+        scaledverts.push(new Vector2(D + 0.5, -D / Math.sqrt(3) + 0.5));
+        scaledverts.push(new Vector2(0.5, (2 * D) / Math.sqrt(3) + 0.5));
 
         for (let i = nVertex; i < nVertex + 3; i++) {
-            this.vert.push(new Point(this.screenL * scaledverts[i].x + this.min_coord.x, this.screenL * scaledverts[i].y + this.min_coord.y))
+            this.vert.push(
+                new Vector2(
+                    this.screenL * scaledverts[i].x + this.min_coord.x,
+                    this.screenL * scaledverts[i].y + this.min_coord.y
+                )
+            );
         }
 
         //Sort the vertices in ascending bin order
-        bin_index.sort(this.binSorter)
+        bin_index.sort(this.binSorter);
 
-        this.scaled_vert = scaledverts
-        this.bin = bin_index
+        this.scaled_vert = scaledverts;
+        this.bin = bin_index;
 
         //Super-triangle connectivity
-        this.tri = [[nVertex, (nVertex + 1), (nVertex + 2)]]
-        this.adj = [[-1, -1, -1]]
-        this.vert_to_tri = []
+        this.tri = [[nVertex, nVertex + 1, nVertex + 2]];
+        this.adj = [[-1, -1, -1]];
+        this.vert_to_tri = [];
     }
 
     // Function for computing the unconstrained Delaunay triangulation
     private delaunay() {
         // Sort input vertices and setup super-triangle
-        this.setupDelaunay()
+        this.setupDelaunay();
 
-        const verts = this.scaled_vert
-        const bins = this.bin
-        const triangles = this.tri
-        const adjacency = this.adj
+        const verts = this.scaled_vert;
+        const bins = this.bin;
+        const triangles = this.tri;
+        const adjacency = this.adj;
 
-        const N = verts.length - 3 // vertices includes super-triangle nodes
+        const N = verts.length - 3; // vertices includes super-triangle nodes
 
-        let ind_tri = 0 // points to the super-triangle
-        let nhops_total = 0
+        let ind_tri = 0; // points to the super-triangle
+        let nhops_total = 0;
 
         for (let i = 0; i < N; i++) {
             const new_i = bins[i].ind;
 
             const res = this.findEnclosingTriangle(verts[new_i], ind_tri);
             ind_tri = res[0];
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             nhops_total += res[1];
 
             if (ind_tri === -1) {
-                throw new Error("Could not find a triangle containing the new vertex!")
+                throw new Error("Could not find a triangle containing the new vertex!");
             }
 
-            let cur_tri = triangles[ind_tri]; //vertex indices of triangle containing new point
-            let new_tri0 = [cur_tri[0], cur_tri[1], new_i] as Triangle
-            let new_tri1 = [new_i, cur_tri[1], cur_tri[2]] as Triangle
-            let new_tri2 = [cur_tri[0], new_i, cur_tri[2]] as Triangle
+            const cur_tri = triangles[ind_tri]; //vertex indices of triangle containing new point
+            const new_tri0 = [cur_tri[0], cur_tri[1], new_i] as Triangle;
+            const new_tri1 = [new_i, cur_tri[1], cur_tri[2]] as Triangle;
+            const new_tri2 = [cur_tri[0], new_i, cur_tri[2]] as Triangle;
 
             //Replace the triangle containing the point with new_tri0, and
             //fix its adjacency
@@ -252,10 +277,10 @@ class CDT {
 
             //stack of triangles which need to be checked for Delaunay condition
             //each element contains: [index of tri to check, adjncy index to goto triangle that contains new point]
-            let stack: [number, number][] = [];
+            const stack: Array<[number, number]> = [];
 
-            if (cur_tri_adj[2] >= 0) //if triangle cur_tri's neighbor exists
-            {
+            if (cur_tri_adj[2] >= 0) {
+                //if triangle cur_tri's neighbor exists
                 //Find the index for cur_tri in the adjacency of the neighbor
                 const neigh_adj_ind = adjacency[cur_tri_adj[2]].indexOf(ind_tri);
 
@@ -263,33 +288,32 @@ class CDT {
                 stack.push([cur_tri_adj[2], neigh_adj_ind]);
             }
 
-            if (cur_tri_adj[0] >= 0) //if triangle N_tri's neighbor exists
-            {
+            if (cur_tri_adj[0] >= 0) {
+                //if triangle N_tri's neighbor exists
                 //Find the index for cur_tri in the adjacency of the neighbor
                 const neigh_adj_ind = adjacency[cur_tri_adj[0]].indexOf(ind_tri);
                 adjacency[cur_tri_adj[0]][neigh_adj_ind] = N_tri;
                 stack.push([cur_tri_adj[0], neigh_adj_ind]);
             }
 
-            if (cur_tri_adj[1] >= 0) //if triangle (N_tri+1)'s neighbor exists
-            {
+            if (cur_tri_adj[1] >= 0) {
+                //if triangle (N_tri+1)'s neighbor exists
                 //Find the index for cur_tri in the adjacency of the neighbor
                 const neigh_adj_ind = adjacency[cur_tri_adj[1]].indexOf(ind_tri);
                 adjacency[cur_tri_adj[1]][neigh_adj_ind] = N_tri + 1;
                 stack.push([cur_tri_adj[1], neigh_adj_ind]);
             }
 
-            this.restoreDelaunay(new_i, stack)
-
+            this.restoreDelaunay(new_i, stack);
         } // loop over vertices
 
-        this.removeBoundaryTriangles()
+        this.removeBoundaryTriangles();
 
         // printToLog(`Created ${triangles.length} triangles.`)
     }
 
     //Uses edge orientations - based on Peter Brown's Technical Report 1997
-    private findEnclosingTriangle(target_vertex: Point, ind_tri_cur: number) {
+    private findEnclosingTriangle(target_vertex: Vector2, ind_tri_cur: number) {
         var vertices = this.scaled_vert;
         var triangles = this.tri;
         var adjacency = this.adj;
@@ -299,19 +323,26 @@ class CDT {
         var found_tri = false;
         var path = [];
 
+        // eslint-disable-next-line no-unmodified-loop-condition
         while (!found_tri && nhops < max_hops) {
-            if (ind_tri_cur === -1) //target is outside triangulation
+            if (ind_tri_cur === -1) {
+                //target is outside triangulation
                 return [ind_tri_cur, nhops];
+            }
 
             var tri_cur = triangles[ind_tri_cur];
 
             //Orientation of target wrt each edge of triangle (positive if on left of edge)
-            const orients = [getPointOrientation([vertices[tri_cur[1]], vertices[tri_cur[2]]], target_vertex),
-            getPointOrientation([vertices[tri_cur[2]], vertices[tri_cur[0]]], target_vertex),
-            getPointOrientation([vertices[tri_cur[0]], vertices[tri_cur[1]]], target_vertex)];
+            const orients = [
+                getPointOrientation([vertices[tri_cur[1]], vertices[tri_cur[2]]], target_vertex),
+                getPointOrientation([vertices[tri_cur[2]], vertices[tri_cur[0]]], target_vertex),
+                getPointOrientation([vertices[tri_cur[0]], vertices[tri_cur[1]]], target_vertex)
+            ];
 
-            if (orients[0] >= 0 && orients[1] >= 0 && orients[2] >= 0) //target is to left of all edges, so inside tri
+            if (orients[0] >= 0 && orients[1] >= 0 && orients[2] >= 0) {
+                //target is to left of all edges, so inside tri
                 return [ind_tri_cur, nhops];
+            }
 
             var base_ind = -1;
             for (let iedge = 0; iedge < 3; iedge++) {
@@ -325,22 +356,27 @@ class CDT {
 
             if (orients[base_p1_ind] >= 0 && orients[base_p2_ind] < 0) {
                 ind_tri_cur = adjacency[ind_tri_cur][base_p2_ind]; //should move to the triangle opposite base_p2_ind
-                path[nhops] = vertices[tri_cur[base_ind]].add(vertices[tri_cur[base_p1_ind]]).scale(0.5);
-            }
-            else if (orients[base_p1_ind] < 0 && orients[base_p2_ind] >= 0) {
+                path[nhops] = vertices[tri_cur[base_ind]]
+                    .add(vertices[tri_cur[base_p1_ind]])
+                    .multiplyScalar(0.5);
+            } else if (orients[base_p1_ind] < 0 && orients[base_p2_ind] >= 0) {
                 ind_tri_cur = adjacency[ind_tri_cur][base_p1_ind]; //should move to the triangle opposite base_p1_ind
-                path[nhops] = vertices[tri_cur[base_p2_ind]].add(vertices[tri_cur[base_ind]]).scale(0.5);
-            }
-            else {
+                path[nhops] = vertices[tri_cur[base_p2_ind]]
+                    .add(vertices[tri_cur[base_ind]])
+                    .multiplyScalar(0.5);
+            } else {
                 const vec0 = vertices[tri_cur[base_p1_ind]].sub(vertices[tri_cur[base_ind]]); //vector from base_ind to base_p1_ind
                 const vec1 = target_vertex.sub(vertices[tri_cur[base_ind]]); //vector from base_ind to target_vertex
                 if (vec0.dot(vec1) > 0) {
                     ind_tri_cur = adjacency[ind_tri_cur][base_p2_ind]; //should move to the triangle opposite base_p2_ind
-                    path[nhops] = vertices[tri_cur[base_ind]].add(vertices[tri_cur[base_p1_ind]]).scale(0.5);
-                }
-                else {
+                    path[nhops] = vertices[tri_cur[base_ind]]
+                        .add(vertices[tri_cur[base_p1_ind]])
+                        .multiplyScalar(0.5);
+                } else {
                     ind_tri_cur = adjacency[ind_tri_cur][base_p1_ind]; //should move to the triangle opposite base_p1_ind
-                    path[nhops] = vertices[tri_cur[base_p2_ind]].add(vertices[tri_cur[base_ind]]).scale(0.5);
+                    path[nhops] = vertices[tri_cur[base_p2_ind]]
+                        .add(vertices[tri_cur[base_ind]])
+                        .multiplyScalar(0.5);
                 }
             }
 
@@ -348,15 +384,20 @@ class CDT {
         }
 
         if (!found_tri) {
-            printToLog("Failed to locate triangle containing vertex (" +
-                target_vertex.x.toFixed(4) + ", " + target_vertex.y.toFixed(4) + "). "
-                + "Input vertices may be too close to each other.")
+            printToLog(
+                "Failed to locate triangle containing vertex (" +
+                    target_vertex.x.toFixed(4) +
+                    ", " +
+                    target_vertex.y.toFixed(4) +
+                    "). " +
+                    "Input vertices may be too close to each other."
+            );
         }
 
-        return [ind_tri_cur, (nhops - 1)];
+        return [ind_tri_cur, nhops - 1];
     }
 
-    private restoreDelaunay(ind_vert: number, stack: [number, number][]) {
+    private restoreDelaunay(ind_vert: number, stack: Array<[number, number]>) {
         var vertices = this.scaled_vert;
         var triangles = this.tri;
         var adjacency = this.adj;
@@ -365,14 +406,13 @@ class CDT {
         while (stack.length > 0) {
             const ind_tri_pair = stack.pop(); //[index of tri to check, adjncy index to goto triangle that contains new point]
             if (ind_tri_pair === undefined) {
-                throw new Error('Someting wernt wrong')
+                throw new Error("Someting wernt wrong");
             }
-            const ind_tri = ind_tri_pair[0] as number
+            const ind_tri = ind_tri_pair[0] as number;
 
             const ind_tri_vert = triangles[ind_tri]; //vertex indices of the triangle
-            let v_tri = [];
-            for (let i = 0; i < 3; i++)
-                v_tri[i] = vertices[ind_tri_vert[i]];
+            const v_tri = [];
+            for (let i = 0; i < 3; i++) v_tri[i] = vertices[ind_tri_vert[i]];
 
             if (!this.isDelaunay2(v_tri, v_new)) {
                 //v_new lies inside the circumcircle of the triangle, so need to swap diagonals
@@ -380,8 +420,8 @@ class CDT {
                 const outernode_tri = ind_tri_pair[1]; // [0,1,2] node-index of vertex that's not part of the common edge
                 const ind_tri_neigh = adjacency[ind_tri][outernode_tri];
 
-                if (ind_tri_neigh < 0)
-                    throw "negative index";
+                // eslint-disable-next-line @typescript-eslint/no-throw-literal
+                if (ind_tri_neigh < 0) throw "negative index";
 
                 //Swap the diagonal between the adjacent triangles
                 this.swapDiagonal(ind_tri, ind_tri_neigh);
@@ -400,7 +440,6 @@ class CDT {
                     const neigh_node = adjacency[ind_tri_neigh_outer].indexOf(ind_tri_neigh);
                     stack.push([ind_tri_neigh_outer, neigh_node]);
                 }
-
             } //is not Delaunay
         }
     }
@@ -473,19 +512,18 @@ class CDT {
         var del_count = 0;
         var indmap = [];
         for (let i = 0; i < triangles.length; i++) {
-            let prev_del_count = del_count;
+            const prev_del_count = del_count;
             for (let j = i; j < triangles.length; j++) {
                 if (triangles[j][0] < N && triangles[j][1] < N && triangles[j][2] < N) {
                     indmap[i + del_count] = i;
                     break;
-                }
-                else {
+                } else {
                     indmap[i + del_count] = -1;
                     del_count++;
                 }
             }
 
-            let del_length = del_count - prev_del_count;
+            const del_length = del_count - prev_del_count;
             if (del_length > 0) {
                 triangles.splice(i, del_length);
                 adjacency.splice(i, del_length);
@@ -495,7 +533,7 @@ class CDT {
         //Update adjacencies
         for (let i = 0; i < adjacency.length; i++) {
             for (let j = 0; j < 3; j++) {
-                adjacency[i][j] = indmap[adjacency[i][j]]
+                adjacency[i][j] = indmap[adjacency[i][j]];
             }
         }
 
@@ -504,7 +542,7 @@ class CDT {
         this.vert.splice(-3, 3);
     }
 
-    private isDelaunay2(v_tri: Point[], p: Point) {
+    private isDelaunay2(v_tri: Vector2[], p: Vector2) {
         const vecp0 = v_tri[0].sub(p);
         const vecp1 = v_tri[1].sub(p);
         const vecp2 = v_tri[2].sub(p);
@@ -513,48 +551,53 @@ class CDT {
         const p1_sq = vecp1.x * vecp1.x + vecp1.y * vecp1.y;
         const p2_sq = vecp2.x * vecp2.x + vecp2.y * vecp2.y;
 
-        const det = vecp0.x * (vecp1.y * p2_sq - p1_sq * vecp2.y)
-            - vecp0.y * (vecp1.x * p2_sq - p1_sq * vecp2.x)
-            + p0_sq * (vecp1.x * vecp2.y - vecp1.y * vecp2.x);
+        const det =
+            vecp0.x * (vecp1.y * p2_sq - p1_sq * vecp2.y) -
+            vecp0.y * (vecp1.x * p2_sq - p1_sq * vecp2.x) +
+            p0_sq * (vecp1.x * vecp2.y - vecp1.y * vecp2.x);
 
-        if (det > 0) //p is inside circumcircle of v_tri
+        if (det > 0) {
+            //p is inside circumcircle of v_tri
             return false;
-        else
-            return true;
+        } else return true;
     }
 
     private constrainEdges() {
-        if (this.con_edge.length == 0) {
-            return
+        if (this.con_edge.length === 0) {
+            return;
         }
 
-        this.buildVertexConnectivity()
+        this.buildVertexConnectivity();
 
-        const con_edges = this.con_edge
-        const triangles = this.tri
-        const verts = this.scaled_vert
-        const adjacency = this.adj
-        const vert2tri = this.vert_to_tri
+        const con_edges = this.con_edge;
+        const triangles = this.tri;
+        const verts = this.scaled_vert;
+        const adjacency = this.adj;
+        const vert2tri = this.vert_to_tri;
 
-        const newEdgeList: Edge[] = []
+        const newEdgeList: Edge[] = [];
 
         for (let iedge = 0; iedge < con_edges.length; iedge++) {
-            let intersections = this.getEdgeIntersections(iedge)
+            let intersections = this.getEdgeIntersections(iedge);
 
-            let iter = 0
-            const maxIter = Math.max(intersections.length, 1)
+            let iter = 0;
+            const maxIter = Math.max(intersections.length, 1);
             while (intersections.length > 0 && iter < maxIter) {
-                this.fixEdgeIntersections(intersections, iedge, newEdgeList)
-                intersections = this.getEdgeIntersections(iedge)
-                iter++
+                this.fixEdgeIntersections(intersections, iedge, newEdgeList);
+                intersections = this.getEdgeIntersections(iedge);
+                iter++;
             }
 
             if (intersections.length > 0) {
-                throw new Error("Could not add edge " + iedge + " to triangulation after " + maxIter + " iterations!")
+                throw new Error(
+                    "Could not add edge " +
+                        iedge +
+                        " to triangulation after " +
+                        maxIter +
+                        " iterations!"
+                );
             }
-
         } //loop over constrained edges
-
 
         //Restore Delaunay
         while (true) {
@@ -563,40 +606,46 @@ class CDT {
                 const new_edge_nodes = newEdgeList[iedge];
 
                 //Check if the new edge is a constrained edge
-                let is_con_edge = false
+                let is_con_edge = false;
                 for (let jedge = 0; jedge < con_edges.length; jedge++) {
                     if (isSameEdge(new_edge_nodes, con_edges[jedge])) {
                         is_con_edge = true;
                         break;
-                    };
+                    }
                 }
 
                 if (is_con_edge) {
                     continue; //cannot change this edge if it's constrained
                 }
 
-                const tri_around_v0 = vert2tri[new_edge_nodes[0]]
-                let tri_count = 0
-                let tri_ind_pair = [-1, -1] //indices of the triangles on either side of this edge
+                const tri_around_v0 = vert2tri[new_edge_nodes[0]];
+                let tri_count = 0;
+                const tri_ind_pair = [-1, -1]; //indices of the triangles on either side of this edge
                 for (let itri = 0; itri < tri_around_v0.length; itri++) {
-                    const cur_tri = triangles[tri_around_v0[itri]] as Triangle
-                    if (cur_tri[0] == new_edge_nodes[1] || cur_tri[1] == new_edge_nodes[1] || cur_tri[2] == new_edge_nodes[1]) {
+                    const cur_tri = triangles[tri_around_v0[itri]] as Triangle;
+                    if (
+                        cur_tri[0] === new_edge_nodes[1] ||
+                        cur_tri[1] === new_edge_nodes[1] ||
+                        cur_tri[2] === new_edge_nodes[1]
+                    ) {
                         tri_ind_pair[tri_count] = tri_around_v0[itri];
                         tri_count++;
 
-                        if (tri_count == 2) {
+                        if (tri_count === 2) {
                             break; //found both neighboring triangles
                         }
                     }
                 }
 
-                if (tri_ind_pair[0] == -1) {
+                if (tri_ind_pair[0] === -1) {
                     continue; //this edge no longer exists, so nothing to do.
                 }
 
-                const triA_verts = [verts[triangles[tri_ind_pair[0]][0]],
-                verts[triangles[tri_ind_pair[0]][1]],
-                verts[triangles[tri_ind_pair[0]][2]]];
+                const triA_verts = [
+                    verts[triangles[tri_ind_pair[0]][0]],
+                    verts[triangles[tri_ind_pair[0]][1]],
+                    verts[triangles[tri_ind_pair[0]][2]]
+                ];
 
                 const outer_nodeB_ind = adjacency[tri_ind_pair[1]].indexOf(tri_ind_pair[0]);
                 const triB_vert = verts[triangles[tri_ind_pair[1]][outer_nodeB_ind]];
@@ -605,17 +654,18 @@ class CDT {
                     const outer_nodeA_ind = adjacency[tri_ind_pair[0]].indexOf(tri_ind_pair[1]);
 
                     //Swap the diagonal between the pair of triangles
-                    this.swapDiagonal(tri_ind_pair[0], tri_ind_pair[1])
+                    this.swapDiagonal(tri_ind_pair[0], tri_ind_pair[1]);
                     num_diagonal_swaps++;
 
                     //Replace current new edge with the new diagonal
-                    newEdgeList[iedge] = [triangles[tri_ind_pair[0]][outer_nodeA_ind],
-                    triangles[tri_ind_pair[1]][outer_nodeB_ind]];
+                    newEdgeList[iedge] = [
+                        triangles[tri_ind_pair[0]][outer_nodeA_ind],
+                        triangles[tri_ind_pair[1]][outer_nodeB_ind]
+                    ];
                 }
-
             } //loop over new edges
 
-            if (num_diagonal_swaps == 0) {
+            if (num_diagonal_swaps === 0) {
                 break; //no further swaps, we're done.
             }
         }
@@ -628,10 +678,9 @@ class CDT {
 
         for (let itri = 0; itri < triangles.length; itri++) {
             for (let node = 0; node < 3; node++) {
-                if (vConnectivity[triangles[itri][node]] == undefined)
+                if (vConnectivity[triangles[itri][node]] === undefined) {
                     vConnectivity[triangles[itri][node]] = [itri];
-                else
-                    vConnectivity[triangles[itri][node]].push(itri);
+                } else vConnectivity[triangles[itri][node]].push(itri);
             }
         }
     }
@@ -645,15 +694,15 @@ class CDT {
 
         const edge_v0_ind = con_edges[iedge][0];
         const edge_v1_ind = con_edges[iedge][1];
-        const edge_coords = [verts[edge_v0_ind], verts[edge_v1_ind]] as GeomEdge
+        const edge_coords = [verts[edge_v0_ind], verts[edge_v1_ind]] as GeomEdge;
 
-        const tri_around_v0 = vert2tri[edge_v0_ind] as number[]
+        const tri_around_v0 = vert2tri[edge_v0_ind] as number[];
 
         let edge_in_triangulation = false;
 
         //stores the index of tri that intersects current edge,
         //and the edge-index of intersecting edge in triangle
-        let intersections: [number, number][] = []
+        const intersections: Array<[number, number]> = [];
 
         for (let itri = 0; itri < tri_around_v0.length; itri++) {
             const cur_tri = triangles[tri_around_v0[itri]];
@@ -661,18 +710,20 @@ class CDT {
             const v0p1_node = (v0_node + 1) % 3;
             const v0p2_node = (v0_node + 2) % 3;
 
-            if (edge_v1_ind == cur_tri[v0p1_node]) {
+            if (edge_v1_ind === cur_tri[v0p1_node]) {
                 //constrained edge is an edge of the current tri (node v0_node to v0_node+1)
                 edge_in_triangulation = true;
                 break;
-            }
-            else if (edge_v1_ind == cur_tri[v0p2_node]) {
+            } else if (edge_v1_ind === cur_tri[v0p2_node]) {
                 //constrained edge is an edge of the current tri (node v0_node to v0_node+2)
                 edge_in_triangulation = true;
                 break;
             }
 
-            const opposite_edge_coords = [verts[cur_tri[v0p1_node]], verts[cur_tri[v0p2_node]]] as GeomEdge
+            const opposite_edge_coords = [
+                verts[cur_tri[v0p1_node]],
+                verts[cur_tri[v0p2_node]]
+            ] as GeomEdge;
             if (isEdgeIntersecting(edge_coords, opposite_edge_coords)) {
                 intersections.push([tri_around_v0[itri], v0_node]);
                 break;
@@ -680,23 +731,25 @@ class CDT {
         }
 
         if (!edge_in_triangulation) {
-            if (intersections.length == 0)
-                throw "Cannot have no intersections!";
+            // eslint-disable-next-line @typescript-eslint/no-throw-literal
+            if (intersections.length === 0) throw "Cannot have no intersections!";
 
             while (true) {
                 const prev_intersection = intersections[intersections.length - 1]; //[tri ind][node ind for edge]
                 const tri_ind = adjacency[prev_intersection[0]][prev_intersection[1]];
 
-                if (triangles[tri_ind][0] == edge_v1_ind ||
-                    triangles[tri_ind][1] == edge_v1_ind ||
-                    triangles[tri_ind][2] == edge_v1_ind) {
+                if (
+                    triangles[tri_ind][0] === edge_v1_ind ||
+                    triangles[tri_ind][1] === edge_v1_ind ||
+                    triangles[tri_ind][2] === edge_v1_ind
+                ) {
                     break; //found the end node of the edge
                 }
 
                 //Find the index of the edge from which we came into this triangle
-                let prev_edge_ind = adjacency[tri_ind].indexOf(prev_intersection[0]);
-                if (prev_edge_ind == -1)
-                    throw "Could not find edge!";
+                const prev_edge_ind = adjacency[tri_ind].indexOf(prev_intersection[0]);
+                // eslint-disable-next-line @typescript-eslint/no-throw-literal
+                if (prev_edge_ind === -1) throw "Could not find edge!";
 
                 const cur_tri = triangles[tri_ind];
 
@@ -705,14 +758,16 @@ class CDT {
                 for (let offset = 1; offset < 3; offset++) {
                     const v0_node = (prev_edge_ind + offset + 1) % 3;
                     const v1_node = (prev_edge_ind + offset + 2) % 3;
-                    const cur_edge_coords = [verts[cur_tri[v0_node]], verts[cur_tri[v1_node]]] as GeomEdge
+                    const cur_edge_coords = [
+                        verts[cur_tri[v0_node]],
+                        verts[cur_tri[v1_node]]
+                    ] as GeomEdge;
 
                     if (isEdgeIntersecting(edge_coords, cur_edge_coords)) {
                         intersections.push([tri_ind, (prev_edge_ind + offset) % 3]);
                         break;
                     }
                 }
-
             } //while intersections not found
         } //if edge not in triangulation
 
@@ -720,7 +775,11 @@ class CDT {
     }
 
     // intersectionList: number [][]
-    private fixEdgeIntersections(intersectionList: number[][], con_edge_ind: number, newEdgeList: [number, number][]) {
+    private fixEdgeIntersections(
+        intersectionList: number[][],
+        con_edge_ind: number,
+        newEdgeList: Array<[number, number]>
+    ) {
         var triangles = this.tri;
         var verts = this.scaled_vert;
         var adjacency = this.adj;
@@ -728,7 +787,7 @@ class CDT {
 
         //Node indices and endpoint coords of current constrained edge
         var con_edge_nodes = con_edges[con_edge_ind];
-        var cur_con_edge_coords = [verts[con_edge_nodes[0]], verts[con_edge_nodes[1]]] as GeomEdge
+        var cur_con_edge_coords = [verts[con_edge_nodes[0]], verts[con_edge_nodes[1]]] as GeomEdge;
 
         var nIntersections = intersectionList.length;
         for (let i = 0; i < nIntersections; i++) {
@@ -750,31 +809,42 @@ class CDT {
             if (isConvex) {
                 this.swapDiagonal(tri0_ind, tri1_ind);
 
-                const newDiagonal_nodes = [triangles[tri0_ind][tri0_node], triangles[tri1_ind][tri1_node]];
+                const newDiagonal_nodes = [
+                    triangles[tri0_ind][tri0_node],
+                    triangles[tri1_ind][tri1_node]
+                ];
 
-                const newDiagonal_coords = [quad_v0, quad_v2] as GeomEdge
-                const hasCommonNode = (newDiagonal_nodes[0] == con_edge_nodes[0] || newDiagonal_nodes[0] == con_edge_nodes[1] ||
-                    newDiagonal_nodes[1] == con_edge_nodes[0] || newDiagonal_nodes[1] == con_edge_nodes[1]);
+                const newDiagonal_coords = [quad_v0, quad_v2] as GeomEdge;
+                const hasCommonNode =
+                    newDiagonal_nodes[0] === con_edge_nodes[0] ||
+                    newDiagonal_nodes[0] === con_edge_nodes[1] ||
+                    newDiagonal_nodes[1] === con_edge_nodes[0] ||
+                    newDiagonal_nodes[1] === con_edge_nodes[1];
                 if (hasCommonNode || !isEdgeIntersecting(cur_con_edge_coords, newDiagonal_coords)) {
                     newEdgeList.push([newDiagonal_nodes[0], newDiagonal_nodes[1]]);
                 }
-
             } //is convex
-
         } //loop over intersections
     }
 }
 
 function printToLog(msg: string) {
-    console.log(msg)
+    // eslint-disable-next-line no-console
+    console.log(msg);
 }
 
 function isSameEdge(edge0: Edge, edge1: Edge): boolean {
-    return ((edge0[0] == edge1[0] && edge0[1] == edge1[1]) || (edge0[1] == edge1[0] && edge0[0] == edge1[1]))
+    return (
+        (edge0[0] === edge1[0] && edge0[1] === edge1[1]) ||
+        (edge0[1] === edge1[0] && edge0[0] === edge1[1])
+    );
 }
 
-export type Edge = [number, number]
-export type Triangle = [number, number, number]
-type BinIndex = { ind: number, bin: number }
+export type Edge = [number, number];
+export type Triangle = [number, number, number];
+interface BinIndex {
+    ind: number;
+    bin: number;
+}
 
-const boundingL = 1000.0
+const boundingL = 1000.0;

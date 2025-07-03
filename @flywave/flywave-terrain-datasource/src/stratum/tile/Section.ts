@@ -1,16 +1,23 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 export class SectionLine {
-    private _id: string;
-    private _name: string;
-    private _lineString: [number, number, number][];
-    private _geometries?: THREE.BufferGeometry[];  // 类型替换
+    private readonly _id: string;
+    private readonly _name: string;
+    private _lineString: Array<[number, number, number]>;
+    private _geometries?: THREE.BufferGeometry[]; // 类型替换
     private _bbox?: THREE.Box3;
-    private _materials?: THREE.Material[];        // 类型替换
+    private _materials?: THREE.Material[]; // 类型替换
 
-    constructor(sl: {
-        id: string, name: string, lineString: [number, number, number][]
-    }, bbox?: THREE.Box3, geometry?: THREE.BufferGeometry[], materials?: THREE.Material[]) {
+    constructor(
+        sl: {
+            id: string;
+            name: string;
+            lineString: Array<[number, number, number]>;
+        },
+        bbox?: THREE.Box3,
+        geometry?: THREE.BufferGeometry[],
+        materials?: THREE.Material[]
+    ) {
         this._id = sl.id;
         this._name = sl.name;
         this._lineString = sl.lineString;
@@ -27,7 +34,7 @@ export class SectionLine {
         return this._name;
     }
 
-    get lineString(): [number, number, number][] {
+    get lineString(): Array<[number, number, number]> {
         return this._lineString;
     }
 
@@ -35,18 +42,20 @@ export class SectionLine {
         return this._bbox;
     }
 
-    get geometries(): THREE.BufferGeometry[] {  // 返回类型修改
+    get geometries(): THREE.BufferGeometry[] {
+        // 返回类型修改
         return this._geometries || [];
     }
 
-    get materials(): THREE.Material[] {         // 返回类型修改
+    get materials(): THREE.Material[] {
+        // 返回类型修改
         return this._materials || [];
     }
 
     dispose() {
         this._geometries?.forEach(geom => geom.dispose());
         this._materials?.forEach(mat => mat.dispose());
-        
+
         // 释放几何数据
         this._geometries = undefined;
         // 释放材质数据

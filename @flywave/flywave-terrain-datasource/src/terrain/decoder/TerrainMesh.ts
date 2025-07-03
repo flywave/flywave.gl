@@ -1,6 +1,6 @@
-import { OrientedBox3 } from "@flywave/flywave-geoutils";
+import { BoundingSphere, OrientedBox3 } from "@flywave/flywave-geoutils";
 import { defaultValue } from "@flywave/flywave-utils";
-import { Sphere, Vector3 } from "three";
+import { Vector3 } from "three";
 
 import { TerrainEncoding } from "./Decoder";
 
@@ -15,7 +15,7 @@ class TerrainMesh {
     vertexCountWithoutSkirts: number;
     minimumHeight: number;
     maximumHeight: number;
-    boundingSphere3D: Sphere;
+    boundingSphere3D: BoundingSphere;
     occludeePointInScaledSpace: Vector3;
     orientedBoundingBox?: OrientedBox3;
     encoding: TerrainEncoding;
@@ -36,7 +36,7 @@ class TerrainMesh {
         vertexCountWithoutSkirts: number,
         minimumHeight: number,
         maximumHeight: number,
-        boundingSphere3D: Sphere,
+        boundingSphere3D: BoundingSphere,
         occludeePointInScaledSpace: Vector3,
         vertexStride?: number,
         orientedBoundingBox?: OrientedBox3,

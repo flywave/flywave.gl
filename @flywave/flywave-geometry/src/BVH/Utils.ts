@@ -1,4 +1,5 @@
-import { FloatArray } from './types';
+export type FloatArray = Float32Array | Float64Array;
+export type FloatArrayType = typeof Float32Array | typeof Float64Array;
 
 export function unionBox(A: FloatArray, B: FloatArray, target: FloatArray): void {
     target[0] = A[0] > B[0] ? B[0] : A[0];
@@ -171,7 +172,10 @@ export function minDistancePointToBox(box: FloatArray, point: FloatArray): numbe
     return Math.sqrt(minDistanceSqPointToBox(box, point));
 }
 
-export function minMaxDistanceSqPointToBox(box: FloatArray, point: FloatArray): { min: number; max: number } {
+export function minMaxDistanceSqPointToBox(
+    box: FloatArray,
+    point: FloatArray
+): { min: number; max: number } {
     let dXmin, dXmax, dYmin, dYmax, dZmin, dZmax;
 
     const xMin = box[0] - point[0];
@@ -219,9 +223,42 @@ export function minMaxDistanceSqPointToBox(box: FloatArray, point: FloatArray): 
     };
 }
 
-export function minMaxDistancePointToBox(box: FloatArray, point: FloatArray): { min: number; max: number } {
+export function minMaxDistancePointToBox(
+    box: FloatArray,
+    point: FloatArray
+): { min: number; max: number } {
     const result = minMaxDistanceSqPointToBox(box, point);
     result.min = Math.sqrt(result.min);
     result.max = Math.sqrt(result.max);
     return result;
+}
+
+interface ItemListType {
+    node: any;
+    inheritedCost: number;
+} // fix d.ts
+
+export class SortedListPriority {
+    public array: ItemListType[] = [];
+
+    public clear(): void {
+        this.array = [];
+    }
+
+    public push(node: ItemListType): void {
+        const array = this.array;
+        const cost = node.inheritedCost;
+        const end = array.length > 6 ? array.length - 6 : 0;
+        let i: number;
+
+        for (i = array.length - 1; i >= end; i--) {
+            if (cost <= array[i].inheritedCost) break;
+        }
+
+        if (i > array.length - 7) array.splice(i + 1, 0, node); // if in last 6 place, add it do the list
+    }
+
+    public pop(): ItemListType | undefined {
+        return this.array.pop();
+    }
 }

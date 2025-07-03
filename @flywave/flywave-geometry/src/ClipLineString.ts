@@ -54,7 +54,7 @@ class ClipEdge {
      * {@link https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
      *    | line-line intersection}.
      */
-    computeIntersection<Vector>(a: Vector3, b: Vector3): Vector3 {
+    computeIntersection(a: Vector3, b: Vector3): Vector3 {
         const result = new Vector3();
         Math2D.intersectLines(
             a.x,
@@ -67,7 +67,7 @@ class ClipEdge {
             this.p1.y,
             result
         );
-        result.z = a.z +(result.distanceTo(a) / a.distanceTo(b)) * (b.z - a.z);
+        result.z = a.z + (result.distanceTo(a) / a.distanceTo(b)) * (b.z - a.z);
         return result;
     }
 
@@ -147,7 +147,7 @@ export function clipLineString(
     minY: number,
     maxX: number,
     maxY: number
-):   Vector3[][] {
+): Vector3[][] {
     const clipEdge0 = new ClipEdge(minX, minY, minX, maxY, p => p.x > minX); // left
     const clipEdge1 = new ClipEdge(minX, maxY, maxX, maxY, p => p.y < maxY); // bottom
     const clipEdge2 = new ClipEdge(maxX, maxY, maxX, minY, p => p.x < maxX); // right
@@ -228,8 +228,8 @@ export function wrapLineString(coordinates: GeoCoordinates[]): Partial<WrappedLi
     const worldP = new Vector3();
 
     const lineString = coordinates.map(g => {
-        const { x, y,z } = webMercatorProjection.projectPoint(g, worldP);
-        return new Vector3(x, y,z);
+        const { x, y, z } = webMercatorProjection.projectPoint(g, worldP);
+        return new Vector3(x, y, z);
     });
 
     const multiLineString = [lineString];

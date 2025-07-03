@@ -1,21 +1,29 @@
-import { BVHNode } from './Node';
-import { IBVHBuilder, onLeafCreationCallback } from './Builder';
-import { FloatArray, } from "../utils/types";
-import { CoordinateSystem, Frustum, WebGLCoordinateSystem } from '../utils/frustum';
-import { intersectBoxBox, intersectRayBox, intersectSphereBox } from '../utils/intersect';
-import { minDistanceSqPointToBox, minMaxDistanceSqPointToBox } from '../utils/box';
+import { IBVHBuilder, onLeafCreationCallback } from "./Builder";
+import { CoordinateSystem, Frustum, WebGLCoordinateSystem } from "./Frustum";
+import { intersectBoxBox, intersectRayBox, intersectSphereBox } from "./Intersect";
+import { BVHNode } from "./Node";
+import { FloatArray, minDistanceSqPointToBox, minMaxDistanceSqPointToBox } from "./Utils";
 
 export type onTraverseCallback<N, L> = (node: BVHNode<N, L>, depth: number) => boolean;
 export type onIntersectionCallback<L> = (obj: L) => boolean;
 export type onClosestDistanceCallback<L> = (obj: L) => number;
 export type onIntersectionRayCallback<L> = (obj: L) => void;
-export type onFrustumIntersectionCallback<N, L> = (node: BVHNode<N, L>, frustum?: Frustum, mask?: number) => void;
-export type onFrustumIntersectionLODCallback<N, L> = (node: BVHNode<N, L>, level: number | null, frustum?: Frustum, mask?: number) => void;
+export type onFrustumIntersectionCallback<N, L> = (
+    node: BVHNode<N, L>,
+    frustum?: Frustum,
+    mask?: number
+) => void;
+export type onFrustumIntersectionLODCallback<N, L> = (
+    node: BVHNode<N, L>,
+    level: number | null,
+    frustum?: Frustum,
+    mask?: number
+) => void;
 
-export type BVHOptions = {
+export interface BVHOptions {
     highPrecision?: boolean;
     coordinateSystem?: CoordinateSystem;
-};
+}
 
 export class BVH<N, L> {
     private readonly _builder: IBVHBuilder<N, L>;
@@ -34,7 +42,12 @@ export class BVH<N, L> {
         this._dirInv = highPrecision ? new Float64Array(3) : new Float32Array(3);
     }
 
-    public createFromArray(objects: L[], boxes: FloatArray[], onLeafCreation?: onLeafCreationCallback<N, L>, margin?: number): void {
+    public createFromArray(
+        objects: L[],
+        boxes: FloatArray[],
+        onLeafCreation?: onLeafCreationCallback<N, L>,
+        margin?: number
+    ): void {
         if (objects?.length > 0) {
             this._builder.createFromArray(objects, boxes, onLeafCreation, margin);
         }
@@ -44,7 +57,12 @@ export class BVH<N, L> {
         return this._builder.insert(object, box, margin);
     }
 
-    public insertRange(objects: L[], boxes: FloatArray[], margins?: number | FloatArray | number[], onLeafCreation?: onLeafCreationCallback<N, L>): void {
+    public insertRange(
+        objects: L[],
+        boxes: FloatArray[],
+        margins?: number | FloatArray | number[],
+        onLeafCreation?: onLeafCreationCallback<N, L>
+    ): void {
         if (objects?.length > 0) {
             this._builder.insertRange(objects, boxes, margins, onLeafCreation);
         }
@@ -68,7 +86,8 @@ export class BVH<N, L> {
         _traverse(this.root, 0);
 
         function _traverse(node: BVHNode<N, L>, depth: number): void {
-            if (node.object !== undefined) { // is leaf
+            if (node.object !== undefined) {
+                // is leaf
                 callback(node, depth);
                 return;
             }
@@ -83,7 +102,7 @@ export class BVH<N, L> {
     }
 
     public intersects(
-        type: 'ray' | 'box' | 'sphere',
+        type: "ray" | "box" | "sphere",
         params: {
             dir?: FloatArray;
             origin?: FloatArray;
@@ -96,18 +115,24 @@ export class BVH<N, L> {
         if (!this.root) return false;
 
         switch (type) {
-            case 'ray':
+            case "ray":
                 return this.intersectsRay(params.dir!, params.origin!, callback);
-            case 'box':
+            case "box":
                 return this.intersectsBox(params.box!, callback);
-            case 'sphere':
+            case "sphere":
                 return this.intersectsSphere(params.center!, params.radius!, callback);
             default:
-                throw new Error('Invalid intersection type');
+                throw new Error("Invalid intersection type");
         }
     }
 
-    public intersectsRay(dir: FloatArray, origin: FloatArray, onIntersection: onIntersectionCallback<L>, near = 0, far = Infinity): boolean {
+    public intersectsRay(
+        dir: FloatArray,
+        origin: FloatArray,
+        onIntersection: onIntersectionCallback<L>,
+        near = 0,
+        far = Infinity
+    ): boolean {
         if (this.root === null) return false;
 
         const dirInv = this._dirInv;
@@ -146,7 +171,11 @@ export class BVH<N, L> {
         }
     }
 
-    public intersectsSphere(center: FloatArray, radius: number, onIntersection: onIntersectionCallback<L>): boolean {
+    public intersectsSphere(
+        center: FloatArray,
+        radius: number,
+        onIntersection: onIntersectionCallback<L>
+    ): boolean {
         if (this.root === null) return false;
 
         return _intersectsSphere(this.root);
@@ -160,7 +189,10 @@ export class BVH<N, L> {
         }
     }
 
-    public isNodeIntersected(node: BVHNode<N, L>, onIntersection: onIntersectionCallback<L>): boolean {
+    public isNodeIntersected(
+        node: BVHNode<N, L>,
+        onIntersection: onIntersectionCallback<L>
+    ): boolean {
         const nodeBox = node.box;
         let parent;
 
@@ -183,7 +215,13 @@ export class BVH<N, L> {
         }
     }
 
-    public rayIntersections(dir: FloatArray, origin: FloatArray, onIntersection: onIntersectionRayCallback<L>, near = 0, far = Infinity): void {
+    public rayIntersections(
+        dir: FloatArray,
+        origin: FloatArray,
+        onIntersection: onIntersectionRayCallback<L>,
+        near = 0,
+        far = Infinity
+    ): void {
         if (this.root === null) return;
 
         const dirInv = this._dirInv;
@@ -211,13 +249,13 @@ export class BVH<N, L> {
             _rayIntersections(node.right!);
         }
     }
+
     public frustumCulling(
         projectionMatrix: FloatArray | number[],
         onIntersection: onFrustumIntersectionCallback<N, L>
     ): void {
-        this._frustumCullingBase(
-            projectionMatrix,
-            (node, frustum, mask) => onIntersection(node, frustum, mask)
+        this._frustumCullingBase(projectionMatrix, (node, frustum, mask) =>
+            onIntersection(node, frustum, mask)
         );
     }
 
@@ -227,13 +265,10 @@ export class BVH<N, L> {
         levels: FloatArray,
         onIntersection: onFrustumIntersectionLODCallback<N, L>
     ): void {
-        this._frustumCullingBase(
-            projectionMatrix,
-            (node, frustum, mask) => {
-                const level = this._getLODLevel(node.box, cameraPosition, levels);
-                onIntersection(node, level, frustum, mask);
-            }
-        );
+        this._frustumCullingBase(projectionMatrix, (node, frustum, mask) => {
+            const level = this._getLODLevel(node.box, cameraPosition, levels);
+            onIntersection(node, level, frustum, mask);
+        });
     }
 
     private _frustumCullingBase(
@@ -266,10 +301,7 @@ export class BVH<N, L> {
         traverse(this.root, 0b111111);
     }
 
-    private _traverseAll(
-        node: BVHNode<N, L>,
-        callback: () => void
-    ): void {
+    private _traverseAll(node: BVHNode<N, L>, callback: () => void): void {
         if (node.object !== undefined) {
             callback();
             return;
@@ -293,7 +325,10 @@ export class BVH<N, L> {
         return 0;
     }
 
-    public closestPointToPoint(point: FloatArray, onClosestDistance?: onClosestDistanceCallback<L>): number | undefined {
+    public closestPointToPoint(
+        point: FloatArray,
+        onClosestDistance?: onClosestDistanceCallback<L>
+    ): number | undefined {
         if (this.root === null) return;
 
         let bestDistance = Infinity;
@@ -305,7 +340,8 @@ export class BVH<N, L> {
         function _closestPointToPoint(node: BVHNode<N, L>): void {
             if (node.object !== undefined) {
                 if (onClosestDistance) {
-                    const distance = onClosestDistance(node.object) ?? minDistanceSqPointToBox(node.box, point);
+                    const distance =
+                        onClosestDistance(node.object) ?? minDistanceSqPointToBox(node.box, point);
                     if (distance < bestDistance) bestDistance = distance;
                 } else {
                     bestDistance = minDistanceSqPointToBox(node.box, point); // this was already calculated actually

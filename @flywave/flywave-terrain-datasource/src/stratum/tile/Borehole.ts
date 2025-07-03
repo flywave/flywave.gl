@@ -1,26 +1,31 @@
-import { BoreholeStratum, TrajectoryPoint } from "../decoder/types";
 import * as THREE from "three";
 
+import { BoreholeStratum, TrajectoryPoint } from "../decoder/types";
+
 export class Borehole {
-    private _id: string;
-    private _location: [number, number, number];
-    private _depth: number;
-    private _azimuth: number;
-    private _inclination: number;
+    private readonly _id: string;
+    private readonly _location: [number, number, number];
+    private readonly _depth: number;
+    private readonly _azimuth: number;
+    private readonly _inclination: number;
     private _trajectory: TrajectoryPoint[];
     private _stratums: BoreholeStratum[];
     private _geometrys?: THREE.BufferGeometry[];
-    private _materials?: THREE.Material[]; 
+    private _materials?: THREE.Material[];
 
-    constructor(bh: {
-        id: string;
-        location: [number, number, number];
-        depth: number;
-        azimuth: number;
-        inclination: number;
-        trajectory: TrajectoryPoint[];
-        stratums: BoreholeStratum[];
-    }, geometry?: THREE.BufferGeometry[], materials?: THREE.Material[]) {
+    constructor(
+        bh: {
+            id: string;
+            location: [number, number, number];
+            depth: number;
+            azimuth: number;
+            inclination: number;
+            trajectory: TrajectoryPoint[];
+            stratums: BoreholeStratum[];
+        },
+        geometry?: THREE.BufferGeometry[],
+        materials?: THREE.Material[]
+    ) {
         this._id = bh.id;
         this._location = bh.location;
         this._depth = bh.depth;
@@ -59,7 +64,7 @@ export class Borehole {
     get stratums() {
         return this._stratums;
     }
-    
+
     get geometries(): THREE.BufferGeometry[] {
         return this._geometrys || [];
     }
@@ -70,11 +75,11 @@ export class Borehole {
 
     dispose() {
         this._geometrys?.forEach(geom => {
-            geom.dispose();  
+            geom.dispose();
         });
 
         this._materials?.forEach(mat => {
-            mat.dispose(); 
+            mat.dispose();
         });
 
         // 清空数组引用

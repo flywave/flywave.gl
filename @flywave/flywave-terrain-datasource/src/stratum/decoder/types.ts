@@ -1,9 +1,8 @@
-
-export type ParseStratumMeshOptions = {
+export interface ParseStratumMeshOptions {
     bounds?: [number, number, number, number];
-};
+}
 
-export type Header = {
+export interface Header {
     centerX?: number;
     centerY?: number;
     centerZ?: number;
@@ -16,73 +15,73 @@ export type Header = {
     horizonOcclusionPointX?: number;
     horizonOcclusionPointY?: number;
     horizonOcclusionPointZ?: number;
-};
+}
 
-export type DecodeHeaderResult = {
+export interface DecodeHeaderResult {
     header: Header;
     headerEndPosition: number;
-};
+}
 
-export type VertexData = {
+export interface VertexData {
     u: Float64Array<ArrayBuffer>;
     v: Float64Array<ArrayBuffer>;
     h: Float64Array<ArrayBuffer>;
     normals: Float32Array<ArrayBuffer>;
     uvs: Float32Array<ArrayBuffer>;
-};
+}
 
-export type DecodeVertexDataResult = {
+export interface DecodeVertexDataResult {
     vertexData: VertexData;
     vertexDataEndPosition: number;
-};
+}
 
-export type DecodeTriangleIndicesResult = {
+export interface DecodeTriangleIndicesResult {
     triangleIndices: Uint16Array | Uint32Array;
     triangleIndicesEndPosition: number;
-};
+}
 
-export type DecodeExtensionsResult = {
+export interface DecodeExtensionsResult {
     extensions: Extensions;
     extensionsEndPosition: number;
-};
+}
 
-export type DecodeOptions = {
+export interface DecodeOptions {
     maxDecodingStep?: number;
-};
+}
 
-export type DecodeResult = {
+export interface DecodeResult {
     header: Header;
     vertexData?: VertexData;
     triangleIndices?: Uint16Array | Uint32Array;
     extensions?: Extensions;
     layers?: StratumLayer[];
     faceTypes?: Uint8Array;
-};
+}
 
 // 扩展头
-export type ExtensionHeader = {
+export interface ExtensionHeader {
     extensionId: number;
     extensionLength: number;
-};
+}
 
 // 元数据
-export type Metadata = {
+export interface Metadata {
     jsonLength: number;
     json: any; // 可以使用更具体的类型替代 any
-};
+}
 
 // 地层体素
-export type StratumVoxel = {
+export interface StratumVoxel {
     id: string;
     index: number;
     start: number;
     end: number;
     bbox: [[number, number, number], [number, number, number]];
     neighbors: [number, number, number];
-};
+}
 
 // 颜色映射
-export type ColorMap = {
+export interface ColorMap {
     textureSize: number;
     stratumColor: Record<string, ColorRGBA>;
     stratumTexture: Record<string, string>;
@@ -92,25 +91,25 @@ export type ColorMap = {
     defaultFault: ColorRGBA;
     collapseColor: Record<string, ColorRGBA>;
     defaultCollapse: ColorRGBA;
-};
+}
 
 // RGBA 颜色
-export type ColorRGBA = {
+export interface ColorRGBA {
     r: number;
     g: number;
     b: number;
     a: number;
-};
+}
 
 // 断层点
-export type FaultPoint = {
+export interface FaultPoint {
     x: number;
     y: number;
     z: number;
-};
+}
 
 // 断层剖面
-export type FaultProfile = {
+export interface FaultProfile {
     id: string;
     name: string;
     type: string;
@@ -118,28 +117,28 @@ export type FaultProfile = {
     dip: number;
     throw: number;
     points: FaultPoint[];
-};
+}
 
 // 轨迹点
-export type TrajectoryPoint = {
+export interface TrajectoryPoint {
     depth: number;
     x: number;
     y: number;
     z: number;
     azimuth: number;
     inclination: number;
-};
+}
 
 // 钻孔地层
-export type BoreholeStratum = {
+export interface BoreholeStratum {
     id: string;
     lithology: string;
     top: number;
     base: number;
-};
+}
 
 // 钻孔
-export type Borehole = {
+export interface Borehole {
     id: string;
     location: [number, number, number];
     depth: number;
@@ -147,7 +146,7 @@ export type Borehole = {
     inclination: number;
     trajectory: TrajectoryPoint[];
     stratums: BoreholeStratum[];
-};
+}
 
 export enum LayerType {
     Voxel = 0,
@@ -158,14 +157,14 @@ export enum LayerType {
 }
 
 // 地层组
-export type StratumLayer = {
+export interface StratumLayer {
     type: LayerType; // 使用枚举类型替代number
     id: string;
     voxels: StratumVoxel[];
-};
+}
 
 // 陷落柱
-export type CollapsePillar = {
+export interface CollapsePillar {
     id: string;
     name: string;
     topCenter: [number, number, number];
@@ -176,14 +175,14 @@ export type CollapsePillar = {
     stratumId: string;
     lithology: string;
     bbox: [[number, number, number], [number, number, number]];
-};
+}
 
 // 剖切线
-export type SectionLine = {
+export interface SectionLine {
     id: string;
     name: string;
-    lineString: [number, number, number][];
-};
+    lineString: Array<[number, number, number]>;
+}
 
 export type StratumLithology = Record<string, string>;
 

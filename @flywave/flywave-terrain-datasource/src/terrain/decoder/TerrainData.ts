@@ -19,7 +19,7 @@ interface QuantizedMeshTerrainDataOptions {
     indices: Uint16Array | Uint32Array;
     minimumHeight: number;
     maximumHeight: number;
-    boundingSphere: THREE.Sphere;
+    boundingSphere: BoundingSphere;
     orientedBoundingBox?: OrientedBox3;
     horizonOcclusionPoint?: THREE.Vector3;
     westIndices: number[] | Uint16Array | Uint32Array;
@@ -245,7 +245,7 @@ class QuantizedMeshTerrainData {
             const minimumHeight = result.minimumHeight;
             const maximumHeight = result.maximumHeight;
             const boundingSphere = defaultValue(
-                result.boundingSphere && new THREE.Sphere().copy(result.boundingSphere),
+                result.boundingSphere && new BoundingSphere().copy(result.boundingSphere),
                 this._boundingSphere
             );
             const obb = defaultValue(
@@ -412,7 +412,7 @@ class QuantizedMeshTerrainData {
                 encodedNormals: encodedNormals,
                 minimumHeight: result.minimumHeight,
                 maximumHeight: result.maximumHeight,
-                boundingSphere: new THREE.Sphere().copy(result.boundingSphere),
+                boundingSphere: new BoundingSphere().copy(result.boundingSphere),
                 westIndices: result.westIndices,
                 southIndices: result.southIndices,
                 eastIndices: result.eastIndices,

@@ -1,22 +1,22 @@
 import * as THREE from "three";
 
-export type ColorRGBA = {
+export interface ColorRGBA {
     r: number;
     g: number;
     b: number;
     a: number;
-};
+}
 
 export class ColorMap {
     private textureSize: number;
-    private stratumColor: Map<string, ColorRGBA>;
-    private stratumTexture: Map<string, string>; // 存储纹理路径或URL
+    private readonly stratumColor: Map<string, ColorRGBA>;
+    private readonly stratumTexture: Map<string, string>; // 存储纹理路径或URL
     private defaultStratum: ColorRGBA;
-    private faultColor: Map<string, ColorRGBA>;
+    private readonly faultColor: Map<string, ColorRGBA>;
     private faultHighlight: ColorRGBA;
     private defaultFault: ColorRGBA;
-    private collapseColor: Map<string, ColorRGBA>;
-    private defaultCollapse: ColorRGBA;
+    private readonly collapseColor: Map<string, ColorRGBA>;
+    private readonly defaultCollapse: ColorRGBA;
 
     constructor(cm?: {
         textureSize: number;
@@ -149,9 +149,12 @@ export class ColorMap {
 
     // 解析十六进制颜色
     private parseHexColor(hex: string): ColorRGBA {
-        hex = hex.replace(/^#/, '');
+        hex = hex.replace(/^#/, "");
 
-        let r = 0, g = 0, b = 0, a = 255;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let a = 255;
 
         switch (hex.length) {
             case 3: // RGB

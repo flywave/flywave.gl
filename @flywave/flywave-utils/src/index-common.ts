@@ -33,3 +33,4 @@ export * from "./BinarySearch";
 export * from "./Image";
 export * from "./OffscreenCanvasSupported";
 export * from "./Browser";
+export * from "./FlatArray";

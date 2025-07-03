@@ -1,41 +1,57 @@
-import { BSPNode, allPolygons, build, clipTo, fromPolygons, invert } from "../csg/Bsp";
-import { Polygon } from "../csg/Polygon";
-import { fromVectors } from "../utils/plane";
-import { cross, dot, lengthV, minus, Vector } from "../utils/vector";
-import * as THREE from 'three';
+import {
+    allPolygons,
+    BSPNode,
+    build,
+    clipTo,
+    fromPolygons,
+    invert,
+    Polygon
+} from "@flywave/flywave-geometry";
+import { fromVectors } from "@flywave/flywave-geoutils";
+import * as THREE from "three";
 
 export type FaceType = number;
 
 export const FaceTypes = {
-    TopFace: 1 << 0,          // 1 (0b0001)
-    BaseFace: 1 << 1,        // 2 (0b0010)
-    SideFace: 1 << 2,        // 4 (0b0100)
-    BoundaryFace: 1 << 3,    // 8 (0b1000)
-    GroundFace: 1 << 4,      // 16 (0b00010000) 地表
-    BedrockFace: 1 << 5,     // 32 (0b00100000) 基岩
-    CutFace: 1 << 6,         // 64 (0b10000000) 切割面
-    BoundarySideFace: (1 << 2) | (1 << 3),  // 12 (0b1100)
-    TopGroundFace: (1 << 0) | (1 << 4),    // 17 (0b00010001) 地表顶板
-    BaseBedrockFace: (1 << 5) | (1 << 1)   // 34 (0b00100010) 基岩底板
+    TopFace: 1 << 0,
+    BaseFace: 1 << 1,
+    SideFace: 1 << 2,
+    BoundaryFace: 1 << 3,
+    GroundFace: 1 << 4,
+    BedrockFace: 1 << 5,
+    CutFace: 1 << 6,
+    BoundarySideFace: (1 << 2) | (1 << 3),
+    TopGroundFace: (1 << 0) | (1 << 4),
+    BaseBedrockFace: (1 << 5) | (1 << 1)
 } as const;
 
 export class StratumVoxel {
-    private _id: string;
-    private _index: number;
+    private readonly _id: string;
+    private readonly _index: number;
     private _bsp?: BSPNode;
     private _bbox?: THREE.Box3;
-    private _geometry?: THREE.BufferGeometry;  // 类型替换
-    private _material?: THREE.Material;       // 类型替换
-    private _neighbors: [StratumVoxel | undefined, StratumVoxel | undefined, StratumVoxel | undefined];
+    private _geometry?: THREE.BufferGeometry;
+    private _material?: THREE.Material;
+    private _neighbors: [
+        StratumVoxel | undefined,
+        StratumVoxel | undefined,
+        StratumVoxel | undefined
+    ];
 
-    constructor(id: string, index: number, bbox?: THREE.Box3, geometry?: THREE.BufferGeometry, material?: THREE.Material) {
+    constructor(
+        id: string,
+        index: number,
+        bbox?: THREE.Box3,
+        geometry?: THREE.BufferGeometry,
+        material?: THREE.Material
+    ) {
         this._id = id;
         this._index = index;
         this._geometry = geometry;
         this._material = material;
         this._bbox = bbox;
         this._bsp = this.buildBsp();
-        this._neighbors = [undefined, undefined, undefined]
+        this._neighbors = [undefined, undefined, undefined];
     }
 
     get id() {
@@ -46,14 +62,13 @@ export class StratumVoxel {
         return this._index;
     }
 
-    get material(): THREE.Material {           // 返回类型修改
+    get material(): THREE.Material {
         return this._material!;
     }
 
-    get geometry(): THREE.BufferGeometry {     // 返回类型修改
+    get geometry(): THREE.BufferGeometry {
         return this._geometry!;
     }
-
 
     get bsp() {
         return this._bsp;
@@ -63,58 +78,53 @@ export class StratumVoxel {
         return this._bbox!;
     }
 
-    get neighbors(): [StratumVoxel | undefined, StratumVoxel | undefined, StratumVoxel | undefined] {
+    get neighbors() {
         return this._neighbors;
     }
 
     dispose() {
         this._geometry?.dispose();
         this._material?.dispose();
-        // 释放几何数据引用
         this._geometry = undefined;
-        // 释放材质引用
         this._material = undefined;
-        // 销毁BSP树结构
         this._bsp = undefined;
-        // 清空包围盒缓存
         this._bbox = undefined;
     }
 
-    /**
-     * 计算体素的精确体积（基于三角形面片）
-     */
     get volume(): number {
         const polygons = this.getPolygons();
         let signedVolume = 0;
 
         for (const poly of polygons) {
-            // 每个多边形都是三角形（来自buildPolygons实现）
             const [v0, v1, v2] = poly.vectors;
+            const v0Vec = new THREE.Vector3(v0.x, v0.y, v0.z);
+            const v1Vec = new THREE.Vector3(v1.x, v1.y, v1.z);
+            const v2Vec = new THREE.Vector3(v2.x, v2.y, v2.z);
 
-            // 计算四面体体积贡献公式：v0 · (v1 × v2)
-            const crossProduct = cross(v1, v2);
-            signedVolume += dot(v0, crossProduct);
+            const crossProduct = new THREE.Vector3().crossVectors(v1Vec, v2Vec);
+            signedVolume += v0Vec.dot(crossProduct);
         }
 
-        // 取绝对值并除以6
         return Math.abs(signedVolume) / 6;
     }
 
     linkNeighbors(allVoxels: StratumVoxel[], neighbors: [number, number, number]) {
-        this._neighbors = neighbors.map(idx =>
-            idx !== -1 ? allVoxels[idx] : undefined
-        ) as [StratumVoxel | undefined, StratumVoxel | undefined, StratumVoxel | undefined];
+        this._neighbors = neighbors.map(idx => (idx !== -1 ? allVoxels[idx] : undefined)) as [
+            StratumVoxel | undefined,
+            StratumVoxel | undefined,
+            StratumVoxel | undefined
+        ];
     }
 
     clipGeometry(node: BSPNode): THREE.BufferGeometry | undefined {
         const status = this.intersection(node);
 
         switch (status) {
-            case 'inside':
+            case "inside":
                 return undefined;
-            case 'outside':
+            case "outside":
                 return this._geometry;
-            case 'intersect':
+            case "intersect":
                 if (!this._bsp) {
                     this._bsp = this.buildBsp();
                 }
@@ -130,14 +140,8 @@ export class StratumVoxel {
         }
     }
 
-    /**
-     * 将多边形数组转换为网格几何体
-     * @private
-     */
     private polygonsToGeometry(polygons: readonly Polygon[]): THREE.BufferGeometry {
         const geometry = new THREE.BufferGeometry();
-        // 实现多边形到网格几何体的转换逻辑
-        // 这里需要根据实际需求实现
         const positions: number[] = [];
         const indices: number[] = [];
 
@@ -146,65 +150,63 @@ export class StratumVoxel {
             poly.vectors.forEach(vec => {
                 positions.push(vec.x, vec.y, vec.z);
             });
-            // 简单三角剖分（假设多边形是凸的）
             for (let i = 1; i < poly.vectors.length - 1; i++) {
                 indices.push(baseIndex, baseIndex + i, baseIndex + i + 1);
             }
         });
-        
-        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+
+        geometry.setAttribute(
+            "position",
+            new THREE.BufferAttribute(new Float32Array(positions), 3)
+        );
         geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
         return geometry;
     }
 
-    /**
-     * 获取顶部三角面片数据
-     */
     getTopTriangles(): Float32Array {
         return this.getTrianglesByFaceType(FaceTypes.TopFace);
     }
 
-    /**
-     * 获取底部三角面片数据
-     */
     getBaseTriangles(): Float32Array {
         return this.getTrianglesByFaceType(FaceTypes.BaseFace);
     }
 
-    /**
-     * 根据面类型获取符合条件的三角形数组
-     * @param faceType 要筛选的面类型
-     * @returns 返回符合条件的三维坐标数组，每组3个点构成一个三角形
-     */
     getTrianglesByFaceType(faceType: FaceType): Float32Array {
         if (!this._geometry) {
             return new Float32Array(0);
         }
-        const { attributes, indices, facetypes } = this._geometry;
-        const positions = attributes.POSITION?.value;
-        const indicesArray = indices?.value;
-        const faceTypesArray = facetypes?.value;
 
-        if (!positions || !indicesArray || !faceTypesArray) {
+        const positionAttr = this._geometry.getAttribute("position");
+        const indexAttr = this._geometry.getIndex();
+        // @ts-ignore - custom attribute
+        const faceTypesAttr = this._geometry.getAttribute("facetypes");
+
+        if (!positionAttr || !indexAttr || !faceTypesAttr) {
             return new Float32Array(0);
         }
 
+        const positions = positionAttr.array;
+        const indices = indexAttr.array;
+        const faceTypesArray = faceTypesAttr.array;
         const result: number[] = [];
 
-        // 遍历所有三角形
-        for (let i = 0; i < indicesArray.length; i += 3) {
+        for (let i = 0; i < indices.length; i += 3) {
             const faceTypeIndex = Math.floor(i / 3);
             if (faceTypesArray[faceTypeIndex] & faceType) {
-                // 获取三个顶点的索引
-                const i0 = indicesArray[i] * 3;
-                const i1 = indicesArray[i + 1] * 3;
-                const i2 = indicesArray[i + 2] * 3;
+                const i0 = indices[i] * 3;
+                const i1 = indices[i + 1] * 3;
+                const i2 = indices[i + 2] * 3;
 
-                // 添加顶点坐标到结果
                 result.push(
-                    positions[i0], positions[i0 + 1], positions[i0 + 2],
-                    positions[i1], positions[i1 + 1], positions[i1 + 2],
-                    positions[i2], positions[i2 + 1], positions[i2 + 2]
+                    positions[i0],
+                    positions[i0 + 1],
+                    positions[i0 + 2],
+                    positions[i1],
+                    positions[i1 + 1],
+                    positions[i1 + 2],
+                    positions[i2],
+                    positions[i2 + 1],
+                    positions[i2 + 2]
                 );
             }
         }
@@ -212,59 +214,45 @@ export class StratumVoxel {
         return new Float32Array(result);
     }
 
-
-    /**
-     * 从当前体素的多边形构建BSP树
-     * @returns 构建好的BSP树节点
-     */
     private buildBsp(): BSPNode {
-        // 假设我们有一个方法获取体素的所有多边形
         const polygons = this.buildPolygons();
         return fromPolygons(polygons);
     }
 
-    /**
-     * 获取体素的所有多边形（需要根据实际数据结构实现）
-     * @private
-     */
     private buildPolygons(): Polygon[] {
         if (!this._geometry) {
             return [];
         }
-        const polygons: Polygon[] = [];
-        const { attributes, indices } = this._geometry;
-        const positions = attributes.POSITION?.value;
-        const indicesArray = indices?.value;
 
-        if (!positions || !indicesArray) {
+        const polygons: Polygon[] = [];
+        const positionAttr = this._geometry.getAttribute("position");
+        const indexAttr = this._geometry.getIndex();
+
+        if (!positionAttr || !indexAttr) {
             return [];
         }
 
-        if (positions && indices) {
-            for (let i = 0; i < indicesArray.length; i += 3) {
-                const i0 = indicesArray[i] * 3;
-                const i1 = indicesArray[i + 1] * 3;
-                const i2 = indicesArray[i + 2] * 3;
+        const positions = positionAttr.array;
+        const indices = indexAttr.array;
 
-                const vectors: Vector[] = [
-                    { x: positions[i0], y: positions[i0 + 1], z: positions[i0 + 2] },
-                    { x: positions[i1], y: positions[i1 + 1], z: positions[i1 + 2] },
-                    { x: positions[i2], y: positions[i2 + 1], z: positions[i2 + 2] }
-                ];
+        for (let i = 0; i < indices.length; i += 3) {
+            const i0 = indices[i] * 3;
+            const i1 = indices[i + 1] * 3;
+            const i2 = indices[i + 2] * 3;
 
-                // 这里需要计算平面方程，可能需要添加planeFromPoints方法
-                const plane = fromVectors(vectors);
+            const vectors = [
+                new THREE.Vector3(positions[i0], positions[i0 + 1], positions[i0 + 2]),
+                new THREE.Vector3(positions[i1], positions[i1 + 1], positions[i1 + 2]),
+                new THREE.Vector3(positions[i2], positions[i2 + 1], positions[i2 + 2])
+            ];
 
-                polygons.push({ vectors, plane });
-            }
+            const plane = fromVectors(vectors);
+            polygons.push({ vectors, plane });
         }
+
         return polygons;
     }
 
-    /**
-     * 获取体素的所有多边形（需要根据实际数据结构实现）
-     * @returns 多边形数组
-     */
     getPolygons(): readonly Polygon[] {
         if (!this._bsp) {
             return [];
@@ -276,65 +264,54 @@ export class StratumVoxel {
         if (this._bbox) {
             return this._bbox;
         }
+
         if (!this._geometry) {
-            return [[0, 0, 0], [0, 0, 0]];
+            return new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0));
         }
-        const { attributes } = this._geometry;
-        const positions = attributes.POSITION?.value;
-        if (!positions) {
-            return [[0, 0, 0], [0, 0, 0]];
+
+        const positionAttr = this._geometry.getAttribute("position");
+        if (!positionAttr) {
+            return new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0));
         }
-        let minX = Infinity, minY = Infinity, minZ = Infinity;
-        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+        const positions = positionAttr.array;
+        const box = new THREE.Box3();
 
         for (let i = 0; i < positions.length; i += 3) {
-            minX = Math.min(minX, positions[i]);
-            minY = Math.min(minY, positions[i + 1]);
-            minZ = Math.min(minZ, positions[i + 2]);
-            maxX = Math.max(maxX, positions[i]);
-            maxY = Math.max(maxY, positions[i + 1]);
-            maxZ = Math.max(maxZ, positions[i + 2]);
+            box.expandByPoint(new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]));
         }
 
-        this._bbox = [[minX, minY, minZ], [maxX, maxY, maxZ]];
-        return this._bbox;
+        this._bbox = box;
+        return box;
     }
 
-    intersection(bspB: BSPNode): 'inside' | 'intersect' | 'outside' {
+    intersection(bspB: BSPNode): "inside" | "intersect" | "outside" {
         const bspA = this._bsp!;
-
-        // 1. 快速检测 - 检查包围盒关系
         const bboxA = this.getBSPBoundingBox(bspA);
         const bboxB = this.getBSPBoundingBox(bspB);
         const bboxRelation = this.checkBBoxRelation(bboxA, bboxB);
 
-        if (bboxRelation === 'outside') return 'outside';
-        if (bboxRelation === 'inside') return 'inside';
+        if (bboxRelation === "outside") return "outside";
+        if (bboxRelation === "inside") return "inside";
 
-        // 2. 精确检测 - 递归遍历BSP树
         return this.recursiveBSPIntersection(bspA, bspB);
     }
 
-    // 递归检测优化（带空间剪枝）
-    private recursiveBSPIntersection(a: BSPNode, b: BSPNode): 'inside' | 'intersect' | 'outside' {
-        // 空节点快速返回
+    private recursiveBSPIntersection(a: BSPNode, b: BSPNode): "inside" | "intersect" | "outside" {
         if (a.polygons.length === 0 || b.polygons.length === 0) {
-            return 'outside';
+            return "outside";
         }
 
-        // 多边形相交检测（优化版）
         for (const polyA of a.polygons) {
             for (const polyB of b.polygons) {
                 if (this.polygonsIntersect(polyA, polyB)) {
-                    return 'intersect';
+                    return "intersect";
                 }
             }
         }
 
-        // 递归子树（优先检测同侧子树）
-        let result: 'inside' | 'intersect' | 'outside' = 'outside';
+        let result: "inside" | "intersect" | "outside" = "outside";
 
-        // 检测共侧子树组合
         if (a.front && b.front) {
             result = this.mergeResults(result, this.recursiveBSPIntersection(a.front, b.front));
         }
@@ -342,8 +319,7 @@ export class StratumVoxel {
             result = this.mergeResults(result, this.recursiveBSPIntersection(a.back, b.back));
         }
 
-        // 检测交叉子树组合
-        if (result !== 'intersect') {
+        if (result !== "intersect") {
             if (a.front && b.back) {
                 result = this.mergeResults(result, this.recursiveBSPIntersection(a.front, b.back));
             }
@@ -355,48 +331,54 @@ export class StratumVoxel {
         return result;
     }
 
-    // 结果合并策略
-    private mergeResults(a: 'inside' | 'intersect' | 'outside',
-        b: 'inside' | 'intersect' | 'outside'): 'inside' | 'intersect' | 'outside' {
-        if (a === 'intersect' || b === 'intersect') return 'intersect';
-        if (a === 'inside' && b === 'inside') return 'inside';
-        if (a === 'outside') return b;
+    private mergeResults(
+        a: "inside" | "intersect" | "outside",
+        b: "inside" | "intersect" | "outside"
+    ): "inside" | "intersect" | "outside" {
+        if (a === "intersect" || b === "intersect") return "intersect";
+        if (a === "inside" && b === "inside") return "inside";
+        if (a === "outside") return b;
         return a;
     }
 
-    private checkBBoxRelation(a: THREE.Box3, b: THREE.Box3): 'inside' | 'outside' | 'intersect' {
-        if (a[1][0] < b[0][0] || a[0][0] > b[1][0] ||
-            a[1][1] < b[0][1] || a[0][1] > b[1][1] ||
-            a[1][2] < b[0][2] || a[0][2] > b[1][2]) {
-            return 'outside';
+    private checkBBoxRelation(a: THREE.Box3, b: THREE.Box3): "inside" | "outside" | "intersect" {
+        if (
+            a.max.x < b.min.x ||
+            a.min.x > b.max.x ||
+            a.max.y < b.min.y ||
+            a.min.y > b.max.y ||
+            a.max.z < b.min.z ||
+            a.min.z > b.max.z
+        ) {
+            return "outside";
         }
 
-        if (a[0][0] >= b[0][0] && a[1][0] <= b[1][0] &&
-            a[0][1] >= b[0][1] && a[1][1] <= b[1][1] &&
-            a[0][2] >= b[0][2] && a[1][2] <= b[1][2]) {
-            return 'inside';
+        if (
+            a.min.x >= b.min.x &&
+            a.max.x <= b.max.x &&
+            a.min.y >= b.min.y &&
+            a.max.y <= b.max.y &&
+            a.min.z >= b.min.z &&
+            a.max.z <= b.max.z
+        ) {
+            return "inside";
         }
 
-        return 'intersect';
+        return "intersect";
     }
 
-    // 高效多边形相交检测
     private polygonsIntersect(a: Polygon, b: Polygon): boolean {
-        // 1. 平面平行检测
-        const normalA = a.plane.normal;
-        const normalB = b.plane.normal;
-        const parallel = Math.abs(dot(normalA, normalB)) > 0.99;
+        const normalA = new THREE.Vector3(a.plane.normal.x, a.plane.normal.y, a.plane.normal.z);
+        const normalB = new THREE.Vector3(b.plane.normal.x, b.plane.normal.y, b.plane.normal.z);
+        const parallel = Math.abs(normalA.dot(normalB)) > 0.99;
 
-        // 2. 快速分离轴测试
         if (!parallel && this.polygonsSeparated(a, b)) {
             return false;
         }
 
-        // 3. 精确边相交检测
         return this.checkEdgeIntersections(a, b);
     }
 
-    // 检查两个多边形的边是否相交
     private checkEdgeIntersections(a: Polygon, b: Polygon): boolean {
         const edgesA = this.getPolygonEdges(a);
         const edgesB = this.getPolygonEdges(b);
@@ -411,21 +393,22 @@ export class StratumVoxel {
         return false;
     }
 
-    /**
-     * 获取多边形的所有边
-     * @param poly 输入多边形
-     * @returns 返回多边形边的数组，每条边由两个顶点组成
-     */
-    private getPolygonEdges(poly: Polygon): [Vector, Vector][] {
-        const edges: [Vector, Vector][] = [];
+    private getPolygonEdges(poly: Polygon): Array<[THREE.Vector3, THREE.Vector3]> {
+        const edges: Array<[THREE.Vector3, THREE.Vector3]> = [];
 
-        // 遍历多边形顶点，连接相邻顶点形成边
         for (let i = 0; i < poly.vectors.length; i++) {
-            const current = poly.vectors[i];
-            const next = poly.vectors[(i + 1) % poly.vectors.length]; // 循环连接首尾顶点
+            const current = new THREE.Vector3(
+                poly.vectors[i].x,
+                poly.vectors[i].y,
+                poly.vectors[i].z
+            );
+            const next = new THREE.Vector3(
+                poly.vectors[(i + 1) % poly.vectors.length].x,
+                poly.vectors[(i + 1) % poly.vectors.length].y,
+                poly.vectors[(i + 1) % poly.vectors.length].z
+            );
 
-            // 跳过长度为零的边
-            if (lengthV(minus(next, current)) > 1e-6) {
+            if (next.clone().sub(current).length() > 1e-6) {
                 edges.push([current, next]);
             }
         }
@@ -433,42 +416,43 @@ export class StratumVoxel {
         return edges;
     }
 
-    // 分离轴定理实现多边形分离检测
     private polygonsSeparated(a: Polygon, b: Polygon): boolean {
-        // 获取所有需要测试的轴
         const axes = this.getSeparatingAxes(a, b);
 
         for (const axis of axes) {
-            // 计算两个多边形在当前轴上的投影
             const projA = this.projectPolygon(a, axis);
             const projB = this.projectPolygon(b, axis);
 
-            // 检查投影是否重叠
             if (projA.max < projB.min || projB.max < projA.min) {
-                return true; // 存在分离轴
+                return true;
             }
         }
-        return false; // 所有轴上都重叠
+        return false;
     }
 
-    // 获取所有可能的分离轴
-    private getSeparatingAxes(a: Polygon, b: Polygon): Vector[] {
-        const axes: Vector[] = [];
+    private getSeparatingAxes(a: Polygon, b: Polygon): THREE.Vector3[] {
+        const axes: THREE.Vector3[] = [];
 
-        // 添加多边形A的边法线
         for (let i = 0; i < a.vectors.length; i++) {
-            const p1 = a.vectors[i];
-            const p2 = a.vectors[(i + 1) % a.vectors.length];
-            const edge = minus(p2, p1);
+            const p1 = new THREE.Vector3(a.vectors[i].x, a.vectors[i].y, a.vectors[i].z);
+            const p2 = new THREE.Vector3(
+                a.vectors[(i + 1) % a.vectors.length].x,
+                a.vectors[(i + 1) % a.vectors.length].y,
+                a.vectors[(i + 1) % a.vectors.length].z
+            );
+            const edge = new THREE.Vector3().subVectors(p2, p1);
             const normal = this.getEdgeNormal(edge);
             axes.push(normal);
         }
 
-        // 添加多边形B的边法线
         for (let i = 0; i < b.vectors.length; i++) {
-            const p1 = b.vectors[i];
-            const p2 = b.vectors[(i + 1) % b.vectors.length];
-            const edge = minus(p2, p1);
+            const p1 = new THREE.Vector3(b.vectors[i].x, b.vectors[i].y, b.vectors[i].z);
+            const p2 = new THREE.Vector3(
+                b.vectors[(i + 1) % b.vectors.length].x,
+                b.vectors[(i + 1) % b.vectors.length].y,
+                b.vectors[(i + 1) % b.vectors.length].z
+            );
+            const edge = new THREE.Vector3().subVectors(p2, p1);
             const normal = this.getEdgeNormal(edge);
             axes.push(normal);
         }
@@ -476,19 +460,17 @@ export class StratumVoxel {
         return axes;
     }
 
-    // 计算边的法线（垂直于边的向量）
-    private getEdgeNormal(edge: Vector): Vector {
-        // 返回垂直于XY平面的向量（2D情况）
-        return { x: -edge.y, y: edge.x, z: 0, metadata: undefined };
+    private getEdgeNormal(edge: THREE.Vector3): THREE.Vector3 {
+        return new THREE.Vector3(-edge.y, edge.x, 0);
     }
 
-    // 计算多边形在轴上的投影
-    private projectPolygon(poly: Polygon, axis: Vector): { min: number, max: number } {
+    private projectPolygon(poly: Polygon, axis: THREE.Vector3): { min: number; max: number } {
         let min = Infinity;
         let max = -Infinity;
 
         for (const vec of poly.vectors) {
-            const proj = dot(vec, axis);
+            const vec3 = new THREE.Vector3(vec.x, vec.y, vec.z);
+            const proj = vec3.dot(axis);
             min = Math.min(min, proj);
             max = Math.max(max, proj);
         }
@@ -496,46 +478,39 @@ export class StratumVoxel {
         return { min, max };
     }
 
-    // 检查两条线段是否相交
-    private segmentsIntersect(seg1: [Vector, Vector], seg2: [Vector, Vector]): boolean {
+    private segmentsIntersect(
+        seg1: [THREE.Vector3, THREE.Vector3],
+        seg2: [THREE.Vector3, THREE.Vector3]
+    ): boolean {
         const [a, b] = seg1;
         const [c, d] = seg2;
 
-        // 计算方向向量
-        const ab = minus(b, a);
-        const cd = minus(d, c);
-        const ac = minus(c, a);
+        const ab = new THREE.Vector3().subVectors(b, a);
+        const cd = new THREE.Vector3().subVectors(d, c);
+        const ac = new THREE.Vector3().subVectors(c, a);
 
-        // 计算叉积
-        const crossABxCD = cross(ab, cd);
+        const crossABxCD = new THREE.Vector3().crossVectors(ab, cd);
 
-        // 检查是否共线
-        if (Math.abs(dot(ac, crossABxCD)) > 1e-6) {
+        if (Math.abs(ac.dot(crossABxCD)) > 1e-6) {
             return false;
         }
 
-        // 计算参数
-        const t = dot(cross(ac, cd), crossABxCD) / dot(crossABxCD, crossABxCD);
-        const u = dot(cross(ac, ab), crossABxCD) / dot(crossABxCD, crossABxCD);
+        const crossACxCD = new THREE.Vector3().crossVectors(ac, cd);
+        const crossACxAB = new THREE.Vector3().crossVectors(ac, ab);
 
-        // 检查交点是否在线段上
+        const t = crossACxCD.dot(crossABxCD) / crossABxCD.dot(crossABxCD);
+        const u = crossACxAB.dot(crossABxCD) / crossABxCD.dot(crossABxCD);
+
         return t >= 0 && t <= 1 && u >= 0 && u <= 1;
     }
 
     private getBSPBoundingBox(node: BSPNode): THREE.Box3 {
-        let minX = Infinity, minY = Infinity, minZ = Infinity;
-        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        const box = new THREE.Box3();
 
-        // 遍历所有多边形获取包围盒
         const collectPolygons = (n: BSPNode) => {
             n.polygons.forEach(poly => {
                 poly.vectors.forEach(v => {
-                    minX = Math.min(minX, v.x);
-                    minY = Math.min(minY, v.y);
-                    minZ = Math.min(minZ, v.z);
-                    maxX = Math.max(maxX, v.x);
-                    maxY = Math.max(maxY, v.y);
-                    maxZ = Math.max(maxZ, v.z);
+                    box.expandByPoint(new THREE.Vector3(v.x, v.y, v.z));
                 });
             });
             if (n.front) collectPolygons(n.front);
@@ -543,7 +518,6 @@ export class StratumVoxel {
         };
 
         collectPolygons(node);
-        return [[minX, minY, minZ], [maxX, maxY, maxZ]];
+        return box;
     }
-
 }

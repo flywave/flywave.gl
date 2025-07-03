@@ -1,26 +1,31 @@
-import { FaultPoint } from "../decoder/types";
 import * as THREE from "three";
 
-export class FaultProfile {
-    private _id: string;
-    private _name: string;
-    private _type: string;
-    private _strike: number;
-    private _dip: number;
-    private _throw: number;
-    private _points: FaultPoint[];
-    private _geometry?: THREE.BufferGeometry;  // 类型替换
-    private _material?: THREE.Material;       // 类型替换
+import { FaultPoint } from "../decoder/types";
 
-    constructor(fault: {
-        id: string;
-        name: string;
-        type: string;
-        strike: number;
-        dip: number;
-        throw: number;
-        points: FaultPoint[];
-    }, geometry?: THREE.BufferGeometry, material?: THREE.Material) {
+export class FaultProfile {
+    private readonly _id: string;
+    private readonly _name: string;
+    private readonly _type: string;
+    private readonly _strike: number;
+    private readonly _dip: number;
+    private readonly _throw: number;
+    private _points: FaultPoint[];
+    private _geometry?: THREE.BufferGeometry; // 类型替换
+    private _material?: THREE.Material; // 类型替换
+
+    constructor(
+        fault: {
+            id: string;
+            name: string;
+            type: string;
+            strike: number;
+            dip: number;
+            throw: number;
+            points: FaultPoint[];
+        },
+        geometry?: THREE.BufferGeometry,
+        material?: THREE.Material
+    ) {
         this._id = fault.id;
         this._name = fault.name;
         this._type = fault.type;
@@ -46,7 +51,7 @@ export class FaultProfile {
         // 清空点集引用
         this._points = [];
     }
-    
+
     get id() {
         return this._id;
     }

@@ -1,15 +1,35 @@
-import { BVHNode } from './Node';
-import { FloatArray, FloatArrayType, } from "../utils/types";
-import { SortedListPriority } from '../utils/sorted';
-import { areaBox, areaFromTwoBoxes, expandBoxByMargin, getLongestAxis, isBoxInsideBox, isExpanded, unionBox, unionBoxChanged } from '../utils/box';
+import { BVHNode } from "./Node";
+import {
+    areaBox,
+    areaFromTwoBoxes,
+    expandBoxByMargin,
+    FloatArray,
+    FloatArrayType,
+    getLongestAxis,
+    isBoxInsideBox,
+    isExpanded,
+    SortedListPriority,
+    unionBox,
+    unionBoxChanged
+} from "./Utils";
 
 export type onLeafCreationCallback<N, L> = (node: BVHNode<N, L>) => void;
 
 export interface IBVHBuilder<N, L> {
     root: BVHNode<N, L> | null;
-    createFromArray(objects: L[], boxes: FloatArray[], onLeafCreation?: onLeafCreationCallback<N, L>, margin?: number): void;
+    createFromArray(
+        objects: L[],
+        boxes: FloatArray[],
+        onLeafCreation?: onLeafCreationCallback<N, L>,
+        margin?: number
+    ): void;
     insert(object: L, box: FloatArray, margin: number): BVHNode<N, L>;
-    insertRange(objects: L[], boxes: FloatArray[], margins?: number | FloatArray | number[], onLeafCreation?: onLeafCreationCallback<N, L>): void;
+    insertRange(
+        objects: L[],
+        boxes: FloatArray[],
+        margins?: number | FloatArray | number[],
+        onLeafCreation?: onLeafCreationCallback<N, L>
+    ): void;
     move(node: BVHNode<N, L>, margin: number): void;
     delete(node: BVHNode<N, L>): BVHNode<N, L> | null;
     clear(): void;
@@ -28,17 +48,25 @@ export class HybridBuilder<N = {}, L = {}> implements IBVHBuilder<N, L> {
         this._typeArray = highPrecision ? Float64Array : Float32Array;
     }
 
-    public createFromArray(objects: L[], boxes: FloatArray[], onLeafCreation?: onLeafCreationCallback<N, L>, margin = 0): void {
+    public createFromArray(
+        objects: L[],
+        boxes: FloatArray[],
+        onLeafCreation?: onLeafCreationCallback<N, L>,
+        margin = 0
+    ): void {
         const maxCount = boxes.length;
         const typeArray = this._typeArray;
-        if (typeArray !== (boxes[0].BYTES_PER_ELEMENT === 4 ? Float32Array : Float64Array)) console.warn('Different precision.');
         const centroid = new typeArray(6);
         let axis: number;
         let position: number;
 
         this.root = buildNode(0, maxCount, null);
 
-        function buildNode(offset: number, count: number, parent: BVHNode<N, L> | null): BVHNode<N, L> {
+        function buildNode(
+            offset: number,
+            count: number,
+            parent: BVHNode<N, L> | null
+        ): BVHNode<N, L> {
             if (count === 1) {
                 const box = boxes[offset];
                 if (margin > 0) expandBoxByMargin(box, margin);
@@ -134,7 +162,8 @@ export class HybridBuilder<N = {}, L = {}> implements IBVHBuilder<N, L> {
 
             while (left <= right) {
                 const boxLeft = boxes[left];
-                if ((boxLeft[axis + 1] + boxLeft[axis]) * 0.5 >= position) { // if equals, lies on right
+                if ((boxLeft[axis + 1] + boxLeft[axis]) * 0.5 >= position) {
+                    // if equals, lies on right
                     while (true) {
                         const boxRight = boxes[right];
                         if ((boxRight[axis + 1] + boxRight[axis]) * 0.5 < position) {
@@ -174,16 +203,22 @@ export class HybridBuilder<N = {}, L = {}> implements IBVHBuilder<N, L> {
         return leaf;
     }
 
-    public insertRange(objects: L[], boxes: FloatArray[], margins?: number | number[], onLeafCreation?: onLeafCreationCallback<N, L>): void {
+    public insertRange(
+        objects: L[],
+        boxes: FloatArray[],
+        margins?: number | number[],
+        onLeafCreation?: onLeafCreationCallback<N, L>
+    ): void {
         const count = objects.length;
         // 验证所有输入box
         for (const box of boxes) {
             this.validateBox(box);
         }
         // 统一处理margin参数
-        const marginValues = typeof margins === 'number'
-            ? new Array(count).fill(margins)
-            : margins || new Array(count).fill(0);
+        const marginValues =
+            typeof margins === "number"
+                ? new Array(count).fill(margins)
+                : margins || new Array(count).fill(0);
 
         for (let i = 0; i < count; i++) {
             const node = this.insert(objects[i], boxes[i], marginValues[i]);
@@ -271,7 +306,11 @@ export class HybridBuilder<N = {}, L = {}> implements IBVHBuilder<N, L> {
         return { box, object, parent: null } as BVHNode<N, L>;
     }
 
-    protected createInternalNode(parent: BVHNode<N, L>, sibling: BVHNode<N, L>, leaf: BVHNode<N, L>): BVHNode<N, L> {
+    protected createInternalNode(
+        parent: BVHNode<N, L>,
+        sibling: BVHNode<N, L>,
+        leaf: BVHNode<N, L>
+    ): BVHNode<N, L> {
         return { parent, left: sibling, right: leaf, box: new this._typeArray(6) } as BVHNode<N, L>;
     }
 
@@ -280,11 +319,13 @@ export class HybridBuilder<N = {}, L = {}> implements IBVHBuilder<N, L> {
         let bestCost = areaFromTwoBoxes(leafBox, bestNode.box);
         const leafArea = areaBox(leafBox);
 
-        const stack: { node: BVHNode<N, L>, inheritedCost: number }[] = [];
-        if (bestNode.left) stack.push({
-            node: bestNode.left,
-            inheritedCost: bestCost - areaBox(bestNode.box)
-        });
+        const stack: Array<{ node: BVHNode<N, L>; inheritedCost: number }> = [];
+        if (bestNode.left) {
+            stack.push({
+                node: bestNode.left,
+                inheritedCost: bestCost - areaBox(bestNode.box)
+            });
+        }
 
         while (stack.length > 0) {
             const { node, inheritedCost } = stack.pop()!;
@@ -311,8 +352,7 @@ export class HybridBuilder<N = {}, L = {}> implements IBVHBuilder<N, L> {
     }
 
     protected refit(node: BVHNode<N, L> | undefined): void {
-        if (node === undefined)
-            return
+        if (node === undefined) return;
         this.validateBox(node.left!.box); // 验证子节点box
         this.validateBox(node.right!.box);
         unionBox(node.left!.box, node.right!.box, node.box);
@@ -323,8 +363,7 @@ export class HybridBuilder<N = {}, L = {}> implements IBVHBuilder<N, L> {
     }
 
     protected refitAndRotate(node: BVHNode<N, L> | undefined | null, sibling: BVHNode<N, L>): void {
-        if (node === undefined || node === null)
-            return
+        if (node === undefined || node === null) return;
         const originalNodeBox = node.box;
         node = node.parent!;
         const nodeBox = node.box;
@@ -346,7 +385,8 @@ export class HybridBuilder<N = {}, L = {}> implements IBVHBuilder<N, L> {
             let nodeSwap2: BVHNode<N, L> | null = null;
             let bestCost = 0;
 
-            if (right.object === undefined) { // is not leaf
+            if (right.object === undefined) {
+                // is not leaf
                 const RL = right.left!;
                 const RR = right.right!;
                 const rightArea = areaBox(right.box);
@@ -367,7 +407,8 @@ export class HybridBuilder<N = {}, L = {}> implements IBVHBuilder<N, L> {
                 }
             }
 
-            if (left.object === undefined) { // is not leaf
+            if (left.object === undefined) {
+                // is not leaf
                 const LL = left.left!;
                 const LR = left.right!;
                 const leftArea = areaBox(left.box);
@@ -410,10 +451,10 @@ export class HybridBuilder<N = {}, L = {}> implements IBVHBuilder<N, L> {
 
     private validateBox(box: FloatArray): void {
         if (box.length !== 6) {
-            throw new Error('Invalid box size');
+            throw new Error("Invalid box size");
         }
         if (box[0] > box[1] || box[2] > box[3] || box[4] > box[5]) {
-            throw new Error('Invalid box coordinates');
+            throw new Error("Invalid box coordinates");
         }
     }
 }

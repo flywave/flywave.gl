@@ -1,15 +1,15 @@
 import {
-    ColorMap,
-    FaultProfile,
     Borehole,
-    StratumLayer,
     CollapsePillar,
-    SectionLine,
+    ColorMap,
     ExtensionHeader,
-    Metadata
-} from './types';
+    FaultProfile,
+    Metadata,
+    SectionLine,
+    StratumLayer
+} from "./types";
 
-// 扩展ID常量 
+// 扩展ID常量
 const STRATUM_MESH_METADATA_EXTENSION_ID = 1;
 const STRATUM_MESH_COLORMAP_EXTENSION_ID = 2;
 const STRATUM_MESH_FAULT_EXTENSION_ID = 3;
@@ -18,7 +18,10 @@ const STRATUM_MESH_COLLAPSE_EXTENSION_ID = 5;
 const STRATUM_MESH_SECTION_EXTENSION_ID = 6;
 const STRATUM_MESH_LITHOLOGY_EXTENSION_ID = 7;
 
-export function decodeExtensions(dataView: DataView<ArrayBuffer>, offset: number = 0): {
+export function decodeExtensions(
+    dataView: DataView<ArrayBuffer>,
+    offset: number = 0
+): {
     extensions: {
         metadata?: Metadata;
         colorMap?: ColorMap;
@@ -42,7 +45,11 @@ export function decodeExtensions(dataView: DataView<ArrayBuffer>, offset: number
         };
         pos += 5; // 1 byte for id + 4 bytes for length
 
-        const extensionData = new Uint8Array(dataView.buffer, dataView.byteOffset + pos, header.extensionLength);
+        const extensionData = new Uint8Array(
+            dataView.buffer,
+            dataView.byteOffset + pos,
+            header.extensionLength
+        );
         pos += header.extensionLength;
 
         switch (header.extensionId) {
@@ -210,7 +217,7 @@ function readColorMap(data: Uint8Array): ColorMap {
         const length = dataView.getInt32(pos, true);
         const strBytes = new Uint8Array(dataView.buffer, dataView.byteOffset + pos + 4, length);
         colorMap.stratumTexture[id] = new TextDecoder().decode(strBytes);
-        pos += (length + 4);
+        pos += length + 4;
     }
 
     return colorMap;
@@ -415,9 +422,9 @@ export function readString(dataView: DataView, pos: number): string {
 function readStratumLithology(data: Uint8Array): Record<string, string> {
     const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
     let pos = 0;
-    
+
     const lithologyMap: Record<string, string> = {};
-    
+
     // 读取地层数量
     const count = dataView.getInt32(pos, true);
     pos += 4;
@@ -426,7 +433,7 @@ function readStratumLithology(data: Uint8Array): Record<string, string> {
         // 读取地层ID
         const id = readString(dataView, pos);
         pos += 4 + id.length; // 4字节长度 + 字符串内容
-        
+
         // 读取岩性名称
         const lithology = readString(dataView, pos);
         pos += 4 + lithology.length;

@@ -52,3 +52,4 @@ export * from "./math/TransformLike";
 export * from "./math/OrientedBox3";
 export * from "./math/AxisAlignedBox3";
 export * from "./math/intersections";
+export * from "./math/Plane";

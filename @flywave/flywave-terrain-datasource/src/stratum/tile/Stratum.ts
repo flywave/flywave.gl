@@ -1,30 +1,38 @@
-import { StratumVoxel } from "./Voxel";
+/* eslint-disable no-console */
+import * as THREE from "three";
+
 import { LayerType } from "../decoder/types";
-import * as THREE from 'three';
+import { StratumVoxel } from "./Voxel";
 
 export class StratumLayer {
-    private _id: string;
-    private _lithology: string;
-    private _type: LayerType;
+    private readonly _id: string;
+    private readonly _lithology: string;
+    private readonly _type: LayerType;
     private _voxels: StratumVoxel[] = [];
     private _bbox?: THREE.Box3;
-    private _material?: THREE.Material;  // 类型替换
+    private _material?: THREE.Material; // 类型替换
 
-    constructor(layer: {
-        id: string, type: LayerType
-    }, voxels: {
-        id: string;
-        index: number;
-        start: number;
-        end: number;
-        bbox: [[number, number, number], [number, number, number]];
-        neighbors: [number, number, number];
-                geometry?: THREE.BufferGeometry;  // 类型替换
-    }[], lithology: string, material?: THREE.Material) {
+    constructor(
+        layer: {
+            id: string;
+            type: LayerType;
+        },
+        voxels: Array<{
+            id: string;
+            index: number;
+            start: number;
+            end: number;
+            bbox: THREE.Box3;
+            neighbors: [number, number, number];
+            geometry?: THREE.BufferGeometry; // 类型替换
+        }>,
+        lithology: string,
+        material?: THREE.Material
+    ) {
         this._id = layer.id;
         this._lithology = lithology;
         this._type = layer.type;
-        
+
         // 预先分配数组空间
         this._voxels = new Array(voxels.length);
 
@@ -84,16 +92,16 @@ export class StratumLayer {
         return this._bbox!;
     }
 
-    get geometries(): THREE.BufferGeometry[] { 
+    get geometries(): THREE.BufferGeometry[] {
         return this._voxels.map(voxel => voxel.geometry);
     }
 
-    get material(): THREE.Material {  
+    get material(): THREE.Material {
         return this._material!;
     }
 
     // 体素访问方法
-    get voxels(): ReadonlyArray<StratumVoxel> {
+    get voxels(): StratumVoxel[] {
         return [...this._voxels];
     }
 
@@ -107,9 +115,9 @@ export class StratumLayer {
     }
 
     /**
-   * 计算并返回地层层的包围盒
-   * 会缓存计算结果，后续调用直接返回缓存值
-   */
+     * 计算并返回地层层的包围盒
+     * 会缓存计算结果，后续调用直接返回缓存值
+     */
     calcBoundingBox(): THREE.Box3 {
         // 返回缓存结果
         if (this._bbox) {
@@ -118,10 +126,7 @@ export class StratumLayer {
 
         // 处理空体素情况
         if (this._voxels.length === 0) {
-            return new THREE.Box3(
-                new THREE.Vector3(0, 0, 0),
-                new THREE.Vector3(0, 0, 0)
-            );
+            return new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0));
         }
 
         // 初始化第一个体素的包围盒

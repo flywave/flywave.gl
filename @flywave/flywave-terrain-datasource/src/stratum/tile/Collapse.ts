@@ -1,48 +1,50 @@
-import { Polygon } from "../csg/Polygon";
-import { BSPNode, fromPolygons } from "../csg/Bsp";
-import { fromVectors } from "../utils/plane";
-import { cross, dot, lengthV, minus, normalize, Vector } from "../utils/vector";
-import { triangulate } from "../triangulate";
+import { BSPNode, fromPolygons, Polygon, triangulate } from "@flywave/flywave-geometry";
+import { fromVectors } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 
 // 陷落柱剖面结构
 export interface CollapseProfile {
-    collapseID: string;        // 陷落柱唯一标识
-    crossSections: THREE.BufferGeometry[];  // MeshGeometry -> THREE.BufferGeometry
-    polys: Vector[][];       // 陷落柱边界多边形集合
+    collapseID: string;
+    crossSections: THREE.BufferGeometry[];
+    polys: THREE.Vector3[][];
 }
 
 export class CollapsePillar {
-    private _id: string;
-    private _name: string;
-    private _lithology: string;
-    private _topCenter: [number, number, number];
-    private _baseCenter: [number, number, number];
-    private _topRadius: number;
-    private _baseRadius: number;
-    private _height: number;
-    private _stratumId: string;
+    private readonly _id: string;
+    private readonly _name: string;
+    private readonly _lithology: string;
+    private readonly _topCenter: THREE.Vector3;
+    private readonly _baseCenter: THREE.Vector3;
+    private readonly _topRadius: number;
+    private readonly _baseRadius: number;
+    private readonly _height: number;
+    private readonly _stratumId: string;
     private _bbox?: THREE.Box3;
     private _bsp?: BSPNode;
-    private _geometry?: THREE.BufferGeometry;  // 修改类型
-    private _material?: THREE.Material;       // 修改类型
+    private _geometry?: THREE.BufferGeometry;
+    private _material?: THREE.Material;
 
-    constructor(collapse: {
-        id: string;
-        name: string;
-        topCenter: [number, number, number];
-        baseCenter: [number, number, number];
-        topRadius: number;
-        baseRadius: number;
-        height: number;
-        stratumId: string;
-        lithology: string;
-    }, bbox?: THREE.Box3, geometry?: THREE.BufferGeometry, material?: THREE.Material) {
+    constructor(
+        collapse: {
+            id: string;
+            name: string;
+            topCenter: [number, number, number];
+            baseCenter: [number, number, number];
+            topRadius: number;
+            baseRadius: number;
+            height: number;
+            stratumId: string;
+            lithology: string;
+        },
+        bbox?: THREE.Box3,
+        geometry?: THREE.BufferGeometry,
+        material?: THREE.Material
+    ) {
         this._id = collapse.id;
         this._name = collapse.name;
         this._lithology = collapse.lithology;
-        this._topCenter = collapse.topCenter;
-        this._baseCenter = collapse.baseCenter;
+        this._topCenter = new THREE.Vector3().fromArray(collapse.topCenter);
+        this._baseCenter = new THREE.Vector3().fromArray(collapse.baseCenter);
         this._topRadius = collapse.topRadius;
         this._baseRadius = collapse.baseRadius;
         this._height = collapse.height;
@@ -50,7 +52,7 @@ export class CollapsePillar {
         this._bbox = bbox;
         this._geometry = geometry;
         this._material = material;
-        this._bsp = this.buildBsp()
+        this._bsp = this.buildBsp();
     }
 
     get id() {
@@ -89,11 +91,11 @@ export class CollapsePillar {
         return this._stratumId;
     }
 
-    get geometry(): THREE.BufferGeometry {  
+    get geometry(): THREE.BufferGeometry {
         return this._geometry!;
     }
 
-    get material(): THREE.Material {      
+    get material(): THREE.Material {
         return this._material!;
     }
 
@@ -112,56 +114,50 @@ export class CollapsePillar {
         if (this._material) {
             this._material.dispose();
         }
-        // 释放几何数据
         this._geometry = undefined;
-        // 释放材质数据
         this._material = undefined;
-        // 释放BSP树
         this._bsp = undefined;
-        // 清空包围盒引用
         this._bbox = undefined;
     }
 
-    generateCrossSections(line: [Vector, Vector]): { positions: Vector[], indices: number[][] } | undefined {
-        // 1. 计算切割平面与几何体的交点
+    generateCrossSections(
+        line: [THREE.Vector3, THREE.Vector3]
+    ): { positions: THREE.Vector3[]; indices: number[][] } | undefined {
         const intersectionPoints = this.calculateIntersection(line);
 
         if (intersectionPoints.length < 3) return;
 
-        // 2. 对交点进行排序（凸多边形简单排序）
         const sortedPoints = this.sortConvexPoints(intersectionPoints);
-
-        // 3. 生成三角剖分
         return triangulate(sortedPoints);
     }
 
-    // 计算切割平面与凸几何体的交点
-    private calculateIntersection(line: [Vector, Vector]): Vector[] {
+    private calculateIntersection(line: [THREE.Vector3, THREE.Vector3]): THREE.Vector3[] {
         if (!this._geometry) {
             return [];
         }
-        const { attributes, indices, facetypes } = this._geometry;
-        const positions = attributes.POSITION?.value;
-        const indicesArray = indices?.value;
-        const intersections: Vector[] = [];
 
-        if (!positions || !indicesArray) {
+        const positionAttr = this._geometry.getAttribute("position");
+        const indexAttr = this._geometry.getIndex();
+        const positions = positionAttr.array;
+        const indices = indexAttr?.array;
+
+        if (!positions || !indices) {
             return [];
         }
 
-        // 遍历所有三角形边
-        for (let i = 0; i < indicesArray.length; i += 3) {
-            const i1 = indicesArray[i] * 3;
-            const i2 = indicesArray[i + 1] * 3;
-            const i3 = indicesArray[i + 2] * 3;
+        const intersections: THREE.Vector3[] = [];
+
+        for (let i = 0; i < indices.length; i += 3) {
+            const i1 = indices[i] * 3;
+            const i2 = indices[i + 1] * 3;
+            const i3 = indices[i + 2] * 3;
 
             const triangle = [
-                { x: positions[i1], y: positions[i1 + 1], z: positions[i1 + 2] },
-                { x: positions[i2], y: positions[i2 + 1], z: positions[i2 + 2] },
-                { x: positions[i3], y: positions[i3 + 1], z: positions[i3 + 2] }
+                new THREE.Vector3(positions[i1], positions[i1 + 1], positions[i1 + 2]),
+                new THREE.Vector3(positions[i2], positions[i2 + 1], positions[i2 + 2]),
+                new THREE.Vector3(positions[i3], positions[i3 + 1], positions[i3 + 2])
             ];
 
-            // 计算边与切割平面的交点
             for (let j = 0; j < 3; j++) {
                 const a = triangle[j];
                 const b = triangle[(j + 1) % 3];
@@ -174,55 +170,56 @@ export class CollapsePillar {
         return this.removeDuplicates(intersections);
     }
 
-    private intersectEdgeWithPlane(a: Vector, b: Vector, line: [Vector, Vector]): Vector | null {
-        // 获取平面定义（使用切割线段和垂直方向）
+    private intersectEdgeWithPlane(
+        a: THREE.Vector3,
+        b: THREE.Vector3,
+        line: [THREE.Vector3, THREE.Vector3]
+    ): THREE.Vector3 | null {
         const planePoint = line[0];
-        const lineDirection = minus(line[1], line[0]);
+        const lineDirection = new THREE.Vector3().subVectors(line[1], line[0]);
 
-        // 计算平面法向量（垂直于切割线段和Y轴）
-        let planeNormal = cross(lineDirection, { x: 0, y: 1, z: 0 });
+        // Calculate plane normal (perpendicular to both line direction and up vector)
+        const up = new THREE.Vector3(0, 1, 0);
+        const planeNormal = new THREE.Vector3().crossVectors(lineDirection, up);
 
-        // 处理平行情况
-        if (lengthV(planeNormal) < 1e-6) {
-            planeNormal = cross(lineDirection, { x: 0, y: 0, z: 1 });
-            if (lengthV(planeNormal) < 1e-6) return null;
+        // Handle parallel case
+        if (planeNormal.length() < 1e-6) {
+            const zAxis = new THREE.Vector3(0, 0, 1);
+            planeNormal.crossVectors(lineDirection, zAxis);
+            if (planeNormal.length() < 1e-6) return null;
         }
-        planeNormal = normalize(planeNormal);
+        planeNormal.normalize();
 
-        // 线段参数方程：a + t*(b-a)
-        const edgeVector = minus(b, a);
-        const denominator = dot(edgeVector, planeNormal);
+        const edgeVector = new THREE.Vector3().subVectors(b, a);
+        const denominator = edgeVector.dot(planeNormal);
 
-        // 处理平行情况
         if (Math.abs(denominator) < 1e-6) return null;
 
-        // 计算交点参数t
-        const t = dot(minus(planePoint, a), planeNormal) / denominator;
+        const t = new THREE.Vector3().subVectors(planePoint, a).dot(planeNormal) / denominator;
 
-        // 检查是否在线段范围内
         if (t < 0 || t > 1) return null;
 
-        // 计算交点坐标
-        return {
-            x: a.x + edgeVector.x * t,
-            y: a.y + edgeVector.y * t,
-            z: a.z + edgeVector.z * t,
-            metadata: a.metadata
-        };
+        return new THREE.Vector3(
+            a.x + edgeVector.x * t,
+            a.y + edgeVector.y * t,
+            a.z + edgeVector.z * t
+        );
     }
 
-    // 凸多边形顶点排序（简单极角排序）
-    private sortConvexPoints(points: Vector[]): Vector[] {
+    private sortConvexPoints(points: THREE.Vector3[]): THREE.Vector3[] {
         if (points.length === 0) return [];
 
-        // 找到质心
-        const centroid = points.reduce((acc, cur) => ({ x: acc.x + cur.x, y: acc.y + cur.y, z: acc.z + cur.z }),
-            { x: 0, y: 0, z: 0 } as Vector
-        );
+        // Calculate centroid
+        const centroid = points
+            .reduce((acc, cur) => {
+                acc.x += cur.x;
+                acc.y += cur.y;
+                acc.z += cur.z;
+                return acc;
+            }, new THREE.Vector3(0, 0, 0))
+            .divideScalar(points.length);
 
-        normalize(centroid);
-
-        // 极角排序
+        // Sort by angle relative to centroid
         return points.sort((a, b) => {
             const angleA = Math.atan2(a.y - centroid.y, a.x - centroid.x);
             const angleB = Math.atan2(b.y - centroid.y, b.x - centroid.x);
@@ -230,63 +227,55 @@ export class CollapsePillar {
         });
     }
 
-    // 去除重复点
-    private removeDuplicates(points: Vector[], epsilon = 1e-6): Vector[] {
-        return points.filter((p, i) =>
-            !points.slice(0, i).some(q =>
-                Math.abs(p.x - q.x) < epsilon &&
-                Math.abs(p.y - q.y) < epsilon &&
-                Math.abs(p.z - q.z) < epsilon
-            )
+    private removeDuplicates(points: THREE.Vector3[], epsilon = 1e-6): THREE.Vector3[] {
+        return points.filter(
+            (p, i) =>
+                !points
+                    .slice(0, i)
+                    .some(
+                        q =>
+                            Math.abs(p.x - q.x) < epsilon &&
+                            Math.abs(p.y - q.y) < epsilon &&
+                            Math.abs(p.z - q.z) < epsilon
+                    )
         );
     }
 
-    /**
-     * 从当前体素的多边形构建BSP树
-     * @returns 构建好的BSP树节点
-     */
     private buildBsp(): BSPNode {
-        // 假设我们有一个方法获取体素的所有多边形
         const polygons = this.buildPolygons();
         return fromPolygons(polygons);
     }
 
-    /**
-     * 获取体素的所有多边形（需要根据实际数据结构实现）
-     * @private
-     */
     private buildPolygons(): Polygon[] {
         if (!this._geometry) {
             return [];
         }
-        const polygons: Polygon[] = [];
-        const { attributes, indices } = this._geometry;
-        const positions = attributes.POSITION?.value;
-        const indicesArray = indices?.value;
 
-        if (!positions || !indicesArray) {
+        const polygons: Polygon[] = [];
+        const positionAttr = this._geometry.getAttribute("position");
+        const indexAttr = this._geometry.getIndex();
+        const positions = positionAttr.array;
+        const indices = indexAttr?.array;
+
+        if (!positions || !indices) {
             return [];
         }
 
-        if (positions && indices) {
-            for (let i = 0; i < indicesArray.length; i += 3) {
-                const i0 = indicesArray[i] * 3;
-                const i1 = indicesArray[i + 1] * 3;
-                const i2 = indicesArray[i + 2] * 3;
+        for (let i = 0; i < indices.length; i += 3) {
+            const i0 = indices[i] * 3;
+            const i1 = indices[i + 1] * 3;
+            const i2 = indices[i + 2] * 3;
 
-                const vectors: Vector[] = [
-                    { x: positions[i0], y: positions[i0 + 1], z: positions[i0 + 2] },
-                    { x: positions[i1], y: positions[i1 + 1], z: positions[i1 + 2] },
-                    { x: positions[i2], y: positions[i2 + 1], z: positions[i2 + 2] }
-                ];
+            const vectors = [
+                new THREE.Vector3(positions[i0], positions[i0 + 1], positions[i0 + 2]),
+                new THREE.Vector3(positions[i1], positions[i1 + 1], positions[i1 + 2]),
+                new THREE.Vector3(positions[i2], positions[i2 + 1], positions[i2 + 2])
+            ];
 
-                // 这里需要计算平面方程，可能需要添加planeFromPoints方法
-                const plane = fromVectors(vectors);
-
-                polygons.push({ vectors, plane });
-            }
+            const plane = fromVectors(vectors);
+            polygons.push({ vectors, plane });
         }
+
         return polygons;
     }
-
 }
