@@ -1,6 +1,6 @@
 import { dispatch as _dispatch } from "d3-dispatch";
 import { EventDispatcher, Matrix4, Vector3, Vector4, Event } from "three";
-import { GeoCoordinates } from "@flywave/flywave-geoutils";
+import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { CameraTransform } from "./CameraTransform";
 import { slerpMatrices } from "./math";
 import { MapView, MapViewEventNames } from "@flywave/flywave-mapview";
@@ -256,32 +256,28 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
         this.cameraTransform.getOrigin(cameraPos);
 
-        if (mouseDown[2]) {
-            // 右键按下
-            // 只有当不禁用tilt和heading时才处理旋转
-            const canRotate = !this._disableTilt && !this._disableHeading;
+        // 右键按下
+        // 只有当不禁用tilt和heading时才处理旋转
+        const canRotate = !this._disableTilt && !this._disableHeading;
 
-            // 更新prevDown状态（对应原始代码中的R[2]）
-            this.mouseState.prevDown[2] = canRotate;
+        // 更新prevDown状态（对应原始代码中的R[2]）
+        this.mouseState.prevDown[2] = canRotate;
 
-            // 只有当允许旋转时才处理旋转操作
-            if (canRotate) {
-                this.handleRotationOperations(mouseDown, mouseX, mouseY);
-            }
-        }
+        // 只有当允许旋转时才处理旋转操作
+        this.handleRotationOperations(mouseDown, mouseX, mouseY);
 
         // Apply tilt and heading changes
         this.applyTiltAndHeadingChanges();
 
         if ((!mouseDown[0] || !this.isPanHit) && this.lastHitCenterDistance > 0) {
-            // this.cameraTransform.applyTiltLimit(
-            //     this.lastHitCenter,
-            //     this.lastHitGravity,
-            //     this.tiltLimit
-            // );
-            this.cameraTransform.smartBalance(
+            this.cameraTransform.applyTiltLimit(
                 this.lastHitCenter,
                 this.lastHitGravity,
+                this.tiltLimit
+            );
+            this.cameraTransform.smartBalance(
+                this.lastHitCenter.clone(),
+                this.lastHitGravity.clone(),
                 this.tiltLimit
             );
         }
@@ -601,7 +597,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             );
 
             this.cameraTransform.pan(this.panHit, target, this.inertialAxis, 0.2);
-        } else if (this.inertialAxis.length() > 0) {
+        } else if (this.inertialAxis.w != 0) {
             this.cameraTransform.inertialPan(cameraPos, this.inertialAxis, 0.075);
         }
 
@@ -1080,6 +1076,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.cameraTransform.setMatrix(matrix);
         this.inertialDeltaX = 0;
         this.inertialDeltaY = 0;
+        this.applyToMapView();
     }
 
     /**
@@ -1354,6 +1351,23 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         return 0;
     }
 
+    /**
+     * Flies the camera to view the specified geographic bounding box
+     * @param geoBox - The geographic bounding box to fly to
+     * @param speed - Optional flight animation speed (default: 0.1)
+     * @param theta - Optional camera tilt angle in radians (default: 0)
+     * @param phi - Optional camera heading angle in radians (default: 0)
+     */
+    flyToBox(geoBox: GeoBox, speed?: number, theta?: number, phi?: number): void {
+        const { projection, camera } = this.mapView;
+        const box = projection.projectBox(geoBox);
+        const d =
+            (new Vector3().copy(box.min).distanceTo(box.max) * 0.5) /
+            Math.tan(((camera.fov / 2) * Math.PI) / 180);
+        const { longitude, latitude, altitude } = geoBox.center;
+
+        this.flyTo(longitude, latitude, altitude, speed || 0.1, d, theta || 0, phi || 0);
+    }
     /**
      * Gets current camera tilt angle
      * @returns Tilt in radians (-π/2 to π/2)

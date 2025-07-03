@@ -4,16 +4,17 @@
 import { FeatureTable, BatchTable, BatchTableHeader } from "../utilities/FeatureTable";
 import { Description, LoaderBase } from "./LoaderBase";
 
-export interface B3DMDescription extends Description {
+export interface B3DMDescription<BatchTableExtensions extends BatchTableHeader>
+    extends Description {
     featureTable: FeatureTable;
-    batchTable: BatchTable;
+    batchTable: BatchTable<BatchTableExtensions>;
     glbBytes: Uint8Array;
 }
 
 export abstract class B3DMLoaderBase<
     BatchTableExtensions extends BatchTableHeader
-> extends LoaderBase<B3DMDescription> {
-    async unpack(buffer: ArrayBuffer): Promise<B3DMDescription> {
+> extends LoaderBase<B3DMDescription<BatchTableExtensions>> {
+    async unpack(buffer: ArrayBuffer): Promise<B3DMDescription<BatchTableExtensions>> {
         // TODO: this should be able to take a uint8array with an offset and length
         const dataView = new DataView(buffer);
 

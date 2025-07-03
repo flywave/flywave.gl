@@ -5,10 +5,11 @@
  */
 import { MapControls, MapControlsUI } from "@flywave/flywave-map-controls";
 import { CopyrightElementHandler, MapView } from "@flywave/flywave-mapview";
-import { HereTileProvider, HereWebTileDataSource } from "@flywave/flywave-webtile-datasource";
 
-import { apikey } from "./config";
 import { GeoCoordinates, sphereProjection } from "@flywave/flywave-geoutils";
+import { TilesRenderer } from "@flywave/flywave-3dtile-render";
+import { apikey } from "./config";
+import { HereTileProvider, HereWebTileDataSource } from "@flywave/flywave-webtile-datasource";
 
 /**
  * A simple example using the webtile data source. Tiles are retrieved from
@@ -26,15 +27,21 @@ import { GeoCoordinates, sphereProjection } from "@flywave/flywave-geoutils";
  * [[include:harp_gl_datasource_satellitetile_2.ts]]
  * ```
  */
-export namespace SatelliteDataSourceExample {
+
+class MockMapView extends MapView {
+    get isDynamicFrame() {
+        return true;
+    }
+}
+export namespace T3DTileRenderExample {
     // creates a new MapView for the HTMLCanvasElement of the given id
-    export function initializeMapView(id: string): MapView {
+    export function initializeMapView(id: string): [MapView, MapControls] {
         const canvas = document.getElementById(id) as HTMLCanvasElement;
 
-        const map = new MapView({
+        const map = new MockMapView({
             projection: sphereProjection,
-            target: new GeoCoordinates(36.79460588481734, 117.61746743784798, 0),
-            zoomLevel: 8,
+            target: new GeoCoordinates(36.10112950120568, 117.0042267735369, 0),
+            zoomLevel: 18,
             canvas,
             theme: "resources/berlin_tilezen_base_globe.json"
         });
@@ -56,10 +63,22 @@ export namespace SatelliteDataSourceExample {
             map.resize(window.innerWidth, window.innerHeight);
         });
 
-        return map;
+        return [map, controls];
     }
 
-    const mapView = initializeMapView("mapCanvas");
+    const [mapView, controls] = initializeMapView("mapCanvas");
+
+    let tileRender = new TilesRenderer({
+        // url: "./resources/3dtile-data/pipe/tileset.json",
+
+        url: "http://192.168.1.18/flywave-examples/data/%E5%91%A8%E6%9D%91/3dtile_power/tileset.json",
+        decoderPath: "./resources/"
+    });
+    mapView.add3DTileSet(tileRender);
+
+    // controls.setTo(117.0002378472017, 36.04174517742333, 1171.7782847248018, 0, 0, 0);
+
+    controls.setTo(117.82701769728989, 36.831012861737015, 1171.7782847248018, 0, 0, 0);
 
     // snippet:harp_gl_datasource_satellitetile_1.ts
     const webTileDataSource = new HereWebTileDataSource({
@@ -69,6 +88,5 @@ export namespace SatelliteDataSourceExample {
     // end:harp_gl_datasource_satellitetile_1.ts
 
     // snippet:harp_gl_datasource_satellitetile_2.ts
-    mapView.addDataSource(webTileDataSource);
-    // end:harp_gl_datasource_satellitetile_2.ts
+    // mapView.addDataSource(webTileDataSource);
 }

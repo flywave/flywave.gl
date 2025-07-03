@@ -17,7 +17,7 @@
         "prebuild": "node scripts/postinstall.js",
         "tsc": "tsc --build $EXTRA_TSC_ARGS",
         "build": "webpack --config webpack.config.ts",
-        "start": "webpack serve",
+        "start": "webpack serve --allowed-hosts all  ",
         "publish-html": "node scripts/publish-html.js"
     },
     "author": {
@@ -42,10 +42,10 @@
         "@flywave/flywave-vectortile-datasource": "workspace:*",
         "@flywave/flywave-webtile-datasource": "workspace:*",
         "@types/copy-webpack-plugin": "catalog:",
+        "copy-webpack-plugin": "catalog:",
         "@types/dat.gui": "catalog:",
         "@types/long": "catalog:",
         "@types/three": "catalog:",
-        "copy-webpack-plugin": "catalog:",
         "cross-env": "catalog:",
         "css-loader": "catalog:",
         "dat.gui": "catalog:",
@@ -72,7 +72,8 @@
         "access": "public"
     },
     "dependencies": {
-        "@turf/turf": "catalog:"
+        "@turf/turf": "catalog:",
+        "expose-loader": "5.0.1"
     },
     "private": true
 }

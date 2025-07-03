@@ -1,7 +1,7 @@
 import { Box3, BufferGeometry, Material, Matrix4, Object3D, Scene, Sphere, Texture } from "three";
 import { LoadState } from "./constants";
 import { EllipsoidRegion } from "../three/math/EllipsoidRegion";
-import { OrientedBox3 } from "@flywave/flywave-geoutils";
+import { GeoBox, OrientedBox3 } from "@flywave/flywave-geoutils";
 
 export interface InnterTile {
     /** Last frame number this tile was accessed */
@@ -93,12 +93,9 @@ export type TileCache = {
     transformInverse: Matrix4;
     active: boolean;
     inFrustum: boolean[];
-    box: Box3;
-    boxTransform: Matrix4;
-    boxTransformInverse: Matrix4;
     sphere: Sphere;
-    region: EllipsoidRegion;
     orientedBox: OrientedBox3;
+    geoBox: GeoBox;
     scene: Scene | Object3D;
     geometry?: BufferGeometry[];
     materials?: Material[];

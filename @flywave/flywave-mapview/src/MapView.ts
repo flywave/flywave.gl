@@ -85,6 +85,7 @@ import { Tile } from "./Tile";
 import { TileObjectRenderer } from "./TileObjectsRenderer";
 import { MapViewUtils } from "./Utils";
 import { ResourceComputationType, VisibleTileSet, VisibleTileSetOptions } from "./VisibleTileSet";
+import type { ITilesRenderer } from "./ITilesRenderer";
 
 declare const process: any;
 
@@ -864,6 +865,9 @@ export class MapView extends EventDispatcher {
     private readonly m_failedDataSources = new Set<string>();
     private readonly m_polarDataSource?: PolarTileDataSource;
     private readonly m_enablePolarDataSource: boolean = true;
+
+    //3dtile renderers
+    private readonly m_3dtileRenders: ITilesRenderer[] = [];
 
     // gestures
     private readonly m_raycaster = new THREE.Raycaster();
@@ -2221,6 +2225,27 @@ export class MapView extends EventDispatcher {
     }
 
     /**
+     * Adds a 3D Tiles renderer to the scene and connects it to the map view.
+     * @param tileRender - The TilesRenderer instance to be added to the scene.
+     * This will manage the rendering of a 3D Tileset.
+     */
+    add3DTileSet(tileRender: ITilesRenderer) {
+        this.m_3dtileRenders.push(tileRender); // Add to internal collection
+        tileRender.connectMapView(this); // Establish connection with map view
+    }
+
+    /**
+     * Removes a 3D Tiles renderer from the scene and disconnects it from the map view.
+     * @param tileRender - The TilesRenderer instance to be removed.
+     * This will stop rendering and clean up the specified 3D Tileset.
+     */
+    remove3DTileSet(tileRender: ITilesRenderer) {
+        const trIndex = this.m_3dtileRenders.indexOf(tileRender); // Find renderer index
+        tileRender.disconnectMapView(); // Disconnect from map view
+        this.m_tileDataSources.splice(trIndex, 1); // Remove from collection
+    }
+
+    /**
      * Access the `VisibleTileSet` to get access to all current datasources and their visible tiles.
      */
     get visibleTileSet(): VisibleTileSet {
@@ -3238,13 +3263,17 @@ export class MapView extends EventDispatcher {
         const maxGeometryHeightScaled = Math.max(
             this.m_maxGeometryHeight,
             projectionScale *
-                this.m_tileDataSources.reduce((r, ds) => Math.max(r, ds.maxGeometryHeight), 0)
+                this.m_tileDataSources.reduce((r, ds) => Math.max(r, ds.maxGeometryHeight), 0),
+            projectionScale *
+                this.m_3dtileRenders.reduce((r, ts) => Math.max(r, ts.getMaxGeometryHeight()), 0)
         );
 
-        const minGeometryHeightScaled = Math.max(
+        const minGeometryHeightScaled = Math.min(
             this.m_minGeometryHeight,
             projectionScale *
-                this.m_tileDataSources.reduce((r, ds) => Math.min(r, ds.minGeometryHeight), 0)
+                this.m_tileDataSources.reduce((r, ds) => Math.min(r, ds.minGeometryHeight), 0),
+            projectionScale *
+                this.m_3dtileRenders.reduce((r, ts) => Math.min(r, ts.getMinGeometryHeight()), 0)
         );
 
         // Copy all properties from new view ranges to our readonly object.

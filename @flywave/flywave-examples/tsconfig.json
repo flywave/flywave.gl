@@ -31,7 +31,8 @@
             "@flywave/flywave-test-utils": ["../flywave-test-utils/src/index.web.ts"],
             "@flywave/flywave-test-utils/*": ["../flywave-test-utils/src/*"],
             "@flywave/flywave-map-controls": ["../flywave-map-controls/src"],
-            "@flywave/flywave-map-controls/*": ["../flywave-map-controls/src/*"]
+            "@flywave/flywave-map-controls/*": ["../flywave-map-controls/src/*"],
+            "@flywave/flywave-3dtile-render": ["../flywave-3dtile-render/src"]
         }
     },
     "include": [
@@ -91,6 +92,9 @@
         },
         {
             "path": "../flywave-map-controls"
+        },
+        {
+            "path": "../flywave-3dtile-render"
         }
     ]
 }

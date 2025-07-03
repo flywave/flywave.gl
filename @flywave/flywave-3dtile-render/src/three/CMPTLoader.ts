@@ -1,9 +1,10 @@
-import { Group, DefaultLoadingManager, LoadingManager } from "three";
+import { Group } from "three";
 import { CMPTLoaderBase } from "../base/CMPTLoaderBase";
 import { B3DMLoader } from "./B3DMLoader";
 import { PNTSLoader } from "./PNTSLoader";
 import { I3DMLoader } from "./I3DMLoader";
 import { TileGLTF } from "../base/LoaderBase";
+import { TilesLoadingManager } from "./TilesRenderer";
 
 interface ParseResult {
     tiles: Array<{
@@ -17,7 +18,7 @@ export interface CMPTGLTF extends TileGLTF {
 }
 
 export class CMPTLoader extends CMPTLoaderBase<CMPTGLTF> {
-    constructor(private manager: LoadingManager = DefaultLoadingManager) {
+    constructor(private manager: TilesLoadingManager) {
         super();
     }
 

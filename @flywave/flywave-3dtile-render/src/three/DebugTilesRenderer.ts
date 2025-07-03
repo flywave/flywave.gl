@@ -7,10 +7,9 @@ import {
     Object3D,
     Material
 } from "three";
-import { getIndexedRandomColor } from "./utilities.js";
-import { TilesRenderer, TilesRendererOptions } from "../TilesRenderer.js";
-import { SphereHelper } from "./SphereHelper.js";
-import { Tile, TileCache } from "../base/Tile.js";
+import { TilesRenderer, TilesRendererOptions } from "../TilesRenderer";
+import { SphereHelper } from "./SphereHelper";
+import { Tile, TileCache } from "../base/Tile";
 
 // 符号常量定义
 const ORIGINAL_MATERIAL = Symbol("ORIGINAL_MATERIAL");
@@ -332,28 +331,6 @@ export class DebugTilesRenderer extends TilesRenderer {
             };
             const scene = cached?.scene;
             if (!scene) return;
-
-            if (cached.box && cached.boxTransform) {
-                const cachedBox = cached.box;
-                const cachedBoxMat = cached.boxTransform;
-
-                // 创建调试边界框
-                const boxHelperGroup = new Group();
-                boxHelperGroup.name = "DebugTilesRenderer.boxHelperGroup";
-                boxHelperGroup.matrix.copy(cachedBoxMat);
-                boxHelperGroup.matrixAutoUpdate = false;
-
-                const boxHelper = new Box3Helper(cachedBox, getIndexedRandomColor(tile.__depth));
-                (boxHelper as any).raycast = emptyRaycast;
-                boxHelperGroup.add(boxHelper);
-
-                cached.boxHelperGroup = boxHelperGroup;
-
-                if (this.visibleTiles.has(tile) && this.displayBoxBounds) {
-                    this.boxGroup.add(boxHelperGroup);
-                    boxHelperGroup.updateMatrixWorld(true);
-                }
-            }
 
             if (cached.sphere) {
                 // 创建调试边界球体

@@ -273,4 +273,66 @@ export class GeoBox implements GeoBoxExtentLike {
 
         return longitude >= west && longitude < east;
     }
+
+    /**
+     * 合并两个GeoBox并返回新的GeoBox
+     * @param box1 第一个地理包围盒
+     * @param box2 第二个地理包围盒
+     * @returns 合并后的新GeoBox
+     */
+    static merge(box1: GeoBox, box2: GeoBox): GeoBox {
+        const southWest = new GeoCoordinates(
+            Math.min(box1.southWest.latitude, box2.southWest.latitude),
+            Math.min(box1.southWest.longitude, box2.southWest.longitude),
+            box1.southWest.altitude !== undefined && box2.southWest.altitude !== undefined
+                ? Math.min(box1.southWest.altitude, box2.southWest.altitude)
+                : undefined
+        );
+
+        const northEast = new GeoCoordinates(
+            Math.max(box1.northEast.latitude, box2.northEast.latitude),
+            Math.max(box1.northEast.longitude, box2.northEast.longitude),
+            box1.northEast.altitude !== undefined && box2.northEast.altitude !== undefined
+                ? Math.max(box1.northEast.altitude, box2.northEast.altitude)
+                : undefined
+        );
+
+        return new GeoBox(southWest, northEast);
+    }
+
+    /**
+     * 合并当前GeoBox与另一个GeoBox
+     * @param other 要合并的另一个GeoBox
+     * @returns 合并后的新GeoBox
+     */
+    merge(other: GeoBox): GeoBox {
+        return GeoBox.merge(this, other);
+    }
+
+    /**
+     * 扩展当前GeoBox以包含另一个GeoBox（原地修改）
+     * @param other 要包含的另一个GeoBox
+     * @returns 当前实例（用于链式调用）
+     */
+    expandToInclude(other: GeoBox): this {
+        this.southWest.latitude = Math.min(this.southWest.latitude, other.southWest.latitude);
+        this.southWest.longitude = Math.min(this.southWest.longitude, other.southWest.longitude);
+
+        this.northEast.latitude = Math.max(this.northEast.latitude, other.northEast.latitude);
+        this.northEast.longitude = Math.max(this.northEast.longitude, other.northEast.longitude);
+
+        if (this.southWest.altitude !== undefined && other.southWest.altitude !== undefined) {
+            this.southWest.altitude = Math.min(this.southWest.altitude, other.southWest.altitude);
+        } else {
+            this.southWest.altitude = undefined;
+        }
+
+        if (this.northEast.altitude !== undefined && other.northEast.altitude !== undefined) {
+            this.northEast.altitude = Math.max(this.northEast.altitude, other.northEast.altitude);
+        } else {
+            this.northEast.altitude = undefined;
+        }
+
+        return this;
+    }
 }

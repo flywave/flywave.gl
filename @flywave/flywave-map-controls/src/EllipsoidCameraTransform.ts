@@ -75,16 +75,22 @@ export class EllipsoidCameraTransform extends CameraTransform {
         }
 
         // Store current position
-        const position = new Vector3().setFromMatrixPosition(this.cameraToWorld);
+        // const position = new Vector3().setFromMatrixPosition(this.cameraToWorld);
 
-        // Move to origin relative to target
-        this.cameraToWorld.setPosition(position.sub(targetPoint));
+        // // Move to origin relative to target
+        // this.cameraToWorld.setPosition(position.sub(targetPoint));
 
         // Apply rotation
-        this.rotate(inertialAxis.x, inertialAxis.y, inertialAxis.z, inertialAxis.w);
+        this.rotateAxisAngle(
+            this.cameraToWorld,
+            inertialAxis.x,
+            inertialAxis.y,
+            inertialAxis.z,
+            inertialAxis.w
+        );
 
         // Move back to target-relative position
-        this.cameraToWorld.setPosition(position.add(targetPoint));
+        // this.cameraToWorld.setPosition(position.add(targetPoint));
     }
 
     /**
