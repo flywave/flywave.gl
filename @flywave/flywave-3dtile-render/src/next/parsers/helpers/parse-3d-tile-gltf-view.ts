@@ -1,6 +1,3 @@
-// This file is derived from the Cesium code base under Apache 2 license
-// See LICENSE.md and https://github.com/AnalyticalGraphicsInc/cesium/blob/master/LICENSE.md
-
 // TODO - should we automatically parse the embedded glTF or leave it to the app?
 // - I.e. some apps might work directly on a GLB, in that case no need for us to decode...
 // - And if we decode, do we still keep the GLB in case it is needed?
@@ -65,7 +62,7 @@ export async function extractGLTF(
     tile: Tiles3DTileContent,
     gltfFormat: number,
     options?: Tiles3DLoaderOptions,
-    context?: LoaderContext
+    context?: any
 ): Promise<void> {
     const tile3DOptions = options?.["3d-tiles"] || {};
 
@@ -122,4 +119,24 @@ function extractGLTFBufferOrURL(
         default:
             throw new Error("b3dm: Illegal glTF format field");
     }
+}
+
+async function parseFromContext(
+    data: ArrayBuffer,
+    loader: typeof GLTFLoader,
+    options: any,
+    context: any
+): Promise<any> {
+    // 如果有上下文，则使用上下文提供的解析能力
+    if (context && typeof context.parse === "function") {
+        return context.parse(data, loader, options);
+    }
+
+    // 否则直接使用加载器解析
+    if (typeof loader.parse === "function") {
+        return await loader.parse(data, options);
+    }
+
+    // 如果都没有解析方法，则抛出错误
+    throw new Error("No parser available. Context.parse or loader.parse must be implemented.");
 }

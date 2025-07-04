@@ -810,3 +810,16 @@ export interface GLTF_MSFT_texture_dds {
     source: GLTFId;
     extras?: any;
 }
+
+export interface GLTF_KHR_gaussian_splatting {
+    bufferView: number;
+    attributes: {
+        POSITION?: number;
+        COLOR_0?: number;
+        _SCALE?: number;
+        _ROTATION?: number;
+    };
+    sphericalHarmonics?: {
+        coefficients: number[];
+    };
+}

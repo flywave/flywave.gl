@@ -1,4 +1,4 @@
-import { decodeRGB565 } from "@flywave/flywave-utils";
+import { decodeRGB565, GL } from "@flywave/flywave-utils";
 
 // eslint-disable-next-line import/no-named-default
 import { default as Tile3DBatchTable } from "../../classes/tile-3d-batch-table";

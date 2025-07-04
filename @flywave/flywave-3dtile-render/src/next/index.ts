@@ -2,8 +2,8 @@
 export { default as Tile3DFeatureTable } from "./classes/tile-3d-feature-table";
 export { default as Tile3DBatchTable } from "./classes/tile-3d-batch-table";
 
-export { Tiles3DLoader } from "./Loader";
-export { Tile3DSubtreeLoader } from "./SubtreeLoader";
+export { Tiles3DLoader, load3DTiles } from "./Loader";
+export { Tile3DSubtreeLoader, loadSubtree } from "./SubtreeLoader";
 
 export type {
     FeatureTableJson,

@@ -1,7 +1,8 @@
+import { Projection } from "@flywave/flywave-geoutils";
 import Long from "long";
 
 import { Tiles3DLoaderOptions } from "../../Loader";
-import { Tile3DSubtreeLoader } from "../../SubtreeLoader";
+import { loadSubtree, Tile3DSubtreeLoader } from "../../SubtreeLoader";
 import type { Availability, Subtree, Tile3DBoundingVolume } from "../../types";
 import type { S2VolumeInfo } from "../../utils/obb/s2-corners-to-obb";
 import { convertS2BoundingVolumetoOBB } from "../../utils/obb/s2-corners-to-obb";
@@ -29,7 +30,8 @@ export interface S2VolumeBox {
 function getChildS2VolumeBox(
     s2VolumeBox: S2VolumeBox | undefined,
     index: number,
-    subdivisionScheme: string
+    subdivisionScheme: string,
+    proj: Projection
 ): S2VolumeBox | undefined {
     if (s2VolumeBox?.box) {
         // Check if the BoundingVolume is of type "box"
@@ -59,7 +61,7 @@ function getChildS2VolumeBox(
             default:
                 break;
         }
-        const box = convertS2BoundingVolumetoOBB(s2ChildVolumeInfo);
+        const box = convertS2BoundingVolumetoOBB(s2ChildVolumeInfo, proj);
         const childS2VolumeBox: S2VolumeBox = {
             box,
             s2VolumeInfo: s2ChildVolumeInfo
@@ -99,6 +101,7 @@ export async function parseImplicitTiles(params: {
     implicitOptions: ImplicitOptions;
     loaderOptions: Tiles3DLoaderOptions;
     s2VolumeBox?: S2VolumeBox;
+    proj: Projection;
 }) {
     const {
         subtree,
@@ -118,7 +121,8 @@ export async function parseImplicitTiles(params: {
         childIndex = 0,
         implicitOptions,
         loaderOptions,
-        s2VolumeBox
+        s2VolumeBox,
+        proj
     } = params;
     const {
         subdivisionScheme,
@@ -178,7 +182,7 @@ export async function parseImplicitTiles(params: {
     if (isChildSubtreeAvailable) {
         const subtreePath = `${basePath}/${subtreesUriTemplate}`;
         const childSubtreeUrl = replaceContentUrlTemplate(subtreePath, level, x, y, z);
-        const childSubtree = await load(childSubtreeUrl, Tile3DSubtreeLoader, loaderOptions);
+        const childSubtree = await loadSubtree(childSubtreeUrl, Tile3DSubtreeLoader, loaderOptions);
 
         // The next subtree is the newly-loaded child subtree.
         nextSubtree = childSubtree;
@@ -220,7 +224,8 @@ export async function parseImplicitTiles(params: {
         const childS2VolumeBox: S2VolumeBox | undefined = getChildS2VolumeBox(
             s2VolumeBox,
             index,
-            subdivisionScheme
+            subdivisionScheme,
+            proj
         );
 
         // Recursive calling...
@@ -231,7 +236,8 @@ export async function parseImplicitTiles(params: {
             childIndex: index,
             implicitOptions,
             loaderOptions,
-            s2VolumeBox: childS2VolumeBox
+            s2VolumeBox: childS2VolumeBox,
+            proj
         });
 
         if (childTile.contentUrl || childTile.children.length) {

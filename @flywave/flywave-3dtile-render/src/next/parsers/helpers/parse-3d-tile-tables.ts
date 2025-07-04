@@ -1,6 +1,3 @@
-// This file is derived from the Cesium code base under Apache 2 license
-// See LICENSE.md and https://github.com/AnalyticalGraphicsInc/cesium/blob/master/LICENSE.md
-
 import { Tiles3DLoaderOptions } from "../../Loader";
 import { Tiles3DTileContent } from "../../types";
 import { getStringFromArrayBuffer } from "./parse-utils";
@@ -98,15 +95,14 @@ function parse3DTileFeatureTable(
     }
     byteOffset += featureTableJsonByteLength || 0;
 
-    tile.featureTableBinary = new Uint8Array(arrayBuffer, byteOffset, featureTableBinaryByteLength);
-    byteOffset += featureTableBinaryByteLength || 0;
-
-    /*
-  const featureTable = parseFeatureTable(featureTableJson, featureTableBinary);
-
-  const batchLength = featureTable.getGlobalProperty('BATCH_LENGTH');
-  featureTable.featuresLength = batchLength;
-  */
+    if (featureTableBinaryByteLength && featureTableBinaryByteLength > 0) {
+        tile.featureTableBinary = new Uint8Array(
+            arrayBuffer,
+            byteOffset,
+            featureTableBinaryByteLength
+        );
+        byteOffset += featureTableBinaryByteLength;
+    }
 
     return byteOffset;
 }

@@ -1,18 +1,16 @@
 // This file is derived from the Cesium code base under Apache 2 license
 // See LICENSE.md and https://github.com/AnalyticalGraphicsInc/cesium/blob/master/LICENSE.md
 
-import { LoaderContext } from "@loaders.gl/loader-utils";
-import { GL } from "@loaders.gl/math"; // math.gl/geometry;
+import { GL } from "@flywave/flywave-utils";
 
-import { Tiles3DLoaderOptions } from "../../tiles-3d-loader";
 import Tile3DFeatureTable from "../classes/tile-3d-feature-table";
+import type { Tiles3DLoaderOptions } from "../Loader";
 import { Tiles3DTileContent } from "../types";
 import {
     extractGLTF,
     GLTF_FORMAT,
     parse3DTileGLTFViewSync
 } from "./helpers/parse-3d-tile-gltf-view";
-// import Tile3DBatchTable from '../classes/tile-3d-batch-table';
 import { parse3DTileHeaderSync } from "./helpers/parse-3d-tile-header";
 import { parse3DTileTablesHeaderSync, parse3DTileTablesSync } from "./helpers/parse-3d-tile-tables";
 
@@ -21,7 +19,7 @@ export async function parseBatchedModel3DTile(
     arrayBuffer: ArrayBuffer,
     byteOffset: number,
     options?: Tiles3DLoaderOptions,
-    context?: LoaderContext
+    context?: any
 ) {
     byteOffset = parseBatchedModel(tile, arrayBuffer, byteOffset, options, context);
     await extractGLTF(tile, GLTF_FORMAT.EMBEDDED, options, context);
@@ -39,7 +37,7 @@ function parseBatchedModel(
     arrayBuffer: ArrayBuffer,
     byteOffset: number,
     options?: Tiles3DLoaderOptions,
-    context?: LoaderContext
+    context?: any
 ) {
     byteOffset = parse3DTileHeaderSync(tile, arrayBuffer, byteOffset);
 

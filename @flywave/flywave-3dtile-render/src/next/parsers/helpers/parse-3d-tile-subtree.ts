@@ -12,8 +12,8 @@ const SUBTREE_FILE_VERSION = 1;
 // eslint-disable-next-line max-statements
 export default async function parse3DTilesSubtree(
     data: ArrayBuffer,
-    options: LoaderOptions | undefined,
-    context: LoaderContext | undefined
+    options: any | undefined,
+    context: any | undefined
 ): Promise<Subtree> {
     const magic = new Uint32Array(data.slice(0, 4));
 
@@ -80,7 +80,7 @@ export async function loadExplicitBitstream(
     subtree: Subtree,
     availabilityObject: Availability,
     internalBinaryBuffer: ArrayBuffer,
-    context: LoaderContext | undefined
+    context: any | undefined
 ): Promise<void> {
     const bufferViewIndex = Number.isFinite(availabilityObject.bitstream)
         ? availabilityObject.bitstream

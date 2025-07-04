@@ -1,4 +1,4 @@
-import { GL, octDecode } from "@loaders.gl/math";
+import { GL, octDecode } from "@flywave/flywave-utils";
 import { Vector3 } from "three";
 
 import { Tiles3DTileContent } from "../../types";

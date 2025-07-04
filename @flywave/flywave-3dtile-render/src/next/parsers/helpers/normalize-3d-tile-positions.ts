@@ -1,4 +1,4 @@
-import { GL } from "@loaders.gl/math";
+import { GL } from "@flywave/flywave-utils";
 import { Vector3 } from "three";
 
 // Prepare attribute for positions

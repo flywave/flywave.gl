@@ -43,4 +43,6 @@ export * from "./ImageFormat";
 export * from "./ImageUtils";
 export * from "./RGB565";
 export * from "./Path";
-export * from "./GLType";
+export { default as GLType, GL_TYPE as GL } from "./GLType";
+export * from "./Coroutine";
+export * from "./Compression";

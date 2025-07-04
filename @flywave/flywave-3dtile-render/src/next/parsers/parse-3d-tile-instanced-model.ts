@@ -1,11 +1,10 @@
-import { LoaderContext } from "@loaders.gl/loader-utils";
-import { GL } from "@loaders.gl/math"; // 'math.gl/geometry';
-import { Matrix3, Matrix4, Quaternion, Vector3 } from "@math.gl/core";
-import { Ellipsoid } from "@math.gl/geospatial";
+import { eastNorthUpToFixedFrame } from "@flywave/flywave-geoutils";
+import { GL } from "@flywave/flywave-utils";
+import { Matrix4, Quaternion, Vector3 } from "three";
 
-import { Tiles3DLoaderOptions } from "../../tiles-3d-loader";
 import Tile3DBatchTable from "../classes/tile-3d-batch-table";
 import Tile3DFeatureTable from "../classes/tile-3d-feature-table";
+import { Tiles3DLoaderOptions } from "../Loader";
 import { Tiles3DTileContent } from "../types";
 import { extractGLTF, parse3DTileGLTFViewSync } from "./helpers/parse-3d-tile-gltf-view";
 import { parse3DTileHeaderSync } from "./helpers/parse-3d-tile-header";
@@ -16,7 +15,7 @@ export async function parseInstancedModel3DTile(
     arrayBuffer: ArrayBuffer,
     byteOffset: number,
     options?: Tiles3DLoaderOptions,
-    context?: LoaderContext
+    context?: any
 ): Promise<number> {
     byteOffset = parseInstancedModel(tile, arrayBuffer, byteOffset, options, context);
     await extractGLTF(tile, tile.gltfFormat || 0, options, context);
@@ -28,7 +27,7 @@ function parseInstancedModel(
     arrayBuffer: ArrayBuffer,
     byteOffset: number,
     options?: Tiles3DLoaderOptions,
-    context?: LoaderContext
+    context?: any
 ): number {
     byteOffset = parse3DTileHeaderSync(tile, arrayBuffer, byteOffset);
     if (tile.version !== 1) {
@@ -47,7 +46,6 @@ function parseInstancedModel(
 
     byteOffset = parse3DTileGLTFViewSync(tile, arrayBuffer, byteOffset, options);
 
-    // TODO - Is the feature table sometimes optional or can check be moved into table header parser?
     if (!tile?.header?.featureTableJsonByteLength || tile.header.featureTableJsonByteLength === 0) {
         throw new Error("i3dm parser: featureTableJsonByteLength is zero.");
     }
@@ -75,7 +73,6 @@ function parseInstancedModel(
     return byteOffset;
 }
 
-// eslint-disable-next-line max-statements, complexity
 function extractInstancedAttributes(
     tile: Tiles3DTileContent,
     featureTable: Tile3DFeatureTable,
@@ -87,15 +84,14 @@ function extractInstancedAttributes(
     const instanceNormalRight = new Vector3();
     const instanceNormalUp = new Vector3();
     const instanceNormalForward = new Vector3();
-    const instanceRotation = new Matrix3();
+    const instanceRotation = new Matrix4();
     const instanceQuaternion = new Quaternion();
-    const instanceScale = new Vector3();
-    const instanceTranslationRotationScale = {};
+    const instanceScale = new Vector3(1, 1, 1);
     const instanceTransform = new Matrix4();
-    const scratch1 = [];
-    const scratch2 = [];
-    const scratch3 = [];
-    const scratch4 = [];
+    const scratch1 = new Vector3();
+    const scratch2 = new Vector3();
+    const scratch3 = new Vector3();
+    const scratch4 = new Vector3();
 
     for (let i = 0; i < instancesLength; i++) {
         let position;
@@ -135,11 +131,15 @@ function extractInstancedAttributes(
             }
 
             const MAX_UNSIGNED_SHORT = 65535.0;
-            for (let j = 0; j < 3; j++) {
-                position[j] =
-                    (position[j] / MAX_UNSIGNED_SHORT) * quantizedVolumeScale[j] +
-                    quantizedVolumeOffset[j];
-            }
+            instancePosition.set(
+                (instancePosition.x / MAX_UNSIGNED_SHORT) * quantizedVolumeScale[0] +
+                    quantizedVolumeOffset[0],
+                (instancePosition.y / MAX_UNSIGNED_SHORT) * quantizedVolumeScale[1] +
+                    quantizedVolumeOffset[1],
+                (instancePosition.z / MAX_UNSIGNED_SHORT) * quantizedVolumeScale[2] +
+                    quantizedVolumeOffset[2]
+            );
+            position = instancePosition;
         }
 
         if (!position) {
@@ -149,32 +149,30 @@ function extractInstancedAttributes(
         }
 
         instancePosition.copy(position);
-        // @ts-expect-error
-        instanceTranslationRotationScale.translation = instancePosition;
 
         // Get the instance rotation
-        tile.normalUp = featureTable.getProperty("NORMAL_UP", GL.FLOAT, 3, i, scratch1);
-        tile.normalRight = featureTable.getProperty("NORMAL_RIGHT", GL.FLOAT, 3, i, scratch2);
+        const normalUp = featureTable.getProperty("NORMAL_UP", GL.FLOAT, 3, i, scratch1);
+        const normalRight = featureTable.getProperty("NORMAL_RIGHT", GL.FLOAT, 3, i, scratch2);
 
-        const hasCustomOrientation = false;
-        if (tile.normalUp) {
-            if (!tile.normalRight) {
+        let hasCustomOrientation = false;
+        if (normalUp) {
+            if (!normalRight) {
                 throw new Error(
                     "i3dm: Custom orientation requires both NORMAL_UP and NORMAL_RIGHT."
                 );
             }
-            // Vector3.unpack(normalUp, 0, instanceNormalUp);
-            // Vector3.unpack(normalRight, 0, instanceNormalRight);
-            tile.hasCustomOrientation = true;
+            instanceNormalUp.copy(normalUp);
+            instanceNormalRight.copy(normalRight);
+            hasCustomOrientation = true;
         } else {
-            tile.octNormalUp = featureTable.getProperty(
+            const octNormalUp = featureTable.getProperty(
                 "NORMAL_UP_OCT32P",
                 GL.UNSIGNED_SHORT,
                 2,
                 i,
                 scratch1
             );
-            tile.octNormalRight = featureTable.getProperty(
+            const octNormalRight = featureTable.getProperty(
                 "NORMAL_RIGHT_OCT32P",
                 GL.UNSIGNED_SHORT,
                 2,
@@ -182,43 +180,50 @@ function extractInstancedAttributes(
                 scratch2
             );
 
-            if (tile.octNormalUp) {
-                if (!tile.octNormalRight) {
+            if (octNormalUp) {
+                if (!octNormalRight) {
                     throw new Error(
                         "i3dm: oct-encoded orientation requires NORMAL_UP_OCT32P and NORMAL_RIGHT_OCT32P"
                     );
                 }
-
                 throw new Error("i3dm: oct-encoded orientation not implemented");
-                /*
-        AttributeCompression.octDecodeInRange(octNormalUp[0], octNormalUp[1], 65535, instanceNormalUp);
-        AttributeCompression.octDecodeInRange(octNormalRight[0], octNormalRight[1], 65535, instanceNormalRight);
-        hasCustomOrientation = true;
-        */
             } else if (tile.eastNorthUp) {
-                Ellipsoid.WGS84.eastNorthUpToFixedFrame(instancePosition, instanceTransform);
-                instanceTransform.getRotationMatrix3(instanceRotation);
+                eastNorthUpToFixedFrame(instancePosition, instanceTransform);
+                instanceRotation.extractRotation(instanceTransform);
             } else {
                 instanceRotation.identity();
             }
         }
 
         if (hasCustomOrientation) {
-            instanceNormalForward.copy(instanceNormalRight).cross(instanceNormalUp).normalize();
-            instanceRotation.setColumn(0, instanceNormalRight);
-            instanceRotation.setColumn(1, instanceNormalUp);
-            instanceRotation.setColumn(2, instanceNormalForward);
+            instanceNormalForward.crossVectors(instanceNormalRight, instanceNormalUp).normalize();
+            instanceRotation.set(
+                instanceNormalRight.x,
+                instanceNormalUp.x,
+                instanceNormalForward.x,
+                0, // 第1行 (x轴方向)
+                instanceNormalRight.y,
+                instanceNormalUp.y,
+                instanceNormalForward.y,
+                0, // 第2行 (y轴方向)
+                instanceNormalRight.z,
+                instanceNormalUp.z,
+                instanceNormalForward.z,
+                0, // 第3行 (z轴方向)
+                0,
+                0,
+                0,
+                1 // 第4行 (齐次坐标)
+            );
         }
 
-        instanceQuaternion.fromMatrix3(instanceRotation);
-        // @ts-expect-error
-        instanceTranslationRotationScale.rotation = instanceQuaternion;
+        instanceQuaternion.setFromRotationMatrix(instanceRotation);
 
         // Get the instance scale
         instanceScale.set(1.0, 1.0, 1.0);
         const scale = featureTable.getProperty("SCALE", GL.FLOAT, 1, i, scratch3);
         if (Number.isFinite(scale)) {
-            instanceScale.multiplyByScalar(scale);
+            instanceScale.multiplyScalar(scale);
         }
         const nonUniformScale = featureTable.getProperty(
             "SCALE_NON_UNIFORM",
@@ -228,35 +233,20 @@ function extractInstancedAttributes(
             scratch1
         );
         if (nonUniformScale) {
-            instanceScale.scale(nonUniformScale);
+            instanceScale.multiply(new Vector3().fromArray(nonUniformScale));
         }
-
-        // @ts-expect-error
-        instanceTranslationRotationScale.scale = instanceScale;
 
         // Get the batchId
         let batchId = featureTable.getProperty("BATCH_ID", GL.UNSIGNED_SHORT, 1, i, scratch4);
         if (batchId === undefined) {
-            // If BATCH_ID semantic is undefined, batchId is just the instance number
             batchId = i;
         }
 
-        // @ts-expect-error
-        const rotationMatrix = new Matrix4().fromQuaternion(
-            instanceTranslationRotationScale.rotation
-        );
-
         // Create the model matrix and the instance
-        instanceTransform.identity();
-        // @ts-expect-error
-        instanceTransform.translate(instanceTranslationRotationScale.translation);
-        instanceTransform.multiplyRight(rotationMatrix);
-        // @ts-expect-error
-        instanceTransform.scale(instanceTranslationRotationScale.scale);
+        instanceTransform.compose(instancePosition, instanceQuaternion, instanceScale);
 
-        const modelMatrix = instanceTransform.clone();
         instances[i] = {
-            modelMatrix,
+            modelMatrix: instanceTransform.clone(),
             batchId
         };
     }

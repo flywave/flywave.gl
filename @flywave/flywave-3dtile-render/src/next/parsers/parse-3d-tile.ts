@@ -1,4 +1,5 @@
 import { TILE3D_TYPE } from "../constants";
+import { Tiles3DLoaderOptions } from "../Loader";
 import { Tiles3DTileContent } from "../types";
 import { getMagicString } from "./helpers/parse-utils";
 import { parseBatchedModel3DTile } from "./parse-3d-tile-batched-model";
@@ -12,7 +13,7 @@ export async function parse3DTile(
     arrayBuffer: ArrayBuffer,
     byteOffset = 0,
     options: Tiles3DLoaderOptions | undefined,
-    context: LoaderContext | undefined,
+    context: any | undefined,
     tile: Tiles3DTileContent = { shape: "tile3d" }
 ): Promise<number> {
     tile.byteOffset = byteOffset;

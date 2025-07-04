@@ -4,9 +4,7 @@
 // Reference code:
 // https://github.com/AnalyticalGraphicsInc/cesium/blob/master/Source/Scene/Composite3DTileContent.js#L182
 
-import type { LoaderContext } from "@loaders.gl/loader-utils";
-
-import type { Tiles3DLoaderOptions } from "../../tiles-3d-loader";
+import type { Tiles3DLoaderOptions } from "../Loader";
 import { Tiles3DTileContent } from "../types";
 import { parse3DTileHeaderSync } from "./helpers/parse-3d-tile-header";
 
@@ -15,7 +13,7 @@ type Parse3DTile = (
     arrayBuffer: ArrayBuffer,
     byteOffset: number,
     options: Tiles3DLoaderOptions | undefined,
-    context: LoaderContext | undefined,
+    context: any | undefined,
     subtile
 ) => Promise<number>;
 
@@ -25,7 +23,7 @@ export async function parseComposite3DTile(
     arrayBuffer: ArrayBuffer,
     byteOffset: number,
     options: Tiles3DLoaderOptions | undefined,
-    context: LoaderContext | undefined,
+    context: any | undefined,
     parse3DTile: Parse3DTile
 ): Promise<number> {
     byteOffset = parse3DTileHeaderSync(tile, arrayBuffer, byteOffset);

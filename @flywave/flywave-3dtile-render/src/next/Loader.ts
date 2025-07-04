@@ -1,4 +1,5 @@
 import { DracoLoaderOptions } from "@flywave/flywave-draco";
+import { Projection } from "@flywave/flywave-geoutils";
 import { dirname } from "@flywave/flywave-utils";
 
 import { parse3DTile } from "./parsers/parse-3d-tile";
@@ -12,6 +13,7 @@ import {
 import { VERSION } from "./utils/version";
 
 export type Tiles3DLoaderOptions = DracoLoaderOptions & {
+    headers?: Record<string, string>;
     "3d-tiles"?: {
         /** Whether to parse any embedded glTF binaries (or extract memory for independent glTF parsing) */
         loadGLTF?: boolean;
@@ -52,7 +54,8 @@ export const Tiles3DLoader = {
 async function parse(
     data,
     options: Tiles3DLoaderOptions = {},
-    context?: any
+    context?: any,
+    proj?: Projection
 ): Promise<Tiles3DTileContent | Tiles3DTilesetJSONPostprocessed> {
     // auto detect file type
     const loaderOptions = options["3d-tiles"] || {};
@@ -64,7 +67,7 @@ async function parse(
     }
 
     return isTileset
-        ? await parseTileset(data, options, context)
+        ? await parseTileset(data, options, context, proj)
         : await parseTile(data, options, context);
 }
 
@@ -72,13 +75,14 @@ async function parse(
 async function parseTileset(
     data: ArrayBuffer,
     options?: Tiles3DLoaderOptions,
-    context?: any
+    context?: any,
+    proj?: Projection
 ): Promise<Tiles3DTilesetJSONPostprocessed> {
     const tilesetJson: Tiles3DTilesetJSON = JSON.parse(new TextDecoder().decode(data));
 
     const tilesetUrl = context?.url || "";
     const basePath = getBaseUri(tilesetUrl);
-    const normalizedRoot = await normalizeTileHeaders(tilesetJson, basePath, options || {});
+    const normalizedRoot = await normalizeTileHeaders(tilesetJson, basePath, options || {}, proj);
     const tilesetJsonPostprocessed: Tiles3DTilesetJSONPostprocessed = {
         ...tilesetJson,
         shape: "tileset3d",
@@ -114,4 +118,65 @@ async function parseTile(
 /** Get base name */
 function getBaseUri(tilesetUrl: string): string {
     return dirname(tilesetUrl);
+}
+
+/**
+ * 加载3D Tiles数据（tileset或tile）
+ * @param url 数据URL
+ * @param options 加载选项
+ * @param context 上下文对象（可选，包含fetch等实用工具）
+ * @param proj 投影系统（可选）
+ * @returns 解析后的3D Tiles数据
+ */
+export async function load3DTiles(
+    url: string,
+    options: Tiles3DLoaderOptions = {},
+    context?: any,
+    proj?: Projection
+): Promise<Tiles3DTileContent | Tiles3DTilesetJSONPostprocessed> {
+    // 获取fetch函数 - 优先使用上下文提供的，否则使用全局fetch
+    const fetchFn = context?.fetch || globalThis.fetch;
+
+    if (!fetchFn) {
+        throw new Error("Fetch function is required to load 3D Tiles data");
+    }
+
+    try {
+        // 1. 发送网络请求
+        const response = await fetchFn(url, {
+            headers: options.headers
+        });
+
+        if (!response.ok) {
+            throw new Error(
+                `Failed to fetch 3D Tiles data: ${response.status} ${response.statusText}`
+            );
+        }
+
+        // 2. 确定数据类型
+        const contentType = response.headers.get("content-type") || "";
+        const isJson = contentType.includes("application/json") || url.endsWith(".json");
+
+        // 3. 读取数据
+        let data: ArrayBuffer | string;
+        if (isJson) {
+            data = await response.text();
+        } else {
+            data = await response.arrayBuffer();
+        }
+
+        // 4. 创建解析上下文
+        const parseContext = {
+            ...context,
+            url,
+            fetch: fetchFn,
+            response,
+            queryString: new URL(url).search
+        };
+
+        // 5. 解析数据
+        return await parse(data, options, parseContext, proj);
+    } catch (error) {
+        throw new Error(`3D Tiles loading failed: ${error.message}`);
+    }
 }

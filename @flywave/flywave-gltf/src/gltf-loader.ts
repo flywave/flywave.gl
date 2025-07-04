@@ -52,8 +52,7 @@ export const GLTFLoader = {
 
 export async function parse(
     arrayBuffer: ArrayBuffer | string,
-    options: GLTFLoaderOptions = {},
-    context?: { fetch?: (url: string) => Promise<Response> }
+    options: GLTFLoaderOptions = {}
 ): Promise<GLTFWithBuffers> {
     // Apply default options
     options = { ...GLTFLoader.options, ...options };
@@ -61,5 +60,5 @@ export async function parse(
 
     const { byteOffset = 0 } = options;
     const gltf = {} as GLTFWithBuffers;
-    return await parseGLTF(gltf, arrayBuffer, byteOffset, options, context);
+    return await parseGLTF(gltf, arrayBuffer, byteOffset, options);
 }

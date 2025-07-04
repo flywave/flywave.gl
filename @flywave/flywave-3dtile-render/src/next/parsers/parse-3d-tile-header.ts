@@ -1,12 +1,14 @@
-import { path } from "@flywave/flywave-utils";
-import { load } from "@loaders.gl/core";
-import type { LoaderOptions } from "@loaders.gl/loader-utils";
+import { Projection } from "@flywave/flywave-geoutils";
+import { resolve } from "@flywave/flywave-utils";
 
-import { Tile3DSubtreeLoader } from "../../tile-3d-subtree-loader";
-import type { Tiles3DLoaderOptions } from "../../tiles-3d-loader";
+import type { Tiles3DLoaderOptions } from "../Loader";
+import { loadSubtree, Tile3DSubtreeLoader } from "../SubtreeLoader";
 import {
     ImplicitTilingExensionData,
+    LOD_METRIC_TYPE,
     Subtree,
+    TILE_REFINEMENT,
+    TILE_TYPE,
     Tile3DBoundingVolume,
     Tiles3DTileContentJSON,
     Tiles3DTileJSON,
@@ -43,7 +45,7 @@ export interface ImplicitOptions {
     /** Function that detects TILE_TYPE by tile metadata and content URL */
     getTileType: (tile: Tiles3DTileJSON, tileContentUrl?: string) => string;
     /** Function that converts string refine method to enum value */
-    getRefine: (refine?: string) => string | undefined;
+    getRefine: (refine?: string) => TILE_REFINEMENT | string | undefined;
 }
 
 function getTileType(tile: Tiles3DTileJSON, tileContentUrl: string = ""): TILE_TYPE | string {
@@ -90,7 +92,7 @@ function resolveUri(uri: string, basePath: string): string {
         return uri;
     }
 
-    return path.resolve(basePath, uri);
+    return resolve(basePath, uri);
 }
 
 export function normalizeTileData(
@@ -126,7 +128,8 @@ export function normalizeTileData(
 export async function normalizeTileHeaders(
     tileset: Tiles3DTilesetJSON,
     basePath: string,
-    options: LoaderOptions
+    options: any,
+    proj: Projection
 ): Promise<Tiles3DTileJSONPostprocessed | null> {
     let root: Tiles3DTileJSONPostprocessed | null = null;
 
@@ -137,7 +140,8 @@ export async function normalizeTileHeaders(
             tileset,
             basePath,
             rootImplicitTilingExtension,
-            options
+            options,
+            proj
         );
     } else {
         root = normalizeTileData(tileset.root, basePath);
@@ -159,7 +163,8 @@ export async function normalizeTileHeaders(
                     tileset,
                     basePath,
                     childImplicitTilingExtension,
-                    options
+                    options,
+                    proj
                 );
             } else {
                 childHeaderPostprocessed = normalizeTileData(childHeader, basePath);
@@ -186,7 +191,8 @@ export async function normalizeImplicitTileHeaders(
     tileset: Tiles3DTilesetJSON,
     basePath: string,
     implicitTilingExtension: ImplicitTilingExensionData,
-    options: Tiles3DLoaderOptions
+    options: Tiles3DLoaderOptions,
+    proj: Projection
 ): Promise<Tiles3DTileJSONPostprocessed | null> {
     const {
         subdivisionScheme,
@@ -197,7 +203,7 @@ export async function normalizeImplicitTileHeaders(
     } = implicitTilingExtension;
     const replacedUrlTemplate = replaceContentUrlTemplate(subtreesUriTemplate, 0, 0, 0, 0);
     const subtreeUrl = resolveUri(replacedUrlTemplate, basePath);
-    const subtree = await load(subtreeUrl, Tile3DSubtreeLoader, options);
+    const subtree = await loadSubtree(subtreeUrl, Tile3DSubtreeLoader, options);
     const tileContentUri = tile.content?.uri;
     const contentUrlTemplate = tileContentUri ? resolveUri(tileContentUri, basePath) : "";
     const refine = tileset?.root?.refine;
@@ -208,7 +214,7 @@ export async function normalizeImplicitTileHeaders(
     const s2VolumeInfo: S2VolumeInfo =
         tile.boundingVolume.extensions?.["3DTILES_bounding_volume_S2"];
     if (s2VolumeInfo) {
-        const box = convertS2BoundingVolumetoOBB(s2VolumeInfo);
+        const box = convertS2BoundingVolumetoOBB(s2VolumeInfo, proj);
         const s2VolumeBox: S2VolumeBox = { box, s2VolumeInfo };
         tile.boundingVolume = s2VolumeBox;
     }
@@ -230,7 +236,7 @@ export async function normalizeImplicitTileHeaders(
         getRefine
     };
 
-    return await normalizeImplicitTileData(tile, basePath, subtree, implicitOptions, options);
+    return await normalizeImplicitTileData(tile, basePath, subtree, implicitOptions, options, proj);
 }
 
 /**
@@ -245,7 +251,8 @@ export async function normalizeImplicitTileData(
     basePath: string,
     rootSubtree: Subtree,
     implicitOptions: ImplicitOptions,
-    loaderOptions: Tiles3DLoaderOptions
+    loaderOptions: Tiles3DLoaderOptions,
+    proj: Projection
 ): Promise<Tiles3DTileJSONPostprocessed | null> {
     if (!tile) {
         return null;
@@ -254,7 +261,8 @@ export async function normalizeImplicitTileData(
     const { children, contentUrl } = await parseImplicitTiles({
         subtree: rootSubtree,
         implicitOptions,
-        loaderOptions
+        loaderOptions,
+        proj
     });
 
     let tileContentUrl: string | undefined;

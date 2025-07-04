@@ -33,27 +33,26 @@ export async function parseGLTF(
     gltf: GLTFWithBuffers,
     arrayBufferOrString,
     byteOffset = 0,
-    options: GLTFLoaderOptions,
-    context: { fetch?: (url: string) => Promise<Response> }
+    options: GLTFLoaderOptions
 ): Promise<GLTFWithBuffers> {
     parseGLTFContainerSync(gltf, arrayBufferOrString, byteOffset, options);
 
     normalizeGLTFV1(gltf, { normalize: options?.gltf?.normalize });
 
-    preprocessExtensions(gltf, options, context);
+    preprocessExtensions(gltf, options);
 
     // Load linked buffers asynchronously and decodes base64 buffers in parallel
     if (options?.gltf?.loadBuffers && gltf.json.buffers) {
-        await loadBuffers(gltf, options, context);
+        await loadBuffers(gltf, options);
     }
 
     // loadImages and decodeExtensions should not be running in parallel, because
     // decodeExtensions uses data from images taken during the loadImages call.
     if (options?.gltf?.loadImages) {
-        await loadImages(gltf, options, context);
+        await loadImages(gltf, options);
     }
 
-    await decodeExtensions(gltf, options, context);
+    await decodeExtensions(gltf, options);
 
     return gltf;
 }
@@ -114,20 +113,13 @@ function parseGLTFContainerSync(gltf, data, byteOffset, options) {
 }
 
 /** Asynchronously fetch and parse buffers, store in buffers array outside of json */
-async function loadBuffers(
-    gltf: GLTFWithBuffers,
-    options,
-    context: { fetch?: (url: string) => Promise<Response> }
-) {
+async function loadBuffers(gltf: GLTFWithBuffers, options: any) {
     const buffers = gltf.json.buffers || [];
     for (let i = 0; i < buffers.length; ++i) {
         const buffer = buffers[i];
         if (buffer.uri) {
-            const { fetch } = context;
-            assert(fetch);
-
             const uri = resolveUrl(buffer.uri, options);
-            const response = await context?.fetch?.(uri);
+            const response = await fetch(uri);
             const arrayBuffer = await response?.arrayBuffer?.();
 
             gltf.buffers[i] = {
@@ -150,18 +142,14 @@ async function loadBuffers(
 /**
  * Loads all images
  */
-async function loadImages(
-    gltf: GLTFWithBuffers,
-    options,
-    context: { fetch?: (url: string) => Promise<Response> }
-) {
+async function loadImages(gltf: GLTFWithBuffers, options: any) {
     const imageIndices = getReferencesImageIndices(gltf);
 
     const images = gltf.json.images || [];
 
     const promises: Array<Promise<any>> = [];
     for (const imageIndex of imageIndices) {
-        promises.push(loadImage(gltf, images[imageIndex], imageIndex, options, context));
+        promises.push(loadImage(gltf, images[imageIndex], imageIndex, options));
     }
 
     return await Promise.all(promises);
@@ -182,19 +170,12 @@ function getReferencesImageIndices(gltf: GLTFWithBuffers): number[] {
 }
 
 /** Asynchronously fetches and parses one image, store in images array outside of json */
-async function loadImage(
-    gltf: GLTFWithBuffers,
-    image: any,
-    index: number,
-    options,
-    context: { fetch?: (url: string) => Promise<Response> }
-) {
+async function loadImage(gltf: GLTFWithBuffers, image: any, index: number, options: any) {
     let arrayBuffer;
 
     if (image.uri && !image.hasOwnProperty("bufferView")) {
         const uri = resolveUrl(image.uri, options);
 
-        const { fetch } = context;
         const response = await fetch(uri);
 
         arrayBuffer = await response.arrayBuffer();
