@@ -424,7 +424,7 @@ export class ConcurrentWorkerSet {
      * @param message - The message to send.
      * @param buffers - Optional buffers to transfer to the workers.
      */
-    broadcastMessage(message: any, buffers?: ArrayBuffer[] | undefined) {
+    broadcastMessage(message: any, buffers?: ArrayBuffer[] | OffscreenCanvas[] | undefined) {
         this.ensureStarted();
 
         if (buffers !== undefined) {

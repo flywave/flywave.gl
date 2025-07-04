@@ -2,8 +2,16 @@
     "extends": "../../tsconfig.json",
     "compilerOptions": {
         "outDir": "./lib",
-        "composite": true
+        "composite": true,
+        "paths": {
+                        "@flywave/flywave-utils": ["../flywave-utils/src"]
+        }
     },
     "include": ["src/**/*", "test/**/*"],
-    "exclude": ["dist/**", "node_modules"]
+    "exclude": ["dist/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-utils"
+        }
+    ]
 }

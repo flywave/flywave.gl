@@ -14,3 +14,7 @@
 
 export * from "./WebTileDataSource";
 export * from "./HereWebTileDataSource";
+export * from "./OpenStreetWebTileDataSource";
+export * from "./MapboxWebTileDataSource";
+export * from "./ArcGISWebTileDataSource";
+export * from "./BingWebTileDataSource";

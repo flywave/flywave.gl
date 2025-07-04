@@ -120,9 +120,7 @@ export function getUrlOrigin(url: string | undefined): string {
 /**
  * Parse `host` and `protocol` part from URL.
  */
-export function getUrlHostAndProtocol(
-    url: string
-): {
+export function getUrlHostAndProtocol(url: string): {
     protocol: string;
     host: string;
 } {
@@ -136,4 +134,30 @@ export function getUrlHostAndProtocol(
         protocol: match[1],
         host: match[2]
     };
+}
+
+interface TemplateValues {
+    version: string;
+    z: string | number;
+    x: string | number;
+    y: string | number;
+}
+
+export function formatUrl(
+    url: string,
+    templateValues: TemplateValues,
+    queryParam?: Record<string, string>
+): string {
+    const { version, z, x, y } = templateValues;
+    const q = [];
+    for (const i in queryParam) {
+        q.push(`${i}=${queryParam[i]}`);
+    }
+    const formattedUrl = url
+        .replace("{x}", x.toString())
+        .replace("{y}", y.toString())
+        .replace("{z}", z.toString())
+        .replace("{version}", version);
+
+    return `${formattedUrl}?${q.join("&")}`;
 }

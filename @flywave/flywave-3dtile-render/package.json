@@ -24,10 +24,18 @@
     },
     "license": "Apache-2.0",
     "dependencies": {
+        "@flywave/flywave-draco": "workspace:*",
         "@flywave/flywave-geoutils": "workspace:*",
-        "@flywave/flywave-mapview": "workspace:*"
+        "@flywave/flywave-gltf": "workspace:*",
+        "@flywave/flywave-mapview": "workspace:*",
+        "@flywave/flywave-utils": "workspace:*",
+        "long": "^5.0.0",
+        "path-browserify": "^1.0.1"
     },
-    "devDependencies": {},
+    "devDependencies": {
+        "@types/chai-as-promised": "^8.0.2",
+        "@types/path-browserify": "^1.0.3"
+    },
     "publishConfig": {
         "access": "public"
     }

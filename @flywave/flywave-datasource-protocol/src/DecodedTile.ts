@@ -14,6 +14,7 @@ import {
     Vector3Like,
     webMercatorProjection
 } from "@flywave/flywave-geoutils";
+import { TypedArray } from "three";
 
 import { Env } from "./Expr";
 import { AttrEvaluationContext, evaluateTechniqueAttr } from "./TechniqueAttr";
@@ -25,7 +26,6 @@ import {
     Technique
 } from "./Techniques";
 import { TileInfo } from "./TileInfo";
-import { TypedArray } from "three";
 
 /**
  * This object has geometry data in the form of geometries buffers ready to be used by WebGL.

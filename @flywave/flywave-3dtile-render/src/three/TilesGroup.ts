@@ -1,4 +1,5 @@
-import { Group, Matrix4, Raycaster, Intersection } from "three";
+import { Group, Matrix4, Raycaster } from "three";
+
 import { TileIntersection, TilesRenderer } from "./TilesRenderer";
 
 const tempMat = new Matrix4();

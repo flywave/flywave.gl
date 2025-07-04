@@ -178,4 +178,43 @@ export namespace MathUtils {
         const r = (p0 + d * t) % 360;
         return r;
     }
+
+    /**
+     * Checks if two numbers are equal within a given epsilon tolerance
+     * @param a - First number
+     * @param b - Second number
+     * @param epsilon - Tolerance value
+     * @returns True if the numbers are equal within the tolerance
+     */
+    export function equalsEpsilon(a: number, b: number, epsilon: number): boolean {
+        return Math.abs(a - b) <= epsilon;
+    }
+
+    /**
+     * Checks if two Vector3 objects are equal within a given epsilon tolerance
+     * @param a - First Vector3
+     * @param b - Second Vector3
+     * @param epsilon - Tolerance value
+     * @returns True if all components are equal within the tolerance
+     */
+    export function vector3equalsEpsilon(
+        a: THREE.Vector3,
+        b: THREE.Vector3,
+        epsilon: number
+    ): boolean {
+        return (
+            equalsEpsilon(a.x, b.x, epsilon) &&
+            equalsEpsilon(a.y, b.y, epsilon) &&
+            equalsEpsilon(a.z, b.z, epsilon)
+        );
+    }
+
+    /**
+     * Gets the sign of a number
+     * @param value - Input value
+     * @returns 1 for positive numbers or zero, -1 for negative numbers
+     */
+    export function sign(value: number): number {
+        return value >= 0 ? 1 : -1;
+    }
 }

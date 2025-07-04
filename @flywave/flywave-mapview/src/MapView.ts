@@ -3309,6 +3309,10 @@ export class MapView extends EventDispatcher {
         this.m_sceneEnvironment.update();
     }
 
+    public getRteCamera(): THREE.PerspectiveCamera {
+        return this.m_rteCamera;
+    }
+
     /**
      * Derive the look at settings (i.e. target, zoom, ...) from the current camera.
      */

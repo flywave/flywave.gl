@@ -50,28 +50,21 @@ function TerrainEncoding(
         var minimum = axisAlignedBoundingBox.minimum;
         var maximum = axisAlignedBoundingBox.maximum;
 
-        var dimensions = cartesian3DimScratch.subVectors(
-            maximum,
-            minimum
-        );
+        var dimensions = cartesian3DimScratch.subVectors(maximum, minimum);
         var hDim = maximumHeight - minimumHeight;
         var maxDim = Math.max(Math.max(dimensions.x, dimensions.y, dimensions.z), hDim);
 
         // if (maxDim < SHIFT_LEFT_12 - 1.0) {
         //     quantization = TerrainQuantization.BITS12;
         // } else {
-            quantization = TerrainQuantization.NONE;
+        quantization = TerrainQuantization.NONE;
         // }
 
         center = axisAlignedBoundingBox.center;
         toENU = Matrix4.inverseTransformation(fromENU, new Matrix4());
 
         var translation = cartesian3Scratch.copy(minimum.clone().negate());
-        Matrix4.multiply(
-            Matrix4.fromTranslation(translation, matrix4Scratch),
-            toENU,
-            toENU
-        );
+        Matrix4.multiply(Matrix4.fromTranslation(translation, matrix4Scratch), toENU, toENU);
 
         var scale = cartesian3Scratch;
         scale.x = 1.0 / dimensions.x;
@@ -80,7 +73,7 @@ function TerrainEncoding(
         Matrix4.multiply(Matrix4.fromScale(scale, matrix4Scratch), toENU, toENU);
 
         matrix = Matrix4.clone(fromENU);
-        Matrix4.setTranslation(matrix, new THREE.Vector3, matrix);
+        Matrix4.setTranslation(matrix, new THREE.Vector3(), matrix);
 
         fromENU = Matrix4.clone(fromENU, new Matrix4());
 
@@ -161,11 +154,7 @@ TerrainEncoding.prototype.encode = function (
     var v = uv.y;
 
     if (this.quantization === TerrainQuantization.BITS12) {
-        position = Matrix4.multiplyByPoint(
-            this.toScaledENU,
-            position,
-            cartesian3Scratch
-        );
+        position = Matrix4.multiplyByPoint(this.toScaledENU, position, cartesian3Scratch);
 
         position.x = THREE.MathUtils.clamp(position.x, 0.0, 1.0);
         position.y = THREE.MathUtils.clamp(position.y, 0.0, 1.0);
@@ -176,19 +165,13 @@ TerrainEncoding.prototype.encode = function (
 
         cartesian2Scratch.fromArray([position.x, position.y]);
 
-        var compressed0 = AttributeCompression.compressTextureCoordinates(
-            cartesian2Scratch
-        );
+        var compressed0 = AttributeCompression.compressTextureCoordinates(cartesian2Scratch);
 
         cartesian2Scratch.fromArray([position.z, h]);
-        var compressed1 = AttributeCompression.compressTextureCoordinates(
-            cartesian2Scratch
-        );
+        var compressed1 = AttributeCompression.compressTextureCoordinates(cartesian2Scratch);
 
         cartesian2Scratch.fromArray([u, v]);
-        var compressed2 = AttributeCompression.compressTextureCoordinates(
-            cartesian2Scratch
-        );
+        var compressed2 = AttributeCompression.compressTextureCoordinates(cartesian2Scratch);
 
         vertexBuffer[bufferIndex++] = compressed0;
         vertexBuffer[bufferIndex++] = compressed1;
@@ -196,9 +179,7 @@ TerrainEncoding.prototype.encode = function (
 
         if (this.hasWebMercatorT) {
             cartesian2Scratch.fromArray([webMercatorT, 0.0]);
-            var compressed3 = AttributeCompression.compressTextureCoordinates(
-                cartesian2Scratch
-            );
+            var compressed3 = AttributeCompression.compressTextureCoordinates(cartesian2Scratch);
             vertexBuffer[bufferIndex++] = compressed3;
         }
     } else {
@@ -217,9 +198,7 @@ TerrainEncoding.prototype.encode = function (
     }
 
     if (this.hasVertexNormals) {
-        vertexBuffer[bufferIndex++] = AttributeCompression.octPackFloat(
-            normalToPack
-        );
+        vertexBuffer[bufferIndex++] = AttributeCompression.octPackFloat(normalToPack);
     }
 
     return bufferIndex;
@@ -255,11 +234,7 @@ TerrainEncoding.prototype.decodePosition = function (buffer, index, result) {
     return result.add(this.center);
 };
 
-TerrainEncoding.prototype.decodeTextureCoordinates = function (
-    buffer,
-    index,
-    result
-) {
+TerrainEncoding.prototype.decodeTextureCoordinates = function (buffer, index, result) {
     if (!defined(result)) {
         result = new THREE.Vector2();
     }
@@ -267,10 +242,7 @@ TerrainEncoding.prototype.decodeTextureCoordinates = function (
     index *= 4;
 
     if (this.quantization === TerrainQuantization.BITS12) {
-        return AttributeCompression.decompressTextureCoordinates(
-            buffer[index + 2],
-            result
-        );
+        return AttributeCompression.decompressTextureCoordinates(buffer[index + 2], result);
     }
 
     return result.fromArray([buffer[index], buffer[index + 1]]);
@@ -284,9 +256,7 @@ TerrainEncoding.prototype.decodeHeight = function (buffer, index) {
             buffer[index + 1],
             cartesian2Scratch
         );
-        return (
-            zh.y * (this.maximumHeight - this.minimumHeight) + this.minimumHeight
-        );
+        return zh.y * (this.maximumHeight - this.minimumHeight) + this.minimumHeight;
     }
 
     return buffer[index + 3];
@@ -305,15 +275,11 @@ TerrainEncoding.prototype.decodeWebMercatorT = function (buffer, index) {
     return buffer[index + 6];
 };
 
-TerrainEncoding.prototype.getOctEncodedNormal = function (
-    buffer,
-    index,
-    result
-) {
+TerrainEncoding.prototype.getOctEncodedNormal = function (buffer, index, result) {
     var stride = this.getStride();
-    // index = (index + 1) * stride - 1;
+    index = (index + 1) * stride - 1;
 
-    var temp = buffer[index+3] / 256.0;
+    var temp = buffer[index + 3] / 256.0;
     var x = Math.floor(temp);
     var y = (temp - x) * 256.0;
 
@@ -344,11 +310,11 @@ TerrainEncoding.prototype.getStride = function () {
 
 var attributesNone = {
     position3DAndHeight: 0,
-    textureCoordAndEncodedNormals: 1,
+    textureCoordAndEncodedNormals: 1
 };
 var attributes = {
     compressed0: 0,
-    compressed1: 1,
+    compressed1: 1
 };
 
 TerrainEncoding.prototype.getAttributes = function (buffer) {
@@ -377,7 +343,7 @@ TerrainEncoding.prototype.getAttributes = function (buffer) {
                 componentDatatype: datatype,
                 componentsPerAttribute: position3DAndHeightLength,
                 offsetInBytes: 0,
-                strideInBytes: stride,
+                strideInBytes: stride
             },
             {
                 index: attributesNone.textureCoordAndEncodedNormals,
@@ -385,8 +351,8 @@ TerrainEncoding.prototype.getAttributes = function (buffer) {
                 componentDatatype: datatype,
                 componentsPerAttribute: numTexCoordComponents,
                 offsetInBytes: position3DAndHeightLength * sizeInBytes,
-                strideInBytes: stride,
-            },
+                strideInBytes: stride
+            }
         ];
     }
 
@@ -409,7 +375,7 @@ TerrainEncoding.prototype.getAttributes = function (buffer) {
                 componentDatatype: datatype,
                 componentsPerAttribute: numCompressed0,
                 offsetInBytes: 0,
-                strideInBytes: stride,
+                strideInBytes: stride
             },
             {
                 index: attributes.compressed1,
@@ -417,8 +383,8 @@ TerrainEncoding.prototype.getAttributes = function (buffer) {
                 componentDatatype: datatype,
                 componentsPerAttribute: numCompressed1,
                 offsetInBytes: numCompressed0 * sizeInBytes,
-                strideInBytes: stride,
-            },
+                strideInBytes: stride
+            }
         ];
     }
     return [
@@ -426,8 +392,8 @@ TerrainEncoding.prototype.getAttributes = function (buffer) {
             index: attributes.compressed0,
             vertexBuffer: buffer,
             componentDatatype: datatype,
-            componentsPerAttribute: numCompressed0,
-        },
+            componentsPerAttribute: numCompressed0
+        }
     ];
 };
 

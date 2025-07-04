@@ -7,7 +7,13 @@
             "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
             "@flywave/flywave-geoutils/*": ["../flywave-geoutils/src/*"],
             "@flywave/flywave-mapview": ["../flywave-mapview/src"],
-            "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"]
+            "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"],
+            "@flywave/flywave-utils/*": ["../flywave-utils/src/*"],
+            "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-draco": ["../flywave-draco/src"],
+            "@flywave/flywave-draco/*": ["../flywave-draco/src/*"],
+            "@flywave/flywave-gltf": ["../flywave-gltf/src"],
+            "@flywave/flywave-gltf/*": ["../flywave-gltf/src/*"],
         }
     },
     "include": ["src/**/*", "test/**/*"],
@@ -18,6 +24,15 @@
         },
         {
             "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-utils"
+        },
+        {
+            "path": "../flywave-draco"
+        },
+        {
+            "path": "../flywave-gltf"
         }
     ]
 }
