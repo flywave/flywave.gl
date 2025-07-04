@@ -34,6 +34,7 @@ catalog:
     "xml2js": "^0.4.23"
     "@strictsoftware/typedoc-plugin-monorepo": "^0.3.1"
     "@types/fs-extra": "^9.0.1"
+    "postprocessing": "^6.37.5 "
 
     "karma-chrome-launcher": "^3.1.0"
     "karma-mocha": "^2.0.1"

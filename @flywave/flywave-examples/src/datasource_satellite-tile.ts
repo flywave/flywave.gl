@@ -42,6 +42,7 @@ export namespace SatelliteDataSourceExample {
         // instantiate the default map controls, allowing the user to pan around freely.
         const controls = new MapControls(map);
 
+        map.mapRenderingManager.bloom.enabled = true;
         // Add an UI.
         const ui = new MapControlsUI(controls, { zoomLevel: "input", projectionSwitch: true });
         canvas.parentElement!.appendChild(ui.domElement);

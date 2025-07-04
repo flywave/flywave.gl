@@ -11,4 +11,3 @@ export {
     MapRenderingManager
 } from "./MapRenderingManager";
 export { type IPass, Pass } from "./Pass";
-export { MSAARenderPass, MSAASampling } from "./MSAARenderPass";

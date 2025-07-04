@@ -102,6 +102,13 @@ const commonConfig: webpack.Configuration = {
                     transpileOnly: true,
                     projectReferences: true
                 }
+            },
+            {
+                test: /\.(HDR|hdr|mp4|png|eot|webp|tiff|svg|woff2|woff|ttf|jpg|gif|jpeg|ico|exr|wasm)$/,
+                type: "asset/resource",
+                generator: {
+                    filename: "files/[name].[hash:8].[ext]"
+                }
             }
         ]
     },

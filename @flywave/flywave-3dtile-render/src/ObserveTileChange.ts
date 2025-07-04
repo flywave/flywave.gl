@@ -1,8 +1,4 @@
-interface Tile {
-    content: {
-        uri: string;
-    };
-}
+import { Tile } from "./base/Tile";
 
 type NotifyCallback = (tile: Tile, active: boolean) => void;
 
@@ -38,7 +34,7 @@ export class Observe3DTileChange {
      * @param activeTiles Array of all active tiles
      * @param active Whether the current tile is active or not
      */
-    public watchTileChange(currentTile: Tile, activeTiles: Tile[], active: boolean): void {
+    public watchTileChange(currentTile: Tile, activeTiles: Set<Tile>, active: boolean): void {
         if (this._watchIds.size === 0) {
             // First time watching - notify about all active tiles
             activeTiles.forEach(tile => {

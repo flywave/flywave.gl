@@ -22,13 +22,15 @@ export interface IOutlineEffect {
 }
 
 export interface IBloomEffect {
-    strength: number;
-    /**
-     * Pixel's brightness threshold between 0 and 1, from which the bloom should apply.
-     */
-    threshold: number;
-    radius: number;
     enabled: boolean;
+    strength?: number; // corresponds to intensity in SelectiveBloomEffect
+    radius?: number; // corresponds to mipmapBlurPass.radius
+    threshold?: number; // corresponds to luminanceMaterial.threshold
+    levels?: number; // corresponds to mipmapBlurPass.levels
+    smoothing?: number; // corresponds to luminanceMaterial.smoothing
+    luminancePassEnabled?: boolean;
+    luminancePassThreshold?: number; // corresponds to luminanceMaterial.threshold
+    luminancePassSmoothing?: number; // corresponds to luminanceMaterial.smoothing
 }
 
 export interface IVignetteEffect {
@@ -40,4 +42,16 @@ export interface IVignetteEffect {
 export interface ISepiaEffect {
     enabled: boolean;
     amount: number;
+}
+
+export interface IGodRaysEffect {
+    enabled: boolean;
+    samples?: number;
+    density?: number;
+    decay?: number;
+    weight?: number;
+    exposure?: number;
+    clampMax?: number;
+    blur?: boolean;
+    resolutionScale?: number;
 }

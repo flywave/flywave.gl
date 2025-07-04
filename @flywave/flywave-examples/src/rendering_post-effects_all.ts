@@ -38,7 +38,7 @@ export namespace EffectsAllExample {
         const mapView = new MapView({
             canvas,
             projection: sphereProjection,
-            theme: "resources/berlin_tilezen_base.json"
+            theme: "resources/berlin_tilezen_effects_streets.json"
         });
 
         CopyrightElementHandler.install("copyrightNotice", mapView);

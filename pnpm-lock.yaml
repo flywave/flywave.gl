@@ -345,6 +345,9 @@ catalogs:
     pixelmatch:
       specifier: ^5.2.0
       version: 5.3.0
+    postprocessing:
+      specifier: '^6.37.5 '
+      version: 6.37.5
     prettier:
       specifier: ^2.2.1
       version: 2.8.8
@@ -1382,6 +1385,9 @@ importers:
       '@flywave/flywave-utils':
         specifier: workspace:*
         version: link:../flywave-utils
+      postprocessing:
+        specifier: 'catalog:'
+        version: 6.37.5(three@0.174.0)
       rbush:
         specifier: 'catalog:'
         version: 3.0.1
@@ -6843,6 +6849,11 @@ packages:
   postcss@7.0.39:
     resolution: {integrity: sha512-yioayjNbHn6z1/Bywyb2Y4s3yvDAeXGOyxqD+LnVOinq6Mdmd++SW2wUNVzavyyHxd6+DxzWGIuosg6P1Rj8uA==}
     engines: {node: '>=6.0.0'}
+
+  postprocessing@6.37.5:
+    resolution: {integrity: sha512-nP3MOpwkhUVtlKSqZ2RsBIcNuAP/JqwKQo+u975PahpBknY/nIxf9FEVZ5FAB2Nyjve96CARfNjDkiqEhxOrhw==}
+    peerDependencies:
+      three: '>= 0.157.0 < 0.179.0'
 
   prebuild-install@6.1.4:
     resolution: {integrity: sha512-Z4vpywnK1lBg+zdPCVCsKq0xO66eEV9rWo2zrROGGiRS4JtueBOdlB1FnY8lcy7JsUud/Q3ijUxyWN26Ika0vQ==}
@@ -14066,6 +14077,10 @@ snapshots:
     dependencies:
       picocolors: 0.2.1
       source-map: 0.6.1
+
+  postprocessing@6.37.5(three@0.174.0):
+    dependencies:
+      three: 0.174.0
 
   prebuild-install@6.1.4:
     dependencies:

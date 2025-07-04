@@ -10,119 +10,59 @@ import {
     ISepiaEffect,
     IVignetteEffect
 } from "@flywave/flywave-datasource-protocol";
-import { SepiaShader, VignetteShader } from "@flywave/flywave-materials";
+import {
+    BlendFunction,
+    EdgeDetectionMode,
+    EffectComposer,
+    EffectPass,
+    OutlineEffect as PPOutlineEffect,
+    PredicationMode,
+    RenderPass,
+    SMAAEffect,
+    SMAAPreset,
+    SelectiveBloomEffect,
+    SepiaEffect,
+    VignetteEffect
+} from "postprocessing";
 import * as THREE from "three";
 
 import { IPassManager } from "./IPassManager";
-import { LowResRenderPass } from "./LowResRenderPass";
-import { MSAARenderPass, MSAASampling } from "./MSAARenderPass";
-import { OutlineEffect } from "./Outline";
-import { RenderPass, ShaderPass } from "./Pass";
-import { BloomPass } from "./UnrealBloomPass";
+import { LowResEffect } from "./LowResRenderPass";
+import { SunGodRaysEffect } from "./SunGodRaysEffect";
 
+// 保持原有的 MSAASampling 枚举兼容性
+enum MSAASampling {
+    Level_0 = 0,
+    Level_1 = 1,
+    Level_2 = 2,
+    Level_4 = 4,
+    Level_8 = 8
+}
+// 定义默认的MSAA采样级别
 const DEFAULT_DYNAMIC_MSAA_SAMPLING_LEVEL = MSAASampling.Level_1;
 const DEFAULT_STATIC_MSAA_SAMPLING_LEVEL = MSAASampling.Level_4;
 
-/**
- * Interface for the antialias settings passed when instantiating
- * a {@link MapView}, and transferred to
- * the {@link MapRenderingManager} instance.
- *
- * @remarks
- * These parameters can be changed at runtime as opposed to
- * the native WebGL antialiasing.
- */
 export interface IMapAntialiasSettings {
-    /**
-     * Whether the MSAA is enabled or not.
-     *
-     * @default `false`
-     */
     msaaEnabled: boolean;
-
-    /**
-     * The sampling level to use for MSAA during continuous rendering.
-     *
-     * @default `MSAASampling.Level_1`
-     */
     dynamicMsaaSamplingLevel?: MSAASampling;
-
-    /**
-     * The sampling level to use for MSAA when the rendering stops.
-     *
-     * @default `MSAASampling.Level_4`
-     */
     staticMsaaSamplingLevel?: MSAASampling;
 }
 
-/**
- * The `MapRenderingManager` class manages the map rendering (as opposed to text) by dispatching the
- * {@link MapRenderingManager.render} call to a set of internal {@link Pass} instances.
- *
- * @remarks It provides an API to modify some of the rendering
- * processes like the antialiasing behaviour at runtime.
- */
+interface ILensFlareEffect {
+    enabled: boolean;
+}
+
 export interface IMapRenderingManager extends IPassManager {
-    /**
-     * Bloom effect parameters.
-     */
     bloom: IBloomEffect;
-
-    /**
-     * Outline effect parameters.
-     */
     outline: IOutlineEffect;
-
-    /**
-     * Vignette effect parameters.
-     */
     vignette: IVignetteEffect;
-
-    /**
-     * Sepia effect parameters.
-     */
     sepia: ISepiaEffect;
-
-    /**
-     * Set a `pixelRatio` for dynamic rendering (i.e. during animations). If a value is specified,
-     * the `LowResRenderPass` will be employed to used to render the scene into a lower resolution
-     * render target, which will then be rendered to the screen.
-     */
-    lowResPixelRatio?: number;
-
-    /**
-     * The level of MSAA sampling while the user interacts. It should be a low level so that the
-     * MSAA does not impact the framerate.
-     */
+    sunGodRaysEffect?: SunGodRaysEffect;
+    lensFlare: ILensFlareEffect;
     dynamicMsaaSamplingLevel: MSAASampling;
-
-    /**
-     * Enable or disable the MSAA. If disabled, `MapRenderingManager` will use the renderer provided
-     * in the {@link MapRenderingManager.render} method to render the scene.
-     */
     msaaEnabled: boolean;
-
-    /**
-     * The higher level of MSAA sampling for a last frame to render, when the camera is static. It
-     * can be a high level, providing high quality renders requiring few tens of seconds, since no
-     * frame is expected to immediately follow in the requestAnimationFrame. It is still limited by
-     * zooming, since zooming is not requestAnimationFrame-based and can lead to stuttering if the
-     * render time is too long, except on desktop Mac, where mouse interaction already implements
-     * some damping. Higher levels of sampling may lead to noticeable color banding, visible in
-     * areas with a slight color gradient, like large areas or the sky background.
-     */
     staticMsaaSamplingLevel: MSAASampling;
 
-    /**
-     * The method to call to render the map. This method depends on an `isStaticFrame` boolean that
-     * notifies the pass manager to switch to a higher level render quality for the last frame.
-     *
-     * @param renderer - The ThreeJS WebGLRenderer instance to render the map with.
-     * @param isStaticFrame - Whether the frame to render is static or dynamic. Selects level of
-     * antialiasing.
-     * @param time - Optional time argument provided by the requestAnimationFrame, to pass to
-     * sub-passes.
-     */
     render(
         renderer: THREE.WebGLRenderer,
         scene: THREE.Scene,
@@ -131,29 +71,32 @@ export interface IMapRenderingManager extends IPassManager {
         time?: number
     ): void;
 
-    /**
-     * Updating the outline rebuilds the outline materials of every outlined mesh.
-     *
-     * @param options - outline options from the {@link @flywave/flywave-datasource-protocol#Theme}.
-     */
     updateOutline(options: {
         thickness: number;
         color: string;
         ghostExtrudedPolygons: boolean;
     }): void;
+
+    updateSunPosition(position: THREE.Vector3): void;
+
+    lowResPixelRatio?: number;
 }
 
-/**
- * The implementation of {@link IMapRenderingManager} to
- * instantiate in {@link MapView} and manage the map
- * rendering.
- */
 export class MapRenderingManager implements IMapRenderingManager {
     bloom = {
         enabled: false,
-        strength: 1.5,
-        radius: 0.4,
-        threshold: 0.85
+        strength: 4.5, // default intensity
+        radius: 0.7, // default mipmapBlurPass.radius
+        threshold: 0.85, // default luminanceMaterial.threshold
+        levels: 5, // typical default for mipmapBlurPass.levels
+        smoothing: 0.1, // typical default for luminanceMaterial.smoothing
+        luminancePassEnabled: false, // as set in MapRenderingManager (luminancePass.enabled = false)
+        luminancePassThreshold: 0.0, // as set in MapRenderingManager (luminanceMaterial.threshold = 0.0)
+        luminancePassSmoothing: 0.1 // as set in MapRenderingManager (luminanceMaterial.smoothing = 0.1)
+    };
+
+    lensFlare = {
+        enabled: false
     };
 
     outline = {
@@ -175,53 +118,57 @@ export class MapRenderingManager implements IMapRenderingManager {
         amount: 0.5
     };
 
+    sunGodRays = {
+        enabled: false,
+        samples: 60,
+        density: 0.96,
+        decay: 0.9,
+        weight: 0.4,
+        exposure: 0.6,
+        clampMax: 1.0,
+        blur: true,
+        resolutionScale: 0.5
+    };
+
+    private m_msaaEnabled: boolean = true;
+
     private m_width: number = 1;
     private m_height: number = 1;
+    private m_renderer?: THREE.WebGLRenderer;
+    private m_scene?: THREE.Scene;
+    private m_camera?: THREE.PerspectiveCamera | THREE.OrthographicCamera;
 
-    private m_outlineEffect?: OutlineEffect;
-    private m_msaaPass: MSAARenderPass;
-    private readonly m_renderPass: RenderPass = new RenderPass();
-    private readonly m_target1: THREE.WebGLRenderTarget = new THREE.WebGLRenderTarget(1, 1);
-    private readonly m_target2: THREE.WebGLRenderTarget = new THREE.WebGLRenderTarget(1, 1);
-    private m_bloomPass?: BloomPass;
-    private m_sepiaPass: ShaderPass = new ShaderPass(SepiaShader);
-    private m_vignettePass: ShaderPass = new ShaderPass(VignetteShader);
-    private readonly m_readBuffer: THREE.WebGLRenderTarget;
+    private m_composer?: EffectComposer;
+    private m_mainRenderPass?: RenderPass;
+    private m_effectPass?: EffectPass;
+    private m_bloomEffect?: SelectiveBloomEffect;
+    private m_outlineEffect?: PPOutlineEffect;
+    private m_vignetteEffect?: VignetteEffect;
+    private m_sepiaEffect?: SepiaEffect;
+    private m_antialiasEffect?: SMAAEffect;
+    private m_sunGodRaysEffect?: SunGodRaysEffect;
+
     private m_dynamicMsaaSamplingLevel: MSAASampling;
     private m_staticMsaaSamplingLevel: MSAASampling;
-    private m_lowResPass: LowResRenderPass;
+    private m_lensSunPosition: THREE.Vector3 = new THREE.Vector3();
 
-    /**
-     * The constructor of `MapRenderingManager`.
-     *
-     * @param width - Width of the frame buffer.
-     * @param height - Height of the frame buffer.
-     * @param lowResPixelRatio - The `pixelRatio` determines the resolution of the internal
-     *  `WebGLRenderTarget`. Values between 0.5 and `window.devicePixelRatio` can be tried to give
-     * good results. A value of `undefined` disables the low res render pass. The value should not
-     * be larger than`window.devicePixelRatio`.
-     * @param antialiasSetting - The object defining the demeanor of MSAA.
-     */
+    private m_lowResPixelRatio?: number;
+
+    private m_lowResEffect?: LowResEffect;
+
     constructor(
         width: number,
         height: number,
         lowResPixelRatio: number | undefined,
         antialiasSettings: IMapAntialiasSettings | undefined = { msaaEnabled: false }
     ) {
-        this.m_readBuffer = new THREE.WebGLRenderTarget(width, height);
-        this.m_msaaPass = new MSAARenderPass();
-        this.m_msaaPass.enabled =
-            antialiasSettings !== undefined ? antialiasSettings.msaaEnabled === true : false;
         this.m_dynamicMsaaSamplingLevel =
-            antialiasSettings.dynamicMsaaSamplingLevel === undefined
-                ? DEFAULT_DYNAMIC_MSAA_SAMPLING_LEVEL
-                : antialiasSettings.dynamicMsaaSamplingLevel;
+            antialiasSettings?.dynamicMsaaSamplingLevel ?? DEFAULT_DYNAMIC_MSAA_SAMPLING_LEVEL;
         this.m_staticMsaaSamplingLevel =
-            antialiasSettings.staticMsaaSamplingLevel === undefined
-                ? DEFAULT_STATIC_MSAA_SAMPLING_LEVEL
-                : antialiasSettings.staticMsaaSamplingLevel;
-        this.m_lowResPass = new LowResRenderPass(lowResPixelRatio);
-        this.m_lowResPass.enabled = lowResPixelRatio !== undefined;
+            antialiasSettings?.staticMsaaSamplingLevel ?? DEFAULT_STATIC_MSAA_SAMPLING_LEVEL;
+        this.msaaEnabled = antialiasSettings?.msaaEnabled ?? false;
+        this.lowResPixelRatio = lowResPixelRatio;
+        this.setSize(width, height);
     }
 
     updateOutline(options: { thickness: number; color: string; ghostExtrudedPolygons: boolean }) {
@@ -231,206 +178,216 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.outline.needsUpdate = true;
     }
 
-    /**
-     * The method to call to render the map with the `MapRenderingManager` instance. It contains the
-     * chain of sub-passes that can transfer the write and read buffers, and other sheer rendering
-     * conditions as disabling AA when a high DPI device is in use.
-     *
-     * @param renderer - The ThreeJS WebGLRenderer instance to render the map with.
-     * @param scene - The ThreeJS Scene instance containing the map objects to render.
-     * @param camera - The ThreeJS Camera instance to render the scene through.
-     * @param isStaticFrame - Whether the frame to render is static or dynamic. Selects level of
-     * antialiasing.
-     */
+    updateSunPosition(position: THREE.Vector3): void {
+        this.m_lensSunPosition.copy(position);
+    }
+
+    private setupEffects(
+        scene: THREE.Scene,
+        camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
+        isStaticFrame: boolean = false
+    ) {
+        if (!this.m_renderer || !this.m_scene || !this.m_camera) return;
+
+        this.m_composer?.dispose();
+        this.m_composer = new EffectComposer(this.m_renderer, {
+            stencilBuffer: true
+        });
+
+        // Create effects
+        const effects = [];
+
+        // Main render pass
+        this.m_mainRenderPass = new RenderPass(this.m_scene, this.m_camera);
+        this.m_composer.addPass(this.m_mainRenderPass);
+
+        // Bloom effect (参数已更新为6.37.5版本)
+        if (this.bloom.enabled) {
+            this.m_bloomEffect = new SelectiveBloomEffect(scene, camera, {
+                blendFunction: BlendFunction.ADD,
+                intensity: this.bloom.strength,
+                radius: this.bloom.radius,
+                luminanceThreshold: this.bloom.threshold,
+                luminanceSmoothing: this.bloom.smoothing
+            });
+
+            this.m_bloomEffect.luminancePass.enabled = this.bloom.luminancePassEnabled;
+            this.m_bloomEffect.ignoreBackground = true;
+            this.m_bloomEffect.inverted = true;
+
+            effects.push(this.m_bloomEffect);
+        }
+
+        // Outline effect (参数已更新为6.37.5版本)
+        if (this.outline.enabled) {
+            this.m_outlineEffect = new PPOutlineEffect(this.m_scene, this.m_camera, {
+                edgeStrength: this.outline.thickness * 100,
+                pulseSpeed: 0.0,
+                visibleEdgeColor: new THREE.Color(this.outline.color).getHex(),
+                hiddenEdgeColor: new THREE.Color(0x000000).getHex(),
+                blur: false,
+                xRay: this.outline.ghostExtrudedPolygons
+            });
+            effects.push(this.m_outlineEffect);
+        }
+
+        // Vignette effect
+        if (this.vignette.enabled) {
+            this.m_vignetteEffect = new VignetteEffect({
+                darkness: this.vignette.darkness,
+                offset: this.vignette.offset
+            });
+            effects.push(this.m_vignetteEffect);
+        }
+
+        // Sepia effect
+        if (this.sepia.enabled) {
+            this.m_sepiaEffect = new SepiaEffect({
+                intensity: this.sepia.amount
+            });
+            effects.push(this.m_sepiaEffect);
+        }
+
+        if (this.m_msaaEnabled) {
+            this.m_antialiasEffect = new SMAAEffect({
+                preset: this.getSMAAPreset(
+                    isStaticFrame ? this.staticMsaaSamplingLevel : this.dynamicMsaaSamplingLevel
+                ),
+                edgeDetectionMode: EdgeDetectionMode.COLOR,
+                predicationMode: PredicationMode.DEPTH
+            });
+            const edgeDetectionMaterial = this.m_antialiasEffect.edgeDetectionMaterial;
+            edgeDetectionMaterial.edgeDetectionThreshold = 0.02;
+            edgeDetectionMaterial.predicationThreshold = 0.002;
+            edgeDetectionMaterial.predicationScale = 1;
+            effects.push(this.m_antialiasEffect);
+        }
+
+        // Sun God Rays Effect
+        if (this.sunGodRays.enabled) {
+            if (!this.m_sunGodRaysEffect)
+                this.m_sunGodRaysEffect = new SunGodRaysEffect(this.m_camera, this.sunGodRays);
+            effects.push(this.m_sunGodRaysEffect);
+        }
+
+        // 设置低分辨率效果
+        if (this.m_lowResPixelRatio !== undefined) {
+            this.m_lowResEffect = new LowResEffect(this.m_lowResPixelRatio);
+            effects.push(this.m_lowResEffect);
+        }
+
+        if (effects.length > 0) {
+            this.m_effectPass = new EffectPass(this.m_camera, ...effects);
+            this.m_composer.addPass(this.m_effectPass);
+        }
+
+        this.m_composer.setSize(this.m_width, this.m_height);
+    }
+
+    // Add a method to update bloom settings
+    setBloomOptions(settings: Partial<IBloomEffect>): void {
+        Object.assign(this.bloom, settings);
+
+        if (this.m_bloomEffect) {
+            this.m_bloomEffect.intensity = this.bloom.strength;
+            this.m_bloomEffect.mipmapBlurPass.radius = this.bloom.radius;
+            this.m_bloomEffect.mipmapBlurPass.levels = this.bloom.levels ?? 5;
+            this.m_bloomEffect.luminancePass.enabled = this.bloom.luminancePassEnabled;
+            this.m_bloomEffect.luminanceMaterial.threshold = this.bloom.luminancePassThreshold;
+            this.m_bloomEffect.luminanceMaterial.smoothing = this.bloom.luminancePassSmoothing;
+        }
+
+        // Recreate effects if bloom was toggled
+        if (settings.enabled !== undefined && this.m_scene && this.m_camera) {
+            this.setupEffects(this.m_scene, this.m_camera);
+        }
+    }
+
+    private getSMAAPreset(samplingLevel: MSAASampling): SMAAPreset {
+        // SMAA预设映射
+        switch (samplingLevel) {
+            case MSAASampling.Level_1:
+                return SMAAPreset.LOW;
+            case MSAASampling.Level_2:
+                return SMAAPreset.MEDIUM;
+            case MSAASampling.Level_4:
+                return SMAAPreset.HIGH;
+            case MSAASampling.Level_8:
+                return SMAAPreset.ULTRA;
+            default:
+                return SMAAPreset.LOW;
+        }
+    }
+
     render(
         renderer: THREE.WebGLRenderer,
         scene: THREE.Scene,
         camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
         isStaticFrame: boolean
     ) {
-        const target = null;
-        if (!isStaticFrame && this.m_lowResPass.pixelRatio !== undefined) {
-            // Not designed to be combined with our own MSAA
-            this.m_lowResPass.renderToScreen = true;
-            this.m_lowResPass.render(renderer, scene, camera, target, this.m_readBuffer);
-            return;
+        this.m_renderer = renderer;
+        this.m_scene = scene;
+        this.m_camera = camera;
+
+        if (!this.m_composer || this.outline.needsUpdate) {
+            this.setupEffects(scene, camera, isStaticFrame);
+            this.outline.needsUpdate = false;
         }
 
-        const usePostEffects =
-            this.bloom.enabled ||
-            this.outline.enabled ||
-            this.vignette.enabled ||
-            this.sepia.enabled;
-
-        let activeTarget: null | THREE.WebGLRenderTarget = null;
-
-        // 1. If the bloom is enabled, clear the depth.
-        if (this.bloom.enabled || this.vignette.enabled || this.sepia.enabled) {
-            renderer.setRenderTarget(this.m_target1);
-            renderer.clearDepth();
-        }
-
-        // 2. Render the map.
-
-        if (this.m_msaaPass.enabled) {
-            // Use a higher MSAA sampling level for static rendering.
-            this.m_msaaPass.samplingLevel = isStaticFrame
-                ? this.m_staticMsaaSamplingLevel
-                : this.m_dynamicMsaaSamplingLevel;
-            // MSAA is the only effect for the moment.
-            this.m_msaaPass.renderToScreen = !usePostEffects;
-            // Render to the specified target with the MSAA pass.
-            this.m_msaaPass.render(renderer, scene, camera, target, this.m_readBuffer);
+        if (this.m_composer) {
+            this.m_composer.render();
         } else {
-            if (this.bloom.enabled || this.vignette.enabled || this.sepia.enabled) {
-                activeTarget = this.m_target1;
-                this.m_renderPass.render(renderer, scene, camera, this.m_target1, null!);
-            } else if (!this.outline.enabled || (this.outline.enabled && !this.bloom.enabled)) {
-                renderer.render(scene, camera);
-            }
-        }
-
-        // 3. Apply effects
-        if (this.outline.enabled) {
-            if (this.m_outlineEffect === undefined) {
-                this.m_outlineEffect = new OutlineEffect(renderer);
-            }
-            if (this.outline.needsUpdate) {
-                this.m_outlineEffect.color = this.outline.color;
-                this.m_outlineEffect.thickness = this.outline.thickness;
-                this.m_outlineEffect.ghostExtrudedPolygons = this.outline.ghostExtrudedPolygons;
-                this.outline.needsUpdate = false;
-            }
-            const nextEffectEnabled =
-                this.bloom.enabled || this.vignette.enabled || this.sepia.enabled;
-            if (nextEffectEnabled) {
-                activeTarget = this.m_target1;
-            }
-            renderer.setRenderTarget(nextEffectEnabled ? activeTarget : null!);
-            this.m_outlineEffect.render(scene, camera);
-        }
-
-        if (this.bloom.enabled) {
-            if (this.m_bloomPass === undefined) {
-                this.m_bloomPass = new BloomPass(
-                    new THREE.Vector2(this.m_width, this.m_height),
-                    this.bloom.strength,
-                    this.bloom.radius,
-                    this.bloom.threshold
-                );
-            }
-            const nextEffectEnabled = this.vignette.enabled || this.sepia.enabled;
-            this.m_bloomPass.renderToScreen = !nextEffectEnabled;
-            this.m_bloomPass.radius = this.bloom.radius;
-            this.m_bloomPass.strength = this.bloom.strength;
-            this.m_bloomPass.threshold = this.bloom.threshold;
-            this.m_bloomPass.render(renderer, scene, camera, null!, activeTarget!);
-        } else if (this.m_bloomPass !== undefined) {
-            this.m_bloomPass.dispose();
-            this.m_bloomPass = undefined;
-        }
-
-        if (this.vignette.enabled) {
-            const oldTarget = activeTarget!;
-            const nextEffectEnabled = this.sepia.enabled;
-            this.m_vignettePass.uniforms.offset.value = this.vignette.offset;
-            this.m_vignettePass.uniforms.darkness.value = this.vignette.darkness;
-            this.m_vignettePass.renderToScreen = !nextEffectEnabled;
-            if (nextEffectEnabled) {
-                activeTarget = activeTarget === this.m_target1 ? this.m_target2 : this.m_target1;
-            }
-            this.m_vignettePass.render(renderer, scene, camera, activeTarget!, oldTarget);
-        }
-
-        if (this.sepia.enabled) {
-            this.m_sepiaPass.renderToScreen = true;
-            this.m_sepiaPass.uniforms.amount.value = this.sepia.amount;
-            this.m_sepiaPass.render(renderer, scene, camera, null!, activeTarget!);
+            renderer.render(scene, camera);
         }
     }
 
-    /**
-     * The resize function to call on resize events to resize the render targets. It shall include
-     * the resize methods of all the sub-passes used in `MapRenderingManager`.
-     *
-     * @param width - New width to use.
-     * @param height - New height to use.
-     */
     setSize(width: number, height: number) {
-        this.m_readBuffer.setSize(width, height);
-        this.m_msaaPass.setSize(width, height);
-        if (this.m_bloomPass !== undefined) {
-            this.m_bloomPass.setSize(width, height);
-        }
-        this.m_lowResPass.setSize(width, height);
-        this.m_target1.setSize(width, height);
-        this.m_target2.setSize(width, height);
         this.m_width = width;
         this.m_height = height;
+
+        this.m_composer?.setSize(width, height);
     }
 
-    /**
-     * The `lowResPixelRatio` determines the resolution of the internal `WebGLRenderTarget`. Values
-     * between 0.5 and `window.devicePixelRatio` can be tried to give  good results. A value of
-     * `undefined` disables the low res render pass. The value should not be larger than
-     * `window.devicePixelRatio`.
-     */
-    get lowResPixelRatio(): number | undefined {
-        return this.m_lowResPass.pixelRatio;
+    get sunGodRaysEffect(): SunGodRaysEffect | undefined {
+        return this.m_sunGodRaysEffect;
     }
 
-    set lowResPixelRatio(pixelRatio: number | undefined) {
-        this.m_lowResPass.pixelRatio = pixelRatio;
-        this.m_lowResPass.enabled = pixelRatio !== undefined;
-    }
-
-    /**
-     * Set the level of sampling while the user interacts.
-     *
-     * @param samplingLevel - The sampling level.
-     */
     set dynamicMsaaSamplingLevel(samplingLevel: MSAASampling) {
         this.m_dynamicMsaaSamplingLevel = samplingLevel;
     }
 
-    /**
-     * Return the sampling level defined during continuous rendering.
-     */
     get dynamicMsaaSamplingLevel(): MSAASampling {
         return this.m_dynamicMsaaSamplingLevel;
     }
 
-    /**
-     * Enable or disable the MSAA. If disabled, `MapRenderingManager` will use the renderer provided
-     * in the {@link MapRenderingManager.render} method to render the scene.
-     *
-     * @param value - If `true`, MSAA is enabled, disabled otherwise.
-     */
     set msaaEnabled(value: boolean) {
-        this.m_msaaPass.enabled = value;
+        this.m_msaaEnabled = value;
     }
 
-    /**
-     * Return whether the MSAA is enabled.
-     */
     get msaaEnabled(): boolean {
-        return this.m_msaaPass.enabled;
+        return this.m_msaaEnabled;
     }
 
-    /**
-     * Set the sampling level for rendering static frames.
-     *
-     * @param samplingLevel - The sampling level.
-     */
     set staticMsaaSamplingLevel(samplingLevel: MSAASampling) {
         this.m_staticMsaaSamplingLevel = samplingLevel;
     }
 
-    /**
-     * Return the sampling level defined for rendering static frames.
-     */
-
     get staticMsaaSamplingLevel(): MSAASampling {
         return this.m_staticMsaaSamplingLevel;
+    }
+
+    get lowResPixelRatio(): number | undefined {
+        return this.m_lowResPixelRatio;
+    }
+
+    set lowResPixelRatio(pixelRatio: number | undefined) {
+        if (this.m_lowResPixelRatio !== pixelRatio) {
+            this.m_lowResPixelRatio = pixelRatio;
+            if (this.m_lowResEffect) {
+                this.m_lowResEffect.pixelRatio = pixelRatio;
+            }
+            if (this.m_width && this.m_height) {
+            }
+        }
     }
 }
