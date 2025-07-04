@@ -24,15 +24,16 @@
     },
     "license": "Apache-2.0",
     "dependencies": {
-        "@flywave/flywave-geoutils": "workspace:*",
-        "@flywave/flywave-mapview": "workspace:*",
         "@flywave/flywave-draco": "workspace:*",
-        "@flywave/flywave-utils": "workspace:*",
+        "@flywave/flywave-geoutils": "workspace:*",
         "@flywave/flywave-gltf": "workspace:*",
-        "path-browserify": "^1.0.1",
-        "long": "^5.0.0"
+        "@flywave/flywave-mapview": "workspace:*",
+        "@flywave/flywave-utils": "workspace:*",
+        "long": "^5.0.0",
+        "path-browserify": "^1.0.1"
     },
     "devDependencies": {
+        "@types/chai-as-promised": "^8.0.2",
         "@types/path-browserify": "^1.0.3"
     },
     "publishConfig": {

@@ -1,5 +1,6 @@
-import { Group, Matrix4, Raycaster, Intersection } from "three";
-import { TilesRenderer } from "./TilesRenderer";
+import { Group, Matrix4, Raycaster } from "three";
+
+import { TileIntersection, TilesRenderer } from "./TilesRenderer";
 
 const tempMat = new Matrix4();
 
@@ -12,7 +13,7 @@ export class TilesGroup extends Group {
         this.tilesRenderer = tilesRenderer;
     }
 
-    raycast(raycaster: Raycaster, intersects: Intersection[]): void {
+    raycast(raycaster: Raycaster, intersects: TileIntersection[]): void {
         if (this.tilesRenderer.optimizeRaycast) {
             this.tilesRenderer.raycast(raycaster, intersects);
         } else {

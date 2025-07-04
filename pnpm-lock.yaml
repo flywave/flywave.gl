@@ -679,6 +679,9 @@ importers:
         specifier: ^1.0.1
         version: 1.0.1
     devDependencies:
+      '@types/chai-as-promised':
+        specifier: ^8.0.2
+        version: 8.0.2
       '@types/path-browserify':
         specifier: ^1.0.3
         version: 1.0.3
@@ -1798,6 +1801,79 @@ importers:
       cross-env:
         specifier: 'catalog:'
         version: 7.0.3
+      mocha:
+        specifier: 'catalog:'
+        version: 11.7.0
+      sinon:
+        specifier: 'catalog:'
+        version: 9.2.4
+      source-map-support:
+        specifier: 'catalog:'
+        version: 0.5.21
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
+  '@flywave/flywave-splats':
+    dependencies:
+      '@flywave/flywave-draco':
+        specifier: workspace:*
+        version: link:../flywave-draco
+      '@flywave/flywave-mapview':
+        specifier: workspace:*
+        version: link:../flywave-mapview
+      '@flywave/flywave-mapview-decoder':
+        specifier: workspace:*
+        version: link:../flywave-mapview-decoder
+      three:
+        specifier: 'catalog:'
+        version: 0.174.0
+    devDependencies:
+      '@flywave/flywave-datasource-protocol':
+        specifier: workspace:*
+        version: link:../flywave-datasource-protocol
+      '@flywave/flywave-fetch':
+        specifier: workspace:*
+        version: link:../flywave-fetch
+      '@flywave/flywave-geoutils':
+        specifier: workspace:*
+        version: link:../flywave-geoutils
+      '@flywave/flywave-test-utils':
+        specifier: workspace:*
+        version: link:../flywave-test-utils
+      '@types/chai':
+        specifier: 'catalog:'
+        version: 4.3.20
+      '@types/earcut':
+        specifier: 'catalog:'
+        version: 2.1.4
+      '@types/long':
+        specifier: 'catalog:'
+        version: 4.0.2
+      '@types/mocha':
+        specifier: 'catalog:'
+        version: 10.0.10
+      '@types/node':
+        specifier: 'catalog:'
+        version: 16.18.126
+      '@types/sinon':
+        specifier: 'catalog:'
+        version: 9.0.11
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.174.0
+      chai:
+        specifier: 'catalog:'
+        version: 4.5.0
+      copyfiles:
+        specifier: 'catalog:'
+        version: 2.4.1
+      cross-env:
+        specifier: 'catalog:'
+        version: 7.0.3
+      eslint-plugin-simple-import-sort:
+        specifier: ^12.1.1
+        version: 12.1.1(eslint@7.32.0)
       mocha:
         specifier: 'catalog:'
         version: 11.7.0
@@ -3574,6 +3650,9 @@ packages:
 
   '@types/chai-as-promised@7.1.8':
     resolution: {integrity: sha512-ThlRVIJhr69FLlh6IctTXFkmhtP3NpMZ2QGq69StYLyKZFp/HOp1VdKZj7RvfNWYYcJ1xlbLGLLWj1UvP5u/Gw==}
+
+  '@types/chai-as-promised@8.0.2':
+    resolution: {integrity: sha512-meQ1wDr1K5KRCSvG2lX7n7/5wf70BeptTKst0axGvnN6zqaVpRqegoIbugiAPSqOW9K9aL8gDVrm7a2LXOtn2Q==}
 
   '@types/chai@4.3.20':
     resolution: {integrity: sha512-/pC9HAB5I/xMlc5FP77qjCnI16ChlJfW0tGa0IUcFn38VJrTV6DeZ60NU5KZBtaOZqjdpwTWohz5HU1RrhiYxQ==}
@@ -10415,6 +10494,10 @@ snapshots:
       '@types/node': 24.0.3
 
   '@types/chai-as-promised@7.1.8':
+    dependencies:
+      '@types/chai': 4.3.20
+
+  '@types/chai-as-promised@8.0.2':
     dependencies:
       '@types/chai': 4.3.20
 
