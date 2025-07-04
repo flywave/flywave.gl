@@ -1,10 +1,14 @@
-// This file is derived from the Cesium code base under Apache 2 license
-// See LICENSE.md and https://github.com/AnalyticalGraphicsInc/cesium/blob/master/LICENSE.md
+import { assert, defaultValue, GL } from "@flywave/flywave-utils";
 
-// TODO - Finish hierarchy suypport: this file is only half ported
-/* eslint-disable */
-// @ts-nocheck
+import {
+    COMPONENTS_PER_ATTRIBUTE,
+    createTypedArrayFromAccessor
+} from "./helpers/tile-3d-accessor-utils";
+
 const defined = x => x !== undefined;
+const scratchVisited = [];
+const scratchStack = [];
+let marker = 0;
 
 export function initializeHierarchy(batchTable, jsonHeader, binaryBody) {
     if (!jsonHeader) {
@@ -27,6 +31,50 @@ export function initializeHierarchy(batchTable, jsonHeader, binaryBody) {
     }
 
     return initializeHierarchyValues(hierarchy, binaryBody);
+}
+
+function getBinaryProperties(featuresLength, properties, binaryBody) {
+    let binaryProperties;
+    for (const name in properties) {
+        if (properties.hasOwnProperty(name)) {
+            const property = properties[name];
+            if ("byteOffset" in property) {
+                // This is a binary property
+                const type = property.type;
+                assert(Number.isFinite(property.componentType), "componentType is required.");
+                if (!defined(type)) {
+                    throw new Error("type is required.");
+                }
+                if (!defined(binaryBody)) {
+                    throw new Error("Property " + name + " requires a batch table binary.");
+                }
+
+                const binaryAccessor = getBinaryAccessor(property);
+                const componentCount = binaryAccessor.componentsPerAttribute;
+                const classType = binaryAccessor.classType;
+
+                const byteOffset = property.byteOffset;
+                const typedArray = binaryAccessor.createArrayBufferView(
+                    binaryBody.buffer,
+                    binaryBody.byteOffset + byteOffset,
+                    featuresLength
+                );
+
+                if (!defined(binaryProperties)) {
+                    binaryProperties = {};
+                }
+
+                // Store any information needed to access the binary data, including the typed array,
+                // componentCount (e.g. a VEC4 would be 4), and the type used to pack and unpack (e.g. Cartesian4).
+                binaryProperties[name] = {
+                    typedArray,
+                    componentCount,
+                    type: classType
+                };
+            }
+        }
+    }
+    return binaryProperties;
 }
 
 // eslint-disable-next-line max-statements
@@ -137,7 +185,6 @@ export function traverseHierarchy(hierarchy, instanceIndex, endConditionCallback
     return traverseHierarchySingleParent(hierarchy, instanceIndex, endConditionCallback);
 }
 
-// eslint-disable-next-line max-statements
 function traverseHierarchyMultipleParents(hierarchy, instanceIndex, endConditionCallback) {
     const classIds = hierarchy.classIds;
     const parentCounts = hierarchy.parentCounts;
@@ -207,7 +254,7 @@ function validateHierarchy(hierarchy) {
     const instancesLength = classIds.length;
 
     for (let i = 0; i < instancesLength; ++i) {
-        validateInstance(hierarchy, i, stack);
+        validateInstance(hierarchy, i, scratchValidateStack);
     }
 }
 
@@ -243,4 +290,60 @@ function validateInstance(hierarchy, instanceIndex, stack) {
         }
     }
     stack.pop(instanceIndex);
+}
+// 定义属性类型枚举
+export const AttributeType = {
+    SCALAR: "SCALAR",
+    VEC2: "VEC2",
+    VEC3: "VEC3",
+    VEC4: "VEC4",
+    MAT2: "MAT2",
+    MAT3: "MAT3",
+    MAT4: "MAT4"
+};
+
+// 获取二进制访问器
+function getBinaryAccessor(property) {
+    const { componentType, type } = property;
+    const componentsPerAttribute = COMPONENTS_PER_ATTRIBUTE[type];
+
+    return {
+        componentsPerAttribute,
+        classType: null, // 实际应用中可能是解包类型
+        createArrayBufferView(buffer, byteOffset, length) {
+            return createTypedArrayFromAccessor(
+                {
+                    componentType,
+                    type,
+                    byteOffset: 0 // 因为外部已经处理了偏移量
+                },
+                buffer,
+                byteOffset,
+                length
+            ).values;
+        }
+    };
+}
+
+// 合并二进制属性和普通属性
+function combine(binaryProperties, properties) {
+    const combined = { ...properties };
+
+    if (binaryProperties) {
+        for (const name in binaryProperties) {
+            if (binaryProperties.hasOwnProperty(name)) {
+                // 覆盖普通属性为二进制属性
+                combined[name] = binaryProperties[name];
+
+                // 删除原始属性中的二进制描述符
+                if (combined[name] && combined[name].byteOffset !== undefined) {
+                    delete combined[name].byteOffset;
+                    delete combined[name].componentType;
+                    delete combined[name].type;
+                }
+            }
+        }
+    }
+
+    return combined;
 }

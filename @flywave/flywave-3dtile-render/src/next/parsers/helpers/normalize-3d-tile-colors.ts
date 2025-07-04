@@ -4,7 +4,6 @@ import { decodeRGB565, GL } from "@flywave/flywave-utils";
 import { default as Tile3DBatchTable } from "../../classes/tile-3d-batch-table";
 import { Tiles3DTileContent } from "../../types";
 
-/* eslint-disable complexity*/
 export function normalize3DTileColorAttribute(
     tile: Tiles3DTileContent,
     colors: Uint8ClampedArray | null,

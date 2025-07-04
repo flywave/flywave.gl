@@ -1,6 +1,6 @@
 import { assert, GLType } from "@flywave/flywave-utils";
 
-const COMPONENTS_PER_ATTRIBUTE = {
+export const COMPONENTS_PER_ATTRIBUTE = {
     SCALAR: 1,
     VEC2: 2,
     VEC3: 3,

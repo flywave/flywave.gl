@@ -1,9 +1,3 @@
-// This file is derived from the Cesium code base under Apache 2 license
-// See LICENSE.md and https://github.com/AnalyticalGraphicsInc/cesium/blob/master/LICENSE.md
-
-// Reference code:
-// https://github.com/AnalyticalGraphicsInc/cesium/blob/master/Source/Scene/Composite3DTileContent.js#L182
-
 import type { Tiles3DLoaderOptions } from "../Loader";
 import { Tiles3DTileContent } from "../types";
 import { parse3DTileHeaderSync } from "./helpers/parse-3d-tile-header";
