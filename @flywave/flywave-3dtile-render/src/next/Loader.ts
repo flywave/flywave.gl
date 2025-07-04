@@ -120,21 +120,13 @@ function getBaseUri(tilesetUrl: string): string {
     return dirname(tilesetUrl);
 }
 
-/**
- * 加载3D Tiles数据（tileset或tile）
- * @param url 数据URL
- * @param options 加载选项
- * @param context 上下文对象（可选，包含fetch等实用工具）
- * @param proj 投影系统（可选）
- * @returns 解析后的3D Tiles数据
- */
+/** Load 3D Tiles data */
 export async function load3DTiles(
     url: string,
     options: Tiles3DLoaderOptions = {},
     context?: any,
     proj?: Projection
 ): Promise<Tiles3DTileContent | Tiles3DTilesetJSONPostprocessed> {
-    // 获取fetch函数 - 优先使用上下文提供的，否则使用全局fetch
     const fetchFn = context?.fetch || globalThis.fetch;
 
     if (!fetchFn) {
@@ -142,7 +134,6 @@ export async function load3DTiles(
     }
 
     try {
-        // 1. 发送网络请求
         const response = await fetchFn(url, {
             headers: options.headers
         });
@@ -153,11 +144,9 @@ export async function load3DTiles(
             );
         }
 
-        // 2. 确定数据类型
         const contentType = response.headers.get("content-type") || "";
         const isJson = contentType.includes("application/json") || url.endsWith(".json");
 
-        // 3. 读取数据
         let data: ArrayBuffer | string;
         if (isJson) {
             data = await response.text();
@@ -165,7 +154,6 @@ export async function load3DTiles(
             data = await response.arrayBuffer();
         }
 
-        // 4. 创建解析上下文
         const parseContext = {
             ...context,
             url,
@@ -174,7 +162,6 @@ export async function load3DTiles(
             queryString: new URL(url).search
         };
 
-        // 5. 解析数据
         return await parse(data, options, parseContext, proj);
     } catch (error) {
         throw new Error(`3D Tiles loading failed: ${error.message}`);

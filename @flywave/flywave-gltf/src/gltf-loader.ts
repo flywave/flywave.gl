@@ -52,7 +52,8 @@ export const GLTFLoader = {
 
 export async function parse(
     arrayBuffer: ArrayBuffer | string,
-    options: GLTFLoaderOptions = {}
+    options: GLTFLoaderOptions = {},
+    context?: any
 ): Promise<GLTFWithBuffers> {
     // Apply default options
     options = { ...GLTFLoader.options, ...options };
@@ -61,4 +62,36 @@ export async function parse(
     const { byteOffset = 0 } = options;
     const gltf = {} as GLTFWithBuffers;
     return await parseGLTF(gltf, arrayBuffer, byteOffset, options);
+}
+
+export async function loadGLTF(
+    url: string,
+    loader: typeof GLTFLoader,
+    options?: GLTFLoaderOptions,
+    context?: any
+): Promise<GLTFWithBuffers> {
+    const fetchFn = context?.fetch || globalThis.fetch;
+
+    if (!fetchFn) {
+        throw new Error("Fetch function is required to load subtree");
+    }
+
+    try {
+        // 1. 获取子树文件
+        const response = await fetchFn(url, {
+            headers: options.headers
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch subtree: ${response.status} ${response.statusText}`);
+        }
+
+        // 2. 读取二进制数据
+        const arrayBuffer = await response.arrayBuffer();
+
+        // 3. 使用加载器解析数据
+        return await loader.parse(arrayBuffer, options, context);
+    } catch (error) {
+        throw new Error(`Subtree loading failed: ${error.message}`);
+    }
 }

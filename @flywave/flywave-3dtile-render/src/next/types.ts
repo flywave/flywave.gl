@@ -1,7 +1,7 @@
 import type { FeatureTableJson, GLTFPostprocessed } from "@flywave/flywave-gltf";
 export type { FeatureTableJson };
 
-import { Matrix4, Vector3 } from "three";
+import { Matrix4, TypedArray, Vector3 } from "three";
 
 export type LODMetricType = "geometricError" | "maxScreenThreshold";
 
@@ -283,13 +283,13 @@ export interface Tiles3DTileContent {
 
     /** For Pointcloud tiles */
     attributes?: {
-        positions: null | number[];
+        positions: null | number[] | TypedArray;
         colors:
             | null
             | number[]
             | { type: number; value: Uint8ClampedArray; size: number; normalized: boolean };
-        normals: null | number[] | { type: number; size: number; value: Float32Array };
-        batchIds: null | number[];
+        normals: null | number[] | { type: number; size: number; value: Float32Array } | TypedArray;
+        batchIds: null | number[] | TypedArray;
     };
     constantRGBA?: number[];
     isQuantized?: boolean;

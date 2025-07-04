@@ -80,11 +80,11 @@ export type {
 export type { GLTFWithBuffers, FeatureTableJson } from "./gltf/types/gltf-types";
 
 // glTF loader/writer definition objects
-export { GLTFLoader } from "./gltf-loader";
+export { GLTFLoader, loadGLTF } from "./gltf-loader";
 export { GLTFWriter } from "./gltf-writer";
 
 // GLB Loader & Writer (for custom formats that want to leverage the GLB binary "envelope")
-export { GLBLoader } from "./glb-loader";
+export { GLBLoader, loadGLB } from "./glb-loader";
 export { GLBWriter } from "./glb-writer";
 
 // glTF Data Access Helper Class

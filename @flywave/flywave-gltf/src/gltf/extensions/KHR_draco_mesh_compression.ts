@@ -2,7 +2,7 @@
 // Only TRIANGLES: 0x0004 and TRIANGLE_STRIP: 0x0005 are supported
 /* eslint-disable camelcase */
 
-import { DracoLoader } from "@flywave/flywave-draco";
+import { DracoLoader, DracoMesh } from "@flywave/flywave-draco";
 import { sliceArrayBuffer } from "@flywave/flywave-utils";
 
 import type { GLTFLoaderOptions } from "../../gltf-loader";
@@ -89,7 +89,7 @@ async function decompressPrimitive(
     delete dracoOptions["3d-tiles"];
 
     // Use DracoLoader directly instead of parseFromContext
-    const decodedData = await DracoLoader.parse(bufferCopy, dracoOptions as any);
+    const decodedData = await parseFromContext(bufferCopy, DracoLoader, dracoOptions, context);
 
     const decodedAttributes: { [key: string]: GLTFAccessor } = getGLTFAccessors(
         decodedData.schema.attributes // 改为从 schema 获取属性
@@ -136,4 +136,19 @@ function* makeMeshPrimitiveIterator(scenegraph) {
             yield primitive;
         }
     }
+}
+
+// 实现缺失的parseFromContext函数
+async function parseFromContext(
+    data: ArrayBuffer,
+    loader: any,
+    options: any,
+    context: any
+): Promise<DracoMesh> {
+    // 如果有context，则使用context的解析能力
+    if (context && context.parse) {
+        return context.parse(data, loader, options);
+    }
+    // 否则直接使用loader解析
+    return loader.parse(data, options);
 }

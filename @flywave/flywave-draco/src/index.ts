@@ -12,5 +12,5 @@ export { DracoWriterWorker, DracoWriter } from "./draco-writer";
 
 // Draco Loader
 
-export type { DracoLoaderOptions } from "./draco-loader";
+export type { DracoLoaderOptions, loadDraco } from "./draco-loader";
 export { DracoWorkerLoader, DracoLoader } from "./draco-loader";

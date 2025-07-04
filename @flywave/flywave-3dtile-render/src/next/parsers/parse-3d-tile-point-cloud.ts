@@ -1,4 +1,4 @@
-import { DracoLoader } from "@flywave/flywave-draco";
+import { DracoLoader, DracoMesh } from "@flywave/flywave-draco";
 import { GL } from "@flywave/flywave-utils";
 import { Vector3 } from "three";
 
@@ -11,24 +11,6 @@ import { normalize3DTileNormalAttribute } from "./helpers/normalize-3d-tile-norm
 import { normalize3DTilePositionAttribute } from "./helpers/normalize-3d-tile-positions";
 import { parse3DTileHeaderSync } from "./helpers/parse-3d-tile-header";
 import { parse3DTileTablesHeaderSync, parse3DTileTablesSync } from "./helpers/parse-3d-tile-tables";
-
-// 添加缺失的类型定义
-interface DracoQuantization {
-    quantizationBits: number;
-    minValues: number[];
-    range: number;
-}
-
-interface DracoAttribute {
-    value: any;
-    quantization?: DracoQuantization;
-}
-
-interface DracoData {
-    attributes: {
-        [key: string]: DracoAttribute;
-    };
-}
 
 export async function parsePointCloud3DTile(
     tile: Tiles3DTileContent,
@@ -283,74 +265,73 @@ async function parseDraco(
 async function loadDraco(
     tile: Tiles3DTileContent,
     dracoData: any,
-    batchTable: Tile3DBatchTable | null, // 新增这个参数
+    batchTable: Tile3DBatchTable | null,
     options?: Tiles3DLoaderOptions,
     context?: any
 ): Promise<void> {
-    if (!context) {
-        return;
-    }
+    if (!context) return;
 
-    const dracoOptions = {
-        ...options,
-        draco: {
-            ...options?.draco,
-            extraAttributes: dracoData.batchTableProperties || {}
-        }
-    };
+    // 解析Draco数据
+    const data = await parseFromContext(
+        dracoData.buffer,
+        DracoLoader,
+        {
+            ...options,
+            draco: {
+                ...options?.draco,
+                extraAttributes: dracoData.batchTableProperties || {}
+            }
+        },
+        context
+    );
 
-    // 删除可能过大的选项
-    delete dracoOptions["3d-tiles"];
-
-    const data = await parseFromContext(dracoData.buffer, DracoLoader, dracoOptions, context);
-
-    const decodedPositions = data.attributes.POSITION?.value;
-    const decodedColors = data.attributes.COLOR_0?.value;
-    const decodedNormals = data.attributes.NORMAL?.value;
-    const decodedBatchIds = data.attributes.BATCH_ID?.value;
-
-    // 修复属性访问方式
-    const isQuantizedDraco = decodedPositions && data.attributes.POSITION.quantization;
-    const isOctEncodedDraco = decodedNormals && data.attributes.NORMAL.quantization;
-
+    const decodedPositions =
+        data.schema.attributes["POSITION"] && data.schema.attributes["POSITION"].array;
+    const decodedColors = data.schema.attributes["COLOR"] && data.schema.attributes["COLOR"].array;
+    const decodedNormals =
+        data.schema.attributes["NORMAL"] && data.schema.attributes["NORMAL"].array;
+    const decodedBatchIds =
+        data.schema.attributes["BATCH_ID"] && data.schema.attributes["BATCH_ID"].array;
+    const isQuantizedDraco =
+        decodedPositions && (data.schema.attributes["POSITION"] as any).quantization;
+    const isOctEncodedDraco =
+        decodedNormals && (data.schema.attributes["NORMAL"] as any).quantization;
     if (isQuantizedDraco) {
-        const quantization = data.attributes.POSITION.quantization;
+        // Draco quantization range == quantized volume scale - size in meters of the quantized volume
+        // Internal quantized range is the range of values of the quantized data, e.g. 255 for 8-bit, 1023 for 10-bit, etc
+        // @ts-expect-error This doesn't look right
+        const quantization = data.POSITION.data.quantization;
         const range = quantization.range;
         tile.quantizedVolumeScale = new Vector3(range, range, range);
-        tile.quantizedVolumeOffset = new Vector3(
-            quantization.minValues[0],
-            quantization.minValues[1],
-            quantization.minValues[2]
-        );
+        tile.quantizedVolumeOffset = new Vector3(quantization.minValues);
         tile.quantizedRange = (1 << quantization.quantizationBits) - 1.0;
         tile.isQuantizedDraco = true;
     }
-
     if (isOctEncodedDraco) {
-        const quantization = data.attributes.NORMAL.quantization;
-        tile.octEncodedRange = (1 << quantization.quantizationBits) - 1.0;
+        // @ts-expect-error This doesn't look right
+        tile.octEncodedRange = (1 << data.NORMAL.data.quantization.quantizationBits) - 1.0;
         tile.isOctEncodedDraco = true;
     }
 
-    // 处理额外属性
-    const batchTableAttributes: Record<string, any> = {};
+    // Extra batch table attributes
+    const batchTableAttributes = {};
     if (dracoData.batchTableProperties) {
         for (const attributeName of Object.keys(dracoData.batchTableProperties)) {
-            if (data.attributes[attributeName]?.value) {
+            if (
+                data.schema.attributes[attributeName] &&
+                data.schema.attributes[attributeName].array
+            ) {
                 batchTableAttributes[attributeName.toLowerCase()] =
-                    data.attributes[attributeName].value;
+                    data.schema.attributes[attributeName].array;
             }
         }
     }
 
-    // 更新tile属性
     tile.attributes = {
-        positions: decodedPositions || tile.attributes.positions,
-        colors:
-            normalize3DTileColorAttribute(tile, decodedColors, batchTable) ||
-            tile.attributes.colors,
-        normals: decodedNormals || tile.attributes.normals,
-        batchIds: decodedBatchIds || tile.attributes.batchIds,
+        positions: decodedPositions,
+        colors: normalize3DTileColorAttribute(tile, decodedColors as Uint8ClampedArray, undefined),
+        normals: decodedNormals,
+        batchIds: decodedBatchIds,
         ...batchTableAttributes
     };
 }
@@ -361,7 +342,7 @@ async function parseFromContext(
     loader: any,
     options: any,
     context: any
-): Promise<DracoData> {
+): Promise<DracoMesh> {
     // 如果有context，则使用context的解析能力
     if (context && context.parse) {
         return context.parse(data, loader, options);
