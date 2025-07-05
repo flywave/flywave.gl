@@ -1,3 +1,4 @@
+import { SplatMesh } from "@flywave/flywave-splats";
 import {
     AnimationClip,
     Bone,
@@ -327,6 +328,9 @@ function createMeshForPrimitive(
     material: Material,
     gltfMesh: any
 ): Object3D {
+    if (primitive.extensions?.KHR_gaussian_splatting) {
+        return createSplatMesh(gltf, primitive, geometry);
+    }
     const isSkinned = primitive.attributes.JOINTS_0 && primitive.attributes.WEIGHTS_0;
     const mesh = isSkinned
         ? new SkinnedMesh(geometry, material as MeshStandardMaterial)
@@ -341,6 +345,37 @@ function createMeshForPrimitive(
     }
 
     return mesh;
+}
+
+function createSplatMesh(
+    gltf: GLTFPostprocessed,
+    primitive: GLTFMeshPrimitivePostprocessed,
+    geometry: BufferGeometry
+): Object3D {
+    const setSplatAttribute = (
+        name: string,
+        attributeName: string,
+        itemSize: number,
+        normalized = false
+    ) => {
+        const accessor = primitive.attributes[attributeName];
+        if (!accessor) {
+            throw new Error(`Missing required attribute for splat: ${attributeName}`);
+        }
+        geometry.setAttribute(name, new BufferAttribute(accessor.value, itemSize, normalized));
+    };
+
+    setSplatAttribute("position", "POSITION", 3);
+    setSplatAttribute("scale", "_SCALE", 3);
+    setSplatAttribute("rotation", "_ROTATION", 4);
+    setSplatAttribute("color", "COLOR_0", 4, true);
+
+    const splatMesh = new SplatMesh();
+
+    splatMesh.updateDataFromGeometry(geometry);
+    splatMesh.userData.gltfPrimitive = primitive;
+
+    return splatMesh;
 }
 
 function applyMorphTargets(

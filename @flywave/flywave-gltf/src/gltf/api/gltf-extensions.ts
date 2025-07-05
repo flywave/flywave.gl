@@ -7,6 +7,7 @@ import * as KHR_lights_punctual from "../extensions/deprecated/KHR_lights_punctu
 import * as KHR_materials_unlit from "../extensions/deprecated/KHR_materials_unlit";
 import * as KHR_techniques_webgl from "../extensions/deprecated/KHR_techniques_webgl";
 import * as EXT_bim4d_metadata from "../extensions/EXT_bim4d_metadata";
+import * as EXT_gaussian_splatting from "../extensions/EXT_gaussian_splatting";
 // GLTF 1.0 extensions (decode only)
 // import * as KHR_binary_gltf from './KHR_draco_mesh_compression';
 // GLTF 2.0 Vendor extensions
@@ -61,7 +62,8 @@ export const EXTENSIONS: GLTFExtensionPlugin[] = [
     KHR_mesh_quantization,
     EXT_feature_metadata,
     EXT_mesh_gpu_instancing,
-    EXT_bim4d_metadata
+    EXT_bim4d_metadata,
+    EXT_gaussian_splatting
 ];
 
 /**

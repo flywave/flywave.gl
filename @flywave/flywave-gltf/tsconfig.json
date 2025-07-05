@@ -20,8 +20,9 @@
             "@flywave/flywave-transfer-manager": ["../flywave-transfer-manager/src"],
             "@flywave/flywave-utils": ["../flywave-utils/src"],
             "@flywave/flywave-mapview-decoder": ["../flywave-mapview-decoder/src"],
-            "flywave-webtile-datasource": ["../flywave-webtile-datasource/src"],
-            "flywave-draco": ["../flywave-draco/src"]
+            "@flywave-webtile-datasource": ["../flywave-webtile-datasource/src"],
+            "@flywave-draco": ["../flywave-draco/src"],
+            "@flywave/flywave-splats": ["../flywave-splats/src"]
         }
     },
     "include": ["src/**/*"],
@@ -68,6 +69,9 @@
         },
         {
             "path": "../flywave-draco"
+        },
+        {
+            "path": "../flywave-splats"
         }
     ]
 }
