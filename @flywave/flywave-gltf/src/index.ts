@@ -97,3 +97,6 @@ export {
     type PropertyAttribute
 } from "./gltf/extensions/EXT_structural_metadata";
 export { createExtMeshFeatures } from "./gltf/extensions/EXT_mesh_features";
+
+// glTF to ThreeJS conversion
+export { createThreeSceneFromGLTF, ConversionOptions } from "./gltf/api/gltf-three";

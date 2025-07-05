@@ -1,6 +1,6 @@
-import { getS2Cell } from "../s2geometry/s2-cell-utils";
-import type { S2Cell } from "../s2geometry/s2-geometry";
-import { getS2BoundaryFlatFromS2Cell } from "./s2-to-boundary";
+import { getS2Cell } from "../s2geometry/S2CellUtils";
+import type { S2Cell } from "../s2geometry/S2Geometry";
+import { getS2BoundaryFlatFromS2Cell } from "./S2ToBoundary";
 
 /**
  * Converts S2 cell to the 2D region

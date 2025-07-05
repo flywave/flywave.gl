@@ -1,7 +1,7 @@
 import { Vector3 } from "three";
 
-import { getS2Cell } from "../s2geometry/s2-cell-utils";
-import { getS2Region } from "./s2-to-region";
+import { getS2Cell } from "../s2geometry/S2CellUtils";
+import { getS2Region } from "./S2ToRegion";
 
 export interface S2HeightInfo {
     minimumHeight: number;

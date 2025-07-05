@@ -1,6 +1,6 @@
 import type { Tiles3DLoaderOptions } from "../Loader";
 import { Tiles3DTileContent } from "../types";
-import { parse3DTileHeaderSync } from "./helpers/parse-3d-tile-header";
+import { parse3DTileHeaderSync } from "./helpers/Parse3DTileHeader";
 
 /** Resolve circulate dependency by passing in parsing function as argument */
 type Parse3DTile = (

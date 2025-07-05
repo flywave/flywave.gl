@@ -1,6 +1,6 @@
-import { getS2BoundaryFlatFromS2Cell } from "./converters/s2-to-boundary";
-import { getS2Cell } from "./s2geometry/s2-cell-utils";
-import { getS2LngLatFromS2Cell } from "./s2geometry/s2-geometry";
+import { getS2BoundaryFlatFromS2Cell } from "./converters/S2ToBoundary";
+import { getS2Cell } from "./s2geometry/S2CellUtils";
+import { getS2LngLatFromS2Cell } from "./s2geometry/S2Geometry";
 
 // GEOMETRY
 

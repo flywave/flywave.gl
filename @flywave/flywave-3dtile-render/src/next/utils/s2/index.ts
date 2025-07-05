@@ -1,15 +1,15 @@
-export { getS2CellIdFromToken, getS2TokenFromCellId, getS2ChildCellId } from "./s2-token-functions";
-export { getS2BoundaryFlat, getS2LngLat } from "./s2-geometry-functions";
+export { getS2CellIdFromToken, getS2TokenFromCellId, getS2ChildCellId } from "./S2TokenFunctions";
+export { getS2BoundaryFlat, getS2LngLat } from "./S2GeometryFunctions";
 
-export { getS2Cell, getS2QuadKey } from "./s2geometry/s2-cell-utils";
+export { getS2Cell, getS2QuadKey } from "./s2geometry/S2CellUtils";
 export {
     getS2QuadkeyFromCellId,
     getS2CellFromQuadKey,
     getS2CellIdFromQuadkey,
     getS2LngLatFromS2Cell
-} from "./s2geometry/s2-geometry";
+} from "./s2geometry/S2Geometry";
 
-export { getS2Region } from "./converters/s2-to-region";
+export { getS2Region } from "./converters/S2ToRegion";
 
-export type { S2HeightInfo } from "./converters/s2-to-obb-points";
-export { getS2OrientedBoundingBoxCornerPoints } from "./converters/s2-to-obb-points";
+export type { S2HeightInfo } from "./converters/S2ToObbPoints";
+export { getS2OrientedBoundingBoxCornerPoints } from "./converters/S2ToObbPoints";

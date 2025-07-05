@@ -1,5 +1,5 @@
-import type { S2Cell } from "../s2geometry/s2-geometry";
-import { FaceUVToXYZ, IJToST, STToUV, XYZToLngLat } from "../s2geometry/s2-geometry";
+import type { S2Cell } from "../s2geometry/S2Geometry";
+import { FaceUVToXYZ, IJToST, STToUV, XYZToLngLat } from "../s2geometry/S2Geometry";
 
 const MAX_RESOLUTION = 100;
 

@@ -1,8 +1,8 @@
 import Long from "long";
 
-import { getS2CellIdFromToken } from "../s2-token-functions";
-import type { S2Cell } from "./s2-geometry";
-import { getS2CellFromQuadKey, getS2QuadkeyFromCellId } from "./s2-geometry";
+import { getS2CellIdFromToken } from "../S2TokenFunctions";
+import type { S2Cell } from "./S2Geometry";
+import { getS2CellFromQuadKey, getS2QuadkeyFromCellId } from "./S2Geometry";
 
 /**
  * Return the S2Cell from the cell's hex token or the Hilbert quad key

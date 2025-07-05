@@ -3,7 +3,7 @@ import { assert, defaultValue, GL } from "@flywave/flywave-utils";
 import {
     COMPONENTS_PER_ATTRIBUTE,
     createTypedArrayFromAccessor
-} from "./helpers/tile-3d-accessor-utils";
+} from "./helpers/Tile3DAccessorUtils";
 
 const defined = x => x !== undefined;
 const scratchVisited = [];

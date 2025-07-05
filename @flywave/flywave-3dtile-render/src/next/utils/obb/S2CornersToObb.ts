@@ -1,8 +1,8 @@
 import { OrientedBox3, Projection } from "@flywave/flywave-geoutils";
 import { Vector3 } from "three";
 
-import type { S2HeightInfo } from "../../utils/s2/index";
-import { getS2LngLat, getS2OrientedBoundingBoxCornerPoints } from "../../utils/s2/index";
+import type { S2HeightInfo } from "../s2/index";
+import { getS2LngLat, getS2OrientedBoundingBoxCornerPoints } from "../s2/index";
 
 export interface S2VolumeInfo {
     /** S2 key or token */

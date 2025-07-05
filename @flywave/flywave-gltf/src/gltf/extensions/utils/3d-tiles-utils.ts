@@ -1,12 +1,3 @@
-/**
- * loaders.gl, MIT license
- *
- * Shared code for 3DTiles extensions:
- * * EXT_feature_metadata
- * * EXT_mesh_features
- * * EXT_structural_metadata
- */
-
 import type { BigTypedArray, TypedArray } from "@flywave/flywave-utils";
 import { getImageData, ImageType } from "@flywave/flywave-utils";
 

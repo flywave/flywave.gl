@@ -1,6 +1,6 @@
 import { Tiles3DLoaderOptions } from "../../Loader";
 import { Tiles3DTileContent } from "../../types";
-import { getStringFromArrayBuffer } from "./parse-utils";
+import { getStringFromArrayBuffer } from "./ParseUtils";
 
 const SIZEOF_UINT32 = 4;
 const DEPRECATION_WARNING = "b3dm tile in legacy format.";

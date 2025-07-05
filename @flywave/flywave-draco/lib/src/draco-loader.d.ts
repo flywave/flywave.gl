@@ -22,7 +22,7 @@ export declare const DracoWorkerLoader: {
     readonly tests: readonly ["DRACO"];
     readonly options: {
         readonly draco: {
-            readonly decoderType: "js" | "wasm";
+            readonly decoderType: "wasm" | "js";
             readonly libraryPath: "libs/";
             readonly extraAttributes: {};
             readonly attributeNameEntry: any;
@@ -44,7 +44,7 @@ export declare const DracoLoader: {
     readonly tests: readonly ["DRACO"];
     readonly options: {
         readonly draco: {
-            readonly decoderType: "js" | "wasm";
+            readonly decoderType: "wasm" | "js";
             readonly libraryPath: "libs/";
             readonly extraAttributes: {};
             readonly attributeNameEntry: any;
