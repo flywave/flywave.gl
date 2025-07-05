@@ -18,4 +18,4 @@ export type {
 } from "./types";
 
 export type { Tiles3DLoaderOptions } from "./Loader";
-export { TILE3D_TYPE } from "./Constants";
+export { TILE3D_TYPE } from "./constants";
