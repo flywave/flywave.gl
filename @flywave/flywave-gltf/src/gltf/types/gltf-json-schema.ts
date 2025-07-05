@@ -572,6 +572,8 @@ export interface GLTFNode {
     name?: any;
     extensions?: Record<string, any>;
     extras?: any;
+
+    userData?: any;
     // [k: string]: any;
 }
 
