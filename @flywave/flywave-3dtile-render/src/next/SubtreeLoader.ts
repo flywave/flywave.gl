@@ -1,5 +1,5 @@
 import { Tiles3DLoaderOptions } from "./Loader";
-import parse3DTilesSubtree from "./parsers/helpers/parse-3d-tile-subtree";
+import parse3DTilesSubtree from "./parsers/helpers/Parse3DTileSubtree";
 import type { Subtree } from "./types";
 import { VERSION } from "./utils/version";
 

@@ -107,7 +107,7 @@ async function dequantizeAccessor(
     options: GLTFLoaderOptions
 ): Promise<number> {
     // 跳过浮点类型和不需要解量化的属性
-    if (accessor.componentType === 5126 || attributeName.startsWith("JOINTS_")) {
+    if (accessor.componentType === 5126) {
         return accessor.bufferView!; // 返回原始索引
     }
 
@@ -208,37 +208,61 @@ function dequantizeData(
     min: number[],
     max: number[]
 ): Float32Array {
-    const maxInteger = Math.pow(2, bits) - 1;
+    // 计算量化范围
+    const maxIntegerValue = Math.pow(2, bits) - 1;
+
+    // 确定是否为无符号整型（根据GLTF组件类型）
+    const isUnsigned =
+        accessor.componentType === 5121 || // UNSIGNED_BYTE
+        accessor.componentType === 5123 || // UNSIGNED_SHORT
+        accessor.componentType === 5125; // UNSIGNED_INT
+
+    // 根据规范计算量化偏移量（用于有符号整型）
+    const quantizationOffset = isUnsigned ? 0 : Math.pow(2, bits - 1);
+
     const srcView = new DataView(data);
     const accessorOffset = accessor.byteOffset || 0;
     const totalOffset = baseByteOffset + accessorOffset;
     const dstArray = new Float32Array(accessor.count * components);
 
-    // 优化常见情况（无步长）
+    // 计算每个分量的范围（优化性能）
+    const ranges: number[] = [];
+    for (let c = 0; c < components; c++) {
+        ranges[c] = max[c] - min[c];
+    }
+
+    // 处理无步长情况
     if (stride === components * componentByteSize) {
         const startOffset = totalOffset;
 
         for (let i = 0; i < accessor.count; i++) {
-            const offset = startOffset + i * stride;
+            const elementOffset = startOffset + i * stride;
 
             for (let c = 0; c < components; c++) {
-                const byteOffset = offset + c * componentByteSize;
+                const byteOffset = elementOffset + c * componentByteSize;
                 const rawValue = readComponent(srcView, byteOffset, accessor.componentType);
-                const normalized = rawValue / maxInteger;
-                const floatValue = min[c] + (max[c] - min[c]) * normalized;
+
+                // 正确的解量化公式（符合规范）
+                const normalized = isUnsigned
+                    ? rawValue / maxIntegerValue
+                    : rawValue / (maxIntegerValue / 2);
+
+                const floatValue = min[c] + ranges[c] * normalized;
                 dstArray[i * components + c] = floatValue;
             }
         }
     } else {
-        // 处理带步长的情况
+        // 处理带步长的情况（非连续数据）
         let dstIndex = 0;
         for (let i = 0; i < accessor.count; i++) {
-            const offset = totalOffset + i * stride;
+            const elementOffset = totalOffset + i * stride;
 
             for (let c = 0; c < components; c++) {
-                const byteOffset = offset + c * componentByteSize;
+                const byteOffset = elementOffset + c * componentByteSize;
                 const rawValue = readComponent(srcView, byteOffset, accessor.componentType);
-                const normalized = rawValue / maxInteger;
+
+                // 使用量化偏移量进行解量化
+                const normalized = (rawValue - quantizationOffset) / maxIntegerValue;
                 const floatValue = min[c] + (max[c] - min[c]) * normalized;
                 dstArray[dstIndex++] = floatValue;
             }

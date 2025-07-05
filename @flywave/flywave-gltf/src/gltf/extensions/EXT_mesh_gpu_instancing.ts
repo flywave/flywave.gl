@@ -1,309 +1,385 @@
-// GLTF EXTENSION: EXT_bim4d_metadata (Node Level)
+import {
+    BufferGeometry,
+    DynamicDrawUsage,
+    InstancedBufferAttribute,
+    InstancedMesh,
+    Material,
+    Matrix4,
+    Object3D,
+    Quaternion,
+    TypedArray,
+    Vector3
+} from "three";
+
+import type { GLTFLoaderOptions } from "../../gltf-loader";
 import { GLTFScenegraph } from "../api/gltf-scenegraph";
 import type { GLTF, GLTFNode } from "../types/gltf-json-schema";
 
-const EXTENSION_NAME = "EXT_bim4d_metadata";
-export const name = EXTENSION_NAME;
-
-// 状态枚举定义
-export enum WorkStatus {
-    PENDING = "pending",
-    IN_PROGRESS = "in_progress",
-    COMPLETED = "completed"
+// ==================== 类型定义 ====================
+export interface ExtMeshGpuInstancing {
+    attributes: {
+        TRANSLATION?: number;
+        ROTATION?: number;
+        SCALE?: number;
+        [customAttribute: string]: number | undefined;
+    };
 }
 
-// 生成类型枚举
-export enum GenerateType {
-    AUTO = "auto",
-    MANUAL = "manual"
-}
+type InstanceAttributeName = "TRANSLATION" | "ROTATION" | "SCALE" | string;
+type InstanceAttributes = Record<InstanceAttributeName, InstancedBufferAttribute>;
 
-// 进度类型枚举
-export enum ProgressType {
-    PERCENTAGE = "percentage",
-    ABSOLUTE = "absolute"
-}
+const EXT_NAME = "EXT_mesh_gpu_instancing";
 
-// 核心数据结构
-export interface WorkItem {
-    id: string;
-    name: string;
-    description?: string;
-    status: WorkStatus;
-    generateType: GenerateType;
-    workType: "schedule" | "plan";
-    startTime: string; // ISO 8601格式
-    endTime: string; // ISO 8601格式
-    scheduleStart?: string;
-    scheduleEnd?: string;
-    startValue: number;
-    endValue: number;
-    progressType: ProgressType;
-    total: number;
-    metadata?: Record<string, any>; // 可选元数据
-}
+// GLTF 组件类型常量
+const COMPONENT_TYPES = {
+    BYTE: 5120,
+    UNSIGNED_BYTE: 5121,
+    SHORT: 5122,
+    UNSIGNED_SHORT: 5123,
+    UNSIGNED_INT: 5125,
+    FLOAT: 5126
+} as const;
 
-// 节点扩展数据结构
-interface NodeBIM4dMetadata {
-    works?: WorkItem[];
-    currentWorkId?: string;
-    version: string;
-}
+// 访问器类型常量
+const ACCESSOR_TYPES = {
+    SCALAR: "SCALAR",
+    VEC2: "VEC2",
+    VEC3: "VEC3",
+    VEC4: "VEC4",
+    MAT2: "MAT2",
+    MAT3: "MAT3",
+    MAT4: "MAT4"
+} as const;
 
-// 解码实现（节点级）
-export async function decode(gltfData: { json: GLTF }, options: any = {}): Promise<void> {
+// ==================== 扩展注册 ====================
+export const name = EXT_NAME;
+
+export async function decode(gltfData: { json: GLTF }, options: GLTFLoaderOptions): Promise<void> {
     const scenegraph = new GLTFScenegraph(gltfData);
-    const { logger = console } = options;
-    const { nodes = [] } = gltfData.json;
+    await decodeMeshGpuInstancing(scenegraph, options);
+}
 
-    // 遍历所有节点
-    for (const node of nodes) {
-        const extension = scenegraph.getObjectExtension<NodeBIM4dMetadata>(node, EXTENSION_NAME);
-        if (!extension) continue;
+export function encode(gltfData: { json: GLTF }, options: GLTFLoaderOptions): void {
+    const scenegraph = new GLTFScenegraph(gltfData);
+    encodeMeshGpuInstancing(scenegraph, options);
+}
 
-        const { works = [] } = extension;
+// ==================== 解码逻辑 ====================
+async function decodeMeshGpuInstancing(scenegraph: GLTFScenegraph, options: GLTFLoaderOptions) {
+    const promises: Array<Promise<void>> = [];
 
-        // 从二进制数据解码metadata
-        for (const work of works) {
-            try {
-                const bufferViewIndex = (work as any).metadataBufferView;
-                if (typeof bufferViewIndex === "number") {
-                    const data = scenegraph.getTypedArrayForBufferView(bufferViewIndex);
+    for (const node of getNodes(scenegraph)) {
+        if (scenegraph.getObjectExtension(node, EXT_NAME)) {
+            promises.push(processNode(scenegraph, node, options));
+        }
+    }
 
-                    if (!data) {
-                        logger.warn(
-                            `节点 ${
-                                node.name || node.mesh
-                            } 无法获取缓冲视图 ${bufferViewIndex} 的数据`
-                        );
-                        continue;
-                    }
+    await Promise.all(promises);
+    scenegraph.removeExtension(EXT_NAME);
+}
 
-                    try {
-                        const jsonString = new TextDecoder().decode(data);
-                        work.metadata = JSON.parse(jsonString);
-                    } catch (parseError) {
-                        logger.error(
-                            `节点 ${node.name || node.mesh} 解析元数据失败: ${parseError.message}`
-                        );
-                    }
+async function processNode(scenegraph: GLTFScenegraph, node: GLTFNode, options: GLTFLoaderOptions) {
+    const extension = scenegraph.getObjectExtension<ExtMeshGpuInstancing>(node, EXT_NAME);
+    if (!extension?.attributes) return;
 
-                    // 删除临时字段
-                    delete (work as any).metadataBufferView;
-                }
-            } catch (error) {
-                logger.error(
-                    `节点 ${node.name || node.mesh} 处理工作项 ${work.id} 元数据失败: ${
-                        error.message
-                    }`
-                );
+    try {
+        const attributes = await loadInstanceAttributes(scenegraph, extension.attributes);
+        node.userData.instance = attributes;
+    } finally {
+        scenegraph.removeObjectExtension(node, EXT_NAME);
+    }
+}
+
+async function loadInstanceAttributes(
+    scenegraph: GLTFScenegraph,
+    attributeDefs: Record<string, number>
+): Promise<InstanceAttributes> {
+    const attributes: InstanceAttributes = {};
+    const accessorPromises: Array<Promise<void>> = [];
+
+    for (const [name, accessorIndex] of Object.entries(attributeDefs)) {
+        const accessor = scenegraph.getAccessor(accessorIndex);
+        if (!accessor) continue;
+
+        const promise = (async () => {
+            const bufferView = scenegraph.getBufferView(accessor.bufferView!);
+            if (!bufferView) throw new Error(`BufferView not found for accessor ${accessorIndex}`);
+
+            const data = scenegraph.getTypedArrayForBufferView(bufferView);
+            const componentCount = getComponentCount(accessor.type);
+
+            attributes[name] = new InstancedBufferAttribute(
+                data,
+                componentCount,
+                !!accessor.normalized
+            );
+        })();
+
+        accessorPromises.push(promise);
+    }
+
+    await Promise.all(accessorPromises);
+    return attributes;
+}
+
+// ==================== 编码逻辑 ====================
+function encodeMeshGpuInstancing(scenegraph: GLTFScenegraph, options: GLTFLoaderOptions) {
+    for (const node of getNodes(scenegraph)) {
+        if (node.mesh !== undefined && node.extras?.instancedAttributes) {
+            const extension = createExtension(scenegraph, node);
+            scenegraph.addObjectExtension(node, EXT_NAME, extension);
+            scenegraph.addRequiredExtension(EXT_NAME);
+        }
+    }
+}
+
+function createExtension(scenegraph: GLTFScenegraph, node: GLTFNode): ExtMeshGpuInstancing {
+    const attributes: Record<string, number> = {};
+    const instancedAttributes = node.extras?.instancedAttributes as
+        | Record<string, TypedArray>
+        | undefined;
+
+    if (!instancedAttributes) {
+        throw new Error(
+            `Missing instancedAttributes in node.extras for node ${node.name || node.mesh}`
+        );
+    }
+
+    for (const [name, data] of Object.entries(instancedAttributes)) {
+        const componentType = getComponentTypeFromData(data);
+        const accessorType = getAccessorType(name);
+
+        const bufferViewIndex = scenegraph.addBufferView(data);
+        const accessorIndex = scenegraph.addAccessor(bufferViewIndex, {
+            array: data,
+            componentType,
+            type: accessorType,
+            count: data.length / getComponentCount(accessorType)
+        });
+
+        attributes[name] = accessorIndex;
+    }
+
+    return { attributes };
+}
+
+// ==================== 实例化网格创建 ====================
+interface InstancedMeshCreationOptions {
+    parent?: Object3D;
+    applyParentTransform?: boolean;
+}
+
+export function createInstancedMesh(
+    geometry: BufferGeometry,
+    material: Material | Material[],
+    attributes: InstanceAttributes,
+    options: InstancedMeshCreationOptions = {}
+): InstancedMesh {
+    const { parent, applyParentTransform = true } = options;
+    const instanceCount = validateAttributes(attributes);
+
+    const instancedMesh = new InstancedMesh(geometry, material, instanceCount);
+
+    // 应用父级变换（如果需要）
+    if (parent && applyParentTransform) {
+        instancedMesh.applyMatrix4(parent.matrixWorld);
+    }
+
+    // 设置实例属性
+    applyInstanceAttributes(instancedMesh, geometry, attributes);
+
+    return instancedMesh;
+}
+
+function applyInstanceAttributes(
+    instancedMesh: InstancedMesh,
+    geometry: BufferGeometry,
+    attributes: InstanceAttributes
+): void {
+    // 标准TRS属性处理
+    if ("TRANSLATION" in attributes || "ROTATION" in attributes || "SCALE" in attributes) {
+        updateInstanceMatrices(instancedMesh, attributes);
+    }
+
+    // 自定义属性处理
+    applyCustomAttributes(geometry, attributes);
+}
+
+function updateInstanceMatrices(
+    instancedMesh: InstancedMesh,
+    attributes: InstanceAttributes
+): void {
+    const instanceCount = instancedMesh.count;
+    const position = new Vector3();
+    const rotation = new Quaternion();
+    const scale = new Vector3(1, 1, 1);
+    const matrix = new Matrix4();
+
+    const translationAttr = attributes.TRANSLATION;
+    const rotationAttr = attributes.ROTATION;
+    const scaleAttr = attributes.SCALE;
+
+    for (let i = 0; i < instanceCount; i++) {
+        // 读取变换属性
+        if (translationAttr) position.fromBufferAttribute(translationAttr, i);
+        if (scaleAttr) scale.fromBufferAttribute(scaleAttr, i);
+
+        // 特殊处理旋转属性（可能规范化）
+        if (rotationAttr) {
+            if (rotationAttr.normalized) {
+                const [x, y, z, w] = readNormalizedQuaternion(rotationAttr, i);
+                rotation.set(x, y, z, w).normalize();
+            } else {
+                rotation.fromBufferAttribute(rotationAttr, i);
             }
+        } else {
+            rotation.identity();
         }
 
-        // 将扩展数据保存到节点userData
-        node.userData = node.userData || {};
-        node.userData.bim4dMetadata = extension;
+        // 计算并设置矩阵
+        matrix.compose(position, rotation, scale);
+        instancedMesh.setMatrixAt(i, matrix);
+    }
+
+    // 标记更新
+    instancedMesh.instanceMatrix.needsUpdate = true;
+}
+
+// ==================== 工具函数 ====================
+function getNodes(scenegraph: GLTFScenegraph): GLTFNode[] {
+    return scenegraph.json.nodes || [];
+}
+
+function getComponentCount(type: string): number {
+    switch (type) {
+        case ACCESSOR_TYPES.VEC2:
+            return 2;
+        case ACCESSOR_TYPES.VEC3:
+            return 3;
+        case ACCESSOR_TYPES.VEC4:
+        case ACCESSOR_TYPES.MAT2:
+            return 4;
+        case ACCESSOR_TYPES.MAT3:
+            return 9;
+        case ACCESSOR_TYPES.MAT4:
+            return 16;
+        case ACCESSOR_TYPES.SCALAR:
+        default:
+            return 1;
     }
 }
 
-// 编码实现（节点级）
-export function encode(gltfData: { json: GLTF }, options: any = {}) {
-    const scenegraph = new GLTFScenegraph(gltfData);
-    const { logger = console } = options;
-    const { nodes = [] } = gltfData.json;
+function getComponentTypeFromData(data: TypedArray): number {
+    if (data instanceof Float32Array) return COMPONENT_TYPES.FLOAT;
+    if (data instanceof Uint32Array) return COMPONENT_TYPES.UNSIGNED_INT;
+    if (data instanceof Int16Array) return COMPONENT_TYPES.SHORT;
+    if (data instanceof Uint16Array) return COMPONENT_TYPES.UNSIGNED_SHORT;
+    if (data instanceof Uint8Array) return COMPONENT_TYPES.UNSIGNED_BYTE;
+    if (data instanceof Int8Array) return COMPONENT_TYPES.BYTE;
 
-    let hasExtension = false;
-
-    // 遍历所有节点
-    for (const node of nodes) {
-        // 从userData获取扩展数据
-        const metadata = node.userData?.bim4dMetadata;
-        if (!metadata) continue;
-
-        hasExtension = true;
-
-        // 创建节点扩展数据的深拷贝
-        const extensionClone: NodeBIM4dMetadata = {
-            ...metadata,
-            works: metadata.works ? metadata.works.map(work => ({ ...work })) : []
-        };
-
-        // 处理元数据编码
-        if (extensionClone.works) {
-            for (const work of extensionClone.works) {
-                // 跳过空元数据
-                if (!work.metadata || Object.keys(work.metadata).length === 0) {
-                    delete work.metadata;
-                    continue;
-                }
-
-                try {
-                    // 序列化元数据
-                    const jsonString = JSON.stringify(work.metadata);
-                    const binaryData = new TextEncoder().encode(jsonString);
-
-                    // 添加到GLTF并获取缓冲视图索引
-                    const bufferViewIndex = scenegraph.addBufferView(binaryData);
-
-                    // 存储缓冲视图引用并删除原始元数据
-                    (work as any).metadataBufferView = bufferViewIndex;
-                    delete work.metadata;
-                } catch (error) {
-                    logger.error(
-                        `节点 ${node.name || node.mesh} 序列化工作项 ${work.id} 元数据失败: ${
-                            error.message
-                        }`
-                    );
-                    delete work.metadata;
-                }
-            }
-        }
-
-        // 添加节点扩展
-        scenegraph.addObjectExtension(node, EXTENSION_NAME, extensionClone);
-    }
-
-    // 如果需要，添加顶级扩展声明
-    if (hasExtension) {
-        scenegraph.addRequiredExtension(EXTENSION_NAME);
-    }
-
-    return scenegraph.gltf;
+    return COMPONENT_TYPES.FLOAT; // 默认使用FLOAT
 }
 
-// 验证工作项的有效性
-export function validateWorkItem(work: Partial<WorkItem>): work is WorkItem {
-    return (
-        typeof work.id === "string" &&
-        typeof work.name === "string" &&
-        Object.values(WorkStatus).includes(work.status as WorkStatus) &&
-        Object.values(GenerateType).includes(work.generateType as GenerateType) &&
-        ["schedule", "plan"].includes(work.workType as any) &&
-        typeof work.startTime === "string" &&
-        typeof work.endTime === "string" &&
-        typeof work.startValue === "number" &&
-        typeof work.endValue === "number" &&
-        Object.values(ProgressType).includes(work.progressType as ProgressType) &&
-        typeof work.total === "number"
-    );
+function getAccessorType(name: string): string {
+    switch (name) {
+        case "TRANSLATION":
+            return ACCESSOR_TYPES.VEC3;
+        case "ROTATION":
+            return ACCESSOR_TYPES.VEC4;
+        case "SCALE":
+            return ACCESSOR_TYPES.VEC3;
+        default:
+            return ACCESSOR_TYPES.SCALAR;
+    }
 }
 
-// 属性转换方法（带验证）
-export function createWorkItem(info: any): WorkItem | null {
-    const workItem: Partial<WorkItem> = {
-        id: info.id,
-        name: info.name,
-        description: info.description,
-        status: info.status,
-        generateType: info.generateType,
-        workType: info.workType,
-        startTime: info.startTime,
-        endTime: info.endTime,
-        scheduleStart: info.scheduleStart,
-        scheduleEnd: info.scheduleEnd,
-        startValue: info.startValue,
-        endValue: info.endValue,
-        progressType: info.progressType,
-        total: info.total,
-        metadata: info.metadata
+function validateAttributes(attributes: InstanceAttributes): number {
+    const counts = Object.values(attributes).map(attr => attr.count);
+    if (counts.length === 0) throw new Error("No valid instance attributes found");
+
+    const firstCount = counts[0];
+    if (!counts.every(count => count === firstCount)) {
+        throw new Error("Instance attribute counts do not match");
+    }
+
+    return firstCount;
+}
+
+function readNormalizedQuaternion(
+    attr: InstancedBufferAttribute,
+    index: number
+): [number, number, number, number] {
+    const offset = index * attr.itemSize;
+    const array = attr.array;
+
+    const denormalize = (value: number) => {
+        if (array instanceof Int8Array) return Math.max(value / 0x7f, -1);
+        if (array instanceof Uint8Array) return value / 0xff;
+        if (array instanceof Int16Array) return Math.max(value / 0x7fff, -1);
+        if (array instanceof Uint16Array) return value / 0xffff;
+        return value;
     };
 
-    return validateWorkItem(workItem) ? (workItem as WorkItem) : null;
+    return [
+        denormalize(array[offset]),
+        denormalize(array[offset + 1]),
+        denormalize(array[offset + 2]),
+        denormalize(array[offset + 3])
+    ];
 }
 
-// 节点扩展操作API
-export class BIM4dNodeExtension {
-    /**
-     * 为节点添加工作项
-     * @param node 目标节点
-     * @param workItem 工作项数据
-     */
-    static addWorkItem(node: GLTFNode, workItem: WorkItem) {
-        node.userData = node.userData || {};
-        node.userData.bim4dMetadata = node.userData.bim4dMetadata || {
-            version: "1.0",
-            works: []
-        };
+function applyCustomAttributes(geometry: BufferGeometry, attributes: InstanceAttributes): void {
+    for (const [name, attr] of Object.entries(attributes)) {
+        // 跳过标准TRS属性
+        if (name === "TRANSLATION" || name === "ROTATION" || name === "SCALE") continue;
 
-        const metadata = node.userData.bim4dMetadata;
-        metadata.works = metadata.works || [];
-        metadata.works.push(workItem);
-    }
+        // 设置属性并标记为实例化
+        geometry.setAttribute(name, attr);
+        attr.setUsage(DynamicDrawUsage);
 
-    /**
-     * 获取节点的工作项
-     * @param node 目标节点
-     * @returns 工作项数组
-     */
-    static getWorkItems(node: GLTFNode): WorkItem[] {
-        return node.userData?.bim4dMetadata?.works || [];
-    }
-
-    /**
-     * 设置节点的当前工作项
-     * @param node 目标节点
-     * @param workId 工作项ID
-     */
-    static setCurrentWorkItem(node: GLTFNode, workId: string) {
-        node.userData = node.userData || {};
-        node.userData.bim4dMetadata = node.userData.bim4dMetadata || {
-            version: "1.0",
-            works: []
-        };
-
-        node.userData.bim4dMetadata.currentWorkId = workId;
-    }
-
-    /**
-     * 获取节点的当前工作项
-     * @param node 目标节点
-     * @returns 当前工作项或null
-     */
-    static getCurrentWorkItem(node: GLTFNode): WorkItem | null {
-        const metadata = node.userData?.bim4dMetadata;
-        if (!metadata) return null;
-
-        const currentId = metadata.currentWorkId;
-        if (!currentId) return null;
-
-        return metadata.works?.find(work => work.id === currentId) || null;
-    }
-
-    /**
-     * 更新工作项进度
-     * @param node 目标节点
-     * @param workId 工作项ID
-     * @param progress 新进度值
-     */
-    static updateWorkProgress(node: GLTFNode, workId: string, progress: number) {
-        const workItem = BIM4dNodeExtension.getWorkItemById(node, workId);
-        if (workItem) {
-            workItem.startValue = progress;
+        // 兼容旧版Three.js
+        if (!("isInstancedBufferAttribute" in attr)) {
+            (attr as any).isInstancedBufferAttribute = true;
         }
     }
+}
 
-    /**
-     * 按ID获取工作项
-     * @param node 目标节点
-     * @param workId 工作项ID
-     * @returns 工作项或null
-     */
-    static getWorkItemById(node: GLTFNode, workId: string): WorkItem | null {
-        const works = BIM4dNodeExtension.getWorkItems(node);
-        return works.find(work => work.id === workId) || null;
-    }
+// ==================== 矩阵计算工具 ====================
+export function calculateInstanceMatrices(
+    attributes: InstanceAttributes,
+    instanceCount: number
+): Matrix4[] {
+    const matrices: Matrix4[] = Array(instanceCount);
+    const position = new Vector3();
+    const rotation = new Quaternion();
+    const scale = new Vector3(1, 1, 1);
 
-    /**
-     * 计算工作项进度百分比
-     * @param work 工作项
-     * @returns 进度百分比
-     */
-    static calculateWorkProgress(work: WorkItem): number {
-        if (work.progressType === ProgressType.PERCENTAGE) {
-            return work.startValue;
+    const translationAttr = attributes.TRANSLATION;
+    const rotationAttr = attributes.ROTATION;
+    const scaleAttr = attributes.SCALE;
+
+    for (let i = 0; i < instanceCount; i++) {
+        // 读取变换属性
+        if (translationAttr) position.fromBufferAttribute(translationAttr, i);
+        if (scaleAttr) scale.fromBufferAttribute(scaleAttr, i);
+
+        // 处理旋转
+        if (rotationAttr) {
+            if (rotationAttr.normalized) {
+                const [x, y, z, w] = readNormalizedQuaternion(rotationAttr, i);
+                rotation.set(x, y, z, w).normalize();
+            } else {
+                rotation.fromBufferAttribute(rotationAttr, i);
+            }
+        } else {
+            rotation.identity();
         }
 
-        if (work.total === 0) return 0;
-        return (work.startValue / work.total) * 100;
+        // 计算矩阵
+        const matrix = new Matrix4();
+        matrix.compose(position, rotation, scale);
+        matrices[i] = matrix;
     }
+
+    return matrices;
 }

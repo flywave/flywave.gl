@@ -2,13 +2,13 @@ import { eastNorthUpToFixedFrame } from "@flywave/flywave-geoutils";
 import { GL } from "@flywave/flywave-utils";
 import { Matrix4, Quaternion, Vector3 } from "three";
 
-import Tile3DBatchTable from "../classes/tile-3d-batch-table";
-import Tile3DFeatureTable from "../classes/tile-3d-feature-table";
+import Tile3DBatchTable from "../classes/Tile3DBatchTable";
+import Tile3DFeatureTable from "../classes/Tile3DFeatureTable";
 import { Tiles3DLoaderOptions } from "../Loader";
 import { Tiles3DTileContent } from "../types";
-import { extractGLTF, parse3DTileGLTFViewSync } from "./helpers/parse-3d-tile-gltf-view";
-import { parse3DTileHeaderSync } from "./helpers/parse-3d-tile-header";
-import { parse3DTileTablesHeaderSync, parse3DTileTablesSync } from "./helpers/parse-3d-tile-tables";
+import { extractGLTF, parse3DTileGLTFViewSync } from "./helpers/Parse3DTileGltfView";
+import { parse3DTileHeaderSync } from "./helpers/Parse3DTileHeader";
+import { parse3DTileTablesHeaderSync, parse3DTileTablesSync } from "./helpers/Parse3DTileTables";
 
 export async function parseInstancedModel3DTile(
     tile: Tiles3DTileContent,

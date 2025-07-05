@@ -1,7 +1,7 @@
 import { assert } from "@flywave/flywave-utils";
 
-import { createTypedArrayFromAccessor } from "./helpers/tile-3d-accessor-utils";
-import { initializeHierarchy, traverseHierarchy } from "./tile-3d-batch-table-hierarchy";
+import { createTypedArrayFromAccessor } from "./helpers/Tile3DAccessorUtils";
+import { initializeHierarchy, traverseHierarchy } from "./Tile3DBatchTableHierarchy";
 
 function defined(x) {
     return x !== undefined && x !== null;

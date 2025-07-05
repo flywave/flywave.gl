@@ -4,10 +4,10 @@ import Long from "long";
 import { Tiles3DLoaderOptions } from "../../Loader";
 import { loadSubtree, Tile3DSubtreeLoader } from "../../SubtreeLoader";
 import type { Availability, Subtree, Tile3DBoundingVolume } from "../../types";
-import type { S2VolumeInfo } from "../../utils/obb/s2-corners-to-obb";
-import { convertS2BoundingVolumetoOBB } from "../../utils/obb/s2-corners-to-obb";
+import type { S2VolumeInfo } from "../../utils/obb/S2CornersToObb";
+import { convertS2BoundingVolumetoOBB } from "../../utils/obb/S2CornersToObb";
 import { getS2CellIdFromToken, getS2ChildCellId, getS2TokenFromCellId } from "../../utils/s2/index";
-import { ImplicitOptions } from "../parse-3d-tile-header";
+import { ImplicitOptions } from "../Parse3DTileHeader";
 
 const QUADTREE_DIVISION_COUNT = 4;
 const OCTREE_DIVISION_COUNT = 8;

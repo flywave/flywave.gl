@@ -635,6 +635,7 @@ export interface GLTFNodePostprocessed {
     extensions?: any;
     extras?: any;
     // [k: string]: any;
+    userData?: Record<string, any>;
 }
 
 /**

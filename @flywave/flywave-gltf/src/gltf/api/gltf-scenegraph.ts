@@ -27,7 +27,7 @@ function makeDefaultGLTFJson(): GLTF {
     return {
         asset: {
             version: "2.0",
-            generator: "loaders.gl"
+            generator: "flywave.gl"
         },
         buffers: [],
         extensions: {},

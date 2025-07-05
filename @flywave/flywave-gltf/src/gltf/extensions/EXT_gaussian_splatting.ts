@@ -12,6 +12,8 @@ import type {
 
 const EXT_NAME = "KHR_gaussian_splatting";
 
+export const name = EXT_NAME;
+
 const REQUIRED_ATTRIBUTES = {
     POSITION: "POSITION",
     COLOR_0: "COLOR_0",

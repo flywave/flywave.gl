@@ -2,8 +2,8 @@ import { DracoLoaderOptions } from "@flywave/flywave-draco";
 import { Projection } from "@flywave/flywave-geoutils";
 import { dirname } from "@flywave/flywave-utils";
 
-import { parse3DTile } from "./parsers/parse-3d-tile";
-import { normalizeTileHeaders } from "./parsers/parse-3d-tile-header";
+import { parse3DTile } from "./parsers/Parse3DTile";
+import { normalizeTileHeaders } from "./parsers/Parse3DTileHeader";
 import {
     LOD_METRIC_TYPE,
     Tiles3DTileContent,

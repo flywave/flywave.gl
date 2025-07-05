@@ -1,12 +1,12 @@
-import { TILE3D_TYPE } from "../constants";
+import { TILE3D_TYPE } from "../Constants";
 import { Tiles3DLoaderOptions } from "../Loader";
 import { Tiles3DTileContent } from "../types";
-import { getMagicString } from "./helpers/parse-utils";
-import { parseBatchedModel3DTile } from "./parse-3d-tile-batched-model";
-import { parseComposite3DTile } from "./parse-3d-tile-composite";
-import { parseGltf3DTile } from "./parse-3d-tile-gltf";
-import { parseInstancedModel3DTile } from "./parse-3d-tile-instanced-model";
-import { parsePointCloud3DTile } from "./parse-3d-tile-point-cloud";
+import { getMagicString } from "./helpers/ParseUtils";
+import { parseBatchedModel3DTile } from "./Parse3DTileBatchedModel";
+import { parseComposite3DTile } from "./Parse3DTileComposite";
+import { parseGltf3DTile } from "./Parse3DTileGltf";
+import { parseInstancedModel3DTile } from "./Parse3DTileInstancedModel";
+import { parsePointCloud3DTile } from "./Parse3DTilePointCloud";
 
 // Extracts
 export async function parse3DTile(

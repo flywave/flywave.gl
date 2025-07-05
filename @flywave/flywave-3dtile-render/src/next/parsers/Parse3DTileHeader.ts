@@ -15,10 +15,10 @@ import {
     Tiles3DTileJSONPostprocessed,
     Tiles3DTilesetJSON
 } from "../types";
-import type { S2VolumeInfo } from "../utils/obb/s2-corners-to-obb";
-import { convertS2BoundingVolumetoOBB } from "../utils/obb/s2-corners-to-obb";
-import type { S2VolumeBox } from "./helpers/parse-3d-implicit-tiles";
-import { parseImplicitTiles, replaceContentUrlTemplate } from "./helpers/parse-3d-implicit-tiles";
+import type { S2VolumeInfo } from "../utils/obb/S2CornersToObb";
+import { convertS2BoundingVolumetoOBB } from "../utils/obb/S2CornersToObb";
+import type { S2VolumeBox } from "./helpers/Parse3DImplicitTiles";
+import { parseImplicitTiles, replaceContentUrlTemplate } from "./helpers/Parse3DImplicitTiles";
 
 /** Options for recursive loading implicit subtrees */
 export interface ImplicitOptions {

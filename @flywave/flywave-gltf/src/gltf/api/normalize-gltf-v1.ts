@@ -157,7 +157,7 @@ class GLTFV1Normalizer {
         json.asset = json.asset || {};
         // We are normalizing to glTF v2, so change version to "2.0"
         json.asset.version = "2.0";
-        json.asset.generator = json.asset.generator || "Normalized to glTF 2.0 by loaders.gl";
+        json.asset.generator = json.asset.generator || "Normalized to glTF 2.0 by flywave.gl";
     }
 
     _convertTopLevelObjectsToArrays(json) {
