@@ -46,6 +46,7 @@ export const EXTENSIONS: GLTFExtensionPlugin[] = [
     // 1.0
     // KHR_binary_gltf is handled separately - must be processed before other parsing starts
     // KHR_binary_gltf,
+    EXT_gaussian_splatting,
 
     // 2.0
     EXT_structural_metadata,
@@ -62,8 +63,7 @@ export const EXTENSIONS: GLTFExtensionPlugin[] = [
     KHR_mesh_quantization,
     EXT_feature_metadata,
     EXT_mesh_gpu_instancing,
-    EXT_bim4d_metadata,
-    EXT_gaussian_splatting
+    EXT_bim4d_metadata
 ];
 
 /**

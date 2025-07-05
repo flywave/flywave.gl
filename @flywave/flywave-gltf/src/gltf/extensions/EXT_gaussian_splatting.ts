@@ -13,6 +13,7 @@ import type {
 
 const EXT_NAME = "KHR_gaussian_splatting";
 const MESHOPT_COMPRESSION_EXT = "EXT_meshopt_compression";
+const MESH_QUANTIZATION_EXT = "KHR_mesh_quantization";
 
 export const name = EXT_NAME;
 
@@ -66,10 +67,10 @@ async function processPrimitive(
 
     // eslint-disable-next-line no-useless-catch
     try {
-        // 验证图元属性
+        // 1. 验证图元属性
         validateGaussianPrimitive(scenegraph, primitive);
 
-        // 处理压缩数据
+        // 2. 处理压缩数据
         if (extension.bufferView !== undefined && extension.bufferView !== -1) {
             await decompressPrimitive(scenegraph, primitive, extension, options);
         } else {
@@ -77,13 +78,13 @@ async function processPrimitive(
             processUncompressedOpacity(scenegraph, primitive);
         }
 
-        // 处理球谐系数
+        // 3. 处理解量化（KHR_mesh_quantization）
+        await dequantizePrimitive(scenegraph, primitive);
+
+        // 4. 处理球谐系数
         if (extension.sphericalHarmonics) {
             processSphericalHarmonics(primitive, extension.sphericalHarmonics);
         }
-
-        // 清理扩展
-        scenegraph.removeObjectExtension(primitive, EXT_NAME);
     } catch (error) {
         throw error;
     }
@@ -118,6 +119,198 @@ function validateGaussianPrimitive(scenegraph: GLTFScenegraph, primitive: GLTFMe
     }
 }
 
+async function dequantizePrimitive(
+    scenegraph: GLTFScenegraph,
+    primitive: GLTFMeshPrimitive
+): Promise<void> {
+    // 获取图元的量化扩展配置
+    const quantizationExt = scenegraph.getObjectExtension<{
+        POSITION?: number;
+        NORMAL?: number;
+        TANGENT?: number;
+        TEXCOORD?: number;
+        COLOR?: number;
+        GENERIC?: number;
+        JOINTS?: number;
+        WEIGHTS?: number;
+    }>(primitive, MESH_QUANTIZATION_EXT);
+
+    if (!quantizationExt) {
+        return; // 没有量化扩展，直接返回
+    }
+
+    // 处理所有属性
+    for (const [attributeName, accessorIndex] of Object.entries(primitive.attributes)) {
+        const accessor = scenegraph.getAccessor(accessorIndex);
+        if (!accessor || accessor.componentType === 5126) {
+            // 5126 = FLOAT
+            continue; // 跳过浮点类型
+        }
+
+        // 获取属性的量化位数
+        const bits = getQuantizationBits(attributeName, quantizationExt);
+        if (bits === 0) continue;
+
+        // 执行反量化
+        const newAccessorIndex = await dequantizeAccessor(scenegraph, accessor, bits);
+        primitive.attributes[attributeName] = newAccessorIndex;
+    }
+
+    // 移除量化扩展
+    scenegraph.removeObjectExtension(primitive, MESH_QUANTIZATION_EXT);
+}
+
+function getQuantizationBits(attributeName: string, ext: any): number {
+    switch (true) {
+        case attributeName.startsWith("POSITION"):
+            return ext.POSITION ?? 12;
+        case attributeName.startsWith("NORMAL"):
+            return ext.NORMAL ?? 10;
+        case attributeName.startsWith("TANGENT"):
+            return ext.TANGENT ?? 10;
+        case attributeName.startsWith("TEXCOORD"):
+            return ext.TEXCOORD ?? 12;
+        case attributeName.startsWith("COLOR"):
+            return ext.COLOR ?? 8;
+        case attributeName.startsWith("WEIGHTS"):
+            return ext.WEIGHTS ?? 8;
+        default:
+            return ext.GENERIC ?? 8;
+    }
+}
+
+async function dequantizeAccessor(
+    scenegraph: GLTFScenegraph,
+    accessor: any,
+    bits: number
+): Promise<number> {
+    if (!accessor.min || !accessor.max || accessor.min.length !== accessor.max.length) {
+        return accessor.index; // 无效的min/max，无法解量化
+    }
+
+    const componentCount = getComponentCount(accessor.type);
+    if (componentCount === 0) return accessor.index;
+
+    const bufferView = scenegraph.getBufferView(accessor.bufferView);
+    if (!bufferView) return accessor.index;
+
+    const bufferData = scenegraph.getTypedArrayForBufferView(bufferView);
+    if (!bufferData) return accessor.index;
+
+    // 计算数据范围和偏移
+    const count = accessor.count;
+    const start = (accessor.byteOffset || 0) + (bufferView.byteOffset || 0);
+    const stride =
+        bufferView.byteStride || componentCount * getComponentSize(accessor.componentType);
+
+    // 创建独立数据副本
+    const bufferCopy = new Uint8Array(
+        bufferData.buffer.slice(
+            bufferData.byteOffset,
+            bufferData.byteOffset + bufferData.byteLength
+        )
+    );
+
+    // 准备浮点数据存储
+    const floatData = new Float32Array(count * componentCount);
+    const maxIntegerValue = Math.pow(2, bits) - 1;
+
+    // 解量化数据
+    for (let i = 0; i < count; i++) {
+        const elementOffset = start + i * stride;
+
+        for (let c = 0; c < componentCount; c++) {
+            const valueOffset = elementOffset + c * getComponentSize(accessor.componentType);
+            const rawValue = readComponent(
+                bufferCopy,
+                valueOffset,
+                accessor.componentType,
+                accessor.normalized
+            );
+
+            // 应用解量化公式: value = min + (max - min) * (raw / maxInteger)
+            const normalized = rawValue / maxIntegerValue;
+            const floatValue = accessor.min[c] + (accessor.max[c] - accessor.min[c]) * normalized;
+
+            floatData[i * componentCount + c] = floatValue;
+        }
+    }
+
+    // 创建新缓冲区
+    const newBuffer = new Uint8Array(floatData.buffer);
+    const newBufferViewIndex = scenegraph.addBufferView(newBuffer);
+
+    // 创建新访问器
+    const newAccessor = {
+        bufferView: newBufferViewIndex,
+        byteOffset: 0,
+        componentType: 5126, // FLOAT
+        count: count,
+        type: accessor.type,
+        min: accessor.min,
+        max: accessor.max,
+        normalized: false
+    };
+
+    return scenegraph.addAccessor(newBufferViewIndex, newAccessor);
+}
+
+function readComponent(
+    data: TypedArray,
+    offset: number,
+    componentType: number,
+    normalized: boolean
+): number {
+    const view = new DataView(data.buffer, data.byteOffset + offset);
+
+    switch (componentType) {
+        case 5120: // BYTE
+            const int8 = view.getInt8(0);
+            return normalized ? int8 / 127 : int8;
+        case 5121: // UNSIGNED_BYTE
+            const uint8 = view.getUint8(0);
+            return normalized ? uint8 / 255 : uint8;
+        case 5122: // SHORT
+            const int16 = view.getInt16(0, true);
+            return normalized ? int16 / 32767 : int16;
+        case 5123: // UNSIGNED_SHORT
+            const uint16 = view.getUint16(0, true);
+            return normalized ? uint16 / 65535 : uint16;
+        default:
+            return 0;
+    }
+}
+
+function getComponentCount(type: string): number {
+    switch (type) {
+        case "SCALAR":
+            return 1;
+        case "VEC2":
+            return 2;
+        case "VEC3":
+            return 3;
+        case "VEC4":
+            return 4;
+        default:
+            return 0;
+    }
+}
+
+function getComponentSize(componentType: number): number {
+    switch (componentType) {
+        case 5120: // BYTE
+        case 5121: // UNSIGNED_BYTE
+            return 1;
+        case 5122: // SHORT
+        case 5123: // UNSIGNED_SHORT
+            return 2;
+        case 5126: // FLOAT
+            return 4;
+        default:
+            return 0;
+    }
+}
+
 async function decompressPrimitive(
     scenegraph: GLTFScenegraph,
     primitive: GLTFMeshPrimitive,
@@ -137,6 +330,7 @@ async function decompressPrimitive(
     const meshoptExt = scenegraph.getObjectExtension(bufferView, MESHOPT_COMPRESSION_EXT);
     if (meshoptExt) {
         await decompressMeshopt(scenegraph, primitive, bufferView, meshoptExt);
+        scenegraph.removeObjectExtension(bufferView, MESHOPT_COMPRESSION_EXT);
     } else {
         // 处理自定义压缩格式
         const buffer = scenegraph.getTypedArrayForBufferView(bufferView);
@@ -227,8 +421,7 @@ async function decompressPrimitive(
         }
 
         // 更新属性
-        // @ts-ignore
-        primitive.attributes = decodedAttributes;
+        primitive.attributes = decodedAttributes as any;
     }
 }
 
