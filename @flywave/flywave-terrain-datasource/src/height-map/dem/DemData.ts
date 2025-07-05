@@ -137,7 +137,7 @@ export default class DEMData {
             this.displacementMap!,
             _size,
             _size,
-            THREE.LuminanceFormat,
+            THREE.RedFormat,
             THREE.FloatType
         );
         this.displacementMapTexture.flipY = true;

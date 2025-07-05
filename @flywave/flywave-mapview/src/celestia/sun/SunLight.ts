@@ -5,6 +5,7 @@ import { Simon1994PlanetaryPositions } from "../utils/simon1994planetaryposition
 import { computeTemeToPseudoFixedMatrix } from "../utils/CoordinateTransforms";
 import { MapView } from "../../MapView";
 import { MapViewAtmosphere } from "../../MapViewAtmosphere";
+import { EarthConstants } from "@flywave/flywave-geoutils";
 
 const points = [
     // near plane points
@@ -191,9 +192,13 @@ export class SunLight extends THREE.Object3D {
             .sub(this._mapView.camera.position);
 
         this.direction = this.light.position.clone().normalize();
-        this.atmosphere.lightDirection.copy(position.normalize());
+        this.atmosphere.lightDirection.copy(position).normalize();
 
-        this._mapView.mapRenderingManager?.updateSunPosition(this.light.position);
+        this._mapView.mapRenderingManager?.updateSunPosition(
+            this._mapView.worldTarget
+                .clone()
+                .addScaledVector(position.normalize(), EarthConstants.EQUATORIAL_RADIUS * 1.025)
+        );
 
         // 计算太阳高度
         this._sunElevation = this.calculateSunElevation(position);

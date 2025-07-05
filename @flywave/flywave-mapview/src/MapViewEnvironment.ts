@@ -13,7 +13,7 @@ import { MapView, MapViewOptions } from "./MapView";
 import { MapViewFog } from "./MapViewFog";
 import { SkyBackground } from "./SkyBackground";
 import { createLight } from "./ThemeHelpers";
-import { Celestia } from "./Celestia/Celestia";
+import { Celestia } from "./celestia/Celestia";
 
 const logger = LoggerManager.instance.create("MapViewEnvironment");
 

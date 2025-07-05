@@ -12,16 +12,13 @@ import {
 } from "@flywave/flywave-datasource-protocol";
 import {
     BlendFunction,
-    EdgeDetectionMode,
     EffectComposer,
     EffectPass,
     OutlineEffect as PPOutlineEffect,
-    PredicationMode,
     RenderPass,
-    SMAAEffect,
-    SMAAPreset,
     SelectiveBloomEffect,
     SepiaEffect,
+    Effect,
     VignetteEffect
 } from "postprocessing";
 import * as THREE from "three";
@@ -29,6 +26,36 @@ import * as THREE from "three";
 import { IPassManager } from "./IPassManager";
 import { LowResEffect } from "./LowResRenderPass";
 import { SunGodRaysEffect } from "./SunGodRaysEffect";
+
+interface IEnabledEffect extends Effect {
+    enabled?: boolean;
+}
+
+class FilterEffectPass extends EffectPass {
+    private rootEffects: IEnabledEffect[];
+    private currentEffects: IEnabledEffect[];
+
+    constructor(camera?: THREE.Camera, ...effects: IEnabledEffect[]) {
+        super(camera, ...effects);
+        this.rootEffects = effects;
+        this.currentEffects = effects;
+    }
+    render(
+        renderer: THREE.WebGLRenderer,
+        inputBuffer: THREE.WebGLRenderTarget | null,
+        outputBuffer: THREE.WebGLRenderTarget | null,
+        deltaTime?: number,
+        stencilTest?: boolean
+    ): void {
+        let effects = this.rootEffects.filter(effect => effect.enabled);
+        if (effects.length != this.currentEffects.length) {
+            this.currentEffects = effects;
+            this.setEffects(effects);
+            this.updateMaterial();
+        }
+        super.render(renderer, inputBuffer, outputBuffer, deltaTime, stencilTest);
+    }
+}
 
 // 保持原有的 MSAASampling 枚举兼容性
 enum MSAASampling {
@@ -85,14 +112,14 @@ export interface IMapRenderingManager extends IPassManager {
 export class MapRenderingManager implements IMapRenderingManager {
     bloom = {
         enabled: false,
-        strength: 4.5, // default intensity
-        radius: 0.7, // default mipmapBlurPass.radius
-        threshold: 0.85, // default luminanceMaterial.threshold
-        levels: 5, // typical default for mipmapBlurPass.levels
-        smoothing: 0.1, // typical default for luminanceMaterial.smoothing
-        luminancePassEnabled: false, // as set in MapRenderingManager (luminancePass.enabled = false)
-        luminancePassThreshold: 0.0, // as set in MapRenderingManager (luminanceMaterial.threshold = 0.0)
-        luminancePassSmoothing: 0.1 // as set in MapRenderingManager (luminanceMaterial.smoothing = 0.1)
+        strength: 2.5,
+        radius: 0.7,
+        threshold: 0.15,
+        levels: 5,
+        smoothing: 0.1,
+        luminancePassEnabled: false,
+        luminancePassThreshold: 0.0,
+        luminancePassSmoothing: 0.1
     };
 
     lensFlare = {
@@ -131,7 +158,6 @@ export class MapRenderingManager implements IMapRenderingManager {
     };
 
     private m_msaaEnabled: boolean = true;
-
     private m_width: number = 1;
     private m_height: number = 1;
     private m_renderer?: THREE.WebGLRenderer;
@@ -141,11 +167,10 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_composer?: EffectComposer;
     private m_mainRenderPass?: RenderPass;
     private m_effectPass?: EffectPass;
-    private m_bloomEffect?: SelectiveBloomEffect;
-    private m_outlineEffect?: PPOutlineEffect;
-    private m_vignetteEffect?: VignetteEffect;
-    private m_sepiaEffect?: SepiaEffect;
-    private m_antialiasEffect?: SMAAEffect;
+    private m_bloomEffect?: SelectiveBloomEffect & IEnabledEffect;
+    private m_outlineEffect?: PPOutlineEffect & IEnabledEffect;
+    private m_vignetteEffect?: VignetteEffect & IEnabledEffect;
+    private m_sepiaEffect?: SepiaEffect & IEnabledEffect;
     private m_sunGodRaysEffect?: SunGodRaysEffect;
 
     private m_dynamicMsaaSamplingLevel: MSAASampling;
@@ -153,7 +178,6 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_lensSunPosition: THREE.Vector3 = new THREE.Vector3();
 
     private m_lowResPixelRatio?: number;
-
     private m_lowResEffect?: LowResEffect;
 
     constructor(
@@ -171,6 +195,69 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.setSize(width, height);
     }
 
+    private initializeEffects() {
+        if (!this.m_renderer || !this.m_scene || !this.m_camera) {
+            return;
+        }
+
+        // Initialize composer and main render pass
+        this.m_composer = new EffectComposer(this.m_renderer, {
+            multisampling: this.m_dynamicMsaaSamplingLevel,
+            stencilBuffer: true
+        });
+        this.m_mainRenderPass = new RenderPass(this.m_scene, this.m_camera);
+        this.m_composer.addPass(this.m_mainRenderPass);
+
+        // Initialize all possible effects (but don't enable them yet)
+        this.m_bloomEffect = new SelectiveBloomEffect(this.m_scene, this.m_camera, {
+            blendFunction: BlendFunction.SCREEN,
+            intensity: this.bloom.strength,
+            radius: this.bloom.radius,
+            mipmapBlur: false,
+            luminanceThreshold: this.bloom.threshold,
+            luminanceSmoothing: this.bloom.smoothing
+        });
+        this.m_bloomEffect.luminancePass.enabled = true;
+        // this.m_bloomEffect.ignoreBackground = true;
+        this.m_bloomEffect.inverted = true;
+        // this.m_bloomEffect.blendMode.blendFunction = BlendFunction.ADD;
+
+        this.m_outlineEffect = new PPOutlineEffect(this.m_scene, this.m_camera, {
+            edgeStrength: this.outline.thickness * 100,
+            pulseSpeed: 0.0,
+            visibleEdgeColor: new THREE.Color(this.outline.color).getHex(),
+            hiddenEdgeColor: new THREE.Color(0x000000).getHex(),
+            blur: false,
+            xRay: this.outline.ghostExtrudedPolygons
+        });
+
+        this.m_vignetteEffect = new VignetteEffect({
+            darkness: this.vignette.darkness,
+            offset: this.vignette.offset
+        });
+
+        this.m_sepiaEffect = new SepiaEffect({
+            intensity: this.sepia.amount
+        });
+
+        if (this.sunGodRays.enabled) {
+            this.m_sunGodRaysEffect = new SunGodRaysEffect(this.m_camera, this.sunGodRays);
+        }
+
+        if (this.m_lowResPixelRatio !== undefined) {
+            this.m_lowResEffect = new LowResEffect(this.m_lowResPixelRatio);
+        }
+
+        this.m_effectPass = new FilterEffectPass(
+            this.m_camera,
+            this.m_bloomEffect,
+            this.m_outlineEffect,
+            this.m_vignetteEffect,
+            this.m_sepiaEffect
+        );
+        this.m_composer.addPass(this.m_effectPass);
+    }
+
     updateOutline(options: { thickness: number; color: string; ghostExtrudedPolygons: boolean }) {
         this.outline.color = options.color;
         this.outline.thickness = options.thickness;
@@ -180,142 +267,80 @@ export class MapRenderingManager implements IMapRenderingManager {
 
     updateSunPosition(position: THREE.Vector3): void {
         this.m_lensSunPosition.copy(position);
+        if (this.m_sunGodRaysEffect) {
+            this.m_sunGodRaysEffect.lightPosition.copy(position);
+        }
     }
 
-    private setupEffects(
-        scene: THREE.Scene,
-        camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
-        isStaticFrame: boolean = false
-    ) {
-        if (!this.m_renderer || !this.m_scene || !this.m_camera) return;
-
-        this.m_composer?.dispose();
-        this.m_composer = new EffectComposer(this.m_renderer, {
-            stencilBuffer: true
-        });
-
-        // Create effects
-        const effects = [];
-
-        // Main render pass
-        this.m_mainRenderPass = new RenderPass(this.m_scene, this.m_camera);
-        this.m_composer.addPass(this.m_mainRenderPass);
-
-        // Bloom effect (参数已更新为6.37.5版本)
-        if (this.bloom.enabled) {
-            this.m_bloomEffect = new SelectiveBloomEffect(scene, camera, {
-                blendFunction: BlendFunction.ADD,
-                intensity: this.bloom.strength,
-                radius: this.bloom.radius,
-                luminanceThreshold: this.bloom.threshold,
-                luminanceSmoothing: this.bloom.smoothing
-            });
-
-            this.m_bloomEffect.luminancePass.enabled = this.bloom.luminancePassEnabled;
-            this.m_bloomEffect.ignoreBackground = true;
-            this.m_bloomEffect.inverted = true;
-
-            effects.push(this.m_bloomEffect);
+    private updateEffects() {
+        // First ensure all effects are initialized
+        if (
+            !this.m_bloomEffect ||
+            !this.m_outlineEffect ||
+            !this.m_vignetteEffect ||
+            !this.m_sepiaEffect
+        ) {
+            this.initializeEffects();
         }
 
-        // Outline effect (参数已更新为6.37.5版本)
-        if (this.outline.enabled) {
-            this.m_outlineEffect = new PPOutlineEffect(this.m_scene, this.m_camera, {
-                edgeStrength: this.outline.thickness * 100,
-                pulseSpeed: 0.0,
-                visibleEdgeColor: new THREE.Color(this.outline.color).getHex(),
-                hiddenEdgeColor: new THREE.Color(0x000000).getHex(),
-                blur: false,
-                xRay: this.outline.ghostExtrudedPolygons
-            });
-            effects.push(this.m_outlineEffect);
+        // Collect active effects based on current configuration
+
+        // Bloom effect
+        if (this.bloom.enabled && this.m_bloomEffect) {
+            this.m_bloomEffect.enabled = true;
+            this.updateBloomOptions();
+        } else if (this.m_bloomEffect) {
+            this.m_bloomEffect.enabled = false;
+        }
+
+        // Outline effect
+        if (this.outline.enabled && this.m_outlineEffect) {
+            this.m_outlineEffect.enabled = true;
+        } else if (this.m_outlineEffect) {
+            this.m_outlineEffect.enabled = false;
         }
 
         // Vignette effect
-        if (this.vignette.enabled) {
-            this.m_vignetteEffect = new VignetteEffect({
-                darkness: this.vignette.darkness,
-                offset: this.vignette.offset
-            });
-            effects.push(this.m_vignetteEffect);
+        if (this.vignette.enabled && this.m_vignetteEffect) {
+            this.m_vignetteEffect.enabled = true;
+        } else if (this.m_vignetteEffect) {
+            this.m_vignetteEffect.enabled = false;
+            this.m_vignetteEffect.offset = this.vignette.offset;
+            this.m_vignetteEffect.darkness = this.vignette.darkness;
         }
 
         // Sepia effect
-        if (this.sepia.enabled) {
-            this.m_sepiaEffect = new SepiaEffect({
-                intensity: this.sepia.amount
-            });
-            effects.push(this.m_sepiaEffect);
-        }
-
-        if (this.m_msaaEnabled) {
-            this.m_antialiasEffect = new SMAAEffect({
-                preset: this.getSMAAPreset(
-                    isStaticFrame ? this.staticMsaaSamplingLevel : this.dynamicMsaaSamplingLevel
-                ),
-                edgeDetectionMode: EdgeDetectionMode.COLOR,
-                predicationMode: PredicationMode.DEPTH
-            });
-            const edgeDetectionMaterial = this.m_antialiasEffect.edgeDetectionMaterial;
-            edgeDetectionMaterial.edgeDetectionThreshold = 0.02;
-            edgeDetectionMaterial.predicationThreshold = 0.002;
-            edgeDetectionMaterial.predicationScale = 1;
-            effects.push(this.m_antialiasEffect);
+        if (this.sepia.enabled && this.m_sepiaEffect) {
+            this.m_sepiaEffect.enabled = true;
+            this.m_sepiaEffect.intensity = this.sepia.amount;
+        } else if (this.m_sepiaEffect) {
+            this.m_sepiaEffect.enabled = false;
         }
 
         // Sun God Rays Effect
-        if (this.sunGodRays.enabled) {
-            if (!this.m_sunGodRaysEffect)
-                this.m_sunGodRaysEffect = new SunGodRaysEffect(this.m_camera, this.sunGodRays);
-            effects.push(this.m_sunGodRaysEffect);
+        if (this.sunGodRays.enabled && this.m_sunGodRaysEffect) {
+            this.m_sunGodRaysEffect.enabled = true;
         }
 
-        // 设置低分辨率效果
-        if (this.m_lowResPixelRatio !== undefined) {
-            this.m_lowResEffect = new LowResEffect(this.m_lowResPixelRatio);
-            effects.push(this.m_lowResEffect);
+        // Low resolution effect
+        if (this.m_lowResPixelRatio !== undefined && this.m_lowResEffect) {
         }
 
-        if (effects.length > 0) {
-            this.m_effectPass = new EffectPass(this.m_camera, ...effects);
-            this.m_composer.addPass(this.m_effectPass);
+        if (this.m_msaaEnabled) {
+            this.m_composer.multisampling = this.m_staticMsaaSamplingLevel || 2;
         }
 
         this.m_composer.setSize(this.m_width, this.m_height);
     }
 
-    // Add a method to update bloom settings
-    setBloomOptions(settings: Partial<IBloomEffect>): void {
-        Object.assign(this.bloom, settings);
-
+    private updateBloomOptions(): void {
         if (this.m_bloomEffect) {
             this.m_bloomEffect.intensity = this.bloom.strength;
             this.m_bloomEffect.mipmapBlurPass.radius = this.bloom.radius;
-            this.m_bloomEffect.mipmapBlurPass.levels = this.bloom.levels ?? 5;
-            this.m_bloomEffect.luminancePass.enabled = this.bloom.luminancePassEnabled;
-            this.m_bloomEffect.luminanceMaterial.threshold = this.bloom.luminancePassThreshold;
-            this.m_bloomEffect.luminanceMaterial.smoothing = this.bloom.luminancePassSmoothing;
-        }
-
-        // Recreate effects if bloom was toggled
-        if (settings.enabled !== undefined && this.m_scene && this.m_camera) {
-            this.setupEffects(this.m_scene, this.m_camera);
-        }
-    }
-
-    private getSMAAPreset(samplingLevel: MSAASampling): SMAAPreset {
-        // SMAA预设映射
-        switch (samplingLevel) {
-            case MSAASampling.Level_1:
-                return SMAAPreset.LOW;
-            case MSAASampling.Level_2:
-                return SMAAPreset.MEDIUM;
-            case MSAASampling.Level_4:
-                return SMAAPreset.HIGH;
-            case MSAASampling.Level_8:
-                return SMAAPreset.ULTRA;
-            default:
-                return SMAAPreset.LOW;
+            this.m_bloomEffect.mipmapBlurPass.levels = this.bloom.levels ?? 1;
+            this.m_bloomEffect.luminanceMaterial.threshold = this.bloom.threshold;
+            this.m_bloomEffect.luminanceMaterial.smoothing =
+                this.bloom.luminancePassSmoothing || 0.1;
         }
     }
 
@@ -329,10 +354,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_scene = scene;
         this.m_camera = camera;
 
-        if (!this.m_composer || this.outline.needsUpdate) {
-            this.setupEffects(scene, camera, isStaticFrame);
-            this.outline.needsUpdate = false;
-        }
+        this.updateEffects();
 
         if (this.m_composer) {
             this.m_composer.render();
@@ -344,12 +366,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     setSize(width: number, height: number) {
         this.m_width = width;
         this.m_height = height;
-
         this.m_composer?.setSize(width, height);
-    }
-
-    get sunGodRaysEffect(): SunGodRaysEffect | undefined {
-        return this.m_sunGodRaysEffect;
     }
 
     set dynamicMsaaSamplingLevel(samplingLevel: MSAASampling) {
@@ -385,8 +402,6 @@ export class MapRenderingManager implements IMapRenderingManager {
             this.m_lowResPixelRatio = pixelRatio;
             if (this.m_lowResEffect) {
                 this.m_lowResEffect.pixelRatio = pixelRatio;
-            }
-            if (this.m_width && this.m_height) {
             }
         }
     }

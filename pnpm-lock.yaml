@@ -112,8 +112,8 @@ catalogs:
       specifier: ^0.17.0
       version: 0.17.4
     '@types/three':
-      specifier: ^0.174.0
-      version: 0.174.0
+      specifier: ^0.178.0
+      version: 0.178.0
     '@types/ua-parser-js':
       specifier: ^0.7.32
       version: 0.7.39
@@ -135,9 +135,6 @@ catalogs:
     ansi-bold:
       specifier: ^0.1.1
       version: 0.1.1
-    assert:
-      specifier: ~2.0.0
-      version: 2.0.0
     babel-loader:
       specifier: ^8.1.0
       version: 8.4.1
@@ -346,8 +343,8 @@ catalogs:
       specifier: ^5.2.0
       version: 5.3.0
     postprocessing:
-      specifier: '^6.37.5 '
-      version: 6.37.5
+      specifier: '^6.37.6 '
+      version: 6.37.6
     prettier:
       specifier: ^2.2.1
       version: 2.8.8
@@ -406,8 +403,8 @@ catalogs:
       specifier: ^1.8.0
       version: 1.9.0
     three:
-      specifier: ^0.174.0
-      version: 0.174.0
+      specifier: ^0.178.0
+      version: 0.178.0
     three-bvh-csg:
       specifier: ~0.0.15
       version: 0.0.17
@@ -499,7 +496,7 @@ importers:
         version: 0.17.4
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       '@typescript-eslint/eslint-plugin':
         specifier: 'catalog:'
         version: 4.33.0(@typescript-eslint/parser@4.33.0(eslint@7.32.0)(typescript@5.8.3))(eslint@7.32.0)(typescript@5.8.3)
@@ -610,7 +607,7 @@ importers:
         version: 3.0.0
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       ts-loader:
         specifier: 'catalog:'
         version: 8.4.0(typescript@5.8.3)(webpack@5.99.9)
@@ -758,7 +755,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -776,7 +773,7 @@ importers:
         version: 0.5.21
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       typeconv:
         specifier: 'catalog:'
         version: 1.8.0
@@ -800,7 +797,7 @@ importers:
         version: link:../flywave-text-canvas
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
     devDependencies:
       '@types/chai':
         specifier: 'catalog:'
@@ -813,7 +810,7 @@ importers:
         version: 16.18.126
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -840,7 +837,7 @@ importers:
         version: link:../flywave-mapview-decoder
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
     devDependencies:
       '@flywave/flywave-datasource-protocol':
         specifier: workspace:*
@@ -874,7 +871,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -965,7 +962,7 @@ importers:
         version: 4.0.2
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       copy-webpack-plugin:
         specifier: 'catalog:'
         version: 7.0.0(webpack@5.99.9)
@@ -998,7 +995,7 @@ importers:
         version: 1.9.0
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       ts-loader:
         specifier: 'catalog:'
         version: 8.4.0(typescript@5.8.3)(webpack@5.99.9)
@@ -1037,7 +1034,7 @@ importers:
         version: link:../flywave-vectortile-datasource
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
     devDependencies:
       '@types/chai':
         specifier: 'catalog:'
@@ -1050,7 +1047,7 @@ importers:
         version: 16.18.126
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1139,7 +1136,7 @@ importers:
         version: 16.18.126
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1157,7 +1154,7 @@ importers:
         version: 0.5.21
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
@@ -1188,7 +1185,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1209,7 +1206,7 @@ importers:
         version: 0.5.21
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
@@ -1227,7 +1224,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1245,7 +1242,7 @@ importers:
         version: 0.5.21
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
@@ -1263,7 +1260,7 @@ importers:
         version: link:../flywave-mapview-decoder
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
     devDependencies:
       '@flywave/flywave-datasource-protocol':
         specifier: workspace:*
@@ -1297,7 +1294,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1346,7 +1343,7 @@ importers:
         version: 10.0.10
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1361,7 +1358,7 @@ importers:
         version: 0.5.21
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
@@ -1432,7 +1429,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1453,7 +1450,7 @@ importers:
         version: 0.5.21
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
@@ -1555,7 +1552,7 @@ importers:
         version: link:../flywave-utils
       postprocessing:
         specifier: 'catalog:'
-        version: 6.37.5(three@0.174.0)
+        version: 6.37.6(three@0.178.0)
       rbush:
         specifier: 'catalog:'
         version: 3.0.1
@@ -1580,7 +1577,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1604,7 +1601,7 @@ importers:
         version: 0.5.21
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
@@ -1687,7 +1684,7 @@ importers:
         version: 10.0.10
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1702,7 +1699,7 @@ importers:
         version: 0.5.21
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
@@ -1769,7 +1766,7 @@ importers:
         version: link:../flywave-vectortile-datasource
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
     devDependencies:
       '@flywave/flywave-fetch':
         specifier: workspace:*
@@ -1797,7 +1794,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1833,7 +1830,7 @@ importers:
         version: link:../flywave-mapview-decoder
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
     devDependencies:
       '@flywave/flywave-datasource-protocol':
         specifier: workspace:*
@@ -1867,7 +1864,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -1915,7 +1912,7 @@ importers:
         version: 3.2.0
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       upng-js:
         specifier: ^2.1.0
         version: 2.1.0
@@ -1952,7 +1949,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -2003,7 +2000,7 @@ importers:
         version: 9.2.4
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       ua-parser-js:
         specifier: 'catalog:'
         version: 0.7.40
@@ -2043,7 +2040,7 @@ importers:
         version: 1.15.8
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       body-parser:
         specifier: 'catalog:'
         version: 1.20.3(supports-color@6.1.0)
@@ -2092,7 +2089,7 @@ importers:
         version: 16.18.126
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -2110,7 +2107,7 @@ importers:
         version: 0.5.21
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       ts-node:
         specifier: 'catalog:'
         version: 9.1.1(typescript@5.8.3)
@@ -2269,7 +2266,7 @@ importers:
         version: 6.11.4
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
     devDependencies:
       '@flywave/flywave-fetch':
         specifier: workspace:*
@@ -2297,7 +2294,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -2367,7 +2364,7 @@ importers:
         version: link:../flywave-utils
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
     devDependencies:
       '@types/chai':
         specifier: 'catalog:'
@@ -2380,7 +2377,7 @@ importers:
         version: 10.0.10
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -2456,9 +2453,6 @@ importers:
       '@vitaly-z/hilbert-geohash':
         specifier: 'catalog:'
         version: 0.0.5
-      assert:
-        specifier: 'catalog:'
-        version: 2.0.0
       csscolorparser:
         specifier: 'catalog:'
         version: 1.0.3
@@ -2515,7 +2509,7 @@ importers:
         version: 4.0.1
       three-bvh-csg:
         specifier: 'catalog:'
-        version: 0.0.17(three-mesh-bvh@0.9.1(three@0.174.0))(three@0.174.0)
+        version: 0.0.17(three-mesh-bvh@0.9.1(three@0.178.0))(three@0.178.0)
     devDependencies:
       '@babel/cli':
         specifier: 'catalog:'
@@ -3137,6 +3131,9 @@ packages:
 
   '@davidcmeier/string-to-color@2.0.0':
     resolution: {integrity: sha512-dRp83lEdZ8YzRgWwbymB5ZVMKgROTXbJTeKnDDrg8n/3VSjYCuvga5a3ZjbmhLgZEhUgAfrx/nOA5FyR/hInqw==}
+
+  '@dimforge/rapier3d-compat@0.12.0':
+    resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
 
   '@discoveryjs/json-ext@0.5.7':
     resolution: {integrity: sha512-dBVuXR082gk3jsFp7Rd/JI4kytwGHecnCoTtXFb7DB6CNHp4rg5k1bhg0nWdLGLnOV71lmDzGQaLMy8iPLY0pw==}
@@ -3777,8 +3774,8 @@ packages:
   '@types/stats.js@0.17.4':
     resolution: {integrity: sha512-jIBvWWShCvlBqBNIZt0KAshWpvSjhkwkEu4ZUcASoAvhmrgAUI2t1dXrjSL4xXVLB4FznPrIsX3nKXFl/Dt4vA==}
 
-  '@types/three@0.174.0':
-    resolution: {integrity: sha512-De/+vZnfg2aVWNiuy1Ldu+n2ydgw1osinmiZTAn0necE++eOfsygL8JpZgFjR2uHmAPo89MkxBj3JJ+2BMe+Uw==}
+  '@types/three@0.178.0':
+    resolution: {integrity: sha512-1IpVbMKbEAAWjyn0VTdVcNvI1h1NlTv3CcnwMr3NNBv/gi3PL0/EsWROnXUEkXBxl94MH5bZvS8h0WnBRmR/pQ==}
 
   '@types/ua-parser-js@0.7.39':
     resolution: {integrity: sha512-P/oDfpofrdtF5xw433SPALpdSchtJmY7nsJItf8h3KXqOslkbySh8zq4dSWXH2oTjRvJ5PczVEoCZPow6GicLg==}
@@ -4134,9 +4131,6 @@ packages:
   assert-plus@1.0.0:
     resolution: {integrity: sha512-NfJ4UzBCcQGLDlQq7nHxH+tv3kyZ0hHQqF5BO6J7tNJeP5do1llPr8dZ8zHonfhAu0PHAdMkSo+8o0wxg9lZWw==}
     engines: {node: '>=0.8'}
-
-  assert@2.0.0:
-    resolution: {integrity: sha512-se5Cd+js9dXJnu6Ag2JFc00t+HmHOen+8Q+L7O9zI0PqQXr20uk2J0XQqMxZEeo5U50o8Nvmmx7dZrl+Ufr35A==}
 
   assertion-error@1.1.0:
     resolution: {integrity: sha512-jgsaNduz+ndvGyFt3uSuWqvy4lCnIJiovtouQN5JZHOKCS2QuhEdbcQHFhVksz2N2U9hXJo8odG7ETyWlEeuDw==}
@@ -5101,9 +5095,6 @@ packages:
 
   es6-error@4.1.1:
     resolution: {integrity: sha512-Um/+FxMr9CISWh0bi5Zv0iOD+4cFh5qLeks1qhAopKVAJw3drgKbKySikp7wGhDL0HPeaja0P5ULZrxLkniUVg==}
-
-  es6-object-assign@1.1.0:
-    resolution: {integrity: sha512-MEl9uirslVwqQU369iHNWZXsI8yaZYGg/D65aOgZkeyFJwHYSxilf7rQzXKI7DdDuBPrBXbfk3sl9hJhmd5AUw==}
 
   es6-promise@3.3.1:
     resolution: {integrity: sha512-SOp9Phqvqn7jtEUxPWdWfWoLmyt2VaJ6MpvP9Comy1MceMXqE6bxvaTu4iaxpYYPzhny28Lc+M87/c2cPK6lDg==}
@@ -6122,10 +6113,6 @@ packages:
 
   is-map@2.0.3:
     resolution: {integrity: sha512-1Qed0/Hr2m+YqxnM09CjA2d/i6YZNfF6R2oRAOj36eUdS6qIV/huPJNSEpKbupewFs+ZsJlxsjjPbc0/afW6Lw==}
-    engines: {node: '>= 0.4'}
-
-  is-nan@1.3.2:
-    resolution: {integrity: sha512-E+zBKpQ2t6MEo1VsonYmluk9NxGrbzpeeLC2xIViuO2EjU2xsXsBPwTr3Ykv9l08UYEVEdWeRZNouaZqF6RN0w==}
     engines: {node: '>= 0.4'}
 
   is-negative-zero@2.0.3:
@@ -7237,8 +7224,8 @@ packages:
     resolution: {integrity: sha512-yioayjNbHn6z1/Bywyb2Y4s3yvDAeXGOyxqD+LnVOinq6Mdmd++SW2wUNVzavyyHxd6+DxzWGIuosg6P1Rj8uA==}
     engines: {node: '>=6.0.0'}
 
-  postprocessing@6.37.5:
-    resolution: {integrity: sha512-nP3MOpwkhUVtlKSqZ2RsBIcNuAP/JqwKQo+u975PahpBknY/nIxf9FEVZ5FAB2Nyjve96CARfNjDkiqEhxOrhw==}
+  postprocessing@6.37.6:
+    resolution: {integrity: sha512-KrdKLf1257RkoIk3z3nhRS0aToKrX2xJgtR0lbnOQUjd+1I4GVNv1gQYsQlfRglvEXjpzrwqOA5fXfoDBimadg==}
     peerDependencies:
       three: '>= 0.157.0 < 0.179.0'
 
@@ -8101,8 +8088,8 @@ packages:
     peerDependencies:
       three: '>= 0.159.0'
 
-  three@0.174.0:
-    resolution: {integrity: sha512-p+WG3W6Ov74alh3geCMkGK9NWuT62ee21cV3jEnun201zodVF4tCE5aZa2U122/mkLRmhJJUQmLLW1BH00uQJQ==}
+  three@0.178.0:
+    resolution: {integrity: sha512-ybFIB0+x8mz0wnZgSGy2MO/WCO6xZhQSZnmfytSPyNpM0sBafGRVhdaj+erYh5U+RhQOAg/eXqw5uVDiM2BjhQ==}
 
   through2@2.0.5:
     resolution: {integrity: sha512-/mrRod8xqpA+IHSLyGCQ2s8SPHiCDEeQJSep1jqLYeEUClOFG2Qsh+4FU6G9VeqpZnGW/Su8LQGc4YKni5rYSQ==}
@@ -8426,9 +8413,6 @@ packages:
 
   util@0.10.4:
     resolution: {integrity: sha512-0Pm9hTQ3se5ll1XihRic3FDIku70C+iHUdT/W926rSgHV5QgXsYbKZN8MSC3tJtSkhuROzvsQjAaFENRXr+19A==}
-
-  util@0.12.5:
-    resolution: {integrity: sha512-kZf/K6hEIrWHI6XqOFUiiMa+79wE/D8Q+NCNAWclkyg3b4d2k7s0QGepNjiABc+aR3N1PAyHL7p6UcLY6LmrnA==}
 
   utila@0.4.0:
     resolution: {integrity: sha512-Z0DbgELS9/L/75wZbro8xAnT50pBVFQZ+hUEueGDU5FN51YSCYM+jdxsfCiHjwNP/4LCDD0i/graKpeBnOXKRA==}
@@ -9442,6 +9426,8 @@ snapshots:
   '@colors/colors@1.5.0': {}
 
   '@davidcmeier/string-to-color@2.0.0': {}
+
+  '@dimforge/rapier3d-compat@0.12.0': {}
 
   '@discoveryjs/json-ext@0.5.7': {}
 
@@ -10639,8 +10625,9 @@ snapshots:
 
   '@types/stats.js@0.17.4': {}
 
-  '@types/three@0.174.0':
+  '@types/three@0.178.0':
     dependencies:
+      '@dimforge/rapier3d-compat': 0.12.0
       '@tweenjs/tween.js': 23.1.3
       '@types/stats.js': 0.17.4
       '@types/webxr': 0.5.22
@@ -11029,13 +11016,6 @@ snapshots:
       safer-buffer: 2.1.2
 
   assert-plus@1.0.0: {}
-
-  assert@2.0.0:
-    dependencies:
-      es6-object-assign: 1.1.0
-      is-nan: 1.3.2
-      object-is: 1.1.6
-      util: 0.12.5
 
   assertion-error@1.1.0: {}
 
@@ -12187,8 +12167,6 @@ snapshots:
       is-symbol: 1.1.1
 
   es6-error@4.1.1: {}
-
-  es6-object-assign@1.1.0: {}
 
   es6-promise@3.3.1: {}
 
@@ -13371,11 +13349,6 @@ snapshots:
       is-extglob: 2.1.1
 
   is-map@2.0.3: {}
-
-  is-nan@1.3.2:
-    dependencies:
-      call-bind: 1.0.8
-      define-properties: 1.2.1
 
   is-negative-zero@2.0.3: {}
 
@@ -14568,9 +14541,9 @@ snapshots:
       picocolors: 0.2.1
       source-map: 0.6.1
 
-  postprocessing@6.37.5(three@0.174.0):
+  postprocessing@6.37.6(three@0.178.0):
     dependencies:
-      three: 0.174.0
+      three: 0.178.0
 
   prebuild-install@6.1.4:
     dependencies:
@@ -15623,16 +15596,16 @@ snapshots:
 
   text-table@0.2.0: {}
 
-  three-bvh-csg@0.0.17(three-mesh-bvh@0.9.1(three@0.174.0))(three@0.174.0):
+  three-bvh-csg@0.0.17(three-mesh-bvh@0.9.1(three@0.178.0))(three@0.178.0):
     dependencies:
-      three: 0.174.0
-      three-mesh-bvh: 0.9.1(three@0.174.0)
+      three: 0.178.0
+      three-mesh-bvh: 0.9.1(three@0.178.0)
 
-  three-mesh-bvh@0.9.1(three@0.174.0):
+  three-mesh-bvh@0.9.1(three@0.178.0):
     dependencies:
-      three: 0.174.0
+      three: 0.178.0
 
-  three@0.174.0: {}
+  three@0.178.0: {}
 
   through2@2.0.5:
     dependencies:
@@ -15971,14 +15944,6 @@ snapshots:
   util@0.10.4:
     dependencies:
       inherits: 2.0.3
-
-  util@0.12.5:
-    dependencies:
-      inherits: 2.0.4
-      is-arguments: 1.2.0
-      is-generator-function: 1.1.0
-      is-typed-array: 1.1.15
-      which-typed-array: 1.1.19
 
   utila@0.4.0: {}
 

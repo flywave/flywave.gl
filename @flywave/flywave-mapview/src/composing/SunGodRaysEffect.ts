@@ -6,7 +6,7 @@ export class SunGodRaysEffect extends GodRaysEffect {
     private m_sunMesh: THREE.Mesh;
     private m_config: IGodRaysEffect;
     private m_lightPosition = new THREE.Vector3();
-
+    public enabled = false;
     /**
      * 构造函数
      * @param camera - 主相机
@@ -22,7 +22,14 @@ export class SunGodRaysEffect extends GodRaysEffect {
         // 创建太阳网格
         const geometry = new THREE.CircleGeometry(1, 32);
 
-        const sunMesh = new THREE.Mesh(geometry);
+        const sunMesh = new THREE.Mesh(
+            geometry,
+            new THREE.MeshBasicMaterial({
+                depthTest: true,
+                depthWrite: false,
+                blending: THREE.NormalBlending
+            })
+        );
         sunMesh.name = "SunLightSource";
 
         // 初始化父类
@@ -32,7 +39,7 @@ export class SunGodRaysEffect extends GodRaysEffect {
             decay: fullConfig.decay,
             weight: fullConfig.weight,
             exposure: fullConfig.exposure,
-            clampMax: fullConfig.clampMax,
+            // clampMax: fullConfig.clampMax,
             blur: fullConfig.blur,
             resolutionScale: fullConfig.resolutionScale
         });
@@ -96,6 +103,7 @@ export class SunGodRaysEffect extends GodRaysEffect {
      */
     private updateSunPositionAndDirection(): void {
         this.m_sunMesh.position.copy(this.lightPosition);
+        this.m_sunMesh.scale.setScalar(100000);
 
         // 使太阳始终朝向相机（保持视觉上的圆形）
         this.m_sunMesh.lookAt(new THREE.Vector3(0, 0, 0));
@@ -109,8 +117,10 @@ export class SunGodRaysEffect extends GodRaysEffect {
         inputBuffer: THREE.WebGLRenderTarget,
         deltaTime?: number
     ): void {
-        this.updateSunPositionAndDirection();
-        super.update(renderer, inputBuffer, deltaTime);
+        if (this.enabled) {
+            this.updateSunPositionAndDirection();
+            super.update(renderer, inputBuffer, deltaTime);
+        }
     }
 
     /**

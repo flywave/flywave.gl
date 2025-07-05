@@ -1,6 +1,7 @@
 import type { DracoParseOptions } from "./lib/draco-parser";
 import type { DracoMesh } from "./lib/draco-types";
 export interface DracoLoaderOptions {
+    headers?: Record<string, string>;
     draco?: DracoParseOptions & {
         decoderType?: "wasm" | "js";
         libraryPath?: string;
@@ -50,6 +51,7 @@ export declare const DracoLoader: {
         };
     };
 };
-declare function parse(arrayBuffer: ArrayBuffer, options?: DracoLoaderOptions): Promise<DracoMesh>;
+declare function parse(arrayBuffer: ArrayBuffer, options?: DracoLoaderOptions, context?: any): Promise<DracoMesh>;
+export declare function loadDraco(url: string, loader: typeof DracoLoader, options?: DracoLoaderOptions, context?: any): Promise<DracoMesh>;
 export {};
 //# sourceMappingURL=draco-loader.d.ts.map
