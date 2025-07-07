@@ -113,7 +113,7 @@ export class CirclePointsMaterial extends RawShaderMaterial {
             ]);
             shaderParams.depthTest = false;
             shaderParams.extensions = {
-                ...shaderParams.extensions,
+                ...shaderParams.extensions
                 // derivatives: true
             };
             shaderParameters = shaderParams;
@@ -123,7 +123,7 @@ export class CirclePointsMaterial extends RawShaderMaterial {
         // Blending needs to always be enabled to support smooth edges
         enforceBlending(this);
 
-        this.type = "CirclePointsMaterial";
+        // this.type = "CirclePointsMaterial";
         this.setOpacity(defaultOpacity);
 
         if (sizeValue !== undefined) {

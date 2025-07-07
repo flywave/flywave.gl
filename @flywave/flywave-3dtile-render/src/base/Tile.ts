@@ -1,62 +1,13 @@
-import { Box3, BufferGeometry, Material, Matrix4, Object3D, Scene, Sphere, Texture } from "three";
+import { BufferGeometry, Material, Matrix4, Object3D, Scene, Sphere, Texture } from "three";
 import { LoadState } from "./constants";
-import { EllipsoidRegion } from "../three/math/EllipsoidRegion";
 import { GeoBox, OrientedBox3 } from "@flywave/flywave-geoutils";
-
-export interface InnterTile {
-    /** Last frame number this tile was accessed */
-    __lastFrameVisited: number;
-    /** Whether the tile is used in current frame */
-    __used: boolean;
-    /** Whether the tile is within view frustum */
-    __inFrustum: boolean;
-    /** Indicates if this tile is a leaf node */
-    __isLeaf: boolean;
-    /** Visibility state of the tile */
-    __visible: boolean;
-    /** Activation state of the tile */
-    __active: boolean;
-    /** Screen space error metric value */
-    __error: number;
-    /** Distance from camera to tile center */
-    __distanceFromCamera: number;
-    /** Whether any child was visible last frame */
-    __childrenWereVisible: boolean;
-    /** All children have finished loading */
-    __allChildrenLoaded: boolean;
-    /** Depth level in tile hierarchy */
-    __depth: number;
-    /** Load state enumeration from LoadState */
-    __loadingState: LoadState;
-    /** Depth relative to nearest rendered parent */
-    __depthFromRenderedParent: number;
-    /** Marks external tile set reference */
-    __externalTileSet?: boolean;
-    /** Indicates empty content node */
-    __contentEmpty?: boolean;
-    /** Child tile references */
-    children?: Tile[];
-    /** Refinement strategy: ADD or REPLACE */
-    refine?: "ADD" | "REPLACE";
-    /** Parent tile reference */
-    parent?: Tile;
-    /** Previous visibility state */
-    __wasSetVisible?: boolean;
-    /** Previous activation state */
-    __wasSetActive?: boolean;
-    /** Usage state in previous frame */
-    __usedLastFrame?: boolean;
-
-    __loadIndex: number;
-
-    __loadAbort?: AbortController;
-}
-
-export type TileContext = {
-    uri?: string;
-    //old version
-    url?: string;
-};
+import {
+    TILE_REFINEMENT,
+    TileRefinement,
+    Tiles3DTileContent,
+    Tiles3DTileJSONPostprocessed,
+    Tiles3DTilesetJSONPostprocessed
+} from "../next/types";
 
 export type BoundingVolume = {
     /** 轴对齐包围盒 (12元素数组) */
@@ -102,12 +53,110 @@ export type TileCache = {
     textures?: Texture[];
 };
 
-export interface Tile extends InnterTile {
+export class Tile {
+    /** Last frame number this tile was accessed */
+    __lastFrameVisited: number;
+    /** Whether the tile is used in current frame */
+    __used: boolean;
+    /** Whether the tile is within view frustum */
+    __inFrustum: boolean;
+    /** Indicates if this tile is a leaf node */
+    __isLeaf: boolean;
+    /** Visibility state of the tile */
+    __visible: boolean;
+    /** Activation state of the tile */
+    __active: boolean;
+    /** Screen space error metric value */
+    __error: number;
+    /** Distance from camera to tile center */
+    __distanceFromCamera: number;
+    /** Whether any child was visible last frame */
+    __childrenWereVisible: boolean;
+    /** All children have finished loading */
+    __allChildrenLoaded: boolean;
+    /** Depth level in tile hierarchy */
+    __depth: number;
+    /** Load state enumeration from LoadState */
+    __loadingState: LoadState;
+    /** Depth relative to nearest rendered parent */
+    __depthFromRenderedParent: number;
+
+    /** Indicates empty content node */
+    __contentEmpty?: boolean;
+    /** Previous visibility state */
+    __wasSetVisible?: boolean;
+    /** Previous activation state */
+    __wasSetActive?: boolean;
+    /** Usage state in previous frame */
+    __usedLastFrame?: boolean;
+
+    __loadIndex: number;
+
+    __loadAbort?: AbortController;
+
+    __implicitTiles?: boolean;
+    __externalTileSet?: boolean;
+    __contentGroup?: boolean;
+
+    private _children: Tile[] = [];
+    constructor(private metadata: Tiles3DTileContent | Tiles3DTileJSONPostprocessed) {
+        this.__lastFrameVisited = 0;
+        this.__used = false;
+        this.__inFrustum = false;
+
+        this._children = this.tiles3DTileJSONPostprocessed.children?.map(e => {
+            return new Tile(e);
+        });
+    }
+
+    get tiles3DTileContent(): Tiles3DTileContent {
+        return this.metadata as Tiles3DTileContent;
+    }
+
+    get tiles3DTileJSONPostprocessed(): Tiles3DTileJSONPostprocessed {
+        return this.metadata as Tiles3DTileJSONPostprocessed;
+    }
+
+    /** Child tile references */
+    get children() {
+        return this._children || [];
+    }
     /** Parent tile reference */
     parent?: Tile;
-    content: TileContext;
-    transform: number[];
-    boundingVolume: BoundingVolume;
+
+    get content() {
+        return this.tiles3DTileJSONPostprocessed.content;
+    }
+
+    get transform() {
+        return this.tiles3DTileJSONPostprocessed.transform;
+    }
+
+    get boundingVolume() {
+        return this.tiles3DTileJSONPostprocessed.boundingVolume as BoundingVolume;
+    }
+
     cached: TileCache;
-    geometricError?: number;
+    get geometricError() {
+        return this.tiles3DTileJSONPostprocessed.geometricError;
+    }
+
+    get refine() {
+        return this.tiles3DTileJSONPostprocessed.refine as TILE_REFINEMENT;
+    }
+
+    set refine(value: TILE_REFINEMENT) {
+        this.tiles3DTileJSONPostprocessed.refine = value;
+    }
+}
+
+export class TileSet {
+    root: Tile;
+    constructor(private meta: Tiles3DTilesetJSONPostprocessed) {
+        this.root = new Tile(meta.root);
+    }
+
+    get asset() {
+        return this.meta.asset;
+    }
 }

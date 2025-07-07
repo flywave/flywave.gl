@@ -124,6 +124,7 @@ function getBaseUri(tilesetUrl: string): string {
 export async function load3DTiles(
     url: string,
     options: Tiles3DLoaderOptions = {},
+    requestInit?: RequestInit,
     context?: any,
     proj?: Projection
 ): Promise<Tiles3DTileContent | Tiles3DTilesetJSONPostprocessed> {
@@ -134,9 +135,7 @@ export async function load3DTiles(
     }
 
     try {
-        const response = await fetchFn(url, {
-            headers: options.headers
-        });
+        const response = await fetchFn(url, requestInit);
 
         if (!response.ok) {
             throw new Error(
@@ -148,11 +147,7 @@ export async function load3DTiles(
         const isJson = contentType.includes("application/json") || url.endsWith(".json");
 
         let data: ArrayBuffer | string;
-        if (isJson) {
-            data = await response.text();
-        } else {
-            data = await response.arrayBuffer();
-        }
+        data = await response.arrayBuffer();
 
         const parseContext = {
             ...context,

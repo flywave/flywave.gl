@@ -25,7 +25,7 @@ function createFakeDisplacementMap(sideSize: number): THREE.DataTexture {
         }
     }
 
-    return new THREE.DataTexture(array, sideSize, sideSize, THREE.LuminanceFormat, THREE.FloatType);
+    return new THREE.DataTexture(array, sideSize, sideSize, THREE.RedFormat, THREE.FloatType);
 }
 
 function createPerspectiveCamera(width: number, height: number): THREE.PerspectiveCamera {

@@ -628,7 +628,7 @@ function setupScene(gltf: GLTFPostprocessed, scene: Scene, nodeMap: Map<string, 
     }
 
     for (const nodeId of defaultScene.nodes || []) {
-        const node = nodeMap.get(nodeId.toString());
+        const node = nodeMap.get(nodeId.id.toString());
         if (node) scene.add(node);
     }
 }

@@ -84,7 +84,7 @@ export class HighPrecisionPointMaterial extends THREE.PointsMaterial {
         const shaderParams = params;
         super(shaderParams);
 
-        this.type = "HighPrecisionPointMaterial";
+        // this.type = "HighPrecisionPointMaterial";
         this.vertexShader = vertexSource;
         this.fragmentShader = THREE.ShaderChunk.points_frag;
         this.fog = false;
