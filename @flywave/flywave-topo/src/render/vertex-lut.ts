@@ -1,14 +1,14 @@
 import * as THREE from "three";
 
-import { QParams2d, QParams3d } from "../../common";
+import { QParams2d, QParams3d } from "../common";
 import {
     AuxChannel,
     AuxChannelTable,
     AuxDisplacementChannel,
     AuxParamChannel
-} from "../../common/render/primitives/aux-channel-table";
-import { VertexTable } from "../../common/render/primitives/vertex-table";
-import { dispose, IDisposable } from "../../utils";
+} from "../common/render/primitives/aux-channel-table";
+import { VertexTable } from "../common/render/primitives/vertex-table";
+import { dispose, IDisposable } from "../utils";
 import { qorigin3dToArray, qparams2dToArray, qscale3dToArray } from "./attribute-buffers";
 import { ColorInfo } from "./color-info";
 

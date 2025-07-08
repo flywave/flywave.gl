@@ -1,7 +1,7 @@
 import { BufferAttribute, Uint16BufferAttribute } from "three";
 
-import { QParams2d, QParams3d } from "../../common";
-import { Point3d } from "../../core-geometry";
+import { QParams2d, QParams3d } from "../common";
+import { Point3d } from "../core-geometry";
 
 function setScale(index: number, value: number, array: Float32Array) {
     array[index] = value !== 0.0 ? 1.0 / value : value;

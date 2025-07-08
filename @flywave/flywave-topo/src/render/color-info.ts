@@ -1,6 +1,6 @@
-import { ColorDef, ColorIndex } from "../../common";
-import { VertexTable } from "../../common/render/primitives/vertex-table";
-import { assert } from "../../utils";
+import { ColorDef, ColorIndex } from "../common";
+import { VertexTable } from "../common/render/primitives/vertex-table";
+import { assert } from "../utils";
 import { FloatRgba } from "./float-rgba";
 
 export class ColorInfo {

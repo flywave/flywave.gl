@@ -15,72 +15,20 @@ import { MeshParams } from "../common/render/primitives/mesh-params";
 import { PointStringParams } from "../common/render/primitives/point-string-params";
 import { PolylineParams } from "../common/render/primitives/polyline-params";
 import { TextureCacheKey } from "../common/render/texture-params";
-import { ClipVector, Matrix3d, Point3d, Range3d, Transform, XAndY } from "../core-geometry";
+import {  Matrix3d, Point3d, Range3d, Transform, XAndY } from "../core-geometry";
 import { MeshArgs, PolylineArgs } from "../primitives/mesh/mesh-primitives";
 import { PointCloudArgs } from "../primitives/point-cloud-primitive";
 import { createPointStringParams } from "../primitives/point-string-params";
 import { createPolylineParams } from "../primitives/polyline-params";
 import { createMeshParams } from "../primitives/vertex-table-builder";
 import { Id64String, IDisposable } from "../utils";
-import { CreateRenderMaterialArgs } from "./create-render-material-args";
-import { CreateTextureArgs, CreateTextureFromSourceArgs } from "./create-texture-args";
-import { GraphicBranch, GraphicBranchOptions } from "./graphic-branch";
 import {
     BatchOptions,
     CustomGraphicBuilderOptions,
     GraphicBuilder,
     ViewportGraphicBuilderOptions
 } from "./graphic-builder";
-import { imageElementFromImageSource } from "./image-util";
-import { InstancedGraphicParams, PatternGraphicParams } from "./instanced-graphic-params";
-import { RenderClipVolume } from "./render-clip-volume";
-import { RenderGraphic, RenderGraphicOwner } from "./render-graphic";
-
-export type RenderGeometry = IDisposable;
-export type RenderAreaPattern = IDisposable;
-
-export interface GLTimerResult {
-    label: string;
-    nanoseconds: number;
-    children?: GLTimerResult[];
-}
-
-export type GLTimerResultCallback = (result: GLTimerResult) => void;
-
-class GraphicOwner extends RenderGraphicOwner {
-    public constructor(private readonly _graphic: RenderGraphic) {
-        super();
-    }
-
-    public get graphic(): RenderGraphic {
-        return this._graphic;
-    }
-}
-
-export class PlanarGridTransparency {
-    public readonly planeTransparency = 0.9;
-    public readonly lineTransparency = 0.75;
-    public readonly refTransparency = 0.5;
-}
-
-export interface PlanarGridProps {
-    origin: Point3d;
-    rMatrix: Matrix3d;
-    spacing: XAndY;
-    gridsPerRef: number;
-    color: ColorDef;
-    transparency?: PlanarGridTransparency;
-}
-
-export class DebugShaderFile {
-    public constructor(
-        public readonly filename: string,
-        public readonly src: string,
-        public isVS: boolean,
-        public isGL: boolean,
-        public isUsed: boolean
-    ) {}
-}
+import { RenderGraphic } from "./render-graphic";
 
 export abstract class RenderSystem implements IDisposable {
     public readonly options: RenderSystem.Options;
@@ -93,10 +41,6 @@ export abstract class RenderSystem implements IDisposable {
     public abstract get isValid(): boolean;
 
     public abstract dispose(): void;
-
-    public get maxTextureSize(): number {
-        return 0;
-    }
 
     public findMaterial(_key: string): RenderMaterial | undefined {
         return undefined;
@@ -246,11 +190,6 @@ export abstract class RenderSystem implements IDisposable {
     public createPointCloud(_args: PointCloudArgs): RenderGraphic | undefined {
         return undefined;
     }
-
-    public createClipVolume(_clipVector: ClipVector): RenderClipVolume | undefined {
-        return undefined;
-    }
-
     public createPlanarGrid(_frustum: Frustum, _grid: PlanarGridProps): RenderGraphic | undefined {
         return undefined;
     }

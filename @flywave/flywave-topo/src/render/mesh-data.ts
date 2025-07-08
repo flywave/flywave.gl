@@ -1,8 +1,8 @@
-import { FeatureIndexType, FillFlags, LinePixels } from "../../common";
-import { MeshParams } from "../../common/render/primitives/mesh-params";
-import { SurfaceType } from "../../common/render/primitives/surface-params";
-import { Point3d } from "../../core-geometry";
-import { dispose, IDisposable } from "../../utils";
+import { FeatureIndexType, FillFlags, LinePixels } from "../common";
+import { MeshParams } from "../common/render/primitives/mesh-params";
+import { SurfaceType } from "../common/render/primitives/surface-params";
+import { Point3d } from "../core-geometry";
+import { dispose, IDisposable } from "../utils";
 import { LineCode } from "./line-code";
 import { createMaterialInfo, MaterialInfo } from "./material";
 import { Texture } from "./texture";

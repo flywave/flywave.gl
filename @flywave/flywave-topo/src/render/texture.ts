@@ -1,9 +1,8 @@
 import * as THREE from "three";
 
-import { RenderTexture, TextureTransparency } from "../../common";
-import { assert, IDisposable } from "../../utils";
-import { TextureOwnership } from "../create-texture-args";
-import { OvrFlags } from "./render-flags";
+import { RenderTexture, TextureTransparency } from "../common";
+import { assert, IDisposable } from "../utils";
+import { TextureOwnership } from "./create-texture-args";
 
 export interface TextureParams {
     type: RenderTexture.Type;
@@ -57,21 +56,9 @@ export class Texture2DDataUpdater {
         }
     }
 
-    public setOvrFlagsAtIndex(index: number, value: OvrFlags) {
-        assert(index < this.data.length - 1);
-        assert(value < 0xffff);
-        this.setByteAtIndex(index, value & 0xff);
-        this.setByteAtIndex(index + 1, (value & 0xff00) >> 8);
-    }
-
     public getByteAtIndex(index: number): number {
         assert(index < this.data.length);
         return this.data[index];
     }
 
-    public getOvrFlagsAtIndex(index: number): OvrFlags {
-        const lo = this.getByteAtIndex(index);
-        const hi = this.getByteAtIndex(index + 1);
-        return lo | (hi << 8);
-    }
 }

@@ -1,4 +1,4 @@
-import { ColorDef, RgbColor } from "../../common";
+import { ColorDef, RgbColor } from "../common";
 
 function clamp(norm: number): number {
     return Math.max(0, Math.min(1, norm));
