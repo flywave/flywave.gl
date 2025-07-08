@@ -28,6 +28,7 @@ export * from "./projection/Projection";
 export * from "./projection/MercatorProjection";
 export * from "./projection/TransverseMercatorProjection";
 export * from "./projection/SphereProjection";
+export * from "./projection/ECEFProjection";
 export * from "./tiling/FlatTileBoundingBoxGenerator";
 export * from "./tiling/HalfQuadTreeSubdivisionScheme";
 export * from "./tiling/QuadTreeSubdivisionScheme";

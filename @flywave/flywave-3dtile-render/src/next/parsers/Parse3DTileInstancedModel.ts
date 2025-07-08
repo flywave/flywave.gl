@@ -98,14 +98,12 @@ function extractInstancedAttributes(
 
         // Get the instance position
         if (featureTable.hasProperty("POSITION")) {
-            position = featureTable.getProperty("POSITION", GL.FLOAT, 3, i, instancePosition);
+            position = instancePosition.fromArray(
+                featureTable.getProperty("POSITION", GL.FLOAT, 3, i, [])
+            );
         } else if (featureTable.hasProperty("POSITION_QUANTIZED")) {
-            position = featureTable.getProperty(
-                "POSITION_QUANTIZED",
-                GL.UNSIGNED_SHORT,
-                3,
-                i,
-                instancePosition
+            position = instancePosition.fromArray(
+                featureTable.getProperty("POSITION_QUANTIZED", GL.UNSIGNED_SHORT, 3, i, [])
             );
 
             const quantizedVolumeOffset = featureTable.getGlobalProperty(
@@ -151,8 +149,12 @@ function extractInstancedAttributes(
         instancePosition.copy(position);
 
         // Get the instance rotation
-        const normalUp = featureTable.getProperty("NORMAL_UP", GL.FLOAT, 3, i, scratch1);
-        const normalRight = featureTable.getProperty("NORMAL_RIGHT", GL.FLOAT, 3, i, scratch2);
+        const normalUp = scratch1.fromArray(
+            featureTable.getProperty("NORMAL_UP", GL.FLOAT, 3, i, [])
+        );
+        const normalRight = scratch2.fromArray(
+            featureTable.getProperty("NORMAL_RIGHT", GL.FLOAT, 3, i, [])
+        );
 
         let hasCustomOrientation = false;
         if (normalUp) {
@@ -165,19 +167,11 @@ function extractInstancedAttributes(
             instanceNormalRight.copy(normalRight);
             hasCustomOrientation = true;
         } else {
-            const octNormalUp = featureTable.getProperty(
-                "NORMAL_UP_OCT32P",
-                GL.UNSIGNED_SHORT,
-                2,
-                i,
-                scratch1
+            const octNormalUp = scratch1.fromArray(
+                featureTable.getProperty("NORMAL_UP_OCT32P", GL.UNSIGNED_SHORT, 2, i, [])
             );
-            const octNormalRight = featureTable.getProperty(
-                "NORMAL_RIGHT_OCT32P",
-                GL.UNSIGNED_SHORT,
-                2,
-                i,
-                scratch2
+            const octNormalRight = scratch2.fromArray(
+                featureTable.getProperty("NORMAL_RIGHT_OCT32P", GL.UNSIGNED_SHORT, 2, i, [])
             );
 
             if (octNormalUp) {
@@ -225,15 +219,11 @@ function extractInstancedAttributes(
         if (Number.isFinite(scale)) {
             instanceScale.multiplyScalar(scale);
         }
-        const nonUniformScale = featureTable.getProperty(
-            "SCALE_NON_UNIFORM",
-            GL.FLOAT,
-            3,
-            i,
-            scratch1
+        const nonUniformScale = scratch1.fromArray(
+            featureTable.getProperty("SCALE_NON_UNIFORM", GL.FLOAT, 3, i, [])
         );
         if (nonUniformScale) {
-            instanceScale.multiply(new Vector3().fromArray(nonUniformScale));
+            instanceScale.multiply(nonUniformScale);
         }
 
         // Get the batchId

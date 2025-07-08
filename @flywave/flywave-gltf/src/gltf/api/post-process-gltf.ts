@@ -426,7 +426,7 @@ class GLTFPostProcessor {
                     accessor.bufferView.byteStride,
                     accessor.bytesPerElement,
                     accessor.count
-                );
+                ) as ArrayBuffer;
             }
             accessor.value = new ArrayType(cutBuffer);
         }

@@ -12,9 +12,6 @@ import { expect } from "chai";
 
 chai.use(chaiAsPromised);
 
-import { B3DMLoader } from "../src/three/B3DMLoader";
-import { TilesLoadingManager } from "../src/three/TilesRenderer";
-import { I3DMLoader } from "../src";
 import { load3DTiles } from "../src/next";
 
 describe("Flywave3DTileRendererTest", function () {

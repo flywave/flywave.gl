@@ -4,7 +4,12 @@
 // - Do we add an option to control this?
 // - Also, should we have hard dependency on gltf module or use injection or auto-discovery for gltf parser?
 
-import { _getMemoryUsageGLTF, GLTFLoader, postProcessGLTF } from "@flywave/flywave-gltf";
+import {
+    _getMemoryUsageGLTF,
+    GLTFLoader,
+    GLTFWithBuffers,
+    postProcessGLTF
+} from "@flywave/flywave-gltf";
 import { sliceArrayBuffer } from "@flywave/flywave-utils";
 
 import { Tiles3DLoaderOptions } from "../../Loader";
@@ -126,7 +131,7 @@ async function parseFromContext(
     loader: typeof GLTFLoader,
     options: any,
     context: any
-): Promise<any> {
+): Promise<GLTFWithBuffers> {
     // 如果有上下文，则使用上下文提供的解析能力
     if (context && typeof context.parse === "function") {
         return context.parse(data, loader, options);

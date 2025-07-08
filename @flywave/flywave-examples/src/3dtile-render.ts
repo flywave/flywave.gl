@@ -71,14 +71,16 @@ export namespace T3DTileRenderExample {
     let tileRender = new TilesRenderer({
         // url: "./resources/3dtile-data/pipe/tileset.json",
 
-        url: "http://192.168.1.18/flywave-examples/data/%E5%91%A8%E6%9D%91/3dtile_power/tileset.json",
+        url: "https://assets.cms.plateau.reearth.io/assets/99/e2a800-7d75-4d11-94e1-bef604c39d01/13103_minato-ku_pref_2023_citygml_1_op_bldg_3dtiles_13103_minato-ku_lod4/tileset.json",
         decoderPath: "./resources/"
     });
     mapView.add3DTileSet(tileRender);
-
+    tileRender.getRootTileBoundingVolumeRegion().then(region => {
+        controls.flyToBox(region);
+    });
     // controls.setTo(117.0002378472017, 36.04174517742333, 1171.7782847248018, 0, 0, 0);
 
-    controls.setTo(117.82701769728989, 36.831012861737015, 1171.7782847248018, 0, 0, 0);
+    // controls.setTo(117.82701769728989, 36.831012861737015, 1171.7782847248018, 0, 0, 0);
 
     // snippet:harp_gl_datasource_satellitetile_1.ts
     const webTileDataSource = new HereWebTileDataSource({

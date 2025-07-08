@@ -1,8 +1,8 @@
 import { GeoCoordinates, GeoBox } from "@flywave/flywave-geoutils";
-import { TilesRenderer as ThreeTilesRenderer, TileIntersection } from "./three/TilesRenderer";
+import { TilesRenderer as ThreeTilesRenderer, TileIntersection } from "./renderer/TilesRenderer";
 import { Vector3, Object3D, Raycaster } from "three";
 import { MapView, MapViewEventNames } from "@flywave/flywave-mapview";
-import { DebugTilesRenderer } from "./three/DebugTilesRenderer";
+import { DebugTilesRenderer } from "./renderer/DebugTilesRenderer";
 import { Tile } from "./base/Tile";
 import { ITilesRenderer } from "@flywave/flywave-mapview/ITilesRenderer";
 import { Observe3DTileChange } from "./ObserveTileChange";
@@ -38,8 +38,6 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
         this.loadSiblings = false;
 
         this.autoDisableRendererCulling = false;
-
-        this.manager.setDracoDecoderPath(options.decoderPath);
         this.errorTarget = 16;
     }
 
