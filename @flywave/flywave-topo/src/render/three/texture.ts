@@ -1,0 +1,77 @@
+import * as THREE from "three";
+
+import { RenderTexture, TextureTransparency } from "../../common";
+import { assert, IDisposable } from "../../utils";
+import { TextureOwnership } from "../create-texture-args";
+import { OvrFlags } from "./render-flags";
+
+export interface TextureParams {
+    type: RenderTexture.Type;
+    ownership?: TextureOwnership;
+    transparency: TextureTransparency;
+    handle: THREE.Texture;
+}
+
+export class Texture extends RenderTexture implements IDisposable {
+    public readonly texture: THREE.Texture;
+    public readonly ownership?: TextureOwnership;
+    public transparency: TextureTransparency;
+
+    public get hasOwner(): boolean {
+        return undefined !== this.ownership;
+    }
+
+    public get key(): string | undefined {
+        return typeof this.ownership !== "string" && typeof this.ownership?.key === "string"
+            ? this.ownership.key
+            : undefined;
+    }
+
+    public constructor(params: TextureParams) {
+        super(params.type);
+        this.ownership = params.ownership;
+        this.texture = params.handle;
+        this.transparency = params.handle.premultiplyAlpha
+            ? params.transparency
+            : TextureTransparency.Opaque;
+    }
+
+    public dispose() {
+        this.texture.dispose();
+    }
+}
+
+export class Texture2DDataUpdater {
+    public data: Uint8Array;
+    public modified: boolean = false;
+
+    public constructor(data: Uint8Array) {
+        this.data = data;
+    }
+
+    public setByteAtIndex(index: number, byte: number) {
+        assert(index < this.data.length);
+        if (byte !== this.data[index]) {
+            this.data[index] = byte;
+            this.modified = true;
+        }
+    }
+
+    public setOvrFlagsAtIndex(index: number, value: OvrFlags) {
+        assert(index < this.data.length - 1);
+        assert(value < 0xffff);
+        this.setByteAtIndex(index, value & 0xff);
+        this.setByteAtIndex(index + 1, (value & 0xff00) >> 8);
+    }
+
+    public getByteAtIndex(index: number): number {
+        assert(index < this.data.length);
+        return this.data[index];
+    }
+
+    public getOvrFlagsAtIndex(index: number): OvrFlags {
+        const lo = this.getByteAtIndex(index);
+        const hi = this.getByteAtIndex(index + 1);
+        return lo | (hi << 8);
+    }
+}
