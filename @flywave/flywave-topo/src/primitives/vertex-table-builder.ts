@@ -1,8 +1,6 @@
 import {
     ColorDef,
     ColorIndex,
-    FeatureIndex,
-    FeatureIndexType,
     FillFlags,
     QParams2d,
     QParams3d,
@@ -26,7 +24,7 @@ import { MeshArgs, PolylineArgs } from "./mesh/mesh-primitives";
 
 export function createMeshParams(args: MeshArgs, maxDimension: number): MeshParams {
     const builder = createMeshBuilder(args);
-    const vertices = builder.build(args.colors, args.features, maxDimension);
+    const vertices = builder.build(args.colors, maxDimension);
 
     const surfaceIndices = VertexIndices.fromArray(args.vertIndices);
 
@@ -127,11 +125,7 @@ export abstract class VertexTableBuilder {
         this.append8(colors.t);
     }
 
-    public build(
-        colorIndex: ColorIndex,
-        featureIndex: FeatureIndex,
-        maxDimension: number
-    ): VertexTable {
+    public build(colorIndex: ColorIndex, maxDimension: number): VertexTable {
         const { numVertices, numRgbaPerVertex } = this;
         const numColors = colorIndex.isUniform ? 0 : colorIndex.numColors;
         const dimensions = computeDimensions(
@@ -163,10 +157,7 @@ export abstract class VertexTableBuilder {
             uniformColor: colorIndex.uniform,
             numVertices,
             numRgbaPerVertex,
-            uvParams: this.uvParams,
-            featureIndexType: featureIndex.type,
-            uniformFeatureID:
-                featureIndex.type === FeatureIndexType.Uniform ? featureIndex.featureID : undefined
+            uvParams: this.uvParams
         };
     }
 
@@ -178,7 +169,7 @@ export abstract class VertexTableBuilder {
         if (polylines.length === 0) return undefined;
 
         const builder = createPolylineBuilder(args);
-        return builder.build(args.colors, args.features, maxDimension);
+        return builder.build(args.colors, maxDimension);
     }
 }
 
@@ -220,7 +211,6 @@ namespace Quantized {
         public appendVertex(vertIndex: number): void {
             this.appendPosition(vertIndex);
             this.appendColorIndex(vertIndex);
-            this.appendFeatureIndex(vertIndex);
         }
 
         protected appendPosition(vertIndex: number) {
@@ -234,14 +224,6 @@ namespace Quantized {
                 this.append16(this.args.colors.nonUniform.indices[vertIndex]);
             } else {
                 this.advance(2);
-            }
-        }
-
-        protected appendFeatureIndex(vertIndex: number) {
-            if (undefined !== this.args.features.featureIDs) {
-                this.append32(this.args.features.featureIDs[vertIndex]);
-            } else {
-                this.advance(4);
             }
         }
     }
@@ -310,7 +292,6 @@ namespace Quantized {
         public override appendVertex(vertIndex: number) {
             this.appendPosition(vertIndex);
             this.appendNormal(vertIndex);
-            this.appendFeatureIndex(vertIndex);
             this.appendUVParams(vertIndex);
         }
 
@@ -411,25 +392,18 @@ namespace Unquantized {
             const x = this.convertFloat32(pt.x);
             const y = this.convertFloat32(pt.y);
             const z = this.convertFloat32(pt.z);
-            const featID = this.args.features.featureIDs
-                ? this.args.features.featureIDs[vertIndex]
-                : 0;
             this.append8(x & 0x000000ff);
             this.append8(y & 0x000000ff);
             this.append8(z & 0x000000ff);
-            this.append8(featID & 0x000000ff);
             this.append8((x >>> 8) & 0x000000ff);
             this.append8((y >>> 8) & 0x000000ff);
             this.append8((z >>> 8) & 0x000000ff);
-            this.append8((featID >>> 8) & 0x000000ff);
             this.append8((x >>> 16) & 0x000000ff);
             this.append8((y >>> 16) & 0x000000ff);
             this.append8((z >>> 16) & 0x000000ff);
-            this.append8((featID >>> 16) & 0x000000ff);
             this.append8(x >>> 24);
             this.append8(y >>> 24);
             this.append8(z >>> 24);
-            this.append8(featID >>> 24);
         }
 
         protected appendPosition(vertIndex: number) {
@@ -437,12 +411,6 @@ namespace Unquantized {
             this.appendFloat32(pt.x);
             this.appendFloat32(pt.y);
             this.appendFloat32(pt.z);
-        }
-
-        protected appendFeatureIndex(vertIndex: number) {
-            if (this.args.features.featureIDs) {
-                this.append32(this.args.features.featureIDs[vertIndex]);
-            } else this.advance(4);
         }
 
         protected _appendColorIndex(vertIndex: number) {

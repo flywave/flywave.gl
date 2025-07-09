@@ -1,5 +1,4 @@
 import {
-    Feature,
     MeshEdge,
     MeshEdges,
     MeshPolyline,
@@ -80,25 +79,20 @@ export class MeshBuilder {
     public addStrokePointLists(
         strokes: StrokesPrimitivePointLists,
         isDisjoint: boolean,
-        fillColor: number,
-        feature: Feature | undefined
+        fillColor: number
     ): void {
         for (const strokePoints of strokes) {
-            if (isDisjoint) this.addPointString(strokePoints.points, fillColor, feature);
-            else this.addPolyline(strokePoints.points, fillColor, feature);
+            if (isDisjoint) this.addPointString(strokePoints.points, fillColor);
+            else this.addPolyline(strokePoints.points, fillColor);
         }
     }
 
-    public addFromPolyface(
-        polyface: IndexedPolyface,
-        props: MeshBuilder.PolyfaceOptions,
-        feature: Feature | undefined
-    ): void {
+    public addFromPolyface(polyface: IndexedPolyface, props: MeshBuilder.PolyfaceOptions): void {
         this.beginPolyface(polyface, props.edgeOptions);
         const visitor = polyface.createVisitor();
 
         while (visitor.moveToNextFacet()) {
-            this.addFromPolyfaceVisitor(visitor, props, feature);
+            this.addFromPolyfaceVisitor(visitor, props);
         }
 
         this.endPolyface();
@@ -106,8 +100,7 @@ export class MeshBuilder {
 
     public addFromPolyfaceVisitor(
         visitor: PolyfaceVisitor,
-        options: MeshBuilder.PolyfaceOptions,
-        feature: Feature | undefined
+        options: MeshBuilder.PolyfaceOptions
     ): void {
         const { pointCount, normalCount, paramCount, requireNormals } = visitor;
         const { includeParams, mappedTexture } = options;
@@ -124,12 +117,7 @@ export class MeshBuilder {
 
         const polyfaceVisitorOptions = { ...options, triangleCount, haveParam };
         for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++) {
-            const triangle = this.createTriangle(
-                triangleIndex,
-                visitor,
-                polyfaceVisitorOptions,
-                feature
-            );
+            const triangle = this.createTriangle(triangleIndex, visitor, polyfaceVisitorOptions);
             if (undefined !== triangle) this.addTriangle(triangle);
         }
     }
@@ -137,8 +125,7 @@ export class MeshBuilder {
     public createTriangleVertices(
         triangleIndex: number,
         visitor: PolyfaceVisitor,
-        options: MeshBuilder.PolyfaceVisitorOptions,
-        feature: Feature | undefined
+        options: MeshBuilder.PolyfaceVisitorOptions
     ): VertexKeyPropsWithIndex[] | undefined {
         const { point, requireNormals } = visitor;
         const { fillColor, haveParam } = options;
@@ -167,8 +154,7 @@ export class MeshBuilder {
                 fillColor,
                 normal,
                 uvParam,
-                sourceIndex: vertexIndex,
-                feature
+                sourceIndex: vertexIndex
             };
         }
 
@@ -186,10 +172,9 @@ export class MeshBuilder {
     public createTriangle(
         triangleIndex: number,
         visitor: PolyfaceVisitor,
-        options: MeshBuilder.PolyfaceVisitorOptions,
-        feature: Feature | undefined
+        options: MeshBuilder.PolyfaceVisitorOptions
     ): Triangle | undefined {
-        const vertices = this.createTriangleVertices(triangleIndex, visitor, options, feature);
+        const vertices = this.createTriangleVertices(triangleIndex, visitor, options);
 
         if (undefined === vertices) return undefined;
 
@@ -225,27 +210,23 @@ export class MeshBuilder {
         return triangle;
     }
 
-    public addPolyline(points: Point3d[], fillColor: number, feature: Feature | undefined): void {
+    public addPolyline(points: Point3d[], fillColor: number): void {
         const { mesh } = this;
 
         const poly = new MeshPolyline();
         for (const position of points) {
-            poly.addIndex(this.addVertex({ position, fillColor, feature }));
+            poly.addIndex(this.addVertex({ position, fillColor }));
         }
 
         mesh.addPolyline(poly);
     }
 
-    public addPointString(
-        points: Point3d[],
-        fillColor: number,
-        feature: Feature | undefined
-    ): void {
+    public addPointString(points: Point3d[], fillColor: number): void {
         const { mesh } = this;
         const poly = new MeshPolyline();
 
         for (const position of points) {
-            poly.addIndex(this.addVertex({ position, fillColor, feature }));
+            poly.addIndex(this.addVertex({ position, fillColor }));
         }
 
         mesh.addPolyline(poly);

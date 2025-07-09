@@ -1,11 +1,4 @@
-import {
-    ColorIndex,
-    FeatureIndex,
-    LinePixels,
-    PolylineFlags,
-    PolylineIndices,
-    QPoint3dList
-} from "../common";
+import { ColorIndex, LinePixels, PolylineFlags, PolylineIndices, QPoint3dList } from "../common";
 import { Point3d, Range3d } from "../core-geometry";
 
 /** Arguments supplied to [[RenderSystem.createIndexedPolylines]] describing a set of "polylines" (i.e., line strings or point strings).
@@ -16,8 +9,6 @@ import { Point3d, Range3d } from "../core-geometry";
 export interface PolylineArgs {
     /** The color(s) of the vertices. */
     colors: ColorIndex;
-    /** The [Feature]($common)(s) contained in the [[polylines]]. */
-    features: FeatureIndex;
     /** The width of the lines or radius of the points, in pixels. */
     width: number;
     /** The pixel pattern to apply to the line strings. */

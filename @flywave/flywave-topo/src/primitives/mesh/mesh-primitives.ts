@@ -1,10 +1,6 @@
 import {
     ColorIndex,
     EdgeArgs,
-    Feature,
-    FeatureIndex,
-    FeatureIndexType,
-    FeatureTable,
     FillFlags,
     LinePixels,
     MeshEdges,
@@ -35,7 +31,6 @@ import { VertexKeyProps } from "../vertex-key";
 
 export interface PolylineArgs {
     colors: ColorIndex;
-    features: FeatureIndex;
     width: number;
     linePixels: LinePixels;
     flags: PolylineFlags;
@@ -69,17 +64,13 @@ export namespace PolylineArgs {
         const colors = new ColorIndex();
         mesh.colorMap.toColorIndex(colors, mesh.colors);
 
-        const features = new FeatureIndex();
-        mesh.toFeatureIndex(features);
-
         return {
             width: mesh.displayParams.width,
             linePixels: mesh.displayParams.linePixels,
             flags,
             polylines,
             points: mesh.points,
-            colors,
-            features
+            colors
         };
     }
 }
@@ -110,7 +101,6 @@ export interface MeshArgs {
     points: QPoint3dList | (Point3d[] & { range: Range3d });
     normals?: OctEncodedNormal[];
     colors: ColorIndex;
-    features: FeatureIndex;
     fillFlags?: FillFlags;
     isPlanar?: boolean;
     is2d?: boolean;
@@ -133,9 +123,6 @@ export namespace MeshArgs {
 
         const colors = new ColorIndex();
         mesh.colorMap.toColorIndex(colors, mesh.colors);
-
-        const features = new FeatureIndex();
-        mesh.toFeatureIndex(features);
 
         let edges;
         if (mesh.edges) {
@@ -162,7 +149,6 @@ export namespace MeshArgs {
                     : undefined,
             textureMapping,
             colors,
-            features,
             material: mesh.displayParams.material,
             fillFlags: mesh.displayParams.fillFlags,
             isPlanar: mesh.isPlanar,
@@ -182,7 +168,6 @@ export class Mesh {
     public readonly colorMap: ColorMap = new ColorMap();
     public colors: number[] = [];
     public edges?: MeshEdges;
-    public readonly features?: Mesh.Features;
     public readonly type: MeshPrimitiveType;
     public readonly is2d: boolean;
     public readonly isPlanar: boolean;
@@ -192,10 +177,9 @@ export class Mesh {
     private _auxChannels?: AuxChannel[];
 
     private constructor(props: Mesh.Props) {
-        const { displayParams, features, type, range, is2d, isPlanar } = props;
+        const { displayParams, type, range, is2d, isPlanar } = props;
         this._data = MeshPrimitiveType.Mesh === type ? new TriangleList() : new MeshPolylineList();
         this.displayParams = displayParams;
-        this.features = features ? new Mesh.Features(features) : undefined;
         this.type = type;
         this.is2d = is2d;
         this.isPlanar = isPlanar;
@@ -275,10 +259,6 @@ export class Mesh {
         }
     }
 
-    public toFeatureIndex(index: FeatureIndex): void {
-        if (undefined !== this.features) this.features.toFeatureIndex(index);
-    }
-
     public toMeshArgs(): MeshArgs | undefined {
         return MeshArgs.fromMesh(this);
     }
@@ -308,18 +288,13 @@ export class Mesh {
     }
 
     public addVertex(props: VertexKeyProps): number {
-        const { feature, position, normal, uvParam, fillColor } = props;
+        const { position, normal, uvParam, fillColor } = props;
 
         this.points.add(position);
 
         if (undefined !== normal) this.normals.push(normal);
 
         if (undefined !== uvParam) this.uvParams.push(uvParam);
-
-        if (feature) {
-            assert(undefined !== this.features);
-            this.features.add(feature, this.points.length);
-        }
 
         if (this.colorMap.length === 0) {
             this.colorMap.insert(fillColor);
@@ -337,60 +312,8 @@ export class Mesh {
 }
 
 export namespace Mesh {
-    // eslint-disable-line no-redeclare
-    export class Features {
-        public readonly table: FeatureTable;
-        public indices: number[] = [];
-        public uniform = 0;
-        public initialized = false;
-
-        public constructor(table: FeatureTable) {
-            this.table = table;
-        }
-
-        public add(feat: Feature, numVerts: number): void {
-            const index = this.table.insert(feat);
-            if (!this.initialized) {
-                this.uniform = index;
-                this.initialized = true;
-            } else if (this.indices.length > 0) {
-                this.indices.push(index);
-            } else {
-                while (this.indices.length < numVerts - 1) this.indices.push(this.uniform);
-
-                this.indices.push(index);
-            }
-        }
-
-        public setIndices(indices: number[]) {
-            this.indices.length = 0;
-            this.uniform = 0;
-            this.initialized = indices.length > 0;
-
-            assert(indices.length > 0);
-            if (indices.length === 1) this.uniform = indices[0];
-            else if (indices.length > 1) this.indices = indices;
-        }
-
-        public toFeatureIndex(output?: FeatureIndex): FeatureIndex {
-            const index = output ?? new FeatureIndex();
-            if (!this.initialized) {
-                index.type = FeatureIndexType.Empty;
-            } else if (this.indices.length === 0) {
-                index.type = FeatureIndexType.Uniform;
-                index.featureID = this.uniform;
-            } else {
-                index.type = FeatureIndexType.NonUniform;
-                index.featureIDs = new Uint32Array(this.indices);
-            }
-
-            return index;
-        }
-    }
-
     export interface Props {
         displayParams: DisplayParams;
-        features?: FeatureTable;
         type: MeshPrimitiveType;
         range: Range3d;
         quantizePositions: boolean;
@@ -402,11 +325,9 @@ export namespace Mesh {
 }
 
 export class MeshList extends Array<Mesh> {
-    public readonly features?: FeatureTable;
     public readonly range?: Range3d;
-    constructor(features?: FeatureTable, range?: Range3d) {
+    constructor(range?: Range3d) {
         super();
-        this.features = features;
         this.range = range;
     }
 }

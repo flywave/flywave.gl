@@ -1,13 +1,12 @@
-import { Feature, OctEncodedNormal } from "../common";
+import { OctEncodedNormal } from "../common";
 import { Point2d, Point3d, XYAndZ } from "../core-geometry";
-import { assert, comparePossiblyUndefined, compareWithTolerance, IndexMap } from "../utils";
+import { assert, compareWithTolerance, IndexMap } from "../utils";
 
 export interface VertexKeyProps {
     position: Point3d;
     fillColor: number;
     normal?: OctEncodedNormal;
     uvParam?: Point2d;
-    feature?: Feature;
 }
 
 function comparePositions(p0: Point3d, p1: Point3d, tolerance: XYAndZ): number {
@@ -20,45 +19,30 @@ function comparePositions(p0: Point3d, p1: Point3d, tolerance: XYAndZ): number {
     return diff;
 }
 
-function compareFeatures(f0: Feature | undefined, f1: Feature | undefined): number {
-    return comparePossiblyUndefined((lhs, rhs) => lhs.compare(rhs), f0, f1);
-}
-
 export class VertexKey {
     public readonly position: Point3d;
     public readonly normal?: OctEncodedNormal;
     public readonly uvParam?: Point2d;
     public readonly fillColor: number;
-    public readonly feature?: Feature;
 
     public constructor(
         position: Point3d,
         fillColor: number,
         normal?: OctEncodedNormal,
-        uvParam?: Point2d,
-        feature?: Feature
+        uvParam?: Point2d
     ) {
         this.position = position.clone();
         this.fillColor = fillColor;
         this.normal = normal;
         this.uvParam = uvParam?.clone();
-        this.feature = feature;
     }
 
     public static create(props: VertexKeyProps): VertexKey {
-        return new VertexKey(
-            props.position,
-            props.fillColor,
-            props.normal,
-            props.uvParam,
-            props.feature
-        );
+        return new VertexKey(props.position, props.fillColor, props.normal, props.uvParam);
     }
 
     public equals(rhs: VertexKey, tolerance: XYAndZ): boolean {
         if (this.fillColor !== rhs.fillColor) return false;
-
-        if (compareFeatures(this.feature, rhs.feature) !== 0) return false;
 
         if (undefined !== this.normal) {
             assert(undefined !== rhs.normal);
@@ -82,18 +66,15 @@ export class VertexKey {
         if (diff === 0) {
             diff = comparePositions(this.position, rhs.position, tolerance);
             if (diff === 0) {
-                diff = compareFeatures(this.feature, rhs.feature);
-                if (diff === 0) {
-                    if (undefined !== this.normal) {
-                        assert(undefined !== rhs.normal);
-                        diff = this.normal.value - rhs.normal.value;
-                    }
+                if (undefined !== this.normal) {
+                    assert(undefined !== rhs.normal);
+                    diff = this.normal.value - rhs.normal.value;
+                }
 
-                    if (diff === 0 && undefined !== this.uvParam) {
-                        assert(undefined !== rhs.uvParam);
-                        diff = compareWithTolerance(this.uvParam.x, rhs.uvParam.x);
-                        if (diff === 0) diff = compareWithTolerance(this.uvParam.x, rhs.uvParam.y);
-                    }
+                if (diff === 0 && undefined !== this.uvParam) {
+                    assert(undefined !== rhs.uvParam);
+                    diff = compareWithTolerance(this.uvParam.x, rhs.uvParam.x);
+                    if (diff === 0) diff = compareWithTolerance(this.uvParam.x, rhs.uvParam.y);
                 }
             }
         }

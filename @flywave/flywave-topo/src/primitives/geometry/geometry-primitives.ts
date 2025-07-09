@@ -1,4 +1,3 @@
-import { Feature } from "../../common";
 import { DisplayParams } from "../../common/render/primitives/display-params";
 import {
     CurveChain,
@@ -29,38 +28,29 @@ export abstract class Geometry {
     public readonly transform: Transform;
     public readonly tileRange: Range3d;
     public readonly displayParams: DisplayParams;
-    public readonly feature?: Feature;
 
-    public constructor(
-        transform: Transform,
-        tileRange: Range3d,
-        displayParams: DisplayParams,
-        feature: Feature | undefined
-    ) {
+    public constructor(transform: Transform, tileRange: Range3d, displayParams: DisplayParams) {
         this.transform = transform;
         this.tileRange = tileRange;
         this.displayParams = displayParams;
-        this.feature = feature;
     }
 
     public static createFromPointString(
         pts: Point3d[],
         tf: Transform,
         tileRange: Range3d,
-        params: DisplayParams,
-        feature: Feature | undefined
+        params: DisplayParams
     ): Geometry {
-        return new PrimitivePointStringGeometry(pts, tf, tileRange, params, feature);
+        return new PrimitivePointStringGeometry(pts, tf, tileRange, params);
     }
 
     public static createFromLineString(
         pts: Point3d[],
         tf: Transform,
         tileRange: Range3d,
-        params: DisplayParams,
-        feature: Feature | undefined
+        params: DisplayParams
     ): Geometry {
-        return new PrimitiveLineStringGeometry(pts, tf, tileRange, params, feature);
+        return new PrimitiveLineStringGeometry(pts, tf, tileRange, params);
     }
 
     public static createFromLoop(
@@ -68,20 +58,18 @@ export abstract class Geometry {
         tf: Transform,
         tileRange: Range3d,
         params: DisplayParams,
-        disjoint: boolean,
-        feature: Feature | undefined
+        disjoint: boolean
     ): Geometry {
-        return new PrimitiveLoopGeometry(loop, tf, tileRange, params, disjoint, feature);
+        return new PrimitiveLoopGeometry(loop, tf, tileRange, params, disjoint);
     }
 
     public static createFromSolidPrimitive(
         primitive: SolidPrimitive,
         tf: Transform,
         tileRange: Range3d,
-        params: DisplayParams,
-        feature: Feature | undefined
+        params: DisplayParams
     ): Geometry {
-        return new SolidPrimitiveGeometry(primitive, tf, tileRange, params, feature);
+        return new SolidPrimitiveGeometry(primitive, tf, tileRange, params);
     }
 
     public static createFromPath(
@@ -89,20 +77,18 @@ export abstract class Geometry {
         tf: Transform,
         tileRange: Range3d,
         params: DisplayParams,
-        disjoint: boolean,
-        feature: Feature | undefined
+        disjoint: boolean
     ): Geometry {
-        return new PrimitivePathGeometry(path, tf, tileRange, params, disjoint, feature);
+        return new PrimitivePathGeometry(path, tf, tileRange, params, disjoint);
     }
 
     public static createFromPolyface(
         ipf: IndexedPolyface,
         tf: Transform,
         tileRange: Range3d,
-        params: DisplayParams,
-        feature: Feature | undefined
+        params: DisplayParams
     ): Geometry {
-        return new PrimitivePolyfaceGeometry(ipf, tf, tileRange, params, feature);
+        return new PrimitivePolyfaceGeometry(ipf, tf, tileRange, params);
     }
 
     protected abstract _getPolyfaces(
@@ -152,10 +138,9 @@ export class PrimitivePathGeometry extends Geometry {
         tf: Transform,
         range: Range3d,
         params: DisplayParams,
-        isDisjoint: boolean,
-        feature: Feature | undefined
+        isDisjoint: boolean
     ) {
-        super(tf, range, params, feature);
+        super(tf, range, params);
         this.path = path;
         this.isDisjoint = isDisjoint;
     }
@@ -226,14 +211,8 @@ export class PrimitivePathGeometry extends Geometry {
 export class PrimitivePointStringGeometry extends Geometry {
     public readonly pts: Point3d[];
 
-    public constructor(
-        pts: Point3d[],
-        tf: Transform,
-        range: Range3d,
-        params: DisplayParams,
-        feature: Feature | undefined
-    ) {
-        super(tf, range, params, feature);
+    public constructor(pts: Point3d[], tf: Transform, range: Range3d, params: DisplayParams) {
+        super(tf, range, params);
         this.pts = pts;
     }
 
@@ -261,14 +240,8 @@ export class PrimitivePointStringGeometry extends Geometry {
 export class PrimitiveLineStringGeometry extends Geometry {
     public readonly pts: Point3d[];
 
-    public constructor(
-        pts: Point3d[],
-        tf: Transform,
-        range: Range3d,
-        params: DisplayParams,
-        feature: Feature | undefined
-    ) {
-        super(tf, range, params, feature);
+    public constructor(pts: Point3d[], tf: Transform, range: Range3d, params: DisplayParams) {
+        super(tf, range, params);
         this.pts = pts;
     }
 
@@ -302,10 +275,9 @@ export class PrimitiveLoopGeometry extends Geometry {
         tf: Transform,
         range: Range3d,
         params: DisplayParams,
-        isDisjoint: boolean,
-        feature: Feature | undefined
+        isDisjoint: boolean
     ) {
-        super(tf, range, params, feature);
+        super(tf, range, params);
         this.loop = loop;
         this.isDisjoint = isDisjoint;
     }
@@ -349,10 +321,9 @@ export class PrimitivePolyfaceGeometry extends Geometry {
         polyface: IndexedPolyface,
         tf: Transform,
         range: Range3d,
-        params: DisplayParams,
-        feature: Feature | undefined
+        params: DisplayParams
     ) {
-        super(tf, range, params, feature);
+        super(tf, range, params);
         this.polyface = tf.isIdentity ? polyface : polyface.cloneTransformed(tf);
     }
 
@@ -388,10 +359,9 @@ export class SolidPrimitiveGeometry extends Geometry {
         primitive: SolidPrimitive,
         tf: Transform,
         range: Range3d,
-        params: DisplayParams,
-        feature: Feature | undefined
+        params: DisplayParams
     ) {
-        super(tf, range, params, feature);
+        super(tf, range, params);
         const xformPrim = tf.isIdentity ? primitive : primitive.cloneTransformed(tf);
         this.primitive = xformPrim !== undefined ? (xformPrim as SolidPrimitive) : primitive;
     }

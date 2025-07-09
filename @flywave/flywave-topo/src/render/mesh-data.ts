@@ -1,4 +1,4 @@
-import { FeatureIndexType, FillFlags, LinePixels } from "../common";
+import { FillFlags, LinePixels } from "../common";
 import { MeshParams } from "../common/render/primitives/mesh-params";
 import { SurfaceType } from "../common/render/primitives/surface-params";
 import { Point3d } from "../core-geometry";
@@ -31,11 +31,6 @@ export class MeshData implements IDisposable {
     private constructor(lut: VertexLUT, params: MeshParams, viOrigin: Point3d | undefined) {
         this.lut = lut;
         this.viewIndependentOrigin = viOrigin;
-
-        this.hasFeatures = FeatureIndexType.Empty !== params.vertices.featureIndexType;
-        if (FeatureIndexType.Uniform === params.vertices.featureIndexType) {
-            this.uniformFeatureId = params.vertices.uniformFeatureID;
-        }
 
         this.textureUsesConstantLod = false;
         this.normalMapUsesConstantLod = false;

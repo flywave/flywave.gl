@@ -3,7 +3,6 @@ import { Object3D } from "three";
 import {
     AnalysisStyle,
     ColorDef,
-    Feature,
     Frustum,
     GeometryClass,
     GraphicParams,
@@ -23,7 +22,7 @@ import {
     SolidPrimitive,
     Transform
 } from "../core-geometry";
-import { assert, Id64String } from "../utils";
+import { Id64String } from "../utils";
 import { GraphicPrimitive } from "./graphic-primitive";
 
 export enum GraphicType {
@@ -134,21 +133,6 @@ export abstract class GraphicBuilder {
     public abstract finish(): Object3D;
 
     public abstract activateGraphicParams(graphicParams: GraphicParams): void;
-
-    protected _activateFeature(_feature: Feature): void {}
-
-    public activateFeature(feature: Feature): void {
-        assert(
-            undefined !== this._options.pickable,
-            "GraphicBuilder.activateFeature has no effect if PickableGraphicOptions were not supplied"
-        );
-        if (this._options.pickable) this._activateFeature(feature);
-    }
-
-    public activatePickableId(id: Id64String): void {
-        const pick = this._options.pickable;
-        this.activateFeature(new Feature(id, pick?.subCategoryId, pick?.geometryClass));
-    }
 
     public abstract addLineString(points: Point3d[]): void;
 

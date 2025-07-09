@@ -1,4 +1,4 @@
-import { ColorDef, FeatureIndexType, QParams2d, QParams3d } from "../../../common";
+import { ColorDef, QParams2d, QParams3d } from "../../../common";
 import { assert } from "../../../utils";
 
 export interface VertexTable {
@@ -9,8 +9,6 @@ export interface VertexTable {
     readonly height: number;
     readonly hasTranslucency: boolean;
     readonly uniformColor?: ColorDef;
-    readonly featureIndexType: FeatureIndexType;
-    readonly uniformFeatureID?: number;
     readonly numVertices: number;
     readonly numRgbaPerVertex: number;
     readonly uvParams?: QParams2d;

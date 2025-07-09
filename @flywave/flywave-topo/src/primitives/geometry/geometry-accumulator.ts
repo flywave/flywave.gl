@@ -20,7 +20,6 @@ import {
 
 import {
     AnalysisStyleDisplacement,
-    Feature,
     Gradient,
     ImageBufferFormat,
     RenderTexture,
@@ -68,7 +67,6 @@ export class GeometryAccumulator {
 
     public readonly tileRange: Range3d;
     public readonly geometries: GeometryList = new GeometryList();
-    public currentFeature?: Feature;
 
     public get surfacesOnly(): boolean {
         return this._surfacesOnly;
@@ -92,14 +90,16 @@ export class GeometryAccumulator {
         tileRange?: Range3d;
         analysisStyleDisplacement?: AnalysisStyleDisplacement;
         viewIndependentOrigin?: Point3d;
-        feature?: Feature;
     }) {
         this.tileRange = options?.tileRange ?? Range3d.createNull();
         this._surfacesOnly = options?.surfacesOnly === true;
         this._transform = options?.transform ?? Transform.createIdentity();
         this._analysisDisplacement = options?.analysisStyleDisplacement;
         this._viewIndependentOrigin = options?.viewIndependentOrigin;
-        this.currentFeature = options?.feature;
+    }
+
+    public dispose(): void {
+        this.clear();
     }
 
     private getPrimitiveRange(geom: PrimitiveGeometryType): Range3d | undefined {
@@ -126,14 +126,7 @@ export class GeometryAccumulator {
 
         const xform = this.calculateTransform(transform, range);
         return this.addGeometry(
-            Geometry.createFromLoop(
-                loop,
-                xform,
-                range,
-                displayParams,
-                disjoint,
-                this.currentFeature
-            )
+            Geometry.createFromLoop(loop, xform, range, displayParams, disjoint)
         );
     }
 
@@ -147,9 +140,7 @@ export class GeometryAccumulator {
         if (range.isNull) return false;
 
         const xform = this.calculateTransform(transform, range);
-        return this.addGeometry(
-            Geometry.createFromLineString(pts, xform, range, displayParams, this.currentFeature)
-        );
+        return this.addGeometry(Geometry.createFromLineString(pts, xform, range, displayParams));
     }
 
     public addPointString(
@@ -162,9 +153,7 @@ export class GeometryAccumulator {
         if (range.isNull) return false;
 
         const xform = this.calculateTransform(transform, range);
-        return this.addGeometry(
-            Geometry.createFromPointString(pts, xform, range, displayParams, this.currentFeature)
-        );
+        return this.addGeometry(Geometry.createFromPointString(pts, xform, range, displayParams));
     }
 
     public addPath(
@@ -178,14 +167,7 @@ export class GeometryAccumulator {
 
         const xform = this.calculateTransform(transform, range);
         return this.addGeometry(
-            Geometry.createFromPath(
-                path,
-                xform,
-                range,
-                displayParams,
-                disjoint,
-                this.currentFeature
-            )
+            Geometry.createFromPath(path, xform, range, displayParams, disjoint)
         );
     }
 
@@ -224,9 +206,7 @@ export class GeometryAccumulator {
         if (!range && !(range = this.getPrimitiveRange(pf))) return false;
 
         const xform = this.calculateTransform(transform, range);
-        return this.addGeometry(
-            Geometry.createFromPolyface(pf, xform, range, displayParams, this.currentFeature)
-        );
+        return this.addGeometry(Geometry.createFromPolyface(pf, xform, range, displayParams));
     }
 
     public addSolidPrimitive(
@@ -239,13 +219,7 @@ export class GeometryAccumulator {
 
         const xform = this.calculateTransform(transform, range);
         return this.addGeometry(
-            Geometry.createFromSolidPrimitive(
-                primitive,
-                xform,
-                range,
-                displayParams,
-                this.currentFeature
-            )
+            Geometry.createFromSolidPrimitive(primitive, xform, range, displayParams)
         );
     }
 
@@ -258,42 +232,26 @@ export class GeometryAccumulator {
         this.geometries.clear();
     }
 
-    public toMeshBuilderMap(
-        options: GeometryOptions,
-        tolerance: number,
-        pickable: { modelId?: string } | undefined
-    ): MeshBuilderMap {
+    public toMeshBuilderMap(options: GeometryOptions, tolerance: number): MeshBuilderMap {
         const { geometries } = this;
 
         const range = geometries.computeRange();
         const is2d = !range.isNull && range.isAlmostZeroZ;
 
-        return MeshBuilderMap.createFromGeometries(
-            geometries,
-            tolerance,
-            range,
-            is2d,
-            options,
-            pickable
-        );
+        return MeshBuilderMap.createFromGeometries(geometries, tolerance, range, is2d, options);
     }
 
-    public toMeshes(
-        options: GeometryOptions,
-        tolerance: number,
-        pickable: { modelId?: string } | undefined
-    ): MeshList {
+    public toMeshes(options: GeometryOptions, tolerance: number): MeshList {
         if (this.geometries.isEmpty) return new MeshList();
 
-        const builderMap = this.toMeshBuilderMap(options, tolerance, pickable);
+        const builderMap = this.toMeshBuilderMap(options, tolerance);
         return builderMap.toMeshes();
     }
 
     public saveToGraphicList(
         graphics: Object3D[],
         options: GeometryOptions,
-        tolerance: number,
-        pickable: { modelId?: string } | undefined
+        tolerance: number
     ): Object3D[] {
         if (this.geometries.isEmpty) return;
 
@@ -301,7 +259,7 @@ export class GeometryAccumulator {
         const geometries = this.prepareGeometries(options, tolerance);
 
         // 2. 创建 Three.js 对象
-        const threeObjects = this.createThreeObjects(geometries, pickable);
+        const threeObjects = this.createThreeObjects(geometries);
 
         // 3. 应用坐标变换
         this.applyTransformations(threeObjects);
@@ -333,10 +291,7 @@ export class GeometryAccumulator {
         return result;
     }
 
-    private createThreeObjects(
-        geometries: PreparedGeometry[],
-        pickable: { modelId?: string } | undefined
-    ): Object3D[] {
+    private createThreeObjects(geometries: PreparedGeometry[]): Object3D[] {
         const objects: Object3D[] = [];
 
         for (const geom of geometries) {
@@ -359,14 +314,6 @@ export class GeometryAccumulator {
                     continue; // 跳过未知类型
             }
 
-            // 添加拾取信息
-            if (pickable?.modelId) {
-                threeObj.userData = {
-                    modelId: pickable.modelId,
-                    feature: this.currentFeature
-                };
-            }
-
             objects.push(threeObj);
         }
 
@@ -376,7 +323,12 @@ export class GeometryAccumulator {
     private applyTransformations(objects: Object3D[]): void {
         if (objects.length === 0) return;
 
-        const transformOrigin = this._viewIndependentOrigin
+        // 预计算变换矩阵
+        const transformMatrix = this._transform.isIdentity
+            ? null
+            : new Matrix4().fromArray(this._transform.toArray());
+
+        const origin = this._viewIndependentOrigin
             ? new Vector3(
                   this._viewIndependentOrigin.x,
                   this._viewIndependentOrigin.y,
@@ -385,11 +337,11 @@ export class GeometryAccumulator {
             : this.calculateCommonOrigin(objects);
 
         for (const obj of objects) {
-            obj.position.sub(transformOrigin);
+            // 直接修改对象位置避免中间对象
+            obj.position.sub(origin);
 
-            if (!this._transform.isIdentity) {
-                const matrix = new Matrix4().fromArray(this._transform.toArray());
-                obj.applyMatrix4(matrix);
+            if (transformMatrix) {
+                obj.applyMatrix4(transformMatrix);
             }
         }
     }
@@ -400,14 +352,17 @@ export class GeometryAccumulator {
 
         for (const obj of objects) {
             obj.traverse(child => {
-                if (child instanceof Mesh || child instanceof Line || child instanceof Points) {
-                    const geometry = (child as Mesh).geometry;
-                    if (geometry) {
-                        geometry.computeBoundingSphere();
-                        center.add(geometry.boundingSphere!.center);
-                        count++;
-                    }
+                if (!(child instanceof Mesh || child instanceof Line || child instanceof Points)) {
+                    return;
                 }
+
+                const geometry = child.geometry;
+                if (!geometry?.boundingSphere) {
+                    geometry.computeBoundingSphere();
+                }
+
+                center.add(geometry.boundingSphere!.center);
+                count++;
             });
         }
 
@@ -423,26 +378,34 @@ export class GeometryAccumulator {
     }
 
     private createPoints(geom: PreparedPointGeometry): Points {
-        const vertices = new Float32Array(geom.points.length * 3);
-        const colors = new Float32Array(geom.points.length * 3);
+        const count = geom.points.length;
+        const vertices = new Float32Array(count * 3);
+        const colors = new Float32Array(count * 3);
+
+        // 使用直接索引访问代替forEach
         const { r, g, b, t } = geom.params.fillColor.colors;
+        const colorR = r / 255;
+        const colorG = g / 255;
+        const colorB = b / 255;
+        const opacity = t < 255 ? t / 255 : 1.0;
 
-        // 填充顶点和颜色数据
-        geom.points.forEach((point, i) => {
-            vertices[i * 3] = point.x;
-            vertices[i * 3 + 1] = point.y;
-            vertices[i * 3 + 2] = point.z;
+        for (let i = 0; i < count; i++) {
+            const pt = geom.points[i];
+            const base = i * 3;
 
-            colors[i * 3] = r / 255;
-            colors[i * 3 + 1] = g / 255;
-            colors[i * 3 + 2] = b / 255;
-        });
+            vertices[base] = pt.x;
+            vertices[base + 1] = pt.y;
+            vertices[base + 2] = pt.z;
+
+            colors[base] = colorR;
+            colors[base + 1] = colorG;
+            colors[base + 2] = colorB;
+        }
 
         const geometry = new BufferGeometry();
         geometry.setAttribute("position", new BufferAttribute(vertices, 3));
         geometry.setAttribute("color", new BufferAttribute(colors, 3));
 
-        const opacity = t < 255 ? t / 255 : 1.0;
         const material = new PointsMaterial({
             size: geom.params.pointSize || 1.0,
             vertexColors: true,
@@ -560,63 +523,79 @@ export class GeometryAccumulator {
         const visitor = polyface.createVisitor(0);
 
         while (visitor.moveToNextFacet()) {
-            if (visitor.pointCount === 3) {
-                // 三角面直接读取
-                indices.push(visitor.clientPointIndex(0));
-                indices.push(visitor.clientPointIndex(1));
-                indices.push(visitor.clientPointIndex(2));
-            } else if (visitor.pointCount > 3) {
-                // 多边形需要三角剖分
-                const baseIndex = visitor.clientPointIndex(0);
-                for (let i = 1; i < visitor.pointCount - 1; i++) {
-                    indices.push(baseIndex);
-                    indices.push(visitor.clientPointIndex(i));
-                    indices.push(visitor.clientPointIndex(i + 1));
-                }
+            const pointCount = visitor.pointCount;
+            if (pointCount < 3) continue;
+
+            const baseIndex = visitor.clientPointIndex(0);
+
+            for (let i = 1; i < pointCount - 1; i++) {
+                indices.push(
+                    baseIndex,
+                    visitor.clientPointIndex(i),
+                    visitor.clientPointIndex(i + 1)
+                );
             }
         }
         return indices;
     }
 
     private createMesh(geom: PreparedMeshGeometry): Mesh {
-        if (geom.vertices.length === 0 || geom.indices.length === 0) return null;
+        const vertexCount = geom.vertices.length;
+        const indexCount = geom.indices.length;
 
-        const vertices = new Float32Array(geom.vertices.length * 3);
-        const indices = new Uint32Array(geom.indices);
-        const normals =
-            geom.normals.length > 0
-                ? new Float32Array(geom.normals.length * 3)
-                : new Float32Array(geom.vertices.length * 3);
+        if (vertexCount === 0 || indexCount === 0) return null;
 
-        geom.vertices.forEach((point, i) => {
-            vertices[i * 3] = point[0];
-            vertices[i * 3 + 1] = point[1];
-            vertices[i * 3 + 2] = point[2];
-        });
+        // 预分配内存
+        const vertices = new Float32Array(vertexCount * 3);
+        const indices = new Uint32Array(indexCount);
+        const normals = new Float32Array(
+            geom.normals.length > 0 ? geom.normals.length * 3 : vertexCount * 3
+        );
 
+        // 填充顶点数据
+        for (let i = 0; i < vertexCount; i++) {
+            const v = geom.vertices[i];
+            const base = i * 3;
+            vertices[base] = v[0];
+            vertices[base + 1] = v[1];
+            vertices[base + 2] = v[2];
+        }
+
+        // 填充法线数据（如果存在）
         if (geom.normals.length > 0) {
-            geom.normals.forEach((normal, i) => {
-                normals[i * 3] = normal[0];
-                normals[i * 3 + 1] = normal[1];
-                normals[i * 3 + 2] = normal[2];
-            });
+            for (let i = 0; i < geom.normals.length; i++) {
+                const n = geom.normals[i];
+                const base = i * 3;
+                normals[base] = n[0];
+                normals[base + 1] = n[1];
+                normals[base + 2] = n[2];
+            }
+        }
+
+        // 复制索引数据
+        for (let i = 0; i < indexCount; i++) {
+            indices[i] = geom.indices[i];
         }
 
         const geometry = new BufferGeometry();
         geometry.setAttribute("position", new BufferAttribute(vertices, 3));
         geometry.setAttribute("normal", new BufferAttribute(normals, 3));
 
+        // UV处理
         if (geom.uvs.length > 0) {
             const uvs = new Float32Array(geom.uvs.length * 2);
-            geom.uvs.forEach((uv, i) => {
-                uvs[i * 2] = uv[0];
-                uvs[i * 2 + 1] = uv[1];
-            });
+            for (let i = 0; i < geom.uvs.length; i++) {
+                const uv = geom.uvs[i];
+                const base = i * 2;
+                uvs[base] = uv[0];
+                uvs[base + 1] = uv[1];
+            }
             geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
         }
 
         geometry.setIndex(new BufferAttribute(indices, 1));
 
+        // 自动计算法线（如果未提供）
         if (geom.normals.length === 0) {
             geometry.computeVertexNormals();
         }

@@ -1,4 +1,4 @@
-import { ColorDef, RenderFeatureTable, RenderMaterial } from "../../../common";
+import { ColorDef, RenderMaterial } from "../../../common";
 import { assert, Uint8ArrayBuilder, Uint32ArrayBuilder } from "../../../utils";
 import { MaterialParams } from "../material-params";
 import { calculateEdgeTableParams, EdgeParams, EdgeTable, IndexedEdgeParams } from "./edge-params";
@@ -103,9 +103,6 @@ class VertexBuffer {
             width: dimensions.width,
             height: dimensions.height,
             hasTranslucency: source.hasTranslucency,
-            uniformColor: colorTable instanceof ColorDef ? colorTable : undefined,
-            featureIndexType: source.featureIndexType,
-            uniformFeatureID: source.uniformFeatureID,
             numVertices: this.length,
             numRgbaPerVertex: source.numRgbaPerVertex,
             uvParams: source.uvParams
@@ -295,7 +292,6 @@ interface AtlasInfo {
 }
 
 interface VertexTableSplitArgs extends VertexTableWithIndices {
-    featureTable: RenderFeatureTable;
     atlasInfo?: AtlasInfo;
 }
 
@@ -359,7 +355,6 @@ class VertexTableSplitter {
 }
 
 export interface SplitVertexTableArgs {
-    featureTable: RenderFeatureTable;
     maxDimension: number;
     computeNodeId: ComputeAnimationNodeId;
 }
@@ -372,8 +367,7 @@ export function splitPointStringParams(args: SplitPointStringArgs): Map<number, 
     const nodes = VertexTableSplitter.split(
         {
             indices: args.params.indices,
-            vertices: args.params.vertices,
-            featureTable: args.featureTable
+            vertices: args.params.vertices
         },
         args.computeNodeId
     );
@@ -757,7 +751,6 @@ export function splitMeshParams(args: SplitMeshArgs): Map<number, MeshParams> {
         {
             indices: args.params.surface.indices,
             vertices: args.params.vertices,
-            featureTable: args.featureTable,
             atlasInfo
         },
         args.computeNodeId
@@ -804,8 +797,7 @@ export function splitPolylineParams(args: SplitPolylineArgs): Map<number, Polyli
     const nodes = VertexTableSplitter.split(
         {
             indices: args.params.polyline.indices,
-            vertices: args.params.vertices,
-            featureTable: args.featureTable
+            vertices: args.params.vertices
         },
         args.computeNodeId
     ) as Map<number, PolylineNode>;

@@ -1,6 +1,5 @@
 import {
     ColorIndex,
-    FeatureIndex,
     FillFlags,
     OctEncodedNormal,
     QPoint3dList,
@@ -31,8 +30,6 @@ export interface MeshArgs {
     normals?: OctEncodedNormal[];
     /** The color(s) of the mesh. */
     colors: ColorIndex;
-    /** The [Feature]($common)(s) contained in the mesh. */
-    features: FeatureIndex;
     /** If [[isPlanar]] is `true`, describes how fill is applied to planar region interiors in wireframe mode.
      * Default: [FillFlags.ByView]($common).
      */

@@ -709,3 +709,88 @@ export class ColorDef {
     /** pure blue */
     public static readonly blue = new ColorDef(ColorByName.blue);
 }
+
+/** As part of a [[ColorIndex]], describes per-vertex colors for a [MeshArgs]($frontend) or [PolylineArgs]($frontend).
+ * The [[colors]] array holds the set of unique colors. The [[indices]] array describes the color of each vertex as an index into [[colors]].
+ * @note A `NonUniformColor` table cannot contain a mix of opaque and translucent colors. If any color in [[colors]] has a transparency greater
+ * than zero, all of them must have a transparency greater than zero.
+ * @public
+ */
+export class NonUniformColor {
+    /** An array of 32-bit [[ColorDef]] values in `tbgr` format, indexed by [[indices]]. */
+    public readonly colors: Uint32Array;
+    /** For each vertex, an index into [[colors]] indicating the color of that vertex. */
+    public readonly indices: Uint16Array;
+    /** If `true`, indicates none of the [[colors]] have a transparency greater than zero; otherwise, all of
+     * the colors have a transparency greater than zero.
+     */
+    public readonly isOpaque: boolean;
+
+    /** Constructor.
+     * @param colors See [[colors]].
+     * @param indices See [[indices]]
+     * @param hasAlpha `true` if all `colors` have a transparency greater than zero, or `false` if they all have a transparency of zero.
+     */
+    public constructor(colors: Uint32Array, indices: number[], hasAlpha: boolean) {
+        this.colors = new Uint32Array(colors.buffer);
+        this.indices = Uint16Array.from(indices);
+        this.isOpaque = !hasAlpha;
+    }
+}
+
+/** Describes the color(s) of the vertices of a [MeshArgs]($frontend) or [PolylineArgs]($frontend).
+ * This may be a uniform color to be applied to every vertex, or a table specifying individual per-vertex colors.
+ * @public
+ */
+export class ColorIndex {
+    private _color: ColorDef | NonUniformColor;
+
+    /** Whether the color(s) in this index have transparency. */
+    public get hasAlpha() {
+        return !this._color.isOpaque;
+    }
+
+    /** Whether this index specifies a single uniform color for the entire mesh or polyline. */
+    public get isUniform() {
+        return this._color instanceof ColorDef;
+    }
+
+    /** The number of colors in this index. */
+    public get numColors(): number {
+        return this.isUniform ? 1 : this.nonUniform!.colors.length;
+    }
+
+    /** Construct a default index specifying a uniform white color. */
+    public constructor() {
+        this._color = ColorDef.white;
+    }
+
+    /** Reset this index to specify a uniform white color. */
+    public reset() {
+        this._color = ColorDef.white;
+    }
+
+    /** Returns the single color to be applied to all vertices, if [[isUniform]] is `true`; or `undefined` otherwise. */
+    public get uniform(): ColorDef | undefined {
+        return this.isUniform ? (this._color as ColorDef) : undefined;
+    }
+
+    /** Set the specified color to be applied to all vertices. */
+    public initUniform(color: ColorDef | number) {
+        this._color = typeof color === "number" ? ColorDef.fromJSON(color) : color;
+    }
+
+    /** Returns the per-vertex colors, if [[isUniform]] is `false`; or `undefined` otherwise. */
+    public get nonUniform(): NonUniformColor | undefined {
+        return !this.isUniform ? (this._color as NonUniformColor) : undefined;
+    }
+
+    /** Set the per-vertex colors.
+     * @param colors See [[NonUniformColor.colors]].
+     * @param indices See [[NonUniformColor.indices]].
+     * @param hasAlpha `true` if all `colors` have a transparency greater than zero, or `false` if they all have a transparency of zero.
+     */
+    public initNonUniform(colors: Uint32Array, indices: number[], hasAlpha: boolean) {
+        this._color = new NonUniformColor(colors, indices, hasAlpha);
+    }
+}

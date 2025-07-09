@@ -1,6 +1,6 @@
 import { Group, Object3D } from "three";
 
-import { Feature, Gradient, GraphicParams, RenderTexture } from "../../common";
+import { Gradient, GraphicParams, RenderTexture } from "../../common";
 import { DisplayParams } from "../../common/render/primitives/display-params";
 import {
     Arc3d,
@@ -47,10 +47,6 @@ export abstract class GeometryListBuilder extends GraphicBuilder {
             analysisStyleDisplacement: this.analysisStyle?.displacement,
             viewIndependentOrigin: options.viewIndependentOrigin
         });
-
-        if (this.pickable) {
-            this.activateFeature(new Feature(this.pickable.id, this.pickable.subCategoryId));
-        }
     }
 
     public finish(): Object3D {
@@ -61,10 +57,6 @@ export abstract class GeometryListBuilder extends GraphicBuilder {
 
     public activateGraphicParams(graphicParams: GraphicParams): void {
         graphicParams.clone(this.graphicParams);
-    }
-
-    protected override _activateFeature(feature: Feature): void {
-        this.accum.currentFeature = feature;
     }
 
     public addArc2d(ellipse: Arc3d, isEllipse: boolean, filled: boolean, zDepth: number): void {
@@ -194,7 +186,7 @@ export class PrimitiveBuilder extends GeometryListBuilder {
         if (!accum.isEmpty) {
             const options = GeometryOptions.createForGraphicBuilder(this);
             const tolerance = this.computeTolerance(accum);
-            accum.saveToGraphicList(this.primitives, options, tolerance, this.pickable);
+            accum.saveToGraphicList(this.primitives, options, tolerance);
         }
 
         if (this.primitives.length === 0) {

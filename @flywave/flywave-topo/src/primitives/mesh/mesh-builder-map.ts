@@ -1,8 +1,7 @@
-import { Feature, FeatureTable } from "../../common";
 import { DisplayParams } from "../../common/render/primitives/display-params";
 import { MeshPrimitiveType } from "../../common/render/primitives/mesh-primitive";
 import { Range3d } from "../../core-geometry";
-import { compareBooleans, compareNumbers, Dictionary, Id64String } from "../../utils";
+import { compareBooleans, compareNumbers, Dictionary } from "../../utils";
 import { GeometryList } from "../geometry/geometry-list";
 import { Geometry } from "../geometry/geometry-primitives";
 import { PolyfacePrimitive } from "../polyface";
@@ -17,17 +16,10 @@ export class MeshBuilderMap extends Dictionary<MeshBuilderMap.Key, MeshBuilder> 
     public readonly facetAreaTolerance: number;
     public readonly tolerance: number;
     public readonly is2d: boolean;
-    public readonly features?: FeatureTable;
     public readonly options: GeometryOptions;
     private _keyOrder = 0;
 
-    constructor(
-        tolerance: number,
-        range: Range3d,
-        is2d: boolean,
-        options: GeometryOptions,
-        pickable: { modelId?: Id64String } | undefined
-    ) {
+    constructor(tolerance: number, range: Range3d, is2d: boolean, options: GeometryOptions) {
         super((lhs: MeshBuilderMap.Key, rhs: MeshBuilderMap.Key) => lhs.compare(rhs));
         this.tolerance = tolerance;
         this.vertexTolerance = tolerance * ToleranceRatio.vertex;
@@ -35,8 +27,6 @@ export class MeshBuilderMap extends Dictionary<MeshBuilderMap.Key, MeshBuilder> 
         this.range = range;
         this.is2d = is2d;
         this.options = options;
-
-        if (pickable) this.features = new FeatureTable(2048 * 1024, pickable.modelId);
     }
 
     public static createFromGeometries(
@@ -44,10 +34,9 @@ export class MeshBuilderMap extends Dictionary<MeshBuilderMap.Key, MeshBuilder> 
         tolerance: number,
         range: Range3d,
         is2d: boolean,
-        options: GeometryOptions,
-        pickable: { modelId?: Id64String } | undefined
+        options: GeometryOptions
     ): MeshBuilderMap {
-        const map = new MeshBuilderMap(tolerance, range, is2d, options, pickable);
+        const map = new MeshBuilderMap(tolerance, range, is2d, options);
 
         for (const geom of geometries) map.loadGeometry(geom);
 
@@ -55,7 +44,7 @@ export class MeshBuilderMap extends Dictionary<MeshBuilderMap.Key, MeshBuilder> 
     }
 
     public toMeshes(): MeshList {
-        const meshes = new MeshList(this.features, this.range);
+        const meshes = new MeshList(this.range);
         for (const builder of this._values) {
             if (builder.mesh.points.length > 0) meshes.push(builder.mesh);
         }
@@ -72,11 +61,11 @@ export class MeshBuilderMap extends Dictionary<MeshBuilderMap.Key, MeshBuilder> 
         const polyfaces = geom.getPolyfaces(this.tolerance);
 
         if (polyfaces !== undefined) {
-            for (const polyface of polyfaces) this.loadIndexedPolyface(polyface, geom.feature);
+            for (const polyface of polyfaces) this.loadIndexedPolyface(polyface);
         }
     }
 
-    public loadIndexedPolyface(polyface: PolyfacePrimitive, feature: Feature | undefined): void {
+    public loadIndexedPolyface(polyface: PolyfacePrimitive): void {
         const { indexedPolyface, displayParams, isPlanar } = polyface;
         const { pointCount, normalCount } = indexedPolyface;
         const { fillColor, isTextured } = displayParams;
@@ -95,35 +84,28 @@ export class MeshBuilderMap extends Dictionary<MeshBuilderMap.Key, MeshBuilder> 
                 ? MeshEdgeCreationOptions.Type.DefaultEdges
                 : MeshEdgeCreationOptions.Type.NoEdges
         );
-        builder.addFromPolyface(
-            indexedPolyface,
-            {
-                edgeOptions,
-                includeParams: isTextured,
-                fillColor: fillColor.tbgr,
-                mappedTexture: textureMapping
-            },
-            feature
-        );
+        builder.addFromPolyface(indexedPolyface, {
+            edgeOptions,
+            includeParams: isTextured,
+            fillColor: fillColor.tbgr,
+            mappedTexture: textureMapping
+        });
     }
 
     public loadStrokePrimitiveList(geom: Geometry): void {
         const strokes = geom.getStrokes(this.tolerance);
 
         if (undefined !== strokes) {
-            for (const stroke of strokes) this.loadStrokesPrimitive(stroke, geom.feature);
+            for (const stroke of strokes) this.loadStrokesPrimitive(stroke);
         }
     }
 
-    public loadStrokesPrimitive(
-        strokePrimitive: StrokesPrimitive,
-        feature: Feature | undefined
-    ): void {
+    public loadStrokesPrimitive(strokePrimitive: StrokesPrimitive): void {
         const { displayParams, isDisjoint, isPlanar, strokes } = strokePrimitive;
 
         const type = isDisjoint ? MeshPrimitiveType.Point : MeshPrimitiveType.Polyline;
         const builder = this.getBuilder(displayParams, type, false, isPlanar);
-        builder.addStrokePointLists(strokes, isDisjoint, displayParams.fillColor.tbgr, feature);
+        builder.addStrokePointLists(strokes, isDisjoint, displayParams.fillColor.tbgr);
     }
 
     public getBuilder(
@@ -144,8 +126,7 @@ export class MeshBuilderMap extends Dictionary<MeshBuilderMap.Key, MeshBuilder> 
             is2d,
             isPlanar,
             tolerance,
-            areaTolerance: facetAreaTolerance,
-            features: this.features
+            areaTolerance: facetAreaTolerance
         });
     }
 
