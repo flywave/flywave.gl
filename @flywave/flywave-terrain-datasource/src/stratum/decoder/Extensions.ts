@@ -7,7 +7,7 @@ import {
     Metadata,
     SectionLine,
     StratumLayer
-} from "./types";
+} from "./Types";
 
 // 扩展ID常量
 const STRATUM_MESH_METADATA_EXTENSION_ID = 1;

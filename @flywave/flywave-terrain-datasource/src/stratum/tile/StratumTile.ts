@@ -9,7 +9,7 @@ import { GeoBox } from "@flywave/flywave-geoutils";
 import { FlatArray } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
-import { DecodeResult, Header, LayerType } from "../decoder/types";
+import { DecodeResult, Header, LayerType } from "../decoder";
 import { Borehole } from "./Borehole";
 import { CollapsePillar, CollapseProfile } from "./Collapse";
 import { ColorMap } from "./ColorMap";

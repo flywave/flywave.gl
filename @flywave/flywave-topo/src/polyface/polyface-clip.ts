@@ -17,7 +17,6 @@ import { GrowableXYZArrayCache } from "../geometry3d/reusable-object-cache";
 import { Transform } from "../geometry3d/transform";
 import { SweepContour } from "../solid/sweep-contour";
 import { ChainMergeContext } from "../topology/chain-merge";
-import { assert } from "../utils";
 import { RangeSearch } from "./multiclip/range-search";
 import { IndexedPolyface, Polyface, PolyfaceVisitor } from "./polyface";
 import { PolyfaceBuilder } from "./polyface-builder";

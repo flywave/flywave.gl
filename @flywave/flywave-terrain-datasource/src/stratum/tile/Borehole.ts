@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { BoreholeStratum, TrajectoryPoint } from "../decoder/types";
+import { BoreholeStratum, TrajectoryPoint } from "../decoder";
 
 export class Borehole {
     private readonly _id: string;

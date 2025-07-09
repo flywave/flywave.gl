@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import * as THREE from "three";
 
-import { LayerType } from "../decoder/types";
+import { LayerType } from "../decoder";
 import { StratumVoxel } from "./Voxel";
 
 export class StratumLayer {

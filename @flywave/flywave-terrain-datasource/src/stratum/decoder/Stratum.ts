@@ -8,7 +8,7 @@ import {
     Header,
     StratumLayer,
     StratumVoxel
-} from "./types";
+} from "./Types";
 
 const STRATUM_MESH_HEADER_SIZE = 88;
 const STRATUM_COORDINATE_SIZE = 32767;

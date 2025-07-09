@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { FaultPoint } from "../decoder/types";
+import { FaultPoint } from "../decoder";
 
 export class FaultProfile {
     private readonly _id: string;
