@@ -1,255 +1,182 @@
-import {RenderMode} from '@itwin/core-common';
-import * as THREE from 'three';
+import * as THREE from "three";
 
-import {EdgeTable} from '../../../common/internal/render/EdgeParams';
-import {IndexedEdgeParams} from '../../common/internal/render/EdgeParams';
+import type { EdgeTable, IndexedEdgeParams } from "../common/render/primitives/edge-params";
+import type { RenderPass, RenderTarget, ShaderParams } from "./mesh-geometry";
+import { MeshGeometry } from "./mesh-geometry";
 
-import {ColorInfo} from './ColorInfo';
-import {ShaderProgramParams} from './DrawCommand';
-import {MeshData} from './MeshData';
-import {Pass, RenderOrder} from './RenderFlags';
-import {Target} from './Target';
-import {TechniqueId} from './TechniqueId';
-import {ThreeMeshGeometry} from './ThreeMeshGeometry';
-
-/**
- * Three.js 实现的 IndexedEdgeGeometry
- * 封装了 iTwin.js 的 IndexedEdgeGeometry 功能
+/** @see [[EdgeTable]]
+ * @internal
  */
+export class EdgeLUT {
+    public readonly texture: THREE.DataTexture;
+    public readonly numSegments: number;
+    public readonly silhouettePadding: number;
+
+    private constructor(
+        texture: THREE.DataTexture,
+        numSegments: number,
+        silhouettePadding: number
+    ) {
+        this.texture = texture;
+        this.numSegments = numSegments;
+        this.silhouettePadding = silhouettePadding;
+    }
+
+    public dispose(): void {
+        this.texture.dispose();
+    }
+
+    public static create(table: EdgeTable): EdgeLUT | undefined {
+        const texture = new THREE.DataTexture(
+            table.data,
+            table.width,
+            table.height,
+            THREE.RGBAFormat,
+            THREE.UnsignedByteType
+        );
+        return texture
+            ? new EdgeLUT(texture, table.numSegments, table.silhouettePadding)
+            : undefined;
+    }
+}
+
+// 渲染顺序常量
+enum RenderOrder {
+    Edge = 2000,
+    PlanarEdge = 2100
+}
+
 export class IndexedEdgeGeometry extends MeshGeometry {
-  public readonly edgeLut: THREE.DataTexture;
-  private readonly _indices: Uint8Array;
+    public readonly edgeLut: EdgeLUT;
+    private readonly _indices: Uint8Array;
 
-  // 原始实现属性兼容
-  public get lutBuffers() {
-    return null;
-  }  // Three.js 不需要原生缓冲区容器
-  public override get asIndexedEdge() {
-    return this;
-  }
-  public get techniqueId() {
-    return TechniqueId.IndexedEdge;
-  }
+    // 添加实例属性以符合基类要求
+    public uniformColor: THREE.Vector4 | null = null;
+    public texture: THREE.Texture | null = null;
+    public normalMap: THREE.Texture | null = null;
+    public vertexColors: boolean = false;
 
-  private constructor(mesh: MeshData, indices: Uint8Array, lut: EdgeTable) {
-    super(mesh, indices.length / 3);  // 每个索引3个分量
-    this._indices = indices;
+    constructor(options: { indices: Uint8Array; lut: EdgeTable }) {
+        // 转换为基类需要的 Float32Array 位置数据
+        const floatIndices = new Float32Array(options.indices.length);
+        for (let i = 0; i < options.indices.length; i++) {
+            floatIndices[i] = options.indices[i];
+        }
 
-    // 创建边缘查找表纹理
-    this.edgeLut = new THREE.DataTexture(
-        lut.data, lut.width, lut.height, THREE.RGBAFormat,
-        THREE.UnsignedByteType);
-    this.edgeLut.needsUpdate = true;
+        super({
+            positions: floatIndices,
+            indices: undefined // 索引几何体不使用索引缓冲区
+        });
 
-    // 设置几何体属性
-    this.setAttribute('position', new THREE.BufferAttribute(indices, 3, false));
-  }
+        this._indices = options.indices;
 
-  /**
-   * 创建 ThreeIndexedEdgeGeometry 实例
-   */
-  public static create(mesh: MeshData, params: IndexedEdgeParams):
-      ThreeIndexedEdgeGeometry|undefined {
-    try {
-      return new ThreeIndexedEdgeGeometry(
-          mesh, params.indices.data, params.edges);
-    } catch (e) {
-      console.error('Failed to create IndexedEdgeGeometry:', e);
-      return undefined;
+        // 创建边缘查找表纹理
+        this.edgeLut = EdgeLUT.create(options.lut);
+
+        // 设置几何体属性
+        const positionAttr = new THREE.BufferAttribute(this._indices, 3);
+        positionAttr.normalized = true; // 重要：需要归一化字节数据
+        this.setAttribute("position", positionAttr);
     }
-  }
 
-  /**
-   * 为特定渲染通道创建材质
-   */
-  protected createMaterialForPass(pass: Pass, target: Target): THREE.Material {
-    const isOpaque = pass === 'opaque-linear';
-    const isPlanar = this.isPlanar;
+    /**
+     * 创建 IndexedEdgeGeometry 实例
+     */
+    public static create(params: IndexedEdgeParams): IndexedEdgeGeometry | undefined {
+        // 添加参数校验
+        if (!params?.indices?.data || !params?.edges) {
+            return undefined;
+        }
 
-    // 基础材质参数
-    const baseParams = {
-      depthTest: true,
-      depthWrite: isOpaque,
-      transparent: !isOpaque,
-      side: THREE.FrontSide,
-      extensions: {
-        fragDepth: false  // 禁用片段深度扩展
-      }
-    };
+        try {
+            // 解构参数提升可读性
+            const { indices, edges } = params;
 
-    // 根据通道选择着色器
-    if (isOpaque) {
-      return new THREE.ShaderMaterial({
-        ...baseParams,
-        vertexShader: this.getVertexShader(),
-        fragmentShader: this.getFragmentShader(true),
-        uniforms: this.getCommonUniforms(target)
-      });
-    } else {
-      return new THREE.ShaderMaterial({
-        ...baseParams,
-        vertexShader: this.getVertexShader(),
-        fragmentShader: this.getFragmentShader(false),
-        uniforms: this.getCommonUniforms(target)
-      });
+            return new IndexedEdgeGeometry({
+                indices: indices.data,
+                lut: edges
+            });
+        } catch (e) {
+            return undefined;
+        }
     }
-  }
 
-  /**
-   * 获取公共 uniforms
-   */
-  private getCommonUniforms(target: Target): Record<string, THREE.IUniform> {
-    return {
-      viewIndependentOrigin: {value: this.viewIndependentOrigin},
-      edgeLut: {value: this.edgeLut},
-      edgeWeight: {value: this.edgeWidth},
-      edgeLineCode: {value: this.edgeLineCode},
-      viewport: {
-        value: new THREE.Vector4(
-            0, 0, target.viewport.width, target.viewport.height)
-      },
-      modelMatrix: {value: new THREE.Matrix4()},
-      viewMatrix: {value: new THREE.Matrix4()},
-      projectionMatrix: {value: new THREE.Matrix4()},
-      // 添加其他必要 uniforms
-    };
-  }
+    /**
+     * 创建Three.js网格对象
+     * @param material 可选材质，默认使用基础线框材质
+     */
+    createMesh(): THREE.LineSegments {
+        // 转换几何体属性为Three.js标准格式
+        const bufferGeometry = new THREE.BufferGeometry();
 
-  /**
-   * 获取顶点着色器代码
-   */
-  private getVertexShader(): string {
-    return `
-      attribute vec3 position;
-      uniform vec3 viewIndependentOrigin;
-      uniform mat4 modelMatrix;
-      uniform mat4 viewMatrix;
-      uniform mat4 projectionMatrix;
-      
-      varying vec3 vPosition;
-      
-      void main() {
-        // 字节坐标转换 (0-255 => 0.0-1.0)
-        vec3 normalizedPos = position / 255.0;
-        
-        // 应用视图独立原点偏移
-        vec3 worldPos = normalizedPos + viewIndependentOrigin;
-        
-        // 计算最终位置
-        vec4 modelViewPosition = viewMatrix * modelMatrix * vec4(worldPos, 1.0);
-        gl_Position = projectionMatrix * modelViewPosition;
-        
-        vPosition = position;
-      }
-    `;
-  }
+        // 复制位置属性（已存在的position属性）
+        const posAttr = this.getAttribute("position");
+        bufferGeometry.setAttribute("position", new THREE.BufferAttribute(posAttr.array, 3));
 
-  /**
-   * 获取片段着色器代码
-   * @param isOpaque 是否不透明通道
-   */
-  private getFragmentShader(isOpaque: boolean): string {
-    return `
-      precision highp float;
-      uniform sampler2D edgeLut;
-      uniform float edgeWeight;
-      uniform float edgeLineCode;
-      uniform vec4 viewport;
-      
-      varying vec3 vPosition;
-      
-      void main() {
-        // 边缘查找表采样
-        vec2 uv = vec2(vPosition.x / 255.0, vPosition.y / 255.0);
-        vec4 edgeData = texture2D(edgeLut, uv);
-        
-        // 边缘可见性检查
-        if (edgeData.a < 0.1) discard;
-        
-        // 边缘颜色计算
-        vec3 edgeColor = edgeData.rgb;
-        
-        // 透明度处理
-        float alpha = ${isOpaque ? '1.0' : 'edgeData.a'};
-        
-        gl_FragColor = vec4(edgeColor, alpha);
-        
-        // 深度偏移处理（减少Z-fighting）
-        gl_FragDepthEXT = gl_FragCoord.z - 0.0001;
-      }
-    `;
-  }
+        // 使用默认材质（黄色线框）如果未提供材质
+        const defaultMaterial = new THREE.LineBasicMaterial({
+            color: 0xffff00,
+            linewidth: 2
+        });
 
-  /**
-   * 更新 uniforms
-   */
-  public updateUniforms(material: THREE.Material, params: ShaderProgramParams):
-      void {
-    super.updateUniforms(material, params);
+        return new THREE.LineSegments(bufferGeometry, defaultMaterial);
+    }
 
-    if (!(material instanceof THREE.ShaderMaterial)) return;
+    /**
+     * 计算边缘线宽
+     */
+    protected computeEdgeWeight(params: ShaderParams): number {
+        const baseWidth = this.edgeWidth;
+        const pixelRatio = params.devicePixelRatio || window.devicePixelRatio || 1;
+        return baseWidth * pixelRatio;
+    }
 
-    const uniforms = material.uniforms;
-    const target = params.target;
+    /**
+     * 计算边缘线代码
+     */
+    protected computeEdgeLineCode(params: ShaderParams): number {
+        return this.edgeLineCode;
+    }
 
-    // 更新矩阵
-    uniforms.modelMatrix.value =
-        params.transform?.matrix ?? new THREE.Matrix4();
-    uniforms.viewMatrix.value = target.viewMatrix;
-    uniforms.projectionMatrix.value = target.projectionMatrix;
+    /**
+     * 确定渲染通道
+     */
+    protected determineRenderPass(target: RenderTarget): RenderPass {
+        return "edge";
+    }
 
-    // 更新边缘参数
-    uniforms.edgeWeight.value = this.computeEdgeWeight(params);
-    uniforms.edgeLineCode.value = this.computeEdgeLineCode(params);
+    /**
+     * 获取渲染顺序
+     */
+    public get renderOrder(): number {
+        return this.isPlanar ? RenderOrder.PlanarEdge : RenderOrder.Edge;
+    }
 
-    // 更新视口
-    uniforms.viewport.value.set(
-        0, 0, target.viewport.width, target.viewport.height);
-  }
+    /**
+     * 释放资源
+     */
+    public override dispose(): void {
+        super.dispose();
+        this.edgeLut.dispose();
+    }
 
-  /**
-   * 获取渲染通道
-   */
-  public override getPass(target: Target): Pass {
-    return this.computeEdgePass(target);
-  }
+    // 实现基类要求的抽象方法
+    public get asIndexedEdge() {
+        return this;
+    }
 
-  /**
-   * 获取渲染顺序
-   */
-  public get renderOrder(): number {
-    return this.isPlanar ? RenderOrder.PlanarEdge : RenderOrder.Edge;
-  }
+    public wantMonochrome(target: RenderTarget): boolean {
+        return target.currentViewFlags?.renderMode === 0; // 假设0是线框模式
+    }
 
-  /**
-   * 获取颜色信息
-   */
-  public override getColor(target: Target): ColorInfo {
-    return this.computeEdgeColor(target);
-  }
+    public getPass(target: RenderTarget): RenderPass {
+        return this.determineRenderPass(target);
+    }
 
-  /**
-   * 是否需要单色处理
-   */
-  public override wantMonochrome(target: Target): boolean {
-    return target.currentViewFlags.renderMode === RenderMode.Wireframe;
-  }
-
-  /**
-   * 释放资源
-   */
-  public override dispose(): void {
-    super.dispose();
-    this.edgeLut.dispose();
-  }
-
-  /**
-   * 收集内存统计信息
-   */
-  public collectStatistics(): {indices: number; texture: number} {
-    return {
-      indices: this._indices.byteLength,
-      texture: this.edgeLut.image.width * this.edgeLut.image.height * 4  // RGBA
-    };
-  }
+    public getColor(target: RenderTarget): { isUniform: boolean; uniform: THREE.Color } {
+        return {
+            isUniform: true,
+            uniform: new THREE.Color(0xffffff) // 实际应从LUT获取
+        };
+    }
 }

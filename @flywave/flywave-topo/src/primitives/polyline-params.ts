@@ -1,4 +1,3 @@
-import { App } from "../app";
 import { QPoint3dList } from "../common";
 import { PolylineIndices, PolylineTypeFlags } from "../common/render";
 import { PolylineParams, TesselatedPolyline } from "../common/render/primitives/polyline-params";
@@ -230,7 +229,7 @@ export function tesselatePolyline(
 
 export function createPolylineParams(args: PolylineArgs): PolylineParams | undefined {
     assert(!args.flags.isDisjoint);
-    const vertices = VertexTableBuilder.buildFromPolylines(args, App.renderSystem.maxTextureSize);
+    const vertices = VertexTableBuilder.buildFromPolylines(args, 4096);
     if (undefined === vertices) return undefined;
 
     const tesselator = PolylineTesselator.fromPolyline(args);

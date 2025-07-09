@@ -1,3 +1,5 @@
+import { Object3D } from "three";
+
 import {
     AnalysisStyle,
     ColorDef,
@@ -23,7 +25,6 @@ import {
 } from "../core-geometry";
 import { assert, Id64String } from "../utils";
 import { GraphicPrimitive } from "./graphic-primitive";
-import { RenderGraphic } from "./render-graphic";
 
 export enum GraphicType {
     ViewBackground,
@@ -130,7 +131,7 @@ export abstract class GraphicBuilder {
         return this.type === GraphicType.ViewOverlay || this.type === GraphicType.WorldOverlay;
     }
 
-    public abstract finish(): RenderGraphic;
+    public abstract finish(): Object3D;
 
     public abstract activateGraphicParams(graphicParams: GraphicParams): void;
 

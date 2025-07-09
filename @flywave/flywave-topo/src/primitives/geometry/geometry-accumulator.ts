@@ -1,24 +1,64 @@
-import { App } from "../../app";
-import { AnalysisStyleDisplacement, Feature, QPoint3dList } from "../../common";
+import {
+    BufferAttribute,
+    BufferGeometry,
+    Color,
+    DataTexture,
+    Line,
+    LineBasicMaterial,
+    LineLoop,
+    Material,
+    Matrix4,
+    Mesh,
+    MeshStandardMaterial,
+    Object3D,
+    Points,
+    PointsMaterial,
+    RGBAFormat,
+    UnsignedByteType,
+    Vector3
+} from "three";
+
+import {
+    AnalysisStyleDisplacement,
+    Feature,
+    Gradient,
+    ImageBufferFormat,
+    RenderTexture,
+    TextureTransparency
+} from "../../common";
 import { DisplayParams } from "../../common/render/primitives/display-params";
 import {
     IndexedPolyface,
     Loop,
     Path,
     Point3d,
+    PolyfaceBuilder,
     Range3d,
     SolidPrimitive,
+    StrokeOptions,
     Transform
 } from "../../core-geometry";
-import { GraphicBranch } from "../../render/graphic-branch";
-import { RenderGraphic } from "../../render/render-graphic";
-import { RenderSystem } from "../../render/render-system";
-import { assert } from "../../utils";
+import { Texture } from "../../render/texture";
 import { MeshBuilderMap } from "../mesh/mesh-builder-map";
 import { MeshList } from "../mesh/mesh-primitives";
 import { GeometryOptions } from "../primitives";
 import { GeometryList } from "./geometry-list";
-import { Geometry, PrimitiveGeometryType } from "./geometry-primitives";
+import {
+    Geometry,
+    PrimitiveGeometryType,
+    PrimitiveLineStringGeometry,
+    PrimitivePathGeometry,
+    PrimitivePointStringGeometry,
+    PrimitivePolyfaceGeometry,
+    SolidPrimitiveGeometry
+} from "./geometry-primitives";
+import {
+    PreparedGeometry,
+    PreparedLineGeometry,
+    PreparedMeshGeometry,
+    PreparedPointGeometry,
+    PreparedSolidGeometry
+} from "./prepared-geometry";
 
 export class GeometryAccumulator {
     private readonly _transform: Transform;
@@ -28,7 +68,6 @@ export class GeometryAccumulator {
 
     public readonly tileRange: Range3d;
     public readonly geometries: GeometryList = new GeometryList();
-    public readonly system: RenderSystem;
     public currentFeature?: Feature;
 
     public get surfacesOnly(): boolean {
@@ -48,7 +87,6 @@ export class GeometryAccumulator {
     }
 
     public constructor(options?: {
-        system?: RenderSystem;
         surfacesOnly?: boolean;
         transform?: Transform;
         tileRange?: Range3d;
@@ -56,7 +94,6 @@ export class GeometryAccumulator {
         viewIndependentOrigin?: Point3d;
         feature?: Feature;
     }) {
-        this.system = options?.system ?? App.renderSystem;
         this.tileRange = options?.tileRange ?? Range3d.createNull();
         this._surfacesOnly = options?.surfacesOnly === true;
         this._transform = options?.transform ?? Transform.createIdentity();
@@ -253,56 +290,467 @@ export class GeometryAccumulator {
     }
 
     public saveToGraphicList(
-        graphics: RenderGraphic[],
+        graphics: Object3D[],
         options: GeometryOptions,
         tolerance: number,
         pickable: { modelId?: string } | undefined
-    ): MeshList | undefined {
-        const meshes = this.toMeshes(options, tolerance, pickable);
-        if (meshes.length === 0) return undefined;
+    ): Object3D[] {
+        if (this.geometries.isEmpty) return;
 
-        const branch = new GraphicBranch(true);
-        let transformOrigin: Point3d | undefined;
-        let meshesRangeOffset = false;
+        // 1. 准备几何数据
+        const geometries = this.prepareGeometries(options, tolerance);
 
-        for (const mesh of meshes) {
-            const verts = mesh.points;
-            if (branch.isEmpty) {
-                if (verts instanceof QPoint3dList) {
-                    transformOrigin = verts.params.origin.clone();
-                    verts.params.origin.setZero();
-                } else {
-                    transformOrigin = verts.range.center;
-                    if (!meshesRangeOffset) {
-                        meshes.range?.low.subtractInPlace(transformOrigin);
-                        meshes.range?.high.subtractInPlace(transformOrigin);
-                        meshesRangeOffset = true;
+        // 2. 创建 Three.js 对象
+        const threeObjects = this.createThreeObjects(geometries, pickable);
+
+        // 3. 应用坐标变换
+        this.applyTransformations(threeObjects);
+
+        // 4. 添加到结果集
+        graphics.push(...threeObjects);
+
+        return graphics;
+    }
+
+    private prepareGeometries(options: GeometryOptions, tolerance: number): PreparedGeometry[] {
+        const result: PreparedGeometry[] = [];
+
+        for (const geom of this.geometries) {
+            // 使用 instanceof 进行类型判断
+            if (geom instanceof PrimitivePointStringGeometry) {
+                result.push(this.preparePointGeometry(geom));
+            } else if (geom instanceof PrimitiveLineStringGeometry) {
+                result.push(this.prepareLineStringGeometry(geom, tolerance));
+            } else if (geom instanceof PrimitivePathGeometry) {
+                result.push(this.preparePathGeometry(geom, tolerance));
+            } else if (geom instanceof PrimitivePolyfaceGeometry) {
+                result.push(this.prepareMeshGeometry(geom, options));
+            } else if (geom instanceof SolidPrimitiveGeometry) {
+                result.push(this.prepareSolidGeometry(geom, options));
+            }
+        }
+
+        return result;
+    }
+
+    private createThreeObjects(
+        geometries: PreparedGeometry[],
+        pickable: { modelId?: string } | undefined
+    ): Object3D[] {
+        const objects: Object3D[] = [];
+
+        for (const geom of geometries) {
+            let threeObj: Object3D;
+
+            switch (geom.type) {
+                case "point":
+                    threeObj = this.createPoints(geom);
+                    break;
+                case "line":
+                    threeObj = this.createLines(geom);
+                    break;
+                case "mesh":
+                    threeObj = this.createMesh(geom);
+                    break;
+                case "solid":
+                    threeObj = this.createSolid(geom);
+                    break;
+                default:
+                    continue; // 跳过未知类型
+            }
+
+            // 添加拾取信息
+            if (pickable?.modelId) {
+                threeObj.userData = {
+                    modelId: pickable.modelId,
+                    feature: this.currentFeature
+                };
+            }
+
+            objects.push(threeObj);
+        }
+
+        return objects;
+    }
+
+    private applyTransformations(objects: Object3D[]): void {
+        if (objects.length === 0) return;
+
+        const transformOrigin = this._viewIndependentOrigin
+            ? new Vector3(
+                  this._viewIndependentOrigin.x,
+                  this._viewIndependentOrigin.y,
+                  this._viewIndependentOrigin.z
+              )
+            : this.calculateCommonOrigin(objects);
+
+        for (const obj of objects) {
+            obj.position.sub(transformOrigin);
+
+            if (!this._transform.isIdentity) {
+                const matrix = new Matrix4().fromArray(this._transform.toArray());
+                obj.applyMatrix4(matrix);
+            }
+        }
+    }
+
+    private calculateCommonOrigin(objects: Object3D[]): Vector3 {
+        const center = new Vector3();
+        let count = 0;
+
+        for (const obj of objects) {
+            obj.traverse(child => {
+                if (child instanceof Mesh || child instanceof Line || child instanceof Points) {
+                    const geometry = (child as Mesh).geometry;
+                    if (geometry) {
+                        geometry.computeBoundingSphere();
+                        center.add(geometry.boundingSphere!.center);
+                        count++;
                     }
                 }
-            } else {
-                assert(undefined !== transformOrigin);
-                if (verts instanceof QPoint3dList) {
-                    assert(transformOrigin.isAlmostEqual(verts.params.origin));
-                    verts.params.origin.setZero();
-                } else {
-                    assert(verts.range.center.isAlmostZero);
+            });
+        }
+
+        return count > 0 ? center.divideScalar(count) : new Vector3();
+    }
+
+    private preparePointGeometry(geom: PrimitivePointStringGeometry): PreparedPointGeometry {
+        return {
+            type: "point",
+            points: geom.pts,
+            params: geom.displayParams
+        };
+    }
+
+    private createPoints(geom: PreparedPointGeometry): Points {
+        const vertices = new Float32Array(geom.points.length * 3);
+        const colors = new Float32Array(geom.points.length * 3);
+        const { r, g, b, t } = geom.params.fillColor.colors;
+
+        // 填充顶点和颜色数据
+        geom.points.forEach((point, i) => {
+            vertices[i * 3] = point.x;
+            vertices[i * 3 + 1] = point.y;
+            vertices[i * 3 + 2] = point.z;
+
+            colors[i * 3] = r / 255;
+            colors[i * 3 + 1] = g / 255;
+            colors[i * 3 + 2] = b / 255;
+        });
+
+        const geometry = new BufferGeometry();
+        geometry.setAttribute("position", new BufferAttribute(vertices, 3));
+        geometry.setAttribute("color", new BufferAttribute(colors, 3));
+
+        const opacity = t < 255 ? t / 255 : 1.0;
+        const material = new PointsMaterial({
+            size: geom.params.pointSize || 1.0,
+            vertexColors: true,
+            transparent: opacity < 1.0,
+            opacity
+        });
+
+        return new Points(geometry, material);
+    }
+
+    // 线几何处理 ==========================================
+    private prepareLineStringGeometry(
+        geom: PrimitiveLineStringGeometry,
+        tolerance: number
+    ): PreparedLineGeometry {
+        const points = geom.pts;
+        const isLoop = points.length > 2 && points[0].isAlmostEqual(points[points.length - 1]);
+        return {
+            type: "line",
+            points: points,
+            isLoop: isLoop,
+            params: geom.displayParams
+        };
+    }
+
+    private preparePathGeometry(
+        geom: PrimitivePathGeometry,
+        tolerance: number
+    ): PreparedLineGeometry {
+        const path = geom.path;
+        const isLoop = path.isLoop();
+
+        const facetOptions = StrokeOptions.createForCurves();
+        facetOptions.chordTol = tolerance;
+        const strokes = path.getPackedStrokes(facetOptions);
+
+        const points = strokes?.getPoint3dArray() ?? [];
+        geom.transform.multiplyPoint3dArrayInPlace(points);
+
+        return {
+            type: "line",
+            points: points,
+            isLoop: isLoop,
+            params: geom.displayParams
+        };
+    }
+
+    private createLines(geom: PreparedLineGeometry): Line | LineLoop {
+        const vertices = new Float32Array(geom.points.length * 3);
+
+        geom.points.forEach((point, i) => {
+            vertices[i * 3] = point.x;
+            vertices[i * 3 + 1] = point.y;
+            vertices[i * 3 + 2] = point.z;
+        });
+
+        const geometry = new BufferGeometry();
+        geometry.setAttribute("position", new BufferAttribute(vertices, 3));
+
+        const { r, g, b, t } = geom.params.fillColor.colors;
+        const opacity = t < 255 ? t / 255 : 1.0;
+
+        const material = new LineBasicMaterial({
+            color: new Color(r / 255, g / 255, b / 255),
+            linewidth: geom.params.lineWidth || 1.0,
+            transparent: opacity < 1.0,
+            opacity
+        });
+
+        return geom.isLoop ? new LineLoop(geometry, material) : new Line(geometry, material);
+    }
+
+    public prepareMeshGeometry(
+        geom: PrimitivePolyfaceGeometry,
+        options: GeometryOptions
+    ): PreparedMeshGeometry {
+        const polyface = geom.polyface;
+
+        const vertices = [];
+        for (let i = 0; i < polyface.data.point.length; i++) {
+            const p = polyface.data.point.getPoint3dAtUncheckedPointIndex(i);
+            vertices.push([p.x, p.y, p.z]);
+        }
+
+        const normals = [];
+        if (polyface.data.normal) {
+            for (let i = 0; i < polyface.data.normal.length; i++) {
+                const n = polyface.data.normal.getVector3dAtCheckedVectorIndex(i);
+                if (n) normals.push([n.x, n.y, n.z]);
+            }
+        }
+
+        const indices = this.extractTriangleIndices(polyface);
+
+        const uvs = [];
+        if (polyface.data.param) {
+            for (let i = 0; i < polyface.data.param.length; i++) {
+                const param = polyface.data.param.getPoint2dAtCheckedPointIndex(i);
+                if (param) uvs.push([param.x, param.y]);
+            }
+        }
+
+        return {
+            type: "mesh",
+            vertices,
+            indices,
+            normals,
+            uvs,
+            params: geom.displayParams
+        };
+    }
+
+    private extractTriangleIndices(polyface: IndexedPolyface): number[] {
+        const indices: number[] = [];
+        const visitor = polyface.createVisitor(0);
+
+        while (visitor.moveToNextFacet()) {
+            if (visitor.pointCount === 3) {
+                // 三角面直接读取
+                indices.push(visitor.clientPointIndex(0));
+                indices.push(visitor.clientPointIndex(1));
+                indices.push(visitor.clientPointIndex(2));
+            } else if (visitor.pointCount > 3) {
+                // 多边形需要三角剖分
+                const baseIndex = visitor.clientPointIndex(0);
+                for (let i = 1; i < visitor.pointCount - 1; i++) {
+                    indices.push(baseIndex);
+                    indices.push(visitor.clientPointIndex(i));
+                    indices.push(visitor.clientPointIndex(i + 1));
                 }
             }
+        }
+        return indices;
+    }
 
-            const graphic = mesh.getGraphics(this.system, this._viewIndependentOrigin);
-            if (undefined !== graphic) branch.add(graphic);
+    private createMesh(geom: PreparedMeshGeometry): Mesh {
+        if (geom.vertices.length === 0 || geom.indices.length === 0) return null;
+
+        const vertices = new Float32Array(geom.vertices.length * 3);
+        const indices = new Uint32Array(geom.indices);
+        const normals =
+            geom.normals.length > 0
+                ? new Float32Array(geom.normals.length * 3)
+                : new Float32Array(geom.vertices.length * 3);
+
+        geom.vertices.forEach((point, i) => {
+            vertices[i * 3] = point[0];
+            vertices[i * 3 + 1] = point[1];
+            vertices[i * 3 + 2] = point[2];
+        });
+
+        if (geom.normals.length > 0) {
+            geom.normals.forEach((normal, i) => {
+                normals[i * 3] = normal[0];
+                normals[i * 3 + 1] = normal[1];
+                normals[i * 3 + 2] = normal[2];
+            });
         }
 
-        if (!branch.isEmpty) {
-            assert(undefined !== transformOrigin);
-            const transform = Transform.createTranslation(transformOrigin);
-            graphics.push(this.system.createBranch(branch, transform));
-            if (meshesRangeOffset) {
-                meshes.range?.low.addInPlace(transformOrigin);
-                meshes.range?.high.addInPlace(transformOrigin);
+        const geometry = new BufferGeometry();
+        geometry.setAttribute("position", new BufferAttribute(vertices, 3));
+        geometry.setAttribute("normal", new BufferAttribute(normals, 3));
+
+        if (geom.uvs.length > 0) {
+            const uvs = new Float32Array(geom.uvs.length * 2);
+            geom.uvs.forEach((uv, i) => {
+                uvs[i * 2] = uv[0];
+                uvs[i * 2 + 1] = uv[1];
+            });
+            geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
+        }
+
+        geometry.setIndex(new BufferAttribute(indices, 1));
+
+        if (geom.normals.length === 0) {
+            geometry.computeVertexNormals();
+        }
+
+        const material = this.createMeshMaterial(geom.params);
+        return new Mesh(geometry, material);
+    }
+
+    private createMeshMaterial(params: DisplayParams): Material {
+        const { r, g, b, t } = params.fillColor.colors;
+        const opacity = t < 255 ? t / 255 : 1.0;
+
+        // 创建基础材质
+        const material = new MeshStandardMaterial({
+            color: new Color(r / 255, g / 255, b / 255),
+            transparent: opacity < 1.0,
+            opacity,
+            roughness: 0.8,
+            metalness: 0.2,
+            side: params.twoSided ? 2 : 0 // 0 = FrontSide, 1 = BackSide, 2 = DoubleSide
+        });
+
+        if (params.texture) {
+            const texture = params.texture.getTexture();
+            if (texture) {
+                material.map = texture;
             }
         }
 
-        return meshes;
+        if (params.gradient) {
+            const gradientTexture = this.getGradientTexture(params.gradient, params.maxTextureSize);
+            if (gradientTexture) {
+                material.map = gradientTexture.getTexture();
+            }
+        }
+
+        return material;
+    }
+
+    private prepareSolidGeometry(
+        geom: SolidPrimitiveGeometry,
+        options: GeometryOptions
+    ): PreparedSolidGeometry {
+        const solidPrimitive = geom.primitive;
+
+        const facetOptions = StrokeOptions.createForFacets();
+        facetOptions.chordTol = geom.displayParams.tessellationTolerance;
+
+        const polyfaceBuilder = PolyfaceBuilder.create(facetOptions);
+        polyfaceBuilder.addGeometryQuery(solidPrimitive);
+
+        const polyface = polyfaceBuilder.claimPolyface();
+
+        const vertices = [];
+        for (let i = 0; i < polyface.data.point.length; i++) {
+            const p = polyface.data.point.getPoint3dAtUncheckedPointIndex(i);
+            vertices.push([p.x, p.y, p.z]);
+        }
+
+        const normals = [];
+        if (polyface.data.normal) {
+            for (let i = 0; i < polyface.data.normal.length; i++) {
+                const n = polyface.data.normal.getVector3dAtCheckedVectorIndex(i);
+                if (n) normals.push([n.x, n.y, n.z]);
+            }
+        }
+
+        const indices = this.extractTriangleIndices(polyface);
+
+        return {
+            type: "solid",
+            meshData: {
+                type: "mesh",
+                vertices: vertices,
+                indices: indices,
+                normals: normals,
+                uvs: [],
+                params: geom.displayParams
+            }
+        };
+    }
+
+    private createSolid(geom: PreparedSolidGeometry): Mesh {
+        return this.createMesh(geom.meshData);
+    }
+
+    public getGradientTexture(
+        symb: Gradient.Symb,
+        maxTextureSize?: number
+    ): RenderTexture | undefined {
+        // 设置纹理尺寸
+        let width = 0x100;
+        let height = 0x100;
+
+        // 处理专题渐变模式
+        if (symb.mode === Gradient.Mode.Thematic) {
+            width = 1; // 每行像素相同
+            height = Math.min(4096, maxTextureSize); // 限制最大高度
+        }
+
+        try {
+            // 生成渐变图像
+            const imageSource = symb.produceImage({
+                width,
+                height,
+                includeThematicMargin: true
+            });
+
+            // Add null check and convert to Uint8Array
+            if (!imageSource?.data) return undefined;
+
+            // 创建 Three.js 纹理
+            const texture = new DataTexture(
+                imageSource.data, // Use the underlying buffer data
+                imageSource.width,
+                imageSource.height,
+                RGBAFormat,
+                UnsignedByteType
+            );
+
+            // 设置纹理属性
+            texture.needsUpdate = true;
+            texture.premultiplyAlpha = imageSource.format === ImageBufferFormat.Rgba;
+
+            return new Texture({
+                type: RenderTexture.Type.ThematicGradient,
+                handle: texture,
+                transparency:
+                    imageSource.format === ImageBufferFormat.Rgba
+                        ? TextureTransparency.Mixed
+                        : TextureTransparency.Opaque
+            });
+        } catch (e) {
+            return undefined;
+        }
     }
 }

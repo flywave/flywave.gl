@@ -1,4 +1,3 @@
-import { App } from "../app";
 import { MeshEdge, OctEncodedNormalPair, PolylineIndices } from "../common";
 import {
     calculateEdgeTableParams,
@@ -219,7 +218,7 @@ export function createEdgeParams(
     let indexed: IndexedEdgeParams | undefined;
 
     if (type !== "non-indexed") {
-        indexed = buildIndexedEdges(args, !doJoints, maxWidth ?? App.renderSystem.maxTextureSize);
+        indexed = buildIndexedEdges(args, !doJoints, maxWidth ?? 4096);
     } else {
         segments = convertPolylinesAndEdges(undefined, args.edges.edges);
         silhouettes =

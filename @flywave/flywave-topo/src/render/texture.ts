@@ -35,6 +35,10 @@ export class Texture extends RenderTexture implements IDisposable {
             : TextureTransparency.Opaque;
     }
 
+    public getTexture(): THREE.Texture {
+        return this.texture;
+    }
+
     public dispose() {
         this.texture.dispose();
     }
@@ -60,5 +64,4 @@ export class Texture2DDataUpdater {
         assert(index < this.data.length);
         return this.data[index];
     }
-
 }

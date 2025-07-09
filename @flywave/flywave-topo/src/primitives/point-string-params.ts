@@ -1,4 +1,3 @@
-import { App } from "../app";
 import { PointStringParams } from "../common/render/primitives/point-string-params";
 import { VertexIndices } from "../common/render/primitives/vertex-indices";
 import { assert } from "../utils";
@@ -8,7 +7,7 @@ import { VertexTableBuilder } from "./vertex-table-builder";
 export function createPointStringParams(args: PolylineArgs): PointStringParams | undefined {
     if (!args.flags.isDisjoint) return undefined;
 
-    const vertices = VertexTableBuilder.buildFromPolylines(args, App.renderSystem.maxTextureSize);
+    const vertices = VertexTableBuilder.buildFromPolylines(args, 4096);
     if (undefined === vertices) return undefined;
 
     const polylines = args.polylines;

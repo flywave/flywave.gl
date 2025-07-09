@@ -1,8 +1,5 @@
 import { ColorDef, RenderMaterial } from "../common";
-import {
-    SurfaceMaterial,
-    SurfaceMaterialAtlas
-} from "../common/render/primitives/surface-params";
+import { SurfaceMaterial, SurfaceMaterialAtlas } from "../common/render/primitives/surface-params";
 import { FloatRgb } from "./float-rgba";
 
 export class Material extends RenderMaterial {

@@ -64,6 +64,12 @@ export class Transform implements BeJSONFunctions {
         this._matrix.setIdentity();
     }
 
+    public toArray(): number[] {
+        const m = this._matrix.coffs;
+        const o = this._origin;
+        return [m[0], m[1], m[2], o.x, m[3], m[4], m[5], o.y, m[6], m[7], m[8], o.z, 0, 0, 0, 1];
+    }
+
     /**
      * Set this Transform instance from flexible inputs:
      * * Any object (such as another Transform or TransformProps) that has `origin` and `matrix` members

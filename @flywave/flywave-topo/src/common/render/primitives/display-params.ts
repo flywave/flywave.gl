@@ -41,6 +41,12 @@ export class DisplayParams {
     public readonly linePixels: LinePixels; // linear and mesh (edges)
     public readonly fillFlags: FillFlags; // meshes only
     public readonly ignoreLighting: boolean; // always true for text and linear geometry; true for meshes only if normals not desired
+    public readonly pointSize: number; // meshes only
+    public readonly lineWidth: number;
+    public readonly texture: RenderTexture;
+    public readonly tessellationTolerance: number;
+    public readonly twoSided: boolean;
+    public readonly maxTextureSize: number;
 
     public constructor(
         type: DisplayParams.Type,

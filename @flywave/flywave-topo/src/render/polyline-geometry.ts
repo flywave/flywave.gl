@@ -1,290 +1,113 @@
-import * as THREE from 'three';
-import { Point3d } from '@itwin/core-geometry';
-import { FeatureIndexType, PolylineTypeFlags, QParams3d } from '@itwin/core-common';
-import { PolylineParams } from '../../../common/internal/render/PolylineParams';
-import { RenderMemory } from '../../../render/RenderMemory';
-import { ColorInfo } from './ColorInfo';
-import { LineCode } from './LineCode';
-import { BuffersContainer } from './AttributeBuffers';
-import { RenderOrder } from './RenderFlags';
-import { TechniqueId } from './TechniqueId';
-import { VertexLUT } from './VertexLUT';
+import * as THREE from "three";
 
-// 自定义类型声明
-type WebGLDisposable = {
-  dispose: () => void;
-  isDisposed: boolean;
-};
+import { PolylineParams } from "../common/render/primitives/polyline-params";
+import type { Point3d, Range3d } from "../core-geometry";
+import { RenderGeometry } from "./render-geometry";
 
-class BufferHandle implements WebGLDisposable {
-  public readonly buffer: THREE.InstancedBufferAttribute | THREE.BufferAttribute;
-  public readonly bytesUsed: number;
-  public isDisposed = false;
-
-  constructor(data: ArrayBufferView, itemSize: number, type: THREE.BufferAttributeType) {
-    this.buffer = new THREE.BufferAttribute(data, itemSize);
-    this.bytesUsed = data.byteLength;
-  }
-
-  dispose() {
-    this.buffer.dispose();
-    this.isDisposed = true;
-  }
+// 折线类型标志
+export enum PolylineTypeFlags {
+    Normal = 0,
+    Edge = 1,
+    Outline = 2
 }
 
-/** @internal */
-export class PolylineBuffers implements WebGLDisposable {
-  public geometry: THREE.BufferGeometry;
-  public indices: BufferHandle;
-  public prevIndices: BufferHandle;
-  public nextIndicesAndParams: BufferHandle;
-  
-  private constructor(indices: BufferHandle, prevIndices: BufferHandle, nextIndicesAndParams: BufferHandle) {
-    this.geometry = new THREE.BufferGeometry();
-    this.indices = indices;
-    this.prevIndices = prevIndices;
-    this.nextIndicesAndParams = nextIndicesAndParams;
-    
-    // 设置几何属性
-    this.geometry.setAttribute('a_pos', indices.buffer);
-    this.geometry.setAttribute('a_prevIndex', prevIndices.buffer);
-    
-    // 处理共享缓冲区的属性
-    const nextBuffer = nextIndicesAndParams.buffer as THREE.BufferAttribute;
-    this.geometry.setAttribute('a_nextIndex', new THREE.BufferAttribute(
-      nextBuffer.array,
-      3,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      4
-    ));
-    
-    this.geometry.setAttribute('a_param', new THREE.BufferAttribute(
-      nextBuffer.array,
-      1,
-      false,
-      undefined,
-      undefined,
-      3,
-      4
-    ));
-  }
+export class PolylineGeometry extends THREE.BufferGeometry implements RenderGeometry {
+    // 新增需要实现的接口属性
+    public readonly isPlanar: boolean;
+    public readonly uniformColor?: THREE.Vector4;
+    public readonly vertexColors: boolean;
+    public readonly colorInfo?: { hasTranslucency: boolean };
 
-  public static create(polyline: any): PolylineBuffers | undefined {
-    // 假设polyline结构包含必要的数据
-    const indices = new BufferHandle(
-      new Uint8Array(polyline.indices.data),
-      3,
-      THREE.UnsignedByteType
-    );
-    
-    const prev = new BufferHandle(
-      new Uint8Array(polyline.prevIndices.data),
-      3,
-      THREE.UnsignedByteType
-    );
-    
-    const next = new BufferHandle(
-      new Uint8Array(polyline.nextIndicesAndParams),
-      4, // 包含3字节索引 + 1字节参数
-      THREE.UnsignedByteType
-    );
-    
-    return new PolylineBuffers(indices, prev, next);
-  }
+    // 保留原有属性
+    public readonly lineWeight: number;
+    public readonly lineCode: number;
+    public readonly ptype: PolylineTypeFlags;
+    public readonly isInstanceable: boolean;
+    public readonly renderGeometryType = "polyline" as const;
+    isDisposed: boolean;
 
-  public collectStatistics(stats: RenderMemory.Statistics, type: any): void {
-    stats.addBuffer(type, this.indices.bytesUsed + this.prevIndices.bytesUsed + this.nextIndicesAndParams.bytesUsed);
-  }
+    constructor(options: {
+        positions: Float32Array;
+        indices?: Uint16Array | Uint32Array;
+        lineWeight: number;
+        lineCode: number;
+        type: PolylineTypeFlags;
+        isPlanar?: boolean;
+        viewIndependentOrigin?: THREE.Vector3;
+        uniformColor?: THREE.Vector4;
+        vertexColors?: boolean;
+        colors?: Float32Array;
+    }) {
+        super();
 
-  public get isDisposed(): boolean {
-    return this.geometry === null &&
-      this.indices.isDisposed &&
-      this.prevIndices.isDisposed &&
-      this.nextIndicesAndParams.isDisposed;
-  }
+        // 手动创建几何体属性
+        this.setAttribute("position", new THREE.BufferAttribute(options.positions, 3));
+        if (options.indices) {
+            this.setIndex(new THREE.BufferAttribute(options.indices, 1));
+        }
 
-  public dispose() {
-    this.geometry.dispose();
-    this.indices.dispose();
-    this.prevIndices.dispose();
-    this.nextIndicesAndParams.dispose();
-    this.geometry = null as any;
-  }
-}
+        // 初始化新增属性
+        this.isPlanar = options.isPlanar ?? false;
+        this.uniformColor = options.uniformColor;
+        this.vertexColors = options.vertexColors ?? false;
 
-/** @internal */
-export class PolylineGeometry {
-  public readonly isInstanceable: boolean;
-  public vertexParams: QParams3d;
-  private readonly _hasFeatures: boolean;
-  public lineWeight: number;
-  public lineCode: number;
-  public type: PolylineTypeFlags;
-  private _isPlanar: boolean;
-  public lut: VertexLUT;
-  public numIndices: number;
-  private _buffers: PolylineBuffers;
-  private _origin: Point3d | undefined;
-  
-  public threeGeometry: THREE.BufferGeometry;
-  public material: THREE.Material;
-
-  constructor(lut: VertexLUT, buffers: PolylineBuffers, params: PolylineParams, viOrigin: Point3d | undefined) {
-    this.isInstanceable = undefined === viOrigin;
-    this.vertexParams = params.vertices.qparams;
-    this._hasFeatures = FeatureIndexType.Empty !== params.vertices.featureIndexType;
-    this.lineWeight = params.weight;
-    this.lineCode = LineCode.valueFromLinePixels(params.linePixels);
-    this.type = params.type;
-    this._isPlanar = params.isPlanar;
-    this.lut = lut;
-    this.numIndices = params.polyline.indices.length;
-    this._buffers = buffers;
-    this._origin = viOrigin;
-    
-    // 创建Three.js几何体
-    this.threeGeometry = buffers.geometry.clone();
-    
-    // 添加颜色信息
-    if (lut.colorInfo) {
-      const colorAttr = new THREE.BufferAttribute(
-        new Float32Array(lut.colorInfo.colors),
-        4
-      );
-      this.threeGeometry.setAttribute('color', colorAttr);
-    }
-    
-    // 创建材质
-    this.material = this.createPolylineMaterial();
-  }
-
-  private createPolylineMaterial(): THREE.Material {
-    return new THREE.MeshBasicMaterial({
-      vertexColors: this.lut.colorInfo ? true : false,
-      side: THREE.DoubleSide,
-      transparent: this.lut.colorInfo?.hasTranslucency,
-      opacity: this.lut.colorInfo?.transparency,
-      linewidth: this.lineWeight
-    });
-  }
-
-  public get isDisposed(): boolean { 
-    return this._buffers.isDisposed && this.lut.isDisposed; 
-  }
-
-  public dispose() {
-    if (!this.noDispose) {
-      this.lut.dispose();
-      this._buffers.dispose();
-      this.threeGeometry.dispose();
-      (this.material as any).dispose();
-    }
-  }
-
-  public collectStatistics(stats: RenderMemory.Statistics): void {
-    this._buffers.collectStatistics(stats, RenderMemory.BufferType.Polylines);
-    stats.addVertexTable(this.lut.bytesUsed);
-  }
-
-  public get isAnyEdge(): boolean { return PolylineTypeFlags.Normal !== this.type; }
-  public get isNormalEdge(): boolean { return PolylineTypeFlags.Edge === this.type; }
-  public get isOutlineEdge(): boolean { return PolylineTypeFlags.Outline === this.type; }
-
-  public get renderOrder(): RenderOrder {
-    if (this.isAnyEdge)
-      return this.isPlanar ? RenderOrder.PlanarEdge : RenderOrder.Edge;
-    else
-      return this.isPlanar ? RenderOrder.PlanarLinear : RenderOrder.Linear;
-  }
-
-  protected _wantWoWReversal(_target: any): boolean { return true; }
-
-  public get polylineBuffers(): PolylineBuffers | undefined { return this._buffers; }
-
-  private _computeEdgePass(target: any, colorInfo: ColorInfo): string {
-    const vf = target.currentViewFlags;
-    if (vf.renderMode === 'smooth' && !vf.visibleEdges)
-      return "none";
-
-    const isTranslucent: boolean = vf.renderMode === 'wireframe' && vf.transparency && colorInfo.hasTranslucency;
-    return isTranslucent ? "translucent" : "opaque-linear";
-  }
-
-  public getPass(target: any): string {
-    const vf = target.currentViewFlags;
-    if (this.isEdge) {
-      let pass = this._computeEdgePass(target, this.lut.colorInfo);
-      if ("none" !== pass && this.isOutlineEdge && vf.renderMode === 'wireframe' && vf.fill)
-        pass = "none";
-
-      return pass;
+        // 保留原有赋值
+        this.lineWeight = options.lineWeight;
+        this.lineCode = options.lineCode;
+        this.ptype = options.type;
+        this.isInstanceable = !options.viewIndependentOrigin;
     }
 
-    const isTranslucent: boolean = vf.transparency && this.lut.colorInfo.hasTranslucency;
-    return isTranslucent ? "translucent" : "opaque-linear";
-  }
-
-  public get techniqueId(): TechniqueId { return TechniqueId.Polyline; }
-  public get isPlanar(): boolean { return this._isPlanar; }
-  public get isEdge(): boolean { return this.isAnyEdge; }
-  public get qOrigin(): Float32Array { return this.lut.qOrigin; }
-  public get qScale(): Float32Array { return this.lut.qScale; }
-  public get numRgbaPerVertex(): number { return this.lut.numRgbaPerVertex; }
-  public get hasFeatures() { return this._hasFeatures; }
-
-  protected _getLineWeight(params: any): number {
-    return this.isEdge ? params.target.computeEdgeWeight(params.renderPass, this.lineWeight) : this.lineWeight;
-  }
-  
-  protected _getLineCode(params: any): number {
-    return this.isEdge ? params.target.computeEdgeLineCode(params.renderPass, this.lineCode) : this.lineCode;
-  }
-  
-  public getColor(target: any): ColorInfo {
-    return this.isEdge ? target.computeEdgeColor(this.lut.colorInfo) : this.lut.colorInfo;
-  }
-
-  public static create(params: PolylineParams, viewIndependentOrigin: Point3d | undefined): PolylineGeometry | undefined {
-    const lut = VertexLUT.createFromVertexTable(params.vertices);
-    if (undefined === lut) return undefined;
-
-    const buffers = PolylineBuffers.create(params.polyline);
-    if (undefined === buffers) return undefined;
-
-    return new PolylineGeometry(lut, buffers, params, viewIndependentOrigin);
-  }
-
-  // Three.js 特定方法
-  public createMesh(): THREE.Mesh {
-    return new THREE.Mesh(this.threeGeometry, this.material);
-  }
-
-  public updateMaterialForPass(pass: string): void {
-    if (pass === "translucent") {
-      this.material.transparent = true;
-      this.material.opacity = this.lut.colorInfo.transparency || 0.7;
-    } else {
-      this.material.transparent = false;
-      this.material.opacity = 1.0;
+    computeRange(out?: Range3d): Range3d {
+        throw new Error("Method not implemented.");
     }
-  }
-  
-  // 实例化支持
-  public createInstancedMesh(count: number): THREE.InstancedMesh {
-    const instancedMesh = new THREE.InstancedMesh(
-      this.threeGeometry, 
-      this.material, 
-      count
-    );
-    
-    // 设置实例化属性
-    // 这里可以根据需要添加实例化属性
-    
-    return instancedMesh;
-  }
-  
-  public noDispose = false;
+
+    public static create(params: PolylineParams, viOrigin?: Point3d): PolylineGeometry | undefined {
+        try {
+            // 转换顶点数据为 Float32Array
+            const positions = new Float32Array(params.vertices.data);
+
+            // 转换索引数据
+            let indices: Uint16Array | Uint32Array | undefined;
+            if (params.polyline.indices) {
+                const indexData = params.polyline.indices.data;
+                if (indexData.length < 65535) {
+                    indices = new Uint16Array(indexData);
+                } else {
+                    indices = new Uint32Array(indexData);
+                }
+            }
+
+            // 转换视图独立原点
+            const viewIndependentOrigin = viOrigin
+                ? new THREE.Vector3(viOrigin.x, viOrigin.y, viOrigin.z)
+                : undefined;
+
+            return new PolylineGeometry({
+                positions,
+                indices,
+                lineWeight: params.weight,
+                lineCode: this.lineCodeFromPixels(params.linePixels),
+                type: params.type,
+                isPlanar: params.isPlanar,
+                viewIndependentOrigin
+            });
+        } catch (e) {
+            return undefined;
+        }
+    }
+
+    private static lineCodeFromPixels(pixels: number): number {
+        // 简化实现：实际应根据像素值计算线型代码
+        return pixels > 1 ? 1 : 0;
+    }
+
+    // 实现基类要求的抽象方法
+    public get asPolyline() {
+        return this;
+    }
+
+    public get asMesh() {
+        return undefined; // 折线几何体不提供网格形式
+    }
 }

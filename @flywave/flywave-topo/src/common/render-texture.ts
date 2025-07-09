@@ -1,3 +1,5 @@
+import * as THREE from "three";
+
 import { IDisposable } from "../utils";
 
 /** Identifies an image to be used to produce a [[RenderTexture]] for a given purpose - for example,
@@ -40,6 +42,8 @@ export abstract class RenderTexture implements IDisposable {
      * its disposal.
      */
     public abstract dispose(): void;
+
+    public abstract getTexture(): THREE.Texture;
 }
 
 /** @public */

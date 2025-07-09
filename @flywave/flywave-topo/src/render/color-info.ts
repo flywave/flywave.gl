@@ -49,6 +49,10 @@ export class ColorInfo {
         return this._uniform!;
     }
 
+    public get colors(): Float32Array {
+        return this._uniform.array();
+    }
+
     private static readonly _nonUniformTranslucent = new ColorInfo(true);
     private static readonly _nonUniformOpaque = new ColorInfo(false);
 }

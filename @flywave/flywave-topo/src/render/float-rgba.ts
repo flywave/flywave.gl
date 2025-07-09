@@ -132,6 +132,10 @@ export class FloatRgba extends FloatColor {
         this.setRgbaComponents(r, g, b, a);
     }
 
+    public array(): Float32Array {
+        return this._components;
+    }
+
     public get alpha(): number {
         return this._components[3];
     }

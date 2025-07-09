@@ -1,3 +1,5 @@
+import { Group, Object3D } from "three";
+
 import { Feature, Gradient, GraphicParams, RenderTexture } from "../../common";
 import { DisplayParams } from "../../common/render/primitives/display-params";
 import {
@@ -11,7 +13,6 @@ import {
     Point2d,
     Point3d,
     Polyface,
-    Range3d,
     SolidPrimitive,
     Transform
 } from "../../core-geometry";
@@ -20,9 +21,6 @@ import {
     GraphicBuilder,
     ViewportGraphicBuilderOptions
 } from "../../render/graphic-builder";
-import { RenderGraphic } from "../../render/render-graphic";
-import { RenderSystem } from "../../render/render-system";
-import { MeshList } from "../mesh/mesh-primitives";
 import { GeometryOptions } from "../primitives";
 import { GeometryAccumulator } from "./geometry-accumulator";
 import { Geometry } from "./geometry-primitives";
@@ -37,16 +35,14 @@ export abstract class GeometryListBuilder extends GraphicBuilder {
     public accum: GeometryAccumulator;
     public readonly graphicParams: GraphicParams = new GraphicParams();
 
-    public abstract finishGraphic(accum: GeometryAccumulator): RenderGraphic;
+    public abstract finishGraphic(accum: GeometryAccumulator): Object3D;
 
     public constructor(
-        system: RenderSystem,
         options: ViewportGraphicBuilderOptions | CustomGraphicBuilderOptions,
         accumulatorTransform = Transform.identity
     ) {
         super(options);
         this.accum = new GeometryAccumulator({
-            system,
             transform: accumulatorTransform,
             analysisStyleDisplacement: this.analysisStyle?.displacement,
             viewIndependentOrigin: options.viewIndependentOrigin
@@ -57,7 +53,7 @@ export abstract class GeometryListBuilder extends GraphicBuilder {
         }
     }
 
-    public finish(): RenderGraphic {
+    public finish(): Object3D {
         const graphic = this.finishGraphic(this.accum);
         this.accum.clear();
         return graphic;
@@ -176,50 +172,42 @@ export abstract class GeometryListBuilder extends GraphicBuilder {
         return DisplayParams.createForText(this.graphicParams);
     }
 
-    public get system(): RenderSystem {
-        return this.accum.system;
-    }
-
     public add(geom: Geometry): void {
         this.accum.addGeometry(geom);
     }
 
     private resolveGradient(gradient: Gradient.Symb): RenderTexture | undefined {
-        return this.system.getGradientTexture(gradient);
+        return this.accum.getGradientTexture(gradient);
     }
 }
 
-let addDebugRangeBox = false;
-
 export class PrimitiveBuilder extends GeometryListBuilder {
-    public primitives: RenderGraphic[] = [];
+    public primitives: Object3D[] = [];
 
-    public finishGraphic(accum: GeometryAccumulator): RenderGraphic {
-        let meshes: MeshList | undefined;
-        let range: Range3d | undefined;
+    private _createGraphicGroup(primitives: Object3D[]): Object3D {
+        const group = new Group();
+        group.add(...primitives);
+        return group;
+    }
+
+    public finishGraphic(accum: GeometryAccumulator): Object3D {
         if (!accum.isEmpty) {
             const options = GeometryOptions.createForGraphicBuilder(this);
             const tolerance = this.computeTolerance(accum);
-            meshes = accum.saveToGraphicList(this.primitives, options, tolerance, this.pickable);
-            if (undefined !== meshes) {
-                range = meshes.range;
-            }
+            accum.saveToGraphicList(this.primitives, options, tolerance, this.pickable);
         }
 
-        let graphic =
-            this.primitives.length !== 1
-                ? this.accum.system.createGraphicList(this.primitives)
-                : (this.primitives.pop() as RenderGraphic);
-
-        if (addDebugRangeBox && range) {
-            addDebugRangeBox = false;
-            const builder = this.accum.system.createGraphic({ ...this._options });
-            builder.addRangeBox(range);
-            graphic = this.accum.system.createGraphicList([graphic, builder.finish()]);
-            addDebugRangeBox = true;
+        if (this.primitives.length === 0) {
+            return new Object3D();
         }
 
-        return graphic;
+        const graphic =
+            this.primitives.length > 1
+                ? this._createGraphicGroup(this.primitives)
+                : this.primitives[0];
+
+        this.primitives.length = 0;
+        return graphic ?? new Object3D();
     }
 
     public computeTolerance(accum: GeometryAccumulator): number {

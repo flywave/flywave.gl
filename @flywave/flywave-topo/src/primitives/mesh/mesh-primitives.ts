@@ -28,8 +28,6 @@ import {
     Point3dList
 } from "../../common/render/primitives/mesh-primitive";
 import { AuxChannel, AuxChannelData, Point2d, Point3d, Range3d } from "../../core-geometry";
-import { RenderGraphic } from "../../render/render-graphic";
-import { RenderSystem } from "../../render/render-system";
 import { assert } from "../../utils";
 import { ColorMap } from "../color-map";
 import { Triangle, TriangleList } from "../primitives";
@@ -287,19 +285,6 @@ export class Mesh {
 
     public toPolylineArgs(): PolylineArgs | undefined {
         return PolylineArgs.fromMesh(this);
-    }
-
-    public getGraphics(
-        system: RenderSystem,
-        instancesOrViewIndependentOrigin?: Point3d
-    ): RenderGraphic | undefined {
-        const meshArgs = this.toMeshArgs();
-        if (meshArgs) return system.createTriMesh(meshArgs, instancesOrViewIndependentOrigin);
-
-        const plArgs = this.toPolylineArgs();
-        return plArgs
-            ? system.createIndexedPolylines(plArgs, instancesOrViewIndependentOrigin)
-            : undefined;
     }
 
     public addPolyline(poly: MeshPolyline): void {

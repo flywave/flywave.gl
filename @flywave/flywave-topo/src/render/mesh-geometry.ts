@@ -1,189 +1,409 @@
-import * as THREE from 'three';
-import { MeshData } from './mesh-data';
-import { ColorInfo } from './color-info';
-import { FloatRgba } from './float-rgba';
-import { RenderMode } from '@itwin/core-common';
+import * as THREE from "three";
 
-/**
- * Three.js 实现的 MeshGeometry 基础类
- * 封装了 iTwin.js 的 MeshGeometry 功能
- */
-export abstract class ThreeMeshGeometry extends THREE.BufferGeometry {
-  // 原始 iTwin.js 的 MeshData 引用
-  public readonly mesh: MeshData;
-  
-  // 视图独立原点 (用于世界坐标转换)
-  public readonly viewIndependentOrigin: THREE.Vector3;
-  
-  // 索引数量
-  protected readonly _numIndices: number;
-  
-  // 访问器
-  public get asMesh() { return this; }
-  public get edgeWidth() { return this.mesh.edgeWidth; }
-  public get edgeLineCode() { return this.mesh.edgeLineCode; }
-  public get hasFeatures() { return this.mesh.hasFeatures; }
-  public get surfaceType() { return this.mesh.type; }
-  public get fillFlags() { return this.mesh.fillFlags; }
-  public get isPlanar() { return this.mesh.isPlanar; }
-  public get colorInfo(): ColorInfo { return this.mesh.lut.colorInfo; }
-  public get uniformColor(): FloatRgba | undefined {
-    return this.colorInfo.isUniform ? this.colorInfo.uniform : undefined;
-  }
-  public get texture() { return this.mesh.texture; }
-  public get normalMap() { return this.mesh.normalMap; }
-  public get hasBakedLighting() { return this.mesh.hasBakedLighting; }
-  public get lut() { return this.mesh.lut; }
-  public get hasScalarAnimation() { return this.mesh.lut.hasScalarAnimation; }
+// 渲染模式枚举
+export enum RenderMode {
+    Wireframe = 0,
+    HiddenLine = 1,
+    SolidFill = 2,
+    SmoothShade = 3,
+    Monochrome = 4
+}
 
-  // 材质缓存
-  private _materialCache = new Map<string, THREE.Material>();
-  
-  protected constructor(mesh: MeshData, numIndices: number) {
-    super();
-    this.mesh = mesh;
-    this._numIndices = numIndices;
-    
-    // 转换视图独立原点为 Three.js 向量
-    this.viewIndependentOrigin = new THREE.Vector3(
-      mesh.viewIndependentOrigin.x,
-      mesh.viewIndependentOrigin.y,
-      mesh.viewIndependentOrigin.z
-    );
-  }
+// 渲染通道类型
+export type RenderPass = "none" | "opaque" | "translucent" | "edge";
 
-  /**
-   * 计算边缘线宽 (Three.js 实现)
-   */
-  protected computeEdgeWeight(params: ShaderProgramParams): number {
-    // 在实际应用中，这里应该实现具体的线宽计算逻辑
-    // 简化实现：根据渲染通道和原始线宽计算
-    const baseWidth = this.edgeWidth;
-    if (params.renderPass === 'translucent') {
-      return baseWidth * 0.8; // 半透明通道使用稍细的线
+// 渲染目标接口
+export interface RenderTarget {
+    isDrawingShadowMap: boolean;
+    currentViewFlags: {
+        renderMode: RenderMode;
+        visibleEdges: boolean;
+        transparency: boolean;
+    };
+}
+
+// 着色器参数
+export interface ShaderParams {
+    renderPass?: RenderPass;
+    devicePixelRatio?: number;
+}
+
+export class MeshGeometry extends THREE.BufferGeometry {
+    // 几何体属性
+    public viewIndependentOrigin: THREE.Vector3;
+    public edgeWidth: number;
+    public edgeLineCode: number;
+    public isPlanar: boolean;
+    public hasBakedLighting: boolean;
+    public hasScalarAnimation: boolean;
+
+    // 材质相关属性
+    public uniformColor: THREE.Vector4 | null = null;
+    public texture: THREE.Texture | null = null;
+    public normalMap: THREE.Texture | null = null;
+    public vertexColors: boolean = false;
+
+    // 实例计数（用于实例化渲染）
+    public instanceCount: number = 0;
+
+    // 材质缓存
+    private readonly _materialCache = new Map<string, THREE.Material>();
+
+    constructor(options: {
+        indices?: Uint32Array | Uint16Array;
+        positions: Float32Array;
+        normals?: Float32Array;
+        uvs?: Float32Array;
+        colors?: Float32Array;
+        viewIndependentOrigin?: THREE.Vector3;
+        edgeWidth?: number;
+        edgeLineCode?: number;
+        isPlanar?: boolean;
+        hasBakedLighting?: boolean;
+        hasScalarAnimation?: boolean;
+        uniformColor?: THREE.Vector4;
+        texture?: THREE.Texture;
+        normalMap?: THREE.Texture;
+    }) {
+        super();
+
+        // 设置几何数据
+        if (options.indices) {
+            this.setIndex(new THREE.BufferAttribute(options.indices, 1));
+        }
+
+        this.setAttribute("position", new THREE.BufferAttribute(options.positions, 3));
+
+        if (options.normals) {
+            this.setAttribute("normal", new THREE.BufferAttribute(options.normals, 3));
+        } else {
+            this.computeVertexNormals();
+        }
+
+        if (options.uvs) {
+            this.setAttribute("uv", new THREE.BufferAttribute(options.uvs, 2));
+        }
+
+        if (options.colors) {
+            this.setAttribute("color", new THREE.BufferAttribute(options.colors, 3));
+            this.vertexColors = true;
+        }
+
+        // 设置其他属性
+        this.viewIndependentOrigin = options.viewIndependentOrigin || new THREE.Vector3();
+        this.edgeWidth = options.edgeWidth ?? 1.0;
+        this.edgeLineCode = options.edgeLineCode ?? 0;
+        this.isPlanar = options.isPlanar ?? false;
+        this.hasBakedLighting = options.hasBakedLighting ?? false;
+        this.hasScalarAnimation = options.hasScalarAnimation ?? false;
+        this.uniformColor = options.uniformColor || null;
+        this.texture = options.texture || null;
+        this.normalMap = options.normalMap || null;
+
+        // 计算边界
+        this.computeBoundingSphere();
+        this.computeBoundingBox();
     }
-    return baseWidth;
-  }
 
-  /**
-   * 计算边缘线代码 (Three.js 实现)
-   */
-  protected computeEdgeLineCode(params: ShaderProgramParams): number {
-    // 在实际应用中，这里应该实现具体的线代码计算逻辑
-    // 简化实现：根据渲染通道和原始线代码计算
-    return this.edgeLineCode;
-  }
+    // 新增颜色转换方法
+    public getUniformColorHex(includeAlpha: boolean = false): string | null {
+        if (!this.uniformColor) return null;
 
-  /**
-   * 计算边缘颜色 (Three.js 实现)
-   */
-  protected computeEdgeColor(target: Target): ColorInfo {
-    // 在实际应用中，这里应该实现具体的颜色计算逻辑
-    // 简化实现：返回原始颜色信息
-    return this.colorInfo;
-  }
+        const toHex = (value: number) => {
+            const scaled = Math.round(value * 255);
+            return Math.min(255, Math.max(0, scaled)).toString(16).padStart(2, "0");
+        };
 
-  /**
-   * 计算渲染通道 (Three.js 实现)
-   */
-  protected computeEdgePass(target: Target): Pass {
-    // 简化实现：根据视图标志决定渲染通道
-    const vf = target.currentViewFlags;
-    
-    if (target.isDrawingShadowMap) return "none";
-    if (RenderMode.SmoothShade === vf.renderMode && !vf.visibleEdges) return "none";
-    
-    const isTranslucent = RenderMode.Wireframe === vf.renderMode && 
-                         vf.transparency && 
-                         this.colorInfo.hasTranslucency;
-    
-    return isTranslucent ? "translucent" : "opaque-linear";
-  }
+        const r = toHex(this.uniformColor.x);
+        const g = toHex(this.uniformColor.y);
+        const b = toHex(this.uniformColor.z);
+        const a = toHex(this.uniformColor.w);
 
-  /**
-   * 创建或获取缓存的材质
-   * @param pass 渲染通道
-   * @param target 渲染目标
-   */
-  public getMaterial(pass: Pass, target: Target): THREE.Material {
-    const cacheKey = `${pass}_${this.mesh.type}_${this.isPlanar}`;
-    
-    if (this._materialCache.has(cacheKey)) {
-      return this._materialCache.get(cacheKey)!;
+        return includeAlpha ? `#${r}${g}${b}${a}` : `#${r}${g}${b}`;
     }
-    
-    const material = this.createMaterialForPass(pass, target);
-    this._materialCache.set(cacheKey, material);
-    return material;
-  }
 
-  /**
-   * 根据渲染通道创建材质
-   */
-  protected abstract createMaterialForPass(pass: Pass, target: Target): THREE.Material;
+    /**
+     * 计算边缘线宽
+     */
+    protected computeEdgeWeight(params: ShaderParams): number {
+        const baseWidth = this.edgeWidth;
+        const pixelRatio = params.devicePixelRatio || window.devicePixelRatio || 1;
 
-  /**
-   * 创建 Three.js 网格对象
-   */
-  public createThreeMesh(target: Target): THREE.Mesh {
-    const pass = this.computeEdgePass(target);
-    if (pass === 'none') {
-      throw new Error('Geometry should not be rendered in current pass');
+        if (params.renderPass === "translucent") {
+            return baseWidth * pixelRatio * 0.8;
+        }
+        return baseWidth * pixelRatio;
     }
-    
-    const material = this.getMaterial(pass, target);
-    return new THREE.Mesh(this, material);
-  }
 
-  /**
-   * 更新 uniforms (在渲染前调用)
-   */
-  public updateUniforms(material: THREE.Material, params: ShaderProgramParams): void {
-    if (!(material instanceof THREE.ShaderMaterial)) return;
-    
-    const uniforms = material.uniforms;
-    
-    // 更新线宽
-    if (uniforms.edgeWeight) {
-      uniforms.edgeWeight.value = this.computeEdgeWeight(params);
-    }
-    
-    // 更新线代码
-    if (uniforms.edgeLineCode) {
-      uniforms.edgeLineCode.value = this.computeEdgeLineCode(params);
-    }
-    
-    // 更新视图独立原点
-    if (uniforms.viewIndependentOrigin) {
-      uniforms.viewIndependentOrigin.value = this.viewIndependentOrigin;
-    }
-    
-    // 更新颜色信息
-    if (this.uniformColor && uniforms.uniformColor) {
-      const color = this.uniformColor;
-      uniforms.uniformColor.value = new THREE.Vector4(color.red, color.green, color.blue, color.alpha);
-    }
-    
-    // 更新纹理
-    if (this.texture && uniforms.map) {
-      uniforms.map.value = this.texture;
-    }
-    
-    if (this.normalMap && uniforms.normalMap) {
-      uniforms.normalMap.value = this.normalMap;
-    }
-  }
+    /**
+     * 确定渲染通道
+     */
+    protected determineRenderPass(target: RenderTarget): RenderPass {
+        const vf = target.currentViewFlags;
 
-  /**
-   * 释放资源
-   */
-  public dispose(): void {
-    super.dispose();
-    
-    // 释放所有缓存的材质
-    for (const material of this._materialCache.values()) {
-      material.dispose();
+        if (target.isDrawingShadowMap) return "none";
+        if (RenderMode.SmoothShade === vf.renderMode && !vf.visibleEdges) return "none";
+
+        return vf.renderMode === RenderMode.Wireframe || vf.renderMode === RenderMode.HiddenLine
+            ? "edge"
+            : "opaque";
     }
-    this._materialCache.clear();
-  }
+
+    /**
+     * 创建或获取缓存的材质
+     */
+    public getMaterial(pass: RenderPass, target: RenderTarget): THREE.Material {
+        // 创建唯一的缓存键
+        const cacheKey = [
+            pass,
+            this.isPlanar ? "planar" : "non-planar",
+            this.hasBakedLighting ? "baked" : "no-baked",
+            this.texture ? "textured" : "no-texture",
+            this.normalMap ? "normalMapped" : "no-normal-map",
+            this.vertexColors ? "vertexColors" : "no-vertex-colors",
+            target.currentViewFlags.renderMode,
+            this.edgeWidth,
+            this.edgeLineCode
+        ].join("|");
+
+        // 使用缓存或创建新材质
+        if (!this._materialCache.has(cacheKey)) {
+            const material = this.createMaterialForPass(pass, target);
+            this._materialCache.set(cacheKey, material);
+        }
+
+        return this._materialCache.get(cacheKey)!;
+    }
+
+    /**
+     * 创建 Three.js 网格对象
+     */
+    public createMesh(target: RenderTarget): THREE.Object3D | null {
+        const pass = this.determineRenderPass(target);
+        if (pass === "none") return null;
+
+        const material = this.getMaterial(pass, target);
+
+        // 处理实例化渲染
+        if (this.instanceCount > 0 && this.attributes.instanceMatrix) {
+            const mesh = new THREE.InstancedMesh(this, material, this.instanceCount);
+            return mesh;
+        }
+
+        return new THREE.Mesh(this, material);
+    }
+
+    /**
+     * 创建特定通道的材质
+     */
+    protected createMaterialForPass(pass: RenderPass, target: RenderTarget): THREE.Material {
+        switch (pass) {
+            case "edge":
+                return this.createEdgeMaterial();
+            case "translucent":
+                return this.createTranslucentMaterial();
+            default:
+                return this.createOpaqueMaterial();
+        }
+    }
+
+    /**
+     * 创建边缘材质
+     */
+    protected createEdgeMaterial(): THREE.Material {
+        return new THREE.LineBasicMaterial({
+            color: this.getUniformColorHex(true) || 0x000000,
+            linewidth: this.edgeWidth,
+            vertexColors: this.vertexColors
+        });
+    }
+
+    /**
+     * 创建半透明材质
+     */
+    protected createTranslucentMaterial(): THREE.Material {
+        const material = new THREE.MeshStandardMaterial({
+            color: this.getUniformColorHex(true) || 0xffffff,
+            transparent: true,
+            opacity: 0.7,
+            side: THREE.DoubleSide,
+            vertexColors: this.vertexColors
+        });
+
+        if (this.texture) material.map = this.texture;
+        if (this.normalMap) material.normalMap = this.normalMap;
+
+        return material;
+    }
+
+    /**
+     * 创建不透明材质
+     */
+    protected createOpaqueMaterial(): THREE.Material {
+        const material = new THREE.MeshStandardMaterial({
+            color: this.getUniformColorHex(true) || 0xffffff,
+            roughness: this.hasBakedLighting ? 1.0 : 0.5,
+            metalness: 0.0,
+            side: THREE.FrontSide,
+            vertexColors: this.vertexColors
+        });
+
+        if (this.texture) material.map = this.texture;
+        if (this.normalMap) material.normalMap = this.normalMap;
+
+        return material;
+    }
+
+    /**
+     * 更新材质 uniforms
+     */
+    public updateMaterialUniforms(material: THREE.Material, params: ShaderParams = {}) {
+        if (!(material instanceof THREE.ShaderMaterial)) return;
+
+        const uniforms = material.uniforms;
+
+        // 更新视图独立原点
+        if (uniforms.viewIndependentOrigin) {
+            uniforms.viewIndependentOrigin.value = this.viewIndependentOrigin;
+        }
+
+        // 更新边缘相关属性
+        if (uniforms.edgeWeight) {
+            uniforms.edgeWeight.value = this.computeEdgeWeight(params);
+        }
+
+        if (uniforms.edgeLineCode) {
+            uniforms.edgeLineCode.value = this.edgeLineCode;
+        }
+
+        // 更新颜色
+        if (this.uniformColor && uniforms.uniformColor) {
+            uniforms.uniformColor.value = new THREE.Vector4(
+                this.uniformColor.x,
+                this.uniformColor.y,
+                this.uniformColor.z,
+                1.0
+            );
+        }
+
+        // 更新纹理
+        if (this.texture && uniforms.map) {
+            uniforms.map.value = this.texture;
+        }
+
+        if (this.normalMap && uniforms.normalMap) {
+            uniforms.normalMap.value = this.normalMap;
+        }
+    }
+
+    /**
+     * 更新几何数据
+     */
+    public updateGeometry(options: {
+        positions?: Float32Array;
+        normals?: Float32Array;
+        colors?: Float32Array;
+    }) {
+        // 正确更新位置数据
+        if (options.positions) {
+            const positionAttr = this.attributes.position;
+            if (positionAttr && positionAttr.array.length === options.positions.length) {
+                // 复制数据到现有数组
+                (positionAttr.array as Float32Array).set(options.positions);
+                positionAttr.needsUpdate = true;
+            } else {
+                // 创建新的 BufferAttribute
+                this.setAttribute("position", new THREE.BufferAttribute(options.positions, 3));
+            }
+            this.computeBoundingSphere();
+            this.computeBoundingBox();
+        }
+
+        // 正确更新法线数据
+        if (options.normals) {
+            const normalAttr = this.attributes.normal;
+            if (normalAttr && normalAttr.array.length === options.normals.length) {
+                (normalAttr.array as Float32Array).set(options.normals);
+                normalAttr.needsUpdate = true;
+            } else {
+                this.setAttribute("normal", new THREE.BufferAttribute(options.normals, 3));
+            }
+        }
+
+        // 正确更新颜色数据
+        if (options.colors) {
+            const colorAttr = this.attributes.color;
+            if (colorAttr && colorAttr.array.length === options.colors.length) {
+                (colorAttr.array as Float32Array).set(options.colors);
+                colorAttr.needsUpdate = true;
+            } else {
+                this.setAttribute("color", new THREE.BufferAttribute(options.colors, 3));
+                this.vertexColors = true;
+            }
+        }
+    }
+
+    /**
+     * 释放资源
+     */
+    public dispose(): void {
+        super.dispose();
+
+        // 释放纹理
+        if (this.texture) this.texture.dispose();
+        if (this.normalMap) this.normalMap.dispose();
+
+        // 释放材质
+        for (const material of this._materialCache.values()) {
+            material.dispose();
+        }
+        this._materialCache.clear();
+    }
+
+    /**
+     * 应用实例化矩阵
+     */
+    public applyInstancingMatrices(matrices: Float32Array, count: number): void {
+        if (matrices.length === 0) return;
+
+        const instancedMatrix = new THREE.InstancedBufferAttribute(matrices, 16);
+        this.setAttribute("instanceMatrix", instancedMatrix);
+
+        // 设置实例计数
+        this.instanceCount = count;
+    }
+
+    /**
+     * 创建自定义着色器材质（高级用法）
+     */
+    public createCustomShaderMaterial(
+        vertexShader: string,
+        fragmentShader: string,
+        uniforms: { [name: string]: THREE.Uniform } = {}
+    ): THREE.ShaderMaterial {
+        return new THREE.ShaderMaterial({
+            vertexShader,
+            fragmentShader,
+            uniforms: {
+                ...uniforms,
+                viewIndependentOrigin: { value: this.viewIndependentOrigin },
+                edgeWeight: { value: this.edgeWidth },
+                edgeLineCode: { value: this.edgeLineCode },
+                ...(this.uniformColor && {
+                    uniformColor: {
+                        value: new THREE.Vector4(
+                            this.uniformColor.x,
+                            this.uniformColor.y,
+                            this.uniformColor.z,
+                            1.0
+                        )
+                    }
+                }),
+                ...(this.texture && { map: { value: this.texture } }),
+                ...(this.normalMap && { normalMap: { value: this.normalMap } })
+            },
+            vertexColors: this.vertexColors,
+            transparent: this.uniformColor ? this.uniformColor.w < 1.0 : false
+        });
+    }
 }
