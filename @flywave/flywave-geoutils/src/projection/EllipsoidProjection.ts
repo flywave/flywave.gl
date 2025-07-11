@@ -3,6 +3,7 @@
  * Implements Projection interface for EPSG:4979 with WGS84 ellipsoid
  */
 import * as THREE from "three";
+
 import { GeoBox } from "../coordinates/GeoBox";
 import { GeoCoordinates } from "../coordinates/GeoCoordinates";
 import { GeoCoordinatesLike, isGeoCoordinatesLike } from "../coordinates/GeoCoordinatesLike";
@@ -13,7 +14,7 @@ import { Vector3Like } from "../math/Vector3Like";
 import { EarthConstants } from "./EarthConstants";
 import { Projection, ProjectionType } from "./Projection";
 
-export class ECEFProjection extends Projection {
+export class EllipsoidProjection extends Projection {
     /** @override */
     readonly type: ProjectionType = ProjectionType.Spherical;
 
@@ -281,4 +282,4 @@ export class ECEFProjection extends Projection {
 }
 
 // Singleton instance
-export const ecefProjection = new ECEFProjection();
+export const ellipsoidProjection = new EllipsoidProjection();

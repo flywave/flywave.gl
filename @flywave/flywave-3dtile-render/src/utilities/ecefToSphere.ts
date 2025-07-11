@@ -1,4 +1,4 @@
-import { ecefProjection, Projection } from "@flywave/flywave-geoutils";
+import { ellipsoidProjection, Projection } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 
 /**
@@ -18,7 +18,7 @@ export function transformECEFToProjection(
     transformMatrix: THREE.Matrix4;
 } {
     // 1. 将 ECEF 坐标转换为地理坐标
-    const geoCoords = ecefProjection.unprojectPoint(ecefPos);
+    const geoCoords = ellipsoidProjection.unprojectPoint(ecefPos);
 
     // 2. 计算目标投影下的坐标
     const projectedPos = new THREE.Vector3();
@@ -34,7 +34,7 @@ export function transformECEFToProjection(
         yAxis: new THREE.Vector3(),
         zAxis: new THREE.Vector3()
     };
-    ecefProjection.localTangentSpace(ecefPos, ecefTangentSpace);
+    ellipsoidProjection.localTangentSpace(ecefPos, ecefTangentSpace);
 
     // 3.2 获取目标投影下的局部切空间
     const targetTangentSpace = {
