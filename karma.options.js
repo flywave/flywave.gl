@@ -92,7 +92,6 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             // "@flywave/flywave-lines/**/*.ts",
             // "@flywave/flywave-test-utils/**/*.ts",
             // "@flywave/flywave-map-controls/**/*.ts",
-            // "@flywave/flywave-olp-utils/**/*.ts",
             // "@flywave/flywave-webtile-datasource/**/*.ts",
             // "@flywave/flywave-vectortile-datasource/**/*.ts",
             // "@flywave/flywave-map-theme/test/DefaultThemeTest.ts"

@@ -570,15 +570,34 @@ export function sectionProfileToSVG(
             symbol.setAttribute("fill", item.color);
 
             // 为地层添加特殊标记
+            // 绘制颜色标记
             if (item.type === "stratum") {
+                const symbol = document.createElementNS(svgNS, "rect");
+                symbol.setAttribute("x", itemX.toString());
+                symbol.setAttribute("y", (itemY - legendOptions.symbolSize / 2).toString());
+                symbol.setAttribute("width", legendOptions.symbolSize.toString());
+                symbol.setAttribute("height", legendOptions.symbolSize.toString());
                 symbol.setAttribute("rx", "2");
                 symbol.setAttribute("ry", "2");
                 symbol.setAttribute("stroke", "#ffffff");
                 symbol.setAttribute("stroke-width", "1");
+                symbol.setAttribute("fill", item.color);
+                legendGroup.appendChild(symbol);
             } else {
-                // 塌陷使用圆形标记
-                symbol.setAttribute("rx", legendOptions.symbolSize.toString());
-                symbol.setAttribute("ry", legendOptions.symbolSize.toString());
+                // 塌陷使用梯形标记
+                const symbol = document.createElementNS(svgNS, "polygon");
+                const symbolSize = legendOptions.symbolSize;
+                const points = [
+                    `${itemX + symbolSize * 0.2},${itemY - symbolSize / 2}`, // 上左（向右缩进20%）
+                    `${itemX + symbolSize * 0.8},${itemY - symbolSize / 2}`, // 上右（向左缩进20%）
+                    `${itemX + symbolSize},${itemY + symbolSize / 2}`, // 下右（保持原右边界）
+                    `${itemX},${itemY + symbolSize / 2}` // 下左（保持原左边界）
+                ].join(" ");
+                symbol.setAttribute("points", points);
+                symbol.setAttribute("fill", item.color);
+                symbol.setAttribute("stroke", "#ffffff");
+                symbol.setAttribute("stroke-width", "1");
+                legendGroup.appendChild(symbol);
             }
 
             legendGroup.appendChild(symbol);
