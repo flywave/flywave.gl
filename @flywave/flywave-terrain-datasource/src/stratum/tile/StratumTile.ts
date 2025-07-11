@@ -5,7 +5,7 @@ import {
     triangulate,
     weilerAthertonClip
 } from "@flywave/flywave-geometry";
-import { GeoBox } from "@flywave/flywave-geoutils";
+import { GeoBox, Projection, TileKey } from "@flywave/flywave-geoutils";
 import { FlatArray } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
@@ -14,14 +14,12 @@ import { Borehole } from "./Borehole";
 import { CollapsePillar, CollapseProfile } from "./Collapse";
 import { ColorMap } from "./ColorMap";
 import { FaultProfile } from "./Fault";
-import { toTileWorldBBox } from "./Project";
+import { toTileLocalLines, toTileWorld, toTileWorldBBox } from "./Project";
 import { SectionLine } from "./Section";
 import { StratumLayer } from "./Stratum";
 import { StratumVoxel } from "./Voxel";
 
 export type BVHObject = CollapsePillar | StratumVoxel;
-
-export type TileKey = any;
 
 // 新增类型定义
 interface ProjectionMatrix {
@@ -57,10 +55,13 @@ class StratumTile {
     private _indices?: Uint16Array | Uint32Array;
     private _faceTypes?: Uint8Array;
     private _stratumBVH?: BVH<{}, CollapsePillar | StratumVoxel>;
+    private readonly _materialCache = new Map<string, THREE.Material>();
+    private readonly _project?: Projection;
 
-    constructor(id?: TileKey, res?: DecodeResult, options?: any) {
+    constructor(id?: TileKey, res?: DecodeResult, project?: Projection) {
         this._id = id;
         this.init(res);
+        this._project = project;
     }
 
     get id() {
@@ -535,6 +536,13 @@ class StratumTile {
         id?: string,
         lithology?: string
     ): THREE.Material {
+        const cacheKey = `${layerType}_${id || ""}_${lithology || ""}`;
+
+        // 检查缓存
+        if (this._materialCache.has(cacheKey)) {
+            return this._materialCache.get(cacheKey)!;
+        }
+        let material: THREE.Material;
         switch (layerType) {
             case "fault": {
                 const faultColor = this._colorMap?.getFaultColor(id || "default") || {
@@ -543,7 +551,7 @@ class StratumTile {
                     b: 0,
                     a: 255
                 };
-                return new THREE.MeshPhongMaterial({
+                material = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(
                         faultColor.r / 255,
                         faultColor.g / 255,
@@ -553,6 +561,7 @@ class StratumTile {
                     opacity: faultColor.a / 255,
                     shininess: 100 // 增加高光效果
                 });
+                break;
             }
 
             case "collapse": {
@@ -563,7 +572,7 @@ class StratumTile {
                     a: 255
                 };
                 const texture = this._colorMap?.getStratumTexture(lithology || "default");
-                return new THREE.MeshPhongMaterial({
+                material = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(
                         collapseColor.r / 255,
                         collapseColor.g / 255,
@@ -574,6 +583,7 @@ class StratumTile {
                     map: texture,
                     side: THREE.DoubleSide
                 });
+                break;
             }
 
             default: {
@@ -582,7 +592,7 @@ class StratumTile {
                     lithology || id || "default"
                 ) || { r: 200, g: 200, b: 200, a: 255 };
                 const texture = this._colorMap?.getStratumTexture(lithology || id || "default");
-                return new THREE.MeshPhongMaterial({
+                material = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(
                         stratumColor.r / 255,
                         stratumColor.g / 255,
@@ -593,8 +603,13 @@ class StratumTile {
                     map: texture,
                     side: THREE.DoubleSide
                 });
+                break;
             }
         }
+
+        // 存入缓存
+        this._materialCache.set(cacheKey, material);
+        return material;
     }
 
     private buildMeshGeometry(geom: {
@@ -607,13 +622,28 @@ class StratumTile {
         const subIndices = this._indices.subarray(geom.start, geom.end + 1);
         if (subIndices.length === 0) return null;
 
-        // 创建Three.js原生几何体
         const geometry = new THREE.BufferGeometry();
 
-        // 设置顶点属性
         geometry.setAttribute("position", new THREE.BufferAttribute(this._vertices, 3));
 
-        // 设置索引（需要转换为Uint32Array）
+        if (this._normals) {
+            geometry.setAttribute("normal", new THREE.BufferAttribute(this._normals, 3));
+        }
+
+        if (this._texCoords) {
+            geometry.setAttribute("uv", new THREE.BufferAttribute(this._texCoords, 2));
+        }
+
+        if (this._faceTypes) {
+            const faceCount = subIndices.length / 3;
+            const faceTypes = new Uint32Array(faceCount);
+            const typeOffset = geom.start / 3; // 每个面占3个索引
+            for (let i = 0; i < faceCount; i++) {
+                faceTypes[i] = this._faceTypes[typeOffset + i];
+            }
+            geometry.setAttribute("facetypes", new THREE.BufferAttribute(faceTypes, 1));
+        }
+
         const indices = new Uint32Array(subIndices);
         geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
@@ -628,72 +658,72 @@ class StratumTile {
         };
     }
 
-    generateCrossSections(cutLines: THREE.Vector3[][]): {
+    public generateCrossSections(
+        cutLines: THREE.Vector3[][],
+        upDir: THREE.Vector3 // 新增upDir参数
+    ): Array<{
         stratumProfiles: StratumProfile[];
         collapseProfiles: CollapseProfile[];
-    } {
+        line: THREE.Vector3[];
+    }> {
         const collapseProfiles: CollapseProfile[] = [];
         const stratumProfiles: StratumProfile[] = [];
 
-        // Process collapse pillars
-        this._collapsePillars?.forEach(collapse => {
-            const profile: CollapseProfile = {
-                collapseID: collapse.id,
-                crossSections: [],
-                polys: []
-            };
+        const results = [];
+        const localLines = toTileLocalLines(this._header, cutLines);
+        localLines.forEach((line, lineIndex) => {
+            // 处理陷落柱
+            this._collapsePillars?.forEach(collapse => {
+                const profile: CollapseProfile = {
+                    collapseID: collapse.id,
+                    crossSections: [],
+                    polys: []
+                };
 
-            cutLines.forEach(line => {
-                // Call collapse pillar's cross section generation method
-                const result = collapse.generateCrossSections([
-                    new THREE.Vector3(line[0].x, line[0].y, line[0].z),
-                    new THREE.Vector3(line[1].x, line[1].y, line[1].z)
-                ]);
+                // 传递upDir参数
+                const result = collapse.generateCrossSections(
+                    [
+                        new THREE.Vector3(line[0].x, line[0].y, line[0].z),
+                        new THREE.Vector3(line[1].x, line[1].y, line[1].z)
+                    ],
+                    upDir
+                ); // 新增upDir参数
+
                 if (!result) return;
 
-                // Convert triangulation result to THREE.BufferGeometry
+                // 转换三角剖分结果
                 const geometry = new THREE.BufferGeometry();
-
-                // Set positions
                 const positions = new Float32Array(result.positions.flatMap(p => [p.x, p.y, p.z]));
                 geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
 
-                // Set indices
                 const indices = new Uint32Array(result.indices.flat());
                 geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-                // Collect results
                 profile.crossSections.push(geometry);
                 profile.polys.push(result.positions.map(p => new THREE.Vector3(p.x, p.y, p.z)));
+
+                if (profile.crossSections.length > 0) {
+                    collapseProfiles.push(profile);
+                }
             });
 
-            if (profile.crossSections.length > 0) {
-                collapseProfiles.push(profile);
-            }
-        });
-
-        // Process stratum layers
-        cutLines.forEach(line => {
+            // 处理地层
             const lineStart = new THREE.Vector3(line[0].x, line[0].y, line[0].z);
             const lineEnd = new THREE.Vector3(line[1].x, line[1].y, line[1].z);
 
-            // Calculate line direction
+            // 使用传入的upDir作为剖切面上方向
             let lineDir = new THREE.Vector3().subVectors(lineEnd, lineStart);
             const lineLength = lineDir.length();
 
-            // Handle degenerate line case
+            // 处理退化情况
             if (lineLength < 1e-6) {
-                lineDir = new THREE.Vector3(1, 0, 0); // Default X-axis direction
+                lineDir = new THREE.Vector3(1, 0, 0); // X轴方向
             } else {
                 lineDir.normalize();
-
-                // Ensure consistent direction (positive X-axis)
-                if (lineDir.x < 0) {
-                    lineDir.multiplyScalar(-1);
-                }
+                if (lineDir.x < 0) lineDir.multiplyScalar(-1);
             }
 
-            // Process each stratum layer
+            // 处理各地层
             this._stratumLayers?.forEach(layer => {
                 const stratumProfile: StratumProfile = {
                     stratumID: layer.id,
@@ -704,32 +734,33 @@ class StratumTile {
                 };
 
                 layer.voxels.forEach(voxel => {
-                    // Get top triangle data
+                    // 传递upDir参数
                     const topTris = voxel.getTopTriangles();
                     const topPoints = this.processTriangles(topTris, [lineStart, lineEnd]);
-                    const sortedTopPoints = this.sortPointsAlongLine(topPoints, [
-                        lineStart,
-                        lineEnd
-                    ]);
+                    const sortedTopPoints = this.sortPointsAlongLine(
+                        topPoints,
+                        [lineStart, lineEnd],
+                        upDir
+                    );
 
-                    // Get base triangle data
+                    // 传递upDir参数
                     const baseTris = voxel.getBaseTriangles();
                     const basePoints = this.processTriangles(baseTris, [lineStart, lineEnd]);
-                    const sortedBasePoints = this.sortPointsAlongLine(basePoints, [
-                        lineStart,
-                        lineEnd
-                    ]);
+                    const sortedBasePoints = this.sortPointsAlongLine(
+                        basePoints,
+                        [lineStart, lineEnd],
+                        upDir
+                    );
 
-                    if (sortedTopPoints.length < 2 || sortedBasePoints.length < 2) {
-                        return;
-                    }
+                    if (sortedTopPoints.length < 2 || sortedBasePoints.length < 2) return;
 
-                    // Generate stratum mesh
+                    // 传递upDir参数
                     const { meshes, polys } = this.generateStratumMesh(
                         sortedTopPoints,
                         sortedBasePoints,
                         lineDir,
-                        collapseProfiles
+                        collapseProfiles,
+                        upDir // 新增upDir参数
                     );
 
                     stratumProfile.top.push(...topPoints);
@@ -742,9 +773,83 @@ class StratumTile {
                     stratumProfiles.push(stratumProfile);
                 }
             });
+
+            // 转换当前剖切线的坐标
+            const convertCoordinates = (profiles: StratumProfile[] | CollapseProfile[]) => {
+                profiles.forEach(profile => {
+                    // 转换陷落柱剖面坐标
+                    collapseProfiles.forEach(profile => {
+                        profile.polys.forEach(poly => {
+                            poly.forEach(point => {
+                                const worldPoint = toTileWorld(this._header!, point);
+                                point.copy(worldPoint);
+                            });
+                        });
+                        profile.crossSections.forEach(geometry => {
+                            const positions = geometry.getAttribute("position");
+                            const array = positions.array as Float32Array;
+                            for (let i = 0; i < array.length; i += 3) {
+                                const local = new THREE.Vector3(
+                                    array[i],
+                                    array[i + 1],
+                                    array[i + 2]
+                                );
+                                const world = toTileWorld(this._header!, local);
+                                array.set([world.x, world.y, world.z], i);
+                            }
+                            positions.needsUpdate = true;
+                        });
+                    });
+
+                    // 转换地层剖面坐标
+                    stratumProfiles.forEach(profile => {
+                        // 转换顶底板坐标
+                        [profile.top, profile.base].forEach(points => {
+                            points.forEach(point => {
+                                const worldPoint = toTileWorld(this._header!, point);
+                                point.copy(worldPoint);
+                            });
+                        });
+
+                        // 转换多边形坐标
+                        profile.polys.forEach(poly => {
+                            poly.forEach(point => {
+                                const worldPoint = toTileWorld(this._header!, point);
+                                point.copy(worldPoint);
+                            });
+                        });
+
+                        // 转换几何体坐标
+                        profile.crossSections.forEach(geometry => {
+                            const positions = geometry.getAttribute("position");
+                            const array = positions.array as Float32Array;
+                            for (let i = 0; i < array.length; i += 3) {
+                                const local = new THREE.Vector3(
+                                    array[i],
+                                    array[i + 1],
+                                    array[i + 2]
+                                );
+                                const world = toTileWorld(this._header!, local);
+                                array.set([world.x, world.y, world.z], i);
+                            }
+                            positions.needsUpdate = true;
+                        });
+                    });
+                });
+            };
+
+            convertCoordinates(stratumProfiles);
+            convertCoordinates(collapseProfiles);
+
+            // 添加分组结果
+            results.push({
+                line: cutLines[lineIndex], // 保留原始世界坐标剖切线
+                stratumProfiles,
+                collapseProfiles
+            });
         });
 
-        return { stratumProfiles, collapseProfiles };
+        return results;
     }
 
     private processTriangles(triangles: Float32Array, line: THREE.Vector3[]): THREE.Vector3[] {
@@ -772,55 +877,6 @@ class StratumTile {
         });
 
         return result;
-    }
-
-    private sortPointsAlongLine(points: THREE.Vector3[], line: THREE.Vector3[]): THREE.Vector3[] {
-        interface ParamPoint {
-            totalDist: number;
-            point: THREE.Vector3;
-        }
-        const paramPoints: ParamPoint[] = [];
-
-        // Build parameterized line lengths
-        const segDists: number[] = [0];
-        for (let i = 1; i < line.length; i++) {
-            const segLen = line[i].distanceTo(line[i - 1]);
-            segDists.push(segDists[i - 1] + segLen);
-        }
-
-        // Calculate projection parameters for each point
-        for (const pt of points) {
-            let minDist = Infinity;
-            let bestSegmentIndex = 0;
-            let bestParam = 0;
-            let accumDist = 0;
-
-            // Find closest line segment
-            for (let i = 1; i < line.length; i++) {
-                const segStart = line[i - 1];
-                const segEnd = line[i];
-                const [proj, t] = this.projectPointToSegment(pt, segStart, segEnd);
-
-                const d = pt.distanceTo(proj);
-                if (d < minDist) {
-                    minDist = d;
-                    bestSegmentIndex = i - 1;
-                    bestParam = t;
-                    const segLen = segDists[i] - segDists[i - 1];
-                    accumDist = segDists[bestSegmentIndex] + bestParam * segLen;
-                }
-            }
-
-            if (minDist < Infinity) {
-                paramPoints.push({ totalDist: accumDist, point: pt });
-            }
-        }
-
-        // Sort by accumulated distance
-        paramPoints.sort((a, b) => a.totalDist - b.totalDist);
-
-        // Extract sorted points
-        return paramPoints.map(pp => pp.point);
     }
 
     private projectPointToSegment(
@@ -886,27 +942,34 @@ class StratumTile {
     }
 
     // 新增地质剖面生成核心方法
-    generateStratumMesh(
+    private generateStratumMesh(
         top: THREE.Vector3[],
         base: THREE.Vector3[],
         lineDir: THREE.Vector3,
-        collapseProfiles: CollapseProfile[]
+        collapseProfiles: CollapseProfile[],
+        upDir: THREE.Vector3 // 新增 upDir 参数
     ): { meshes: THREE.BufferGeometry[]; polys: THREE.Vector3[][] } {
         const meshes: THREE.BufferGeometry[] = [];
         const polys: THREE.Vector3[][] = [];
 
         if (top.length < 2) return { meshes, polys };
 
-        // Split continuous segments (handle pinch-outs)
+        // 分割连续段（处理尖灭）
         const segments = this.splitContinuousSegments(top, base);
 
         for (const seg of segments) {
             if (seg.top.length < 2) continue;
 
-            // Build stratum polygon (top + reversed base)
+            // 构建地层多边形（顶板 + 反转的底板）
             const polygon = [...seg.top, ...[...seg.base].reverse()];
 
-            // Perform triangulation
+            // 计算投影矩阵时使用 upDir
+            const matrix = this.calculateProjectionMatrixForSection(polygon, lineDir, upDir);
+            if (!matrix) {
+                continue;
+            }
+
+            // 执行三角剖分
             const subMesh = this.buildTriangulateMesh(polygon);
             if (subMesh) {
                 meshes.push(subMesh);
@@ -914,26 +977,29 @@ class StratumTile {
             }
         }
 
-        // Process collapse pillar cuts
+        // 处理陷落柱切割
         const finalMeshes: THREE.BufferGeometry[] = [];
         for (let i = 0; i < meshes.length; i++) {
-            const matrix = this.calculateProjectionMatrix(polys[i], lineDir);
+            const polygon = polys[i];
+
+            // 重新计算投影矩阵（使用 upDir）
+            const matrix = this.calculateProjectionMatrixForSection(polygon, lineDir, upDir);
             if (!matrix) {
                 finalMeshes.push(meshes[i]);
                 continue;
             }
 
-            const relevantCollapses = this.queryRelevantCollapses(polys[i], collapseProfiles);
+            const relevantCollapses = this.queryRelevantCollapses(polygon, collapseProfiles);
             if (relevantCollapses.length === 0) {
                 finalMeshes.push(meshes[i]);
                 continue;
             }
 
-            // Process each relevant collapse profile
+            // 处理每个相关的陷落柱
             for (const collapse of relevantCollapses) {
                 for (const collapsePoly of collapse.polys) {
                     try {
-                        const newMeshes = this.cutProfiles(polys[i], collapsePoly, matrix);
+                        const newMeshes = this.cutProfiles(polygon, collapsePoly, matrix);
                         finalMeshes.push(...newMeshes);
                     } catch (e) {
                         finalMeshes.push(meshes[i]);
@@ -941,7 +1007,7 @@ class StratumTile {
                 }
             }
 
-            // Keep original uncut portion if valid
+            // 保留未切割的部分（如果有效）
             const positionAttr = meshes[i].getAttribute("position");
             if (positionAttr && positionAttr.count > 2) {
                 finalMeshes.push(meshes[i]);
@@ -949,6 +1015,97 @@ class StratumTile {
         }
 
         return { meshes: finalMeshes, polys };
+    }
+
+    // 新增方法：为剖面计算投影矩阵（使用 upDir）
+    private calculateProjectionMatrixForSection(
+        poly: THREE.Vector3[],
+        lineDir: THREE.Vector3,
+        upDir: THREE.Vector3
+    ): ProjectionMatrix | null {
+        if (poly.length < 3) return null;
+
+        const origin = poly[0].clone();
+
+        // 使用 upDir 作为主要参考方向
+        const normal = this.computePolygonNormal(poly);
+
+        // 确保 lineDir 与 normal 垂直
+        const adjustedLineDir = lineDir.clone().projectOnPlane(normal).normalize();
+
+        // 计算 x 轴（使用调整后的线方向）
+        const xAxis =
+            adjustedLineDir.length() > 0.001 ? adjustedLineDir : new THREE.Vector3(1, 0, 0);
+
+        // 计算 y 轴（使用 upDir 在平面上的投影）
+        const projectedUpDir = upDir.clone().projectOnPlane(normal).normalize();
+        const yAxis =
+            projectedUpDir.length() > 0.001
+                ? projectedUpDir
+                : new THREE.Vector3().crossVectors(normal, xAxis).normalize();
+
+        return {
+            origin,
+            xAxis,
+            yAxis,
+            normal
+        };
+    }
+
+    // 修改点排序方法（使用 upDir）
+    private sortPointsAlongLine(
+        points: THREE.Vector3[],
+        line: THREE.Vector3[],
+        upDir: THREE.Vector3 // 新增 upDir 参数
+    ): THREE.Vector3[] {
+        interface ParamPoint {
+            totalDist: number;
+            point: THREE.Vector3;
+        }
+
+        const paramPoints: ParamPoint[] = [];
+        const segDists: number[] = [0];
+
+        // 计算线段长度
+        for (let i = 1; i < line.length; i++) {
+            segDists.push(segDists[i - 1] + line[i].distanceTo(line[i - 1]));
+        }
+
+        // 计算每个点的参数值
+        for (const pt of points) {
+            let minDist = Infinity;
+            let bestSegmentIndex = 0;
+            let bestParam = 0;
+            let accumDist = 0;
+
+            // 找到最近的线段
+            for (let i = 1; i < line.length; i++) {
+                const segStart = line[i - 1];
+                const segEnd = line[i];
+                const [proj, t] = this.projectPointToSegment(pt, segStart, segEnd);
+
+                const d = pt.distanceTo(proj);
+                if (d < minDist) {
+                    minDist = d;
+                    bestSegmentIndex = i - 1;
+                    bestParam = t;
+                    const segLen = segDists[i] - segDists[i - 1];
+                    accumDist = segDists[bestSegmentIndex] + bestParam * segLen;
+                }
+            }
+
+            // 添加垂直方向偏差（使用 upDir）
+            if (minDist < Infinity) {
+                const verticalOffset = pt.clone().sub(line[0]).dot(upDir);
+                accumDist += verticalOffset * 0.001; // 小权重避免影响主要排序
+                paramPoints.push({ totalDist: accumDist, point: pt });
+            }
+        }
+
+        // 按累计距离排序
+        paramPoints.sort((a, b) => a.totalDist - b.totalDist);
+
+        return paramPoints.map(pp => pp.point);
     }
 
     // 空间查询方法
@@ -1000,23 +1157,6 @@ class StratumTile {
         }
 
         return segments;
-    }
-
-    // 新增投影矩阵计算
-    private calculateProjectionMatrix(
-        poly: THREE.Vector3[],
-        xAxis: THREE.Vector3
-    ): ProjectionMatrix | null {
-        if (poly.length < 3) return null;
-
-        const origin = poly[0].clone();
-        const normal = this.computePolygonNormal(poly);
-
-        // Ensure xAxis is perpendicular to normal
-        const u = new THREE.Vector3().crossVectors(normal, xAxis).normalize();
-        const v = new THREE.Vector3().crossVectors(normal, u).normalize();
-
-        return { origin, xAxis: u, yAxis: v, normal };
     }
 
     // 多边形法向量计算

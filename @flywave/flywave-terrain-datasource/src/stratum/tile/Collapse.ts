@@ -120,125 +120,140 @@ export class CollapsePillar {
         this._bbox = undefined;
     }
 
+    // 更新后的横截面生成方法（增加 upDir 参数）
     generateCrossSections(
-        line: [THREE.Vector3, THREE.Vector3]
+        line: [THREE.Vector3, THREE.Vector3],
+        upDir: THREE.Vector3 // 新增：定义当前坐标系的向上方向
     ): { positions: THREE.Vector3[]; indices: number[][] } | undefined {
-        const intersectionPoints = this.calculateIntersection(line);
+        // 使用传入的 upDir 创建竖直平面
+        const plane = this.createVerticalPlane(line, upDir);
+        const points = this.calculateIntersection(plane); // 传入平面对象
 
-        if (intersectionPoints.length < 3) return;
+        if (points.length < 3) return;
 
-        const sortedPoints = this.sortConvexPoints(intersectionPoints);
+        const sortedPoints = this.sortPolygonPoints(points, plane, upDir); // 传入 upDir
         return triangulate(sortedPoints);
     }
 
-    private calculateIntersection(line: [THREE.Vector3, THREE.Vector3]): THREE.Vector3[] {
-        if (!this._geometry) {
-            return [];
+    // 修改：增加 upDir 参数
+    private createVerticalPlane(
+        line: [THREE.Vector3, THREE.Vector3],
+        upDir: THREE.Vector3
+    ): THREE.Plane {
+        const dir = new THREE.Vector3().subVectors(line[1], line[0]);
+
+        // 计算水平方向分量（垂直于 upDir）
+        const horizontalDir = new THREE.Vector3().crossVectors(dir, upDir);
+
+        // 处理特殊情况：如果水平方向分量太小，使用默认方向
+        if (horizontalDir.length() < 1e-10) {
+            // 尝试构造一个垂直于 upDir 的默认方向
+            const temp = new THREE.Vector3(1, 0, 0);
+            if (Math.abs(temp.dot(upDir)) > 0.9) temp.set(0, 1, 0);
+            horizontalDir.crossVectors(upDir, temp).normalize();
+        } else {
+            horizontalDir.normalize();
         }
+
+        // 创建法向量（垂直于水平方向）
+        const normal = new THREE.Vector3().crossVectors(upDir, horizontalDir).normalize();
+        const plane = new THREE.Plane();
+        plane.setFromNormalAndCoplanarPoint(normal, line[0]);
+        return plane;
+    }
+
+    // 修改：直接接收平面对象
+    private calculateIntersection(plane: THREE.Plane): THREE.Vector3[] {
+        if (!this._geometry) return [];
 
         const positionAttr = this._geometry.getAttribute("position");
         const indexAttr = this._geometry.getIndex();
         const positions = positionAttr.array;
-        const indices = indexAttr?.array;
+        const indices = indexAttr?.array || [];
 
-        if (!positions || !indices) {
-            return [];
-        }
-
-        const intersections: THREE.Vector3[] = [];
+        const uniquePoints = new Map<string, THREE.Vector3>();
+        const addUniquePoint = (point: THREE.Vector3) => {
+            const key = `${point.x.toFixed(5)},${point.y.toFixed(5)},${point.z.toFixed(5)}`;
+            if (!uniquePoints.has(key)) {
+                uniquePoints.set(key, point);
+            }
+        };
 
         for (let i = 0; i < indices.length; i += 3) {
-            const i1 = indices[i] * 3;
-            const i2 = indices[i + 1] * 3;
-            const i3 = indices[i + 2] * 3;
+            const idx0 = indices[i] * 3;
+            const idx1 = indices[i + 1] * 3;
+            const idx2 = indices[i + 2] * 3;
 
-            const triangle = [
-                new THREE.Vector3(positions[i1], positions[i1 + 1], positions[i1 + 2]),
-                new THREE.Vector3(positions[i2], positions[i2 + 1], positions[i2 + 2]),
-                new THREE.Vector3(positions[i3], positions[i3 + 1], positions[i3 + 2])
+            const v0 = new THREE.Vector3(positions[idx0], positions[idx0 + 1], positions[idx0 + 2]);
+            const v1 = new THREE.Vector3(positions[idx1], positions[idx1 + 1], positions[idx1 + 2]);
+            const v2 = new THREE.Vector3(positions[idx2], positions[idx2 + 1], positions[idx2 + 2]);
+
+            const edges = [
+                new THREE.Line3(v0, v1),
+                new THREE.Line3(v1, v2),
+                new THREE.Line3(v2, v0)
             ];
 
-            for (let j = 0; j < 3; j++) {
-                const a = triangle[j];
-                const b = triangle[(j + 1) % 3];
-                const intersection = this.intersectEdgeWithPlane(a, b, line);
-                if (intersection) {
-                    intersections.push(intersection);
+            edges.forEach(edge => {
+                const intersectPoint = new THREE.Vector3();
+                const result = plane.intersectLine(edge, intersectPoint);
+                if (result !== null) {
+                    addUniquePoint(intersectPoint);
                 }
-            }
+            });
         }
-        return this.removeDuplicates(intersections);
+        return Array.from(uniquePoints.values());
     }
 
-    private intersectEdgeWithPlane(
-        a: THREE.Vector3,
-        b: THREE.Vector3,
-        line: [THREE.Vector3, THREE.Vector3]
-    ): THREE.Vector3 | null {
-        const planePoint = line[0];
-        const lineDirection = new THREE.Vector3().subVectors(line[1], line[0]);
+    // 修改：增加 upDir 参数
+    private sortPolygonPoints(
+        points: THREE.Vector3[],
+        plane: THREE.Plane,
+        upDir: THREE.Vector3
+    ): THREE.Vector3[] {
+        if (points.length < 3) return points;
 
-        // Calculate plane normal (perpendicular to both line direction and up vector)
-        const up = new THREE.Vector3(0, 1, 0);
-        const planeNormal = new THREE.Vector3().crossVectors(lineDirection, up);
+        // 1. 计算中心点
+        const centroid = new THREE.Vector3();
+        points.forEach(p => centroid.add(p));
+        centroid.divideScalar(points.length);
 
-        // Handle parallel case
-        if (planeNormal.length() < 1e-6) {
-            const zAxis = new THREE.Vector3(0, 0, 1);
-            planeNormal.crossVectors(lineDirection, zAxis);
-            if (planeNormal.length() < 1e-6) return null;
+        // 2. 构建平面坐标系
+        // X 轴：平面法线与 upDir 的叉积（水平方向）
+        const basisX = new THREE.Vector3().crossVectors(plane.normal, upDir).normalize();
+
+        // 处理特殊情况
+        if (basisX.length() < 1e-5) {
+            // 如果法线与 upDir 平行，使用备用方向
+            const temp = new THREE.Vector3(1, 0, 0);
+            if (Math.abs(temp.dot(upDir)) > 0.9) temp.set(0, 1, 0);
+            basisX.crossVectors(plane.normal, temp).normalize();
         }
-        planeNormal.normalize();
 
-        const edgeVector = new THREE.Vector3().subVectors(b, a);
-        const denominator = edgeVector.dot(planeNormal);
+        // Y 轴：使用 upDir（竖直方向）
+        const basisY = upDir.clone().normalize();
 
-        if (Math.abs(denominator) < 1e-6) return null;
+        // 3. 投影到2D平面
+        const projectTo2D = (v: THREE.Vector3) => {
+            const offset = v.clone().sub(centroid);
+            return {
+                x: offset.dot(basisX),
+                y: offset.dot(basisY)
+            };
+        };
 
-        const t = new THREE.Vector3().subVectors(planePoint, a).dot(planeNormal) / denominator;
-
-        if (t < 0 || t > 1) return null;
-
-        return new THREE.Vector3(
-            a.x + edgeVector.x * t,
-            a.y + edgeVector.y * t,
-            a.z + edgeVector.z * t
-        );
-    }
-
-    private sortConvexPoints(points: THREE.Vector3[]): THREE.Vector3[] {
-        if (points.length === 0) return [];
-
-        // Calculate centroid
-        const centroid = points
-            .reduce((acc, cur) => {
-                acc.x += cur.x;
-                acc.y += cur.y;
-                acc.z += cur.z;
-                return acc;
-            }, new THREE.Vector3(0, 0, 0))
-            .divideScalar(points.length);
-
-        // Sort by angle relative to centroid
+        // 4. 使用角度排序
         return points.sort((a, b) => {
-            const angleA = Math.atan2(a.y - centroid.y, a.x - centroid.x);
-            const angleB = Math.atan2(b.y - centroid.y, b.x - centroid.x);
+            const a2D = projectTo2D(a);
+            const b2D = projectTo2D(b);
+            const angleA = Math.atan2(a2D.y, a2D.x);
+            const angleB = Math.atan2(b2D.y, b2D.x);
+
+            if (Math.abs(angleA - angleB) < 1e-5) {
+                return a2D.x * a2D.x + a2D.y * a2D.y - (b2D.x * b2D.x + b2D.y * b2D.y);
+            }
             return angleA - angleB;
         });
-    }
-
-    private removeDuplicates(points: THREE.Vector3[], epsilon = 1e-6): THREE.Vector3[] {
-        return points.filter(
-            (p, i) =>
-                !points
-                    .slice(0, i)
-                    .some(
-                        q =>
-                            Math.abs(p.x - q.x) < epsilon &&
-                            Math.abs(p.y - q.y) < epsilon &&
-                            Math.abs(p.z - q.z) < epsilon
-                    )
-        );
     }
 
     private buildBsp(): BSPNode {

@@ -7,6 +7,11 @@ export interface ColorRGBA {
     a: number;
 }
 
+export function rgbaToHex(color: ColorRGBA): string {
+    const toHex = (n: number) => n.toString(16).padStart(2, "0").toUpperCase();
+    return `#${toHex(color.r)}${toHex(color.g)}${toHex(color.b)}`;
+}
+
 export class ColorMap {
     private textureSize: number;
     private readonly stratumColor: Map<string, ColorRGBA>;
