@@ -404,6 +404,7 @@ export abstract class CameraTransform {
         balanceFactor: number
     ): void {
         const cameraMatrix = this.cameraToWorld;
+        balanceFactor = Math.max(0.1, balanceFactor);
 
         // 计算相机各轴在球心方向上的投影分量
         const xProjection =

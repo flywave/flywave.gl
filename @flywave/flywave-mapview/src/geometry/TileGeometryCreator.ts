@@ -158,7 +158,7 @@ class AttachmentInfo {
         }
 
         const ArrayCtor = getArrayConstructor(description.type);
-        const buffer = new ArrayCtor(description.buffer);
+        const buffer = new ArrayCtor(description.buffer as ArrayBuffer);
         const interleavedBuffer = new THREE.InterleavedBuffer(buffer, description.stride);
 
         const attrs = description.attributes.map(interleavedAttr => {
@@ -515,7 +515,7 @@ export class TileGeometryCreator {
                 }
 
                 const positions = new THREE.BufferAttribute(
-                    new Float64Array(text.positions.buffer),
+                    new Float64Array(text.positions.buffer as Float64Array),
                     text.positions.itemCount
                 );
 
@@ -1217,7 +1217,7 @@ export class TileGeometryCreator {
                     displacementMap.buffer,
                     displacementMap.xCountVertices,
                     displacementMap.yCountVertices,
-                    THREE.LuminanceFormat,
+                    THREE.RedFormat,
                     THREE.FloatType
                 ),
                 displacementMap,

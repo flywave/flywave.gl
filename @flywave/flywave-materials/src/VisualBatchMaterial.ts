@@ -136,7 +136,6 @@ class VisualBatchMaterial extends THREE.MeshStandardMaterial {
         this._styleTable = new Map();
         this._valueTable = new Map();
         this._idAttributeName = idAttributeName;
-        this.defines = { USE_VISUAL_BATCH: "" };
 
         // Initialize uniforms
         this.uniforms = THREE.UniformsUtils.merge([
@@ -312,7 +311,7 @@ class VisualBatchMaterial extends THREE.MeshStandardMaterial {
     private _compileShader(shader: THREE.WebGLProgramParametersWithUniforms): void {
         // Merge uniforms
         shader.uniforms = THREE.UniformsUtils.merge([shader.uniforms, this.uniforms]);
-
+        shader.defines.USE_VISUAL_BATCH = true;
         // =============== Vertex Shader ===============
         shader.vertexShader = `
       // Add custom attribute and varying

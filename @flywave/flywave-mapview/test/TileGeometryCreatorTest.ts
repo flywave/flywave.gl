@@ -572,6 +572,7 @@ describe("TileGeometryCreator", () => {
             });
             initTexturesStub = sandbox.stub().callsFake(async (texture: THREE.Texture) => {
                 await promise;
+                //@ts-ignore
                 texture?.onUpdate();
             });
             (mapView.renderer as any).initTexture = initTexturesStub;

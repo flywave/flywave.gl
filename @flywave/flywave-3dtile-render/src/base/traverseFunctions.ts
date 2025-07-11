@@ -1,16 +1,20 @@
+import { TILE_REFINEMENT } from "../next/types";
+import { LRUCache } from "../utilities/LRUCache";
 import { LOADED, FAILED, LoadState } from "./constants";
+import { Tile } from "./Tile";
+import { TilesRendererBase } from "./TilesRendererBase";
 
 function isDownloadFinished(value: LoadState) {
     return value === LOADED || value === FAILED;
 }
 
 // Checks whether this tile was last used on the given frame.
-function isUsedThisFrame(tile, frameCount: number) {
+function isUsedThisFrame(tile, frameCount: number): boolean {
     return tile.__lastFrameVisited === frameCount && tile.__used;
 }
 
 // Resets the frame frame information for the given tile
-function resetFrameState(tile, frameCount) {
+function resetFrameState(tile: Tile, frameCount: number) {
     if (tile.__lastFrameVisited !== frameCount) {
         tile.__lastFrameVisited = frameCount;
         tile.__used = false;
@@ -26,7 +30,7 @@ function resetFrameState(tile, frameCount) {
 }
 
 // Recursively mark tiles used down to the next tile with content
-function recursivelyMarkUsed(tile, frameCount, lruCache) {
+function recursivelyMarkUsed(tile: Tile, frameCount: number, lruCache: LRUCache<Tile>) {
     resetFrameState(tile, frameCount);
 
     tile.__used = true;
@@ -43,7 +47,11 @@ function recursivelyMarkUsed(tile, frameCount, lruCache) {
     // }
 }
 
-function recursivelyLoadTiles(tile, depthFromRenderedParent, renderer) {
+function recursivelyLoadTiles(
+    tile: Tile,
+    depthFromRenderedParent: number,
+    renderer: TilesRendererBase
+) {
     if (!isUsedThisFrame(tile, renderer.frameCount)) {
         return;
     }
@@ -67,7 +75,7 @@ function recursivelyLoadTiles(tile, depthFromRenderedParent, renderer) {
 
 // Helper function for recursively traversing a tile set. If `beforeCb` returns `true` then the
 // traversal will end early.
-export function traverseSet(tile, beforeCb = null, afterCb = null, parent = null, depth = 0) {
+export function traverseSet(tile: Tile, beforeCb = null, afterCb = null, parent = null, depth = 0) {
     if (beforeCb && beforeCb(tile, parent, depth)) {
         if (afterCb) {
             afterCb(tile, parent, depth);
@@ -89,7 +97,7 @@ export function traverseSet(tile, beforeCb = null, afterCb = null, parent = null
 // Determine which tiles are within the camera frustum.
 // TODO: this is marking items as used in the lrucache, which means some data is
 // being kept around that isn't being used -- is that okay?
-export function determineFrustumSet(tile, renderer) {
+export function determineFrustumSet(tile: Tile, renderer: TilesRendererBase): boolean {
     const stats = renderer.stats;
     const frameCount = renderer.frameCount;
     const errorTarget = renderer.errorTarget;
@@ -152,7 +160,7 @@ export function determineFrustumSet(tile, renderer) {
 }
 
 // Traverse and mark the tiles that are at the leaf nodes of the "used" tree.
-export function markUsedSetLeaves(tile, renderer) {
+export function markUsedSetLeaves(tile: Tile, renderer: TilesRendererBase) {
     const stats = renderer.stats;
     const frameCount = renderer.frameCount;
     if (!isUsedThisFrame(tile, frameCount)) {
@@ -212,7 +220,7 @@ export function markUsedSetLeaves(tile, renderer) {
 }
 
 // Skip past tiles we consider unrenderable because they are outside the error threshold.
-export function skipTraversal(tile, renderer) {
+export function skipTraversal(tile: Tile, renderer: TilesRendererBase) {
     const stats = renderer.stats;
     const frameCount = renderer.frameCount;
     if (!isUsedThisFrame(tile, frameCount)) {
@@ -247,7 +255,7 @@ export function skipTraversal(tile, renderer) {
 
     const errorRequirement = (renderer.errorTarget + 1) * renderer.errorThreshold;
     const meetsSSE = tile.__error <= errorRequirement;
-    const includeTile = meetsSSE || tile.refine === "ADD";
+    const includeTile = meetsSSE || tile.refine === TILE_REFINEMENT.ADD;
     const hasModel = !tile.__contentEmpty;
     const hasContent = hasModel || tile.__externalTileSet;
     const loadedContent = isDownloadFinished(tile.__loadingState) && hasContent;
@@ -288,7 +296,7 @@ export function skipTraversal(tile, renderer) {
     // Skip the tile entirely if there's no content to load
     if (
         (meetsSSE && hasModel && !childrenWereVisible && loadedContent) ||
-        (tile.refine === "ADD" && loadedContent)
+        (tile.refine === TILE_REFINEMENT.ADD && loadedContent)
     ) {
         if (tile.__inFrustum) {
             tile.__visible = true;
@@ -300,7 +308,12 @@ export function skipTraversal(tile, renderer) {
 
     // If we're additive then don't stop the traversal here because it doesn't matter whether the children load in
     // at the same rate.
-    if (tile.refine !== "ADD" && meetsSSE && !allChildrenHaveContent && loadedContent) {
+    if (
+        tile.refine !== TILE_REFINEMENT.ADD &&
+        meetsSSE &&
+        !allChildrenHaveContent &&
+        loadedContent
+    ) {
         // load the child content if we've found that we've been loaded so we can move down to the next tile
         // layer when the data has loaded.
         for (let i = 0, l = children.length; i < l; i++) {
@@ -313,13 +326,6 @@ export function skipTraversal(tile, renderer) {
     } else {
         for (let i = 0, l = children.length; i < l; i++) {
             const c = children[i];
-            // if (c.content && c.content.uri == "static/data/3dtile/qingyan/16/54625/25719/data/0-8.i3dm" ||
-            // 	c.content && c.content.uri == 'static/data/3dtile/qingyan/15/27312/12859/data/0-0.b3dm' ||
-            // 	c.content && c.content.uri == 'static/data/3dtile/qingyan/14/13656/6429/data/0-0.b3dm' ||
-            // 	c.content && c.content.uri == 'static/data/3dtile/qingyan/13/6828/3214/data/0-0.b3dm' ||
-            // 	c.content && c.content.uri == 'static/data/3dtile/qingyan/12/3414/1607/data/0-0.b3dm') {
-            // 	console.log();
-            // }
             if (isUsedThisFrame(c, frameCount)) {
                 skipTraversal(c, renderer);
             }
@@ -328,7 +334,7 @@ export function skipTraversal(tile, renderer) {
 }
 
 // Final traverse to toggle tile visibility.
-export function toggleTiles(tile, renderer) {
+export function toggleTiles(tile: Tile, renderer: TilesRendererBase) {
     const frameCount = renderer.frameCount;
     const isUsed = isUsedThisFrame(tile, frameCount);
     if (isUsed || tile.__usedLastFrame) {

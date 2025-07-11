@@ -114,7 +114,7 @@ export class HighPrecisionLineMaterial extends RawShaderMaterial {
         Object.assign(shaderParams as any, params as any);
         super(shaderParams);
 
-        this.type = "HighPrecisionLineMaterial";
+        // this.name = "HighPrecisionLineMaterial";
         this.isHighPrecisionLineMaterial = true;
 
         // Apply initial parameter values.

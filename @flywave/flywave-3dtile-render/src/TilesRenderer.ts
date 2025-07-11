@@ -1,10 +1,11 @@
 import { GeoCoordinates, GeoBox } from "@flywave/flywave-geoutils";
 import { TilesRenderer as ThreeTilesRenderer, TileIntersection } from "./three/TilesRenderer";
-import { Vector3, Object3D, Raycaster, Intersection } from "three";
+import { Vector3, Object3D, Raycaster } from "three";
 import { MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import { DebugTilesRenderer } from "./three/DebugTilesRenderer";
 import { Tile } from "./base/Tile";
 import { ITilesRenderer } from "@flywave/flywave-mapview/ITilesRenderer";
+import { Observe3DTileChange } from "./ObserveTileChange";
 
 export const TilesRendererUpdateEvent = "update";
 export const TilesRendererRootOnLoadedEvent = "onRootNodeLoaded";
@@ -16,9 +17,7 @@ export interface TilesRendererOptions {
 
 export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer {
     private debugRender?: any; // Replace with actual DebugTilesRenderer type
-    private observeTileChange?: {
-        _watchTileChange: (tile: Tile, activeTiles: Set<Tile>, active: boolean) => void;
-    };
+    private observeTileChange?: Observe3DTileChange[];
     private rootTile?: Tile;
     private debug?: boolean;
     public object: Object3D;
@@ -108,16 +107,20 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
         return this.mapView.projection;
     }
 
-    setObserveTileChange = (observeTileChange: {
-        _watchTileChange: (tile: Tile, activeTiles: Set<Tile>, active: boolean) => void;
-    }) => {
-        this.observeTileChange = observeTileChange;
+    addObserveTileChange = (observeTileChange: Observe3DTileChange) => {
+        this.observeTileChange.push(observeTileChange);
+    };
+
+    removeObserveTileChange = (observeTileChange: Observe3DTileChange) => {
+        this.observeTileChange = this.observeTileChange.filter(item => item !== observeTileChange);
     };
 
     setTileActive(tile: Tile, active: boolean): void {
         super.setTileActive(tile, active);
         if (this.observeTileChange) {
-            this.observeTileChange._watchTileChange(tile, this.activeTiles, active);
+            this.observeTileChange.forEach(item => {
+                item.watchTileChange(tile, this.activeTiles, active);
+            });
         }
     }
 

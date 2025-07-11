@@ -14,6 +14,7 @@
             "@flywave/flywave-draco/*": ["../flywave-draco/src/*"],
             "@flywave/flywave-gltf": ["../flywave-gltf/src"],
             "@flywave/flywave-gltf/*": ["../flywave-gltf/src/*"],
+            "@flywave/flywave-splats": ["../../flywave-splats/src"]
         }
     },
     "include": ["src/**/*", "test/**/*"],
@@ -33,6 +34,9 @@
         },
         {
             "path": "../flywave-gltf"
+        },
+        {
+            "path": "../flywave-splats"
         }
     ]
 }

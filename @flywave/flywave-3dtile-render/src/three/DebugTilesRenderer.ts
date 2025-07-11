@@ -10,6 +10,7 @@ import {
 import { TilesRenderer, TilesRendererOptions } from "../TilesRenderer";
 import { SphereHelper } from "./SphereHelper";
 import { Tile, TileCache } from "../base/Tile";
+import { Tiles3DTileContent } from "../next";
 
 // 符号常量定义
 const ORIGINAL_MATERIAL = Symbol("ORIGINAL_MATERIAL");
@@ -323,7 +324,7 @@ export class DebugTilesRenderer extends TilesRenderer {
         }
     }
 
-    parseTile(buffer: ArrayBuffer, tile: Tile, extension: string): Promise<void> {
+    parseTile(buffer: Tiles3DTileContent, tile: Tile, extension: string): Promise<void> {
         return super.parseTile(buffer, tile, extension).then(() => {
             const cached = tile.cached as TileCache & {
                 boxHelperGroup?: Group;

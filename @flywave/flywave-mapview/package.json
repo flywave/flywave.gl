@@ -52,7 +52,8 @@
         "@flywave/flywave-text-canvas": "workspace:*",
         "@flywave/flywave-transfer-manager": "workspace:*",
         "@flywave/flywave-utils": "workspace:*",
-        "rbush": "catalog:"
+        "rbush": "catalog:",
+        "postprocessing": "catalog:"
     },
     "devDependencies": {
         "@flywave/flywave-test-utils": "workspace:*",

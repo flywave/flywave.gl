@@ -50,7 +50,6 @@
         "kdbush": "catalog:",
         "keymirror": "catalog:",
         "lodash.debounce": "catalog:",
-        "assert": "catalog:",
         "gl-matrix": "catalog:",
         "d3-selection": "catalog:",
         "stringify-object": "catalog:",

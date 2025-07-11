@@ -3,170 +3,88 @@
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
-import { CopyMaterial, CopyShader } from "@flywave/flywave-materials";
+
+import { Effect, BlendFunction } from "postprocessing";
 import * as THREE from "three";
 
-import { Pass } from "./Pass";
-
-/**
- * The `LowResRenderPass` renders the scene at a lower resolution into an internal
- * `WebGLRenderTarget`, and then copies the result into the frame buffer. The size of the internal
- * buffer is determined by the current frame buffer size multiplied by `pixelRatio`.
- *
- * @note Since no anti-aliasing is applied during dynamic rendering, visual artifacts may be
- * visible.
- */
-export class LowResRenderPass extends Pass {
+export class LowResEffect extends Effect {
     private m_renderTarget: THREE.WebGLRenderTarget | null = null;
-    private readonly m_localCamera: THREE.OrthographicCamera = new THREE.OrthographicCamera(
-        -1,
-        1,
-        1,
-        -1,
-        0,
-        1
-    );
-
-    private readonly m_quadScene: THREE.Scene = new THREE.Scene();
-    private readonly m_quadUniforms: { [uniformName: string]: THREE.IUniform } =
-        CopyShader.uniforms;
-
-    private readonly m_quadMaterial: THREE.ShaderMaterial = new CopyMaterial(this.m_quadUniforms);
-    private readonly m_quad: THREE.Mesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(2, 2),
-        this.m_quadMaterial
-    );
-
     private m_pixelRatio: number | undefined;
-    private m_savedWidth = 0;
-    private m_savedHeight = 0;
+    private m_width = 0;
+    private m_height = 0;
 
-    /**
-     * The constructor for `LowResRenderPass`. It builds an internal scene with a camera looking at
-     * a quad.
-     *
-     * @param lowResPixelRatio - The `pixelRatio` determines the resolution of the internal
-     *  `WebGLRenderTarget`. Values between 0.5 and `window.devicePixelRatio` can be tried to give
-     * good results. A value of `undefined` disables the low res render pass. The value should not
-     * be larger than`window.devicePixelRatio`.
-     */
-    constructor(public lowResPixelRatio?: number) {
-        super();
-        this.m_quad.frustumCulled = false;
-        this.m_quadScene.add(this.m_quad);
-        this.m_pixelRatio = lowResPixelRatio;
+    constructor(pixelRatio?: number) {
+        super("LowResEffect", null, {
+            blendFunction: BlendFunction.SKIP // 不进行混合，直接覆盖
+        });
+        this.m_pixelRatio = pixelRatio;
     }
 
-    /**
-     * Releases all used resources.
-     */
     dispose() {
-        this.m_quadMaterial.dispose();
-        this.m_quad.geometry.dispose();
-        if (this.m_renderTarget !== null) {
-            this.m_renderTarget.dispose();
-            this.m_renderTarget = null;
-        }
+        this.m_renderTarget?.dispose();
+        super.dispose();
     }
 
-    /**
-     * If a value is specified, a low resolution render pass is used to render the scene into a
-     * low resolution render target, before it is copied to the screen.
-     *
-     * A value of `undefined` disables the low res render pass. The value should not be larger than
-     * `window.devicePixelRatio`.
-     *
-     * @default `undefined`
-     */
     set pixelRatio(ratio: number | undefined) {
         this.m_pixelRatio = ratio;
-        if (this.m_renderTarget && this.pixelRatio !== undefined) {
-            this.m_renderTarget.setSize(
-                Math.floor(this.m_savedWidth * this.pixelRatio),
-                Math.floor(this.m_savedHeight * this.pixelRatio)
-            );
-        }
+        this.updateRenderTarget();
     }
 
     get pixelRatio(): number | undefined {
         return this.m_pixelRatio;
     }
 
-    /**
-     * The render function of `LowResRenderPass`. It renders the whole scene into an internal
-     * `WebGLRenderTarget` instance with a lower resolution, using the passed in `WebGLRenderer`.
-     * The low resolution image is then copied to the `writeBuffer`, which is `undefined` in case it
-     * is the screen.
-     *
-     * @param renderer - The ThreeJS WebGLRenderer instance to render the scene with.
-     * @param scene - The ThreeJS Scene instance to render the scene with.
-     * @param camera - The ThreeJS Camera instance to render the scene with.
-     * @param writeBuffer - A ThreeJS WebGLRenderTarget instance to render the scene to.
-     * @param readBuffer - A ThreeJS WebGLRenderTarget instance to render the scene.
-     * @override
-     */
-    render(
+    update(
         renderer: THREE.WebGLRenderer,
-        scene: THREE.Scene,
-        camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
-        writeBuffer: THREE.WebGLRenderTarget | null,
-        readBuffer: THREE.WebGLRenderTarget
-    ) {
-        if (!this.enabled || this.pixelRatio === undefined) {
+        inputBuffer: THREE.WebGLRenderTarget,
+        deltaTime?: number
+    ): void {
+        if (!this.m_pixelRatio || this.m_pixelRatio >= 1) {
             return;
         }
 
-        // Initiates the local render target with the read buffer's dimensions, if not available.
-        if (this.m_renderTarget === null) {
-            this.m_savedWidth = readBuffer.width;
-            this.m_savedHeight = readBuffer.height;
-            this.m_renderTarget = new THREE.WebGLRenderTarget(
-                Math.floor(this.m_savedWidth * this.pixelRatio),
-                Math.floor(this.m_savedHeight * this.pixelRatio),
-                {
-                    minFilter: THREE.LinearFilter,
-                    magFilter: THREE.LinearFilter,
-                    format: THREE.RGBAFormat,
-                    depthBuffer: true,
-                    stencilBuffer: true
-                }
-            );
-            this.m_renderTarget.texture.name = "LowResRenderPass.sample";
+        // 初始化或更新渲染目标
+        if (
+            !this.m_renderTarget ||
+            this.m_width !== inputBuffer.width ||
+            this.m_height !== inputBuffer.height
+        ) {
+            this.m_width = inputBuffer.width;
+            this.m_height = inputBuffer.height;
+            this.updateRenderTarget();
         }
 
-        this.m_quadUniforms.tDiffuse.value = this.m_renderTarget.texture;
-        this.m_quadUniforms.opacity.value = 1.0;
-
-        const oldRenderTarget = renderer.getRenderTarget();
+        // 渲染到低分辨率目标
         renderer.setRenderTarget(this.m_renderTarget);
         renderer.clear();
-        // Render into the low resolution internal render target.
-        renderer.render(scene, camera);
+        renderer.render(this.mainScene, this.mainCamera);
 
-        // Render the low resolution target into the screen.
-        // NOTE: three.js doesn't like undefined as renderTarget, but works with `null`
-        renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
-        renderer.clear();
-        renderer.render(this.m_quadScene, this.m_localCamera);
-        renderer.setRenderTarget(oldRenderTarget);
+        // 使用低分辨率纹理作为效果输入
+        this.uniforms.get("inputBuffer").value = this.m_renderTarget.texture;
     }
 
-    /**
-     * Resize the internal render target to match the new size specified. The size of internal
-     * buffer depends on the `pixelRatio`.
-     *
-     * @param width - New width to apply to the render target.
-     * @param height - New height to apply to the render target.
-     * @override
-     */
-    setSize(width: number, height: number) {
-        this.m_savedWidth = width;
-        this.m_savedHeight = height;
-        if (this.m_renderTarget && this.pixelRatio !== undefined) {
-            this.m_renderTarget.setSize(
-                Math.floor(width * this.pixelRatio),
-                Math.floor(height * this.pixelRatio)
-            );
-        }
+    private updateRenderTarget() {
+        if (!this.m_pixelRatio) return;
+
+        this.m_renderTarget?.dispose();
+
+        this.m_renderTarget = new THREE.WebGLRenderTarget(
+            Math.floor(this.m_width * this.m_pixelRatio),
+            Math.floor(this.m_height * this.m_pixelRatio),
+            {
+                minFilter: THREE.LinearFilter,
+                magFilter: THREE.LinearFilter,
+                format: THREE.RGBAFormat,
+                depthBuffer: false,
+                stencilBuffer: false
+            }
+        );
+        this.m_renderTarget.texture.name = "LowResEffect.target";
+    }
+
+    setSize(width: number, height: number): void {
+        this.m_width = width;
+        this.m_height = height;
+        this.updateRenderTarget();
     }
 }

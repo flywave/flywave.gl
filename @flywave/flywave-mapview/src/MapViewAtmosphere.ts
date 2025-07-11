@@ -106,6 +106,10 @@ export class MapViewAtmosphere {
 
     private readonly m_lightDirection = new THREE.Vector3(0.0, 1.0, 0.0);
 
+    get lightDirection() {
+        return this.m_lightDirection;
+    }
+
     /**
      * Creates and adds `Atmosphere` effects to the scene.
      *

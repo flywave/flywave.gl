@@ -291,7 +291,7 @@ function createQuantizedMeshTerrainData(
             waterMaskBuffer,
             textureSize,
             textureSize,
-            THREE.LuminanceFormat,
+            THREE.RedFormat,
             THREE.UnsignedByteType
         );
         texture.minFilter = THREE.LinearFilter;

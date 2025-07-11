@@ -41,7 +41,9 @@
             "@flywave/flywave-test-utils": ["./@flywave/flywave-test-utils/src/index.web.ts"],
             "@flywave/flywave-test-utils/*": ["./@flywave/flywave-test-utils/src/*"],
             "@flywave-draco": ["./@flywave-draco/src"],
-            "@flywave-gltf/*": ["./@flywave-gltf/src/*"]
+            "@flywave-gltf": ["./@flywave-gltf/src"],
+            "@flywave-gltf/*": ["./@flywave-gltf/src/*"],
+            "@flywave-draco/*": ["./@flywave-draco/src/*"]
         }
     },
     "include": [

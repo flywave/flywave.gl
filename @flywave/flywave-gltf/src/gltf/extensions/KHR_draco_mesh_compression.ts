@@ -77,7 +77,7 @@ async function decompressPrimitive(
     }
 
     const buffer = scenegraph.getTypedArrayForBufferView(dracoExtension.bufferView);
-    const bufferCopy = sliceArrayBuffer(buffer.buffer, buffer.byteOffset);
+    const bufferCopy = sliceArrayBuffer(buffer.buffer as ArrayBuffer, buffer.byteOffset);
 
     // Simplified Draco options type
     const dracoOptions: any = {
@@ -89,7 +89,7 @@ async function decompressPrimitive(
     delete dracoOptions["3d-tiles"];
 
     // Use DracoLoader directly instead of parseFromContext
-    const decodedData = await DracoLoader.parse(bufferCopy, dracoOptions, context);
+    const decodedData = await DracoLoader.parse(bufferCopy, dracoOptions, options);
 
     const decodedAttributes: { [key: string]: GLTFAccessor } = getGLTFAccessors(
         decodedData.schema.attributes // 改为从 schema 获取属性

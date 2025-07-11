@@ -30,6 +30,8 @@ import { GeoBox, GeoCoordinates, OrientedBox3, Projection } from "@flywave/flywa
 import { TileGLTF } from "../base/LoaderBase";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { Tiles3DTileContent } from "../next";
+import { createThreeSceneFromGLTF } from "@flywave/flywave-gltf";
 
 const INITIAL_FRUSTUM_CULLED = Symbol("INITIAL_FRUSTUM_CULLED");
 const tempMat = new Matrix4();
@@ -123,7 +125,6 @@ export abstract class TilesRenderer extends TilesRendererBase {
         this._autoDisableRendererCulling = true;
         this.optimizeRaycast = true;
 
-        this.onLoadTileSet = null;
         this.onLoadModel = null;
         this.onDisposeModel = null;
         this.onTileVisibilityChange = null;
@@ -242,18 +243,6 @@ export abstract class TilesRenderer extends TilesRendererBase {
             return true;
         }
         return false;
-    }
-
-    fetchTileSet(url: string, fetchOptions: RequestInit, parent: Tile = null): Promise<any> {
-        const pr = super.fetchTileSet(url, fetchOptions, parent);
-        pr.then(json => {
-            if (this.onLoadTileSet) {
-                Promise.resolve().then(() => {
-                    this.onLoadTileSet!(json, url);
-                });
-            }
-        });
-        return pr;
     }
 
     update(): void {
@@ -400,133 +389,77 @@ export abstract class TilesRenderer extends TilesRendererBase {
         } as TileCache;
     }
 
-    parseTile(buffer: ArrayBuffer, tile: Tile, extension: string): Promise<void> {
+    async parseTile(children: Tiles3DTileContent, tile: Tile, extension: string): Promise<void> {
         //
 
-        const uri = tile.content.uri;
-        const uriSplits = uri.split(/[\\\/]/g);
-        uriSplits.pop();
-        const workingPath = uriSplits.join("/");
-        const fetchOptions = this.fetchOptions;
+        const res = createThreeSceneFromGLTF(children.gltf);
+        const scene = res.scene;
 
-        const manager = this.manager;
-        // const loadIndex = tile.__loadIndex;
-        let promise: Promise<TileGLTF> | null = null;
+        const upAxis = (this.rootTileSet.asset && this.rootTileSet.asset.gltfUpAxis) || "y";
+        const cached = tile.cached;
+        const cachedTransform = cached.transform;
 
-        switch (extension) {
-            case "b3dm": {
-                const loader = new B3DMLoader(manager, tile);
-                loader.workingPath = workingPath;
-                loader.fetchOptions = fetchOptions;
-                promise = loader.parse(buffer);
+        switch (upAxis.toLowerCase()) {
+            case "x":
+                tempMat.makeRotationAxis(Y_AXIS, -Math.PI / 2);
                 break;
-            }
-            case "pnts": {
-                const loader = new PNTSLoader(manager);
-                loader.workingPath = workingPath;
-                loader.fetchOptions = fetchOptions;
-                promise = loader.parse(buffer);
+            case "y":
+                tempMat.makeRotationAxis(X_AXIS, Math.PI / 2);
                 break;
-            }
-            case "i3dm": {
-                const loader = new I3DMLoader(manager, this);
-                loader.workingPath = workingPath;
-                loader.fetchOptions = fetchOptions;
-                promise = loader.parse(buffer);
-                break;
-            }
-            case "cmpt": {
-                const loader = new CMPTLoader(manager);
-                loader.workingPath = workingPath;
-                loader.fetchOptions = fetchOptions;
-                promise = loader.parse(buffer);
-                break;
-            }
-            case "gltf":
-            case "glb": {
-                const loader = new GLTFExtensionLoader(manager);
-                loader.workingPath = workingPath;
-                loader.fetchOptions = fetchOptions;
-                promise = loader.parse(buffer);
-                break;
-            }
-            default:
-                console.warn(`TilesRenderer: Content type "${extension}" not supported.`);
-                promise = Promise.resolve({ scene: undefined } as TileGLTF);
+            case "z":
+                tempMat.identity();
                 break;
         }
 
-        return promise.then(res => {
-            const scene = res.scene;
-            // if (tile.__loadIndex !== loadIndex) {
-            //     return;
-            // }
+        scene.position.fromArray(children.rtcCenter);
+        scene.updateMatrix();
 
-            const upAxis = (this.rootTileSet.asset && this.rootTileSet.asset.gltfUpAxis) || "y";
-            const cached = tile.cached;
-            const cachedTransform = cached.transform;
+        if (extension !== "pnts") {
+            scene.matrix.multiply(tempMat);
+        }
 
-            switch (upAxis.toLowerCase()) {
-                case "x":
-                    tempMat.makeRotationAxis(Y_AXIS, -Math.PI / 2);
-                    break;
-                case "y":
-                    tempMat.makeRotationAxis(X_AXIS, Math.PI / 2);
-                    break;
-                case "z":
-                    tempMat.identity();
-                    break;
-            }
+        scene.matrix.premultiply(cachedTransform);
+        scene.matrix.decompose(scene.position, scene.quaternion, scene.scale);
+        scene.traverse((c: Object3D) => {
+            c[INITIAL_FRUSTUM_CULLED] = c.frustumCulled;
+        });
 
-            scene.updateMatrix();
+        cached.scene = scene;
 
-            if (extension !== "pnts") {
-                scene.matrix.multiply(tempMat);
-            }
+        scene.traverse((c: Object3D) => {
+            c.raycast = this._overridenRaycast;
+        });
 
-            scene.matrix.premultiply(cachedTransform);
-            scene.matrix.decompose(scene.position, scene.quaternion, scene.scale);
-            scene.traverse((c: Object3D) => {
-                c[INITIAL_FRUSTUM_CULLED] = c.frustumCulled;
-            });
+        const materials: Material[] = [];
+        const geometry: BufferGeometry[] = [];
+        const textures: Texture[] = [];
+        scene.traverse((c: Object3D) => {
+            if (c instanceof Mesh) {
+                if (c.geometry) {
+                    geometry.push(c.geometry);
+                }
 
-            cached.scene = scene;
+                if (c.material) {
+                    const material = c.material;
+                    materials.push(material);
 
-            scene.traverse((c: Object3D) => {
-                c.raycast = this._overridenRaycast;
-            });
-
-            const materials: Material[] = [];
-            const geometry: BufferGeometry[] = [];
-            const textures: Texture[] = [];
-            scene.traverse((c: Object3D) => {
-                if (c instanceof Mesh) {
-                    if (c.geometry) {
-                        geometry.push(c.geometry);
-                    }
-
-                    if (c.material) {
-                        const material = c.material;
-                        materials.push(material);
-
-                        for (const key in material) {
-                            const value = (material as any)[key];
-                            if (value && value.isTexture) {
-                                textures.push(value);
-                            }
+                    for (const key in material) {
+                        const value = (material as any)[key];
+                        if (value && value.isTexture) {
+                            textures.push(value);
                         }
                     }
                 }
-            });
-
-            cached.materials = materials;
-            cached.geometry = geometry;
-            cached.textures = textures;
-
-            if (this.onLoadModel) {
-                this.onLoadModel(scene, tile);
             }
         });
+
+        cached.materials = materials;
+        cached.geometry = geometry;
+        cached.textures = textures;
+
+        if (this.onLoadModel) {
+            this.onLoadModel(scene, tile);
+        }
     }
 
     disposeTile(tile: Tile): void {

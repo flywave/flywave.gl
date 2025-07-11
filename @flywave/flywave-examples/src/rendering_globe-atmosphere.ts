@@ -74,20 +74,20 @@ export namespace GlobeAtmosphereExample {
         map.addDataSource(dataSource);
 
         const mapControls = new MapControls(map);
-        mapControls.maxTiltAngle = 90;
+        mapControls.maxTiltAngle = 0;
         const ui = new MapControlsUI(mapControls, { zoomLevel: "input" });
         map.canvas.parentElement!.appendChild(ui.domElement);
 
-        const { camera, projection, mapAnchors } = map;
-        const updateCallback = () => map.update();
-        const atmosphere = new MapViewAtmosphere(
-            mapAnchors,
-            camera,
-            projection,
-            map.renderer.capabilities,
-            updateCallback
-        );
-        atmosphere.lightMode = AtmosphereLightMode.LightDynamic;
+        // const { camera, projection, mapAnchors } = map;
+        // const updateCallback = () => map.update();
+        // const atmosphere = new MapViewAtmosphere(
+        //     mapAnchors,
+        //     camera,
+        //     projection,
+        //     map.renderer.capabilities,
+        //     updateCallback
+        // );
+        // atmosphere.lightMode = AtmosphereLightMode.LightDynamic;
 
         const coords = new GeoCoordinates(10.0, -10.0);
         map.lookAt({ target: coords, distance: EarthConstants.EQUATORIAL_RADIUS * 2.1 });

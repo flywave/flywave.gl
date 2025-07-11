@@ -10,7 +10,7 @@ export enum LOD_METRIC_TYPE {
     MAX_SCREEN_THRESHOLD = "maxScreenThreshold"
 }
 
-export type TileRefinement = "add" | "replace";
+export type TileRefinement = "ADD" | "REPLACE";
 
 export enum TILE_REFINEMENT {
     ADD = 1, // Render tile and, if screen space error exceeded, also refine to its children.
@@ -404,7 +404,7 @@ export type ImplicitTilingExensionData = ImplicitTilingData & {
  * This object allows a tile to be implicitly subdivided. Tile and content availability and metadata is stored in subtrees which are referenced externally.
  * https://github.com/CesiumGS/3d-tiles/blob/draft-1.1/specification/schema/tile.implicitTiling.schema.json
  * */
-interface ImplicitTilingData {
+export interface ImplicitTilingData {
     /** A string describing the subdivision scheme used within the tileset. */
     subdivisionScheme: "QUADTREE" | "OCTREE" | string;
     /** The number of distinct levels in each subtree. For example, a quadtree with `subtreeLevels = 2` will have subtrees with 5 nodes (one root and 4 children). */

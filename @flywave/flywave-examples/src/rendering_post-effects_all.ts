@@ -38,7 +38,8 @@ export namespace EffectsAllExample {
         const mapView = new MapView({
             canvas,
             projection: sphereProjection,
-            theme: "resources/berlin_tilezen_base.json"
+            addBackgroundDatasource: false,
+            theme: "resources/berlin_tilezen_effects_streets.json"
         });
 
         CopyrightElementHandler.install("copyrightNotice", mapView);
@@ -68,6 +69,7 @@ export namespace EffectsAllExample {
         apiFormat: APIFormat.XYZOMV,
         styleSetName: "tilezen",
         authenticationCode: apikey,
+        addGroundPlane: false,
         authenticationMethod: {
             method: AuthenticationMethod.QueryString,
             name: "apikey"
@@ -87,8 +89,8 @@ export namespace EffectsAllExample {
         },
         bloom: {
             enabled: true,
-            strength: 0.5,
-            threshold: 0.83,
+            strength: 2.5,
+            threshold: 0.1,
             radius: 1
         },
         vignette: {

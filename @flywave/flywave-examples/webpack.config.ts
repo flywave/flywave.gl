@@ -20,9 +20,7 @@ const harpFontResourcesPath = path.dirname(require.resolve("@here/harp-fontcatal
 const threePath = `${path.dirname(require.resolve("three"))}/three.cjs`;
 const threeDracoPath = `${path.dirname(require.resolve("three"))}/../examples/jsm/libs/draco`;
 
-console.log(threeDracoPath);
 const isProduction = process.env.NODE_ENV === "production";
-const harpBundleSuffix = isProduction ? ".min" : "";
 
 const themeList = {
     default: "resources/berlin_tilezen_base.json",
@@ -52,18 +50,6 @@ function getCacheConfig(name: string): CacheConfig | false {
               },
               name: "flywave-examples_" + name
           };
-}
-
-function resolveOptional(path: string, message?: string): string | undefined {
-    try {
-        return require.resolve(path);
-    } catch (error) {
-        if (!message) {
-            message = "some examples may not work";
-        }
-        console.log(`warning: unable to find '${path}': ${message}`);
-        return undefined;
-    }
 }
 
 const commonConfig: webpack.Configuration = {
@@ -101,6 +87,13 @@ const commonConfig: webpack.Configuration = {
                     configFile: path.join(process.cwd(), "tsconfig.json"),
                     transpileOnly: true,
                     projectReferences: true
+                }
+            },
+            {
+                test: /\.(HDR|hdr|mp4|png|eot|webp|tiff|svg|woff2|woff|ttf|jpg|gif|jpeg|ico|exr|wasm)$/,
+                type: "asset/resource",
+                generator: {
+                    filename: "files/[name].[hash:8].[ext]"
                 }
             }
         ]
@@ -155,7 +148,6 @@ const threejsConfig = merge(commonConfig, {
         ]
     },
     externals: [],
-    target: "web",
     devtool: false
 });
 

@@ -13,6 +13,7 @@ import { MapView, MapViewOptions } from "./MapView";
 import { MapViewFog } from "./MapViewFog";
 import { SkyBackground } from "./SkyBackground";
 import { createLight } from "./ThemeHelpers";
+import { Celestia } from "./celestia/Celestia";
 
 const logger = LoggerManager.instance.create("MapViewEnvironment");
 
@@ -45,12 +46,14 @@ export type MapViewEnvironmentOptions = Pick<
 export class MapViewEnvironment {
     private readonly m_fog: MapViewFog;
     private m_skyBackground?: SkyBackground;
+    private m_celestia?: Celestia;
     private m_createdLights?: THREE.Light[];
     private m_overlayCreatedLights?: THREE.Light[];
     private readonly m_backgroundDataSource?: BackgroundDataSource;
 
     constructor(private readonly m_mapView: MapView, options: MapViewEnvironmentOptions) {
         this.m_fog = new MapViewFog(this.m_mapView.scene);
+        this.m_celestia = new Celestia(this.m_mapView);
         if (options.addBackgroundDatasource !== false) {
             this.m_backgroundDataSource = new BackgroundDataSource();
             this.m_mapView.addDataSource(this.m_backgroundDataSource);
@@ -93,6 +96,7 @@ export class MapViewEnvironment {
             this.m_skyBackground.updateCamera(this.m_mapView.camera);
         }
         this.updateLights();
+        this.m_celestia.update();
     }
 
     updateClearColor(clearColor?: string, clearAlpha?: number) {

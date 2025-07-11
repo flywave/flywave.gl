@@ -12,7 +12,9 @@ import {
 } from "./traverseFunctions";
 import { UNLOADED, LOADING, PARSING, LOADED, FAILED } from "./constants";
 import * as THREE from "three";
-import { Tile } from "./Tile";
+import { Tile, TileSet } from "./Tile";
+import { load3DTiles, Tiles3DTileContent, Tiles3DTilesetJSONPostprocessed } from "../next";
+import { TILE_REFINEMENT } from "../next/types";
 
 interface TilesRendererStats {
     parsing: number;
@@ -22,14 +24,6 @@ interface TilesRendererStats {
     used: number;
     active: number;
     visible: number;
-}
-
-interface TileSet {
-    root: Tile;
-    asset?: {
-        version: string;
-        gltfUpAxis?: string;
-    };
 }
 
 /**
@@ -178,7 +172,7 @@ export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: an
         lruCache.scheduleUnload();
     }
 
-    parseTile(buffer: ArrayBuffer, tile: Tile, extension: string): Promise<void> {
+    parseTile(childTile: Tiles3DTileContent, tile: Tile, extension: string): Promise<void> {
         return Promise.resolve();
     }
 
@@ -186,7 +180,7 @@ export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: an
 
     preprocessNode(tile: Tile, parentTile: Tile | null, tileSetDir: string): void {
         if (tile.content) {
-            if (!("uri" in tile.content) && "url" in tile.content) {
+            if (!tile.content.uri && "url" in tile.content) {
                 tile.content.uri = tile.content.url;
                 delete tile.content.url;
             }
@@ -208,7 +202,6 @@ export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: an
         }
 
         tile.parent = parentTile;
-        tile.children = tile.children || [];
 
         const uri = tile.content?.uri;
         if (uri) {
@@ -246,7 +239,7 @@ export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: an
         tile.__depthFromRenderedParent = -1;
         if (parentTile === null) {
             tile.__depth = 0;
-            tile.refine = tile.refine || "REPLACE";
+            tile.refine = tile.refine || TILE_REFINEMENT.REPLACE;
         } else {
             tile.__depth = parentTile.__depth + 1;
             tile.refine = tile.refine || parentTile.refine;
@@ -270,36 +263,34 @@ export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: an
         fetchOptions: RequestInit,
         parent: Tile | null = null
     ): Promise<TileSet> {
-        return fetch(url, fetchOptions)
-            .then(res => {
-                if (res.ok) {
-                    return res.json();
-                } else {
-                    throw new Error(
-                        `TilesRenderer: Failed to load tileset "${url}" with status ${res.status} : ${res.statusText}`
-                    );
+        return load3DTiles(
+            url,
+            {
+                "3d-tiles": {
+                    isTileset: true
                 }
-            })
-            .then((json: TileSet) => {
-                const version = json.asset?.version;
-                console.assert(
-                    version === "1.0" || version === "0.0",
-                    'asset.version is expected to be a string of "1.0" or "0.0"'
-                );
+            },
+            fetchOptions
+        ).then((json: Tiles3DTilesetJSONPostprocessed) => {
+            let tileSet = new TileSet(json);
+            const version = json.asset?.version;
+            console.assert(
+                version === "1.0" || version === "0.0",
+                'asset.version is expected to be a string of "1.0" or "0.0"'
+            );
 
-                const basePath = path.dirname(url);
+            const basePath = path.dirname(url);
 
-                traverseSet(
-                    json.root,
-                    (node: Tile, parent: Tile | null) =>
-                        this.preprocessNode(node, parent, basePath),
-                    null,
-                    parent,
-                    parent ? parent.__depth : 0
-                );
+            traverseSet(
+                tileSet.root,
+                (node: Tile, parent: Tile | null) => this.preprocessNode(node, parent, basePath),
+                null,
+                parent,
+                parent ? parent.__depth : 0
+            );
 
-                return json;
-            });
+            return tileSet;
+        }) as Promise<TileSet>;
     }
 
     loadRootTileSet(url: string): Promise<TileSet> {
@@ -428,7 +419,7 @@ export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: an
                 .catch(errorCallback);
         } else {
             downloadQueue
-                .add(tile, (downloadTile: Tile): Promise<Response | undefined> => {
+                .add(tile, (downloadTile: Tile): Promise<Tiles3DTileContent | undefined> => {
                     if (downloadTile.__loadIndex !== loadIndex) {
                         return Promise.resolve(undefined);
                     }
@@ -437,20 +428,24 @@ export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: an
                     if (!uri) return Promise.reject(new Error("Tile content URI is missing"));
 
                     const processedUri = this.preprocessURL ? this.preprocessURL(uri) : uri;
-                    return fetch(processedUri, Object.assign({ signal }, this.fetchOptions));
+                    return load3DTiles(
+                        processedUri,
+                        {
+                            "3d-tiles": {
+                                loadGLTF: true
+                            }
+                        },
+                        { signal, ...this.fetchOptions }
+                    ) as Promise<Tiles3DTileContent | undefined>;
                 })
                 .then(res => {
-                    if (tile.__loadIndex !== loadIndex) {
+                    if (tile.__loadIndex !== loadIndex || !res) {
                         return;
                     }
 
-                    if (res.ok) {
-                        return res.arrayBuffer();
-                    } else {
-                        throw new Error(`Failed to load model with error code ${res.status}`);
-                    }
+                    return res;
                 })
-                .then((buffer: ArrayBuffer | undefined) => {
+                .then((buffer: Tiles3DTileContent | undefined) => {
                     if (tile.__loadIndex !== loadIndex || !buffer) {
                         return;
                     }
