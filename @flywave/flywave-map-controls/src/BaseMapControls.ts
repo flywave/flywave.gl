@@ -224,7 +224,11 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
         // Handle zoom animations
         if (this.zoomAnimationState) {
-            return this.handleZoomAnimation(mouseDown, mouseZ);
+            this.handleZoomAnimation(mouseDown, mouseZ);
+            this.applyToMapView();
+            this.dispatchEvent(EventUpdate);
+
+            return;
         }
 
         // Get camera position and calculate globe distance
@@ -526,19 +530,21 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             this.cameraTransform.setMatrix(endMatrix);
         } else {
             if (this.zoomAnimationState.mode === 1) {
-                this.cameraTransform.followMatrix(endMatrix, time, startMatrix);
+                this.cameraTransform.followMatrix(
+                    endMatrix,
+                    this.zoomAnimationState.time,
+                    startMatrix
+                );
             } else {
                 const pivot = new Vector3().fromArray(
                     this.zoomAnimationState.globeCenter.toArray()
                 );
-                const radius = this.getDistanceToGlobe(pivot);
-
                 this.cameraTransform.followMatrixGreatCircle(
                     startMatrix,
                     endMatrix,
-                    time,
+                    this.zoomAnimationState.time,
                     pivot,
-                    radius,
+                    this.zoomAnimationState.heightRatio,
                     midMatrix,
                     0.5
                 );

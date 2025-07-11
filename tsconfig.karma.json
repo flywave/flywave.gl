@@ -46,11 +46,7 @@
             "@flywave-draco/*": ["./@flywave-draco/src/*"]
         }
     },
-    "include": [
-        "@flywave/**/*.ts",
-        "@flywave/flywave.gl/**/*.ts",
-        "@flywave/flywave-vectortile-datasource/src/adapters/omv/proto/vector_tile.js"
-    ],
+    "include": ["@flywave/**/*.ts"],
     "exclude": [
         "**/node_modules/**",
         "@flywave/generator-flywave.gl",

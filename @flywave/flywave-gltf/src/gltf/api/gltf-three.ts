@@ -17,6 +17,8 @@ import {
     LinearFilter,
     LinearMipmapLinearFilter,
     LinearMipmapNearestFilter,
+    LineBasicMaterial,
+    LineSegments,
     Material,
     Matrix4,
     Mesh,
@@ -107,7 +109,7 @@ function processTextures(gltf: GLTFPostprocessed): Map<string, Texture> {
     for (const gltfTexture of gltf.textures) {
         const texture = new Texture();
         if (gltfTexture.source?.image) {
-            texture.image = gltfTexture.source.image;
+            texture.image = gltfTexture.source.image.data;
             texture.needsUpdate = true;
         }
 
@@ -296,12 +298,27 @@ function processMeshes(
     return meshMap;
 }
 
+const ATTRIBUTES = {
+    POSITION: "position",
+    NORMAL: "normal",
+    TANGENT: "tangent",
+    TEXCOORD_0: "uv",
+    TEXCOORD_1: "uv1",
+    TEXCOORD_2: "uv2",
+    TEXCOORD_3: "uv3",
+    COLOR_0: "color",
+    WEIGHTS_0: "skinWeight",
+    JOINTS_0: "skinIndex"
+};
 function createPrimitiveGeometry(primitive: GLTFMeshPrimitivePostprocessed): BufferGeometry {
     const geometry = new BufferGeometry();
 
     // Set attributes
     for (const [name, accessor] of Object.entries(primitive.attributes)) {
-        geometry.setAttribute(name, createBufferAttribute(accessor));
+        geometry.setAttribute(
+            ATTRIBUTES[name.toUpperCase() as keyof typeof ATTRIBUTES] || name,
+            createBufferAttribute(accessor)
+        );
     }
 
     // Set indices
@@ -331,6 +348,17 @@ function createMeshForPrimitive(
     if (primitive.extensions?.KHR_gaussian_splatting) {
         return createSplatMesh(gltf, primitive, geometry);
     }
+
+    if (primitive.mode === 1) {
+        let rawmaterial = material as MeshStandardMaterial;
+        let lineMaterial = new LineBasicMaterial();
+        Material.prototype.copy.call(lineMaterial, material);
+        lineMaterial.color.copy(rawmaterial.color);
+        lineMaterial.map = rawmaterial.map;
+
+        return new LineSegments(geometry, lineMaterial);
+    }
+
     const isSkinned = primitive.attributes.JOINTS_0 && primitive.attributes.WEIGHTS_0;
     const mesh = isSkinned
         ? new SkinnedMesh(geometry, material as MeshStandardMaterial)
