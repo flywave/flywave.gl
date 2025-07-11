@@ -1,4 +1,4 @@
-import { TILE3D_TYPE } from "../constants";
+import { TILE3D_TYPE } from "../Constants";
 import { Tiles3DLoaderOptions } from "../Loader";
 import { Tiles3DTileContent } from "../types";
 import { getMagicString } from "./helpers/ParseUtils";
