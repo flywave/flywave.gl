@@ -22,7 +22,6 @@ packages="\
     @flywave/flywave-mapview-decoder \
     @flywave/flywave-materials \
     @flywave/flywave-vectortile-datasource \
-    @flywave/flywave-omv-datasource \
     @flywave/flywave-text-canvas \
     @flywave/flywave-transfer-manager \
     @flywave/flywave-utils \

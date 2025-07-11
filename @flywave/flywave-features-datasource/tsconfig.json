@@ -11,7 +11,7 @@
             "@flywave/flywave-geojson-datasource": ["../flywave-geojson-datasource/src"],
             "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
             "@flywave/flywave-utils": ["../flywave-utils/src"],
-            "@flywave/flywave-omv-datasource": ["../flywave-omv-datasource/src"],
+            "@flywave/flywave-vectortile-datasource": ["../flywave-vectortile-datasource/src"],
             "@flywave/flywave-mapview": ["../flywave-mapview/src"]
         }
     },
@@ -31,7 +31,7 @@
             "path": "../flywave-mapview"
         },
         {
-            "path": "../flywave-omv-datasource"
+            "path": "../flywave-vectortile-datasource"
         },
         {
             "path": "../flywave-utils"
