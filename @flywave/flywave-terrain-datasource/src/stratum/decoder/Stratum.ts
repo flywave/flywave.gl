@@ -11,23 +11,46 @@ import {
 } from "./Types";
 
 const STRATUM_MESH_HEADER_SIZE = 88;
-const STRATUM_COORDINATE_SIZE = 32767;
 
 function decodeZigZag(value: number): number {
     return (value >> 1) ^ -(value & 1);
 }
+function signNotZero(v: number): number {
+    return v < 0.0 ? -1.0 : 1.0;
+}
 
-function octDecodeNormal(x: number, y: number): [number, number, number] {
-    // 八面体解码实现
-    const nx = x / STRATUM_COORDINATE_SIZE;
-    const ny = y / STRATUM_COORDINATE_SIZE;
-    const nz = 1 - Math.abs(nx) - Math.abs(ny);
+function fromSnorm(v: number): number {
+    return (clamp(v, 0.0, 255.0) / 255.0) * 2.0 - 1.0;
+}
 
-    const t = Math.max(-nz, 0);
-    const nxSign = nx >= 0 ? 1 : -1;
-    const nySign = ny >= 0 ? 1 : -1;
+function clamp(val: number, minVal: number, maxVal: number): number {
+    return Math.min(Math.max(val, minVal), maxVal);
+}
 
-    return [nx + t * nxSign, ny + t * nySign, nz];
+function octDecode(x: number, y: number): [number, number, number] {
+    // 将输入的8位整数转换为归一化浮点数（范围[-1,1]）
+    let fx = fromSnorm(x);
+    let fy = fromSnorm(y);
+
+    // 计算初始z分量（1 - |x| - |y|）
+    const fz = 1.0 - (Math.abs(fx) + Math.abs(fy));
+
+    // 如果z为负，说明在负半球，需调整x,y
+    if (fz < 0.0) {
+        const oldX = fx;
+        fx = (1.0 - Math.abs(fy)) * signNotZero(oldX);
+        fy = (1.0 - Math.abs(oldX)) * signNotZero(fy);
+    }
+
+    // 构造向量并归一化
+    const vec = [fx, fy, fz];
+    const length = Math.sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]);
+
+    if (length === 0) {
+        return [0, 0, 0];
+    }
+
+    return [vec[0] / length, vec[1] / length, vec[2] / length];
 }
 
 function decodeHeader(dataView: DataView): DecodeHeaderResult {
@@ -58,19 +81,19 @@ function decodeVertexData(dataView: DataView, headerEndPosition: number): Decode
     const vertexCount = dataView.getUint32(position, true);
     position += 4;
 
-    // 读取U坐标
-    const uArray = new Uint16Array(dataView.buffer, position, vertexCount);
-    position += vertexCount * 2;
+    const readCoordData = (): Uint16Array => {
+        const data = new Uint16Array(vertexCount);
+        for (let i = 0; i < vertexCount; i++) {
+            data[i] = dataView.getUint16(position, true);
+            position += 2;
+        }
+        return data;
+    };
 
-    // 读取V坐标
-    const vArray = new Uint16Array(dataView.buffer, position, vertexCount);
-    position += vertexCount * 2;
+    const uArray = readCoordData();
+    const vArray = readCoordData();
+    const hArray = readCoordData();
 
-    // 读取高度
-    const hArray = new Uint16Array(dataView.buffer, position, vertexCount);
-    position += vertexCount * 2;
-
-    // 解码顶点坐标
     const decodedU = new Float64Array(vertexCount);
     const decodedV = new Float64Array(vertexCount);
     const decodedH = new Float64Array(vertexCount);
@@ -88,43 +111,49 @@ function decodeVertexData(dataView: DataView, headerEndPosition: number): Decode
         decodedH[i] = h;
     }
 
-    // 解码法线数据 (八面体编码 + 差分编码)
     const normalsArray = new Float32Array(vertexCount * 3);
     let prevNu = 0;
     let prevNv = 0;
+
     for (let i = 0; i < vertexCount; i++) {
-        const nx = decodeZigZag(dataView.getUint16(position + i * 4, true)) + prevNu;
-        const ny = decodeZigZag(dataView.getUint16(position + i * 4 + 2, true)) + prevNv;
+        const deltaNu = decodeZigZag(dataView.getUint16(position, true)) + prevNu;
+        position += 2;
+        const deltaNv = decodeZigZag(dataView.getUint16(position, true)) + prevNv;
+        position += 2;
+
+        const nx = prevNu + deltaNu;
+        const ny = prevNv + deltaNv;
+
         prevNu = nx;
         prevNv = ny;
 
-        const normal = octDecodeNormal(nx, ny);
+        const normal = octDecode(nx, ny);
         normalsArray[i * 3] = normal[0];
         normalsArray[i * 3 + 1] = normal[1];
         normalsArray[i * 3 + 2] = normal[2];
     }
-    position += vertexCount * 4;
 
-    // 解码UV数据 (差分编码)
+    const uvByteSize = Math.ceil((vertexCount * 2 * 12) / 8);
+    const uvUnpacked = unpack12BitData(dataView, position, vertexCount * 2);
+    position += uvByteSize;
+
     const uvsArray = new Float32Array(vertexCount * 2);
     let prevUVu = 0;
     let prevUVv = 0;
     for (let i = 0; i < vertexCount; i++) {
-        const u = decodeZigZag(dataView.getUint16(position + i * 4, true)) + prevUVu;
-        const v = decodeZigZag(dataView.getUint16(position + i * 4 + 2, true)) + prevUVv;
-        uvsArray[i * 2] = u / 32767; // 反量化到[0,1]范围
-        uvsArray[i * 2 + 1] = v / 32767;
+        const u = decodeZigZag(uvUnpacked[i * 2]) + prevUVu;
+        const v = decodeZigZag(uvUnpacked[i * 2 + 1]) + prevUVv;
+
         prevUVu = u;
         prevUVv = v;
-    }
-    position += vertexCount * 4;
 
-    // 处理对齐填充
-    const alignment = vertexCount > 65535 ? 4 : 2;
-    const padding = position % alignment;
-    if (padding > 0) {
-        position += alignment - padding;
+        uvsArray[i * 2] = u / 0xfff;
+        uvsArray[i * 2 + 1] = v / 0xfff;
     }
+
+    const alignment = vertexCount > 65535 ? 4 : 2;
+    const padding = (alignment - (position % alignment)) % alignment;
+    position += padding;
 
     return {
         vertexData: {
@@ -136,6 +165,35 @@ function decodeVertexData(dataView: DataView, headerEndPosition: number): Decode
         },
         vertexDataEndPosition: position
     };
+}
+
+// 优化的12位解包函数
+function unpack12BitData(dataView: DataView, start: number, count: number): Uint16Array {
+    const result = new Uint16Array(count);
+    let byteIndex = start;
+    let resultIndex = 0;
+
+    // 成对处理值（每3字节包含2个12位值）
+    const pairs = Math.floor(count / 2);
+    for (let i = 0; i < pairs; i++) {
+        const byte1 = dataView.getUint8(byteIndex++);
+        const byte2 = dataView.getUint8(byteIndex++);
+        const byte3 = dataView.getUint8(byteIndex++);
+
+        // 第一个值：前两个字节的高12位
+        result[resultIndex++] = (byte1 << 4) | (byte2 >> 4);
+        // 第二个值：后两个字节的低12位
+        result[resultIndex++] = ((byte2 & 0x0f) << 8) | byte3;
+    }
+
+    // 处理最后一个值（当count为奇数时）
+    if (count % 2 !== 0) {
+        const byte1 = dataView.getUint8(byteIndex++);
+        const byte2 = dataView.getUint8(byteIndex++);
+        result[resultIndex] = (byte1 << 4) | (byte2 >> 4);
+    }
+
+    return result;
 }
 
 function decodeTriangleIndices(

@@ -297,11 +297,13 @@ function decodeHeader(dataView: DataView): { header: Header; headerEndPosition: 
 
     return { header, headerEndPosition: position };
 }
-
 function decodeVertexData(
     dataView: DataView,
     headerEndPosition: number,
-    quantization = TerrainQuantization.NONE
+    quantization = TerrainQuantization.NONE,
+    minHeight: number,
+    maxHeight: number,
+    hasWebMercatorT: boolean
 ): { vertexData: Uint16Array; vertexDataEndPosition: number } {
     let position = headerEndPosition;
     const elementsPerVertex = 3;
@@ -311,31 +313,35 @@ function decodeVertexData(
     position += Uint32Array.BYTES_PER_ELEMENT;
 
     if (quantization === TerrainQuantization.BITS12) {
-        // 12位量化处理逻辑
-        const bytesPerElement = 2; // 每个分量2字节
-        const totalBytes = vertexCount * elementsPerVertex * bytesPerElement;
+        // 计算压缩数据长度（考虑WebMercatorT）
+        const elementsPerVertex = hasWebMercatorT ? 4 : 3;
+        const compressedData = new Uint16Array(
+            dataView.buffer,
+            position,
+            vertexCount * elementsPerVertex
+        );
+        position += compressedData.byteLength;
 
-        // 读取压缩数据
-        const compressedData = new Uint16Array(dataView.buffer, position, vertexCount * 3);
-        position += totalBytes;
+        // 复用对象减少内存分配
+        const xyResult = new Vector2();
+        const zhResult = new Vector2();
+        const uvResult = new Vector2();
 
-        // 解压缩12位数据
         for (let i = 0; i < vertexCount; i++) {
-            // 解压u分量 (12位)
-            const uCompressed = compressedData[i * 3];
-            const u = uCompressed & 0xfff; // 取低12位
+            const baseIndex = i * elementsPerVertex;
 
-            // 解压v分量 (12位)
-            const vCompressed = compressedData[i * 3 + 1];
-            const v = vCompressed & 0xfff; // 取低12位
+            // 解压缩分量
+            decompressTextureCoordinates(compressedData[baseIndex], xyResult);
+            decompressTextureCoordinates(compressedData[baseIndex + 1], zhResult);
+            decompressTextureCoordinates(compressedData[baseIndex + 2], uvResult);
 
-            // 解压高度分量 (12位)
-            const hCompressed = compressedData[i * 3 + 2];
-            const height = hCompressed & 0xfff; // 取低12位
+            // 计算实际高度
+            const height = zhResult.y * (maxHeight - minHeight) + minHeight;
 
-            vertexData[i * 3] = u;
-            vertexData[i * 3 + 1] = v;
-            vertexData[i * 3 + 2] = height;
+            // 保存结果
+            vertexData[i * 3] = uvResult.x; // u
+            vertexData[i * 3 + 1] = uvResult.y; // v
+            vertexData[i * 3 + 2] = height; // height
         }
     } else {
         // 非量化模式 - 交错数据
@@ -840,7 +846,10 @@ export default function decode(
     const { vertexData, vertexDataEndPosition } = decodeVertexData(
         view,
         headerEndPosition,
-        options.quantization
+        options.quantization,
+        header.minHeight,
+        header.maxHeight,
+        options.hasWebMercatorT
     );
 
     // Decode all positions, texture coordinates, heights, and normals
