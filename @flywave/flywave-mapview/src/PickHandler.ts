@@ -400,7 +400,7 @@ export class PickHandler {
         pickResult.userData = featureData.objInfos[objInfosIndex - 1];
     }
 
-    private setupRaycaster(x: number, y: number): THREE.Raycaster {
+    public setupRaycaster(x: number, y: number): THREE.Raycaster {
         const camera = this.mapView.camera;
         const rayCaster = this.raycasterFromScreenPoint(x, y);
 

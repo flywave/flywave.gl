@@ -1,11 +1,12 @@
-import { GeoCoordinates, GeoBox } from "@flywave/flywave-geoutils";
-import { TilesRenderer as ThreeTilesRenderer, TileIntersection } from "./renderer/TilesRenderer";
+import { GeoCoordinates, GeoBox, Projection } from "@flywave/flywave-geoutils";
+import { TilesRenderer as ThreeTilesRenderer } from "./renderer/TilesRenderer";
 import { Vector3, Object3D, Raycaster } from "three";
 import { MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import { DebugTilesRenderer } from "./renderer/DebugTilesRenderer";
-import { Tile } from "./base/Tile";
+import { Tile, TileInternal } from "./base/Tile";
 import { ITilesRenderer } from "@flywave/flywave-mapview/ITilesRenderer";
 import { Observe3DTileChange } from "./ObserveTileChange";
+import { TileIntersection } from "./renderer/raycastTraverse";
 
 export const TilesRendererUpdateEvent = "update";
 export const TilesRendererRootOnLoadedEvent = "onRootNodeLoaded";
@@ -26,32 +27,34 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
 
     constructor(private readonly options: TilesRendererOptions) {
         super(options.url);
-
-        this.lruCache.maxSize = 2200;
-        this.lruCache.minSize = 2000;
-
-        this.displayActiveTiles = true;
-
         this.object = new Object3D();
 
         this.object.add(this.group);
-        this.loadSiblings = false;
-
-        this.autoDisableRendererCulling = false;
-        this.errorTarget = 16;
+        this.errorTarget = 100;
     }
 
-    update(): void {
+    protected doUpdate() {
+        const cameras = this.cameras;
+
+        if (cameras.length === 0) {
+            console.warn("TilesRenderer: no cameras defined. Cannot update 3d tiles.");
+            return;
+        }
+
         super.update();
 
         this.activeTiles.forEach(tile => {
-            if (tile.cached.geoBox) {
+            if (tile.cached.boundingVolume.region) {
                 if (!this.geoExtent) {
-                    this.geoExtent = tile.cached.geoBox.clone();
+                    this.geoExtent = tile.cached.boundingVolume.region.clone();
                 }
-                this.geoExtent = this.geoExtent.merge(tile.cached.geoBox);
+                this.geoExtent = this.geoExtent.merge(tile.cached.boundingVolume.region);
             }
         });
+    }
+
+    update(): void {
+        this.doUpdate();
     }
 
     getMaxGeometryHeight(): number {
@@ -101,7 +104,7 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
         }
     };
 
-    protected getProjection() {
+    protected getProjection(): Projection {
         return this.mapView.projection;
     }
 
@@ -151,8 +154,6 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
 
         this.object.position.copy(this.mapView.camera.position.clone().negate());
 
-        this.downloadQueue.maxJobs = this.mapView.cameraIsMoving ? 4 : 16;
-
         this.update();
         this.dispatchEvent({ type: TilesRendererUpdateEvent });
     };
@@ -186,24 +187,14 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
         }
     }
 
-    public rootPosition: Vector3 = new Vector3();
-
-    public getRootPosition(): Vector3 {
-        return this.rootPosition;
-    }
-
-    preprocessNode(tile: Tile, parentTile: Tile | null, tileSetDir: string): void {
+    preprocessNode(tile: TileInternal, tileSetDir: string, parentTile: TileInternal | null): void {
         if (!parentTile) {
             this.dispatchEvent({ type: TilesRendererRootOnLoadedEvent });
             this.rootTile = tile;
             if (this.readyPromiseResolve) this.readyPromiseResolve(tile);
         }
 
-        super.preprocessNode(tile, parentTile, tileSetDir);
-
-        if (!parentTile) {
-            this.rootPosition.copy(this.rootTile?.cached.sphere.center);
-        }
+        super.preprocessNode(tile, tileSetDir, parentTile);
     }
 
     off(): void {

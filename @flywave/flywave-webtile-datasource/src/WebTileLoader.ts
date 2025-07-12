@@ -71,7 +71,7 @@ export class WebTileLoader extends BaseTileLoader {
                 if (this.dataSource.transparent) {
                     enableBlending(planeMaterial);
                 }
-                planeMaterial.depthTest = false;
+                // planeMaterial.depthTest = false;
 
                 this.tile.invalidateResourceInfo();
                 this.dataSource.requestUpdate();

@@ -10,6 +10,8 @@ import { GeoCoordinates, sphereProjection } from "@flywave/flywave-geoutils";
 import { TilesRenderer } from "@flywave/flywave-3dtile-render";
 import { apikey } from "./config";
 import { HereTileProvider, HereWebTileDataSource } from "@flywave/flywave-webtile-datasource";
+import { TileIntersection } from "../../flywave-3dtile-render/src/renderer/TilesRenderer";
+import { Tile } from "../../flywave-3dtile-render/src/base/Tile";
 
 /**
  * A simple example using the webtile data source. Tiles are retrieved from
@@ -68,6 +70,14 @@ export namespace T3DTileRenderExample {
 
     const [mapView, controls] = initializeMapView("mapCanvas");
 
+    function getCanvasPosition(
+        event: MouseEvent | Touch,
+        canvas: HTMLCanvasElement
+    ): { x: number; y: number } {
+        const { left, top } = canvas.getBoundingClientRect();
+        return { x: event.clientX - Math.floor(left), y: event.clientY - Math.floor(top) };
+    }
+
     let tileRender = new TilesRenderer({
         // url: "./resources/3dtile-data/pipe/tileset.json",
 
@@ -78,6 +88,28 @@ export namespace T3DTileRenderExample {
     tileRender.getRootTileBoundingVolumeRegion().then(region => {
         controls.flyToBox(region);
     });
+
+    let intersection: TileIntersection[] = [];
+    const canvas = mapView.canvas;
+
+    let preTile: Tile | undefined;
+    canvas.addEventListener("mouseup", event => {
+        const canvasPos = getCanvasPosition(event, canvas);
+        const rayCaster = mapView.pickHandler.setupRaycaster(canvasPos.x, canvasPos.y);
+        tileRender.raycast(rayCaster, intersection);
+
+        const [picked] = intersection;
+        if (picked) {
+            if (preTile) {
+                preTile.debugBoundingVolume(false);
+            }
+            preTile = picked.tile;
+            preTile.debugBoundingVolume("box");
+        }
+        console.log(intersection);
+        intersection.length = 0;
+    });
+
     // controls.setTo(117.0002378472017, 36.04174517742333, 1171.7782847248018, 0, 0, 0);
 
     // controls.setTo(117.82701769728989, 36.831012861737015, 1171.7782847248018, 0, 0, 0);

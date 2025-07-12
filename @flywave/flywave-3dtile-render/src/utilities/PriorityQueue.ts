@@ -1,147 +1,149 @@
-type JobCallback<T, R = void> = (item: T) => Promise<R>;
-type PriorityCallback<T> = (a: T, b: T) => number;
-type SchedulingCallback = (func: () => void) => void;
+type PriorityQueueItem<T> = {
+    callback: (item: T) => any;
+    reject: (reason?: any) => void;
+    resolve: (value: any) => void;
+    promise: Promise<any>;
+};
 
 export class PriorityQueue<T> {
-    // Configuration options
-    public maxJobs: number;
-    public autoUpdate: boolean;
+    // returns whether tasks are queued or actively running
+    get running(): boolean {
+        return this.items.length !== 0 || this.currJobs !== 0;
+    }
 
-    // Internal state
-    private items: T[];
-    private callbacks: Map<T, JobCallback<T, any>>;
-    private currJobs: number;
-    private scheduled: boolean;
-    priorityCallback: PriorityCallback<T>;
-    private schedulingCallback: SchedulingCallback;
-    private _runjobs: () => void;
+    // options
+    maxJobs: number = 6;
 
-    constructor() {
-        // Options
-        this.maxJobs = 6;
-        this.autoUpdate = true;
+    items: T[] = [];
+    callbacks: Map<T, PriorityQueueItem<T>> = new Map();
+    currJobs: number = 0;
+    scheduled: boolean = false;
+    autoUpdate: boolean = true;
 
-        // Internal state
-        this.items = [];
-        this.callbacks = new Map();
-        this.currJobs = 0;
+    priorityCallback: (a: T, b: T) => number = () => {
+        throw new Error("PriorityQueue: PriorityCallback function not defined.");
+    };
+
+    // Customizable scheduling callback. Default using requestAnimationFrame()
+    schedulingCallback: (func: () => void) => void = func => {
+        requestAnimationFrame(func);
+    };
+
+    private _runjobs = () => {
         this.scheduled = false;
+        this.tryRunJobs();
+    };
 
-        // Default priority callback throws if not overridden
-        this.priorityCallback = () => {
-            throw new Error("PriorityQueue: PriorityCallback function not defined.");
-        };
-
-        // Default scheduling uses requestAnimationFrame
-        this.schedulingCallback = func => {
-            requestAnimationFrame(func);
-        };
-
-        // Pre-bind the runjobs function
-        this._runjobs = () => {
-            this.tryRunJobs();
-            this.scheduled = false;
-        };
+    sort(): void {
+        const priorityCallback = this.priorityCallback;
+        const items = this.items;
+        items.sort(priorityCallback);
     }
 
-    /**
-     * Sort the items in the queue using the priority callback
-     */
-    public sort(): void {
-        this.items.sort(this.priorityCallback);
+    has(item: T): boolean {
+        return this.callbacks.has(item);
     }
 
-    /**
-     * Add an item to the queue with a processing callback
-     * @param item The item to add
-     * @param callback The callback that will process the item
-     * @returns A promise that resolves when the item is processed
-     */
-    public add<R>(item: T, callback: (item: T) => Promise<R>): Promise<R> {
-        return new Promise<R>((resolve, reject) => {
-            // Wrap the callback to handle promise resolution
-            const prCallback: JobCallback<T> = (...args) =>
-                callback(...args)
-                    .then(resolve)
-                    .catch(reject);
+    add(item: T, callback: (item: T) => any): Promise<any> {
+        const data: Partial<PriorityQueueItem<T>> = {
+            callback,
+            reject: null,
+            resolve: null,
+            promise: null
+        };
 
-            // Add timestamp to item
-            // @ts-ignore
-            item.__t = Date.now();
+        const promise = new Promise((resolve, reject) => {
+            const items = this.items;
+            const callbacks = this.callbacks;
 
-            // Add to queue
-            this.items.push(item);
-            this.callbacks.set(item, prCallback);
+            data.resolve = resolve;
+            data.reject = reject;
 
-            // Schedule processing if auto-update is enabled
+            items.push(item);
+            callbacks.set(item, data as PriorityQueueItem<T>);
+
             if (this.autoUpdate) {
                 this.scheduleJobRun();
             }
         });
+
+        data.promise = promise;
+        return promise;
     }
 
-    /**
-     * Remove an item from the queue
-     * @param item The item to remove
-     */
-    public remove(item: T): void {
-        const index = this.items.indexOf(item);
+    remove(item: T): void {
+        const items = this.items;
+        const callbacks = this.callbacks;
+
+        const index = items.indexOf(item);
         if (index !== -1) {
-            this.items.splice(index, 1);
-            this.callbacks.delete(item);
+            // reject the promise to ensure there are no dangling promises - add a
+            // catch here to handle the case where the promise was never used anywhere
+            // else.
+            const info = callbacks.get(item)!;
+            info.promise.catch(() => {});
+            info.reject(new Error("PriorityQueue: Item removed."));
+
+            items.splice(index, 1);
+            callbacks.delete(item);
         }
     }
 
-    /**
-     * Attempt to run jobs from the queue, respecting maxJobs limit
-     */
-    public tryRunJobs(): void {
+    removeByFilter(filter: (item: T) => boolean): void {
+        const { items } = this;
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (filter(item)) {
+                this.remove(item);
+            }
+        }
+    }
+
+    tryRunJobs(): void {
         this.sort();
 
-        const { items, callbacks, maxJobs } = this;
-        let { currJobs } = this;
+        const items = this.items;
+        const callbacks = this.callbacks;
+        const maxJobs = this.maxJobs;
+        let iterated = 0;
 
-        while (maxJobs > currJobs && items.length > 0) {
-            currJobs++;
+        const completedCallback = () => {
+            this.currJobs--;
+
+            if (this.autoUpdate) {
+                this.scheduleJobRun();
+            }
+        };
+
+        while (maxJobs > this.currJobs && items.length > 0 && iterated < maxJobs) {
+            this.currJobs++;
+            iterated++;
             const item = items.pop()!;
-            const callback = callbacks.get(item)!;
-
+            const { callback, resolve, reject } = callbacks.get(item)!;
             callbacks.delete(item);
 
-            callback(item).finally(() => {
-                this.currJobs--;
-                if (this.autoUpdate) {
-                    this.scheduleJobRun();
-                }
-            });
-        }
+            let result;
+            try {
+                result = callback(item);
+            } catch (err) {
+                reject(err);
+                completedCallback();
+                continue;
+            }
 
-        this.currJobs = currJobs;
+            if (result instanceof Promise) {
+                result.then(resolve).catch(reject).finally(completedCallback);
+            } else {
+                resolve(result);
+                completedCallback();
+            }
+        }
     }
 
-    /**
-     * Schedule the job runner to execute
-     */
-    public scheduleJobRun(): void {
+    scheduleJobRun(): void {
         if (!this.scheduled) {
             this.schedulingCallback(this._runjobs);
             this.scheduled = true;
         }
-    }
-
-    /**
-     * Set a custom priority callback function
-     * @param callback The function to compare two items
-     */
-    public setPriorityCallback(callback: PriorityCallback<T>): void {
-        this.priorityCallback = callback;
-    }
-
-    /**
-     * Set a custom scheduling callback
-     * @param callback The function to schedule job execution
-     */
-    public setSchedulingCallback(callback: SchedulingCallback): void {
-        this.schedulingCallback = callback;
     }
 }

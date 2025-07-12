@@ -39,19 +39,19 @@ export class ECEFProjection extends Projection {
         maxAltitude: number,
         result?: WorldBoundingBox
     ): WorldBoundingBox {
-        if (!result) {
-            result = { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } } as WorldBoundingBox;
-        }
-
+        const output =
+            result ||
+            ({ min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } } as WorldBoundingBox);
         const maxRadius = this.a + maxAltitude;
-        result.min.x = -maxRadius;
-        result.min.y = -maxRadius;
-        result.min.z = -this.b - maxAltitude;
-        result.max.x = maxRadius;
-        result.max.y = maxRadius;
-        result.max.z = this.b + maxAltitude;
 
-        return result;
+        output.min.x = -maxRadius;
+        output.min.y = -maxRadius;
+        output.min.z = -this.b - maxAltitude;
+        output.max.x = maxRadius;
+        output.max.y = maxRadius;
+        output.max.z = this.b + maxAltitude;
+
+        return output;
     }
 
     /** @override */
@@ -59,10 +59,7 @@ export class ECEFProjection extends Projection {
         geoPoint: GeoCoordinatesLike,
         result?: WorldCoordinates
     ): WorldCoordinates {
-        if (!result) {
-            result = { x: 0, y: 0, z: 0 } as WorldCoordinates;
-        }
-
+        const output = result || ({ x: 0, y: 0, z: 0 } as WorldCoordinates);
         const φ = THREE.MathUtils.degToRad(geoPoint.latitude);
         const λ = THREE.MathUtils.degToRad(geoPoint.longitude);
         const h = geoPoint.altitude ?? 0;
@@ -75,39 +72,78 @@ export class ECEFProjection extends Projection {
         // Prime vertical radius of curvature
         const N = this.a / Math.sqrt(1 - this.e2 * sinφ * sinφ);
 
-        result.x = (N + h) * cosφ * cosλ;
-        result.y = (N + h) * cosφ * sinλ;
-        result.z = (N * (1 - this.e2) + h) * sinφ;
+        output.x = (N + h) * cosφ * cosλ;
+        output.y = (N + h) * cosφ * sinλ;
+        output.z = (N * (1 - this.e2) + h) * sinφ;
 
-        return result;
+        return output;
+    }
+
+    /**
+     * Scales a Cartesian point to the surface of the ellipsoid.
+     * @param worldPoint Input Cartesian (X, Y, Z).
+     * @param result Optional output buffer.
+     * @returns Projected point on the ellipsoid surface.
+     */
+    private scaleToGeodeticSurface(worldPoint: Vector3Like, result?: Vector3Like): Vector3Like {
+        const { x, y, z } = worldPoint;
+        const p = Math.sqrt(x * x + y * y);
+        const a = this.a,
+            b = this.b;
+
+        // Initial guess: scale by ellipsoid norm
+        const scale = Math.sqrt((x * x + y * y) / (a * a) + (z * z) / (b * b));
+        let xScale = x / scale,
+            yScale = y / scale,
+            zScale = z / scale;
+
+        // Newton-Raphson iteration (typically converges in 2-3 steps)
+        for (let i = 0; i < 5; i++) {
+            const x2 = xScale * xScale,
+                y2 = yScale * yScale,
+                z2 = zScale * zScale;
+            const f = (x2 + y2) / (a * a) + z2 / (b * b) - 1; // Residual
+
+            // Jacobian components
+            const dfdx = (2 * xScale) / (a * a);
+            const dfdy = (2 * yScale) / (a * a);
+            const dfdz = (2 * zScale) / (b * b);
+
+            // Update step
+            const denom = dfdx * dfdx + dfdy * dfdy + dfdz * dfdz;
+            xScale -= (f * dfdx) / denom;
+            yScale -= (f * dfdy) / denom;
+            zScale -= (f * dfdz) / denom;
+        }
+
+        const output = result || { x: 0, y: 0, z: 0 };
+        output.x = xScale;
+        output.y = yScale;
+        output.z = zScale;
+        return output;
     }
 
     /** @override */
     unprojectPoint(worldPoint: Vector3Like): GeoCoordinates {
-        const x = worldPoint.x;
-        const y = worldPoint.y;
-        const z = worldPoint.z;
+        const { x, y, z } = worldPoint;
         const p = Math.sqrt(x * x + y * y);
 
-        // Longitude (no iteration needed)
+        // 1. Project to ellipsoid surface
+        const surfacePoint = this.scaleToGeodeticSurface(worldPoint);
+        const pSurface = Math.sqrt(
+            surfacePoint.x * surfacePoint.x + surfacePoint.y * surfacePoint.y
+        );
+
+        // 2. Calculate longitude (直接使用原始点，避免精度损失)
         const λ = Math.atan2(y, x);
 
-        // Latitude (requires iteration)
-        let φ = Math.atan2(z, p * (1 - this.e2));
-        let φPrev = Infinity;
-        let N = this.a;
-        let sinφ = 0;
-
-        // Bowring's method (typically converges in 2-4 iterations)
-        for (let i = 0; i < 10 && Math.abs(φ - φPrev) > 1e-12; i++) {
-            φPrev = φ;
-            sinφ = Math.sin(φ);
-            N = this.a / Math.sqrt(1 - this.e2 * sinφ * sinφ);
-            φ = Math.atan2(z + this.ep2 * N * sinφ, p);
-        }
-
-        // Height
-        const h = p / Math.cos(φ) - N;
+        // 3. Calculate latitude and height
+        const φ = Math.atan2(surfacePoint.z, pSurface * (1 - this.e2));
+        const h =
+            Math.sign(z - surfacePoint.z) *
+            Math.sqrt(
+                (x - surfacePoint.x) ** 2 + (y - surfacePoint.y) ** 2 + (z - surfacePoint.z) ** 2
+            );
 
         return GeoCoordinates.fromRadians(φ, λ, h);
     }

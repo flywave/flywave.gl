@@ -1,156 +1,97 @@
-import { TilesRendererBase } from "../base/TilesRendererBase";
-import { TilesGroup } from "./TilesGroup";
-
 import {
     Matrix4,
-    Box3,
-    Sphere,
     Vector3,
     Vector2,
-    Frustum,
+    Euler,
     LoadingManager,
-    Object3D,
-    WebGLRenderer,
-    Raycaster,
-    Intersection,
-    BufferGeometry,
-    Material,
-    Texture,
-    PerspectiveCamera,
-    Mesh,
+    EventDispatcher,
+    Group,
     InstancedMesh,
+    Mesh,
+    Object3D,
     Quaternion,
-    Group
+    Material,
+    BufferGeometry,
+    Texture,
+    Intersection
 } from "three";
 import { raycastTraverse, raycastTraverseFirstHit } from "./raycastTraverse";
-import { Tile, TileCache } from "../base/Tile";
-import { GeoBox, GeoCoordinates, OrientedBox3, Projection } from "@flywave/flywave-geoutils";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { TilesRendererBase } from "../base/TilesRendererBase";
+import { TilesGroup } from "./TilesGroup";
+import { ExtendedFrustum } from "../utilities/ExtendedFrustum";
+import { TileBoundingVolume } from "../utilities/TileBoundingVolume";
+import { Tile, TileInternal } from "../base/Tile";
+import { Projection } from "@flywave/flywave-geoutils";
 import { Tiles3DTileContent } from "../next";
 import { createThreeSceneFromGLTF } from "@flywave/flywave-gltf";
+import { estimateBytesUsed } from "../utilities/estimateBytesUsed";
 import { transformECEFToProjection } from "../utilities/ecefToSphere";
+import { ViewErrorTarget } from "../base/traverseFunctions";
 
-const INITIAL_FRUSTUM_CULLED = Symbol("INITIAL_FRUSTUM_CULLED");
+// Temporary variables for calculations
+const _mat = new Matrix4();
+const _euler = new Euler();
+const tempMat = new Matrix4();
+const tempQuaternion = new Quaternion();
 const tempVector = new Vector3();
+const tempVector2 = new Vector2();
+const tempVector3 = new Vector3();
 
+// Symbol for tracking initial frustum culling state
+const INITIAL_FRUSTUM_CULLED = Symbol("INITIAL_FRUSTUM_CULLED");
+
+// Constants for axis vectors
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
 
-const tempPos = new Vector3();
-const tempQuat = new Quaternion();
-const tempSca = new Vector3();
-const tempMat = new Matrix4();
-const tempMat2 = new Matrix4();
-
-/**
- * Updates frustum culling state for an object and its children
- * @param object - The object to update
- * @param toInitialValue - Whether to restore initial frustum culling state
- */
-function updateFrustumCulled(object: Object3D, toInitialValue: boolean): void {
-    object.traverse((c: Object3D) => {
-        c.frustumCulled = c[INITIAL_FRUSTUM_CULLED] && toInitialValue;
-    });
-}
-
-/**
- * Intersection information with additional tile context
- */
-export type TileIntersection = Intersection & {
-    /** The tile that was intersected */
-    tile: Tile;
+// Temporary object for view error calculations
+const viewErrorTarget = {
+    inView: false,
+    error: Infinity
 };
 
 /**
- * A 3D Tiles renderer implementation for Three.js
- *
- * This class extends TilesRendererBase to provide concrete rendering functionality
- * for 3D Tiles in Three.js, including tile loading, frustum culling, and LOD management.
+ * Updates frustum culling state for all objects in a scene
+ * @param object The root object to traverse
+ * @param toInitialValue Whether to restore initial culling state
+ */
+function updateFrustumCulled(object: any, toInitialValue: boolean): void {
+    object.traverse((c: any) => {
+        c.frustumCulled = c[INITIAL_FRUSTUM_CULLED] && toInitialValue;
+    });
+}
+/**
+ * The main 3D Tiles renderer class that extends TilesRendererBase with Three.js-specific functionality.
+ * Handles loading, rendering, and managing 3D Tiles datasets with camera management and raycasting.
  */
 export abstract class TilesRenderer extends TilesRendererBase {
-    private _autoDisableRendererCulling: boolean;
-    private _overridenRaycast: (raycaster: Raycaster, intersects: Intersection[]) => void;
-
-    /** Group containing all visible tiles */
+    // Group containing all rendered tiles
     public group: TilesGroup;
-    /** Array of cameras used for view frustum culling */
-    public cameras: PerspectiveCamera[];
-    /** Map of cameras to their resolution */
-    public cameraMap: Map<PerspectiveCamera, Vector2>;
-    /** Camera information for view calculations */
-    public cameraInfo: CameraInfo[];
-    /** Set of currently active tiles */
-    public activeTiles: Set<Tile>;
-    /** Set of currently visible tiles */
-    public visibleTiles: Set<Tile>;
-    /** Whether to optimize raycasting performance */
-    public optimizeRaycast: boolean;
 
-    /** Callback when tileset JSON is loaded */
-    public onLoadTileSet: ((json: any, url: string) => void) | null;
-    /** Callback when a tile's model is loaded */
-    public onLoadModel: ((scene: Object3D, tile: Tile) => void) | null;
-    /** Callback when a tile's model is disposed */
-    public onDisposeModel: ((scene: Object3D, tile: Tile) => void) | null;
-    /** Callback when a tile's visibility changes */
-    public onTileVisibilityChange: ((scene: Object3D, tile: Tile, visible: boolean) => void) | null;
-    /** Loading manager for tile resources */
+    // Camera management
+    public cameras: any[] = [];
+    private cameraMap: Map<any, Vector2> = new Map();
+    private cameraInfo: Array<{
+        frustum: ExtendedFrustum;
+        isOrthographic: boolean;
+        sseDenominator: number;
+        position: Vector3;
+        invScale: number;
+        pixelSize: number;
+    }> = [];
+
+    // Internal state
+    private _optimizeRaycast: boolean = true;
+    private _upRotationMatrix: Matrix4 = new Matrix4();
+    private _autoDisableRendererCulling: boolean = true;
     public manager: LoadingManager;
-    /** URL preprocessor function */
-    public preprocessURL: ((url: string) => string) | null;
+    private _listeners: Record<string, any> = {};
 
-    /**
-     * Creates a new TilesRenderer instance
-     * @param url - The URL of the tileset.json file to load
-     */
-    constructor(url: string) {
-        super(url);
-        this.group = new TilesGroup(this);
-        this.cameras = [];
-        this.cameraMap = new Map();
-        this.cameraInfo = [];
-        this.activeTiles = new Set();
-        this.visibleTiles = new Set();
-        this._autoDisableRendererCulling = true;
-        this.optimizeRaycast = true;
-
-        this.onLoadModel = null;
-        this.onDisposeModel = null;
-        this.onTileVisibilityChange = null;
-        this.preprocessURL = null;
-
-        this.manager = new LoadingManager();
-        this.manager.setURLModifier((url: string) => {
-            if (this.preprocessURL) {
-                return this.preprocessURL(url);
-            } else {
-                return url;
-            }
-        });
-
-        const tilesRenderer = this;
-        this._overridenRaycast = function (raycaster: Raycaster, intersects: Intersection[]) {
-            if (!tilesRenderer.optimizeRaycast) {
-                Object.getPrototypeOf(this).raycast.call(this, raycaster, intersects);
-            }
-        };
-    }
-
-    /**
-     * Gets the projection system used for geographic coordinates
-     * @abstract
-     * @returns The projection system instance
-     */
     protected abstract getProjection(): Projection;
 
     /**
-     * Gets the root position of the tileset in world coordinates
-     * @abstract
-     * @returns The root position vector or undefined if not available
-     */
-    public abstract getRootPosition(): Vector3 | undefined;
-
-    /**
-     * Whether to automatically disable frustum culling on loaded models
+     * Whether to automatically disable Three.js frustum culling
      */
     get autoDisableRendererCulling(): boolean {
         return this._autoDisableRendererCulling;
@@ -166,166 +107,274 @@ export abstract class TilesRenderer extends TilesRendererBase {
     }
 
     /**
-     * Gets the bounding sphere encompassing all tiles
-     * @param sphere - The sphere to populate with bounds data
-     * @returns True if bounds were successfully retrieved
+     * Whether to optimize raycasting (deprecated)
      */
-    getBoundingSphere(sphere: Sphere): boolean {
-        if (!this.root) {
-            return false;
-        }
+    get optimizeRaycast(): boolean {
+        return this._optimizeRaycast;
+    }
 
-        const boundingSphere = this.root.cached.sphere;
-        if (boundingSphere) {
-            sphere.copy(boundingSphere);
+    set optimizeRaycast(v: boolean) {
+        console.warn('TilesRenderer: The "optimizeRaycast" option has been deprecated.');
+        this._optimizeRaycast = v;
+    }
+
+    /**
+     * Creates a new TilesRenderer instance
+     * @param args Arguments passed to the base class
+     */
+    constructor(...args: any[]) {
+        super(...args);
+
+        // Initialize core components
+        this.group = new TilesGroup(this);
+
+        // Configure LRU cache memory estimation
+        this.lruCache.computeMemoryUsageCallback = (tile: any) => tile.cached.bytesUsed ?? null;
+
+        // Set up loading manager with URL preprocessing
+        this.manager = new LoadingManager();
+        this.manager.setURLModifier((url: string) => {
+            return this.preprocessURL ? this.preprocessURL(url) : url;
+        });
+    }
+
+    // EventDispatcher methods
+    addEventListener(...args: any[]): void {
+        EventDispatcher.prototype.addEventListener.call(this, ...args);
+    }
+
+    hasEventListener(...args: any[]): void {
+        EventDispatcher.prototype.hasEventListener.call(this, ...args);
+    }
+
+    removeEventListener(...args: any[]): void {
+        EventDispatcher.prototype.removeEventListener.call(this, ...args);
+    }
+
+    dispatchEvent(...args: any[]): void {
+        EventDispatcher.prototype.dispatchEvent.call(this, ...args);
+    }
+
+    /* Public API Methods */
+
+    /**
+     * Gets the bounding box of the root tile
+     * @param target Target box to store the result
+     * @returns Whether the bounding box was found
+     */
+    getBoundingBox(target: any): boolean {
+        if (!this.root) return false;
+        const boundingVolume = this.root.cached.boundingVolume;
+        if (boundingVolume) {
+            boundingVolume.getAABB(target);
             return true;
-        } else {
-            return false;
         }
+        return false;
+    }
+
+    /**
+     * Gets the oriented bounding box of the root tile
+     * @param targetBox Target box to store the result
+     * @param targetMatrix Target matrix to store the orientation
+     * @returns Whether the OBB was found
+     */
+    getOrientedBoundingBox(targetBox: any, targetMatrix: Matrix4): boolean {
+        if (!this.root) return false;
+        const boundingVolume = this.root.cached.boundingVolume;
+        if (boundingVolume) {
+            boundingVolume.getOBB(targetBox, targetMatrix);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Gets the bounding sphere of the root tile
+     * @param target Target sphere to store the result
+     * @returns Whether the bounding sphere was found
+     */
+    getBoundingSphere(target: any): boolean {
+        if (!this.root) return false;
+        const boundingVolume = this.root.cached.boundingVolume;
+        if (boundingVolume) {
+            boundingVolume.getSphere(target);
+            return true;
+        }
+        return false;
     }
 
     /**
      * Executes a callback for each loaded model in the tileset
-     * @param callback - Function to call for each loaded model
+     * @param callback Function to call for each loaded model
      */
-    forEachLoadedModel(callback: (scene: Object3D, tile: Tile) => void): void {
-        this.traverse((tile: Tile) => {
-            const scene = tile.cached.scene;
-            if (scene) {
-                callback(scene, tile);
-            }
-        });
+    forEachLoadedModel(callback: (scene: any, tile: any) => void): void {
+        this.traverse(
+            (tile: any) => {
+                const scene = tile.cached?.scene;
+                if (scene) {
+                    callback(scene, tile);
+                }
+            },
+            null,
+            false
+        );
     }
 
     /**
-     * Performs raycasting against visible tiles
-     * @param raycaster - The raycaster to use
-     * @param intersects - Array to store intersection results
+     * Performs raycasting against the tileset
+     * @param raycaster The raycaster to use
+     * @param intersects Array to store intersection results
      */
-    raycast(
-        raycaster: Raycaster & {
-            firstHitOnly?: boolean;
-        },
-        intersects: TileIntersection[]
-    ): void {
-        if (!this.root) {
-            return;
-        }
+    raycast(raycaster: any, intersects: any[]): void {
+        if (!this.root) return;
 
         if (raycaster.firstHitOnly) {
-            const hit = raycastTraverseFirstHit(this.root, this.group, this.activeTiles, raycaster);
+            const hit = raycastTraverseFirstHit(this, this.root, raycaster);
             if (hit) {
                 intersects.push(hit);
             }
         } else {
-            raycastTraverse(this.root, this.group, this.activeTiles, raycaster, intersects);
+            raycastTraverse(this, this.root, raycaster, intersects);
         }
     }
 
     /**
-     * Checks if a camera is being tracked by this renderer
-     * @param camera - The camera to check
-     * @returns True if the camera is being tracked
+     * Checks if a camera is being tracked by the renderer
+     * @param camera The camera to check
+     * @returns Whether the camera is being tracked
      */
-    hasCamera(camera: PerspectiveCamera): boolean {
+    hasCamera(camera: any): boolean {
         return this.cameraMap.has(camera);
     }
 
     /**
-     * Adds a camera to be used for view frustum culling and LOD selection
-     * @param camera - The camera to add
-     * @returns True if camera was added, false if already present
+     * Adds a camera to be tracked by the renderer
+     * @param camera The camera to add
+     * @returns Whether the camera was added (false if already exists)
      */
-    setCamera(camera: PerspectiveCamera): boolean {
-        const cameras = this.cameras;
-        const cameraMap = this.cameraMap;
-        if (!cameraMap.has(camera)) {
-            cameraMap.set(camera, new Vector2());
-            cameras.push(camera);
+    setCamera(camera: any): boolean {
+        if (!this.cameraMap.has(camera)) {
+            this.cameraMap.set(camera, new Vector2());
+            this.cameras.push(camera);
+            this.dispatchEvent({ type: "add-camera", camera });
             return true;
         }
         return false;
     }
 
     /**
-     * Sets the resolution for a camera
-     * @param camera - The camera to set resolution for
-     * @param xOrVec - Either a Vector2 or x resolution value
-     * @param y - The y resolution (if xOrVec is a number)
-     * @returns True if resolution was set successfully
+     * Sets the resolution for a tracked camera
+     * @param camera The camera to update
+     * @param xOrVec Either width or a Vector2 containing width/height
+     * @param y The height (if xOrVec is not a Vector2)
+     * @returns Whether the resolution was set (false if camera not found)
      */
-    setResolution(camera: PerspectiveCamera, xOrVec: Vector2 | number, y?: number): boolean {
-        const cameraMap = this.cameraMap;
-        if (!cameraMap.has(camera)) {
-            return false;
+    setResolution(camera: any, xOrVec: number | Vector2, y?: number): boolean {
+        if (!this.cameraMap.has(camera)) return false;
+
+        const width = xOrVec instanceof Vector2 ? xOrVec.x : xOrVec;
+        const height = xOrVec instanceof Vector2 ? xOrVec.y : y;
+        const cameraVec = this.cameraMap.get(camera);
+
+        if (cameraVec!.x !== width || cameraVec!.y !== height) {
+            cameraVec!.set(width, height || 0);
+            this.dispatchEvent({ type: "camera-resolution-change" });
         }
 
-        const resolution = cameraMap.get(camera)!;
-        if (xOrVec instanceof Vector2) {
-            resolution.copy(xOrVec);
-        } else {
-            resolution.set(xOrVec, y!);
-        }
         return true;
     }
 
     /**
-     * Sets camera resolution from renderer dimensions
-     * @param camera - The camera to set resolution for
-     * @param renderer - The WebGL renderer to get dimensions from
-     * @returns True if resolution was set successfully
+     * Sets camera resolution from a renderer's current size
+     * @param camera The camera to update
+     * @param renderer The renderer to get size from
+     * @returns Whether the resolution was set
      */
-    setResolutionFromRenderer(camera: PerspectiveCamera, renderer: WebGLRenderer): boolean {
-        const cameraMap = this.cameraMap;
-        if (!cameraMap.has(camera)) {
-            return false;
-        }
-
-        const resolution = cameraMap.get(camera)!;
-        renderer.getSize(resolution);
-        resolution.multiplyScalar(renderer.getPixelRatio());
-        return true;
+    setResolutionFromRenderer(camera: any, renderer: any): boolean {
+        renderer.getSize(tempVector2);
+        return this.setResolution(camera, tempVector2.x, tempVector2.y);
     }
 
     /**
      * Removes a camera from tracking
-     * @param camera - The camera to remove
-     * @returns True if camera was removed, false if not found
+     * @param camera The camera to remove
+     * @returns Whether the camera was removed (false if not found)
      */
-    deleteCamera(camera: PerspectiveCamera): boolean {
-        const cameras = this.cameras;
-        const cameraMap = this.cameraMap;
-        if (cameraMap.has(camera)) {
-            const index = cameras.indexOf(camera);
-            cameras.splice(index, 1);
-            cameraMap.delete(camera);
+    deleteCamera(camera: any): boolean {
+        if (this.cameraMap.has(camera)) {
+            const index = this.cameras.indexOf(camera);
+            this.cameras.splice(index, 1);
+            this.cameraMap.delete(camera);
+            this.dispatchEvent({ type: "delete-camera", camera });
             return true;
         }
         return false;
     }
 
+    /* Overridden Methods */
+
     /**
-     * Updates the renderer's view of the scene
+     * Loads the root tileset with additional processing for glTF up-axis and ellipsoid
+     * @param args Arguments passed to the base implementation
+     * @returns Promise that resolves with the loaded tileset
+     */
+    async loadRootTileSet(): Promise<any> {
+        return super.loadRootTileSet().then((root: any) => {
+            // Cache the glTF tile set rotation matrix based on up-axis
+            const { asset, extensions = {} } = root;
+            const upAxis = asset?.gltfUpAxis || "y";
+            switch (upAxis.toLowerCase()) {
+                case "x":
+                    this._upRotationMatrix.makeRotationAxis(Y_AXIS, -Math.PI / 2);
+                    break;
+                case "y":
+                    this._upRotationMatrix.makeRotationAxis(X_AXIS, Math.PI / 2);
+                    break;
+            }
+
+            // Update the ellipsoid based on the extension
+            // if ("3DTILES_ellipsoid" in extensions) {
+            //     const ext = extensions["3DTILES_ellipsoid"];
+            //     const { ellipsoid } = this;
+            //     ellipsoid.name = ext.body;
+            //     ellipsoid.radius.set(...(ext.radii || [1, 1, 1]));
+            // }
+
+            return root;
+        });
+    }
+
+    /**
+     * Updates the tileset rendering based on current camera views
      */
     update(): void {
-        const group = this.group;
-        const cameras = this.cameras;
-        const cameraMap = this.cameraMap;
-        const cameraInfo = this.cameraInfo;
+        // Check if plugins require an update
+        let needsUpdate: boolean | null = null;
+        // this.invokeAllPlugins((plugin: any) => {
+        //     if (plugin.doTilesNeedUpdate) {
+        //         const res = plugin.doTilesNeedUpdate();
+        //         needsUpdate = needsUpdate === null ? res : needsUpdate || res;
+        //     }
+        // });
 
-        if (cameras.length === 0) {
-            console.warn("TilesRenderer: no cameras defined. Cannot update 3d tiles.");
+        if (needsUpdate === false) {
+            this.dispatchEvent({ type: "update-before" });
+            this.dispatchEvent({ type: "update-after" });
             return;
         }
 
-        // Ensure camera info array matches cameras array length
+        // Begin update process
+        this.dispatchEvent({ type: "update-before" });
+
+        const { group, cameras, cameraMap, cameraInfo } = this;
+
+        // Adjust camera info array size to match active cameras
         while (cameraInfo.length > cameras.length) {
             cameraInfo.pop();
         }
-
         while (cameraInfo.length < cameras.length) {
             cameraInfo.push({
-                frustum: new Frustum(),
+                frustum: new ExtendedFrustum(),
                 isOrthographic: false,
                 sseDenominator: -1,
                 position: new Vector3(),
@@ -334,66 +383,79 @@ export abstract class TilesRenderer extends TilesRendererBase {
             });
         }
 
-        let invScale = 1;
+        // Check for non-uniform scale
+        tempVector.setFromMatrixScale(group.matrixWorldInverse);
+        if (Math.abs(Math.max(tempVector.x - tempVector.y, tempVector.x - tempVector.z)) > 1e-6) {
+            console.warn(
+                "ThreeTilesRenderer: Non-uniform scale may cause issues with screen space error calculation."
+            );
+        }
 
-        // Update camera information for each tracked camera
+        // Update camera info for each tracked camera
         for (let i = 0, l = cameraInfo.length; i < l; i++) {
             const camera = cameras[i];
             const info = cameraInfo[i];
-            const frustum = info.frustum;
-            const position = info.position;
-            const resolution = cameraMap.get(camera)!;
+            const resolution = cameraMap.get(camera);
 
-            if (resolution.width === 0 || resolution.height === 0) {
-                console.warn("TilesRenderer: resolution for camera error calculation is not set.");
+            if (resolution?.x === 0 || resolution?.y === 0) {
+                console.warn("TilesRenderer: Camera resolution not set for error calculation.");
             }
 
+            // Determine camera type and setup parameters
             const projection = camera.projectionMatrix.elements;
             info.isOrthographic = projection[15] === 1;
 
             if (info.isOrthographic) {
                 const w = 2 / projection[0];
                 const h = 2 / projection[5];
-                info.pixelSize = Math.max(h / resolution.height, w / resolution.width);
+                info.pixelSize = Math.max(h / resolution!.y, w / resolution!.x);
             } else {
-                info.sseDenominator = 2 / projection[5] / resolution.height;
-                info.sseDenominator = 2.0 * Math.tan((0.5 * camera.fov * Math.PI) / 180);
+                info.sseDenominator = 2 / projection[5] / resolution!.y;
             }
-
-            info.invScale = invScale;
-
-            tempMat.copy(group.matrixWorld);
-            tempMat.premultiply(camera.matrixWorldInverse);
-            tempMat.premultiply(camera.projectionMatrix);
 
             camera.updateProjectionMatrix();
             camera.updateMatrixWorld();
-            frustum.setFromProjectionMatrix(
+            info.frustum.setFromProjectionMatrix(
                 new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
             );
 
-            position.set(0, 0, 0);
-            position.applyMatrix4(camera.matrixWorld);
+            // Update camera position in group root frame
+            info.position
+                // .set(0, 0, 0)
+                .copy(camera.position);
+            // .applyMatrix4(group.matrixWorldInverse);
         }
 
+        // Perform base update
         super.update();
+        this.dispatchEvent({ type: "update-after" });
+
+        // Warn if no cameras are set and no plugins provide error calculation
+        // if (cameras.length === 0 && this.root) {
+        //     let found = false;
+        //     this.invokeAllPlugins((plugin: any) => {
+        //         found = found || (plugin !== this && plugin.calculateTileViewError);
+        //         return found;
+        //     });
+        //     if (!found) {
+        //         console.warn("TilesRenderer: No cameras defined. Cannot update 3D tiles.");
+        //     }
+        // }
     }
 
     /**
-     * Processes a tile node before it's loaded
-     * @param tile - The tile to process
-     * @param parentTile - The parent tile (if any)
-     * @param tileSetDir - The directory containing the tileset
+     * Preprocesses a tile node, setting up transforms and bounding volumes
+     * @param tile The tile to preprocess
+     * @param tileSetDir The base directory of the tileset
+     * @param parentTile The parent tile (optional)
      */
-    preprocessNode(tile: Tile, parentTile: Tile | null, tileSetDir: string): void {
-        super.preprocessNode(tile, parentTile, tileSetDir);
+    preprocessNode(tile: TileInternal, tileSetDir: string, parentTile: TileInternal = null): void {
+        super.preprocessNode(tile, tileSetDir, parentTile);
 
-        // Handle transform matrix
+        // Set up transform matrices
         const transform = new Matrix4();
         if (tile.transform) {
             transform.fromArray(tile.transform);
-        } else {
-            transform.identity();
         }
 
         if (parentTile) {
@@ -402,78 +464,54 @@ export abstract class TilesRenderer extends TilesRendererBase {
 
         const transformInverse = new Matrix4().copy(transform).invert();
 
-        let sphere: Sphere | null = null;
-        let orientedBox: OrientedBox3 | null = null;
-
-        // Process bounding volume based on type
-        const boundingVolume = tile.boundingVolume;
-        if ("box" in boundingVolume) {
-            // Process box volume
-            const data = boundingVolume.box;
-
-            // Create oriented box first
-            orientedBox = OrientedBox3.fromArray(data);
-
-            // Create sphere from box
-            sphere = new Sphere();
-            orientedBox.getBoundingSphere(sphere);
-        } else if ("region" in boundingVolume) {
-            // Process region volume using Projection
-            const [west, south, east, north, minHeight, maxHeight] = boundingVolume.region;
-
-            // Create GeoBox from region
-            const geoBox = new GeoBox(
-                GeoCoordinates.fromRadians(south, west, minHeight),
-                GeoCoordinates.fromRadians(north, east, maxHeight)
-            );
-
-            // Project to world space using the Projection system
-            orientedBox = this.getProjection().projectBox(geoBox, new OrientedBox3());
-
-            sphere = new Sphere();
-            orientedBox.getBoundingSphere(sphere);
-        } else if ("sphere" in boundingVolume) {
-            // Process sphere volume
-            const data = boundingVolume.sphere;
-            sphere = new Sphere(new Vector3(data[0], data[1], data[2]), data[3]);
+        // Set up bounding volume
+        const boundingVolume = new TileBoundingVolume();
+        if ("sphere" in tile.boundingVolume) {
+            boundingVolume.setSphereData(...tile.boundingVolume.sphere, transform);
+        } else if ("box" in tile.boundingVolume) {
+            boundingVolume.setObbData(tile.boundingVolume.box, transform);
+        } else if ("region" in tile.boundingVolume) {
+            boundingVolume.setRegionData(this.getProjection(), ...tile.boundingVolume.region);
         }
 
-        // Ensure we have at least a sphere for all volume types
-        if (!sphere) {
-            sphere = new Sphere();
-        }
-
-        // Store cached values
+        // Initialize cached data
         tile.cached = {
-            loadIndex: 0,
             transform,
             transformInverse,
             active: false,
-            inFrustum: [],
-            geoBox: orientedBox?.toGeoBox(this.getProjection()),
-            sphere: sphere || new Sphere(),
-            orientedBox: orientedBox || new OrientedBox3(),
+            boundingVolume,
             scene: null,
+            bytesUsed: 0,
             geometry: null,
-            material: null
-        } as TileCache;
+            materials: null,
+            textures: null
+        };
     }
 
     /**
-     * Parses tile content and creates Three.js objects
-     * @param children - The tile content data
-     * @param tile - The tile being loaded
-     * @param extension - The file extension of the tile content
+     * Parses tile content based on file type
+     * @param buffer The content buffer
+     * @param tile The tile being parsed
+     * @param extension The file extension
+     * @param uri The content URI
+     * @param abortSignal Signal for aborting the operation
+     * @returns Promise that resolves when parsing is complete
      */
-    async parseTile(children: Tiles3DTileContent, tile: Tile, extension: string): Promise<void> {
-        const res = createThreeSceneFromGLTF(children.gltf);
+    async parseTile(
+        metadata: Tiles3DTileContent,
+        tile: Tile,
+        extension: string,
+        uri: string,
+        abortSignal: AbortSignal
+    ): Promise<void> {
+        const res = createThreeSceneFromGLTF(metadata.gltf);
 
         const instances: InstancedMesh[] = [];
         const meshes: (Mesh | InstancedMesh)[] = [];
         const originalMatrices: Matrix4[] = [];
         let scene: Object3D = res.scene;
 
-        if (children.type == "i3dm") {
+        if (metadata.type == "i3dm") {
             // Handle instanced models
             res.scene.traverse((child: Object3D) => {
                 if (child instanceof Mesh || child instanceof InstancedMesh) {
@@ -485,7 +523,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
                         const newInstancedMesh = new InstancedMesh(
                             child.geometry,
                             child.material,
-                            children.instances.length
+                            metadata.instances.length
                         );
                         newInstancedMesh.updateMatrixWorld();
                         instances.push(newInstancedMesh);
@@ -494,7 +532,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
                         const instancedMesh = new InstancedMesh(
                             child.geometry,
                             child.material,
-                            children.instances.length
+                            metadata.instances.length
                         );
                         instancedMesh.updateMatrixWorld();
                         instances.push(instancedMesh);
@@ -503,28 +541,32 @@ export abstract class TilesRenderer extends TilesRendererBase {
             });
 
             // Apply instance transformations
-            for (let i = 0; i < children.instances.length; i++) {
+            for (let i = 0; i < metadata.instances.length; i++) {
                 for (let j = 0; j < meshes.length; j++) {
                     const mesh = meshes[j];
                     const instance = instances[j];
                     const originalMatrix = originalMatrices[j];
-                    children.instances[i].modelMatrix.decompose(tempPos, tempQuat, tempSca);
+                    metadata.instances[i].modelMatrix.decompose(
+                        tempVector,
+                        tempQuaternion,
+                        tempVector3
+                    );
 
                     if (mesh instanceof InstancedMesh) {
                         // Handle original InstancedMesh expansion
                         const originalInstanceCount = mesh.count;
                         for (let k = 0; k < originalInstanceCount; k++) {
-                            mesh.getMatrixAt(k, tempMat2);
-                            tempMat.compose(tempPos, tempQuat, tempSca);
+                            mesh.getMatrixAt(k, tempMat);
+                            tempMat.compose(tempVector, tempQuaternion, tempVector3);
                             tempMat.multiply(originalMatrix);
-                            tempMat.multiply(tempMat2);
+                            tempMat.multiply(tempMat);
 
                             const instanceIndex = i * originalInstanceCount + k;
                             instance.setMatrixAt(instanceIndex, tempMat);
                         }
                     } else {
                         // Handle regular Mesh conversion
-                        tempMat.compose(tempPos, tempQuat, tempSca);
+                        tempMat.compose(tempVector, tempQuaternion, tempVector3);
                         tempMat.multiply(originalMatrix);
                         instance.setMatrixAt(i, tempMat);
                     }
@@ -535,7 +577,6 @@ export abstract class TilesRenderer extends TilesRendererBase {
             instances.forEach(instance => scene.add(instance));
         }
 
-        // Handle GLTF up axis conversion
         const upAxis = (this.rootTileSet.asset && this.rootTileSet.asset.gltfUpAxis) || "y";
         const cached = tile.cached;
         const cachedTransform = cached.transform;
@@ -551,8 +592,9 @@ export abstract class TilesRenderer extends TilesRendererBase {
                 tempMat.identity();
                 break;
         }
+
         const { transformMatrix } = transformECEFToProjection(
-            new Vector3().fromArray(children.rtcCenter),
+            new Vector3().fromArray(metadata.rtcCenter),
             this.getProjection()
         );
 
@@ -564,225 +606,185 @@ export abstract class TilesRenderer extends TilesRendererBase {
             scene.matrix.multiply(tempMat);
         }
 
-        scene.matrix.premultiply(cachedTransform).premultiply(transformMatrix);
+        scene.matrix.premultiply(tile.cached.transform).premultiply(transformMatrix);
         scene.matrix.decompose(scene.position, scene.quaternion, scene.scale);
 
-        // Store initial frustum culling state
-        scene.traverse((c: Object3D) => {
-            c[INITIAL_FRUSTUM_CULLED] = c.frustumCulled;
-        });
-
-        cached.scene = scene;
-
-        // Override raycast behavior if optimized
-        scene.traverse((c: Object3D) => {
-            c.raycast = this._overridenRaycast;
-        });
+        updateFrustumCulled(scene, !this.autoDisableRendererCulling);
 
         // Collect resources for disposal
         const materials: Material[] = [];
         const geometry: BufferGeometry[] = [];
         const textures: Texture[] = [];
-
-        scene.traverse((c: Object3D) => {
-            if (c instanceof Mesh) {
-                if (c.geometry) {
-                    geometry.push(c.geometry);
-                }
-
-                if (c.material) {
-                    const material = c.material;
-                    material.alphaTest = 0;
-                    materials.push(material);
-                    for (const key in material) {
-                        const value = (material as any)[key];
-                        if (value && value.isTexture) {
-                            textures.push(value);
+        scene.traverse((c: Mesh) => {
+            if (c.geometry) geometry.push(c.geometry);
+            if (c.material) {
+                if (Array.isArray(c.material)) {
+                    c.material.forEach((m: Material) => {
+                        materials.push(m);
+                        for (const key in m) {
+                            const value = m[key];
+                            if (value?.isTexture) textures.push(value);
                         }
+                    });
+                } else {
+                    materials.push(c.material);
+                    for (const key in c.material) {
+                        const value = c.material[key];
+                        if (value?.isTexture) textures.push(value);
                     }
                 }
             }
         });
 
-        cached.materials = materials;
-        cached.geometry = geometry;
-        cached.textures = textures;
-
-        if (this.onLoadModel) {
-            this.onLoadModel(scene, tile);
+        // Handle abort case
+        if (abortSignal.aborted) {
+            textures.forEach(texture => {
+                if (texture.image instanceof ImageBitmap) texture.image.close();
+                texture.dispose();
+            });
+            return;
         }
+
+        // Store parsed data
+        tile.cached.materials = materials;
+        tile.cached.geometry = geometry;
+        tile.cached.textures = textures;
+        tile.cached.scene = scene;
+        tile.cached.bytesUsed = estimateBytesUsed(scene);
     }
 
     /**
-     * Disposes of resources used by a tile
-     * @param tile - The tile to dispose
+     * Disposes of resources associated with a tile
+     * @param tile The tile to dispose
      */
-    disposeTile(tile: Tile): void {
+    disposeTile(tile: any): void {
+        super.disposeTile(tile);
+
         const cached = tile.cached;
-        if (cached.scene) {
-            const materials = cached.materials;
-            const geometry = cached.geometry;
-            const textures = cached.textures;
+        if (!cached.scene) return;
 
-            // Dispose of geometry
-            for (let i = 0, l = geometry!.length; i < l; i++) {
-                geometry![i].dispose();
-            }
+        // Clean up scene and resources
+        const parent = cached.scene.parent;
+        if (parent) parent.remove(cached.scene);
 
-            // Dispose of materials
-            for (let i = 0, l = materials!.length; i < l; i++) {
-                materials![i].dispose();
-            }
+        // Dispose of special features
+        cached.scene.traverse((child: any) => {
+            if (child.userData.meshFeatures) child.userData.meshFeatures.dispose();
+            if (child.userData.structuralMetadata) child.userData.structuralMetadata.dispose();
+        });
 
-            // Dispose of textures
-            for (let i = 0, l = textures!.length; i < l; i++) {
-                const texture = textures![i];
-                texture.dispose();
-            }
+        // Dispose of geometry, materials, and textures
+        cached.geometry?.forEach((g: any) => g.dispose());
+        cached.materials?.forEach((m: any) => m.dispose());
+        cached.textures?.forEach((t: any) => {
+            if (t.image instanceof ImageBitmap) t.image.close();
+            t.dispose();
+        });
 
-            if (this.onDisposeModel) {
-                this.onDisposeModel(cached.scene, tile);
-            }
+        // Dispatch event and clear references
+        this.dispatchEvent({
+            type: "dispose-model",
+            scene: cached.scene,
+            tile
+        });
 
-            // Clear cached references
-            cached.scene = null;
-            cached.materials = null;
-            cached.textures = null;
-            cached.geometry = null;
-        }
-
-        tile.__loadIndex++;
+        cached.scene = null;
+        cached.materials = null;
+        cached.textures = null;
+        cached.geometry = null;
+        cached.metadata = null;
     }
 
     /**
      * Sets a tile's visibility state
-     * @param tile - The tile to modify
-     * @param visible - Whether the tile should be visible
+     * @param tile The tile to update
+     * @param visible Whether the tile should be visible
      */
-    setTileVisible(tile: Tile, visible: boolean): void {
+    setTileVisible(tile: any, visible: boolean): void {
         const scene = tile.cached.scene;
-        const visibleTiles = this.visibleTiles;
         const group = this.group;
 
         if (visible) {
-            group.add(scene);
-            visibleTiles.add(tile);
-            scene.updateMatrixWorld(true);
+            if (scene) {
+                group.add(scene);
+                scene.updateMatrixWorld(true);
+            }
         } else {
-            group.remove(scene);
-            visibleTiles.delete(tile);
+            if (scene) {
+                group.remove(scene);
+            }
         }
 
-        if (this.onTileVisibilityChange) {
-            this.onTileVisibilityChange(scene, tile, visible);
-        }
+        super.setTileVisible(tile, visible);
+        this.dispatchEvent({
+            type: "tile-visibility-change",
+            scene,
+            tile,
+            visible
+        });
     }
 
     /**
-     * Sets a tile's active state (whether it should be considered for rendering)
-     * @param tile - The tile to modify
-     * @param active - Whether the tile should be active
+     * Calculates the screen space error for a tile based on camera views
+     * @param tile The tile to calculate for
+     * @param target Object to store the results
      */
-    setTileActive(tile: Tile, active: boolean): void {
-        const activeTiles = this.activeTiles;
-        if (active) {
-            activeTiles.add(tile);
-        } else {
-            activeTiles.delete(tile);
-        }
-    }
-
-    /**
-     * Calculates the screen space error for a tile
-     * @param tile - The tile to calculate error for
-     */
-    calculateError(tile: Tile): void {
+    calculateTileViewError(tile: Tile, target: ViewErrorTarget): void {
         const cached = tile.cached;
-        const inFrustum = cached.inFrustum;
-        const cameras = this.cameras;
-        const cameraInfo = this.cameraInfo;
+        const boundingVolume = cached.boundingVolume;
 
-        const orientedBox = cached.orientedBox;
+        let inView = false;
+        let inViewError = -Infinity;
+        let inViewDistance = Infinity;
         let maxError = -Infinity;
         let minDistance = Infinity;
 
-        for (let i = 0, l = cameras.length; i < l; i++) {
-            var height = this.cameraMap.get(cameras[i])!.y;
-            if (!inFrustum[i]) {
-                continue;
+        // Calculate error from each camera
+        for (let i = 0, l = this.cameras.length; i < l; i++) {
+            const info = this.cameraInfo[i];
+            let error: number, distance: number;
+
+            if (info.isOrthographic) {
+                error = tile.geometricError / info.pixelSize;
+                distance = Infinity;
+            } else {
+                distance = boundingVolume.distanceToPoint(info.position);
+                error =
+                    distance === 0
+                        ? Infinity
+                        : tile.geometricError / (distance * info.sseDenominator);
             }
 
-            const info = cameraInfo[i];
-            const invScale = info.invScale;
-
-            let error;
-            if (info.isOrthographic) {
-                const pixelSize = info.pixelSize;
-                error = tile.geometricError / (pixelSize * invScale);
-            } else {
-                tempVector.copy(info.position);
-                let distance = Math.max(orientedBox!.distanceToPoint(tempVector), 0.1);
-
-                const scaledDistance = distance * invScale;
-                const sseDenominator = info.sseDenominator;
-                error = (tile.geometricError * height) / (scaledDistance * sseDenominator);
-                minDistance = Math.min(minDistance, scaledDistance);
+            // Check if in camera frustum
+            if (boundingVolume.intersectsFrustum(info.frustum)) {
+                inView = true;
+                inViewError = Math.max(inViewError, error);
+                inViewDistance = Math.min(inViewDistance, distance);
             }
 
             maxError = Math.max(maxError, error);
+            minDistance = Math.min(minDistance, distance);
         }
 
-        tile.__distanceFromCamera = minDistance;
-        tile.__error = maxError;
+        // Check plugin visibility calculations
+        // this.calculateTileViewError(tile, viewErrorTarget);
+        if (viewErrorTarget.inView) {
+            inView = true;
+            inViewError = Math.max(inViewError, viewErrorTarget.error);
+        }
+        maxError = Math.max(maxError, viewErrorTarget.error);
+
+        // Set target values
+        target.inView = inView;
+        target.error = inView ? inViewError : maxError;
+        target.distanceFromCamera = inView ? inViewDistance : minDistance;
     }
 
     /**
-     * Checks if a tile is within any camera's view frustum
-     * @param tile - The tile to check
-     * @returns True if the tile is in view of any camera
+     * Disposes of all resources
      */
-    tileInView(tile: Tile): boolean {
-        const cached = tile.cached;
-        const sphere = cached.sphere;
-        const inFrustum = cached.inFrustum;
-        const orientedBox = cached.orientedBox;
-
-        if (sphere) {
-            const cameraInfo = this.cameraInfo;
-            let inView = false;
-
-            for (let i = 0, l = cameraInfo.length; i < l; i++) {
-                const frustum = cameraInfo[i].frustum;
-                if (
-                    frustum.intersectsSphere(sphere) &&
-                    (!orientedBox ? true : orientedBox.intersects(frustum))
-                ) {
-                    inView = true;
-                    inFrustum[i] = true;
-                } else {
-                    inFrustum[i] = false;
-                }
-            }
-            return inView;
-        }
-        return true;
+    dispose(): void {
+        super.dispose();
+        this.group.removeFromParent();
     }
-}
-
-/**
- * Information about a camera used for view frustum culling and LOD selection
- */
-interface CameraInfo {
-    /** The camera's view frustum */
-    frustum: Frustum;
-    /** Whether the camera is orthographic */
-    isOrthographic: boolean;
-    /** Denominator for screen space error calculation */
-    sseDenominator: number;
-    /** Camera position in world space */
-    position: Vector3;
-    /** Inverse scale factor for error calculation */
-    invScale: number;
-    /** Pixel size for orthographic cameras */
-    pixelSize: number;
 }
