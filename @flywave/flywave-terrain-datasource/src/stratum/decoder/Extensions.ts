@@ -1,5 +1,6 @@
 import {
     Borehole,
+    BoreholeStratum,
     CollapsePillar,
     ColorMap,
     ExtensionHeader,
@@ -232,10 +233,20 @@ function readFaultProfiles(data: Uint8Array): FaultProfile[] {
 
     const faults: FaultProfile[] = [];
     for (let i = 0; i < count; i++) {
+        // 动态读取字符串字段
+        const [id, idOffset] = readString(dataView, pos);
+        pos += 4 + idOffset;
+
+        const [name, nameOffset] = readString(dataView, pos);
+        pos += 4 + nameOffset;
+
+        const [type, typeOffset] = readString(dataView, pos);
+        pos += 4 + typeOffset;
+
         const fault: FaultProfile = {
-            id: readString(dataView, pos),
-            name: readString(dataView, pos),
-            type: readString(dataView, pos),
+            id,
+            name,
+            type,
             strike: dataView.getFloat64(pos, true),
             dip: dataView.getFloat64(pos + 8, true),
             throw: dataView.getFloat64(pos + 16, true),
@@ -271,13 +282,21 @@ function readBoreholes(data: Uint8Array): Borehole[] {
 
     const boreholes: Borehole[] = [];
     for (let i = 0; i < count; i++) {
+        // 读取钻孔ID
+        const [id, idOffset] = readString(dataView, pos);
+        pos += 4 + idOffset;
+
+        // 读取位置坐标
+        const location: [number, number, number] = [
+            dataView.getFloat64(pos, true),
+            dataView.getFloat64(pos + 8, true),
+            dataView.getFloat64(pos + 16, true)
+        ];
+        pos += 24;
+
         const borehole: Borehole = {
-            id: readString(dataView, pos),
-            location: [
-                dataView.getFloat64(pos, true),
-                dataView.getFloat64(pos + 8, true),
-                dataView.getFloat64(pos + 16, true)
-            ],
+            id,
+            location,
             depth: dataView.getFloat64(pos + 24, true),
             azimuth: dataView.getFloat64(pos + 32, true),
             inclination: dataView.getFloat64(pos + 40, true),
@@ -305,16 +324,22 @@ function readBoreholes(data: Uint8Array): Borehole[] {
         // 读取地层信息
         const stratumCount = dataView.getInt32(pos, true);
         pos += 4;
-        borehole.stratums = new Array(stratumCount);
+        const stratums: BoreholeStratum[] = [];
         for (let j = 0; j < stratumCount; j++) {
-            borehole.stratums[j] = {
-                id: readString(dataView, pos),
-                lithology: readString(dataView, pos),
-                top: dataView.getFloat64(pos, true),
-                base: dataView.getFloat64(pos + 8, true)
-            };
+            const [stratumId, stratumIdOffset] = readString(dataView, pos);
+            pos += 4 + stratumIdOffset;
+
+            const [lithology, lithologyOffset] = readString(dataView, pos);
+            pos += 4 + lithologyOffset;
+
+            const top = dataView.getFloat64(pos, true);
+            const base = dataView.getFloat64(pos + 8, true);
             pos += 16;
+
+            stratums.push({ id: stratumId, lithology, top, base });
         }
+
+        borehole.stratums = stratums;
 
         boreholes.push(borehole);
     }
@@ -325,54 +350,71 @@ function readBoreholes(data: Uint8Array): Borehole[] {
 function readCollapsePillars(data: Uint8Array): CollapsePillar[] {
     const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
     let pos = 0;
+    const collapses: CollapsePillar[] = [];
 
     const count = dataView.getInt32(pos, true);
     pos += 4;
 
-    const collapses: CollapsePillar[] = [];
     for (let i = 0; i < count; i++) {
-        // First read the strings separately
-        const id = readString(dataView, pos);
-        const name = readString(dataView, pos + 4 + id.length);
-        const stratumId = readString(dataView, pos + 72);
-        const lithology = readString(dataView, pos + 72 + 4 + stratumId.length);
+        // 动态读取每个字段（按Go的写入顺序）
+        const [id, idOffset] = readString(dataView, pos);
+        pos += 4 + idOffset;
 
-        const col: CollapsePillar = {
-            id,
-            name,
-            topCenter: [
+        const [name, nameOffset] = readString(dataView, pos);
+        pos += 4 + nameOffset;
+
+        const topCenter: [number, number, number] = [
+            dataView.getFloat64(pos, true),
+            dataView.getFloat64(pos + 8, true),
+            dataView.getFloat64(pos + 16, true)
+        ];
+        pos += 24;
+
+        const baseCenter: [number, number, number] = [
+            dataView.getFloat64(pos, true),
+            dataView.getFloat64(pos + 8, true),
+            dataView.getFloat64(pos + 16, true)
+        ];
+        pos += 24;
+
+        const topRadius = dataView.getFloat64(pos, true);
+        const baseRadius = dataView.getFloat64(pos + 8, true);
+        const height = dataView.getFloat64(pos + 16, true);
+        pos += 24;
+
+        const [stratumId, stratumIdOffset] = readString(dataView, pos);
+        pos += 4 + stratumIdOffset;
+
+        const [lithology, lithologyOffset] = readString(dataView, pos);
+        pos += 4 + lithologyOffset;
+
+        const bbox: [[number, number, number], [number, number, number]] = [
+            [
                 dataView.getFloat64(pos, true),
                 dataView.getFloat64(pos + 8, true),
                 dataView.getFloat64(pos + 16, true)
             ],
-            baseCenter: [
+            [
                 dataView.getFloat64(pos + 24, true),
                 dataView.getFloat64(pos + 32, true),
                 dataView.getFloat64(pos + 40, true)
-            ],
-            topRadius: dataView.getFloat64(pos + 48, true),
-            baseRadius: dataView.getFloat64(pos + 56, true),
-            height: dataView.getFloat64(pos + 64, true),
+            ]
+        ];
+        pos += 48;
+
+        collapses.push({
+            id,
+            name,
+            topCenter,
+            baseCenter,
+            topRadius,
+            baseRadius,
+            height,
             stratumId,
             lithology,
-            bbox: [
-                [
-                    dataView.getFloat64(pos + 72 + 8 + stratumId.length + lithology.length, true),
-                    dataView.getFloat64(pos + 80 + 8 + stratumId.length + lithology.length, true),
-                    dataView.getFloat64(pos + 88 + 8 + stratumId.length + lithology.length, true)
-                ],
-                [
-                    dataView.getFloat64(pos + 96 + 8 + stratumId.length + lithology.length, true),
-                    dataView.getFloat64(pos + 104 + 8 + stratumId.length + lithology.length, true),
-                    dataView.getFloat64(pos + 112 + 8 + stratumId.length + lithology.length, true)
-                ]
-            ]
-        };
-        pos += 120 + 8 + stratumId.length + lithology.length;
-
-        collapses.push(col);
+            bbox
+        });
     }
-
     return collapses;
 }
 
@@ -385,37 +427,41 @@ function readSectionLines(data: Uint8Array): SectionLine[] {
 
     const sections: SectionLine[] = [];
     for (let i = 0; i < count; i++) {
-        const sec: SectionLine = {
-            id: readString(dataView, pos),
-            name: readString(dataView, pos),
-            lineString: []
-        };
-        pos += 8 + sec.id.length + sec.name.length;
+        // 读取ID和名称
+        const [id, idOffset] = readString(dataView, pos);
+        pos += 4 + idOffset;
 
+        const [name, nameOffset] = readString(dataView, pos);
+        pos += 4 + nameOffset;
+
+        // 读取坐标点
         const pointsCount = dataView.getInt32(pos, true);
         pos += 4;
-        sec.lineString = new Array(pointsCount);
 
+        const lineString = [];
         for (let j = 0; j < pointsCount; j++) {
-            sec.lineString[j] = [
+            lineString.push([
                 dataView.getFloat64(pos, true),
                 dataView.getFloat64(pos + 8, true),
                 dataView.getFloat64(pos + 16, true)
-            ];
+            ]);
             pos += 24;
         }
 
-        sections.push(sec);
+        sections.push({ id, name, lineString });
     }
 
     return sections;
 }
 
 // 辅助函数：读取字符串
-export function readString(dataView: DataView, pos: number): string {
-    const length = dataView.getInt32(pos, true);
-    const strBytes = new Uint8Array(dataView.buffer, dataView.byteOffset + pos + 4, length);
-    return new TextDecoder().decode(strBytes);
+function readString(dataView: DataView, startPos: number): [string, number] {
+    const length = dataView.getInt32(startPos, true);
+    const strBytes = new Uint8Array(dataView.buffer, dataView.byteOffset + startPos + 4, length);
+    return [
+        new TextDecoder().decode(strBytes),
+        4 + length // 总字节数 = 4字节长度 + 字符串内容长度
+    ];
 }
 
 // 新增岩性解析函数
@@ -431,12 +477,12 @@ function readStratumLithology(data: Uint8Array): Record<string, string> {
 
     for (let i = 0; i < count; i++) {
         // 读取地层ID
-        const id = readString(dataView, pos);
-        pos += 4 + id.length; // 4字节长度 + 字符串内容
+        const [id, idOffset] = readString(dataView, pos);
+        pos += 4 + idOffset; // 4字节长度 + 字符串内容
 
         // 读取岩性名称
-        const lithology = readString(dataView, pos);
-        pos += 4 + lithology.length;
+        const [lithology, lithologyOffset] = readString(dataView, pos);
+        pos += 4 + lithologyOffset;
 
         lithologyMap[id] = lithology;
     }
