@@ -80,8 +80,8 @@ export namespace T3DTileRenderExample {
 
     let tileRender = new TilesRenderer({
         // url: "./resources/3dtile-data/pipe/tileset.json",
-
-        url: "https://assets.cms.plateau.reearth.io/assets/99/e2a800-7d75-4d11-94e1-bef604c39d01/13103_minato-ku_pref_2023_citygml_1_op_bldg_3dtiles_13103_minato-ku_lod4/tileset.json",
+        url: "http://192.168.1.18/flywave-examples/data/%E7%89%B9%E9%AB%98%E5%8E%8B%E8%BE%93%E7%94%B5%E7%BA%BF%E8%B7%AF/3dtile/tileset.json",
+        // url: "https://assets.cms.plateau.reearth.io/assets/99/e2a800-7d75-4d11-94e1-bef604c39d01/13103_minato-ku_pref_2023_citygml_1_op_bldg_3dtiles_13103_minato-ku_lod4/tileset.json",
         decoderPath: "./resources/"
     });
     mapView.add3DTileSet(tileRender);

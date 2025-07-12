@@ -597,6 +597,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
             new Vector3().fromArray(metadata.rtcCenter),
             this.getProjection()
         );
+        transformMatrix.setPosition(new Vector3().fromArray(metadata.rtcCenter));
 
         // Apply RTC center and transformations
         // scene.position.copy(projectedPos);
