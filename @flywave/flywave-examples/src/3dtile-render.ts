@@ -10,8 +10,8 @@ import { GeoCoordinates, sphereProjection } from "@flywave/flywave-geoutils";
 import { TilesRenderer } from "@flywave/flywave-3dtile-render";
 import { apikey } from "./config";
 import { HereTileProvider, HereWebTileDataSource } from "@flywave/flywave-webtile-datasource";
-import { TileIntersection } from "../../flywave-3dtile-render/src/renderer/TilesRenderer";
 import { Tile } from "../../flywave-3dtile-render/src/base/Tile";
+import { TileIntersection } from "../../flywave-3dtile-render/src/renderer/raycastTraverse";
 
 /**
  * A simple example using the webtile data source. Tiles are retrieved from
