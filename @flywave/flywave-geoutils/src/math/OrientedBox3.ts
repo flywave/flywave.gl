@@ -286,6 +286,70 @@ export class OrientedBox3 implements OrientedBox3Like {
     }
 
     /**
+     * Premultiplies this oriented box by the given matrix (applies the transformation from the left).
+     * This means the matrix is applied before the box's current transformation.
+     *
+     * @param matrix - The matrix to premultiply by.
+     */
+    premultiply(matrix: Matrix4): this {
+        // Apply matrix to position
+        this.position.applyMatrix4(matrix);
+
+        // Apply matrix to axes and extents
+        const scale = new Vector3();
+        const rotation = new Quaternion();
+        const position = new Vector3();
+        matrix.decompose(position, rotation, scale);
+
+        // Apply rotation to axes
+        this.xAxis.applyQuaternion(rotation);
+        this.yAxis.applyQuaternion(rotation);
+        this.zAxis.applyQuaternion(rotation);
+
+        // Apply scale to extents
+        this.extents.x *= scale.x;
+        this.extents.y *= scale.y;
+        this.extents.z *= scale.z;
+
+        return this;
+    }
+
+    /**
+     * Multiplies this oriented box by the given matrix (applies the transformation from the right).
+     * This means the matrix is applied after the box's current transformation.
+     *
+     * @param matrix - The matrix to multiply by.
+     */
+    multiply(matrix: Matrix4): this {
+        // Create a transformation matrix for this box
+        const boxMatrix = new Matrix4();
+        this.getRotationMatrix(boxMatrix);
+        boxMatrix.setPosition(this.position);
+
+        // Scale the matrix by extents
+        const scaleMatrix = new Matrix4().makeScale(this.extents.x, this.extents.y, this.extents.z);
+        boxMatrix.premultiply(scaleMatrix);
+
+        // Apply the transformation
+        boxMatrix.multiply(matrix);
+
+        // Extract new position, rotation and scale
+        const newScale = new Vector3();
+        const newRotation = new Quaternion();
+        const newPosition = new Vector3();
+        boxMatrix.decompose(newPosition, newRotation, newScale);
+
+        // Update box properties
+        this.position.copy(newPosition);
+        this.xAxis.set(1, 0, 0).applyQuaternion(newRotation);
+        this.yAxis.set(0, 1, 0).applyQuaternion(newRotation);
+        this.zAxis.set(0, 0, 1).applyQuaternion(newRotation);
+        this.extents.copy(newScale);
+
+        return this;
+    }
+
+    /**
      * 将OrientedBox3转换为GeoBox
      * @param orientedBox 要转换的定向包围盒
      * @param projection 使用的投影系统
@@ -325,6 +389,142 @@ export class OrientedBox3 implements OrientedBox3Like {
         return new GeoBox(southWest, northEast);
     }
 
+    /**
+     * Checks if this oriented box intersects with a sphere.
+     *
+     * @param sphere - The sphere to test for intersection.
+     * @returns `true` if the sphere intersects with this box, `false` otherwise.
+     */
+    intersectsSphere(sphere: Sphere): boolean {
+        // Transform sphere center to the oriented box's local space
+        const localCenter = new Vector3();
+        localCenter.subVectors(sphere.center, this.position);
+
+        // Project the center onto each axis of the box
+        const x = Math.abs(localCenter.dot(this.xAxis));
+        const y = Math.abs(localCenter.dot(this.yAxis));
+        const z = Math.abs(localCenter.dot(this.zAxis));
+
+        // Clamp the projected center to the box's extents
+        const closestPoint = new Vector3(
+            Math.min(x, this.extents.x),
+            Math.min(y, this.extents.y),
+            Math.min(z, this.extents.z)
+        );
+
+        // Calculate the distance between the sphere center and the closest point
+        const distanceSquared =
+            (x - closestPoint.x) * (x - closestPoint.x) +
+            (y - closestPoint.y) * (y - closestPoint.y) +
+            (z - closestPoint.z) * (z - closestPoint.z);
+
+        return distanceSquared <= sphere.radius * sphere.radius;
+    }
+
+    /**
+     * Checks if a point is contained within this oriented box.
+     *
+     * @param point - The point to test.
+     * @returns `true` if the point is inside the box, `false` otherwise.
+     */
+    containsPoint(point: Vector3): boolean {
+        // Vector from box center to point
+        const direction = new Vector3().subVectors(point, this.position);
+
+        // Project the direction vector onto each axis of the box
+        const xProjection = Math.abs(direction.dot(this.xAxis));
+        const yProjection = Math.abs(direction.dot(this.yAxis));
+        const zProjection = Math.abs(direction.dot(this.zAxis));
+
+        // Check if all projections are within the extents
+        return (
+            xProjection <= this.extents.x &&
+            yProjection <= this.extents.y &&
+            zProjection <= this.extents.z
+        );
+    }
+
+    /**
+     * Checks if this oriented box intersects with another oriented box.
+     *
+     * @param box - The other oriented box to test for intersection.
+     * @returns `true` if the boxes intersect, `false` otherwise.
+     */
+    intersectsOrientedBox(box: OrientedBox3): boolean {
+        // Implementation of the separating axis theorem (SAT) for OBB-OBB intersection
+
+        // Prepare all axes to test (15 in total)
+        const axes: Vector3[] = [
+            // Axes of this box
+            this.xAxis,
+            this.yAxis,
+            this.zAxis,
+            // Axes of the other box
+            box.xAxis,
+            box.yAxis,
+            box.zAxis,
+            // Cross products between axes
+            new Vector3(),
+            new Vector3(),
+            new Vector3(),
+            new Vector3(),
+            new Vector3(),
+            new Vector3(),
+            new Vector3(),
+            new Vector3(),
+            new Vector3()
+        ];
+
+        // Compute cross products between axes (9 combinations)
+        axes[6].crossVectors(this.xAxis, box.xAxis);
+        axes[7].crossVectors(this.xAxis, box.yAxis);
+        axes[8].crossVectors(this.xAxis, box.zAxis);
+        axes[9].crossVectors(this.yAxis, box.xAxis);
+        axes[10].crossVectors(this.yAxis, box.yAxis);
+        axes[11].crossVectors(this.yAxis, box.zAxis);
+        axes[12].crossVectors(this.zAxis, box.xAxis);
+        axes[13].crossVectors(this.zAxis, box.yAxis);
+        axes[14].crossVectors(this.zAxis, box.zAxis);
+
+        // Vector between centers
+        const centerDiff = new Vector3().subVectors(box.position, this.position);
+
+        for (const axis of axes) {
+            // Skip near-parallel axes (avoid division by zero)
+            if (axis.lengthSq() < 1e-10) {
+                continue;
+            }
+            axis.normalize();
+
+            // Project both boxes onto the axis
+            const thisProj = this.projectOntoAxis(axis);
+            const otherProj = box.projectOntoAxis(axis);
+
+            // Project the center difference onto the axis
+            const distance = Math.abs(centerDiff.dot(axis));
+
+            // Check for separation
+            if (distance > thisProj + otherProj) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Helper method to project the oriented box onto an axis.
+     *
+     * @param axis - The axis to project onto (must be normalized).
+     * @returns The half-length of the projection.
+     */
+    private projectOntoAxis(axis: Vector3): number {
+        return (
+            Math.abs(this.xAxis.dot(axis)) * this.extents.x +
+            Math.abs(this.yAxis.dot(axis)) * this.extents.y +
+            Math.abs(this.zAxis.dot(axis)) * this.extents.z
+        );
+    }
     /**
      * 获取定向包围盒的8个角点
      * @param box 定向包围盒

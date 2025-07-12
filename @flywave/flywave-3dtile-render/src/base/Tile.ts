@@ -1,13 +1,15 @@
 import { BufferGeometry, Material, Matrix4, Object3D, Scene, Sphere, Texture } from "three";
-import { LoadState } from "./constants";
 import { GeoBox, OrientedBox3 } from "@flywave/flywave-geoutils";
 import {
+    ImplicitTilingData,
     TILE_REFINEMENT,
-    TileRefinement,
     Tiles3DTileContent,
     Tiles3DTileJSONPostprocessed,
     Tiles3DTilesetJSONPostprocessed
 } from "../next/types";
+import { OrientedBox3Visualizer } from "../renderer/OrientedBoxHelper";
+import { SphereHelper } from "../renderer/SphereHelper";
+import { TileBoundingVolume } from "../utilities/TileBoundingVolume";
 
 export type BoundingVolume = {
     /** 轴对齐包围盒 (12元素数组) */
@@ -39,64 +41,59 @@ export type BoundingVolume = {
 };
 
 export type TileCache = {
-    loadIndex: number;
     transform: Matrix4;
     transformInverse: Matrix4;
     active: boolean;
-    inFrustum: boolean[];
-    sphere: Sphere;
-    orientedBox: OrientedBox3;
-    geoBox: GeoBox;
+    boundingVolume: TileBoundingVolume;
     scene: Scene | Object3D;
     geometry?: BufferGeometry[];
     materials?: Material[];
     textures?: Texture[];
+    bytesUsed: number;
 };
 
 export class Tile {
-    /** Last frame number this tile was accessed */
-    __lastFrameVisited: number;
-    /** Whether the tile is used in current frame */
-    __used: boolean;
-    /** Whether the tile is within view frustum */
-    __inFrustum: boolean;
-    /** Indicates if this tile is a leaf node */
-    __isLeaf: boolean;
-    /** Visibility state of the tile */
-    __visible: boolean;
-    /** Activation state of the tile */
-    __active: boolean;
-    /** Screen space error metric value */
-    __error: number;
-    /** Distance from camera to tile center */
-    __distanceFromCamera: number;
-    /** Whether any child was visible last frame */
-    __childrenWereVisible: boolean;
-    /** All children have finished loading */
-    __allChildrenLoaded: boolean;
-    /** Depth level in tile hierarchy */
+    /**
+     * Hierarchy Depth from the TileGroup
+     */
     __depth: number;
-    /** Load state enumeration from LoadState */
-    __loadingState: LoadState;
-    /** Depth relative to nearest rendered parent */
+    /**
+     * The screen space error for this tile
+     */
+    __error: number;
+    /**
+     * How far is this tiles bounds from the nearest active Camera.
+     * Expected to be filled in during calculateError implementations.
+     */
+    __distanceFromCamera: number;
+    /**
+     * This tile is currently active if:
+     *  1: Tile content is loaded and ready to be made visible if needed
+     */
+    __active: boolean;
+    /**
+     * This tile is currently visible if:
+     *  1: Tile content is loaded
+     *  2: Tile is within a camera frustum
+     *  3: Tile meets the SSE requirements
+     */
+    __visible: boolean;
+    /**
+     * Whether or not the tile was visited during the last update run.
+     */
+    __used: boolean;
+
+    /**
+     * Whether or not the tile was within the frustum on the last update run.
+     */
+    __inFrustum: boolean;
+
+    /**
+     * The depth of the tiles that increments only when a child with geometry content is encountered
+     */
     __depthFromRenderedParent: number;
 
-    /** Indicates empty content node */
-    __contentEmpty?: boolean;
-    /** Previous visibility state */
-    __wasSetVisible?: boolean;
-    /** Previous activation state */
-    __wasSetActive?: boolean;
-    /** Usage state in previous frame */
-    __usedLastFrame?: boolean;
-
-    __loadIndex: number;
-
-    __loadAbort?: AbortController;
-
-    __implicitTiles?: boolean;
-    __externalTileSet?: boolean;
-    __contentGroup?: boolean;
+    __lastFrameVisited: number;
 
     private _children: Tile[] = [];
     constructor(private metadata: Tiles3DTileContent | Tiles3DTileJSONPostprocessed) {
@@ -124,6 +121,12 @@ export class Tile {
     /** Parent tile reference */
     parent?: Tile;
 
+    extensions?: Record<string, any>;
+
+    get implicitTiling(): ImplicitTilingData | undefined {
+        return this.tiles3DTileJSONPostprocessed.implicitTiling;
+    }
+
     get content() {
         return this.tiles3DTileJSONPostprocessed.content;
     }
@@ -148,6 +151,67 @@ export class Tile {
     set refine(value: TILE_REFINEMENT) {
         this.tiles3DTileJSONPostprocessed.refine = value;
     }
+
+    private __debugSphere: SphereHelper;
+    private __debugBox: OrientedBox3Visualizer;
+
+    debugBoundingVolume(type?: "sphere" | "box" | false) {
+        switch (type) {
+            case "sphere": {
+                if (!this.__debugSphere) {
+                    this.__debugSphere = new SphereHelper(this.cached.boundingVolume.sphere);
+                    this.__debugSphere.position.sub(this.cached.scene.position);
+                }
+                this.cached.scene?.add(this.__debugSphere);
+                break;
+            }
+            case "box": {
+                if (!this.__debugBox) {
+                    this.__debugBox = new OrientedBox3Visualizer(this.cached.boundingVolume.obb);
+                    this.__debugBox.position.sub(this.cached.scene.position);
+                }
+                this.cached.scene?.add(this.__debugBox);
+                break;
+            }
+            case false: {
+                this.cached.scene?.remove(this.__debugSphere);
+                this.cached.scene?.remove(this.__debugBox);
+                break;
+            }
+        }
+    }
+}
+
+export interface TileInternal extends Tile {
+    // tile description
+    __isLeaf: boolean;
+    __hasContent: boolean;
+    __hasRenderableContent: boolean;
+    __hasUnrenderableContent: boolean;
+
+    // resource tracking
+    __usedLastFrame: boolean;
+    __used: boolean;
+
+    // Visibility tracking
+    __allChildrenLoaded: boolean;
+    __childrenWereVisible: boolean;
+    __inFrustum: boolean;
+    __wasSetVisible: boolean;
+
+    // download state tracking
+    /**
+     * This tile is currently active if:
+     *  1: Tile content is loaded and ready to be made visible if needed
+     */
+    __active: boolean;
+    __loadIndex: number;
+    __loadAbort: AbortController | null;
+    __loadingState: number;
+    __wasSetActive: boolean;
+
+    __childrenProcessed: number;
+    __basePath?: string;
 }
 
 export class TileSet {
@@ -158,5 +222,29 @@ export class TileSet {
 
     get asset() {
         return this.meta.asset;
+    }
+
+    get geometricError() {
+        return this.meta.geometricError;
+    }
+
+    get extensionsUsed() {
+        return this.meta.extensionsUsed;
+    }
+
+    get extensionsRequired() {
+        return this.meta.extensionsRequired;
+    }
+
+    get properties() {
+        return this.meta.properties;
+    }
+
+    get extensions() {
+        return this.meta.extensions;
+    }
+
+    get extras() {
+        return this.meta.extras;
     }
 }

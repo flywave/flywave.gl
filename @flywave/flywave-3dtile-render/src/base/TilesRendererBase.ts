@@ -1,22 +1,28 @@
-import path from "path-browserify";
-import { urlJoin } from "../utilities/urlJoin";
 import { getUrlExtension } from "../utilities/urlExtension";
 import { LRUCache } from "../utilities/LRUCache";
 import { PriorityQueue } from "../utilities/PriorityQueue";
 import {
-    determineFrustumSet,
+    markUsedTiles,
     toggleTiles,
-    skipTraversal,
+    markVisibleTiles,
     markUsedSetLeaves,
-    traverseSet
+    traverseSet,
+    ViewErrorTarget
 } from "./traverseFunctions";
-import { UNLOADED, LOADING, PARSING, LOADED, FAILED } from "./constants";
-import * as THREE from "three";
-import { Tile, TileSet } from "./Tile";
-import { load3DTiles, Tiles3DTileContent, Tiles3DTilesetJSONPostprocessed } from "../next";
-import { TILE_REFINEMENT } from "../next/types";
+import { UNLOADED, LOADING, PARSING, LOADED, FAILED, LoadState } from "./constants";
+import { throttle } from "../utilities/throttle";
+import { Tile, TileInternal, TileSet } from "./Tile";
+import {
+    TILE_REFINEMENT,
+    Tiles3DTileContent,
+    Tiles3DTilesetJSONPostprocessed
+} from "../next/types";
+import { load3DTiles } from "../next";
 
-interface TilesRendererStats {
+// Interface for stats object
+interface Stats {
+    inCacheSinceLoad?: number;
+    inCache?: number;
     parsing: number;
     downloading: number;
     failed: number;
@@ -27,80 +33,297 @@ interface TilesRendererStats {
 }
 
 /**
- * Function for provided to sort all tiles for prioritizing loading/unloading.
+ * Base class for 3D Tiles renderers with core functionality for loading,
+ * managing, and rendering tilesets.
  */
-const priorityCallback = (a: Tile, b: Tile): number => {
-    if (a.__depth !== b.__depth) {
-        return a.__depth > b.__depth ? -1 : 1;
-    } else if (a.__inFrustum !== b.__inFrustum) {
-        return a.__inFrustum ? 1 : -1;
-    } else if (a.__used !== b.__used) {
-        return a.__used ? 1 : -1;
-    } else if (a.__error !== b.__error) {
-        return a.__error > b.__error ? 1 : -1;
-    } else if (a.__distanceFromCamera !== b.__distanceFromCamera) {
-        return a.__distanceFromCamera > b.__distanceFromCamera ? -1 : 1;
-    }
-    return 0;
-};
+export class TilesRendererBase {
+    // Internal state
+    private _errorThreshold: number = Infinity;
+    private rootLoadingState: LoadState = UNLOADED;
+    protected rootTileSet: TileSet | null = null;
+    private rootURL: string | null;
+    protected fetchOptions: RequestInit = {};
+    private queuedTiles: Tile[] = [];
+    private cachedSinceLoadComplete: Set<Tile> = new Set();
+    private isLoading: boolean = false;
+    public frameCount: number = 0;
 
-/**
- * Function for sorting the evicted LRU items.
- */
-const lruPriorityCallback = (tile: Tile): number => 1 / (tile.__depthFromRenderedParent + 1);
+    //
+    public preprocessURL?: (url: string, parent?: Tile) => string;
 
-export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: any }> {
-    private tileSets: Record<string, TileSet | Promise<TileSet> | Error>;
-    public rootURL: string;
-    public fetchOptions: RequestInit;
-    public preprocessURL: ((url: string) => string) | null;
+    // Core components
+    public readonly lruCache: LRUCache<Tile>;
+    public readonly downloadQueue: PriorityQueue<Tile>;
+    public readonly parseQueue: PriorityQueue<Tile>;
+    public readonly processNodeQueue: PriorityQueue<Tile>;
 
-    public lruCache: LRUCache<Tile>;
-    public downloadQueue: PriorityQueue<Tile>;
-    public parseQueue: PriorityQueue<Tile>;
-    public stats: TilesRendererStats;
-    public frameCount: number;
+    // Tile tracking sets
+    public readonly visibleTiles: Set<Tile> = new Set();
+    public readonly activeTiles: Set<Tile> = new Set();
+    public readonly usedSet: Set<Tile> = new Set();
 
-    // Options
-    public errorTarget: number;
-    public errorThreshold: number;
-    public loadSiblings: boolean;
-    public displayActiveTiles: boolean;
-    public maxDepth: number;
-    public stopAtEmptyTiles: boolean;
+    // Statistics
+    public stats: Stats = {
+        inCacheSinceLoad: 0,
+        inCache: 0,
+        parsing: 0,
+        downloading: 0,
+        failed: 0,
+        inFrustum: 0,
+        used: 0,
+        active: 0,
+        visible: 0
+    };
 
-    get rootTileSet(): TileSet | null {
-        const tileSet = this.tileSets[this.rootURL];
-        if (!tileSet || tileSet instanceof Promise || tileSet instanceof Error) {
-            return null;
-        } else {
-            return tileSet;
-        }
-    }
+    // Configuration options
+    public errorTarget: number = 16.0;
+    public displayActiveTiles: boolean = false;
+    public maxDepth: number = Infinity;
 
+    // Throttled event dispatcher
+    private _dispatchNeedsUpdateEvent: () => void;
+
+    /**
+     * Gets the root tile of the tileset
+     */
     get root(): Tile | null {
         const tileSet = this.rootTileSet;
         return tileSet ? tileSet.root : null;
     }
 
-    constructor(url: string) {
-        super();
-        this.tileSets = {};
-        this.rootURL = url;
-        this.fetchOptions = {};
-        this.preprocessURL = null;
+    /**
+     * Gets the current loading progress (0 to 1)
+     */
+    get loadProgress(): number {
+        const { stats, isLoading } = this;
+        const loading = stats.downloading + stats.parsing;
+        const total = stats.inCacheSinceLoad + (isLoading ? 1 : 0);
+        return total === 0 ? 1.0 : 1.0 - loading / total;
+    }
 
+    /**
+     * Gets the error threshold (deprecated)
+     */
+    get errorThreshold(): number {
+        return this._errorThreshold;
+    }
+
+    /**
+     * Sets the error threshold (deprecated)
+     */
+    set errorThreshold(v: number) {
+        console.warn('TilesRenderer: The "errorThreshold" option has been deprecated.');
+        this._errorThreshold = v;
+    }
+
+    /**
+     * Creates a new TilesRendererBase instance
+     * @param url The URL of the root tileset (optional)
+     */
+    constructor(url: string | null = null) {
+        this.rootURL = url;
+
+        // Initialize LRU cache for tile management
         this.lruCache = new LRUCache<Tile>();
         this.lruCache.unloadPriorityCallback = lruPriorityCallback;
 
+        // Initialize queues with different concurrency levels
         this.downloadQueue = new PriorityQueue<Tile>();
-        this.downloadQueue.maxJobs = 16;
+        this.downloadQueue.maxJobs = 10;
         this.downloadQueue.priorityCallback = priorityCallback;
 
         this.parseQueue = new PriorityQueue<Tile>();
-        this.parseQueue.maxJobs = 10;
+        this.parseQueue.maxJobs = 1;
         this.parseQueue.priorityCallback = priorityCallback;
 
+        this.processNodeQueue = new PriorityQueue<Tile>();
+        this.processNodeQueue.maxJobs = 25;
+        this.processNodeQueue.priorityCallback = priorityCallback;
+
+        // Throttle the needs-update event
+        this._dispatchNeedsUpdateEvent = throttle(() => {
+            this.dispatchEvent({ type: "needs-update" });
+        });
+    }
+
+    /**
+     * Traverses the tile hierarchy
+     * @param beforecb Callback before visiting children
+     * @param aftercb Callback after visiting children
+     * @param ensureFullyProcessed Whether to ensure children are preprocessed
+     */
+    traverse(
+        beforecb?: (tile: TileInternal, ...args: any[]) => boolean | void,
+        aftercb?: (tile: TileInternal, ...args: any[]) => void,
+        ensureFullyProcessed: boolean = true
+    ): void {
+        if (!this.root) return;
+
+        traverseSet(
+            this.root as TileInternal,
+            (tile, ...args) => {
+                if (ensureFullyProcessed) {
+                    this.ensureChildrenArePreprocessed(tile, true);
+                }
+                return beforecb ? beforecb(tile, ...args) : false;
+            },
+            aftercb
+        );
+    }
+
+    /**
+     * Queues a tile for download
+     * @param tile The tile to queue
+     */
+    queueTileForDownload(tile: TileInternal): void {
+        if (tile.__loadingState !== UNLOADED) {
+            return;
+        }
+        this.queuedTiles.push(tile);
+    }
+
+    /**
+     * Marks a tile as used (preventing it from being unloaded)
+     * @param tile The tile to mark
+     */
+    markTileUsed(tile: Tile): void {
+        this.usedSet.add(tile);
+        this.lruCache.markUsed(tile);
+    }
+
+    /**
+     * Main update function that should be called every frame
+     */
+    update(): void {
+        const { lruCache, usedSet, stats, root, downloadQueue, parseQueue, processNodeQueue } =
+            this;
+
+        // Load root tileset if not already loaded
+        if (this.rootLoadingState === UNLOADED) {
+            this.rootLoadingState = LOADING;
+            this.loadRootTileSet()
+                .then((root: TileSet) => {
+                    let processedUrl = this.rootURL;
+                    if (processedUrl !== null) {
+                        this.preprocessURL?.(processedUrl, null);
+                    }
+                    this.rootLoadingState = LOADED;
+                    this.rootTileSet = root;
+                    this.dispatchEvent({ type: "needs-update" });
+                    this.dispatchEvent({ type: "load-content" });
+                    this.dispatchEvent({
+                        type: "load-tile-set",
+                        tileSet: root,
+                        url: processedUrl
+                    });
+                })
+                .catch(error => {
+                    this.rootLoadingState = FAILED;
+                    console.error(error);
+                    this.rootTileSet = null;
+                    this.dispatchEvent({
+                        type: "load-error",
+                        tile: null,
+                        error,
+                        url: this.rootURL
+                    });
+                });
+        }
+
+        if (!root) {
+            return;
+        }
+
+        // Reset frame statistics
+        stats.inFrustum = 0;
+        stats.used = 0;
+        stats.active = 0;
+        stats.visible = 0;
+        this.frameCount++;
+
+        // Clear used tiles from previous frame
+        usedSet.forEach(tile => lruCache.markUnused(tile));
+        usedSet.clear();
+
+        // Traverse and update tile states
+        markUsedTiles(root as TileInternal, this);
+        markUsedSetLeaves(root as TileInternal, this);
+        markVisibleTiles(root as TileInternal, this);
+        toggleTiles(root as TileInternal, this);
+
+        // Sort and load queued tiles
+        const queuedTiles = this.queuedTiles;
+        queuedTiles.sort(lruCache.unloadPriorityCallback);
+        for (let i = 0, l = queuedTiles.length; i < l && !lruCache.isFull(); i++) {
+            this.requestTileContents(queuedTiles[i] as TileInternal);
+        }
+        queuedTiles.length = 0;
+
+        // Schedule unloading of unused tiles
+        lruCache.scheduleUnload();
+
+        // Check if loading has completed
+        const runningTasks =
+            downloadQueue.running || parseQueue.running || processNodeQueue.running;
+        if (runningTasks === false && this.isLoading === true) {
+            this.cachedSinceLoadComplete.clear();
+            stats.inCacheSinceLoad = 0;
+            this.dispatchEvent({ type: "tiles-load-end" });
+            this.isLoading = false;
+        }
+    }
+
+    /**
+     * Resets tiles that failed to load
+     */
+    resetFailedTiles(): void {
+        // Reset root tile if it failed
+        if (this.rootLoadingState === FAILED) {
+            this.rootLoadingState = UNLOADED;
+        }
+
+        const stats = this.stats;
+        if (stats.failed === 0) {
+            return;
+        }
+
+        // Traverse and reset failed tiles
+        this.traverse(
+            tile => {
+                if (tile.__loadingState === FAILED) {
+                    tile.__loadingState = UNLOADED;
+                }
+            },
+            null,
+            false
+        );
+
+        stats.failed = 0;
+    }
+
+    /**
+     * Disposes of all resources
+     */
+    dispose(): void {
+        const lruCache = this.lruCache;
+
+        // Collect all tiles for disposal
+        const toRemove: Tile[] = [];
+        this.traverse(
+            t => {
+                toRemove.push(t);
+                return false;
+            },
+            null,
+            false
+        );
+
+        // Remove all tiles from cache
+        for (let i = 0, l = toRemove.length; i < l; i++) {
+            lruCache.remove(toRemove[i]);
+        }
+
+        // Reset statistics
         this.stats = {
             parsing: 0,
             downloading: 0,
@@ -111,158 +334,23 @@ export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: an
             visible: 0
         };
         this.frameCount = 0;
-
-        this.errorTarget = 6.0;
-        this.errorThreshold = Infinity;
-        this.loadSiblings = true;
-        this.displayActiveTiles = false;
-        this.maxDepth = Infinity;
-        this.stopAtEmptyTiles = true;
     }
 
-    traverse(
-        beforecb: (node: Tile, parent: Tile | null) => void,
-        aftercb?: (node: Tile, parent: Tile | null) => void
-    ): void {
-        const tileSets = this.tileSets;
-        const rootTileSet = tileSets[this.rootURL];
-        if (
-            !rootTileSet ||
-            rootTileSet instanceof Promise ||
-            rootTileSet instanceof Error ||
-            !rootTileSet.root
-        ) {
-            return;
-        }
-
-        traverseSet(rootTileSet.root, beforecb, aftercb);
+    /**
+     * Dispatches an event (to be overridden by subclasses)
+     * @param e The event to dispatch
+     */
+    dispatchEvent(e: any): void {
+        // To be overridden for dispatching via an event system
     }
 
-    update(): void {
-        const stats = this.stats;
-        const lruCache = this.lruCache;
-        const tileSets = this.tileSets;
-        const rootTileSet = tileSets[this.rootURL];
-
-        if (!(this.rootURL in tileSets)) {
-            this.loadRootTileSet(this.rootURL);
-            return;
-        } else if (
-            !rootTileSet ||
-            rootTileSet instanceof Promise ||
-            rootTileSet instanceof Error ||
-            !rootTileSet.root
-        ) {
-            return;
-        }
-
-        const root = rootTileSet.root;
-
-        stats.inFrustum = 0;
-        stats.used = 0;
-        stats.active = 0;
-        stats.visible = 0;
-        this.frameCount++;
-
-        determineFrustumSet(root, this);
-        markUsedSetLeaves(root, this);
-        skipTraversal(root, this);
-        toggleTiles(root, this);
-
-        lruCache.scheduleUnload();
-    }
-
-    parseTile(childTile: Tiles3DTileContent, tile: Tile, extension: string): Promise<void> {
-        return Promise.resolve();
-    }
-
-    disposeTile(tile: Tile): void {}
-
-    preprocessNode(tile: Tile, parentTile: Tile | null, tileSetDir: string): void {
-        if (tile.content) {
-            if (!tile.content.uri && "url" in tile.content) {
-                tile.content.uri = tile.content.url;
-                delete tile.content.url;
-            }
-
-            if (tile.content.uri) {
-                tile.content.uri = urlJoin(tileSetDir, tile.content.uri);
-            }
-
-            // if (
-            //     tile.content.boundingVolume &&
-            //     !(
-            //         "box" in tile.content.boundingVolume ||
-            //         "sphere" in tile.content.boundingVolume ||
-            //         "region" in tile.content.boundingVolume
-            //     )
-            // ) {
-            //     delete tile.content.boundingVolume;
-            // }
-        }
-
-        tile.parent = parentTile;
-
-        const uri = tile.content?.uri;
-        if (uri) {
-            const extension = getUrlExtension(tile.content.uri);
-            const isExternalTileSet = Boolean(extension && extension.toLowerCase() === "json");
-            tile.__externalTileSet = isExternalTileSet;
-            tile.__contentEmpty = isExternalTileSet;
-        } else {
-            tile.__externalTileSet = false;
-            tile.__contentEmpty = true;
-        }
-
-        tile.__distanceFromCamera = Infinity;
-        tile.__error = Infinity;
-
-        tile.__inFrustum = false;
-        tile.__isLeaf = false;
-
-        tile.__usedLastFrame = false;
-        tile.__used = false;
-
-        tile.__wasSetVisible = false;
-        tile.__visible = false;
-        tile.__childrenWereVisible = false;
-        tile.__allChildrenLoaded = false;
-
-        tile.__wasSetActive = false;
-        tile.__active = false;
-
-        tile.__loadingState = UNLOADED;
-        tile.__loadIndex = 0;
-
-        tile.__loadAbort = null;
-
-        tile.__depthFromRenderedParent = -1;
-        if (parentTile === null) {
-            tile.__depth = 0;
-            tile.refine = tile.refine || TILE_REFINEMENT.REPLACE;
-        } else {
-            tile.__depth = parentTile.__depth + 1;
-            tile.refine = tile.refine || parentTile.refine;
-        }
-    }
-
-    setTileActive(tile: Tile, state: boolean): void {}
-
-    setTileVisible(tile: Tile, state: boolean): void {}
-
-    calculateError(tile: Tile): void | number {
-        return 0;
-    }
-
-    tileInView(tile: Tile): boolean {
-        return true;
-    }
-
-    fetchTileSet(
-        url: string,
-        fetchOptions: RequestInit,
-        parent: Tile | null = null
-    ): Promise<TileSet> {
+    /**
+     * Fetches data from a URL (can be overridden by plugins)
+     * @param url The URL to fetch
+     * @param options Fetch options
+     * @returns A promise with the response
+     */
+    fetchTileJson(url: string, fetchOptions: any): Promise<TileSet> {
         return load3DTiles(
             url,
             {
@@ -272,73 +360,290 @@ export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: an
             },
             fetchOptions
         ).then((json: Tiles3DTilesetJSONPostprocessed) => {
-            let tileSet = new TileSet(json);
-            const version = json.asset?.version;
-            console.assert(
-                version === "1.0" || version === "0.0",
-                'asset.version is expected to be a string of "1.0" or "0.0"'
-            );
-
-            const basePath = path.dirname(url);
-
-            traverseSet(
-                tileSet.root,
-                (node: Tile, parent: Tile | null) => this.preprocessNode(node, parent, basePath),
-                null,
-                parent,
-                parent ? parent.__depth : 0
-            );
-
-            return tileSet;
+            return new TileSet(json);
         }) as Promise<TileSet>;
     }
 
-    loadRootTileSet(url: string): Promise<TileSet> {
-        const tileSets = this.tileSets;
-        if (!(url in tileSets)) {
-            const pr = this.fetchTileSet(
-                this.preprocessURL ? this.preprocessURL(url) : url,
-                this.fetchOptions
-            ).then(json => {
-                tileSets[url] = json;
-                return json;
-            });
+    fetchTileContent(url: string, fetchOptions: any): Promise<Tiles3DTileContent> {
+        return load3DTiles(
+            url,
+            {
+                "3d-tiles": {
+                    loadGLTF: true
+                }
+            },
+            fetchOptions
+        ).then((json: Tiles3DTileContent) => {
+            return json;
+        }) as Promise<Tiles3DTileContent>;
+    }
 
-            pr.catch((err: Error) => {
-                console.error(err);
-                tileSets[url] = err;
-            });
+    /**
+     * Parses tile content (to be implemented by subclasses)
+     * @param buffer The content buffer
+     * @param tile The tile being parsed
+     * @param extension The file extension
+     * @returns Parsed content or null
+     */
+    parseTile(
+        content: Tiles3DTileContent,
+        tile: Tile,
+        extension: string,
+        uri: string,
+        signal: AbortSignal
+    ): Promise<void> {
+        return null;
+    }
 
-            tileSets[url] = pr;
-            return pr;
-        } else if (tileSets[url] instanceof Error) {
-            return Promise.reject(tileSets[url]);
-        } else if (tileSets[url] instanceof Promise) {
-            return tileSets[url] as Promise<TileSet>;
-        } else {
-            return Promise.resolve(tileSets[url] as TileSet);
+    /**
+     * Disposes of tile resources
+     * @param tile The tile to dispose
+     */
+    disposeTile(tile: Tile): void {
+        // Hide tile if visible
+        if (tile.__visible) {
+            this.setTileVisible(tile, false);
+            tile.__visible = false;
+        }
+
+        // Deactivate tile if active
+        if (tile.__active) {
+            this.setTileActive(tile, false);
+            tile.__active = false;
         }
     }
 
-    requestTileContents(tile: Tile): void {
-        if (tile.__loadingState !== UNLOADED) {
+    /**
+     * Preprocesses a tile node
+     * @param tile The tile to preprocess
+     * @param tileSetDir The base directory of the tileset
+     * @param parentTile The parent tile (optional)
+     */
+    preprocessNode(
+        tile: TileInternal,
+        tileSetDir: string,
+        parentTile: TileInternal | null = null
+    ): void {
+        if (tile.content) {
+            // Fix old file formats
+            if (!tile.content.uri && tile.content.url) {
+                tile.content.uri = tile.content.url;
+                delete tile.content.url;
+            }
+
+            // Fix cases where bounding volume is present but empty
+            if (
+                tile.content.boundingVolume &&
+                !(
+                    "box" in tile.content.boundingVolume ||
+                    "sphere" in tile.content.boundingVolume ||
+                    "region" in tile.content.boundingVolume
+                )
+            ) {
+                delete tile.content.boundingVolume;
+            }
+        }
+
+        tile.parent = parentTile;
+
+        // Determine content type
+        if (tile.content?.uri) {
+            const extension = getUrlExtension(tile.content.uri);
+            tile.__hasContent = true;
+            tile.__hasUnrenderableContent = Boolean(extension && /json$/.test(extension));
+            tile.__hasRenderableContent = !tile.__hasUnrenderableContent;
+        } else {
+            tile.__hasContent = false;
+            tile.__hasUnrenderableContent = false;
+            tile.__hasRenderableContent = false;
+        }
+
+        // Initialize tile state
+        tile.__childrenProcessed = 0;
+        if (parentTile) {
+            parentTile.__childrenProcessed++;
+        }
+
+        tile.__distanceFromCamera = Infinity;
+        tile.__error = Infinity;
+        tile.__inFrustum = false;
+        tile.__isLeaf = false;
+        tile.__usedLastFrame = false;
+        tile.__used = false;
+        tile.__wasSetVisible = false;
+        tile.__visible = false;
+        tile.__childrenWereVisible = false;
+        tile.__allChildrenLoaded = false;
+        tile.__wasSetActive = false;
+        tile.__active = false;
+        tile.__loadingState = UNLOADED;
+
+        // Set depth and refine mode
+        if (parentTile === null) {
+            tile.__depth = 0;
+            tile.__depthFromRenderedParent = tile.__hasRenderableContent ? 1 : 0;
+            tile.refine = tile.refine || TILE_REFINEMENT.REPLACE;
+        } else {
+            tile.__depth = parentTile.__depth + 1;
+            tile.__depthFromRenderedParent =
+                parentTile.__depthFromRenderedParent + (tile.__hasRenderableContent ? 1 : 0);
+            tile.refine = tile.refine || parentTile.refine;
+        }
+
+        tile.__basePath = tileSetDir;
+        tile.__lastFrameVisited = -1;
+
+        // Allow plugins to preprocess the node
+        // this.preprocessNode(tile, tileSetDir, parentTile);
+    }
+
+    /**
+     * Sets a tile's active state
+     * @param tile The tile to update
+     * @param active Whether the tile is active
+     */
+    setTileActive(tile: Tile, active: boolean): void {
+        active ? this.activeTiles.add(tile) : this.activeTiles.delete(tile);
+    }
+
+    /**
+     * Sets a tile's visibility state
+     * @param tile The tile to update
+     * @param visible Whether the tile is visible
+     */
+    setTileVisible(tile: Tile, visible: boolean): void {
+        visible ? this.visibleTiles.add(tile) : this.visibleTiles.delete(tile);
+    }
+
+    /**
+     * Calculates the screen space error for a tile
+     * @param tile The tile to calculate for
+     * @param target The target error value
+     */
+    calculateTileViewError(tile: Tile, target: ViewErrorTarget): void {
+        // To be implemented by subclasses
+    }
+
+    /**
+     * Ensures children tiles are preprocessed
+     * @param tile The parent tile
+     * @param immediate Whether to process immediately
+     */
+    ensureChildrenArePreprocessed(tile: TileInternal, immediate: boolean = false): void {
+        const children = tile.children || [];
+        for (let i = 0, l = children.length; i < l; i++) {
+            const child = children[i];
+            if ("__depth" in child) {
+                // Child already processed
+                break;
+            } else if (immediate) {
+                // Process immediately
+                this.processNodeQueue.remove(child);
+                this.preprocessNode(child, tile.__basePath || "", tile);
+            } else {
+                // Queue for processing
+                if (!this.processNodeQueue.has(child)) {
+                    this.processNodeQueue.add(child, (child: TileInternal) => {
+                        this.preprocessNode(child, tile.__basePath || "", tile);
+                        this._dispatchNeedsUpdateEvent();
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Preprocesses a tileset JSON
+     * @param json The tileset JSON
+     * @param url The tileset URL
+     * @param parent The parent tile (optional)
+     */
+    private preprocessTileSet(
+        json: TileSet,
+        url: string,
+        parent: TileInternal | null = null
+    ): void {
+        const version = json.asset?.version;
+        if (version) {
+            const [major, minor] = version.split(".").map(v => parseInt(v));
+            console.assert(
+                major <= 1,
+                "TilesRenderer: asset.version is expected to be a 1.x or a compatible version."
+            );
+
+            if (major === 1 && minor > 0) {
+                console.warn(
+                    "TilesRenderer: tiles versions at 1.1 or higher have limited support. Some new extensions and features may not be supported."
+                );
+            }
+        }
+
+        // Determine base path
+        let basePath = url.replace(/\/[^/]*$/, "");
+        basePath = new URL(basePath, window.location.href).toString();
+        this.preprocessNode(json.root as TileInternal, basePath, parent);
+    }
+
+    /**
+     * Loads the root tileset
+     * @returns A promise with the loaded tileset
+     */
+    protected loadRootTileSet(): Promise<TileSet> {
+        // Preprocess URL
+        let processedUrl = this.rootURL;
+        this.preprocessURL?.(processedUrl, null);
+
+        // Load tileset
+        const pr = this.fetchTileJson(processedUrl, this.fetchOptions).then((root: TileSet) => {
+            if (processedUrl) {
+                this.preprocessTileSet(root, processedUrl);
+            }
+            return root;
+        });
+
+        return pr as Promise<TileSet>;
+    }
+    /**
+     * Requests tile contents to be loaded
+     * @param tile The tile to load
+     */
+    private requestTileContents(tile: TileInternal): void {
+        if (tile.__loadingState !== UNLOADED || !tile.content?.uri) {
             return;
+        }
+
+        let isExternalTileSet = false;
+        let externalTileset: TileSet | null = null;
+        let uri = new URL(tile.content.uri, tile.__basePath + "/").toString();
+        if (this.preprocessURL) {
+            uri = this.preprocessURL(uri, tile);
         }
 
         const stats = this.stats;
         const lruCache = this.lruCache;
         const downloadQueue = this.downloadQueue;
         const parseQueue = this.parseQueue;
-        const isExternalTileSet = tile.__externalTileSet;
+        const extension = getUrlExtension(uri);
 
-        lruCache.add(tile, (t: Tile) => {
-            if (t.__loadingState === LOADING) {
-                t.__loadAbort?.abort();
-                t.__loadAbort = null;
-            } else if (isExternalTileSet) {
+        // Set up abort controller for cancellation
+        const controller = new AbortController();
+        const signal = controller.signal;
+        const addedSuccessfully = lruCache.add(tile, (t: TileInternal) => {
+            // Cleanup when tile is unloaded
+            controller.abort();
+
+            if (isExternalTileSet) {
                 t.children.length = 0;
+                t.__childrenProcessed = 0;
             } else {
                 this.disposeTile(t);
+            }
+
+            // Update stats
+            stats.inCache--;
+            if (this.cachedSinceLoadComplete.has(tile)) {
+                this.cachedSinceLoadComplete.delete(tile);
+                stats.inCacheSinceLoad--;
             }
 
             if (t.__loadingState === LOADING) {
@@ -348,149 +653,199 @@ export class TilesRendererBase extends THREE.EventDispatcher<{ [key: string]: an
             }
 
             t.__loadingState = UNLOADED;
-            t.__loadIndex++;
-
             parseQueue.remove(t);
             downloadQueue.remove(t);
         });
 
-        tile.__loadIndex++;
-        const loadIndex = tile.__loadIndex;
-        const controller = new AbortController();
-        const signal = controller.signal;
+        if (!addedSuccessfully) {
+            return;
+        }
 
+        // Notify loading start
+        if (!this.isLoading) {
+            this.isLoading = true;
+            this.dispatchEvent({ type: "tiles-load-start" });
+        }
+
+        this.cachedSinceLoadComplete.add(tile);
+        stats.inCacheSinceLoad++;
+        stats.inCache++;
         stats.downloading++;
-        tile.__loadAbort = controller;
         tile.__loadingState = LOADING;
 
-        const errorCallback = (e: Error) => {
-            if (tile.__loadIndex !== loadIndex) {
-                return;
-            }
-
-            if (e.name !== "AbortError") {
-                parseQueue.remove(tile);
-                downloadQueue.remove(tile);
-
-                if (tile.__loadingState === PARSING) {
-                    stats.parsing--;
-                } else if (tile.__loadingState === LOADING) {
-                    stats.downloading--;
-                }
-
-                stats.failed++;
-
-                console.error(`TilesRenderer : Failed to load tile at url "${tile.content?.uri}".`);
-                console.error(e);
-                tile.__loadingState = FAILED;
-            } else {
-                lruCache.remove(tile);
-            }
-        };
-
-        if (isExternalTileSet) {
-            downloadQueue
-                .add(tile, (tileCb: Tile): Promise<TileSet | void> => {
-                    if (tileCb.__loadIndex !== loadIndex) {
-                        return Promise.resolve();
-                    }
-
-                    const uri = tileCb.content?.uri;
-                    if (!uri) return Promise.reject(new Error("Tile content URI is missing"));
-
-                    const processedUri = this.preprocessURL ? this.preprocessURL(uri) : uri;
-                    return this.fetchTileSet(
-                        processedUri,
-                        Object.assign({ signal }, this.fetchOptions),
-                        tileCb
-                    );
-                })
-                .then(json => {
-                    if (tile.__loadIndex !== loadIndex || !json) {
-                        return;
-                    }
-
-                    stats.downloading--;
-                    tile.__loadAbort = null;
-                    tile.__loadingState = LOADED;
-
-                    tile.children.push(json.root);
-                })
-                .catch(errorCallback);
-        } else {
-            downloadQueue
-                .add(tile, (downloadTile: Tile): Promise<Tiles3DTileContent | undefined> => {
-                    if (downloadTile.__loadIndex !== loadIndex) {
+        // Start download process
+        downloadQueue
+            .add(
+                tile,
+                async (downloadTile: Tile): Promise<TileSet | Tiles3DTileContent | undefined> => {
+                    if (signal.aborted) {
                         return Promise.resolve(undefined);
                     }
 
-                    const uri = downloadTile.content?.uri;
-                    if (!uri) return Promise.reject(new Error("Tile content URI is missing"));
-
-                    const processedUri = this.preprocessURL ? this.preprocessURL(uri) : uri;
-                    return load3DTiles(
-                        processedUri,
-                        {
-                            "3d-tiles": {
-                                loadGLTF: true
-                            }
-                        },
-                        { signal, ...this.fetchOptions }
-                    ) as Promise<Tiles3DTileContent | undefined>;
-                })
-                .then(res => {
-                    if (tile.__loadIndex !== loadIndex || !res) {
-                        return;
+                    let res: TileSet | Tiles3DTileContent | undefined;
+                    if (extension === "json") {
+                        res = await this.fetchTileJson(uri, { ...this.fetchOptions, signal });
+                    } else {
+                        res = await this.fetchTileContent(uri, { ...this.fetchOptions, signal });
                     }
-
+                    this.dispatchEvent({ type: "tile-download-start", tile });
                     return res;
-                })
-                .then((buffer: Tiles3DTileContent | undefined) => {
-                    if (tile.__loadIndex !== loadIndex || !buffer) {
-                        return;
+                }
+            )
+            .then((content: TileSet | Tiles3DTileContent | undefined) => {
+                if (signal.aborted) {
+                    return;
+                }
+
+                stats.downloading--;
+                stats.parsing++;
+                tile.__loadingState = PARSING;
+
+                return parseQueue.add(tile, (parseTile: Tile) => {
+                    if (signal.aborted) {
+                        return Promise.resolve();
                     }
 
-                    stats.downloading--;
-                    stats.parsing++;
-                    tile.__loadAbort = null;
-                    tile.__loadingState = PARSING;
+                    if (extension === "json" && (content as TileSet).root) {
+                        this.preprocessTileSet(content as TileSet, uri, tile);
+                        tile.children.push((content as TileSet).root as TileInternal);
+                        externalTileset = content as TileSet;
+                        isExternalTileSet = true;
+                        return Promise.resolve();
+                    } else {
+                        return this.parseTile(
+                            content as Tiles3DTileContent,
+                            parseTile,
+                            extension,
+                            uri,
+                            signal
+                        );
+                    }
+                });
+            })
+            .then(() => {
+                if (signal.aborted) {
+                    return;
+                }
 
-                    return parseQueue.add(tile, (parseTile: Tile) => {
-                        if (parseTile.__loadIndex !== loadIndex) {
-                            return Promise.resolve();
-                        }
+                stats.parsing--;
+                tile.__loadingState = LOADED;
+                lruCache.setLoaded(tile, true);
 
-                        const uri = parseTile.content?.uri;
-                        if (!uri) return Promise.reject(new Error("Tile content URI is missing"));
+                // Check memory usage
+                if (lruCache.getMemoryUsage(tile) === null) {
+                    if (lruCache.isFull() && lruCache.computeMemoryUsageCallback(tile) > 0) {
+                        lruCache.remove(tile);
+                    } else {
+                        lruCache.updateMemoryUsage(tile);
+                    }
+                }
 
-                        const extension = getUrlExtension(uri);
-                        return this.parseTile(buffer, parseTile, extension);
+                // Dispatch events
+                this.dispatchEvent({ type: "needs-update" });
+                this.dispatchEvent({ type: "load-content" });
+                if (isExternalTileSet) {
+                    this.dispatchEvent({
+                        type: "load-tile-set",
+                        tileSet: externalTileset,
+                        url: uri
                     });
-                })
-                .then(() => {
-                    if (tile.__loadIndex !== loadIndex) {
-                        return;
+                }
+                if (tile.cached?.scene) {
+                    this.dispatchEvent({
+                        type: "load-model",
+                        scene: tile.cached.scene,
+                        tile
+                    });
+                }
+            })
+            .catch(error => {
+                if (signal.aborted) {
+                    return;
+                }
+
+                if (error.name !== "AbortError") {
+                    parseQueue.remove(tile);
+                    downloadQueue.remove(tile);
+
+                    if (tile.__loadingState === PARSING) {
+                        stats.parsing--;
+                    } else if (tile.__loadingState === LOADING) {
+                        stats.downloading--;
                     }
 
-                    stats.parsing--;
-                    tile.__loadingState = LOADED;
+                    stats.failed++;
 
-                    if (tile.__wasSetVisible) {
-                        this.setTileVisible(tile, true);
-                    }
+                    console.error(
+                        `TilesRenderer : Failed to load tile at url "${tile.content?.uri}".`
+                    );
+                    console.error(error);
+                    tile.__loadingState = FAILED;
+                    lruCache.setLoaded(tile, true);
 
-                    if (tile.__wasSetActive) {
-                        this.setTileActive(tile, true);
-                    }
-                })
-                .catch(errorCallback);
-        }
+                    this.dispatchEvent({
+                        type: "load-error",
+                        tile,
+                        error,
+                        url: uri
+                    });
+                } else {
+                    lruCache.remove(tile);
+                }
+            });
     }
+}
 
-    dispose(): void {
-        const lruCache = this.lruCache;
-        this.traverse(tile => {
-            lruCache.remove(tile);
-        });
+/**
+ * Priority queue sort function for tile loading
+ * @param a First tile to compare
+ * @param b Second tile to compare
+ * @returns Comparison result (-1, 0, or 1)
+ */
+function priorityCallback(a: Tile, b: Tile): number {
+    if (a.__depthFromRenderedParent !== b.__depthFromRenderedParent) {
+        // load shallower tiles first using "depth from rendered parent" to help
+        // even out depth disparities caused by non-content parent tiles
+        return a.__depthFromRenderedParent > b.__depthFromRenderedParent ? -1 : 1;
+    } else if (a.__inFrustum !== b.__inFrustum) {
+        // load tiles that are in the frustum at the current depth
+        return a.__inFrustum ? 1 : -1;
+    } else if (a.__used !== b.__used) {
+        // load tiles that have been used
+        return a.__used ? 1 : -1;
+    } else if (a.__error !== b.__error) {
+        // load the tile with the higher error
+        return a.__error > b.__error ? 1 : -1;
+    } else if (a.__distanceFromCamera !== b.__distanceFromCamera) {
+        // and finally visible tiles which have equal error (ex: if geometricError === 0)
+        // should prioritize based on distance.
+        return a.__distanceFromCamera > b.__distanceFromCamera ? -1 : 1;
     }
+    return 0;
+}
+
+/**
+ * LRU cache sort function for tile unloading
+ * @param a First tile to compare
+ * @param b Second tile to compare
+ * @returns Comparison result (-1, 0, or 1)
+ */
+function lruPriorityCallback(a: TileInternal, b: TileInternal): number {
+    if (a.__depthFromRenderedParent !== b.__depthFromRenderedParent) {
+        // dispose of deeper tiles first
+        return a.__depthFromRenderedParent > b.__depthFromRenderedParent ? 1 : -1;
+    } else if (a.__loadingState !== b.__loadingState) {
+        // dispose of tiles that are earlier along in the loading process first
+        return a.__loadingState > b.__loadingState ? -1 : 1;
+    } else if (a.__lastFrameVisited !== b.__lastFrameVisited) {
+        // dispose of least recent tiles first
+        return a.__lastFrameVisited > b.__lastFrameVisited ? -1 : 1;
+    } else if (a.__hasUnrenderableContent !== b.__hasUnrenderableContent) {
+        // dispose of external tile sets last
+        return a.__hasUnrenderableContent ? -1 : 1;
+    } else if (a.__error !== b.__error) {
+        // unload the tile with lower error
+        return a.__error > b.__error ? -1 : 1;
+    }
+    return 0;
 }

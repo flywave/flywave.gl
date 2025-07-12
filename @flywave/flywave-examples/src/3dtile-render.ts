@@ -10,6 +10,8 @@ import { GeoCoordinates, sphereProjection } from "@flywave/flywave-geoutils";
 import { TilesRenderer } from "@flywave/flywave-3dtile-render";
 import { apikey } from "./config";
 import { HereTileProvider, HereWebTileDataSource } from "@flywave/flywave-webtile-datasource";
+import { Tile } from "../../flywave-3dtile-render/src/base/Tile";
+import { TileIntersection } from "../../flywave-3dtile-render/src/renderer/raycastTraverse";
 
 /**
  * A simple example using the webtile data source. Tiles are retrieved from
@@ -68,16 +70,46 @@ export namespace T3DTileRenderExample {
 
     const [mapView, controls] = initializeMapView("mapCanvas");
 
+    function getCanvasPosition(
+        event: MouseEvent | Touch,
+        canvas: HTMLCanvasElement
+    ): { x: number; y: number } {
+        const { left, top } = canvas.getBoundingClientRect();
+        return { x: event.clientX - Math.floor(left), y: event.clientY - Math.floor(top) };
+    }
+
     let tileRender = new TilesRenderer({
         // url: "./resources/3dtile-data/pipe/tileset.json",
-
-        url: "https://assets.cms.plateau.reearth.io/assets/99/e2a800-7d75-4d11-94e1-bef604c39d01/13103_minato-ku_pref_2023_citygml_1_op_bldg_3dtiles_13103_minato-ku_lod4/tileset.json",
+        url: "http://192.168.1.18/flywave-examples/data/%E7%89%B9%E9%AB%98%E5%8E%8B%E8%BE%93%E7%94%B5%E7%BA%BF%E8%B7%AF/3dtile/tileset.json",
+        // url: "https://assets.cms.plateau.reearth.io/assets/99/e2a800-7d75-4d11-94e1-bef604c39d01/13103_minato-ku_pref_2023_citygml_1_op_bldg_3dtiles_13103_minato-ku_lod4/tileset.json",
         decoderPath: "./resources/"
     });
     mapView.add3DTileSet(tileRender);
     tileRender.getRootTileBoundingVolumeRegion().then(region => {
         controls.flyToBox(region);
     });
+
+    let intersection: TileIntersection[] = [];
+    const canvas = mapView.canvas;
+
+    let preTile: Tile | undefined;
+    canvas.addEventListener("mouseup", event => {
+        const canvasPos = getCanvasPosition(event, canvas);
+        const rayCaster = mapView.pickHandler.setupRaycaster(canvasPos.x, canvasPos.y);
+        tileRender.raycast(rayCaster, intersection);
+
+        const [picked] = intersection;
+        if (picked) {
+            if (preTile) {
+                preTile.debugBoundingVolume(false);
+            }
+            preTile = picked.tile;
+            preTile.debugBoundingVolume("box");
+        }
+        console.log(intersection);
+        intersection.length = 0;
+    });
+
     // controls.setTo(117.0002378472017, 36.04174517742333, 1171.7782847248018, 0, 0, 0);
 
     // controls.setTo(117.82701769728989, 36.831012861737015, 1171.7782847248018, 0, 0, 0);
