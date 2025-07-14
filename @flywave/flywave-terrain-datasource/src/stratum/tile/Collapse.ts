@@ -296,11 +296,8 @@ export class CollapsePillar extends BspObject {
             "position",
             new THREE.BufferAttribute(new Float32Array(positions), 3)
         );
-
         geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normals), 3));
-
         geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(uvs), 2));
-
         geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
 
         return geometry;

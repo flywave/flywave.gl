@@ -20,6 +20,9 @@ export abstract class BspObject {
     protected abstract polygonsToGeometry(polygons: readonly Polygon[]): THREE.BufferGeometry;
 
     clipGeometry(node: BSPNode): THREE.BufferGeometry | undefined {
+        if (!this.bsp) this.buildBsp();
+        if (!this.bsp?.polygons.length) return undefined;
+
         const status = this.intersection(node);
 
         switch (status) {
@@ -28,12 +31,6 @@ export abstract class BspObject {
             case "outside":
                 return this.geometry;
             case "intersect":
-                if (!this.bsp) {
-                    this.buildBsp();
-                }
-                if (!this.geometry) {
-                    return undefined;
-                }
                 const clippedA = clipTo(invert(this.bsp), node);
                 const clippedB = invert(clipTo(invert(clipTo(node, clippedA)), clippedA));
                 const outs = allPolygons(invert(build(allPolygons(clippedB), clippedA)));
@@ -126,100 +123,146 @@ export abstract class BspObject {
     }
 
     private polygonsIntersect(a: Polygon, b: Polygon): boolean {
-        const normalA = new THREE.Vector3(a.plane.normal.x, a.plane.normal.y, a.plane.normal.z);
-        const normalB = new THREE.Vector3(b.plane.normal.x, b.plane.normal.y, b.plane.normal.z);
-        const parallel = Math.abs(normalA.dot(normalB)) > 0.99;
-
-        if (!parallel && this.polygonsSeparated(a, b)) {
-            return false;
-        }
-
-        return this.checkEdgeIntersections(a, b);
-    }
-
-    private checkEdgeIntersections(a: Polygon, b: Polygon): boolean {
-        const edgesA = this.getPolygonEdges(a);
-        const edgesB = this.getPolygonEdges(b);
-
-        for (const edgeA of edgesA) {
-            for (const edgeB of edgesB) {
-                if (this.segmentsIntersect(edgeA, edgeB)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private getPolygonEdges(poly: Polygon): Array<[THREE.Vector3, THREE.Vector3]> {
-        const edges: Array<[THREE.Vector3, THREE.Vector3]> = [];
-
-        for (let i = 0; i < poly.vectors.length; i++) {
-            const current = new THREE.Vector3(
-                poly.vectors[i].x,
-                poly.vectors[i].y,
-                poly.vectors[i].z
-            );
-            const next = new THREE.Vector3(
-                poly.vectors[(i + 1) % poly.vectors.length].x,
-                poly.vectors[(i + 1) % poly.vectors.length].y,
-                poly.vectors[(i + 1) % poly.vectors.length].z
-            );
-
-            if (next.clone().sub(current).length() > 1e-6) {
-                edges.push([current, next]);
-            }
-        }
-
-        return edges;
-    }
-
-    private polygonsSeparated(a: Polygon, b: Polygon): boolean {
+        // 1. 收集所有可能的分离轴
         const axes = this.getSeparatingAxes(a, b);
 
+        // 2. 执行分离轴定理检测
         for (const axis of axes) {
-            const projA = this.projectPolygon(a, axis);
-            const projB = this.projectPolygon(b, axis);
-
-            if (projA.max < projB.min || projB.max < projA.min) {
-                return true;
+            if (this.isSeparatingAxis(a, b, axis)) {
+                return false;
             }
         }
-        return false;
+
+        // 3. 处理共面多边形的情况
+        return this.checkCoplanarIntersection(a, b);
     }
 
+    // 新增辅助方法：获取所有可能的分离轴
     private getSeparatingAxes(a: Polygon, b: Polygon): THREE.Vector3[] {
         const axes: THREE.Vector3[] = [];
 
-        for (let i = 0; i < a.vectors.length; i++) {
-            const p1 = new THREE.Vector3(a.vectors[i].x, a.vectors[i].y, a.vectors[i].z);
-            const p2 = new THREE.Vector3(
-                a.vectors[(i + 1) % a.vectors.length].x,
-                a.vectors[(i + 1) % a.vectors.length].y,
-                a.vectors[(i + 1) % a.vectors.length].z
-            );
-            const edge = new THREE.Vector3().subVectors(p2, p1);
-            const normal = this.getEdgeNormal(edge);
-            axes.push(normal);
-        }
+        // 添加多边形平面法线
+        axes.push(new THREE.Vector3(a.plane.normal.x, a.plane.normal.y, a.plane.normal.z));
+        axes.push(new THREE.Vector3(b.plane.normal.x, b.plane.normal.y, b.plane.normal.z));
 
-        for (let i = 0; i < b.vectors.length; i++) {
-            const p1 = new THREE.Vector3(b.vectors[i].x, b.vectors[i].y, b.vectors[i].z);
-            const p2 = new THREE.Vector3(
-                b.vectors[(i + 1) % b.vectors.length].x,
-                b.vectors[(i + 1) % b.vectors.length].y,
-                b.vectors[(i + 1) % b.vectors.length].z
-            );
-            const edge = new THREE.Vector3().subVectors(p2, p1);
-            const normal = this.getEdgeNormal(edge);
-            axes.push(normal);
+        // 添加边向量叉积轴
+        for (const edgeA of this.getEdges(a)) {
+            for (const edgeB of this.getEdges(b)) {
+                const cross = new THREE.Vector3().crossVectors(edgeA, edgeB);
+                if (cross.lengthSq() > 1e-6) {
+                    axes.push(cross.normalize());
+                }
+            }
         }
 
         return axes;
     }
 
-    private getEdgeNormal(edge: THREE.Vector3): THREE.Vector3 {
-        return new THREE.Vector3(-edge.y, edge.x, 0);
+    // 新增辅助方法：获取多边形边向量
+    private getEdges(poly: Polygon): THREE.Vector3[] {
+        const edges: THREE.Vector3[] = [];
+        for (let i = 0; i < poly.vectors.length; i++) {
+            const current = poly.vectors[i];
+            const next = poly.vectors[(i + 1) % poly.vectors.length];
+            edges.push(
+                new THREE.Vector3(next.x - current.x, next.y - current.y, next.z - current.z)
+            );
+        }
+        return edges;
+    }
+
+    // 新增辅助方法：分离轴检测
+    private isSeparatingAxis(a: Polygon, b: Polygon, axis: THREE.Vector3): boolean {
+        const projA = this.projectPolygon(a, axis);
+        const projB = this.projectPolygon(b, axis);
+        return projA.max < projB.min || projB.max < projA.min;
+    }
+
+    // 新增辅助方法：共面多边形相交检测
+    private checkCoplanarIntersection(a: Polygon, b: Polygon): boolean {
+        // 1. 检查是否共面
+        const planeA = new THREE.Plane().setFromNormalAndCoplanarPoint(
+            new THREE.Vector3(a.plane.normal.x, a.plane.normal.y, a.plane.normal.z),
+            new THREE.Vector3(a.vectors[0].x, a.vectors[0].y, a.vectors[0].z)
+        );
+
+        const planeB = new THREE.Plane().setFromNormalAndCoplanarPoint(
+            new THREE.Vector3(b.plane.normal.x, b.plane.normal.y, b.plane.normal.z),
+            new THREE.Vector3(b.vectors[0].x, b.vectors[0].y, b.vectors[0].z)
+        );
+
+        if (!planeA.equals(planeB)) return true;
+
+        // 2. 投影到2D平面进行检测
+        const basis = this.createProjectionBasis(planeA.normal);
+        const polyA2D = a.vectors.map(v => this.projectTo2D(v, basis));
+        const polyB2D = b.vectors.map(v => this.projectTo2D(v, basis));
+
+        // 3. 使用分离轴定理进行2D检测
+        const edges = [...this.getPolygonEdges2D(polyA2D), ...this.getPolygonEdges2D(polyB2D)];
+
+        for (const edge of edges) {
+            const axis = new THREE.Vector2(-edge.y, edge.x).normalize();
+            const projA = this.project2D(polyA2D, axis);
+            const projB = this.project2D(polyB2D, axis);
+
+            if (projA.max < projB.min || projB.max < projA.min) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // 新增辅助方法：创建投影坐标系
+    private createProjectionBasis(normal: THREE.Vector3): {
+        origin: THREE.Vector3;
+        u: THREE.Vector3;
+        v: THREE.Vector3;
+    } {
+        const origin = new THREE.Vector3();
+        const u = new THREE.Vector3();
+        const v = new THREE.Vector3();
+
+        if (Math.abs(normal.x) > Math.abs(normal.y)) {
+            u.set(normal.z, 0, -normal.x).normalize();
+        } else {
+            u.set(0, -normal.z, normal.y).normalize();
+        }
+        v.crossVectors(normal, u);
+
+        return { origin, u, v };
+    }
+
+    // 新增辅助方法：3D到2D投影
+    private projectTo2D(
+        vec: { x: number; y: number; z: number },
+        basis: { u: THREE.Vector3; v: THREE.Vector3 }
+    ): THREE.Vector2 {
+        const v = new THREE.Vector3(vec.x, vec.y, vec.z);
+        return new THREE.Vector2(v.dot(basis.u), v.dot(basis.v));
+    }
+
+    // 新增辅助方法：获取2D多边形边向量
+    private getPolygonEdges2D(poly: THREE.Vector2[]): THREE.Vector2[] {
+        return poly.map((p, i) => {
+            const next = poly[(i + 1) % poly.length];
+            return new THREE.Vector2(next.x - p.x, next.y - p.y);
+        });
+    }
+
+    // 新增辅助方法：2D投影
+    private project2D(points: THREE.Vector2[], axis: THREE.Vector2): { min: number; max: number } {
+        let min = Infinity;
+        let max = -Infinity;
+
+        for (const p of points) {
+            const proj = p.dot(axis);
+            min = Math.min(min, proj);
+            max = Math.max(max, proj);
+        }
+
+        return { min, max };
     }
 
     private projectPolygon(poly: Polygon, axis: THREE.Vector3): { min: number; max: number } {
@@ -234,32 +277,6 @@ export abstract class BspObject {
         }
 
         return { min, max };
-    }
-
-    private segmentsIntersect(
-        seg1: [THREE.Vector3, THREE.Vector3],
-        seg2: [THREE.Vector3, THREE.Vector3]
-    ): boolean {
-        const [a, b] = seg1;
-        const [c, d] = seg2;
-
-        const ab = new THREE.Vector3().subVectors(b, a);
-        const cd = new THREE.Vector3().subVectors(d, c);
-        const ac = new THREE.Vector3().subVectors(c, a);
-
-        const crossABxCD = new THREE.Vector3().crossVectors(ab, cd);
-
-        if (Math.abs(ac.dot(crossABxCD)) > 1e-6) {
-            return false;
-        }
-
-        const crossACxCD = new THREE.Vector3().crossVectors(ac, cd);
-        const crossACxAB = new THREE.Vector3().crossVectors(ac, ab);
-
-        const t = crossACxCD.dot(crossABxCD) / crossABxCD.dot(crossABxCD);
-        const u = crossACxAB.dot(crossABxCD) / crossABxCD.dot(crossABxCD);
-
-        return t >= 0 && t <= 1 && u >= 0 && u <= 1;
     }
 
     private getBSPBoundingBox(node: BSPNode): THREE.Box3 {

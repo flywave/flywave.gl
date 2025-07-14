@@ -580,7 +580,6 @@ class StratumTile {
     ): Array<Promise<StratumLayer>> {
         return (
             ext.stratumLayers?.map(sl => {
-                // 移除async
                 const layer = this.findStratumLayer(res, sl.id, LayerType.Voxel);
                 const lithology = res.extensions?.stratumLithology?.[layer?.id || ""] || "";
 
@@ -1477,6 +1476,123 @@ class StratumTile {
                 return acc;
             }, []);
         });
+    }
+
+    public extractGroundFaces(): { positions: Float32Array; indices: Uint32Array } {
+        const allGroundFaces = [
+            ...(this._stratumLayers?.flatMap(layer =>
+                layer.voxels.flatMap(voxel => this.extractVoxelGroundFaces(voxel))
+            ) || [])
+        ];
+
+        return this.mergeGeometryData(allGroundFaces);
+    }
+
+    private buildVoxelGeometry(voxel: StratumVoxel): {
+        geometry?: THREE.BufferGeometry;
+        bbox?: THREE.Box3;
+    } {
+        if (!voxel.geometry) return {};
+
+        // 直接从体素获取几何属性
+        const positionAttr = voxel.geometry.getAttribute("position");
+        const normalAttr = voxel.geometry.getAttribute("normal");
+        const uvAttr = voxel.geometry.getAttribute("uv");
+        const faceTypeAttr = voxel.geometry.getAttribute("facetypes");
+        const indices = voxel.geometry.index?.array;
+
+        // 创建新几何体避免污染原始数据
+        const geometry = new THREE.BufferGeometry();
+
+        // 设置几何属性
+        geometry.setAttribute("position", positionAttr.clone());
+        if (normalAttr) geometry.setAttribute("normal", normalAttr.clone());
+        if (uvAttr) geometry.setAttribute("uv", uvAttr.clone());
+        if (faceTypeAttr) geometry.setAttribute("facetypes", faceTypeAttr.clone());
+
+        // 设置索引
+        if (indices) {
+            geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
+        }
+
+        // 计算包围盒
+        geometry.computeBoundingBox();
+
+        return {
+            geometry,
+            bbox: geometry.boundingBox?.clone()
+        };
+    }
+
+    private extractVoxelGroundFaces(voxel: StratumVoxel): {
+        positions: Float32Array;
+        indices: Uint32Array;
+    } {
+        const geomData = this.buildVoxelGeometry(voxel); // 改为调用新方法
+        if (!geomData?.geometry) {
+            return { positions: new Float32Array(), indices: new Uint32Array() };
+        }
+
+        // 获取原始几何数据
+        const positionAttr = geomData.geometry.getAttribute("position");
+        const faceTypeAttr = geomData.geometry.getAttribute("facetypes");
+        const indices = (geomData.geometry.index?.array as Uint32Array) || new Uint32Array();
+
+        // 筛选地面面（假设faceType=0表示地面）
+        const groundIndices = [];
+        for (let i = 0; i < faceTypeAttr.count; i++) {
+            if (faceTypeAttr.getX(i) === 0) {
+                // 0代表地面面类型
+                const triIndex = i * 3;
+                groundIndices.push(indices[triIndex], indices[triIndex + 1], indices[triIndex + 2]);
+            }
+        }
+
+        // 提取顶点数据
+        return {
+            positions: positionAttr.array as Float32Array,
+            indices: new Uint32Array(groundIndices)
+        };
+    }
+
+    private mergeGeometryData(datasets: Array<{ positions: Float32Array; indices: Uint32Array }>): {
+        positions: Float32Array;
+        indices: Uint32Array;
+    } {
+        // 顶点去重哈希表
+        const vertexMap = new Map<string, number>();
+        const mergedVertices: number[] = [];
+        const mergedIndices: number[] = [];
+        let vertexCounter = 0;
+
+        datasets.forEach(({ positions, indices }) => {
+            indices.forEach(idx => {
+                const base = idx * 3;
+                const x = positions[base];
+                const y = positions[base + 1];
+                const z = positions[base + 2];
+
+                // 转换为世界坐标
+                const worldPos = toTileWorld(
+                    this._header!,
+                    new THREE.Vector3(x, y, z)
+                ) as THREE.Vector3;
+
+                const key = `${worldPos.x},${worldPos.y},${worldPos.z}`;
+
+                if (!vertexMap.has(key)) {
+                    vertexMap.set(key, vertexCounter++);
+                    mergedVertices.push(worldPos.x, worldPos.y, worldPos.z);
+                }
+
+                mergedIndices.push(vertexMap.get(key)!);
+            });
+        });
+
+        return {
+            positions: new Float32Array(mergedVertices),
+            indices: new Uint32Array(mergedIndices)
+        };
     }
 }
 

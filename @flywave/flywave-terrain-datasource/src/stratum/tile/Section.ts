@@ -4,8 +4,8 @@ export class SectionLine {
     private readonly _id: string;
     private readonly _name: string;
     private _lineString: Array<[number, number, number]>;
-    private _geometries?: THREE.BufferGeometry[]; // 类型替换
-    private _materials?: THREE.Material[]; // 类型替换
+    private _geometries?: THREE.BufferGeometry[];
+    private _materials?: THREE.Material[];
 
     constructor(
         sl: {
