@@ -76,7 +76,6 @@ export interface StratumVoxel {
     index: number;
     start: number;
     end: number;
-    bbox: [[number, number, number], [number, number, number]];
     neighbors: [number, number, number];
 }
 
@@ -158,7 +157,7 @@ export enum LayerType {
 
 // 地层组
 export interface StratumLayer {
-    type: LayerType; // 使用枚举类型替代number
+    type: LayerType;
     id: string;
     voxels: StratumVoxel[];
 }
@@ -174,7 +173,6 @@ export interface CollapsePillar {
     height: number;
     stratumId: string;
     lithology: string;
-    bbox: [[number, number, number], [number, number, number]];
 }
 
 // 剖切线

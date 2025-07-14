@@ -287,20 +287,6 @@ function decodeStratumLayers(
             const end = dataView.getInt32(position, true);
             position += 4;
 
-            // 读取bbox数据
-            const bboxMinX = dataView.getFloat32(position, true);
-            position += 4;
-            const bboxMinY = dataView.getFloat32(position, true);
-            position += 4;
-            const bboxMinZ = dataView.getFloat32(position, true);
-            position += 4;
-            const bboxMaxX = dataView.getFloat32(position, true);
-            position += 4;
-            const bboxMaxY = dataView.getFloat32(position, true);
-            position += 4;
-            const bboxMaxZ = dataView.getFloat32(position, true);
-            position += 4;
-
             // 读取neighbors数据
             const neighbor1 = dataView.getInt32(position, true);
             position += 4;
@@ -314,10 +300,6 @@ function decodeStratumLayers(
                 index,
                 start,
                 end,
-                bbox: [
-                    [bboxMinX, bboxMinY, bboxMinZ],
-                    [bboxMaxX, bboxMaxY, bboxMaxZ]
-                ],
                 neighbors: [neighbor1, neighbor2, neighbor3]
             };
             layer.voxels.push(voxel);

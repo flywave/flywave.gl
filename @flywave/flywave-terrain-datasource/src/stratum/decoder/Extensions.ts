@@ -388,20 +388,6 @@ function readCollapsePillars(data: Uint8Array): CollapsePillar[] {
         const [lithology, lithologyOffset] = readString(dataView, pos);
         pos += 4 + lithologyOffset;
 
-        const bbox: [[number, number, number], [number, number, number]] = [
-            [
-                dataView.getFloat64(pos, true),
-                dataView.getFloat64(pos + 8, true),
-                dataView.getFloat64(pos + 16, true)
-            ],
-            [
-                dataView.getFloat64(pos + 24, true),
-                dataView.getFloat64(pos + 32, true),
-                dataView.getFloat64(pos + 40, true)
-            ]
-        ];
-        pos += 48;
-
         collapses.push({
             id,
             name,
@@ -411,8 +397,7 @@ function readCollapsePillars(data: Uint8Array): CollapsePillar[] {
             baseRadius,
             height,
             stratumId,
-            lithology,
-            bbox
+            lithology
         });
     }
     return collapses;

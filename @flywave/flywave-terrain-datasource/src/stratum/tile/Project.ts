@@ -1,34 +1,46 @@
-import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
+import { GeoBox, GeoCoordinates, GeoCoordinatesLike, Projection } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 
 export function toTileLocal(
     header: { centerX?: number; centerY?: number; centerZ?: number },
-    point: THREE.Vector3
+    geoPoint: GeoCoordinatesLike,
+    project?: Projection
 ): THREE.Vector3 {
     const { centerX = 0, centerY = 0, centerZ = 0 } = header;
+    const point = project
+        ? project.projectPoint(geoPoint)
+        : new THREE.Vector3(geoPoint.longitude, geoPoint.latitude, geoPoint.altitude);
+
     return new THREE.Vector3(point.x - centerX, point.y - centerY, point.z - centerZ);
 }
 
 export function toTileWorld(
     header: { centerX?: number; centerY?: number; centerZ?: number },
-    point: THREE.Vector3
-): THREE.Vector3 {
+    point: THREE.Vector3,
+    project?: Projection
+): GeoCoordinatesLike | THREE.Vector3 {
     const { centerX = 0, centerY = 0, centerZ = 0 } = header;
-    return new THREE.Vector3(point.x + centerX, point.y + centerY, point.z + centerZ);
+
+    const ppoint = new THREE.Vector3(point.x + centerX, point.y + centerY, point.z + centerZ);
+    return project ? project.unprojectPoint(ppoint) : ppoint;
 }
 
 export function toTileLocalLines(
     header: { centerX?: number; centerY?: number; centerZ?: number },
-    lines: THREE.Vector3[][]
+    lines: GeoCoordinatesLike[][],
+    project?: Projection
 ): THREE.Vector3[][] {
-    return lines.map(line => line.map(point => toTileLocal(header, point)));
+    return lines.map(line => line.map(point => toTileLocal(header, point, project)));
 }
 
 export function toTileWorldLines(
     header: { centerX?: number; centerY?: number; centerZ?: number },
-    lines: THREE.Vector3[][]
-): THREE.Vector3[][] {
-    return lines.map(line => line.map(point => toTileWorld(header, point)));
+    lines: THREE.Vector3[][],
+    project?: Projection
+): GeoCoordinatesLike[][] | THREE.Vector3[][] {
+    return lines.map(line => line.map(point => toTileWorld(header, point, project))) as
+        | GeoCoordinatesLike[][]
+        | THREE.Vector3[][];
 }
 
 export function toTileWorldBBox(
@@ -37,7 +49,8 @@ export function toTileWorldBBox(
         centerY?: number;
         centerZ?: number;
     },
-    bbox: THREE.Box3
+    bbox: THREE.Box3,
+    project?: Projection
 ): GeoBox {
     const { centerX = 0, centerY = 0, centerZ = 0 } = header;
 
@@ -48,10 +61,15 @@ export function toTileWorldBBox(
         .copy(bbox.max)
         .add(new THREE.Vector3(centerX, centerY, centerZ));
 
-    return new GeoBox(
-        new GeoCoordinates(min.y, min.x, min.z), // 西南点（经度，纬度）
-        new GeoCoordinates(max.y, max.x, max.z) // 东北点（经度，纬度）
-    );
+    return project
+        ? project.unprojectBox({
+              min,
+              max
+          })
+        : new GeoBox(
+              new GeoCoordinates(min.y, min.x, min.z),
+              new GeoCoordinates(max.y, max.x, max.z)
+          );
 }
 
 export function toTileLocalBBox(
@@ -60,23 +78,45 @@ export function toTileLocalBBox(
         centerY?: number;
         centerZ?: number;
     },
-    bbox: GeoBox
+    bbox: GeoBox,
+    project?: Projection
 ): THREE.Box3 {
     const { centerX = 0, centerY = 0, centerZ = 0 } = header;
 
-    const sw = bbox.southWest;
-    const ne = bbox.northEast;
+    // 增加空值检查和后备方案
+    const worldBox = project
+        ? project.projectBox(bbox)
+        : (() => {
+              return {
+                  min: {
+                      x: bbox.west,
+                      y: bbox.south,
+                      z: bbox.minAltitude
+                  },
+                  max: {
+                      x: bbox.east,
+                      y: bbox.north,
+                      z: bbox.maxAltitude
+                  }
+              };
+          })();
+
+    // 增加浮点数精度处理
+    const preciseOffset = (val: number, offset: number) => {
+        const scaled = (val - offset) * 1e6;
+        return Math.round(scaled) / 1e6;
+    };
 
     return new THREE.Box3(
         new THREE.Vector3(
-            sw.longitude - centerX,
-            sw.latitude - centerY,
-            (sw.altitude || 0) - centerZ
+            preciseOffset(worldBox.min.x, centerX),
+            preciseOffset(worldBox.min.y, centerY),
+            preciseOffset(worldBox.min.z, centerZ)
         ),
         new THREE.Vector3(
-            ne.longitude - centerX,
-            ne.latitude - centerY,
-            (ne.altitude || 0) - centerZ
+            preciseOffset(worldBox.max.x, centerX),
+            preciseOffset(worldBox.max.y, centerY),
+            preciseOffset(worldBox.max.z, centerZ)
         )
     );
 }

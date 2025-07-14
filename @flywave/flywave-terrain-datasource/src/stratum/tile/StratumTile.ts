@@ -5,7 +5,7 @@ import {
     triangulate,
     weilerAthertonClip
 } from "@flywave/flywave-geometry";
-import { GeoBox, Projection, TileKey } from "@flywave/flywave-geoutils";
+import { GeoBox, GeoCoordinatesLike, Projection, TileKey } from "@flywave/flywave-geoutils";
 import { FlatArray } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
@@ -74,6 +74,10 @@ class StratumTile {
 
     get bbox() {
         return this._bbox;
+    }
+
+    get geoBox() {
+        return this._bboxEcef;
     }
 
     get colorMap() {
@@ -191,7 +195,7 @@ class StratumTile {
 
             this._bbox = box;
             if (box) {
-                this._bboxEcef = toTileWorldBBox(this._header!, box);
+                this._bboxEcef = toTileWorldBBox(this._header!, box, this._project);
             }
         }
     }
@@ -366,21 +370,14 @@ class StratumTile {
         }
 
         // 处理纹理坐标
-        const texCoords = new Float32Array(nCoords * 2);
-        for (let i = 0; i < nCoords; i++) {
-            const offset = i * 2;
-            texCoords[offset] = uArr[i] / 32767;
-            texCoords[offset + 1] = vArr[i] / 32767;
-        }
+        const texCoords = res.vertexData.uvs
+            ? new Float32Array(res.vertexData.uvs)
+            : new Float32Array(nCoords * 2);
 
-        // 直接引用法线数据（假设已经是Float32Array）
-        const normals =
-            res.vertexData.normals instanceof Float32Array
-                ? res.vertexData.normals
-                : new Float32Array(res.vertexData.normals);
+        const normals = res.vertexData.normals;
 
         this._vertices = positions;
-        this._texCoords = texCoords;
+        this._texCoords = texCoords; // 使用解码后的UV数据
         this._normals = normals;
         this.caclBBox();
     }
@@ -447,8 +444,16 @@ class StratumTile {
                 const items = layer!.voxels.map(voxel => {
                     const geomData = this.buildMeshGeometry(voxel);
                     const bbox = new THREE.Box3(
-                        new THREE.Vector3(voxel.bbox[0][0], voxel.bbox[0][1], voxel.bbox[0][2]),
-                        new THREE.Vector3(voxel.bbox[1][0], voxel.bbox[1][1], voxel.bbox[1][2])
+                        new THREE.Vector3(
+                            geomData.bbox[0][0],
+                            geomData.bbox[0][1],
+                            geomData.bbox[0][2]
+                        ),
+                        new THREE.Vector3(
+                            geomData.bbox[1][0],
+                            geomData.bbox[1][1],
+                            geomData.bbox[1][2]
+                        )
                     );
                     return {
                         id: voxel.id,
@@ -480,8 +485,12 @@ class StratumTile {
                 const geomData = this.buildMeshGeometry(voxel);
                 const material = this.buildMeshMaterial("collapse", cp.id, cp.lithology);
                 const bbox = new THREE.Box3(
-                    new THREE.Vector3(voxel.bbox[0][0], voxel.bbox[0][1], voxel.bbox[0][2]),
-                    new THREE.Vector3(voxel.bbox[1][0], voxel.bbox[1][1], voxel.bbox[1][2])
+                    new THREE.Vector3(
+                        geomData.bbox[0][0],
+                        geomData.bbox[0][1],
+                        geomData.bbox[0][2]
+                    ),
+                    new THREE.Vector3(geomData.bbox[1][0], geomData.bbox[1][1], geomData.bbox[1][2])
                 );
                 return new CollapsePillar(cp, bbox, geomData?.geometry, material);
             }) ?? []
@@ -494,22 +503,12 @@ class StratumTile {
                 const layer = this.findStratumLayer(res, sl.id, LayerType.Section);
                 if (!layer?.voxels?.length) return new SectionLine(sl);
 
-                const bbox = new THREE.Box3();
                 const geometries: THREE.BufferGeometry[] = [];
                 const materials: THREE.Material[] = [];
 
                 layer.voxels.forEach(voxel => {
                     const geomData = this.buildMeshGeometry(voxel);
                     if (!geomData?.geometry || !geomData.bbox) return;
-
-                    // 合并包围盒
-                    const { min, max } = geomData.bbox;
-                    bbox[0][0] = Math.min(bbox[0][0], min[0]);
-                    bbox[0][1] = Math.min(bbox[0][1], min[1]);
-                    bbox[0][2] = Math.min(bbox[0][2], min[2]);
-                    bbox[1][0] = Math.max(bbox[1][0], max[0]);
-                    bbox[1][1] = Math.max(bbox[1][1], max[1]);
-                    bbox[1][2] = Math.max(bbox[1][2], max[2]);
 
                     geometries.push(geomData.geometry);
 
@@ -522,7 +521,7 @@ class StratumTile {
                     materials.push(material);
                 });
 
-                return new SectionLine(sl, bbox, geometries, materials);
+                return new SectionLine(sl, geometries, materials);
             }) ?? []
         );
     }
@@ -615,7 +614,6 @@ class StratumTile {
     private buildMeshGeometry(geom: {
         start: number;
         end: number;
-        bbox: [[number, number, number], [number, number, number]];
     }): { bbox: THREE.Box3; geometry?: THREE.BufferGeometry } | null {
         if (!this._indices || !this._vertices) return null;
 
@@ -646,12 +644,9 @@ class StratumTile {
 
         const indices = new Uint32Array(subIndices);
         geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+        geometry.computeBoundingBox();
 
-        const bbox = new THREE.Box3(
-            new THREE.Vector3(geom.bbox[0][0], geom.bbox[0][1], geom.bbox[0][2]),
-            new THREE.Vector3(geom.bbox[1][0], geom.bbox[1][1], geom.bbox[1][2])
-        );
-
+        const bbox = geometry.boundingBox?.clone();
         return {
             bbox,
             geometry
@@ -659,7 +654,7 @@ class StratumTile {
     }
 
     public generateCrossSections(
-        cutLines: THREE.Vector3[][],
+        cutLines: GeoCoordinatesLike[][],
         upDir: THREE.Vector3 // 新增upDir参数
     ): Array<{
         stratumProfiles: StratumProfile[];
@@ -670,7 +665,7 @@ class StratumTile {
         const stratumProfiles: StratumProfile[] = [];
 
         const results = [];
-        const localLines = toTileLocalLines(this._header, cutLines);
+        const localLines = toTileLocalLines(this._header, cutLines, this._project);
         localLines.forEach((line, lineIndex) => {
             // 处理陷落柱
             this._collapsePillars?.forEach(collapse => {
@@ -781,7 +776,10 @@ class StratumTile {
                     collapseProfiles.forEach(profile => {
                         profile.polys.forEach(poly => {
                             poly.forEach(point => {
-                                const worldPoint = toTileWorld(this._header!, point);
+                                const worldPoint = toTileWorld(
+                                    this._header!,
+                                    point
+                                ) as THREE.Vector3;
                                 point.copy(worldPoint);
                             });
                         });
@@ -794,7 +792,7 @@ class StratumTile {
                                     array[i + 1],
                                     array[i + 2]
                                 );
-                                const world = toTileWorld(this._header!, local);
+                                const world = toTileWorld(this._header!, local) as THREE.Vector3;
                                 array.set([world.x, world.y, world.z], i);
                             }
                             positions.needsUpdate = true;
@@ -806,7 +804,10 @@ class StratumTile {
                         // 转换顶底板坐标
                         [profile.top, profile.base].forEach(points => {
                             points.forEach(point => {
-                                const worldPoint = toTileWorld(this._header!, point);
+                                const worldPoint = toTileWorld(
+                                    this._header!,
+                                    point
+                                ) as THREE.Vector3;
                                 point.copy(worldPoint);
                             });
                         });
@@ -814,7 +815,10 @@ class StratumTile {
                         // 转换多边形坐标
                         profile.polys.forEach(poly => {
                             poly.forEach(point => {
-                                const worldPoint = toTileWorld(this._header!, point);
+                                const worldPoint = toTileWorld(
+                                    this._header!,
+                                    point
+                                ) as THREE.Vector3;
                                 point.copy(worldPoint);
                             });
                         });
@@ -829,7 +833,7 @@ class StratumTile {
                                     array[i + 1],
                                     array[i + 2]
                                 );
-                                const world = toTileWorld(this._header!, local);
+                                const world = toTileWorld(this._header!, local) as THREE.Vector3;
                                 array.set([world.x, world.y, world.z], i);
                             }
                             positions.needsUpdate = true;
