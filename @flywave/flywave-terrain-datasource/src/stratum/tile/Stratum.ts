@@ -2,7 +2,7 @@
 import * as THREE from "three";
 
 import { LayerType } from "../decoder";
-import { StratumVoxel } from "./Voxel";
+import { FaceTypes, StratumVoxel } from "./Voxel";
 
 export class StratumLayer {
     private readonly _id: string;
@@ -143,4 +143,50 @@ export class StratumLayer {
         this._bbox = bbox;
         return this._bbox;
     }
+
+    public extractGroundFaces(): Array<{
+    positions: Float32Array;
+    indices: Uint32Array;
+}> {
+        const groundFaces: Array<{ positions: Float32Array; indices: Uint32Array }> = [];
+
+        for (const voxel of this.voxels) {
+                // 跳过无效体素
+                if (!voxel.geometry) continue;
+                
+                // 直接推送结果避免中间数组
+                groundFaces.push(this.extractVoxelGroundFaces(voxel));
+            }
+            return groundFaces;
+    }
+
+    private extractVoxelGroundFaces(voxel: StratumVoxel): {
+        positions: Float32Array;
+        indices: Uint32Array;
+    } {
+        if (!voxel.geometry) {
+            return { positions: new Float32Array(), indices: new Uint32Array() };
+        }
+
+        // 直接从体素获取几何属性
+        const positionAttr = voxel.geometry.getAttribute("position");
+        const faceTypeAttr = voxel.geometry.getAttribute("facetypes");
+        const indices = (voxel.geometry.index?.array as Uint32Array) || new Uint32Array();
+
+        // 筛选地面面（假设faceType=0表示地面）
+        const groundIndices = [];
+        for (let i = 0; i < faceTypeAttr.count; i++) {
+            if (faceTypeAttr.getX(i) === FaceTypes.TopGroundFace) {
+                const triIndex = i * 3;
+                groundIndices.push(indices[triIndex], indices[triIndex + 1], indices[triIndex + 2]);
+            }
+        }
+
+        // 提取顶点数据
+        return {
+            positions: positionAttr.array as Float32Array,
+            indices: new Uint32Array(groundIndices)
+        };
+    }
+
 }

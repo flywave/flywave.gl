@@ -30,7 +30,7 @@ import { SectionLine } from "./Section";
 import { CollapseProfile, StratumProfile } from "./SectionProfile";
 import { StratumLayer } from "./Stratum";
 import { TextureCacheLoader } from "./Texture";
-import { StratumVoxel } from "./Voxel";
+import { FaceTypes, StratumVoxel } from "./Voxel";
 
 export type BVHObject = CollapsePillar | StratumVoxel;
 
@@ -1479,91 +1479,23 @@ class StratumTile {
     }
 
     public extractGroundFaces(): { positions: Float32Array; indices: Uint32Array } {
-        const allGroundFaces = [
-            ...(this._stratumLayers?.flatMap(layer =>
-                layer.voxels.flatMap(voxel => this.extractVoxelGroundFaces(voxel))
-            ) || [])
-        ];
-
-        return this.mergeGeometryData(allGroundFaces);
-    }
-
-    private buildVoxelGeometry(voxel: StratumVoxel): {
-        geometry?: THREE.BufferGeometry;
-        bbox?: THREE.Box3;
-    } {
-        if (!voxel.geometry) return {};
-
-        // 直接从体素获取几何属性
-        const positionAttr = voxel.geometry.getAttribute("position");
-        const normalAttr = voxel.geometry.getAttribute("normal");
-        const uvAttr = voxel.geometry.getAttribute("uv");
-        const faceTypeAttr = voxel.geometry.getAttribute("facetypes");
-        const indices = voxel.geometry.index?.array;
-
-        // 创建新几何体避免污染原始数据
-        const geometry = new THREE.BufferGeometry();
-
-        // 设置几何属性
-        geometry.setAttribute("position", positionAttr.clone());
-        if (normalAttr) geometry.setAttribute("normal", normalAttr.clone());
-        if (uvAttr) geometry.setAttribute("uv", uvAttr.clone());
-        if (faceTypeAttr) geometry.setAttribute("facetypes", faceTypeAttr.clone());
-
-        // 设置索引
-        if (indices) {
-            geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
+        const groundFaces: Array<{ positions: Float32Array; indices: Uint32Array }> = [];
+        
+        for (const layer of this._stratumLayers || []) {
+            if (!layer.voxels?.length) continue;
+            groundFaces.push(...layer.extractGroundFaces());
         }
 
-        // 计算包围盒
-        geometry.computeBoundingBox();
-
-        return {
-            geometry,
-            bbox: geometry.boundingBox?.clone()
-        };
-    }
-
-    private extractVoxelGroundFaces(voxel: StratumVoxel): {
-        positions: Float32Array;
-        indices: Uint32Array;
-    } {
-        const geomData = this.buildVoxelGeometry(voxel); // 改为调用新方法
-        if (!geomData?.geometry) {
-            return { positions: new Float32Array(), indices: new Uint32Array() };
-        }
-
-        // 获取原始几何数据
-        const positionAttr = geomData.geometry.getAttribute("position");
-        const faceTypeAttr = geomData.geometry.getAttribute("facetypes");
-        const indices = (geomData.geometry.index?.array as Uint32Array) || new Uint32Array();
-
-        // 筛选地面面（假设faceType=0表示地面）
-        const groundIndices = [];
-        for (let i = 0; i < faceTypeAttr.count; i++) {
-            if (faceTypeAttr.getX(i) === 0) {
-                // 0代表地面面类型
-                const triIndex = i * 3;
-                groundIndices.push(indices[triIndex], indices[triIndex + 1], indices[triIndex + 2]);
-            }
-        }
-
-        // 提取顶点数据
-        return {
-            positions: positionAttr.array as Float32Array,
-            indices: new Uint32Array(groundIndices)
-        };
+        return this.mergeGeometryData(groundFaces);
     }
 
     private mergeGeometryData(datasets: Array<{ positions: Float32Array; indices: Uint32Array }>): {
         positions: Float32Array;
         indices: Uint32Array;
     } {
-        // 顶点去重哈希表
-        const vertexMap = new Map<string, number>();
+        const vertexMap = new Map<number, number>();
         const mergedVertices: number[] = [];
         const mergedIndices: number[] = [];
-        let vertexCounter = 0;
 
         datasets.forEach(({ positions, indices }) => {
             indices.forEach(idx => {
@@ -1572,20 +1504,14 @@ class StratumTile {
                 const y = positions[base + 1];
                 const z = positions[base + 2];
 
-                // 转换为世界坐标
-                const worldPos = toTileWorld(
-                    this._header!,
-                    new THREE.Vector3(x, y, z)
-                ) as THREE.Vector3;
+                const hash = this.generatePositionHash(new THREE.Vector3(x, y, z));
 
-                const key = `${worldPos.x},${worldPos.y},${worldPos.z}`;
-
-                if (!vertexMap.has(key)) {
-                    vertexMap.set(key, vertexCounter++);
-                    mergedVertices.push(worldPos.x, worldPos.y, worldPos.z);
-                }
-
-                mergedIndices.push(vertexMap.get(key)!);
+            if (!vertexMap.has(hash)) {
+                vertexMap.set(hash, mergedVertices.length / 3);
+                mergedVertices.push(x, y, z);
+            }
+            
+            mergedIndices.push(vertexMap.get(hash)!);
             });
         });
 
@@ -1593,6 +1519,18 @@ class StratumTile {
             positions: new Float32Array(mergedVertices),
             indices: new Uint32Array(mergedIndices)
         };
+    }
+
+    // 新增高效哈希生成方法
+    private generatePositionHash(v: THREE.Vector3): number {
+        // 按厘米级精度处理（适用于地质坐标）
+        const scale = 1000;
+        const x = Math.round(v.x * scale);
+        const y = Math.round(v.y * scale);
+        const z = Math.round(v.z * scale);
+        
+        // 使用素数混合哈希 (2^24 + 2^14 + 2^3) 减少碰撞
+        return (x << 24) ^ (y << 14) ^ (z << 3);
     }
 }
 
