@@ -1,15 +1,10 @@
-import { BSPNode, fromPolygons, Polygon, triangulate } from "@flywave/flywave-geometry";
+import { Polygon, triangulate } from "@flywave/flywave-geometry";
 import { fromVectors } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 
-// 陷落柱剖面结构
-export interface CollapseProfile {
-    collapseID: string;
-    crossSections: THREE.BufferGeometry[];
-    polys: THREE.Vector3[][];
-}
+import { BspObject } from "./BspObject";
 
-export class CollapsePillar {
+export class CollapsePillar extends BspObject {
     private readonly _id: string;
     private readonly _name: string;
     private readonly _lithology: string;
@@ -20,7 +15,6 @@ export class CollapsePillar {
     private readonly _height: number;
     private readonly _stratumId: string;
     private _bbox?: THREE.Box3;
-    private _bsp?: BSPNode;
     private _geometry?: THREE.BufferGeometry;
     private _material?: THREE.Material;
 
@@ -40,6 +34,7 @@ export class CollapsePillar {
         geometry?: THREE.BufferGeometry,
         material?: THREE.Material
     ) {
+        super();
         this._id = collapse.id;
         this._name = collapse.name;
         this._lithology = collapse.lithology;
@@ -101,10 +96,6 @@ export class CollapsePillar {
 
     get bbox() {
         return this._bbox;
-    }
-
-    get bsp() {
-        return this._bsp;
     }
 
     dispose() {
@@ -256,19 +247,73 @@ export class CollapsePillar {
         });
     }
 
-    private buildBsp(): BSPNode {
-        const polygons = this.buildPolygons();
-        return fromPolygons(polygons);
+    protected polygonsToGeometry(polygons: readonly Polygon[]): THREE.BufferGeometry {
+        const geometry = new THREE.BufferGeometry();
+        const positions: number[] = [];
+        const normals: number[] = [];
+        const uvs: number[] = [];
+        const indices: number[] = [];
+
+        // 计算面法线
+        const computeFaceNormal = (poly: Polygon) => {
+            const v0 = poly.vectors[0];
+            const v1 = poly.vectors[1];
+            const v2 = poly.vectors[2];
+            const a = new THREE.Vector3().subVectors(v1, v0);
+            const b = new THREE.Vector3().subVectors(v2, v0);
+            const normal = new THREE.Vector3().crossVectors(a, b).normalize();
+            return normal;
+        };
+
+        polygons.forEach((poly: any) => {
+            const baseIndex = positions.length / 3;
+            const faceNormal = computeFaceNormal(poly);
+
+            // 添加顶点数据
+            for (let i = 0; i < poly.vectors.length; i++) {
+                const vec = poly.vectors[i];
+                positions.push(vec.x, vec.y, vec.z);
+
+                // 添加法线（平坦着色）
+                normals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+
+                // 添加UV坐标（如果存在）
+                if (poly.uvs && poly.uvs[i]) {
+                    uvs.push(poly.uvs[i].u, poly.uvs[i].v);
+                } else {
+                    uvs.push(0, 0); // 默认UV
+                }
+            }
+
+            // 生成三角形索引（三角扇）
+            for (let i = 1; i < poly.vectors.length - 1; i++) {
+                indices.push(baseIndex, baseIndex + i, baseIndex + i + 1);
+            }
+        });
+
+        // 设置几何体属性
+        geometry.setAttribute(
+            "position",
+            new THREE.BufferAttribute(new Float32Array(positions), 3)
+        );
+
+        geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normals), 3));
+
+        geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(uvs), 2));
+
+        geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
+
+        return geometry;
     }
 
-    private buildPolygons(): Polygon[] {
-        if (!this._geometry) {
+    protected buildPolygons(): Polygon[] {
+        if (!this.geometry) {
             return [];
         }
 
         const polygons: Polygon[] = [];
-        const positionAttr = this._geometry.getAttribute("position");
-        const indexAttr = this._geometry.getIndex();
+        const positionAttr = this.geometry.getAttribute("position");
+        const indexAttr = this.geometry.getIndex();
         const positions = positionAttr.array;
         const indices = indexAttr?.array;
 

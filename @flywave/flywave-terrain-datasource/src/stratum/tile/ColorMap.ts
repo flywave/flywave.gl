@@ -1,5 +1,7 @@
 import * as THREE from "three";
 
+import { TextureCacheLoader } from "./Texture";
+
 export interface ColorRGBA {
     r: number;
     g: number;
@@ -15,7 +17,7 @@ export function rgbaToHex(color: ColorRGBA): string {
 export class ColorMap {
     private textureSize: number;
     private readonly stratumColor: Map<string, ColorRGBA>;
-    private readonly stratumTexture: Map<string, string>; // 存储纹理路径或URL
+    private readonly stratumTexture: Map<string, string>; // 存储纹理路径
     private defaultStratum: ColorRGBA;
     private readonly faultColor: Map<string, ColorRGBA>;
     private faultHighlight: ColorRGBA;
@@ -23,17 +25,22 @@ export class ColorMap {
     private readonly collapseColor: Map<string, ColorRGBA>;
     private readonly defaultCollapse: ColorRGBA;
 
-    constructor(cm?: {
-        textureSize: number;
-        stratumColor: Record<string, ColorRGBA>;
-        stratumTexture: Record<string, string>;
-        defaultStratum: ColorRGBA;
-        faultColor: Record<string, ColorRGBA>;
-        faultHighlight: ColorRGBA;
-        defaultFault: ColorRGBA;
-        collapseColor: Record<string, ColorRGBA>;
-        defaultCollapse: ColorRGBA;
-    }) {
+    private readonly textureCache?: TextureCacheLoader;
+
+    constructor(
+        cm?: {
+            textureSize: number;
+            stratumColor: Record<string, ColorRGBA>;
+            stratumTexture: Record<string, string>;
+            defaultStratum: ColorRGBA;
+            faultColor: Record<string, ColorRGBA>;
+            faultHighlight: ColorRGBA;
+            defaultFault: ColorRGBA;
+            collapseColor: Record<string, ColorRGBA>;
+            defaultCollapse: ColorRGBA;
+        },
+        textureCache?: TextureCacheLoader // 新增缓存参数
+    ) {
         this.textureSize = cm?.textureSize || 512;
         this.stratumColor = new Map(Object.entries(cm?.stratumColor || {}));
         this.stratumTexture = new Map(Object.entries(cm?.stratumTexture || {}));
@@ -43,6 +50,7 @@ export class ColorMap {
         this.defaultFault = cm?.defaultFault || { r: 255, g: 100, b: 100, a: 255 };
         this.collapseColor = new Map(Object.entries(cm?.collapseColor || {}));
         this.defaultCollapse = cm?.defaultCollapse || { r: 128, g: 0, b: 128, a: 255 };
+        this.textureCache = textureCache || new TextureCacheLoader();
     }
 
     // 获取地层颜色
@@ -50,16 +58,10 @@ export class ColorMap {
         return this.stratumColor.get(lithologyOrId) || this.defaultStratum;
     }
 
-    // 获取地层纹理路径
-    getStratumTexture(lithologyOrId: string): THREE.DataTexture | undefined {
-        const texture = new THREE.DataTexture(
-            new Uint8Array(4 * this.textureSize * this.textureSize), // 初始化RGBA数据
-            this.textureSize,
-            this.textureSize,
-            THREE.RGBAFormat
-        );
-        texture.needsUpdate = true;
-        return texture;
+    // 修改后的纹理获取方法（异步）
+    async getStratumTexture(lithologyOrId: string): Promise<THREE.Texture | undefined> {
+        const texturePath = this.stratumTexture.get(lithologyOrId);
+        return await this.textureCache?.getTexture(lithologyOrId, texturePath);
     }
 
     // 检查是否存在纹理

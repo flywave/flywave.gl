@@ -335,4 +335,78 @@ export class GeoBox implements GeoBoxExtentLike {
 
         return this;
     }
+
+    /**
+     * 判断当前地理包围盒是否完全包含另一个地理包围盒
+     */
+    containsBox(geoBox: GeoBox): boolean {
+        // 纬度范围检查
+        if (geoBox.south < this.south || geoBox.north > this.north) {
+            return false;
+        }
+
+        // 经度范围检查（处理国际日期变更线情况）
+        const thisWest = this.west;
+        const thisEast = this.east;
+        const otherWest = geoBox.west;
+        const otherEast = geoBox.east;
+
+        const isContainedInWestHemisphere = otherWest >= thisWest && otherEast >= thisWest;
+        const isContainedInEastHemisphere = otherWest <= thisEast && otherEast <= thisEast;
+        const longitudeContained =
+            thisWest <= thisEast
+                ? otherWest >= thisWest && otherEast <= thisEast
+                : isContainedInWestHemisphere || isContainedInEastHemisphere;
+
+        if (!longitudeContained) {
+            return false;
+        }
+
+        // 高度范围检查（当且仅当两者都有高度定义时）
+        if (this.minAltitude !== undefined && this.maxAltitude !== undefined) {
+            if (geoBox.minAltitude === undefined || geoBox.maxAltitude === undefined) {
+                return false;
+            }
+            return geoBox.minAltitude >= this.minAltitude && geoBox.maxAltitude <= this.maxAltitude;
+        }
+
+        return true;
+    }
+
+    /**
+     * 判断当前地理包围盒与另一个地理包围盒是否存在交集
+     */
+    intersectsBox(geoBox: GeoBox): boolean {
+        // 纬度范围无交集
+        if (geoBox.north <= this.south || geoBox.south >= this.north) {
+            return false;
+        }
+
+        // 经度范围检查（处理国际日期变更线情况）
+        const thisWest = this.west;
+        const thisEast = this.east;
+        const otherWest = geoBox.west;
+        const otherEast = geoBox.east;
+
+        const overlapsWestHemisphere = otherWest < thisEast && otherEast > thisWest;
+        const overlapsEastHemisphere = otherWest < thisEast + 360 || otherEast > thisWest - 360;
+        const longitudeIntersects =
+            thisWest <= thisEast ? overlapsWestHemisphere : overlapsEastHemisphere;
+
+        if (!longitudeIntersects) {
+            return false;
+        }
+
+        // 高度范围检查（当且仅当两者都有高度定义时）
+        if (
+            this.minAltitude !== undefined &&
+            this.maxAltitude !== undefined &&
+            geoBox.minAltitude !== undefined &&
+            geoBox.maxAltitude !== undefined
+        ) {
+            return geoBox.minAltitude < this.maxAltitude && geoBox.maxAltitude > this.minAltitude;
+        }
+
+        return true;
+    }
 }

@@ -1,15 +1,15 @@
-import { GeoBox, GeoCoordinates, GeoCoordinatesLike, Projection } from "@flywave/flywave-geoutils";
+import { GeoBox, GeoCoordinatesLike, Projection } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 
 export function toTileLocal(
     header: { centerX?: number; centerY?: number; centerZ?: number },
-    geoPoint: GeoCoordinatesLike,
+    geoPoint: GeoCoordinatesLike | THREE.Vector3,
     project?: Projection
 ): THREE.Vector3 {
     const { centerX = 0, centerY = 0, centerZ = 0 } = header;
     const point = project
-        ? project.projectPoint(geoPoint)
-        : new THREE.Vector3(geoPoint.longitude, geoPoint.latitude, geoPoint.altitude);
+        ? project.projectPoint(geoPoint as GeoCoordinatesLike)
+        : (geoPoint as THREE.Vector3);
 
     return new THREE.Vector3(point.x - centerX, point.y - centerY, point.z - centerZ);
 }
@@ -27,7 +27,7 @@ export function toTileWorld(
 
 export function toTileLocalLines(
     header: { centerX?: number; centerY?: number; centerZ?: number },
-    lines: GeoCoordinatesLike[][],
+    lines: GeoCoordinatesLike[][] | THREE.Vector3[][],
     project?: Projection
 ): THREE.Vector3[][] {
     return lines.map(line => line.map(point => toTileLocal(header, point, project)));
@@ -51,7 +51,7 @@ export function toTileWorldBBox(
     },
     bbox: THREE.Box3,
     project?: Projection
-): GeoBox {
+): GeoBox | THREE.Box3 {
     const { centerX = 0, centerY = 0, centerZ = 0 } = header;
 
     const min = new THREE.Vector3()
@@ -66,10 +66,7 @@ export function toTileWorldBBox(
               min,
               max
           })
-        : new GeoBox(
-              new GeoCoordinates(min.y, min.x, min.z),
-              new GeoCoordinates(max.y, max.x, max.z)
-          );
+        : new THREE.Box3(min, max);
 }
 
 export function toTileLocalBBox(
@@ -78,28 +75,13 @@ export function toTileLocalBBox(
         centerY?: number;
         centerZ?: number;
     },
-    bbox: GeoBox,
+    bbox: GeoBox | THREE.Box3,
     project?: Projection
 ): THREE.Box3 {
     const { centerX = 0, centerY = 0, centerZ = 0 } = header;
 
     // 增加空值检查和后备方案
-    const worldBox = project
-        ? project.projectBox(bbox)
-        : (() => {
-              return {
-                  min: {
-                      x: bbox.west,
-                      y: bbox.south,
-                      z: bbox.minAltitude
-                  },
-                  max: {
-                      x: bbox.east,
-                      y: bbox.north,
-                      z: bbox.maxAltitude
-                  }
-              };
-          })();
+    const worldBox = project ? project.projectBox(bbox as GeoBox) : (bbox as THREE.Box3);
 
     // 增加浮点数精度处理
     const preciseOffset = (val: number, offset: number) => {

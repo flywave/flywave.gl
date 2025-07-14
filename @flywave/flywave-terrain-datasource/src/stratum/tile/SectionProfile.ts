@@ -2,9 +2,23 @@ import { Projection } from "@flywave/flywave-geoutils";
 import { MapAnchor } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 
-import { CollapseProfile } from "./Collapse";
 import { ColorMap, rgbaToHex } from "./ColorMap";
-import { StratumProfile } from "./StratumTile";
+
+// 陷落柱剖面结构
+export interface CollapseProfile {
+    collapseID: string;
+    crossSections: THREE.BufferGeometry[];
+    polys: THREE.Vector3[][];
+}
+
+// 地层剖面结构
+export interface StratumProfile {
+    stratumID: string; // 地层唯一标识
+    top: THREE.Vector3[]; // 顶板交线点序列（沿剖切线有序排列）
+    base: THREE.Vector3[]; // 底板交线点序列
+    crossSections: THREE.BufferGeometry[]; // 三角剖分后的TIN网格集合
+    polys: THREE.Vector3[][]; // 原始剖面多边形顶点序列
+}
 
 export interface SectionProfile {
     stratumProfiles: StratumProfile[];
