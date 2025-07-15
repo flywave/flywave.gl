@@ -1,6 +1,6 @@
 export * from "./Fault";
 export * from "./Borehole";
-export * from "./ColorMap";
+export * from "./MaterialGroup";
 export * from "./Section";
 export * from "./Stratum";
 export * from "./Voxel";

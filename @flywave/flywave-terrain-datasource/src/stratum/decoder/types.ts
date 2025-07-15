@@ -77,19 +77,13 @@ export interface StratumVoxel {
     start: number;
     end: number;
     neighbors: [number, number, number];
+    material: number;
 }
 
-// 颜色映射
-export interface ColorMap {
-    textureSize: number;
-    stratumColor: Record<string, ColorRGBA>;
-    stratumTexture: Record<string, string>;
-    defaultStratum: ColorRGBA;
-    faultColor: Record<string, ColorRGBA>;
-    faultHighlight: ColorRGBA;
-    defaultFault: ColorRGBA;
-    collapseColor: Record<string, ColorRGBA>;
-    defaultCollapse: ColorRGBA;
+// 材质映射
+export interface Material {
+    color: ColorRGBA;
+    texture: [number, number, number, number];
 }
 
 // RGBA 颜色
@@ -187,7 +181,7 @@ export type StratumLithology = Record<string, string>;
 // 扩展类型
 export type Extensions = {
     metadata?: Metadata;
-    colorMap?: ColorMap;
+    materials?: Material[];
     faultProfiles?: FaultProfile[];
     boreholes?: Borehole[];
     stratumLayers?: StratumLayer[];

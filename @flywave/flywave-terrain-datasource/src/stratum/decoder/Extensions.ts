@@ -2,9 +2,9 @@ import {
     Borehole,
     BoreholeStratum,
     CollapsePillar,
-    ColorMap,
     ExtensionHeader,
     FaultProfile,
+    Material,
     Metadata,
     SectionLine,
     StratumLayer
@@ -12,7 +12,7 @@ import {
 
 // 扩展ID常量
 const STRATUM_MESH_METADATA_EXTENSION_ID = 1;
-const STRATUM_MESH_COLORMAP_EXTENSION_ID = 2;
+const STRATUM_MESH_MATERIALS_EXTENSION_ID = 2;
 const STRATUM_MESH_FAULT_EXTENSION_ID = 3;
 const STRATUM_MESH_BOREHOLE_EXTENSION_ID = 4;
 const STRATUM_MESH_COLLAPSE_EXTENSION_ID = 5;
@@ -25,7 +25,7 @@ export function decodeExtensions(
 ): {
     extensions: {
         metadata?: Metadata;
-        colorMap?: ColorMap;
+        materials?: Material[];
         faultProfiles?: FaultProfile[];
         boreholes?: Borehole[];
         stratumLayers?: StratumLayer[];
@@ -57,8 +57,8 @@ export function decodeExtensions(
             case STRATUM_MESH_METADATA_EXTENSION_ID:
                 extensions.metadata = readMetadata(extensionData);
                 break;
-            case STRATUM_MESH_COLORMAP_EXTENSION_ID:
-                extensions.colorMap = readColorMap(extensionData);
+            case STRATUM_MESH_MATERIALS_EXTENSION_ID:
+                extensions.materials = readMaterials(extensionData);
                 break;
             case STRATUM_MESH_FAULT_EXTENSION_ID:
                 extensions.faultProfiles = readFaultProfiles(extensionData);
@@ -100,128 +100,37 @@ function readMetadata(data: Uint8Array): Metadata {
     };
 }
 
-function readColorMap(data: Uint8Array): ColorMap {
+function readMaterials(data: Uint8Array): Material[] {
     const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
     let pos = 0;
 
-    const colorMap: ColorMap = {
-        textureSize: dataView.getInt32(pos, true),
-        stratumColor: {},
-        stratumTexture: {},
-        defaultStratum: { r: 0, g: 0, b: 0, a: 0 },
-        faultColor: {},
-        faultHighlight: { r: 0, g: 0, b: 0, a: 0 },
-        defaultFault: { r: 0, g: 0, b: 0, a: 0 },
-        collapseColor: {},
-        defaultCollapse: { r: 0, g: 0, b: 0, a: 0 }
-    };
+    // 读取材料数量
+    const count = dataView.getInt32(pos, true);
     pos += 4;
 
-    // 读取地层颜色
-    const stratumCount = dataView.getInt32(pos, true);
-    pos += 4;
-    for (let i = 0; i < stratumCount; i++) {
-        const idLen = dataView.getInt32(pos, true);
+    const materials: Material[] = [];
+    for (let i = 0; i < count; i++) {
+        // 读取颜色 (4 个 uint8)
+        const r = dataView.getUint8(pos);
+        const g = dataView.getUint8(pos + 1);
+        const b = dataView.getUint8(pos + 2);
+        const a = dataView.getUint8(pos + 3);
         pos += 4;
-        const id = new TextDecoder().decode(data.slice(pos, pos + idLen));
-        pos += idLen;
 
-        colorMap.stratumColor[id] = {
-            r: dataView.getUint8(pos),
-            g: dataView.getUint8(pos + 1),
-            b: dataView.getUint8(pos + 2),
-            a: dataView.getUint8(pos + 3)
-        };
-        pos += 4;
+        // 读取纹理矩形 (4 个 int32)
+        const x0 = dataView.getInt32(pos, true);
+        const y0 = dataView.getInt32(pos + 4, true);
+        const x1 = dataView.getInt32(pos + 8, true);
+        const y1 = dataView.getInt32(pos + 12, true);
+        pos += 16;
+
+        materials.push({
+            color: { r, g, b, a },
+            texture: [x0, y0, x1, y1]
+        });
     }
 
-    // 读取默认地层颜色
-    colorMap.defaultStratum = {
-        r: dataView.getUint8(pos),
-        g: dataView.getUint8(pos + 1),
-        b: dataView.getUint8(pos + 2),
-        a: dataView.getUint8(pos + 3)
-    };
-    pos += 4;
-
-    // 读取断层颜色
-    const faultCount = dataView.getInt32(pos, true);
-    pos += 4;
-    for (let i = 0; i < faultCount; i++) {
-        const idLen = dataView.getInt32(pos, true);
-        pos += 4;
-        const id = new TextDecoder().decode(data.slice(pos, pos + idLen));
-        pos += idLen;
-
-        colorMap.faultColor[id] = {
-            r: dataView.getUint8(pos),
-            g: dataView.getUint8(pos + 1),
-            b: dataView.getUint8(pos + 2),
-            a: dataView.getUint8(pos + 3)
-        };
-        pos += 4;
-    }
-
-    // 读取高亮和默认断层颜色
-    colorMap.faultHighlight = {
-        r: dataView.getUint8(pos),
-        g: dataView.getUint8(pos + 1),
-        b: dataView.getUint8(pos + 2),
-        a: dataView.getUint8(pos + 3)
-    };
-    pos += 4;
-
-    colorMap.defaultFault = {
-        r: dataView.getUint8(pos),
-        g: dataView.getUint8(pos + 1),
-        b: dataView.getUint8(pos + 2),
-        a: dataView.getUint8(pos + 3)
-    };
-    pos += 4;
-
-    // 读取陷落体颜色
-    const collapseCount = dataView.getInt32(pos, true);
-    pos += 4;
-    for (let i = 0; i < collapseCount; i++) {
-        const idLen = dataView.getInt32(pos, true);
-        pos += 4;
-        const id = new TextDecoder().decode(data.slice(pos, pos + idLen));
-        pos += idLen;
-
-        colorMap.collapseColor[id] = {
-            r: dataView.getUint8(pos),
-            g: dataView.getUint8(pos + 1),
-            b: dataView.getUint8(pos + 2),
-            a: dataView.getUint8(pos + 3)
-        };
-        pos += 4;
-    }
-
-    // 读取默认陷落体颜色
-    colorMap.defaultCollapse = {
-        r: dataView.getUint8(pos),
-        g: dataView.getUint8(pos + 1),
-        b: dataView.getUint8(pos + 2),
-        a: dataView.getUint8(pos + 3)
-    };
-    pos += 4;
-
-    // 读取纹理数据
-    const textureCount = dataView.getInt32(pos, true);
-    pos += 4;
-    for (let i = 0; i < textureCount; i++) {
-        const idLen = dataView.getInt32(pos, true);
-        pos += 4;
-        const id = new TextDecoder().decode(data.slice(pos, pos + idLen));
-        pos += idLen;
-
-        const length = dataView.getInt32(pos, true);
-        const strBytes = new Uint8Array(dataView.buffer, dataView.byteOffset + pos + 4, length);
-        colorMap.stratumTexture[id] = new TextDecoder().decode(strBytes);
-        pos += length + 4;
-    }
-
-    return colorMap;
+    return materials;
 }
 
 function readFaultProfiles(data: Uint8Array): FaultProfile[] {

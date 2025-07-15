@@ -295,12 +295,16 @@ function decodeStratumLayers(
             const neighbor3 = dataView.getInt32(position, true);
             position += 4;
 
+            const material = dataView.getInt32(position, true);
+            position += 4;
+
             const voxel: StratumVoxel = {
                 id,
                 index,
                 start,
                 end,
-                neighbors: [neighbor1, neighbor2, neighbor3]
+                neighbors: [neighbor1, neighbor2, neighbor3],
+                material
             };
             layer.voxels.push(voxel);
         }

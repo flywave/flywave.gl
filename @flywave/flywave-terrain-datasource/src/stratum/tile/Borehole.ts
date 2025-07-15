@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import { BoreholeStratum, TrajectoryPoint } from "../decoder";
+import { StratumMaterial } from "./StratumMaterial";
 
 export class Borehole {
     private readonly _id: string;
@@ -11,7 +12,7 @@ export class Borehole {
     private _trajectory: TrajectoryPoint[];
     private _stratums: BoreholeStratum[];
     private _geometrys?: THREE.BufferGeometry[];
-    private _materials?: THREE.Material[];
+    private _materials?: StratumMaterial[];
 
     constructor(
         bh: {
@@ -24,7 +25,7 @@ export class Borehole {
             stratums: BoreholeStratum[];
         },
         geometry?: THREE.BufferGeometry[],
-        materials?: THREE.Material[]
+        materials?: StratumMaterial[]
     ) {
         this._id = bh.id;
         this._location = bh.location;
@@ -69,7 +70,7 @@ export class Borehole {
         return this._geometrys || [];
     }
 
-    get materials(): THREE.Material[] {
+    get materials(): StratumMaterial[] {
         return this._materials || [];
     }
 

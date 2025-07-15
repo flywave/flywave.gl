@@ -145,19 +145,19 @@ export class StratumLayer {
     }
 
     public extractGroundFaces(): Array<{
-    positions: Float32Array;
-    indices: Uint32Array;
-}> {
+        positions: Float32Array;
+        indices: Uint32Array;
+    }> {
         const groundFaces: Array<{ positions: Float32Array; indices: Uint32Array }> = [];
 
         for (const voxel of this.voxels) {
-                // 跳过无效体素
-                if (!voxel.geometry) continue;
-                
-                // 直接推送结果避免中间数组
-                groundFaces.push(this.extractVoxelGroundFaces(voxel));
-            }
-            return groundFaces;
+            // 跳过无效体素
+            if (!voxel.geometry) continue;
+
+            // 直接推送结果避免中间数组
+            groundFaces.push(this.extractVoxelGroundFaces(voxel));
+        }
+        return groundFaces;
     }
 
     private extractVoxelGroundFaces(voxel: StratumVoxel): {
@@ -188,5 +188,4 @@ export class StratumLayer {
             indices: new Uint32Array(groundIndices)
         };
     }
-
 }

@@ -3,6 +3,7 @@ import { fromVectors } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 
 import { BspObject } from "./BspObject";
+import { StratumMaterial } from "./StratumMaterial";
 
 export class CollapsePillar extends BspObject {
     private readonly _id: string;
@@ -16,7 +17,7 @@ export class CollapsePillar extends BspObject {
     private readonly _stratumId: string;
     private _bbox?: THREE.Box3;
     private _geometry?: THREE.BufferGeometry;
-    private _material?: THREE.Material;
+    private _material?: StratumMaterial;
 
     constructor(
         collapse: {
@@ -32,7 +33,7 @@ export class CollapsePillar extends BspObject {
         },
         bbox?: THREE.Box3,
         geometry?: THREE.BufferGeometry,
-        material?: THREE.Material
+        material?: StratumMaterial
     ) {
         super();
         this._id = collapse.id;
@@ -90,7 +91,7 @@ export class CollapsePillar extends BspObject {
         return this._geometry!;
     }
 
-    get material(): THREE.Material {
+    get material(): StratumMaterial {
         return this._material!;
     }
 

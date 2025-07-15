@@ -2,7 +2,7 @@ import { Projection } from "@flywave/flywave-geoutils";
 import { MapAnchor } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 
-import { ColorMap, rgbaToHex } from "./ColorMap";
+import { ColorMap, rgbaToHex } from "./MaterialGroup";
 
 // 陷落柱剖面结构
 export interface CollapseProfile {

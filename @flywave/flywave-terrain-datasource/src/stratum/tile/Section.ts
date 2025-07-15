@@ -1,11 +1,13 @@
 import * as THREE from "three";
 
+import { StratumMaterial } from "./StratumMaterial";
+
 export class SectionLine {
     private readonly _id: string;
     private readonly _name: string;
     private _lineString: Array<[number, number, number]>;
     private _geometries?: THREE.BufferGeometry[];
-    private _materials?: THREE.Material[];
+    private _materials?: StratumMaterial[];
 
     constructor(
         sl: {
@@ -14,7 +16,7 @@ export class SectionLine {
             lineString: Array<[number, number, number]>;
         },
         geometry?: THREE.BufferGeometry[],
-        materials?: THREE.Material[]
+        materials?: StratumMaterial[]
     ) {
         this._id = sl.id;
         this._name = sl.name;
@@ -40,7 +42,7 @@ export class SectionLine {
         return this._geometries || [];
     }
 
-    get materials(): THREE.Material[] {
+    get materials(): StratumMaterial[] {
         // 返回类型修改
         return this._materials || [];
     }

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import { FaultPoint } from "../decoder";
+import { StratumMaterial } from "./StratumMaterial";
 
 export class FaultProfile {
     private readonly _id: string;
@@ -11,7 +12,7 @@ export class FaultProfile {
     private readonly _throw: number;
     private _points: FaultPoint[];
     private _geometry?: THREE.BufferGeometry; // 类型替换
-    private _material?: THREE.Material; // 类型替换
+    private _material?: StratumMaterial; // 类型替换
 
     constructor(
         fault: {
@@ -24,7 +25,7 @@ export class FaultProfile {
             points: FaultPoint[];
         },
         geometry?: THREE.BufferGeometry,
-        material?: THREE.Material
+        material?: StratumMaterial
     ) {
         this._id = fault.id;
         this._name = fault.name;
@@ -84,7 +85,7 @@ export class FaultProfile {
         return this._geometry!;
     }
 
-    get material(): THREE.Material {
+    get material(): StratumMaterial {
         return this._material!;
     }
 }

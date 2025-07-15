@@ -2,8 +2,8 @@ import { TileKey } from "@flywave/flywave-geoutils";
 import { Tile } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 
-import { StratumMaterial, StratumMaterialParams } from "./StratumMaterial";
 import { StratumTerrainSource } from "./StratumTerrainSource";
+import { StratumMaterial, StratumMaterialParams } from "./tile/StratumMaterial";
 
 export class StratumTile extends Tile {
     private _materialParams: StratumMaterialParams;

@@ -12,6 +12,7 @@ import {
 import {
     BoundingSphere,
     GeoBox,
+    GeoCoordinates,
     GeoCoordinatesLike,
     Projection,
     TileKey
@@ -23,14 +24,20 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils";
 import { DecodeResult, Header, LayerType } from "../decoder";
 import { Borehole } from "./Borehole";
 import { CollapsePillar } from "./Collapse";
-import { ColorMap } from "./ColorMap";
 import { FaultProfile } from "./Fault";
+import { MaterialGroup } from "./MaterialGroup";
 import { toTileLocalBBox, toTileLocalLines, toTileWorld, toTileWorldBBox } from "./Project";
 import { SectionLine } from "./Section";
 import { CollapseProfile, StratumProfile } from "./SectionProfile";
 import { StratumLayer } from "./Stratum";
+import {
+    RenderMode,
+    SatelliteTextureParams,
+    StratumMaterial,
+    StratumMaterialParams
+} from "./StratumMaterial";
 import { TextureCacheLoader } from "./Texture";
-import { FaceTypes, StratumVoxel } from "./Voxel";
+import { StratumVoxel } from "./Voxel";
 
 export type BVHObject = CollapsePillar | StratumVoxel;
 
@@ -49,7 +56,7 @@ class StratumTile {
     private _geoBox?: GeoBox;
     private _ecefBox?: THREE.Box3;
     private _ecefSphere?: BoundingSphere;
-    private _colorMap?: ColorMap;
+    private _materialGroup?: MaterialGroup;
     private _faultProfiles?: FaultProfile[];
     private _boreholes?: Borehole[];
     private _stratumLayers?: StratumLayer[];
@@ -61,24 +68,29 @@ class StratumTile {
     private _indices?: Uint16Array | Uint32Array;
     private _faceTypes?: Uint8Array;
     private _stratumBVH?: BVH<{}, CollapsePillar | StratumVoxel>;
-    private readonly _materialCache = new Map<string, THREE.Material>();
     private readonly _project?: Projection;
     private readonly _textureCache?: TextureCacheLoader;
-    private _geometriesCache: Record<
-        string,
-        Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>
-    > | null = null;
+    private _geometriesCache: { geometry: THREE.BufferGeometry; material: StratumMaterial } | null =
+        null;
+
+    private _staticGeometriesCache: THREE.BufferGeometry[];
+
+    private readonly _texturePath?: string;
+
+    private _material?: StratumMaterial;
 
     constructor(
         id?: TileKey,
         res?: DecodeResult,
         project?: Projection,
-        textureCache?: TextureCacheLoader
+        textureCache?: TextureCacheLoader,
+        texturePath?: string
     ) {
         this._id = id;
         this.init(res);
         this._project = project;
         this._textureCache = textureCache;
+        this._texturePath = texturePath;
     }
 
     get id() {
@@ -105,8 +117,8 @@ class StratumTile {
         return this._geoBox;
     }
 
-    get colorMap() {
-        return this._colorMap;
+    get materialGroup() {
+        return this._materialGroup;
     }
 
     get faultProfiles() {
@@ -129,70 +141,44 @@ class StratumTile {
         return this._sectionLines;
     }
 
+    get material() {
+        return this._material;
+    }
+
     // 在get geometries方法后添加BVH相关方法
     get stratumBVH(): BVH<{}, CollapsePillar | StratumVoxel> | undefined {
         return this._stratumBVH;
     }
 
-    get geometries(): Record<
-        string,
-        Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>
-    > {
-        const groups = {
-            stratum: [],
-            fault: [],
-            borehole: [],
-            collapse: [],
-            section: []
-        } as Record<string, Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>>;
+    get geometries(): { geometry: THREE.BufferGeometry; material: StratumMaterial } {
         if (this._geometriesCache) {
             return this._geometriesCache;
         }
 
-        // 合并地层体素几何
-        const stratumObjects = this._stratumLayers?.flatMap(l => l.voxels) || [];
-        groups.stratum = this.mergeGeometriesByMaterial(stratumObjects);
+        // 收集所有几何体
+        const allGeometries: THREE.BufferGeometry[] = [];
 
-        // 合并陷落柱几何
-        const collapseObjects = this._collapsePillars || [];
-        groups.collapse = this.mergeGeometriesByMaterial(collapseObjects);
+        // 合并地层和陷落柱几何
+        const stratumGeoms = this._stratumLayers?.flatMap(l => l.voxels.map(v => v.geometry)) || [];
+        const collapseGeoms = this._collapsePillars?.map(p => p.geometry) || [];
+        allGeometries.push(...stratumGeoms, ...collapseGeoms);
 
-        // 收集断层几何
-        this._faultProfiles?.forEach(fault => {
-            if (fault.geometry && fault.material) {
-                groups.fault.push({
-                    geometry: fault.geometry,
-                    material: fault.material
-                });
-            }
-        });
+        const staticGeometries: THREE.BufferGeometry[] = [];
+        // 添加其他类型几何
+        this._faultProfiles?.forEach(f => f.geometry && staticGeometries.push(f.geometry));
+        this._boreholes?.forEach(b => b.geometries?.forEach(g => staticGeometries.push(g)));
+        this._sectionLines?.forEach(s => s.geometries?.forEach(g => staticGeometries.push(g)));
 
-        // 收集钻孔几何
-        this._boreholes?.forEach(borehole => {
-            borehole.geometries?.forEach((geom, index) => {
-                const material = borehole.materials?.[index];
-                if (geom && material) {
-                    groups.borehole.push({
-                        geometry: geom,
-                        material: material
-                    });
-                }
-            });
-        });
+        this._staticGeometriesCache = staticGeometries;
+        allGeometries.push(...staticGeometries);
 
-        // 收集剖切线几何
-        this._sectionLines?.forEach(section => {
-            section.geometries?.forEach((geom, index) => {
-                const material = section.materials?.[index];
-                if (geom && material) {
-                    groups.section.push({
-                        geometry: geom,
-                        material: material
-                    });
-                }
-            });
-        });
-        // 更新缓存
+        // 创建合并后的几何体
+        const merged = mergeGeometries(allGeometries, true);
+        const groups = {
+            geometry: merged,
+            material: this._material! // 使用共享材质实例
+        };
+
         this._geometriesCache = groups;
         return groups;
     }
@@ -224,83 +210,59 @@ class StratumTile {
     public cliGeometry(
         geoBox: GeoBox,
         isClip?: boolean
-    ): Record<string, Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>> {
+    ): { geometry: THREE.BufferGeometry; material: THREE.Material } {
         const tileGeoBox = this._geoBox!;
 
         if (!tileGeoBox.intersectsBox(geoBox)) {
             return this.geometries;
         }
-        const { fault, borehole, section } = this.geometries;
 
-        if (geoBox.containsBox(tileGeoBox)) {
-            return {
-                stratum: [],
-                collapse: [],
-                fault,
-                borehole,
-                section
-            };
+        // 收集所有需要合并的几何体
+        const geometriesToMerge: THREE.BufferGeometry[] = [...this._staticGeometriesCache];
+
+        if (!geoBox.containsBox(tileGeoBox)) {
+            const tileLocalBox = toTileLocalBBox(this._header!, geoBox, this._project);
+            const clipNode = this.createBoxBsp(tileLocalBox);
+
+            // 处理所有地质对象
+            const allObjects = [
+                ...(this._stratumLayers?.flatMap(l => l.voxels) || []),
+                ...(this._collapsePillars || [])
+            ];
+
+            allObjects.forEach(obj => {
+                const objBbox = obj.bbox!;
+
+                if (!tileLocalBox.intersectsBox(objBbox)) {
+                    // 完全在box外的对象直接保留
+                    if (obj.geometry) geometriesToMerge.push(obj.geometry);
+                    return;
+                }
+
+                if (isClip) {
+                    // 相交对象进行裁剪处理
+                    let clippedGeom: THREE.BufferGeometry | undefined;
+                    if (obj instanceof StratumVoxel) {
+                        clippedGeom = obj.clipGeometry(clipNode);
+                    } else if (obj instanceof CollapsePillar) {
+                        clippedGeom = obj.clipGeometry(clipNode);
+                    }
+                    if (clippedGeom) geometriesToMerge.push(clippedGeom);
+                } else {
+                    // 未裁剪时保留完整几何体
+                    if (obj.geometry) geometriesToMerge.push(obj.geometry);
+                }
+            });
         }
 
-        // 相交情况：将geoBox转换到tile坐标系
-        const tileLocalBox = toTileLocalBBox(this._header!, geoBox, this._project);
-        const clipNode = this.createBoxBsp(tileLocalBox);
+        // 合并所有几何体
+        const merged =
+            geometriesToMerge.length > 0 ? mergeGeometries(geometriesToMerge, true) : undefined;
 
-        // 获取所有地质对象
-        const allObjects = [
-            ...(this._stratumLayers?.flatMap(l => l.voxels) || []),
-            ...(this._collapsePillars || [])
-        ];
-
-        const result = {
-            stratum: [] as Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>,
-            fault: [] as Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>,
-            borehole: [] as Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>,
-            collapse: [] as Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>,
-            section: [] as Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>
+        return {
+            geometry: merged,
+            material: this._material! // 使用共享材质
         };
-
-        allObjects.forEach(obj => {
-            const objBbox = obj.bbox!;
-
-            // 完全在box内的对象直接跳过
-            if (tileLocalBox.containsBox(objBbox)) return;
-
-            // 完全在box外的对象直接保留
-            if (!tileLocalBox.intersectsBox(objBbox)) {
-                const type = obj instanceof StratumVoxel ? "stratum" : "collapse";
-                if (obj.geometry && obj.material) {
-                    result[type].push({
-                        geometry: obj.geometry,
-                        material: obj.material
-                    });
-                }
-                return;
-            }
-
-            if (isClip) {
-                // 相交对象进行裁剪处理
-                let clippedGeom: THREE.BufferGeometry | undefined;
-                if (obj instanceof StratumVoxel) {
-                    clippedGeom = obj.clipGeometry(clipNode);
-                } else if (obj instanceof CollapsePillar) {
-                    clippedGeom = obj.clipGeometry(clipNode);
-                }
-
-                if (clippedGeom) {
-                    const type = obj instanceof StratumVoxel ? "stratum" : "collapse";
-                    result[type].push({
-                        geometry: clippedGeom,
-                        material: obj.material!
-                    });
-                }
-            }
-        });
-
-        result.fault = fault;
-        result.borehole = borehole;
-        result.section = section;
-        return result;
     }
 
     // 创建表示立方体的BSP节点
@@ -331,6 +293,10 @@ class StratumTile {
         ]);
     }
 
+    public async rebuildMaterial(params?: SatelliteTextureParams) {
+        this._material = await this.buildMeshMaterial(params);
+    }
+
     public dispose() {
         // 释放BVH相关资源
         if (this._stratumBVH) {
@@ -357,23 +323,15 @@ class StratumTile {
         this._faultProfiles = undefined;
         this._boreholes = undefined;
         this._sectionLines = undefined;
-        this._colorMap = undefined;
+        this._materialGroup = undefined;
 
         // 释放所有合并的几何体
-        Object.values(this._geometriesCache).forEach(group => {
-            group.forEach(({ geometry }) => {
-                geometry.dispose();
-                if (geometry.index) geometry.index.array = null;
-            });
-        });
-        this._geometriesCache = null;
-
-        // 释放材质资源
-        this._materialCache.forEach(material => {
-            if ((material as any)?.map) (material as any)?.map.dispose();
-            material.dispose();
-        });
-        this._materialCache.clear();
+        if (this._geometriesCache) {
+            this._geometriesCache.geometry.dispose();
+            this._geometriesCache.geometry.index.array = null;
+            this._geometriesCache = null;
+        }
+        this._material?.dispose();
     }
 
     public rayIntersect(
@@ -521,31 +479,35 @@ class StratumTile {
     private async initExtensions(res: DecodeResult) {
         const ext = res.extensions!;
 
-        if (ext.colorMap) {
-            this._colorMap = new ColorMap(ext.colorMap, this._textureCache);
+        if (ext.materials) {
+            this._materialGroup = new MaterialGroup(
+                ext.materials,
+                this._textureCache,
+                this._texturePath
+            );
         }
 
-        this._faultProfiles = await Promise.all(this.initFaultProfiles(ext, res));
-        this._boreholes = await Promise.all(this.initBoreholes(ext, res));
-        this._stratumLayers = await Promise.all(this.initStratumLayers(ext, res));
-        this._collapsePillars = await Promise.all(this.initCollapsePillars(ext, res));
-        this._sectionLines = await this.initSectionLines(ext, res);
+        this._faultProfiles = this.initFaultProfiles(ext, res);
+        this._boreholes = this.initBoreholes(ext, res);
+        this._stratumLayers = this.initStratumLayers(ext, res);
+        this._collapsePillars = this.initCollapsePillars(ext, res);
+        this._sectionLines = this.initSectionLines(ext, res);
         this._geometriesCache = null;
+
+        this._material = await this.buildMeshMaterial();
     }
 
     private initFaultProfiles(
         ext: NonNullable<DecodeResult["extensions"]>,
         res: DecodeResult
-    ): Array<Promise<FaultProfile>> {
+    ): FaultProfile[] {
         return (
             ext.faultProfiles?.map(fp => {
                 const layer = this.findStratumLayer(res, fp.id, LayerType.Fault);
-                if (!layer?.voxels?.length) return Promise.resolve(new FaultProfile(fp));
+                if (!layer?.voxels?.length) return new FaultProfile(fp);
 
                 const geometry = this.buildMeshGeometry(layer.voxels[0])?.geometry;
-                return this.buildMeshMaterial("fault", fp.id).then(
-                    material => new FaultProfile(fp, geometry, material)
-                );
+                return new FaultProfile(fp, geometry);
             }) ?? []
         );
     }
@@ -553,31 +515,25 @@ class StratumTile {
     private initBoreholes(
         ext: NonNullable<DecodeResult["extensions"]>,
         res: DecodeResult
-    ): Array<Promise<Borehole>> {
-        return (
-            ext.boreholes?.map(bh => {
-                // 移除async
-                const layer = this.findStratumLayer(res, bh.id, LayerType.Borehole);
-                if (!layer?.voxels?.length) return Promise.resolve(new Borehole(bh));
+    ): Borehole[] {
+        return ext.boreholes?.map(bh => {
+            // 移除async
+            const layer = this.findStratumLayer(res, bh.id, LayerType.Borehole);
+            if (!layer?.voxels?.length) return new Borehole(bh);
 
-                const geometries = layer.voxels.map(
-                    voxel => this.buildMeshGeometry(voxel)?.geometry as THREE.BufferGeometry
-                );
+            const geometries = layer.voxels.map(
+                voxel => this.buildMeshGeometry(voxel)?.geometry as THREE.BufferGeometry
+            );
 
-                // 使用Promise.all处理材质数组
-                return Promise.all(
-                    bh.stratums?.map(stratum =>
-                        this.buildMeshMaterial("stratum", stratum.id, stratum.lithology)
-                    ) || []
-                ).then(materials => new Borehole(bh, geometries, materials));
-            }) ?? []
-        );
+            // 使用Promise.all处理材质数组
+            return new Borehole(bh, geometries);
+        });
     }
 
     private initStratumLayers(
         ext: NonNullable<DecodeResult["extensions"]>,
         res: DecodeResult
-    ): Array<Promise<StratumLayer>> {
+    ): StratumLayer[] {
         return (
             ext.stratumLayers?.map(sl => {
                 const layer = this.findStratumLayer(res, sl.id, LayerType.Voxel);
@@ -604,9 +560,7 @@ class StratumTile {
                 });
 
                 // 直接返回Promise链
-                return this.buildMeshMaterial("stratum", layer?.id, lithology).then(
-                    material => new StratumLayer(sl, items, lithology, material)
-                );
+                return new StratumLayer(sl, items, lithology);
             }) ?? []
         );
     }
@@ -614,56 +568,45 @@ class StratumTile {
     private initCollapsePillars(
         ext: NonNullable<DecodeResult["extensions"]>,
         res: DecodeResult
-    ): Array<Promise<CollapsePillar>> {
+    ): CollapsePillar[] {
         return (
             ext.collapsePillars?.map(cp => {
                 // 移除async
                 const layer = this.findStratumLayer(res, cp.id, LayerType.Collapse);
-                if (!layer?.voxels?.length) return Promise.resolve(new CollapsePillar(cp));
+                if (!layer?.voxels?.length) return new CollapsePillar(cp);
 
                 const voxel = layer.voxels[0];
                 const geomData = this.buildMeshGeometry(voxel);
 
                 // 使用Promise链处理异步操作
-                return this.buildMeshMaterial("collapse", cp.id, cp.lithology).then(material => {
-                    const bbox = new THREE.Box3(
-                        new THREE.Vector3(...geomData.bbox[0]),
-                        new THREE.Vector3(...geomData.bbox[1])
-                    );
-                    return new CollapsePillar(cp, bbox, geomData?.geometry, material);
-                });
+                const bbox = new THREE.Box3(
+                    new THREE.Vector3(...geomData.bbox[0]),
+                    new THREE.Vector3(...geomData.bbox[1])
+                );
+                return new CollapsePillar(cp, bbox, geomData?.geometry);
             }) ?? []
         );
     }
 
-    private async initSectionLines(
+    private initSectionLines(
         ext: NonNullable<DecodeResult["extensions"]>,
         res: DecodeResult
-    ) {
+    ): SectionLine[] {
         return (
             ext.sectionLines?.map(sl => {
                 const layer = this.findStratumLayer(res, sl.id, LayerType.Section);
                 if (!layer?.voxels?.length) return new SectionLine(sl);
 
                 const geometries: THREE.BufferGeometry[] = [];
-                const materials: THREE.Material[] = [];
 
                 layer.voxels.forEach(async voxel => {
                     const geomData = this.buildMeshGeometry(voxel);
                     if (!geomData?.geometry || !geomData.bbox) return;
 
                     geometries.push(geomData.geometry);
-
-                    let lithology = "";
-                    if (res.extensions?.stratumLithology) {
-                        lithology = res.extensions?.stratumLithology[voxel.id];
-                    }
-
-                    const material = await this.buildMeshMaterial("section", undefined, lithology);
-                    materials.push(material);
                 });
 
-                return new SectionLine(sl, geometries, materials);
+                return new SectionLine(sl, geometries);
             }) ?? []
         );
     }
@@ -672,94 +615,32 @@ class StratumTile {
         return res.layers?.find(layer => layer.id === id && (!type || layer.type === type));
     }
 
-    private async buildMeshMaterial(
-        layerType: "stratum" | "borehole" | "section" | "fault" | "collapse",
-        id?: string,
-        lithology?: string
-    ): Promise<THREE.Material> {
-        const cacheKey = `${layerType}_${id || ""}_${lithology || ""}`;
+    // 修改buildMeshMaterial方法
+    private async buildMeshMaterial(params?: SatelliteTextureParams): Promise<StratumMaterial> {
+        const textureAtlas = await this._materialGroup.getTexture();
+        // 从MaterialGroup获取共享参数
+        const materialParams: StratumMaterialParams = {
+            textureAtlas: textureAtlas,
+            textureAtlasMappings: this._materialGroup?.getAllAtlasMappings(),
+            opacity: 1.0,
+            renderMode: RenderMode.ALL,
+            facetypes: true,
+            satelliteParams: params
+        };
 
-        // 检查缓存
-        if (this._materialCache.has(cacheKey)) {
-            return this._materialCache.get(cacheKey)!;
-        }
-        let material: THREE.Material;
-        switch (layerType) {
-            case "fault": {
-                const faultColor = this._colorMap?.getFaultColor(id || "default") || {
-                    r: 255,
-                    g: 0,
-                    b: 0,
-                    a: 255
-                };
-                material = new THREE.MeshPhongMaterial({
-                    color: new THREE.Color(
-                        faultColor.r / 255,
-                        faultColor.g / 255,
-                        faultColor.b / 255
-                    ),
-                    transparent: faultColor.a < 1.0,
-                    opacity: faultColor.a / 255,
-                    shininess: 100 // 增加高光效果
-                });
-                break;
-            }
+        // 创建共享材质实例
+        const material = new StratumMaterial(materialParams);
+        material.side = THREE.DoubleSide;
+        material.transparent = materialParams.opacity! < 1.0;
 
-            case "collapse": {
-                const collapseColor = this._colorMap?.getCollapseColor(id || "default") || {
-                    r: 128,
-                    g: 0,
-                    b: 128,
-                    a: 255
-                };
-                const texture = await this._colorMap?.getStratumTexture(lithology || "default");
-                material = new THREE.MeshPhongMaterial({
-                    color: new THREE.Color(
-                        collapseColor.r / 255,
-                        collapseColor.g / 255,
-                        collapseColor.b / 255
-                    ),
-                    transparent: true, // 强制半透明
-                    opacity: collapseColor.a / 255,
-                    map: texture,
-                    side: THREE.DoubleSide
-                });
-                break;
-            }
-
-            default: {
-                // stratum
-                const stratumColor = this._colorMap?.getStratumColor(
-                    lithology || id || "default"
-                ) || { r: 200, g: 200, b: 200, a: 255 };
-                const texture = await this._colorMap?.getStratumTexture(
-                    lithology || id || "default"
-                );
-                material = new THREE.MeshPhongMaterial({
-                    color: new THREE.Color(
-                        stratumColor.r / 255,
-                        stratumColor.g / 255,
-                        stratumColor.b / 255
-                    ),
-                    transparent: stratumColor.a < 1.0,
-                    opacity: stratumColor.a / 255,
-                    map: texture,
-                    side: THREE.DoubleSide
-                });
-                break;
-            }
-        }
-
-        // 存入缓存
-        this._materialCache.set(cacheKey, material);
         return material;
     }
 
     // 合并相同材质的几何体
     private mergeGeometriesByMaterial(
         objects: Array<StratumVoxel | CollapsePillar>
-    ): Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }> {
-        const materialMap = new Map<THREE.Material, THREE.BufferGeometry[]>();
+    ): Array<{ geometry: THREE.BufferGeometry; material: StratumMaterial }> {
+        const materialMap = new Map<StratumMaterial, THREE.BufferGeometry[]>();
 
         objects.forEach(obj => {
             if (!obj.geometry || !obj.material) return;
@@ -770,7 +651,7 @@ class StratumTile {
             materialMap.get(obj.material)!.push(obj.geometry);
         });
 
-        const results: Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }> = [];
+        const results: Array<{ geometry: THREE.BufferGeometry; material: StratumMaterial }> = [];
 
         materialMap.forEach((geometries, material) => {
             if (geometries.length === 1) {
@@ -794,6 +675,7 @@ class StratumTile {
     private buildMeshGeometry(geom: {
         start: number;
         end: number;
+        material: number;
     }): { bbox: THREE.Box3; geometry?: THREE.BufferGeometry } | null {
         if (!this._indices || !this._vertices) return null;
 
@@ -820,6 +702,14 @@ class StratumTile {
                 faceTypes[i] = this._faceTypes[typeOffset + i];
             }
             geometry.setAttribute("facetypes", new THREE.BufferAttribute(faceTypes, 1));
+        }
+
+        // 新增材质组属性
+        if (this._materialGroup) {
+            const faceCount = subIndices.length / 3;
+            const materialIndices = new Uint32Array(faceCount);
+            materialIndices.fill(geom.material);
+            geometry.setAttribute("materialGroup", new THREE.BufferAttribute(materialIndices, 1));
         }
 
         const indices = new Uint32Array(subIndices);
@@ -1478,21 +1368,51 @@ class StratumTile {
         });
     }
 
-    public extractGroundFaces(): { positions: Float32Array; indices: Uint32Array } {
+    public extractGroundFaces(): {
+        positions: Float32Array;
+        indices: Uint32Array;
+        extents: number[];
+    } {
         const groundFaces: Array<{ positions: Float32Array; indices: Uint32Array }> = [];
-        
+
         for (const layer of this._stratumLayers || []) {
             if (!layer.voxels?.length) continue;
             groundFaces.push(...layer.extractGroundFaces());
         }
 
-        return this.mergeGeometryData(groundFaces);
+        const { positions, indices, minZ, maxZ, minLon, maxLon, minLat, maxLat } =
+            this.mergeGeometryData(groundFaces);
+        return {
+            positions,
+            indices,
+            extents: [
+                minLon, // minLongitude
+                minLat, // minLatitude
+                minZ, // 地面面最小高程
+                maxLon, // maxLongitude
+                maxLat, // maxLatitude
+                maxZ // 地面面最大高程
+            ]
+        };
     }
 
     private mergeGeometryData(datasets: Array<{ positions: Float32Array; indices: Uint32Array }>): {
         positions: Float32Array;
         indices: Uint32Array;
+        minZ: number;
+        maxZ: number;
+        minLon: number;
+        maxLon: number;
+        minLat: number;
+        maxLat: number;
     } {
+        let minZ = Infinity;
+        let maxZ = -Infinity;
+        let minLon = Infinity;
+        let maxLon = -Infinity;
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+
         const vertexMap = new Map<number, number>();
         const mergedVertices: number[] = [];
         const mergedIndices: number[] = [];
@@ -1500,35 +1420,57 @@ class StratumTile {
         datasets.forEach(({ positions, indices }) => {
             indices.forEach(idx => {
                 const base = idx * 3;
-                const x = positions[base];
-                const y = positions[base + 1];
-                const z = positions[base + 2];
+                const localX = positions[base];
+                const localY = positions[base + 1];
+                const localZ = positions[base + 2];
 
-                const hash = this.generatePositionHash(new THREE.Vector3(x, y, z));
+                // 转换为世界坐标系
+                const worldPos = toTileWorld(
+                    this._header!,
+                    new THREE.Vector3(localX, localY, localZ),
+                    this._project
+                ) as GeoCoordinates;
 
-            if (!vertexMap.has(hash)) {
-                vertexMap.set(hash, mergedVertices.length / 3);
-                mergedVertices.push(x, y, z);
-            }
-            
-            mergedIndices.push(vertexMap.get(hash)!);
+                // 更新高程极值
+                minZ = Math.min(minZ, worldPos.altitude);
+                maxZ = Math.max(maxZ, worldPos.altitude);
+                minLon = Math.min(minLon, worldPos.longitude);
+                maxLon = Math.max(maxLon, worldPos.longitude);
+                minLat = Math.min(minLat, worldPos.latitude);
+                maxLat = Math.max(maxLat, worldPos.latitude);
+
+                // 使用世界坐标生成哈希
+                const hash = this.generatePositionHash(worldPos);
+
+                if (!vertexMap.has(hash)) {
+                    vertexMap.set(hash, mergedVertices.length / 3);
+                    mergedVertices.push(worldPos.longitude, worldPos.latitude, worldPos.altitude);
+                }
+
+                mergedIndices.push(vertexMap.get(hash)!);
             });
         });
 
         return {
             positions: new Float32Array(mergedVertices),
-            indices: new Uint32Array(mergedIndices)
+            indices: new Uint32Array(mergedIndices),
+            minZ,
+            maxZ,
+            minLon,
+            maxLon,
+            minLat,
+            maxLat
         };
     }
 
     // 新增高效哈希生成方法
-    private generatePositionHash(v: THREE.Vector3): number {
+    private generatePositionHash(v: GeoCoordinates): number {
         // 按厘米级精度处理（适用于地质坐标）
         const scale = 1000;
-        const x = Math.round(v.x * scale);
-        const y = Math.round(v.y * scale);
-        const z = Math.round(v.z * scale);
-        
+        const x = Math.round(v.longitude * scale);
+        const y = Math.round(v.latitude * scale);
+        const z = Math.round(v.altitude * scale);
+
         // 使用素数混合哈希 (2^24 + 2^14 + 2^3) 减少碰撞
         return (x << 24) ^ (y << 14) ^ (z << 3);
     }

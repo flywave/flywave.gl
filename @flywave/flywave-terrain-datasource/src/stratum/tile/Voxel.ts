@@ -3,6 +3,7 @@ import { fromVectors } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 
 import { BspObject } from "./BspObject";
+import { StratumMaterial } from "./StratumMaterial";
 
 export type FaceType = number;
 
@@ -24,7 +25,7 @@ export class StratumVoxel extends BspObject {
     private readonly _index: number;
     private _bbox?: THREE.Box3;
     private _geometry?: THREE.BufferGeometry;
-    private _material?: THREE.Material;
+    private _material?: StratumMaterial;
     private _neighbors: [
         StratumVoxel | undefined,
         StratumVoxel | undefined,
@@ -36,7 +37,7 @@ export class StratumVoxel extends BspObject {
         index: number,
         bbox?: THREE.Box3,
         geometry?: THREE.BufferGeometry,
-        material?: THREE.Material
+        material?: StratumMaterial
     ) {
         super();
         this._id = id;
@@ -56,7 +57,7 @@ export class StratumVoxel extends BspObject {
         return this._index;
     }
 
-    get material(): THREE.Material {
+    get material(): StratumMaterial {
         return this._material!;
     }
 
