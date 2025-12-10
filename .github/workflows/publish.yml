@@ -78,6 +78,6 @@ jobs:
         with:
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
-          draft: true
+          draft: ${{ startsWith(github.ref_name, 'draft-') }}
           prerelease: ${{ startsWith(github.ref_name, 'test-') || startsWith(github.ref_name, 'draft-') }}
           generate_release_notes: true
