@@ -1,0 +1,746 @@
+/**
+ * CSS files with the .module.css suffix will be treated as CSS modules
+ * and scoped locally.
+ */
+
+/* Add wrapper styles to ensure height adaptability */
+.layoutWrapper {
+  height:  calc(100vh - 60px)!important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.mainWrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+  height: calc(100vh - 60px - 35px); /* Subtract the height of the top navigation bar and bottom area */
+}
+
+.exampleDetailContainer {
+  display: flex;
+  flex-direction: row;
+  margin: 0;
+  padding: 0;
+  /* Use CSS variables to support skinning */
+  background-color: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.sidebar {
+  width: 280px;
+  /* Use CSS variables to support skinning */
+  background-color: var(--ifm-menu-color-background);
+  border-right: 1px solid var(--ifm-color-emphasis-300);
+  z-index: 100;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+  min-height: 0;
+  height: 100%;
+}
+
+.sidebarHeader {
+  padding: 1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  /* 使用 CSS 变量来支持换肤 */
+  background-color: var(--ifm-menu-color-background-active);
+}
+
+.sidebarTitle {
+  font-size: 1.2rem;
+  font-weight: 600;
+  /* 使用 CSS 变量来支持换肤 */
+  color: var(--ifm-font-color-base);
+  margin: 0 0 1rem 0;
+}
+
+.sidebarActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sidebarBackButton {
+  background: linear-gradient(135deg, var(--ifm-color-primary-dark), var(--ifm-color-primary-darker));
+  color: var(--ifm-font-color-base-inverse);
+  border: none;
+  font-weight: 500;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  text-align: center;
+  justify-content: center;
+}
+
+.sidebarBackButton:hover {
+  background: linear-gradient(135deg, var(--ifm-color-primary), var(--ifm-color-primary-dark));
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.exampleList {
+  padding: 1rem 0;
+  flex: 1;
+  overflow-y: auto;
+  /* Add custom scrollbar styles */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ifm-color-primary) var(--ifm-menu-color-background);
+  min-height: 0;
+  max-height: 100%;
+}
+
+/* Ensure scrollbar is displayed in all browsers */
+.exampleList::-webkit-scrollbar {
+  -webkit-appearance: none;
+  width: 8px;
+}
+
+.exampleList::-webkit-scrollbar-track {
+  background: var(--ifm-menu-color-background);
+}
+
+.exampleList::-webkit-scrollbar-thumb {
+  background-color: var(--ifm-color-primary);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.exampleList::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ifm-color-primary-dark);
+}
+
+/* Firefox */
+.exampleList {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ifm-color-primary) var(--ifm-menu-color-background);
+}
+
+/* Webkit browsers scrollbar styles */
+.exampleList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.exampleList::-webkit-scrollbar-track {
+  background: var(--ifm-menu-color-background);
+}
+
+.exampleList::-webkit-scrollbar-thumb {
+  background-color: var(--ifm-color-primary);
+  border-radius: 4px;
+}
+
+.exampleList::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ifm-color-primary-dark);
+}
+
+.exampleCategory {
+  margin-bottom: 1.5rem;
+}
+
+.categoryTitle {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ifm-color-primary);
+  padding: 0.5rem 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  margin: 0 0 0.5rem 0;
+}
+
+.exampleItem {
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  margin: 0 0.5rem 0.5rem 0.5rem;
+  cursor: pointer;
+  /* Use CSS variables to support skinning */
+  background: var(--ifm-menu-color-background);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.exampleItem:hover {
+  /* Use CSS variables to support skinning */
+  background: var(--ifm-menu-color-background-hover);
+  border-color: var(--ifm-color-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.exampleItem.active {
+  /* Use CSS variables to support skinning */
+  background: var(--ifm-menu-color-background-active);
+  border: 1px solid var(--ifm-color-primary);
+  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+  position: relative;
+}
+
+.exampleItem.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 4px;
+  background: linear-gradient(to bottom, var(--ifm-color-primary), var(--ifm-color-primary-dark));
+}
+
+.exampleImage {
+  height: 120px;
+  background: linear-gradient(135deg, var(--ifm-color-primary), var(--ifm-color-primary-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.exampleImage::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  transform: rotate(45deg);
+  animation: shine 3s infinite;
+}
+
+/* Add thumbnail styles */
+.exampleThumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.exampleItem:hover .exampleThumbnail {
+  transform: scale(1.05);
+}
+
+@keyframes shine {
+  0% {
+    transform: rotate(45deg) translateX(-100%);
+  }
+  100% {
+    transform: rotate(45deg) translateX(100%);
+  }
+}
+
+.placeholderImage {
+  color: var(--ifm-font-color-base-inverse);
+  font-size: 1rem;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  z-index: 1;
+  text-align: center;
+  padding: 0.5rem;
+}
+
+.exampleContent {
+  padding: 0.75rem;
+}
+
+.exampleTitle {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  /* Use CSS variables to support skinning */
+  color: var(--ifm-font-color-base);
+}
+
+.exampleDescription {
+  margin: 0;
+  font-size: 0.8rem;
+  /* Use CSS variables to support skinning */
+  color: var(--ifm-color-emphasis-600);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mainContent {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
+  min-height: 0;
+}
+
+.header {
+  display: flex;
+  padding: 0.75rem 1rem;
+  background-color: var(--ifm-background-surface-color);
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.headerContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.headerTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ifm-font-color-base);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 1rem;
+}
+
+.headerActions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.actionButton {
+  /* Use CSS variables to support skinning */
+  background: var(--ifm-button-background-color);
+  color: var(--ifm-font-color-base);
+  border: 1px solid var(--ifm-button-border-color);
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.actionButton:hover {
+  background: var(--ifm-button-background-color-hover);
+  border-color: var(--ifm-button-border-color-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.actionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.actionButton.primary {
+  background: linear-gradient(135deg, var(--ifm-color-primary), var(--ifm-color-primary-dark));
+  border-color: var(--ifm-color-primary-darker);
+  box-shadow: 0 2px 4px rgba(0, 122, 204, 0.3);
+  font-weight: 600;
+  padding: 0.5rem 1.2rem;
+  color: var(--ifm-font-color-base-inverse);
+}
+
+.actionButton.primary:hover {
+  background: linear-gradient(135deg, var(--ifm-color-primary-light), var(--ifm-color-primary));
+  border-color: var(--ifm-color-primary-dark);
+  box-shadow: 0 4px 8px rgba(0, 122, 204, 0.4);
+  transform: translateY(-2px);
+}
+
+.actionButton.secondary {
+  background: var(--ifm-button-background-color);
+  border-color: var(--ifm-button-border-color);
+}
+
+.actionButton.secondary:hover {
+  background: var(--ifm-button-background-color-hover);
+  border-color: var(--ifm-button-border-color-hover);
+}
+
+.actionButton.small {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.panelsContainer {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  background-color: var(--ifm-background-color);
+}
+
+.editorPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background-color: var(--ifm-background-color);
+  position: relative;
+}
+
+.previewPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background-color: var(--ifm-background-color);
+}
+
+.panelHeader {
+  padding: 0.5rem 1rem;
+  background-color: var(--ifm-background-surface-color);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ifm-font-color-base);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.panelActions {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.editorWrapper,
+.previewWrapper {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  min-height: 0;
+  height: 100%;
+}
+
+.previewContent {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.previewPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background-color: var(--ifm-background-color);
+  padding: 1rem;
+  text-align: center;
+}
+
+.previewPlaceholder p {
+  margin: 0.25rem 0;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.previewPlaceholder p:first-child {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--ifm-font-color-base);
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 1.1rem;
+  /* Use CSS variables to support skinning */
+  color: var(--ifm-color-emphasis-600);
+  /* Use CSS variables to support skinning */
+  background-color: var(--ifm-background-color);
+}
+
+.error {
+  color: #f48771;
+  padding: 2rem;
+  font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+  overflow: auto;
+  max-height: 100%;
+  /* Use CSS variables to support skinning */
+  background-color: var(--ifm-background-color);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* Monaco Editor 样式覆盖 */
+.editorWrapper {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  height: 100%;
+}
+
+.editorWrapper :global(.monaco-editor) {
+  height: 100% !important;
+}
+
+.editorWrapper :global(.monaco-scrollable-element) {
+  height: 100% !important;
+}
+
+/* 分割线 */
+.editorPanel {
+  border-right: 1px solid var(--ifm-color-emphasis-300);
+}
+
+/* 可拖拽分割器 */
+.resizer {
+  position: absolute;
+  right: -5px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 10;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resizer:hover {
+  background: rgba(0, 122, 204, 0.1);
+}
+
+.resizer::after {
+  content: '';
+  width: 2px;
+  height: 40px;
+  background: var(--ifm-color-emphasis-300);
+  border-radius: 1px;
+}
+
+.resizer:hover::after {
+  background: var(--ifm-color-primary);
+}
+
+/* New footer style that only retains copyright information */
+.footerOnlyCopyright {
+  background-color: var(--ifm-footer-background-color);
+  color: var(--ifm-footer-color);
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-size: 0.8rem;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+  width: 100%;
+  flex-shrink: 0; /* 防止底部区域被压缩 */
+  height: 35px; /* Fixed height */
+}
+
+.footerCopyright {
+  margin: 0;
+  padding: 0;
+  line-height: 1.5;
+}
+
+.footerCopyright a {
+  color: var(--ifm-footer-link-color);
+  text-decoration: none;
+}
+
+.footerCopyright a:hover {
+  color: var(--ifm-footer-link-color-hover);
+  text-decoration: none;
+}
+
+/* Responsive design */
+@media screen and (max-width: 996px) {
+  .exampleDetailContainer {
+    flex-direction: column;
+  }
+  
+  .sidebar {
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  }
+  
+  .panelsContainer {
+    flex-direction: column;
+  }
+  
+  .editorPanel,
+  .previewPanel {
+    width: 100%;
+    height: 50%;
+  }
+  
+  .editorPanel {
+    border-right: none;
+    border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  }
+  
+  .header {
+    padding: 0.75rem;
+  }
+  
+  .headerTitle {
+    font-size: 1.1rem;
+  }
+  
+  .headerActions {
+    gap: 0.3rem;
+  }
+  
+  .actionButton {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+  }
+  
+  .actionButton.small {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+  
+  /* Hide splitter on mobile devices */
+  .resizer {
+    display: none;
+  }
+  
+  .footerOnlyCopyright {
+    padding: 0.5rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .header {
+    padding: 0.5rem;
+  }
+  
+  .headerTop {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .headerActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .actionButton {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+  }
+  
+  .actionButton.small {
+    padding: 0.15rem 0.3rem;
+    font-size: 0.7rem;
+  }
+  
+  .resizer {
+    display: none;
+  }
+  
+  .panelHeader {
+    padding: 0.5rem;
+    font-size: 0.9rem;
+  }
+  
+  .previewPlaceholder p {
+    font-size: 0.9rem;
+  }
+  
+  .previewPlaceholder p:first-child {
+    font-size: 1.1rem;
+  }
+  
+  .footerOnlyCopyright {
+    padding: 0.5rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .header {
+    padding: 0.5rem;
+  }
+  
+  .headerTitle {
+    font-size: 1rem;
+  }
+  
+  .headerActions {
+    gap: 0.2rem;
+  }
+  
+  .actionButton {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+  
+  .actionButton.small {
+    padding: 0.1rem 0.2rem;
+    font-size: 0.65rem;
+  }
+  
+  .resizer {
+    display: none;
+  }
+  
+  .panelHeader {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+    height: 24px;
+  }
+  
+  .previewPlaceholder p {
+    font-size: 0.85rem;
+  }
+  
+  .previewPlaceholder p:first-child {
+    font-size: 1rem;
+  }
+  
+  .footerOnlyCopyright {
+    padding: 0.4rem;
+    font-size: 0.7rem;
+  }
+}

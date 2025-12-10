@@ -1,0 +1,14 @@
+/example-definitions.js
+node_modules/
+dist/
+*.tgz
+lib/
+!src/lib/
+
+resources/3dtile-data
+resources/taihe
+resources/stratum/**/*
+resources/ELEC/**/*
+resources/HVAC/**/*
+!resources/three-nebula.module.js
+!global.d.ts

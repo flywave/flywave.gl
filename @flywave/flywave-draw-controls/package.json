@@ -1,0 +1,49 @@
+{
+    "name": "@flywave/flywave-draw-controls",
+    "version": "0.0.1",
+    "description": "Drawing controls module for the flywave.gl library",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
+    "exports": {
+        ".": {
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
+        },
+        "./*": {
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
+        },
+        "./package.json": "./package.json"
+    },
+    "directories": {
+        "test": "test"
+    },
+    "scripts": {
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-draw-controls"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {},
+    "devDependencies": {
+        "@flywave/flywave-test-utils": "workspace:*",
+        "@types/three": "catalog:",
+        "@types/earcut": "catalog:",
+        "three": "catalog:",
+        "typescript": "catalog:",
+        "earcut": "catalog:"
+    },
+    "peerDependencies": {
+        "three": "catalog:"
+    },
+    "private": true
+}

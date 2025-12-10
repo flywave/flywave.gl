@@ -1,0 +1,25 @@
+{
+    "extends": "../tsconfig.karma.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "sourceMap": true,
+        "composite": true,
+        "incremental": true,
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-datasource-protocol": ["../@flywave/flywave-datasource-protocol/src"],
+            "@flywave/flywave-datasource-protocol/*": [
+                "../@flywave/flywave-datasource-protocol/src/*"
+            ],
+            "@flywave/flywave-test-utils": ["../@flywave/flywave-test-utils/src"],
+            "@flywave/flywave-test-utils/*": ["../@flywave/flywave-test-utils/src/*"]
+        }
+    },
+    "include": ["./ImportTest.ts"],
+    "exclude": ["dist/**", "node_modules"],
+    "references": [
+        {
+            "path": "../@flywave/flywave-datasource-protocol"
+        }
+    ]
+}

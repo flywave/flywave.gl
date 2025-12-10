@@ -1,0 +1,30 @@
+{
+  "area": {
+    "min_lat": 36.4,
+    "min_lon": 118.1,
+    "max_lat": 36.55,
+    "max_lon": 118.25
+  },
+  "max_zoom": 14,
+  "download_time": "2025-11-09T07:54:05.431Z",
+  "tile_format": "png",
+  "data_source": "Mapbox Terrain-RGB",
+  "total_tiles": 129,
+  "config": {
+    "ACCESS_TOKEN": "pk.eyJ1IjoiYW5pbmdnbyIsImEiOiJjbWY2Mjc1ejIwYmpkMmlxcW1vcmNldmFnIn0.4KMSdkV8JFAZjOYRhqCAhg",
+    "AREA": {
+      "minLat": 36.4,
+      "minLon": 118.1,
+      "maxLat": 36.55,
+      "maxLon": 118.25,
+      "maxZoom": 14
+    },
+    "DOWNLOAD": {
+      "outputDir": "resources/dem_terrain",
+      "delay": 400,
+      "maxConcurrent": 2,
+      "batchSize": 15,
+      "retries": 3
+    }
+  }
+}

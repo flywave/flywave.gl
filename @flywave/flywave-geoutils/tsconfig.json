@@ -1,0 +1,22 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "rootDir": "./",
+        "composite": true,
+        "paths": {
+            "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-kriging-gl": ["../flywave-kriging-gl/src"]
+        }
+    },
+    "include": ["src/**/*", "test/**/*"],
+    "exclude": ["dist/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-utils"
+        },
+        {
+            "path": "../flywave-kriging-gl"
+        }
+    ]
+}

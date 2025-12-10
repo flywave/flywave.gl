@@ -1,0 +1,71 @@
+{
+    "name": "@flywave/flywave-gl-docs",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "docusaurus": "docusaurus",
+        "start": "npm-run-all docs:sync-bilingual docs:prepare-en --parallel docusaurus-start",
+        "start:zh": "npm-run-all docs:sync-bilingual docs:prepare-zh --parallel docusaurus-start-zh",
+        "start:en": "npm-run-all docs:sync-bilingual docs:prepare-en --parallel docusaurus-start-en",
+        "docusaurus-start": "docusaurus start --host 0.0.0.0 --port 3000",
+        "docusaurus-start-zh": "docusaurus start --host 0.0.0.0 --port 3000 --locale zh",
+        "docusaurus-start-en": "docusaurus start --host 0.0.0.0 --port 3001 --locale en",
+        "build": "npm-run-all docs:sync-bilingual docs:prepare-en docusaurus-build",
+        "build:zh": "npm-run-all docs:sync-bilingual docs:prepare-zh docusaurus-build-zh",
+        "build:en": "npm-run-all docs:sync-bilingual docs:prepare-en docusaurus-build-en",
+        "docusaurus-build": "docusaurus build",
+        "docusaurus-build-zh": "docusaurus build --locale zh",
+        "docusaurus-build-en": "docusaurus build --locale en",
+        "swizzle": "docusaurus swizzle",
+        "deploy": "docusaurus deploy",
+        "clear": "docusaurus clear",
+        "serve": "docusaurus serve",
+        "write-translations": "docusaurus write-translations",
+        "write-heading-ids": "docusaurus write-heading-ids",
+        "docs:list": "node scripts/doc-manager.js list",
+        "docs:prepare-en": "node scripts/doc-manager.js prepare-en",
+        "docs:prepare-zh": "node scripts/doc-manager.js prepare-zh",
+        "docs:sync-bilingual": "node scripts/doc-manager.js sync-bilingual"
+    },
+    "dependencies": {
+        "@docusaurus/core": "catalog:",
+        "@docusaurus/plugin-content-docs": "catalog:",
+        "@docusaurus/preset-classic": "catalog:",
+        "@docusaurus/theme-common": "catalog:",
+        "@docusaurus/theme-mermaid": "catalog:",
+        "@easyops-cn/docusaurus-search-local": "catalog:",
+        "@flywave/flywave-examples": "workspace:*",
+        "@mdx-js/react": "catalog:",
+        "@monaco-editor/react": "catalog:",
+        "clsx": "catalog:",
+        "prism-react-renderer": "catalog:",
+        "raw-loader": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "rehype-katex": "catalog:",
+        "remark-math": "catalog:"
+    },
+    "devDependencies": {
+        "@docusaurus/module-type-aliases": "catalog:",
+        "@docusaurus/tsconfig": "catalog:",
+        "@docusaurus/types": "catalog:",
+        "@types/webpack-env": "catalog:",
+        "copy-webpack-plugin": "catalog:",
+        "npm-run-all": "^4.1.5"
+    },
+    "browserslist": {
+        "production": [
+            ">0.5%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 3 chrome version",
+            "last 3 firefox version",
+            "last 5 safari version"
+        ]
+    },
+    "engines": {
+        "node": ">=20.0"
+    }
+}

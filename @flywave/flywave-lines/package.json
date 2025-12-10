@@ -1,0 +1,54 @@
+{
+    "name": "@flywave/flywave-lines",
+    "version": "0.0.1",
+    "description": "Create three.js geometries for wide lines",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
+    "exports": {
+        ".": {
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
+        },
+        "./*": {
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
+        },
+        "./package.json": "./package.json"
+    },
+    "directories": {
+        "test": "test",
+        "lib": "lib"
+    },
+    "scripts": {
+        "test": "echo \"The testing of this package is handled by the image based comparison tests by the sdk\"",
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-lines"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {},
+    "devDependencies": {
+        "@flywave/flywave-test-utils": "workspace:*",
+        "@types/chai": "catalog:",
+        "@types/mocha": "catalog:",
+        "@types/three": "catalog:",
+        "chai": "catalog:",
+        "cross-env": "catalog:",
+        "mocha": "catalog:",
+        "source-map-support": "catalog:",
+        "three": "catalog:",
+        "typescript": "catalog:"
+    },
+    "peerDependencies": {
+        "three": "catalog:"
+    },
+    "private": true
+}

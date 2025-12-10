@@ -1,0 +1,74 @@
+{
+    "name": "@flywave/flywave-terrain-datasource",
+    "version": "0.0.1",
+    "description": "Terrain Data source for flywave.gl",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
+    "exports": {
+        ".": {
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
+        },
+        "./*": {
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
+        },
+        "./package.json": "./package.json"
+    },
+    "worker": {
+        "name": "@flywave/flywave-terrain-datasource-worker",
+        "main": "index-worker.js"
+    },
+    "directories": {
+        "test": "test"
+    },
+    "scripts": {
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-terrain-datasource"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@turf/boolean-intersects": "^7.1.0",
+        "@turf/turf": "^5.1.6",
+        "lodash.debounce": "catalog:",
+        "three-bvh-csg": "catalog:",
+        "gh-pages": "^3.0.0",
+        "lodash.range": "catalog:",
+        "earcut": "catalog:",
+        "tess2-ts": "catalog:",
+        "upng-js": "^2.1.0",
+        "@vitaly-z/hilbert-geohash": "^0.0.5"
+    },
+    "devDependencies": {
+        "@flywave/flywave-test-utils": "workspace:*",
+        "@types/chai": "catalog:",
+        "@types/earcut": "catalog:",
+        "@types/long": "catalog:",
+        "@types/mocha": "catalog:",
+        "@types/node": "catalog:",
+        "@types/sinon": "catalog:",
+        "@types/three": "catalog:",
+        "chai": "catalog:",
+        "copyfiles": "catalog:",
+        "cross-env": "catalog:",
+        "eslint-plugin-simple-import-sort": "^12.1.1",
+        "mocha": "catalog:",
+        "sinon": "catalog:",
+        "source-map-support": "catalog:",
+        "typescript": "catalog:"
+    },
+    "peerDependencies": {
+        "three": "catalog:"
+    },
+    "private": true
+}

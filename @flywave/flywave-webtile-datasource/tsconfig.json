@@ -1,0 +1,47 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "rootDir": "./",
+        "composite": true,
+        "paths": {
+            "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],
+            "@flywave/flywave-vectortile-datasource": ["../flywave-vectortile-datasource/src"],
+            "@flywave/flywave-geometry": ["../flywave-geometry/src"],
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-lrucache": ["../flywave-lrucache/src"],
+            "@flywave/flywave-mapview": ["../flywave-mapview/src"],
+            "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"],
+            "@flywave/flywave-materials": ["../flywave-materials/src"],
+            "@flywave/flywave-utils": ["../flywave-utils/src"]
+        }
+    },
+    "include": ["src/**/*.ts", "test/**/*.ts"],
+    "exclude": ["dist/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-datasource-protocol"
+        },
+        {
+            "path": "../flywave-vectortile-datasource"
+        },
+        {
+            "path": "../flywave-geometry"
+        },
+        {
+            "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-lrucache"
+        },
+        {
+            "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-materials"
+        },
+        {
+            "path": "../flywave-utils"
+        }
+    ]
+}

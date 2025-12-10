@@ -1,0 +1,12 @@
+@flywave/flywave-vectortile-datasource/lib/adapters/omv/proto/vector_tile.d.ts
+@flywave/flywave-vectortile-datasource/lib/adapters/omv/proto/vector_tile.js
+@flywave/flywave-datasource-protocol/theme.schema.json
+@flywave/flywave-map-theme/resources/fonts/
+@flywave/flywave-text-canvas/resources/fonts/
+dist/
+.nyc_output/
+coverage/
+lerna.json
+.github/workflows
+.vscode/
+.history

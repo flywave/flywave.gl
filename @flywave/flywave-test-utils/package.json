@@ -1,0 +1,67 @@
+{
+    "name": "@flywave/flywave-test-utils",
+    "version": "0.0.1",
+    "description": "Provides utilities for tests",
+    "main": "lib/src/index.node.js",
+    "browser": "lib/src/index.web.js",
+    "typings": "lib/src/index.web",
+    "exports": {
+        ".": {
+            "import": "./lib/src/index.web.js",
+            "require": "./lib/src/index.web.js"
+        },
+        "./*": {
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
+        }
+    },
+    "scripts": {
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-test-utils"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@types/ua-parser-js": "catalog:",
+        "@types/xml2js": "catalog:",
+        "chai": "catalog:",
+        "commander": "catalog:",
+        "glob": "catalog:",
+        "pixelmatch": "catalog:",
+        "sinon": "catalog:",
+        "three": "catalog:",
+        "ua-parser-js": "catalog:",
+        "xml2js": "catalog:"
+    },
+    "devDependencies": {
+        "@flywave/flywave-fetch": "workspace:*",
+        "@flywave/flywave-utils": "workspace:*",
+        "@types/body-parser": "catalog:",
+        "@types/chai": "catalog:",
+        "@types/express": "catalog:",
+        "@types/glob": "catalog:",
+        "@types/mocha": "catalog:",
+        "@types/node": "catalog:",
+        "@types/serve-static": "catalog:",
+        "@types/three": "catalog:",
+        "@types/mkpath": "catalog:",
+        "body-parser": "catalog:",
+        "cross-env": "catalog:",
+        "express": "catalog:",
+        "mkpath": "catalog:",
+        "mocha": "catalog:",
+        "serve-static": "catalog:",
+        "source-map-support": "catalog:",
+        "typescript": "catalog:"
+    },
+    "private": true
+}

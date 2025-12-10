@@ -1,0 +1,46 @@
+{
+    "name": "@flywave/flywave-inspector",
+    "version": "0.0.1",
+    "description": "A debugging and monitoring panel for flywave.gl MapView using dat.GUI",
+    "keywords": [
+        "flywave",
+        "inspector",
+        "debugger",
+        "mapview",
+        "dat.gui",
+        "performance"
+    ],
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index.d.ts",
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-inspector"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "devDependencies": {
+        "@types/dat.gui": "catalog:",
+        "@types/three": "catalog:",
+        "css-loader": "catalog:",
+        "dat.gui": "catalog:",
+        "html-webpack-plugin": "catalog:",
+        "style-loader": "catalog:",
+        "typescript": "catalog:",
+        "webpack": "catalog:",
+        "webpack-cli": "catalog:",
+        "webpack-dev-server": "catalog:"
+    },
+    "dependencies": {},
+    "private": true
+}

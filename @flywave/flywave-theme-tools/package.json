@@ -1,0 +1,39 @@
+{
+    "name": "@flywave/flywave-theme-tools",
+    "version": "0.0.1",
+    "description": "Tools for flywave.gl-theme optimiziation.",
+    "bin": {
+        "flywave-theme-optimizer": "lib/cli-build-theme.js"
+    },
+    "scripts": {
+        "build": "tsc --build",
+        "watch": "tsc --build -w",
+        "buildTheme": "ts-node src/cli-build-theme.ts",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-theme-tools"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "keywords": [
+        "here",
+        "flywave.gl",
+        "theme"
+    ],
+    "dependencies": {
+        "commander": "catalog:",
+        "glob": "catalog:",
+        "path": "catalog:"
+    },
+    "devDependencies": {
+        "ts-node": "catalog:",
+        "typescript": "catalog:"
+    },
+    "private": true
+}

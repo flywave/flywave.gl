@@ -1,0 +1,39 @@
+{
+    "tilejson": "2.1.0",
+    "name": "test",
+    "version": "0.0.1",
+    "format": "stratum-mesh-1.0",
+    "scheme": "tms",
+    "tiles": ["/{z}/{x}/{y}.stratum"],
+    "minzoom": 15,
+    "maxzoom": 17,
+    "bounds": [-180, -90, 180, 90],
+    "projection": "EPSG:4326",
+    "available": [
+        [
+            {
+                "startX": 54258,
+                "startY": 25550,
+                "endX": 54258,
+                "endY": 25550
+            }
+        ],
+        [
+            {
+                "startX": 108516,
+                "startY": 51100,
+                "endX": 108517,
+                "endY": 51101
+            }
+        ],
+        [
+            {
+                "startX": 217032,
+                "startY": 102200,
+                "endX": 217035,
+                "endY": 102203
+            }
+        ]
+    ],
+    "extensions": ["metadata", "materials", "fault", "borehole", "collapse", "section"]
+}

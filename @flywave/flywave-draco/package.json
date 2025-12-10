@@ -1,0 +1,62 @@
+{
+    "name": "@flywave/flywave-draco",
+    "version": "0.0.1",
+    "description": "Draco compression library for 3D models in flywave.gl",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
+    "exports": {
+        ".": {
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
+        },
+        "./*": {
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
+        },
+        "./package.json": "./package.json"
+    },
+    "worker": {
+        "name": "@flywave/flywave-draco-worker",
+        "main": "index-worker.js"
+    },
+    "directories": {
+        "test": "test"
+    },
+    "scripts": {
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-draco"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+    },
+    "devDependencies": {
+        "@types/chai": "catalog:",
+        "@types/long": "catalog:",
+        "@types/mocha": "catalog:",
+        "@types/node": "catalog:",
+        "@types/sinon": "catalog:",
+        "@types/three": "catalog:",
+        "chai": "catalog:",
+        "copyfiles": "catalog:",
+        "cross-env": "catalog:",
+        "eslint-plugin-simple-import-sort": "^12.1.1",
+        "mocha": "catalog:",
+        "sinon": "catalog:",
+        "source-map-support": "catalog:",
+        "typescript": "catalog:"
+    },
+    "peerDependencies": {
+        "three": "catalog:"
+    },
+    "private": true
+}

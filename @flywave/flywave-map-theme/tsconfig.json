@@ -1,0 +1,18 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "composite": true,
+        "module": "commonjs",
+        "paths": {
+            "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],
+            "@flywave/flywave-datasource-protocol/*": ["../flywave-datasource-protocol/src/*"]
+        }
+    },
+    "include": ["./**/*.ts"],
+    "exclude": ["dist/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-datasource-protocol"
+        }
+    ]
+}

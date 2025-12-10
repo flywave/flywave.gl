@@ -1,0 +1,88 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "composite": true,
+        "declaration": true,
+        "outDir": "./lib",
+        "rootDir": "./src",
+        "paths": {
+            "@flywave/flywave-mapview": ["../flywave-mapview/src"],
+            "@flywave/flywave-mapview-decoder": ["../flywave-mapview-decoder/src"],
+            "@flywave/flywave-terrain-datasource": ["../flywave-terrain-datasource/src"],
+            "@flywave/flywave-map-controls": ["../flywave-map-controls/src"],
+            "@flywave/flywave-3dtile-datasource": ["../flywave-3dtile-datasource/src"],
+            "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],
+            "@flywave/flywave-draw-controls": ["../flywave-draw-controls/src"],
+            "@flywave/flywave-webtile-datasource": ["../flywave-webtile-datasource/src"],
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-features-datasource": ["../flywave-features-datasource/src"],
+            "@flywave/flywave-geojson-datasource": ["../flywave-geojson-datasource/src"],
+            "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-vectortile-datasource": ["../flywave-vectortile-datasource/src"],
+            "@flywave/flywave-inspector": ["../flywave-inspector/src"],
+            "@flywave/flywave-vectortile-datasource/*": ["../flywave-vectortile-datasource/src/*"],
+            "@flywave/flywave-transfer-manager": ["../flywave-transfer-manager/src"],
+            "@flywave/flywave-gltf": ["../flywave-gltf/src"],
+            "@flywave/flywave-geometry": ["../flywave-geometry/src"],
+            "@flywave/flywave-text-canvas": ["../flywave-text-canvas/src"]
+        }
+    },
+    "include": ["src/**/*"],
+    "exclude": ["webpack.config.ts"],
+    "references": [
+        {
+            "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-mapview-decoder"
+        },
+        {
+            "path": "../flywave-terrain-datasource"
+        },
+        {
+            "path": "../flywave-map-controls"
+        },
+        {
+            "path": "../flywave-3dtile-datasource"
+        },
+        {
+            "path": "../flywave-datasource-protocol"
+        },
+        {
+            "path": "../flywave-draw-controls"
+        },
+        {
+            "path": "../flywave-webtile-datasource"
+        },
+        {
+            "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-features-datasource"
+        },
+        {
+            "path": "../flywave-geojson-datasource"
+        },
+        {
+            "path": "../flywave-transfer-manager"
+        },
+        {
+            "path": "../flywave-geometry"
+        },
+        {
+            "path": "../flywave-utils"
+        },
+        {
+            "path": "../flywave-vectortile-datasource"
+        },
+        {
+            "path": "../flywave-inspector"
+        },
+        {
+            "path": "../flywave-gltf"
+        },
+        {
+            "path": "../flywave-text-canvas"
+        }
+    ]
+}

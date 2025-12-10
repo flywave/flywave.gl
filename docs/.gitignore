@@ -1,0 +1,27 @@
+# Dependencies
+/node_modules
+
+# Production
+/build
+
+# Generated files
+.docusaurus
+.cache-loader
+
+# Ignore generated i18n files
+i18n/*/docusaurus-plugin-content-blog/
+i18n/*/docusaurus-plugin-content-docs/
+i18n/*/docusaurus-theme-classic/
+
+# Misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log* 
+docs/api/**
+!plugins/**/*

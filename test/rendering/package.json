@@ -1,0 +1,29 @@
+{
+    "name": "@flywave/flywave-rendering-test",
+    "version": "0.28.0",
+    "private": true,
+    "author": {
+        "name": "HERE Europe B.V.",
+        "url": "https://here.com"
+    },
+    "scripts": {
+        "build": "\n"
+    },
+    "devDependencies": {
+        "@flywave/flywave-datasource-protocol": "^0.28.0",
+        "@flywave/flywave-debug-datasource": "^0.28.0",
+        "@flywave/flywave-features-datasource": "^0.28.0",
+        "@flywave/flywave-geojson-datasource": "^0.28.0",
+        "@flywave/flywave-geoutils": "^0.28.0",
+        "@flywave/flywave-mapview": "^0.28.0",
+        "@flywave/flywave-mapview-decoder": "^0.28.0",
+        "@flywave/flywave-test-utils": "^0.28.0",
+        "@flywave/flywave-utils": "^0.28.0",
+        "@flywave/flywave-vectortile-datasource": "^0.28.0",
+        "@types/chai": "^4.2.14",
+        "@types/three": "^0.129.0",
+        "chai": "^4.2.0",
+        "three": "^0.129.0"
+    },
+    "license": "Apache-2.0"
+}

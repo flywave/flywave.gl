@@ -1,0 +1,24 @@
+{
+    // This file is not used in compilation. It is here just for a nice editor experience.
+    "extends": "@docusaurus/tsconfig",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "module": "esnext",
+        "paths": {
+            "@flywave/flywave-examples/*": ["../@flywave/flywave-examples/src/*"]
+        },
+        "skipLibCheck": true,
+        "noImplicitAny": false,
+        "sourceMap": true,
+        "strict": false,
+        "types": [
+            "node",
+            "@docusaurus/types",
+            "@docusaurus/theme-mermaid",
+            "@types/webpack-env",
+            "@docusaurus/theme-common"
+        ]
+    },
+    "exclude": [".docusaurus", "build"],
+    "include": ["src/**/*"]
+}

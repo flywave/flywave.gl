@@ -1,0 +1,40 @@
+<svg width="400" height="300" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .grid { stroke: #ccc; stroke-width: 1; }
+    .axis { stroke: #000; stroke-width: 2; }
+    .label { font-size: 14px; font-family: sans-serif; }
+    .border { stroke: #000; stroke-width: 2; fill: none; }
+  </style>
+  
+  <!-- 边框 -->
+  <rect x="50" y="50" width="300" height="200" class="border" />
+  
+  <!-- 网格线 -->
+  <line x1="100" y1="50" x2="100" y2="250" class="grid" />
+  <line x1="150" y1="50" x2="150" y2="250" class="grid" />
+  <line x1="200" y1="50" x2="200" y2="250" class="grid" />
+  <line x1="250" y1="50" x2="250" y2="250" class="grid" />
+  <line x1="300" y1="50" x2="300" y2="250" class="grid" />
+  
+  <line x1="50" y1="100" x2="350" y2="100" class="grid" />
+  <line x1="50" y1="150" x2="350" y2="150" class="grid" />
+  <line x1="50" y1="200" x2="350" y2="200" class="grid" />
+  
+  <!-- 坐标轴 -->
+  <line x1="50" y1="250" x2="350" y2="250" class="axis" marker-end="url(#arrow-x)" />
+  <line x1="50" y1="250" x2="50" y2="50" class="axis" marker-end="url(#arrow-y)" />
+  
+  <text x="355" y="255" class="label">X轴</text>
+  <text x="35" y="55" class="label">Y轴</text>
+  <text x="150" y="30" class="label">墨卡托投影平面坐标系</text>
+  
+  <!-- 箭头定义 -->
+  <defs>
+    <marker id="arrow-x" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#000" />
+    </marker>
+    <marker id="arrow-y" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,0 L3,9 z" fill="#000" />
+    </marker>
+  </defs>
+</svg>

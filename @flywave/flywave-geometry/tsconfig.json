@@ -1,0 +1,24 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "rootDir": "./",
+        "composite": true,
+        "declaration": true,
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"]
+        }
+    },
+    "include": ["src/**/*", "test/**/*"],
+    "exclude": ["**/node_modules/**"],
+    "references": [
+        {
+            "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-utils"
+        }
+    ]
+}

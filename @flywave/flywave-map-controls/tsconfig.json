@@ -1,0 +1,39 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "rootDir": "./",
+        "composite": true,
+        "sourceMap": true,
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-geoutils/*": ["../flywave-geoutils/src/*"],
+            "@flywave/flywave-mapview": ["../flywave-mapview/src"],
+            "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"],
+            "@flywave/flywave-test-utils": ["../flywave-test-utils/src"],
+            "@flywave/flywave-3dtile-datasource": ["../flywave-3dtile-datasource/src"],
+            "@flywave/flywave-test-utils/*": ["../flywave-test-utils/src/*"]
+        }
+    },
+    "include": ["src/**/*", "test/**/*"],
+    "exclude": ["dist/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-utils"
+        },
+        {
+            "path": "../flywave-3dtile-datasource"
+        },
+        {
+            "path": "../flywave-test-utils"
+        }
+    ]
+}

@@ -1,0 +1,804 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
+
+
+import { type Arc3d } from "../curve/arc3d";
+import {
+    type AnnounceNumberNumber,
+    type AnnounceNumberNumberCurvePrimitive
+} from "../curve/curve-primitive";
+import { Geometry } from "../geometry";
+import { Point3dArray } from "../geometry3d/point-helpers";
+import { Vector2d } from "../geometry3d/point2d-vector2d";
+import { Point3d, Vector3d } from "../geometry3d/point3d-vector3d";
+import { PolygonOps } from "../geometry3d/polygon-ops";
+import { PolylineOps } from "../geometry3d/polyline-ops";
+import { type Range3d } from "../geometry3d/range";
+import { Transform } from "../geometry3d/transform";
+import { type TransformProps, type XYZProps } from "../geometry3d/xyz-props";
+import { type Matrix4d } from "../geometry4d/matrix4d";
+import { type HalfEdge, type HalfEdgeGraph, HalfEdgeMask } from "../topology/graph";
+import { Triangulator } from "../topology/triangulation";
+import { AlternatingCCTreeNode } from "./alternating-convex-clip-tree";
+import { ClipPlane } from "./clip-plane";
+import { type Clipper, ClipPlaneContainment } from "./clip-utils";
+import { ConvexClipPlaneSet } from "./convex-clip-plane-set";
+import {
+    type UnionOfConvexClipPlaneSetsProps,
+    UnionOfConvexClipPlaneSets
+} from "./union-of-convex-clip-plane-sets";
+
+export enum ClipMaskXYZRangePlanes {
+    None = 0x00,
+    XLow = 0x01,
+    XHigh = 0x02,
+    YLow = 0x04,
+    YHigh = 0x08,
+    ZLow = 0x10,
+    ZHigh = 0x20,
+    XAndY = 0x0f,
+    All = 0x3f
+}
+
+export interface ClipPrimitivePlanesProps {
+    planes?: {
+        clips?: UnionOfConvexClipPlaneSetsProps;
+        invisible?: boolean;
+    };
+}
+
+export interface ClipPrimitiveShapeProps {
+    shape?: {
+        points?: XYZProps[];
+        trans?: TransformProps;
+        zlow?: number;
+        zhigh?: number;
+        mask?: boolean;
+        invisible?: boolean;
+    };
+}
+
+export type ClipPrimitiveProps = ClipPrimitivePlanesProps | ClipPrimitiveShapeProps;
+
+export class ClipPrimitive implements Clipper {
+    protected _clipPlanes?: UnionOfConvexClipPlaneSets;
+    protected _invisible: boolean;
+
+    public fetchClipPlanesRef(): UnionOfConvexClipPlaneSets | undefined {
+        this.ensurePlaneSets();
+        return this._clipPlanes;
+    }
+
+    public get invisible(): boolean {
+        return this._invisible;
+    }
+
+    protected constructor(
+        planeSet?: UnionOfConvexClipPlaneSets | undefined,
+        isInvisible: boolean = false
+    ) {
+        this._clipPlanes = planeSet;
+        this._invisible = isInvisible;
+    }
+
+    public static createCapture(
+        planes: UnionOfConvexClipPlaneSets | ConvexClipPlaneSet | undefined,
+        isInvisible: boolean = false
+    ): ClipPrimitive {
+        let planeData;
+        if (planes instanceof UnionOfConvexClipPlaneSets) planeData = planes;
+        if (planes instanceof ConvexClipPlaneSet) {
+            planeData = UnionOfConvexClipPlaneSets.createConvexSets([planes]);
+        }
+
+        return new ClipPrimitive(planeData, isInvisible);
+    }
+
+    public toJSON(): ClipPrimitiveProps {
+        const planes: ClipPrimitivePlanesProps["planes"] = {};
+        if (this._clipPlanes) planes.clips = this._clipPlanes.toJSON();
+
+        if (this._invisible) planes.invisible = true;
+
+        return { planes };
+    }
+
+    public arePlanesDefined(): boolean {
+        return this._clipPlanes !== undefined;
+    }
+
+    public clone(): ClipPrimitive {
+        const newPlanes = this._clipPlanes ? this._clipPlanes.clone() : undefined;
+        const result = new ClipPrimitive(newPlanes, this._invisible);
+        return result;
+    }
+
+    public ensurePlaneSets() {}
+
+    public pointInside(
+        point: Point3d,
+        onTolerance: number = Geometry.smallMetricDistanceSquared
+    ): boolean {
+        this.ensurePlaneSets();
+        let inside = true;
+        if (this._clipPlanes) inside = this._clipPlanes.isPointOnOrInside(point, onTolerance);
+        return inside;
+    }
+
+    public isPointOnOrInside(
+        point: Point3d,
+        onTolerance: number = Geometry.smallMetricDistanceSquared
+    ): boolean {
+        this.ensurePlaneSets();
+        let inside = true;
+        if (this._clipPlanes) inside = this._clipPlanes.isPointOnOrInside(point, onTolerance);
+        return inside;
+    }
+
+    public announceClippedSegmentIntervals(
+        f0: number,
+        f1: number,
+        pointA: Point3d,
+        pointB: Point3d,
+        announce?: AnnounceNumberNumber
+    ): boolean {
+        this.ensurePlaneSets();
+        let hasInsideParts = false;
+        if (this._clipPlanes) {
+            hasInsideParts = this._clipPlanes.announceClippedSegmentIntervals(
+                f0,
+                f1,
+                pointA,
+                pointB,
+                announce
+            );
+        }
+        return hasInsideParts;
+    }
+
+    public announceClippedArcIntervals(
+        arc: Arc3d,
+        announce?: AnnounceNumberNumberCurvePrimitive
+    ): boolean {
+        this.ensurePlaneSets();
+        let hasInsideParts = false;
+        if (this._clipPlanes) {
+            hasInsideParts = this._clipPlanes.announceClippedArcIntervals(arc, announce);
+        }
+        return hasInsideParts;
+    }
+
+    public multiplyPlanesByMatrix4d(
+        matrix: Matrix4d,
+        invert: boolean = true,
+        transpose: boolean = true
+    ): boolean {
+        if (invert) {
+            const inverse = matrix.createInverse();
+            if (!inverse) return false;
+            return this.multiplyPlanesByMatrix4d(inverse, false, transpose);
+        }
+        if (this._clipPlanes) this._clipPlanes.multiplyPlanesByMatrix4d(matrix);
+        return true;
+    }
+
+    public transformInPlace(transform: Transform): boolean {
+        if (this._clipPlanes) this._clipPlanes.transformInPlace(transform);
+        return true;
+    }
+
+    public setInvisible(invisible: boolean) {
+        this._invisible = invisible;
+    }
+
+    public containsZClip(): boolean {
+        if (this.fetchClipPlanesRef() !== undefined) {
+            for (const convexSet of this._clipPlanes!.convexSets) {
+                for (const plane of convexSet.planes) {
+                    if (
+                        Math.abs(plane.inwardNormalRef.z) > 1.0e-6 &&
+                        Math.abs(plane.distance) !== Number.MAX_VALUE
+                    ) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    public classifyPointContainment(
+        points: Point3d[],
+        ignoreInvisibleSetting: boolean
+    ): ClipPlaneContainment {
+        this.ensurePlaneSets();
+        const planes = this._clipPlanes;
+        let inside = ClipPlaneContainment.StronglyInside;
+        if (planes) inside = planes.classifyPointContainment(points, false);
+        if (this._invisible && !ignoreInvisibleSetting) {
+            switch (inside) {
+                case ClipPlaneContainment.StronglyInside:
+                    return ClipPlaneContainment.StronglyOutside;
+                case ClipPlaneContainment.StronglyOutside:
+                    return ClipPlaneContainment.StronglyInside;
+                case ClipPlaneContainment.Ambiguous:
+                    return ClipPlaneContainment.Ambiguous;
+            }
+        }
+        return inside;
+    }
+
+    public static fromJSON(json: ClipPrimitiveProps | undefined): ClipPrimitive | undefined {
+        if (!json) return undefined;
+        const shape = ClipShape.fromClipShapeJSON(json as ClipPrimitiveShapeProps);
+        if (shape) return shape;
+        return ClipPrimitive.fromJSONClipPrimitive(json as ClipPrimitivePlanesProps);
+    }
+
+    public static fromJSONClipPrimitive(
+        json: ClipPrimitivePlanesProps | undefined
+    ): ClipPrimitive | undefined {
+        const planes = json?.planes;
+        if (!planes) return undefined;
+
+        const clipPlanes = planes.clips
+            ? UnionOfConvexClipPlaneSets.fromJSON(planes.clips)
+            : undefined;
+        const invisible = undefined !== planes.invisible ? planes.invisible : false;
+        return new ClipPrimitive(clipPlanes, invisible);
+    }
+}
+
+class PolyEdge {
+    public pointA: Point3d;
+    public pointB: Point3d;
+    public normal: Vector3d;
+
+    public constructor(origin: Point3d, next: Point3d, normal: Vector3d, z: number) {
+        this.pointA = Point3d.create(origin.x, origin.y, z);
+        this.pointB = Point3d.create(next.x, next.y, z);
+        this.normal = normal;
+    }
+
+    public static makeUnitPerpendicularToBisector(
+        edgeA: PolyEdge,
+        edgeB: PolyEdge,
+        reverse: boolean
+    ): Vector3d | undefined {
+        let candidate = edgeB.normal.minus(edgeA.normal);
+        if (candidate.normalize(candidate) === undefined) {
+            candidate = Vector3d.createStartEnd(edgeA.pointA, edgeB.pointB);
+            if (candidate.normalize(candidate) === undefined) return undefined;
+        }
+        if (reverse) candidate.scale(-1.0, candidate);
+        return candidate;
+    }
+}
+
+export class ClipShape extends ClipPrimitive {
+    protected _polygon: Point3d[];
+    protected _zLow?: number;
+    protected _zHigh?: number;
+    protected _isMask: boolean;
+    protected _transformFromClip?: Transform;
+    protected _transformToClip?: Transform;
+
+    protected constructor(
+        polygon: Point3d[] = [],
+        zLow?: number,
+        zHigh?: number,
+        transform?: Transform,
+        isMask: boolean = false,
+        invisible: boolean = false
+    ) {
+        super(undefined, invisible);
+        this._isMask = false;
+        this._polygon = polygon;
+        this.initSecondaryProps(isMask, zLow, zHigh, transform);
+    }
+
+    public override get invisible(): boolean {
+        return this._invisible;
+    }
+
+    public get transformFromClip(): Transform | undefined {
+        return this._transformFromClip;
+    }
+
+    public get transformToClip(): Transform | undefined {
+        return this._transformToClip;
+    }
+
+    public get transformValid(): boolean {
+        return this.transformFromClip !== undefined;
+    }
+
+    public get zLowValid(): boolean {
+        return this._zLow !== undefined;
+    }
+
+    public get zHighValid(): boolean {
+        return this._zHigh !== undefined;
+    }
+
+    public get transformIsValid(): boolean {
+        return this._transformFromClip !== undefined;
+    }
+
+    public get zLow(): number | undefined {
+        return this._zLow;
+    }
+
+    public get zHigh(): number | undefined {
+        return this._zHigh;
+    }
+
+    public get polygon(): Point3d[] {
+        return this._polygon;
+    }
+
+    public get isMask(): boolean {
+        return this._isMask;
+    }
+
+    public setPolygon(polygon: Point3d[]) {
+        if (!polygon[0].isAlmostEqual(polygon[polygon.length - 1])) {
+            polygon.push(polygon[0].clone());
+        }
+        this._polygon = polygon;
+    }
+
+    public override ensurePlaneSets() {
+        if (this._clipPlanes !== undefined) return;
+        this._clipPlanes = UnionOfConvexClipPlaneSets.createEmpty();
+        this.parseClipPlanes(this._clipPlanes);
+        if (this._transformFromClip) this._clipPlanes.transformInPlace(this._transformFromClip);
+    }
+
+    public initSecondaryProps(
+        isMask: boolean,
+        zLow?: number,
+        zHigh?: number,
+        transform?: Transform
+    ) {
+        this._isMask = isMask;
+        this._zLow = zLow;
+        this._zHigh = zHigh;
+
+        if (transform !== undefined) {
+            this._transformFromClip = transform;
+            this._transformToClip = transform.inverse();
+        } else {
+            this._transformFromClip = Transform.createIdentity();
+            this._transformToClip = Transform.createIdentity();
+        }
+    }
+
+    public override toJSON(): ClipPrimitiveShapeProps {
+        const shape: ClipPrimitiveShapeProps["shape"] = {
+            points: this._polygon.map(pt => pt.toJSON())
+        };
+        if (this.invisible) shape.invisible = true;
+        if (this._transformFromClip && !this._transformFromClip.isIdentity) {
+            shape.trans = this._transformFromClip.toJSON();
+        }
+        if (this.isMask) shape.mask = true;
+        if (typeof this.zLow !== "undefined" && this.zLow !== -Number.MAX_VALUE) {
+            shape.zlow = this.zLow;
+        }
+        if (typeof this.zHigh !== "undefined" && this.zHigh !== Number.MAX_VALUE) {
+            shape.zhigh = this.zHigh;
+        }
+        return { shape };
+    }
+
+    public static fromClipShapeJSON(
+        json: ClipPrimitiveShapeProps | undefined,
+        result?: ClipShape
+    ): ClipShape | undefined {
+        const shape = json?.shape;
+        if (!shape) return undefined;
+        const points: Point3d[] = shape.points ? shape.points.map(pt => Point3d.fromJSON(pt)) : [];
+        const trans = shape.trans ? Transform.fromJSON(shape.trans) : undefined;
+        const zLow = typeof shape.zlow === "number" ? shape.zlow : undefined;
+        const zHigh = typeof shape.zhigh === "number" ? shape.zhigh : undefined;
+        const isMask = typeof shape.mask === "boolean" && shape.mask;
+        const invisible = typeof shape.invisible === "boolean" && shape.invisible;
+
+        return ClipShape.createShape(points, zLow, zHigh, trans, isMask, invisible, result);
+    }
+
+    public static createFrom(other: ClipShape, result?: ClipShape): ClipShape {
+        const retVal = ClipShape.createEmpty(false, false, undefined, result);
+        retVal._invisible = other._invisible;
+        for (const point of other._polygon) {
+            retVal._polygon.push(point.clone());
+        }
+        retVal._isMask = other._isMask;
+        retVal._zLow = other._zLow;
+        retVal._zHigh = other._zHigh;
+        retVal._transformToClip = other._transformToClip
+            ? other._transformToClip.clone()
+            : undefined;
+        retVal._transformFromClip = other._transformFromClip
+            ? other._transformFromClip.clone()
+            : undefined;
+        return retVal;
+    }
+
+    public static createShape(
+        polygon: Point3d[] = [],
+        zLow?: number,
+        zHigh?: number,
+        transform?: Transform,
+        isMask: boolean = false,
+        invisible: boolean = false,
+        result?: ClipShape
+    ): ClipShape | undefined {
+        if (polygon.length < 3) return undefined;
+        const pPoints = polygon.slice(0);
+        if (pPoints[0].isAlmostEqual(pPoints[pPoints.length - 1])) {
+            pPoints[0].clone(pPoints[pPoints.length - 1]);
+        } else pPoints.push(pPoints[0].clone());
+        if (result) {
+            result._clipPlanes = undefined; // Start as undefined
+            result._invisible = invisible;
+            result._polygon = pPoints;
+            result.initSecondaryProps(isMask, zLow, zHigh, transform);
+            return result;
+        } else {
+            return new ClipShape(pPoints, zLow, zHigh, transform, isMask, invisible);
+        }
+    }
+
+    public static createBlock(
+        extremities: Range3d,
+        clipMask: ClipMaskXYZRangePlanes,
+        isMask: boolean = false,
+        invisible: boolean = false,
+        transform?: Transform,
+        result?: ClipShape
+    ): ClipShape {
+        const low = extremities.low;
+        const high = extremities.high;
+        const blockPoints: Point3d[] = [];
+        for (let i = 0; i < 5; i++) blockPoints.push(Point3d.create());
+        blockPoints[0].x = blockPoints[3].x = blockPoints[4].x = low.x;
+        blockPoints[1].x = blockPoints[2].x = high.x;
+        blockPoints[0].y = blockPoints[1].y = blockPoints[4].y = low.y;
+        blockPoints[2].y = blockPoints[3].y = high.y;
+        return ClipShape.createShape(
+            blockPoints,
+            ClipMaskXYZRangePlanes.None !== (clipMask & ClipMaskXYZRangePlanes.ZLow)
+                ? low.z
+                : undefined,
+            ClipMaskXYZRangePlanes.None !== (clipMask & ClipMaskXYZRangePlanes.ZHigh)
+                ? high.z
+                : undefined,
+            transform,
+            isMask,
+            invisible,
+            result
+        )!;
+    }
+
+    public static createEmpty(
+        isMask = false,
+        invisible: boolean = false,
+        transform?: Transform,
+        result?: ClipShape
+    ): ClipShape {
+        if (result) {
+            result._clipPlanes = undefined;
+            result._invisible = invisible;
+            result._polygon.length = 0;
+            result.initSecondaryProps(isMask, undefined, undefined, transform);
+            return result;
+        }
+        return new ClipShape([], undefined, undefined, transform, isMask, invisible);
+    }
+
+    public get isValidPolygon(): boolean {
+        if (this._polygon.length < 3) return false;
+        if (!this._polygon[0].isExactEqual(this._polygon[this._polygon.length - 1])) return false;
+        return true;
+    }
+
+    public override clone(result?: ClipShape): ClipShape {
+        return ClipShape.createFrom(this, result);
+    }
+
+    private parseClipPlanes(set: UnionOfConvexClipPlaneSets) {
+        const points = this._polygon;
+        if (
+            points.length === 3 &&
+            !this._isMask &&
+            points[0].isExactEqual(points[points.length - 1])
+        ) {
+            this.parseLinearPlanes(set, this._polygon[0], this._polygon[1]);
+            return true;
+        }
+        if (!this.isMask) {
+            const direction = PolygonOps.testXYPolygonTurningDirections(this.polygon);
+            if (direction !== 0) {
+                this.parseConvexPolygonPlanes(set, this._polygon, direction, false);
+                return true;
+            }
+        }
+        this.parsePolygonPlanes(set, this._polygon, this.isMask);
+        return true;
+    }
+
+    private parseLinearPlanes(
+        set: UnionOfConvexClipPlaneSets,
+        start: Point3d,
+        end: Point3d,
+        cameraFocalLength?: number
+    ): boolean {
+        const normal = start.vectorTo(end);
+        if (normal.magnitude() === 0.0) return false;
+        normal.normalize(normal);
+        const convexSet = ConvexClipPlaneSet.createEmpty();
+        if (cameraFocalLength === undefined) {
+            const perpendicular = Vector2d.create(-normal.y, normal.x);
+            convexSet.planes.push(
+                ClipPlane.createNormalAndPoint(
+                    Vector3d.create(normal.x, normal.y),
+                    Point3d.createFrom(start),
+                    this._invisible
+                )!
+            );
+            convexSet.planes.push(
+                ClipPlane.createNormalAndPoint(
+                    Vector3d.create(-normal.x, -normal.y),
+                    Point3d.createFrom(end),
+                    this._invisible
+                )!
+            );
+            convexSet.planes.push(
+                ClipPlane.createNormalAndPoint(
+                    Vector3d.create(perpendicular.x, perpendicular.y),
+                    Point3d.createFrom(start),
+                    this._invisible
+                )!
+            );
+            convexSet.planes.push(
+                ClipPlane.createNormalAndPoint(
+                    Vector3d.create(-perpendicular.x, -perpendicular.y),
+                    Point3d.createFrom(start),
+                    this._invisible
+                )!
+            );
+        } else {
+            const start3d = Point3d.create(start.x, start.y, -cameraFocalLength);
+            const end3d = Point3d.create(end.x, end.y, -cameraFocalLength);
+            const vecEnd3d = Vector3d.createFrom(end3d);
+            const perpendicular = vecEnd3d.crossProduct(Vector3d.createFrom(start3d)).normalize();
+            let endNormal = Vector3d.createFrom(start3d).crossProduct(perpendicular!).normalize();
+            convexSet.planes.push(
+                ClipPlane.createNormalAndDistance(perpendicular!, 0.0, this._invisible)!
+            );
+            convexSet.planes.push(
+                ClipPlane.createNormalAndDistance(endNormal!, 0.0, this._invisible)!
+            );
+            perpendicular!.negate();
+            endNormal = vecEnd3d.crossProduct(perpendicular!).normalize();
+            convexSet.planes.push(
+                ClipPlane.createNormalAndDistance(perpendicular!, 0.0, this._invisible)!
+            );
+            convexSet.planes.push(
+                ClipPlane.createNormalAndDistance(endNormal!, 0.0, this._invisible)!
+            );
+        }
+        convexSet.addZClipPlanes(this._invisible, this._zLow, this._zHigh);
+        set.addConvexSet(convexSet);
+        return true;
+    }
+
+    private parseConvexPolygonPlanes(
+        set: UnionOfConvexClipPlaneSets,
+        polygon: Point3d[],
+        direction: number,
+        buildExteriorClipper: boolean,
+        cameraFocalLength?: number
+    ): boolean {
+        const samePointTolerance = 1.0e-8;
+        const edges: PolyEdge[] = [];
+
+        const reverse = direction < 0;
+        for (let i = 0; i < polygon.length - 1; i++) {
+            const z = cameraFocalLength === undefined ? 0.0 : -cameraFocalLength;
+            const dir = Vector3d.createStartEnd(polygon[i], polygon[i + 1]);
+            const magnitude = dir.magnitude();
+            dir.normalize(dir);
+            if (magnitude > samePointTolerance) {
+                const normal = Vector3d.create(reverse ? dir.y : -dir.y, reverse ? -dir.x : dir.x);
+                edges.push(new PolyEdge(polygon[i], polygon[i + 1], normal, z));
+            }
+        }
+        if (edges.length < 3) {
+            return false;
+        }
+        if (buildExteriorClipper) {
+            const last = edges.length - 1;
+            for (let i = 0; i <= last; i++) {
+                const edge = edges[i];
+                const prevEdge = edges[i ? i - 1 : last];
+                const nextEdge = edges[i === last ? 0 : i + 1];
+                const convexSet = ConvexClipPlaneSet.createEmpty();
+                const previousPerpendicular = PolyEdge.makeUnitPerpendicularToBisector(
+                    prevEdge,
+                    edge,
+                    !reverse
+                );
+                const nextPerpendicular = PolyEdge.makeUnitPerpendicularToBisector(
+                    edge,
+                    nextEdge,
+                    reverse
+                );
+
+                if (previousPerpendicular) {
+                    convexSet.planes.push(
+                        ClipPlane.createNormalAndPoint(
+                            previousPerpendicular,
+                            edge.pointA,
+                            this._invisible,
+                            true
+                        )!
+                    );
+                }
+                convexSet.planes.push(
+                    ClipPlane.createNormalAndPoint(
+                        edge.normal,
+                        edge.pointB,
+                        this._invisible,
+                        false
+                    )!
+                );
+                if (nextPerpendicular) {
+                    convexSet.planes.push(
+                        ClipPlane.createNormalAndPoint(
+                            nextPerpendicular,
+                            nextEdge.pointA,
+                            this._invisible,
+                            true
+                        )!
+                    );
+                }
+                set.addConvexSet(convexSet);
+                set.addOutsideZClipSets(this._invisible, this._zLow, this._zHigh);
+            }
+        } else {
+            const convexSet = ConvexClipPlaneSet.createEmpty();
+            if (cameraFocalLength === undefined) {
+                for (const edge of edges) {
+                    convexSet.planes.push(
+                        ClipPlane.createNormalAndPoint(
+                            Vector3d.create(edge.normal.x, edge.normal.y),
+                            edge.pointA
+                        )!
+                    );
+                }
+            } else {
+                if (reverse) {
+                    for (const edge of edges) {
+                        convexSet.planes.push(
+                            ClipPlane.createNormalAndDistance(
+                                Vector3d.createFrom(edge.pointA)
+                                    .crossProduct(Vector3d.createFrom(edge.pointB))
+                                    .normalize()!,
+                                0.0
+                            )!
+                        );
+                    }
+                } else {
+                    for (const edge of edges) {
+                        convexSet.planes.push(
+                            ClipPlane.createNormalAndDistance(
+                                Vector3d.createFrom(edge.pointB)
+                                    .crossProduct(Vector3d.createFrom(edge.pointA))
+                                    .normalize()!,
+                                0.0
+                            )!
+                        );
+                    }
+                }
+            }
+            convexSet.addZClipPlanes(this._invisible, this._zLow, this._zHigh);
+            set.addConvexSet(convexSet);
+        }
+        return true;
+    }
+
+    private parsePolygonPlanes(
+        set: UnionOfConvexClipPlaneSets,
+        polygon: Point3d[],
+        isMask: boolean,
+        cameraFocalLength?: number
+    ): boolean {
+        const cleanPolygon = PolylineOps.compressDanglers(polygon, true);
+        const announceFace = (_graph: HalfEdgeGraph, edge: HalfEdge): boolean => {
+            if (!edge.isMaskSet(HalfEdgeMask.EXTERIOR)) {
+                const convexFacetPoints = edge.collectAroundFace((node: HalfEdge): any => {
+                    if (!node.isMaskSet(HalfEdgeMask.EXTERIOR)) {
+                        return Point3d.create(node.x, node.y, 0);
+                    }
+                });
+                convexFacetPoints.push(convexFacetPoints[0].clone());
+                const direction = PolygonOps.testXYPolygonTurningDirections(convexFacetPoints);
+                this.parseConvexPolygonPlanes(
+                    set,
+                    convexFacetPoints,
+                    direction,
+                    false,
+                    cameraFocalLength
+                );
+            }
+            return true;
+        };
+        if (isMask) {
+            const polygonA = Point3dArray.clonePoint3dArray(cleanPolygon);
+            const hullAndInlets = AlternatingCCTreeNode.createHullAndInletsForPolygon(polygonA);
+            const allLoops = hullAndInlets.extractLoops();
+            if (allLoops.length === 0) return false;
+            const hull = allLoops[0];
+            const direction1 = PolygonOps.testXYPolygonTurningDirections(hull);
+            this.parseConvexPolygonPlanes(set, hull, -direction1, true, cameraFocalLength);
+            for (let i = 1; i < allLoops.length; i++) {
+                const triangulatedPolygon = Triangulator.createTriangulatedGraphFromSingleLoop(
+                    allLoops[i]
+                );
+                if (triangulatedPolygon) {
+                    Triangulator.flipTriangles(triangulatedPolygon);
+                    triangulatedPolygon.announceFaceLoops(announceFace);
+                }
+            }
+            return true;
+        } else {
+            const triangulatedPolygon =
+                Triangulator.createTriangulatedGraphFromSingleLoop(cleanPolygon);
+            if (triangulatedPolygon === undefined) return false;
+            Triangulator.flipTriangles(triangulatedPolygon);
+            triangulatedPolygon.announceFaceLoops(announceFace);
+        }
+        return true;
+    }
+
+    public override multiplyPlanesByMatrix4d(
+        matrix: Matrix4d,
+        invert: boolean = true,
+        transpose: boolean = true
+    ): boolean {
+        this.ensurePlaneSets();
+        return super.multiplyPlanesByMatrix4d(matrix, invert, transpose);
+    }
+
+    public override transformInPlace(transform: Transform): boolean {
+        if (transform.isIdentity) return true;
+        super.transformInPlace(transform);
+        if (this._transformFromClip) {
+            transform.multiplyTransformTransform(this._transformFromClip, this._transformFromClip);
+        } else this._transformFromClip = transform.clone();
+        this._transformToClip = this._transformFromClip.inverse();
+        return true;
+    }
+
+    public get isXYPolygon(): boolean {
+        if (this._polygon.length === 0) return false;
+        if (this._transformFromClip === undefined) return true;
+        const zVector = this._transformFromClip.matrix.columnZ();
+        return zVector.magnitudeXY() < 1.0e-8;
+    }
+
+    public performTransformToClip(point: Point3d): void {
+        if (this._transformToClip !== undefined) {
+            this._transformToClip.multiplyPoint3d(point, point);
+        }
+    }
+
+    public performTransformFromClip(point: Point3d): void {
+        if (this._transformFromClip !== undefined) {
+            this._transformFromClip.multiplyPoint3d(point, point);
+        }
+    }
+}

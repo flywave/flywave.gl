@@ -1,0 +1,11 @@
+*.ts
+!*.d.ts
+test/
+tsconfig.json
+.gitignore
+.gitreview
+resources-dev/
+scripts/
+*.tgz
+*.map
+*.tsbuildinfo

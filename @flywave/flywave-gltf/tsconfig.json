@@ -1,0 +1,29 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "rootDir": "./",
+        "sourceMap": true,
+        "composite": true,
+        "incremental": true,
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-splats": ["../flywave-splats/src"],
+            "@flywave/flywave-draco": ["../flywave-draco/src"]
+        }
+    },
+    "include": ["src/**/*"],
+    "exclude": ["dist/**", "test/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-splats"
+        },
+        {
+            "path": "../flywave-utils"
+        },
+        {
+            "path": "../flywave-draco"
+        },
+    ]
+}

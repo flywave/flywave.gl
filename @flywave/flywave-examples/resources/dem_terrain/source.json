@@ -1,0 +1,18 @@
+{
+  "type": "raster-dem",
+  "url": "mapbox://mapbox.terrain-rgb",
+  "tileSize": 512,
+  "maxzoom": 14,
+  "minzoom": 0,
+  "bounds": [
+    118.1,
+    36.4,
+    118.25,
+    36.55
+  ],
+  "scheme": "xyz",
+  "tiles": [
+    "tiles/{level}/{x}/{y}.png"
+  ],
+  "encoding": "terrarium"
+}

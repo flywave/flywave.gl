@@ -1,0 +1,119 @@
+{
+    "tilejson": "2.1.0",
+    "name": "水库.tif",
+    "version": "0.0.1",
+    "format": "quantized-mesh-1.",
+    "tiles": ["/{z}/{x}/{y}.terrain?v={version}"],
+    "minzoom": 0,
+    "maxzoom": 12,
+    "bounds": [-180, -90, 180, 90],
+    "scheme": "tms",
+    "projection": "EPSG:4326",
+    "available": [
+        [
+            {
+                "startX": 1,
+                "startY": 0,
+                "endX": 1,
+                "endY": 0
+            }
+        ],
+        [
+            {
+                "startX": 3,
+                "startY": 1,
+                "endX": 3,
+                "endY": 1
+            }
+        ],
+        [
+            {
+                "startX": 6,
+                "startY": 2,
+                "endX": 6,
+                "endY": 2
+            }
+        ],
+        [
+            {
+                "startX": 13,
+                "startY": 5,
+                "endX": 13,
+                "endY": 5
+            }
+        ],
+        [
+            {
+                "startX": 26,
+                "startY": 11,
+                "endX": 26,
+                "endY": 11
+            }
+        ],
+        [
+            {
+                "startX": 52,
+                "startY": 22,
+                "endX": 53,
+                "endY": 22
+            }
+        ],
+        [
+            {
+                "startX": 105,
+                "startY": 44,
+                "endX": 106,
+                "endY": 44
+            }
+        ],
+        [
+            {
+                "startX": 211,
+                "startY": 89,
+                "endX": 212,
+                "endY": 89
+            }
+        ],
+        [
+            {
+                "startX": 423,
+                "startY": 179,
+                "endX": 424,
+                "endY": 179
+            }
+        ],
+        [
+            {
+                "startX": 847,
+                "startY": 359,
+                "endX": 848,
+                "endY": 359
+            }
+        ],
+        [
+            {
+                "startX": 1695,
+                "startY": 719,
+                "endX": 1696,
+                "endY": 719
+            }
+        ],
+        [
+            {
+                "startX": 3391,
+                "startY": 1439,
+                "endX": 3392,
+                "endY": 1439
+            }
+        ],
+        [
+            {
+                "startX": 6783,
+                "startY": 2878,
+                "endX": 6784,
+                "endY": 2879
+            }
+        ]
+    ],
+    "extensions": ["octvertexnormals", "vertexnormals", "watermask"]
+}

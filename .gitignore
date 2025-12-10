@@ -1,0 +1,17 @@
+node_modules/
+doc/
+coverage/
+test-npm-packages-app/
+.vscode/
+.DS_Store
+.nyc_output/
+rendering-test-results/
+*.tgz
+*.tsbuildinfo
+*.ts.map
+/input/
+/markdown/
+/temp/
+credentials.js
+@flywave/flywave.gl/dist
+pnpm-lock.yaml

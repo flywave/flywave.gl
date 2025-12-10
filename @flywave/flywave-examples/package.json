@@ -1,0 +1,72 @@
+{
+    "name": "@flywave/flywave-examples",
+    "version": "0.0.1",
+    "description": "flywave.gl Examples",
+    "keywords": [
+        "examples",
+        "map",
+        "map-renderer",
+        "vector-tiles",
+        "geojson",
+        "typescript",
+        "webgl",
+        "flywave.gl"
+    ],
+    "scripts": {
+        "test": "exit 0",
+        "tsc": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "build": "webpack --config webpack.config.ts",
+        "start": "webpack serve --allowed-hosts all  ",
+        "publish-html": "node scripts/publish-html.js",
+        "download-terrain": "node scripts/mapbox-terrain-downloader.js",
+        "download-cesium-tiles": "node scripts/cesium-3dtile-downloader.js"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "devDependencies": {
+        "@flywave/flywave-webpack-utils": "workspace:*",
+        "@types/copy-webpack-plugin": "catalog:",
+        "@types/dat.gui": "catalog:",
+        "@types/glob": "catalog:",
+        "@types/long": "catalog:",
+        "@types/three": "catalog:",
+        "axios": "1.13.2",
+        "copy-webpack-plugin": "catalog:",
+        "cross-env": "catalog:",
+        "css-loader": "catalog:",
+        "dat.gui": "catalog:",
+        "glob": "catalog:",
+        "highlight.js": "catalog:",
+        "html-webpack-plugin": "catalog:",
+        "ncp": "catalog:",
+        "stats.js": "catalog:",
+        "style-loader": "catalog:",
+        "suncalc": "catalog:",
+        "three": "catalog:",
+        "typescript": "catalog:",
+        "webpack": "catalog:",
+        "webpack-cli": "catalog:",
+        "webpack-dev-server": "catalog:",
+        "webpack-merge": "catalog:"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-examples"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "dependencies": {
+        "@flywave/flywave-gltf": "workspace:*",
+        "@flywave/flywave-inspector": "workspace:*",
+        "@turf/turf": "catalog:",
+        "@types/earcut": "catalog:",
+        "earcut": "catalog:",
+        "three-nebula": "10.0.3"
+    },
+    "private": true
+}

@@ -1,0 +1,359 @@
+/**
+ * CSS files with the .module.css suffix will be treated as CSS modules
+ * and scoped locally.
+ */
+
+.heroBanner {
+  padding: 5rem 0;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-dark) 100%);
+  color: white;
+}
+
+.heroTitle {
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.heroSubtitle {
+  font-size: 1.25rem;
+  font-weight: 300;
+  margin-bottom: 2rem;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+@media screen and (max-width: 996px) {
+  .heroBanner {
+    padding: 3rem 1rem;
+  }
+  
+  .heroTitle {
+    font-size: 2rem;
+  }
+  
+  .heroSubtitle {
+    font-size: 1.1rem;
+  }
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.primaryButton {
+  background-color: white;
+  color: var(--ifm-color-primary);
+  border: 2px solid white;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 50px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  text-decoration: none;
+  display: inline-block;
+}
+
+.primaryButton:hover {
+  background-color: transparent;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.secondaryButton {
+  background-color: transparent;
+  color: white;
+  border: 2px solid white;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 50px;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.secondaryButton:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.categorySection {
+  margin: 4rem 0;
+}
+
+.categoryTitle {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--ifm-color-primary);
+  font-size: 1.8rem;
+  font-weight: 700;
+  text-align: center;
+  position: relative;
+}
+
+.categoryTitle::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 4px;
+  background: var(--ifm-color-primary);
+  border-radius: 2px;
+}
+
+.examplesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.exampleCard {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-theme='dark'] .exampleCard {
+  background: var(--ifm-background-surface-color);
+  border-color: var(--ifm-color-emphasis-300);
+}
+
+.exampleCard:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+}
+
+.exampleImage {
+  height: 180px;
+  background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-light) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.exampleImage::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  transform: rotate(45deg);
+  animation: shine 3s infinite;
+}
+
+/* 添加缩略图样式 */
+.exampleThumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.exampleCard:hover .exampleThumbnail {
+  transform: scale(1.08);
+}
+
+/* 当有缩略图时，移除光晕动画 */
+.exampleImage:has(.exampleThumbnail)::before {
+  display: none;
+}
+
+/* 当有缩略图时，移除渐变背景 */
+.exampleImage:has(.exampleThumbnail) {
+  background: transparent;
+}
+
+@keyframes shine {
+  0% {
+    transform: rotate(45deg) translateX(-100%);
+  }
+  100% {
+    transform: rotate(45deg) translateX(100%);
+  }
+}
+
+.placeholderImage {
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  z-index: 1;
+  text-align: center;
+  padding: 1rem;
+}
+
+.exampleContent {
+  padding: 1.5rem;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.exampleContent h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ifm-font-color-base);
+}
+
+.exampleDescription {
+  margin: 0 0 1rem 0;
+  font-size: 0.95rem;
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.6;
+  flex-grow: 1;
+}
+
+.exampleCategory {
+  margin: 0 0 1rem 0;
+  font-size: 0.85rem;
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.exampleButton {
+  background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-dark) 100%);
+  color: white;
+  border: none;
+  font-weight: 600;
+  padding: 0.7rem 1.4rem;
+  border-radius: 6px;
+  transition: all 0.4s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  align-self: flex-start;
+  box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.exampleButton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--ifm-color-primary-dark) 0%, var(--ifm-color-primary-darker) 100%);
+  z-index: -1;
+  transition: opacity 0.4s ease;
+  opacity: 0;
+}
+
+.exampleButton:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(67, 97, 238, 0.4);
+  color: white;
+}
+
+.exampleButton:hover::before {
+  opacity: 1;
+}
+
+@media screen and (max-width: 768px) {
+  .heroBanner {
+    padding: 2rem 1rem;
+  }
+  
+  .heroTitle {
+    font-size: 1.8rem;
+  }
+  
+  .heroSubtitle {
+    font-size: 1rem;
+  }
+  
+  .categorySection {
+    margin: 3rem 0;
+  }
+  
+  .categoryTitle {
+    font-size: 1.5rem;
+  }
+  
+  .examplesGrid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+  
+  .exampleImage {
+    height: 150px;
+  }
+  
+  .exampleContent {
+    padding: 1.25rem;
+  }
+  
+  .exampleContent h3 {
+    font-size: 1.1rem;
+  }
+  
+  /* 移动端缩略图优化 */
+  .exampleThumbnail {
+    object-fit: cover;
+  }
+}
+
+/* 响应式图片加载优化 */
+.exampleThumbnail {
+  background-color: var(--ifm-color-emphasis-100);
+}
+
+.exampleThumbnail[src=""] {
+  display: none;
+}
+
+.exampleThumbnail:not([src]) {
+  display: none;
+}
+
+/* 加载状态样式 */
+.exampleThumbnail.loading {
+  opacity: 0.7;
+  filter: blur(2px);
+}
+
+.exampleThumbnail.loaded {
+  opacity: 1;
+  filter: blur(0);
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}

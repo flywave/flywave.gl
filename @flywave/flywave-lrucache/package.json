@@ -1,0 +1,48 @@
+{
+    "name": "@flywave/flywave-lrucache",
+    "version": "0.0.1",
+    "description": "LRU cache",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
+    "exports": {
+        ".": {
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
+        },
+        "./*": {
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
+        },
+        "./package.json": "./package.json"
+    },
+    "directories": {
+        "test": "test"
+    },
+    "scripts": {
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-lrucache"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {},
+    "devDependencies": {
+        "@types/chai": "catalog:",
+        "@types/mocha": "catalog:",
+        "@types/node": "catalog:",
+        "chai": "catalog:",
+        "cross-env": "catalog:",
+        "mocha": "catalog:",
+        "source-map-support": "catalog:",
+        "typescript": "catalog:"
+    },
+    "private": true
+}
