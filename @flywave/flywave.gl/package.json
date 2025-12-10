@@ -53,30 +53,6 @@
     "peerDependencies": {
         "three": ">= 0.169.0 < 0.182.0"
     },
-    "devDependencies": {
-        "@flywave/flywave-3dtile-datasource": "0.0.1",
-        "@flywave/flywave-datasource-protocol": "0.0.1",
-        "@flywave/flywave-draw-controls": "0.0.1",
-        "@flywave/flywave-features-datasource": "0.0.1",
-        "@flywave/flywave-geoutils": "0.0.1",
-        "@flywave/flywave-inspector": "0.0.1",
-        "@flywave/flywave-map-controls": "0.0.1",
-        "@flywave/flywave-mapview": "0.0.1",
-        "@flywave/flywave-mapview-decoder": "0.0.1",
-        "@flywave/flywave-terrain-datasource": "0.0.1",
-        "@flywave/flywave-utils": "0.0.1",
-        "@flywave/flywave-vectortile-datasource": "0.0.1",
-        "@flywave/flywave-webpack-utils": "0.0.1",
-        "@flywave/flywave-webtile-datasource": "0.0.1",
-        "copy-webpack-plugin": "catalog:",
-        "cross-env": "catalog:",
-        "expose-loader": "5.0.1",
-        "tsconfig-paths-webpack-plugin": "catalog:",
-        "typescript": "catalog:",
-        "webpack": "catalog:",
-        "webpack-cli": "catalog:",
-        "webpack-merge": "catalog:"
-    },
     "publishConfig": {
         "access": "public"
     },
