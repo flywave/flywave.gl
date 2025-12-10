@@ -1,105 +1,100 @@
-# @flywave/flywave.gl
+# 🌍 Flywave.gl
 
+[![CI](https://img.shields.io/github/actions/workflow/status/flywave/flywave.gl/ci.yaml?branch=master&style=for-the-badge&label=CI&logo=github)](https://github.com/flywave/flywave.gl/actions/workflows/ci.yaml)
+[![Code Coverage](https://img.shields.io/codecov/c/github/flywave/flywave.gl/master?style=for-the-badge&logo=codecov&labelColor=2c3e50)](https://codecov.io/gh/flywave/flywave.gl)
 [![NPM 版本](https://img.shields.io/npm/v/@flywave/flywave.gl.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/@flywave/flywave.gl)
 [![许可证](https://img.shields.io/npm/l/@flywave/flywave.gl.svg?style=for-the-badge)](https://github.com/flywave/flywave.gl/blob/master/LICENSE)
 [![下载量](https://img.shields.io/npm/dm/@flywave/flywave.gl.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/@flywave/flywave.gl)
+[![Twitter](https://img.shields.io/badge/Twitter-@flywave.gl-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20flywave.gl%20-%20an%20awesome%203D%20map%20engine!)
 
-**一个基于 TypeScript 构建的开源 3D 地图渲染引擎**  
+**一个基于 TypeScript 构建的开源 3D 地图渲染引擎**
+
 *使用 WebGL 和 Three.js 创建高性能、可扩展的 3D 地图可视化解决方案*
 
-## 概述
+[快速开始](#快速开始) · [文档](https://flywave.github.io/flywave.gl/) · [示例](https://flywave.github.io/flywave.gl/examples) · [官网](https://flywave.net)
+
+---
+
+## 项目简介
 
 `@flywave/flywave.gl` 是 flywave.gl 项目的完整功能包，集成了所有核心模块，提供了一个功能齐全的 3D 地图渲染引擎。该包采用模块化设计，旨在提供一个高性能、可扩展且模块化的 3D 地图渲染解决方案。
 
-## 功能特性
+您可以使用此引擎来：
 
 - 🌍 **开发视觉上吸引人的 3D 地图** - 利用 WebGL 技术创建沉浸式地图体验
 - 🎨 **使用 WebGL 创建高度动画和动态的地图可视化** - 基于流行的 [three.js](https://threejs.org/) 库
 - 🎨 **创建可动态切换的主题地图** - 支持多种地图样式和主题
 - ⚡ **通过高性能的地图渲染和解码创建流畅的地图体验** - Web Workers 并行化 CPU 密集型任务
 - 🔧 **模块化设计地图** - 可以根据需要交换模块和数据提供者
-- 🗺️ **多数据源支持** - 支持多种地图数据源格式（3D Tiles、矢量瓦片、Web 瓦片等）
-- 🏔️ **地形支持** - 内置数字高程模型 (DEM) 支持
-- 🖱️ **丰富的交互功能** - 提供完整的地图交互和控制功能
-- 🌍 **多种投影方式** - 支持球面、平面和椭球投影
 
-## 安装
+## 系统截图
 
+<div align="center">
+
+|  |  |  |
+| :----------------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/01-globe-view.png" alt="球面视图" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/02-terrain-rendering.png" alt="地形渲染" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/03-3dtiles-rendering.png" alt="3D Tiles渲染" width="200" /> |
+|  |  |  |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/04-post-processing.png" alt="后期处理" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/06-interactive-controls.png" alt="交互控制" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/07-planar-map.png" alt="平面地图" width="200" /> |
+|  |  |  |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/08-atmosphere.png" alt="大气效果" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/09-animation.png" alt="动画系统" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/11-lighting.png" alt="光照系统" width="200" /> |
+
+</div>
+
+## 文档
+
+- [完整文档](https://flywave.github.io/flywave.gl) - API 文档、教程、最佳实践
+- [示例集合](https://flywave.github.io/flywave.gl/examples) - 功能示例、代码片段
+- [开发指南](https://flywave.github.io/flywave.gl/docs/development/setup.html) - 环境搭建、构建说明
+- [快速开始](https://flywave.github.io/flywave.gl/docs/getting-started/installation.html) - 安装、基本使用
+- [问题反馈](https://github.com/flywave/flywave.gl/issues) - Bug 报告、功能建议
+- [社区讨论](https://github.com/flywave/flywave.gl/discussions) - 技术交流、使用帮助
+
+## 快速开始
+
+### 环境要求
+- Node.js >= 22.15.0 (检查命令: `node --version`)
+- pnpm >= 9.0.0 (检查命令: `pnpm --version`)
+
+### 安装
+
+**使用 pnpm (推荐):**
+```bash
+pnpm add @flywave/flywave.gl
+```
+
+**或使用 npm:**
 ```bash
 npm install @flywave/flywave.gl
 ```
 
-或
+### 代码中使用
 
-```bash
-yarn add @flywave/flywave.gl
-```
+```ts
+import { MapView, GeoCoordinates, sphereProjection } from "@flywave/flywave.gl";
 
-## 快速开始
-
-```javascript
-import * as flywave from '@flywave/flywave.gl';
-
-// 创建地图视图
-const mapView = new flywave.MapView({
-  target: 'map-container',
-  theme: 'dark'
+const mapView = new MapView({
+  projection: sphereProjection,
+  target: new GeoCoordinates(36, 118),
+  zoomLevel: 6,
+  canvas: document.getElementById("mapCanvas") as HTMLCanvasElement
 });
-
-// 添加数据源
-const tileDataSource = new flywave.WebTileDataSource({
-  name: 'basemap',
-  tileUrls: ['https://example.com/tiles/{z}/{x}/{y}.png']
-});
-
-mapView.addDataSource(tileDataSource);
 ```
 
-## 核心模块
+## 核心功能
 
-此包包含了 flywave.gl 项目的所有核心模块：
+- 🚀 **高性能渲染**: 利用 WebGL 和现代图形技术实现流畅的 3D 地图渲染
+- 🔧 **模块化设计**: 可以根据需要选择和组合不同的功能模块
+- 🎨 **可扩展主题**: 支持动态切换和自定义地图主题
+- 🗺️ **多数据源支持**: 支持多种地图数据源格式
+- 🖱️ **丰富的交互功能**: 提供完整的地图交互和控制功能
+- 🌍 **多种投影方式**: 支持球面、平面和椭球投影
+- 🏔️ **地形支持**: 内置数字高程模型 (DEM) 支持
 
-- `@flywave/flywave-mapview` - 地图视图核心模块
-- `@flywave/flywave-terrain-datasource` - 地形数据源模块
-- `@flywave/flywave-map-controls` - 地图控件模块
-- `@flywave/flywave-3dtile-datasource` - 3D 瓦片数据源模块
-- `@flywave/flywave-datasource-protocol` - 数据源协议模块
-- `@flywave/flywave-draw-controls` - 绘制控件模块
-- `@flywave/flywave-webtile-datasource` - Web 瓦片数据源模块
-- `@flywave/flywave-geoutils` - 地理空间工具模块
-- `@flywave/flywave-features-datasource` - 特征数据源模块
-- `@flywave/flywave-utils` - 工具模块
-- `@flywave/flywave-vectortile-datasource` - 矢量瓦片数据源模块
-- `@flywave/flywave-inspector` - 调试检查工具
-
-## 文档资源
-
-- [完整文档](https://flywave.net/docs) - API 文档、教程、最佳实践
-- [示例集合](https://flywave.net/examples) - 功能示例、代码片段
-- [官方网站](https://flywave.net) - 项目主页、最新动态
-- [GitHub 仓库](https://github.com/flywave/flywave.gl) - 源代码、问题反馈
-
-## 开发
-
-### 环境要求
-
-| 工具 | 版本要求 |
-|------|----------|
-| **Node.js** | >= 22.15.0 |
-| **pnpm** | >= 9.0.0 |
-
-### 安装与构建
-
-```bash
-# 安装依赖
-pnpm install
-
-# 构建项目
-pnpm build
-```
+---
 
 ## 许可证
 
 Copyright © 2022-2025 [Flywave 项目作者](https://github.com/flywave)
 
-根据 [Apache 许可证 2.0 版](https://github.com/flywave/flywave.gl/blob/master/LICENSE) 授权。
+Licensed under the [Apache License, Version 2.0](https://github.com/flywave/flywave.gl/blob/main/LICENSE).

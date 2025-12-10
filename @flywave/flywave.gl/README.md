@@ -1,105 +1,100 @@
-# @flywave/flywave.gl
+# 🌍 Flywave.gl
 
+[![CI](https://img.shields.io/github/actions/workflow/status/flywave/flywave.gl/ci.yaml?branch=master&style=for-the-badge&label=CI&logo=github)](https://github.com/flywave/flywave.gl/actions/workflows/ci.yaml)
+[![Code Coverage](https://img.shields.io/codecov/c/github/flywave/flywave.gl/master?style=for-the-badge&logo=codecov&labelColor=2c3e50)](https://codecov.io/gh/flywave/flywave.gl)
 [![NPM Version](https://img.shields.io/npm/v/@flywave/flywave.gl.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/@flywave/flywave.gl)
 [![License](https://img.shields.io/npm/l/@flywave/flywave.gl.svg?style=for-the-badge)](https://github.com/flywave/flywave.gl/blob/master/LICENSE)
 [![Downloads](https://img.shields.io/npm/dm/@flywave/flywave.gl.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/@flywave/flywave.gl)
+[![Twitter](https://img.shields.io/badge/Twitter-@flywave.gl-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20flywave.gl%20-%20an%20awesome%203D%20map%20engine!)
 
-**A TypeScript-based open-source 3D map rendering engine**  
+**An open-source 3D map rendering engine built with TypeScript**
+
 *Create high-performance, scalable 3D map visualization solutions using WebGL and Three.js*
+
+[Quick Start](#quick-start) · [Documentation](https://flywave.github.io/flywave.gl/) · [Examples](https://flywave.github.io/flywave.gl/examples) · [Website](https://flywave.net)
+
+---
 
 ## Overview
 
 `@flywave/flywave.gl` is the complete feature package of the flywave.gl project, integrating all core modules to provide a fully functional 3D map rendering engine. The package is designed with modularity in mind, aiming to provide a high-performance, scalable, and modular 3D map rendering solution.
 
-## Features
+You can use this engine to:
 
 - 🌍 **Develop visually appealing 3D maps** - Create immersive map experiences using WebGL technology
-- 🎨 **Create highly animated and dynamic map visualizations with WebGL** - Based on the popular [three.js](https://threejs.org/) library
-- 🎨 **Create dynamically switchable theme maps** - Support multiple map styles and themes
-- ⚡ **Create smooth map experiences through high-performance map rendering and decoding** - Parallelize CPU-intensive tasks with Web Workers
-- 🔧 **Modular map design** - Exchange modules and data providers as needed
-- 🗺️ **Multi-data source support** - Support multiple map data source formats (3D Tiles, vector tiles, web tiles, etc.)
-- 🏔️ **Terrain support** - Built-in Digital Elevation Model (DEM) support
-- 🖱️ **Rich interaction features** - Provide complete map interaction and control features
-- 🌍 **Multiple projection methods** - Support spherical, planar, and ellipsoidal projections
+- 🎨 **Create highly animated and dynamic map visualizations** - Based on the popular [three.js](https://threejs.org/) library
+- 🎨 **Create themeable maps with dynamic switching** - Support for multiple map styles and themes
+- ⚡ **Create smooth map experiences** - Parallelize CPU-intensive tasks with Web Workers
+- 🔧 **Modular map design** - Swap modules and data providers as needed
 
-## Installation
+## Screenshots
 
+<div align="center">
+
+|  |  |  |
+| :----------------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/01-globe-view.png" alt="Globe View" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/02-terrain-rendering.png" alt="Terrain Rendering" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/03-3dtiles-rendering.png" alt="3D Tiles Rendering" width="200" /> |
+|  |  |  |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/04-post-processing.png" alt="Post Processing" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/06-interactive-controls.png" alt="Interactive Controls" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/07-planar-map.png" alt="Planar Map" width="200" /> |
+|  |  |  |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/08-atmosphere.png" alt="Atmosphere Effect" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/09-animation.png" alt="Animation System" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/11-lighting.png" alt="Lighting System" width="200" /> |
+
+</div>
+
+## Documentation Resources
+
+- [Complete Documentation](https://flywave.github.io/flywave.gl) - API docs, tutorials, best practices
+- [Example Collection](https://flywave.github.io/flywave.gl/examples) - Feature examples, code snippets
+- [Development Guide](https://flywave.github.io/flywave.gl/docs/development/setup.html) - Environment setup, build instructions
+- [Quick Start](https://flywave.github.io/flywave.gl/docs/getting-started/installation.html) - Installation, basic usage
+- [Issue Reporting](https://github.com/flywave/flywave.gl/issues) - Bug reports, feature suggestions
+- [Community Discussion](https://github.com/flywave/flywave.gl/discussions) - Technical exchange, usage help
+
+## Quick Start
+
+### System Requirements
+- Node.js >= 22.15.0 (Check with: `node --version`)
+- pnpm >= 9.0.0 (Check with: `pnpm --version`)
+
+### Installation
+
+**Using pnpm (recommended):**
+```bash
+pnpm add @flywave/flywave.gl
+```
+
+**Or using npm:**
 ```bash
 npm install @flywave/flywave.gl
 ```
 
-or
+### Basic Usage
 
-```bash
-yarn add @flywave/flywave.gl
-```
+```typescript
+import { MapView, GeoCoordinates, sphereProjection } from "@flywave/flywave.gl";
 
-## Quick Start
-
-```javascript
-import * as flywave from '@flywave/flywave.gl';
-
-// Create map view
-const mapView = new flywave.MapView({
-  target: 'map-container',
-  theme: 'dark'
+const mapView = new MapView({
+  projection: sphereProjection,
+  target: new GeoCoordinates(36, 118),
+  zoomLevel: 6,
+  canvas: document.getElementById("mapCanvas") as HTMLCanvasElement
 });
-
-// Add data source
-const tileDataSource = new flywave.WebTileDataSource({
-  name: 'basemap',
-  tileUrls: ['https://example.com/tiles/{z}/{x}/{y}.png']
-});
-
-mapView.addDataSource(tileDataSource);
 ```
 
-## Core Modules
+## Core Features
 
-This package includes all core modules of the flywave.gl project:
+- 🚀 **High-performance rendering**: Smooth 3D map rendering using WebGL and modern graphics technology
+- 🔧 **Modular design**: Select and combine different functional modules as needed
+- 🎨 **Extensible themes**: Support for dynamic switching and custom map themes
+- 🗺️ **Multi-data source support**: Support for various map data source formats
+- 🖱️ **Rich interaction features**: Complete map interaction and control functionality
+- 🌍 **Multiple projection methods**: Support for spherical, planar, and ellipsoidal projections
+- 🏔️ **Terrain support**: Built-in Digital Elevation Model (DEM) support
 
-- `@flywave/flywave-mapview` - Map view core module
-- `@flywave/flywave-terrain-datasource` - Terrain data source module
-- `@flywave/flywave-map-controls` - Map control module
-- `@flywave/flywave-3dtile-datasource` - 3D tile data source module
-- `@flywave/flywave-datasource-protocol` - Data source protocol module
-- `@flywave/flywave-draw-controls` - Drawing control module
-- `@flywave/flywave-webtile-datasource` - Web tile data source module
-- `@flywave/flywave-geoutils` - Geospatial utility module
-- `@flywave/flywave-features-datasource` - Feature data source module
-- `@flywave/flywave-utils` - Utility module
-- `@flywave/flywave-vectortile-datasource` - Vector tile data source module
-- `@flywave/flywave-inspector` - Debug inspection tool
-
-## Documentation Resources
-
-- [Full Documentation](https://flywave.net/docs) - API documentation, tutorials, best practices
-- [Example Collection](https://flywave.net/examples) - Feature examples, code snippets
-- [Official Website](https://flywave.net) - Project homepage, latest news
-- [GitHub Repository](https://github.com/flywave/flywave.gl) - Source code, issue feedback
-
-## Development
-
-### Environment Requirements
-
-| Tool | Version Requirement |
-|------|-------------------|
-| **Node.js** | >= 22.15.0 |
-| **pnpm** | >= 9.0.0 |
-
-### Installation and Build
-
-```bash
-# Install dependencies
-pnpm install
-
-# Build project
-pnpm build
-```
+---
 
 ## License
 
 Copyright © 2022-2025 [Flywave Project Authors](https://github.com/flywave)
 
-Licensed under the [Apache License, Version 2.0](https://github.com/flywave/flywave.gl/blob/master/LICENSE).
+Licensed under the [Apache License, Version 2.0](https://github.com/flywave/flywave.gl/blob/main/LICENSE).
