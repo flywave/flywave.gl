@@ -52,29 +52,5 @@
     },
     "peerDependencies": {
         "three": ">= 0.169.0 < 0.182.0"
-    },
-    "devDependencies": {
-        "@flywave/flywave-3dtile-datasource": "workspace:*",
-        "@flywave/flywave-datasource-protocol": "workspace:*",
-        "@flywave/flywave-draw-controls": "workspace:*",
-        "@flywave/flywave-features-datasource": "workspace:*",
-        "@flywave/flywave-geoutils": "workspace:*",
-        "@flywave/flywave-inspector": "workspace:*",
-        "@flywave/flywave-map-controls": "workspace:*",
-        "@flywave/flywave-mapview": "workspace:*",
-        "@flywave/flywave-mapview-decoder": "workspace:*",
-        "@flywave/flywave-terrain-datasource": "workspace:*",
-        "@flywave/flywave-utils": "workspace:*",
-        "@flywave/flywave-vectortile-datasource": "workspace:*",
-        "@flywave/flywave-webpack-utils": "workspace:*",
-        "@flywave/flywave-webtile-datasource": "workspace:*",
-        "copy-webpack-plugin": "catalog:",
-        "cross-env": "catalog:",
-        "expose-loader": "5.0.1",
-        "tsconfig-paths-webpack-plugin": "catalog:",
-        "typescript": "catalog:",
-        "webpack": "catalog:",
-        "webpack-cli": "catalog:",
-        "webpack-merge": "catalog:"
     }
 }
