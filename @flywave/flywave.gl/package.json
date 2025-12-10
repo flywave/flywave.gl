@@ -52,5 +52,9 @@
     },
     "peerDependencies": {
         "three": ">= 0.169.0 < 0.182.0"
-    }
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "gitHead": "24c3a06cf7b86b31043db61f814e765bf398eaed"
 }
