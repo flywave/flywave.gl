@@ -8,7 +8,7 @@
 
 *Create high-performance, scalable 3D map visualization solutions using WebGL and Three.js*
 
-[Quick Start](#quick-start) · [Documentation](https://flywave.net/docs) · [Examples](https://flywave.net/examples) · [Website](https://flywave.net)
+[Quick Start](#quick-start) · [Documentation](https://flywave.github.io/flywave.gl/) · [Examples](https://flywave.github.io/flywave.gl/examples) · [Website](https://flywave.net)
 
 ---
 
@@ -40,8 +40,8 @@ You can use this engine to:
 
 ## Documentation
 
-- [Complete Documentation](https://flywave.net/docs) - API docs, tutorials, best practices
-- [Example Collection](https://flywave.net/examples) - Feature examples, code snippets
+- [Complete Documentation](https://flywave.github.io/flywave.gl) - API docs, tutorials, best practices
+- [Example Collection](https://flywave.github.io/flywave.gl/examples) - Feature examples, code snippets
 - [Development Guide](./development/setup.md) - Environment setup, build instructions
 - [Quick Start](./getting-started/installation.md) - Installation, basic usage
 - [Issue Reporting](https://github.com/flywave/flywave.gl/issues) - Bug reports, feature suggestions

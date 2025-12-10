@@ -11,7 +11,7 @@
 ```html
 <script>
   // 设置全局基础路径
-  window.FLYWAVE_BASE_URL = "https://flywave.net/flywave.gl/resources/";
+  window.FLYWAVE_BASE_URL = "https://flywave.github.io/flywave.gl/resources/";
 </script>
 ```
 
@@ -19,7 +19,7 @@
 
 ```typescript
 // 在初始化 MapView 之前设置基础路径
-window.FLYWAVE_BASE_URL = "https://flywave.net/flywave.gl/resources/";
+window.FLYWAVE_BASE_URL = "https://flywave.github.io/flywave.gl/resources/";
 
 import { MapView, GeoCoordinates, MapControls, sphereProjection } from "@flywave/flywave.gl";
 ```

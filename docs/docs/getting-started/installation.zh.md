@@ -32,7 +32,7 @@ npm install @flywave/flywave.gl
 ```html
 <script>
   // 在引入 flywave.gl 之前设置基础路径
-  window.FLYWAVE_BASE_URL = "https://flywave.net/flywave.gl/resources/";
+  window.FLYWAVE_BASE_URL = "https://flywave.github.io/flywave.gl/resources/";
 </script>
 ``` 
 

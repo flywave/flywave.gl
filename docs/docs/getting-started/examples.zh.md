@@ -79,7 +79,7 @@ npm install @flywave/flywave.gl
 
 ## 浏览在线示例
 
-您也可以在我们的 [在线示例页面](https://flywave.net/examples) 查看所有示例。
+您也可以在我们的 [在线示例页面](https://flywave.github.io/flywave.gl/examples) 查看所有示例。
 
 ## 示例结构
 
@@ -96,7 +96,7 @@ npm install @flywave/flywave.gl
 ```html
 <script>
   // 设置全局基础路径，确保资源文件正确加载
-  window.FLYWAVE_BASE_URL = "https://flywave.net/flywave.gl/resources/";
+  window.FLYWAVE_BASE_URL = "https://flywave.github.io/flywave.gl/resources/";
 </script>
 ```
 
@@ -106,7 +106,7 @@ npm install @flywave/flywave.gl
 
 新用户建议按以下顺序学习示例：
 
-1. [基本配置示例](https://flywave.net/examples/basic-config) - 了解基本设置
-2. [DEM 地形示例](https://flywave.net/examples/dem-terrain) - 了解地形渲染
-3. [3D Tiles 示例](https://flywave.net/examples/3dtiles) - 了解 3D 模型渲染
-4. [后期处理效果示例](https://flywave.net/examples/post-processing) - 了解高级视觉效果
+1. [基本配置示例](https://flywave.github.io/flywave.gl/examples/basic-config) - 了解基本设置
+2. [DEM 地形示例](https://flywave.github.io/flywave.gl/examples/dem-terrain) - 了解地形渲染
+3. [3D Tiles 示例](https://flywave.github.io/flywave.gl/examples/3dtiles) - 了解 3D 模型渲染
+4. [后期处理效果示例](https://flywave.github.io/flywave.gl/examples/post-processing) - 了解高级视觉效果

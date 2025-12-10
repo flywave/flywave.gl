@@ -105,9 +105,9 @@ pnpm build
 
 | 资源 | 描述 | 链接 |
 |------|------|------|
-| 📖 **官方文档** | API 文档、教程、最佳实践 | [flywave.net/docs](https://flywave.net/docs) |
-| 🎯 **示例代码** | 功能示例、代码片段 | [flywave.net/examples](https://flywave.net/examples) |
-| 🏠 **官网** | 项目主页、最新动态 | [flywave.net](https://flywave.net) |
+| 📖 **官方文档** | API 文档、教程、最佳实践 | [flywave.github.io/flywave.gl/docs](https://flywave.github.io/flywave.gl/docs) |
+| 🎯 **示例代码** | 功能示例、代码片段 | [flywave.github.io/flywave.gl/examples](https://flywave.github.io/flywave.gl/examples) |
+| 🏠 **官网** | 项目主页、最新动态 | [flywave.github.io/flywave.gl](https://flywave.github.io/flywave.gl) |
 | 🐛 **问题反馈** | Bug 报告、功能建议 | [GitHub Issues](https://github.com/flywave/flywave.gl/issues) |
 | 💬 **社区讨论** | 技术交流、使用帮助 | [GitHub Discussions](https://github.com/flywave/flywave.gl/discussions) |
 

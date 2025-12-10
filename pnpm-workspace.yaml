@@ -175,6 +175,7 @@ catalog:
     "@types/mkpath": "^0.1.29"
 
     # 其他依赖
+    "lerna": "^9.0.3"
     "node-fetch": "^2.6.1"
     "semver": "^7.3.2"
     "protobufjs": "^6.9.0"

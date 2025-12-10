@@ -105,9 +105,9 @@ pnpm build
 
 | Resource | Description | Link |
 |---------|-------------|------|
-| 📖 **Documentation** | API docs, tutorials, best practices | [flywave.net/docs](https://flywave.net/docs) |
-| 🎯 **Examples** | Functional examples, code snippets | [flywave.net/examples](https://flywave.net/examples) |
-| 🏠 **Website** | Project homepage, latest news | [flywave.net](https://flywave.net) |
+| 📖 **Documentation** | API docs, tutorials, best practices | [flywave.github.io/flywave.gl/docs](https://flywave.github.io/flywave.gl/docs) |
+| 🎯 **Examples** | Functional examples, code snippets | [flywave.github.io/flywave.gl/examples](https://flywave.github.io/flywave.gl/examples) |
+| 🏠 **Website** | Project homepage, latest news | [flywave.github.io/flywave.gl](https://flywave.github.io/flywave.gl) |
 | 🐛 **Issues** | Bug reports, feature suggestions | [GitHub Issues](https://github.com/flywave/flywave.gl/issues) |
 | 💬 **Discussions** | Technical exchanges, usage help | [GitHub Discussions](https://github.com/flywave/flywave.gl/discussions) |
 
