@@ -3,6 +3,10 @@ name: Deploy Documentation
 on:
   # 允许手动触发
   workflow_dispatch:
+  # 在推送到主分支时自动触发
+  push:
+    branches:
+      - main
 
 concurrency:
   group: "pages"
@@ -20,10 +24,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js with pnpm caching
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'pnpm' 
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -48,16 +53,15 @@ jobs:
       - name: Upload to GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/build
-
-  # 部署到 GitHub Pages 的独立作业
+          path: docs/build  
+ 
   deploy:
     needs: deploy-docs
     runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
-
+ 
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
