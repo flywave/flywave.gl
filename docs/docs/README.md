@@ -30,11 +30,11 @@ You can use this engine to:
 
 |  |  |  |
 | :----------------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
-| <img src="/screenshots/01-globe-view.png" alt="Globe View" width="200" /> | <img src="/screenshots/02-terrain-rendering.png" alt="Terrain Rendering" width="200" /> | <img src="/screenshots/03-3dtiles-rendering.png" alt="3D Tiles Rendering" width="200" /> |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/01-globe-view.png" alt="Globe View" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/02-terrain-rendering.png" alt="Terrain Rendering" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/03-3dtiles-rendering.png" alt="3D Tiles Rendering" width="200" /> |
 |  |  |  |
-| <img src="/screenshots/04-post-processing.png" alt="Post Processing" width="200" /> | <img src="/screenshots/06-interactive-controls.png" alt="Interactive Controls" width="200" /> | <img src="/screenshots/07-planar-map.png" alt="Planar Map" width="200" /> |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/04-post-processing.png" alt="Post Processing" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/06-interactive-controls.png" alt="Interactive Controls" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/07-planar-map.png" alt="Planar Map" width="200" /> |
 |  |  |  |
-| <img src="/screenshots/08-atmosphere.png" alt="Atmosphere Effect" width="200" /> | <img src="/screenshots/09-animation.png" alt="Animation System" width="200" /> | <img src="/screenshots/11-lighting.png" alt="Lighting System" width="200" /> |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/08-atmosphere.png" alt="Atmosphere Effect" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/09-animation.png" alt="Animation System" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/11-lighting.png" alt="Lighting System" width="200" /> |
 
 </div>
 
