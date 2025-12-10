@@ -1,0 +1,18 @@
+{
+    "include": [
+        "@flywave/*/{lib,src}/**/*.ts"
+    ],
+    "exclude": [
+        "typings"
+    ],
+    "extension": [
+        ".ts"
+    ],
+    "reporter": [
+        "json",
+        "html",
+        "text-summary"
+    ],
+    "all": true
+}
+

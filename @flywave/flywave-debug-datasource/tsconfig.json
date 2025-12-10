@@ -1,0 +1,26 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "sourceMap": true,
+        "composite": true,
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-mapview": ["../flywave-mapview/src"],
+            "@flywave/flywave-text-canvas": ["../flywave-text-canvas/src"]
+        }
+    },
+    "include": ["src/**/*"],
+    "references": [
+        {
+            "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-text-canvas"
+        }
+    ]
+}

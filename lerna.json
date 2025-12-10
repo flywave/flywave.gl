@@ -1,0 +1,33 @@
+{
+    "packages": [
+        "@flywave/*"
+    ],
+    "version": "independent",
+    "npmClient": "pnpm",
+    "useWorkspaces": true,
+    "command": {
+        "publish": {
+            "ignoreChanges": [
+                "test/**",
+                "README.md",
+                "docs/**",
+                "**/package-lock.json",
+                "**/yarn.lock",
+                "**/pnpm-lock.yaml"
+            ],
+            "registry": "https://registry.npmjs.org/"
+        },
+        "version": {
+            "exact": true,
+            "forceGitTag": true,
+            "ignoreChanges": [
+                "test/**",
+                "README.md",
+                "docs/**",
+                "**/package-lock.json",
+                "**/yarn.lock",
+                "**/pnpm-lock.yaml"
+            ]
+        }
+    }
+}

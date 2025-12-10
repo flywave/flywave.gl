@@ -1,0 +1,55 @@
+{
+    "name": "@flywave/flywave-atlas-tools",
+    "version": "0.0.1",
+    "description": "Sprites and texture atlas generator for flywave.gl maps",
+    "main": "lib/index.js",
+    "bin": {
+        "flywave-atlas-generator": "lib/cli-atlas-generator.js",
+        "flywave-sprites-generator": "lib/cli-sprites-generator.js"
+    },
+    "scripts": {
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "watch": "cross-env tsc --build -w",
+        "generateAtlas": "cross-env ts-node src/cli-atlas-generator.ts",
+        "generateSprites": "ts-node src/cli-sprites-generator.ts",
+        "test": "pnpm build && pnpm generateAtlas",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-atlas-tools"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "keywords": [
+        "here",
+        "flywave.gl",
+        "theme",
+        "icons",
+        "sprites",
+        "texture-atlas",
+        "sprites-atlas",
+        "atlas-generator"
+    ],
+    "dependencies": {
+        "@types/mkpath": "catalog:",
+        "@types/sharp": "catalog:",
+        "commander": "catalog:",
+        "glob": "catalog:",
+        "jimp": "catalog:",
+        "mkpath": "catalog:",
+        "path": "catalog:",
+        "promise-limit": "catalog:",
+        "sharp": "catalog:",
+        "spritesmith": "catalog:"
+    },
+    "devDependencies": {
+        "ts-node": "catalog:",
+        "typescript": "catalog:"
+    },
+    "private": true
+}

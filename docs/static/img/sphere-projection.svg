@@ -1,0 +1,9 @@
+<svg width="300" height="200" viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .sphere { fill: #a0c4ff; stroke: #333; stroke-width: 2; }
+    .label { font-size: 14px; font-family: sans-serif; }
+  </style>
+  <ellipse class="sphere" cx="150" cy="100" rx="80" ry="80" />
+  <text x="120" y="105" class="label">O 球心</text>
+  <text x="10" y="20" class="label">球面投影示意图</text>
+</svg>

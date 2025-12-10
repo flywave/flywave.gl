@@ -1,0 +1,48 @@
+{
+    "name": "@flywave/flywave-react",
+    "version": "0.0.1",
+    "description": "React wrapper for flywave.gl MapView with context provider",
+    "main": "lib/index.js",
+    "module": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./lib/index.js",
+            "require": "./lib/index.js",
+            "types": "./lib/index.d.ts"
+        },
+        "./package.json": "./package.json"
+    },
+    "license": "Apache-2.0",
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-react"
+    },
+    "engines": {
+        "node": ">=10.5.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:ui": "vitest --ui"
+    },
+    "dependencies": {},
+    "peerDependencies": {
+        "react": ">=16.8.0",
+        "react-dom": ">=16.8.0"
+    },
+    "devDependencies": {},
+    "typings": "lib/index.d.ts",
+    "files": [
+        "lib/**/*"
+    ]
+}

@@ -1,0 +1,293 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
+
+
+import {
+    type AngleProps,
+    type Transform,
+    type XYProps,
+    type XYZProps,
+    type YawPitchRollProps,
+    Angle,
+    Geometry,
+    Matrix3d,
+    Point2d,
+    Point3d,
+    YawPitchRollAngles
+} from "../../core-geometry";
+import { type Id64String, Id64 } from "../../utils";
+import { type ColorDefProps, ColorDef } from "../color-def";
+
+export namespace AreaPattern {
+    export interface HatchDefLineProps {
+        angle?: AngleProps;
+        through?: XYProps;
+        offset?: XYProps;
+        dashes?: number[];
+    }
+
+    export class HatchDefLine implements HatchDefLineProps {
+        public angle?: Angle;
+        public through?: Point2d;
+        public offset?: Point2d;
+        public dashes?: number[];
+
+        public constructor(json: HatchDefLineProps) {
+            this.angle = json.angle ? Angle.fromJSON(json.angle) : undefined;
+            this.through = json.through ? Point2d.fromJSON(json.through) : undefined;
+            this.offset = json.offset ? Point2d.fromJSON(json.offset) : undefined;
+            if (json.dashes) {
+                const dashes: number[] = [];
+                json.dashes.forEach(dash => dashes.push(dash));
+                this.dashes = dashes;
+            }
+        }
+    }
+
+    export interface ParamsProps {
+        origin?: XYZProps;
+        rotation?: YawPitchRollProps;
+        space1?: number;
+        space2?: number;
+        angle1?: AngleProps;
+        angle2?: AngleProps;
+        scale?: number;
+        color?: ColorDefProps;
+        weight?: number;
+        invisibleBoundary?: boolean;
+        snappable?: boolean;
+        symbolId?: Id64String;
+        defLines?: HatchDefLineProps[];
+    }
+
+    export class Params {
+        public origin?: Point3d;
+        public rotation?: YawPitchRollAngles;
+        public space1?: number;
+        public space2?: number;
+        public angle1?: Angle;
+        public angle2?: Angle;
+        public scale?: number;
+        public color?: ColorDef;
+        public weight?: number;
+        public invisibleBoundary?: boolean;
+        public snappable?: boolean;
+        public symbolId?: Id64String;
+        public defLines?: HatchDefLine[];
+
+        public static fromJSON(json?: ParamsProps) {
+            const result = new Params();
+            if (!json) return result;
+            result.origin = json.origin ? Point3d.fromJSON(json.origin) : undefined;
+            result.rotation = json.rotation
+                ? YawPitchRollAngles.fromJSON(json.rotation)
+                : undefined;
+            result.space1 = json.space1;
+            result.space2 = json.space2;
+            result.angle1 = json.angle1 ? Angle.fromJSON(json.angle1) : undefined;
+            result.angle2 = json.angle2 ? Angle.fromJSON(json.angle2) : undefined;
+            result.scale = json.scale;
+            result.color = json.color ? ColorDef.fromJSON(json.color) : undefined;
+            result.weight = json.weight;
+            result.invisibleBoundary = json.invisibleBoundary;
+            result.snappable = json.snappable;
+            result.symbolId = json.symbolId ? Id64.fromJSON(json.symbolId) : undefined;
+            if (!json.defLines) return result;
+            const defLines: HatchDefLine[] = [];
+            json.defLines.forEach(defLine => defLines.push(new HatchDefLine(defLine)));
+            result.defLines = defLines;
+            return result;
+        }
+
+        public toJSON(): ParamsProps {
+            return {
+                ...this,
+                color: this.color?.toJSON()
+            };
+        }
+
+        public clone(): Params {
+            return Params.fromJSON(this.toJSON());
+        }
+
+        public equals(other: Params): boolean {
+            if (this === other) return true; // Same pointer
+
+            if (
+                this.scale !== other.scale ||
+                this.space1 !== other.space1 ||
+                this.space2 !== other.space2 ||
+                this.weight !== other.weight ||
+                this.invisibleBoundary !== other.invisibleBoundary ||
+                this.snappable !== other.snappable
+            ) {
+                return false;
+            }
+
+            if ((this.color === undefined) !== (other.color === undefined)) return false;
+            if (this.color && !this.color.equals(other.color!)) return false;
+
+            if ((this.angle1 === undefined) !== (other.angle1 === undefined)) return false;
+            if (this.angle1 && !this.angle1.isAlmostEqualNoPeriodShift(other.angle1!)) return false;
+
+            if ((this.angle2 === undefined) !== (other.angle2 === undefined)) return false;
+            if (this.angle2 && !this.angle2.isAlmostEqualNoPeriodShift(other.angle2!)) return false;
+
+            if ((this.origin === undefined) !== (other.origin === undefined)) return false;
+            if (this.origin && !this.origin.isAlmostEqual(other.origin!)) return false;
+
+            if ((this.rotation === undefined) !== (other.rotation === undefined)) return false;
+            if (this.rotation && !this.rotation.isAlmostEqual(other.rotation!)) return false;
+
+            if ((this.symbolId === undefined) !== (other.symbolId === undefined)) return false;
+            if (this.symbolId && !(this.symbolId === other.symbolId!)) return false;
+
+            if ((this.defLines === undefined) !== (other.defLines === undefined)) return false;
+            if (this.defLines) {
+                if (this.defLines.length !== other.defLines!.length) return false;
+
+                for (let i = 0; i < this.defLines.length; ++i) {
+                    const otherLine = other.defLines![i];
+                    const thisLine = this.defLines[i];
+
+                    if ((thisLine.angle === undefined) !== (otherLine.angle === undefined)) {
+                        return false;
+                    }
+                    if (
+                        thisLine.angle &&
+                        !thisLine.angle.isAlmostEqualNoPeriodShift(otherLine.angle!)
+                    ) {
+                        return false;
+                    }
+
+                    if ((thisLine.through === undefined) !== (otherLine.through === undefined)) {
+                        return false;
+                    }
+                    if (thisLine.through && !thisLine.through.isAlmostEqual(otherLine.through!)) {
+                        return false;
+                    }
+
+                    if ((thisLine.offset === undefined) !== (otherLine.offset === undefined)) {
+                        return false;
+                    }
+                    if (thisLine.offset && !thisLine.offset.isAlmostEqual(otherLine.offset!)) {
+                        return false;
+                    }
+
+                    if ((thisLine.dashes === undefined) !== (otherLine.dashes === undefined)) {
+                        return false;
+                    }
+                    if (thisLine.dashes && thisLine.dashes.length !== otherLine.dashes!.length) {
+                        return false;
+                    }
+                    if (thisLine.dashes) {
+                        for (let dash = 0; dash < thisLine.dashes.length; ++dash) {
+                            if (
+                                !Geometry.isSameCoordinate(
+                                    thisLine.dashes[dash],
+                                    otherLine.dashes![dash]
+                                )
+                            ) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        public static transformPatternSpace(
+            transform: Transform,
+            oldSpace: number,
+            patRot: Matrix3d,
+            angle?: Angle
+        ): number {
+            let tmpRot: Matrix3d;
+            if (angle && !angle.isAlmostZero) {
+                const yprTriple = new YawPitchRollAngles(angle);
+                const angRot = yprTriple.toMatrix3d();
+                tmpRot = patRot.multiplyMatrixMatrix(angRot);
+            } else {
+                tmpRot = patRot;
+            }
+            const yDir = tmpRot.getColumn(1);
+            yDir.scale(oldSpace, yDir);
+            transform.multiplyVector(yDir, yDir);
+            return yDir.magnitude();
+        }
+
+        public static getTransformPatternScale(transform: Transform): number {
+            const xDir = transform.matrix.getColumn(0);
+            const mag = xDir.magnitude();
+            return mag > 1.0e-10 ? mag : 1.0;
+        }
+
+        public applyTransform(transform: Transform): boolean {
+            if (transform.isIdentity) return true;
+            let origin = this.origin ? this.origin : Point3d.createZero();
+            const rMatrix = this.rotation ? this.rotation.toMatrix3d() : Matrix3d.createIdentity();
+            if (this.symbolId !== undefined) {
+                this.space1 = Params.transformPatternSpace(
+                    transform,
+                    this.space1 ? this.space1 : 0.0,
+                    rMatrix,
+                    this.angle1
+                );
+                this.space2 = Params.transformPatternSpace(
+                    transform,
+                    this.space2 ? this.space2 : 0.0,
+                    rMatrix,
+                    this.angle2
+                );
+                const scale = Params.getTransformPatternScale(transform);
+                this.scale = this.scale ? this.scale * scale : scale;
+            } else if (this.defLines) {
+                const scale = Params.getTransformPatternScale(transform);
+                if (!Geometry.isSameCoordinate(scale, 1.0)) {
+                    this.scale = this.scale ? this.scale * scale : scale;
+                    for (const line of this.defLines) {
+                        if (line.through) {
+                            line.through.x *= scale;
+                            line.through.y *= scale;
+                        }
+                        if (line.offset) {
+                            line.offset.x *= scale;
+                            line.offset.y *= scale;
+                        }
+                        if (line.dashes) {
+                            for (let iDash = 0; iDash < line.dashes.length; iDash++) {
+                                line.dashes[iDash] *= scale;
+                            }
+                        }
+                    }
+                }
+            } else {
+                this.space1 = Params.transformPatternSpace(
+                    transform,
+                    this.space1 ? this.space1 : 0.0,
+                    rMatrix,
+                    this.angle1
+                );
+                if (this.space2 && this.space2 !== 0) {
+                    this.space2 = Params.transformPatternSpace(
+                        transform,
+                        this.space2,
+                        rMatrix,
+                        this.angle2
+                    );
+                }
+            }
+
+            origin = transform.multiplyPoint3d(origin);
+            rMatrix.multiplyMatrixMatrix(transform.matrix, rMatrix);
+            const normalized = Matrix3d.createRigidFromMatrix3d(rMatrix);
+            if (!normalized) return false;
+            const newRotation = YawPitchRollAngles.createFromMatrix3d(normalized);
+            if (undefined === newRotation) return false;
+            this.origin = origin;
+            this.rotation = newRotation;
+            return true;
+        }
+    }
+}

@@ -1,0 +1,20 @@
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .axis { stroke: #000; stroke-width: 2; }
+    .label { font-size: 14px; font-family: sans-serif; }
+    .earth { fill: #a0c4ff; stroke: #333; stroke-width: 2; }
+    .origin { fill: #f00; stroke: #000; stroke-width: 1; }
+  </style>
+  <circle class="earth" cx="200" cy="200" r="100" />
+  <line class="axis" x1="200" y1="50" x2="200" y2="350" />
+  <line class="axis" x1="50" y1="200" x2="350" y2="200" />
+  <line class="axis" x1="200" y1="200" x2="280" y2="120" />
+  
+  <text x="355" y="205" class="label">Y轴</text>
+  <text x="205" y="45" class="label">Z轴</text>
+  <text x="285" y="115" class="label">X轴</text>
+  <circle class="origin" cx="200" cy="200" r="5"/>
+  <text x="210" y="195" class="label">地心O</text>
+  
+  <text x="10" y="20" class="label">ECEF坐标系示意图</text>
+</svg>

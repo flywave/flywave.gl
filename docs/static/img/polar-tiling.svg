@@ -1,0 +1,26 @@
+<svg width="300" height="400" viewBox="0 0 300 400" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .earth { fill: #a0c4ff; stroke: #333; stroke-width: 2; }
+    .polar { fill: #ffe6e6; stroke: #cc0000; stroke-width: 2; }
+    .text { font-size: 14px; font-family: sans-serif; text-anchor: middle; }
+    .label { font-size: 12px; font-family: sans-serif; text-anchor: middle; }
+  </style>
+  
+  <!-- 北极区域 -->
+  <rect class="polar" x="100" y="50" width="100" height="50" />
+  <text x="150" y="45" class="text">极地区域特殊瓦片划分</text>
+  <text x="150" y="80" class="label">北极区域</text>
+  <text x="150" y="95" class="label">特殊处理</text>
+  
+  <!-- 地球主体 -->
+  <ellipse class="earth" cx="150" cy="200" rx="80" ry="100" />
+  <text x="150" y="205" class="label">Globe</text>
+  
+  <!-- 南极区域 -->
+  <rect class="polar" x="100" y="300" width="100" height="50" />
+  <text x="150" y="330" class="label">南极区域</text>
+  <text x="150" y="345" class="label">特殊处理</text>
+  
+  <!-- 连接线 -->
+  <line x1="150" y1="100" x2="150" y2="100" stroke="#ccc" />
+</svg>

@@ -1,0 +1,12 @@
+excludes:
+  paths:
+  - pattern: "test/**"
+    reason: "TEST_OF"
+    comment: "Directory is only used for testing. Not included in released artifacts."
+  - pattern: "@flywave/*/test/**"
+    reason: "TEST_OF"
+    comment: "Directory is only used for testing. Not included in released artifacts."
+  scopes:
+  - name: "devDependencies"
+    reason: "DEV_DEPENDENCY_OF"
+    comment: "Packages for development only. Not included in released artifacts."

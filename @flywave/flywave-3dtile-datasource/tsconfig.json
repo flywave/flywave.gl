@@ -1,0 +1,48 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "rootDir": "./",
+        "composite": true,
+        "paths": {
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-geoutils/*": ["../flywave-geoutils/src/*"],
+            "@flywave/flywave-mapview": ["../flywave-mapview/src"],
+            "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"],
+            "@flywave/flywave-utils/*": ["../flywave-utils/src/*"],
+            "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-draco": ["../flywave-draco/src"],
+            "@flywave/flywave-draco/*": ["../flywave-draco/src/*"],
+            "@flywave/flywave-gltf": ["../flywave-gltf/src"],
+            "@flywave/flywave-gltf/*": ["../flywave-gltf/src/*"],
+            "@flywave/flywave-splats": ["../../flywave-splats/src"],
+            "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],
+            "@flywave/flywave-datasource-protocol/*": ["../flywave-datasource-protocol/src/*"]
+        }
+    },
+    "include": ["src/**/*", "test/**/*"],
+    "exclude": ["dist/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-utils"
+        },
+        {
+            "path": "../flywave-draco"
+        },
+        {
+            "path": "../flywave-gltf"
+        },
+        {
+            "path": "../flywave-splats"
+        },
+        {
+            "path": "../flywave-datasource-protocol"
+        }
+    ]
+}

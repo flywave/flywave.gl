@@ -1,0 +1,33 @@
+{
+    "name": "@flywave/flywave-kriging-gl",
+    "version": "0.0.1",
+    "description": "Kriging interpolation with Three.js WebGL renderer",
+    "main": "lib/index.js",
+    "typings": "lib/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "prepare": "cross-env tsc  --build $EXTRA_TSC_ARGS --force",
+        "example": "npx http-server ."
+    },
+    "keywords": [
+        "kriging",
+        "interpolation",
+        "geostatistics",
+        "webgl",
+        "three.js"
+    ],
+    "author": "Flywave Team",
+    "license": "Apache-2.0",
+    "dependencies": {
+        "three": "catalog:",
+        "earcut": "catalog:"
+    },
+    "devDependencies": {
+        "@types/three": "catalog:",
+        "@types/earcut": "catalog:",
+        "typescript": "catalog:"
+    },
+    "peerDependencies": {
+        "three": "catalog:"
+    }
+}

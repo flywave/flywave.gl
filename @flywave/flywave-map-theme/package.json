@@ -1,0 +1,48 @@
+{
+    "name": "@flywave/flywave-map-theme",
+    "version": "0.0.1",
+    "description": "Map themes",
+    "main": "index.js",
+    "typings": "index",
+    "directories": {
+        "test": "test"
+    },
+    "scripts": {
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "prepare-icons": "ts-node ./scripts/prepareIcons.ts",
+        "prepare": "cross-env tsc --sourceMap false && ts-node scripts/prepack.ts"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-map-theme"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "devDependencies": {
+        "@flywave/flywave-atlas-tools": "workspace:*",
+        "@here/harp-fontcatalog": "catalog:",
+        "@flywave/flywave-test-utils": "workspace:*",
+        "@types/ajv": "catalog:",
+        "@types/chai": "catalog:",
+        "@types/mocha": "catalog:",
+        "@types/ncp": "catalog:",
+        "ajv": "catalog:",
+        "chai": "catalog:",
+        "copyfiles": "catalog:",
+        "cross-env": "catalog:",
+        "github-download": "catalog:",
+        "mkpath": "catalog:",
+        "mocha": "catalog:",
+        "ncp": "catalog:",
+        "source-map-support": "catalog:",
+        "tmp": "catalog:",
+        "ts-node": "catalog:",
+        "typescript": "catalog:"
+    },
+    "private": true
+}

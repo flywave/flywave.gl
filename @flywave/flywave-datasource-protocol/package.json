@@ -1,0 +1,55 @@
+{
+    "name": "@flywave/flywave-datasource-protocol",
+    "version": "0.0.1",
+    "description": "Components used for the decoding and styling of data that is used by the Datasources.",
+    "main": "./lib/src/index.js",
+    "typings": "./lib/src/index",
+    "exports": {
+        ".": {
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
+        },
+        "./*": {
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
+        },
+        "./package.json": "./package.json"
+    },
+    "directories": {
+        "test": "test"
+    },
+    "scripts": {
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS --force",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force",
+        "generate-json-schema": "typeconv -f ts -t jsc ./src/Theme.ts && node -e \"require('fs').copyFileSync('./src/Theme.json', 'theme.schema.json')\" && node -e \"require('fs').unlinkSync('./src/Theme.json')\""
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-datasource-protocol"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+        "csscolorparser": "catalog:"
+    },
+    "devDependencies": {
+        "@types/chai": "catalog:",
+        "@types/mocha": "catalog:",
+        "@types/three": "catalog:",
+        "chai": "catalog:",
+        "cross-env": "catalog:",
+        "mocha": "catalog:",
+        "source-map-support": "catalog:",
+        "three": "catalog:",
+        "typeconv": "catalog:",
+        "typescript": "catalog:",
+        "sinon": "catalog:",
+        "@types/sinon": "catalog:"
+    },
+    "private": true
+}

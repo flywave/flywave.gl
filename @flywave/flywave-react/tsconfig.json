@@ -1,0 +1,16 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "composite": true,
+        "outDir": "./lib",
+        "rootDir": "./src",
+        "jsx": "react-jsx",
+        "paths": {
+            "@flywave/flywave.gl": ["../flywave.gl"],
+            "@flywave/flywave.gl/*": ["../flywave.gl/*"]
+        }
+    },
+    "include": ["src/**/*"],
+    "exclude": ["lib", "test"],
+    "references": [{ "path": "../flywave.gl" }]
+}

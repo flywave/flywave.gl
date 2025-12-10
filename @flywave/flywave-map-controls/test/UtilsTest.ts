@@ -1,0 +1,20 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
+//    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
+
+import { assert } from "chai";
+
+import { safeParseDecimalInt } from "../src/Utils";
+
+describe("MapControls", function () {
+    describe("Utils", function () {
+        it("safeParseDecimalInt", function () {
+            assert.equal(safeParseDecimalInt("0", 1), 0);
+            assert.equal(safeParseDecimalInt("123456789", 666), 123456789);
+
+            assert.equal(safeParseDecimalInt("100%", 555), 555);
+            assert.equal(safeParseDecimalInt("0xff", 777), 777);
+            assert.equal(safeParseDecimalInt("767xx", 666), 666);
+        });
+    });
+});

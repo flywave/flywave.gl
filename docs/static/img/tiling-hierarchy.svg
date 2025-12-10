@@ -1,0 +1,46 @@
+<svg width="500" height="400" viewBox="0 0 500 400" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .tile { fill: #e6f3ff; stroke: #0066cc; stroke-width: 2; }
+    .text { font-size: 14px; font-family: sans-serif; text-anchor: middle; }
+    .level-text { font-size: 16px; font-weight: bold; font-family: sans-serif; text-anchor: middle; }
+    .arrow { stroke: #666; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+  </style>
+  
+  <!-- 全球 (0级) -->
+  <rect class="tile" x="200" y="30" width="100" height="50" />
+  <text x="250" y="60" class="text">全球 (0级)</text>
+  
+  <!-- 箭头从0级到1级 -->
+  <line x1="250" y1="80" x2="250" y2="120" class="arrow" />
+  
+  <!-- 1级瓦片 -->
+  <rect class="tile" x="100" y="120" width="100" height="50" />
+  <rect class="tile" x="200" y="120" width="100" height="50" />
+  <rect class="tile" x="300" y="120" width="100" height="50" />
+  <text x="150" y="150" class="text">1-0</text>
+  <text x="250" y="150" class="text">1-1</text>
+  <text x="350" y="150" class="text">1-2</text>
+  <text x="250" y="180" class="level-text">(1级)</text>
+  
+  <!-- 箭头从1级到2级 -->
+  <line x1="250" y1="170" x2="250" y2="210" class="arrow" />
+  
+  <!-- 2级瓦片 -->
+  <rect class="tile" x="100" y="210" width="100" height="50" />
+  <rect class="tile" x="200" y="210" width="100" height="50" />
+  <rect class="tile" x="300" y="210" width="100" height="50" />
+  <text x="150" y="240" class="text">2-0</text>
+  <text x="250" y="240" class="text">2-1</text>
+  <text x="350" y="240" class="text">2-2</text>
+  <text x="250" y="270" class="level-text">(2级)</text>
+  
+  <!-- 省略号 -->
+  <text x="250" y="310" class="text">...</text>
+  
+  <!-- 箭头定义 -->
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#666" />
+    </marker>
+  </defs>
+</svg>

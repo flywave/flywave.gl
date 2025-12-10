@@ -1,0 +1,52 @@
+{
+    "name": "@flywave/flywave-geoutils",
+    "version": "0.0.1",
+    "description": "Utility classes for working with geospatial data",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
+    "exports": {
+        ".": {
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
+        },
+        "./*": {
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
+        },
+        "./package.json": "./package.json"
+    },
+    "scripts": {
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-geoutils"
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "devDependencies": {
+        "@types/chai": "catalog:",
+        "@types/mocha": "catalog:",
+        "@types/sinon": "catalog:",
+        "@types/three": "catalog:",
+        "@turf/turf": "catalog:",
+        "chai": "catalog:",
+        "cross-env": "catalog:",
+        "mocha": "catalog:",
+        "sinon": "catalog:",
+        "source-map-support": "catalog:",
+        "lru-cache": "^11.1.0",
+        "three": "catalog:",
+        "typescript": "catalog:"
+    },
+    "peerDependencies": {
+        "three": "catalog:"
+    },
+    "private": true
+}

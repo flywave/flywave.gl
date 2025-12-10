@@ -1,0 +1,36 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "rootDir": "./",
+        "composite": true,
+        "paths": {
+            "@flywave/flywave-mapview": ["../flywave-mapview/src/index.ts"],
+            "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"],
+            "@flywave/flywave-vectortile-datasource": [
+                "../flywave-vectortile-datasource/src/index.ts"
+            ],
+            "@flywave/flywave-vectortile-datasource/*": ["../flywave-vectortile-datasource/src/*"],
+            "@flywave/flywave-terrain-datasource": ["../flywave-terrain-datasource/src/index.ts"],
+            "@flywave/flywave-terrain-datasource/*": ["../flywave-terrain-datasource/src/*"],
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src/index.ts"],
+            "@flywave/flywave-geoutils/*": ["../flywave-geoutils/src/*"],
+        }
+    },
+    "include": ["src/**/*"],
+    "exclude": ["dist", "node_modules", "**/test/**/*", "**/*.spec.ts"],
+    "references": [
+        {
+            "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-vectortile-datasource"
+        },
+        {
+            "path": "../flywave-terrain-datasource"
+        },
+        {
+            "path": "../flywave-geoutils"
+        }
+    ]
+}

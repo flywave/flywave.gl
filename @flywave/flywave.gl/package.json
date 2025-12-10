@@ -1,0 +1,80 @@
+{
+    "name": "@flywave/flywave.gl",
+    "version": "0.0.1",
+    "type": "module",
+    "description": "WebGl GIS",
+    "exports": {
+        ".": {
+            "import": "./dist/flywave.gl.module.js",
+            "require": "./dist/flywave.gl.cjs.js",
+            "types": "./index.d.ts"
+        },
+        "./package.json": "./package.json",
+        "./decoder": {
+            "import": "./dist/flywave-decoders.js",
+            "require": "./dist/flywave-decoders.js"
+        }
+    },
+    "typesVersions": {
+        "*": {
+            "*": [
+                "dist/index.d.ts"
+            ]
+        }
+    },
+    "files": [
+        "dist/**/*",
+        "README.md"
+    ],
+    "scripts": {
+        "tsc": "tsc --build",
+        "build": "webpack --mode production",
+        "prepare": "webpack --mode production",
+        "build-typings": "tsc --build && api-extractor run --local && echo 'export as namespace flywave;' >> dist/flywave.d.ts && rm -rf temp",
+        "debug": "webpack"
+    },
+    "keywords": [
+        "3d",
+        "webgl",
+        "gis",
+        "map",
+        "geospatial"
+    ],
+    "author": "flywave",
+    "license": "Apache-2.0",
+    "homepage": "https://github.com/flywave/flywave.gl#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/flywave/flywave.gl.git"
+    },
+    "bugs": {
+        "url": "https://github.com/flywave/flywave.gl/issues"
+    },
+    "peerDependencies": {
+        "three": ">= 0.169.0 < 0.182.0"
+    },
+    "devDependencies": {
+        "@flywave/flywave-webpack-utils": "catalog:",
+        "@flywave/flywave-mapview": "catalog:",
+        "@flywave/flywave-mapview-decoder": "catalog:",
+        "@flywave/flywave-terrain-datasource": "catalog:",
+        "@flywave/flywave-map-controls": "catalog:",
+        "@flywave/flywave-3dtile-datasource": "catalog:",
+        "@flywave/flywave-datasource-protocol": "catalog:",
+        "@flywave/flywave-draw-controls": "catalog:",
+        "@flywave/flywave-webtile-datasource": "catalog:",
+        "@flywave/flywave-geoutils": "catalog:",
+        "@flywave/flywave-features-datasource": "catalog:",
+        "@flywave/flywave-utils": "catalog:",
+        "@flywave/flywave-vectortile-datasource": "catalog:",
+        "@flywave/flywave-inspector": "catalog:",
+        "copy-webpack-plugin": "catalog:",
+        "tsconfig-paths-webpack-plugin": "catalog:",
+        "cross-env": "catalog:",
+        "expose-loader": "5.0.1",
+        "typescript": "catalog:",
+        "webpack": "catalog:",
+        "webpack-cli": "catalog:",
+        "webpack-merge": "catalog:"
+    }
+}

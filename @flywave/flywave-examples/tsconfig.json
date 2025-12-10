@@ -1,0 +1,53 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "declarationMap": false,
+        "sourceMap": false,
+        "composite": false,
+        "declaration": false,
+        "paths": {
+            "@flywave/flywave.gl": [
+                "../flywave.gl/src"
+            ],
+            "@flywave/flywave.gl/*": [
+                "../flywave.gl/src/*"
+            ],
+            "@flywave/flywave-map-controls": [
+                "../flywave-map-controls/src"
+            ],
+            "@flywave/flywave-map-controls/*": [
+                "../flywave-map-controls/src/*"
+            ],
+            "@flywave/flywave-draw-controls": [
+                "../flywave-draw-controls/src"
+            ],
+            "@flywave/flywave-draw-controls/*": [
+                "../flywave-draw-controls/src/*"
+            ],
+            "@flywave/flywave-geometry": [
+                "../flywave-geometry/src"
+            ],
+            "@flywave/flywave-geometry/*": [
+                "../flywave-geometry/src/*"
+            ],
+            "@flywave/flywave-examples/*": [
+                "./src/*"
+            ]
+        }
+    },
+    "include": [
+        "example-browser.ts",
+        "codebrowser.ts",
+        "src/**/*.ts",
+        "global.d.ts",
+        "decoder/**/*"
+    ],
+    "references": [
+        {
+            "path": "../flywave.gl"
+        },
+        {
+            "path": "../flywave-geometry"
+        },
+    ]
+}

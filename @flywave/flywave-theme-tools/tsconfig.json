@@ -1,0 +1,25 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "rootDir": "./",
+        "sourceMap": true,
+        "composite": true,
+        "incremental": true,
+        "declarationMap": true,
+        "paths": {
+            "@flywave/flywave-mapview": ["../flywave-mapview/src"],
+            "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"]
+        }
+    },
+    "include": ["src/**/*"],
+    "exclude": ["dist/**", "test/**", "node_modules"],
+    "references": [
+        {
+            "path": "../flywave-mapview"
+        },
+        {
+            "path": "../flywave-datasource-protocol"
+        }
+    ]
+}

@@ -1,0 +1,51 @@
+{
+    "name": "@flywave/flywave-webpack-utils",
+    "version": "0.0.1",
+    "description": "flywave.gl webpack utilities",
+    "type": "module",
+    "scripts": {
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/flywave/flywave.gl.git",
+        "directory": "@flywave/flywave-webpack-utils"
+    },
+    "exports": {
+        "./scripts/WebpackConfig": {
+            "types": "./scripts/WebpackConfig.ts.d.ts",
+            "require": "./scripts/WebpackConfig.js",
+            "import": "./scripts/WebpackConfig.js"
+        }
+    },
+    "author": {
+        "name": "flywave.gl contributors",
+        "url": "https://flywave.net"
+    },
+    "license": "Apache-2.0",
+    "keywords": [
+        "map",
+        "map-renderer",
+        "vector-tiles",
+        "geojson",
+        "typescript",
+        "webgl",
+        "harpgl"
+    ],
+    "dependencies": {
+        "copy-webpack-plugin": "catalog:",
+        "html-webpack-plugin": "catalog:",
+        "tsconfig-paths-webpack-plugin": "catalog:",
+        "webpack-merge": "catalog:"
+    },
+    "peerDependencies": {
+        "webpack": "catalog:"
+    },
+    "devDependencies": {
+        "cross-env": "catalog:",
+        "ts-node": "catalog:",
+        "typescript": "catalog:"
+    },
+    "private": true
+}

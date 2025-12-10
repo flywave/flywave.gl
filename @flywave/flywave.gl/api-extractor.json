@@ -1,0 +1,85 @@
+{
+    "$schema": "https://developer.microsoft.com/json-schemas/api-extractor/v7/api-extractor.schema.json",
+    "mainEntryPointFilePath": "<projectFolder>/lib/index.d.ts",
+    "bundledPackages": [
+        "@flywave/flywave-mapview",
+        "@flywave/flywave-mapview-decoder",
+        "@flywave/flywave-terrain-datasource",
+        "@flywave/flywave-map-controls",
+        "@flywave/flywave-3dtile-datasource",
+        "@flywave/flywave-datasource-protocol",
+        "@flywave/flywave-draw-controls",
+        "@flywave/flywave-webtile-datasource",
+        "@flywave/flywave-geoutils",
+        "@flywave/flywave-features-datasource",
+        "@flywave/flywave-utils",
+        "@flywave/flywave-vectortile-datasource",
+        "@flywave/flywave-inspector"
+    ],
+    "compiler": {
+        "tsconfigFilePath": "<projectFolder>/tsconfig.json",
+        "overrideTsconfig": {
+            "include": ["lib/**/*.d.ts"],
+            "exclude": [
+                "src/**/*",
+                "node_modules/**/*",
+                "dist/**/*",
+                "**/*.test.ts",
+                "**/*.spec.ts",
+                "**/test/**/*"
+            ]
+        }
+    },
+    "apiReport": {
+        "enabled": false,
+        "reportFileName": "<unscopedPackageName>.api.md"
+    },
+    "docModel": {
+        "enabled": true,
+        "apiJsonFilePath": "<projectFolder>/temp/<unscopedPackageName>.api.json"
+    },
+    "dtsRollup": {
+        "enabled": true,
+        "untrimmedFilePath": "dist/flywave.d.ts",
+        "publicTrimmedFilePath": ""
+    },
+    "tsdocMetadata": {
+        "enabled": false
+    },
+    "newlineKind": "lf",
+    "messages": {
+        "compilerMessageReporting": {
+            "default": {
+                "logLevel": "none"
+            }
+        },
+        "extractorMessageReporting": {
+            "default": {
+                "logLevel": "none",
+                "addToApiReportFile": false
+            },
+            "ae-missing-release-tag": {
+                "logLevel": "none",
+                "addToApiReportFile": false
+            },
+            "ae-forgotten-export": {
+                "logLevel": "none",
+                "addToApiReportFile": false
+            },
+            "ae-internal-missing-underscore": {
+                "logLevel": "none",
+                "addToApiReportFile": false
+            },
+            "ae-incompatible-release-tags": {
+                "logLevel": "none",
+                "addToApiReportFile": false
+            }
+        },
+        "tsdocMessageReporting": {
+            "default": {
+                "logLevel": "none",
+                "addToApiReportFile": false
+            }
+        }
+    }
+}

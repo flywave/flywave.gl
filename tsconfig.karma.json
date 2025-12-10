@@ -1,0 +1,109 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./lib",
+        "composite": true,
+        "module": "es2015",
+        "target": "es2015",
+        "paths": {
+            "@flywave/flywave-datasource-protocol": ["./@flywave/flywave-datasource-protocol/src"],
+            "@flywave/flywave-datasource-protocol/*": [
+                "./@flywave/flywave-datasource-protocol/src/*"
+            ],
+            "@flywave/flywave-vectortile-datasource": [
+                "./@flywave/flywave-vectortile-datasource/src"
+            ],
+            "@flywave/flywave-vectortile-datasource/*": [
+                "./@flywave/flywave-vectortile-datasource/src/*"
+            ],
+            "@flywave/flywave-fetch": ["./@flywave/flywave-fetch/src"],
+            "@flywave/flywave-geometry": ["./@flywave/flywave-geometry/src"],
+            "@flywave/flywave-geometry/*": ["./@flywave/flywave-geometry/src/*"],
+            "@flywave/flywave-geoutils": ["./@flywave/flywave-geoutils/src"],
+            "@flywave/flywave-geoutils/*": ["./@flywave/flywave-geoutils/src/*"],
+            "@flywave/flywave-lines": ["./@flywave/flywave-lines/src"],
+            "@flywave/flywave-lines/*": ["./@flywave/flywave-lines/src/*"],
+            "@flywave/flywave-lrucache": ["./@flywave/flywave-lrucache/src"],
+            "@flywave/flywave-materials": ["./@flywave/flywave-materials/src"],
+            "@flywave/flywave-materials/*": ["./@flywave/flywave-materials/src/*"],
+            "@flywave/flywave-text-canvas": ["./@flywave/flywave-text-canvas/src"],
+            "@flywave/flywave-text-canvas/*": ["./@flywave/flywave-text-canvas/src/*"],
+            "@flywave/flywave-transfer-manager": ["./@flywave/flywave-transfer-manager/src"],
+            "@flywave/flywave-utils": ["./@flywave/flywave-utils/src"],
+            "@flywave/flywave-mapview": ["./@flywave/flywave-mapview/src"],
+            "@flywave/flywave-mapview/*": ["./@flywave/flywave-mapview/src/*"],
+            "@flywave/flywave-mapview-decoder": ["./@flywave/flywave-mapview-decoder/src"],
+            "@flywave/flywave-mapview-decoder/*": ["./@flywave/flywave-mapview-decoder/src/*"],
+            "@flywave/flywave-webtile-datasource": ["./@flywave/flywave-webtile-datasource/src"],
+            "@flywave/flywave-webtile-datasource/*": [
+                "./@flywave/flywave-webtile-datasource/src/*"
+            ],
+            "@flywave/flywave-test-utils": ["./@flywave/flywave-test-utils/src/index.web.ts"],
+            "@flywave/flywave-test-utils/*": ["./@flywave/flywave-test-utils/src/*"],
+            "@flywave-draco": ["./@flywave-draco/src"],
+            "@flywave-gltf": ["./@flywave-gltf/src"],
+            "@flywave-gltf/*": ["./@flywave-gltf/src/*"],
+            "@flywave-draco/*": ["./@flywave-draco/src/*"]
+        }
+    },
+    "include": ["@flywave/**/*.ts"],
+    "exclude": [
+        "**/node_modules/**",
+        "@flywave/generator-flywave.gl",
+        "@flywave/flywave-examples",
+        "@flywave/flywave.gl/**"
+    ]
+    // "references": [
+    //     {
+    //         "path": "./@flywave/flywave-datasource-protocol"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-fetch"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-geometry"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-geoutils"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-lines"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-lrucache"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-materials"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-text-canvas"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-transfer-manager"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-utils"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-mapview"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-mapview-decoder"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-vectortile-datasource"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-webtile-datasource"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-test-utils"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave-map-controls"
+    //     },
+    //     {
+    //         "path": "./@flywave/flywave.gl"
+    //     }
+    // ]
+}

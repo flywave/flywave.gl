@@ -1,0 +1,11 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "sourceMap": true,
+        "composite": true,
+        "incremental": true,
+        "declarationMap": true,
+        "skipLibCheck": true
+    },
+    "exclude": ["dist/**", "test/**", "node_modules"]
+}

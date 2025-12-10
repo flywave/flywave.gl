@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "lib",
+    "rootDir": "."
+  },
+  "include": [
+    "src/**/*",
+    "test/**/*"
+  ],
+  "references": [
+    {
+      "path": "../flywave-mapview"
+    },
+    {
+      "path": "../flywave-geoutils"
+    },
+    {
+      "path": "../flywave-terrain-datasource"
+    }
+  ]
+}
