@@ -14,4 +14,3 @@ rendering-test-results/
 /temp/
 credentials.js
 @flywave/flywave.gl/dist
-pnpm-lock.yaml
