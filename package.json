@@ -33,10 +33,7 @@
         "karma-headless": "karma start --browsers ChromeHeadless",
         "karma-headless-firefox": "karma start --browsers FirefoxHeadless",
         "karma-browser": "karma start --browsers Chrome --no-single-run",
-        "build": "pnpm workspaces run build && pnpm run build-bundle",
         "build-examples": "webpack --config @flywave/flywave-examples/webpack.config.ts",
-        "build-bundle": "cd @flywave/flywave.gl && webpack",
-        "build-tests": "webpack --config ./webpack.tests.config.js",
         "start": "pnpm --filter @flywave/flywave-examples run tsc && pnpm --filter @flywave/flywave-examples run start",
         "start-tests": "webpack serve --config ./webpack.tests.config.js",
         "cleanup": "tsc --build --clean",
@@ -58,8 +55,7 @@
         "prepare-doc-deploy": "ts-node ./scripts/prepare_doc_deploy.ts",
         "publish-packages": "lerna publish",
         "publish-from-git": "lerna publish from-git",
-        "publish-from-package": "lerna publish from-package",
-        "version-packages": "lerna version"
+        "publish-from-package": "lerna publish from-package"
     },
     "devDependencies": {
         "@microsoft/api-extractor": "catalog:",
@@ -110,6 +106,7 @@
         "querystring-es3": "catalog:",
         "semver": "catalog:",
         "sinon": "catalog:",
+        "lerna": "catalog:",
         "stream-browserify": "catalog:",
         "three": "^0.178.0",
         "ts-loader": "catalog:",

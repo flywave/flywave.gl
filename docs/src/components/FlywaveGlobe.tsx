@@ -20,8 +20,11 @@ const FlywaveGlobe = () => {
     iframe.style.maxWidth = '500px';
     iframe.style.maxHeight = '500px';
 
-    // 获取当前的基础URL，用于处理国际化路径
-    const baseUrl = window.location.origin + window.location.pathname.split('/').slice(0, 2).join('/');
+    // 获取当前的基础URL，用于处理 GitHub Pages 部署路径
+    const pathParts = window.location.pathname.split('/');
+    // 查找 'flywave.gl' 部分，确保正确构建基础URL
+    const flywaveIndex = pathParts.indexOf('flywave.gl');
+    const baseUrl = window.location.origin + (flywaveIndex !== -1 ? pathParts.slice(0, flywaveIndex + 1).join('/') : '');
     
     // 设置 iframe 内容
     const iframeContent = `

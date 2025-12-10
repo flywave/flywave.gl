@@ -61,7 +61,7 @@ To run the examples locally:
 
 ## Online Examples
 
-You can also view our online examples at [flywave.net/examples](https://flywave.net/examples).
+You can also view our online examples at [flywave.github.io/flywave.gl/examples](https://flywave.github.io/flywave.gl/examples).
 
 ## Contributing Examples
 

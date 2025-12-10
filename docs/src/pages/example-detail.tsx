@@ -311,7 +311,7 @@ export default function ExampleDetail() {
                     "@turf/turf": "https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/+esm",
                     "dat.gui": "https://unpkg.com/dat.gui@0.7.9/build/dat.gui.module.js",  
                     "@flywave/flywave.gl": "./flywave.gl.module.js",
-                    "three-nebula": "/three-nebula.module.js"
+                    "three-nebula": "./three-nebula.module.js"
                 }
             }
             </script>

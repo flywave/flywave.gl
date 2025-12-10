@@ -10,8 +10,6 @@ import { CopyrightInfo } from "./CopyrightInfo";
  *
  * @example
  *
- *     // HTML snippet
- *     <div id="copyrightNotice" style="position:absolute; right:0; bottom:0; z-index:100"></div>
  *
  *     // JavaScript
  *     const mapView = new MapView({ ... });

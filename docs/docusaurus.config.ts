@@ -14,7 +14,7 @@ const examplesSrcPath3dtilesAnimation = path.resolve(__dirname, '../@flywave/fly
 const config: Config = {
     title: "FlywaveGL",
     url: "https://flywave.gl",
-    baseUrl: "/",
+    baseUrl: "/flywave.gl/",
 
     favicon: "img/favicon.ico",
     tagline: "3D 地图渲染引擎",
