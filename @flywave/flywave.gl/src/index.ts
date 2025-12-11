@@ -27,7 +27,7 @@ export * from "@flywave/flywave-utils";
 export * from "@flywave/flywave-vectortile-datasource";
 export * from "@flywave/flywave-inspector";
 export * from "@flywave/flywave-gltf";
-// export * from "@flywave/flywave-transfer-manager";
+export * from "@flywave/flywave-transfer-manager";
 export * from "@flywave/flywave-geometry";
 export {
     FontCatalog,
