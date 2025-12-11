@@ -30,8 +30,8 @@ export class ImageLoader {
             // 尝试创建KTX2Loader，但不设置renderer
             // this.ktx2Loader = new KTX2Loader();
             // 设置transcoder路径
-            this.ktx2Loader.setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/basis/');
-            this.ktx2Loader.detectSupport(webglRender);
+            // this.ktx2Loader.setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/basis/');
+            // this.ktx2Loader.detectSupport(webglRender);
 
         } catch (error) {
             console.warn('Some Three.js loaders failed to initialize:', error);
