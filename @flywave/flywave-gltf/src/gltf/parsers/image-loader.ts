@@ -1,8 +1,9 @@
 // image-loader.ts
-import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+// import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { DDSLoader } from 'three/examples/jsm/loaders/DDSLoader.js';
 import { TGALoader } from 'three/examples/jsm/loaders/TGALoader.js';
 import { WebGLRenderer } from 'three';
+// import { read } from 'ktx-parse';
 
 export interface LoadedImage {
     width: number;
@@ -15,7 +16,7 @@ export interface LoadedImage {
 const webglRenderInstance = new WebGLRenderer();
 
 export class ImageLoader {
-    private ktx2Loader?: KTX2Loader;
+    private ktx2Loader?: any;
     private ddsLoader?: DDSLoader;
     private tgaLoader?: TGALoader;
 
@@ -27,7 +28,7 @@ export class ImageLoader {
             this.tgaLoader = new TGALoader();
 
             // 尝试创建KTX2Loader，但不设置renderer
-            this.ktx2Loader = new KTX2Loader();
+            // this.ktx2Loader = new KTX2Loader();
             // 设置transcoder路径
             this.ktx2Loader.setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/basis/');
             this.ktx2Loader.detectSupport(webglRender);
@@ -175,10 +176,9 @@ export class ImageLoader {
         console.log('Using fallback KTX2 decoder');
 
         // 方案1：尝试使用ktx-parse解析基本信息
-        try {
-            const { read } = await import('ktx-parse');
-            const ktx = read(new Uint8Array(arrayBuffer));
-
+        try { 
+            const ktx = undefined;// read(new Uint8Array(arrayBuffer));
+            console.log('KTX2 Info:', ktx);
             // 创建占位图，显示KTX2信息
             const canvas = document.createElement('canvas');
             canvas.width = Math.max(ktx.pixelWidth, 256);
