@@ -15,7 +15,8 @@
                 "**/pnpm-lock.yaml"
             ],
             "registry": "https://registry.npmjs.org/",
-            "skipPrivate": true
+            "skipPrivate": true,
+            "tagVersionPrefix": "v"
         },
         "version": {
             "exact": true,
@@ -27,7 +28,8 @@
                 "**/package-lock.json",
                 "**/yarn.lock",
                 "**/pnpm-lock.yaml"
-            ]
+            ],
+            "tagVersionPrefix": "v"
         }
     }
 }
