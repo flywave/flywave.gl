@@ -67,6 +67,20 @@ _Creating high-performance, scalable 3D map visualization solutions using WebGL 
 
 ### 🛠️ Installation
 
+There are two ways to install flywave.gl:
+
+#### Direct npm Installation (Recommended for projects)
+
+```bash
+# Using npm
+npm install @flywave/flywave.gl
+
+# Using pnpm (recommended)
+pnpm add @flywave/flywave.gl
+```
+
+#### From Source (For development)
+
 ```bash
 # Clone repository
 git clone https://github.com/flywave/flywave.gl.git
@@ -82,10 +96,6 @@ pnpm start
 
 ### 📦 Building for Production
 
-```bash
-# Build project for production
-pnpm build
-```
 
 <br>
 
