@@ -67,6 +67,20 @@ _使用 WebGL 和 Three.js 创建高性能、可扩展的 3D 地图可视化解�
 
 ### 🛠️ 安装步骤
 
+有两种方式安装 flywave.gl：
+
+#### 直接使用 npm 安装（推荐用于项目）
+
+```bash
+# 使用 npm
+npm install @flywave/flywave.gl
+
+# 使用 pnpm（推荐）
+pnpm add @flywave/flywave.gl
+```
+
+#### 从源码安装（用于开发）
+
 ```bash
 # 克隆仓库
 git clone https://github.com/flywave/flywave.gl.git
@@ -82,10 +96,6 @@ pnpm start
 
 ### 📦 生产环境构建
 
-```bash
-# 生产环境构建项目
-pnpm build
-```
 
 <br>
 
