@@ -2107,6 +2107,10 @@ importers:
 
     "@flywave/flywave.gl":
         dependencies:
+            three:
+                specifier: ^0.178.0
+                version: 0.178.0
+        devDependencies:
             "@flywave/flywave-3dtile-datasource":
                 specifier: workspace:*
                 version: link:../flywave-3dtile-datasource
@@ -2149,10 +2153,6 @@ importers:
             "@flywave/flywave-webtile-datasource":
                 specifier: workspace:*
                 version: link:../flywave-webtile-datasource
-            three:
-                specifier: ^0.178.0
-                version: 0.178.0
-        devDependencies:
             copy-webpack-plugin:
                 specifier: "catalog:"
                 version: 7.0.0(webpack@5.103.0)
