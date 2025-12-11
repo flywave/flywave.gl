@@ -111,6 +111,39 @@ pnpm start
 
 <br>
 
+## 💡 Usage Examples
+
+### Basic Map with Data Source
+
+```typescript
+import { 
+    MapView, 
+    GeoCoordinates, 
+    MapControls, 
+    sphereProjection,
+    ArcGISWebTileDataSource 
+} from "@flywave/flywave.gl";
+
+// Initialize map view
+const mapView = new MapView({
+    projection: sphereProjection,
+    target: new GeoCoordinates(39.9042, 116.4074), // Beijing coordinates
+    zoomLevel: 10,
+    canvas: document.getElementById("mapCanvas")
+});
+
+// Create data source
+const webTileDataSource = new ArcGISWebTileDataSource();
+
+// Add data source to map
+mapView.addDataSource(webTileDataSource);
+
+// Add controls for user interaction
+const mapControls = new MapControls(mapView);
+```
+
+<br>
+
 ## 📚 Resources
 
 | Resource | Description | Link |
