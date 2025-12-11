@@ -111,6 +111,39 @@ pnpm start
 
 <br>
 
+## 💡 使用示例
+
+### 带数据源的基础地图
+
+```typescript
+import { 
+    MapView, 
+    GeoCoordinates, 
+    MapControls, 
+    sphereProjection,
+    ArcGISWebTileDataSource 
+} from "@flywave/flywave.gl";
+
+// 初始化地图视图
+const mapView = new MapView({
+    projection: sphereProjection,
+    target: new GeoCoordinates(39.9042, 116.4074), // 北京坐标
+    zoomLevel: 10,
+    canvas: document.getElementById("mapCanvas")
+});
+
+// 创建数据源
+const webTileDataSource = new ArcGISWebTileDataSource();
+
+// 添加数据源到地图
+mapView.addDataSource(webTileDataSource);
+
+// 添加控制以支持用户交互
+const mapControls = new MapControls(mapView);
+```
+
+<br>
+
 ## 📚 资源链接
 
 | 资源 | 描述 | 链接 |
