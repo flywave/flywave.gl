@@ -14,8 +14,8 @@
 _使用 WebGL 和 Three.js 创建高性能、可扩展的 3D 地图可视化解决方案_
 
 [:us: English Version](./README.md) • 
-[📚 官方文档](https://flywave.net/docs) • 
-[🎯 示例代码](https://flywave.net/examples) • 
+[📚 官方文档](https://flywave.github.io/flywave.gl/docs) • 
+[🎯 示例代码](https://flywave.github.io/flywave.gl/examples) • 
 [🏠 官网](https://flywave.net)
 
 </div>

@@ -77,7 +77,7 @@ class MapAssetsUriResolver implements UriResolver {
     }
 }
 
-window.FLYWAVE_BASE_URL = "https://flywave.net/flywave.gl/resources/";
+window.FLYWAVE_BASE_URL = "https://flywave.github.io/flywave.gl/";
 
 // Export a singleton instance
 export const mapAssetsUriResolver = new MapAssetsUriResolver();
