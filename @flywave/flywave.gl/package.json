@@ -1,6 +1,6 @@
 {
     "name": "@flywave/flywave.gl",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "type": "module",
     "description": "WebGl GIS",
     "exports": {
@@ -54,7 +54,7 @@
         "three": ">= 0.169.0 < 0.182.0"
     },
     "devDependencies": {
-         "@flywave/flywave-3dtile-datasource": "workspace:*",
+        "@flywave/flywave-3dtile-datasource": "workspace:*",
         "@flywave/flywave-datasource-protocol": "workspace:*",
         "@flywave/flywave-draw-controls": "workspace:*",
         "@flywave/flywave-features-datasource": "workspace:*",
