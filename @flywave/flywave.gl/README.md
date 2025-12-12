@@ -33,12 +33,20 @@ You can use this engine to:
 <div align="center">
 
 |  |  |  |
-| :----------------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
-| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/01-globe-view.png" alt="Globe View" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/02-terrain-rendering.png" alt="Terrain Rendering" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/03-3dtiles-rendering.png" alt="3D Tiles Rendering" width="200" /> |
+|:---:|:---:|:---:|
+| ![3D Globe](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/01-globe-view.png) | ![Terrain](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/02-terrain-rendering.png) | ![Atmosphere](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/08-atmosphere.png) |
+
 |  |  |  |
-| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/04-post-processing.png" alt="Post Processing" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/06-interactive-controls.png" alt="Interactive Controls" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/07-planar-map.png" alt="Planar Map" width="200" /> |
+|:---:|:---:|:---:|
+| ![Controls](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/06-interactive-controls.png) | ![Post-processing](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/04-post-processing.png) | ![Animation](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/09-animation.png) |
+
 |  |  |  |
-| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/08-atmosphere.png" alt="Atmosphere Effect" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/09-animation.png" alt="Animation System" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/11-lighting.png" alt="Lighting System" width="200" /> |
+|:---:|:---:|:---:|
+| ![Planar](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/07-planar-map.png) | ![3D Tiles](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/03-3dtiles-rendering.png) | ![Drawing](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/16-drawing-controls.png) |
+
+|  |  |  |
+|:---:|:---:|:---:|
+| ![New Feature 1](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20250917_4.png) | ![New Feature 2](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20251016_3.png) | ![New Feature 3](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20251021_4.png) |
 
 </div>
 
@@ -72,14 +80,30 @@ npm install @flywave/flywave.gl
 ### Basic Usage
 
 ```typescript
-import { MapView, GeoCoordinates, sphereProjection } from "@flywave/flywave.gl";
+import { 
+    MapView, 
+    GeoCoordinates, 
+    MapControls, 
+    sphereProjection,
+    ArcGISWebTileDataSource 
+} from "@flywave/flywave.gl";
 
+// Initialize map view
 const mapView = new MapView({
-  projection: sphereProjection,
-  target: new GeoCoordinates(36, 118),
-  zoomLevel: 6,
-  canvas: document.getElementById("mapCanvas") as HTMLCanvasElement
+    projection: sphereProjection,
+    target: new GeoCoordinates(39.9042, 116.4074), // Beijing coordinates
+    zoomLevel: 10,
+    canvas: document.getElementById("mapCanvas")
 });
+
+// Create data source
+const webTileDataSource = new ArcGISWebTileDataSource();
+
+// Add data source to map
+mapView.addDataSource(webTileDataSource);
+
+// Add controls for user interaction
+const mapControls = new MapControls(mapView);
 ```
 
 ## Core Features
