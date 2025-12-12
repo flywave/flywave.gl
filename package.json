@@ -53,7 +53,7 @@
         "eslint:fix": "eslint --fix --ext .ts ./@flywave test scripts",
         "postinstall": "pnpm --filter @flywave/flywave-datasource-protocol run generate-json-schema",
         "prepare-doc-deploy": "ts-node ./scripts/prepare_doc_deploy.ts",
-        "publish-packages": "lerna publish --no-private",
+        "publish-packages": "lerna publish --no-private --force-publish",
         "publish-from-git": "lerna publish from-git",
         "publish-from-package": "lerna publish from-package"
     },
