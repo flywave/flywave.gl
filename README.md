@@ -52,6 +52,10 @@ _Creating high-performance, scalable 3D map visualization solutions using WebGL 
 |:---:|:---:|:---:|
 | ![Planar](./docs/static/screenshots/07-planar-map.png) | ![3D Tiles](./docs/static/screenshots/03-3dtiles-rendering.png) | ![Drawing](./docs/static/screenshots/16-drawing-controls.png) |
 
+|  |  |  |
+|:---:|:---:|:---:|
+| ![New Feature 1](./docs/static/screenshots/Snip20250917_4.png) | ![New Feature 2](./docs/static/screenshots/Snip20251016_3.png) | ![New Feature 3](./docs/static/screenshots/Snip20251021_4.png) |
+
 </div>
 
 <br>
