@@ -33,12 +33,20 @@
 <div align="center">
 
 |  |  |  |
-| :----------------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
-| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/01-globe-view.png" alt="球面视图" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/02-terrain-rendering.png" alt="地形渲染" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/03-3dtiles-rendering.png" alt="3D Tiles渲染" width="200" /> |
+|:---:|:---:|:---:|
+| ![3D 球面](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/01-globe-view.png) | ![地形](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/02-terrain-rendering.png) | ![大气](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/08-atmosphere.png) |
+
 |  |  |  |
-| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/04-post-processing.png" alt="后期处理" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/06-interactive-controls.png" alt="交互控制" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/07-planar-map.png" alt="平面地图" width="200" /> |
+|:---:|:---:|:---:|
+| ![控制](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/06-interactive-controls.png) | ![后期处理](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/04-post-processing.png) | ![动画](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/09-animation.png) |
+
 |  |  |  |
-| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/08-atmosphere.png" alt="大气效果" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/09-animation.png" alt="动画系统" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/11-lighting.png" alt="光照系统" width="200" /> |
+|:---:|:---:|:---:|
+| ![平面](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/07-planar-map.png) | ![3D 瓦片](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/03-3dtiles-rendering.png) | ![绘图](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/16-drawing-controls.png) |
+
+|  |  |  |
+|:---:|:---:|:---:|
+| ![新功能 1](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20250917_4.png) | ![新功能 2](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20251016_3.png) | ![新功能 3](https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20251021_4.png) |
 
 </div>
 
@@ -72,14 +80,30 @@ npm install @flywave/flywave.gl
 ### 代码中使用
 
 ```ts
-import { MapView, GeoCoordinates, sphereProjection } from "@flywave/flywave.gl";
+import { 
+    MapView, 
+    GeoCoordinates, 
+    MapControls, 
+    sphereProjection,
+    ArcGISWebTileDataSource 
+} from "@flywave/flywave.gl";
 
+// 初始化地图视图
 const mapView = new MapView({
-  projection: sphereProjection,
-  target: new GeoCoordinates(36, 118),
-  zoomLevel: 6,
-  canvas: document.getElementById("mapCanvas") as HTMLCanvasElement
+    projection: sphereProjection,
+    target: new GeoCoordinates(39.9042, 116.4074), // 北京坐标
+    zoomLevel: 10,
+    canvas: document.getElementById("mapCanvas")
 });
+
+// 创建数据源
+const webTileDataSource = new ArcGISWebTileDataSource();
+
+// 添加数据源到地图
+mapView.addDataSource(webTileDataSource);
+
+// 添加控制以支持用户交互
+const mapControls = new MapControls(mapView);
 ```
 
 ## 核心功能
