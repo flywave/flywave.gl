@@ -16,7 +16,7 @@
             ],
             "registry": "https://registry.npmjs.org/",
             "skipPrivate": true,
-            "tagVersionPrefix": "v"
+            "message": "chore(release): publish %v"
         },
         "version": {
             "exact": true,
@@ -28,8 +28,8 @@
                 "**/package-lock.json",
                 "**/yarn.lock",
                 "**/pnpm-lock.yaml"
-            ],
-            "tagVersionPrefix": "v"
+            ]
         }
-    }
+    },
+    "npmClientArgs": ["--no-git-tag-version"]
 }
