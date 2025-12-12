@@ -36,6 +36,8 @@ You can use this engine to:
 | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/04-post-processing.png" alt="Post Processing" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/06-interactive-controls.png" alt="Interactive Controls" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/07-planar-map.png" alt="Planar Map" width="200" /> |
 |  |  |  |
 | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/08-atmosphere.png" alt="Atmosphere Effect" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/09-animation.png" alt="Animation System" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/11-lighting.png" alt="Lighting System" width="200" /> |
+|  |  |  |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20250917_4.png" alt="New Feature 1" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20251016_3.png" alt="New Feature 2" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20251021_4.png" alt="New Feature 3" width="200" /> |
 
 </div>
 

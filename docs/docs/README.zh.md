@@ -36,6 +36,8 @@
 | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/04-post-processing.png" alt="后期处理" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/06-interactive-controls.png" alt="交互控制" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/07-planar-map.png" alt="平面地图" width="200" /> |
 |  |  |  |
 | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/08-atmosphere.png" alt="大气效果" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/09-animation.png" alt="动画系统" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/11-lighting.png" alt="光照系统" width="200" /> |
+|  |  |  |
+| <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20250917_4.png" alt="新功能 1" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20251016_3.png" alt="新功能 2" width="200" /> | <img src="https://raw.githubusercontent.com/flywave/flywave.gl/master/docs/static/screenshots/Snip20251021_4.png" alt="新功能 3" width="200" /> |
 
 </div>
 

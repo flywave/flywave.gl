@@ -52,6 +52,10 @@ _使用 WebGL 和 Three.js 创建高性能、可扩展的 3D 地图可视化解�
 |:---:|:---:|:---:|
 | ![平面](./docs/static/screenshots/07-planar-map.png) | ![3D 瓦片](./docs/static/screenshots/03-3dtiles-rendering.png) | ![绘图](./docs/static/screenshots/16-drawing-controls.png) |
 
+|  |  |  |
+|:---:|:---:|:---:|
+| ![新功能 1](./docs/static/screenshots/Snip20250917_4.png) | ![新功能 2](./docs/static/screenshots/Snip20251016_3.png) | ![新功能 3](./docs/static/screenshots/Snip20251021_4.png) |
+
 </div>
 
 <br>
