@@ -134,56 +134,6 @@ export default function ExampleDetail() {
         }
     }, [location.pathname, location.search, EXAMPLES_CONFIG.length]); // 监听 EXAMPLES_CONFIG 长度变化
 
-    
-
-    // 监听路由变化，处理语言切换时的URL问题
-    useEffect(() => {
-        const handleLocationChange = () => {
-            // 支持两种URL参数格式：查询参数 ?id=... 或路径参数 /example-detail/...
-            const urlParams = new URLSearchParams(location.search);
-            let urlExampleId = urlParams.get("id");
-            
-            // 如果查询参数中没有找到id，尝试从路径中解析
-            if (!urlExampleId) {
-                const pathSegments = location.pathname.split('/');
-                // 查找可能包含id的路径段
-                for (let i = 0; i < pathSegments.length; i++) {
-                    if (pathSegments[i] === 'example-detail' && i + 1 < pathSegments.length) {
-                        const potentialId = pathSegments[i + 1];
-                        // 检查是否是有效的示例ID（存在于EXAMPLES_CONFIG中）
-                        if (EXAMPLES_CONFIG.some(ex => ex.id === potentialId)) {
-                            urlExampleId = potentialId;
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            if (!urlExampleId) {
-                urlExampleId = "hello-world";
-            }
-            
-            // 确保示例存在
-            const targetExample = EXAMPLES_CONFIG.find(ex => ex.id === urlExampleId) || EXAMPLES_CONFIG[0];
-            
-            // 如果当前示例ID与URL参数不匹配，更新示例
-            if (targetExample.id !== exampleId) {
-                setExampleId(targetExample.id);
-                setCode(targetExample.code);
-                
-                // 运行新示例
-                setTimeout(() => {
-                    if (previewRef.current) {
-                        runCodeWithContent(targetExample.code);
-                    }
-                }, 0);
-            }
-        };
-
-        // 监听location变化，包括语言切换
-        handleLocationChange();
-    }, [location.pathname, location.search, EXAMPLES_CONFIG, exampleId]);
-
     // 监听浏览器的 popstate 事件，处理前进后退和语言切换
     useEffect(() => {
         const handlePopState = () => {
