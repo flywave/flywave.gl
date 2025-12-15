@@ -51,7 +51,7 @@ function getExampleLink(exampleId: string): string {
            window.location.pathname.startsWith('/en/') ? '/en' : '') 
         : '';
     
-    // 跳转到示例详情页，保持语言前缀
+    // 跳转到示例详情页，保持语言前缀，不使用路径斜杠，直接连接查询参数
     return currentLangPrefix ? `${currentLangPrefix}/example-detail?id=${exampleId}` : `/example-detail?id=${exampleId}`;
 }
 
