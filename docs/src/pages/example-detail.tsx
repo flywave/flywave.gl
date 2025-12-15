@@ -134,6 +134,23 @@ export default function ExampleDetail() {
         }
     }, [location.pathname, location.search, EXAMPLES_CONFIG.length]); // 监听 EXAMPLES_CONFIG 长度变化
 
+    // 监听URL变化并规范化URL格式，确保不带尾随斜杠
+    useEffect(() => {
+        // 检查当前URL是否包含尾随斜杠，并规范化为不带斜杠的格式
+        if (location.pathname.includes('/example-detail/') && location.search.includes('id=')) {
+            // 如果路径是 /example-detail/ 形式（带斜杠），将其规范化为 /example-detail 形式（不带斜杠）
+            const normalizedPath = location.pathname.replace(/\/example-detail\/$/, '/example-detail');
+            if (normalizedPath !== location.pathname) {
+                // URL包含尾随斜杠，需要规范化，但不触发页面重新加载
+                const normalizedUrl = `${normalizedPath}${location.search}`;
+                // 仅在URL实际发生变化时进行替换
+                if (normalizedUrl !== `${location.pathname}${location.search}`) {
+                    window.history.replaceState({}, document.title, normalizedUrl);
+                }
+            }
+        }
+    }, [location.pathname, location.search]);
+
     // 监听路由变化，处理语言切换时的URL问题
     useEffect(() => {
         const handleLocationChange = () => {
