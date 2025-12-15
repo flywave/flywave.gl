@@ -182,6 +182,49 @@ export default function ExampleDetail() {
         handleLocationChange();
     }, [location.pathname, location.search, EXAMPLES_CONFIG, exampleId]);
 
+    // 监听浏览器的 popstate 事件，处理前进后退和语言切换
+    useEffect(() => {
+        const handlePopState = () => {
+            // URL发生变化时重新解析参数
+            const urlParams = new URLSearchParams(location.search);
+            let urlExampleId = urlParams.get("id");
+            
+            if (!urlExampleId) {
+                const pathSegments = location.pathname.split('/');
+                for (let i = 0; i < pathSegments.length; i++) {
+                    if (pathSegments[i] === 'example-detail' && i + 1 < pathSegments.length) {
+                        const potentialId = pathSegments[i + 1];
+                        if (EXAMPLES_CONFIG.some(ex => ex.id === potentialId)) {
+                            urlExampleId = potentialId;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (!urlExampleId) {
+                urlExampleId = "hello-world";
+            }
+            
+            const targetExample = EXAMPLES_CONFIG.find(ex => ex.id === urlExampleId) || EXAMPLES_CONFIG[0];
+            if (targetExample.id !== exampleId) {
+                setExampleId(targetExample.id);
+                setCode(targetExample.code);
+                
+                setTimeout(() => {
+                    if (previewRef.current) {
+                        runCodeWithContent(targetExample.code);
+                    }
+                }, 0);
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+        };
+    }, [location.pathname, location.search, EXAMPLES_CONFIG, exampleId]);
+
     // 监听主题变化
     useEffect(() => {
         const handleThemeChange = () => {
