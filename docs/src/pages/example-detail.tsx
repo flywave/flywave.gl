@@ -248,7 +248,8 @@ export default function ExampleDetail() {
         const currentLangPrefix = window.location.pathname.startsWith('/zh/') ? '/zh' : 
                                   window.location.pathname.startsWith('/en/') ? '/en' : '';
         
-        // 返回示例页面，保持语言前缀
+        // 返回示例页面，保持语言前缀，确保路径格式正确
+        // 修复：移除多余的斜杠，统一使用不带结尾斜杠的格式
         const homeUrl = currentLangPrefix ? `${currentLangPrefix}/examples` : '/examples';
         window.location.href = homeUrl;
     };
