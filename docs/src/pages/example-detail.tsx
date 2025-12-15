@@ -134,27 +134,7 @@ export default function ExampleDetail() {
         }
     }, [location.pathname, location.search, EXAMPLES_CONFIG.length]); // 监听 EXAMPLES_CONFIG 长度变化
 
-    // 监听URL变化并规范化URL格式，确保不带尾随斜杠
-    useEffect(() => {
-        // 检查当前URL是否包含尾随斜杠，并规范化为不带斜杠的格式
-        // 使用setTimeout确保在所有状态更新完成后再执行规范化
-        const timer = setTimeout(() => {
-            if (location.pathname.includes('/example-detail/') && location.search.includes('id=')) {
-                // 如果路径是 /example-detail/ 形式（带斜杠），将其规范化为 /example-detail 形式（不带斜杠）
-                const normalizedPath = location.pathname.replace(/\/example-detail\/$/, '/example-detail');
-                if (normalizedPath !== location.pathname) {
-                    // URL包含尾随斜杠，需要规范化，但不触发页面重新加载
-                    const normalizedUrl = `${normalizedPath}${location.search}`;
-                    // 仅在URL实际发生变化时进行替换
-                    if (normalizedUrl !== `${location.pathname}${location.search}`) {
-                        window.history.replaceState({}, document.title, normalizedUrl);
-                    }
-                }
-            }
-        }, 100); // 延迟执行，确保状态更新完成
-
-        return () => clearTimeout(timer);
-    }, [location.pathname, location.search]);
+    
 
     // 监听路由变化，处理语言切换时的URL问题
     useEffect(() => {
@@ -335,24 +315,16 @@ export default function ExampleDetail() {
         setExampleId(selectedExample.id);
         setCode(selectedExample.code);
 
-        // 更新URL参数，保持当前语言路径前缀，但去除路径末尾的斜杠
+        // 更新URL参数，保持当前语言路径前缀
         const currentPath = window.location.pathname;
         const currentLangPrefix = currentPath.startsWith('/zh/') ? '/zh' : 
                                   currentPath.startsWith('/en/') ? '/en' : '';
         
-        // 构建正确的URL路径，处理语言前缀，但不包含末尾斜杠
+        // 构建正确的URL，处理语言前缀
         let newUrlPath = currentLangPrefix ? `${currentLangPrefix}/example-detail` : '/example-detail';
-        
-        // 确保路径不以斜杠结尾，使查询参数直接连接
-        if (newUrlPath.endsWith('/')) {
-            newUrlPath = newUrlPath.slice(0, -1);
-        }
-        
-        // 构建完整的URL，使用window.location.origin确保正确的协议和主机
-        const newUrlString = `${window.location.origin}${newUrlPath}?id=${selectedExample.id}`;
-        
-        // 使用 replaceState 更新URL但不触发页面重载
-        window.history.replaceState({}, '', newUrlString);
+        const newUrl = new URL(window.location.origin + newUrlPath);
+        newUrl.searchParams.set('id', selectedExample.id);
+        window.history.replaceState({}, '', newUrl.toString());
 
         // 立即运行新代码，使用新的代码内容，避免依赖可能未更新的状态
         setTimeout(() => {
