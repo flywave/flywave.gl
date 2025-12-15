@@ -313,16 +313,21 @@ export default function ExampleDetail() {
         setExampleId(selectedExample.id);
         setCode(selectedExample.code);
 
-        // 更新URL参数，保持当前语言路径前缀
+        // 更新URL参数，保持当前语言路径前缀，但去除路径末尾的斜杠
         const currentPath = window.location.pathname;
         const currentLangPrefix = currentPath.startsWith('/zh/') ? '/zh' : 
                                   currentPath.startsWith('/en/') ? '/en' : '';
         
-        // 构建正确的URL，处理语言前缀
+        // 构建正确的URL，处理语言前缀，但不包含末尾斜杠
         let newUrlPath = currentLangPrefix ? `${currentLangPrefix}/example-detail` : '/example-detail';
-        const newUrl = new URL(window.location.origin + newUrlPath);
-        newUrl.searchParams.set('id', selectedExample.id);
-        window.history.replaceState({}, '', newUrl.toString());
+        // 确保路径不以斜杠结尾，使查询参数直接连接
+        if (newUrlPath.endsWith('/')) {
+            newUrlPath = newUrlPath.slice(0, -1);
+        }
+        
+        // 构建URL字符串，直接连接查询参数
+        const newUrlString = `${window.location.origin}${newUrlPath}?id=${selectedExample.id}`;
+        window.history.replaceState({}, '', newUrlString);
 
         // 立即运行新代码，使用新的代码内容，避免依赖可能未更新的状态
         setTimeout(() => {
