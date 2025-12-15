@@ -81,8 +81,31 @@ export default function ExampleDetail() {
                 return;
             }
             
+            // 支持两种URL参数格式：查询参数 ?id=... 或路径参数 /example-detail/...
+            // 首先尝试从查询参数获取
             const urlParams = new URLSearchParams(location.search);
-            const urlExampleId = urlParams.get("id") || "hello-world";
+            let urlExampleId = urlParams.get("id");
+            
+            // 如果查询参数中没有找到id，尝试从路径中解析（处理类似 /example-detail/xxx 的格式）
+            if (!urlExampleId) {
+                const pathSegments = location.pathname.split('/');
+                // 查找可能包含id的路径段
+                for (let i = 0; i < pathSegments.length; i++) {
+                    if (pathSegments[i] === 'example-detail' && i + 1 < pathSegments.length) {
+                        const potentialId = pathSegments[i + 1];
+                        // 检查是否是有效的示例ID（存在于EXAMPLES_CONFIG中）
+                        if (EXAMPLES_CONFIG.some(ex => ex.id === potentialId)) {
+                            urlExampleId = potentialId;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // 如果仍然没有找到，使用默认值
+            if (!urlExampleId) {
+                urlExampleId = "hello-world";
+            }
             
             // 确保示例存在
             const targetExample = EXAMPLES_CONFIG.find(ex => ex.id === urlExampleId) || EXAMPLES_CONFIG[0];
@@ -109,13 +132,34 @@ export default function ExampleDetail() {
             const timer = setTimeout(initExample, 100);
             return () => clearTimeout(timer);
         }
-    }, [location.search, EXAMPLES_CONFIG.length]); // 监听 EXAMPLES_CONFIG 长度变化
+    }, [location.pathname, location.search, EXAMPLES_CONFIG.length]); // 监听 EXAMPLES_CONFIG 长度变化
 
     // 监听路由变化，处理语言切换时的URL问题
     useEffect(() => {
         const handleLocationChange = () => {
+            // 支持两种URL参数格式：查询参数 ?id=... 或路径参数 /example-detail/...
             const urlParams = new URLSearchParams(location.search);
-            const urlExampleId = urlParams.get("id") || "hello-world";
+            let urlExampleId = urlParams.get("id");
+            
+            // 如果查询参数中没有找到id，尝试从路径中解析
+            if (!urlExampleId) {
+                const pathSegments = location.pathname.split('/');
+                // 查找可能包含id的路径段
+                for (let i = 0; i < pathSegments.length; i++) {
+                    if (pathSegments[i] === 'example-detail' && i + 1 < pathSegments.length) {
+                        const potentialId = pathSegments[i + 1];
+                        // 检查是否是有效的示例ID（存在于EXAMPLES_CONFIG中）
+                        if (EXAMPLES_CONFIG.some(ex => ex.id === potentialId)) {
+                            urlExampleId = potentialId;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (!urlExampleId) {
+                urlExampleId = "hello-world";
+            }
             
             // 确保示例存在
             const targetExample = EXAMPLES_CONFIG.find(ex => ex.id === urlExampleId) || EXAMPLES_CONFIG[0];
