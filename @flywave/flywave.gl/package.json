@@ -1,6 +1,6 @@
 {
     "name": "@flywave/flywave.gl",
-    "version": "0.0.9",
+    "version": "0.0.8",
     "type": "module",
     "description": "WebGl GIS",
     "exports": {
@@ -55,6 +55,34 @@
     },
     "publishConfig": {
         "access": "public"
+    },
+    "devDependencies": {
+        "@flywave/flywave-3dtile-datasource": "workspace:*",
+        "@flywave/flywave-datasource-protocol": "workspace:*",
+        "@flywave/flywave-draw-controls": "workspace:*",
+        "@flywave/flywave-features-datasource": "workspace:*",
+        "@flywave/flywave-geojson-datasource": "workspace:*",
+        "@flywave/flywave-geometry": "workspace:*",
+        "@flywave/flywave-geoutils": "workspace:*",
+        "@flywave/flywave-gltf": "workspace:*",
+        "@flywave/flywave-inspector": "workspace:*",
+        "@flywave/flywave-map-controls": "workspace:*",
+        "@flywave/flywave-mapview": "workspace:*",
+        "@flywave/flywave-mapview-decoder": "workspace:*",
+        "@flywave/flywave-terrain-datasource": "workspace:*",
+        "@flywave/flywave-transfer-manager": "workspace:*",
+        "@flywave/flywave-utils": "workspace:*",
+        "@flywave/flywave-vectortile-datasource": "workspace:*",
+        "@flywave/flywave-webpack-utils": "workspace:*",
+        "@flywave/flywave-webtile-datasource": "workspace:*",
+        "copy-webpack-plugin": "catalog:",
+        "cross-env": "catalog:",
+        "expose-loader": "5.0.1",
+        "tsconfig-paths-webpack-plugin": "catalog:",
+        "typescript": "catalog:",
+        "webpack": "catalog:",
+        "webpack-cli": "catalog:",
+        "webpack-merge": "catalog:"
     },
     "gitHead": "31ea639ccb9a06d4595f4325396c21ba4164c454"
 }

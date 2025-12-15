@@ -5,6 +5,7 @@
 import { type ImageType } from "@flywave/flywave-utils";
 
 import type { GLTF } from "./gltf-json-schema";
+import { AnimationClip, Scene } from "three";
 
 /** GLTFLoader removes processed extensions from `extensionsUsed` and `extensionsUsed`
  * `processedExtensions` is used to track those extensions
@@ -14,6 +15,8 @@ export interface GLTFWithBuffers {
     binary?: ArrayBuffer;
     buffers: GLTFExternalBuffer[];
     images?: GLTFExternalImage[];
+    scene?: Scene;
+    animations?: AnimationClip[];
 }
 
 export interface GLTFExternalBuffer {
