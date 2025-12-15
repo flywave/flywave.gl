@@ -265,21 +265,14 @@ export default function ExampleDetail() {
         setExampleId(selectedExample.id);
         setCode(selectedExample.code);
 
-        // 更新URL参数，保持当前语言路径前缀
-        const currentPath = window.location.pathname;
-        const currentLangPrefix = currentPath.startsWith('/zh/') ? '/zh' : 
-                                  currentPath.startsWith('/en/') ? '/en' : '';
-        
-        // 构建正确的URL，处理语言前缀
-        let newUrlPath = currentLangPrefix ? `${currentLangPrefix}/example-detail` : '/example-detail';
-        const newUrl = new URL(window.location.origin + newUrlPath);
+        // 更新URL参数
+        const newUrl = new URL(window.location.href);
         newUrl.searchParams.set('id', selectedExample.id);
         window.history.replaceState({}, '', newUrl.toString());
 
-        // 立即运行新代码，使用新的代码内容，避免依赖可能未更新的状态
+        // 立即运行新代码
         setTimeout(() => {
             if (previewRef.current) {
-                // 使用新示例的代码直接运行，而不依赖state
                 runCodeWithContent(selectedExample.code);
             }
         }, 0);
