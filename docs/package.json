@@ -16,6 +16,8 @@
         "docusaurus-build": "docusaurus build",
         "docusaurus-build-zh": "docusaurus build --locale zh",
         "docusaurus-build-en": "docusaurus build --locale en",
+        "preview-build": "http-server build -p 3002",
+        "preview-build-open": "http-server build -p 3002 -o",
         "swizzle": "docusaurus swizzle",
         "deploy": "docusaurus deploy",
         "clear": "docusaurus clear",
