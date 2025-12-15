@@ -205,7 +205,13 @@ export default function ExampleDetail() {
     };
 
     const handleBackToHome = () => {
-        window.location.href = "/examples";
+        // 获取当前语言前缀
+        const currentLangPrefix = window.location.pathname.startsWith('/zh/') ? '/zh' : 
+                                  window.location.pathname.startsWith('/en/') ? '/en' : '';
+        
+        // 返回示例页面，保持语言前缀
+        const homeUrl = currentLangPrefix ? `${currentLangPrefix}/examples` : '/examples';
+        window.location.href = homeUrl;
     };
 
     const handleExampleSelect = (selectedExampleId: string) => {

@@ -45,8 +45,14 @@ function ExamplesHeader() {
 }
 
 function getExampleLink(exampleId: string): string {
-    // 跳转到示例详情页
-    return `/example-detail?id=${exampleId}`;
+    // 获取当前语言前缀
+    const currentLangPrefix = typeof window !== 'undefined' 
+        ? (window.location.pathname.startsWith('/zh/') ? '/zh' : 
+           window.location.pathname.startsWith('/en/') ? '/en' : '') 
+        : '';
+    
+    // 跳转到示例详情页，保持语言前缀
+    return currentLangPrefix ? `${currentLangPrefix}/example-detail?id=${exampleId}` : `/example-detail?id=${exampleId}`;
 }
 
 function ExampleCard({ example }: { example: Example }) {
