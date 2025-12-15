@@ -14,7 +14,10 @@
         "@flywave/flywave-features-datasource",
         "@flywave/flywave-utils",
         "@flywave/flywave-vectortile-datasource",
-        "@flywave/flywave-inspector"
+        "@flywave/flywave-inspector",
+        "@flywave/flywave-gltf",
+        "@flywave/flywave-transfer-manager",
+        "@flywave/flywave-geometry"
     ],
     "compiler": {
         "tsconfigFilePath": "<projectFolder>/tsconfig.json",
