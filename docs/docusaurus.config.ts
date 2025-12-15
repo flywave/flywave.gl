@@ -15,7 +15,7 @@ const config: Config = {
     title: "FlywaveGL",
     url: "https://flywave.gl",
     baseUrl: "/flywave.gl/",
-    // 添加 trailingSlash 配置，确保在所有环境下 URL 行为一致
+    // Add trailingSlash configuration to ensure consistent URL behavior across all environments
     trailingSlash: false,
 
     favicon: "img/favicon.ico",
@@ -72,27 +72,27 @@ const config: Config = {
             } satisfies Preset.Options
         ]
     ],
-    // 更新 staticDirectories 配置
+    // Update staticDirectories configuration
     staticDirectories: [
-        "./static",  // 确保包含静态目录
+        "./static",  // Ensure static directory is included
         flywavePath, 
         examplesPath,
-        // 保留根目录映射（如果需要）
+        // Keep root directory mapping (if needed)
         examplesSrcPath, 
         examplesSrcPath3dtilesAnimation
     ],
     markdown: {
         format: 'mdx',
         mermaid: true,
-        // 处理损坏的 Markdown 图像
+        // Handle broken Markdown images
         mdx1Compat: {
           admonitions: true,
           comments: true,
           headingIds: true,
         },
-        // 忽略损坏的 Markdown 图像
+        // Ignore broken Markdown images
         hooks: {
-          onBrokenMarkdownImages: 'warn', // 或 'ignore' 
+          onBrokenMarkdownImages: 'warn', // or 'ignore' 
         },
     },
     themeConfig: {
@@ -144,7 +144,7 @@ const config: Config = {
                         },
                         {
                             label: "API 参考",
-                            to: "/docs/api" // 更新为正确的 API 路径
+                            to: "/docs/api" // Update to correct API path
                         }
                     ]
                 },
