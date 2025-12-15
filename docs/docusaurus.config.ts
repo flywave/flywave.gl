@@ -15,6 +15,8 @@ const config: Config = {
     title: "FlywaveGL",
     url: "https://flywave.gl",
     baseUrl: "/flywave.gl/",
+    // 添加 trailingSlash 配置，确保在所有环境下 URL 行为一致
+    trailingSlash: false,
 
     favicon: "img/favicon.ico",
     tagline: "3D 地图渲染引擎",
