@@ -111,6 +111,33 @@ export default function ExampleDetail() {
         }
     }, [location.search, EXAMPLES_CONFIG.length]); // 监听 EXAMPLES_CONFIG 长度变化
 
+    // 监听路由变化，处理语言切换时的URL问题
+    useEffect(() => {
+        const handleLocationChange = () => {
+            const urlParams = new URLSearchParams(location.search);
+            const urlExampleId = urlParams.get("id") || "hello-world";
+            
+            // 确保示例存在
+            const targetExample = EXAMPLES_CONFIG.find(ex => ex.id === urlExampleId) || EXAMPLES_CONFIG[0];
+            
+            // 如果当前示例ID与URL参数不匹配，更新示例
+            if (targetExample.id !== exampleId) {
+                setExampleId(targetExample.id);
+                setCode(targetExample.code);
+                
+                // 运行新示例
+                setTimeout(() => {
+                    if (previewRef.current) {
+                        runCodeWithContent(targetExample.code);
+                    }
+                }, 0);
+            }
+        };
+
+        // 监听location变化，包括语言切换
+        handleLocationChange();
+    }, [location.pathname, location.search, EXAMPLES_CONFIG, exampleId]);
+
     // 监听主题变化
     useEffect(() => {
         const handleThemeChange = () => {
@@ -193,8 +220,14 @@ export default function ExampleDetail() {
         setExampleId(selectedExample.id);
         setCode(selectedExample.code);
 
-        // 更新URL参数
-        const newUrl = new URL(window.location.href);
+        // 更新URL参数，保持当前语言路径前缀
+        const currentPath = window.location.pathname;
+        const currentLangPrefix = currentPath.startsWith('/zh/') ? '/zh' : 
+                                  currentPath.startsWith('/en/') ? '/en' : '';
+        
+        // 构建正确的URL，处理语言前缀
+        let newUrlPath = currentLangPrefix ? `${currentLangPrefix}/example-detail` : '/example-detail';
+        const newUrl = new URL(window.location.origin + newUrlPath);
         newUrl.searchParams.set('id', selectedExample.id);
         window.history.replaceState({}, '', newUrl.toString());
 
