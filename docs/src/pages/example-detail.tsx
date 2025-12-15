@@ -335,15 +335,18 @@ export default function ExampleDetail() {
         const currentLangPrefix = currentPath.startsWith('/zh/') ? '/zh' : 
                                   currentPath.startsWith('/en/') ? '/en' : '';
         
-        // 构建正确的URL，处理语言前缀，但不包含末尾斜杠
+        // 构建正确的URL路径，处理语言前缀，但不包含末尾斜杠
         let newUrlPath = currentLangPrefix ? `${currentLangPrefix}/example-detail` : '/example-detail';
+        
         // 确保路径不以斜杠结尾，使查询参数直接连接
         if (newUrlPath.endsWith('/')) {
             newUrlPath = newUrlPath.slice(0, -1);
         }
         
-        // 构建URL字符串，直接连接查询参数
+        // 构建完整的URL，使用window.location.origin确保正确的协议和主机
         const newUrlString = `${window.location.origin}${newUrlPath}?id=${selectedExample.id}`;
+        
+        // 使用 replaceState 更新URL但不触发页面重载
         window.history.replaceState({}, '', newUrlString);
 
         // 立即运行新代码，使用新的代码内容，避免依赖可能未更新的状态
