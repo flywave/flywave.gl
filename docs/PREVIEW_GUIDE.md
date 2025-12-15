@@ -10,7 +10,7 @@ npm run preview-build       # 启动服务但不自动打开浏览器
 npm run preview-build-open # 启动服务并自动打开浏览器
 ```
 
-服务器将在 http://localhost:3002 上运行。
+服务器将在 http://localhost:3002/flywave.gl/ 上运行。
 
 ## 方法二：使用脚本文件
 
@@ -33,17 +33,19 @@ npm install -g http-server
 
 # 在 docs/build 目录启动服务器
 cd docs
-http-server build -p 3002 -o
+http-server build -p 3002 -o -c-1
 ```
 
 或者使用 npx：
 ```bash
 cd docs
-npx http-server build -p 3002 -o
+npx http-server build -p 3002 -o -c-1
 ```
 
-## 注意事项
+## 重要注意事项
 
 - 确保先运行 `npm run build` 或 `npm run docusaurus-build` 来构建站点
+- 由于 Docusaurus 配置中的 baseUrl 为 "/flywave.gl/"，网站将在 http://localhost:3002/flywave.gl/ 上提供服务
+- 使用 `-c-1` 参数禁用缓存以确保最新的文件被加载
 - 服务器默认运行在端口 3002 上，以避免与开发服务器冲突
 - 按 Ctrl+C 可以停止服务器
