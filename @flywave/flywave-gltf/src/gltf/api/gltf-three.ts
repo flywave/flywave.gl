@@ -522,11 +522,29 @@ function processNodes(
 
         applyTransform(gltfNode, node);
 
-        // Add children
-        if (gltfNode.children) {
-            for (const childId of gltfNode.children) {
-                const childNode = dependencies.nodeMap.get(childId.toString());
-                if (childNode) node.add(childNode);
+        // Add children recursively
+        addChildrenRecursively(gltfNode, node, dependencies.nodeMap);
+    }
+}
+
+/**
+ * 递归添加节点的所有子节点
+ * @param gltfNode 当前GLTF节点
+ * @param node 当前Three.js节点对象
+ * @param nodeMap 节点映射表
+ */
+function addChildrenRecursively(
+    gltfNode: GLTFNodePostprocessed,
+    node: Object3D,
+    nodeMap: Map<string, Object3D>
+): void {
+    if (gltfNode.children) {
+        for (const childGltfNode of gltfNode.children) {
+            const childNode = nodeMap.get(childGltfNode.id);
+            if (childNode) {
+                node.add(childNode);
+                // 递归处理子节点的子节点
+                addChildrenRecursively(childGltfNode, childNode, nodeMap);
             }
         }
     }
@@ -666,9 +684,12 @@ function setupScene(gltf: GLTFPostprocessed, scene: Scene, nodeMap: Map<string, 
         scene.userData.extras = defaultScene.extras;
     }
 
+    // 添加场景中的根节点（子节点已在processNodes中递归添加）
     for (const nodeId of defaultScene.nodes || []) {
         const node = nodeMap.get(nodeId.id.toString());
-        if (node) scene.add(node);
+        if (node) {
+            scene.add(node);
+        }
     }
 }
 
