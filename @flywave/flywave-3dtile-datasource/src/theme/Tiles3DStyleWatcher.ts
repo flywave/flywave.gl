@@ -157,6 +157,11 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
 
         this.m_styleEvaluator = new BatchStyleProcessor(styleSetOptions);
 
+        this.m_mapRenderingManager?.addTranslucentLayer(this.observeId, theme.tile3DRender?.postEffects?.translucentDepth || {
+            mixFactor: 0.5,
+            blendMode: "mix"
+        });
+
         this.nodifyActiveTiles();
     }
 
@@ -216,9 +221,9 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
             object.traverse(child => {
                 if (child && (child instanceof THREE.Mesh || child instanceof THREE.InstancedMesh)) {
                     if (isTranslucentDepthEnabled)
-                        this.m_mapRenderingManager?.addTranslucentDepthObject(child);
+                        this.m_mapRenderingManager?.addTranslucentObject(child,this.observeId);
                     else
-                        this.m_mapRenderingManager?.removeTranslucentDepthObject(child);
+                        this.m_mapRenderingManager?.removeTranslucentObject(child);
                     if (isBloomEnabled)
                         this.m_mapRenderingManager?.addBloomObject(child);
                     else
@@ -1249,6 +1254,8 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
         // Clear all collections
         this.m_appliedMaterials.clear();
         this.m_tileFeatures.clear();
+
+        this.m_mapRenderingManager.removeTranslucentLayer(this.observeId);
 
         // Call parent class dispose method
         super.dispose();

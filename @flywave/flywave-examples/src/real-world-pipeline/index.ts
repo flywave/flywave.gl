@@ -15,12 +15,12 @@ import {
     FeaturesDataSource,
     FeatureCollection,
 } from "@flywave/flywave.gl";
-import { MathUtils, RepeatWrapping, TextureLoader } from "three";
+import { Color, MathUtils, RepeatWrapping, TextureLoader } from "three";
 
 // Project configuration constants
 const PROJECT_CONFIG = {
     SERVER_BASE_URL: "http://192.168.1.18/flywave-examples/data",
-    PROJECT_NAME: "Zhoucun",
+    PROJECT_NAME: "周村",
     REGION_DATA_PATH: "./region_data.geojson",
     TEXTURE_PATH: "staff_1024.jpg"
 };
@@ -63,14 +63,10 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             }],
             celestia: {
                 sunTime: new Date().setHours(13), // Set sun time to 1 PM
-                sunCastShadow: true,    // Enable shadows
-                sunIntensity: 3,        // Sun light intensity
+                sunCastShadow: true,    // Enable shadows 
                 atmosphere: true        // Enable atmospheric effect
             },
             postEffects: { 
-                translucentDepth: {
-                    mixFactor: 0.4      // Translucent depth mix factor
-                },
                 brightnessContrast: {
                     brightness: -0.17,  // Brightness adjustment
                     contrast: 0.23,     // Contrast adjustment
@@ -130,6 +126,10 @@ const addPipeDataSources = (mapView: MapView): void => {
                 postEffects: {
                     translucentDepth: {
                         enabled: true,   // Enable translucent depth effect
+                        mixFactor:1, // Translucent depth mix factor
+                        useObjectColor: true, // Use object color for translucent depth
+                        objectColorMix: 0, // Object color mix factor
+                        color: `#${new Color(Math.random() * 0xffffff).getHexString()}` // Object color
                     } 
                 },
             }

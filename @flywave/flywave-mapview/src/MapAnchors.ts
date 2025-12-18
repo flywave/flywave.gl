@@ -12,7 +12,7 @@ import { type GeoCoordLike } from "@flywave/flywave-geoutils/coordinates/GeoCoor
 import * as THREE from "three";
 
 declare module "three"{
-    interface Object3D{
+    interface Object3D {
         anchor?: GeoCoordLike | Vector3Like|GeoCoordinates;
     }
 }

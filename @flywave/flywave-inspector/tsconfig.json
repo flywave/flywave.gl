@@ -13,6 +13,8 @@
             "@flywave/flywave-vectortile-datasource/*": ["../flywave-vectortile-datasource/src/*"],
             "@flywave/flywave-terrain-datasource": ["../flywave-terrain-datasource/src/index.ts"],
             "@flywave/flywave-terrain-datasource/*": ["../flywave-terrain-datasource/src/*"],
+            "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src/index.ts"],
+            "@flywave/flywave-datasource-protocol/*": ["../flywave-datasource-protocol/src/*"],
             "@flywave/flywave-geoutils": ["../flywave-geoutils/src/index.ts"],
             "@flywave/flywave-geoutils/*": ["../flywave-geoutils/src/*"],
         }
@@ -31,6 +33,9 @@
         },
         {
             "path": "../flywave-geoutils"
+        },
+        {
+            "path": "../flywave-datasource-protocol"
         }
     ]
 }

@@ -28,6 +28,7 @@ import {
 } from "@flywave/flywave-utils";
 
 import { SKY_CUBEMAP_FACE_COUNT, SkyCubemapFaceId } from "./SkyCubemapTexture";
+import { threadId } from "worker_threads";
 
 /**
  * @internal
@@ -532,7 +533,9 @@ export class ThemeLoader {
             // deep merge with a duplicate exclusion.
             ...ThemeLoader.mergeImageTextures(theme, baseTheme),
             definitions,
-            styles
+            styles,
+            tile3DRender: { ...baseTheme.tile3DRender, ...theme.tile3DRender },
+            celestia: { ...baseTheme.celestia, ...theme.celestia }
         };
     }
 
