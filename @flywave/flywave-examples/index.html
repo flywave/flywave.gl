@@ -8,29 +8,32 @@
             content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
         <style>
             :root {
-                /* COLOURS */
-                /* Color1: background color. */
-                --color1-hue: 218;
-                --color1-saturation: 17%;
-
-                /* Graceful gradients. */
-                --gradient: linear-gradient(to bottom right, #e7e1a0, #85e0ce);
-
-                /* Luminosity shades */
-                --dark: 18%;
-                /* MapControlsUI background's luminosity. */
-                --soft: 45%;
-                --light: 65%;
-                --bright: 85%;
-                /* MapControlsUI text's luminosity. */
-
-                --intermediate: 55%;
-                /* For the title, if colour2 is used. */
-
-                /* LAYOUT */
-                --headers-height: 65px;
-                --margin: 15px;
-                --nav-width: 310px;
+                /* Professional GIS/Geospatial Tech Theme */
+                --primary-blue: #2196f3;       /* Standard tech blue */
+                --dark-blue: #0d47a1;          /* Deep professional blue */
+                --light-blue: #64b5f6;         /* Light accent blue */
+                --accent-teal: #00bcd4;        /* Teal for geographic elements */
+                --accent-green: #4caf50;       /* Green for environmental data */
+                --background-app: #f1f5f9;     /* Application background */
+                --background-panel: #ffffff;   /* Panel background */
+                --background-element: #f8fafc; /* Element background */
+                --text-primary: #0f172a;       /* Dark text for readability */
+                --text-secondary: #64748b;     /* Secondary text */
+                --border-color: #e2e8f0;       /* Subtle borders */
+                --hover-bg: #f1f5f9;           /* Hover states */
+                --selected-bg: #dbeafe;        /* Selection highlight */
+                --shadow-light: rgba(15, 23, 42, 0.05);
+                --shadow-medium: rgba(15, 23, 42, 0.1);
+                
+                /* Layout */
+                --sidebar-width: 320px;
+                --header-height: 64px;
+                --spacing-xs: 4px;
+                --spacing-sm: 8px;
+                --spacing-md: 16px;
+                --spacing-lg: 24px;
+                --spacing-xl: 32px;
+                --border-radius: 6px;
             }
 
             html {
@@ -40,365 +43,398 @@
             body {
                 margin: 0;
                 height: 100%;
-                font-size: 17px;
-                line-height: 18px;
-                font-family: 'Fira Sans', sans-serif;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                background-color: var(--background-element);
+                color: var(--text-primary);
+                overflow: hidden;
+                font-feature-settings: "cv05" on, "cv08" on, "cv09" on, "ss02" on, "ss05" on;
+                background-image: radial-gradient(circle at 10% 20%, rgba(33, 150, 243, 0.05) 0%, transparent 20%),
+                                 radial-gradient(circle at 90% 80%, rgba(0, 188, 212, 0.05) 0%, transparent 20%);
             }
 
             a {
-                color: hsl(var(--color1-hue), var(--color1-saturation), var(--bright));
+                color: var(--accent-blue);
+                text-decoration: none;
             }
 
             a:visited {
-                color: hsl(var(--color1-hue), var(--color1-saturation), var(--bright))
+                color: var(--dark-blue);
             }
 
             #navPanel {
-                background: hsl(var(--color1-hue), var(--color1-saturation), var(--dark));
+                background: var(--background-panel);
                 position: fixed;
-                z-index: 1;
-                left: 0px;
-                width: var(--nav-width);
+                z-index: 100;
+                left: 0;
+                width: var(--sidebar-width);
                 height: 100%;
-                max-height: 100%;
-                transition: all 250ms ease;
-            }
-
-            #navPanel {
-                left: calc(var(--nav-width) * -1);
+                display: flex;
+                flex-direction: column;
+                border-right: 1px solid var(--border-color);
+                box-shadow: 0 0 25px var(--shadow-light);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
 
             #navPanel.collapsed {
-                left: 0px;
+                transform: translateX(calc(-1 * var(--sidebar-width)));
             }
 
             #titleBar {
-                height: var(--headers-height);
+                height: var(--header-height);
+                display: flex;
+                align-items: center;
+                padding: 0 var(--spacing-md);
+                border-bottom: 1px solid var(--border-color);
+                background: linear-gradient(90deg, #0d47a1, #1565c0, #1976d2);
+                flex-shrink: 0;
+                box-shadow: 0 2px 10px rgba(13, 71, 161, 0.2);
             }
 
-            #github path {
-                fill: hsl(var(--color1-hue), var(--color1-saturation), var(--bright));
-            }
-
-            #github:hover path {
-                fill: hsl(var(--color1-hue), var(--color1-saturation), var(--light));
-            }
-
-            #documentation path {
-                fill: hsl(var(--color1-hue), var(--color1-saturation), var(--bright));
-                stroke: hsl(var(--color1-hue), var(--color1-saturation), var(--bright));
-            }
-
-            #documentation:hover path {
-                fill: hsl(var(--color1-hue), var(--color1-saturation), var(--light));
-                stroke: hsl(var(--color1-hue), var(--color1-saturation), var(--light));
-            }
-
-            #navPanel h1 {
+            #titleBar h1 {
                 margin: 0;
-                font-size: 25px;
-                color: hsla(var(--color2-hue), var(--color2-saturation), var(--intermediate), 1);
-                position: absolute;
-                top: 24px;
-                left: var(--margin);
-                padding: 5px 0;
-                margin-top: -5px;
-                background: var(--gradient);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
+                font-size: 22px;
+                font-weight: 700;
+                color: white;
+                flex-grow: 1;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+                letter-spacing: 0.5px;
             }
 
-            #documentation,
-            #github,
-            #closeButton {
-                position: absolute;
-                top: 20px;
-                height: 20px
+            .titleBar-actions {
+                display: flex;
+                gap: var(--spacing-md);
             }
 
-            #closeButton {
-                right: 15px;
-                outline: none;
+            .action-btn {
                 background: none;
                 border: none;
+                color: rgba(255, 255, 255, 0.8);
                 cursor: pointer;
-                width: 25px;
-                height: 25px
+                padding: var(--spacing-sm);
+                border-radius: 4px;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
             }
 
-            #closeButton span:nth-child(1) {
-                left: 0;
-                margin-top: -2px;
-                transform: rotateZ(45deg);
+            .action-btn:hover {
+                color: white;
+                background: rgba(255, 255, 255, 0.2);
+                transform: scale(1.1);
             }
 
-            #closeButton span:nth-child(2) {
-                left: 0;
-                margin-top: -2px;
-                transform: rotateZ(-45deg);
+            #closeButton {
+                background: none;
+                border: none;
+                color: rgba(255, 255, 255, 0.8);
+                cursor: pointer;
+                padding: var(--spacing-sm);
+                border-radius: 4px;
+                width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                backdrop-filter: blur(10px);
             }
 
-            #documentation {
-                right: 50px;
+            #closeButton:hover {
+                color: #ff5252;
+                background: rgba(255, 82, 82, 0.2);
+                transform: scale(1.1);
             }
 
-            #github {
-                right: 85px;
+            .filterBlock {
+                padding: var(--spacing-md);
+                background: var(--background-element);
+                flex-shrink: 0;
+                border-bottom: 1px solid var(--border-color);
             }
 
-            #exampleFrame {
-                position: absolute;
-                border: 0px;
-                left: 0;
+            #filterInput {
                 width: 100%;
-                height: 100%;
-                overflow: auto;
+                padding: var(--spacing-sm) var(--spacing-md);
+                background: var(--background-panel);
+                border: 1px solid var(--border-color);
+                border-radius: var(--border-radius);
+                color: var(--text-primary);
+                font-family: inherit;
+                font-size: 14px;
+                outline: none;
+                transition: all 0.2s ease;
+                box-sizing: border-box;
             }
 
-            /*
-            * Example list
-            */
+            #filterInput:focus {
+                border-color: var(--primary-blue);
+                box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.15);
+            }
+
             #exampleList {
-                padding: calc(var(--margin) + 19px) 0;
-                padding-bottom: calc(var(--margin) + 19px);
-                overflow: auto;
-                position: absolute;
-                top: calc(2 * var(--headers-height));
-                bottom: 0;
-                width: 100%;
-                height: calc(100% - 3 * var(--headers-height));
+                flex-grow: 1;
+                overflow-y: overlay;
+                padding: var(--spacing-md);
+                background: var(--background-element);
+                scrollbar-width: thin;
+                scrollbar-color: var(--primary-blue) transparent;
             }
 
-            #exampleList div {
-                width: 100%;
+            #exampleList::-webkit-scrollbar {
+                width: 6px;
             }
 
-            #exampleList div h2 {
-                margin: var(--margin);
-                margin-bottom: calc(var(--headers-height)/3 - 9px);
-                margin-top: calc(2 * var(--headers-height)/3 - 9px);
-                font-size: 16px;
-                color: hsl(var(--color1-hue), var(--color1-saturation), var(--bright));
+            #exampleList::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            #exampleList::-webkit-scrollbar-thumb {
+                background-color: var(--primary-blue);
+                border-radius: 3px;
+            }
+
+            .category-section {
+                margin-bottom: var(--spacing-lg);
+            }
+
+            .category-title {
+                font-size: 14px;
+                font-weight: 600;
                 text-transform: uppercase;
-                letter-spacing: 3px;
+                letter-spacing: 1px;
+                color: var(--dark-blue);
+                margin: 0 0 var(--spacing-md) 0;
+                padding: var(--spacing-sm) var(--spacing-md);
+                border-bottom: 2px solid var(--accent-teal);
+                background: rgba(33, 150, 243, 0.05);
+                border-radius: 4px 4px 0 0;
             }
 
-            #exampleList div:first-of-type h2 {
-                margin-top: 0;
-            }
-
-            #exampleList .link {
-                text-decoration: none;
+            .example-item {
+                display: flex;
+                align-items: center;
+                padding: var(--spacing-md);
+                margin-bottom: var(--spacing-xs);
+                border-radius: var(--border-radius);
+                background: var(--background-panel);
+                border: 1px solid var(--border-color);
                 cursor: pointer;
-                display: block;
-                color: hsl(var(--color1-hue), var(--color1-saturation), var(--bright));
-                padding: 3px var(--margin);
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: 0 1px 2px var(--shadow-light);
+                position: relative;
+                overflow: hidden;
             }
 
-            #exampleList .selected {
+            .example-item::before {
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 3px;
+                height: 100%;
+                background: var(--primary-blue);
+                transform: scaleY(0);
+                transition: transform 0.2s ease;
+            }
+
+            .example-item:hover::before {
+                transform: scaleY(1);
+            }
+
+            .example-item.selected::before {
+                transform: scaleY(1);
+                background: var(--accent-teal);
+            }
+
+            .example-item:hover {
+                border-color: var(--primary-blue);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px var(--shadow-medium);
+            }
+
+            .example-item.selected {
+                background: var(--selected-bg);
+                border-color: var(--primary-blue);
+                box-shadow: 0 2px 8px var(--shadow-medium);
+            }
+
+            .example-thumbnail {
+                width: 64px;
+                height: 64px;
+                border-radius: 6px;
+                margin-right: var(--spacing-md);
+                flex-shrink: 0;
+                background-color: #e3f2fd;
+                background-size: cover;
+                background-position: center;
+                position: relative;
+                overflow: hidden;
+                border: 1px solid var(--border-color);
+            }
+
+            .example-thumbnail::after {
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: linear-gradient(45deg, rgba(66, 165, 245, 0.1), rgba(79, 195, 247, 0.1));
+            }
+
+            .example-thumbnail.loading::before {
+                content: "";
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 20px;
+                height: 20px;
+                margin: -10px 0 0 -10px;
+                border: 2px solid rgba(66, 165, 245, 0.3);
+                border-top: 2px solid var(--primary-blue);
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+
+            .example-thumbnail.error::before {
+                content: "!";
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: #ff5252;
                 font-weight: bold;
-                background: hsl(var(--color1-hue), var(--color1-saturation), var(--soft));
+                font-size: 18px;
             }
 
-            #exampleList .link:hover {
-                background: hsl(var(--color1-hue), var(--color1-saturation), var(--soft));
+            .example-thumbnail.fallback::before {
+                content: "";
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 24px;
+                height: 24px;
+                margin: -12px 0 0 -12px;
+                background: var(--primary-blue);
+                mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M8.5,13.5L11,16.5L14.5,12L19,18H5M21,19V5C21,3.89 20.1,3 19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19Z'/%3E%3C/svg%3E");
+                -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M8.5,13.5L11,16.5L14.5,12L19,18H5M21,19V5C21,3.89 20.1,3 19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19Z'/%3E%3C/svg%3E");
+            }
+
+            .example-info {
+                flex-grow: 1;
+                min-width: 0;
+            }
+
+            .example-title {
+                margin: 0 0 4px 0;
+                font-size: 15px;
+                font-weight: 500;
+                color: var(--text-primary);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .example-category {
+                margin: 0;
+                font-size: 12px;
+                color: var(--text-secondary);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
 
             #exampleList .filtered {
                 display: none !important;
             }
 
-            /*
-            * View Source button
-            */
-            #viewSource {
-                width: 50px;
-                height: 50px;
-                font-size: 22px;
-                border-radius: 50%;
-                font-weight: bold;
-                border: none;
-                color: hsl(var(--color1-hue), var(--color1-saturation), var(--dark));
-                box-shadow:0 0 10px #333;
-                cursor: pointer;
-                transition: all 0.1s;
-                padding: 0 0 1px 1px;
-                user-select: none;
+            #exampleFrame {
                 position: absolute;
-                bottom: 0;
-                right: 0;
-                margin: var(--margin);
-                background: var(--gradient);
-                text-decoration: none;
+                border: 0;
+                left: var(--sidebar-width);
+                width: calc(100% - var(--sidebar-width));
+                height: 100%;
+                background-color: #f8fafc !important;
+                background-image: radial-gradient(circle at 10% 20%, rgba(33, 150, 243, 0.05) 0%, transparent 20%),
+                                 radial-gradient(circle at 90% 80%, rgba(0, 188, 212, 0.05) 0%, transparent 20%);
             }
-
-            #viewSource p {
-                font-size: 15px;
-                font-weight: bold;
-                margin: 0;
-                text-transform: uppercase;
-            }
-
-            /*
-            * Filter input block
-            */
-
-            .filterBlock {
-                position: relative;
-                margin: 0px 0 15px 0;
-            }
-
-            .filterBlock p {
-                margin: 0;
-            }
-
-            #filterInput {
-                background: hsl(var(--color1-hue), var(--color1-saturation), var(--bright));
-                width: 100%;
-                box-sizing: border-box;
-                padding: calc(var(--margin) + 7px) 50px calc(var(--margin) + 7px) var(--margin);
-                color: hsl(var(--color1-hue), var(--color1-saturation), var(--dark));
-                font-family: inherit;
-                font-size: 17px;
-                outline: none;
-                border: none;
-            }
-
-            #filterInput:focus+#magnifier-placeholder {
-                display: none;
-            }
-
-            #magnifier-placeholder {
-                position: absolute;
-                top: 22px;
-                left: calc(var(--margin) + 2px);
-                pointer-events: none;
-                font-size: 25px;
-                color: hsl(var(--color1-hue), var(--color1-saturation), var(--dark));
-            }
-
-            #clearFilterButton {
-                text-decoration: none;
-                position: absolute;
-                right: var(--margin);
-                top: 50%;
-                padding: 0;
-                margin-top: -8px;
-                height: 16px;
-                font-size: 30px;
-                color: hsl(var(--color1-hue), var(--color1-saturation), var(--dark));
-                text-align: center;
-                line-height: 0;
-                background: none;
-                border: none;
-                outline: none;
-                cursor: pointer;
-            }
-
-            #clearFilterButton:hover {
-                opacity: 1;
-            }
-
-            /*
-            * Mobile / Responsive support
-            */
 
             #hamburgerMenu {
-                position: absolute;
-                background: hsl(var(--color1-hue), var(--color1-saturation), var(--dark));
-                width: 50px;
-                height: 50px;
+                position: fixed;
+                top: var(--spacing-md);
+                left: var(--spacing-md);
+                z-index: 99;
+                background: var(--primary-blue);
                 border: none;
-                outline: none;
+                border-radius: 4px;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                gap: 4px;
+                padding: 0;
                 cursor: pointer;
-                z-index: 1
-            }
-
-            #hamburgerMenu span,
-            #closeButton span {
-                height: 2px;
-                background: hsl(var(--color1-hue), var(--color1-saturation), var(--bright));
-                width: 26px;
-                position: absolute;
-            }
-
-            #closeButton span {
-                background: hsl(var(--color1-hue), var(--color1-saturation), var(--intermediate));
+                box-shadow: 0 2px 10px rgba(66, 165, 245, 0.3);
             }
 
             #hamburgerMenu span {
-                left: 11px;
-                top: 14px;
+                height: 2px;
+                width: 20px;
+                background: white;
+                display: block;
+                transition: all 0.3s ease;
             }
 
-            #hamburgerMenu span:nth-child(1) {
-                top: 23px;
-            }
-
-            #hamburgerMenu span:nth-child(2) {
-                top: 32px;
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
             }
 
         </style>
     </head>
 
     <body>
-        <button id="hamburgerMenu" href="#">
+        <button id="hamburgerMenu">
             <span></span>
             <span></span>
             <span></span>
         </button>
         <div id="navPanel" class="collapsed">
             <div id="titleBar">
-                <a href="http://flywave.gl">
-                    <h1 id="title">flywave.gl</h1>
-                </a>
-                <a id=documentation title="Documentation"
-                    href=https://www.flywave.gl/docs/master/doc/> <svg viewBox="0 0 23 60"
-                    height="25" width="23">
-                    <path
-                        d="M -1.6965819,8.2701467 V 35.224035 c 0.0283,0.847295 0.648697,1.588424 1.318981,1.5861 0.64875499,0.0046 1.15590999,-0.400431 1.463019,-0.762541 l 4.217,-7.516842 4.217,7.517911 c 0.327,0.582909 0.9389999,0.856715 1.5499999,0.734786 0.045,-0.0086 0.089,-0.0021 0.134,-0.01497 0.657,-0.195729 1.099,-0.816072 1.099,-1.54444 V 8.2701467 Z" />
-                    <path
-                        style="fill:none;stroke-width:4px;stroke-linecap:round;stroke-linejoin:miter;stroke-opacity:1"
-                        d="M 31.544194,1.8446699 31.499,58.375 H -4.4999998 v -47 H 31.499" />
-                    <path
-                        style="fill:none;stroke-width:4px;stroke-linecap:round;stroke-linejoin:miter;stroke-opacity:1"
-                        d="m -4.5,58.375 c -2.8186816,0.0081 -5.078877,-1.790886 -5.125,-4.3545 V 6.6875 C -9.580216,4.4229047 -7.1760603,2.001032 -4.6438447,1.9924176 L 31.544194,1.8446699" />
-                    <path
-                        style="fill:none;stroke-width:4px;stroke-linecap:round;stroke-linejoin:miter;stroke-opacity:1"
-                        d="m -9.625,6.6875 c 0.02296,2.96301 1.8301551,4.714336 5.1250002,4.6875" />
-                    </svg>
-                </a>
-                <a id=github title="Visit flywave.gl repository on GitHub"
-                    href=https://github.com/flywave/flywave.gl> <svg
-                    class="octicon octicon-mark-github v-align-middle" height="25"
-                    viewBox="0 0 16 16" version="1.1" aria-hidden="true">
-                    <path
-                        d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z">
-                    </path></svg>
-                </a>
-
-                <button id="closeButton" href="#">
-                    <span></span>
-                    <span></span>
-                </button>
-                <div style="clear:both"></div>
+                <h1>flywave.gl</h1>
+                <div class="titleBar-actions">
+                    <a class="action-btn" id="documentation" title="Documentation"
+                        href="https://www.flywave.gl/docs/master/doc/">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M16 13H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M16 17H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M10 9H9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <a class="action-btn" id="github" title="GitHub Repository"
+                        href="https://github.com/flywave/flywave.gl">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <path d="M9 19C4.72421 19.9368 4.72421 16.8101 4 16M14 13C13.8333 12.8333 13.1667 12.1667 13 12C12.1667 11.1667 12.1667 10.8333 13 10C13.8333 9.16667 14.1667 8.83333 15 8C15.8333 7.16667 16.1667 7.16667 17 8C17.8333 8.83333 18.8333 9.16667 19 10M12 22C16.4183 22 20 18.4183 20 14C20 9.58172 16.4183 6 12 6C7.58172 6 4 9.58172 4 14C4 18.4183 7.58172 22 12 22Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <button id="closeButton">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div class="filterBlock">
-                <input type="text" id="filterInput">
-                <svg id=magnifier-placeholder viewBox="30 30 110 110" width=20 height=20>
-                    <circle style="stroke-width:15;fill:none;stroke:#252c36;" cx="75" cy="75"
-                        r="35" />
-                    <path style="fill:none;stroke:#252c36;stroke-width:15;" d="m 100,100 35,35" />
-                </svg>
-                </input>
-                <button href="#" id="clearFilterButton" style="display:none;">&#215;</button>
+                <input type="text" id="filterInput" placeholder="Search examples...">
             </div>
             <div id="exampleList"></div>
         </div>
 
-        <iframe id="exampleFrame" allowfullscreen allowvr onmousewheel=""></iframe> 
+        <iframe id="exampleFrame" allowfullscreen allowvr style="background-color: #f8fafc; left: 0; width: 100%;"></iframe>
 
         <script src="example-definitions.js"></script>
         <script src="example-browser.bundle.js" type="module"></script>
