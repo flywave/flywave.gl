@@ -83,8 +83,6 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
         } catch (error) {
             // If the specific thumbnail doesn't exist, try a fallback
             try {
-                const fallbackModule = await import('./resources/default-thumbnail.png');
-                thumbnail.style.backgroundImage = `url('${fallbackModule.default}')`;
                 thumbnail.classList.remove('loading');
                 thumbnail.classList.add('loaded', 'fallback');
             } catch (fallbackError) {
