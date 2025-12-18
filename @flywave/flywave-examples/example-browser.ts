@@ -47,8 +47,8 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 exampleFrameElement.style.left = "0";
                 exampleFrameElement.style.width = "100%";
             } else {
-                exampleFrameElement.style.left = "var(--sidebar-width)";
-                exampleFrameElement.style.width = "calc(100% - var(--sidebar-width))";
+                exampleFrameElement.style.left = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width');
+                exampleFrameElement.style.width = "calc(100% - " + getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width') + ")";
             }
             // Ensure iframe fills the available space without scrollbars
             setTimeout(() => {
@@ -65,8 +65,8 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 exampleFrameElement.style.left = "0";
                 exampleFrameElement.style.width = "100%";
             } else {
-                exampleFrameElement.style.left = "var(--sidebar-width)";
-                exampleFrameElement.style.width = "calc(100% - var(--sidebar-width))";
+                exampleFrameElement.style.left = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width');
+                exampleFrameElement.style.width = "calc(100% - " + getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width') + ")";
             }
             // Ensure iframe fills the available space without scrollbars
             setTimeout(() => {
