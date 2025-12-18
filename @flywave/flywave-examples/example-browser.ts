@@ -11,7 +11,7 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
     const exampleListElement = document.getElementById("exampleList") as HTMLDivElement;
 
     let currentlySelectedSource: string | undefined;
-    const categories: Record<string, HTMLAnchorElement[]> = {};
+    const categories: Record<string, HTMLElement[]> = {};
     const orderedCategories: string[] = [
         "Getting started",
         "Datasource",
@@ -41,12 +41,58 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
 
         expandButton.addEventListener("click", event => {
             navPanel.classList.toggle("collapsed");
+            // Adjust iframe position based on sidebar state
+            if (navPanel.classList.contains("collapsed")) {
+                exampleFrameElement.style.left = "0";
+                exampleFrameElement.style.width = "100%";
+            } else {
+                exampleFrameElement.style.left = "var(--sidebar-width)";
+                exampleFrameElement.style.width = "calc(100% - var(--sidebar-width))";
+            }
             event.preventDefault();
         });
         closeButton.addEventListener("click", event => {
             navPanel.classList.toggle("collapsed");
+            // Adjust iframe position based on sidebar state
+            if (navPanel.classList.contains("collapsed")) {
+                exampleFrameElement.style.left = "0";
+                exampleFrameElement.style.width = "100%";
+            } else {
+                exampleFrameElement.style.left = "var(--sidebar-width)";
+                exampleFrameElement.style.width = "calc(100% - var(--sidebar-width))";
+            }
             event.preventDefault();
         });
+    }
+
+    /**
+     * Dynamically import thumbnail using Webpack's dynamic import
+     * This ensures images are properly bundled and available after build
+     */
+    async function loadThumbnail(thumbnail: HTMLDivElement, exampleName: string): Promise<void> {
+        // Add loading class initially
+        thumbnail.classList.add('loading');
+        
+        try {
+            // Try to dynamically import the thumbnail image
+            // Webpack will handle bundling these assets correctly
+            const thumbnailModule = await import(`./src/${exampleName}/thumbnail.png`);
+            thumbnail.style.backgroundImage = `url('${thumbnailModule.default}')`;
+            thumbnail.classList.remove('loading');
+            thumbnail.classList.add('loaded');
+        } catch (error) {
+            // If the specific thumbnail doesn't exist, try a fallback
+            try {
+                const fallbackModule = await import('./resources/default-thumbnail.png');
+                thumbnail.style.backgroundImage = `url('${fallbackModule.default}')`;
+                thumbnail.classList.remove('loading');
+                thumbnail.classList.add('loaded', 'fallback');
+            } catch (fallbackError) {
+                // If no thumbnails available, show error state
+                thumbnail.classList.remove('loading');
+                thumbnail.classList.add('error');
+            }
+        }
     }
 
     function populateExamplesMenu() {
@@ -66,14 +112,59 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 }
                 const visibleText =
                     linkElements.length === 1 ? linkName : linkElements.slice(1).join(" / ");
+                
+                // Create container for example item with thumbnail
+                const exampleItem = document.createElement("div");
+                exampleItem.className = "example-item";
+                
+                // Create thumbnail element
+                const thumbnail = document.createElement("div");
+                thumbnail.className = "example-thumbnail";
+                
+                // Extract example name for dynamic import
+                const exampleName = pageUrl.split('/').pop()?.replace('.html', '') || '';
+                
+                // Load thumbnail asynchronously
+                loadThumbnail(thumbnail, exampleName);
+                
+                // Create info container
+                const infoContainer = document.createElement("div");
+                infoContainer.className = "example-info";
+                
+                // Create title element
+                const titleElement = document.createElement("h3");
+                titleElement.className = "example-title";
+                titleElement.textContent = visibleText;
+                
+                // Create category element
+                const categoryElement = document.createElement("p");
+                categoryElement.className = "example-category";
+                categoryElement.textContent = linkSubMenu;
+                
+                // Append info elements
+                infoContainer.appendChild(titleElement);
+                infoContainer.appendChild(categoryElement);
+                
+                // Create link element (hidden, for navigation)
                 const linkElement = createDomElement<HTMLAnchorElement>("a", {
-                    innerText: visibleText,
                     href: "#" + pageUrl,
-                    className: "link"
+                    className: "link",
+                    style: "display: none;"
                 });
                 (linkElement as any).nameWithCategory = linkName;
                 (linkElement as any).nameWithoutCategory = visibleText;
-                categories[linkSubMenu].push(linkElement);
+                
+                // Add click handler to example item to trigger link
+                exampleItem.addEventListener("click", (event) => {
+                    linkElement.click();
+                });
+                
+                // Append thumbnail and info to example item
+                exampleItem.appendChild(thumbnail);
+                exampleItem.appendChild(infoContainer);
+                exampleItem.appendChild(linkElement);
+                
+                categories[linkSubMenu].push(exampleItem);
                 elements.push(linkElement);
             });
 
@@ -86,19 +177,29 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
             });
 
         orderedCategories.forEach(menuElement => {
-            const menu = document.createElement("div");
-            const title = document.createElement("h2");
-            title.innerHTML = menuElement;
-            titleElements.push(title);
-            menu.appendChild(title);
-            const category = categories[menuElement];
-            if (category === undefined) {
+            // Create category section
+            const categorySection = document.createElement("div");
+            categorySection.className = "category-section";
+            
+            // Create category title
+            const categoryTitle = document.createElement("h2");
+            categoryTitle.className = "category-title";
+            categoryTitle.textContent = menuElement;
+            titleElements.push(categoryTitle);
+            
+            // Append title to section
+            categorySection.appendChild(categoryTitle);
+            
+            // Append examples to section
+            const categoryExamples = categories[menuElement];
+            if (categoryExamples === undefined) {
                 return;
             }
-            category.forEach(anchor => {
-                menu.appendChild(anchor);
+            categoryExamples.forEach(example => {
+                categorySection.appendChild(example);
             });
-            exampleListElement.appendChild(menu);
+            
+            exampleListElement.appendChild(categorySection);
         });
     }
 
@@ -108,8 +209,19 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
         titleElements.forEach(title => {
             title.style.cssText = "display:none;";
         });
-        document.getElementById("magnifier-placeholder")!.style.cssText = "display:none;";
-        document.getElementById("clearFilterButton")!.style.cssText = "";
+        
+        // Only try to access magnifier-placeholder if it exists
+        const magnifierPlaceholder = document.getElementById("magnifier-placeholder");
+        if (magnifierPlaceholder) {
+            magnifierPlaceholder.style.cssText = "display:none;";
+        }
+        
+        // Only try to access clearFilterButton if it exists
+        const clearFilterButton = document.getElementById("clearFilterButton");
+        if (clearFilterButton) {
+            clearFilterButton.style.cssText = "";
+        }
+        
         elements.forEach(anchor => {
             anchor.innerText = (anchor as any).nameWithCategory;
         });
@@ -120,8 +232,19 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
         titleElements.forEach(title => {
             title.style.cssText = "";
         });
-        document.getElementById("magnifier-placeholder")!.style.cssText = "";
-        document.getElementById("clearFilterButton")!.style.cssText = "display:none;";
+        
+        // Only try to access magnifier-placeholder if it exists
+        const magnifierPlaceholder = document.getElementById("magnifier-placeholder");
+        if (magnifierPlaceholder) {
+            magnifierPlaceholder.style.cssText = "";
+        }
+        
+        // Only try to access clearFilterButton if it exists
+        const clearFilterButton = document.getElementById("clearFilterButton");
+        if (clearFilterButton) {
+            clearFilterButton.style.cssText = "display:none;";
+        }
+        
         elements.forEach(anchor => {
             anchor.classList.remove("filtered");
             anchor.innerText = (anchor as any).nameWithoutCategory;
@@ -150,12 +273,25 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 const matches = filterValue === "" || text.includes(filterValue.toLowerCase());
                 if (matches) {
                     element.classList.remove("filtered");
+                    // Also unhide parent example-item
+                    if (element.parentElement) {
+                        element.parentElement.classList.remove("filtered");
+                    }
                 } else {
                     element.classList.add("filtered");
+                    // Also hide parent example-item
+                    if (element.parentElement) {
+                        element.parentElement.classList.add("filtered");
+                    }
                 }
             }
         });
-        document.getElementById("clearFilterButton")!.addEventListener("click", leaveSearchMode);
+        
+        // Only add clear filter button event listener if the element exists
+        const clearFilterButton = document.getElementById("clearFilterButton");
+        if (clearFilterButton) {
+            clearFilterButton.addEventListener("click", leaveSearchMode);
+        }
     }
 
     /**
@@ -181,6 +317,10 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
             window.location.search = queryParams;
         }
 
+        // Set a soft background color before loading the page
+        exampleFrameElement.style.backgroundColor = "#f8fafc";
+        exampleFrameElement.style.backgroundImage = "radial-gradient(circle at 10% 20%, rgba(33, 150, 243, 0.05) 0%, transparent 20%), radial-gradient(circle at 90% 80%, rgba(0, 188, 212, 0.05) 0%, transparent 20%)";
+
         // load page in frame
         exampleFrameElement.src = pageUrl + queryParams;
 
@@ -189,8 +329,16 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
             const elementTargetPage = element.hash.substr(1);
             if (elementTargetPage === pageUrl) {
                 element.classList.add("selected");
+                // Also highlight parent example-item
+                if (element.parentElement) {
+                    element.parentElement.classList.add("selected");
+                }
             } else {
                 element.classList.remove("selected");
+                // Also unhighlight parent example-item
+                if (element.parentElement) {
+                    element.parentElement.classList.remove("selected");
+                }
             }
         });
 
