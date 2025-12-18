@@ -12,3 +12,4 @@ resources/ELEC/**/*
 resources/HVAC/**/*
 !resources/three-nebula.module.js
 !global.d.ts
+*.js

@@ -78,6 +78,10 @@
             #navPanel.collapsed {
                 transform: translateX(calc(-1 * var(--sidebar-width)));
             }
+            
+            #navPanel.collapsed:not(.animating) {
+                display: none;
+            }
 
             #titleBar {
                 height: var(--header-height);
@@ -349,12 +353,14 @@
             #exampleFrame {
                 position: absolute;
                 border: 0;
+                top: 0;
                 left: var(--sidebar-width);
                 width: calc(100% - var(--sidebar-width));
-                height: 100%;
+                height: 100vh; /* Use viewport height instead of 100% to avoid cascading height issues */
                 background-color: #f8fafc !important;
                 background-image: radial-gradient(circle at 10% 20%, rgba(33, 150, 243, 0.05) 0%, transparent 20%),
                                  radial-gradient(circle at 90% 80%, rgba(0, 188, 212, 0.05) 0%, transparent 20%);
+                overflow: hidden;
             }
 
             #hamburgerMenu {
@@ -399,7 +405,7 @@
             <span></span>
             <span></span>
         </button>
-        <div id="navPanel" class="collapsed">
+        <div id="navPanel">
             <div id="titleBar">
                 <h1>flywave.gl</h1>
                 <div class="titleBar-actions">
@@ -434,7 +440,7 @@
             <div id="exampleList"></div>
         </div>
 
-        <iframe id="exampleFrame" allowfullscreen allowvr style="background-color: #f8fafc; left: 0; width: 100%;"></iframe>
+        <iframe id="exampleFrame" allowfullscreen allowvr style="background-color: #f8fafc; left: 0; width: 100%; overflow: hidden;"></iframe>
 
         <script src="example-definitions.js"></script>
         <script src="example-browser.bundle.js" type="module"></script>
