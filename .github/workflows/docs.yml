@@ -3,10 +3,6 @@ name: Deploy Documentation
 on:
   # 允许手动触发
   workflow_dispatch:
-  # 在推送到主分支时自动触发
-  push:
-    branches:
-      - main
 
 concurrency:
   group: "pages"

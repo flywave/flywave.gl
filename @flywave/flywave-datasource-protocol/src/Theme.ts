@@ -5,7 +5,7 @@ import { type Material, type MaterialParameters } from "three";
 
 import { type JsonExpr, type JsonValue } from "./Expr";
 import { type InterpolatedPropertyDefinition } from "./InterpolatedPropertyDefs";
-import { type PostEffects } from "./PostEffects";
+import { ITranslucentLayerConfig, type PostEffects } from "./PostEffects";
 import {
     type BaseTechniqueParams,
     type BasicExtrudedLineTechniqueParams,
@@ -142,7 +142,7 @@ export interface Theme {
                  * Enable or disable the translucent depth effect.
                  */
                 enabled: boolean;
-            };
+            } & ITranslucentLayerConfig;
         };
     };
 

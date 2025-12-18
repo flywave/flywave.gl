@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
+    ITranslucentLayerConfig,
     type IBloomEffect,
     type IBrightnessContrastEffect,
     type IHueSaturationEffect,
@@ -21,7 +22,7 @@ import {
     HueSaturationEffect,
     NormalPass,
     PredicationMode,
-    RenderPass, 
+    RenderPass,
     SepiaEffect,
     SMAAEffect,
     SMAAPreset,
@@ -34,23 +35,38 @@ import { SelectiveBloomEffect } from "./SelectiveBloomEffect";
 
 import { type IPassManager } from "./IPassManager";
 import { LowResEffect } from "./LowResRenderPass";
-import { TranslucentDepthEffect } from "./TranslucentDepthEffect";
+import { TranslucentLayerEffect } from "./TranslucentDepthEffect";
 import { DepthPickingWithStencilPass } from "./StencilDepthPickingPass";
 
+// Interface for effects that can be enabled/disabled
 interface IEnabledEffect extends Effect {
     enabled?: boolean;
 }
 
+// Custom effect pass that filters enabled effects
 class FilterEffectPass extends EffectPass {
     private readonly rootEffects: IEnabledEffect[];
     private currentEffects: IEnabledEffect[];
 
+    /**
+     * Constructor for FilterEffectPass
+     * @param camera - Camera used for rendering
+     * @param effects - Effects to be managed by this pass
+     */
     constructor(camera?: THREE.Camera, ...effects: IEnabledEffect[]) {
         super(camera, ...effects);
         this.rootEffects = effects;
         this.currentEffects = effects;
     }
 
+    /**
+     * Render method that filters enabled effects before rendering
+     * @param renderer - WebGL renderer
+     * @param inputBuffer - Input render target
+     * @param outputBuffer - Output render target
+     * @param deltaTime - Time delta for animations
+     * @param stencilTest - Whether to perform stencil test
+     */
     render(
         renderer: THREE.WebGLRenderer,
         inputBuffer: THREE.WebGLRenderTarget | null,
@@ -68,7 +84,7 @@ class FilterEffectPass extends EffectPass {
     }
 }
 
-// 保持原有的 MSAASampling 枚举兼容性
+// MSAA sampling levels for anti-aliasing
 enum MSAASampling {
     Level_0 = 0,
     Level_1 = 1,
@@ -76,10 +92,12 @@ enum MSAASampling {
     Level_4 = 4,
     Level_8 = 8
 }
-// 定义默认的MSAA采样级别
+
+// Default MSAA sampling levels
 const DEFAULT_DYNAMIC_MSAA_SAMPLING_LEVEL = MSAASampling.Level_1;
 const DEFAULT_STATIC_MSAA_SAMPLING_LEVEL = MSAASampling.Level_4;
 
+// Anti-aliasing settings interface
 export interface IMapAntialiasSettings {
     msaaEnabled: boolean;
     dynamicMsaaSamplingLevel?: MSAASampling;
@@ -88,14 +106,15 @@ export interface IMapAntialiasSettings {
     smaaEnabled?: boolean;
 }
 
-// 自定义效果接口
+// Custom effect interface
 export interface ICustomEffect {
     id: string;
     effect: Effect & IEnabledEffect;
     enabled: boolean;
-    order?: number; // 渲染顺序，数值越小越先执行
+    order?: number; // Rendering order, lower values are rendered first
 }
 
+// Main rendering manager interface
 export interface IMapRenderingManager extends IPassManager {
     bloom: IBloomEffect;
     outline: IOutlineEffect;
@@ -113,12 +132,20 @@ export interface IMapRenderingManager extends IPassManager {
         mixFactor?: number;
         blendMode?: "mix" | "add" | "multiply" | "screen";
     };
-    // 深度拾取相关配置
+    // Depth picking related configuration
     depthPicking: {
         enabled: boolean;
         stencilRef?: number;
     };
 
+    /**
+     * Render the scene
+     * @param renderer - WebGL renderer
+     * @param scene - Scene to render
+     * @param camera - Camera to use for rendering
+     * @param isStaticFrame - Whether this is a static frame
+     * @param time - Current time for animations
+     */
     render(
         renderer: THREE.WebGLRenderer,
         scene: THREE.Scene,
@@ -127,6 +154,10 @@ export interface IMapRenderingManager extends IPassManager {
         time?: number
     ): void;
 
+    /**
+     * Update outline effect options
+     * @param options - Outline configuration options
+     */
     updateOutline(options: {
         thickness: number;
         color: string;
@@ -135,37 +166,143 @@ export interface IMapRenderingManager extends IPassManager {
 
     lowResPixelRatio?: number;
 
+    /**
+     * Add an object to bloom effect
+     * @param object - Object to add to bloom effect
+     */
     addBloomObject(object: THREE.Object3D): void;
 
+    /**
+     * Remove an object from bloom effect
+     * @param object - Object to remove from bloom effect
+     */
     removeBloomObject(object: THREE.Object3D): void;
 
+    /**
+     * Add an object to ignore bloom effect
+     * @param object - Object to ignore in bloom effect
+     */
     addIgnoreBloomObject(object: THREE.Object3D): void;
 
+    /**
+     * Remove an object from ignore bloom effect
+     * @param object - Object to stop ignoring in bloom effect
+     */
     removeIgnoreBloomObject(object: THREE.Object3D): void;
 
-    // 新增方法：设置抗锯齿
+    /**
+     * Set anti-aliasing type
+     * @param type - Type of anti-aliasing to use
+     */
     setAntialias(type: "none" | "fxaa" | "smaa"): void;
 
-    addTranslucentDepthObject(object: THREE.Object3D): void;
+    /**
+     * Add a translucent object to a layer
+     * @param object - Object to add
+     * @param layer - Layer to add the object to
+     */
+    addTranslucentObject(object: THREE.Object3D, layer: string): void;
 
-    removeTranslucentDepthObject(object: THREE.Object3D): void;
+    /**
+     * Remove a translucent object
+     * @param object - Object to remove
+     */
+    removeTranslucentObject(object: THREE.Object3D): void;
 
-    // 自定义效果管理方法
+    /**
+     * Add a translucent layer
+     * @param layer - Layer to add
+     */
+    addTranslucentLayer(layer: string, layerConfig: ITranslucentLayerConfig): void;
+    /**
+     * Update translucent layer configuration
+     * @param layer - Layer to update
+     * @param config - Translucent layer configuration
+     */
+    updateTranslucentLayer(layer: string, config: {
+        mixFactor?: number;
+        blendMode?: "mix" | "add" | "multiply" | "screen";
+    }): void;
+
+    /**
+     * Remove a translucent layer
+     * @param layer - Layer to remove
+     */
+    removeTranslucentLayer(layer: string): void;
+
+    // Custom effect management methods
+    /**
+     * Add a custom effect
+     * @param customEffect - Custom effect to add
+     */
     addCustomEffect(customEffect: ICustomEffect): void;
+    
+    /**
+     * Remove a custom effect
+     * @param effectId - ID of the effect to remove
+     * @returns Whether the effect was successfully removed
+     */
     removeCustomEffect(effectId: string): boolean;
+    
+    /**
+     * Get a custom effect by ID
+     * @param effectId - ID of the effect to retrieve
+     * @returns The custom effect or undefined if not found
+     */
     getCustomEffect(effectId: string): ICustomEffect | undefined;
+    
+    /**
+     * Enable or disable a custom effect
+     * @param effectId - ID of the effect to update
+     * @param enabled - Whether the effect should be enabled
+     * @returns Whether the effect was successfully updated
+     */
     setCustomEffectEnabled(effectId: string, enabled: boolean): boolean;
+    
+    /**
+     * Update a custom effect
+     * @param effectId - ID of the effect to update
+     * @param updater - Function to update the effect
+     * @returns Whether the effect was successfully updated
+     */
     updateCustomEffect(effectId: string, updater: (effect: Effect) => void): boolean;
+    
+    /**
+     * Get all custom effects
+     * @returns Array of all custom effects
+     */
     getAllCustomEffects(): ICustomEffect[];
 
-    // 深度拾取相关方法
+    // Depth picking related methods
+    /**
+     * Enable or disable depth picking
+     * @param enabled - Whether depth picking should be enabled
+     */
     setDepthPickingEnabled(enabled: boolean): void;
+    
+    /**
+     * Set stencil reference value for depth picking
+     * @param stencilRef - Stencil reference value
+     */
     setDepthPickingStencilRef(stencilRef: number): void;
+    
+    /**
+     * Get depth texture
+     * @returns Depth texture or null if not available
+     */
     getDepthTexture(): THREE.Texture | null;
+    
+    /**
+     * Read depth at a specific point
+     * @param ndc - Normalized device coordinates
+     * @returns Promise resolving to depth value or null
+     */
     readDepth(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null>;
 }
 
+// Main rendering manager implementation
 export class MapRenderingManager implements IMapRenderingManager {
+    // Bloom effect configuration
     bloom = {
         enabled: false,
         strength: 2.5,
@@ -176,6 +313,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         luminancePassSmoothing: 0.1
     };
 
+    // Outline effect configuration
     outline = {
         enabled: false,
         thickness: 0.02,
@@ -183,30 +321,34 @@ export class MapRenderingManager implements IMapRenderingManager {
         ghostExtrudedPolygons: false
     };
 
+    // Vignette effect configuration
     vignette = {
         enabled: false,
         offset: 1.0,
         darkness: 1.0
     };
 
+    // Sepia effect configuration
     sepia = {
         enabled: false,
         amount: 0.5
     };
 
+    // Hue/Saturation effect configuration
     hueSaturation = {
         enabled: false,
         hue: 0.0,
         saturation: 0.0
     };
 
+    // Brightness/Contrast effect configuration
     brightnessContrast = {
         enabled: false,
         brightness: 0.0,
         contrast: 0.0
     };
 
-    // 添加SSAO效果的配置
+    // SSAO effect configuration
     ssao = {
         enabled: false,
         intensity: 1.0,
@@ -221,18 +363,18 @@ export class MapRenderingManager implements IMapRenderingManager {
         blurDepthCutoff: 0.01
     };
 
+    // Translucent depth configuration
     translucentDepth = {
-        mixFactor: 0.4,
-        blendMode: "mix" as "mix" | "add" | "multiply" | "screen"
+
     };
 
-    // 深度拾取配置
+    // Depth picking configuration
     depthPicking = {
         enabled: false,
         stencilRef: 1
     };
 
-    // 添加抗锯齿效果的配置
+    // Anti-aliasing effect configuration
     fxaaEnabled: boolean = false;
     smaaEnabled: boolean = false;
 
@@ -256,7 +398,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_smaaEffect?: SMAAEffect & IEnabledEffect;
     private m_ssaoEffect?: SSAOEffect & IEnabledEffect;
     private m_normalPass?: NormalPass & IEnabledEffect;
-    private m_translucentDepthEffect?: TranslucentDepthEffect & IEnabledEffect;
+    private m_translucentDepthEffect?: TranslucentLayerEffect & IEnabledEffect;
     private m_depthPickingPass?: DepthPickingWithStencilPass & IEnabledEffect;
 
     private m_dynamicMsaaSamplingLevel: MSAASampling;
@@ -265,17 +407,24 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_lowResPixelRatio?: number;
     private m_lowResEffect?: LowResEffect;
 
-    // 用于跟踪抗锯齿配置变化
+    // Track anti-aliasing configuration changes
     private m_lastFxaaEnabled: boolean = false;
     private m_lastSmaaEnabled: boolean = false;
 
-    // 自定义效果存储
+    // Store custom effects
     private m_customEffects: Map<string, ICustomEffect> = new Map();
 
-    // 用于跟踪临时对象
+    // Track temporary objects
     private m_bloomObjects: THREE.Object3D[] = [];
     private m_ignoreObjects: THREE.Object3D[] = [];
 
+    /**
+     * Constructor for MapRenderingManager
+     * @param width - Initial width of the rendering area
+     * @param height - Initial height of the rendering area
+     * @param lowResPixelRatio - Pixel ratio for low resolution rendering
+     * @param antialiasSettings - Anti-aliasing settings
+     */
     constructor(
         width: number,
         height: number,
@@ -290,7 +439,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.fxaaEnabled = antialiasSettings?.fxaaEnabled ?? false;
         this.smaaEnabled = antialiasSettings?.smaaEnabled ?? false;
 
-        // 记录初始状态
+        // Record initial state
         this.m_lastFxaaEnabled = this.fxaaEnabled;
         this.m_lastSmaaEnabled = this.smaaEnabled;
 
@@ -298,6 +447,9 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.setSize(width, height);
     }
 
+    /**
+     * Initialize all effects
+     */
     private initializeEffects() {
         if (!this.m_renderer || !this.m_scene || !this.m_camera) {
             return;
@@ -312,12 +464,12 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_mainRenderPass = new RenderPass(this.m_scene, this.m_camera);
         this.m_composer.addPass(this.m_mainRenderPass);
 
-        // 初始化深度拾取通道
+        // Initialize depth picking pass
         this.m_depthPickingPass = new DepthPickingWithStencilPass() as DepthPickingWithStencilPass & IEnabledEffect;
         this.m_depthPickingPass.enabled = this.depthPicking.enabled;
         this.m_composer.addPass(this.m_depthPickingPass);
 
-        // 初始化NormalPass用于SSAO
+        // Initialize NormalPass for SSAO
         this.m_normalPass = new NormalPass(this.m_scene, this.m_camera) as NormalPass &
             IEnabledEffect;
         this.m_normalPass.enabled = false;
@@ -334,7 +486,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_bloomEffect.luminancePass.enabled = true;
         this.m_bloomEffect.ignoreBackground = true;
         this.m_bloomEffect.inverted = this.bloom.inverted;
-        this.m_bloomEffect.enabled = this.bloom.enabled; 
+        this.m_bloomEffect.enabled = this.bloom.enabled;
 
         this.m_vignetteEffect = new VignetteEffect({
             darkness: this.vignette.darkness,
@@ -370,9 +522,9 @@ export class MapRenderingManager implements IMapRenderingManager {
         });
         this.m_outlineEffect.enabled = this.outline.enabled;
 
-        // 初始化SSAO效果
+        // Initialize SSAO effect
         this.m_ssaoEffect = new SSAOEffect(this.m_camera, this.m_normalPass.texture, {
-            // 使用NormalPass的texture而不是scene
+            // Use NormalPass texture instead of scene
             blendFunction: BlendFunction.MULTIPLY,
             intensity: this.ssao.intensity,
             radius: this.ssao.radius,
@@ -385,23 +537,21 @@ export class MapRenderingManager implements IMapRenderingManager {
 
         this.m_ssaoEffect.enabled = this.ssao.enabled;
 
-        // 初始化半透明深度效果
-        this.m_translucentDepthEffect = new TranslucentDepthEffect(this.m_scene, this.m_camera, {
-            blendFunction: BlendFunction.ADD,
-            mixFactor: this.translucentDepth.mixFactor,
-            blendMode: this.translucentDepth.blendMode
-        }) as TranslucentDepthEffect & IEnabledEffect;
+        // Initialize translucent depth effect
+        this.m_translucentDepthEffect = new TranslucentLayerEffect(this.m_scene, this.m_camera, {
+            blendFunction: BlendFunction.SCREEN,
+        }) as TranslucentLayerEffect & IEnabledEffect;
         this.m_translucentDepthEffect.enabled = true;
 
-        // 初始化抗锯齿效果 - 修复 SMAA 配置
+        // Initialize anti-aliasing effects - Fix SMAA configuration
         this.m_fxaaEffect = new FXAAEffect() as FXAAEffect & IEnabledEffect;
         this.m_fxaaEffect.enabled = this.fxaaEnabled;
 
-        // 修复 SMAA 配置 - 使用更明显的设置
+        // Fix SMAA configuration - Use more noticeable settings
         this.m_smaaEffect = new SMAAEffect({
-            preset: SMAAPreset.ULTRA, // 使用 HIGH 预设以获得更明显的效果
+            preset: SMAAPreset.ULTRA, // Use HIGH preset for more noticeable effect
             edgeDetectionMode: EdgeDetectionMode.LUMA,
-            predicationMode: PredicationMode.DISABLED // 禁用预测以获得更一致的效果
+            predicationMode: PredicationMode.DISABLED // Disable predication for more consistent effect
         }) as SMAAEffect & IEnabledEffect;
         this.m_smaaEffect.enabled = this.smaaEnabled && !this.fxaaEnabled;
 
@@ -409,36 +559,39 @@ export class MapRenderingManager implements IMapRenderingManager {
             this.m_lowResEffect = new LowResEffect(this.m_lowResPixelRatio);
         }
 
-        // 创建效果通道
+        // Create effect pass
         this.recreateEffectPass();
     }
 
+    /**
+     * Recreate the effect pass with current configuration
+     */
     private recreateEffectPass() {
         if (!this.m_composer || !this.m_camera) return;
 
-        // 移除旧的效果通道
+        // Remove old effect pass
         if (this.m_effectPass) {
             this.m_composer.removePass(this.m_effectPass);
         }
 
-        // 首先添加NormalPass到composer中（如果启用了SSAO）
+        // First add NormalPass to composer (if SSAO is enabled)
         if (this.ssao.enabled && this.m_normalPass) {
             this.m_composer.addPass(this.m_normalPass);
         }
 
-        // 创建所有效果的数组
+        // Create array of all effects
         const allEffects: IEnabledEffect[] = [
-            this.m_translucentDepthEffect!, // 半透明深度效果应该在早期应用
+            this.m_translucentDepthEffect!, // Translucent depth effect should be applied early
             this.m_bloomEffect!,
             this.m_outlineEffect!,
             this.m_vignetteEffect!,
             this.m_sepiaEffect!,
             this.m_hueSaturationEffect!,
             this.m_brightnessContrastEffect!,
-            this.m_ssaoEffect! // 添加SSAO效果到效果数组
+            this.m_ssaoEffect! // Add SSAO effect to effect array
         ];
 
-        // 添加自定义效果（按order排序）
+        // Add custom effects (sorted by order)
         const customEffects = Array.from(this.m_customEffects.values())
             .filter(customEffect => customEffect.enabled)
             .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
@@ -446,8 +599,8 @@ export class MapRenderingManager implements IMapRenderingManager {
 
         allEffects.push(...customEffects);
 
-        // 重要：抗锯齿效果应该放在最后（后处理链的末端）
-        // 根据设置添加抗锯齿效果（注意：FXAA 和 SMAA 不能同时启用）
+        // Important: Anti-aliasing effects should be placed last (at the end of the post-processing chain)
+        // Add anti-aliasing effects based on settings (note: FXAA and SMAA cannot be enabled simultaneously)
         if (this.fxaaEnabled && this.m_fxaaEffect) {
             console.log("Adding FXAA effect to render pipeline");
             allEffects.push(this.m_fxaaEffect);
@@ -458,7 +611,7 @@ export class MapRenderingManager implements IMapRenderingManager {
             console.log("No antialiasing effect enabled");
         }
 
-        // 添加低分辨率效果（如果有）- 应该在抗锯齿之前
+        // Add low resolution effect (if any) - should be before anti-aliasing
         if (this.m_lowResEffect) {
             allEffects.push(this.m_lowResEffect);
         }
@@ -466,13 +619,16 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_effectPass = new FilterEffectPass(this.m_camera, ...allEffects);
         this.m_composer.addPass(this.m_effectPass);
 
-        // 更新记录的状态
+        // Update recorded state
         this.m_lastFxaaEnabled = this.fxaaEnabled;
         this.m_lastSmaaEnabled = this.smaaEnabled;
 
         console.log(`Effect pass recreated with ${allEffects.length} effects (${customEffects.length} custom)`);
     }
 
+    /**
+     * Update all effects with current configuration
+     */
     private updateEffects() {
         // First ensure all effects are initialized
         if (
@@ -485,41 +641,37 @@ export class MapRenderingManager implements IMapRenderingManager {
             !this.m_fxaaEffect ||
             !this.m_smaaEffect ||
             !this.m_ssaoEffect ||
-            !this.m_normalPass || // 添加NormalPass检查
-            !this.m_translucentDepthEffect || // 添加半透明深度效果检查
-            !this.m_depthPickingPass // 添加深度拾取通道检查
+            !this.m_normalPass || // Add NormalPass check
+            !this.m_translucentDepthEffect || // Add translucent depth effect check
+            !this.m_depthPickingPass // Add depth picking pass check
         ) {
             this.initializeEffects();
             return;
         }
 
-        // 检查抗锯齿配置是否发生变化
+        // Check if anti-aliasing configuration has changed
         const antialiasConfigChanged =
             this.m_lastFxaaEnabled !== this.fxaaEnabled ||
             this.m_lastSmaaEnabled !== this.smaaEnabled;
 
-        // 检查自定义效果是否有变化
+        // Check if custom effects have changed
         const customEffectsChanged = Array.from(this.m_customEffects.values()).some(
             customEffect => customEffect.effect.enabled !== customEffect.enabled
         );
 
-        // 更新深度拾取通道
+        // Update depth picking pass
         if (this.m_depthPickingPass) {
             this.m_depthPickingPass.enabled = this.depthPicking.enabled;
 
-            // 更新模板参考值
+            // Update stencil reference value
             if (this.depthPicking.stencilRef !== undefined) {
                 this.m_depthPickingPass.setStencilRef(this.depthPicking.stencilRef);
             }
         }
 
-        // 半透明深度效果 - 始终启用
+        // Translucent depth effect - always enabled
         if (this.m_translucentDepthEffect) {
-            this.m_translucentDepthEffect.enabled = true; // 始终启用
-            this.m_translucentDepthEffect.mixFactor = this.translucentDepth.mixFactor ?? 0.7;
-            if (this.translucentDepth.blendMode) {
-                this.m_translucentDepthEffect.setBlendMode(this.translucentDepth.blendMode);
-            }
+            this.m_translucentDepthEffect.enabled = true; // Always enabled
         }
 
         // Bloom effect
@@ -579,9 +731,9 @@ export class MapRenderingManager implements IMapRenderingManager {
         // SSAO effect
         if (this.ssao.enabled && this.m_ssaoEffect) {
             this.m_ssaoEffect.enabled = true;
-            this.m_normalPass.enabled = true; // 启用NormalPass
+            this.m_normalPass.enabled = true; // Enable NormalPass
 
-            // 更新SSAO参数
+            // Update SSAO parameters
             if (this.m_ssaoEffect.ssaoMaterial) {
                 this.m_ssaoEffect.ssaoMaterial.intensity = this.ssao.intensity;
                 this.m_ssaoEffect.ssaoMaterial.radius = this.ssao.radius;
@@ -591,10 +743,10 @@ export class MapRenderingManager implements IMapRenderingManager {
             }
         } else if (this.m_ssaoEffect) {
             this.m_ssaoEffect.enabled = false;
-            this.m_normalPass.enabled = false; // 禁用NormalPass
+            this.m_normalPass.enabled = false; // Disable NormalPass
         }
 
-        // 更新自定义效果
+        // Update custom effects
         this.m_customEffects.forEach(customEffect => {
             customEffect.effect.enabled = customEffect.enabled;
         });
@@ -604,17 +756,17 @@ export class MapRenderingManager implements IMapRenderingManager {
             this.m_fxaaEffect.enabled = this.fxaaEnabled;
         }
 
-        // SMAA effect - 与 FXAA 互斥
+        // SMAA effect - mutually exclusive with FXAA
         if (this.m_smaaEffect) {
             this.m_smaaEffect.enabled = this.smaaEnabled && !this.fxaaEnabled;
         }
 
         // Low resolution effect
         if (this.m_lowResPixelRatio !== undefined && this.m_lowResEffect) {
-            // 低分辨率效果的处理
+            // Low resolution effect processing
         }
 
-        // 更新 MSAA 设置
+        // Update MSAA settings
         if (this.m_composer) {
             if (this.m_msaaEnabled) {
                 this.m_composer.multisampling = this.m_staticMsaaSamplingLevel || 2;
@@ -623,7 +775,7 @@ export class MapRenderingManager implements IMapRenderingManager {
             }
         }
 
-        // 如果抗锯齿配置或自定义效果发生变化，需要重新创建效果通道
+        // If anti-aliasing configuration or custom effects have changed, recreate effect pass
         if (antialiasConfigChanged || customEffectsChanged) {
             this.recreateEffectPass();
         }
@@ -631,7 +783,11 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_composer?.setSize(this.m_width, this.m_height);
     }
 
-    // 深度拾取相关方法
+    // Depth picking related methods
+    /**
+     * Enable or disable depth picking
+     * @param enabled - Whether depth picking should be enabled
+     */
     setDepthPickingEnabled(enabled: boolean): void {
         this.depthPicking.enabled = enabled;
         if (this.m_depthPickingPass) {
@@ -639,6 +795,10 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
     }
 
+    /**
+     * Set stencil reference value for depth picking
+     * @param stencilRef - Stencil reference value
+     */
     setDepthPickingStencilRef(stencilRef: number): void {
         this.depthPicking.stencilRef = stencilRef;
         if (this.m_depthPickingPass) {
@@ -646,6 +806,10 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
     }
 
+    /**
+     * Get depth texture
+     * @returns Depth texture or null if not available
+     */
     getDepthTexture(): THREE.Texture | null {
         if (this.m_depthPickingPass && this.depthPicking.enabled) {
             return this.m_depthPickingPass.getDepthTexture();
@@ -653,7 +817,11 @@ export class MapRenderingManager implements IMapRenderingManager {
         return null;
     }
 
-    // 新增方法：设置抗锯齿类型
+    // New method: Set anti-aliasing type
+    /**
+     * Set anti-aliasing type
+     * @param type - Type of anti-aliasing to use
+     */
     setAntialias(type: "none" | "fxaa" | "smaa"): void {
         const oldFxaa = this.fxaaEnabled;
         const oldSmaa = this.smaaEnabled;
@@ -666,14 +834,18 @@ export class MapRenderingManager implements IMapRenderingManager {
             new: { fxaa: this.fxaaEnabled, smaa: this.smaaEnabled }
         });
 
-        // 强制重新创建效果通道
+        // Force recreate effect pass
         if (this.m_composer) {
             this.recreateEffectPass();
             this.m_composer.setSize(this.m_width, this.m_height);
         }
     }
 
-    // 自定义效果管理方法
+    // Custom effect management methods
+    /**
+     * Add a custom effect
+     * @param customEffect - Custom effect to add
+     */
     addCustomEffect(customEffect: ICustomEffect): void {
         if (this.m_customEffects.has(customEffect.id)) {
             console.warn(`Custom effect with id '${customEffect.id}' already exists. It will be replaced.`);
@@ -682,18 +854,23 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_customEffects.set(customEffect.id, customEffect);
         console.log(`Added custom effect: ${customEffect.id}`);
 
-        // 重新创建效果通道以包含新的自定义效果
+        // Recreate effect pass to include new custom effect
         if (this.m_composer) {
             this.recreateEffectPass();
         }
     }
 
+    /**
+     * Remove a custom effect
+     * @param effectId - ID of the effect to remove
+     * @returns Whether the effect was successfully removed
+     */
     removeCustomEffect(effectId: string): boolean {
         const removed = this.m_customEffects.delete(effectId);
         if (removed) {
             console.log(`Removed custom effect: ${effectId}`);
 
-            // 重新创建效果通道以移除自定义效果
+            // Recreate effect pass to remove custom effect
             if (this.m_composer) {
                 this.recreateEffectPass();
             }
@@ -703,10 +880,21 @@ export class MapRenderingManager implements IMapRenderingManager {
         return removed;
     }
 
+    /**
+     * Get a custom effect by ID
+     * @param effectId - ID of the effect to retrieve
+     * @returns The custom effect or undefined if not found
+     */
     getCustomEffect(effectId: string): ICustomEffect | undefined {
         return this.m_customEffects.get(effectId);
     }
 
+    /**
+     * Enable or disable a custom effect
+     * @param effectId - ID of the effect to update
+     * @param enabled - Whether the effect should be enabled
+     * @returns Whether the effect was successfully updated
+     */
     setCustomEffectEnabled(effectId: string, enabled: boolean): boolean {
         const customEffect = this.m_customEffects.get(effectId);
         if (customEffect) {
@@ -722,6 +910,12 @@ export class MapRenderingManager implements IMapRenderingManager {
         return false;
     }
 
+    /**
+     * Update a custom effect
+     * @param effectId - ID of the effect to update
+     * @param updater - Function to update the effect
+     * @returns Whether the effect was successfully updated
+     */
     updateCustomEffect(effectId: string, updater: (effect: Effect) => void): boolean {
         const customEffect = this.m_customEffects.get(effectId);
         if (customEffect) {
@@ -731,15 +925,23 @@ export class MapRenderingManager implements IMapRenderingManager {
         return false;
     }
 
+    /**
+     * Get all custom effects
+     * @returns Array of all custom effects
+     */
     getAllCustomEffects(): ICustomEffect[] {
         return Array.from(this.m_customEffects.values());
     }
 
+    /**
+     * Update outline effect options
+     * @param options - Outline configuration options
+     */
     updateOutline(options: { thickness: number; color: string; ghostExtrudedPolygons: boolean }) {
         this.outline.thickness = options.thickness;
         this.outline.color = options.color;
         this.outline.ghostExtrudedPolygons = options.ghostExtrudedPolygons;
-        
+
         if (this.m_outlineEffect) {
             this.m_outlineEffect.patternScale = options.thickness;
             this.m_outlineEffect.visibleEdgeColor = new THREE.Color(options.color);
@@ -748,6 +950,9 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
     }
 
+    /**
+     * Update bloom effect options
+     */
     private updateBloomOptions(): void {
         if (this.m_bloomEffect) {
             this.m_bloomEffect.intensity = this.bloom.strength;
@@ -774,6 +979,10 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
     }
 
+    /**
+     * Add an object to bloom effect
+     * @param object - Object to add to bloom effect
+     */
     addBloomObject(object: THREE.Object3D): void {
         if (this.m_bloomEffect) {
             this.m_bloomEffect.selection.add(object);
@@ -781,6 +990,10 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_bloomObjects.push(object);
     }
 
+    /**
+     * Remove an object from bloom effect
+     * @param object - Object to remove from bloom effect
+     */
     removeBloomObject(object: THREE.Object3D): void {
         if (this.m_bloomEffect) {
             this.m_bloomEffect.selection.delete(object);
@@ -788,14 +1001,29 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_bloomObjects = this.m_bloomObjects.filter(item => item !== object);
     }
 
+    /**
+     * Add an object to ignore bloom effect
+     * @param object - Object to ignore in bloom effect
+     */
     addIgnoreBloomObject(object: THREE.Object3D): void {
         this.m_ignoreObjects.push(object);
     }
 
+    /**
+     * Remove an object from ignore bloom effect
+     * @param object - Object to stop ignoring in bloom effect
+     */
     removeIgnoreBloomObject(object: THREE.Object3D): void {
         this.m_ignoreObjects = this.m_ignoreObjects.filter(item => item !== object);
     }
 
+    /**
+     * Render the scene
+     * @param renderer - WebGL renderer
+     * @param scene - Scene to render
+     * @param camera - Camera to use for rendering
+     * @param isStaticFrame - Whether this is a static frame
+     */
     render(
         renderer: THREE.WebGLRenderer,
         scene: THREE.Scene,
@@ -814,7 +1042,7 @@ export class MapRenderingManager implements IMapRenderingManager {
             } catch (error) {
                 console.error("Error rendering with EffectComposer:", error);
                 console.error("Falling back to normal rendering");
-                // 如果EffectComposer渲染失败，回退到普通渲染
+                // If EffectComposer rendering fails, fall back to normal rendering
                 renderer.render(scene, camera);
             }
         } else {
@@ -822,6 +1050,11 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
     }
 
+    /**
+     * Set the size of the rendering area
+     * @param width - Width of the rendering area
+     * @param height - Height of the rendering area
+     */
     setSize(width: number, height: number) {
         this.m_width = width;
         this.m_height = height;
@@ -865,26 +1098,67 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
     }
 
+    /**
+     * Read depth at a specific point
+     * @param ndc - Normalized device coordinates
+     * @returns Promise resolving to depth value or null
+     */
     readDepth(ndc: THREE.Vector2 | THREE.Vector3): Promise<number> | null {
         return this.m_depthPickingPass?.readDepth(ndc) ?? null;
     }
 
-    // 新增方法：获取半透明深度效果的选择对象
-    getTranslucentDepthSelection() {
-        return this.m_translucentDepthEffect?.selection;
-    }
-
-    // 新增方法：添加半透明深度效果的对象
-    addTranslucentDepthObject(object: THREE.Object3D): void {
+    /**
+     * Add a translucent layer
+     * @param layer - Layer name
+     * @param layerConfig - Layer configuration
+     */
+    addTranslucentLayer(layer: string, layerConfig: ITranslucentLayerConfig): void {
         if (this.m_translucentDepthEffect) {
-            this.m_translucentDepthEffect.selection.add(object);
+            this.m_translucentDepthEffect.createLayer(layer, layerConfig);
         }
     }
 
-    // 新增方法：移除半透明深度效果的对象
-    removeTranslucentDepthObject(object: THREE.Object3D): void {
+    /**
+     * Update a translucent layer
+     * @param layer - Layer name
+     * @param layerConfig - Layer configuration
+     */
+    updateTranslucentLayer(layer: string, layerConfig: ITranslucentLayerConfig): void {
         if (this.m_translucentDepthEffect) {
-            this.m_translucentDepthEffect.selection.delete(object);
+            this.m_translucentDepthEffect.updateLayer(layer, layerConfig);
+        }
+    }
+
+    /**
+     * Remove a translucent layer
+     * @param layer - Layer name
+     */
+    removeTranslucentLayer(layer: string): void {
+        if (this.m_translucentDepthEffect) {
+            this.m_translucentDepthEffect.removeLayer(layer);
+        }
+    }
+
+    // New method: Add translucent depth effect object
+    /**
+     * Add a translucent object to a layer
+     * @param object - Object to add
+     * @param layer - Layer to add the object to
+     */
+    addTranslucentObject(object: THREE.Object3D, layer: string): void {
+        if (this.m_translucentDepthEffect) {
+            this.m_translucentDepthEffect.addToLayer(object, layer);
+        }
+    }
+
+    // New method: Remove translucent depth effect object
+    /**
+     * Remove a translucent object
+     * @param object - Object to remove
+     */
+    removeTranslucentObject(object: THREE.Object3D): void {
+        if (this.m_translucentDepthEffect) {
+            this.m_translucentDepthEffect.removeFromLayer(object);
         }
     }
 }

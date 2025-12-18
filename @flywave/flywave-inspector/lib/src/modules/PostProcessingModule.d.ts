@@ -1,4 +1,5 @@
 import { type MapViewMonitor } from "../monitor/MapViewMonitor";
+import { ITranslucentLayerConfig } from "@flywave/flywave-datasource-protocol";
 export interface PostProcessingData {
     bloom: {
         enabled: boolean;
@@ -45,10 +46,7 @@ export interface PostProcessingData {
         blurStdDev?: number;
         blurDepthCutoff?: number;
     };
-    translucentDepth: {
-        mixFactor?: number;
-        blendMode?: "mix" | "add" | "multiply" | "screen";
-    };
+    translucentDepth: ITranslucentLayerConfig;
     dynamicMsaaSamplingLevel: number;
     msaaEnabled: boolean;
     staticMsaaSamplingLevel: number;

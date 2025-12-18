@@ -12,7 +12,7 @@ export interface PostEffects {
     fxaa?: boolean;
     smaa?: boolean;
     ssao?: ISSAOEffect; // Add SSAOEffect definition
-    translucentDepth?: ITranslucentDepthEffect; // Add translucent depth effect definition
+    translucentDepth?: ITranslucentLayerConfig;
 }
 
 export interface IOutlineEffect {
@@ -65,7 +65,7 @@ export interface IBrightnessContrastEffect {
     brightness: number;
     contrast: number;
 }
- 
+
 
 export interface ISMAAEffect {
     enabled: boolean;
@@ -86,8 +86,17 @@ export interface ISSAOEffect {
     blurDepthCutoff?: number;
 }
 
-// Add translucent depth effect interface definition
-export interface ITranslucentDepthEffect {
+export interface ITranslucentLayerConfig {
+    /** Blend factor (0-1) */
     mixFactor?: number;
-    blendMode?: "mix" | "add" | "multiply" | "screen";
+    /** Blend mode */
+    blendMode?: 'mix' | 'add' | 'multiply' | 'screen';
+    /** Highlight color */
+    color?: string;
+    /** Occlusion distance threshold (in meters), effect is not displayed beyond this distance, default is 1.0 */
+    occlusionDistance?: number;
+    /** Whether to use original object color blending, default is true */
+    useObjectColor?: boolean;
+    /** Original color blending intensity (0-1), default is 0.5 */
+    objectColorMix?: number;
 }

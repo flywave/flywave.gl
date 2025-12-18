@@ -8,6 +8,7 @@ import {
 } from "@flywave/flywave-mapview/composing/MapRenderingManager";
 
 import { type MapViewMonitor } from "../monitor/MapViewMonitor";
+import { ITranslucentLayerConfig } from "@flywave/flywave-datasource-protocol";
 
 export interface PostProcessingData {
     bloom: {
@@ -58,10 +59,7 @@ export interface PostProcessingData {
         blurDepthCutoff?: number;
     };
     // 添加半透明深度配置
-    translucentDepth: {
-        mixFactor?: number;
-        blendMode?: "mix" | "add" | "multiply" | "screen";
-    };
+    translucentDepth: ITranslucentLayerConfig;
     dynamicMsaaSamplingLevel: number;
     msaaEnabled: boolean;
     staticMsaaSamplingLevel: number;

@@ -41,6 +41,8 @@
         "webpack-cli": "catalog:",
         "webpack-dev-server": "catalog:"
     },
-    "dependencies": {},
+    "dependencies": {
+        "@flywave/flywave-datasource-protocol": "workspace:*"
+    },
     "private": true
 }

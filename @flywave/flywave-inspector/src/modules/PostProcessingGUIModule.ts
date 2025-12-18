@@ -296,15 +296,24 @@ export class PostProcessingGUIModule {
             });
         msaaFolder.close();
 
-        // Translucent depth controls (新增)
+        // Translucent depth controls
         const translucentDepthFolder = this.folder.addFolder("💧 Translucent Depth");
-        translucentDepthFolder
-            .add(this.currentData.translucentDepth, "mixFactor", 0, 1)
-            .step(0.01)
-            .name("Mix Factor")
-            .onChange(() => {
-                this.updateEffects();
-            }); 
+        
+        // Check if translucentDepth exists before adding controls
+        if (this.currentData.translucentDepth) {
+            // Check each optional property before adding control
+            if (this.currentData.translucentDepth.mixFactor !== undefined) {
+                translucentDepthFolder
+                    .add(this.currentData.translucentDepth, "mixFactor", 0, 1)
+                    .step(0.01)
+                    .name("Mix Factor")
+                    .onChange(() => {
+                        this.updateEffects();
+                    });
+            }
+    
+        }
+        
         translucentDepthFolder.close();
     }
 
