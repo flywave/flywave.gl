@@ -30,7 +30,7 @@
         "tsc": "tsc --build",
         "build": "webpack --mode production && npm run build-typings",
         "prepare": "webpack --mode production && npm run build-typings",
-        "build-typings": "tsc --build && api-extractor run --local && echo 'export as namespace flywave;' >> dist/flywave.d.ts && rm -rf temp",
+        "build-typings": "tsc --build && api-extractor run --local && node -e \"const fs = require('fs'); fs.appendFileSync('dist/flywave.d.ts', 'export as namespace flywave;\\n'); if(fs.existsSync('temp')) fs.rmSync('temp', { recursive: true, force: true })\"",
         "debug": "webpack"
     },
     "keywords": [

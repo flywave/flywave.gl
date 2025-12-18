@@ -9,4 +9,5 @@ doc
 resources/temp
 resources/maki_icons_*
 resources-dev/Fonts/Assets/*
+resources/fonts/
 *.tgz
