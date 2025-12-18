@@ -40,6 +40,7 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
         const closeButton = document.getElementById("closeButton") as HTMLButtonElement;
 
         expandButton.addEventListener("click", event => {
+            navPanel.classList.add("animating"); // Add animating class to prevent display: none during animation
             navPanel.classList.toggle("collapsed");
             // Adjust iframe position based on sidebar state
             if (navPanel.classList.contains("collapsed")) {
@@ -49,9 +50,15 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 exampleFrameElement.style.left = "var(--sidebar-width)";
                 exampleFrameElement.style.width = "calc(100% - var(--sidebar-width))";
             }
+            // Ensure iframe fills the available space without scrollbars
+            setTimeout(() => {
+                exampleFrameElement.style.height = "100vh";
+                navPanel.classList.remove("animating"); // Remove animating class after animation completes
+            }, 300); // Match the CSS transition time
             event.preventDefault();
         });
         closeButton.addEventListener("click", event => {
+            navPanel.classList.add("animating"); // Add animating class to prevent display: none during animation
             navPanel.classList.toggle("collapsed");
             // Adjust iframe position based on sidebar state
             if (navPanel.classList.contains("collapsed")) {
@@ -61,6 +68,11 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 exampleFrameElement.style.left = "var(--sidebar-width)";
                 exampleFrameElement.style.width = "calc(100% - var(--sidebar-width))";
             }
+            // Ensure iframe fills the available space without scrollbars
+            setTimeout(() => {
+                exampleFrameElement.style.height = "100vh";
+                navPanel.classList.remove("animating"); // Remove animating class after animation completes
+            }, 300); // Match the CSS transition time
             event.preventDefault();
         });
     }
@@ -344,8 +356,13 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
         currentlySelectedSource = exampleDefinitions[pageUrl];
         exampleListElement.style.bottom = "65px";
 
-        // mobile: collapse the navPanel
-        navPanel.classList.toggle("collapsed");
+        // Ensure iframe fills the available space without scrollbars
+        setTimeout(() => {
+            exampleFrameElement.style.height = "100vh";
+            exampleFrameElement.style.overflow = "hidden";
+        }, 100);
+
+        // Keep the sidebar in its current state when showing examples - do not auto-collapse
     }
 
 
@@ -377,6 +394,11 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
             showExample(pageUrl);
         }
     }
+
+    // Set initial state - collapse the navPanel on page load
+    navPanel.classList.add("collapsed");
+    exampleFrameElement.style.left = "0";
+    exampleFrameElement.style.width = "100%";
 
     window.addEventListener("hashchange", showExampleFromHash);
     showExampleFromHash();
