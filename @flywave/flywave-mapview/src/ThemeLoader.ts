@@ -529,12 +529,12 @@ export class ThemeLoader {
         return {
             ...baseTheme,
             ...theme,
+            postEffects: { ...baseTheme.postEffects, ...theme.postEffects },
             // Due to nested structure of the images/textures it needs a
             // deep merge with a duplicate exclusion.
             ...ThemeLoader.mergeImageTextures(theme, baseTheme),
             definitions,
             styles,
-            tile3DRender: { ...baseTheme.tile3DRender, ...theme.tile3DRender },
             celestia: { ...baseTheme.celestia, ...theme.celestia }
         };
     }

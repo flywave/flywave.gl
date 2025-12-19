@@ -11,8 +11,7 @@ export interface PostEffects {
     brightnessContrast?: IBrightnessContrastEffect;
     fxaa?: boolean;
     smaa?: boolean;
-    ssao?: ISSAOEffect; // Add SSAOEffect definition
-    translucentDepth?: ITranslucentLayerConfig;
+    ssao?: ISSAOEffect; 
 }
 
 export interface IOutlineEffect {
@@ -30,6 +29,7 @@ export interface IBloomEffect {
     strength?: number; // corresponds to intensity in SelectiveBloomEffect
     radius?: number; // corresponds to mipmapBlurPass.radius
     levels?: number; // corresponds to mipmapBlurPass.levels
+    inverted?: boolean;
     ignoreBackground?: boolean;
     luminancePassEnabled?: boolean;
     luminancePassThreshold?: number; // corresponds to luminanceMaterial.threshold

@@ -50,6 +50,12 @@ export class PostProcessingGUIModule {
                 this.updateEffects();
             });
         bloomFolder
+            .add(this.currentData.bloom, "inverted")
+            .name("Inverted")
+            .onChange(() => {
+                this.updateEffects();
+            });
+        bloomFolder
             .add(this.currentData.bloom, "strength", 0, 50)
             .step(0.01)
             .name("Strength")
@@ -295,26 +301,6 @@ export class PostProcessingGUIModule {
                 this.updateEffects();
             });
         msaaFolder.close();
-
-        // Translucent depth controls
-        const translucentDepthFolder = this.folder.addFolder("💧 Translucent Depth");
-        
-        // Check if translucentDepth exists before adding controls
-        if (this.currentData.translucentDepth) {
-            // Check each optional property before adding control
-            if (this.currentData.translucentDepth.mixFactor !== undefined) {
-                translucentDepthFolder
-                    .add(this.currentData.translucentDepth, "mixFactor", 0, 1)
-                    .step(0.01)
-                    .name("Mix Factor")
-                    .onChange(() => {
-                        this.updateEffects();
-                    });
-            }
-    
-        }
-        
-        translucentDepthFolder.close();
     }
 
     private updateEffects() {

@@ -66,7 +66,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                 "atmosphere": false,     // Disable atmospheric effects
                 sunTime: new Date().setHours(17, 0, 0, 0), // Set sun time
             },
-            "postEffects": {
+            "postEffects": { 
                 "bloom": { // Bloom effect
                     "enabled": true,     // Enable bloom effect
                     luminancePassEnabled: true,

@@ -167,7 +167,6 @@ export class TranslucentLayerEffect extends Effect {
      * @returns A shader material configured for layer ID rendering.
      */
     private createLayerIDMaterial(): ShaderMaterial {
-        // 保持与原代码完全相同的逻辑
         const customMaterial = new ShaderMaterial({
             uniforms: { 
                 layerIndex: { value: 0 }
@@ -385,7 +384,7 @@ export class TranslucentLayerEffect extends Effect {
                 }
                 
                 // 关键：保持与原代码完全相同的深度比较逻辑
-                bool isLayerInFront = (layerDepth - depth) < 0.000001;
+                bool isLayerInFront = (layerDepth - depth) < 0.0001;
                 bool isBackground = depth >= 0.999;
                 
                 float actualLayerDepth = getLinearDistance(layerDepth);
@@ -489,7 +488,7 @@ export class TranslucentLayerEffect extends Effect {
                     }
 
                     // Set new rendering state
-                    material.depthWrite = enableDepthWrite;
+                    // material.depthWrite = enableDepthWrite;
                     material.colorWrite = enableColorWrite;
                     material.needsUpdate = true;
                 });

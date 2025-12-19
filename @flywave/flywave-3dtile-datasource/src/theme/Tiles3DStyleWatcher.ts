@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { type ITile, Tile } from "../base/Tile";
 import { B3DMBatchMaterial } from "../materials/B3DMBatchMaterial";
 import { Observe3DTileChange } from "../ObserveTileChange";
-import { type BatchAnimation } from "../TileRenderDataSource";
+import { FlatThemeExtra, ThemeExtra, type BatchAnimation } from "../TileRenderDataSource";
 import { BatchStyleProcessor } from "./BatchStyleProcessor";
 
 /**
@@ -108,7 +108,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      * @param animation - Batch animation configuration
      */
     constructor(
-        private theme: Theme | FlatTheme,
+        private theme: ThemeExtra | FlatThemeExtra,
         private readonly styleSetName?: string,
         private readonly m_mapRenderingManager?: IMapRenderingManager,
         customAttributeConfig?: CustomAttributeConfig,
@@ -137,7 +137,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      * Updates the theme configuration
      * @param theme - New theme configuration
      */
-    updateTheme(theme: Theme | FlatTheme): void {
+    updateTheme(theme: ThemeExtra | FlatThemeExtra): void {
         this.theme = theme;
         // Select style set using styleSetName
         let styleSet: StyleSet = [];
@@ -157,7 +157,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
 
         this.m_styleEvaluator = new BatchStyleProcessor(styleSetOptions);
 
-        this.m_mapRenderingManager?.addTranslucentLayer(this.observeId, theme.tile3DRender?.postEffects?.translucentDepth || {
+        this.m_mapRenderingManager?.addTranslucentLayer(this.observeId, theme?.postEffects?.translucentDepth || {
             mixFactor: 0.5,
             blendMode: "mix"
         });
@@ -215,13 +215,13 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      */
     private applyRenderEffectConfig(object: THREE.Object3D): void {
         // Check if theme has tile3DRender and postEffects configuration
-        const isTranslucentDepthEnabled = this.theme.tile3DRender?.postEffects?.translucentDepth?.enabled;
-        const isBloomEnabled = this.theme.tile3DRender?.postEffects?.bloom?.enabled;
+        const isTranslucentDepthEnabled = this.theme?.postEffects?.translucentDepth?.enabled;
+        const isBloomEnabled = this.theme?.postEffects?.bloom?.enabled;
         if (isTranslucentDepthEnabled !== undefined || isBloomEnabled !== undefined) {
             object.traverse(child => {
                 if (child && (child instanceof THREE.Mesh || child instanceof THREE.InstancedMesh)) {
                     if (isTranslucentDepthEnabled)
-                        this.m_mapRenderingManager?.addTranslucentObject(child,this.observeId);
+                        this.m_mapRenderingManager?.addTranslucentObject(child, this.observeId);
                     else
                         this.m_mapRenderingManager?.removeTranslucentObject(child);
                     if (isBloomEnabled)
@@ -472,7 +472,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
             batchMaterials = tile!.cached.materials.map((origin: THREE.MeshStandardMaterial) => {
                 const batchMaterial = new B3DMBatchMaterial({
                     materialParams: {
-                        ...this.theme.tile3DRender?.materialParameters,
+                        ...this.theme?.materialParameters,
                         color: origin.color,
                         map: origin.map,
                         normalMap: origin.normalMap,
@@ -507,8 +507,8 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                         object,
                         group
                     );
-                    if (this.theme.tile3DRender?.onMatrialRender) {
-                        this.theme.tile3DRender?.onMatrialRender?.call(
+                    if (this.theme?.onMatrialRender) {
+                        this.theme?.onMatrialRender?.call(
                             batchMaterial,
                             renderer,
                             scene,
@@ -602,7 +602,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
 
                 const batchMaterial = new B3DMBatchMaterial({
                     materialParams: {
-                        ...this.theme.tile3DRender?.materialParameters,
+                        ...this.theme?.materialParameters,
                         color: originalMaterial.color,
                         map: originalMaterial.map,
                         normalMap: originalMaterial.normalMap,
@@ -639,8 +639,8 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                         object,
                         group
                     );
-                    if (this.theme.tile3DRender?.onMatrialRender) {
-                        this.theme.tile3DRender.onMatrialRender.call(
+                    if (this.theme?.onMatrialRender) {
+                        this.theme.onMatrialRender.call(
                             batchMaterial,
                             renderer,
                             scene,
