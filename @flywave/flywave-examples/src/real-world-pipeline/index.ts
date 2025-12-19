@@ -45,7 +45,7 @@ const getMapCanvas = (): HTMLCanvasElement => {
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and view (Zhoucun project location)
     const initialLocation = new GeoCoordinates(36.8356, 117.8525);
-    
+
     return new MapView({
         projection: sphereProjection,    // Use spherical projection
         target: initialLocation,         // Initial target position
@@ -66,7 +66,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                 sunCastShadow: true,    // Enable shadows 
                 atmosphere: true        // Enable atmospheric effect
             },
-            postEffects: { 
+            postEffects: {
                 brightnessContrast: {
                     brightness: -0.17,  // Brightness adjustment
                     contrast: 0.23,     // Contrast adjustment
@@ -97,12 +97,12 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  * Get pipeline data source configuration
  * @returns Pipeline data source configuration array
  */
-const getPipeSourceConfigs = (): Array<{name: string, url: string}> => {
+const getPipeSourceConfigs = (): Array<{ name: string, url: string }> => {
     return [
-        { name: "Street Lamp", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ludeng/tileset.json` },
-        { name: "Drainage", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ps/tileset.json` },
-        { name: "Electricity", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_power/tileset.json` },
-        { name: "Natural Gas", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_trq/tileset.json` },
+        // { name: "Street Lamp", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ludeng/tileset.json` },
+        // { name: "Drainage", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ps/tileset.json` },
+        // { name: "Electricity", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_power/tileset.json` },
+        // { name: "Natural Gas", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_trq/tileset.json` },
         { name: "Drinking Water", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ys/tileset.json` }
     ];
 };
@@ -113,7 +113,7 @@ const getPipeSourceConfigs = (): Array<{name: string, url: string}> => {
  */
 const addPipeDataSources = (mapView: MapView): void => {
     const pipeSources = getPipeSourceConfigs();
-    
+
     // Batch add pipeline data sources
     pipeSources.forEach(item => {
         const dataSource = new TileRenderDataSource({
@@ -122,22 +122,23 @@ const addPipeDataSources = (mapView: MapView): void => {
         });
 
         dataSource.setTheme({
-            tile3DRender: {
-                postEffects: {
-                    translucentDepth: {
-                        enabled: true,   // Enable translucent depth effect
-                        mixFactor:1, // Translucent depth mix factor
-                        useObjectColor: true, // Use object color for translucent depth
-                        objectColorMix: 0, // Object color mix factor
-                        color: `#${new Color(Math.random() * 0xffffff).getHexString()}` // Object color
-                    } 
+            postEffects: {
+                bloom: {
+                    enabled: true,   // Enable bloom effect 
                 },
-            }
+                translucentDepth: {
+                    enabled: true,   // Enable translucent depth effect
+                    mixFactor: 1, // Translucent depth mix factor
+                    useObjectColor: true, // Use object color for translucent depth
+                    objectColorMix: 0, // Object color mix factor
+                    color: `#${new Color(0xffffff).getHexString()}` // Object color
+                }
+            },
         });
 
         mapView.addDataSource(dataSource);
     });
-    
+
     // Add building data source
     const buildingDataSource = new TileRenderDataSource({
         url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_buildings/tileset.json`,
@@ -159,13 +160,13 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
 
     // Add Web tile data source
     demTerrain.addWebTileDataSource(new ArcGISTileProvider({ minDataLevel: 0, maxDataLevel: 18 }));
-    
+
     // Set as map elevation data source
     mapView.setElevationSource(demTerrain);
-    
+
     // Add ground texture overlay
     addGroundOverlay(demTerrain);
-    
+
     // Add ground modification
     addGroundModification(demTerrain);
 };
@@ -235,22 +236,22 @@ const initializeMapMonitor = (mapView: MapView): void => {
 const addGeoJsonDataSource = async (mapView: MapView): Promise<void> => {
     // GeoJSON data source configuration
     const geojsonDataSource = new FeaturesDataSource({
-        styleSetName: 'labelLayers', 
+        styleSetName: 'labelLayers',
         maxDataLevel: 16,
         minDataLevel: 0,
     });
 
     try {
         const json: FeatureCollection = await TransferManager.instance().downloadJson(PROJECT_CONFIG.REGION_DATA_PATH);
-        
+
         json.features.forEach((feature) => {
             feature.id = MathUtils.generateUUID();
         });
-        
+
         geojsonDataSource.setFromGeojson(json);
-        
+
         await mapView.addDataSource(geojsonDataSource);
-        
+
         geojsonDataSource.setTheme({
             styles: {
                 labelLayers: [
@@ -277,25 +278,25 @@ const addGeoJsonDataSource = async (mapView: MapView): Promise<void> => {
 try {
     // 1. Get map canvas element
     const canvas = getMapCanvas();
-    
+
     // 2. Initialize map view
     const mapView = initializeMapView(canvas);
-    
+
     // 3. Initialize map controls
     initializeMapControls(mapView, canvas);
-    
+
     // 4. Add pipeline data sources
     addPipeDataSources(mapView);
-    
+
     // 5. Configure DEM terrain data source
     configureDEMTerrainSource(mapView);
-    
+
     // 6. Initialize map monitor
     initializeMapMonitor(mapView);
-    
+
     // 7. Add GeoJSON data source
     addGeoJsonDataSource(mapView);
-    
+
     console.log("Pipeline engineering project visualization example initialized successfully");
 } catch (error) {
     console.error("Error initializing pipeline engineering project visualization example:", error);

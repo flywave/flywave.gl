@@ -3007,9 +3007,6 @@ export class MapView extends EventDispatcher {
             if (this.m_postEffects.fxaa !== undefined) {
                 this.mapRenderingManager.fxaaEnabled = this.m_postEffects.fxaa;
             }
-            if (this.m_postEffects.translucentDepth !== undefined) {
-                this.mapRenderingManager.translucentDepth = this.m_postEffects.translucentDepth;
-            }
         }
     }
 

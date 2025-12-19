@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Style, type FlatTheme, type Theme } from "@flywave/flywave-datasource-protocol";
+import { ITranslucentLayerConfig, Style, type FlatTheme, type Theme } from "@flywave/flywave-datasource-protocol";
 import {
     type GeoBox,
     quadTreeSubdivisionScheme,
@@ -23,6 +23,69 @@ import { type TileIntersection } from "./renderer/raycastTraverse";
 import { type CustomAttributeConfig, Tiles3DStyleWatcher } from "./theme/Tiles3DStyleWatcher";
 import { type TilesRendererOptions, TilesRenderer } from "./TilesRenderer";
 import { ITile } from "./ObserveTileChange";
+import { type Material, type MaterialParameters } from "three";
+ 
+interface TileExtraTheme {
+    /**
+     * Custom material parameters to be applied to 3D Tiles meshes.
+     *
+     * @remarks
+     * These parameters are used when creating materials for 3D Tiles batched meshes.
+     * They allow customization of visual properties like color, roughness, metalness, etc.
+     *
+     * @see {@link @flywave/flywave-3dtile-datasource#B3DMBatchMaterial}
+     */
+    materialParameters?: MaterialParameters;
+
+    /**
+     * Callback function invoked before rendering 3D Tiles meshes.
+     *
+     * @remarks
+     * This function is called on each render frame for 3D Tiles meshes, allowing for
+     * dynamic updates to material properties based on render context such as camera position,
+     * lighting conditions, or animation progress.
+     *
+     * @see {@link https://threejs.org/docs/#api/en/core/Object3D.onBeforeRender|THREE.Object3D.onBeforeRender}
+     */
+    onMatrialRender?: Material["onBeforeRender"];
+
+    /**
+     * Post-processing effects configuration for 3D Tiles.
+     *
+     * @remarks
+     * This property allows customization of post-processing effects applied to 3D Tiles.
+     * It provides options to enable and configure effects like translucent depth.
+     */
+    postEffects?: {
+        /**
+         * Bloom effect configuration.
+         *
+         * @remarks
+         * This effect enhances the visual quality of 3D Tiles by
+         * reducing noise and improving the visibility of details.
+         */
+        bloom?: {
+            enabled: boolean;
+        };
+        /**
+         * Translucent depth effect configuration.
+         *
+         * @remarks
+         * This effect enhances the visual quality of translucent 3D objects by
+         * properly handling their depth rendering.
+         */
+        translucentDepth?: {
+            /**
+             * Enable or disable the translucent depth effect.
+             */
+            enabled: boolean;
+        } & ITranslucentLayerConfig;
+    };
+}
+
+// 可选：为 tile3DRender 内部结构单独定义类型以便重用
+export type FlatThemeExtra = TileExtraTheme & FlatTheme;
+export type ThemeExtra = TileExtraTheme & Theme;
 
 /**
  * Configuration options for batch animation effects
@@ -165,7 +228,7 @@ export class TileRenderDataSource extends DataSource {
         // Configure renderer settings
         if (options.errorTarget !== undefined) {
             this.m_tilesRenderer.errorTarget = options.errorTarget;
-        } 
+        }
 
         // Set up event listeners
         this.setupEventListeners();
@@ -299,14 +362,14 @@ export class TileRenderDataSource extends DataSource {
      * @param languages - Optional languages for localization
      * @returns Promise that resolves when theme is applied
      */
-    async setTheme(theme: Theme | FlatTheme, languages?: string[]): Promise<void> {
+    async setTheme(theme: ThemeExtra | FlatThemeExtra, languages?: string[]): Promise<void> {
         // Load and resolve theme using ThemeLoader
-        let loadedTheme: Theme;
+        let loadedTheme: ThemeExtra;
 
         if (typeof theme === "string" || !this.isThemeLoaded(theme)) {
             loadedTheme = (await ThemeLoader.load(theme));
         } else {
-            loadedTheme = theme as Theme;
+            loadedTheme = theme as ThemeExtra;
         }
         // Store current theme
         this.m_currentTheme = loadedTheme;
@@ -393,7 +456,7 @@ export class TileRenderDataSource extends DataSource {
             // console.warn("Failed to get geo extent:", error);
             return undefined;
         }
-    } 
+    }
     /**
      * Sets up event listeners for the tiles renderer
      */

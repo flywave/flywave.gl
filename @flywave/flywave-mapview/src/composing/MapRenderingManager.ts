@@ -581,7 +581,7 @@ export class MapRenderingManager implements IMapRenderingManager {
 
         // Create array of all effects
         const allEffects: IEnabledEffect[] = [
-            this.m_translucentDepthEffect!, // Translucent depth effect should be applied early
+            this.m_translucentDepthEffect!,
             this.m_bloomEffect!,
             this.m_outlineEffect!,
             this.m_vignetteEffect!,

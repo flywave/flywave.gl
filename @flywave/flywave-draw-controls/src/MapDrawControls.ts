@@ -395,7 +395,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         });
     }
 
-    private onMouseDown({ event }: { event: MouseEvent }): void {
+    private onMouseDown(event): void {
         if (this.drawMode === DrawMode.NONE) return;
 
         this.dragStartPoint.set(event.offsetX, event.offsetY);
@@ -422,7 +422,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         // Empty implementation, to be overridden by subclasses
     }
 
-    private onMouseMove({ event }: { event: MouseEvent }): void {
+    private onMouseMove(event): void {
         this.updateCursorStyle(event);
 
         this.mapView.update();
@@ -475,7 +475,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         }
     }
 
-    private onMouseUp({ event }: { event: MouseEvent }): void {
+    private onMouseUp(event: MouseEvent): void {
         this.mapView.update();
 
         // First handle height adjustment end
@@ -544,7 +544,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         }, 100);
     }
 
-    private onMouseWheel({ event }: { event: WheelEvent }): void {
+    private onMouseWheel(event: WheelEvent): void {
         // if (this.heightAdjustManager.handleWheelAdjustment(event)) {
         //     return;
         // }
@@ -595,7 +595,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         }
     }
 
-    private onClick({ event }: { event: MouseEvent }): void {
+    private onClick(event: MouseEvent): void {
         if (this.drawMode === DrawMode.NONE) return;
 
         this.mapView.update();
@@ -615,7 +615,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         }
     }
 
-    private onDoubleClick({ event }: { event: MouseEvent }): void {
+    private onDoubleClick(event: MouseEvent): void {
         if (this.drawMode === DrawMode.LINE || this.drawMode === DrawMode.POLYGON) {
             // Set double-click protection flag and immediately force disable camera
             this.isDoubleClickProcessing = true;

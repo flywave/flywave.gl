@@ -1,7 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type Vector3Like } from "@flywave/flywave-geoutils/math/Vector3Like";
-import { type Material, type MaterialParameters } from "three";
 
 import { type JsonExpr, type JsonValue } from "./Expr";
 import { type InterpolatedPropertyDefinition } from "./InterpolatedPropertyDefs";
@@ -85,66 +84,6 @@ export interface Theme {
 
     celestia?: Celestia;
 
-    /**
-     * Configuration for 3D Tiles rendering.
-     *
-     * @remarks
-     * This property allows customization of 3D Tiles rendering materials and render callbacks.
-     * It provides options to override material parameters and define custom rendering behavior
-     * through the onBeforeRender callback.
-     */
-    tile3DRender?: {
-        /**
-         * Custom material parameters to be applied to 3D Tiles meshes.
-         *
-         * @remarks
-         * These parameters are used when creating materials for 3D Tiles batched meshes.
-         * They allow customization of visual properties like color, roughness, metalness, etc.
-         *
-         * @see {@link @flywave/flywave-3dtile-datasource#B3DMBatchMaterial}
-         */
-        materialParameters?: MaterialParameters;
-
-        /**
-         * Callback function invoked before rendering 3D Tiles meshes.
-         *
-         * @remarks
-         * This function is called on each render frame for 3D Tiles meshes, allowing for
-         * dynamic updates to material properties based on render context such as camera position,
-         * lighting conditions, or animation progress.
-         *
-         * @see {@link https://threejs.org/docs/#api/en/core/Object3D.onBeforeRender|THREE.Object3D.onBeforeRender}
-         */
-        onMatrialRender?: Material["onBeforeRender"];
-
-        /**
-         * Post-processing effects configuration for 3D Tiles.
-         *
-         * @remarks
-         * This property allows customization of post-processing effects applied to 3D Tiles.
-         * It provides options to enable and configure effects like translucent depth.
-         */
-        postEffects?: {
-
-            bloom?: {
-                enabled: boolean;
-            }
-
-            /**
-             * Translucent depth effect configuration.
-             *
-             * @remarks
-             * This effect enhances the visual quality of translucent 3D objects by
-             * properly handling their depth rendering.
-             */
-            translucentDepth?: {
-                /**
-                 * Enable or disable the translucent depth effect.
-                 */
-                enabled: boolean;
-            } & ITranslucentLayerConfig;
-        };
-    };
 
     /**
      * Define the fog used in the map scene.

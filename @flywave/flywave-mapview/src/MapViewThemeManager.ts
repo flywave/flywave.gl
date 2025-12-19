@@ -124,13 +124,6 @@ export class MapViewThemeManager {
             this.m_mapView.renderer.toneMappingExposure = theme.toneMappingExposure;
         }
 
-        // Handle tile3DRender configuration
-        if (theme.tile3DRender !== undefined) {
-            this.m_theme.tile3DRender = theme.tile3DRender;
-            // Apply tile3DRender configuration to data sources
-            this.applyTile3DRenderConfig(theme.tile3DRender);
-        }
-
         // Images and environment map.
         if (
             !isEqual(this.m_theme.images, theme.images) ||
@@ -186,15 +179,6 @@ export class MapViewThemeManager {
         for (const dataSource of this.m_mapView.dataSources) {
             await dataSource.setThemeFromBase(this.m_theme);
         }
-    }
-
-    /**
-     * Apply tile3DRender configuration to data sources
-     */
-    private applyTile3DRenderConfig(tile3DRender: Theme["tile3DRender"]): void {
-        // This method can be extended to apply tile3DRender configuration to specific data sources
-        // For now, we just store the configuration in the theme
-        console.log("Applying tile3DRender configuration:", tile3DRender);
     }
 
     updateCache() {
