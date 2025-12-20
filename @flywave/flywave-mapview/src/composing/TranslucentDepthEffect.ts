@@ -24,6 +24,7 @@ import {
 
 /**
  * Configuration options for the translucent layer effect.
+ * Note: Best results are achieved when using logarithmic depth buffers for depth buffering.
  */
 export interface LayerHighlightEffectOptions {
     /** Blend function to use for the effect. */
@@ -53,6 +54,7 @@ interface InternalLayerConfig extends ITranslucentLayerConfig {
  * Effect class for rendering translucent layers with depth-based occlusion.
  * This effect allows objects to be rendered with translucency while properly handling
  * depth-based occlusion with other scene objects.
+ * Note: Best results are achieved when using logarithmic depth buffers for depth buffering.
  */
 export class TranslucentLayerEffect extends Effect {
     // ================ Private Properties ================
@@ -377,14 +379,14 @@ export class TranslucentLayerEffect extends Effect {
                 LayerData layer = getLayerData(layerIndex);
                 
                 // Read object's original color and blend - 保持与原代码相同的逻辑
-                vec3 finalHighlightColor = layer.color;
+                vec3 finalHighlightColor = objectColor.rgb;
                 
                 if (layer.useObjectColor && layer.objectColorMix > 0.0) {
                     finalHighlightColor = mix(layer.color, objectColor.rgb, layer.objectColorMix);
                 }
                 
                 // 关键：保持与原代码完全相同的深度比较逻辑
-                bool isLayerInFront = (layerDepth - depth) < 0.0001;
+                bool isLayerInFront = (layerDepth - depth) < 0.00001;
                 bool isBackground = depth >= 0.999;
                 
                 float actualLayerDepth = getLinearDistance(layerDepth);
@@ -793,7 +795,8 @@ export class TranslucentLayerEffect extends Effect {
             overrideMaterial: this.scene.overrideMaterial,
             background: this.scene.background,
             toneMapping: renderer.toneMapping,
-            shadowMapEnabled: renderer.shadowMap.enabled
+            shadowMapEnabled: renderer.shadowMap.enabled,
+            logarithmicDepthBuffer: renderer.capabilities.logarithmicDepthBuffer
         };
 
         renderer.getClearColor(originalState.clearColor);
