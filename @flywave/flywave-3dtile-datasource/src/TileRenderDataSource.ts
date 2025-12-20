@@ -6,8 +6,7 @@ import {
     quadTreeSubdivisionScheme,
     type TileKey,
     TilingScheme,
-    webMercatorProjection,
-    webMercatorTilingScheme
+    webMercatorProjection
 } from "@flywave/flywave-geoutils";
 import {
     type DataSourceOptions,
@@ -24,6 +23,7 @@ import { type CustomAttributeConfig, Tiles3DStyleWatcher } from "./theme/Tiles3D
 import { type TilesRendererOptions, TilesRenderer } from "./TilesRenderer";
 import { ITile } from "./ObserveTileChange";
 import { type Material, type MaterialParameters } from "three";
+import { MatrixTransformCallback } from "./renderer/TilesRenderer";
  
 interface TileExtraTheme {
     /**
@@ -157,6 +157,11 @@ export interface TileRenderDataSourceOptions extends DataSourceOptions {
      * Whether to enable debug visualization of bounding volumes
      */
     debugBoundingVolume?: boolean;
+
+    /**
+     * Matrix transformation callback that can be applied to transformMatrix
+     */
+    matrixTransformCallback?: MatrixTransformCallback;
 }
 
 class RootTile extends Tile {
@@ -224,6 +229,11 @@ export class TileRenderDataSource extends DataSource {
         };
 
         this.m_tilesRenderer = new TilesRenderer(rendererOptions);
+
+        // Set matrix transform callback if provided
+        if (options.matrixTransformCallback) {
+            this.m_tilesRenderer.matrixTransformCallback = options.matrixTransformCallback;
+        }
 
         // Configure renderer settings
         if (options.errorTarget !== undefined) {

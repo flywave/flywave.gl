@@ -1,6 +1,6 @@
 /example-definitions.js
 node_modules/
-dist/
+dist
 *.tgz
 lib/
 !src/lib/

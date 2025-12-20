@@ -1,7 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type Projection, ellipsoidProjection } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
+import { Projection } from "../projection/Projection";
+import { ellipsoidProjection } from "../projection/EllipsoidProjection";
 
 /**
  * Transforms ECEF (Earth-Centered, Earth-Fixed) coordinates to a target projection

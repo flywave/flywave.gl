@@ -68,9 +68,6 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             },
             postEffects: {
                 smaa: true,            // Enable SMAA anti-aliasing
-                translucentDepth: {
-                    mixFactor: 0.4      // Translucent depth mixing factor
-                },
                 brightnessContrast: {
                     brightness: 0.01,   // Brightness adjustment
                     contrast: 0.23,     // Contrast adjustment

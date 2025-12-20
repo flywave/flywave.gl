@@ -2,13 +2,10 @@
 
 import { type MapView } from "@flywave/flywave-mapview";
 import {
-    type IMapRenderingManager,
-    IMapAntialiasSettings,
-    MapRenderingManager
+    type IMapRenderingManager
 } from "@flywave/flywave-mapview/composing/MapRenderingManager";
 
 import { type MapViewMonitor } from "../monitor/MapViewMonitor";
-import { ITranslucentLayerConfig } from "@flywave/flywave-datasource-protocol";
 
 export interface PostProcessingData {
     bloom: {
@@ -59,7 +56,6 @@ export interface PostProcessingData {
         blurDepthCutoff?: number;
     };
     // 添加半透明深度配置
-    translucentDepth: ITranslucentLayerConfig;
     dynamicMsaaSamplingLevel: number;
     msaaEnabled: boolean;
     staticMsaaSamplingLevel: number;
@@ -108,7 +104,6 @@ export class PostProcessingModule {
             // 添加SSAO配置
             ssao: { ...this.mapRenderingManager.ssao },
             // 添加半透明深度配置
-            translucentDepth: { ...this.mapRenderingManager.translucentDepth },
             dynamicMsaaSamplingLevel: this.mapRenderingManager.dynamicMsaaSamplingLevel,
             msaaEnabled: this.mapRenderingManager.msaaEnabled,
             staticMsaaSamplingLevel: this.mapRenderingManager.staticMsaaSamplingLevel
@@ -142,7 +137,6 @@ export class PostProcessingModule {
                 // 添加SSAO默认值
                 ssao: { ...this.mapRenderingManager.ssao },
                 // 添加半透明深度默认值
-                translucentDepth: { ...this.mapRenderingManager.translucentDepth },
                 dynamicMsaaSamplingLevel: this.mapRenderingManager.dynamicMsaaSamplingLevel,
                 msaaEnabled: this.mapRenderingManager.msaaEnabled,
                 staticMsaaSamplingLevel: this.mapRenderingManager.staticMsaaSamplingLevel
@@ -198,11 +192,6 @@ export class PostProcessingModule {
                 blurStdDev: 4,
                 blurDepthCutoff: 0.01
             },
-            // 添加半透明深度默认值
-            translucentDepth: {
-                mixFactor: 0.4,
-                blendMode: "mix"
-            },
             dynamicMsaaSamplingLevel: 1,
             msaaEnabled: false,
             staticMsaaSamplingLevel: 4
@@ -226,7 +215,6 @@ export class PostProcessingModule {
         // 同步SSAO状态
         Object.assign(data.ssao, this.mapRenderingManager.ssao);
         // 同步半透明深度状态
-        Object.assign(data.translucentDepth, this.mapRenderingManager.translucentDepth);
         data.dynamicMsaaSamplingLevel = this.mapRenderingManager.dynamicMsaaSamplingLevel;
         data.msaaEnabled = this.mapRenderingManager.msaaEnabled;
         data.staticMsaaSamplingLevel = this.mapRenderingManager.staticMsaaSamplingLevel;
@@ -249,7 +237,6 @@ export class PostProcessingModule {
         // 更新SSAO状态
         Object.assign(this.mapRenderingManager.ssao, data.ssao);
         // 更新半透明深度状态
-        Object.assign(this.mapRenderingManager.translucentDepth, data.translucentDepth);
         this.mapRenderingManager.dynamicMsaaSamplingLevel = data.dynamicMsaaSamplingLevel;
         this.mapRenderingManager.msaaEnabled = data.msaaEnabled;
         this.mapRenderingManager.staticMsaaSamplingLevel = data.staticMsaaSamplingLevel;

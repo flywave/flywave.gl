@@ -38,7 +38,7 @@ const getMapCanvas = (): HTMLCanvasElement => {
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and view (Country Garden project location)
     const initialLocation = new GeoCoordinates(36.804157511532786, 117.92817009363822);
-    
+
     return new MapView({
         projection: sphereProjection,    // Use spherical projection
         target: initialLocation,         // Initial target position
@@ -59,10 +59,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                 atmosphere: true        // Enable atmospheric effect
             },
             postEffects: {
-                smaa: true,            // Enable SMAA anti-aliasing
-                translucentDepth: {
-                    mixFactor: 0.4      // Translucent depth mix factor
-                },
+                smaa: true,
                 brightnessContrast: {
                     brightness: -0.17,  // Brightness adjustment
                     contrast: 0.23,     // Contrast adjustment
@@ -93,7 +90,7 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  * Get 3D Tiles data source configuration
  * @returns 3D Tiles data source configuration array
  */
-const getTileSourceConfigs = (): Array<{name: string, url: string}> => {
+const getTileSourceConfigs = (): Array<{ name: string, url: string }> => {
     return [
         { name: "Street Lamp", url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ludeng/tileset.json` },
         // { name: "排水", url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ps/tileset.json` },
@@ -110,7 +107,7 @@ const getTileSourceConfigs = (): Array<{name: string, url: string}> => {
  */
 const add3DTileDataSources = (mapView: MapView): void => {
     const tileSources = getTileSourceConfigs();
-    
+
     // Batch add pipeline data sources
     tileSources.forEach(item => {
         const dataSource = new TileRenderDataSource({
@@ -119,18 +116,16 @@ const add3DTileDataSources = (mapView: MapView): void => {
         });
 
         dataSource.setTheme({
-            tile3DRender: {
-                postEffects: {
-                    translucentDepth: {
-                        enabled: true,    // Enable translucent depth effect
-                    }
-                },
-            }
+            postEffects: {
+                translucentDepth: {
+                    enabled: true,    // Enable translucent depth effect
+                }
+            },
         });
 
         mapView.addDataSource(dataSource);
     });
-    
+
     // Add green plant data source
     const treeDataSource = new TileRenderDataSource({
         url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_tree/tileset.json`,
@@ -145,20 +140,20 @@ const add3DTileDataSources = (mapView: MapView): void => {
  */
 const configureDEMTerrainSource = (mapView: MapView): void => {
     const demTerrain = new DEMTerrainSource({
-        source: { 
-            "bounds": [117.88982391357423, 36.78839127856239, 117.94132232666017, 36.829622821570254], 
-            "minzoom": 0, 
-            "maxzoom": 14, 
-            "scheme": "xyz", 
-            "tiles": [PROJECT_CONFIG.SERVER_URL + "/"+ PROJECT_CONFIG.PROJECT_NAME +"/terrain/{z}/{x}/{y}.png"], 
-            "type": "raster-dem", 
+        source: {
+            "bounds": [117.88982391357423, 36.78839127856239, 117.94132232666017, 36.829622821570254],
+            "minzoom": 0,
+            "maxzoom": 14,
+            "scheme": "xyz",
+            "tiles": [PROJECT_CONFIG.SERVER_URL + "/" + PROJECT_CONFIG.PROJECT_NAME + "/terrain/{z}/{x}/{y}.png"],
+            "type": "raster-dem",
             "tileSize": 512
         }
     });
 
     // Add Web tile data source
-    demTerrain.addWebTileDataSource(new ArcGISTileProvider({ minDataLevel: 0, maxDataLevel: 18 })); 
-    
+    demTerrain.addWebTileDataSource(new ArcGISTileProvider({ minDataLevel: 0, maxDataLevel: 18 }));
+
     // Set as map elevation data source
     mapView.setElevationSource(demTerrain);
 };
@@ -178,25 +173,25 @@ const initializeMapMonitor = (mapView: MapView): void => {
 try {
     // 1. Get map canvas element
     const canvas = getMapCanvas();
-    
+
     // 2. Initialize map view
     const mapView = initializeMapView(canvas);
-    
+
     // 3. Initialize map controls
     initializeMapControls(mapView, canvas);
-    
+
     // 4. Add 3D Tiles data sources
     add3DTileDataSources(mapView);
-    
+
     // 5. Configure DEM terrain data source
     configureDEMTerrainSource(mapView);
-    
+
     // 6. Initialize map monitor
     initializeMapMonitor(mapView);
-    
+
     // 7. Expose map view to global scope for debugging
     (window as any).mapView = mapView;
-    
+
     console.log("Community construction project visualization example initialized successfully");
 } catch (error) {
     console.error("Error initializing community construction project visualization example:", error);

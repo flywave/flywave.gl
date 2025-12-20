@@ -33,8 +33,10 @@ import {
 import { ITile, type Tile, type TileInternal } from "../base/Tile";
 import { TilesRendererBase } from "../base/TilesRendererBase";
 import { type ViewErrorTarget } from "../base/traverseFunctions";
+
+// Type for matrix transformation function
+export type MatrixTransformCallback = (matrix: Matrix4) => Matrix4;
 import { type Tiles3DTileContent } from "../loader";
-import { transformECEFToProjection } from "../utilities/ecefToSphere";
 import { estimateBytesUsed } from "../utilities/estimateBytesUsed";
 import { TileBoundingVolume } from "../utilities/TileBoundingVolume";
 import { raycastTraverse, raycastTraverseFirstHit } from "./raycastTraverse";
@@ -225,6 +227,11 @@ export abstract class TilesRenderer extends TilesRendererBase {
     }
 
     debugBoundingVolume: boolean = false;
+
+    /**
+     * Matrix transformation callback that can be applied to transformMatrix
+     */
+    matrixTransformCallback: MatrixTransformCallback | null = null;
 
     /**
      * Shared material for points rendering
@@ -662,7 +669,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
             boundingVolume.setSphereData(
                 this.getProjection(),
                 ...[0, 0, 0, tile.boundingVolume.sphere[3]],
-                transformMatrix
+                this.matrixTransformCallback?.(transformMatrix) || transformMatrix
             );
         } else if ("box" in tile.boundingVolume) {
             const ecefPos = new Vector3().fromArray(tile.boundingVolume.box);
@@ -674,7 +681,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
             box[1] = 0;
             box[2] = 0;
 
-            boundingVolume.setObbData(this.getProjection(), box, transformMatrix);
+            boundingVolume.setObbData(this.getProjection(), box, this.matrixTransformCallback?.(transformMatrix) || transformMatrix);
         } else if ("region" in tile.boundingVolume) {
             boundingVolume.setRegionData(this.getProjection(), ...tile.boundingVolume.region);
         }
@@ -905,6 +912,12 @@ export abstract class TilesRenderer extends TilesRendererBase {
 
         const transformMatrix = metadata.rtcCenter ? new Matrix4().setPosition(new Vector3().fromArray(metadata.rtcCenter).applyMatrix4(tile.cached.transform)) : tile.cached.transform;
 
+        // Apply matrix transformation callback if provided
+        let finalTransformMatrix = transformMatrix;
+        if (this.matrixTransformCallback) {
+            finalTransformMatrix = this.matrixTransformCallback(transformMatrix.clone());
+        }
+
         // Apply RTC center and transformations
         // scene.position.copy(projectedPos);
         scene.updateMatrix();
@@ -913,7 +926,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
             scene.matrix.multiply(tempMat);
         }
 
-        scene.matrix.premultiply(transformMatrix);
+        scene.matrix.premultiply(finalTransformMatrix);
         scene.matrix.decompose(scene.position, scene.quaternion, scene.scale);
 
         updateFrustumCulled(scene, !this.autoDisableRendererCulling);

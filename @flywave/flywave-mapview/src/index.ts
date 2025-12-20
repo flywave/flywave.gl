@@ -40,7 +40,6 @@ export * from "./FixedClipPlanesEvaluator";
 export * from "./FovCalculation";
 export * from "./PolarTileDataSource";
 export * from "./DecodedTileHelpers";
-export * from "./DepthPrePass";
 export * from "./DisplacementMap";
 export * from "./ElevationProvider";
 export * from "./ElevationRangeSource";
