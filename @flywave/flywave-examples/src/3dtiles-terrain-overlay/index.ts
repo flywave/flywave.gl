@@ -30,7 +30,7 @@ const getMapCanvas = (): HTMLCanvasElement => {
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and view (New York City, near Statue of Liberty)
     const initialLocation = new GeoCoordinates(40.6959, -74.0162);
-    
+
     return new MapView({
         projection: ellipsoidProjection, // Use ellipsoid projection
         target: initialLocation,         // Initial target position
@@ -39,12 +39,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         heading: 35.1,                  // Initial heading angle
         canvas: canvas,                 // Specify render canvas
         theme: {
-            extends: "resources/tilezen_base_globe.json", // Base theme configuration
-            postEffects: {
-                "translucentDepth": {
-                    mixFactor: 0.5,      // Translucent depth mix factor
-                }
-            }
+            extends: "resources/tilezen_base_globe.json"
         }
     });
 };
@@ -70,9 +65,9 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
     });
 
     mapView.setElevationSource(demTerrain);
-    demTerrain.addWebTileDataSource(new ArcGISTileProvider({ 
-        minDataLevel: 0, 
-        maxDataLevel: 18 
+    demTerrain.addWebTileDataSource(new ArcGISTileProvider({
+        minDataLevel: 0,
+        maxDataLevel: 18
     }));
 };
 
@@ -90,17 +85,15 @@ const createCesiumIonDataSource = (mapView: MapView): CesiumIonDataSource => {
 
     // Set data source theme, enable translucent depth effect
     cesiumIonDataSource.setTheme({
-        "tile3DRender": {
-            "postEffects": {
-                "translucentDepth": {
-                    enabled: true,       // Enable translucent depth effect
-                }
-            },
-        }
+        "postEffects": {
+            "translucentDepth": {
+                enabled: true,       // Enable translucent depth effect
+            }
+        },
     });
 
     mapView.addDataSource(cesiumIonDataSource);
-    
+
     return cesiumIonDataSource;
 };
 
@@ -109,19 +102,19 @@ const createCesiumIonDataSource = (mapView: MapView): CesiumIonDataSource => {
 try {
     // 1. Get map canvas element
     const canvas = getMapCanvas();
-    
+
     // 2. Initialize map view
     const mapView = initializeMapView(canvas);
-    
+
     // 3. Initialize map controls
     initializeMapControls(mapView, canvas);
-    
+
     // 4. Configure DEM terrain data source
     configureDEMTerrainSource(mapView);
-    
+
     // 5. Create Cesium Ion data source
     const cesiumDataSource = createCesiumIonDataSource(mapView);
-    
+
     console.log("3D Tiles terrain overlay example initialized successfully");
 } catch (error) {
     console.error("Error initializing 3D Tiles terrain overlay example:", error);

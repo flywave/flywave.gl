@@ -44,14 +44,13 @@ const getMapCanvas = (): HTMLCanvasElement => {
  */
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and view (Zhoucun project location)
-    const initialLocation = new GeoCoordinates(36.8356, 117.8525);
+    const initialLocation = new GeoCoordinates(36.8335, 117.8541,112);
 
     return new MapView({
         projection: sphereProjection,    // Use spherical projection
         target: initialLocation,         // Initial target position
-        zoomLevel: 18,                  // Initial zoom level
-        tilt: 70,                       // Initial tilt angle
-        logarithmicDepthBuffer: true,    // Enable logarithmic depth buffer
+        tilt: 64,                       // Initial tilt angle
+        heading:-61.0,                       // Initial heading angle
         canvas: canvas,                 // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
@@ -99,10 +98,10 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  */
 const getPipeSourceConfigs = (): Array<{ name: string, url: string }> => {
     return [
-        // { name: "Street Lamp", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ludeng/tileset.json` },
-        // { name: "Drainage", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ps/tileset.json` },
-        // { name: "Electricity", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_power/tileset.json` },
-        // { name: "Natural Gas", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_trq/tileset.json` },
+        { name: "Street Lamp", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ludeng/tileset.json` },
+        { name: "Drainage", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ps/tileset.json` },
+        { name: "Electricity", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_power/tileset.json` },
+        { name: "Natural Gas", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_trq/tileset.json` },
         { name: "Drinking Water", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ys/tileset.json` }
     ];
 };
@@ -128,9 +127,9 @@ const addPipeDataSources = (mapView: MapView): void => {
                 },
                 translucentDepth: {
                     enabled: true,   // Enable translucent depth effect
-                    mixFactor: 1, // Translucent depth mix factor
+                    mixFactor: 0.7, // Translucent depth mix factor
                     useObjectColor: true, // Use object color for translucent depth
-                    objectColorMix: 0, // Object color mix factor
+                    objectColorMix: 0.3, // Object color mix factor
                     color: `#${new Color(0xffffff).getHexString()}` // Object color
                 }
             },

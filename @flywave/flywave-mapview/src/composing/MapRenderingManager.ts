@@ -27,16 +27,19 @@ import {
     SMAAEffect,
     SMAAPreset,
     SSAOEffect,
-    VignetteEffect
+    VignetteEffect,
+    DepthCopyPass,
+    CopyPass
 } from "postprocessing";
 import * as THREE from "three";
 
+import { ClassificationType } from "../DataSource";
 import { SelectiveBloomEffect } from "./SelectiveBloomEffect";
 
 import { type IPassManager } from "./IPassManager";
 import { LowResEffect } from "./LowResRenderPass";
 import { TranslucentLayerEffect } from "./TranslucentDepthEffect";
-import { DepthPickingWithStencilPass } from "./StencilDepthPickingPass";
+import { DepthReadingPass } from "./DepthReadingPass";
 
 // Interface for effects that can be enabled/disabled
 interface IEnabledEffect extends Effect {
@@ -128,15 +131,6 @@ export interface IMapRenderingManager extends IPassManager {
     dynamicMsaaSamplingLevel: MSAASampling;
     msaaEnabled: boolean;
     staticMsaaSamplingLevel: MSAASampling;
-    translucentDepth: {
-        mixFactor?: number;
-        blendMode?: "mix" | "add" | "multiply" | "screen";
-    };
-    // Depth picking related configuration
-    depthPicking: {
-        enabled: boolean;
-        stencilRef?: number;
-    };
 
     /**
      * Render the scene
@@ -236,21 +230,21 @@ export interface IMapRenderingManager extends IPassManager {
      * @param customEffect - Custom effect to add
      */
     addCustomEffect(customEffect: ICustomEffect): void;
-    
+
     /**
      * Remove a custom effect
      * @param effectId - ID of the effect to remove
      * @returns Whether the effect was successfully removed
      */
     removeCustomEffect(effectId: string): boolean;
-    
+
     /**
      * Get a custom effect by ID
      * @param effectId - ID of the effect to retrieve
      * @returns The custom effect or undefined if not found
      */
     getCustomEffect(effectId: string): ICustomEffect | undefined;
-    
+
     /**
      * Enable or disable a custom effect
      * @param effectId - ID of the effect to update
@@ -258,7 +252,7 @@ export interface IMapRenderingManager extends IPassManager {
      * @returns Whether the effect was successfully updated
      */
     setCustomEffectEnabled(effectId: string, enabled: boolean): boolean;
-    
+
     /**
      * Update a custom effect
      * @param effectId - ID of the effect to update
@@ -266,38 +260,25 @@ export interface IMapRenderingManager extends IPassManager {
      * @returns Whether the effect was successfully updated
      */
     updateCustomEffect(effectId: string, updater: (effect: Effect) => void): boolean;
-    
+
     /**
      * Get all custom effects
      * @returns Array of all custom effects
      */
     getAllCustomEffects(): ICustomEffect[];
 
-    // Depth picking related methods
-    /**
-     * Enable or disable depth picking
-     * @param enabled - Whether depth picking should be enabled
-     */
-    setDepthPickingEnabled(enabled: boolean): void;
-    
     /**
      * Set stencil reference value for depth picking
      * @param stencilRef - Stencil reference value
      */
     setDepthPickingStencilRef(stencilRef: number): void;
-    
-    /**
-     * Get depth texture
-     * @returns Depth texture or null if not available
-     */
-    getDepthTexture(): THREE.Texture | null;
-    
+
     /**
      * Read depth at a specific point
      * @param ndc - Normalized device coordinates
-     * @returns Promise resolving to depth value or null
+     * @returns Depth value or null
      */
-    readDepth(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null>;
+    readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null;
 }
 
 // Main rendering manager implementation
@@ -363,17 +344,6 @@ export class MapRenderingManager implements IMapRenderingManager {
         blurDepthCutoff: 0.01
     };
 
-    // Translucent depth configuration
-    translucentDepth = {
-
-    };
-
-    // Depth picking configuration
-    depthPicking = {
-        enabled: false,
-        stencilRef: 1
-    };
-
     // Anti-aliasing effect configuration
     fxaaEnabled: boolean = false;
     smaaEnabled: boolean = false;
@@ -399,7 +369,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_ssaoEffect?: SSAOEffect & IEnabledEffect;
     private m_normalPass?: NormalPass & IEnabledEffect;
     private m_translucentDepthEffect?: TranslucentLayerEffect & IEnabledEffect;
-    private m_depthPickingPass?: DepthPickingWithStencilPass & IEnabledEffect;
+    private m_depthCopyPass?: DepthReadingPass;
 
     private m_dynamicMsaaSamplingLevel: MSAASampling;
     private m_staticMsaaSamplingLevel: MSAASampling;
@@ -463,11 +433,6 @@ export class MapRenderingManager implements IMapRenderingManager {
         });
         this.m_mainRenderPass = new RenderPass(this.m_scene, this.m_camera);
         this.m_composer.addPass(this.m_mainRenderPass);
-
-        // Initialize depth picking pass
-        this.m_depthPickingPass = new DepthPickingWithStencilPass() as DepthPickingWithStencilPass & IEnabledEffect;
-        this.m_depthPickingPass.enabled = this.depthPicking.enabled;
-        this.m_composer.addPass(this.m_depthPickingPass);
 
         // Initialize NormalPass for SSAO
         this.m_normalPass = new NormalPass(this.m_scene, this.m_camera) as NormalPass &
@@ -559,6 +524,10 @@ export class MapRenderingManager implements IMapRenderingManager {
             this.m_lowResEffect = new LowResEffect(this.m_lowResPixelRatio);
         }
 
+        // Initialize DepthCopyPass
+        this.m_depthCopyPass = new DepthReadingPass();
+        this.m_depthCopyPass.enabled = true; // Enable by default
+
         // Create effect pass
         this.recreateEffectPass();
     }
@@ -615,10 +584,13 @@ export class MapRenderingManager implements IMapRenderingManager {
         if (this.m_lowResEffect) {
             allEffects.push(this.m_lowResEffect);
         }
+        // Add DepthCopyPass as a separate pass after the effect pass
+        if (this.m_depthCopyPass) {
+            this.m_composer.addPass(this.m_depthCopyPass);
+        }
 
         this.m_effectPass = new FilterEffectPass(this.m_camera, ...allEffects);
         this.m_composer.addPass(this.m_effectPass);
-
         // Update recorded state
         this.m_lastFxaaEnabled = this.fxaaEnabled;
         this.m_lastSmaaEnabled = this.smaaEnabled;
@@ -642,8 +614,7 @@ export class MapRenderingManager implements IMapRenderingManager {
             !this.m_smaaEffect ||
             !this.m_ssaoEffect ||
             !this.m_normalPass || // Add NormalPass check
-            !this.m_translucentDepthEffect || // Add translucent depth effect check
-            !this.m_depthPickingPass // Add depth picking pass check
+            !this.m_translucentDepthEffect // Add translucent depth effect check
         ) {
             this.initializeEffects();
             return;
@@ -659,15 +630,6 @@ export class MapRenderingManager implements IMapRenderingManager {
             customEffect => customEffect.effect.enabled !== customEffect.enabled
         );
 
-        // Update depth picking pass
-        if (this.m_depthPickingPass) {
-            this.m_depthPickingPass.enabled = this.depthPicking.enabled;
-
-            // Update stencil reference value
-            if (this.depthPicking.stencilRef !== undefined) {
-                this.m_depthPickingPass.setStencilRef(this.depthPicking.stencilRef);
-            }
-        }
 
         // Translucent depth effect - always enabled
         if (this.m_translucentDepthEffect) {
@@ -781,40 +743,6 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
 
         this.m_composer?.setSize(this.m_width, this.m_height);
-    }
-
-    // Depth picking related methods
-    /**
-     * Enable or disable depth picking
-     * @param enabled - Whether depth picking should be enabled
-     */
-    setDepthPickingEnabled(enabled: boolean): void {
-        this.depthPicking.enabled = enabled;
-        if (this.m_depthPickingPass) {
-            this.m_depthPickingPass.enabled = enabled;
-        }
-    }
-
-    /**
-     * Set stencil reference value for depth picking
-     * @param stencilRef - Stencil reference value
-     */
-    setDepthPickingStencilRef(stencilRef: number): void {
-        this.depthPicking.stencilRef = stencilRef;
-        if (this.m_depthPickingPass) {
-            this.m_depthPickingPass.setStencilRef(stencilRef);
-        }
-    }
-
-    /**
-     * Get depth texture
-     * @returns Depth texture or null if not available
-     */
-    getDepthTexture(): THREE.Texture | null {
-        if (this.m_depthPickingPass && this.depthPicking.enabled) {
-            return this.m_depthPickingPass.getDepthTexture();
-        }
-        return null;
     }
 
     // New method: Set anti-aliasing type
@@ -1099,12 +1027,24 @@ export class MapRenderingManager implements IMapRenderingManager {
     }
 
     /**
-     * Read depth at a specific point
-     * @param ndc - Normalized device coordinates
-     * @returns Promise resolving to depth value or null
+     * Read depth at a specific point synchronously.
+     * 
+     * Performance considerations:
+     * - This is synchronous and will cause a GPU sync point, which may impact performance
+     * - For high-frequency use cases, prefer getDepthTexture() and shader-based solutions
+     * 
+     * @param ndc - Normalized device coordinates (x, y in range [-1, 1])
+     * @returns Depth value (in range [0, 1]) or null if reading failed
      */
-    readDepth(ndc: THREE.Vector2 | THREE.Vector3): Promise<number> | null {
-        return this.m_depthPickingPass?.readDepth(ndc) ?? null;
+    readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null {
+
+        // Delegate to DepthReadingPass if available
+        if (this.m_depthCopyPass) {
+            let depth = this.m_depthCopyPass.readDepth(ndc);
+
+            return depth;
+        }
+        return null;
     }
 
     /**
@@ -1161,4 +1101,26 @@ export class MapRenderingManager implements IMapRenderingManager {
             this.m_translucentDepthEffect.removeFromLayer(object);
         }
     }
+
+    /**
+     * Set stencil reference value for depth picking
+     * @param stencilRef - Stencil reference value
+     */
+    setDepthPickingStencilRef(stencilRef: ClassificationType): void {
+        if (this.m_depthCopyPass) {
+            // Convert stencilRef to ClassificationType if it matches a known type, otherwise pass as-is
+            this.m_depthCopyPass.setClassificationTypeFilter(stencilRef);
+        }
+    }
+
+    /**
+     * Set classification type filter for depth reading
+     * @param classificationType - The classification type to filter by, or 0 to disable filtering
+     */
+    setDepthReadingFilter(classificationType: ClassificationType): void {
+        if (this.m_depthCopyPass) {
+            this.m_depthCopyPass.setClassificationTypeFilter(classificationType);
+        }
+    }
+
 }

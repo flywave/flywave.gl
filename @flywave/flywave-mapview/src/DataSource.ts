@@ -18,6 +18,22 @@ import { ElevationRangeSource } from "./ElevationRangeSource";
 const logger = LoggerManager.instance.create("DataSource");
 
 /**
+ * Enum representing classification types for rendered objects.
+ * These values are used as stencil references in depth reading operations
+ * to filter results by object classification.
+ */
+export enum ClassificationType {
+    /** Terrain objects */
+    TERRAIN = 1,
+    
+    /** 3D Tiles objects */
+    TILE_3D = 2,
+    
+    /** Both terrain and 3D tiles */
+    BOTH = 3
+}
+
+/**
  * Options for a {@link DataSource}.
  */
 export interface DataSourceOptions {

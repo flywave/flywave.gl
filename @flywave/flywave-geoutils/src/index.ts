@@ -54,6 +54,7 @@ export * from "./math/Box3Like";
 export * from "./math/OrientedBox3Like";
 export * from "./math/OrientedBoxHelper";
 export * from "./math/BoundingSphere";
+export * from "./math/EcefToSphere";
 // export * from "./math/MathUtils";
 export * from "./math/TransformLike";
 export * from "./math/OrientedBox3";
