@@ -27,7 +27,7 @@ tags: [3dtile, 地形融合, 可视化, 深度处理]
 <div style={{width: '100%', textAlign: 'center', padding: '1rem', border: '1px solid #eee', borderRadius: '8px', marginBottom: '2rem'}}>
   <h4>无融合效果（管网场景）</h4>
   <img 
-    src="../blog/no_filter_effect_1.png" 
+    src="https://flywave.github.io/flywave.gl/blog/no_filter_effect_1.png" 
     alt="无融合效果（管网场景）" 
     style={{maxHeight: '600px', objectFit: 'contain', width: '100%', margin: '0 auto'}} 
   />
@@ -37,7 +37,7 @@ tags: [3dtile, 地形融合, 可视化, 深度处理]
 <div style={{width: '100%', textAlign: 'center', padding: '1rem', border: '1px solid #eee', borderRadius: '8px', marginBottom: '2rem'}}>
   <h4>启用融合效果（使用指定颜色）</h4>
   <img 
-    src="../blog/filter_effect_use_color_1.png" 
+    src="https://flywave.github.io/flywave.gl/blog/filter_effect_use_color_1.png" 
     alt="启用融合效果（使用指定颜色）" 
     style={{maxHeight: '600px', objectFit: 'contain', width: '100%', margin: '0 auto'}} 
   />
@@ -47,7 +47,7 @@ tags: [3dtile, 地形融合, 可视化, 深度处理]
 <div style={{width: '100%', textAlign: 'center', padding: '1rem', border: '1px solid #eee', borderRadius: '8px', marginBottom: '2rem'}}>
   <h4>不使用叠加颜色</h4>
   <img 
-    src="../blog/filter_effect_use_raw_1.png" 
+    src="https://flywave.github.io/flywave.gl/blog/filter_effect_use_raw_1.png" 
     alt="不使用叠加颜色" 
     style={{maxHeight: '600px', objectFit: 'contain', width: '100%', margin: '0 auto'}} 
   />
@@ -57,7 +57,7 @@ tags: [3dtile, 地形融合, 可视化, 深度处理]
 <div style={{width: '100%', textAlign: 'center', padding: '1rem', border: '1px solid #eee', borderRadius: '8px', marginBottom: '2rem'}}>
   <h4>保持正常遮挡关系</h4>
   <img 
-    src="../blog/filter_effect_use_color_depth_1.png" 
+    src="https://flywave.github.io/flywave.gl/blog/filter_effect_use_color_depth_1.png" 
     alt="保持正常遮挡关系" 
     style={{maxHeight: '600px', objectFit: 'contain', width: '100%', margin: '0 auto'}} 
   />
@@ -67,7 +67,7 @@ tags: [3dtile, 地形融合, 可视化, 深度处理]
 <div style={{width: '100%', textAlign: 'center', padding: '1rem', border: '1px solid #eee', borderRadius: '8px', marginBottom: '2rem'}}>
   <h4>无融合效果（倾斜摄影场景）</h4>
   <img 
-    src="../blog/no_filter_effect_2.png" 
+    src="https://flywave.github.io/flywave.gl/blog/no_filter_effect_2.png" 
     alt="无融合效果（倾斜摄影场景）" 
     style={{maxHeight: '600px', objectFit: 'contain', width: '100%', margin: '0 auto'}} 
   />
@@ -77,7 +77,7 @@ tags: [3dtile, 地形融合, 可视化, 深度处理]
 <div style={{width: '100%', textAlign: 'center', padding: '1rem', border: '1px solid #eee', borderRadius: '8px', marginBottom: '2rem'}}>
   <h4>启用融合效果（控制遮挡距离）</h4>
   <img 
-    src="../blog/filter_effect_use_raw_2.png" 
+    src="https://flywave.github.io/flywave.gl/blog/filter_effect_use_raw_2.png" 
     alt="启用融合效果（控制遮挡距离）" 
     style={{maxHeight: '600px', objectFit: 'contain', width: '100%', margin: '0 auto'}} 
   />
