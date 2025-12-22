@@ -11,7 +11,7 @@ export interface PostEffects {
     brightnessContrast?: IBrightnessContrastEffect;
     fxaa?: boolean;
     smaa?: boolean;
-    ssao?: ISSAOEffect; 
+    ssao?: ISSAOEffect;
 }
 
 export interface IOutlineEffect {
@@ -99,4 +99,6 @@ export interface ITranslucentLayerConfig {
     useObjectColor?: boolean;
     /** Original color blending intensity (0-1), default is 0.5 */
     objectColorMix?: number;
+
+    mode?: 'normal' | 'background';
 }
