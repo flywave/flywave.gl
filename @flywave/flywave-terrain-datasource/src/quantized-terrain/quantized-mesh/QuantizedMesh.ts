@@ -68,7 +68,7 @@ interface CommonUniforms {
     waterMaskTexture: { value: THREE.Texture };
 
     normalSampler: { value: THREE.Texture };
-    frameNumber: { value: number }; 
+    frameNumber: { value: number };
 }
 
 export class QuantizedMeshMaterial extends THREE.MeshStandardMaterial {
@@ -83,7 +83,7 @@ export class QuantizedMeshMaterial extends THREE.MeshStandardMaterial {
         normalSampler: { value: new THREE.DataTexture() },
         overlayerImageryTransform: { value: new THREE.Vector4() },
         overlayerImagery: { value: new THREE.Texture() },
-        frameNumber: { value: 0 }, 
+        frameNumber: { value: 0 },
     };
 
     public defines: Record<string, any> = {};
@@ -226,7 +226,7 @@ export class QuantizedMeshMaterial extends THREE.MeshStandardMaterial {
     public set frameNumber(value: number) {
         this.commonUniform.frameNumber.value = value;
     }
- 
+
 }
 
 /**
@@ -255,7 +255,7 @@ export class QuantizedMesh extends THREE.Mesh {
         protected readonly projectionSwitchController: ProjectionSwitchController,
         protected readonly mapView?: MapView
     ) {
-        super(undefined, new QuantizedMeshMaterial({ wireframe: false }));
+        super(undefined, new QuantizedMeshMaterial({ wireframe: false, transparent: false, blending: THREE.NoBlending }));
         this.receiveShadow = true;
 
         this.setupFromQuantizedTerrainMesh(quantizedTerrainMesh);
@@ -374,7 +374,7 @@ export class QuantizedMesh extends THREE.Mesh {
         const material = this.material as QuantizedMeshMaterial;
         material.clipUvTransform = this._computeClipUvTransform(parentGeobox);
     }
- 
+
 
     /**
      * Computes the texture UV transform between imagery and quantized tiles

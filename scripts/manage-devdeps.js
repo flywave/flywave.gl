@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Script to manage devDependencies for flywave.gl package during publish
+ * Script to manage devDependencies and scripts for flywave.gl package during publish
  * 
  * Usage:
- * - Backup devDependencies: node manage-devdeps.js backup
- * - Restore devDependencies: node manage-devdeps.js restore
- * - Clear devDependencies: node manage-devdeps.js clear
+ * - Backup devDependencies and scripts: node manage-devdeps.js backup
+ * - Restore devDependencies and scripts: node manage-devdeps.js restore
+ * - Clear devDependencies and scripts: node manage-devdeps.js clear
  */
 
 import fs from 'fs';
@@ -18,6 +18,7 @@ const __dirname = path.dirname(__filename);
 
 const PACKAGE_JSON_PATH = path.join(__dirname, '../@flywave/flywave.gl/package.json');
 const BACKUP_PATH = path.join(__dirname, '../@flywave/flywave.gl/package.devdeps.backup');
+const SCRIPTS_BACKUP_PATH = path.join(__dirname, '../@flywave/flywave.gl/package.scripts.backup');
 
 function readPackageJson() {
   const content = fs.readFileSync(PACKAGE_JSON_PATH, 'utf8');
@@ -40,6 +41,15 @@ function backupDevDependencies() {
     fs.writeFileSync(BACKUP_PATH, '{}');
     console.log('ℹ️ No devDependencies to backup');
   }
+  
+  // Backup scripts if they exist
+  if (pkg.scripts) {
+    fs.writeFileSync(SCRIPTS_BACKUP_PATH, JSON.stringify(pkg.scripts, null, 2));
+    console.log('✅ Backed up scripts');
+  } else {
+    fs.writeFileSync(SCRIPTS_BACKUP_PATH, '{}');
+    console.log('ℹ️ No scripts to backup');
+  }
 }
 
 function restoreDevDependencies() {
@@ -52,6 +62,15 @@ function restoreDevDependencies() {
   const backup = JSON.parse(fs.readFileSync(BACKUP_PATH, 'utf8'));
   
   pkg.devDependencies = backup;
+  
+  // Restore scripts if backup exists
+  if (fs.existsSync(SCRIPTS_BACKUP_PATH)) {
+    const scriptsBackup = JSON.parse(fs.readFileSync(SCRIPTS_BACKUP_PATH, 'utf8'));
+    pkg.scripts = scriptsBackup;
+    fs.unlinkSync(SCRIPTS_BACKUP_PATH);
+    console.log('✅ Restored scripts');
+  }
+  
   writePackageJson(pkg);
   
   // Remove backup file
@@ -63,8 +82,12 @@ function restoreDevDependencies() {
 function clearDevDependencies() {
   const pkg = readPackageJson();
   pkg.devDependencies = {};
+  
+  // Clear scripts as well
+  pkg.scripts = {};
+  
   writePackageJson(pkg);
-  console.log('✅ Cleared devDependencies');
+  console.log('✅ Cleared devDependencies and scripts');
 }
 
 // Main execution

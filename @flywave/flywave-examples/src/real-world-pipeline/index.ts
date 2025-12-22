@@ -114,7 +114,7 @@ const addPipeDataSources = (mapView: MapView): void => {
     const pipeSources = getPipeSourceConfigs();
 
     // Batch add pipeline data sources
-    pipeSources.forEach(item => {
+    pipeSources.forEach((item,index) => {
         const dataSource = new TileRenderDataSource({
             url: item.url,
             name: item.name
@@ -130,7 +130,8 @@ const addPipeDataSources = (mapView: MapView): void => {
                     mixFactor: 0.7, // Translucent depth mix factor
                     useObjectColor: true, // Use object color for translucent depth
                     objectColorMix: 0.3, // Object color mix factor
-                    color: `#${new Color(0xffffff).getHexString()}` // Object color
+                    color: `#${new Color(Math.random()*0xff0000).getHexString()}`, // Object color
+                    occlusionDistance:10000
                 }
             },
         });
@@ -142,6 +143,15 @@ const addPipeDataSources = (mapView: MapView): void => {
     const buildingDataSource = new TileRenderDataSource({
         url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_buildings/tileset.json`,
         name: "Buildings"
+    });
+
+    buildingDataSource.setTheme({
+        postEffects: {
+            translucentDepth: {
+                enabled: true,   // Enable translucent depth effect
+                mode: 'background' 
+            }
+        },
     });
     mapView.addDataSource(buildingDataSource);
 };

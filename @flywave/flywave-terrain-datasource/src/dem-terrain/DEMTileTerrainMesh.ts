@@ -92,7 +92,7 @@ export class HeightMapTerrainMesh extends Mesh {
     /** Target Z rotation for spherical projection */
     private readonly m_targetZRotation: number;
 
-        /** The skirt height for the mesh */
+    /** The skirt height for the mesh */
     private readonly m_skirtHeight: number;
 
     private readonly m_yDown: boolean = this.m_tilingSchemeTileGrid.isYAxisDown();
@@ -113,7 +113,7 @@ export class HeightMapTerrainMesh extends Mesh {
         private readonly m_tilingSchemeTileGrid: TileGeometryBuilder,
         materialParams?: THREE.MeshStandardMaterialParameters,
     ) {
-        const material = new DEMTileMeshMaterial({...materialParams,transparent:false});
+        const material = new DEMTileMeshMaterial({ ...materialParams, transparent: false, blending: THREE.NoBlending });
         const geometryWithTransform = m_tilingSchemeTileGrid.getTileGeometryWithTransform(m_tile.tileKey);
 
         super(geometryWithTransform.geometry, material);
@@ -122,7 +122,7 @@ export class HeightMapTerrainMesh extends Mesh {
         this.m_isSimplePatch = geometryWithTransform.geometry.mode.is_simple_patch;
         this.m_transformation = geometryWithTransform.transformation;
         this.m_skirtHeight = geometryWithTransform.skirtHeight;
-        
+
         // 计算目标Z旋转（球面投影时的旋转值）
         this.m_targetZRotation = (Math.PI * 2 * m_tile.tileKey.column) /
             this.m_tilingSchemeTileGrid
@@ -130,7 +130,7 @@ export class HeightMapTerrainMesh extends Mesh {
                 .subdivisionScheme.getLevelDimensionX(m_tile.tileKey.level);
 
         this._initializeMesh();
- 
+
         this.frustumCulled = false;
     }
 
