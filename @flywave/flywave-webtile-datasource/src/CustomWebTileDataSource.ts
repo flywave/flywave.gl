@@ -47,19 +47,6 @@ interface CustomWebTileDataSourceOptions extends Omit<WebTileDataSourceOptions, 
      */
     headers?: RequestHeaders;
 
-    /**
-     * Minimum zoom level for data.
-     *
-     * @default 0
-     */
-    minZoomLevel?: number;
-
-    /**
-     * Maximum zoom level for data.
-     *
-     * @default 20
-     */
-    maxZoomLevel?: number;
 }
 
 /**
@@ -86,14 +73,6 @@ export class CustomTileProvider extends WebTileDataProvider {
         this.m_headers = m_options.headers;
     }
 
-    get minLevel(): number {
-        return this.m_options.minZoomLevel ?? 0;
-    }
-
-    get maxLevel(): number {
-        return this.m_options.maxZoomLevel ?? 19;
-    }
-    
     /** @override */
     async getTexture(tile: Tile, abortSignal?: AbortSignal): Promise<[Texture, CopyrightInfo[]]> {
         const { column, row, level } = tile.tileKey;
@@ -183,8 +162,8 @@ export class CustomWebTileDataSource extends WebTileDataSource {
 
         super({
             ...m_options,
-            minDataLevel: m_options.minZoomLevel ?? 0,
-            maxDataLevel: m_options.maxZoomLevel ?? 19,
+            minDataLevel: m_options.minDataLevel ?? 0,
+            maxDataLevel: m_options.maxDataLevel ?? 19,
             dataProvider: new CustomTileProvider(m_options),
             storageLevelOffset: m_options.storageLevelOffset ?? -1
         });
