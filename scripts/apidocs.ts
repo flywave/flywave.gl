@@ -65,6 +65,7 @@ async function main() {
         "@flywave/flywave-mapview",
         "@flywave/flywave-features-datasource",
         "@flywave/flywave-geojson-datasource",
+        "@flywave/flywave-webtile-datasource",
         "@flywave/flywave-terrain-datasource",
         "@flywave/flywave-vectortile-datasource",
         "@flywave/flywave-3dtile-datasource",

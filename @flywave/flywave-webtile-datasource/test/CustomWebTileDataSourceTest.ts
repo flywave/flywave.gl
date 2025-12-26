@@ -33,8 +33,8 @@ describe("CustomWebTileDataSource", function () {
     it("#createCustomWebTileDataSource with custom min/max zoom levels", function () {
         const customWebTileDataSource = new CustomWebTileDataSource({
             tileUrlTemplate: "https://example.com/{z}/{x}/{y}.png",
-            minZoomLevel: 5,
-            maxZoomLevel: 15
+            minDataLevel: 5,
+            maxDataLevel: 15
         });
 
         expect(customWebTileDataSource.minDataLevel).to.equal(5);
