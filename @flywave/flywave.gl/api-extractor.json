@@ -3,21 +3,15 @@
     "mainEntryPointFilePath": "<projectFolder>/lib/index.d.ts",
     "bundledPackages": [
         "@flywave/flywave-mapview",
-        "@flywave/flywave-mapview-decoder",
-        "@flywave/flywave-terrain-datasource",
-        "@flywave/flywave-map-controls",
-        "@flywave/flywave-3dtile-datasource",
-        "@flywave/flywave-datasource-protocol",
-        "@flywave/flywave-draw-controls",
         "@flywave/flywave-webtile-datasource",
-        "@flywave/flywave-geoutils",
         "@flywave/flywave-features-datasource",
-        "@flywave/flywave-utils",
+        "@flywave/flywave-geojson-datasource",
+        "@flywave/flywave-terrain-datasource",
         "@flywave/flywave-vectortile-datasource",
-        "@flywave/flywave-inspector",
-        "@flywave/flywave-gltf",
-        "@flywave/flywave-transfer-manager",
-        "@flywave/flywave-geometry"
+        "@flywave/flywave-3dtile-datasource",
+        "@flywave/flywave-draw-controls",
+        "@flywave/flywave-map-controls",
+        "@flywave/flywave-inspector"
     ],
     "compiler": {
         "tsconfigFilePath": "<projectFolder>/tsconfig.json",
@@ -30,7 +24,25 @@
                 "**/*.test.ts",
                 "**/*.spec.ts",
                 "**/test/**/*"
-            ]
+            ],
+            "compilerOptions": {
+                "skipLibCheck": true,
+                "noImplicitAny": false,
+                "resolveJsonModule": true,
+                "esModuleInterop": true,
+                "paths": {
+                    "@flywave/flywave-mapview": ["../flywave-mapview/lib/src"],
+                    "@flywave/flywave-webtile-datasource": ["../flywave-webtile-datasource/lib/src"],
+                    "@flywave/flywave-features-datasource": ["../flywave-features-datasource/lib/src"],
+                    "@flywave/flywave-geojson-datasource": ["../flywave-geojson-datasource/lib/src"],
+                    "@flywave/flywave-terrain-datasource": ["../flywave-terrain-datasource/lib/src"],
+                    "@flywave/flywave-vectortile-datasource": ["../flywave-vectortile-datasource/lib/src"],
+                    "@flywave/flywave-3dtile-datasource": ["../flywave-3dtile-datasource/lib/src"],
+                    "@flywave/flywave-draw-controls": ["../flywave-draw-controls/lib/src"],
+                    "@flywave/flywave-map-controls": ["../flywave-map-controls/lib/src"],
+                    "@flywave/flywave-inspector": ["../flywave-inspector/lib/src"]
+                }
+            }
         }
     },
     "apiReport": {
@@ -44,7 +56,8 @@
     "dtsRollup": {
         "enabled": true,
         "untrimmedFilePath": "dist/flywave.d.ts",
-        "publicTrimmedFilePath": ""
+        "publicTrimmedFilePath": "",
+        "omitTrimmingComments": true
     },
     "tsdocMetadata": {
         "enabled": false
