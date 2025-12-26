@@ -1,52 +1,52 @@
 /* 
  * Copyright (C) 2025 flywave.gl contributors
  * 
- * WindowEventHandler - 统一处理窗口事件的类，支持鼠标、键盘和触摸事件
- * 提供事件分发和状态管理功能，适用于交互式图形应用
+ * WindowEventHandler - A class that handles window events uniformly, supporting mouse, keyboard and touch events
+ * Provides event dispatch and state management functions, suitable for interactive graphics applications
  */
 
 import { EventDispatcher, Vector2 } from "three";
 
 /**
- * 窗口事件映射接口
- * 定义了所有支持的事件类型及其对应的事件对象
+ * Window event map interface
+ * Defines all supported event types and their corresponding event objects
  */
 interface WindowEventMap {
     mousemove: MouseEvent;
     mouseup: MouseEvent;
     mouseout: MouseEvent;
     dblclick: MouseEvent;
-    premouseclick: MouseEvent;  // 鼠标点击前事件
-    mouseclick: MouseEvent;     // 鼠标点击事件
-    realclick: MouseEvent;      // 实际点击事件
-    rightclick: MouseEvent;     // 右键点击事件
+    premouseclick: MouseEvent;  // Pre-mouse click event
+    mouseclick: MouseEvent;     // Mouse click event
+    realclick: MouseEvent;      // Real click event
+    rightclick: MouseEvent;     // Right click event
     keydown: KeyboardEvent;
     keyup: KeyboardEvent;
-    premousedown: MouseEvent;   // 鼠标按下前事件
+    premousedown: MouseEvent;   // Pre-mouse down event
     mousedown: MouseEvent;
     mousewheel: WheelEvent;
-    mousedraw: MouseEvent;      // 鼠标绘制事件
+    mousedraw: MouseEvent;      // Mouse draw event
 }
 
 /**
- * 窗口事件处理器类
- * 负责管理鼠标、键盘和触摸事件，并提供事件分发功能
+ * Window event handler class
+ * Manages mouse, keyboard and touch events, and provides event dispatch functionality
  */
 class WindowEventHandler extends EventDispatcher<WindowEventMap> {
-    // 鼠标按钮状态数组 [左键, 中键, 右键]
+    // Mouse button state array [left, middle, right]
     public mouseDown: [boolean, boolean, boolean] = [false, false, false];
 
-    // 功能开关
+    // Feature switches
     private _panEnabled: boolean = true;
     public zoomEnabled: boolean = true;
     public doubleZoomEnable: boolean = true;
 
-    // 鼠标位置状态
+    // Mouse position state
     public lastMouseX: number = 0;
     public lastMouseY: number = 0;
-    public lastMouseZ: number = 0;  // 用于滚轮状态
+    public lastMouseZ: number = 0;  // For wheel state
 
-    // 窗口尺寸信息
+    // Window size information
     public center_x: number = 0;
     public center_y: number = 0;
     public width: number = 600;
@@ -56,7 +56,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     private _lastMouseDownPoint: Vector2 | null = null;
     private _clickTimeId: number | null = null;
 
-    // 状态缓存，用于检测变化
+    // State cache for detecting changes
     private __preMouseDown?: [boolean, boolean, boolean];
     private __panEnabled?: boolean;
     private __zoomEnabled?: boolean;
@@ -65,8 +65,8 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     private __lastMouseZ?: number;
 
     /**
-     * 构造函数
-     * @param el - 要绑定事件的HTML元素
+     * Constructor
+     * @param el - HTML element to bind events to
      */
     constructor(el: HTMLElement) {
         super();
@@ -75,18 +75,18 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     }
 
     /**
-     * 设置平移功能是否启用
+     * Sets whether pan functionality is enabled
      */
     set panEnabled(v: boolean) {
         this._panEnabled = v;
-        // 禁用时重置所有鼠标按钮状态
+        // Reset all mouse button states when disabled
         this.mouseDown[0] = false;
         this.mouseDown[1] = false;
         this.mouseDown[2] = false;
     }
 
     /**
-     * 获取平移功能启用状态
+     * Gets the pan functionality enabled status
      */
     get panEnabled(): boolean {
         return this._panEnabled;
@@ -96,20 +96,20 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         type: T,
         originalEvent: WindowEventMap[T]
     ): any {
-        // 创建一个空对象作为代理目标
+        // Create an empty object as the proxy target
         const proxyTarget = {};
 
         return new Proxy(proxyTarget, {
             get: (target, prop: string | symbol, receiver) => {
-                // 固定属性
+                // Fixed properties
                 if (prop === 'type') return type;
 
-                // 从代理目标中获取（Three.js 设置的属性）
+                // Get from proxy target (Three.js set properties)
                 if (prop in target) {
                     return Reflect.get(target, prop, receiver);
                 }
 
-                // 从原始事件中获取
+                // Get from original event
                 if (prop in originalEvent) {
                     const value = (originalEvent as any)[prop];
                     return typeof value === 'function' ? value.bind(originalEvent) : value;
@@ -119,7 +119,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
             },
 
             set: (target, prop: string | symbol, value: any, receiver) => {
-                // 允许设置任何属性到代理目标
+                // Allow setting any property to the proxy target
                 return Reflect.set(target, prop, value, receiver);
             },
 
@@ -143,11 +143,11 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
                     };
                 }
 
-                // 先从代理目标中获取描述符
+                // First get descriptor from proxy target
                 const targetDescriptor = Reflect.getOwnPropertyDescriptor(target, prop);
                 if (targetDescriptor) return targetDescriptor;
 
-                // 再从原始事件中获取
+                // Then get from original event
                 const originalDescriptor = Reflect.getOwnPropertyDescriptor(originalEvent, prop);
                 if (originalDescriptor) {
                     return {
@@ -162,7 +162,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     }
 
     /**
-     * 条件性分发事件
+     * Conditionally dispatches events
      */
     private dispatchConditionalEvent<T extends keyof WindowEventMap>(
         type: T,
@@ -177,10 +177,10 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         }
     }
 
-    // ==================== 事件处理函数 ====================
+    // ==================== Event Handler Functions ====================
 
     /**
-     * 鼠标滚轮事件处理
+     * Mouse wheel event handling
      */
     private readonly onMouseWheel = (event: WheelEvent) => {
         if (!this.zoomEnabled) {
@@ -189,7 +189,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
 
         let wheelDelta = 0;
 
-        // 计算滚轮增量
+        // Calculate wheel increment
         if (event.deltaY) {
             wheelDelta = (-event.deltaY / 120) * 2;
         }
@@ -203,12 +203,12 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     };
 
     /**
-     * 窗口尺寸变化事件处理
+     * Window resize event handling
      */
     private readonly onResize = () => {
         let offsetWidth: number, offsetHeight: number;
 
-        // 获取父元素或窗口的尺寸
+        // Get parent element or window dimensions
         if (this.el.parentNode && (this.el.parentNode as HTMLElement).offsetWidth) {
             offsetWidth = (this.el.parentNode as HTMLElement).offsetWidth;
         } else {
@@ -225,39 +225,39 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     };
 
     /**
-     * 右键菜单事件处理（阻止默认行为）
+     * Right-click context menu event handling (prevents default behavior)
      */
     private readonly onContextMenu = (event: MouseEvent) => {
         event.preventDefault();
     };
 
     /**
-     * 鼠标按下事件处理
+     * Mouse down event handling
      */
     private readonly onMousedown = (event: MouseEvent) => {
         const button = event.button;
         this.lastMouseX = event.offsetX;
         this.lastMouseY = event.offsetY;
 
-        // 分发按下前事件
+        // Dispatch pre-mousedown event
         this.dispatchConditionalEvent("premousedown", event);
 
-        // 根据按钮设置状态
+        // Set state based on button
         if (button === 0) {
-            this.mouseDown[0] = this._panEnabled;  // 左键受平移功能控制
+            this.mouseDown[0] = this._panEnabled;  // Left button controlled by pan function
         } else if (button === 1) {
-            this.mouseDown[1] = true;  // 中键
+            this.mouseDown[1] = true;  // Middle button
         } else if (button === 2) {
-            this.mouseDown[2] = true;  // 右键
+            this.mouseDown[2] = true;  // Right button
         }
 
-        // 记录按下位置用于点击检测
+        // Record press position for click detection
         this._lastMouseDownPoint = new Vector2(event.offsetX, event.offsetY);
         this.dispatchConditionalEvent("mousedown", event);
     };
 
     /**
-     * 鼠标移动事件处理
+     * Mouse move event handling
      */
     private readonly onMousemove = (event: MouseEvent) => {
         event.preventDefault();
@@ -268,12 +268,12 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     };
 
     /**
-     * 鼠标移出事件处理
+     * Mouse out event handling
      */
     private readonly onMouseOut = (event: MouseEvent) => {
         this.lastMouseX = event.offsetX;
         this.lastMouseY = event.offsetY;
-        // 移出时重置所有鼠标按钮状态
+        // Reset all mouse button states when moving out
         this.mouseDown[0] = false;
         this.mouseDown[1] = false;
         this.mouseDown[2] = false;
@@ -283,14 +283,14 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     };
 
     /**
-     * 鼠标释放事件处理
+     * Mouse up event handling
      */
     private readonly onMouseUp = (event: MouseEvent) => {
         const button = event.button;
         this.lastMouseX = event.offsetX;
         this.lastMouseY = event.offsetY;
 
-        // 根据按钮重置状态
+        // Reset state based on button
         if (button === 0) {
             this.mouseDown[0] = false;
         } else if (button === 1) {
@@ -300,18 +300,18 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         }
 
         this.dispatchConditionalEvent("mouseup", event);
-        this.onRightClick(event);  // 检查右键点击
+        this.onRightClick(event);  // Check right-click
     };
 
     /**
-     * 鼠标点击事件处理
+     * Mouse click event handling
      */
     private readonly onClick = (event: MouseEvent) => {
         const point = new Vector2(event.offsetX, event.offsetY);
 
-        // 检查是否为有效点击（移动距离小于3像素）
+        // Check if it's a valid click (movement less than 3 pixels)
         if (this._lastMouseDownPoint && this._lastMouseDownPoint.distanceTo(point) <= 3) {
-            // 延迟分发点击事件，避免与双击冲突
+            // Delay dispatching click event to avoid conflict with double-click
             this._clickTimeId = window.setTimeout(() => {
                 if (this._clickTimeId) {
                     this.dispatchConditionalEvent("premouseclick", event);
@@ -324,12 +324,12 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     };
 
     /**
-     * 右键点击检测
+     * Right-click detection
      */
     private readonly onRightClick = (event: MouseEvent) => {
         if (event.button === 2) {
             const point = new Vector2(event.offsetX, event.offsetY);
-            // 检查是否为有效右键点击
+            // Check if it's a valid right-click
             if (this._lastMouseDownPoint && this._lastMouseDownPoint.distanceTo(point) <= 3) {
                 this.dispatchConditionalEvent("rightclick", event);
             }
@@ -337,7 +337,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     };
 
     /**
-     * 双击事件处理
+     * Double-click event handling
      */
     private readonly onDoubleClick = (event: MouseEvent) => {
         if (!this.zoomEnabled) {
@@ -347,44 +347,44 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         event.stopPropagation();
         event.preventDefault();
 
-        // 清除可能的单击定时器
+        // Clear possible single-click timer
         if (this._clickTimeId) {
             clearTimeout(this._clickTimeId);
             this._clickTimeId = null;
         }
 
-        // 双击缩放功能
+        // Double-click zoom functionality
         if (this.doubleZoomEnable) {
             this.lastMouseX = event.offsetX;
             this.lastMouseY = event.offsetY;
-            this.lastMouseZ += 10;  // 模拟滚轮增量
+            this.lastMouseZ += 10;  // Simulate wheel increment
         }
 
         this.dispatchConditionalEvent("dblclick", event);
     };
 
     /**
-     * 键盘按下事件处理
+     * Keyboard key down event handling
      */
     private readonly onKeydown = (event: KeyboardEvent) => {
         this.dispatchConditionalEvent("keydown", event);
     };
 
     /**
-     * 键盘释放事件处理
+     * Keyboard key up event handling
      */
     private readonly onKeyup = (event: KeyboardEvent) => {
         this.dispatchConditionalEvent("keyup", event);
     };
 
-    // ==================== 触摸事件处理 ====================
+    // ==================== Touch Event Handling ====================
 
     /**
-     * 触摸移动事件处理（转换为鼠标事件）
+     * Touch move event handling (converts to mouse event)
      */
     private readonly touchMove = (event: TouchEvent) => {
         if (event.changedTouches.length > 1) {
-            return;  // 忽略多点触控
+            return;  // Ignore multi-touch
         }
 
         const touch = event.changedTouches[0];
@@ -399,7 +399,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     };
 
     /**
-     * 触摸结束事件处理（转换为鼠标事件）
+     * Touch end event handling (converts to mouse event)
      */
     private readonly touchUp = (event: TouchEvent) => {
         if (event.changedTouches.length > 1) {
@@ -418,7 +418,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     };
 
     /**
-     * 触摸开始事件处理（转换为鼠标事件）
+     * Touch start event handling (converts to mouse event)
      */
     private readonly touchDown = (event: TouchEvent) => {
         if (event.changedTouches.length > 1) {
@@ -436,13 +436,13 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         this.onMousedown(fakeMouseEvent);
     };
 
-    // ==================== 公共方法 ====================
+    // ==================== Public Methods ====================
 
     /**
-     * 绑定所有事件监听器
+     * Bind all event listeners
      */
     private bindEvent() {
-        // 鼠标事件
+        // Mouse events
         this.el.addEventListener("contextmenu", this.onContextMenu);
         this.el.addEventListener("wheel", this.onMouseWheel);
         this.el.addEventListener("mousedown", this.onMousedown);
@@ -452,25 +452,25 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         this.el.addEventListener("click", this.onClick);
         this.el.addEventListener("dblclick", this.onDoubleClick);
 
-        // 键盘事件
+        // Keyboard events
         this.el.addEventListener("keydown", this.onKeydown);
         this.el.addEventListener("keyup", this.onKeyup);
 
-        // 触摸事件
+        // Touch events
         this.el.addEventListener("touchstart", this.touchDown);
         this.el.addEventListener("touchmove", this.touchMove);
         this.el.addEventListener("touchend", this.touchUp);
 
-        // 窗口事件
+        // Window events
         window.addEventListener("resize", this.onResize);
         window.addEventListener("load", this.onResize);
     }
 
     /**
-     * 清理所有事件监听器
+     * Clean up all event listeners
      */
     public clearEvent = () => {
-        // 鼠标事件
+        // Mouse events
         this.el.removeEventListener("contextmenu", this.onContextMenu);
         this.el.removeEventListener("wheel", this.onMouseWheel);
         this.el.removeEventListener("mousedown", this.onMousedown);
@@ -480,24 +480,24 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         this.el.removeEventListener("click", this.onClick);
         this.el.removeEventListener("dblclick", this.onDoubleClick);
 
-        // 键盘事件
+        // Keyboard events
         this.el.removeEventListener("keydown", this.onKeydown);
         this.el.removeEventListener("keyup", this.onKeyup);
 
-        // 触摸事件
+        // Touch events
         this.el.removeEventListener("touchstart", this.touchDown);
         this.el.removeEventListener("touchmove", this.touchMove);
         this.el.removeEventListener("touchend", this.touchUp);
 
-        // 窗口事件
+        // Window events
         window.removeEventListener("resize", this.onResize);
         window.removeEventListener("load", this.onResize);
     };
 
     /**
-     * 设置元素尺寸
-     * @param w - 宽度
-     * @param h - 高度
+     * Set element size
+     * @param w - width
+     * @param h - height
      */
     public setSize(w: number, h: number) {
         this.width = w;
@@ -508,42 +508,42 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         this.el.style.height = h + "px";
     }
 
-    // ==================== 私有方法 ====================
+    // ==================== Private Methods ====================
 
     /**
-     * 检查是否需要触发绘制事件
-     * 基于鼠标状态、功能开关和位置变化进行判断
-     * @returns 是否需要绘制
+     * Check if drawing event needs to be triggered
+     * Based on mouse state, feature switches and position changes
+     * @returns Whether drawing is needed
      */
     private checkNeedDraw(): boolean {
-        // 初始化状态缓存
+        // Initialize state cache
         if (!this.__preMouseDown) {
             this.__preMouseDown = [...this.mouseDown];
-            return true; // 初始状态总是需要绘制
+            return true; // Initial state always needs drawing
         }
 
         const [a, b, c] = this.__preMouseDown;
         const [a1, b1, c1] = this.mouseDown;
 
-        // 检查鼠标按钮状态变化
+        // Check mouse button state changes
         if (a !== a1 || b !== b1 || c !== c1) {
             this.__preMouseDown = [...this.mouseDown];
             return true;
         }
 
-        // 检查平移功能状态变化
+        // Check pan function status changes
         if (this.__panEnabled !== this.panEnabled) {
             this.__panEnabled = this.panEnabled;
             return true;
         }
 
-        // 检查缩放功能状态变化
+        // Check zoom function status changes
         if (this.__zoomEnabled !== this.zoomEnabled) {
             this.__zoomEnabled = this.zoomEnabled;
             return true;
         }
 
-        // 检查鼠标按下时的位置变化
+        // Check position changes when mouse is pressed
         if (a1 || b1 || c1) {
             if (this.__lastMouseX !== this.lastMouseX) {
                 this.__lastMouseX = this.lastMouseX;
@@ -556,7 +556,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
             }
         }
 
-        // 检查滚轮状态变化
+        // Check wheel state changes
         if (this.__lastMouseZ !== this.lastMouseZ) {
             this.__lastMouseZ = this.lastMouseZ;
             return true;
@@ -566,4 +566,4 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     }
 }
 
-export { WindowEventHandler };
+export { WindowEventHandler, WindowEventMap };
