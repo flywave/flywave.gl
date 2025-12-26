@@ -2,16 +2,22 @@
     "$schema": "https://developer.microsoft.com/json-schemas/api-extractor/v7/api-extractor.schema.json",
     "mainEntryPointFilePath": "<projectFolder>/lib/index.d.ts",
     "bundledPackages": [
-        "@flywave/flywave-mapview",
-        "@flywave/flywave-webtile-datasource",
-        "@flywave/flywave-features-datasource",
-        "@flywave/flywave-geojson-datasource",
+      "@flywave/flywave-mapview",
+        "@flywave/flywave-mapview-decoder",
         "@flywave/flywave-terrain-datasource",
-        "@flywave/flywave-vectortile-datasource",
-        "@flywave/flywave-3dtile-datasource",
-        "@flywave/flywave-draw-controls",
         "@flywave/flywave-map-controls",
-        "@flywave/flywave-inspector"
+        "@flywave/flywave-3dtile-datasource",
+        "@flywave/flywave-datasource-protocol",
+        "@flywave/flywave-draw-controls",
+        "@flywave/flywave-webtile-datasource",
+        "@flywave/flywave-geoutils",
+        "@flywave/flywave-features-datasource",
+        "@flywave/flywave-utils",
+        "@flywave/flywave-vectortile-datasource",
+        "@flywave/flywave-inspector",
+        "@flywave/flywave-gltf",
+        "@flywave/flywave-transfer-manager",
+        "@flywave/flywave-geometry"
     ],
     "compiler": {
         "tsconfigFilePath": "<projectFolder>/tsconfig.json",
@@ -32,6 +38,7 @@
                 "esModuleInterop": true,
                 "paths": {
                     "@flywave/flywave-mapview": ["../flywave-mapview/lib/src"],
+                    "@flywave/flywave-mapview-decoder": ["../flywave-mapview-decoder/lib/src"],
                     "@flywave/flywave-webtile-datasource": ["../flywave-webtile-datasource/lib/src"],
                     "@flywave/flywave-features-datasource": ["../flywave-features-datasource/lib/src"],
                     "@flywave/flywave-geojson-datasource": ["../flywave-geojson-datasource/lib/src"],
@@ -40,7 +47,13 @@
                     "@flywave/flywave-3dtile-datasource": ["../flywave-3dtile-datasource/lib/src"],
                     "@flywave/flywave-draw-controls": ["../flywave-draw-controls/lib/src"],
                     "@flywave/flywave-map-controls": ["../flywave-map-controls/lib/src"],
-                    "@flywave/flywave-inspector": ["../flywave-inspector/lib/src"]
+                    "@flywave/flywave-inspector": ["../flywave-inspector/lib/src"],
+                    "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/lib/src"],
+                    "@flywave/flywave-geoutils": ["../flywave-geoutils/lib/src"],
+                    "@flywave/flywave-utils": ["../flywave-utils/lib/src"],
+                    "@flywave/flywave-gltf": ["../flywave-gltf/lib/src"],
+                    "@flywave/flywave-transfer-manager": ["../flywave-transfer-manager/lib/src"],
+                    "@flywave/flywave-geometry": ["../flywave-geometry/lib/src"]
                 }
             }
         }
