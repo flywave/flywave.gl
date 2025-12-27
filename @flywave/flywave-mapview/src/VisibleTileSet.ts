@@ -512,6 +512,13 @@ export class VisibleTileSet {
     }
 
     /**
+     * Returns frustum used for intersection tests.
+     */
+    get frustum(): THREE.Frustum {
+        return this.m_frustumIntersection.frustum;
+    }
+
+    /**
      * Sets the way tile cache is managing its elements.
      *
      * Cache may be either keeping number of elements stored or the memory consumed by them.

@@ -116,6 +116,13 @@ export class FrustumIntersection {
     }
 
     /**
+     * Return frustum used to compute intersected tiles.
+     */
+    get frustum(): THREE.Frustum {
+        return this.m_frustum;
+    }
+
+    /**
      * Updates the frustum to match the current camera setup.
      */
     updateFrustum(projectionMatrixOverride?: THREE.Matrix4) {
