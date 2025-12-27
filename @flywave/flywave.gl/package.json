@@ -1,6 +1,6 @@
 {
     "name": "@flywave/flywave.gl",
-    "version": "0.0.10",
+    "version": "0.0.11",
     "type": "module",
     "description": "WebGl GIS",
     "exports": {
