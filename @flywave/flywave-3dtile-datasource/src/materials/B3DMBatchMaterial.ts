@@ -19,6 +19,8 @@ interface B3DMBatchMaterialUniforms {
     animationTexture: { value: THREE.DataTexture | null };
     animationTextureWidth: { value: number };
     animationTextureHeight: { value: number };
+    uPolygonOffsetFactor: { value: number };
+    uPolygonOffsetUnits: { value: number };
 }
 
 /**
@@ -71,7 +73,9 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         textureHeight: { value: 0 },
         animationTexture: { value: null },
         animationTextureWidth: { value: 0 },
-        animationTextureHeight: { value: 0 }
+        animationTextureHeight: { value: 0 },
+        uPolygonOffsetFactor: { value: 0 },
+        uPolygonOffsetUnits: { value: 0 }
     };
 
     constructor(
@@ -188,6 +192,15 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         object: THREE.Object3D,
         group: THREE.Group
     ): void {
+        // Sync polygonOffset properties to uniforms
+        if (this.polygonOffset) {
+            this.uniforms.uPolygonOffsetFactor.value = this.polygonOffsetFactor;
+            this.uniforms.uPolygonOffsetUnits.value = this.polygonOffsetUnits;
+        } else {
+            this.uniforms.uPolygonOffsetFactor.value = 0;
+            this.uniforms.uPolygonOffsetUnits.value = 0;
+        }
+
         // Update animation manager
         if (this._animationManager.isPlaying) {
             this._animationManager.update();
@@ -239,6 +252,18 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
             ${this._getFragmentParsShaderReplacement()}`
         );
 
+        // Replace logdepthbuf_fragment to include polygonOffset logic
+        parameters.fragmentShader = parameters.fragmentShader.replace(
+            "#include <logdepthbuf_fragment>",
+            `
+            #if defined(USE_LOGDEPTHBUF)
+                float dz = fwidth(vFragDepth);
+                float offset = dz * uPolygonOffsetFactor + uPolygonOffsetUnits;
+                gl_FragDepthEXT = log2(vFragDepth + offset) * logDepthBufFC * 0.5;
+            #endif
+            `
+        );
+
         parameters.fragmentShader = parameters.fragmentShader.replace(
             "#include <color_fragment>",
             `#include <color_fragment>
@@ -281,6 +306,8 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
             };
             varying BatchStyle vBatchStyle;
             uniform sampler2D styleTexture;
+            uniform float uPolygonOffsetFactor;
+            uniform float uPolygonOffsetUnits;
         `;
     }
 
