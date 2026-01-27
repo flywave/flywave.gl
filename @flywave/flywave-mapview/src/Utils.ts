@@ -539,7 +539,7 @@ export namespace MapViewUtils {
                 groundPlane.constant = 0;
             }
             return result;
-        } else { 
+        } else {
             let result: THREE.Vector3 | null = new THREE.Vector3();
 
             let sphere = projection as SphereProjection;
@@ -703,7 +703,7 @@ export namespace MapViewUtils {
         projection: Projection,
         camera: THREE.Camera,
         elevationProvider?: ElevationProvider
-    ): { target: THREE.Vector3; distance: number;altitude?: number; final: boolean } {
+    ): { target: THREE.Vector3; distance: number; altitude?: number; final: boolean } {
         const cameraPitch = extractAttitude({ projection }, camera).pitch;
 
         //FIXME: For now we keep the old behaviour when terrain is enabled (i.e. use the camera
@@ -772,10 +772,10 @@ export namespace MapViewUtils {
     ): Promise<THREE.Vector3 | null> {
         // Get the center of the screen in NDC coordinates
         const ndcCenter = new THREE.Vector2(0, 0);
-        
+
         // Read depth at the center of the screen
         const depthPromise = mapView.mapRenderingManager.readDepth(ndcCenter);
-        
+
         if (depthPromise === null) {
             return null;
         }
@@ -787,10 +787,10 @@ export namespace MapViewUtils {
             logger.warn("Failed to read depth from buffer:", error);
             return null;
         }
- 
+
         depth = (depth * 2.0) - 1.0;
 
-        if(Math.abs(depth) === 1.0) {
+        if (Math.abs(depth) === 1.0) {
             return null;
         }
 
@@ -800,14 +800,14 @@ export namespace MapViewUtils {
         // Convert from NDC to world coordinates using the unproject method
         const worldTarget = ndcWithDepth.clone();
         worldTarget.unproject(camera);
-        
+
         // If we have elevation information, adjust the target accordingly
         if (elevation !== undefined) {
             // Adjust for elevation by moving along the surface normal
             const surfaceNormal = projection.surfaceNormal(worldTarget, new THREE.Vector3());
             worldTarget.add(surfaceNormal.multiplyScalar(elevation));
         }
-        
+
         return worldTarget;
     }
 
@@ -876,57 +876,57 @@ export namespace MapViewUtils {
         }
     }
 
-   export function getCameraPositionFromTargetCoordinates(
-    targetCoordinates: GeoCoordinates,
-    distance: number,
-    yawDeg: number,
-    pitchDeg: number,
-    projection: Projection,
-    result: THREE.Vector3 = new THREE.Vector3()
-): THREE.Vector3 {
-    const pitchRad = THREE.MathUtils.degToRad(pitchDeg);
-    const altitude = Math.cos(pitchRad) * distance;
-    const yawRad = THREE.MathUtils.degToRad(yawDeg);
-    projection.projectPoint(targetCoordinates, result);
-    const groundDistance = distance * Math.sin(pitchRad);
-    
-    if (projection.type === ProjectionType.Planar) {
-        result.x = result.x + Math.sin(yawRad) * groundDistance;
-        result.y = result.y - Math.cos(yawRad) * groundDistance;
-        result.z = result.z + altitude;
-    } else if (projection.type === ProjectionType.Spherical) {
-        // Get the Z axis in tangent space: it is the normalized position vector of the target.
-        tangentSpace.z.copy(result).normalize();
+    export function getCameraPositionFromTargetCoordinates(
+        targetCoordinates: GeoCoordinates,
+        distance: number,
+        yawDeg: number,
+        pitchDeg: number,
+        projection: Projection,
+        result: THREE.Vector3 = new THREE.Vector3()
+    ): THREE.Vector3 {
+        const pitchRad = THREE.MathUtils.degToRad(pitchDeg);
+        const altitude = Math.cos(pitchRad) * distance;
+        const yawRad = THREE.MathUtils.degToRad(yawDeg);
+        projection.projectPoint(targetCoordinates, result);
+        const groundDistance = distance * Math.sin(pitchRad);
 
-        // Get the Y axis (north axis in tangent space):
-        tangentSpace.y.set(0, 0, 1).projectOnPlane(tangentSpace.z).normalize();
+        if (projection.type === ProjectionType.Planar) {
+            result.x = result.x + Math.sin(yawRad) * groundDistance;
+            result.y = result.y - Math.cos(yawRad) * groundDistance;
+            result.z = result.z + altitude;
+        } else if (projection.type === ProjectionType.Spherical) {
+            // Get the Z axis in tangent space: it is the normalized position vector of the target.
+            tangentSpace.z.copy(result).normalize();
 
-        // Rotate this north axis by the given yaw, giving the camera direction relative to
-        // the target.
-        cache.quaternions[0].setFromAxisAngle(tangentSpace.z, yawRad - Math.PI);
-        tangentSpace.y.applyQuaternion(cache.quaternions[0]);
+            // Get the Y axis (north axis in tangent space):
+            tangentSpace.y.set(0, 0, 1).projectOnPlane(tangentSpace.z).normalize();
 
-        // Push the camera to the specified distance.
-        tangentSpace.y.setLength(groundDistance);
+            // Rotate this north axis by the given yaw, giving the camera direction relative to
+            // the target.
+            cache.quaternions[0].setFromAxisAngle(tangentSpace.z, yawRad - Math.PI);
+            tangentSpace.y.applyQuaternion(cache.quaternions[0]);
 
-        // Now get the actual camera position vector: from the target position, add the
-        // previous computation to get the projection of the camera on the ground, then add
-        // the height of the camera in the tangent space.
-        const height = distance * Math.cos(pitchRad);
-        result.add(tangentSpace.y).add(tangentSpace.z.setLength(height));
- 
-        const targetPos = cache.vector3[0].copy(result).sub(tangentSpace.y).sub(tangentSpace.z);
+            // Push the camera to the specified distance.
+            tangentSpace.y.setLength(groundDistance);
+
+            // Now get the actual camera position vector: from the target position, add the
+            // previous computation to get the projection of the camera on the ground, then add
+            // the height of the camera in the tangent space.
+            const height = distance * Math.cos(pitchRad);
+            result.add(tangentSpace.y).add(tangentSpace.z.setLength(height));
+
+            const targetPos = cache.vector3[0].copy(result).sub(tangentSpace.y).sub(tangentSpace.z);
             const actualDistance = targetPos.distanceTo(result);
-            
+
             if (Math.abs(actualDistance - distance) > 1e-3) {
                 // 调整到正确距离
                 const direction = new THREE.Vector3().subVectors(result, targetPos).normalize();
                 result.copy(targetPos).add(direction.multiplyScalar(distance));
             }
-    }
+        }
 
-    return result;
-}
+        return result;
+    }
 
     /**
      * @hidden

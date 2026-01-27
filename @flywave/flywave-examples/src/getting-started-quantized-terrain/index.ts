@@ -37,7 +37,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         enablePolarDataSource: false,    // Disable polar data source
         heading: -125.79565303507096,   // Initial heading angle
         tilt: 56.60060867291795,       // Initial tilt angle
-        zoomLevel: 18,                  // Initial zoom level
+        // zoomLevel: 18,                  // Initial zoom level
         canvas: canvas,                 // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
