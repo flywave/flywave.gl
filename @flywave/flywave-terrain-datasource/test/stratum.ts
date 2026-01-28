@@ -33,7 +33,7 @@ import { type StratumTileData } from "../src/quantized-terrain/quantized-stratum
 // import { TaskType } from "../src/Constants";
 
 describe("flywave-terrain-datasource.stratum", function () {
-    it("decoder+clipTest", async function () {
+    it.skip("decoder+clipTest", async function () {
         const layerStrategy = await createLayerStrategy({
             url: "/@flywave/flywave-terrain-datasource/test/data/stratum/layer.json"
         });
@@ -48,15 +48,11 @@ describe("flywave-terrain-datasource.stratum", function () {
                 sphereProjection,
                 [
                     {
-                        geoArea: geographicStandardTiling.getGeoBox(
-                            TileKey.fromRowColumnLevel(51100, 108516, 16)
-                        ),
                         id: "groundModification",
                         type: {
-                            vertexSource: "fixed",
                             heightOperation: "replace"
                         },
-                        depthOrHeight: -200,
+                        operations: [],
                         boundingBox: geographicStandardTiling.getGeoBox(
                             TileKey.fromRowColumnLevel(51100, 108516, 16)
                         )

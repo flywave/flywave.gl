@@ -28,8 +28,8 @@ import { DemTileResource } from "../../dem-terrain/DEMTileProvider";
 import {
     type GroundModificationEventParams,
     type GroundModificationManager,
-    type GroundModificationPolygon,
-    type SerializedGroundModificationPolygon,
+    type GroundModificationData,
+    type SerializedGroundModificationData,
 } from "../../ground-modification-manager";
 import { renderGroundModificationHeightMap, renderHeightMap } from "../../terrain-processor";
 import { QuantizedTileResource } from "../QuantizedTileResource";
@@ -58,7 +58,7 @@ export interface QuantizedTerrainMeshData {
     maximumHeight: number;
     demMap?: SerializedDEMData;
     groundElevationModified?: boolean;
-    groundModificationPolygons?: SerializedGroundModificationPolygon[];
+    groundModificationPolygons?: SerializedGroundModificationData[];
 }
 
 export class QuantizedTerrainMesh extends QuantizedTileResource {
@@ -122,7 +122,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
             geoBox: GeoBox;
             flipY?: boolean;
         };
-        clip: GroundModificationPolygon[];
+        clip: GroundModificationData[];
         projection: Projection;
     }) {
         if (options.heightMap)
@@ -132,7 +132,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
 
     private drawHeightMap(
         geoBox: GeoBox,
-        groundModificationPolygons?: GroundModificationPolygon[],
+        groundModificationPolygons?: GroundModificationData[],
         flipY?: boolean
     ) {
         geoBox.southWest.altitude = this.minHeight;

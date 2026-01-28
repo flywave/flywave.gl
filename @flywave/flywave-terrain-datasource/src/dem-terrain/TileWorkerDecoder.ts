@@ -4,8 +4,8 @@ import { type GeoBoxArray, GeoBox } from "@flywave/flywave-geoutils";
 import { Texture } from "three";
 
 import {
-    type SerializedGroundModificationPolygon,
-    deserializeGroundModificationPolygon
+    type SerializedGroundModificationData,
+    deserializeGroundModificationData
 } from "../ground-modification-manager";
 import { renderGroundModificationHeightMap } from "../terrain-processor";
 import { type DEMEncoding, DEMData } from "./dem/DemData";
@@ -14,31 +14,14 @@ import { type DEMEncoding, DEMData } from "./dem/DemData";
  * Parameters for decoding a DEM tile
  */
 export interface DecodeTileParams {
-    /** Unique identifier for the tile */
     uid: string;
-    /** The encoding format of the DEM data */
     encoding: DEMEncoding;
-    /** The raw image data containing elevation information */
     rawImageData: ImageData;
-    /** The geographic bounding box of the tile as an array */
     geoBox: GeoBoxArray;
-    /** Padding to add around the image data */
     padding: number;
-    /** Whether to build a quadtree for the tile */
     buildQuadTree: boolean;
-    /** Optional ground modification polygons to apply */
-    groundModificationPolygons?: SerializedGroundModificationPolygon[];
-    /** Whether to flip the Y axis */
+    groundModificationPolygons?: SerializedGroundModificationData[];
     flipY: boolean;
-    /** Optional kriging interpolation options */
-    krigingOptions?: {
-        /** The kriging model to use */
-        model?: "gaussian" | "exponential" | "spherical";
-        /** The sigma squared parameter */
-        sigma2?: number;
-        /** The alpha parameter */
-        alpha?: number;
-    };
 }
 
 /**
@@ -94,22 +77,20 @@ async function getImageData(
  */
 export const processDEMTile = async (params: DecodeTileParams): Promise<DecodeTileResult> => {
     validateDecodeParams(params);
-    const { uid, encoding, groundModificationPolygons, geoBox, flipY, krigingOptions } = params;
+    const { uid, encoding, groundModificationPolygons, geoBox, flipY } = params;
 
     const rawimagePixels = await getImageData(params.rawImageData, params.padding);
     let imagePixels = rawimagePixels;
 
     const baseDem = new Texture(await getImageData(params.rawImageData, 0));
-    //handler for ground modification
     if (groundModificationPolygons && groundModificationPolygons.length) {
         const { image: processed } = await renderGroundModificationHeightMap(
-            groundModificationPolygons?.map(deserializeGroundModificationPolygon),
+            groundModificationPolygons?.map(deserializeGroundModificationData),
             GeoBox.fromArray(geoBox),
             baseDem,
             256,
             256,
-            flipY,
-            krigingOptions
+            flipY
         );
         imagePixels = await getImageData(processed, params.padding);
     }

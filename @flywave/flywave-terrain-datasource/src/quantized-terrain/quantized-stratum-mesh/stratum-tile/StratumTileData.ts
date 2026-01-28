@@ -32,7 +32,7 @@ import {
 } from "three";
 
 import DEMData from "../../../dem-terrain/dem/DemData";
-import { type GroundModificationPolygon } from "../../../ground-modification-manager";
+import { type GroundModificationData } from "../../../ground-modification-manager";
 import { renderGroundModificationHeightMap, renderHeightMap } from "../../../terrain-processor";
 import { HEIGHT_MAP_HEIGHT, HEIGHT_MAP_WIDTH } from "../../../terrain-processor/constants";
 import {
@@ -198,7 +198,7 @@ export class StratumTileData {
         public projection: Projection,
         public geoBox: GeoBox,
         decodedData: DecodeResult | DecodedStratumTileData,
-        protected groundModificationPolygons?: GroundModificationPolygon[],
+        protected groundModificationPolygons?: GroundModificationData[],
         public isEllipsoid: boolean = true
     ) {
         if (decodedData instanceof DecodedStratumTileData) {
@@ -710,7 +710,7 @@ export class StratumTileData {
 
     drawHeightMap(
         geoBox: GeoBox,
-        groundModificationPolygons?: GroundModificationPolygon[],
+        groundModificationPolygons?: GroundModificationData[],
         flipY?: boolean
     ) {
         geoBox.southWest.altitude = this.minHeight;
@@ -721,7 +721,7 @@ export class StratumTileData {
         this._demMap = new DEMData("", rawData, rawData, geoBox);
 
         if (groundModificationPolygons?.length) {
-            const { image: processed, krigingPoints } = renderGroundModificationHeightMap(
+            const { image: processed } = renderGroundModificationHeightMap(
                 groundModificationPolygons,
                 geoBox,
                 new Texture(this._demMap.rawImageData),
@@ -1011,7 +1011,7 @@ export function createStratumTileFromBuffer(
     geoBox: GeoBox,
     buffer: ArrayBuffer,
     projection: Projection,
-    groundModificationPolygons?: GroundModificationPolygon[]
+    groundModificationPolygons?: GroundModificationData[]
 ): StratumTileData {
     return new StratumTileData(projection, geoBox, decode(buffer), groundModificationPolygons);
 }

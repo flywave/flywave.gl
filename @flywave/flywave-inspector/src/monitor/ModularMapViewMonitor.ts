@@ -17,7 +17,6 @@ import { type RenderingData, RenderingModule } from "../modules/RenderingModule"
 import { type TextData, TextModule } from "../modules/TextModule";
 import { type TileData, TileModule } from "../modules/TileModule";
 import { type VisibleTileSetData, VisibleTileSetModule } from "../modules/VisibleTileSetModule";
-import { GroundModificationGUIModule } from "../modules/GroundModificationGUIModule";
 
 export class ModularMapViewMonitor {
     private readonly gui: GUI;
@@ -37,7 +36,6 @@ export class ModularMapViewMonitor {
     private readonly environmentModule: EnvironmentModule;
     private readonly postProcessingGUIModule: PostProcessingGUIModule;
     private readonly fogGUIModule: FogGUIModule;
-    private readonly groundModificationGUIModule: GroundModificationGUIModule;
 
     // Data objects
     private readonly performanceData: PerformanceData;
@@ -91,7 +89,6 @@ export class ModularMapViewMonitor {
         this.environmentModule = new EnvironmentModule(mapView);
         this.postProcessingGUIModule = new PostProcessingGUIModule(mapView, this.gui);
         this.fogGUIModule = new FogGUIModule(mapView, this.gui);
-        this.groundModificationGUIModule = new GroundModificationGUIModule(mapView, this.gui);
 
         // Create data objects
         this.performanceData = this.performanceModule.createData();
@@ -120,7 +117,6 @@ export class ModularMapViewMonitor {
         this.environmentFolder = this.environmentModule.setupFolder(this.gui);
         this.postProcessingFolder = this.postProcessingGUIModule.getFolder();
         this.fogFolder = this.fogGUIModule.getFolder();
-        this.groundModificationFolder = this.groundModificationGUIModule.getFolder();
 
         // Bind controls
         this.performanceModule.bindControls(this.performanceFolder, this.performanceData);
@@ -189,7 +185,6 @@ export class ModularMapViewMonitor {
             this.environmentModule.updateData(this.environmentData);
             this.postProcessingGUIModule.update();
             this.fogGUIModule.update();
-            this.groundModificationGUIModule.update();
             // ElevationModule and FrustumCullingModule don't need continuous updates as they're interactive
         } catch (e) {
             console.warn("Error updating monitor:", e);

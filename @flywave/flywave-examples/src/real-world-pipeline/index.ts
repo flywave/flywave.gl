@@ -14,6 +14,7 @@ import {
     TransferManager,
     FeaturesDataSource,
     FeatureCollection,
+    BrushType
 } from "@flywave/flywave.gl";
 import { Color, MathUtils, RepeatWrapping, TextureLoader } from "three";
 
@@ -32,7 +33,9 @@ const PROJECT_CONFIG = {
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
     if (!canvas) {
-        throw new Error("Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML");
+        throw new Error(
+            "Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML"
+        );
     }
     return canvas;
 };
@@ -44,37 +47,39 @@ const getMapCanvas = (): HTMLCanvasElement => {
  */
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and view (Zhoucun project location)
-    const initialLocation = new GeoCoordinates(36.8335, 117.8541,112);
+    const initialLocation = new GeoCoordinates(36.8335, 117.8541, 112);
 
     return new MapView({
-        projection: sphereProjection,    // Use spherical projection
-        target: initialLocation,         // Initial target position
-        tilt: 64,                       // Initial tilt angle
-        heading:-61.0,                       // Initial heading angle
-        canvas: canvas,                 // Specify render canvas
+        projection: sphereProjection, // Use spherical projection
+        target: initialLocation, // Initial target position
+        tilt: 64, // Initial tilt angle
+        heading: -61.0, // Initial heading angle
+        canvas: canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
-            lights: [{
-                type: "ambient",       // Ambient light
-                intensity: 1.0,        // Light intensity
-                name: "ambientLight",  // Light source name
-                color: "#ffffff"       // Light source color
-            }],
+            lights: [
+                {
+                    type: "ambient", // Ambient light
+                    intensity: 1.0, // Light intensity
+                    name: "ambientLight", // Light source name
+                    color: "#ffffff" // Light source color
+                }
+            ],
             celestia: {
                 sunTime: new Date().setHours(13), // Set sun time to 1 PM
-                sunCastShadow: true,    // Enable shadows 
-                atmosphere: true        // Enable atmospheric effect
+                sunCastShadow: true, // Enable shadows
+                atmosphere: true // Enable atmospheric effect
             },
             postEffects: {
                 brightnessContrast: {
-                    brightness: -0.17,  // Brightness adjustment
-                    contrast: 0.23,     // Contrast adjustment
-                    enabled: true       // Enable brightness contrast effect
+                    brightness: -0.17, // Brightness adjustment
+                    contrast: 0.23, // Contrast adjustment
+                    enabled: true // Enable brightness contrast effect
                 },
                 hueSaturation: {
-                    hue: 0.17,         // Hue adjustment
-                    saturation: 0.57,   // Saturation adjustment
-                    enabled: true       // Enable hue saturation effect
+                    hue: 0.17, // Hue adjustment
+                    saturation: 0.57, // Saturation adjustment
+                    enabled: true // Enable hue saturation effect
                 }
             }
         }
@@ -96,13 +101,28 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  * Get pipeline data source configuration
  * @returns Pipeline data source configuration array
  */
-const getPipeSourceConfigs = (): Array<{ name: string, url: string }> => {
+const getPipeSourceConfigs = (): Array<{ name: string; url: string }> => {
     return [
-        { name: "Street Lamp", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ludeng/tileset.json` },
-        { name: "Drainage", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ps/tileset.json` },
-        { name: "Electricity", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_power/tileset.json` },
-        { name: "Natural Gas", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_trq/tileset.json` },
-        { name: "Drinking Water", url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ys/tileset.json` }
+        {
+            name: "Street Lamp",
+            url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ludeng/tileset.json`
+        },
+        {
+            name: "Drainage",
+            url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ps/tileset.json`
+        },
+        {
+            name: "Electricity",
+            url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_power/tileset.json`
+        },
+        {
+            name: "Natural Gas",
+            url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_trq/tileset.json`
+        },
+        {
+            name: "Drinking Water",
+            url: `${PROJECT_CONFIG.SERVER_BASE_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ys/tileset.json`
+        }
     ];
 };
 
@@ -114,7 +134,7 @@ const addPipeDataSources = (mapView: MapView): void => {
     const pipeSources = getPipeSourceConfigs();
 
     // Batch add pipeline data sources
-    pipeSources.forEach((item,index) => {
+    pipeSources.forEach((item, index) => {
         const dataSource = new TileRenderDataSource({
             url: item.url,
             name: item.name
@@ -123,17 +143,17 @@ const addPipeDataSources = (mapView: MapView): void => {
         dataSource.setTheme({
             postEffects: {
                 bloom: {
-                    enabled: true,   // Enable bloom effect 
+                    enabled: true // Enable bloom effect
                 },
                 translucentDepth: {
-                    enabled: true,   // Enable translucent depth effect
+                    enabled: true, // Enable translucent depth effect
                     mixFactor: 0.7, // Translucent depth mix factor
                     useObjectColor: true, // Use object color for translucent depth
                     objectColorMix: 0.3, // Object color mix factor
-                    color: `#${new Color(Math.random()*0xff0000).getHexString()}`, // Object color
-                    occlusionDistance:10000
+                    color: `#${new Color(Math.random() * 0xff0000).getHexString()}`, // Object color
+                    occlusionDistance: 10000
                 }
-            },
+            }
         });
 
         mapView.addDataSource(dataSource);
@@ -148,15 +168,13 @@ const addPipeDataSources = (mapView: MapView): void => {
     buildingDataSource.setTheme({
         postEffects: {
             translucentDepth: {
-                enabled: true,   // Enable translucent depth effect
-                mode: 'background' 
+                enabled: true, // Enable translucent depth effect
+                mode: "background"
             }
-        },
+        }
     });
     mapView.addDataSource(buildingDataSource);
 };
-
-
 
 /**
  * Configure DEM terrain data source
@@ -196,7 +214,7 @@ const addGroundOverlay = (demTerrain: DEMTerrainSource): void => {
         [117.85102680375553, 36.834357945481926]
     ]);
 
-    textureLoader.load(PROJECT_CONFIG.TEXTURE_PATH, (texture) => {
+    textureLoader.load(PROJECT_CONFIG.TEXTURE_PATH, texture => {
         texture.wrapS = RepeatWrapping;
         texture.wrapT = RepeatWrapping;
         demTerrain.getGroundOverlayProvider().addOverlays([
@@ -213,7 +231,6 @@ const addGroundOverlay = (demTerrain: DEMTerrainSource): void => {
  * @param demTerrain DEM terrain data source
  */
 const addGroundModification = (demTerrain: DEMTerrainSource): void => {
-    // Ground modification polygon
     const overlayPolygon = new GeoPolygon([
         [117.85112449445177, 36.83428081874651],
         [117.85108647506257, 36.83386874898096],
@@ -222,10 +239,17 @@ const addGroundModification = (demTerrain: DEMTerrainSource): void => {
         [117.85112449445177, 36.83428081874651]
     ]);
 
-    demTerrain.getGroundModificationManager().addModification({
-        heightOperation: "replace",   // Height operation type
-        vertexSource: "fixed"         // Vertex source type
-    }, overlayPolygon, 0, -5);       // Polygon, minimum height, maximum height
+    const brushOperations = overlayPolygon.coordinates.map(coord => ({
+        position: new GeoCoordinates(coord.latitude, coord.longitude),
+        settings: {
+            type: BrushType.LOWER,
+            size: 200,
+            strength: 0.5,
+            hardness: 0.8
+        }
+    }));
+
+    demTerrain.getGroundModificationManager().addModification("replace", brushOperations);
 };
 
 /**
@@ -245,15 +269,17 @@ const initializeMapMonitor = (mapView: MapView): void => {
 const addGeoJsonDataSource = async (mapView: MapView): Promise<void> => {
     // GeoJSON data source configuration
     const geojsonDataSource = new FeaturesDataSource({
-        styleSetName: 'labelLayers',
+        styleSetName: "labelLayers",
         maxDataLevel: 16,
-        minDataLevel: 0,
+        minDataLevel: 0
     });
 
     try {
-        const json: FeatureCollection = await TransferManager.instance().downloadJson(PROJECT_CONFIG.REGION_DATA_PATH);
+        const json: FeatureCollection = await TransferManager.instance().downloadJson(
+            PROJECT_CONFIG.REGION_DATA_PATH
+        );
 
-        json.features.forEach((feature) => {
+        json.features.forEach(feature => {
             feature.id = MathUtils.generateUUID();
         });
 
@@ -265,16 +291,16 @@ const addGeoJsonDataSource = async (mapView: MapView): Promise<void> => {
             styles: {
                 labelLayers: [
                     {
-                        when: ['==', ['geometry-type'], 'LineString'],
-                        technique: 'text',
-                        text: ['get', 'name'],
+                        when: ["==", ["geometry-type"], "LineString"],
+                        technique: "text",
+                        text: ["get", "name"],
                         size: 18,
-                        color: '#000',
-                        backgroundColor: '#ffffff',
+                        color: "#000",
+                        backgroundColor: "#ffffff",
                         backgroundSize: 10,
-                        fontStyle: 'Bold',
-                    },
-                ],
+                        fontStyle: "Bold"
+                    }
+                ]
             }
         });
     } catch (error) {

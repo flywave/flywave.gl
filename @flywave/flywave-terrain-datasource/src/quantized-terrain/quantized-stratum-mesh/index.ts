@@ -3,7 +3,7 @@
 import { type TileKey, type TilingScheme } from "@flywave/flywave-geoutils";
 
 import { TaskType } from "../../Constants";
-import { serializeGroundModificationPolygon } from "../../ground-modification-manager";
+import { serializeGroundModificationData } from "../../ground-modification-manager";
 import { type DecodedTerrainTile } from "../../TerrainDecoderWorker";
 import { type ITerrainSource } from "../../TerrainSource";
 import { type ILayerStrategy } from "../layer-strategy/LayerStrategy";
@@ -29,7 +29,7 @@ export async function getQuantizedStratumMesh(
                     groundModificationPolygons: dataSource
                         .getGroundModificationManager()
                         .findModificationsInBoundingBox(geoBox)
-                        .map(serializeGroundModificationPolygon),
+                        .map(serializeGroundModificationData),
                     geoBox: geoBox.toArray(),
                     elevationMapEnabled,
                     elevationMapFlipY

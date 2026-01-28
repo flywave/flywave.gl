@@ -21,8 +21,8 @@ import { TaskType } from "../Constants";
 import {
     type GroundModificationEventParams,
     type GroundModificationManager,
-    type SerializedGroundModificationPolygon,
-    serializeGroundModificationPolygon
+    type SerializedGroundModificationData,
+    serializeGroundModificationData
 } from "../ground-modification-manager";
 import { ResourceProvider } from "../ResourceProvider";
 import type { DecodedTerrainTile } from "../TerrainDecoderWorker";
@@ -45,14 +45,14 @@ const tempBox = new Box2();
  * and tile size information.
  */
 export interface DemSourceDescription {
-    /** 
+    /**
      * Array of tile URL templates
      * Supports placeholders like {z}/{x}/{y} or {zoom}/{x}/{y}
      * Example: ['https://example.com/terrain/{z}/{x}/{y}.png']
      */
     tiles: string[];
 
-    /** 
+    /**
      * Tile coordinate system scheme
      * - "xyz": Standard Web Mercator tile scheme (most common)
      * - "tms": TMS tile scheme with flipped Y-axis
@@ -60,38 +60,38 @@ export interface DemSourceDescription {
      */
     scheme: "xyz" | "tms" | "custom";
 
-    /** 
+    /**
      * Geographic bounds [west, south, east, north] in degrees
      * Example: [-180, -85.0511, 180, 85.0511] for global coverage
      */
     bounds: [number, number, number, number];
 
-    /** 
+    /**
      * Minimum zoom level (0-22)
      * The minimum zoom level at which tiles are available
      */
     minzoom: number;
 
-    /** 
+    /**
      * Maximum zoom level (0-22)
      * The maximum zoom level at which tiles are available
      */
     maxzoom: number;
 
-    /** 
+    /**
      * Tile size in pixels
      * Typically 256 or 512
      * Modern map services often use 512x512 tiles
      */
     tileSize: number;
 
-    /** 
+    /**
      * Data source type
      * For terrain data, must be set to "raster-dem"
      */
     type: "raster-dem";
 
-    /** 
+    /**
      * Elevation data encoding format
      * - "terrarium": PNG format with RGB-encoded elevation (Red * 256 + Green + Blue / 256 - 32768)
      * - "mapbox": Mapbox custom encoding, optimized compression format
@@ -99,80 +99,83 @@ export interface DemSourceDescription {
      */
     encoding?: "terrarium" | "mapbox" | "custom";
 
-    /** 
+    /**
      * Data source attribution
      * Copyright information displayed on the map
      */
     attribution?: string;
 
-    /** 
+    /**
      * Volatility flag
      * If true, indicates tile content may change frequently, cache strategy will be more aggressive
      */
     volatile?: boolean;
 
-    /** 
+    /**
      * Tile coordinate system definition
      * Transformation matrix for custom coordinate systems
      * Typically [1, -1, -1, 1] or [1, 0, 0, 1], etc.
      */
     tileSystem?: number[];
 
-    /** 
+    /**
      * CORS cross-origin settings
      * - "anonymous": Anonymous cross-origin requests, no credentials sent
      * - "use-credentials": Cross-origin requests with credentials
      */
     crossOrigin?: "anonymous" | "use-credentials";
 
-    /** 
+    /**
      * Elevation data units
      * - "meters": Meters (default)
      * - "feet": Feet
      */
     units?: "meters" | "feet";
 
-    /** 
+    /**
      * Maximum tile cache size
      * Controls the number of tiles cached in memory, affects performance
      */
     maxCacheSize?: number;
 
-    /** 
+    /**
      * Retry count
      * Number of retries when tile loading fails
      */
     retries?: number;
 
-    /** 
+    /**
      * Minimum tile recognizability
      * Controls the detail level threshold for tile loading
      */
     minimumTileRecognizability?: number;
 
-    /** 
+    /**
      * Request parameters
      * Additional query parameters appended to tile URLs
      */
     queryParameters?: Record<string, string>;
 
-    /** 
+    /**
      * Request headers
      * HTTP headers for tile requests
      */
     headers?: Record<string, string>;
 
-    /** 
+    /**
      * Error handling callback
      * Handler function when tile loading fails
      */
     onError?: (error: Error, tile: { z: number; x: number; y: number }) => void;
 
-    /** 
+    /**
      * Preprocessing function
      * Function to preprocess loaded tile data
      */
-    preprocess?: (data: ArrayBuffer, tile: { z: number; x: number; y: number }) => ArrayBuffer | Promise<ArrayBuffer>;
+    preprocess?: (
+        data: ArrayBuffer,
+        tile: { z: number; x: number; y: number }
+    ) => ArrayBuffer | Promise<ArrayBuffer>;
 }
 
 /**
@@ -238,7 +241,7 @@ export class DemTileResource extends TileValidResource {
             this.tileKey,
             this.terrainSource,
             this.demData.encoding,
-            event.modifications?.map(serializeGroundModificationPolygon)
+            event.modifications?.map(serializeGroundModificationData)
         ).then((demTileResource: DemTileResource) => {
             this._demData.dispose();
             this._demData = demTileResource.demData;
@@ -264,7 +267,7 @@ export class DemTileResource extends TileValidResource {
         tileKey: TileKey,
         terrainSource: ITerrainSource,
         encoding: DEMEncoding,
-        groundModificationPolygons?: SerializedGroundModificationPolygon[]
+        groundModificationPolygons?: SerializedGroundModificationData[]
     ) {
         const buffer = (imgData.width - prevPowerOfTwo(imgData.width)) / 2;
         const padding = 1 - buffer;
@@ -288,7 +291,7 @@ export class DemTileResource extends TileValidResource {
             terrainSource
                 .getGroundModificationManager()
                 .findModificationsInBoundingBox(geoBox)
-                .map(serializeGroundModificationPolygon);
+                .map(serializeGroundModificationData);
 
         return terrainSource.decoder
             .decodeTile(
@@ -302,8 +305,7 @@ export class DemTileResource extends TileValidResource {
                     groundModificationPolygons: polygons,
                     height: imgData.height,
                     width: imgData.width,
-                    flipY: (terrainSource.dataProvider() as DemTileProvider).isElevationMapFlipY(),
-                    krigingOptions: terrainSource.getGroundModificationManager().krigingOptions
+                    flipY: (terrainSource.dataProvider() as DemTileProvider).isElevationMapFlipY()
                 },
                 tileKey,
                 terrainSource.projection
@@ -470,7 +472,11 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
         const { lng: maxLng, lat: maxLat } = geoBox.northEast;
 
         tempBox.set(new Vector2(minLng, minLat), new Vector2(maxLng, maxLat));
-        return this._bounds.intersectsBox(tempBox) && tileKey.level >= minzoom && tileKey.level <= maxzoom;
+        return (
+            this._bounds.intersectsBox(tempBox) &&
+            tileKey.level >= minzoom &&
+            tileKey.level <= maxzoom
+        );
     }
 
     /**
@@ -536,15 +542,15 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
     }
 
     /**
-  * Fetches raw tile data from the data source
-  *
-  * This method constructs the appropriate URL for the tile and fetches
-  * the raw data using the transfer manager.
-  *
-  * @param tileKey - The tile key to fetch
-  * @param abortSignal - Optional abort signal for cancellation
-  * @returns A promise that resolves to the raw tile data
-  */
+     * Fetches raw tile data from the data source
+     *
+     * This method constructs the appropriate URL for the tile and fetches
+     * the raw data using the transfer manager.
+     *
+     * @param tileKey - The tile key to fetch
+     * @param abortSignal - Optional abort signal for cancellation
+     * @returns A promise that resolves to the raw tile data
+     */
     private async _fetchTileData(
         tileKey: TileKey,
         abortSignal?: AbortSignal
@@ -580,14 +586,16 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
             // Apply all replacements
             for (const [placeholder, value] of Object.entries(replacements)) {
                 if (url.includes(placeholder)) {
-                    url = url.replace(new RegExp(placeholder, 'g'), value);
+                    url = url.replace(new RegExp(placeholder, "g"), value);
                 }
             }
 
             // If no placeholders found, use default XYZ format
-            if (!url.includes(String(tileKey.column)) &&
+            if (
+                !url.includes(String(tileKey.column)) &&
                 !url.includes(String(tileKey.row)) &&
-                !url.includes(String(tileKey.level))) {
+                !url.includes(String(tileKey.level))
+            ) {
                 console.warn(`No placeholder found in URL template: ${url}`);
             }
         }
@@ -606,19 +614,21 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
 
     /**
      * Checks if a URL is relative
-     * 
+     *
      * @param url - The URL to check
      * @returns True if the URL is relative
      */
     private _isRelativeUrl(url: string): boolean {
-        return url.startsWith("./") ||
+        return (
+            url.startsWith("./") ||
             url.startsWith("../") ||
-            (!url.includes("://") && !url.startsWith("/"));
+            (!url.includes("://") && !url.startsWith("/"))
+        );
     }
 
     /**
      * Resolves a relative URL against a base source URL
-     * 
+     *
      * @param relativeUrl - The relative URL to resolve
      * @param sourceUrl - The base source URL
      * @returns The resolved absolute URL
@@ -628,16 +638,25 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
             // If sourceUrl is an absolute URL
             if (sourceUrl.includes("://")) {
                 const baseUrl = new URL(sourceUrl);
-                const basePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf("/") + 1);
+                const basePath = baseUrl.pathname.substring(
+                    0,
+                    baseUrl.pathname.lastIndexOf("/") + 1
+                );
                 return new URL(relativeUrl, `${baseUrl.origin}${basePath}`).toString();
             } else {
                 // If sourceUrl is a relative URL, resolve against current page location
                 const baseUrl = new URL(sourceUrl, window.location.href);
-                const basePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf("/") + 1);
+                const basePath = baseUrl.pathname.substring(
+                    0,
+                    baseUrl.pathname.lastIndexOf("/") + 1
+                );
                 return new URL(relativeUrl, `${baseUrl.origin}${basePath}`).toString();
             }
         } catch (error) {
-            console.warn(`Failed to resolve relative URL: ${relativeUrl} against source: ${sourceUrl}`, error);
+            console.warn(
+                `Failed to resolve relative URL: ${relativeUrl} against source: ${sourceUrl}`,
+                error
+            );
             return relativeUrl;
         }
     }

@@ -14,7 +14,7 @@ import { TriangleGeometryMerger } from "@flywave/flywave-utils";
 import { BufferAttribute, BufferGeometry, Sphere, Triangle, Vector3 } from "three";
 import { Brush } from "three-bvh-csg";
 
-import { type GroundModificationPolygon } from "../../../ground-modification-manager";
+import { type GroundModificationData } from "../../../ground-modification-manager";
 import { FaceTypes } from "../decoder";
 import { type BspObject } from "./BspObject";
 import { type StratumTileData } from "./StratumTileData";
@@ -70,40 +70,23 @@ export class StratumMeshCliper {
         return additionalGeometries;
     }
 
-    private makeFrustumGeoAreaFromGroundModificationPolygon(
-        groundModificationPolygon: GroundModificationPolygon
+    private makeFrustumGeoAreaFromGroundModificationData(
+        groundModificationPolygon: GroundModificationData
     ): FrustumGeoArea {
-        const { geoArea, depthOrHeight } = groundModificationPolygon;
+        const operations = groundModificationPolygon.operations;
         const maxHeight = this.stratumMeshData.maxHeight;
+        const minHeight = this.stratumMeshData.minHeight || 0;
 
-        if (geoArea instanceof GeoBox) {
-            return {
-                geoArea,
-                topAltitude: maxHeight,
-                bottomAltitude: depthOrHeight
-            };
+        if (operations.length === 0) {
+            throw new Error("Cannot create frustum geo area from empty operations");
         }
 
-        if (geoArea instanceof GeoPolygon) {
-            return {
-                geoArea: geoArea.coordinates.map(coord => coord as GeoCoordinates),
-                topAltitude: maxHeight,
-                bottomAltitude: depthOrHeight
-            };
-        }
-
-        if (geoArea instanceof GeoLineString) {
-            return {
-                geoArea: geoArea.coordinates.map(coord => coord as GeoCoordinates),
-                topAltitude: maxHeight,
-                bottomAltitude: depthOrHeight
-            };
-        }
+        const coordinates = operations.map(op => op.position);
 
         return {
-            geoArea,
+            geoArea: coordinates,
             topAltitude: maxHeight,
-            bottomAltitude: depthOrHeight
+            bottomAltitude: minHeight
         };
     }
 
@@ -263,14 +246,14 @@ export class StratumMeshCliper {
      * @returns The clipped stratum tile data.
      */
     public clipTileMesh(
-        groundModificationPolygons?: GroundModificationPolygon[],
+        groundModificationPolygons?: GroundModificationData[],
         isClip: boolean = false
     ): BufferGeometry {
         // Pre-calculate clipBox and bspClipBox to avoid repeated calculations
         const frustumGeoAreas = groundModificationPolygons.map(
             polygon =>
                 new FrustumGeoAreaTester(
-                    this.makeFrustumGeoAreaFromGroundModificationPolygon(polygon),
+                    this.makeFrustumGeoAreaFromGroundModificationData(polygon),
                     this.stratumMeshData.center,
                     this.stratumMeshData.projection
                 )
@@ -280,7 +263,7 @@ export class StratumMeshCliper {
         if (isClip) {
             bspClipBox = this.makeFrustumGeoAreaToBspNode(
                 groundModificationPolygons.map(polygon =>
-                    this.makeFrustumGeoAreaFromGroundModificationPolygon(polygon)
+                    this.makeFrustumGeoAreaFromGroundModificationData(polygon)
                 )
             );
         }

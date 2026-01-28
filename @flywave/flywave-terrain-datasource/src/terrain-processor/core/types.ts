@@ -1,25 +1,16 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type GeoCoordinates, GeoBox } from "@flywave/flywave-geoutils";
-import { type Variogram } from "@flywave/flywave-kriging-gl";
+import { type GeoBox } from "@flywave/flywave-geoutils";
 import type * as THREE from "three";
 
-/**
- * Render options interface
- */
 export interface RenderOptions {
     width?: number;
     height?: number;
     flipY?: boolean;
 }
 
-/**
- * Ground modification result interface
- */
 export interface GroundModificationResult {
     image: ImageData;
-    krigingPoints: GeoCoordinates[];
-    variogram: Variogram;
 }
 
 /**

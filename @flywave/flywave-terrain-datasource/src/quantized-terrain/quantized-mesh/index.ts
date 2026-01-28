@@ -3,12 +3,11 @@
 import { type TileKey, EarthConstants, Projection } from "@flywave/flywave-geoutils";
 
 import { TaskType } from "../../Constants";
-import { serializeGroundModificationPolygon } from "../../ground-modification-manager";
+import { serializeGroundModificationData } from "../../ground-modification-manager";
 import { type DecodedTerrainTile } from "../../TerrainDecoderWorker";
 import { type ITerrainSource } from "../../TerrainSource";
 import { type ILayerStrategy } from "../layer-strategy/LayerStrategy";
 import { type QuantizedTerrainMeshData, QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
-
 
 /**
  * Fetches and processes quantized mesh terrain data for a specific tile
@@ -46,7 +45,7 @@ export async function getQuantizedMeshTerrain(
             const groundModificationPolygons = dataSource
                 .getGroundModificationManager()
                 .findModificationsInBoundingBox(geobox)
-                .map(serializeGroundModificationPolygon);
+                .map(serializeGroundModificationData);
 
             let skirtHeight = Math.min((rootGeometricError / (1 << tileKey.level)) * 4.0, 1000);
 
@@ -73,7 +72,8 @@ export async function getQuantizedMeshTerrain(
                      * - Correct physics/collision calculations
                      * The DEM provides higher precision than standard mesh rendering
                      */
-                    elevationMapEnabled: elevationMapEnabled || !!groundModificationPolygons?.length,
+                    elevationMapEnabled:
+                        elevationMapEnabled || !!groundModificationPolygons?.length,
                     elevationMapFlipY
                 },
                 tileKey,
@@ -119,7 +119,7 @@ export async function getUpSamplQuantizedMeshTerrain(
     const groundModificationPolygons = dataSource
         .getGroundModificationManager()
         .findModificationsInBoundingBox(targetGeoBox)
-        .map(serializeGroundModificationPolygon);
+        .map(serializeGroundModificationData);
 
     let projection = dataSource.projection;
     const maxRadius = EarthConstants.EQUATORIAL_RADIUS;

@@ -18,8 +18,8 @@ import {
 } from "three";
 
 import {
-    type SerializedGroundModificationPolygon,
-    GroundModificationPolygon
+    type SerializedGroundModificationData,
+    GroundModificationData
 } from "../../ground-modification-manager";
 import { type ClippedData, GeometryClipper, hashVertex, SplitOperation } from "./GeometryClipper";
 import { QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
@@ -45,7 +45,7 @@ export interface QuantizedMeshClipperOptions {
     solid?: boolean;
     geoBox: GeoBox;
     targetGeoBox: GeoBox;
-    groundModificationPolygons?: SerializedGroundModificationPolygon[];
+    groundModificationPolygons?: SerializedGroundModificationData[];
     elevationMapEnabled: boolean;
     elevationMapFlipY: boolean;
 }

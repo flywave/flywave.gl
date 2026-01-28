@@ -19,8 +19,6 @@ export { PostProcessingModule } from "./modules/PostProcessingModule";
 export { PostProcessingGUIModule } from "./modules/PostProcessingGUIModule";
 export { FogModule } from "./modules/FogModule";
 export { FogGUIModule } from "./modules/FogGUIModule";
-export { GroundModificationModule } from "./modules/GroundModificationModule";
-export { GroundModificationGUIModule } from "./modules/GroundModificationGUIModule";
 export { ElevationModule } from "./modules/ElevationModule";
 export { FrustumCullingModule } from "./modules/FrustumCullingModule";
 
@@ -38,7 +36,6 @@ export type { AnimationData } from "./modules/AnimationModule";
 export type { EnvironmentData } from "./modules/EnvironmentModule";
 export type { PostProcessingData } from "./modules/PostProcessingModule";
 export type { FogData } from "./modules/FogModule";
-export type { GroundModificationData } from "./modules/GroundModificationModule";
 
 // Export dat.GUI types
 export { GUI } from "dat.gui";

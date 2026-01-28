@@ -22,8 +22,8 @@ import {
 } from "three";
 
 import {
-    type SerializedGroundModificationPolygon,
-    GroundModificationPolygon
+    type SerializedGroundModificationData,
+    GroundModificationData
 } from "../../ground-modification-manager";
 import { type QuantizedMeshData, QuantizedMeshLoaderBase } from "./QuantizedMeshLoaderBase";
 import { QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
@@ -75,7 +75,7 @@ export interface QuantizedMeshLoaderOptions {
     geoBox: GeoBox;
     elevationMapEnabled: boolean;
     elevationMapFlipY: boolean;
-    groundModificationPolygons?: SerializedGroundModificationPolygon[];
+    groundModificationPolygons?: SerializedGroundModificationData[];
 }
 
 export class QuantizedMeshLoader extends QuantizedMeshLoaderBase {

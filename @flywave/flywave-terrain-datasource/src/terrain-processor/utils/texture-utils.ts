@@ -1,16 +1,12 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    type GeoBox,
-    GeoBox as GeoBoxType,
-    GeoCoordinates
-} from "@flywave/flywave-geoutils";
+import { type GeoBox, GeoBox as GeoBoxType, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type RenderEnvironment } from "../core/RenderEnvironment";
 import { type DistanceTextureResult } from "../core/types";
 import { CoordinateUtils } from "./coordinate-utils";
 import * as THREE from "three";
-import { GroundModificationPolygon } from "../../ground-modification-manager";
-import * as turf from '@turf/turf';
+import { GroundModificationData } from "../../ground-modification-manager";
+import * as turf from "@turf/turf";
 import earcut from "earcut";
 
 // Shader code: Fragment shader that only renders the red channel
@@ -38,11 +34,7 @@ export class TextureUtils {
      * @param flipY - Whether to flip the Y axis
      * @returns Base texture
      */
-    static createDefaultBaseTexture(
-        width: number,
-        height: number,
-        flipY: boolean
-    ): THREE.Texture {
+    static createDefaultBaseTexture(width: number, height: number, flipY: boolean): THREE.Texture {
         // Create a simple gradient image data as the default base texture
         const size = width * height;
         const data = new Uint8ClampedArray(4 * size);
@@ -54,10 +46,10 @@ export class TextureUtils {
             const y = Math.floor(i / width);
             const value = Math.floor((x / width) * 255);
 
-            data[stride] = value;     // R
+            data[stride] = value; // R
             data[stride + 1] = value; // G
             data[stride + 2] = value; // B
-            data[stride + 3] = 255;   // A
+            data[stride + 3] = 255; // A
         }
 
         const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
@@ -85,7 +77,7 @@ export class TextureUtils {
         width: number,
         height: number,
         renderEnv: RenderEnvironment,
-        modification: GroundModificationPolygon
+        slopeWidth: number = 10
     ): DistanceTextureResult {
         // First execute the original rendering
         const { renderTarget: maskRenderTarget } = this.renderMaskPolygon(
@@ -98,14 +90,9 @@ export class TextureUtils {
 
         // Read the rendering result
         const pixels = new Uint8Array(width * height);
-        renderEnv.getRenderer().readRenderTargetPixels(
-            maskRenderTarget!,
-            0,
-            0,
-            width,
-            height,
-            pixels
-        );
+        renderEnv
+            .getRenderer()
+            .readRenderTargetPixels(maskRenderTarget!, 0, 0, width, height, pixels);
 
         // Create a new pixel data array (single channel floating point)
         const distanceData = new Float32Array(width * height);
@@ -132,13 +119,9 @@ export class TextureUtils {
                 const latitude = geoBox.south + latRatio * (geoBox.north - geoBox.south);
                 const pixelCoord = new GeoCoordinates(latitude, longitude);
 
-                // Calculate the longitude and latitude distance from the current pixel to the edge of the input polygon
-                const distance = this.calculateDistanceToPolygonEdge(
-                    pixelCoord,
-                    polygonCoords
-                );
+                const distance = this.calculateDistanceToPolygonEdge(pixelCoord, polygonCoords);
 
-                distanceData[index] = Math.min(1.0, distance / modification.slopeWidth);
+                distanceData[index] = Math.min(1.0, distance / slopeWidth);
             }
         }
 
@@ -201,7 +184,7 @@ export class TextureUtils {
 
         // Set indices
         if (pixelCoords.length > 2) {
-            const indices = earcut(pixelCoords.flatMap(coord => [coord.x, coord.y])); 
+            const indices = earcut(pixelCoords.flatMap(coord => [coord.x, coord.y]));
             geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indices), 1));
         }
 
@@ -249,7 +232,10 @@ export class TextureUtils {
      * @param end - Line segment end point
      * @returns Distance value
      */
-    static calculateDistanceToPolygonEdge(point: GeoCoordinates, polygon: GeoCoordinates[]): number {
+    static calculateDistanceToPolygonEdge(
+        point: GeoCoordinates,
+        polygon: GeoCoordinates[]
+    ): number {
         if (polygon.length < 2) {
             return 0;
         }
@@ -271,7 +257,7 @@ export class TextureUtils {
             const turfPoint = turf.point([point.longitude, point.latitude]);
 
             // 计算点到线段的最短距离
-            const distance = turf.pointToLineDistance(turfPoint, line, { units: 'meters' });
+            const distance = turf.pointToLineDistance(turfPoint, line, { units: "meters" });
 
             if (distance < minDistance) {
                 minDistance = distance;
@@ -322,7 +308,9 @@ export class TextureUtils {
                 contourTexture: { value: contourTexture.texture },
                 resolution: { value: new THREE.Vector2(width, height) },
                 contourLength: { value: polygonCoords.length },
-                contourTexSize: { value: new THREE.Vector2(contourTexture.width, contourTexture.height) }
+                contourTexSize: {
+                    value: new THREE.Vector2(contourTexture.width, contourTexture.height)
+                }
             },
             vertexShader: `
                 void main() {
@@ -450,10 +438,12 @@ export class TextureUtils {
     ): { texture: THREE.Texture; width: number; height: number } {
         // Convert geographic coordinates to pixel coordinates
         const pixelCoords = polygonCoords.map(coord =>
-            CoordinateUtils.geoToTileSpace(coord, new GeoBoxType(
-                new GeoCoordinates(-90, -180),
-                new GeoCoordinates(90, 180)
-            ), width, height)
+            CoordinateUtils.geoToTileSpace(
+                coord,
+                new GeoBoxType(new GeoCoordinates(-90, -180), new GeoCoordinates(90, 180)),
+                width,
+                height
+            )
         );
 
         // Calculate texture width (1 pixel per vertex)
@@ -466,8 +456,8 @@ export class TextureUtils {
             const baseIndex = i * 4;
             textureData[baseIndex + 0] = point.x; // R - x high 8 bits
             textureData[baseIndex + 1] = point.y; // G - y low 8 bits
-            textureData[baseIndex + 2] = 0;       // B - reserved
-            textureData[baseIndex + 3] = 0;       // A - reserved
+            textureData[baseIndex + 2] = 0; // B - reserved
+            textureData[baseIndex + 3] = 0; // A - reserved
         }
 
         // Create data texture

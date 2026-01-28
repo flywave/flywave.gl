@@ -4,8 +4,8 @@
 import { type GeoBoxArray, type Projection, GeoBox, TileKey } from "@flywave/flywave-geoutils";
 
 import {
-    type SerializedGroundModificationPolygon,
-    deserializeGroundModificationPolygon
+    type SerializedGroundModificationData,
+    deserializeGroundModificationData
 } from "../ground-modification-manager";
 import {
     type QuantizedMeshClipperOptions,
@@ -50,11 +50,11 @@ export const processQuantizedMesh = (
     quantizedTerrainMesh.generateAndProcessTerrain({
         heightMap: data.elevationMapEnabled
             ? {
-                geoBox: data.geoBox,
-                flipY: data.elevationMapFlipY
-            }
+                  geoBox: data.geoBox,
+                  flipY: data.elevationMapFlipY
+              }
             : undefined,
-        clip: data.groundModificationPolygons?.map(deserializeGroundModificationPolygon),
+        clip: data.groundModificationPolygons?.map(deserializeGroundModificationData),
         projection
     });
 
@@ -113,11 +113,11 @@ export const processUpsampledMesh = (
     quantizedTerrainMesh.generateAndProcessTerrain({
         heightMap: data.elevationMapEnabled
             ? {
-                geoBox: data.targetGeoBox,
-                flipY: data.elevationMapFlipY
-            }
+                  geoBox: data.targetGeoBox,
+                  flipY: data.elevationMapFlipY
+              }
             : undefined,
-        clip: data.groundModificationPolygons?.map(deserializeGroundModificationPolygon),
+        clip: data.groundModificationPolygons?.map(deserializeGroundModificationData),
         projection: data.projection
     });
 
@@ -135,7 +135,7 @@ export interface DecodeStratumTileParams {
     /** Map projection to use for coordinate transformations */
     projection: Projection;
     /** Optional ground modification polygons to apply */
-    groundModificationPolygons?: SerializedGroundModificationPolygon[];
+    groundModificationPolygons?: SerializedGroundModificationData[];
     /** Whether to flip the Y axis for elevation maps */
     elevationMapFlipY?: boolean;
     /** Whether to enable elevation map generation */
@@ -157,21 +157,20 @@ export const processStratumTile = (params: DecodeStratumTileParams): DecodedStra
         params.geoBox,
         params.buffer,
         params.projection,
-        params.groundModificationPolygons?.map(deserializeGroundModificationPolygon)
+        params.groundModificationPolygons?.map(deserializeGroundModificationData)
     );
 
     if (params.elevationMapEnabled) {
         // Render heightmap for clipped mesh
         stratumTile.drawHeightMap(
             params.geoBox,
-            params.groundModificationPolygons?.map(deserializeGroundModificationPolygon),
+            params.groundModificationPolygons?.map(deserializeGroundModificationData),
             params.elevationMapFlipY
         );
     }
 
     return stratumTile.toDecodedStratumTileData();
 };
-
 
 /**
  * Parameters for reprojecting tile geometry between coordinate systems
@@ -208,7 +207,6 @@ export interface TileGeometryReprojectionData {
     };
     targetProjectionName: string;
     sourceProjectionName: string;
-    
 }
 
 /**
@@ -257,7 +255,7 @@ export const processReProjectTileGeometry = (
         const reprojectedPosition = targetProjection.reprojectPoint(
             sourceProjection,
             absolutePosition,
-            new Vector3
+            new Vector3()
         );
 
         // Convert back to relative position by subtracting tile center
@@ -274,7 +272,7 @@ export const processReProjectTileGeometry = (
             array: reprojectedArray,
             itemSize: 3
         },
-        targetProjectionName:getProjectionName(targetProjection),
-        sourceProjectionName:sourceProjectionName
+        targetProjectionName: getProjectionName(targetProjection),
+        sourceProjectionName: sourceProjectionName
     };
 };
