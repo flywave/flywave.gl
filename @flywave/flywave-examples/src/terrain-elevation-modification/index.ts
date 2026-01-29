@@ -9,7 +9,8 @@ import {
     DEMTerrainSource,
     BrushType,
     GeoBox,
-    ArcGISTileProvider
+    ArcGISTileProvider,
+    type BrushOperation
 } from "@flywave/flywave.gl";
 import { RepeatWrapping, TextureLoader } from "three";
 
@@ -23,39 +24,39 @@ const CONFIG = {
             position: new GeoCoordinates(36.39626, 118.09628),
             settings: {
                 type: BrushType.RAISE,
-                size: 15,
-                strength: 0.3,
-                hardness: 0.5
+                radius: 15,
+                hardness: 0.5,
+                heightDelta: 0.3
             }
         },
         {
             position: new GeoCoordinates(36.39876, 118.09938),
             settings: {
                 type: BrushType.RAISE,
-                size: 14,
-                strength: 30,
-                hardness: 0.5
+                radius: 14,
+                hardness: 0.5,
+                heightDelta: 30
             }
         },
         {
             position: new GeoCoordinates(36.40072, 118.10173),
             settings: {
                 type: BrushType.RAISE,
-                size: 15,
-                strength:303,
-                hardness: 0.5
+                radius: 300,
+                hardness: 0.5,
+                heightDelta: 303
             }
         },
         {
             position: new GeoCoordinates(36.40195, 118.10679),
             settings: {
                 type: BrushType.RAISE,
-                size: 40,
-                strength: 3000,
-                hardness: 0.5
+                radius: 100,
+                hardness: 0.5,
+                heightDelta: 300
             }
         }
-    ]
+    ] as BrushOperation[]
 };
 
 const getMapCanvas = id => {
@@ -87,9 +88,7 @@ const initializeMapView = canvas => {
 };
 
 const addTerrainModification = heightMapSource => {
-    heightMapSource
-        .getGroundModificationManager()
-        .addModification("replace", CONFIG.BRUSH_OPERATIONS);
+    heightMapSource.getGroundModificationManager().addModification(CONFIG.BRUSH_OPERATIONS);
 };
 
 const addGroundOverlay = heightMapSource => {

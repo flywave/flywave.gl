@@ -3,6 +3,7 @@
 import type { GeoBox } from "@flywave/flywave-geoutils";
 import type { BrushOperation, BrushSettings } from "./BrushTypes";
 import { CoordinateUtils } from "../terrain-processor/utils/coordinate-utils";
+import { GeoDistanceUtils } from "./GeoDistanceUtils";
 
 export class BrushProcessor {
     public applyBrushOperations(
@@ -14,6 +15,8 @@ export class BrushProcessor {
         const data = new Float32Array(width * height);
         data.fill(0.0);
 
+        const pixelScaling = GeoDistanceUtils.metersToPixels(1, tileGeoBox, width, height);
+
         for (const op of operations) {
             const pixelPos = CoordinateUtils.geoToTileSpace(op.position, tileGeoBox, width, height);
             this.applyBrush(
@@ -22,7 +25,8 @@ export class BrushProcessor {
                 height,
                 Math.floor(pixelPos.x),
                 Math.floor(pixelPos.y),
-                op.settings
+                op.settings,
+                pixelScaling
             );
         }
 
@@ -35,13 +39,19 @@ export class BrushProcessor {
         height: number,
         centerX: number,
         centerY: number,
-        settings: BrushSettings
+        settings: BrushSettings,
+        pixelScaling: { xPixels: number; yPixels: number }
     ): void {
-        const { type, size, strength, hardness } = settings;
-        const radius = Math.floor(size / 2);
+        const { type, radius, hardness } = settings;
 
-        for (let dy = -radius; dy <= radius; dy++) {
-            for (let dx = -radius; dx <= radius; dx++) {
+        const radiusXPixels = radius * pixelScaling.xPixels;
+        const radiusYPixels = radius * pixelScaling.yPixels;
+
+        const radiusXInt = Math.ceil(radiusXPixels);
+        const radiusYInt = Math.ceil(radiusYPixels);
+
+        for (let dy = -radiusYInt; dy <= radiusYInt; dy++) {
+            for (let dx = -radiusXInt; dx <= radiusXInt; dx++) {
                 const pixelX = centerX + dx;
                 const pixelY = centerY + dy;
 
@@ -49,27 +59,34 @@ export class BrushProcessor {
                     continue;
                 }
 
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance > radius) continue;
+                const normalizedDx = dx / radiusXPixels;
+                const normalizedDy = dy / radiusYPixels;
+                const distance = Math.sqrt(
+                    normalizedDx * normalizedDx + normalizedDy * normalizedDy
+                );
 
-                const normalizedDistance = distance / radius;
-                const weight = this.calculateBrushWeight(normalizedDistance, hardness);
+                if (distance > 1.0) continue;
+
+                const weight = this.calculateBrushWeight(distance, hardness);
 
                 const index = pixelY * width + pixelX;
+                let heightDelta = 0;
 
                 if (type === "raise") {
-                    data[index] = Math.max(data[index], weight * strength);
+                    heightDelta = weight * settings.heightDelta;
                 } else if (type === "lower") {
-                    data[index] = Math.max(data[index], weight * strength);
+                    heightDelta = -weight * settings.heightDelta;
                 } else if (type === "smooth") {
-                    data[index] = Math.max(data[index], weight * strength);
+                    heightDelta = weight * settings.strength;
                 } else if (type === "flatten") {
-                    data[index] = Math.max(data[index], weight * strength);
+                    heightDelta = weight * settings.targetAltitude;
                 } else if (type === "noise") {
-                    data[index] = Math.max(data[index], weight * strength);
+                    heightDelta = weight * settings.strength;
                 } else if (type === "erode") {
-                    data[index] = Math.max(data[index], weight * strength);
+                    heightDelta = weight * settings.strength;
                 }
+
+                data[index] = Math.max(data[index], heightDelta);
             }
         }
     }

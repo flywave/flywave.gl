@@ -8,7 +8,8 @@ import {
     MapControlsUI,
     DEMTerrainSource,
     BrushType,
-    ArcGISTileProvider
+    ArcGISTileProvider,
+    type BrushOperation
 } from "@flywave/flywave.gl";
 
 const CONFIG = {
@@ -45,7 +46,7 @@ const initializeMapView = canvas => {
     return map;
 };
 
-const createTestBrushOperations = () => {
+const createTestBrushOperations = (): BrushOperation[] => {
     const centerLat = 36.398;
     const centerLon = 118.099;
 
@@ -56,60 +57,59 @@ const createTestBrushOperations = () => {
             position: new GeoCoordinates(centerLat - 0.0015, centerLon - 0.001),
             settings: {
                 type: BrushType.RAISE,
-                size: 120,
-                strength: 0.4,
-                hardness: 0.6
+                radius: 120,
+                hardness: 0.6,
+                heightDelta: 0.4
             }
         },
         {
             position: new GeoCoordinates(centerLat + 0.0015, centerLon - 0.001),
             settings: {
                 type: BrushType.LOWER,
-                size: 120,
-                strength: 0.4,
-                hardness: 0.6
+                radius: 120,
+                hardness: 0.6,
+                heightDelta: 0.4
             }
         },
         {
             position: new GeoCoordinates(centerLat - 0.0015, centerLon + 0.001),
             settings: {
                 type: BrushType.SMOOTH,
-                size: 100,
-                strength: 0.5,
-                hardness: 0.7
+                radius: 100,
+                hardness: 0.7,
+                strength: 0.5
             }
         },
         {
             position: new GeoCoordinates(centerLat + 0.0015, centerLon + 0.001),
             settings: {
                 type: BrushType.FLATTEN,
-                size: 90,
-                strength: 0.6,
+                radius: 90,
                 hardness: 0.8,
-                flattenTargetHeight: 120
+                targetAltitude: 120
             }
         },
         {
             position: new GeoCoordinates(centerLat, centerLon),
             settings: {
                 type: BrushType.NOISE,
-                size: 150,
-                strength: 0.3,
+                radius: 150,
                 hardness: 0.5,
-                noiseScale: 8.0,
-                noisePersistence: 0.6
+                strength: 0.3,
+                scale: 8.0,
+                persistence: 0.6
             }
         },
         {
             position: new GeoCoordinates(centerLat + 0.003, centerLon),
             settings: {
                 type: BrushType.ERODE,
-                size: 130,
-                strength: 0.4,
-                hardness: 0.7
+                radius: 130,
+                hardness: 0.7,
+                strength: 0.4
             }
         }
-    ];
+    ] as BrushOperation[];
 };
 
 const addBrushModifications = demTerrain => {
@@ -127,21 +127,24 @@ const addBrushModifications = demTerrain => {
         console.log(
             `  Position: ${op.position.latitude.toFixed(6)}, ${op.position.longitude.toFixed(6)}`
         );
-        console.log(`  Size: ${op.settings.size}m`);
-        console.log(`  Strength: ${op.settings.strength}`);
+        console.log(`  Radius: ${op.settings.radius}m`);
         console.log(`  Hardness: ${op.settings.hardness}`);
-        if (op.settings.flattenTargetHeight !== undefined) {
-            console.log(`  Target Height: ${op.settings.flattenTargetHeight}m`);
+        if ("heightDelta" in op.settings) {
+            console.log(`  Height Delta: ${op.settings.heightDelta}m`);
         }
-        if (op.settings.noiseScale !== undefined) {
-            console.log(`  Noise Scale: ${op.settings.noiseScale}`);
+        if ("strength" in op.settings) {
+            console.log(`  Strength: ${op.settings.strength}`);
+        }
+        if ("targetAltitude" in op.settings) {
+            console.log(`  Target Altitude: ${op.settings.targetAltitude}m`);
+        }
+        if ("scale" in op.settings) {
+            console.log(`  Noise Scale: ${op.settings.scale}`);
         }
         console.log("");
     });
 
-    const modification = demTerrain
-        .getGroundModificationManager()
-        .addModification("add", brushOperations);
+    const modification = demTerrain.getGroundModificationManager().addModification(brushOperations);
 
     console.log("=".repeat(70));
     console.log("MODIFICATION ADDED SUCCESSFULLY");
@@ -208,9 +211,11 @@ try {
     console.log(`  6. ERODE    - Erodes terrain edges`);
     console.log("");
     console.log("Brush Parameters:");
-    console.log(`  Size:    Brush radius in meters`);
-    console.log(`  Strength: Intensity of modification (0-1)`);
+    console.log(`  Radius:  Brush radius in meters`);
     console.log(`  Hardness: Edge softness (0-1, 1 = sharp)`);
+    console.log(`  heightDelta: Height change in meters (RAISE/LOWER)`);
+    console.log(`  strength: Intensity (SMOOTH/NOISE/ERODE, 0-1)`);
+    console.log(`  targetAltitude: Target height in meters (FLATTEN)`);
     console.log("");
     console.log("Performance Characteristics:");
     console.log(`  ✓ WebGL GPU acceleration`);

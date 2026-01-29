@@ -376,10 +376,11 @@ export default class DEMData extends TileValidResource {
             throw new Error("dem dimension mismatch");
         }
 
-        let xMin = dx * this.dim;
-        let xMax = dx * this.dim + this.dim;
-        let yMin = dy * this.dim;
-        let yMax = dy * this.dim + this.dim;
+        const dim = this.dim;
+        let xMin = dx * dim;
+        let xMax = dx * dim + dim;
+        let yMin = dy * dim;
+        let yMax = dy * dim + dim;
 
         // Adjust ranges based on direction
         if (dx === -1) xMin = xMax - 1;
@@ -388,14 +389,16 @@ export default class DEMData extends TileValidResource {
         if (dy === -1) yMin = yMax - 1;
         else if (dy === 1) yMax = yMin + 1;
 
-        const ox = -dx * this.dim;
-        const oy = -dy * this.dim;
+        const ox = -dx * dim;
+        const oy = -dy * dim;
         const srcPixels = borderTile.pixels;
         const dstPixels = this.pixels;
 
         for (let y = yMin; y < yMax; y++) {
             for (let x = xMin; x < xMax; x++) {
-                const srcIdx = 4 * this._idx(x + ox, y + oy);
+                const srcX = (x + ox + dim) % dim;
+                const srcY = (y + oy + dim) % dim;
+                const srcIdx = 4 * borderTile._idx(srcX, srcY);
                 const dstIdx = 4 * this._idx(x, y);
 
                 dstPixels[dstIdx] = srcPixels[srcIdx];
@@ -403,6 +406,10 @@ export default class DEMData extends TileValidResource {
                 dstPixels[dstIdx + 2] = srcPixels[srcIdx + 2];
                 dstPixels[dstIdx + 3] = srcPixels[srcIdx + 3];
             }
+        }
+
+        if (this.texture) {
+            this.texture.needsUpdate = true;
         }
     }
 
@@ -457,8 +464,13 @@ export default class DEMData extends TileValidResource {
             const borderTileKey = TileKey.fromMortonCode(Number(borderId), encoding);
             const neighboringTileResource = demResource.getPreciseResource(borderTileKey);
             if (neighboringTileResource) {
-                DEMData.fillBorder(this, tileID, neighboringTileResource, borderTileKey, encoding);
-                DEMData.fillBorder(neighboringTileResource, borderTileKey, this, tileID, encoding);
+                // Only perform border filling from the tile with the smaller morton code to the larger one
+                // This ensures consistent directionality and prevents conflicting adjustments
+                if (tileID.mortonCode(encoding) < borderTileKey.mortonCode(encoding)) {
+                    DEMData.fillBorder(neighboringTileResource, borderTileKey, this, tileID, encoding);
+                } else {
+                    DEMData.fillBorder(this, tileID, neighboringTileResource, borderTileKey, encoding);
+                }
             }
         });
     }

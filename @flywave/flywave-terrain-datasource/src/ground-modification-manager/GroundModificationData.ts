@@ -8,17 +8,10 @@ import {
     GeoCoordinates
 } from "@flywave/flywave-geoutils";
 
-import type { BrushOperation } from "./BrushTypes";
-
-export type HeightOperationType = "replace" | "add" | "subtract" | "max" | "min";
-
-export interface GroundModificationType {
-    heightOperation: HeightOperationType;
-}
+import { BrushType, type BrushOperation, type BrushSettings } from "./BrushTypes";
 
 export interface SerializedGroundModificationData {
     id: string;
-    type: GroundModificationType;
     operations: SerializedBrushOperation[];
     boundingBox: GeoBoxArray;
 }
@@ -27,21 +20,79 @@ export interface SerializedBrushOperation {
     position: GeoPointLike;
     settings: {
         type: string;
-        size: number;
-        strength: number;
+        radius: number;
         hardness: number;
         texture?: string;
-        flattenTargetHeight?: number;
-        noiseScale?: number;
-        noisePersistence?: number;
+        heightDelta?: number;
+        strength?: number;
+        targetAltitude?: number;
+        scale?: number;
+        persistence?: number;
     };
 }
 
 export interface GroundModificationData {
     id: string;
-    type: GroundModificationType;
     operations: BrushOperation[];
     boundingBox: GeoBox;
+}
+
+function serializeBrushSettings(settings: BrushSettings): SerializedBrushOperation["settings"] {
+    const base: SerializedBrushOperation["settings"] = {
+        type: settings.type,
+        radius: settings.radius,
+        hardness: settings.hardness,
+        texture: settings.texture
+    };
+
+    if (settings.type === BrushType.RAISE || settings.type === BrushType.LOWER) {
+        return { ...base, heightDelta: settings.heightDelta };
+    } else if (settings.type === BrushType.SMOOTH) {
+        return { ...base, strength: settings.strength };
+    } else if (settings.type === BrushType.FLATTEN) {
+        return { ...base, targetAltitude: settings.targetAltitude };
+    } else if (settings.type === BrushType.NOISE) {
+        return {
+            ...base,
+            strength: settings.strength,
+            scale: settings.scale,
+            persistence: settings.persistence
+        };
+    } else if (settings.type === BrushType.ERODE) {
+        return { ...base, strength: settings.strength };
+    }
+
+    return base;
+}
+
+function deserializeBrushSettings(serialized: SerializedBrushOperation["settings"]): BrushSettings {
+    const base = {
+        radius: serialized.radius,
+        hardness: serialized.hardness,
+        texture: serialized.texture as any
+    };
+
+    if (serialized.type === "raise") {
+        return { ...base, type: BrushType.RAISE, heightDelta: serialized.heightDelta! };
+    } else if (serialized.type === "lower") {
+        return { ...base, type: BrushType.LOWER, heightDelta: serialized.heightDelta! };
+    } else if (serialized.type === "smooth") {
+        return { ...base, type: BrushType.SMOOTH, strength: serialized.strength! };
+    } else if (serialized.type === "flatten") {
+        return { ...base, type: BrushType.FLATTEN, targetAltitude: serialized.targetAltitude! };
+    } else if (serialized.type === "noise") {
+        return {
+            ...base,
+            type: BrushType.NOISE,
+            strength: serialized.strength!,
+            scale: serialized.scale!,
+            persistence: serialized.persistence
+        };
+    } else if (serialized.type === "erode") {
+        return { ...base, type: BrushType.ERODE, strength: serialized.strength! };
+    }
+
+    throw new Error(`Unknown brush type: ${serialized.type}`);
 }
 
 export function serializeGroundModificationData(
@@ -49,19 +100,9 @@ export function serializeGroundModificationData(
 ): SerializedGroundModificationData {
     return {
         id: data.id,
-        type: data.type,
         operations: data.operations.map(op => ({
             position: op.position.toGeoPoint(),
-            settings: {
-                type: op.settings.type,
-                size: op.settings.size,
-                strength: op.settings.strength,
-                hardness: op.settings.hardness,
-                texture: op.settings.texture,
-                flattenTargetHeight: op.settings.flattenTargetHeight,
-                noiseScale: op.settings.noiseScale,
-                noisePersistence: op.settings.noisePersistence
-            }
+            settings: serializeBrushSettings(op.settings)
         })),
         boundingBox: data.boundingBox.toArray()
     };
@@ -72,19 +113,9 @@ export function deserializeGroundModificationData(
 ): GroundModificationData {
     return {
         id: serialized.id,
-        type: serialized.type,
         operations: serialized.operations.map(op => ({
             position: GeoCoordinates.fromGeoPoint(op.position),
-            settings: {
-                type: op.settings.type as any,
-                size: op.settings.size,
-                strength: op.settings.strength,
-                hardness: op.settings.hardness,
-                texture: op.settings.texture as any,
-                flattenTargetHeight: op.settings.flattenTargetHeight,
-                noiseScale: op.settings.noiseScale,
-                noisePersistence: op.settings.noisePersistence
-            }
+            settings: deserializeBrushSettings(op.settings)
         })),
         boundingBox: GeoBox.fromArray(serialized.boundingBox)
     };

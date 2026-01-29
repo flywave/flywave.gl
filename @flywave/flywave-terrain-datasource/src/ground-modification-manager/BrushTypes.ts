@@ -13,16 +13,45 @@ export enum BrushType {
 
 export type BrushTexture = "circle" | "square" | "diamond" | "soft" | "custom";
 
-export interface BrushSettings {
-    type: BrushType;
-    size: number;
-    strength: number;
+export interface BaseBrushSettings {
+    radius: number;
     hardness: number;
     texture?: BrushTexture;
-    flattenTargetHeight?: number;
-    noiseScale?: number;
-    noisePersistence?: number;
 }
+
+export interface RaiseLowerSettings extends BaseBrushSettings {
+    type: BrushType.RAISE | BrushType.LOWER;
+    heightDelta: number;
+}
+
+export interface SmoothSettings extends BaseBrushSettings {
+    type: BrushType.SMOOTH;
+    strength: number;
+}
+
+export interface FlattenSettings extends BaseBrushSettings {
+    type: BrushType.FLATTEN;
+    targetAltitude: number;
+}
+
+export interface NoiseSettings extends BaseBrushSettings {
+    type: BrushType.NOISE;
+    strength: number;
+    scale: number;
+    persistence?: number;
+}
+
+export interface ErodeSettings extends BaseBrushSettings {
+    type: BrushType.ERODE;
+    strength: number;
+}
+
+export type BrushSettings =
+    | RaiseLowerSettings
+    | SmoothSettings
+    | FlattenSettings
+    | NoiseSettings
+    | ErodeSettings;
 
 export interface BrushOperation {
     position: GeoCoordinates;

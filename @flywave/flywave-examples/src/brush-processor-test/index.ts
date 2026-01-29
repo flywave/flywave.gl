@@ -1,6 +1,12 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { BrushProcessor, BrushType, GeoBox, GeoCoordinates } from "@flywave/flywave.gl";
+import {
+    BrushProcessor,
+    BrushType,
+    GeoBox,
+    GeoCoordinates,
+    type BrushOperation
+} from "@flywave/flywave.gl";
 
 const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -10,55 +16,55 @@ canvas.height = window.innerHeight;
 
 const brushProcessor = new BrushProcessor();
 
-const operations = [
+const operations: BrushOperation[] = [
     {
         position: new GeoCoordinates(0.0005, 0.001),
         settings: {
             type: BrushType.RAISE,
-            size: 80,
-            strength: 0.8,
-            hardness: 0.5
+            radius: 80,
+            hardness: 0.5,
+            heightDelta: 800
         }
     },
     {
         position: new GeoCoordinates(0.001, 0.001),
         settings: {
             type: BrushType.RAISE,
-            size: 100,
-            strength: 1.0,
-            hardness: 0.7
+            radius: 100,
+            hardness: 0.7,
+            heightDelta: 1000
         }
     },
     {
         position: new GeoCoordinates(0.0015, 0.001),
         settings: {
             type: BrushType.RAISE,
-            size: 120,
-            strength: 0.6,
-            hardness: 0.3
+            radius: 120,
+            hardness: 0.3,
+            heightDelta: 600
         }
     },
     {
         position: new GeoCoordinates(0.0018, 0.0012),
         settings: {
             type: BrushType.LOWER,
-            size: 60,
-            strength: 0.5,
-            hardness: 0.8
+            radius: 60,
+            hardness: 0.8,
+            heightDelta: 500
         }
     },
     {
         position: new GeoCoordinates(0.0008, 0.0005),
         settings: {
-            type: BrushType.NOISE,
-            size: 90,
-            strength: 0.7,
+            type: BrushType.RAISE,
+            radius: 90,
             hardness: 0.4,
-            noiseScale: 8,
-            noisePersistence: 0.6
+            strength: 300,
+            scale: 8,
+            persistence: 0.6
         }
     }
-];
+] as any;
 
 const tileGeoBox = new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0.002, 0.002));
 

@@ -5,14 +5,8 @@ import debounce from "lodash.debounce";
 import { EventDispatcher, MathUtils } from "three";
 
 import { type ITerrainSource } from "../TerrainSource";
-import {
-    type GroundModificationData,
-    type GroundModificationType,
-    type HeightOperationType
-} from "./GroundModificationData";
+import { type GroundModificationData } from "./GroundModificationData";
 import type { BrushOperation } from "./BrushTypes";
-
-export { GroundModificationType };
 
 export interface GroundModificationEventParams {
     changeType: "add" | "remove" | "update" | "clear" | "bounds";
@@ -53,14 +47,6 @@ export class GroundModification {
         this.updateBoundingBox();
     }
 
-    get type(): GroundModificationType {
-        return this.data.type;
-    }
-
-    set type(type: GroundModificationType) {
-        this.data.type = type;
-    }
-
     private updateBoundingBox(): void {
         if (this.data.operations.length === 0) {
             this.data.boundingBox = new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0));
@@ -88,7 +74,7 @@ export class GroundModificationManager extends EventDispatcher<GroundModificatio
     private globalBoundingBox: GeoBox | null = null;
 
     private readonly debouncedDispatch: (
-        changeType: "add" | "remove" | "update" | "clear" | "bounds",
+        changeType: "add" | "remove" | "update" | "clear",
         affectedModifications: GroundModificationData[],
         previousBounds?: GeoBox | null
     ) => void;
@@ -101,16 +87,12 @@ export class GroundModificationManager extends EventDispatcher<GroundModificatio
         ) as typeof this.debouncedDispatch;
     }
 
-    addModification(
-        heightOperation: HeightOperationType,
-        operations: BrushOperation[]
-    ): GroundModification {
+    addModification(operations: BrushOperation[]): GroundModification {
         const id = `mod-${this.nextId++}`;
         const boundingBox = this.calculateBoundingBox(operations);
 
         const modification: GroundModificationData = {
             id,
-            type: { heightOperation },
             operations,
             boundingBox
         };
@@ -133,12 +115,8 @@ export class GroundModificationManager extends EventDispatcher<GroundModificatio
             this.globalBoundingBox = null;
         } else if (
             this.globalBoundingBox &&
-            (modification.data.boundingBox.southWest.equals(
-                this.globalBoundingBox.southWest
-            ) ||
-                modification.data.boundingBox.northEast.equals(
-                    this.globalBoundingBox.northEast
-                ))
+            (modification.data.boundingBox.southWest.equals(this.globalBoundingBox.southWest) ||
+                modification.data.boundingBox.northEast.equals(this.globalBoundingBox.northEast))
         ) {
             this.recalculateGlobalBoundingBox();
         }
@@ -157,10 +135,6 @@ export class GroundModificationManager extends EventDispatcher<GroundModificatio
         const previousBounds = modification.boundingBox.clone();
         let needsBoundingBoxRecalc = false;
 
-        if (changes.type !== undefined) {
-            modification.type = changes.type;
-        }
-
         if (changes.operations !== undefined) {
             modification.operations = changes.operations;
             needsBoundingBoxRecalc = true;
@@ -170,11 +144,7 @@ export class GroundModificationManager extends EventDispatcher<GroundModificatio
             this.recalculateGlobalBoundingBox();
         }
 
-        this.dispatchChangeEvent(
-            "update",
-            [modification.data],
-            previousBounds
-        );
+        this.dispatchChangeEvent("update", [modification.data], previousBounds);
         return true;
     }
 
