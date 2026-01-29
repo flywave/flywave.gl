@@ -3,3 +3,4 @@
 export * from "./GroundModificationManager";
 export * from "./GroundModificationData";
 export * from "./BrushTypes";
+export * from "./BrushProcessor";

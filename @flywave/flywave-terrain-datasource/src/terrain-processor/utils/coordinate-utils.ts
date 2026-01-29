@@ -23,8 +23,9 @@ export class CoordinateUtils {
             (geoCoords.longitude - tileGeoBox.southWest.longitude) /
             (tileGeoBox.northEast.longitude - tileGeoBox.southWest.longitude);
         const latRatio =
+            1.0 -
             (geoCoords.latitude - tileGeoBox.southWest.latitude) /
-            (tileGeoBox.northEast.latitude - tileGeoBox.southWest.latitude);
+                (tileGeoBox.northEast.latitude - tileGeoBox.southWest.latitude);
 
         return new THREE.Vector2(lonRatio * width, latRatio * height);
     }
