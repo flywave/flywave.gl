@@ -249,7 +249,7 @@ const addGroundModification = (demTerrain: DEMTerrainSource): void => {
         }
     }));
 
-    demTerrain.getGroundModificationManager().addModification("replace", brushOperations);
+    // demTerrain.getGroundModificationManager().addModification(brushOperations);
 };
 
 /**

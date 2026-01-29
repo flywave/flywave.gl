@@ -37,23 +37,14 @@ const CONFIG = {
                 hardness: 0.5,
                 heightDelta: 30
             }
-        },
-        {
-            position: new GeoCoordinates(36.40072, 118.10173),
-            settings: {
-                type: BrushType.RAISE,
-                radius: 300,
-                hardness: 0.5,
-                heightDelta: 303
-            }
-        },
+        }, 
         {
             position: new GeoCoordinates(36.40195, 118.10679),
             settings: {
-                type: BrushType.RAISE,
+                type: BrushType.LOWER,
                 radius: 100,
                 hardness: 0.5,
-                heightDelta: 300
+                heightDelta: 100
             }
         }
     ] as BrushOperation[]

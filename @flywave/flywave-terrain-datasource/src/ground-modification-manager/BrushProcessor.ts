@@ -86,7 +86,7 @@ export class BrushProcessor {
                     heightDelta = weight * settings.strength;
                 }
 
-                data[index] = Math.max(data[index], heightDelta);
+                data[index] = heightDelta;
             }
         }
     }
