@@ -95,17 +95,40 @@ function deserializeBrushSettings(serialized: SerializedBrushOperation["settings
     throw new Error(`Unknown brush type: ${serialized.type}`);
 }
 
+export function serializeBrushOperation(op: BrushOperation): SerializedBrushOperation {
+    return {
+        position: op.position.toGeoPoint(),
+        settings: serializeBrushSettings(op.settings)
+    };
+}
+
+export function deserializeBrushOperation(serialized: SerializedBrushOperation): BrushOperation {
+    return {
+        position: GeoCoordinates.fromGeoPoint(serialized.position),
+        settings: deserializeBrushSettings(serialized.settings)
+    };
+}
+
 export function serializeGroundModificationData(
     data: GroundModificationData
 ): SerializedGroundModificationData {
     return {
         id: data.id,
-        operations: data.operations.map(op => ({
-            position: op.position.toGeoPoint(),
-            settings: serializeBrushSettings(op.settings)
-        })),
+        operations: data.operations.map(serializeBrushOperation),
         boundingBox: data.boundingBox.toArray()
     };
+}
+
+export function brushOperationsToSerializedModifications(
+    operations: BrushOperation[],
+    operationIds: string[],
+    boundingBoxes: GeoBox[]
+): SerializedGroundModificationData[] {
+    return operations.map((op, index) => ({
+        id: operationIds[index],
+        operations: [serializeBrushOperation(op)],
+        boundingBox: boundingBoxes[index].toArray()
+    }));
 }
 
 export function deserializeGroundModificationData(

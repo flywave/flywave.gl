@@ -1,9 +1,15 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type TileKey, EarthConstants, Projection } from "@flywave/flywave-geoutils";
+import {
+    type TileKey,
+    EarthConstants,
+    Projection,
+    GeoBox,
+    GeoCoordinates
+} from "@flywave/flywave-geoutils";
 
 import { TaskType } from "../../Constants";
-import { serializeGroundModificationData } from "../../ground-modification-manager";
+import { brushOperationsToSerializedModifications } from "../../ground-modification-manager";
 import { type DecodedTerrainTile } from "../../TerrainDecoderWorker";
 import { type ITerrainSource } from "../../TerrainSource";
 import { type ILayerStrategy } from "../layer-strategy/LayerStrategy";
@@ -42,10 +48,19 @@ export async function getQuantizedMeshTerrain(
             const geobox = layerStrategy.tilingScheme.getGeoBox(tileKey);
 
             // Check for ground modifications in this tile's area
-            const groundModificationPolygons = dataSource
+            const foundOps = dataSource
                 .getGroundModificationManager()
-                .findModificationsInBoundingBox(geobox)
-                .map(serializeGroundModificationData);
+                .findOperationsInBoundingBox(geobox);
+            const groundModificationPolygons = brushOperationsToSerializedModifications(
+                foundOps.map(item => item.operation),
+                foundOps.map(item => item.id),
+                foundOps.map(item => {
+                    const bbox = dataSource
+                        .getGroundModificationManager()
+                        .getOperationBoundingBox(item.id);
+                    return bbox || new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0));
+                })
+            );
 
             let skirtHeight = Math.min((rootGeometricError / (1 << tileKey.level)) * 4.0, 1000);
 
@@ -116,10 +131,17 @@ export async function getUpSamplQuantizedMeshTerrain(
     const targetGeoBox = layerStrategy.tilingScheme.getGeoBox(tileKey);
 
     // Find and serialize terrain modification polygons in current tile area
-    const groundModificationPolygons = dataSource
+    const foundOps = dataSource
         .getGroundModificationManager()
-        .findModificationsInBoundingBox(targetGeoBox)
-        .map(serializeGroundModificationData);
+        .findOperationsInBoundingBox(targetGeoBox);
+    const groundModificationPolygons = brushOperationsToSerializedModifications(
+        foundOps.map(item => item.operation),
+        foundOps.map(item => item.id),
+        foundOps.map(item => {
+            const bbox = dataSource.getGroundModificationManager().getOperationBoundingBox(item.id);
+            return bbox || new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0));
+        })
+    );
 
     let projection = dataSource.projection;
     const maxRadius = EarthConstants.EQUATORIAL_RADIUS;

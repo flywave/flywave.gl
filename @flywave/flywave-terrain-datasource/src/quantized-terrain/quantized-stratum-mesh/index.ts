@@ -1,9 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type TileKey, type TilingScheme } from "@flywave/flywave-geoutils";
+import { type TileKey, type TilingScheme, GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
 
 import { TaskType } from "../../Constants";
-import { serializeGroundModificationData } from "../../ground-modification-manager";
+import { brushOperationsToSerializedModifications } from "../../ground-modification-manager";
 import { type DecodedTerrainTile } from "../../TerrainDecoderWorker";
 import { type ITerrainSource } from "../../TerrainSource";
 import { type ILayerStrategy } from "../layer-strategy/LayerStrategy";
@@ -19,6 +19,15 @@ export async function getQuantizedStratumMesh(
     elevationMapFlipY: boolean
 ): Promise<QuantizedStratumResource> {
     const geoBox = tilingScheme.getGeoBox(tileKey);
+    const foundOps = dataSource.getGroundModificationManager().findOperationsInBoundingBox(geoBox);
+    const groundModificationPolygons = brushOperationsToSerializedModifications(
+        foundOps.map(item => item.operation),
+        foundOps.map(item => item.id),
+        foundOps.map(item => {
+            const bbox = dataSource.getGroundModificationManager().getOperationBoundingBox(item.id);
+            return bbox || new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0));
+        })
+    );
     return await layerStrategy
         .requestTileBuffer(tileKey)
         .then(function (buffer: ArrayBuffer) {
@@ -26,10 +35,7 @@ export async function getQuantizedStratumMesh(
                 {
                     buffer,
                     type: TaskType.QuantizedStratumInit,
-                    groundModificationPolygons: dataSource
-                        .getGroundModificationManager()
-                        .findModificationsInBoundingBox(geoBox)
-                        .map(serializeGroundModificationData),
+                    groundModificationPolygons,
                     geoBox: geoBox.toArray(),
                     elevationMapEnabled,
                     elevationMapFlipY

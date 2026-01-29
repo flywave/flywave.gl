@@ -37,7 +37,7 @@ const CONFIG = {
                 hardness: 0.5,
                 heightDelta: 30
             }
-        }, 
+        },
         {
             position: new GeoCoordinates(36.40195, 118.10679),
             settings: {
@@ -79,7 +79,7 @@ const initializeMapView = canvas => {
 };
 
 const addTerrainModification = heightMapSource => {
-    heightMapSource.getGroundModificationManager().addModification(CONFIG.BRUSH_OPERATIONS);
+    heightMapSource.getGroundModificationManager().addOperations(CONFIG.BRUSH_OPERATIONS);
 };
 
 const addGroundOverlay = heightMapSource => {

@@ -2,7 +2,8 @@
 
 // height-map/DemTileProgressiveLoader.ts
 import {
-    type GeoBox,
+    GeoBox,
+    GeoCoordinates,
     type TileKey,
     geographicTerrainStandardTiling,
     webMercatorTerrainTilingScheme
@@ -22,7 +23,7 @@ import {
     type GroundModificationEventParams,
     type GroundModificationManager,
     type SerializedGroundModificationData,
-    serializeGroundModificationData
+    brushOperationsToSerializedModifications
 } from "../ground-modification-manager";
 import { ResourceProvider } from "../ResourceProvider";
 import type { DecodedTerrainTile } from "../TerrainDecoderWorker";
@@ -236,12 +237,21 @@ export class DemTileResource extends TileValidResource {
         event: GroundModificationEventParams,
         modify: GroundModificationManager
     ): Promise<void> {
+        const modifications =
+            event.operations && event.affectedIds && event.operationBoundingBoxes
+                ? brushOperationsToSerializedModifications(
+                      event.operations,
+                      event.affectedIds,
+                      event.operationBoundingBoxes
+                  )
+                : undefined;
+
         return DemTileResource.createDemTileResourceFromImageryData(
             this.demData.sourceImage,
             this.tileKey,
             this.terrainSource,
             this.demData.encoding,
-            event.modifications?.map(serializeGroundModificationData)
+            modifications
         ).then((demTileResource: DemTileResource) => {
             this._demData.dispose();
             this._demData = demTileResource.demData;
@@ -288,10 +298,23 @@ export class DemTileResource extends TileValidResource {
 
         const polygons =
             groundModificationPolygons ||
-            terrainSource
-                .getGroundModificationManager()
-                .findModificationsInBoundingBox(geoBox)
-                .map(serializeGroundModificationData);
+            (() => {
+                const foundOps = terrainSource
+                    .getGroundModificationManager()
+                    .findOperationsInBoundingBox(geoBox);
+                return brushOperationsToSerializedModifications(
+                    foundOps.map(item => item.operation),
+                    foundOps.map(item => item.id),
+                    foundOps.map(item => {
+                        const bbox = terrainSource
+                            .getGroundModificationManager()
+                            .getOperationBoundingBox(item.id);
+                        return (
+                            bbox || new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0))
+                        );
+                    })
+                );
+            })();
 
         return terrainSource.decoder
             .decodeTile(

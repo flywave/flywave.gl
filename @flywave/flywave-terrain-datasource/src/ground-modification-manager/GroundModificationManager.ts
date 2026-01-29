@@ -6,7 +6,7 @@ import { EventDispatcher, MathUtils } from "three";
 
 import { type ITerrainSource } from "../TerrainSource";
 import { type GroundModificationData } from "./GroundModificationData";
-import type { BrushOperation } from "./BrushTypes";
+import type { BrushOperation, BrushType } from "./BrushTypes";
 
 export interface GroundModificationEventParams {
     changeType: "add" | "remove" | "update" | "clear" | "bounds";
@@ -14,7 +14,8 @@ export interface GroundModificationEventParams {
     globalBounds: GeoBox | null;
     affectedBounds: GeoBox | null;
     previousBounds?: GeoBox | null;
-    modifications?: GroundModificationData[];
+    operations?: BrushOperation[];
+    operationBoundingBoxes?: GeoBox[];
 }
 
 interface GroundModificationEvents {
@@ -26,56 +27,17 @@ export interface GroundModificationManagerOptions {
     skipZoomLevelZoom?: number;
 }
 
-export class GroundModification {
-    id: string = MathUtils.generateUUID();
-
-    constructor(
-        public data: GroundModificationData,
-        private readonly terrainSource: ITerrainSource
-    ) {}
-
-    get boundingBox(): GeoBox {
-        return this.data.boundingBox;
-    }
-
-    get operations(): BrushOperation[] {
-        return this.data.operations;
-    }
-
-    set operations(operations: BrushOperation[]) {
-        this.data.operations = operations;
-        this.updateBoundingBox();
-    }
-
-    private updateBoundingBox(): void {
-        if (this.data.operations.length === 0) {
-            this.data.boundingBox = new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0));
-            return;
-        }
-
-        const firstPos = this.data.operations[0].position;
-        const southWest = firstPos.clone();
-        const northEast = firstPos.clone();
-
-        for (const op of this.data.operations) {
-            southWest.latitude = Math.min(southWest.latitude, op.position.latitude);
-            southWest.longitude = Math.min(southWest.longitude, op.position.longitude);
-            northEast.latitude = Math.max(northEast.latitude, op.position.latitude);
-            northEast.longitude = Math.max(northEast.longitude, op.position.longitude);
-        }
-
-        this.data.boundingBox = new GeoBox(southWest, northEast);
-    }
-}
-
 export class GroundModificationManager extends EventDispatcher<GroundModificationEvents> {
-    private readonly modifications = new Map<string, GroundModification>();
+    private readonly operations = new Map<
+        string,
+        { operation: BrushOperation; boundingBox: GeoBox }
+    >();
     private nextId: number = 0;
     private globalBoundingBox: GeoBox | null = null;
 
     private readonly debouncedDispatch: (
         changeType: "add" | "remove" | "update" | "clear",
-        affectedModifications: GroundModificationData[],
+        affectedOperations: BrushOperation[],
         previousBounds?: GeoBox | null
     ) => void;
 
@@ -87,153 +49,212 @@ export class GroundModificationManager extends EventDispatcher<GroundModificatio
         ) as typeof this.debouncedDispatch;
     }
 
-    addModification(operations: BrushOperation[]): GroundModification {
-        const id = `mod-${this.nextId++}`;
-        const boundingBox = this.calculateBoundingBox(operations);
+    addOperation(operation: BrushOperation): string {
+        const id = `op-${this.nextId++}`;
+        const boundingBox = this.calculateOperationBoundingBox(operation);
 
-        const modification: GroundModificationData = {
-            id,
-            operations,
-            boundingBox
-        };
-
-        const groundModification = new GroundModification(modification, this.terrainSource);
-        this.modifications.set(groundModification.id, groundModification);
+        this.operations.set(id, { operation, boundingBox });
         this.updateGlobalBoundingBox(boundingBox);
-        this.dispatchChangeEvent("add", [modification]);
+        this.dispatchChangeEvent("add", [operation]);
 
-        return groundModification;
+        return id;
     }
 
-    removeModification(id: string): boolean {
-        const modification = this.modifications.get(id);
-        if (!modification) return false;
+    addOperations(operations: BrushOperation[]): string[] {
+        const ids: string[] = [];
+        for (const op of operations) {
+            ids.push(this.addOperation(op));
+        }
+        return ids;
+    }
 
-        this.modifications.delete(id);
+    removeOperation(id: string): boolean {
+        const entry = this.operations.get(id);
+        if (!entry) return false;
 
-        if (this.modifications.size === 0) {
+        this.operations.delete(id);
+
+        if (this.operations.size === 0) {
             this.globalBoundingBox = null;
         } else if (
             this.globalBoundingBox &&
-            (modification.data.boundingBox.southWest.equals(this.globalBoundingBox.southWest) ||
-                modification.data.boundingBox.northEast.equals(this.globalBoundingBox.northEast))
+            (entry.boundingBox.southWest.equals(this.globalBoundingBox.southWest) ||
+                entry.boundingBox.northEast.equals(this.globalBoundingBox.northEast))
         ) {
             this.recalculateGlobalBoundingBox();
         }
 
-        this.dispatchChangeEvent("remove", [modification.data]);
+        this.dispatchChangeEvent("remove", [entry.operation]);
         return true;
     }
 
-    updateModification(
-        id: string,
-        changes: Partial<Omit<GroundModificationData, "id" | "boundingBox">>
-    ): boolean {
-        const modification = this.modifications.get(id);
-        if (!modification) return false;
+    removeOperations(ids: string[]): boolean[] {
+        return ids.map(id => this.removeOperation(id));
+    }
 
-        const previousBounds = modification.boundingBox.clone();
-        let needsBoundingBoxRecalc = false;
+    updateOperation(id: string, changes: Partial<BrushOperation>): boolean {
+        const entry = this.operations.get(id);
+        if (!entry) return false;
 
-        if (changes.operations !== undefined) {
-            modification.operations = changes.operations;
-            needsBoundingBoxRecalc = true;
+        const previousBounds = entry.boundingBox.clone();
+
+        if (changes.position !== undefined) {
+            entry.operation.position = changes.position;
+        }
+        if (changes.settings !== undefined) {
+            entry.operation.settings = changes.settings;
         }
 
-        if (needsBoundingBoxRecalc) {
-            this.recalculateGlobalBoundingBox();
-        }
+        entry.boundingBox = this.calculateOperationBoundingBox(entry.operation);
+        this.recalculateGlobalBoundingBox();
 
-        this.dispatchChangeEvent("update", [modification.data], previousBounds);
+        this.dispatchChangeEvent("update", [entry.operation], previousBounds);
         return true;
     }
 
     clear(): void {
-        const hadModifications = this.modifications.size > 0;
-        const clearedModifications = Array.from(this.modifications.values());
+        const hadOperations = this.operations.size > 0;
+        const clearedOperations = Array.from(this.operations.values());
 
-        this.modifications.clear();
+        this.operations.clear();
         this.globalBoundingBox = null;
 
-        if (hadModifications) {
-            this.dispatchChangeEvent("clear", clearedModifications);
+        if (hadOperations) {
+            this.dispatchChangeEvent(
+                "clear",
+                clearedOperations.map(e => e.operation)
+            );
         }
     }
 
-    getModification(id: string): GroundModificationData | undefined {
-        return this.modifications.get(id);
+    getOperation(id: string): BrushOperation | undefined {
+        const entry = this.operations.get(id);
+        return entry?.operation;
     }
 
-    getAllModifications(): GroundModificationData[] {
-        return Array.from(this.modifications.values());
+    getOperationBoundingBox(id: string): GeoBox | undefined {
+        const entry = this.operations.get(id);
+        return entry?.boundingBox.clone();
+    }
+
+    getAllOperations(): BrushOperation[] {
+        return Array.from(this.operations.values()).map(e => e.operation);
+    }
+
+    getAllOperationIds(): string[] {
+        return Array.from(this.operations.keys());
+    }
+
+    getOperationsByType(type: BrushType): { id: string; operation: BrushOperation }[] {
+        const result: { id: string; operation: BrushOperation }[] = [];
+        for (const [id, entry] of this.operations.entries()) {
+            if (entry.operation.settings.type === type) {
+                result.push({ id, operation: entry.operation });
+            }
+        }
+        return result;
     }
 
     getGlobalBoundingBox(): GeoBox | null {
         return this.globalBoundingBox ? this.globalBoundingBox.clone() : null;
     }
 
-    findModificationsInBoundingBox(bbox: GeoBox): GroundModificationData[] {
-        const result: GroundModificationData[] = [];
+    findOperationsInBoundingBox(bbox: GeoBox): { id: string; operation: BrushOperation }[] {
+        const result: { id: string; operation: BrushOperation }[] = [];
 
-        for (const mod of this.modifications.values()) {
-            if (mod.boundingBox.intersectsBox(bbox)) {
-                result.push(mod);
+        for (const [id, entry] of this.operations.entries()) {
+            if (entry.boundingBox.intersectsBox(bbox)) {
+                result.push({ id, operation: entry.operation });
             }
         }
 
         return result;
     }
 
-    findModificationsContainingPoint(point: GeoCoordinates): GroundModificationData[] {
-        const result: GroundModificationData[] = [];
+    findOperationsContainingPoint(
+        point: GeoCoordinates
+    ): { id: string; operation: BrushOperation }[] {
+        const result: { id: string; operation: BrushOperation }[] = [];
 
-        for (const mod of this.modifications.values()) {
-            if (mod.boundingBox.contains(point)) {
-                result.push(mod);
+        for (const [id, entry] of this.operations.entries()) {
+            if (entry.boundingBox.contains(point)) {
+                result.push({ id, operation: entry.operation });
             }
         }
 
         return result;
+    }
+
+    getOperationCount(): number {
+        return this.operations.size;
+    }
+
+    hasOperation(id: string): boolean {
+        return this.operations.has(id);
     }
 
     private dispatchChangeEventImmediate(
         changeType: "add" | "remove" | "update" | "clear",
-        affectedModifications: GroundModificationData[] = [],
+        affectedOperations: BrushOperation[] = [],
         previousBounds: GeoBox | null = null
     ) {
         let affectedBounds: GeoBox | null = null;
-        if (affectedModifications.length > 0) {
-            affectedBounds = affectedModifications[0].boundingBox.clone();
-            for (let i = 1; i < affectedModifications.length; i++) {
-                affectedBounds.expandToInclude(affectedModifications[i].boundingBox);
+        if (affectedOperations.length > 0) {
+            affectedBounds = this.calculateOperationsBoundingBox(affectedOperations);
+        }
+
+        const affectedIds: string[] = [];
+        const operationBoundingBoxes: GeoBox[] = [];
+        for (const [id] of this.operations.entries()) {
+            if (affectedOperations.includes(this.operations.get(id)!.operation)) {
+                affectedIds.push(id);
+                operationBoundingBoxes.push(this.operations.get(id)!.boundingBox.clone());
             }
         }
 
         this.dispatchEvent({
             type: "change",
             changeType,
-            affectedIds: affectedModifications.map(m => m.id),
+            affectedIds,
             globalBounds: this.globalBoundingBox ? this.globalBoundingBox.clone() : null,
             affectedBounds,
             previousBounds,
-            modifications:
-                changeType === "add" || changeType === "update"
-                    ? affectedModifications.map(m => m)
-                    : undefined
+            operations:
+                changeType === "add" || changeType === "update" ? affectedOperations : undefined,
+            operationBoundingBoxes:
+                changeType === "add" || changeType === "update" ? operationBoundingBoxes : undefined
         });
     }
 
     private dispatchChangeEvent(
         changeType: "add" | "remove" | "update" | "clear",
-        affectedModifications: GroundModificationData[] = [],
+        affectedOperations: BrushOperation[] = [],
         previousBounds: GeoBox | null = null
     ) {
-        this.debouncedDispatch(changeType, affectedModifications, previousBounds);
+        this.debouncedDispatch(changeType, affectedOperations, previousBounds);
     }
 
-    private calculateBoundingBox(operations: BrushOperation[]): GeoBox {
+    private calculateOperationBoundingBox(operation: BrushOperation): GeoBox {
+        const { position, settings } = operation;
+        const radius = settings.radius;
+        const latDelta = radius / 111111;
+        const lonDelta = radius / (111111 * Math.cos((position.latitude * Math.PI) / 180));
+
+        const southWest = new GeoCoordinates(
+            position.latitude - latDelta,
+            position.longitude - lonDelta
+        );
+        const northEast = new GeoCoordinates(
+            position.latitude + latDelta,
+            position.longitude + lonDelta
+        );
+
+        return new GeoBox(southWest, northEast);
+    }
+
+    private calculateOperationsBoundingBox(operations: BrushOperation[]): GeoBox {
         if (operations.length === 0) {
-            throw new Error("Cannot calculate bounding box for empty operations");
+            return new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0));
         }
 
         const firstPos = operations[0].position.clone();
@@ -241,14 +262,12 @@ export class GroundModificationManager extends EventDispatcher<GroundModificatio
         const northEast = firstPos.clone();
 
         for (const op of operations) {
-            southWest.latitude = Math.min(southWest.latitude, op.position.latitude);
-            southWest.longitude = Math.min(southWest.longitude, op.position.longitude);
-            northEast.latitude = Math.max(northEast.latitude, op.position.latitude);
-            northEast.longitude = Math.max(northEast.longitude, op.position.longitude);
+            const bbox = this.calculateOperationBoundingBox(op);
+            southWest.latitude = Math.min(southWest.latitude, bbox.southWest.latitude);
+            southWest.longitude = Math.min(southWest.longitude, bbox.southWest.longitude);
+            northEast.latitude = Math.max(northEast.latitude, bbox.northEast.latitude);
+            northEast.longitude = Math.max(northEast.longitude, bbox.northEast.longitude);
         }
-
-        southWest.altitude = undefined;
-        northEast.altitude = undefined;
 
         return new GeoBox(southWest, northEast);
     }
@@ -263,8 +282,8 @@ export class GroundModificationManager extends EventDispatcher<GroundModificatio
 
     private recalculateGlobalBoundingBox(): void {
         this.globalBoundingBox = null;
-        for (const mod of this.modifications.values()) {
-            this.updateGlobalBoundingBox(mod.boundingBox);
+        for (const entry of this.operations.values()) {
+            this.updateGlobalBoundingBox(entry.boundingBox);
         }
     }
 }

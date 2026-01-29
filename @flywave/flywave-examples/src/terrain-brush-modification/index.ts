@@ -144,23 +144,13 @@ const addBrushModifications = demTerrain => {
         console.log("");
     });
 
-    const modification = demTerrain.getGroundModificationManager().addModification(brushOperations);
+    const operationIds = demTerrain.getGroundModificationManager().addOperations(brushOperations);
 
     console.log("=".repeat(70));
-    console.log("MODIFICATION ADDED SUCCESSFULLY");
+    console.log("MODIFICATIONS ADDED SUCCESSFULLY");
     console.log("=".repeat(70));
-    console.log(`Modification ID: ${modification.id}`);
-    console.log(`Bounding Box:`);
-    console.log(
-        `  South West: ${modification.boundingBox.southWest.latitude.toFixed(
-            6
-        )}, ${modification.boundingBox.southWest.longitude.toFixed(6)}`
-    );
-    console.log(
-        `  North East: ${modification.boundingBox.northEast.latitude.toFixed(
-            6
-        )}, ${modification.boundingBox.northEast.longitude.toFixed(6)}`
-    );
+    console.log(`Operation IDs: ${operationIds.join(", ")}`);
+    console.log(`Total operations: ${operationIds.length}`);
     console.log("");
     console.log("Expected Effects:");
     console.log("  ✓ GPU-accelerated rendering");
@@ -169,7 +159,7 @@ const addBrushModifications = demTerrain => {
     console.log("=".repeat(70));
     console.log("");
 
-    return modification;
+    return operationIds;
 };
 
 const configureDEMTerrainSource = mapView => {
@@ -197,7 +187,7 @@ try {
 
     const canvas = getMapCanvas("mapCanvas");
     const mapView = initializeMapView(canvas);
-    const { demTerrain, modification } = configureDEMTerrainSource(mapView);
+    const { demTerrain, modification: operationIds } = configureDEMTerrainSource(mapView);
 
     console.log("=".repeat(70));
     console.log("TEST CONFIGURATION");
