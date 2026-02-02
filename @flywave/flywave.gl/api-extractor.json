@@ -17,7 +17,8 @@
         "@flywave/flywave-inspector",
         "@flywave/flywave-gltf",
         "@flywave/flywave-transfer-manager",
-        "@flywave/flywave-geometry"
+        "@flywave/flywave-geometry",
+        "@flywave/flywave-terrain-tools"
     ],
     "compiler": {
         "tsconfigFilePath": "<projectFolder>/tsconfig.json",
@@ -53,7 +54,8 @@
                     "@flywave/flywave-utils": ["../flywave-utils/lib/src"],
                     "@flywave/flywave-gltf": ["../flywave-gltf/lib/src"],
                     "@flywave/flywave-transfer-manager": ["../flywave-transfer-manager/lib/src"],
-                    "@flywave/flywave-geometry": ["../flywave-geometry/lib/src"]
+                    "@flywave/flywave-geometry": ["../flywave-geometry/lib/src"],
+                    "@flywave/flywave-terrain-tools": ["../flywave-terrain-tools/lib/src"]
                 }
             }
         }

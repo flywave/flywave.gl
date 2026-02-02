@@ -24,7 +24,8 @@
             "@flywave/flywave-transfer-manager": ["../flywave-transfer-manager/src"],
             "@flywave/flywave-gltf": ["../flywave-gltf/src"],
             "@flywave/flywave-geometry": ["../flywave-geometry/src"],
-            "@flywave/flywave-text-canvas": ["../flywave-text-canvas/src"]
+            "@flywave/flywave-text-canvas": ["../flywave-text-canvas/src"],
+            "@flywave/flywave-terrain-tools": ["../flywave-terrain-tools/src"]
         }
     },
     "include": ["src/**/*"],
@@ -83,6 +84,9 @@
         },
         {
             "path": "../flywave-text-canvas"
+        },
+        {
+            "path": "../flywave-terrain-tools"
         }
     ]
 }

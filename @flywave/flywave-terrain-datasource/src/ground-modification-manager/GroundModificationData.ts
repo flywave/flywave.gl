@@ -22,7 +22,7 @@ export interface SerializedBrushOperation {
         type: string;
         radius: number;
         hardness: number;
-        texture?: string;
+        shape?: string;
         heightDelta?: number;
         strength?: number;
         targetAltitude?: number;
@@ -42,7 +42,7 @@ function serializeBrushSettings(settings: BrushSettings): SerializedBrushOperati
         type: settings.type,
         radius: settings.radius,
         hardness: settings.hardness,
-        texture: settings.texture
+        shape: settings.shape
     };
 
     if (settings.type === BrushType.RAISE || settings.type === BrushType.LOWER) {
@@ -69,7 +69,7 @@ function deserializeBrushSettings(serialized: SerializedBrushOperation["settings
     const base = {
         radius: serialized.radius,
         hardness: serialized.hardness,
-        texture: serialized.texture as any
+        shape: serialized.shape as any
     };
 
     if (serialized.type === "raise") {

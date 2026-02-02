@@ -25,7 +25,8 @@ import {
     isVector3Like,
     mercatorProjection,
     OrientedBox3,
-    ProjectionType
+    ProjectionType,
+    SphereProjection
 } from "@flywave/flywave-geoutils";
 import { type GeoCoordLike } from "@flywave/flywave-geoutils/coordinates/GeoCoordLike";
 import {
@@ -2651,7 +2652,7 @@ export class MapView extends EventDispatcher {
         this.m_raycaster.setFromCamera(this.getNormalizedScreenCoordinates(x, y), this.m_camera);
         const worldPos =
             this.projection.type === ProjectionType.Spherical
-                ? this.m_raycaster.ray.intersectSphere(this.m_sphere, cache.vector3[0])
+                ? ((this.projection as SphereProjection).rayCast(cache.vector3[0], this.m_raycaster.ray.origin, this.m_raycaster.ray.origin.clone().add(this.m_raycaster.ray.direction)),cache.vector3[0])
                 : this.m_raycaster.ray.intersectPlane(this.m_plane, cache.vector3[0]);
 
         if (worldPos === null && fallback === true) {
@@ -3755,7 +3756,7 @@ export class MapView extends EventDispatcher {
 
         this.m_options.target = GeoCoordinates.fromObject(
             getOptionValue(this.m_options.target, MapViewDefaults.target)
-        ); 
+        );
         this.m_options.tilt = getOptionValue(this.m_options.tilt, MapViewDefaults.tilt);
 
         this.m_options.heading = getOptionValue(this.m_options.heading, MapViewDefaults.heading);
@@ -3894,7 +3895,7 @@ export class MapView extends EventDispatcher {
     private getRenderedTilesCopyrightInfo(): CopyrightInfo[] {
         let result: CopyrightInfo[] = [];
         for (const tileList of this.m_visibleTiles.dataSourceTileList) {
-            for (const tile of tileList.renderedTiles.values()) {
+            for (const tile of Array.from(tileList.renderedTiles.values())) {
                 const tileCopyrightInfo = tile.copyrightInfo;
                 if (tileCopyrightInfo === undefined || tileCopyrightInfo.length === 0) {
                     continue;

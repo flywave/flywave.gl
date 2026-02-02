@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+        />
+        <title>地形工具测试</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                background: #1e1e1e;
+                color: #fff;
+                overflow: hidden;
+            }
+            #mapCanvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
+            #status-panel {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                background: rgba(30, 30, 30, 0.95);
+                padding: 15px;
+                border-radius: 8px;
+                z-index: 1000;
+                min-width: 280px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            }
+            #status-panel h3 {
+                margin: 0 0 12px 0;
+                font-size: 16px;
+                color: #4ec9b0;
+                border-bottom: 1px solid #3e3e42;
+                padding-bottom: 8px;
+            }
+            .status-item {
+                display: flex;
+                justify-content: space-between;
+                margin: 8px 0;
+                font-size: 13px;
+            }
+            .status-label {
+                color: #858585;
+            }
+            .status-value {
+                color: #d4d4d4;
+                font-weight: 600;
+            }
+            .status-value.enabled {
+                color: #4ec9b0;
+            }
+            .status-value.disabled {
+                color: #f48771;
+            }
+            #controls {
+                position: fixed;
+                bottom: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(30, 30, 30, 0.95);
+                padding: 15px 25px;
+                border-radius: 8px;
+                z-index: 1000;
+                display: flex;
+                gap: 15px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            }
+            .control-btn {
+                padding: 10px 20px;
+                background: #0e639c;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 600;
+                transition: all 0.2s;
+            }
+            .control-btn:hover {
+                background: #1177bb;
+            }
+            .control-btn.active {
+                background: #4ec9b0;
+            }
+            #help-panel {
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                background: rgba(30, 30, 30, 0.95);
+                padding: 15px;
+                border-radius: 8px;
+                z-index: 1000;
+                max-width: 300px;
+                font-size: 12px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            }
+            #help-panel h4 {
+                color: #4ec9b0;
+                margin: 0 0 10px 0;
+            }
+            #help-panel ul {
+                list-style: none;
+                padding: 0;
+            }
+            #help-panel li {
+                margin: 6px 0;
+                padding-left: 16px;
+                position: relative;
+            }
+            #help-panel li:before {
+                content: "•";
+                position: absolute;
+                left: 0;
+                color: #4ec9b0;
+            }
+            .kbd {
+                background: #3e3e42;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-family: monospace;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="mapCanvas"></canvas>
+
+        <div id="status-panel">
+            <h3>🔧 工具状态</h3>
+            <div class="status-item">
+                <span class="status-label">启用状态:</span>
+                <span class="status-value" id="enabled-status">检查中...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">工作模式:</span>
+                <span class="status-value" id="mode-status">检查中...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">操作数量:</span>
+                <span class="status-value" id="op-count">0</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">控制点数:</span>
+                <span class="status-value" id="cp-count">0</span>
+            </div>
+        </div>
+
+        <div id="controls">
+            <button class="control-btn" id="btn-enable">启用工具</button>
+            <button class="control-btn" id="btn-mode">切换模式</button>
+            <button class="control-btn" id="btn-apply">应用控制点</button>
+        </div>
+
+        <div id="help-panel">
+            <h4>📖 使用说明</h4>
+            <ul>
+                <li>点击 <b>启用工具</b> 开始操作</li>
+                <li>在笔刷模式下点击地图修改地形</li>
+                <li>按 <span class="kbd">C</span> 切换到控制点模式</li>
+                <li>在控制点模式下点击地图添加点</li>
+                <li>点击控制点显示配置面板</li>
+                <li>按 <span class="kbd">Delete</span> 删除选中的点</li>
+            </ul>
+        </div>
+
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js"
+                }
+            }
+        </script>
+        <script type="module">
+            import {
+                MapView,
+                GeoCoordinates,
+                ellipsoidProjection,
+                MapControls,
+                MapControlsUI,
+                DEMTerrainSource,
+                ArcGISTileProvider,
+                TerrainTools,
+                TerrainControlPointUI
+            } from "./flywave_gl_src_index_ts_bundle.js";
+
+            const CONFIG = {
+                DEM_SOURCE_PATH: "dem_terrain/source.json",
+                INITIAL_COORDINATES: new GeoCoordinates(36.4, 118.1, 1000),
+                ZOOM_LEVEL: 17
+            };
+
+            let terrainTools = null;
+            let controlPointUI = null;
+
+            function updateStatus() {
+                if (!terrainTools) return;
+
+                const isEnabled = terrainTools.getMode ? true : false; // 简化检查
+                const mode = terrainTools.getMode ? terrainTools.getMode() : "unknown";
+                const opCount = terrainTools.getOperationCount
+                    ? terrainTools.getOperationCount()
+                    : 0;
+                const cpCount = terrainTools.getControlPointManager
+                    ? terrainTools.getControlPointManager().getPointCount()
+                    : 0;
+
+                document.getElementById("enabled-status").textContent = "已启用";
+                document.getElementById("enabled-status").className = "status-value enabled";
+                document.getElementById("mode-status").textContent =
+                    mode === "brush" ? "笔刷模式" : "控制点模式";
+                document.getElementById("op-count").textContent = opCount;
+                document.getElementById("cp-count").textContent = cpCount;
+            }
+
+            async function init() {
+                try {
+                    console.log("=".repeat(60));
+                    console.log("🚀 开始初始化地形工具测试页面");
+                    console.log("=".repeat(60));
+
+                    const canvas = document.getElementById("mapCanvas");
+                    console.log("✅ Canvas 元素已找到");
+
+                    const mapView = new MapView({
+                        target: CONFIG.INITIAL_COORDINATES,
+                        zoomLevel: CONFIG.ZOOM_LEVEL,
+                        projection: ellipsoidProjection,
+                        canvas: canvas,
+                        theme: { extends: "resources/tilezen_base.json" }
+                    });
+                    console.log("✅ MapView 已创建");
+
+                    const controls = new MapControls(mapView);
+                    const ui = new MapControlsUI(controls, { zoomLevel: "input" });
+                    canvas.parentElement.appendChild(ui.domElement);
+                    console.log("✅ 地图控制已初始化");
+
+                    const demTerrain = new DEMTerrainSource({
+                        source: CONFIG.DEM_SOURCE_PATH
+                    });
+                    demTerrain.addWebTileDataSource(
+                        new ArcGISTileProvider({
+                            minDataLevel: 0,
+                            maxDataLevel: 18
+                        })
+                    );
+                    mapView.setElevationSource(demTerrain);
+                    console.log("✅ 地形数据源已配置");
+
+                    controlPointUI = new TerrainControlPointUI();
+                    console.log("✅ 控制点 UI 已创建");
+
+                    terrainTools = new TerrainTools({
+                        mapView: mapView,
+                        demTerrainSource: demTerrain,
+                        showUI: true,
+                        defaultBrush: {
+                            type: "raise",
+                            radius: 80,
+                            hardness: 0.5,
+                            heightDelta: 10
+                        },
+                        defaultMode: "brush",
+                        onOperationAdded: (id, operation) => {
+                            console.log("✅ 笔刷操作已添加:", id);
+                            updateStatus();
+                        },
+                        onOperationRemoved: id => {
+                            console.log("❌ 笔刷操作已移除:", id);
+                            updateStatus();
+                        },
+                        onControlPointAdded: point => {
+                            console.log("📍 控制点已添加:", point.id);
+                            updateStatus();
+                        },
+                        onControlPointRemoved: id => {
+                            console.log("🗑️ 控制点已移除:", id);
+                            updateStatus();
+                        },
+                        onControlPointSelected: point => {
+                            if (point) {
+                                console.log("✅ 控制点已选中:", point.id);
+                                controlPointUI.show(point);
+                            } else {
+                                console.log("❌ 控制点已取消选中");
+                                controlPointUI.hide();
+                            }
+                        }
+                    });
+                    console.log("✅ 地形工具已创建");
+
+                    // 绑定按钮事件
+                    document.getElementById("btn-enable").addEventListener("click", () => {
+                        terrainTools.enable();
+                        console.log("🔧 工具已通过按钮启用");
+                        updateStatus();
+                    });
+
+                    document.getElementById("btn-mode").addEventListener("click", () => {
+                        const newMode = terrainTools.getMode() === "brush" ? "control" : "brush";
+                        terrainTools.setMode(newMode);
+                        console.log("🔄 模式已切换:", newMode);
+                        updateStatus();
+                    });
+
+                    document.getElementById("btn-apply").addEventListener("click", () => {
+                        terrainTools.applyControlPointsToTerrain();
+                        console.log("✅ 控制点已应用到地形");
+                    });
+
+                    window.addEventListener("keydown", event => {
+                        if (event.key === "c" || event.key === "C") {
+                            const newMode =
+                                terrainTools.getMode() === "brush" ? "control" : "brush";
+                            terrainTools.setMode(newMode);
+                            console.log("🔄 模式已切换:", newMode);
+                            updateStatus();
+                        } else if (event.key === "a" || event.key === "A") {
+                            terrainTools.applyControlPointsToTerrain();
+                            console.log("✅ 控制点已应用到地形");
+                        }
+                    });
+
+                    terrainTools.enable();
+                    console.log("✅ 地形工具已启用");
+
+                    updateStatus();
+
+                    console.log("=".repeat(60));
+                    console.log("🎉 初始化完成！");
+                    console.log("=".repeat(60));
+                    console.log("💡 现在可以点击地图进行操作了");
+                    console.log("💡 打开控制台查看详细日志");
+                    console.log("=".repeat(60));
+                } catch (error) {
+                    console.error("❌ 初始化失败:", error);
+                    alert("初始化失败: " + error.message);
+                }
+            }
+
+            init();
+        </script>
+    </body>
+</html>

@@ -6,7 +6,7 @@ if (!(window as any).THREE) {
     // eslint-disable-next-line no-console
     console.warn(
         "flywave.gl.js: It looks like 'three.js' is not loaded. This script requires 'THREE' object to " +
-        "be defined. See https://github.com/flywave/flywave.gl/@flywave/flywave-mapview."
+            "be defined. See https://github.com/flywave/flywave.gl/@flywave/flywave-mapview."
     );
 }
 
@@ -16,6 +16,7 @@ export * from "@flywave/flywave-mapview";
 export * from "@flywave/flywave-mapview-decoder";
 export * from "@flywave/flywave-terrain-datasource";
 export * from "@flywave/flywave-map-controls";
+export * from "@flywave/flywave-terrain-tools";
 export * from "@flywave/flywave-3dtile-datasource";
 export * from "@flywave/flywave-datasource-protocol";
 export * from "@flywave/flywave-draw-controls";
