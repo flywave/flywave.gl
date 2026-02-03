@@ -228,6 +228,8 @@ export class TerrainTools {
 
         console.log("🖱️ 控制点模式：点击事件触发");
 
+        e.stopPropagation();
+
         const coords = this.getCoordinatesFromMouseEvent(e);
         if (!coords) {
             console.warn("⚠️ 无法获取地理坐标");
@@ -275,6 +277,7 @@ export class TerrainTools {
         }
 
         console.log("🖱️ 鼠标按下事件触发");
+        e.stopPropagation();
         this.isMouseDown = true;
 
         const coords = this.getCoordinatesFromMouseEvent(e);
@@ -313,6 +316,8 @@ export class TerrainTools {
             return;
         }
 
+        e.stopPropagation();
+
         const coords = this.getCoordinatesFromMouseEvent(e);
         if (!coords) {
             return;
@@ -346,6 +351,7 @@ export class TerrainTools {
     }
 
     private handleMouseUp(e: MouseEvent): void {
+        e.stopPropagation();
         this.isMouseDown = false;
         this.lastDragPosition = null;
     }

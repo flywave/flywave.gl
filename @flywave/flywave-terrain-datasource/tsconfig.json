@@ -26,8 +26,7 @@
             "@flywave/flywave-mapview-decoder": ["../flywave-mapview-decoder/src"],
             "@flywave/flywave-mapview-decoder/*": ["../flywave-mapview-decoder/src/*"],
             "@flywave/flywave-webtile-datasource": ["../flywave-webtile-datasource/src"],
-            "@flywave/flywave-test-utils/*": ["../flywave-test-utils/src/*"],
-            "@flywave/flywave-kriging-gl": ["../flywave-kriging-gl/src"]
+            "@flywave/flywave-test-utils/*": ["../flywave-test-utils/src/*"]
         }
     },
     "include": ["src/**/*", "test/**/*"],
@@ -74,9 +73,6 @@
         },
         {
             "path": "../flywave-test-utils"
-        },
-        {
-            "path": "../flywave-kriging-gl"
         }
     ]
 }

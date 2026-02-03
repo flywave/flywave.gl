@@ -5,8 +5,7 @@
         "rootDir": "./",
         "composite": true,
         "paths": {
-            "@flywave/flywave-utils": ["../flywave-utils/src"],
-            "@flywave/flywave-kriging-gl": ["../flywave-kriging-gl/src"]
+            "@flywave/flywave-utils": ["../flywave-utils/src"]
         }
     },
     "include": ["src/**/*", "test/**/*"],
@@ -14,9 +13,6 @@
     "references": [
         {
             "path": "../flywave-utils"
-        },
-        {
-            "path": "../flywave-kriging-gl"
         }
     ]
 }

@@ -173,31 +173,31 @@ export class TerrainToolsGUI {
         const brushType = this.currentBrushType;
 
         // 隐藏所有特定参数
-        this.heightDeltaController.show(false);
-        this.strengthController.show(false);
-        this.targetAltitudeController.show(false);
-        this.scaleController.show(false);
-        this.persistenceController.show(false);
+        this.heightDeltaController.domElement.style.display = "none";
+        this.strengthController.domElement.style.display = "none";
+        this.targetAltitudeController.domElement.style.display = "none";
+        this.scaleController.domElement.style.display = "none";
+        this.persistenceController.domElement.style.display = "none";
 
         // 根据笔刷类型显示相应参数
         switch (brushType) {
             case BrushType.RAISE:
             case BrushType.LOWER:
-                this.heightDeltaController.show(true);
+                this.heightDeltaController.domElement.style.display = "block";
                 break;
             case BrushType.SMOOTH:
-                this.strengthController.show(true);
+                this.strengthController.domElement.style.display = "block";
                 break;
             case BrushType.FLATTEN:
-                this.targetAltitudeController.show(true);
+                this.targetAltitudeController.domElement.style.display = "block";
                 break;
             case BrushType.NOISE:
-                this.strengthController.show(true);
-                this.scaleController.show(true);
-                this.persistenceController.show(true);
+                this.strengthController.domElement.style.display = "block";
+                this.scaleController.domElement.style.display = "block";
+                this.persistenceController.domElement.style.display = "block";
                 break;
             case BrushType.ERODE:
-                this.strengthController.show(true);
+                this.strengthController.domElement.style.display = "block";
                 break;
         }
     }

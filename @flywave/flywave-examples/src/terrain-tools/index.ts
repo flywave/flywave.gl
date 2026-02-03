@@ -35,6 +35,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: CONFIG.ZOOM_LEVEL,
         projection: ellipsoidProjection,
         canvas: canvas,
+        logarithmicDepthBuffer: false,
         theme: {
             extends: "resources/tilezen_base.json"
         }
@@ -151,6 +152,11 @@ try {
     console.log("=".repeat(60));
     console.log("Flywave 地形工具已初始化");
     console.log("=".repeat(60));
+    console.log("✨ 修复说明:");
+    console.log("   - 地形工具启用时，鼠标点击不会触发地图平移");
+    console.log("   - 事件正确处理，地形修改功能正常工作");
+    console.log("   - 禁用工具后，地图控制恢复正常");
+    console.log("");
     console.log("🎨 笔刷预览特性:");
     console.log("   - 鼠标移动时显示圆形预览");
     console.log("   - 圆环大小随笔刷半径变化");
@@ -175,8 +181,10 @@ try {
     console.log("   6. 侵蚀 (ERODE)   - 橙色 #ff8800");
     console.log("");
     console.log("📋 操作指南:");
-    console.log("   - 点击右侧面板顶部的【启用】按钮进入绘制模式");
-    console.log("   - 点击【禁用】按钮退出绘制模式，恢复地图控制");
+    console.log("   - 工具默认已启用，可以直接点击地图进行地形修改");
+    console.log("   - 点击右侧面板顶部的【启用工具】开关切换状态");
+    console.log("   - 启用时：点击地图修改地形，地图不会平移");
+    console.log("   - 禁用时：恢复正常地图控制（平移、旋转、缩放）");
     console.log("   - 按【C】键在笔刷模式和控制点模式间切换");
     console.log("   - 在控制点模式下，点击地图添加控制点");
     console.log("   - 点击控制点可选中并在右侧配置参数");

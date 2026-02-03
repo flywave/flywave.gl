@@ -1,6 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type KrigingModel, type Variogram, Kriging } from "@flywave/flywave-kriging-gl";
 import type * as turf from "@turf/turf";
 import { Vector3 } from "three";
 
@@ -38,11 +37,7 @@ export class GeoLineString {
     private readonly m_coordinates: MinTwoItemsArray<GeoCoordinates>;
     private readonly m_spline_coordinates: MinTwoItemsArray<GeoCoordinates>;
 
-    private readonly m_width: number;
-
-    private readonly m_innerfactor: number = 1;
-
-    private readonly m_variogram: Variogram | undefined;
+    private readonly m_width: number; 
 
     /**
      * Creates a GeoLineString instance
@@ -91,8 +86,7 @@ export class GeoLineString {
     toPolygon(options?: {
         widthFactor?: number;
         units?: turf.Units;
-        steps?: number;
-        krigingModel?: KrigingModel;
+        steps?: number; 
     }): GeoPolygon {
         const bufferGenerator = new HeightAwareBufferGenerator();
         const buffered = bufferGenerator.generate3DBuffer(
