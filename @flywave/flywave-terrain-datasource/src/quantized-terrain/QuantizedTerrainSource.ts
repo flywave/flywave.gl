@@ -88,8 +88,10 @@ export class QuantizedTerrainSource extends BaseQuantizedTerrainSource<Quantized
         super(new QuantizedTerrainTileFactory(), options);
     }
 
-    shouldSubdivide(zoomLevel: number, tileKey: TileKey): boolean { 
-        let tileIsAvailable = this.dataProvider().layerStrategy.getTileDataAvailable(tileKey) || this.dataProvider().hasResource(tileKey);
+    shouldSubdivide(zoomLevel: number, tileKey: TileKey): boolean {
+        let tileIsAvailable =
+            this.dataProvider().layerStrategy.getTileDataAvailable(tileKey) ||
+            this.dataProvider().hasResource(tileKey);
 
         let childrens = this.getTilingScheme().getSubTileKeys(tileKey);
 
@@ -101,12 +103,13 @@ export class QuantizedTerrainSource extends BaseQuantizedTerrainSource<Quantized
                 }
             }
 
-        return (
-            tileIsAvailable && super.shouldSubdivide(zoomLevel, tileKey)
-        )
+        return tileIsAvailable && super.shouldSubdivide(zoomLevel, tileKey);
     }
 
     canGetSubdivideChildren(tileKey: TileKey): boolean {
-        return this.dataProvider().layerStrategy.getTileDataAvailable(tileKey) || this.dataProvider().hasResource(tileKey.parent());
+        return (
+            this.dataProvider().layerStrategy.getTileDataAvailable(tileKey) ||
+            this.dataProvider().hasResource(tileKey.parent())
+        );
     }
 }

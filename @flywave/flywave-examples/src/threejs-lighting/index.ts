@@ -10,15 +10,15 @@ import {
     sphereProjection
 } from "@flywave/flywave.gl";
 import * as THREE from "three";
-import { GUI } from 'dat.gui';
+import { GUI } from "dat.gui";
 
 // Configuration constants
 const CONFIG = {
     CANVAS_ELEMENT_ID: "mapCanvas",
     DEM_SOURCE_PATH: "dem_terrain/source.json",
-    INITIAL_COORDINATES: new GeoCoordinates(36.4839, 118.1755,700),
+    INITIAL_COORDINATES: new GeoCoordinates(36.4839, 118.1755, 700),
     ANCHOR_COORDINATES: new GeoCoordinates(36.48619699228674, 118.17270928364879, 500),
-    TILT: 50, 
+    TILT: 50,
     HEADING: -19,
     SPOT_LIGHT_INTENSITY: 2.8,
     SPOT_LIGHT_DISTANCE: 10000,
@@ -29,9 +29,9 @@ const CONFIG = {
     POINT_LIGHT_DISTANCE: 500,
     POINT_LIGHT_DECAY: 0.2,
     DIRECTIONAL_LIGHT_INTENSITY: 0.8,
-    SPOT_LIGHT_COLOR: '#ffffff',
-    POINT_LIGHT_COLOR: '#ff0000',
-    DIRECTIONAL_LIGHT_COLOR: '#ffffff',
+    SPOT_LIGHT_COLOR: "#ffffff",
+    POINT_LIGHT_COLOR: "#ff0000",
+    DIRECTIONAL_LIGHT_COLOR: "#ffffff",
     SHOW_HELPERS: true,
     SHADOW_MAP_TYPE: THREE.PCFSoftShadowMap,
     BOX_GEOMETRY_SIZE: 10,
@@ -57,7 +57,9 @@ const CONFIG = {
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById(CONFIG.CANVAS_ELEMENT_ID) as HTMLCanvasElement;
     if (!canvas) {
-        throw new Error(`Map canvas element not found, please ensure there is a canvas element with id '${CONFIG.CANVAS_ELEMENT_ID}' in HTML`);
+        throw new Error(
+            `Map canvas element not found, please ensure there is a canvas element with id '${CONFIG.CANVAS_ELEMENT_ID}' in HTML`
+        );
     }
     return canvas;
 };
@@ -70,24 +72,24 @@ const getMapCanvas = (): HTMLCanvasElement => {
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const mapView = new MapView({
         projection: sphereProjection,
-        target: CONFIG.INITIAL_COORDINATES, 
-        tilt: CONFIG.TILT,  
+        target: CONFIG.INITIAL_COORDINATES,
+        tilt: CONFIG.TILT,
         heading: CONFIG.HEADING,
         canvas: canvas,
         theme: {
             extends: "resources/tilezen_base_globe.json",
             lights: [],
-            "enableShadows": true,
-            "celestia": {
+            enableShadows: true,
+            celestia: {
                 sunTime: new Date().setHours(17, 0, 0, 0),
-                atmosphere: true,
+                atmosphere: true
             }
         }
-    }); 
-    
+    });
+
     // Call update() after configuration to ensure theme settings take effect
     mapView.update();
-    
+
     return mapView;
 };
 
@@ -108,7 +110,7 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  */
 const configureDEMTerrainSource = (mapView: MapView): void => {
     const demTerrain = new DEMTerrainSource({
-        source: CONFIG.DEM_SOURCE_PATH,
+        source: CONFIG.DEM_SOURCE_PATH
     });
 
     mapView.setElevationSource(demTerrain);
@@ -130,9 +132,9 @@ const enableShadowMapping = (mapView: MapView): void => {
 // Lights manager class - inherits from THREE.Object3D and serves as MapAnchor
 class LightsManager extends THREE.Object3D {
     public lights: {
-        pointLight?: THREE.PointLight, // Movable point light
-        directionalLight?: THREE.DirectionalLight,
-        spotLight?: THREE.SpotLight
+        pointLight?: THREE.PointLight; // Movable point light
+        directionalLight?: THREE.DirectionalLight;
+        spotLight?: THREE.SpotLight;
     } = {};
     public helpers: { [key: string]: THREE.Object3D } = {};
     public gui: GUI;
@@ -171,19 +173,27 @@ class LightsManager extends THREE.Object3D {
         const spotLight = new THREE.SpotLight(
             new THREE.Color(this.params.spotLightColor), // Color
             this.params.spotLightIntensity, // Intensity
-            this.params.spotLightDistance,     // Distance
-            this.params.spotLightAngle, // Angle 
+            this.params.spotLightDistance, // Distance
+            this.params.spotLightAngle, // Angle
             this.params.spotLightPenumbra, // Penumbra
             this.params.spotLightDecay // Decay
         );
         // Set position in local coordinate system (above the sphere)
-        spotLight.position.set(CONFIG.SPOT_LIGHT_POSITION.x, CONFIG.SPOT_LIGHT_POSITION.y, CONFIG.SPOT_LIGHT_POSITION.z);
+        spotLight.position.set(
+            CONFIG.SPOT_LIGHT_POSITION.x,
+            CONFIG.SPOT_LIGHT_POSITION.y,
+            CONFIG.SPOT_LIGHT_POSITION.z
+        );
         spotLight.castShadow = true;
         spotLight.shadow.mapSize.width = CONFIG.SPOT_LIGHT_SHADOW_MAP_SIZE;
         spotLight.shadow.mapSize.height = CONFIG.SPOT_LIGHT_SHADOW_MAP_SIZE;
 
         // Set spotlight target position
-        this.spotLightTarget.position.set(CONFIG.SPOT_LIGHT_TARGET_POSITION.x, CONFIG.SPOT_LIGHT_TARGET_POSITION.y, CONFIG.SPOT_LIGHT_TARGET_POSITION.z);
+        this.spotLightTarget.position.set(
+            CONFIG.SPOT_LIGHT_TARGET_POSITION.x,
+            CONFIG.SPOT_LIGHT_TARGET_POSITION.y,
+            CONFIG.SPOT_LIGHT_TARGET_POSITION.z
+        );
         spotLight.target = this.spotLightTarget;
 
         this.lights.spotLight = spotLight;
@@ -199,10 +209,14 @@ class LightsManager extends THREE.Object3D {
         const pointLight = new THREE.PointLight(
             new THREE.Color(this.params.pointLightColor), // Color
             this.params.pointLightIntensity, // Intensity
-            this.params.pointLightDistance,  // Distance
-            this.params.pointLightDecay      // Decay
+            this.params.pointLightDistance, // Distance
+            this.params.pointLightDecay // Decay
         );
-        pointLight.position.set(CONFIG.POINT_LIGHT_POSITION.x, CONFIG.POINT_LIGHT_POSITION.y, CONFIG.POINT_LIGHT_POSITION.z); // Fixed position
+        pointLight.position.set(
+            CONFIG.POINT_LIGHT_POSITION.x,
+            CONFIG.POINT_LIGHT_POSITION.y,
+            CONFIG.POINT_LIGHT_POSITION.z
+        ); // Fixed position
         pointLight.castShadow = true;
         pointLight.shadow.mapSize.width = CONFIG.POINT_LIGHT_SHADOW_MAP_SIZE;
         pointLight.shadow.mapSize.height = CONFIG.POINT_LIGHT_SHADOW_MAP_SIZE;
@@ -216,12 +230,20 @@ class LightsManager extends THREE.Object3D {
         this.add(pointLightHelper);
 
         // Add a box as shadow receiver and caster
-        const boxGeometry = new THREE.BoxGeometry(CONFIG.BOX_GEOMETRY_SIZE, CONFIG.BOX_GEOMETRY_SIZE, CONFIG.BOX_GEOMETRY_SIZE);
+        const boxGeometry = new THREE.BoxGeometry(
+            CONFIG.BOX_GEOMETRY_SIZE,
+            CONFIG.BOX_GEOMETRY_SIZE,
+            CONFIG.BOX_GEOMETRY_SIZE
+        );
         const boxMaterial = new THREE.MeshPhongMaterial({ color: CONFIG.BOX_COLOR });
         const box = new THREE.Mesh(boxGeometry, boxMaterial);
         // Place the box near the origin as a moving object
-        box.position.set(CONFIG.BOX_INITIAL_POSITION.x, CONFIG.BOX_INITIAL_POSITION.y, CONFIG.BOX_INITIAL_POSITION.z); // Initial position
-        box.castShadow = true; // Cast shadows 
+        box.position.set(
+            CONFIG.BOX_INITIAL_POSITION.x,
+            CONFIG.BOX_INITIAL_POSITION.y,
+            CONFIG.BOX_INITIAL_POSITION.z
+        ); // Initial position
+        box.castShadow = true; // Cast shadows
         box.receiveShadow = true; // Receive shadows
         this.add(box);
 
@@ -244,8 +266,10 @@ class LightsManager extends THREE.Object3D {
     // Update helper objects
     private updateHelpers() {
         Object.values(this.helpers).forEach(helper => {
-            if (helper instanceof THREE.SpotLightHelper ||
-                helper instanceof THREE.DirectionalLightHelper) {
+            if (
+                helper instanceof THREE.SpotLightHelper ||
+                helper instanceof THREE.DirectionalLightHelper
+            ) {
                 helper.update();
             }
         });
@@ -290,46 +314,66 @@ class LightsManager extends THREE.Object3D {
     }
 
     private setupGUI() {
-        const lightsFolder = this.gui.addFolder('Light Controls');
+        const lightsFolder = this.gui.addFolder("Light Controls");
 
         // Spotlight controls
-        const spotLightFolder = lightsFolder.addFolder('Spotlight');
-        spotLightFolder.add(this.params, 'spotLightIntensity', 0, 5).name('Intensity')
-            .onChange((value: number) => this.setLightIntensity('spotLight', value));
-        spotLightFolder.add(this.params, 'spotLightDistance', 0, 20000).name('Distance')
-            .onChange((value: number) => this.lights.spotLight.distance = value);
-        spotLightFolder.add(this.params, 'spotLightAngle', 0, Math.PI / 2).name('Angle')
+        const spotLightFolder = lightsFolder.addFolder("Spotlight");
+        spotLightFolder
+            .add(this.params, "spotLightIntensity", 0, 5)
+            .name("Intensity")
+            .onChange((value: number) => this.setLightIntensity("spotLight", value));
+        spotLightFolder
+            .add(this.params, "spotLightDistance", 0, 20000)
+            .name("Distance")
+            .onChange((value: number) => (this.lights.spotLight.distance = value));
+        spotLightFolder
+            .add(this.params, "spotLightAngle", 0, Math.PI / 2)
+            .name("Angle")
             .onChange((value: number) => {
                 this.lights.spotLight.angle = value;
                 this.updateHelpers();
             });
-        spotLightFolder.add(this.params, 'spotLightPenumbra', 0, 1).name('Penumbra')
-            .onChange((value: number) => this.lights.spotLight.penumbra = value);
-        spotLightFolder.add(this.params, 'spotLightDecay', 0, 2).name('Decay')
-            .onChange((value: number) => this.lights.spotLight.decay = value);
-        spotLightFolder.addColor(this.params, 'spotLightColor')
-            .onChange((value: string) => this.setLightColor('spotLight', value));
-        spotLightFolder.add(this.lights.spotLight, 'visible').name('Switch');
+        spotLightFolder
+            .add(this.params, "spotLightPenumbra", 0, 1)
+            .name("Penumbra")
+            .onChange((value: number) => (this.lights.spotLight.penumbra = value));
+        spotLightFolder
+            .add(this.params, "spotLightDecay", 0, 2)
+            .name("Decay")
+            .onChange((value: number) => (this.lights.spotLight.decay = value));
+        spotLightFolder
+            .addColor(this.params, "spotLightColor")
+            .onChange((value: string) => this.setLightColor("spotLight", value));
+        spotLightFolder.add(this.lights.spotLight, "visible").name("Switch");
 
         // Point light controls
-        const pointLightFolder = lightsFolder.addFolder('Point Light');
-        pointLightFolder.add(this.params, 'pointLightIntensity', 0, 5).name('Intensity')
-            .onChange((value: number) => this.setLightIntensity('pointLight', value));
-        pointLightFolder.add(this.params, 'pointLightDistance', 0, 2000).name('Distance')
+        const pointLightFolder = lightsFolder.addFolder("Point Light");
+        pointLightFolder
+            .add(this.params, "pointLightIntensity", 0, 5)
+            .name("Intensity")
+            .onChange((value: number) => this.setLightIntensity("pointLight", value));
+        pointLightFolder
+            .add(this.params, "pointLightDistance", 0, 2000)
+            .name("Distance")
             .onChange((value: number) => {
                 if (this.lights.pointLight) this.lights.pointLight.distance = value;
             });
-        pointLightFolder.add(this.params, 'pointLightDecay', 0, 2).name('Decay')
+        pointLightFolder
+            .add(this.params, "pointLightDecay", 0, 2)
+            .name("Decay")
             .onChange((value: number) => {
                 if (this.lights.pointLight) this.lights.pointLight.decay = value;
             });
-        pointLightFolder.addColor(this.params, 'pointLightColor')
-            .onChange((value: string) => this.setLightColor('pointLight', value));
-        pointLightFolder.add(this.lights.pointLight, 'visible').name('Switch');
+        pointLightFolder
+            .addColor(this.params, "pointLightColor")
+            .onChange((value: string) => this.setLightColor("pointLight", value));
+        pointLightFolder.add(this.lights.pointLight, "visible").name("Switch");
 
         // Global controls
-        const globalFolder = lightsFolder.addFolder('Global Settings');
-        globalFolder.add(this.params, 'showHelpers').name('Show Helpers')
+        const globalFolder = lightsFolder.addFolder("Global Settings");
+        globalFolder
+            .add(this.params, "showHelpers")
+            .name("Show Helpers")
             .onChange((value: boolean) => {
                 Object.values(this.helpers).forEach(helper => {
                     helper.visible = value;
@@ -350,10 +394,16 @@ class LightsManager extends THREE.Object3D {
             const time = Date.now() * 0.001; // Time variable for animation
 
             // Make the box move back and forth on the xy plane
-            this.helpers.box.position.x = Math.sin(time * CONFIG.BOX_MOVEMENT_SPEED_XZ) * CONFIG.BOX_MOVEMENT_AMPLITUDE_X; // Move left and right on x-axis
-            this.helpers.box.position.z = Math.cos(time * CONFIG.BOX_MOVEMENT_SPEED_XZ * CONFIG.BOX_MOVEMENT_FACTOR_Z) * CONFIG.BOX_MOVEMENT_AMPLITUDE_Z; // Move forward and backward on z-axis
+            this.helpers.box.position.x =
+                Math.sin(time * CONFIG.BOX_MOVEMENT_SPEED_XZ) * CONFIG.BOX_MOVEMENT_AMPLITUDE_X; // Move left and right on x-axis
+            this.helpers.box.position.z =
+                Math.cos(time * CONFIG.BOX_MOVEMENT_SPEED_XZ * CONFIG.BOX_MOVEMENT_FACTOR_Z) *
+                CONFIG.BOX_MOVEMENT_AMPLITUDE_Z; // Move forward and backward on z-axis
             // y-axis position remains relatively stable with slight vertical fluctuation
-            this.helpers.box.position.y = CONFIG.BOX_INITIAL_POSITION.y + Math.abs(Math.sin(time * CONFIG.BOX_MOVEMENT_SPEED_Y)) * CONFIG.BOX_MOVEMENT_AMPLITUDE_Y;
+            this.helpers.box.position.y =
+                CONFIG.BOX_INITIAL_POSITION.y +
+                Math.abs(Math.sin(time * CONFIG.BOX_MOVEMENT_SPEED_Y)) *
+                    CONFIG.BOX_MOVEMENT_AMPLITUDE_Y;
         }
     }
 }
@@ -370,7 +420,9 @@ const addLightManagerToMap = (mapView: MapView): void => {
     //@ts-ignore
     lightsManager.anchor = CONFIG.ANCHOR_COORDINATES;
 
-    lightsManager.lookAt(ellipsoidProjection.projectPoint(CONFIG.ANCHOR_COORDINATES, new THREE.Vector3()));
+    lightsManager.lookAt(
+        ellipsoidProjection.projectPoint(CONFIG.ANCHOR_COORDINATES, new THREE.Vector3())
+    );
     // Add to map anchors
     mapView.mapAnchors.add(lightsManager);
 
@@ -385,28 +437,28 @@ const addLightManagerToMap = (mapView: MapView): void => {
 try {
     // 1. Get map canvas element
     const canvas = getMapCanvas();
-    
+
     // 2. Initialize map view
     const mapView = initializeMapView(canvas);
-    
+
     // 3. Initialize map controls
     initializeMapControls(mapView, canvas);
-    
+
     // 4. Configure DEM terrain data source
     configureDEMTerrainSource(mapView);
-    
+
     // 5. Enable shadow mapping
     enableShadowMapping(mapView);
-    
+
     // 6. Add lights manager to map
     addLightManagerToMap(mapView);
-    
+
     // 7. Start animation
     mapView.beginAnimation();
-    
+
     // 8. Expose map view to global scope for debugging
     (window as any).mapView = mapView;
-    
+
     console.log("Three.js lighting example initialized successfully");
 } catch (error) {
     console.error("Error initializing Three.js lighting example:", error);

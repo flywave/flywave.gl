@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type OctEncodedNormal } from "../common";
 import { type Point2d, type Point3d, type XYAndZ } from "../core-geometry";
 import { assert, compareWithTolerance, IndexMap } from "../utils";

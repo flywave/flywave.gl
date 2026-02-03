@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { AxisOrder, Geometry } from "../../geometry";
 import { type Angle } from "../../geometry3d/angle";
 import { AngleSweep } from "../../geometry3d/angle-sweep";

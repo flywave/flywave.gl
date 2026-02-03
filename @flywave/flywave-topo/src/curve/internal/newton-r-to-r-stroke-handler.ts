@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { NewtonEvaluatorRtoR } from "../../numerics/newton";
 import { type CurvePrimitive } from "../curve-primitive";
 

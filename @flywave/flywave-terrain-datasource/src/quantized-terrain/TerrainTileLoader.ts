@@ -42,7 +42,6 @@ class MapViewQuantizedMesh extends QuantizedMesh {
     ) {
         super(selfGeobox, quantizedTerrainMesh, projectionSwitchController, mapView);
     }
-
 }
 
 /**
@@ -146,10 +145,13 @@ class TileObjectMesh extends Object3D {
                 params.quantizedTilingScheme
             );
         }
-        return new TileObjectMesh(mesh as Object3D & {
-            geometry: BufferGeometry;
-            material: Material;
-        }, params.tile);
+        return new TileObjectMesh(
+            mesh as Object3D & {
+                geometry: BufferGeometry;
+                material: Material;
+            },
+            params.tile
+        );
     }
 
     /**
@@ -360,7 +362,6 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
             resource: QuantizedTerrainMesh;
         }
     ) {
-
         // Create height map terrain mesh
         const terrainMesh = new HeightMapTerrainMesh(
             this.tile,
@@ -429,7 +430,11 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
         }
 
         let needDemDraw = false;
-        if (quantizedDataResource?.resource.tryReprojectToProjection(this.dataSource.mapView.projection)) {
+        if (
+            quantizedDataResource?.resource.tryReprojectToProjection(
+                this.dataSource.mapView.projection
+            )
+        ) {
             needDemDraw = true;
         }
 
@@ -441,7 +446,8 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
 
             // If we don't have exact data or are at wrong level, create intermediate block
             if (
-                !quantizedDataResource || needDemDraw ||
+                !quantizedDataResource ||
+                needDemDraw ||
                 this.tile.tileKey.level !== quantizedDataResource.tileKey.level ||
                 quantizedDataResource.resource.isGroundElevationModified
             ) {

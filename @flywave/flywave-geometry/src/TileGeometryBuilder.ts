@@ -21,11 +21,15 @@ declare module "three" {
     }
 }
 
-
-function getEstimatedLevelZeroGeometricError(projection: Projection, gridImageWidth: number, numberOfTilesAtLevelZero: number) {
-    return (projection.unitScale * 2 * Math.PI * 0.25) / (gridImageWidth * numberOfTilesAtLevelZero);
+function getEstimatedLevelZeroGeometricError(
+    projection: Projection,
+    gridImageWidth: number,
+    numberOfTilesAtLevelZero: number
+) {
+    return (
+        (projection.unitScale * 2 * Math.PI * 0.25) / (gridImageWidth * numberOfTilesAtLevelZero)
+    );
 }
-
 
 /**
  * Interface representing the geometry mode configuration
@@ -148,10 +152,14 @@ export class TileTransformation {
         return (
             this.spherePosition.equals(other.spherePosition) &&
             ((!this.sphereRotation && !other.sphereRotation) ||
-                (this.sphereRotation && other.sphereRotation && this.sphereRotation.equals(other.sphereRotation))) &&
+                (this.sphereRotation &&
+                    other.sphereRotation &&
+                    this.sphereRotation.equals(other.sphereRotation))) &&
             this.mercatorPosition.equals(other.mercatorPosition) &&
             ((!this.mercatorRotation && !other.mercatorRotation) ||
-                (this.mercatorRotation && other.mercatorRotation && this.mercatorRotation.equals(other.mercatorRotation)))
+                (this.mercatorRotation &&
+                    other.mercatorRotation &&
+                    this.mercatorRotation.equals(other.mercatorRotation)))
         );
     }
 }
@@ -209,7 +217,11 @@ class TileGeometryBuilder {
     /**
      * Computes tangent vectors for a patch on the sphere
      */
-    private computePatchTangents(tangentArray: number[], tileKey: TileKey, projection: Projection): void {
+    private computePatchTangents(
+        tangentArray: number[],
+        tileKey: TileKey,
+        projection: Projection
+    ): void {
         tangentArray.fill(0, 0, 12);
 
         const geoBox = this.tileScheme.getGeoBox(tileKey);
@@ -269,7 +281,11 @@ class TileGeometryBuilder {
         }
 
         const { x: posX, y: posY, z: posZ } = tilePosition;
-        this.computePatchTangents(tangentVectors, TileKey.fromRowColumnLevel(row, column, level), projection);
+        this.computePatchTangents(
+            tangentVectors,
+            TileKey.fromRowColumnLevel(row, column, level),
+            projection
+        );
 
         const matrix = new Matrix4();
         const elements = matrix.elements;
@@ -320,10 +336,7 @@ class TileGeometryBuilder {
     }
 
     private createBoundingSpherePosition(tileKey: TileKey, projection: Projection): Vector3 {
-        return projection.projectPoint(
-            this.tileScheme.getGeoBox(tileKey).center,
-            new Vector3()
-        );
+        return projection.projectPoint(this.tileScheme.getGeoBox(tileKey).center, new Vector3());
     }
 
     /**
@@ -427,45 +440,37 @@ class TileGeometryBuilder {
         let mode: GeometryMode;
         let needsNormalCalculation = false;
 
-        cacheKey = level >= maxDetailLevel ? `simple.patch/${subdivision}` : `${level}/${row}/patch`;
+        cacheKey =
+            level >= maxDetailLevel ? `simple.patch/${subdivision}` : `${level}/${row}/patch`;
 
         if (!this.models.has(cacheKey)) {
             if (level >= maxDetailLevel) {
                 const size = (1 << subdivision) + 1;
 
-
-                mode = this.generateSimplePatchWithSkirt(
-                    size*2,
-                    size*2,
-                    0,
-                    0,
-                    1,
-                    1, 
-                    true
-                );
+                mode = this.generateSimplePatchWithSkirt(size * 2, size * 2, 0, 0, 1, 1, true);
                 mode.is_simple_patch = true;
             } else {
                 needsNormalCalculation = true;
                 mode =
                     level >= minDetailLevel
                         ? this.generatePatchWithBucketsAndSkirt(
-                            subdivision,
-                            level,
-                            row,
-                            0,
-                            tileCount,
-                            tileCount,
-                            true
-                        )
+                              subdivision,
+                              level,
+                              row,
+                              0,
+                              tileCount,
+                              tileCount,
+                              true
+                          )
                         : this.generatePatchWithBuckets(
-                            subdivision,
-                            level,
-                            row,
-                            0,
-                            tileCount,
-                            tileCount,
-                            true
-                        );
+                              subdivision,
+                              level,
+                              row,
+                              0,
+                              tileCount,
+                              tileCount,
+                              true
+                          );
                 mode.is_simple_patch = false;
             }
             this.models.set(cacheKey, mode);
@@ -500,7 +505,8 @@ class TileGeometryBuilder {
         const level = tileKey.level;
         const subdivision = Math.max(7 - level, 4);
 
-        const cacheKey = level >= this.maxDetailLevel ? `simple.patch/${subdivision}` : `${level}/${row}/patch`;
+        const cacheKey =
+            level >= this.maxDetailLevel ? `simple.patch/${subdivision}` : `${level}/${row}/patch`;
 
         if (!this.geometryCache.has(cacheKey)) {
             const model = this.generateTileGeometry(tileKey);
@@ -511,11 +517,19 @@ class TileGeometryBuilder {
 
         // Calculate sphere transformation
         const spherePosition = this.computeTileBasePosition(tileKey, this.sphereProjection);
-        const sphereRotation = this.computeTileRotationMatrix(tileKey, spherePosition, this.sphereProjection);
+        const sphereRotation = this.computeTileRotationMatrix(
+            tileKey,
+            spherePosition,
+            this.sphereProjection
+        );
 
         // Calculate Mercator transformation
         const mercatorPosition = this.computeTileBasePosition(tileKey, mercatorProjection);
-        const mercatorRotation = this.computeTileRotationMatrix(tileKey, mercatorPosition, mercatorProjection);
+        const mercatorRotation = this.computeTileRotationMatrix(
+            tileKey,
+            mercatorPosition,
+            mercatorProjection
+        );
 
         // Create transformation object
         const transformation = new TileTransformation(
@@ -525,11 +539,16 @@ class TileGeometryBuilder {
             mercatorRotation
         );
 
-        let skirtHeight = Math.min((getEstimatedLevelZeroGeometricError(
-            this.sphereProjection,
-            (1 << subdivision) + 1,
-            this.tileScheme.subdivisionScheme.getSubdivisionX(0)
-        ) / (1 << tileKey.level)) * 4.0, 1000);
+        let skirtHeight = Math.min(
+            (getEstimatedLevelZeroGeometricError(
+                this.sphereProjection,
+                (1 << subdivision) + 1,
+                this.tileScheme.subdivisionScheme.getSubdivisionX(0)
+            ) /
+                (1 << tileKey.level)) *
+                4.0,
+            1000
+        );
 
         return {
             geometry,
@@ -547,7 +566,7 @@ class TileGeometryBuilder {
         offsetX: number,
         offsetY: number,
         paddingX: number,
-        paddingY: number, 
+        paddingY: number,
         centered: boolean,
         skirtOffset?: number
     ): GeometryMode {
@@ -617,7 +636,11 @@ class TileGeometryBuilder {
 
         const isYAxisDown = this.isYAxisDown(this.getTilingScheme());
         for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++, positionIndex += 3, uvIndex += 2, webMercatorYIndex++, mercatorIndex += 3) {
+            for (
+                let x = 0;
+                x < width;
+                x++, positionIndex += 3, uvIndex += 2, webMercatorYIndex++, mercatorIndex += 3
+            ) {
                 let zValue = 0;
                 let u = (x - 1) / (width - 3);
                 let v = (y - 1) / (height - 3);
@@ -889,8 +912,8 @@ class TileGeometryBuilder {
                         ? convertWebMercatorY.convert(geoPos.latitudeInRadians)
                         : 1 - convertWebMercatorY.convert(geoPos.latitudeInRadians)
                     : isYAxisDown
-                        ? 1 - v
-                        : v;
+                    ? 1 - v
+                    : v;
 
                 // Store original position to skritMap
                 {
@@ -1163,6 +1186,4 @@ export class GeographicStandardTilingTileGeometryBuilder extends TileGeometryBui
     }
 }
 
-export type {
-    TileGeometryBuilder
-}
+export type { TileGeometryBuilder };

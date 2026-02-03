@@ -55,12 +55,15 @@ export class BatchAnimationManager {
         }
 
         const currentState = this._batchStates.get(batchId) || this._createDefaultState();
-        
+
         // Clamp target progress to valid range
         targetProgress = Math.max(0, Math.min(1, targetProgress));
-        
+
         // If target value hasn't changed and animation is in progress, maintain current state
-        if (Math.abs(currentState.targetProgress - targetProgress) < 0.001 && currentState.isAnimating) {
+        if (
+            Math.abs(currentState.targetProgress - targetProgress) < 0.001 &&
+            currentState.isAnimating
+        ) {
             return;
         }
 
@@ -99,17 +102,17 @@ export class BatchAnimationManager {
         const maxBatchId = Math.max(...this._batchStates.keys());
         const batchCount = maxBatchId + 1;
         const progresses = new Float32Array(batchCount);
-        
+
         // Initialize all progress values to 0
         progresses.fill(0);
-        
+
         // Fill progress for each batch
         this._batchStates.forEach((state: BatchAnimationState, batchId: number) => {
             if (batchId < batchCount) {
                 progresses[batchId] = state.currentProgress;
             }
         });
-        
+
         return progresses;
     }
 
@@ -143,13 +146,13 @@ export class BatchAnimationManager {
 
             const elapsed = currentTime - state.startTime;
             let rawProgress = Math.min(elapsed / this._animation!.duration, 1.0);
-            
+
             // Apply easing function
             const easedProgress = this._easingFunction(rawProgress);
-            
+
             // Calculate current progress
-            state.currentProgress = state.startProgress + 
-                (state.targetProgress - state.startProgress) * easedProgress;
+            state.currentProgress =
+                state.startProgress + (state.targetProgress - state.startProgress) * easedProgress;
 
             // Ensure progress stays within bounds
             state.currentProgress = Math.max(0, Math.min(1, state.currentProgress));

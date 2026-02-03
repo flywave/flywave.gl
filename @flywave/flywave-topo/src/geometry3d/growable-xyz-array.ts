@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type PlaneAltitudeEvaluator, Geometry } from "../geometry";
 import { type Matrix4d } from "../geometry4d/matrix4d";
 import { type MultiLineStringDataVariant } from "../topology/triangulation";

@@ -25,7 +25,9 @@ const PROJECT_CONFIG = {
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
     if (!canvas) {
-        throw new Error("Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML");
+        throw new Error(
+            "Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML"
+        );
     }
     return canvas;
 };
@@ -40,35 +42,37 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const initialLocation = new GeoCoordinates(36.804157511532786, 117.92817009363822);
 
     return new MapView({
-        projection: sphereProjection,    // Use spherical projection
-        target: initialLocation,         // Initial target position
-        zoomLevel: 20,                  // Initial zoom level
-        canvas: canvas,                 // Specify render canvas
+        projection: sphereProjection, // Use spherical projection
+        target: initialLocation, // Initial target position
+        zoomLevel: 20, // Initial zoom level
+        canvas: canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
-            lights: [{
-                type: "ambient",       // Ambient light
-                intensity: 1.0,        // Light intensity
-                name: "ambientLight",  // Light source name
-                color: "#ffffff"       // Light source color
-            }],
+            lights: [
+                {
+                    type: "ambient", // Ambient light
+                    intensity: 1.0, // Light intensity
+                    name: "ambientLight", // Light source name
+                    color: "#ffffff" // Light source color
+                }
+            ],
             celestia: {
                 sunTime: new Date().setHours(13), // Set sun time to 1 PM
-                sunCastShadow: true,    // Enable shadows
-                sunIntensity: 3,        // Sun light intensity
-                atmosphere: true        // Enable atmospheric effect
+                sunCastShadow: true, // Enable shadows
+                sunIntensity: 3, // Sun light intensity
+                atmosphere: true // Enable atmospheric effect
             },
             postEffects: {
                 smaa: true,
                 brightnessContrast: {
-                    brightness: -0.17,  // Brightness adjustment
-                    contrast: 0.23,     // Contrast adjustment
-                    enabled: true       // Enable brightness contrast effect
+                    brightness: -0.17, // Brightness adjustment
+                    contrast: 0.23, // Contrast adjustment
+                    enabled: true // Enable brightness contrast effect
                 },
                 hueSaturation: {
-                    hue: 0.17,         // Hue adjustment
-                    saturation: 0.57,   // Saturation adjustment
-                    enabled: true       // Enable hue saturation effect
+                    hue: 0.17, // Hue adjustment
+                    saturation: 0.57, // Saturation adjustment
+                    enabled: true // Enable hue saturation effect
                 }
             }
         }
@@ -90,14 +94,26 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  * Get 3D Tiles data source configuration
  * @returns 3D Tiles data source configuration array
  */
-const getTileSourceConfigs = (): Array<{ name: string, url: string }> => {
+const getTileSourceConfigs = (): Array<{ name: string; url: string }> => {
     return [
-        { name: "Street Lamp", url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ludeng/tileset.json` },
+        {
+            name: "Street Lamp",
+            url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ludeng/tileset.json`
+        },
         // { name: "排水", url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ps/tileset.json` },
         // { name: "电力", url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_power/tileset.json` },
-        { name: "Buildings", url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_buildings/tileset.json` },
-        { name: "Natural Gas", url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_trq/tileset.json` },
-        { name: "Drinking Water", url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ys/tileset.json` }
+        {
+            name: "Buildings",
+            url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_buildings/tileset.json`
+        },
+        {
+            name: "Natural Gas",
+            url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_trq/tileset.json`
+        },
+        {
+            name: "Drinking Water",
+            url: `${PROJECT_CONFIG.SERVER_URL}/${PROJECT_CONFIG.PROJECT_NAME}/3dtile_ys/tileset.json`
+        }
     ];
 };
 
@@ -118,9 +134,9 @@ const add3DTileDataSources = (mapView: MapView): void => {
         dataSource.setTheme({
             postEffects: {
                 translucentDepth: {
-                    enabled: true,    // Enable translucent depth effect
+                    enabled: true // Enable translucent depth effect
                 }
-            },
+            }
         });
 
         mapView.addDataSource(dataSource);
@@ -141,13 +157,18 @@ const add3DTileDataSources = (mapView: MapView): void => {
 const configureDEMTerrainSource = (mapView: MapView): void => {
     const demTerrain = new DEMTerrainSource({
         source: {
-            "bounds": [117.88982391357423, 36.78839127856239, 117.94132232666017, 36.829622821570254],
-            "minzoom": 0,
-            "maxzoom": 14,
-            "scheme": "xyz",
-            "tiles": [PROJECT_CONFIG.SERVER_URL + "/" + PROJECT_CONFIG.PROJECT_NAME + "/terrain/{z}/{x}/{y}.png"],
-            "type": "raster-dem",
-            "tileSize": 512
+            bounds: [117.88982391357423, 36.78839127856239, 117.94132232666017, 36.829622821570254],
+            minzoom: 0,
+            maxzoom: 14,
+            scheme: "xyz",
+            tiles: [
+                PROJECT_CONFIG.SERVER_URL +
+                    "/" +
+                    PROJECT_CONFIG.PROJECT_NAME +
+                    "/terrain/{z}/{x}/{y}.png"
+            ],
+            type: "raster-dem",
+            tileSize: 512
         }
     });
 
@@ -194,5 +215,8 @@ try {
 
     console.log("Community construction project visualization example initialized successfully");
 } catch (error) {
-    console.error("Error initializing community construction project visualization example:", error);
+    console.error(
+        "Error initializing community construction project visualization example:",
+        error
+    );
 }

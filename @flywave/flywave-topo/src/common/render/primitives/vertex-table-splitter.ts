@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type RenderMaterial, ColorDef } from "../../../common";
 import { assert, Uint8ArrayBuilder, Uint32ArrayBuilder } from "../../../utils";
 import { type MaterialParams } from "../material-params";

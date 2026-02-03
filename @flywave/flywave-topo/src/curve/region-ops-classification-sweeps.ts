@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 import { Point3d, Vector3d } from "../geometry3d/point3d-vector3d";
 import { Range2d, Range3d } from "../geometry3d/range";

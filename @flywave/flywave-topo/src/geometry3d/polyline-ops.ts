@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 import { GrowableXYZArray } from "./growable-xyz-array";
 import { type IndexedXYZCollection } from "./indexed-xyz-collection";

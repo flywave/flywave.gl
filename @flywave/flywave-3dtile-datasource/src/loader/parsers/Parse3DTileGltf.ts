@@ -50,5 +50,5 @@ async function parseFromContext(
         return context.parse(data, loader, options);
     }
     // Otherwise, directly use the loader to parse
-    return await loader.parse(data, options,context);
+    return await loader.parse(data, options, context);
 }

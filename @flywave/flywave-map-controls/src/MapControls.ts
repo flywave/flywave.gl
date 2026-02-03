@@ -53,7 +53,7 @@ export class MapControls extends BaseMapControls {
         super(mapView, options);
         this.m_cameraTransformPlanar = new PlanarCameraTransform(mapView);
         this.m_cameraTransformEllipsoid = new EllipsoidCameraTransform(mapView);
-        
+
         this.startAnimation();
     }
 

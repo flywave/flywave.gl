@@ -1053,7 +1053,11 @@ export class Tile implements CachedResource {
      * @param recursive - Whether to recursively check child objects.
      * @param intersects - Array to store intersection results.
      */
-    raycast(rayCaster: THREE.Raycaster, intersects: THREE.Intersection[], recursive: boolean = true): void {
+    raycast(
+        rayCaster: THREE.Raycaster,
+        intersects: THREE.Intersection[],
+        recursive: boolean = true
+    ): void {
         rayCaster.intersectObjects(this.objects, recursive, intersects);
     }
 

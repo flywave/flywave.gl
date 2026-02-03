@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type AuxChannelTable } from "./aux-channel-table";
 import { type EdgeParams } from "./edge-params";
 import { type SurfaceParams } from "./surface-params";

@@ -85,20 +85,34 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private limitZoomOut: number = 1.5;
 
     private _zoomEnabled: boolean = true;
-    public get zoomEnabled() { return this._zoomEnabled; }
-    public set zoomEnabled(value: boolean) { this._zoomEnabled = value; }
+    public get zoomEnabled() {
+        return this._zoomEnabled;
+    }
+    public set zoomEnabled(value: boolean) {
+        this._zoomEnabled = value;
+    }
 
     private _tiltEnabled: boolean = true;
-    public get tiltEnabled() { return this._tiltEnabled; }
-    public set tiltEnabled(value: boolean) { this._tiltEnabled = value; }
+    public get tiltEnabled() {
+        return this._tiltEnabled;
+    }
+    public set tiltEnabled(value: boolean) {
+        this._tiltEnabled = value;
+    }
 
-    public get maxTiltAngle() { return (this.tiltLimit * 180) / Math.PI; }
+    public get maxTiltAngle() {
+        return (this.tiltLimit * 180) / Math.PI;
+    }
     public set maxTiltAngle(value: number) {
         this.tiltLimit = (value * Math.PI) / 180;
     }
 
-    public get maxZoomLevel() { return this.limitZoomOut; }
-    public set maxZoomLevel(value: number) { this.limitZoomOut = value; }
+    public get maxZoomLevel() {
+        return this.limitZoomOut;
+    }
+    public set maxZoomLevel(value: number) {
+        this.limitZoomOut = value;
+    }
 
     private headingSet?: number;
     private tiltSet?: number;
@@ -112,10 +126,16 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private readonly mouseCursorManager: MouseCursorManager;
 
     private _enabled: boolean = true;
-    public get enabled() { return this._enabled; }
-    public set enabled(value: boolean) { this._enabled = value; }
+    public get enabled() {
+        return this._enabled;
+    }
+    public set enabled(value: boolean) {
+        this._enabled = value;
+    }
 
-    public get eventHandler() { return this.windowEventHandler; }
+    public get eventHandler() {
+        return this.windowEventHandler;
+    }
 
     protected abstract get cameraTransform(): CameraTransform<Projection>;
 
@@ -201,8 +221,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         const mouseDown = this.windowEventHandler.mouseDown;
         const mouseZ = this.windowEventHandler.lastMouseZ;
 
-        const isMoving = Math.abs(mouseX - this.mouseState.x) > 1 ||
-            Math.abs(mouseY - this.mouseState.y) > 1;
+        const isMoving =
+            Math.abs(mouseX - this.mouseState.x) > 1 || Math.abs(mouseY - this.mouseState.y) > 1;
 
         this.mouseCursorManager?.update(mouseDown, mouseZ - this.mouseState.z, isMoving);
 
@@ -344,7 +364,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         if (this.smoothZoom !== prevSmoothZoom) {
             if (hitDistance > 0 || (mouseZ === this.mouseState.z && this.lastHitDistance > 0)) {
                 const zoomDelta = (this.smoothZoom - prevSmoothZoom) * 0.08;
-                const distanceRatio = this.lastHit.distanceTo(cameraPos) / this.mapView.projection.unitScale;
+                const distanceRatio =
+                    this.lastHit.distanceTo(cameraPos) / this.mapView.projection.unitScale;
 
                 let damping = 1;
                 if (zoomDelta < 0 && distanceRatio > this.limitZoomOut) {
@@ -391,7 +412,10 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             this.inertialDeltaY += (0 - this.inertialDeltaY) * rotationDamping * 0.75;
         }
 
-        if (this.lastHitCenterDistance > 0 && (this.inertialDeltaX !== 0 || this.inertialDeltaY !== 0)) {
+        if (
+            this.lastHitCenterDistance > 0 &&
+            (this.inertialDeltaX !== 0 || this.inertialDeltaY !== 0)
+        ) {
             const rotationStep = 0.0045;
             const tiltStep = rotationStep * 0.5;
 
@@ -429,8 +453,10 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     }
 
     private applyTiltAndHeadingChanges(): void {
-        if ((this.headingSet !== undefined || this.tiltSet !== undefined) &&
-            this.lastHitCenterDistance > 0) {
+        if (
+            (this.headingSet !== undefined || this.tiltSet !== undefined) &&
+            this.lastHitCenterDistance > 0
+        ) {
             if (this.headingSet !== undefined) {
                 this.applyHeadingChange();
             }
@@ -473,15 +499,16 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             Math.min(
                 Math.max(
                     right.x * rotationMatrix.elements[0] +
-                    right.y * rotationMatrix.elements[1] +
-                    right.z * rotationMatrix.elements[2],
+                        right.y * rotationMatrix.elements[1] +
+                        right.z * rotationMatrix.elements[2],
                     -1
                 ),
                 1
             )
         );
 
-        const direction = right.x * rotationMatrix.elements[4] +
+        const direction =
+            right.x * rotationMatrix.elements[4] +
             right.y * rotationMatrix.elements[5] +
             right.z * rotationMatrix.elements[6];
 
@@ -504,11 +531,13 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.cameraTransform.getDown(down);
         this.cameraTransform.getForward(forward);
 
-        const downDot = this.lastHitGravity.x * down.x +
+        const downDot =
+            this.lastHitGravity.x * down.x +
             this.lastHitGravity.y * down.y +
             this.lastHitGravity.z * down.z;
 
-        const forwardDot = this.lastHitGravity.x * forward.x +
+        const forwardDot =
+            this.lastHitGravity.x * forward.x +
             this.lastHitGravity.y * forward.y +
             this.lastHitGravity.z * forward.z;
 
@@ -542,9 +571,13 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         return this.panVelocityX !== 0 || this.panVelocityY !== 0;
     }
 
-    public disableTilt(): void { this._disableTilt = true; }
+    public disableTilt(): void {
+        this._disableTilt = true;
+    }
 
-    public disableHeading(): void { this._disableHeading = true; }
+    public disableHeading(): void {
+        this._disableHeading = true;
+    }
 
     public getDistanceToGlobe(position: Vector3, normal?: Vector3): number {
         const normalVector = new Vector3();

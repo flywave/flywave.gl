@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type CurveCollection } from "../curve/curve-collection";
 import { type AnyCurve } from "../curve/curve-types";
 import { type GeometryQuery } from "../curve/geometry-query";

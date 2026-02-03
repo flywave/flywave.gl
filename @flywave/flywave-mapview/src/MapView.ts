@@ -1138,8 +1138,7 @@ export class MapView extends EventDispatcher {
             : new MapRenderingManager(
                 width,
                 height,
-                this.m_options.dynamicPixelRatio,
-                mapPassAntialiasSettings
+                this.m_options.dynamicPixelRatio, 
             );
 
         this.m_animatedExtrusionHandler = new AnimatedExtrusionHandler(this);
@@ -1206,8 +1205,10 @@ export class MapView extends EventDispatcher {
                 const { width, height } = entry.contentRect;
 
                 // Only resize if dimensions actually changed
-                const canvasWidth = this.m_renderer.domElement.width / this.m_renderer.getPixelRatio();
-                const canvasHeight = this.m_renderer.domElement.height / this.m_renderer.getPixelRatio();
+                const canvasWidth =
+                    this.m_renderer.domElement.width / this.m_renderer.getPixelRatio();
+                const canvasHeight =
+                    this.m_renderer.domElement.height / this.m_renderer.getPixelRatio();
 
                 if (Math.abs(canvasWidth - width) > 1 || Math.abs(canvasHeight - height) > 1) {
                     this.resize(width, height);
@@ -2644,19 +2645,56 @@ export class MapView extends EventDispatcher {
      * If `fallback === true` the return value will always exist but it might not be on the earth
      * surface.
      *
+     * This method automatically uses GPU depth buffer for accurate positioning (including terrain
+     * and 3D models). When depth reading fails, it falls back to raycasting against the math
+     * model (sphere or plane).
+     *
      * @param x - The X position in css/client coordinates (without applied display ratio).
      * @param y - The Y position in css/client coordinates (without applied display ratio).
-     * @param fallback - Whether to compute a fallback position if the earth surface is not hit.
+     * @param fallback - Whether to compute a fallback position if depth reading fails.
      */
     getWorldPositionAt(x: number, y: number, fallback?: boolean): THREE.Vector3 | null {
+        // Always try to read depth first (includes terrain and 3D models)
+        const worldPosByDepth = this.getWorldPositionAtByDepth(x, y);
+        if (worldPosByDepth !== null) {
+            return worldPosByDepth;
+        }
+
+        // Depth reading failed, use raycasting against math model (fallback)
+        return this.getWorldPositionAtWithRaycast(x, y, fallback);
+    }
+
+    private getWorldPositionAtByDepth(x: number, y: number): THREE.Vector3 | null {
+        const ndc = this.getNormalizedScreenCoordinates(x, y);
+        const ndcVector = new THREE.Vector3(ndc.x, ndc.y, 0.5);
+        const depth = this.mapRenderingManager.readDepth(ndcVector);
+
+        if (depth === null) {
+            return null;
+        }
+        const ndcWithDepth = new THREE.Vector3(ndc.x, ndc.y, (depth * 2.0) - 1.0);
+
+        const worldPosition = new THREE.Vector3();
+        return this.ndcToView(ndcWithDepth, worldPosition).add(this.camera.position); 
+    }
+
+    private getWorldPositionAtWithRaycast(
+        x: number,
+        y: number,
+        fallback?: boolean
+    ): THREE.Vector3 | null {
         this.m_raycaster.setFromCamera(this.getNormalizedScreenCoordinates(x, y), this.m_camera);
         const worldPos =
             this.projection.type === ProjectionType.Spherical
-                ? ((this.projection as SphereProjection).rayCast(cache.vector3[0], this.m_raycaster.ray.origin, this.m_raycaster.ray.origin.clone().add(this.m_raycaster.ray.direction)),cache.vector3[0])
+                ? ((this.projection as SphereProjection).rayCast(
+                    cache.vector3[0],
+                    this.m_raycaster.ray.origin,
+                    this.m_raycaster.ray.origin.clone().add(this.m_raycaster.ray.direction)
+                ),
+                    cache.vector3[0])
                 : this.m_raycaster.ray.intersectPlane(this.m_plane, cache.vector3[0]);
 
         if (worldPos === null && fallback === true) {
-            // Fall back to the far plane
             const cosAlpha = this.m_camera
                 .getWorldDirection(cache.vector3[0])
                 .dot(this.m_raycaster.ray.direction);

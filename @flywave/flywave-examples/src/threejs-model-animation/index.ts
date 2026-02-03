@@ -6,20 +6,20 @@ import {
     DEMTerrainSource,
     ArcGISTileProvider,
     MapControlsUI,
-    MapViewEventNames, 
+    MapViewEventNames
 } from "@flywave/flywave.gl";
 import * as THREE from "three";
-import { GUI } from 'dat.gui';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { GUI } from "dat.gui";
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 
 // Configuration constants
 const CONFIG = {
     CANVAS_ELEMENT_ID: "mapCanvas",
     DEM_SOURCE_PATH: "dem_terrain/source.json",
-    INITIAL_COORDINATES: new GeoCoordinates(36.4810, 118.1727, 900),
+    INITIAL_COORDINATES: new GeoCoordinates(36.481, 118.1727, 900),
     ANCHOR_COORDINATES: new GeoCoordinates(36.48619699228674, 118.17270928364879, 330),
     TILT: 50.1,
-    MODEL_FILE_PATH: 'Samba Dancing.fbx',
+    MODEL_FILE_PATH: "Samba Dancing.fbx",
     INITIAL_MODEL_SCALE: 0.5,
     MODEL_SCALE_MIN: 0.01,
     MODEL_SCALE_MAX: 0.5,
@@ -43,7 +43,9 @@ const CONFIG = {
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById(CONFIG.CANVAS_ELEMENT_ID) as HTMLCanvasElement;
     if (!canvas) {
-        throw new Error(`Map canvas element not found, please ensure there is a canvas element with id '${CONFIG.CANVAS_ELEMENT_ID}' in HTML`);
+        throw new Error(
+            `Map canvas element not found, please ensure there is a canvas element with id '${CONFIG.CANVAS_ELEMENT_ID}' in HTML`
+        );
     }
     return canvas;
 };
@@ -56,24 +58,24 @@ const getMapCanvas = (): HTMLCanvasElement => {
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const mapView = new MapView({
         projection: ellipsoidProjection,
-        target: CONFIG.INITIAL_COORDINATES, 
+        target: CONFIG.INITIAL_COORDINATES,
         canvas: canvas,
         tilt: CONFIG.TILT,
         theme: {
             extends: "resources/tilezen_base_globe.json",
             lights: [],
-            "enableShadows": true,
-            "celestia": {
+            enableShadows: true,
+            celestia: {
                 sunTime: new Date().setHours(13, 0, 0, 0),
                 atmosphere: true,
                 sunCastShadow: true,
-                sunIntensity: 5.0,
+                sunIntensity: 5.0
             }
         }
     });
 
     mapView.update();
-    
+
     return mapView;
 };
 
@@ -94,7 +96,7 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  */
 const configureDEMTerrainSource = (mapView: MapView): void => {
     const demTerrain = new DEMTerrainSource({
-        source: CONFIG.DEM_SOURCE_PATH,
+        source: CONFIG.DEM_SOURCE_PATH
     });
 
     mapView.setElevationSource(demTerrain);
@@ -129,7 +131,7 @@ class SambaDancingManager extends THREE.Object3D {
         this.gui = new GUI();
         this.clock = new THREE.Clock();
         this.loader = new FBXLoader();
-        this.guiMorphsFolder = this.gui.addFolder('Morphs');
+        this.guiMorphsFolder = this.gui.addFolder("Morphs");
         this.guiMorphsFolder.hide();
 
         this.initGUI();
@@ -138,20 +140,38 @@ class SambaDancingManager extends THREE.Object3D {
 
     private initGUI() {
         // Model settings
-        const modelFolder = this.gui.addFolder('Samba Dance Model Settings');
-        modelFolder.add(this.params, 'modelScale', CONFIG.MODEL_SCALE_MIN, CONFIG.MODEL_SCALE_MAX, CONFIG.MODEL_SCALE_STEP).name('Scale')
+        const modelFolder = this.gui.addFolder("Samba Dance Model Settings");
+        modelFolder
+            .add(
+                this.params,
+                "modelScale",
+                CONFIG.MODEL_SCALE_MIN,
+                CONFIG.MODEL_SCALE_MAX,
+                CONFIG.MODEL_SCALE_STEP
+            )
+            .name("Scale")
             .onChange((value: number) => {
                 if (this.model) {
                     this.model.scale.setScalar(value);
                 }
             });
-        modelFolder.add(this.params, 'showModel').name('Show Model')
+        modelFolder
+            .add(this.params, "showModel")
+            .name("Show Model")
             .onChange((value: boolean) => {
                 if (this.model) {
                     this.model.visible = value;
                 }
             });
-        modelFolder.add(this.params, 'animationSpeed', CONFIG.ANIMATION_SPEED_MIN, CONFIG.ANIMATION_SPEED_MAX, CONFIG.ANIMATION_SPEED_STEP).name('Animation Speed')
+        modelFolder
+            .add(
+                this.params,
+                "animationSpeed",
+                CONFIG.ANIMATION_SPEED_MIN,
+                CONFIG.ANIMATION_SPEED_MAX,
+                CONFIG.ANIMATION_SPEED_STEP
+            )
+            .name("Animation Speed")
             .onChange((value: number) => {
                 if (this.mixer) {
                     this.mixer.timeScale = value;
@@ -159,27 +179,59 @@ class SambaDancingManager extends THREE.Object3D {
             });
 
         // Animation Control
-        const animationFolder = modelFolder.addFolder('Animation Control');
-        animationFolder.add(this.params, 'animationIndex', 0, CONFIG.MAX_ANIMATION_INDEX, CONFIG.ANIMATION_INDEX_STEP).name('Animation Index')
+        const animationFolder = modelFolder.addFolder("Animation Control");
+        animationFolder
+            .add(
+                this.params,
+                "animationIndex",
+                0,
+                CONFIG.MAX_ANIMATION_INDEX,
+                CONFIG.ANIMATION_INDEX_STEP
+            )
+            .name("Animation Index")
             .onChange((value: number) => {
                 this.playAnimation(value);
             });
 
         // Position Control
-        const positionFolder = modelFolder.addFolder('Position');
-        positionFolder.add(this.params, 'modelPositionX', CONFIG.POSITION_MIN, CONFIG.POSITION_MAX, CONFIG.POSITION_STEP).name('X Position')
+        const positionFolder = modelFolder.addFolder("Position");
+        positionFolder
+            .add(
+                this.params,
+                "modelPositionX",
+                CONFIG.POSITION_MIN,
+                CONFIG.POSITION_MAX,
+                CONFIG.POSITION_STEP
+            )
+            .name("X Position")
             .onChange((value: number) => {
                 if (this.model) {
                     this.model.position.x = value;
                 }
             });
-        positionFolder.add(this.params, 'modelPositionY', CONFIG.POSITION_MIN, CONFIG.POSITION_MAX, CONFIG.POSITION_STEP).name('Y Position')
+        positionFolder
+            .add(
+                this.params,
+                "modelPositionY",
+                CONFIG.POSITION_MIN,
+                CONFIG.POSITION_MAX,
+                CONFIG.POSITION_STEP
+            )
+            .name("Y Position")
             .onChange((value: number) => {
                 if (this.model) {
                     this.model.position.y = value;
                 }
             });
-        positionFolder.add(this.params, 'modelPositionZ', CONFIG.POSITION_MIN, CONFIG.POSITION_MAX, CONFIG.POSITION_STEP).name('Z Position')
+        positionFolder
+            .add(
+                this.params,
+                "modelPositionZ",
+                CONFIG.POSITION_MIN,
+                CONFIG.POSITION_MAX,
+                CONFIG.POSITION_STEP
+            )
+            .name("Z Position")
             .onChange((value: number) => {
                 if (this.model) {
                     this.model.position.z = value;
@@ -191,47 +243,47 @@ class SambaDancingManager extends THREE.Object3D {
     }
 
     private loadSambaDancing() {
-        this.loader.load(CONFIG.MODEL_FILE_PATH, (group) => {
+        this.loader.load(
+            CONFIG.MODEL_FILE_PATH,
+            group => {
+                // Set new model
+                this.model = group;
+                this.model.traverse((child: THREE.Object3D) => {
+                    if ((child as THREE.Mesh).isMesh) {
+                        (child as THREE.Mesh).castShadow = true;
+                    }
+                });
+                // Set animation
+                if (this.model.animations && this.model.animations.length) {
+                    this.mixer = new THREE.AnimationMixer(this.model);
 
-            // Set new model
-            this.model = group;
-            this.model.traverse((child: THREE.Object3D) => {
-                if ((child as THREE.Mesh).isMesh) {
-                    (child as THREE.Mesh).castShadow = true;
+                    // Get animation list
+                    this.animationList = this.model.animations.map(anim => anim.name);
+                    console.log("Available animations:", this.animationList);
+
+                    // Play first animation by default
+                    this.playAnimation(CONFIG.INITIAL_ANIMATION_INDEX);
+                } else {
+                    this.mixer = null;
+                    console.log("Model has no animations");
                 }
-            });
-            // Set animation
-            if (this.model.animations && this.model.animations.length) {
-                this.mixer = new THREE.AnimationMixer(this.model);
 
+                // Set Morph Targets control
+                this.setupMorphControls();
 
-                // Get animation list
-                this.animationList = this.model.animations.map(anim => anim.name);
-                console.log('Available animations:', this.animationList);
+                // Set model properties
+                this.setupModelProperties();
 
-                // Play first animation by default
-                this.playAnimation(CONFIG.INITIAL_ANIMATION_INDEX);
-            } else {
-                this.mixer = null;
-                console.log('Model has no animations');
+                console.log("Samba Dancing model loaded successfully");
+            },
+            undefined,
+            error => {
+                throw error;
             }
-
-            // Set Morph Targets control
-            this.setupMorphControls();
-
-            // Set model properties
-            this.setupModelProperties();
-
-            console.log('Samba Dancing model loaded successfully');
-
-        }, undefined, (error) => {
-            throw error;
-        });
+        );
     }
- 
 
     private setupMorphControls() {
-
         if (!this.model) return;
 
         // Set morph targets control
@@ -240,14 +292,18 @@ class SambaDancingManager extends THREE.Object3D {
                 const mesh = child as THREE.Mesh;
                 if (mesh.morphTargetDictionary) {
                     this.guiMorphsFolder.show();
-                    const meshFolder = this.guiMorphsFolder.addFolder(mesh.name || 'Morph Targets');
+                    const meshFolder = this.guiMorphsFolder.addFolder(mesh.name || "Morph Targets");
 
-                    Object.keys(mesh.morphTargetDictionary).forEach((key) => {
-                        meshFolder.add(
-                            mesh.morphTargetInfluences!,
-                            mesh.morphTargetDictionary[key],
-                            0, 1, 0.01
-                        ).name(key);
+                    Object.keys(mesh.morphTargetDictionary).forEach(key => {
+                        meshFolder
+                            .add(
+                                mesh.morphTargetInfluences!,
+                                mesh.morphTargetDictionary[key],
+                                0,
+                                1,
+                                0.01
+                            )
+                            .name(key);
                     });
                 }
             }
@@ -273,12 +329,12 @@ class SambaDancingManager extends THREE.Object3D {
             this.params.modelPositionY,
             this.params.modelPositionZ
         );
- 
+
         this.model.rotateX(CONFIG.MODEL_ROTATION_X);
 
         this.add(this.model);
     }
- 
+
     // Play animation by specified index
     public playAnimation(animationIndex: number = 0) {
         if (this.mixer && this.model && this.model.animations) {
@@ -321,11 +377,13 @@ const addSambaManagerToMap = (mapView: MapView): void => {
     sambaManager.anchor = CONFIG.ANCHOR_COORDINATES;
 
     // Set orientation
-    sambaManager.lookAt(ellipsoidProjection.projectPoint(CONFIG.ANCHOR_COORDINATES, new THREE.Vector3()));
+    sambaManager.lookAt(
+        ellipsoidProjection.projectPoint(CONFIG.ANCHOR_COORDINATES, new THREE.Vector3())
+    );
 
     // Add to map anchors
     mapView.mapAnchors.add(sambaManager);
-    
+
     // Add render event listener to update model animation
     mapView.addEventListener(MapViewEventNames.Render, () => {
         sambaManager.update();
@@ -337,23 +395,23 @@ const addSambaManagerToMap = (mapView: MapView): void => {
 try {
     // 1. Get map canvas element
     const canvas = getMapCanvas();
-    
+
     // 2. Initialize map view
     const mapView = initializeMapView(canvas);
-    
+
     // 3. Initialize map controls
     initializeMapControls(mapView, canvas);
-    
+
     // 4. Configure DEM terrain data source
     configureDEMTerrainSource(mapView);
-    
+
     // 5. Add Samba dance model manager to map
     addSambaManagerToMap(mapView);
-    
+
     // 6. Start animation loop
     mapView.beginAnimation();
-    
+
     console.log("Three.js model animation example initialized successfully");
 } catch (error) {
     console.error("Error initializing Three.js model animation example:", error);
-} 
+}

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type HalfEdge, type HalfEdgeGraph, type HalfEdgeMask } from "./graph";
 
 // Search services for HalfEdgeGraph

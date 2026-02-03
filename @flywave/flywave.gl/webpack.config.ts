@@ -42,20 +42,23 @@ const flywaveConfig: FlywaveWebpackConfig = {
     outputPath: path.resolve(__dirname, "dist"),
     enableTsconfigPaths: true
 };
- 
+
 /**
  * Decoder Configuration
  * Specialized build configuration for Web Workers decoder environment
  */
-const decoderConfig = merge(createDecoderConfig({
-    ...flywaveConfig,
-    decoderEntry: "src/DecoderBundleMain.ts"
-}), {
-    output: {
-        path: path.resolve(__dirname, "dist"),
-        filename: `flywave-decoders${getFilenameSuffix()}`
+const decoderConfig = merge(
+    createDecoderConfig({
+        ...flywaveConfig,
+        decoderEntry: "src/DecoderBundleMain.ts"
+    }),
+    {
+        output: {
+            path: path.resolve(__dirname, "dist"),
+            filename: `flywave-decoders${getFilenameSuffix()}`
+        }
     }
-});
+);
 
 /**
  * Output format configuration array
@@ -66,18 +69,18 @@ const outputFormats = [
         name: "commonjs",
         filename: `flywave.gl.cjs${getFilenameSuffix()}`,
         library: {
-            type: 'commonjs', // 或者 'commonjs', 'umd' 等
-        },
+            type: "commonjs" // 或者 'commonjs', 'umd' 等
+        }
     },
     {
         name: "module",
-        filename: `flywave.gl.module${getFilenameSuffix()}`, 
+        filename: `flywave.gl.module${getFilenameSuffix()}`,
         experiments: {
             outputModule: true
         },
         library: {
-            type: 'module', // 或者 'commonjs', 'umd' 等
-        },
+            type: "module" // 或者 'commonjs', 'umd' 等
+        }
     }
 ];
 
@@ -91,23 +94,23 @@ const browserConfigs = outputFormats.map(format => {
         entry: "./src/index.ts",
         output: {
             path: path.resolve(__dirname, "dist"),
-            filename: format.filename, 
+            filename: format.filename,
             library: format.library
-        }, 
-        optimization:{
-            sideEffects:false,
+        },
+        optimization: {
+            sideEffects: false
         },
         // External dependencies configuration to avoid bundling certain libraries
         externals: [
             {
-                "three": {
+                three: {
                     commonjs: "three",
                     commonjs2: "three",
                     amd: "three",
                     module: "three"
                 }
             }
-        ],
+        ]
     };
 
     // Merge configuration with experimental settings if they exist
@@ -117,9 +120,7 @@ const browserConfigs = outputFormats.map(format => {
 
     // Add copy plugin for each configuration
     const assets = createAssetsConfig(flywaveConfig);
-    config.plugins = [
-        new CopyWebpackPlugin({ patterns: assets })
-    ];
+    config.plugins = [new CopyWebpackPlugin({ patterns: assets })];
 
     return config;
 });
@@ -128,7 +129,7 @@ const browserConfigs = outputFormats.map(format => {
  * Complete Webpack configuration array
  * Includes decoder configuration and all browser environment configurations
  */
-const configs: Configuration[] = [  ...browserConfigs,decoderConfig];
+const configs: Configuration[] = [...browserConfigs, decoderConfig];
 
 // Export configuration for Webpack usage
 export default configs;

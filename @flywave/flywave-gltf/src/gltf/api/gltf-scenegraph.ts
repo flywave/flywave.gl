@@ -568,7 +568,7 @@ export class GLTFScenegraph {
         for (const sourceBuffer of this.sourceBuffers || []) {
             actualByteLength += padToNBytes(sourceBuffer.byteLength, 4);
         }
-        
+
         // Allocate total array
         const arrayBuffer = new ArrayBuffer(actualByteLength);
         const targetArray = new Uint8Array(arrayBuffer);
@@ -592,7 +592,7 @@ export class GLTFScenegraph {
         // Put arrayBuffer to sourceBuffers for possible additional writing data in the chunk
         this.sourceBuffers = [arrayBuffer];
         this.gltf.buffers = [{ arrayBuffer, byteOffset: 0, byteLength: arrayBuffer.byteLength }];
-        
+
         // Update byteLength to match actual size
         this.byteLength = actualByteLength;
     }

@@ -29,13 +29,13 @@ export function isAntimeridianCrossing(lonStart: number, lonEnd: number) {
 }
 
 interface MinThreeItemsArray<T> extends Array<T> {
-  0: T;
-  1: T;
-  2: T;
+    0: T;
+    1: T;
+    2: T;
 }
 
 export type GeoPolygonCoordinates = Array<
-  GeoCoordinatesLike | GeoCoordinates | GeoCoordLike | GeoPointLike
+    GeoCoordinatesLike | GeoCoordinates | GeoCoordLike | GeoPointLike
 > & { length: 3 | number };
 
 export interface GeoPolygonJSON {

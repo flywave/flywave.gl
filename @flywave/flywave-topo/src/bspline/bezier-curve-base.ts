@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { CurvePrimitive } from "../curve/curve-primitive";
 import { CurveOffsetXYHandler } from "../curve/internal/curve-offset-xy-handler";
 import { PlaneAltitudeRangeContext } from "../curve/internal/plane-altitude-range-context";

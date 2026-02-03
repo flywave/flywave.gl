@@ -3,7 +3,7 @@
 import * as THREE from "three";
 
 const shaderChunks = {
-terrain_pars_vert: `  
+    terrain_pars_vert: `  
     attribute float webMercatorY;  
     attribute vec3 mercatorPosition;  
     uniform float uSkirtHeight;
@@ -168,7 +168,7 @@ terrain_pars_vert: `
         }
     `,
 
-beginnormal_terrain_vertex: `  
+    beginnormal_terrain_vertex: `  
     bool uIsSimplePatch = pack[0][3] > 0.0; 
     
     if (uIsSimplePatch) {
@@ -221,7 +221,8 @@ beginnormal_terrain_vertex: `
         #endif
     `,
 
-   terrain_common: ` 
+    terrain_common: ` 
+    uniform bool isRenderingDepth;
     uniform sampler2D uHeighMapTexture;  
     uniform mat4 uPatchPos;
     uniform mat4 pack;  

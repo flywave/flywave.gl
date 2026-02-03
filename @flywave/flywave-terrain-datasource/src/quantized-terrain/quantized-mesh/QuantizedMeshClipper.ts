@@ -360,7 +360,7 @@ export class QuantizedMeshClipper extends GeometryClipper {
         }
 
         resultMesh.userData.geoBox = clipBox.toArray();
-        return new QuantizedTerrainMesh(resultMesh,quantizedTerrainMesh.geometryProjection);
+        return new QuantizedTerrainMesh(resultMesh, quantizedTerrainMesh.geometryProjection);
     }
 
     private adjustVertices(info: ClippedData, position: Vector3, offset: number): void {

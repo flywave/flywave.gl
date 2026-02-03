@@ -57,8 +57,7 @@ export enum TaskType {
      */
     GroundOverlay = "ground-overlay",
 
-
-      /**
+    /**
      * Tile geometry reprojection task
      *
      * This task type handles the reprojection of terrain geometry between different

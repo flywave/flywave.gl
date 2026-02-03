@@ -7,9 +7,8 @@ export type NotifyCallback = (tile: ITile, active: boolean) => void;
 export { ITile };
 
 export class Observe3DTileChange {
-
     protected observeId: string = MathUtils.generateUUID();
-    
+
     private readonly _watchIds = new Set<string>();
     private _notifyCallback: NotifyCallback;
     private activeTiles = new Set<ITile>();

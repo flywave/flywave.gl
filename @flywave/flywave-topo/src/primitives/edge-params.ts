@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type MeshEdge, type OctEncodedNormalPair, type PolylineIndices } from "../common";
 import {
     type EdgeParams,

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { ColorDef, RenderMaterial } from "../common";
 import {
     type SurfaceMaterial,

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type IndexedEdgeMatcher, SortableEdge } from "./indexed-edge-matcher";
 import { type IndexedPolyface, type PolyfaceVisitor } from "./polyface";
 import { PolyfaceQuery } from "./polyface-query";

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { ColorDef } from "./color-def";
 
 /** An immutable color defined by Hue, Saturation, and Lightness.

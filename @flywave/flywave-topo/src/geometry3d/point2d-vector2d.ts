@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type BeJSONFunctions, type PerpParallelOptions, Geometry } from "../geometry";
 import { Angle } from "./angle";
 import { type XAndY, type XYProps } from "./xyz-props";

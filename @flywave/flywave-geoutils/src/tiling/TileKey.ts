@@ -349,7 +349,7 @@ export class TileKey {
             this.m_mortonCode = result;
         }
 
-        if(isNaN(this.m_mortonCode)){
+        if (isNaN(this.m_mortonCode)) {
             throw new Error(`Invalid morton code: ${this.m_mortonCode}`);
         }
         return this.m_mortonCode;

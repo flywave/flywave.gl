@@ -1,6 +1,11 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Style, type FlatTheme, type StyleSet, type Theme } from "@flywave/flywave-datasource-protocol";
+import {
+    Style,
+    type FlatTheme,
+    type StyleSet,
+    type Theme
+} from "@flywave/flywave-datasource-protocol";
 import { type StyleSetOptions } from "@flywave/flywave-datasource-protocol/StyleSetEvaluator";
 import { type IMapRenderingManager } from "@flywave/flywave-mapview";
 import * as THREE from "three";
@@ -157,14 +162,16 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
 
         this.m_styleEvaluator = new BatchStyleProcessor(styleSetOptions);
 
-        this.m_mapRenderingManager?.addTranslucentLayer(this.observeId, theme?.postEffects?.translucentDepth || {
-            mixFactor: 0.5,
-            blendMode: "mix"
-        });
+        this.m_mapRenderingManager?.addTranslucentLayer(
+            this.observeId,
+            theme?.postEffects?.translucentDepth || {
+                mixFactor: 0.5,
+                blendMode: "mix"
+            }
+        );
 
         this.nodifyActiveTiles();
     }
-
 
     /**
      * Add a new style to the style set.
@@ -178,7 +185,6 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
         return result;
     }
 
-
     /**
      * Remove style by its identifier.
      *
@@ -190,7 +196,6 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
         this.nodifyActiveTiles();
         return result;
     }
-
 
     /**
      * Update style properties by its identifier.
@@ -219,18 +224,17 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
         const isBloomEnabled = this.theme?.postEffects?.bloom?.enabled;
         if (isTranslucentDepthEnabled !== undefined || isBloomEnabled !== undefined) {
             object.traverse(child => {
-                if (child && (child instanceof THREE.Mesh || child instanceof THREE.InstancedMesh)) {
+                if (
+                    child &&
+                    (child instanceof THREE.Mesh || child instanceof THREE.InstancedMesh)
+                ) {
                     if (isTranslucentDepthEnabled)
                         this.m_mapRenderingManager?.addTranslucentObject(child, this.observeId);
-                    else
-                        this.m_mapRenderingManager?.removeTranslucentObject(child);
-                    if (isBloomEnabled)
-                        this.m_mapRenderingManager?.addBloomObject(child);
-                    else
-                        this.m_mapRenderingManager?.removeBloomObject(child);
+                    else this.m_mapRenderingManager?.removeTranslucentObject(child);
+                    if (isBloomEnabled) this.m_mapRenderingManager?.addBloomObject(child);
+                    else this.m_mapRenderingManager?.removeBloomObject(child);
                 }
             });
-
         }
     }
 
@@ -585,62 +589,53 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
 
         if (!batchMaterials) {
             // Create batch materials for each instanced object
-            batchMaterials = instancedObjects.map((instancedObject: THREE.Object3D) => {
-                // Find the mesh within the instanced object
-                let targetMesh: THREE.Mesh | null = null;
-                instancedObject.traverse((child: THREE.Object3D) => {
-                    if (child.type === "Mesh" && !targetMesh) {
-                        targetMesh = child as THREE.Mesh;
-                    }
-                });
-
-                if (!targetMesh) {
-                    return null;
-                }
-
-                const originalMaterial = targetMesh.material as THREE.MeshStandardMaterial;
-
-                const batchMaterial = new B3DMBatchMaterial({
-                    materialParams: {
-                        ...this.theme?.materialParameters,
-                        color: originalMaterial.color,
-                        map: originalMaterial.map,
-                        normalMap: originalMaterial.normalMap,
-                        roughnessMap: originalMaterial.roughnessMap,
-                        emissive: originalMaterial.emissive,
-                        transparent: true,
-                        depthWrite: true,
-                        metalness: originalMaterial.metalness,
-                        userData: {
-                            originUUID: originalMaterial.uuid,
-                            instanceId: instancedObject.userData.instanceId
+            batchMaterials = instancedObjects
+                .map((instancedObject: THREE.Object3D) => {
+                    // Find the mesh within the instanced object
+                    let targetMesh: THREE.Mesh | null = null;
+                    instancedObject.traverse((child: THREE.Object3D) => {
+                        if (child.type === "Mesh" && !targetMesh) {
+                            targetMesh = child as THREE.Mesh;
                         }
-                    },
-                    batchIdAttributeName: this.m_customAttributeConfig.batchIdAttributeName,
-                    animation: this.animation
-                });
+                    });
 
-                // Set up custom rendering callback
-                const rawOnBeforeRender = batchMaterial.onBeforeRender;
-                batchMaterial.onBeforeRender = (
-                    renderer: THREE.WebGLRenderer,
-                    scene: THREE.Scene,
-                    camera: THREE.Camera,
-                    geometry: THREE.BufferGeometry,
-                    object: THREE.Object3D,
-                    group: THREE.Group
-                ) => {
-                    rawOnBeforeRender?.call(
-                        batchMaterial,
-                        renderer,
-                        scene,
-                        camera,
-                        geometry,
-                        object,
-                        group
-                    );
-                    if (this.theme?.onMatrialRender) {
-                        this.theme.onMatrialRender.call(
+                    if (!targetMesh) {
+                        return null;
+                    }
+
+                    const originalMaterial = targetMesh.material as THREE.MeshStandardMaterial;
+
+                    const batchMaterial = new B3DMBatchMaterial({
+                        materialParams: {
+                            ...this.theme?.materialParameters,
+                            color: originalMaterial.color,
+                            map: originalMaterial.map,
+                            normalMap: originalMaterial.normalMap,
+                            roughnessMap: originalMaterial.roughnessMap,
+                            emissive: originalMaterial.emissive,
+                            transparent: true,
+                            depthWrite: true,
+                            metalness: originalMaterial.metalness,
+                            userData: {
+                                originUUID: originalMaterial.uuid,
+                                instanceId: instancedObject.userData.instanceId
+                            }
+                        },
+                        batchIdAttributeName: this.m_customAttributeConfig.batchIdAttributeName,
+                        animation: this.animation
+                    });
+
+                    // Set up custom rendering callback
+                    const rawOnBeforeRender = batchMaterial.onBeforeRender;
+                    batchMaterial.onBeforeRender = (
+                        renderer: THREE.WebGLRenderer,
+                        scene: THREE.Scene,
+                        camera: THREE.Camera,
+                        geometry: THREE.BufferGeometry,
+                        object: THREE.Object3D,
+                        group: THREE.Group
+                    ) => {
+                        rawOnBeforeRender?.call(
                             batchMaterial,
                             renderer,
                             scene,
@@ -649,14 +644,25 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                             object,
                             group
                         );
-                    }
-                };
+                        if (this.theme?.onMatrialRender) {
+                            this.theme.onMatrialRender.call(
+                                batchMaterial,
+                                renderer,
+                                scene,
+                                camera,
+                                geometry,
+                                object,
+                                group
+                            );
+                        }
+                    };
 
-                batchMaterial.userData.originUUID = originalMaterial.uuid;
-                batchMaterial.userData.instanceId = instancedObject.userData.instanceId;
+                    batchMaterial.userData.originUUID = originalMaterial.uuid;
+                    batchMaterial.userData.instanceId = instancedObject.userData.instanceId;
 
-                return batchMaterial;
-            }).filter((material): material is B3DMBatchMaterial => material !== null);
+                    return batchMaterial;
+                })
+                .filter((material): material is B3DMBatchMaterial => material !== null);
 
             if (batchMaterials.length > 0) {
                 this.m_appliedMaterials.set(tileId, batchMaterials);
@@ -719,7 +725,10 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      * @param instanceId - Instance identifier
      * @returns Instance properties object
      */
-    private extractInstanceProperties(feature: I3DMTileFeature, instanceId: number): Record<string, any> {
+    private extractInstanceProperties(
+        feature: I3DMTileFeature,
+        instanceId: number
+    ): Record<string, any> {
         const properties: Record<string, any> = {
             batchId: instanceId
         };
@@ -730,7 +739,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                 const propertyValue = feature.featureTable[propertyName];
                 if (Array.isArray(propertyValue) && instanceId < propertyValue.length) {
                     properties[propertyName] = propertyValue[instanceId];
-                } else if (typeof propertyValue !== 'object') {
+                } else if (typeof propertyValue !== "object") {
                     // Single value property shared by all instances
                     properties[propertyName] = propertyValue;
                 }
@@ -754,7 +763,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
             // Extract user data
             if (instanceObject.userData) {
                 Object.keys(instanceObject.userData).forEach(key => {
-                    if (key !== 'originalMaterial') {
+                    if (key !== "originalMaterial") {
                         properties[key] = instanceObject.userData[key];
                     }
                 });
@@ -769,7 +778,10 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      * @param feature - I3DM feature data
      * @param materials - Batch materials to apply
      */
-    private applyMaterialToInstancedObjects(feature: I3DMTileFeature, materials: B3DMBatchMaterial[]): void {
+    private applyMaterialToInstancedObjects(
+        feature: I3DMTileFeature,
+        materials: B3DMBatchMaterial[]
+    ): void {
         feature.instancedObjects.forEach((instancedObject: THREE.Object3D, index: number) => {
             instancedObject.traverse((child: THREE.Object3D) => {
                 if (child.type === "Mesh") {
@@ -781,9 +793,11 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                     }
 
                     // Find appropriate material for this instance
-                    const instanceMaterial = materials.find(material =>
-                        material.userData.instanceId === instancedObject.userData.instanceId
-                    ) || materials[index % materials.length];
+                    const instanceMaterial =
+                        materials.find(
+                            material =>
+                                material.userData.instanceId === instancedObject.userData.instanceId
+                        ) || materials[index % materials.length];
 
                     if (instanceMaterial) {
                         mesh.material = instanceMaterial;

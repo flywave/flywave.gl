@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import * as THREE from "three";
 
 import { type TextureTransparency, FillFlags } from "../common";

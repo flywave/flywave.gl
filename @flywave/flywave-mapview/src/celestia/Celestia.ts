@@ -76,10 +76,9 @@ export class Celestia extends THREE.Object3D {
         //     // this.mapView.mapRenderingManager.addIgnoreBloomObject(
         //     //     this.mapViewAtmosphere.groundMesh
         //     // );
-        //     // this.mapView.mapRenderingManager.addIgnoreBloomObject(this.mapViewAtmosphere.skyMesh); 
+        //     // this.mapView.mapRenderingManager.addIgnoreBloomObject(this.mapViewAtmosphere.skyMesh);
         //     this.ignoreAtmosphereBloom = true;
         // }
-
     }
 
     public updateOptions(options?: CelestiaOptions) {

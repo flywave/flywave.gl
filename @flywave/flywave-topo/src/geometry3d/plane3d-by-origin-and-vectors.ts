@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type BeJSONFunctions, AxisOrder, Geometry } from "../geometry";
 import { type Point4d } from "../geometry4d/point4d";
 import { Matrix3d } from "./matrix3d";

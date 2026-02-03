@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 export { assert } from "./assert";
 export { PriorityQueue } from "./priority-queue";
 export * from "./compare";

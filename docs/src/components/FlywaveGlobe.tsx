@@ -1,33 +1,35 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react";
 
 const FlywaveGlobe = () => {
-  const containerRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
+    useEffect(() => {
+        if (!containerRef.current) return;
 
-    // 创建 iframe 来运行 flywave 示例
-    const iframe = document.createElement('iframe');
-    iframe.style.width = '450px';
-    iframe.style.height = '450px';
-    iframe.style.border = 'none';
-    iframe.setAttribute('title', 'Flywave Globe Preview');
-    iframe.style.display = 'block';
-    iframe.style.background = 'transparent';
-    iframe.style.overflow = 'hidden';
-    iframe.style.minWidth = '400px';
-    iframe.style.minHeight = '400px';
-    iframe.style.maxWidth = '500px';
-    iframe.style.maxHeight = '500px';
+        // 创建 iframe 来运行 flywave 示例
+        const iframe = document.createElement("iframe");
+        iframe.style.width = "450px";
+        iframe.style.height = "450px";
+        iframe.style.border = "none";
+        iframe.setAttribute("title", "Flywave Globe Preview");
+        iframe.style.display = "block";
+        iframe.style.background = "transparent";
+        iframe.style.overflow = "hidden";
+        iframe.style.minWidth = "400px";
+        iframe.style.minHeight = "400px";
+        iframe.style.maxWidth = "500px";
+        iframe.style.maxHeight = "500px";
 
-    // 获取当前的基础URL，用于处理 GitHub Pages 部署路径
-    const pathParts = window.location.pathname.split('/');
-    // 查找 'flywave.gl' 部分，确保正确构建基础URL
-    const flywaveIndex = pathParts.indexOf('flywave.gl');
-    const baseUrl = window.location.origin + (flywaveIndex !== -1 ? pathParts.slice(0, flywaveIndex + 1).join('/') : '');
-    
-    // 设置 iframe 内容
-    const iframeContent = `
+        // 获取当前的基础URL，用于处理 GitHub Pages 部署路径
+        const pathParts = window.location.pathname.split("/");
+        // 查找 'flywave.gl' 部分，确保正确构建基础URL
+        const flywaveIndex = pathParts.indexOf("flywave.gl");
+        const baseUrl =
+            window.location.origin +
+            (flywaveIndex !== -1 ? pathParts.slice(0, flywaveIndex + 1).join("/") : "");
+
+        // 设置 iframe 内容
+        const iframeContent = `
       <!DOCTYPE html>
       <html style="width:100%; height:100%; margin:0; padding:0;">
       <head>
@@ -127,30 +129,30 @@ const FlywaveGlobe = () => {
       </html>
     `;
 
-    // 清空容器并添加 iframe
-    const container = containerRef.current;
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
-    }
-    container.appendChild(iframe);
+        // 清空容器并添加 iframe
+        const container = containerRef.current;
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+        container.appendChild(iframe);
 
-    // 写入 iframe 内容
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (iframeDoc) {
-      iframeDoc.open();
-      iframeDoc.write(iframeContent);
-      iframeDoc.close();
-    }
+        // 写入 iframe 内容
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (iframeDoc) {
+            iframeDoc.open();
+            iframeDoc.write(iframeContent);
+            iframeDoc.close();
+        }
 
-    // 清理函数
-    return () => {
-      if (container.firstChild === iframe) {
-        container.removeChild(iframe);
-      }
-    };
-  }, []);
+        // 清理函数
+        return () => {
+            if (container.firstChild === iframe) {
+                container.removeChild(iframe);
+            }
+        };
+    }, []);
 
-  return <div ref={containerRef} className="globe-container" />;
+    return <div ref={containerRef} className="globe-container" />;
 };
 
 export default FlywaveGlobe;

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type QPoint3dList } from "../../../common";
 import { type Point3d, type Range3d } from "../../../core-geometry";
 

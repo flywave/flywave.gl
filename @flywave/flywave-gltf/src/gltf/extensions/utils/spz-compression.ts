@@ -1,9 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { loadSpz } from '@spz-loader/core';
+import { loadSpz } from "@spz-loader/core";
 import { GLTFScenegraph } from "../../api/gltf-scenegraph";
 import type { GLTFMeshPrimitive } from "../../types/gltf-json-schema";
-import { MathUtils } from 'three';
+import { MathUtils } from "three";
 
 export const EXT_SPZ_COMPRESSION = "KHR_gaussian_splatting_compression_spz_2";
 
@@ -36,7 +36,7 @@ export interface SPZDecompressionResult {
         degree: number;
     };
 }
- 
+
 // SPZ 解压器
 export class SPZDecompressor {
     /**
@@ -50,7 +50,7 @@ export class SPZDecompressor {
     ): Promise<SPZDecompressionResult> {
         const { mergeAlphaToColor = true, preserveSHData = true } = options;
 
-        console.log('Starting SPZ decompression...');
+        console.log("Starting SPZ decompression...");
 
         // 验证扩展数据
         this.validateExtension(spzExtension);
@@ -80,7 +80,7 @@ export class SPZDecompressor {
         await this.validateCreatedAccessors(scenegraph, attributes);
 
         // 处理球谐系数
-        let sphericalHarmonics: SPZDecompressionResult['sphericalHarmonics'] = undefined;
+        let sphericalHarmonics: SPZDecompressionResult["sphericalHarmonics"] = undefined;
         if (spzData.sh && preserveSHData) {
             sphericalHarmonics = await this.handleSphericalHarmonics(
                 scenegraph,
@@ -89,7 +89,7 @@ export class SPZDecompressor {
             );
         }
 
-        console.log('SPZ decompression completed successfully');
+        console.log("SPZ decompression completed successfully");
 
         return {
             vertexCount,
@@ -103,7 +103,7 @@ export class SPZDecompressor {
      */
     private static async validateCreatedAccessors(
         scenegraph: GLTFScenegraph,
-        attributes: SPZDecompressionResult['attributes']
+        attributes: SPZDecompressionResult["attributes"]
     ): Promise<void> {
         const expectedTypes = {
             POSITION: "VEC3",
@@ -124,7 +124,9 @@ export class SPZDecompressor {
                     expected: expectedType,
                     actual: accessor.type
                 });
-                throw new Error(`Attribute type mismatch for ${attrName}. Expected ${expectedType}, found ${accessor.type}`);
+                throw new Error(
+                    `Attribute type mismatch for ${attrName}. Expected ${expectedType}, found ${accessor.type}`
+                );
             }
         }
     }
@@ -133,12 +135,12 @@ export class SPZDecompressor {
      * 验证 SPZ 扩展数据
      */
     private static validateExtension(extension: any): void {
-        if (typeof extension.bufferView !== 'number') {
-            throw new Error('SPZ extension must have a valid bufferView index');
+        if (typeof extension.bufferView !== "number") {
+            throw new Error("SPZ extension must have a valid bufferView index");
         }
 
         if (extension.bufferView < 0) {
-            throw new Error('SPZ extension bufferView index cannot be negative');
+            throw new Error("SPZ extension bufferView index cannot be negative");
         }
     }
 
@@ -148,7 +150,7 @@ export class SPZDecompressor {
     private static validateDecompressedData(spzData: SPZData): void {
         // 验证必需数据存在
         if (!spzData.positions || !spzData.colors || !spzData.scales || !spzData.rotations) {
-            throw new Error('SPZ data missing required fields');
+            throw new Error("SPZ data missing required fields");
         }
 
         // 验证数据长度一致性
@@ -158,7 +160,9 @@ export class SPZDecompressor {
         const rotationCount = spzData.rotations.length;
 
         if (positionCount % 3 !== 0) {
-            throw new Error(`Invalid positions data length: ${positionCount} (must be multiple of 3)`);
+            throw new Error(
+                `Invalid positions data length: ${positionCount} (must be multiple of 3)`
+            );
         }
         if (colorCount % 3 !== 0) {
             throw new Error(`Invalid colors data length: ${colorCount} (must be multiple of 3)`);
@@ -167,7 +171,9 @@ export class SPZDecompressor {
             throw new Error(`Invalid scales data length: ${scaleCount} (must be multiple of 3)`);
         }
         if (rotationCount % 4 !== 0) {
-            throw new Error(`Invalid rotations data length: ${rotationCount} (must be multiple of 4)`);
+            throw new Error(
+                `Invalid rotations data length: ${rotationCount} (must be multiple of 4)`
+            );
         }
 
         const vertexCountFromPositions = positionCount / 3;
@@ -177,23 +183,33 @@ export class SPZDecompressor {
 
         // 验证顶点数一致性
         if (vertexCountFromColors !== vertexCountFromPositions) {
-            throw new Error(`Vertex count mismatch: positions=${vertexCountFromPositions}, colors=${vertexCountFromColors}`);
+            throw new Error(
+                `Vertex count mismatch: positions=${vertexCountFromPositions}, colors=${vertexCountFromColors}`
+            );
         }
         if (vertexCountFromScales !== vertexCountFromPositions) {
-            throw new Error(`Vertex count mismatch: positions=${vertexCountFromPositions}, scales=${vertexCountFromScales}`);
+            throw new Error(
+                `Vertex count mismatch: positions=${vertexCountFromPositions}, scales=${vertexCountFromScales}`
+            );
         }
         if (vertexCountFromRotations !== vertexCountFromPositions) {
-            throw new Error(`Vertex count mismatch: positions=${vertexCountFromPositions}, rotations=${vertexCountFromRotations}`);
+            throw new Error(
+                `Vertex count mismatch: positions=${vertexCountFromPositions}, rotations=${vertexCountFromRotations}`
+            );
         }
 
         // 验证透明度数据（如果存在）
         if (spzData.alphas && spzData.alphas.length !== vertexCountFromPositions) {
-            throw new Error(`Alpha data length mismatch: ${spzData.alphas.length} != ${vertexCountFromPositions}`);
+            throw new Error(
+                `Alpha data length mismatch: ${spzData.alphas.length} != ${vertexCountFromPositions}`
+            );
         }
 
         // 验证球谐系数数据（如果存在）
         if (spzData.sh && spzData.sh.length % vertexCountFromPositions !== 0) {
-            throw new Error(`Spherical harmonics data length invalid: ${spzData.sh.length} for ${vertexCountFromPositions} vertices`);
+            throw new Error(
+                `Spherical harmonics data length invalid: ${spzData.sh.length} for ${vertexCountFromPositions} vertices`
+            );
         }
     }
 
@@ -213,7 +229,10 @@ export class SPZDecompressor {
     /**
      * 获取压缩数据
      */
-    private static getCompressedData(scenegraph: GLTFScenegraph, bufferViewIndex: number): Uint8Array {
+    private static getCompressedData(
+        scenegraph: GLTFScenegraph,
+        bufferViewIndex: number
+    ): Uint8Array {
         const bufferView = scenegraph.getBufferView(bufferViewIndex);
         if (!bufferView) {
             throw new Error(`Invalid bufferView index: ${bufferViewIndex}`);
@@ -248,8 +267,13 @@ export class SPZDecompressor {
             const gaussianCloud = await loadSpz(arrayBuffer);
 
             // 验证解码结果
-            if (!gaussianCloud.positions || !gaussianCloud.colors || !gaussianCloud.scales || !gaussianCloud.rotations) {
-                throw new Error('Invalid SPZ decoding result: missing required fields');
+            if (
+                !gaussianCloud.positions ||
+                !gaussianCloud.colors ||
+                !gaussianCloud.scales ||
+                !gaussianCloud.rotations
+            ) {
+                throw new Error("Invalid SPZ decoding result: missing required fields");
             }
 
             return {
@@ -261,7 +285,7 @@ export class SPZDecompressor {
                 sh: gaussianCloud.sh
             };
         } catch (error) {
-            console.error('SPZ decoding failed:', error);
+            console.error("SPZ decoding failed:", error);
             throw new Error(`SPZ decoding failed: ${error.message}`);
         }
     }
@@ -274,16 +298,32 @@ export class SPZDecompressor {
         spzData: SPZData,
         vertexCount: number,
         options: SPZDecompressionOptions
-    ): Promise<SPZDecompressionResult['attributes']> {
+    ): Promise<SPZDecompressionResult["attributes"]> {
         // 处理颜色数据（可能包含透明度）
-        const colorData = await this.prepareColorData(spzData, vertexCount, options.mergeAlphaToColor);
+        const colorData = await this.prepareColorData(
+            spzData,
+            vertexCount,
+            options.mergeAlphaToColor
+        );
 
         // 创建所有必需的属性 - 使用标准的属性名称
         const attributes = {
-            POSITION: this.createFloatAttribute(scenegraph, spzData.positions, "VEC3", 3, vertexCount),
+            POSITION: this.createFloatAttribute(
+                scenegraph,
+                spzData.positions,
+                "VEC3",
+                3,
+                vertexCount
+            ),
             COLOR_0: this.createColorAttribute(scenegraph, colorData, vertexCount),
             _SCALE: this.createFloatAttribute(scenegraph, spzData.scales, "VEC3", 3, vertexCount),
-            _ROTATION: this.createFloatAttribute(scenegraph, spzData.rotations, "VEC4", 4, vertexCount)
+            _ROTATION: this.createFloatAttribute(
+                scenegraph,
+                spzData.rotations,
+                "VEC4",
+                4,
+                vertexCount
+            )
         };
 
         return attributes;
@@ -302,17 +342,17 @@ export class SPZDecompressor {
         if (spzData.alphas && mergeAlphaToColor) {
             // 创建带透明度的颜色数据，使用钳制转换
             for (let i = 0; i < vertexCount; i++) {
-                colorsWithAlpha[i * 4] = MathUtils.clamp(spzData.colors[i * 3], 0, 1) * 255;          // R
-                colorsWithAlpha[i * 4 + 1] = MathUtils.clamp(spzData.colors[i * 3 + 1], 0, 1) * 255;  // G
-                colorsWithAlpha[i * 4 + 2] = MathUtils.clamp(spzData.colors[i * 3 + 2], 0, 1) * 255;  // B
-                colorsWithAlpha[i * 4 + 3] = MathUtils.clamp(spzData.alphas[i], 0, 1) * 255;          // A
+                colorsWithAlpha[i * 4] = MathUtils.clamp(spzData.colors[i * 3], 0, 1) * 255; // R
+                colorsWithAlpha[i * 4 + 1] = MathUtils.clamp(spzData.colors[i * 3 + 1], 0, 1) * 255; // G
+                colorsWithAlpha[i * 4 + 2] = MathUtils.clamp(spzData.colors[i * 3 + 2], 0, 1) * 255; // B
+                colorsWithAlpha[i * 4 + 3] = MathUtils.clamp(spzData.alphas[i], 0, 1) * 255; // A
             }
         } else {
             // 如果没有透明度或不需要合并，将 RGB 转换为 RGBA
             for (let i = 0; i < vertexCount; i++) {
-                colorsWithAlpha[i * 4] = MathUtils.clamp(spzData.colors[i * 3], 0, 1) * 255;          // R
-                colorsWithAlpha[i * 4 + 1] = MathUtils.clamp(spzData.colors[i * 3 + 1], 0, 1) * 255;  // G
-                colorsWithAlpha[i * 4 + 2] = MathUtils.clamp(spzData.colors[i * 3 + 2], 0, 1) * 255;  // B
+                colorsWithAlpha[i * 4] = MathUtils.clamp(spzData.colors[i * 3], 0, 1) * 255; // R
+                colorsWithAlpha[i * 4 + 1] = MathUtils.clamp(spzData.colors[i * 3 + 1], 0, 1) * 255; // G
+                colorsWithAlpha[i * 4 + 2] = MathUtils.clamp(spzData.colors[i * 3 + 2], 0, 1) * 255; // B
                 colorsWithAlpha[i * 4 + 3] = 255; // 默认不透明度为 1 (255)
             }
         }
@@ -330,13 +370,15 @@ export class SPZDecompressor {
     ): number {
         const components = 4; // RGBA
         const actualCount = data.length / components;
-        
+
         if (actualCount !== vertexCount) {
-            throw new Error(`Color data count mismatch: expected ${vertexCount}, got ${actualCount}`);
+            throw new Error(
+                `Color data count mismatch: expected ${vertexCount}, got ${actualCount}`
+            );
         }
 
         const bufferViewIndex = scenegraph.addBufferView(data);
-        
+
         const accessorData = {
             bufferView: bufferViewIndex,
             size: components,
@@ -364,11 +406,15 @@ export class SPZDecompressor {
         // 验证数据长度
         const actualCount = data.length / components;
         if (!Number.isInteger(actualCount) || actualCount !== expectedCount) {
-            throw new Error(`Data count mismatch for ${type}: expected ${expectedCount}, got ${actualCount}`);
+            throw new Error(
+                `Data count mismatch for ${type}: expected ${expectedCount}, got ${actualCount}`
+            );
         }
 
         if (data.length % components !== 0) {
-            throw new Error(`Data length ${data.length} is not a multiple of components ${components}`);
+            throw new Error(
+                `Data length ${data.length} is not a multiple of components ${components}`
+            );
         }
 
         const bufferViewIndex = this.createAlignedBufferView(scenegraph, data);
@@ -407,7 +453,9 @@ export class SPZDecompressor {
             if (scenegraph.json.accessors && scenegraph.json.accessors[accessorIndex]) {
                 scenegraph.json.accessors[accessorIndex].type = expectedType;
             } else {
-                throw new Error(`Cannot fix accessor type: accessor not found at index ${accessorIndex}`);
+                throw new Error(
+                    `Cannot fix accessor type: accessor not found at index ${accessorIndex}`
+                );
             }
         }
 
@@ -437,7 +485,10 @@ export class SPZDecompressor {
     /**
      * 计算最小最大值
      */
-    private static calculateMinMax(data: Float32Array, components: number): { min: number[]; max: number[] } {
+    private static calculateMinMax(
+        data: Float32Array,
+        components: number
+    ): { min: number[]; max: number[] } {
         const min = new Array(components).fill(Infinity);
         const max = new Array(components).fill(-Infinity);
 
@@ -468,15 +519,23 @@ export class SPZDecompressor {
         scenegraph: GLTFScenegraph,
         shData: Float32Array,
         vertexCount: number
-    ): Promise<SPZDecompressionResult['sphericalHarmonics']> {
+    ): Promise<SPZDecompressionResult["sphericalHarmonics"]> {
         const shComponents = 3; // RGB 三个通道分别存储球谐系数
         const coefficientsPerVertex = shData.length / vertexCount;
 
         if (coefficientsPerVertex % shComponents !== 0) {
-            throw new Error(`Invalid spherical harmonics data: ${coefficientsPerVertex} coefficients per vertex`);
+            throw new Error(
+                `Invalid spherical harmonics data: ${coefficientsPerVertex} coefficients per vertex`
+            );
         }
 
-        const shAccessorIndex = this.createFloatAttribute(scenegraph, shData, "VEC3", shComponents, vertexCount * (coefficientsPerVertex / shComponents));
+        const shAccessorIndex = this.createFloatAttribute(
+            scenegraph,
+            shData,
+            "VEC3",
+            shComponents,
+            vertexCount * (coefficientsPerVertex / shComponents)
+        );
 
         return {
             accessor: shAccessorIndex,
@@ -493,9 +552,11 @@ export class SPZDecompressor {
 
         for (const attrName in primitive.attributes) {
             // 移除所有扩展相关的属性
-            if (attrName.startsWith('KHR_gaussian_splatting:') ||
-                attrName.startsWith('SH_DEGREE_') ||
-                attrName.startsWith('SH_COEFFS_')) {
+            if (
+                attrName.startsWith("KHR_gaussian_splatting:") ||
+                attrName.startsWith("SH_DEGREE_") ||
+                attrName.startsWith("SH_COEFFS_")
+            ) {
                 attributesToRemove.push(attrName);
             }
         }
@@ -514,7 +575,7 @@ export class SPZDecompressor {
 
         for (const attrName in primitive.attributes) {
             const accessorIndex = primitive.attributes[attrName];
-            if (typeof accessorIndex === 'number' && accessorIndex >= 0) {
+            if (typeof accessorIndex === "number" && accessorIndex >= 0) {
                 validAttributes.push(attrName);
             } else {
                 invalidAttributes.push(attrName);
@@ -538,7 +599,12 @@ export async function decompressSPZ(
         // 首先清理 primitive 的现有属性，避免重复
         SPZDecompressor.cleanPrimitiveAttributes(primitive);
 
-        const result = await SPZDecompressor.decompress(scenegraph, primitive, spzExtension, options);
+        const result = await SPZDecompressor.decompress(
+            scenegraph,
+            primitive,
+            spzExtension,
+            options
+        );
 
         // 只设置标准的属性，避免扩展前缀
         Object.assign(primitive.attributes, result.attributes);
@@ -554,17 +620,17 @@ export async function decompressSPZ(
         // 验证最终属性设置
         SPZDecompressor.validateFinalAttributes(primitive);
     } catch (error) {
-        console.error('SPZ decompression failed:', error);
+        console.error("SPZ decompression failed:", error);
         throw error;
     }
 }
 
 export function validateSPZExtension(extension: any): void {
-    if (typeof extension.bufferView !== 'number') {
-        throw new Error('SPZ extension must have a valid bufferView index');
+    if (typeof extension.bufferView !== "number") {
+        throw new Error("SPZ extension must have a valid bufferView index");
     }
 
     if (extension.bufferView < 0) {
-        throw new Error('SPZ extension bufferView index cannot be negative');
+        throw new Error("SPZ extension bufferView index cannot be negative");
     }
 }

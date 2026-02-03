@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { JsonUtils } from "../utils";
 import { type ColorDefProps, ColorDef } from "./color-def";
 import { LinePixels } from "./line-pixels";

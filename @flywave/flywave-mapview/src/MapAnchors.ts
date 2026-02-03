@@ -11,9 +11,9 @@ import {
 import { type GeoCoordLike } from "@flywave/flywave-geoutils/coordinates/GeoCoordLike";
 import * as THREE from "three";
 
-declare module "three"{
+declare module "three" {
     interface Object3D {
-        anchor?: GeoCoordLike | Vector3Like|GeoCoordinates;
+        anchor?: GeoCoordLike | Vector3Like | GeoCoordinates;
     }
 }
 /**

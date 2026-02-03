@@ -69,7 +69,7 @@ class ElevationProvider implements InnerElevationProvider {
      *
      * @param dataSource - The DEM terrain data source to use for elevation data
      */
-    constructor(private readonly dataSource: DEMTerrainSource) { }
+    constructor(private readonly dataSource: DEMTerrainSource) {}
 
     /**
      * Gets the elevation at a specific geographic point along with the tile key
@@ -93,7 +93,10 @@ class ElevationProvider implements InnerElevationProvider {
             return { altitude: defaultIfNotLoaded, tileKey: undefined };
         }
 
-        let normaledGeoPoint = new GeoCoordinates(geoPoint.latitude, geoPoint.longitude  - 360 * Math.floor((geoPoint.longitude + 180) / 360));
+        let normaledGeoPoint = new GeoCoordinates(
+            geoPoint.latitude,
+            geoPoint.longitude - 360 * Math.floor((geoPoint.longitude + 180) / 360)
+        );
 
         const minLevel = this.dataSource.dataProvider().getMinZoom();
         level = Math.max(minLevel, level || minLevel);
@@ -103,9 +106,10 @@ class ElevationProvider implements InnerElevationProvider {
             .getBestAvailableResourceTile(
                 TileKeyUtils.geoCoordinatesToTileKey(
                     webMercatorTerrainTilingScheme,
-                   normaledGeoPoint,
+                    normaledGeoPoint,
                     Math.max(level, this.dataSource.dataProvider().getMaxZoom())
-                ), false
+                ),
+                false
             );
 
         if (!(demTile && demTile.resource)) {

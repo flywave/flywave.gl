@@ -44,7 +44,12 @@ describe("NearPlaneFix", function () {
         camera.position.set(0, 0, EarthConstants.EQUATORIAL_RADIUS + altitude);
         camera.lookAt(1000000, 1000000, 0); // Looking at an angle, not directly down
 
-        const viewRanges = evaluator.evaluateClipPlanes(camera, sphericalProjection,undefined,true);
+        const viewRanges = evaluator.evaluateClipPlanes(
+            camera,
+            sphericalProjection,
+            undefined,
+            true
+        );
 
         console.log(`Camera altitude: ${altitude}`);
         console.log(`Calculated near plane: ${viewRanges.near}`);
@@ -63,7 +68,12 @@ describe("NearPlaneFix", function () {
         camera.position.set(0, 0, EarthConstants.EQUATORIAL_RADIUS + extremeAltitude);
         camera.lookAt(5000000, 5000000, 0); // Looking at a steep angle
 
-        const viewRanges = evaluator.evaluateClipPlanes(camera, sphericalProjection,undefined,true);
+        const viewRanges = evaluator.evaluateClipPlanes(
+            camera,
+            sphericalProjection,
+            undefined,
+            true
+        );
 
         console.log(`Extreme camera altitude: ${extremeAltitude}`);
         console.log(`Calculated near plane: ${viewRanges.near}`);
@@ -81,7 +91,7 @@ describe("NearPlaneFix", function () {
         camera.position.set(0, 0, altitude);
         camera.lookAt(500, 500, 0); // Looking at an angle, not directly down
 
-        const viewRanges = evaluator.evaluateClipPlanes(camera, planarProjection,undefined,true);
+        const viewRanges = evaluator.evaluateClipPlanes(camera, planarProjection, undefined, true);
 
         console.log(`Camera altitude (planar): ${altitude}`);
         console.log(`Calculated near plane: ${viewRanges.near}`);
@@ -108,7 +118,12 @@ describe("NearPlaneFix", function () {
         camera.position.set(0, 0, EarthConstants.EQUATORIAL_RADIUS + altitude);
         camera.lookAt(10000, 10000, 0);
 
-        const viewRanges = extremeEvaluator.evaluateClipPlanes(camera, sphericalProjection,undefined,true);
+        const viewRanges = extremeEvaluator.evaluateClipPlanes(
+            camera,
+            sphericalProjection,
+            undefined,
+            true
+        );
 
         console.log(`Extreme configuration test:`);
         console.log(`  near: ${viewRanges.near}`);

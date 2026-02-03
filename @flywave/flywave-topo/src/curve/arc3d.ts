@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type Clipper } from "../clipping/clip-utils";
 import {
     type BeJSONFunctions,

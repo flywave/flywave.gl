@@ -37,8 +37,8 @@ export class PlanarCameraTransform extends CameraTransform {
     }
 
     public pan(
-        rayHitPoint: Vector3,  // 射线命中点（原参数 rayTargetPoint/[x,w,u]）
-        targetPosition: Vector3,// 目标位置（原参数 moveToTargetPoint/F）
+        rayHitPoint: Vector3, // 射线命中点（原参数 rayTargetPoint/[x,w,u]）
+        targetPosition: Vector3, // 目标位置（原参数 moveToTargetPoint/F）
         inertiaVector: Vector4, // 惯性向量（原参数 inertialAxis/E）
         interpolationStep: number // 插值步长（原参数 step/r）
     ): void {

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type GeometryQuery } from "../curve/geometry-query";
 import { BGFBReader } from "./bgfb-reader";
 import { BGFBWriter } from "./bgfb-writer";

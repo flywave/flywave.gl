@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type OctEncodedNormalPair } from "./oct-encoded-normal";
 
 // cSpell:ignore vals

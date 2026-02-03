@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type RgbColor, ColorDef } from "../common";
 
 function clamp(norm: number): number {

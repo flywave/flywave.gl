@@ -9,7 +9,7 @@ import {
     Texture,
     Camera,
     IUniform
-} from 'three';
+} from "three";
 
 export interface GroundPrimitiveMaterialParameters {
     color?: Color | string | number;
@@ -112,8 +112,8 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
             stencilRef: parameters.stencilReference ?? GroundPrimitiveMaterial.STENCIL_BOTH_MASK,
             stencilFuncMask: parameters.stencilMask ?? GroundPrimitiveMaterial.STENCIL_BOTH_MASK,
             stencilFail: 7680, // THREE.KeepStencilOp
-            stencilZFail: 7680, // THREE.KeepStencilOp,  
-            stencilZPass: 7680, // THREE.KeepStencilOp
+            stencilZFail: 7680, // THREE.KeepStencilOp,
+            stencilZPass: 7680 // THREE.KeepStencilOp
         });
 
         this.setValues(parameters);
@@ -303,11 +303,7 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
     }
 
     setVolumeBounds(bounds: VolumeBounds): this {
-        this.uniforms.volumeBounds.value.set(
-            bounds.minHeight,
-            bounds.maxHeight,
-            bounds.radius
-        );
+        this.uniforms.volumeBounds.value.set(bounds.minHeight, bounds.maxHeight, bounds.radius);
         this.uniforms.volumeCenter.value.copy(bounds.center);
         return this;
     }
@@ -353,7 +349,7 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
 }
 
 // 为Three.js的类型系统注册自定义属性
-declare module 'three' {
+declare module "three" {
     interface ShaderMaterial {
         // 确保类型兼容性
         uniforms: { [key: string]: IUniform };

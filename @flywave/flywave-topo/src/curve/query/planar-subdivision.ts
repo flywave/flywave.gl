@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../../geometry";
 import { type Point3d } from "../../geometry3d/point3d-vector3d";
 import { type HalfEdge, HalfEdgeGraph } from "../../topology/graph";

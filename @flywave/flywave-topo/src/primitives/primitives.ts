@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type GraphicBuilder } from "../render/graphic-builder";
 import { assert, SortedArray } from "../utils";
 

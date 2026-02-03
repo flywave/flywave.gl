@@ -145,16 +145,14 @@ export abstract class TerrainTileLoader<
         this.tile.clearTextElements();
         if (this.dataSource.showDebugInfo) {
             let debugTextElement = new TextElement(
-                 `row:${this.tile.tileKey.row} \n col:${this.tile.tileKey.column}\n level:${this.tile.tileKey.level}`,
+                `row:${this.tile.tileKey.row} \n col:${this.tile.tileKey.column}\n level:${this.tile.tileKey.level}`,
                 this.tile.center,
                 {
                     color: new Color(0xff0000)
                 },
                 {}
             );
-            this.tile.addTextElement(
-                debugTextElement
-            );
+            this.tile.addTextElement(debugTextElement);
         }
     }
 

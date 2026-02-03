@@ -407,7 +407,7 @@ function createSplatMesh(
     setSplatAttribute("scale", "_SCALE", 3);
     setSplatAttribute("rotation", "_ROTATION", 4);
     setSplatAttribute("color", "COLOR_0", 4, true);
-    geometry.copy(splatGeometry)
+    geometry.copy(splatGeometry);
 
     const splatMesh = new SplatMesh();
 
@@ -851,8 +851,8 @@ function createAnimationTrack(
         sampler.interpolation === "STEP"
             ? InterpolateDiscrete
             : sampler.interpolation === "CUBICSPLINE"
-                ? InterpolateSmooth
-                : InterpolateLinear
+            ? InterpolateSmooth
+            : InterpolateLinear
     );
 
     return track;

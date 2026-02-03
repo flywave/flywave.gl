@@ -1,7 +1,13 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type ViewRanges } from "@flywave/flywave-datasource-protocol/ViewRanges";
-import { type Projection, EarthConstants, EllipsoidProjection, ProjectionType, SphereProjection } from "@flywave/flywave-geoutils";
+import {
+    type Projection,
+    EarthConstants,
+    EllipsoidProjection,
+    ProjectionType,
+    SphereProjection
+} from "@flywave/flywave-geoutils";
 import { assert } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
@@ -157,7 +163,14 @@ namespace SphericalProj {
     ): number | undefined {
         raycaster.setFromCamera(ndcDir, camera);
         let intersection: THREE.Vector3 | null = new THREE.Vector3();
-        if (projection.rayCast(intersection, raycaster.ray.origin, tmpVectors[0].addVectors(camera.position, raycaster.ray.direction), R) > -1) {
+        if (
+            projection.rayCast(
+                intersection,
+                raycaster.ray.origin,
+                tmpVectors[0].addVectors(camera.position, raycaster.ray.direction),
+                R
+            ) > -1
+        ) {
             intersection = null;
         }
 
@@ -165,7 +178,6 @@ namespace SphericalProj {
             ? intersection.sub(camera.position).dot(camera.getWorldDirection(tmpVectors[1]))
             : undefined;
     }
-
 
     /**
      * Calculate angle between forward vector and surface normal at camera position.
@@ -392,9 +404,19 @@ export class TopViewClipPlanesEvaluator extends ElevationBasedClipPlanesEvaluato
         assert(camera instanceof THREE.PerspectiveCamera, "Unsupported camera type.");
         const persCamera = camera as THREE.PerspectiveCamera;
         if (projection.type === ProjectionType.Spherical) {
-            return this.evaluateDistanceSphericalProj(persCamera, projection, elevationProvider, useLogarithmicDepth);
+            return this.evaluateDistanceSphericalProj(
+                persCamera,
+                projection,
+                elevationProvider,
+                useLogarithmicDepth
+            );
         } else if (projection.type === ProjectionType.Planar) {
-            return this.evaluateDistancePlanarProj(persCamera, projection, elevationProvider, useLogarithmicDepth);
+            return this.evaluateDistancePlanarProj(
+                persCamera,
+                projection,
+                elevationProvider,
+                useLogarithmicDepth
+            );
         }
         assert(false, "Unsupported projection type");
         return { ...this.minimumViewRange };
@@ -680,7 +702,13 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         // far = cos(halfFov) * topDist
         viewRanges.far = topDist * Math.cos(topFov);
 
-        return this.applyViewRangeConstraints(viewRanges, camera, projection, elevationProvider, useLogarithmicDepth);
+        return this.applyViewRangeConstraints(
+            viewRanges,
+            camera,
+            projection,
+            elevationProvider,
+            useLogarithmicDepth
+        );
     }
 
     /** @override */
@@ -693,10 +721,20 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         assert(projection.type === ProjectionType.Spherical);
         const viewRanges = { ...this.minimumViewRange };
 
-        viewRanges.near = this.computeNearDistSphericalProj(camera, projection, useLogarithmicDepth);
+        viewRanges.near = this.computeNearDistSphericalProj(
+            camera,
+            projection,
+            useLogarithmicDepth
+        );
         viewRanges.far = this.computeFarDistSphericalProj(camera, projection, useLogarithmicDepth);
 
-        return this.applyViewRangeConstraints(viewRanges, camera, projection, elevationProvider, useLogarithmicDepth);
+        return this.applyViewRangeConstraints(
+            viewRanges,
+            camera,
+            projection,
+            elevationProvider,
+            useLogarithmicDepth
+        );
     }
 
     private computeNearDistSphericalProj(
@@ -740,11 +778,11 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         );
         const topDist = checkTopIntersection
             ? SphericalProj.getProjSphereIntersectionDistance(
-                camera,
-                this.m_tmpV2.setComponent(1, 1),
-                this.maxElevation,
-                projection as SphereProjection
-            )
+                  camera,
+                  this.m_tmpV2.setComponent(1, 1),
+                  this.maxElevation,
+                  projection as SphereProjection
+              )
             : Infinity;
         const near = Math.min(bottomDist ?? Infinity, topDist ?? Infinity);
         if (near == Infinity) return defaultNear;
@@ -780,11 +818,11 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         );
         const bottomDist = checkBottomIntersection
             ? SphericalProj.getProjSphereIntersectionDistance(
-                camera,
-                this.m_tmpV2.set(ndcX, -1),
-                this.maxElevation,
-                projection as SphereProjection
-            )
+                  camera,
+                  this.m_tmpV2.set(ndcX, -1),
+                  this.maxElevation,
+                  projection as SphereProjection
+              )
             : 0;
         const largestDist = Math.max(topDist ?? Infinity, bottomDist ?? Infinity);
         if (largestDist !== Infinity) {
@@ -817,11 +855,11 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
 
         // 根据是否使用对数深度缓冲调整约束
         const farMax = useLogarithmicDepth
-            ? distance * this.farMaxRatio * 10  // 对数深度下可以设置更大的 far 值
+            ? distance * this.farMaxRatio * 10 // 对数深度下可以设置更大的 far 值
             : distance * this.farMaxRatio;
 
         const nearMin = useLogarithmicDepth
-            ? Math.max(this.nearMin, 0.001)     // 对数深度下可以使用更小的 near 值
+            ? Math.max(this.nearMin, 0.001) // 对数深度下可以使用更小的 near 值
             : this.nearMin;
 
         // Apply the constraints.
@@ -830,16 +868,14 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
 
         // 对数深度下可以减少边距要求
         const marginRatio = useLogarithmicDepth
-            ? this.nearFarMarginRatio * 0.5  // 减少边距比例
+            ? this.nearFarMarginRatio * 0.5 // 减少边距比例
             : this.nearFarMarginRatio;
 
         const nearFarMargin = (marginRatio * (viewRanges.near + viewRanges.far)) / 2;
 
-        viewRanges.near = Math.max(viewRanges.near - nearFarMargin / 2, nearMin)/2;
-        viewRanges.far = Math.max(
-            viewRanges.far + nearFarMargin / 2,
-            viewRanges.near + nearFarMargin
-        )*2.0;
+        viewRanges.near = Math.max(viewRanges.near - nearFarMargin / 2, nearMin) / 2;
+        viewRanges.far =
+            Math.max(viewRanges.far + nearFarMargin / 2, viewRanges.near + nearFarMargin) * 2.0;
 
         // Set minimum and maximum view range.
         viewRanges.minimum = nearMin;

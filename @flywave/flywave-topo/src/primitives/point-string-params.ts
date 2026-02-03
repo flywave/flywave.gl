@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type PointStringParams } from "../common/render/primitives/point-string-params";
 import { VertexIndices } from "../common/render/primitives/vertex-indices";
 import { assert } from "../utils";

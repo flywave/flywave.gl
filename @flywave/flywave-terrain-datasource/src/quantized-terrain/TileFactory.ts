@@ -81,7 +81,7 @@ export class QuantizedStratumTileFactory extends TileFactory<TerrainResourceTile
             resourceTile = new TerrainResourceTile(dataSource as QuantizedStratumSource, tileKey);
             dataSource.cacheTile(resourceTile);
         }
-        
+
         let shadowTile = new ShadowTerrainResourceTile(dataSource, tileKey, resourceTile);
         shadowTile.tileLoader = new QuantizedStratumTileLoader(dataSource, shadowTile);
         (shadowTile.tileLoader as QuantizedStratumTileLoader).updateView();

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { BSplineCurve3d } from "../bspline/bspline-curve";
 import { Arc3d } from "../curve/arc3d";
 import { CurveCollection } from "../curve/curve-collection";

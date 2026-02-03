@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Vector3d } from "../geometry3d/point3d-vector3d";
 import { type XYAndZ } from "../geometry3d/xyz-props";
 

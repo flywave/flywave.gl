@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { LineString3d } from "../curve/line-string3d";
 import { type GeometryHandler } from "../geometry3d/geometry-handler";
 import { Plane3dByOriginAndVectors } from "../geometry3d/plane3d-by-origin-and-vectors";

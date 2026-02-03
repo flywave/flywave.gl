@@ -346,11 +346,9 @@ export const GroundAtmosphereShader: THREE.ShaderMaterialParameters = {
     `
 };
 
-export interface GroundAtmosphereMaterialParameters extends RendererMaterialParameters {
-}
+export interface GroundAtmosphereMaterialParameters extends RendererMaterialParameters {}
 
 export class GroundAtmosphereMaterial extends RawShaderMaterial {
-
     /**
      * Constructs a new `GroundAtmosphereMaterial`.
      *
@@ -379,7 +377,6 @@ export class GroundAtmosphereMaterial extends RawShaderMaterial {
         }
         super(shaderParams);
     }
-
 
     setDynamicLighting(enableLighting: boolean) {
         setShaderMaterialDefine(this, "DYNAMIC_LIGHT", enableLighting);

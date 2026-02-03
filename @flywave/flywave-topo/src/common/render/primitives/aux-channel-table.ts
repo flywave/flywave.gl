@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { OctEncodedNormal, QParams3d, QPoint3d, Quantization } from "../../../common";
 import {
     type AuxChannel as PolyfaceAuxChannel,

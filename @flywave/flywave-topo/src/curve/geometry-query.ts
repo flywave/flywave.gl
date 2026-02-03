@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type BSpline2dNd } from "../bspline/bspline-surface";
 import { type GeometryHandler } from "../geometry3d/geometry-handler";
 import { Range3d } from "../geometry3d/range";

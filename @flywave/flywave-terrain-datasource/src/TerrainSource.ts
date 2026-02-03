@@ -45,10 +45,17 @@ import {
     GroundOverlayProvider
 } from "./ground-overlay-provider";
 import { type IResourceProvider } from "./ResourceProvider";
-import { ProjectionSwitchController, type ProjectionSwitchOptions } from "./ProjectionSwitchController";
+import {
+    ProjectionSwitchController,
+    type ProjectionSwitchOptions
+} from "./ProjectionSwitchController";
 import { TileLRUCache, TileResourceManager } from "./TileResourceManager";
 import { type WebTileLoaderOptions, WebImageryTileProvider } from "./WebImageryTileProvider";
-import { GeographicStandardTilingTileGeometryBuilder, TileGeometryBuilder, WebMercatorTileGeometryBuilder } from "@flywave/flywave-geometry";
+import {
+    GeographicStandardTilingTileGeometryBuilder,
+    TileGeometryBuilder,
+    WebMercatorTileGeometryBuilder
+} from "@flywave/flywave-geometry";
 
 /**
  * Configuration options for TerrainSource
@@ -69,7 +76,6 @@ export interface TerrainSourceOptions<DataProviderType extends DataProvider = Da
 
     /** Options for projection switching animation */
     projectionSwitchOptions?: ProjectionSwitchOptions;
-
 
     /**
      * Number of progressive loading stages to split the loading process
@@ -95,7 +101,6 @@ export interface ITerrainSource<ProviderType extends DataProvider = DataProvider
 
     /** Adds a tile to the cache */
     cacheTile(tile: TerrainResourceTile): boolean;
-
 
     /** Enqueues a task for loading tile data asynchronously */
     enqueueTileLoadingTask(
@@ -181,11 +186,10 @@ export class TerrainResourceTile extends Tile {
     }
 }
 
-
 export class ShadowTerrainResourceTile extends TerrainResourceTile {
     constructor(dataSource: DataSource, tileKey: TileKey, private resTile: TerrainResourceTile) {
         super(dataSource, tileKey);
-        this.forceHasGeometry(true)
+        this.forceHasGeometry(true);
     }
 
     get resourceManager() {
@@ -195,7 +199,6 @@ export class ShadowTerrainResourceTile extends TerrainResourceTile {
     removeTileResource(resourceKey: string) {
         this.resTile.removeTileResource(resourceKey);
     }
-
 
     updateVisibilityState(mapView: MapView, frustum?: ExtendedFrustum) {
         this.resTile.updateVisibilityState(mapView, frustum);
@@ -284,11 +287,12 @@ function tileEvictionPriorityComparator(a: TerrainResourceTile, b: TerrainResour
  * Abstract base class for terrain data sources
  */
 export abstract class TerrainSource<
-    DataProviderType extends DataProvider & IResourceProvider,
-    TileType extends TerrainResourceTile = TerrainResourceTile
->
+        DataProviderType extends DataProvider & IResourceProvider,
+        TileType extends TerrainResourceTile = TerrainResourceTile
+    >
     extends TileDataSource<TileType, DataProviderType>
-    implements ITerrainSource<DataProviderType>, TerrainDataSource {
+    implements ITerrainSource<DataProviderType>, TerrainDataSource
+{
     protected readonly m_elevationRangeSource?: ElevationRangeSource;
     protected readonly m_elevationProvider?: ElevationProvider;
     protected m_materialProviders: WebImageryTileProvider[] = [];
@@ -311,15 +315,12 @@ export abstract class TerrainSource<
     /** Number of loading stages for progressive loading */
     protected m_loadingStages: number;
 
-
     constructor(
         tileFactory: TileFactory<TileType>,
         protected options: TerrainSourceOptions<DataProviderType>
     ) {
         super(tileFactory, {
-            tilingScheme:
-                options.tilingScheme ||
-                webMercatorTerrainTilingScheme,
+            tilingScheme: options.tilingScheme || webMercatorTerrainTilingScheme,
             enablePicking: true,
             ...options,
             concurrentDecoderServiceName: TERRAIN_TILE_DECODER_ID
@@ -337,7 +338,10 @@ export abstract class TerrainSource<
 
         this.m_loadingQueue.maxJobs = options.maxJobs || 20;
 
-        this.m_groundOverlayProvider = new GroundOverlayProvider(options.groundOverlayOptions, this);
+        this.m_groundOverlayProvider = new GroundOverlayProvider(
+            options.groundOverlayOptions,
+            this
+        );
 
         this.m_groundOverlayProvider.register(this);
 
@@ -345,7 +349,6 @@ export abstract class TerrainSource<
             this,
             options.projectionSwitchOptions
         );
-
 
         this.m_loadingStages = options.loadingStages ?? 6;
 
@@ -359,22 +362,31 @@ export abstract class TerrainSource<
     protected abstract getTerrainLevelRange(): [number, number] | undefined;
 
     public get tileBaseGeometryBuilder(): TileGeometryBuilder {
-        if (!this.m_tileBaseGeometryBuilder || this.m_tileBaseGeometryBuilder.sphereProjection !== this.projection) {
+        if (
+            !this.m_tileBaseGeometryBuilder ||
+            this.m_tileBaseGeometryBuilder.sphereProjection !== this.projection
+        ) {
             if (this.projection.type === ProjectionType.Spherical) {
                 if (this.getTilingScheme() === webMercatorTerrainTilingScheme) {
-                    this.m_tileBaseGeometryBuilder = new WebMercatorTileGeometryBuilder(this.projection as SphereProjection);
-                }
-                else if (this.getTilingScheme() === geographicTerrainStandardTiling) {
-                    this.m_tileBaseGeometryBuilder = new GeographicStandardTilingTileGeometryBuilder(this.projection as SphereProjection);
+                    this.m_tileBaseGeometryBuilder = new WebMercatorTileGeometryBuilder(
+                        this.projection as SphereProjection
+                    );
+                } else if (this.getTilingScheme() === geographicTerrainStandardTiling) {
+                    this.m_tileBaseGeometryBuilder =
+                        new GeographicStandardTilingTileGeometryBuilder(
+                            this.projection as SphereProjection
+                        );
                 }
             } else {
-                this.m_tileBaseGeometryBuilder = new WebMercatorTileGeometryBuilder(sphereProjection);
+                this.m_tileBaseGeometryBuilder = new WebMercatorTileGeometryBuilder(
+                    sphereProjection
+                );
             }
         }
         return this.m_tileBaseGeometryBuilder;
     }
 
-    async setTheme(theme: Theme | FlatTheme, languages?: string[]): Promise<void> { }
+    async setTheme(theme: Theme | FlatTheme, languages?: string[]): Promise<void> {}
 
     public get isYAxisDown(): boolean {
         return this.getTilingScheme().projection === webMercatorProjection;
@@ -554,8 +566,7 @@ export abstract class TerrainSource<
     connect(): Promise<void> {
         return super.connect().then(() => {
             this.initializeStages();
-            if (this.showDebugInfo)
-                this.mapView.scene.add(this.m_debugObject);
+            if (this.showDebugInfo) this.mapView.scene.add(this.m_debugObject);
         });
     }
 
@@ -570,7 +581,9 @@ export abstract class TerrainSource<
             )
         );
 
-        this.m_debugObject?.position.setFromMatrixPosition(this.mapView.camera.matrixWorld).negate();
+        this.m_debugObject?.position
+            .setFromMatrixPosition(this.mapView.camera.matrixWorld)
+            .negate();
 
         // Update projection switch controller
         if (this.m_projectionSwitchController) {
@@ -606,16 +619,16 @@ export abstract class TerrainSource<
             this.name,
             geoBox
                 ? (tileToCheck: Tile) => {
-                    const { latitude: minLat, longitude: minLng } = tileToCheck.geoBox.southWest;
-                    const { latitude: maxLat, longitude: maxLng } = tileToCheck.geoBox.northEast;
-                    const tileBox = new Math2D.Box(
-                        minLng,
-                        minLat,
-                        maxLng - minLng,
-                        maxLat - minLat
-                    );
-                    return filterBoundingBox ? tileBox.intersects(filterBoundingBox) : false;
-                }
+                      const { latitude: minLat, longitude: minLng } = tileToCheck.geoBox.southWest;
+                      const { latitude: maxLat, longitude: maxLng } = tileToCheck.geoBox.northEast;
+                      const tileBox = new Math2D.Box(
+                          minLng,
+                          minLat,
+                          maxLng - minLng,
+                          maxLat - minLat
+                      );
+                      return filterBoundingBox ? tileBox.intersects(filterBoundingBox) : false;
+                  }
                 : undefined
         );
         this.mapView.update();
@@ -701,7 +714,6 @@ export abstract class TerrainSource<
         return this.stageConfigs[this.stageConfigs.length - 1];
     }
 
-
     /**
      * Determines whether a tile should be subdivided
      * @param zoomLevel - The current zoom level
@@ -716,15 +728,17 @@ export abstract class TerrainSource<
 
         const stage = this.getStageForLevel(tileKey);
 
-        const levelOffset = tileKey.level - (stage.isLast ? Math.max(stage.minLevel, tileKey.level) : stage.minLevel);
+        const levelOffset =
+            tileKey.level -
+            (stage.isLast ? Math.max(stage.minLevel, tileKey.level) : stage.minLevel);
         const parentKey = TileKey.fromRowColumnLevel(
             tileKey.row >> levelOffset,
             tileKey.column >> levelOffset,
             stage.minLevel
         );
         return (
-            (this.dataProvider().hasResource(parentKey) ||
-                (tileKey.level > maxZoom && super.shouldSubdivide(zoomLevel, tileKey)))
+            this.dataProvider().hasResource(parentKey) ||
+            (tileKey.level > maxZoom && super.shouldSubdivide(zoomLevel, tileKey))
         );
     }
 

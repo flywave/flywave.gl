@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 export * from "./oct-encoded-normal";
 export * from "./render";
 export * from "./color-def";

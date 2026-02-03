@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { CurveChain } from "../curve/curve-collection";
 import { CurvePrimitive } from "../curve/curve-primitive";
 import { type AnyRegion } from "../curve/curve-types";

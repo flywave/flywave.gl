@@ -40,7 +40,7 @@ export class TileKeyEntry {
         public offset: number = 0,
         public elevationRange?: ElevationRange,
         public distance: number = 0
-    ) { }
+    ) {}
 }
 
 function getGeoBox(tilingScheme: TilingScheme, childTileKey: TileKey, offset: number) {
@@ -191,7 +191,10 @@ export class FrustumIntersection {
 
         let m_rootTileKeys = this.m_rootTileKeys;
         //process here tilingScheme
-        if (tilingScheme === geographicStandardTiling || tilingScheme === geographicTerrainStandardTiling) {
+        if (
+            tilingScheme === geographicStandardTiling ||
+            tilingScheme === geographicTerrainStandardTiling
+        ) {
             m_rootTileKeys = [
                 new TileKeyEntry(TileKey.fromRowColumnLevel(0, 0, 0), Infinity, 0),
                 new TileKeyEntry(TileKey.fromRowColumnLevel(0, 1, 0), Infinity, 0)
@@ -389,7 +392,6 @@ export class FrustumIntersection {
             .set(center.x, center.y, center.z, 1.0)
             .applyMatrix4(this.m_viewProjectionMatrix);
 
-  
         // Estimate objects screen space size with diagonal of bounds
         // Dividing by w projects object size to screen space
         const size = tileBounds.getSize(tmpVectors3[1]);
@@ -404,8 +406,8 @@ export class FrustumIntersection {
                 projectedPoint.z <= -projectedPoint.w
                     ? -1
                     : projectedPoint.z >= projectedPoint.w
-                        ? 1
-                        : projectedPoint.z / projectedPoint.w
+                    ? 1
+                    : projectedPoint.z / projectedPoint.w
         };
     }
 

@@ -18,7 +18,9 @@ import {
 const getMapCanvas = (id: string): HTMLCanvasElement => {
     const canvas = document.getElementById(id) as HTMLCanvasElement;
     if (!canvas) {
-        throw new Error(`Map canvas element not found, please ensure there is a canvas element with id '${id}' in HTML`);
+        throw new Error(
+            `Map canvas element not found, please ensure there is a canvas element with id '${id}' in HTML`
+        );
     }
     return canvas;
 };
@@ -31,12 +33,12 @@ const getMapCanvas = (id: string): HTMLCanvasElement => {
 const initializeMapView = (canvas: HTMLCanvasElement): [MapView, MapControls] => {
     // Set initial map position and view (Pennsylvania, some location)
     const initialLocation = new GeoCoordinates(40.00269243085496, -75.29281581060715, 10);
-    
+
     const map = new MapView({
         projection: ellipsoidProjection, // Use ellipsoid projection
-        target: initialLocation,         // Initial target position
-        zoomLevel: 19,                  // Initial zoom level
-        canvas: canvas,                 // Specify render canvas
+        target: initialLocation, // Initial target position
+        zoomLevel: 19, // Initial zoom level
+        canvas: canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json" // Base theme configuration
         }
@@ -67,18 +69,18 @@ const initializeMapView = (canvas: HTMLCanvasElement): [MapView, MapControls] =>
  */
 const createGaussianSplatDataSource = (mapView: MapView): TileRenderDataSource => {
     const tileDataSource = new TileRenderDataSource({
-        url: "3dtile/gaussianSplatting/tileset.json", // Gaussian splat dataset path
+        url: "3dtile/gaussianSplatting/tileset.json" // Gaussian splat dataset path
     });
-    
+
     mapView.addDataSource(tileDataSource);
-    
+
     // Get geographic extent and adjust view
-    tileDataSource.getGeoExtent().then((extent) => {
+    tileDataSource.getGeoExtent().then(extent => {
         mapView.lookAt({
-            bounds: extent, // Adjust view based on data extent
+            bounds: extent // Adjust view based on data extent
         });
     });
-    
+
     return tileDataSource;
 };
 
@@ -95,16 +97,16 @@ const addArcGISWebTileDataSource = (mapView: MapView): void => {
 try {
     // 1. Get map canvas element
     const canvas = getMapCanvas("mapCanvas");
-    
+
     // 2. Initialize map view and controls
     const [mapView, controls] = initializeMapView(canvas);
-    
+
     // 3. Create Gaussian splat data source
     createGaussianSplatDataSource(mapView);
-    
+
     // 4. Add ArcGIS Web tile data source
     addArcGISWebTileDataSource(mapView);
-    
+
     console.log("3D Tiles Gaussian splat example initialized successfully");
 } catch (error) {
     console.error("Error initializing 3D Tiles Gaussian splat example:", error);

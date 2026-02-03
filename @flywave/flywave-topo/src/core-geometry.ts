@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 export * from "./geometry3d/angle";
 export * from "./geometry3d/angle-sweep";
 export * from "./geometry3d/longitude-latitude-altitude";

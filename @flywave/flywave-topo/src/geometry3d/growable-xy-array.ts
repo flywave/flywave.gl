@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 import { type MultiLineStringDataVariant } from "../topology/triangulation";
 import { GrowableXYZArray } from "./growable-xyz-array";

@@ -494,7 +494,7 @@ export class StyleSetEvaluator {
         }
 
         const originalStyle = this.styleSet[styleIndex];
-        
+
         // Preserve internal optimization properties
         const updatedStyle = {
             ...originalStyle,
@@ -517,10 +517,10 @@ export class StyleSetEvaluator {
         } as InternalStyle;
 
         this.styleSet[styleIndex] = updatedStyle;
-        
+
         // Recompile the updated style
         this.compileStyle(updatedStyle);
-        
+
         // Invalidate caches that depend on style content
         this.invalidateStyleCaches();
 
@@ -540,10 +540,10 @@ export class StyleSetEvaluator {
         }
 
         this.styleSet.splice(styleIndex, 1);
-        
+
         // Recompute indices and render order for remaining styles
         this.recomputeStyleSetIndices();
-        
+
         // Invalidate caches that depend on style set structure
         this.invalidateStyleSetCaches();
 
@@ -564,13 +564,13 @@ export class StyleSetEvaluator {
         } as InternalStyle;
 
         this.styleSet.push(styleWithId);
-        
+
         // Recompute indices and render order for all styles
         this.recomputeStyleSetIndices();
-        
+
         // Compile the new style
         this.compileStyle(styleWithId);
-        
+
         // Invalidate caches that depend on style set structure
         this.invalidateStyleSetCaches();
 

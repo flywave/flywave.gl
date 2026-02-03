@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type PolygonLocation, Geometry } from "../geometry";
 import { TriangleLocationDetail } from "../geometry3d/barycentric-triangle";
 import { type IndexedXYCollection } from "../geometry3d/indexed-xy-collection";

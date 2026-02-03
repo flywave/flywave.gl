@@ -46,7 +46,6 @@ interface CustomWebTileDataSourceOptions extends Omit<WebTileDataSourceOptions, 
      * Headers to be sent with the tile request.
      */
     headers?: RequestHeaders;
-
 }
 
 /**

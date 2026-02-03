@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type BeJSONFunctions, type PlaneAltitudeEvaluator, Geometry } from "../geometry";
 import { Plane3d } from "../geometry3d/plane3d";
 import { Plane3dByOriginAndUnitNormal } from "../geometry3d/plane3d-by-origin-and-unit-normal";

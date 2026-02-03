@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type FillFlags, LinePixels } from "../common";
 import { type MeshParams } from "../common/render/primitives/mesh-params";
 import { type SurfaceType } from "../common/render/primitives/surface-params";

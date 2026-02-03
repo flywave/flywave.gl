@@ -148,7 +148,6 @@ export class QuantizedMeshLoader extends QuantizedMeshLoaderBase {
         let groupOffset = 0;
         let materialIndex = 0;
 
-
         // construct terrain
         for (let i = 0; i < vertexCount; i++) {
             readUVHeight(i, _uvh);

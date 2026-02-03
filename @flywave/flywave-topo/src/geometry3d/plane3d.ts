@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type PlaneAltitudeEvaluator, Geometry } from "../geometry";
 import { type Point4d } from "../geometry4d/point4d";
 import { Point3d, Vector3d } from "./point3d-vector3d";

@@ -96,7 +96,10 @@ export function triangulateWithEarcut(
     return {
         positions: [...polygon, ...(holes ? holes.flat() : [])],
         indices: indices,
-        originalVertexIndices: Array.from({ length: polygon.length + (holes ? holes.flat().length : 0) }, (_, i) => i)
+        originalVertexIndices: Array.from(
+            { length: polygon.length + (holes ? holes.flat().length : 0) },
+            (_, i) => i
+        )
     };
 }
 

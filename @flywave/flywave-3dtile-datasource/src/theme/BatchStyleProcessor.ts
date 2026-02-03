@@ -15,7 +15,7 @@ import {
 
 /**
  * Extended StyleSetEvaluator with batch styling capabilities
- * 
+ *
  * @remarks
  * This class extends the base StyleSetEvaluator to provide specialized
  * batch style processing for 3D Tiles and other batch-rendered geometries.
@@ -45,11 +45,7 @@ export class BatchStyleProcessor extends StyleSetEvaluator {
         const env = new MapEnv(properties);
 
         // Use parent class method to get matching techniques
-        const matchingTechniques = this.getMatchingTechniques(
-            env,
-            layer,
-            geometryType
-        );
+        const matchingTechniques = this.getMatchingTechniques(env, layer, geometryType);
 
         // Filter batch techniques and convert to BatchThemeInformation
         const batchStyles: Tile3DBatchMeshTechniqueParams[] = [];

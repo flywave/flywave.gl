@@ -9,7 +9,6 @@ import {
     MapControlsUI
 } from "@flywave/flywave.gl";
 
-
 /**
  * Get map canvas element
  * @returns HTMLCanvasElement Map canvas element
@@ -17,7 +16,9 @@ import {
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
     if (!canvas) {
-        throw new Error("Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML");
+        throw new Error(
+            "Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML"
+        );
     }
     return canvas;
 };
@@ -33,11 +34,11 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
 
     return new MapView({
         projection: ellipsoidProjection, // Use ellipsoid projection
-        target: initialLocation,         // Initial target position
-        zoomLevel: 17,                  // Initial zoom level
-        tilt: 70,                       // Initial tilt angle
-        heading: 35.1,                  // Initial heading angle
-        canvas: canvas,                 // Specify render canvas
+        target: initialLocation, // Initial target position
+        zoomLevel: 17, // Initial zoom level
+        tilt: 70, // Initial tilt angle
+        heading: 35.1, // Initial heading angle
+        canvas: canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json"
         }
@@ -61,14 +62,16 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  */
 const configureDEMTerrainSource = (mapView: MapView): void => {
     const demTerrain = new DEMTerrainSource({
-        source: "dem_terrain/source.json", // DEM terrain data source path
+        source: "dem_terrain/source.json" // DEM terrain data source path
     });
 
     mapView.setElevationSource(demTerrain);
-    demTerrain.addWebTileDataSource(new ArcGISTileProvider({
-        minDataLevel: 0,
-        maxDataLevel: 18
-    }));
+    demTerrain.addWebTileDataSource(
+        new ArcGISTileProvider({
+            minDataLevel: 0,
+            maxDataLevel: 18
+        })
+    );
 };
 
 /**
@@ -80,16 +83,16 @@ const createCesiumIonDataSource = (mapView: MapView): CesiumIonDataSource => {
     const cesiumIonDataSource = new CesiumIonDataSource({
         // Note: In production environments, this token should be managed using environment variables or configuration files
         accessToken: CESIUM_ION_TOKEN, // Use unified configured access token
-        assetId: 75343                // Data asset ID
+        assetId: 75343 // Data asset ID
     });
 
     // Set data source theme, enable translucent depth effect
     cesiumIonDataSource.setTheme({
-        "postEffects": {
-            "translucentDepth": {
-                enabled: true,       // Enable translucent depth effect
+        postEffects: {
+            translucentDepth: {
+                enabled: true // Enable translucent depth effect
             }
-        },
+        }
     });
 
     mapView.addDataSource(cesiumIonDataSource);

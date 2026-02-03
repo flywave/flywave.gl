@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../core-geometry";
 import { ColorByName } from "./color-by-name";
 import { HSLColor } from "./hsl-color";

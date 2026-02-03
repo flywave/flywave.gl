@@ -48,12 +48,12 @@ export type DecodedTerrainTile = DecodedTile & {
      * that will be used for rendering the 3D terrain
      */
     tileTerrain:
-    | QuantizedTerrainMeshData
-    | DecodedStratumTileData
-    | TileGeometryReprojectionData
-    | SerializedDEMData
-    | ImageBitmap
-    | ImageData;
+        | QuantizedTerrainMeshData
+        | DecodedStratumTileData
+        | TileGeometryReprojectionData
+        | SerializedDEMData
+        | ImageBitmap
+        | ImageData;
 };
 
 /**
@@ -67,12 +67,12 @@ export type DecodedTerrainTile = DecodedTile & {
  */
 const createDecodedTile = <
     T extends
-    | QuantizedTerrainMeshData
-    | TileGeometryReprojectionData
-    | DecodedStratumTileData
-    | SerializedDEMData
-    | ImageBitmap
-    | ImageData
+        | QuantizedTerrainMeshData
+        | TileGeometryReprojectionData
+        | DecodedStratumTileData
+        | SerializedDEMData
+        | ImageBitmap
+        | ImageData
 >(
     tileTerrain: T
 ): DecodedTile & { tileTerrain: T } => {

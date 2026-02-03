@@ -1,4 +1,3 @@
-
 export default {
     title: "Terrain Brush Modification Test",
     titleZh: "地形笔刷修改测试",

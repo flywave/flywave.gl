@@ -1,10 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 // height-map/HeightMapTerrainMesh.ts
-import {
-    type TileGeometryBuilder,
-    type TileTransformation
-} from "@flywave/flywave-geometry";
+import { type TileGeometryBuilder, type TileTransformation } from "@flywave/flywave-geometry";
 import { type GeoBox, type TilingScheme, ProjectionType, TileKey } from "@flywave/flywave-geoutils";
 import { MapView, Tile } from "@flywave/flywave-mapview";
 import { DataTexture, Matrix4, Mesh, Vector3, Vector4 } from "three";
@@ -111,10 +108,16 @@ export class HeightMapTerrainMesh extends Mesh {
         private readonly m_terrainTilingScheme: TilingScheme,
         private readonly m_projectionSwitchController: ProjectionSwitchController,
         private readonly m_tilingSchemeTileGrid: TileGeometryBuilder,
-        materialParams?: THREE.MeshStandardMaterialParameters,
+        materialParams?: THREE.MeshStandardMaterialParameters
     ) {
-        const material = new DEMTileMeshMaterial({ ...materialParams, transparent: false, blending: THREE.NoBlending });
-        const geometryWithTransform = m_tilingSchemeTileGrid.getTileGeometryWithTransform(m_tile.tileKey);
+        const material = new DEMTileMeshMaterial({
+            ...materialParams,
+            transparent: false,
+            blending: THREE.NoBlending
+        });
+        const geometryWithTransform = m_tilingSchemeTileGrid.getTileGeometryWithTransform(
+            m_tile.tileKey
+        );
 
         super(geometryWithTransform.geometry, material);
         this.m_selfGeoBox = this.m_terrainTilingScheme.getGeoBox(m_tile.tileKey);
@@ -124,7 +127,8 @@ export class HeightMapTerrainMesh extends Mesh {
         this.m_skirtHeight = geometryWithTransform.skirtHeight;
 
         // 计算目标Z旋转（球面投影时的旋转值）
-        this.m_targetZRotation = (Math.PI * 2 * m_tile.tileKey.column) /
+        this.m_targetZRotation =
+            (Math.PI * 2 * m_tile.tileKey.column) /
             this.m_tilingSchemeTileGrid
                 .getTilingScheme()
                 .subdivisionScheme.getLevelDimensionX(m_tile.tileKey.level);
@@ -133,7 +137,6 @@ export class HeightMapTerrainMesh extends Mesh {
 
         this.frustumCulled = false;
     }
-
 
     /**
      * Initializes the mesh with basic properties
@@ -157,7 +160,6 @@ export class HeightMapTerrainMesh extends Mesh {
 
         // 使用插值获取当前变换
         const interpolatedTransform = this.m_transformation.interpolate(projectionFactor);
-
 
         // 应用插值后的旋转矩阵（如果存在）
         if (interpolatedTransform.rotation) {
@@ -191,7 +193,6 @@ export class HeightMapTerrainMesh extends Mesh {
      * render the terrain, including height map parameters and patch positioning.
      */
     updateUniforms() {
-
         const mat = new Matrix4();
 
         mat.elements[3] = this.m_isSimplePatch ? 1 : 0;
@@ -229,9 +230,7 @@ export class HeightMapTerrainMesh extends Mesh {
         const controller = this.m_projectionSwitchController;
         if (controller) {
             const material = this.material as DEMTileMeshMaterial;
-            material.setProjectionUniforms(
-                controller.projectionFactor
-            );
+            material.setProjectionUniforms(controller.projectionFactor);
         }
     }
 
@@ -415,6 +414,6 @@ export class HeightMapTerrainMesh extends Mesh {
      * @returns A new instance of the mesh
      */
     clone(recursive?: boolean): this {
-        return this
+        return this;
     }
 }

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type ConvexClipPlaneSet } from "../clipping/convex-clip-plane-set";
 import { type LineSegment3d } from "../curve/line-segment3d";
 import { LineString3d } from "../curve/line-string3d";

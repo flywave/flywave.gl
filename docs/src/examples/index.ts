@@ -15,28 +15,28 @@ const addedExampleIds = new Set<string>();
 
 // 获取当前语言环境
 const getCurrentLocale = (): string => {
-  if (typeof window !== 'undefined') {
-    // 尝试从 URL 获取语言参数
-    const urlParams = new URLSearchParams(window.location.search);
-    const lang = urlParams.get('locale');
-    if (lang && (lang === 'zh' || lang === 'en')) return lang;
-    
-    // 尝试从 localStorage 获取
-    const storedLocale = localStorage.getItem('locale');
-    if (storedLocale && (storedLocale === 'zh' || storedLocale === 'en')) return storedLocale;
-    
-    // 尝试从 Docusaurus 的语言路径获取
-    if (window.location.pathname.startsWith('/zh/')) {
-      return 'zh';
+    if (typeof window !== "undefined") {
+        // 尝试从 URL 获取语言参数
+        const urlParams = new URLSearchParams(window.location.search);
+        const lang = urlParams.get("locale");
+        if (lang && (lang === "zh" || lang === "en")) return lang;
+
+        // 尝试从 localStorage 获取
+        const storedLocale = localStorage.getItem("locale");
+        if (storedLocale && (storedLocale === "zh" || storedLocale === "en")) return storedLocale;
+
+        // 尝试从 Docusaurus 的语言路径获取
+        if (window.location.pathname.startsWith("/zh/")) {
+            return "zh";
+        }
+
+        // 检查 HTML 根元素的语言属性
+        const htmlLang = document.documentElement.lang;
+        if (htmlLang && (htmlLang.includes("zh") || htmlLang.includes("en"))) {
+            return htmlLang.includes("zh") ? "zh" : "en";
+        }
     }
-    
-    // 检查 HTML 根元素的语言属性
-    const htmlLang = document.documentElement.lang;
-    if (htmlLang && (htmlLang.includes('zh') || htmlLang.includes('en'))) {
-      return htmlLang.includes('zh') ? 'zh' : 'en';
-    }
-  }
-  return 'en'; // 默认语言
+    return "en"; // 默认语言
 };
 
 // 动态导入每个示例的配置和代码
@@ -65,23 +65,30 @@ exampleContext.keys().forEach((configKey: string) => {
 
                 // 根据当前语言环境决定使用哪种语言的标题和描述
                 const currentLocale = getCurrentLocale();
-                const title = currentLocale === 'zh' && config.titleZh ? config.titleZh : config.title;
-                const description = currentLocale === 'zh' && config.descriptionZh ? config.descriptionZh : config.description;
+                const title =
+                    currentLocale === "zh" && config.titleZh ? config.titleZh : config.title;
+                const description =
+                    currentLocale === "zh" && config.descriptionZh
+                        ? config.descriptionZh
+                        : config.description;
 
                 // 根据分类code获取分类名称（根据当前语言环境）
                 const categoryInfo = EXAMPLE_CATEGORIES.find(cat => cat.code === config.code);
                 let categoryName = config.code || "未分类";
                 if (categoryInfo) {
-                  categoryName = currentLocale === 'zh' && categoryInfo.nameZh ? categoryInfo.nameZh : categoryInfo.name;
+                    categoryName =
+                        currentLocale === "zh" && categoryInfo.nameZh
+                            ? categoryInfo.nameZh
+                            : categoryInfo.name;
                 }
 
                 examples.push({
                     id: exampleId,
                     title: title,
                     description: description,
-                    category: categoryName,  // 使用映射后的分类名称
-                    categoryCode: config.code,  // 保存分类code用于排序
-                    order: config.order || 0,  // 保存排序字段
+                    category: categoryName, // 使用映射后的分类名称
+                    categoryCode: config.code, // 保存分类code用于排序
+                    order: config.order || 0, // 保存排序字段
                     code: code,
                     language: "javascript",
                     image: config.thumbnail || ""

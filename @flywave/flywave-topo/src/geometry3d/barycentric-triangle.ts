@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry, PolygonLocation } from "../geometry";
 import { assert } from "../utils";
 import { Matrix3d } from "./matrix3d";

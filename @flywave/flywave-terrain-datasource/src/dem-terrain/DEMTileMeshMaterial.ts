@@ -49,6 +49,8 @@ interface CommonUniforms {
     uProjectionFactor: { value: number };
     /** The skirt height for the mesh */
     uSkirtHeight: { value: number };
+
+    isRenderingDepth: { value: boolean };
 }
 
 /**
@@ -95,6 +97,7 @@ export class DEMTileMeshMaterial extends THREE.MeshStandardMaterial {
         imageryPatchCount: { value: 0 },
         uSkirtHeight: { value: 0.0 },
         uProjectionFactor: { value: 0.0 },
+        isRenderingDepth: { value: false }
     };
 
     /** Shader defines that control compilation variants */
@@ -107,6 +110,19 @@ export class DEMTileMeshMaterial extends THREE.MeshStandardMaterial {
      */
     constructor(parameters?: THREE.MeshStandardMaterialParameters) {
         super(parameters);
+    }
+
+    public setRenderingDepth(enabled: boolean): void {
+        this.commonUniform.isRenderingDepth.value = enabled;
+    }
+
+    /**
+     * Gets whether the material is currently in depth rendering mode
+     *
+     * @returns True if in depth rendering mode, false otherwise
+     */
+    public getIsRenderingDepth(): boolean {
+        return this.commonUniform.isRenderingDepth.value;
     }
 
     /**
@@ -179,6 +195,13 @@ export class DEMTileMeshMaterial extends THREE.MeshStandardMaterial {
              #include <depth_packing_fragment>`
             );
 
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <logdepthbuf_fragment>`,
+                `if (!isRenderingDepth) {
+                    #include <logdepthbuf_fragment>
+                }`
+            );
+
             // Add terrain projection
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <project_vertex>`,
@@ -248,7 +271,6 @@ export class DEMTileMeshMaterial extends THREE.MeshStandardMaterial {
         this.m_commonUniform.imageryPatchCount.value = value.length;
     }
 
-
     get commonUniform() {
         return this.m_commonUniform;
     }
@@ -294,9 +316,7 @@ export class DEMTileMeshMaterial extends THREE.MeshStandardMaterial {
      * @param targetProjectionType - Target projection type
      * @param projectionFactor - Interpolation factor between 0.0 and 1.0
      */
-    public setProjectionUniforms(
-        projectionFactor: number
-    ): void {
+    public setProjectionUniforms(projectionFactor: number): void {
         this.m_commonUniform.uProjectionFactor.value = projectionFactor;
     }
 }

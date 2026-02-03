@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 /**
  * Implement the classic UnionFind algorithm, viz https://en.wikipedia.org/wiki/Disjoint-set_data_structure
  * * Each of the entities being merged exists as an entry in an array.

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import * as THREE from "three";
 
 import { type QParams2d, type QParams3d } from "../common";

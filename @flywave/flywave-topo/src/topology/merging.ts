@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type CurveLocationDetail } from "../curve/curve-location-detail";
 import { LineSegment3d } from "../curve/line-segment3d";
 import { Geometry } from "../geometry";

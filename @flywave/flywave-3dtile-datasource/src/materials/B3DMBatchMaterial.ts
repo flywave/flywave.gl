@@ -21,6 +21,7 @@ interface B3DMBatchMaterialUniforms {
     animationTextureHeight: { value: number };
     uPolygonOffsetFactor: { value: number };
     uPolygonOffsetUnits: { value: number };
+    isRenderingDepth: { value: boolean };
 }
 
 /**
@@ -29,7 +30,7 @@ interface B3DMBatchMaterialUniforms {
 interface ExtendedBatchStyle extends Tile3DBatchMeshTechniqueParams {
     highlighted?: boolean;
     highlightColor?: THREE.Color;
-    visible?: boolean; 
+    visible?: boolean;
 }
 
 /**
@@ -75,7 +76,8 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         animationTextureWidth: { value: 0 },
         animationTextureHeight: { value: 0 },
         uPolygonOffsetFactor: { value: 0 },
-        uPolygonOffsetUnits: { value: 0 }
+        uPolygonOffsetUnits: { value: 0 },
+        isRenderingDepth: { value: false }
     };
 
     constructor(
@@ -95,6 +97,10 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
 
         // Initialize animation manager
         this._animationManager = new BatchAnimationManager(animation);
+
+        // Key setting: do not allow scene.overrideMaterial to override
+        // This allows 3D Tiles material to use its own depth rendering logic
+        this.allowOverride = false;
 
         // Set up shader compilation
         this.onBeforeCompile = this.setupShaders.bind(this);
@@ -152,7 +158,10 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
     /**
      * Check if style has changed (excluding value)
      */
-    private _hasStyleChanged(oldStyle: ExtendedBatchStyle | undefined, newStyle: ExtendedBatchStyle): boolean {
+    private _hasStyleChanged(
+        oldStyle: ExtendedBatchStyle | undefined,
+        newStyle: ExtendedBatchStyle
+    ): boolean {
         if (!oldStyle && !newStyle) return false;
         if (!oldStyle || !newStyle) return true;
 
@@ -239,6 +248,16 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
             ${this._getVertexParsShaderReplacement()}`
         );
 
+        // Replace logdepthbuf_vertex to disable logarithmic depth in depth rendering mode
+        parameters.vertexShader = parameters.vertexShader.replace(
+            "#include <logdepthbuf_vertex>",
+            ` 
+            if (!isRenderingDepth) {
+                #include <logdepthbuf_vertex>
+            } 
+        `
+        );
+
         parameters.vertexShader = parameters.vertexShader.replace(
             "#include <begin_vertex>",
             `#include <begin_vertex>
@@ -249,25 +268,48 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         parameters.fragmentShader = parameters.fragmentShader.replace(
             "#include <color_pars_fragment>",
             `#include <color_pars_fragment>
+            uniform bool isRenderingDepth;
             ${this._getFragmentParsShaderReplacement()}`
         );
 
-        // Replace logdepthbuf_fragment to include polygonOffset logic
+        // Replace logdepthbuf_pars_fragment
         parameters.fragmentShader = parameters.fragmentShader.replace(
-            "#include <logdepthbuf_fragment>",
-            `
-            #if defined(USE_LOGDEPTHBUF)
-                float dz = fwidth(vFragDepth);
-                float offset = dz * uPolygonOffsetFactor + uPolygonOffsetUnits;
-                gl_FragDepthEXT = log2(vFragDepth + offset) * logDepthBufFC * 0.5;
-            #endif
-            `
+            "#include <logdepthbuf_pars_fragment>",
+            `#include <logdepthbuf_pars_fragment>`
         );
+ 
 
         parameters.fragmentShader = parameters.fragmentShader.replace(
             "#include <color_fragment>",
-            `#include <color_fragment>
-            ${this._getFragmentShaderReplacement()}`
+            ` 
+            #include <color_fragment>
+                    ${this._getFragmentShaderReplacement()} 
+        `
+        );
+
+        // Metalness replacement
+        parameters.fragmentShader = parameters.fragmentShader.replace(
+            "#include <metalnessmap_fragment>",
+            `${this._getMetalnessShaderReplacement()}`
+        );
+
+        // Roughness replacement
+        parameters.fragmentShader = parameters.fragmentShader.replace(
+            "#include <roughnessmap_fragment>",
+            `${this._getRoughnessShaderReplacement()}`
+        );
+
+        // Emissive replacement
+        parameters.fragmentShader = parameters.fragmentShader.replace(
+            "#include <color_fragment>",
+            `
+if (isRenderingDepth) {
+    gl_FragColor = vec4(gl_FragCoord.z, 0.0, 0.0, 1.0);
+} else {
+    #include <color_fragment>
+            ${this._getFragmentShaderReplacement()}
+}
+`
         );
 
         // Metalness replacement
@@ -512,10 +554,11 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
 
         // Create or update animation texture
         let animationTexture = this.uniforms.animationTexture.value;
-        if (!animationTexture ||
+        if (
+            !animationTexture ||
             animationTexture.image.width !== textureWidth ||
-            animationTexture.image.height !== textureHeight) {
-
+            animationTexture.image.height !== textureHeight
+        ) {
             if (animationTexture) {
                 animationTexture.dispose();
             }
@@ -764,7 +807,9 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         }
 
         // Process emissive
-        let startEmissive: THREE.Color = this.emissive.clone().multiplyScalar(this.emissiveIntensity);
+        let startEmissive: THREE.Color = this.emissive
+            .clone()
+            .multiplyScalar(this.emissiveIntensity);
         let endEmissive: THREE.Color = this.emissive.clone().multiplyScalar(this.emissiveIntensity);
         let hasEmissiveTransition: boolean = false;
 
@@ -791,8 +836,10 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         const useAnimation: boolean = batchStyle.useAnimation !== false; // true or undefined both mean respond to animation
 
         // Get current value from animation manager
-        const currentValue = batchStyle.value !== undefined ?
-            batchStyle.value : this._animationManager.getBatchProgress(batchId);
+        const currentValue =
+            batchStyle.value !== undefined
+                ? batchStyle.value
+                : this._animationManager.getBatchProgress(batchId);
 
         return {
             startColor: finalStartColor.clone(),
@@ -838,6 +885,25 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
             emissive: "#000000",
             value: 0
         };
+    }
+
+    /**
+     * Sets whether the material is in depth rendering mode
+     * When enabled, the material renders depth only without logarithmic depth buffer
+     *
+     * @param enabled - True to enable depth rendering mode, false for normal rendering
+     */
+    public setRenderingDepth(enabled: boolean): void {
+        this.uniforms.isRenderingDepth.value = enabled;
+    }
+
+    /**
+     * Gets whether the material is currently in depth rendering mode
+     *
+     * @returns True if in depth rendering mode, false otherwise
+     */
+    public getIsRenderingDepth(): boolean {
+        return this.uniforms.isRenderingDepth.value;
     }
 
     /**

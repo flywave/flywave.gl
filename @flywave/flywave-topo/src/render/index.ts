@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type MeshParams } from "../common/render/primitives/mesh-params";
 import { type PointStringParams } from "../common/render/primitives/point-string-params";
 import { type PolylineParams } from "../common/render/primitives/polyline-params";

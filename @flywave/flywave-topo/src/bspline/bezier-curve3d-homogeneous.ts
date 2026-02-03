@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type CurveLocationDetail } from "../curve/curve-location-detail";
 import { Geometry } from "../geometry";
 import { type GeometryHandler } from "../geometry3d/geometry-handler";

@@ -166,7 +166,7 @@ export abstract class QuantizedProvider<
      * @param tileKey - The tile key to check
      * @returns True if elevation map generation is enabled for this level
      */
-    protected isElevationMapEnabled(tileKey: TileKey): boolean {  
+    protected isElevationMapEnabled(tileKey: TileKey): boolean {
         return this.layerStrategy.getTileDataAvailable(tileKey);
     }
 

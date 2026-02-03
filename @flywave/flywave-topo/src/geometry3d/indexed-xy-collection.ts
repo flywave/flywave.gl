@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type XY, Point2d, Vector2d } from "./point2d-vector2d";
 import { type XAndY } from "./xyz-props";
 

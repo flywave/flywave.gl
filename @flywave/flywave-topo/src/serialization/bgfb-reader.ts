@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { flatbuffers } from "flatbuffers";
 
 import { AkimaCurve3d, AkimaCurve3dOptions } from "../bspline/akima-curve3d";

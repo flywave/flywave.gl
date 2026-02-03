@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type ColorDef } from "./color-def";
 import { type TextureMapping } from "./texture-mapping";
 

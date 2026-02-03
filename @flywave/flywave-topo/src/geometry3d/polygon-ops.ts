@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type PlaneAltitudeEvaluator, AxisOrder, Geometry, PolygonLocation } from "../geometry";
 import { Matrix4d } from "../geometry4d/matrix4d";
 import { Point4d } from "../geometry4d/point4d";

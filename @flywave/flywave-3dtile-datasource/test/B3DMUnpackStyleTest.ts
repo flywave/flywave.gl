@@ -102,7 +102,7 @@ describe("B3DMBatchMaterial unpackStyle Function", () => {
             offset: { from: 0, to: 1 }
         });
 
-        material.setBatchStyles(batchStyles); 
+        material.setBatchStyles(batchStyles);
 
         // Verify that uniforms are correctly set
         const uniforms = (material as any).uniforms;

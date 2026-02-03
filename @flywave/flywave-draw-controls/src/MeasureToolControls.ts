@@ -414,7 +414,7 @@ export class MeasureToolControls extends MapDrawControls {
         this.updateMeasureLabelPositions();
         // Only update temporary measurement label coordinates, do not recreate labels
         this.updateTempMeasureLabelPositions();
-    }
+    };
 
     /**
      * Update measurement label coordinates (only update coordinates, do not recreate labels)
@@ -668,7 +668,7 @@ export class MeasureToolControls extends MapDrawControls {
 
         // Update all measurement labels (may need to recreate labels)
         this.updateMeasureLabels();
-    }
+    };
 
     /**
      * Object modification event handling
@@ -676,7 +676,7 @@ export class MeasureToolControls extends MapDrawControls {
     private onObjectModified = (event: DrawEvent): void => {
         // Update all measurement labels (may need to recreate labels)
         this.updateMeasureLabels();
-    }
+    };
 
     /**
      * Object removal event handling

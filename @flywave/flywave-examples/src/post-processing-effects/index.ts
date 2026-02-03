@@ -20,7 +20,7 @@ import {
     CylinderGeometry,
     TorusGeometry,
     Group,
-    Color, 
+    Color
 } from "three";
 
 /**
@@ -30,7 +30,9 @@ import {
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
     if (!canvas) {
-        throw new Error("Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML");
+        throw new Error(
+            "Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML"
+        );
     }
     return canvas;
 };
@@ -43,38 +45,39 @@ const getMapCanvas = (): HTMLCanvasElement => {
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and viewpoint (a location in Shandong Province, China)
     const initialLocation = new GeoCoordinates(36.4902, 118.1742, 900);
-    
+
     return new MapView({
-        projection: sphereProjection,    // Use spherical projection
-        target: initialLocation,         // Initial target position
-        zoomLevel: 17,                  // Initial zoom level
-        tilt: 45,                       // Initial tilt angle
-        logarithmicDepthBuffer: false,   // Disable logarithmic depth buffer
-        heading: 1.5413763202653008,    // Initial heading angle
-        canvas: canvas,                 // Specify render canvas
+        projection: sphereProjection, // Use spherical projection
+        target: initialLocation, // Initial target position
+        zoomLevel: 17, // Initial zoom level
+        tilt: 45, // Initial tilt angle
+        logarithmicDepthBuffer: false, // Disable logarithmic depth buffer
+        heading: 1.5413763202653008, // Initial heading angle
+        canvas: canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
-            "lights": [
+            lights: [
                 {
-                    "type": "ambient",
-                    "color": "#ffffff",
-                    "intensity": 0.3,
-                    "name": "ambient"
-                },
+                    type: "ambient",
+                    color: "#ffffff",
+                    intensity: 0.3,
+                    name: "ambient"
+                }
             ],
-            "celestia": {
-                "atmosphere": false,     // Disable atmospheric effects
-                sunTime: new Date().setHours(17, 0, 0, 0), // Set sun time
+            celestia: {
+                atmosphere: false, // Disable atmospheric effects
+                sunTime: new Date().setHours(17, 0, 0, 0) // Set sun time
             },
-            "postEffects": { 
-                "bloom": { // Bloom effect
-                    "enabled": true,     // Enable bloom effect
+            postEffects: {
+                bloom: {
+                    // Bloom effect
+                    enabled: true, // Enable bloom effect
                     luminancePassEnabled: true,
                     luminancePassThreshold: 0.1, // Luminance threshold
-                    "strength": 2.5,     // Strength
-                    "radius": 1.12,      // Radius
-                    "levels": 3,         // Levels
-                },
+                    strength: 2.5, // Strength
+                    radius: 1.12, // Radius
+                    levels: 3 // Levels
+                }
             }
         }
     });
@@ -89,7 +92,7 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
     const controls = new MapControls(mapView);
     const ui = new MapControlsUI(controls);
     canvas.parentElement!.appendChild(ui.domElement);
-    
+
     // Initialize post-processing GUI module after theme is loaded
     mapView.addEventListener(MapViewEventNames.ThemeLoaded, () => {
         new PostProcessingGUIModule(mapView, new GUI()).open();
@@ -102,14 +105,16 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  */
 const configureDEMTerrainSource = (mapView: MapView): void => {
     const demTerrain = new DEMTerrainSource({
-        source: "dem_terrain/source.json", // DEM terrain data source path
+        source: "dem_terrain/source.json" // DEM terrain data source path
     });
 
     mapView.setElevationSource(demTerrain);
-    demTerrain.addWebTileDataSource(new ArcGISTileProvider({ 
-        minDataLevel: 0, 
-        maxDataLevel: 18 
-    }));
+    demTerrain.addWebTileDataSource(
+        new ArcGISTileProvider({
+            minDataLevel: 0,
+            maxDataLevel: 18
+        })
+    );
 };
 
 /**
@@ -120,7 +125,12 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
  * @param opacity Opacity
  * @returns Glowing mesh object
  */
-const createGlowingObject = (geometry: any, color: any, intensity: number = 1.0, opacity: number = 0.7): any => {
+const createGlowingObject = (
+    geometry: any,
+    color: any,
+    intensity: number = 1.0,
+    opacity: number = 0.7
+): any => {
     const material = new MeshBasicMaterial({
         color: color,
         transparent: true,
@@ -193,11 +203,7 @@ const createRotatingGlowGroup = (mapView: MapView): any => {
             0x45b7d1, // Blue
             3 + i * 0.5
         );
-        sphere.position.set(
-            Math.cos(angle) * 120,
-            Math.sin(angle) * 120,
-            0
-        );
+        sphere.position.set(Math.cos(angle) * 120, Math.sin(angle) * 120, 0);
         group.add(sphere);
         smallSpheres.push(sphere);
     }
@@ -208,7 +214,7 @@ const createRotatingGlowGroup = (mapView: MapView): any => {
         group.rotation.y += delta * 0.3;
 
         // Update pulse spheres
-        smallSpheres.forEach((sphere) => {
+        smallSpheres.forEach(sphere => {
             if (sphere.userData.update) {
                 sphere.userData.update(delta);
             }
@@ -281,9 +287,10 @@ const createFloatingParticles = (mapView: MapView, count: number = 8): any => {
 
     for (let i = 0; i < count; i++) {
         const size = 15 + Math.random() * 20;
-        const geometry = Math.random() > 0.5 ?
-            new SphereGeometry(size, 8, 8) :
-            new BoxGeometry(size, size, size);
+        const geometry =
+            Math.random() > 0.5
+                ? new SphereGeometry(size, 8, 8)
+                : new BoxGeometry(size, size, size);
 
         const particle = createPulsingGlow(
             geometry,
@@ -312,7 +319,8 @@ const createFloatingParticles = (mapView: MapView, count: number = 8): any => {
     particles.userData.update = (delta: number) => {
         particles.children.forEach((particle: any) => {
             particle.userData.floatTime += delta * particle.userData.floatSpeed;
-            particle.position.y = particle.userData.initialY +
+            particle.position.y =
+                particle.userData.initialY +
                 Math.sin(particle.userData.floatTime) * particle.userData.floatRange;
 
             particle.rotation.x += delta * 0.5;
@@ -355,9 +363,21 @@ const addGlowingObjectsToMap = (mapView: MapView): void => {
 
     // 4. Additional individual glowing objects (different shapes)
     const extraObjects = [
-        { geometry: new ConeGeometry(40, 100, 8), color: 0xe91e63, position: [36.489, 118.173, 480] }, // Pink cone
-        { geometry: new CylinderGeometry(35, 35, 120, 6), color: 0x00bcd4, position: [36.492, 118.176, 520] }, // Blue cylinder
-        { geometry: new TorusGeometry(60, 20, 12, 24), color: 0x8bc34a, position: [36.488, 118.177, 460] } // Green torus
+        {
+            geometry: new ConeGeometry(40, 100, 8),
+            color: 0xe91e63,
+            position: [36.489, 118.173, 480]
+        }, // Pink cone
+        {
+            geometry: new CylinderGeometry(35, 35, 120, 6),
+            color: 0x00bcd4,
+            position: [36.492, 118.176, 520]
+        }, // Blue cylinder
+        {
+            geometry: new TorusGeometry(60, 20, 12, 24),
+            color: 0x8bc34a,
+            position: [36.488, 118.177, 460]
+        } // Green torus
     ];
 
     extraObjects.forEach((obj, index) => {
@@ -394,39 +414,44 @@ const startAnimationLoop = (objects: any[]): void => {
 try {
     // 1. Get map canvas element
     const canvas = getMapCanvas();
-    
+
     // 2. Initialize map view
     const mapView = initializeMapView(canvas);
-    
+
     // 3. Initialize map controls
     initializeMapControls(mapView, canvas);
-    
+
     // 4. Configure DEM terrain data source
     configureDEMTerrainSource(mapView);
-    
+
     // 5. Add glowing objects to map
     addGlowingObjectsToMap(mapView);
-    
+
     // 6. Start animation loop
     const objectsToAnimate = [
         mapView.mapAnchors.children.find((obj: any) => obj.userData.update !== undefined)
     ].filter(Boolean) as any[];
-    
+
     // Actually, we need to directly use the objects created previously
     const mainCoordinates = new GeoCoordinates(36.4902, 118.1742, 500);
     const structureCoords = new GeoCoordinates(36.491, 118.175, 450);
-    
+
     // Find corresponding instances based on objects added previously
-    const rotatingGlowGroup = mapView.mapAnchors.children.find((obj: any) => 
-        obj.anchor && obj.anchor.equals(mainCoordinates));
-    const glowingStructure = mapView.mapAnchors.children.find((obj: any) => 
-        obj.anchor && obj.anchor.equals(structureCoords));
-    const floatingParticles = mapView.mapAnchors.children.find((obj: any) => 
-        obj.anchor && obj.anchor.equals(mainCoordinates) && obj !== rotatingGlowGroup);
-    
-    const objectsToAnimateFull = [rotatingGlowGroup, glowingStructure, floatingParticles].filter(Boolean) as any[];
+    const rotatingGlowGroup = mapView.mapAnchors.children.find(
+        (obj: any) => obj.anchor && obj.anchor.equals(mainCoordinates)
+    );
+    const glowingStructure = mapView.mapAnchors.children.find(
+        (obj: any) => obj.anchor && obj.anchor.equals(structureCoords)
+    );
+    const floatingParticles = mapView.mapAnchors.children.find(
+        (obj: any) => obj.anchor && obj.anchor.equals(mainCoordinates) && obj !== rotatingGlowGroup
+    );
+
+    const objectsToAnimateFull = [rotatingGlowGroup, glowingStructure, floatingParticles].filter(
+        Boolean
+    ) as any[];
     startAnimationLoop(objectsToAnimateFull);
-    
+
     console.log("Post-processing effects example initialized successfully");
 } catch (error) {
     console.error("Error occurred while initializing post-processing effects example:", error);

@@ -80,7 +80,9 @@ export class QuantizedStratumResource extends QuantizedTileResource {
 
     protected updateGeometryProjection(projection) {
         this.stratumTileData.projection = projection;
-        this.stratumTileData.center.copy(this.geometryProjection.projectPoint(this.stratumTileData.geoCener));
+        this.stratumTileData.center.copy(
+            this.geometryProjection.projectPoint(this.stratumTileData.geoCener)
+        );
     }
 
     protected get geoCenter() {
@@ -91,7 +93,7 @@ export class QuantizedStratumResource extends QuantizedTileResource {
      * Disposes of any resources held by this instance
      * (Currently empty implementation)
      */
-    disposeResources(): void { }
+    disposeResources(): void {}
 
     /**
      * Gets the number of bytes used by the stratum tile data

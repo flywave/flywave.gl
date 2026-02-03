@@ -6,12 +6,9 @@
         "composite": true,
         "incremental": true,
         "declarationMap": true,
-        "paths": { 
-        }
+        "paths": {}
     },
     "include": ["src/**/*"],
     "exclude": ["dist/**", "test/**", "node_modules"],
-    "references": [
-         
-    ]
+    "references": []
 }

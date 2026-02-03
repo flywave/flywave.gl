@@ -30,9 +30,7 @@
         "url": "https://flywave.net"
     },
     "license": "Apache-2.0",
-    "dependencies": {
- 
-    },
+    "dependencies": {},
     "devDependencies": {
         "@flywave/flywave-test-utils": "workspace:*",
         "@types/chai": "catalog:",

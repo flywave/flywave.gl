@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type AngleProps, type BeJSONFunctions, type TrigValues, Geometry } from "../geometry";
 
 /**

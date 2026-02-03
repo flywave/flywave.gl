@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type ImageSource, type RenderTexture, type TextureTransparency } from "../common";
 import { type TextureCacheKey, type TextureImage } from "../common/render/texture-params";
 

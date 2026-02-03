@@ -8,7 +8,7 @@
         "incremental": true,
         "declarationMap": true,
         "paths": {
-            "@flywave/flywave-utils": ["../flywave-utils/src"],
+            "@flywave/flywave-utils": ["../flywave-utils/src"]
         }
     },
     "include": ["src/**/*"],

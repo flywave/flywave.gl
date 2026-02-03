@@ -1,6 +1,6 @@
-/* 
+/*
  * Copyright (C) 2025 flywave.gl contributors
- * 
+ *
  * WindowEventHandler - A class that handles window events uniformly, supporting mouse, keyboard and touch events
  * Provides event dispatch and state management functions, suitable for interactive graphics applications
  */
@@ -16,16 +16,16 @@ interface WindowEventMap {
     mouseup: MouseEvent;
     mouseout: MouseEvent;
     dblclick: MouseEvent;
-    premouseclick: MouseEvent;  // Pre-mouse click event
-    mouseclick: MouseEvent;     // Mouse click event
-    realclick: MouseEvent;      // Real click event
-    rightclick: MouseEvent;     // Right click event
+    premouseclick: MouseEvent; // Pre-mouse click event
+    mouseclick: MouseEvent; // Mouse click event
+    realclick: MouseEvent; // Real click event
+    rightclick: MouseEvent; // Right click event
     keydown: KeyboardEvent;
     keyup: KeyboardEvent;
-    premousedown: MouseEvent;   // Pre-mouse down event
+    premousedown: MouseEvent; // Pre-mouse down event
     mousedown: MouseEvent;
     mousewheel: WheelEvent;
-    mousedraw: MouseEvent;      // Mouse draw event
+    mousedraw: MouseEvent; // Mouse draw event
 }
 
 /**
@@ -44,7 +44,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     // Mouse position state
     public lastMouseX: number = 0;
     public lastMouseY: number = 0;
-    public lastMouseZ: number = 0;  // For wheel state
+    public lastMouseZ: number = 0; // For wheel state
 
     // Window size information
     public center_x: number = 0;
@@ -102,7 +102,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         return new Proxy(proxyTarget, {
             get: (target, prop: string | symbol, receiver) => {
                 // Fixed properties
-                if (prop === 'type') return type;
+                if (prop === "type") return type;
 
                 // Get from proxy target (Three.js set properties)
                 if (prop in target) {
@@ -112,7 +112,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
                 // Get from original event
                 if (prop in originalEvent) {
                     const value = (originalEvent as any)[prop];
-                    return typeof value === 'function' ? value.bind(originalEvent) : value;
+                    return typeof value === "function" ? value.bind(originalEvent) : value;
                 }
 
                 return undefined;
@@ -124,17 +124,17 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
             },
 
             has: (target, prop) => {
-                return prop === 'type' || prop in target || prop in originalEvent;
+                return prop === "type" || prop in target || prop in originalEvent;
             },
 
-            ownKeys: (target) => {
+            ownKeys: target => {
                 const targetKeys = Reflect.ownKeys(target);
                 const originalKeys = Reflect.ownKeys(originalEvent);
-                return Array.from(new Set(['type', ...targetKeys, ...originalKeys]));
+                return Array.from(new Set(["type", ...targetKeys, ...originalKeys]));
             },
 
             getOwnPropertyDescriptor: (target, prop) => {
-                if (prop === 'type') {
+                if (prop === "type") {
                     return {
                         value: type,
                         writable: false,
@@ -244,11 +244,11 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
 
         // Set state based on button
         if (button === 0) {
-            this.mouseDown[0] = this._panEnabled;  // Left button controlled by pan function
+            this.mouseDown[0] = this._panEnabled; // Left button controlled by pan function
         } else if (button === 1) {
-            this.mouseDown[1] = true;  // Middle button
+            this.mouseDown[1] = true; // Middle button
         } else if (button === 2) {
-            this.mouseDown[2] = true;  // Right button
+            this.mouseDown[2] = true; // Right button
         }
 
         // Record press position for click detection
@@ -300,7 +300,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         }
 
         this.dispatchConditionalEvent("mouseup", event);
-        this.onRightClick(event);  // Check right-click
+        this.onRightClick(event); // Check right-click
     };
 
     /**
@@ -357,7 +357,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         if (this.doubleZoomEnable) {
             this.lastMouseX = event.offsetX;
             this.lastMouseY = event.offsetY;
-            this.lastMouseZ += 10;  // Simulate wheel increment
+            this.lastMouseZ += 10; // Simulate wheel increment
         }
 
         this.dispatchConditionalEvent("dblclick", event);
@@ -384,7 +384,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
      */
     private readonly touchMove = (event: TouchEvent) => {
         if (event.changedTouches.length > 1) {
-            return;  // Ignore multi-touch
+            return; // Ignore multi-touch
         }
 
         const touch = event.changedTouches[0];

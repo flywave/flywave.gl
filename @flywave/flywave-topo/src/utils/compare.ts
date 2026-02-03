@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 export type OrderedComparator<T, U = T> = (lhs: T, rhs: U) => number;
 
 export function compareWithTolerance(a: number, b: number, tolerance = 0.1): number {

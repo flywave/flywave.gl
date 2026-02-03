@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 /**
  * * XYParitySearchContext is an internal class for callers that can feed points (without extracting to array structures)
  * * Most will be via static methods which handle a specific data source.

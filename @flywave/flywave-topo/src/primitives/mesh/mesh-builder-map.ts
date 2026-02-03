@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type DisplayParams } from "../../common/render/primitives/display-params";
 import { MeshPrimitiveType } from "../../common/render/primitives/mesh-primitive";
 import { type Range3d } from "../../core-geometry";

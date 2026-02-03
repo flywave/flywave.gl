@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type Range3d } from "../core-geometry";
 
 export interface RenderGeometry {

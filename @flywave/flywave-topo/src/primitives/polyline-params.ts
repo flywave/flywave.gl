@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { QPoint3dList } from "../common";
 import { type PolylineIndices, PolylineTypeFlags } from "../common/render";
 import {

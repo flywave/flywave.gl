@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 /**
  * Utilities to compare json objects by searching through their properties.
  * @public

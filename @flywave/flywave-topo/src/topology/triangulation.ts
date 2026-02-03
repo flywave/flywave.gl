@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { ClipUtilities } from "../clipping/clip-utils";
 import { Geometry } from "../geometry";
 import { IndexedXYZCollection } from "../geometry3d/indexed-xyz-collection";

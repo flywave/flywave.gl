@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { LineSegment3d } from "../curve/line-segment3d";
 import { Geometry } from "../geometry";
 import { Angle } from "../geometry3d/angle";

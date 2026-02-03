@@ -1,3 +1,1 @@
- 
-import  "@flywave/flywave.gl/DecoderBundleMain"; 
-  
+import "@flywave/flywave.gl/DecoderBundleMain";

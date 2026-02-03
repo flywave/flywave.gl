@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 /**
  * * For boundary sorting, an edge is a (packed!) Float64Array.
  * * Fixed entry positions are:

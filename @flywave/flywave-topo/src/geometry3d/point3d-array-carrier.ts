@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { IndexedReadWriteXYZCollection } from "./indexed-xyz-collection";
 import { Point3d, Vector3d } from "./point3d-vector3d";
 import { type XYAndZ } from "./xyz-props";

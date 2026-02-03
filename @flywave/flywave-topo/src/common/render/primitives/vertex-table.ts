@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type ColorDef, type QParams2d, type QParams3d } from "../../../common";
 import { assert } from "../../../utils";
 

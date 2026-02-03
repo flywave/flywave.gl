@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import * as THREE from "three";
 
 import type { EdgeTable, IndexedEdgeParams } from "../common/render/primitives/edge-params";

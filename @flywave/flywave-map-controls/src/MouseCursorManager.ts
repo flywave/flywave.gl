@@ -2,7 +2,6 @@
 
 import { WindowEventHandler } from "@flywave/flywave-utils";
 
-
 /**
  * 鼠标指针样式管理器
  * 为不同的地图操作提供明确且具有设计感的视觉反馈

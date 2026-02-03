@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type GeometryHandler } from "../geometry3d/geometry-handler";
 import { CurveCollection } from "./curve-collection";
 import { type RecursiveCurveProcessor } from "./curve-processor";

@@ -148,7 +148,9 @@ export async function serializeGroundOverlayTexture(
         // 向后兼容：处理传统的坐标数组
         geoArea = {
             type: "Polygon",
-            coordinates: (overlay.geoArea as GeoCoordinates[]).map((coord: GeoCoordinates) => coord.toGeoPoint())
+            coordinates: (overlay.geoArea as GeoCoordinates[]).map((coord: GeoCoordinates) =>
+                coord.toGeoPoint()
+            )
         };
     }
 

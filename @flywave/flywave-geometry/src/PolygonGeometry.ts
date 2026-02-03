@@ -1,14 +1,6 @@
-import {
-    BufferGeometry,
-    BufferAttribute,
-    Vector2,
-    Vector3,
-    Box3,
-    Plane,
-    Ray,
-} from 'three';
-import earcut from 'earcut';
-import { Projection } from '@flywave/flywave-geoutils';
+import { BufferGeometry, BufferAttribute, Vector2, Vector3, Box3, Plane, Ray } from "three";
+import earcut from "earcut";
+import { Projection } from "@flywave/flywave-geoutils";
 
 export const ArcType = {
     GEODESIC: 0,
@@ -56,7 +48,7 @@ class GeometryPipeline {
      * 计算几何体顶点法线
      */
     static computeNormal(geometry: BufferGeometry): BufferGeometry {
-        const positionAttribute = geometry.getAttribute('position');
+        const positionAttribute = geometry.getAttribute("position");
         if (!positionAttribute) return geometry;
 
         const positions = positionAttribute.array as Float32Array;
@@ -103,7 +95,7 @@ class GeometryPipeline {
             normals[idx + 2] = normal.z;
         }
 
-        geometry.setAttribute('normal', new BufferAttribute(normals, 3));
+        geometry.setAttribute("normal", new BufferAttribute(normals, 3));
         return geometry;
     }
 
@@ -251,7 +243,9 @@ class PolygonPipeline {
                         if (hasTexcoords && texcoords) {
                             const t0 = new Vector2().fromArray(subdividedTexcoords, i0 * 2);
                             const t1 = new Vector2().fromArray(subdividedTexcoords, i1 * 2);
-                            const midTexcoord = new Vector2().addVectors(t0, t1).multiplyScalar(0.5);
+                            const midTexcoord = new Vector2()
+                                .addVectors(t0, t1)
+                                .multiplyScalar(0.5);
                             subdividedTexcoords.push(midTexcoord.x, midTexcoord.y);
                         }
                     }
@@ -271,7 +265,9 @@ class PolygonPipeline {
                         if (hasTexcoords && texcoords) {
                             const t1 = new Vector2().fromArray(subdividedTexcoords, i1 * 2);
                             const t2 = new Vector2().fromArray(subdividedTexcoords, i2 * 2);
-                            const midTexcoord = new Vector2().addVectors(t1, t2).multiplyScalar(0.5);
+                            const midTexcoord = new Vector2()
+                                .addVectors(t1, t2)
+                                .multiplyScalar(0.5);
                             subdividedTexcoords.push(midTexcoord.x, midTexcoord.y);
                         }
                     }
@@ -291,7 +287,9 @@ class PolygonPipeline {
                         if (hasTexcoords && texcoords) {
                             const t2 = new Vector2().fromArray(subdividedTexcoords, i2 * 2);
                             const t0 = new Vector2().fromArray(subdividedTexcoords, i0 * 2);
-                            const midTexcoord = new Vector2().addVectors(t2, t0).multiplyScalar(0.5);
+                            const midTexcoord = new Vector2()
+                                .addVectors(t2, t0)
+                                .multiplyScalar(0.5);
                             subdividedTexcoords.push(midTexcoord.x, midTexcoord.y);
                         }
                     }
@@ -305,11 +303,17 @@ class PolygonPipeline {
         }
 
         const geometry = new BufferGeometry();
-        geometry.setAttribute('position', new BufferAttribute(new Float32Array(subdividedPositions), 3));
+        geometry.setAttribute(
+            "position",
+            new BufferAttribute(new Float32Array(subdividedPositions), 3)
+        );
         geometry.setIndex(subdividedIndices);
 
         if (hasTexcoords) {
-            geometry.setAttribute('uv', new BufferAttribute(new Float32Array(subdividedTexcoords), 2));
+            geometry.setAttribute(
+                "uv",
+                new BufferAttribute(new Float32Array(subdividedTexcoords), 2)
+            );
         }
 
         return geometry;
@@ -439,7 +443,8 @@ class EllipsoidTangentPlane {
     projectPointOntoEllipsoid(cartesian: Vector2, result?: Vector3): Vector3 {
         const point = result || new Vector3();
 
-        point.copy(this._origin)
+        point
+            .copy(this._origin)
             .add(this._xAxis.clone().multiplyScalar(cartesian.x))
             .add(this._yAxis.clone().multiplyScalar(cartesian.y));
 
@@ -497,7 +502,7 @@ export class PolygonGeometry {
         const closeBottom = geometry._closeBottom;
 
         if (!polygonHierarchy.positions || polygonHierarchy.positions.length < 3) {
-            throw new Error('At least three positions are required.');
+            throw new Error("At least three positions are required.");
         }
 
         if (height !== extrudedHeight) {
@@ -517,7 +522,7 @@ export class PolygonGeometry {
                 height,
                 vertexFormat,
                 projection,
-                perPositionHeight,
+                perPositionHeight
             );
         }
     }
@@ -527,18 +532,26 @@ export class PolygonGeometry {
         height: number,
         vertexFormat: VertexFormat,
         projection: Projection,
-        perPositionHeight: boolean,
+        perPositionHeight: boolean
     ): BufferGeometry {
         const positions2D = this.projectPositionsTo2D(polygonHierarchy, projection);
         if (!positions2D) {
-            throw new Error('Unable to project positions to 2D.');
+            throw new Error("Unable to project positions to 2D.");
         }
 
         const indices = this.triangulatePolygon(polygonHierarchy, positions2D);
-        const flattenedPositions = this.generatePositions(polygonHierarchy, height, perPositionHeight, projection);
+        const flattenedPositions = this.generatePositions(
+            polygonHierarchy,
+            height,
+            perPositionHeight,
+            projection
+        );
 
         const geometry = new BufferGeometry();
-        geometry.setAttribute('position', new BufferAttribute(new Float32Array(flattenedPositions), 3));
+        geometry.setAttribute(
+            "position",
+            new BufferAttribute(new Float32Array(flattenedPositions), 3)
+        );
         geometry.setIndex(indices);
 
         if (vertexFormat.normal) {
@@ -547,7 +560,7 @@ export class PolygonGeometry {
 
         if (vertexFormat.uv) {
             const uvAttribute = this.generateTextureCoordinates(geometry, polygonHierarchy);
-            geometry.setAttribute('uv', uvAttribute);
+            geometry.setAttribute("uv", uvAttribute);
         }
 
         geometry.computeBoundingSphere();
@@ -567,7 +580,7 @@ export class PolygonGeometry {
         closeBottom: boolean
     ): BufferGeometry {
         if (height === extrudedHeight) {
-            throw new Error('Height and extrudedHeight must be different for extrusion.');
+            throw new Error("Height and extrudedHeight must be different for extrusion.");
         }
 
         const topGeometry = this.createFlatPolygonGeometry(
@@ -575,7 +588,7 @@ export class PolygonGeometry {
             extrudedHeight,
             vertexFormat,
             projection,
-            perPositionHeight,
+            perPositionHeight
         );
 
         const bottomGeometry = this.createFlatPolygonGeometry(
@@ -583,7 +596,7 @@ export class PolygonGeometry {
             height,
             vertexFormat,
             projection,
-            perPositionHeight,
+            perPositionHeight
         );
 
         const wallGeometry = this.generateWallGeometry(
@@ -626,21 +639,54 @@ export class PolygonGeometry {
                 const current = ringPositions[i];
                 const next = ringPositions[(i + 1) % numPositions];
 
-                const bottomCurrent = this.computePosition(current, height, perPositionHeight, projection);
-                const topCurrent = this.computePosition(current, extrudedHeight, perPositionHeight, projection);
-                const bottomNext = this.computePosition(next, height, perPositionHeight, projection);
-                const topNext = this.computePosition(next, extrudedHeight, perPositionHeight, projection);
+                const bottomCurrent = this.computePosition(
+                    current,
+                    height,
+                    perPositionHeight,
+                    projection
+                );
+                const topCurrent = this.computePosition(
+                    current,
+                    extrudedHeight,
+                    perPositionHeight,
+                    projection
+                );
+                const bottomNext = this.computePosition(
+                    next,
+                    height,
+                    perPositionHeight,
+                    projection
+                );
+                const topNext = this.computePosition(
+                    next,
+                    extrudedHeight,
+                    perPositionHeight,
+                    projection
+                );
 
                 const startIndex = wallPositions.length / 3;
 
                 wallPositions.push(
-                    bottomCurrent.x, bottomCurrent.y, bottomCurrent.z,
-                    topCurrent.x, topCurrent.y, topCurrent.z,
-                    bottomNext.x, bottomNext.y, bottomNext.z,
-                    topNext.x, topNext.y, topNext.z
+                    bottomCurrent.x,
+                    bottomCurrent.y,
+                    bottomCurrent.z,
+                    topCurrent.x,
+                    topCurrent.y,
+                    topCurrent.z,
+                    bottomNext.x,
+                    bottomNext.y,
+                    bottomNext.z,
+                    topNext.x,
+                    topNext.y,
+                    topNext.z
                 );
 
-                const normal = this.computeWallNormal(bottomCurrent, topCurrent, bottomNext, isOuterRing);
+                const normal = this.computeWallNormal(
+                    bottomCurrent,
+                    topCurrent,
+                    bottomNext,
+                    isOuterRing
+                );
 
                 for (let j = 0; j < 4; j++) {
                     wallNormals.push(normal.x, normal.y, normal.z);
@@ -649,24 +695,11 @@ export class PolygonGeometry {
                 const u0 = i / numPositions;
                 const u1 = (i + 1) / numPositions;
 
-                wallUVs.push(
-                    u0, 0,
-                    u0, 1,
-                    u1, 0,
-                    u1, 1
-                );
+                wallUVs.push(u0, 0, u0, 1, u1, 0, u1, 1);
 
-                wallIndices.push(
-                    startIndex,
-                    startIndex + 1,
-                    startIndex + 2
-                );
+                wallIndices.push(startIndex, startIndex + 1, startIndex + 2);
 
-                wallIndices.push(
-                    startIndex + 1,
-                    startIndex + 3,
-                    startIndex + 2
-                );
+                wallIndices.push(startIndex + 1, startIndex + 3, startIndex + 2);
             }
         };
 
@@ -678,14 +711,20 @@ export class PolygonGeometry {
             }
         }
 
-        wallGeometry.setAttribute('position', new BufferAttribute(new Float32Array(wallPositions), 3));
+        wallGeometry.setAttribute(
+            "position",
+            new BufferAttribute(new Float32Array(wallPositions), 3)
+        );
 
         if (vertexFormat.normal) {
-            wallGeometry.setAttribute('normal', new BufferAttribute(new Float32Array(wallNormals), 3));
+            wallGeometry.setAttribute(
+                "normal",
+                new BufferAttribute(new Float32Array(wallNormals), 3)
+            );
         }
 
         if (vertexFormat.uv) {
-            wallGeometry.setAttribute('uv', new BufferAttribute(new Float32Array(wallUVs), 2));
+            wallGeometry.setAttribute("uv", new BufferAttribute(new Float32Array(wallUVs), 2));
         }
 
         wallGeometry.setIndex(wallIndices);
@@ -711,7 +750,12 @@ export class PolygonGeometry {
         return normal;
     }
 
-    private static computePosition(position: Vector3, height: number, perPositionHeight: boolean, projection: Projection): Vector3 {
+    private static computePosition(
+        position: Vector3,
+        height: number,
+        perPositionHeight: boolean,
+        projection: Projection
+    ): Vector3 {
         if (perPositionHeight) {
             return position.clone();
         } else {
@@ -750,7 +794,7 @@ export class PolygonGeometry {
                 vertexFormat,
                 new Vector3(0, 0, 1)
             );
-            indexOffset += topGeometry.getAttribute('position').count;
+            indexOffset += topGeometry.getAttribute("position").count;
         }
 
         if (closeBottom) {
@@ -764,7 +808,7 @@ export class PolygonGeometry {
                 vertexFormat,
                 new Vector3(0, 0, -1)
             );
-            indexOffset += bottomGeometry.getAttribute('position').count;
+            indexOffset += bottomGeometry.getAttribute("position").count;
         }
 
         this.appendGeometry(
@@ -777,14 +821,20 @@ export class PolygonGeometry {
             vertexFormat
         );
 
-        mergedGeometry.setAttribute('position', new BufferAttribute(new Float32Array(mergedPositions), 3));
+        mergedGeometry.setAttribute(
+            "position",
+            new BufferAttribute(new Float32Array(mergedPositions), 3)
+        );
 
         if (vertexFormat.normal && mergedNormals.length > 0) {
-            mergedGeometry.setAttribute('normal', new BufferAttribute(new Float32Array(mergedNormals), 3));
+            mergedGeometry.setAttribute(
+                "normal",
+                new BufferAttribute(new Float32Array(mergedNormals), 3)
+            );
         }
 
         if (vertexFormat.uv && mergedUVs.length > 0) {
-            mergedGeometry.setAttribute('uv', new BufferAttribute(new Float32Array(mergedUVs), 2));
+            mergedGeometry.setAttribute("uv", new BufferAttribute(new Float32Array(mergedUVs), 2));
         }
 
         mergedGeometry.setIndex(mergedIndices);
@@ -804,17 +854,13 @@ export class PolygonGeometry {
         vertexFormat: VertexFormat,
         overrideNormal?: Vector3
     ): void {
-        const positions = sourceGeometry.getAttribute('position');
-        const normals = sourceGeometry.getAttribute('normal');
-        const uvs = sourceGeometry.getAttribute('uv');
+        const positions = sourceGeometry.getAttribute("position");
+        const normals = sourceGeometry.getAttribute("normal");
+        const uvs = sourceGeometry.getAttribute("uv");
         const indices = sourceGeometry.getIndex();
 
         for (let i = 0; i < positions.count; i++) {
-            targetPositions.push(
-                positions.getX(i),
-                positions.getY(i),
-                positions.getZ(i)
-            );
+            targetPositions.push(positions.getX(i), positions.getY(i), positions.getZ(i));
 
             if (vertexFormat.normal) {
                 if (overrideNormal) {
@@ -836,7 +882,10 @@ export class PolygonGeometry {
         }
     }
 
-    private static projectPositionsTo2D(polygonHierarchy: PolygonHierarchy, projection: Projection): Vector2[] | undefined {
+    private static projectPositionsTo2D(
+        polygonHierarchy: PolygonHierarchy,
+        projection: Projection
+    ): Vector2[] | undefined {
         if (polygonHierarchy.positions.length === 0) {
             return undefined;
         }
@@ -857,7 +906,10 @@ export class PolygonGeometry {
         return allPositions2D;
     }
 
-    private static triangulatePolygon(polygonHierarchy: PolygonHierarchy, positions2D: Vector2[]): number[] {
+    private static triangulatePolygon(
+        polygonHierarchy: PolygonHierarchy,
+        positions2D: Vector2[]
+    ): number[] {
         const vertices: number[] = [];
         const holes: number[] = [];
 
@@ -923,8 +975,11 @@ export class PolygonGeometry {
         return positions;
     }
 
-    private static generateTextureCoordinates(geometry: BufferGeometry, polygonHierarchy: PolygonHierarchy): BufferAttribute {
-        const positions = geometry.getAttribute('position').array as Float32Array;
+    private static generateTextureCoordinates(
+        geometry: BufferGeometry,
+        polygonHierarchy: PolygonHierarchy
+    ): BufferAttribute {
+        const positions = geometry.getAttribute("position").array as Float32Array;
         const uvs: number[] = [];
 
         geometry.computeBoundingBox();
@@ -934,10 +989,7 @@ export class PolygonGeometry {
             for (let i = 0; i < positions.length; i += 3) {
                 const x = positions[i];
                 const y = positions[i + 1];
-                uvs.push(
-                    (x + 180) / 360,
-                    (90 - y) / 180
-                );
+                uvs.push((x + 180) / 360, (90 - y) / 180);
             }
         } else {
             const size = new Vector3();
@@ -963,7 +1015,11 @@ export class PolygonGeometry {
      * Create shadow volume geometry
      * 创建阴影体几何体
      */
-    static createShadowVolume(geometry: PolygonGeometry, minHeight: number, maxHeight: number): PolygonGeometry {
+    static createShadowVolume(
+        geometry: PolygonGeometry,
+        minHeight: number,
+        maxHeight: number
+    ): PolygonGeometry {
         return new PolygonGeometry({
             polygonHierarchy: geometry._polygonHierarchy,
             height: maxHeight,
@@ -987,7 +1043,10 @@ export class PolygonGeometry {
      */
     computeRectangle(): { west: number; south: number; east: number; north: number } {
         const positions = this._polygonHierarchy.positions;
-        let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
+        let west = Infinity,
+            south = Infinity,
+            east = -Infinity,
+            north = -Infinity;
 
         for (const position of positions) {
             west = Math.min(west, position.x);
@@ -1010,14 +1069,17 @@ export class PolygonBufferGeometry extends BufferGeometry {
      * Create from positions array
      * 从位置数组创建
      */
-    static fromPositions(positions: Vector3[], options?: Omit<PolygonGeometryOptions, 'polygonHierarchy'>): PolygonBufferGeometry {
+    static fromPositions(
+        positions: Vector3[],
+        options?: Omit<PolygonGeometryOptions, "polygonHierarchy">
+    ): PolygonBufferGeometry {
         const polygonHierarchy: PolygonHierarchy = {
             positions: positions
         };
 
         const polygonGeometry = new PolygonGeometry({
             polygonHierarchy,
-            ...options,
+            ...options
         });
 
         return new PolygonBufferGeometry(polygonGeometry);

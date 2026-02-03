@@ -106,7 +106,7 @@ class ElevationRangeSource implements IElevationRangeSource {
             return cached;
         }
 
-        const demTile = this.dataSource.dataProvider().getBestAvailableResourceTile(tileID,false);
+        const demTile = this.dataSource.dataProvider().getBestAvailableResourceTile(tileID, false);
         if (!(demTile && demTile.resource)) {
             return null;
         }

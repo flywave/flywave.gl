@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../../geometry";
 import { Plane3dByOriginAndVectors } from "../../geometry3d/plane3d-by-origin-and-vectors";
 import { type Vector3d, Point3d } from "../../geometry3d/point3d-vector3d";

@@ -8,9 +8,9 @@ import { merge } from "webpack-merge";
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
 
-import { 
-    createBaseConfig, 
-    createDecoderConfig, 
+import {
+    createBaseConfig,
+    createDecoderConfig,
     createAssetsConfig,
     FlywaveWebpackConfig
 } from "@flywave/flywave-webpack-utils/scripts/WebpackConfig";
@@ -56,18 +56,18 @@ function getCacheConfig(name: string): CacheConfig | false {
     return process.env.NO_HARD_SOURCE_CACHE
         ? false
         : {
-            type: "filesystem",
-            buildDependencies: {
-                config: [__filename]
-            },
-            name: "flywave-examples_" + name
-        };
+              type: "filesystem",
+              buildDependencies: {
+                  config: [__filename]
+              },
+              name: "flywave-examples_" + name
+          };
 }
 
 // 定义flywave-webpack-utils配置
 const flywaveConfig: FlywaveWebpackConfig = {
     tsConfigPath: path.join(__dirname, "tsconfig.json"),
-    projectRoot: path.resolve(__dirname, '../../'),
+    projectRoot: path.resolve(__dirname, "../../"),
     enableTsconfigPaths: true,
     themePath: flywaveMapThemePath,
     fontResourcesPath: flywaveFontResourcesPath,
@@ -79,11 +79,11 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
     resolve: {
         alias: {
             "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src/index.ts")
-        },
-    }, 
+        }
+    },
     output: {
         path: path.join(process.cwd(), "dist/examples"),
-        filename: "[name].bundle.js", 
+        filename: "[name].bundle.js",
         libraryTarget: "module"
     },
     experiments: {
@@ -93,30 +93,35 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
         new webpack.DefinePlugin({
             THEMES: JSON.stringify(themeList),
             FLYWAVE_BASE_URL: JSON.stringify("./"),
-            CESIUM_ION_TOKEN: JSON.stringify(process.env.CESIUM_ION_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOTFkYWMzNC1mYjI1LTRlYTYtYTc2ZS04NWI1MTU2OTVlMDYiLCJpZCI6Mzg2NzksImlhdCI6MTY0MTE5NTAyNn0.4xsIJgYTK81yhRu67GG0x2FMit6zpYFCWsvWSwiFVV4'),
+            CESIUM_ION_TOKEN: JSON.stringify(
+                process.env.CESIUM_ION_TOKEN ||
+                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOTFkYWMzNC1mYjI1LTRlYTYtYTc2ZS04NWI1MTU2OTVlMDYiLCJpZCI6Mzg2NzksImlhdCI6MTY0MTE5NTAyNn0.4xsIJgYTK81yhRu67GG0x2FMit6zpYFCWsvWSwiFVV4"
+            )
         })
     ]
 });
 
-const decoderConfig = merge(createDecoderConfig({
-    ...flywaveConfig,
-    decoderEntry: "./decoder/decoder.ts"
-}), {
-    target: "webworker",
-    resolve: {
-        alias: {
-            three: threePath,
-            "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src")
+const decoderConfig = merge(
+    createDecoderConfig({
+        ...flywaveConfig,
+        decoderEntry: "./decoder/decoder.ts"
+    }),
+    {
+        target: "webworker",
+        resolve: {
+            alias: {
+                three: threePath,
+                "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src")
+            }
         },
-    },
-    output: {
-        filename: "flywave-decoders.js"
-    },
-    experiments: {
-        outputModule: false
+        output: {
+            filename: "flywave-decoders.js"
+        },
+        experiments: {
+            outputModule: false
+        }
     }
-});
-
+);
 
 const webpackEntries = glob
     .sync(path.join(__dirname, "./src/*.{ts,tsx}"))
@@ -198,7 +203,7 @@ const exampleBrowserConfig = merge(commonConfig, {
     },
     cache: getCacheConfig("example_browser")
 });
- 
+
 browserConfig.plugins!.push(
     ...Object.keys(browserConfig.entry as Record<string, string>).map(
         chunk =>
@@ -228,7 +233,7 @@ const exampleDefs = Object.keys(allEntries).reduce(function (
     r[entry + ".html"] = path.relative(__dirname, allEntries[entry]);
     return r;
 },
-    {});
+{});
 
 interface CopyPattern {
     from: string;
@@ -268,26 +273,31 @@ const htmlFiles: CopyPattern[] = glob.sync(path.join(__dirname, "src/*.html")).m
 });
 
 // 添加额外的资源到配置中
-const additionalAssets: Array<{ from: string; to: string; toType?: "dir" | "file" | "template" }> = [
-    { from: path.join(__dirname, "resources"), to: "", toType: "dir" },
-    { from: path.join(flywaveMapThemePath, "resources"), to: "resources", toType: "dir" },
-    { from: path.join(flywaveMapThemePath, "resources"), to: "resources", toType: "dir" },
-    { from: threeDracoPath, to: "resources/libs", toType: "dir" },
-    {
-        from: path.join(flywaveFontResourcesPath, "resources"),
-        to: "resources/fonts",
-        toType: "dir"
-    },
-    {
-        from: __dirname + "/example-definitions.js.in",
-        to: "example-definitions.js",
-        toType: "file"
-    },
-    ...srcFiles.filter(asset => asset.to).map(asset => ({ from: asset.from, to: asset.to!, toType: asset.toType })),
-    ...htmlFiles.filter(asset => asset.to).map(asset => ({ from: asset.from, to: asset.to!, toType: asset.toType })),
-    { from: path.join(__dirname, "index.html"), to: "index.html" },
-    { from: path.join(__dirname, "codebrowser.html"), to: "codebrowser.html" }
-];
+const additionalAssets: Array<{ from: string; to: string; toType?: "dir" | "file" | "template" }> =
+    [
+        { from: path.join(__dirname, "resources"), to: "", toType: "dir" },
+        { from: path.join(flywaveMapThemePath, "resources"), to: "resources", toType: "dir" },
+        { from: path.join(flywaveMapThemePath, "resources"), to: "resources", toType: "dir" },
+        { from: threeDracoPath, to: "resources/libs", toType: "dir" },
+        {
+            from: path.join(flywaveFontResourcesPath, "resources"),
+            to: "resources/fonts",
+            toType: "dir"
+        },
+        {
+            from: __dirname + "/example-definitions.js.in",
+            to: "example-definitions.js",
+            toType: "file"
+        },
+        ...srcFiles
+            .filter(asset => asset.to)
+            .map(asset => ({ from: asset.from, to: asset.to!, toType: asset.toType })),
+        ...htmlFiles
+            .filter(asset => asset.to)
+            .map(asset => ({ from: asset.from, to: asset.to!, toType: asset.toType })),
+        { from: path.join(__dirname, "index.html"), to: "index.html" },
+        { from: path.join(__dirname, "codebrowser.html"), to: "codebrowser.html" }
+    ];
 
 // 更新flywaveConfig中的additionalAssets
 flywaveConfig.additionalAssets = additionalAssets;
@@ -298,7 +308,9 @@ const assets = createAssetsConfig(flywaveConfig).map(asset => {
         return {
             ...asset,
             transform: (content: Buffer) => {
-                return content.toString().replace("{{EXAMPLES}}", JSON.stringify(exampleDefs, null, 4));
+                return content
+                    .toString()
+                    .replace("{{EXAMPLES}}", JSON.stringify(exampleDefs, null, 4));
             }
         };
     }
@@ -307,10 +319,6 @@ const assets = createAssetsConfig(flywaveConfig).map(asset => {
 
 browserConfig.plugins!.push(new CopyWebpackPlugin({ patterns: assets }));
 
-const configs: Configuration[] = [
-    decoderConfig,
-    browserConfig,
-    exampleBrowserConfig
-];
+const configs: Configuration[] = [decoderConfig, browserConfig, exampleBrowserConfig];
 
 export default configs;

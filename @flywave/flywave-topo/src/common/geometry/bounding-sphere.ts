@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type Transform, Point3d } from "../../core-geometry";
 
 export class BoundingSphere {

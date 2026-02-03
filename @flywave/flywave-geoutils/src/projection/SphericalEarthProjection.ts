@@ -491,7 +491,7 @@ class SphericalEarthProjection extends Projection implements SphereProjection {
                 return distance;
             }
         }
- 
+
         const intersectionResult = ray.intersectSphere(sphere, intersectionPoint);
 
         if (intersectionResult !== null) {
@@ -511,9 +511,10 @@ class SphericalEarthProjection extends Projection implements SphereProjection {
             }
         }
 
-
         return -1; // 没有有效的交点
     }
 }
 
-export const sphereProjection: SphericalEarthProjection = new SphericalEarthProjection(EarthConstants.EQUATORIAL_RADIUS);
+export const sphereProjection: SphericalEarthProjection = new SphericalEarthProjection(
+    EarthConstants.EQUATORIAL_RADIUS
+);

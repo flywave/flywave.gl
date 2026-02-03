@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 /**
  * Methods to "grab and drop" mask bits.
  * * Caller code (e.g. HalfEdgeGraph) initializes with a block of bits to be managed.

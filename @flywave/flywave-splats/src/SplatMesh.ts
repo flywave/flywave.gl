@@ -924,16 +924,16 @@ export class SplatMesh extends Mesh {
         const ray = raycaster.ray;
         const positions = this._splatPositions2;
         const vertexCount = this._vertexCount;
-        
+
         // 获取世界矩阵及其逆矩阵
         const matrixWorld = this.matrixWorld;
         const inverseMatrix = new Matrix4().copy(matrixWorld).invert();
-        
+
         // 将射线转换到局部坐标系
         const localRay = ray.clone().applyMatrix4(inverseMatrix);
-        
+
         const localIntersects: SplatIntersection[] = [];
-        
+
         // 对每个高斯椭球体进行检测
         for (let i = 0; i < vertexCount; i++) {
             const index = i;
@@ -942,32 +942,27 @@ export class SplatMesh extends Mesh {
                 positions[4 * index + 1],
                 positions[4 * index + 2]
             );
-            
+
             // 使用简化方法：将高斯椭球体当作球体处理
             // 使用固定的半径，实际应用中可以根据协方差信息计算更精确的半径
             const radius = 0.05;
-            
+
             // 计算射线与球体的交点
-            const intersection = this._raycastGaussianSplat(
-                localRay, 
-                position, 
-                radius, 
-                index
-            );
-            
+            const intersection = this._raycastGaussianSplat(localRay, position, radius, index);
+
             if (intersection) {
                 localIntersects.push(intersection);
             }
         }
-        
+
         // 按距离排序
         localIntersects.sort((a, b) => a.distance - b.distance);
-        
+
         // 转换到世界坐标系并添加到结果中
         for (const localIntersect of localIntersects) {
             const worldPoint = localIntersect.point.applyMatrix4(matrixWorld);
             const worldDistance = raycaster.ray.origin.distanceTo(worldPoint);
-            
+
             intersects.push({
                 distance: worldDistance,
                 point: worldPoint,
@@ -983,17 +978,16 @@ export class SplatMesh extends Mesh {
      * 将高斯椭球体近似为球体进行检测
      */
     private _raycastGaussianSplat(
-        ray: Ray, 
-        center: Vector3, 
-        radius: number, 
+        ray: Ray,
+        center: Vector3,
+        radius: number,
         index: number
     ): SplatIntersection | null {
-        
         // 简化实现：将高斯椭球体当作球体处理
         const sphere = new Sphere(center, radius);
         const intersectionPoint = new Vector3();
         const result = ray.intersectSphere(sphere, intersectionPoint);
-        
+
         if (result) {
             return {
                 distance: ray.origin.distanceTo(intersectionPoint),
@@ -1002,7 +996,7 @@ export class SplatMesh extends Mesh {
                 splatMesh: this
             };
         }
-        
+
         return null;
     }
 
@@ -1022,28 +1016,28 @@ export class SplatMesh extends Mesh {
         const vertexCount = this._vertexCount;
         const matrixWorld = this.matrixWorld;
         const inverseMatrix = new Matrix4().copy(matrixWorld).invert();
-        
+
         // 将点转换到局部坐标系
         const localPoint = point.clone().applyMatrix4(inverseMatrix);
-        
+
         let closestIndex: number | null = null;
         let minDistance = threshold;
-        
+
         for (let i = 0; i < vertexCount; i++) {
             const position = new Vector3(
                 positions[4 * i],
                 positions[4 * i + 1],
                 positions[4 * i + 2]
             );
-            
+
             const distance = position.distanceTo(localPoint);
-            
+
             if (distance < minDistance) {
                 minDistance = distance;
                 closestIndex = i;
             }
         }
-        
+
         return closestIndex;
     }
 

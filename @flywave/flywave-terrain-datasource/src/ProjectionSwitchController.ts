@@ -9,10 +9,10 @@ import { ProjectionType, type Projection } from "@flywave/flywave-geoutils";
 export interface ProjectionSwitchOptions {
     /** Duration of the projection switch animation in milliseconds */
     duration?: number;
-    
+
     /** Speed factor for the projection switch animation */
     speedFactor?: number;
-    
+
     /** Whether to animate the projection switch */
     animate?: boolean;
 }
@@ -29,11 +29,7 @@ export class ProjectionSwitchController {
     private m_animate: boolean = true;
     private m_lastProjectionType?: ProjectionType;
 
-    constructor(
-        private readonly m_dataSource: DataSource,
-        options?: ProjectionSwitchOptions
-    ) {
-        
+    constructor(private readonly m_dataSource: DataSource, options?: ProjectionSwitchOptions) {
         // Apply options if provided
         if (options) {
             if (options.duration !== undefined) {
@@ -58,9 +54,11 @@ export class ProjectionSwitchController {
      * @returns True if planar, false if spherical
      */
     private isPlanarProjection(projectionType: ProjectionType): boolean {
-        return projectionType === ProjectionType.Planar ||  
-               // Add other planar projection types as needed
-               false;
+        return (
+            projectionType === ProjectionType.Planar ||
+            // Add other planar projection types as needed
+            false
+        );
     }
 
     /**
@@ -92,7 +90,7 @@ export class ProjectionSwitchController {
             this.startAnimation(currentProjectionType);
             this.m_lastProjectionType = currentProjectionType;
         }
-        
+
         // Update animation progress if animating
         if (this.m_isAnimating) {
             this.updateAnimation();
@@ -110,7 +108,7 @@ export class ProjectionSwitchController {
             this.m_isAnimating = false;
             return;
         }
-        
+
         // Reset animation state
         this.m_startTime = performance.now();
         this.m_isAnimating = true;
@@ -123,21 +121,21 @@ export class ProjectionSwitchController {
         if (!this.m_isAnimating) {
             return;
         }
-        
+
         const currentTime = performance.now();
         const elapsed = currentTime - this.m_startTime;
         const progress = Math.min(1.0, (elapsed / this.m_duration) * this.m_speedFactor);
-        
+
         // Apply easing function (smooth start and end)
         const easedProgress = this.easeInOutCubic(progress);
-        
+
         // Calculate target factor based on projection type
         const startFactor = this.m_projectionFactor;
         const targetFactor = this.getTargetProjectionFactor(this.m_lastProjectionType!);
-        
+
         // Interpolate between start and target factors
         this.m_projectionFactor = startFactor + (targetFactor - startFactor) * easedProgress;
-        
+
         // Check if animation is complete
         if (progress >= 1.0) {
             this.m_isAnimating = false;
@@ -184,7 +182,7 @@ export class ProjectionSwitchController {
     get ProjectionType(): ProjectionType {
         return this.mapView.projection.type!;
     }
- 
+
     /**
      * Get the current projection factor (0.0 for spherical, 1.0 for planar)
      */

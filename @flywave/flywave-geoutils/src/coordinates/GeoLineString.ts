@@ -17,7 +17,7 @@ import { type GeoPolygonCoordinates, GeoPolygon } from "./GeoPolygon";
 type MinTwoItemsArray<T> = [T, T, ...T[]];
 
 export type GeoLineStringCoordinates = Array<
-  GeoCoordinatesLike | GeoCoordinates | GeoCoordLike | GeoPointLike
+    GeoCoordinatesLike | GeoCoordinates | GeoCoordLike | GeoPointLike
 > & { length: 2 | number };
 
 export interface GeoLineStringJSON {

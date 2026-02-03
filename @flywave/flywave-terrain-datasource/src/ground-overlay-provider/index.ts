@@ -321,9 +321,7 @@ export class GroundOverlayProvider extends ResourceProvider<
      *
      * @param identifier - Can be overlay ID/name, GeoBox, GeoPolygon, GeoLineString, or coordinate array
      */
-    removeOverlays(
-        identifier: string | GeoBox | GeoPolygon | GeoLineString
-    ): void {
+    removeOverlays(identifier: string | GeoBox | GeoPolygon | GeoLineString): void {
         // 清除将要删除的覆盖层的缓存
         this.overlays.forEach(overlay => {
             let shouldRemove = false;
@@ -384,7 +382,6 @@ export class GroundOverlayProvider extends ResourceProvider<
      * @returns Bounding box for the geo area
      */
     private getOrCreateBoundingBox(geoArea: GeoPolygon | GeoLineString): GeoBox {
-
         // 计算并缓存边界框
         const coords = this.extractCoordinates(geoArea);
         const boundingBox = this.createBoundingBoxForCoordinates(coords);

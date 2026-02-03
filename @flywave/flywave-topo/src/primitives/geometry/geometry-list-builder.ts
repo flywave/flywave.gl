@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Group, Object3D } from "three";
 
 import { type Gradient, type RenderTexture, GraphicParams } from "../../common";

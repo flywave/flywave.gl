@@ -5,7 +5,8 @@ import { type TileRenderDataSourceOptions, TileRenderDataSource } from "./TileRe
 /**
  * Configuration options for the CesiumIonDataSource
  */
-export interface CesiumIonDataSourceOptions extends Omit<TileRenderDataSourceOptions, 'url' | 'headers'> {
+export interface CesiumIonDataSourceOptions
+    extends Omit<TileRenderDataSourceOptions, "url" | "headers"> {
     /**
      * Cesium Ion access token
      */
@@ -24,7 +25,7 @@ export interface CesiumIonDataSourceOptions extends Omit<TileRenderDataSourceOpt
 
 /**
  * A DataSource implementation for rendering Cesium Ion 3D Tiles datasets
- * 
+ *
  * This class extends TileRenderDataSource to provide seamless integration
  * with Cesium Ion services, handling authentication and endpoint resolution
  * automatically.
@@ -40,8 +41,13 @@ export class CesiumIonDataSource extends TileRenderDataSource {
      * @param options - Configuration options for the data source
      */
     constructor(options: CesiumIonDataSourceOptions) {
-        const { accessToken, assetId, apiEndpoint = "https://api.cesium.com/v1", ...baseOptions } = options;
-        
+        const {
+            accessToken,
+            assetId,
+            apiEndpoint = "https://api.cesium.com/v1",
+            ...baseOptions
+        } = options;
+
         // Initialize parent class with placeholder values
         super({
             ...baseOptions,
@@ -60,7 +66,7 @@ export class CesiumIonDataSource extends TileRenderDataSource {
      */
     private async fetchAssetEndpoint(): Promise<any> {
         const endpointUrl = `${this.m_apiEndpoint}/assets/${this.m_assetId}/endpoint`;
-        
+
         const response = await fetch(endpointUrl, {
             headers: {
                 Authorization: `Bearer ${this.m_accessToken}`
@@ -68,7 +74,9 @@ export class CesiumIonDataSource extends TileRenderDataSource {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch asset endpoint: ${response.status} ${response.statusText}`);
+            throw new Error(
+                `Failed to fetch asset endpoint: ${response.status} ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -82,7 +90,7 @@ export class CesiumIonDataSource extends TileRenderDataSource {
         try {
             // Fetch the asset endpoint information
             const endpointData = await this.fetchAssetEndpoint();
-            
+
             // Update the tiles renderer with the actual URL and headers
             const tilesRenderer = this.tilesRenderer;
             if (tilesRenderer) {
@@ -91,16 +99,16 @@ export class CesiumIonDataSource extends TileRenderDataSource {
                 (tilesRenderer as any).fetchOptions.headers = {
                     authorization: `Bearer ${endpointData.accessToken}`
                 };
-                
+
                 // Reinitialize the base renderer with the new URL
                 // This is a workaround since the base class doesn't expose a method to update the URL
                 const basePath = (tilesRenderer as any).rootURL;
                 (tilesRenderer as any).rootURL = endpointData.url;
-                
+
                 // Reset loading state to trigger reload with new URL
                 (tilesRenderer as any).rootLoadingState = 0; // UNLOADED state
             }
-            
+
             // Call parent connect method
             await super.connect();
         } catch (error) {

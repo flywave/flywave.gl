@@ -21,7 +21,7 @@ export class VectorTileRendererProvider extends WebTileDataProvider {
 
     constructor(options: OmvWithRestClientParams & { textureResolution?: number } = {}) {
         super(options);
-        
+
         this._vectorSource = new VectorTileDataSource({});
         this._scene.add(this._rootNode);
         this._textureResolution = options.textureResolution || 1024;

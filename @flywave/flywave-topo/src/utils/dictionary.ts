@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type OrderedComparator } from "./compare";
 import { type CloneFunction, lowerBound, shallowClone } from "./sorted-array";
 

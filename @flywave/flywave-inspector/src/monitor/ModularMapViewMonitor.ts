@@ -64,7 +64,6 @@ export class ModularMapViewMonitor {
     private readonly environmentFolder: GUI;
     private readonly postProcessingFolder: GUI;
     private readonly fogFolder: GUI;
-    private readonly groundModificationFolder: GUI;
 
     private readonly updateHandler: () => void;
 
@@ -145,7 +144,6 @@ export class ModularMapViewMonitor {
         this.environmentFolder.close();
         this.postProcessingFolder.close();
         this.fogFolder.close();
-        this.groundModificationFolder.close();
 
         // Bind the update handler to this instance
         this.updateHandler = this.update.bind(this);
@@ -263,9 +261,5 @@ export class ModularMapViewMonitor {
 
     getFogFolder(): GUI {
         return this.fogFolder;
-    }
-
-    getGroundModificationFolder(): GUI {
-        return this.groundModificationFolder;
     }
 }

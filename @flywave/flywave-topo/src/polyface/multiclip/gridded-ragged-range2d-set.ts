@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type Range3d, Range2d } from "../../geometry3d/range";
 import { type LowAndHighXY } from "../../geometry3d/xyz-props";
 import { LinearSearchRange2dArray } from "./linear-search-range2d-array";

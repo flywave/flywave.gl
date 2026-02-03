@@ -15,4 +15,4 @@ export const webMercatorTilingScheme = new TilingScheme(
 export const webMercatorTerrainTilingScheme = new TilingScheme(
     quadTreeSubdivisionScheme,
     webMercatorProjection
-);;
+);

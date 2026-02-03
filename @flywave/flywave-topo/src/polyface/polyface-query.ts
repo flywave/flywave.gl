@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type CurveCollection, BagOfCurves } from "../curve/curve-collection";
 import { type CurveLocationDetail } from "../curve/curve-location-detail";
 import { CurveOps } from "../curve/curve-ops";

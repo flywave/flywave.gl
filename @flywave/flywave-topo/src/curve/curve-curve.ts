@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 import { type Matrix4d } from "../geometry4d/matrix4d";
 import { type CurveLocationDetailPair } from "./curve-location-detail";

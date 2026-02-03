@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type CurvePrimitive } from "../curve/curve-primitive";
 import { type GeometryQuery } from "../curve/geometry-query";
 import { ProxyCurve } from "../curve/proxy-curve";

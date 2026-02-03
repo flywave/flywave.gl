@@ -30,10 +30,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         this.cameraToWorld.copy(matrix);
     }
 
-
-    constructor(protected mapView: MapView) {
-    }
-
+    constructor(protected mapView: MapView) {}
 
     protected getCameraProjectionMatrix(): Matrix4 {
         return this.mapView.camera.projectionMatrix;
@@ -43,11 +40,9 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         return this.mapView.renderer.getViewport(new Vector4());
     }
 
-
     protected get projection() {
         return this.mapView.projection as ProjectionType;
     }
-
 
     /**
      * Smoothly interpolates between the current camera position and a target matrix
@@ -595,7 +590,6 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         step: number
     );
 
-
     protected getElevationProvider(): ElevationProvider {
         return this.mapView.elevationProvider;
     }
@@ -643,7 +637,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         }
         return this.cameraToWorld.clone(); // Return new copy if no output matrix provided
     }
-  
+
     abstract getDistanceAndNormal(position: Vector3, normal?: Vector3): number;
 
     /**

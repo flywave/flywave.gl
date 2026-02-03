@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 /** Utility functions for converting from JSON objects, with default values.
  * @public
  */

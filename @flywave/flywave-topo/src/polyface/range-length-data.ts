@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type GrowableXYZArray } from "../geometry3d/growable-xyz-array";
 import { Range3d } from "../geometry3d/range";
 import { UsageSums } from "../numerics/usage-sums";

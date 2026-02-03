@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type AngleProps, Angle } from "../core-geometry";
 import { assert } from "../utils";
 import { type ColorDefProps, ColorDef } from "./color-def";

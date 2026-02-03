@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { CurvePrimitive } from "../curve/curve-primitive";
 import { type LineString3d } from "../curve/line-string3d";
 import { StrokeCountMap } from "../curve/query/stroke-count-map";

@@ -20,6 +20,6 @@ declare module "*.gif" {
 declare module "*.svg" {
     const content: any;
     export default content;
-} 
+}
 
 declare const CESIUM_ION_TOKEN: string;

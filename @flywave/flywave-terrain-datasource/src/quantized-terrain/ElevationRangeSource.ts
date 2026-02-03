@@ -75,7 +75,7 @@ class ElevationRangeSource implements IElevationRangeSource {
      */
     getMinMaxForTile(tileID: TileKey): MinMaxResult | null {
         const dataProvider = this.dataSource.dataProvider();
-        const tinTile = dataProvider.getBestAvailableResourceTile(tileID,false);
+        const tinTile = dataProvider.getBestAvailableResourceTile(tileID, false);
 
         // if (!tinTile) {
         //     return null;

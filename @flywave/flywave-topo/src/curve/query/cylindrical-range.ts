@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { RecurseToCurvesGeometryHandler } from "../../geometry3d/geometry-handler";
 import { Point3d, Vector3d } from "../../geometry3d/point3d-vector3d";
 import { type Ray3d } from "../../geometry3d/ray3d";

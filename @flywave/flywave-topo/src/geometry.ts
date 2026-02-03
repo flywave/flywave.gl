@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type AngleSweep } from "./geometry3d/angle-sweep";
 import { type Point2d, type XY, Vector2d } from "./geometry3d/point2d-vector2d";
 import { type Point3d, type XYZ, Vector3d } from "./geometry3d/point3d-vector3d";

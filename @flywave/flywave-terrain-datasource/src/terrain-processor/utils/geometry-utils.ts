@@ -129,9 +129,7 @@ export class GeometryUtils {
         }
     }
 
-    static createGeoAreaShape(
-        groundModificationPolygon: GroundModificationData
-    ): GeoCoordinates[] {
+    static createGeoAreaShape(groundModificationPolygon: GroundModificationData): GeoCoordinates[] {
         return groundModificationPolygon.operations.map(op => op.position);
     }
 }

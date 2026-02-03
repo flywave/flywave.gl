@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 import { BarycentricTriangle } from "../geometry3d/barycentric-triangle";
 import { type IndexedXYZCollection } from "../geometry3d/indexed-xyz-collection";

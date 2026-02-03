@@ -6,8 +6,9 @@ import { CameraTransform } from "./CameraTransform";
 import { EllipsoidProjection, SphereProjection } from "@flywave/flywave-geoutils";
 import { assert } from "chai";
 
-export class EllipsoidCameraTransform extends CameraTransform<EllipsoidProjection | SphereProjection> {
-
+export class EllipsoidCameraTransform extends CameraTransform<
+    EllipsoidProjection | SphereProjection
+> {
     /**
      * Performs collision detection against an ellipsoid (globe)
      * @param outTarget Output vector for collision point
@@ -80,8 +81,8 @@ export class EllipsoidCameraTransform extends CameraTransform<EllipsoidProjectio
      * @param step Damping/step factor
      */
     public pan(
-        rayHitPoint: Vector3,  // 射线命中点（原参数 rayTargetPoint/[x,w,u]）
-        targetPosition: Vector3,// 目标位置（原参数 moveToTargetPoint/F）
+        rayHitPoint: Vector3, // 射线命中点（原参数 rayTargetPoint/[x,w,u]）
+        targetPosition: Vector3, // 目标位置（原参数 moveToTargetPoint/F）
         inertiaVector: Vector4, // 惯性向量（原参数 inertialAxis/E）
         interpolationStep: number // 插值步长（原参数 step/r）
     ): void {
@@ -166,8 +167,6 @@ export class EllipsoidCameraTransform extends CameraTransform<EllipsoidProjectio
         if (Math.abs(inertiaVector.w) < 1e-15) {
             inertiaVector.w = 0;
         }
-
-
     }
 
     // 必须补充的辅助方法（严格对应原始实现）
@@ -246,12 +245,7 @@ export class EllipsoidCameraTransform extends CameraTransform<EllipsoidProjectio
         return this.rayCastEllipsoid(result, origin, direction);
     }
 
-
-    private rayCastEllipsoid(
-        result: Vector3,
-        origin: Vector3,
-        direction: Vector3
-    ): number {
+    private rayCastEllipsoid(result: Vector3, origin: Vector3, direction: Vector3): number {
         const scaledOrigin = origin.clone();
         const scaledDirection = direction.clone();
         const hit = new Vector3();
@@ -264,7 +258,7 @@ export class EllipsoidCameraTransform extends CameraTransform<EllipsoidProjectio
 
         if (t >= 0) {
             result.copy(hit);
-            return t
+            return t;
         }
         return -1;
     }

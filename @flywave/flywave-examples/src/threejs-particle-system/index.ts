@@ -5,9 +5,9 @@ import {
     MapControls,
     DEMTerrainSource,
     ArcGISTileProvider,
-    MapControlsUI,
+    MapControlsUI
 } from "@flywave/flywave.gl";
-import * as THREE from "three"; 
+import * as THREE from "three";
 import ParticleSystem, {
     Body,
     Color,
@@ -24,14 +24,14 @@ import ParticleSystem, {
     SphereZone,
     SpriteRenderer,
     Vector3D,
-    ease,
-} from 'three-nebula';
+    ease
+} from "three-nebula";
 
 // Configuration constants
 const CONFIG = {
     CANVAS_ELEMENT_ID: "mapCanvas",
     DEM_SOURCE_PATH: "dem_terrain/source.json",
-    INITIAL_COORDINATES: new GeoCoordinates(36.4764, 118.1720, 1200),
+    INITIAL_COORDINATES: new GeoCoordinates(36.4764, 118.172, 1200),
     ANCHOR_COORDINATES: new GeoCoordinates(36.48619699228674, 118.17270928364879, 350),
     ZOOM_LEVEL: 19,
     TILT: 50.1,
@@ -63,7 +63,9 @@ const CONFIG = {
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById(CONFIG.CANVAS_ELEMENT_ID) as HTMLCanvasElement;
     if (!canvas) {
-        throw new Error(`Map canvas element not found, please ensure there is a canvas element with id '${CONFIG.CANVAS_ELEMENT_ID}' in HTML`);
+        throw new Error(
+            `Map canvas element not found, please ensure there is a canvas element with id '${CONFIG.CANVAS_ELEMENT_ID}' in HTML`
+        );
     }
     return canvas;
 };
@@ -83,35 +85,35 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         tilt: CONFIG.TILT,
         theme: {
             extends: "resources/tilezen_base_globe.json",
-            "lights": [
+            lights: [
                 {
-                    "type": "ambient",
-                    "color": "#ffffff",
-                    "intensity": 0.3,
-                    "name": "ambient"
-                },
+                    type: "ambient",
+                    color: "#ffffff",
+                    intensity: 0.3,
+                    name: "ambient"
+                }
             ],
-            "enableShadows": true,
-            "celestia": {
+            enableShadows: true,
+            celestia: {
                 sunTime: new Date().setHours(17, 0, 0, 0),
                 atmosphere: false,
                 sunCastShadow: true,
-                sunIntensity: 5.0,
-            }, 
-            "postEffects": {
-                "bloom": {
-                    "enabled": true,
+                sunIntensity: 5.0
+            },
+            postEffects: {
+                bloom: {
+                    enabled: true,
                     luminancePassEnabled: true,
-                    "luminancePassThreshold": 0.3,
-                    "strength": 2.5,
-                    "radius": 20.0
-                },
+                    luminancePassThreshold: 0.3,
+                    strength: 2.5,
+                    radius: 20.0
+                }
             }
         }
     });
 
     mapView.update();
-    
+
     return mapView;
 };
 
@@ -137,7 +139,7 @@ canvas.parentElement!.appendChild(ui.domElement);
  */
 const configureDEMTerrainSource = (mapView: MapView): void => {
     const demTerrain = new DEMTerrainSource({
-        source: CONFIG.DEM_SOURCE_PATH,
+        source: CONFIG.DEM_SOURCE_PATH
     });
 
     mapView.setElevationSource(demTerrain);
@@ -160,118 +162,147 @@ class NebulaParticleManager extends THREE.Object3D {
     // Create sprite material
     private createSprite(): THREE.Sprite {
         // Use built-in circular texture to avoid external image dependencies
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         canvas.width = CONFIG.CANVAS_SPRITE_SIZE;
         canvas.height = CONFIG.CANVAS_SPRITE_SIZE;
-        const context = canvas.getContext('2d')!;
+        const context = canvas.getContext("2d")!;
 
         // Create circular gradient
         const gradient = context.createRadialGradient(
-            CONFIG.PARTICLE_SPRITE_SIZE.width / 2, 
-            CONFIG.PARTICLE_SPRITE_SIZE.height / 2, 
-            0, 
-            CONFIG.PARTICLE_SPRITE_SIZE.width / 2, 
-            CONFIG.PARTICLE_SPRITE_SIZE.height / 2, 
+            CONFIG.PARTICLE_SPRITE_SIZE.width / 2,
+            CONFIG.PARTICLE_SPRITE_SIZE.height / 2,
+            0,
+            CONFIG.PARTICLE_SPRITE_SIZE.width / 2,
+            CONFIG.PARTICLE_SPRITE_SIZE.height / 2,
             CONFIG.PARTICLE_SPRITE_SIZE.width / 2
         );
-        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        gradient.addColorStop(0.5, 'rgba(255, 100, 100, 0.8)');
-        gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+        gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+        gradient.addColorStop(0.5, "rgba(255, 100, 100, 0.8)");
+        gradient.addColorStop(1, "rgba(255, 0, 0, 0)");
 
         context.fillStyle = gradient;
-        context.fillRect(0, 0, CONFIG.PARTICLE_SPRITE_SIZE.width, CONFIG.PARTICLE_SPRITE_SIZE.height);
+        context.fillRect(
+            0,
+            0,
+            CONFIG.PARTICLE_SPRITE_SIZE.width,
+            CONFIG.PARTICLE_SPRITE_SIZE.height
+        );
 
         const texture = new THREE.CanvasTexture(canvas);
         const material = new THREE.SpriteMaterial({
             map: texture,
             color: 0xffffff,
             blending: THREE.AdditiveBlending,
-            transparent: true,
+            transparent: true
         });
         return new THREE.Sprite(material);
     }
 
-    private createEmitter(emitterType: 'fire' | 'explosion' | 'fountain' = 'fire') {
+    private createEmitter(emitterType: "fire" | "explosion" | "fountain" = "fire") {
         const emitter = new Emitter();
         let config;
 
         switch (emitterType) {
-            case 'fire':
+            case "fire":
                 config = {
                     rate: new Rate(
-                        new Span(CONFIG.FIRE_EMITTER_RATE.min, CONFIG.FIRE_EMITTER_RATE.max), 
+                        new Span(CONFIG.FIRE_EMITTER_RATE.min, CONFIG.FIRE_EMITTER_RATE.max),
                         new Span(0.05, 0.1)
                     ),
                     initializers: [
                         new Body(this.createSprite()),
                         new Mass(1),
-                        new Life(CONFIG.FIRE_EMITTER_LIFETIME.min, CONFIG.FIRE_EMITTER_LIFETIME.max),
+                        new Life(
+                            CONFIG.FIRE_EMITTER_LIFETIME.min,
+                            CONFIG.FIRE_EMITTER_LIFETIME.max
+                        ),
                         new Position(new SphereZone(CONFIG.FIRE_EMITTER_RADIUS)),
                         new RadialVelocity(
-                            new Span(CONFIG.FIRE_EMITTER_VELOCITY.min, CONFIG.FIRE_EMITTER_VELOCITY.max), 
-                            new Vector3D(0, 1, 0), 
+                            new Span(
+                                CONFIG.FIRE_EMITTER_VELOCITY.min,
+                                CONFIG.FIRE_EMITTER_VELOCITY.max
+                            ),
+                            new Vector3D(0, 1, 0),
                             CONFIG.FIRE_EMITTER_SPREAD
-                        ),
+                        )
                     ],
                     behaviours: [
                         new RandomDrift(5, 5, 5, 0.05),
                         new Scale(new Span(1, 2), 0),
                         new Gravity(3),
-                        new Color('#FF4400', ['#FFFF00', '#FF0000'], Infinity, ease.easeOutSine),
+                        new Color("#FF4400", ["#FFFF00", "#FF0000"], Infinity, ease.easeOutSine)
                     ],
                     position: { x: 0, y: 0, z: 0 }
                 };
                 break;
 
-            case 'explosion':
+            case "explosion":
                 config = {
                     rate: new Rate(
-                        new Span(CONFIG.EXPLOSION_EMITTER_RATE.min, CONFIG.EXPLOSION_EMITTER_RATE.max), 
+                        new Span(
+                            CONFIG.EXPLOSION_EMITTER_RATE.min,
+                            CONFIG.EXPLOSION_EMITTER_RATE.max
+                        ),
                         new Span(0.01, 0.02)
                     ),
                     initializers: [
                         new Body(this.createSprite()),
                         new Mass(1),
-                        new Life(CONFIG.EXPLOSION_EMITTER_LIFETIME.min, CONFIG.EXPLOSION_EMITTER_LIFETIME.max),
+                        new Life(
+                            CONFIG.EXPLOSION_EMITTER_LIFETIME.min,
+                            CONFIG.EXPLOSION_EMITTER_LIFETIME.max
+                        ),
                         new Position(new SphereZone(CONFIG.EXPLOSION_EMITTER_RADIUS)),
                         new RadialVelocity(
-                            new Span(CONFIG.EXPLOSION_EMITTER_VELOCITY.min, CONFIG.EXPLOSION_EMITTER_VELOCITY.max), 
-                            new Vector3D(0, 0, 0), 
+                            new Span(
+                                CONFIG.EXPLOSION_EMITTER_VELOCITY.min,
+                                CONFIG.EXPLOSION_EMITTER_VELOCITY.max
+                            ),
+                            new Vector3D(0, 0, 0),
                             360
-                        ),
+                        )
                     ],
                     behaviours: [
                         new RandomDrift(8, 8, 8, 0.1),
                         new Scale(new Span(1.5, 3), 0),
                         new Gravity(2),
-                        new Color('#FFFF00', ['#FF4500', '#FF0000'], Infinity, ease.easeOutSine),
+                        new Color("#FFFF00", ["#FF4500", "#FF0000"], Infinity, ease.easeOutSine)
                     ],
                     position: { x: 0, y: 0, z: 0 }
                 };
                 break;
 
-            case 'fountain':
+            case "fountain":
                 config = {
                     rate: new Rate(
-                        new Span(CONFIG.FOUNTAIN_EMITTER_RATE.min, CONFIG.FOUNTAIN_EMITTER_RATE.max), 
+                        new Span(
+                            CONFIG.FOUNTAIN_EMITTER_RATE.min,
+                            CONFIG.FOUNTAIN_EMITTER_RATE.max
+                        ),
                         new Span(0.1, 0.2)
                     ),
                     initializers: [
                         new Body(this.createSprite()),
                         new Mass(1),
-                        new Life(CONFIG.FOUNTAIN_EMITTER_LIFETIME.min, CONFIG.FOUNTAIN_EMITTER_LIFETIME.max),
+                        new Life(
+                            CONFIG.FOUNTAIN_EMITTER_LIFETIME.min,
+                            CONFIG.FOUNTAIN_EMITTER_LIFETIME.max
+                        ),
                         new Position(new SphereZone(CONFIG.FOUNTAIN_EMITTER_RADIUS)),
                         new RadialVelocity(
-                            new Span(CONFIG.FOUNTAIN_EMITTER_VELOCITY.min, CONFIG.FOUNTAIN_EMITTER_VELOCITY.max), 
-                            new Vector3D(0, 1, 0), 
+                            new Span(
+                                CONFIG.FOUNTAIN_EMITTER_VELOCITY.min,
+                                CONFIG.FOUNTAIN_EMITTER_VELOCITY.max
+                            ),
+                            new Vector3D(0, 1, 0),
                             CONFIG.FOUNTAIN_EMITTER_SPREAD
-                        ),
+                        )
                     ],
                     behaviours: [
                         new RandomDrift(3, 3, 3, 0.02),
                         new Scale(new Span(1, 1.5), 0),
                         new Gravity(8),
-                        new Color('#00AAFF', ['#0088FF', '#0066FF'], Infinity, ease.easeOutSine),
+                        new Color("#00AAFF", ["#0088FF", "#0066FF"], Infinity, ease.easeOutSine)
                     ],
                     position: { x: 0, y: 0, z: 0 }
                 };
@@ -287,7 +318,7 @@ class NebulaParticleManager extends THREE.Object3D {
     }
 
     // Initialize particle system
-    async initializeSystem(emitterType: 'fire' | 'explosion' | 'fountain' = 'fire') {
+    async initializeSystem(emitterType: "fire" | "explosion" | "fountain" = "fire") {
         // Clean up existing system
         this.clearSystem();
 
@@ -331,7 +362,7 @@ class NebulaParticleManager extends THREE.Object3D {
     // Trigger explosion effect
     triggerExplosion() {
         if (this.system) {
-            const explosionEmitter = this.createEmitter('explosion');
+            const explosionEmitter = this.createEmitter("explosion");
             this.system.addEmitter(explosionEmitter);
             this.currentEmitters.push(explosionEmitter);
 
@@ -358,7 +389,9 @@ class NebulaParticleManager extends THREE.Object3D {
     setParticleScale(scale: number) {
         this.currentEmitters.forEach(emitter => {
             // Update scale behavior
-            const scaleBehaviour = emitter.behaviours.find((b: any) => b instanceof Scale) as Scale | undefined;
+            const scaleBehaviour = emitter.behaviours.find((b: any) => b instanceof Scale) as
+                | Scale
+                | undefined;
             if (scaleBehaviour) {
                 scaleBehaviour.scaleA = new Span(scale * 0.8, scale * 1.2);
             }
@@ -373,9 +406,10 @@ configureDEMTerrainSource(mapView);
 const particleManager = new NebulaParticleManager();
 //@ts-ignore
 particleManager.anchor = CONFIG.ANCHOR_COORDINATES;
-particleManager.lookAt(ellipsoidProjection.projectPoint(CONFIG.ANCHOR_COORDINATES, new THREE.Vector3()));
+particleManager.lookAt(
+    ellipsoidProjection.projectPoint(CONFIG.ANCHOR_COORDINATES, new THREE.Vector3())
+);
 mapView.mapAnchors.add(particleManager);
-
 
 // Modify animation loop
 const originalAnimate = mapView.beginAnimation;
@@ -402,21 +436,21 @@ const startAutoExplosion = (controls: ExtendedMapControls): void => {
             particleManager.triggerExplosion();
         }
     }, CONFIG.AUTO_EXPLOSION_INTERVAL);
-}
+};
 
 /**
  * Initialize particle system
  */
 const initializeParticleSystem = async (): Promise<void> => {
     // Initialize default system
-    await particleManager.initializeSystem('fire');
+    await particleManager.initializeSystem("fire");
 
     // Start automatic explosion (if enabled)
     startAutoExplosion(controls);
 
     // Start animation loop
     mapView.beginAnimation();
-}
+};
 
 // Start application
 try {

@@ -127,7 +127,7 @@ export class GeometryClipper {
         const result = object.clone();
         const toRemove: Object3D[] = [];
         result.traverse(c => {
-            if ('isMesh' in c && c.isMesh) {
+            if ("isMesh" in c && c.isMesh) {
                 const mesh = c as Mesh;
                 mesh.geometry = this.clip(mesh).geometry;
 
@@ -314,10 +314,10 @@ export class GeometryClipper {
             );
             const newAttr = new BufferAttribute(cons, attr.itemSize, attr.normalized);
             // GPU type is not part of the standard BufferAttribute interface
-        // This is a workaround for Three.js internal properties
-        const newAttrWithGpuType = newAttr as BufferAttribute & { gpuType?: unknown };
-        const attrWithGpuType = attr as BufferAttribute & { gpuType?: unknown };
-        newAttrWithGpuType.gpuType = attrWithGpuType.gpuType;
+            // This is a workaround for Three.js internal properties
+            const newAttrWithGpuType = newAttr as BufferAttribute & { gpuType?: unknown };
+            const attrWithGpuType = attr as BufferAttribute & { gpuType?: unknown };
+            newAttrWithGpuType.gpuType = attrWithGpuType.gpuType;
 
             geometry.setAttribute(key, newAttr);
         }

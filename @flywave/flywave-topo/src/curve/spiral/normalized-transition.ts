@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 /**
  * NormalizedTransition is the (abstract) base class for clothoid, bloss, biquadratic, sine, and cosine transition functions.
  * * Each function maps fractional progress to a curvature value.

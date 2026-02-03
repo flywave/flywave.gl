@@ -12,9 +12,9 @@ import {
     Camera,
     Group,
     Scene,
-    WebGLRenderer,
-} from 'three';
-import { Object3D } from 'three/src/Three.Core';
+    WebGLRenderer
+} from "three";
+import { Object3D } from "three/src/Three.Core";
 
 interface WaterMaterialOptions {
     alpha?: number;
@@ -38,7 +38,7 @@ class WaterMaterial extends ShaderMaterial {
         const speed = options.speed ?? 1.0;
         const sunDirection = options.sunDirection ?? new Vector3(0.70707, 0.70707, 0.0);
         const sunColor = new Color(options.sunColor ?? 0xffffff);
-        const waterColor = new Color(options.waterColor ?? 0x7F7F7F);
+        const waterColor = new Color(options.waterColor ?? 0x7f7f7f);
         const distortionScale = options.distortionScale ?? 20.0;
         const fog = options.fog ?? false;
 
@@ -46,11 +46,11 @@ class WaterMaterial extends ShaderMaterial {
         let normalSampler: Texture;
         if (options.normalMap instanceof Texture) {
             normalSampler = options.normalMap;
-        } else if (typeof options.normalMap === 'string') {
+        } else if (typeof options.normalMap === "string") {
             normalSampler = new TextureLoader().load(options.normalMap);
         } else {
             // Default normal map
-            normalSampler = new TextureLoader().load('./waternormals.jpg');
+            normalSampler = new TextureLoader().load("./waternormals.jpg");
         }
 
         normalSampler.wrapS = RepeatWrapping;
@@ -58,29 +58,32 @@ class WaterMaterial extends ShaderMaterial {
 
         const waterShader = {
             uniforms: UniformsUtils.merge([
-                UniformsLib['fog'],
-                UniformsLib['lights'],
+                UniformsLib["fog"],
+                UniformsLib["lights"],
                 {
-                    'normalSampler': { value: null },
-                    'mirrorSampler': { value: null },
-                    'alpha': { value: 0.9 },
-                    'time': { value: 0.0 },
-                    'size': { value: 2.0 },
-                    'distortionScale': { value: 20.0 },
-                    'watterNormal': {
+                    normalSampler: { value: null },
+                    mirrorSampler: { value: null },
+                    alpha: { value: 0.9 },
+                    time: { value: 0.0 },
+                    size: { value: 2.0 },
+                    distortionScale: { value: 20.0 },
+                    watterNormal: {
                         value: new Vector3(
-                            -0.22354059905927112, 0.8579892843484154, -0.46247593290409833)
+                            -0.22354059905927112,
+                            0.8579892843484154,
+                            -0.46247593290409833
+                        )
                     },
-                    'camPosition': { value: new Vector3() },
-                    'textureMatrix': { value: new Matrix4() },
-                    'sunColor': { value: new Color(0x7F7F7F) },
-                    'sunDirection': { value: new Vector3(0.70707, 0.70707, 0) },
-                    'eye': { value: new Vector3() },
-                    'waterColor': { value: new Color(0x555555) }
+                    camPosition: { value: new Vector3() },
+                    textureMatrix: { value: new Matrix4() },
+                    sunColor: { value: new Color(0x7f7f7f) },
+                    sunDirection: { value: new Vector3(0.70707, 0.70707, 0) },
+                    eye: { value: new Vector3() },
+                    waterColor: { value: new Color(0x555555) }
                 }
             ]),
 
-            vertexShader: /* glsl */`
+            vertexShader: /* glsl */ `
                 uniform mat4 textureMatrix;
                 uniform float time;
 
@@ -109,7 +112,7 @@ class WaterMaterial extends ShaderMaterial {
                     #include <shadowmap_vertex>
                 }`,
 
-            fragmentShader: /* glsl */`
+            fragmentShader: /* glsl */ `
                 uniform sampler2D mirrorSampler;
                 uniform float alpha;
                 uniform float time;
@@ -200,13 +203,13 @@ class WaterMaterial extends ShaderMaterial {
         this._lastUpdateTime = performance.now() / 1000;
 
         // Set uniforms
-        this.uniforms['alpha'].value = alpha;
-        this.uniforms['time'].value = this._time;
-        this.uniforms['normalSampler'].value = normalSampler;
-        this.uniforms['sunColor'].value = sunColor;
-        this.uniforms['waterColor'].value = waterColor;
-        this.uniforms['sunDirection'].value = sunDirection;
-        this.uniforms['distortionScale'].value = distortionScale;
+        this.uniforms["alpha"].value = alpha;
+        this.uniforms["time"].value = this._time;
+        this.uniforms["normalSampler"].value = normalSampler;
+        this.uniforms["sunColor"].value = sunColor;
+        this.uniforms["waterColor"].value = waterColor;
+        this.uniforms["sunDirection"].value = sunDirection;
+        this.uniforms["distortionScale"].value = distortionScale;
     }
 
     private updateTime(): void {
@@ -216,26 +219,33 @@ class WaterMaterial extends ShaderMaterial {
         this._time += deltaTime * this._speed;
         this._lastUpdateTime = currentTime;
 
-        this.uniforms['time'].value = this._time;
+        this.uniforms["time"].value = this._time;
     }
-    onBeforeRender(renderer: WebGLRenderer, scene: Scene, camera: Camera, geometry: BufferGeometry, object: Object3D, group: Group): void {
+    onBeforeRender(
+        renderer: WebGLRenderer,
+        scene: Scene,
+        camera: Camera,
+        geometry: BufferGeometry,
+        object: Object3D,
+        group: Group
+    ): void {
         this.updateTime();
     }
 
     // Set mirror sampler (reflection map)
     setMirrorSampler(texture: Texture): void {
-        this.uniforms['mirrorSampler'].value = texture;
+        this.uniforms["mirrorSampler"].value = texture;
     }
 
     // Set camera position
     setCameraPosition(position: Vector3): void {
-        this.uniforms['eye'].value.copy(position);
-        this.uniforms['camPosition'].value.copy(position);
+        this.uniforms["eye"].value.copy(position);
+        this.uniforms["camPosition"].value.copy(position);
     }
 
     // Set texture matrix
     setTextureMatrix(matrix: Matrix4): void {
-        this.uniforms['textureMatrix'].value.copy(matrix);
+        this.uniforms["textureMatrix"].value.copy(matrix);
     }
 
     // Getters and setters
@@ -245,7 +255,7 @@ class WaterMaterial extends ShaderMaterial {
 
     set time(value: number) {
         this._time = value;
-        this.uniforms['time'].value = value;
+        this.uniforms["time"].value = value;
     }
 
     get speed(): number {
@@ -257,43 +267,43 @@ class WaterMaterial extends ShaderMaterial {
     }
 
     get alpha(): number {
-        return this.uniforms['alpha'].value;
+        return this.uniforms["alpha"].value;
     }
 
     set alpha(value: number) {
-        this.uniforms['alpha'].value = value;
+        this.uniforms["alpha"].value = value;
     }
 
     get distortionScale(): number {
-        return this.uniforms['distortionScale'].value;
+        return this.uniforms["distortionScale"].value;
     }
 
     set distortionScale(value: number) {
-        this.uniforms['distortionScale'].value = value;
+        this.uniforms["distortionScale"].value = value;
     }
 
     get sunDirection(): Vector3 {
-        return this.uniforms['sunDirection'].value;
+        return this.uniforms["sunDirection"].value;
     }
 
     set sunDirection(value: Vector3) {
-        this.uniforms['sunDirection'].value.copy(value);
+        this.uniforms["sunDirection"].value.copy(value);
     }
 
     get sunColor(): Color {
-        return this.uniforms['sunColor'].value;
+        return this.uniforms["sunColor"].value;
     }
 
     set sunColor(value: Color) {
-        this.uniforms['sunColor'].value.copy(value);
+        this.uniforms["sunColor"].value.copy(value);
     }
 
     get waterColor(): Color {
-        return this.uniforms['waterColor'].value;
+        return this.uniforms["waterColor"].value;
     }
 
     set waterColor(value: Color) {
-        this.uniforms['waterColor'].value.copy(value);
+        this.uniforms["waterColor"].value.copy(value);
     }
 
     dispose(): void {

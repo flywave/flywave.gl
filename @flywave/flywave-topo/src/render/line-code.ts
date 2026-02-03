@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { LinePixels } from "../common";
 
 /** Map a LinePixels value to an integer in [0..9] that can be used by shaders to index into the corresponding pixel pattern.

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { compareNumbers } from "../utils";
 import { ColorDef } from "./color-def";
 

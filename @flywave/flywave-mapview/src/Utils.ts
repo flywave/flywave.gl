@@ -125,7 +125,7 @@ export namespace MapViewUtils {
     /**
      * @deprecated
      */
-    export interface MemoryUsage extends Object3DUtils.MemoryUsage { }
+    export interface MemoryUsage extends Object3DUtils.MemoryUsage {}
 
     /**
      * Zooms and moves the map in such a way that the given target position remains at the same
@@ -151,9 +151,9 @@ export namespace MapViewUtils {
         // Use for now elevation at camera position. See getTargetAndDistance.
         const elevation = elevationProvider
             ? elevationProvider.getHeight(
-                projection.unprojectPoint(camera.position),
-                TERRAIN_ZOOM_LEVEL
-            )
+                  projection.unprojectPoint(camera.position),
+                  TERRAIN_ZOOM_LEVEL
+              )
             : undefined;
 
         // Get current target position in world space before we zoom.
@@ -544,7 +544,14 @@ export namespace MapViewUtils {
 
             let sphere = projection as SphereProjection;
 
-            if (sphere.rayCast(result, rayCaster.ray.origin, rayCaster.ray.origin.clone().add(rayCaster.ray.direction), elevation) == -1) {
+            if (
+                sphere.rayCast(
+                    result,
+                    rayCaster.ray.origin,
+                    rayCaster.ray.origin.clone().add(rayCaster.ray.direction),
+                    elevation
+                ) == -1
+            ) {
                 result = null;
             }
             return result;
@@ -713,9 +720,9 @@ export namespace MapViewUtils {
         //       elevation in the scene)
         const elevation = elevationProvider
             ? elevationProvider.getHeight(
-                projection.unprojectPoint(camera.position),
-                TERRAIN_ZOOM_LEVEL
-            )
+                  projection.unprojectPoint(camera.position),
+                  TERRAIN_ZOOM_LEVEL
+              )
             : undefined;
         const final = !elevationProvider || elevation !== undefined;
 
@@ -760,7 +767,7 @@ export namespace MapViewUtils {
      * @param projection - The world space projection.
      * @param elevation - Optional elevation to consider.
      * @returns The target point in world coordinates, or null if depth information is not available.
-     * 
+     *
      * Note: This method is currently not used directly in getTargetAndDistance because it's async.
      * It can be used in contexts where async operations are allowed.
      */
@@ -788,7 +795,7 @@ export namespace MapViewUtils {
             return null;
         }
 
-        depth = (depth * 2.0) - 1.0;
+        depth = depth * 2.0 - 1.0;
 
         if (Math.abs(depth) === 1.0) {
             return null;
@@ -833,9 +840,9 @@ export namespace MapViewUtils {
         // Get elevation information
         const elevation = elevationProvider
             ? elevationProvider.getHeight(
-                projection.unprojectPoint(camera.position),
-                TERRAIN_ZOOM_LEVEL
-            )
+                  projection.unprojectPoint(camera.position),
+                  TERRAIN_ZOOM_LEVEL
+              )
             : undefined;
         const final = !elevationProvider || elevation !== undefined;
 
@@ -844,9 +851,17 @@ export namespace MapViewUtils {
         if (camera instanceof THREE.PerspectiveCamera) {
             try {
                 // Use depth buffer to get more accurate target point
-                target = await getWorldTargetFromDepthBuffer(mapView, camera, projection, elevation);
+                target = await getWorldTargetFromDepthBuffer(
+                    mapView,
+                    camera,
+                    projection,
+                    elevation
+                );
             } catch (error) {
-                logger.warn("Failed to get target from depth buffer, falling back to default method:", error);
+                logger.warn(
+                    "Failed to get target from depth buffer, falling back to default method:",
+                    error
+                );
             }
         }
 
@@ -1260,7 +1275,14 @@ export namespace MapViewUtils {
         const result =
             mapView.projection.type === ProjectionType.Planar
                 ? rayCaster.ray.intersectPlane(groundPlane, worldPosition)
-                : sphere.rayCast(worldPosition, rayCaster.ray.origin, rayCaster.ray.origin.clone().add(rayCaster.ray.direction), elevation) == -1 ? null : worldPosition;
+                : sphere.rayCast(
+                      worldPosition,
+                      rayCaster.ray.origin,
+                      rayCaster.ray.origin.clone().add(rayCaster.ray.direction),
+                      elevation
+                  ) == -1
+                ? null
+                : worldPosition;
 
         if (elevation !== undefined) {
             groundPlane.constant = 0;
@@ -1349,7 +1371,7 @@ export namespace MapViewUtils {
             // Deduce max pitch from max tilt. To this end the sine law of triangles is used below.
             const maxPitch = Math.asin(
                 (EarthConstants.EQUATORIAL_RADIUS * Math.sin(Math.PI - maxTiltAngleRad)) /
-                mapView.camera.position.length()
+                    mapView.camera.position.length()
             );
             newPitch = Math.min(newPitch, maxPitch);
         }

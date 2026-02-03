@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 // spell-checker: disable
 /** A set of known colors by [HTML color name](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value), as a 32-bit integer in the form 0xBBGGRR (red is the low byte).
  * This is different than color values in #RRGGBB format for HTML pages (red and blue are swapped).

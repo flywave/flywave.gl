@@ -1,9 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type MapView } from "@flywave/flywave-mapview";
-import {
-    type IMapRenderingManager
-} from "@flywave/flywave-mapview/composing/MapRenderingManager";
+import { type IMapRenderingManager } from "@flywave/flywave-mapview/composing/MapRenderingManager";
 
 import { type MapViewMonitor } from "../monitor/MapViewMonitor";
 

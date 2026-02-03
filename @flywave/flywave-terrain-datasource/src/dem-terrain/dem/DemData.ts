@@ -467,9 +467,21 @@ export default class DEMData extends TileValidResource {
                 // Only perform border filling from the tile with the smaller morton code to the larger one
                 // This ensures consistent directionality and prevents conflicting adjustments
                 if (tileID.mortonCode(encoding) < borderTileKey.mortonCode(encoding)) {
-                    DEMData.fillBorder(neighboringTileResource, borderTileKey, this, tileID, encoding);
+                    DEMData.fillBorder(
+                        neighboringTileResource,
+                        borderTileKey,
+                        this,
+                        tileID,
+                        encoding
+                    );
                 } else {
-                    DEMData.fillBorder(this, tileID, neighboringTileResource, borderTileKey, encoding);
+                    DEMData.fillBorder(
+                        this,
+                        tileID,
+                        neighboringTileResource,
+                        borderTileKey,
+                        encoding
+                    );
                 }
             }
         });

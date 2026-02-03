@@ -387,7 +387,7 @@ const compareDistances = (a: TileKeyEntry, b: TileKeyEntry, tileingScheme: Tilin
 
     return Math.abs(distanceDiff) < minDiff
         ? a.tileKey.mortonCode(tileingScheme.mortonTileEncoding) -
-        b.tileKey.mortonCode(tileingScheme.mortonTileEncoding)
+              b.tileKey.mortonCode(tileingScheme.mortonTileEncoding)
         : distanceDiff;
 };
 
@@ -654,8 +654,14 @@ export class VisibleTileSet {
             // data sources without elevationRangeSource will contribute to
             // values with zero levels for both elevations.
             const tiles = renderListEntry.renderedTiles;
-            minElevation = MathUtils.min2(minElevation, renderListEntry.dataSource.minGeometryHeight);
-            maxElevation = MathUtils.max2(maxElevation, renderListEntry.dataSource.maxGeometryHeight);
+            minElevation = MathUtils.min2(
+                minElevation,
+                renderListEntry.dataSource.minGeometryHeight
+            );
+            maxElevation = MathUtils.max2(
+                maxElevation,
+                renderListEntry.dataSource.maxGeometryHeight
+            );
 
             tiles.forEach(tile => {
                 tile.update(renderListEntry.zoomLevel);
@@ -1091,10 +1097,10 @@ export class VisibleTileSet {
             searchLevelsDown > 0 && searchLevelsUp > 0
                 ? SearchDirection.BOTH
                 : searchLevelsDown > 0
-                    ? SearchDirection.DOWN
-                    : searchLevelsUp > 0
-                        ? SearchDirection.UP
-                        : SearchDirection.NONE;
+                ? SearchDirection.DOWN
+                : searchLevelsUp > 0
+                ? SearchDirection.UP
+                : SearchDirection.NONE;
         return { searchDirection, searchLevelsUp, searchLevelsDown };
     }
 

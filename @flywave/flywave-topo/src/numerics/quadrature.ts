@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 
 /** Support class for quadrature -- approximate integrals by summing weighted function values.

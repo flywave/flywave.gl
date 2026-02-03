@@ -4,9 +4,16 @@ import { BufferAttribute, BufferGeometry, Sphere, Vector3, type DataTexture } fr
 
 import { ITileResource, TileValidResource } from "../TileResourceManager";
 import { GeoCoordinates, Projection } from "@flywave/flywave-geoutils";
-import { getProjection, getProjectionName, RequestController } from "@flywave/flywave-datasource-protocol";
+import {
+    getProjection,
+    getProjectionName,
+    RequestController
+} from "@flywave/flywave-datasource-protocol";
 import { TaskType } from "../Constants";
-import type { TileGeometryReprojectionData, TileGeometryReprojectionParams } from "./TileWorkerDecoder";
+import type {
+    TileGeometryReprojectionData,
+    TileGeometryReprojectionParams
+} from "./TileWorkerDecoder";
 import { Tile } from "@flywave/flywave-mapview";
 import { DecodedTerrainTile } from "../TerrainDecoderWorker";
 import { get } from "http";
@@ -116,7 +123,6 @@ export abstract class QuantizedTileResource extends TileValidResource {
      */
     public abstract get geometryProjection(): Projection;
 
-
     /**
      * Gets the center of this tile's geometry in geographic coordinates
      *
@@ -149,27 +155,26 @@ export abstract class QuantizedTileResource extends TileValidResource {
 
     private projectionCacheBuffer: {
         [key: string]: {
-            position: BufferAttribute,
-            normal: BufferAttribute, 
-            boundingSphere: Sphere,
-        }
+            position: BufferAttribute;
+            normal: BufferAttribute;
+            boundingSphere: Sphere;
+        };
     };
     /**
      * Attempts to reproject the tile geometry to the specified target projection
-     * 
+     *
      * This method checks if reprojection is needed and initiates the reprojection process
      * if required. It handles duplicate request prevention and projection state management.
-     * 
+     *
      * @param targetProjection - The target projection system to reproject to
      * @param tile - The tile containing geometry data to reproject
-     * @returns Promise<void> if reprojection is initiated, true if already in progress, 
+     * @returns Promise<void> if reprojection is initiated, true if already in progress,
      *          false if no reprojection needed or cannot be performed
      */
     public tryReprojectToProjection(targetProjection: Projection): Promise<void> | boolean {
         if (this.geometryProjection === targetProjection) {
             return false;
         }
-
 
         const cached = this.projectionCacheBuffer?.[getProjectionName(targetProjection)];
         if (cached) {
@@ -190,51 +195,61 @@ export abstract class QuantizedTileResource extends TileValidResource {
         let posiiton = this.geometry.getAttribute("position");
         let normal = this.geometry.getAttribute("normal");
 
-        this.terrainSource.decoder.decodeTile({
-            position: {
-                array: posiiton.array,
-                itemSize: posiiton.itemSize,
-            },
-            sourceProjectionName: getProjectionName(this.geometryProjection),
-            type: TaskType.GeometryReprojection,
-            center: this.geometryProjection.projectPoint(this.geoCenter),
-            targetTileCenter: targetProjection.projectPoint(this.geoCenter),
-        } as TileGeometryReprojectionParams & {
-            type: TaskType;
-        } as unknown as Record<string, unknown>, this.tileKey, targetProjection, this.m_RequestController).then((params: DecodedTerrainTile) => {
+        this.terrainSource.decoder
+            .decodeTile(
+                {
+                    position: {
+                        array: posiiton.array,
+                        itemSize: posiiton.itemSize
+                    },
+                    sourceProjectionName: getProjectionName(this.geometryProjection),
+                    type: TaskType.GeometryReprojection,
+                    center: this.geometryProjection.projectPoint(this.geoCenter),
+                    targetTileCenter: targetProjection.projectPoint(this.geoCenter)
+                } as TileGeometryReprojectionParams & {
+                    type: TaskType;
+                } as unknown as Record<string, unknown>,
+                this.tileKey,
+                targetProjection,
+                this.m_RequestController
+            )
+            .then((params: DecodedTerrainTile) => {
+                let reprojectedGeometry = params.tileTerrain as TileGeometryReprojectionData;
 
-            let reprojectedGeometry = params.tileTerrain as TileGeometryReprojectionData
+                this.updateGeometryProjection(
+                    getProjection(reprojectedGeometry.targetProjectionName)
+                );
+                this.m_reProjectGeometryPanding = false;
 
-            this.updateGeometryProjection(getProjection(reprojectedGeometry.targetProjectionName));
-            this.m_reProjectGeometryPanding = false;
+                if (this.projectionCacheBuffer)
+                    throw new Error("projectionCacheBuffer is not empty");
 
-            if(this.projectionCacheBuffer)throw new Error("projectionCacheBuffer is not empty");
+                this.projectionCacheBuffer = {};
+                this.projectionCacheBuffer[reprojectedGeometry.sourceProjectionName] = {
+                    position: posiiton as BufferAttribute,
+                    normal: normal as BufferAttribute,
+                    boundingSphere: this.geometry.boundingSphere
+                };
 
-            this.projectionCacheBuffer = {};
-            this.projectionCacheBuffer[reprojectedGeometry.sourceProjectionName] = {
-                position: posiiton as BufferAttribute,
-                normal: normal as BufferAttribute,
-                boundingSphere: this.geometry.boundingSphere,
-            }
+                let targetPosition = new BufferAttribute(
+                    reprojectedGeometry.position.array,
+                    reprojectedGeometry.position.itemSize
+                );
+                targetPosition.needsUpdate = true;
+                this.geometry.setAttribute("position", targetPosition);
+                this.geometry.deleteAttribute("normal");
+                this.geometry.computeVertexNormals();
+                this.geometry.computeBoundingSphere();
+                this.projectionCacheBuffer[reprojectedGeometry.targetProjectionName] = {
+                    position: targetPosition,
+                    normal: this.geometry.getAttribute("normal") as BufferAttribute,
+                    boundingSphere: this.geometry.boundingSphere
+                };
 
-            let targetPosition = new BufferAttribute(reprojectedGeometry.position.array, reprojectedGeometry.position.itemSize)
-            targetPosition.needsUpdate = true;
-            this.geometry.setAttribute("position", targetPosition);
-             this.geometry.deleteAttribute("normal");
-            this.geometry.computeVertexNormals();
-            this.geometry.computeBoundingSphere();
-            this.projectionCacheBuffer[reprojectedGeometry.targetProjectionName] = {
-                position: targetPosition,
-                normal: this.geometry.getAttribute("normal") as BufferAttribute,
-                boundingSphere: this.geometry.boundingSphere,
-            }
-
-
-            this.terrainSource.updateTileOverlays();
-        });
+                this.terrainSource.updateTileOverlays();
+            });
         return true;
     }
-
 
     private m_RequestController = new RequestController();
 

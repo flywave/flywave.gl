@@ -4,22 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
-  MapView,
-  GeoCoordinates,
-  ellipsoidProjection,
-  MapControls,
-  DEMTerrainSource,
-  ArcGISTileProvider,
-  MapControlsUI,
-  mercatorProjection,
-  sphereProjection, 
+    MapView,
+    GeoCoordinates,
+    ellipsoidProjection,
+    MapControls,
+    DEMTerrainSource,
+    ArcGISTileProvider,
+    MapControlsUI,
+    mercatorProjection,
+    sphereProjection
 } from "@flywave/flywave.gl";
 
-import {
-  CameraAnimationBuilder,
-  CameraKeyTrackAnimation,
-  ControlPoint
-} from "@flywave/flywave.gl";
+import { CameraAnimationBuilder, CameraKeyTrackAnimation, ControlPoint } from "@flywave/flywave.gl";
 import { GUI } from "dat.gui";
 import * as THREE from "three";
 
@@ -31,33 +27,33 @@ type GeoLocations = Record<string, GeoCoordinates>;
  * @returns MapView instance
  */
 const createBaseMap = (): MapView => {
-  const canvas = getMapCanvas();
- 
-  const mapView = new MapView({
-    projection: ellipsoidProjection,  // Use spherical projection
-    target: new GeoCoordinates(36.6512, 117.1200), // Initial position set to Jinan
-    zoomLevel: 10,
-    tilt: 45,
-    heading: 0,
-    canvas,
-    theme: {
-      extends: "resources/tilezen_base_globe.json",
-      "celestia": {
-        "atmosphere": true,  // Enable atmospheric effects
-      }
-    }
-  });
+    const canvas = getMapCanvas();
 
-  // Initialize map controls and UI
-  initializeMapControls(mapView, canvas);
+    const mapView = new MapView({
+        projection: ellipsoidProjection, // Use spherical projection
+        target: new GeoCoordinates(36.6512, 117.12), // Initial position set to Jinan
+        zoomLevel: 10,
+        tilt: 45,
+        heading: 0,
+        canvas,
+        theme: {
+            extends: "resources/tilezen_base_globe.json",
+            celestia: {
+                atmosphere: true // Enable atmospheric effects
+            }
+        }
+    });
 
-  // Configure DEM terrain data source
-  configureDEMTerrainSource(mapView);
+    // Initialize map controls and UI
+    initializeMapControls(mapView, canvas);
 
-  // Expose map view to global scope for debugging
-  (window as any).mapView = mapView;
-  
-  return mapView;
+    // Configure DEM terrain data source
+    configureDEMTerrainSource(mapView);
+
+    // Expose map view to global scope for debugging
+    (window as any).mapView = mapView;
+
+    return mapView;
 };
 
 /**
@@ -67,7 +63,9 @@ const createBaseMap = (): MapView => {
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
     if (!canvas) {
-        throw new Error("Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML");
+        throw new Error(
+            "Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML"
+        );
     }
     return canvas;
 };
@@ -78,14 +76,14 @@ const getMapCanvas = (): HTMLCanvasElement => {
  * @param canvas Map canvas element
  */
 const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): void => {
-  const controls = new MapControls(mapView);
-  const ui = new MapControlsUI(controls, {
-    "screenshotButton": {
-        "width": 512,
-        "height": 512,
-    },
-  });
-  canvas.parentElement!.appendChild(ui.domElement);
+    const controls = new MapControls(mapView);
+    const ui = new MapControlsUI(controls, {
+        screenshotButton: {
+            width: 512,
+            height: 512
+        }
+    });
+    canvas.parentElement!.appendChild(ui.domElement);
 };
 
 /**
@@ -94,9 +92,9 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  */
 const configureDEMTerrainSource = (mapView: MapView): void => {
     const demTerrain = new DEMTerrainSource({
-        source: "dem_terrain/source.json", // DEM terrain data source path
+        source: "dem_terrain/source.json" // DEM terrain data source path
     });
-    
+
     mapView.setElevationSource(demTerrain);
     demTerrain.addWebTileDataSource(new ArcGISTileProvider({ minDataLevel: 0, maxDataLevel: 18 }));
 };
@@ -105,16 +103,16 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
 const createGeoLocations = (): GeoLocations => {
     return {
         // Famous locations in Jinan
-        JinanCenter: new GeoCoordinates(36.6512, 117.1200), // Jinan city center
-        DamingLake: new GeoCoordinates(36.6778, 117.0211),  // Daming Lake
+        JinanCenter: new GeoCoordinates(36.6512, 117.12), // Jinan city center
+        DamingLake: new GeoCoordinates(36.6778, 117.0211), // Daming Lake
         BaotuSpring: new GeoCoordinates(36.6614, 117.0094), // Baotu Spring
-        ThousandBuddhaMountain: new GeoCoordinates(36.6250, 117.0333), // Thousand Buddha Mountain
-        
+        ThousandBuddhaMountain: new GeoCoordinates(36.625, 117.0333), // Thousand Buddha Mountain
+
         // Famous locations in Beijing
         BeijingCenter: new GeoCoordinates(39.9042, 116.4074), // Beijing city center
         ForbiddenCity: new GeoCoordinates(39.9163, 116.3972), // Forbidden City
         TempleOfHeaven: new GeoCoordinates(39.8822, 116.4064), // Temple of Heaven
-        SummerPalace: new GeoCoordinates(39.9998, 116.2754)   // Summer Palace
+        SummerPalace: new GeoCoordinates(39.9998, 116.2754) // Summer Palace
     };
 };
 
@@ -134,21 +132,24 @@ interface UIOptions {
 }
 
 // Initialize camera animation related options
-const initializeAnimationOptions = (): { options: UIOptions; animationOptions: AnimationOptions } => {
+const initializeAnimationOptions = (): {
+    options: UIOptions;
+    animationOptions: AnimationOptions;
+} => {
     const options: UIOptions = {
         globe: true,
         orbit: false,
         flyTo: "JinanCenter",
         flyOver: false
     };
-    
+
     const animationOptions: AnimationOptions = {
         interpolation: THREE.InterpolateSmooth,
         loop: THREE.LoopOnce,
         repetitions: 1,
         rotateOnlyClockWise: true
     };
-    
+
     return { options, animationOptions };
 };
 
@@ -204,35 +205,53 @@ const initializeUIControls = (
     flyOverAnimationOptions: any
 ): [GUI, (animation: CameraKeyTrackAnimation | undefined) => void] => {
     let cameraAnimation: CameraKeyTrackAnimation | undefined;
-    
+
     // Callback function to update camera animation instance
     const updateCameraAnimation = (animation: CameraKeyTrackAnimation | undefined): void => {
         cameraAnimation = animation;
     };
-    
+
     const gui = new GUI({ width: 300 });
-    
+
     // Add projection switch control
     gui.add(options, "globe").onChange(() => {
         map.projection = options.globe ? sphereProjection : mercatorProjection;
     });
-    
+
     // Add orbit animation control
-    gui.add(options, "orbit").onChange((enable: boolean) => {
-        enableOrbit(enable, map, options, animationOptions, updateCameraAnimation, createOrbitAnimation);
-    }).listen();
-    
+    gui.add(options, "orbit")
+        .onChange((enable: boolean) => {
+            enableOrbit(
+                enable,
+                map,
+                options,
+                animationOptions,
+                updateCameraAnimation,
+                createOrbitAnimation
+            );
+        })
+        .listen();
+
     // Add fly to specified location control
     gui.add(options, "flyTo", [...Object.keys(geoLocations)])
         .onChange((location: string) => {
             flyTo(location, map, geoLocations, options, animationOptions, updateCameraAnimation);
         })
         .listen();
-    
+
     // Add flight route animation control
-    gui.add(options, "flyOver").onChange((enable: boolean) => {
-        enableFlyOver(enable, map, options, flyOverAnimationOptions, animationOptions, updateCameraAnimation);
-    }).listen();
+    gui.add(options, "flyOver")
+        .onChange((enable: boolean) => {
+            enableFlyOver(
+                enable,
+                map,
+                options,
+                flyOverAnimationOptions,
+                animationOptions,
+                updateCameraAnimation
+            );
+        })
+        .listen();
 
     // Add animation interpolation method control
     gui.add(animationOptions, "interpolation", {
@@ -284,7 +303,10 @@ const initializeUIControls = (
  * @param options Control options
  * @param updateCameraAnimation Callback function to update camera animation instance
  */
-const stopAnimation = (options: UIOptions, updateCameraAnimation: (animation: CameraKeyTrackAnimation | undefined) => void): void => {
+const stopAnimation = (
+    options: UIOptions,
+    updateCameraAnimation: (animation: CameraKeyTrackAnimation | undefined) => void
+): void => {
     updateCameraAnimation(undefined);
     options.flyOver = false;
     options.orbit = false;
@@ -305,7 +327,10 @@ const enableOrbit = (
     options: UIOptions,
     animationOptions: AnimationOptions,
     updateCameraAnimation: (animation: CameraKeyTrackAnimation | undefined) => void,
-    createOrbitAnimation: (map: MapView, animationOptions: AnimationOptions) => CameraKeyTrackAnimation
+    createOrbitAnimation: (
+        map: MapView,
+        animationOptions: AnimationOptions
+    ) => CameraKeyTrackAnimation
 ): void => {
     stopAnimation(options, updateCameraAnimation);
     options.orbit = enable;
@@ -391,9 +416,12 @@ const enableFlyOver = (
  * @param animationOptions Animation options
  * @returns CameraKeyTrackAnimation instance
  */
-const createOrbitAnimation = (map: MapView, animationOptions: AnimationOptions): CameraKeyTrackAnimation => {
+const createOrbitAnimation = (
+    map: MapView,
+    animationOptions: AnimationOptions
+): CameraKeyTrackAnimation => {
     const currentLookAt = CameraAnimationBuilder.getLookAtFromView(map);
-    
+
     const orbitControlPoints = [
         new ControlPoint({
             ...currentLookAt,
@@ -403,8 +431,8 @@ const createOrbitAnimation = (map: MapView, animationOptions: AnimationOptions):
         new ControlPoint({
             ...currentLookAt,
             timestamp: 10,
-            heading: 90,  
-            distance: currentLookAt.distance * 1.1 
+            heading: 90,
+            distance: currentLookAt.distance * 1.1
         }),
         new ControlPoint({
             ...currentLookAt,
@@ -441,23 +469,23 @@ const createOrbitAnimation = (map: MapView, animationOptions: AnimationOptions):
 try {
     // 1. Create base map
     const map = createBaseMap();
-    
+
     // 2. Create landmark locations
     const geoLocations = createGeoLocations();
-    
+
     // 3. Set initial viewpoint to Jinan city center
     map.lookAt({
         target: geoLocations.JinanCenter,
         distance: 2000,
         tilt: 45
     });
-    
+
     // 4. Initialize animation options
     const { options, animationOptions } = initializeAnimationOptions();
-    
+
     // 5. Create flight route animation options
     const flyOverAnimationOptions = createFlyOverAnimationOptions(geoLocations);
-    
+
     // 6. Initialize user interface controls
     const [gui, updateCameraAnimation] = initializeUIControls(
         map,
@@ -466,8 +494,11 @@ try {
         animationOptions,
         flyOverAnimationOptions
     );
-    
+
     console.log("Camera animation getting started example initialized successfully");
 } catch (error) {
-    console.error("Error occurred while initializing camera animation getting started example:", error);
+    console.error(
+        "Error occurred while initializing camera animation getting started example:",
+        error
+    );
 }

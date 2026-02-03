@@ -66,7 +66,6 @@ export interface IBrightnessContrastEffect {
     contrast: number;
 }
 
-
 export interface ISMAAEffect {
     enabled: boolean;
 }
@@ -90,7 +89,7 @@ export interface ITranslucentLayerConfig {
     /** Blend factor (0-1) */
     mixFactor?: number;
     /** Blend mode */
-    blendMode?: 'mix' | 'add' | 'multiply' | 'screen';
+    blendMode?: "mix" | "add" | "multiply" | "screen";
     /** Highlight color */
     color?: string;
     /** Occlusion distance threshold (in meters), effect is not displayed beyond this distance, default is 1.0 */
@@ -100,5 +99,5 @@ export interface ITranslucentLayerConfig {
     /** Original color blending intensity (0-1), default is 0.5 */
     objectColorMix?: number;
 
-    mode?: 'normal' | 'background';
+    mode?: "normal" | "background";
 }

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type ColorDef, type ColorIndex } from "../common";
 import { type VertexTable } from "../common/render/primitives/vertex-table";
 import { assert } from "../utils";

@@ -80,11 +80,12 @@ export type ResourceProviderEventMap = {
  * @abstract
  */
 export abstract class ResourceProvider<
-    T extends ITileResource,
-    TTerrainSource extends ITerrainSource = ITerrainSource
->
+        T extends ITileResource,
+        TTerrainSource extends ITerrainSource = ITerrainSource
+    >
     extends DataProvider<T>
-    implements IResourceProvider {
+    implements IResourceProvider
+{
     /** Unique identifier for this provider instance */
     public readonly uuid = MathUtils.generateUUID();
 
@@ -160,10 +161,14 @@ export abstract class ResourceProvider<
             if (resource !== undefined) {
                 return;
             }
-        } 
+        }
 
         // Execute the resource loading
-        const loadResult = this.loadResourcesAtLevel(tileKey,  Math.max(Math.min(tileKey.level, this.maxLevel), this.minLevel), abortSignal);
+        const loadResult = this.loadResourcesAtLevel(
+            tileKey,
+            Math.max(Math.min(tileKey.level, this.maxLevel), this.minLevel),
+            abortSignal
+        );
 
         // If loading returned true, it means loading is complete
         if (loadResult === true) {
@@ -345,7 +350,7 @@ export abstract class ResourceProvider<
      * @param minLevel - New minimum level (optional)
      * @param maxLevel - New maximum level (optional)
      */
-    public updateConfig( minLevel?: number, maxLevel?: number): void {
+    public updateConfig(minLevel?: number, maxLevel?: number): void {
         this.minLevel = minLevel ?? this.minLevel;
         this.maxLevel = maxLevel ?? this.maxLevel;
     }

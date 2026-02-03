@@ -187,12 +187,7 @@ export namespace TextStylingDynamicExample {
             ),
             new THREE.LineSegments(
                 new THREE.WireframeGeometry(
-                    new THREE.PlaneGeometry(
-                        window.innerWidth - 1,
-                        window.innerHeight - 1,
-                        2,
-                        2
-                    )
+                    new THREE.PlaneGeometry(window.innerWidth - 1, window.innerHeight - 1, 2, 2)
                 ),
                 new THREE.LineBasicMaterial({
                     color: CONFIG.BOUNDS_COLOR,
@@ -309,7 +304,7 @@ export namespace TextStylingDynamicExample {
         camera.top = window.innerHeight / 2.0;
         camera.updateProjectionMatrix();
     }
-    
+
     /**
      * Handle keyboard key release event
      */
@@ -382,7 +377,9 @@ export namespace TextStylingDynamicExample {
      */
     function main() {
         // Initialize Three.JS, enable backward compatibility for three.js <= 0.117
-        const WebGL1Renderer = (THREE as any).WebGL1Renderer as typeof THREE.WebGLRenderer | undefined;
+        const WebGL1Renderer = (THREE as any).WebGL1Renderer as
+            | typeof THREE.WebGLRenderer
+            | undefined;
         webglRenderer = new (WebGL1Renderer ?? THREE.WebGLRenderer)({
             canvas: document.getElementById(CONFIG.CANVAS_ELEMENT_ID) as HTMLCanvasElement
         });
@@ -408,28 +405,26 @@ export namespace TextStylingDynamicExample {
 
         // Initialize TextCanvas
         textRenderStyle = new TextRenderStyle({
-            fontSize: { 
-                unit: FontUnit.Pixel, 
-                size: CONFIG.INITIAL_FONT_SIZE, 
-                backgroundSize: CONFIG.INITIAL_BACKGROUND_SIZE 
+            fontSize: {
+                unit: FontUnit.Pixel,
+                size: CONFIG.INITIAL_FONT_SIZE,
+                backgroundSize: CONFIG.INITIAL_BACKGROUND_SIZE
             },
             color: new THREE.Color(CONFIG.INITIAL_FONT_COLOR),
             backgroundColor: new THREE.Color(CONFIG.INITIAL_BACKGROUND_COLOR),
             backgroundOpacity: CONFIG.INITIAL_BACKGROUND_OPACITY
         });
-        FontCatalog.load(CONFIG.FONT_CATALOG_PATH, 2048).then(
-            (loadedFontCatalog: FontCatalog) => {
-                textCanvas = new TextCanvas({
-                    renderer: webglRenderer,
-                    fontCatalog: loadedFontCatalog,
-                    minGlyphCount: 16,
-                    maxGlyphCount: CONFIG.CHARACTER_COUNT
-                });
-                loadedFontCatalog.loadCharset(textSample, textRenderStyle).then(() => {
-                    assetsLoaded = true;
-                });
-            }
-        );
+        FontCatalog.load(CONFIG.FONT_CATALOG_PATH, 2048).then((loadedFontCatalog: FontCatalog) => {
+            textCanvas = new TextCanvas({
+                renderer: webglRenderer,
+                fontCatalog: loadedFontCatalog,
+                minGlyphCount: 16,
+                maxGlyphCount: CONFIG.CHARACTER_COUNT
+            });
+            loadedFontCatalog.loadCharset(textSample, textRenderStyle).then(() => {
+                assetsLoaded = true;
+            });
+        });
 
         // Initialize debug visualization
         initDebugBounds();

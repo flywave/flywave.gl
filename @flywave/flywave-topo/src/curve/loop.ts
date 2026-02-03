@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type GeometryHandler } from "../geometry3d/geometry-handler";
 import { type IndexedXYZCollection } from "../geometry3d/indexed-xyz-collection";
 import { type Point3d } from "../geometry3d/point3d-vector3d";

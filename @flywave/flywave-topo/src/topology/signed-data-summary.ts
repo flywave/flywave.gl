@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 /**
  * Class to accumulate statistics about a stream of signed numbers with tag items.
  * * All sums, counts, extrema, and item values are initialized to zero in the constructor.

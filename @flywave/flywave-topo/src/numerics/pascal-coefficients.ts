@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 export class PascalCoefficients {
     private static readonly _allRows: Float64Array[] = [];
     /**

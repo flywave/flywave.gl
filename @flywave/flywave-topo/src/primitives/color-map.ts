@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type ColorIndex, ColorDef } from "../common";
 import { assert, compareNumbers, IndexMap } from "../utils";
 

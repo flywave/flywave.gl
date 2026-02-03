@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { GeometryQuery } from "../curve/geometry-query";
 import { AxisOrder, Geometry } from "../geometry";
 import { type GeometryHandler } from "../geometry3d/geometry-handler";

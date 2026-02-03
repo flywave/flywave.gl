@@ -2,18 +2,15 @@
 
 import { type Theme } from "@flywave/flywave-datasource-protocol";
 import { type Projection, EarthConstants, ProjectionType } from "@flywave/flywave-geoutils";
-import {
-    GroundAtmosphereMaterial,
-    SkyAtmosphereMaterial
-} from "@flywave/flywave-materials";
+import { GroundAtmosphereMaterial, SkyAtmosphereMaterial } from "@flywave/flywave-materials";
 import { assert } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
 import { TiltViewClipPlanesEvaluator } from "./ClipPlanesEvaluator";
 import { type MapAnchor, type MapAnchors } from "./MapAnchors";
 
-export  const ATMOSPHERE_SKY_RENDER_ORDER = Number.MIN_SAFE_INTEGER;
-export  const ATMOSPHERE_GROUND_RENDER_ORDER = Number.MIN_SAFE_INTEGER;
+export const ATMOSPHERE_SKY_RENDER_ORDER = Number.MIN_SAFE_INTEGER;
+export const ATMOSPHERE_GROUND_RENDER_ORDER = Number.MIN_SAFE_INTEGER;
 /**
  * Atmosphere effect variants.
  */
@@ -94,7 +91,6 @@ export class MapViewAtmosphere {
     private m_groundGeometry?: THREE.BufferGeometry;
     private m_groundMaterial?: THREE.Material;
     private m_groundMesh?: THREE.Mesh;
- 
 
     private readonly m_clipPlanesEvaluator = new TiltViewClipPlanesEvaluator(
         EarthConstants.EQUATORIAL_RADIUS * SKY_ATMOSPHERE_ALTITUDE_FACTOR,
@@ -234,7 +230,7 @@ export class MapViewAtmosphere {
             this.m_skyMaterial.setDynamicLighting(true);
         }
     }
-  
+
     /**
      * Disposes allocated resources.
      */

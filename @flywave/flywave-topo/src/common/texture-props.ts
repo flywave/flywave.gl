@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type Id64String } from "../utils";
 import { type Base64EncodedString } from "./base64-encoded-string";
 import { type ImageSourceFormat } from "./image";

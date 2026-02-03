@@ -6,10 +6,16 @@ import type * as Preset from "@docusaurus/preset-classic";
 const path = require("path");
 const fs = require("fs");
 
-const flywavePath = path.resolve(__dirname, '../@flywave/flywave.gl/dist');
-const examplesPath = path.resolve(__dirname, '../@flywave/flywave-examples/resources/');
-const examplesSrcPath = path.resolve(__dirname, '../@flywave/flywave-examples/src/real-world-ecological-farming'); 
-const examplesSrcPath3dtilesAnimation = path.resolve(__dirname, '../@flywave/flywave-examples/src/3dtiles-animation'); 
+const flywavePath = path.resolve(__dirname, "../@flywave/flywave.gl/dist");
+const examplesPath = path.resolve(__dirname, "../@flywave/flywave-examples/resources/");
+const examplesSrcPath = path.resolve(
+    __dirname,
+    "../@flywave/flywave-examples/src/real-world-ecological-farming"
+);
+const examplesSrcPath3dtilesAnimation = path.resolve(
+    __dirname,
+    "../@flywave/flywave-examples/src/3dtiles-animation"
+);
 
 const config: Config = {
     title: "FlywaveGL",
@@ -29,7 +35,7 @@ const config: Config = {
     projectName: "FlywaveGL",
 
     onBrokenLinks: "warn",
-    onBrokenAnchors: "warn", 
+    onBrokenAnchors: "warn",
     i18n: {
         defaultLocale: "en",
         locales: ["en", "zh"],
@@ -74,31 +80,31 @@ const config: Config = {
     ],
     // Update staticDirectories configuration
     staticDirectories: [
-        "./static",  // Ensure static directory is included
-        flywavePath, 
+        "./static", // Ensure static directory is included
+        flywavePath,
         examplesPath,
         // Keep root directory mapping (if needed)
-        examplesSrcPath, 
+        examplesSrcPath,
         examplesSrcPath3dtilesAnimation
     ],
     markdown: {
-        format: 'mdx',
+        format: "mdx",
         mermaid: true,
         // Handle broken Markdown images
         mdx1Compat: {
-          admonitions: true,
-          comments: true,
-          headingIds: true,
+            admonitions: true,
+            comments: true,
+            headingIds: true
         },
         // Ignore broken Markdown images
         hooks: {
-          onBrokenMarkdownImages: 'warn', // or 'ignore' 
-        },
+            onBrokenMarkdownImages: "warn" // or 'ignore'
+        }
     },
     themeConfig: {
         image: "img/docusaurus-social-card.jpg",
         colorMode: {
-            defaultMode: 'light',
+            defaultMode: "light",
             disableSwitch: false,
             respectPrefersColorScheme: false
         },
@@ -127,9 +133,9 @@ const config: Config = {
                     position: "right"
                 },
                 {
-                    type: 'localeDropdown',
-                    position: 'right',
-                },
+                    type: "localeDropdown",
+                    position: "right"
+                }
             ]
         },
         footer: {

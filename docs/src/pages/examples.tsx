@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Link from "@docusaurus/Link";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import Layout from "@theme/Layout";
-import Translate from '@docusaurus/Translate';
+import Translate from "@docusaurus/Translate";
 const Heading = require("@theme/Heading").default;
 
 import styles from "./examples.module.css";
@@ -35,7 +35,10 @@ function ExamplesHeader() {
                     </Translate>
                 </Heading>
                 <p className={styles.heroSubtitle}>
-                    <Translate id="examples.subtitle" description="The subtitle for the examples page">
+                    <Translate
+                        id="examples.subtitle"
+                        description="The subtitle for the examples page"
+                    >
                         Learn various features of flywave.gl through practical examples
                     </Translate>
                 </p>
@@ -46,14 +49,20 @@ function ExamplesHeader() {
 
 function getExampleLink(exampleId: string): string {
     // 获取当前语言前缀
-    const currentLangPrefix = typeof window !== 'undefined' 
-        ? (window.location.pathname.startsWith('/zh/') ? '/zh' : 
-           window.location.pathname.startsWith('/en/') ? '/en' : '') 
-        : '';
-    
+    const currentLangPrefix =
+        typeof window !== "undefined"
+            ? window.location.pathname.startsWith("/zh/")
+                ? "/zh"
+                : window.location.pathname.startsWith("/en/")
+                ? "/en"
+                : ""
+            : "";
+
     // 跳转到示例详情页，保持语言前缀，确保路径格式正确
     // 修复：移除多余的斜杠，统一使用不带结尾斜杠的格式
-    return currentLangPrefix ? `${currentLangPrefix}/example-detail?id=${exampleId}` : `/example-detail?id=${exampleId}`;
+    return currentLangPrefix
+        ? `${currentLangPrefix}/example-detail?id=${exampleId}`
+        : `/example-detail?id=${exampleId}`;
 }
 
 function ExampleCard({ example }: { example: Example }) {
@@ -61,8 +70,8 @@ function ExampleCard({ example }: { example: Example }) {
         <div className={styles.exampleCard}>
             <div className={styles.exampleImage}>
                 {example.image ? (
-                    <img 
-                        src={example.image} 
+                    <img
+                        src={example.image}
                         alt={example.title}
                         className={styles.exampleThumbnail}
                     />
@@ -75,7 +84,10 @@ function ExampleCard({ example }: { example: Example }) {
                 <p className={styles.exampleDescription}>{example.description}</p>
                 <p className={styles.exampleCategory}>{example.category}</p>
                 <Link className={styles.exampleButton} to={getExampleLink(example.id)}>
-                    <Translate id="examples.viewDetails" description="Button text to view example details">
+                    <Translate
+                        id="examples.viewDetails"
+                        description="Button text to view example details"
+                    >
                         View Details
                     </Translate>
                 </Link>
@@ -118,14 +130,20 @@ export default function Examples(): ReactNode {
 
     // 根据EXAMPLE_CATEGORIES定义的顺序对分类进行排序
     const sortedCategories = [...EXAMPLE_CATEGORIES];
-    
+
     // 获取当前语言环境
-    const currentLocale = typeof window !== 'undefined' ? 
-      (window.location.pathname.startsWith('/zh/') || document.documentElement.lang.includes('zh') ? 'zh' : 'en') : 'en';
+    const currentLocale =
+        typeof window !== "undefined"
+            ? window.location.pathname.startsWith("/zh/") ||
+              document.documentElement.lang.includes("zh")
+                ? "zh"
+                : "en"
+            : "en";
 
     // 过滤出有示例的分类
-    const categoriesWithExamples = sortedCategories.filter(category => 
-        examplesByCategory[category.code] && examplesByCategory[category.code].length > 0
+    const categoriesWithExamples = sortedCategories.filter(
+        category =>
+            examplesByCategory[category.code] && examplesByCategory[category.code].length > 0
     );
 
     // 添加没有在EXAMPLE_CATEGORIES中定义但有示例的分类
@@ -143,9 +161,14 @@ export default function Examples(): ReactNode {
                     {categoriesWithExamples.map(category => {
                         const examples = examplesByCategory[category.code] || [];
                         return (
-                            <div key={category.code} className={`${styles.categorySection} slide-in-up`}>
+                            <div
+                                key={category.code}
+                                className={`${styles.categorySection} slide-in-up`}
+                            >
                                 <Heading as="h2" className={styles.categoryTitle}>
-                                    {currentLocale === 'zh' && category.nameZh ? category.nameZh : category.name}
+                                    {currentLocale === "zh" && category.nameZh
+                                        ? category.nameZh
+                                        : category.name}
                                 </Heading>
                                 <div className={styles.examplesGrid}>
                                     {examples.map(example => (
@@ -157,13 +180,17 @@ export default function Examples(): ReactNode {
                             </div>
                         );
                     })}
-                    
+
                     {/* 显示未定义的分类 */}
                     {undefinedCategories.map(categoryCode => {
                         const examples = examplesByCategory[categoryCode] || [];
-                        const categoryName = examples.length > 0 ? examples[0].category : categoryCode;
+                        const categoryName =
+                            examples.length > 0 ? examples[0].category : categoryCode;
                         return (
-                            <div key={categoryCode} className={`${styles.categorySection} slide-in-up`}>
+                            <div
+                                key={categoryCode}
+                                className={`${styles.categorySection} slide-in-up`}
+                            >
                                 <Heading as="h2" className={styles.categoryTitle}>
                                     {categoryName}
                                 </Heading>

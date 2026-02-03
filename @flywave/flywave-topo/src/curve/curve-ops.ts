@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 import { type Range3d } from "../geometry3d/range";
 import { BagOfCurves, CurveCollection } from "./curve-collection";

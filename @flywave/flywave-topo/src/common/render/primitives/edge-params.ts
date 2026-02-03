@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type LinePixels } from "../../../common";
 import { type TesselatedPolyline } from "./polyline-params";
 import { type VertexIndices } from "./vertex-indices";

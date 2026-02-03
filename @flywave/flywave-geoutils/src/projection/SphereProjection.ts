@@ -12,7 +12,7 @@ import { Vector3Like } from "../math/Vector3Like";
 /**
  * Sphere projection interface for spherical Earth model
  */
-interface SphereProjection  extends Projection{
+interface SphereProjection extends Projection {
     /** Projection type identifier */
     readonly type: ProjectionType;
 
@@ -60,10 +60,7 @@ interface SphereProjection  extends Projection{
      * @param result Optional output buffer
      * @returns World bounding box (axis-aligned or oriented)
      */
-    projectBox<Bounds extends Box3Like | OrientedBox3Like>(
-        geoBox: GeoBox,
-        result?: Bounds
-    ): Bounds;
+    projectBox<Bounds extends Box3Like | OrientedBox3Like>(geoBox: GeoBox, result?: Bounds): Bounds;
 
     /**
      * Unprojects world bounding box to geographic bounding box

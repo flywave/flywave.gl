@@ -171,7 +171,7 @@ function getReferencesImageIndices(gltf: GLTFWithBuffers): number[] {
 
     return Array.from(imageIndices).sort();
 }
- 
+
 // 修改 loadImage 函数
 async function loadImage(gltf: GLTFWithBuffers, image: any, index: number, options: any) {
     let arrayBuffer;
@@ -191,10 +191,10 @@ async function loadImage(gltf: GLTFWithBuffers, image: any, index: number, optio
     }
 
     assert(arrayBuffer, "glTF image has no data");
- 
+
     try {
         const result = await imageLoader.load(arrayBuffer, image.mimeType);
-        
+
         gltf.images = gltf.images || [];
         gltf.images[index] = {
             width: result.width,
@@ -203,7 +203,7 @@ async function loadImage(gltf: GLTFWithBuffers, image: any, index: number, optio
             compressed: result.compressed
         };
     } catch (error) {
-        console.error('Failed to load image:', error); 
+        console.error("Failed to load image:", error);
     }
 }
 

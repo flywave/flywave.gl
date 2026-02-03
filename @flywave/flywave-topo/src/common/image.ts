@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 /** Format of an [[ImageBuffer]].
  * The format determines how many bytes are allocated for each pixel in the buffer and the semantics of each byte.
  * @see [[ImageBuffer.getNumBytesPerPixel]]

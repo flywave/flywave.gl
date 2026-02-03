@@ -39,7 +39,6 @@ export class GroundModificationProcessor {
             width = baseDemTexture.image.width;
             height = baseDemTexture.image.height;
         }
- 
 
         const brushWeights = this.brushProcessor.applyBrushOperations(
             allOperations,
@@ -70,7 +69,7 @@ export class GroundModificationProcessor {
 
         const data = renderEnv.render(width, height);
         const imageData = new ImageData(data as Uint8ClampedArray<ArrayBuffer>, width, height);
- 
+
         brushTexture.dispose();
         geometry.dispose();
         material.dispose();
@@ -78,7 +77,7 @@ export class GroundModificationProcessor {
 
         return { image: imageData };
     }
- 
+
     private floatArrayToTexture(
         weights: Float32Array,
         width: number,

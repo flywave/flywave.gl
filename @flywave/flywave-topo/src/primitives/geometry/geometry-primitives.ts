@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { DisplayParams } from "../../common/render/primitives/display-params";
 import {
     type CurveChain,

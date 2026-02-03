@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type Arc3d } from "../curve/arc3d";
 import { type AnnounceNumberNumberCurvePrimitive } from "../curve/curve-primitive";
 import { AxisOrder, Geometry } from "../geometry";

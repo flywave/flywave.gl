@@ -117,7 +117,7 @@ export class PolarTileDataSource extends DataSource {
             technique,
             env: this.mapView.env
         });
-        material.depthTest=true;
+        material.depthTest = true;
         if (!material) {
             return undefined;
         }

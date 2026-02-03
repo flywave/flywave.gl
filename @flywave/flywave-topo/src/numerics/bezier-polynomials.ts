@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 import { type GrowableFloat64Array } from "../geometry3d/growable-float64-array";
 import { PascalCoefficients } from "./pascal-coefficients";

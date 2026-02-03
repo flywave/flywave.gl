@@ -307,7 +307,7 @@ export function getProjection(projectionName: string): Projection | never {
         case "equirectangular":
             return equirectangularProjection;
         case "ellipsoid":
-            return ellipsoidProjection; 
+            return ellipsoidProjection;
         default:
             throw new Error(`Unknown projection ${projectionName}`);
     } // switch

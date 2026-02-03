@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 export function assert(
     condition: boolean | (() => boolean),
     message?: string | (() => string)

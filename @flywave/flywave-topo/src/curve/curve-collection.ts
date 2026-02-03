@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 import { type GeometryHandler } from "../geometry3d/geometry-handler";
 import { type GrowableXYZArray } from "../geometry3d/growable-xyz-array";

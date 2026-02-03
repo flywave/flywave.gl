@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { ColorDef } from "./color-def";
 
 export enum HSVConstants {

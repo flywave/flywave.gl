@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type DisplayParams } from "../../common/render/primitives/display-params";
 import { type Point3d } from "../../core-geometry";
 

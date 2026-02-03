@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 import { GrowableBlockedArray } from "../geometry3d/growable-blocked-array";
 import { GrowableXYArray } from "../geometry3d/growable-xy-array";

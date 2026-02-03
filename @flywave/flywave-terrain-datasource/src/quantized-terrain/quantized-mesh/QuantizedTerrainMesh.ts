@@ -1,6 +1,11 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type GeoBoxArray, type Projection, GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
+import {
+    type GeoBoxArray,
+    type Projection,
+    GeoBox,
+    GeoCoordinates
+} from "@flywave/flywave-geoutils";
 import {
     type SerializableGeometryData,
     deserializeBufferGeometry,
@@ -29,7 +34,7 @@ import {
     type GroundModificationEventParams,
     type GroundModificationManager,
     type GroundModificationData,
-    type SerializedGroundModificationData,
+    type SerializedGroundModificationData
 } from "../../ground-modification-manager";
 import { renderGroundModificationHeightMap, renderHeightMap } from "../../terrain-processor";
 import { QuantizedTileResource } from "../QuantizedTileResource";
@@ -73,7 +78,11 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
     waterMaskTexture?: DataTexture;
     declare geoBox: GeoBox;
 
-    constructor(data: QuantizedTerrainMeshData | Mesh, private m_projection?: Projection, public waterMask?: WaterMask) {
+    constructor(
+        data: QuantizedTerrainMeshData | Mesh,
+        private m_projection?: Projection,
+        public waterMask?: WaterMask
+    ) {
         super(
             data instanceof Mesh
                 ? GeoBox.fromArray(data.userData.geoBox)
@@ -128,7 +137,6 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
         if (options.heightMap)
             this.drawHeightMap(options.heightMap.geoBox, options.clip, options.heightMap.flipY);
     }
-
 
     private drawHeightMap(
         geoBox: GeoBox,
@@ -245,14 +253,17 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
     }
 
     protected get geometry(): BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap> {
-        return this.quantizedGeometry as BufferGeometry<NormalBufferAttributes, BufferGeometryEventMap>;
+        return this.quantizedGeometry as BufferGeometry<
+            NormalBufferAttributes,
+            BufferGeometryEventMap
+        >;
     }
 
     public get geometryProjection(): Projection {
         return this.m_projection;
     }
     protected updateGeometryProjection(projection: Projection) {
-        this.m_projection = projection;  
+        this.m_projection = projection;
         projection.projectPoint(this.geoCenter, this.position);
     }
 

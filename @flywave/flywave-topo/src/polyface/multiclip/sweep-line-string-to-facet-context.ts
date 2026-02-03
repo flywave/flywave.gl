@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { ClipPlane } from "../../clipping/clip-plane";
 import { ConvexClipPlaneSet } from "../../clipping/convex-clip-plane-set";
 import { Geometry } from "../../geometry";

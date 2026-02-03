@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../../geometry";
 import { type Angle } from "../../geometry3d/angle";
 import { type GeometryHandler, type IStrokeHandler } from "../../geometry3d/geometry-handler";

@@ -45,8 +45,7 @@ export interface TilesRendererOptions {
      */
     debugBoundingVolume?: boolean;
 
-
-     /**
+    /**
      * Size of points in the point cloud
      */
     pointSize?: number;
@@ -69,7 +68,7 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
     private rootTile?: ITile;
     public object: Object3D;
     private geoExtent?: GeoBox;
-    private mapView?: MapView; 
+    private mapView?: MapView;
 
     /**
      * Creates a new TilesRenderer instance
@@ -180,7 +179,6 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
             this.mapView.removeEventListener(MapViewEventNames.WillRender, this.update3DTileSource);
         }
     }
- 
 
     /**
      * Gets the projection used by the connected MapView

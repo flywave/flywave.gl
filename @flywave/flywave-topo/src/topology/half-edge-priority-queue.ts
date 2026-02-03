@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type OrderedComparator, PriorityQueue } from "../utils";
 import { type HalfEdge } from "./graph";
 import { HalfEdgeGraphOps } from "./merging";

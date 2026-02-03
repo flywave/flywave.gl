@@ -284,8 +284,12 @@ describe("ClipPlanesEvaluator", function () {
             camera.position.set(0, 0, 1000);
             camera.lookAt(0, 0, 0);
 
-            const viewRanges = evaluator.evaluateClipPlanes(camera, projection, elevationProvider,
-                true);
+            const viewRanges = evaluator.evaluateClipPlanes(
+                camera,
+                projection,
+                elevationProvider,
+                true
+            );
 
             // Check that we get valid ViewRanges
             expect(viewRanges).to.not.be.undefined;
@@ -334,8 +338,12 @@ describe("ClipPlanesEvaluator", function () {
             camera.position.set(0, 0, 0);
             camera.lookAt(0, 1, 0);
 
-            const viewRanges = evaluator.evaluateClipPlanes(camera, projection, elevationProvider,
-                true);
+            const viewRanges = evaluator.evaluateClipPlanes(
+                camera,
+                projection,
+                elevationProvider,
+                true
+            );
 
             // Should still return valid ViewRanges even in edge cases
             expect(viewRanges).to.not.be.undefined;

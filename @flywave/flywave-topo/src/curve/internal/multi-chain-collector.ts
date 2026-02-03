@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../../geometry";
 import { FrameBuilder } from "../../geometry3d/frame-builder";
 import { type Point3d } from "../../geometry3d/point3d-vector3d";

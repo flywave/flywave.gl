@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type AngleSweepProps, type BeJSONFunctions, Geometry } from "../geometry";
 import { Angle } from "./angle";
 import { type GrowableFloat64Array } from "./growable-float64-array";

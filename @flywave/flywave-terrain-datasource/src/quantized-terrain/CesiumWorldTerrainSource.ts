@@ -1,6 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { QuantizedTerrainSource, type QuantizedTerrainSourceOptions } from "./QuantizedTerrainSource";
+import {
+    QuantizedTerrainSource,
+    type QuantizedTerrainSourceOptions
+} from "./QuantizedTerrainSource";
 
 /**
  * Configuration options for CesiumWorldTerrainSource
@@ -9,7 +12,8 @@ import { QuantizedTerrainSource, type QuantizedTerrainSourceOptions } from "./Qu
  * This simplifies access to Cesium World Terrain by handling the access token authentication
  * automatically.
  */
-export interface CesiumWorldTerrainSourceOptions extends Omit<QuantizedTerrainSourceOptions, 'url' | 'headers'> {
+export interface CesiumWorldTerrainSourceOptions
+    extends Omit<QuantizedTerrainSourceOptions, "url" | "headers"> {
     /**
      * Cesium Ion access token
      *
@@ -61,12 +65,17 @@ export class CesiumWorldTerrainSource extends QuantizedTerrainSource {
      * @param options - Configuration options for the Cesium World Terrain source
      */
     constructor(options: CesiumWorldTerrainSourceOptions) {
-        const { accessToken, apiEndpoint = "https://api.cesium.com/v1", assetId = 1, ...baseOptions } = options;
+        const {
+            accessToken,
+            apiEndpoint = "https://api.cesium.com/v1",
+            assetId = 1,
+            ...baseOptions
+        } = options;
 
         // Initialize parent class with placeholder values
         super({
             ...baseOptions,
-            url: "https://assets.ion.cesium.com/ap-northeast-1/asset_depot/1/CesiumWorldTerrain/v1.2/layer.json", // Will be set after fetching endpoint
+            url: "https://assets.ion.cesium.com/ap-northeast-1/asset_depot/1/CesiumWorldTerrain/v1.2/layer.json" // Will be set after fetching endpoint
         } as QuantizedTerrainSourceOptions);
 
         this.m_accessToken = accessToken;
@@ -109,7 +118,9 @@ export class CesiumWorldTerrainSource extends QuantizedTerrainSource {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch asset endpoint: ${response.status} ${response.statusText}`);
+            throw new Error(
+                `Failed to fetch asset endpoint: ${response.status} ${response.statusText}`
+            );
         }
 
         return await response.json();

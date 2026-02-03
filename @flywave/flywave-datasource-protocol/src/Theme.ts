@@ -84,7 +84,6 @@ export interface Theme {
 
     celestia?: Celestia;
 
-
     /**
      * Define the fog used in the map scene.
      */

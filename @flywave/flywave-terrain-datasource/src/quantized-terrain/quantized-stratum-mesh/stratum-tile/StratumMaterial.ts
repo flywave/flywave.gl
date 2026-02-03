@@ -41,7 +41,7 @@ class StratumMaterial extends VisualBatchMaterial {
         imageryPatchArray: THREE.IUniform<THREE.Texture[]>;
         imageryPatchCount: THREE.IUniform<number>;
         clipPatchTransform: THREE.IUniform<THREE.Vector4>;
-        
+
         // Projection switching uniforms
         uCurrentGeometryProjectionType: THREE.IUniform<number>;
         uTargetProjectionType: THREE.IUniform<number>;
@@ -192,7 +192,7 @@ class StratumMaterial extends VisualBatchMaterial {
 
             overlayerImageryTransform: { value: new THREE.Vector4() },
             overlayerImagery: { value: null },
-            
+
             // Projection switching uniforms
             uCurrentGeometryProjectionType: { value: 0 },
             uTargetProjectionType: { value: 0 },
@@ -200,7 +200,7 @@ class StratumMaterial extends VisualBatchMaterial {
             uEarthRadius: { value: 6378137.0 }
         };
     }
-    
+
     /**
      * Sets the projection uniforms for terrain projection switching animation
      *

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type BSplineCurve3d } from "../../bspline/bspline-curve";
 import { BSplineCurveOps } from "../../bspline/bspline-curve-ops";
 import { InterpolationCurve3dOptions } from "../../bspline/interpolation-curve3d";

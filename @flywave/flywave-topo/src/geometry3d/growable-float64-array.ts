@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 /**
  * Type for a OptionalGrowableFloat64Array or undefined.
  * @public

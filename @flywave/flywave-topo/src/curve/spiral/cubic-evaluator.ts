@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { XYCurveEvaluator } from "./xy-curve-evaluator";
 /** Intermediate class for evaluation of bare cubic spirals `y = m ^x^3` with x axis from [0..xLength]
  * * This implements all the computations among fraction, x, and y.

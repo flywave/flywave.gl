@@ -88,7 +88,6 @@ export class QuantizedStratumMesh extends THREE.Mesh {
         });
         return styles;
     }
- 
 
     public setUpClipGeoBox(geoBox: GeoBox, quantizedTilingScheme: TilingScheme) {
         const material = this.material as StratumMaterial;

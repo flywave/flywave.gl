@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type CurveCollection, CurveChain } from "../curve-collection";
 import { type CurvePrimitive } from "../curve-primitive";
 import { RecursiveCurveProcessorWithStack } from "../curve-processor";

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type Clipper } from "../clipping/clip-utils";
 import { type BeJSONFunctions, type PlaneAltitudeEvaluator, Geometry } from "../geometry";
 import { type GeometryHandler, type IStrokeHandler } from "../geometry3d/geometry-handler";

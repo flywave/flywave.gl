@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Arc3d } from "../curve/arc3d";
 import { type CurveCollection } from "../curve/curve-collection";
 import { type GeometryQuery } from "../curve/geometry-query";

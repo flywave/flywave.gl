@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../geometry";
 import { Point4d } from "../geometry4d/point4d";
 import { type MultiLineStringDataVariant } from "../topology/triangulation";

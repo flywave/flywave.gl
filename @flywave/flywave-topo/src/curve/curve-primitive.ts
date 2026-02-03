@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import type { AkimaCurve3d } from "../bspline/akima-curve3d";
 import type { BezierCurve3d } from "../bspline/bezier-curve3d";
 import type { BSplineCurve3d } from "../bspline/bspline-curve";

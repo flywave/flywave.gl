@@ -1,6 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type MapView, type ElevationProvider, type ElevationRangeSource } from "@flywave/flywave-mapview";
+import {
+    type MapView,
+    type ElevationProvider,
+    type ElevationRangeSource
+} from "@flywave/flywave-mapview";
 import { TileKey, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { GUI } from "dat.gui";
 
@@ -43,10 +47,9 @@ export class ElevationModule {
         const elevationProvider = this.elevationProvider;
 
         if (!elevationProvider) {
-            this.elevationFolder.add(
-                { message: "No elevation provider available" },
-                "message"
-            ).name("Status");
+            this.elevationFolder
+                .add({ message: "No elevation provider available" }, "message")
+                .name("Status");
             return;
         }
 
@@ -67,10 +70,19 @@ export class ElevationModule {
             queryElevation: () => {
                 if (elevationProvider) {
                     try {
-                        const geoPoint = new GeoCoordinates(queryControls.latitude, queryControls.longitude, 0);
-                        const elevation = elevationProvider.getHeight(geoPoint, queryControls.level);
-                        console.log(`Elevation at [${queryControls.latitude}, ${queryControls.longitude}] level ${queryControls.level}: ${elevation}m`);
-                        let resultStr = '';
+                        const geoPoint = new GeoCoordinates(
+                            queryControls.latitude,
+                            queryControls.longitude,
+                            0
+                        );
+                        const elevation = elevationProvider.getHeight(
+                            geoPoint,
+                            queryControls.level
+                        );
+                        console.log(
+                            `Elevation at [${queryControls.latitude}, ${queryControls.longitude}] level ${queryControls.level}: ${elevation}m`
+                        );
+                        let resultStr = "";
                         if (elevation !== undefined) {
                             resultStr = `Elevation: ${elevation}m`;
                         } else {
@@ -79,17 +91,17 @@ export class ElevationModule {
 
                         // Create a temporary textarea to copy the result
                         const copyToClipboard = () => {
-                            const tempTextArea = document.createElement('textarea');
+                            const tempTextArea = document.createElement("textarea");
                             tempTextArea.value = resultStr;
                             document.body.appendChild(tempTextArea);
                             tempTextArea.select();
-                            document.execCommand('copy');
+                            document.execCommand("copy");
                             document.body.removeChild(tempTextArea);
-                            alert('Result copied to clipboard!');
+                            alert("Result copied to clipboard!");
                         };
 
                         // Show result with copy button
-                        const resultDiv = document.createElement('div');
+                        const resultDiv = document.createElement("div");
                         resultDiv.innerHTML = `
                             <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 1px solid #ccc; z-index: 10000; max-width: 400px;">
                                 <h4>Elevation Result</h4>
@@ -103,11 +115,11 @@ export class ElevationModule {
                         document.body.appendChild(resultDiv);
 
                         // Add event listeners
-                        const copyBtn = document.getElementById('copyElevationResult');
-                        const closeBtn = document.getElementById('closeElevationResult');
+                        const copyBtn = document.getElementById("copyElevationResult");
+                        const closeBtn = document.getElementById("closeElevationResult");
 
-                        copyBtn?.addEventListener('click', copyToClipboard);
-                        closeBtn?.addEventListener('click', () => {
+                        copyBtn?.addEventListener("click", copyToClipboard);
+                        closeBtn?.addEventListener("click", () => {
                             document.body.removeChild(resultDiv);
                         });
                     } catch (error) {
@@ -120,7 +132,7 @@ export class ElevationModule {
 
         // Set default coordinates to somewhere interesting
         queryControls.latitude = 40.7128; // New York
-        queryControls.longitude = -74.0060;
+        queryControls.longitude = -74.006;
 
         this.elevationFolder.add(queryControls, "latitude", -90, 90, 0.0001).name("Latitude");
         this.elevationFolder.add(queryControls, "longitude", -180, 180, 0.0001).name("Longitude");
@@ -148,10 +160,9 @@ export class ElevationModule {
         const elevationRangeSource = this.elevationRangeSource;
 
         if (!elevationRangeSource) {
-            this.rangeFolder.add(
-                { message: "No elevation range source available" },
-                "message"
-            ).name("Status");
+            this.rangeFolder
+                .add({ message: "No elevation range source available" }, "message")
+                .name("Status");
             return;
         }
 
@@ -182,27 +193,30 @@ export class ElevationModule {
 
                     // Try to get elevation range
                     if (elevationRangeSource.getElevationRange) {
-                        const result = elevationRangeSource.getElevationRange(tileKey, this.mapView.dataSources);
+                        const result = elevationRangeSource.getElevationRange(
+                            tileKey,
+                            this.mapView.dataSources
+                        );
                         console.log(`Elevation range result:`, result);
 
                         let resultStr = `Tile: ${tileKey.toString()}`;
                         resultStr += `\nMin Elevation: ${result.minElevation}m`;
                         resultStr += `\nMax Elevation: ${result.maxElevation}m`;
-                        resultStr += `\nStatus: ${result.calculationStatus || 'Unknown'}`;
+                        resultStr += `\nStatus: ${result.calculationStatus || "Unknown"}`;
 
                         // Create a temporary textarea to copy the result
                         const copyToClipboard = () => {
-                            const tempTextArea = document.createElement('textarea');
+                            const tempTextArea = document.createElement("textarea");
                             tempTextArea.value = resultStr;
                             document.body.appendChild(tempTextArea);
                             tempTextArea.select();
-                            document.execCommand('copy');
+                            document.execCommand("copy");
                             document.body.removeChild(tempTextArea);
-                            alert('Result copied to clipboard!');
+                            alert("Result copied to clipboard!");
                         };
 
                         // Show result with copy button
-                        const resultDiv = document.createElement('div');
+                        const resultDiv = document.createElement("div");
                         resultDiv.innerHTML = `
                             <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 1px solid #ccc; z-index: 10000; max-width: 400px;">
                                 <h4>Elevation Range Result</h4>
@@ -216,11 +230,11 @@ export class ElevationModule {
                         document.body.appendChild(resultDiv);
 
                         // Add event listeners
-                        const copyBtn = document.getElementById('copyRangeResult');
-                        const closeBtn = document.getElementById('closeRangeResult');
+                        const copyBtn = document.getElementById("copyRangeResult");
+                        const closeBtn = document.getElementById("closeRangeResult");
 
-                        copyBtn?.addEventListener('click', copyToClipboard);
-                        closeBtn?.addEventListener('click', () => {
+                        copyBtn?.addEventListener("click", copyToClipboard);
+                        closeBtn?.addEventListener("click", () => {
                             document.body.removeChild(resultDiv);
                         });
                     } else {

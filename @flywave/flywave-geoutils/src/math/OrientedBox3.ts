@@ -346,10 +346,10 @@ export class OrientedBox3 implements OrientedBox3Like {
     }
 
     /**
- * 将OrientedBox3转换为GeoBox
- * @param projection 使用的投影系统
- * @returns 转换后的地理包围盒
- */
+     * 将OrientedBox3转换为GeoBox
+     * @param projection 使用的投影系统
+     * @returns 转换后的地理包围盒
+     */
     toGeoBox(projection: Projection): GeoBox {
         // 获取定向包围盒的8个角点
         const corners = this.getCorners();

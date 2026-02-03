@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type BeJSONFunctions, Geometry } from "../geometry";
 import { Matrix3d } from "../geometry3d/matrix3d";
 import { type Vector3d, type XYZ, Point3d } from "../geometry3d/point3d-vector3d";

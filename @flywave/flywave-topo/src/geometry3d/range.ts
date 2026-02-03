@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type BeJSONFunctions, AxisIndex, Geometry } from "../geometry";
 import { type MultiLineStringDataVariant } from "../topology/triangulation";
 import { type GrowableXYZArray } from "./growable-xyz-array";

@@ -47,8 +47,13 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 exampleFrameElement.style.left = "0";
                 exampleFrameElement.style.width = "100%";
             } else {
-                exampleFrameElement.style.left = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width');
-                exampleFrameElement.style.width = "calc(100% - " + getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width') + ")";
+                exampleFrameElement.style.left = getComputedStyle(
+                    document.documentElement
+                ).getPropertyValue("--sidebar-width");
+                exampleFrameElement.style.width =
+                    "calc(100% - " +
+                    getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width") +
+                    ")";
             }
             // Ensure iframe fills the available space without scrollbars
             setTimeout(() => {
@@ -65,8 +70,13 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 exampleFrameElement.style.left = "0";
                 exampleFrameElement.style.width = "100%";
             } else {
-                exampleFrameElement.style.left = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width');
-                exampleFrameElement.style.width = "calc(100% - " + getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width') + ")";
+                exampleFrameElement.style.left = getComputedStyle(
+                    document.documentElement
+                ).getPropertyValue("--sidebar-width");
+                exampleFrameElement.style.width =
+                    "calc(100% - " +
+                    getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width") +
+                    ")";
             }
             // Ensure iframe fills the available space without scrollbars
             setTimeout(() => {
@@ -83,24 +93,24 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
      */
     async function loadThumbnail(thumbnail: HTMLDivElement, exampleName: string): Promise<void> {
         // Add loading class initially
-        thumbnail.classList.add('loading');
-        
+        thumbnail.classList.add("loading");
+
         try {
             // Try to dynamically import the thumbnail image
             // Webpack will handle bundling these assets correctly
             const thumbnailModule = await import(`./src/${exampleName}/thumbnail.png`);
             thumbnail.style.backgroundImage = `url('${thumbnailModule.default}')`;
-            thumbnail.classList.remove('loading');
-            thumbnail.classList.add('loaded');
+            thumbnail.classList.remove("loading");
+            thumbnail.classList.add("loaded");
         } catch (error) {
             // If the specific thumbnail doesn't exist, try a fallback
             try {
-                thumbnail.classList.remove('loading');
-                thumbnail.classList.add('loaded', 'fallback');
+                thumbnail.classList.remove("loading");
+                thumbnail.classList.add("loaded", "fallback");
             } catch (fallbackError) {
                 // If no thumbnails available, show error state
-                thumbnail.classList.remove('loading');
-                thumbnail.classList.add('error');
+                thumbnail.classList.remove("loading");
+                thumbnail.classList.add("error");
             }
         }
     }
@@ -122,39 +132,39 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 }
                 const visibleText =
                     linkElements.length === 1 ? linkName : linkElements.slice(1).join(" / ");
-                
+
                 // Create container for example item with thumbnail
                 const exampleItem = document.createElement("div");
                 exampleItem.className = "example-item";
-                
+
                 // Create thumbnail element
                 const thumbnail = document.createElement("div");
                 thumbnail.className = "example-thumbnail";
-                
+
                 // Extract example name for dynamic import
-                const exampleName = pageUrl.split('/').pop()?.replace('.html', '') || '';
-                
+                const exampleName = pageUrl.split("/").pop()?.replace(".html", "") || "";
+
                 // Load thumbnail asynchronously
                 loadThumbnail(thumbnail, exampleName);
-                
+
                 // Create info container
                 const infoContainer = document.createElement("div");
                 infoContainer.className = "example-info";
-                
+
                 // Create title element
                 const titleElement = document.createElement("h3");
                 titleElement.className = "example-title";
                 titleElement.textContent = visibleText;
-                
+
                 // Create category element
                 const categoryElement = document.createElement("p");
                 categoryElement.className = "example-category";
                 categoryElement.textContent = linkSubMenu;
-                
+
                 // Append info elements
                 infoContainer.appendChild(titleElement);
                 infoContainer.appendChild(categoryElement);
-                
+
                 // Create link element (hidden, for navigation)
                 const linkElement = createDomElement<HTMLAnchorElement>("a", {
                     href: "#" + pageUrl,
@@ -163,17 +173,17 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 });
                 (linkElement as any).nameWithCategory = linkName;
                 (linkElement as any).nameWithoutCategory = visibleText;
-                
+
                 // Add click handler to example item to trigger link
-                exampleItem.addEventListener("click", (event) => {
+                exampleItem.addEventListener("click", event => {
                     linkElement.click();
                 });
-                
+
                 // Append thumbnail and info to example item
                 exampleItem.appendChild(thumbnail);
                 exampleItem.appendChild(infoContainer);
                 exampleItem.appendChild(linkElement);
-                
+
                 categories[linkSubMenu].push(exampleItem);
                 elements.push(linkElement);
             });
@@ -190,16 +200,16 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
             // Create category section
             const categorySection = document.createElement("div");
             categorySection.className = "category-section";
-            
+
             // Create category title
             const categoryTitle = document.createElement("h2");
             categoryTitle.className = "category-title";
             categoryTitle.textContent = menuElement;
             titleElements.push(categoryTitle);
-            
+
             // Append title to section
             categorySection.appendChild(categoryTitle);
-            
+
             // Append examples to section
             const categoryExamples = categories[menuElement];
             if (categoryExamples === undefined) {
@@ -208,7 +218,7 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
             categoryExamples.forEach(example => {
                 categorySection.appendChild(example);
             });
-            
+
             exampleListElement.appendChild(categorySection);
         });
     }
@@ -219,19 +229,19 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
         titleElements.forEach(title => {
             title.style.cssText = "display:none;";
         });
-        
+
         // Only try to access magnifier-placeholder if it exists
         const magnifierPlaceholder = document.getElementById("magnifier-placeholder");
         if (magnifierPlaceholder) {
             magnifierPlaceholder.style.cssText = "display:none;";
         }
-        
+
         // Only try to access clearFilterButton if it exists
         const clearFilterButton = document.getElementById("clearFilterButton");
         if (clearFilterButton) {
             clearFilterButton.style.cssText = "";
         }
-        
+
         elements.forEach(anchor => {
             anchor.innerText = (anchor as any).nameWithCategory;
         });
@@ -242,19 +252,19 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
         titleElements.forEach(title => {
             title.style.cssText = "";
         });
-        
+
         // Only try to access magnifier-placeholder if it exists
         const magnifierPlaceholder = document.getElementById("magnifier-placeholder");
         if (magnifierPlaceholder) {
             magnifierPlaceholder.style.cssText = "";
         }
-        
+
         // Only try to access clearFilterButton if it exists
         const clearFilterButton = document.getElementById("clearFilterButton");
         if (clearFilterButton) {
             clearFilterButton.style.cssText = "display:none;";
         }
-        
+
         elements.forEach(anchor => {
             anchor.classList.remove("filtered");
             anchor.innerText = (anchor as any).nameWithoutCategory;
@@ -296,7 +306,7 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
                 }
             }
         });
-        
+
         // Only add clear filter button event listener if the element exists
         const clearFilterButton = document.getElementById("clearFilterButton");
         if (clearFilterButton) {
@@ -329,7 +339,8 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
 
         // Set a soft background color before loading the page
         exampleFrameElement.style.backgroundColor = "#f8fafc";
-        exampleFrameElement.style.backgroundImage = "radial-gradient(circle at 10% 20%, rgba(33, 150, 243, 0.05) 0%, transparent 20%), radial-gradient(circle at 90% 80%, rgba(0, 188, 212, 0.05) 0%, transparent 20%)";
+        exampleFrameElement.style.backgroundImage =
+            "radial-gradient(circle at 10% 20%, rgba(33, 150, 243, 0.05) 0%, transparent 20%), radial-gradient(circle at 90% 80%, rgba(0, 188, 212, 0.05) 0%, transparent 20%)";
 
         // load page in frame
         exampleFrameElement.src = pageUrl + queryParams;
@@ -364,7 +375,6 @@ function exampleBrowser(exampleDefinitions: ExampleDefinitions) {
 
         // Keep the sidebar in its current state when showing examples - do not auto-collapse
     }
-
 
     /**
      * Show example based on `location.hash` if it's not empty.

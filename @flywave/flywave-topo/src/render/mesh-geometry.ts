@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import * as THREE from "three";
 
 // 渲染模式枚举

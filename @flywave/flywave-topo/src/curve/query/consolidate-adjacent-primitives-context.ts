@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { NullGeometryHandler } from "../../geometry3d/geometry-handler";
 import { type Point3d } from "../../geometry3d/point3d-vector3d";
 import { PolylineCompressionContext } from "../../geometry3d/polyline-compression-by-edge-offset";

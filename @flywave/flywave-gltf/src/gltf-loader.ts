@@ -58,7 +58,7 @@ export async function parse(
     context?: any
 ): Promise<GLTFWithBuffers> {
     // Apply default options
-    options = { ...GLTFLoader.options, ...options,uri:context?.url };
+    options = { ...GLTFLoader.options, ...options, uri: context?.url };
     options.gltf = { ...GLTFLoader.options.gltf, ...options.gltf };
 
     const { byteOffset = 0 } = options;

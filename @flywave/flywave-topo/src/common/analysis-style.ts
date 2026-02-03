@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type Range1dProps, Range1d } from "../core-geometry";
 import { Gradient } from "./gradient";
 import { type ThematicGradientSettingsProps, ThematicGradientSettings } from "./thematic-display";

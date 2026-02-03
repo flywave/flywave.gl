@@ -131,7 +131,7 @@ export class MapControlsUI {
         const lat = geoCenter.latitude.toFixed(4);
         const lng = geoCenter.longitude.toFixed(4);
 
-        let altitude = '';
+        let altitude = "";
         if (geoCenter.altitude !== undefined) {
             const altValue = geoCenter.altitude;
             // Format altitude for better readability
@@ -140,7 +140,7 @@ export class MapControlsUI {
                 altitude = ` ${(altValue / 1000).toFixed(1)}km`;
             } else if (altValue === 0) {
                 // For 0 altitude, just show 0m
-                altitude = ' 0m';
+                altitude = " 0m";
             } else {
                 // For altitudes < 1000m, show in meters with 0 decimal places
                 altitude = ` ${Math.round(altValue)}m`;
@@ -159,10 +159,13 @@ export class MapControlsUI {
      *
      * @param controls - Controls referencing a [[MapView]].
      */
-    constructor(readonly controls: MapControls, options: MapControlsUIOptions = {
-        zoomLevel: "input",
-        screenshotButton: true, // 默认启用截图按钮
-    }) {
+    constructor(
+        readonly controls: MapControls,
+        options: MapControlsUIOptions = {
+            zoomLevel: "input",
+            screenshotButton: true // 默认启用截图按钮
+        }
+    ) {
         // 初始化截图配置
         this.m_screenshotConfig = this.normalizeScreenshotConfig(options.screenshotButton);
 
@@ -224,7 +227,7 @@ export class MapControlsUI {
             );
 
             const updateZoom = (event: KeyboardEvent | FocusEvent) => {
-                controls.mapView.lookAt({zoomLevel: parseFloat(input.value)});
+                controls.mapView.lookAt({ zoomLevel: parseFloat(input.value) });
                 event.preventDefault();
             };
 
@@ -261,7 +264,7 @@ export class MapControlsUI {
             screenshotButton.id = "flywave-gl_controls_screenshot-button";
             screenshotButton.title = this.getScreenshotTooltip();
             screenshotButton.classList.add("flywave-gl_controls-button", "expanded");
-            screenshotButton.addEventListener("click", async (event) => {
+            screenshotButton.addEventListener("click", async event => {
                 await this.captureScreenshot();
             });
             expandedContainer.appendChild(screenshotButton);
@@ -274,10 +277,11 @@ export class MapControlsUI {
             switcher.id = "flywave-gl_controls_switch_projection";
             switcher.classList.add("flywave-gl_controls-button", "expanded");
             const getTitle: () => string = () => {
-                return `Switch to ${this.controls.mapView.projection.type === ProjectionType.Spherical
-                    ? "flat"
-                    : "globe"
-                    } projection`;
+                return `Switch to ${
+                    this.controls.mapView.projection.type === ProjectionType.Spherical
+                        ? "flat"
+                        : "globe"
+                } projection`;
             };
             switcher.title = getTitle();
             const globeSVG = getGlobeSVG();
@@ -302,7 +306,7 @@ export class MapControlsUI {
         }
 
         // Toggle controls visibility
-        toggleButton.addEventListener("click", (event) => {
+        toggleButton.addEventListener("click", event => {
             event.stopPropagation(); // Prevent event bubbling
             isExpanded = !isExpanded;
             expandedContainer.style.display = isExpanded ? "flex" : "none";
@@ -312,20 +316,20 @@ export class MapControlsUI {
         // Add event listeners for buttons
         zoomInButton.addEventListener("click", event => {
             const zoomLevel = controls.mapView.zoomLevel + 1;
-            controls.mapView.lookAt({zoomLevel});
+            controls.mapView.lookAt({ zoomLevel });
         });
 
         zoomOutButton.addEventListener("click", event => {
             const zoomLevel = controls.mapView.zoomLevel - 1;
-            controls.mapView.lookAt({zoomLevel});
+            controls.mapView.lookAt({ zoomLevel });
         });
 
         tiltButton.addEventListener("click", event => {
-            controls.mapView.lookAt({tilt: controls.mapView.tilt === 0 ? 45 : 0});
+            controls.mapView.lookAt({ tilt: controls.mapView.tilt === 0 ? 45 : 0 });
         });
 
         compassButton.addEventListener("click", event => {
-            controls.mapView.lookAt({heading: 0});
+            controls.mapView.lookAt({ heading: 0 });
         });
 
         controls.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
@@ -356,10 +360,7 @@ export class MapControlsUI {
             controls.mapView.renderer.domElement.parentElement?.appendChild(geoCenterContainer);
 
             // Add event listener to update geoCenter display
-            controls.mapView.addEventListener(
-                MapViewEventNames.Render,
-                this.m_onGeoCenterUpdate
-            );
+            controls.mapView.addEventListener(MapViewEventNames.Render, this.m_onGeoCenterUpdate);
         }
 
         return this;
@@ -368,18 +369,20 @@ export class MapControlsUI {
     /**
      * Normalize screenshot configuration
      */
-    private normalizeScreenshotConfig(config: boolean | ScreenshotConfig | undefined): ScreenshotConfig {
+    private normalizeScreenshotConfig(
+        config: boolean | ScreenshotConfig | undefined
+    ): ScreenshotConfig {
         if (config === false) {
             return { width: 0, height: 0 }; // Disabled
         }
 
-        if (typeof config === 'boolean') {
+        if (typeof config === "boolean") {
             // Default configuration
             return {
                 width: 512,
                 height: 512,
                 quality: 0.9,
-                filename: 'flywave-screenshot-{timestamp}_{width}x{height}.png'
+                filename: "flywave-screenshot-{timestamp}_{width}x{height}.png"
             };
         }
 
@@ -388,7 +391,7 @@ export class MapControlsUI {
             width: config?.width || 512,
             height: config?.height || 512,
             quality: config?.quality || 0.9,
-            filename: config?.filename || 'flywave-screenshot-{timestamp}_{width}x{height}.png'
+            filename: config?.filename || "flywave-screenshot-{timestamp}_{width}x{height}.png"
         };
     }
 
@@ -448,7 +451,7 @@ export class MapControlsUI {
 
                 this.controls.mapView.resize(targetWidth, targetHeight);
                 this.controls.mapView.renderSync();
-                const dataURL = canvas.toDataURL('image/png', this.m_screenshotConfig.quality);
+                const dataURL = canvas.toDataURL("image/png", this.m_screenshotConfig.quality);
                 this.downloadScreenshot(dataURL, targetWidth, targetHeight);
 
                 // 恢复按钮状态
@@ -456,7 +459,7 @@ export class MapControlsUI {
                 this.m_screenshotButton.disabled = false;
             }
         } catch (error) {
-            console.error('截图失败:', error);
+            console.error("截图失败:", error);
             // 恢复按钮状态
             if (this.m_screenshotButton) {
                 this.m_screenshotButton.innerHTML = getScreenshotSVG();
@@ -472,18 +475,18 @@ export class MapControlsUI {
      * Download screenshot as PNG file
      */
     private downloadScreenshot(dataURL: string, width: number, height: number): void {
-        const link = document.createElement('a');
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const link = document.createElement("a");
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 
         // 生成文件名，替换占位符
-        let filename = this.m_screenshotConfig.filename!
-            .replace(/{timestamp}/g, timestamp)
+        let filename = this.m_screenshotConfig
+            .filename!.replace(/{timestamp}/g, timestamp)
             .replace(/{width}/g, width.toString())
             .replace(/{height}/g, height.toString());
 
         // 确保文件扩展名
-        if (!filename.toLowerCase().endsWith('.png')) {
-            filename += '.png';
+        if (!filename.toLowerCase().endsWith(".png")) {
+            filename += ".png";
         }
 
         link.href = dataURL;
@@ -515,7 +518,7 @@ export class MapControlsUI {
             );
 
             // Remove the geoCenter display element from the map view's parent container
-            const geoCenterDisplay = document.querySelector('.flywave-gl_geo-center-display');
+            const geoCenterDisplay = document.querySelector(".flywave-gl_geo-center-display");
             if (geoCenterDisplay && geoCenterDisplay.parentNode) {
                 geoCenterDisplay.parentNode.removeChild(geoCenterDisplay);
             }

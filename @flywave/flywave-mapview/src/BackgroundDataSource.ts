@@ -21,7 +21,7 @@ export class BackgroundDataSource extends DataSource {
     private m_tilingScheme: TilingScheme = BackgroundDataSource.DEFAULT_TILING_SCHEME;
 
     constructor() {
-        super({ name: "background"});
+        super({ name: "background" });
         this.cacheable = true;
         this.addGroundPlane = true;
         this.enablePicking = false;
@@ -78,7 +78,7 @@ export class BackgroundDataSource extends DataSource {
     getTile(tileKey: TileKey): Tile | undefined {
         const tile = new Tile(this, tileKey);
         tile.forceHasGeometry(true);
-        let mesh = addGroundPlane(tile, BackgroundDataSource.GROUND_RENDER_ORDER); 
+        let mesh = addGroundPlane(tile, BackgroundDataSource.GROUND_RENDER_ORDER);
         return tile;
     }
 }

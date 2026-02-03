@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { LineString3d } from "../curve/line-string3d";
 import { StrokeOptions } from "../curve/stroke-options";
 import { Geometry } from "../geometry";

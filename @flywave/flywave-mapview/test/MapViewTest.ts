@@ -108,7 +108,6 @@ describe("MapView", function () {
         }
     });
 
-
     describe("lookAt", function () {
         const tests: Array<{
             testName: string;

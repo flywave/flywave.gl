@@ -29,7 +29,6 @@ export interface WebTileLoaderOptions {
      * @default webMercatorTerrainTilingScheme
      */
     tilingScheme?: TilingScheme;
-
 }
 
 /**
@@ -184,7 +183,7 @@ export class WebImageryTileProvider extends ResourceProvider<
 
         // Create the loading promise
         const loadPromise = this.executeLoadTileTexture(tile, noCache, abortSignal, cacheKey);
-        
+
         // Store the promise if caching is enabled
         if (!noCache) {
             this.pendingRequests.set(cacheKey, loadPromise);

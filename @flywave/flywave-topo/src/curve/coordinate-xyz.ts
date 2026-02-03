@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type GeometryHandler } from "../geometry3d/geometry-handler";
 import { Point3d } from "../geometry3d/point3d-vector3d";
 import { Range3d } from "../geometry3d/range";

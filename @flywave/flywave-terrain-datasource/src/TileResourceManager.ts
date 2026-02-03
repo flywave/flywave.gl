@@ -120,7 +120,7 @@ export class TileLRUCache<TileType extends TerrainResourceTile> extends LRUCache
         this.markAllUnused();
         this._tileMap.forEach(tile => {
             tile.updateVisibilityState(mapView, frustum);
-        //     tile._isUsed = false;
+            //     tile._isUsed = false;
         });
     }
 
@@ -214,7 +214,7 @@ export abstract class TileValidResource extends ITileResource {
         this.onConnectedToDataSource();
     }
 
-    protected onConnectedToDataSource(): void { }
+    protected onConnectedToDataSource(): void {}
 
     /**
      * Checks if the resource is valid (always true for TileValidResource)
@@ -242,7 +242,7 @@ export abstract class TileValidResource extends ITileResource {
     /**
      * Resets ground modification changes
      */
-    protected resetGroundModificationChange(): void { }
+    protected resetGroundModificationChange(): void {}
 
     /**
      * Disposes of the resource and releases any allocated resources
@@ -265,7 +265,9 @@ export abstract class TileValidResource extends ITileResource {
      *
      * @param event - The ground modification event parameters
      */
-    private onGroundModificationChanged = async (event: GroundModificationEventParams): Promise<void> => {
+    private onGroundModificationChanged = async (
+        event: GroundModificationEventParams
+    ): Promise<void> => {
         // If we're already processing an event, just store this one as the latest and return
         if (this._isProcessingGroundModification) {
             this._latestPendingEvent = event;
@@ -289,7 +291,7 @@ export abstract class TileValidResource extends ITileResource {
             // Mark that we're done processing
             this._isProcessingGroundModification = false;
         }
-    }
+    };
 
     /**
      * Processes a ground modification event
@@ -341,7 +343,7 @@ export class TileInvalidResource extends ITileResource {
     /**
      * Disposes of the resource (no-op for invalid resources)
      */
-    dispose(): void { }
+    dispose(): void {}
 
     /**
      * Gets the memory usage of the resource (always 0 for invalid resources)

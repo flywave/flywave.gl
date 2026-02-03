@@ -10,11 +10,7 @@ import type {
 } from "../types/gltf-json-schema";
 
 // 导入 SPZ 压缩模块
-import {
-    decompressSPZ,
-    EXT_SPZ_COMPRESSION,
-    validateSPZExtension
-} from "./utils/spz-compression";
+import { decompressSPZ, EXT_SPZ_COMPRESSION, validateSPZExtension } from "./utils/spz-compression";
 
 // 扩展常量
 const EXT_GAUSSIAN_SPLATTING = "KHR_gaussian_splatting";
@@ -36,7 +32,10 @@ const OPTIONAL_ATTRIBUTES = {
 } as const;
 
 // 主解码函数
-export async function decode(gltfData: { json: GLTF; buffers?: any[] }, options: GLTFLoaderOptions): Promise<void> {
+export async function decode(
+    gltfData: { json: GLTF; buffers?: any[] },
+    options: GLTFLoaderOptions
+): Promise<void> {
     const scenegraph = new GLTFScenegraph(gltfData);
 
     // 保存原始状态用于检测是否需要重新打包
@@ -46,11 +45,16 @@ export async function decode(gltfData: { json: GLTF; buffers?: any[] }, options:
     await decodeExtGaussianSplatting(scenegraph, options);
 
     // 检查是否有新的 buffer 数据被添加
-    const hasNewBufferData = scenegraph.sourceBuffers.length > originalSourceBuffersCount ||
+    const hasNewBufferData =
+        scenegraph.sourceBuffers.length > originalSourceBuffersCount ||
         scenegraph.byteLength > originalByteLength;
 
     if (hasNewBufferData) {
-        console.log(`Rebuilding binary chunk: added ${scenegraph.sourceBuffers.length - originalSourceBuffersCount} buffers`);
+        console.log(
+            `Rebuilding binary chunk: added ${
+                scenegraph.sourceBuffers.length - originalSourceBuffersCount
+            } buffers`
+        );
         scenegraph.createBinaryChunk();
         gltfData.buffers = scenegraph.gltf.buffers;
     }
@@ -82,7 +86,10 @@ async function decodeExtGaussianSplatting(
 /**
  * 检测图元是否包含高斯泼溅相关扩展（支持深度嵌套）
  */
-function hasGaussianSplattingExtension(primitive: GLTFMeshPrimitive, scenegraph: GLTFScenegraph): boolean {
+function hasGaussianSplattingExtension(
+    primitive: GLTFMeshPrimitive,
+    scenegraph: GLTFScenegraph
+): boolean {
     const extensions = getGaussianSplattingExtension(primitive, scenegraph);
     return !!(extensions.main || extensions.spz);
 }
@@ -104,7 +111,8 @@ function getGaussianSplattingExtension(
     const nestedSpz = main?.extensions?.[EXT_SPZ_COMPRESSION];
 
     // 4. 获取深度嵌套的 SPZ 扩展
-    const deeplyNestedSpz = main?.extensions?.[EXT_GAUSSIAN_SPLATTING]?.extensions?.[EXT_SPZ_COMPRESSION];
+    const deeplyNestedSpz =
+        main?.extensions?.[EXT_GAUSSIAN_SPLATTING]?.extensions?.[EXT_SPZ_COMPRESSION];
 
     return {
         main,
@@ -115,24 +123,33 @@ function getGaussianSplattingExtension(
 /**
  * 记录扩展检测结果用于调试
  */
-function logExtensionDetection(primitive: GLTFMeshPrimitive, extensions: { main?: any; spz?: any }, scenegraph: GLTFScenegraph): void {
+function logExtensionDetection(
+    primitive: GLTFMeshPrimitive,
+    extensions: { main?: any; spz?: any },
+    scenegraph: GLTFScenegraph
+): void {
     const main = scenegraph.getObjectExtension(primitive, EXT_GAUSSIAN_SPLATTING);
     const standaloneSpz = scenegraph.getObjectExtension(primitive, EXT_SPZ_COMPRESSION);
     const nestedSpz = main?.extensions?.[EXT_SPZ_COMPRESSION];
-    const deeplyNestedSpz = main?.extensions?.[EXT_GAUSSIAN_SPLATTING]?.extensions?.[EXT_SPZ_COMPRESSION];
+    const deeplyNestedSpz =
+        main?.extensions?.[EXT_GAUSSIAN_SPLATTING]?.extensions?.[EXT_SPZ_COMPRESSION];
 
-    console.log('Gaussian splatting extension detection:', {
+    console.log("Gaussian splatting extension detection:", {
         hasMainExtension: !!extensions.main,
         hasSpzExtension: !!extensions.spz,
-        mainExtension: main ? 'found' : 'not found',
+        mainExtension: main ? "found" : "not found",
         spzExtensionTypes: {
             standalone: !!standaloneSpz,
             nested: !!nestedSpz,
             deeplyNested: !!deeplyNestedSpz
         },
-        spzSource: standaloneSpz ? 'standalone' :
-            nestedSpz ? 'nested' :
-                deeplyNestedSpz ? 'deeplyNested' : 'none'
+        spzSource: standaloneSpz
+            ? "standalone"
+            : nestedSpz
+            ? "nested"
+            : deeplyNestedSpz
+            ? "deeplyNested"
+            : "none"
     });
 }
 
@@ -151,7 +168,7 @@ async function processPrimitive(
 
     // 如果没有找到任何高斯泼溅相关扩展，直接返回
     if (!mainExtension && !spzExtension) {
-        console.log('No Gaussian splatting extensions found, skipping primitive');
+        console.log("No Gaussian splatting extensions found, skipping primitive");
         return;
     }
 
@@ -161,7 +178,7 @@ async function processPrimitive(
 
         // 2. 处理压缩数据 - 优先处理 SPZ 压缩
         if (spzExtension) {
-            console.log('Processing SPZ compression extension');
+            console.log("Processing SPZ compression extension");
 
             // 验证 SPZ 扩展数据
             validateSPZExtension(spzExtension);
@@ -174,7 +191,6 @@ async function processPrimitive(
 
             // 清理 SPZ 扩展
             await cleanupSPZExtension(primitive, scenegraph, mainExtension, spzExtension);
-
         } else if (mainExtension?.bufferView !== undefined && mainExtension.bufferView !== -1) {
             // 处理其他压缩格式
             await decompressPrimitive(scenegraph, primitive, mainExtension, options);
@@ -204,7 +220,6 @@ async function processPrimitive(
             hadMainExtension: !!mainExtension,
             hadSpzExtension: !!spzExtension
         };
-
     } catch (error) {
         console.error(`Failed to process Gaussian splatting primitive:`, error);
         throw error;
@@ -249,7 +264,10 @@ async function cleanupSPZExtension(
 /**
  * 清理所有高斯泼溅相关扩展
  */
-async function cleanupAllGaussianExtensions(primitive: GLTFMeshPrimitive, scenegraph: GLTFScenegraph): Promise<void> {
+async function cleanupAllGaussianExtensions(
+    primitive: GLTFMeshPrimitive,
+    scenegraph: GLTFScenegraph
+): Promise<void> {
     scenegraph.removeObjectExtension(primitive, EXT_GAUSSIAN_SPLATTING);
     scenegraph.removeObjectExtension(primitive, EXT_SPZ_COMPRESSION);
 }
@@ -262,7 +280,7 @@ function cleanupLegacyAttributes(primitive: GLTFMeshPrimitive): void {
     const legacyAttributePatterns = [
         /^KHR_gaussian_splatting:/, // 以扩展名开头的属性
         /^SH_DEGREE_\d+_COEF_\d+$/, // 球谐系数属性
-        /^SH_COEFFS_\d+$/,          // 其他球谐系数格式
+        /^SH_COEFFS_\d+$/ // 其他球谐系数格式
     ];
 
     let cleanedCount = 0;
@@ -270,18 +288,21 @@ function cleanupLegacyAttributes(primitive: GLTFMeshPrimitive): void {
         for (const pattern of legacyAttributePatterns) {
             if (pattern.test(attrName)) {
                 delete attributes[attrName];
-                cleanedCount++; 
+                cleanedCount++;
                 break;
             }
         }
-    } 
+    }
 }
 
 // 验证解压后的图元属性
-function validateDecompressedPrimitive(scenegraph: GLTFScenegraph, primitive: GLTFMeshPrimitive): void {
+function validateDecompressedPrimitive(
+    scenegraph: GLTFScenegraph,
+    primitive: GLTFMeshPrimitive
+): void {
     const attributes = primitive.attributes;
     // 验证必需属性
-    const requiredAttributes = ['POSITION', 'COLOR_0', '_SCALE', '_ROTATION'];
+    const requiredAttributes = ["POSITION", "COLOR_0", "_SCALE", "_ROTATION"];
     for (const attrName of requiredAttributes) {
         if (attributes[attrName] === undefined) {
             throw new Error(`Missing required attribute after decompression: ${attrName}`);
@@ -300,14 +321,18 @@ function validateDecompressedPrimitive(scenegraph: GLTFScenegraph, primitive: GL
 
     // 确保没有遗留的扩展属性
     for (const attrName in attributes) {
-        if (attrName.startsWith('KHR_gaussian_splatting:')) {
+        if (attrName.startsWith("KHR_gaussian_splatting:")) {
             console.warn(`Found legacy extension attribute after cleanup: ${attrName}`);
             delete attributes[attrName];
         }
     }
 }
 
-function validateAttributeDataType(scenegraph: GLTFScenegraph, accessorIndex: number, expectedType: string): void {
+function validateAttributeDataType(
+    scenegraph: GLTFScenegraph,
+    accessorIndex: number,
+    expectedType: string
+): void {
     if (accessorIndex === undefined) return;
 
     const accessor = scenegraph.getAccessor(accessorIndex);
@@ -316,12 +341,16 @@ function validateAttributeDataType(scenegraph: GLTFScenegraph, accessorIndex: nu
     }
 
     if (accessor.type !== expectedType) {
-        throw new Error(`Attribute type mismatch after decompression. Expected ${expectedType}, found ${accessor.type}`);
+        throw new Error(
+            `Attribute type mismatch after decompression. Expected ${expectedType}, found ${accessor.type}`
+        );
     }
 
     // 验证组件类型为 FLOAT
     if (accessor.componentType !== 5126) {
-        throw new Error(`Expected FLOAT component type for attribute, found: ${accessor.componentType}`);
+        throw new Error(
+            `Expected FLOAT component type for attribute, found: ${accessor.componentType}`
+        );
     }
 }
 
@@ -369,25 +398,25 @@ async function dequantizePrimitive(
 function getQuantizationBits(attributeName: string, ext: any): number {
     // 简化的量化位深获取逻辑
     const quantizationMap: Record<string, number> = {
-        'POSITION': ext.POSITION ?? 14,
-        'POSITION_0': ext.POSITION ?? 14,
-        'NORMAL': ext.NORMAL ?? 10,
-        'NORMAL_0': ext.NORMAL ?? 10,
-        'TANGENT': ext.TANGENT ?? 10,
-        'TANGENT_0': ext.TANGENT ?? 10,
-        'TEXCOORD': ext.TEXCOORD ?? 12,
-        'TEXCOORD_0': ext.TEXCOORD ?? 12,
-        'TEXCOORD_1': ext.TEXCOORD ?? 12,
-        'COLOR': ext.COLOR ?? 8,
-        'COLOR_0': ext.COLOR ?? 8,
-        'COLOR_1': ext.COLOR ?? 8,
-        'WEIGHTS': ext.WEIGHTS ?? 8,
-        'WEIGHTS_0': ext.WEIGHTS ?? 8,
-        '_SCALE': ext.GENERIC ?? 12,
-        '_ROTATION': ext.GENERIC ?? 12
+        POSITION: ext.POSITION ?? 14,
+        POSITION_0: ext.POSITION ?? 14,
+        NORMAL: ext.NORMAL ?? 10,
+        NORMAL_0: ext.NORMAL ?? 10,
+        TANGENT: ext.TANGENT ?? 10,
+        TANGENT_0: ext.TANGENT ?? 10,
+        TEXCOORD: ext.TEXCOORD ?? 12,
+        TEXCOORD_0: ext.TEXCOORD ?? 12,
+        TEXCOORD_1: ext.TEXCOORD ?? 12,
+        COLOR: ext.COLOR ?? 8,
+        COLOR_0: ext.COLOR ?? 8,
+        COLOR_1: ext.COLOR ?? 8,
+        WEIGHTS: ext.WEIGHTS ?? 8,
+        WEIGHTS_0: ext.WEIGHTS ?? 8,
+        _SCALE: ext.GENERIC ?? 12,
+        _ROTATION: ext.GENERIC ?? 12
     };
 
-    return quantizationMap[attributeName] ?? (ext.GENERIC ?? 8);
+    return quantizationMap[attributeName] ?? ext.GENERIC ?? 8;
 }
 
 async function dequantizeAccessor(
@@ -416,7 +445,8 @@ async function dequantizeAccessor(
 
     const count = accessor.count;
     const byteOffset = (accessor.byteOffset || 0) + (bufferView.byteOffset || 0);
-    const stride = bufferView.byteStride || componentCount * getComponentSize(accessor.componentType);
+    const stride =
+        bufferView.byteStride || componentCount * getComponentSize(accessor.componentType);
 
     // 创建解量化后的浮点数据
     const floatData = new Float32Array(count * componentCount);
@@ -435,7 +465,7 @@ async function dequantizeAccessor(
             );
 
             // 解量化计算
-            const normalized = accessor.normalized ? rawValue : (rawValue / maxIntegerValue);
+            const normalized = accessor.normalized ? rawValue : rawValue / maxIntegerValue;
             const floatValue = accessor.min[c] + (accessor.max[c] - accessor.min[c]) * normalized;
 
             floatData[i * componentCount + c] = floatValue;

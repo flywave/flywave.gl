@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { assert } from "./assert";
 import { type Constructor } from "./utility-types";
 

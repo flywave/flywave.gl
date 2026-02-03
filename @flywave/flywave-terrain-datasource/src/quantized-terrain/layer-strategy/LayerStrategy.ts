@@ -342,9 +342,7 @@ export async function createLayerStrategy(options: LayerStrategyOptions): Promis
  * for proper terrain data loading and fallback mechanisms.
  */
 class LayerStrategy implements ILayerStrategy {
-
-   private downloadManager = new TransferManager(undefined, 1);
-
+    private downloadManager = new TransferManager(undefined, 1);
 
     /**
      * Whether water mask data is requested
@@ -541,7 +539,10 @@ class LayerStrategy implements ILayerStrategy {
         }
 
         // Download and parse layer metadata
-        const data = (await this.downloadManager.downloadJson(`${layerUrl}`, this.request)) as LayerData;
+        const data = (await this.downloadManager.downloadJson(
+            `${layerUrl}`,
+            this.request
+        )) as LayerData;
 
         await this.parseMetadataSuccess(data);
     }

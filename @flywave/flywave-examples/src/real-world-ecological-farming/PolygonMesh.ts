@@ -20,7 +20,7 @@ export class PolygonMesh extends THREE.Mesh {
 
         this.updateGeometry();
 
-        this.renderOrder= Number.MAX_SAFE_INTEGER;
+        this.renderOrder = Number.MAX_SAFE_INTEGER;
     }
 
     updateFeature(feature: Feature): void {
@@ -31,7 +31,7 @@ export class PolygonMesh extends THREE.Mesh {
     getFeature(): Feature {
         return this.feature;
     }
- 
+
     private updateGeometry(): void {
         // Clean up old geometry
         if (this.geometry) {
@@ -39,11 +39,18 @@ export class PolygonMesh extends THREE.Mesh {
         }
 
         const centroid = turf.centroid(this.feature as any);
-        const { geometry: { coordinates } } = centroid;
+        const {
+            geometry: { coordinates }
+        } = centroid;
         this.anchor = new GeoCoordinates(coordinates[1], coordinates[0], 0);
 
-        const position = this.projection.projectPoint(this.anchor as GeoCoordinates, new THREE.Vector3());
-        const { geometry: { coordinates: featureCoordinates } } = this.feature as { geometry: TurfPolygon };
+        const position = this.projection.projectPoint(
+            this.anchor as GeoCoordinates,
+            new THREE.Vector3()
+        );
+        const {
+            geometry: { coordinates: featureCoordinates }
+        } = this.feature as { geometry: TurfPolygon };
 
         // Process polygon coordinates (may contain holes, we only take the outer ring)
         const outLine = featureCoordinates[0] as Position[];
@@ -97,8 +104,8 @@ export class PolygonMesh extends THREE.Mesh {
         const indexAttribute = new THREE.BufferAttribute(uindices, 1);
 
         geometry.setIndex(indexAttribute);
-        geometry.setAttribute('position', positionAttribute);
-        geometry.setAttribute('uv', uvAttribute);
+        geometry.setAttribute("position", positionAttribute);
+        geometry.setAttribute("uv", uvAttribute);
 
         this.geometry = geometry;
         this.lookAt(position);
@@ -125,4 +132,3 @@ export class PolygonMesh extends THREE.Mesh {
         }
     }
 }
- 

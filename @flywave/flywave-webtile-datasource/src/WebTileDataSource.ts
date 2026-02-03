@@ -41,9 +41,7 @@ export interface WebTileRenderingOptions {
 }
 
 export abstract class WebTileDataProvider {
-
-    constructor(protected readonly m_options: Omit<WebTileDataSourceOptions, "dataProvider">) {
-    }
+    constructor(protected readonly m_options: Omit<WebTileDataSourceOptions, "dataProvider">) {}
 
     /**
      * The method to create the Texture that will be applied to the Tile

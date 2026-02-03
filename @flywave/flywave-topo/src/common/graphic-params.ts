@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { ColorDef } from "./color-def";
 import { type Gradient } from "./gradient";
 import { LinePixels } from "./line-pixels";

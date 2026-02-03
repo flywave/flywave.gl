@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type FillFlags, type RenderMaterial, type RenderTexture } from "../../../common";
 import { type VertexIndices } from "./vertex-indices";
 

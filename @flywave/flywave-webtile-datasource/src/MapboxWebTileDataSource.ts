@@ -100,7 +100,6 @@ export class MapboxTileProvider extends WebTileDataProvider {
     };
 
     constructor(readonly m_options: MapboxWebTileDataSourceParameters) {
-
         super(m_options);
 
         this.m_style =

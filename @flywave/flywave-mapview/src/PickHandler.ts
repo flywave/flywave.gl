@@ -151,7 +151,7 @@ function intersectDependentObjects(
             mapView.frameNumber
         );
         if (otherTile !== undefined) {
-           otherTile.raycast(rayCaster, intersects, true);
+            otherTile.raycast(rayCaster, intersects, true);
         }
     }
 }

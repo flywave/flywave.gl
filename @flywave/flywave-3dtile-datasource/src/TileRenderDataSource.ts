@@ -1,6 +1,11 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { ITranslucentLayerConfig, Style, type FlatTheme, type Theme } from "@flywave/flywave-datasource-protocol";
+import {
+    ITranslucentLayerConfig,
+    Style,
+    type FlatTheme,
+    type Theme
+} from "@flywave/flywave-datasource-protocol";
 import {
     type GeoBox,
     quadTreeSubdivisionScheme,
@@ -8,12 +13,7 @@ import {
     TilingScheme,
     webMercatorProjection
 } from "@flywave/flywave-geoutils";
-import {
-    type DataSourceOptions,
-    type MapView,
-    DataSource,
-    Tile
-} from "@flywave/flywave-mapview";
+import { type DataSourceOptions, type MapView, DataSource, Tile } from "@flywave/flywave-mapview";
 import { type IntersectParams } from "@flywave/flywave-mapview/IntersectParams";
 import { ThemeLoader } from "@flywave/flywave-mapview/ThemeLoader";
 import { Intersection, Raycaster, type Matrix4 } from "three";
@@ -24,7 +24,7 @@ import { type TilesRendererOptions, TilesRenderer } from "./TilesRenderer";
 import { ITile } from "./ObserveTileChange";
 import { type Material, type MaterialParameters } from "three";
 import { MatrixTransformCallback } from "./renderer/TilesRenderer";
- 
+
 interface TileExtraTheme {
     /**
      * Custom material parameters to be applied to 3D Tiles meshes.
@@ -101,7 +101,6 @@ export interface BatchAnimation {
      * Animation duration in milliseconds
      */
     duration: number;
-
 }
 
 /**
@@ -170,7 +169,10 @@ class RootTile extends Tile {
     }
 
     raycast(rayCaster: Raycaster, intersects: Intersection[], recursive?: boolean): void {
-        (this.dataSource as TileRenderDataSource).raycast(rayCaster, intersects as TileIntersection[]);
+        (this.dataSource as TileRenderDataSource).raycast(
+            rayCaster,
+            intersects as TileIntersection[]
+        );
     }
 }
 
@@ -215,17 +217,14 @@ export class TileRenderDataSource extends DataSource {
         });
 
         this.m_options = options;
-        this.m_tilingScheme = new TilingScheme(
-            quadTreeSubdivisionScheme,
-            webMercatorProjection
-        );
+        this.m_tilingScheme = new TilingScheme(quadTreeSubdivisionScheme, webMercatorProjection);
 
         // Create the 3D Tiles renderer
         const rendererOptions: TilesRendererOptions = {
             url: options.url,
             headers: options.headers,
             transform: options.transform,
-            debugBoundingVolume: options.debugBoundingVolume,
+            debugBoundingVolume: options.debugBoundingVolume
         };
 
         this.m_tilesRenderer = new TilesRenderer(rendererOptions);
@@ -377,7 +376,7 @@ export class TileRenderDataSource extends DataSource {
         let loadedTheme: ThemeExtra;
 
         if (typeof theme === "string" || !this.isThemeLoaded(theme)) {
-            loadedTheme = (await ThemeLoader.load(theme));
+            loadedTheme = await ThemeLoader.load(theme);
         } else {
             loadedTheme = theme as ThemeExtra;
         }
@@ -401,7 +400,6 @@ export class TileRenderDataSource extends DataSource {
         this.requestUpdate();
     }
 
-
     /**
      * Add a new style to the style set.
      *
@@ -412,7 +410,6 @@ export class TileRenderDataSource extends DataSource {
         return this.m_styleWatcher.addStyle(style);
     }
 
-
     /**
      * Remove style by its identifier.
      *
@@ -422,7 +419,6 @@ export class TileRenderDataSource extends DataSource {
     removeStyleById(id: string): boolean {
         return this.m_styleWatcher.removeStyleById(id);
     }
-
 
     /**
      * Update style properties by its identifier.
@@ -444,7 +440,10 @@ export class TileRenderDataSource extends DataSource {
      * @returns Promise that resolves when theme is applied
      */
     async setThemeFromBase(theme: Theme, languages?: string[]): Promise<void> {
-        await this.setTheme(this.m_currentTheme ? ThemeLoader["mergeThemes"](theme, this.m_currentTheme) : theme, languages);
+        await this.setTheme(
+            this.m_currentTheme ? ThemeLoader["mergeThemes"](theme, this.m_currentTheme) : theme,
+            languages
+        );
     }
 
     /**

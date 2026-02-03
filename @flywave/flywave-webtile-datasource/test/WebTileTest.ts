@@ -14,8 +14,8 @@ describe("WebTileDataSource", function () {
     class FakeWebTileProvider extends WebTileDataProvider {
         getTexture = sinon.spy((tile: Tile) => {
             return Promise.resolve([{}, []] as unknown as [THREE.Texture, CopyrightInfo[]]);
-        })
-    };
+        });
+    }
     const fakeWebTileProvider = new FakeWebTileProvider({});
     const fakeMapView = {
         projection: mercatorProjection
@@ -64,8 +64,8 @@ describe("WebTileDataSource", function () {
         class UndefinedProvider extends WebTileDataProvider {
             getTexture = sinon.spy((tile: Tile) => {
                 return Promise.resolve(undefined);
-            })
-        };
+            });
+        }
 
         const undefinedProvider = new UndefinedProvider({});
 
@@ -95,8 +95,8 @@ describe("WebTileDataSource", function () {
         class NoTextureProvider extends WebTileDataProvider {
             getTexture = sinon.spy((tile: Tile) => {
                 return Promise.reject();
-            })
-        };
+            });
+        }
 
         const noTextureProvider = new NoTextureProvider({});
 

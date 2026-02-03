@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 export interface IDisposable {
     /** Disposes of any resources owned by this object.
      * @note The object is generally considered unusable after it has been disposed of.

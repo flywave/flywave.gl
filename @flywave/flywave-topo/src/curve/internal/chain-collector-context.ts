@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type Point3d } from "../../geometry3d/point3d-vector3d";
 import { BagOfCurves } from "../curve-collection";
 import { CurvePrimitive } from "../curve-primitive";

@@ -113,10 +113,10 @@ export class TranslucentLayerEffect extends Effect {
 
     /** Blend mode to float mapping. */
     private static readonly BLEND_MODE_MAP: Record<string, number> = {
-        'mix': 0.0,
-        'add': 1.0,
-        'multiply': 2.0,
-        'screen': 3.0
+        mix: 0.0,
+        add: 1.0,
+        multiply: 2.0,
+        screen: 3.0
     };
 
     // ================ Constructor ================
@@ -163,13 +163,13 @@ export class TranslucentLayerEffect extends Effect {
         this.normalTargetRenderTarget = new WebGLRenderTarget(1, 1, {
             minFilter: LinearFilter,
             magFilter: LinearFilter,
-            format: RGBAFormat,
+            format: RGBAFormat
         });
 
         this.backgroundTargetRenderTarget = new WebGLRenderTarget(1, 1, {
             minFilter: LinearFilter,
             magFilter: LinearFilter,
-            format: RGBAFormat,
+            format: RGBAFormat
         });
 
         this.normalColorRenderTarget = new WebGLRenderTarget(1, 1, {
@@ -589,7 +589,6 @@ export class TranslucentLayerEffect extends Effect {
         `;
     }
 
-
     // ================ Layer Management API ================
 
     /**
@@ -603,15 +602,16 @@ export class TranslucentLayerEffect extends Effect {
             return;
         }
 
-        const mode = config.mode || 'normal';
+        const mode = config.mode || "normal";
         const defaultColor = TranslucentLayerEffect.DEFAULT_LAYER_COLOR.clone();
         const parsedColor = config.color ? new Color(config.color) : defaultColor;
 
         this.layers.set(layerId, {
             mixFactor: config.mixFactor !== undefined ? config.mixFactor : 0.3,
-            blendMode: config.blendMode || 'mix',
-            color: config.color || '#ff802a',
-            occlusionDistance: config.occlusionDistance !== undefined ? config.occlusionDistance : 10.0,
+            blendMode: config.blendMode || "mix",
+            color: config.color || "#ff802a",
+            occlusionDistance:
+                config.occlusionDistance !== undefined ? config.occlusionDistance : 10.0,
             useObjectColor: config.useObjectColor !== undefined ? config.useObjectColor : true,
             objectColorMix: config.objectColorMix !== undefined ? config.objectColorMix : 0.5,
             mode: mode,
@@ -619,10 +619,13 @@ export class TranslucentLayerEffect extends Effect {
         });
 
         // Assign index based on mode
-        if (mode === 'normal') {
+        if (mode === "normal") {
             // Check if resize is needed
             if (this.nextNormalLayerIndex >= this.layersPerRow) {
-                this.normalLayerDataTexture = this.resizeLayerTexture(this.normalLayerDataTexture, this.nextNormalLayerIndex);
+                this.normalLayerDataTexture = this.resizeLayerTexture(
+                    this.normalLayerDataTexture,
+                    this.nextNormalLayerIndex
+                );
                 this.uniforms.get("tNormalLayerData")!.value = this.normalLayerDataTexture;
             }
             this.normalLayerIndices.set(layerId, this.nextNormalLayerIndex);
@@ -630,7 +633,10 @@ export class TranslucentLayerEffect extends Effect {
         } else {
             // Check if resize is needed
             if (this.nextBackgroundLayerIndex >= this.layersPerRow) {
-                this.backgroundLayerDataTexture = this.resizeLayerTexture(this.backgroundLayerDataTexture, this.nextBackgroundLayerIndex);
+                this.backgroundLayerDataTexture = this.resizeLayerTexture(
+                    this.backgroundLayerDataTexture,
+                    this.nextBackgroundLayerIndex
+                );
                 this.uniforms.get("tBackgroundLayerData")!.value = this.backgroundLayerDataTexture;
             }
             this.backgroundLayerIndices.set(layerId, this.nextBackgroundLayerIndex);
@@ -651,30 +657,33 @@ export class TranslucentLayerEffect extends Effect {
         }
 
         const existingConfig = this.layers.get(layerId)!;
-        const oldMode = existingConfig.mode || 'normal';
+        const oldMode = existingConfig.mode || "normal";
         const newMode = config.mode || oldMode;
 
         // Check if mode changed
         if (oldMode !== newMode) {
             // Remove from old index map
-            if (oldMode === 'normal') {
+            if (oldMode === "normal") {
                 this.normalLayerIndices.delete(layerId);
             } else {
                 this.backgroundLayerIndices.delete(layerId);
             }
 
             // Reindex layers for the old mode
-            if (oldMode === 'normal') {
-                this.reindexLayers('normal');
+            if (oldMode === "normal") {
+                this.reindexLayers("normal");
             } else {
-                this.reindexLayers('background');
+                this.reindexLayers("background");
             }
 
             // Add to new index map
-            if (newMode === 'normal') {
+            if (newMode === "normal") {
                 // Check if resize is needed
                 if (this.nextNormalLayerIndex >= this.layersPerRow) {
-                    this.normalLayerDataTexture = this.resizeLayerTexture(this.normalLayerDataTexture, this.nextNormalLayerIndex);
+                    this.normalLayerDataTexture = this.resizeLayerTexture(
+                        this.normalLayerDataTexture,
+                        this.nextNormalLayerIndex
+                    );
                     this.uniforms.get("tNormalLayerData")!.value = this.normalLayerDataTexture;
                 }
                 this.normalLayerIndices.set(layerId, this.nextNormalLayerIndex);
@@ -682,8 +691,12 @@ export class TranslucentLayerEffect extends Effect {
             } else {
                 // Check if resize is needed
                 if (this.nextBackgroundLayerIndex >= this.layersPerRow) {
-                    this.backgroundLayerDataTexture = this.resizeLayerTexture(this.backgroundLayerDataTexture, this.nextBackgroundLayerIndex);
-                    this.uniforms.get("tBackgroundLayerData")!.value = this.backgroundLayerDataTexture;
+                    this.backgroundLayerDataTexture = this.resizeLayerTexture(
+                        this.backgroundLayerDataTexture,
+                        this.nextBackgroundLayerIndex
+                    );
+                    this.uniforms.get("tBackgroundLayerData")!.value =
+                        this.backgroundLayerDataTexture;
                 }
                 this.backgroundLayerIndices.set(layerId, this.nextBackgroundLayerIndex);
                 this.nextBackgroundLayerIndex++;
@@ -703,9 +716,18 @@ export class TranslucentLayerEffect extends Effect {
             mixFactor: config.mixFactor !== undefined ? config.mixFactor : existingConfig.mixFactor,
             blendMode: config.blendMode || existingConfig.blendMode,
             color: config.color || existingConfig.color,
-            occlusionDistance: config.occlusionDistance !== undefined ? config.occlusionDistance : existingConfig.occlusionDistance,
-            useObjectColor: config.useObjectColor !== undefined ? config.useObjectColor : existingConfig.useObjectColor,
-            objectColorMix: config.objectColorMix !== undefined ? config.objectColorMix : existingConfig.objectColorMix,
+            occlusionDistance:
+                config.occlusionDistance !== undefined
+                    ? config.occlusionDistance
+                    : existingConfig.occlusionDistance,
+            useObjectColor:
+                config.useObjectColor !== undefined
+                    ? config.useObjectColor
+                    : existingConfig.useObjectColor,
+            objectColorMix:
+                config.objectColorMix !== undefined
+                    ? config.objectColorMix
+                    : existingConfig.objectColorMix,
             mode: newMode,
             parsedColor
         };
@@ -717,18 +739,22 @@ export class TranslucentLayerEffect extends Effect {
     /**
      * Updates objects when their layer's mode changes.
      */
-    private updateObjectsForLayerModeChange(layerId: string, oldMode: 'normal' | 'background', newMode: 'normal' | 'background'): void {
+    private updateObjectsForLayerModeChange(
+        layerId: string,
+        oldMode: "normal" | "background",
+        newMode: "normal" | "background"
+    ): void {
         // 找出所有属于这个层的对象
-        if (oldMode === 'normal') {
+        if (oldMode === "normal") {
             // 从normalSelection中移除并添加到backgroundSelection
             const objectsToMove: Object3D[] = [];
-            this.normalSelection.forEach((object) => {
+            this.normalSelection.forEach(object => {
                 if (object.userData.__layerId === layerId) {
                     objectsToMove.push(object);
                 }
             });
 
-            objectsToMove.forEach((object) => {
+            objectsToMove.forEach(object => {
                 this.normalSelection.delete(object);
                 this.backgroundSelection.add(object);
                 object.userData.__layerIndex = this.backgroundLayerIndices.get(layerId)!;
@@ -736,13 +762,13 @@ export class TranslucentLayerEffect extends Effect {
         } else {
             // 从backgroundSelection中移除并添加到normalSelection
             const objectsToMove: Object3D[] = [];
-            this.backgroundSelection.forEach((object) => {
+            this.backgroundSelection.forEach(object => {
                 if (object.userData.__layerId === layerId) {
                     objectsToMove.push(object);
                 }
             });
 
-            objectsToMove.forEach((object) => {
+            objectsToMove.forEach(object => {
                 this.backgroundSelection.delete(object);
                 this.normalSelection.add(object);
                 object.userData.__layerIndex = this.normalLayerIndices.get(layerId)!;
@@ -757,19 +783,19 @@ export class TranslucentLayerEffect extends Effect {
     public removeLayer(layerId: string): void {
         if (this.layers.has(layerId)) {
             const config = this.layers.get(layerId)!;
-            const mode = config.mode || 'normal';
+            const mode = config.mode || "normal";
 
             // Remove all objects from this layer
             const objectsToRemove: Object3D[] = [];
 
-            if (mode === 'normal') {
-                this.normalSelection.forEach((object) => {
+            if (mode === "normal") {
+                this.normalSelection.forEach(object => {
                     if (object.userData.__layerId === layerId) {
                         objectsToRemove.push(object);
                     }
                 });
             } else {
-                this.backgroundSelection.forEach((object) => {
+                this.backgroundSelection.forEach(object => {
                     if (object.userData.__layerId === layerId) {
                         objectsToRemove.push(object);
                     }
@@ -777,18 +803,18 @@ export class TranslucentLayerEffect extends Effect {
             }
 
             // 移除对象
-            objectsToRemove.forEach((object) => {
+            objectsToRemove.forEach(object => {
                 this.removeFromLayer(object);
             });
 
             this.layers.delete(layerId);
 
-            if (mode === 'normal') {
+            if (mode === "normal") {
                 this.normalLayerIndices.delete(layerId);
-                this.reindexLayers('normal');
+                this.reindexLayers("normal");
             } else {
                 this.backgroundLayerIndices.delete(layerId);
-                this.reindexLayers('background');
+                this.reindexLayers("background");
             }
 
             this.needsLayerTextureUpdate = true;
@@ -798,12 +824,15 @@ export class TranslucentLayerEffect extends Effect {
     /**
      * Reindexes layers for a specific mode to maintain contiguous indices.
      */
-    private reindexLayers(mode: 'normal' | 'background'): void {
-        if (mode === 'normal') {
+    private reindexLayers(mode: "normal" | "background"): void {
+        if (mode === "normal") {
             const sortedLayerIds = Array.from(this.layers.entries())
-                .filter(([layerId, config]) => (config.mode || 'normal') === 'normal')
-                .sort(([layerIdA, configA], [layerIdB, configB]) =>
-                    (this.normalLayerIndices.get(layerIdA) || 0) - (this.normalLayerIndices.get(layerIdB) || 0))
+                .filter(([layerId, config]) => (config.mode || "normal") === "normal")
+                .sort(
+                    ([layerIdA, configA], [layerIdB, configB]) =>
+                        (this.normalLayerIndices.get(layerIdA) || 0) -
+                        (this.normalLayerIndices.get(layerIdB) || 0)
+                )
                 .map(([layerId, config]) => layerId);
 
             this.normalLayerIndices.clear();
@@ -815,7 +844,7 @@ export class TranslucentLayerEffect extends Effect {
             }
 
             // Update object layer indices
-            this.normalSelection.forEach((object) => {
+            this.normalSelection.forEach(object => {
                 const layerId = object.userData.__layerId;
                 if (layerId && this.layers.has(layerId) && this.normalLayerIndices.has(layerId)) {
                     object.userData.__layerIndex = this.normalLayerIndices.get(layerId)!;
@@ -823,9 +852,12 @@ export class TranslucentLayerEffect extends Effect {
             });
         } else {
             const sortedLayerIds = Array.from(this.layers.entries())
-                .filter(([layerId, config]) => config.mode === 'background')
-                .sort(([layerIdA, configA], [layerIdB, configB]) =>
-                    (this.backgroundLayerIndices.get(layerIdA) || 0) - (this.backgroundLayerIndices.get(layerIdB) || 0))
+                .filter(([layerId, config]) => config.mode === "background")
+                .sort(
+                    ([layerIdA, configA], [layerIdB, configB]) =>
+                        (this.backgroundLayerIndices.get(layerIdA) || 0) -
+                        (this.backgroundLayerIndices.get(layerIdB) || 0)
+                )
                 .map(([layerId, config]) => layerId);
 
             this.backgroundLayerIndices.clear();
@@ -837,9 +869,13 @@ export class TranslucentLayerEffect extends Effect {
             }
 
             // Update object layer indices
-            this.backgroundSelection.forEach((object) => {
+            this.backgroundSelection.forEach(object => {
                 const layerId = object.userData.__layerId;
-                if (layerId && this.layers.has(layerId) && this.backgroundLayerIndices.has(layerId)) {
+                if (
+                    layerId &&
+                    this.layers.has(layerId) &&
+                    this.backgroundLayerIndices.has(layerId)
+                ) {
                     object.userData.__layerIndex = this.backgroundLayerIndices.get(layerId)!;
                 }
             });
@@ -857,7 +893,7 @@ export class TranslucentLayerEffect extends Effect {
         normalArray.fill(0);
 
         for (const [layerId, config] of this.layers) {
-            if ((config.mode || 'normal') === 'normal') {
+            if ((config.mode || "normal") === "normal") {
                 const layerIndex = this.normalLayerIndices.get(layerId);
                 if (layerIndex !== undefined) {
                     this.updateLayerDataTextureArray(normalArray, layerIndex, config);
@@ -872,7 +908,7 @@ export class TranslucentLayerEffect extends Effect {
         backgroundArray.fill(0);
 
         for (const [layerId, config] of this.layers) {
-            if (config.mode === 'background') {
+            if (config.mode === "background") {
                 const layerIndex = this.backgroundLayerIndices.get(layerId);
                 if (layerIndex !== undefined) {
                     this.updateLayerDataTextureArray(backgroundArray, layerIndex, config);
@@ -888,7 +924,11 @@ export class TranslucentLayerEffect extends Effect {
     /**
      * Updates a specific layer's data in the texture array.
      */
-    private updateLayerDataTextureArray(array: Float32Array, layerIndex: number, config: InternalLayerConfig): void {
+    private updateLayerDataTextureArray(
+        array: Float32Array,
+        layerIndex: number,
+        config: InternalLayerConfig
+    ): void {
         const pixelsPerLayer = TranslucentLayerEffect.PIXELS_PER_LAYER;
         const color = config.parsedColor!;
 
@@ -898,7 +938,8 @@ export class TranslucentLayerEffect extends Effect {
         // First pixel: basic configuration
         // RGBA: [mixFactor, blendMode, color.r, color.g]
         array[pixelOffset] = config.mixFactor !== undefined ? config.mixFactor : 0.3;
-        array[pixelOffset + 1] = TranslucentLayerEffect.BLEND_MODE_MAP[config.blendMode || 'mix'] ?? 0.0;
+        array[pixelOffset + 1] =
+            TranslucentLayerEffect.BLEND_MODE_MAP[config.blendMode || "mix"] ?? 0.0;
         array[pixelOffset + 2] = color.r;
         array[pixelOffset + 3] = color.g;
 
@@ -907,7 +948,8 @@ export class TranslucentLayerEffect extends Effect {
         array[pixelOffset + 4] = color.b;
 
         // 确保遮挡距离正确存储
-        array[pixelOffset + 5] = config.occlusionDistance !== undefined ? config.occlusionDistance : 10.0;
+        array[pixelOffset + 5] =
+            config.occlusionDistance !== undefined ? config.occlusionDistance : 10.0;
 
         array[pixelOffset + 6] = 0; // Reserved for future use
 
@@ -944,9 +986,9 @@ export class TranslucentLayerEffect extends Effect {
      * @param mode - The mode to filter by.
      * @returns Array of layer identifiers for the specified mode.
      */
-    public getLayersByMode(mode: 'normal' | 'background'): string[] {
+    public getLayersByMode(mode: "normal" | "background"): string[] {
         return Array.from(this.layers.entries())
-            .filter(([layerId, config]) => (config.mode || 'normal') === mode)
+            .filter(([layerId, config]) => (config.mode || "normal") === mode)
             .map(([layerId, config]) => layerId);
     }
 
@@ -963,11 +1005,11 @@ export class TranslucentLayerEffect extends Effect {
         }
 
         const config = this.layers.get(layerId)!;
-        const mode = config.mode || 'normal';
+        const mode = config.mode || "normal";
 
         object.userData.__layerId = layerId;
 
-        if (mode === 'normal') {
+        if (mode === "normal") {
             object.userData.__layerIndex = this.normalLayerIndices.get(layerId)!;
             this.normalSelection.add(object);
         } else {
@@ -1023,12 +1065,12 @@ export class TranslucentLayerEffect extends Effect {
      * @param object - The 3D object.
      * @returns The layer mode or undefined if the object isn't in any layer.
      */
-    public getObjectLayerMode(object: Object3D): 'normal' | 'background' | undefined {
+    public getObjectLayerMode(object: Object3D): "normal" | "background" | undefined {
         const layerId = this.getObjectLayer(object);
         if (!layerId || !this.layers.has(layerId)) return undefined;
 
         const config = this.layers.get(layerId)!;
-        return config.mode || 'normal';
+        return config.mode || "normal";
     }
 
     /**
@@ -1060,7 +1102,7 @@ export class TranslucentLayerEffect extends Effect {
             return false;
         } else {
             if (layerId === undefined) {
-                throw new Error('Layer ID is required when adding an object');
+                throw new Error("Layer ID is required when adding an object");
             }
             this.addToLayer(object, layerId);
             return true;
@@ -1148,7 +1190,6 @@ export class TranslucentLayerEffect extends Effect {
 
                 renderer.render(this.scene, this.camera);
             }
-
         } finally {
             // 恢复所有对象的可见性
             this.normalSelection.setVisible(true);
@@ -1188,10 +1229,14 @@ export class TranslucentLayerEffect extends Effect {
             this.renderSelectedObjects(renderer);
             this.uniforms.get("tNormalLayerID")!.value = this.normalTargetRenderTarget.texture;
             this.uniforms.get("tNormalLayerColor")!.value = this.normalColorRenderTarget.texture;
-            this.uniforms.get("tNormalLayerDepth")!.value = this.normalColorRenderTarget.depthTexture;
-            this.uniforms.get("tBackgroundLayerID")!.value = this.backgroundTargetRenderTarget.texture;
-            this.uniforms.get("tBackgroundLayerColor")!.value = this.backgroundColorRenderTarget.texture;
-            this.uniforms.get("tBackgroundLayerDepth")!.value = this.backgroundColorRenderTarget.depthTexture;
+            this.uniforms.get("tNormalLayerDepth")!.value =
+                this.normalColorRenderTarget.depthTexture;
+            this.uniforms.get("tBackgroundLayerID")!.value =
+                this.backgroundTargetRenderTarget.texture;
+            this.uniforms.get("tBackgroundLayerColor")!.value =
+                this.backgroundColorRenderTarget.texture;
+            this.uniforms.get("tBackgroundLayerDepth")!.value =
+                this.backgroundColorRenderTarget.depthTexture;
         } else {
             this.uniforms.get("tNormalLayerID")!.value = null;
             this.uniforms.get("tNormalLayerColor")!.value = null;

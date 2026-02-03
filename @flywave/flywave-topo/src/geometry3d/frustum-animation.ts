@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { AxisOrder, Geometry } from "../geometry";
 import { type Angle } from "./angle";
 import { Matrix3d } from "./matrix3d";

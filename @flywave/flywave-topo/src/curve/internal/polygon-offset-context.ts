@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../../geometry";
 import { AngleSweep } from "../../geometry3d/angle-sweep";
 import { Point3d, Vector3d } from "../../geometry3d/point3d-vector3d";

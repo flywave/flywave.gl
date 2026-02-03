@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { QParams3d } from "../../common";
 import { Range3d } from "../../core-geometry";
 import { type Geometry } from "./geometry-primitives";

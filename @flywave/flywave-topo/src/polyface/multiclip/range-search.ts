@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { Geometry } from "../../geometry";
 import { Range2d } from "../../geometry3d/range";
 import { type UsageSums } from "../../numerics/usage-sums";

@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { ConstructCurveBetweenCurves } from "../curve/construct-curve-between-curves";
 import { CurveChain, CurveCollection } from "../curve/curve-collection";
 import { CurvePrimitive } from "../curve/curve-primitive";

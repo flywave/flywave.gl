@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type Range1dProps, type XYZProps, Point3d, Range1d, Vector3d } from "../core-geometry";
 import { compareNumbers } from "../utils";
 import { type ColorDefProps, ColorDef } from "./color-def";

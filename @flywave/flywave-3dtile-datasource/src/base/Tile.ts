@@ -263,20 +263,20 @@ export abstract class ITile {
      *
      * @param type - Type of bounding volume to visualize ("sphere", "box", or false to hide)
      */
-    debugBoundingVolume(type?: "sphere" | "box" | false,rootObject?:Object3D) {
+    debugBoundingVolume(type?: "sphere" | "box" | false, rootObject?: Object3D) {
         switch (type) {
             case "sphere": {
                 if (!this.__debugSphere) {
-                    this.__debugSphere = new SphereHelper(this.cached.boundingVolume.sphere); 
+                    this.__debugSphere = new SphereHelper(this.cached.boundingVolume.sphere);
                 }
                 rootObject?.add(this.__debugSphere);
                 break;
             }
             case "box": {
                 if (!this.__debugBox) {
-                    this.__debugBox = new OrientedBoxHelper(this.cached.boundingVolume.regionObb); 
+                    this.__debugBox = new OrientedBoxHelper(this.cached.boundingVolume.regionObb);
                 }
-               rootObject?.add(this.__debugBox);
+                rootObject?.add(this.__debugBox);
                 break;
             }
             case false: {
@@ -462,7 +462,9 @@ export class Tile extends TileInternal {
      */
     get transform() {
         if (!this.tiles3DTileJSONPostprocessed.transform) {
-            this.tiles3DTileJSONPostprocessed.transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+            this.tiles3DTileJSONPostprocessed.transform = [
+                1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+            ];
         }
         return this.tiles3DTileJSONPostprocessed.transform;
     }

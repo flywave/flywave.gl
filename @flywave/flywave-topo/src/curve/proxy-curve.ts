@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import type { GeometryHandler, IStrokeHandler } from "../geometry3d/geometry-handler";
 import type { Plane3dByOriginAndUnitNormal } from "../geometry3d/plane3d-by-origin-and-unit-normal";
 import type { Plane3dByOriginAndVectors } from "../geometry3d/plane3d-by-origin-and-vectors";

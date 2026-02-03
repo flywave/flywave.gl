@@ -2,11 +2,7 @@
 
 import { type FlatTheme, type Theme, type ValueMap } from "@flywave/flywave-datasource-protocol";
 import { ExprPool } from "@flywave/flywave-datasource-protocol/ExprPool";
-import {
-    type Projection,
-    type TileKey,
-    type TilingScheme
-} from "@flywave/flywave-geoutils";
+import { type Projection, type TileKey, type TilingScheme } from "@flywave/flywave-geoutils";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
@@ -25,10 +21,10 @@ const logger = LoggerManager.instance.create("DataSource");
 export enum ClassificationType {
     /** Terrain objects */
     TERRAIN = 1,
-    
+
     /** 3D Tiles objects */
     TILE_3D = 2,
-    
+
     /** Both terrain and 3D tiles */
     BOTH = 3
 }
@@ -52,7 +48,7 @@ export interface DataSourceOptions {
      *  An array of ISO 639-1 language codes.
      */
     languages?: string[];
-    
+
     /**
      * The minimum zoom level at which data is available.
      */

@@ -9,7 +9,6 @@ import { execSync } from "child_process";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 
-
 // The typings don't yet work for copy-webpack-plugin & webpack 5, hence we ignore them for now,
 // see: https://github.com/DefinitelyTyped/DefinitelyTyped/issues/49528
 const CopyWebpackPlugin: any = require("copy-webpack-plugin");
@@ -20,7 +19,6 @@ import HtmlWebpackPlugin from "html-webpack-plugin";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 
 export interface FlywaveWebpackConfig {
     mainEntry?: string;
@@ -57,24 +55,26 @@ export interface CopyPattern {
 function getSubprojectTsconfigPathsPlugins(projectRoot: string): TsconfigPathsPlugin[] {
     try {
         // Use pnpm command to get all subproject information
-        const pnpmOutput = execSync('pnpm ls -r --depth -1 --json', { cwd: projectRoot, encoding: 'utf-8' });
+        const pnpmOutput = execSync("pnpm ls -r --depth -1 --json", {
+            cwd: projectRoot,
+            encoding: "utf-8"
+        });
         const packages = JSON.parse(pnpmOutput);
 
         // Filter out subprojects under the @flywave scope (excluding private packages and root project)
-        const flywavePackages = packages.filter((pkg: any) =>
-            pkg.name.startsWith('@flywave/') &&
-            pkg.path !== projectRoot
+        const flywavePackages = packages.filter(
+            (pkg: any) => pkg.name.startsWith("@flywave/") && pkg.path !== projectRoot
         );
 
         // Create TsconfigPathsPlugin configuration for each subproject
         return flywavePackages.map((pkg: any) => {
-            const tsconfigPath = path.resolve(pkg.path, 'tsconfig.json');
+            const tsconfigPath = path.resolve(pkg.path, "tsconfig.json");
             return new TsconfigPathsPlugin({
                 configFile: tsconfigPath
             });
         });
     } catch (error) {
-        console.error('Error getting subprojects:', error);
+        console.error("Error getting subprojects:", error);
         // If acquisition fails, return default configuration
         return [];
     }
@@ -84,7 +84,7 @@ function getSubprojectTsconfigPathsPlugins(projectRoot: string): TsconfigPathsPl
  * 创建基础Webpack配置
  */
 export function createBaseConfig(config?: FlywaveWebpackConfig): Configuration {
-    const projectRoot = config?.projectRoot || path.resolve(__dirname, '../../../');
+    const projectRoot = config?.projectRoot || path.resolve(__dirname, "../../../");
     const tsConfigPath = config?.tsConfigPath || path.resolve(process.cwd(), "tsconfig.json");
 
     const resolvePlugins = [];
@@ -97,7 +97,7 @@ export function createBaseConfig(config?: FlywaveWebpackConfig): Configuration {
         resolve: {
             extensions: [".webpack.js", ".web.ts", ".ts", ".tsx", ".web.js", ".js"],
             alias: {
-                "react-native": "react-native-web",
+                "react-native": "react-native-web"
             },
             plugins: resolvePlugins,
             fallback: {
@@ -112,7 +112,7 @@ export function createBaseConfig(config?: FlywaveWebpackConfig): Configuration {
                     loader: "ts-loader",
                     options: {
                         transpileOnly: true,
-                        configFile: tsConfigPath,
+                        configFile: tsConfigPath
                     }
                 },
                 {
@@ -146,7 +146,7 @@ export function createBrowserConfig(config?: FlywaveWebpackConfig): Configuratio
     const baseConfig = createBaseConfig(config);
 
     return {
-        ...baseConfig,
+        ...baseConfig
     };
 }
 
@@ -165,7 +165,10 @@ export function createDecoderConfig(config?: FlywaveWebpackConfig): Configuratio
         },
         output: {
             path: outputPath,
-            filename: process.env.NODE_ENV === "production" ? "flywave-decoders.min.js" : "flywave-decoders.js"
+            filename:
+                process.env.NODE_ENV === "production"
+                    ? "flywave-decoders.min.js"
+                    : "flywave-decoders.js"
         }
     };
 }
@@ -205,11 +208,13 @@ export function createAssetsConfig(config?: FlywaveWebpackConfig): CopyPattern[]
 
     // Add additional resources
     if (config?.additionalAssets) {
-        assets.push(...config.additionalAssets.map(asset => ({
-            from: asset.from,
-            to: asset.to,
-            toType: asset.toType
-        })));
+        assets.push(
+            ...config.additionalAssets.map(asset => ({
+                from: asset.from,
+                to: asset.to,
+                toType: asset.toType
+            }))
+        );
     }
 
     // Configure glob options for each resource
@@ -223,10 +228,7 @@ export function createAssetsConfig(config?: FlywaveWebpackConfig): CopyPattern[]
     return assets.filter(asset => asset.from) as CopyPattern[];
 }
 
-export function addWebpackConfig(
-    config?: Configuration,
-    flywaveConfig?: FlywaveWebpackConfig
-) {
+export function addWebpackConfig(config?: Configuration, flywaveConfig?: FlywaveWebpackConfig) {
     if (Array.isArray(config) || typeof config === "function") {
         throw new Error("config passed to addFlywaveWebpackConfig must be a Configuration object");
     }

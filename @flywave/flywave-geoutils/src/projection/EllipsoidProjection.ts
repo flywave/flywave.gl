@@ -16,10 +16,10 @@ import { EllipsoidTangentPlane } from "../math/EllipsoidTangentPlane";
 
 /**
  * ECEF (Earth-Centered, Earth-Fixed) projection implementation using WGS84 ellipsoid (EPSG:4979)
- * 
+ *
  * Earth-Centered, Earth-Fixed coordinate system:
  * - X-axis: Intersection of prime meridian and equator
- * - Y-axis: 90° east of prime meridian at equator  
+ * - Y-axis: 90° east of prime meridian at equator
  * - Z-axis: North pole direction
  */
 class EllipsoidProjection extends Projection {
@@ -45,7 +45,7 @@ class EllipsoidProjection extends Projection {
         const N = this.a / Math.sqrt(1 - this.e2 * sinφ * sinφ);
 
         // Meridional radius of curvature
-        const M = this.a * (1 - this.e2) / Math.pow(1 - this.e2 * sinφ * sinφ, 1.5);
+        const M = (this.a * (1 - this.e2)) / Math.pow(1 - this.e2 * sinφ * sinφ, 1.5);
 
         // Average radius for scale calculation
         const avgRadius = Math.sqrt(N * M);
@@ -83,12 +83,12 @@ class EllipsoidProjection extends Projection {
 
     /**
      * Converts geographic coordinates to ECEF Cartesian coordinates
-     * 
+     *
      * ECEF coordinates calculation:
      * x = (N + h) * cos(φ) * cos(λ)
-     * y = (N + h) * cos(φ) * sin(λ) 
+     * y = (N + h) * cos(φ) * sin(λ)
      * z = (N * (1 - e²) + h) * sin(φ)
-     * 
+     *
      * Where:
      * - N: Prime vertical radius of curvature
      * - h: Height above ellipsoid (meters)
@@ -121,7 +121,7 @@ class EllipsoidProjection extends Projection {
 
     /**
      * Projects a 3D point onto the ellipsoid surface using Newton-Raphson iteration
-     * 
+     *
      * Iteration solves: (x² + y²)/a² + z²/b² = 1
      * Returns the scaled point lying on the ellipsoid surface
      */
@@ -165,7 +165,7 @@ class EllipsoidProjection extends Projection {
 
     /**
      * Converts ECEF Cartesian coordinates to geographic coordinates
-     * 
+     *
      * Algorithm:
      * 1. Project point to ellipsoid surface
      * 2. Calculate longitude from X,Y components
@@ -215,11 +215,7 @@ class EllipsoidProjection extends Projection {
         // 对于接近极点的特殊情况
         if (p < 1e-12) {
             // 在极点处
-            return GeoCoordinates.fromRadians(
-                Math.PI / 2 * Math.sign(z),
-                0,
-                Math.abs(z) - b
-            );
+            return GeoCoordinates.fromRadians((Math.PI / 2) * Math.sign(z), 0, Math.abs(z) - b);
         }
 
         return GeoCoordinates.fromRadians(φ, λ, h);
@@ -274,7 +270,6 @@ class EllipsoidProjection extends Projection {
             result.max.x = max.x;
             result.max.y = max.y;
             result.max.z = max.z;
-
         } else if (isOrientedBox3Like(result)) {
             // Process as Oriented Bounding Box
             const rectangle = {
@@ -332,9 +327,7 @@ class EllipsoidProjection extends Projection {
 
         // Add minimum height point if different from maximum
         if (minHeight !== maxHeight) {
-            keyPoints.push(
-                new GeoCoordinates(midLat, midLon, minHeight)
-            );
+            keyPoints.push(new GeoCoordinates(midLat, midLon, minHeight));
         }
 
         return keyPoints;
@@ -438,15 +431,28 @@ class EllipsoidProjection extends Projection {
 
         // Compute boundary points
         const boundaryPoints = this.computeSmallRectangleBoundaryPoints(
-            rectangle, minimumHeight, maximumHeight, spansEquator
+            rectangle,
+            minimumHeight,
+            maximumHeight,
+            spansEquator
         );
 
         // Compute bounds in tangent space
         const { minX, maxX, minY, maxY, minZ, maxZ } = this.computeBoundsInTangentSpace(
-            boundaryPoints, tangentPlane
+            boundaryPoints,
+            tangentPlane
         );
 
-        this.setOrientedBoxFromTangentPlane(tangentPlane, minX, maxX, minY, maxY, minZ, maxZ, result);
+        this.setOrientedBoxFromTangentPlane(
+            tangentPlane,
+            minX,
+            maxX,
+            minY,
+            maxY,
+            minZ,
+            maxZ,
+            result
+        );
     }
 
     /**
@@ -474,10 +480,10 @@ class EllipsoidProjection extends Projection {
 
         // Edge midpoint
         const edgeMidPoints = [
-            [north, centerLon],  // North edge midpoint
-            [south, centerLon],  // South edge midpoint
-            [centerLat, west],   // West edge midpoint
-            [centerLat, east]    // East edge midpoint
+            [north, centerLon], // North edge midpoint
+            [south, centerLon], // South edge midpoint
+            [centerLat, west], // West edge midpoint
+            [centerLat, east] // East edge midpoint
         ];
 
         // Center point
@@ -485,30 +491,36 @@ class EllipsoidProjection extends Projection {
 
         // Add all points at maximum height
         [...corners, ...edgeMidPoints, centerPoint].forEach(([lat, lon]) => {
-            points.push(new GeoCoordinates(
-                THREE.MathUtils.radToDeg(lat),
-                THREE.MathUtils.radToDeg(lon),
-                maximumHeight
-            ));
+            points.push(
+                new GeoCoordinates(
+                    THREE.MathUtils.radToDeg(lat),
+                    THREE.MathUtils.radToDeg(lon),
+                    maximumHeight
+                )
+            );
         });
 
         // Add minimum height points if different
         if (minimumHeight !== maximumHeight) {
             // Add minimum height corners
             corners.forEach(([lat, lon]) => {
-                points.push(new GeoCoordinates(
-                    THREE.MathUtils.radToDeg(lat),
-                    THREE.MathUtils.radToDeg(lon),
-                    minimumHeight
-                ));
+                points.push(
+                    new GeoCoordinates(
+                        THREE.MathUtils.radToDeg(lat),
+                        THREE.MathUtils.radToDeg(lon),
+                        minimumHeight
+                    )
+                );
             });
 
             // Add minimum height center
-            points.push(new GeoCoordinates(
-                THREE.MathUtils.radToDeg(centerLat),
-                THREE.MathUtils.radToDeg(centerLon),
-                minimumHeight
-            ));
+            points.push(
+                new GeoCoordinates(
+                    THREE.MathUtils.radToDeg(centerLat),
+                    THREE.MathUtils.radToDeg(centerLon),
+                    minimumHeight
+                )
+            );
         }
 
         return points;
@@ -528,8 +540,11 @@ class EllipsoidProjection extends Projection {
         // Determine rectangle's relationship to equator
         const fullyAboveEquator = south > 0;
         const fullyBelowEquator = north < 0;
-        const latitudeNearestToEquator = fullyAboveEquator ? south :
-            fullyBelowEquator ? north : 0.0;
+        const latitudeNearestToEquator = fullyAboveEquator
+            ? south
+            : fullyBelowEquator
+            ? north
+            : 0.0;
 
         const centerLongitude = (west + east) * 0.5;
 
@@ -555,10 +570,7 @@ class EllipsoidProjection extends Projection {
         const yAxis = new THREE.Vector3(0, 0, 1);
         const xAxis = new THREE.Vector3().crossVectors(normal, yAxis).normalize();
 
-        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
-            normal,
-            planeOrigin
-        );
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, planeOrigin);
 
         const tangentPlane = {
             origin: planeOrigin,
@@ -570,15 +582,28 @@ class EllipsoidProjection extends Projection {
 
         // Compute boundary points
         const boundaryPoints = this.computeLargeRectangleBoundaryPoints(
-            rectangle, minimumHeight, maximumHeight, latitudeNearestToEquator
+            rectangle,
+            minimumHeight,
+            maximumHeight,
+            latitudeNearestToEquator
         );
 
         // Compute bounds in tangent space
         const { minX, maxX, minY, maxY, minZ, maxZ } = this.computeBoundsInTangentSpace(
-            boundaryPoints, tangentPlane
+            boundaryPoints,
+            tangentPlane
         );
 
-        this.setOrientedBoxFromTangentPlane(tangentPlane, minX, maxX, minY, maxY, minZ, maxZ, result);
+        this.setOrientedBoxFromTangentPlane(
+            tangentPlane,
+            minX,
+            maxX,
+            minY,
+            maxY,
+            minZ,
+            maxZ,
+            result
+        );
     }
 
     /**
@@ -611,15 +636,22 @@ class EllipsoidProjection extends Projection {
         // Add points with appropriate heights
         keyPoints.forEach(([lat, lon], index) => {
             // Use minimum height for depth point, maximum for others
-            const height = index < 4 ? maximumHeight :
-                (fullyBelowEquator || fullyAboveEquator) ? maximumHeight :
-                    index === 6 ? minimumHeight : maximumHeight;
+            const height =
+                index < 4
+                    ? maximumHeight
+                    : fullyBelowEquator || fullyAboveEquator
+                    ? maximumHeight
+                    : index === 6
+                    ? minimumHeight
+                    : maximumHeight;
 
-            points.push(new GeoCoordinates(
-                THREE.MathUtils.radToDeg(lat),
-                THREE.MathUtils.radToDeg(lon),
-                height
-            ));
+            points.push(
+                new GeoCoordinates(
+                    THREE.MathUtils.radToDeg(lat),
+                    THREE.MathUtils.radToDeg(lon),
+                    height
+                )
+            );
         });
 
         // Add extra points for equator-spanning rectangles
@@ -627,7 +659,9 @@ class EllipsoidProjection extends Projection {
             // Rectangle spans equator
             points.push(new GeoCoordinates(0, THREE.MathUtils.radToDeg(west), maximumHeight));
             points.push(new GeoCoordinates(0, THREE.MathUtils.radToDeg(east), maximumHeight));
-            points.push(new GeoCoordinates(0, THREE.MathUtils.radToDeg(centerLongitude), maximumHeight));
+            points.push(
+                new GeoCoordinates(0, THREE.MathUtils.radToDeg(centerLongitude), maximumHeight)
+            );
         }
 
         return points;
@@ -638,9 +672,12 @@ class EllipsoidProjection extends Projection {
      */
     private setOrientedBoxFromTangentPlane(
         tangentPlane: any,
-        minX: number, maxX: number,
-        minY: number, maxY: number,
-        minZ: number, maxZ: number,
+        minX: number,
+        maxX: number,
+        minY: number,
+        maxY: number,
+        minZ: number,
+        maxZ: number,
         result: OrientedBox3Like
     ): void {
         // Calculate extents
@@ -699,11 +736,7 @@ class EllipsoidProjection extends Projection {
         const cosλ = Math.cos(λ);
 
         // Up direction (surface normal)
-        const up = new THREE.Vector3(
-            cosφ * cosλ,
-            cosφ * sinλ,
-            sinφ
-        ).normalize();
+        const up = new THREE.Vector3(cosφ * cosλ, cosφ * sinλ, sinφ).normalize();
 
         // East direction
         const east = new THREE.Vector3(-sinλ, cosλ, 0).normalize();
@@ -716,10 +749,7 @@ class EllipsoidProjection extends Projection {
             xAxis: east,
             yAxis: north,
             zAxis: up,
-            plane: new THREE.Plane().setFromNormalAndCoplanarPoint(
-                up,
-                worldPoint
-            )
+            plane: new THREE.Plane().setFromNormalAndCoplanarPoint(up, worldPoint)
         };
     }
 
@@ -730,9 +760,12 @@ class EllipsoidProjection extends Projection {
         points: GeoCoordinates[],
         tangentPlane: any
     ): { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number } {
-        let minX = Infinity, maxX = -Infinity;
-        let minY = Infinity, maxY = -Infinity;
-        let minZ = Infinity, maxZ = -Infinity;
+        let minX = Infinity,
+            maxX = -Infinity;
+        let minY = Infinity,
+            maxY = -Infinity;
+        let minZ = Infinity,
+            maxZ = -Infinity;
 
         for (const geoPoint of points) {
             const worldPoint = this.projectPoint(geoPoint);
@@ -898,15 +931,15 @@ class EllipsoidProjection extends Projection {
 
     /**
      * Performs ray casting to the WGS84 ellipsoid
-     * 
+     *
      * Solves quadratic equation for ray-ellipsoid intersection:
      * A*t² + B*t + C = 0
-     * 
+     *
      * Where coefficients are derived from ellipsoid equation:
      * (x² + y²)/a² + z²/b² = 1
-     * 
+     *
      * @param result - Intersection point in ECEF coordinates
-     * @param rayOrigin - Ray origin in ECEF coordinates  
+     * @param rayOrigin - Ray origin in ECEF coordinates
      * @param rayTarget - Ray target point in ECEF coordinates
      * @param altitude - Altitude above ellipsoid surface (default: 0)
      * @returns Distance from ray origin to intersection, or -1 if no intersection
@@ -937,14 +970,19 @@ class EllipsoidProjection extends Projection {
         const scaledB = this.b + altitude;
 
         // Quadratic coefficients for ray-ellipsoid intersection
-        const a = (rayDir.x * rayDir.x + rayDir.y * rayDir.y) / (scaledA * scaledA) +
+        const a =
+            (rayDir.x * rayDir.x + rayDir.y * rayDir.y) / (scaledA * scaledA) +
             (rayDir.z * rayDir.z) / (scaledB * scaledB);
 
-        const b = 2 * ((rayOrigin.x * rayDir.x + rayOrigin.y * rayDir.y) / (scaledA * scaledA) +
-            (rayOrigin.z * rayDir.z) / (scaledB * scaledB));
+        const b =
+            2 *
+            ((rayOrigin.x * rayDir.x + rayOrigin.y * rayDir.y) / (scaledA * scaledA) +
+                (rayOrigin.z * rayDir.z) / (scaledB * scaledB));
 
-        const c = (rayOrigin.x * rayOrigin.x + rayOrigin.y * rayOrigin.y) / (scaledA * scaledA) +
-            (rayOrigin.z * rayOrigin.z) / (scaledB * scaledB) - 1;
+        const c =
+            (rayOrigin.x * rayOrigin.x + rayOrigin.y * rayOrigin.y) / (scaledA * scaledA) +
+            (rayOrigin.z * rayOrigin.z) / (scaledB * scaledB) -
+            1;
 
         // Solve quadratic equation
         const discriminant = b * b - 4 * a * c;
@@ -955,7 +993,8 @@ class EllipsoidProjection extends Projection {
         const t2 = (-b + sqrtD) / (2 * a);
 
         // Determine if ray origin is inside the ellipsoid
-        const originDistSq = (rayOrigin.x * rayOrigin.x + rayOrigin.y * rayOrigin.y) / (scaledA * scaledA) +
+        const originDistSq =
+            (rayOrigin.x * rayOrigin.x + rayOrigin.y * rayOrigin.y) / (scaledA * scaledA) +
             (rayOrigin.z * rayOrigin.z) / (scaledB * scaledB);
         const isInside = originDistSq < 1;
 

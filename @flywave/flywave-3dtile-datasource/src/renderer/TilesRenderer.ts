@@ -245,7 +245,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
 
     /**
      * Sets the size of points in the point cloud
-     * 
+     *
      * @param size The new size for points
      */
     setPointSize(size: number): void {
@@ -662,7 +662,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
         if ("sphere" in tile.boundingVolume) {
             const ecefPos = new Vector3().fromArray(tile.boundingVolume.sphere);
 
-            const transformMatrix = new Matrix4().setPosition(ecefPos.x, ecefPos.y, ecefPos.z)
+            const transformMatrix = new Matrix4().setPosition(ecefPos.x, ecefPos.y, ecefPos.z);
 
             transformMatrix.premultiply(transform);
 
@@ -673,7 +673,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
             );
         } else if ("box" in tile.boundingVolume) {
             const ecefPos = new Vector3().fromArray(tile.boundingVolume.box);
-            const transformMatrix = new Matrix4().setPosition(ecefPos.x, ecefPos.y, ecefPos.z)
+            const transformMatrix = new Matrix4().setPosition(ecefPos.x, ecefPos.y, ecefPos.z);
             transformMatrix.premultiply(transform);
             const box = [...tile.boundingVolume.box] as typeof tile.boundingVolume.box;
 
@@ -681,7 +681,11 @@ export abstract class TilesRenderer extends TilesRendererBase {
             box[1] = 0;
             box[2] = 0;
 
-            boundingVolume.setObbData(this.getProjection(), box, this.matrixTransformCallback?.(transformMatrix) || transformMatrix);
+            boundingVolume.setObbData(
+                this.getProjection(),
+                box,
+                this.matrixTransformCallback?.(transformMatrix) || transformMatrix
+            );
         } else if ("region" in tile.boundingVolume) {
             boundingVolume.setRegionData(this.getProjection(), ...tile.boundingVolume.region);
         }
@@ -702,7 +706,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
     }
 
     private createPointsScene(content: Tiles3DTileContent): {
-        scene: Scene
+        scene: Scene;
     } {
         const scene = new Scene();
 
@@ -713,7 +717,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
         const positions = new BufferAttribute(new Float32Array(content.attributes.positions), 3);
 
         const geometry = new BufferGeometry();
-        geometry.setAttribute('position', positions);
+        geometry.setAttribute("position", positions);
 
         // Key fix point 2: Color processing
         if (content.attributes.colors) {
@@ -723,7 +727,10 @@ export abstract class TilesRenderer extends TilesRendererBase {
             if (Array.isArray(colorData)) {
                 // If it's an RGB array [r, g, b, r, g, b, ...]
                 colors = new BufferAttribute(new Float32Array(colorData), 3);
-            } else if (colorData.value instanceof Uint8Array || colorData.value instanceof Uint8ClampedArray) {
+            } else if (
+                colorData.value instanceof Uint8Array ||
+                colorData.value instanceof Uint8ClampedArray
+            ) {
                 // Key fix point 3: Correctly handle Uint8 color data
                 const colorArray = new Float32Array(colorData.value.length);
                 for (let i = 0; i < colorData.value.length; i++) {
@@ -737,7 +744,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
                 colors = new BufferAttribute(defaultColors, 3);
             }
 
-            geometry.setAttribute('color', colors);
+            geometry.setAttribute("color", colors);
 
             // Use shared material and ensure vertex colors are enabled
             this.m_pointsMaterial.vertexColors = true;
@@ -753,7 +760,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
 
             if (Array.isArray(normalsData)) {
                 normals = new BufferAttribute(new Float32Array(normalsData), 3);
-            } else if (normalsData && typeof normalsData === 'object' && 'value' in normalsData) {
+            } else if (normalsData && typeof normalsData === "object" && "value" in normalsData) {
                 const typedNormals = normalsData as { value: Float32Array; size?: number };
                 if (typedNormals.value instanceof Float32Array) {
                     normals = new BufferAttribute(typedNormals.value, typedNormals.size || 3);
@@ -763,7 +770,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
             }
 
             if (normals) {
-                geometry.setAttribute('normal', normals);
+                geometry.setAttribute("normal", normals);
             }
         }
 
@@ -806,7 +813,10 @@ export abstract class TilesRenderer extends TilesRendererBase {
         if (super.parseTile(metadata, tile, extension, uri, abortSignal)) {
             return;
         }
-        const res = extension === "pnts" ? this.createPointsScene(metadata) : createThreeSceneFromGLTF(metadata.gltf);
+        const res =
+            extension === "pnts"
+                ? this.createPointsScene(metadata)
+                : createThreeSceneFromGLTF(metadata.gltf);
 
         const instances: InstancedMesh[] = [];
         const meshes: Array<Mesh | InstancedMesh> = [];
@@ -819,7 +829,6 @@ export abstract class TilesRenderer extends TilesRendererBase {
                 if (child instanceof Mesh || child instanceof InstancedMesh) {
                     meshes.push(child);
                     originalMatrices.push(child.matrixWorld.clone());
-
 
                     if (child instanceof InstancedMesh) {
                         // Expand existing InstancedMesh instances
@@ -881,7 +890,15 @@ export abstract class TilesRenderer extends TilesRendererBase {
                         tempMat.multiply(originalMatrix);
                         instance.setMatrixAt(i, tempMat);
                     }
-                    mesh.geometry.setAttribute("_batchId", new InstancedBufferAttribute(new Uint32Array(metadata.instances.length).fill(metadata.instances[i].batchId), 1));
+                    mesh.geometry.setAttribute(
+                        "_batchId",
+                        new InstancedBufferAttribute(
+                            new Uint32Array(metadata.instances.length).fill(
+                                metadata.instances[i].batchId
+                            ),
+                            1
+                        )
+                    );
                 }
             }
 
@@ -910,7 +927,11 @@ export abstract class TilesRenderer extends TilesRendererBase {
                 break;
         }
 
-        const transformMatrix = metadata.rtcCenter ? new Matrix4().setPosition(new Vector3().fromArray(metadata.rtcCenter).applyMatrix4(tile.cached.transform)) : tile.cached.transform;
+        const transformMatrix = metadata.rtcCenter
+            ? new Matrix4().setPosition(
+                  new Vector3().fromArray(metadata.rtcCenter).applyMatrix4(tile.cached.transform)
+              )
+            : tile.cached.transform;
 
         // Apply matrix transformation callback if provided
         let finalTransformMatrix = transformMatrix;
@@ -1053,11 +1074,10 @@ export abstract class TilesRenderer extends TilesRendererBase {
         const scene = tile.cached.scene;
         const group = this.group;
 
-
         if (this.debugBoundingVolume) {
             if (visible) {
                 if (!tile.cached.debugBoundingVolume) {
-                    tile.cached.debugBoundingVolume = new Object3D()
+                    tile.cached.debugBoundingVolume = new Object3D();
                     tile.debugBoundingVolume("box", tile.cached.debugBoundingVolume);
                 }
                 group.add(tile.cached.debugBoundingVolume);

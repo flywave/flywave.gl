@@ -166,7 +166,7 @@ export namespace TileKeyUtils {
      * @param mortonTileEncoding - The encoding scheme used for Morton code calculation.
      */
     export function extractOffsetAndMortonKeyFromKey(
-        key: number, 
+        key: number,
         bitshift: number = 4,
         mortonTileEncoding: TileEncoding = TileEncoding.QUAD_TREE
     ) {
@@ -185,7 +185,7 @@ export namespace TileKeyUtils {
         }
         // We subtract half of the total amount, this undoes what is computed in getShiftedOffset
         offset -= powerOfTwo[bitshift - 1];
-        
+
         // 根据编码类型创建 TileKey
         const tileKey = TileKey.fromMortonCode(mortonCode, mortonTileEncoding);
         return { offset, mortonCode: tileKey.mortonCode(mortonTileEncoding), tileKey };
@@ -200,11 +200,15 @@ export namespace TileKeyUtils {
      * @param mortonTileEncoding - The encoding scheme for Morton code calculation.
      */
     export function getParentKeyFromKey(
-        calculatedKey: number, 
+        calculatedKey: number,
         bitshift: number = 4,
         mortonTileEncoding: TileEncoding = TileEncoding.QUAD_TREE
     ) {
-        const { offset, tileKey } = extractOffsetAndMortonKeyFromKey(calculatedKey, bitshift, mortonTileEncoding);
+        const { offset, tileKey } = extractOffsetAndMortonKeyFromKey(
+            calculatedKey,
+            bitshift,
+            mortonTileEncoding
+        );
         const parentTileKey = tileKey.parent();
         return getKeyForTileKeyAndOffset(parentTileKey, offset, bitshift, mortonTileEncoding);
     }
@@ -217,7 +221,10 @@ export namespace TileKeyUtils {
      * @param encoding - The encoding scheme used.
      * @returns The Morton code of the parent tile.
      */
-    export function parentMortonCode(mortonCode: number, encoding: TileEncoding = TileEncoding.QUAD_TREE): number {
+    export function parentMortonCode(
+        mortonCode: number,
+        encoding: TileEncoding = TileEncoding.QUAD_TREE
+    ): number {
         if (encoding === TileEncoding.HALF_QUAD_TREE) {
             // 对于 HALF_QUAD_TREE，需要特殊处理父级计算
             const tileKey = TileKey.fromMortonCode(mortonCode, encoding);

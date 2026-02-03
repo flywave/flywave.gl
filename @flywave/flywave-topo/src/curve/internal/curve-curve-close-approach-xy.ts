@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { BSplineCurve3d, BSplineCurve3dBase } from "../../bspline/bspline-curve";
 import { type BSplineCurve3dH } from "../../bspline/bspline-curve3d-homogeneous";
 import { Geometry } from "../../geometry";

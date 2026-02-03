@@ -213,10 +213,13 @@ export interface IMapRenderingManager extends IPassManager {
      * @param layer - Layer to update
      * @param config - Translucent layer configuration
      */
-    updateTranslucentLayer(layer: string, config: {
-        mixFactor?: number;
-        blendMode?: "mix" | "add" | "multiply" | "screen";
-    }): void;
+    updateTranslucentLayer(
+        layer: string,
+        config: {
+            mixFactor?: number;
+            blendMode?: "mix" | "add" | "multiply" | "screen";
+        }
+    ): void;
 
     /**
      * Remove a translucent layer
@@ -504,7 +507,7 @@ export class MapRenderingManager implements IMapRenderingManager {
 
         // Initialize translucent depth effect
         this.m_translucentDepthEffect = new TranslucentLayerEffect(this.m_scene, this.m_camera, {
-            blendFunction: BlendFunction.SCREEN,
+            blendFunction: BlendFunction.SCREEN
         }) as TranslucentLayerEffect & IEnabledEffect;
         this.m_translucentDepthEffect.enabled = true;
 
@@ -587,6 +590,9 @@ export class MapRenderingManager implements IMapRenderingManager {
         // Add DepthCopyPass as a separate pass after the effect pass
         if (this.m_depthCopyPass) {
             this.m_composer.addPass(this.m_depthCopyPass);
+            // Set main scene and camera for depth reading
+            this.m_depthCopyPass.mainScene = this.m_scene;
+            this.m_depthCopyPass.mainCamera = this.m_camera;
         }
 
         this.m_effectPass = new FilterEffectPass(this.m_camera, ...allEffects);
@@ -595,7 +601,9 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_lastFxaaEnabled = this.fxaaEnabled;
         this.m_lastSmaaEnabled = this.smaaEnabled;
 
-        console.log(`Effect pass recreated with ${allEffects.length} effects (${customEffects.length} custom)`);
+        console.log(
+            `Effect pass recreated with ${allEffects.length} effects (${customEffects.length} custom)`
+        );
     }
 
     /**
@@ -629,7 +637,6 @@ export class MapRenderingManager implements IMapRenderingManager {
         const customEffectsChanged = Array.from(this.m_customEffects.values()).some(
             customEffect => customEffect.effect.enabled !== customEffect.enabled
         );
-
 
         // Translucent depth effect - always enabled
         if (this.m_translucentDepthEffect) {
@@ -776,7 +783,9 @@ export class MapRenderingManager implements IMapRenderingManager {
      */
     addCustomEffect(customEffect: ICustomEffect): void {
         if (this.m_customEffects.has(customEffect.id)) {
-            console.warn(`Custom effect with id '${customEffect.id}' already exists. It will be replaced.`);
+            console.warn(
+                `Custom effect with id '${customEffect.id}' already exists. It will be replaced.`
+            );
         }
 
         this.m_customEffects.set(customEffect.id, customEffect);
@@ -962,6 +971,12 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_scene = scene;
         this.m_camera = camera;
 
+        // Update depth copy pass scene and camera
+        if (this.m_depthCopyPass) {
+            this.m_depthCopyPass.mainScene = scene;
+            this.m_depthCopyPass.mainCamera = camera;
+        }
+
         this.updateEffects();
 
         if (this.m_composer) {
@@ -1028,16 +1043,15 @@ export class MapRenderingManager implements IMapRenderingManager {
 
     /**
      * Read depth at a specific point synchronously.
-     * 
+     *
      * Performance considerations:
      * - This is synchronous and will cause a GPU sync point, which may impact performance
      * - For high-frequency use cases, prefer getDepthTexture() and shader-based solutions
-     * 
+     *
      * @param ndc - Normalized device coordinates (x, y in range [-1, 1])
      * @returns Depth value (in range [0, 1]) or null if reading failed
      */
     readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null {
-
         // Delegate to DepthReadingPass if available
         if (this.m_depthCopyPass) {
             let depth = this.m_depthCopyPass.readDepth(ndc);
@@ -1122,5 +1136,4 @@ export class MapRenderingManager implements IMapRenderingManager {
             this.m_depthCopyPass.setClassificationTypeFilter(classificationType);
         }
     }
-
 }

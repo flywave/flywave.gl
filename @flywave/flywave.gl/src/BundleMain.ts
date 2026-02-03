@@ -3,7 +3,6 @@
 import { ConcurrentDecoderFacade, ConcurrentTilerFacade } from "@flywave/flywave-mapview";
 import { baseUrl, UriResolver } from "@flywave/flywave-utils";
 
-
 /**
  * Global declaration for flywave.gl resource base URL variables
  */
@@ -29,7 +28,6 @@ declare const FLYWAVE_BASE_URL: string | undefined;
  * 2. Through webpack DefinePlugin: FLYWAVE_BASE_URL
  */
 class MapAssetsUriResolver implements UriResolver {
-
     /**
      * Get the current base resource URL
      */
@@ -47,15 +45,13 @@ class MapAssetsUriResolver implements UriResolver {
         return undefined;
     }
 
-
     resolveUri(uri: string): string {
-
         // If it's already an absolute URL, return as is
         if (uri.startsWith("http://") || uri.startsWith("https://")) {
             return uri;
         }
 
-        let _baseResourceUrl = this.baseResourceUrl
+        let _baseResourceUrl = this.baseResourceUrl;
 
         // If a base resource URL is specified, resolve relative to it
         if (_baseResourceUrl) {
@@ -65,9 +61,7 @@ class MapAssetsUriResolver implements UriResolver {
             }
 
             // Ensure base URL ends with a slash
-            const base = _baseResourceUrl.endsWith("/")
-                ? _baseResourceUrl
-                : _baseResourceUrl + "/";
+            const base = _baseResourceUrl.endsWith("/") ? _baseResourceUrl : _baseResourceUrl + "/";
 
             return base + uri;
         }
@@ -94,7 +88,6 @@ export const DEFAULT_DECODER_SCRIPT_URL = "flywave-decoders.js";
  * @hidden
  */
 export const BUNDLE_SCRIPT_BASENAME = "flywave.gl";
-
 
 /**
  * Get script URL assumet it's already loaded in DOM.
@@ -125,7 +118,7 @@ const getActualDecoderScriptUrl = () => {
         // eslint-disable-next-line no-console
         console.error(
             `flywave.gl: Unable to determine default location of 'flywave-decoders(min).js'. ` +
-            `See https://github.com/flywave/flywave.gl/@flywave/flywave.gl.`
+                `See https://github.com/flywave/flywave.gl/@flywave/flywave.gl.`
         );
     }
     const isMinified = baseScriptUrl && baseScriptUrl.endsWith(".min.js");

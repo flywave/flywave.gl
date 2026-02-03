@@ -80,18 +80,18 @@ export default function ExampleDetail() {
                 setIsLoading(false);
                 return;
             }
-            
+
             // 支持两种URL参数格式：查询参数 ?id=... 或路径参数 /example-detail/...
             // 首先尝试从查询参数获取
             const urlParams = new URLSearchParams(location.search);
             let urlExampleId = urlParams.get("id");
-            
+
             // 如果查询参数中没有找到id，尝试从路径中解析（处理类似 /example-detail/xxx 的格式）
             if (!urlExampleId) {
-                const pathSegments = location.pathname.split('/');
+                const pathSegments = location.pathname.split("/");
                 // 查找可能包含id的路径段
                 for (let i = 0; i < pathSegments.length; i++) {
-                    if (pathSegments[i] === 'example-detail' && i + 1 < pathSegments.length) {
+                    if (pathSegments[i] === "example-detail" && i + 1 < pathSegments.length) {
                         const potentialId = pathSegments[i + 1];
                         // 检查是否是有效的示例ID（存在于EXAMPLES_CONFIG中）
                         if (EXAMPLES_CONFIG.some(ex => ex.id === potentialId)) {
@@ -101,21 +101,22 @@ export default function ExampleDetail() {
                     }
                 }
             }
-            
+
             // 如果仍然没有找到，使用默认值
             if (!urlExampleId) {
                 urlExampleId = "hello-world";
             }
-            
+
             // 确保示例存在
-            const targetExample = EXAMPLES_CONFIG.find(ex => ex.id === urlExampleId) || EXAMPLES_CONFIG[0];
-            
+            const targetExample =
+                EXAMPLES_CONFIG.find(ex => ex.id === urlExampleId) || EXAMPLES_CONFIG[0];
+
             // 设置示例ID和代码
             setExampleId(targetExample.id);
             setCode(targetExample.code);
-            
+
             setIsLoading(false);
-            
+
             // 立即运行示例，使用目标示例的代码，避免依赖可能未更新的状态
             setTimeout(() => {
                 if (previewRef.current) {
@@ -140,11 +141,11 @@ export default function ExampleDetail() {
             // URL发生变化时重新解析参数
             const urlParams = new URLSearchParams(location.search);
             let urlExampleId = urlParams.get("id");
-            
+
             if (!urlExampleId) {
-                const pathSegments = location.pathname.split('/');
+                const pathSegments = location.pathname.split("/");
                 for (let i = 0; i < pathSegments.length; i++) {
-                    if (pathSegments[i] === 'example-detail' && i + 1 < pathSegments.length) {
+                    if (pathSegments[i] === "example-detail" && i + 1 < pathSegments.length) {
                         const potentialId = pathSegments[i + 1];
                         if (EXAMPLES_CONFIG.some(ex => ex.id === potentialId)) {
                             urlExampleId = potentialId;
@@ -153,16 +154,17 @@ export default function ExampleDetail() {
                     }
                 }
             }
-            
+
             if (!urlExampleId) {
                 urlExampleId = "hello-world";
             }
-            
-            const targetExample = EXAMPLES_CONFIG.find(ex => ex.id === urlExampleId) || EXAMPLES_CONFIG[0];
+
+            const targetExample =
+                EXAMPLES_CONFIG.find(ex => ex.id === urlExampleId) || EXAMPLES_CONFIG[0];
             if (targetExample.id !== exampleId) {
                 setExampleId(targetExample.id);
                 setCode(targetExample.code);
-                
+
                 setTimeout(() => {
                     if (previewRef.current) {
                         runCodeWithContent(targetExample.code);
@@ -171,9 +173,9 @@ export default function ExampleDetail() {
             }
         };
 
-        window.addEventListener('popstate', handlePopState);
+        window.addEventListener("popstate", handlePopState);
         return () => {
-            window.removeEventListener('popstate', handlePopState);
+            window.removeEventListener("popstate", handlePopState);
         };
     }, [location.pathname, location.search, EXAMPLES_CONFIG, exampleId]);
 
@@ -245,12 +247,15 @@ export default function ExampleDetail() {
 
     const handleBackToHome = () => {
         // 获取当前语言前缀
-        const currentLangPrefix = window.location.pathname.startsWith('/zh/') ? '/zh' : 
-                                  window.location.pathname.startsWith('/en/') ? '/en' : '';
-        
+        const currentLangPrefix = window.location.pathname.startsWith("/zh/")
+            ? "/zh"
+            : window.location.pathname.startsWith("/en/")
+            ? "/en"
+            : "";
+
         // 返回示例页面，保持语言前缀，确保路径格式正确
         // 修复：移除多余的斜杠，统一使用不带结尾斜杠的格式
-        const homeUrl = currentLangPrefix ? `${currentLangPrefix}/examples` : '/examples';
+        const homeUrl = currentLangPrefix ? `${currentLangPrefix}/examples` : "/examples";
         window.location.href = homeUrl;
     };
 
@@ -268,8 +273,8 @@ export default function ExampleDetail() {
 
         // 更新URL参数
         const newUrl = new URL(window.location.href);
-        newUrl.searchParams.set('id', selectedExample.id);
-        window.history.replaceState({}, '', newUrl.toString());
+        newUrl.searchParams.set("id", selectedExample.id);
+        window.history.replaceState({}, "", newUrl.toString());
 
         // 立即运行新代码
         setTimeout(() => {
@@ -298,7 +303,8 @@ export default function ExampleDetail() {
         // 添加加载超时处理
         const timeoutId = setTimeout(() => {
             if (previewRef.current) {
-                previewRef.current.innerHTML = '<div class="error">加载超时，请检查网络连接或重试</div>';
+                previewRef.current.innerHTML =
+                    '<div class="error">加载超时，请检查网络连接或重试</div>';
                 setIsRunning(false);
             }
         }, 15000);
@@ -414,7 +420,8 @@ export default function ExampleDetail() {
         iframe.onerror = () => {
             clearTimeout(timeoutId);
             if (previewRef.current) {
-                previewRef.current.innerHTML = '<div class="error">iframe 加载失败，请检查网络连接或重试</div>';
+                previewRef.current.innerHTML =
+                    '<div class="error">iframe 加载失败，请检查网络连接或重试</div>';
             }
             setIsRunning(false);
         };
@@ -451,13 +458,19 @@ export default function ExampleDetail() {
     });
 
     // 获取当前语言环境
-    const currentLocale = typeof window !== 'undefined' ? 
-      (window.location.pathname.startsWith('/zh/') || document.documentElement.lang.includes('zh') ? 'zh' : 'en') : 'en';
+    const currentLocale =
+        typeof window !== "undefined"
+            ? window.location.pathname.startsWith("/zh/") ||
+              document.documentElement.lang.includes("zh")
+                ? "zh"
+                : "en"
+            : "en";
 
     // 根据EXAMPLE_CATEGORIES定义的顺序对分类进行排序
     const sortedCategories = [...EXAMPLE_CATEGORIES];
-    const categoriesWithExamples = sortedCategories.filter(category => 
-        examplesByCategory[category.code] && examplesByCategory[category.code].length > 0
+    const categoriesWithExamples = sortedCategories.filter(
+        category =>
+            examplesByCategory[category.code] && examplesByCategory[category.code].length > 0
     );
 
     const definedCategoryCodes = new Set(EXAMPLE_CATEGORIES.map(cat => cat.code));
@@ -467,7 +480,8 @@ export default function ExampleDetail() {
 
     if (isLoading || EXAMPLES_CONFIG.length === 0) {
         //@ts-ignore
-        return (<Layout wrapperClassName={styles.layoutWrapper} noFooter={true}>
+        return (
+            <Layout wrapperClassName={styles.layoutWrapper} noFooter={true}>
                 <div className={styles.mainWrapper}>
                     <div className={styles.loadingContainer}>
                         <div className={styles.loadingSpinner}>加载中...</div>
@@ -485,14 +499,14 @@ export default function ExampleDetail() {
                     <div className={styles.sidebar}>
                         <div className={styles.sidebarHeader}>
                             <h2 className={styles.sidebarTitle}>
-                                {currentLocale === 'zh' ? '示例列表' : 'Example List'}
+                                {currentLocale === "zh" ? "示例列表" : "Example List"}
                             </h2>
                             <div className={styles.sidebarActions}>
                                 <button
                                     className={styles.sidebarBackButton}
                                     onClick={handleBackToHome}
                                 >
-                                    ← {currentLocale === 'zh' ? '返回示例首页' : 'Back to Examples'}
+                                    ← {currentLocale === "zh" ? "返回示例首页" : "Back to Examples"}
                                 </button>
                             </div>
                         </div>
@@ -503,7 +517,9 @@ export default function ExampleDetail() {
                                 return (
                                     <div key={category.code} className={styles.exampleCategory}>
                                         <div className={styles.categoryTitle}>
-                                            {currentLocale === 'zh' && category.nameZh ? category.nameZh : category.name}
+                                            {currentLocale === "zh" && category.nameZh
+                                                ? category.nameZh
+                                                : category.name}
                                         </div>
                                         {examples.map(ex => (
                                             <div
@@ -515,8 +531,8 @@ export default function ExampleDetail() {
                                             >
                                                 <div className={styles.exampleImage}>
                                                     {ex.image ? (
-                                                        <img 
-                                                            src={ex.image} 
+                                                        <img
+                                                            src={ex.image}
                                                             alt={ex.title}
                                                             className={styles.exampleThumbnail}
                                                         />
@@ -539,11 +555,12 @@ export default function ExampleDetail() {
                                     </div>
                                 );
                             })}
-                            
+
                             {/* 显示未定义的分类 */}
                             {undefinedCategories.map(categoryCode => {
                                 const examples = examplesByCategory[categoryCode] || [];
-                                const categoryName = examples.length > 0 ? examples[0].category : categoryCode;
+                                const categoryName =
+                                    examples.length > 0 ? examples[0].category : categoryCode;
                                 return (
                                     <div key={categoryCode} className={styles.exampleCategory}>
                                         <div className={styles.categoryTitle}>{categoryName}</div>
@@ -557,8 +574,8 @@ export default function ExampleDetail() {
                                             >
                                                 <div className={styles.exampleImage}>
                                                     {ex.image ? (
-                                                        <img 
-                                                            src={ex.image} 
+                                                        <img
+                                                            src={ex.image}
                                                             alt={ex.title}
                                                             className={styles.exampleThumbnail}
                                                         />
@@ -593,22 +610,30 @@ export default function ExampleDetail() {
                                         onClick={handleRunCode}
                                         disabled={isRunning}
                                     >
-                                        {isRunning ? 
-                                            (currentLocale === 'zh' ? "运行中..." : "Running...") : 
-                                            (currentLocale === 'zh' ? "运行代码" : "Run Code")}
+                                        {isRunning
+                                            ? currentLocale === "zh"
+                                                ? "运行中..."
+                                                : "Running..."
+                                            : currentLocale === "zh"
+                                            ? "运行代码"
+                                            : "Run Code"}
                                     </button>
                                     <button
                                         className={`${styles.actionButton} ${styles.secondary}`}
                                         onClick={handleResetCode}
-                                        title={currentLocale === 'zh' ? "重置代码到初始状态" : "Reset code to initial state"}
+                                        title={
+                                            currentLocale === "zh"
+                                                ? "重置代码到初始状态"
+                                                : "Reset code to initial state"
+                                        }
                                     >
-                                        {currentLocale === 'zh' ? "重置代码" : "Reset Code"}
+                                        {currentLocale === "zh" ? "重置代码" : "Reset Code"}
                                     </button>
                                     <button
                                         className={`${styles.actionButton} ${styles.secondary}`}
                                         onClick={handleFullscreen}
                                     >
-                                        {currentLocale === 'zh' ? "全屏预览" : "Fullscreen Preview"}
+                                        {currentLocale === "zh" ? "全屏预览" : "Fullscreen Preview"}
                                     </button>
                                 </div>
                             </div>
@@ -619,7 +644,9 @@ export default function ExampleDetail() {
                                 style={{ width: `${editorWidth}%` }}
                             >
                                 <div className={styles.panelHeader}>
-                                    <span>{currentLocale === 'zh' ? "代码编辑器" : "Code Editor"}</span>
+                                    <span>
+                                        {currentLocale === "zh" ? "代码编辑器" : "Code Editor"}
+                                    </span>
                                 </div>
                                 <div className={styles.editorWrapper}>
                                     <Editor
@@ -655,14 +682,28 @@ export default function ExampleDetail() {
                                 style={{ width: `${100 - editorWidth}%` }}
                             >
                                 <div className={styles.panelHeader}>
-                                    <span>{currentLocale === 'zh' ? "实时预览" : "Live Preview"}</span>
+                                    <span>
+                                        {currentLocale === "zh" ? "实时预览" : "Live Preview"}
+                                    </span>
                                 </div>
                                 <div className={styles.previewWrapper}>
                                     <div ref={previewRef} className={styles.previewContent}>
                                         <div className={styles.previewPlaceholder}>
-                                            <p>{currentLocale === 'zh' ? "实时预览区域" : "Live Preview Area"}</p>
-                                            <p>{currentLocale === 'zh' ? '点击"运行代码"按钮查看效果' : 'Click "Run Code" button to see the result'}</p>
-                                            <p>{currentLocale === 'zh' ? `当前示例: ${currentExample.title}` : `Current Example: ${currentExample.title}`}</p>
+                                            <p>
+                                                {currentLocale === "zh"
+                                                    ? "实时预览区域"
+                                                    : "Live Preview Area"}
+                                            </p>
+                                            <p>
+                                                {currentLocale === "zh"
+                                                    ? '点击"运行代码"按钮查看效果'
+                                                    : 'Click "Run Code" button to see the result'}
+                                            </p>
+                                            <p>
+                                                {currentLocale === "zh"
+                                                    ? `当前示例: ${currentExample.title}`
+                                                    : `Current Example: ${currentExample.title}`}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>

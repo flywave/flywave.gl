@@ -346,11 +346,9 @@ void main(void)
     `
 };
 
-export interface SkyAtmosphereMaterialParameters extends RendererMaterialParameters {
-}
+export interface SkyAtmosphereMaterialParameters extends RendererMaterialParameters {}
 
 export class SkyAtmosphereMaterial extends RawShaderMaterial {
-
     /**
      * Constructs a new `SkyAtmosphereMaterial`.
      *
@@ -380,7 +378,6 @@ export class SkyAtmosphereMaterial extends RawShaderMaterial {
             };
         }
         super(shaderParams);
- 
     }
 
     setDynamicLighting(enableLighting: boolean) {

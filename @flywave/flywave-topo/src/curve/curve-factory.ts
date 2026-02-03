@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-
 import { type PlaneAltitudeEvaluator, AxisIndex, AxisOrder, Geometry } from "../geometry";
 import { Angle } from "../geometry3d/angle";
 import { AngleSweep } from "../geometry3d/angle-sweep";

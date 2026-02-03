@@ -21,7 +21,9 @@ import {
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
     if (!canvas) {
-        throw new Error("Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML");
+        throw new Error(
+            "Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML"
+        );
     }
     return canvas;
 };
@@ -34,22 +36,22 @@ const getMapCanvas = (): HTMLCanvasElement => {
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and viewpoint (Beijing coordinates)
     const initialLocation = new GeoCoordinates(39.9042, 116.4074);
-    
+
     return new MapView({
-        canvas: canvas,                 // Specify render canvas
-        target: initialLocation,         // Initial target position
-        zoomLevel: 14,                  // Initial zoom level
+        canvas: canvas, // Specify render canvas
+        target: initialLocation, // Initial target position
+        zoomLevel: 14, // Initial zoom level
         theme: {
             extends: "resources/tilezen_base.json", // Base theme configuration
 
             definitions: {
-                "defaultTextStyle": {
-                    "color": "#2c3e50",
-                    "backgroundColor": "#ffffff",
-                    "backgroundSize": 3,
-                    "fontSize": 20,
-                    "fontName": "Noto Sans",
-                    "fontStyle": "bold"
+                defaultTextStyle: {
+                    color: "#2c3e50",
+                    backgroundColor: "#ffffff",
+                    backgroundSize: 3,
+                    fontSize: 20,
+                    fontName: "Noto Sans",
+                    fontStyle: "bold"
                 }
             },
             styles: {
@@ -61,23 +63,23 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                             text: ["get", "name"],
                             color: "#2C7BE5", // Dark blue, more readable
                             backgroundColor: "#FFFFFF",
-                            backgroundOpacity: 0.95, 
-                            "imageTexture": "circle-stroked-11",
+                            backgroundOpacity: 0.95,
+                            imageTexture: "circle-stroked-11",
                             iconScale: 1.3,
-                            size:16,
+                            size: 16,
                             vAlignment: "Center",
-                            hAlignment: "Right", 
+                            hAlignment: "Right"
                         }
                     },
                     {
                         when: ["==", ["geometry-type"], "LineString"],
                         technique: "solid-line",
                         attr: {
-                            color: "#2C7BE5", 
+                            color: "#2C7BE5",
                             outlineWidth: 2,
                             metricUnit: "Pixel",
                             lineWidth: 3,
-                            outlineColor: "#2C7BE5",
+                            outlineColor: "#2C7BE5"
                         }
                     },
                     {
@@ -89,7 +91,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                             backgroundColor: "#FFFFFF",
                             backgroundOpacity: 0.98,
                             size: 20,
-                            fontName: "default", 
+                            fontName: "default",
                             priority: 95,
                             vAlignment: "Center",
                             hAlignment: "Center"
@@ -119,13 +121,13 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  */
 const createFeaturesDataSource = async (mapView: MapView): Promise<FeaturesDataSource> => {
     const featuresDataSource = new FeaturesDataSource({
-        styleSetName: "user-features",  // Style set name
-        maxDataLevel: 20,              // Maximum data level
+        styleSetName: "user-features", // Style set name
+        maxDataLevel: 20 // Maximum data level
     });
 
     // Add data source to map view
     await mapView.addDataSource(featuresDataSource);
-    
+
     return featuresDataSource;
 };
 
@@ -136,19 +138,21 @@ const createFeaturesDataSource = async (mapView: MapView): Promise<FeaturesDataS
 const loadAndSetGeoJsonData = async (featuresDataSource: FeaturesDataSource): Promise<void> => {
     try {
         // Load data from GeoJSON file
-        const geojsonData: FeatureCollection = await TransferManager.instance().downloadJson("complex-features.json");
+        const geojsonData: FeatureCollection = await TransferManager.instance().downloadJson(
+            "complex-features.json"
+        );
 
         // Filter out features without names
-        geojsonData.features = geojsonData.features.filter((feature) => {
+        geojsonData.features = geojsonData.features.filter(feature => {
             return feature.properties?.name;
         });
-        
+
         // Add GeoJSON data to FeaturesDataSource
         featuresDataSource.setFromGeojson(geojsonData);
-        
+
         console.log("GeoJSON data loaded successfully");
     } catch (error) {
-        console.error('Error loading GeoJSON data:', error);
+        console.error("Error loading GeoJSON data:", error);
     }
 };
 
@@ -166,22 +170,22 @@ const main = async () => {
     try {
         // 1. Get map canvas element
         const canvas = getMapCanvas();
-        
+
         // 2. Initialize map view
         const mapView = initializeMapView(canvas);
-        
+
         // 3. Initialize map controls
         initializeMapControls(mapView, canvas);
-        
+
         // 4. Create and configure features data source
         const featuresDataSource = await createFeaturesDataSource(mapView);
-        
+
         // 5. Load and set GeoJSON data
         await loadAndSetGeoJsonData(featuresDataSource);
-        
+
         // 6. Add background map data source
         addBackgroundDataSource(mapView);
-        
+
         console.log("Features text icons example initialized successfully");
     } catch (error) {
         console.error("Error occurred while initializing features text icons example:", error);
