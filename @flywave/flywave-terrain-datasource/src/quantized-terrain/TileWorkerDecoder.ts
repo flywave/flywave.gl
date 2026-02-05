@@ -4,9 +4,13 @@
 import { type GeoBoxArray, type Projection, GeoBox, TileKey } from "@flywave/flywave-geoutils";
 
 import {
-    type SerializedGroundModificationData,
-    deserializeGroundModificationData
+    type SerializedHeightMapModifier,
+    deserializeHeightMapModifier
 } from "../ground-modification-manager";
+import {
+    type SerializedStratumClipRegion,
+    deserializeStratumClipRegion
+} from "../quantized-terrain/quantized-stratum-mesh/stratum-tile/StratumClipTypes";
 import {
     type QuantizedMeshClipperOptions,
     QuantizedMeshClipper
@@ -54,7 +58,7 @@ export const processQuantizedMesh = (
                   flipY: data.elevationMapFlipY
               }
             : undefined,
-        clip: data.groundModificationPolygons?.map(deserializeGroundModificationData),
+        clip: data.heightMapModifiers?.map(deserializeHeightMapModifier),
         projection
     });
 
@@ -117,7 +121,7 @@ export const processUpsampledMesh = (
                   flipY: data.elevationMapFlipY
               }
             : undefined,
-        clip: data.groundModificationPolygons?.map(deserializeGroundModificationData),
+        clip: data.heightMapModifiers?.map(deserializeHeightMapModifier),
         projection: data.projection
     });
 
@@ -134,8 +138,10 @@ export interface DecodeStratumTileParams {
     geoBox: GeoBox;
     /** Map projection to use for coordinate transformations */
     projection: Projection;
-    /** Optional ground modification polygons to apply */
-    groundModificationPolygons?: SerializedGroundModificationData[];
+    /** Optional clip regions for stratum geometry clipping */
+    clipRegions?: SerializedStratumClipRegion[];
+    /** Optional height map modifiers to apply */
+    heightMapModifiers?: SerializedHeightMapModifier[];
     /** Whether to flip the Y axis for elevation maps */
     elevationMapFlipY?: boolean;
     /** Whether to enable elevation map generation */
@@ -157,16 +163,11 @@ export const processStratumTile = (params: DecodeStratumTileParams): DecodedStra
         params.geoBox,
         params.buffer,
         params.projection,
-        params.groundModificationPolygons?.map(deserializeGroundModificationData)
+        params.clipRegions?.map(deserializeStratumClipRegion)
     );
 
     if (params.elevationMapEnabled) {
-        // Render heightmap for clipped mesh
-        stratumTile.drawHeightMap(
-            params.geoBox,
-            params.groundModificationPolygons?.map(deserializeGroundModificationData),
-            params.elevationMapFlipY
-        );
+        stratumTile.drawHeightMap(params.geoBox, params.elevationMapFlipY);
     }
 
     return stratumTile.toDecodedStratumTileData();

@@ -13,8 +13,8 @@ import { type WebTileDataProvider } from "@flywave/flywave-webtile-datasource";
 import * as THREE from "three";
 
 import {
-    type GroundModificationEventParams,
-    type GroundModificationManager
+    type HeightMapModificationEventParams,
+    type HeightMapModifierManager
 } from "./ground-modification-manager";
 import { ResourceProvider } from "./ResourceProvider";
 import { type ITerrainSource } from "./TerrainSource";
@@ -51,8 +51,8 @@ export interface WebTile {
  */
 class WebImageryTileResource extends TileValidResource {
     protected async handleGroundModificationChange(
-        event: GroundModificationEventParams,
-        modify: GroundModificationManager
+        event: HeightMapModificationEventParams,
+        modify: HeightMapModifierManager
     ): Promise<void> {}
 
     /**

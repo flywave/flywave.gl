@@ -32,7 +32,7 @@ import {
 } from "three";
 
 import DEMData from "../../../dem-terrain/dem/DemData";
-import { type GroundModificationData } from "../../../ground-modification-manager";
+import { type StratumClipRegion } from "./StratumClipTypes";
 import { renderGroundModificationHeightMap, renderHeightMap } from "../../../terrain-processor";
 import { HEIGHT_MAP_HEIGHT, HEIGHT_MAP_WIDTH } from "../../../terrain-processor/constants";
 import {
@@ -198,7 +198,7 @@ export class StratumTileData {
         public projection: Projection,
         public geoBox: GeoBox,
         decodedData: DecodeResult | DecodedStratumTileData,
-        protected groundModificationPolygons?: GroundModificationData[],
+        protected clipRegions?: StratumClipRegion[],
         public isEllipsoid: boolean = true
     ) {
         if (decodedData instanceof DecodedStratumTileData) {
@@ -255,9 +255,9 @@ export class StratumTileData {
         }
 
         if (!this.stratumTileGeometry) {
-            if (groundModificationPolygons && groundModificationPolygons.length) {
+            if (clipRegions && clipRegions.length) {
                 this.stratumTileGeometry = this.buildShellGeometry(
-                    new StratumMeshCliper(this).clipTileMesh(groundModificationPolygons)
+                    new StratumMeshCliper(this).clipTileMesh(clipRegions)
                 );
             } else {
                 const geometry = new BufferGeometry();
@@ -708,32 +708,13 @@ export class StratumTileData {
         }
     }
 
-    drawHeightMap(
-        geoBox: GeoBox,
-        groundModificationPolygons?: GroundModificationData[],
-        flipY?: boolean
-    ) {
+    drawHeightMap(geoBox: GeoBox, flipY?: boolean) {
         geoBox.southWest.altitude = this.minHeight;
         geoBox.northEast.altitude = this.maxHeight;
 
         const rawData = renderHeightMap(this.stratumTileGeometry, undefined, "stratum");
 
         this._demMap = new DEMData("", rawData, rawData, geoBox);
-
-        if (groundModificationPolygons?.length) {
-            const { image: processed } = renderGroundModificationHeightMap(
-                groundModificationPolygons,
-                geoBox,
-                new Texture(this._demMap.rawImageData),
-                this._demMap.rawImageData.width,
-                this._demMap.rawImageData.height,
-                flipY
-            );
-
-            this._demMap = new DEMData("", rawData, processed, geoBox, undefined, false, true);
-
-            this._groundElevationModified = true;
-        }
 
         this._header.maxHeight = this._demMap.tree._maximums[0];
         this._header.minHeight = this._demMap.tree._minimums[0];
@@ -1011,7 +992,7 @@ export function createStratumTileFromBuffer(
     geoBox: GeoBox,
     buffer: ArrayBuffer,
     projection: Projection,
-    groundModificationPolygons?: GroundModificationData[]
+    clipRegions?: StratumClipRegion[]
 ): StratumTileData {
-    return new StratumTileData(projection, geoBox, decode(buffer), groundModificationPolygons);
+    return new StratumTileData(projection, geoBox, decode(buffer), clipRegions);
 }

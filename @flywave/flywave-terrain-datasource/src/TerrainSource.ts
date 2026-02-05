@@ -39,7 +39,7 @@ import { Matrix4, Object3D } from "three";
 
 import { TERRAIN_TILE_DECODER_ID } from "./Constants";
 import { ExclusionManager } from "./ExclusionManager";
-import { GroundModificationManager } from "./ground-modification-manager";
+import { HeightMapModifierManager } from "./ground-modification-manager";
 import {
     type GroundOverlayProviderOptions,
     GroundOverlayProvider
@@ -124,7 +124,7 @@ export interface ITerrainSource<ProviderType extends DataProvider = DataProvider
     /** Gets the ground modification manager */
     getGroundOverlayProvider(): GroundOverlayProvider;
 
-    getGroundModificationManager(): GroundModificationManager;
+    getGroundModificationManager(): HeightMapModifierManager;
 
     getElevationProvider(): ElevationProvider;
 
@@ -304,8 +304,8 @@ export abstract class TerrainSource<
     private readonly m_loadingQueue = new PriorityQueue<TileType>();
     private readonly m_tileCache = new TileLRUCache<TileType>(this);
     private readonly m_groundOverlayProvider: GroundOverlayProvider;
-    private readonly m_groundModificationManager: GroundModificationManager =
-        new GroundModificationManager(this);
+    private readonly m_groundModificationManager: HeightMapModifierManager =
+        new HeightMapModifierManager(this);
     private m_tileBaseGeometryBuilder?: TileGeometryBuilder;
 
     private m_showDebugInfo: boolean = false;
@@ -447,7 +447,7 @@ export abstract class TerrainSource<
         return this.m_groundOverlayProvider;
     }
 
-    getGroundModificationManager(): GroundModificationManager {
+    getGroundModificationManager(): HeightMapModifierManager {
         return this.m_groundModificationManager;
     }
 

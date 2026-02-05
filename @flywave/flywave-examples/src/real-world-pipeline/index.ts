@@ -13,8 +13,7 @@ import {
     GeoPolygon,
     TransferManager,
     FeaturesDataSource,
-    FeatureCollection,
-    BrushType
+    FeatureCollection
 } from "@flywave/flywave.gl";
 import { Color, MathUtils, RepeatWrapping, TextureLoader } from "three";
 
@@ -231,6 +230,8 @@ const addGroundOverlay = (demTerrain: DEMTerrainSource): void => {
  * @param demTerrain DEM terrain data source
  */
 const addGroundModification = (demTerrain: DEMTerrainSource): void => {
+    // TODO: Implement new heightmap overlay approach
+    // This function needs to be updated to use HeightMapModifier instead of deprecated BrushType
     const overlayPolygon = new GeoPolygon([
         [117.85112449445177, 36.83428081874651],
         [117.85108647506257, 36.83386874898096],
@@ -239,17 +240,8 @@ const addGroundModification = (demTerrain: DEMTerrainSource): void => {
         [117.85112449445177, 36.83428081874651]
     ]);
 
-    const brushOperations = overlayPolygon.coordinates.map(coord => ({
-        position: new GeoCoordinates(coord.latitude, coord.longitude),
-        settings: {
-            type: BrushType.LOWER,
-            size: 200,
-            strength: 0.5,
-            hardness: 0.8
-        }
-    }));
-
-    // demTerrain.getGroundModificationManager().addModification(brushOperations);
+    console.log("Ground modification needs to be updated to new HeightMapModifier API");
+    console.log("See heightmap-overlay example for reference");
 };
 
 /**

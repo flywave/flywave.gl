@@ -9,11 +9,11 @@ import {
 } from "@flywave/flywave-geoutils";
 
 import { TaskType } from "../../Constants";
-import { brushOperationsToSerializedModifications } from "../../ground-modification-manager";
 import { type DecodedTerrainTile } from "../../TerrainDecoderWorker";
 import { type ITerrainSource } from "../../TerrainSource";
 import { type ILayerStrategy } from "../layer-strategy/LayerStrategy";
 import { type QuantizedTerrainMeshData, QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
+import { serializeHeightMapModifier } from "../../ground-modification-manager";
 
 /**
  * Fetches and processes quantized mesh terrain data for a specific tile
@@ -47,20 +47,11 @@ export async function getQuantizedMeshTerrain(
             // Get geographic bounds of the tile
             const geobox = layerStrategy.tilingScheme.getGeoBox(tileKey);
 
-            // Check for ground modifications in this tile's area
-            const foundOps = dataSource
+            // Check for height map modifiers in this tile's area
+            const foundModifiers = dataSource
                 .getGroundModificationManager()
-                .findOperationsInBoundingBox(geobox);
-            const groundModificationPolygons = brushOperationsToSerializedModifications(
-                foundOps.map(item => item.operation),
-                foundOps.map(item => item.id),
-                foundOps.map(item => {
-                    const bbox = dataSource
-                        .getGroundModificationManager()
-                        .getOperationBoundingBox(item.id);
-                    return bbox || new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0));
-                })
-            );
+                .findModifiersInBoundingBox(geobox);
+            const heightMapModifiers = foundModifiers.map(m => serializeHeightMapModifier(m));
 
             let skirtHeight = Math.min((rootGeometricError / (1 << tileKey.level)) * 4.0, 1000);
 
@@ -69,26 +60,19 @@ export async function getQuantizedMeshTerrain(
                     buffer,
                     type: TaskType.QuantizedMesh,
                     geoBox: geobox.toArray(),
-                    skirtLength: skirtHeight, // Vertical skirt length in meters
-                    groundModificationPolygons, // Serialized modification data
-                    isWebMercator: true, // Using Web Mercator projection
-                    smoothSkirtNormals: true, // Smooth shading for tile edges
-                    solid: false, // Not solid geometry
+                    skirtLength: skirtHeight,
+                    heightMapModifiers,
+                    isWebMercator: true,
+                    smoothSkirtNormals: true,
+                    solid: false,
 
                     /*
                      * Critical elevation map control logic:
                      * Elevation maps are REQUIRED in two cases:
                      * 1. When explicitly enabled via elevationMapEnabled parameter (global setting)
-                     * 2. When ANY ground modifications exist in this tile (!!groundModificationPolygons?.length)
-                     *
-                     * Reason: Ground modifications require DEM-based rendering for:
-                     * - Precise elevation adjustments (excavation/elevation)
-                     * - Accurate blending with original terrain
-                     * - Correct physics/collision calculations
-                     * The DEM provides higher precision than standard mesh rendering
+                     * 2. When ANY height map modifiers exist in this tile (!!heightMapModifiers?.length)
                      */
-                    elevationMapEnabled:
-                        elevationMapEnabled || !!groundModificationPolygons?.length,
+                    elevationMapEnabled: elevationMapEnabled || !!heightMapModifiers?.length,
                     elevationMapFlipY
                 },
                 tileKey,
@@ -130,18 +114,19 @@ export async function getUpSamplQuantizedMeshTerrain(
     // Get geographic bounding box of target tile
     const targetGeoBox = layerStrategy.tilingScheme.getGeoBox(tileKey);
 
-    // Find and serialize terrain modification polygons in current tile area
-    const foundOps = dataSource
+    // Find and serialize height map modifiers in current tile area
+    const foundModifiers = dataSource
         .getGroundModificationManager()
-        .findOperationsInBoundingBox(targetGeoBox);
-    const groundModificationPolygons = brushOperationsToSerializedModifications(
-        foundOps.map(item => item.operation),
-        foundOps.map(item => item.id),
-        foundOps.map(item => {
-            const bbox = dataSource.getGroundModificationManager().getOperationBoundingBox(item.id);
-            return bbox || new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0));
-        })
-    );
+        .findModifiersInBoundingBox(targetGeoBox);
+    const heightMapModifiers = foundModifiers.map(m => ({
+        id: m.id,
+        source: m.source,
+        geoBox: m.geoBox.toArray(),
+        blendMode: m.blendMode,
+        opacity: m.opacity,
+        enabled: m.enabled,
+        heightScale: m.heightScale
+    }));
 
     let projection = dataSource.projection;
     const maxRadius = EarthConstants.EQUATORIAL_RADIUS;
@@ -154,30 +139,25 @@ export async function getUpSamplQuantizedMeshTerrain(
     return dataSource.decoder
         .decodeTile(
             {
-                type: TaskType.QuantizedUpsample, // Specify as upsampling task type
-                quantizedTerrainMeshData: parentQuantizedMesh.toQuantizedTerrainMeshData(), // Parent mesh data
-                smoothSkirtNormals: true, // Enable edge normal smoothing
-                skirtHeight, // Inherit from parent or use default skirt length
-                geoBox: layerStrategy.tilingScheme.getGeoBox(parentTileKey).toArray(), // Parent geographic bounds
-                targetGeoBox: targetGeoBox.toArray(), // Target tile geographic bounds
-                groundModificationPolygons, // Current area terrain modification data
-                tileKey: tileKey.toArray(), // Current tile identifier
-                isWebMercator: true, // Use Web Mercator projection
-                parentTileKey: parentTileKey.toArray(), // Parent tile identifier
-                solid: false, // Not solid geometry
+                type: TaskType.QuantizedUpsample,
+                quantizedTerrainMeshData: parentQuantizedMesh.toQuantizedTerrainMeshData(),
+                smoothSkirtNormals: true,
+                skirtHeight,
+                geoBox: layerStrategy.tilingScheme.getGeoBox(parentTileKey).toArray(),
+                targetGeoBox: targetGeoBox.toArray(),
+                heightMapModifiers,
+                tileKey: tileKey.toArray(),
+                isWebMercator: true,
+                parentTileKey: parentTileKey.toArray(),
+                solid: false,
 
                 /**
-                 * Elevation map enable logic (identical to base function):
+                 * Elevation map enable logic:
                  * Enable elevation map when either condition is met:
                  * 1. Global elevationMapEnabled parameter is true
-                 * 2. Terrain modification polygons exist in current tile area (!!groundModificationPolygons?.length is true)
-                 *
-                 * Technical note: The upsampling process also requires DEM data to ensure:
-                 * - Precise edge transitions in terrain modification areas
-                 * - Elevation continuity between modified areas and surrounding terrain
-                 * - Avoid seam issues between different LOD levels
+                 * 2. Height map modifiers exist in current tile area (!!heightMapModifiers?.length is true)
                  */
-                elevationMapEnabled: elevationMapEnabled || !!groundModificationPolygons?.length,
+                elevationMapEnabled: elevationMapEnabled || !!heightMapModifiers?.length,
                 elevationMapFlipY
             },
             tileKey,

@@ -49,10 +49,7 @@ describe("flywave-terrain-datasource.stratum", function () {
                 [
                     {
                         id: "groundModification",
-                        operations: [],
-                        boundingBox: geographicStandardTiling.getGeoBox(
-                            TileKey.fromRowColumnLevel(51100, 108516, 16)
-                        )
+                        boundary: []
                     }
                 ]
             );

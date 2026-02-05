@@ -1,8 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    type GroundModificationEventParams,
-    type GroundModificationManager
+    type HeightMapModificationEventParams,
+    type HeightMapModifierManager
 } from "../../ground-modification-manager";
 import { type IHeightMap, QuantizedTileResource } from "../QuantizedTileResource";
 import { type StratumTileData } from "./stratum-tile/StratumTileData";
@@ -19,8 +19,8 @@ export class QuantizedStratumResource extends QuantizedTileResource {
      * @throws Error - Method not implemented
      */
     protected handleGroundModificationChange(
-        event: GroundModificationEventParams,
-        modify: GroundModificationManager
+        event: HeightMapModificationEventParams,
+        modify: HeightMapModifierManager
     ): Promise<void> {
         throw new Error("Method not implemented.");
     }

@@ -31,10 +31,10 @@ import {
 import DEMData, { SerializedDEMData } from "../../dem-terrain/dem/DemData";
 import { DemTileResource } from "../../dem-terrain/DEMTileProvider";
 import {
-    type GroundModificationEventParams,
-    type GroundModificationManager,
-    type GroundModificationData,
-    type SerializedGroundModificationData
+    type HeightMapModificationEventParams,
+    type HeightMapModifierManager,
+    type HeightMapModifier,
+    type SerializedHeightMapModifier
 } from "../../ground-modification-manager";
 import { renderGroundModificationHeightMap, renderHeightMap } from "../../terrain-processor";
 import { QuantizedTileResource } from "../QuantizedTileResource";
@@ -63,7 +63,7 @@ export interface QuantizedTerrainMeshData {
     maximumHeight: number;
     demMap?: SerializedDEMData;
     groundElevationModified?: boolean;
-    groundModificationPolygons?: SerializedGroundModificationData[];
+    heightMapModifiers?: SerializedHeightMapModifier[];
 }
 
 export class QuantizedTerrainMesh extends QuantizedTileResource {
@@ -126,21 +126,25 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
         }
     }
 
-    public generateAndProcessTerrain(options: {
+    public async generateAndProcessTerrain(options: {
         heightMap?: {
             geoBox: GeoBox;
             flipY?: boolean;
         };
-        clip: GroundModificationData[];
+        clip: HeightMapModifier[];
         projection: Projection;
     }) {
         if (options.heightMap)
-            this.drawHeightMap(options.heightMap.geoBox, options.clip, options.heightMap.flipY);
+            await this.drawHeightMap(
+                options.heightMap.geoBox,
+                options.clip,
+                options.heightMap.flipY
+            );
     }
 
-    private drawHeightMap(
+    private async drawHeightMap(
         geoBox: GeoBox,
-        groundModificationPolygons?: GroundModificationData[],
+        heightMapModifiers?: HeightMapModifier[],
         flipY?: boolean
     ) {
         geoBox.southWest.altitude = this.minHeight;
@@ -160,9 +164,9 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
 
         this._demMap = new DEMData("", rawData, rawData, geoBox, undefined, true, true);
 
-        if (groundModificationPolygons?.length) {
-            const processed = renderGroundModificationHeightMap(
-                groundModificationPolygons,
+        if (heightMapModifiers?.length) {
+            const processed = await renderGroundModificationHeightMap(
+                heightMapModifiers,
                 geoBox,
                 new Texture(this._demMap.rawImageData),
                 this._demMap.rawImageData.width,
@@ -173,7 +177,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
             this._demMap = new DEMData(
                 "",
                 rawData,
-                processed.image,
+                processed!.image,
                 geoBox,
                 undefined,
                 false,
@@ -272,8 +276,8 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
     }
 
     protected handleGroundModificationChange(
-        event: GroundModificationEventParams,
-        modify: GroundModificationManager
+        event: HeightMapModificationEventParams,
+        modify: HeightMapModifierManager
     ): Promise<void> {
         return DemTileResource.createDemTileResourceFromImageryData(
             this._demMap.rawImageData,

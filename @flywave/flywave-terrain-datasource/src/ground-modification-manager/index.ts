@@ -1,7 +1,4 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-export * from "./GroundModificationManager";
-export * from "./GroundModificationData";
-export * from "./BrushTypes";
-export * from "./BrushProcessor";
-export * from "./GeoDistanceUtils";
+export * from "./HeightMapModifierTypes";
+export * from "./HeightMapModifierManager";

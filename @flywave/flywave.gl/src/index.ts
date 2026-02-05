@@ -16,7 +16,6 @@ export * from "@flywave/flywave-mapview";
 export * from "@flywave/flywave-mapview-decoder";
 export * from "@flywave/flywave-terrain-datasource";
 export * from "@flywave/flywave-map-controls";
-export * from "@flywave/flywave-terrain-tools";
 export * from "@flywave/flywave-3dtile-datasource";
 export * from "@flywave/flywave-datasource-protocol";
 export * from "@flywave/flywave-draw-controls";

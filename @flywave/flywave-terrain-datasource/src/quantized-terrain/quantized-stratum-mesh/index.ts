@@ -3,12 +3,12 @@
 import { type TileKey, type TilingScheme, GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
 
 import { TaskType } from "../../Constants";
-import { brushOperationsToSerializedModifications } from "../../ground-modification-manager";
 import { type DecodedTerrainTile } from "../../TerrainDecoderWorker";
 import { type ITerrainSource } from "../../TerrainSource";
 import { type ILayerStrategy } from "../layer-strategy/LayerStrategy";
 import { QuantizedStratumResource } from "./QuantizedStratumResource";
 import { DecodedStratumTileData, StratumTileData } from "./stratum-tile/StratumTileData";
+import { serializeHeightMapModifier } from "../../ground-modification-manager";
 export async function getQuantizedStratumMesh(
     layerStrategy: ILayerStrategy,
     dataSource: ITerrainSource,
@@ -19,15 +19,11 @@ export async function getQuantizedStratumMesh(
     elevationMapFlipY: boolean
 ): Promise<QuantizedStratumResource> {
     const geoBox = tilingScheme.getGeoBox(tileKey);
-    const foundOps = dataSource.getGroundModificationManager().findOperationsInBoundingBox(geoBox);
-    const groundModificationPolygons = brushOperationsToSerializedModifications(
-        foundOps.map(item => item.operation),
-        foundOps.map(item => item.id),
-        foundOps.map(item => {
-            const bbox = dataSource.getGroundModificationManager().getOperationBoundingBox(item.id);
-            return bbox || new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0));
-        })
-    );
+    const foundModifiers = dataSource
+        .getGroundModificationManager()
+        .findModifiersInBoundingBox(geoBox);
+    const heightMapModifiers = foundModifiers.map(m => serializeHeightMapModifier(m));
+
     return await layerStrategy
         .requestTileBuffer(tileKey)
         .then(function (buffer: ArrayBuffer) {
@@ -35,7 +31,7 @@ export async function getQuantizedStratumMesh(
                 {
                     buffer,
                     type: TaskType.QuantizedStratumInit,
-                    groundModificationPolygons,
+                    heightMapModifiers,
                     geoBox: geoBox.toArray(),
                     elevationMapEnabled,
                     elevationMapFlipY

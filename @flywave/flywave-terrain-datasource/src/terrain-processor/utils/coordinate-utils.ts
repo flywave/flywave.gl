@@ -3,7 +3,6 @@
 import { GeoBox, GeoCoordinates, GeoLineString, GeoPolygon } from "@flywave/flywave-geoutils";
 import * as THREE from "three";
 
-import { type GroundModificationData } from "../../ground-modification-manager";
 import { type GroundOverlayTexture } from "../../ground-overlay-provider/GroundOverlayTexture";
 
 /**
@@ -57,22 +56,14 @@ export class CoordinateUtils {
         }
     }
 
-    static createBoundingBoxForCoordinates(
-        overlays: GroundOverlayTexture[] | GroundModificationData[]
-    ): GeoBox {
+    static createBoundingBoxForCoordinates(overlays: GroundOverlayTexture[]): GeoBox {
         let minLat = Infinity;
         let maxLat = -Infinity;
         let minLon = Infinity;
         let maxLon = -Infinity;
 
         for (const overlay of overlays) {
-            let coordinates: GeoCoordinates[];
-
-            if ("geoArea" in overlay) {
-                coordinates = this.extractCoordinates(overlay.geoArea);
-            } else {
-                coordinates = overlay.operations.map(op => op.position);
-            }
+            const coordinates = this.extractCoordinates(overlay.geoArea);
 
             for (const coord of coordinates) {
                 minLat = Math.min(minLat, coord.latitude);

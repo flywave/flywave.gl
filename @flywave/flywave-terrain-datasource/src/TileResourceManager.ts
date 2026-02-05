@@ -7,8 +7,8 @@ import { type ExtendedFrustum } from "@flywave/flywave-utils/ExtendedFrustum";
 import { type RemoveCallback, LRUCache } from "@flywave/flywave-utils/LRUCache";
 
 import {
-    type GroundModificationEventParams,
-    type GroundModificationManager
+    type HeightMapModificationEventParams,
+    type HeightMapModifierManager
 } from "./ground-modification-manager";
 import { type ITerrainSource, type TerrainResourceTile } from "./TerrainSource";
 
@@ -185,7 +185,7 @@ export abstract class TileValidResource extends ITileResource {
     private _isProcessingGroundModification = false;
 
     /** Stores the latest pending ground modification event */
-    private _latestPendingEvent: GroundModificationEventParams | null = null;
+    private _latestPendingEvent: HeightMapModificationEventParams | null = null;
 
     /**
      * Creates a new TileValidResource instance
@@ -233,8 +233,8 @@ export abstract class TileValidResource extends ITileResource {
      * @returns Promise that resolves when handling is complete
      */
     protected handleGroundModificationChange(
-        event: GroundModificationEventParams,
-        modify: GroundModificationManager
+        event: HeightMapModificationEventParams,
+        modify: HeightMapModifierManager
     ): Promise<void> {
         return Promise.resolve();
     }
@@ -266,7 +266,7 @@ export abstract class TileValidResource extends ITileResource {
      * @param event - The ground modification event parameters
      */
     private onGroundModificationChanged = async (
-        event: GroundModificationEventParams
+        event: HeightMapModificationEventParams
     ): Promise<void> => {
         // If we're already processing an event, just store this one as the latest and return
         if (this._isProcessingGroundModification) {
@@ -299,7 +299,7 @@ export abstract class TileValidResource extends ITileResource {
      * @param event - The ground modification event parameters
      */
     private async processGroundModificationEvent(
-        event: GroundModificationEventParams
+        event: HeightMapModificationEventParams
     ): Promise<void> {
         if (
             !(event.affectedBounds || event.previousBounds) ||

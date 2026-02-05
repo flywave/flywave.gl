@@ -17,13 +17,13 @@ import {
     prevPowerOfTwo
 } from "@flywave/flywave-utils";
 import { Box2, Vector2 } from "three";
+import { serializeHeightMapModifier } from "../ground-modification-manager";
 
 import { TaskType } from "../Constants";
 import {
-    type GroundModificationEventParams,
-    type GroundModificationManager,
-    type SerializedGroundModificationData,
-    brushOperationsToSerializedModifications
+    type HeightMapModificationEventParams,
+    type HeightMapModifierManager,
+    type SerializedHeightMapModifier
 } from "../ground-modification-manager";
 import { ResourceProvider } from "../ResourceProvider";
 import type { DecodedTerrainTile } from "../TerrainDecoderWorker";
@@ -224,41 +224,6 @@ export class DemTileResource extends TileValidResource {
     }
 
     /**
-     * Handles ground modification changes for this tile
-     *
-     * When ground modifications change, this method recreates the DEM tile resource
-     * with the updated ground modification data applied to the elevation data.
-     *
-     * @param event - The ground modification event parameters
-     * @param modify - The ground modification manager
-     * @returns A promise that resolves when the update is complete
-     */
-    protected override handleGroundModificationChange(
-        event: GroundModificationEventParams,
-        modify: GroundModificationManager
-    ): Promise<void> {
-        const modifications =
-            event.operations && event.affectedIds && event.operationBoundingBoxes
-                ? brushOperationsToSerializedModifications(
-                      event.operations,
-                      event.affectedIds,
-                      event.operationBoundingBoxes
-                  )
-                : undefined;
-
-        return DemTileResource.createDemTileResourceFromImageryData(
-            this.demData.sourceImage,
-            this.tileKey,
-            this.terrainSource,
-            this.demData.encoding,
-            modifications
-        ).then((demTileResource: DemTileResource) => {
-            this._demData.dispose();
-            this._demData = demTileResource.demData;
-        });
-    }
-
-    /**
      * Creates a DEM tile resource from imagery data
      *
      * This static method processes raw imagery data (typically from a tile request)
@@ -277,7 +242,7 @@ export class DemTileResource extends TileValidResource {
         tileKey: TileKey,
         terrainSource: ITerrainSource,
         encoding: DEMEncoding,
-        groundModificationPolygons?: SerializedGroundModificationData[]
+        heightMapModifiers?: SerializedHeightMapModifier[]
     ) {
         const buffer = (imgData.width - prevPowerOfTwo(imgData.width)) / 2;
         const padding = 1 - buffer;
@@ -296,25 +261,12 @@ export class DemTileResource extends TileValidResource {
         }
         const geoBox = terrainSource.getTilingScheme().getGeoBox(tileKey);
 
-        const polygons =
-            groundModificationPolygons ||
-            (() => {
-                const foundOps = terrainSource
-                    .getGroundModificationManager()
-                    .findOperationsInBoundingBox(geoBox);
-                return brushOperationsToSerializedModifications(
-                    foundOps.map(item => item.operation),
-                    foundOps.map(item => item.id),
-                    foundOps.map(item => {
-                        const bbox = terrainSource
-                            .getGroundModificationManager()
-                            .getOperationBoundingBox(item.id);
-                        return (
-                            bbox || new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0))
-                        );
-                    })
-                );
-            })();
+        const modifiers =
+            heightMapModifiers ||
+            terrainSource
+                .getGroundModificationManager()
+                .findModifiersInBoundingBox(geoBox)
+                .map(m => serializeHeightMapModifier(m));
 
         return terrainSource.decoder
             .decodeTile(
@@ -325,7 +277,7 @@ export class DemTileResource extends TileValidResource {
                     encoding,
                     geoBox: geoBox.toArray(),
                     padding,
-                    groundModificationPolygons: polygons,
+                    heightMapModifiers: modifiers,
                     height: imgData.height,
                     width: imgData.width,
                     flipY: (terrainSource.dataProvider() as DemTileProvider).isElevationMapFlipY()
@@ -365,6 +317,11 @@ export class DemTileResource extends TileValidResource {
  * data sources, tile fetching, and progressive loading of elevation data.
  */
 export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrainSource> {
+    protected async connect(): Promise<void> {
+        if (this.ready()) return;
+        // 假设 options.source 可以通过 this.options 访问
+        await this.setSource(this.dem_options.source);
+    }
     /**
      * Checks if the provider is ready to load tiles
      *
@@ -375,17 +332,12 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
     }
 
     /**
-     * Establishes connection to the data source
+     * Handles ground modification changes
      *
-     * This method loads the source description if it hasn't been loaded yet.
-     *
-     * @returns A promise that resolves when the connection is established
+     * @param event - The ground modification event parameters
+     * @param modify - The ground modification manager
+     * @returns A promise that resolves when the update is complete
      */
-    protected async connect(): Promise<void> {
-        if (this.ready()) return;
-        // 假设 options.source 可以通过 this.options 访问
-        await this.setSource(this.dem_options.source);
-    }
 
     /** Transfer manager for handling network requests */
     private readonly _transferManager = new TransferManager(undefined, 1);

@@ -5,7 +5,6 @@ import { type RenderEnvironment } from "../core/RenderEnvironment";
 import { type DistanceTextureResult } from "../core/types";
 import { CoordinateUtils } from "./coordinate-utils";
 import * as THREE from "three";
-import { GroundModificationData } from "../../ground-modification-manager";
 import * as turf from "@turf/turf";
 import earcut from "earcut";
 

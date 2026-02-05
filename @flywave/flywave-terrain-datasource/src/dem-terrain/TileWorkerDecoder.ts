@@ -4,8 +4,8 @@ import { type GeoBoxArray, GeoBox } from "@flywave/flywave-geoutils";
 import { Texture } from "three";
 
 import {
-    type SerializedGroundModificationData,
-    deserializeGroundModificationData
+    type SerializedHeightMapModifier,
+    deserializeHeightMapModifier
 } from "../ground-modification-manager";
 import { renderGroundModificationHeightMap } from "../terrain-processor";
 import { type DEMEncoding, DEMData } from "./dem/DemData";
@@ -20,7 +20,7 @@ export interface DecodeTileParams {
     geoBox: GeoBoxArray;
     padding: number;
     buildQuadTree: boolean;
-    groundModificationPolygons?: SerializedGroundModificationData[];
+    heightMapModifiers?: SerializedHeightMapModifier[];
     flipY: boolean;
 }
 
@@ -77,15 +77,16 @@ async function getImageData(
  */
 export const processDEMTile = async (params: DecodeTileParams): Promise<DecodeTileResult> => {
     validateDecodeParams(params);
-    const { uid, encoding, groundModificationPolygons, geoBox, flipY } = params;
+    const { uid, encoding, heightMapModifiers, geoBox, flipY } = params;
 
     const rawimagePixels = await getImageData(params.rawImageData, params.padding);
     let imagePixels = rawimagePixels;
 
     const baseDem = new Texture(await getImageData(params.rawImageData, 0));
-    if (groundModificationPolygons && groundModificationPolygons.length) {
+    if (heightMapModifiers && heightMapModifiers.length) {
+        let modifyed = heightMapModifiers?.map(deserializeHeightMapModifier)
         const { image: processed } = await renderGroundModificationHeightMap(
-            groundModificationPolygons?.map(deserializeGroundModificationData),
+            modifyed,
             GeoBox.fromArray(geoBox),
             baseDem,
             256,

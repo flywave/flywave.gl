@@ -14,7 +14,7 @@ import { TriangleGeometryMerger } from "@flywave/flywave-utils";
 import { BufferAttribute, BufferGeometry, Sphere, Triangle, Vector3 } from "three";
 import { Brush } from "three-bvh-csg";
 
-import { type GroundModificationData } from "../../../ground-modification-manager";
+import { type StratumClipRegion } from "./StratumClipTypes";
 import { FaceTypes } from "../decoder";
 import { type BspObject } from "./BspObject";
 import { type StratumTileData } from "./StratumTileData";
@@ -70,21 +70,16 @@ export class StratumMeshCliper {
         return additionalGeometries;
     }
 
-    private makeFrustumGeoAreaFromGroundModificationData(
-        groundModificationPolygon: GroundModificationData
-    ): FrustumGeoArea {
-        const operations = groundModificationPolygon.operations;
+    private makeFrustumGeoAreaFromClipRegion(clipRegion: StratumClipRegion): FrustumGeoArea {
         const maxHeight = this.stratumMeshData.maxHeight;
         const minHeight = this.stratumMeshData.minHeight || 0;
 
-        if (operations.length === 0) {
-            throw new Error("Cannot create frustum geo area from empty operations");
+        if (clipRegion.boundary.length === 0) {
+            throw new Error("Cannot create frustum geo area from empty boundary");
         }
 
-        const coordinates = operations.map(op => op.position);
-
         return {
-            geoArea: coordinates,
+            geoArea: clipRegion.boundary,
             topAltitude: maxHeight,
             bottomAltitude: minHeight
         };
@@ -246,14 +241,14 @@ export class StratumMeshCliper {
      * @returns The clipped stratum tile data.
      */
     public clipTileMesh(
-        groundModificationPolygons?: GroundModificationData[],
+        clipRegions?: StratumClipRegion[],
         isClip: boolean = false
     ): BufferGeometry {
         // Pre-calculate clipBox and bspClipBox to avoid repeated calculations
-        const frustumGeoAreas = groundModificationPolygons.map(
-            polygon =>
+        const frustumGeoAreas = clipRegions.map(
+            region =>
                 new FrustumGeoAreaTester(
-                    this.makeFrustumGeoAreaFromGroundModificationData(polygon),
+                    this.makeFrustumGeoAreaFromClipRegion(region),
                     this.stratumMeshData.center,
                     this.stratumMeshData.projection
                 )
@@ -262,9 +257,7 @@ export class StratumMeshCliper {
         let bspClipBox: Brush | undefined;
         if (isClip) {
             bspClipBox = this.makeFrustumGeoAreaToBspNode(
-                groundModificationPolygons.map(polygon =>
-                    this.makeFrustumGeoAreaFromGroundModificationData(polygon)
-                )
+                clipRegions.map(region => this.makeFrustumGeoAreaFromClipRegion(region))
             );
         }
 

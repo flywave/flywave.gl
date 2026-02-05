@@ -5,7 +5,6 @@ import * as turf from "@turf/turf";
 import earcut from "earcut";
 import * as THREE from "three";
 
-import { type GroundModificationData } from "../../ground-modification-manager";
 import { type GeometryResult } from "../core/types";
 import { CoordinateUtils } from "./coordinate-utils";
 
@@ -127,9 +126,5 @@ export class GeometryUtils {
         } else {
             throw new Error("Unsupported geoArea type");
         }
-    }
-
-    static createGeoAreaShape(groundModificationPolygon: GroundModificationData): GeoCoordinates[] {
-        return groundModificationPolygon.operations.map(op => op.position);
     }
 }

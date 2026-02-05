@@ -435,7 +435,7 @@ export class GeoBox implements GeoBoxExtentLike {
             geoBox.minAltitude !== undefined &&
             geoBox.maxAltitude !== undefined
         ) {
-            return geoBox.minAltitude < this.maxAltitude && geoBox.maxAltitude > this.minAltitude;
+            return geoBox.minAltitude <= this.maxAltitude && geoBox.maxAltitude >= this.minAltitude;
         }
 
         return true;
