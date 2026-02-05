@@ -366,6 +366,8 @@ try {
     const mapView = initializeMapView(canvas);
     const { cesiumTerrain, modifierIds } = configureDEMTerrainSource(mapView);
 
+    mapView.beginAnimation();
+
     console.log("=".repeat(70));
     console.log("SINGLE WALL WITH 3 STEPS");
     console.log("=".repeat(70));

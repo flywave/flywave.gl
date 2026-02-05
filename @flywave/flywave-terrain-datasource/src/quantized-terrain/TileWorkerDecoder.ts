@@ -40,10 +40,10 @@ import { getProjection, getProjectionName } from "@flywave/flywave-datasource-pr
  * @param projection - The map projection to use for coordinate transformations
  * @returns Processed quantized terrain mesh data
  */
-export const processQuantizedMesh = (
+export const processQuantizedMesh = async (
     data: { buffer: ArrayBuffer } & QuantizedMeshLoaderOptions,
     projection: Projection
-): QuantizedTerrainMeshData => {
+): Promise<QuantizedTerrainMeshData> => {
     // Convert geoBox array to GeoBox object
     data.geoBox = GeoBox.fromArray(data.geoBox as unknown as GeoBoxArray);
 
@@ -51,7 +51,7 @@ export const processQuantizedMesh = (
     const quantizedMeshLoader = new QuantizedMeshLoader(projection, data);
     const quantizedTerrainMesh = quantizedMeshLoader.parse(data.buffer);
 
-    quantizedTerrainMesh.generateAndProcessTerrain({
+    await quantizedTerrainMesh.generateAndProcessTerrain({
         heightMap: data.elevationMapEnabled
             ? {
                   geoBox: data.geoBox,

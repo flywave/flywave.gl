@@ -31,19 +31,11 @@ export class GroundModificationProcessor {
     }
 
     async renderHeightMap(
-        modifiers: HeightMapModifier[],
+        enabledModifiers: HeightMapModifier[],
         tileGeoBox: GeoBox,
         baseDemTexture: THREE.Texture | undefined,
         options: RenderOptions = {}
-    ): Promise<GroundModificationResult | undefined> {
-        const enabledModifiers = modifiers.filter(
-            m => m.enabled && m.geoBox.intersectsBox(tileGeoBox)
-        );
-
-        if (enabledModifiers.length === 0) {
-            return undefined;
-        }
-
+    ): Promise<GroundModificationResult | undefined> { 
         let {
             width = GROUND_MODIFICATION_WIDTH,
             height = GROUND_MODIFICATION_HEIGHT,

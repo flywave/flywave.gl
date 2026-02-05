@@ -173,7 +173,7 @@ export class TerrainTileDecoder implements ITileDecoder {
         switch (data.type) {
             // Handle quantized mesh terrain data
             case TaskType.QuantizedMesh:
-                tileTerrain = processQuantizedMesh(
+                tileTerrain =await processQuantizedMesh(
                     data as unknown as { buffer: ArrayBuffer } & QuantizedMeshLoaderOptions,
                     projection
                 );

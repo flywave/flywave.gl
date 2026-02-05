@@ -171,13 +171,13 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
                 new Texture(this._demMap.rawImageData),
                 this._demMap.rawImageData.width,
                 this._demMap.rawImageData.height,
-                flipY
+                !flipY
             );
 
             this._demMap = new DEMData(
                 "",
                 rawData,
-                processed!.image,
+                processed?.image,
                 geoBox,
                 undefined,
                 false,
