@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import styled from "styled-components";
 import { BrushSettings, BrushType } from "../types";
 
@@ -13,51 +13,75 @@ interface BrushToolbarProps {
 
 const ToolbarContainer = styled.div<{ $disabled?: boolean }>`
     position: absolute;
-    top: 80px;
-    left: 20px;
-    width: 300px;
+    top: 70px;
+    left: 10px;
+    width: 260px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
     background: linear-gradient(180deg, rgba(30, 30, 30, 0.98) 0%, rgba(20, 20, 20, 0.95) 100%);
     backdrop-filter: blur(20px);
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    padding: 12px;
     z-index: 2000;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     opacity: ${props => (props.$disabled ? 0.5 : 1)};
     pointer-events: ${props => (props.$disabled ? "none" : "auto")};
     border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
 `;
 
 const Title = styled.h3`
-    margin: 0 0 16px 0;
-    font-size: 18px;
+    margin: 0 0 10px 0;
+    font-size: 15px;
     font-weight: 700;
     color: #fff;
     text-align: center;
     letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 `;
 
-const Section = styled.div`
-    margin-bottom: 12px;
+const CollapseButton = styled.button<{ $collapsed: boolean }>`
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    padding: 4px;
+    font-size: 14px;
+    transition: transform 0.3s ease;
+    transform: ${props => (props.$collapsed ? "rotate(-90deg)" : "rotate(0deg)")};
+
+    &:hover {
+        color: rgba(255, 255, 255, 1);
+    }
+`;
+
+const Section = styled.div<{ $collapsed?: boolean }>`
+    margin-bottom: ${props => (props.$collapsed ? "0" : "8px")};
+    overflow: ${props => (props.$collapsed ? "hidden" : "visible")};
+    max-height: ${props => (props.$collapsed ? "0" : "none")};
+    transition: all 0.3s ease;
 `;
 
 const Label = styled.label`
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     font-weight: 600;
-    font-size: 13px;
+    font-size: 11px;
     color: #e0e0e0;
 `;
 
 const ButtonGroup = styled.div`
     display: flex;
     gap: 6px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 `;
 
 const Button = styled.button<{ $active?: boolean; $variant?: "primary" | "danger" | "default" }>`
     flex: 1;
-    padding: 10px 14px;
+    padding: 6px 10px;
     border: 1px solid
         ${props =>
             props.$active
@@ -77,9 +101,9 @@ const Button = styled.button<{ $active?: boolean; $variant?: "primary" | "danger
             : props.$variant === "danger"
             ? "#f5576c"
             : "rgba(255, 255, 255, 0.7)"};
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -108,27 +132,27 @@ const Button = styled.button<{ $active?: boolean; $variant?: "primary" | "danger
 const RangeContainer = styled.div`
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 `;
 
 const RangeInput = styled.input`
     flex: 1;
-    height: 6px;
+    height: 4px;
     -webkit-appearance: none;
     appearance: none;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
+    border-radius: 2px;
     outline: none;
 
     &::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;
-        width: 18px;
-        height: 18px;
+        width: 14px;
+        height: 14px;
         border-radius: 50%;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         cursor: pointer;
-        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.5);
+        box-shadow: 0 2px 6px rgba(102, 126, 234, 0.5);
         transition: transform 0.2s;
     }
 
@@ -137,13 +161,13 @@ const RangeInput = styled.input`
     }
 
     &::-moz-range-thumb {
-        width: 18px;
-        height: 18px;
+        width: 14px;
+        height: 14px;
         border-radius: 50%;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         cursor: pointer;
         border: none;
-        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.5);
+        box-shadow: 0 2px 6px rgba(102, 126, 234, 0.5);
         transition: transform 0.2s;
     }
 
@@ -160,18 +184,18 @@ const Divider = styled.div`
         rgba(255, 255, 255, 0.1) 50%,
         transparent 100%
     );
-    margin: 16px 0;
+    margin: 10px 0;
 `;
 
 const GridContainer = styled.div`
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    margin-top: 8px;
+    gap: 4px;
+    margin-top: 4px;
 `;
 
 const IconButton = styled.button<{ $active: boolean }>`
-    padding: 10px 6px;
+    padding: 6px 4px;
     border: 1px solid
         ${props => (props.$active ? "rgba(102, 126, 234, 0.8)" : "rgba(255, 255, 255, 0.1)")};
     background: ${props =>
@@ -179,11 +203,15 @@ const IconButton = styled.button<{ $active: boolean }>`
             ? "linear-gradient(135deg, rgba(102, 126, 234, 0.8) 0%, rgba(118, 75, 162, 0.8) 100%)"
             : "rgba(255, 255, 255, 0.05)"};
     color: ${props => (props.$active ? "#fff" : "rgba(255, 255, 255, 0.7)")};
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 600;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 
     &:hover {
         background: ${props =>
@@ -209,6 +237,9 @@ export const BrushToolbar: React.FC<BrushToolbarProps> = ({
     onModeChange,
     disabled = false
 }) => {
+    const [collapsed, setCollapsed] = useState(false);
+    const [settingsCollapsed, setSettingsCollapsed] = useState(true);
+
     const brushOptions = [
         { label: "提升", value: BrushType.RAISE, icon: "⬆️" },
         { label: "降低", value: BrushType.LOWER, icon: "⬇️" },
@@ -219,10 +250,14 @@ export const BrushToolbar: React.FC<BrushToolbarProps> = ({
 
     return (
         <ToolbarContainer $disabled={disabled}>
-            <Title>绘图工具</Title>
+            <Title>
+                <span>🎨 工具</span>
+                <CollapseButton $collapsed={collapsed} onClick={() => setCollapsed(!collapsed)}>
+                    ▼
+                </CollapseButton>
+            </Title>
 
-            <Section>
-                <Label>模式</Label>
+            <Section $collapsed={collapsed}>
                 <ButtonGroup>
                     <Button $active={mode === "draw"} onClick={() => onModeChange("draw")}>
                         🎨 绘制
@@ -231,12 +266,9 @@ export const BrushToolbar: React.FC<BrushToolbarProps> = ({
                         🗺️ 导航
                     </Button>
                 </ButtonGroup>
-            </Section>
 
-            <Divider />
+                <Divider />
 
-            <Section>
-                <Label>笔刷类型</Label>
                 <GridContainer>
                     {brushOptions.map(option => (
                         <IconButton
@@ -245,78 +277,110 @@ export const BrushToolbar: React.FC<BrushToolbarProps> = ({
                             onClick={() => onSettingsChange({ type: option.value as BrushType })}
                             title={`${option.label}笔刷`}
                         >
-                            {option.icon} {option.label}
+                            <div style={{ fontSize: "12px" }}>{option.icon}</div>
+                            <div style={{ fontSize: "9px", marginTop: "2px" }}>{option.label}</div>
                         </IconButton>
                     ))}
                 </GridContainer>
-            </Section>
 
-            <Divider />
+                <Divider />
 
-            <Section>
-                <Label>笔刷大小: {brushSettings.size}px</Label>
-                <RangeContainer>
-                    <RangeInput
-                        type="range"
-                        min={5}
-                        max={200}
-                        value={brushSettings.size}
-                        onChange={e => onSettingsChange({ size: parseInt(e.target.value) })}
-                    />
-                </RangeContainer>
-            </Section>
+                <div
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "8px"
+                    }}
+                >
+                    <Label style={{ margin: 0 }}>高级设置</Label>
+                    <CollapseButton
+                        $collapsed={settingsCollapsed}
+                        onClick={() => setSettingsCollapsed(!settingsCollapsed)}
+                    >
+                        ▼
+                    </CollapseButton>
+                </div>
 
-            <Section>
-                <Label>笔刷强度: {(brushSettings.strength * 100).toFixed(0)}%</Label>
-                <RangeContainer>
-                    <RangeInput
-                        type="range"
-                        min={0.01}
-                        max={1}
-                        step={0.01}
-                        value={brushSettings.strength}
-                        onChange={e => onSettingsChange({ strength: parseFloat(e.target.value) })}
-                    />
-                </RangeContainer>
-            </Section>
+                <Section $collapsed={settingsCollapsed}>
+                    <Section>
+                        <Label>笔刷大小: {brushSettings.size}px</Label>
+                        <RangeContainer>
+                            <RangeInput
+                                type="range"
+                                min={5}
+                                max={200}
+                                value={brushSettings.size}
+                                onChange={e => onSettingsChange({ size: parseInt(e.target.value) })}
+                            />
+                        </RangeContainer>
+                    </Section>
 
-            <Section>
-                <Label>笔刷硬度: {(brushSettings.hardness * 100).toFixed(0)}%</Label>
-                <RangeContainer>
-                    <RangeInput
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={brushSettings.hardness}
-                        onChange={e => onSettingsChange({ hardness: parseFloat(e.target.value) })}
-                    />
-                </RangeContainer>
-            </Section>
+                    <Section>
+                        <Label>笔刷强度: {(brushSettings.strength * 100).toFixed(0)}%</Label>
+                        <RangeContainer>
+                            <RangeInput
+                                type="range"
+                                min={0.01}
+                                max={1}
+                                step={0.01}
+                                value={brushSettings.strength}
+                                onChange={e =>
+                                    onSettingsChange({ strength: parseFloat(e.target.value) })
+                                }
+                            />
+                        </RangeContainer>
+                    </Section>
 
-            {brushSettings.type === BrushType.FLATTEN && (
-                <Section>
-                    <Label>平整高度: {(brushSettings.flattenHeight! * 100).toFixed(0)}%</Label>
-                    <RangeContainer>
-                        <RangeInput
-                            type="range"
-                            min={0}
-                            max={1}
-                            step={0.01}
-                            value={brushSettings.flattenHeight!}
-                            onChange={e =>
-                                onSettingsChange({ flattenHeight: parseFloat(e.target.value) })
-                            }
-                        />
-                    </RangeContainer>
+                    <Section>
+                        <Label>笔刷硬度: {(brushSettings.hardness * 100).toFixed(0)}%</Label>
+                        <RangeContainer>
+                            <RangeInput
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={brushSettings.hardness}
+                                onChange={e =>
+                                    onSettingsChange({ hardness: parseFloat(e.target.value) })
+                                }
+                            />
+                        </RangeContainer>
+                    </Section>
+
+                    {brushSettings.type === BrushType.FLATTEN && (
+                        <Section>
+                            <Label>
+                                平整高度: {(brushSettings.flattenHeight! * 100).toFixed(0)}%
+                            </Label>
+                            <RangeContainer>
+                                <RangeInput
+                                    type="range"
+                                    min={0}
+                                    max={1}
+                                    step={0.01}
+                                    value={brushSettings.flattenHeight!}
+                                    onChange={e =>
+                                        onSettingsChange({
+                                            flattenHeight: parseFloat(e.target.value)
+                                        })
+                                    }
+                                />
+                            </RangeContainer>
+                        </Section>
+                    )}
+
+                    <Divider />
+
+                    <Button
+                        $variant="danger"
+                        onClick={onClear}
+                        style={{ fontSize: "11px", padding: "8px" }}
+                    >
+                        🗑️ 清空
+                    </Button>
                 </Section>
-            )}
-
-            <Divider />
-
-            <Button $variant="danger" onClick={onClear}>
-                🗑️ 清空画布
-            </Button>
+            </Section>
         </ToolbarContainer>
     );
 };

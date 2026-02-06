@@ -343,6 +343,17 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         const pixelWidth = Math.round(Math.abs(max.x - min.x));
         const pixelHeight = Math.round(Math.abs(max.y - min.y));
 
+        console.log("Canvas size calculation:", {
+            southWest: [southWest.lat, southWest.lng],
+            northEast: [northEast.lat, northEast.lng],
+            min: [min.x, min.y],
+            max: [max.x, max.y],
+            pixelWidth,
+            pixelHeight,
+            finalWidth: Math.max(64, pixelWidth),
+            finalHeight: Math.max(64, pixelHeight)
+        });
+
         return {
             width: Math.max(64, pixelWidth),
             height: Math.max(64, pixelHeight)
@@ -362,11 +373,20 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         const min = map.latLngToLayerPoint(bounds.getSouthWest());
         const max = map.latLngToLayerPoint(bounds.getNorthEast());
 
-        const pixelWidth = Math.round(max.x - min.x);
-        const pixelHeight = Math.round(max.y - min.y);
+        const pixelWidth = Math.round(Math.abs(max.x - min.x));
+        const pixelHeight = Math.round(Math.abs(max.y - min.y));
 
         const width = Math.max(64, pixelWidth);
         const height = Math.max(64, pixelHeight);
+
+        console.log("handleStartPaint:", {
+            min: [min.x, min.y],
+            max: [max.x, max.y],
+            pixelWidth,
+            pixelHeight,
+            width,
+            height
+        });
 
         onStartPaint(width, height, currentGeoBox);
     }, [currentGeoBox, onStartPaint]);
