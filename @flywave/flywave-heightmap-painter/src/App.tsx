@@ -3,7 +3,7 @@ import styled from "styled-components";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { PaintCanvas, PaintCanvasRef } from "./components/PaintCanvas";
 import { BrushToolbar } from "./components/BrushToolbar";
-import { HeightmapExport, BrushSettings } from "./types";
+import { HeightmapExport, BrushSettings, BrushType } from "./types";
 
 const Container = styled.div`
     width: 100%;
@@ -65,6 +65,13 @@ const App = React.forwardRef<AppInstance, AppProps>(
             paintAreaGeoBox || null
         );
         const [mode, setMode] = useState<"draw" | "navigate">("draw");
+        const [brushSettings, setBrushSettings] = useState<BrushSettings>({
+            type: BrushType.RAISE,
+            size: 50,
+            strength: 0.5,
+            hardness: 0.5,
+            flattenHeight: 0.5
+        });
 
         React.useImperativeHandle(ref, () => ({
             exportHeightmap: () => {
@@ -111,6 +118,10 @@ const App = React.forwardRef<AppInstance, AppProps>(
             onHeightmapChange?.(heightData);
         };
 
+        const handleBrushSettingsChange = (settings: Partial<BrushSettings>) => {
+            setBrushSettings((prev: BrushSettings) => ({ ...prev, ...settings }));
+        };
+
         if (appState === "config") {
             return (
                 <Container>
@@ -145,22 +156,16 @@ const App = React.forwardRef<AppInstance, AppProps>(
                     onBrushMove={handleBrushMove}
                     onBrushEnd={handleBrushEnd}
                     onHeightmapChange={handleHeightmapChange}
+                    onBrushSettingsChange={handleBrushSettingsChange}
                     mode={mode}
                 />
 
                 <BrushToolbar
-                    brushSettings={
-                        paintCanvasRef.current?.getBrushSettings() || {
-                            type: "raise" as any,
-                            size: 50,
-                            strength: 0.5,
-                            hardness: 0.5,
-                            flattenHeight: 0.5
-                        }
-                    }
-                    onSettingsChange={settings =>
-                        paintCanvasRef.current?.updateBrushSettings(settings)
-                    }
+                    brushSettings={brushSettings}
+                    onSettingsChange={settings => {
+                        paintCanvasRef.current?.updateBrushSettings(settings);
+                        handleBrushSettingsChange(settings);
+                    }}
                     onClear={() => paintCanvasRef.current?.clearCanvas()}
                     mode={mode}
                     onModeChange={setMode}

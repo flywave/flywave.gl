@@ -22,6 +22,7 @@ interface PaintCanvasProps {
     onBrushMove?: (x: number, y: number) => void;
     onBrushEnd?: () => void;
     onHeightmapChange?: (heightData: Float32Array) => void;
+    onBrushSettingsChange?: (settings: Partial<BrushSettings>) => void;
     mode: "draw" | "navigate";
 }
 
@@ -144,6 +145,7 @@ export const PaintCanvas = forwardRef<PaintCanvasRef, PaintCanvasProps>(
             onBrushMove,
             onBrushEnd,
             onHeightmapChange,
+            onBrushSettingsChange,
             mode
         },
         ref
@@ -248,6 +250,10 @@ export const PaintCanvas = forwardRef<PaintCanvasRef, PaintCanvasProps>(
                 canvas.style.width = `${Math.abs(max.x - min.x)}px`;
                 canvas.style.height = `${Math.abs(max.y - min.y)}px`;
 
+                const scaleX = Math.abs(max.x - min.x) / width;
+                const scaleY = Math.abs(max.y - min.y) / height;
+                brushEngineRef.current?.setScale(scaleX, scaleY);
+
                 updateCanvas();
             };
 
@@ -321,9 +327,8 @@ export const PaintCanvas = forwardRef<PaintCanvasRef, PaintCanvasProps>(
                 (latlng.lng - paintAreaGeoBox.minLon) /
                 (paintAreaGeoBox.maxLon - paintAreaGeoBox.minLon);
             const normalizedY =
-                1 -
-                (latlng.lat - paintAreaGeoBox.minLat) /
-                    (paintAreaGeoBox.maxLat - paintAreaGeoBox.minLat);
+                (paintAreaGeoBox.maxLat - latlng.lat) /
+                (paintAreaGeoBox.maxLat - paintAreaGeoBox.minLat);
 
             return {
                 x: normalizedX * width,
@@ -362,14 +367,9 @@ export const PaintCanvas = forwardRef<PaintCanvasRef, PaintCanvasProps>(
             const ctx = canvasRef.current.getContext("2d");
             if (!ctx) return;
 
-            ctx.imageSmoothingEnabled = true;
-            const tempCanvas = document.createElement("canvas");
-            tempCanvas.width = width;
-            tempCanvas.height = height;
-            brushEngineRef.current.renderToCanvas(tempCanvas);
-
+            ctx.imageSmoothingEnabled = false;
             ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-            ctx.drawImage(tempCanvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
+            brushEngineRef.current.renderToCanvas(canvasRef.current);
         };
 
         const handleMouseUp = () => {
@@ -421,6 +421,7 @@ export const PaintCanvas = forwardRef<PaintCanvasRef, PaintCanvasProps>(
 
         const updateBrushSettings = (settings: Partial<BrushSettings>) => {
             setBrushSettings((prev: BrushSettings) => ({ ...prev, ...settings }));
+            onBrushSettingsChange?.(settings);
         };
 
         const getBrushSettingsValue = () => brushSettings;

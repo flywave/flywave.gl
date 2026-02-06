@@ -5,6 +5,8 @@ export class BrushEngine {
     private width: number;
     private height: number;
     private currentBrush: BrushSettings;
+    private scaleX: number = 1;
+    private scaleY: number = 1;
 
     constructor(width: number, height: number) {
         this.width = width;
@@ -21,6 +23,11 @@ export class BrushEngine {
 
     updateBrushSettings(settings: Partial<BrushSettings>): void {
         this.currentBrush = { ...this.currentBrush, ...settings };
+    }
+
+    setScale(x: number, y: number): void {
+        this.scaleX = x;
+        this.scaleY = y;
     }
 
     getBrushSettings(): BrushSettings {
@@ -40,7 +47,9 @@ export class BrushEngine {
                     continue;
                 }
 
-                const distance = Math.sqrt(dx * dx + dy * dy);
+                const scaledDx = dx * this.scaleX;
+                const scaledDy = dy * this.scaleY;
+                const distance = Math.sqrt(scaledDx * scaledDx + scaledDy * scaledDy);
                 if (distance > radius) continue;
 
                 const normalizedDistance = distance / radius;
