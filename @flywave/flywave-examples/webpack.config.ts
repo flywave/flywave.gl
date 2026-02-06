@@ -86,6 +86,18 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
         filename: "[name].bundle.js",
         libraryTarget: "module"
     },
+    module: {
+        rules: [
+            {
+                test: /\.css$/,
+                use: ['style-loader', 'css-loader']
+            },
+            {
+                test: /\.(scss|sass)$/,
+                use: ['style-loader', 'css-loader', 'sass-loader']
+            }
+        ]
+    },
     experiments: {
         outputModule: true
     },
@@ -175,7 +187,7 @@ if (exampleFilter) {
 const browserConfig = merge(commonConfig, {
     //@ts-ignore
     devServer: {
-        port: 8080,
+        port: 8081,
         headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Credentials": "true" }
     },
     entry: webpackEntries,

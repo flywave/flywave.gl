@@ -16,7 +16,7 @@
         "test": "exit 0",
         "tsc": "cross-env tsc --build $EXTRA_TSC_ARGS",
         "build": "webpack --config webpack.config.ts",
-        "start": "webpack serve --allowed-hosts all  --port 8002",
+        "start": "webpack serve --allowed-hosts all  ",
         "publish-html": "node scripts/publish-html.js",
         "download-terrain": "node scripts/mapbox-terrain-downloader.js",
         "download-cesium-tiles": "node scripts/cesium-3dtile-downloader.js"

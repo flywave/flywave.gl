@@ -1,10 +1,11 @@
 {
-    "extends": "../../tsconfig.base.json",
+    "extends": "../../tsconfig.json",
     "compilerOptions": {
         "declarationMap": false,
         "sourceMap": false,
         "composite": false,
         "declaration": false,
+        "jsx": "react",
         "paths": {
             "@flywave/flywave.gl": ["../flywave.gl/src"],
             "@flywave/flywave.gl/*": ["../flywave.gl/src/*"],
@@ -14,7 +15,8 @@
             "@flywave/flywave-draw-controls/*": ["../flywave-draw-controls/src/*"],
             "@flywave/flywave-geometry": ["../flywave-geometry/src"],
             "@flywave/flywave-geometry/*": ["../flywave-geometry/src/*"],
-            "@flywave/flywave-examples/*": ["./src/*"]
+            "@flywave/flywave-examples/*": ["./src/*"],
+            "@flywave/flywave-heightmap-painter": ["../flywave-heightmap-painter/src"],
         }
     },
     "include": [
@@ -30,6 +32,9 @@
         },
         {
             "path": "../flywave-geometry"
+        },
+        {
+            "path": "../flywave-heightmap-painter"
         }
     ]
 }
