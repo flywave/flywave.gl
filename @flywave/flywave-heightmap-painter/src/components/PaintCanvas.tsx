@@ -35,7 +35,7 @@ export interface PaintCanvasRef {
 
 const Container = styled.div<{ width: number; height: number }>`
     width: 100%;
-    height: 100%;
+    height: 100vh;
     position: relative;
     border: none;
     border-radius: 0;
