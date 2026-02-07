@@ -106,7 +106,7 @@ export interface AppProps {
     width?: number;
     height?: number;
     paintAreaGeoBox?: { minLon: number; minLat: number; maxLon: number; maxLat: number };
-    onExport?: (data: HeightmapExport) => void;
+    onExport?: (data: HeightmapExport, format: "png" | "json") => void;
     onBrushStart?: (x: number, y: number) => void;
     onBrushMove?: (x: number, y: number) => void;
     onBrushEnd?: () => void;
@@ -150,6 +150,7 @@ const App = React.forwardRef<AppInstance, AppProps>(
             paintAreaGeoBox || null
         );
         const [mode, setMode] = useState<"draw" | "navigate">("draw");
+        const [showExport, setShowExport] = useState(false);
         const [brushSettings, setBrushSettings] = useState<BrushSettings>({
             type: BrushType.RAISE,
             size: 100,
