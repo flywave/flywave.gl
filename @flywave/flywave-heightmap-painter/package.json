@@ -23,28 +23,22 @@
         "heightmap",
         "terrain",
         "painting",
-        "leaflet",
+        "3d",
+        "webgl",
         "gis",
         "react",
-        "typescript"
+        "typescript",
+        "flywave"
     ],
     "author": "flywave.gl contributors",
     "license": "Apache-2.0",
     "peerDependencies": {
-        "leaflet": "^1.9.4",
+        "@flywave/flywave.gl": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "styled-components": "^6.1.6"
     },
-    "peerDependenciesMeta": {
-        "@jonatanheyman/leaflet-areaselect": {
-            "optional": true
-        }
-    },
     "devDependencies": {
-        "@jonatanheyman/leaflet-areaselect": "^1.2.0",
-        "@types/leaflet-areaselect": "^0.1.8",
-        "@types/leaflet":  "^1.9.4",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
         "@types/styled-components": "^5.1.34",

@@ -12,10 +12,8 @@ import {
     ArcGISTileProvider,
     ellipsoidProjection
 } from "@flywave/flywave.gl";
-
-// @ts-ignore
-import { HeightmapPainter } from "@flywave/flywave-heightmap-painter";
-// @ts-ignore
+ 
+import { HeightmapPainter } from "@flywave/flywave-heightmap-painter"; 
 import { CESIUM_ION_TOKEN } from "../token-config.js";
 
 class HeightmapPainterExample {
@@ -46,24 +44,13 @@ class HeightmapPainterExample {
             margin: 0;
             padding: 0;
             overflow: hidden;
-            display: flex;
             height: 100vh;
             background: #000;
         `;
 
-        this.painterContainer = document.createElement("div");
-        this.painterContainer.style.cssText = `
-            width: 50%;
-            height: 100%;
-            background: #1a1a1a;
-            position: relative;
-            border-right: 2px solid #333;
-        `;
-        document.body.appendChild(this.painterContainer);
-
         this.mapContainer = document.createElement("div");
         this.mapContainer.style.cssText = `
-            flex: 1;
+            width: 100%;
             height: 100%;
             position: relative;
         `;
@@ -84,6 +71,7 @@ class HeightmapPainterExample {
             target: new GeoCoordinates(36.4, 118.1, 1000),
             zoomLevel: 17,
             projection: ellipsoidProjection,
+            logarithmicDepthBuffer: false,
             canvas: canvas,
             theme: {
                 extends: "resources/tilezen_base.json"
@@ -113,30 +101,26 @@ class HeightmapPainterExample {
     }
 
     async initializePainter() {
+        // 创建 HeightmapPainter，传入 mapView 和 container
+        // Painter 会自动把自己添加到 mapContainer 中
         this.painter = new HeightmapPainter({
-            width: 1024,
-            height: 1024,
-            initialCenter: [36.4, 118.1] as [number, number],
-            initialZoom: 13,
-            basemap: "satellite"
+            mapView: this.map,
+            container: this.mapContainer // Painter 渲染到 MapView 的父容器中
         });
-
-        const element = this.painter.getElement();
-        element.style.width = "100%";
-        element.style.height = "100%";
-        element.style.position = "absolute";
-        element.style.top = "0";
-        element.style.left = "0";
-        this.painterContainer.appendChild(element);
 
         this.painter.on("ready", () => {
-            console.log("Heightmap painter ready");
-            console.log("左侧：高度图编辑器 | 右侧：3D地形");
-            console.log("在左侧绘制，导出后会自动应用到右侧3D地形");
+            console.log("✨ Heightmap painter ready");
+            console.log("📍 请先在配置面板设置绘制区域和输出尺寸");
         });
 
+        // 监听导出事件，直接应用到地形
         this.painter.on("export", (data: any) => {
             this.handleExport(data);
+        });
+
+        // 监听高度变化，可以实现实时预览
+        this.painter.on("heightmapChange", (heightData: Float32Array) => {
+            // console.log("Height data changed:", heightData.length);
         });
     }
 

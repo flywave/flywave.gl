@@ -1,18 +1,20 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
+import PainterApp from "./PainterApp";
 import { GlobalStyle } from "./styles/GlobalStyle";
 import { HeightmapExport, BrushSettings } from "./types";
-import type { L } from "./types";
-import { BrushEngine } from "./utils/brushEngine";
 
 export interface HeightmapPainterOptions {
+    mapView: any;
+    container: HTMLElement;
     width?: number;
     height?: number;
-    initialCenter?: [number, number];
-    initialZoom?: number;
-    basemap?: "satellite" | "street" | "terrain";
-    paintAreaGeoBox?: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+    paintAreaGeoBox?: {
+        minLon: number;
+        minLat: number;
+        maxLon: number;
+        maxLat: number;
+    };
 }
 
 export type HeightmapPainterEvents = {
@@ -32,28 +34,38 @@ interface AppInstance {
     clearCanvas(): void;
     updateBrushSettings(settings: Partial<BrushSettings>): void;
     getBrushSettings(): BrushSettings | null;
-    setMode(mode: "draw" | "navigate"): void;
-    getMap(): L.Map | null;
-    getBrushEngine(): BrushEngine | null;
+    reconfigure(): void;
 }
 
 export class HeightmapPainter {
     private container: HTMLElement;
+    private targetContainer: HTMLElement;
     private root: ReactDOM.Root | null = null;
     private isMounted: boolean = false;
     private eventListeners: Map<keyof HeightmapPainterEvents, Set<Function>> = new Map();
     private appRef: React.RefObject<AppInstance> = React.createRef<AppInstance>();
 
     constructor(options: HeightmapPainterOptions) {
-        this.container = document.createElement("div");
+        if (!options.mapView) {
+            throw new Error("mapView is required for HeightmapPainter");
+        }
+        if (!options.container) {
+            throw new Error("container is required for HeightmapPainter");
+        }
 
-        this.container.style.width = `${options.width ?? 1024}px`;
-        this.container.style.height = `${options.height ?? 1024}px`;
-        this.container.style.position = "relative";
-        this.container.style.overflow = "hidden";
-        this.container.style.border = "2px solid #333";
-        this.container.style.borderRadius = "8px";
-        this.container.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
+        this.targetContainer = options.container;
+
+        this.container = document.createElement("div");
+        this.container.style.width = "100%";
+        this.container.style.height = "100%";
+        this.container.style.position = "absolute";
+        this.container.style.top = "0";
+        this.container.style.left = "0";
+        this.container.style.pointerEvents = "none";
+        this.container.style.zIndex = "1000"; // 远高于 MapControlsUI
+
+        // 把 painter 的容器添加到 targetContainer 中
+        this.targetContainer.appendChild(this.container);
 
         this.mount(options);
     }
@@ -63,13 +75,12 @@ export class HeightmapPainter {
     }
 
     private mount(options: HeightmapPainterOptions): void {
-        const appElement = React.createElement(App, {
+        const appElement = React.createElement(PainterApp, {
             ref: this.appRef,
-            width: options.width ?? 1024,
-            height: options.height ?? 1024,
-            initialCenter: options.initialCenter ?? [39.9, 116.4],
-            initialZoom: options.initialZoom ?? 13,
-            basemap: options.basemap ?? "satellite",
+            mapView: options.mapView,
+            width: options.width,
+            height: options.height,
+            paintAreaGeoBox: options.paintAreaGeoBox,
             onBrushStart: (x: number, y: number) => this.emit("brushStart", x, y),
             onBrushMove: (x: number, y: number) => this.emit("brushMove", x, y),
             onBrushEnd: () => this.emit("brushEnd"),
@@ -131,18 +142,6 @@ export class HeightmapPainter {
 
     public getBrushSettings(): BrushSettings | null {
         return this.appRef.current?.getBrushSettings() || null;
-    }
-
-    public setMode(mode: "draw" | "navigate"): void {
-        this.appRef.current?.setMode(mode);
-    }
-
-    public getMap(): L.Map | null {
-        return this.appRef.current?.getMap() || null;
-    }
-
-    public getBrushEngine(): BrushEngine | null {
-        return this.appRef.current?.getBrushEngine() || null;
     }
 
     public destroy(): void {

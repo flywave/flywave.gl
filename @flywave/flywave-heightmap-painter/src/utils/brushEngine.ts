@@ -15,6 +15,7 @@ export class BrushEngine {
         this.currentBrush = {
             type: BrushType.RAISE,
             size: 30,
+            sizeUnit: "pixels" as const,
             strength: 0.5,
             hardness: 0.5,
             flattenHeight: 0.5

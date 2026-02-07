@@ -32,26 +32,28 @@ const Container = styled.div`
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: #f5f5f5;
+    background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
     overflow: hidden;
 `;
 
 const Header = styled.div`
     flex-shrink: 0;
-    background: white;
-    padding: 16px 20px;
-    border-bottom: 1px solid #e0e0e0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    background: linear-gradient(180deg, rgba(30, 30, 30, 0.98) 0%, rgba(20, 20, 20, 0.95) 100%);
+    backdrop-filter: blur(10px);
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 `;
 
 const Title = styled.h2`
-    margin: 0 0 16px 0;
-    font-size: 20px;
-    color: #333;
+    margin: 0 0 12px 0;
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
 `;
 
 const FormSection = styled.div`
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 `;
 
 const SectionLabel = styled.label`
@@ -59,7 +61,14 @@ const SectionLabel = styled.label`
     margin-bottom: 8px;
     font-size: 14px;
     font-weight: 600;
-    color: #555;
+    color: rgba(255, 255, 255, 0.9);
+`;
+
+const SubSectionLabel = styled.label`
+    display: block;
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.6);
 `;
 
 const InputRow = styled.div`
@@ -74,34 +83,44 @@ const InputGroup = styled.div`
 
 const InputLabel = styled.label`
     display: block;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     font-size: 12px;
-    color: #666;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
 `;
 
 const Input = styled.input`
     width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #d0d0d0;
-    border-radius: 4px;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
     font-size: 14px;
+    transition: all 0.3s;
 
     &:focus {
         outline: none;
-        border-color: #1890ff;
-        box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+        border-color: rgba(102, 126, 234, 0.8);
+        background: rgba(255, 255, 255, 0.1);
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    }
+
+    &::placeholder {
+        color: rgba(255, 255, 255, 0.4);
     }
 `;
 
 const MapContainer = styled.div`
     flex: 1;
-    min-height: 200px;
+    min-height: 300px;
     position: relative;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
     overflow: hidden;
-    background: white;
-    margin: 0 16px 16px 16px;
+    background: rgba(0, 0, 0, 0.3);
+    margin: 0 20px 20px 20px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 `;
 
 const MapDiv = styled.div`
@@ -111,40 +130,42 @@ const MapDiv = styled.div`
 
 const GeoBoxDisplay = styled.div`
     flex-shrink: 0;
-    background: white;
-    padding: 16px 24px;
-    border-top: 1px solid #e0e0e0;
+    background: linear-gradient(180deg, rgba(30, 30, 30, 0.98) 0%, rgba(20, 20, 20, 0.95) 100%);
+    backdrop-filter: blur(10px);
+    padding: 20px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     font-family: "Courier New", monospace;
-    font-size: 12px;
+    font-size: 13px;
 `;
 
 const InfoBox = styled.div`
-    background: #f0f5ff;
-    border: 1px solid #adc6ff;
-    border-radius: 6px;
+    background: rgba(102, 126, 234, 0.15);
+    border: 1px solid rgba(102, 126, 234, 0.4);
+    border-radius: 8px;
     padding: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
 `;
 
 const InfoRow = styled.div`
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     font-size: 13px;
+    color: rgba(255, 255, 255, 0.9);
 `;
 
 const Label = styled.span`
     font-weight: 600;
-    color: #595959;
+    color: rgba(255, 255, 255, 0.85);
     font-size: 13px;
     display: block;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 `;
 
 const Value = styled.span`
     font-family: monospace;
-    color: #262626;
+    color: #fff;
 `;
 
 const ButtonRow = styled.div`
@@ -155,30 +176,44 @@ const ButtonRow = styled.div`
 
 const Button = styled.button<{ $variant?: "primary" | "default" }>`
     flex: 1;
-    padding: 10px 20px;
+    padding: 12px 24px;
     border: none;
-    border-radius: 6px;
-    font-size: 14px;
+    border-radius: 10px;
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 
     ${props =>
         props.$variant === "primary"
             ? `
-        background: #1890ff;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         &:hover {
-            background: #40a9ff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+        &:active {
+            transform: translateY(0);
+        }
+        &:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
     `
             : `
-        background: white;
-        color: #333;
-        border: 1px solid #d0d0d0;
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.2);
         &:hover {
-            border-color: #1890ff;
-            color: #1890ff;
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        &:active {
+            transform: translateY(0);
         }
     `}
 `;
@@ -206,6 +241,9 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         maxLon: "",
         maxLat: ""
     });
+
+    const [outputWidth, setOutputWidth] = useState("1024");
+    const [outputHeight, setOutputHeight] = useState("1024");
 
     const [mapZoom, setMapZoom] = useState(0);
 
@@ -361,46 +399,33 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
     }, [currentGeoBox, mapZoom]);
 
     const handleStartPaint = useCallback(() => {
-        if (!currentGeoBox || !mapRef.current) return;
+        if (!currentGeoBox) return;
 
-        const map = mapRef.current;
-        const zoom = map.getZoom();
-        const bounds = L.latLngBounds(
-            [currentGeoBox.minLat, currentGeoBox.minLon],
-            [currentGeoBox.maxLat, currentGeoBox.maxLon]
-        );
+        const width = parseInt(outputWidth);
+        const height = parseInt(outputHeight);
 
-        const min = map.latLngToLayerPoint(bounds.getSouthWest());
-        const max = map.latLngToLayerPoint(bounds.getNorthEast());
-
-        const pixelWidth = Math.round(Math.abs(max.x - min.x));
-        const pixelHeight = Math.round(Math.abs(max.y - min.y));
-
-        const width = Math.max(64, pixelWidth);
-        const height = Math.max(64, pixelHeight);
+        if (isNaN(width) || isNaN(height) || width < 64 || height < 64) {
+            alert("请输入有效的宽度和高度（最小64px）");
+            return;
+        }
 
         console.log("handleStartPaint:", {
-            min: [min.x, min.y],
-            max: [max.x, max.y],
-            pixelWidth,
-            pixelHeight,
             width,
-            height
+            height,
+            geoBox: currentGeoBox
         });
 
         onStartPaint(width, height, currentGeoBox);
-    }, [currentGeoBox, onStartPaint]);
+    }, [currentGeoBox, outputWidth, outputHeight, onStartPaint]);
 
     return (
         <Container>
             <Header>
-                <Title>Heightmap Painter - 配置</Title>
+                <Title>📍 配置绘制区域</Title>
 
                 <FormSection>
                     <SectionLabel>地图范围设置</SectionLabel>
-                    <SectionLabel style={{ fontWeight: "normal", fontSize: "13px", color: "#666" }}>
-                        拖动蓝色矩形框或手动输入坐标
-                    </SectionLabel>
+                    <SubSectionLabel>拖动蓝色矩形框或手动输入坐标</SubSectionLabel>
                 </FormSection>
             </Header>
 
@@ -469,33 +494,43 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                             </div>
                         </div>
 
-                        {canvasSize && (
-                            <div
-                                style={{
-                                    marginBottom: "16px",
-                                    padding: "12px",
-                                    background: "rgba(102, 126, 234, 0.1)",
-                                    borderRadius: "8px",
-                                    border: "1px solid rgba(102, 126, 234, 0.3)"
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        fontWeight: 600,
-                                        color: "#667eea",
-                                        marginBottom: "4px"
-                                    }}
-                                >
-                                    输出尺寸: {canvasSize.width} x {canvasSize.height}
-                                </div>
+                        <div
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr",
+                                gap: "8px 16px",
+                                marginBottom: "16px"
+                            }}
+                        >
+                            <div>
+                                <Label>输出宽度（像素）</Label>
+                                <Input
+                                    type="number"
+                                    min="64"
+                                    max="8192"
+                                    placeholder="1024"
+                                    value={outputWidth}
+                                    onChange={e => setOutputWidth(e.target.value)}
+                                />
                             </div>
-                        )}
+                            <div>
+                                <Label>输出高度（像素）</Label>
+                                <Input
+                                    type="number"
+                                    min="64"
+                                    max="8192"
+                                    placeholder="1024"
+                                    value={outputHeight}
+                                    onChange={e => setOutputHeight(e.target.value)}
+                                />
+                            </div>
+                        </div>
                     </>
                 )}
 
                 <ButtonRow>
                     <Button $variant="primary" onClick={handleStartPaint} disabled={!currentGeoBox}>
-                        ✓ 开始绘制
+                        ✅ 开始绘制
                     </Button>
                 </ButtonRow>
             </GeoBoxDisplay>

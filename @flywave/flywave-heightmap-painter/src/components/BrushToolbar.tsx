@@ -304,12 +304,48 @@ export const BrushToolbar: React.FC<BrushToolbarProps> = ({
 
                 <Section $collapsed={settingsCollapsed}>
                     <Section>
-                        <Label>笔刷大小: {brushSettings.size}px</Label>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                marginBottom: "4px"
+                            }}
+                        >
+                            <Label style={{ margin: 0 }}>
+                                笔刷大小: {brushSettings.size}
+                                {brushSettings.sizeUnit === "meters" ? "m" : "px"}
+                            </Label>
+                            <select
+                                value={brushSettings.sizeUnit}
+                                onChange={e =>
+                                    onSettingsChange({
+                                        sizeUnit: e.target.value as "meters" | "pixels"
+                                    })
+                                }
+                                style={{
+                                    background: "rgba(255, 255, 255, 0.1)",
+                                    border: "1px solid rgba(255, 255, 255, 0.2)",
+                                    borderRadius: "4px",
+                                    color: "#fff",
+                                    padding: "2px 6px",
+                                    fontSize: "10px",
+                                    cursor: "pointer"
+                                }}
+                            >
+                                <option value="pixels" style={{ color: "#000" }}>
+                                    像素
+                                </option>
+                                <option value="meters" style={{ color: "#000" }}>
+                                    米
+                                </option>
+                            </select>
+                        </div>
                         <RangeContainer>
                             <RangeInput
                                 type="range"
-                                min={5}
-                                max={200}
+                                min={brushSettings.sizeUnit === "meters" ? 1 : 5}
+                                max={brushSettings.sizeUnit === "meters" ? 1000 : 200}
                                 value={brushSettings.size}
                                 onChange={e => onSettingsChange({ size: parseInt(e.target.value) })}
                             />

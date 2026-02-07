@@ -7,5 +7,7 @@ export * from "./utils/geoUtils";
 export * from "./utils/canvasUtils";
 
 export { ConfigPanel } from "./components/ConfigPanel";
-export { PaintCanvas } from "./components/PaintCanvas";
-export type { PaintCanvasRef } from "./components/PaintCanvas";
+export { ExportPanel } from "./components/ExportPanel";
+export { Painter } from "./components/Painter";
+export type { PainterRef } from "./components/Painter";
+export { BrushToolbar } from "./components/BrushToolbar";

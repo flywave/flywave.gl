@@ -1,7 +1,8 @@
-import type * as Leaflet from "leaflet";
+import type { MapView } from "@flywave/flywave.gl";
+import type { GeoBox as FlywaveGeoBox } from "@flywave/flywave-geoutils";
 
 export namespace L {
-    export type Map = Leaflet.Map;
+    export type Map = MapView;
 }
 
 export interface GeoBox {
@@ -29,6 +30,7 @@ export enum BrushType {
 export interface BrushSettings {
     type: BrushType;
     size: number;
+    sizeUnit: "meters" | "pixels";
     strength: number;
     hardness: number;
     flattenHeight?: number;
