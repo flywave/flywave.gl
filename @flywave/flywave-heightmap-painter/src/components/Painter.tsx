@@ -2,13 +2,19 @@ import React, { useEffect, useRef, useState, forwardRef } from "react";
 import styled from "styled-components";
 import { BrushEngine } from "../utils/brushEngine";
 import { BrushSettings, HeightmapExport, BrushType } from "../types";
-import { WindowEventHandler } from "@flywave/flywave.gl";
-import type { MapControls } from "@flywave/flywave.gl";
+import {
+    WindowEventHandler,
+    DataSource,
+    GeoBox,
+    GeoCoordinates,
+    DEMTerrainSource
+} from "@flywave/flywave.gl";
+import type { MapControls, MapView } from "@flywave/flywave.gl";
 
 interface PainterProps {
     width: number;
     height: number;
-    mapView: any;
+    mapView: MapView;
     paintAreaGeoBox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
     onBrushStart?: (x: number, y: number) => void;
     onBrushMove?: (x: number, y: number) => void;
@@ -88,6 +94,78 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
         const [cursorSize, setCursorSize] = useState(50);
         const [isDrawingMode, setIsDrawingMode] = useState(false);
         const mapControlsRef = useRef<MapControls>(mapControls);
+        const modifierIdRef = useRef<string>("heightmap-painter");
+        const updateTerrainModifierRef = useRef<(() => void) | null>(null);
+
+        // Function to update terrain modifier (implementation)
+        const updateTerrainModifierImpl = () => {
+            const manager = (mapView.elevationSource as DEMTerrainSource)?.getGroundModificationManager?.();
+            if (!manager || !tempCanvasRef.current || !brushEngineRef.current) return;
+
+            const canvas = tempCanvasRef.current;
+            brushEngineRef.current.renderToCanvas(canvas);
+
+            try {
+                if (manager.hasModifier(modifierIdRef.current)) {
+                    manager.updateModifier(modifierIdRef.current, { enabled: true });
+                } else {
+                    const southWest = new GeoCoordinates(
+                        paintAreaGeoBox.minLat,
+                        paintAreaGeoBox.minLon
+                    );
+                    const northEast = new GeoCoordinates(
+                        paintAreaGeoBox.maxLat,
+                        paintAreaGeoBox.maxLon
+                    );
+                    const geoBoxForDisplay = new GeoBox(southWest, northEast);
+
+                    manager.addModifier(modifierIdRef.current,
+                        {
+                            type: "image",
+                            image: canvas
+                        },
+                        geoBoxForDisplay
+                    );
+                }
+            } catch (error) {
+                console.warn("Failed to update terrain modifier:", error);
+            }
+        };
+
+        // Create throttled version
+        useEffect(() => {
+            let throttleTimer: number | null = null;
+            let lastRun = 0;
+            const throttleDelay = 50; // 50ms throttle
+
+            const throttledUpdate = () => {
+                const now = Date.now();
+                if (now - lastRun >= throttleDelay) {
+                    updateTerrainModifierImpl();
+                    lastRun = now;
+                } else if (throttleTimer === null) {
+                    throttleTimer = window.setTimeout(() => {
+                        updateTerrainModifierImpl();
+                        lastRun = Date.now();
+                        throttleTimer = null;
+                    }, throttleDelay - (now - lastRun));
+                }
+            };
+
+            updateTerrainModifierRef.current = throttledUpdate;
+
+            return () => {
+                if (throttleTimer !== null) {
+                    clearTimeout(throttleTimer);
+                }
+            };
+        }, [paintAreaGeoBox]);
+
+        const updateTerrainModifier = () => {
+            if (updateTerrainModifierRef.current) {
+                updateTerrainModifierRef.current();
+            }
+        };
 
         useEffect(() => {
             const brushEngine = new BrushEngine(width, height);
@@ -103,6 +181,11 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
                 tempCanvasRef.current = null;
             };
         }, [width, height, paintAreaGeoBox]);
+
+        // Initialize terrain modifier
+        useEffect(() => {
+            updateTerrainModifier();
+        }, [mapView, paintAreaGeoBox]);
 
         useEffect(() => {
             if (brushEngineRef.current) {
@@ -140,6 +223,7 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
 
                         onBrushStart?.(coords.x, coords.y);
                         onHeightmapChange?.(brushEngineRef.current!.getHeightData());
+                        updateTerrainModifier();
                     }
                 };
 
@@ -171,6 +255,7 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
                                 brushEngineRef.current?.drawAt(coords.x, coords.y);
                                 onBrushMove?.(coords.x, coords.y);
                                 onHeightmapChange?.(brushEngineRef.current!.getHeightData());
+                                updateTerrainModifier();
                             }
                         } else {
                             setCursorVisible(false);
@@ -281,6 +366,7 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
 
         const clearCanvas = () => {
             brushEngineRef.current?.clear();
+            updateTerrainModifier();
             onHeightmapChange?.(brushEngineRef.current!.getHeightData());
         };
 
@@ -321,8 +407,7 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             if (mapControlsRef.current) {
                 mapControlsRef.current.enabled = !enabledParam;
                 console.log(
-                    `${enabledParam ? "🖌️" : "🗺️"} ${
-                        enabledParam ? "Enter" : "Exit"
+                    `${enabledParam ? "🖌️" : "🗺️"} ${enabledParam ? "Enter" : "Exit"
                     } drawing mode - Map controls ${enabledParam ? "disabled" : "enabled"}`
                 );
             } else {

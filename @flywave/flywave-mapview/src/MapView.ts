@@ -3005,6 +3005,9 @@ export class MapView extends EventDispatcher {
         this.clearTileCache();
     }
 
+    get elevationSource(): TerrainDataSource | undefined {
+        return this.m_elevationSource as TerrainDataSource | undefined;
+    }
     /**
      * Public access to {@link MapViewFog} allowing to toggle it by setting its `enabled` property.
      */

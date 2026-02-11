@@ -279,6 +279,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
         event: HeightMapModificationEventParams,
         modify: HeightMapModifierManager
     ): Promise<void> {
+        if (!this._demMap)
         return DemTileResource.createDemTileResourceFromImageryData(
             this._demMap.rawImageData,
             this.tileKey,

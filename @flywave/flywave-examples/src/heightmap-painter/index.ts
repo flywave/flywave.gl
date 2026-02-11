@@ -137,6 +137,7 @@ class HeightmapPainterExample {
         );
 
         const modifierId = manager.addModifier(
+            "heightmap-painter",
             { type: "image", image: data.imageData },
             geoBox,
             HeightMapBlendMode.ADD,

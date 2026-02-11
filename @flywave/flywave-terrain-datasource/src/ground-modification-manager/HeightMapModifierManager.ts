@@ -41,13 +41,13 @@ export class HeightMapModifierManager extends EventDispatcher<HeightMapModificat
     }
 
     addModifier(
+        id: string,
         source: HeightMapSourceData,
         geoBox: GeoBox,
         blendMode: HeightMapBlendMode = HeightMapBlendMode.ADD,
         opacity: number = 1.0,
         heightScale?: HeightMapScale
-    ): string {
-        const id = `modifier-${this.nextId++}`;
+    ): string { 
         const modifier: HeightMapModifier = {
             id,
             source,

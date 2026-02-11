@@ -118,15 +118,8 @@ export async function getUpSamplQuantizedMeshTerrain(
     const foundModifiers = dataSource
         .getGroundModificationManager()
         .findModifiersInBoundingBox(targetGeoBox);
-    const heightMapModifiers = foundModifiers.map(m => ({
-        id: m.id,
-        source: m.source,
-        geoBox: m.geoBox.toArray(),
-        blendMode: m.blendMode,
-        opacity: m.opacity,
-        enabled: m.enabled,
-        heightScale: m.heightScale
-    }));
+
+    const heightMapModifiers = foundModifiers.map(m => serializeHeightMapModifier(m));
 
     let projection = dataSource.projection;
     const maxRadius = EarthConstants.EQUATORIAL_RADIUS;

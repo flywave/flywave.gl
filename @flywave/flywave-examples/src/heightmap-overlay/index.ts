@@ -138,6 +138,7 @@ const addHeightMapModifiers = async (demTerrain: CesiumWorldTerrainSource): Prom
     const heightMap = createSteppedWallMap(256, 512, 0.4, 1.0, numSteps);
 
     const modifierId = manager.addModifier(
+        "stepped-wall",
         { type: "image", image: heightMap },
         geoBox,
         HeightMapBlendMode.ADD,
