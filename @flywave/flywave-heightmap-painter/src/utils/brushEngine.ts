@@ -11,14 +11,14 @@ export class BrushEngine {
     constructor(width: number, height: number) {
         this.width = width;
         this.height = height;
-        this.heightData = new Float32Array(width * height).fill(0.5);
+        this.heightData = new Float32Array(width * height).fill(0);
         this.currentBrush = {
             type: BrushType.RAISE,
             size: 30,
             sizeUnit: "pixels" as const,
-            strength: 0.5,
+            strength: 10,
             hardness: 0.5,
-            flattenHeight: 0.5
+            flattenHeight: 100
         };
     }
 
@@ -71,18 +71,17 @@ export class BrushEngine {
                         newHeight = this.applySmoothAt(pixelX, pixelY, strength);
                         break;
                     case BrushType.FLATTEN:
-                        const targetHeight = flattenHeight ?? 0.5;
+                        const targetHeight = flattenHeight ?? 0;
                         newHeight =
-                            currentHeight * (1 - weight * strength) +
-                            targetHeight * weight * strength;
+                            currentHeight * (1 - weight * 0.1) + targetHeight * weight * 0.1;
                         break;
                     case BrushType.NOISE:
                         const noiseValue = this.generateNoise(pixelX, pixelY);
-                        newHeight = currentHeight + weight * strength * (noiseValue - 0.5) * 0.5;
+                        newHeight = currentHeight + weight * strength * (noiseValue - 0.5);
                         break;
                 }
 
-                this.heightData[idx] = Math.max(0, Math.min(1, newHeight));
+                this.heightData[idx] = newHeight;
             }
         }
     }
@@ -131,24 +130,45 @@ export class BrushEngine {
         return value;
     }
 
+    private encodeMapboxRGB(height: number): [number, number, number, number] {
+        const vector = [6553.6, 25.6, 0.1, 10000.0];
+        let v = Math.floor((height + vector[3]) / vector[2]);
+        const b = v % 256;
+        v = Math.floor(v / 256);
+        const g = v % 256;
+        v = Math.floor(v / 256);
+        const r = v;
+        return [r, g, b, 255];
+    }
+
     renderToCanvas(canvas: HTMLCanvasElement): void {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        const imageData = ctx.createImageData(this.width, this.height);
+        console.log("[BrushEngine.renderToCanvas] Input:", {
+            brushEngineSize: { width: this.width, height: this.height },
+            canvasSize: { width: canvas.width, height: canvas.height },
+            dataLength: this.heightData.length
+        });
+
+        // 使用 canvas 的实际尺寸，而不是 brushEngine 的尺寸
+        const imageData = ctx.createImageData(canvas.width, canvas.height);
         const data = imageData.data;
 
-        for (let i = 0; i < this.heightData.length; i++) {
+        for (let i = 0; i < Math.min(this.heightData.length, canvas.width * canvas.height); i++) {
             const height = this.heightData[i];
-            const grayValue = Math.floor(height * 255);
+            const [r, g, b, a] = this.encodeMapboxRGB(height);
 
-            data[i * 4] = grayValue;
-            data[i * 4 + 1] = grayValue;
-            data[i * 4 + 2] = grayValue;
-            data[i * 4 + 3] = 255;
+            data[i * 4] = r;
+            data[i * 4 + 1] = g;
+            data[i * 4 + 2] = b;
+            data[i * 4 + 3] = a;
         }
 
         ctx.putImageData(imageData, 0, 0);
+        console.log("[BrushEngine.renderToCanvas] Done:", {
+            renderedPixels: Math.min(this.heightData.length, canvas.width * canvas.height)
+        });
     }
 
     getHeightData(): Float32Array {
@@ -162,11 +182,11 @@ export class BrushEngine {
     }
 
     clear(): void {
-        this.heightData.fill(0.5);
+        this.heightData.fill(0);
     }
 
     resize(width: number, height: number): void {
-        const newData = new Float32Array(width * height).fill(0.5);
+        const newData = new Float32Array(width * height).fill(0);
 
         const minX = Math.min(this.width, width);
         const minY = Math.min(this.height, height);

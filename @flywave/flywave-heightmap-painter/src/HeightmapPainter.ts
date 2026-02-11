@@ -5,9 +5,11 @@ import { GlobalStyle } from "./styles/GlobalStyle";
 import { HeightmapExport, BrushSettings } from "./types";
 import type { MapControls } from "@flywave/flywave.gl";
 import type { MapView } from "@flywave/flywave.gl";
+import type { TerrainSource } from "@flywave/flywave.gl";
 
 export interface HeightmapPainterOptions {
     mapView: MapView;
+    terrainSource: TerrainSource;
     mapControls?: MapControls;
     container: HTMLElement;
     width?: number;
@@ -52,6 +54,9 @@ export class HeightmapPainter {
         if (!options.mapView) {
             throw new Error("mapView is required for HeightmapPainter");
         }
+        if (!options.terrainSource) {
+            throw new Error("terrainSource is required for HeightmapPainter");
+        }
         if (!options.container) {
             throw new Error("container is required for HeightmapPainter");
         }
@@ -81,6 +86,7 @@ export class HeightmapPainter {
         const appElement = React.createElement(PainterApp, {
             ref: this.appRef,
             mapView: options.mapView,
+            terrainSource: options.terrainSource,
             mapControls: options.mapControls,
             width: options.width,
             height: options.height,

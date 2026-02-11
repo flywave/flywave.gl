@@ -7,9 +7,9 @@ import {
     DataSource,
     GeoBox,
     GeoCoordinates,
-    DEMTerrainSource
+    TerrainDataSource
 } from "@flywave/flywave.gl";
-import type { MapControls, MapView } from "@flywave/flywave.gl";
+import type { DEMTerrainSource, MapControls, MapView } from "@flywave/flywave.gl";
 
 interface PainterProps {
     width: number;
@@ -20,8 +20,8 @@ interface PainterProps {
     onBrushMove?: (x: number, y: number) => void;
     onBrushEnd?: () => void;
     onHeightmapChange?: (heightData: Float32Array) => void;
-    mode?: "draw" | "navigate"; // Kept for backward compatibility, but no longer controls drawing behavior
-    mapControls?: MapControls; // Map controls instance must be passed in
+    mode?: "draw" | "navigate";
+    mapControls?: MapControls;
 }
 
 export interface PainterRef {
@@ -97,9 +97,10 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
         const modifierIdRef = useRef<string>("heightmap-painter");
         const updateTerrainModifierRef = useRef<(() => void) | null>(null);
 
-        // Function to update terrain modifier (implementation)
         const updateTerrainModifierImpl = () => {
-            const manager = (mapView.elevationSource as DEMTerrainSource)?.getGroundModificationManager?.();
+            const manager = (
+                mapView.elevationSource as DEMTerrainSource
+            )?.getGroundModificationManager();
             if (!manager || !tempCanvasRef.current || !brushEngineRef.current) return;
 
             const canvas = tempCanvasRef.current;
@@ -119,7 +120,8 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
                     );
                     const geoBoxForDisplay = new GeoBox(southWest, northEast);
 
-                    manager.addModifier(modifierIdRef.current,
+                    manager.addModifier(
+                        modifierIdRef.current,
                         {
                             type: "image",
                             image: canvas
@@ -168,6 +170,7 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
         };
 
         useEffect(() => {
+            console.log("[Painter] Initializing BrushEngine:", { width, height });
             const brushEngine = new BrushEngine(width, height);
             brushEngineRef.current = brushEngine;
 
@@ -176,16 +179,21 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             canvas.height = height;
             tempCanvasRef.current = canvas;
 
+            console.log("[Painter] Canvas created:", {
+                canvasWidth: canvas.width,
+                canvasHeight: canvas.height,
+                brushEngineDimensions: brushEngine.getDimensions()
+            });
+
             return () => {
                 brushEngineRef.current = null;
                 tempCanvasRef.current = null;
             };
         }, [width, height, paintAreaGeoBox]);
 
-        // Initialize terrain modifier
         useEffect(() => {
             updateTerrainModifier();
-        }, [mapView, paintAreaGeoBox]);
+        }, [paintAreaGeoBox]);
 
         useEffect(() => {
             if (brushEngineRef.current) {
@@ -407,7 +415,8 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             if (mapControlsRef.current) {
                 mapControlsRef.current.enabled = !enabledParam;
                 console.log(
-                    `${enabledParam ? "🖌️" : "🗺️"} ${enabledParam ? "Enter" : "Exit"
+                    `${enabledParam ? "🖌️" : "🗺️"} ${
+                        enabledParam ? "Enter" : "Exit"
                     } drawing mode - Map controls ${enabledParam ? "disabled" : "enabled"}`
                 );
             } else {

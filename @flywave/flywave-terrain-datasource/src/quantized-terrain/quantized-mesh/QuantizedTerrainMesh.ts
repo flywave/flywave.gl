@@ -147,8 +147,39 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
         heightMapModifiers?: HeightMapModifier[],
         flipY?: boolean
     ) {
-        geoBox.southWest.altitude = this.minHeight;
-        geoBox.northEast.altitude = this.maxHeight;
+        // 克隆 geoBox 避免修改原始对象
+        const drawGeoBox = geoBox.clone();
+        drawGeoBox.southWest.altitude = this.minHeight;
+        drawGeoBox.northEast.altitude = this.maxHeight;
+
+        console.log("[QuantizedTerrainMesh.drawHeightMap]", {
+            originalGeoBox: {
+                sw: {
+                    lat: geoBox.southWest.latitude,
+                    lon: geoBox.southWest.longitude,
+                    alt: geoBox.southWest.altitude
+                },
+                ne: {
+                    lat: geoBox.northEast.latitude,
+                    lon: geoBox.northEast.longitude,
+                    alt: geoBox.northEast.altitude
+                }
+            },
+            drawGeoBox: {
+                sw: {
+                    lat: drawGeoBox.southWest.latitude,
+                    lon: drawGeoBox.southWest.longitude,
+                    alt: drawGeoBox.southWest.altitude
+                },
+                ne: {
+                    lat: drawGeoBox.northEast.latitude,
+                    lon: drawGeoBox.northEast.longitude,
+                    alt: drawGeoBox.northEast.altitude
+                }
+            },
+            minHeight: this.minHeight,
+            maxHeight: this.maxHeight
+        });
 
         const originDrawRange = this.quantizedGeometry.drawRange;
         const { start, count } = this.quantizedGeometry.groups[0];
@@ -167,7 +198,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
         if (heightMapModifiers?.length) {
             const processed = await renderGroundModificationHeightMap(
                 heightMapModifiers,
-                geoBox,
+                drawGeoBox, // 使用修改后的克隆，而不是原始 geoBox
                 new Texture(this._demMap.rawImageData),
                 this._demMap.rawImageData.width,
                 this._demMap.rawImageData.height,
@@ -178,7 +209,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
                 "",
                 rawData,
                 processed?.image,
-                geoBox,
+                drawGeoBox, // 使用修改后的克隆
                 undefined,
                 false,
                 true
@@ -279,8 +310,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
         event: HeightMapModificationEventParams,
         modify: HeightMapModifierManager
     ): Promise<void> {
-        if (!this._demMap)
-            return Promise.resolve();
+        if (!this._demMap) return Promise.resolve();
         return DemTileResource.createDemTileResourceFromImageryData(
             this._demMap.rawImageData,
             this.tileKey,

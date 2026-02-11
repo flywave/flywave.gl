@@ -2,38 +2,16 @@
 
 import { type GeoBoxArray, type GeoBoxJSON, GeoBox } from "@flywave/flywave-geoutils";
 
-export enum HeightMapBlendMode {
-    ADD = "add",
-    SUBTRACT = "subtract",
-    MULTIPLY = "multiply",
-    DIVIDE = "divide",
-    MIN = "min",
-    MAX = "max",
-    REPLACE = "replace",
-    AVERAGE = "average",
-    DIFFERENCE = "difference",
-    SCREEN = "screen",
-    OVERLAY = "overlay"
-}
-
 export type HeightMapSourceData =
     | { type: "image"; image: ImageData | HTMLImageElement | HTMLCanvasElement }
     | { type: "url"; url: string }
     | { type: "data"; data: Float32Array | Uint8Array; width: number; height: number };
 
-export interface HeightMapScale {
-    min: number;
-    max: number;
-}
-
 export interface HeightMapModifier {
     id: string;
     source: HeightMapSourceData;
     geoBox: GeoBox;
-    blendMode: HeightMapBlendMode;
-    opacity: number;
     enabled: boolean;
-    heightScale?: HeightMapScale;
 }
 
 export interface SerializedHeightMapModifier {
@@ -46,10 +24,7 @@ export interface SerializedHeightMapModifier {
         height?: number;
     };
     geoBox: GeoBoxArray;
-    blendMode: string;
-    opacity: number;
     enabled: boolean;
-    heightScale?: HeightMapScale;
 }
 
 export interface HeightMapModificationEventParams {
@@ -101,10 +76,7 @@ export function serializeHeightMapModifier(
         id: modifier.id,
         source,
         geoBox: modifier.geoBox.toArray(),
-        blendMode: modifier.blendMode,
-        opacity: modifier.opacity,
-        enabled: modifier.enabled,
-        heightScale: modifier.heightScale
+        enabled: modifier.enabled
     };
 }
 
@@ -146,9 +118,6 @@ export function deserializeHeightMapModifier(
         id: serialized.id,
         source,
         geoBox: GeoBox.fromArray(serialized.geoBox),
-        blendMode: serialized.blendMode as HeightMapBlendMode,
-        opacity: serialized.opacity,
-        enabled: serialized.enabled,
-        heightScale: serialized.heightScale
+        enabled: serialized.enabled
     };
 }

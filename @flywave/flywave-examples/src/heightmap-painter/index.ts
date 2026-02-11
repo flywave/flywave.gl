@@ -8,24 +8,23 @@ import {
     MapControls,
     MapControlsUI,
     CesiumWorldTerrainSource,
-    HeightMapBlendMode,
     ArcGISTileProvider,
     ellipsoidProjection
 } from "@flywave/flywave.gl";
- 
-import { HeightmapPainter } from "@flywave/flywave-heightmap-painter"; 
+
+import { HeightmapPainter } from "@flywave/flywave-heightmap-painter";
 import { CESIUM_ION_TOKEN } from "../token-config.js";
 
 class HeightmapPainterExample {
     private map?: MapView;
     private controls: MapControls;
-    
+
     private cesiumTerrain?: CesiumWorldTerrainSource;
     private painter: HeightmapPainter | null = null;
     private painterContainer: HTMLDivElement | null = null;
     private mapContainer: HTMLDivElement | null = null;
 
-    constructor() {  
+    constructor() {
         this.painterContainer = null;
         this.mapContainer = null;
         this.initialize();
@@ -106,8 +105,9 @@ class HeightmapPainterExample {
         // Painter 会自动把自己添加到 mapContainer 中
         this.painter = new HeightmapPainter({
             mapView: this.map,
+            terrainSource: this.cesiumTerrain,
             mapControls: this.controls,
-            container: this.mapContainer // Painter 渲染到 MapView 的父容器中
+            container: this.mapContainer
         });
 
         this.painter.on("ready", () => {
@@ -139,10 +139,7 @@ class HeightmapPainterExample {
         const modifierId = manager.addModifier(
             "heightmap-painter",
             { type: "image", image: data.imageData },
-            geoBox,
-            HeightMapBlendMode.ADD,
-            1.0,
-            { min: 0, max: 500 }
+            geoBox
         );
 
         console.log("Successfully applied heightmap to terrain:", modifierId);

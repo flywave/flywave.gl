@@ -6,11 +6,9 @@ import { EventDispatcher } from "three";
 
 import { type ITerrainSource } from "../TerrainSource";
 import {
-    HeightMapBlendMode,
     type HeightMapModificationEventParams,
     type HeightMapModifier,
-    type HeightMapSourceData,
-    type HeightMapScale
+    type HeightMapSourceData
 } from "./HeightMapModifierTypes";
 
 interface HeightMapModificationEvents {
@@ -40,22 +38,12 @@ export class HeightMapModifierManager extends EventDispatcher<HeightMapModificat
         ) as typeof this.debouncedDispatch;
     }
 
-    addModifier(
-        id: string,
-        source: HeightMapSourceData,
-        geoBox: GeoBox,
-        blendMode: HeightMapBlendMode = HeightMapBlendMode.ADD,
-        opacity: number = 1.0,
-        heightScale?: HeightMapScale
-    ): string { 
+    addModifier(id: string, source: HeightMapSourceData, geoBox: GeoBox): string {
         const modifier: HeightMapModifier = {
             id,
             source,
             geoBox: geoBox.clone(),
-            blendMode,
-            opacity: Math.max(0, Math.min(1, opacity)),
-            enabled: true,
-            heightScale
+            enabled: true
         };
 
         this.modifiers.set(id, modifier);
@@ -85,28 +73,14 @@ export class HeightMapModifierManager extends EventDispatcher<HeightMapModificat
         return true;
     }
 
-    updateModifier(
-        id: string,
-        changes: Partial<
-            Pick<HeightMapModifier, "blendMode" | "opacity" | "enabled" | "heightScale">
-        >
-    ): boolean {
+    updateModifier(id: string, changes: Partial<Pick<HeightMapModifier, "enabled">>): boolean {
         const modifier = this.modifiers.get(id);
         if (!modifier) return false;
 
         const previousBounds = modifier.geoBox.clone();
 
-        if (changes.blendMode !== undefined) {
-            modifier.blendMode = changes.blendMode;
-        }
-        if (changes.opacity !== undefined) {
-            modifier.opacity = Math.max(0, Math.min(1, changes.opacity));
-        }
         if (changes.enabled !== undefined) {
             modifier.enabled = changes.enabled;
-        }
-        if (changes.heightScale !== undefined) {
-            modifier.heightScale = changes.heightScale;
         }
 
         this.dispatchChangeEvent("update", [id], previousBounds);
