@@ -4,7 +4,11 @@ import { Painter, PainterRef } from "./components/Painter";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { BrushToolbar } from "./components/BrushToolbar";
 import { ExportPanel } from "./components/ExportPanel";
+import { HelpPanel, HelpButton } from "./components/HelpPanel";
+import { MiniHelpPanel } from "./components/MiniHelpPanel";
 import { HeightmapExport, BrushSettings, BrushType } from "./types";
+import type { MapControls } from "@flywave/flywave.gl";
+import type { MapView } from "@flywave/flywave.gl";
 
 const Container = styled.div`
     width: 100%;
@@ -102,7 +106,8 @@ const Button = styled.button<{ $variant?: "primary" | "danger" | "default" }>`
 type AppState = "config" | "painting";
 
 export interface AppProps {
-    mapView: any;
+    mapView: MapView;
+    mapControls?: MapControls;
     width?: number;
     height?: number;
     paintAreaGeoBox?: { minLon: number; minLat: number; maxLon: number; maxLat: number };
@@ -125,6 +130,7 @@ const App = React.forwardRef<AppInstance, AppProps>(
     (
         {
             mapView,
+            mapControls,
             width: propWidth,
             height: propHeight,
             paintAreaGeoBox,
@@ -149,8 +155,9 @@ const App = React.forwardRef<AppInstance, AppProps>(
         const [currentGeoBox, setCurrentGeoBox] = useState<typeof paintAreaGeoBox>(
             paintAreaGeoBox || null
         );
-        const [mode, setMode] = useState<"draw" | "navigate">("draw");
         const [showExport, setShowExport] = useState(false);
+        const [showHelp, setShowHelp] = useState(false);
+        const [realtimeExportData, setRealtimeExportData] = useState<HeightmapExport | null>(null);
         const [brushSettings, setBrushSettings] = useState<BrushSettings>({
             type: BrushType.RAISE,
             size: 100,
@@ -184,6 +191,8 @@ const App = React.forwardRef<AppInstance, AppProps>(
         };
 
         const handleHeightmapChange = (heightData: Float32Array) => {
+            const exportData = painterRef.current?.exportHeightmap() || null;
+            setRealtimeExportData(exportData);
             onHeightmapChange?.(heightData);
         };
 
@@ -242,6 +251,7 @@ const App = React.forwardRef<AppInstance, AppProps>(
                         🎨 地形编辑器 - {currentWidth}x{currentHeight}
                     </Title>
                     <ButtonGroup>
+                        <HelpButton onClick={() => setShowHelp(true)} />
                         <Button $variant="default" onClick={handleReconfigure}>
                             ↩ 重新配置区域
                         </Button>
@@ -261,7 +271,7 @@ const App = React.forwardRef<AppInstance, AppProps>(
                     onBrushMove={handleBrushMove}
                     onBrushEnd={handleBrushEnd}
                     onHeightmapChange={handleHeightmapChange}
-                    mode={mode}
+                    mapControls={mapControls}
                 />
 
                 <BrushToolbar
@@ -271,16 +281,15 @@ const App = React.forwardRef<AppInstance, AppProps>(
                         handleBrushSettingsChange(settings);
                     }}
                     onClear={() => painterRef.current?.clearCanvas()}
-                    mode={mode}
-                    onModeChange={setMode}
                 />
 
                 {showExport && (
-                    <ExportPanel
-                        exportData={painterRef.current?.exportHeightmap() || null}
-                        onExport={handleExport}
-                    />
+                    <ExportPanel exportData={realtimeExportData} onExport={handleExport} />
                 )}
+
+                {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
+
+                <MiniHelpPanel />
             </Container>
         );
     }

@@ -17,15 +17,15 @@ import { HeightmapPainter } from "@flywave/flywave-heightmap-painter";
 import { CESIUM_ION_TOKEN } from "../token-config.js";
 
 class HeightmapPainterExample {
-    private map: MapView;
-    private cesiumTerrain: CesiumWorldTerrainSource;
+    private map?: MapView;
+    private controls: MapControls;
+    
+    private cesiumTerrain?: CesiumWorldTerrainSource;
     private painter: HeightmapPainter | null = null;
     private painterContainer: HTMLDivElement | null = null;
     private mapContainer: HTMLDivElement | null = null;
 
-    constructor() {
-        this.map = null as any;
-        this.cesiumTerrain = null as any;
+    constructor() {  
         this.painterContainer = null;
         this.mapContainer = null;
         this.initialize();
@@ -81,6 +81,7 @@ class HeightmapPainterExample {
         const controls = new MapControls(map);
         const ui = new MapControlsUI(controls, { zoomLevel: "input" });
         this.mapContainer.appendChild(ui.domElement);
+        this.controls = controls;
 
         return map;
     }
@@ -105,6 +106,7 @@ class HeightmapPainterExample {
         // Painter 会自动把自己添加到 mapContainer 中
         this.painter = new HeightmapPainter({
             mapView: this.map,
+            mapControls: this.controls,
             container: this.mapContainer // Painter 渲染到 MapView 的父容器中
         });
 

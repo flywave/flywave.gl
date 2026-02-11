@@ -6,8 +6,6 @@ interface BrushToolbarProps {
     brushSettings: BrushSettings;
     onSettingsChange: (settings: Partial<BrushSettings>) => void;
     onClear: () => void;
-    mode: "draw" | "navigate";
-    onModeChange: (mode: "draw" | "navigate") => void;
     disabled?: boolean;
 }
 
@@ -233,8 +231,6 @@ export const BrushToolbar: React.FC<BrushToolbarProps> = ({
     brushSettings,
     onSettingsChange,
     onClear,
-    mode,
-    onModeChange,
     disabled = false
 }) => {
     const [collapsed, setCollapsed] = useState(false);
@@ -258,17 +254,6 @@ export const BrushToolbar: React.FC<BrushToolbarProps> = ({
             </Title>
 
             <Section $collapsed={collapsed}>
-                <ButtonGroup>
-                    <Button $active={mode === "draw"} onClick={() => onModeChange("draw")}>
-                        🎨 绘制
-                    </Button>
-                    <Button $active={mode === "navigate"} onClick={() => onModeChange("navigate")}>
-                        🗺️ 导航
-                    </Button>
-                </ButtonGroup>
-
-                <Divider />
-
                 <GridContainer>
                     {brushOptions.map(option => (
                         <IconButton

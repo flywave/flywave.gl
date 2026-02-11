@@ -3,9 +3,12 @@ import ReactDOM from "react-dom/client";
 import PainterApp from "./PainterApp";
 import { GlobalStyle } from "./styles/GlobalStyle";
 import { HeightmapExport, BrushSettings } from "./types";
+import type { MapControls } from "@flywave/flywave.gl";
+import type { MapView } from "@flywave/flywave.gl";
 
 export interface HeightmapPainterOptions {
-    mapView: any;
+    mapView: MapView;
+    mapControls?: MapControls;
     container: HTMLElement;
     width?: number;
     height?: number;
@@ -62,9 +65,9 @@ export class HeightmapPainter {
         this.container.style.top = "0";
         this.container.style.left = "0";
         this.container.style.pointerEvents = "none";
-        this.container.style.zIndex = "1000"; // 远高于 MapControlsUI
+        this.container.style.zIndex = "1000"; // Far above MapControlsUI
 
-        // 把 painter 的容器添加到 targetContainer 中
+        // Append painter container to targetContainer
         this.targetContainer.appendChild(this.container);
 
         this.mount(options);
@@ -78,6 +81,7 @@ export class HeightmapPainter {
         const appElement = React.createElement(PainterApp, {
             ref: this.appRef,
             mapView: options.mapView,
+            mapControls: options.mapControls,
             width: options.width,
             height: options.height,
             paintAreaGeoBox: options.paintAreaGeoBox,

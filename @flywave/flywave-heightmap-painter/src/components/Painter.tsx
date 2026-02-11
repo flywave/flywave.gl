@@ -3,6 +3,7 @@ import styled from "styled-components";
 import { BrushEngine } from "../utils/brushEngine";
 import { BrushSettings, HeightmapExport, BrushType } from "../types";
 import { WindowEventHandler } from "@flywave/flywave.gl";
+import type { MapControls } from "@flywave/flywave.gl";
 
 interface PainterProps {
     width: number;
@@ -13,7 +14,8 @@ interface PainterProps {
     onBrushMove?: (x: number, y: number) => void;
     onBrushEnd?: () => void;
     onHeightmapChange?: (heightData: Float32Array) => void;
-    mode: "draw" | "navigate";
+    mode?: "draw" | "navigate"; // Kept for backward compatibility, but no longer controls drawing behavior
+    mapControls?: MapControls; // Map controls instance must be passed in
 }
 
 export interface PainterRef {
@@ -21,6 +23,7 @@ export interface PainterRef {
     exportHeightmap: () => HeightmapExport | null;
     updateBrushSettings: (settings: Partial<BrushSettings>) => void;
     getBrushSettings: () => BrushSettings;
+    setDrawingMode: (enabled: boolean) => void;
 }
 
 const BrushCursor = styled.div<{ $visible: boolean; $size: number; $x: number; $y: number }>`
@@ -32,9 +35,9 @@ const BrushCursor = styled.div<{ $visible: boolean; $size: number; $x: number; $
     border: 2px solid rgba(255, 255, 255, 0.9);
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.3);
-    pointer-events: none !important;  /* 确保鼠标事件穿透 */
-    -webkit-pointer-events: none;  /* Safari兼容 */
-    -moz-pointer-events: none;  /* Firefox兼容 */
+    pointer-events: none !important; /* Ensure mouse events pass through */
+    -webkit-pointer-events: none; /* Safari compatibility */
+    -moz-pointer-events: none; /* Firefox compatibility */
     transform: translate(
         ${props => props.$x - props.$size / 2}px,
         ${props => props.$y - props.$size / 2}px
@@ -43,7 +46,7 @@ const BrushCursor = styled.div<{ $visible: boolean; $size: number; $x: number; $
     display: ${props => (props.$visible ? "block" : "none")};
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(2px);
-    /* 确保不会影响鼠标事件 */
+    /* Ensure it doesn't affect mouse events */
     user-select: none;
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -61,7 +64,8 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             onBrushMove,
             onBrushEnd,
             onHeightmapChange,
-            mode
+            mode,
+            mapControls
         },
         ref
     ) => {
@@ -82,6 +86,8 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
         const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
         const [cursorVisible, setCursorVisible] = useState(false);
         const [cursorSize, setCursorSize] = useState(50);
+        const [isDrawingMode, setIsDrawingMode] = useState(false);
+        const mapControlsRef = useRef<MapControls>(mapControls);
 
         useEffect(() => {
             const brushEngine = new BrushEngine(width, height);
@@ -105,23 +111,23 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             }
         }, [brushSettings]);
 
-        // 初始化 WindowEventHandler
+        // Initialize WindowEventHandler
         useEffect(() => {
             if (mapView && mapView.canvas) {
                 const canvas = mapView.canvas as HTMLCanvasElement;
-                
-                // 创建 WindowEventHandler 实例
+
+                // Create WindowEventHandler instance
                 const windowEventHandler = new WindowEventHandler(canvas);
                 windowEventHandlerRef.current = windowEventHandler;
 
-                // 监听鼠标事件
+                // Listen to mouse events
                 const handleMouseDown = (event: MouseEvent) => {
-                    if (mode !== "draw" || !mapView || !paintAreaGeoBox) return;
+                    if (!isDrawingMode || !mapView || !paintAreaGeoBox) return;
 
                     const x = event.offsetX;
                     const y = event.offsetY;
 
-                    // 通过 WindowEventHandler 的状态来判断是否是左键按下
+                    // Check if left mouse button is pressed via WindowEventHandler state
                     if (windowEventHandler.mouseDown[0]) {
                         const worldPos = mapView.getWorldPositionAt(x, y);
                         if (!worldPos) return;
@@ -151,7 +157,7 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
 
                     const geoPos = mapView.projection.unprojectPoint(worldPos);
 
-                    if (mode === "draw") {
+                    if (isDrawingMode) {
                         const coords = getCanvasCoordinates(geoPos.longitude, geoPos.latitude);
 
                         if (coords) {
@@ -160,7 +166,7 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
                             setCursorPos({ x: event.clientX, y: event.clientY });
                             setCursorSize(size);
 
-                            // 检查是否正在绘制（左键按下状态）
+                            // Check if currently drawing (left mouse button pressed)
                             if (windowEventHandlerRef.current?.mouseDown[0]) {
                                 brushEngineRef.current?.drawAt(coords.x, coords.y);
                                 onBrushMove?.(coords.x, coords.y);
@@ -175,28 +181,74 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
                 };
 
                 const handleMouseUp = () => {
-                    // 鼠标释放后触发结束绘制事件
-                    if (mode === "draw") {
+                    // Trigger brush end event when mouse is released
+                    if (isDrawingMode) {
                         onBrushEnd?.();
                     }
                 };
 
-                // 注册事件监听器
-                windowEventHandler.addEventListener('mousedown', handleMouseDown as EventListener);
-                windowEventHandler.addEventListener('mousemove', handleMouseMove as EventListener);
-                windowEventHandler.addEventListener('mouseup', handleMouseUp);
+                // Register event listeners
+                windowEventHandler.addEventListener("mousedown", handleMouseDown as EventListener);
+                windowEventHandler.addEventListener("mousemove", handleMouseMove as EventListener);
+                windowEventHandler.addEventListener("mouseup", handleMouseUp);
 
-                // 清理事件监听器
+                // Cleanup event listeners
                 return () => {
                     if (windowEventHandler) {
-                        windowEventHandler.removeEventListener('mousedown', handleMouseDown as EventListener);
-                        windowEventHandler.removeEventListener('mousemove', handleMouseMove as EventListener);
-                        windowEventHandler.removeEventListener('mouseup', handleMouseUp);
+                        windowEventHandler.removeEventListener(
+                            "mousedown",
+                            handleMouseDown as EventListener
+                        );
+                        windowEventHandler.removeEventListener(
+                            "mousemove",
+                            handleMouseMove as EventListener
+                        );
+                        windowEventHandler.removeEventListener("mouseup", handleMouseUp);
                         windowEventHandler.clearEvent();
                     }
                 };
             }
-        }, [mapView, mode, brushSettings.size, paintAreaGeoBox]);
+        }, [mapView, isDrawingMode, brushSettings.size, paintAreaGeoBox]);
+
+        // Listen to space key events
+        useEffect(() => {
+            const handleKeyDown = (event: KeyboardEvent) => {
+                if (event.code === "Space" && !event.repeat) {
+                    event.preventDefault();
+                    setIsDrawingMode(true);
+                    // Disable map controls
+                    if (mapControlsRef.current) {
+                        mapControlsRef.current.enabled = false;
+                        console.log("🖌️ Enter drawing mode - Map controls disabled");
+                    } else {
+                        console.warn(
+                            "⚠️ Map controls instance not found, unable to control enable/disable state"
+                        );
+                    }
+                }
+            };
+
+            const handleKeyUp = (event: KeyboardEvent) => {
+                if (event.code === "Space") {
+                    event.preventDefault();
+                    setIsDrawingMode(false);
+                    // Enable map controls
+                    if (mapControlsRef.current) {
+                        mapControlsRef.current.enabled = true;
+                    }
+                    // Trigger brush end event
+                    onBrushEnd?.();
+                }
+            };
+
+            window.addEventListener("keydown", handleKeyDown);
+            window.addEventListener("keyup", handleKeyUp);
+
+            return () => {
+                window.removeEventListener("keydown", handleKeyDown);
+                window.removeEventListener("keyup", handleKeyUp);
+            };
+        }, [onBrushEnd]);
 
         const getCanvasCoordinates = (lon: number, lat: number) => {
             if (
@@ -264,16 +316,36 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
 
         const getBrushSettingsValue = () => brushSettings;
 
+        const setDrawingMode = (enabledParam: boolean) => {
+            setIsDrawingMode(enabledParam);
+            if (mapControlsRef.current) {
+                mapControlsRef.current.enabled = !enabledParam;
+                console.log(
+                    `${enabledParam ? "🖌️" : "🗺️"} ${
+                        enabledParam ? "Enter" : "Exit"
+                    } drawing mode - Map controls ${enabledParam ? "disabled" : "enabled"}`
+                );
+            } else {
+                console.warn(
+                    "⚠️ Map controls instance not found, unable to control enable/disable state"
+                );
+            }
+            if (!enabledParam) {
+                onBrushEnd?.();
+            }
+        };
+
         (ref as React.MutableRefObject<PainterRef>).current = {
             clearCanvas,
             exportHeightmap,
             updateBrushSettings,
-            getBrushSettings: getBrushSettingsValue
+            getBrushSettings: getBrushSettingsValue,
+            setDrawingMode
         };
 
         return (
             <BrushCursor
-                $visible={cursorVisible && mode === "draw"}
+                $visible={cursorVisible && isDrawingMode}
                 $size={cursorSize}
                 $x={cursorPos.x}
                 $y={cursorPos.y}

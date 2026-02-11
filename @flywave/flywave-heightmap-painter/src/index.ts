@@ -11,3 +11,5 @@ export { ExportPanel } from "./components/ExportPanel";
 export { Painter } from "./components/Painter";
 export type { PainterRef } from "./components/Painter";
 export { BrushToolbar } from "./components/BrushToolbar";
+export { HelpPanel, HelpButton } from "./components/HelpPanel";
+export { MiniHelpPanel } from "./components/MiniHelpPanel";
