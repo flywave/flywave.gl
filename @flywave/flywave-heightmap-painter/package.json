@@ -32,8 +32,7 @@
     ],
     "author": "flywave.gl contributors",
     "license": "Apache-2.0",
-    "peerDependencies": {
-        "@flywave/flywave.gl": "workspace:*",
+    "peerDependencies": { 
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "styled-components": "^6.1.6"

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, forwardRef } from "react";
 import styled from "styled-components";
 import { BrushEngine } from "../utils/brushEngine";
 import { BrushSettings, HeightmapExport, BrushType } from "../types";
+import { WindowEventHandler } from "@flywave/flywave.gl";
 
 interface PainterProps {
     width: number;
@@ -31,15 +32,22 @@ const BrushCursor = styled.div<{ $visible: boolean; $size: number; $x: number; $
     border: 2px solid rgba(255, 255, 255, 0.9);
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.3);
-    pointer-events: none;
+    pointer-events: none !important;  /* 确保鼠标事件穿透 */
+    -webkit-pointer-events: none;  /* Safari兼容 */
+    -moz-pointer-events: none;  /* Firefox兼容 */
     transform: translate(
         ${props => props.$x - props.$size / 2}px,
         ${props => props.$y - props.$size / 2}px
     );
-    z-index: 10000;
+    z-index: 9999;
     display: ${props => (props.$visible ? "block" : "none")};
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(2px);
+    /* 确保不会影响鼠标事件 */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 `;
 
 export const Painter = forwardRef<PainterRef, PainterProps>(
@@ -58,7 +66,7 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
         ref
     ) => {
         const brushEngineRef = useRef<BrushEngine | null>(null);
-        const isDrawingRef = useRef(false);
+        const windowEventHandlerRef = useRef<WindowEventHandler | null>(null);
         const tempCanvasRef = useRef<HTMLCanvasElement | null>(null);
         const currentBrushSizeRef = useRef(50);
 
@@ -97,6 +105,99 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             }
         }, [brushSettings]);
 
+        // 初始化 WindowEventHandler
+        useEffect(() => {
+            if (mapView && mapView.canvas) {
+                const canvas = mapView.canvas as HTMLCanvasElement;
+                
+                // 创建 WindowEventHandler 实例
+                const windowEventHandler = new WindowEventHandler(canvas);
+                windowEventHandlerRef.current = windowEventHandler;
+
+                // 监听鼠标事件
+                const handleMouseDown = (event: MouseEvent) => {
+                    if (mode !== "draw" || !mapView || !paintAreaGeoBox) return;
+
+                    const x = event.offsetX;
+                    const y = event.offsetY;
+
+                    // 通过 WindowEventHandler 的状态来判断是否是左键按下
+                    if (windowEventHandler.mouseDown[0]) {
+                        const worldPos = mapView.getWorldPositionAt(x, y);
+                        if (!worldPos) return;
+
+                        const geoPos = mapView.projection.unprojectPoint(worldPos);
+                        const coords = getCanvasCoordinates(geoPos.longitude, geoPos.latitude);
+                        if (!coords) return;
+
+                        brushEngineRef.current?.drawAt(coords.x, coords.y);
+
+                        onBrushStart?.(coords.x, coords.y);
+                        onHeightmapChange?.(brushEngineRef.current!.getHeightData());
+                    }
+                };
+
+                const handleMouseMove = (event: MouseEvent) => {
+                    if (!mapView || !paintAreaGeoBox) return;
+
+                    const x = event.offsetX;
+                    const y = event.offsetY;
+
+                    const worldPos = mapView.getWorldPositionAt(x, y);
+                    if (!worldPos) {
+                        setCursorVisible(false);
+                        return;
+                    }
+
+                    const geoPos = mapView.projection.unprojectPoint(worldPos);
+
+                    if (mode === "draw") {
+                        const coords = getCanvasCoordinates(geoPos.longitude, geoPos.latitude);
+
+                        if (coords) {
+                            const size = calculateCursorSize(brushSettings.size);
+                            setCursorVisible(true);
+                            setCursorPos({ x: event.clientX, y: event.clientY });
+                            setCursorSize(size);
+
+                            // 检查是否正在绘制（左键按下状态）
+                            if (windowEventHandlerRef.current?.mouseDown[0]) {
+                                brushEngineRef.current?.drawAt(coords.x, coords.y);
+                                onBrushMove?.(coords.x, coords.y);
+                                onHeightmapChange?.(brushEngineRef.current!.getHeightData());
+                            }
+                        } else {
+                            setCursorVisible(false);
+                        }
+                    } else {
+                        setCursorVisible(false);
+                    }
+                };
+
+                const handleMouseUp = () => {
+                    // 鼠标释放后触发结束绘制事件
+                    if (mode === "draw") {
+                        onBrushEnd?.();
+                    }
+                };
+
+                // 注册事件监听器
+                windowEventHandler.addEventListener('mousedown', handleMouseDown as EventListener);
+                windowEventHandler.addEventListener('mousemove', handleMouseMove as EventListener);
+                windowEventHandler.addEventListener('mouseup', handleMouseUp);
+
+                // 清理事件监听器
+                return () => {
+                    if (windowEventHandler) {
+                        windowEventHandler.removeEventListener('mousedown', handleMouseDown as EventListener);
+                        windowEventHandler.removeEventListener('mousemove', handleMouseMove as EventListener);
+                        windowEventHandler.removeEventListener('mouseup', handleMouseUp);
+                        windowEventHandler.clearEvent();
+                    }
+                };
+            }
+        }, [mapView, mode, brushSettings.size, paintAreaGeoBox]);
+
         const getCanvasCoordinates = (lon: number, lat: number) => {
             if (
                 lat < paintAreaGeoBox.minLat ||
@@ -125,86 +226,6 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             const size = Math.max(minSize, Math.min(maxSize, brushSizeMeters / 5));
             return size;
         };
-
-        const handleMouseDown = (event: MouseEvent) => {
-            if (mode !== "draw" || !mapView || !paintAreaGeoBox) return;
-
-            const rect = (mapView.canvas as HTMLCanvasElement).getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-
-            const worldPos = mapView.getWorldPositionAt(x, y);
-            if (!worldPos) return;
-
-            const geoPos = mapView.projection.unprojectPoint(worldPos);
-            const coords = getCanvasCoordinates(geoPos.longitude, geoPos.latitude);
-            if (!coords) return;
-
-            isDrawingRef.current = true;
-            brushEngineRef.current?.drawAt(coords.x, coords.y);
-
-            onBrushStart?.(coords.x, coords.y);
-            onHeightmapChange?.(brushEngineRef.current!.getHeightData());
-        };
-
-        const handleMouseMove = (event: MouseEvent) => {
-            if (!mapView || !paintAreaGeoBox) return;
-
-            const rect = (mapView.canvas as HTMLCanvasElement).getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-
-            const worldPos = mapView.getWorldPositionAt(x, y);
-            if (!worldPos) {
-                setCursorVisible(false);
-                return;
-            }
-
-            const geoPos = mapView.projection.unprojectPoint(worldPos);
-
-            if (mode === "draw") {
-                const coords = getCanvasCoordinates(geoPos.longitude, geoPos.latitude);
-
-                if (coords) {
-                    const size = calculateCursorSize(brushSettings.size);
-                    setCursorVisible(true);
-                    setCursorPos({ x: event.clientX, y: event.clientY });
-                    setCursorSize(size);
-
-                    if (isDrawingRef.current) {
-                        brushEngineRef.current?.drawAt(coords.x, coords.y);
-                        onBrushMove?.(coords.x, coords.y);
-                        onHeightmapChange?.(brushEngineRef.current!.getHeightData());
-                    }
-                } else {
-                    setCursorVisible(false);
-                }
-            } else {
-                setCursorVisible(false);
-            }
-        };
-
-        const handleMouseUp = () => {
-            if (!isDrawingRef.current) return;
-            isDrawingRef.current = false;
-            onBrushEnd?.();
-        };
-
-        useEffect(() => {
-            if (!mapView || !mapView.canvas) return;
-
-            const canvas = mapView.canvas as HTMLCanvasElement;
-
-            canvas.addEventListener("mousedown", handleMouseDown);
-            window.addEventListener("mousemove", handleMouseMove);
-            window.addEventListener("mouseup", handleMouseUp);
-
-            return () => {
-                canvas.removeEventListener("mousedown", handleMouseDown);
-                window.removeEventListener("mousemove", handleMouseMove);
-                window.removeEventListener("mouseup", handleMouseUp);
-            };
-        }, [mapView, mode, brushSettings.size]);
 
         const clearCanvas = () => {
             brushEngineRef.current?.clear();

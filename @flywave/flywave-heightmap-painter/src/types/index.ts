@@ -1,5 +1,4 @@
 import type { MapView } from "@flywave/flywave.gl";
-import type { GeoBox as FlywaveGeoBox } from "@flywave/flywave-geoutils";
 
 export namespace L {
     export type Map = MapView;
