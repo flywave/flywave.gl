@@ -17,13 +17,11 @@ import {
     prevPowerOfTwo
 } from "@flywave/flywave-utils";
 import { Box2, Vector2 } from "three";
-import { serializeHeightMapModifier } from "../ground-modification-manager";
 
 import { TaskType } from "../Constants";
 import {
     type HeightMapModificationEventParams,
-    type HeightMapModifierManager,
-    type SerializedHeightMapModifier
+    type HeightMapModifierManager
 } from "../ground-modification-manager";
 import { ResourceProvider } from "../ResourceProvider";
 import type { DecodedTerrainTile } from "../TerrainDecoderWorker";
@@ -234,15 +232,13 @@ export class DemTileResource extends TileValidResource {
      * @param tileKey - The tile key identifying this tile
      * @param terrainSource - The terrain data source
      * @param encoding - The DEM encoding format
-     * @param groundModificationPolygons - Optional ground modification polygons
      * @returns A promise that resolves to a new DemTileResource
      */
     static async createDemTileResourceFromImageryData(
         imgData: HTMLImageElement | ImageBitmap | ImageData,
         tileKey: TileKey,
         terrainSource: ITerrainSource,
-        encoding: DEMEncoding,
-        heightMapModifiers?: SerializedHeightMapModifier[]
+        encoding: DEMEncoding
     ) {
         const buffer = (imgData.width - prevPowerOfTwo(imgData.width)) / 2;
         const padding = 1 - buffer;
@@ -261,12 +257,10 @@ export class DemTileResource extends TileValidResource {
         }
         const geoBox = terrainSource.getTilingScheme().getGeoBox(tileKey);
 
-        const modifiers =
-            heightMapModifiers ||
-            terrainSource
-                .getGroundModificationManager()
-                .findModifiersInBoundingBox(geoBox)
-                .map(m => serializeHeightMapModifier(m));
+        // Check for height map modifiers in this tile's area (for elevation map decision only)
+        const foundModifiers = terrainSource
+            .getGroundModificationManager()
+            .findModifiersInBoundingBox(geoBox);
 
         return terrainSource.decoder
             .decodeTile(
@@ -277,7 +271,7 @@ export class DemTileResource extends TileValidResource {
                     encoding,
                     geoBox: geoBox.toArray(),
                     padding,
-                    heightMapModifiers: modifiers,
+                    terrainSourceId: terrainSource.name,
                     height: imgData.height,
                     width: imgData.width,
                     flipY: (terrainSource.dataProvider() as DemTileProvider).isElevationMapFlipY()
@@ -285,6 +279,7 @@ export class DemTileResource extends TileValidResource {
                 tileKey,
                 terrainSource.projection
             )
+
             .then(({ tileTerrain }: DecodedTerrainTile) => {
                 const data = tileTerrain as SerializedDEMData;
 

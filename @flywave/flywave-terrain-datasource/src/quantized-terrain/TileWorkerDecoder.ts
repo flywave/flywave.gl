@@ -3,10 +3,7 @@
 // TileDecoderUtils.ts
 import { type GeoBoxArray, type Projection, GeoBox, TileKey } from "@flywave/flywave-geoutils";
 
-import {
-    type SerializedHeightMapModifier,
-    deserializeHeightMapModifier
-} from "../ground-modification-manager";
+import { HeightMapModifierWorkerManager } from "../ground-modification-manager";
 import {
     type SerializedStratumClipRegion,
     deserializeStratumClipRegion
@@ -51,14 +48,29 @@ export const processQuantizedMesh = async (
     const quantizedMeshLoader = new QuantizedMeshLoader(projection, data);
     const quantizedTerrainMesh = quantizedMeshLoader.parse(data.buffer);
 
+    // Get height map modifiers from worker local store
+    let clipModifiers = undefined;
+    const terrainSourceId = (data as { terrainSourceId?: string }).terrainSourceId;
+
+    if (terrainSourceId && data.geoBox) {
+        const workerModifiers = HeightMapModifierWorkerManager.findModifiersInBoundingBox(
+            terrainSourceId,
+            data.geoBox
+        );
+
+        if (workerModifiers.length > 0) {
+            clipModifiers = workerModifiers;
+        }
+    }
+
     await quantizedTerrainMesh.generateAndProcessTerrain({
         heightMap: data.elevationMapEnabled
             ? {
-                  geoBox: data.geoBox,
-                  flipY: data.elevationMapFlipY
-              }
+                geoBox: data.geoBox,
+                flipY: data.elevationMapFlipY
+            }
             : undefined,
-        clip: data.heightMapModifiers?.map(deserializeHeightMapModifier),
+        clip: clipModifiers,
         projection
     });
 
@@ -77,14 +89,14 @@ export const processQuantizedMesh = async (
  * @param projection - The map projection to use for coordinate transformations
  * @returns Clipped and processed quantized terrain mesh data
  */
-export const processUpsampledMesh = (
+export const processUpsampledMesh = async (
     data: {
         quantizedTerrainMeshData: QuantizedTerrainMeshData;
         tileKey: ArrayLike<number>;
         parentTileKey: ArrayLike<number>;
     } & QuantizedMeshClipperOptions,
     projection: Projection
-): QuantizedTerrainMeshData => {
+): Promise<QuantizedTerrainMeshData> => {
     // Convert geoBox array to GeoBox object
     data.geoBox = GeoBox.fromArray(data.geoBox as unknown as GeoBoxArray);
     data.targetGeoBox = GeoBox.fromArray(data.targetGeoBox as unknown as GeoBoxArray);
@@ -113,15 +125,30 @@ export const processUpsampledMesh = (
         isBottom
     );
 
+    // Get height map modifiers from worker local store
+    let clipModifiers = undefined;
+    const terrainSourceId = (data as { terrainSourceId?: string }).terrainSourceId;
+
+    if (terrainSourceId && data.targetGeoBox) {
+        const workerModifiers = HeightMapModifierWorkerManager.findModifiersInBoundingBox(
+            terrainSourceId,
+            data.targetGeoBox
+        );
+
+        if (workerModifiers.length > 0) {
+            clipModifiers = workerModifiers;
+        }
+    }
+
     // Render heightmap for clipped mesh
-    quantizedTerrainMesh.generateAndProcessTerrain({
+    await quantizedTerrainMesh.generateAndProcessTerrain({
         heightMap: data.elevationMapEnabled
             ? {
-                  geoBox: data.targetGeoBox,
-                  flipY: data.elevationMapFlipY
-              }
+                geoBox: data.targetGeoBox,
+                flipY: data.elevationMapFlipY
+            }
             : undefined,
-        clip: data.heightMapModifiers?.map(deserializeHeightMapModifier),
+        clip: clipModifiers,
         projection: data.projection
     });
 
@@ -140,8 +167,6 @@ export interface DecodeStratumTileParams {
     projection: Projection;
     /** Optional clip regions for stratum geometry clipping */
     clipRegions?: SerializedStratumClipRegion[];
-    /** Optional height map modifiers to apply */
-    heightMapModifiers?: SerializedHeightMapModifier[];
     /** Whether to flip the Y axis for elevation maps */
     elevationMapFlipY?: boolean;
     /** Whether to enable elevation map generation */

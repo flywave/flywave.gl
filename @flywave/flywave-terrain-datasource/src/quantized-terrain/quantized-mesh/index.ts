@@ -13,7 +13,6 @@ import { type DecodedTerrainTile } from "../../TerrainDecoderWorker";
 import { type ITerrainSource } from "../../TerrainSource";
 import { type ILayerStrategy } from "../layer-strategy/LayerStrategy";
 import { type QuantizedTerrainMeshData, QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
-import { serializeHeightMapModifier } from "../../ground-modification-manager";
 
 /**
  * Fetches and processes quantized mesh terrain data for a specific tile
@@ -47,11 +46,10 @@ export async function getQuantizedMeshTerrain(
             // Get geographic bounds of the tile
             const geobox = layerStrategy.tilingScheme.getGeoBox(tileKey);
 
-            // Check for height map modifiers in this tile's area
+            // Check for height map modifiers in this tile's area (for elevation map decision only)
             const foundModifiers = dataSource
                 .getGroundModificationManager()
                 .findModifiersInBoundingBox(geobox);
-            const heightMapModifiers = foundModifiers.map(m => serializeHeightMapModifier(m));
 
             let skirtHeight = Math.min((rootGeometricError / (1 << tileKey.level)) * 4.0, 1000);
 
@@ -61,7 +59,7 @@ export async function getQuantizedMeshTerrain(
                     type: TaskType.QuantizedMesh,
                     geoBox: geobox.toArray(),
                     skirtLength: skirtHeight,
-                    heightMapModifiers,
+                    terrainSourceId: dataSource.name,
                     isWebMercator: true,
                     smoothSkirtNormals: true,
                     solid: false,
@@ -70,9 +68,9 @@ export async function getQuantizedMeshTerrain(
                      * Critical elevation map control logic:
                      * Elevation maps are REQUIRED in two cases:
                      * 1. When explicitly enabled via elevationMapEnabled parameter (global setting)
-                     * 2. When ANY height map modifiers exist in this tile (!!heightMapModifiers?.length)
+                     * 2. When ANY height map modifiers exist in this tile (!!foundModifiers?.length)
                      */
-                    elevationMapEnabled: elevationMapEnabled || !!heightMapModifiers?.length,
+                    elevationMapEnabled: elevationMapEnabled || !!foundModifiers?.length,
                     elevationMapFlipY
                 },
                 tileKey,
@@ -114,12 +112,10 @@ export async function getUpSamplQuantizedMeshTerrain(
     // Get geographic bounding box of target tile
     const targetGeoBox = layerStrategy.tilingScheme.getGeoBox(tileKey);
 
-    // Find and serialize height map modifiers in current tile area
+    // Check for height map modifiers in this tile's area (for elevation map decision only)
     const foundModifiers = dataSource
         .getGroundModificationManager()
         .findModifiersInBoundingBox(targetGeoBox);
-
-    const heightMapModifiers = foundModifiers.map(m => serializeHeightMapModifier(m));
 
     let projection = dataSource.projection;
     const maxRadius = EarthConstants.EQUATORIAL_RADIUS;
@@ -138,7 +134,7 @@ export async function getUpSamplQuantizedMeshTerrain(
                 skirtHeight,
                 geoBox: layerStrategy.tilingScheme.getGeoBox(parentTileKey).toArray(),
                 targetGeoBox: targetGeoBox.toArray(),
-                heightMapModifiers,
+                terrainSourceId: dataSource.name,
                 tileKey: tileKey.toArray(),
                 isWebMercator: true,
                 parentTileKey: parentTileKey.toArray(),
@@ -148,9 +144,9 @@ export async function getUpSamplQuantizedMeshTerrain(
                  * Elevation map enable logic:
                  * Enable elevation map when either condition is met:
                  * 1. Global elevationMapEnabled parameter is true
-                 * 2. Height map modifiers exist in current tile area (!!heightMapModifiers?.length is true)
+                 * 2. Height map modifiers exist in current tile area (!!foundModifiers?.length is true)
                  */
-                elevationMapEnabled: elevationMapEnabled || !!heightMapModifiers?.length,
+                elevationMapEnabled: elevationMapEnabled || !!foundModifiers?.length,
                 elevationMapFlipY
             },
             tileKey,

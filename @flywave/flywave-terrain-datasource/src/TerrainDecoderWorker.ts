@@ -16,6 +16,7 @@ import { WorkerServiceManager } from "@flywave/flywave-mapview-decoder/WorkerSer
 import { TaskType, TERRAIN_TILE_DECODER_ID } from "./Constants";
 import { type SerializedDEMData } from "./dem-terrain/dem/DemData"; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { type DecodeTileParams, processDEMTile } from "./dem-terrain/TileWorkerDecoder";
+import { HeightMapModifierWorkerManager } from "./ground-modification-manager";
 import { type GroundOverlayTextureJSON } from "./ground-overlay-provider/GroundOverlayTexture";
 import { processGroundOverlayTile } from "./ground-overlay-provider/TileWorkerDecoder";
 import { type QuantizedMeshClipperOptions } from "./quantized-terrain/quantized-mesh/QuantizedMeshClipper";
@@ -137,7 +138,18 @@ export class TerrainTileDecoder implements ITileDecoder {
      * @param customOptions - Custom options map
      */
     public configure(options?: DecoderOptions, customOptions: OptionsMap = {}): void {
-        // No configuration needed for this decoder
+        // Handle height map modifiers synchronization
+        const terrainSourceId = customOptions.terrainSourceId as string;
+        const modifiers =
+            customOptions.heightMapModifiers as import("./ground-modification-manager").SerializedHeightMapModifier[];
+
+        if (terrainSourceId) {
+            if (modifiers && modifiers.length > 0) {
+                HeightMapModifierWorkerManager.updateModifiers(terrainSourceId, modifiers);
+            } else {
+                HeightMapModifierWorkerManager.clearModifiers(terrainSourceId);
+            }
+        }
     }
 
     /**
@@ -173,7 +185,7 @@ export class TerrainTileDecoder implements ITileDecoder {
         switch (data.type) {
             // Handle quantized mesh terrain data
             case TaskType.QuantizedMesh:
-                tileTerrain =await processQuantizedMesh(
+                tileTerrain = await processQuantizedMesh(
                     data as unknown as { buffer: ArrayBuffer } & QuantizedMeshLoaderOptions,
                     projection
                 );
@@ -181,7 +193,7 @@ export class TerrainTileDecoder implements ITileDecoder {
 
             // Handle upsampled quantized mesh data (for LOD transitions)
             case TaskType.QuantizedUpsample:
-                tileTerrain = processUpsampledMesh(
+                tileTerrain = await processUpsampledMesh(
                     data as unknown as {
                         quantizedTerrainMeshData: QuantizedTerrainMeshData;
                         tileKey: ArrayLike<number>;

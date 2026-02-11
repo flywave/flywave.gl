@@ -3,10 +3,7 @@
 import { type GeoBoxArray, GeoBox } from "@flywave/flywave-geoutils";
 import { Texture } from "three";
 
-import {
-    type SerializedHeightMapModifier,
-    deserializeHeightMapModifier
-} from "../ground-modification-manager";
+import { HeightMapModifierWorkerManager } from "../ground-modification-manager";
 import { renderGroundModificationHeightMap } from "../terrain-processor";
 import { type DEMEncoding, DEMData } from "./dem/DemData";
 
@@ -20,8 +17,8 @@ export interface DecodeTileParams {
     geoBox: GeoBoxArray;
     padding: number;
     buildQuadTree: boolean;
-    heightMapModifiers?: SerializedHeightMapModifier[];
     flipY: boolean;
+    terrainSourceId?: string;
 }
 
 /**
@@ -77,23 +74,31 @@ async function getImageData(
  */
 export const processDEMTile = async (params: DecodeTileParams): Promise<DecodeTileResult> => {
     validateDecodeParams(params);
-    const { uid, encoding, heightMapModifiers, geoBox, flipY } = params;
+    const { uid, encoding, geoBox, flipY, terrainSourceId } = params;
 
     const rawimagePixels = await getImageData(params.rawImageData, params.padding);
     let imagePixels = rawimagePixels;
 
     const baseDem = new Texture(await getImageData(params.rawImageData, 0));
-    if (heightMapModifiers && heightMapModifiers.length) {
-        let modifyed = heightMapModifiers?.map(deserializeHeightMapModifier)
-        const { image: processed } = await renderGroundModificationHeightMap(
-            modifyed,
-            GeoBox.fromArray(geoBox),
-            baseDem,
-            256,
-            256,
-            flipY
+
+    // Get height map modifiers from worker local store
+    if (terrainSourceId) {
+        const modifiers = HeightMapModifierWorkerManager.findModifiersInBoundingBox(
+            terrainSourceId,
+            GeoBox.fromArray(geoBox)
         );
-        imagePixels = await getImageData(processed, params.padding);
+
+        if (modifiers.length > 0) {
+            const { image: processed } = await renderGroundModificationHeightMap(
+                modifiers,
+                GeoBox.fromArray(geoBox),
+                baseDem,
+                256,
+                256,
+                flipY
+            );
+            imagePixels = await getImageData(processed, params.padding);
+        }
     }
 
     const dem = new DEMData(

@@ -39,7 +39,10 @@ import { Matrix4, Object3D } from "three";
 
 import { TERRAIN_TILE_DECODER_ID } from "./Constants";
 import { ExclusionManager } from "./ExclusionManager";
-import { HeightMapModifierManager } from "./ground-modification-manager";
+import {
+    HeightMapModifierManager,
+    serializeHeightMapModifier
+} from "./ground-modification-manager";
 import {
     type GroundOverlayProviderOptions,
     GroundOverlayProvider
@@ -298,14 +301,14 @@ export abstract class TerrainSource<
     protected m_materialProviders: WebImageryTileProvider[] = [];
 
     protected m_exclusionManager: ExclusionManager = new ExclusionManager();
+
     protected m_projectionSwitchController?: ProjectionSwitchController;
 
     private readonly m_viewFrustum: ExtendedFrustum = new ExtendedFrustum();
     private readonly m_loadingQueue = new PriorityQueue<TileType>();
     private readonly m_tileCache = new TileLRUCache<TileType>(this);
     private readonly m_groundOverlayProvider: GroundOverlayProvider;
-    private readonly m_groundModificationManager: HeightMapModifierManager =
-        new HeightMapModifierManager(this);
+    private readonly m_groundModificationManager: HeightMapModifierManager;
     private m_tileBaseGeometryBuilder?: TileGeometryBuilder;
 
     private m_showDebugInfo: boolean = false;
@@ -345,6 +348,10 @@ export abstract class TerrainSource<
 
         this.m_groundOverlayProvider.register(this);
 
+        // Create ground modification manager
+        this.m_groundModificationManager = new HeightMapModifierManager(this);
+        // Note: setupGroundModificationSync will be called in connect() after decoder is ready
+
         this.m_projectionSwitchController = new ProjectionSwitchController(
             this,
             options.projectionSwitchOptions
@@ -353,6 +360,41 @@ export abstract class TerrainSource<
         this.m_loadingStages = options.loadingStages ?? 6;
 
         this.m_showDebugInfo = options.showDebugInfo ?? false;
+    }
+
+    /**
+     * Sets up synchronization of ground modifications to worker
+     * This ensures that modifiers are stored locally in worker to avoid
+     * repeated serialization for each tile decode operation
+     */
+    private async setupGroundModificationSync(): Promise<void> {
+        // Sync existing modifiers to worker immediately
+        const existingModifiers = this.m_groundModificationManager.getEnabledModifiers();
+        if (existingModifiers.length > 0) {
+            const serializedModifiers = existingModifiers.map(serializeHeightMapModifier);
+            this.decoder.configure(
+                {},
+                {
+                    terrainSourceId: this.name,
+                    heightMapModifiers: serializedModifiers
+                }
+            );
+        }
+
+        // Listen for modifier changes and sync to worker
+        this.m_groundModificationManager.addEventListener("change", async () => {
+            const modifiers = this.m_groundModificationManager.getEnabledModifiers();
+            const serializedModifiers = modifiers.map(serializeHeightMapModifier);
+
+            // Sync modifiers to worker using configure (broadcasts to all workers)
+            this.decoder.configure(
+                {},
+                {
+                    terrainSourceId: this.name,
+                    heightMapModifiers: serializedModifiers
+                }
+            );
+        });
     }
 
     protected abstract createElevationRangeSource(): ElevationRangeSource;
@@ -563,11 +605,12 @@ export abstract class TerrainSource<
         }
     }
 
-    connect(): Promise<void> {
-        return super.connect().then(() => {
-            this.initializeStages();
-            if (this.showDebugInfo) this.mapView.scene.add(this.m_debugObject);
-        });
+    async connect(): Promise<void> {
+        await super.connect();
+        this.initializeStages();
+        if (this.showDebugInfo) this.mapView.scene.add(this.m_debugObject);
+        // Setup ground modification sync after decoder is connected
+        await this.setupGroundModificationSync();
     }
 
     /**

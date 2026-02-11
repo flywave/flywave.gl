@@ -2,3 +2,4 @@
 
 export * from "./HeightMapModifierTypes";
 export * from "./HeightMapModifierManager";
+export * from "./HeightMapModifierWorkerManager";

@@ -8,7 +8,7 @@ import { type ITerrainSource } from "../../TerrainSource";
 import { type ILayerStrategy } from "../layer-strategy/LayerStrategy";
 import { QuantizedStratumResource } from "./QuantizedStratumResource";
 import { DecodedStratumTileData, StratumTileData } from "./stratum-tile/StratumTileData";
-import { serializeHeightMapModifier } from "../../ground-modification-manager";
+
 export async function getQuantizedStratumMesh(
     layerStrategy: ILayerStrategy,
     dataSource: ITerrainSource,
@@ -19,10 +19,11 @@ export async function getQuantizedStratumMesh(
     elevationMapFlipY: boolean
 ): Promise<QuantizedStratumResource> {
     const geoBox = tilingScheme.getGeoBox(tileKey);
+
+    // Check for height map modifiers in this tile's area (for elevation map decision only)
     const foundModifiers = dataSource
         .getGroundModificationManager()
         .findModifiersInBoundingBox(geoBox);
-    const heightMapModifiers = foundModifiers.map(m => serializeHeightMapModifier(m));
 
     return await layerStrategy
         .requestTileBuffer(tileKey)
@@ -31,9 +32,9 @@ export async function getQuantizedStratumMesh(
                 {
                     buffer,
                     type: TaskType.QuantizedStratumInit,
-                    heightMapModifiers,
+                    terrainSourceId: dataSource.name,
                     geoBox: geoBox.toArray(),
-                    elevationMapEnabled,
+                    elevationMapEnabled: elevationMapEnabled || !!foundModifiers?.length,
                     elevationMapFlipY
                 },
                 tileKey,
