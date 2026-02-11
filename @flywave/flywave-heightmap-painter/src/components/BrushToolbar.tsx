@@ -31,7 +31,7 @@ const ToolbarContainer = styled.div<{ $disabled?: boolean }>`
 
 const Title = styled.h3`
     margin: 0 0 10px 0;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 700;
     color: #fff;
     text-align: center;
@@ -67,7 +67,7 @@ const Label = styled.label`
     display: block;
     margin-bottom: 4px;
     font-weight: 600;
-    font-size: 11px;
+    font-size: 12px;
     color: #e0e0e0;
 `;
 
@@ -188,12 +188,12 @@ const Divider = styled.div`
 const GridContainer = styled.div`
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
+    gap: 6px;
     margin-top: 4px;
 `;
 
 const IconButton = styled.button<{ $active: boolean }>`
-    padding: 6px 4px;
+    padding: 10px 6px;
     border: 1px solid
         ${props => (props.$active ? "rgba(102, 126, 234, 0.8)" : "rgba(255, 255, 255, 0.1)")};
     background: ${props =>
@@ -203,13 +203,14 @@ const IconButton = styled.button<{ $active: boolean }>`
     color: ${props => (props.$active ? "#fff" : "rgba(255, 255, 255, 0.7)")};
     border-radius: 6px;
     cursor: pointer;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    min-height: 60px;
 
     &:hover {
         background: ${props =>
@@ -262,8 +263,10 @@ export const BrushToolbar: React.FC<BrushToolbarProps> = ({
                             onClick={() => onSettingsChange({ type: option.value as BrushType })}
                             title={`${option.label}笔刷`}
                         >
-                            <div style={{ fontSize: "12px" }}>{option.icon}</div>
-                            <div style={{ fontSize: "9px", marginTop: "2px" }}>{option.label}</div>
+                            <div style={{ fontSize: "20px", lineHeight: 1 }}>{option.icon}</div>
+                            <div style={{ fontSize: "11px", marginTop: "4px", fontWeight: 600 }}>
+                                {option.label}
+                            </div>
                         </IconButton>
                     ))}
                 </GridContainer>
