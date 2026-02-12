@@ -107,7 +107,7 @@ export const processDEMTile = async (params: DecodeTileParams): Promise<DecodeTi
         imagePixels,
         GeoBox.fromArray(geoBox),
         encoding,
-        params.padding < 1,
+        false,
         true
     );
 

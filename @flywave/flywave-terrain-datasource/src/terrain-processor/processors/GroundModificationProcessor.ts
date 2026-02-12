@@ -40,30 +40,14 @@ export class GroundModificationProcessor {
             width = baseDemTexture.image.width;
             height = baseDemTexture.image.height;
         }
-
-        console.log("=== renderHeightMap START ===");
-        console.log("[renderHeightMap] Input params:", {
-            numModifiers: enabledModifiers.length,
-            tileGeoBox: {
-                swLat: tileGeoBox.southWest.latitude,
-                swLon: tileGeoBox.southWest.longitude,
-                neLat: tileGeoBox.northEast.latitude,
-                neLon: tileGeoBox.northEast.longitude
-            },
-            width,
-            height,
-            flipY,
-            baseDemTextureSize: baseDemTexture?.image
-                ? { width: baseDemTexture.image.width, height: baseDemTexture.image.height }
-                : undefined
-        });
+ 
 
         const renderEnv = this.environment || getGlobalRenderEnvironment();
 
         if (flipY) {
-            renderEnv.setupCamera(0, width, 0, height);
-        } else {
             renderEnv.setupCamera(0, width, height, 0);
+        } else {
+            renderEnv.setupCamera(0, width, 0, height);
         }
 
         let currentTexture = baseDemTexture || this.createEmptyTexture();
