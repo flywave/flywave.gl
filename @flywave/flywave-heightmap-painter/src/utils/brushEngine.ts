@@ -16,7 +16,7 @@ export class BrushEngine {
             type: BrushType.RAISE,
             size: 30,
             sizeUnit: "pixels" as const,
-            strength: 10,
+            targetHeight: 50,
             hardness: 0.5,
             flattenHeight: 100
         };
@@ -36,7 +36,7 @@ export class BrushEngine {
     }
 
     drawAt(x: number, y: number): void {
-        const { type, size, strength, hardness, flattenHeight } = this.currentBrush;
+        const { type, size, targetHeight, hardness, flattenHeight } = this.currentBrush;
         const radius = Math.floor(size / 2);
 
         for (let dy = -radius; dy <= radius; dy++) {
@@ -62,22 +62,20 @@ export class BrushEngine {
 
                 switch (type) {
                     case BrushType.RAISE:
-                        newHeight = currentHeight + weight * strength;
-                        break;
                     case BrushType.LOWER:
-                        newHeight = currentHeight - weight * strength;
+                        newHeight = currentHeight * (1 - weight) + targetHeight * weight;
                         break;
                     case BrushType.SMOOTH:
-                        newHeight = this.applySmoothAt(pixelX, pixelY, strength);
+                        newHeight = this.applySmoothAt(pixelX, pixelY, 0.3);
                         break;
                     case BrushType.FLATTEN:
-                        const targetHeight = flattenHeight ?? 0;
+                        const flattenTarget = flattenHeight ?? 0;
                         newHeight =
-                            currentHeight * (1 - weight * 0.1) + targetHeight * weight * 0.1;
+                            currentHeight * (1 - weight * 0.5) + flattenTarget * weight * 0.5;
                         break;
                     case BrushType.NOISE:
                         const noiseValue = this.generateNoise(pixelX, pixelY);
-                        newHeight = currentHeight + weight * strength * (noiseValue - 0.5);
+                        newHeight = targetHeight + weight * 20 * (noiseValue - 0.5);
                         break;
                 }
 

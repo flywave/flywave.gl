@@ -368,33 +368,7 @@ export abstract class TerrainSource<
      * repeated serialization for each tile decode operation
      */
     private async setupGroundModificationSync(): Promise<void> {
-        // Sync existing modifiers to worker immediately
-        const existingModifiers = this.m_groundModificationManager.getEnabledModifiers();
-        if (existingModifiers.length > 0) {
-            const serializedModifiers = existingModifiers.map(serializeHeightMapModifier);
-            this.decoder.configure(
-                {},
-                {
-                    terrainSourceId: this.name,
-                    heightMapModifiers: serializedModifiers
-                }
-            );
-        }
-
-        // Listen for modifier changes and sync to worker
-        this.m_groundModificationManager.addEventListener("change", async () => {
-            const modifiers = this.m_groundModificationManager.getEnabledModifiers();
-            const serializedModifiers = modifiers.map(serializeHeightMapModifier);
-
-            // Sync modifiers to worker using configure (broadcasts to all workers)
-            this.decoder.configure(
-                {},
-                {
-                    terrainSourceId: this.name,
-                    heightMapModifiers: serializedModifiers
-                }
-            );
-        });
+        await this.m_groundModificationManager.setupSync(this.decoder as any);
     }
 
     protected abstract createElevationRangeSource(): ElevationRangeSource;

@@ -84,7 +84,7 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             type: BrushType.RAISE,
             size: 50,
             sizeUnit: "meters",
-            strength: 0.5,
+            targetHeight: 50,
             hardness: 0.5,
             flattenHeight: 0.5
         });

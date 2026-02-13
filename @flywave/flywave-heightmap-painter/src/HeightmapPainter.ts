@@ -5,11 +5,11 @@ import { GlobalStyle } from "./styles/GlobalStyle";
 import { HeightmapExport, BrushSettings } from "./types";
 import type { MapControls } from "@flywave/flywave.gl";
 import type { MapView } from "@flywave/flywave.gl";
-import type { TerrainSource } from "@flywave/flywave.gl";
+import type { TerrainDataSource } from "@flywave/flywave.gl";
 
 export interface HeightmapPainterOptions {
     mapView: MapView;
-    terrainSource: TerrainSource;
+    terrainSource: TerrainDataSource;
     mapControls?: MapControls;
     container: HTMLElement;
     width?: number;

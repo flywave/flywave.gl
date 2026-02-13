@@ -40,7 +40,6 @@ export class GroundModificationProcessor {
             width = baseDemTexture.image.width;
             height = baseDemTexture.image.height;
         }
- 
 
         const renderEnv = this.environment || getGlobalRenderEnvironment();
 
@@ -101,26 +100,8 @@ export class GroundModificationProcessor {
     ): Promise<ModifierTextureData[]> {
         const results: ModifierTextureData[] = [];
 
-        console.log("[prepareModifierTextures] Processing modifiers:", modifiers.length);
         for (const modifier of modifiers) {
-            console.log("[prepareModifierTextures] Modifier:", {
-                id: modifier.id,
-                enabled: modifier.enabled,
-                geoBox: {
-                    swLat: modifier.geoBox.southWest.latitude,
-                    swLon: modifier.geoBox.southWest.longitude,
-                    neLat: modifier.geoBox.northEast.latitude,
-                    neLon: modifier.geoBox.northEast.longitude
-                }
-            });
-
             const texture = await this.getModifierTexture(modifier);
-            console.log("[prepareModifierTextures] Texture created:", {
-                id: modifier.id,
-                textureSize: { width: texture.image.width, height: texture.image.height },
-                textureFormat: texture.format,
-                textureType: texture.type
-            });
 
             results.push({
                 texture,
@@ -145,29 +126,14 @@ export class GroundModificationProcessor {
 
         if (modifier.source.type === "image") {
             ({ data, width, height } = await this.extractImageData(modifier.source.image));
-            console.log("[getModifierTexture] From image:", {
-                id: modifier.id,
-                width,
-                height,
-                dataLength: data.length
-            });
         } else if (modifier.source.type === "data") {
             const sourceData = modifier.source.data;
             width = modifier.source.width;
             height = modifier.source.height;
 
-            console.log("[getModifierTexture] From data:", {
-                id: modifier.id,
-                width,
-                height,
-                dataType: sourceData.constructor.name
-            });
-
             if (sourceData instanceof Uint8Array) {
                 data = sourceData;
             } else if (sourceData instanceof Float32Array) {
-                // Float32Array 存储的是高度值（米），需要编码为 RGB
-                console.log("[getModifierTexture] Encoding Float32Array to RGB");
                 data = this.encodeMapboxRGB(sourceData, width, height);
             } else {
                 throw new Error(`Unsupported data type`);
@@ -176,15 +142,6 @@ export class GroundModificationProcessor {
             throw new Error(`Unsupported source type: ${modifier.source.type}`);
         }
 
-        // 确保纹理尺寸正确
-        const expectedPixels = width * height * 4;
-        if (data.length !== expectedPixels) {
-            console.error(
-                `[getModifierTexture] ❌ Data size mismatch! Expected ${expectedPixels}, got ${data.length}`
-            );
-        }
-
-        // 直接使用编码后的 RGB 数据创建纹理，让 GLSL 来解码
         const texture = new THREE.DataTexture(
             data,
             width,
@@ -193,12 +150,6 @@ export class GroundModificationProcessor {
             THREE.UnsignedByteType
         );
         texture.needsUpdate = true;
-
-        console.log("[getModifierTexture] Texture created:", {
-            id: modifier.id,
-            textureSize: { width: texture.image.width, height: texture.image.height },
-            dataLength: data.length
-        });
 
         this.textureCache.set(cacheKey, texture);
 
@@ -270,42 +221,18 @@ export class GroundModificationProcessor {
         const m2 = paddedModifiers[2];
         const m3 = paddedModifiers[3];
 
-        console.log("[createBatchMaterial] Input modifiers:", {
-            count: paddedModifiers.length,
-            m0: {
-                enabled: m0.enabled,
-                geoBox: m0.geoBox
-                    ? {
-                          swLat: m0.geoBox.southWest.latitude.toFixed(8),
-                          swLon: m0.geoBox.southWest.longitude.toFixed(8),
-                          neLat: m0.geoBox.northEast.latitude.toFixed(8),
-                          neLon: m0.geoBox.northEast.longitude.toFixed(8)
-                      }
-                    : null,
-                textureSize: m0.texture
-                    ? { width: m0.texture.image.width, height: m0.texture.image.height }
-                    : null
-            },
-            m1: {
-                enabled: m1.enabled,
-                geoBox: m1.geoBox
-                    ? {
-                          swLat: m1.geoBox.southWest.latitude.toFixed(8),
-                          swLon: m1.geoBox.southWest.longitude.toFixed(8),
-                          neLat: m1.geoBox.northEast.latitude.toFixed(8),
-                          neLon: m1.geoBox.northEast.longitude.toFixed(8)
-                      }
-                    : null,
-                textureSize: m1.texture
-                    ? { width: m1.texture.image.width, height: m1.texture.image.height }
-                    : null
-            }
-        });
-
-        const uvBounds0 =m0.enabled? this.geoBoxToUVBounds(m0.geoBox, tileGeoBox, width, height):new THREE.Vector4();   
-        const uvBounds1 =m1.enabled? this.geoBoxToUVBounds(m1.geoBox, tileGeoBox, width, height):new THREE.Vector4();
-        const uvBounds2 =m2.enabled? this.geoBoxToUVBounds(m2.geoBox, tileGeoBox, width, height):new THREE.Vector4();
-        const uvBounds3 =m3.enabled? this.geoBoxToUVBounds(m3.geoBox, tileGeoBox, width, height):new THREE.Vector4();
+        const uvBounds0 = m0.enabled
+            ? this.geoBoxToUVBounds(m0.geoBox, tileGeoBox, width, height)
+            : new THREE.Vector4();
+        const uvBounds1 = m1.enabled
+            ? this.geoBoxToUVBounds(m1.geoBox, tileGeoBox, width, height)
+            : new THREE.Vector4();
+        const uvBounds2 = m2.enabled
+            ? this.geoBoxToUVBounds(m2.geoBox, tileGeoBox, width, height)
+            : new THREE.Vector4();
+        const uvBounds3 = m3.enabled
+            ? this.geoBoxToUVBounds(m3.geoBox, tileGeoBox, width, height)
+            : new THREE.Vector4();
 
         const vertexShader = `
             varying vec2 vUv;
@@ -396,21 +323,6 @@ export class GroundModificationProcessor {
             u_uvBounds3: { value: uvBounds3 }
         };
 
-        console.log("[createBatchMaterial] Shader uniforms:", {
-            baseTextureSize: baseTexture.image
-                ? { width: baseTexture.image.width, height: baseTexture.image.height }
-                : "unknown",
-            tex0Size: m0.texture.image
-                ? { width: m0.texture.image.width, height: m0.texture.image.height }
-                : "unknown",
-            uvBounds0: `(${uvBounds0.x.toFixed(4)}, ${uvBounds0.y.toFixed(
-                4
-            )}, ${uvBounds0.z.toFixed(4)}, ${uvBounds0.w.toFixed(4)})`,
-            uvBounds1: `(${uvBounds1.x.toFixed(4)}, ${uvBounds1.y.toFixed(
-                4
-            )}, ${uvBounds1.z.toFixed(4)}, ${uvBounds1.w.toFixed(4)})`
-        });
-
         return new THREE.ShaderMaterial({
             vertexShader,
             fragmentShader,
@@ -425,18 +337,6 @@ export class GroundModificationProcessor {
         width: number,
         height: number
     ): THREE.Vector4 {
-        console.log("----- geoBoxToUVBounds -----");
-
-        // 检查 geoBox 和 tileGeoBox 是否相同
-        const geoBoxEqual =
-            Math.abs(geoBox.southWest.latitude - tileGeoBox.southWest.latitude) < 0.000001 &&
-            Math.abs(geoBox.southWest.longitude - tileGeoBox.southWest.longitude) < 0.000001 &&
-            Math.abs(geoBox.northEast.latitude - tileGeoBox.northEast.latitude) < 0.000001 &&
-            Math.abs(geoBox.northEast.longitude - tileGeoBox.northEast.longitude) < 0.000001;
-
-        console.log("[geoBoxToUVBounds] GeoBox == TileGeoBox?", geoBoxEqual);
-
-        // 使用 CoordinateUtils 进行地理坐标到 tile 空间的转换
         const southWest = CoordinateUtils.geoToTileSpace(
             geoBox.southWest,
             tileGeoBox,
@@ -450,50 +350,10 @@ export class GroundModificationProcessor {
             height
         );
 
-        console.log("[geoBoxToUVBounds] geoBox:", {
-            sw: {
-                lat: geoBox.southWest.latitude.toFixed(8),
-                lon: geoBox.southWest.longitude.toFixed(8)
-            },
-            ne: {
-                lat: geoBox.northEast.latitude.toFixed(8),
-                lon: geoBox.northEast.longitude.toFixed(8)
-            }
-        });
-        console.log("[geoBoxToUVBounds] tileGeoBox:", {
-            sw: {
-                lat: tileGeoBox.southWest.latitude.toFixed(8),
-                lon: tileGeoBox.southWest.longitude.toFixed(8)
-            },
-            ne: {
-                lat: tileGeoBox.northEast.latitude.toFixed(8),
-                lon: tileGeoBox.northEast.longitude.toFixed(8)
-            }
-        });
-        console.log("[geoBoxToUVBounds] tileSpace:", {
-            sw: { x: southWest.x.toFixed(2), y: southWest.y.toFixed(2) },
-            ne: { x: northEast.x.toFixed(2), y: northEast.y.toFixed(2) }
-        });
-
-        // 转换为归一化的 UV 坐标 (0-1)
         const uMin = southWest.x / width;
         const uMax = northEast.x / width;
         const vMin = northEast.y / height;
         const vMax = southWest.y / height;
-
-        console.log("[geoBoxToUVBounds] UV bounds:", {
-            uMin: uMin.toFixed(4),
-            uMax: uMax.toFixed(4),
-            vMin: vMin.toFixed(4),
-            vMax: vMax.toFixed(4),
-            inRange: uMin >= 0 && uMax <= 1 && vMin >= 0 && vMax <= 1
-        });
-
-        if (geoBoxEqual) {
-            console.log("[geoBoxToUVBounds] ⚠️ geoBox equals tileGeoBox, should return [0,0,1,1]!");
-        }
-
-        console.log("----- geoBoxToUVBounds END -----");
 
         return new THREE.Vector4(uMin, vMin, uMax, vMax);
     }

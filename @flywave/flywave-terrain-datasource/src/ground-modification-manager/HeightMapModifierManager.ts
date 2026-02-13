@@ -1,18 +1,31 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
-import debounce from "lodash.debounce";
 import { EventDispatcher } from "three";
 
 import { type ITerrainSource } from "../TerrainSource";
 import {
     type HeightMapModificationEventParams,
     type HeightMapModifier,
-    type HeightMapSourceData
+    type HeightMapSourceData,
+    type SerializedHeightMapModifier,
+    serializeHeightMapModifier
 } from "./HeightMapModifierTypes";
 
 interface HeightMapModificationEvents {
     change: HeightMapModificationEventParams;
+}
+
+// Type for decoder that provides workerSet for broadcast requests
+interface DecoderWithWorkerSet {
+    workerSet: {
+        broadcastRequest(
+            serviceId: string,
+            message: unknown,
+            transferList?: unknown[]
+        ): Promise<unknown[]>;
+    };
+    serviceId: string;
 }
 
 export interface HeightMapModifierOptions {
@@ -24,18 +37,51 @@ export class HeightMapModifierManager extends EventDispatcher<HeightMapModificat
     private nextId: number = 0;
     private globalBoundingBox: GeoBox | null = null;
 
-    private readonly debouncedDispatch: (
-        changeType: "add" | "remove" | "update" | "clear",
-        affectedIds: string[],
-        previousBounds?: GeoBox | null
-    ) => void;
+    private decoder: DecoderWithWorkerSet | null = null;
+
+    private syncPhaseListeners: Array<() => Promise<void>> = [];
 
     constructor(private readonly terrainSource: ITerrainSource) {
         super();
-        this.debouncedDispatch = debounce(
-            this.dispatchChangeEventImmediate.bind(this),
-            100
-        ) as typeof this.debouncedDispatch;
+    }
+
+    /**
+     * Setup synchronization of modifiers to workers
+     */
+    async setupSync(decoder: DecoderWithWorkerSet): Promise<void> {
+        this.decoder = decoder;
+
+        this.syncPhaseListeners.push(this.syncToWorkers.bind(this));
+
+        const existingModifiers = this.getEnabledModifiers();
+        if (existingModifiers.length > 0) {
+            await this.syncToWorkers();
+        }
+    }
+
+    private async syncToWorkers(): Promise<void> {
+        if (!this.decoder) {
+            console.warn("HeightMapModifierManager: decoder not available");
+            return;
+        }
+
+        const modifiers = this.getEnabledModifiers();
+        const serializedModifiers = modifiers.map(serializeHeightMapModifier);
+
+        const message: any = {
+            service: this.decoder.serviceId,
+            type: "configuration",
+            options: {
+                terrainSourceId: this.terrainSource.name,
+                heightMapModifiers: serializedModifiers
+            }
+        };
+
+        try {
+            await this.decoder.workerSet.broadcastRequest(this.decoder.serviceId, message);
+        } catch (error) {
+            console.error("HeightMapModifierManager: Failed to sync modifiers to workers", error);
+        }
     }
 
     addModifier(id: string, source: HeightMapSourceData, geoBox: GeoBox): string {
@@ -186,7 +232,16 @@ export class HeightMapModifierManager extends EventDispatcher<HeightMapModificat
         affectedIds: string[] = [],
         previousBounds: GeoBox | null = null
     ) {
-        this.debouncedDispatch(changeType, affectedIds, previousBounds);
+        const syncPromises = this.syncPhaseListeners.map(listener => listener());
+
+        Promise.all(syncPromises)
+            .then(() => {
+                this.dispatchChangeEventImmediate(changeType, affectedIds, previousBounds);
+            })
+            .catch(error => {
+                console.error("HeightMapModifierManager: Error during sync-phase", error);
+                this.dispatchChangeEventImmediate(changeType, affectedIds, previousBounds);
+            });
     }
 
     private calculateBoundingBox(boxes: GeoBox[]): GeoBox {

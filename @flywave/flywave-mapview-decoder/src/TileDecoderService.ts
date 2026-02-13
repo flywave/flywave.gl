@@ -55,6 +55,13 @@ export class TileDecoderService extends WorkerService {
      * @override
      */
     protected handleRequest(request: any): Promise<WorkerServiceResponse> {
+        if (WorkerDecoderProtocol.isConfigurationMessage(request)) {
+            this.handleConfigurationMessage(request);
+            return Promise.resolve({
+                response: { success: true }
+            });
+        }
+
         if (WorkerDecoderProtocol.isDecodeTileRequest(request)) {
             return this.handleDecodeTileRequest(request);
         } else if (WorkerDecoderProtocol.isTileInfoRequest(request)) {

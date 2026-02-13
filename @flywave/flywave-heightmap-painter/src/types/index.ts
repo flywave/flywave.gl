@@ -30,7 +30,7 @@ export interface BrushSettings {
     type: BrushType;
     size: number;
     sizeUnit: "meters" | "pixels";
-    strength: number;
+    targetHeight: number;
     hardness: number;
     flattenHeight?: number;
 }

@@ -341,16 +341,16 @@ export const BrushToolbar: React.FC<BrushToolbarProps> = ({
                     </Section>
 
                     <Section>
-                        <Label>笔刷强度: {(brushSettings.strength * 100).toFixed(0)}%</Label>
+                        <Label>高度值: {brushSettings.targetHeight.toFixed(0)}</Label>
                         <RangeContainer>
                             <RangeInput
                                 type="range"
-                                min={0.01}
-                                max={1}
-                                step={0.01}
-                                value={brushSettings.strength}
+                                min={0}
+                                max={255}
+                                step={1}
+                                value={brushSettings.targetHeight}
                                 onChange={e =>
-                                    onSettingsChange({ strength: parseFloat(e.target.value) })
+                                    onSettingsChange({ targetHeight: parseFloat(e.target.value) })
                                 }
                             />
                         </RangeContainer>

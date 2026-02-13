@@ -9,7 +9,7 @@ import { MiniHelpPanel } from "./components/MiniHelpPanel";
 import { HeightmapExport, BrushSettings, BrushType } from "./types";
 import type { MapControls } from "@flywave/flywave.gl";
 import type { MapView } from "@flywave/flywave.gl";
-import type { TerrainSource } from "@flywave/flywave.gl";
+import type { TerrainDataSource } from "@flywave/flywave.gl";
 
 const Container = styled.div`
     width: 100%;
@@ -108,7 +108,7 @@ type AppState = "config" | "painting";
 
 export interface AppProps {
     mapView: MapView;
-    terrainSource: TerrainSource;
+    terrainSource: TerrainDataSource;
     mapControls?: MapControls;
     width?: number;
     height?: number;
@@ -165,7 +165,7 @@ const App = React.forwardRef<AppInstance, AppProps>(
             type: BrushType.RAISE,
             size: 100,
             sizeUnit: "meters",
-            strength: 0.5,
+            targetHeight: 50,
             hardness: 0.5,
             flattenHeight: 0.5
         });
@@ -267,7 +267,6 @@ const App = React.forwardRef<AppInstance, AppProps>(
                 <Painter
                     ref={painterRef}
                     mapView={mapView}
-                    terrainSource={terrainSource}
                     width={currentWidth}
                     height={currentHeight}
                     paintAreaGeoBox={currentGeoBox}
