@@ -289,6 +289,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
             this.terrainSource,
             this._demMap.encoding
         ).then((demTileResource: DemTileResource) => {
+            this._demMap?.dispose();
             this._demMap = demTileResource.demData;
             this._groundElevationModified = true;
         });

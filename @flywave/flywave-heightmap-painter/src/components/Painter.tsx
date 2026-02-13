@@ -107,28 +107,28 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             brushEngineRef.current.renderToCanvas(canvas);
 
             try {
-                if (manager.hasModifier(modifierIdRef.current)) {
-                    manager.updateModifier(modifierIdRef.current, { enabled: true });
-                } else {
-                    const southWest = new GeoCoordinates(
-                        paintAreaGeoBox.minLat,
-                        paintAreaGeoBox.minLon
-                    );
-                    const northEast = new GeoCoordinates(
-                        paintAreaGeoBox.maxLat,
-                        paintAreaGeoBox.maxLon
-                    );
-                    const geoBoxForDisplay = new GeoBox(southWest, northEast);
+                const southWest = new GeoCoordinates(
+                    paintAreaGeoBox.minLat,
+                    paintAreaGeoBox.minLon
+                );
+                const northEast = new GeoCoordinates(
+                    paintAreaGeoBox.maxLat,
+                    paintAreaGeoBox.maxLon
+                );
+                const geoBoxForDisplay = new GeoBox(southWest, northEast);
 
-                    manager.addModifier(
-                        modifierIdRef.current,
-                        {
-                            type: "image",
-                            image: canvas
-                        },
-                        geoBoxForDisplay
-                    );
+                if (manager.hasModifier(modifierIdRef.current)) {
+                    manager.removeModifier(modifierIdRef.current);
                 }
+
+                manager.addModifier(
+                    modifierIdRef.current,
+                    {
+                        type: "image",
+                        image: canvas
+                    },
+                    geoBoxForDisplay
+                );
             } catch (error) {
                 console.warn("Failed to update terrain modifier:", error);
             }

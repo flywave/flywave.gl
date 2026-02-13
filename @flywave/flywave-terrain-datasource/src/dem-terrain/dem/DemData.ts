@@ -79,7 +79,7 @@ export default class DEMData extends TileValidResource {
     constructor(
         uid: string | number,
         public rawImageData: ImageData,
-        data: ImageData,
+       public data: ImageData,
         geoBox: GeoBox,
         encoding: DEMEncoding = "mapbox",
         borderReady: boolean = false,

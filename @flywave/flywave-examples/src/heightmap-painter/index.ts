@@ -21,55 +21,6 @@ import { HeightmapPainter } from "@flywave/flywave-heightmap-painter";
 import { CESIUM_ION_TOKEN } from "../token-config.js";
 
 
-
-class MockMapView extends MapView {
-    get isDynamicFrame() {
-        return true;
-    }
-
-    constructor(options: MapViewOptions) {
-        super(options);
-
-        let getVisibleTileKeysForDataSources =
-            this.visibleTileSet["getVisibleTileKeysForDataSources"];
-        this.visibleTileSet["getVisibleTileKeysForDataSources"] = function (
-            zoomLevel: number,
-            dataSources: DataSource[],
-            elevationRangeSource: ElevationRangeSource | undefined
-        ) {
-            // let { tileKeys, allBoundingBoxesFinal } = getVisibleTileKeysForDataSources.call(
-            //     this,
-            //     zoomLevel,
-            //     dataSources,
-            //     elevationRangeSource
-            // );column 
-
-            if (!dataSources[1])
-                return {
-                    tileKeys: [],
-                    allBoundingBoxesFinal: true
-                };
-            return {
-                tileKeys: [
-                    {
-                        dataSource: dataSources[1],
-                        visibleTileKeys: [
-                            new TileKeyEntry(TileKey.fromRowColumnLevel(92039, 217068, 17).parent().parent().parent().parent(), 1, 0), 
-                            // new TileKeyEntry(TileKey.fromRowColumnLevel(2, 2, 2), 1, 0),
-                            // new TileKeyEntry(TileKey.fromRowColumnLevel(2, 1, 2), 1, 0)
-                            // new TileKeyEntry(TileKey.fromRowColumnLevel(3, 1, 2), 1, 0)
-                            // new TileKeyEntry(TileKey.fromRowColumnLevel(0, 2, 1), 1, 0)
-                            // new TileKeyEntry(TileKey.fromRowColumnLevel(0, 3, 1), 1, 0)
-                            // new TileKeyEntry(TileKey.fromRowColumnLevel(0, 0, 0), 1, 0)
-                        ]
-                    }
-                ],
-                allBoundingBoxesFinal: true
-            };
-        };
-    }
-}
-
 class HeightmapPainterExample {
     private map?: MapView;
     private controls: MapControls;
@@ -121,7 +72,7 @@ class HeightmapPainterExample {
         `;
         this.mapContainer.appendChild(canvas);
 
-        const map = new MockMapView({
+        const map = new MapView({
             target: new GeoCoordinates(36.4, 118.1, 1000),
             zoomLevel: 17,
             projection: ellipsoidProjection,
