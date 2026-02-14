@@ -82,6 +82,7 @@ class WebImageryTileResource extends TileValidResource {
         );
     }
 
+    protected listenerTerrainModification() {}
     /**
      * Get the tiles value
      */

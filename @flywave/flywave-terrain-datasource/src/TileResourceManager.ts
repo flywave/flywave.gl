@@ -197,6 +197,12 @@ export abstract class TileValidResource extends ITileResource {
         super();
     }
 
+    protected listenerTerrainModification() {
+ 
+        this.terrainSource
+            ?.getGroundModificationManager()
+            ?.addEventListener("change", this.onGroundModificationChanged);
+    }
     /**
      * Connects the resource to a data source
      *
@@ -206,13 +212,10 @@ export abstract class TileValidResource extends ITileResource {
     connectToDataSource(dataSource: ITerrainSource, tileKey: TileKey): void {
         this.terrainSource = dataSource;
         this.tileKey = tileKey;
-
-        this.terrainSource
-            ?.getGroundModificationManager()
-            ?.addEventListener("change", this.onGroundModificationChanged);
-
+        this.listenerTerrainModification();
         this.onConnectedToDataSource();
     }
+
 
     protected onConnectedToDataSource(): void {}
 
