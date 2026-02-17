@@ -181,7 +181,7 @@ export class GroundModificationProcessor {
     }
 
     private async extractImageData(
-        image: ImageData | HTMLImageElement | HTMLCanvasElement
+        image: ImageData | HTMLImageElement | HTMLCanvasElement | ImageBitmap
     ): Promise<{ data: Uint8ClampedArray; width: number; height: number }> {
         let imageData: ImageData;
 

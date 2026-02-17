@@ -50,7 +50,7 @@ export interface WebTile {
  * Resource class for web imagery tiles
  */
 class WebImageryTileResource extends TileValidResource {
-    protected async handleGroundModificationChange(
+    public async handleGroundModificationChange(
         event: HeightMapModificationEventParams,
         modify: HeightMapModifierManager
     ): Promise<void> {}

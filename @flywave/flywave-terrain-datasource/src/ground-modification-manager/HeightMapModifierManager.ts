@@ -9,7 +9,9 @@ import {
     type HeightMapModifier,
     type HeightMapSourceData,
     type SerializedHeightMapModifier,
-    serializeHeightMapModifier
+    serializeHeightMapModifier,
+    serializeHeightMapModifierWithTransfer,
+    type SerializedHeightMapModifierWithTransfer
 } from "./HeightMapModifierTypes";
 
 interface HeightMapModificationEvents {
@@ -24,6 +26,7 @@ interface DecoderWithWorkerSet {
             message: unknown,
             transferList?: unknown[]
         ): Promise<unknown[]>;
+        m_workers?: Worker[];
     };
     serviceId: string;
 }
@@ -66,19 +69,45 @@ export class HeightMapModifierManager extends EventDispatcher<HeightMapModificat
         }
 
         const modifiers = this.getEnabledModifiers();
-        const serializedModifiers = modifiers.map(serializeHeightMapModifier);
-
-        const message: any = {
-            service: this.decoder.serviceId,
-            type: "configuration",
-            options: {
-                terrainSourceId: this.terrainSource.name,
-                heightMapModifiers: serializedModifiers
-            }
-        };
 
         try {
-            await this.decoder.workerSet.broadcastRequest(this.decoder.serviceId, message);
+            const workerSet = this.decoder.workerSet as any;
+            const workers = workerSet.m_workers;
+
+            if (workers && workers.length > 0) {
+                for (const worker of workers) {
+                    const transferables: Transferable[] = [];
+                    const serializedModifiers = await Promise.all(
+                        modifiers.map(async modifier => {
+                            const result = await serializeHeightMapModifierWithTransfer(modifier);
+                            transferables.push(...result.transferables);
+                            return result.modifier;
+                        })
+                    );
+
+                    const message: any = {
+                        service: this.decoder.serviceId,
+                        type: "configuration",
+                        options: {
+                            terrainSourceId: this.terrainSource.name,
+                            heightMapModifiers: serializedModifiers
+                        }
+                    };
+
+                    worker.postMessage(message, transferables);
+                }
+            } else {
+                const serializedModifiers = modifiers.map(serializeHeightMapModifier);
+                const message: any = {
+                    service: this.decoder.serviceId,
+                    type: "configuration",
+                    options: {
+                        terrainSourceId: this.terrainSource.name,
+                        heightMapModifiers: serializedModifiers
+                    }
+                };
+                await this.decoder.workerSet.broadcastRequest(this.decoder.serviceId, message);
+            }
         } catch (error) {
             console.error("HeightMapModifierManager: Failed to sync modifiers to workers", error);
         }

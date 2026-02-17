@@ -379,7 +379,7 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
             while (tileKey.level >= 0) {
                 const tile = this.dataSource.dataProvider().getPreciseResource(tileKey);
                 if (tile && tile.demMap) {
-                    const texture = tile.demMap.getDisplacementMap(); 
+                    const texture = tile.demMap.getDisplacementMap();
                     terrainMesh.setHeightMap(texture, tileKey);
                     break;
                 }

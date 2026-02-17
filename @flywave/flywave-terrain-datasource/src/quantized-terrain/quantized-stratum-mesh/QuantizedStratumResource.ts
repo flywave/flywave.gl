@@ -18,7 +18,7 @@ export class QuantizedStratumResource extends QuantizedTileResource {
      * @param modify - Ground modification manager instance
      * @throws Error - Method not implemented
      */
-    protected handleGroundModificationChange(
+    public async handleGroundModificationChange(
         event: HeightMapModificationEventParams,
         modify: HeightMapModifierManager
     ): Promise<void> {

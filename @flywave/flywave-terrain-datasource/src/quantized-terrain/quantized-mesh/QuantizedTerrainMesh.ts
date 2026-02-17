@@ -146,7 +146,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
         geoBox: GeoBox,
         heightMapModifiers?: HeightMapModifier[],
         flipY?: boolean
-    ) { 
+    ) {
         const drawGeoBox = geoBox.clone();
         drawGeoBox.southWest.altitude = this.minHeight;
         drawGeoBox.northEast.altitude = this.maxHeight;
@@ -276,13 +276,13 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
         return this.m_geoCenter;
     }
 
-    protected handleGroundModificationChange(
+    public async handleGroundModificationChange(
         event: HeightMapModificationEventParams,
         modify: HeightMapModifierManager
     ): Promise<void> {
         if (!this._demMap) return Promise.resolve();
 
-        console.log(this.tileKey.toArray())
+        console.log(this.tileKey.toArray());
         return DemTileResource.createDemTileResourceFromImageryData(
             this._demMap.rawImageData,
             this.tileKey,

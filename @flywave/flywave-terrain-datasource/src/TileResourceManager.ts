@@ -184,8 +184,11 @@ export abstract class TileValidResource extends ITileResource {
     /** Flag indicating if ground modification change is being processed */
     private _isProcessingGroundModification = false;
 
-    /** Stores the latest pending ground modification event */
+    /** Stores latest pending ground modification event */
     private _latestPendingEvent: HeightMapModificationEventParams | null = null;
+
+    /** Flag indicating if resource is expired due to ground modification */
+    private _isExpiredDueToModification = false;
 
     /**
      * Creates a new TileValidResource instance
@@ -198,7 +201,6 @@ export abstract class TileValidResource extends ITileResource {
     }
 
     protected listenerTerrainModification() {
- 
         this.terrainSource
             ?.getGroundModificationManager()
             ?.addEventListener("change", this.onGroundModificationChanged);
@@ -215,7 +217,6 @@ export abstract class TileValidResource extends ITileResource {
         this.listenerTerrainModification();
         this.onConnectedToDataSource();
     }
-
 
     protected onConnectedToDataSource(): void {}
 
@@ -235,11 +236,32 @@ export abstract class TileValidResource extends ITileResource {
      * @param modify - The ground modification manager
      * @returns Promise that resolves when handling is complete
      */
-    protected handleGroundModificationChange(
+    public async handleGroundModificationChange(
         event: HeightMapModificationEventParams,
         modify: HeightMapModifierManager
     ): Promise<void> {
         return Promise.resolve();
+    }
+
+    /**
+     * Marks this resource as expired due to ground modification
+     */
+    markAsExpired(): void {
+        this._isExpiredDueToModification = true;
+    }
+
+    /**
+     * Checks if this resource is expired due to ground modification
+     */
+    isExpiredDueToModification(): boolean {
+        return this._isExpiredDueToModification;
+    }
+
+    /**
+     * Resets the expired flag after processing
+     */
+    private resetExpiredFlag(): void {
+        this._isExpiredDueToModification = false;
     }
 
     /**
@@ -309,10 +331,7 @@ export abstract class TileValidResource extends ITileResource {
             (event.affectedBounds || event.previousBounds).intersectsBox(this.geoBox)
         ) {
             this._isUsedGroundModification = true;
-            await this.handleGroundModificationChange(
-                event,
-                this.terrainSource.getGroundModificationManager()
-            );
+            this.markAsExpired();
             this.terrainSource.updateTileOverlays();
         } else {
             if (this._isUsedGroundModification) {
