@@ -30,9 +30,8 @@ export class HeightHandle extends THREE.Object3D {
         this.arrow.renderOrder = 10;
         this.add(this.arrow);
 
-        // Disable raycasting to avoid interfering with interactions of other objects
         this.raycast = () => {};
-        (this.arrow as any).raycast = () => {};
+        (this.arrow as THREE.Object3D).raycast = () => {};
 
         this.visible = false;
     }

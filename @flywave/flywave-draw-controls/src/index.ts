@@ -8,3 +8,6 @@ export { PointObject } from "./PointObject";
 export { GeoJSONDrawControls } from "./GeoJSONDrawControls";
 export type { MeasureLine } from "./MeasureLine";
 export { MeasureToolControls } from "./MeasureToolControls";
+
+export { VertexHandle } from "./VertexHandle";
+export type { VertexHandleEvents, VertexHandleOptions } from "./VertexHandle";

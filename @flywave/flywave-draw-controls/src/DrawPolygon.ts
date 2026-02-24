@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// src/DrawPolygon.ts
-
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import earcut from "earcut";
@@ -9,33 +7,36 @@ import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
+import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawableObject } from "./DrawableObject";
-import { PointObject } from "./PointObject";
+import { VertexHandle } from "./VertexHandle";
 
 export class DrawPolygon extends DrawableObject {
-    // Change private properties to protected properties so that subclasses can access them
     protected mesh: THREE.Mesh;
     protected outline: Line2;
     protected fillColor: number = 0x00ff00;
     protected outlineColor: number = 0x0000ff;
     protected opacity: number = 0.6;
-    protected verticesPoints: PointObject[] = [];
+    protected vertexHandles: VertexHandle[] = [];
     protected edges: Line2[] = [];
     protected outlineEdges: Line2[] = [];
 
-    constructor(mapView: MapView, vertices: GeoCoordinates[] = [], id?: string) {
+    constructor(
+        mapView: MapView,
+        vertices: GeoCoordinates[] = [],
+        windowHandler: WindowEventHandler,
+        id?: string
+    ) {
         super(mapView, id);
         this.vertices = vertices;
 
-        // Create face geometry
         const geometry = new THREE.BufferGeometry();
         const material = this.createPolygonMaterial(this.fillColor, this.opacity);
 
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.renderOrder = 0;
 
-        // Create outline line
         const outlineGeometry = new LineGeometry();
         const outlineMaterial = this.createOutlineMaterial(this.outlineColor);
 
@@ -45,14 +46,14 @@ export class DrawPolygon extends DrawableObject {
         this.add(this.mesh);
         this.add(this.outline);
 
-        // Initialize edges and outline edges
+        this.windowHandler = windowHandler;
         this.createEdges();
         this.createOutlineObject();
-
         this.update();
     }
 
-    // Change the material creation method to an overloadable method
+    private windowHandler: WindowEventHandler;
+
     protected createPolygonMaterial(color: number, opacity: number): THREE.MeshPhongMaterial {
         return new THREE.MeshPhongMaterial({
             color,
@@ -64,7 +65,6 @@ export class DrawPolygon extends DrawableObject {
         });
     }
 
-    // Change the outline material creation method to an overloadable method
     protected createOutlineMaterial(color: number): LineMaterial {
         return new LineMaterial({
             color,
@@ -76,11 +76,9 @@ export class DrawPolygon extends DrawableObject {
     }
 
     private createEdges(): void {
-        // Clean up existing edges
         this.edges.forEach(edge => this.remove(edge));
         this.edges = [];
 
-        // Create Line2 objects for each edge
         for (let i = 0; i < this.vertices.length; i++) {
             const geometry = new LineGeometry();
             const material = new LineMaterial({
@@ -99,7 +97,6 @@ export class DrawPolygon extends DrawableObject {
     }
 
     protected createOutlineObject(): void {
-        // Clean up existing outline edges
         this.outlineEdges.forEach(edge => this.remove(edge));
         this.outlineEdges = [];
 
@@ -111,16 +108,14 @@ export class DrawPolygon extends DrawableObject {
             line.visible = false;
             line.renderOrder = 999;
 
-            // Disable outline interaction
             line.userData.isOutline = true;
-            line.raycast = () => {}; // Empty function, disable ray detection
+            line.raycast = () => {};
 
             this.outlineEdges.push(line);
             this.add(line);
         }
     }
 
-    // Change the outline edge material creation method to an overloadable method
     protected createOutlineEdgeMaterial(): LineMaterial {
         return new LineMaterial({
             color: 0xffd700,
@@ -159,25 +154,53 @@ export class DrawPolygon extends DrawableObject {
         }
     }
 
-    private createVerticesAndEdges(): void {
-        this.verticesPoints.forEach(point => this.remove(point.getObject3D()));
-        this.verticesPoints = [];
+    private createVertexHandles(): void {
+        this.vertexHandles.forEach(handle => {
+            this.remove(handle);
+            handle.dispose();
+        });
+        this.vertexHandles = [];
 
         for (let i = 0; i < this.vertices.length; i++) {
-            // Use factory method to create vertex points, allowing subclass override
-            const vertexPoint = this.createVertexPoint(this.vertices[i], true);
-            this.verticesPoints.push(vertexPoint);
-            this.add(vertexPoint.getObject3D());
+            const handle = this.createVertexHandle(this.vertices[i]);
+
+            handle.userData.vertexIndex = i;
+            handle.userData.parentObject = this;
+
+            this.setupHandleEvents(handle, i);
+
+            this.vertexHandles.push(handle);
+            this.add(handle);
         }
 
-        // Recreate edges and outline edges
         this.createEdges();
         this.createOutlineObject();
     }
 
-    // Add overloadable vertex point creation method
-    protected createVertexPoint(position: GeoCoordinates, isVertex: boolean): PointObject {
-        return new PointObject(this.mapView, position, isVertex);
+    protected createVertexHandle(position: GeoCoordinates): VertexHandle {
+        return new VertexHandle({
+            position,
+            mapView: this.mapView,
+            windowHandler: this.windowHandler,
+            autoHeightHandle: true
+        });
+    }
+
+    private setupHandleEvents(handle: VertexHandle, index: number): void {
+        handle.on("drag", (h: VertexHandle, newPosition: GeoCoordinates) => {
+            this.updateVertex(index, newPosition);
+        });
+
+        handle.on("heightChange", (h: VertexHandle, newHeight: number) => {
+            if (index < this.vertices.length) {
+                this.vertices[index].altitude = newHeight;
+                this.update();
+            }
+        });
+
+        handle.on("selected", (h: VertexHandle, selected: boolean) => {});
+
+        handle.on("hovered", (h: VertexHandle, hovered: boolean) => {});
     }
 
     public updateVertex(index: number, newVertex: GeoCoordinates): void {
@@ -194,7 +217,6 @@ export class DrawPolygon extends DrawableObject {
         const deltaLat = newPosition.latitude - center.latitude;
         const deltaLon = newPosition.longitude - center.longitude;
 
-        // Move all vertices
         this.vertices = this.vertices.map(
             vertex =>
                 new GeoCoordinates(
@@ -211,7 +233,6 @@ export class DrawPolygon extends DrawableObject {
             return new GeoCoordinates(0, 0);
         }
 
-        // Calculate the geometric center of the polygon
         let sumLat = 0;
         let sumLon = 0;
         let sumAlt = 0;
@@ -236,7 +257,6 @@ export class DrawPolygon extends DrawableObject {
             this.mapView.projection.projectPoint(vertex)
         );
 
-        // Update face
         const flattenedVertices = worldVertices.flatMap(v => [v.x, v.y, v.z]);
         const indices = earcut(flattenedVertices, null, 3);
 
@@ -247,12 +267,10 @@ export class DrawPolygon extends DrawableObject {
         this.mesh.geometry.setIndex(indices);
         this.mesh.geometry.computeVertexNormals();
 
-        // Update outline line
         const outlineVertices = [...worldVertices, worldVertices[0]];
         const outlinePositions = outlineVertices.flatMap(v => [v.x, v.y, v.z]);
         (this.outline.geometry as LineGeometry).setPositions(outlinePositions);
 
-        // Update edges
         for (let i = 0; i < this.edges.length; i++) {
             if (i < worldVertices.length) {
                 const nextIndex = (i + 1) % worldVertices.length;
@@ -268,42 +286,42 @@ export class DrawPolygon extends DrawableObject {
             }
         }
 
-        // Update outline edges
         this.updateOutline();
 
-        // Update vertex positions
-        for (let i = 0; i < this.verticesPoints.length && i < worldVertices.length; i++) {
-            this.verticesPoints[i].position.copy(worldVertices[i]);
+        if (this.vertexHandles.length !== this.vertices.length) {
+            this.createVertexHandles();
+        } else {
+            for (let i = 0; i < this.vertices.length; i++) {
+                if (i < this.vertexHandles.length) {
+                    this.vertexHandles[i].setPosition(this.vertices[i]);
+                    this.vertexHandles[i].update();
+                }
+            }
         }
 
-        // If the number of vertices changes, recreate points and edges
-        if (this.verticesPoints.length !== this.vertices.length) {
-            this.createVerticesAndEdges();
+        if (this.edges.length !== this.vertices.length) {
+            this.createEdges();
+        }
+
+        if (this.outlineEdges.length !== this.vertices.length) {
+            this.createOutlineObject();
         }
     }
 
-    // Add vertex selection method
     public setVertexSelected(index: number, selected: boolean): void {
-        if (index >= 0 && index < this.verticesPoints.length) {
-            this.verticesPoints[index].setSelected(selected);
-
-            // If the vertex is selected, display the height handle
-            if (selected) {
-                this.verticesPoints[index].setEditing(true);
-            } else {
-                this.verticesPoints[index].setEditing(false);
-            }
+        if (index >= 0 && index < this.vertexHandles.length) {
+            this.vertexHandles[index].setSelected(selected);
         }
     }
 
     public getVertexSelected(index: number): boolean {
-        return index >= 0 && index < this.verticesPoints.length
-            ? this.verticesPoints[index].isSelected
+        return index >= 0 && index < this.vertexHandles.length
+            ? this.vertexHandles[index].getSelected()
             : false;
     }
 
-    public getVertexPoints(): PointObject[] {
-        return this.verticesPoints;
+    public getVertexHandles(): VertexHandle[] {
+        return this.vertexHandles;
     }
 
     protected updateVisuals(): void {
@@ -317,26 +335,15 @@ export class DrawPolygon extends DrawableObject {
             outlineMaterial.color.set(0xffff00);
             meshMaterial.opacity = 0.8;
             outlineMaterial.linewidth = 4;
-
-            // When the object is selected, all vertices are also displayed as selected
-            this.verticesPoints.forEach(point => {
-                point.setSelected(true);
-            });
         } else {
             meshMaterial.color.set(this.fillColor);
             outlineMaterial.color.set(this.outlineColor);
             meshMaterial.opacity = this.opacity;
             outlineMaterial.linewidth = 3;
-
-            // When the object is deselected, all vertices are also deselected
-            this.verticesPoints.forEach(point => {
-                point.setSelected(false);
-                point.setEditing(false);
-            });
         }
     }
 
-    public toGeoJSON(): any {
+    public toGeoJSON(): { type: string; coordinates: number[][][] } {
         return {
             type: "Polygon",
             coordinates: [
@@ -350,7 +357,6 @@ export class DrawPolygon extends DrawableObject {
     }
 
     public dispose(): void {
-        // Clean up outline edges
         this.outlineEdges.forEach(edge => {
             this.remove(edge);
             edge.geometry.dispose();
@@ -358,7 +364,6 @@ export class DrawPolygon extends DrawableObject {
         });
         this.outlineEdges = [];
 
-        // Clean up edges
         this.edges.forEach(edge => {
             this.remove(edge);
             edge.geometry.dispose();
@@ -366,16 +371,15 @@ export class DrawPolygon extends DrawableObject {
         });
         this.edges = [];
 
-        // Clean up other resources
         this.mesh.geometry.dispose();
         (this.mesh.material as THREE.Material).dispose();
         this.outline.geometry.dispose();
         (this.outline.material as THREE.Material).dispose();
 
-        this.verticesPoints.forEach(point => {
-            point.dispose();
+        this.vertexHandles.forEach(handle => {
+            handle.dispose();
         });
-        this.verticesPoints = [];
+        this.vertexHandles = [];
 
         super.dispose();
     }
@@ -383,6 +387,12 @@ export class DrawPolygon extends DrawableObject {
     public setOutlineVisible(visible: boolean): void {
         this.outlineEdges.forEach(edge => {
             edge.visible = visible;
+        });
+    }
+
+    protected onCameraPositionChanged(): void {
+        this.vertexHandles.forEach(handle => {
+            handle.update();
         });
     }
 }

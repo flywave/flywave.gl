@@ -119,7 +119,10 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry Geometry object
      * @returns DrawableObject instance
      */
-    private createObjectFromGeometry(geometry: any): DrawableObject | null {
+    private createObjectFromGeometry(geometry: {
+        type: string;
+        coordinates?: any;
+    }): DrawableObject | null {
         try {
             let object: DrawableObject | null = null;
 
@@ -150,7 +153,10 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry Point geometry data
      * @returns PointObject instance
      */
-    private createPointFromGeometry(geometry: any): PointObject | null {
+    private createPointFromGeometry(geometry: {
+        type: string;
+        coordinates?: number[];
+    }): PointObject | null {
         if (!geometry || geometry.type !== "Point" || !geometry.coordinates) {
             return null;
         }
@@ -175,7 +181,10 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry LineString geometry data
      * @returns DrawLine instance
      */
-    private createLineFromGeometry(geometry: any): DrawLine | null {
+    private createLineFromGeometry(geometry: {
+        type: string;
+        coordinates?: number[][];
+    }): DrawLine | null {
         if (!geometry || geometry.type !== "LineString" || !geometry.coordinates) {
             return null;
         }
@@ -189,7 +198,7 @@ export class GeoJSONDrawControls extends MapDrawControls {
                 );
             });
 
-            return new DrawLine(this.mapView, vertices);
+            return new DrawLine(this.mapView, vertices, this.windowHandler);
         } catch (error) {
             console.error("Error creating DrawLine from geometry:", error);
             return null;
@@ -201,7 +210,10 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry Polygon geometry data
      * @returns DrawPolygon instance
      */
-    private createPolygonFromGeometry(geometry: any): DrawPolygon | null {
+    private createPolygonFromGeometry(geometry: {
+        type: string;
+        coordinates?: number[][][];
+    }): DrawPolygon | null {
         if (!geometry || geometry.type !== "Polygon" || !geometry.coordinates) {
             return null;
         }
@@ -216,7 +228,7 @@ export class GeoJSONDrawControls extends MapDrawControls {
                 );
             });
 
-            return new DrawPolygon(this.mapView, vertices);
+            return new DrawPolygon(this.mapView, vertices, this.windowHandler);
         } catch (error) {
             console.error("Error creating DrawPolygon from geometry:", error);
             return null;
@@ -281,7 +293,10 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param object Existing object
      * @param geometry Geometry data
      */
-    private updateObjectFromGeometry(object: DrawableObject, geometry: any): void {
+    private updateObjectFromGeometry(
+        object: DrawableObject,
+        geometry: { type: string; coordinates?: unknown }
+    ): void {
         try {
             switch (geometry.type) {
                 case "Point":
@@ -297,13 +312,15 @@ export class GeoJSONDrawControls extends MapDrawControls {
                     break;
                 case "LineString":
                     if (object instanceof DrawLine && geometry.coordinates) {
-                        const vertices = geometry.coordinates.map((coord: number[]) => {
-                            return new GeoCoordinates(
-                                coord[1], // latitude
-                                coord[0], // longitude
-                                coord[2] || 0 // altitude
-                            );
-                        });
+                        const vertices = (geometry.coordinates as number[][]).map(
+                            (coord: number[]) => {
+                                return new GeoCoordinates(
+                                    coord[1], // latitude
+                                    coord[0], // longitude
+                                    coord[2] || 0 // altitude
+                                );
+                            }
+                        );
                         object.setVertices(vertices);
                     }
                     break;

@@ -5,6 +5,7 @@ import { type MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
+import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawLine } from "./DrawLine";
 
@@ -17,8 +18,13 @@ export class MeasureLine extends DrawLine {
     private ndcVertexs: THREE.Vector3[] = [];
     private distance: number = 0;
 
-    constructor(mapView: MapView, vertices: GeoCoordinates[] = [], id?: string) {
-        super(mapView, vertices, id);
+    constructor(
+        mapView: MapView,
+        vertices: GeoCoordinates[] = [],
+        windowHandler: WindowEventHandler,
+        id?: string
+    ) {
+        super(mapView, vertices, windowHandler, id);
 
         this.updateMeasureDisplay();
     }

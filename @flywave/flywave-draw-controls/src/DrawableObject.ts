@@ -31,7 +31,10 @@ export abstract class DrawableObject extends THREE.Object3D {
     public abstract setVertexSelected(index: number, selected: boolean): void;
     public abstract getVertexSelected(index: number): boolean;
     public abstract update(): void;
-    public abstract toGeoJSON(): any;
+    public abstract toGeoJSON(): {
+        type: string;
+        coordinates: number[] | number[][] | number[][][];
+    };
 
     /**
      * Update vertex position
@@ -164,17 +167,17 @@ export abstract class DrawableObject extends THREE.Object3D {
         );
         if (this.outlineObject) {
             this.remove(this.outlineObject);
-            // Only clean up the geometry and material of the outline
-            if ((this.outlineObject as any).geometry) {
-                (this.outlineObject as any).geometry.dispose();
+            const obj = this.outlineObject as THREE.Mesh;
+            if (obj.geometry) {
+                obj.geometry.dispose();
             }
-            if ((this.outlineObject as any).material) {
-                if (Array.isArray((this.outlineObject as any).material)) {
-                    (this.outlineObject as any).material.forEach((mat: THREE.Material) => {
+            if (obj.material) {
+                if (Array.isArray(obj.material)) {
+                    obj.material.forEach(mat => {
                         mat.dispose();
                     });
                 } else {
-                    ((this.outlineObject as any).material as THREE.Material).dispose();
+                    (obj.material as THREE.Material).dispose();
                 }
             }
         }
@@ -187,7 +190,7 @@ export abstract class DrawableObject extends THREE.Object3D {
      * @param coordinates - Coordinate array
      * @returns GeoCoordinates array
      */
-    protected static createVerticesFromCoordinates(coordinates: any[]): GeoCoordinates[] {
+    protected static createVerticesFromCoordinates(coordinates: number[][]): GeoCoordinates[] {
         return coordinates.map(coord => {
             if (Array.isArray(coord) && coord.length >= 2) {
                 return new GeoCoordinates(

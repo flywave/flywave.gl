@@ -247,7 +247,7 @@ export class PointObject extends DrawableObject {
     }
 
     // Implement base class abstract method
-    public toGeoJSON(): any {
+    public toGeoJSON(): { type: string; coordinates: number[] } {
         return {
             type: "Point",
             coordinates: [
@@ -297,7 +297,11 @@ export class PointObject extends DrawableObject {
     }
 
     // Static method: Create point object from GeoJSON
-    public static fromGeoJSON(mapView: MapView, geoJson: any, id?: string): PointObject | null {
+    public static fromGeoJSON(
+        mapView: MapView,
+        geoJson: { type: string; coordinates: number[] },
+        id?: string
+    ): PointObject | null {
         if (!geoJson || geoJson.type !== "Point" || !geoJson.coordinates) {
             return null;
         }

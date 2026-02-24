@@ -57,11 +57,9 @@ export class FixedSizeArrow extends THREE.Object3D {
         this._headColor = new THREE.Color(this._options.headColor!);
         this._shaftColor = new THREE.Color(this._options.shaftColor!);
 
-        // Create arrow geometry
         this.createArrowGeometry();
 
-        // Mark as fixed size object
-        (this as any).isFixedSizeArrow = true;
+        (this.userData as { isFixedSizeArrow?: boolean }).isFixedSizeArrow = true;
     }
 
     /**
@@ -319,7 +317,7 @@ export class FixedSizeArrowSystem {
         if (!this._camera) return;
 
         this._arrows.forEach(arrow => {
-            if ((arrow as any).isFixedSizeArrow) {
+            if ((arrow.userData as { isFixedSizeArrow?: boolean }).isFixedSizeArrow) {
                 arrow.updateSize(this._camera!, this._renderer);
             }
         });

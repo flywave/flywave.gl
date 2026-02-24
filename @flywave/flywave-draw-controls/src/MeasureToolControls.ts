@@ -100,7 +100,7 @@ export class MeasureToolControls extends MapDrawControls {
         vertices: GeoCoordinates[],
         id?: string
     ): MeasureLine {
-        return new MeasureLine(mapView, vertices, id);
+        return new MeasureLine(mapView, vertices, this.windowHandler, id);
     }
 
     /**
@@ -109,7 +109,7 @@ export class MeasureToolControls extends MapDrawControls {
      * @returns MeasureLine instance
      */
     public createMeasureLine(vertices: GeoCoordinates[]): MeasureLine {
-        return new MeasureLine(this.mapView, vertices);
+        return new MeasureLine(this.mapView, vertices, this.windowHandler);
     }
 
     /**
@@ -121,7 +121,7 @@ export class MeasureToolControls extends MapDrawControls {
         try {
             const vertices = line.getVertices();
             if (vertices.length >= 2) {
-                const measureLine = new MeasureLine(this.mapView, vertices);
+                const measureLine = new MeasureLine(this.mapView, vertices, this.windowHandler);
 
                 // Copy properties from the original object
                 measureLine.setSelected(line.getSelected());

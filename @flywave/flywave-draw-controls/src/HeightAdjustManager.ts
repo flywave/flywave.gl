@@ -122,7 +122,10 @@ export class HeightAdjustManager extends THREE.Object3D {
         return position;
     }
 
-    public attachToLineVertex(line: any, vertexIndex: number): void {
+    public attachToLineVertex(
+        line: { getVertexPoints: () => THREE.Object3D[] },
+        vertexIndex: number
+    ): void {
         if (!line || !line.getVertexPoints || vertexIndex < 0) {
             this.detach();
             return;
@@ -135,7 +138,7 @@ export class HeightAdjustManager extends THREE.Object3D {
         }
 
         const vertexPoint = vertexPoints[vertexIndex];
-        this.attachToPoint(vertexPoint);
+        this.attachToPoint(vertexPoint as PointObject);
     }
 
     // Start height adjustment

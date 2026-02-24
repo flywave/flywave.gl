@@ -6,21 +6,25 @@ import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
+import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawableObject } from "./DrawableObject";
-import { PointObject } from "./PointObject";
+import { VertexHandle } from "./VertexHandle";
 
 export class DrawLine extends DrawableObject {
     protected outlineLine: Line2 | null = null;
-
-    // Change private properties to protected properties so that subclasses can access them
     protected line: Line2;
     protected lineContainer: THREE.Object3D;
     protected baseLineWidth: number = 2;
     protected lineColor: number = 0xffff00;
-    protected vertexPoints: PointObject[] = [];
+    protected vertexHandles: VertexHandle[] = [];
 
-    constructor(mapView: MapView, vertices: GeoCoordinates[] = [], id?: string) {
+    constructor(
+        mapView: MapView,
+        vertices: GeoCoordinates[] = [],
+        windowHandler: WindowEventHandler,
+        id?: string
+    ) {
         super(mapView, id);
         this.vertices = vertices;
 
@@ -34,17 +38,14 @@ export class DrawLine extends DrawableObject {
         this.lineContainer.add(this.line);
         this.add(this.lineContainer);
 
-        this.createVertexPoints();
+        this.windowHandler = windowHandler;
+        this.createVertexHandles();
         this.createOutlineObject();
         this.update();
     }
 
-    /**
-     * Create line material
-     * @param color - Line color
-     * @param linewidth - Line width
-     * @returns LineMaterial instance
-     */
+    private windowHandler: WindowEventHandler;
+
     protected createLineMaterial(color: number, linewidth: number): LineMaterial {
         return new LineMaterial({
             color,
@@ -57,29 +58,13 @@ export class DrawLine extends DrawableObject {
         });
     }
 
-    /**
-     * Update vertex position
-     * @param index - Vertex index
-     * @param newVertex - New vertex coordinates
-     */
     public updateVertex(index: number, newVertex: GeoCoordinates): void {
         if (index >= 0 && index < this.vertices.length) {
             this.vertices[index] = newVertex;
-
-            // Synchronously update the corresponding vertex visualization point
-            if (index < this.vertexPoints.length) {
-                this.vertexPoints[index].moveTo(newVertex);
-                this.vertexPoints[index].update(); // Ensure immediate update
-            }
-
-            this.update(); // Update the line itself
+            this.update();
         }
     }
 
-    /**
-     * Move the entire line to a new position
-     * @param newPosition - New position coordinates
-     */
     public moveTo(newPosition: GeoCoordinates): void {
         if (this.vertices.length === 0) return;
 
@@ -87,7 +72,6 @@ export class DrawLine extends DrawableObject {
         const deltaLat = newPosition.latitude - center.latitude;
         const deltaLon = newPosition.longitude - center.longitude;
 
-        // Move all vertices
         for (let i = 0; i < this.vertices.length; i++) {
             const vertex = this.vertices[i];
             const newVertex = new GeoCoordinates(
@@ -96,34 +80,19 @@ export class DrawLine extends DrawableObject {
                 vertex.altitude
             );
             this.vertices[i] = newVertex;
-
-            // Synchronously update vertex visualization points
-            if (i < this.vertexPoints.length) {
-                this.vertexPoints[i].moveTo(newVertex);
-            }
         }
 
         this.update();
     }
 
-    /**
-     * Set line vertices
-     * @param vertices - Vertex coordinate array
-     */
     public setVertices(vertices: GeoCoordinates[]): void {
         if (vertices.length < 2) return;
 
         this.vertices = vertices;
-
-        // Recreate vertex points
-        this.createVertexPoints();
+        this.createVertexHandles();
         this.update();
     }
 
-    /**
-     * Get the center point coordinates of the line
-     * @returns Center point coordinates of the line
-     */
     public getCenter(): GeoCoordinates {
         if (!this.vertices || this.vertices.length === 0) {
             return new GeoCoordinates(0, 0);
@@ -146,9 +115,6 @@ export class DrawLine extends DrawableObject {
         );
     }
 
-    /**
-     * Update line display
-     */
     public update(): void {
         if (!this.vertices || this.vertices.length < 2) {
             this.line.visible = false;
@@ -157,14 +123,11 @@ export class DrawLine extends DrawableObject {
             this.line.visible = true;
         }
 
-        // Calculate the center point as the origin of local coordinates
         const center = this.getCenter();
         const centerProjected = this.mapView.projection.projectPoint(center);
 
-        // Set the position of the line container
         this.lineContainer.position.copy(centerProjected);
 
-        // Calculate local coordinates relative to the center point
         const positions = this.vertices.map(vertex => {
             const projected = this.mapView.projection.projectPoint(vertex);
             return new THREE.Vector3(
@@ -178,15 +141,13 @@ export class DrawLine extends DrawableObject {
         const geometry = this.line.geometry as LineGeometry;
         geometry.setPositions(vertices);
 
-        // Ensure the number of vertex visualization points matches
-        if (this.vertexPoints.length !== this.vertices.length) {
-            this.createVertexPoints();
+        if (this.vertexHandles.length !== this.vertices.length) {
+            this.createVertexHandles();
         } else {
-            // Synchronize the positions of vertex visualization points
             for (let i = 0; i < this.vertices.length; i++) {
-                if (i < this.vertexPoints.length) {
-                    this.vertexPoints[i].moveTo(this.vertices[i]);
-                    this.vertexPoints[i].update(); // Ensure immediate update
+                if (i < this.vertexHandles.length) {
+                    this.vertexHandles[i].setPosition(this.vertices[i]);
+                    this.vertexHandles[i].update();
                 }
             }
         }
@@ -194,65 +155,34 @@ export class DrawLine extends DrawableObject {
         this.updateVisuals();
     }
 
-    /**
-     * Set vertex selection state
-     * @param index - Vertex index
-     * @param selected - Whether selected
-     */
     public setVertexSelected(index: number, selected: boolean): void {
-        if (index >= 0 && index < this.vertexPoints.length) {
-            this.vertexPoints[index].setSelected(selected);
-
-            // If the vertex is selected, display the height handle
-            if (selected) {
-                this.vertexPoints[index].setEditing(true);
-            } else {
-                this.vertexPoints[index].setEditing(false);
-            }
+        if (index >= 0 && index < this.vertexHandles.length) {
+            this.vertexHandles[index].setSelected(selected);
         }
     }
 
-    /**
-     * Get vertex selection state
-     * @param index - Vertex index
-     * @returns Whether selected
-     */
     public getVertexSelected(index: number): boolean {
-        return index >= 0 && index < this.vertexPoints.length
-            ? this.vertexPoints[index].isSelected
+        return index >= 0 && index < this.vertexHandles.length
+            ? this.vertexHandles[index].getSelected()
             : false;
     }
 
-    /**
-     * Update line visual effects
-     */
     protected updateVisuals(): void {
         const material = this.line.material as LineMaterial;
         if (this.isSelected) {
             material.color.set(0x00ff00);
             material.linewidth = this.baseLineWidth * 2;
 
-            // When the object is selected, all vertices are also displayed as selected
-            this.vertexPoints.forEach(point => {
-                point.setSelected(true);
+            this.vertexHandles.forEach(handle => {
+                handle.setSelected(false);
             });
         } else {
             material.color.set(this.lineColor);
             material.linewidth = this.baseLineWidth;
-
-            // When the object is deselected, all vertices are also deselected
-            this.vertexPoints.forEach(point => {
-                point.setSelected(false);
-                point.setEditing(false);
-            });
         }
     }
 
-    /**
-     * Convert to GeoJSON format
-     * @returns GeoJSON object
-     */
-    public toGeoJSON(): any {
+    public toGeoJSON(): { type: string; coordinates: number[][] } {
         return {
             type: "LineString",
             coordinates: this.vertices.map(vertex => [
@@ -263,13 +193,15 @@ export class DrawLine extends DrawableObject {
         };
     }
 
-    /**
-     * Dispose line resources
-     */
+    protected onCameraPositionChanged(): void {
+        this.vertexHandles.forEach(handle => {
+            handle.update();
+        });
+    }
+
     public dispose(): void {
         super.dispose();
 
-        // Remove lineContainer from parent object
         if (this.lineContainer.parent) {
             this.lineContainer.parent.remove(this.lineContainer);
         }
@@ -277,12 +209,11 @@ export class DrawLine extends DrawableObject {
         this.line.geometry.dispose();
         (this.line.material as THREE.Material).dispose();
 
-        this.vertexPoints.forEach(point => {
-            point.dispose();
+        this.vertexHandles.forEach(handle => {
+            handle.dispose();
         });
-        this.vertexPoints = [];
+        this.vertexHandles = [];
 
-        // Clean up outlineLine
         if (this.outlineLine) {
             this.outlineLine.geometry.dispose();
             (this.outlineLine.material as THREE.Material).dispose();
@@ -290,34 +221,21 @@ export class DrawLine extends DrawableObject {
         }
     }
 
-    /**
-     * Get vertex visualization points array
-     * @returns PointObject array
-     */
-    public getVertexPoints(): PointObject[] {
-        return this.vertexPoints;
+    public getVertexHandles(): VertexHandle[] {
+        return this.vertexHandles;
     }
 
-    /**
-     * Create outline object
-     */
     protected createOutlineObject(): void {
-        // Directly use the main line's geometry to avoid repeated creation and calculation
         const mainGeometry = this.line.geometry;
-
         const material = this.createOutlineMaterial();
 
-        this.outlineLine = new Line2(mainGeometry, material); // Share the same geometry
+        this.outlineLine = new Line2(mainGeometry, material);
         this.outlineLine.renderOrder = -10;
         this.outlineLine.raycast = () => {};
 
         this.lineContainer.add(this.outlineLine);
     }
 
-    /**
-     * Create outline material
-     * @returns LineMaterial instance
-     */
     protected createOutlineMaterial(): LineMaterial {
         return new LineMaterial({
             color: 0xffd700,
@@ -332,38 +250,49 @@ export class DrawLine extends DrawableObject {
         });
     }
 
-    /**
-     * Create vertex visualization points
-     */
-    protected createVertexPoints(): void {
-        // Clean up existing points
-        this.vertexPoints.forEach(point => {
-            this.remove(point.getObject3D());
-            point.dispose();
+    protected createVertexHandles(): void {
+        this.vertexHandles.forEach(handle => {
+            this.remove(handle);
+            handle.dispose();
         });
-        this.vertexPoints = [];
+        this.vertexHandles = [];
 
-        // Create new vertex points
         for (let i = 0; i < this.vertices.length; i++) {
-            // Use factory method to create vertex points, allowing subclass override
-            const vertexPoint = this.createVertexPoint(this.vertices[i], true);
+            const handle = this.createVertexHandle(this.vertices[i]);
 
-            // Add index identifier to the vertex
-            vertexPoint.getObject3D().userData.vertexIndex = i;
-            vertexPoint.getObject3D().userData.parentObject = this;
+            handle.userData.vertexIndex = i;
+            handle.userData.parentObject = this;
 
-            this.vertexPoints.push(vertexPoint);
-            this.add(vertexPoint.getObject3D());
+            this.setupHandleEvents(handle, i);
+
+            this.vertexHandles.push(handle);
+            this.add(handle);
         }
     }
 
-    /**
-     * Create vertex visualization point object
-     * @param position - Vertex position
-     * @param isVertex - Whether it is a vertex
-     * @returns PointObject instance
-     */
-    protected createVertexPoint(position: GeoCoordinates, isVertex: boolean): PointObject {
-        return new PointObject(this.mapView, position, isVertex);
+    protected createVertexHandle(position: GeoCoordinates): VertexHandle {
+        return new VertexHandle({
+            position,
+            mapView: this.mapView,
+            windowHandler: this.windowHandler,
+            autoHeightHandle: true
+        });
+    }
+
+    private setupHandleEvents(handle: VertexHandle, index: number): void {
+        handle.on("drag", (h: VertexHandle, newPosition: GeoCoordinates) => {
+            this.updateVertex(index, newPosition);
+        });
+
+        handle.on("heightChange", (h: VertexHandle, newHeight: number) => {
+            if (index < this.vertices.length) {
+                this.vertices[index].altitude = newHeight;
+                this.update();
+            }
+        });
+
+        handle.on("selected", (h: VertexHandle, selected: boolean) => {});
+
+        handle.on("hovered", (h: VertexHandle, hovered: boolean) => {});
     }
 }
