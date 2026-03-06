@@ -17,6 +17,7 @@ interface WindowEventMap {
 export interface VertexHandleEvents {
     dragStart?: (handle: VertexHandle) => void;
     drag?: (handle: VertexHandle, newPosition: GeoCoordinates) => void;
+    dragWorld?: (handle: VertexHandle, newPosition: THREE.Vector3) => void;
     dragEnd?: (handle: VertexHandle) => void;
     heightChange?: (handle: VertexHandle, newHeight: number) => void;
     heightAdjustStart?: (handle: VertexHandle) => void;
@@ -26,7 +27,8 @@ export interface VertexHandleEvents {
 }
 
 export interface VertexHandleOptions {
-    position: GeoCoordinates;
+    position?: GeoCoordinates;
+    worldPosition?: THREE.Vector3;
     mapView: MapView;
     windowHandler: WindowEventHandler;
     mapControls?: MapControls;
@@ -42,7 +44,9 @@ export class VertexHandle extends THREE.Object3D {
     private readonly mapView: MapView;
     private readonly windowHandler: WindowEventHandler;
     private readonly mapControls: MapControls | undefined;
-    private geoPosition: GeoCoordinates;
+    private geoPosition: GeoCoordinates | null;
+    private worldPosition: THREE.Vector3;
+    private useGeoCoordinates: boolean;
 
     private windowHandlerPanEnabledState: boolean = true;
     private readonly heightHandle: HeightHandle;
@@ -82,13 +86,24 @@ export class VertexHandle extends THREE.Object3D {
         this.mapView = options.mapView;
         this.windowHandler = options.windowHandler;
         this.mapControls = options.mapControls;
-        this.geoPosition = options.position;
         this.autoHeightHandle = options.autoHeightHandle !== false;
 
         this.normalColor = options.normalColor ?? 0xff6b6b;
         this.selectedColor = options.selectedColor ?? 0x00ff00;
         this.hoverColor = options.hoverColor ?? 0xffff00;
         this.size = options.size ?? 0.008;
+
+        if (options.position !== undefined) {
+            this.useGeoCoordinates = true;
+            this.geoPosition = options.position.clone();
+            this.worldPosition = this.mapView.projection.projectPoint(this.geoPosition);
+        } else if (options.worldPosition !== undefined) {
+            this.useGeoCoordinates = false;
+            this.geoPosition = null;
+            this.worldPosition = options.worldPosition.clone();
+        } else {
+            throw new Error("Either position or worldPosition must be provided");
+        }
 
         this.heightHandle = new HeightHandle();
         this.add(this.heightHandle);
@@ -179,8 +194,9 @@ export class VertexHandle extends THREE.Object3D {
             this.isDragging = true;
             this.hasDraggedDistance = false;
             this.dragStartPoint.set(event.offsetX, event.offsetY);
-            this.dragStartGeoCoord = this.geoPosition.clone();
-            this.dragStartHeight = this.geoPosition.altitude || 0;
+            this.dragStartGeoCoord =
+                this.useGeoCoordinates && this.geoPosition ? this.geoPosition.clone() : null;
+            this.dragStartHeight = this.worldPosition.z;
 
             this.windowHandlerPanEnabledState = this.windowHandler.panEnabled;
             this.windowHandler.panEnabled = false;
@@ -308,7 +324,7 @@ export class VertexHandle extends THREE.Object3D {
     private startHeightAdjustment(mousePoint: THREE.Vector2): void {
         this.isAdjustingHeight = true;
 
-        this.heightAdjustStartHeight = this.geoPosition.altitude || 0;
+        this.heightAdjustStartHeight = this.worldPosition.z;
 
         const arrowDirection = this.heightHandle.getDirection();
         const handleWorldPos = new THREE.Vector3();
@@ -350,7 +366,7 @@ export class VertexHandle extends THREE.Object3D {
             const heightDelta = displacement.dot(arrowDirection);
 
             const newHeight = this.heightAdjustStartHeight + heightDelta;
-            this.geoPosition.altitude = newHeight;
+            this.worldPosition.z = newHeight;
 
             this.updatePosition();
             this.events.heightChange?.(this, newHeight);
@@ -358,22 +374,55 @@ export class VertexHandle extends THREE.Object3D {
     }
 
     private handleDrag(event: MouseEvent): void {
-        if (!this.dragStartGeoCoord || this.dragStartHeight === null) return;
+        if (this.dragStartHeight === null) return;
 
         const currentMousePoint = new THREE.Vector2(event.offsetX, event.offsetY);
-        const currentGeoCoord = this.getIntersectionOnDragSurface(
-            currentMousePoint,
-            this.dragStartGeoCoord,
-            this.dragStartHeight
-        );
 
-        if (!currentGeoCoord) return;
+        if (this.useGeoCoordinates && this.dragStartGeoCoord) {
+            const currentGeoCoord = this.getIntersectionOnDragSurface(
+                currentMousePoint,
+                this.dragStartGeoCoord,
+                this.dragStartHeight
+            );
 
-        this.geoPosition.latitude = currentGeoCoord.latitude;
-        this.geoPosition.longitude = currentGeoCoord.longitude;
+            if (!currentGeoCoord) return;
+
+            if (this.geoPosition) {
+                this.geoPosition.latitude = currentGeoCoord.latitude;
+                this.geoPosition.longitude = currentGeoCoord.longitude;
+            }
+            this.worldPosition = this.mapView.projection.projectPoint(currentGeoCoord);
+
+            if (this.events.dragWorld) {
+                this.events.dragWorld(this, this.worldPosition.clone());
+            } else if (this.events.drag) {
+                this.events.drag(this, currentGeoCoord);
+            }
+        } else {
+            const currentWorldPos = this.getIntersectionOnDragSurfaceWorld(
+                currentMousePoint,
+                this.dragStartHeight
+            );
+
+            if (!currentWorldPos) return;
+
+            this.worldPosition.copy(currentWorldPos);
+            if (this.geoPosition) {
+                const newGeoCoord = this.mapView.projection.unprojectPoint(this.worldPosition);
+                this.geoPosition.latitude = newGeoCoord.latitude;
+                this.geoPosition.longitude = newGeoCoord.longitude;
+            }
+
+            if (this.events.dragWorld) {
+                this.events.dragWorld(this, this.worldPosition.clone());
+            } else if (this.events.drag) {
+                const geoCoord =
+                    this.geoPosition || this.mapView.projection.unprojectPoint(this.worldPosition);
+                this.events.drag(this, geoCoord);
+            }
+        }
 
         this.updatePosition();
-        this.events.drag?.(this, this.geoPosition);
     }
 
     private getIntersectionOnDragSurface(
@@ -434,19 +483,59 @@ export class VertexHandle extends THREE.Object3D {
         return geoCoord;
     }
 
+    private getIntersectionOnDragSurfaceWorld(
+        mousePoint: THREE.Vector2,
+        height: number
+    ): THREE.Vector3 | null {
+        try {
+            const mouseCoords = new THREE.Vector2(
+                (mousePoint.x / this.mapView.canvas.width) * 2 - 1,
+                -(mousePoint.y / this.mapView.canvas.height) * 2 + 1
+            );
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouseCoords, this.mapView.camera);
+
+            if (this.mapView.projection.type === ProjectionType.Spherical) {
+                const normal = this.worldPosition.clone().normalize();
+                const plane = new THREE.Plane(normal, -this.worldPosition.dot(normal));
+
+                const intersection = new THREE.Vector3();
+                if (raycaster.ray.intersectPlane(plane, intersection)) {
+                    const targetRadius = 6371000 + height;
+                    const normalized = intersection.clone().normalize();
+                    return normalized.multiplyScalar(targetRadius);
+                }
+            } else {
+                const planeHeight = height;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -planeHeight);
+
+                const intersection = new THREE.Vector3();
+                if (raycaster.ray.intersectPlane(plane, intersection)) {
+                    return intersection;
+                }
+            }
+        } catch (error) {
+            console.error("Error getting surface intersection:", error);
+            return null;
+        }
+
+        return null;
+    }
+
     private updatePosition(): void {
-        const worldPos = this.mapView.projection.projectPoint(this.geoPosition);
-        this.position.copy(worldPos);
+        this.position.copy(this.worldPosition);
 
         this.updateHeightHandle();
     }
 
     private updateHeightHandle(): void {
         if (this.isSelected && this.autoHeightHandle) {
-            const worldPos = this.mapView.projection.projectPoint(this.geoPosition);
-
             if (this.mapView.projection.type === ProjectionType.Spherical) {
-                const normal = this.mapView.projection.surfaceNormal(worldPos, new THREE.Vector3());
+                const normal = this.mapView.projection.surfaceNormal(
+                    this.worldPosition,
+                    new THREE.Vector3()
+                );
                 this.heightHandle.setDirection(normal);
             } else {
                 this.heightHandle.setDirection(new THREE.Vector3(0, 0, 1));
@@ -503,12 +592,38 @@ export class VertexHandle extends THREE.Object3D {
     }
 
     public setPosition(position: GeoCoordinates): void {
+        this.useGeoCoordinates = true;
         this.geoPosition = position.clone();
+        this.worldPosition = this.mapView.projection.projectPoint(this.geoPosition);
         this.updatePosition();
     }
 
-    public getPosition(): GeoCoordinates {
+    public setWorldPosition(position: THREE.Vector3): void {
+        this.useGeoCoordinates = false;
+        this.worldPosition = position.clone();
+        if (this.geoPosition) {
+            const newGeoCoord = this.mapView.projection.unprojectPoint(this.worldPosition);
+            this.geoPosition.latitude = newGeoCoord.latitude;
+            this.geoPosition.longitude = newGeoCoord.longitude;
+            this.geoPosition.altitude = newGeoCoord.altitude;
+        }
+        this.updatePosition();
+    }
+
+    public getPosition(): GeoCoordinates | null {
+        if (!this.useGeoCoordinates || !this.geoPosition) {
+            const geoCoord = this.mapView.projection.unprojectPoint(this.worldPosition);
+            return geoCoord;
+        }
         return this.geoPosition.clone();
+    }
+
+    public getWorldPosition(): THREE.Vector3 {
+        return this.worldPosition.clone();
+    }
+
+    public isUsingGeoCoordinates(): boolean {
+        return this.useGeoCoordinates;
     }
 
     public setEnabled(enabled: boolean): void {
@@ -534,12 +649,17 @@ export class VertexHandle extends THREE.Object3D {
     }
 
     public setHeight(height: number): void {
-        this.geoPosition.altitude = height;
+        if (this.useGeoCoordinates && this.geoPosition) {
+            this.geoPosition.altitude = height;
+            this.worldPosition = this.mapView.projection.projectPoint(this.geoPosition);
+        } else {
+            this.worldPosition.z = height;
+        }
         this.updatePosition();
     }
 
     public getHeight(): number {
-        return this.geoPosition.altitude || 0;
+        return this.worldPosition.z;
     }
 
     public getHovered(): boolean {

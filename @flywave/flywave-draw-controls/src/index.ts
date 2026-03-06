@@ -10,4 +10,5 @@ export type { MeasureLine } from "./MeasureLine";
 export { MeasureToolControls } from "./MeasureToolControls";
 
 export { VertexHandle } from "./VertexHandle";
+export { HeightHandle } from "./HeightHandle";
 export type { VertexHandleEvents, VertexHandleOptions } from "./VertexHandle";
