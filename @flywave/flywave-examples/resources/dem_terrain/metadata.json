@@ -10,8 +10,7 @@
     "tile_format": "png",
     "data_source": "Mapbox Terrain-RGB",
     "total_tiles": 129,
-    "config": {
-        "ACCESS_TOKEN": "YOUE token",
+    "config": { 
         "AREA": {
             "minLat": 36.4,
             "minLon": 118.1,
