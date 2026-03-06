@@ -11,7 +11,7 @@
     "data_source": "Mapbox Terrain-RGB",
     "total_tiles": 129,
     "config": {
-        "ACCESS_TOKEN": "MAPBOX_ACCESS_TOKEN_REMOVED",
+        "ACCESS_TOKEN": "YOUE token",
         "AREA": {
             "minLat": 36.4,
             "minLon": 118.1,
