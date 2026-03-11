@@ -245,6 +245,7 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         parameters.vertexShader = parameters.vertexShader.replace(
             "#include <color_pars_vertex>",
             `#include <color_pars_vertex>
+            uniform bool isRenderingDepth;
             ${this._getVertexParsShaderReplacement()}`
         );
 

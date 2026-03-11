@@ -187,7 +187,7 @@ if (exampleFilter) {
 const browserConfig = merge(commonConfig, {
     //@ts-ignore
     devServer: {
-        port: 8081,
+        port: 8080,
         headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Credentials": "true" }
     },
     entry: webpackEntries,
