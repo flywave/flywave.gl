@@ -100,7 +100,7 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
 
         // Key setting: do not allow scene.overrideMaterial to override
         // This allows 3D Tiles material to use its own depth rendering logic
-        this.allowOverride = false;
+        // this.allowOverride = false;
 
         // Set up shader compilation
         this.onBeforeCompile = this.setupShaders.bind(this);
