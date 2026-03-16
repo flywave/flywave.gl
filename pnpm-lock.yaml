@@ -289,8 +289,8 @@ catalogs:
       specifier: ^0.4.2
       version: 0.4.2
     postprocessing:
-      specifier: ^6.37.6
-      version: 6.38.2
+      specifier: 6.38.0
+      version: 6.38.0
     prettier:
       specifier: ^2.2.1
       version: 2.8.8
@@ -1419,7 +1419,7 @@ importers:
     dependencies:
       postprocessing:
         specifier: 'catalog:'
-        version: 6.38.2(three@0.178.0)
+        version: 6.38.0(three@0.178.0)
       rbush:
         specifier: 'catalog:'
         version: 3.0.1
@@ -10802,8 +10802,8 @@ packages:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
     engines: {node: ^10 || ^12 || >=14}
 
-  postprocessing@6.38.2:
-    resolution: {integrity: sha512-7DwuT7Tkst41ZjSj287g7C9c5/D3Xx5rMgBosg0dadbUPoZD2HNzkadKPol1d2PJAoI9f+Jeh1/v9YfLzpFGVw==}
+  postprocessing@6.38.0:
+    resolution: {integrity: sha512-tisx8XN/PWTL3uXz2mt8bjlMS1wiOUSCK3ixi4zjwUCFmP8XW8hNhXwrxwd2zf2VmCyCQ3GUaLm7GLnkkBbDsQ==}
     peerDependencies:
       three: ^0.178.0
 
@@ -24635,7 +24635,7 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  postprocessing@6.38.2(three@0.178.0):
+  postprocessing@6.38.0(three@0.178.0):
     dependencies:
       three: 0.178.0
 

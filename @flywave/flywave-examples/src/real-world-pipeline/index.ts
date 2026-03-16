@@ -322,7 +322,7 @@ try {
     initializeMapMonitor(mapView);
 
     // 7. Add GeoJSON data source
-    // addGeoJsonDataSource(mapView);
+    addGeoJsonDataSource(mapView);
 
     console.log("Pipeline engineering project visualization example initialized successfully");
 } catch (error) {
