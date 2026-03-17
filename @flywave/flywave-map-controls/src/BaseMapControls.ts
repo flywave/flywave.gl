@@ -7,11 +7,17 @@ import { type Event, EventDispatcher, Matrix4, Vector3, Vector4 } from "three";
 import { type CameraTransform } from "./CameraTransform";
 import { MouseCursorManager } from "./MouseCursorManager";
 import { WindowEventHandler } from "@flywave/flywave-utils";
+import { IWindowEventHandler } from "./IWindowEventHandler";
 
 export interface BaseMapControlsOptions {
     zoomEnabled?: boolean;
     tiltEnabled?: boolean;
     maxTiltAngle?: number;
+    /**
+     * Optional custom event handler instance
+     * If not provided, a default WindowEventHandler will be created
+     */
+    eventHandler?: IWindowEventHandler;
 }
 
 interface MouseState {
@@ -122,8 +128,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private _disableTilt: boolean = false;
     private _disableHeading: boolean = false;
 
-    protected windowEventHandler: WindowEventHandler;
-    private readonly mouseCursorManager: MouseCursorManager;
+    protected windowEventHandler: IWindowEventHandler;
+    private mouseCursorManager?: MouseCursorManager;
 
     private _enabled: boolean = true;
     public get enabled() {
@@ -141,7 +147,20 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
     constructor(public mapView: MapView, options?: BaseMapControlsOptions) {
         super();
-        this.windowEventHandler = new WindowEventHandler(this.mapView.canvas);
+
+        // Use custom event handler if provided, otherwise create default
+        if (options?.eventHandler) {
+            this.windowEventHandler = options.eventHandler;
+            // Don't create mouse cursor manager for custom event handlers (e.g., React Native)
+            this.mouseCursorManager = undefined;
+        } else {
+            this.windowEventHandler = new WindowEventHandler(this.mapView.canvas);
+            // Create mouse cursor manager only for web platform
+            this.mouseCursorManager = new MouseCursorManager(
+                this.mapView.canvas,
+                this.windowEventHandler as WindowEventHandler
+            );
+        }
 
         if (options) {
             if (options.zoomEnabled !== undefined) {

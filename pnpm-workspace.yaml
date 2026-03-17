@@ -6,13 +6,23 @@ catalog:
     # React相关
     "react": ^19.0.0
     "react-dom": ^19.0.0
+    "react-native": "^0.74.0"
     "@types/react": ^19.0.0
     "@types/react-dom": ^19.0.0
+    "@types/react-native": "^0.73.0"
     "@testing-library/react": ^13.0.0
     "@testing-library/react-dom": ^13.0.0
     "@testing-library/user-event": ^14.0.0
     "@types/geojson-vt": "^3.2.5"
     "vitest": ^0.34.0
+
+    # Expo相关
+    "expo": ^51.0.0
+    "expo-three": ^8.0.0
+    "expo-gl": ^14.0.0
+    "expo-asset": ^9.0.0
+    "@expo/metro-config": ^0.10.0
+    "react-native-gesture-handler": ^2.15.0
 
     # Docusaurus相关
     "@docusaurus/core": 3.9.1
@@ -51,10 +61,10 @@ catalog:
     "source-map-support": "^0.5.19"
 
     # 工具库
-    "url": "0.11.4" 
+    "url": "0.11.4"
     "@types/earcut": "^2.1.1"
     "earcut": "^2.2.2"
-    "poly-decomp-es" : "^0.4.2"
+    "poly-decomp-es": "^0.4.2"
     "tess2-ts": "^1.0.8"
     "@types/long": "^4.0.1"
     "long": "^4.0.0"
@@ -72,7 +82,7 @@ catalog:
     "rbush": "^3.0.1"
     "@turf/geojson-rbush": "^7.2.0"
     "@turf/turf": "^5.1.6"
-    "geojson-vt": "^4.0.2" 
+    "geojson-vt": "^4.0.2"
     "geokdbush": "^1.1.0"
     "hat": "~0.0.3"
     "immutable": "^4.0.0"

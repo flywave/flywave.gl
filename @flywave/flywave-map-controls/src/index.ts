@@ -9,6 +9,7 @@
  */
 
 export * from "./BaseMapControls";
+export * from "./IWindowEventHandler";
 export * from "./MapControlsUI";
 export * from "./LongPressHandler";
 export * from "./Utils";

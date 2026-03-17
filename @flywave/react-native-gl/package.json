@@ -1,0 +1,47 @@
+{
+    "name": "@flywave/react-native-gl",
+    "version": "0.0.1",
+    "description": "React Native adapter for flywave.gl - enables @flywave/flywave.gl to run on React Native",
+    "main": "lib/src/index.js",
+    "types": "lib/src/index.d.ts",
+    "scripts": {
+        "build": "tsc --build"
+    },
+    "dependencies": {
+        "@flywave/flywave-3dtile-datasource": "workspace:*",
+        "@flywave/flywave-datasource-protocol": "workspace:*",
+        "@flywave/flywave-draw-controls": "workspace:*",
+        "@flywave/flywave-features-datasource": "workspace:*",
+        "@flywave/flywave-geojson-datasource": "workspace:*",
+        "@flywave/flywave-geometry": "workspace:*",
+        "@flywave/flywave-geoutils": "workspace:*",
+        "@flywave/flywave-gltf": "workspace:*",
+        "@flywave/flywave-inspector": "workspace:*",
+        "@flywave/flywave-map-controls": "workspace:*",
+        "@flywave/flywave-mapview": "workspace:*",
+        "@flywave/flywave-mapview-decoder": "workspace:*",
+        "@flywave/flywave-terrain-datasource": "workspace:*",
+        "@flywave/flywave-transfer-manager": "workspace:*",
+        "@flywave/flywave-utils": "workspace:*",
+        "@flywave/flywave-vectortile-datasource": "workspace:*",
+        "@flywave/flywave-webtile-datasource": "workspace:*",
+        "expo": "^51.0.0",
+        "expo-three": "^8.0.0",
+        "expo-gl": "^14.0.0",
+        "three": "^0.178.0",
+        "react-native": "^0.74.0"
+    },
+    "devDependencies": {
+        "@types/react": "catalog:",
+        "@types/react-native": "^0.73.0",
+        "typescript": "catalog:"
+    },
+    "peerDependencies": {
+        "react": "*",
+        "react-native": "*"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "private": true
+}
