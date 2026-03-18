@@ -1,5 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { getPerformanceNow } from "../utilities/platform";
 import { type BatchAnimation } from "../TileRenderDataSource";
 
 /**
@@ -39,7 +40,7 @@ export class BatchAnimationManager {
     constructor(animation?: BatchAnimation) {
         this._animation = animation;
         this._easingFunction = this._getEasingFunction(animation?.easing);
-        this._lastUpdateTime = performance.now();
+        this._lastUpdateTime = getPerformanceNow();
     }
 
     /**
@@ -70,7 +71,7 @@ export class BatchAnimationManager {
         // Start new animation
         currentState.startProgress = currentState.currentProgress;
         currentState.targetProgress = targetProgress;
-        currentState.startTime = performance.now();
+        currentState.startTime = getPerformanceNow();
         currentState.isAnimating = true;
 
         this._batchStates.set(batchId, currentState);
@@ -134,7 +135,7 @@ export class BatchAnimationManager {
             return;
         }
 
-        const currentTime = performance.now();
+        const currentTime = getPerformanceNow();
         this._lastUpdateTime = currentTime;
 
         let hasActiveAnimations = false;

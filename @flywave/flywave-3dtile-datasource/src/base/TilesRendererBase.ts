@@ -12,6 +12,7 @@ import {
     type Tiles3DTilesetJSONPostprocessed,
     TILE_REFINEMENT
 } from "../loader/types";
+import { getBaseUrl } from "../utilities/platform";
 import { getUrlExtension } from "../utilities/urlExtension";
 import { type LoadState, FAILED, LOADED, LOADING, PARSING, UNLOADED } from "./constants";
 import { expandSubtree } from "./ResloveSubtree";
@@ -809,9 +810,8 @@ export class TilesRendererBase {
             }
         }
 
-        // Determine base path
-        let basePath = url.replace(/\/[^/]*$/, "");
-        basePath = new URL(basePath, window.location.href).toString();
+        // Determine base path (platform-aware)
+        const basePath = getBaseUrl(url);
         this.preprocessNode(json.root as TileInternal, basePath, parent);
     }
 
