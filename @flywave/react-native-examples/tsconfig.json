@@ -1,0 +1,24 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "composite": true,
+        "outDir": "./dist",
+        "rootDir": "./",
+        "jsx": "react",
+        "lib": ["ES2020", "DOM"],
+        "types": ["react", "react-native"],
+        "module": "ES2020",
+        "target": "ES2020",
+        "moduleResolution": "node",
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true
+    },
+    "include": ["*.ts", "*.tsx"],
+    "exclude": ["node_modules", "dist"],
+    "references": [
+        {
+            "path": "../react-native-gl"
+        }
+    ]
+}

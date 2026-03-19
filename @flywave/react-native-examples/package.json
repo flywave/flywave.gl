@@ -1,0 +1,26 @@
+{
+    "name": "@flywave/react-native-examples",
+    "version": "0.0.1",
+    "description": "React Native examples for flywave.gl",
+    "main": "index.js",
+    "scripts": {
+        "start": "expo start",
+        "android": "expo start --android",
+        "ios": "expo start --ios"
+    },
+    "dependencies": {
+        "@babel/runtime": "^7.29.2",
+        "@flywave/react-native-gl": "workspace:*",
+        "expo": "catalog:",
+        "expo-asset": "catalog:",
+        "expo-gl": "catalog:",
+        "expo-three": "catalog:",
+        "react": "catalog:",
+        "react-native": "catalog:"
+    },
+    "devDependencies": {
+        "@types/react": "catalog:",
+        "typescript": "catalog:"
+    },
+    "private": true
+}

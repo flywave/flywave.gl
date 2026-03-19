@@ -1,0 +1,16 @@
+{
+    "expo": {
+        "name": "Flywave React Native Examples",
+        "slug": "flywave-react-native-examples",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "userInterfaceStyle": "light",
+        "assetBundlePatterns": ["**/*"],
+        "ios": {
+            "supportsTablet": true
+        },
+        "android": {
+            "backgroundColor": "#ffffff"
+        }
+    }
+}
