@@ -61,3 +61,4 @@ export * from "./Compression";
 export * from "./TriangleGeometryMerger";
 export * from "./BufferGeometryUtils";
 export * from "./WindowEventHandler";
+export * from "./IWindowEventHandler";

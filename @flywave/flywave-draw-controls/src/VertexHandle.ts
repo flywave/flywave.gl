@@ -4,15 +4,10 @@ import { GeoCoordinates, ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import { type MapControls } from "@flywave/flywave-map-controls";
 import * as THREE from "three";
-import { WindowEventHandler } from "@flywave/flywave-utils";
+import { IWindowEventHandler } from "@flywave/flywave-utils";
 
 import { HeightHandle } from "./HeightHandle";
-
-interface WindowEventMap {
-    mousedown: MouseEvent;
-    mousemove: MouseEvent;
-    mouseup: MouseEvent;
-}
+ 
 
 export interface VertexHandleEvents {
     dragStart?: (handle: VertexHandle) => void;
@@ -30,7 +25,7 @@ export interface VertexHandleOptions {
     position?: GeoCoordinates;
     worldPosition?: THREE.Vector3;
     mapView: MapView;
-    windowHandler: WindowEventHandler;
+    windowHandler: IWindowEventHandler;
     mapControls?: MapControls;
     normalColor?: number;
     selectedColor?: number;
@@ -42,7 +37,7 @@ export interface VertexHandleOptions {
 
 export class VertexHandle extends THREE.Object3D {
     private readonly mapView: MapView;
-    private readonly windowHandler: WindowEventHandler;
+    private readonly windowHandler: IWindowEventHandler;
     private readonly mapControls: MapControls | undefined;
     private geoPosition: GeoCoordinates | null;
     private worldPosition: THREE.Vector3;

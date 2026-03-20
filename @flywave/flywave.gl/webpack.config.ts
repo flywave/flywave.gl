@@ -81,6 +81,23 @@ const outputFormats = [
         library: {
             type: "module" // 或者 'commonjs', 'umd' 等
         }
+    },
+    {
+        name: "commonjs",
+        filename: `flywave.native.gl.cjs${getFilenameSuffix()}`,
+        library: {
+            type: "commonjs" // 或者 'commonjs', 'umd' 等
+        }
+    },
+    {
+        name: "module",
+        filename: `flywave.native.gl.module${getFilenameSuffix()}`,
+        experiments: {
+            outputModule: true
+        },
+        library: {
+            type: "module" // 或者 'commonjs', 'umd' 等
+        }
     }
 ];
 

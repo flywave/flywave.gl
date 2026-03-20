@@ -4,15 +4,20 @@
     "type": "module",
     "description": "WebGl GIS",
     "exports": {
-        ".": {
-            "import": "./dist/flywave.gl.module.js",
-            "require": "./dist/flywave.gl.cjs.js",
-            "types": "./dist/flywave.d.ts"
-        },
         "./package.json": "./package.json",
         "./decoder": {
             "import": "./dist/flywave-decoders.js",
             "require": "./dist/flywave-decoders.js"
+        },
+        "./native": {
+            "import": "./dist/flywave.native.gl.module.js",
+            "require": "./dist/flywave.native.gl.cjs.js",
+            "types": "./dist/flywave.d.ts"
+        },
+        ".": {
+            "import": "./dist/flywave.gl.module.js",
+            "require": "./dist/flywave.gl.cjs.js",
+            "types": "./dist/flywave.d.ts"
         }
     },
     "typesVersions": {

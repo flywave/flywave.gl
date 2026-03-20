@@ -13,8 +13,7 @@ import { DrawLine } from "./DrawLine";
 import { DrawMode } from "./DrawMode";
 import { DrawPolygon } from "./DrawPolygon";
 import { PointObject } from "./PointObject";
-import { WindowEventHandler } from "@flywave/flywave-utils";
-import { VertexHandle } from "./VertexHandle";
+import { IWindowEventHandler } from "@flywave/flywave-utils";
 
 interface MapDrawControlsEventMap {
     [DrawEventNames.DRAW_START]: DrawEvent;
@@ -35,7 +34,7 @@ export { DrawEventNames };
 
 export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
     protected mapView: MapView;
-    protected readonly windowHandler: WindowEventHandler;
+    protected readonly windowHandler: IWindowEventHandler;
     private drawMode: DrawMode = DrawMode.NONE;
     private readonly objects = new Map<number, DrawableObject>();
     private selectedObject: DrawableObject | null = null;
@@ -276,7 +275,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         }
     }
 
-    protected triggerLabelUpdate(): void {}
+    protected triggerLabelUpdate(): void { }
 
     private onMouseMove(event): void {
         this.updateCursorStyle(event);
@@ -405,7 +404,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         }
     }
 
-    private handleDrawModeMouseDown(event: MouseEvent): void {}
+    private handleDrawModeMouseDown(event: MouseEvent): void { }
 
     private selectVertex(object: DrawableObject, vertexIndex: number): void {
         if (this.selectedVertexObject === object && this.selectedVertexIndex === vertexIndex) {
@@ -950,7 +949,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         return new DrawPolygon(mapView, vertices, this.windowHandler, id);
     }
 
-    protected updateMeasureLabels(): void {}
+    protected updateMeasureLabels(): void { }
 
     protected getTempVertices(): GeoCoordinates[] {
         return this.tempVertices;

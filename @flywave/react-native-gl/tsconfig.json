@@ -4,7 +4,14 @@
         "composite": true,
         "outDir": "./lib/src",
         "rootDir": "./src",
-        "jsx": "react"
+        "jsx": "react",
+        "paths": {
+            "@flywave/flywave-mapview": ["../flywave-mapview/src"],
+            "@flywave/flywave-map-controls": ["../flywave-map-controls/src"],
+            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
+            "@flywave/flywave-geometry": ["../flywave-geometry/src"],
+            "@flywave/flywave-utils": ["../flywave-utils/src"]
+        }
     },
     "include": ["src/**/*"],
     "exclude": ["lib", "test"],

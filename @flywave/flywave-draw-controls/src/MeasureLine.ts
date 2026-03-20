@@ -5,7 +5,7 @@ import { type MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
-import { WindowEventHandler } from "@flywave/flywave-utils";
+import { IWindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawLine } from "./DrawLine";
 
@@ -21,7 +21,7 @@ export class MeasureLine extends DrawLine {
     constructor(
         mapView: MapView,
         vertices: GeoCoordinates[] = [],
-        windowHandler: WindowEventHandler,
+        windowHandler: IWindowEventHandler,
         id?: string
     ) {
         super(mapView, vertices, windowHandler, id);

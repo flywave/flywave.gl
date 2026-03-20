@@ -62,3 +62,4 @@ expo.log
 # Build output
 dist/
 *.tsbuildinfo
+%ProgramData%

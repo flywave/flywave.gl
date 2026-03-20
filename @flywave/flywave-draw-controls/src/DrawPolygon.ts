@@ -7,10 +7,10 @@ import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
-import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawableObject } from "./DrawableObject";
 import { VertexHandle } from "./VertexHandle";
+import { IWindowEventHandler } from "@flywave/flywave-utils";
 
 export class DrawPolygon extends DrawableObject {
     protected mesh: THREE.Mesh;
@@ -25,7 +25,7 @@ export class DrawPolygon extends DrawableObject {
     constructor(
         mapView: MapView,
         vertices: GeoCoordinates[] = [],
-        windowHandler: WindowEventHandler,
+        windowHandler: IWindowEventHandler,
         id?: string
     ) {
         super(mapView, id);
@@ -52,7 +52,7 @@ export class DrawPolygon extends DrawableObject {
         this.update();
     }
 
-    private windowHandler: WindowEventHandler;
+    private windowHandler: IWindowEventHandler;
 
     protected createPolygonMaterial(color: number, opacity: number): THREE.MeshPhongMaterial {
         return new THREE.MeshPhongMaterial({

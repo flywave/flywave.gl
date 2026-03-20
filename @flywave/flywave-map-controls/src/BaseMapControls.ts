@@ -6,8 +6,7 @@ import { type Event, EventDispatcher, Matrix4, Vector3, Vector4 } from "three";
 
 import { type CameraTransform } from "./CameraTransform";
 import { MouseCursorManager } from "./MouseCursorManager";
-import { WindowEventHandler } from "@flywave/flywave-utils";
-import { IWindowEventHandler } from "./IWindowEventHandler";
+import { IWindowEventHandler, WindowEventHandler } from "@flywave/flywave-utils";
 
 export interface BaseMapControlsOptions {
     zoomEnabled?: boolean;

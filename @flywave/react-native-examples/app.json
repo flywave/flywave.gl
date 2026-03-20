@@ -9,8 +9,10 @@
         "ios": {
             "supportsTablet": true
         },
+        "newArchEnabled": true,
         "android": {
             "backgroundColor": "#ffffff"
-        }
+        },
+        "jsEngine": "hermes"
     }
 }

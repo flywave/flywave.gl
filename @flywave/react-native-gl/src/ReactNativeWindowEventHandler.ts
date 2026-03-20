@@ -1,5 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { IWindowEventHandler } from "@flywave/flywave-utils";
 import { Vector2 } from "three";
 
 /**
@@ -46,27 +47,6 @@ export type IWindowEventMap = {
  * Simple event listener type
  */
 type EventListener<K extends keyof IWindowEventMap> = (event: IWindowEventMap[K]) => void;
-
-/**
- * Interface for window event handler
- */
-export interface IWindowEventHandler {
-    mouseDown: MouseState;
-    lastMouseX: number;
-    lastMouseY: number;
-    lastMouseZ: number;
-    center_x: number;
-    center_y: number;
-    width: number;
-    height: number;
-    panEnabled: boolean;
-    zoomEnabled: boolean;
-    doubleZoomEnable: boolean;
-    addEventListener<K extends keyof IWindowEventMap>(type: K, listener: EventListener<K>): void;
-    removeEventListener<K extends keyof IWindowEventMap>(type: K, listener: EventListener<K>): void;
-    clearEvent(): void;
-    setSize(w: number, h: number): void;
-}
 
 // React Native specific types
 export interface ReactNativeTouchEvent {

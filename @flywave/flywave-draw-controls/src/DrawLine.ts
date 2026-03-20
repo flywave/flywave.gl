@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
-import { WindowEventHandler } from "@flywave/flywave-utils";
+import { IWindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawableObject } from "./DrawableObject";
 import { VertexHandle } from "./VertexHandle";
@@ -22,7 +22,7 @@ export class DrawLine extends DrawableObject {
     constructor(
         mapView: MapView,
         vertices: GeoCoordinates[] = [],
-        windowHandler: WindowEventHandler,
+        windowHandler: IWindowEventHandler,
         id?: string
     ) {
         super(mapView, id);
@@ -44,7 +44,7 @@ export class DrawLine extends DrawableObject {
         this.update();
     }
 
-    private windowHandler: WindowEventHandler;
+    protected windowHandler: IWindowEventHandler;
 
     protected createLineMaterial(color: number, linewidth: number): LineMaterial {
         return new LineMaterial({

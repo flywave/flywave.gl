@@ -3,19 +3,19 @@
 /**
  * Mouse button state array [left, middle, right]
  */
-export type MouseState = [boolean, boolean, boolean];
+type MouseState = [boolean, boolean, boolean];
 
 /**
  * Base event interface
  */
-export interface BaseEvent {
+interface BaseEvent {
     type: string;
 }
 
 /**
  * Mouse event interface
  */
-export interface MouseEvent extends BaseEvent {
+interface MouseEvent extends BaseEvent {
     offsetX?: number;
     offsetY?: number;
     clientX?: number;
@@ -26,7 +26,7 @@ export interface MouseEvent extends BaseEvent {
 /**
  * Wheel event interface
  */
-export interface WheelEvent extends BaseEvent {
+interface WheelEvent extends BaseEvent {
     deltaX?: number;
     deltaY?: number;
 }
@@ -34,7 +34,7 @@ export interface WheelEvent extends BaseEvent {
 /**
  * Key event interface
  */
-export interface KeyEvent extends BaseEvent {
+interface KeyEvent extends BaseEvent {
     key?: string;
     keyCode?: number;
 }
