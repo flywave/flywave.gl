@@ -200,7 +200,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.update();
 
         if (!this.distory) {
-            this.m_animationFrameHandle = requestAnimationFrame(this.handleRequestAnimationFrame);
+            if (!this.mapView.disposed)
+                this.m_animationFrameHandle = requestAnimationFrame(this.handleRequestAnimationFrame);
         } else {
             this.m_animationFrameHandle = undefined;
         }
@@ -517,8 +518,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             Math.min(
                 Math.max(
                     right.x * rotationMatrix.elements[0] +
-                        right.y * rotationMatrix.elements[1] +
-                        right.z * rotationMatrix.elements[2],
+                    right.y * rotationMatrix.elements[1] +
+                    right.z * rotationMatrix.elements[2],
                     -1
                 ),
                 1
