@@ -37,10 +37,6 @@
         "test:ui": "vitest --ui"
     },
     "dependencies": {},
-    "peerDependencies": {
-        "react": ">=16.8.0",
-        "react-dom": ">=16.8.0"
-    },
     "devDependencies": {},
     "typings": "lib/index.d.ts",
     "files": [

@@ -452,6 +452,7 @@ export class BoxBuffer {
                 image !== undefined &&
                 pickInfos[pickInfoIndex].poiInfo !== undefined &&
                 pickInfos[pickInfoIndex].poiInfo.uvBox !== undefined &&
+                typeof document !== 'undefined'&&
                 this.isPixelTransparent(
                     image,
                     screenX,

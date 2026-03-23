@@ -22,7 +22,7 @@ export function getPixelFromImage(
         return getPixelFromImageData(image, xPos, yPos, stride);
     }
 
-    if (!canvas) {
+    if (!canvas && typeof document !== 'undefined') {
         canvas = document.createElement("canvas");
     }
     return getPixelFromCanvasImageSource(image, xPos, yPos, canvas);

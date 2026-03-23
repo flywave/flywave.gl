@@ -50,11 +50,13 @@ export class CopyrightElementHandler {
      */
     constructor(element: string | HTMLElement, mapView?: MapView) {
         if (typeof element === "string") {
-            const htmlElement = document.getElementById(element);
-            if (!htmlElement) {
-                throw new Error(`CopyrightElementHandler: unable to find DOM element #${element}`);
+            if (typeof document !== 'undefined') {
+                const htmlElement = document.getElementById(element);
+                if (!htmlElement) {
+                    throw new Error(`CopyrightElementHandler: unable to find DOM element #${element}`);
+                }
+                this.m_element = htmlElement;
             }
-            this.m_element = htmlElement;
         } else {
             this.m_element = element;
         }
