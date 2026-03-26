@@ -11,7 +11,8 @@
         },
         "newArchEnabled": true,
         "android": {
-            "backgroundColor": "#ffffff"
+            "backgroundColor": "#ffffff",
+            "package": "com.flywave.reactnative.examples"
         },
         "jsEngine": "hermes"
     }

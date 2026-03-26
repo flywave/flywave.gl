@@ -1,13 +1,13 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import * as React from "react";
-import { MapView as RawMapView, MapViewOptions } from "@flywave/flywave.gl/native"; 
+import { MapView as RawMapView, MapViewOptions } from "@flywave/flywave.gl/dist/flywave.native.gl.module.js"; 
 import {
     MapControls as RawMapControls,
     BaseMapControlsOptions
-} from "@flywave/flywave.gl/native"; 
+} from "@flywave/flywave.gl/dist/flywave.native.gl.module.js"; 
 
-export * from "@flywave/flywave.gl/native"; 
+export * from "@flywave/flywave.gl/dist/flywave.native.gl.module.js"; 
 
 function createCanvasAdapter(gl: WebGLRenderingContext): HTMLCanvasElement {
     const glContext = gl as { drawingBufferWidth: number; drawingBufferHeight: number };

@@ -17,6 +17,7 @@
         "expo-gl": "catalog:",
         "expo-three": "catalog:",
         "react": "catalog:",
+        "react-dom": "catalog:",
         "react-native": "catalog:"
     },
     "devDependencies": {

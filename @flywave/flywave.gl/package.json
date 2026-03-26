@@ -12,7 +12,8 @@
         "./native": {
             "import": "./dist/flywave.native.gl.module.js",
             "require": "./dist/flywave.native.gl.cjs.js",
-            "types": "./dist/flywave.d.ts"
+            "types": "./dist/flywave.d.ts",
+            "default": "./dist/flywave.native.gl.module.js"
         },
         ".": {
             "import": "./dist/flywave.gl.module.js",

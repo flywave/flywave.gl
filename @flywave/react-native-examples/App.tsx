@@ -2,7 +2,7 @@
 
 import React from "react";
 import { StyleSheet, View, Text, SafeAreaView, ActivityIndicator } from "react-native";
-import { GLView, MapView, MapControls, GeoCoordinates } from "@flywave/react-native-gl";
+import { GLView, MapView, GeoCoordinates } from "@flywave/react-native-gl";
 
 interface Theme {
     version: string;
@@ -39,7 +39,6 @@ export default function App(): React.JSX.Element {
             console.log("MapView initialized:", mapView);
 
             try {
-                const controls = new MapControls(mapView, {});
                 setLoading(false);
                 setPosition("Ready");
 
