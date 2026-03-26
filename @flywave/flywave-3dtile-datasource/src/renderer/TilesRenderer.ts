@@ -658,7 +658,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
         const transformInverse = new Matrix4().copy(transform).invert();
 
         // Set up bounding volume
-        const boundingVolume = new TileBoundingVolume();
+        const boundingVolume = new TileBoundingVolume(this.group.position);
         if ("sphere" in tile.boundingVolume) {
             const ecefPos = new Vector3().fromArray(tile.boundingVolume.sphere);
 

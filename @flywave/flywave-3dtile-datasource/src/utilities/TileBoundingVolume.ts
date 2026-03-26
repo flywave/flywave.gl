@@ -28,7 +28,27 @@ export class TileBoundingVolume {
     /** OBB representation of the region (derived) */
     public regionObb: OrientedBox3 | null = null;
 
-    constructor() {}
+    constructor(private offset?: Vector3) {}
+
+    private _applyOffsetToSphere(): Sphere | null {
+        if (!this.sphere) return null;
+        if (!this.offset) return this.sphere;
+
+        const tempSphere = new Sphere();
+        tempSphere.center.copy(this.sphere.center).add(this.offset);
+        tempSphere.radius = this.sphere.radius;
+        return tempSphere;
+    }
+
+    private _applyOffsetToObb(): OrientedBox3 | null {
+        const obb = this.obb || this.regionObb;
+        if (!obb) return null;
+        if (!this.offset) return obb;
+
+        const tempObb = obb.clone();
+        tempObb.position.add(this.offset);
+        return tempObb;
+    }
 
     /**
      * Tests if a ray intersects this bounding volume
@@ -36,14 +56,17 @@ export class TileBoundingVolume {
      * @returns True if the ray intersects the volume
      */
     intersectsRay(ray: Ray): boolean {
+        // Apply offset if present
+        const offsetSphere = this._applyOffsetToSphere();
+        const offsetObb = this._applyOffsetToObb();
+
         // Early out if we don't hit the sphere
-        if (this.sphere && !ray.intersectsSphere(this.sphere)) {
+        if (offsetSphere && !ray.intersectsSphere(offsetSphere)) {
             return false;
         }
 
         // Check against OBB (either primary or region-derived)
-        const obb = this.obb || this.regionObb;
-        if (obb && !obb.intersectsRay(ray)) {
+        if (offsetObb && !offsetObb.intersectsRay(ray)) {
             return false;
         }
 
@@ -57,25 +80,25 @@ export class TileBoundingVolume {
      * @returns The intersection point or null if no intersection
      */
     intersectRay(ray: Ray, target: Vector3 | null = null): Vector3 | null {
-        const sphere = this.sphere;
-        const obb = this.obb || this.regionObb;
+        const offsetSphere = this._applyOffsetToSphere();
+        const offsetObb = this._applyOffsetToObb();
 
         let sphereDistSq = -Infinity;
         let obbDistSq = -Infinity;
 
         // Test sphere intersection
-        if (sphere) {
-            if (ray.intersectSphere(sphere, _sphereVec)) {
-                sphereDistSq = sphere.containsPoint(ray.origin)
+        if (offsetSphere) {
+            if (ray.intersectSphere(offsetSphere, _sphereVec)) {
+                sphereDistSq = offsetSphere.containsPoint(ray.origin)
                     ? 0
                     : ray.origin.distanceToSquared(_sphereVec);
             }
         }
 
         // Test OBB intersection
-        if (obb) {
-            if (obb.intersectsRay(ray, _obbVec)) {
-                obbDistSq = obb.containsPoint(ray.origin)
+        if (offsetObb) {
+            if (offsetObb.intersectsRay(ray, _obbVec)) {
+                obbDistSq = offsetObb.containsPoint(ray.origin)
                     ? 0
                     : ray.origin.distanceToSquared(_obbVec);
             }
@@ -101,18 +124,20 @@ export class TileBoundingVolume {
      * @returns The distance (0 if inside the volume)
      */
     distanceToPoint(point: Vector3): number {
+        const offsetSphere = this._applyOffsetToSphere();
+        const offsetObb = this._applyOffsetToObb();
+
         let sphereDistance = -Infinity;
         let obbDistance = -Infinity;
 
         // Sphere distance (clipped to 0 inside)
-        if (this.sphere) {
-            sphereDistance = Math.max(this.sphere.distanceToPoint(point), 0);
+        if (offsetSphere) {
+            sphereDistance = Math.max(offsetSphere.distanceToPoint(point), 0);
         }
 
         // OBB distance (either primary or region-derived)
-        const obb = this.obb || this.regionObb;
-        if (obb) {
-            obbDistance = obb.distanceToPoint(point);
+        if (offsetObb) {
+            obbDistance = offsetObb.distanceToPoint(point);
         }
 
         // Return the larger distance (more conservative)
@@ -125,20 +150,21 @@ export class TileBoundingVolume {
      * @returns True if intersecting
      */
     intersectsFrustum(frustum: Frustum): boolean {
-        const obb = this.obb || this.regionObb;
+        const offsetSphere = this._applyOffsetToSphere();
+        const offsetObb = this._applyOffsetToObb();
 
         // Test sphere first
-        if (this.sphere && !frustum.intersectsSphere(this.sphere)) {
+        if (offsetSphere && !frustum.intersectsSphere(offsetSphere)) {
             return false;
         }
 
         // Test OBB
-        if (obb && !obb.intersects(frustum)) {
+        if (offsetObb && !offsetObb.intersects(frustum)) {
             return false;
         }
 
         // If we have any volume, we intersected
-        return Boolean(this.sphere || obb);
+        return Boolean(offsetSphere || offsetObb);
     }
 
     /**
@@ -147,17 +173,18 @@ export class TileBoundingVolume {
      * @returns True if intersecting
      */
     intersectsSphere(otherSphere: Sphere): boolean {
-        const obb = this.obb || this.regionObb;
+        const offsetSphere = this._applyOffsetToSphere();
+        const offsetObb = this._applyOffsetToObb();
 
-        if (this.sphere && !this.sphere.intersectsSphere(otherSphere)) {
+        if (offsetSphere && !offsetSphere.intersectsSphere(otherSphere)) {
             return false;
         }
 
-        if (obb && !obb.intersectsSphere(otherSphere)) {
+        if (offsetObb && !offsetObb.intersectsSphere(otherSphere)) {
             return false;
         }
 
-        return Boolean(this.sphere || obb);
+        return Boolean(offsetSphere || offsetObb);
     }
 
     /**
@@ -166,17 +193,18 @@ export class TileBoundingVolume {
      * @returns True if intersecting
      */
     intersectsOBB(otherObb: OrientedBox3): boolean {
-        const obb = this.obb || this.regionObb;
+        const offsetSphere = this._applyOffsetToSphere();
+        const offsetObb = this._applyOffsetToObb();
 
-        if (this.sphere && !otherObb.intersectsSphere(this.sphere)) {
+        if (offsetSphere && !otherObb.intersectsSphere(offsetSphere)) {
             return false;
         }
 
-        if (obb && !obb.intersectsOrientedBox(otherObb)) {
+        if (offsetObb && !offsetObb.intersectsOrientedBox(otherObb)) {
             return false;
         }
 
-        return Boolean(this.sphere || obb);
+        return Boolean(offsetSphere || offsetObb);
     }
 
     /**
@@ -185,10 +213,10 @@ export class TileBoundingVolume {
      * @param targetMatrix Matrix to store the transform
      */
     getOBB(targetBox: Box3, targetMatrix: Matrix4): void {
-        const obb = this.obb || this.regionObb;
-        if (obb) {
-            obb.getSize(targetBox.max);
-            obb.getRotationMatrix(targetMatrix).setPosition(obb.position);
+        const offsetObb = this._applyOffsetToObb();
+        if (offsetObb) {
+            offsetObb.getSize(targetBox.max);
+            offsetObb.getRotationMatrix(targetMatrix).setPosition(offsetObb.position);
         }
     }
 
@@ -197,7 +225,10 @@ export class TileBoundingVolume {
      * @param target Box to store the result
      */
     getAABB(target: Box3): void {
-        this.sphere.getBoundingBox(target);
+        const offsetSphere = this._applyOffsetToSphere();
+        if (offsetSphere) {
+            offsetSphere.getBoundingBox(target);
+        }
     }
 
     /**
@@ -205,7 +236,10 @@ export class TileBoundingVolume {
      * @param target Sphere to store the result
      */
     getSphere(target: Sphere): void {
-        target.copy(this.sphere);
+        const offsetSphere = this._applyOffsetToSphere();
+        if (offsetSphere) {
+            target.copy(offsetSphere);
+        }
     }
 
     /**
