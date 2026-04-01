@@ -641,7 +641,7 @@ export class Tile extends TileInternal {
      */
     getBatchPropertiesByIntersection(
         intersection: TileIntersection,
-        batchName: string = "_batchid"
+        batchName: string = "_BATCHID"
     ): Record<string, any> {
         // Get batchId from intersection
         let batchId: number | undefined;

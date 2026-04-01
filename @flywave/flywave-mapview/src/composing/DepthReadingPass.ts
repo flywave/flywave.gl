@@ -49,7 +49,8 @@ export class DepthReadingPass extends DepthCopyPass {
         }
 
         if (this.renderer.capabilities.logarithmicDepthBuffer) {
-            throw new Error("DepthReadingPass does not support logarithmic depth buffers.");
+            console.error("DepthReadingPass does not support logarithmic depth buffers.");
+            return null;
         }
 
         this.renderer.readRenderTargetPixels(renderTarget, x, y, 1, 1, this.readBuffer);

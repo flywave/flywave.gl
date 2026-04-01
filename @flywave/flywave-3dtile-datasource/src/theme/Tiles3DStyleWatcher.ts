@@ -133,7 +133,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
         // Initialize custom attribute configuration
         // Use provided configuration or default values
         this.m_customAttributeConfig = {
-            batchIdAttributeName: customAttributeConfig?.batchIdAttributeName || "_batchid",
+            batchIdAttributeName: customAttributeConfig?.batchIdAttributeName || "_BATCHID",
             attributeMappings: customAttributeConfig?.attributeMappings || {}
         };
     }

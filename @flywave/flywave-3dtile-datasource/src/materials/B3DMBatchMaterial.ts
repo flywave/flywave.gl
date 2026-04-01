@@ -90,7 +90,7 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
             animation?: BatchAnimation;
         } = {}
     ) {
-        const { materialParams = {}, batchIdAttributeName = "_batchid", animation } = params;
+        const { materialParams = {}, batchIdAttributeName = "_BATCHID", animation } = params;
 
         super(materialParams);
         this._idAttributeName = batchIdAttributeName;

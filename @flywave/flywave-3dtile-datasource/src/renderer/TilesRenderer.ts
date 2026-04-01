@@ -891,7 +891,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
                         instance.setMatrixAt(i, tempMat);
                     }
                     mesh.geometry.setAttribute(
-                        "_batchId",
+                        "_BATCHID",
                         new InstancedBufferAttribute(
                             new Uint32Array(metadata.instances.length).fill(
                                 metadata.instances[i].batchId
