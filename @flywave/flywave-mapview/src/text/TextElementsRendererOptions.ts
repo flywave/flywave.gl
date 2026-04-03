@@ -137,7 +137,7 @@ export function initializeDefaultOptions(options: TextElementsRendererOptions) {
     }
 
     if (options.delayLabelsUntilMovementFinished === undefined) {
-        options.delayLabelsUntilMovementFinished = true;
+        options.delayLabelsUntilMovementFinished = false;
     }
 
     if (options.showReplacementGlyphs === undefined) {

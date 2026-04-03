@@ -11,7 +11,8 @@ import {
     FeaturesDataSource,
     ArcGISWebTileDataSource,
     TransferManager,
-    FeatureCollection
+    FeatureCollection,
+    ellipsoidProjection
 } from "@flywave/flywave.gl";
 
 /**
@@ -35,23 +36,24 @@ const getMapCanvas = (): HTMLCanvasElement => {
  */
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and viewpoint (Beijing coordinates)
-    const initialLocation = new GeoCoordinates(39.9042, 116.4074);
+    const initialLocation = new GeoCoordinates(36.68888228182142, 117.111025517555);
 
     return new MapView({
         canvas: canvas, // Specify render canvas
         target: initialLocation, // Initial target position
+        projection: ellipsoidProjection,
         zoomLevel: 14, // Initial zoom level
         theme: {
             extends: "resources/tilezen_base.json", // Base theme configuration
 
             definitions: {
                 defaultTextStyle: {
-                    color: "#2c3e50",
+                    color: "#78350F",
                     backgroundColor: "#ffffff",
-                    backgroundSize: 3,
+                    backgroundSize: 5,
                     fontSize: 20,
                     fontName: "Noto Sans",
-                    fontStyle: "bold"
+                    fontStyle: "Bold"
                 }
             },
             styles: {
@@ -61,25 +63,26 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                         technique: "labeled-icon",
                         attr: {
                             text: ["get", "name"],
-                            color: "#2C7BE5", // Dark blue, more readable
-                            backgroundColor: "#FFFFFF",
+                            color: "#B45309",
+                            backgroundColor: "#FFFBEB",
                             backgroundOpacity: 0.95,
+                            backgroundSize: 3,
                             imageTexture: "circle-stroked-11",
-                            iconScale: 1.3,
-                            size: 16,
+                            iconScale: 1.0,
+                            size: 14,
                             vAlignment: "Center",
-                            hAlignment: "Right"
+                            hAlignment: "Left"
                         }
                     },
                     {
                         when: ["==", ["geometry-type"], "LineString"],
                         technique: "solid-line",
                         attr: {
-                            color: "#2C7BE5",
+                            color: "#F59E0B",
                             outlineWidth: 2,
                             metricUnit: "Pixel",
                             lineWidth: 3,
-                            outlineColor: "#2C7BE5"
+                            outlineColor: "#78350F"
                         }
                     },
                     {
@@ -87,13 +90,15 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                         technique: "text",
                         attr: {
                             text: ["get", "name"],
-                            color: "#D33F8C", // Soft pink-purple
-                            backgroundColor: "#FFFFFF",
-                            backgroundOpacity: 0.98,
-                            size: 20,
+                            color: "#92400E",
+                            backgroundColor: "#FFFBEB",
+                            backgroundOpacity: 0.9,
+                            backgroundSize: 3,
+                            size: 14,
                             fontName: "default",
+                            fontStyle: "Bold",
                             priority: 95,
-                            vAlignment: "Center",
+                            vAlignment: "Above",
                             hAlignment: "Center"
                         }
                     }
@@ -144,7 +149,7 @@ const loadAndSetGeoJsonData = async (featuresDataSource: FeaturesDataSource): Pr
 
         // Filter out features without names
         geojsonData.features = geojsonData.features.filter(feature => {
-            return feature.properties?.name;
+            return feature.properties?.name !== undefined;
         });
 
         // Add GeoJSON data to FeaturesDataSource

@@ -2111,7 +2111,7 @@ export class TextElementsRenderer {
 
         tempPosition.z = labelState.renderDistance;
 
-        addTextToCanvas(pathLabel, textCanvas, tempPosition, textPath);
+        addTextToCanvas(pathLabel, textCanvas, tempPosition, textPath, true);
         renderParams.numRenderedTextElements++;
 
         // Restore previous style values for text elements using the same style.

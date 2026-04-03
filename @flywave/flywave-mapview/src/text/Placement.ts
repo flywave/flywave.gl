@@ -48,7 +48,7 @@ const MIN_AVERAGE_CHAR_WIDTH = 5;
 const tmpPosition = new THREE.Vector3(0, 0, 0);
 const tmpCameraDir = new THREE.Vector3(0, 0, 0);
 const tmpPointDir = new THREE.Vector3(0, 0, 0);
-const COS_TEXT_ELEMENT_FALLOFF_ANGLE = 0.5877852522924731; // Math.cos(0.3 * Math.PI)
+const COS_TEXT_ELEMENT_FALLOFF_ANGLE = 0.1736; // Math.cos(0.3 * Math.PI)
 
 /**
  * Checks whether the distance of the text element to the camera plane meets threshold criteria.
@@ -663,7 +663,7 @@ function placePointLabelAtAnchor(
 
         tmpMeasurementParams.outputCharacterBounds = undefined;
         tmpMeasurementParams.path = undefined;
-        tmpMeasurementParams.pathOverflow = false;
+        tmpMeasurementParams.pathOverflow = true;
         tmpMeasurementParams.letterCaseArray = label.glyphCaseArray!;
         // Compute label bounds according to layout settings.
         textCanvas.measureText(label.glyphs!, labelBounds, tmpMeasurementParams);

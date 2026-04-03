@@ -131,10 +131,10 @@ export function webMercatorTile2TargetWorld(
     flipY: boolean = false
 ) {
     tile2world(extents, decodeInfo, position, flipY, target);
-    decodeInfo.targetProjection.reprojectPoint(webMercatorProjection, target, target);
     if (position instanceof THREE.Vector3 && scaleHeight) {
         target.z *= decodeInfo.targetProjection.getScaleFactor(target);
     }
+    decodeInfo.targetProjection.reprojectPoint(webMercatorProjection, target, target);
 }
 
 export function webMercatorTile2TargetTile(
