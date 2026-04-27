@@ -1,0 +1,37 @@
+import { type CurveLocationDetail } from "../curve/curve-location-detail";
+import { type GeometryHandler } from "../geometry3d/geometry-handler";
+import { Plane3dByOriginAndVectors } from "../geometry3d/plane3d-by-origin-and-vectors";
+import { Point2d } from "../geometry3d/point2d-vector2d";
+import { Point3d } from "../geometry3d/point3d-vector3d";
+import { type Range3d } from "../geometry3d/range";
+import { Ray3d } from "../geometry3d/ray3d";
+import { type Transform } from "../geometry3d/transform";
+import { type Matrix4d } from "../geometry4d/matrix4d";
+import { Point4d } from "../geometry4d/point4d";
+import { BezierCurveBase } from "./bezier-curve-base";
+export declare class BezierCurve3dH extends BezierCurveBase {
+    isSameGeometryClass(other: any): boolean;
+    tryTransformInPlace(transform: Transform): boolean;
+    tryMultiplyMatrix4dInPlace(matrix: Matrix4d): void;
+    private readonly _workRay0;
+    private readonly _workRay1;
+    getPolePoint4d(i: number, result?: Point4d): Point4d | undefined;
+    getPolePoint3d(i: number, result?: Point3d): Point3d | undefined;
+    isUnitWeight(tolerance?: number): boolean;
+    private constructor();
+    static create(data: Point3d[] | Point4d[] | Point2d[]): BezierCurve3dH | undefined;
+    static createOrder(order: number): BezierCurve3dH;
+    loadSpan3dPolesWithWeight(data: Float64Array, spanIndex: number, weight: number): void;
+    loadSpan4dPoles(data: Float64Array, spanIndex: number): void;
+    clone(): BezierCurve3dH;
+    fractionToPoint(fraction: number, result?: Point3d): Point3d;
+    fractionToPoint4d(fraction: number, result?: Point4d): Point4d;
+    fractionToPointAndDerivative(fraction: number, result?: Ray3d): Ray3d;
+    fractionToPointAnd2Derivatives(fraction: number, result?: Plane3dByOriginAndVectors): Plane3dByOriginAndVectors;
+    isAlmostEqual(other: any): boolean;
+    dispatchToGeometryHandler(handler: GeometryHandler): any;
+    poleProductsXYZW(products: Float64Array, ax: number, ay: number, az: number, aw: number): void;
+    updateClosestPointByTruePerpendicular(spacePoint: Point3d, detail: CurveLocationDetail, testAt0?: boolean, testAt1?: boolean): boolean;
+    private updateDetailAtFraction;
+    extendRange(rangeToExtend: Range3d, transform?: Transform): void;
+}

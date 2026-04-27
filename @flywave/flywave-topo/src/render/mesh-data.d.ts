@@ -1,0 +1,34 @@
+import { type FillFlags } from "../common";
+import { type MeshParams } from "../common/render/primitives/mesh-params";
+import { type SurfaceType } from "../common/render/primitives/surface-params";
+import { type Point3d } from "../core-geometry";
+import { type IDisposable } from "../utils";
+import { type MaterialInfo } from "./material";
+import { type Texture } from "./texture";
+import { VertexLUT } from "./vertex-lut";
+export declare class MeshData implements IDisposable {
+    readonly edgeWidth: number;
+    readonly hasFeatures: boolean;
+    readonly uniformFeatureId?: number;
+    readonly texture?: Texture;
+    readonly normalMap?: Texture;
+    readonly constantLodVParams?: Float32Array;
+    readonly constantLodFParams?: Float32Array;
+    readonly textureUsesConstantLod?: boolean;
+    readonly normalMapUsesConstantLod?: boolean;
+    readonly materialInfo?: MaterialInfo;
+    readonly type: SurfaceType;
+    readonly fillFlags: FillFlags;
+    readonly edgeLineCode: number;
+    readonly isPlanar: boolean;
+    readonly hasBakedLighting: boolean;
+    readonly lut: VertexLUT;
+    readonly viewIndependentOrigin?: Point3d;
+    private readonly _textureAlwaysDisplayed;
+    private constructor();
+    static create(params: MeshParams, viOrigin: Point3d | undefined): MeshData | undefined;
+    dispose(): void;
+    get isGlyph(): boolean;
+    get isTextureAlwaysDisplayed(): boolean;
+    private get _ownsTexture();
+}

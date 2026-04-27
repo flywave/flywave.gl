@@ -1,0 +1,30 @@
+import { LineString3d } from "../curve/line-string3d";
+import { type GeometryHandler } from "../geometry3d/geometry-handler";
+import { Plane3dByOriginAndVectors } from "../geometry3d/plane3d-by-origin-and-vectors";
+import { Point2d } from "../geometry3d/point2d-vector2d";
+import { Point3d } from "../geometry3d/point3d-vector3d";
+import { type Range3d } from "../geometry3d/range";
+import { Ray3d } from "../geometry3d/ray3d";
+import { type Transform } from "../geometry3d/transform";
+import { Point4d } from "../geometry4d/point4d";
+import { BezierCurveBase } from "./bezier-curve-base";
+export declare class BezierCurve3d extends BezierCurveBase {
+    isSameGeometryClass(other: any): boolean;
+    tryTransformInPlace(transform: Transform): boolean;
+    private readonly _workRay0;
+    private readonly _workRay1;
+    getPolePoint3d(i: number, result?: Point3d): Point3d | undefined;
+    getPolePoint4d(i: number, result?: Point4d): Point4d | undefined;
+    private constructor();
+    copyPointsAsLineString(): LineString3d;
+    static create(data: Point3d[] | Point2d[]): BezierCurve3d | undefined;
+    static createOrder(order: number): BezierCurve3d;
+    loadSpanPoles(data: Float64Array, spanIndex: number): void;
+    clone(): BezierCurve3d;
+    fractionToPoint(fraction: number, result?: Point3d): Point3d;
+    fractionToPointAndDerivative(fraction: number, result?: Ray3d): Ray3d;
+    fractionToPointAnd2Derivatives(fraction: number, result?: Plane3dByOriginAndVectors): Plane3dByOriginAndVectors;
+    isAlmostEqual(other: any): boolean;
+    dispatchToGeometryHandler(handler: GeometryHandler): any;
+    extendRange(rangeToExtend: Range3d, transform?: Transform): void;
+}

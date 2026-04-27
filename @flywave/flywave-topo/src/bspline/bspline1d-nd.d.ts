@@ -1,0 +1,31 @@
+import { Point3d } from "../geometry3d/point3d-vector3d";
+import { BSplineWrapMode, KnotVector } from "./knot-vector";
+export declare class BSpline1dNd {
+    knots: KnotVector;
+    packedData: Float64Array;
+    poleLength: number;
+    get degree(): number;
+    get order(): number;
+    get numSpan(): number;
+    get numPoles(): number;
+    getPoint3dPole(i: number, result?: Point3d): Point3d | undefined;
+    basisBuffer: Float64Array;
+    poleBuffer: Float64Array;
+    basisBuffer1: Float64Array;
+    basisBuffer2: Float64Array;
+    poleBuffer1: Float64Array;
+    poleBuffer2: Float64Array;
+    protected constructor(numPoles: number, poleLength: number, order: number, knots: KnotVector);
+    static create(numPoles: number, poleLength: number, order: number, knots: KnotVector): BSpline1dNd | undefined;
+    spanFractionToKnot(span: number, localFraction: number): number;
+    evaluateBasisFunctionsInSpan(spanIndex: number, spanFraction: number, f: Float64Array, df?: Float64Array, ddf?: Float64Array): void;
+    evaluateBuffersInSpan(spanIndex: number, spanFraction: number): void;
+    evaluateBuffersInSpan1(spanIndex: number, spanFraction: number): void;
+    sumPoleBufferForSpan(spanIndex: number): void;
+    sumPoleBuffer1ForSpan(spanIndex: number): void;
+    sumPoleBuffer2ForSpan(spanIndex: number): void;
+    evaluateBuffersAtKnot(u: number, numDerivative?: number): void;
+    reverseInPlace(): void;
+    testCloseablePolygon(mode?: BSplineWrapMode): boolean;
+    addKnot(knot: number, totalMultiplicity: number): boolean;
+}

@@ -1,0 +1,54 @@
+import { type LineString3d } from "../curve/line-string3d";
+import { StrokeCountMap } from "../curve/query/stroke-count-map";
+import { type StrokeOptions } from "../curve/stroke-options";
+import { type GeometryHandler, type IStrokeHandler } from "../geometry3d/geometry-handler";
+import { type Plane3dByOriginAndUnitNormal } from "../geometry3d/plane3d-by-origin-and-unit-normal";
+import { type Plane3dByOriginAndVectors } from "../geometry3d/plane3d-by-origin-and-vectors";
+import { Point3d } from "../geometry3d/point3d-vector3d";
+import { type Range3d } from "../geometry3d/range";
+import { type Ray3d } from "../geometry3d/ray3d";
+import { type Transform } from "../geometry3d/transform";
+import { Point4d } from "../geometry4d/point4d";
+import { type BezierCurveBase } from "./bezier-curve-base";
+import { BSplineCurve3dBase } from "./bspline-curve";
+export declare class BSplineCurve3dH extends BSplineCurve3dBase {
+    private _workBezier?;
+    private initializeWorkBezier;
+    isSameGeometryClass(other: any): boolean;
+    tryTransformInPlace(transform: Transform): boolean;
+    getPolePoint3d(poleIndex: number, result?: Point3d): Point3d | undefined;
+    getPolePoint4d(poleIndex: number, result?: Point4d): Point4d | undefined;
+    spanFractionToKnot(span: number, localFraction: number): number;
+    private constructor();
+    copyPoints(): any[];
+    copyPointsFloat64Array(): Float64Array;
+    copyXYZFloat64Array(deweighted: boolean): Float64Array;
+    copyWeightsFloat64Array(): Float64Array;
+    static createUniformKnots(controlPoints: Point3d[] | Point4d[] | Float64Array, order: number): BSplineCurve3dH | undefined;
+    static assemblePackedXYZW(controlPoints: Float64Array | Point4d[] | {
+        xyz: Float64Array;
+        weights: Float64Array;
+    } | Point3d[]): Float64Array | undefined;
+    static create(controlPointData: Float64Array | Point4d[] | {
+        xyz: Float64Array;
+        weights: Float64Array;
+    } | Point3d[], knotArray: Float64Array | number[], order: number): BSplineCurve3dH | undefined;
+    clone(): BSplineCurve3dH;
+    evaluatePointInSpan(spanIndex: number, spanFraction: number, result?: Point3d): Point3d;
+    evaluatePointAndDerivativeInSpan(spanIndex: number, spanFraction: number, result?: Ray3d): Ray3d;
+    knotToPoint(u: number, result?: Point3d): Point3d;
+    knotToPointAndDerivative(u: number, result?: Ray3d): Ray3d;
+    knotToPointAnd2Derivatives(u: number, result?: Plane3dByOriginAndVectors): Plane3dByOriginAndVectors;
+    isAlmostEqual(other: any): boolean;
+    isInPlane(plane: Plane3dByOriginAndUnitNormal): boolean;
+    quickLength(): number;
+    emitStrokableParts(handler: IStrokeHandler, options?: StrokeOptions): void;
+    emitStrokes(dest: LineString3d, options?: StrokeOptions): void;
+    computeStrokeCountForOptions(options?: StrokeOptions): number;
+    computeAndAttachRecursiveStrokeCounts(options?: StrokeOptions, parentStrokeMap?: StrokeCountMap): void;
+    get isClosable(): boolean;
+    getSaturatedBezierSpan3dH(spanIndex: number, result?: BezierCurveBase): BezierCurveBase | undefined;
+    getSaturatedBezierSpan3dOr3dH(spanIndex: number, _prefer3dH: boolean, result?: BezierCurveBase): BezierCurveBase | undefined;
+    dispatchToGeometryHandler(handler: GeometryHandler): any;
+    extendRange(rangeToExtend: Range3d, transform?: Transform): void;
+}

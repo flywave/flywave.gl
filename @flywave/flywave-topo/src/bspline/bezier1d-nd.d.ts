@@ -1,0 +1,34 @@
+import { Point2d } from "../geometry3d/point2d-vector2d";
+import { Point3d } from "../geometry3d/point3d-vector3d";
+import { Segment1d } from "../geometry3d/segment1d";
+import { Point4d } from "../geometry4d/point4d";
+import { KnotVector } from "./knot-vector";
+export declare class Bezier1dNd {
+    private readonly _packedData;
+    private readonly _order;
+    private readonly _blockSize;
+    private readonly _basis;
+    constructor(blockSize: number, polygon: Float64Array);
+    clonePolygon(result?: Float64Array): Float64Array;
+    get order(): number;
+    get packedData(): Float64Array<ArrayBufferLike>;
+    static create(data: Point2d[] | Point3d[] | Point4d[]): Bezier1dNd | undefined;
+    evaluate(s: number, buffer?: Float64Array): Float64Array;
+    evaluateDerivative(s: number, buffer?: Float64Array): Float64Array;
+    getPolygonPoint(i: number, buffer?: Float64Array): Float64Array | undefined;
+    setPolygonPoint(i: number, buffer: Float64Array): void;
+    loadSpanPoles(data: Float64Array, spanIndex: number): void;
+    loadSpanPolesWithWeight(data: Float64Array, dataDimension: number, spanIndex: number, weight: number): void;
+    unpackToJsonArrays(): any[];
+    isAlmostEqual(other: any): boolean;
+    reverseInPlace(): void;
+    interpolatePoleInPlace(poleIndexA: number, fraction: number, poleIndexB: number): void;
+    saturateInPlace(knots: KnotVector, spanIndex: number): boolean;
+    static saturate1dInPlace(coffs: Float64Array, knots: KnotVector, spanIndex: number): boolean;
+    subdivideInPlaceKeepLeft(fraction: number): boolean;
+    subdivideInPlaceKeepRight(fraction: number): boolean;
+    subdivideToIntervalInPlace(fraction0: number, fraction1: number): boolean;
+    interval?: Segment1d;
+    setInterval(a: number, b: number): void;
+    fractionToParentFraction(fraction: number): number;
+}

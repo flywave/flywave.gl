@@ -1,0 +1,72 @@
+import { CurveCollection } from "../curve/curve-collection";
+import { CurveLocationDetailPair } from "../curve/curve-location-detail";
+import { CurvePrimitive } from "../curve/curve-primitive";
+import { type GrowableXYZArray } from "../geometry3d/growable-xyz-array";
+import { type IndexedXYZCollection } from "../geometry3d/indexed-xyz-collection";
+import { type Point3d } from "../geometry3d/point3d-vector3d";
+import { type GrowableXYZArrayCache } from "../geometry3d/reusable-object-cache";
+import { ClipPlane } from "./clip-plane";
+import { type PolygonClipper } from "./clip-utils";
+import { ConvexClipPlaneSet } from "./convex-clip-plane-set";
+export declare class AlternatingCCTreeNode implements PolygonClipper {
+    points: Point3d[];
+    planes: ConvexClipPlaneSet;
+    children: AlternatingCCTreeNode[];
+    startIdx: number;
+    numPoints: number;
+    private constructor();
+    static createWithIndices(index0: number, numPoints: number, result?: AlternatingCCTreeNode): AlternatingCCTreeNode;
+    static createTreeForPolygon(points: Point3d[], result?: AlternatingCCTreeNode): AlternatingCCTreeNode;
+    static createHullAndInletsForPolygon(points: Point3d[], result?: AlternatingCCTreeNode): AlternatingCCTreeNode;
+    private extractLoopsGo;
+    extractLoops(): Point3d[][];
+    empty(): void;
+    clone(result?: AlternatingCCTreeNode): AlternatingCCTreeNode;
+    addEmptyChild(index0: number, numPoints: number): void;
+    addPlane(plane: ClipPlane): void;
+    isPointOnOrInside(point: Point3d): boolean;
+    captureConvexClipPlaneSetAsVoid(child: AlternatingCCTreeNode): void;
+    appendCurvePrimitiveClipIntervals(curve: CurvePrimitive, insideIntervals: CurveLocationDetailPair[], outsideIntervals: CurveLocationDetailPair[]): void;
+    appendCurveCollectionClipIntervals(curves: CurveCollection, insideIntervals: CurveLocationDetailPair[], outsideIntervals: CurveLocationDetailPair[]): void;
+    appendPolygonClip(xyz: IndexedXYZCollection, insideFragments: GrowableXYZArray[], outsideFragments: GrowableXYZArray[], arrayCache: GrowableXYZArrayCache): void;
+    depth(): number;
+}
+export declare class AlternatingCCTreeBuilder {
+    private _points;
+    private readonly _stack;
+    private constructor();
+    static createPointsRef(points: Point3d[], result?: AlternatingCCTreeBuilder): AlternatingCCTreeBuilder;
+    get period(): number;
+    indexAfter(i: number): number;
+    indexBefore(i: number): number;
+    pushIndex(primaryPointIndex: number): void;
+    private static cross;
+    cyclicStackPoint(cyclicIndex: number): Point3d;
+    signFromStackTip(pointIndex: number, sign: number): 1 | -1;
+    get indexOfMaxX(): number;
+    extendHullChain(k: number, sign: number, pushAfterPops: boolean): void;
+    collectHullChain(kStart: number, numK: number, sign: number): void;
+    collectHullPointsInArray(points: Point3d[], kStart: number, numK: number, _sign: number): void;
+    private buildHullTreeGo;
+    buildHullAndInletsForPolygon(root: AlternatingCCTreeNode): boolean;
+    buildHullTree(root: AlternatingCCTreeNode): boolean;
+}
+export declare class AlternatingCCTreeNodeCurveClipper {
+    private _curve;
+    private _intervalStack;
+    private _stackDepth;
+    constructor();
+    private setCurveRef;
+    private popSegmentFrame;
+    private clearSegmentStack;
+    private pushEmptySegmentFrame;
+    private get _topOfStack();
+    private set _topOfStack(value);
+    private stackEntry;
+    private isTopOfStackEmpty;
+    private static readonly _fractionIntervals;
+    private appendSingleClipToStack;
+    private recurse;
+    appendSingleClipPrimitive(root: AlternatingCCTreeNode, curve: CurvePrimitive, insideIntervals: CurveLocationDetailPair[], _outsideIntervals: CurveLocationDetailPair[]): void;
+    appendCurveCollectionClip(root: AlternatingCCTreeNode, curve: CurveCollection, insideIntervals: CurveLocationDetailPair[], outsideIntervals: CurveLocationDetailPair[]): void;
+}

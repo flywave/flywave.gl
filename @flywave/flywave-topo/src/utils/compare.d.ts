@@ -1,0 +1,10 @@
+export type OrderedComparator<T, U = T> = (lhs: T, rhs: U) => number;
+export declare function compareWithTolerance(a: number, b: number, tolerance?: number): number;
+export declare function compareNumbers(a: number, b: number): number;
+export declare function compareBooleans(a: boolean, b: boolean): number;
+export declare function compareStrings(a: string, b: string): number;
+export declare function comparePossiblyUndefined<T>(compareDefined: (lhs: T, rhs: T) => number, lhs?: T, rhs?: T): number;
+export declare function compareStringsOrUndefined(lhs?: string, rhs?: string): number;
+export declare function compareNumbersOrUndefined(lhs?: number, rhs?: number): number;
+export declare function compareBooleansOrUndefined(lhs?: boolean, rhs?: boolean): number;
+export declare function areEqualPossiblyUndefined<T, U>(t: T | undefined, u: U | undefined, areEqual: (t: T, u: U) => boolean): boolean;

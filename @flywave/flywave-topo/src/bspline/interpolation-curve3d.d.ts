@@ -1,0 +1,75 @@
+import { type GeometryQuery } from "../curve/geometry-query";
+import { ProxyCurve } from "../curve/proxy-curve";
+import { type GeometryHandler } from "../geometry3d/geometry-handler";
+import { type Point3d, Vector3d } from "../geometry3d/point3d-vector3d";
+import { type Transform } from "../geometry3d/transform";
+import { type XYZProps } from "../geometry3d/xyz-props";
+export interface InterpolationCurve3dProps {
+    order?: number;
+    closed?: boolean;
+    isChordLenKnots?: number;
+    isColinearTangents?: number;
+    isChordLenTangents?: number;
+    isNaturalTangents?: number;
+    startTangent?: XYZProps;
+    endTangent?: XYZProps;
+    fitPoints: XYZProps[];
+    knots?: number[];
+}
+export declare class InterpolationCurve3dOptions {
+    constructor(fitPoints?: Point3d[], knots?: number[]);
+    private _order?;
+    private _closed?;
+    private _isChordLenKnots?;
+    private _isColinearTangents?;
+    private _isChordLenTangents?;
+    private _isNaturalTangents?;
+    private _startTangent?;
+    private _endTangent?;
+    private _fitPoints;
+    private _knots?;
+    get order(): number;
+    set order(val: number);
+    get closed(): boolean;
+    set closed(val: boolean);
+    get isChordLenKnots(): number;
+    set isChordLenKnots(val: number);
+    get isColinearTangents(): number;
+    set isColinearTangents(val: number);
+    get isChordLenTangents(): number;
+    set isChordLenTangents(val: number);
+    get isNaturalTangents(): number;
+    set isNaturalTangents(val: number);
+    get startTangent(): Vector3d | undefined;
+    set startTangent(val: Vector3d | undefined);
+    get endTangent(): Vector3d | undefined;
+    set endTangent(val: Vector3d | undefined);
+    get fitPoints(): Point3d[];
+    set fitPoints(val: Point3d[]);
+    get knots(): number[] | undefined;
+    set knots(val: number[] | undefined);
+    captureOptionalProps(order: number | undefined, closed: boolean | undefined, isChordLenKnots: number | undefined, isColinearTangents: number | undefined, isChordLenTangent: number | undefined, isNaturalTangents: number | undefined, startTangent: Vector3d | undefined, endTangent: Vector3d | undefined): void;
+    cloneAsInterpolationCurve3dProps(): InterpolationCurve3dProps;
+    clone(): InterpolationCurve3dOptions;
+    static create(source: InterpolationCurve3dProps): InterpolationCurve3dOptions;
+    private static areAlmostEqualAllow000AsUndefined;
+    static areAlmostEqual(dataA: InterpolationCurve3dOptions | undefined, dataB: InterpolationCurve3dOptions | undefined): boolean;
+    reverseInPlace(): void;
+}
+export declare class InterpolationCurve3d extends ProxyCurve {
+    readonly curvePrimitiveType = "interpolationCurve";
+    private readonly _options;
+    private constructor();
+    dispatchToGeometryHandler(handler: GeometryHandler): any;
+    static create(options: InterpolationCurve3dOptions | InterpolationCurve3dProps): InterpolationCurve3d | undefined;
+    static createCapture(options: InterpolationCurve3dOptions): InterpolationCurve3d | undefined;
+    copyFitPointsFloat64Array(): Float64Array;
+    toJSON(): any;
+    cloneProps(): InterpolationCurve3dProps;
+    get options(): InterpolationCurve3dOptions;
+    reverseInPlace(): void;
+    tryTransformInPlace(transform: Transform): boolean;
+    clone(): InterpolationCurve3d;
+    isAlmostEqual(other: GeometryQuery): boolean;
+    isSameGeometryClass(other: GeometryQuery): boolean;
+}

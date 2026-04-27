@@ -7,13 +7,8 @@ import type { Configuration } from "webpack";
 import { merge } from "webpack-merge";
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
-
-import { 
-    createBaseConfig, 
-    createDecoderConfig, 
-    createAssetsConfig,
-    FlywaveWebpackConfig
-} from "@flywave/flywave-webpack-utils/scripts/WebpackConfig";
+import TsconfigPathsPlugin from "tsconfig-paths-webpack-plugin";
+import { execSync } from "child_process";
 
 const require = createRequire(import.meta.url);
 
@@ -25,14 +20,29 @@ const __dirname = path.dirname(__filename);
 
 const exampleFilter = process.env["FILTER_EXAMPLE"];
 
-const flywaveMapThemePath = path.dirname(
-    require.resolve("@flywave/flywave-map-theme/package.json")
-);
-const flywaveFontResourcesPath = path.dirname(
-    require.resolve("@here/harp-fontcatalog/package.json")
-);
-const threePath = `${path.dirname(require.resolve("three"))}/three.cjs`;
-const threeDracoPath = `${path.dirname(require.resolve("three"))}/../examples/jsm/libs`;
+const flywaveMapThemePath = path.resolve(__dirname, "../flywave-map-theme");
+
+let flywaveFontResourcesPath: string;
+let threePath: string;
+let threeDracoPath: string;
+
+try {
+    flywaveFontResourcesPath = path.dirname(
+        require.resolve("@here/harp-fontcatalog/package.json")
+    );
+} catch (e) {
+    console.warn("Could not resolve @here/harp-fontcatalog, using fallback path");
+    flywaveFontResourcesPath = path.resolve(__dirname, "../../node_modules/@here/harp-fontcatalog");
+}
+
+try {
+    threePath = `${path.dirname(require.resolve("three"))}/three.cjs`;
+    threeDracoPath = `${path.dirname(require.resolve("three"))}/../examples/jsm/libs`;
+} catch (e) {
+    console.warn("Could not resolve three, using fallback path");
+    threePath = path.resolve(__dirname, "../../node_modules/three/three.cjs");
+    threeDracoPath = path.resolve(__dirname, "../../node_modules/three/examples/jsm/libs");
+}
 
 const themeList = {
     default: "resources/tilezen_base.json",
@@ -43,6 +53,23 @@ const themeList = {
     berlinOutlines: "resources/berlin_tilezen_effects_outlines.json"
 };
 
+interface FlywaveWebpackConfig {
+    mainEntry?: string;
+    decoderEntry?: string;
+    htmlTemplate?: string;
+    themePath?: string;
+    fontResourcesPath?: string;
+    threeDracoPath?: string;
+    tsConfigPath?: string;
+    projectRoot?: string;
+    outputPath?: string;
+    devServerPort?: number;
+    enableTsconfigPaths?: boolean;
+    enableExamples?: boolean;
+    enableCodeBrowser?: boolean;
+    additionalAssets?: Array<{ from: string; to: string; toType?: "dir" | "file" | "template" }>;
+}
+
 interface CacheConfig {
     type: "filesystem";
     buildDependencies: {
@@ -51,8 +78,158 @@ interface CacheConfig {
     name: string;
 }
 
+interface CopyPattern {
+    from: string;
+    to?: string;
+    toType?: "dir" | "file" | "template";
+    transform?: (content: Buffer) => string | Buffer;
+    globOptions?: {
+        dot?: boolean;
+        ignore?: string[];
+    };
+}
+
+function getSubprojectTsconfigPathsPlugins(projectRoot: string): TsconfigPathsPlugin[] {
+    try {
+        const pnpmOutput = execSync('pnpm ls -r --depth -1 --json', { cwd: projectRoot, encoding: 'utf-8' });
+        const packages = JSON.parse(pnpmOutput);
+
+        const flywavePackages = packages.filter((pkg: any) =>
+            pkg.name.startsWith('@flywave/') &&
+            pkg.path !== projectRoot
+        );
+
+        return flywavePackages.map((pkg: any) => {
+            const tsconfigPath = path.resolve(pkg.path, 'tsconfig.json');
+            return new TsconfigPathsPlugin({
+                configFile: tsconfigPath
+            });
+        });
+    } catch (error) {
+        console.error('Error getting subprojects:', error);
+        return [];
+    }
+}
+
+function createBaseConfig(config?: FlywaveWebpackConfig): Configuration {
+    const projectRoot = config?.projectRoot || path.resolve(__dirname, '../../');
+    const tsConfigPath = config?.tsConfigPath || path.resolve(process.cwd(), "tsconfig.json");
+
+    const resolvePlugins = [];
+    if (config?.enableTsconfigPaths) {
+        resolvePlugins.push(...getSubprojectTsconfigPathsPlugins(projectRoot));
+    }
+
+    return {
+        devtool: "source-map",
+        resolve: {
+            extensions: [".webpack.js", ".web.ts", ".ts", ".tsx", ".web.js", ".js"],
+            alias: {
+                "react-native": "react-native-web",
+            },
+            plugins: resolvePlugins,
+            fallback: {
+                assert: false,
+                fs: false
+            }
+        },
+        module: {
+            rules: [
+                {
+                    test: /\.tsx?$/,
+                    loader: "ts-loader",
+                    options: {
+                        transpileOnly: true,
+                        configFile: tsConfigPath,
+                    }
+                },
+                {
+                    test: /\.(HDR|hdr|mp4|png|eot|webp|tiff|svg|woff2|woff|ttf|jpg|gif|jpeg|ico|exr|wasm)$/,
+                    type: "asset/resource",
+                    generator: {
+                        filename: "files/[name].[hash:8].[ext]"
+                    }
+                }
+            ]
+        },
+        performance: {
+            hints: false
+        },
+        stats: {
+            all: false,
+            timings: true,
+            exclude: "resources/",
+            errors: true,
+            entrypoints: true,
+            warnings: true
+        },
+        mode: process.env.NODE_ENV === "production" ? "production" : "development"
+    };
+}
+
+function createDecoderConfig(config?: FlywaveWebpackConfig): Configuration {
+    const baseConfig = createBaseConfig(config);
+    const outputPath = config?.outputPath || path.join(process.cwd(), "dist");
+
+    return {
+        ...baseConfig,
+        target: "webworker",
+        entry: {
+            decoder: config?.decoderEntry || "./src/DecoderBundleMain.ts"
+        },
+        output: {
+            path: outputPath,
+            filename: process.env.NODE_ENV === "production" ? "flywave-decoders.min.js" : "flywave-decoders.js"
+        }
+    };
+}
+
+function createAssetsConfig(config?: FlywaveWebpackConfig): CopyPattern[] {
+    const assets: CopyPattern[] = [];
+
+    if (config?.themePath) {
+        assets.push({
+            from: path.join(config.themePath, "resources"),
+            to: "resources",
+            toType: "dir"
+        });
+    }
+
+    if (config?.fontResourcesPath) {
+        assets.push({
+            from: path.join(config.fontResourcesPath, "resources"),
+            to: "resources/fonts",
+            toType: "dir"
+        });
+    }
+
+    if (config?.threeDracoPath) {
+        assets.push({
+            from: config.threeDracoPath,
+            to: "resources/libs",
+            toType: "dir"
+        });
+    }
+
+    if (config?.additionalAssets) {
+        assets.push(...config.additionalAssets.map(asset => ({
+            from: asset.from,
+            to: asset.to,
+            toType: asset.toType
+        })));
+    }
+
+    assets.forEach(asset => {
+        asset.globOptions = {
+            dot: true,
+            ignore: [".npmignore", ".gitignore"]
+        };
+    });
+
+    return assets.filter(asset => asset.from) as CopyPattern[];
+}
+
 function getCacheConfig(name: string): CacheConfig | false {
-    // Use a separate cache for each configuration, otherwise cache writing fails.
     return process.env.NO_HARD_SOURCE_CACHE
         ? false
         : {
@@ -64,7 +241,6 @@ function getCacheConfig(name: string): CacheConfig | false {
         };
 }
 
-// 定义flywave-webpack-utils配置
 const flywaveConfig: FlywaveWebpackConfig = {
     tsConfigPath: path.join(__dirname, "tsconfig.json"),
     projectRoot: path.resolve(__dirname, '../../'),
@@ -74,7 +250,6 @@ const flywaveConfig: FlywaveWebpackConfig = {
     threeDracoPath: threeDracoPath
 };
 
-// 使用flywave-webpack-utils创建基础配置
 const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
     resolve: {
         alias: {
@@ -129,7 +304,6 @@ const webpackEntries = glob
         return result;
     }, {});
 
-// 添加对新示例文件夹结构的支持
 const exampleFolders = glob
     .sync(path.join(__dirname, "./src/*/index.ts"))
     .reduce((result: Record<string, string>, entry: string) => {
@@ -138,7 +312,6 @@ const exampleFolders = glob
         return result;
     }, {});
 
-// 合并两种入口方式
 Object.assign(webpackEntries, exampleFolders);
 
 const htmlEntries = glob
@@ -160,9 +333,6 @@ function filterExamples(pattern: string) {
     filterEntries(htmlEntries);
 }
 
-// Usage example:
-//    FILTER_EXAMPLE=shadows yarn start
-//
 if (exampleFilter) {
     filterExamples(exampleFilter);
 }
@@ -183,7 +353,7 @@ const browserConfig = merge(commonConfig, {
         splitChunks: {
             chunks: "all",
             minSize: 1000,
-            name: false // 使用 webpack 自动生成的名称，避免冲突
+            name: false
         }
     },
     cache: getCacheConfig("browser")
@@ -214,13 +384,6 @@ browserConfig.plugins!.push(
 
 const allEntries = Object.assign({}, webpackEntries, htmlEntries);
 
-/**
- * Generate example definitions for 'index.html' in following form:
- *
- * {
- *     [examplePage: string]: string // maps example page to example source
- * }
- */
 const exampleDefs = Object.keys(allEntries).reduce(function (
     r: Record<string, string>,
     entry: string
@@ -229,17 +392,6 @@ const exampleDefs = Object.keys(allEntries).reduce(function (
     return r;
 },
     {});
-
-interface CopyPattern {
-    from: string;
-    to?: string;
-    toType?: "dir" | "file" | "template";
-    transform?: (content: Buffer) => string | Buffer;
-    globOptions?: {
-        dot?: boolean;
-        ignore?: string[];
-    };
-}
 
 const srcFiles: CopyPattern[] = [
     ...glob.sync(path.join(__dirname, "src", "*.{ts,tsx,html}")).map(from => {
@@ -267,7 +419,6 @@ const htmlFiles: CopyPattern[] = glob.sync(path.join(__dirname, "src/*.html")).m
     };
 });
 
-// 添加额外的资源到配置中
 const additionalAssets: Array<{ from: string; to: string; toType?: "dir" | "file" | "template" }> = [
     { from: path.join(__dirname, "resources"), to: "", toType: "dir" },
     { from: path.join(flywaveMapThemePath, "resources"), to: "resources", toType: "dir" },
@@ -289,10 +440,8 @@ const additionalAssets: Array<{ from: string; to: string; toType?: "dir" | "file
     { from: path.join(__dirname, "codebrowser.html"), to: "codebrowser.html" }
 ];
 
-// 更新flywaveConfig中的additionalAssets
 flywaveConfig.additionalAssets = additionalAssets;
 
-// 为transform函数处理特殊内容
 const assets = createAssetsConfig(flywaveConfig).map(asset => {
     if (asset.to === "example-definitions.js") {
         return {
