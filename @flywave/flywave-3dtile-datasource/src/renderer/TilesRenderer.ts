@@ -890,17 +890,20 @@ export abstract class TilesRenderer extends TilesRendererBase {
                         tempMat.multiply(originalMatrix);
                         instance.setMatrixAt(i, tempMat);
                     }
-                    mesh.geometry.setAttribute(
-                        "_BATCHID",
-                        new InstancedBufferAttribute(
-                            new Uint32Array(metadata.instances.length).fill(
-                                metadata.instances[i].batchId
-                            ),
-                            1
-                        )
-                    );
                 }
             }
+
+            // Set _BATCHID attribute once per instance mesh (Float32 to match GLSL attribute float)
+            const batchIdArray = new Float32Array(metadata.instances.length);
+            for (let i = 0; i < metadata.instances.length; i++) {
+                batchIdArray[i] = metadata.instances[i].batchId;
+            }
+            instances.forEach(instance => {
+                instance.geometry.setAttribute(
+                    "_BATCHID",
+                    new InstancedBufferAttribute(batchIdArray.slice(), 1)
+                );
+            });
 
             // Create a scene group containing all instances and set it to the origin position
             const instancesGroup = new Group();
