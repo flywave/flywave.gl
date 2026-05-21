@@ -277,6 +277,7 @@ export default class DracoParser {
         }
 
         // Automatically calculate normals and bounding box
+        if(!geometry.hasAttribute("normal"))
         geometry.computeVertexNormals();
         geometry.computeBoundingBox();
 

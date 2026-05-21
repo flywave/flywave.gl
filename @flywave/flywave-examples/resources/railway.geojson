@@ -1,0 +1,2261 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "way/324900278",
+      "properties": {
+        "@id": "way/324900278",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "highspeed": "yes",
+        "maxspeed": "250",
+        "name": "青荣城际线",
+        "name:en": "Qingrong Intercity Line",
+        "railway": "rail",
+        "railway:ctcs": "2",
+        "railway:track_ref": "I-I",
+        "railway:traffic_mode": "passenger",
+        "ref": "3038",
+        "start_date": "2016-11-16",
+        "usage": "main",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7089749,
+            36.9300854,
+            40
+          ],
+          [
+            120.70826531593458,
+            36.929616033539645,
+            40
+          ],
+          [
+            120.70453140727471,
+            36.927146746085434,
+            40
+          ],
+          [
+            120.70199300560652,
+            36.925468585008986,
+            40
+          ],
+          [
+            120.7010137496901,
+            36.92482201654957,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/427767405",
+      "properties": {
+        "@id": "way/427767405",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "maxspeed": "100",
+        "name": "蓝烟线",
+        "name:en": "Lanyan Line",
+        "railway": "rail",
+        "railway:ctcs": "2",
+        "ref": "0502",
+        "usage": "main",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.6989227,
+            36.9229442,
+            40
+          ],
+          [
+            120.6992541,
+            36.9231606,
+            40
+          ],
+          [
+            120.6995719,
+            36.9233708,
+            40
+          ],
+          [
+            120.7001313,
+            36.9237428,
+            40
+          ],
+          [
+            120.7007041,
+            36.9241195,
+            40
+          ],
+          [
+            120.7012328,
+            36.924469,
+            40
+          ],
+          [
+            120.7014134,
+            36.9245888,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1000638319",
+      "properties": {
+        "@id": "way/1000638319",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "货2",
+        "service": "yard"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7072458,
+            36.9273172,
+            40
+          ],
+          [
+            120.7105704,
+            36.9295364,
+            40
+          ],
+          [
+            120.7107152,
+            36.9296575,
+            40
+          ],
+          [
+            120.7108104,
+            36.9297572,
+            40
+          ],
+          [
+            120.7108828,
+            36.9298398,
+            40
+          ],
+          [
+            120.7110237,
+            36.9300477,
+            40
+          ],
+          [
+            120.7111607,
+            36.9302993,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1000638320",
+      "properties": {
+        "@id": "way/1000638320",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "货3",
+        "service": "yard"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7060361,
+            36.9261862,
+            40
+          ],
+          [
+            120.7097456,
+            36.9286423,
+            40
+          ],
+          [
+            120.7101908,
+            36.9289371,
+            40
+          ],
+          [
+            120.7103612,
+            36.9290754,
+            40
+          ],
+          [
+            120.7104725,
+            36.9291804,
+            40
+          ],
+          [
+            120.7105878,
+            36.9292951,
+            40
+          ],
+          [
+            120.7106911,
+            36.9294206,
+            40
+          ],
+          [
+            120.7107635,
+            36.9295149,
+            40
+          ],
+          [
+            120.7108869,
+            36.929709,
+            40
+          ],
+          [
+            120.7110076,
+            36.9299423,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1000638352",
+      "properties": {
+        "@id": "way/1000638352",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "粮专线",
+        "service": "spur"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.6988572,
+            36.9235595,
+            40
+          ],
+          [
+            120.7000668,
+            36.924355,
+            40
+          ],
+          [
+            120.7006757,
+            36.9247527,
+            40
+          ],
+          [
+            120.7009707,
+            36.9249532,
+            40
+          ],
+          [
+            120.7011424,
+            36.9250851,
+            40
+          ],
+          [
+            120.7012819,
+            36.9252063,
+            40
+          ],
+          [
+            120.7014428,
+            36.9253842,
+            40
+          ],
+          [
+            120.7016067,
+            36.9255838,
+            40
+          ],
+          [
+            120.701758,
+            36.9258098,
+            40
+          ],
+          [
+            120.7018492,
+            36.9259782,
+            40
+          ],
+          [
+            120.7019323,
+            36.9261647,
+            40
+          ],
+          [
+            120.7019926,
+            36.9263555,
+            40
+          ],
+          [
+            120.7020405,
+            36.9265524,
+            40
+          ],
+          [
+            120.702053,
+            36.9267243,
+            40
+          ],
+          [
+            120.7020762,
+            36.9276222,
+            40
+          ],
+          [
+            120.7020772,
+            36.9279769,
+            40
+          ],
+          [
+            120.7020767,
+            36.9280945,
+            40
+          ],
+          [
+            120.7020758,
+            36.9282829,
+            40
+          ],
+          [
+            120.7020725,
+            36.9285249,
+            40
+          ],
+          [
+            120.7020088,
+            36.9300702,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1307302217",
+      "properties": {
+        "@id": "way/1307302217",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "highspeed": "yes",
+        "maxspeed": "250",
+        "name": "青荣城际线",
+        "name:en": "Qingrong Intercity Line",
+        "railway": "rail",
+        "railway:ctcs": "2",
+        "railway:track_ref": "I-II",
+        "railway:traffic_mode": "passenger",
+        "ref": "3038",
+        "start_date": "2016-11-16",
+        "usage": "main",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.70041716461293,
+            36.92437579870464,
+            40
+          ],
+          [
+            120.7013409,
+            36.9249875,
+            40
+          ],
+          [
+            120.70201513046499,
+            36.925428895884984,
+            40
+          ],
+          [
+            120.7047432,
+            36.9272336,
+            40
+          ],
+          [
+            120.7072873,
+            36.928921,
+            40
+          ],
+          [
+            120.708611,
+            36.9297958,
+            40
+          ],
+          [
+            120.7092322,
+            36.9301997,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1307302223",
+      "properties": {
+        "@id": "way/1307302223",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "货5",
+        "service": "yard"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7083817,
+            36.9268529,
+            40
+          ],
+          [
+            120.7092641,
+            36.927433,
+            40
+          ],
+          [
+            120.7096061,
+            36.9276581,
+            40
+          ],
+          [
+            120.7099052,
+            36.9278811,
+            40
+          ],
+          [
+            120.710101,
+            36.9280676,
+            40
+          ],
+          [
+            120.7102378,
+            36.9282103,
+            40
+          ],
+          [
+            120.7103719,
+            36.928385,
+            40
+          ],
+          [
+            120.7104966,
+            36.9285737,
+            40
+          ],
+          [
+            120.7105972,
+            36.9287666,
+            40
+          ],
+          [
+            120.710679,
+            36.9289607,
+            40
+          ],
+          [
+            120.7107058,
+            36.9290368,
+            40
+          ],
+          [
+            120.7107796,
+            36.9292909,
+            40
+          ],
+          [
+            120.7108562,
+            36.9295843,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486727",
+      "properties": {
+        "@id": "way/1364486727",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "yard"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7115313,
+            36.9309788,
+            40
+          ],
+          [
+            120.7118732,
+            36.9312618,
+            40
+          ],
+          [
+            120.7121401,
+            36.9314757,
+            40
+          ],
+          [
+            120.7124835,
+            36.9317635,
+            40
+          ],
+          [
+            120.712757,
+            36.9319902,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486728",
+      "properties": {
+        "@id": "way/1364486728",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "name": "蓝烟线",
+        "name:en": "Lanyan Line",
+        "railway": "rail",
+        "railway:ctcs": "2",
+        "ref": "0502",
+        "usage": "main",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.6988834,
+            36.9229855,
+            40
+          ],
+          [
+            120.6994803,
+            36.9233736,
+            40
+          ],
+          [
+            120.6998265,
+            36.9235988,
+            40
+          ],
+          [
+            120.7000357,
+            36.9237348,
+            40
+          ],
+          [
+            120.7005456,
+            36.9240664,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486729",
+      "properties": {
+        "@id": "way/1364486729",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "maxspeed": "100",
+        "name": "蓝烟线",
+        "name:en": "Lanyan Line",
+        "railway": "rail",
+        "railway:ctcs": "2",
+        "railway:track_ref": "II-II",
+        "ref": "0502",
+        "usage": "main",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7014134,
+            36.9245888,
+            40
+          ],
+          [
+            120.7026042,
+            36.9253789,
+            40
+          ],
+          [
+            120.7037254,
+            36.9261175,
+            40
+          ],
+          [
+            120.7086673,
+            36.9293906,
+            40
+          ],
+          [
+            120.7112691,
+            36.9310878,
+            40
+          ],
+          [
+            120.7118232,
+            36.9314471,
+            40
+          ],
+          [
+            120.7124323,
+            36.9318498,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486731",
+      "properties": {
+        "@id": "way/1364486731",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "name": "蓝烟线",
+        "name:en": "Lanyan Line",
+        "railway": "rail",
+        "railway:ctcs": "2",
+        "railway:track_ref": "II-I",
+        "ref": "0502",
+        "usage": "main",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7005456,
+            36.9240664,
+            40
+          ],
+          [
+            120.7010195,
+            36.9243746,
+            40
+          ],
+          [
+            120.7016561,
+            36.9247913,
+            40
+          ],
+          [
+            120.701935,
+            36.9249714,
+            40
+          ],
+          [
+            120.7025827,
+            36.9254153,
+            40
+          ],
+          [
+            120.7089436,
+            36.9296227,
+            40
+          ],
+          [
+            120.7101278,
+            36.9303876,
+            40
+          ],
+          [
+            120.7106643,
+            36.9307445,
+            40
+          ],
+          [
+            120.7111806,
+            36.9310822,
+            40
+          ],
+          [
+            120.7115789,
+            36.9313483,
+            40
+          ],
+          [
+            120.7119883,
+            36.9316202,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486733",
+      "properties": {
+        "@id": "way/1364486733",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "II-6",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.702045,
+            36.9249447,
+            40
+          ],
+          [
+            120.7023977,
+            36.9251076,
+            40
+          ],
+          [
+            120.7027678,
+            36.9252749,
+            40
+          ],
+          [
+            120.7030441,
+            36.9254303,
+            40
+          ],
+          [
+            120.7033257,
+            36.925619,
+            40
+          ],
+          [
+            120.705647,
+            36.9271516,
+            40
+          ],
+          [
+            120.7104805,
+            36.9303425,
+            40
+          ],
+          [
+            120.7111832,
+            36.9308099,
+            40
+          ],
+          [
+            120.7113978,
+            36.9309686,
+            40
+          ],
+          [
+            120.7117157,
+            36.9312227,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486736",
+      "properties": {
+        "@id": "way/1364486736",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "yard"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7108562,
+            36.9295843,
+            40
+          ],
+          [
+            120.7110076,
+            36.9299423,
+            40
+          ],
+          [
+            120.7111607,
+            36.9302993,
+            40
+          ],
+          [
+            120.7112369,
+            36.9304776,
+            40
+          ],
+          [
+            120.7113066,
+            36.930617,
+            40
+          ],
+          [
+            120.7113992,
+            36.9307531,
+            40
+          ],
+          [
+            120.7115333,
+            36.9309161,
+            40
+          ],
+          [
+            120.7116821,
+            36.9310683,
+            40
+          ],
+          [
+            120.7118732,
+            36.9312618,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486737",
+      "properties": {
+        "@id": "way/1364486737",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7014134,
+            36.9245888,
+            40
+          ],
+          [
+            120.701829,
+            36.9248257,
+            40
+          ],
+          [
+            120.702045,
+            36.9249447,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486738",
+      "properties": {
+        "@id": "way/1364486738",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "siding",
+        "voltage": "15000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7008695,
+            36.924347,
+            40
+          ],
+          [
+            120.7007334,
+            36.9242553,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486739",
+      "properties": {
+        "@id": "way/1364486739",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7119883,
+            36.9316202,
+            40
+          ],
+          [
+            120.7114609,
+            36.9313309,
+            40
+          ],
+          [
+            120.7109311,
+            36.9309879,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486745",
+      "properties": {
+        "@id": "way/1364486745",
+        "railway": "disused",
+        "railway:track_ref": "安全线2",
+        "service": "yard"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7051273,
+            36.9267325,
+            40
+          ],
+          [
+            120.7054071,
+            36.9269302,
+            40
+          ],
+          [
+            120.7056338,
+            36.927076,
+            40
+          ],
+          [
+            120.7059865,
+            36.9273118,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486746",
+      "properties": {
+        "@id": "way/1364486746",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "disused",
+        "railway:track_ref": "电厂专用线",
+        "service": "spur"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7043825,
+            36.9261272,
+            40
+          ],
+          [
+            120.704868,
+            36.9265174,
+            40
+          ],
+          [
+            120.7051273,
+            36.9267325,
+            40
+          ],
+          [
+            120.7053696,
+            36.9269334,
+            40
+          ],
+          [
+            120.705647,
+            36.9271516,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486748",
+      "properties": {
+        "@id": "way/1364486748",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "货4",
+        "service": "yard"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7059288,
+            36.9257005,
+            40
+          ],
+          [
+            120.7098663,
+            36.9282949,
+            40
+          ],
+          [
+            120.7100447,
+            36.9284182,
+            40
+          ],
+          [
+            120.7101721,
+            36.9285297,
+            40
+          ],
+          [
+            120.7102995,
+            36.9286498,
+            40
+          ],
+          [
+            120.7104121,
+            36.9287859,
+            40
+          ],
+          [
+            120.7105248,
+            36.9289339,
+            40
+          ],
+          [
+            120.7105958,
+            36.9290304,
+            40
+          ],
+          [
+            120.7106696,
+            36.9291579,
+            40
+          ],
+          [
+            120.7107528,
+            36.9293434,
+            40
+          ],
+          [
+            120.7108562,
+            36.9295843,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486749",
+      "properties": {
+        "@id": "way/1364486749",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "机待线",
+        "service": "yard"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7104148,
+            36.9301967,
+            40
+          ],
+          [
+            120.7108976,
+            36.9304969,
+            40
+          ],
+          [
+            120.7111551,
+            36.9306684,
+            40
+          ],
+          [
+            120.7113281,
+            36.9308089,
+            40
+          ],
+          [
+            120.7115313,
+            36.9309788,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486750",
+      "properties": {
+        "@id": "way/1364486750",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "货1",
+        "service": "yard"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7070151,
+            36.9278232,
+            40
+          ],
+          [
+            120.7104456,
+            36.9300922,
+            40
+          ],
+          [
+            120.7107816,
+            36.9303131,
+            40
+          ],
+          [
+            120.7109834,
+            36.9304605,
+            40
+          ],
+          [
+            120.7111672,
+            36.9306148,
+            40
+          ],
+          [
+            120.7115313,
+            36.9309788,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486754",
+      "properties": {
+        "@id": "way/1364486754",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "II-4",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.702045,
+            36.9249447,
+            40
+          ],
+          [
+            120.7026002,
+            36.9252599,
+            40
+          ],
+          [
+            120.7029945,
+            36.9254796,
+            40
+          ],
+          [
+            120.7032171,
+            36.9256136,
+            40
+          ],
+          [
+            120.7088135,
+            36.9292941,
+            40
+          ],
+          [
+            120.7110827,
+            36.9308014,
+            40
+          ],
+          [
+            120.7114099,
+            36.9310436,
+            40
+          ],
+          [
+            120.7116593,
+            36.9312452,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486755",
+      "properties": {
+        "@id": "way/1364486755",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "yard",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7113241,
+            36.9313224,
+            40
+          ],
+          [
+            120.7107702,
+            36.9309997,
+            40
+          ],
+          [
+            120.7103558,
+            36.9307799,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486756",
+      "properties": {
+        "@id": "way/1364486756",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "yard",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7007334,
+            36.9242553,
+            40
+          ],
+          [
+            120.6990304,
+            36.9231471,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486757",
+      "properties": {
+        "@id": "way/1364486757",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "crossover",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7005456,
+            36.9240664,
+            40
+          ],
+          [
+            120.7012328,
+            36.924469,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486758",
+      "properties": {
+        "@id": "way/1364486758",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "crossover",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.6989227,
+            36.9229442,
+            40
+          ],
+          [
+            120.6994803,
+            36.9233736,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486759",
+      "properties": {
+        "@id": "way/1364486759",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "yard",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.6990304,
+            36.9231471,
+            40
+          ],
+          [
+            120.6998265,
+            36.9235988,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486760",
+      "properties": {
+        "@id": "way/1364486760",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "siding",
+        "voltage": "15000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7007334,
+            36.9242553,
+            40
+          ],
+          [
+            120.7000357,
+            36.9237348,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486761",
+      "properties": {
+        "@id": "way/1364486761",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "II-5",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7008695,
+            36.924347,
+            40
+          ],
+          [
+            120.701353,
+            36.9247024,
+            40
+          ],
+          [
+            120.7017218,
+            36.9249672,
+            40
+          ],
+          [
+            120.7021201,
+            36.9252373,
+            40
+          ],
+          [
+            120.7074483,
+            36.9287495,
+            40
+          ],
+          [
+            120.7090656,
+            36.9298333,
+            40
+          ],
+          [
+            120.7097737,
+            36.9302997,
+            40
+          ],
+          [
+            120.7100514,
+            36.9304787,
+            40
+          ],
+          [
+            120.7103665,
+            36.9306684,
+            40
+          ],
+          [
+            120.7109311,
+            36.9309879,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486762",
+      "properties": {
+        "@id": "way/1364486762",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "II-3",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7109311,
+            36.9309879,
+            40
+          ],
+          [
+            120.7099333,
+            36.9303286,
+            40
+          ],
+          [
+            120.7084554,
+            36.9293552,
+            40
+          ],
+          [
+            120.7028952,
+            36.925679,
+            40
+          ],
+          [
+            120.7016936,
+            36.9248782,
+            40
+          ],
+          [
+            120.7008695,
+            36.924347,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486764",
+      "properties": {
+        "@id": "way/1364486764",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "spur"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7020088,
+            36.9300702,
+            40
+          ],
+          [
+            120.7019886,
+            36.9304285,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486766",
+      "properties": {
+        "@id": "way/1364486766",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "粮2",
+        "service": "spur"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7019886,
+            36.9304285,
+            40
+          ],
+          [
+            120.7018961,
+            36.9320685,
+            40
+          ],
+          [
+            120.7017883,
+            36.9340065,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486767",
+      "properties": {
+        "@id": "way/1364486767",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "粮3",
+        "service": "spur"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7019886,
+            36.9304285,
+            40
+          ],
+          [
+            120.7019229,
+            36.9306717,
+            40
+          ],
+          [
+            120.7018438,
+            36.9320578,
+            40
+          ],
+          [
+            120.7017902,
+            36.9332241,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486768",
+      "properties": {
+        "@id": "way/1364486768",
+        "electrified": "no",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "粮1",
+        "service": "spur"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7020088,
+            36.9300702,
+            40
+          ],
+          [
+            120.7020342,
+            36.9304465,
+            40
+          ],
+          [
+            120.7018813,
+            36.9333731,
+            40
+          ],
+          [
+            120.7018438,
+            36.9336754,
+            40
+          ],
+          [
+            120.7017883,
+            36.9340065,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486772",
+      "properties": {
+        "@id": "way/1364486772",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "crossover",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7095136,
+            36.9304416,
+            40
+          ],
+          [
+            120.7106946,
+            36.9311661,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486773",
+      "properties": {
+        "@id": "way/1364486773",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "highspeed": "yes",
+        "maxspeed": "250",
+        "name": "青荣城际线",
+        "name:en": "Qingrong Intercity Line",
+        "railway": "rail",
+        "railway:ctcs": "2",
+        "railway:traffic_mode": "passenger",
+        "ref": "3038",
+        "start_date": "2016-11-16",
+        "usage": "main",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.69892806934902,
+            36.923387795423494,
+            40
+          ],
+          [
+            120.69939122326795,
+            36.92369445034435,
+            40
+          ],
+          [
+            120.70041716461293,
+            36.92437579870464,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486774",
+      "properties": {
+        "@id": "way/1364486774",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "highspeed": "yes",
+        "maxspeed": "250",
+        "name": "青荣城际线",
+        "name:en": "Qingrong Intercity Line",
+        "railway": "rail",
+        "railway:ctcs": "2",
+        "railway:traffic_mode": "passenger",
+        "ref": "3038",
+        "start_date": "2016-11-16",
+        "usage": "main",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7010137496901,
+            36.92482201654957,
+            40
+          ],
+          [
+            120.70085240229666,
+            36.92471651405965,
+            40
+          ],
+          [
+            120.70049242684688,
+            36.92448077755284,
+            40
+          ],
+          [
+            120.6988932,
+            36.9234294,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486775",
+      "properties": {
+        "@id": "way/1364486775",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "I-4",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.70155168774428,
+            36.92506219214766,
+            40
+          ],
+          [
+            120.70797905009852,
+            36.92929483022295,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486776",
+      "properties": {
+        "@id": "way/1364486776",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "highspeed": "yes",
+        "maxspeed": "250",
+        "name": "青荣城际线",
+        "name:en": "Qingrong Intercity Line",
+        "railway": "rail",
+        "railway:ctcs": "2",
+        "railway:traffic_mode": "passenger",
+        "ref": "3038",
+        "start_date": "2016-11-16",
+        "usage": "main",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7092322,
+            36.9301997,
+            40
+          ],
+          [
+            120.709412,
+            36.9303166,
+            40
+          ],
+          [
+            120.7106946,
+            36.9311661,
+            40
+          ],
+          [
+            120.7136958,
+            36.9331536,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486777",
+      "properties": {
+        "@id": "way/1364486777",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "highspeed": "yes",
+        "maxspeed": "250",
+        "name": "青荣城际线",
+        "name:en": "Qingrong Intercity Line",
+        "railway": "rail",
+        "railway:ctcs": "2",
+        "railway:traffic_mode": "passenger",
+        "ref": "3038",
+        "start_date": "2016-11-16",
+        "usage": "main",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7136632,
+            36.9331868,
+            40
+          ],
+          [
+            120.7095136,
+            36.9304416,
+            40
+          ],
+          [
+            120.7093137,
+            36.9303093,
+            40
+          ],
+          [
+            120.7089749,
+            36.9300854,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486778",
+      "properties": {
+        "@id": "way/1364486778",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7089749,
+            36.9300854,
+            40
+          ],
+          [
+            120.70836017726229,
+            36.92969861077355,
+            40
+          ],
+          [
+            120.70764656594615,
+            36.929275475171536,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486779",
+      "properties": {
+        "@id": "way/1364486779",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.70797905009852,
+            36.92929483022295,
+            40
+          ],
+          [
+            120.7086539,
+            36.9297765,
+            40
+          ],
+          [
+            120.7092322,
+            36.9301997,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486780",
+      "properties": {
+        "@id": "way/1364486780",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "yard",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.70797905009852,
+            36.92929483022295,
+            40
+          ],
+          [
+            120.7087988,
+            36.929843,
+            40
+          ],
+          [
+            120.7092293,
+            36.9301303,
+            40
+          ],
+          [
+            120.7096142,
+            36.9303833,
+            40
+          ],
+          [
+            120.709814,
+            36.9305066,
+            40
+          ],
+          [
+            120.7099561,
+            36.930587,
+            40
+          ],
+          [
+            120.7101466,
+            36.9306802,
+            40
+          ],
+          [
+            120.7103558,
+            36.9307799,
+            40
+          ],
+          [
+            120.7107434,
+            36.9309541,
+            40
+          ],
+          [
+            120.7109861,
+            36.9310704,
+            40
+          ],
+          [
+            120.7111886,
+            36.9311841,
+            40
+          ],
+          [
+            120.7114609,
+            36.9313309,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486781",
+      "properties": {
+        "@id": "way/1364486781",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "安全线3",
+        "service": "yard",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7082462,
+            36.9294163,
+            40
+          ],
+          [
+            120.708603,
+            36.9296414,
+            40
+          ],
+          [
+            120.7087988,
+            36.9297883,
+            40
+          ],
+          [
+            120.7092293,
+            36.9301303,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486782",
+      "properties": {
+        "@id": "way/1364486782",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "安全线2",
+        "service": "yard",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7087237,
+            36.9300295,
+            40
+          ],
+          [
+            120.7083522,
+            36.9297454,
+            40
+          ],
+          [
+            120.70764656594615,
+            36.929275475171536,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486783",
+      "properties": {
+        "@id": "way/1364486783",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "安全线1",
+        "service": "yard",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.7005188,
+            36.9243432,
+            40
+          ],
+          [
+            120.7008608,
+            36.9245887,
+            40
+          ],
+          [
+            120.7012336,
+            36.9248428,
+            40
+          ],
+          [
+            120.70155168774428,
+            36.92506219214766,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486784",
+      "properties": {
+        "@id": "way/1364486784",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "railway:track_ref": "I-3",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.70764656594615,
+            36.929275475171536,
+            40
+          ],
+          [
+            120.7024457380416,
+            36.9258443634494,
+            40
+          ],
+          [
+            120.70203637194051,
+            36.92556269139828,
+            40
+          ],
+          [
+            120.7010137496901,
+            36.92482201654957,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486785",
+      "properties": {
+        "@id": "way/1364486785",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "siding",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.70041716461293,
+            36.92437579870464,
+            40
+          ],
+          [
+            120.70109161144532,
+            36.92477807852958,
+            40
+          ],
+          [
+            120.70155168774428,
+            36.92506219214766,
+            40
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1364486786",
+      "properties": {
+        "@id": "way/1364486786",
+        "electrified": "contact_line",
+        "frequency": "50",
+        "gauge": "1435",
+        "railway": "rail",
+        "service": "crossover",
+        "voltage": "25000"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            120.69939122326795,
+            36.92369445034435,
+            40
+          ],
+          [
+            120.70049242684688,
+            36.92448077755284,
+            40
+          ]
+        ]
+      }
+    }
+  ]
+}

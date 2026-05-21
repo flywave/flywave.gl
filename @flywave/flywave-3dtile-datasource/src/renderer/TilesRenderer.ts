@@ -234,6 +234,20 @@ export abstract class TilesRenderer extends TilesRendererBase {
     matrixTransformCallback: MatrixTransformCallback | null = null;
 
     /**
+     * Whether loaded tile meshes cast shadows.
+     *
+     * @default false
+     */
+    castShadow: boolean = false;
+
+    /**
+     * Whether loaded tile meshes receive shadows.
+     *
+     * @default false
+     */
+    receiveShadow: boolean = false;
+
+    /**
      * Shared material for points rendering
      */
     private m_pointsMaterial: PointsMaterial;
@@ -978,7 +992,8 @@ export abstract class TilesRenderer extends TilesRendererBase {
                     }
                 }
                 if (extension !== "pnts") {
-                    c.castShadow = true;
+                    c.castShadow = this.castShadow;
+                    c.receiveShadow = this.receiveShadow;
                 }
             }
         });

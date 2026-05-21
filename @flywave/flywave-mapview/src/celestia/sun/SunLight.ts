@@ -153,7 +153,7 @@ export class SunLight extends THREE.Object3D {
             box.expandByPoint(point);
         });
 
-        const distance = this.m_mapView.camera.position.distanceTo(this.m_mapView.worldTarget);
+        const distance = this.m_mapView.camera.position.distanceTo(this.m_mapView.worldTarget)*2;
         const min = distance * ((this.m_mapView.camera.fov * Math.PI) / 180);
 
         camera.left = Math.max(box.min.x, -min);
