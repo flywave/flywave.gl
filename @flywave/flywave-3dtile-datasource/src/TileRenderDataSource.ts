@@ -16,6 +16,7 @@ import {
 import { type DataSourceOptions, type MapView, DataSource, Tile } from "@flywave/flywave-mapview";
 import { type IntersectParams } from "@flywave/flywave-mapview/IntersectParams";
 import { ThemeLoader } from "@flywave/flywave-mapview/ThemeLoader";
+import { type ICameraCollidable } from "@flywave/flywave-mapview";
 import { Intersection, Raycaster, type Matrix4 } from "three";
 
 import { type TileIntersection } from "./renderer/raycastTraverse";
@@ -161,6 +162,43 @@ export interface TileRenderDataSourceOptions extends DataSourceOptions {
      * Matrix transformation callback that can be applied to transformMatrix
      */
     matrixTransformCallback?: MatrixTransformCallback;
+
+    /**
+     * Whether to cast shadows for loaded tile meshes.
+     *
+     * @default false
+     */
+    castShadow?: boolean;
+
+    /**
+     * Whether to receive shadows for loaded tile meshes.
+     *
+     * @default false
+     */
+    receiveShadow?: boolean;
+
+    /**
+     * Per-datasource post-processing effects configuration.
+     *
+     * @remarks
+     * Allows enabling bloom for tiles in this specific data source.
+     * Unlike the global theme postEffects, this only affects tiles
+     * loaded by this data source. If not set, falls back to the theme's postEffects.
+     */
+    postEffects?: {
+        bloom?: {
+            enabled: boolean;
+        };
+    };
+
+    /**
+     * Whether this data source participates in camera collision detection.
+     * When enabled, the camera controller and map center calculation will
+     * raycast against this data source for ground clamping and zoom hit-point.
+     *
+     * @default false
+     */
+    enableCameraCollision?: boolean;
 }
 
 class RootTile extends Tile {
@@ -190,7 +228,7 @@ class RootTile extends Tile {
  * - Raycasting and picking for user interaction
  * - Animation effects for batched features
  */
-export class TileRenderDataSource extends DataSource {
+export class TileRenderDataSource extends DataSource implements ICameraCollidable {
     private readonly m_tilingScheme: TilingScheme;
     private readonly m_tilesRenderer: TilesRenderer;
     private readonly m_options: TileRenderDataSourceOptions;
@@ -224,7 +262,9 @@ export class TileRenderDataSource extends DataSource {
             url: options.url,
             headers: options.headers,
             transform: options.transform,
-            debugBoundingVolume: options.debugBoundingVolume
+            debugBoundingVolume: options.debugBoundingVolume,
+            castShadow: options.castShadow,
+            receiveShadow: options.receiveShadow
         };
 
         this.m_tilesRenderer = new TilesRenderer(rendererOptions);
@@ -246,6 +286,7 @@ export class TileRenderDataSource extends DataSource {
         this.cacheable = false; // 3D Tiles handles its own caching
         this.enablePicking = true;
         this.allowOverlappingTiles = true;
+        this.enableCameraCollision = options.enableCameraCollision ?? false;
 
         this.m_animation = options.animation;
     }
@@ -567,7 +608,8 @@ export class TileRenderDataSource extends DataSource {
                 this.styleSetName,
                 this.mapView.mapRenderingManager,
                 this.m_options.customAttributeConfig,
-                this.m_animation
+                this.m_animation,
+                this.m_options.postEffects
             );
             // Add the watcher to the tiles renderer
             // Note: This requires ObserveTileChange interface

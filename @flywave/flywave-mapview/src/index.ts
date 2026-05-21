@@ -44,6 +44,7 @@ export * from "./DisplacementMap";
 export * from "./ElevationProvider";
 export * from "./ElevationRangeSource";
 export * from "./ITileLoader";
+export * from "./ICameraCollidable";
 export * from "./image/Image";
 export * from "./image/ImageCache";
 export * from "./image/MapViewImageCache";

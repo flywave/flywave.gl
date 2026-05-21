@@ -23,6 +23,7 @@ import * as THREE from "three";
 import { CameraUtils } from "./CameraUtils";
 import { type ElevationProvider } from "./ElevationProvider";
 import { Object3DUtils } from "./geometry/Object3DUtils";
+import { type ICameraCollidable } from "./ICameraCollidable";
 import { type MapView } from "./MapView";
 
 const logger = LoggerManager.instance.create("MapViewUtils");
@@ -523,11 +524,24 @@ export namespace MapViewUtils {
     export function getWorldTargetFromCamera(
         camera: THREE.Camera,
         projection: Projection,
-        elevation?: number
+        elevation?: number,
+        collidables?: ICameraCollidable[]
     ): THREE.Vector3 | null {
         const cameraPos = cache.vector3[0].copy(camera.position);
         const cameraLookAt = camera.getWorldDirection(cache.vector3[1]);
         rayCaster.set(cameraPos, cameraLookAt);
+
+        if (collidables && collidables.length > 0) {
+            const intersections: THREE.Intersection[] = [];
+            for (const target of collidables) {
+                target.raycast(rayCaster, intersections);
+            }
+            if (intersections.length > 0) {
+                intersections.sort((a, b) => a.distance - b.distance);
+                return intersections[0].point.clone().add(camera.position);
+            }
+        }
+
         if (elevation !== undefined) {
             groundPlane.constant -= elevation;
         }
@@ -709,14 +723,15 @@ export namespace MapViewUtils {
     export function getTargetAndDistance(
         projection: Projection,
         camera: THREE.Camera,
-        elevationProvider?: ElevationProvider
+        elevationProvider?: ElevationProvider,
+        collidables?: ICameraCollidable[]
     ): { target: THREE.Vector3; distance: number; altitude?: number; final: boolean } {
         const cameraPitch = extractAttitude({ projection }, camera).pitch;
 
         //FIXME: For now we keep the old behaviour when terrain is enabled (i.e. use the camera
         //       height above terrain to deduce the target distance).
         //       This leads to zoomlevel changes while panning. We have to find a proper solution
-        //       for terrain (e.g. raycast with the ground surfcae that is elevated by the average
+        //       for terrain (e.g. raycast with the ground surfcace that is elevated by the average
         //       elevation in the scene)
         const elevation = elevationProvider
             ? elevationProvider.getHeight(
@@ -730,7 +745,7 @@ export namespace MapViewUtils {
         // infinity.
         const target =
             cameraPitch < MAX_TILT_RAD
-                ? getWorldTargetFromCamera(camera, projection, elevation)
+                ? getWorldTargetFromCamera(camera, projection, elevation, collidables)
                 : null;
         if (target !== null) {
             const distance = camera.position.distanceTo(target);
