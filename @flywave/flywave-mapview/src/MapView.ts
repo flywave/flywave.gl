@@ -58,6 +58,7 @@ import { TerrainDataSource, type DataSource } from "./DataSource";
 import { type ElevationProvider } from "./ElevationProvider";
 import { type ElevationRangeSource } from "./ElevationRangeSource";
 import { type DispatcherEvent, EventDispatcher } from "./EventDispatcher";
+import { type ICameraCollidable } from "./ICameraCollidable";
 import {
     type FovCalculation,
     DEFAULT_FOV_CALCULATION,
@@ -1135,11 +1136,7 @@ export class MapView extends EventDispatcher {
         const useMapRenderingManager = this.m_options.useMapRenderingManager;
         this.mapRenderingManager = useMapRenderingManager
             ? useMapRenderingManager(width, height, this)
-            : new MapRenderingManager(
-                width,
-                height,
-                this.m_options.dynamicPixelRatio, 
-            );
+            : new MapRenderingManager(width, height, this.m_options.dynamicPixelRatio);
 
         this.m_animatedExtrusionHandler = new AnimatedExtrusionHandler(this);
 
@@ -2042,11 +2039,11 @@ export class MapView extends EventDispatcher {
         this.m_geoMaxBounds = bounds;
         this.m_worldMaxBounds = this.m_geoMaxBounds
             ? this.projection.projectBox(
-                this.m_geoMaxBounds,
-                this.projection.type === ProjectionType.Planar
-                    ? new THREE.Box3()
-                    : new OrientedBox3()
-            )
+                  this.m_geoMaxBounds,
+                  this.projection.type === ProjectionType.Planar
+                      ? new THREE.Box3()
+                      : new OrientedBox3()
+              )
             : undefined;
     }
 
@@ -2243,7 +2240,8 @@ export class MapView extends EventDispatcher {
         } catch (error) {
             // error is a string if a promise was rejected.
             logger.error(
-                `Failed to connect to datasource ${dataSource.name}: ${(error as Error).message ?? error
+                `Failed to connect to datasource ${dataSource.name}: ${
+                    (error as Error).message ?? error
                 }`
             );
 
@@ -2672,10 +2670,10 @@ export class MapView extends EventDispatcher {
         if (depth === null) {
             return null;
         }
-        const ndcWithDepth = new THREE.Vector3(ndc.x, ndc.y, (depth * 2.0) - 1.0);
+        const ndcWithDepth = new THREE.Vector3(ndc.x, ndc.y, depth * 2.0 - 1.0);
 
         const worldPosition = new THREE.Vector3();
-        return this.ndcToView(ndcWithDepth, worldPosition).add(this.camera.position); 
+        return this.ndcToView(ndcWithDepth, worldPosition).add(this.camera.position);
     }
 
     private getWorldPositionAtWithRaycast(
@@ -2687,11 +2685,11 @@ export class MapView extends EventDispatcher {
         const worldPos =
             this.projection.type === ProjectionType.Spherical
                 ? ((this.projection as SphereProjection).rayCast(
-                    cache.vector3[0],
-                    this.m_raycaster.ray.origin,
-                    this.m_raycaster.ray.origin.clone().add(this.m_raycaster.ray.direction)
-                ),
-                    cache.vector3[0])
+                      cache.vector3[0],
+                      this.m_raycaster.ray.origin,
+                      this.m_raycaster.ray.origin.clone().add(this.m_raycaster.ray.direction)
+                  ),
+                  cache.vector3[0])
                 : this.m_raycaster.ray.intersectPlane(this.m_plane, cache.vector3[0]);
 
         if (worldPos === null && fallback === true) {
@@ -3026,7 +3024,7 @@ export class MapView extends EventDispatcher {
 
         if (this.m_postEffects !== undefined) {
             if (this.m_postEffects.bloom !== undefined) {
-                this.mapRenderingManager.bloom = this.m_postEffects.bloom;
+                Object.assign(this.mapRenderingManager.bloom, this.m_postEffects.bloom);
             }
             if (this.m_postEffects.outline !== undefined) {
                 this.mapRenderingManager.updateOutline(this.m_postEffects.outline);
@@ -3151,16 +3149,16 @@ export class MapView extends EventDispatcher {
         const distance =
             params.zoomLevel !== undefined
                 ? MapViewUtils.calculateDistanceFromZoomLevel(
-                    this,
-                    THREE.MathUtils.clamp(
-                        params.zoomLevel,
-                        this.m_minZoomLevel,
-                        this.m_maxZoomLevel
-                    )
-                )
+                      this,
+                      THREE.MathUtils.clamp(
+                          params.zoomLevel,
+                          this.m_minZoomLevel,
+                          this.m_maxZoomLevel
+                      )
+                  )
                 : params.distance !== undefined
-                    ? params.distance
-                    : this.m_targetDistance;
+                ? params.distance
+                : this.m_targetDistance;
 
         let target: GeoCoordinates | undefined;
         if (params.bounds !== undefined) {
@@ -3313,13 +3311,13 @@ export class MapView extends EventDispatcher {
         const maxGeometryHeightScaled = Math.max(
             this.m_maxGeometryHeight,
             projectionScale *
-            this.m_tileDataSources.reduce((r, ds) => Math.max(r, ds.maxGeometryHeight), 0)
+                this.m_tileDataSources.reduce((r, ds) => Math.max(r, ds.maxGeometryHeight), 0)
         );
 
         const minGeometryHeightScaled = Math.min(
             this.m_minGeometryHeight,
             projectionScale *
-            this.m_tileDataSources.reduce((r, ds) => Math.min(r, ds.minGeometryHeight), 0)
+                this.m_tileDataSources.reduce((r, ds) => Math.min(r, ds.minGeometryHeight), 0)
         );
 
         // Copy all properties from new view ranges to our readonly object.
@@ -3329,9 +3327,9 @@ export class MapView extends EventDispatcher {
             this.m_viewRanges,
             viewRanges === undefined
                 ? this.m_visibleTiles.updateClipPlanes(
-                    maxGeometryHeightScaled,
-                    minGeometryHeightScaled
-                )
+                      maxGeometryHeightScaled,
+                      minGeometryHeightScaled
+                  )
                 : viewRanges
         );
         this.m_viewRanges.far = this.m_viewRanges.far;
@@ -3396,10 +3394,14 @@ export class MapView extends EventDispatcher {
      * Derive the look at settings (i.e. target, zoom, ...) from the current camera.
      */
     protected updateLookAtSettings() {
+        const collidables = this.dataSources.filter(
+            ds => ds.enableCameraCollision && typeof (ds as any).raycast === "function"
+        ) as unknown as ICameraCollidable[];
         let { target, distance, final, altitude } = MapViewUtils.getTargetAndDistance(
             this.projection,
             this.camera,
-            this.elevationProvider
+            this.elevationProvider,
+            collidables
         );
         if (!final) {
             this.update();
@@ -3886,8 +3888,8 @@ export class MapView extends EventDispatcher {
             renderedTiles.forEach(tile => {
                 tileIdList.push(
                     dataSource.name +
-                    "-" +
-                    tile.tileKey.mortonCode(dataSource.getTilingScheme().mortonTileEncoding)
+                        "-" +
+                        tile.tileKey.mortonCode(dataSource.getTilingScheme().mortonTileEncoding)
                 );
             });
         });

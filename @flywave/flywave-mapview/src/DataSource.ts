@@ -187,6 +187,17 @@ export abstract class DataSource extends THREE.EventDispatcher<{ update: {} }> {
     enablePicking: boolean = true;
 
     /**
+     * Whether this data source participates in camera collision detection.
+     * When enabled, the camera controller will raycast against this data source
+     * for ground clamping, zoom hit-point, and map center calculation.
+     *
+     * Only data sources implementing `raycast()` can meaningfully set this to `true`.
+     *
+     * @default false
+     */
+    enableCameraCollision: boolean = false;
+
+    /**
      * Overrides the default rendering order of this `DataSource`.
      *
      * @remarks

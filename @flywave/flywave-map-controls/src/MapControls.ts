@@ -3,17 +3,13 @@
 import { ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import { PickingRaycaster } from "@flywave/flywave-mapview/PickingRaycaster";
+import { type ICameraCollidable } from "@flywave/flywave-mapview";
 import { type Intersection, Raycaster, Vector2, Vector3 } from "three";
-import { TileRenderDataSource } from "@flywave/flywave-3dtile-datasource";
 
 import { BaseMapControls, BaseMapControlsOptions, EventNames } from "./BaseMapControls";
 import { EllipsoidCameraTransform } from "./EllipsoidCameraTransform";
 import { PlanarCameraTransform } from "./PlanerCameraTransform";
 import { CameraTransform } from "./CameraTransform";
-
-interface ITileRenderDataSource {
-    raycast(raycaster: PickingRaycaster, intersections: Intersection[]): void;
-}
 
 export class MapControls extends BaseMapControls {
     protected rayCastWorld(result: Vector3, origin: Vector3, target: Vector3): number {
@@ -24,13 +20,11 @@ export class MapControls extends BaseMapControls {
 
         rayCaster.ray.set(origin, target.clone().sub(origin).normalize());
 
-        (rayCaster as any).firstHitBoundingVolumeOnly = true;
-
         const intersection: Intersection[] = [];
 
-        // this.getTilesRenderDataSources().forEach(datasource => {
-        //     datasource.raycast(rayCaster, intersection);
-        // });
+        this.getTilesRenderDataSources().forEach(datasource => {
+            datasource.raycast(rayCaster, intersection);
+        });
 
         if (intersection.length > 0) {
             intersection.sort((a, b) => a.distance - b.distance);
@@ -40,10 +34,10 @@ export class MapControls extends BaseMapControls {
         return this.rayCastProjectionWorld(result, origin, target);
     }
 
-    protected getTilesRenderDataSources(): ITileRenderDataSource[] {
+    protected getTilesRenderDataSources(): ICameraCollidable[] {
         return this.mapView.dataSources.filter(
-            item => item instanceof TileRenderDataSource
-        ) as unknown as ITileRenderDataSource[];
+            item => item.enableCameraCollision && typeof (item as any).raycast === "function"
+        ) as unknown as ICameraCollidable[];
     }
 
     private m_cameraTransformPlanar: CameraTransform;

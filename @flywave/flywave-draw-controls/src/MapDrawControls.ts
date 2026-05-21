@@ -3,7 +3,7 @@
 import { type GeoJson, type FeatureGeometry } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates, ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapControls } from "@flywave/flywave-map-controls";
-import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
+import { type MapView, MapViewEventNames, type ICameraCollidable } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 import { EventDispatcher } from "three";
 
@@ -25,10 +25,6 @@ interface MapDrawControlsEventMap {
     [DrawEventNames.OBJECT_MODIFIED]: DrawEvent;
     [DrawEventNames.OBJECT_MODIFIED_END]: DrawEvent;
     [DrawEventNames.MODE_CHANGED]: DrawEvent;
-}
-
-interface ITileRenderDataSource {
-    raycast(raycaster: THREE.Raycaster, intersections: THREE.Intersection[]): void;
 }
 
 export { DrawEventNames };
@@ -840,10 +836,10 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         return { x: event.x, y: event.y };
     }
 
-    protected getTilesRenderDataSources(): ITileRenderDataSource[] {
+    protected getTilesRenderDataSources(): ICameraCollidable[] {
         return this.mapView.dataSources.filter(
-            item => typeof (item as { raycast?: unknown }).raycast === "function"
-        ) as unknown as ITileRenderDataSource[];
+            item => item.enableCameraCollision && typeof (item as any).raycast === "function"
+        ) as unknown as ICameraCollidable[];
     }
 
     private getGeoCoordinateFromMouse(
