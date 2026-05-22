@@ -49,6 +49,20 @@ export interface TilesRendererOptions {
      * Size of points in the point cloud
      */
     pointSize?: number;
+
+    /**
+     * Whether to cast shadows for loaded tile meshes.
+     *
+     * @default false
+     */
+    castShadow?: boolean;
+
+    /**
+     * Whether to receive shadows for loaded tile meshes.
+     *
+     * @default false
+     */
+    receiveShadow?: boolean;
 }
 
 /**
@@ -89,6 +103,10 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
 
         // Set point size option
         this.pointSize = options.pointSize || 0.5;
+
+        // Set cast shadow option
+        this.castShadow = options.castShadow ?? false;
+        this.receiveShadow = options.receiveShadow ?? false;
     }
 
     protected get dracoPath() {

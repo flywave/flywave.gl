@@ -340,7 +340,9 @@ export class TextElementStateCache {
         }
 
         const replacement = cacheResult.entries[cacheResult.index];
-        assert(!replacement.visible);
+        if (replacement.visible) {
+            return false;
+        }
 
         replacement.replace(elementState);
         return true;

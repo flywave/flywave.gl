@@ -278,7 +278,6 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
             "#include <logdepthbuf_pars_fragment>",
             `#include <logdepthbuf_pars_fragment>`
         );
- 
 
         parameters.fragmentShader = parameters.fragmentShader.replace(
             "#include <color_fragment>",
@@ -382,7 +381,7 @@ if (isRenderingDepth) {
     private _getMetalnessShaderReplacement(): string {
         return `
             #ifdef USE_VISUAL_BATCH
-            float metalnessFactor = vBatchStyle.metalness;
+            float metalnessFactor = vBatchStyle.metalness > 0.0 ? vBatchStyle.metalness : metalness;
             #else
             float metalnessFactor = metalness;
             #endif
@@ -395,7 +394,7 @@ if (isRenderingDepth) {
     private _getRoughnessShaderReplacement(): string {
         return `
             #ifdef USE_VISUAL_BATCH
-            float roughnessFactor = vBatchStyle.roughness;
+            float roughnessFactor = vBatchStyle.roughness > 0.0 ? vBatchStyle.roughness : roughness;
             #else
             float roughnessFactor = roughness;
             #endif

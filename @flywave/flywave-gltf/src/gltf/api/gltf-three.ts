@@ -11,6 +11,7 @@ import {
     BufferGeometry,
     DoubleSide,
     DynamicDrawUsage,
+    EquirectangularReflectionMapping,
     FrontSide,
     Group,
     InstancedMesh,
@@ -35,6 +36,7 @@ import {
     QuaternionKeyframeTrack,
     RepeatWrapping,
     Scene,
+    SRGBColorSpace,
     Skeleton,
     SkinnedMesh,
     Texture,
@@ -68,14 +70,18 @@ const DEFAULT_OPTIONS: Required<ConversionOptions> = {
     createMaterial: undefined as any
 };
 
-function createThreeSceneFromGLTF(
-    gltf: GLTFPostprocessed,
-    options: ConversionOptions = {}
-): {
+interface ThreeSceneResult {
     scene: Scene;
     animations: AnimationClip[];
     nodes: Map<string, Object3D>;
-} {
+    textures: Texture[];
+    extras: any;
+}
+
+function createThreeSceneFromGLTF(
+    gltf: GLTFPostprocessed,
+    options: ConversionOptions = {}
+): ThreeSceneResult {
     if (!gltf) throw new Error("GLTF data is required");
     if (!gltf.scenes) throw new Error("GLTF must contain scenes");
 
@@ -84,32 +90,32 @@ function createThreeSceneFromGLTF(
     const animations: AnimationClip[] = [];
     const nodeMap = new Map<string, Object3D>();
 
-    // Resource processing
-    const textureMap = processTextures(gltf);
+    const { map: textureMap, array: textureArray } = processTextures(gltf);
     const materialMap = processMaterials(gltf, textureMap, mergedOptions.createMaterial);
     const meshMap = processMeshes(gltf, materialMap);
     const cameraMap = processCameras(gltf);
 
-    // Node processing
     processNodes(gltf, { meshMap, cameraMap, nodeMap }, mergedOptions);
 
-    // Scene setup
     setupScene(gltf, scene, nodeMap);
 
-    // Post-processing
     processSkins(gltf, nodeMap);
     processAnimations(gltf, animations, nodeMap);
 
-    return { scene, animations, nodes: nodeMap };
+    applyEnvMap(scene, gltf.extras, textureArray);
+
+    return { scene, animations, nodes: nodeMap, textures: textureArray, extras: gltf.extras };
 }
 
 // Texture processing
-function processTextures(gltf: GLTFPostprocessed): Map<string, Texture> {
+function processTextures(gltf: GLTFPostprocessed): { map: Map<string, Texture>; array: Texture[] } {
     const textureMap = new Map<string, Texture>();
-    if (!gltf.textures) return textureMap;
+    const textureArray: Texture[] = [];
+    if (!gltf.textures) return { map: textureMap, array: textureArray };
 
     for (const gltfTexture of gltf.textures) {
         const texture = new Texture();
+        texture.flipY = false;
         if (gltfTexture.source?.image) {
             texture.image = gltfTexture.source.image.data;
             texture.needsUpdate = true;
@@ -117,9 +123,10 @@ function processTextures(gltf: GLTFPostprocessed): Map<string, Texture> {
 
         applySamplerParameters(gltfTexture, texture);
         textureMap.set(gltfTexture.id, texture);
+        textureArray.push(texture);
     }
 
-    return textureMap;
+    return { map: textureMap, array: textureArray };
 }
 
 function applySamplerParameters(gltfTexture: any, texture: Texture): void {
@@ -203,6 +210,7 @@ function applyPbrProperties(
     if (pbr.baseColorTexture) {
         const texture = textureMap.get(pbr.baseColorTexture.texture.id);
         if (texture) {
+            texture.colorSpace = SRGBColorSpace;
             material.map = texture;
             if (gltfMaterial.alphaMode === "MASK") {
                 material.alphaMap = texture;
@@ -246,7 +254,10 @@ function applyEmissiveProperties(
 ): void {
     if (gltfMaterial.emissiveTexture) {
         const tex = textureMap.get(gltfMaterial.emissiveTexture.texture.id);
-        if (tex) material.emissiveMap = tex;
+        if (tex) {
+            tex.colorSpace = SRGBColorSpace;
+            material.emissiveMap = tex;
+        }
     }
 
     if (gltfMaterial.emissiveFactor) {
@@ -334,7 +345,7 @@ function createPrimitiveGeometry(primitive: GLTFMeshPrimitivePostprocessed): Buf
     }
 
     if (!geometry.attributes.normal && geometry.attributes.position) {
-        geometry.computeVertexNormals();
+        // geometry.computeVertexNormals();
     }
 
     return geometry;
@@ -372,6 +383,26 @@ function createMeshForPrimitive(
     const mesh = isSkinned
         ? new SkinnedMesh(geometry, material as MeshStandardMaterial)
         : new Mesh(geometry, material as MeshStandardMaterial);
+
+    if (
+        material instanceof MeshStandardMaterial &&
+        material.aoMap &&
+        geometry.attributes.uv &&
+        !geometry.attributes.uv1
+    ) {
+        geometry.setAttribute("uv1", geometry.attributes.uv);
+    }
+
+    if (
+        material instanceof MeshStandardMaterial &&
+        material.normalMap &&
+        !geometry.attributes.tangent &&
+        geometry.attributes.uv &&
+        geometry.attributes.normal &&
+        geometry.attributes.position
+    ) {
+        geometry.computeTangents();
+    }
 
     // Handle morph targets
     if (primitive.targets?.length > 0) {
@@ -858,4 +889,25 @@ function createAnimationTrack(
     return track;
 }
 
+function applyEnvMap(scene: Scene, extras: any, textures: Texture[]): void {
+    if (!extras || extras.envMapTexture == null) return;
+
+    const envMap = textures[extras.envMapTexture];
+    if (!envMap) return;
+
+    envMap.mapping = EquirectangularReflectionMapping;
+    scene.environment = envMap;
+    const envMapIntensity = extras.envMapIntensity ?? 1.0;
+
+    scene.traverse(child => {
+        if ((child as Mesh).isMesh) {
+            const mat = (child as Mesh).material as MeshStandardMaterial;
+            if (mat) {
+                mat.envMap = envMap;
+                mat.envMapIntensity = envMapIntensity;
+                mat.needsUpdate = true;
+            }
+        }
+    });
+}
 export { createThreeSceneFromGLTF, type ConversionOptions };

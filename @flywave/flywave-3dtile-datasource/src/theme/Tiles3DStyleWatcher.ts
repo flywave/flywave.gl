@@ -104,6 +104,10 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
         attributeMappings: Record<string, string>;
     };
 
+    private readonly m_datasourcePostEffects?: {
+        bloom?: { enabled: boolean };
+    };
+
     /**
      * Constructor
      * @param theme - Theme configuration
@@ -111,13 +115,17 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      * @param m_mapRenderingManager - Map rendering manager instance
      * @param customAttributeConfig - Custom attribute configuration, optional
      * @param animation - Batch animation configuration
+     * @param datasourcePostEffects - Per-datasource post-processing effects (overrides theme)
      */
     constructor(
         private theme: ThemeExtra | FlatThemeExtra,
         private readonly styleSetName?: string,
         private readonly m_mapRenderingManager?: IMapRenderingManager,
         customAttributeConfig?: CustomAttributeConfig,
-        private readonly animation?: BatchAnimation
+        private readonly animation?: BatchAnimation,
+        datasourcePostEffects?: {
+            bloom?: { enabled: boolean };
+        }
     ) {
         // Initialize parent class with notification callback
         super((tile: ITile, active: boolean) => {
@@ -128,6 +136,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
             }
         });
 
+        this.m_datasourcePostEffects = datasourcePostEffects;
         this.updateTheme(theme);
 
         // Initialize custom attribute configuration
@@ -219,10 +228,11 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      * @param object - 3D object to apply effect to
      */
     private applyRenderEffectConfig(object: THREE.Object3D): void {
-        // Check if theme has tile3DRender and postEffects configuration
+        // Per-datasource postEffects controls bloom for this data source.
+        // Defaults to false if not configured - does NOT inherit from global theme.
+        const isBloomEnabled = this.m_datasourcePostEffects?.bloom?.enabled ?? false;
         const isTranslucentDepthEnabled = this.theme?.postEffects?.translucentDepth?.enabled;
-        const isBloomEnabled = this.theme?.postEffects?.bloom?.enabled;
-        if (isTranslucentDepthEnabled !== undefined || isBloomEnabled !== undefined) {
+        if (isTranslucentDepthEnabled !== undefined || isBloomEnabled) {
             object.traverse(child => {
                 if (
                     child &&
@@ -481,10 +491,14 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                         map: origin.map,
                         normalMap: origin.normalMap,
                         roughnessMap: origin.roughnessMap,
+                        metalnessMap: origin.metalnessMap,
                         emissive: origin.emissive,
+                        envMap: origin.envMap,
+                        envMapIntensity: origin.envMapIntensity,
                         transparent: true,
                         depthWrite: true,
                         metalness: origin.metalness,
+                        roughness: origin.roughness,
                         userData: {
                             originUUID: origin.uuid
                         }
@@ -612,10 +626,14 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                             map: originalMaterial.map,
                             normalMap: originalMaterial.normalMap,
                             roughnessMap: originalMaterial.roughnessMap,
+                            metalnessMap: originalMaterial.metalnessMap,
                             emissive: originalMaterial.emissive,
+                            envMap: originalMaterial.envMap,
+                            envMapIntensity: originalMaterial.envMapIntensity,
                             transparent: true,
                             depthWrite: true,
                             metalness: originalMaterial.metalness,
+                            roughness: originalMaterial.roughness,
                             userData: {
                                 originUUID: originalMaterial.uuid,
                                 instanceId: instancedObject.userData.instanceId

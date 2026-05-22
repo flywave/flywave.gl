@@ -293,6 +293,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         radius: 0.67,
         levels: 3,
         inverted: false,
+        ignoreBackground: true,
         luminancePassThreshold: 0.0,
         luminancePassSmoothing: 0.1
     };
@@ -452,7 +453,6 @@ export class MapRenderingManager implements IMapRenderingManager {
             luminanceSmoothing: this.bloom.luminancePassSmoothing
         });
         this.m_bloomEffect.luminancePass.enabled = true;
-        this.m_bloomEffect.ignoreBackground = true;
         this.m_bloomEffect.inverted = this.bloom.inverted;
         this.m_bloomEffect.enabled = this.bloom.enabled;
 
@@ -541,7 +541,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     private recreateEffectPass() {
         if (!this.m_composer || !this.m_camera) return;
 
-        // Remove old effect pass
+        // Remove old effect passes
         if (this.m_effectPass) {
             this.m_composer.removePass(this.m_effectPass);
         }
@@ -551,16 +551,16 @@ export class MapRenderingManager implements IMapRenderingManager {
             this.m_composer.addPass(this.m_normalPass);
         }
 
-        // Create array of all effects
+        // Create array of all effects (bloom at the end)
         const allEffects: IEnabledEffect[] = [
             this.m_translucentDepthEffect!,
-            this.m_bloomEffect!,
+            this.m_hueSaturationEffect!,
             this.m_outlineEffect!,
             this.m_vignetteEffect!,
             this.m_sepiaEffect!,
-            this.m_hueSaturationEffect!,
             this.m_brightnessContrastEffect!,
-            this.m_ssaoEffect! // Add SSAO effect to effect array
+            this.m_ssaoEffect!,
+            this.m_bloomEffect!
         ];
 
         // Add custom effects (sorted by order)
@@ -896,7 +896,7 @@ export class MapRenderingManager implements IMapRenderingManager {
             this.m_bloomEffect.mipmapBlurPass.enabled = true;
             this.m_bloomEffect.mipmapBlurPass.radius = this.bloom.radius;
             this.m_bloomEffect.mipmapBlurPass.levels = this.bloom.levels || 1;
-            this.m_bloomEffect.ignoreBackground = true;
+            this.m_bloomEffect.ignoreBackground = this.bloom.ignoreBackground;
 
             this.m_bloomEffect.inverted = this.bloom.inverted;
             this.m_bloomEffect.luminancePass.enabled = true;
@@ -904,9 +904,6 @@ export class MapRenderingManager implements IMapRenderingManager {
 
             this.m_bloomEffect.luminanceMaterial.smoothing =
                 this.bloom.luminancePassSmoothing ?? 0.1;
-
-            this.m_bloomEffect!.selection.clear();
-            this.m_bloomObjects.forEach(item => this.m_bloomEffect!.selection.add(item));
 
             if (this.bloom.inverted) {
                 this.m_ignoreObjects.forEach(item => this.m_bloomEffect!.selection.add(item));
