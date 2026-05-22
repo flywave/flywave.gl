@@ -118,7 +118,7 @@ export class VertexHandle extends THREE.Object3D {
     }
 
     private createVisuals(): void {
-        const texture = this.createHandleTexture(this.normalColor, false);
+        const texture = this.createHandleTexture(this.normalColor, false, false);
         this.spriteMaterial = new THREE.SpriteMaterial({
             map: texture,
             color: 0xffffff,
@@ -139,10 +139,9 @@ export class VertexHandle extends THREE.Object3D {
         this.add(this.sprite);
     }
 
-    private createHandleTexture(color: number, isSelected: boolean): THREE.Texture {
+    private createHandleTexture(color: number, isSelected: boolean, isHovered: boolean = false): THREE.Texture {
         const canvas = document.createElement("canvas");
-        const baseSize = 64;
-        const size = isSelected ? baseSize * 1.3 : baseSize;
+        const size = 64;
         canvas.width = size;
         canvas.height = size;
         const context = canvas.getContext("2d")!;
@@ -150,19 +149,38 @@ export class VertexHandle extends THREE.Object3D {
         context.clearRect(0, 0, size, size);
 
         const center = size / 2;
-        const displayColor = isSelected ? "#00ff00" : `#${color.toString(16).padStart(6, "0")}`;
+        const displayColor = `#${color.toString(16).padStart(6, "0")}`;
+        const radius = isSelected ? 24 : 22;
+        const strokeWidth = isSelected ? 3.5 : (isHovered ? 3.5 : 2.5);
+        const showCenterDot = isSelected || isHovered;
 
-        context.strokeStyle = displayColor;
-        context.lineWidth = size / 8;
+        if (isHovered || isSelected) {
+            const alpha = isHovered ? 0.25 : 0.3;
+            context.shadowBlur = 12;
+            context.shadowColor = `rgba(${parseInt(displayColor.slice(1,3),16)},${parseInt(displayColor.slice(3,5),16)},${parseInt(displayColor.slice(5,7),16)},${alpha})`;
+            context.shadowOffsetY = 0;
+        } else {
+            context.shadowBlur = 8;
+            context.shadowColor = "rgba(0,0,0,0.35)";
+            context.shadowOffsetY = 2;
+        }
         context.beginPath();
-        context.arc(center, center, size / 2 - size / 16, 0, Math.PI * 2);
+        context.arc(center, center, radius, 0, Math.PI * 2);
+        context.fillStyle = "#ffffff";
+        context.fill();
+
+        context.shadowBlur = 0;
+        context.shadowColor = "transparent";
+        context.strokeStyle = displayColor;
+        context.lineWidth = strokeWidth;
         context.stroke();
 
-        context.strokeStyle = displayColor;
-        context.lineWidth = size / 8;
-        context.beginPath();
-        context.arc(center, center, size / 4, 0, Math.PI * 2);
-        context.stroke();
+        if (showCenterDot) {
+            context.beginPath();
+            context.arc(center, center, 4, 0, Math.PI * 2);
+            context.fillStyle = displayColor;
+            context.fill();
+        }
 
         const texture = new THREE.CanvasTexture(canvas);
         return texture;
@@ -327,13 +345,15 @@ export class VertexHandle extends THREE.Object3D {
     private startHeightAdjustment(mousePoint: THREE.Vector2): void {
         this.isAdjustingHeight = true;
 
+        this.dragStartWorldPos.copy(this.worldPosition);
+
         if (this.useGeoCoordinates && this.geoPosition) {
             this.heightAdjustStartHeight = this.geoPosition.altitude || 0;
         } else {
             if (this.mapView.projection.type === ProjectionType.Spherical) {
-                this.heightAdjustStartHeight = this.dragStartWorldPos.length() - 6371000;
+                this.heightAdjustStartHeight = this.worldPosition.length() - 6371000;
             } else {
-                this.heightAdjustStartHeight = this.dragStartWorldPos.z;
+                this.heightAdjustStartHeight = this.worldPosition.z;
             }
         }
 
@@ -521,7 +541,7 @@ export class VertexHandle extends THREE.Object3D {
         }
 
         const oldMaterial = this.spriteMaterial;
-        const texture = this.createHandleTexture(color, this.isSelected);
+        const texture = this.createHandleTexture(color, this.isSelected, this.isHovered);
 
         this.spriteMaterial = new THREE.SpriteMaterial({
             map: texture,

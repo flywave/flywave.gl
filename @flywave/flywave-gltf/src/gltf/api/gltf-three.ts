@@ -132,7 +132,7 @@ function processTextures(gltf: GLTFPostprocessed): { map: Map<string, Texture>; 
 function applySamplerParameters(gltfTexture: any, texture: Texture): void {
     if (!gltfTexture.sampler) return;
 
-    const { magFilter, minFilter, wrapS, wrapT } = gltfTexture.sampler.parameters;
+    const { magFilter, minFilter, wrapS, wrapT } = gltfTexture.sampler;
 
     texture.magFilter = magFilter || LinearFilter;
     texture.minFilter = minFilter || LinearMipmapLinearFilter;
