@@ -323,7 +323,7 @@ export class VertexHandle extends THREE.Object3D {
         raycaster.setFromCamera(mousePoint, this.mapView.getRteCamera());
 
         const intersects: THREE.Intersection[] = [];
-        raycaster.intersectObject(this, true, intersects);
+        raycaster.intersectObject(this.sprite, false, intersects);
 
         return intersects.length > 0;
     }
