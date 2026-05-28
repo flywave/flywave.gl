@@ -21,6 +21,7 @@ import { SimulationUI } from "./SimulationUI";
 import { ScenarioManager } from "./ScenarioManager";
 import { CCTVOverlay } from "./CCTVOverlay";
 import { SignalOverlay } from "./SignalOverlay";
+import { DashboardOverlay } from "./DashboardOverlay";
 // import { RailwayEditUI } from "./RailwayEditUI";
 
 const TILESET_URL = "http://192.168.1.8/%E8%8E%B1%E9%98%B3%E7%AB%99/tileset.json";
@@ -66,9 +67,10 @@ const main = async () => {
         const canvas = getMapCanvas();
         scene.mapView = new MapView({
             projection: sphereProjection,
-            target: new GeoCoordinates(36.976, 120.71),
+            target: new GeoCoordinates(36.9245, 120.7003, 61),
+            tilt: 68.9,
+            heading: 76.8,
             logarithmicDepthBuffer: false,
-            zoomLevel: 19,
             minCameraHeight: 5,
             canvas,
             theme: {
@@ -168,10 +170,6 @@ const main = async () => {
             receiveShadow: true
         });
         scene.mapView.addDataSource(ds3d);
-        ds3d.getRootTile().then(tile =>
-            scene.mapView.lookAt({ bounds: tile.cached.boundingVolume.region })
-        );
-
         const dem = new DEMTerrainSource({
             source: {
                 bounds: [120.68, 36.95, 120.74, 37.0],
@@ -243,7 +241,12 @@ const main = async () => {
         );
 
         scene.scenario = new ScenarioManager(scene.sim);
-        scene.ui = new SimulationUI(scene.sim, scene.scenario);
+        scene.ui = new SimulationUI(
+            scene.sim,
+            scene.scenario,
+            () => sigOverlay.show(),
+            () => sigOverlay.hide()
+        );
 
         const DEG = Math.PI / 180;
         const cctv = new CCTVOverlay("CCTV-1 莱阳站");
@@ -255,6 +258,18 @@ const main = async () => {
         );
 
         const sigOverlay = new SignalOverlay(scene.sim, scene.rds, "sig_junction");
+
+        const dashboard = new DashboardOverlay();
+        const simSlot = dashboard.getSimSlot();
+        const uiContainer = document.getElementById("railway-ui");
+        if (simSlot && uiContainer) {
+            const style = uiContainer.querySelector("style");
+            if (style) style.remove();
+            const header = uiContainer.querySelector(".rui-header");
+            if (header) header.remove();
+            uiContainer.style.cssText = "";
+            simSlot.appendChild(uiContainer);
+        }
 
         // const gjEdit: FeatureCollection = await TransferManager.instance().downloadJson(
         //     "railway.geojson"

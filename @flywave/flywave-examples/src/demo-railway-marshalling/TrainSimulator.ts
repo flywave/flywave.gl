@@ -49,7 +49,8 @@ export class TrainSimulator {
     private m_network: TrackNetwork;
     private m_trains: Map<string, TrainInstance> = new Map();
     private m_signals: Map<string, SignalLight> = new Map();
-    private m_carriageSpacing = 21.2;
+    private m_carriageSpacing = 15;
+    private m_engineGap = 14;
     private m_engineModel?: THREE.Object3D;
     private m_carriageModel?: THREE.Object3D;
     private m_signalModel?: THREE.Object3D;
@@ -419,7 +420,8 @@ export class TrainSimulator {
         if (!ep) return;
         this.applyRot(train.engine, ep.position, ep.tangent);
         for (let i = 0; i < train.carriages.length; i++) {
-            const d = train.distance - (i + 1) * this.m_carriageSpacing;
+            const offset = this.m_engineGap + i * this.m_carriageSpacing;
+            const d = train.distance - offset;
             const cp = this.lerp(train.pathPositions, train.pathTangents, d, train.pathTotalLength);
             if (cp) this.applyRot(train.carriages[i], cp.position, cp.tangent);
         }

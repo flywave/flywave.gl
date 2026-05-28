@@ -88,8 +88,18 @@ export class SignalOverlay {
         });
 
         document.body.appendChild(this.m_div);
+        this.m_visible = false;
+        this.m_div.style.display = "none";
+    }
+
+    show(): void {
         this.m_visible = true;
         this.m_div.style.display = "block";
+    }
+
+    hide(): void {
+        this.m_visible = false;
+        this.m_div.style.display = "none";
     }
 
     update(camera: THREE.Camera): void {

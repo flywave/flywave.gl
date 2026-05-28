@@ -15,7 +15,7 @@ import {
 // Project configuration constants
 const PROJECT_CONFIG = {
     SERVER_URL: "http://192.168.1.18/flywave-examples/data",
-    PROJECT_NAME: "Country Garden"
+    PROJECT_NAME: "周村"
 };
 
 /**
