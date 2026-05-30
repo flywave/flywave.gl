@@ -4,6 +4,7 @@ import {
     MapControls,
     DEMTerrainSource,
     ArcGISTileProvider,
+    ellipsoidProjection,
     MapControlsUI,
     sphereProjection
 } from "@flywave/flywave.gl";
@@ -29,18 +30,18 @@ const getMapCanvas = (): HTMLCanvasElement => {
  */
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and viewpoint (eastern China region)
-    const initialLocation = new GeoCoordinates(36, 118);
+    const initialLocation = new GeoCoordinates(35, 0);
 
     return new MapView({
-        projection: sphereProjection, // Use spherical projection
+        projection: ellipsoidProjection, // Use spherical projection
         target: initialLocation, // Initial target position
-        zoomLevel: 6, // Initial zoom level
-        tilt: 45, // Initial tilt angle
-        heading: 1.5413763202653008, // Initial heading angle
-        logarithmicDepthBuffer: true, // Enable logarithmic depth buffer
+        zoomLevel: 16, // Initial zoom level (approx 2km view distance)
+        tilt: 20, // Initial tilt angle (~20° below horizon)
+        heading: -1.57, // Initial heading angle (~90° west)
+        logarithmicDepthBuffer: false, // Enable logarithmic depth buffer
         canvas: canvas, // Specify render canvas
         theme: {
-            extends: "resources/tilezen_base_globe.json", // Base theme configuration
+            // extends: "resources/tilezen_base_globe.json", // Base theme configuration
             celestia: {
                 atmosphere: true // Enable atmospheric effects
             }
@@ -70,8 +71,17 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
  */
 const configureDEMTerrainSource = (mapView: MapView): void => {
     const demTerrain = new DEMTerrainSource({
-        source: "dem_terrain/source.json" // DEM terrain data source path
-    });
+        source: {
+    "type": "raster-dem", 
+    "tileSize": 512,
+    "maxzoom": 14,
+    "minzoom": 0,
+    "bounds": [0, -90, 180, 90],
+    "scheme": "xyz",
+    "tiles": [],
+    "encoding": "terrarium"
+}})
+
 
     mapView.setElevationSource(demTerrain);
     demTerrain.addWebTileDataSource(

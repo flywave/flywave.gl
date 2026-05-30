@@ -122,7 +122,8 @@ export interface DataSourceOptions {
 /**
  * Derive a class from `DataSource` to contribute data and geometries to the {@link MapView}.
  */
-export abstract class DataSource extends THREE.EventDispatcher<{ update: {} }> {
+export abstract class DataSource<TEventMap extends {} = {}> 
+    extends THREE.EventDispatcher<{ update: {} } & TEventMap> {
     /**
      * Keep the update event here to avoid a global reference to the datasource (and thus prevent garbage collection).
      */

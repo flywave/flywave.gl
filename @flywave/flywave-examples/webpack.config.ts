@@ -78,7 +78,9 @@ const flywaveConfig: FlywaveWebpackConfig = {
 const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
     resolve: {
         alias: {
-            "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src/index.ts")
+            "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src/index.ts"),
+            "three/examples/jsm": path.resolve(__dirname, "node_modules/three/examples/jsm"),
+            "three/addons": path.resolve(__dirname, "node_modules/three/examples/jsm")
         }
     },
     output: {
@@ -90,11 +92,11 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
         rules: [
             {
                 test: /\.css$/,
-                use: ['style-loader', 'css-loader']
+                use: ["style-loader", "css-loader"]
             },
             {
                 test: /\.(scss|sass)$/,
-                use: ['style-loader', 'css-loader', 'sass-loader']
+                use: ["style-loader", "css-loader", "sass-loader"]
             }
         ]
     },
@@ -122,6 +124,12 @@ const decoderConfig = merge(
         target: "webworker",
         resolve: {
             alias: {
+                "three/examples/jsm/loaders/EXRLoader.js": path.resolve(
+                    __dirname,
+                    "node_modules/three/examples/jsm/loaders/EXRLoader.js"
+                ),
+                "three/examples/jsm": path.resolve(__dirname, "node_modules/three/examples/jsm"),
+                "three/addons": path.resolve(__dirname, "node_modules/three/examples/jsm"),
                 three: threePath,
                 "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src")
             }

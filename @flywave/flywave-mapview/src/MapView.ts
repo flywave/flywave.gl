@@ -3591,6 +3591,11 @@ export class MapView extends EventDispatcher {
         // clear the scenes
         this.m_sceneRoot.children.length = 0;
         this.m_overlaySceneRoot.children.length = 0;
+        // Re-add Celestia to scene root (required for RTE rendering)
+        const celestia = this.m_sceneEnvironment?.celestia;
+        if (celestia) {
+            this.m_sceneRoot.add(celestia);
+        }
 
         if (gatherStatistics) {
             setupTime = PerformanceTimer.now();
@@ -3691,8 +3696,18 @@ export class MapView extends EventDispatcher {
         if (gatherStatistics) {
             textPlacementTime = PerformanceTimer.now();
         }
-
         this.dispatchEvent(this.WILL_RENDER_EVENT);
+
+        // Set EffectComposer mainCamera to RTE camera so that
+        // EffectPass.copyCameraSettings sets correct PERSPECTIVE_CAMERA define
+        // and custom camera uniforms for atmospheric scattering effects.
+        if (this.m_sceneEnvironment?.celestia) {
+            const mgr = this.mapRenderingManager as any;
+            if (mgr?.m_composer) {
+                mgr.m_composer.setMainCamera(this.getRteCamera());
+            }
+        }
+
         this.mapRenderingManager.render(
             this.m_renderer,
             this.m_scene,
