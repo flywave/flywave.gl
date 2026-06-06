@@ -1,0 +1,7 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
+import { WebGLRenderer } from "three";
+
+export function isFloatLinearSupported(renderer: WebGLRenderer): boolean {
+    return renderer.getContext().getExtension("OES_texture_float_linear") != null;
+}

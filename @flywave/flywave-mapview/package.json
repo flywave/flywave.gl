@@ -45,6 +45,7 @@
     },
     "license": "Apache-2.0",
     "dependencies": {
+        "@flywave/flywave-atmosphere": "workspace:*",
         "rbush": "catalog:",
         "postprocessing": "catalog:"
     },

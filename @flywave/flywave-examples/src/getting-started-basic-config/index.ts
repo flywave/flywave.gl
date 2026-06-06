@@ -40,9 +40,9 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         logarithmicDepthBuffer: true, // Enable logarithmic depth buffer
         canvas: canvas, // Specify render canvas
         theme: {
-            extends: "resources/tilezen_base_globe.json", // Base theme configuration
+            // extends: "resources/tilezen_base_globe.json", // Base theme configuration
             celestia: {
-                atmosphere: true // Enable atmospheric effects
+                atmosphere: true
             }
         }
     });

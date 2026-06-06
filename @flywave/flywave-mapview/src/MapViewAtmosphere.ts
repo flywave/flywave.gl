@@ -11,67 +11,40 @@ import { type MapAnchor, type MapAnchors } from "./MapAnchors";
 
 export const ATMOSPHERE_SKY_RENDER_ORDER = Number.MIN_SAFE_INTEGER;
 export const ATMOSPHERE_GROUND_RENDER_ORDER = Number.MIN_SAFE_INTEGER;
-/**
- * Atmosphere effect variants.
- */
+
 export enum AtmosphereVariant {
     Ground = 0x1,
     Sky = 0x2,
     SkyAndGround = 0x3
 }
 
-/**
- * Atmosphere shader variants.
- */
 export enum AtmosphereShadingVariant {
     ScatteringShader,
     SimpleColor,
     Wireframe
 }
 
-/**
- * Lists light modes.
- */
 export enum AtmosphereLightMode {
     LightOverhead = 0,
     LightDynamic = 1
 }
 
-/**
- * Maximum altitude that atmosphere reaches as the percent of the Earth radius.
- */
-const SKY_ATMOSPHERE_ALTITUDE_FACTOR = 0.025;
+export enum AtmosphereBackend {
+    Legacy = "legacy",
+    Bruneton = "bruneton"
+}
 
-/**
- * Maximum altitude that ground atmosphere is visible as the percent of the Earth radius.
- */
+const SKY_ATMOSPHERE_ALTITUDE_FACTOR = 0.025;
 const GROUND_ATMOSPHERE_ALTITUDE_FACTOR = 0.0001;
 
-/**
- * Utility cache for holding temporary values.
- */
 const cache = {
     clipPlanes: { near: 0, far: 0 }
 };
 
-/**
- * Class that provides {@link MapView}'s atmospheric scattering effect.
- */
 export class MapViewAtmosphere {
-    /**
-     * User data name attribute assigned to created mesh.
-     */
     static SkyAtmosphereUserName: string = "SkyAtmosphere";
-    /**
-     * User data name attribute assigned to created mesh.
-     */
     static GroundAtmosphereUserName: string = "GroundAtmosphere";
 
-    /**
-     * Check if map anchors have already atmosphere effect added.
-     *
-     * @param mapAnchors - MapAnchors to check.
-     */
     static isPresent(mapAnchors: MapAnchors): boolean {
         for (const mapAnchor of mapAnchors.children) {
             if (
@@ -99,8 +72,6 @@ export class MapViewAtmosphere {
         0.05,
         10000000.0
     );
-    // TODO: Support for Theme definition should be added.
-    //private m_cachedTheme: Theme = { styles: {} };
 
     private readonly m_lightDirection = new THREE.Vector3(0.0, 1.0, 0.0);
 
@@ -108,25 +79,8 @@ export class MapViewAtmosphere {
         return this.m_lightDirection;
     }
 
-    /**
-     * Creates and adds `Atmosphere` effects to the scene.
-     *
-     * @note Currently works only with globe projection.
-     *
-     * @param m_mapAnchors - The {@link MapAnchors} instance where the effect will be added.
-     * @param m_sceneCamera - The camera used to render entire scene.
-     * @param m_projection - The geo-projection used to transform geo coordinates to
-     *                       cartesian space.
-     * @param m_rendererCapabilities The capabilities of the WebGL renderer.
-     * @param m_updateCallback - The optional callback to that should be called whenever atmosphere
-     * configuration changes, may be used to inform related components (`MapView`) to redraw.
-     * @param m_atmosphereVariant - The optional atmosphere configuration variant enum
-     * [[AtmosphereVariant]], which denotes where the atmosphere scattering effect should be
-     * applied, it may be ground or sky atmosphere only or most realistic for both, which is
-     * chosen by default.
-     * @param m_materialVariant - The optional material variant to be used, mainly for
-     * testing and tweaking purposes.
-     */
+    private readonly m_backend: AtmosphereBackend;
+
     constructor(
         private readonly m_mapAnchors: MapAnchors,
         private readonly m_sceneCamera: THREE.Camera,
@@ -134,18 +88,24 @@ export class MapViewAtmosphere {
         private readonly m_rendererCapabilities: THREE.WebGLCapabilities,
         private readonly m_updateCallback?: () => void,
         private readonly m_atmosphereVariant: AtmosphereVariant = AtmosphereVariant.SkyAndGround,
-        private readonly m_materialVariant = AtmosphereShadingVariant.ScatteringShader
+        private readonly m_materialVariant = AtmosphereShadingVariant.ScatteringShader,
+        backend: AtmosphereBackend = AtmosphereBackend.Legacy
     ) {
-        // 初始化大气散射管理器
-        // this.initializeAtmosphericScatteringManager();
+        this.m_backend = backend;
 
-        if (this.m_atmosphereVariant & AtmosphereVariant.Sky) {
-            this.createSkyGeometry();
+        if (backend === AtmosphereBackend.Legacy) {
+            if (this.m_atmosphereVariant & AtmosphereVariant.Sky) {
+                this.createSkyGeometry();
+            }
+            if (this.m_atmosphereVariant & AtmosphereVariant.Ground) {
+                this.createGroundGeometry();
+            }
+            this.addToMapAnchors(this.m_mapAnchors);
         }
-        if (this.m_atmosphereVariant & AtmosphereVariant.Ground) {
-            this.createGroundGeometry();
-        }
-        this.addToMapAnchors(this.m_mapAnchors);
+    }
+
+    get backend(): AtmosphereBackend {
+        return this.m_backend;
     }
 
     get skyMesh(): THREE.Mesh | undefined {
@@ -156,16 +116,7 @@ export class MapViewAtmosphere {
         return this.m_groundMesh;
     }
 
-    /**
-     * Allows to enable/disable the atmosphere effect, regardless of the theme settings.
-     *
-     * Use this method to change the setup in runtime without defining corresponding theme setup.
-     *
-     * @param enable - A boolean that specifies whether the atmosphere should be enabled or
-     *                 disabled.
-     */
     set enabled(enable: boolean) {
-        // Check already disposed.
         if (this.disposed) {
             return;
         }
@@ -173,22 +124,24 @@ export class MapViewAtmosphere {
             return;
         }
         this.m_enabled = enable;
-        const isAdded = MapViewAtmosphere.isPresent(this.m_mapAnchors);
-        if (enable && !isAdded) {
-            this.addToMapAnchors(this.m_mapAnchors);
-        } else if (!enable && isAdded) {
-            this.removeFromMapAnchors(this.m_mapAnchors);
+        if (this.m_backend === AtmosphereBackend.Legacy) {
+            const isAdded = MapViewAtmosphere.isPresent(this.m_mapAnchors);
+            if (enable && !isAdded) {
+                this.addToMapAnchors(this.m_mapAnchors);
+            } else if (!enable && isAdded) {
+                this.removeFromMapAnchors(this.m_mapAnchors);
+            }
         }
     }
 
-    /**
-     * Returns the current atmosphere status, enabled or disabled.
-     */
     get enabled(): boolean {
         return this.m_enabled;
     }
 
     set lightMode(lightMode: AtmosphereLightMode) {
+        if (this.m_backend === AtmosphereBackend.Bruneton) {
+            return;
+        }
         if (this.m_materialVariant !== AtmosphereShadingVariant.ScatteringShader) {
             return;
         }
@@ -201,28 +154,14 @@ export class MapViewAtmosphere {
             const skyMat = this.m_skyMaterial as SkyAtmosphereMaterial;
             skyMat.setDynamicLighting(dynamicLight);
         }
-
-        // // 更新大气散射管理器中的光照方向
-        // if (dynamicLight) {
-        //     this.m_atmosphericScatteringManager.parameters = {
-        //         lightDirection: this.m_lightDirection
-        //     };
-        // }
     }
 
-    /**
-     * 更新光照方向
-     * @param lightDirection 新的光照方向
-     */
     setLightDirection(lightDirection: THREE.Vector3): void {
         this.m_lightDirection.copy(lightDirection);
 
-        // // 更新大气散射管理器中的光照方向
-        // this.m_atmosphericScatteringManager.parameters = {
-        //     lightDirection: this.m_lightDirection
-        // };
-
-        // 如果启用了动态光照，也更新材质
+        if (this.m_backend === AtmosphereBackend.Bruneton) {
+            return;
+        }
         if (this.m_groundMaterial instanceof GroundAtmosphereMaterial) {
             this.m_groundMaterial.setDynamicLighting(true);
         }
@@ -231,11 +170,7 @@ export class MapViewAtmosphere {
         }
     }
 
-    /**
-     * Disposes allocated resources.
-     */
     dispose() {
-        // Unlink from scene and mapview anchors
         if (this.enabled) {
             this.enabled = false;
         }
@@ -246,7 +181,6 @@ export class MapViewAtmosphere {
         this.m_skyGeometry?.dispose();
         this.m_groundGeometry?.dispose();
 
-        // After disposal we may no longer enable effect.
         this.m_skyGeometry = undefined;
         this.m_groundGeometry = undefined;
 
@@ -257,27 +191,14 @@ export class MapViewAtmosphere {
         this.m_groundMesh = undefined;
     }
 
-    /**
-     * Sets the atmosphere depending on the
-     * {@link @flywave/flywave-datasource-protocol#Theme} instance provided.
-     *
-     * This function is called when a theme is loaded. Atmosphere is added only if the theme
-     * contains a atmosphere definition with a:
-     * - `color` property, used to set the atmosphere color.
-     *
-     * @param theme - A {@link @flywave/flywave-datasource-protocol#Theme} instance.
-     */
-    reset(theme: Theme) {
-        //this.m_cachedTheme = theme;
-    }
+    reset(theme: Theme) {}
 
     private get disposed() {
-        return this.m_skyMesh === undefined && this.m_groundMesh === undefined;
+        return this.m_backend === AtmosphereBackend.Bruneton
+            ? true
+            : this.m_skyMesh === undefined && this.m_groundMesh === undefined;
     }
 
-    /**
-     * Handles atmosphere effect adding.
-     */
     private addToMapAnchors(mapAnchors: MapAnchors) {
         assert(!MapViewAtmosphere.isPresent(mapAnchors), "Atmosphere already added");
         if (this.m_skyMesh !== undefined) {
@@ -287,15 +208,11 @@ export class MapViewAtmosphere {
             mapAnchors.add(createMapAnchor(this.m_groundMesh, ATMOSPHERE_SKY_RENDER_ORDER));
         }
 
-        // Request an update once the anchor is added to {@link MapView}.
         if (this.m_updateCallback) {
             this.m_updateCallback();
         }
     }
 
-    /**
-     * Handles atmosphere effect removal.
-     */
     private removeFromMapAnchors(mapAnchors: MapAnchors) {
         if (!MapViewAtmosphere.isPresent(mapAnchors)) {
             return;
@@ -340,7 +257,7 @@ export class MapViewAtmosphere {
                 color: new THREE.Color(0xc4f8ed),
                 opacity: 0.4,
                 transparent: false,
-                depthTest: true, // hide atmosphere behind globe (note: transparent changes order)
+                depthTest: true,
                 depthWrite: false,
                 side: THREE.BackSide,
                 blending: THREE.NormalBlending,
@@ -352,13 +269,12 @@ export class MapViewAtmosphere {
                 depthTest: false,
                 depthWrite: false,
                 normalScale: new THREE.Vector2(-1, -1),
-                side: THREE.BackSide, // not truly supported in wireframe mode
+                side: THREE.BackSide,
                 wireframe: true
             });
         }
 
         this.m_skyMesh = new THREE.Mesh(this.m_skyGeometry, this.m_skyMaterial);
-        // Assign custom name so sky object may be easily recognized withing the scene.
         this.m_skyMesh.name = MapViewAtmosphere.SkyAtmosphereUserName;
         this.setupSkyForRendering();
     }
@@ -397,7 +313,7 @@ export class MapViewAtmosphere {
         } else {
             this.m_groundMaterial = new THREE.MeshStandardMaterial({
                 color: 0x11899a,
-                depthTest: true, // FrontSide is not fully supported, so need depth test
+                depthTest: true,
                 depthWrite: false,
                 side: THREE.FrontSide,
                 wireframe: true
@@ -405,9 +321,7 @@ export class MapViewAtmosphere {
         }
 
         this.m_groundMesh = new THREE.Mesh(this.m_groundGeometry, this.m_groundMaterial);
-        // Assign name so object may be recognized withing the scene.
         this.m_groundMesh.name = MapViewAtmosphere.GroundAtmosphereUserName;
-
         this.setupGroundForRendering();
     }
 
@@ -415,20 +329,14 @@ export class MapViewAtmosphere {
         if (this.m_skyMesh === undefined) {
             return;
         }
-        // Depending on material variant we need to update uniforms or only
-        // update camera near/far planes cause camera need to see further then
-        // actual earth geometry.
         let onBeforeCallback: (_camera: THREE.Camera, _material: THREE.Material) => void;
         if (this.m_materialVariant !== AtmosphereShadingVariant.ScatteringShader) {
-            // Setup only further clip planes before rendering.
             onBeforeCallback = (camera: THREE.Camera, _material: THREE.Material) => {
                 this.overrideClipPlanes(camera);
             };
         } else {
-            // Setup proper clip planes and update uniforms values.
             onBeforeCallback = (camera: THREE.Camera, material: THREE.Material) => {
                 this.overrideClipPlanes(camera);
-                // Check material wasn't swapped.
                 if (material instanceof SkyAtmosphereMaterial) {
                     assert(material instanceof SkyAtmosphereMaterial);
                     const mat = this.m_skyMaterial as SkyAtmosphereMaterial;
@@ -437,7 +345,6 @@ export class MapViewAtmosphere {
             };
         }
 
-        // Sky material should be already created with mesh.
         assert(this.m_skyMaterial !== undefined);
         this.m_skyMesh.onBeforeRender = (
             _renderer: THREE.WebGLRenderer,
@@ -469,10 +376,7 @@ export class MapViewAtmosphere {
         if (this.m_materialVariant !== AtmosphereShadingVariant.ScatteringShader) {
             return;
         }
-        // Ground material should be already created.
         assert(this.m_groundMaterial !== undefined);
-        // Ground mesh does not need custom clip planes and uses the same camera setup as
-        // real (data source based) geometry.
         this.m_groundMesh.onBeforeRender = (
             _renderer: THREE.WebGLRenderer,
             _scene: THREE.Scene,
@@ -490,24 +394,18 @@ export class MapViewAtmosphere {
     }
 
     private overrideClipPlanes(rteCamera: THREE.Camera) {
-        // Store current clip planes used by global camera before modifying them.
         const sceneCam = this.m_sceneCamera as THREE.PerspectiveCamera;
         cache.clipPlanes.near = sceneCam.near;
         cache.clipPlanes.far = sceneCam.far;
-        // Calculate view ranges using world camera.
-        // NOTE: ElevationProvider is not passed to evaluator, leaves min/max altitudes unchanged.
         const viewRanges = this.m_clipPlanesEvaluator.evaluateClipPlanes(
             this.m_sceneCamera,
             this.m_projection,
             undefined,
             this.m_rendererCapabilities.logarithmicDepthBuffer
         );
-        // Update relative to eye camera used internally in rendering.
         assert(rteCamera instanceof THREE.PerspectiveCamera);
         const c = rteCamera as THREE.PerspectiveCamera;
         c.near = viewRanges.near;
-        // Small margin ensures that we never cull small triangles just below or at
-        // horizon - possible due to frustum culling in-precisions.
         c.far = viewRanges.far + EarthConstants.EQUATORIAL_RADIUS * 0.5;
         c.updateProjectionMatrix();
     }
@@ -515,7 +413,6 @@ export class MapViewAtmosphere {
     private revertClipPlanes(rteCamera: THREE.Camera) {
         assert(rteCamera instanceof THREE.PerspectiveCamera);
         const c = rteCamera as THREE.PerspectiveCamera;
-        // Restore scene camera clip planes.
         c.near = cache.clipPlanes.near;
         c.far = cache.clipPlanes.far;
         c.updateProjectionMatrix();

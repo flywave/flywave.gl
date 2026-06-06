@@ -21,7 +21,9 @@
             "@flywave/flywave-transfer-manager": ["../flywave-transfer-manager/src"],
             "@flywave/flywave-utils": ["../flywave-utils/src"],
             "@flywave/flywave-utils/*": ["../flywave-utils/src/*"],
-            "@flywave/flywave-test-utils/*": ["../flywave-test-utils/src/*"]
+            "@flywave/flywave-test-utils/*": ["../flywave-test-utils/src/*"],
+            "@flywave/flywave-atmosphere": ["../flywave-atmosphere/src"],
+            "@flywave/flywave-atmosphere/*": ["../flywave-atmosphere/src/*"]
         }
     },
     "include": ["src/**/*", "test/**/*.ts"],
@@ -58,6 +60,9 @@
         },
         {
             "path": "../flywave-test-utils"
+        },
+        {
+            "path": "../flywave-atmosphere"
         }
     ]
 }

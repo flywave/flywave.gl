@@ -358,6 +358,8 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_renderer?: THREE.WebGLRenderer;
     private m_scene?: THREE.Scene;
     private m_camera?: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+    private m_lastCameraNear: number = NaN;
+    private m_lastCameraFar: number = NaN;
 
     private m_composer?: EffectComposer;
     private m_mainRenderPass?: RenderPass;
@@ -431,6 +433,7 @@ export class MapRenderingManager implements IMapRenderingManager {
 
         // Initialize composer and main render pass
         this.m_composer = new EffectComposer(this.m_renderer, {
+            frameBufferType: THREE.HalfFloatType,
             multisampling: this.m_dynamicMsaaSamplingLevel,
             stencilBuffer: true,
             depthBuffer: true
@@ -978,6 +981,11 @@ export class MapRenderingManager implements IMapRenderingManager {
 
         if (this.m_composer) {
             try {
+                if (camera.near !== this.m_lastCameraNear || camera.far !== this.m_lastCameraFar) {
+                    this.m_composer.setMainCamera(camera);
+                    this.m_lastCameraNear = camera.near;
+                    this.m_lastCameraFar = camera.far;
+                }
                 this.m_composer.render();
             } catch (error) {
                 console.error("Error rendering with EffectComposer:", error);

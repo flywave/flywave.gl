@@ -2,6 +2,7 @@
     "compilerOptions": {
         "resolveJsonModule": true,
         "moduleResolution": "node",
+        "experimentalDecorators": true,
         "strict": false,
         "strictPropertyInitialization": false,
         "useDefineForClassFields": false,

@@ -7,6 +7,8 @@ import * as THREE from "three";
 
 import { BackgroundDataSource } from "./BackgroundDataSource";
 import { type CelestiaOptions, Celestia } from "./celestia/Celestia";
+
+export type { CelestiaOptions };
 import { type MapView, type MapViewOptions } from "./MapView";
 import { MapViewFog } from "./MapViewFog";
 import { SkyBackground } from "./SkyBackground";
@@ -51,6 +53,12 @@ export class MapViewEnvironment {
     constructor(private readonly m_mapView: MapView, options: MapViewEnvironmentOptions) {
         this.m_fog = new MapViewFog(this.m_mapView.scene);
         this.m_celestia = new Celestia(this.m_mapView, options, options.celestiaOptions);
+        const useBruneton =
+            options.celestiaOptions?.atmosphereEngine !== "legacy" &&
+            options.celestiaOptions?.atmosphere !== false;
+        if (useBruneton) {
+            this.m_celestia.initializeAtmosphere(this.m_mapView.renderer);
+        }
         if (options.addBackgroundDatasource !== false) {
             this.m_backgroundDataSource = new BackgroundDataSource();
             this.m_mapView.addDataSource(this.m_backgroundDataSource);
@@ -124,6 +132,10 @@ export class MapViewEnvironment {
 
     updateCelestia(options?: CelestiaOptions) {
         this.m_celestia.updateOptions(options);
+        const useBruneton = options?.atmosphereEngine !== "legacy" && options?.atmosphere !== false;
+        if (useBruneton && !this.m_celestia.isTexturesReady) {
+            this.m_celestia.initializeAtmosphere(this.m_mapView.renderer);
+        }
     }
 
     createLight(lightDescription: Light) {
