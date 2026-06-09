@@ -42,6 +42,7 @@ const main = async () => {
                     sunCastShadow: true,
                     enableSunLight: true,
                     sunIntensity: 4,
+                    sunTime:new Date().setHours(10),
                     sunShadowBias: -0.00005
                 },
                 lights: [],
@@ -171,8 +172,13 @@ const main = async () => {
 
         ui.mount(canvas.parentElement!);
 
+        let lastCameraPos = new THREE.Vector3();
         mapView.addEventListener(MapViewEventNames.Render, () => {
-            explodeView.updateSSECulling(mapView.camera, mapView.renderer);
+            const cp = mapView.camera.position;
+            if (cp.distanceTo(lastCameraPos) > 1) {
+                lastCameraPos.copy(cp);
+                explodeView.updateSSECulling(mapView.camera, mapView.renderer);
+            }
         });
 
         const spinCutterhead = () => {

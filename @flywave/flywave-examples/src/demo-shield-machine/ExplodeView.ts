@@ -20,7 +20,7 @@ export class ExplodeView {
     private animating = false;
     private _mode: ExplodeMode = "axial";
     private _transitionFrom = 1;
-    private sseThreshold = 30;
+    private sseThreshold = 50;
 
     constructor(private model: THREE.Object3D, private spreadFactor = 1.0) {
         this.analyzeParts();
