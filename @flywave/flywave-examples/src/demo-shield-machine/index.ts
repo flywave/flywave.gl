@@ -9,6 +9,7 @@ import {
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { ModelDisplayDataSource } from "./ModelDisplayDataSource";
+import { ExplodeView } from "./ExplodeView";
 
 const MODEL_URL = "dungouji.glb";
 const ENVMAP_URL = "kloofendal_48d_partly_cloudy_puresky.webp";
@@ -31,8 +32,6 @@ const main = async () => {
             maxGeometryHeight: 1000,
             projection: ellipsoidProjection,
             distance: 300,
-            // tilt:71,
-            // heading:-79,
             theme: {
                 extends: "resources/tilezen_base_globe.json",
                 environment: { url: ENVMAP_URL },
@@ -40,20 +39,19 @@ const main = async () => {
                     sunCastShadow: true,
                     enableSunLight: true,
                     sunIntensity: 4,
-                    sunShadowBias: -0.00005,
-                    // sunShadowNormalBias: 0.01
+                    sunShadowBias: -0.00005
                 },
                 lights: [],
                 postEffects: {
                     hueSaturation: { hue: 0.17, saturation: 0.39, enabled: true },
                     bloom: {
-                        enabled: true, // Enable bloom effect
+                        enabled: true,
                         luminancePassEnabled: true,
                         ignoreBackground: true,
-                        luminancePassThreshold: 0.0, // Luminance threshold
-                        strength: 5, // Strength
+                        luminancePassThreshold: 0.0,
+                        strength: 5,
                         inverted: false,
-                        radius: 0.8 // Radius
+                        radius: 0.8
                     }
                 }
             }
@@ -66,7 +64,6 @@ const main = async () => {
         await mapView.addDataSource(ds);
 
         const loader = new GLTFLoader();
-        console.log("Loading shield machine model...");
         const gltf = await loader.loadAsync(MODEL_URL);
         const model = gltf.scene;
 
@@ -84,8 +81,7 @@ const main = async () => {
 
         ds.addObject("shield-machine", wrapper);
 
-        let autoRotate = true;
-        const rotationSpeed = 0.3;
+        const explodeView = new ExplodeView(model, 0.5);
 
         const uiContainer = document.createElement("div");
         uiContainer.style.cssText = `
@@ -122,14 +118,17 @@ const main = async () => {
             return btn;
         };
 
-        const toggleBtn = createButton("暂停旋转", () => {
-            autoRotate = !autoRotate;
-            toggleBtn.textContent = autoRotate ? "暂停旋转" : "开始旋转";
+        const explodeBtn = createButton("拆解", () => {
+            explodeView.toggle();
+            explodeBtn.textContent = explodeView.isExploded ? "复原" : "拆解";
         });
-        uiContainer.appendChild(toggleBtn);
+        uiContainer.appendChild(explodeBtn);
 
         const resetBtn = createButton("重置视角", () => {
-            wrapper.rotation.z = 0;
+            if (explodeView.isExploded) {
+                explodeView.collapse();
+                explodeBtn.textContent = "拆解";
+            }
             mc.setHeading(0);
             mc.setTilt((45 * Math.PI) / 180);
         });
@@ -156,7 +155,6 @@ const main = async () => {
 
         (window as any).mv = mapView;
         (window as any).model = model;
-        console.log("Shield machine demo initialized");
     } catch (e) {
         console.error("Init error:", e);
     }
