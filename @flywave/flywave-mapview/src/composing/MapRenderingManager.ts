@@ -156,7 +156,15 @@ export interface IMapRenderingManager extends IPassManager {
         thickness: number;
         color: string;
         ghostExtrudedPolygons: boolean;
+        enabled?: boolean;
+        edgeStrength?: number;
+        pulseSpeed?: number;
     }): void;
+
+    selectOutlineObject(object: THREE.Object3D): void;
+    deselectOutlineObject(object: THREE.Object3D): void;
+    clearOutlineSelection(): void;
+    getOutlineSelectionLayer(): number;
 
     lowResPixelRatio?: number;
 
@@ -874,7 +882,19 @@ export class MapRenderingManager implements IMapRenderingManager {
      * Update outline effect options
      * @param options - Outline configuration options
      */
-    updateOutline(options: { thickness: number; color: string; ghostExtrudedPolygons: boolean }) {
+    updateOutline(options: {
+        thickness: number;
+        color: string;
+        ghostExtrudedPolygons: boolean;
+        enabled?: boolean;
+        edgeStrength?: number;
+        pulseSpeed?: number;
+    }) {
+        if (options.enabled !== undefined) {
+            this.outline.enabled = options.enabled;
+        } else {
+            this.outline.enabled = true;
+        }
         this.outline.thickness = options.thickness;
         this.outline.color = options.color;
         this.outline.ghostExtrudedPolygons = options.ghostExtrudedPolygons;
@@ -884,6 +904,12 @@ export class MapRenderingManager implements IMapRenderingManager {
             this.m_outlineEffect.visibleEdgeColor = new THREE.Color(options.color);
             this.m_outlineEffect.hiddenEdgeColor = new THREE.Color(options.color);
             this.m_outlineEffect.xRay = !options.ghostExtrudedPolygons;
+            if (options.edgeStrength !== undefined) {
+                this.m_outlineEffect.edgeStrength = options.edgeStrength;
+            }
+            if (options.pulseSpeed !== undefined) {
+                this.m_outlineEffect.setPulseSpeed(options.pulseSpeed);
+            }
         }
     }
 
@@ -949,6 +975,36 @@ export class MapRenderingManager implements IMapRenderingManager {
      */
     removeIgnoreBloomObject(object: THREE.Object3D): void {
         this.m_ignoreObjects = this.m_ignoreObjects.filter(item => item !== object);
+    }
+
+    selectOutlineObject(object: THREE.Object3D): void {
+        if (this.m_outlineEffect) {
+            const layer = this.m_outlineEffect.selectionLayer;
+            object.traverse(obj => obj.layers.enable(layer));
+            this.m_outlineEffect.selectObject(object);
+        }
+    }
+
+    deselectOutlineObject(object: THREE.Object3D): void {
+        if (this.m_outlineEffect) {
+            const layer = this.m_outlineEffect.selectionLayer;
+            object.traverse(obj => obj.layers.disable(layer));
+            this.m_outlineEffect.deselectObject(object);
+        }
+    }
+
+    clearOutlineSelection(): void {
+        if (this.m_outlineEffect) {
+            const layer = this.m_outlineEffect.selectionLayer;
+            for (const obj of Array.from(this.m_outlineEffect.selection)) {
+                obj.traverse(child => child.layers.disable(layer));
+            }
+            this.m_outlineEffect.clearSelection();
+        }
+    }
+
+    getOutlineSelectionLayer(): number {
+        return this.m_outlineEffect?.selectionLayer ?? 0;
     }
 
     /**

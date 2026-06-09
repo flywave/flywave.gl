@@ -9,12 +9,15 @@ export interface ExplodePart {
     radialOffset: THREE.Vector3;
 }
 
+const _worldSphere = new THREE.Sphere();
+
 export class ExplodeView {
     private parts: ExplodePart[] = [];
     private progress = 0;
     private targetProgress = 0;
     private animating = false;
     private _mode: ExplodeMode = "axial";
+    private sseThreshold = 30;
 
     constructor(private model: THREE.Object3D, private spreadFactor = 1.0) {
         this.analyzeParts();
@@ -60,6 +63,13 @@ export class ExplodeView {
             wrapper.add(child);
             root.add(wrapper);
 
+            child.traverse(obj => {
+                if ((obj as THREE.Mesh).isMesh) {
+                    const mesh = obj as THREE.Mesh;
+                    mesh.geometry.computeBoundingSphere();
+                }
+            });
+
             const pos = child.position.clone();
 
             const centerVal = useZ ? pos.z : pos.x;
@@ -97,6 +107,28 @@ export class ExplodeView {
     private syncOffsets() {
         for (const part of this.parts) {
             part.wrapper.position.set(0, 0, 0);
+        }
+    }
+
+    updateSSECulling(camera: THREE.Camera, renderer: THREE.WebGLRenderer) {
+        const height = renderer.domElement.height;
+        const fov = camera instanceof THREE.PerspectiveCamera ? camera.fov : 1;
+        const sseDenom = 2.0 * Math.tan((0.5 * fov * Math.PI) / 180);
+        const cameraPos = new THREE.Vector3();
+
+        for (const part of this.parts) {
+            part.object.traverse(obj => {
+                if (!(obj as THREE.Mesh).isMesh) return;
+                const mesh = obj as THREE.Mesh;
+                const sphere = mesh.geometry.boundingSphere;
+                if (!sphere) return;
+
+                _worldSphere.copy(sphere).applyMatrix4(mesh.matrixWorld);
+                const distance = Math.abs(_worldSphere.distanceToPoint(cameraPos));
+                const sse = (_worldSphere.radius * 2 * height) / (distance * sseDenom);
+
+                mesh.visible = sse >= this.sseThreshold;
+            });
         }
     }
 

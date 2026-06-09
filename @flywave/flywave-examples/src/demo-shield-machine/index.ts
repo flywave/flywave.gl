@@ -3,7 +3,8 @@ import {
     MapControls,
     ellipsoidProjection,
     GeoCoordinates,
-    WindowEventHandler
+    WindowEventHandler,
+    MapViewEventNames
 } from "@flywave/flywave.gl";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -44,7 +45,6 @@ const main = async () => {
                 lights: [],
                 postEffects: {
                     hueSaturation: { hue: 0.17, saturation: 0.39, enabled: true },
-                    smaa:true,
                     bloom: {
                         enabled: true,
                         luminancePassEnabled: true,
@@ -53,6 +53,12 @@ const main = async () => {
                         strength: 5,
                         inverted: false,
                         radius: 0.8
+                    },
+                    outline: {
+                        enabled: false,
+                        thickness: 0.1,
+                        color: "#00ccff",
+                        ghostExtrudedPolygons: false
                     }
                 }
             }
@@ -85,6 +91,19 @@ const main = async () => {
         highlighter.setRaycasterProvider((x, y) =>
             mapView.pickHandler.raycasterFromScreenPoint(x, y)
         );
+        highlighter.setOutlineProvider({
+            selectOutlineObject: obj => mapView.mapRenderingManager.selectOutlineObject(obj),
+            clearOutlineSelection: () => mapView.mapRenderingManager.clearOutlineSelection(),
+            setOutlineEnabled: enabled =>
+                mapView.mapRenderingManager.updateOutline({
+                    thickness: 0.3,
+                    color: "#00ff88",
+                    ghostExtrudedPolygons: false,
+                    edgeStrength: 5,
+                    pulseSpeed: enabled ? 1.5 : 0,
+                    enabled
+                })
+        });
 
         const eventHandler = new WindowEventHandler(canvas);
         eventHandler.addEventListener("mouseclick", (e: any) => {
@@ -184,6 +203,10 @@ const main = async () => {
         uiContainer.appendChild(infoDiv);
 
         canvas.parentElement!.appendChild(uiContainer);
+
+        mapView.addEventListener(MapViewEventNames.Render, () => {
+            explodeView.updateSSECulling(mapView.camera, mapView.renderer);
+        });
 
         (window as any).mv = mapView;
         (window as any).model = model;

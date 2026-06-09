@@ -19,6 +19,11 @@ export class ModelHighlighter {
     private storedMaterials = new Map<THREE.Mesh, OriginalMaterialState>();
     private _focusedPart: ExplodePart | null = null;
     private getRaycaster: ((x: number, y: number) => THREE.Raycaster) | null = null;
+    private outlineProvider: {
+        selectOutlineObject: (obj: THREE.Object3D) => void;
+        clearOutlineSelection: () => void;
+        setOutlineEnabled: (enabled: boolean) => void;
+    } | null = null;
 
     constructor(parts: ExplodePart[]) {
         this.parts = parts;
@@ -26,6 +31,14 @@ export class ModelHighlighter {
 
     setRaycasterProvider(provider: (x: number, y: number) => THREE.Raycaster) {
         this.getRaycaster = provider;
+    }
+
+    setOutlineProvider(provider: {
+        selectOutlineObject: (obj: THREE.Object3D) => void;
+        clearOutlineSelection: () => void;
+        setOutlineEnabled: (enabled: boolean) => void;
+    }) {
+        this.outlineProvider = provider;
     }
 
     get isFocused(): boolean {
@@ -82,6 +95,11 @@ export class ModelHighlighter {
     }
 
     private applyFocus() {
+        if (this._focusedPart && this.outlineProvider) {
+            this.outlineProvider.setOutlineEnabled(true);
+            this.outlineProvider.selectOutlineObject(this._focusedPart.wrapper);
+        }
+
         for (const part of this.parts) {
             part.object.traverse(obj => {
                 if (!(obj as THREE.Mesh).isMesh) return;
@@ -113,6 +131,12 @@ export class ModelHighlighter {
 
     private restore() {
         this._focusedPart = null;
+
+        if (this.outlineProvider) {
+            this.outlineProvider.clearOutlineSelection();
+            this.outlineProvider.setOutlineEnabled(false);
+        }
+
         this.storedMaterials.forEach((orig, mesh) => {
             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             for (const mat of materials) {
