@@ -81,7 +81,7 @@ const main = async () => {
 
         ds.addObject("shield-machine", wrapper);
 
-        const explodeView = new ExplodeView(model, 0.5);
+        const explodeView = new ExplodeView(model, 1.0);
 
         const uiContainer = document.createElement("div");
         uiContainer.style.cssText = `
@@ -123,6 +123,24 @@ const main = async () => {
             explodeBtn.textContent = explodeView.isExploded ? "复原" : "拆解";
         });
         uiContainer.appendChild(explodeBtn);
+
+        const axialBtn = createButton("轴向拆解", () => {
+            explodeView.setMode("axial");
+            if (!explodeView.isExploded) {
+                explodeView.explode();
+                explodeBtn.textContent = "复原";
+            }
+        });
+        uiContainer.appendChild(axialBtn);
+
+        const radialBtn = createButton("径向拆解", () => {
+            explodeView.setMode("radial");
+            if (!explodeView.isExploded) {
+                explodeView.explode();
+                explodeBtn.textContent = "复原";
+            }
+        });
+        uiContainer.appendChild(radialBtn);
 
         const resetBtn = createButton("重置视角", () => {
             if (explodeView.isExploded) {

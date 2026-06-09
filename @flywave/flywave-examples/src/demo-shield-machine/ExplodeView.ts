@@ -5,14 +5,19 @@ interface ExplodePart {
     targetOffset: THREE.Vector3;
 }
 
+export type ExplodeMode = "axial" | "radial";
+
 export class ExplodeView {
     private parts: ExplodePart[] = [];
+    private axialOffsets: THREE.Vector3[] = [];
+    private radialOffsets: THREE.Vector3[] = [];
     private progress = 0;
     private targetProgress = 0;
     private animating = false;
+    private currentMode: ExplodeMode = "axial";
 
-    constructor(private model: THREE.Object3D, spreadFactor = 0.5) {
-        this.analyzeParts(spreadFactor);
+    constructor(private model: THREE.Object3D, private spreadFactor = 0.5) {
+        this.analyzeParts();
     }
 
     private findExplodableRoot(obj: THREE.Object3D): THREE.Object3D {
@@ -25,7 +30,7 @@ export class ExplodeView {
         return current;
     }
 
-    private analyzeParts(spreadFactor: number) {
+    private analyzeParts() {
         this.model.updateMatrixWorld(true);
         const root = this.findExplodableRoot(this.model);
         const children = [...root.children];
@@ -35,7 +40,7 @@ export class ExplodeView {
         box.getSize(size);
         const useZ = size.z >= size.x;
         const axisLength = Math.max(useZ ? size.z : size.x, 1);
-        const spread = axisLength * spreadFactor;
+        const spread = axisLength * this.spreadFactor;
 
         children.forEach(child => {
             const wrapper = new THREE.Group();
@@ -43,25 +48,53 @@ export class ExplodeView {
             wrapper.add(child);
             root.add(wrapper);
 
-            const childBox = new THREE.Box3().setFromObject(child);
-            const childCenter = new THREE.Vector3();
-            childBox.getCenter(childCenter);
+            const pos = child.position.clone();
 
-            const centerVal = useZ ? childCenter.z : childCenter.x;
+            const centerVal = useZ ? pos.z : pos.x;
             const minVal = useZ ? box.min.z : box.min.x;
             const t = (centerVal - minVal) / axisLength;
-            const direction = t < 0.5 ? -1 : 1;
-            const distance = Math.abs(t - 0.5) * 2;
+            const dir = t < 0.5 ? -1 : 1;
+            const dist = Math.abs(t - 0.5) * 2;
+
+            this.axialOffsets.push(
+                new THREE.Vector3(useZ ? 0 : dir * spread * dist, 0, useZ ? dir * spread * dist : 0)
+            );
+
+            const radialDir = new THREE.Vector3(0, pos.y, pos.z);
+            const radialDist = radialDir.length();
+            if (radialDist > 0.01) {
+                radialDir.divideScalar(radialDist);
+            } else {
+                radialDir.set(0, 1, 0);
+            }
+            this.radialOffsets.push(radialDir.multiplyScalar(radialDist * this.spreadFactor));
 
             this.parts.push({
                 wrapper,
-                targetOffset: new THREE.Vector3(
-                    useZ ? 0 : direction * spread * distance,
-                    0,
-                    useZ ? direction * spread * distance : 0
-                )
+                targetOffset: new THREE.Vector3()
             });
         });
+
+        this.syncOffsets();
+    }
+
+    private syncOffsets() {
+        const offsets = this.currentMode === "axial" ? this.axialOffsets : this.radialOffsets;
+        for (let i = 0; i < this.parts.length; i++) {
+            this.parts[i].targetOffset.copy(offsets[i]);
+        }
+    }
+
+    setMode(mode: ExplodeMode) {
+        this.currentMode = mode;
+        this.syncOffsets();
+        if (this.progress > 0) {
+            this.applyProgress();
+        }
+    }
+
+    get mode() {
+        return this.currentMode;
     }
 
     explode() {
