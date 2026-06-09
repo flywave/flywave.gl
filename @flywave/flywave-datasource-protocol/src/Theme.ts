@@ -210,6 +210,10 @@ export interface Celestia {
     sunColor?: string;
 
     enableSunLight?: boolean;
+
+    sunShadowBias?: number;
+
+    sunShadowNormalBias?: number;
 }
 
 /**

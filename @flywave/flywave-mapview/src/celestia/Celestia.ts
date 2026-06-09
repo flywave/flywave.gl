@@ -26,6 +26,10 @@ export interface CelestiaOptions {
     sunIntensity?: number;
 
     sunColor?: string;
+
+    sunShadowBias?: number;
+
+    sunShadowNormalBias?: number;
 }
 
 export class Celestia extends THREE.Object3D {
@@ -89,6 +93,10 @@ export class Celestia extends THREE.Object3D {
         if (options?.sunIntensity) this.sun.setUserIntensityFactor(options.sunIntensity);
 
         if (options?.sunCastShadow !== undefined) this.sun.setUserCastShadow(options.sunCastShadow);
+
+        if (options?.sunShadowBias !== undefined) this.sun.setUserShadowBias(options.sunShadowBias);
+        if (options?.sunShadowNormalBias !== undefined)
+            this.sun.setUserShadowNormalBias(options.sunShadowNormalBias);
 
         if (options?.sunTime !== undefined) this.currentDate = new Date(options.sunTime);
 

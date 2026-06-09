@@ -96,6 +96,14 @@ export class SunLight extends THREE.Object3D {
         this.light.castShadow = castShadow;
     }
 
+    public setUserShadowBias(bias: number): void {
+        this.light.shadow.bias = bias;
+    }
+
+    public setUserShadowNormalBias(normalBias: number): void {
+        this.light.shadow.normalBias = normalBias;
+    }
+
     // 更新光照
     public update(date: Date): void {
         // 计算太阳位置
@@ -153,7 +161,7 @@ export class SunLight extends THREE.Object3D {
             box.expandByPoint(point);
         });
 
-        const distance = this.m_mapView.camera.position.distanceTo(this.m_mapView.worldTarget)*2;
+        const distance = this.m_mapView.camera.position.distanceTo(this.m_mapView.worldTarget) * 2;
         const min = distance * ((this.m_mapView.camera.fov * Math.PI) / 180);
 
         camera.left = Math.max(box.min.x, -min);
