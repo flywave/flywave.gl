@@ -1,15 +1,15 @@
 import {
     MapView,
     MapControls,
-    MapControlsUI,
-    MapViewEventNames,
     ellipsoidProjection,
-    GeoCoordinates
+    GeoCoordinates,
+    WindowEventHandler
 } from "@flywave/flywave.gl";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { ModelDisplayDataSource } from "./ModelDisplayDataSource";
 import { ExplodeView } from "./ExplodeView";
+import { ModelHighlighter } from "./ModelHighlighter";
 
 const MODEL_URL = "dungouji.glb";
 const ENVMAP_URL = "kloofendal_48d_partly_cloudy_puresky.webp";
@@ -44,6 +44,7 @@ const main = async () => {
                 lights: [],
                 postEffects: {
                     hueSaturation: { hue: 0.17, saturation: 0.39, enabled: true },
+                    smaa:true,
                     bloom: {
                         enabled: true,
                         luminancePassEnabled: true,
@@ -57,7 +58,7 @@ const main = async () => {
             }
         });
 
-        mapView.mapRenderingManager.msaaEnabled = true;
+        // mapView.mapRenderingManager.msaaEnabled = true;
         const mc = new MapControls(mapView);
 
         const ds = new ModelDisplayDataSource({ name: "shield-machine-display" });
@@ -76,12 +77,24 @@ const main = async () => {
 
         const wrapper = new THREE.Group();
         wrapper.add(model);
-
         ellipsoidProjection.projectPoint(new GeoCoordinates(90, 0, 300), wrapper.position);
-
         ds.addObject("shield-machine", wrapper);
 
         const explodeView = new ExplodeView(model, 1.0);
+        const highlighter = new ModelHighlighter(explodeView.getParts());
+        highlighter.setRaycasterProvider((x, y) =>
+            mapView.pickHandler.raycasterFromScreenPoint(x, y)
+        );
+
+        const eventHandler = new WindowEventHandler(canvas);
+        eventHandler.addEventListener("mouseclick", (e: any) => {
+            const hit = highlighter.hitTest(e.layerX, e.layerY);
+            if (hit) {
+                highlighter.toggleFocus(hit);
+            } else if (highlighter.isFocused) {
+                highlighter.unfocus();
+            }
+        });
 
         const uiContainer = document.createElement("div");
         uiContainer.style.cssText = `
@@ -147,6 +160,7 @@ const main = async () => {
                 explodeView.collapse();
                 explodeBtn.textContent = "拆解";
             }
+            highlighter.unfocus();
             mc.setHeading(0);
             mc.setTilt((45 * Math.PI) / 180);
         });
