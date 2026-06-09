@@ -9,30 +9,32 @@ import {
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { ModelDisplayDataSource } from "./ModelDisplayDataSource";
-import { ExplodeView } from "./ExplodeView";
+import { ExplodeView, type ExplodePart } from "./ExplodeView";
 import { ModelHighlighter } from "./ModelHighlighter";
+import { UIManager } from "./UIManager";
+import { getPartInfo } from "./mockData";
 
 const MODEL_URL = "dungouji.glb";
 const ENVMAP_URL = "kloofendal_48d_partly_cloudy_puresky.webp";
 
-const getMapCanvas = (): HTMLCanvasElement => {
-    const c = document.getElementById("mapCanvas") as HTMLCanvasElement;
-    if (!c) throw new Error("Map canvas not found");
-    return c;
-};
-
 const main = async () => {
     try {
-        const canvas = getMapCanvas();
+        const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
 
         const mapView = new MapView({
             enablePolarDataSource: false,
             canvas,
-            target: new GeoCoordinates(90, 0, 0),
+            target: new GeoCoordinates(
+                89.99132938177085,
+                70.95494731411642,
+                0.0000028349459171295166
+            ),
+            tilt: 64.30439935505709,
+            heading: -64.75131505164961,
             logarithmicDepthBuffer: true,
             maxGeometryHeight: 1000,
             projection: ellipsoidProjection,
-            distance: 300,
+            distance: 3000,
             theme: {
                 extends: "resources/tilezen_base_globe.json",
                 environment: { url: ENVMAP_URL },
@@ -56,15 +58,15 @@ const main = async () => {
                     },
                     outline: {
                         enabled: false,
-                        thickness: 0.1,
-                        color: "#00ccff",
+                        thickness: 0.3,
+                        color: "#00ff88",
                         ghostExtrudedPolygons: false
                     }
                 }
             }
         });
 
-        // mapView.mapRenderingManager.msaaEnabled = true;
+        mapView.mapRenderingManager.msaaEnabled = true;
         const mc = new MapControls(mapView);
 
         const ds = new ModelDisplayDataSource({ name: "shield-machine-display" });
@@ -87,7 +89,18 @@ const main = async () => {
         ds.addObject("shield-machine", wrapper);
 
         const explodeView = new ExplodeView(model, 1.0);
-        const highlighter = new ModelHighlighter(explodeView.getParts());
+        const parts = explodeView.getParts();
+
+        const cutterheadParts = explodeView.getCutterheadParts();
+        const cutterheadPivot = new THREE.Group();
+        const explodableRoot = explodeView.getExplodableRoot();
+        explodableRoot.add(cutterheadPivot);
+        for (const p of cutterheadParts) {
+            explodableRoot.remove(p.wrapper);
+            cutterheadPivot.add(p.wrapper);
+        }
+
+        const highlighter = new ModelHighlighter(parts);
         highlighter.setRaycasterProvider((x, y) =>
             mapView.pickHandler.raycasterFromScreenPoint(x, y)
         );
@@ -105,108 +118,69 @@ const main = async () => {
                 })
         });
 
+        for (const part of parts) {
+            const pos = new THREE.Vector3();
+            part.object.getWorldPosition(pos);
+            part.wrapper.userData.partInfo = getPartInfo(part.object.name || "", pos.z);
+        }
+
         const eventHandler = new WindowEventHandler(canvas);
         eventHandler.addEventListener("mouseclick", (e: any) => {
             const hit = highlighter.hitTest(e.layerX, e.layerY);
             if (hit) {
                 highlighter.toggleFocus(hit);
+                if (highlighter.isFocused) {
+                    const info = hit.wrapper.userData.partInfo;
+                    if (info) {
+                        ui.showPartInfo(info, hit.object.name);
+                    }
+                } else {
+                    ui.showOverview();
+                }
             } else if (highlighter.isFocused) {
                 highlighter.unfocus();
+                ui.showOverview();
             }
         });
 
-        const uiContainer = document.createElement("div");
-        uiContainer.style.cssText = `
-            position: absolute;
-            top: 16px;
-            right: 16px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        `;
-
-        const createButton = (label: string, onClick: () => void) => {
-            const btn = document.createElement("button");
-            btn.textContent = label;
-            btn.style.cssText = `
-                padding: 8px 16px;
-                background: rgba(30, 58, 95, 0.85);
-                color: #fff;
-                border: 1px solid rgba(255,255,255,0.2);
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 13px;
-                font-family: sans-serif;
-                transition: background 0.2s;
-            `;
-            btn.addEventListener("mouseenter", () => {
-                btn.style.background = "rgba(30, 58, 95, 1)";
-            });
-            btn.addEventListener("mouseleave", () => {
-                btn.style.background = "rgba(30, 58, 95, 0.85)";
-            });
-            btn.addEventListener("click", onClick);
-            return btn;
-        };
-
-        const explodeBtn = createButton("拆解", () => {
-            explodeView.toggle();
-            explodeBtn.textContent = explodeView.isExploded ? "复原" : "拆解";
-        });
-        uiContainer.appendChild(explodeBtn);
-
-        const axialBtn = createButton("轴向拆解", () => {
-            explodeView.setMode("axial");
-            if (!explodeView.isExploded) {
+        const ui = new UIManager({
+            onExplodeAxial: () => {
+                explodeView.setMode("axial");
                 explodeView.explode();
-                explodeBtn.textContent = "复原";
-            }
-        });
-        uiContainer.appendChild(axialBtn);
-
-        const radialBtn = createButton("径向拆解", () => {
-            explodeView.setMode("radial");
-            if (!explodeView.isExploded) {
+                ui.setExplodeButtonActive("axial");
+            },
+            onExplodeRadial: () => {
+                explodeView.setMode("radial");
                 explodeView.explode();
-                explodeBtn.textContent = "复原";
-            }
-        });
-        uiContainer.appendChild(radialBtn);
-
-        const resetBtn = createButton("重置视角", () => {
-            if (explodeView.isExploded) {
+                ui.setExplodeButtonActive("radial");
+            },
+            onCollapse: () => {
                 explodeView.collapse();
-                explodeBtn.textContent = "拆解";
+                ui.setExplodeButtonActive(null);
+            },
+            onReset: () => {
+                explodeView.collapse();
+                explodeView.setMode("axial");
+                highlighter.unfocus();
+                ui.showOverview();
+                ui.setExplodeButtonActive(null);
+                mc.setHeading(0);
+                mc.setTilt((45 * Math.PI) / 180);
             }
-            highlighter.unfocus();
-            mc.setHeading(0);
-            mc.setTilt((45 * Math.PI) / 180);
         });
-        uiContainer.appendChild(resetBtn);
 
-        const infoDiv = document.createElement("div");
-        infoDiv.style.cssText = `
-            padding: 12px 16px;
-            background: rgba(0,0,0,0.6);
-            color: #fff;
-            border-radius: 8px;
-            font-size: 13px;
-            font-family: sans-serif;
-            line-height: 1.6;
-        `;
-        infoDiv.innerHTML = `
-            <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">盾构机 (TBM)</div>
-            <div>全断面隧道掘进机</div>
-            <div style="margin-top:4px;color:#aaa;">鼠标左键旋转 / 滚轮缩放 / 右键平移</div>
-        `;
-        uiContainer.appendChild(infoDiv);
-
-        canvas.parentElement!.appendChild(uiContainer);
+        ui.mount(canvas.parentElement!);
 
         mapView.addEventListener(MapViewEventNames.Render, () => {
             explodeView.updateSSECulling(mapView.camera, mapView.renderer);
         });
+
+        const spinCutterhead = () => {
+            cutterheadPivot.rotation.z += 0.005;
+            mapView.update();
+            requestAnimationFrame(spinCutterhead);
+        };
+        spinCutterhead();
 
         (window as any).mv = mapView;
         (window as any).model = model;

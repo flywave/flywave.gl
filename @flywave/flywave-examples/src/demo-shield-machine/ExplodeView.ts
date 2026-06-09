@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { classifyPart } from "./mockData";
 
 export type ExplodeMode = "axial" | "radial";
 
@@ -7,6 +8,7 @@ export interface ExplodePart {
     object: THREE.Object3D;
     axialOffset: THREE.Vector3;
     radialOffset: THREE.Vector3;
+    transitionStart?: THREE.Vector3;
 }
 
 const _worldSphere = new THREE.Sphere();
@@ -17,6 +19,7 @@ export class ExplodeView {
     private targetProgress = 0;
     private animating = false;
     private _mode: ExplodeMode = "axial";
+    private _transitionFrom = 1;
     private sseThreshold = 30;
 
     constructor(private model: THREE.Object3D, private spreadFactor = 1.0) {
@@ -25,6 +28,20 @@ export class ExplodeView {
 
     getParts(): ExplodePart[] {
         return this.parts;
+    }
+
+    getCutterheadParts(): ExplodePart[] {
+        this.model.updateMatrixWorld(true);
+        const root = this.findExplodableRoot(this.model);
+        return this.parts.filter(p => {
+            const localPos = root.worldToLocal(p.object.getWorldPosition(new THREE.Vector3()));
+            const sub = classifyPart(p.object.name || "", localPos.z);
+            return sub && sub.id === "cutterhead";
+        });
+    }
+
+    getExplodableRoot(): THREE.Object3D {
+        return this.findExplodableRoot(this.model);
     }
 
     get mode(): ExplodeMode {
@@ -133,9 +150,15 @@ export class ExplodeView {
     }
 
     setMode(mode: ExplodeMode) {
+        if (this._mode === mode) return;
         this._mode = mode;
         if (this.progress > 0) {
-            this.applyProgress();
+            for (const part of this.parts) {
+                part.transitionStart = part.wrapper.position.clone();
+            }
+            this._transitionFrom = 0;
+            this.animating = false;
+            this.startAnimation();
         }
     }
 
@@ -162,28 +185,51 @@ export class ExplodeView {
     private animate() {
         if (!this.animating) return;
 
+        const transitioning = this._transitionFrom < 1;
         const step = 1 / 1.5 / 60;
-        if (Math.abs(this.progress - this.targetProgress) < 0.002) {
+
+        if (!transitioning && Math.abs(this.progress - this.targetProgress) < 0.002) {
             this.progress = this.targetProgress;
             this.applyProgress();
             this.animating = false;
             return;
         }
-        this.progress += this.targetProgress > this.progress ? step : -step;
-        this.progress = THREE.MathUtils.clamp(this.progress, 0, 1);
+
+        if (!transitioning) {
+            this.progress += this.targetProgress > this.progress ? step : -step;
+            this.progress = THREE.MathUtils.clamp(this.progress, 0, 1);
+        }
+
         this.applyProgress();
 
         requestAnimationFrame(() => this.animate());
     }
 
     private applyProgress() {
+        const transitioning = this._transitionFrom < 1;
         for (const part of this.parts) {
             const offset = this._mode === "axial" ? part.axialOffset : part.radialOffset;
-            part.wrapper.position.set(
-                offset.x * this.progress,
-                offset.y * this.progress,
-                offset.z * this.progress
-            );
+            const tx = offset.x * this.progress;
+            const ty = offset.y * this.progress;
+            const tz = offset.z * this.progress;
+            if (transitioning && part.transitionStart) {
+                part.wrapper.position.lerpVectors(
+                    part.transitionStart,
+                    new THREE.Vector3(tx, ty, tz),
+                    this._transitionFrom
+                );
+            } else {
+                part.wrapper.position.set(tx, ty, tz);
+            }
+        }
+        if (transitioning) {
+            this._transitionFrom = THREE.MathUtils.clamp(this._transitionFrom + 1 / 1.5 / 60, 0, 1);
+            if (this._transitionFrom >= 1) {
+                this.animating = false;
+                for (const part of this.parts) {
+                    delete part.transitionStart;
+                }
+            }
         }
     }
 }
