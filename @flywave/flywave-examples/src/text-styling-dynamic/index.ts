@@ -15,6 +15,7 @@ import {
 import { GUI } from "dat.gui";
 import * as Stats from "stats.js";
 import * as THREE from "three";
+import { WebGPURenderer } from "three/webgpu";
 
 /**
  * This example showcases how [[TextCanvas]] can handle dynamic loading of multiple [[FontCatalog]]
@@ -60,7 +61,7 @@ export namespace TextStylingDynamicExample {
     };
 
     // Three.js renderer and camera
-    let webglRenderer: THREE.WebGLRenderer;
+    let webglRenderer: WebGPURenderer;
     let camera: THREE.OrthographicCamera;
 
     // Text rendering related
@@ -376,13 +377,10 @@ export namespace TextStylingDynamicExample {
      * Main initialization function
      */
     function main() {
-        // Initialize Three.JS, enable backward compatibility for three.js <= 0.117
-        const WebGL1Renderer = (THREE as any).WebGL1Renderer as
-            | typeof THREE.WebGLRenderer
-            | undefined;
-        webglRenderer = new (WebGL1Renderer ?? THREE.WebGLRenderer)({
+        webglRenderer = new WebGPURenderer({
             canvas: document.getElementById(CONFIG.CANVAS_ELEMENT_ID) as HTMLCanvasElement
         });
+        webglRenderer.init();
         webglRenderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
         webglRenderer.autoClear = false;
         webglRenderer.setClearColor(0xffffff);
@@ -417,6 +415,7 @@ export namespace TextStylingDynamicExample {
         FontCatalog.load(CONFIG.FONT_CATALOG_PATH, 2048).then((loadedFontCatalog: FontCatalog) => {
             textCanvas = new TextCanvas({
                 renderer: webglRenderer,
+                rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false },
                 fontCatalog: loadedFontCatalog,
                 minGlyphCount: 16,
                 maxGlyphCount: CONFIG.CHARACTER_COUNT

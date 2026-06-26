@@ -2,6 +2,7 @@
 
 // src/HeightHandle.ts
 import * as THREE from "three";
+import type { Renderer } from "three/webgpu";
 
 import { FixedSizeArrow } from "./FixedSizeArrow";
 
@@ -51,7 +52,7 @@ export class HeightHandle extends THREE.Object3D {
     }
 
     // Update size (maintain fixed screen size based on camera distance)
-    public updateSize(camera: THREE.Camera, renderer?: THREE.WebGLRenderer): void {
+    public updateSize(camera: THREE.Camera, renderer?: Renderer): void {
         this.arrow.updateSize(camera, renderer);
     }
 

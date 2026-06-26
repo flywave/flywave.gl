@@ -42,7 +42,6 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         canvas: canvas,
         target: initialLocation,
         enablePolarDataSource: false,
-        logarithmicDepthBuffer: false,
         zoomLevel: 14,
         tilt: 45,
         heading: 0,

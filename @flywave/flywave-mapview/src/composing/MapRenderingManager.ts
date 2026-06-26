@@ -359,6 +359,8 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_renderer?: Renderer;
     private m_scene?: THREE.Scene;
     private m_camera?: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+    private m_postProcessingAvailable: boolean = false;
+    private m_postProcessingChecked: boolean = false;
 
     private m_composer?: EffectComposer;
     private m_mainRenderPass?: RenderPass;
@@ -430,8 +432,13 @@ export class MapRenderingManager implements IMapRenderingManager {
             return;
         }
 
-        // Initialize composer and main render pass
-        this.m_composer = new EffectComposer(this.m_renderer as unknown as THREE.WebGLRenderer, {
+        // Initialize composer and main render pass.
+        // postprocessing v6 requires WebGLRenderer in its type signature, but the
+        // Renderer's WebGL backend is fully compatible at runtime. This path is
+        // only reached when m_postProcessingAvailable is true (WebGL backend).
+        const webGLRenderer: THREE.WebGLRenderer = this
+            .m_renderer as unknown as THREE.WebGLRenderer;
+        this.m_composer = new EffectComposer(webGLRenderer, {
             multisampling: this.m_dynamicMsaaSamplingLevel,
             stencilBuffer: true,
             depthBuffer: true
@@ -968,6 +975,19 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_renderer = renderer;
         this.m_scene = scene;
         this.m_camera = camera;
+
+        // The postprocessing library (v6) relies on WebGLRenderer-specific APIs
+        // (getContext, getContextAttributes) that are absent on WebGPURenderer.
+        // Detect support once and bypass EffectComposer when unavailable.
+        if (!this.m_postProcessingChecked) {
+            this.m_postProcessingAvailable = !("isWebGPUBackend" in renderer.backend);
+            this.m_postProcessingChecked = true;
+        }
+
+        if (!this.m_postProcessingAvailable) {
+            renderer.render(scene, camera);
+            return;
+        }
 
         // Update depth copy pass scene and camera
         if (this.m_depthCopyPass) {

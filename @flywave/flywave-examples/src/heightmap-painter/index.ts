@@ -20,8 +20,6 @@ import {
 import { HeightmapPainter } from "@flywave/flywave-heightmap-painter";
 import { CESIUM_ION_TOKEN } from "../token-config.js";
 
-
-
 class MockMapView extends MapView {
     get isDynamicFrame() {
         return true;
@@ -42,7 +40,7 @@ class MockMapView extends MapView {
             //     zoomLevel,
             //     dataSources,
             //     elevationRangeSource
-            // );column 
+            // );column
 
             if (!dataSources[1])
                 return {
@@ -54,7 +52,15 @@ class MockMapView extends MapView {
                     {
                         dataSource: dataSources[1],
                         visibleTileKeys: [
-                            new TileKeyEntry(TileKey.fromRowColumnLevel(92039, 217068, 17).parent().parent().parent().parent(), 1, 0), 
+                            new TileKeyEntry(
+                                TileKey.fromRowColumnLevel(92039, 217068, 17)
+                                    .parent()
+                                    .parent()
+                                    .parent()
+                                    .parent(),
+                                1,
+                                0
+                            )
                             // new TileKeyEntry(TileKey.fromRowColumnLevel(2, 2, 2), 1, 0),
                             // new TileKeyEntry(TileKey.fromRowColumnLevel(2, 1, 2), 1, 0)
                             // new TileKeyEntry(TileKey.fromRowColumnLevel(3, 1, 2), 1, 0)
@@ -125,7 +131,6 @@ class HeightmapPainterExample {
             target: new GeoCoordinates(36.4, 118.1, 1000),
             zoomLevel: 17,
             projection: ellipsoidProjection,
-            logarithmicDepthBuffer: false,
             canvas: canvas,
             theme: {
                 extends: "resources/tilezen_base.json"

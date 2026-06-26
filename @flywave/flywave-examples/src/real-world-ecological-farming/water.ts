@@ -14,7 +14,7 @@ import {
     Scene,
     WebGLRenderer
 } from "three";
-import { Object3D } from "three/src/Three.Core";
+import { Object3D } from "three";
 
 interface WaterMaterialOptions {
     alpha?: number;

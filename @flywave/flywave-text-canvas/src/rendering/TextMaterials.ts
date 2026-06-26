@@ -168,31 +168,19 @@ interface RawShaderMaterialParameters extends THREE.ShaderMaterialParameters {
 }
 
 class RawShaderMaterial extends THREE.RawShaderMaterial {
-    /**
-     * The constructor of `RawShaderMaterial`.
-     *
-     * @param params - `RawShaderMaterial` parameters.  Always required except when cloning
-     * another material.
-     */
     constructor(params?: RawShaderMaterialParameters) {
-        const isWebGL2 = params?.rendererCapabilities.isWebGL2 === true;
-
         const shaderParams: THREE.ShaderMaterialParameters | undefined = params
             ? {
                   ...params,
-                  glslVersion: isWebGL2 ? THREE.GLSL3 : THREE.GLSL1,
-                  vertexShader:
-                      isWebGL2 && params.vertexShader
-                          ? convertVertexShaderToWebGL2(params.vertexShader)
-                          : params.vertexShader,
-                  fragmentShader:
-                      isWebGL2 && params.fragmentShader
-                          ? convertFragmentShaderToWebGL2(params.fragmentShader)
-                          : params.fragmentShader
+                  glslVersion: THREE.GLSL3,
+                  vertexShader: params.vertexShader
+                      ? convertVertexShaderToWebGL2(params.vertexShader)
+                      : params.vertexShader,
+                  fragmentShader: params.fragmentShader
+                      ? convertFragmentShaderToWebGL2(params.fragmentShader)
+                      : params.fragmentShader
               }
             : undefined;
-        // Remove properties that are not in THREE.ShaderMaterialParameters, otherwise THREE.js
-        // will log warnings.
         if (shaderParams) {
             delete (shaderParams as any).rendererCapabilities;
         }

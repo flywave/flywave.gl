@@ -51,7 +51,6 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         target: initialLocation, // Initial target position
         zoomLevel: 17, // Initial zoom level
         tilt: 45, // Initial tilt angle
-        logarithmicDepthBuffer: false, // Disable logarithmic depth buffer
         heading: 1.5413763202653008, // Initial heading angle
         canvas: canvas, // Specify render canvas
         theme: {

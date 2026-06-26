@@ -90,11 +90,11 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
         rules: [
             {
                 test: /\.css$/,
-                use: ['style-loader', 'css-loader']
+                use: ["style-loader", "css-loader"]
             },
             {
                 test: /\.(scss|sass)$/,
-                use: ['style-loader', 'css-loader', 'sass-loader']
+                use: ["style-loader", "css-loader", "sass-loader"]
             }
         ]
     },
@@ -195,7 +195,6 @@ const browserConfig = merge(commonConfig, {
         filename: "[name]_bundle.js",
         libraryTarget: "module"
     },
-    externals: ["three"],
     optimization: {
         splitChunks: {
             chunks: "all",

@@ -27,7 +27,13 @@ export interface RawShaderMaterialParameters
         THREE.ShaderMaterialParameters {}
 
 /**
- * Base class for all raw shader materials. Ensures WebGL2 compatibility for WebGL1 shaders.
+ * Base class for all raw shader materials.
+ *
+ * All shaders are compiled as GLSL3 (ES 3.00) since both the WebGPU WebGL2
+ * backend and native WebGL2 contexts support it. The GLSL1-to-GLSL3 conversion
+ * via {@link convertVertexShaderToWebGL2} / {@link convertFragmentShaderToWebGL2}
+ * is applied unconditionally to remain compatible with shaders authored in
+ * legacy GLSL1 syntax.
  */
 export class RawShaderMaterial extends THREE.RawShaderMaterial {
     /**
@@ -37,20 +43,16 @@ export class RawShaderMaterial extends THREE.RawShaderMaterial {
      * another material.
      */
     constructor(params?: RawShaderMaterialParameters) {
-        const isWebGL2 = params?.rendererCapabilities.isWebGL2 === true;
-
         const shaderParams: THREE.ShaderMaterialParameters | undefined = params
             ? {
                   ...params,
-                  glslVersion: isWebGL2 ? THREE.GLSL3 : THREE.GLSL1,
-                  vertexShader:
-                      isWebGL2 && params.vertexShader
-                          ? convertVertexShaderToWebGL2(params.vertexShader)
-                          : params.vertexShader,
-                  fragmentShader:
-                      isWebGL2 && params.fragmentShader
-                          ? convertFragmentShaderToWebGL2(params.fragmentShader)
-                          : params.fragmentShader
+                  glslVersion: THREE.GLSL3,
+                  vertexShader: params.vertexShader
+                      ? convertVertexShaderToWebGL2(params.vertexShader)
+                      : params.vertexShader,
+                  fragmentShader: params.fragmentShader
+                      ? convertFragmentShaderToWebGL2(params.fragmentShader)
+                      : params.fragmentShader
               }
             : undefined;
         // Remove properties that are not in THREE.ShaderMaterialParameters, otherwise THREE.js
@@ -61,7 +63,7 @@ export class RawShaderMaterial extends THREE.RawShaderMaterial {
         super(shaderParams);
         this.invalidateFog();
         this.invalidateLogarithmicDepthBuffer(
-            params?.rendererCapabilities.logarithmicDepthBuffer as boolean
+            params?.rendererCapabilities.logarithmicDepthBuffer ?? false
         );
         this.setOpacity(shaderParams?.opacity);
     }

@@ -54,7 +54,6 @@ const initializeMapView = (
     return new MapView({
         projection: sphereProjection,
         target: CONFIG.INITIAL_COORDINATES,
-        logarithmicDepthBuffer: useLogarithmicDepth,
         enablePolarDataSource: false,
         heading: CONFIG.HEADING,
         tilt: CONFIG.TILT,
@@ -205,8 +204,8 @@ class DepthReadingController {
             .listen();
 
         infoFolder
-            .add({ current: this.mapView.renderer.capabilities.logarithmicDepthBuffer }, "current")
-            .name("Current Logarithmic Depth")
+            .add({ current: false }, "current")
+            .name("Current Log Depth (deprecated)")
             .listen();
 
         infoFolder.open();
@@ -315,7 +314,7 @@ class DepthReadingController {
             const material = new THREE.MeshBasicMaterial({
                 color: CONFIG.CLICK_POINT_COLOR,
                 transparent: true,
-                depthWrite:false,
+                depthWrite: false,
                 opacity: 0.8
             });
             this.clickPoint = new THREE.Mesh(geometry, material);

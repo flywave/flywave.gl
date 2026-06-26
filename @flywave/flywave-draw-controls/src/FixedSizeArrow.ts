@@ -2,6 +2,7 @@
 
 // FixedSizeArrow.ts
 import * as THREE from "three";
+import type { Renderer } from "three/webgpu";
 
 /**
  * Fixed size arrow component options
@@ -112,7 +113,7 @@ export class FixedSizeArrow extends THREE.Object3D {
      * @param camera Camera
      * @param renderer Renderer (optional, for more accurate size calculation)
      */
-    public updateSize(camera: THREE.Camera, renderer?: THREE.WebGLRenderer): void {
+    public updateSize(camera: THREE.Camera, renderer?: Renderer): void {
         if (!camera) return;
 
         // Calculate distance factor
@@ -260,14 +261,14 @@ export class FixedSizeArrow extends THREE.Object3D {
 export class FixedSizeArrowSystem {
     private readonly _arrows = new Set<FixedSizeArrow>();
     private _camera: THREE.Camera | null = null;
-    private _renderer: THREE.WebGLRenderer | null = null;
+    private _renderer: Renderer | null = null;
 
     /**
      * Create arrow system
      * @param camera Camera
      * @param renderer Renderer (optional)
      */
-    constructor(camera: THREE.Camera, renderer?: THREE.WebGLRenderer) {
+    constructor(camera: THREE.Camera, renderer?: Renderer) {
         this._camera = camera;
         this._renderer = renderer || null;
     }
@@ -342,14 +343,14 @@ export class FixedSizeArrowSystem {
      * Set renderer
      * @param renderer Renderer instance
      */
-    public setRenderer(renderer: THREE.WebGLRenderer): void {
+    public setRenderer(renderer: Renderer): void {
         this._renderer = renderer;
     }
 
     /**
      * Get current renderer
      */
-    public getRenderer(): THREE.WebGLRenderer | null {
+    public getRenderer(): Renderer | null {
         return this._renderer;
     }
 

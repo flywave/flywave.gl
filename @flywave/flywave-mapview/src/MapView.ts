@@ -871,6 +871,8 @@ export class MapView extends EventDispatcher {
     private m_updatePending: boolean = false;
     private readonly m_renderer: Renderer;
     private readonly m_rendererCapabilities: RendererCapabilities;
+    private readonly m_rendererReady: Promise<void>;
+    private m_rendererInitialized: boolean = false;
     private m_frameNumber = 0;
 
     private readonly m_textElementsRenderer: TextElementsRenderer;
@@ -1058,6 +1060,10 @@ export class MapView extends EventDispatcher {
             alpha: this.m_options.alpha,
             reversedDepthBuffer: true,
             ...(powerPreference !== undefined ? { powerPreference } : {})
+        });
+
+        this.m_rendererReady = this.m_renderer.init().then(() => {
+            this.m_rendererInitialized = true;
         });
 
         this.m_renderer.autoClear = false;
@@ -1353,6 +1359,7 @@ export class MapView extends EventDispatcher {
             this.m_animationFrameHandle = undefined;
         }
 
+        // Remove legacy WebGL context event listeners.
         this.canvas.removeEventListener("webglcontextlost", this.onWebGLContextLost);
         this.canvas.removeEventListener("webglcontextrestored", this.onWebGLContextRestored);
 
@@ -1367,7 +1374,15 @@ export class MapView extends EventDispatcher {
         }
         this.m_visibleTiles.clearTileCache();
         this.m_textElementsRenderer.clearRenderStates();
-        this.m_renderer.dispose();
+
+        // Ensure the renderer backend is initialized before disposing to avoid
+        // rejecting the init promise or leaking GPU resources.
+        this.m_rendererReady.then(() => {
+            if (!this.m_disposed) {
+                return;
+            }
+            this.m_renderer.dispose();
+        });
 
         if (freeContext) {
             // The renderer's backend context is released as part of dispose().
@@ -1751,6 +1766,14 @@ export class MapView extends EventDispatcher {
      */
     get renderer(): Renderer {
         return this.m_renderer;
+    }
+
+    /**
+     * Resolves when the renderer backend has finished initializing.
+     * Await this before calling renderer methods directly.
+     */
+    get ready(): Promise<void> {
+        return this.m_rendererReady;
     }
 
     /**
@@ -3477,6 +3500,12 @@ export class MapView extends EventDispatcher {
         // Render loop shouldn't run when synchronous rendering is enabled or if `MapView` has been
         // disposed of.
         if (this.m_options.synchronousRendering === true || this.disposed) {
+            return;
+        }
+
+        // Defer rendering until the renderer backend has finished initializing.
+        if (!this.m_rendererInitialized) {
+            this.m_animationFrameHandle = requestAnimationFrame(this.handleRequestAnimationFrame);
             return;
         }
 

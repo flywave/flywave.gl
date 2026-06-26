@@ -37,7 +37,6 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 6, // Initial zoom level
         tilt: 45, // Initial tilt angle
         heading: 1.5413763202653008, // Initial heading angle
-        logarithmicDepthBuffer: true, // Enable logarithmic depth buffer
         canvas: canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration

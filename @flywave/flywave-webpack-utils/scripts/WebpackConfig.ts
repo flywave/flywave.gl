@@ -259,7 +259,8 @@ export function addWebpackConfig(config?: Configuration, flywaveConfig?: Flywave
         },
         mode,
         externals: {
-            three: "THREE"
+            three: "THREE",
+            "three/webgpu": "three/webgpu"
         }
     };
     const typescriptConfig: Configuration = {
