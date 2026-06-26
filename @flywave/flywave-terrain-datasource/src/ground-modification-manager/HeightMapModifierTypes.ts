@@ -7,11 +7,16 @@ export type HeightMapSourceData =
     | { type: "url"; url: string }
     | { type: "data"; data: Float32Array | Uint8Array; width: number; height: number };
 
+export type HeightOperation = "add" | "replace";
+
 export interface HeightMapModifier {
     id: string;
     source: HeightMapSourceData;
     geoBox: GeoBox;
     enabled: boolean;
+    heightOperation?: HeightOperation;
+    minHeight?: number;
+    maxHeight?: number;
 }
 
 export interface SerializedHeightMapModifier {

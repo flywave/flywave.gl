@@ -82,6 +82,7 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
                 this.dataSource.getProjectionSwitchController(),
                 this.dataSource.tileBaseGeometryBuilder
             );
+            terrainMesh.setModifierManager(this.dataSource.getGroundModificationManager());
             // terrainMesh.displacement.add(this.tile.center.clone().multiplyScalar(-1));
             // If we have DEM data, set up the height map
             if (demTile && demTile.resource) {

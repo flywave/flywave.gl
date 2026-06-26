@@ -112,9 +112,20 @@ class ElevationRangeSource implements IElevationRangeSource {
                 calculationStatus: CalculationStatus.PendingApproximate
             };
         }
+        let minElevation = range.min;
+        let maxElevation = range.max;
+        const manager = this.dataSource.getGroundModificationManager();
+        if (manager.getModifierCount() > 0) {
+            const tileGeoBox = this.dataSource.getTilingScheme().getGeoBox(tikeKey);
+            const delta = manager.getModifierHeightRange(tileGeoBox);
+            if (delta) {
+                minElevation += delta.minDelta;
+                maxElevation += delta.maxDelta;
+            }
+        }
         return {
-            minElevation: range.min,
-            maxElevation: range.max,
+            minElevation,
+            maxElevation,
             calculationStatus: CalculationStatus.FinalPrecise
         };
     };

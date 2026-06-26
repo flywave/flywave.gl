@@ -1,246 +1,283 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
-import { EventDispatcher } from "three";
+import { DataTexture, EventDispatcher, LinearFilter, RGBAFormat } from "three";
 
-import { type ITerrainSource } from "../TerrainSource";
 import {
-    type HeightMapModificationEventParams,
-    type HeightMapModifier,
+    type HeightOperation,
     type HeightMapSourceData,
-    type SerializedHeightMapModifier,
-    serializeHeightMapModifier,
-    serializeHeightMapModifierWithTransfer,
-    type SerializedHeightMapModifierWithTransfer
+    type HeightMapModifier,
+    type HeightMapModificationEventParams
 } from "./HeightMapModifierTypes";
+
+interface InternalModifier extends HeightMapModifier {
+    texture: DataTexture | null;
+}
 
 interface HeightMapModificationEvents {
     change: HeightMapModificationEventParams;
 }
 
-// Type for decoder that provides workerSet for broadcast requests
-interface DecoderWithWorkerSet {
-    workerSet: {
-        broadcastRequest(
-            serviceId: string,
-            message: unknown,
-            transferList?: unknown[]
-        ): Promise<unknown[]>;
-        m_workers?: Worker[];
-    };
-    serviceId: string;
+function geoBoxesIntersect(a: GeoBox, b: GeoBox): boolean {
+    return !(
+        a.northEast.longitude < b.southWest.longitude ||
+        a.southWest.longitude > b.northEast.longitude ||
+        a.northEast.latitude < b.southWest.latitude ||
+        a.southWest.latitude > b.northEast.latitude
+    );
 }
 
-export interface HeightMapModifierOptions {
-    maxModificationZoomLevel?: number;
+async function createTextureFromSource(source: HeightMapSourceData): Promise<DataTexture> {
+    let width: number;
+    let height: number;
+    let data: Uint8Array;
+
+    if (source.type === "data") {
+        width = source.width;
+        height = source.height;
+        data =
+            source.data instanceof Float32Array
+                ? new Uint8Array(source.data.buffer)
+                : (source.data as Uint8Array);
+    } else if (source.type === "image") {
+        const img = source.image;
+        if (img instanceof ImageData) {
+            width = img.width;
+            height = img.height;
+            data = new Uint8Array(img.data.buffer);
+        } else {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d")!;
+            ctx.drawImage(img as CanvasImageSource, 0, 0);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            width = canvas.width;
+            height = canvas.height;
+            data = new Uint8Array(imgData.data.buffer);
+        }
+    } else {
+        throw new Error(`URL source not supported for direct texture creation`);
+    }
+
+    const texture = new DataTexture(data, width, height, RGBAFormat);
+    texture.minFilter = LinearFilter;
+    texture.magFilter = LinearFilter;
+    texture.needsUpdate = true;
+    return texture;
 }
 
 export class HeightMapModifierManager extends EventDispatcher<HeightMapModificationEvents> {
-    private readonly modifiers = new Map<string, HeightMapModifier>();
-    private nextId: number = 0;
-    private globalBoundingBox: GeoBox | null = null;
+    private readonly modifiers = new Map<string, InternalModifier>();
+    private _version = 0;
 
-    private decoder: DecoderWithWorkerSet | null = null;
-
-    private syncPhaseListeners: Array<() => Promise<void>> = [];
-
-    constructor(private readonly terrainSource: ITerrainSource) {
-        super();
+    get version(): number {
+        return this._version;
     }
 
-    /**
-     * Setup synchronization of modifiers to workers
-     */
-    async setupSync(decoder: DecoderWithWorkerSet): Promise<void> {
-        this.decoder = decoder;
-
-        this.syncPhaseListeners.push(this.syncToWorkers.bind(this));
-
-        const existingModifiers = this.getEnabledModifiers();
-        if (existingModifiers.length > 0) {
-            await this.syncToWorkers();
-        }
-    }
-
-    private async syncToWorkers(): Promise<void> {
-        if (!this.decoder) {
-            console.warn("HeightMapModifierManager: decoder not available");
-            return;
-        }
-
-        const modifiers = this.getEnabledModifiers();
-
-        try {
-            const workerSet = this.decoder.workerSet as any;
-            const workers = workerSet.m_workers;
-
-            if (workers && workers.length > 0) {
-                for (const worker of workers) {
-                    const transferables: Transferable[] = [];
-                    const serializedModifiers = await Promise.all(
-                        modifiers.map(async modifier => {
-                            const result = await serializeHeightMapModifierWithTransfer(modifier);
-                            transferables.push(...result.transferables);
-                            return result.modifier;
-                        })
-                    );
-
-                    const message: any = {
-                        service: this.decoder.serviceId,
-                        type: "configuration",
-                        options: {
-                            terrainSourceId: this.terrainSource.name,
-                            heightMapModifiers: serializedModifiers
-                        }
-                    };
-
-                    worker.postMessage(message, transferables);
-                }
-            } else {
-                const serializedModifiers = modifiers.map(serializeHeightMapModifier);
-                const message: any = {
-                    service: this.decoder.serviceId,
-                    type: "configuration",
-                    options: {
-                        terrainSourceId: this.terrainSource.name,
-                        heightMapModifiers: serializedModifiers
-                    }
-                };
-                await this.decoder.workerSet.broadcastRequest(this.decoder.serviceId, message);
-            }
-        } catch (error) {
-            console.error("HeightMapModifierManager: Failed to sync modifiers to workers", error);
-        }
-    }
-
-    addModifier(id: string, source: HeightMapSourceData, geoBox: GeoBox): string {
-        const modifier: HeightMapModifier = {
+    addModifier(
+        id: string,
+        source: HeightMapSourceData,
+        geoBox: GeoBox,
+        heightOperation: HeightOperation = "add"
+    ): string {
+        const internal: InternalModifier = {
             id,
             source,
             geoBox: geoBox.clone(),
-            enabled: true
+            enabled: true,
+            heightOperation,
+            texture: null
         };
-
-        this.modifiers.set(id, modifier);
-        this.updateGlobalBoundingBox(geoBox);
+        this.modifiers.set(id, internal);
+        this.createTextureAsync(id);
+        this._version++;
         this.dispatchChangeEvent("add", [id]);
-
         return id;
     }
 
+    updateModifierData(id: string, source: HeightMapSourceData, geoBox?: GeoBox): boolean {
+        const mod = this.modifiers.get(id);
+        if (!mod) return false;
+
+        mod.source = source;
+        if (geoBox) mod.geoBox = geoBox.clone();
+        mod.texture = null;
+        this.createTextureAsync(id);
+        this._version++;
+        this.dispatchChangeEvent("update", [id]);
+        return true;
+    }
+
+    updateModifierTexture(id: string, texture: DataTexture): boolean {
+        const mod = this.modifiers.get(id);
+        if (!mod) return false;
+
+        const wasNull = mod.texture === null;
+        mod.texture = texture;
+        if (wasNull) {
+            this._version++;
+            this.dispatchChangeEvent("update", [id]);
+        }
+        return true;
+    }
+
+    updateModifierHeightRange(id: string, minHeight: number, maxHeight: number): boolean {
+        const mod = this.modifiers.get(id);
+        if (!mod) return false;
+
+        mod.minHeight = minHeight;
+        mod.maxHeight = maxHeight;
+        return true;
+    }
+
     removeModifier(id: string): boolean {
-        const modifier = this.modifiers.get(id);
-        if (!modifier) return false;
+        const mod = this.modifiers.get(id);
+        if (!mod) return false;
 
         this.modifiers.delete(id);
-
-        if (this.modifiers.size === 0) {
-            this.globalBoundingBox = null;
-        } else if (
-            this.globalBoundingBox &&
-            (modifier.geoBox.southWest.equals(this.globalBoundingBox.southWest) ||
-                modifier.geoBox.northEast.equals(this.globalBoundingBox.northEast))
-        ) {
-            this.recalculateGlobalBoundingBox();
-        }
-
+        this._version++;
         this.dispatchChangeEvent("remove", [id]);
         return true;
     }
 
     updateModifier(id: string, changes: Partial<Pick<HeightMapModifier, "enabled">>): boolean {
-        const modifier = this.modifiers.get(id);
-        if (!modifier) return false;
-
-        const previousBounds = modifier.geoBox.clone();
+        const mod = this.modifiers.get(id);
+        if (!mod) return false;
 
         if (changes.enabled !== undefined) {
-            modifier.enabled = changes.enabled;
+            mod.enabled = changes.enabled;
         }
-
-        this.dispatchChangeEvent("update", [id], previousBounds);
+        this._version++;
+        this.dispatchChangeEvent("update", [id]);
         return true;
     }
 
     clear(): void {
-        const hadModifiers = this.modifiers.size > 0;
-        const modifierIds = Array.from(this.modifiers.keys());
-
+        const ids = Array.from(this.modifiers.keys());
         this.modifiers.clear();
-        this.globalBoundingBox = null;
-
-        if (hadModifiers) {
-            this.dispatchChangeEvent("clear", modifierIds);
+        if (ids.length > 0) {
+            this._version++;
+            this.dispatchChangeEvent("clear", ids);
         }
-    }
-
-    getModifier(id: string): HeightMapModifier | undefined {
-        const modifier = this.modifiers.get(id);
-        return modifier ? { ...modifier, geoBox: modifier.geoBox.clone() } : undefined;
-    }
-
-    getAllModifiers(): HeightMapModifier[] {
-        return Array.from(this.modifiers.values()).map(m => ({
-            ...m,
-            geoBox: m.geoBox.clone()
-        }));
-    }
-
-    getEnabledModifiers(): HeightMapModifier[] {
-        return this.getAllModifiers().filter(m => m.enabled);
-    }
-
-    getAllModifierIds(): string[] {
-        return Array.from(this.modifiers.keys());
-    }
-
-    getGlobalBoundingBox(): GeoBox | null {
-        return this.globalBoundingBox ? this.globalBoundingBox.clone() : null;
-    }
-
-    findModifiersInBoundingBox(bbox: GeoBox): HeightMapModifier[] {
-        const result: HeightMapModifier[] = [];
-
-        for (const modifier of this.modifiers.values()) {
-            if (modifier.enabled && modifier.geoBox.intersectsBox(bbox)) {
-                result.push({ ...modifier, geoBox: modifier.geoBox.clone() });
-            }
-        }
-
-        return result;
-    }
-
-    findModifiersContainingPoint(point: GeoCoordinates): HeightMapModifier[] {
-        const result: HeightMapModifier[] = [];
-
-        for (const modifier of this.modifiers.values()) {
-            if (modifier.enabled && modifier.geoBox.contains(point)) {
-                result.push({ ...modifier, geoBox: modifier.geoBox.clone() });
-            }
-        }
-
-        return result;
-    }
-
-    getModifierCount(): number {
-        return this.modifiers.size;
     }
 
     hasModifier(id: string): boolean {
         return this.modifiers.has(id);
     }
 
-    private dispatchChangeEventImmediate(
+    getModifier(id: string): HeightMapModifier | undefined {
+        const mod = this.modifiers.get(id);
+        return mod ? { ...mod, geoBox: mod.geoBox.clone() } : undefined;
+    }
+
+    getAllModifiers(): HeightMapModifier[] {
+        return Array.from(this.modifiers.values()).map(m => ({ ...m, geoBox: m.geoBox.clone() }));
+    }
+
+    getEnabledModifiers(): HeightMapModifier[] {
+        return this.getAllModifiers().filter(m => m.enabled);
+    }
+
+    findIntersectingModifiers(tileGeoBox: GeoBox): InternalModifier[] {
+        const result: InternalModifier[] = [];
+        for (const mod of this.modifiers.values()) {
+            if (mod.enabled && mod.texture && geoBoxesIntersect(mod.geoBox, tileGeoBox)) {
+                result.push(mod);
+            }
+        }
+        return result;
+    }
+
+    findModifiersInBoundingBox(bbox: GeoBox): HeightMapModifier[] {
+        return this.findIntersectingModifiers(bbox).map(m => ({ ...m, geoBox: m.geoBox.clone() }));
+    }
+
+    getModifierHeightRange(tileGeoBox: GeoBox): { minDelta: number; maxDelta: number } | null {
+        const mods = this.findIntersectingModifiers(tileGeoBox);
+        if (mods.length === 0) return null;
+
+        let minDelta = 0;
+        let maxDelta = 0;
+
+        for (const mod of mods) {
+            const modMin = mod.minHeight ?? 0;
+            const modMax = mod.maxHeight ?? 0;
+            if (mod.heightOperation === "replace") {
+                minDelta = Math.min(minDelta, modMin);
+                maxDelta = Math.max(maxDelta, modMax);
+            } else {
+                minDelta = Math.min(minDelta, modMin);
+                maxDelta = Math.max(maxDelta, modMax);
+            }
+        }
+
+        if (minDelta === 0 && maxDelta === 0) return null;
+        return { minDelta, maxDelta };
+    }
+
+    getModifierCount(): number {
+        return this.modifiers.size;
+    }
+
+    getModifiedElevation(baseHeight: number, lon: number, lat: number): number {
+        let result = baseHeight;
+        for (const mod of this.modifiers.values()) {
+            if (!mod.enabled || !mod.texture) continue;
+            if (!mod.geoBox.contains(new GeoCoordinates(lat, lon))) continue;
+
+            const u =
+                (lon - mod.geoBox.southWest.longitude) /
+                (mod.geoBox.northEast.longitude - mod.geoBox.southWest.longitude);
+            const v =
+                (lat - mod.geoBox.southWest.latitude) /
+                (mod.geoBox.northEast.latitude - mod.geoBox.southWest.latitude);
+
+            const px = Math.floor(u * (mod.texture.image.width - 1));
+            const py = Math.floor((1 - v) * (mod.texture.image.height - 1));
+            const idx = (py * mod.texture.image.width + px) * 4;
+            const data = mod.texture.image.data as Uint8Array;
+
+            const alpha = data[idx + 3] / 255;
+            if (alpha < 0.01) continue;
+
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const modH = (r * 65536 + g * 256 + b) / 10 - 10000;
+
+            if (mod.heightOperation === "replace") {
+                result = result * (1 - alpha) + modH * alpha;
+            } else {
+                result += modH * alpha;
+            }
+        }
+        return result;
+    }
+
+    private async createTextureAsync(id: string): Promise<void> {
+        const mod = this.modifiers.get(id);
+        if (!mod) return;
+        try {
+            const texture = await createTextureFromSource(mod.source);
+            if (mod.texture !== null) return;
+            mod.texture = texture;
+            this._version++;
+            this.dispatchChangeEvent("update", [id]);
+        } catch (e) {
+            console.error(`Failed to create texture for modifier ${id}:`, e);
+        }
+    }
+
+    private dispatchChangeEvent(
         changeType: "add" | "remove" | "update" | "clear",
-        affectedIds: string[] = [],
-        previousBounds: GeoBox | null = null
+        affectedIds: string[] = []
     ) {
         let affectedBounds: GeoBox | null = null;
         if (affectedIds.length > 0) {
             const boxes = affectedIds
                 .map(id => this.modifiers.get(id)?.geoBox)
                 .filter((b): b is GeoBox => b !== undefined);
-
             if (boxes.length > 0) {
                 affectedBounds = this.calculateBoundingBox(boxes);
             }
@@ -250,59 +287,20 @@ export class HeightMapModifierManager extends EventDispatcher<HeightMapModificat
             type: "change",
             changeType,
             affectedIds,
-            globalBounds: this.globalBoundingBox ? this.globalBoundingBox.clone() : null,
-            affectedBounds,
-            previousBounds
+            globalBounds: null,
+            affectedBounds
         });
     }
 
-    private dispatchChangeEvent(
-        changeType: "add" | "remove" | "update" | "clear",
-        affectedIds: string[] = [],
-        previousBounds: GeoBox | null = null
-    ) {
-        const syncPromises = this.syncPhaseListeners.map(listener => listener());
-
-        Promise.all(syncPromises)
-            .then(() => {
-                this.dispatchChangeEventImmediate(changeType, affectedIds, previousBounds);
-            })
-            .catch(error => {
-                console.error("HeightMapModifierManager: Error during sync-phase", error);
-                this.dispatchChangeEventImmediate(changeType, affectedIds, previousBounds);
-            });
-    }
-
     private calculateBoundingBox(boxes: GeoBox[]): GeoBox {
-        if (boxes.length === 0) {
-            return new GeoBox(new GeoCoordinates(0, 0), new GeoCoordinates(0, 0));
-        }
-
-        const southWest = boxes[0].southWest.clone();
-        const northEast = boxes[0].northEast.clone();
-
+        const sw = boxes[0].southWest.clone();
+        const ne = boxes[0].northEast.clone();
         for (const box of boxes) {
-            southWest.latitude = Math.min(southWest.latitude, box.southWest.latitude);
-            southWest.longitude = Math.min(southWest.longitude, box.southWest.longitude);
-            northEast.latitude = Math.max(northEast.latitude, box.northEast.latitude);
-            northEast.longitude = Math.max(northEast.longitude, box.northEast.longitude);
+            sw.latitude = Math.min(sw.latitude, box.southWest.latitude);
+            sw.longitude = Math.min(sw.longitude, box.southWest.longitude);
+            ne.latitude = Math.max(ne.latitude, box.northEast.latitude);
+            ne.longitude = Math.max(ne.longitude, box.northEast.longitude);
         }
-
-        return new GeoBox(southWest, northEast);
-    }
-
-    private updateGlobalBoundingBox(newBox: GeoBox): void {
-        if (this.globalBoundingBox === null) {
-            this.globalBoundingBox = newBox.clone();
-        } else {
-            this.globalBoundingBox.expandToInclude(newBox);
-        }
-    }
-
-    private recalculateGlobalBoundingBox(): void {
-        this.globalBoundingBox = null;
-        for (const modifier of this.modifiers.values()) {
-            this.updateGlobalBoundingBox(modifier.geoBox);
-        }
+        return new GeoBox(sw, ne);
     }
 }

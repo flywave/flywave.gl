@@ -336,27 +336,6 @@ export abstract class ResourceProvider<
             const resource = cacheTile.resourceManager.getResource<T>(resourceKey);
 
             if (resource !== undefined) {
-                // Check if resource is expired due to modification and needs refresh
-                if (
-                    resource instanceof TileValidResource &&
-                    resource.isExpiredDueToModification()
-                ) {
-                    const modifyManager = this.terrainSource!.getGroundModificationManager();
-                    if (modifyManager) {
-                        // Create a synthetic change event to trigger refresh
-                        const event: any = {
-                            type: "change",
-                            changeType: "update",
-                            affectedIds: modifyManager.getAllModifierIds(),
-                            globalBounds: modifyManager.getGlobalBoundingBox(),
-                            affectedBounds: modifyManager.getGlobalBoundingBox(),
-                            previousBounds: null
-                        };
-                        resource.handleGroundModificationChange(event, modifyManager).catch(e => {
-                            console.error("Failed to refresh expired resource:", e);
-                        });
-                    }
-                }
                 return { tileKey: parentKey, resource };
             }
         }

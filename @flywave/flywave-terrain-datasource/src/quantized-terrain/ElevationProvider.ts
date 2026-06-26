@@ -231,6 +231,9 @@ export class ElevationProvider implements InnerElevationProvider {
      * @returns The height at geoPoint or 0 if no tile was found that covers the geoPoint
      */
     getHeight(geoPoint: GeoCoordinates, level: number = TERRAIN_ZOOM_LEVEL): number {
-        return this.getAtPointOrZero(geoPoint, 0, level);
+        const baseHeight = this.getAtPointOrZero(geoPoint, 0, level);
+        const manager = this.dataSource.getGroundModificationManager();
+        if (manager.getModifierCount() === 0) return baseHeight;
+        return manager.getModifiedElevation(baseHeight, geoPoint.longitude, geoPoint.latitude);
     }
 }

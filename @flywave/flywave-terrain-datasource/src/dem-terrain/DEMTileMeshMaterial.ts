@@ -51,6 +51,11 @@ interface CommonUniforms {
     uSkirtHeight: { value: number };
 
     isRenderingDepth: { value: boolean };
+
+    uModifierTexture: { value: THREE.Texture };
+    uModifierUVBounds: { value: THREE.Vector4 };
+    uModifierOp: { value: number };
+    uHasModifier: { value: number };
 }
 
 /**
@@ -97,7 +102,11 @@ export class DEMTileMeshMaterial extends THREE.MeshStandardMaterial {
         imageryPatchCount: { value: 0 },
         uSkirtHeight: { value: 0.0 },
         uProjectionFactor: { value: 0.0 },
-        isRenderingDepth: { value: false }
+        isRenderingDepth: { value: false },
+        uModifierTexture: { value: emptyTexture },
+        uModifierUVBounds: { value: new THREE.Vector4() },
+        uModifierOp: { value: 0 },
+        uHasModifier: { value: 0 }
     };
 
     /** Shader defines that control compilation variants */

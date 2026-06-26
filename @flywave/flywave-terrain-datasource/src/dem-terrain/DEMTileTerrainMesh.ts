@@ -2,12 +2,13 @@
 
 // height-map/HeightMapTerrainMesh.ts
 import { type TileGeometryBuilder, type TileTransformation } from "@flywave/flywave-geometry";
-import { type GeoBox, type TilingScheme, ProjectionType, TileKey } from "@flywave/flywave-geoutils";
+import { GeoBox, type TilingScheme, ProjectionType, TileKey } from "@flywave/flywave-geoutils";
 import { MapView, Tile } from "@flywave/flywave-mapview";
-import { DataTexture, Matrix4, Mesh, Vector3, Vector4 } from "three";
+import { DataTexture, LinearFilter, Matrix4, Mesh, RGBAFormat, Vector3, Vector4 } from "three";
 import * as THREE from "three";
 
 import { type GroundOverlayTextureResource } from "../ground-overlay-provider";
+import { type HeightMapModifierManager } from "../ground-modification-manager";
 import { type WebTile } from "../WebImageryTileProvider";
 import { DEMTileMeshMaterial } from "./DEMTileMeshMaterial";
 import { ProjectionSwitchController } from "../ProjectionSwitchController";
@@ -94,6 +95,13 @@ export class HeightMapTerrainMesh extends Mesh {
 
     private readonly m_yDown: boolean = this.m_tilingSchemeTileGrid.isYAxisDown();
 
+    private m_modifierManager?: HeightMapModifierManager;
+    private m_modifierVersion: number = -1;
+    private m_modifierTexture: THREE.Texture | null = null;
+    private m_modifierUVBounds: Vector4 = new Vector4();
+    private m_modifierOp: number = 0;
+    private m_mergedTexture: DataTexture | null = null;
+
     /**
      * Creates a new height map terrain mesh
      *
@@ -136,6 +144,11 @@ export class HeightMapTerrainMesh extends Mesh {
         this._initializeMesh();
 
         this.frustumCulled = false;
+
+        this.onBeforeRender = () => {
+            this.updateProjectionTransform();
+            this.updateModifierUniforms();
+        };
     }
 
     /**
@@ -148,8 +161,105 @@ export class HeightMapTerrainMesh extends Mesh {
         this.updateProjectionTransform();
     }
 
-    onBeforeRender(): void {
-        this.updateProjectionTransform();
+    setModifierManager(manager: HeightMapModifierManager): void {
+        this.m_modifierManager = manager;
+        this.m_modifierVersion = -1;
+    }
+
+    private updateModifierUniforms(): void {
+        if (!this.m_modifierManager) return;
+
+        if (this.m_modifierVersion !== this.m_modifierManager.version) {
+            this.m_modifierVersion = this.m_modifierManager.version;
+            this.refreshModifierQuery();
+        }
+
+        const mat = this.m_material;
+        if (this.m_modifierTexture) {
+            mat.commonUniform.uHasModifier.value = 1;
+            mat.commonUniform.uModifierTexture.value = this.m_modifierTexture;
+            mat.commonUniform.uModifierUVBounds.value.copy(this.m_modifierUVBounds);
+            mat.commonUniform.uModifierOp.value = this.m_modifierOp;
+        } else {
+            mat.commonUniform.uHasModifier.value = 0;
+        }
+    }
+
+    private refreshModifierQuery(): void {
+        if (this.m_mergedTexture) {
+            this.m_mergedTexture.dispose();
+            this.m_mergedTexture = null;
+        }
+
+        const mods = this.m_modifierManager!.findIntersectingModifiers(this.m_selfGeoBox);
+
+        if (mods.length === 0) {
+            this.m_modifierTexture = null;
+            return;
+        }
+
+        if (mods.length === 1) {
+            this.m_modifierTexture = mods[0].texture;
+            this.m_modifierOp = mods[0].heightOperation === "replace" ? 1 : 0;
+            this.computeModifierUVBounds(mods[0].geoBox);
+            return;
+        }
+
+        const ref = mods[0].texture!;
+        const w = ref.image.width;
+        const h = ref.image.height;
+        const merged = new Uint8Array(w * h * 4);
+
+        for (const mod of mods) {
+            if (!mod.texture) continue;
+            const src = mod.texture.image.data as Uint8Array;
+            for (let i = 0; i < src.length && i < merged.length; i += 4) {
+                const a = src[i + 3];
+                if (a === 0) continue;
+                const w0 = merged[i + 3] / 255;
+                const w1 = a / 255;
+                const totalW = w0 + w1;
+                if (totalW === 0) continue;
+                merged[i] = (merged[i] * w0 + src[i] * w1) / totalW;
+                merged[i + 1] = (merged[i + 1] * w0 + src[i + 1] * w1) / totalW;
+                merged[i + 2] = (merged[i + 2] * w0 + src[i + 2] * w1) / totalW;
+                merged[i + 3] = Math.max(merged[i + 3], a);
+            }
+        }
+
+        const tex = new DataTexture(merged, w, h, RGBAFormat);
+        tex.minFilter = LinearFilter;
+        tex.magFilter = LinearFilter;
+        tex.needsUpdate = true;
+        this.m_mergedTexture = tex;
+        this.m_modifierTexture = tex;
+        this.m_modifierOp = mods[0].heightOperation === "replace" ? 1 : 0;
+
+        const unionSW = mods[0].geoBox.southWest.clone();
+        const unionNE = mods[0].geoBox.northEast.clone();
+        for (let i = 1; i < mods.length; i++) {
+            unionSW.latitude = Math.min(unionSW.latitude, mods[i].geoBox.southWest.latitude);
+            unionSW.longitude = Math.min(unionSW.longitude, mods[i].geoBox.southWest.longitude);
+            unionNE.latitude = Math.max(unionNE.latitude, mods[i].geoBox.northEast.latitude);
+            unionNE.longitude = Math.max(unionNE.longitude, mods[i].geoBox.northEast.longitude);
+        }
+        this.computeModifierUVBounds(new GeoBox(unionSW, unionNE));
+    }
+
+    private computeModifierUVBounds(modGeoBox: GeoBox): void {
+        const tileMinLon = this.m_selfGeoBox.southWest.longitude;
+        const tileMinLat = this.m_selfGeoBox.southWest.latitude;
+        const tileMaxLat = this.m_selfGeoBox.northEast.latitude;
+        const tileW = this.m_selfGeoBox.northEast.longitude - tileMinLon;
+        const tileH = this.m_selfGeoBox.northEast.latitude - tileMinLat;
+
+        const minU = (modGeoBox.southWest.longitude - tileMinLon) / tileW;
+        const maxU = (modGeoBox.northEast.longitude - tileMinLon) / tileW;
+
+        const minV = (modGeoBox.southWest.latitude - tileMinLat) / tileH;
+        const maxV = (modGeoBox.northEast.latitude - tileMinLat) / tileH;
+
+        this.m_modifierUVBounds.set(minU, minV, maxU, maxV);
     }
 
     /**
@@ -405,6 +515,10 @@ export class HeightMapTerrainMesh extends Mesh {
     dispose() {
         this.geometry.dispose();
         this.m_material.dispose();
+        if (this.m_mergedTexture) {
+            this.m_mergedTexture.dispose();
+            this.m_mergedTexture = null;
+        }
     }
 
     /**

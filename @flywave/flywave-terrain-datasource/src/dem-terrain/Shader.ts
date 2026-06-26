@@ -227,8 +227,13 @@ const shaderChunks = {
     uniform mat4 uPatchPos;
     uniform mat4 pack;  
     varying vec4 debugColor;
- 
+  
     uniform float uProjectionFactor;
+
+    uniform sampler2D uModifierTexture;
+    uniform vec4 uModifierUVBounds;
+    uniform int uModifierOp;
+    uniform int uHasModifier;
 
     mat3 mat3_emu(mat4 m4) {
         return mat3(
@@ -240,6 +245,20 @@ const shaderChunks = {
     float decodeElevation(vec4 v) {     
         vec4 uDemUnpack = pack[1]; 
         return dot(vec4(v.xyz * 255.0, -1.0), uDemUnpack);
+    }
+
+    float applyModifier(float height, vec2 tileUv) {
+        if (uHasModifier == 0) return height;
+        vec4 b = uModifierUVBounds;
+        if (tileUv.x < b.x || tileUv.x > b.z ||
+            tileUv.y < b.y || tileUv.y > b.w) return height;
+        vec2 modUv = (tileUv - b.xy) / (b.zw - b.xy);
+        modUv.y = 1.0 - modUv.y;
+        vec4 modSample = texture2D(uModifierTexture, modUv);
+        if (modSample.a < 0.001) return height;
+        float modH = decodeElevation(modSample);
+        if (uModifierOp == 0) return height + modH * modSample.a;
+        return mix(height, modH, modSample.a);
     }
 
     vec2 tileUvToDemSample(vec2 uv) {
@@ -337,7 +356,7 @@ const shaderChunks = {
         
         float h0 = mix(h00, h10, fractPart.x);
         float h1 = mix(h01, h11, fractPart.x);
-        return mix(h0, h1, fractPart.y);
+        return applyModifier(mix(h0, h1, fractPart.y), tileUv);
     }
 
     float decodeOverlayerElevation(vec4 v) { 

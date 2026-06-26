@@ -3,7 +3,6 @@
 // TileDecoderUtils.ts
 import { type GeoBoxArray, type Projection, GeoBox, TileKey } from "@flywave/flywave-geoutils";
 
-import { HeightMapModifierWorkerManager } from "../ground-modification-manager";
 import {
     type SerializedStratumClipRegion,
     deserializeStratumClipRegion
@@ -41,36 +40,19 @@ export const processQuantizedMesh = async (
     data: { buffer: ArrayBuffer } & QuantizedMeshLoaderOptions,
     projection: Projection
 ): Promise<QuantizedTerrainMeshData> => {
-    // Convert geoBox array to GeoBox object
     data.geoBox = GeoBox.fromArray(data.geoBox as unknown as GeoBoxArray);
 
-    // Load and parse the quantized mesh
     const quantizedMeshLoader = new QuantizedMeshLoader(projection, data);
     const quantizedTerrainMesh = quantizedMeshLoader.parse(data.buffer);
-
-    // Get height map modifiers from worker local store
-    let clipModifiers = undefined;
-    const terrainSourceId = (data as { terrainSourceId?: string }).terrainSourceId;
-
-    if (terrainSourceId && data.geoBox) {
-        const workerModifiers = HeightMapModifierWorkerManager.findModifiersInBoundingBox(
-            terrainSourceId,
-            data.geoBox
-        );
-
-        if (workerModifiers.length > 0) {
-            clipModifiers = workerModifiers;
-        }
-    }
 
     await quantizedTerrainMesh.generateAndProcessTerrain({
         heightMap: data.elevationMapEnabled
             ? {
-                geoBox: data.geoBox,
-                flipY: data.elevationMapFlipY
-            }
+                  geoBox: data.geoBox,
+                  flipY: data.elevationMapFlipY
+              }
             : undefined,
-        clip: clipModifiers,
+        clip: undefined,
         projection
     });
 
@@ -125,30 +107,14 @@ export const processUpsampledMesh = async (
         isBottom
     );
 
-    // Get height map modifiers from worker local store
-    let clipModifiers = undefined;
-    const terrainSourceId = (data as { terrainSourceId?: string }).terrainSourceId;
-
-    if (terrainSourceId && data.targetGeoBox) {
-        const workerModifiers = HeightMapModifierWorkerManager.findModifiersInBoundingBox(
-            terrainSourceId,
-            data.targetGeoBox
-        );
-
-        if (workerModifiers.length > 0) {
-            clipModifiers = workerModifiers;
-        }
-    }
-
-    // Render heightmap for clipped mesh
     await quantizedTerrainMesh.generateAndProcessTerrain({
         heightMap: data.elevationMapEnabled
             ? {
-                geoBox: data.targetGeoBox,
-                flipY: data.elevationMapFlipY
-            }
+                  geoBox: data.targetGeoBox,
+                  flipY: data.elevationMapFlipY
+              }
             : undefined,
-        clip: clipModifiers,
+        clip: undefined,
         projection: data.projection
     });
 

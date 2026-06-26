@@ -349,8 +349,7 @@ export abstract class TerrainSource<
         this.m_groundOverlayProvider.register(this);
 
         // Create ground modification manager
-        this.m_groundModificationManager = new HeightMapModifierManager(this);
-        // Note: setupGroundModificationSync will be called in connect() after decoder is ready
+        this.m_groundModificationManager = new HeightMapModifierManager();
 
         this.m_projectionSwitchController = new ProjectionSwitchController(
             this,
@@ -367,9 +366,7 @@ export abstract class TerrainSource<
      * This ensures that modifiers are stored locally in worker to avoid
      * repeated serialization for each tile decode operation
      */
-    private async setupGroundModificationSync(): Promise<void> {
-        await this.m_groundModificationManager.setupSync(this.decoder as any);
-    }
+    private async setupGroundModificationSync(): Promise<void> {}
 
     protected abstract createElevationRangeSource(): ElevationRangeSource;
 

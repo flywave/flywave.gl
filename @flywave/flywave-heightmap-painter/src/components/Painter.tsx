@@ -41,9 +41,9 @@ const BrushCursor = styled.div<{ $visible: boolean; $size: number; $x: number; $
     border: 2px solid rgba(255, 255, 255, 0.9);
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.3);
-    pointer-events: none !important; /* Ensure mouse events pass through */
-    -webkit-pointer-events: none; /* Safari compatibility */
-    -moz-pointer-events: none; /* Firefox compatibility */
+    pointer-events: none !important;
+    -webkit-pointer-events: none;
+    -moz-pointer-events: none;
     transform: translate(
         ${props => props.$x - props.$size / 2}px,
         ${props => props.$y - props.$size / 2}px
@@ -52,7 +52,6 @@ const BrushCursor = styled.div<{ $visible: boolean; $size: number; $x: number; $
     display: ${props => (props.$visible ? "block" : "none")};
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(2px);
-    /* Ensure it doesn't affect mouse events */
     user-select: none;
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -79,6 +78,8 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
         const windowEventHandlerRef = useRef<WindowEventHandler | null>(null);
         const tempCanvasRef = useRef<HTMLCanvasElement | null>(null);
         const currentBrushSizeRef = useRef(50);
+        const modifierIdRef = useRef<string>("heightmap-painter");
+        const modifierReadyRef = useRef<boolean>(false);
 
         const [brushSettings, setBrushSettings] = useState<BrushSettings>({
             type: BrushType.RAISE,
@@ -94,83 +95,50 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
         const [cursorSize, setCursorSize] = useState(50);
         const [isDrawingMode, setIsDrawingMode] = useState(false);
         const mapControlsRef = useRef<MapControls>(mapControls);
-        const modifierIdRef = useRef<string>("heightmap-painter");
-        const updateTerrainModifierRef = useRef<(() => void) | null>(null);
 
-        const updateTerrainModifierImpl = () => {
+        const initModifier = () => {
             const manager = (
                 mapView.elevationSource as DEMTerrainSource
             )?.getGroundModificationManager();
-            if (!manager || !tempCanvasRef.current || !brushEngineRef.current) return;
+            if (!manager || !brushEngineRef.current) return;
 
-            const canvas = tempCanvasRef.current;
-            brushEngineRef.current.renderToCanvas(canvas);
+            const southWest = new GeoCoordinates(paintAreaGeoBox.minLat, paintAreaGeoBox.minLon);
+            const northEast = new GeoCoordinates(paintAreaGeoBox.maxLat, paintAreaGeoBox.maxLon);
+            const geoBox = new GeoBox(southWest, northEast);
 
-            try {
-                const southWest = new GeoCoordinates(
-                    paintAreaGeoBox.minLat,
-                    paintAreaGeoBox.minLon
-                );
-                const northEast = new GeoCoordinates(
-                    paintAreaGeoBox.maxLat,
-                    paintAreaGeoBox.maxLon
-                );
-                const geoBoxForDisplay = new GeoBox(southWest, northEast);
+            const texture = brushEngineRef.current.getTexture();
 
-                if (manager.hasModifier(modifierIdRef.current)) {
-                    manager.removeModifier(modifierIdRef.current);
-                }
+            manager.addModifier(
+                modifierIdRef.current,
+                {
+                    type: "image",
+                    image: new ImageData(
+                        new Uint8ClampedArray(texture.image.data.buffer.slice(0)),
+                        texture.image.width,
+                        texture.image.height
+                    )
+                },
+                geoBox,
+                "add"
+            );
 
-                manager.addModifier(
-                    modifierIdRef.current,
-                    {
-                        type: "image",
-                        image: canvas
-                    },
-                    geoBoxForDisplay
-                );
-            } catch (error) {
-                console.warn("Failed to update terrain modifier:", error);
-            }
+            manager.updateModifierTexture(modifierIdRef.current, texture);
+            modifierReadyRef.current = true;
         };
 
-        // Create throttled version
-        useEffect(() => {
-            let throttleTimer: number | null = null;
-            let lastRun = 0;
-            const throttleDelay = 50; // 50ms throttle
+        const updateModifierTexture = () => {
+            const manager = (
+                mapView.elevationSource as DEMTerrainSource
+            )?.getGroundModificationManager();
+            if (!manager || !brushEngineRef.current || !modifierReadyRef.current) return;
 
-            const throttledUpdate = () => {
-                const now = Date.now();
-                if (now - lastRun >= throttleDelay) {
-                    updateTerrainModifierImpl();
-                    lastRun = now;
-                } else if (throttleTimer === null) {
-                    throttleTimer = window.setTimeout(() => {
-                        updateTerrainModifierImpl();
-                        lastRun = Date.now();
-                        throttleTimer = null;
-                    }, throttleDelay - (now - lastRun));
-                }
-            };
-
-            updateTerrainModifierRef.current = throttledUpdate;
-
-            return () => {
-                if (throttleTimer !== null) {
-                    clearTimeout(throttleTimer);
-                }
-            };
-        }, [paintAreaGeoBox]);
-
-        const updateTerrainModifier = () => {
-            if (updateTerrainModifierRef.current) {
-                updateTerrainModifierRef.current();
-            }
+            const texture = brushEngineRef.current.getTexture();
+            manager.updateModifierTexture(modifierIdRef.current, texture);
+            const range = brushEngineRef.current.getHeightRange();
+            manager.updateModifierHeightRange(modifierIdRef.current, range.min, range.max);
         };
 
         useEffect(() => {
-            console.log("[Painter] Initializing BrushEngine:", { width, height });
             const brushEngine = new BrushEngine(width, height);
             brushEngineRef.current = brushEngine;
 
@@ -179,21 +147,14 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             canvas.height = height;
             tempCanvasRef.current = canvas;
 
-            console.log("[Painter] Canvas created:", {
-                canvasWidth: canvas.width,
-                canvasHeight: canvas.height,
-                brushEngineDimensions: brushEngine.getDimensions()
-            });
+            initModifier();
 
             return () => {
                 brushEngineRef.current = null;
                 tempCanvasRef.current = null;
+                modifierReadyRef.current = false;
             };
         }, [width, height, paintAreaGeoBox]);
-
-        useEffect(() => {
-            updateTerrainModifier();
-        }, [paintAreaGeoBox]);
 
         useEffect(() => {
             if (brushEngineRef.current) {
@@ -202,23 +163,19 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             }
         }, [brushSettings]);
 
-        // Initialize WindowEventHandler
         useEffect(() => {
             if (mapView && mapView.canvas) {
                 const canvas = mapView.canvas as HTMLCanvasElement;
 
-                // Create WindowEventHandler instance
                 const windowEventHandler = new WindowEventHandler(canvas);
                 windowEventHandlerRef.current = windowEventHandler;
 
-                // Listen to mouse events
                 const handleMouseDown = (event: MouseEvent) => {
                     if (!isDrawingMode || !mapView || !paintAreaGeoBox) return;
 
                     const x = event.offsetX;
                     const y = event.offsetY;
 
-                    // Check if left mouse button is pressed via WindowEventHandler state
                     if (windowEventHandler.mouseDown[0]) {
                         const worldPos = mapView.getWorldPositionAt(x, y);
                         if (!worldPos) return;
@@ -227,11 +184,12 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
                         const coords = getCanvasCoordinates(geoPos.longitude, geoPos.latitude);
                         if (!coords) return;
 
+                        brushEngineRef.current?.resetStroke();
                         brushEngineRef.current?.drawAt(coords.x, coords.y);
 
                         onBrushStart?.(coords.x, coords.y);
                         onHeightmapChange?.(brushEngineRef.current!.getHeightData());
-                        updateTerrainModifier();
+                        updateModifierTexture();
                     }
                 };
 
@@ -258,12 +216,11 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
                             setCursorPos({ x: event.clientX, y: event.clientY });
                             setCursorSize(size);
 
-                            // Check if currently drawing (left mouse button pressed)
                             if (windowEventHandlerRef.current?.mouseDown[0]) {
                                 brushEngineRef.current?.drawAt(coords.x, coords.y);
                                 onBrushMove?.(coords.x, coords.y);
                                 onHeightmapChange?.(brushEngineRef.current!.getHeightData());
-                                updateTerrainModifier();
+                                updateModifierTexture();
                             }
                         } else {
                             setCursorVisible(false);
@@ -274,18 +231,16 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
                 };
 
                 const handleMouseUp = () => {
-                    // Trigger brush end event when mouse is released
                     if (isDrawingMode) {
+                        brushEngineRef.current?.resetStroke();
                         onBrushEnd?.();
                     }
                 };
 
-                // Register event listeners
                 windowEventHandler.addEventListener("mousedown", handleMouseDown as EventListener);
                 windowEventHandler.addEventListener("mousemove", handleMouseMove as EventListener);
                 windowEventHandler.addEventListener("mouseup", handleMouseUp);
 
-                // Cleanup event listeners
                 return () => {
                     if (windowEventHandler) {
                         windowEventHandler.removeEventListener(
@@ -303,20 +258,13 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             }
         }, [mapView, isDrawingMode, brushSettings.size, paintAreaGeoBox]);
 
-        // Listen to space key events
         useEffect(() => {
             const handleKeyDown = (event: KeyboardEvent) => {
                 if (event.code === "Space" && !event.repeat) {
                     event.preventDefault();
                     setIsDrawingMode(true);
-                    // Disable map controls
                     if (mapControlsRef.current) {
                         mapControlsRef.current.enabled = false;
-                        console.log("🖌️ Enter drawing mode - Map controls disabled");
-                    } else {
-                        console.warn(
-                            "⚠️ Map controls instance not found, unable to control enable/disable state"
-                        );
                     }
                 }
             };
@@ -325,11 +273,9 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
                 if (event.code === "Space") {
                     event.preventDefault();
                     setIsDrawingMode(false);
-                    // Enable map controls
                     if (mapControlsRef.current) {
                         mapControlsRef.current.enabled = true;
                     }
-                    // Trigger brush end event
                     onBrushEnd?.();
                 }
             };
@@ -374,7 +320,7 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
 
         const clearCanvas = () => {
             brushEngineRef.current?.clear();
-            updateTerrainModifier();
+            updateModifierTexture();
             onHeightmapChange?.(brushEngineRef.current!.getHeightData());
         };
 
@@ -414,15 +360,6 @@ export const Painter = forwardRef<PainterRef, PainterProps>(
             setIsDrawingMode(enabledParam);
             if (mapControlsRef.current) {
                 mapControlsRef.current.enabled = !enabledParam;
-                console.log(
-                    `${enabledParam ? "🖌️" : "🗺️"} ${
-                        enabledParam ? "Enter" : "Exit"
-                    } drawing mode - Map controls ${enabledParam ? "disabled" : "enabled"}`
-                );
-            } else {
-                console.warn(
-                    "⚠️ Map controls instance not found, unable to control enable/disable state"
-                );
             }
             if (!enabledParam) {
                 onBrushEnd?.();

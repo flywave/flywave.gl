@@ -372,6 +372,7 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                 wireframe: false
             }
         );
+        terrainMesh.setModifierManager(this.dataSource.getGroundModificationManager());
 
         // If parent data is available, use it for height mapping
         if (parent) {
@@ -448,7 +449,8 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                 !quantizedDataResource ||
                 needDemDraw ||
                 this.tile.tileKey.level !== quantizedDataResource.tileKey.level ||
-                quantizedDataResource.resource.isGroundElevationModified
+                quantizedDataResource.resource.isGroundElevationModified ||
+                this.dataSource.getGroundModificationManager().getModifierCount() > 0
             ) {
                 this.tile.objects.push(
                     this.makeIntermediateTerrainBlock(
