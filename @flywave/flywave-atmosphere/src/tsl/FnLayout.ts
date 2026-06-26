@@ -26,7 +26,7 @@ export interface FnLayoutSpec {
  * A callable TSL shader function with layout metadata.
  * When invoked with node arguments, it produces a shader call node.
  */
-interface ShaderFn<Args extends readonly unknown[]> {
+export interface ShaderFn<Args extends readonly unknown[]> {
     (...args: Args): Node;
     setLayout: (layout: {
         name: string;
