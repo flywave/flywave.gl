@@ -122,12 +122,17 @@ export interface DataSourceOptions {
 /**
  * Derive a class from `DataSource` to contribute data and geometries to the {@link MapView}.
  */
-export abstract class DataSource<TEventMap extends {} = {}> 
-    extends THREE.EventDispatcher<{ update: {} } & TEventMap> {
+type DataSourceEventMap<T> = {
+    [K in keyof T | "update"]: K extends "update" ? {} : K extends keyof T ? T[K] : never;
+};
+
+export abstract class DataSource<TEventMap extends {} = {}> extends THREE.EventDispatcher<
+    DataSourceEventMap<TEventMap>
+> {
     /**
      * Keep the update event here to avoid a global reference to the datasource (and thus prevent garbage collection).
      */
-    private readonly UPDATE_EVENT = { type: "update" };
+    private readonly UPDATE_EVENT: { type: "update" } = { type: "update" };
 
     /**
      * A counter to generate unique names for each `DataSource`, if no name is provided in the
@@ -720,7 +725,7 @@ export abstract class DataSource<TEventMap extends {} = {}>
      * Sends a request to the {@link MapView} to redraw the scene.
      */
     requestUpdate() {
-        this.dispatchEvent(this.UPDATE_EVENT as THREE.BaseEvent<"update">);
+        this.dispatchEvent(this.UPDATE_EVENT);
     }
 }
 
