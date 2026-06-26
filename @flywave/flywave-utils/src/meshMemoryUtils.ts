@@ -122,57 +122,68 @@ export function estimateTextureMemory(texture: Texture): number {
         return 0;
     }
 
-    const image = texture.image;
-
     // DataTexture 特殊处理
-    if (texture instanceof DataTexture && image.data) {
-        return image.data.byteLength;
+    if (texture instanceof DataTexture) {
+        const data = texture.image.data;
+        if (data) {
+            return data.byteLength;
+        }
     }
 
     // 处理普通纹理（Image/Canvas 元素）
-    if (image.width && image.height) {
-        // 估计通道数
-        let channels = 4; // 默认 RGBA
-
-        // 根据 WebGL 常量估计通道数（简化处理）
-        const format = (texture as any).format;
-        switch (format) {
-            case 6407: // RGBFormat (RGB)
-                channels = 3;
-                break;
-            case 6403: // RedFormat (RED)
-                channels = 1;
-                break;
-            case 6408: // RGBAFormat (RGBA)
-            default:
-                channels = 4;
-                break;
-        }
-
-        // 估计每个像素的字节数
-        let bytesPerPixel = 1;
-        const type = (texture as any).type;
-        switch (type) {
-            case 5121: // UnsignedByteType
-                bytesPerPixel = 1;
-                break;
-            case 5123: // UnsignedShortType
-            case 5122: // ShortType
-                bytesPerPixel = 2;
-                break;
-            case 5126: // FloatType
-                bytesPerPixel = 4;
-                break;
-            default:
-                bytesPerPixel = 1;
-                break;
-        }
-
-        return image.width * image.height * channels * bytesPerPixel;
+    const image = texture.image;
+    if (
+        typeof image !== "object" ||
+        image === null ||
+        !("width" in image) ||
+        !("height" in image)
+    ) {
+        return 0;
     }
 
-    // 如果无法确定尺寸，返回估算值
-    return 0;
+    const imgWidth = (image as { width: number }).width;
+    const imgHeight = (image as { height: number }).height;
+    if (!imgWidth || !imgHeight) {
+        return 0;
+    }
+
+    // 估计通道数
+    let channels = 4; // 默认 RGBA
+
+    const format = (texture as any).format;
+    switch (format) {
+        case 6407: // RGBFormat (RGB)
+            channels = 3;
+            break;
+        case 6403: // RedFormat (RED)
+            channels = 1;
+            break;
+        case 6408: // RGBAFormat (RGBA)
+        default:
+            channels = 4;
+            break;
+    }
+
+    // 估计每个像素的字节数
+    let bytesPerPixel = 1;
+    const type = (texture as any).type;
+    switch (type) {
+        case 5121: // UnsignedByteType
+            bytesPerPixel = 1;
+            break;
+        case 5123: // UnsignedShortType
+        case 5122: // ShortType
+            bytesPerPixel = 2;
+            break;
+        case 5126: // FloatType
+            bytesPerPixel = 4;
+            break;
+        default:
+            bytesPerPixel = 1;
+            break;
+    }
+
+    return imgWidth * imgHeight * channels * bytesPerPixel;
 }
 
 /**

@@ -2,7 +2,11 @@
 
 import { type Theme } from "@flywave/flywave-datasource-protocol";
 import { type Projection, EarthConstants, ProjectionType } from "@flywave/flywave-geoutils";
-import { GroundAtmosphereMaterial, SkyAtmosphereMaterial } from "@flywave/flywave-materials";
+import {
+    GroundAtmosphereMaterial,
+    type RendererCapabilities,
+    SkyAtmosphereMaterial
+} from "@flywave/flywave-materials";
 import { assert } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
@@ -131,7 +135,7 @@ export class MapViewAtmosphere {
         private readonly m_mapAnchors: MapAnchors,
         private readonly m_sceneCamera: THREE.Camera,
         private readonly m_projection: Projection,
-        private readonly m_rendererCapabilities: THREE.WebGLCapabilities,
+        private readonly m_rendererCapabilities: RendererCapabilities,
         private readonly m_updateCallback?: () => void,
         private readonly m_atmosphereVariant: AtmosphereVariant = AtmosphereVariant.SkyAndGround,
         private readonly m_materialVariant = AtmosphereShadingVariant.ScatteringShader

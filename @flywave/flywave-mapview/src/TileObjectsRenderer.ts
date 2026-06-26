@@ -10,6 +10,7 @@ import {
     Pickability
 } from "@flywave/flywave-datasource-protocol";
 import type * as THREE from "three";
+import type { Renderer } from "three/webgpu";
 
 import { BackgroundDataSource } from "./BackgroundDataSource";
 import { SolidLineMesh } from "./geometry/SolidLineMesh";
@@ -22,13 +23,13 @@ const DEFAULT_STENCIL_VALUE = 1;
  * Interface to represent the items of three.js render lists.
  */
 interface RenderItem {
-    groupOrder: number;
-    renderOrder: number;
-    program: { id: number };
-    material: { id: number };
-    z: number;
-    id: number;
-    object: THREE.Object3D;
+    groupOrder: number | null;
+    renderOrder: number | null;
+    program?: { id: number } | null;
+    material: THREE.Material | null;
+    z: number | null;
+    id: number | null;
+    object: THREE.Object3D | null;
 }
 
 export class TileObjectRenderer {
@@ -36,7 +37,7 @@ export class TileObjectRenderer {
     // Valid values start at 1, because the screen is cleared to zero
     private m_stencilValue: number = DEFAULT_STENCIL_VALUE;
 
-    constructor(private readonly m_env: MapEnv, private readonly m_renderer: THREE.WebGLRenderer) {}
+    constructor(private readonly m_env: MapEnv, private readonly m_renderer: Renderer) {}
 
     render(
         tile: Tile,
@@ -93,26 +94,37 @@ export class TileObjectRenderer {
          * will also be different.
          */
         const stableSort = (a: RenderItem, b: RenderItem): number => {
-            if (a.groupOrder !== b.groupOrder) {
-                return a.groupOrder - b.groupOrder;
-            } else if (a.renderOrder !== b.renderOrder) {
-                return a.renderOrder - b.renderOrder;
+            const groupOrderA = a.groupOrder ?? 0;
+            const groupOrderB = b.groupOrder ?? 0;
+            if (groupOrderA !== groupOrderB) {
+                return groupOrderA - groupOrderB;
+            }
+            const renderOrderA = a.renderOrder ?? 0;
+            const renderOrderB = b.renderOrder ?? 0;
+            if (renderOrderA !== renderOrderB) {
+                return renderOrderA - renderOrderB;
             } else if (
-                a.object.userData.tileKey &&
-                b.object.userData.tileKey &&
+                a.object?.userData.tileKey &&
+                b.object?.userData.tileKey &&
                 a.object.userData.tileKey.mortonCode() !== b.object.userData.tileKey.mortonCode()
             ) {
                 return (
                     a.object.userData.tileKey.mortonCode() - b.object.userData.tileKey.mortonCode()
                 );
-            } else if (a.program !== b.program) {
-                return a.program.id - b.program.id;
-            } else if (a.material.id !== b.material.id) {
-                return a.material.id - b.material.id;
+            } else if (a.program?.id !== b.program?.id) {
+                return (a.program?.id ?? 0) - (b.program?.id ?? 0);
+            } else if (
+                (a.material as THREE.Material & { id: number }).id !==
+                (b.material as THREE.Material & { id: number }).id
+            ) {
+                return (
+                    (a.material as THREE.Material & { id: number }).id -
+                    (b.material as THREE.Material & { id: number }).id
+                );
             } else if (a.z !== b.z) {
-                return a.z - b.z;
+                return (a.z ?? 0) - (b.z ?? 0);
             } else {
-                return a.id - b.id;
+                return (a.id ?? 0) - (b.id ?? 0);
             }
         };
 

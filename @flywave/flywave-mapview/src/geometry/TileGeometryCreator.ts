@@ -628,7 +628,7 @@ export class TileGeometryCreator {
 
                 if (material === undefined) {
                     material = createMaterial(
-                        mapView.renderer.capabilities,
+                        mapView.capabilities,
                         {
                             technique,
                             env: mapView.env,
@@ -892,7 +892,7 @@ export class TileGeometryCreator {
                         fadeFar: fadingParams.lineFadeFar,
                         extrusionRatio: extrusionAnimationEnabled ? 0 : undefined,
                         vertexColors: bufferGeometry.getAttribute("color") ? true : false,
-                        rendererCapabilities: mapView.renderer.capabilities
+                        rendererCapabilities: mapView.capabilities
                     };
                     const edgeMaterial = new EdgeMaterial(materialParams);
                     const edgeObj = new THREE.LineSegments(
@@ -978,7 +978,7 @@ export class TileGeometryCreator {
                         fadeNear: fadingParams.lineFadeNear,
                         fadeFar: fadingParams.lineFadeFar,
                         vertexColors: bufferGeometry.getAttribute("color") ? true : false,
-                        rendererCapabilities: mapView.renderer.capabilities
+                        rendererCapabilities: mapView.capabilities
                     };
                     const outlineMaterial = new EdgeMaterial(materialParams);
                     const outlineObj = new THREE.LineSegments(

@@ -48,7 +48,7 @@ export class Celestia extends THREE.Object3D {
             mapView.mapAnchors,
             mapView.camera,
             mapView.projection,
-            mapView.renderer.capabilities
+            mapView.capabilities
         );
 
         const mapAdapter = new BaseMapObjectAdapter(new THREE.Object3D(), {});

@@ -2,6 +2,7 @@
 
 import { LRUCache } from "@flywave/flywave-lrucache";
 import * as THREE from "three";
+import type { Renderer } from "three/webgpu";
 
 import { type Font, type FontMetrics } from "./FontCatalog";
 import { GlyphData } from "./GlyphData";
@@ -61,6 +62,20 @@ export class GlyphTextureCache {
     private readonly m_clearGeometry: THREE.BufferGeometry;
     private readonly m_clearMesh: THREE.Mesh;
     private m_clearGeometryDrawCount: number;
+
+    /**
+     * Default renderer capabilities for the text rendering subsystem.
+     *
+     * Both WebGPU and WebGL2 backends support GLSL3-level features.
+     * Reversed depth buffer replaces logarithmic depth buffer in the new architecture.
+     */
+    private static readonly DEFAULT_CAPABILITIES: {
+        isWebGL2: boolean;
+        logarithmicDepthBuffer: boolean;
+    } = {
+        isWebGL2: true,
+        logarithmicDepthBuffer: false
+    };
 
     /**
      * Creates a `GlyphTextureCache` object.
@@ -259,7 +274,7 @@ export class GlyphTextureCache {
      *
      * @param renderer - WebGLRenderer.
      */
-    update(renderer: THREE.WebGLRenderer): void {
+    update(renderer: Renderer): void {
         let oldRenderTarget: THREE.WebGLRenderTarget | null = null;
 
         const willClearGeometry = this.m_clearGeometryDrawCount > 0;
@@ -274,7 +289,7 @@ export class GlyphTextureCache {
         if (willClearGeometry) {
             if (!this.m_clearMaterial) {
                 this.m_clearMaterial = new GlyphClearMaterial({
-                    rendererCapabilities: renderer.capabilities
+                    rendererCapabilities: GlyphTextureCache.DEFAULT_CAPABILITIES
                 });
                 this.m_clearMesh.material = this.m_clearMaterial;
             }
@@ -307,7 +322,7 @@ export class GlyphTextureCache {
         if (willCopyGeometry) {
             if (!this.m_copyMaterial) {
                 this.m_copyMaterial = new GlyphCopyMaterial({
-                    rendererCapabilities: renderer.capabilities
+                    rendererCapabilities: GlyphTextureCache.DEFAULT_CAPABILITIES
                 });
                 this.m_copyMesh.material = this.m_copyMaterial;
             }

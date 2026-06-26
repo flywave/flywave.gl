@@ -46,7 +46,8 @@ export function estimateBytesUsed(object: THREE.Object3D): number {
                 if (value?.isTexture && !dedupeSet.has(value)) {
                     const texture = value as THREE.Texture;
                     const { format, type, image } = texture;
-                    const { width, height } = image;
+                    const img = image as { width: number; height: number };
+                    const { width, height } = img;
                     // Calculate texture memory usage, accounting for mipmaps if enabled
                     const bytes = TextureUtils.getByteLength(width, height, format, type);
                     totalBytes += texture.generateMipmaps ? (bytes * 4) / 3 : bytes;

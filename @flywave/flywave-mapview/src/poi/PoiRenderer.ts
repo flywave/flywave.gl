@@ -5,8 +5,9 @@ import {
     type ImageTexture,
     getPropertyValue
 } from "@flywave/flywave-datasource-protocol";
-import { IconMaterial } from "@flywave/flywave-materials";
+import { IconMaterial, type RendererCapabilities } from "@flywave/flywave-materials";
 import { type MemoryUsage } from "@flywave/flywave-text-canvas";
+import type { Renderer } from "three/webgpu";
 import { assert, LoggerManager, Math2D } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
@@ -112,7 +113,7 @@ class PoiBatch {
      * @param m_onDispose - Callback executed when the `PoiBatch` is disposed.
      */
     constructor(
-        private readonly m_rendererCapabilities: THREE.WebGLCapabilities,
+        private readonly m_rendererCapabilities: RendererCapabilities,
         readonly imageItem: ImageItem,
         private readonly m_onDispose: () => void
     ) {
@@ -250,7 +251,7 @@ export class PoiBatchRegistry {
      *
      * @param m_rendererCapabilities - The {@link THREE.WebGLCapabilities} to be used.
      */
-    constructor(private readonly m_rendererCapabilities: THREE.WebGLCapabilities) {}
+    constructor(private readonly m_rendererCapabilities: RendererCapabilities) {}
 
     /**
      * Register the POI and prepare the [[PoiBatch]] for the POI at first usage.
@@ -466,14 +467,15 @@ export class PoiRenderer {
      * @param m_imageCaches - The {@link ImageCache}s to look for loaded images.
      */
     constructor(
-        private readonly m_renderer: THREE.WebGLRenderer,
+        private readonly m_renderer: Renderer,
+        private readonly m_rendererCapabilities: RendererCapabilities,
         private readonly m_poiManager: PoiManager,
         private readonly m_imageCaches: MapViewImageCache[]
     ) {
-        this.m_poiBatchRegistry = new PoiBatchRegistry(this.renderer.capabilities);
+        this.m_poiBatchRegistry = new PoiBatchRegistry(this.m_rendererCapabilities);
     }
 
-    get renderer(): THREE.WebGLRenderer {
+    get renderer(): Renderer {
         return this.m_renderer;
     }
 

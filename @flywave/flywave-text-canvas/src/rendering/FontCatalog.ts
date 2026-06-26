@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import * as THREE from "three";
+import type { Renderer } from "three/webgpu";
 
 import { type MemoryUsage } from "../TextCanvas";
 import { UnicodeUtils } from "../utils/UnicodeUtils";
@@ -243,7 +244,7 @@ export class FontCatalog {
      *
      * @param renderer - WebGLRenderer.
      */
-    update(renderer: THREE.WebGLRenderer): void {
+    update(renderer: Renderer): void {
         this.m_glyphTextureCache.update(renderer);
     }
 
@@ -527,7 +528,10 @@ export class FontCatalog {
             if (this.m_loadedPages.get(page) !== undefined) {
                 const loadedPage = this.m_loadedPages.get(page);
                 if (loadedPage !== undefined) {
-                    textureBytes += loadedPage.image.width * loadedPage.image.height * 4;
+                    textureBytes +=
+                        (loadedPage.image as { width: number; height: number }).width *
+                        (loadedPage.image as { width: number; height: number }).height *
+                        4;
                 }
             }
         }
@@ -570,10 +574,13 @@ export class FontCatalog {
             sourceGlyphData!.xadvance,
             sourceGlyphData!.xoffset,
             sourceGlyphData!.yoffset,
-            sourceGlyphData!.x / texture!.image.width,
-            1.0 - (sourceGlyphData!.y + sourceGlyphData!.height) / texture!.image.height,
-            (sourceGlyphData!.x + sourceGlyphData!.width) / texture!.image.width,
-            1.0 - sourceGlyphData!.y / texture!.image.height,
+            sourceGlyphData!.x / (texture!.image as { width: number; height: number }).width,
+            1.0 -
+                (sourceGlyphData!.y + sourceGlyphData!.height) /
+                    (texture!.image as { width: number; height: number }).height,
+            (sourceGlyphData!.x + sourceGlyphData!.width) /
+                (texture!.image as { width: number; height: number }).width,
+            1.0 - sourceGlyphData!.y / (texture!.image as { width: number; height: number }).height,
             texture!,
             font
         );

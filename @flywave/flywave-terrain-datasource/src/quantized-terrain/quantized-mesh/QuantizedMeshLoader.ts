@@ -9,6 +9,7 @@ import {
 import {
     BufferAttribute,
     BufferGeometry,
+    type DataTextureImageData,
     DataTexture,
     LinearFilter,
     LinearMipMapLinearFilter,
@@ -352,7 +353,7 @@ export class QuantizedMeshLoader extends QuantizedMeshLoaderBase {
             this.ellipsoid,
             material.roughnessMap
                 ? {
-                      ...material.roughnessMap.image,
+                      ...(material.roughnessMap.image as DataTextureImageData),
                       geoBox: [
                           this.minLat,
                           this.minLon,

@@ -108,7 +108,7 @@
         "sinon": "catalog:",
         "lerna": "catalog:",
         "stream-browserify": "catalog:",
-        "three": "^0.178.0",
+        "three": "catalog:",
         "ts-loader": "catalog:",
         "ts-mocha": "catalog:",
         "ts-node": "catalog:",

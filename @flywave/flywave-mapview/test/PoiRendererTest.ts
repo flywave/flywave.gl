@@ -144,7 +144,12 @@ describe("PoiRenderer", function () {
 
             const testImageItem = addRandomImageToCache(testCache, testImageName, true);
             const caches = [testCache];
-            const poiRenderer = new PoiRenderer(webGLRenderer, poiManager, caches);
+            const poiRenderer = new PoiRenderer(
+                webGLRenderer as any,
+                { isWebGL2: true, logarithmicDepthBuffer: false },
+                poiManager,
+                caches
+            );
             const pointLabel = createPointLabel(testImageName);
             const waitingForLoad = poiRenderer.prepareRender(pointLabel, mapEnv);
             // This is false because the image is still being loaded in the background, notice the
@@ -168,7 +173,12 @@ describe("PoiRenderer", function () {
 
             // Empty cache for now
             const caches = [testCache];
-            const poiRenderer = new PoiRenderer(webGLRenderer, poiManager, caches);
+            const poiRenderer = new PoiRenderer(
+                webGLRenderer as any,
+                { isWebGL2: true, logarithmicDepthBuffer: false },
+                poiManager,
+                caches
+            );
             const pointLabel = createPointLabel(testImageName);
             const waitingForLoad = poiRenderer.prepareRender(pointLabel, mapEnv);
             expect(waitingForLoad).false;

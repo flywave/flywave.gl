@@ -39,6 +39,8 @@ import {
     PerformanceTimer
 } from "@flywave/flywave-utils";
 import * as THREE from "three";
+import { WebGPURenderer, type Renderer } from "three/webgpu";
+import { type RendererCapabilities } from "@flywave/flywave-materials";
 
 import { AnimatedExtrusionHandler } from "./AnimatedExtrusionHandler";
 import { BackgroundDataSource } from "./BackgroundDataSource";
@@ -225,8 +227,7 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
     canvas: HTMLCanvasElement;
 
     /**
-     * Optional WebGL Rendering Context.
-     * (https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext)
+     * Optional rendering context.
      */
     context?: WebGLRenderingContext;
 
@@ -262,7 +263,15 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
         mapView: MapView
     ) => MapRenderingManager;
 
-    logarithmicDepthBuffer?: boolean;
+    /**
+     * Force the renderer to use the WebGL2 backend even if WebGPU is available.
+     *
+     * When `false` or `undefined`, the renderer attempts to use WebGPU first and
+     * falls back to WebGL2 automatically.
+     *
+     * @default `false`
+     */
+    forceWebGL?: boolean;
     /**
      * `Projection` used by the `MapView`.
      *
@@ -860,7 +869,8 @@ export class MapView extends EventDispatcher {
     private m_animationFrameHandle: number | undefined;
     private m_drawing: boolean = false;
     private m_updatePending: boolean = false;
-    private readonly m_renderer: THREE.WebGLRenderer;
+    private readonly m_renderer: Renderer;
+    private readonly m_rendererCapabilities: RendererCapabilities;
     private m_frameNumber = 0;
 
     private readonly m_textElementsRenderer: TextElementsRenderer;
@@ -1034,30 +1044,29 @@ export class MapView extends EventDispatcher {
         // Initialization of the stats
         this.setupStats(this.m_options.enableStatistics);
 
-        this.canvas.addEventListener("webglcontextlost", this.onWebGLContextLost);
-        this.canvas.addEventListener("webglcontextrestored", this.onWebGLContextRestored);
+        // Initialization of the renderer with WebGPU backend (auto-fallback to WebGL2).
+        const powerPreference =
+            this.m_options.powerPreference === undefined ||
+            this.m_options.powerPreference === MapViewPowerPreference.Default
+                ? undefined
+                : (this.m_options.powerPreference as "low-power" | "high-performance");
 
-        // Initialization of the renderer, enable backward compatibility with three.js <= 0.117
-        this.m_renderer = new THREE.WebGLRenderer({
+        this.m_renderer = new WebGPURenderer({
             canvas: this.canvas,
-            context: this.m_options.context,
+            forceWebGL: this.m_options.forceWebGL === true,
             antialias: this.nativeWebglAntialiasEnabled,
             alpha: this.m_options.alpha,
-            logarithmicDepthBuffer:
-                this.m_options.logarithmicDepthBuffer == undefined
-                    ? true
-                    : this.m_options.logarithmicDepthBuffer,
-            preserveDrawingBuffer: this.m_options.preserveDrawingBuffer === true,
-            powerPreference:
-                this.m_options.powerPreference === undefined
-                    ? MapViewPowerPreference.Default
-                    : this.m_options.powerPreference
+            reversedDepthBuffer: true,
+            ...(powerPreference !== undefined ? { powerPreference } : {})
         });
-
-        this.m_renderer.localClippingEnabled = true;
 
         this.m_renderer.autoClear = false;
         this.m_renderer.debug.checkShaderErrors = !isProduction;
+
+        this.m_rendererCapabilities = Object.freeze({
+            isWebGL2: true,
+            logarithmicDepthBuffer: false
+        });
 
         // This is detailed at https://threejs.org/docs/#api/renderers/WebGLRenderer.info
         // When using several WebGLRenderer#render calls per frame, it is the only way to get
@@ -1361,12 +1370,8 @@ export class MapView extends EventDispatcher {
         this.m_renderer.dispose();
 
         if (freeContext) {
-            // See for a discussion of using this call to force freeing the context:
-            //   https://github.com/mrdoob/three.js/pull/17588
-            // The patch to call forceContextLoss() upon WebGLRenderer.dispose() had been merged,
-            // but has been reverted later:
-            //   https://github.com/mrdoob/three.js/pull/19022
-            this.m_renderer.forceContextLoss();
+            // The renderer's backend context is released as part of dispose().
+            // Note: forceContextLoss() is WebGL-only and not available on WebGPURenderer.
         }
 
         this.m_themeManager.dispose();
@@ -1742,17 +1747,26 @@ export class MapView extends EventDispatcher {
     }
 
     /**
-     * The THREE.js `WebGLRenderer` used by this scene.
+     * The renderer used by this scene.
      */
-    get renderer(): THREE.WebGLRenderer {
+    get renderer(): Renderer {
         return this.m_renderer;
+    }
+
+    /**
+     * The renderer capability descriptor used by legacy GLSL materials.
+     */
+    get capabilities(): RendererCapabilities {
+        return this.m_rendererCapabilities;
     }
 
     /**
      * The color used to clear the view.
      */
     get clearColor() {
-        const rendererClearColor = this.m_renderer.getClearColor(cache.color);
+        const rendererClearColor = (this.m_renderer.getClearColor as Function)(
+            cache.color
+        ) as THREE.Color;
         return rendererClearColor !== undefined ? rendererClearColor.getHex() : 0;
     }
 
@@ -3968,6 +3982,7 @@ export class MapView extends EventDispatcher {
             this.m_screenProjector,
             this.m_poiManager,
             this.m_renderer,
+            this.m_rendererCapabilities,
             [this.imageCache, this.userImageCache],
             this.m_options
         );

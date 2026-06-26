@@ -11,7 +11,7 @@ import { SdfTextMaterial } from "../rendering/TextMaterials";
  */
 export interface SdfTextMaterialParameters {
     fontCatalog: FontCatalog;
-    rendererCapabilities: THREE.WebGLCapabilities;
+    rendererCapabilities: { isWebGL2: boolean; logarithmicDepthBuffer: boolean };
     isBackground?: boolean;
     vertexSource?: string;
     fragmentSource?: string;

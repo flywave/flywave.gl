@@ -2,7 +2,8 @@
 
 import { type FontCatalog, TextCanvas } from "@flywave/flywave-text-canvas";
 import { assert } from "@flywave/flywave-utils";
-import type * as THREE from "three";
+import type { Renderer } from "three/webgpu";
+import { type RendererCapabilities } from "@flywave/flywave-materials";
 
 export class TextCanvasFactory {
     private m_minGlyphCount: number = 0; //Min amount of glyphs each [[TextCanvas]] layer can store.
@@ -11,8 +12,12 @@ export class TextCanvasFactory {
     /**
      * Creates an instance of text canvas factory.
      * @param m_renderer -
+     * @param rendererCapabilities -
      */
-    constructor(private readonly m_renderer: THREE.WebGLRenderer) {}
+    constructor(
+        private readonly m_renderer: Renderer,
+        private readonly m_rendererCapabilities: RendererCapabilities
+    ) {}
 
     setGlyphCountLimits(min: number, max: number) {
         this.m_minGlyphCount = min;
@@ -29,6 +34,7 @@ export class TextCanvasFactory {
 
         return new TextCanvas({
             renderer: this.m_renderer,
+            rendererCapabilities: this.m_rendererCapabilities,
             fontCatalog,
             minGlyphCount: this.m_minGlyphCount,
             maxGlyphCount: this.m_maxGlyphCount,

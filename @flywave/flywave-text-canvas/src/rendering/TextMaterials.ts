@@ -154,12 +154,17 @@ const sdfTextFragmentSource: string = `
         gl_FragColor = color;
     }`;
 
+interface RendererCapabilities {
+    readonly isWebGL2: boolean;
+    readonly logarithmicDepthBuffer: boolean;
+}
+
 interface RendererMaterialParameters {
-    rendererCapabilities: THREE.WebGLCapabilities;
+    rendererCapabilities: RendererCapabilities;
 }
 
 interface RawShaderMaterialParameters extends THREE.ShaderMaterialParameters {
-    rendererCapabilities: THREE.WebGLCapabilities;
+    rendererCapabilities: RendererCapabilities;
 }
 
 class RawShaderMaterial extends THREE.RawShaderMaterial {

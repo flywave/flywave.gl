@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import type * as THREE from "three";
+import type { Renderer } from "three/webgpu";
 
 /**
  * `IPassManager` provides a base interface for {@link Pass}
@@ -11,7 +11,7 @@ export interface IPassManager {
      * The render method to extend in `IPassManager`'s implementations. This is the place where the
      * desired setups and effect composing and chaining happen.
      */
-    render(renderer: THREE.WebGLRenderer, ...args: any[]): void;
+    render(renderer: Renderer, ...args: any[]): void;
 
     /**
      * The resize method to extend in {@link Pass} implementations

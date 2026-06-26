@@ -34,8 +34,8 @@ catalog:
 
     # 核心依赖
     "typescript": 5.8.2
-    "@types/three": ^0.178.0
-    "three": ^0.178.0
+    "@types/three": ^0.184.0
+    "three": ^0.184.0
 
     # 测试相关
     "@types/mocha": "^10.0.10"
@@ -51,10 +51,10 @@ catalog:
     "source-map-support": "^0.5.19"
 
     # 工具库
-    "url": "0.11.4" 
+    "url": "0.11.4"
     "@types/earcut": "^2.1.1"
     "earcut": "^2.2.2"
-    "poly-decomp-es" : "^0.4.2"
+    "poly-decomp-es": "^0.4.2"
     "tess2-ts": "^1.0.8"
     "@types/long": "^4.0.1"
     "long": "^4.0.0"
@@ -66,13 +66,13 @@ catalog:
     "ua-parser-js": "^0.7.21"
     "xml2js": "^0.4.23"
     "@types/fs-extra": "^9.0.1"
-    "postprocessing": "6.38.0"
+    "postprocessing": "6.39.1"
     "promise-limit": "^2.6.0"
     "@tweenjs/tween.js": "^18.6.4"
     "rbush": "^3.0.1"
     "@turf/geojson-rbush": "^7.2.0"
     "@turf/turf": "^5.1.6"
-    "geojson-vt": "^4.0.2" 
+    "geojson-vt": "^4.0.2"
     "geokdbush": "^1.1.0"
     "hat": "~0.0.3"
     "immutable": "^4.0.0"

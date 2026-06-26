@@ -25,6 +25,8 @@ import {
     PerformanceTimer
 } from "@flywave/flywave-utils";
 import * as THREE from "three";
+import type { Renderer } from "three/webgpu";
+import { type RendererCapabilities } from "@flywave/flywave-materials";
 
 import { type DataSource } from "../DataSource";
 import { debugContext } from "../DebugContext";
@@ -389,7 +391,8 @@ export class TextElementsRenderer {
         private readonly m_viewState: ViewState,
         private readonly m_screenProjector: ScreenProjector,
         private readonly m_poiManager: PoiManager,
-        private m_renderer: THREE.WebGLRenderer,
+        private m_renderer: Renderer,
+        private readonly m_rendererCapabilities: RendererCapabilities,
         private readonly m_imageCaches: MapViewImageCache[],
         options: TextElementsRendererOptions,
         textCanvasFactory?: TextCanvasFactory,
@@ -409,14 +412,22 @@ export class TextElementsRenderer {
             );
         }
 
-        this.m_textCanvasFactory = textCanvasFactory ?? new TextCanvasFactory(this.m_renderer);
+        this.m_textCanvasFactory =
+            textCanvasFactory ??
+            new TextCanvasFactory(this.m_renderer, this.m_rendererCapabilities);
         this.m_textCanvasFactory.setGlyphCountLimits(
             this.m_options.minNumGlyphs!,
             this.m_options.maxNumGlyphs!
         );
 
         this.m_poiRenderer =
-            poiRenderer ?? new PoiRenderer(this.m_renderer, this.m_poiManager, this.m_imageCaches);
+            poiRenderer ??
+            new PoiRenderer(
+                this.m_renderer,
+                this.m_rendererCapabilities,
+                this.m_poiManager,
+                this.m_imageCaches
+            );
 
         this.initializeCamera();
 
@@ -468,10 +479,11 @@ export class TextElementsRenderer {
         });
     }
 
-    restoreRenderers(renderer: THREE.WebGLRenderer) {
+    restoreRenderers(renderer: Renderer) {
         this.m_renderer = renderer;
         this.m_poiRenderer = new PoiRenderer(
             this.m_renderer,
+            this.m_rendererCapabilities,
             this.m_poiManager,
             this.m_imageCaches
         );

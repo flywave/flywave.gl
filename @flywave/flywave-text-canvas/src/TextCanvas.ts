@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import * as THREE from "three";
+import type { Renderer } from "three/webgpu";
 
 import { type FontCatalog } from "./rendering/FontCatalog";
 import { type GlyphData } from "./rendering/GlyphData";
@@ -164,9 +165,14 @@ export interface TextCanvasLayer {
  */
 export interface TextCanvasParameters {
     /**
-     * WebGLRenderer internally used by this `TextCanvas`.
+     * Renderer internally used by this `TextCanvas`.
      */
-    renderer: THREE.WebGLRenderer;
+    renderer: Renderer;
+
+    /**
+     * Capabilities of the renderer, used for material creation.
+     */
+    rendererCapabilities: { isWebGL2: boolean; logarithmicDepthBuffer: boolean };
 
     /**
      * Initial [[FontCatalog]].
@@ -226,7 +232,7 @@ export class TextCanvas {
 
     readonly name?: string;
 
-    private readonly m_renderer: THREE.WebGLRenderer;
+    private readonly m_renderer: Renderer;
     private m_fontCatalog: FontCatalog;
 
     private readonly m_currentTextRenderStyle: TextRenderStyle;
@@ -261,7 +267,7 @@ export class TextCanvas {
             this.m_ownsMaterial = true;
             this.m_material = createSdfTextMaterial({
                 fontCatalog: params.fontCatalog,
-                rendererCapabilities: this.m_renderer.capabilities
+                rendererCapabilities: params.rendererCapabilities
             });
         } else {
             this.m_ownsMaterial = false;
@@ -272,7 +278,7 @@ export class TextCanvas {
             this.m_bgMaterial = createSdfTextMaterial({
                 fontCatalog: params.fontCatalog,
                 isBackground: true,
-                rendererCapabilities: this.m_renderer.capabilities
+                rendererCapabilities: params.rendererCapabilities
             });
         } else {
             this.m_ownsBgMaterial = false;
@@ -417,7 +423,7 @@ export class TextCanvas {
         camera: THREE.OrthographicCamera,
         lowerLayerId?: number,
         higherLayerId?: number,
-        target?: THREE.WebGLRenderTarget,
+        target?: THREE.RenderTarget,
         clear?: boolean
     ) {
         this.m_fontCatalog.update(this.m_renderer);

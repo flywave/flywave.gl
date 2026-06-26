@@ -15,7 +15,7 @@ import { estimateGeometryMemory } from "@flywave/flywave-utils/meshMemoryUtils";
 import {
     type BufferGeometry,
     type Material,
-    type TextureImageData,
+    type DataTextureImageData,
     BufferGeometryEventMap,
     DataTexture,
     LinearFilter,
@@ -43,7 +43,7 @@ import { getProjection, getProjectionName } from "@flywave/flywave-datasource-pr
 
 const isWorker = typeof document === "undefined";
 
-export type WaterMask = TextureImageData & {
+export type WaterMask = DataTextureImageData & {
     geoBox: GeoBoxArray;
 };
 

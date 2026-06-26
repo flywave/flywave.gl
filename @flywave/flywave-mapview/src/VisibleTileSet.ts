@@ -546,7 +546,7 @@ export class VisibleTileSet {
             camera,
             projection,
             elevationProvider,
-            this.m_frustumIntersection.mapView.renderer.capabilities.logarithmicDepthBuffer
+            this.m_frustumIntersection.mapView.capabilities.logarithmicDepthBuffer
         );
         return this.m_viewRange;
     }

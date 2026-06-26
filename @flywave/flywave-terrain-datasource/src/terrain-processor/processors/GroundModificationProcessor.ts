@@ -37,8 +37,9 @@ export class GroundModificationProcessor {
         } = options;
 
         if (baseDemTexture?.image) {
-            width = baseDemTexture.image.width;
-            height = baseDemTexture.image.height;
+            const img = baseDemTexture.image as { width: number; height: number };
+            width = img.width;
+            height = img.height;
         }
 
         const renderEnv = this.environment || getGlobalRenderEnvironment();

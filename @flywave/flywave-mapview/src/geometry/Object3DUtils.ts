@@ -48,7 +48,7 @@ export namespace Object3DUtils {
         visitedObjects.set(texture.uuid, true);
 
         // May be HTMLImage or ImageData
-        const image = texture.image;
+        const image = texture.image as { width: number; height: number };
         // Assuming RGBA
         const imageBytes = 4 * image.width * image.height;
         objectSize.heapSize += imageBytes;

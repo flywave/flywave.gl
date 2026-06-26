@@ -1,5 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import type { TypedArray } from "three/src/core/BufferAttribute.js";
+import { type RendererCapabilities } from "@flywave/flywave-materials";
+
 import {
     type BufferAttribute,
     type Env,
@@ -119,7 +122,7 @@ function createTextureFromRawImage(
         const buffer = getTextureBuffer(textureBuffer.buffer, textureDataType);
 
         const texture = new THREE.DataTexture(
-            buffer as ArrayBufferView,
+            buffer,
             properties.width,
             properties.height,
             properties.format ? toPixelFormat(properties.format) : undefined,
@@ -230,7 +233,7 @@ function createTexture(
  * @internal
  */
 export function createMaterial(
-    rendererCapabilities: THREE.WebGLCapabilities,
+    rendererCapabilities: RendererCapabilities,
     options: MaterialOptions,
     onTextureCreated?: (texture: Promise<THREE.Texture>) => void
 ): THREE.Material | undefined {
@@ -888,7 +891,7 @@ function getBaseColorPropName(technique: Technique): string | undefined {
 function getTextureBuffer(
     buffer: ArrayBuffer,
     textureDataType: THREE.TextureDataType | undefined
-): BufferSource {
+): TypedArray {
     if (textureDataType === undefined) {
         return new Uint8Array(buffer);
     }

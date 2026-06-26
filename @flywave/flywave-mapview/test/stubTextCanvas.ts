@@ -32,9 +32,10 @@ export function stubTextCanvas(
     textWidth: number,
     textHeight: number
 ): TextCanvas {
-    const renderer = { capabilities: { isWebGL2: false } } as any as THREE.WebGLRenderer;
+    const renderer = { capabilities: { isWebGL2: false } } as any;
     const textCanvas = new TextCanvas({
         renderer,
+        rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false },
         fontCatalog,
         minGlyphCount: 1,
         maxGlyphCount: 1

@@ -1057,7 +1057,10 @@ export class PerformanceStatistics {
      * Add the render state information from [[THREE.WebGLInfo]] to the current frame.
      * @param {THREE.WebGLInfo} webGlInfo
      */
-    addWebGLInfo(webGlInfo: THREE.WebGLInfo) {
+    addWebGLInfo(webGlInfo: {
+        render?: { calls: number; points: number; lines: number; triangles: number };
+        memory?: { geometries: number; textures: number; programs?: number };
+    }) {
         if (webGlInfo.render !== undefined) {
             this.currentFrame.setValue(
                 "gl.numCalls",
@@ -1086,10 +1089,10 @@ export class PerformanceStatistics {
                 webGlInfo.memory.textures === null ? 0 : webGlInfo.memory.textures
             );
         }
-        if (webGlInfo.programs !== undefined) {
+        if (webGlInfo.memory?.programs !== undefined) {
             this.currentFrame.setValue(
                 "gl.numPrograms",
-                webGlInfo.programs === null ? 0 : webGlInfo.programs.length
+                webGlInfo.memory.programs === null ? 0 : webGlInfo.memory.programs
             );
         }
     }

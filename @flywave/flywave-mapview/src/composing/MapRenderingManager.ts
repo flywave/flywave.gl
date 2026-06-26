@@ -32,6 +32,7 @@ import {
     CopyPass
 } from "postprocessing";
 import * as THREE from "three";
+import type { Renderer } from "three/webgpu";
 
 import { ClassificationType } from "../DataSource";
 import { SelectiveBloomEffect } from "./SelectiveBloomEffect";
@@ -134,14 +135,14 @@ export interface IMapRenderingManager extends IPassManager {
 
     /**
      * Render the scene
-     * @param renderer - WebGL renderer
+     * @param renderer - Renderer
      * @param scene - Scene to render
      * @param camera - Camera to use for rendering
      * @param isStaticFrame - Whether this is a static frame
      * @param time - Current time for animations
      */
     render(
-        renderer: THREE.WebGLRenderer,
+        renderer: Renderer,
         scene: THREE.Scene,
         camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
         isStaticFrame: boolean,
@@ -355,7 +356,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_msaaEnabled: boolean = true;
     private m_width: number = 1;
     private m_height: number = 1;
-    private m_renderer?: THREE.WebGLRenderer;
+    private m_renderer?: Renderer;
     private m_scene?: THREE.Scene;
     private m_camera?: THREE.PerspectiveCamera | THREE.OrthographicCamera;
 
@@ -430,7 +431,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
 
         // Initialize composer and main render pass
-        this.m_composer = new EffectComposer(this.m_renderer, {
+        this.m_composer = new EffectComposer(this.m_renderer as unknown as THREE.WebGLRenderer, {
             multisampling: this.m_dynamicMsaaSamplingLevel,
             stencilBuffer: true,
             depthBuffer: true
@@ -959,7 +960,7 @@ export class MapRenderingManager implements IMapRenderingManager {
      * @param isStaticFrame - Whether this is a static frame
      */
     render(
-        renderer: THREE.WebGLRenderer,
+        renderer: Renderer,
         scene: THREE.Scene,
         camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
         isStaticFrame: boolean

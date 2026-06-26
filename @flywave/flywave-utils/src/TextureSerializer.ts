@@ -31,7 +31,7 @@ export async function textureToImageBitmap(texture: THREE.Texture): Promise<Imag
             });
         } else {
             // For OffscreenCanvas or other cases
-            return await createImageBitmap(texture.image, {
+            return await createImageBitmap(texture.image as ImageBitmapSource, {
                 imageOrientation: texture.flipY ? "flipY" : "none"
             });
         }

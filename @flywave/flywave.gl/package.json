@@ -51,7 +51,7 @@
         "url": "https://github.com/flywave/flywave.gl/issues"
     },
     "peerDependencies": {
-        "three": ">= 0.169.0 < 0.182.0"
+        "three": ">= 0.184.0"
     },
     "publishConfig": {
         "access": "public"

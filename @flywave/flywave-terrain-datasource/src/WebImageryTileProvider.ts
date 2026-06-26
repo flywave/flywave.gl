@@ -77,7 +77,10 @@ class WebImageryTileResource extends TileValidResource {
      */
     getBytesUsed(): number {
         return this.tiles.reduce(
-            (acc, cur) => acc + (cur.texture.image || cur.texture.source)?.data?.byteLength || 0,
+            (acc, cur) =>
+                acc +
+                    (cur.texture.image as { data?: { byteLength: number } } | undefined)?.data
+                        ?.byteLength || 0,
             0
         );
     }

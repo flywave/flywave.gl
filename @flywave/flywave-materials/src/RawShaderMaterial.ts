@@ -6,10 +6,20 @@ import * as THREE from "three";
 import { getShaderMaterialDefine, setShaderMaterialDefine } from "./Utils";
 
 /**
- * [[RawShaderMaterial]] parameters.
+ * Renderer capability descriptor consumed by legacy GLSL-based materials.
+ *
+ * In the WebGPU renderer architecture, these properties are derived from the
+ * renderer configuration rather than queried from a `WebGLRenderingContext`.
+ * They exist solely to bridge the transition period while GLSL materials are
+ * progressively rewritten as TSL node materials.
  */
+export interface RendererCapabilities {
+    readonly isWebGL2: boolean;
+    readonly logarithmicDepthBuffer: boolean;
+}
+
 export interface RendererMaterialParameters {
-    rendererCapabilities: THREE.WebGLCapabilities;
+    rendererCapabilities: RendererCapabilities;
 }
 
 export interface RawShaderMaterialParameters
