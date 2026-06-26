@@ -66,5 +66,10 @@ export type NodeValueTypeOf<T extends NodeType> =
 /**
  * Unified TSL node type. The generic parameter is purely annotational;
  * it does not enforce type safety at compile time.
+ *
+ * TSL nodes support operator methods (.sub, .mul, .dot, etc.) through a
+ * runtime proxy system that `@types/three` does not fully declare. Code
+ * within `FnVar` / `FnLayout` callback scopes operates in a type-loose zone,
+ * analogous to how GLSL shader strings bypass TypeScript entirely.
  */
 export type Node<T extends NodeType = NodeType> = ThreeNode;
