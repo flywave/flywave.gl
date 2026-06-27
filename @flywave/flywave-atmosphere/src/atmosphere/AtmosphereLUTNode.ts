@@ -1,0 +1,215 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
+// @ts-nocheck
+// AtmosphereLUTNode extends Node and uses WebGPU-specific lifecycle hooks
+// (updateBeforeType, version, dispatchEvent) not fully typed in @types/three@0.184.
+
+import { Data3DTexture, FloatType, HalfFloatType, RGBAFormat, Texture } from "three";
+import {
+    Node,
+    NodeUpdateType,
+    RendererUtils,
+    type NodeBuilder,
+    type NodeFrame,
+    type Renderer,
+    type Texture3DNode,
+    type TextureNode
+} from "three/webgpu";
+
+import { isFloatLinearSupported } from "../capabilities";
+import type { AnyFloatType } from "../tsl/types";
+import { isWebGPU } from "../tsl/utils";
+import { outputTexture } from "../tsl/OutputTextureNode";
+import { outputTexture3D } from "../tsl/OutputTexture3DNode";
+
+import { requestIdleCallback } from "./helpers/requestIdleCallback";
+import type { AtmosphereLUTTextures, AtmosphereLUTTexturesContext } from "./AtmosphereLUTTextures";
+import { AtmosphereLUTTexturesWebGL } from "./AtmosphereLUTTexturesWebGL";
+import { AtmosphereLUTTexturesWebGPU } from "./AtmosphereLUTTexturesWebGPU";
+import { AtmosphereParameters } from "./AtmosphereParameters";
+import type { AtmosphereLUTTexture3DName, AtmosphereLUTTextureName } from "./AtmosphereLUTTypes";
+
+const { resetRendererState, restoreRendererState } = RendererUtils;
+
+async function timeSlice<T>(iterable: Iterable<T>): Promise<T> {
+    const iterator = iterable[Symbol.iterator]();
+    return await new Promise<T>((resolve, reject) => {
+        const callback = (): void => {
+            try {
+                const { value, done } = iterator.next();
+                if (done === true) {
+                    resolve(value);
+                } else {
+                    requestIdleCallback(callback);
+                }
+            } catch (error: unknown) {
+                reject(error instanceof Error ? error : new Error());
+            }
+        };
+        requestIdleCallback(callback);
+    });
+}
+
+let rendererState: RendererUtils.RendererState;
+
+function run(renderer: Renderer, task: () => void): boolean {
+    rendererState = resetRendererState(renderer, rendererState);
+    renderer.setClearColor(0, 0);
+    renderer.autoClear = false;
+    task();
+    restoreRendererState(renderer, rendererState);
+    return true;
+}
+
+const emptyTexture = new Texture();
+const emptyTexture3D = (() => {
+    const texture = new Data3DTexture(new Uint8Array(4));
+    texture.format = RGBAFormat;
+    texture.needsUpdate = true;
+    return texture;
+})();
+
+const updateEvent = { type: "update" as const };
+
+export class AtmosphereLUTNode extends Node {
+    static get type(): string {
+        return "AtmosphereLUTNode";
+    }
+
+    parameters: AtmosphereParameters;
+    textureType?: AnyFloatType;
+
+    private textures?: AtmosphereLUTTextures;
+
+    private readonly textureNodes = {
+        transmittance: outputTexture(this, emptyTexture),
+        multipleScattering: outputTexture(this, emptyTexture),
+        scattering: outputTexture3D(this, emptyTexture3D),
+        singleMieScattering: outputTexture3D(this, emptyTexture3D),
+        higherOrderScattering: outputTexture3D(this, emptyTexture3D),
+        irradiance: outputTexture(this, emptyTexture)
+    };
+
+    private currentVersion?: number;
+    private updating = false;
+    private disposeQueue: (() => void) | undefined;
+
+    constructor(parameters = new AtmosphereParameters(), textureType?: AnyFloatType) {
+        super(null);
+        this.updateBeforeType = NodeUpdateType.FRAME;
+
+        this.parameters = parameters;
+        this.textureType = textureType;
+    }
+
+    getTextureNode(name: AtmosphereLUTTextureName): TextureNode;
+    getTextureNode(name: AtmosphereLUTTexture3DName): Texture3DNode;
+    getTextureNode(
+        name: AtmosphereLUTTextureName | AtmosphereLUTTexture3DName
+    ): TextureNode | Texture3DNode {
+        return this.textureNodes[name];
+    }
+
+    private dispatchUpdate(): void {
+        this.dispatchEvent(updateEvent);
+    }
+
+    private *performCompute(
+        renderer: Renderer,
+        context: AtmosphereLUTTexturesContext
+    ): Iterable<boolean> {
+        const { textures } = this;
+        if (textures == null) {
+            return;
+        }
+
+        yield run(renderer, () => {
+            textures.computeTransmittance(renderer, context);
+            this.dispatchUpdate();
+        });
+        yield run(renderer, () => {
+            textures.computeMultipleScattering(renderer, context);
+            this.dispatchUpdate();
+        });
+        yield run(renderer, () => {
+            textures.computeScattering(renderer, context);
+            this.dispatchUpdate();
+        });
+        yield run(renderer, () => {
+            textures.computeIrradiance(renderer, context);
+            this.dispatchUpdate();
+        });
+    }
+
+    async updateTextures(renderer: Renderer): Promise<void> {
+        if (this.textures == null) {
+            throw new Error("LUT textures are not initialized.");
+        }
+
+        const context = this.textures.createContext();
+        this.updating = true;
+        try {
+            await timeSlice(this.performCompute(renderer, context));
+        } finally {
+            this.updating = false;
+            context.dispose();
+            this.disposeQueue?.();
+        }
+    }
+
+    updateBefore({ renderer }: NodeFrame): void {
+        if (renderer == null || this.version === this.currentVersion) {
+            return;
+        }
+        this.currentVersion = this.version;
+
+        this.updateTextures(renderer).catch((error: unknown) => {
+            throw error instanceof Error ? error : new Error();
+        });
+    }
+
+    setup(builder: NodeBuilder): unknown {
+        if (this.textures == null) {
+            this.textures = isWebGPU(builder)
+                ? new AtmosphereLUTTexturesWebGPU()
+                : new AtmosphereLUTTexturesWebGL();
+
+            const {
+                transmittance,
+                irradiance,
+                multipleScattering,
+                scattering,
+                singleMieScattering,
+                higherOrderScattering
+            } = this.textureNodes;
+            transmittance.value = this.textures.get("transmittance");
+            multipleScattering.value = this.textures.get("multipleScattering");
+            scattering.value = this.textures.get("scattering");
+            singleMieScattering.value = this.textures.get("singleMieScattering");
+            higherOrderScattering.value = this.textures.get("higherOrderScattering");
+            irradiance.value = this.textures.get("irradiance");
+        }
+
+        const textureType = isFloatLinearSupported(builder.renderer)
+            ? this.textureType ?? FloatType
+            : HalfFloatType;
+        this.parameters.update();
+        this.textures.setup(this.parameters, textureType);
+
+        return super.setup(builder);
+    }
+
+    dispose(): void {
+        if (this.updating) {
+            this.disposeQueue = () => {
+                this.dispose();
+                this.disposeQueue = undefined;
+            };
+            return;
+        }
+
+        this.textures?.dispose();
+        this.textures = undefined;
+        super.dispose();
+    }
+}
