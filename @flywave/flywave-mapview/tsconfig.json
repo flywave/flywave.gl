@@ -5,6 +5,8 @@
         "rootDir": "./",
         "composite": true,
         "paths": {
+            "@flywave/flywave-atmosphere": ["../flywave-atmosphere/src"],
+            "@flywave/flywave-atmosphere/*": ["../flywave-atmosphere/src/*"],
             "@flywave/flywave-datasource-protocol": ["../flywave-datasource-protocol/src"],
             "@flywave/flywave-datasource-protocol/*": ["../flywave-datasource-protocol/src/*"],
             "@flywave/flywave-fetch": ["../flywave-fetch"],
@@ -26,6 +28,9 @@
     },
     "include": ["src/**/*", "test/**/*.ts"],
     "references": [
+        {
+            "path": "../flywave-atmosphere"
+        },
         {
             "path": "../flywave-datasource-protocol"
         },

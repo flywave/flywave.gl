@@ -643,17 +643,26 @@ export class Tile extends TileInternal {
         intersection: TileIntersection,
         batchName: string = "_BATCHID"
     ): Record<string, any> {
-        // Get batchId from intersection
         let batchId: number | undefined;
 
-        // First try to get batchId from intersection's object
-        // In 3D Tiles, batchId is typically stored in geometry attributes
         if (intersection.object && (intersection.object as any).geometry) {
             const geometry = (intersection.object as any).geometry;
 
-            // Try to get the attribute corresponding to batchName from geometry attributes
-            if (geometry.attributes && geometry.attributes[batchName]) {
-                const attribute = geometry.attributes[batchName];
+            // Find the batchId attribute name: try configured name first,
+            // then fallback to common variants (_batchid, _BATCHID, batchId)
+            let attrName = batchName;
+            if (!geometry.attributes[attrName]) {
+                const candidates = ["_batchid", "_BATCHID", "batchId", "_batch_id", "_BATCH_ID"];
+                for (const candidate of candidates) {
+                    if (geometry.attributes[candidate]) {
+                        attrName = candidate;
+                        break;
+                    }
+                }
+            }
+
+            if (geometry.attributes && geometry.attributes[attrName]) {
+                const attribute = geometry.attributes[attrName];
 
                 // If it's a BufferAttribute, try to get the value at the corresponding index
                 if (attribute && "array" in attribute) {

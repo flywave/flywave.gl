@@ -1,6 +1,6 @@
+// @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// @ts-nocheck
 // TSL shader generators use operator chaining not fully typed in @types/three.
 
 import { abs, Fn, screenCoordinate, time, vec2, vec3 } from "three/tsl";

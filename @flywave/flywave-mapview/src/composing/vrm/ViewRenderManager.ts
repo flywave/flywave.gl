@@ -1,0 +1,236 @@
+// @ts-nocheck
+import * as THREE from "three";
+import { float, mrt, output, pass, uniform, vec4 } from "three/tsl";
+import { RenderPipeline, type Renderer } from "three/webgpu";
+
+import {
+    dithering,
+    lensFlare,
+    aerialPerspective,
+    convertToTexture,
+    agxPunchyToneMapping,
+    AgXPunchyToneMapping,
+    temporalAntialias,
+    highpVelocity,
+    type LensFlareNode,
+    type AerialPerspectiveNode,
+    type TemporalAntialiasNode
+} from "@flywave/flywave-atmosphere";
+
+import type { IViewRenderConfig, IViewRenderManager } from "./ViewRenderTypes";
+import { vignette } from "./effects/vignette";
+import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
+import { bloom } from "./effects/bloom";
+import { outline } from "./effects/outline";
+import { translucentLayer } from "./effects/translucentLayer";
+import { TranslucentLayerEffect } from "./TranslucentLayerEffect";
+
+export class ViewRenderManager implements IViewRenderManager {
+    readonly config: IViewRenderConfig = {
+        aerialPerspective: { enabled: false },
+        bloom: { enabled: false, intensity: 0.05, radius: 0.5, threshold: 0.5 },
+        vignette: { enabled: false, offset: 1, darkness: 1 },
+        brightnessContrast: { enabled: false, brightness: 0, contrast: 0 },
+        hueSaturation: { enabled: false, hue: 0, saturation: 0 },
+        sepia: { enabled: false, amount: 0 },
+        outline: { enabled: false, thickness: 0.002, color: "#ffffff" },
+        taa: { enabled: false },
+        lensFlare: {
+            enabled: false,
+            bloomIntensity: 0.05,
+            ghostIntensity: 0.005,
+            haloIntensity: 0.005,
+            glareIntensity: 1
+        }
+    };
+
+    needsUpdate: boolean = true;
+
+    private pipeline?: RenderPipeline;
+    private passNode?: ReturnType<typeof pass>;
+    private lensFlareNode?: LensFlareNode;
+    private aerialNode?: AerialPerspectiveNode;
+    private taaNode?: TemporalAntialiasNode;
+    private camera?: THREE.Camera;
+
+    bloomObjects: Set<THREE.Object3D> = new Set();
+    bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
+    translucentLayerEffect?: TranslucentLayerEffect;
+
+    constructor(private readonly renderer: Renderer) {}
+
+    private buildNodeGraph(scene: THREE.Scene, camera: THREE.Camera): void {
+        this.pipeline?.dispose();
+        this.camera = camera;
+
+        const taaEnabled = this.config.taa.enabled;
+        const bloomEnabled = this.config.bloom.enabled;
+
+        const mrtEntries: Record<string, unknown> = { output };
+        if (taaEnabled) mrtEntries.velocity = highpVelocity;
+        if (bloomEnabled) mrtEntries.bloomIntensity = float(0);
+
+        this.passNode =
+            Object.keys(mrtEntries).length > 1
+                ? pass(scene, camera, { samples: 0 }).setMRT(mrt(mrtEntries))
+                : pass(scene, camera, { samples: 0 });
+
+        const colorNode = this.passNode.getTextureNode("output");
+        const depthNode = this.passNode.getTextureNode("depth");
+
+        let outputNode = colorNode;
+
+        if (this.config.aerialPerspective.enabled) {
+            this.aerialNode = aerialPerspective(convertToTexture(outputNode), depthNode);
+            outputNode = this.aerialNode;
+        }
+
+        if (bloomEnabled) {
+            const bloomIntensityPass = this.passNode.getTextureNode("bloomIntensity");
+            const bloomInput =
+                bloomIntensityPass != null ? colorNode.mul(bloomIntensityPass) : colorNode;
+            const bloomPass = bloom(
+                bloomInput,
+                this.config.bloom.intensity,
+                this.config.bloom.radius,
+                this.config.bloom.threshold
+            );
+            outputNode = outputNode.add(bloomPass);
+        }
+
+        if (this.config.lensFlare.enabled) {
+            this.lensFlareNode = lensFlare(convertToTexture(outputNode));
+            outputNode = this.lensFlareNode;
+        }
+
+        const agxResult = agxPunchyToneMapping(outputNode.rgb, uniform(3));
+        let finalNode = vec4(agxResult, 1);
+
+        if (taaEnabled) {
+            const velocityNode = this.passNode.getTextureNode("velocity");
+            this.taaNode = temporalAntialias(finalNode, depthNode, velocityNode, camera);
+            finalNode = this.taaNode;
+        }
+
+        if (this.config.outline.enabled) {
+            finalNode = outline(
+                finalNode,
+                depthNode,
+                this.config.outline.thickness,
+                this.config.outline.color
+            );
+        }
+        if (this.config.vignette.enabled) {
+            finalNode = vignette(
+                finalNode,
+                this.config.vignette.offset,
+                this.config.vignette.darkness
+            );
+        }
+        if (this.config.brightnessContrast.enabled) {
+            finalNode = brightnessContrast(
+                finalNode,
+                this.config.brightnessContrast.brightness,
+                this.config.brightnessContrast.contrast
+            );
+        }
+        if (this.config.hueSaturation.enabled) {
+            finalNode = hueSaturation(
+                finalNode,
+                this.config.hueSaturation.hue,
+                this.config.hueSaturation.saturation
+            );
+        }
+        if (this.config.sepia.enabled) {
+            finalNode = sepia(finalNode, this.config.sepia.amount);
+        }
+
+        if (this.translucentLayerEffect != null) {
+            const tle = this.translucentLayerEffect;
+            const layerIDTex = tle.getLayerIDTexture();
+            const layerColorTex = tle.getLayerColorTexture();
+            const layerDepthTex = tle.getLayerDepthTexture();
+            const layerDataTex = tle.getLayerDataTexture();
+            if (
+                layerIDTex != null &&
+                layerColorTex != null &&
+                layerDepthTex != null &&
+                layerDataTex != null
+            ) {
+                const cam = camera as THREE.PerspectiveCamera;
+                finalNode = translucentLayer(
+                    finalNode,
+                    layerIDTex,
+                    layerColorTex,
+                    layerDepthTex,
+                    layerDataTex,
+                    tle.getLayerCount(),
+                    cam.near,
+                    cam.far
+                );
+            }
+        }
+
+        finalNode = finalNode.add(dithering);
+
+        this.pipeline = new RenderPipeline(
+            this.renderer,
+            finalNode as ConstructorParameters<typeof RenderPipeline>[1]
+        );
+        this.pipeline.outputColorTransform = true;
+        this.needsUpdate = false;
+    }
+
+    render(scene: THREE.Scene, camera: THREE.Camera): void {
+        if (this.translucentLayerEffect != null) {
+            this.translucentLayerEffect.renderLayerPasses();
+            if (this.needsUpdate) {
+                this.buildNodeGraph(scene, camera);
+            }
+        }
+        if (this.needsUpdate || this.pipeline == null) {
+            this.buildNodeGraph(scene, camera);
+        }
+        this.pipeline.render();
+    }
+
+    setSize(width: number, height: number): void {
+        this.needsUpdate = true;
+    }
+
+    dispose(): void {
+        this.pipeline?.dispose();
+        this.pipeline = undefined;
+        this.passNode = undefined;
+        this.lensFlareNode = undefined;
+        this.aerialNode = undefined;
+        this.taaNode = undefined;
+    }
+
+    getColorTexture(): THREE.Texture | null {
+        return this.passNode?.renderTarget?.texture ?? null;
+    }
+
+    getDepthTexture(): THREE.Texture | null {
+        return this.passNode?.renderTarget?.depthTexture ?? null;
+    }
+
+    async readDepthAsync(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null> {
+        const rt = this.passNode?.renderTarget;
+        if (rt == null) return null;
+
+        const width = rt.width;
+        const height = rt.height;
+        const x = Math.round((ndc.x * 0.5 + 0.5) * width);
+        const y = Math.round((ndc.y * 0.5 + 0.5) * height);
+        if (x < 0 || x >= width || y < 0 || y >= height) return null;
+
+        try {
+            const buffer = new Float32Array(4);
+            await this.renderer.readRenderTargetPixelsAsync(rt, x, y, 1, 1, buffer);
+            return buffer[0];
+        } catch {
+            return null;
+        }
+    }
+}

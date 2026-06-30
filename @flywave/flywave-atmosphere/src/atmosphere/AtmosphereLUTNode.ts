@@ -1,6 +1,6 @@
+// @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// @ts-nocheck
 // AtmosphereLUTNode extends Node and uses WebGPU-specific lifecycle hooks
 // (updateBeforeType, version, dispatchEvent) not fully typed in @types/three@0.184.
 
@@ -150,6 +150,8 @@ export class AtmosphereLUTNode extends Node {
         this.updating = true;
         try {
             await timeSlice(this.performCompute(renderer, context));
+        } catch (error: unknown) {
+            throw error instanceof Error ? error : new Error();
         } finally {
             this.updating = false;
             context.dispose();
@@ -161,6 +163,7 @@ export class AtmosphereLUTNode extends Node {
         if (renderer == null || this.version === this.currentVersion) {
             return;
         }
+
         this.currentVersion = this.version;
 
         this.updateTextures(renderer).catch((error: unknown) => {
@@ -188,13 +191,13 @@ export class AtmosphereLUTNode extends Node {
             singleMieScattering.value = this.textures.get("singleMieScattering");
             higherOrderScattering.value = this.textures.get("higherOrderScattering");
             irradiance.value = this.textures.get("irradiance");
-        }
 
-        const textureType = isFloatLinearSupported(builder.renderer)
-            ? this.textureType ?? FloatType
-            : HalfFloatType;
-        this.parameters.update();
-        this.textures.setup(this.parameters, textureType);
+            const textureType = isFloatLinearSupported(builder.renderer)
+                ? this.textureType ?? FloatType
+                : HalfFloatType;
+            this.parameters.update();
+            this.textures.setup(this.parameters, textureType);
+        }
 
         return super.setup(builder);
     }

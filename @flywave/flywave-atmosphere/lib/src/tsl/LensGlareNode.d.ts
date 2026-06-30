@@ -1,0 +1,34 @@
+import { Vector2, type Texture } from "three";
+import { type NodeBuilder, type NodeFrame, type TextureNode } from "three/webgpu";
+import { FilterNode } from "./FilterNode";
+import type { Node } from "./node";
+export declare class LensGlareNode extends FilterNode {
+    static get type(): string;
+    quadTexture: Texture;
+    quadCount: number;
+    wireframe: boolean;
+    intensity: import("three/webgpu").UniformNode<"float", number>;
+    sizeScale: import("three/webgpu").UniformNode<"vec2", Vector2>;
+    luminanceThreshold: import("three/webgpu").UniformNode<"float", number>;
+    private computeNode?;
+    private readonly indirectBuffer;
+    private instanceBuffer;
+    private readonly renderTarget;
+    private readonly material;
+    private readonly mesh;
+    private readonly camera;
+    private rendererState?;
+    private readonly tileSize;
+    private readonly inputTexelSize;
+    private readonly outputTexelSize;
+    private readonly geometryRatio;
+    constructor(inputNode?: TextureNode | null);
+    customCacheKey(): number;
+    setSize(width: number, height: number): this;
+    updateBefore({ renderer }: NodeFrame): void;
+    private setupCompute;
+    private setupMaterial;
+    setup(builder: NodeBuilder): unknown;
+    dispose(): void;
+}
+export declare const lensGlare: (inputNode: Node | null) => LensGlareNode;

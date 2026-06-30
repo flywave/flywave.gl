@@ -4,7 +4,7 @@
     "description": "flywave.gl webpack utilities",
     "type": "module",
     "scripts": {
-        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+        "build": "cross-env tsc --build $EXTRA_TSC_ARGS --force",
         "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
     },
     "repository": {

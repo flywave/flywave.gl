@@ -3,6 +3,8 @@
 import type { Color, Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4 } from "three";
 import { Node as ThreeNode } from "three/webgpu";
 
+export { ThreeNode as Node };
+
 /**
  * Complete set of TSL primitive type identifiers.
  */
@@ -62,14 +64,3 @@ export type NodeValueTypeOf<T extends NodeType> =
     T extends "mat3" ? Matrix3 :
     T extends "mat4" ? Matrix4 :
     T extends "color" ? Color : never;
-
-/**
- * Unified TSL node type. The generic parameter is purely annotational;
- * it does not enforce type safety at compile time.
- *
- * TSL nodes support operator methods (.sub, .mul, .dot, etc.) through a
- * runtime proxy system that `@types/three` does not fully declare. Code
- * within `FnVar` / `FnLayout` callback scopes operates in a type-loose zone,
- * analogous to how GLSL shader strings bypass TypeScript entirely.
- */
-export type Node<T extends NodeType = NodeType> = ThreeNode;

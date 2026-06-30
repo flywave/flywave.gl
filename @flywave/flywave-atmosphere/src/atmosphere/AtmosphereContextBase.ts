@@ -1,6 +1,6 @@
+// @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// @ts-nocheck
 // TSL struct construction and field destructureation use patterns not
 // fully supported by @types/three@0.184.
 

@@ -4,6 +4,7 @@ export { type IPassManager } from "./IPassManager";
 export {
     type IMapAntialiasSettings,
     type IMapRenderingManager,
-    MapRenderingManager
+    MapRenderingManager,
+    MSAASampling,
+    type ICustomEffect
 } from "./MapRenderingManager";
-export { type IPass, Pass } from "./Pass";

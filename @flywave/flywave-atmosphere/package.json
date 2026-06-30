@@ -29,7 +29,9 @@
         "url": "https://flywave.net"
     },
     "license": "Apache-2.0",
-    "dependencies": {},
+    "dependencies": {
+        "tiny-invariant": "catalog:"
+    },
     "devDependencies": {
         "@types/three": "catalog:",
         "cross-env": "catalog:",

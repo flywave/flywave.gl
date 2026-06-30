@@ -46,7 +46,7 @@ import { AnimatedExtrusionHandler } from "./AnimatedExtrusionHandler";
 import { BackgroundDataSource } from "./BackgroundDataSource";
 import { CameraMovementDetector } from "./CameraMovementDetector";
 import { CameraUtils } from "./CameraUtils";
-import { type CelestiaOptions } from "./celestia/Celestia";
+import { type AtmosphereSystemOptions } from "./composing/AtmosphereSystem";
 import { type ClipPlanesEvaluator, createDefaultClipPlanesEvaluator } from "./ClipPlanesEvaluator";
 import {
     type IMapAntialiasSettings,
@@ -629,9 +629,9 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
     minGeometryHeight?: number;
 
     /**
-     * Options for Celestia
+     * Options for the atmosphere system
      */
-    celestiaOptions?: CelestiaOptions;
+    atmosphereOptions?: AtmosphereSystemOptions;
 }
 
 /**
@@ -3067,16 +3067,22 @@ export class MapView extends EventDispatcher {
                 this.mapRenderingManager.updateOutline(this.m_postEffects.outline);
             }
             if (this.m_postEffects.vignette !== undefined) {
-                this.mapRenderingManager.vignette = this.m_postEffects.vignette;
+                Object.assign(this.mapRenderingManager.vignette, this.m_postEffects.vignette);
             }
             if (this.m_postEffects.sepia !== undefined) {
-                this.mapRenderingManager.sepia = this.m_postEffects.sepia;
+                Object.assign(this.mapRenderingManager.sepia, this.m_postEffects.sepia);
             }
             if (this.m_postEffects.hueSaturation !== undefined) {
-                this.mapRenderingManager.hueSaturation = this.m_postEffects.hueSaturation;
+                Object.assign(
+                    this.mapRenderingManager.hueSaturation,
+                    this.m_postEffects.hueSaturation
+                );
             }
             if (this.m_postEffects.brightnessContrast !== undefined) {
-                this.mapRenderingManager.brightnessContrast = this.m_postEffects.brightnessContrast;
+                Object.assign(
+                    this.mapRenderingManager.brightnessContrast,
+                    this.m_postEffects.brightnessContrast
+                );
             }
             if (this.m_postEffects.smaa !== undefined) {
                 this.mapRenderingManager.smaaEnabled = this.m_postEffects.smaa;
@@ -3085,6 +3091,8 @@ export class MapView extends EventDispatcher {
                 this.mapRenderingManager.fxaaEnabled = this.m_postEffects.fxaa;
             }
         }
+
+        this.mapRenderingManager.syncPostEffectsToVRM();
     }
 
     /**
@@ -3749,11 +3757,17 @@ export class MapView extends EventDispatcher {
         }
 
         if (this.renderLabels && !this.m_pointOfView) {
+            const savedColorSpace = this.m_renderer.outputColorSpace;
+            this.m_renderer.outputColorSpace = THREE.ColorManagement.workingColorSpace;
             this.m_textElementsRenderer.renderText(this.m_viewRanges.maximum);
+            this.m_renderer.outputColorSpace = savedColorSpace;
         }
 
         if (this.m_overlaySceneRoot.children.length > 0) {
+            const savedColorSpace = this.m_renderer.outputColorSpace;
+            this.m_renderer.outputColorSpace = THREE.ColorManagement.workingColorSpace;
             this.m_renderer.render(this.m_overlayScene, camera);
+            this.m_renderer.outputColorSpace = savedColorSpace;
         }
 
         if (gatherStatistics) {

@@ -100,7 +100,7 @@ export class MapViewThemeManager {
         environment.updateLighting(theme.lights);
 
         this.m_theme.celestia = theme.celestia;
-        environment.updateCelestia(theme.celestia);
+        environment.updateAtmosphere(theme.celestia);
 
         if (theme.enableShadows || theme.celestia?.sunCastShadow) {
             this.m_mapView.shadowsEnabled = true;

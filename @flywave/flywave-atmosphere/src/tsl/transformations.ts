@@ -1,6 +1,6 @@
+// @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// @ts-nocheck
 // TSL transformations use operator chaining and FnLayout patterns
 // not fully supported by @types/three@0.184.
 

@@ -1,13 +1,11 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { mapAssetsUriResolver, mapBundleMain } from "./BundleMain";
+import * as THREE from "three";
 
-if (!(window as any).THREE) {
-    // eslint-disable-next-line no-console
-    console.warn(
-        "flywave.gl.js: It looks like 'three.js' is not loaded. This script requires 'THREE' object to " +
-            "be defined. See https://github.com/flywave/flywave.gl/@flywave/flywave-mapview."
-    );
+const win = window as Window & { THREE?: typeof THREE };
+if (!win.THREE) {
+    win.THREE = THREE;
 }
 
 import { MapView as RawMapView, MapViewOptions } from "@flywave/flywave-mapview";

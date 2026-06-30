@@ -13,7 +13,7 @@ import { GUI } from "dat.gui";
 
 import {
     Mesh,
-    MeshBasicMaterial,
+    MeshBasicNodeMaterial,
     SphereGeometry,
     BoxGeometry,
     ConeGeometry,
@@ -21,7 +21,7 @@ import {
     TorusGeometry,
     Group,
     Color
-} from "three";
+} from "three/webgpu";
 
 /**
  * Get map canvas element
@@ -130,7 +130,7 @@ const createGlowingObject = (
     intensity: number = 1.0,
     opacity: number = 0.7
 ): any => {
-    const material = new MeshBasicMaterial({
+    const material = new MeshBasicNodeMaterial({
         color: color,
         transparent: true,
         opacity: opacity
@@ -146,7 +146,7 @@ const createGlowingObject = (
  * @returns Mesh object with pulse effect
  */
 const createPulsingGlow = (geometry: any, baseColor: any, pulseSpeed: number = 2): any => {
-    const material = new MeshBasicMaterial({
+    const material = new MeshBasicNodeMaterial({
         color: baseColor,
         transparent: true,
         opacity: 0.5

@@ -1,17 +1,33 @@
 /* Copyright (C) 2025 flywave.gl contributors */
+// @ts-nocheck
 
 import {
     type Tile3DBatchMeshTechniqueParams,
     type TransitionValue
 } from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three";
+import { MeshStandardNodeMaterial } from "three/webgpu";
+import {
+    Fn,
+    attribute,
+    float,
+    texture,
+    uniform,
+    vec2,
+    vec3,
+    vec4,
+    uv,
+    varying,
+    positionLocal,
+    mix,
+    max,
+    clamp,
+    greaterThanEqual
+} from "three/tsl";
 
 import { type BatchAnimation } from "../TileRenderDataSource";
 import { BatchAnimationManager } from "./BatchAnimationManager";
 
-/**
- * Interface for custom uniforms used in the shader
- */
 interface B3DMBatchMaterialUniforms {
     styleTexture: { value: THREE.DataTexture | null };
     textureWidth: { value: number };
@@ -24,18 +40,12 @@ interface B3DMBatchMaterialUniforms {
     isRenderingDepth: { value: boolean };
 }
 
-/**
- * Extended batch style with animation value
- */
 interface ExtendedBatchStyle extends Tile3DBatchMeshTechniqueParams {
     highlighted?: boolean;
     highlightColor?: THREE.Color;
     visible?: boolean;
 }
 
-/**
- * Visual style structure for shader processing
- */
 interface VisualStyle {
     startColor: THREE.Color;
     endColor: THREE.Color;
@@ -52,22 +62,15 @@ interface VisualStyle {
     visible: boolean;
     hasTransition: boolean;
     hasMaterialTransition: boolean;
-    value: number; // Animation value from 0 to 1
+    value: number;
 }
 
-/**
- * Custom material for B3DM format batch rendering
- * Based on MeshStandardMaterial with specialized handling for B3DM batchId attribute
- */
-class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
+class B3DMBatchMaterial extends MeshStandardNodeMaterial {
     private _batchStyles: Map<number, ExtendedBatchStyle> = new Map();
     private _styleTexture: THREE.DataTexture | null = null;
     private readonly _idAttributeName: string;
     private readonly _animationManager: BatchAnimationManager;
 
-    /**
-     * Custom uniforms for shader
-     */
     public uniforms: B3DMBatchMaterialUniforms = {
         styleTexture: { value: null },
         textureWidth: { value: 0 },
@@ -80,40 +83,148 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         isRenderingDepth: { value: false }
     };
 
+    private static createDummyTexture(): THREE.DataTexture {
+        const tex = new THREE.DataTexture(
+            new Float32Array([0, 0, 0, 1, 0, 0, 0, 1]),
+            1,
+            1,
+            THREE.RGBAFormat,
+            THREE.FloatType
+        );
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    private readonly _dummyTexture = B3DMBatchMaterial.createDummyTexture();
+    private readonly _styleTexNode = texture(this._dummyTexture);
+    private readonly _animTexNode = texture(this._dummyTexture);
+    private readonly _texWidthUniform = uniform(1);
+    private readonly _texHeightUniform = uniform(1);
+    private readonly _animTexWidthUniform = uniform(1);
+    private readonly _animTexHeightUniform = uniform(1);
+
+    private _tslNodesBuilt = false;
+
     constructor(
         params: {
-            /** Base material parameters */
             materialParams?: THREE.MeshStandardMaterialParameters;
-            /** BatchId attribute name (default: _BATCHID) */
             batchIdAttributeName?: string;
-            /** Animation configuration */
             animation?: BatchAnimation;
         } = {}
     ) {
         const { materialParams = {}, batchIdAttributeName = "_BATCHID", animation } = params;
-
         super(materialParams);
         this._idAttributeName = batchIdAttributeName;
-
-        // Initialize animation manager
         this._animationManager = new BatchAnimationManager(animation);
-
-        // Key setting: do not allow scene.overrideMaterial to override
-        // This allows 3D Tiles material to use its own depth rendering logic
-        // this.allowOverride = false;
-
-        // Set up shader compilation
-        this.onBeforeCompile = this.setupShaders.bind(this);
+        this.buildTslNodes();
     }
 
-    /**
-     * Set batch style for a specific batch
-     * Only updates if the style has actually changed
-     */
+    private buildTslNodes(): void {
+        if (this._tslNodesBuilt) return;
+        this._tslNodesBuilt = true;
+
+        const styleTex = this._styleTexNode;
+        const texW = this._texWidthUniform;
+        const texH = this._texHeightUniform;
+        const animTex = this._animTexNode;
+        const animW = this._animTexWidthUniform;
+        const animH = this._animTexHeightUniform;
+        const idAttrName = this._idAttributeName;
+
+        // Varyings for passing batch style from vertex to fragment
+        const vBatchColor = varying(vec3(0), "vBatchColor");
+        const vBatchOpacity = varying(float(1), "vBatchOpacity");
+        const vBatchMetalness = varying(float(0), "vBatchMetalness");
+        const vBatchRoughness = varying(float(1), "vBatchRoughness");
+        const vBatchEmissive = varying(vec3(0), "vBatchEmissive");
+        const vBatchVisible = varying(float(1), "vBatchVisible");
+
+        // Vertex stage: read batchId, lookup style texture, apply offset
+        const batchOffsetNode = Fn(() => {
+            const batchId = attribute(idAttrName).round();
+
+            const animU = float(0.5).div(animW);
+            const animV = batchId.add(0.5).div(animH);
+            const progress = texture(animTex, vec2(animU, animV)).r;
+
+            const v = batchId.add(0.5).div(texH);
+
+            const u0 = float(0.5).div(texW);
+            const col0 = texture(styleTex, vec2(u0, v));
+
+            const u1 = float(1.5).div(texW);
+            const col1 = texture(styleTex, vec2(u1, v));
+
+            const u2 = float(2.5).div(texW);
+            const col2 = texture(styleTex, vec2(u2, v));
+
+            const u3 = float(3.5).div(texW);
+            const col3 = texture(styleTex, vec2(u3, v));
+
+            const u4 = float(4.5).div(texW);
+            const col4 = texture(styleTex, vec2(u4, v));
+
+            const u5 = float(5.5).div(texW);
+            const col5 = texture(styleTex, vec2(u5, v));
+
+            const u6 = float(6.5).div(texW);
+            const col6 = texture(styleTex, vec2(u6, v));
+
+            const startColor = col0.rgb;
+            const startOpacity = col0.a;
+            const startOffset = col1.xyz;
+            const endOffsetX = col1.w;
+            const endOffsetYZ = col2.xy;
+            const endOpacity = col2.z;
+            const visible = col2.w;
+            const endColor = col3.rgb;
+            const hasTransition = col3.a;
+            const startMetalness = col4.r;
+            const startRoughness = col4.g;
+            const endMetalness = col4.b;
+            const endRoughness = col4.a;
+            const startEmissive = col5.rgb;
+            const endEmissive = col6.rgb;
+
+            const endOffset = vec3(endOffsetX, endOffsetYZ.x, endOffsetYZ.y);
+
+            const p = clamp(progress, float(0), float(1));
+            const tMask = greaterThanEqual(hasTransition, float(0.5)).toFloat();
+
+            const blendedColor = mix(startColor, endColor, p);
+            const blendedOffset = mix(startOffset, endOffset, p);
+            const blendedOpacity = mix(startOpacity, endOpacity, p);
+            const blendedMetalness = mix(startMetalness, endMetalness, p);
+            const blendedRoughness = mix(startRoughness, endRoughness, p);
+            const blendedEmissive = mix(startEmissive, endEmissive, p);
+
+            const finalColor = mix(startColor, blendedColor, tMask);
+            const finalOffset = mix(startOffset, blendedOffset, tMask);
+            const finalOpacity = mix(startOpacity, blendedOpacity, tMask);
+            const finalMetalness = mix(startMetalness, blendedMetalness, tMask);
+            const finalRoughness = mix(startRoughness, blendedRoughness, tMask);
+            const finalEmissive = mix(startEmissive, blendedEmissive, tMask);
+
+            vBatchColor.assign(finalColor);
+            vBatchOpacity.assign(finalOpacity);
+            vBatchMetalness.assign(finalMetalness);
+            vBatchRoughness.assign(finalRoughness);
+            vBatchEmissive.assign(finalEmissive);
+            vBatchVisible.assign(visible);
+
+            return finalOffset;
+        })();
+
+        this.positionNode = positionLocal.add(batchOffsetNode.toVertexStage());
+
+        this.colorNode = vec4(vBatchColor, vBatchOpacity);
+        this.metalnessNode = vBatchMetalness;
+        this.roughnessNode = vBatchRoughness;
+        this.emissiveNode = vBatchEmissive;
+    }
+
     setBatchStyle(batchId: number, style: ExtendedBatchStyle): void {
         const currentStyle = this._batchStyles.get(batchId);
-
-        // Check if style has actually changed (excluding value changes)
         const styleChanged = this._hasStyleChanged(currentStyle, style);
 
         if (styleChanged) {
@@ -121,29 +232,21 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
             this._updateStyleTexture();
         }
 
-        // Always update value through animation manager
         if (style.value !== undefined) {
             this._animationManager.ensureBatchState(batchId);
             this._animationManager.setBatchProgress(batchId, style.value);
         }
     }
 
-    /**
-     * Set batch styles for multiple batches
-     */
     setBatchStyles(batchStyles: Map<number, ExtendedBatchStyle>): void {
         let needsTextureUpdate = false;
 
         batchStyles.forEach((newStyle, batchId) => {
             const currentStyle = this._batchStyles.get(batchId);
-
-            // Check if style has changed
             if (this._hasStyleChanged(currentStyle, newStyle)) {
                 this._batchStyles.set(batchId, { ...newStyle });
                 needsTextureUpdate = true;
             }
-
-            // Update value through animation manager
             if (newStyle.value !== undefined) {
                 this._animationManager.ensureBatchState(batchId);
                 this._animationManager.setBatchProgress(batchId, newStyle.value);
@@ -155,17 +258,12 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         }
     }
 
-    /**
-     * Check if style has changed (excluding value)
-     */
     private _hasStyleChanged(
         oldStyle: ExtendedBatchStyle | undefined,
         newStyle: ExtendedBatchStyle
     ): boolean {
         if (!oldStyle && !newStyle) return false;
         if (!oldStyle || !newStyle) return true;
-
-        // Compare all style properties except value
         return (
             oldStyle.color !== newStyle.color ||
             oldStyle.opacity !== newStyle.opacity ||
@@ -181,18 +279,12 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         );
     }
 
-    /**
-     * Reset all batch styles to default
-     */
     resetBatchStyles(): void {
         this._batchStyles.clear();
         this._animationManager.reset();
         this._updateStyleTexture();
     }
 
-    /**
-     * Called before rendering to update animations
-     */
     onBeforeRender(
         renderer: THREE.WebGLRenderer,
         scene: THREE.Scene,
@@ -201,7 +293,6 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
         object: THREE.Object3D,
         group: THREE.Group
     ): void {
-        // Sync polygonOffset properties to uniforms
         if (this.polygonOffset) {
             this.uniforms.uPolygonOffsetFactor.value = this.polygonOffsetFactor;
             this.uniforms.uPolygonOffsetUnits.value = this.polygonOffsetUnits;
@@ -210,359 +301,33 @@ class B3DMBatchMaterial extends THREE.MeshStandardMaterial {
             this.uniforms.uPolygonOffsetUnits.value = 0;
         }
 
-        // Update animation manager
         if (this._animationManager.isPlaying) {
             this._animationManager.update();
             this._updateAnimationUniforms();
         }
     }
 
-    /**
-     * Set up shader definitions and uniforms
-     */
-    protected setupShaders(
-        parameters: THREE.WebGLProgramParametersWithUniforms,
-        renderer: THREE.WebGLRenderer
-    ): void {
-        // Set up shader definitions
-        parameters.defines = {
-            ...(parameters.defines || {}),
-            USE_VISUAL_BATCH: 1,
-            USE_BATCH_ANIMATION: 1
-        };
-
-        // Add custom uniforms
-        Object.assign(parameters.uniforms, this.uniforms);
-
-        this._setupShaderCode(parameters);
-    }
-
-    /**
-     * Set up shader code replacements
-     */
-    private _setupShaderCode(parameters: THREE.WebGLProgramParametersWithUniforms): void {
-        // Vertex shader replacements
-        parameters.vertexShader = parameters.vertexShader.replace(
-            "#include <color_pars_vertex>",
-            `#include <color_pars_vertex>
-            uniform bool isRenderingDepth;
-            ${this._getVertexParsShaderReplacement()}`
-        );
-
-        // Replace logdepthbuf_vertex to disable logarithmic depth in depth rendering mode
-        parameters.vertexShader = parameters.vertexShader.replace(
-            "#include <logdepthbuf_vertex>",
-            ` 
-            if (!isRenderingDepth) {
-                #include <logdepthbuf_vertex>
-            } 
-        `
-        );
-
-        parameters.vertexShader = parameters.vertexShader.replace(
-            "#include <begin_vertex>",
-            `#include <begin_vertex>
-            ${this._getVertexShaderReplacement()}`
-        );
-
-        // Fragment shader replacements
-        parameters.fragmentShader = parameters.fragmentShader.replace(
-            "#include <color_pars_fragment>",
-            `#include <color_pars_fragment>
-            uniform bool isRenderingDepth;
-            ${this._getFragmentParsShaderReplacement()}`
-        );
-
-        // Replace logdepthbuf_pars_fragment
-        parameters.fragmentShader = parameters.fragmentShader.replace(
-            "#include <logdepthbuf_pars_fragment>",
-            `#include <logdepthbuf_pars_fragment>`
-        );
-
-        parameters.fragmentShader = parameters.fragmentShader.replace(
-            "#include <color_fragment>",
-            ` 
-            #include <color_fragment>
-                    ${this._getFragmentShaderReplacement()} 
-        `
-        );
-
-        // Metalness replacement
-        parameters.fragmentShader = parameters.fragmentShader.replace(
-            "#include <metalnessmap_fragment>",
-            `${this._getMetalnessShaderReplacement()}`
-        );
-
-        // Roughness replacement
-        parameters.fragmentShader = parameters.fragmentShader.replace(
-            "#include <roughnessmap_fragment>",
-            `${this._getRoughnessShaderReplacement()}`
-        );
-
-        // Emissive replacement
-        parameters.fragmentShader = parameters.fragmentShader.replace(
-            "#include <color_fragment>",
-            `
-if (isRenderingDepth) {
-    gl_FragColor = vec4(gl_FragCoord.z, 0.0, 0.0, 1.0);
-} else {
-    #include <color_fragment>
-            ${this._getFragmentShaderReplacement()}
-}
-`
-        );
-
-        // Metalness replacement
-        parameters.fragmentShader = parameters.fragmentShader.replace(
-            "#include <metalnessmap_fragment>",
-            `${this._getMetalnessShaderReplacement()}`
-        );
-
-        // Roughness replacement
-        parameters.fragmentShader = parameters.fragmentShader.replace(
-            "#include <roughnessmap_fragment>",
-            `${this._getRoughnessShaderReplacement()}`
-        );
-
-        // Emissive replacement
-        parameters.fragmentShader = parameters.fragmentShader.replace(
-            "#include <map_fragment>",
-            `${this._getEmissiveShaderReplacement()}
-            #include <map_fragment>`
-        );
-    }
-
-    /**
-     * Get fragment shader parsing replacement
-     */
-    private _getFragmentParsShaderReplacement(): string {
-        return `
-            struct BatchStyle {
-                vec3 color;
-                float opacity;
-                vec3 offset;
-                float visible;
-                float metalness;
-                float roughness;
-                vec3 emissive;
-            };
-            varying BatchStyle vBatchStyle;
-            uniform sampler2D styleTexture;
-            uniform float uPolygonOffsetFactor;
-            uniform float uPolygonOffsetUnits;
-        `;
-    }
-
-    /**
-     * Get fragment shader main replacement
-     */
-    private _getFragmentShaderReplacement(): string {
-        return `
-            #ifdef USE_VISUAL_BATCH
-                
-                // Apply visibility
-                if (vBatchStyle.visible < 0.5) {
-                    discard;
-                }
-                
-                // Apply color and opacity
-                if (vBatchStyle.color.rgb != vec3(0.0)) {
-                    diffuseColor.rgb = vBatchStyle.color.rgb;
-                }
-                diffuseColor.a *= vBatchStyle.opacity;
-                  
-            #endif 
-        `;
-    }
-
-    /**
-     * Get metalness shader replacement
-     */
-    private _getMetalnessShaderReplacement(): string {
-        return `
-            #ifdef USE_VISUAL_BATCH
-            float metalnessFactor = vBatchStyle.metalness > 0.0 ? vBatchStyle.metalness : metalness;
-            #else
-            float metalnessFactor = metalness;
-            #endif
-        `;
-    }
-
-    /**
-     * Get roughness shader replacement
-     */
-    private _getRoughnessShaderReplacement(): string {
-        return `
-            #ifdef USE_VISUAL_BATCH
-            float roughnessFactor = vBatchStyle.roughness > 0.0 ? vBatchStyle.roughness : roughness;
-            #else
-            float roughnessFactor = roughness;
-            #endif
-        `;
-    }
-
-    /**
-     * Get emissive shader replacement
-     */
-    private _getEmissiveShaderReplacement(): string {
-        return `
-            #ifdef USE_VISUAL_BATCH
-                totalEmissiveRadiance = vBatchStyle.emissive;
-            #endif
-        `;
-    }
-
-    /**
-     * Get vertex shader main replacement
-     */
-    private _getVertexShaderReplacement(): string {
-        return `
-            #ifdef USE_VISUAL_BATCH
-                float batchId = round(${this._idAttributeName}); 
-                
-                // Unpack style from texture and apply offset transformation (explosion effect)
-                BatchStyle style = unpackStyle(batchId);
-                if (style.visible >= 0.5) {
-                    transformed += style.offset;
-                }
-                vBatchStyle = style;
-            #endif
-        `;
-    }
-
-    /**
-     * Get vertex shader parsing replacement
-     */
-    private _getVertexParsShaderReplacement(): string {
-        return ` 
-          /**
-             * Unpack style information from style texture
-             */
-            struct BatchStyle {
-                vec3 color;
-                float opacity;
-                vec3 offset;
-                float visible;
-                float metalness;
-                float roughness;
-                vec3 emissive;
-            };
-
-            uniform sampler2D styleTexture;
-            uniform float textureWidth;
-            uniform float textureHeight;
-            uniform sampler2D animationTexture;
-            uniform float animationTextureWidth;
-            uniform float animationTextureHeight;
-            varying BatchStyle vBatchStyle;
-
-            attribute float ${this._idAttributeName};
-
-            /**
-             * Get batch animation progress from animation texture
-             */
-            float getBatchAnimationProgress(float batchId) {
-                float u = (0.5) / animationTextureWidth;
-                float v = (batchId + 0.5) / animationTextureHeight;
-                return texture2D(animationTexture, vec2(u, v)).r;
-            }
-
-            BatchStyle unpackStyle(float batchId) {
-                BatchStyle style;
-                
-                // Get independent animation progress for this batch
-                float animationProgress = getBatchAnimationProgress(batchId);
-                
-                // Calculate UV coordinates
-                float u = (0.5) / textureWidth;  // First column center
-                float v = (batchId + 0.5) / textureHeight; // Corresponding row
-                
-                // First column: Start color (RGBA)
-                vec4 colorData = texture2D(styleTexture, vec2(u, v));
-                style.color = colorData.rgb;
-                style.opacity = colorData.a;
-                
-                // Second column: Start offset (XYZ) + End offset X
-                u = (1.0 + 0.5) / textureWidth;
-                vec4 offsetData1 = texture2D(styleTexture, vec2(u, v));
-                style.offset = offsetData1.xyz;
-                
-                // Third column: End offset (YZ) + End opacity + Visibility
-                u = (2.0 + 0.5) / textureWidth;
-                vec4 metaData = texture2D(styleTexture, vec2(u, v));
-                style.visible = metaData.a;
-                
-                // Fourth column: End color (RGB) + Has transition animation
-                u = (3.0 + 0.5) / textureWidth;
-                vec4 endColorData = texture2D(styleTexture, vec2(u, v));
-                
-                // Fifth column: Start metalness + Start roughness + End metalness + End roughness
-                u = (4.0 + 0.5) / textureWidth;
-                vec4 metalnessRoughnessData = texture2D(styleTexture, vec2(u, v));
-                style.metalness = metalnessRoughnessData.r;
-                style.roughness = metalnessRoughnessData.g;
-                
-                // Sixth column: Start emissive (RGB) + Has material transition
-                u = (5.0 + 0.5) / textureWidth;
-                vec4 startEmissiveData = texture2D(styleTexture, vec2(u, v));
-                style.emissive = startEmissiveData.rgb;
-                
-                // Seventh column: End emissive (RGB) + Reserved field
-                u = (6.0 + 0.5) / textureWidth;
-                vec4 endEmissiveData = texture2D(styleTexture, vec2(u, v));
-                
-                // Apply animation transition
-                if (endColorData.a > 0.5) {
-                    vec3 endOffset = vec3(offsetData1.a, metaData.xy); // End offset (X from offsetData1.a, YZ from metaData.xy)
-                    float endOpacity = metaData.z; // End opacity
-                    float endMetalness = metalnessRoughnessData.b; // End metalness
-                    float endRoughness = metalnessRoughnessData.a; // End roughness
-                    vec3 endEmissive = endEmissiveData.rgb; // End emissive
-                    
-                    float progress = clamp(animationProgress, 0.0, 1.0);
-                    style.color = mix(style.color, endColorData.rgb, progress);
-                    style.offset = mix(style.offset, endOffset, progress);
-                    style.opacity = mix(style.opacity, endOpacity, progress);
-                    style.metalness = mix(style.metalness, endMetalness, progress);
-                    style.roughness = mix(style.roughness, endRoughness, progress);
-                    style.emissive = mix(style.emissive, endEmissive, progress);
-                }
-                
-                return style;
-            }
-        `;
-    }
-
-    /**
-     * Update animation-related uniforms
-     */
     private _updateAnimationUniforms(): void {
         const batchProgresses = this._animationManager.getBatchProgresses();
-        const textureWidth = 1; // 1 texel per row
+        const textureWidth = 1;
         const textureHeight = Math.max(batchProgresses.length, 1);
 
-        // Create animation texture data
         const textureData = new Float32Array(textureWidth * textureHeight * 4);
-
         for (let i = 0; i < batchProgresses.length; i++) {
             const index = i * 4;
-            textureData[index] = batchProgresses[i]; // R channel stores progress
-            textureData[index + 1] = 0; // G channel unused
-            textureData[index + 2] = 0; // B channel unused
-            textureData[index + 3] = 1; // A channel fixed at 1
+            textureData[index] = batchProgresses[i];
+            textureData[index + 1] = 0;
+            textureData[index + 2] = 0;
+            textureData[index + 3] = 1;
         }
 
-        // Create or update animation texture
         let animationTexture = this.uniforms.animationTexture.value;
         if (
             !animationTexture ||
             animationTexture.image.width !== textureWidth ||
             animationTexture.image.height !== textureHeight
         ) {
-            if (animationTexture) {
-                animationTexture.dispose();
-            }
-
+            if (animationTexture) animationTexture.dispose();
             animationTexture = new THREE.DataTexture(
                 textureData,
                 textureWidth,
@@ -577,83 +342,74 @@ if (isRenderingDepth) {
             animationTexture.needsUpdate = true;
         }
 
-        // Update texture dimension uniforms
         this.uniforms.animationTextureWidth.value = textureWidth;
         this.uniforms.animationTextureHeight.value = textureHeight;
+        this._animTexNode.value = animationTexture;
+        this._animTexWidthUniform.value = textureWidth;
+        this._animTexHeightUniform.value = textureHeight;
+
+        const prevAnimTexture = this.uniforms.animationTexture.value;
+        if (prevAnimTexture !== animationTexture) {
+            this.needsUpdate = true;
+        }
     }
 
-    /**
-     * Update style texture - extended layout to include material properties
-     */
     private _updateStyleTexture(): void {
-        // Calculate texture size - each row stores all properties for one batchId
         const batchCount = Math.max(this._batchStyles.size, 1);
-        const textureWidth = 7; // 7 texels per row: color, offset, visibility/opacity, end values, metalness/roughness, start emissive, end emissive
-        const textureHeight = batchCount; // One batchId per row
+        const textureWidth = 7;
+        const textureHeight = batchCount;
 
-        // Create texture data
         const textureData = new Float32Array(textureWidth * textureHeight * 4);
         textureData.fill(0);
 
-        // Fill texture data - each row contains all properties for one batchId
         this._batchStyles.forEach((batchStyle: ExtendedBatchStyle, batchId: number) => {
             const visualStyle: VisualStyle = this._convertToVisualStyle(batchStyle, batchId);
             const row = batchId;
 
-            // First column: Start color (RGBA)
             const colorIndex = row * textureWidth * 4;
             textureData[colorIndex] = visualStyle.startColor.r;
             textureData[colorIndex + 1] = visualStyle.startColor.g;
             textureData[colorIndex + 2] = visualStyle.startColor.b;
             textureData[colorIndex + 3] = visualStyle.startOpacity;
 
-            // Second column: Start offset (XYZ) + End offset X
             const offsetIndex = colorIndex + 4;
             textureData[offsetIndex] = visualStyle.startOffset.x;
             textureData[offsetIndex + 1] = visualStyle.startOffset.y;
             textureData[offsetIndex + 2] = visualStyle.startOffset.z;
             textureData[offsetIndex + 3] = visualStyle.endOffset.x;
 
-            // Third column: End offset (YZ) + End opacity + Visibility
             const metaIndex = offsetIndex + 4;
             textureData[metaIndex] = visualStyle.endOffset.y;
             textureData[metaIndex + 1] = visualStyle.endOffset.z;
             textureData[metaIndex + 2] = visualStyle.endOpacity;
             textureData[metaIndex + 3] = visualStyle.visible ? 1.0 : 0.0;
 
-            // Fourth column: End color (RGB) + Has transition animation
             const endIndex = metaIndex + 4;
             textureData[endIndex] = visualStyle.endColor.r;
             textureData[endIndex + 1] = visualStyle.endColor.g;
             textureData[endIndex + 2] = visualStyle.endColor.b;
             textureData[endIndex + 3] = visualStyle.hasTransition ? 1.0 : 0.0;
 
-            // Fifth column: Start metalness + Start roughness + End metalness + End roughness
-            const metalnessRoughnessIndex = endIndex + 4;
-            textureData[metalnessRoughnessIndex] = visualStyle.startMetalness;
-            textureData[metalnessRoughnessIndex + 1] = visualStyle.startRoughness;
-            textureData[metalnessRoughnessIndex + 2] = visualStyle.endMetalness;
-            textureData[metalnessRoughnessIndex + 3] = visualStyle.endRoughness;
+            const mrIndex = endIndex + 4;
+            textureData[mrIndex] = visualStyle.startMetalness;
+            textureData[mrIndex + 1] = visualStyle.startRoughness;
+            textureData[mrIndex + 2] = visualStyle.endMetalness;
+            textureData[mrIndex + 3] = visualStyle.endRoughness;
 
-            // Sixth column: Start emissive (RGB) + Has material transition
-            const startEmissiveIndex = metalnessRoughnessIndex + 4;
-            textureData[startEmissiveIndex] = visualStyle.startEmissive.r;
-            textureData[startEmissiveIndex + 1] = visualStyle.startEmissive.g;
-            textureData[startEmissiveIndex + 2] = visualStyle.startEmissive.b;
-            textureData[startEmissiveIndex + 3] = visualStyle.hasMaterialTransition ? 1.0 : 0.0;
+            const seIndex = mrIndex + 4;
+            textureData[seIndex] = visualStyle.startEmissive.r;
+            textureData[seIndex + 1] = visualStyle.startEmissive.g;
+            textureData[seIndex + 2] = visualStyle.startEmissive.b;
+            textureData[seIndex + 3] = visualStyle.hasMaterialTransition ? 1.0 : 0.0;
 
-            // Seventh column: End emissive (RGB) + Reserved field
-            const endEmissiveIndex = startEmissiveIndex + 4;
-            textureData[endEmissiveIndex] = visualStyle.endEmissive.r;
-            textureData[endEmissiveIndex + 1] = visualStyle.endEmissive.g;
-            textureData[endEmissiveIndex + 2] = visualStyle.endEmissive.b;
-            textureData[endEmissiveIndex + 3] = 0.0; // Reserved field
+            const eeIndex = seIndex + 4;
+            textureData[eeIndex] = visualStyle.endEmissive.r;
+            textureData[eeIndex + 1] = visualStyle.endEmissive.g;
+            textureData[eeIndex + 2] = visualStyle.endEmissive.b;
+            textureData[eeIndex + 3] = 0.0;
         });
 
-        // Create or update texture
-        if (this._styleTexture) {
-            this._styleTexture.dispose();
-        }
+        if (this._styleTexture) this._styleTexture.dispose();
 
         this._styleTexture = new THREE.DataTexture(
             textureData,
@@ -664,20 +420,20 @@ if (isRenderingDepth) {
         );
         this._styleTexture.needsUpdate = true;
 
-        // Update uniforms
         this.uniforms.styleTexture.value = this._styleTexture;
         this.uniforms.textureWidth.value = textureWidth;
         this.uniforms.textureHeight.value = textureHeight;
+
+        this._styleTexNode.value = this._styleTexture;
+        this._texWidthUniform.value = textureWidth;
+        this._texHeightUniform.value = textureHeight;
+        this.needsUpdate = true;
     }
 
-    /**
-     * Convert B3DM style to VisualStyle structure
-     */
     private _convertToVisualStyle(batchStyle: ExtendedBatchStyle, batchId: number): VisualStyle {
-        // Process color
-        let startColor: THREE.Color = new THREE.Color(0, 0, 0);
-        let endColor: THREE.Color = new THREE.Color(0, 0, 0);
-        let hasColorTransition: boolean = false;
+        let startColor = new THREE.Color(0, 0, 0);
+        let endColor = new THREE.Color(0, 0, 0);
+        let hasColorTransition = false;
 
         if (batchStyle.color !== undefined) {
             if (
@@ -685,10 +441,9 @@ if (isRenderingDepth) {
                 "from" in batchStyle.color &&
                 "to" in batchStyle.color
             ) {
-                // TransitionValue<StyleColor>
-                const colorTransition = batchStyle.color as TransitionValue<string | number>;
-                startColor = new THREE.Color(colorTransition.from as string | number);
-                endColor = new THREE.Color(colorTransition.to as string | number);
+                const ct = batchStyle.color as TransitionValue<string | number>;
+                startColor = new THREE.Color(ct.from as string | number);
+                endColor = new THREE.Color(ct.to as string | number);
                 hasColorTransition = true;
             } else if (typeof batchStyle.color === "string") {
                 startColor = new THREE.Color(batchStyle.color);
@@ -699,26 +454,22 @@ if (isRenderingDepth) {
             }
         }
 
-        // Process highlight color (if exists)
-        let highlightColor: THREE.Color = startColor.clone();
+        let highlightColor = startColor.clone();
         if (batchStyle.highlightColor) {
-            if (batchStyle.highlightColor instanceof THREE.Color) {
+            if (batchStyle.highlightColor instanceof THREE.Color)
                 highlightColor = batchStyle.highlightColor.clone();
-            } else if (typeof batchStyle.highlightColor === "string") {
+            else if (typeof batchStyle.highlightColor === "string")
                 highlightColor = new THREE.Color(batchStyle.highlightColor);
-            } else if (typeof batchStyle.highlightColor === "number") {
+            else if (typeof batchStyle.highlightColor === "number")
                 highlightColor = new THREE.Color(batchStyle.highlightColor);
-            }
         }
 
-        // Select color based on highlight status
-        const finalStartColor: THREE.Color = batchStyle.highlighted ? highlightColor : startColor;
-        const finalEndColor: THREE.Color = batchStyle.highlighted ? highlightColor : endColor;
+        const finalStartColor = batchStyle.highlighted ? highlightColor : startColor;
+        const finalEndColor = batchStyle.highlighted ? highlightColor : endColor;
 
-        // Process opacity
-        let startOpacity: number = batchStyle.visible !== false ? 1 : 0;
-        let endOpacity: number = startOpacity;
-        let hasOpacityTransition: boolean = false;
+        let startOpacity = batchStyle.visible !== false ? 1 : 0;
+        let endOpacity = startOpacity;
+        let hasOpacityTransition = false;
 
         if (batchStyle.opacity !== undefined) {
             if (
@@ -726,10 +477,9 @@ if (isRenderingDepth) {
                 "from" in batchStyle.opacity &&
                 "to" in batchStyle.opacity
             ) {
-                // TransitionValue<number>
-                const opacityTransition = batchStyle.opacity as TransitionValue<number>;
-                startOpacity = batchStyle.visible !== false ? opacityTransition.from : 0;
-                endOpacity = batchStyle.visible !== false ? opacityTransition.to : 0;
+                const ot = batchStyle.opacity as TransitionValue<number>;
+                startOpacity = batchStyle.visible !== false ? ot.from : 0;
+                endOpacity = batchStyle.visible !== false ? ot.to : 0;
                 hasOpacityTransition = true;
             } else if (typeof batchStyle.opacity === "number") {
                 startOpacity = batchStyle.visible !== false ? batchStyle.opacity : 0;
@@ -737,10 +487,9 @@ if (isRenderingDepth) {
             }
         }
 
-        // Process offset
-        let startOffset: THREE.Vector3 = new THREE.Vector3();
-        let endOffset: THREE.Vector3 = new THREE.Vector3();
-        let hasOffsetTransition: boolean = false;
+        let startOffset = new THREE.Vector3();
+        let endOffset = new THREE.Vector3();
+        let hasOffsetTransition = false;
 
         if (batchStyle.offset !== undefined) {
             if (
@@ -748,14 +497,11 @@ if (isRenderingDepth) {
                 "from" in batchStyle.offset &&
                 "to" in batchStyle.offset
             ) {
-                // TransitionValue<number>
-                const offsetTransition = batchStyle.offset as TransitionValue<number>;
-                // Simplified as Y-axis offset
-                startOffset = new THREE.Vector3(0, offsetTransition.from, 0);
-                endOffset = new THREE.Vector3(0, offsetTransition.to, 0);
+                const ot = batchStyle.offset as TransitionValue<number>;
+                startOffset = new THREE.Vector3(0, ot.from, 0);
+                endOffset = new THREE.Vector3(0, ot.to, 0);
                 hasOffsetTransition = true;
             } else if (typeof batchStyle.offset === "number") {
-                // Single number, simplified as Y-axis offset
                 startOffset = new THREE.Vector3(0, batchStyle.offset, 0);
                 endOffset = startOffset.clone();
             } else if (this._isVector3(batchStyle.offset)) {
@@ -764,10 +510,9 @@ if (isRenderingDepth) {
             }
         }
 
-        // Process metalness
-        let startMetalness: number = this.metalness;
-        let endMetalness: number = this.metalness;
-        let hasMetalnessTransition: boolean = false;
+        let startMetalness = this.metalness;
+        let endMetalness = this.metalness;
+        let hasMetalnessTransition = false;
 
         if (batchStyle.metalness !== undefined) {
             if (
@@ -775,9 +520,9 @@ if (isRenderingDepth) {
                 "from" in batchStyle.metalness &&
                 "to" in batchStyle.metalness
             ) {
-                const metalnessTransition = batchStyle.metalness as TransitionValue<number>;
-                startMetalness = metalnessTransition.from;
-                endMetalness = metalnessTransition.to;
+                const mt = batchStyle.metalness as TransitionValue<number>;
+                startMetalness = mt.from;
+                endMetalness = mt.to;
                 hasMetalnessTransition = true;
             } else if (typeof batchStyle.metalness === "number") {
                 startMetalness = batchStyle.metalness;
@@ -785,10 +530,9 @@ if (isRenderingDepth) {
             }
         }
 
-        // Process roughness
-        let startRoughness: number = this.roughness;
-        let endRoughness: number = this.roughness;
-        let hasRoughnessTransition: boolean = false;
+        let startRoughness = this.roughness;
+        let endRoughness = this.roughness;
+        let hasRoughnessTransition = false;
 
         if (batchStyle.roughness !== undefined) {
             if (
@@ -796,9 +540,9 @@ if (isRenderingDepth) {
                 "from" in batchStyle.roughness &&
                 "to" in batchStyle.roughness
             ) {
-                const roughnessTransition = batchStyle.roughness as TransitionValue<number>;
-                startRoughness = roughnessTransition.from;
-                endRoughness = roughnessTransition.to;
+                const rt = batchStyle.roughness as TransitionValue<number>;
+                startRoughness = rt.from;
+                endRoughness = rt.to;
                 hasRoughnessTransition = true;
             } else if (typeof batchStyle.roughness === "number") {
                 startRoughness = batchStyle.roughness;
@@ -806,12 +550,9 @@ if (isRenderingDepth) {
             }
         }
 
-        // Process emissive
-        let startEmissive: THREE.Color = this.emissive
-            .clone()
-            .multiplyScalar(this.emissiveIntensity);
-        let endEmissive: THREE.Color = this.emissive.clone().multiplyScalar(this.emissiveIntensity);
-        let hasEmissiveTransition: boolean = false;
+        let startEmissive = this.emissive.clone().multiplyScalar(this.emissiveIntensity);
+        let endEmissive = this.emissive.clone().multiplyScalar(this.emissiveIntensity);
+        let hasEmissiveTransition = false;
 
         if (batchStyle.emissive !== undefined) {
             if (
@@ -819,9 +560,9 @@ if (isRenderingDepth) {
                 "from" in batchStyle.emissive &&
                 "to" in batchStyle.emissive
             ) {
-                const emissiveTransition = batchStyle.emissive as TransitionValue<string | number>;
-                startEmissive = new THREE.Color(emissiveTransition.from as string | number);
-                endEmissive = new THREE.Color(emissiveTransition.to as string | number);
+                const et = batchStyle.emissive as TransitionValue<string | number>;
+                startEmissive = new THREE.Color(et.from as string | number);
+                endEmissive = new THREE.Color(et.to as string | number);
                 hasEmissiveTransition = true;
             } else if (typeof batchStyle.emissive === "string") {
                 startEmissive = new THREE.Color(batchStyle.emissive);
@@ -832,10 +573,7 @@ if (isRenderingDepth) {
             }
         }
 
-        // Process animation properties - if useAnimation is false, don't apply transition animations
-        const useAnimation: boolean = batchStyle.useAnimation !== false; // true or undefined both mean respond to animation
-
-        // Get current value from animation manager
+        const useAnimation = batchStyle.useAnimation !== false;
         const currentValue =
             batchStyle.value !== undefined
                 ? batchStyle.value
@@ -865,62 +603,27 @@ if (isRenderingDepth) {
         };
     }
 
-    /**
-     * Check if object is a THREE.Vector3 instance
-     */
     private _isVector3(obj: any): obj is THREE.Vector3 {
         return obj && typeof obj === "object" && "x" in obj && "y" in obj && "z" in obj;
     }
 
-    /**
-     * Create default style
-     */
-    private _createDefaultStyle(): ExtendedBatchStyle {
-        return {
-            visible: true,
-            color: "#ffffff",
-            opacity: 1,
-            metalness: 0,
-            roughness: 1,
-            emissive: "#000000",
-            value: 0
-        };
-    }
-
-    /**
-     * Sets whether the material is in depth rendering mode
-     * When enabled, the material renders depth only without logarithmic depth buffer
-     *
-     * @param enabled - True to enable depth rendering mode, false for normal rendering
-     */
     public setRenderingDepth(enabled: boolean): void {
         this.uniforms.isRenderingDepth.value = enabled;
     }
 
-    /**
-     * Gets whether the material is currently in depth rendering mode
-     *
-     * @returns True if in depth rendering mode, false otherwise
-     */
     public getIsRenderingDepth(): boolean {
         return this.uniforms.isRenderingDepth.value;
     }
 
-    /**
-     * Clean up resources
-     */
     dispose(): void {
         if (this._styleTexture) {
             this._styleTexture.dispose();
             this._styleTexture = null;
         }
-
-        // Clean up animation texture
         if (this.uniforms.animationTexture.value) {
             this.uniforms.animationTexture.value.dispose();
             this.uniforms.animationTexture.value = null;
         }
-
         super.dispose();
     }
 }

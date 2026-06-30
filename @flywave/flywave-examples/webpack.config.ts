@@ -16,7 +16,6 @@ import {
 } from "@flywave/flywave-webpack-utils/scripts/WebpackConfig";
 
 const require = createRequire(import.meta.url);
-
 const webpack = require("webpack");
 const glob = require("glob");
 
@@ -31,8 +30,9 @@ const flywaveMapThemePath = path.dirname(
 const flywaveFontResourcesPath = path.dirname(
     require.resolve("@here/harp-fontcatalog/package.json")
 );
-const threePath = `${path.dirname(require.resolve("three"))}/three.cjs`;
-const threeDracoPath = `${path.dirname(require.resolve("three"))}/../examples/jsm/libs`;
+const threeMainPath = path.dirname(require.resolve("three"));
+const threePath = `${threeMainPath}/three.cjs`;
+const threeDracoPath = `${threeMainPath}/../examples/jsm/libs`;
 
 const themeList = {
     default: "resources/tilezen_base.json",
@@ -122,7 +122,7 @@ const decoderConfig = merge(
         target: "webworker",
         resolve: {
             alias: {
-                three: threePath,
+                three$: threePath,
                 "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src")
             }
         },

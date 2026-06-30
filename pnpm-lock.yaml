@@ -363,6 +363,9 @@ catalogs:
     three-bvh-csg:
       specifier: ~0.0.17
       version: 0.0.17
+    tiny-invariant:
+      specifier: ^1.3.3
+      version: 1.3.3
     tmp:
       specifier: ^0.2.1
       version: 0.2.5
@@ -650,6 +653,25 @@ importers:
       ts-node:
         specifier: 'catalog:'
         version: 9.1.1(typescript@5.8.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.2
+
+  '@flywave/flywave-atmosphere':
+    dependencies:
+      tiny-invariant:
+        specifier: 'catalog:'
+        version: 1.3.3
+    devDependencies:
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.184.1
+      cross-env:
+        specifier: 'catalog:'
+        version: 7.0.3
+      three:
+        specifier: ^0.184.0
+        version: 0.184.0
       typescript:
         specifier: 'catalog:'
         version: 5.8.2
@@ -1417,6 +1439,9 @@ importers:
 
   '@flywave/flywave-mapview':
     dependencies:
+      '@flywave/flywave-atmosphere':
+        specifier: workspace:*
+        version: link:../flywave-atmosphere
       postprocessing:
         specifier: 'catalog:'
         version: 6.39.1(three@0.184.0)

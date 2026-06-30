@@ -795,18 +795,19 @@ export namespace MapViewUtils {
         // Get the center of the screen in NDC coordinates
         const ndcCenter = new THREE.Vector2(0, 0);
 
-        // Read depth at the center of the screen
-        const depthPromise = mapView.mapRenderingManager.readDepth(ndcCenter);
-
-        if (depthPromise === null) {
+        const vrm = mapView.mapRenderingManager.viewRenderManager;
+        let depth: number | null;
+        try {
+            depth =
+                vrm != null
+                    ? await vrm.readDepthAsync(ndcCenter)
+                    : mapView.mapRenderingManager.readDepth(ndcCenter);
+        } catch (error) {
+            logger.warn("Failed to read depth from buffer:", error);
             return null;
         }
 
-        let depth: number;
-        try {
-            depth = await depthPromise;
-        } catch (error) {
-            logger.warn("Failed to read depth from buffer:", error);
+        if (depth === null) {
             return null;
         }
 

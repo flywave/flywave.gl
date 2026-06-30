@@ -1,6 +1,6 @@
+// @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// @ts-nocheck
 // TSL accessors use reference() and cached camera property lookups.
 // @types/three@0.184 cannot fully type these TSL reference patterns.
 

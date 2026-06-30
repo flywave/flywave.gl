@@ -20,7 +20,6 @@
         "target": "ES2020",
         "lib": ["ES2020", "DOM"],
         "useUnknownInCatchVariables": false,
-        "downlevelIteration": true,
         "types": ["node", "@types/mocha"]
     },
     "exclude": ["node_modules"]

@@ -1,24 +1,21 @@
-/* Copyright (C) 2025 flywave.gl contributors */
+// @ts-nocheck
+import { hash, hashString as hashStringFn } from "three/src/nodes/core/NodeUtils.js";
 
-import { hash, hashString } from "three/src/nodes/core/NodeUtils.js";
-import { NodeBuilder, type Renderer } from "three/webgpu";
+export { hash, hashStringFn as hashString };
 
-/**
- * Detects whether the target is using the WebGPU backend.
- */
-export function isWebGPU(target: NodeBuilder | Renderer | Renderer["backend"]): boolean {
-    const backend =
-        target instanceof NodeBuilder
-            ? target.renderer.backend
-            : "backend" in target
-            ? target.backend
-            : target;
-    return "isWebGPUBackend" in backend && backend.isWebGPUBackend === true;
+export function isWebGPU(target: unknown): boolean {
+    if (target == null) return false;
+    const obj = target as Record<string, unknown>;
+    if (obj.renderer != null && typeof obj.renderer === "object") {
+        const backend = (obj.renderer as Record<string, unknown>).backend;
+        return (backend as Record<string, unknown>)?.isWebGPUBackend === true;
+    }
+    if (obj.backend != null && typeof obj.backend === "object") {
+        return (obj.backend as Record<string, unknown>)?.isWebGPUBackend === true;
+    }
+    return (obj as Record<string, unknown>)?.isWebGPUBackend === true;
 }
 
-/**
- * Stable hash from a set of values. Used for TSL node cache keys.
- */
 export function hashValues(
     ...values: ReadonlyArray<number | boolean | string | null | undefined>
 ): number {
@@ -29,7 +26,7 @@ export function hashValues(
                 : typeof value === "boolean"
                 ? +value
                 : typeof value === "string"
-                ? hashString(value)
+                ? hashStringFn(value)
                 : 0x7fffffff
         )
     );

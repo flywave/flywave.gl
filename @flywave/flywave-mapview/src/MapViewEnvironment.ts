@@ -6,7 +6,7 @@ import { getOptionValue, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
 import { BackgroundDataSource } from "./BackgroundDataSource";
-import { type CelestiaOptions, Celestia } from "./celestia/Celestia";
+import { AtmosphereSystem, type AtmosphereSystemOptions } from "./composing/AtmosphereSystem";
 import { type MapView, type MapViewOptions } from "./MapView";
 import { MapViewFog } from "./MapViewFog";
 import { SkyBackground } from "./SkyBackground";
@@ -34,7 +34,7 @@ const cache = {
 
 export type MapViewEnvironmentOptions = Pick<
     MapViewOptions,
-    "addBackgroundDatasource" | "backgroundTilingScheme" | "celestiaOptions"
+    "addBackgroundDatasource" | "backgroundTilingScheme" | "atmosphereOptions"
 >;
 /**
  * Class handling the Scene Environment, like fog, sky, background datasource, clearColor etc
@@ -43,14 +43,14 @@ export type MapViewEnvironmentOptions = Pick<
 export class MapViewEnvironment {
     private readonly m_fog: MapViewFog;
     private m_skyBackground?: SkyBackground;
-    private readonly m_celestia?: Celestia;
+    private readonly m_atmosphere: AtmosphereSystem;
     private m_createdLights?: THREE.Light[];
     private m_overlayCreatedLights?: THREE.Light[];
     private readonly m_backgroundDataSource?: BackgroundDataSource;
 
     constructor(private readonly m_mapView: MapView, options: MapViewEnvironmentOptions) {
         this.m_fog = new MapViewFog(this.m_mapView.scene);
-        this.m_celestia = new Celestia(this.m_mapView, options, options.celestiaOptions);
+        this.m_atmosphere = new AtmosphereSystem(this.m_mapView);
         if (options.addBackgroundDatasource !== false) {
             this.m_backgroundDataSource = new BackgroundDataSource();
             this.m_mapView.addDataSource(this.m_backgroundDataSource);
@@ -72,8 +72,8 @@ export class MapViewEnvironment {
         return this.m_fog;
     }
 
-    get celestia(): Celestia {
-        return this.m_celestia!;
+    get atmosphere(): AtmosphereSystem {
+        return this.m_atmosphere;
     }
 
     updateBackgroundDataSource() {
@@ -97,7 +97,7 @@ export class MapViewEnvironment {
             this.m_skyBackground.updateCamera(this.m_mapView.camera);
         }
         this.updateLights();
-        this.m_celestia.update();
+        this.m_atmosphere.update();
     }
 
     updateClearColor(clearColor?: string, clearAlpha?: number) {
@@ -122,8 +122,8 @@ export class MapViewEnvironment {
         }
     }
 
-    updateCelestia(options?: CelestiaOptions) {
-        this.m_celestia.updateOptions(options);
+    updateAtmosphere(options?: AtmosphereSystemOptions) {
+        this.m_atmosphere.updateOptions(options);
     }
 
     createLight(lightDescription: Light) {

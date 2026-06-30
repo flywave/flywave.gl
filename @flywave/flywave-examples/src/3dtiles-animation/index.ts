@@ -67,14 +67,15 @@ const initializeMapControls = (mapView: MapView): void => {
 const create3DTilesDataSource = (mapView: MapView): CesiumIonDataSource => {
     // Create Cesium Ion data source using specified asset ID
     const cesiumIonDataSource = new CesiumIonDataSource({
-        styleSetName: "3dtiles", // Style set name
-        // Note: In production environments, this token should be managed using environment variables or configuration files
-        accessToken: CESIUM_ION_TOKEN, // Use unified configured access token
-        assetId: 75343, // Data asset ID
+        styleSetName: "3dtiles",
+        accessToken: CESIUM_ION_TOKEN,
+        assetId: 75343,
+        customAttributeConfig: {
+            batchIdAttributeName: "_batchid"
+        },
         animation: {
-            // Animation configuration
-            easing: "ease-in-out", // Easing effect
-            duration: 1000 // Animation duration (milliseconds)
+            easing: "ease-in-out",
+            duration: 1000
         }
     });
 
@@ -230,7 +231,7 @@ const setupMouseClickHandler = (
 
         if (pick && pick.tile) {
             // Get properties of selected object
-            const properties = pick.tile.getBatchPropertiesByIntersection(pick);
+            const properties = pick.tile.getBatchPropertiesByIntersection(pick, "_batchid");
 
             // Display properties in table
             propertiesTable.show(properties);

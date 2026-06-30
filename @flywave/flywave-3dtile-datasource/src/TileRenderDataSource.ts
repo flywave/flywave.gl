@@ -469,6 +469,7 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
      * @returns `true` if style was found and updated, `false` otherwise.
      */
     updateStyleById(id: string, updates: Partial<Style>): boolean {
+        if (!this.m_styleWatcher) return false;
         return this.m_styleWatcher.updateStyleById(id, updates);
     }
     /**

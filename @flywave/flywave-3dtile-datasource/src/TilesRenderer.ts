@@ -246,6 +246,7 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
      * @param intersects - Array to store intersection results
      */
     raycast = (raycaster: Raycaster, intersects: TileIntersection[]): void => {
+        if (this.mapView == null) return;
         const oldRayOrigin = new Vector3();
         oldRayOrigin.copy(raycaster.ray.origin);
         raycaster.ray.origin.copy(this.mapView.camera.position);

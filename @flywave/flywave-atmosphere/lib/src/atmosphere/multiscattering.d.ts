@@ -1,0 +1,11 @@
+import type { TextureNode } from "three/webgpu";
+import type { Node } from "../tsl/node";
+import type { AtmosphereContext } from "./AtmosphereContext";
+export declare const getSubUVFromTextureUnit: import("../tsl/FnLayout").ShaderFn<readonly unknown[]>;
+export declare const getTextureUnitFromSubUV: import("../tsl/FnLayout").ShaderFn<readonly unknown[]>;
+export declare const atmosphereMediumStruct: import("three/src/nodes/TSL.js").Struct;
+export declare const sampleAtmosphereMedium: import("../tsl/FnLayout").ShaderFn<readonly unknown[]>;
+export declare const multipleScatteringStruct: import("three/src/nodes/TSL.js").Struct;
+export declare const computeMultipleScatteringTexture: (parameters: import("three/webgpu").StructNode, transmittanceNode: TextureNode, radius: Node<"float">, cosView: Node<"float">, cosLight: Node<"float">, cosViewLight: Node<"float">) => Node;
+export declare const computeScatteringTexture: (transmittanceNode: TextureNode, multipleScatteringNode: TextureNode, fragCoord: Node<"vec3">) => Node;
+export declare const computeIndirectRadianceToPoint: (context: AtmosphereContext, radius: Node<"float">, cosView: Node<"float">, cosLight: Node<"float">, cosViewLight: Node<"float">, maxDistance: Node<"float">, shadowLength: Node<"vec2">) => Node;
