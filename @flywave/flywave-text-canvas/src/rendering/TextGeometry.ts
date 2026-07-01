@@ -69,11 +69,13 @@ export class TextGeometry {
     private m_drawCount: number;
     private m_updateOffset: number;
 
-    private m_vertexBuffer: THREE.InterleavedBuffer;
-    private m_positionAttribute: THREE.InterleavedBufferAttribute;
-    private m_uvAttribute: THREE.InterleavedBufferAttribute;
-    private m_colorAttribute: THREE.InterleavedBufferAttribute;
-    private m_bgColorAttribute: THREE.InterleavedBufferAttribute;
+    private m_positionAttribute: THREE.BufferAttribute;
+    private m_rotationAttribute: THREE.BufferAttribute;
+    private m_uvAttribute: THREE.BufferAttribute;
+    private m_weightAttribute: THREE.BufferAttribute;
+    private m_bgWeightAttribute: THREE.BufferAttribute;
+    private m_colorAttribute: THREE.BufferAttribute;
+    private m_bgColorAttribute: THREE.BufferAttribute;
     private m_indexBuffer: THREE.BufferAttribute;
 
     private m_geometry: THREE.BufferGeometry;
@@ -104,15 +106,21 @@ export class TextGeometry {
         this.m_drawCount = 0;
         this.m_updateOffset = 0;
 
-        this.m_vertexBuffer = new THREE.InterleavedBuffer(
-            new Float32Array(this.m_currentCapacity * QUAD_VERTEX_MEMORY_FOOTPRINT),
-            VERTEX_BUFFER_STRIDE
-        );
-        this.m_vertexBuffer.setUsage(THREE.DynamicDrawUsage);
-        this.m_positionAttribute = new THREE.InterleavedBufferAttribute(this.m_vertexBuffer, 4, 0);
-        this.m_uvAttribute = new THREE.InterleavedBufferAttribute(this.m_vertexBuffer, 4, 4);
-        this.m_colorAttribute = new THREE.InterleavedBufferAttribute(this.m_vertexBuffer, 4, 8);
-        this.m_bgColorAttribute = new THREE.InterleavedBufferAttribute(this.m_vertexBuffer, 4, 12);
+        const numVerts = this.m_currentCapacity * VERTICES_PER_QUAD;
+        this.m_positionAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 3), 3);
+        this.m_positionAttribute.setUsage(THREE.DynamicDrawUsage);
+        this.m_rotationAttribute = new THREE.BufferAttribute(new Float32Array(numVerts), 1);
+        this.m_rotationAttribute.setUsage(THREE.DynamicDrawUsage);
+        this.m_uvAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 2), 2);
+        this.m_uvAttribute.setUsage(THREE.DynamicDrawUsage);
+        this.m_weightAttribute = new THREE.BufferAttribute(new Float32Array(numVerts), 1);
+        this.m_weightAttribute.setUsage(THREE.DynamicDrawUsage);
+        this.m_bgWeightAttribute = new THREE.BufferAttribute(new Float32Array(numVerts), 1);
+        this.m_bgWeightAttribute.setUsage(THREE.DynamicDrawUsage);
+        this.m_colorAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 4), 4);
+        this.m_colorAttribute.setUsage(THREE.DynamicDrawUsage);
+        this.m_bgColorAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 4), 4);
+        this.m_bgColorAttribute.setUsage(THREE.DynamicDrawUsage);
 
         this.m_indexBuffer = new THREE.BufferAttribute(
             new Uint32Array(this.m_currentCapacity * QUAD_INDEX_MEMORY_FOOTPRINT),
@@ -122,9 +130,12 @@ export class TextGeometry {
 
         this.m_geometry = new THREE.BufferGeometry();
         this.m_geometry.setAttribute("position", this.m_positionAttribute);
+        this.m_geometry.setAttribute("aRotation", this.m_rotationAttribute);
         this.m_geometry.setAttribute("uv", this.m_uvAttribute);
-        this.m_geometry.setAttribute("color", this.m_colorAttribute);
-        this.m_geometry.setAttribute("bgColor", this.m_bgColorAttribute);
+        this.m_geometry.setAttribute("aWeight", this.m_weightAttribute);
+        this.m_geometry.setAttribute("aBgWeight", this.m_bgWeightAttribute);
+        this.m_geometry.setAttribute("aColor", this.m_colorAttribute);
+        this.m_geometry.setAttribute("aBgColor", this.m_bgColorAttribute);
         this.m_geometry.setIndex(this.m_indexBuffer);
 
         this.m_mesh = new THREE.Mesh(this.m_geometry, material);
@@ -158,23 +169,22 @@ export class TextGeometry {
      */
     update() {
         if (this.drawCount > this.m_updateOffset) {
-            this.m_vertexBuffer.needsUpdate = true;
-            // this.m_vertexBuffer.updateRange.offset =
-            //     this.m_updateOffset * QUAD_VERTEX_MEMORY_FOOTPRINT;
-            // this.m_vertexBuffer.updateRange.count =
-            //     (this.m_drawCount - this.m_updateOffset) * QUAD_VERTEX_MEMORY_FOOTPRINT;
-
-            //@ts-ignore
-            this.m_vertexBuffer.addUpdateRange(
-                this.m_updateOffset * QUAD_VERTEX_MEMORY_FOOTPRINT,
-                (this.m_drawCount - this.m_updateOffset) * QUAD_VERTEX_MEMORY_FOOTPRINT
-            );
+            const attrs = [
+                this.m_positionAttribute,
+                this.m_rotationAttribute,
+                this.m_uvAttribute,
+                this.m_weightAttribute,
+                this.m_bgWeightAttribute,
+                this.m_colorAttribute,
+                this.m_bgColorAttribute
+            ];
+            for (const attr of attrs) {
+                attr.needsUpdate = true;
+                //@ts-ignore
+                attr.addUpdateRange(0, attr.count * attr.itemSize);
+            }
 
             this.m_indexBuffer.needsUpdate = true;
-            // this.m_indexBuffer.updateRange.offset =
-            //     this.m_updateOffset * QUAD_INDEX_MEMORY_FOOTPRINT;
-            // this.m_indexBuffer.updateRange.count =
-            //     (this.m_drawCount - this.m_updateOffset) * QUAD_INDEX_MEMORY_FOOTPRINT;
             //@ts-ignore
             this.m_indexBuffer.addUpdateRange(
                 this.m_updateOffset * QUAD_INDEX_MEMORY_FOOTPRINT,
@@ -216,21 +226,21 @@ export class TextGeometry {
         const baseIndex = this.m_drawCount * INDICES_PER_QUAD;
 
         for (let i = 0; i < VERTICES_PER_QUAD; ++i) {
-            this.m_positionAttribute.setXYZW(
+            this.m_positionAttribute.setXYZ(
                 baseVertex + i,
                 corners[i].x,
                 corners[i].y,
-                corners[i].z,
-                (mirrored ? -1.0 : 1.0) * style.rotation
+                corners[i].z
             );
+            this.m_rotationAttribute.setX(baseVertex + i, (mirrored ? -1.0 : 1.0) * style.rotation);
             const mirroredUVIdx = mirrored ? ((i + 1) % 2) + Math.floor(i / 2) * 2 : i;
-            this.m_uvAttribute.setXYZW(
+            this.m_uvAttribute.setXY(
                 baseVertex + i,
                 glyphData.dynamicTextureCoordinates[mirroredUVIdx].x,
-                glyphData.dynamicTextureCoordinates[mirroredUVIdx].y,
-                weight,
-                bgWeight
+                glyphData.dynamicTextureCoordinates[mirroredUVIdx].y
             );
+            this.m_weightAttribute.setX(baseVertex + i, weight);
+            this.m_bgWeightAttribute.setX(baseVertex + i, bgWeight);
             this.m_colorAttribute.setXYZW(
                 baseVertex + i,
                 style.color.r,
@@ -376,19 +386,25 @@ export class TextGeometry {
             for (let j = 0; j < VERTICES_PER_QUAD; ++j) {
                 const x = buffer[srcOffset + j * VERTEX_BUFFER_STRIDE];
                 const y = buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 1];
-                this.m_positionAttribute.setXYZW(
+                this.m_positionAttribute.setXYZ(
                     targetOffset + i * VERTICES_PER_QUAD + j,
                     x * s * cosR + y * s * -sinR + offsetX,
                     x * s * sinR + y * s * cosR + offsetY,
-                    buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 2] + offsetZ,
+                    buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 2] + offsetZ
+                );
+                this.m_rotationAttribute.setX(
+                    targetOffset + i * VERTICES_PER_QUAD + j,
                     buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 3] + rotSign * r
                 );
                 const mirroredUVIdx = mirrored ? ((j + 1) % 2) + Math.floor(j / 2) * 2 : j;
-                this.m_uvAttribute.setXYZW(
+                this.m_uvAttribute.setXY(
                     targetOffset + i * VERTICES_PER_QUAD + j,
                     glyph.dynamicTextureCoordinates[mirroredUVIdx].x,
-                    glyph.dynamicTextureCoordinates[mirroredUVIdx].y,
-                    w,
+                    glyph.dynamicTextureCoordinates[mirroredUVIdx].y
+                );
+                this.m_weightAttribute.setX(targetOffset + i * VERTICES_PER_QUAD + j, w);
+                this.m_bgWeightAttribute.setX(
+                    targetOffset + i * VERTICES_PER_QUAD + j,
                     (bw - w) / s + w
                 );
                 this.m_colorAttribute.setXYZW(
@@ -518,9 +534,10 @@ export class TextGeometry {
      * @param info - The info object to increment with the values from this `TextGeometry`.
      */
     updateMemoryUsage(info: MemoryUsage) {
-        const numBytes =
-            this.m_vertexBuffer.count * NUM_BYTES_PER_FLOAT +
-            this.m_indexBuffer.count * NUM_BYTES_PER_INT32;
+        const numVerts = this.m_positionAttribute.count;
+        const vertexBytes = numVerts * (3 + 1 + 2 + 1 + 1 + 4 + 4) * NUM_BYTES_PER_FLOAT;
+        const indexBytes = this.m_indexBuffer.count * NUM_BYTES_PER_INT32;
+        const numBytes = vertexBytes + indexBytes;
         info.heapSize += numBytes;
         info.gpuSize += numBytes;
     }
@@ -528,14 +545,23 @@ export class TextGeometry {
     private resizeBuffers(size: number) {
         this.m_currentCapacity = size;
 
-        const newVertexBuffer = new Float32Array(size * QUAD_VERTEX_MEMORY_FOOTPRINT);
-        newVertexBuffer.set(this.m_vertexBuffer.array);
-        this.m_vertexBuffer = new THREE.InterleavedBuffer(newVertexBuffer, VERTEX_BUFFER_STRIDE);
-        this.m_vertexBuffer.setUsage(THREE.DynamicDrawUsage);
-        this.m_positionAttribute = new THREE.InterleavedBufferAttribute(this.m_vertexBuffer, 4, 0);
-        this.m_uvAttribute = new THREE.InterleavedBufferAttribute(this.m_vertexBuffer, 4, 4);
-        this.m_colorAttribute = new THREE.InterleavedBufferAttribute(this.m_vertexBuffer, 4, 8);
-        this.m_bgColorAttribute = new THREE.InterleavedBufferAttribute(this.m_vertexBuffer, 4, 12);
+        const numVerts = size * VERTICES_PER_QUAD;
+
+        const resizeAttr = (old: THREE.BufferAttribute, count: number, itemSize: number) => {
+            const newArray = new Float32Array(count * itemSize);
+            newArray.set(old.array.subarray(0, Math.min(old.array.length, newArray.length)));
+            const newAttr = new THREE.BufferAttribute(newArray, itemSize);
+            newAttr.setUsage(THREE.DynamicDrawUsage);
+            return newAttr;
+        };
+
+        this.m_positionAttribute = resizeAttr(this.m_positionAttribute, numVerts, 3);
+        this.m_rotationAttribute = resizeAttr(this.m_rotationAttribute, numVerts, 1);
+        this.m_uvAttribute = resizeAttr(this.m_uvAttribute, numVerts, 2);
+        this.m_weightAttribute = resizeAttr(this.m_weightAttribute, numVerts, 1);
+        this.m_bgWeightAttribute = resizeAttr(this.m_bgWeightAttribute, numVerts, 1);
+        this.m_colorAttribute = resizeAttr(this.m_colorAttribute, numVerts, 4);
+        this.m_bgColorAttribute = resizeAttr(this.m_bgColorAttribute, numVerts, 4);
 
         const newIndexBuffer = new Uint32Array(size * QUAD_INDEX_MEMORY_FOOTPRINT);
         newIndexBuffer.set(this.m_indexBuffer.array);
@@ -545,9 +571,12 @@ export class TextGeometry {
         this.m_geometry.dispose();
         this.m_geometry = new THREE.BufferGeometry();
         this.m_geometry.setAttribute("position", this.m_positionAttribute);
+        this.m_geometry.setAttribute("aRotation", this.m_rotationAttribute);
         this.m_geometry.setAttribute("uv", this.m_uvAttribute);
-        this.m_geometry.setAttribute("color", this.m_colorAttribute);
-        this.m_geometry.setAttribute("bgColor", this.m_bgColorAttribute);
+        this.m_geometry.setAttribute("aWeight", this.m_weightAttribute);
+        this.m_geometry.setAttribute("aBgWeight", this.m_bgWeightAttribute);
+        this.m_geometry.setAttribute("aColor", this.m_colorAttribute);
+        this.m_geometry.setAttribute("aBgColor", this.m_bgColorAttribute);
         this.m_geometry.setIndex(this.m_indexBuffer);
 
         this.m_pickingDataArray.length = this.m_currentCapacity;

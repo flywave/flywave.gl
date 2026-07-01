@@ -100,6 +100,7 @@ export class FontCatalog {
         replacementTexture.wrapS = THREE.ClampToEdgeWrapping;
         replacementTexture.wrapT = THREE.ClampToEdgeWrapping;
         replacementTexture.minFilter = THREE.NearestFilter;
+        replacementTexture.colorSpace = THREE.NoColorSpace;
         replacementTexture.needsUpdate = true;
 
         const replacementFont = fontCatalog.fonts.find((font: Font) => font.name === "Extra");
@@ -599,6 +600,7 @@ export class FontCatalog {
                 page.wrapS = THREE.ClampToEdgeWrapping;
                 page.wrapT = THREE.ClampToEdgeWrapping;
                 page.minFilter = THREE.NearestFilter;
+                page.colorSpace = THREE.NoColorSpace;
                 page.needsUpdate = true;
                 if (this.m_loadingPages.delete(pagePath)) {
                     this.m_loadedPages.set(pagePath, page);

@@ -1,158 +1,26 @@
 /* Copyright (C) 2025 flywave.gl contributors */
+// @ts-nocheck
 
-import { convertFragmentShaderToWebGL2, convertVertexShaderToWebGL2 } from "@flywave/flywave-utils";
 import * as THREE from "three";
-
-const SdfShaderChunks = {
-    sdf_attributes: `
-        attribute vec4 position;
-        attribute vec4 uv;
-        attribute vec4 color;
-        attribute vec4 bgColor;
-        `,
-    sdf_varying: `
-        varying vec4 vColor;
-        varying float vWeight;
-        varying vec2 vUv;
-        varying float vRotation;
-        `,
-    sdf_varying_computation: `
-        #if BG_TEXT
-        vColor = bgColor;
-        vWeight = uv.w;
-        #else
-        vColor = color;
-        vWeight = uv.z;
-        #endif
-        vUv = vec2(uv.xy);
-        vRotation = position.w;
-        `,
-    sdf_frag_uniforms: `
-        uniform sampler2D sdfTexture;
-        uniform vec4 sdfParams;
-        `,
-    sdf_sampling_functions: `
-        float median(float r, float g, float b) {
-            return max(min(r, g), min(max(r, g), b));
-        }
-
-        float getDistance(vec2 uvOffset) {
-            vec3 texSample = texture2D(sdfTexture, vUv.xy + uvOffset).rgb;
-            #if MSDF
-            return median(texSample.r, texSample.g, texSample.b);
-            #else
-            return texSample.r;
-            #endif
-        }
-
-        float getOpacity(vec2 uvOffset, float weight) {
-            vec2 uv = vUv + uvOffset;
-            vec2 rotatedUVs = abs(vec2(
-                cos(vRotation) * uv.x - sin(vRotation) * uv.y,
-                sin(vRotation) * uv.x + cos(vRotation) * uv.y));
-
-            float dx = dFdx(rotatedUVs.x) * sdfParams.x;
-            float dy = dFdy(rotatedUVs.y) * sdfParams.y;
-            float toPixels = sdfParams.w * inversesqrt( dx * dx + dy * dy );
-
-            float dist = getDistance(uvOffset) + min(weight, 0.5 - 1.0 / sdfParams.w) - 0.5;
-            return clamp(dist * toPixels + 0.5, 0.0, 1.0);
-        }
-        `
-};
-Object.assign(THREE.ShaderChunk, SdfShaderChunks);
-
-const clearVertexSource: string = `
-    attribute vec2 position;
-
-    uniform mat4 modelViewMatrix;
-    uniform mat4 projectionMatrix;
-
-    void main() {
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, 0.0, 1.0);
-    }`;
-
-const clearFragmentSource: string = `
-    precision highp float;
-    precision highp int;
-
-    void main() {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
-    }`;
-
-const copyVertexSource: string = `
-    attribute vec3 position;
-    attribute vec2 uv;
-
-    uniform mat4 modelViewMatrix;
-    uniform mat4 projectionMatrix;
-
-    varying vec3 vUv;
-
-    void main() {
-        vUv = vec3(uv.xy, position.z);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, 0.0, 1.0);
-    }`;
-
-const copyFragmentSource: string = `
-    precision highp float;
-    precision highp int;
-
-    uniform float pageOffset;
-    uniform sampler2D page0;
-    uniform sampler2D page1;
-    uniform sampler2D page2;
-    uniform sampler2D page3;
-    uniform sampler2D page4;
-    uniform sampler2D page5;
-    uniform sampler2D page6;
-    uniform sampler2D page7;
-
-    varying vec3 vUv;
-
-    void main() {
-        vec4 texSample = vec4(0.0);
-        if (vUv.z < pageOffset || vUv.z > (pageOffset + 7.0)) discard;
-        else if (vUv.z < pageOffset + 1.0) texSample = texture2D(page0, vUv.xy);
-        else if (vUv.z < pageOffset + 2.0) texSample = texture2D(page1, vUv.xy);
-        else if (vUv.z < pageOffset + 3.0) texSample = texture2D(page2, vUv.xy);
-        else if (vUv.z < pageOffset + 4.0) texSample = texture2D(page3, vUv.xy);
-        else if (vUv.z < pageOffset + 5.0) texSample = texture2D(page4, vUv.xy);
-        else if (vUv.z < pageOffset + 6.0) texSample = texture2D(page5, vUv.xy);
-        else if (vUv.z < pageOffset + 7.0) texSample = texture2D(page6, vUv.xy);
-        else texSample = texture2D(page7, vUv.xy);
-
-        gl_FragColor = texSample;
-    }`;
-
-const sdfTextVertexSource: string = `
-    #include <sdf_attributes>
-    #include <sdf_varying>
-
-    uniform mat4 modelViewMatrix;
-    uniform mat4 projectionMatrix;
-
-    void main() {
-        #include <sdf_varying_computation>
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xyz, 1.0);
-    }`;
-
-const sdfTextFragmentSource: string = `
-    precision highp float;
-    precision highp int;
-
-    #include <sdf_varying>
-    #include <sdf_frag_uniforms>
-    #include <sdf_sampling_functions>
-
-    void main() {
-        vec4 color = vColor;
-        color.a *= getOpacity(vec2(0.0), vWeight);
-        if (color.a < 0.05) {
-            discard;
-        }
-        gl_FragColor = color;
-    }`;
+import { NodeMaterial } from "three/webgpu";
+import {
+    Fn,
+    abs,
+    attribute,
+    clamp,
+    cos,
+    dFdx,
+    dFdy,
+    float,
+    inverseSqrt,
+    max,
+    min,
+    sin,
+    texture,
+    uniform,
+    uv as uvNode,
+    vec4
+} from "three/tsl";
 
 interface RendererCapabilities {
     readonly isWebGL2: boolean;
@@ -163,99 +31,91 @@ interface RendererMaterialParameters {
     rendererCapabilities: RendererCapabilities;
 }
 
-interface RawShaderMaterialParameters extends THREE.ShaderMaterialParameters {
-    rendererCapabilities: RendererCapabilities;
-}
-
-class RawShaderMaterial extends THREE.RawShaderMaterial {
-    constructor(params?: RawShaderMaterialParameters) {
-        const shaderParams: THREE.ShaderMaterialParameters | undefined = params
-            ? {
-                  ...params,
-                  glslVersion: THREE.GLSL3,
-                  vertexShader: params.vertexShader
-                      ? convertVertexShaderToWebGL2(params.vertexShader)
-                      : params.vertexShader,
-                  fragmentShader: params.fragmentShader
-                      ? convertFragmentShaderToWebGL2(params.fragmentShader)
-                      : params.fragmentShader
-              }
-            : undefined;
-        if (shaderParams) {
-            delete (shaderParams as any).rendererCapabilities;
-        }
-        super(shaderParams);
-    }
+function createDummyTexture(): THREE.Texture {
+    const t = new THREE.DataTexture(
+        new Uint8Array([0, 0, 0, 255]),
+        1,
+        1,
+        THREE.RGBAFormat,
+        THREE.UnsignedByteType
+    );
+    t.needsUpdate = true;
+    t.colorSpace = THREE.NoColorSpace;
+    return t;
 }
 
 /**
- * @hidden
- * Material used for clearing glyphs from a [[GlyphTextureCache]].
+ * Clears a region of the RT to transparent black.
+ * Uses QuadMesh (fullscreen pass) with a scissor-like approach via uniforms.
  */
-export class GlyphClearMaterial extends RawShaderMaterial {
-    /**
-     * Creates a new `GlyphClearMaterial`.
-     * @param params - Material parameters. Always required except when cloning another
-     * material.
-     * @returns New `GlyphClearMaterial`.
-     */
+export class GlyphClearMaterial extends NodeMaterial {
+    readonly clearRectUniform = uniform(new THREE.Vector4(0, 0, 1, 1));
+
     constructor(params?: RendererMaterialParameters) {
-        const shaderParams: RawShaderMaterialParameters | undefined = params
-            ? {
-                  name: "GlyphClearMaterial",
-                  vertexShader: clearVertexSource,
-                  fragmentShader: clearFragmentSource,
-                  uniforms: {},
-                  depthTest: false,
-                  depthWrite: false,
-                  rendererCapabilities: params.rendererCapabilities
-              }
-            : undefined;
-        super(shaderParams);
+        super();
+        this.name = "GlyphClearMaterial";
+        this.depthTest = false;
+        this.depthWrite = false;
+        this.transparent = true;
+
+        const screenUV = uvNode();
+        const clearRect = this.clearRectUniform;
+
+        this.fragmentNode = Fn(() => {
+            const inside = screenUV.x
+                .greaterThanEqual(clearRect.x)
+                .and(screenUV.x.lessThan(clearRect.z))
+                .and(screenUV.y.greaterThanEqual(clearRect.y))
+                .and(screenUV.y.lessThan(clearRect.w));
+            return inside.select(vec4(0, 0, 0, 1), vec4(0, 0, 0, 0));
+        })();
     }
 }
 
 /**
- * @hidden
- * Material used for copying glyphs into a [[GlyphTextureCache]].
+ * Copies a glyph from a source texture to the RT using QuadMesh (fullscreen pass).
+ * Only writes within the target region; discards everything else.
  */
-export class GlyphCopyMaterial extends RawShaderMaterial {
-    /**
-     * Creates a new `GlyphCopyMaterial`.
-     * @param params - Material parameters. Always required except when cloning another
-     * material.
-     * @returns New `GlyphCopyMaterial`.
-     */
-    constructor(params?: RawShaderMaterialParameters) {
-        const shaderParams: RawShaderMaterialParameters | undefined = params
-            ? {
-                  name: "GlyphCopyMaterial",
-                  vertexShader: copyVertexSource,
-                  fragmentShader: copyFragmentSource,
-                  uniforms: {
-                      pageOffset: new THREE.Uniform(0.0),
-                      page0: new THREE.Uniform(THREE.Texture.DEFAULT_IMAGE),
-                      page1: new THREE.Uniform(THREE.Texture.DEFAULT_IMAGE),
-                      page2: new THREE.Uniform(THREE.Texture.DEFAULT_IMAGE),
-                      page3: new THREE.Uniform(THREE.Texture.DEFAULT_IMAGE),
-                      page4: new THREE.Uniform(THREE.Texture.DEFAULT_IMAGE),
-                      page5: new THREE.Uniform(THREE.Texture.DEFAULT_IMAGE),
-                      page6: new THREE.Uniform(THREE.Texture.DEFAULT_IMAGE),
-                      page7: new THREE.Uniform(THREE.Texture.DEFAULT_IMAGE)
-                  },
-                  depthTest: false,
-                  depthWrite: false,
-                  rendererCapabilities: params.rendererCapabilities
-              }
-            : undefined;
-        super(shaderParams);
+export class GlyphCopyMaterial extends NodeMaterial {
+    readonly srcTextureNode = texture(createDummyTexture());
+    readonly srcRectUniform = uniform(new THREE.Vector4(0, 0, 1, 1));
+    readonly dstRectUniform = uniform(new THREE.Vector4(0, 0, 1, 1));
+
+    constructor(params?: RendererMaterialParameters) {
+        super();
+        this.name = "GlyphCopyMaterial";
+        this.depthTest = false;
+        this.depthWrite = false;
+        this.transparent = true;
+
+        const screenUV = uvNode();
+        const srcRect = this.srcRectUniform;
+        const dstRect = this.dstRectUniform;
+        const srcTex = this.srcTextureNode;
+
+        this.fragmentNode = Fn(() => {
+            const inside = screenUV.x
+                .greaterThanEqual(dstRect.x)
+                .and(screenUV.x.lessThan(dstRect.z))
+                .and(screenUV.y.greaterThanEqual(dstRect.y))
+                .and(screenUV.y.lessThan(dstRect.w));
+
+            const t = screenUV.sub(dstRect.xy).div(dstRect.zw.sub(dstRect.xy));
+            const sampleUV = srcRect.xy.add(t.mul(srcRect.zw.sub(srcRect.xy)));
+            srcTex.uvNode = sampleUV;
+
+            const col = srcTex;
+            return inside.select(col, vec4(0, 0, 0, 0));
+        })();
+    }
+
+    setSourceTexture(tex: THREE.Texture) {
+        tex.colorSpace = THREE.NoColorSpace;
+        this.srcTextureNode.value = tex;
+        this.needsUpdate = true;
     }
 }
 
-/**
- * @hidden
- * Material parameters passed on [[SdfTextMaterial]] creation.
- */
 export interface SdfTextMaterialParameters extends RendererMaterialParameters {
     texture: THREE.Texture;
     textureSize: THREE.Vector2;
@@ -267,51 +127,88 @@ export interface SdfTextMaterialParameters extends RendererMaterialParameters {
     fragmentSource?: string;
 }
 
-/**
- * Material designed to render transformable, high quality SDF text.
- */
-export class SdfTextMaterial extends RawShaderMaterial {
-    /**
-     * Creates a new `SdfTextMaterial`.
-     *
-     * @param params - Material parameters. Always required except when cloning another
-     * material.
-     * @returns New `SdfTextMaterial`.
-     */
+export class SdfTextMaterial extends NodeMaterial {
+    readonly sdfParamsUniform: { value: THREE.Vector4 };
+    private sdfTexNode: ReturnType<typeof texture>;
+    private sdfParamsNode: ReturnType<typeof uniform>;
+    private isMsdf: boolean;
+    private isBackground: boolean;
+
     constructor(params?: SdfTextMaterialParameters) {
-        const shaderParams: RawShaderMaterialParameters | undefined = params
-            ? {
-                  name: "SdfTextMaterial",
-                  vertexShader:
-                      params.vertexSource !== undefined ? params.vertexSource : sdfTextVertexSource,
-                  fragmentShader:
-                      params.fragmentSource !== undefined
-                          ? params.fragmentSource
-                          : sdfTextFragmentSource,
-                  uniforms: {
-                      sdfTexture: new THREE.Uniform(params.texture),
-                      sdfParams: new THREE.Uniform(
-                          new THREE.Vector4(
-                              params.textureSize.x,
-                              params.textureSize.y,
-                              params.size,
-                              params.distanceRange
-                          )
-                      )
-                  },
-                  defines: {
-                      MSDF: params.isMsdf ? 1.0 : 0.0,
-                      BG_TEXT: params.isBackground ? 1.0 : 0.0
-                  },
-                  depthTest: true,
-                  depthWrite: false,
-                  side: THREE.DoubleSide,
-                  transparent: true,
-                  rendererCapabilities: params.rendererCapabilities
-              }
-            : undefined;
-        super(shaderParams);
-        //@ts-ignore
-        this.extensions.derivatives = true;
+        super();
+        this.name = "SdfTextMaterial";
+        this.depthTest = true;
+        this.depthWrite = false;
+        this.side = THREE.DoubleSide;
+        this.transparent = true;
+
+        const tex = params?.texture ?? createDummyTexture();
+        tex.colorSpace = THREE.NoColorSpace;
+        tex.needsUpdate = true;
+
+        this.sdfTexNode = texture(tex);
+        this.sdfParamsNode = uniform(
+            new THREE.Vector4(
+                params?.textureSize?.x ?? 1,
+                params?.textureSize?.y ?? 1,
+                params?.size ?? 1,
+                params?.distanceRange ?? 1
+            )
+        );
+
+        this.sdfParamsUniform = { value: this.sdfParamsNode.value };
+        this.isMsdf = params?.isMsdf ?? false;
+        this.isBackground = params?.isBackground ?? false;
+
+        this.buildNodes();
+    }
+
+    private buildNodes(): void {
+        const sdfTex = this.sdfTexNode;
+        const sdfParams = this.sdfParamsNode;
+        const isMsdf = this.isMsdf;
+        const isBackground = this.isBackground;
+
+        const aUv = uvNode();
+        const aRotation = attribute("aRotation", "float");
+        const aWeight = attribute("aWeight", "float");
+        const aBgWeight = attribute("aBgWeight", "float");
+        const aColor = attribute("aColor", "vec4");
+        const aBgColor = attribute("aBgColor", "vec4");
+
+        this.fragmentNode = Fn(() => {
+            const texSample = sdfTex;
+            const dist = isMsdf
+                ? max(
+                      min(texSample.r, texSample.g),
+                      min(max(texSample.r, texSample.g), texSample.b)
+                  )
+                : texSample.r;
+
+            const color = isBackground ? aBgColor : aColor;
+            const weight = isBackground ? aBgWeight : aWeight;
+
+            const rotUvX = cos(aRotation).mul(aUv.x).sub(sin(aRotation).mul(aUv.y));
+            const rotUvY = sin(aRotation).mul(aUv.x).add(cos(aRotation).mul(aUv.y));
+            const rotUvXAbs = abs(rotUvX);
+            const rotUvYAbs = abs(rotUvY);
+
+            const dx = dFdx(rotUvXAbs).mul(sdfParams.x);
+            const dy = dFdy(rotUvYAbs).mul(sdfParams.y);
+            const toPixels = sdfParams.w.mul(inverseSqrt(dx.mul(dx).add(dy.mul(dy))));
+
+            const adjustedDist = dist
+                .add(min(weight, float(0.5).sub(float(1).div(sdfParams.w))))
+                .sub(0.5);
+            const opacity = clamp(adjustedDist.mul(toPixels).add(0.5), 0, 1);
+
+            return vec4(color.rgb, color.a.mul(opacity));
+        })();
+    }
+
+    updateTexture(texture: THREE.Texture): void {
+        texture.colorSpace = THREE.NoColorSpace;
+        this.sdfTexNode.value = texture;
+        this.needsUpdate = true;
     }
 }

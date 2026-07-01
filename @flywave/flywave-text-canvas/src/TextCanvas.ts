@@ -318,25 +318,23 @@ export class TextCanvas {
     set fontCatalog(value: FontCatalog) {
         this.m_fontCatalog = value;
 
-        const material = this.m_material as THREE.RawShaderMaterial;
-        material.uniforms.sdfTexture.value = this.m_fontCatalog.texture;
-        material.uniforms.sdfParams.value = new THREE.Vector4(
+        const material = this.m_material as SdfTextMaterial;
+        material.updateTexture(this.m_fontCatalog.texture);
+        material.sdfParamsUniform.value.set(
             this.m_fontCatalog.textureSize.x,
             this.m_fontCatalog.textureSize.y,
             this.m_fontCatalog.size,
             this.m_fontCatalog.distanceRange
         );
-        material.defines.MSDF = this.m_fontCatalog.type === "msdf" ? 1.0 : 0.0;
 
-        const bgMaterial = this.m_bgMaterial as THREE.RawShaderMaterial;
-        bgMaterial.uniforms.sdfTexture.value = this.m_fontCatalog.texture;
-        bgMaterial.uniforms.sdfParams.value = new THREE.Vector4(
+        const bgMaterial = this.m_bgMaterial as SdfTextMaterial;
+        bgMaterial.updateTexture(this.m_fontCatalog.texture);
+        bgMaterial.sdfParamsUniform.value.set(
             this.m_fontCatalog.textureSize.x,
             this.m_fontCatalog.textureSize.y,
             this.m_fontCatalog.size,
             this.m_fontCatalog.distanceRange
         );
-        bgMaterial.defines.MSDF = this.m_fontCatalog.type === "msdf" ? 1.0 : 0.0;
     }
 
     /**
@@ -427,7 +425,7 @@ export class TextCanvas {
         clear?: boolean
     ) {
         this.m_fontCatalog.update(this.m_renderer);
-        let oldTarget: THREE.WebGLRenderTarget | null = null;
+        let oldTarget: THREE.RenderTarget | null = null;
         if (target !== undefined) {
             //@ts-ignore
             oldTarget = this.m_renderer.getRenderTarget();

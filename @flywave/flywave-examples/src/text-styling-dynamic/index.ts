@@ -376,11 +376,11 @@ export namespace TextStylingDynamicExample {
     /**
      * Main initialization function
      */
-    function main() {
+    async function main() {
         webglRenderer = new WebGPURenderer({
             canvas: document.getElementById(CONFIG.CANVAS_ELEMENT_ID) as HTMLCanvasElement
         });
-        webglRenderer.init();
+        await webglRenderer.init();
         webglRenderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
         webglRenderer.autoClear = false;
         webglRenderer.setClearColor(0xffffff);
