@@ -148,6 +148,7 @@ export class HeightMapTerrainMesh extends Mesh {
         this.onBeforeRender = () => {
             this.updateProjectionTransform();
             this.updateModifierUniforms();
+            this.m_material.syncStaticUniforms();
         };
     }
 
@@ -166,13 +167,19 @@ export class HeightMapTerrainMesh extends Mesh {
         this.m_modifierVersion = -1;
     }
 
+    private m_modifiersDirty: boolean = true;
+
     private updateModifierUniforms(): void {
         if (!this.m_modifierManager) return;
 
         if (this.m_modifierVersion !== this.m_modifierManager.version) {
             this.m_modifierVersion = this.m_modifierManager.version;
             this.refreshModifierQuery();
+            this.m_modifiersDirty = true;
         }
+
+        if (!this.m_modifiersDirty) return;
+        this.m_modifiersDirty = false;
 
         const mat = this.m_material;
         if (this.m_modifierTexture) {
@@ -183,6 +190,7 @@ export class HeightMapTerrainMesh extends Mesh {
         } else {
             mat.commonUniform.uHasModifier.value = 0;
         }
+        (mat as any).syncUniforms();
     }
 
     private refreshModifierQuery(): void {
@@ -341,6 +349,7 @@ export class HeightMapTerrainMesh extends Mesh {
         if (controller) {
             const material = this.material as DEMTileMeshMaterial;
             material.setProjectionUniforms(controller.projectionFactor);
+            (this.m_material as any).syncUniforms();
         }
     }
 

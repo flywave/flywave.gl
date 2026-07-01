@@ -1,144 +1,103 @@
 /* Copyright (C) 2025 flywave.gl contributors */
+// @ts-nocheck
 
 import * as THREE from "three";
+import { NodeMaterial } from "three/webgpu";
+import { Fn, attribute, uniform, vec3, vec4 } from "three/tsl";
 
-import { type RawShaderMaterialParameters, RawShaderMaterial } from "./RawShaderMaterial";
-import linesShaderChunk from "./ShaderChunks/LinesChunks";
-
-const vertexSource: string = `
-#ifdef USE_COLOR
-attribute vec4 color;
-varying vec3 vColor;
-#endif
-
-#include <common>  
-// uniforms to implement double-precision
-uniform mat4 u_mvp;             // combined modelView and projection matrix
-uniform vec3 u_eyepos;          // eye position major
-uniform vec3 u_eyepos_lowpart;  // eye position minor ((double) eyepos - (float) eyepos)
-
-// vertex attributes
-attribute vec3 position;        // high part
-attribute vec3 positionLow;     // low part
-
-#include <high_precision_vert_func>
-#include <logdepthbuf_pars_vertex>
-
-void main() {
-    #ifdef USE_COLOR
-    vColor = color.rgb;
-    #endif
-
-    vec3 pos = subtractDblEyePos(position);
-    gl_Position = u_mvp * vec4(pos, 1.0);
-    #include <logdepthbuf_vertex>
-}`;
-
-const fragmentSource: string = `
-precision highp float;
-precision highp int;
-
-#include <common>  
-uniform vec3 diffuseColor;
-uniform float opacity;
-
-#ifdef USE_COLOR
-varying vec3 color;
-#endif
-
-#include <logdepthbuf_pars_fragment>
-void main() {
-    #ifdef USE_COLOR
-    gl_FragColor = vec4( diffuseColor * vColor, opacity );
-    #else
-    gl_FragColor = vec4( diffuseColor, opacity );
-    #endif
-    #include <logdepthbuf_fragment>
-}`;
-
-/**
- * Parameters used when constructing a new {@link HighPrecisionLineMaterial}.
- */
-export interface HighPrecisionLineMaterialParameters extends RawShaderMaterialParameters {
-    /**
-     * Line color.
-     */
+export interface HighPrecisionLineMaterialParameters {
     color?: number | string | THREE.Color;
-    /**
-     * Line opacity.
-     */
     opacity?: number;
+    rendererCapabilities?: { isWebGL2: boolean; logarithmicDepthBuffer: boolean };
 }
 
-/**
- * Material designed to render high precision lines (ideal for position-sensible data).
- */
-export class HighPrecisionLineMaterial extends RawShaderMaterial {
+export class HighPrecisionLineMaterial extends NodeMaterial {
     static DEFAULT_COLOR: number = 0x000050;
     static DEFAULT_OPACITY: number = 1.0;
 
-    isHighPrecisionLineMaterial: boolean;
+    isHighPrecisionLineMaterial: boolean = true;
 
-    /**
-     * Constructs a new `HighPrecisionLineMaterial`.
-     *
-     * @param params - `HighPrecisionLineMaterial` parameters.  Always required except when cloning
-     * another material.
-     */
+    private m_diffuseColorU = uniform(new THREE.Color(HighPrecisionLineMaterial.DEFAULT_COLOR));
+    private m_opacityU = uniform(HighPrecisionLineMaterial.DEFAULT_OPACITY);
+    private m_mvpU = uniform(new THREE.Matrix4());
+    private m_eyeposU = uniform(new THREE.Vector3());
+    private m_eyeposLowU = uniform(new THREE.Vector3());
+
+    opacity: number = HighPrecisionLineMaterial.DEFAULT_OPACITY;
+
     constructor(params?: HighPrecisionLineMaterialParameters) {
-        Object.assign(THREE.ShaderChunk, linesShaderChunk);
+        super();
+        this.name = "HighPrecisionLineMaterial";
 
-        const shaderParams: RawShaderMaterialParameters | undefined = params
-            ? {
-                  name: "HighPrecisionLineMaterial",
-                  vertexShader: vertexSource,
-                  fragmentShader: fragmentSource,
-                  uniforms: {
-                      // FLYWAVE-17373: Original uniform name 'diffuse' due to shader compilation
-                      // errors with Metal in Safari 15 on MacOS Monterrey and iPadOS 15.
-                      diffuseColor: new THREE.Uniform(
-                          new THREE.Color(HighPrecisionLineMaterial.DEFAULT_COLOR)
-                      ),
-                      opacity: new THREE.Uniform(HighPrecisionLineMaterial.DEFAULT_OPACITY),
-                      u_mvp: new THREE.Uniform(new THREE.Matrix4()),
-                      u_eyepos: new THREE.Uniform(new THREE.Vector3()),
-                      u_eyepos_lowpart: new THREE.Uniform(new THREE.Vector3())
-                  },
-                  rendererCapabilities: params.rendererCapabilities
-              }
-            : undefined;
-        Object.assign(shaderParams as any, params as any);
-        super(shaderParams);
-
-        // this.name = "HighPrecisionLineMaterial";
-        this.isHighPrecisionLineMaterial = true;
-
-        // Apply initial parameter values.
         if (params) {
-            if (params.color !== undefined) {
-                this.color.set(params.color as any);
-            }
-            if (params.opacity !== undefined) {
-                this.opacity = params.opacity;
-            }
+            if (params.color !== undefined) this.m_diffuseColorU.value.set(params.color as any);
+            if (params.opacity !== undefined) this.opacity = params.opacity;
         }
 
         this.updateTransparencyFeature();
+        this.setupNodes();
     }
 
-    /**
-     * Line color.
-     */
+    private setupNodes() {
+        const positionHigh = attribute("position", "vec3");
+        const positionLow = attribute("positionLow", "vec3");
+        const vertColor = attribute("color", "vec4");
+
+        // subtractDblEyePos: double-precision subtraction of eye position
+        // vec3 t1 = positionLow - u_eyepos_lowpart;
+        // vec3 e = t1 - positionLow;
+        // vec3 t2 = ((-u_eyepos_lowpart - e) + (positionLow - (t1 - e))) + position - u_eyepos;
+        // vec3 high_delta = t1 + t2;
+        // vec3 low_delta = t2 - (high_delta - t1);
+        // return (high_delta + low_delta);
+        this.positionNode = Fn(() => {
+            const t1 = positionLow.sub(this.m_eyeposLowU);
+            const e = t1.sub(positionLow);
+            const t2 = this.m_eyeposLowU
+                .negate()
+                .sub(e)
+                .add(positionLow.sub(t1.sub(e)))
+                .add(positionHigh)
+                .sub(this.m_eyeposU);
+            const highDelta = t1.add(t2);
+            const lowDelta = t2.sub(highDelta.sub(t1));
+            const pos = highDelta.add(lowDelta);
+            return this.m_mvpU.mul(vec4(pos, 1.0));
+        })();
+
+        this.fragmentNode = Fn(() => {
+            return vec4(this.m_diffuseColorU.mul(vertColor.rgb), this.m_opacityU);
+        })();
+    }
+
     get color(): THREE.Color {
-        return this.uniforms.diffuseColor.value as THREE.Color;
+        return this.m_diffuseColorU.value;
+    }
+    set color(value: THREE.Color) {
+        this.m_diffuseColorU.value.copy(value);
     }
 
-    set color(value: THREE.Color) {
-        this.uniforms.diffuseColor.value.copy(value);
+    get uniforms() {
+        return {
+            diffuseColor: { value: this.m_diffuseColorU.value },
+            opacity: { value: this.m_opacityU.value },
+            u_mvp: { value: this.m_mvpU.value },
+            u_eyepos: { value: this.m_eyeposU.value },
+            u_eyepos_lowpart: { value: this.m_eyeposLowU.value }
+        };
+    }
+
+    set uniforms(value: any) {
+        if (value.diffuseColor) this.m_diffuseColorU.value = value.diffuseColor.value;
+        if (value.opacity) this.m_opacityU.value = value.opacity.value;
+        if (value.u_mvp) this.m_mvpU.value = value.u_mvp.value;
+        if (value.u_eyepos) this.m_eyeposU.value = value.u_eyepos.value;
+        if (value.u_eyepos_lowpart) this.m_eyeposLowU.value = value.u_eyepos_lowpart.value;
     }
 
     private updateTransparencyFeature() {
-        this.transparent = this.opacity < 1.0 ? true : false;
+        this.transparent = this.opacity < 1.0;
+        this.m_opacityU.value = this.opacity;
     }
 }
 

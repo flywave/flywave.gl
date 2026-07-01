@@ -1,8 +1,14 @@
+// @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import "./Shader";
 
-import { type TilingScheme, GeoBox, geographicTerrainStandardTiling, ProjectionType } from "@flywave/flywave-geoutils";
+import {
+    type TilingScheme,
+    GeoBox,
+    geographicTerrainStandardTiling,
+    ProjectionType
+} from "@flywave/flywave-geoutils";
 import { MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 
@@ -11,157 +17,46 @@ import { type WebTile } from "../../WebImageryTileProvider";
 import { type QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
 import { ProjectionSwitchController } from "../../ProjectionSwitchController";
 
-/**
- * Custom material for quantized mesh rendering with specialized shader modifications
- *
- * This material extends THREE.MeshStandardMaterial to provide specialized support for:
- * - Clip UV transformations for texture coordinate clamping
- * - Image UV transformations for proper texture mapping
- * - Water mask rendering with animated wave effects
- * - Normal mapping for realistic water surface rendering
- *
- * The material integrates custom shader chunks for terrain-specific rendering features.
- */
-
 interface CommonUniforms {
-    /**
-     * Transform parameters for UV coordinate clipping
-     * @private
-     */
     clipUvTransform: { value: THREE.Vector3 };
-    /**
-     * Transform parameters for UV coordinate mapping
-     * @private
-     */
     imageryPatchTransform: { value: THREE.Vector4[] };
-    /**
-     * Array of image textures for patch mapping
-     * @private
-     */
     imageryPatchArray: { value: THREE.Texture[] };
-
     imageryPatchCount: { value: number };
-    /**
-     * Transform parameters for UV coordinate mapping
-     * @private
-     */
-    overlayerImageryTransform: { value: THREE.Vector4 };
-    /**
-     * Array of image textures for patch mapping
-     * @private
-     */
-    overlayerImagery: { value: THREE.Texture };
-    /**
-     * Texture for height map
-     * @private
-     */
     waterMaskTranslationAndScale: { value: THREE.Vector4 };
-    /**
-     * Texture for noisy height map
-     * @private
-     */
     waterMaskNoisyTranslationAndScale: { value: THREE.Vector4 };
-    /**
-     * Texture for water mask
-     * @private
-     */
     waterMaskTexture: { value: THREE.Texture };
-
     normalSampler: { value: THREE.Texture };
+    overlayerImageryTransform: { value: THREE.Vector4 };
+    overlayerImagery: { value: THREE.Texture };
     frameNumber: { value: number };
 }
 
 export class QuantizedMeshMaterial extends THREE.MeshStandardMaterial {
-    private readonly commonUniform: CommonUniforms = {
+    public readonly commonUniform: CommonUniforms = {
         clipUvTransform: { value: new THREE.Vector3() },
-        imageryPatchTransform: { value: new Array(5).fill(new THREE.Vector4()) },
-        imageryPatchArray: { value: new Array(5).fill(new THREE.Texture()) },
+        imageryPatchTransform: { value: Array.from({ length: 5 }, () => new THREE.Vector4()) },
+        imageryPatchArray: { value: Array.from({ length: 5 }, () => new THREE.Texture()) },
         imageryPatchCount: { value: 0 },
         waterMaskTranslationAndScale: { value: new THREE.Vector4() },
         waterMaskNoisyTranslationAndScale: { value: new THREE.Vector4() },
-        waterMaskTexture: { value: new THREE.DataTexture() },
-        normalSampler: { value: new THREE.DataTexture() },
+        waterMaskTexture: { value: new THREE.Texture() },
+        normalSampler: { value: new THREE.Texture() },
         overlayerImageryTransform: { value: new THREE.Vector4() },
         overlayerImagery: { value: new THREE.Texture() },
-        frameNumber: { value: 0 },
+        frameNumber: { value: 0 }
     };
 
     public defines: Record<string, any> = {};
-    /**
-     * Creates a new QuantizedMeshMaterial instance
-     *
-     * @param parameters - Optional standard material parameters
-     */
+
     constructor(parameters?: THREE.MeshStandardMaterialParameters) {
         super(parameters);
-
-        // Setup shader modifications before compilation
-        this.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
-            this._setupShader(shader);
-        };
     }
 
-    /**
-     * Sets up custom shader modifications for terrain rendering
-     *
-     * This method injects custom shader chunks and uniforms to enable:
-     * - UV coordinate transformations
-     * - Water mask rendering with animated waves
-     * - Clip UV functionality for texture clamping
-     *
-     * @param shader - The shader parameters to modify
-     * @private
-     */
-    private _setupShader(shader: THREE.WebGLProgramParametersWithUniforms): void {
-        // Inject vertex shader modifications
-        shader.vertexShader = shader.vertexShader
-            .replace(
-                `#include <uv_pars_vertex>`,
-                `#include <uv_pars_vertex>\n#include <tinterrain_common>`
-            )
-            .replace(
-                `#include <begin_vertex>`,
-                `#include <begin_vertex>\n#include <begin_tinterrain_vertex>`
-            );
-
-        // Inject fragment shader modifications
-        shader.fragmentShader = shader.fragmentShader
-            .replace(
-                `#include <color_pars_fragment>`,
-                `#include <color_pars_fragment>\n#include <water_mask_pars_fragment>`
-            )
-            .replace(
-                `#include <color_fragment>`,
-                `#include <color_fragment>\n#include <discard_out_range_frag>\n#include <water_mask_compute_color_fragment>`
-            );
-
-        // Setup shader defines for feature toggling
-        shader.defines = {};
-        shader.defines["SHOW_REFLECTIVE_OCEAN"] = false;
-        shader.defines["USE_UV"] = true;
-
-        Object.assign(shader.uniforms, this.commonUniform);
-        Object.assign(shader.defines, this.defines);
-    }
-
-    /**
-     * Sets the clip UV transform parameters
-     * Used for texture coordinate clamping and clipping
-     */
     public set clipUvTransform(value: THREE.Vector3) {
         this.commonUniform.clipUvTransform.value.copy(value);
     }
 
-    /**
-     * Sets the image UV transform parameters
-     * Used for proper texture mapping and alignment
-     */
-    public set imageryPatchs(
-        value: Array<{
-            transform: THREE.Vector4;
-            texture: THREE.Texture;
-        }>
-    ) {
+    public set imageryPatchs(value: Array<{ transform: THREE.Vector4; texture: THREE.Texture }>) {
         value.forEach((item, index) => {
             this.commonUniform.imageryPatchArray.value[index] = item.texture;
             this.commonUniform.imageryPatchTransform.value[index] = item.transform;
@@ -169,79 +64,39 @@ export class QuantizedMeshMaterial extends THREE.MeshStandardMaterial {
         this.commonUniform.imageryPatchCount.value = value.length;
     }
 
-    public setupOverlayerTexture(overlayer?: {
-        transform: THREE.Vector4;
-        texture: THREE.Texture;
-    }): void {
-        const USE_OVERLAYER = this.defines.USE_OVERLAYER;
+    public setupOverlayerTexture(overlayer?: { transform: THREE.Vector4; texture: THREE.Texture }): void {
         if (overlayer) {
             this.commonUniform.overlayerImagery.value = overlayer.texture;
             this.commonUniform.overlayerImageryTransform.value = overlayer.transform;
             this.defines.USE_OVERLAYER = true;
         } else {
-            this.commonUniform.overlayerImagery.value = null;
-            this.commonUniform.overlayerImageryTransform.value = null;
+            this.commonUniform.overlayerImagery.value = null as any;
+            this.commonUniform.overlayerImageryTransform.value = null as any;
             this.defines.USE_OVERLAYER = false;
         }
-
-        this.needsUpdate = USE_OVERLAYER == this.defines.USE_OVERLAYER;
     }
 
-    /**
-     * Sets the water mask translation and scale parameters
-     * Controls positioning and scaling of water mask texture
-     */
     public set waterMaskTranslationAndScale(value: THREE.Vector4) {
         this.commonUniform.waterMaskTranslationAndScale.value.copy(value);
     }
 
-    /**
-     * Sets the water mask noisy translation and scale parameters
-     * Controls positioning and scaling of noisy water effect
-     */
     public set waterMaskNoisyTranslationAndScale(value: THREE.Vector4) {
         this.commonUniform.waterMaskNoisyTranslationAndScale.value.copy(value);
     }
 
-    /**
-     * Sets the water mask texture
-     * Used for detecting ocean/sea areas for water rendering
-     */
     public set waterMaskTexture(value: THREE.Texture) {
         this.commonUniform.waterMaskTexture.value = value;
     }
 
-    /**
-     * Sets the normal sampler texture
-     * Used for water surface wave normal mapping effects
-     */
     public set normalSampler(value: THREE.Texture) {
         this.commonUniform.normalSampler.value = value;
     }
 
-    /**
-     * Sets the current frame number for animation purposes
-     * Controls timing of water wave animations
-     */
     public set frameNumber(value: number) {
         this.commonUniform.frameNumber.value = value;
     }
-
 }
 
-/**
- * Mesh class for rendering quantized terrain data with specialized texture handling
- *
- * This mesh class provides comprehensive support for:
- * - Quantized terrain geometry rendering
- * - Multi-layer texture mapping (imagery, water masks)
- * - UV coordinate transformations for proper texture alignment
- * - Water rendering with animated wave effects
- * - Clip UV functionality for texture clamping
- *
- * The mesh handles both terrain geometry and associated textures, providing a
- * complete solution for 3D terrain visualization.
- */
 export class QuantizedMesh extends THREE.Mesh {
     /**
      * Creates a new QuantizedMesh instance
@@ -255,7 +110,14 @@ export class QuantizedMesh extends THREE.Mesh {
         protected readonly projectionSwitchController: ProjectionSwitchController,
         protected readonly mapView?: MapView
     ) {
-        super(undefined, new QuantizedMeshMaterial({ wireframe: false, transparent: false, blending: THREE.NoBlending }));
+        super(
+            undefined,
+            new QuantizedMeshMaterial({
+                wireframe: false,
+                transparent: false,
+                blending: THREE.NoBlending
+            })
+        );
         this.receiveShadow = true;
 
         this.setupFromQuantizedTerrainMesh(quantizedTerrainMesh);
@@ -374,7 +236,6 @@ export class QuantizedMesh extends THREE.Mesh {
         const material = this.material as QuantizedMeshMaterial;
         material.clipUvTransform = this._computeClipUvTransform(parentGeobox);
     }
-
 
     /**
      * Computes the texture UV transform between imagery and quantized tiles

@@ -57,8 +57,7 @@ import {
     hasExtrusionFeature,
     isHighPrecisionLineMaterial,
     MapMeshDepthMaterial,
-    setDisplacementMapToMaterial,
-    setShaderMaterialDefine
+    setDisplacementMapToMaterial
 } from "@flywave/flywave-materials";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three";
@@ -693,7 +692,8 @@ export class TileGeometryCreator {
                     }
 
                     if (bufferGeometry.getAttribute("color")) {
-                        setShaderMaterialDefine(lineMaterial, "USE_COLOR", true);
+                        lineMaterial.vertexColors = true;
+                        lineMaterial.needsUpdate = true;
                     }
                 }
 

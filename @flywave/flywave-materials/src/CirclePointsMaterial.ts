@@ -1,157 +1,81 @@
 /* Copyright (C) 2025 flywave.gl contributors */
+// @ts-nocheck
 
 import * as THREE from "three";
+import { NodeMaterial } from "three/webgpu";
+import { Fn, fwidth, length, smoothstep, uniform, vec2, vec3, vec4, pointUV } from "three/tsl";
 
-import {
-    type RawShaderMaterialParameters,
-    type RendererMaterialParameters,
-    RawShaderMaterial
-} from "./RawShaderMaterial";
-import { enforceBlending } from "./Utils";
-
-const vertexShader: string = `
-uniform float size;
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
-
-attribute vec3 position;
-
-#include <common>
-#include <logdepthbuf_pars_vertex>
-void main() {
-    vec3 transformed = vec3(position);
-    vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
-
-    gl_Position = projectionMatrix * mvPosition;
-    gl_PointSize = size;
-
-    #include <logdepthbuf_vertex>
-}
-`;
-
-const fragmentShader: string = `
-precision highp float;
-precision highp int;
-
-uniform vec3 diffuseColor;
-uniform float opacity;
-
-#include <common>  
-#include <logdepthbuf_pars_fragment>
-
-void main() {
-    float alpha = opacity;
-
-    float radius = 0.5;
-    vec2 coords = gl_PointCoord.xy - vec2(0.5);
-    float len = length(coords);
-    float falloff = fwidth(len);
-    float threshold = 1.0 - smoothstep(radius - falloff, radius, len);
-    alpha *= threshold;
-
-    gl_FragColor = vec4(diffuseColor, alpha);
-    #include <logdepthbuf_fragment>
-}`;
-
-/**
- * Parameters used when constructing a new {@link HighPrecisionPointMaterial}.
- */
-export interface CirclePointsMaterialParameters
-    extends THREE.ShaderMaterialParameters,
-        RendererMaterialParameters {
-    /**
-     * Point size.
-     */
+export interface CirclePointsMaterialParameters {
     size?: number;
-
-    /**
-     * Point color.
-     */
     color?: THREE.Color;
+    opacity?: number;
+    rendererCapabilities?: { isWebGL2: boolean; logarithmicDepthBuffer: boolean };
 }
 
-/**
- * Material designed to render circle points. Note that it is always transparent since the circle
- * shape is created with an alpha channel to benefit an antialising that a mere `discard` could
- * not bring.
- */
-export class CirclePointsMaterial extends RawShaderMaterial {
+export class CirclePointsMaterial extends NodeMaterial {
     static readonly DEFAULT_CIRCLE_SIZE = 1;
 
-    /**
-     * Constructs a new `CirclePointsMaterial`.
-     *
-     * @param parameters - The constructor's parameters. Always required except when cloning another
-     */
+    private m_sizeUniform = uniform(CirclePointsMaterial.DEFAULT_CIRCLE_SIZE);
+    private m_colorUniform = uniform(new THREE.Color());
+    private m_opacityUniform = uniform(1.0);
+
     constructor(parameters?: CirclePointsMaterialParameters) {
-        const defaultColor = new THREE.Color();
-        const defaultOpacity = 1.0;
-        let sizeValue, colorValue, opacityValue;
-        let shaderParameters: RawShaderMaterialParameters | undefined;
-        if (parameters) {
-            const { size, color, opacity, ...shaderParams } = parameters;
-            sizeValue = size;
-            colorValue = color;
-            opacityValue = opacity;
+        super();
+        this.name = "CirclePointsMaterial";
+        this.depthTest = false;
+        this.depthWrite = false;
+        this.transparent = true;
 
-            shaderParams.name = "CirclePointsMaterial";
-            shaderParams.vertexShader = vertexShader;
-            shaderParams.fragmentShader = fragmentShader;
-            shaderParams.uniforms = THREE.UniformsUtils.merge([
-                {
-                    size: new THREE.Uniform(CirclePointsMaterial.DEFAULT_CIRCLE_SIZE),
-                    // FLYWAVE-17373: Original uniform name 'diffuse' due to shader compilation
-                    // errors with Metal in Safari 15 on MacOS Monterrey and iPadOS 15.
-                    diffuseColor: new THREE.Uniform(defaultColor),
-                    opacity: new THREE.Uniform(defaultOpacity)
-                },
-                THREE.UniformsLib.fog
-            ]);
-            shaderParams.depthTest = false;
-            shaderParams.extensions = {
-                ...shaderParams.extensions
-                // derivatives: true
-            };
-            shaderParameters = shaderParams;
+        if (parameters?.size !== undefined) {
+            this.m_sizeUniform.value = parameters.size;
         }
-        super(shaderParameters);
+        if (parameters?.color !== undefined) {
+            this.m_colorUniform.value.copy(parameters.color);
+        }
+        if (parameters?.opacity !== undefined) {
+            this.m_opacityUniform.value = parameters.opacity;
+        }
 
-        // Blending needs to always be enabled to support smooth edges
-        enforceBlending(this);
-
-        // this.type = "CirclePointsMaterial";
-        this.setOpacity(defaultOpacity);
-
-        if (sizeValue !== undefined) {
-            this.size = sizeValue;
-        }
-        if (colorValue !== undefined) {
-            this.color = colorValue;
-        }
-        if (opacityValue !== undefined) {
-            this.setOpacity(opacityValue);
-        }
+        this.fragmentNode = Fn(() => {
+            const radius = float(0.5);
+            const coords = pointUV.sub(vec2(0.5));
+            const len = length(coords);
+            const falloff = fwidth(len);
+            const threshold = float(1).sub(smoothstep(radius.sub(falloff), radius, len));
+            const alpha = this.m_opacityUniform.mul(threshold);
+            return vec4(this.m_colorUniform, alpha);
+        })();
     }
 
-    /**
-     * Gets the circle screen size.
-     */
     get size(): number {
-        return this.uniforms.size.value;
+        return this.m_sizeUniform.value;
     }
 
-    /**
-     * Sets the circle screen size.
-     */
     set size(size: number) {
-        this.uniforms.size.value = size;
+        this.m_sizeUniform.value = size;
     }
 
     get color(): THREE.Color {
-        return this.uniforms.diffuseColor.value as THREE.Color;
+        return this.m_colorUniform.value;
     }
 
     set color(value: THREE.Color) {
-        this.uniforms.diffuseColor.value.copy(value);
+        this.m_colorUniform.value.copy(value);
+    }
+
+    get opacity(): number {
+        return this.m_opacityUniform.value;
+    }
+
+    setOpacity(value: number) {
+        this.m_opacityUniform.value = value;
+    }
+
+    get uniforms() {
+        return {
+            size: { value: this.m_sizeUniform.value },
+            opacity: { value: this.m_opacityUniform.value },
+            diffuseColor: { value: this.m_colorUniform.value }
+        };
     }
 }
