@@ -1,33 +1,29 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import * as THREE from "three";
+import { WebGPURenderer } from "three/webgpu";
 
 import { DEFAULT_RENDER_HEIGHT, DEFAULT_RENDER_WIDTH } from "../constants";
 
-/**
- * Manages WebGL rendering context, targets, scenes, and cameras
- */
 export class RenderEnvironment {
-    private readonly m_renderer: THREE.WebGLRenderer;
-    private readonly m_renderTarget: THREE.WebGLRenderTarget;
+    private readonly m_renderer: WebGPURenderer;
+    private readonly m_renderTarget: THREE.RenderTarget;
     private readonly m_scene: THREE.Scene;
     private readonly m_camera: THREE.OrthographicCamera;
+    private m_initPromise: Promise<void>;
 
-    constructor(externalRenderer?: THREE.WebGLRenderer) {
+    constructor(externalRenderer?: WebGPURenderer) {
         this.m_renderer = externalRenderer ?? this.createDefaultRenderer();
-        this.m_renderTarget = new THREE.WebGLRenderTarget(
-            DEFAULT_RENDER_WIDTH,
-            DEFAULT_RENDER_HEIGHT
-        );
+        this.m_renderTarget = new THREE.RenderTarget(DEFAULT_RENDER_WIDTH, DEFAULT_RENDER_HEIGHT);
         this.m_scene = this.createScene();
         this.m_camera = this.createCamera();
+        this.m_initPromise = this.m_renderer.init().then(() => {});
     }
 
-    private createDefaultRenderer(): THREE.WebGLRenderer {
-        const renderer = new THREE.WebGLRenderer({
+    private createDefaultRenderer(): WebGPURenderer {
+        const renderer = new WebGPURenderer({
             antialias: true,
-            canvas: new OffscreenCanvas(DEFAULT_RENDER_WIDTH, DEFAULT_RENDER_HEIGHT),
-            preserveDrawingBuffer: true
+            canvas: new OffscreenCanvas(DEFAULT_RENDER_WIDTH, DEFAULT_RENDER_HEIGHT)
         });
         renderer.setSize(DEFAULT_RENDER_WIDTH, DEFAULT_RENDER_HEIGHT, false);
         renderer.setClearColor(0x000000, 0);
@@ -46,11 +42,11 @@ export class RenderEnvironment {
         return camera;
     }
 
-    getRenderer(): THREE.WebGLRenderer {
+    getRenderer(): WebGPURenderer {
         return this.m_renderer;
     }
 
-    getRenderTarget(): THREE.WebGLRenderTarget {
+    getRenderTarget(): THREE.RenderTarget {
         return this.m_renderTarget;
     }
 
@@ -88,49 +84,44 @@ export class RenderEnvironment {
         this.m_camera.right = right;
         this.m_camera.top = top;
         this.m_camera.bottom = bottom;
-
         if (position) {
             this.m_camera.position.copy(position);
         }
-
         this.m_camera.updateProjectionMatrix();
     }
 
-    render(width: number, height: number): Uint8ClampedArray {
-        const buffer = new Uint8ClampedArray(width * height * 4);
-
+    async render(width: number, height: number): Promise<Uint8ClampedArray> {
+        await this.m_initPromise;
         this.m_renderer.setSize(width, height, false);
         this.m_renderTarget.setSize(width, height);
-
         this.m_renderer.setRenderTarget(this.m_renderTarget);
-        this.m_renderer.clear();
         this.m_renderer.render(this.m_scene, this.m_camera);
-        this.m_renderer.readRenderTargetPixels(this.m_renderTarget, 0, 0, width, height, buffer);
-
-        return buffer;
+        const buffer = await this.m_renderer.readRenderTargetPixelsAsync(
+            this.m_renderTarget,
+            0,
+            0,
+            width,
+            height
+        );
+        return new Uint8ClampedArray(buffer.buffer);
     }
 
-    renderToTexture(width: number, height: number): THREE.WebGLRenderTarget {
-        const webglRenderTarget = new THREE.WebGLRenderTarget(width, height);
-
+    async renderToTexture(width: number, height: number): Promise<THREE.RenderTarget> {
+        await this.m_initPromise;
+        const renderTarget = new THREE.RenderTarget(width, height);
         this.m_renderer.setSize(width, height, false);
-
-        this.m_renderer.setRenderTarget(webglRenderTarget);
-        this.m_renderer.clear();
+        this.m_renderer.setRenderTarget(renderTarget);
         this.m_renderer.render(this.m_scene, this.m_camera);
-        return webglRenderTarget;
+        return renderTarget;
     }
 
     dispose(): void {
         this.clearScene();
         this.m_renderTarget.dispose();
-        if (!this.m_renderer.getContext().isContextLost()) {
-            this.m_renderer.dispose();
-        }
+        this.m_renderer.dispose();
     }
 }
 
-// Global singleton instance
 let globalRenderEnvironment: RenderEnvironment | null = null;
 
 export function getGlobalRenderEnvironment(): RenderEnvironment {

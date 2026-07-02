@@ -16,6 +16,7 @@ import { type GroundOverlayTextureResource } from "../../ground-overlay-provider
 import { type WebTile } from "../../WebImageryTileProvider";
 import { type QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
 import { ProjectionSwitchController } from "../../ProjectionSwitchController";
+import { QuantizedMeshMaterial } from "./QuantizedMeshMaterial";
 
 interface CommonUniforms {
     clipUvTransform: { value: THREE.Vector3 };
@@ -29,72 +30,6 @@ interface CommonUniforms {
     overlayerImageryTransform: { value: THREE.Vector4 };
     overlayerImagery: { value: THREE.Texture };
     frameNumber: { value: number };
-}
-
-export class QuantizedMeshMaterial extends THREE.MeshStandardMaterial {
-    public readonly commonUniform: CommonUniforms = {
-        clipUvTransform: { value: new THREE.Vector3() },
-        imageryPatchTransform: { value: Array.from({ length: 5 }, () => new THREE.Vector4()) },
-        imageryPatchArray: { value: Array.from({ length: 5 }, () => new THREE.Texture()) },
-        imageryPatchCount: { value: 0 },
-        waterMaskTranslationAndScale: { value: new THREE.Vector4() },
-        waterMaskNoisyTranslationAndScale: { value: new THREE.Vector4() },
-        waterMaskTexture: { value: new THREE.Texture() },
-        normalSampler: { value: new THREE.Texture() },
-        overlayerImageryTransform: { value: new THREE.Vector4() },
-        overlayerImagery: { value: new THREE.Texture() },
-        frameNumber: { value: 0 }
-    };
-
-    public defines: Record<string, any> = {};
-
-    constructor(parameters?: THREE.MeshStandardMaterialParameters) {
-        super(parameters);
-    }
-
-    public set clipUvTransform(value: THREE.Vector3) {
-        this.commonUniform.clipUvTransform.value.copy(value);
-    }
-
-    public set imageryPatchs(value: Array<{ transform: THREE.Vector4; texture: THREE.Texture }>) {
-        value.forEach((item, index) => {
-            this.commonUniform.imageryPatchArray.value[index] = item.texture;
-            this.commonUniform.imageryPatchTransform.value[index] = item.transform;
-        });
-        this.commonUniform.imageryPatchCount.value = value.length;
-    }
-
-    public setupOverlayerTexture(overlayer?: { transform: THREE.Vector4; texture: THREE.Texture }): void {
-        if (overlayer) {
-            this.commonUniform.overlayerImagery.value = overlayer.texture;
-            this.commonUniform.overlayerImageryTransform.value = overlayer.transform;
-            this.defines.USE_OVERLAYER = true;
-        } else {
-            this.commonUniform.overlayerImagery.value = null as any;
-            this.commonUniform.overlayerImageryTransform.value = null as any;
-            this.defines.USE_OVERLAYER = false;
-        }
-    }
-
-    public set waterMaskTranslationAndScale(value: THREE.Vector4) {
-        this.commonUniform.waterMaskTranslationAndScale.value.copy(value);
-    }
-
-    public set waterMaskNoisyTranslationAndScale(value: THREE.Vector4) {
-        this.commonUniform.waterMaskNoisyTranslationAndScale.value.copy(value);
-    }
-
-    public set waterMaskTexture(value: THREE.Texture) {
-        this.commonUniform.waterMaskTexture.value = value;
-    }
-
-    public set normalSampler(value: THREE.Texture) {
-        this.commonUniform.normalSampler.value = value;
-    }
-
-    public set frameNumber(value: number) {
-        this.commonUniform.frameNumber.value = value;
-    }
 }
 
 export class QuantizedMesh extends THREE.Mesh {
@@ -121,6 +56,14 @@ export class QuantizedMesh extends THREE.Mesh {
         this.receiveShadow = true;
 
         this.setupFromQuantizedTerrainMesh(quantizedTerrainMesh);
+
+        this.onBeforeRender = () => {
+            const mat = this.material as QuantizedMeshMaterial;
+            if (this.mapView) {
+                mat.frameNumber = this.mapView.frameNumber ?? 0;
+            }
+            mat.syncStaticUniforms();
+        };
     }
 
     /**

@@ -209,11 +209,23 @@ function buildNodes() {
 
     const colorNode = Fn(() => {
         const mapUv = vec2(texUv.x, webMercatorY);
-        const tUv = vec2(
-            mapUv.x.mul(_imageryTransform[0].x).add(_imageryTransform[0].z),
-            mapUv.y.mul(_imageryTransform[0].y).add(_imageryTransform[0].w)
-        );
-        return texture(_imageryTex[0], tUv);
+        const color = vec4(0.0).toVar();
+
+        for (let i = 0; i < 5; i++) {
+            const tUv = vec2(
+                mapUv.x.mul(_imageryTransform[i].x).add(_imageryTransform[i].z),
+                mapUv.y.mul(_imageryTransform[i].y).add(_imageryTransform[i].w)
+            );
+            const inRange = tUv.x
+                .greaterThanEqual(float(-0.01))
+                .and(tUv.x.lessThanEqual(float(1.01)))
+                .and(tUv.y.greaterThanEqual(float(-0.01)))
+                .and(tUv.y.lessThanEqual(float(1.01)));
+            const patchColor = texture(_imageryTex[i], tUv);
+            color.assign(select(inRange.and(float(i).lessThan(_imageryCount)), patchColor, color));
+        }
+
+        return color;
     })();
 
     return { positionNode, colorNode, vTerrainNormal };
@@ -329,8 +341,8 @@ export class DEMTileMeshMaterial extends MeshStandardNodeMaterial {
             this.m_commonUniform.overlayerImagery.value = overlayer.texture;
             this.m_commonUniform.overlayerImageryTransform.value.copy(overlayer.transform);
         } else {
-            this.m_commonUniform.overlayerImagery.value = null as unknown as THREE.Texture;
-            this.m_commonUniform.overlayerImageryTransform.value = null as unknown as THREE.Vector4;
+            this.m_commonUniform.overlayerImagery.value = dummyTex();
+            this.m_commonUniform.overlayerImageryTransform.value.set(0, 0, 0, 0);
         }
     }
 

@@ -39,11 +39,11 @@ export class HeightMapProcessor {
      * @param options - Rendering options including width and height
      * @returns ImageData containing the encoded height map
      */
-    renderFromGeometry(
+    async renderFromGeometry(
         geometry: BufferGeometry,
         vertexShaderType: "quantized" | "stratum" = "quantized",
         options: RenderOptions = {}
-    ): ImageData {
+    ): Promise<ImageData> {
         const { width = HEIGHT_MAP_WIDTH, height = HEIGHT_MAP_HEIGHT } = options;
         const renderEnv = this.environment || getGlobalRenderEnvironment();
 
@@ -54,7 +54,9 @@ export class HeightMapProcessor {
         mesh.frustumCulled = false;
         renderEnv.getScene().add(mesh);
 
-        const data = renderEnv.render(width, height);
+        // HeightMapShader.positionNode 输出 NDC 坐标 [-1,1]
+        // 需要设置 identity 相机让 MVP = identity，避免双重变换
+        const data = await renderEnv.render(width, height);
         return new ImageData(data, width, height);
     }
 
@@ -90,12 +92,12 @@ export class HeightMapProcessor {
  * @param options - Rendering options including width and height
  * @returns ImageData containing the encoded height map
  */
-export function renderHeightMap(
+export async function renderHeightMap(
     geometry: BufferGeometry,
     environment?: RenderEnvironment,
     vertexShaderType: "quantized" | "stratum" = "quantized",
     options: RenderOptions = {}
-): ImageData {
+): Promise<ImageData> {
     const processor = new HeightMapProcessor(environment);
     return processor.renderFromGeometry(geometry, vertexShaderType, options);
 }

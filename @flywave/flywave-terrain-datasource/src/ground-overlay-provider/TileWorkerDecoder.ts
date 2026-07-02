@@ -22,7 +22,7 @@ import {
  * @param data.flipY - Whether to flip the Y axis when rendering
  * @returns The rendered ground overlay image data
  */
-export function processGroundOverlayTile(data: {
+export async function processGroundOverlayTile(data: {
     overlays: GroundOverlayTextureJSON[];
     geoBox: GeoBoxArray;
     flipY: boolean;

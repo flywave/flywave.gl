@@ -708,11 +708,11 @@ export class StratumTileData {
         }
     }
 
-    drawHeightMap(geoBox: GeoBox, flipY?: boolean) {
+    async drawHeightMap(geoBox: GeoBox, flipY?: boolean) {
         geoBox.southWest.altitude = this.minHeight;
         geoBox.northEast.altitude = this.maxHeight;
 
-        const rawData = renderHeightMap(this.stratumTileGeometry, undefined, "stratum");
+        const rawData = await renderHeightMap(this.stratumTileGeometry, undefined, "stratum");
 
         this._demMap = new DEMData("", rawData, rawData, geoBox);
 

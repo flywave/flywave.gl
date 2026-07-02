@@ -159,7 +159,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
             count
         };
 
-        const rawData = renderHeightMap(this.quantizedGeometry);
+        const rawData = await renderHeightMap(this.quantizedGeometry);
 
         this.quantizedGeometry.drawRange = originDrawRange;
 

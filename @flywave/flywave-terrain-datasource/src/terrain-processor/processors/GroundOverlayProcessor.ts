@@ -41,11 +41,11 @@ export class GroundOverlayProcessor {
      * @param options - Rendering options including width, height, and Y-axis flipping
      * @returns ImageData containing the rendered overlay
      */
-    renderGroundOverlays(
+    async renderGroundOverlays(
         overlays: GroundOverlayTexture[],
         tileGeoBox: GeoBox,
         options: RenderOptions = {}
-    ): ImageData {
+    ): Promise<ImageData> {
         const { width = 256, height = 256, flipY = true } = options;
         const renderEnvironment = this.environment || getGlobalRenderEnvironment();
 
@@ -75,8 +75,8 @@ export class GroundOverlayProcessor {
             this.createOverlayMesh(overlay, worldGeobox, width, height, renderEnvironment);
         }
 
-        const data = renderEnvironment.render(width, height);
-        return new ImageData(data as Uint8ClampedArray<ArrayBuffer>, width, height);
+        const data = await renderEnvironment.render(width, height);
+        return new ImageData(data, width, height);
     }
 
     /**
@@ -152,13 +152,13 @@ export class GroundOverlayProcessor {
  * @param height - The rendering height (default: 1024)
  * @returns ImageData containing the rendered overlay
  */
-export function renderGroundOverlays(
+export async function renderGroundOverlays(
     overlays: GroundOverlayTexture[],
     tileGeoBox: GeoBox,
     flipY: boolean = true,
     width: number = 1024,
     height: number = 1024
-): ImageData {
+): Promise<ImageData> {
     const processor = new GroundOverlayProcessor();
     return processor.renderGroundOverlays(overlays, tileGeoBox, { width, height, flipY });
 }

@@ -25,6 +25,6 @@ export interface GeometryResult {
  * Distance texture result interface
  */
 export interface DistanceTextureResult {
-    renderTarget: THREE.WebGLRenderTarget | null;
+    renderTarget: THREE.RenderTarget | null;
     distanceTexture: THREE.Texture;
 }

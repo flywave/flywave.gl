@@ -205,11 +205,11 @@ export class TerrainTileDecoder implements ITileDecoder {
 
             // Handle quantized stratum initialization data
             case TaskType.QuantizedStratumInit:
-                tileTerrain = processStratumTile({
+                tileTerrain = await processStratumTile({
                     ...data,
                     geoBox: GeoBox.fromArray(data.geoBox as GeoBoxArray),
                     projection
-                } as unknown as DecodeStratumTileParams) as DecodedStratumTileData;
+                } as unknown as DecodeStratumTileParams);
                 break;
 
             // Handle raster DEM (Digital Elevation Model) data
@@ -221,7 +221,7 @@ export class TerrainTileDecoder implements ITileDecoder {
 
             // Handle ground overlay data
             case TaskType.GroundOverlay: {
-                const imageData = processGroundOverlayTile(
+                const imageData = await processGroundOverlayTile(
                     data as unknown as {
                         overlays: GroundOverlayTextureJSON[];
                         geoBox: GeoBoxArray;

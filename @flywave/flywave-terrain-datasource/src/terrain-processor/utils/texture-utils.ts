@@ -70,16 +70,16 @@ export class TextureUtils {
      * @param modification - Ground modification object (for getting additional parameters)
      * @returns Distance texture result
      */
-    static renderMaskPolygonWithDistanceGPU(
+    static async renderMaskPolygonWithDistanceGPU(
         polygonCoords: GeoCoordinates[],
         geoBox: GeoBoxType,
         width: number,
         height: number,
         renderEnv: RenderEnvironment,
         slopeWidth: number = 10
-    ): DistanceTextureResult {
+    ): Promise<DistanceTextureResult> {
         // First execute the original rendering
-        const { renderTarget: maskRenderTarget } = this.renderMaskPolygon(
+        const { renderTarget: maskRenderTarget } = await this.renderMaskPolygon(
             polygonCoords,
             geoBox,
             width,
@@ -88,10 +88,10 @@ export class TextureUtils {
         );
 
         // Read the rendering result
-        const pixels = new Uint8Array(width * height);
-        renderEnv
+        const readBuffer = await renderEnv
             .getRenderer()
-            .readRenderTargetPixels(maskRenderTarget!, 0, 0, width, height, pixels);
+            .readRenderTargetPixelsAsync(maskRenderTarget!, 0, 0, width, height);
+        const pixels = new Uint8Array(readBuffer.buffer || readBuffer);
 
         // Create a new pixel data array (single channel floating point)
         const distanceData = new Float32Array(width * height);
@@ -156,22 +156,19 @@ export class TextureUtils {
      * @param renderEnv - Render environment
      * @returns Render target
      */
-    static renderMaskPolygon(
+    static async renderMaskPolygon(
         polygonCoords: GeoCoordinates[],
         geoBox: GeoBox,
         width: number,
         height: number,
         renderEnv: RenderEnvironment
-    ): { renderTarget: THREE.WebGLRenderTarget } {
-        // Clear the scene
+    ): Promise<{ renderTarget: THREE.RenderTarget }> {
         renderEnv.clearScene();
 
-        // Convert geographic coordinates to pixel coordinates
         const pixelCoords = polygonCoords.map(coord =>
             CoordinateUtils.geoToTileSpace(coord, geoBox, width, height)
         );
 
-        // Create geometry
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(pixelCoords.length * 3);
         pixelCoords.forEach((coord, i) => {
@@ -181,39 +178,31 @@ export class TextureUtils {
         });
         geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
 
-        // Set indices
         if (pixelCoords.length > 2) {
             const indices = earcut(pixelCoords.flatMap(coord => [coord.x, coord.y]));
             geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indices), 1));
         }
 
-        // Create a custom shader material that only writes to a single channel
-        const material = new THREE.ShaderMaterial({
-            vertexShader: `
-                void main() {
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                }
-            `,
-            fragmentShader: singleChannelFragmentShader,
-            side: THREE.DoubleSide
-        });
+        const { NodeMaterial } = await import("three/webgpu");
+        const { Fn, vec4 } = await import("three/tsl");
+        const material = new NodeMaterial();
+        material.fragmentNode = Fn(() => vec4(1.0, 0.0, 0.0, 1.0))();
+        material.side = THREE.DoubleSide;
 
-        // Create mesh and add to scene
         const mesh = new THREE.Mesh(geometry, material);
         renderEnv.getScene().add(mesh);
 
-        // Create single channel render target
-        const renderTarget = new THREE.WebGLRenderTarget(width, height, {
-            format: THREE.RedFormat, // Only use the red channel
+        const renderTarget = new THREE.RenderTarget(width, height, {
+            format: THREE.RedFormat,
             type: THREE.UnsignedByteType
         });
 
-        // Execute rendering to single channel texture
-        renderEnv.getRenderer().setRenderTarget(renderTarget);
-        renderEnv.getRenderer().clear();
-        renderEnv.getRenderer().render(renderEnv.getScene(), renderEnv.getCamera());
+        const renderer = renderEnv.getRenderer();
+        await renderer.init();
+        renderer.setRenderTarget(renderTarget);
+        renderer.clear();
+        renderer.render(renderEnv.getScene(), renderEnv.getCamera());
 
-        // Clean up temporary mesh in the scene
         renderEnv.getScene().remove(mesh);
         geometry.dispose();
         material.dispose();
@@ -279,16 +268,16 @@ export class TextureUtils {
      * @param modification - Ground modification object
      * @returns Distance texture result
      */
-    static renderMaskPolygonWithDistanceGPU2(
+    static async renderMaskPolygonWithDistanceGPU2(
         polygonCoords: GeoCoordinates[],
         geoBox: GeoBoxType,
         width: number,
         height: number,
         renderEnv: RenderEnvironment,
         modification: any
-    ): DistanceTextureResult {
+    ): Promise<DistanceTextureResult> {
         // Step 1: Render mask (exactly the same as before)
-        const { renderTarget: maskRenderTarget } = this.renderMaskPolygon(
+        const { renderTarget: maskRenderTarget } = await this.renderMaskPolygon(
             polygonCoords,
             geoBox,
             width,

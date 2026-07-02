@@ -149,7 +149,9 @@ export interface DecodeStratumTileParams {
  * @param params - Parameters for decoding the stratum tile
  * @returns Processed stratum tile data
  */
-export const processStratumTile = (params: DecodeStratumTileParams): DecodedStratumTileData => {
+export const processStratumTile = async (
+    params: DecodeStratumTileParams
+): Promise<DecodedStratumTileData> => {
     const stratumTile = createStratumTileFromBuffer(
         params.geoBox,
         params.buffer,
@@ -158,7 +160,7 @@ export const processStratumTile = (params: DecodeStratumTileParams): DecodedStra
     );
 
     if (params.elevationMapEnabled) {
-        stratumTile.drawHeightMap(params.geoBox, params.elevationMapFlipY);
+        await stratumTile.drawHeightMap(params.geoBox, params.elevationMapFlipY);
     }
 
     return stratumTile.toDecodedStratumTileData();

@@ -3,6 +3,20 @@
 import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { CoordinateUtils } from "../utils/coordinate-utils";
 import * as THREE from "three";
+import { NodeMaterial } from "three/webgpu";
+import {
+    Fn,
+    float,
+    dot,
+    floor as tslFloor,
+    mod,
+    texture,
+    uniform,
+    uv as uvNode,
+    vec2,
+    vec4,
+    select
+} from "three/tsl";
 import { type HeightMapModifier } from "../../ground-modification-manager/HeightMapModifierTypes";
 import { GROUND_MODIFICATION_HEIGHT, GROUND_MODIFICATION_WIDTH } from "../constants";
 import { type RenderEnvironment, getGlobalRenderEnvironment } from "../core/RenderEnvironment";
@@ -73,7 +87,7 @@ export class GroundModificationProcessor {
             const mesh = new THREE.Mesh(geometry, material);
             renderEnv.getScene().add(mesh);
 
-            const data = renderEnv.render(width, height);
+            const data = await renderEnv.render(width, height);
             finalImageData = new ImageData(data, width, height);
 
             currentTexture = new THREE.DataTexture(
@@ -204,12 +218,11 @@ export class GroundModificationProcessor {
         tileGeoBox: GeoBox,
         width: number,
         height: number
-    ): THREE.ShaderMaterial {
+    ): NodeMaterial {
         const padding = MODIFIERS_PER_PASS - modifiers.length;
 
         const paddedModifiers = [...modifiers];
         for (let i = 0; i < padding; i++) {
-            // 使用 tileGeoBox 创建空的 modifier，确保坐标系统一致
             paddedModifiers.push({
                 texture: this.createEmptyTexture(),
                 geoBox: tileGeoBox,
@@ -235,101 +248,59 @@ export class GroundModificationProcessor {
             ? this.geoBoxToUVBounds(m3.geoBox, tileGeoBox, width, height)
             : new THREE.Vector4();
 
-        const vertexShader = `
-            varying vec2 vUv;
-            void main() {
-                vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, 0.0, 1.0);
-            }
-        `;
+        const u_baseTexture = texture(baseTexture);
+        const u_tex = [
+            texture(m0.texture),
+            texture(m1.texture),
+            texture(m2.texture),
+            texture(m3.texture)
+        ];
+        const u_uvBounds = [
+            uniform(uvBounds0),
+            uniform(uvBounds1),
+            uniform(uvBounds2),
+            uniform(uvBounds3)
+        ];
 
-        const fragmentShader = `
-            precision highp float;
-            uniform sampler2D u_baseTexture;
-            uniform sampler2D u_tex0;
-            uniform sampler2D u_tex1;
-            uniform sampler2D u_tex2;
-            uniform sampler2D u_tex3;
-            uniform vec4 u_uvBounds0;
-            uniform vec4 u_uvBounds1;
-            uniform vec4 u_uvBounds2;
-            uniform vec4 u_uvBounds3;
-            varying vec2 vUv;
+        const demUnpack = vec4(6553.6, 25.6, 0.1, 10000.0);
 
-            float unpackAltitude(vec4 v) {
-                vec4 uDemUnpack = vec4(6553.6, 25.6, 0.1, 10000.0);
-                return dot(vec4(v.xyz * 255.0, -1.0), uDemUnpack);
-            }
+        const material = new NodeMaterial();
+        material.side = THREE.DoubleSide;
 
-            vec4 packAltitude(float altitude) {
-                vec4 vector = vec4(6553.6, 25.6, 0.1, 10000.0);
-                vec4 color = vec4(0.0, 0.0, 0.0, 255.0);
-                float v = floor((altitude + vector.w) / vector.z);
-                color.b = mod(v, 256.0);
-                v = floor(v / 256.0);
-                color.g = mod(v, 256.0);
-                v = floor(v / 256.0);
-                color.r = v;
-                return color / 255.0;
-            }
+        material.fragmentNode = Fn(() => {
+            const vUv = uvNode();
+            const baseColor = texture(u_baseTexture, vUv);
+            const height = dot(
+                vec4(baseColor.xyz.mul(float(255.0)), float(-1.0)),
+                demUnpack
+            ).toVar();
 
-            bool isInUVBounds(vec2 uv, vec4 bounds) {
-                return uv.x >= bounds.x && uv.x <= bounds.z &&
-                       uv.y >= bounds.y && uv.y <= bounds.w;
+            for (let i = 0; i < 4; i++) {
+                const b = u_uvBounds[i];
+                const inside = vUv.x
+                    .greaterThanEqual(b.x)
+                    .and(vUv.x.lessThanEqual(b.z))
+                    .and(vUv.y.greaterThanEqual(b.y))
+                    .and(vUv.y.lessThanEqual(b.w));
+                const size = b.zw.sub(b.xy);
+                const modUV = vUv.sub(b.xy).div(size);
+                const modColor = texture(u_tex[i], modUV);
+                const deltaH = dot(vec4(modColor.xyz.mul(float(255.0)), float(-1.0)), demUnpack);
+                height.assign(select(inside, height.add(deltaH), height));
             }
 
-            vec2 tileUVToModifierUV(vec2 tileUV, vec4 uvBounds) {
-                vec2 size = uvBounds.zw - uvBounds.xy;
-                return (tileUV - uvBounds.xy) / size;
-            }
+            const vector = vec4(6553.6, 25.6, 0.1, 10000.0);
+            let v = tslFloor(height.add(vector.w).div(vector.z));
+            const bb = mod(v, float(256.0));
+            v = tslFloor(v.div(float(256.0)));
+            const gg = mod(v, float(256.0));
+            v = tslFloor(v.div(float(256.0)));
+            const rr = v;
 
-            void main() {
-                vec4 baseColor = texture2D(u_baseTexture, vUv);
-                float height = unpackAltitude(baseColor);
-                vec4 uvBounds[4];
-                uvBounds[0] = u_uvBounds0;
-                uvBounds[1] = u_uvBounds1;
-                uvBounds[2] = u_uvBounds2;
-                uvBounds[3] = u_uvBounds3;
+            return vec4(rr, gg, bb, float(255.0)).div(float(255.0));
+        })();
 
-                for (int i = 0; i < 4; i++) {
-                    if (!isInUVBounds(vUv, uvBounds[i])) continue;
-
-                    vec2 modUV = tileUVToModifierUV(vUv, uvBounds[i]);
-                    
-                    vec4 modifierColor;
-                    if (i == 0) modifierColor = texture2D(u_tex0, modUV);
-                    else if (i == 1) modifierColor = texture2D(u_tex1, modUV);
-                    else if (i == 2) modifierColor = texture2D(u_tex2, modUV);
-                    else modifierColor = texture2D(u_tex3, modUV);
-                    
-                    float deltaHeight = unpackAltitude(modifierColor);
-
-                    height = height + deltaHeight;
-                }
-
-                gl_FragColor = packAltitude(height);
-            }
-        `;
-
-        const uniforms = {
-            u_baseTexture: { value: baseTexture },
-            u_tex0: { value: m0.texture },
-            u_tex1: { value: m1.texture },
-            u_tex2: { value: m2.texture },
-            u_tex3: { value: m3.texture },
-            u_uvBounds0: { value: uvBounds0 },
-            u_uvBounds1: { value: uvBounds1 },
-            u_uvBounds2: { value: uvBounds2 },
-            u_uvBounds3: { value: uvBounds3 }
-        };
-
-        return new THREE.ShaderMaterial({
-            vertexShader,
-            fragmentShader,
-            side: THREE.DoubleSide,
-            uniforms
-        });
+        return material;
     }
 
     private geoBoxToUVBounds(
