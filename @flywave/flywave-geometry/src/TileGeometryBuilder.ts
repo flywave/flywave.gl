@@ -1,4 +1,4 @@
-﻿/* Copyright (C) 2025 flywave.gl contributors */
+/* Copyright (C) 2025 flywave.gl contributors */
 
 // SphereTileGeometry.ts - Refactored Version
 import {

@@ -2,6 +2,7 @@
 
 import { MapMeshBasicMaterial, MapMeshStandardMaterial } from "@flywave/flywave-materials";
 import { LoggerManager } from "@flywave/flywave-utils";
+import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 import * as THREE from "three";
 
 import { type TileFeatureData, getFeatureDataSize } from "../Tile";
@@ -80,6 +81,7 @@ export namespace Object3DUtils {
             }
         } else if (
             material instanceof THREE.MeshBasicMaterial ||
+            material instanceof MeshBasicNodeMaterial ||
             material instanceof MapMeshBasicMaterial
         ) {
             const meshMaterial = material;
@@ -90,7 +92,8 @@ export namespace Object3DUtils {
             estimateTextureSize(meshMaterial.envMap, objectSize, visitedObjects);
         } else if (
             material instanceof MapMeshStandardMaterial ||
-            material instanceof THREE.MeshStandardMaterial
+            material instanceof THREE.MeshStandardMaterial ||
+            material instanceof MeshStandardNodeMaterial
         ) {
             const standardMaterial = material;
 

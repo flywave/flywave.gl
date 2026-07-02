@@ -25,7 +25,8 @@ const uDemUnpack1 = new Vector4(0.0, 0.0, 0, 0);
 /**
  * Empty texture used as a placeholder when no height map is available
  */
-const emptyTexture = new DataTexture();
+const emptyTexture = new DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, RGBAFormat);
+emptyTexture.needsUpdate = true;
 
 /**
  * Computes the position and scaling parameters for a height map texture
