@@ -255,10 +255,8 @@ export class QuantizedStratumTileLoader extends TerrainTileLoader<
      * data, including setting up imagery textures and overlay textures.
      */
     loadTileMeshImpl(): void {
-        // Clear existing objects
         this.tile.objects.length = 0;
 
-        // Get the precise stratum data resource for this tile
         const stratumDataResource = this.dataSource
             .dataProvider()
             .getPreciseResource(this.tile.tileKey);
@@ -272,13 +270,10 @@ export class QuantizedStratumTileLoader extends TerrainTileLoader<
             overlayImagery.resource.texture.flipY = false;
         }
 
-        // Process each web tile data source
         this.dataSource.getWebTileDataSources().forEach(webTiles => {
-            // Get the best available web tile for this location
             const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
             if (!webTile) return;
 
-            // Create and configure the stratum mesh
             const mesh = TileObjectMesh.makeMapViewStratumMesh({
                 overlayImagery,
                 stratumData: stratumDataResource,
@@ -289,7 +284,6 @@ export class QuantizedStratumTileLoader extends TerrainTileLoader<
                 mapView: this.dataSource.mapView
             });
 
-            // Add to tile objects
             this.tile.objects.push(mesh);
         });
     }
@@ -413,10 +407,8 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
      * handles both exact data loading and intermediate block creation.
      */
     loadTileMeshImpl() {
-        // Clear existing objects
-        this.tile.objects.length = 0;
+        this.tile.clear();
 
-        // Get the best available terrain data for this tile
         let quantizedDataResource = this.dataSource
             .dataProvider()
             .getBestAvailableResourceTile(this.tile.tileKey);
@@ -438,13 +430,10 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
             needDemDraw = true;
         }
 
-        // Process each web tile data source
         this.dataSource.getWebTileDataSources().forEach(webTiles => {
-            // Get the best available web tile for this location
             const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
             if (!webTile) return;
 
-            // If we don't have exact data or are at wrong level, create intermediate block
             if (
                 !quantizedDataResource ||
                 needDemDraw ||
@@ -463,7 +452,6 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                     )
                 );
             } else {
-                // Create and configure the quantized mesh
                 if (!quantizedDataResource?.resource) return;
                 const mesh = TileObjectMesh.makeMapViewQuantizedMesh(
                     {
@@ -477,8 +465,6 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                     },
                     this.dataSource.mapView
                 );
-
-                // Add to tile objects
                 this.tile.objects.push(mesh);
             }
         });

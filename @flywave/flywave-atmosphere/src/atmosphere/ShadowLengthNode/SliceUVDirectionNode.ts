@@ -70,11 +70,11 @@ export class SliceUVDirectionNode extends Node {
     shadowCascadeArray!: UniformArrayNode; // vec2[]
     shadowMatrixArray!: UniformArrayNode; // mat4[]
 
-    private readonly textureNode: TextureNode;
+    private readonly _textureNode: TextureNode;
     private readonly renderTarget: RenderTarget;
     private readonly material = new NodeMaterial();
     private readonly mesh = new QuadMesh(this.material);
-    private rendererState?: RendererUtils.RendererState;
+    private _rendererState?: RendererUtils.RendererState;
 
     constructor() {
         super();
@@ -90,11 +90,11 @@ export class SliceUVDirectionNode extends Node {
         texture.name = "SliceUVDirection";
         this.renderTarget = renderTarget;
 
-        this.textureNode = outputTexture(this, renderTarget.texture);
+        this._textureNode = outputTexture(this, renderTarget.texture);
     }
 
     getTextureNode(): TextureNode {
-        return this.textureNode;
+        return this._textureNode;
     }
 
     override update({ renderer }: NodeFrame): void {
@@ -108,12 +108,12 @@ export class SliceUVDirectionNode extends Node {
             cascadeCount - this.firstCascade.value
         );
 
-        this.rendererState = resetRendererState(renderer, this.rendererState);
+        this._rendererState = resetRendererState(renderer, this._rendererState);
 
         renderer.setRenderTarget(this.renderTarget);
         this.mesh.render(renderer);
 
-        restoreRendererState(renderer, this.rendererState);
+        restoreRendererState(renderer, this._rendererState);
     }
 
     private setupFragmentNode(builder: NodeBuilder): Node<"vec4"> {
@@ -223,7 +223,7 @@ export class SliceUVDirectionNode extends Node {
         material.fragmentNode = this.setupFragmentNode(builder);
         material.needsUpdate = true;
 
-        return this.textureNode;
+        return this._textureNode;
     }
 
     override dispose(): void {

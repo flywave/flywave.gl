@@ -23,7 +23,7 @@ export abstract class SingleFilterNode extends FilterNode {
     private readonly renderTarget: RenderTarget;
     private readonly material = new NodeMaterial();
     private readonly mesh = new QuadMesh(this.material);
-    private rendererState?: RendererUtils.RendererState;
+    private _rendererState?: RendererUtils.RendererState;
 
     protected readonly inputTexelSize = uniform("vec2");
 
@@ -60,12 +60,12 @@ export abstract class SingleFilterNode extends FilterNode {
         this.setSize(width, height);
         this.inputTexelSize.value.set(1 / width, 1 / height);
 
-        this.rendererState = resetRendererState(renderer, this.rendererState);
+        this._rendererState = resetRendererState(renderer, this._rendererState);
 
         renderer.setRenderTarget(this.renderTarget);
         this.mesh.render(renderer);
 
-        restoreRendererState(renderer, this.rendererState);
+        restoreRendererState(renderer, this._rendererState);
     }
 
     protected abstract setupOutputNode(builder: NodeBuilder): Node;

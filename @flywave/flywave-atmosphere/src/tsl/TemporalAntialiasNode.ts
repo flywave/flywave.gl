@@ -237,14 +237,14 @@ export class TemporalAntialiasNode extends TempNode {
 
     debugShowRejection = false;
 
-    private readonly textureNode: TextureNode;
+    private readonly _textureNode: TextureNode;
 
     private resolveRT = this.createRenderTarget("Resolve");
     private historyRT = this.createRenderTarget("History");
     private previousDepthTexture?: DepthTexture;
     private readonly resolveMaterial = new NodeMaterial();
     private readonly mesh = new QuadMesh();
-    private rendererState?: RendererUtils.RendererState;
+    private _rendererState?: RendererUtils.RendererState;
     private needsSyncRenderPipeline = false;
     private needsClearHistory = false;
 
@@ -273,7 +273,7 @@ export class TemporalAntialiasNode extends TempNode {
         }
         this.camera = camera;
 
-        this.textureNode = outputTexture(this, this.resolveRT.texture);
+        this._textureNode = outputTexture(this, this.resolveRT.texture);
     }
 
     override customCacheKey(): number {
@@ -294,7 +294,7 @@ export class TemporalAntialiasNode extends TempNode {
     }
 
     getTextureNode(): TextureNode {
-        return this.textureNode;
+        return this._textureNode;
     }
 
     setSize(width: number, height: number): this {
@@ -368,7 +368,7 @@ export class TemporalAntialiasNode extends TempNode {
         this.historyNode.value = resolveRT.texture;
 
         // The output node must point to the current resolve.
-        this.textureNode.value = resolveRT.texture;
+        this._textureNode.value = resolveRT.texture;
     }
 
     override updateBefore({ renderer }: NodeFrame): void {
@@ -379,7 +379,7 @@ export class TemporalAntialiasNode extends TempNode {
         const size = renderer.getDrawingBufferSize(sizeScratch);
         this.setSize(size.x, size.y);
 
-        this.rendererState = resetRendererState(renderer, this.rendererState);
+        this._rendererState = resetRendererState(renderer, this._rendererState);
 
         if (this.needsClearHistory) {
             this.clearHistory(renderer);
@@ -389,7 +389,7 @@ export class TemporalAntialiasNode extends TempNode {
         this.mesh.material = this.resolveMaterial;
         this.mesh.render(renderer);
 
-        restoreRendererState(renderer, this.rendererState);
+        restoreRendererState(renderer, this._rendererState);
 
         // WORKAROUND: copyTextureToTexture throws error in WebGL.
         if (isWebGPU(renderer)) {
@@ -519,8 +519,8 @@ export class TemporalAntialiasNode extends TempNode {
         resolveMaterial.fragmentNode = this.setupResolveNode(builder);
         resolveMaterial.needsUpdate = true;
 
-        this.textureNode.uvNode = this.inputNode.uvNode;
-        return this.textureNode;
+        this._textureNode.uvNode = this.inputNode.uvNode;
+        return this._textureNode;
     }
 
     override dispose(): void {

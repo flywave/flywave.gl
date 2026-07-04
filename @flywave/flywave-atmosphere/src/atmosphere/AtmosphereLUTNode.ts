@@ -81,7 +81,7 @@ export class AtmosphereLUTNode extends Node {
 
     private textures?: AtmosphereLUTTextures;
 
-    private readonly textureNodes = {
+    private readonly _textureNodes = {
         transmittance: outputTexture(this, emptyTexture),
         multipleScattering: outputTexture(this, emptyTexture),
         scattering: outputTexture3D(this, emptyTexture3D),
@@ -107,7 +107,7 @@ export class AtmosphereLUTNode extends Node {
     getTextureNode(
         name: AtmosphereLUTTextureName | AtmosphereLUTTexture3DName
     ): TextureNode | Texture3DNode {
-        return this.textureNodes[name];
+        return this._textureNodes[name];
     }
 
     private dispatchUpdate(): void {
@@ -184,7 +184,7 @@ export class AtmosphereLUTNode extends Node {
                 scattering,
                 singleMieScattering,
                 higherOrderScattering
-            } = this.textureNodes;
+            } = this._textureNodes;
             transmittance.value = this.textures.get("transmittance");
             multipleScattering.value = this.textures.get("multipleScattering");
             scattering.value = this.textures.get("scattering");

@@ -12,10 +12,7 @@ export abstract class FilterNode extends TempNode {
     }
 
     inputNode: TextureNode | null;
-    resolutionScale = 1;
-
-    private outputNode?: TextureNode;
-    private readonly renderTargets: RenderTarget[] = [];
+    private readonly _renderTargets: RenderTarget[] = [];
 
     constructor(inputNode: TextureNode | null = null) {
         super("vec4");
@@ -35,12 +32,12 @@ export abstract class FilterNode extends TempNode {
         const typeName = (this.constructor as typeof Node).type.replace(/Node$/, "");
         texture.name = name != null ? `${typeName} [${name}]` : typeName;
 
-        this.renderTargets.push(renderTarget);
+        this._renderTargets.push(renderTarget);
         return renderTarget;
     }
 
     getTextureNode(): TextureNode {
-        const { outputNode } = this;
+        const { _outputNode: outputNode } = this;
         invariant(outputNode != null, "outputNode cannot be null.");
         return outputNode;
     }
@@ -48,15 +45,15 @@ export abstract class FilterNode extends TempNode {
     abstract setSize(width: number, height: number): this;
 
     protected get outputTexture(): Texture | null {
-        return this.outputNode?.value ?? null;
+        return this._outputNode?.value ?? null;
     }
 
     protected set outputTexture(value: Texture | null) {
-        this.outputNode = value != null ? outputTexture(this, value) : undefined;
+        this._outputNode = value != null ? outputTexture(this, value) : undefined;
     }
 
     override setup(builder: NodeBuilder): unknown {
-        const { inputNode, outputNode } = this;
+        const { inputNode, _outputNode: outputNode } = this;
         invariant(inputNode != null, "inputNode cannot be null during setup.");
         invariant(outputNode != null, "outputNode cannot be null during setup.");
         outputNode.uvNode = inputNode.uvNode;
@@ -64,7 +61,7 @@ export abstract class FilterNode extends TempNode {
     }
 
     override dispose(): void {
-        for (const renderTarget of this.renderTargets) {
+        for (const renderTarget of this._renderTargets) {
             renderTarget.dispose();
         }
         super.dispose();

@@ -56,16 +56,11 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
             lights: [
-                {
-                    type: "ambient",
-                    color: "#ffffff",
-                    intensity: 0.3,
-                    name: "ambient"
-                }
+          
             ],
             celestia: {
                 atmosphere: false, // Disable atmospheric effects
-                sunTime: new Date().setHours(17, 0, 0, 0) // Set sun time
+                sunTime: new Date().setHours(19, 0, 0, 0) // Set sun time
             },
             postEffects: {
                 bloom: {

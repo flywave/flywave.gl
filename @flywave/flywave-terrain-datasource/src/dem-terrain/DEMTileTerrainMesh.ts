@@ -69,39 +69,29 @@ function computeHeightMapPos(tileKey: TileKey, demTileKey: TileKey, yDown: boole
  * vertex displacement.
  */
 export class HeightMapTerrainMesh extends Mesh {
-    /** Patch position matrix for simple terrain patches */
+    public readonly isHeightMapTerrainMesh = true;
     private m_uPatchPos: Matrix4;
-    /** Position parameters for height map sampling */
     private m_uHeightMapPos?: Vector3;
-    /** Flag indicating if this is a simple patch */
-    private readonly m_isSimplePatch: boolean = false;
-    /** The material used for rendering this mesh */
+    private m_isSimplePatch: boolean = false;
     private readonly m_material: DEMTileMeshMaterial;
-    /** The height map texture */
     private m_uHeighMapTexture: THREE.Texture = emptyTexture;
-    /** The geographic bounding box of this tile */
-    private readonly m_selfGeoBox: GeoBox;
-
-    /** Displacement vector for positioning the mesh */
+    private m_selfGeoBox: GeoBox;
     public displacement: Vector3 = new Vector3();
-
-    /** The tile transformation data */
-    private readonly m_transformation: TileTransformation;
-
-    /** Target Z rotation for spherical projection */
-    private readonly m_targetZRotation: number;
-
-    /** The skirt height for the mesh */
-    private readonly m_skirtHeight: number;
-
-    private readonly m_yDown: boolean = this.m_tilingSchemeTileGrid.isYAxisDown();
-
+    private m_transformation: TileTransformation;
+    private m_targetZRotation: number;
+    private m_skirtHeight: number;
+    private readonly m_yDown: boolean;
     private m_modifierManager?: HeightMapModifierManager;
     private m_modifierVersion: number = -1;
     private m_modifierTexture: THREE.Texture | null = null;
     private m_modifierUVBounds: Vector4 = new Vector4();
     private m_modifierOp: number = 0;
     private m_mergedTexture: DataTexture | null = null;
+    private m_modifiersDirty: boolean = true;
+    private m_tile: Tile;
+    private readonly m_terrainTilingScheme: TilingScheme;
+    private readonly m_projectionSwitchController: ProjectionSwitchController;
+    private readonly m_tilingSchemeTileGrid: TileGeometryBuilder;
 
     /**
      * Creates a new height map terrain mesh
@@ -113,10 +103,10 @@ export class HeightMapTerrainMesh extends Mesh {
      * @param tilingSchemeTileGrid - The tile geometry builder
      */
     constructor(
-        private readonly m_tile: Tile,
-        private readonly m_terrainTilingScheme: TilingScheme,
-        private readonly m_projectionSwitchController: ProjectionSwitchController,
-        private readonly m_tilingSchemeTileGrid: TileGeometryBuilder,
+        tile: Tile,
+        tilingScheme: TilingScheme,
+        projectionSwitchController: ProjectionSwitchController,
+        tilingSchemeTileGrid: TileGeometryBuilder,
         materialParams?: THREE.MeshStandardMaterialParameters
     ) {
         const material = new DEMTileMeshMaterial({
@@ -124,23 +114,28 @@ export class HeightMapTerrainMesh extends Mesh {
             transparent: false,
             blending: THREE.NoBlending
         });
-        const geometryWithTransform = m_tilingSchemeTileGrid.getTileGeometryWithTransform(
-            m_tile.tileKey
+        const geometryWithTransform = tilingSchemeTileGrid.getTileGeometryWithTransform(
+            tile.tileKey
         );
 
         super(geometryWithTransform.geometry, material);
-        this.m_selfGeoBox = this.m_terrainTilingScheme.getGeoBox(m_tile.tileKey);
+
+        this.m_tile = tile;
+        this.m_terrainTilingScheme = tilingScheme;
+        this.m_projectionSwitchController = projectionSwitchController;
+        this.m_tilingSchemeTileGrid = tilingSchemeTileGrid;
+        this.m_yDown = tilingSchemeTileGrid.isYAxisDown();
         this.m_material = material;
+        this.m_selfGeoBox = this.m_terrainTilingScheme.getGeoBox(tile.tileKey);
         this.m_isSimplePatch = geometryWithTransform.geometry.mode.is_simple_patch;
         this.m_transformation = geometryWithTransform.transformation;
         this.m_skirtHeight = geometryWithTransform.skirtHeight;
 
-        // 计算目标Z旋转（球面投影时的旋转值）
         this.m_targetZRotation =
-            (Math.PI * 2 * m_tile.tileKey.column) /
+            (Math.PI * 2 * tile.tileKey.column) /
             this.m_tilingSchemeTileGrid
                 .getTilingScheme()
-                .subdivisionScheme.getLevelDimensionX(m_tile.tileKey.level);
+                .subdivisionScheme.getLevelDimensionX(tile.tileKey.level);
 
         this._initializeMesh();
 
@@ -149,7 +144,6 @@ export class HeightMapTerrainMesh extends Mesh {
         this.onBeforeRender = () => {
             this.updateProjectionTransform();
             this.updateModifierUniforms();
-            this.m_material.syncStaticUniforms();
         };
     }
 
@@ -168,8 +162,6 @@ export class HeightMapTerrainMesh extends Mesh {
         this.m_modifierVersion = -1;
     }
 
-    private m_modifiersDirty: boolean = true;
-
     private updateModifierUniforms(): void {
         if (!this.m_modifierManager) return;
 
@@ -184,14 +176,13 @@ export class HeightMapTerrainMesh extends Mesh {
 
         const mat = this.m_material;
         if (this.m_modifierTexture) {
-            mat.commonUniform.uHasModifier.value = 1;
-            mat.commonUniform.uModifierTexture.value = this.m_modifierTexture;
-            mat.commonUniform.uModifierUVBounds.value.copy(this.m_modifierUVBounds);
-            mat.commonUniform.uModifierOp.value = this.m_modifierOp;
+            mat.hasModifier = 1;
+            mat.modifierTexture = this.m_modifierTexture;
+            mat.modifierUVBounds.copy(this.m_modifierUVBounds);
+            mat.modifierOp = this.m_modifierOp;
         } else {
-            mat.commonUniform.uHasModifier.value = 0;
+            mat.hasModifier = 0;
         }
-        (mat as any).syncUniforms();
     }
 
     private refreshModifierQuery(): void {
@@ -277,32 +268,27 @@ export class HeightMapTerrainMesh extends Mesh {
     updateProjectionTransform() {
         const projectionFactor = this.m_projectionSwitchController.projectionFactor;
 
-        // 使用插值获取当前变换
         const interpolatedTransform = this.m_transformation.interpolate(projectionFactor);
 
-        // 应用插值后的旋转矩阵（如果存在）
         if (interpolatedTransform.rotation) {
             this.m_uPatchPos = interpolatedTransform.rotation;
-            this.m_material.commonUniform.uPatchPos.value.copy(this.m_uPatchPos);
+            this.m_material.patchPos = this.m_uPatchPos;
         } else {
             this.m_uPatchPos = new Matrix4();
-            this.m_material.commonUniform.uPatchPos.value.copy(this.m_uPatchPos);
+            this.m_material.patchPos = this.m_uPatchPos;
         }
-        // 设置裙边高度偏移
-        this.m_material.commonUniform.uSkirtHeight.value = this.m_skirtHeight;
+        this.m_material.skirtHeight = this.m_skirtHeight;
 
         this.quaternion.identity();
-        // 特殊处理：Z轴旋转插值
         if (!this.m_isSimplePatch) {
-            // 球面投影时的目标旋转值，墨卡托投影时旋转为0
             const targetRotation = this.m_targetZRotation;
-            const currentZRotation = targetRotation * (1 - projectionFactor); // 从targetRotation到0的插值
+            const currentZRotation = targetRotation * (1 - projectionFactor);
             this.rotateZ(currentZRotation);
         }
 
         this.displacement.copy(interpolatedTransform.position).sub(this.m_tile.center);
 
-        this.m_material.commonUniform.uProjectionFactor.value = projectionFactor;
+        this.m_material.projectionFactor = projectionFactor;
     }
 
     /**
@@ -317,7 +303,7 @@ export class HeightMapTerrainMesh extends Mesh {
         mat.elements[3] = this.m_isSimplePatch ? 1 : 0;
 
         if (this.m_uPatchPos) {
-            this.m_material.commonUniform.uPatchPos.value.copy(this.m_uPatchPos);
+            this.m_material.patchPos = this.m_uPatchPos;
         }
 
         if (this.m_uHeightMapPos) {
@@ -330,9 +316,15 @@ export class HeightMapTerrainMesh extends Mesh {
             mat.elements[9] = this.m_uHeightMapPos.y;
             mat.elements[10] = this.m_uHeightMapPos.z;
 
-            this.m_material.commonUniform.uHeighMapTexture.value = this.m_uHeighMapTexture;
+            this.m_material.heightMapTexture = this.m_uHeighMapTexture;
+            const img = this.m_uHeighMapTexture.image as
+                | { width?: number; height?: number }
+                | undefined;
+            if (img && img.width) {
+                this.m_material.texSize.set(img.width, img.height);
+            }
         } else {
-            this.m_material.commonUniform.uHeighMapTexture.value = emptyTexture;
+            this.m_material.heightMapTexture = emptyTexture;
             mat.elements[4] = uDemUnpack1.x;
             mat.elements[5] = uDemUnpack1.y;
             mat.elements[6] = uDemUnpack1.z;
@@ -343,14 +335,11 @@ export class HeightMapTerrainMesh extends Mesh {
             mat.elements[10] = 0;
         }
 
-        this.m_material.commonUniform.pack.value.copy(mat);
+        this.m_material.pack = mat;
 
-        // Update projection uniforms if available
         const controller = this.m_projectionSwitchController;
         if (controller) {
-            const material = this.material as DEMTileMeshMaterial;
-            material.setProjectionUniforms(controller.projectionFactor);
-            (this.m_material as any).syncUniforms();
+            this.m_material.setProjectionUniforms(controller.projectionFactor);
         }
     }
 
@@ -371,7 +360,11 @@ export class HeightMapTerrainMesh extends Mesh {
         );
         texture.flipY = this.m_yDown;
         this.m_uHeighMapTexture = texture;
-        this.m_material.commonUniform.uHeighMapTexture.value = texture;
+        this.m_material.heightMapTexture = texture;
+        const img = texture.image as { width?: number; height?: number } | undefined;
+        if (img && img.width) {
+            this.m_material.texSize.set(img.width, img.height);
+        }
     }
 
     /**
@@ -512,9 +505,7 @@ export class HeightMapTerrainMesh extends Mesh {
      *
      * @param value - The depth packing value to set
      */
-    setDepthPacking(value: number) {
-        this.m_material.commonUniform.depth_packing_value.value = value;
-    }
+    setDepthPacking(value: number) {}
 
     /**
      * Disposes of the mesh and its resources

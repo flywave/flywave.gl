@@ -72,13 +72,13 @@ export class MinMaxLevelsNode extends Node {
     maxSliceSampleCount!: UniformNode<number>; // float
     firstCascade!: UniformNode<number>; // uint
 
-    private readonly textureNode: TextureNode;
+    private readonly _textureNode: TextureNode;
     private readonly renderTargetA: RenderTarget;
     private readonly renderTargetB: RenderTarget;
     private readonly gatherMaterial = new NodeMaterial();
     private readonly mipmapMaterial = new NodeMaterial();
     private readonly mesh = new QuadMesh(this.gatherMaterial);
-    private rendererState?: RendererUtils.RendererState;
+    private _rendererState?: RendererUtils.RendererState;
 
     private readonly mipmapSourceNode = uniformTexture();
     private readonly mipmapOffsetNode = uniform("uvec2");
@@ -100,17 +100,17 @@ export class MinMaxLevelsNode extends Node {
         this.renderTargetB = renderTarget.clone();
         this.renderTargetB.texture.name = "MinMaxLevels [B]";
 
-        this.textureNode = outputTexture(this, this.renderTargetA.texture);
+        this._textureNode = outputTexture(this, this.renderTargetA.texture);
     }
 
     getTextureNode(): TextureNode {
-        return this.textureNode;
+        return this._textureNode;
     }
 
     private render(renderer: Renderer, width: number, height: number): void {
         const { renderTargetA, renderTargetB, mesh, mipmapSourceNode, mipmapOffsetNode } = this;
 
-        this.rendererState = resetRendererState(renderer, this.rendererState);
+        this._rendererState = resetRendererState(renderer, this._rendererState);
         renderer.autoClear = false;
 
         let offsetX = 0;
@@ -151,7 +151,7 @@ export class MinMaxLevelsNode extends Node {
             offsetX += targetWidth;
         }
 
-        restoreRendererState(renderer, this.rendererState);
+        restoreRendererState(renderer, this._rendererState);
     }
 
     override update({ renderer }: NodeFrame): void {
@@ -254,7 +254,7 @@ export class MinMaxLevelsNode extends Node {
         mipmapMaterial.fragmentNode = this.setupMipmapNode(builder);
         mipmapMaterial.needsUpdate = true;
 
-        return this.textureNode;
+        return this._textureNode;
     }
 
     override dispose(): void {

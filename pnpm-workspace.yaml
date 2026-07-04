@@ -34,8 +34,8 @@ catalog:
 
     # 核心依赖
     "typescript": 5.8.2
-    "@types/three": ^0.184.0
-    "three": ^0.184.0
+    "@types/three": ^0.185.0
+    "three": ^0.185.0
 
     # 测试相关
     "@types/mocha": "^10.0.10"

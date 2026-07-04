@@ -49,11 +49,11 @@ export class RenderTargetNode extends Node {
     inputNode: Node | null;
     resolutionScale: number;
 
-    private readonly textureNode: TextureNode;
+    private readonly _textureNode: TextureNode;
     private readonly renderTarget: RenderTarget;
     private readonly material = new NodeMaterial();
     private readonly mesh = new QuadMesh(this.material);
-    private rendererState?: RendererUtils.RendererState;
+    private _rendererState?: RendererUtils.RendererState;
 
     constructor(
         inputNode: Node | null = null,
@@ -72,7 +72,7 @@ export class RenderTargetNode extends Node {
         this.inputNode = inputNode;
         this.resolutionScale = resolutionScale;
         this.renderTarget = createRenderTarget(name, options);
-        this.textureNode = outputTexture(this, this.renderTarget.texture);
+        this._textureNode = outputTexture(this, this.renderTarget.texture);
     }
 
     getTexture(): Texture {
@@ -80,7 +80,7 @@ export class RenderTargetNode extends Node {
     }
 
     getTextureNode(): TextureNode {
-        return this.textureNode;
+        return this._textureNode;
     }
 
     setSize(width: number, height: number): this {
@@ -99,12 +99,12 @@ export class RenderTargetNode extends Node {
         const { width, height } = renderer.getDrawingBufferSize(sizeScratch);
         this.setSize(width, height);
 
-        this.rendererState = resetRendererState(renderer, this.rendererState);
+        this._rendererState = resetRendererState(renderer, this._rendererState);
 
         renderer.setRenderTarget(this.renderTarget);
         this.mesh.render(renderer);
 
-        restoreRendererState(renderer, this.rendererState);
+        restoreRendererState(renderer, this._rendererState);
     }
 
     override setup(builder: NodeBuilder): unknown {
@@ -114,7 +114,7 @@ export class RenderTargetNode extends Node {
         material.fragmentNode = this.inputNode.context(builder.getSharedContext());
         material.needsUpdate = true;
 
-        return this.textureNode;
+        return this._textureNode;
     }
 
     override dispose(): void {

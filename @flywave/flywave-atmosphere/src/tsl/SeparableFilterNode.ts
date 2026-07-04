@@ -26,7 +26,7 @@ export abstract class SeparableFilterNode extends FilterNode {
     private readonly verticalRT: RenderTarget;
     private readonly material = new NodeMaterial();
     private readonly mesh = new QuadMesh(this.material);
-    private rendererState?: RendererUtils.RendererState;
+    private _rendererState?: RendererUtils.RendererState;
 
     protected readonly inputTexelSize = uniform("vec2");
     protected readonly direction = uniform("vec2");
@@ -67,7 +67,7 @@ export abstract class SeparableFilterNode extends FilterNode {
         this.inputTexelSize.value.set(1 / width, 1 / height);
 
         const originalTexture = inputNode.value;
-        this.rendererState = resetRendererState(renderer, this.rendererState);
+        this._rendererState = resetRendererState(renderer, this._rendererState);
 
         for (let i = 0; i < this.iterations; ++i) {
             direction.value.set(1, 0);
@@ -81,7 +81,7 @@ export abstract class SeparableFilterNode extends FilterNode {
             inputNode.value = verticalRT.texture;
         }
 
-        restoreRendererState(renderer, this.rendererState);
+        restoreRendererState(renderer, this._rendererState);
         inputNode.value = originalTexture;
     }
 

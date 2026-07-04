@@ -14,21 +14,23 @@ const vectorScratch = /*#__PURE__*/ new Vector3();
 export class AtmosphereContext extends AtmosphereContextBase {
     lutNode: AtmosphereLUTNode;
 
-    matrixWorldToECEF = uniform("mat4").setGroup(renderGroup).setName("matrixWorldToECEF");
+    matrixWorldToECEF: any = uniform("mat4").setGroup(renderGroup).setName("matrixWorldToECEF");
 
-    matrixECIToECEF = uniform("mat4").setGroup(renderGroup).setName("matrixECIToECEF");
+    matrixECIToECEF: any = uniform("mat4").setGroup(renderGroup).setName("matrixECIToECEF");
 
-    sunDirectionECEF = uniform("vec3").setGroup(renderGroup).setName("sunDirectionECEF");
+    sunDirectionECEF: any = uniform("vec3").setGroup(renderGroup).setName("sunDirectionECEF");
 
-    moonDirectionECEF = uniform("vec3").setGroup(renderGroup).setName("moonDirectionECEF");
+    moonDirectionECEF: any = uniform("vec3").setGroup(renderGroup).setName("moonDirectionECEF");
 
-    matrixMoonFixedToECEF = uniform("mat4").setGroup(renderGroup).setName("matrixMoonFixedToECEF");
+    matrixMoonFixedToECEF: any = uniform("mat4")
+        .setGroup(renderGroup)
+        .setName("matrixMoonFixedToECEF");
 
-    scatteringSampleCount = uniform(new Vector2(4, 14))
+    scatteringSampleCount: any = uniform(new Vector2(4, 14))
         .setGroup(renderGroup)
         .setName("scatteringSampleCount");
 
-    matrixViewToECEF = uniform("mat4")
+    matrixViewToECEF: any = uniform("mat4")
         .setGroup(renderGroup)
         .setName("matrixViewToECEF")
         .onRenderUpdate((frame, { value }) => {
@@ -39,14 +41,14 @@ export class AtmosphereContext extends AtmosphereContextBase {
             value.multiplyMatrices(this.matrixWorldToECEF.value, camera.matrixWorld);
         });
 
-    matrixECEFToWorld = uniform("mat4")
+    matrixECEFToWorld: any = uniform("mat4")
         .setGroup(renderGroup)
         .setName("matrixECEFToWorld")
         .onRenderUpdate((_, { value }) => {
             value.copy(this.matrixWorldToECEF.value).invert();
         });
 
-    matrixECEFToView = uniform("mat4")
+    matrixECEFToView: any = uniform("mat4")
         .setGroup(renderGroup)
         .setName("matrixECEFToView")
         .onRenderUpdate((frame, { value }) => {
@@ -60,7 +62,7 @@ export class AtmosphereContext extends AtmosphereContextBase {
             );
         });
 
-    cameraPositionECEF = uniform("vec3")
+    cameraPositionECEF: any = uniform("vec3")
         .setGroup(renderGroup)
         .setName("cameraPositionECEF")
         .onRenderUpdate((frame, { value }) => {
@@ -77,7 +79,7 @@ export class AtmosphereContext extends AtmosphereContextBase {
                 .applyMatrix4(this.matrixWorldToECEF.value);
         });
 
-    altitudeCorrectionECEF = uniform("vec3")
+    altitudeCorrectionECEF: any = uniform("vec3")
         .setGroup(renderGroup)
         .setName("altitudeCorrectionECEF")
         .onRenderUpdate((frame, { value }) => {
@@ -88,7 +90,7 @@ export class AtmosphereContext extends AtmosphereContextBase {
             value.setScalar(0);
         });
 
-    cameraHeight = uniform(0)
+    cameraHeight: any = uniform(0)
         .setGroup(renderGroup)
         .setName("cameraHeight")
         .onRenderUpdate((frame, self) => {

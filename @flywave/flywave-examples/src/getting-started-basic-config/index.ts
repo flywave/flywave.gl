@@ -31,7 +31,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and viewpoint (eastern China region)
     const initialLocation = new GeoCoordinates(36, 118);
 
-    return new MapView({
+    return new MapView({ 
         projection: sphereProjection, // Use spherical projection
         target: initialLocation, // Initial target position
         zoomLevel: 6, // Initial zoom level
@@ -42,7 +42,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             // extends: "resources/tilezen_base_globe.json", // Bas÷e theme configuration
             celestia: {
                 sunTime: new Date().setHours(18),
-                atmosphere: true // Enable atmospheric effects
+                // atmosphere: true // Enable atmospheric effects
             }
         }
     });
@@ -90,6 +90,7 @@ try {
 
     // 2. Initialize map view
     const mapView = initializeMapView(canvas);
+    (window as any).__mapView = mapView;
 
     // 3. Initialize map controls
     initializeMapControls(mapView, canvas);

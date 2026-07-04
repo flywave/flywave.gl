@@ -38,15 +38,15 @@ export class SkyNode extends TempNode {
 
     private readonly scope: SkyNodeScope;
 
-    shadowLengthNode: Node<"vec2"> | null;
+    _shadowLengthNode: Node<"vec2"> | null;
 
     sunNode: SunNode;
     moonNode: MoonNode;
     starsNode: StarsNode;
 
-    inputNode: Node | null = null;
-    cameraPositionUnit: Node<"vec3"> | null = null;
-    rayDirectionECEF: Node<"vec3"> | null = null;
+    _inputNode: Node | null = null;
+    _cameraPositionUnit: Node<"vec3"> | null = null;
+    _rayDirectionECEF: Node<"vec3"> | null = null;
 
     showSun = true;
     showMoon = true;
@@ -56,7 +56,7 @@ export class SkyNode extends TempNode {
     constructor(scope: SkyNodeScope, shadowLengthNode: Node<"vec2"> | null = null) {
         super("vec3");
         this.scope = scope;
-        this.shadowLengthNode = shadowLengthNode;
+        this._shadowLengthNode = shadowLengthNode;
         this.sunNode = new SunNode();
         this.moonNode = new MoonNode();
         this.starsNode = new StarsNode();
@@ -80,7 +80,7 @@ export class SkyNode extends TempNode {
             altitudeCorrectionUnit
         } = atmosphereContext;
 
-        const { shadowLengthNode } = this;
+        const { _shadowLengthNode: shadowLengthNode } = this;
 
         const getCameraPositionUnit = (): Node<"vec3"> => {
             if (this.scope === BACKDROP) {
@@ -118,7 +118,8 @@ export class SkyNode extends TempNode {
         });
 
         return Fn(() => {
-            let { cameraPositionUnit, rayDirectionECEF } = this;
+            let { _cameraPositionUnit: cameraPositionUnit, _rayDirectionECEF: rayDirectionECEF } =
+                this;
             cameraPositionUnit ??= getCameraPositionUnit().toConst();
             rayDirectionECEF ??= getRayDirectionECEF().toConst();
 
@@ -144,7 +145,7 @@ export class SkyNode extends TempNode {
                 );
             }
 
-            const luminance = (this.inputNode?.rgb ?? vec3(0)).toVar();
+            const luminance = (this._inputNode?.rgb ?? vec3(0)).toVar();
 
             if (this.showStars) {
                 luminance.addAssign(this.starsNode);
@@ -152,13 +153,13 @@ export class SkyNode extends TempNode {
 
             if (this.showSun) {
                 const { sunNode } = this;
-                sunNode.rayDirectionECEF = rayDirectionECEF;
+                sunNode._rayDirectionECEF = rayDirectionECEF;
                 luminance.assign(mix(luminance, sunNode.rgb, sunNode.a));
             }
 
             if (this.showMoon) {
                 const { moonNode } = this;
-                moonNode.rayDirectionECEF = rayDirectionECEF;
+                moonNode._rayDirectionECEF = rayDirectionECEF;
                 luminance.assign(mix(luminance, moonNode.rgb, moonNode.a));
             }
 

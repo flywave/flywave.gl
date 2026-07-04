@@ -38,8 +38,8 @@ export const densityProfileLayerStruct = struct(
 
 export const densityProfileStruct = struct(
     {
-        layer0: densityProfileLayerStruct.layout.name,
-        layer1: densityProfileLayerStruct.layout.name
+        layer0: densityProfileLayerStruct.name,
+        layer1: densityProfileLayerStruct.name
     },
     "DensityProfile"
 );
@@ -50,13 +50,13 @@ const atmosphereParametersLayout = {
     sunAngularRadius: Angle,
     bottomRadius: Length,
     topRadius: Length,
-    rayleighDensity: densityProfileStruct.layout.name,
+    rayleighDensity: densityProfileStruct.name,
     rayleighScattering: ScatteringSpectrum,
-    mieDensity: densityProfileStruct.layout.name,
+    mieDensity: densityProfileStruct.name,
     mieScattering: ScatteringSpectrum,
     mieExtinction: ScatteringSpectrum,
     miePhaseFunctionG: Dimensionless,
-    absorptionDensity: densityProfileStruct.layout.name,
+    absorptionDensity: densityProfileStruct.name,
     absorptionExtinction: ScatteringSpectrum,
     groundAlbedo: DimensionlessSpectrum,
     minCosLight: Dimensionless,

@@ -57,11 +57,11 @@ export class CoordinateNode extends Node {
     maxSliceSampleCount!: UniformNode<number>; // float
     screenSize!: UniformNode<Vector2>; // vec2
 
-    private readonly textureNode: TextureNode;
+    private readonly _textureNode: TextureNode;
     private readonly renderTarget: RenderTarget;
     private readonly material = new NodeMaterial();
     private readonly mesh = new QuadMesh(this.material);
-    private rendererState?: RendererUtils.RendererState;
+    private _rendererState?: RendererUtils.RendererState;
 
     constructor() {
         super();
@@ -77,11 +77,11 @@ export class CoordinateNode extends Node {
         texture.name = "Coordinate";
         this.renderTarget = renderTarget;
 
-        this.textureNode = outputTexture(this, renderTarget.texture);
+        this._textureNode = outputTexture(this, renderTarget.texture);
     }
 
     getTextureNode(): TextureNode {
-        return this.textureNode;
+        return this._textureNode;
     }
 
     override update({ renderer }: NodeFrame): void {
@@ -91,12 +91,12 @@ export class CoordinateNode extends Node {
 
         this.renderTarget.setSize(this.maxSliceSampleCount.value, this.epipolarSliceCount.value);
 
-        this.rendererState = resetRendererState(renderer, this.rendererState);
+        this._rendererState = resetRendererState(renderer, this._rendererState);
 
         renderer.setRenderTarget(this.renderTarget);
         this.mesh.render(renderer);
 
-        restoreRendererState(renderer, this.rendererState);
+        restoreRendererState(renderer, this._rendererState);
     }
 
     private setupFragmentNode(builder: NodeBuilder): Node<"vec3"> {
@@ -154,7 +154,7 @@ export class CoordinateNode extends Node {
         material.fragmentNode = this.setupFragmentNode(builder);
         material.needsUpdate = true;
 
-        return this.textureNode;
+        return this._textureNode;
     }
 
     override dispose(): void {

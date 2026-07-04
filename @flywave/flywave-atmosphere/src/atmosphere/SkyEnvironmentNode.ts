@@ -1,7 +1,6 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
 import {
     CubeCamera,
     WebGLCubeRenderTarget as CubeRenderTarget,
@@ -34,7 +33,7 @@ export class SkyEnvironmentNode extends TempNode {
         return "SkyEnvironmentNode";
     }
 
-    skyNode: SkyNode;
+    _skyNode: SkyNode;
 
     distanceThreshold = 1000;
     angularThreshold = (0.1 * Math.PI) / 180;
@@ -57,10 +56,10 @@ export class SkyEnvironmentNode extends TempNode {
         this.updateBeforeType = NodeUpdateType.FRAME;
         this.material.name = "SkyEnvironment";
 
-        this.skyNode = sky();
-        this.skyNode.showSun = false;
-        this.skyNode.showMoon = false;
-        this.skyNode.showStars = false;
+        this._skyNode = sky();
+        this._skyNode.showSun = false;
+        this._skyNode.showMoon = false;
+        this._skyNode.showStars = false;
 
         const matrixViewToECEF = uniform("mat4")
             .setName("matrixViewToECEF")
@@ -71,7 +70,7 @@ export class SkyEnvironmentNode extends TempNode {
                 }
             });
 
-        this.skyNode.rayDirectionECEF = Fn(() => {
+        this._skyNode._rayDirectionECEF = Fn(() => {
             const positionView = inverseProjectionMatrix().mul(vec4(positionGeometry, 1)).xyz;
             return matrixViewToECEF
                 .mul(vec4(positionView, 0))
@@ -87,7 +86,7 @@ export class SkyEnvironmentNode extends TempNode {
         this.cubeCamera = new CubeCamera(0.1, 1000, this.renderTarget);
 
         this.material.vertexNode = vec4(positionGeometry.xy, 0, 1);
-        this.material.fragmentNode = this.skyNode;
+        this.material.fragmentNode = this._skyNode;
         this.pmremNode = pmremTexture(this.renderTarget.texture);
     }
 

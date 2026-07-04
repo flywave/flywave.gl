@@ -43,7 +43,7 @@ export type MapViewEnvironmentOptions = Pick<
 export class MapViewEnvironment {
     private readonly m_fog: MapViewFog;
     private m_skyBackground?: SkyBackground;
-    private readonly m_atmosphere: AtmosphereSystem;
+    private readonly m_atmosphere?: AtmosphereSystem;
     private m_createdLights?: THREE.Light[];
     private m_overlayCreatedLights?: THREE.Light[];
     private readonly m_backgroundDataSource?: BackgroundDataSource;

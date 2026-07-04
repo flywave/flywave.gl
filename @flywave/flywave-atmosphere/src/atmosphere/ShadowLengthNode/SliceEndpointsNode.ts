@@ -55,11 +55,11 @@ export class SliceEndpointsNode extends Node {
     lightScreenPosition!: UniformNode<Vector4>; // vec4
     isLightOnScreen!: UniformNode<boolean>; // bool
 
-    private readonly textureNode: TextureNode;
+    private readonly _textureNode: TextureNode;
     private readonly renderTarget: RenderTarget;
     private readonly material = new NodeMaterial();
     private readonly mesh = new QuadMesh(this.material);
-    private rendererState?: RendererUtils.RendererState;
+    private _rendererState?: RendererUtils.RendererState;
 
     constructor() {
         super();
@@ -75,11 +75,11 @@ export class SliceEndpointsNode extends Node {
         texture.name = "SliceEndpoints";
         this.renderTarget = renderTarget;
 
-        this.textureNode = outputTexture(this, renderTarget.texture);
+        this._textureNode = outputTexture(this, renderTarget.texture);
     }
 
     getTextureNode(): TextureNode {
-        return this.textureNode;
+        return this._textureNode;
     }
 
     override update({ renderer }: NodeFrame): void {
@@ -89,12 +89,12 @@ export class SliceEndpointsNode extends Node {
 
         this.renderTarget.setSize(this.epipolarSliceCount.value, 1);
 
-        this.rendererState = resetRendererState(renderer, this.rendererState);
+        this._rendererState = resetRendererState(renderer, this._rendererState);
 
         renderer.setRenderTarget(this.renderTarget);
         this.mesh.render(renderer);
 
-        restoreRendererState(renderer, this.rendererState);
+        restoreRendererState(renderer, this._rendererState);
     }
 
     private setupFragmentNode(builder: NodeBuilder): Node<"vec4"> {
@@ -215,7 +215,7 @@ export class SliceEndpointsNode extends Node {
         material.fragmentNode = this.setupFragmentNode(builder);
         material.needsUpdate = true;
 
-        return this.textureNode;
+        return this._textureNode;
     }
 
     override dispose(): void {

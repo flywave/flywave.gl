@@ -31,7 +31,6 @@ const flywaveFontResourcesPath = path.dirname(
     require.resolve("@here/harp-fontcatalog/package.json")
 );
 const threeMainPath = path.dirname(require.resolve("three"));
-const threePath = `${threeMainPath}/three.cjs`;
 const threeDracoPath = `${threeMainPath}/../examples/jsm/libs`;
 
 const themeList = {
@@ -79,7 +78,8 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
     resolve: {
         alias: {
             "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src/index.ts")
-        }
+        },
+        extensions:["three"]
     },
     output: {
         path: path.join(process.cwd(), "dist/examples"),
@@ -122,7 +122,6 @@ const decoderConfig = merge(
         target: "webworker",
         resolve: {
             alias: {
-                three$: threePath,
                 "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src")
             }
         },
@@ -258,25 +257,25 @@ interface CopyPattern {
 }
 
 const srcFiles: CopyPattern[] = [
-    ...glob.sync(path.join(__dirname, "src", "*.{ts,tsx,html}")).map(from => {
+    ...glob.sync(path.join(__dirname, "src", "*.{ts,tsx,html}")).map((from:any) => {
         return { from, to: "src/[name].[ext]" };
     }),
-    ...glob.sync(path.join(__dirname, "src", "*/*/index.ts")).map(from => {
+    ...glob.sync(path.join(__dirname, "src", "*/*/index.ts")).map((from:any) => {
         const folderName = path.basename(path.dirname(from));
         return { from, to: `src/${folderName}/[name].[ext]` };
     }),
-    ...glob.sync(path.join(__dirname, "src", "*/*/config.json")).map(from => {
+    ...glob.sync(path.join(__dirname, "src", "*/*/config.json")).map((from:any) => {
         const folderName = path.basename(path.dirname(from));
         return { from, to: `src/${folderName}/[name].[ext]` };
     }),
-    ...glob.sync(path.join(__dirname, "src", "*/*/assets/**/*")).map(from => {
+    ...glob.sync(path.join(__dirname, "src", "*/*/assets/**/*")).map((from:any) => {
         const folderName = path.basename(path.dirname(path.dirname(from)));
         const relativePath = path.relative(path.join(__dirname, "src", folderName, "assets"), from);
         return { from, to: `src/${folderName}/assets/${relativePath}` };
     })
 ];
 
-const htmlFiles: CopyPattern[] = glob.sync(path.join(__dirname, "src/*.html")).map(from => {
+const htmlFiles: CopyPattern[] = glob.sync(path.join(__dirname, "src/*.html")).map((from:any) => {
     return {
         from,
         to: "[name].[ext]"

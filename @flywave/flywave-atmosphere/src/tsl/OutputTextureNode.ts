@@ -19,11 +19,11 @@ export class OutputTextureNode extends TextureNode {
         return "OutputTextureNode";
     }
 
-    readonly owner: NodeT;
+    readonly _owner: NodeT;
 
     constructor(owner: NodeT, texture: Texture) {
         super(texture);
-        this.owner = owner;
+        this._owner = owner;
 
         // WORKAROUND: setUpdateMatrix exists at runtime but is not declared
         // in @types/three@0.184 TextureNode.
@@ -36,13 +36,13 @@ export class OutputTextureNode extends TextureNode {
     }
 
     setup(builder: NodeBuilder) {
-        this.owner.build(builder);
+        this._owner.build(builder);
         return super.setup(builder);
     }
 
     clone(): this {
         // @ts-expect-error polymorphic constructor with private properties
-        const copy = new this.constructor(this.owner, this.value);
+        const copy = new this.constructor(this._owner, this.value);
         copy.uvNode = this.uvNode;
         copy.levelNode = this.levelNode;
         copy.biasNode = this.biasNode;

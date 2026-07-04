@@ -136,7 +136,7 @@ export class LensGlareNode extends FilterNode {
     });
     private readonly mesh = new Mesh(new PlaneGeometry(1, 1), this.material);
     private readonly camera = new PerspectiveCamera();
-    private rendererState?: RendererUtils.RendererState;
+    private _rendererState?: RendererUtils.RendererState;
 
     private readonly tileSize = uniform("uvec2");
     private readonly inputTexelSize = uniform("vec2");
@@ -220,12 +220,12 @@ export class LensGlareNode extends FilterNode {
             1
         ]);
 
-        this.rendererState = resetRendererState(renderer, this.rendererState);
+        this._rendererState = resetRendererState(renderer, this._rendererState);
 
         renderer.setRenderTarget(renderTarget);
         renderer.render(this.mesh, this.camera);
 
-        restoreRendererState(renderer, this.rendererState);
+        restoreRendererState(renderer, this._rendererState);
     }
 
     private setupCompute(): void {

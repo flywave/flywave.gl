@@ -25,7 +25,7 @@ export abstract class DualMipmapFilterNode extends FilterNode {
     private readonly downsampleMaterial = new NodeMaterial();
     private readonly upsampleMaterial = new NodeMaterial();
     private readonly mesh = new QuadMesh();
-    private rendererState?: RendererUtils.RendererState;
+    private _rendererState?: RendererUtils.RendererState;
 
     protected readonly inputTexelSize = uniform("vec2");
     protected readonly downsampleNode = texture();
@@ -78,7 +78,7 @@ export abstract class DualMipmapFilterNode extends FilterNode {
         this.setSize(width, height);
 
         const originalTexture = inputNode.value;
-        this.rendererState = resetRendererState(renderer, this.rendererState);
+        this._rendererState = resetRendererState(renderer, this._rendererState);
 
         mesh.material = this.downsampleMaterial;
         for (const renderTarget of downsampleRTs) {
@@ -100,7 +100,7 @@ export abstract class DualMipmapFilterNode extends FilterNode {
             inputNode.value = renderTarget.texture;
         }
 
-        restoreRendererState(renderer, this.rendererState);
+        restoreRendererState(renderer, this._rendererState);
         inputNode.value = originalTexture;
     }
 

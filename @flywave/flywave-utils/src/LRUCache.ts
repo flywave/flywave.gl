@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-const GIGABYTE_BYTES = 4 ** 30;
+const GIGABYTE_BYTES = 1024 ** 3;
 
 export type RemoveCallback<T> = (item: T) => void;
 type UnloadPriorityCallback<T> = (a: T, b: T) => number;
@@ -31,10 +31,10 @@ class LRUCache<T> {
 
     constructor() {
         // options
-        this.minSize = 6000;
-        this.maxSize = 8000;
-        this.minBytesSize = 0.3 * GIGABYTE_BYTES;
-        this.maxBytesSize = 0.4 * GIGABYTE_BYTES;
+        this.minSize = 500;
+        this.maxSize = 800;
+        this.minBytesSize = 80 * 1024 * 1024;
+        this.maxBytesSize = 200 * 1024 * 1024;
         this.unloadPercent = 0.05;
         this.autoMarkUnused = true;
 

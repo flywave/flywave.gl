@@ -62,7 +62,6 @@ export class QuantizedMesh extends THREE.Mesh {
             if (this.mapView) {
                 mat.frameNumber = this.mapView.frameNumber ?? 0;
             }
-            mat.syncStaticUniforms();
         };
     }
 

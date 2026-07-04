@@ -182,8 +182,8 @@ export class TerrainResourceTile extends Tile {
      * @param fromLru - Whether the disposal is from LRU cache eviction
      */
     dispose(fromLru: boolean = false) {
+        super.dispose();
         if (fromLru) {
-            super.dispose();
             this._resourceManager.dispose();
         }
     }

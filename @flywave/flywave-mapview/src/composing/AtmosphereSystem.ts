@@ -63,14 +63,19 @@ export class AtmosphereSystem {
         this.mapView.ready.then(() => {
             const renderer = this.mapView.renderer as Renderer & {
                 contextNode?: { value: Record<string, unknown> };
+                library: {
+                    addLight: (
+                        nodeClass: typeof AtmosphereLightNode,
+                        lightClass: typeof AtmosphereLight
+                    ) => void;
+                };
             };
             if (renderer.contextNode != null) {
                 renderer.contextNode.value[AtmosphereSystem.CONTEXT_KEY] = () =>
                     this.m_atmosphereContext;
             }
 
-            const addLight = renderer.library.addLight;
-            addLight.call(renderer.library, AtmosphereLightNode, AtmosphereLight);
+            renderer.library.addLight(AtmosphereLightNode, AtmosphereLight);
 
             const scene = this.mapView.scene as THREE.Scene & {
                 backgroundNode?: THREE.Scene["backgroundNode"];

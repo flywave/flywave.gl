@@ -920,7 +920,7 @@ export class Tile implements CachedResource {
     clear() {
         const disposeMaterial = (material: THREE.Material) => {
             Object.getOwnPropertyNames(material).forEach((property: string) => {
-                const materialProperty = (material as any)[property];
+                const materialProperty = (material as unknown as Record<string, unknown>)[property];
                 if (materialProperty !== undefined && materialProperty instanceof THREE.Texture) {
                     const texture = materialProperty;
                     if (this.shouldDisposeTexture(texture)) {

@@ -1,7 +1,6 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
 import { Fn, fwidth, If, smoothstep, uniform, vec4 } from "three/tsl";
 import { TempNode, type NodeBuilder } from "three/webgpu";
 
@@ -15,7 +14,7 @@ export class SunNode extends TempNode {
         return "SunNode";
     }
 
-    rayDirectionECEF: Node | null = null;
+    _rayDirectionECEF: Node | null = null;
 
     angularRadius = uniform(0.004675); // ≈ 16 arcminutes
     intensity = uniform(1);
@@ -27,7 +26,7 @@ export class SunNode extends TempNode {
     override setup(builder: NodeBuilder): unknown {
         const atmosphereContext = getAtmosphereContext(builder);
 
-        const { rayDirectionECEF } = this;
+        const { _rayDirectionECEF: rayDirectionECEF } = this;
         if (rayDirectionECEF == null) {
             return;
         }

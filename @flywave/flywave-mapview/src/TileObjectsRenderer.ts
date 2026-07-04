@@ -9,7 +9,7 @@ import {
     MapEnv,
     Pickability
 } from "@flywave/flywave-datasource-protocol";
-import type * as THREE from "three";
+import * as THREE from "three";
 import type { Renderer } from "three/webgpu";
 
 import { BackgroundDataSource } from "./BackgroundDataSource";
@@ -18,6 +18,7 @@ import { MapObjectAdapter } from "./MapObjectAdapter";
 import { type Tile, type TileFeatureData, type TileObject } from "./Tile";
 
 const DEFAULT_STENCIL_VALUE = 1;
+const tempRotationMatrix = new THREE.Matrix4();
 
 /*
  * Interface to represent the items of three.js render lists.
@@ -65,7 +66,9 @@ export class TileObjectRenderer {
                 object.position.x += worldOffsetX;
                 object.position.sub(cameraPosition);
                 if (tile.localTangentSpace) {
-                    object.setRotationFromMatrix(tile.boundingBox.getRotationMatrix());
+                    object.setRotationFromMatrix(
+                        tile.boundingBox.getRotationMatrix(tempRotationMatrix)
+                    );
                 }
                 object.frustumCulled = false;
 

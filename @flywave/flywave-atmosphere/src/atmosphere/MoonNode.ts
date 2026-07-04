@@ -1,7 +1,6 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
 import {
     dFdx,
     dFdy,
@@ -95,7 +94,7 @@ export class MoonNode extends TempNode {
         return "MoonNode";
     }
 
-    rayDirectionECEF: Node | null = null;
+    _rayDirectionECEF: Node | null = null;
     colorNode: TextureNode | SampleNode | null = null;
     displacementNode: TextureNode | SampleNode | null = null;
 
@@ -113,7 +112,7 @@ export class MoonNode extends TempNode {
     override setup(builder: NodeBuilder): unknown {
         const atmosphereContext = getAtmosphereContext(builder);
 
-        const { rayDirectionECEF } = this;
+        const { _rayDirectionECEF: rayDirectionECEF } = this;
         if (rayDirectionECEF == null) {
             return;
         }

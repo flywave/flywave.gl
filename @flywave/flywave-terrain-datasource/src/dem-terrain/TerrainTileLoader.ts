@@ -62,7 +62,6 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
      * applying height maps, imagery textures, and overlay textures as available.
      */
     loadTileMeshImpl() {
-        // Get the nearest DEM tile for this tile key
         const demTile = this.dataSource
             .dataProvider()
             .getBestAvailableResourceTile(this.tile.tileKey);
@@ -71,11 +70,10 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             .getGroundOverlayProvider()
             .getBestAvailableResourceTile(this.tile.tileKey);
 
-        this.tile.objects.length = 0;
+        this.tile.clear();
         this.dataSource.getWebTileDataSources().forEach(webTiles => {
             const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
             if (!webTile) return;
-            // Create the terrain mesh for this tile
             const terrainMesh = new HeightMapTerrainMesh(
                 this.tile,
                 this.dataSource.getTilingScheme(),
@@ -83,26 +81,17 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
                 this.dataSource.tileBaseGeometryBuilder
             );
             terrainMesh.setModifierManager(this.dataSource.getGroundModificationManager());
-            // terrainMesh.displacement.add(this.tile.center.clone().multiplyScalar(-1));
-            // If we have DEM data, set up the height map
             if (demTile && demTile.resource) {
                 const texture = demTile.resource.demData.getPixels();
                 if (texture) {
-                    // Set the height map texture and position
                     terrainMesh.setHeightMap(texture, demTile.tileKey);
                 }
             }
-
-            // Update uniforms with current tile configuration
             terrainMesh.updateUniforms();
-
             terrainMesh.setupImageryTexture(webTile.resource.value, webTiles.tilingScheme);
-
             if (overlayImagery && overlayImagery.resource?.texture) {
                 terrainMesh.setupOverlayerTexture(overlayImagery.resource, webTiles.tilingScheme);
             }
-
-            // Add the mesh to the tile's objects
             this.tile.objects.push(terrainMesh);
         });
     }

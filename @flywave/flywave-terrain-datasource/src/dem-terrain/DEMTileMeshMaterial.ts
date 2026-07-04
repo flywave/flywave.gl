@@ -1,5 +1,5 @@
-/* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
+/* Copyright (C) 2025 flywave.gl contributors */
 
 import * as THREE from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
@@ -26,6 +26,11 @@ import {
     positionLocal
 } from "three/tsl";
 
+/**
+ * Creates a 1x1 white dummy texture for use as a placeholder in shader nodes.
+ *
+ * @returns A DataTexture filled with opaque white pixels.
+ */
 function dummyTex(): THREE.DataTexture {
     const t = new THREE.DataTexture(
         new Uint8Array([255, 255, 255, 255]),
@@ -39,63 +44,98 @@ function dummyTex(): THREE.DataTexture {
 }
 
 const emptyTexture = dummyTex();
-
-interface CommonUniforms {
-    uHeighMapTexture: { value: THREE.Texture };
-    pack: { value: THREE.Matrix4 };
-    uPatchPos: { value: THREE.Matrix4 };
-    depth_packing_value: { value: number };
-    overlayerImageryTransform: { value: THREE.Vector4 };
-    overlayerImagery: { value: THREE.Texture };
-    imageryPatchTransform: { value: THREE.Vector4[] };
-    imageryPatchArray: { value: THREE.Texture[] };
-    imageryPatchCount: { value: number };
-    uProjectionFactor: { value: number };
-    uSkirtHeight: { value: number };
-    isRenderingDepth: { value: boolean };
-    uModifierTexture: { value: THREE.Texture };
-    uModifierUVBounds: { value: THREE.Vector4 };
-    uModifierOp: { value: number };
-    uHasModifier: { value: number };
-}
+const emptyImageryTextures = [dummyTex(), dummyTex(), dummyTex(), dummyTex(), dummyTex()];
 
 // ====================================================================
-// 静态共享 TSL 节点
+// Module-level shared TSL nodes with onObjectUpdate
 // ====================================================================
 
-const _packCol0 = uniform(new THREE.Vector4());
-const _demUnpack = uniform(new THREE.Vector4());
-const _heightMapPos = uniform(new THREE.Vector4());
-const _patchPos0 = uniform(new THREE.Vector4());
-const _patchPos1 = uniform(new THREE.Vector4());
-const _patchPos2 = uniform(new THREE.Vector4());
-const _patchPos3 = uniform(new THREE.Vector4());
-const _heightMapTex = texture(dummyTex());
-const _texSize = uniform(new THREE.Vector2(1, 1));
-const _skirtHeight = uniform(0.0);
-const _projFactor = uniform(0.0);
-const _modifierTex = texture(dummyTex());
-const _modifierUVBounds = uniform(new THREE.Vector4());
-const _modifierOp = uniform(0);
-const _hasModifier = uniform(0);
-const _overlayTex = texture(dummyTex());
-const _overlayTransform = uniform(new THREE.Vector4(1, 1, 0, 0));
+const _heightMapTex = texture(emptyTexture);
+_heightMapTex.onObjectUpdate(({ material }) => material.heightMapTexture);
+
+const _modifierTex = texture(emptyTexture);
+_modifierTex.onObjectUpdate(({ material }) => material.modifierTexture);
+
+const _overlayTex = texture(emptyTexture);
+_overlayTex.onObjectUpdate(({ material }) => material.overlayTexture);
+
 const _imageryTex = [
-    texture(dummyTex()),
-    texture(dummyTex()),
-    texture(dummyTex()),
-    texture(dummyTex()),
-    texture(dummyTex())
+    texture(emptyImageryTextures[0]),
+    texture(emptyImageryTextures[1]),
+    texture(emptyImageryTextures[2]),
+    texture(emptyImageryTextures[3]),
+    texture(emptyImageryTextures[4])
 ];
-const _imageryTransform = [
-    uniform(new THREE.Vector4(1, 1, 0, 0)),
-    uniform(new THREE.Vector4(1, 1, 0, 0)),
-    uniform(new THREE.Vector4(1, 1, 0, 0)),
-    uniform(new THREE.Vector4(1, 1, 0, 0)),
-    uniform(new THREE.Vector4(1, 1, 0, 0))
-];
-const _imageryCount = uniform(0);
 
+_imageryTex[0].onObjectUpdate(({ material }) => material.imageryTextures[0]);
+_imageryTex[1].onObjectUpdate(({ material }) => material.imageryTextures[1]);
+_imageryTex[2].onObjectUpdate(({ material }) => material.imageryTextures[2]);
+_imageryTex[3].onObjectUpdate(({ material }) => material.imageryTextures[3]);
+_imageryTex[4].onObjectUpdate(({ material }) => material.imageryTextures[4]);
+
+const _imageryTransform = [
+    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
+        ({ material }) => material.imageryTransforms[0]
+    ),
+    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
+        ({ material }) => material.imageryTransforms[1]
+    ),
+    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
+        ({ material }) => material.imageryTransforms[2]
+    ),
+    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
+        ({ material }) => material.imageryTransforms[3]
+    ),
+    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
+        ({ material }) => material.imageryTransforms[4]
+    )
+];
+
+const _packCol0 = uniform(new THREE.Vector4()).onObjectUpdate(({ material }) => material.packCol0);
+const _demUnpack = uniform(new THREE.Vector4()).onObjectUpdate(
+    ({ material }) => material.demUnpack
+);
+const _heightMapPos = uniform(new THREE.Vector4(1, 0, 0, 0)).onObjectUpdate(
+    ({ material }) => material.heightMapPos
+);
+const _patchPos0 = uniform(new THREE.Vector4()).onObjectUpdate(
+    ({ material }) => material.patchPos0
+);
+const _patchPos1 = uniform(new THREE.Vector4()).onObjectUpdate(
+    ({ material }) => material.patchPos1
+);
+const _patchPos2 = uniform(new THREE.Vector4()).onObjectUpdate(
+    ({ material }) => material.patchPos2
+);
+const _patchPos3 = uniform(new THREE.Vector4()).onObjectUpdate(
+    ({ material }) => material.patchPos3
+);
+const _texSize = uniform(new THREE.Vector2(1, 1)).onObjectUpdate(
+    ({ material }) => material.texSize
+);
+const _skirtHeight = uniform(0.0).onObjectUpdate(({ material }) => material.skirtHeight);
+const _projFactor = uniform(0.0).onObjectUpdate(({ material }) => material.projectionFactor);
+const _modifierUVBounds = uniform(new THREE.Vector4()).onObjectUpdate(
+    ({ material }) => material.modifierUVBounds
+);
+const _modifierOp = uniform(0).onObjectUpdate(({ material }) => material.modifierOp);
+const _hasModifier = uniform(0).onObjectUpdate(({ material }) => material.hasModifier);
+const _overlayTransform = uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
+    ({ material }) => material.overlayTransform
+);
+const _imageryCount = uniform(0).onObjectUpdate(({ material }) => material.imageryCount);
+
+/**
+ * Builds the shared TSL position and color nodes for DEM terrain rendering.
+ *
+ * The position node computes terrain elevation by sampling the height map
+ * texture with bilinear interpolation, applying optional ground modifiers.
+ * For simple patches it reconstructs world-space positions from patch basis
+ * vectors. The color node composites up to 5 imagery layers based on UV
+ * transforms and a Web Mercator Y coordinate.
+ *
+ * @returns An object containing the assembled positionNode, colorNode, and vTerrainNormal varying.
+ */
 function buildNodes() {
     const webMercatorY = attribute("webMercatorY", "float");
     const mercatorPosition = attribute("mercatorPosition", "vec3");
@@ -158,7 +198,6 @@ function buildNodes() {
         return applyModifier(tslMix(h0, h1, fr.y), t);
     });
 
-    // computeMvPos — 用 If/Else 实现真正的条件分支
     const computeMvPos = Fn(([fUv, fPos]: [ReturnType<typeof vec2>, ReturnType<typeof vec3>]) => {
         const dx = fPos.x;
         const result = vec4(0, 0, 0, 1).toVar();
@@ -179,14 +218,11 @@ function buildNodes() {
         return result;
     });
 
-    // 在 vertex stage 同时计算位置和法线
-    // 法线存入 varying，避免 fragment 中重新采样 texture 导致的闪烁
     const vTerrainNormal = vec3(0, 1, 0).toVarying("vTerrainNormal");
 
     const positionNode = Fn(() => {
         const finalPos = computeMvPos(texUv, pos).xyz.toVar();
 
-        // 在 vertex 中计算 simple-patch 法线
         If(isSimplePatch, () => {
             const texelsPerUV = texSizeF.x.mul(_heightMapPos.x);
             const e = float(1.0).div(texelsPerUV);
@@ -233,120 +269,226 @@ function buildNodes() {
 
 const s_nodes = buildNodes();
 
-export class DEMTileMeshMaterial extends MeshStandardNodeMaterial {
-    public m_allowOverride: boolean = false;
-    public m_commonUniform: CommonUniforms = {
-        uHeighMapTexture: { value: emptyTexture },
-        pack: { value: new THREE.Matrix4() },
-        uPatchPos: { value: new THREE.Matrix4() },
-        depth_packing_value: { value: 0 },
-        overlayerImageryTransform: { value: new THREE.Vector4(1, 1, 0, 0) },
-        overlayerImagery: { value: dummyTex() },
-        imageryPatchTransform: { value: Array.from({ length: 5 }, () => new THREE.Vector4()) },
-        imageryPatchArray: { value: Array.from({ length: 5 }, () => dummyTex()) },
-        imageryPatchCount: { value: 0 },
-        uSkirtHeight: { value: 0.0 },
-        uProjectionFactor: { value: 0.0 },
-        isRenderingDepth: { value: false },
-        uModifierTexture: { value: emptyTexture },
-        uModifierUVBounds: { value: new THREE.Vector4() },
-        uModifierOp: { value: 0 },
-        uHasModifier: { value: 0 }
-    };
-    public m_defines: Record<string, any> = {};
+export { emptyTexture, emptyImageryTextures };
 
+/**
+ * DEM tile mesh material for rendering terrain with height-map-based elevation.
+ *
+ * This material extends MeshStandardNodeMaterial to provide WebGPU/TSL-compatible
+ * rendering of DEM terrain tiles. It supports bilinear-interpolated elevation
+ * from height map textures, ground modification modifiers, up to 5 imagery
+ * layers, and an optional overlay texture.
+ *
+ * All TSL nodes are module-level shared instances using onObjectUpdate to read
+ * per-instance property values at render time, ensuring the shader is compiled
+ * only once while still supporting per-tile texture and uniform data.
+ */
+export class DEMTileMeshMaterial extends MeshStandardNodeMaterial {
+    /** Whether to allow external systems to override material nodes */
+    public allowOverride: boolean = false;
+
+    /** Defines for shader feature toggles */
+    public defines: Record<string, unknown> = {};
+
+    // --- Imagery textures and transforms ---
+    private readonly m_imageryTextures: THREE.Texture[] = [
+        emptyImageryTextures[0],
+        emptyImageryTextures[1],
+        emptyImageryTextures[2],
+        emptyImageryTextures[3],
+        emptyImageryTextures[4]
+    ];
+
+    private readonly m_imageryTransforms: THREE.Vector4[] = [
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0)
+    ];
+
+    // --- Textures ---
+    /** Height map texture for elevation sampling */
+    public heightMapTexture: THREE.Texture = emptyTexture;
+    /** Ground modifier texture for elevation editing */
+    public modifierTexture: THREE.Texture = emptyTexture;
+    /** Overlay texture rendered on top of imagery */
+    public overlayTexture: THREE.Texture = emptyTexture;
+
+    // --- Elevation decoding uniforms ---
+    /** First column of the pack matrix (pack.w > 0 indicates simple patch mode) */
+    public packCol0: THREE.Vector4 = new THREE.Vector4();
+    /** DEM unpack vector for decoding elevation from RGB channels */
+    public demUnpack: THREE.Vector4 = new THREE.Vector4();
+    /** Height map position and scale in UV space */
+    public heightMapPos: THREE.Vector4 = new THREE.Vector4(1, 0, 0, 0);
+
+    // --- Patch position basis vectors ---
+    /** Patch position column 0 (first basis vector) */
+    public patchPos0: THREE.Vector4 = new THREE.Vector4();
+    /** Patch position column 1 (second basis vector) */
+    public patchPos1: THREE.Vector4 = new THREE.Vector4();
+    /** Patch position column 2 (third basis vector) */
+    public patchPos2: THREE.Vector4 = new THREE.Vector4();
+    /** Patch position column 3 (fourth basis vector) */
+    public patchPos3: THREE.Vector4 = new THREE.Vector4();
+
+    // --- Height map parameters ---
+    /** Size of the height map texture in pixels */
+    public texSize: THREE.Vector2 = new THREE.Vector2(1, 1);
+    /** Skirt height for tile edge geometry */
+    public skirtHeight: number = 0;
+
+    // --- Projection ---
+    /** Projection interpolation factor between local and Mercator positions */
+    public projectionFactor: number = 0;
+
+    // --- Ground modifier ---
+    /** UV bounds [minX, minY, maxX, maxY] for the modifier region */
+    public modifierUVBounds: THREE.Vector4 = new THREE.Vector4();
+    /** Modifier operation type (0 = add, 1 = blend) */
+    public modifierOp: number = 0;
+    /** Whether a modifier is active (0 = no, >0 = yes) */
+    public hasModifier: number = 0;
+
+    // --- Overlay ---
+    /** UV transform for the overlay texture (scaleX, scaleY, offsetX, offsetY) */
+    public overlayTransform: THREE.Vector4 = new THREE.Vector4(1, 1, 0, 0);
+
+    /** Number of active imagery patches */
+    public imageryCount: number = 0;
+
+    /** Backing store for the pack matrix */
+    private m_pack: THREE.Matrix4 = new THREE.Matrix4();
+    /** Backing store for the patch position matrix */
+    private m_patchPos: THREE.Matrix4 = new THREE.Matrix4();
+
+    /**
+     * Creates a new DEMTileMeshMaterial instance.
+     *
+     * @param parameters - Optional standard material parameters.
+     */
     constructor(parameters?: THREE.MeshStandardMaterialParameters) {
         super(parameters);
         this.colorNode = s_nodes.colorNode;
         this.positionNode = s_nodes.positionNode;
     }
 
-    public setupNormal(builder: any): any {
+    /**
+     * Sets up the normal node for terrain lighting.
+     *
+     * For simple patches, uses the terrain normal computed from the height map.
+     * Otherwise, falls back to the default material normal.
+     *
+     * @param builder - The node builder context.
+     * @returns The computed normal node.
+     */
+    public setupNormal(builder: unknown) {
         const defaultNormal = super.setupNormal(builder);
         return select(_packCol0.w.greaterThan(0), s_nodes.vTerrainNormal, defaultNormal);
     }
 
-    public syncStaticUniforms(): void {
-        const u = this.m_commonUniform;
-        const pack = u.pack.value.elements;
-        _packCol0.value.set(pack[0], pack[1], pack[2], pack[3]);
-        _demUnpack.value.set(pack[4], pack[5], pack[6], pack[7]);
-        _heightMapPos.value.set(pack[8], pack[9], pack[10], pack[11]);
-        const pp = u.uPatchPos.value.elements;
-        _patchPos0.value.set(pp[0], pp[1], pp[2], pp[3]);
-        _patchPos1.value.set(pp[4], pp[5], pp[6], pp[7]);
-        _patchPos2.value.set(pp[8], pp[9], pp[10], pp[11]);
-        _patchPos3.value.set(pp[12], pp[13], pp[14], pp[15]);
-        if (_heightMapTex.value !== u.uHeighMapTexture.value)
-            _heightMapTex.value = u.uHeighMapTexture.value;
-        const tex = u.uHeighMapTexture.value;
-        if (tex && tex.image && tex.image.width) {
-            _texSize.value.set(tex.image.width, tex.image.height);
-        }
-        _skirtHeight.value = u.uSkirtHeight.value;
-        _projFactor.value = u.uProjectionFactor.value;
-        if (_modifierTex.value !== u.uModifierTexture.value)
-            _modifierTex.value = u.uModifierTexture.value;
-        _modifierUVBounds.value.copy(u.uModifierUVBounds.value);
-        _modifierOp.value = u.uModifierOp.value;
-        _hasModifier.value = u.uHasModifier.value;
-        if (_overlayTex.value !== u.overlayerImagery.value)
-            _overlayTex.value = u.overlayerImagery.value;
-        _overlayTransform.value.copy(u.overlayerImageryTransform.value);
-        for (let i = 0; i < 5; i++) {
-            if (_imageryTex[i].value !== u.imageryPatchArray.value[i])
-                _imageryTex[i].value = u.imageryPatchArray.value[i];
-            _imageryTransform[i].value.copy(u.imageryPatchTransform.value[i]);
-        }
-        _imageryCount.value = u.imageryPatchCount.value;
+    /**
+     * Gets the pack matrix used for elevation decoding.
+     */
+    public get pack(): THREE.Matrix4 {
+        return this.m_pack;
     }
 
-    public syncUniforms(): void {
-        this.syncStaticUniforms();
+    /**
+     * Sets the pack matrix and decomposes it into column vectors.
+     *
+     * The matrix columns are extracted into packCol0, demUnpack, and
+     * heightMapPos for use as individual shader uniforms.
+     *
+     * @param value - The 4x4 pack matrix.
+     */
+    public set pack(value: THREE.Matrix4) {
+        this.m_pack.copy(value);
+        const e = value.elements;
+        this.packCol0.set(e[0], e[1], e[2], e[3]);
+        this.demUnpack.set(e[4], e[5], e[6], e[7]);
+        this.heightMapPos.set(e[8], e[9], e[10], e[11]);
     }
 
-    public setRenderingDepth(enabled: boolean): void {
-        this.m_commonUniform.isRenderingDepth.value = enabled;
+    /**
+     * Gets the patch position matrix.
+     */
+    public get patchPos(): THREE.Matrix4 {
+        return this.m_patchPos;
     }
 
-    public getIsRenderingDepth(): boolean {
-        return this.m_commonUniform.isRenderingDepth.value;
+    /**
+     * Sets the patch position matrix and decomposes it into column vectors.
+     *
+     * Each column of the matrix becomes a separate Vector4 uniform
+     * (patchPos0 through patchPos3) for the shader.
+     *
+     * @param value - The 4x4 patch position matrix.
+     */
+    public set patchPos(value: THREE.Matrix4) {
+        this.m_patchPos.copy(value);
+        const e = value.elements;
+        this.patchPos0.set(e[0], e[1], e[2], e[3]);
+        this.patchPos1.set(e[4], e[5], e[6], e[7]);
+        this.patchPos2.set(e[8], e[9], e[10], e[11]);
+        this.patchPos3.set(e[12], e[13], e[14], e[15]);
     }
 
-    public copy(source: DEMTileMeshMaterial): this {
-        super.copy(source);
-        this.m_commonUniform = { ...source.m_commonUniform };
-        this.m_allowOverride = source.m_allowOverride;
-        this.m_defines = { ...source.m_defines };
-        return this;
+    /**
+     * Gets the imagery textures array (read-only).
+     */
+    public get imageryTextures(): readonly THREE.Texture[] {
+        return this.m_imageryTextures;
     }
 
+    /**
+     * Gets the imagery transform array (read-only).
+     */
+    public get imageryTransforms(): readonly THREE.Vector4[] {
+        return this.m_imageryTransforms;
+    }
+
+    /**
+     * Sets the imagery patches for this material.
+     *
+     * Each patch consists of a texture and its corresponding UV transform.
+     * Up to 5 patches are supported.
+     *
+     * @param value - Array of imagery patches with transform and texture.
+     */
     public set imageryPatchs(value: Array<{ transform: THREE.Vector4; texture: THREE.Texture }>) {
         value.forEach((item, index) => {
-            this.m_commonUniform.imageryPatchArray.value[index] = item.texture;
-            this.m_commonUniform.imageryPatchTransform.value[index] = item.transform;
+            this.m_imageryTextures[index] = item.texture;
+            this.m_imageryTransforms[index].copy(item.transform);
         });
-        this.m_commonUniform.imageryPatchCount.value = value.length;
+        this.imageryCount = value.length;
     }
 
-    get commonUniform() {
-        return this.m_commonUniform;
-    }
-
+    /**
+     * Sets up or clears the overlay texture.
+     *
+     * @param overlayer - Optional overlay texture with transform. If undefined, clears the overlay.
+     */
     public setupOverlayerTexture(overlayer?: {
         transform: THREE.Vector4;
         texture: THREE.Texture;
     }): void {
         if (overlayer) {
-            this.m_commonUniform.overlayerImagery.value = overlayer.texture;
-            this.m_commonUniform.overlayerImageryTransform.value.copy(overlayer.transform);
+            this.overlayTexture = overlayer.texture;
+            this.overlayTransform.copy(overlayer.transform);
         } else {
-            this.m_commonUniform.overlayerImagery.value = dummyTex();
-            this.m_commonUniform.overlayerImageryTransform.value.set(0, 0, 0, 0);
+            this.overlayTexture = emptyTexture;
+            this.overlayTransform.set(0, 0, 0, 0);
         }
     }
 
+    /**
+     * Sets the projection interpolation factor.
+     *
+     * @param projectionFactor - Factor for blending between local and Mercator positions.
+     */
     public setProjectionUniforms(projectionFactor: number): void {
-        this.m_commonUniform.uProjectionFactor.value = projectionFactor;
+        this.projectionFactor = projectionFactor;
     }
 }

@@ -39,11 +39,9 @@ function transformType(type: FnLayoutType): string {
     if (typeof type === "string") {
         return type;
     }
-    if ("layout" in type && type.layout instanceof StructTypeNode) {
-        if (type.layout.name == null) {
-            throw new Error("Struct name is required.");
-        }
-        return type.layout.name;
+    const name = (type as { name?: string }).name;
+    if (typeof name === "string" && name.length > 0) {
+        return name;
     }
     throw new Error(`Unsupported layout type: ${String(type)}`);
 }

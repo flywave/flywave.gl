@@ -18,11 +18,11 @@ export class OutputTexture3DNode extends Texture3DNode {
         return "OutputTexture3DNode";
     }
 
-    readonly owner: NodeT;
+    readonly _owner: NodeT;
 
     constructor(owner: NodeT, texture: Texture) {
         super(texture);
-        this.owner = owner;
+        this._owner = owner;
 
         reinterpretType<
             OutputTexture3DNode & {
@@ -33,13 +33,13 @@ export class OutputTexture3DNode extends Texture3DNode {
     }
 
     setup(builder: NodeBuilder) {
-        this.owner.build(builder);
+        this._owner.build(builder);
         return super.setup(builder);
     }
 
     clone(): this {
         // @ts-expect-error polymorphic constructor
-        const copy = new this.constructor(this.owner, this.value);
+        const copy = new this.constructor(this._owner, this.value);
         copy.uvNode = this.uvNode;
         copy.levelNode = this.levelNode;
         copy.biasNode = this.biasNode;
