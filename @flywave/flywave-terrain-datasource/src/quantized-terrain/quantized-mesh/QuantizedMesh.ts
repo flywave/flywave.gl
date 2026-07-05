@@ -1,8 +1,6 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import "./Shader";
-
 import {
     type TilingScheme,
     GeoBox,

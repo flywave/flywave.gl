@@ -23,7 +23,11 @@ import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading
 import { bloom } from "./effects/bloom";
 import { outline } from "./effects/outline";
 import { translucentLayer } from "./effects/translucentLayer";
-import { TranslucentLayerEffect } from "./TranslucentLayerEffect";
+import { MeshBasicNodeMaterial } from "three/webgpu";
+import { TranslucentLayerEffect, TRANSLUCENT_LAYER_BIT } from "./TranslucentLayerEffect";
+
+/** Flat white material for translucent pass (no lighting, extremely cheap) */
+const _flatWhiteMaterial = new MeshBasicNodeMaterial({ color: 0xffffff });
 
 export class ViewRenderManager implements IViewRenderManager {
     readonly config: IViewRenderConfig = {
@@ -48,6 +52,7 @@ export class ViewRenderManager implements IViewRenderManager {
 
     private pipeline?: RenderPipeline;
     private passNode?: ReturnType<typeof pass>;
+    private translucentPassNode?: ReturnType<typeof pass>;
     private lensFlareNode?: LensFlareNode;
     private aerialNode?: AerialPerspectiveNode;
     private taaNode?: TemporalAntialiasNode;
@@ -145,30 +150,24 @@ export class ViewRenderManager implements IViewRenderManager {
             finalNode = sepia(finalNode, this.config.sepia.amount);
         }
 
-        if (this.translucentLayerEffect != null) {
+        if (this.translucentLayerEffect != null && this.translucentLayerEffect.hasObjects) {
             const tle = this.translucentLayerEffect;
-            const layerIDTex = tle.getLayerIDTexture();
-            const layerColorTex = tle.getLayerColorTexture();
-            const layerDepthTex = tle.getLayerDepthTexture();
+
+            const translucentLayers = new THREE.Layers();
+            translucentLayers.set(TRANSLUCENT_LAYER_BIT);
+
+            this.translucentPassNode = pass(scene, camera, { samples: 0 });
+            this.translucentPassNode.setLayers(translucentLayers);
+            this.translucentPassNode.overrideMaterial = _flatWhiteMaterial;
+            const translucentColor = this.translucentPassNode.getTextureNode("output");
             const layerDataTex = tle.getLayerDataTexture();
-            if (
-                layerIDTex != null &&
-                layerColorTex != null &&
-                layerDepthTex != null &&
-                layerDataTex != null
-            ) {
-                const cam = camera as THREE.PerspectiveCamera;
-                finalNode = translucentLayer(
-                    finalNode,
-                    layerIDTex,
-                    layerColorTex,
-                    layerDepthTex,
-                    layerDataTex,
-                    tle.getLayerCount(),
-                    cam.near,
-                    cam.far
-                );
-            }
+
+            finalNode = translucentLayer(
+                finalNode,
+                translucentColor,
+                layerDataTex,
+                tle.getLayerCount()
+            );
         }
 
         finalNode = finalNode.add(dithering);
@@ -182,12 +181,6 @@ export class ViewRenderManager implements IViewRenderManager {
     }
 
     render(scene: THREE.Scene, camera: THREE.Camera): void {
-        if (this.translucentLayerEffect != null) {
-            this.translucentLayerEffect.renderLayerPasses();
-            if (this.needsUpdate) {
-                this.buildNodeGraph(scene, camera);
-            }
-        }
         if (this.needsUpdate || this.pipeline == null) {
             this.buildNodeGraph(scene, camera);
         }

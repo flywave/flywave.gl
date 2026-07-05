@@ -261,12 +261,12 @@ export class MapRenderingManager implements IMapRenderingManager {
     }
 
     setTranslucentRenderer(
-        renderer: import("three/webgpu").Renderer,
-        scene: THREE.Scene,
-        camera: THREE.Camera
+        _renderer: import("three/webgpu").Renderer,
+        _scene: THREE.Scene,
+        _camera: THREE.Camera
     ): void {
         if (this.m_translucentLayerEffect == null) {
-            this.m_translucentLayerEffect = new TranslucentLayerEffect(renderer, scene, camera);
+            this.m_translucentLayerEffect = new TranslucentLayerEffect();
             this.viewRenderManager!.translucentLayerEffect = this.m_translucentLayerEffect;
         }
     }
@@ -304,15 +304,35 @@ export class MapRenderingManager implements IMapRenderingManager {
     }
     private applyBloomMrtNode(object: THREE.Object3D, intensity: number): void {
         object.traverse(child => {
-            const mat = (child as THREE.Mesh).material as THREE.Material & { mrtNode?: unknown };
+            const mat = (child as THREE.Mesh).material as THREE.Material & {
+                mrtNode?: unknown;
+                userData?: Record<string, unknown>;
+            };
             if (mat != null) {
-                mat.mrtNode = mrt({ bloomIntensity: uniform(intensity) });
-                mat.needsUpdate = true;
+                mat.userData = mat.userData ?? {};
+                mat.userData.__bloomIntensity = intensity;
+                this.rebuildMrtNode(mat);
             }
         });
     }
     addIgnoreBloomObject(object: THREE.Object3D): void {
         this.viewRenderManager?.bloomIgnoreObjects.add(object);
+    }
+
+    private rebuildMrtNode(
+        mat: THREE.Material & { mrtNode?: unknown; userData?: Record<string, unknown> }
+    ): void {
+        const entries: Record<string, any> = {};
+        const bloomIntensity = mat.userData?.__bloomIntensity;
+        if (bloomIntensity != null) {
+            entries.bloomIntensity = uniform(bloomIntensity);
+        }
+        const layerId = mat.userData?.__translucentLayerId;
+        if (layerId != null) {
+            entries.translucentLayerId = uniform(layerId);
+        }
+        mat.mrtNode = Object.keys(entries).length > 0 ? mrt(entries) : null;
+        mat.needsUpdate = true;
     }
     removeIgnoreBloomObject(object: THREE.Object3D): void {
         this.viewRenderManager?.bloomIgnoreObjects.delete(object);
@@ -321,7 +341,12 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_translucentLayerEffect?: TranslucentLayerEffect;
 
     addTranslucentObject(object: THREE.Object3D, layer: string): void {
+        const wasEmpty =
+            this.m_translucentLayerEffect == null || !this.m_translucentLayerEffect.hasObjects;
         this.m_translucentLayerEffect?.addObject(object, layer);
+        if (wasEmpty && this.m_translucentLayerEffect?.hasObjects) {
+            this.viewRenderManager!.needsUpdate = true;
+        }
     }
     removeTranslucentObject(object: THREE.Object3D): void {
         this.m_translucentLayerEffect?.removeObject(object);

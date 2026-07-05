@@ -22,13 +22,13 @@ import {
     Object3D,
     PerspectiveCamera,
     Points,
-    PointsMaterial,
     Quaternion,
     Scene,
     TypedArray,
     Vector2,
     Vector3
 } from "three";
+import { PointsNodeMaterial } from "three/webgpu";
 
 import { ITile, type Tile, type TileInternal } from "../base/Tile";
 import { TilesRendererBase } from "../base/TilesRendererBase";
@@ -250,7 +250,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
     /**
      * Shared material for points rendering
      */
-    private m_pointsMaterial: PointsMaterial;
+    private m_pointsMaterial: PointsNodeMaterial;
 
     /**
      * Size of points in the point cloud
@@ -279,7 +279,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
         this.group = new TilesGroup(this);
 
         // Initialize shared points material
-        this.m_pointsMaterial = new PointsMaterial({
+        this.m_pointsMaterial = new PointsNodeMaterial({
             size: this.pointSize,
             sizeAttenuation: true,
             vertexColors: true,

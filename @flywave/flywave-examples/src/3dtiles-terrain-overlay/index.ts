@@ -86,11 +86,10 @@ const createCesiumIonDataSource = (mapView: MapView): CesiumIonDataSource => {
         assetId: 75343 // Data asset ID
     });
 
-    // Set data source theme, enable translucent depth effect
     cesiumIonDataSource.setTheme({
         postEffects: {
             translucentDepth: {
-                enabled: true // Enable translucent depth effect
+                enabled: true
             }
         }
     });

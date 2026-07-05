@@ -1,82 +1,51 @@
 // @ts-nocheck
-import { Fn, texture, uniform, vec4, vec3, vec2, float, uv } from "three/tsl";
+import { Fn, texture, vec4, vec3, vec2, float, uv } from "three/tsl";
 
 /**
- * TSL node for translucent layer composition.
- * Reads layer ID, color, depth textures and layer data texture,
- * applies depth-based occlusion and blend modes.
+ * TSL post-process node for translucent layer composition.
+ *
+ * The translucent pass renders ONLY translucent-layer objects (layers bit 10)
+ * with a flat white override material. Background is black (0,0,0).
+ * Detection: red channel > 0.5 means an object is present.
+ *
+ * @param mainColor           - Tone-mapped color from the main render pass.
+ * @param translucentColorNode - PassNode color texture node (flat white = object, black = empty).
+ * @param layerDataTexture    - Raw DataTexture with per-layer config.
+ * @param _layerCount          - Number of active layers (unused, single layer).
  */
 export const translucentLayer = (
-    inputColor,
-    layerIDTexture,
-    layerColorTexture,
-    layerDepthTexture,
+    mainColor,
+    translucentColorNode,
     layerDataTexture,
-    layerCount,
-    cameraNear,
-    cameraFar
+    _layerCount
 ) => {
-    const layerCountUniform = uniform(layerCount);
-    const nearUniform = uniform(cameraNear);
-    const farUniform = uniform(cameraFar);
-
     return Fn(() => {
-        const color = inputColor.toVar();
-        const coord = uv();
+        const color = mainColor.toVar();
 
-        // Sample layer textures
-        const layerID = texture(layerIDTexture, coord);
-        const layerColor = texture(layerColorTexture, coord);
-        const layerDepth = texture(layerDepthTexture, coord).r;
+        // Flat white pass: background = black (0), object = white (1)
+        const hasObject = translucentColorNode.r.greaterThan(0.5);
 
-        // Check if pixel has a layer
-        const hasLayer = layerID.r.greaterThan(0.001);
-
-        // Decode layer index
-        const layerIndex = layerID.r.mul(256.0).sub(1.0).toInt();
-
-        // Read layer data from data texture (2 pixels per layer)
-        const texWidth = float(256.0); // LAYERS_PER_ROW * PIXELS_PER_LAYER
-        const u0 = float(layerIndex).mul(2.0).add(0.5).div(texWidth);
-        const u1 = float(layerIndex).mul(2.0).add(1.5).div(texWidth);
+        // Layer 0 config from data texture
+        const texWidth = float(256.0);
+        const u0 = float(0.5).div(texWidth);
+        const u1 = float(1.5).div(texWidth);
 
         const pixel0 = texture(layerDataTexture, vec2(u0, 0.5));
         const pixel1 = texture(layerDataTexture, vec2(u1, 0.5));
 
         const mixFactor = pixel0.r;
         const blendMode = pixel0.g;
-        const layerRGB = vec3(pixel0.b, pixel0.a, pixel1.r);
-        const occlusionDistance = pixel1.g;
+        const tintColor = vec3(pixel0.b, pixel0.a, pixel1.r);
 
-        // Unpack useObjectColor and objectColorMix
-        const packedValue = pixel1.a;
-        const useObjectColor = packedValue.greaterThanEqual(1.0);
-        const objectColorMix = packedValue.sub(packedValue.floor()).mul(10000.0);
-
-        // Blend highlight color with object color
-        const highlightColor = useObjectColor
-            ? layerRGB.mix(layerColor.rgb, objectColorMix)
-            : layerRGB;
-
-        // Depth comparison
-        const currentDepth = float(inputColor.a); // depth from main pass (unused, simplified)
-        const isLayerInFront = layerDepth.lessThan(0.999).and(layerDepth.greaterThan(0.001));
-
-        // Linearize depth
-        const linearLayerDepth = float(2.0)
-            .mul(nearUniform)
-            .div(farUniform.add(nearUniform).sub(layerDepth.mul(farUniform.sub(nearUniform))));
-
-        // Apply blend modes
-        const mixBlend = inputColor.rgb.mix(highlightColor, mixFactor);
-        const addBlend = inputColor.rgb.add(highlightColor.mul(mixFactor));
-        const multiplyBlend = inputColor.rgb.mix(inputColor.rgb.mul(highlightColor), mixFactor);
-        const screenBlend = inputColor.rgb.mix(
-            float(1.0).sub(float(1.0).sub(inputColor.rgb).mul(float(1.0).sub(highlightColor))),
+        // Blend modes
+        const mixBlend = color.rgb.mix(tintColor, mixFactor);
+        const addBlend = color.rgb.add(tintColor.mul(mixFactor));
+        const multiplyBlend = color.rgb.mix(color.rgb.mul(tintColor), mixFactor);
+        const screenBlend = color.rgb.mix(
+            float(1.0).sub(float(1.0).sub(color.rgb).mul(float(1.0).sub(tintColor))),
             mixFactor
         );
 
-        // Select blend mode
         const blendedColor = blendMode
             .lessThan(0.5)
             .select(
@@ -86,8 +55,7 @@ export const translucentLayer = (
                     .select(addBlend, blendMode.lessThan(2.5).select(multiplyBlend, screenBlend))
             );
 
-        // Final: if has layer, use blended color; otherwise original
-        const result = hasLayer.select(vec4(blendedColor, inputColor.a), color);
+        const result = hasObject.select(vec4(blendedColor, color.a), color);
 
         return result;
     })();

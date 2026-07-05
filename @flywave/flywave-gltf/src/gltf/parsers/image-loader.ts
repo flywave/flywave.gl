@@ -13,14 +13,14 @@ export interface LoadedImage {
     mimeType: string;
 }
 
-const webglRenderInstance = new WebGLRenderer();
+// const webglRenderInstance = new WebGLRenderer();
 
 export class ImageLoader {
     private ktx2Loader?: any;
     private ddsLoader?: DDSLoader;
     private tgaLoader?: TGALoader;
 
-    constructor(webglRender: WebGLRenderer = webglRenderInstance) {
+    constructor(webglRender?: WebGLRenderer) {
         // 初始化加载器，但KTX2Loader在没有renderer时可能无法工作
         // 我们会处理这种情况
         try {
@@ -31,7 +31,7 @@ export class ImageLoader {
             // this.ktx2Loader = new KTX2Loader();
             // 设置transcoder路径
             // this.ktx2Loader.setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/basis/');
-            // this.ktx2Loader.detectSupport(webglRender);
+            // this.ktx2Loader.detectSupport(webglRender||webglRenderInstance);
         } catch (error) {
             console.warn("Some Three.js loaders failed to initialize:", error);
         }

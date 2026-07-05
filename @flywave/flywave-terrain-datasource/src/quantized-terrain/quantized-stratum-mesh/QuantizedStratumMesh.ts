@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
-
-import "../quantized-mesh/Shader";
-
+ 
 import {
     type GeoBox,
     ProjectionType,

@@ -55,12 +55,12 @@ function getCacheConfig(name: string): CacheConfig | false {
     return process.env.NO_HARD_SOURCE_CACHE
         ? false
         : {
-            type: "filesystem",
-            buildDependencies: {
-                config: [__filename]
-            },
-            name: "flywave-examples_" + name
-        };
+              type: "filesystem",
+              buildDependencies: {
+                  config: [__filename]
+              },
+              name: "flywave-examples_" + name
+          };
 }
 
 // 定义flywave-webpack-utils配置
@@ -80,16 +80,7 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
             "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src/index.ts")
         }
     },
-    externals: [
-        {
-            three: {
-                commonjs: "three",
-                commonjs2: "three",
-                amd: "three",
-                module: "three"
-            }
-        }
-    ],
+    externals: ["three", "three/webgpu", "three/tsl"],
     output: {
         path: path.join(process.cwd(), "dist/examples"),
         filename: "[name].bundle.js",
@@ -116,7 +107,7 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
             FLYWAVE_BASE_URL: JSON.stringify("./"),
             CESIUM_ION_TOKEN: JSON.stringify(
                 process.env.CESIUM_ION_TOKEN ||
-                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOTFkYWMzNC1mYjI1LTRlYTYtYTc2ZS04NWI1MTU2OTVlMDYiLCJpZCI6Mzg2NzksImlhdCI6MTY0MTE5NTAyNn0.4xsIJgYTK81yhRu67GG0x2FMit6zpYFCWsvWSwiFVV4"
+                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOTFkYWMzNC1mYjI1LTRlYTYtYTc2ZS04NWI1MTU2OTVlMDYiLCJpZCI6Mzg2NzksImlhdCI6MTY0MTE5NTAyNn0.4xsIJgYTK81yhRu67GG0x2FMit6zpYFCWsvWSwiFVV4"
             )
         })
     ]
@@ -252,7 +243,7 @@ const exampleDefs = Object.keys(allEntries).reduce(function (
     r[entry + ".html"] = path.relative(__dirname, allEntries[entry]);
     return r;
 },
-    {});
+{});
 
 interface CopyPattern {
     from: string;

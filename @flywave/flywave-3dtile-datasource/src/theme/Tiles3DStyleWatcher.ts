@@ -9,6 +9,7 @@ import {
 import { type StyleSetOptions } from "@flywave/flywave-datasource-protocol/StyleSetEvaluator";
 import { type IMapRenderingManager } from "@flywave/flywave-mapview";
 import * as THREE from "three";
+import { type MeshStandardNodeMaterial } from "three/webgpu";
 
 import { type ITile, Tile } from "../base/Tile";
 import { B3DMBatchMaterial } from "../materials/B3DMBatchMaterial";
@@ -483,7 +484,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
         let batchMaterials = this.m_appliedMaterials.get(tileId);
         const isCached = !!batchMaterials;
         if (!batchMaterials) {
-            batchMaterials = tile!.cached.materials.map((origin: THREE.MeshStandardMaterial) => {
+            batchMaterials = tile!.cached.materials.map((origin: MeshStandardNodeMaterial) => {
                 const batchMaterial = new B3DMBatchMaterial({
                     materialParams: {
                         ...this.theme?.materialParameters,
@@ -493,8 +494,6 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                         roughnessMap: origin.roughnessMap,
                         metalnessMap: origin.metalnessMap,
                         emissive: origin.emissive,
-                        envMap: origin.envMap,
-                        envMapIntensity: origin.envMapIntensity,
                         transparent: true,
                         depthWrite: true,
                         metalness: origin.metalness,
@@ -617,7 +616,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                         return null;
                     }
 
-                    const originalMaterial = targetMesh.material as THREE.MeshStandardMaterial;
+                    const originalMaterial = targetMesh.material as MeshStandardNodeMaterial;
 
                     const batchMaterial = new B3DMBatchMaterial({
                         materialParams: {
@@ -628,8 +627,6 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                             roughnessMap: originalMaterial.roughnessMap,
                             metalnessMap: originalMaterial.metalnessMap,
                             emissive: originalMaterial.emissive,
-                            envMap: originalMaterial.envMap,
-                            envMapIntensity: originalMaterial.envMapIntensity,
                             transparent: true,
                             depthWrite: true,
                             metalness: originalMaterial.metalness,
@@ -1065,7 +1062,17 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
             tile.cached.scene.traverse((child: THREE.Object3D) => {
                 if (child.type === "Mesh") {
                     const mesh = child as THREE.Mesh;
-                    // Save original material for restoration
+                    if (
+                        mesh.geometry &&
+                        this.m_customAttributeConfig.batchIdAttributeName !== "_BATCHID"
+                    ) {
+                        const attr = mesh.geometry.getAttribute(
+                            this.m_customAttributeConfig.batchIdAttributeName
+                        );
+                        if (attr && !mesh.geometry.getAttribute("_BATCHID")) {
+                            mesh.geometry.setAttribute("_BATCHID", attr);
+                        }
+                    }
                     if (!mesh.userData.originalMaterial) {
                         mesh.userData.originalMaterial = mesh.material;
                     }

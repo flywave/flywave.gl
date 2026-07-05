@@ -1,21 +1,5 @@
 // @ts-nocheck
-import {
-    Color,
-    DataTexture,
-    FloatType,
-    RGBAFormat,
-    LinearFilter,
-    type Object3D,
-    type Scene,
-    type Camera,
-    type WebGLRenderer,
-    RenderTarget,
-    DepthTexture,
-    ShaderMaterial
-} from "three";
-import { Fn, texture, uniform, vec4, vec3, float, uv, Loop, int } from "three/tsl";
-import type { Renderer } from "three/webgpu";
-
+import { Color, DataTexture, FloatType, RGBAFormat, LinearFilter, Scene, type Object3D } from "three";
 import { ITranslucentLayerConfig } from "@flywave/flywave-datasource-protocol";
 
 interface InternalLayerConfig extends ITranslucentLayerConfig {
@@ -32,32 +16,32 @@ const BLEND_MODE_MAP: Record<string, number> = {
 const PIXELS_PER_LAYER = 2;
 const LAYERS_PER_ROW = 128;
 
-export class TranslucentLayerEffect {
-    private readonly renderer: Renderer;
-    private readonly scene: Scene;
-    private readonly camera: Camera;
+/** Object3D.layers bit for translucent objects (bit 10) */
+export const TRANSLUCENT_LAYER_BIT = 10;
 
+/**
+ * Data manager for translucent layer effect.
+ *
+ * Objects registered via `addObject` get bit 10 enabled on their layers mask.
+ * The ViewRenderManager creates a second `pass()` node using a camera that
+ * only sees layer bit 10. This second pass has its own depth buffer, so
+ * terrain does NOT occlude translucent objects — underground portions are
+ * fully visible. The two pass outputs are blended in post-processing.
+ *
+ * Zero modifications to any material. Zero shader recompilations.
+ */
+export class TranslucentLayerEffect {
     private readonly layers: Map<string, InternalLayerConfig> = new Map();
     private readonly layerIndices: Map<string, number> = new Map();
     private nextLayerIndex: number = 0;
 
     private layerDataTexture: DataTexture;
-    private layerIDMaterial: ShaderMaterial;
-
-    private readonly normalObjects: Set<Object3D> = new Set();
-    private readonly backgroundObjects: Set<Object3D> = new Set();
-
-    private layerIDRT?: RenderTarget;
-    private layerColorRT?: RenderTarget;
-
     private needsLayerTextureUpdate: boolean = false;
 
-    constructor(renderer: Renderer, scene: Scene, camera: Camera) {
-        this.renderer = renderer;
-        this.scene = scene;
-        this.camera = camera;
+    private readonly registeredObjects: Set<Object3D> = new Set();
+
+    constructor() {
         this.layerDataTexture = this.createLayerDataTexture();
-        this.layerIDMaterial = this.createLayerIDMaterial();
     }
 
     private createLayerDataTexture(): DataTexture {
@@ -70,47 +54,7 @@ export class TranslucentLayerEffect {
         return tex;
     }
 
-    private createLayerIDMaterial(): ShaderMaterial {
-        return new ShaderMaterial({
-            uniforms: { layerIndex: { value: -1.0 } },
-            vertexShader: `
-                uniform float layerIndex;
-                varying float vLayerIndex;
-                void main() {
-                    vLayerIndex = layerIndex;
-                    #include <begin_vertex>
-                    #include <project_vertex>
-                }
-            `,
-            fragmentShader: `
-                varying float vLayerIndex;
-                void main() {
-                    if (vLayerIndex < 0.0) {
-                        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
-                    } else {
-                        gl_FragColor = vec4((vLayerIndex + 1.0) / 256.0, 0.0, 0.0, 1.0);
-                    }
-                }
-            `,
-            depthTest: true,
-            depthWrite: true
-        });
-    }
-
-    private ensureRenderTargets(width: number, height: number): void {
-        if (this.layerIDRT == null) {
-            this.layerIDRT = new RenderTarget(width, height, { type: FloatType });
-            this.layerColorRT = new RenderTarget(width, height, {
-                type: FloatType,
-                depthTexture: new DepthTexture(width, height)
-            });
-        } else {
-            this.layerIDRT.setSize(width, height);
-            this.layerColorRT!.setSize(width, height);
-        }
-    }
-
-    private updateLayerDataTexture(): void {
+    private flushDataTexture(): void {
         if (!this.needsLayerTextureUpdate) return;
         const arr = this.layerDataTexture.image.data as Float32Array;
         arr.fill(0);
@@ -176,98 +120,30 @@ export class TranslucentLayerEffect {
     }
 
     addObject(object: Object3D, layerId: string): void {
+        if (this.registeredObjects.has(object)) return;
         if (!this.layers.has(layerId)) {
             this.addLayer(layerId);
         }
-        const config = this.layers.get(layerId)!;
-        object.userData.__layerId = layerId;
-        object.userData.__layerIndex = this.layerIndices.get(layerId)!;
-        if (config.mode === "background") {
-            this.backgroundObjects.add(object);
-        } else {
-            this.normalObjects.add(object);
-        }
+        object.traverse(child => {
+            child.layers.enable(TRANSLUCENT_LAYER_BIT);
+        });
+        this.registeredObjects.add(object);
     }
 
     removeObject(object: Object3D): void {
-        this.normalObjects.delete(object);
-        this.backgroundObjects.delete(object);
-        delete object.userData.__layerId;
-        delete object.userData.__layerIndex;
+        if (!this.registeredObjects.has(object)) return;
+        object.traverse(child => {
+            child.layers.disable(TRANSLUCENT_LAYER_BIT);
+        });
+        this.registeredObjects.delete(object);
     }
 
-    setSize(width: number, height: number): void {
-        this.ensureRenderTargets(width, height);
+    get hasObjects(): boolean {
+        return this.registeredObjects.size > 0;
     }
 
-    /**
-     * Render translucent objects to layer RTs. Called before the main pipeline render.
-     */
-    renderLayerPasses(): void {
-        this.updateLayerDataTexture();
-        const total = this.normalObjects.size + this.backgroundObjects.size;
-        if (total === 0) return;
-
-        const canvas = (this.renderer as unknown as { domElement: HTMLCanvasElement }).domElement;
-        const w = canvas?.clientWidth || 1;
-        const h = canvas?.clientHeight || 1;
-        this.ensureRenderTargets(w, h);
-
-        const allObjects = [...this.normalObjects, ...this.backgroundObjects];
-
-        const savedOverride = this.scene.overrideMaterial;
-        const savedBg = this.scene.background;
-        const savedAutoClear = (this.renderer as unknown as { autoClear: boolean }).autoClear;
-        const r = this.renderer as unknown as {
-            setRenderTarget: (rt: unknown) => void;
-            render: (s: unknown, c: unknown) => void;
-            autoClear: boolean;
-            setClearColor: (c: number, a: number) => void;
-        };
-
-        try {
-            r.autoClear = true;
-            this.scene.background = null;
-
-            // Pass 1: Layer ID
-            this.scene.overrideMaterial = this.layerIDMaterial;
-            r.setRenderTarget(this.layerIDRT);
-            r.setClearColor(0x000000, 0);
-
-            for (const obj of allObjects) {
-                obj.userData.__renderingLayerID = true;
-                const idx = obj.userData.__layerIndex ?? -1;
-                this.layerIDMaterial.uniforms.layerIndex.value = idx;
-                this.layerIDMaterial.uniformsNeedUpdate = true;
-                r.render(this.scene, this.camera);
-            }
-
-            // Pass 2: Color + Depth
-            this.scene.overrideMaterial = null;
-            r.setRenderTarget(this.layerColorRT);
-            r.setClearColor(0x000000, 0);
-            r.render(this.scene, this.camera);
-        } finally {
-            this.scene.overrideMaterial = savedOverride;
-            this.scene.background = savedBg;
-            r.autoClear = savedAutoClear;
-            r.setRenderTarget(null);
-        }
-    }
-
-    getLayerIDTexture() {
-        return this.layerIDRT?.texture ?? null;
-    }
-
-    getLayerColorTexture() {
-        return this.layerColorRT?.texture ?? null;
-    }
-
-    getLayerDepthTexture() {
-        return this.layerColorRT?.depthTexture ?? null;
-    }
-
-    getLayerDataTexture() {
+    getLayerDataTexture(): DataTexture {
+        this.flushDataTexture();
         return this.layerDataTexture;
     }
 
@@ -275,13 +151,20 @@ export class TranslucentLayerEffect {
         return this.nextLayerIndex;
     }
 
+    setSize(_width: number, _height: number): void {}
+    renderLayerPasses(): void {}
+    getLayerIDTexture() {
+        return null;
+    }
+
     dispose(): void {
-        this.layerIDRT?.dispose();
-        this.layerColorRT?.dispose();
+        for (const obj of this.registeredObjects) {
+            obj.traverse(child => {
+                child.layers.disable(TRANSLUCENT_LAYER_BIT);
+            });
+        }
         this.layerDataTexture.dispose();
-        this.layerIDMaterial.dispose();
-        this.normalObjects.clear();
-        this.backgroundObjects.clear();
+        this.registeredObjects.clear();
         this.layers.clear();
         this.layerIndices.clear();
     }

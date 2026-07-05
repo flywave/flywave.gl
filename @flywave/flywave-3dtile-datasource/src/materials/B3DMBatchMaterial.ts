@@ -16,11 +16,9 @@ import {
     vec2,
     vec3,
     vec4,
-    uv,
     varying,
     positionLocal,
     mix,
-    max,
     clamp,
     greaterThanEqual
 } from "three/tsl";
@@ -28,17 +26,117 @@ import {
 import { type BatchAnimation } from "../TileRenderDataSource";
 import { BatchAnimationManager } from "./BatchAnimationManager";
 
-interface B3DMBatchMaterialUniforms {
-    styleTexture: { value: THREE.DataTexture | null };
-    textureWidth: { value: number };
-    textureHeight: { value: number };
-    animationTexture: { value: THREE.DataTexture | null };
-    animationTextureWidth: { value: number };
-    animationTextureHeight: { value: number };
-    uPolygonOffsetFactor: { value: number };
-    uPolygonOffsetUnits: { value: number };
-    isRenderingDepth: { value: boolean };
-}
+// ====================================================================
+// Module-level dummy texture
+// ====================================================================
+
+/** Default dummy texture: white with full opacity, zero offset */
+const _dummyTex = new THREE.DataTexture(
+    new Float32Array([1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1]),
+    1,
+    1,
+    THREE.RGBAFormat,
+    THREE.FloatType
+);
+_dummyTex.needsUpdate = true;
+
+// ====================================================================
+// Module-level shared TSL nodes with onObjectUpdate
+// ====================================================================
+
+const _styleTex = texture(_dummyTex);
+_styleTex.onObjectUpdate(({ material }) => material.styleTexture);
+
+const _animTex = texture(_dummyTex);
+_animTex.onObjectUpdate(({ material }) => material.animationTexture);
+
+const _texW = uniform(1).onObjectUpdate(({ material }) => material.textureWidth);
+const _texH = uniform(1).onObjectUpdate(({ material }) => material.textureHeight);
+const _animTexW = uniform(1).onObjectUpdate(({ material }) => material.animationTextureWidth);
+const _animTexH = uniform(1).onObjectUpdate(({ material }) => material.animationTextureHeight);
+
+// ====================================================================
+// Shared shader nodes (built once, reused by all instances)
+// ====================================================================
+
+const vBatchColor = varying(vec3(1), "vBatchColor");
+const vBatchOpacity = varying(float(1), "vBatchOpacity");
+const vBatchMetalness = varying(float(0), "vBatchMetalness");
+const vBatchRoughness = varying(float(1), "vBatchRoughness");
+const vBatchEmissive = varying(vec3(0), "vBatchEmissive");
+const vBatchVisible = varying(float(1), "vBatchVisible");
+
+const batchOffsetNode = Fn(() => {
+    const batchId = attribute("_BATCHID").round();
+
+    const animU = float(0.5).div(_animTexW);
+    const animV = batchId.add(0.5).div(_animTexH);
+    const progress = texture(_animTex, vec2(animU, animV)).r;
+
+    const v = batchId.add(0.5).div(_texH);
+
+    const col0 = texture(_styleTex, vec2(float(0.5).div(_texW), v));
+    const col1 = texture(_styleTex, vec2(float(1.5).div(_texW), v));
+    const col2 = texture(_styleTex, vec2(float(2.5).div(_texW), v));
+    const col3 = texture(_styleTex, vec2(float(3.5).div(_texW), v));
+    const col4 = texture(_styleTex, vec2(float(4.5).div(_texW), v));
+    const col5 = texture(_styleTex, vec2(float(5.5).div(_texW), v));
+    const col6 = texture(_styleTex, vec2(float(6.5).div(_texW), v));
+
+    const startColor = col0.rgb;
+    const startOpacity = col0.a;
+    const startOffset = col1.xyz;
+    const endOffsetX = col1.w;
+    const endOffsetYZ = col2.xy;
+    const endOpacity = col2.z;
+    const visible = col2.w;
+    const endColor = col3.rgb;
+    const hasTransition = col3.a;
+    const startMetalness = col4.r;
+    const startRoughness = col4.g;
+    const endMetalness = col4.b;
+    const endRoughness = col4.a;
+    const startEmissive = col5.rgb;
+    const endEmissive = col6.rgb;
+
+    const endOffset = vec3(endOffsetX, endOffsetYZ.x, endOffsetYZ.y);
+
+    const p = clamp(progress, float(0), float(1));
+    const tMask = greaterThanEqual(hasTransition, float(0.5)).toFloat();
+
+    const blendedColor = mix(startColor, endColor, p);
+    const blendedOffset = mix(startOffset, endOffset, p);
+    const blendedOpacity = mix(startOpacity, endOpacity, p);
+    const blendedMetalness = mix(startMetalness, endMetalness, p);
+    const blendedRoughness = mix(startRoughness, endRoughness, p);
+    const blendedEmissive = mix(startEmissive, endEmissive, p);
+
+    const finalColor = mix(startColor, blendedColor, tMask);
+    const finalOffset = mix(startOffset, blendedOffset, tMask);
+    const finalOpacity = mix(startOpacity, blendedOpacity, tMask);
+    const finalMetalness = mix(startMetalness, blendedMetalness, tMask);
+    const finalRoughness = mix(startRoughness, blendedRoughness, tMask);
+    const finalEmissive = mix(startEmissive, blendedEmissive, tMask);
+
+    vBatchColor.assign(finalColor);
+    vBatchOpacity.assign(finalOpacity);
+    vBatchMetalness.assign(finalMetalness);
+    vBatchRoughness.assign(finalRoughness);
+    vBatchEmissive.assign(finalEmissive);
+    vBatchVisible.assign(visible);
+
+    return finalOffset;
+})();
+
+const _positionNode = positionLocal.add(batchOffsetNode.toVertexStage());
+const _colorNode = vec4(vBatchColor, vBatchOpacity);
+const _metalnessNode = vBatchMetalness;
+const _roughnessNode = vBatchRoughness;
+const _emissiveNode = vBatchEmissive;
+
+// ====================================================================
+// Types
+// ====================================================================
 
 interface ExtendedBatchStyle extends Tile3DBatchMeshTechniqueParams {
     highlighted?: boolean;
@@ -65,162 +163,48 @@ interface VisualStyle {
     value: number;
 }
 
+// ====================================================================
+// B3DMBatchMaterial
+// ====================================================================
+
+/**
+ * Batch material for B3DM (Batched 3D Model) rendering with per-batch styling.
+ *
+ * Uses module-level shared TSL nodes with onObjectUpdate to ensure the shader
+ * is compiled only once regardless of how many material instances exist.
+ * Per-instance data (style texture, animation texture, dimensions) is read
+ * from public properties at render time.
+ */
 class B3DMBatchMaterial extends MeshStandardNodeMaterial {
     private _batchStyles: Map<number, ExtendedBatchStyle> = new Map();
     private _styleTexture: THREE.DataTexture | null = null;
-    private readonly _idAttributeName: string;
+    private _animationTexture: THREE.DataTexture | null = null;
     private readonly _animationManager: BatchAnimationManager;
 
-    public uniforms: B3DMBatchMaterialUniforms = {
-        styleTexture: { value: null },
-        textureWidth: { value: 0 },
-        textureHeight: { value: 0 },
-        animationTexture: { value: null },
-        animationTextureWidth: { value: 0 },
-        animationTextureHeight: { value: 0 },
-        uPolygonOffsetFactor: { value: 0 },
-        uPolygonOffsetUnits: { value: 0 },
-        isRenderingDepth: { value: false }
-    };
-
-    private static createDummyTexture(): THREE.DataTexture {
-        const tex = new THREE.DataTexture(
-            new Float32Array([0, 0, 0, 1, 0, 0, 0, 1]),
-            1,
-            1,
-            THREE.RGBAFormat,
-            THREE.FloatType
-        );
-        tex.needsUpdate = true;
-        return tex;
-    }
-
-    private readonly _dummyTexture = B3DMBatchMaterial.createDummyTexture();
-    private readonly _styleTexNode = texture(this._dummyTexture);
-    private readonly _animTexNode = texture(this._dummyTexture);
-    private readonly _texWidthUniform = uniform(1);
-    private readonly _texHeightUniform = uniform(1);
-    private readonly _animTexWidthUniform = uniform(1);
-    private readonly _animTexHeightUniform = uniform(1);
-
-    private _tslNodesBuilt = false;
+    // --- Properties read by onObjectUpdate callbacks ---
+    public styleTexture: THREE.Texture = _dummyTex;
+    public animationTexture: THREE.Texture = _dummyTex;
+    public textureWidth: number = 1;
+    public textureHeight: number = 1;
+    public animationTextureWidth: number = 1;
+    public animationTextureHeight: number = 1;
 
     constructor(
         params: {
-            materialParams?: THREE.MeshStandardMaterialParameters;
+            materialParams?: ConstructorParameters<typeof MeshStandardNodeMaterial>[0];
             batchIdAttributeName?: string;
             animation?: BatchAnimation;
         } = {}
     ) {
-        const { materialParams = {}, batchIdAttributeName = "_BATCHID", animation } = params;
+        const { materialParams = {}, animation } = params;
         super(materialParams);
-        this._idAttributeName = batchIdAttributeName;
         this._animationManager = new BatchAnimationManager(animation);
-        this.buildTslNodes();
-    }
 
-    private buildTslNodes(): void {
-        if (this._tslNodesBuilt) return;
-        this._tslNodesBuilt = true;
-
-        const styleTex = this._styleTexNode;
-        const texW = this._texWidthUniform;
-        const texH = this._texHeightUniform;
-        const animTex = this._animTexNode;
-        const animW = this._animTexWidthUniform;
-        const animH = this._animTexHeightUniform;
-        const idAttrName = this._idAttributeName;
-
-        // Varyings for passing batch style from vertex to fragment
-        const vBatchColor = varying(vec3(0), "vBatchColor");
-        const vBatchOpacity = varying(float(1), "vBatchOpacity");
-        const vBatchMetalness = varying(float(0), "vBatchMetalness");
-        const vBatchRoughness = varying(float(1), "vBatchRoughness");
-        const vBatchEmissive = varying(vec3(0), "vBatchEmissive");
-        const vBatchVisible = varying(float(1), "vBatchVisible");
-
-        // Vertex stage: read batchId, lookup style texture, apply offset
-        const batchOffsetNode = Fn(() => {
-            const batchId = attribute(idAttrName).round();
-
-            const animU = float(0.5).div(animW);
-            const animV = batchId.add(0.5).div(animH);
-            const progress = texture(animTex, vec2(animU, animV)).r;
-
-            const v = batchId.add(0.5).div(texH);
-
-            const u0 = float(0.5).div(texW);
-            const col0 = texture(styleTex, vec2(u0, v));
-
-            const u1 = float(1.5).div(texW);
-            const col1 = texture(styleTex, vec2(u1, v));
-
-            const u2 = float(2.5).div(texW);
-            const col2 = texture(styleTex, vec2(u2, v));
-
-            const u3 = float(3.5).div(texW);
-            const col3 = texture(styleTex, vec2(u3, v));
-
-            const u4 = float(4.5).div(texW);
-            const col4 = texture(styleTex, vec2(u4, v));
-
-            const u5 = float(5.5).div(texW);
-            const col5 = texture(styleTex, vec2(u5, v));
-
-            const u6 = float(6.5).div(texW);
-            const col6 = texture(styleTex, vec2(u6, v));
-
-            const startColor = col0.rgb;
-            const startOpacity = col0.a;
-            const startOffset = col1.xyz;
-            const endOffsetX = col1.w;
-            const endOffsetYZ = col2.xy;
-            const endOpacity = col2.z;
-            const visible = col2.w;
-            const endColor = col3.rgb;
-            const hasTransition = col3.a;
-            const startMetalness = col4.r;
-            const startRoughness = col4.g;
-            const endMetalness = col4.b;
-            const endRoughness = col4.a;
-            const startEmissive = col5.rgb;
-            const endEmissive = col6.rgb;
-
-            const endOffset = vec3(endOffsetX, endOffsetYZ.x, endOffsetYZ.y);
-
-            const p = clamp(progress, float(0), float(1));
-            const tMask = greaterThanEqual(hasTransition, float(0.5)).toFloat();
-
-            const blendedColor = mix(startColor, endColor, p);
-            const blendedOffset = mix(startOffset, endOffset, p);
-            const blendedOpacity = mix(startOpacity, endOpacity, p);
-            const blendedMetalness = mix(startMetalness, endMetalness, p);
-            const blendedRoughness = mix(startRoughness, endRoughness, p);
-            const blendedEmissive = mix(startEmissive, endEmissive, p);
-
-            const finalColor = mix(startColor, blendedColor, tMask);
-            const finalOffset = mix(startOffset, blendedOffset, tMask);
-            const finalOpacity = mix(startOpacity, blendedOpacity, tMask);
-            const finalMetalness = mix(startMetalness, blendedMetalness, tMask);
-            const finalRoughness = mix(startRoughness, blendedRoughness, tMask);
-            const finalEmissive = mix(startEmissive, blendedEmissive, tMask);
-
-            vBatchColor.assign(finalColor);
-            vBatchOpacity.assign(finalOpacity);
-            vBatchMetalness.assign(finalMetalness);
-            vBatchRoughness.assign(finalRoughness);
-            vBatchEmissive.assign(finalEmissive);
-            vBatchVisible.assign(visible);
-
-            return finalOffset;
-        })();
-
-        this.positionNode = positionLocal.add(batchOffsetNode.toVertexStage());
-
-        this.colorNode = vec4(vBatchColor, vBatchOpacity);
-        this.metalnessNode = vBatchMetalness;
-        this.roughnessNode = vBatchRoughness;
-        this.emissiveNode = vBatchEmissive;
+        this.positionNode = _positionNode;
+        this.colorNode = _colorNode;
+        this.metalnessNode = _metalnessNode;
+        this.roughnessNode = _roughnessNode;
+        this.emissiveNode = _emissiveNode;
     }
 
     setBatchStyle(batchId: number, style: ExtendedBatchStyle): void {
@@ -293,21 +277,13 @@ class B3DMBatchMaterial extends MeshStandardNodeMaterial {
         object: THREE.Object3D,
         group: THREE.Group
     ): void {
-        if (this.polygonOffset) {
-            this.uniforms.uPolygonOffsetFactor.value = this.polygonOffsetFactor;
-            this.uniforms.uPolygonOffsetUnits.value = this.polygonOffsetUnits;
-        } else {
-            this.uniforms.uPolygonOffsetFactor.value = 0;
-            this.uniforms.uPolygonOffsetUnits.value = 0;
-        }
-
         if (this._animationManager.isPlaying) {
             this._animationManager.update();
-            this._updateAnimationUniforms();
+            this._updateAnimationTexture();
         }
     }
 
-    private _updateAnimationUniforms(): void {
+    private _updateAnimationTexture(): void {
         const batchProgresses = this._animationManager.getBatchProgresses();
         const textureWidth = 1;
         const textureHeight = Math.max(batchProgresses.length, 1);
@@ -321,37 +297,27 @@ class B3DMBatchMaterial extends MeshStandardNodeMaterial {
             textureData[index + 3] = 1;
         }
 
-        let animationTexture = this.uniforms.animationTexture.value;
         if (
-            !animationTexture ||
-            animationTexture.image.width !== textureWidth ||
-            animationTexture.image.height !== textureHeight
+            !this._animationTexture ||
+            this._animationTexture.image.width !== textureWidth ||
+            this._animationTexture.image.height !== textureHeight
         ) {
-            if (animationTexture) animationTexture.dispose();
-            animationTexture = new THREE.DataTexture(
+            if (this._animationTexture) this._animationTexture.dispose();
+            this._animationTexture = new THREE.DataTexture(
                 textureData,
                 textureWidth,
                 textureHeight,
                 THREE.RGBAFormat,
                 THREE.FloatType
             );
-            animationTexture.needsUpdate = true;
-            this.uniforms.animationTexture.value = animationTexture;
         } else {
-            (animationTexture.image.data as Float32Array).set(textureData);
-            animationTexture.needsUpdate = true;
+            (this._animationTexture.image.data as Float32Array).set(textureData);
         }
+        this._animationTexture.needsUpdate = true;
 
-        this.uniforms.animationTextureWidth.value = textureWidth;
-        this.uniforms.animationTextureHeight.value = textureHeight;
-        this._animTexNode.value = animationTexture;
-        this._animTexWidthUniform.value = textureWidth;
-        this._animTexHeightUniform.value = textureHeight;
-
-        const prevAnimTexture = this.uniforms.animationTexture.value;
-        if (prevAnimTexture !== animationTexture) {
-            this.needsUpdate = true;
-        }
+        this.animationTexture = this._animationTexture;
+        this.animationTextureWidth = textureWidth;
+        this.animationTextureHeight = textureHeight;
     }
 
     private _updateStyleTexture(): void {
@@ -360,7 +326,6 @@ class B3DMBatchMaterial extends MeshStandardNodeMaterial {
         const textureHeight = batchCount;
 
         const textureData = new Float32Array(textureWidth * textureHeight * 4);
-        textureData.fill(0);
 
         this._batchStyles.forEach((batchStyle: ExtendedBatchStyle, batchId: number) => {
             const visualStyle: VisualStyle = this._convertToVisualStyle(batchStyle, batchId);
@@ -420,19 +385,14 @@ class B3DMBatchMaterial extends MeshStandardNodeMaterial {
         );
         this._styleTexture.needsUpdate = true;
 
-        this.uniforms.styleTexture.value = this._styleTexture;
-        this.uniforms.textureWidth.value = textureWidth;
-        this.uniforms.textureHeight.value = textureHeight;
-
-        this._styleTexNode.value = this._styleTexture;
-        this._texWidthUniform.value = textureWidth;
-        this._texHeightUniform.value = textureHeight;
-        this.needsUpdate = true;
+        this.styleTexture = this._styleTexture;
+        this.textureWidth = textureWidth;
+        this.textureHeight = textureHeight;
     }
 
     private _convertToVisualStyle(batchStyle: ExtendedBatchStyle, batchId: number): VisualStyle {
-        let startColor = new THREE.Color(0, 0, 0);
-        let endColor = new THREE.Color(0, 0, 0);
+        let startColor = new THREE.Color(1, 1, 1);
+        let endColor = new THREE.Color(1, 1, 1);
         let hasColorTransition = false;
 
         if (batchStyle.color !== undefined) {
@@ -607,22 +567,14 @@ class B3DMBatchMaterial extends MeshStandardNodeMaterial {
         return obj && typeof obj === "object" && "x" in obj && "y" in obj && "z" in obj;
     }
 
-    public setRenderingDepth(enabled: boolean): void {
-        this.uniforms.isRenderingDepth.value = enabled;
-    }
-
-    public getIsRenderingDepth(): boolean {
-        return this.uniforms.isRenderingDepth.value;
-    }
-
     dispose(): void {
         if (this._styleTexture) {
             this._styleTexture.dispose();
             this._styleTexture = null;
         }
-        if (this.uniforms.animationTexture.value) {
-            this.uniforms.animationTexture.value.dispose();
-            this.uniforms.animationTexture.value = null;
+        if (this._animationTexture) {
+            this._animationTexture.dispose();
+            this._animationTexture = null;
         }
         super.dispose();
     }

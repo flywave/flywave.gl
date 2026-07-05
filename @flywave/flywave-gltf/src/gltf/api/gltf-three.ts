@@ -21,14 +21,12 @@ import {
     LinearFilter,
     LinearMipmapLinearFilter,
     LinearMipmapNearestFilter,
-    LineBasicMaterial,
+    NearestMipmapLinearFilter,
+    NearestMipmapNearestFilter,
     LineSegments,
     Material,
     Matrix4,
     Mesh,
-    MeshStandardMaterial,
-    NearestMipmapLinearFilter,
-    NearestMipmapNearestFilter,
     NumberKeyframeTrack,
     OrthographicCamera,
     PerspectiveCamera,
@@ -44,6 +42,7 @@ import {
     Vector3,
     VectorKeyframeTrack
 } from "three";
+import { LineBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 
 import type {
     AnimationChannel,
@@ -173,8 +172,8 @@ function processMaterials(
 function createDefaultMaterial(
     gltfMaterial: GLTFMaterialPostprocessed,
     textureMap: Map<string, Texture>
-): MeshStandardMaterial {
-    const material = new MeshStandardMaterial({
+): MeshStandardNodeMaterial {
+    const material = new MeshStandardNodeMaterial({
         name: gltfMaterial.name || "",
         side: gltfMaterial.doubleSided ? DoubleSide : FrontSide,
         transparent: gltfMaterial.alphaMode === "BLEND",
@@ -195,7 +194,7 @@ function createDefaultMaterial(
 
 function applyPbrProperties(
     gltfMaterial: GLTFMaterialPostprocessed,
-    material: MeshStandardMaterial,
+    material: MeshStandardNodeMaterial,
     textureMap: Map<string, Texture>
 ): void {
     if (!gltfMaterial.pbrMetallicRoughness) return;
@@ -232,7 +231,7 @@ function applyPbrProperties(
 
 function applyNormalProperties(
     gltfMaterial: GLTFMaterialPostprocessed,
-    material: MeshStandardMaterial,
+    material: MeshStandardNodeMaterial,
     textureMap: Map<string, Texture>
 ): void {
     if (!gltfMaterial.normalTexture) return;
@@ -249,7 +248,7 @@ function applyNormalProperties(
 
 function applyEmissiveProperties(
     gltfMaterial: GLTFMaterialPostprocessed,
-    material: MeshStandardMaterial,
+    material: MeshStandardNodeMaterial,
     textureMap: Map<string, Texture>
 ): void {
     if (gltfMaterial.emissiveTexture) {
@@ -271,7 +270,7 @@ function applyEmissiveProperties(
 
 function applyOcclusionProperties(
     gltfMaterial: GLTFMaterialPostprocessed,
-    material: MeshStandardMaterial,
+    material: MeshStandardNodeMaterial,
     textureMap: Map<string, Texture>
 ): void {
     if (!gltfMaterial.occlusionTexture) return;
@@ -298,8 +297,8 @@ function processMeshes(
         for (const primitive of gltfMesh.primitives) {
             const geometry = createPrimitiveGeometry(primitive);
             const material = primitive.material
-                ? materialMap.get(primitive.material?.id) || new MeshStandardMaterial()
-                : new MeshStandardMaterial();
+                ? materialMap.get(primitive.material?.id) || new MeshStandardNodeMaterial()
+                : new MeshStandardNodeMaterial();
 
             const mesh = createMeshForPrimitive(gltf, primitive, geometry, material, gltfMesh);
             group.add(mesh);
@@ -363,8 +362,8 @@ function createMeshForPrimitive(
     }
 
     if (primitive.mode === 1) {
-        const rawmaterial = material as MeshStandardMaterial;
-        const lineMaterial = new LineBasicMaterial();
+        const rawmaterial = material as MeshStandardNodeMaterial;
+        const lineMaterial = new LineBasicNodeMaterial();
         Material.prototype.copy.call(lineMaterial, material);
         lineMaterial.color.copy(rawmaterial.color);
         lineMaterial.map = rawmaterial.map;
@@ -374,18 +373,21 @@ function createMeshForPrimitive(
 
     // Check if geometry has vertex colors and set material property accordingly
     if (geometry.attributes.color) {
-        if (material instanceof MeshStandardMaterial || material instanceof LineBasicMaterial) {
+        if (
+            material instanceof MeshStandardNodeMaterial ||
+            material instanceof LineBasicNodeMaterial
+        ) {
             material.vertexColors = true;
         }
     }
 
     const isSkinned = primitive.attributes.JOINTS_0 && primitive.attributes.WEIGHTS_0;
     const mesh = isSkinned
-        ? new SkinnedMesh(geometry, material as MeshStandardMaterial)
-        : new Mesh(geometry, material as MeshStandardMaterial);
+        ? new SkinnedMesh(geometry, material as MeshStandardNodeMaterial)
+        : new Mesh(geometry, material as MeshStandardNodeMaterial);
 
     if (
-        material instanceof MeshStandardMaterial &&
+        material instanceof MeshStandardNodeMaterial &&
         material.aoMap &&
         geometry.attributes.uv &&
         !geometry.attributes.uv1
@@ -394,7 +396,7 @@ function createMeshForPrimitive(
     }
 
     if (
-        material instanceof MeshStandardMaterial &&
+        material instanceof MeshStandardNodeMaterial &&
         material.normalMap &&
         !geometry.attributes.tangent &&
         geometry.attributes.uv &&
@@ -897,17 +899,5 @@ function applyEnvMap(scene: Scene, extras: any, textures: Texture[]): void {
 
     envMap.mapping = EquirectangularReflectionMapping;
     scene.environment = envMap;
-    const envMapIntensity = extras.envMapIntensity ?? 1.0;
-
-    scene.traverse(child => {
-        if ((child as Mesh).isMesh) {
-            const mat = (child as Mesh).material as MeshStandardMaterial;
-            if (mat) {
-                mat.envMap = envMap;
-                mat.envMapIntensity = envMapIntensity;
-                mat.needsUpdate = true;
-            }
-        }
-    });
 }
 export { createThreeSceneFromGLTF, type ConversionOptions };

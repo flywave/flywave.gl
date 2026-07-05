@@ -6,10 +6,10 @@ import {
     type Sphere,
     BufferAttribute,
     BufferGeometry,
-    LineBasicMaterial,
     LineSegments,
     Vector3
 } from "three";
+import { LineBasicNodeMaterial } from "three/webgpu";
 
 const _vector = new Vector3();
 const axes = ["x", "y", "z"] as const;
@@ -49,7 +49,7 @@ export class SphereHelper extends LineSegments {
         geometry.setAttribute("position", new BufferAttribute(new Float32Array(positions), 3));
         geometry.computeBoundingSphere();
 
-        const material = new LineBasicMaterial({
+        const material = new LineBasicNodeMaterial({
             color,
             toneMapped: false
         });

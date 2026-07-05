@@ -99,18 +99,7 @@ const browserConfigs = outputFormats.map(format => {
         },
         optimization: {
             sideEffects: false
-        },
-        // External dependencies configuration to avoid bundling certain libraries
-        externals: [
-            {
-                three: {
-                    commonjs: "three",
-                    commonjs2: "three",
-                    amd: "three",
-                    module: "three"
-                }
-            }
-        ]
+        }, 
     };
 
     // Merge configuration with experimental settings if they exist
