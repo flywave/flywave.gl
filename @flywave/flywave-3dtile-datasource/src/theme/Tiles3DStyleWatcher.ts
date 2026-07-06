@@ -99,6 +99,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
     private m_styleEvaluator: BatchStyleProcessor;
 
     private readonly m_appliedMaterials = new Map<string, B3DMBatchMaterial[]>();
+    private m_hasBatchStyles: boolean = false;
     private readonly m_tileFeatures = new Map<string, B3DMTileFeature | I3DMTileFeature>();
     private readonly m_customAttributeConfig: {
         batchIdAttributeName: string;
@@ -171,6 +172,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
         };
 
         this.m_styleEvaluator = new BatchStyleProcessor(styleSetOptions);
+        this.m_hasBatchStyles = styleSet.length > 0;
 
         this.m_mapRenderingManager?.addTranslucentLayer(
             this.observeId,
@@ -191,6 +193,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      */
     addStyle(style: Style): Style {
         let result = this.styleEvaluator.addStyle(style);
+        this.m_hasBatchStyles = true;
         this.nodifyActiveTiles();
         return result;
     }
@@ -203,6 +206,9 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      */
     removeStyleById(id: string): boolean {
         let result = this.styleEvaluator.removeStyleById(id);
+        if (result && this.styleEvaluator.styleSet.length === 0) {
+            this.m_hasBatchStyles = false;
+        }
         this.nodifyActiveTiles();
         return result;
     }
@@ -267,11 +273,11 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
             this.m_tileFeatures.set(tileId, tileFeature);
 
             // Apply batch rendering material for B3DM format
-            if (this.isB3DMFeature(tileFeature)) {
+            if (this.m_hasBatchStyles && this.isB3DMFeature(tileFeature)) {
                 this.applyB3DMBatchMaterial(tileFeature, tile);
             }
             // Apply instance material for I3DM format
-            else if (this.isI3DMFeature(tileFeature)) {
+            else if (this.m_hasBatchStyles && this.isI3DMFeature(tileFeature)) {
                 this.applyI3DMInstanceMaterial(tileFeature, tile);
             }
 

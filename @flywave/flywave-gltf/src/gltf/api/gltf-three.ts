@@ -177,7 +177,7 @@ function createDefaultMaterial(
         name: gltfMaterial.name || "",
         side: gltfMaterial.doubleSided ? DoubleSide : FrontSide,
         transparent: gltfMaterial.alphaMode === "BLEND",
-        alphaTest: gltfMaterial.alphaMode === "MASK" ? gltfMaterial.alphaCutoff || 0.5 : 0,
+        alphaTest: gltfMaterial.alphaCutoff ?? 0,
         depthWrite: gltfMaterial.alphaMode !== "BLEND",
         roughness: 1.0,
         metalness: 1.0

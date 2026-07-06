@@ -66,73 +66,69 @@ const vBatchRoughness = varying(float(1), "vBatchRoughness");
 const vBatchEmissive = varying(vec3(0), "vBatchEmissive");
 const vBatchVisible = varying(float(1), "vBatchVisible");
 
-const batchOffsetNode = Fn(() => {
-    const batchId = attribute("_BATCHID").round();
+function buildBatchOffsetNode(batchIdAttrName: string) {
+    return Fn(() => {
+        const batchId = attribute(batchIdAttrName).round();
 
-    const animU = float(0.5).div(_animTexW);
-    const animV = batchId.add(0.5).div(_animTexH);
-    const progress = texture(_animTex, vec2(animU, animV)).r;
+        const animU = float(0.5).div(_animTexW);
+        const animV = batchId.add(0.5).div(_animTexH);
+        const progress = texture(_animTex, vec2(animU, animV)).r;
 
-    const v = batchId.add(0.5).div(_texH);
+        const v = batchId.add(0.5).div(_texH);
 
-    const col0 = texture(_styleTex, vec2(float(0.5).div(_texW), v));
-    const col1 = texture(_styleTex, vec2(float(1.5).div(_texW), v));
-    const col2 = texture(_styleTex, vec2(float(2.5).div(_texW), v));
-    const col3 = texture(_styleTex, vec2(float(3.5).div(_texW), v));
-    const col4 = texture(_styleTex, vec2(float(4.5).div(_texW), v));
-    const col5 = texture(_styleTex, vec2(float(5.5).div(_texW), v));
-    const col6 = texture(_styleTex, vec2(float(6.5).div(_texW), v));
+        const col0 = texture(_styleTex, vec2(float(0.5).div(_texW), v));
+        const col1 = texture(_styleTex, vec2(float(1.5).div(_texW), v));
+        const col2 = texture(_styleTex, vec2(float(2.5).div(_texW), v));
+        const col3 = texture(_styleTex, vec2(float(3.5).div(_texW), v));
+        const col4 = texture(_styleTex, vec2(float(4.5).div(_texW), v));
+        const col5 = texture(_styleTex, vec2(float(5.5).div(_texW), v));
+        const col6 = texture(_styleTex, vec2(float(6.5).div(_texW), v));
 
-    const startColor = col0.rgb;
-    const startOpacity = col0.a;
-    const startOffset = col1.xyz;
-    const endOffsetX = col1.w;
-    const endOffsetYZ = col2.xy;
-    const endOpacity = col2.z;
-    const visible = col2.w;
-    const endColor = col3.rgb;
-    const hasTransition = col3.a;
-    const startMetalness = col4.r;
-    const startRoughness = col4.g;
-    const endMetalness = col4.b;
-    const endRoughness = col4.a;
-    const startEmissive = col5.rgb;
-    const endEmissive = col6.rgb;
+        const startColor = col0.rgb;
+        const startOpacity = col0.a;
+        const startOffset = col1.xyz;
+        const endOffsetX = col1.w;
+        const endOffsetYZ = col2.xy;
+        const endOpacity = col2.z;
+        const visible = col2.w;
+        const endColor = col3.rgb;
+        const hasTransition = col3.a;
+        const startMetalness = col4.r;
+        const startRoughness = col4.g;
+        const endMetalness = col4.b;
+        const endRoughness = col4.a;
+        const startEmissive = col5.rgb;
+        const endEmissive = col6.rgb;
 
-    const endOffset = vec3(endOffsetX, endOffsetYZ.x, endOffsetYZ.y);
+        const endOffset = vec3(endOffsetX, endOffsetYZ.x, endOffsetYZ.y);
 
-    const p = clamp(progress, float(0), float(1));
-    const tMask = greaterThanEqual(hasTransition, float(0.5)).toFloat();
+        const p = clamp(progress, float(0), float(1));
+        const tMask = greaterThanEqual(hasTransition, float(0.5)).toFloat();
 
-    const blendedColor = mix(startColor, endColor, p);
-    const blendedOffset = mix(startOffset, endOffset, p);
-    const blendedOpacity = mix(startOpacity, endOpacity, p);
-    const blendedMetalness = mix(startMetalness, endMetalness, p);
-    const blendedRoughness = mix(startRoughness, endRoughness, p);
-    const blendedEmissive = mix(startEmissive, endEmissive, p);
+        const blendedColor = mix(startColor, endColor, p);
+        const blendedOffset = mix(startOffset, endOffset, p);
+        const blendedOpacity = mix(startOpacity, endOpacity, p);
+        const blendedMetalness = mix(startMetalness, endMetalness, p);
+        const blendedRoughness = mix(startRoughness, endRoughness, p);
+        const blendedEmissive = mix(startEmissive, endEmissive, p);
 
-    const finalColor = mix(startColor, blendedColor, tMask);
-    const finalOffset = mix(startOffset, blendedOffset, tMask);
-    const finalOpacity = mix(startOpacity, blendedOpacity, tMask);
-    const finalMetalness = mix(startMetalness, blendedMetalness, tMask);
-    const finalRoughness = mix(startRoughness, blendedRoughness, tMask);
-    const finalEmissive = mix(startEmissive, blendedEmissive, tMask);
+        const finalColor = mix(startColor, blendedColor, tMask);
+        const finalOffset = mix(startOffset, blendedOffset, tMask);
+        const finalOpacity = mix(startOpacity, blendedOpacity, tMask);
+        const finalMetalness = mix(startMetalness, blendedMetalness, tMask);
+        const finalRoughness = mix(startRoughness, blendedRoughness, tMask);
+        const finalEmissive = mix(startEmissive, blendedEmissive, tMask);
 
-    vBatchColor.assign(finalColor);
-    vBatchOpacity.assign(finalOpacity);
-    vBatchMetalness.assign(finalMetalness);
-    vBatchRoughness.assign(finalRoughness);
-    vBatchEmissive.assign(finalEmissive);
-    vBatchVisible.assign(visible);
+        vBatchColor.assign(finalColor);
+        vBatchOpacity.assign(finalOpacity);
+        vBatchMetalness.assign(finalMetalness);
+        vBatchRoughness.assign(finalRoughness);
+        vBatchEmissive.assign(finalEmissive);
+        vBatchVisible.assign(visible);
 
-    return finalOffset;
-})();
-
-const _positionNode = positionLocal.add(batchOffsetNode.toVertexStage());
-const _colorNode = vec4(vBatchColor, vBatchOpacity);
-const _metalnessNode = vBatchMetalness;
-const _roughnessNode = vBatchRoughness;
-const _emissiveNode = vBatchEmissive;
+        return finalOffset;
+    })();
+}
 
 // ====================================================================
 // Types
@@ -189,6 +185,8 @@ class B3DMBatchMaterial extends MeshStandardNodeMaterial {
     public animationTextureWidth: number = 1;
     public animationTextureHeight: number = 1;
 
+    public batchIdAttributeName: string;
+
     constructor(
         params: {
             materialParams?: ConstructorParameters<typeof MeshStandardNodeMaterial>[0];
@@ -198,13 +196,20 @@ class B3DMBatchMaterial extends MeshStandardNodeMaterial {
     ) {
         const { materialParams = {}, animation } = params;
         super(materialParams);
+        this.batchIdAttributeName = params.batchIdAttributeName || "_BATCHID";
         this._animationManager = new BatchAnimationManager(animation);
 
-        this.positionNode = _positionNode;
-        this.colorNode = _colorNode;
-        this.metalnessNode = _metalnessNode;
-        this.roughnessNode = _roughnessNode;
-        this.emissiveNode = _emissiveNode;
+        this._buildShaderNodes();
+    }
+
+    private _buildShaderNodes(): void {
+        const batchOffsetNode = buildBatchOffsetNode(this.batchIdAttributeName);
+
+        this.positionNode = positionLocal.add(batchOffsetNode.toVertexStage());
+        this.colorNode = vec4(vBatchColor, vBatchOpacity);
+        this.metalnessNode = vBatchMetalness;
+        this.roughnessNode = vBatchRoughness;
+        this.emissiveNode = vBatchEmissive;
     }
 
     setBatchStyle(batchId: number, style: ExtendedBatchStyle): void {

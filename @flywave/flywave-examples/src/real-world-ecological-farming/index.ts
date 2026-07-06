@@ -15,7 +15,8 @@ import {
     MapAnchor
 } from "@flywave/flywave.gl";
 import { PolygonMesh } from "./PolygonMesh.js";
-import { WaterMaterial } from "./water.js";
+import { WaterMaterial } from "./water";
+import { MeshBasicNodeMaterial } from "three/webgpu";
 
 // Project configuration constants
 const PROJECT_CONFIG = {
@@ -61,7 +62,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             lights: [
                 {
                     type: "ambient", // Ambient light
-                    intensity: 0.8, // Light intensity
+                    intensity: 0.1, // Light intensity
                     name: "ambientLight", // Light source name
                     color: "#ffffff" // Light source color
                 }
@@ -162,15 +163,13 @@ const addWaterFeatures = async (mapView: MapView): Promise<void> => {
         );
 
         features.forEach(feature => {
-            // Create water material
             const waterMaterial = new WaterMaterial({
-                sunColor: 0xffffff, // Sun color
-                waterColor: 0x336633, // Water color
-                distortionScale: 3.7, // Distortion scale
-                alpha: 0.6 // Transparency
+                sunColor: 0xffffff,
+                waterColor: 0x336633,
+                distortionScale: 3.7,
+                alpha: 0.6
             });
 
-            // Create polygon mesh
             const mesh = new PolygonMesh(
                 feature,
                 sphereProjection,

@@ -225,8 +225,6 @@ export class SplatMesh extends Mesh {
     ): void {
         this._frameIdThisUpdate = renderer.info.render.frame;
         this.sortDataAsync(camera);
-
-        SplatMaterial.updateUniforms(renderer, camera, this);
         super.onBeforeRender(renderer, scene, camera, geometry, material, group);
     }
 
