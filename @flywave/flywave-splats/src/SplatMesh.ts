@@ -16,14 +16,12 @@ import {
     type Material,
     type PixelFormat,
     type Scene,
-    type WebGLRenderer,
     Box3,
     ClampToEdgeWrapping,
     DataTexture,
     DataUtils,
     FloatType,
     HalfFloatType,
-    LinearFilter,
     Matrix4,
     Mesh,
     NearestFilter,
@@ -218,7 +216,7 @@ export class SplatMesh extends Mesh {
     }
 
     override onBeforeRender(
-        renderer: WebGLRenderer,
+        renderer: any,
         scene: Scene,
         camera: Camera,
         geometry: BufferGeometry,
@@ -532,8 +530,8 @@ export class SplatMesh extends Mesh {
                 UVMapping,
                 ClampToEdgeWrapping,
                 ClampToEdgeWrapping,
-                LinearFilter,
-                LinearFilter
+                NearestFilter,
+                NearestFilter
             );
             texture.generateMipmaps = false;
             texture.needsUpdate = true;
@@ -555,8 +553,8 @@ export class SplatMesh extends Mesh {
                 UVMapping,
                 ClampToEdgeWrapping,
                 ClampToEdgeWrapping,
-                LinearFilter,
-                LinearFilter
+                NearestFilter,
+                NearestFilter
             );
             texture.generateMipmaps = false;
             texture.needsUpdate = true;
@@ -601,8 +599,8 @@ export class SplatMesh extends Mesh {
                 UVMapping,
                 ClampToEdgeWrapping,
                 ClampToEdgeWrapping,
-                LinearFilter,
-                LinearFilter
+                NearestFilter,
+                NearestFilter
             );
             texture.generateMipmaps = false;
             texture.needsUpdate = true;
@@ -621,12 +619,23 @@ export class SplatMesh extends Mesh {
             textureSize.y,
             this._useRGBACovariants ? RGBAFormat : RGFormat
         );
-        this._centersTexture = createTextureFromData(
-            this._splatPositions!,
-            textureSize.x,
-            textureSize.y,
-            RGBAFormat
-        );
+        this._centersTexture = (() => {
+            const texture = new DataTexture(
+                this._splatPositions!,
+                textureSize.x,
+                textureSize.y,
+                RGBAFormat,
+                FloatType,
+                UVMapping,
+                ClampToEdgeWrapping,
+                ClampToEdgeWrapping,
+                NearestFilter,
+                NearestFilter
+            );
+            texture.generateMipmaps = false;
+            texture.needsUpdate = true;
+            return texture;
+        })();
         this._colorsTexture = createTextureFromDataU8(
             colorArray,
             textureSize.x,
@@ -889,25 +898,9 @@ export class SplatMesh extends Mesh {
     }
 
     private _getTextureSize(length: number): Vector2 {
-        const maxTextureSize = 4096; // @TODO: Use 'capabilities.maxTextureSize'
-        const width = maxTextureSize;
-
-        let height = 1;
-
-        // TODO: check engine version and WebGPU support
-        // if (engine.version === 1 && !engine.isWebGPU) {
-        while (width * height < length) {
-            height *= 2;
-        }
-        // } else {
-        //     height = Math.ceil(length / width);
-        // }
-
-        if (height > width) {
-            //Logger.Error("Splat texture size: (" + width + ", " + height + "), maxTextureSize: " + width);
-            height = width;
-        }
-
+        const maxTextureSize = 4096;
+        const width = Math.min(maxTextureSize, Math.ceil(Math.sqrt(length)));
+        const height = Math.ceil(length / width);
         return new Vector2(width, height);
     }
 

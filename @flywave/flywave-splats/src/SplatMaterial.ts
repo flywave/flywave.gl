@@ -1,25 +1,31 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import { type Camera, type Renderer, DoubleSide, NormalBlending, Vector2 } from "three";
-import { NodeMaterial } from "three/webgpu";
+import {
+    type Camera,
+    DataTexture,
+    DoubleSide,
+    NormalBlending,
+    RGBAFormat,
+    UnsignedByteType,
+    Vector2
+} from "three";
+import { type Renderer, NodeMaterial } from "three/webgpu";
 import {
     Fn,
-    abs,
     attribute,
     dot,
     float,
     floor as tslFloor,
     length,
     mat3,
-    mat4,
-    max as tslMax,
     min as tslMin,
     mod,
     normalize,
     pow,
     sqrt,
     texture,
+    transpose,
     uniform,
     vec2,
     vec3,
@@ -39,7 +45,6 @@ export class SplatMaterial {
         const material = new NodeMaterial();
         material.name = "SplatMaterial";
         material.transparent = true;
-        material.alphaTest = 1.0;
         material.blending = NormalBlending;
         material.depthTest = true;
         material.depthWrite = false;
@@ -48,14 +53,23 @@ export class SplatMaterial {
         const invViewport = uniform(new Vector2());
         const dataTextureSize = uniform(new Vector2());
         const focal = uniform(new Vector2());
-        const covariancesATexture = texture(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const covariancesBTexture = texture(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const centersTexture = texture(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const colorsTexture = texture(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const shTexture0 = texture(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const shTexture1 = texture(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const shTexture2 = texture(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const shDegreeU = uniform(maxSphericalHarmonicsDegree);
+
+        const placeholder = new DataTexture(
+            new Uint8Array([255, 255, 255, 255]),
+            1,
+            1,
+            RGBAFormat,
+            UnsignedByteType
+        );
+        placeholder.needsUpdate = true;
+
+        const covariancesATexture = texture(placeholder);
+        const covariancesBTexture = texture(placeholder);
+        const centersTexture = texture(placeholder);
+        const colorsTexture = texture(placeholder);
+        const shTexture0 = texture(placeholder);
+        const shTexture1 = texture(placeholder);
+        const shTexture2 = texture(placeholder);
 
         const splatIndexAttr = attribute("splatIndex", "float");
         const meshPos = positionLocal.xy;
@@ -67,13 +81,14 @@ export class SplatMaterial {
         });
 
         const splatUV = getDataUV(splatIndexAttr, dataTextureSize);
-        const center = texture(centersTexture.value, splatUV);
-        const baseColor = texture(colorsTexture.value, splatUV);
-        const covA = texture(covariancesATexture.value, splatUV).mul(center.w);
-        const covB = texture(covariancesBTexture.value, splatUV).mul(center.w);
 
-        // === SH decompose ===
-        const SH_C0 = float(0.28209479);
+        const center = texture(centersTexture, splatUV);
+        const baseColor = texture(colorsTexture, splatUV);
+        const covAData = texture(covariancesATexture, splatUV).mul(center.w);
+        const covBData = texture(covariancesBTexture, splatUV).mul(center.w);
+        const covA = vec3(covAData.x, covAData.y, covAData.z);
+        const covB = vec3(covAData.w, covBData.x, covBData.y);
+
         const SH_C1 = float(0.48860251);
         const SH_C2_0 = float(1.09254843);
         const SH_C2_1 = float(-1.09254843);
@@ -98,7 +113,6 @@ export class SplatMaterial {
             return comps.mul(2.0 / 255.0).sub(1.0);
         });
 
-        // === SH color computation ===
         const computeSHColor = Fn(() => {
             const worldPos = modelWorldMatrix.mul(vec4(center.xyz, 1.0));
             const dir = normalize(worldPos.xyz.sub(cameraPosition));
@@ -110,7 +124,7 @@ export class SplatMaterial {
             let result = baseColor.rgb;
 
             if (maxSphericalHarmonicsDegree > 0) {
-                const sh0 = texture(shTexture0.value, splatUV);
+                const sh0 = texture(shTexture0, splatUV);
                 const sh00 = decompose(sh0.x);
                 const sh01 = decompose(sh0.y);
                 const sh02 = decompose(sh0.z);
@@ -126,7 +140,7 @@ export class SplatMaterial {
                     .add(SH_C1.negate().mul(x).mul(sh3));
 
                 if (maxSphericalHarmonicsDegree > 1) {
-                    const shTex1 = texture(shTexture1.value, splatUV);
+                    const shTex1 = texture(shTexture1, splatUV);
                     const sh04 = decompose(shTex1.x);
                     const sh05 = decompose(shTex1.y);
 
@@ -151,7 +165,7 @@ export class SplatMaterial {
                         .add(SH_C2_4.mul(xx.sub(yy)).mul(sh8));
 
                     if (maxSphericalHarmonicsDegree > 2) {
-                        const shTex2 = texture(shTexture2.value, splatUV);
+                        const shTex2 = texture(shTexture2, splatUV);
                         const sh06 = decompose(shTex2.x);
                         const sh07 = decompose(shTex2.y);
                         const sh08 = decompose(shTex2.z);
@@ -179,14 +193,13 @@ export class SplatMaterial {
             return result;
         });
 
-        // === getSplat projection ===
         const worldPos = modelWorldMatrix.mul(vec4(center.xyz, 1.0));
         const camspace = cameraViewMatrix.mul(worldPos);
         const pos2d = cameraProjectionMatrix.mul(camspace);
 
         const bounds = float(1.2).mul(pos2d.w);
         const outOfBounds = pos2d.z
-            .lessThan(pos2d.w.negate())
+            .lessThan(0)
             .or(pos2d.x.lessThan(bounds.negate()))
             .or(pos2d.x.greaterThan(bounds))
             .or(pos2d.y.lessThan(bounds.negate()))
@@ -229,20 +242,19 @@ export class SplatMaterial {
             .mul(pos2d.w);
         const finalPos = vec4(pos2d.xy.add(offset), pos2d.zw);
 
-        material.positionNode = outOfBounds.or(degenerate).select(vec4(0, 0, 2, 1), finalPos);
+        material.vertexNode = outOfBounds.or(degenerate).select(vec4(0, 0, 2, 1), finalPos);
 
-        // === Fragment ===
-        material.fragmentNode = Fn(() => {
-            const A = meshPos.dot(meshPos).negate();
-            const B = pow(float(Math.E), A).mul(baseColor.a);
+        const A = meshPos.dot(meshPos).negate();
+        const B = pow(float(Math.E), A).mul(baseColor.a);
 
-            let shColor = baseColor.rgb;
-            if (maxSphericalHarmonicsDegree > 0) {
-                shColor = computeSHColor();
-            }
+        let shColor = baseColor.rgb;
+        if (maxSphericalHarmonicsDegree > 0) {
+            shColor = computeSHColor();
+        }
 
-            return vec4(shColor, B);
-        })();
+        material.colorNode = shColor;
+        material.opacityNode = B;
+        material.maskNode = A.greaterThanEqual(-4.0);
 
         (material as any)._uniforms = {
             invViewport,
