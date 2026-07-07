@@ -1,20 +1,19 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
-import { hashString } from "./utils";
 import { Fn, frameId, nodeImmutable, screenCoordinate, vec3 } from "three/tsl";
 import {
+    type NodeBuilder,
     Data3DTexture,
     NearestFilter,
     RedFormat,
     RepeatWrapping,
-    Texture3DNode,
-    type NodeBuilder
+    Texture3DNode
 } from "three/webgpu";
 
 import { DEFAULT_STBN_URL } from "../constants";
 import { STBNLoader } from "../STBNLoader";
+import { hashString } from "./utils";
 
 const emptyTexture3D = /*#__PURE__*/ (() => {
     const texture = new Data3DTexture(new Uint8Array(1));
@@ -49,6 +48,7 @@ export class STBNTextureNode extends Texture3DNode {
                 this.value = texture;
             })
             .catch((error: unknown) => {
+                // eslint-disable-next-line no-console
                 console.error(error);
             });
 

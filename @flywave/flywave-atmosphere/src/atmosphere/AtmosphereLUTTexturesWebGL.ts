@@ -1,16 +1,15 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
 import {
-    NoColorSpace,
-    RenderTarget,
-    RenderTarget3D,
-    RGBAFormat,
     type Data3DTexture,
     type Texture,
     type Vector2,
-    type Vector3
+    type Vector3,
+    NoColorSpace,
+    RenderTarget,
+    RenderTarget3D,
+    RGBAFormat
 } from "three";
 import {
     acos,
@@ -29,14 +28,13 @@ import {
     vec3,
     vec4
 } from "three/tsl";
-import { NodeMaterial, QuadMesh, type Renderer, type UniformNode } from "three/webgpu";
+import { type Renderer, type UniformNode, NodeMaterial, QuadMesh } from "three/webgpu";
 
-import type { AnyFloatType } from "../tsl/types";
 import { FnVar } from "../tsl/FnVar";
 import type { Node } from "../tsl/node";
-
-import type { AtmosphereLUTTexture3DName, AtmosphereLUTTextureName } from "./AtmosphereLUTTypes";
+import type { AnyFloatType } from "../tsl/types";
 import { AtmosphereLUTTextures, AtmosphereLUTTexturesContext } from "./AtmosphereLUTTextures";
+import type { AtmosphereLUTTexture3DName, AtmosphereLUTTextureName } from "./AtmosphereLUTTypes";
 import type { AtmosphereParameters } from "./AtmosphereParameters";
 import {
     computeMultipleScatteringTexture,

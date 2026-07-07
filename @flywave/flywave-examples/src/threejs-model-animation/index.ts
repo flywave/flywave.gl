@@ -68,8 +68,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             celestia: {
                 sunTime: new Date().setHours(13, 0, 0, 0),
                 atmosphere: true,
-                sunCastShadow: true,
-                sunIntensity: 5.0
+                sunCastShadow: true
             }
         }
     });

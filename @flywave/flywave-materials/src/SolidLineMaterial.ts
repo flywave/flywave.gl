@@ -122,7 +122,15 @@ export class SolidLineMaterial extends NodeMaterial {
     );
     private m_dashSizeU = uniform(SolidLineMaterial.DEFAULT_DASH_SIZE);
     private m_gapSizeU = uniform(SolidLineMaterial.DEFAULT_GAP_SIZE);
-    private m_displacementMapNode = texture(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
+    private m_displacementMapNode = texture(
+        new THREE.DataTexture(
+            new Uint8Array([255, 255, 255, 255]),
+            1,
+            1,
+            THREE.RGBAFormat,
+            THREE.UnsignedByteType
+        )
+    );
     private m_capsModeU = uniform(LineCapsModes.CAPS_ROUND);
     private m_dashesModeU = uniform(LineDashesModes.DASHES_SQUARE);
 

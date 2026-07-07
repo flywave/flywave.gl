@@ -103,8 +103,6 @@ export class MapViewAtmosphere {
         0.05,
         10000000.0
     );
-    // TODO: Support for Theme definition should be added.
-    //private m_cachedTheme: Theme = { styles: {} };
 
     private readonly m_lightDirection = new THREE.Vector3(0.0, 1.0, 0.0);
 
@@ -140,9 +138,6 @@ export class MapViewAtmosphere {
         private readonly m_atmosphereVariant: AtmosphereVariant = AtmosphereVariant.SkyAndGround,
         private readonly m_materialVariant = AtmosphereShadingVariant.ScatteringShader
     ) {
-        // 初始化大气散射管理器
-        // this.initializeAtmosphericScatteringManager();
-
         if (this.m_atmosphereVariant & AtmosphereVariant.Sky) {
             this.createSkyGeometry();
         }
@@ -205,28 +200,15 @@ export class MapViewAtmosphere {
             const skyMat = this.m_skyMaterial as SkyAtmosphereMaterial;
             skyMat.setDynamicLighting(dynamicLight);
         }
-
-        // // 更新大气散射管理器中的光照方向
-        // if (dynamicLight) {
-        //     this.m_atmosphericScatteringManager.parameters = {
-        //         lightDirection: this.m_lightDirection
-        //     };
-        // }
     }
 
     /**
-     * 更新光照方向
-     * @param lightDirection 新的光照方向
+     * Update the light direction.
+     * @param lightDirection - The new light direction.
      */
     setLightDirection(lightDirection: THREE.Vector3): void {
         this.m_lightDirection.copy(lightDirection);
 
-        // // 更新大气散射管理器中的光照方向
-        // this.m_atmosphericScatteringManager.parameters = {
-        //     lightDirection: this.m_lightDirection
-        // };
-
-        // 如果启用了动态光照，也更新材质
         if (this.m_groundMaterial instanceof GroundAtmosphereMaterial) {
             this.m_groundMaterial.setDynamicLighting(true);
         }
@@ -272,7 +254,7 @@ export class MapViewAtmosphere {
      * @param theme - A {@link @flywave/flywave-datasource-protocol#Theme} instance.
      */
     reset(theme: Theme) {
-        //this.m_cachedTheme = theme;
+        // Theme support to be implemented.
     }
 
     private get disposed() {

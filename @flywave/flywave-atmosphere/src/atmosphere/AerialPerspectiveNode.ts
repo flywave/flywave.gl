@@ -17,18 +17,16 @@ import {
     viewportSharedTexture,
     viewportUV
 } from "three/tsl";
-import { TempNode, type NodeBuilder, type TextureNode } from "three/webgpu";
+import { type NodeBuilder, type TextureNode, TempNode } from "three/webgpu";
 
-import { depthToViewZ } from "../tsl/transformations";
-import { hashValues } from "../tsl/utils";
 import { inverseProjectionMatrix, projectionMatrix } from "../tsl/accessors";
 import { rayEllipsoidIntersection } from "../tsl/math";
-import { screenToPositionView } from "../tsl/transformations";
 import type { Node } from "../tsl/node";
-
+import { depthToViewZ, screenToPositionView } from "../tsl/transformations";
+import { hashValues } from "../tsl/utils";
 import { getAtmosphereContext } from "./AtmosphereContext";
 import { getIndirectLuminanceToPoint, getSplitIlluminance } from "./runtime";
-import { sky, skyBackdrop, type SkyNode } from "./SkyNode";
+import { type SkyNode, sky, skyBackdrop } from "./SkyNode";
 
 const CAMERA = "CAMERA";
 const BACKDROP = "BACKDROP";

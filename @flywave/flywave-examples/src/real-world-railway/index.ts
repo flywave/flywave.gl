@@ -64,20 +64,18 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             celestia: {
                 sunTime: new Date().setHours(13), // Set sun time to 1 PM
                 sunCastShadow: true, // Enable shadows
-                sunIntensity: 3, // Sun light intensity
                 atmosphere: true // Enable atmospheric effect
             },
             postEffects: {
-                smaa: true, // Enable SMAA anti-aliasing
                 brightnessContrast: {
-                    brightness: -0.17, // Brightness adjustment
-                    contrast: 0.23, // Contrast adjustment
-                    enabled: true // Enable brightness contrast effect
+                    brightness: -0.17,
+                    contrast: 0.23,
+                    enabled: true
                 },
                 hueSaturation: {
-                    hue: 0.17, // Hue adjustment
-                    saturation: 0.57, // Saturation adjustment
-                    enabled: true // Enable hue saturation effect
+                    hue: 0.17,
+                    saturation: 0.57,
+                    enabled: true
                 }
             }
         }

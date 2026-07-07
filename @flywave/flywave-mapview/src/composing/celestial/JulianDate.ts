@@ -1,11 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// julian-date.ts
-interface LeapSecond {
-    julianDate: JulianDate;
-    offset: number;
-}
-
 export enum TimeStandard {
     TAI = "TAI",
     UTC = "UTC"
@@ -34,7 +28,6 @@ export class TimeConstants {
     static readonly MODIFIED_JULIAN_DATE_DIFFERENCE = 2400000.5;
 }
 
-// Helper class
 class LeapSecond {
     constructor(public julianDate: JulianDate, public offset: number) {}
 }
@@ -79,25 +72,20 @@ export class JulianDate {
         secondsOfDay: number = 0,
         timeStandard: TimeStandard = TimeStandard.UTC
     ) {
-        // 处理小数天数
         const wholeDays = julianDayNumber | 0;
         secondsOfDay += (julianDayNumber - wholeDays) * TimeConstants.SECONDS_PER_DAY;
 
-        // 设置组件
         this.dayNumber = wholeDays;
         this.secondsOfDay = secondsOfDay;
 
-        // 标准化
         this.normalize();
 
-        // UTC 转 TAI
         if (timeStandard === TimeStandard.UTC) {
             this.convertUtcToTai();
         }
     }
 
     static totalDays(julianDate: JulianDate) {
-        //>>includeStart('debug', pragmas.debug);
         return julianDate.dayNumber + julianDate.secondsOfDay / TimeConstants.SECONDS_PER_DAY;
     }
 
@@ -114,7 +102,7 @@ export class JulianDate {
 
     private convertUtcToTai(): void {
         const binarySearchScratch = { julianDate: this };
-        const index = this.binarySearchLeapSeconds(binarySearchScratch);
+        const index = JulianDate.binarySearchLeapSeconds(binarySearchScratch);
 
         let offset = JulianDate.leapSeconds[index].offset;
         if (index > 0) {
@@ -130,7 +118,7 @@ export class JulianDate {
         JulianDate.addSeconds(this, offset, this);
     }
 
-    private binarySearchLeapSeconds(scratch: { julianDate: JulianDate }): number {
+    private static binarySearchLeapSeconds(scratch: { julianDate: JulianDate }): number {
         let low = 0;
         let high = JulianDate.leapSeconds.length - 1;
         let mid = 0;
@@ -154,7 +142,6 @@ export class JulianDate {
         return low < JulianDate.leapSeconds.length ? low : JulianDate.leapSeconds.length - 1;
     }
 
-    // ============== 静态方法 ==============
     static fromDate(date: Date, result?: JulianDate): JulianDate {
         if (!(date instanceof Date)) throw new Error("Invalid JavaScript Date");
 
@@ -185,10 +172,9 @@ export class JulianDate {
         second: number,
         millisecond: number
     ): [number, number] {
-        // 算法来自《天文历书解释性补充》第604页
+        // Algorithm from "Astronomical Almanac Supplemental Explanation" p.604
         const a = ((month - 14) / 12) | 0;
         const b = year + 4800 + a;
-        year + 4800 + a;
         let dayNumber =
             (((1461 * b) / 4) | 0) +
             (((367 * (month - 2 - 12 * a)) / 12) | 0) -
@@ -248,13 +234,9 @@ export class JulianDate {
 
     private static findLeapSecondIndex(date: JulianDate): number {
         const scratch = { julianDate: date };
-        const index = 0;
-
-        // 二分查找实现...
-        return index;
+        return JulianDate.binarySearchLeapSeconds(scratch);
     }
 
-    // ============== 实例方法 ==============
     clone(result?: JulianDate): JulianDate {
         return JulianDate.clone(this, result);
     }
@@ -269,7 +251,6 @@ export class JulianDate {
     }
 
     toGregorianDate(result?: GregorianDate): GregorianDate {
-        // 转换实现...
         return result!;
     }
 

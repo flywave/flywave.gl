@@ -27,10 +27,42 @@ export class GroundModificationHeightShader extends NodeMaterial {
         const altitudeU = uniform(0.0);
         const vertexSourceTypeU = uniform(0);
         const heightOperationU = uniform(0);
-        const baseDemTextureU = uniform(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const krigingTextureU = uniform(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const krigingMaskTextureU = uniform(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const distanceTextureU = uniform(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
+        const baseDemTextureU = uniform(
+            new THREE.DataTexture(
+                new Uint8Array([255, 255, 255, 255]),
+                1,
+                1,
+                THREE.RGBAFormat,
+                THREE.UnsignedByteType
+            )
+        );
+        const krigingTextureU = uniform(
+            new THREE.DataTexture(
+                new Uint8Array([255, 255, 255, 255]),
+                1,
+                1,
+                THREE.RGBAFormat,
+                THREE.UnsignedByteType
+            )
+        );
+        const krigingMaskTextureU = uniform(
+            new THREE.DataTexture(
+                new Uint8Array([255, 255, 255, 255]),
+                1,
+                1,
+                THREE.RGBAFormat,
+                THREE.UnsignedByteType
+            )
+        );
+        const distanceTextureU = uniform(
+            new THREE.DataTexture(
+                new Uint8Array([255, 255, 255, 255]),
+                1,
+                1,
+                THREE.RGBAFormat,
+                THREE.UnsignedByteType
+            )
+        );
 
         this.fragmentNode = Fn(() => {
             const unpackVec = vec4(6553.6, 25.6, 0.1, 10000.0);

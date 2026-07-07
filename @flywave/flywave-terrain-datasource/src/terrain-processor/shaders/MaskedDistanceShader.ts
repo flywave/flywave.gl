@@ -25,8 +25,24 @@ export class MaskedDistanceShader extends NodeMaterial {
 
         const resolutionU = uniform(new THREE.Vector2(256, 256));
         const slopeWidthU = uniform(10.0);
-        const maskTextureU = uniform(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
-        const contourTextureU = uniform(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
+        const maskTextureU = uniform(
+            new THREE.DataTexture(
+                new Uint8Array([255, 255, 255, 255]),
+                1,
+                1,
+                THREE.RGBAFormat,
+                THREE.UnsignedByteType
+            )
+        );
+        const contourTextureU = uniform(
+            new THREE.DataTexture(
+                new Uint8Array([255, 255, 255, 255]),
+                1,
+                1,
+                THREE.RGBAFormat,
+                THREE.UnsignedByteType
+            )
+        );
         const contourLengthU = uniform(0);
         const contourTexSizeU = uniform(new THREE.Vector2(1, 1));
 

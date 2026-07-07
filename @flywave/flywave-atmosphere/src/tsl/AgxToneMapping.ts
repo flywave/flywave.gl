@@ -2,8 +2,9 @@
 import type { ToneMapping } from "three";
 import { add, cdl, float, mat3, vec3 } from "three/tsl";
 
-import { FnLayout, FnVar, type Node } from "./FnLayout";
+import { FnLayout } from "./FnLayout";
 import { FnVar as FnVarFn } from "./FnVar";
+import type { Node } from "./node";
 
 const LINEAR_REC2020_TO_LINEAR_SRGB = mat3(
     vec3(1.6605, -0.1246, -0.0182),

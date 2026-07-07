@@ -7,7 +7,6 @@ import {
     type IHueSaturationEffect,
     type IOutlineEffect,
     type ISepiaEffect,
-    type ISSAOEffect,
     type IVignetteEffect
 } from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three";
@@ -30,8 +29,6 @@ export interface IMapAntialiasSettings {
     msaaEnabled: boolean;
     dynamicMsaaSamplingLevel?: MSAASampling;
     staticMsaaSamplingLevel?: MSAASampling;
-    fxaaEnabled?: boolean;
-    smaaEnabled?: boolean;
 }
 
 export interface ICustomEffect {
@@ -47,9 +44,7 @@ export interface IMapRenderingManager extends IPassManager {
     sepia: ISepiaEffect;
     hueSaturation: IHueSaturationEffect;
     brightnessContrast: IBrightnessContrastEffect;
-    fxaaEnabled: boolean;
-    smaaEnabled: boolean;
-    ssao: ISSAOEffect;
+    taaEnabled: boolean;
     dynamicMsaaSamplingLevel: MSAASampling;
     msaaEnabled: boolean;
     staticMsaaSamplingLevel: MSAASampling;
@@ -64,11 +59,7 @@ export interface IMapRenderingManager extends IPassManager {
         time?: number
     ): void;
 
-    updateOutline(options: {
-        thickness: number;
-        color: string;
-        ghostExtrudedPolygons: boolean;
-    }): void;
+    updateOutline(options: { thickness: number; color: string }): void;
 
     lowResPixelRatio?: number;
 
@@ -76,7 +67,6 @@ export interface IMapRenderingManager extends IPassManager {
     removeBloomObject(object: THREE.Object3D): void;
     addIgnoreBloomObject(object: THREE.Object3D): void;
     removeIgnoreBloomObject(object: THREE.Object3D): void;
-    setAntialias(type: "none" | "fxaa" | "smaa"): void;
 
     addTranslucentObject(object: THREE.Object3D, layer: string): void;
     removeTranslucentObject(object: THREE.Object3D): void;
@@ -115,18 +105,13 @@ export class MapRenderingManager implements IMapRenderingManager {
         enabled: false,
         strength: 2.5,
         radius: 0.67,
-        levels: 3,
-        inverted: false,
-        ignoreBackground: true,
-        luminancePassThreshold: 0.0,
-        luminancePassSmoothing: 0.1
+        luminancePassThreshold: 0.0
     };
 
     outline = {
         enabled: false,
         thickness: 0.02,
-        color: "#ffffff",
-        ghostExtrudedPolygons: false
+        color: "#ffffff"
     };
 
     vignette = {
@@ -152,22 +137,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         contrast: 0.0
     };
 
-    ssao = {
-        enabled: false,
-        intensity: 1.0,
-        radius: 0.05,
-        distanceThreshold: 0.1,
-        distanceFalloff: 0.1,
-        bias: 0.1,
-        samples: 16,
-        rings: 7,
-        blurRadius: 8,
-        blurStdDev: 4,
-        blurDepthCutoff: 0.01
-    };
-
-    fxaaEnabled: boolean = false;
-    smaaEnabled: boolean = false;
+    taaEnabled: boolean = false;
 
     private m_msaaEnabled: boolean = true;
     private m_width: number = 1;
@@ -191,8 +161,6 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_staticMsaaSamplingLevel =
             antialiasSettings?.staticMsaaSamplingLevel ?? MSAASampling.Level_4;
         this.msaaEnabled = antialiasSettings?.msaaEnabled ?? false;
-        this.fxaaEnabled = antialiasSettings?.fxaaEnabled ?? false;
-        this.smaaEnabled = antialiasSettings?.smaaEnabled ?? false;
         this.lowResPixelRatio = lowResPixelRatio;
         this.setSize(width, height);
     }
@@ -224,6 +192,8 @@ export class MapRenderingManager implements IMapRenderingManager {
 
         vrm.config.sepia.enabled = this.sepia.enabled;
         vrm.config.sepia.amount = this.sepia.amount;
+
+        vrm.config.taa.enabled = this.taaEnabled;
 
         vrm.needsUpdate = true;
     }
@@ -271,19 +241,9 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
     }
 
-    updateOutline(options: {
-        thickness: number;
-        color: string;
-        ghostExtrudedPolygons: boolean;
-    }): void {
+    updateOutline(options: { thickness: number; color: string }): void {
         this.outline.thickness = options.thickness;
         this.outline.color = options.color;
-        this.outline.ghostExtrudedPolygons = options.ghostExtrudedPolygons;
-    }
-
-    setAntialias(type: "none" | "fxaa" | "smaa"): void {
-        this.fxaaEnabled = type === "fxaa";
-        this.smaaEnabled = type === "smaa";
     }
 
     addBloomObject(object: THREE.Object3D): void {

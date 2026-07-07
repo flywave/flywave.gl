@@ -21,33 +21,31 @@
  * Modified from the original source code.
  */
 
-
 import {
-    HalfFloatType,
-    RenderTarget,
-    RGFormat,
     type Camera,
     type Vector2,
-    type Vector4
+    type Vector4,
+    HalfFloatType,
+    RenderTarget,
+    RGFormat
 } from "three";
 import { float, Fn, max, min, uniform, uv, vec2, vec4 } from "three/tsl";
 import {
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils,
     type NodeBuilder,
     type NodeFrame,
     type SampleNode,
     type TextureNode,
-    type UniformNode
+    type UniformNode,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils
 } from "three/webgpu";
 
 import { bvecAnd, bvecNot } from "../../tsl/bvec";
+import { Node } from "../../tsl/node";
 import { outputTexture } from "../../tsl/OutputTextureNode";
 import { textureGather } from "../../tsl/sampling";
-import { Node } from "../../tsl/node";
-
 import { getCameraZUnit, getOutermostScreenPixelCoords, transformUVToNDC } from "./common";
 
 const { resetRendererState, restoreRendererState } = RendererUtils;

@@ -19,7 +19,7 @@ const Container = styled.div`
     left: 0;
     pointer-events: none;
 
-    /* 允许交互的子元素 */
+    /* Allow pointer events on interactive children */
     > * {
         pointer-events: auto;
     }

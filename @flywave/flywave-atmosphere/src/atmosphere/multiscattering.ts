@@ -33,7 +33,6 @@ import { FnLayout } from "../tsl/FnLayout";
 import { FnVar } from "../tsl/FnVar";
 import type { Node } from "../tsl/node";
 import { stbn } from "../tsl/STBNTextureNode";
-
 import type { AtmosphereContext } from "./AtmosphereContext";
 import {
     atmosphereParametersStruct,
@@ -53,14 +52,14 @@ import {
     rayleighPhaseFunction
 } from "./common";
 import {
+    type Dimensionless,
+    type Length2,
     AbstractSpectrum,
     DimensionlessSpectrum,
     IrradianceSpectrum,
     Length,
     RadianceSpectrum,
-    ScatteringSpectrum,
-    type Dimensionless,
-    type Length2
+    ScatteringSpectrum
 } from "./dimensional";
 
 export const getSubUVFromTextureUnit = /*#__PURE__*/ FnLayout({

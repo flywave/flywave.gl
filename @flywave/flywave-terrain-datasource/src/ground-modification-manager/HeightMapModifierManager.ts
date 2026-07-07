@@ -203,13 +203,8 @@ export class HeightMapModifierManager extends EventDispatcher<HeightMapModificat
         for (const mod of mods) {
             const modMin = mod.minHeight ?? 0;
             const modMax = mod.maxHeight ?? 0;
-            if (mod.heightOperation === "replace") {
-                minDelta = Math.min(minDelta, modMin);
-                maxDelta = Math.max(maxDelta, modMax);
-            } else {
-                minDelta = Math.min(minDelta, modMin);
-                maxDelta = Math.max(maxDelta, modMax);
-            }
+            minDelta = Math.min(minDelta, modMin);
+            maxDelta = Math.max(maxDelta, modMax);
         }
 
         if (minDelta === 0 && maxDelta === 0) return null;
@@ -265,6 +260,7 @@ export class HeightMapModifierManager extends EventDispatcher<HeightMapModificat
             this._version++;
             this.dispatchChangeEvent("update", [id]);
         } catch (e) {
+            // eslint-disable-next-line no-console
             console.error(`Failed to create texture for modifier ${id}:`, e);
         }
     }

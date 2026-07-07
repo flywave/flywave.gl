@@ -1,7 +1,6 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
 import { ivec2, ivec4, vec2, vec4 } from "three/tsl";
 import type { ConstNode, TextureNode } from "three/webgpu";
 

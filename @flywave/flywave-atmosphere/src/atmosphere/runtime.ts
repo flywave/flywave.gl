@@ -311,9 +311,6 @@ const getIndirectRadiance = /*#__PURE__*/ FnVar(
                 // starts from the camera to reduce the number of LUT lookups, but it
                 // produces discontinuity seemingly due to the inconsistency with the
                 // scattering clamped by the minCosLight and transmittance without it.
-                // scatteringConditional
-                //   .ElseIf(shadowLength.y.equal(0), scatteringBranch2)
-                //   .Else(scatteringBranch3)
                 scatteringConditional.Else(scatteringBranch3);
             } else {
                 scatteringConditional.Else(scatteringBranch2);

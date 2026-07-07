@@ -6,28 +6,27 @@
 
 import { Data3DTexture, FloatType, HalfFloatType, RGBAFormat, Texture } from "three";
 import {
-    Node,
-    NodeUpdateType,
-    RendererUtils,
     type NodeBuilder,
     type NodeFrame,
     type Renderer,
     type Texture3DNode,
-    type TextureNode
+    type TextureNode,
+    Node,
+    NodeUpdateType,
+    RendererUtils
 } from "three/webgpu";
 
 import { isFloatLinearSupported } from "../capabilities";
+import { outputTexture3D } from "../tsl/OutputTexture3DNode";
+import { outputTexture } from "../tsl/OutputTextureNode";
 import type { AnyFloatType } from "../tsl/types";
 import { isWebGPU } from "../tsl/utils";
-import { outputTexture } from "../tsl/OutputTextureNode";
-import { outputTexture3D } from "../tsl/OutputTexture3DNode";
-
-import { requestIdleCallback } from "./helpers/requestIdleCallback";
 import type { AtmosphereLUTTextures, AtmosphereLUTTexturesContext } from "./AtmosphereLUTTextures";
 import { AtmosphereLUTTexturesWebGL } from "./AtmosphereLUTTexturesWebGL";
 import { AtmosphereLUTTexturesWebGPU } from "./AtmosphereLUTTexturesWebGPU";
-import { AtmosphereParameters } from "./AtmosphereParameters";
 import type { AtmosphereLUTTexture3DName, AtmosphereLUTTextureName } from "./AtmosphereLUTTypes";
+import { AtmosphereParameters } from "./AtmosphereParameters";
+import { requestIdleCallback } from "./helpers/requestIdleCallback";
 
 const { resetRendererState, restoreRendererState } = RendererUtils;
 

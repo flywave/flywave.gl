@@ -97,13 +97,11 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             celestia: {
                 sunTime: new Date().setHours(17, 0, 0, 0),
                 atmosphere: false,
-                sunCastShadow: true,
-                sunIntensity: 5.0
+                sunCastShadow: true
             },
             postEffects: {
                 bloom: {
                     enabled: true,
-                    luminancePassEnabled: true,
                     luminancePassThreshold: 0.3,
                     strength: 2.5,
                     radius: 20.0

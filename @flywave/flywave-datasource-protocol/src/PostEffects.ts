@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type Object3D } from "three";
-
 export interface PostEffects {
     bloom?: IBloomEffect;
     outline?: IOutlineEffect;
@@ -9,38 +7,20 @@ export interface PostEffects {
     sepia?: ISepiaEffect;
     hueSaturation?: IHueSaturationEffect;
     brightnessContrast?: IBrightnessContrastEffect;
-    fxaa?: boolean;
-    smaa?: boolean;
-    ssao?: ISSAOEffect;
+    taa?: boolean;
 }
 
 export interface IOutlineEffect {
     enabled: boolean;
-    /**
-     * Make the extruded polygon disappear.
-     */
-    ghostExtrudedPolygons: boolean;
     thickness: number;
     color: string;
 }
 
 export interface IBloomEffect {
     enabled: boolean;
-    strength?: number; // corresponds to intensity in SelectiveBloomEffect
-    radius?: number; // corresponds to mipmapBlurPass.radius
-    levels?: number; // corresponds to mipmapBlurPass.levels
-    inverted?: boolean;
-    ignoreBackground?: boolean;
-    luminancePassEnabled?: boolean;
-    luminancePassThreshold?: number; // corresponds to luminanceMaterial.threshold
-    luminancePassSmoothing?: number; // corresponds to luminanceMaterial.smoothing
-
-    selection?: Set<Object3D>;
-}
-
-export interface ISelectionEffect {
-    enabled: boolean;
-    color: string;
+    strength?: number;
+    radius?: number;
+    luminancePassThreshold?: number;
 }
 
 export interface IVignetteEffect {
@@ -64,25 +44,6 @@ export interface IBrightnessContrastEffect {
     enabled: boolean;
     brightness: number;
     contrast: number;
-}
-
-export interface ISMAAEffect {
-    enabled: boolean;
-}
-
-// Add ISSAOEffect interface definition
-export interface ISSAOEffect {
-    enabled: boolean;
-    intensity?: number;
-    radius?: number;
-    distanceThreshold?: number;
-    distanceFalloff?: number;
-    bias?: number;
-    samples?: number;
-    rings?: number;
-    blurRadius?: number;
-    blurStdDev?: number;
-    blurDepthCutoff?: number;
 }
 
 export interface ITranslucentLayerConfig {

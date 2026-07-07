@@ -14,23 +14,33 @@ import {
     registerAtmosphereContext
 } from "@flywave/flywave-atmosphere";
 import * as THREE from "three";
+import { texture } from "three/tsl";
 import { type Renderer } from "three/webgpu";
 
 import { ViewRenderManager } from "./vrm/ViewRenderManager";
 import { TranslucentLayerEffect } from "./vrm/TranslucentLayerEffect";
 import { type MapView } from "../MapView";
 import { EarthCelestialDirections } from "./celestial/EarthCelestialDirections";
+import { JulianDate } from "./celestial/JulianDate";
+import { Simon1994PlanetaryPositions } from "./celestial/Simon1994PlanetaryPositions";
 
 export interface AtmosphereSystemOptions {
+    atmosphere?: boolean;
     sunTime?: number;
+    sunCastShadow?: boolean;
 }
 
 export class AtmosphereSystem {
+    private static readonly MOON_RADIUS = 1737400;
+
     private currentDate?: Date;
     private readonly m_celestialDirections: EarthCelestialDirections;
     private m_atmosphereContext?: AtmosphereContext;
     private m_skyNode?: SkyNode;
     private m_atmosphereLight?: AtmosphereLight;
+    private m_atmosphereEnabled: boolean = true;
+    private m_sunCastShadow: boolean = true;
+    private readonly m_scratchMoonPos = new THREE.Vector3();
 
     private static readonly CONTEXT_KEY = "getAtmosphere";
 
@@ -52,6 +62,7 @@ export class AtmosphereSystem {
         this.m_skyNode.showMoon = true;
         this.m_skyNode.showStars = true;
         this.m_skyNode.moonNode.intensity.value = 10;
+        this.loadMoonTextures();
 
         this.m_atmosphereLight = new AtmosphereLight(this.mapView.camera.position.length(), "sun");
         this.m_atmosphereLight.intensity = 1;
@@ -88,9 +99,6 @@ export class AtmosphereSystem {
             const vrm = new ViewRenderManager(renderer);
             const canvas = renderer.domElement as HTMLCanvasElement;
             vrm.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
-            vrm.config.lensFlare.enabled = true;
-            vrm.config.aerialPerspective.enabled = true;
-            vrm.config.taa.enabled = true;
             renderer.toneMapping = THREE.NoToneMapping;
             this.mapView.mapRenderingManager.viewRenderManager = vrm;
             this.mapView.mapRenderingManager.syncPostEffectsToVRM();
@@ -103,6 +111,8 @@ export class AtmosphereSystem {
             );
 
             this.mapView.scene.add(this.m_atmosphereLight);
+
+            this.applyAtmosphereEnabled();
         });
     }
 
@@ -120,6 +130,8 @@ export class AtmosphereSystem {
                 d
             );
 
+            this.updateMoonAngularRadius(d);
+
             if (this.m_atmosphereLight != null) {
                 const sunDir = this.m_atmosphereContext.sunDirectionECEF
                     .value as unknown as THREE.Vector3;
@@ -131,7 +143,16 @@ export class AtmosphereSystem {
     }
 
     updateOptions(options?: AtmosphereSystemOptions): void {
-        this.currentDate = options?.sunTime ? new Date(options.sunTime) : undefined;
+        if (options?.sunTime !== undefined) {
+            this.currentDate = new Date(options.sunTime);
+        }
+        if (options?.atmosphere !== undefined) {
+            this.m_atmosphereEnabled = options.atmosphere;
+        }
+        if (options?.sunCastShadow !== undefined) {
+            this.m_sunCastShadow = options.sunCastShadow;
+        }
+        this.applyAtmosphereEnabled();
     }
 
     getCurrentDate(): Date {
@@ -141,5 +162,65 @@ export class AtmosphereSystem {
     setCurrentDate(date: Date): void {
         this.currentDate = date;
         this.update();
+    }
+
+    private loadMoonTextures(): void {
+        const skyNode = this.m_skyNode;
+        if (skyNode == null) return;
+
+        const loader = new THREE.TextureLoader();
+
+        const colorTex = loader.load("resources/moon/color.jpg", tex => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.anisotropy = 16;
+        });
+        skyNode.moonNode.colorNode = texture(colorTex);
+
+        const displacementTex = loader.load("resources/moon/displacement.jpg", tex => {
+            tex.colorSpace = THREE.NoColorSpace;
+            tex.generateMipmaps = false;
+        });
+        skyNode.moonNode.displacementNode = texture(displacementTex);
+    }
+
+    private updateMoonAngularRadius(date: Date): void {
+        const skyNode = this.m_skyNode;
+        if (skyNode == null) return;
+
+        const jd = JulianDate.fromDate(date);
+        Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(
+            jd,
+            this.m_scratchMoonPos
+        );
+        const distance = this.m_scratchMoonPos.length();
+        skyNode.moonNode.angularRadius.value = AtmosphereSystem.MOON_RADIUS / distance;
+    }
+
+    private applyAtmosphereEnabled(): void {
+        const enabled = this.m_atmosphereEnabled;
+
+        if (this.m_atmosphereLight != null) {
+            this.m_atmosphereLight.visible = enabled;
+            this.m_atmosphereLight.castShadow = enabled && this.m_sunCastShadow;
+        }
+
+        const scene = this.mapView.scene as THREE.Scene & {
+            backgroundNode?: THREE.Scene["backgroundNode"];
+            environmentNode?: THREE.Scene["environmentNode"];
+        };
+        if (enabled) {
+            scene.backgroundNode = this.m_skyNode as THREE.Scene["backgroundNode"];
+            scene.environmentNode = skyEnvironment() as unknown as THREE.Scene["environmentNode"];
+        } else {
+            scene.backgroundNode = null;
+            scene.environmentNode = null;
+        }
+
+        const vrm = this.mapView.mapRenderingManager.viewRenderManager;
+        if (vrm != null) {
+            vrm.config.lensFlare.enabled = enabled;
+            vrm.config.aerialPerspective.enabled = enabled;
+            vrm.needsUpdate = true;
+        }
     }
 }

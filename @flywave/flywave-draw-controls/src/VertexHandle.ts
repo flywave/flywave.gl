@@ -139,7 +139,11 @@ export class VertexHandle extends THREE.Object3D {
         this.add(this.sprite);
     }
 
-    private createHandleTexture(color: number, isSelected: boolean, isHovered: boolean = false): THREE.Texture {
+    private createHandleTexture(
+        color: number,
+        isSelected: boolean,
+        isHovered: boolean = false
+    ): THREE.Texture {
         const canvas = document.createElement("canvas");
         const size = 64;
         canvas.width = size;
@@ -151,13 +155,16 @@ export class VertexHandle extends THREE.Object3D {
         const center = size / 2;
         const displayColor = `#${color.toString(16).padStart(6, "0")}`;
         const radius = isSelected ? 24 : 22;
-        const strokeWidth = isSelected ? 3.5 : (isHovered ? 3.5 : 2.5);
+        const strokeWidth = isSelected ? 3.5 : isHovered ? 3.5 : 2.5;
         const showCenterDot = isSelected || isHovered;
 
         if (isHovered || isSelected) {
             const alpha = isHovered ? 0.25 : 0.3;
             context.shadowBlur = 12;
-            context.shadowColor = `rgba(${parseInt(displayColor.slice(1,3),16)},${parseInt(displayColor.slice(3,5),16)},${parseInt(displayColor.slice(5,7),16)},${alpha})`;
+            context.shadowColor = `rgba(${parseInt(displayColor.slice(1, 3), 16)},${parseInt(
+                displayColor.slice(3, 5),
+                16
+            )},${parseInt(displayColor.slice(5, 7), 16)},${alpha})`;
             context.shadowOffsetY = 0;
         } else {
             context.shadowBlur = 8;

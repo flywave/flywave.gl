@@ -29,8 +29,8 @@ export class HeightMapShader extends NodeMaterial {
         const faceType = attribute("faceType", "float");
         const webMercatorY = attribute("webMercatorY", "float");
 
-        // WebGPU readRenderTargetPixelsAsync 从顶部开始读（与 WebGL 相反）
-        // 所以不需要像原始 RawShaderMaterial 那样翻转 Y
+        // WebGPU reads render targets top-to-bottom (unlike WebGL),
+        // so no Y-flip is needed compared to the original RawShaderMaterial.
         if (vertexShaderType === "stratum") {
             this.positionNode = vec4(uvNode().x, uvNode().y, 0, 1);
         } else {

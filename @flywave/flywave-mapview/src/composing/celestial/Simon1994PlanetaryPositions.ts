@@ -1,11 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// julian-date.ts
 import * as THREE from "three";
 
 import { JulianDate, TimeConstants, TimeStandard } from "./JulianDate";
 
-// Math constants and utilities
 export const EPSILON14 = 0.00000000000001;
 export const TWO_PI = 2.0 * Math.PI;
 export const RADIANS_PER_DEGREE = Math.PI / 180.0;
@@ -43,19 +41,15 @@ export function mod(m: number, n: number): number {
 }
 
 export function sign(value: number): number {
-    value = +value; // coerce to number
+    value = +value;
     if (value === 0 || isNaN(value)) {
         return value;
     }
     return value > 0 ? 1 : -1;
 }
 
-// Rest of the JulianDate class implementation remains the same...
-// [Previous JulianDate implementation here...]
-
-// Planetary positions implementation
 const MetersPerKilometer = 1000.0;
-const MetersPerAstronomicalUnit = 1.4959787e11; // IAU 1976 value
+const MetersPerAstronomicalUnit = 1.4959787e11;
 
 const perifocalToEquatorial = new THREE.Matrix3();
 

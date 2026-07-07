@@ -21,25 +21,23 @@
  * Modified from the original source code.
  */
 
-
-import { FloatType, RenderTarget, type Vector2, type Vector4 } from "three";
+import { type Vector2, type Vector4, FloatType, RenderTarget } from "three";
 import { float, Fn, If, max, mix, uint, uv, uvec4, vec2, vec4 } from "three/tsl";
 import {
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils,
     type NodeBuilder,
     type NodeFrame,
     type TextureNode,
-    type UniformNode
+    type UniformNode,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils
 } from "three/webgpu";
 
 import { bvecAnd, bvecNot } from "../../tsl/bvec";
 import { FnVar } from "../../tsl/FnVar";
-import { outputTexture } from "../../tsl/OutputTextureNode";
 import { Node } from "../../tsl/node";
-
+import { outputTexture } from "../../tsl/OutputTextureNode";
 import { FLOAT_MAX, getOutermostScreenPixelCoords, isValidScreenLocation } from "./common";
 
 const { resetRendererState, restoreRendererState } = RendererUtils;

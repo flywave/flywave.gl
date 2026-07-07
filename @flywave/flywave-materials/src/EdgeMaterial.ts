@@ -44,7 +44,15 @@ export class EdgeMaterial extends NodeMaterial {
     private m_fadeNearU = uniform(-1.0);
     private m_fadeFarU = uniform(-1.0);
     private m_extrusionRatioU = uniform(ExtrusionFeatureDefs.DEFAULT_RATIO_MAX);
-    private m_displacementMapNode = texture(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1,THREE.RGBAFormat,THREE.UnsignedByteType));
+    private m_displacementMapNode = texture(
+        new THREE.DataTexture(
+            new Uint8Array([255, 255, 255, 255]),
+            1,
+            1,
+            THREE.RGBAFormat,
+            THREE.UnsignedByteType
+        )
+    );
 
     fadeNear: number = -1.0;
     fadeFar: number = -1.0;

@@ -1,16 +1,14 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// CoordinateTransforms.ts
 import * as THREE from "three";
 
 import { JulianDate, TimeConstants } from "./JulianDate";
 import { TWO_PI } from "./Simon1994PlanetaryPositions";
 
-// 常量定义
 const TT_MINUS_TAI = 32.184;
 const J2000_TT_DAYS = 2451545.0;
 const GMST_CONSTANTS = {
-    C0: 6 * 3600 + 41 * 60 + 50.54841, // 6h41m50.54841s
+    C0: 6 * 3600 + 41 * 60 + 50.54841,
     C1: 8640184.812866,
     C2: 0.093104,
     C3: -6.2e-6
@@ -22,10 +20,11 @@ const TWO_PI_OVER_SECONDS_IN_DAY = TWO_PI / TimeConstants.SECONDS_PER_DAY;
 const dateInUtcScratch = new JulianDate();
 
 /**
- * 计算从TEME(真赤道平春分点)坐标系到伪固定坐标系的转换矩阵
- * @param date 儒略日期
- * @param result 可选的结果矩阵
- * @returns 转换矩阵
+ * Compute the transformation matrix from TEME (True Equator Mean Equinox)
+ * to the pseudo-fixed coordinate system.
+ * @param date - The Julian date.
+ * @param result - Optional result matrix.
+ * @returns The transformation matrix.
  */
 export function computeTemeToPseudoFixedMatrix(
     date: JulianDate,
@@ -35,7 +34,6 @@ export function computeTemeToPseudoFixedMatrix(
         throw new Error("date is required.");
     }
 
-    // 近似使用UTC代替UT1计算GMST
     const dateInUtc = JulianDate.addSeconds(
         date,
         -JulianDate.computeTaiMinusUtc(date),
@@ -44,7 +42,6 @@ export function computeTemeToPseudoFixedMatrix(
     const utcDayNumber = dateInUtc.dayNumber;
     const utcSecondsIntoDay = dateInUtc.secondsOfDay;
 
-    // 计算从J2000起算的儒略世纪数
     let t: number;
     const diffDays = utcDayNumber - 2451545;
     if (utcSecondsIntoDay >= 43200.0) {
@@ -53,7 +50,6 @@ export function computeTemeToPseudoFixedMatrix(
         t = (diffDays - 0.5) / TimeConstants.DAYS_PER_JULIAN_CENTURY;
     }
 
-    // 计算格林尼治平恒星时(GMST)
     const gmst0 =
         GMST_CONSTANTS.C0 +
         t * (GMST_CONSTANTS.C1 + t * (GMST_CONSTANTS.C2 + t * GMST_CONSTANTS.C3));

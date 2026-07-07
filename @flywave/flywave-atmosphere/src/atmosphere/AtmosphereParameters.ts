@@ -59,7 +59,7 @@ export class AtmosphereParameters {
 
     bottomRadius = 6378137;
 
-    topRadius = 6478137;
+    topRadius = 6438137;
 
     rayleighDensity = new DensityProfile([
         new DensityProfileLayer(),

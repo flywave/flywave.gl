@@ -14,9 +14,7 @@ import { createLight } from "./ThemeHelpers";
 
 const logger = LoggerManager.instance.create("MapViewEnvironment");
 
-//  the default breaks the ibct tests, seems it had not been used in all cases before
-
-export const DEFAULT_CLEAR_COLOR = 0xffffff; //0xefe9e1;
+export const DEFAULT_CLEAR_COLOR = 0xffffff;
 
 const cache = {
     vector3: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()],
@@ -123,7 +121,7 @@ export class MapViewEnvironment {
     }
 
     updateAtmosphere(options?: AtmosphereSystemOptions) {
-        this.m_atmosphere.updateOptions(options);
+        this.m_atmosphere?.updateOptions(options);
     }
 
     createLight(lightDescription: Light) {
@@ -158,7 +156,7 @@ export class MapViewEnvironment {
                 }
                 this.m_mapView.scene.add(light);
 
-                if ((light as any).isDirectionalLight) {
+                if ((light as THREE.DirectionalLight).isDirectionalLight) {
                     const directionalLight = light as THREE.DirectionalLight;
                     // This is needed so that the target is updated automatically, see:
                     // https://threejs.org/docs/#api/en/lights/DirectionalLight.target
@@ -220,7 +218,7 @@ export class MapViewEnvironment {
                     // webmercator and mercator give different results.
                     normal.set(0, 0, -1);
                 } else {
-                    // Enable shadows for globe...
+                    // Globe shadow support to be implemented.
                     //this.projection.surfaceNormal(target, normal);
                 }
 
@@ -290,7 +288,7 @@ export class MapViewEnvironment {
         }
         if (this.m_skyBackground !== undefined) {
             this.m_skyBackground.updateTexture(sky, this.m_mapView.projection.type);
-            this.m_mapView.scene.background = this.m_skyBackground?.texture;
+            this.m_mapView.scene.background = this.m_skyBackground.texture;
         }
     }
 

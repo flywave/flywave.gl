@@ -1,7 +1,6 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
 import { Matrix3 } from "three";
 import type { DirectLightData, LightingContext } from "three/src/nodes/TSL.js";
 import { normalView, positionView, renderGroup, uniform, vec4 } from "three/tsl";

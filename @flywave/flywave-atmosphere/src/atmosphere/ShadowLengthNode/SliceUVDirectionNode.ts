@@ -21,26 +21,24 @@
  * Modified from the original source code.
  */
 
-
-import { FloatType, RenderTarget, type Camera, type Vector2 } from "three";
+import { type Camera, type Vector2, FloatType, RenderTarget } from "three";
 import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
 import { Fn, If, max, min, screenCoordinate, uint, uvec2, vec4 } from "three/tsl";
 import {
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils,
     type NodeBuilder,
     type NodeFrame,
     type TextureNode,
     type UniformArrayNode,
-    type UniformNode
+    type UniformNode,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils
 } from "three/webgpu";
 
 import { bvecAnd, bvecNot } from "../../tsl/bvec";
-import { outputTexture } from "../../tsl/OutputTextureNode";
 import { Node } from "../../tsl/node";
-
+import { outputTexture } from "../../tsl/OutputTextureNode";
 import { getAtmosphereContext } from "../AtmosphereContext";
 import {
     FLOAT_MAX,

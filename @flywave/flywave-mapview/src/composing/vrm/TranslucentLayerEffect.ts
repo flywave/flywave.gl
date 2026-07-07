@@ -1,5 +1,13 @@
 // @ts-nocheck
-import { Color, DataTexture, FloatType, RGBAFormat, LinearFilter, Scene, type Object3D } from "three";
+import {
+    Color,
+    DataTexture,
+    FloatType,
+    RGBAFormat,
+    LinearFilter,
+    Scene,
+    type Object3D
+} from "three";
 import { ITranslucentLayerConfig } from "@flywave/flywave-datasource-protocol";
 
 interface InternalLayerConfig extends ITranslucentLayerConfig {

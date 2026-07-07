@@ -204,12 +204,6 @@ export interface Celestia {
     sunTime?: number;
 
     sunCastShadow?: boolean;
-
-    sunIntensity?: number;
-
-    sunColor?: string;
-
-    enableSunLight?: boolean;
 }
 
 /**

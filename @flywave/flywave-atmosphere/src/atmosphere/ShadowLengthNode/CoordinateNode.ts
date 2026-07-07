@@ -21,7 +21,6 @@
  * Modified from the original source code.
  */
 
-
 import { HalfFloatType, RenderTarget, type Camera, type Vector2 } from "three";
 import { float, Fn, If, ivec2, mix, screenCoordinate, uv, vec3 } from "three/tsl";
 import {

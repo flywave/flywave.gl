@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { DepthTexture, HalfFloatType, Matrix4, RenderTarget, Vector2, type Camera } from "three";
+import { type Camera, DepthTexture, HalfFloatType, Matrix4, RenderTarget, Vector2 } from "three";
 import {
     and,
     float,
@@ -20,15 +20,15 @@ import {
     vec4
 } from "three/tsl";
 import {
+    type NodeBuilder,
+    type NodeFrame,
+    type Renderer,
+    type TextureNode,
     NodeMaterial,
     NodeUpdateType,
     QuadMesh,
     RendererUtils,
-    TempNode,
-    type NodeBuilder,
-    type NodeFrame,
-    type Renderer,
-    type TextureNode
+    TempNode
 } from "three/webgpu";
 
 import { cameraFar, cameraNear } from "./accessors";
@@ -576,16 +576,3 @@ export function temporalAntialias(...args: any[]): any {
         camera
     );
 }
-
-// export const temporalAntialias = (
-//   inputNode: Node,
-//   depthNode: TextureNode,
-//   velocityNode: TextureNode,
-//   camera: Camera
-// ): TemporalAntialiasNode =>
-//   new TemporalAntialiasNode(
-//     convertToTexture(inputNode, { name: 'TemporalAntialias [Input]' }),
-//     depthNode,
-//     velocityNode,
-//     camera
-//   )

@@ -21,7 +21,6 @@
  * Modified from the original source code.
  */
 
-
 import { Box2, HalfFloatType, RenderTarget, RGFormat, Vector2 } from "three";
 import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
 import {
@@ -39,20 +38,20 @@ import {
     vec4
 } from "three/tsl";
 import {
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils,
     type NodeBuilder,
     type NodeFrame,
     type Renderer,
     type TextureNode,
-    type UniformNode
+    type UniformNode,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils
 } from "three/webgpu";
 
+import { Node } from "../../tsl/node";
 import { outputTexture } from "../../tsl/OutputTextureNode";
 import { textureGather } from "../../tsl/sampling";
-import { Node } from "../../tsl/node";
 
 const { resetRendererState, restoreRendererState } = RendererUtils;
 

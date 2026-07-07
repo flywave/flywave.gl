@@ -70,22 +70,8 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             celestia: {
                 sunTime: new Date().setHours(10), // Set sun time to 10 AM
                 sunCastShadow: true, // Enable shadows
-                sunIntensity: 2, // Sun light intensity
                 atmosphere: true // Enable atmospheric effects
-            },
-            postEffects: {
-                smaa: true, // Enable SMAA anti-aliasing
-                brightnessContrast: {
-                    brightness: 0.01, // Brightness adjustment
-                    contrast: 0.23, // Contrast adjustment
-                    enabled: true // Enable brightness contrast effect
-                },
-                hueSaturation: {
-                    hue: 0.17, // Hue adjustment
-                    saturation: 0.57, // Saturation adjustment
-                    enabled: true // Enable hue saturation effect
-                }
-            }
+            } 
         }
     });
 };

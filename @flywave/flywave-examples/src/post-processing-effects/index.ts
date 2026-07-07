@@ -55,22 +55,17 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         canvas: canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
-            lights: [
-          
-            ],
+            lights: [],
             celestia: {
                 atmosphere: false, // Disable atmospheric effects
                 sunTime: new Date().setHours(19, 0, 0, 0) // Set sun time
             },
             postEffects: {
                 bloom: {
-                    // Bloom effect
-                    enabled: true, // Enable bloom effect
-                    luminancePassEnabled: true,
-                    luminancePassThreshold: 0.1, // Luminance threshold
-                    strength: 2.5, // Strength
-                    radius: 1.12, // Radius
-                    levels: 3 // Levels
+                    enabled: true,
+                    luminancePassThreshold: 0.1,
+                    strength: 2.5,
+                    radius: 1.12
                 }
             }
         }

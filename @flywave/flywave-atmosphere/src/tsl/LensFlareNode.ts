@@ -12,7 +12,7 @@ import {
     vec4,
     viewportSize
 } from "three/tsl";
-import { TempNode, type NodeBuilder, type TextureNode } from "three/webgpu";
+import { type NodeBuilder, type TextureNode, TempNode } from "three/webgpu";
 import invariant from "tiny-invariant";
 
 import { DownsampleThresholdNode } from "./DownsampleThresholdNode";
@@ -22,7 +22,7 @@ import { LensGlareNode } from "./LensGlareNode";
 import { LensHaloNode } from "./LensHaloNode";
 import { MipmapSurfaceBlurNode } from "./MipmapSurfaceBlurNode";
 import type { Node } from "./node";
-import { convertToTexture, renderTarget, type RenderTargetNode } from "./RenderTargetNode";
+import { type RenderTargetNode, convertToTexture, renderTarget } from "./RenderTargetNode";
 import { isWebGPU } from "./utils";
 
 export class LensFlareNode extends TempNode {

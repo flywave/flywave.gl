@@ -1,5 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
- 
+
 import {
     type GeoBox,
     ProjectionType,

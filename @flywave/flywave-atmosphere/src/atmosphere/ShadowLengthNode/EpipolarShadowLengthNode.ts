@@ -23,7 +23,6 @@
 
 /* eslint-disable max-nested-callbacks */
 
-
 import { HalfFloatType, RenderTarget, RGFormat, type PerspectiveCamera } from "three";
 import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
 import {

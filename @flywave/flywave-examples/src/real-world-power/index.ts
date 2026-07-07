@@ -66,11 +66,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             celestia: {
                 sunTime: new Date().setHours(13), // Set sun time to 1 PM
                 sunCastShadow: true, // Enable shadows
-                sunIntensity: 3, // Sun light intensity
-                atmosphere: true // Enable atmospheric effect
-            },
-            postEffects: {
-                smaa: true // Enable SMAA anti-aliasing
+                atmosphere: true
             }
         }
     });

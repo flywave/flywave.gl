@@ -1,7 +1,6 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-
 import { bool, bvec2, bvec3, bvec4, overloadingFn, uvec2, uvec3, uvec4 } from "three/tsl";
 
 import { FnLayout } from "./FnLayout";

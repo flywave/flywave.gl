@@ -3056,8 +3056,7 @@ export class MapView extends EventDispatcher {
         this.mapRenderingManager.vignette.enabled = false;
         this.mapRenderingManager.sepia.enabled = false;
         this.mapRenderingManager.hueSaturation.enabled = false;
-        this.mapRenderingManager.smaaEnabled = false;
-        this.mapRenderingManager.fxaaEnabled = false;
+        this.mapRenderingManager.taaEnabled = false;
 
         if (this.m_postEffects !== undefined) {
             if (this.m_postEffects.bloom !== undefined) {
@@ -3084,11 +3083,8 @@ export class MapView extends EventDispatcher {
                     this.m_postEffects.brightnessContrast
                 );
             }
-            if (this.m_postEffects.smaa !== undefined) {
-                this.mapRenderingManager.smaaEnabled = this.m_postEffects.smaa;
-            }
-            if (this.m_postEffects.fxaa !== undefined) {
-                this.mapRenderingManager.fxaaEnabled = this.m_postEffects.fxaa;
+            if (this.m_postEffects.taa !== undefined) {
+                this.mapRenderingManager.taaEnabled = this.m_postEffects.taa;
             }
         }
 

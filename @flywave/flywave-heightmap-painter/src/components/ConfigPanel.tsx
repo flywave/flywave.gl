@@ -359,6 +359,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
             setCurrentGeoBox(geoBox);
         } catch (e) {
+            // eslint-disable-next-line no-console
             console.warn("Failed to update bounds:", e);
         }
     }, [geoBoxInput]);
@@ -381,17 +382,6 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         const pixelWidth = Math.round(Math.abs(max.x - min.x));
         const pixelHeight = Math.round(Math.abs(max.y - min.y));
 
-        console.log("Canvas size calculation:", {
-            southWest: [southWest.lat, southWest.lng],
-            northEast: [northEast.lat, northEast.lng],
-            min: [min.x, min.y],
-            max: [max.x, max.y],
-            pixelWidth,
-            pixelHeight,
-            finalWidth: Math.max(64, pixelWidth),
-            finalHeight: Math.max(64, pixelHeight)
-        });
-
         return {
             width: Math.max(64, pixelWidth),
             height: Math.max(64, pixelHeight)
@@ -405,15 +395,9 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         const height = parseInt(outputHeight);
 
         if (isNaN(width) || isNaN(height) || width < 64 || height < 64) {
-            alert("请输入有效的宽度和高度（最小64px）");
+            alert("Please enter valid width and height (min 64px)");
             return;
         }
-
-        console.log("handleStartPaint:", {
-            width,
-            height,
-            geoBox: currentGeoBox
-        });
 
         onStartPaint(width, height, currentGeoBox);
     }, [currentGeoBox, outputWidth, outputHeight, onStartPaint]);

@@ -3,28 +3,26 @@
 
 import {
     CubeCamera,
-    WebGLCubeRenderTarget as CubeRenderTarget,
     HalfFloatType,
     Mesh,
     RGBAFormat,
-    Vector3
+    Vector3,
+    WebGLCubeRenderTarget as CubeRenderTarget
 } from "three";
 import { Fn, pmremTexture, positionGeometry, uniform, vec4 } from "three/tsl";
 import {
-    NodeMaterial,
-    NodeUpdateType,
-    TempNode,
     type NodeBuilder,
     type NodeFrame,
-    type PMREMNode
+    type PMREMNode,
+    NodeMaterial,
+    NodeUpdateType,
+    TempNode
 } from "three/webgpu";
 
-import { QuadGeometry } from "./QuadGeometry";
-
 import { inverseProjectionMatrix } from "../tsl/accessors";
-
 import { getAtmosphereContext } from "./AtmosphereContext";
-import { sky, type SkyNode } from "./SkyNode";
+import { QuadGeometry } from "./QuadGeometry";
+import { type SkyNode, sky } from "./SkyNode";
 
 const vectorScratch = /*#__PURE__*/ new Vector3();
 
