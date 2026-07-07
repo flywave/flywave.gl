@@ -7,6 +7,7 @@ import {
     MapControlsUI,
     sphereProjection
 } from "@flywave/flywave.gl";
+import { BoxGeometry, MeshStandardNodeMaterial, Mesh, Group } from "three/webgpu";
 
 /**
  * Get map canvas element
@@ -29,20 +30,21 @@ const getMapCanvas = (): HTMLCanvasElement => {
  */
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and viewpoint (eastern China region)
-    const initialLocation = new GeoCoordinates(36, 118);
+    const initialLocation = new GeoCoordinates(36.4393, 118.188);
 
-    return new MapView({ 
+    return new MapView({
         projection: sphereProjection, // Use spherical projection
         target: initialLocation, // Initial target position
-        zoomLevel: 6, // Initial zoom level
+        zoomLevel: 19, // Initial zoom level
         tilt: 45, // Initial tilt angle
         heading: 1.5413763202653008, // Initial heading angle
         canvas: canvas, // Specify render canvas
         theme: {
             // extends: "resources/tilezen_base_globe.json", // Bas÷e theme configuration
             celestia: {
-                sunTime: new Date().setHours(18),
-                // atmosphere: true // Enable atmospheric effects
+                atmosphere: true,
+                sunTime: new Date().setHours(16),
+                sunCastShadow: true
             }
         }
     });
@@ -99,6 +101,20 @@ try {
     configureDEMTerrainSource(mapView);
 
     console.log("Basic configuration getting started example initialized successfully");
+
+    // Add a test box near the camera
+    const boxGroup = new Group();
+    const box = new Mesh(
+        new BoxGeometry(5, 5, 5),
+        new MeshStandardNodeMaterial({ color: 0xff6b6b })
+    );
+    box.castShadow = true;
+    box.receiveShadow = true;
+    boxGroup.add(box);
+    const boxCoords = new GeoCoordinates(36.4393, 118.188, 420);
+    // @ts-ignore
+    boxGroup.anchor = boxCoords;
+    mapView.mapAnchors.add(boxGroup);
 } catch (error) {
     console.error(
         "Error occurred while initializing basic configuration getting started example:",

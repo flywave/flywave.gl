@@ -1,7 +1,8 @@
 // @ts-nocheck
 import * as THREE from "three";
-import { float, mrt, output, pass, uniform, vec4 } from "three/tsl";
+import { float, mrt, output, pass, positionView, uniform, vec4 } from "three/tsl";
 import { RenderPipeline, type Renderer } from "three/webgpu";
+import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
 
 import {
     dithering,
@@ -12,6 +13,7 @@ import {
     AgXPunchyToneMapping,
     temporalAntialias,
     highpVelocity,
+    shadowLength,
     type LensFlareNode,
     type AerialPerspectiveNode,
     type TemporalAntialiasNode
@@ -61,6 +63,7 @@ export class ViewRenderManager implements IViewRenderManager {
     bloomObjects: Set<THREE.Object3D> = new Set();
     bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
     translucentLayerEffect?: TranslucentLayerEffect;
+    csmShadowNode?: CSMShadowNode;
 
     constructor(private readonly renderer: Renderer) {}
 
@@ -70,10 +73,17 @@ export class ViewRenderManager implements IViewRenderManager {
 
         const taaEnabled = this.config.taa.enabled;
         const bloomEnabled = this.config.bloom.enabled;
+        const aerialEnabled = this.config.aerialPerspective.enabled;
+        const hasCSM = this.csmShadowNode != null;
+
+        const WORLD_TO_UNIT = 0.001;
 
         const mrtEntries: Record<string, unknown> = { output };
         if (taaEnabled) mrtEntries.velocity = highpVelocity;
         if (bloomEnabled) mrtEntries.bloomIntensity = float(0);
+        if (aerialEnabled && hasCSM) {
+            mrtEntries.viewZUnit = positionView.z.mul(WORLD_TO_UNIT);
+        }
 
         this.passNode =
             Object.keys(mrtEntries).length > 1
@@ -85,8 +95,17 @@ export class ViewRenderManager implements IViewRenderManager {
 
         let outputNode = colorNode;
 
-        if (this.config.aerialPerspective.enabled) {
-            this.aerialNode = aerialPerspective(convertToTexture(outputNode), depthNode);
+        if (aerialEnabled) {
+            let shadowLengthNode = null;
+            if (hasCSM) {
+                const viewZUnitTex = this.passNode.getTextureNode("viewZUnit");
+                shadowLengthNode = shadowLength(this.csmShadowNode, viewZUnitTex);
+            }
+            this.aerialNode = aerialPerspective(
+                convertToTexture(outputNode),
+                depthNode,
+                shadowLengthNode
+            );
             outputNode = this.aerialNode;
         }
 

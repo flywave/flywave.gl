@@ -16,6 +16,7 @@ import {
 import * as THREE from "three";
 import { texture } from "three/tsl";
 import { type Renderer } from "three/webgpu";
+import { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
 
 import { ViewRenderManager } from "./vrm/ViewRenderManager";
 import { TranslucentLayerEffect } from "./vrm/TranslucentLayerEffect";
@@ -30,16 +31,30 @@ export interface AtmosphereSystemOptions {
     sunCastShadow?: boolean;
 }
 
+const FRUSTUM_CORNERS = [
+    { x: -1, y: -1, z: -1 },
+    { x: 1, y: -1, z: -1 },
+    { x: -1, y: 1, z: -1 },
+    { x: 1, y: 1, z: -1 },
+    { x: -1, y: -1, z: 1 },
+    { x: 1, y: -1, z: 1 },
+    { x: -1, y: 1, z: 1 },
+    { x: 1, y: 1, z: 1 }
+];
+
 export class AtmosphereSystem {
     private static readonly MOON_RADIUS = 1737400;
+    private static readonly SHADOW_DISABLE_DISTANCE = 2e5;
 
     private currentDate?: Date;
     private readonly m_celestialDirections: EarthCelestialDirections;
     private m_atmosphereContext?: AtmosphereContext;
     private m_skyNode?: SkyNode;
     private m_atmosphereLight?: AtmosphereLight;
+    private m_csmShadowNode?: CSMShadowNode;
     private m_atmosphereEnabled: boolean = true;
     private m_sunCastShadow: boolean = true;
+    private m_lastCsmMaxFar: number = 0;
     private readonly m_scratchMoonPos = new THREE.Vector3();
 
     private static readonly CONTEXT_KEY = "getAtmosphere";
@@ -64,12 +79,24 @@ export class AtmosphereSystem {
         this.m_skyNode.moonNode.intensity.value = 10;
         this.loadMoonTextures();
 
-        this.m_atmosphereLight = new AtmosphereLight(this.mapView.camera.position.length(), "sun");
+        this.m_atmosphereLight = new AtmosphereLight(1e5, "sun");
         this.m_atmosphereLight.intensity = 1;
         this.m_atmosphereLight.castShadow = true;
         this.m_atmosphereLight.shadow.mapSize.set(2048, 2048);
         this.m_atmosphereLight.shadow.bias = -0.0005;
         this.m_atmosphereLight.shadow.normalBias = 0.1;
+        this.m_atmosphereLight.shadow.camera.near = 0;
+        this.m_atmosphereLight.shadow.camera.far = 3e5;
+        this.m_atmosphereLight.shadow.camera.left = -1e5;
+        this.m_atmosphereLight.shadow.camera.right = 1e5;
+        this.m_atmosphereLight.shadow.camera.top = 1e5;
+        this.m_atmosphereLight.shadow.camera.bottom = -1e5;
+
+        this.m_csmShadowNode = new CSMShadowNode(this.m_atmosphereLight);
+        this.m_csmShadowNode.cascades = 4;
+        this.m_csmShadowNode.maxFar = 1e5;
+        this.m_csmShadowNode.fade = false;
+        this.m_atmosphereLight.shadow.shadowNode = this.m_csmShadowNode;
 
         this.mapView.ready.then(() => {
             const renderer = this.mapView.renderer as Renderer & {
@@ -97,6 +124,7 @@ export class AtmosphereSystem {
             scene.environmentNode = skyEnvironment() as unknown as THREE.Scene["environmentNode"];
 
             const vrm = new ViewRenderManager(renderer);
+            vrm.csmShadowNode = this.m_csmShadowNode;
             const canvas = renderer.domElement as HTMLCanvasElement;
             vrm.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
             renderer.toneMapping = THREE.NoToneMapping;
@@ -131,11 +159,9 @@ export class AtmosphereSystem {
             );
 
             this.updateMoonAngularRadius(d);
+            this.updateCsmMaxFar();
 
             if (this.m_atmosphereLight != null) {
-                const sunDir = this.m_atmosphereContext.sunDirectionECEF
-                    .value as unknown as THREE.Vector3;
-                this.m_atmosphereLight.position.copy(sunDir).multiplyScalar(-1);
                 this.m_atmosphereLight.target.position.set(0, 0, 0);
                 this.m_atmosphereLight.target.updateMatrixWorld();
             }
@@ -194,6 +220,45 @@ export class AtmosphereSystem {
         );
         const distance = this.m_scratchMoonPos.length();
         skyNode.moonNode.angularRadius.value = AtmosphereSystem.MOON_RADIUS / distance;
+    }
+
+    private updateCsmMaxFar(): void {
+        const csm = this.m_csmShadowNode;
+        const light = this.m_atmosphereLight;
+        if (csm == null || light == null) return;
+
+        const viewFar = this.mapView.viewRanges.far;
+
+        if (viewFar > AtmosphereSystem.SHADOW_DISABLE_DISTANCE) {
+            if (light.castShadow) {
+                light.castShadow = false;
+            }
+            return;
+        }
+
+        if (!light.castShadow && this.m_atmosphereEnabled && this.m_sunCastShadow) {
+            light.castShadow = true;
+        }
+
+        csm.lightMargin = viewFar;
+
+        const desiredMaxFar = viewFar;
+        const ratio = this.m_lastCsmMaxFar > 0 ? desiredMaxFar / this.m_lastCsmMaxFar : Infinity;
+
+        if (ratio > 1.1 || ratio < 0.9) {
+            if (csm.camera != null) {
+                csm.maxFar = desiredMaxFar;
+                csm.updateFrustums();
+                this.m_lastCsmMaxFar = desiredMaxFar;
+            }
+        }
+
+        for (let i = 0; i < csm.lights.length; i++) {
+            const sc = csm.lights[i].shadow.camera;
+            sc.near = 0;
+            sc.far = viewFar * 3;
+            sc.updateProjectionMatrix();
+        }
     }
 
     private applyAtmosphereEnabled(): void {
