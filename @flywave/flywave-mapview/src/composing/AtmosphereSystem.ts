@@ -30,6 +30,14 @@ export interface AtmosphereSystemOptions {
     atmosphere?: boolean;
     sunTime?: number;
     sunCastShadow?: boolean;
+    showGround?: boolean;
+    raymarchScattering?: boolean;
+    higherOrderScatteringTexture?: boolean;
+    accurateShadowScattering?: boolean;
+    correctAltitude?: boolean;
+    constrainCamera?: boolean;
+    toneMappingExposure?: number;
+    toneMappingMode?: import("@flywave/flywave-datasource-protocol").ToneMappingMode;
 }
 
 const FRUSTUM_CORNERS = [
@@ -55,6 +63,14 @@ export class AtmosphereSystem {
     private m_csmShadowNode?: CascadedShadowMapsNode;
     private m_atmosphereEnabled: boolean = true;
     private m_sunCastShadow: boolean = true;
+    private m_showGround: boolean = true;
+    private m_raymarchScattering: boolean = true;
+    private m_higherOrderScatteringTexture: boolean = true;
+    private m_accurateShadowScattering: boolean = true;
+    private m_correctAltitude: boolean = true;
+    private m_constrainCamera: boolean = true;
+    private m_toneMappingExposure: number = 3;
+    private m_toneMappingMode?: import("@flywave/flywave-datasource-protocol").ToneMappingMode;
     private m_lastCsmMaxFar: number = 0;
     private readonly m_scratchMoonPos = new THREE.Vector3();
 
@@ -71,7 +87,11 @@ export class AtmosphereSystem {
         this.m_atmosphereContext = new AtmosphereContext(parameters, lutNode);
         this.m_atmosphereContext.camera = this.mapView.camera;
         this.m_atmosphereContext._overrideCameraPositionECEF = this.mapView.camera.position;
-        this.m_atmosphereContext.showGround = true;
+        this.m_atmosphereContext.showGround = this.m_showGround;
+        this.m_atmosphereContext.raymarchScattering = this.m_raymarchScattering;
+        this.m_atmosphereContext.accurateShadowScattering = this.m_accurateShadowScattering;
+        this.m_atmosphereContext.correctAltitude = this.m_correctAltitude;
+        this.m_atmosphereContext.constrainCamera = this.m_constrainCamera;
         registerAtmosphereContext(this.m_atmosphereContext);
 
         this.m_skyNode = sky();
@@ -128,6 +148,7 @@ export class AtmosphereSystem {
             vrm.csmShadowNode = this.m_csmShadowNode;
             const canvas = renderer.domElement as HTMLCanvasElement;
             vrm.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
+            vrm.exposure.value = this.m_toneMappingExposure;
             renderer.toneMapping = THREE.NoToneMapping;
             this.mapView.mapRenderingManager.viewRenderManager = vrm;
             this.mapView.mapRenderingManager.syncPostEffectsToVRM();
@@ -179,7 +200,76 @@ export class AtmosphereSystem {
         if (options?.sunCastShadow !== undefined) {
             this.m_sunCastShadow = options.sunCastShadow;
         }
+        const ctx = this.m_atmosphereContext;
+        if (ctx != null) {
+            if (options?.showGround !== undefined) {
+                this.m_showGround = options.showGround;
+                ctx.showGround = this.m_showGround;
+            }
+            if (options?.raymarchScattering !== undefined) {
+                this.m_raymarchScattering = options.raymarchScattering;
+                ctx.raymarchScattering = this.m_raymarchScattering;
+            }
+            if (options?.higherOrderScatteringTexture !== undefined) {
+                this.m_higherOrderScatteringTexture = options.higherOrderScatteringTexture;
+                ctx.parameters.higherOrderScatteringTexture = this.m_higherOrderScatteringTexture;
+            }
+            if (options?.accurateShadowScattering !== undefined) {
+                this.m_accurateShadowScattering = options.accurateShadowScattering;
+                ctx.accurateShadowScattering = this.m_accurateShadowScattering;
+            }
+            if (options?.correctAltitude !== undefined) {
+                this.m_correctAltitude = options.correctAltitude;
+                ctx.correctAltitude = this.m_correctAltitude;
+            }
+            if (options?.constrainCamera !== undefined) {
+                this.m_constrainCamera = options.constrainCamera;
+                ctx.constrainCamera = this.m_constrainCamera;
+            }
+        }
+        if (options?.toneMappingExposure !== undefined) {
+            this.m_toneMappingExposure = options.toneMappingExposure;
+            const vrm = this.mapView.mapRenderingManager.viewRenderManager;
+            if (vrm != null) {
+                vrm.exposure.value = this.m_toneMappingExposure;
+            }
+        }
+        if (options?.toneMappingMode !== undefined) {
+            this.m_toneMappingMode = options.toneMappingMode;
+            this.applyToneMappingMode();
+        }
         this.applyAtmosphereEnabled();
+    }
+
+    private applyToneMappingMode(): void {
+        const mode = this.m_toneMappingMode;
+        if (mode == null) return;
+        const renderer = this.mapView.renderer as import("three/webgpu").Renderer | null;
+        if (renderer == null) return;
+        const vrm = this.mapView.mapRenderingManager.viewRenderManager;
+        if (mode === "agx-punchy") {
+            renderer.toneMapping = THREE.NoToneMapping;
+            if (vrm != null) vrm.config.toneMappingMode = "agx-punchy";
+        } else {
+            if (vrm != null) vrm.config.toneMappingMode = mode;
+            switch (mode) {
+                case "linear":
+                    renderer.toneMapping = THREE.LinearToneMapping;
+                    break;
+                case "reinhard":
+                    renderer.toneMapping = THREE.ReinhardToneMapping;
+                    break;
+                case "aces":
+                    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                    break;
+                case "agx":
+                    renderer.toneMapping = THREE.AgXToneMapping;
+                    break;
+                case "neutral":
+                    renderer.toneMapping = THREE.NeutralToneMapping;
+                    break;
+            }
+        }
     }
 
     getCurrentDate(): Date {

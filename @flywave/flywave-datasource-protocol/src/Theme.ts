@@ -196,6 +196,12 @@ export interface Theme {
      * Tone mapping exposure value for the renderer.
      */
     toneMappingExposure?: number;
+
+    /**
+     * Tone mapping mode for the renderer.
+     * @default "agx-punchy"
+     */
+    toneMappingMode?: ToneMappingMode;
 }
 
 export interface Celestia {
@@ -204,7 +210,48 @@ export interface Celestia {
     sunTime?: number;
 
     sunCastShadow?: boolean;
+
+    /**
+     * Whether to show the ground intersection in atmosphere rendering.
+     * @default true
+     */
+    showGround?: boolean;
+
+    /**
+     * Whether to use raymarching for scattering computation.
+     * @default true
+     */
+    raymarchScattering?: boolean;
+
+    /**
+     * Whether to use higher order scattering texture for multi-scattering.
+     * @default true
+     */
+    higherOrderScatteringTexture?: boolean;
+
+    /**
+     * Whether to use accurate shadow scattering.
+     * @default true
+     */
+    accurateShadowScattering?: boolean;
+
+    /**
+     * Whether to correct altitude for ellipsoidal earth.
+     * @default true
+     */
+    correctAltitude?: boolean;
+
+    /**
+     * Whether to constrain camera within atmosphere boundaries.
+     * @default true
+     */
+    constrainCamera?: boolean;
 }
+
+/**
+ * Tone mapping modes supported by the renderer.
+ */
+export type ToneMappingMode = "linear" | "reinhard" | "aces" | "agx" | "agx-punchy" | "neutral";
 
 /**
  * A type representing symbolic render orders.

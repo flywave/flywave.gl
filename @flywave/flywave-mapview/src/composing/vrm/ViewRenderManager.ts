@@ -47,7 +47,8 @@ export class ViewRenderManager implements IViewRenderManager {
             ghostIntensity: 0.005,
             haloIntensity: 0.005,
             glareIntensity: 1
-        }
+        },
+        toneMappingMode: "agx-punchy"
     };
 
     needsUpdate: boolean = true;
@@ -64,7 +65,7 @@ export class ViewRenderManager implements IViewRenderManager {
     bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
     translucentLayerEffect?: TranslucentLayerEffect;
     csmShadowNode?: CascadedShadowMapsNode;
-    exposure = uniform(5);
+    exposure = uniform(3);
 
     constructor(private readonly renderer: Renderer) {}
 
@@ -128,8 +129,10 @@ export class ViewRenderManager implements IViewRenderManager {
             outputNode = this.lensFlareNode;
         }
 
-        const agxResult = agxPunchyToneMapping(outputNode.rgb, this.exposure);
-        let finalNode = vec4(agxResult, 1);
+        let finalNode = vec4(outputNode.rgb, 1);
+        if (this.config.toneMappingMode === "agx-punchy") {
+            finalNode = vec4(agxPunchyToneMapping(outputNode.rgb, this.exposure), 1);
+        }
 
         if (taaEnabled) {
             const velocityNode = this.passNode.getTextureNode("velocity");

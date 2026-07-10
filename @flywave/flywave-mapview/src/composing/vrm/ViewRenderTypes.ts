@@ -54,6 +54,8 @@ export interface IAerialPerspectiveConfig {
     enabled: boolean;
 }
 
+export type ToneMappingMode = "linear" | "reinhard" | "aces" | "agx" | "agx-punchy" | "neutral";
+
 export interface IViewRenderConfig {
     aerialPerspective: IAerialPerspectiveConfig;
     bloom: IBloomConfig;
@@ -64,6 +66,7 @@ export interface IViewRenderConfig {
     outline: IOutlineConfig;
     taa: ITemporalAntialiasConfig;
     lensFlare: ILensFlareConfig;
+    toneMappingMode: ToneMappingMode;
 }
 
 import type { TranslucentLayerEffect } from "./TranslucentLayerEffect";
@@ -73,6 +76,7 @@ export interface IViewRenderManager {
     bloomObjects: Set<THREE.Object3D>;
     bloomIgnoreObjects: Set<THREE.Object3D>;
     translucentLayerEffect?: TranslucentLayerEffect;
+    exposure: { value: number };
     render(scene: THREE.Scene, camera: THREE.Camera): void;
     setSize(width: number, height: number): void;
     dispose(): void;

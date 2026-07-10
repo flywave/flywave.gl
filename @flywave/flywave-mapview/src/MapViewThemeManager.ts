@@ -17,6 +17,7 @@ import * as THREE from "three";
 import { MapViewImageCache } from "./image/MapViewImageCache";
 import { type MapView } from "./MapView";
 import { ThemeLoader } from "./ThemeLoader";
+import type { AtmosphereSystemOptions } from "./composing/AtmosphereSystem";
 
 const logger = LoggerManager.instance.create("MapViewThemeManager");
 
@@ -122,6 +123,17 @@ export class MapViewThemeManager {
         if (theme.toneMappingExposure !== undefined) {
             this.m_theme.toneMappingExposure = theme.toneMappingExposure;
             this.m_mapView.renderer.toneMappingExposure = theme.toneMappingExposure;
+        }
+        if (theme.toneMappingMode !== undefined || theme.toneMappingExposure !== undefined) {
+            const celestiaOptions = {
+                ...(theme.toneMappingMode !== undefined && {
+                    toneMappingMode: theme.toneMappingMode
+                }),
+                ...(theme.toneMappingExposure !== undefined && {
+                    toneMappingExposure: theme.toneMappingExposure
+                })
+            } as AtmosphereSystemOptions;
+            environment.updateAtmosphere(celestiaOptions);
         }
 
         // Images and environment map.
