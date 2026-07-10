@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
@@ -8,7 +9,7 @@ import {
     AtmosphereLightNode,
     AtmosphereParameters,
     SkyNode,
-    skyBackground,
+    sky,
     skyEnvironment,
     updateCelestialDirections,
     registerAtmosphereContext
@@ -16,7 +17,7 @@ import {
 import * as THREE from "three";
 import { texture } from "three/tsl";
 import { type Renderer } from "three/webgpu";
-import { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
+import { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
 
 import { ViewRenderManager } from "./vrm/ViewRenderManager";
 import { TranslucentLayerEffect } from "./vrm/TranslucentLayerEffect";
@@ -51,7 +52,7 @@ export class AtmosphereSystem {
     private m_atmosphereContext?: AtmosphereContext;
     private m_skyNode?: SkyNode;
     private m_atmosphereLight?: AtmosphereLight;
-    private m_csmShadowNode?: CSMShadowNode;
+    private m_csmShadowNode?: CascadedShadowMapsNode;
     private m_atmosphereEnabled: boolean = true;
     private m_sunCastShadow: boolean = true;
     private m_lastCsmMaxFar: number = 0;
@@ -70,9 +71,10 @@ export class AtmosphereSystem {
         this.m_atmosphereContext = new AtmosphereContext(parameters, lutNode);
         this.m_atmosphereContext.camera = this.mapView.camera;
         this.m_atmosphereContext._overrideCameraPositionECEF = this.mapView.camera.position;
+        this.m_atmosphereContext.showGround = true;
         registerAtmosphereContext(this.m_atmosphereContext);
 
-        this.m_skyNode = skyBackground();
+        this.m_skyNode = sky();
         this.m_skyNode.showSun = true;
         this.m_skyNode.showMoon = true;
         this.m_skyNode.showStars = true;
@@ -92,7 +94,7 @@ export class AtmosphereSystem {
         this.m_atmosphereLight.shadow.camera.top = 1e5;
         this.m_atmosphereLight.shadow.camera.bottom = -1e5;
 
-        this.m_csmShadowNode = new CSMShadowNode(this.m_atmosphereLight);
+        this.m_csmShadowNode = new CascadedShadowMapsNode(this.m_atmosphereLight);
         this.m_csmShadowNode.cascades = 4;
         this.m_csmShadowNode.maxFar = 1e5;
         this.m_csmShadowNode.fade = false;
@@ -122,7 +124,6 @@ export class AtmosphereSystem {
             scene.background = null;
             scene.backgroundNode = this.m_skyNode as THREE.Scene["backgroundNode"];
             scene.environmentNode = skyEnvironment() as unknown as THREE.Scene["environmentNode"];
-
             const vrm = new ViewRenderManager(renderer);
             vrm.csmShadowNode = this.m_csmShadowNode;
             const canvas = renderer.domElement as HTMLCanvasElement;
@@ -219,7 +220,8 @@ export class AtmosphereSystem {
             this.m_scratchMoonPos
         );
         const distance = this.m_scratchMoonPos.length();
-        skyNode.moonNode.angularRadius.value = AtmosphereSystem.MOON_RADIUS / distance;
+        const angularRadius = AtmosphereSystem.MOON_RADIUS / distance;
+        skyNode.moonNode.angularRadius.value = angularRadius;
     }
 
     private updateCsmMaxFar(): void {

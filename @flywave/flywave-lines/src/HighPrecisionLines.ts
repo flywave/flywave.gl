@@ -85,7 +85,7 @@ export class HighPrecisionWireFrameLine extends THREE.Line implements HighPrecis
             _material: THREE.Material,
             _group: THREE.Group
         ) => {
-            HighPrecisionUtils.updateHpUniforms(this, camera, this.shaderMaterial);
+            HighPrecisionUtils.updateHpUniforms(this, camera, this.material as any);
         };
     }
 
@@ -148,7 +148,7 @@ export class HighPrecisionLine extends THREE.Mesh implements HighPrecisionObject
             _material: THREE.Material,
             _group: THREE.Group
         ) => {
-            HighPrecisionUtils.updateHpUniforms(this, camera, this.shaderMaterial);
+            HighPrecisionUtils.updateHpUniforms(this, camera, this.material as any);
         };
     }
 

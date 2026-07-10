@@ -57,9 +57,11 @@ export class AtmosphereParameters {
 
     sunAngularRadius = 0.004675;
 
-    bottomRadius = 6378137;
+    bottomRadius = 6360000;
 
-    topRadius = 6438137;
+    // The distance between the planet center and the top of the atmosphere in
+    // meters.
+    topRadius = 6420000;
 
     rayleighDensity = new DensityProfile([
         new DensityProfileLayer(),

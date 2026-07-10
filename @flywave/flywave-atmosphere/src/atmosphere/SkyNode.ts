@@ -1,20 +1,9 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    Fn,
-    mix,
-    nodeProxy,
-    positionGeometry,
-    positionView,
-    uv,
-    vec2,
-    vec3,
-    vec4
-} from "three/tsl";
+import { Fn, mix, nodeProxy, positionView, uv, vec2, vec3, vec4 } from "three/tsl";
 import { type NodeBuilder, TempNode } from "three/webgpu";
 
-import { inverseProjectionMatrix } from "../tsl/accessors";
 import type { Node } from "../tsl/node";
 import { equirectToDirectionWorld } from "../tsl/transformations";
 import { hashValues } from "../tsl/utils";
@@ -138,7 +127,6 @@ export class SkyNode extends TempNode {
                     shadowLengthNode ?? vec2(0),
                     moonDirectionECEF
                 ).toConst();
-
                 inscattering = inscattering.add(
                     lunarLuminanceTransfer.get("luminance").mul(2.5e-6)
                 );

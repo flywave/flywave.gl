@@ -111,6 +111,7 @@ export { StarsNode } from "./atmosphere/StarsNode";
 // Lighting
 export { AtmosphereLight, type AtmosphereLightBody } from "./atmosphere/AtmosphereLight";
 export { AtmosphereLightNode } from "./atmosphere/AtmosphereLightNode";
+export { CascadedShadowMapsNode } from "./atmosphere/CascadedShadowMapsNode";
 
 // Shadow length
 export { ShadowLengthNode } from "./atmosphere/ShadowLengthNode";

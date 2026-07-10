@@ -9,7 +9,6 @@ import {
 import {
     type Camera,
     type PointsMaterialParameters,
-    type ShaderMaterial,
     BufferAttribute,
     BufferGeometry,
     Float32BufferAttribute,
@@ -134,7 +133,7 @@ export namespace HighPrecisionUtils {
     export function updateHpUniforms(
         object: HPL.HighPrecisionObject,
         camera: Camera,
-        shaderMaterial: ShaderMaterial
+        material: any
     ): void {
         const highPrecisionCameraInfo = createHighPrecisionCameraPos(
             camera,
@@ -142,25 +141,29 @@ export namespace HighPrecisionUtils {
         );
         const mvp = highPrecisionCameraInfo.viewProjection;
 
-        if (shaderMaterial !== undefined && shaderMaterial.isMaterial) {
-            if (
-                shaderMaterial.uniforms &&
-                shaderMaterial.uniforms.u_mvp &&
-                shaderMaterial.uniforms.u_eyepos &&
-                shaderMaterial.uniforms.u_eyepos_lowpart
-            ) {
-                shaderMaterial.uniforms.u_mvp.value = new Float32Array(mvp.elements);
-                shaderMaterial.uniforms.u_eyepos.value = new Float32Array(
-                    highPrecisionCameraInfo.eyePosHi.toArray()
-                );
-                shaderMaterial.uniforms.u_eyepos_lowpart.value = new Float32Array(
-                    highPrecisionCameraInfo.eyePosLo.toArray()
-                );
-            } else {
-                throw Error("High pecision material has missing uniforms");
-            }
+        if (material == null || !material.isMaterial) {
+            throw Error("High precision line has no high precision material");
+        }
+
+        if (material.hpMvp) {
+            material.hpMvp.value.copy(mvp);
+            material.hpEyepos.value.copy(highPrecisionCameraInfo.eyePosHi);
+            material.hpEyeposLow.value.copy(highPrecisionCameraInfo.eyePosLo);
+        } else if (
+            material.uniforms &&
+            material.uniforms.u_mvp &&
+            material.uniforms.u_eyepos &&
+            material.uniforms.u_eyepos_lowpart
+        ) {
+            material.uniforms.u_mvp.value = new Float32Array(mvp.elements);
+            material.uniforms.u_eyepos.value = new Float32Array(
+                highPrecisionCameraInfo.eyePosHi.toArray()
+            );
+            material.uniforms.u_eyepos_lowpart.value = new Float32Array(
+                highPrecisionCameraInfo.eyePosLo.toArray()
+            );
         } else {
-            throw Error("High pecision line has no high precision material");
+            throw Error("High precision material has missing uniforms");
         }
     }
 

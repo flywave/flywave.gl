@@ -57,6 +57,7 @@ import { UnwarpEpipolarNode } from "./ShadowLengthNode/UnwarpEpipolarNode";
 const vector3Scratch = /*#__PURE__*/ new Vector3();
 const vector4Scratch = /*#__PURE__*/ new Vector4();
 const matrixScratch = /*#__PURE__*/ new Matrix4();
+const translationScratch = /*#__PURE__*/ new Matrix4();
 const sizeScratch = /*#__PURE__*/ new Vector2();
 
 export class ShadowLengthNode extends TempNode {
@@ -205,6 +206,7 @@ export class ShadowLengthNode extends TempNode {
 
         const { parameters } = getAtmosphereContext(builder);
         const { worldToUnit } = parameters;
+        const atmosphereContext = getAtmosphereContext(builder);
 
         const maxShadowStep = uniform(1024 / 4, "float");
         const shadowMapTexelSize = uniform("vec2");
@@ -241,12 +243,27 @@ export class ShadowLengthNode extends TempNode {
             const array = shadowMatrixArray.array as Matrix4[];
             const lights = csmShadowNode.lights;
             const unitToWorld = 1 / worldToUnit;
+
+            // RTE fix: shadow maps are rendered with RTE camera (position=0) and
+            // camera-centric geometry. But transformSliceToUnit returns absolute
+            // ECEF unit-space positions. We need to translate by -cameraPositionUnit
+            // to convert from absolute ECEF to camera-centric before shadow lookup.
+            // S(unitToWorld) * T(-cameraPositionUnit) = T(-cameraECEF) * S(unitToWorld)
+            const camPos = atmosphereContext.camera?.position;
             matrixScratch.makeScale(unitToWorld, unitToWorld, unitToWorld);
+            if (camPos != null && (camPos.x !== 0 || camPos.y !== 0 || camPos.z !== 0)) {
+                translationScratch.makeTranslation(
+                    -camPos.x * worldToUnit,
+                    -camPos.y * worldToUnit,
+                    -camPos.z * worldToUnit
+                );
+                matrixScratch.multiply(translationScratch); // S * T
+            }
             for (let i = 0; i < array.length; ++i) {
                 const matrix = lights[i].shadow?.matrix;
                 if (matrix != null) {
                     array[i].copy(matrix);
-                    array[i].multiply(matrixScratch);
+                    array[i].multiply(matrixScratch); // M_shadow * S * T
                 }
             }
         });

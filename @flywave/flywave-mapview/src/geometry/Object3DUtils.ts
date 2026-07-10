@@ -114,6 +114,9 @@ export namespace Object3DUtils {
             material instanceof THREE.PointsMaterial
         ) {
             // Nothing to be done here
+        } else if ((material as any).isNodeMaterial === true) {
+            // TSL NodeMaterial variants (SolidLineMaterial, EdgeMaterial, etc.)
+            // Nothing to be done here
         } else if (material instanceof THREE.MeshLambertMaterial) {
             const meshMaterial = material;
             estimateTextureSize(meshMaterial.map, objectSize, visitedObjects);

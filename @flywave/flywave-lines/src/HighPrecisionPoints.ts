@@ -84,7 +84,7 @@ export class HighPrecisionPoints extends THREE.Points implements HighPrecisionOb
             _material: THREE.Material,
             _group: THREE.Group
         ) => {
-            HighPrecisionUtils.updateHpUniforms(this, camera, this.shaderMaterial);
+            HighPrecisionUtils.updateHpUniforms(this, camera, this.material as any);
         };
     }
 

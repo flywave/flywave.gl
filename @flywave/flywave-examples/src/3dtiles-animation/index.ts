@@ -43,9 +43,11 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         heading: 35.1, // Initial heading angle
         canvas: canvas, // Specify render canvas
         theme: {
-            extends: "resources/tilezen_base_globe.json", // Base theme configuration
-            celestia:{
-                atmosphere:true
+            // extends: "resources/tilezen_base_globe.json", // Base theme configuration
+            celestia: {
+                atmosphere: true,
+                sunCastShadow: true,
+                sunTime: new Date().setHours(17, 50)
             }
         }
     });
@@ -76,6 +78,8 @@ const create3DTilesDataSource = (mapView: MapView): CesiumIonDataSource => {
         customAttributeConfig: {
             batchIdAttributeName: "_batchid"
         },
+        castShadow: true,
+        receiveShadow: true,
         animation: {
             easing: "ease-in-out",
             duration: 1000
@@ -107,7 +111,7 @@ const create3DTilesTheme = (): Theme => {
                     value: 0.9,
                     opacity: {
                         from: 0.5,
-                        to: 0.8
+                        to: 1
                     }
                 },
                 // Medium buildings (15-30m) - Bright green scheme
@@ -121,7 +125,7 @@ const create3DTilesTheme = (): Theme => {
                     value: 0.9,
                     opacity: {
                         from: 0.6,
-                        to: 0.85
+                        to: 1
                     }
                 },
                 // Mid-high buildings (30-50m) - Bright yellow scheme
@@ -135,7 +139,7 @@ const create3DTilesTheme = (): Theme => {
                     value: 0.95,
                     opacity: {
                         from: 0.7,
-                        to: 0.9
+                        to: 1
                     }
                 },
                 // High-rise buildings (50-80m) - Bright orange scheme
@@ -163,7 +167,7 @@ const create3DTilesTheme = (): Theme => {
                     value: 1.0,
                     opacity: {
                         from: 0.8,
-                        to: 0.95
+                        to: 1
                     }
                 },
                 // Skyscrapers (120m+) - Bright purple scheme

@@ -1,115 +1,52 @@
 /* Copyright (C) 2025 flywave.gl contributors */
+// @ts-nocheck
 
 import * as THREE from "three";
+import { PointsNodeMaterial } from "three/webgpu";
+import { Fn, attribute, uniform, vec3, vec4, texture, pointUV, float } from "three/tsl";
 
-import linesShaderChunk from "./ShaderChunks/LinesChunks";
-
-const vertexSource: string = `
-#ifdef USE_COLOR
-varying vec3 vColor;
-#endif
-
-uniform float size;
-
-// uniforms to implement double-precision
-uniform mat4 u_mvp;             // combined modelView and projection matrix
-uniform vec3 u_eyepos;          // eye position major
-uniform vec3 u_eyepos_lowpart;  // eye position minor ((double) eyepos - (float) eyepos)
-
-// vertex attributes
-attribute vec3 positionLow;     // low part
-
-#include <high_precision_vert_func>
-
-void main() {
-    #ifdef USE_COLOR
-    vColor = color.rgb;
-    #endif
-
-    vec3 pos = subtractDblEyePos(position);
-    gl_Position = u_mvp * vec4(pos, 1.0);
-
-    // ignore sizeAttenuation for now!
-    gl_PointSize = size;
-}`;
-
-/**
- * Parameters used when constructing a new {@link HighPrecisionPointMaterial}.
- */
-export interface HighPrecisionPointMaterialParameters extends THREE.PointsMaterialParameters {
-    /**
-     * Point color.
-     */
+export interface HighPrecisionPointMaterialParameters {
     color?: number | string | THREE.Color;
-    /**
-     * Point opacity.
-     */
     opacity?: number;
-    /**
-     * Point scale.
-     */
+    size?: number;
     scale?: number;
-    /**
-     * UV transformation matrix.
-     */
+    map?: THREE.Texture;
     uvTransform?: THREE.Matrix3;
+    rendererCapabilities?: { isWebGL2: boolean; logarithmicDepthBuffer: boolean };
 }
 
-/**
- * Material designed to render high precision points (ideal for position-sensible data).
- */
-export class HighPrecisionPointMaterial extends THREE.PointsMaterial {
+export class HighPrecisionPointMaterial extends PointsNodeMaterial {
     static DEFAULT_COLOR: number = 0x000050;
     static DEFAULT_OPACITY: number = 1.0;
     static DEFAULT_SIZE: number = 1.0;
     static DEFAULT_SCALE: number = 1.0;
 
-    isHighPrecisionPointMaterial: boolean;
-    uniforms: Record<string, THREE.IUniform>;
-    vertexShader?: string;
-    fragmentShader?: string;
+    isHighPrecisionPointMaterial: boolean = true;
 
-    /**
-     * Constructs a new `HighPrecisionPointMaterial`.
-     *
-     * @param params - `HighPrecisionPointMaterial` parameters.
-     */
+    private m_diffuseColorU = uniform(new THREE.Color(HighPrecisionPointMaterial.DEFAULT_COLOR));
+    private m_opacityU = uniform(HighPrecisionPointMaterial.DEFAULT_OPACITY);
+    private m_mvpU = uniform(new THREE.Matrix4());
+    private m_eyeposU = uniform(new THREE.Vector3());
+    private m_eyeposLowU = uniform(new THREE.Vector3());
+    private m_mapU = uniform(new THREE.Texture());
+
+    opacity: number = HighPrecisionPointMaterial.DEFAULT_OPACITY;
+    color: THREE.Color = new THREE.Color(HighPrecisionPointMaterial.DEFAULT_COLOR);
+
     constructor(params?: HighPrecisionPointMaterialParameters) {
-        Object.assign(THREE.ShaderChunk, linesShaderChunk);
+        super();
+        this.name = "HighPrecisionPointMaterial";
+        this.transparent = true;
+        this.sizeAttenuation = false;
 
-        const shaderParams = params;
-        super(shaderParams);
-
-        // this.type = "HighPrecisionPointMaterial";
-        this.vertexShader = vertexSource;
-        this.fragmentShader = THREE.ShaderChunk.points_frag;
-        this.fog = false;
-
-        this.uniforms = {
-            // FLYWAVE-17373: Original uniform name 'diffuse' due to shader compilation
-            // errors with Metal in Safari 15 on MacOS Monterrey and iPadOS 15.
-            diffuseColor: new THREE.Uniform(
-                new THREE.Color(HighPrecisionPointMaterial.DEFAULT_COLOR)
-            ),
-            opacity: new THREE.Uniform(HighPrecisionPointMaterial.DEFAULT_OPACITY),
-            size: new THREE.Uniform(HighPrecisionPointMaterial.DEFAULT_SIZE),
-            scale: new THREE.Uniform(HighPrecisionPointMaterial.DEFAULT_SCALE),
-            map: new THREE.Uniform(new THREE.Texture()),
-            uvTransform: new THREE.Uniform(new THREE.Matrix3()),
-            u_mvp: new THREE.Uniform(new THREE.Matrix4()),
-            u_eyepos: new THREE.Uniform(new THREE.Vector3()),
-            u_eyepos_lowpart: new THREE.Uniform(new THREE.Vector3())
-        };
-
-        this.isHighPrecisionPointMaterial = true;
-
-        // Apply initial parameter values.
-        if (params !== undefined) {
+        if (params) {
             if (params.color !== undefined) {
-                this.color.set(params.color as any);
+                this.m_diffuseColorU.value.set(params.color as any);
+                this.color.copy(this.m_diffuseColorU.value);
             }
             if (params.opacity !== undefined) {
                 this.opacity = params.opacity;
+                this.m_opacityU.value = params.opacity;
             }
             if (params.size !== undefined) {
                 this.size = params.size;
@@ -117,35 +54,90 @@ export class HighPrecisionPointMaterial extends THREE.PointsMaterial {
             if (params.scale !== undefined) {
                 this.scale = params.scale;
             }
-            if (params.uvTransform !== undefined) {
-                this.uvTransform = params.uvTransform;
-            }
             if (params.map !== undefined) {
+                this.m_mapU.value = params.map;
                 this.map = params.map;
             }
         }
+
+        this.updateTransparency();
+        this.setupNodes();
     }
 
-    /**
-     *  Point scale.
-     */
+    private setupNodes() {
+        const positionHigh = attribute("position", "vec3");
+        const positionLow = attribute("positionLow", "vec3");
+
+        this.positionNode = Fn(() => {
+            const t1 = positionLow.sub(this.m_eyeposLowU);
+            const e = t1.sub(positionLow);
+            const t2 = this.m_eyeposLowU
+                .negate()
+                .sub(e)
+                .add(positionLow.sub(t1.sub(e)))
+                .add(positionHigh)
+                .sub(this.m_eyeposU);
+            const highDelta = t1.add(t2);
+            const lowDelta = t2.sub(highDelta.sub(t1));
+            const pos = highDelta.add(lowDelta);
+            return this.m_mvpU.mul(vec4(pos, 1.0));
+        })();
+
+        this.sizeNode = float(this.size);
+
+        this.fragmentNode = Fn(() => {
+            const mapColor = texture(this.m_mapU, pointUV);
+            const rgb = this.m_diffuseColorU.mul(mapColor.rgb);
+            const alpha = this.m_opacityU.mul(mapColor.a);
+            return vec4(rgb, alpha);
+        })();
+    }
+
+    private updateTransparency() {
+        this.transparent = this.opacity < 1.0;
+        this.m_opacityU.value = this.opacity;
+    }
+
     get scale(): number {
-        return this.uniforms.scale.value;
+        return this.size;
     }
 
     set scale(value: number) {
-        this.uniforms.scale.value = value;
+        this.size = value;
+        this.sizeNode = float(value);
     }
 
-    /**
-     * UV transformation matrix.
-     */
-    get uvTransform(): THREE.Matrix3 {
-        return this.uniforms.uvTransform.value;
+    get uniforms() {
+        return {
+            diffuseColor: { value: this.m_diffuseColorU.value },
+            opacity: { value: this.m_opacityU.value },
+            size: { value: this.size },
+            scale: { value: this.scale },
+            map: { value: this.m_mapU.value },
+            u_mvp: { value: this.m_mvpU.value },
+            u_eyepos: { value: this.m_eyeposU.value },
+            u_eyepos_lowpart: { value: this.m_eyeposLowU.value }
+        };
     }
 
-    set uvTransform(value: THREE.Matrix3) {
-        this.uniforms.uvTransform.value = value;
+    set uniforms(value: any) {
+        if (value.diffuseColor) this.m_diffuseColorU.value = value.diffuseColor.value;
+        if (value.opacity) this.m_opacityU.value = value.opacity.value;
+        if (value.u_mvp) this.m_mvpU.value = value.u_mvp.value;
+        if (value.u_eyepos) this.m_eyeposU.value = value.u_eyepos.value;
+        if (value.u_eyepos_lowpart) this.m_eyeposLowU.value = value.u_eyepos_lowpart.value;
+    }
+
+    get hpMvp() {
+        return this.m_mvpU;
+    }
+
+    get hpEyepos() {
+        return this.m_eyeposU;
+    }
+
+    get hpEyeposLow() {
+        return this.m_eyeposLowU;
     }
 }
 

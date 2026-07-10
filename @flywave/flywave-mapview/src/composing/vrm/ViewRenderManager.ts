@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { float, mrt, output, pass, positionView, uniform, vec4 } from "three/tsl";
 import { RenderPipeline, type Renderer } from "three/webgpu";
-import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
+import type { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
 
 import {
     dithering,
@@ -63,7 +63,8 @@ export class ViewRenderManager implements IViewRenderManager {
     bloomObjects: Set<THREE.Object3D> = new Set();
     bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
     translucentLayerEffect?: TranslucentLayerEffect;
-    csmShadowNode?: CSMShadowNode;
+    csmShadowNode?: CascadedShadowMapsNode;
+    exposure = uniform(5);
 
     constructor(private readonly renderer: Renderer) {}
 
@@ -127,7 +128,7 @@ export class ViewRenderManager implements IViewRenderManager {
             outputNode = this.lensFlareNode;
         }
 
-        const agxResult = agxPunchyToneMapping(outputNode.rgb, uniform(3));
+        const agxResult = agxPunchyToneMapping(outputNode.rgb, this.exposure);
         let finalNode = vec4(agxResult, 1);
 
         if (taaEnabled) {

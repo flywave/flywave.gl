@@ -23,6 +23,7 @@ import {
     mod,
     normalize,
     pow as tslPow,
+    select,
     sign,
     sin as tslSin,
     smoothstep,

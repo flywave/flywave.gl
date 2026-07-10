@@ -57,30 +57,30 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
             lights: [
-                {
-                    type: "ambient", // Ambient light
-                    intensity: 1.0, // Light intensity
-                    name: "ambientLight", // Light source name
-                    color: "#ffffff" // Light source color
-                }
+                // {
+                //     type: "ambient", // Ambient light
+                //     intensity: 1.0, // Light intensity
+                //     name: "ambientLight", // Light source name
+                //     color: "#ffffff" // Light source color
+                // }
             ],
             celestia: {
                 sunTime: new Date().setHours(13), // Set sun time to 1 PM
                 sunCastShadow: true, // Enable shadows
                 atmosphere: true // Enable atmospheric effect
             },
-            postEffects: {
-                brightnessContrast: {
-                    brightness: -0.17, // Brightness adjustment
-                    contrast: 0.23, // Contrast adjustment
-                    enabled: true // Enable brightness contrast effect
-                },
-                hueSaturation: {
-                    hue: 0.17, // Hue adjustment
-                    saturation: 0.57, // Saturation adjustment
-                    enabled: true // Enable hue saturation effect
-                }
-            }
+            // postEffects: {
+            //     brightnessContrast: {
+            //         brightness: -0.17, // Brightness adjustment
+            //         contrast: 0.23, // Contrast adjustment
+            //         enabled: true // Enable brightness contrast effect
+            //     },
+            //     hueSaturation: {
+            //         hue: 0.17, // Hue adjustment
+            //         saturation: 0.57, // Saturation adjustment
+            //         enabled: true // Enable hue saturation effect
+            //     }
+            // }
         }
     });
 };
@@ -139,21 +139,21 @@ const addPipeDataSources = (mapView: MapView): void => {
             name: item.name
         });
 
-        dataSource.setTheme({
-            postEffects: {
-                bloom: {
-                    enabled: true // Enable bloom effect
-                },
-                translucentDepth: {
-                    enabled: true, // Enable translucent depth effect
-                    mixFactor: 0.7, // Translucent depth mix factor
-                    useObjectColor: true, // Use object color for translucent depth
-                    objectColorMix: 0.3, // Object color mix factor
-                    color: `#${new Color(Math.random() * 0xff0000).getHexString()}`, // Object color
-                    occlusionDistance: 10000
-                }
-            }
-        });
+        // dataSource.setTheme({
+        //     postEffects: {
+        //         bloom: {
+        //             enabled: true // Enable bloom effect
+        //         },
+        //         translucentDepth: {
+        //             enabled: true, // Enable translucent depth effect
+        //             mixFactor: 0.7, // Translucent depth mix factor
+        //             useObjectColor: true, // Use object color for translucent depth
+        //             objectColorMix: 0.3, // Object color mix factor
+        //             color: `#${new Color(Math.random() * 0xff0000).getHexString()}`, // Object color
+        //             occlusionDistance: 10000
+        //         }
+        //     }
+        // });
 
         mapView.addDataSource(dataSource);
     });
@@ -164,14 +164,14 @@ const addPipeDataSources = (mapView: MapView): void => {
         name: "Buildings"
     });
 
-    buildingDataSource.setTheme({
-        postEffects: {
-            translucentDepth: {
-                enabled: true, // Enable translucent depth effect
-                mode: "background"
-            }
-        }
-    });
+    // buildingDataSource.setTheme({
+    //     postEffects: {
+    //         translucentDepth: {
+    //             enabled: true, // Enable translucent depth effect
+    //             mode: "background"
+    //         }
+    //     }
+    // });
     mapView.addDataSource(buildingDataSource);
 };
 
@@ -191,10 +191,10 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
     mapView.setElevationSource(demTerrain);
 
     // Add ground texture overlay
-    addGroundOverlay(demTerrain);
+    // addGroundOverlay(demTerrain);
 
     // Add ground modification
-    addGroundModification(demTerrain);
+    // addGroundModification(demTerrain);
 };
 
 /**
@@ -322,7 +322,7 @@ try {
     initializeMapMonitor(mapView);
 
     // 7. Add GeoJSON data source
-    addGeoJsonDataSource(mapView);
+    // addGeoJsonDataSource(mapView);
 
     console.log("Pipeline engineering project visualization example initialized successfully");
 } catch (error) {

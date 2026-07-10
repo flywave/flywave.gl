@@ -99,6 +99,18 @@ export class HighPrecisionLineMaterial extends NodeMaterial {
         this.transparent = this.opacity < 1.0;
         this.m_opacityU.value = this.opacity;
     }
+
+    get hpMvp() {
+        return this.m_mvpU;
+    }
+
+    get hpEyepos() {
+        return this.m_eyeposU;
+    }
+
+    get hpEyeposLow() {
+        return this.m_eyeposLowU;
+    }
 }
 
 export function isHighPrecisionLineMaterial(

@@ -85,28 +85,141 @@ export class AtmosphereContext extends AtmosphereContextBase {
         .onRenderUpdate((frame, { value }) => {
             const camera = this.camera ?? frame.camera;
             if (camera == null) {
+                value.setScalar(0);
                 return;
             }
-            value.setScalar(0);
+            // WGS84 ellipsoid parameters
+            const a = 6378137.0;
+            const b = 6356752.314245;
+            const a2 = a * a;
+            const b2 = b * b;
+            const pos = vectorScratch
+                .setFromMatrixPosition(camera.matrixWorld)
+                .applyMatrix4(this.matrixWorldToECEF.value);
+
+            // Project position onto ellipsoid surface (geodetic projection)
+            const rx = 1 / a2;
+            const ry = 1 / a2;
+            const rz = 1 / b2;
+            const x2 = pos.x * pos.x * rx;
+            const y2 = pos.y * pos.y * ry;
+            const z2 = pos.z * pos.z * rz;
+            const normSquared = x2 + y2 + z2;
+            if (!Number.isFinite(normSquared) || normSquared < 0.1) {
+                value.setScalar(0);
+                return;
+            }
+
+            // Iterative geodetic projection
+            const ratio = Math.sqrt(1 / normSquared);
+            const ix = pos.x * ratio;
+            const iy = pos.y * ratio;
+            const iz = pos.z * ratio;
+            const gx = ix * rx * 2;
+            const gy = iy * ry * 2;
+            const gz = iz * rz * 2;
+            const gLen = Math.sqrt(gx * gx + gy * gy + gz * gz);
+            let lambda = ((1 - ratio) * pos.length()) / (gLen / 2);
+            let correction = 0;
+            let sx: number, sy: number, sz: number, error: number;
+            do {
+                lambda -= correction;
+                sx = 1 / (1 + lambda * rx);
+                sy = 1 / (1 + lambda * ry);
+                sz = 1 / (1 + lambda * rz);
+                const sx2 = sx * sx,
+                    sy2 = sy * sy,
+                    sz2 = sz * sz;
+                const sx3 = sx2 * sx,
+                    sy3 = sy2 * sy,
+                    sz3 = sz2 * sz;
+                error = x2 * sx2 + y2 * sy2 + z2 * sz2 - 1;
+                correction = error / ((x2 * sx3 * rx + y2 * sy3 * ry + z2 * sz3 * rz) * -2);
+            } while (Math.abs(error) > 1e-12);
+
+            const surfX = pos.x * sx;
+            const surfY = pos.y * sy;
+            const surfZ = pos.z * sz;
+
+            // Compute osculating sphere center at surface point
+            // normal = (surfX/a², surfY/a², surfZ/b²) normalized
+            const nx = surfX / a2;
+            const ny = surfY / a2;
+            const nz = surfZ / b2;
+            const nLen = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
+            const bottomRadius = this.parameters.bottomRadius;
+            // center = surface - normal * bottomRadius
+            // correction = -center = normal * bottomRadius - surface
+            value.set(
+                nx * nLen * bottomRadius - surfX,
+                ny * nLen * bottomRadius - surfY,
+                nz * nLen * bottomRadius - surfZ
+            );
         });
 
     cameraHeight: any = uniform(0)
         .setGroup(renderGroup)
         .setName("cameraHeight")
         .onRenderUpdate((frame, self) => {
-            if (this._overrideCameraPositionECEF != null) {
-                const pos = this._overrideCameraPositionECEF;
-                self.value = pos.length() - this.parameters.bottomRadius;
-                return;
-            }
             const camera = this.camera ?? frame.camera;
             if (camera == null) {
                 return;
             }
-            const positionECEF = vectorScratch
+            // Compute geodetic height: project camera onto ellipsoid surface,
+            // then height = distance from camera to surface point along normal.
+            const a = 6378137.0;
+            const b = 6356752.314245;
+            const a2 = a * a;
+            const b2 = b * b;
+            const pos = vectorScratch
                 .setFromMatrixPosition(camera.matrixWorld)
                 .applyMatrix4(this.matrixWorldToECEF.value);
-            self.value = positionECEF.length() - this.parameters.bottomRadius;
+
+            // Use the altitudeCorrectionECEF offset to get the osculating sphere
+            // center, then compute height as distance from center minus bottomRadius
+            const rx = 1 / a2;
+            const rz = 1 / b2;
+            const x2 = pos.x * pos.x * rx;
+            const y2 = pos.y * pos.y * rx;
+            const z2 = pos.z * pos.z * rz;
+            const normSquared = x2 + y2 + z2;
+            if (!Number.isFinite(normSquared) || normSquared < 0.1) {
+                self.value = pos.length() - this.parameters.bottomRadius;
+                return;
+            }
+            // Iterative projection
+            const ratio = Math.sqrt(1 / normSquared);
+            const ix = pos.x * ratio;
+            const iy = pos.y * ratio;
+            const iz = pos.z * ratio;
+            const gx = ix * rx * 2;
+            const gy = iy * rx * 2;
+            const gz = iz * rz * 2;
+            const gLen = Math.sqrt(gx * gx + gy * gy + gz * gz);
+            let lambda = ((1 - ratio) * pos.length()) / (gLen / 2);
+            let correction = 0;
+            let sx: number, sy: number, sz: number, error: number;
+            do {
+                lambda -= correction;
+                sx = 1 / (1 + lambda * rx);
+                sy = 1 / (1 + lambda * rx);
+                sz = 1 / (1 + lambda * rz);
+                const sx2 = sx * sx,
+                    sy2 = sy * sy,
+                    sz2 = sz * sz;
+                const sx3 = sx2 * sx,
+                    sy3 = sy2 * sy,
+                    sz3 = sz2 * sz;
+                error = x2 * sx2 + y2 * sy2 + z2 * sz2 - 1;
+                correction = error / ((x2 * sx3 * rx + y2 * sy3 * rx + z2 * sz3 * rz) * -2);
+            } while (Math.abs(error) > 1e-12);
+
+            const surfX = pos.x * sx;
+            const surfY = pos.y * sy;
+            const surfZ = pos.z * sz;
+            self.value = Math.sqrt(
+                (pos.x - surfX) ** 2 + (pos.y - surfY) ** 2 + (pos.z - surfZ) ** 2
+            );
         });
 
     cameraPositionUnit = this.cameraPositionECEF

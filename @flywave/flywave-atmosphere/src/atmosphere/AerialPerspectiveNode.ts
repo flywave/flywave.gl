@@ -26,8 +26,7 @@ import { depthToViewZ, screenToPositionView } from "../tsl/transformations";
 import { hashValues } from "../tsl/utils";
 import { getAtmosphereContext } from "./AtmosphereContext";
 import { getIndirectLuminanceToPoint, getSplitIlluminance } from "./runtime";
-import { type SkyNode, sky, skyBackdrop } from "./SkyNode";
-
+import { SkyNode, sky, skyBackdrop } from "./SkyNode";
 const CAMERA = "CAMERA";
 const BACKDROP = "BACKDROP";
 
@@ -278,7 +277,7 @@ export class AerialPerspectiveNode extends TempNode {
                     : depth.greaterThanEqual(1),
                 () => {
                     if (skyNode != null) {
-                        skyNode._inputNode = _colorNode;
+                        skyNode._inputNode = colorNode;
                         luminance.rgb.assign(skyNode);
                     }
                 }
@@ -306,7 +305,7 @@ export const aerialPerspective = (
     shadowLengthNode?: Node<"vec2"> | null
 ): AerialPerspectiveNode => {
     const node = new AerialPerspectiveNode(CAMERA, colorNode, depthNode, shadowLengthNode);
-    node.skyNode = sky(shadowLengthNode);
+    node._skyNode = sky(shadowLengthNode);
     return node;
 };
 
@@ -318,6 +317,6 @@ export const aerialPerspectiveBackdrop = (
         viewportSharedTexture(),
         viewportDepthTexture()
     );
-    node.skyNode = skyBackdrop(shadowLengthNode);
+    node._skyNode = skyBackdrop(shadowLengthNode);
     return node;
 };
