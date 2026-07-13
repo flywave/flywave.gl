@@ -4,41 +4,39 @@
 import { type TileGeometryBuilder, type TileTransformation } from "@flywave/flywave-geometry";
 import { GeoBox, type TilingScheme, ProjectionType, TileKey } from "@flywave/flywave-geoutils";
 import { MapView, Tile } from "@flywave/flywave-mapview";
-import { DataTexture, LinearFilter, Matrix4, Mesh, RGBAFormat, Vector3, Vector4 } from "three";
+import {
+    DataTexture,
+    LinearFilter,
+    Matrix4,
+    Mesh,
+    RGBAFormat,
+    Vector2,
+    Vector3,
+    Vector4
+} from "three";
 import * as THREE from "three";
 
 import { type GroundOverlayTextureResource } from "../ground-overlay-provider";
 import { type HeightMapModifierManager } from "../ground-modification-manager";
 import { type WebTile } from "../WebImageryTileProvider";
-import { DEMTileMeshMaterial } from "./DEMTileMeshMaterial";
+import {
+    emptyTexture as matEmptyTexture,
+    emptyImageryTextures,
+    defaultDEMTileMeshMaterial
+} from "./DEMTileMeshMaterial";
 import { ProjectionSwitchController } from "../ProjectionSwitchController";
 
-/**
- * Unpacking parameters for height map elevation values
- * These values are used to decode elevation data from texture color values
- */
 const uDemUnpack0 = new Vector4(6553.6, 25.6, 0.1, 10000.0);
-/**
- * Alternative unpacking parameters for height map elevation values
- */
 const uDemUnpack1 = new Vector4(0.0, 0.0, 0, 0);
-/**
- * Empty texture used as a placeholder when no height map is available
- */
-const emptyTexture = new DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, RGBAFormat);
-emptyTexture.needsUpdate = true;
 
-/**
- * Computes the position and scaling parameters for a height map texture
- *
- * This function calculates how a height map texture from a specific DEM tile
- * should be sampled and scaled to provide elevation data for the current tile.
- *
- * @param tileKey - The tile key for the current tile
- * @param demTileKey - The tile key for the DEM tile containing the height data
- * @param yDown - Whether the Y axis is down (true) or up (false)
- * @returns A Vector3 containing the scaling and offset parameters
- */
+const _identityImageryTransforms = [
+    new Vector4(1, 1, 0, 0),
+    new Vector4(1, 1, 0, 0),
+    new Vector4(1, 1, 0, 0),
+    new Vector4(1, 1, 0, 0),
+    new Vector4(1, 1, 0, 0)
+];
+
 function computeHeightMapPos(tileKey: TileKey, demTileKey: TileKey, yDown: boolean): Vector3 {
     tileKey = TileKey.fromRowColumnLevel(
         !yDown ? tileKey.row : (1 << tileKey.level) - 1 - tileKey.row,
@@ -60,21 +58,36 @@ function computeHeightMapPos(tileKey: TileKey, demTileKey: TileKey, yDown: boole
     return new Vector3(P, (tileKey.row - ae * ah) * P, (tileKey.column - J * ah) * P);
 }
 
-/**
- * Mesh representing a terrain tile with height map based elevation
- *
- * This class extends Three.js Mesh to provide specialized functionality
- * for rendering terrain tiles with elevation data from DEM (Digital Elevation Model)
- * height maps. It handles texture mapping, UV transformations, and elevation-based
- * vertex displacement.
- */
 export class HeightMapTerrainMesh extends Mesh {
     public readonly isHeightMapTerrainMesh = true;
+
+    // --- Exposed properties (read by onObjectUpdate in DEMTileMeshMaterial) ---
+    public heightMapTexture: THREE.Texture = matEmptyTexture;
+    public modifierTexture: THREE.Texture | null = null;
+    public overlayTexture: THREE.Texture = matEmptyTexture;
+    public imageryTextures: THREE.Texture[] = [...emptyImageryTextures];
+    public imageryTransforms: THREE.Vector4[] = _identityImageryTransforms.map(v => v.clone());
+    public packCol0: Vector4 = new Vector4();
+    public demUnpack: Vector4 = new Vector4();
+    public heightMapPos: Vector4 = new Vector4(1, 0, 0, 0);
+    public patchPos0: Vector4 = new Vector4();
+    public patchPos1: Vector4 = new Vector4();
+    public patchPos2: Vector4 = new Vector4();
+    public patchPos3: Vector4 = new Vector4();
+    public texSize: Vector2 = new Vector2(1, 1);
+    public skirtHeight: number = 0;
+    public projectionFactor: number = 0;
+    public modifierUVBounds: Vector4 = new Vector4();
+    public modifierOp: number = 0;
+    public hasModifier: number = 0;
+    public overlayTransform: Vector4 = new Vector4(1, 1, 0, 0);
+    public imageryCount: number = 0;
+
+    // --- Internal state ---
     private m_uPatchPos: Matrix4;
     private m_uHeightMapPos?: Vector3;
     private m_isSimplePatch: boolean = false;
-    private readonly m_material: DEMTileMeshMaterial;
-    private m_uHeighMapTexture: THREE.Texture = emptyTexture;
+    private m_uHeighMapTexture: THREE.Texture = matEmptyTexture;
     private m_selfGeoBox: GeoBox;
     public displacement: Vector3 = new Vector3();
     private m_transformation: TileTransformation;
@@ -93,39 +106,23 @@ export class HeightMapTerrainMesh extends Mesh {
     private readonly m_projectionSwitchController: ProjectionSwitchController;
     private readonly m_tilingSchemeTileGrid: TileGeometryBuilder;
 
-    /**
-     * Creates a new height map terrain mesh
-     *
-     * @param mapView - The MapView instance
-     * @param tileKey - The tile key identifying this mesh
-     * @param terrainTilingScheme - The tiling scheme for the terrain
-     * @param materialParams - Optional material parameters
-     * @param tilingSchemeTileGrid - The tile geometry builder
-     */
     constructor(
         tile: Tile,
         tilingScheme: TilingScheme,
         projectionSwitchController: ProjectionSwitchController,
-        tilingSchemeTileGrid: TileGeometryBuilder,
-        materialParams?: THREE.MeshStandardMaterialParameters
+        tilingSchemeTileGrid: TileGeometryBuilder
     ) {
-        const material = new DEMTileMeshMaterial({
-            ...materialParams,
-            transparent: false,
-            blending: THREE.NoBlending
-        });
         const geometryWithTransform = tilingSchemeTileGrid.getTileGeometryWithTransform(
             tile.tileKey
         );
 
-        super(geometryWithTransform.geometry, material);
+        super(geometryWithTransform.geometry, defaultDEMTileMeshMaterial);
 
         this.m_tile = tile;
         this.m_terrainTilingScheme = tilingScheme;
         this.m_projectionSwitchController = projectionSwitchController;
         this.m_tilingSchemeTileGrid = tilingSchemeTileGrid;
         this.m_yDown = tilingSchemeTileGrid.isYAxisDown();
-        this.m_material = material;
         this.m_selfGeoBox = this.m_terrainTilingScheme.getGeoBox(tile.tileKey);
         this.m_isSimplePatch = geometryWithTransform.geometry.mode.is_simple_patch;
         this.m_transformation = geometryWithTransform.transformation;
@@ -147,13 +144,9 @@ export class HeightMapTerrainMesh extends Mesh {
         };
     }
 
-    /**
-     * Initializes the mesh with basic properties
-     */
     private _initializeMesh() {
         this.receiveShadow = true;
 
-        // 初始更新一次变换
         this.updateProjectionTransform();
     }
 
@@ -174,14 +167,14 @@ export class HeightMapTerrainMesh extends Mesh {
         if (!this.m_modifiersDirty) return;
         this.m_modifiersDirty = false;
 
-        const mat = this.m_material;
         if (this.m_modifierTexture) {
-            mat.hasModifier = 1;
-            mat.modifierTexture = this.m_modifierTexture;
-            mat.modifierUVBounds.copy(this.m_modifierUVBounds);
-            mat.modifierOp = this.m_modifierOp;
+            this.hasModifier = 1;
+            this.modifierTexture = this.m_modifierTexture;
+            this.modifierUVBounds.copy(this.m_modifierUVBounds);
+            this.modifierOp = this.m_modifierOp;
         } else {
-            mat.hasModifier = 0;
+            this.hasModifier = 0;
+            this.modifierTexture = null;
         }
     }
 
@@ -262,9 +255,6 @@ export class HeightMapTerrainMesh extends Mesh {
         this.m_modifierUVBounds.set(minU, minV, maxU, maxV);
     }
 
-    /**
-     * Updates the mesh transformation based on current projection factor
-     */
     updateProjectionTransform() {
         const projectionFactor = this.m_projectionSwitchController.projectionFactor;
 
@@ -272,12 +262,12 @@ export class HeightMapTerrainMesh extends Mesh {
 
         if (interpolatedTransform.rotation) {
             this.m_uPatchPos = interpolatedTransform.rotation;
-            this.m_material.patchPos = this.m_uPatchPos;
+            this._decomposePatchPos(this.m_uPatchPos);
         } else {
             this.m_uPatchPos = new Matrix4();
-            this.m_material.patchPos = this.m_uPatchPos;
+            this._decomposePatchPos(this.m_uPatchPos);
         }
-        this.m_material.skirtHeight = this.m_skirtHeight;
+        this.skirtHeight = this.m_skirtHeight;
 
         this.quaternion.identity();
         if (!this.m_isSimplePatch) {
@@ -288,22 +278,16 @@ export class HeightMapTerrainMesh extends Mesh {
 
         this.displacement.copy(interpolatedTransform.position).sub(this.m_tile.center);
 
-        this.m_material.projectionFactor = projectionFactor;
+        this.projectionFactor = projectionFactor;
     }
 
-    /**
-     * Updates the shader uniforms with current mesh parameters
-     *
-     * This method sets up the uniform values that the shader needs to properly
-     * render the terrain, including height map parameters and patch positioning.
-     */
     updateUniforms() {
         const mat = new Matrix4();
 
         mat.elements[3] = this.m_isSimplePatch ? 1 : 0;
 
         if (this.m_uPatchPos) {
-            this.m_material.patchPos = this.m_uPatchPos;
+            this._decomposePatchPos(this.m_uPatchPos);
         }
 
         if (this.m_uHeightMapPos) {
@@ -316,15 +300,15 @@ export class HeightMapTerrainMesh extends Mesh {
             mat.elements[9] = this.m_uHeightMapPos.y;
             mat.elements[10] = this.m_uHeightMapPos.z;
 
-            this.m_material.heightMapTexture = this.m_uHeighMapTexture;
+            this.heightMapTexture = this.m_uHeighMapTexture;
             const img = this.m_uHeighMapTexture.image as
                 | { width?: number; height?: number }
                 | undefined;
             if (img && img.width) {
-                this.m_material.texSize.set(img.width, img.height);
+                this.texSize.set(img.width, img.height);
             }
         } else {
-            this.m_material.heightMapTexture = emptyTexture;
+            this.heightMapTexture = matEmptyTexture;
             mat.elements[4] = uDemUnpack1.x;
             mat.elements[5] = uDemUnpack1.y;
             mat.elements[6] = uDemUnpack1.z;
@@ -335,23 +319,14 @@ export class HeightMapTerrainMesh extends Mesh {
             mat.elements[10] = 0;
         }
 
-        this.m_material.pack = mat;
+        this._decomposePack(mat);
 
         const controller = this.m_projectionSwitchController;
         if (controller) {
-            this.m_material.setProjectionUniforms(controller.projectionFactor);
+            this.projectionFactor = controller.projectionFactor;
         }
     }
 
-    /**
-     * Sets the height map texture for this mesh
-     *
-     * This method configures the mesh to use a specific height map texture
-     * for elevation data, calculating the appropriate sampling parameters.
-     *
-     * @param texture - The height map texture
-     * @param demTileKey - The tile key of the DEM tile containing the height data
-     */
     setHeightMap(texture: THREE.Texture, demTileKey: TileKey) {
         this.m_uHeightMapPos = computeHeightMapPos(
             this.m_tile.tileKey,
@@ -360,25 +335,14 @@ export class HeightMapTerrainMesh extends Mesh {
         );
         texture.flipY = this.m_yDown;
         this.m_uHeighMapTexture = texture;
-        this.m_material.heightMapTexture = texture;
+        this.heightMapTexture = texture;
         const img = texture.image as { width?: number; height?: number } | undefined;
         if (img && img.width) {
-            this.m_material.texSize.set(img.width, img.height);
+            this.texSize.set(img.width, img.height);
         }
     }
 
-    /**
-     * Sets up imagery textures for this mesh
-     *
-     * This method configures the mesh to use web tile imagery textures,
-     * calculating the appropriate UV transformations for proper alignment.
-     *
-     * @param webTiles - Array of web tiles with textures and geo boxes
-     * @param webTingScheme - The tiling scheme for the web tiles
-     */
     public setupImageryTexture(webTiles: WebTile[], webTingScheme: TilingScheme): void {
-        const material = this.material as DEMTileMeshMaterial;
-
         const webTilesUnifrom: Array<{
             transform: THREE.Vector4;
             texture: THREE.Texture;
@@ -393,52 +357,36 @@ export class HeightMapTerrainMesh extends Mesh {
                 });
             }
         });
-        // Calculate and set UV transform for proper texture alignment
-        material.imageryPatchs = webTilesUnifrom;
+        for (let i = 0; i < 5; i++) {
+            this.imageryTextures[i] = null;
+        }
+        webTilesUnifrom.forEach((item, index) => {
+            this.imageryTextures[index] = item.texture;
+            this.imageryTransforms[index].copy(item.transform);
+        });
+        this.imageryCount = webTilesUnifrom.length;
     }
 
-    /**
-     * Sets up overlay texture for this mesh
-     *
-     * This method configures an overlay texture that will be rendered on top
-     * of the base terrain imagery.
-     *
-     * @param groundOverlay - The ground overlay texture resource or null
-     * @param webTingScheme - The tiling scheme for the overlay
-     */
     public setupOverlayerTexture(
         groundOverlay: GroundOverlayTextureResource | null,
         webTingScheme: TilingScheme
     ): void {
-        const material = this.material as DEMTileMeshMaterial;
         if (groundOverlay) {
             const transform = this.computeTextureUvTransform(groundOverlay.geoBox, webTingScheme);
             if (transform) {
-                material.setupOverlayerTexture({
-                    transform,
-                    texture: groundOverlay.texture
-                });
+                this.overlayTexture = groundOverlay.texture;
+                this.overlayTransform.copy(transform);
                 return;
             }
         }
-        material.setupOverlayerTexture(null);
+        this.overlayTexture = matEmptyTexture;
+        this.overlayTransform.set(0, 0, 0, 0);
     }
 
-    /**
-     * Computes the UV transformation for texture mapping
-     *
-     * This method calculates the appropriate scaling and offset parameters
-     * needed to properly align a texture with the mesh's geographic bounds.
-     *
-     * @param imageryGeoBox - The geographic bounds of the imagery
-     * @param imageryTilingScheme - The tiling scheme for the imagery
-     * @returns A Vector4 with scaling and offset parameters, or false if invalid
-     */
     private computeTextureUvTransform(
         imageryGeoBox: GeoBox,
         imageryTilingScheme: TilingScheme
     ): THREE.Vector4 | false {
-        // 1. 计算投影后的坐标范围
         const quantizedWorldBox = new THREE.Box3();
         quantizedWorldBox.expandByPoint(
             imageryTilingScheme.projection.projectPoint(
@@ -467,7 +415,6 @@ export class HeightMapTerrainMesh extends Mesh {
             )
         );
 
-        // 2. 计算缩放比例（保留符号）
         const textureSize = new THREE.Vector2().subVectors(
             imageryWorldBox.max,
             imageryWorldBox.min
@@ -480,54 +427,49 @@ export class HeightMapTerrainMesh extends Mesh {
         const scaleX = Math.abs(tileSize.x / textureSize.x);
         const scaleY = Math.abs(tileSize.y / textureSize.y);
 
-        // 3. 计算偏移量（注意Y轴方向）
         let offsetX;
         let offsetY;
         if (this.m_tilingSchemeTileGrid.isYAxisDown()) {
             offsetX = Math.abs(quantizedWorldBox.min.x - imageryWorldBox.min.x) / textureSize.x;
-            offsetY = Math.abs(quantizedWorldBox.max.y - imageryWorldBox.max.y) / textureSize.y; // 反转Y轴
+            offsetY = Math.abs(quantizedWorldBox.max.y - imageryWorldBox.max.y) / textureSize.y;
         } else {
             offsetX = (quantizedWorldBox.min.x - imageryWorldBox.min.x) / textureSize.x;
-            offsetY = (quantizedWorldBox.min.y - imageryWorldBox.min.y) / textureSize.y; // 反转Y轴
+            offsetY = (quantizedWorldBox.min.y - imageryWorldBox.min.y) / textureSize.y;
         }
 
         const transform = new THREE.Vector4(scaleX, scaleY, offsetX, offsetY);
 
-        // 4. 验证变换是否有效
         if (Number.isFinite(transform.length())) {
             return transform;
         }
         return false;
     }
 
-    /**
-     * Sets the depth packing value for depth buffer encoding
-     *
-     * @param value - The depth packing value to set
-     */
+    private _decomposePack(mat: Matrix4): void {
+        const e = mat.elements;
+        this.packCol0.set(e[0], e[1], e[2], e[3]);
+        this.demUnpack.set(e[4], e[5], e[6], e[7]);
+        this.heightMapPos.set(e[8], e[9], e[10], e[11]);
+    }
+
+    private _decomposePatchPos(mat: Matrix4): void {
+        const e = mat.elements;
+        this.patchPos0.set(e[0], e[1], e[2], e[3]);
+        this.patchPos1.set(e[4], e[5], e[6], e[7]);
+        this.patchPos2.set(e[8], e[9], e[10], e[11]);
+        this.patchPos3.set(e[12], e[13], e[14], e[15]);
+    }
+
     setDepthPacking(value: number) {}
 
-    /**
-     * Disposes of the mesh and its resources
-     *
-     * This method cleans up the geometry and material resources to prevent
-     * memory leaks when the mesh is no longer needed.
-     */
     dispose() {
         this.geometry.dispose();
-        this.m_material.dispose();
         if (this.m_mergedTexture) {
             this.m_mergedTexture.dispose();
             this.m_mergedTexture = null;
         }
     }
 
-    /**
-     * Clones the mesh
-     *
-     * @param recursive - Whether to recursively clone child objects
-     * @returns A new instance of the mesh
-     */
     clone(recursive?: boolean): this {
         return this;
     }

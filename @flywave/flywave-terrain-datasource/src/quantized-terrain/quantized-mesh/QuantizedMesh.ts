@@ -14,90 +14,66 @@ import { type GroundOverlayTextureResource } from "../../ground-overlay-provider
 import { type WebTile } from "../../WebImageryTileProvider";
 import { type QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
 import { ProjectionSwitchController } from "../../ProjectionSwitchController";
-import { QuantizedMeshMaterial } from "./QuantizedMeshMaterial";
-
-interface CommonUniforms {
-    clipUvTransform: { value: THREE.Vector3 };
-    imageryPatchTransform: { value: THREE.Vector4[] };
-    imageryPatchArray: { value: THREE.Texture[] };
-    imageryPatchCount: { value: number };
-    waterMaskTranslationAndScale: { value: THREE.Vector4 };
-    waterMaskNoisyTranslationAndScale: { value: THREE.Vector4 };
-    waterMaskTexture: { value: THREE.Texture };
-    normalSampler: { value: THREE.Texture };
-    overlayerImageryTransform: { value: THREE.Vector4 };
-    overlayerImagery: { value: THREE.Texture };
-    frameNumber: { value: number };
-}
+import {
+    defaultQuantizedMeshMaterial,
+    emptyTexture,
+    emptyTransparentTex,
+    emptyImageryTextures
+} from "./QuantizedMeshMaterial";
 
 export class QuantizedMesh extends THREE.Mesh {
-    /**
-     * Creates a new QuantizedMesh instance
-     *
-     * @param tileKey - The tile key identifying this mesh
-     * @param tileScheme - The tiling scheme used for coordinate calculations
-     */
+    // --- Exposed properties (read by onObjectUpdate in QuantizedMeshMaterial) ---
+    public imageryTextures: THREE.Texture[] = [...emptyImageryTextures];
+    public imageryTransforms: THREE.Vector4[] = [
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0)
+    ];
+    public imageryCount: number = 0;
+    public overlayTexture: THREE.Texture = emptyTransparentTex;
+    public overlayTransform: THREE.Vector4 = new THREE.Vector4(0, 0, 0, 0);
+    public waterMaskTexture: THREE.Texture = emptyTexture;
+    public waterMaskTranslationAndScale: THREE.Vector4 = new THREE.Vector4();
+    public waterMaskNoisyTranslationAndScale: THREE.Vector4 = new THREE.Vector4();
+    public normalSampler: THREE.Texture = emptyTexture;
+    public frameNumber: number = 0;
+    public clipUvTransform: THREE.Vector3 = new THREE.Vector3(1, 0, 0);
+
     constructor(
         private readonly selfGeoBox: GeoBox,
         private readonly quantizedTerrainMesh: QuantizedTerrainMesh,
         protected readonly projectionSwitchController: ProjectionSwitchController,
         protected readonly mapView?: MapView
     ) {
-        super(
-            undefined,
-            new QuantizedMeshMaterial({
-                wireframe: false,
-                transparent: false,
-                blending: THREE.NoBlending
-            })
-        );
+        super(undefined, defaultQuantizedMeshMaterial);
         this.receiveShadow = true;
 
         this.setupFromQuantizedTerrainMesh(quantizedTerrainMesh);
 
         this.onBeforeRender = () => {
-            const mat = this.material as QuantizedMeshMaterial;
             if (this.mapView) {
-                mat.frameNumber = this.mapView.frameNumber ?? 0;
+                this.frameNumber = this.mapView.frameNumber ?? 0;
             }
         };
     }
 
-    /**
-     * Sets up the mesh from quantized terrain mesh data
-     *
-     * This method configures the mesh geometry, transforms, and associated
-     * textures from quantized terrain data including:
-     * - Geometry and spatial transforms
-     * - Parent tile key for clip UV calculations
-     * - Water mask data for ocean rendering
-     *
-     * @param quantizedData - The quantized terrain mesh data
-     */
     private setupFromQuantizedTerrainMesh(quantizedData: QuantizedTerrainMesh): void {
-        // Apply geometry and spatial transforms
         this.geometry = quantizedData.quantizedGeometry;
         this.position.copy(quantizedData.position);
         this.scale.copy(quantizedData.scale);
         this.quaternion.copy(quantizedData.quaternion);
 
-        // Setup texture coordinate transformations
         this.setupParentTileKey(quantizedData.geoBox);
         this.setupWaterMask(quantizedData);
     }
 
-    /**
-     * Sets up the imagery texture for this mesh with proper UV coordinate transformation
-     *
-     * @param imageryResource - The imagery resource containing tile key and texture
-     */
     public setupImageryTexture(
         webTiles: WebTile[],
         webTingScheme: TilingScheme,
         quantizedTilingScheme: TilingScheme
     ): void {
-        const material = this.material as QuantizedMeshMaterial;
-
         const webTilesUnifrom: Array<{
             transform: THREE.Vector4;
             texture: THREE.Texture;
@@ -115,8 +91,14 @@ export class QuantizedMesh extends THREE.Mesh {
                 });
             }
         });
-        // Calculate and set UV transform for proper texture alignment
-        material.imageryPatchs = webTilesUnifrom;
+        for (let i = 0; i < 5; i++) {
+            this.imageryTextures[i] = null;
+        }
+        webTilesUnifrom.forEach((item, index) => {
+            this.imageryTextures[index] = item.texture;
+            this.imageryTransforms[index].copy(item.transform);
+        });
+        this.imageryCount = webTilesUnifrom.length;
     }
 
     public setupOverlayerTexture(
@@ -124,7 +106,6 @@ export class QuantizedMesh extends THREE.Mesh {
         webTingScheme: TilingScheme,
         quantizedTilingScheme: TilingScheme
     ): void {
-        const material = this.material as QuantizedMeshMaterial;
         if (groundOverlay) {
             const transform = this.computeTextureUvTransform(
                 groundOverlay.geoBox,
@@ -132,66 +113,36 @@ export class QuantizedMesh extends THREE.Mesh {
                 quantizedTilingScheme
             );
             if (transform) {
-                material.setupOverlayerTexture({
-                    transform,
-                    texture: groundOverlay.texture
-                });
+                this.overlayTexture = groundOverlay.texture;
+                this.overlayTransform.copy(transform);
                 return;
             }
         }
-        material.setupOverlayerTexture(null);
+        this.overlayTexture = emptyTransparentTex;
+        this.overlayTransform.set(0, 0, 0, 0);
     }
 
-    /**
-     * Sets up the water mask for ocean/sea area rendering with animated wave effects
-     *
-     * @param waterResource - The water mask resource containing tile key and terrain data
-     */
     private setupWaterMask(waterResource: QuantizedTerrainMesh): void {
-        // Skip if no water mask data is available
         if (!waterResource.waterMask) return;
 
-        const material = this.material as QuantizedMeshMaterial;
+        this.waterMaskTexture = waterResource.waterMaskTexture;
 
-        // Set water mask texture for ocean detection
-        material.waterMaskTexture = waterResource.waterMaskTexture;
-
-        // Calculate and set water mask transforms for proper positioning
         const waterGeoBox = GeoBox.fromArray(waterResource.waterMask.geoBox);
-        material.waterMaskTranslationAndScale = this._computeWaterMaskTransform(waterGeoBox);
-
-        // Calculate and set noisy water effect transforms
-        material.waterMaskNoisyTranslationAndScale = this._computeWaterMaskNoisyTransform(
+        this.waterMaskTranslationAndScale = this._computeWaterMaskTransform(waterGeoBox);
+        this.waterMaskNoisyTranslationAndScale = this._computeWaterMaskNoisyTransform(
             this.selfGeoBox
         );
     }
 
-    /**
-     * Sets up the parent tile key for clip UV calculations
-     * Used to determine texture coordinate clamping boundaries
-     *
-     * @param parentTileKey - The parent tile key for reference
-     */
     private setupParentTileKey(parentGeobox: GeoBox): void {
-        const material = this.material as QuantizedMeshMaterial;
-        material.clipUvTransform = this._computeClipUvTransform(parentGeobox);
+        this.clipUvTransform = this._computeClipUvTransform(parentGeobox);
     }
 
-    /**
-     * Computes the texture UV transform between imagery and quantized tiles
-     * Ensures proper alignment and scaling of imagery textures
-     *
-     * @param imageryTileKey - The imagery tile key for source coordinates
-     * @param quantizedTileKey - The quantized mesh tile key for target coordinates
-     * @param tilingScheme - The tiling scheme for coordinate calculations
-     * @returns The computed UV transform as a Vector4 (scaleX, scaleY, offsetX, offsetY)
-     */
     private computeTextureUvTransform(
         imageryGeoBox: GeoBox,
         imageryTilingScheme: TilingScheme,
         quantizedTilingScheme: TilingScheme
     ): THREE.Vector4 | false {
-        // 1. 计算投影后的坐标范围
         const quantizedWorldBox = new THREE.Box3(
             imageryTilingScheme.projection.projectPoint(
                 this.quantizedTerrainMesh.geoBox.southWest,
@@ -213,7 +164,6 @@ export class QuantizedMesh extends THREE.Mesh {
             )
         );
 
-        // 2. 计算缩放比例（保留符号）
         const textureSize = new THREE.Vector2().subVectors(
             imageryWorldBox.max,
             imageryWorldBox.min
@@ -226,63 +176,40 @@ export class QuantizedMesh extends THREE.Mesh {
         const scaleX = tileSize.x / textureSize.x;
         const scaleY = tileSize.y / textureSize.y;
 
-        // 3. 计算偏移量（注意Y轴方向）
         let offsetX;
         let offsetY;
         if (quantizedTilingScheme == geographicTerrainStandardTiling) {
             offsetX = (quantizedWorldBox.min.x - imageryWorldBox.min.x) / textureSize.x;
-            offsetY = (imageryWorldBox.max.y - quantizedWorldBox.max.y) / textureSize.y; // 反转Y轴
+            offsetY = (imageryWorldBox.max.y - quantizedWorldBox.max.y) / textureSize.y;
         } else {
             offsetX = (quantizedWorldBox.min.x - imageryWorldBox.min.x) / textureSize.x;
-            offsetY = (quantizedWorldBox.min.y - imageryWorldBox.min.y) / textureSize.y; // 反转Y轴
+            offsetY = (quantizedWorldBox.min.y - imageryWorldBox.min.y) / textureSize.y;
         }
 
         const transform = new THREE.Vector4(scaleX, scaleY, offsetX, offsetY);
 
-        // 4. 验证变换是否有效
         if (Number.isFinite(transform.length()) && Math.abs(scaleX) > 0 && Math.abs(scaleY) > 0) {
             return transform;
         }
         return false;
     }
 
-    /**
-     * Computes the clip UV transform between parent and current tiles
-     * Used for texture coordinate clamping to prevent bleeding
-     *
-     * @param parentTileKey - The parent tile key for reference
-     * @param currentTileKey - The current tile key for target coordinates
-     * @returns The computed clip UV transform as a Vector3 (scale, offsetX, offsetY)
-     */
     private _computeClipUvTransform(parentGeobox: GeoBox): THREE.Vector3 {
         const currentGeobox = this.selfGeoBox;
-        // 计算当前瓦片在父瓦片坐标系中的UV范围
         const parentWidth = parentGeobox.longitudeSpan;
         const parentHeight = parentGeobox.latitudeSpan;
 
-        // 计算当前瓦片相对于父瓦片的偏移和缩放
         const uScale = currentGeobox.longitudeSpan / parentWidth;
         const vScale = currentGeobox.latitudeSpan / parentHeight;
 
-        // 计算UV偏移（从父瓦片的西北角到当前瓦片的西北角）
         const uOffset = (currentGeobox.west - parentGeobox.west) / parentWidth;
         const vOffset = (currentGeobox.south - parentGeobox.south) / parentHeight;
 
-        // 合并缩放因子（假设在片段着色器中使用）
         const scale = uScale * vScale;
 
         return new THREE.Vector3(scale, uOffset, vOffset);
     }
 
-    /**
-     * Computes the water mask transform between water and quantized tiles
-     * Ensures proper positioning and scaling of water mask textures
-     *
-     * @param waterGeoBox - The geographic bounding box of the water mask
-     * @param quantizedTileKey - The quantized mesh tile key for target coordinates
-     * @param tilingScheme - The tiling scheme for coordinate calculations
-     * @returns The computed water mask transform as a Vector4 (offsetX, offsetY, scaleX, scaleY)
-     */
     private _computeWaterMaskTransform(waterGeoBox: GeoBox): THREE.Vector4 {
         const quantizedGeoBox = this.quantizedTerrainMesh.geoBox;
 
@@ -300,20 +227,12 @@ export class QuantizedMesh extends THREE.Mesh {
         );
     }
 
-    /**
-     * Computes the noisy water mask transform for animated wave effects
-     * Provides proper positioning and scaling for water surface animations
-     *
-     * @param quantizedTileKey - The quantized mesh tile key for target coordinates
-     * @param tilingScheme - The tiling scheme for coordinate calculations
-     * @returns The computed noisy water mask transform as a Vector4 (offsetX, offsetY, scaleX, scaleY)
-     */
     private _computeWaterMaskNoisyTransform(quantizedGeoBox: GeoBox): THREE.Vector4 {
         const tileWidth = quantizedGeoBox.longitudeSpan;
         const tileHeight = quantizedGeoBox.latitudeSpan;
 
-        const scaleX = tileWidth / 180; // Global scaling factor
-        const scaleY = tileHeight / 90; // Global scaling factor
+        const scaleX = tileWidth / 180;
+        const scaleY = tileHeight / 90;
 
         return new THREE.Vector4(
             (scaleX * (quantizedGeoBox.west - 0)) / tileWidth,

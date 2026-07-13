@@ -16,11 +16,6 @@ import {
     vec4
 } from "three/tsl";
 
-/**
- * Creates a 1x1 white dummy texture for use as a placeholder in shader nodes.
- *
- * @returns A DataTexture filled with opaque white pixels.
- */
 function dummyTex(): THREE.DataTexture {
     const t = new THREE.DataTexture(
         new Uint8Array([255, 255, 255, 255]),
@@ -33,11 +28,6 @@ function dummyTex(): THREE.DataTexture {
     return t;
 }
 
-/**
- * Creates a 1x1 transparent dummy texture for use as a placeholder in shader nodes.
- *
- * @returns A DataTexture filled with fully transparent pixels.
- */
 function transparentTex(): THREE.DataTexture {
     const t = new THREE.DataTexture(
         new Uint8Array([0, 0, 0, 0]),
@@ -54,10 +44,6 @@ const emptyTexture = dummyTex();
 const emptyTransparentTex = transparentTex();
 const emptyImageryTextures = [dummyTex(), dummyTex(), dummyTex(), dummyTex(), dummyTex()];
 
-// ====================================================================
-// Module-level shared TSL nodes with onObjectUpdate
-// ====================================================================
-
 const _imageryTex = [
     texture(emptyImageryTextures[0]),
     texture(emptyImageryTextures[1]),
@@ -66,67 +52,59 @@ const _imageryTex = [
     texture(emptyImageryTextures[4])
 ];
 
-_imageryTex[0].onObjectUpdate(({ material }) => material.imageryTextures[0]);
-_imageryTex[1].onObjectUpdate(({ material }) => material.imageryTextures[1]);
-_imageryTex[2].onObjectUpdate(({ material }) => material.imageryTextures[2]);
-_imageryTex[3].onObjectUpdate(({ material }) => material.imageryTextures[3]);
-_imageryTex[4].onObjectUpdate(({ material }) => material.imageryTextures[4]);
+_imageryTex[0].onObjectUpdate(({ object }) => object.imageryTextures[0] ?? emptyImageryTextures[0]);
+_imageryTex[1].onObjectUpdate(({ object }) => object.imageryTextures[1] ?? emptyImageryTextures[1]);
+_imageryTex[2].onObjectUpdate(({ object }) => object.imageryTextures[2] ?? emptyImageryTextures[2]);
+_imageryTex[3].onObjectUpdate(({ object }) => object.imageryTextures[3] ?? emptyImageryTextures[3]);
+_imageryTex[4].onObjectUpdate(({ object }) => object.imageryTextures[4] ?? emptyImageryTextures[4]);
 
 const _imageryTransform = [
     uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ material }) => material.imageryTransforms[0]
+        ({ object }) => object.imageryTransforms[0]
     ),
     uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ material }) => material.imageryTransforms[1]
+        ({ object }) => object.imageryTransforms[1]
     ),
     uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ material }) => material.imageryTransforms[2]
+        ({ object }) => object.imageryTransforms[2]
     ),
     uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ material }) => material.imageryTransforms[3]
+        ({ object }) => object.imageryTransforms[3]
     ),
     uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ material }) => material.imageryTransforms[4]
+        ({ object }) => object.imageryTransforms[4]
     )
 ];
 
-const _imageryCount = uniform(0).onObjectUpdate(({ material }) => material.imageryCount);
+const _imageryCount = uniform(0).onObjectUpdate(({ object }) => object.imageryCount);
 
 const _overlayTex = texture(emptyTransparentTex);
-_overlayTex.onObjectUpdate(({ material }) => material.overlayTexture);
+_overlayTex.onObjectUpdate(({ object }) => object.overlayTexture ?? emptyTransparentTex);
 
 const _overlayTransform = uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-    ({ material }) => material.overlayTransform
+    ({ object }) => object.overlayTransform
 );
 
 const _waterMaskTex = texture(emptyTexture);
-_waterMaskTex.onObjectUpdate(({ material }) => material.waterMaskTexture);
+_waterMaskTex.onObjectUpdate(({ object }) => object.waterMaskTexture ?? emptyTexture);
 
 const _waterMaskTranslationAndScale = uniform(new THREE.Vector4()).onObjectUpdate(
-    ({ material }) => material.waterMaskTranslationAndScale
+    ({ object }) => object.waterMaskTranslationAndScale
 );
 
 const _waterMaskNoisyTranslationAndScale = uniform(new THREE.Vector4()).onObjectUpdate(
-    ({ material }) => material.waterMaskNoisyTranslationAndScale
+    ({ object }) => object.waterMaskNoisyTranslationAndScale
 );
 
 const _normalSampler = texture(emptyTexture);
-_normalSampler.onObjectUpdate(({ material }) => material.normalSampler);
+_normalSampler.onObjectUpdate(({ object }) => object.normalSampler ?? emptyTexture);
 
-const _frameNumber = uniform(0.0).onObjectUpdate(({ material }) => material.frameNumber);
+const _frameNumber = uniform(0.0).onObjectUpdate(({ object }) => object.frameNumber);
 
 const _clipUvTransform = uniform(new THREE.Vector3(1, 0, 0)).onObjectUpdate(
-    ({ material }) => material.clipUvTransform
+    ({ object }) => object.clipUvTransform
 );
 
-/**
- * Builds the shared TSL color node for quantized mesh rendering.
- *
- * The color node samples imagery textures and an optional overlay texture,
- * combining them with a slight white blend for visual clarity.
- *
- * @returns An object containing the assembled colorNode.
- */
 function buildNodes() {
     const texUv = uvNode();
     const webMercatorY = attribute("webMercatorY", "float");
@@ -175,104 +153,34 @@ const s_nodes = buildNodes();
 /**
  * Quantized mesh material for rendering Cesium-style quantized-mesh terrain.
  *
- * This material extends MeshStandardNodeMaterial to provide WebGPU/TSL-compatible
- * rendering of quantized mesh terrain tiles. It supports up to 5 imagery layers,
- * an optional overlay texture, water mask, and normal mapping.
- *
- * All TSL nodes are module-level shared instances using onObjectUpdate to read
- * per-instance property values at render time, ensuring the shader is compiled
- * only once while still supporting per-tile texture data.
+ * All per-tile data is read directly from the mesh object at render time via
+ * onObjectUpdate, so no per-tile properties exist on the material itself.
+ * This ensures the shader is compiled only once and shared by all tiles.
  */
 export class QuantizedMeshMaterial extends MeshStandardNodeMaterial {
-    /** Defines for shader feature toggles */
     public defines: Record<string, unknown> = {};
+    private _isSharedSingleton?: boolean;
 
-    private readonly m_imageryTextures: THREE.Texture[] = [
-        emptyImageryTextures[0],
-        emptyImageryTextures[1],
-        emptyImageryTextures[2],
-        emptyImageryTextures[3],
-        emptyImageryTextures[4]
-    ];
-
-    private readonly m_imageryTransforms: THREE.Vector4[] = [
-        new THREE.Vector4(1, 1, 0, 0),
-        new THREE.Vector4(1, 1, 0, 0),
-        new THREE.Vector4(1, 1, 0, 0),
-        new THREE.Vector4(1, 1, 0, 0),
-        new THREE.Vector4(1, 1, 0, 0)
-    ];
-
-    public get imageryTextures(): readonly THREE.Texture[] {
-        return this.m_imageryTextures;
-    }
-
-    public get imageryTransforms(): readonly THREE.Vector4[] {
-        return this.m_imageryTransforms;
-    }
-
-    /** Number of active imagery patches */
-    public imageryCount: number = 0;
-
-    // --- Overlay texture ---
-    public overlayTexture: THREE.Texture = emptyTransparentTex;
-    public overlayTransform: THREE.Vector4 = new THREE.Vector4(0, 0, 0, 0);
-
-    // --- Water mask and normals ---
-    public waterMaskTexture: THREE.Texture = emptyTexture;
-    public waterMaskTranslationAndScale: THREE.Vector4 = new THREE.Vector4();
-    public waterMaskNoisyTranslationAndScale: THREE.Vector4 = new THREE.Vector4();
-    public normalSampler: THREE.Texture = emptyTexture;
-
-    /** Current frame number, used for water animation */
-    public frameNumber: number = 0;
-
-    /** Clip UV transform for terrain clipping */
-    public clipUvTransform: THREE.Vector3 = new THREE.Vector3(1, 0, 0);
-
-    /**
-     * Creates a new QuantizedMeshMaterial instance.
-     *
-     * @param parameters - Optional standard material parameters.
-     */
     constructor(parameters?: THREE.MeshStandardMaterialParameters) {
         super(parameters);
         this.colorNode = s_nodes.colorNode;
     }
 
-    /**
-     * Sets the imagery patches for this material.
-     *
-     * Each patch consists of a texture and its corresponding UV transform.
-     * Up to 5 patches are supported.
-     *
-     * @param value - Array of imagery patches with transform and texture.
-     */
-    public set imageryPatchs(value: Array<{ transform: THREE.Vector4; texture: THREE.Texture }>) {
-        value.forEach((item, index) => {
-            this.m_imageryTextures[index] = item.texture;
-            this.m_imageryTransforms[index].copy(item.transform);
-        });
-        this.imageryCount = value.length;
+    dispose() {
+        if (this._isSharedSingleton) return;
+        super.dispose();
     }
 
-    /**
-     * Sets up or clears the overlay texture.
-     *
-     * @param overlayer - Optional overlay texture with transform. If undefined, clears the overlay.
-     */
-    public setupOverlayerTexture(overlayer?: {
-        transform: THREE.Vector4;
-        texture: THREE.Texture;
-    }): void {
-        if (overlayer) {
-            this.overlayTexture = overlayer.texture;
-            this.overlayTransform.copy(overlayer.transform);
-            this.defines.USE_OVERLAYER = true;
-        } else {
-            this.overlayTexture = emptyTransparentTex;
-            this.overlayTransform.set(0, 0, 0, 0);
-            this.defines.USE_OVERLAYER = false;
-        }
+    markSharedSingleton(): this {
+        this._isSharedSingleton = true;
+        return this;
     }
 }
+
+const defaultQuantizedMeshMaterial = new QuantizedMeshMaterial({
+    wireframe: false,
+    transparent: false,
+    blending: THREE.NoBlending
+}).markSharedSingleton();
+
+export { emptyTexture, emptyTransparentTex, emptyImageryTextures, defaultQuantizedMeshMaterial };

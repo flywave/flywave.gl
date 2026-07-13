@@ -361,10 +361,7 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
             this.tile,
             this.dataSource.getTilingScheme(),
             this.dataSource.getProjectionSwitchController(),
-            this.dataSource.tileBaseGeometryBuilder,
-            {
-                wireframe: false
-            }
+            this.dataSource.tileBaseGeometryBuilder
         );
         terrainMesh.setModifierManager(this.dataSource.getGroundModificationManager());
 
