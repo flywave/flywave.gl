@@ -235,24 +235,16 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      * @param object - 3D object to apply effect to
      */
     private applyRenderEffectConfig(object: THREE.Object3D): void {
-        // Per-datasource postEffects controls bloom for this data source.
-        // Defaults to false if not configured - does NOT inherit from global theme.
         const isBloomEnabled = this.m_datasourcePostEffects?.bloom?.enabled ?? false;
         const isTranslucentDepthEnabled = this.theme?.postEffects?.translucentDepth?.enabled;
-        if (isTranslucentDepthEnabled !== undefined || isBloomEnabled) {
-            object.traverse(child => {
-                if (
-                    child &&
-                    (child instanceof THREE.Mesh || child instanceof THREE.InstancedMesh)
-                ) {
-                    if (isTranslucentDepthEnabled)
-                        this.m_mapRenderingManager?.addTranslucentObject(child, this.observeId);
-                    else this.m_mapRenderingManager?.removeTranslucentObject(child);
-                    if (isBloomEnabled) this.m_mapRenderingManager?.addBloomObject(child);
-                    else this.m_mapRenderingManager?.removeBloomObject(child);
-                }
-            });
-        }
+        if (!isTranslucentDepthEnabled && !isBloomEnabled) return;
+        object.traverse(child => {
+            if (child && (child instanceof THREE.Mesh || child instanceof THREE.InstancedMesh)) {
+                if (isTranslucentDepthEnabled)
+                    this.m_mapRenderingManager?.addTranslucentObject(child, this.observeId);
+                if (isBloomEnabled) this.m_mapRenderingManager?.addBloomObject(child);
+            }
+        });
     }
 
     /**
@@ -293,6 +285,19 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      */
     onTileUnloaded(tile: ITile): void {
         const tileId = this.getTileId(tile);
+
+        // Remove translucent/bloom registrations to prevent memory leak
+        if (tile.cached?.scene) {
+            tile.cached.scene.traverse((child: any) => {
+                if (
+                    child &&
+                    (child instanceof THREE.Mesh || child instanceof THREE.InstancedMesh)
+                ) {
+                    this.m_mapRenderingManager?.removeTranslucentObject(child);
+                    this.m_mapRenderingManager?.removeBloomObject(child);
+                }
+            });
+        }
 
         // Restore original materials for meshes
         this.restoreOriginalMaterials(tileId, tile);

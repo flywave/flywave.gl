@@ -10,7 +10,7 @@ import {
     type IVignetteEffect
 } from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three";
-import { mrt, uniform } from "three/tsl";
+import { mrt, uniform, vec3, diffuseColor } from "three/tsl";
 import type { Renderer } from "three/webgpu";
 
 import { type IPassManager } from "./IPassManager";
@@ -258,6 +258,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.m_pendingBloomObjects = this.m_pendingBloomObjects.filter(o => o !== object);
         const vrm = this.viewRenderManager;
         if (vrm == null) return;
+        if (!vrm.bloomObjects.has(object)) return;
         vrm.bloomObjects.delete(object);
         vrm.needsUpdate = true;
         this.applyBloomMrtNode(object, 0);
@@ -290,6 +291,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         const layerId = mat.userData?.__translucentLayerId;
         if (layerId != null) {
             entries.translucentLayerId = uniform(layerId);
+            entries.translucentColor = diffuseColor.rgb;
         }
         mat.mrtNode = Object.keys(entries).length > 0 ? mrt(entries) : null;
         mat.needsUpdate = true;
@@ -301,15 +303,25 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_translucentLayerEffect?: TranslucentLayerEffect;
 
     addTranslucentObject(object: THREE.Object3D, layer: string): void {
-        const wasEmpty =
-            this.m_translucentLayerEffect == null || !this.m_translucentLayerEffect.hasObjects;
         this.m_translucentLayerEffect?.addObject(object, layer);
-        if (wasEmpty && this.m_translucentLayerEffect?.hasObjects) {
-            this.viewRenderManager!.needsUpdate = true;
-        }
+        object.traverse(child => {
+            const mat = (child as THREE.Mesh).material as any;
+            if (mat && !mat.userData?.__translucentLayerId) {
+                mat.userData = mat.userData || {};
+                mat.userData.__translucentLayerId = layer;
+                this.rebuildMrtNode(mat);
+            }
+        });
     }
     removeTranslucentObject(object: THREE.Object3D): void {
         this.m_translucentLayerEffect?.removeObject(object);
+        object.traverse(child => {
+            const mat = (child as THREE.Mesh).material as any;
+            if (mat?.userData?.__translucentLayerId) {
+                delete mat.userData.__translucentLayerId;
+                this.rebuildMrtNode(mat);
+            }
+        });
     }
     addTranslucentLayer(layer: string, layerConfig: ITranslucentLayerConfig): void {
         this.m_translucentLayerEffect?.addLayer(layer, layerConfig);

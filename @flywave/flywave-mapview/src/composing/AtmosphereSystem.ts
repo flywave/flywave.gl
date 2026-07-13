@@ -20,7 +20,7 @@ import { type Renderer } from "three/webgpu";
 import { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
 
 import { ViewRenderManager } from "./vrm/ViewRenderManager";
-import { TranslucentLayerEffect } from "./vrm/TranslucentLayerEffect";
+import { TranslucentLayerEffect, TRANSLUCENT_LAYER_BIT } from "./vrm/TranslucentLayerEffect";
 import { type MapView } from "../MapView";
 import { EarthCelestialDirections } from "./celestial/EarthCelestialDirections";
 import { JulianDate } from "./celestial/JulianDate";
@@ -160,6 +160,7 @@ export class AtmosphereSystem {
                 cam
             );
 
+            this.m_atmosphereLight.layers.enable(TRANSLUCENT_LAYER_BIT);
             this.mapView.scene.add(this.m_atmosphereLight);
 
             this.applyAtmosphereEnabled();

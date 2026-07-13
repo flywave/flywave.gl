@@ -1,7 +1,22 @@
 // @ts-nocheck
 import * as THREE from "three";
-import { float, mrt, output, pass, positionView, uniform, vec4 } from "three/tsl";
+import {
+    float,
+    mrt,
+    output,
+    pass,
+    positionView,
+    uniform,
+    vec4,
+    Fn,
+    vec3,
+    fract,
+    depth,
+    uv,
+    texture
+} from "three/tsl";
 import { RenderPipeline, type Renderer } from "three/webgpu";
+import { MeshBasicNodeMaterial } from "three/webgpu";
 import type { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
 
 import {
@@ -25,11 +40,20 @@ import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading
 import { bloom } from "./effects/bloom";
 import { outline } from "./effects/outline";
 import { translucentLayer } from "./effects/translucentLayer";
-import { MeshBasicNodeMaterial } from "three/webgpu";
 import { TranslucentLayerEffect, TRANSLUCENT_LAYER_BIT } from "./TranslucentLayerEffect";
 
-/** Flat white material for translucent pass (no lighting, extremely cheap) */
-const _flatWhiteMaterial = new MeshBasicNodeMaterial({ color: 0xffffff });
+/** Override material for buildings: encodes fragment depth */
+const _objectMarkerMaterial = new MeshBasicNodeMaterial();
+_objectMarkerMaterial.colorNode = Fn(() => {
+    return vec4(depth.mul(float(10.0)).add(float(5.0)), float(0.0), float(0.0), float(1.0));
+})();
+
+/** Override material for terrain pass: same depth encoding */
+const _terrainDepthMaterial = new MeshBasicNodeMaterial();
+_terrainDepthMaterial.colorNode = Fn(() => {
+    return vec4(depth.mul(float(10.0)).add(float(5.0)), float(0.0), float(0.0), float(1.0));
+})();
+_terrainDepthMaterial.depthWrite = true;
 
 export class ViewRenderManager implements IViewRenderManager {
     readonly config: IViewRenderConfig = {
@@ -56,10 +80,16 @@ export class ViewRenderManager implements IViewRenderManager {
     private pipeline?: RenderPipeline;
     private passNode?: ReturnType<typeof pass>;
     private translucentPassNode?: ReturnType<typeof pass>;
+    private buildingColorPassNode?: ReturnType<typeof pass>;
+    private terrainDepthPassNode?: ReturnType<typeof pass>;
     private lensFlareNode?: LensFlareNode;
     private aerialNode?: AerialPerspectiveNode;
     private taaNode?: TemporalAntialiasNode;
+    private scene?: THREE.Scene;
     private camera?: THREE.Camera;
+
+    private buildingRT?: import("three").WebGLRenderTarget;
+    private buildingTextureNode?: any;
 
     bloomObjects: Set<THREE.Object3D> = new Set();
     bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
@@ -91,6 +121,12 @@ export class ViewRenderManager implements IViewRenderManager {
             Object.keys(mrtEntries).length > 1
                 ? pass(scene, camera, { samples: 0 }).setMRT(mrt(mrtEntries))
                 : pass(scene, camera, { samples: 0 });
+
+        // Main pass sees both terrain (layer 0) and buildings (layer 10)
+        const allLayers = new THREE.Layers();
+        allLayers.set(0);
+        allLayers.enable(TRANSLUCENT_LAYER_BIT);
+        this.passNode.setLayers(allLayers);
 
         const colorNode = this.passNode.getTextureNode("output");
         const depthNode = this.passNode.getTextureNode("depth");
@@ -173,24 +209,42 @@ export class ViewRenderManager implements IViewRenderManager {
             finalNode = sepia(finalNode, this.config.sepia.amount);
         }
 
-        if (this.translucentLayerEffect != null && this.translucentLayerEffect.hasObjects) {
-            const tle = this.translucentLayerEffect;
+        if (this.translucentLayerEffect != null) {
+            const buildingLayers = new THREE.Layers();
+            buildingLayers.set(TRANSLUCENT_LAYER_BIT);
 
-            const translucentLayers = new THREE.Layers();
-            translucentLayers.set(TRANSLUCENT_LAYER_BIT);
+            // Create render target for building color
+            const canvas = this.renderer.domElement as HTMLCanvasElement;
+            const w = canvas.clientWidth || 1;
+            const h = canvas.clientHeight || 1;
+            this.buildingRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
+            this.buildingTextureNode = texture(this.buildingRT.texture);
 
+            // Pass: buildings only → depth encoded
             this.translucentPassNode = pass(scene, camera, { samples: 0 });
-            this.translucentPassNode.setLayers(translucentLayers);
-            this.translucentPassNode.overrideMaterial = _flatWhiteMaterial;
-            const translucentColor = this.translucentPassNode.getTextureNode("output");
-            const layerDataTex = tle.getLayerDataTexture();
+            this.translucentPassNode.setLayers(buildingLayers);
+            this.translucentPassNode.transparent = false;
+            this.translucentPassNode.overrideMaterial = _objectMarkerMaterial;
+            const objDepthEnc = this.translucentPassNode.getTextureNode("output").r;
 
-            finalNode = translucentLayer(
-                finalNode,
-                translucentColor,
-                layerDataTex,
-                tle.getLayerCount()
-            );
+            // Pass: full scene → depth encoded
+            this.terrainDepthPassNode = pass(scene, camera, { samples: 0 });
+            this.terrainDepthPassNode.transparent = false;
+            this.terrainDepthPassNode.overrideMaterial = _objectMarkerMaterial;
+            const sceneDepthEnc = this.terrainDepthPassNode.getTextureNode("output").r;
+
+            const hasObject = objDepthEnc.greaterThan(float(2.0));
+            const objDepth = objDepthEnc.sub(float(5.0)).div(float(10.0));
+            const sceneDepth = sceneDepthEnc.sub(float(5.0)).div(float(10.0));
+            const isOccluded = objDepth
+                .greaterThan(sceneDepth)
+                .and(objDepth.sub(sceneDepth).greaterThan(float(0.001)));
+            const underground = hasObject.and(isOccluded);
+
+            // Underground: darken terrain color
+            const alpha = float(0.3);
+            const blended = finalNode.rgb.mul(float(1.0).sub(alpha));
+            finalNode = vec4(underground.select(blended, finalNode.rgb), 1);
         }
 
         finalNode = finalNode.add(dithering);
@@ -207,6 +261,46 @@ export class ViewRenderManager implements IViewRenderManager {
         if (this.needsUpdate || this.pipeline == null) {
             this.buildNodeGraph(scene, camera);
         }
+
+        // Manually render buildings to a render target with lighting
+        if (this.translucentLayerEffect != null && this.buildingRT != null) {
+            const renderer = this.renderer;
+            // Temporarily disable shadows
+            const savedCastShadow: any[] = [];
+            scene.traverse(c => {
+                if (c.isDirectionalLight && c.castShadow) {
+                    savedCastShadow.push(c);
+                    c.castShadow = false;
+                }
+            });
+
+            const hidden: THREE.Object3D[] = [];
+            scene.traverse(c => {
+                if (c.isMesh && !(c.layers.mask & (1 << TRANSLUCENT_LAYER_BIT)) && c.visible) {
+                    c.visible = false;
+                    hidden.push(c);
+                }
+            });
+
+            const savedBg = scene.background;
+            const savedBgNode = scene.backgroundNode;
+            const savedEnvNode = scene.environmentNode;
+            scene.background = null;
+            scene.backgroundNode = null;
+            scene.environmentNode = null;
+
+            renderer.setRenderTarget(this.buildingRT);
+            renderer.autoClear = true;
+            renderer.render(scene, camera);
+            renderer.setRenderTarget(null);
+
+            for (const o of hidden) o.visible = true;
+            scene.background = savedBg;
+            scene.backgroundNode = savedBgNode;
+            scene.environmentNode = savedEnvNode;
+            for (const s of savedCastShadow) s.castShadow = true;
+        }
+
         this.pipeline.render();
     }
 
