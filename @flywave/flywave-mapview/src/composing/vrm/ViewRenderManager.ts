@@ -40,13 +40,6 @@ import { bloom } from "./effects/bloom";
 import { outline } from "./effects/outline";
 import { TranslucentLayerEffect, TRANSLUCENT_LAYER_BIT } from "./TranslucentLayerEffect";
 
-/** Override material for buildings: encodes fragment depth */
-const _objectMarkerMaterial = new MeshBasicNodeMaterial();
-_objectMarkerMaterial.colorNode = Fn(() => {
-    return vec4(depth.mul(float(10.0)).add(float(5.0)), float(0.0), float(0.0), float(1.0));
-})();
-_objectMarkerMaterial.depthWrite = true;
-
 export class ViewRenderManager implements IViewRenderManager {
     readonly config: IViewRenderConfig = {
         aerialPerspective: { enabled: false },
@@ -72,7 +65,6 @@ export class ViewRenderManager implements IViewRenderManager {
     private pipeline?: RenderPipeline;
     private passNode?: ReturnType<typeof pass>;
     private buildingColorPassNode?: ReturnType<typeof pass>;
-    private translucentPassNode?: ReturnType<typeof pass>;
     private lensFlareNode?: LensFlareNode;
     private aerialNode?: AerialPerspectiveNode;
     private taaNode?: TemporalAntialiasNode;
@@ -212,19 +204,15 @@ export class ViewRenderManager implements IViewRenderManager {
                 const n = normalView.normalize();
                 const ndl = n.dot(this._sunDir!).max(0);
                 const light = ndl.mul(0.75).add(this._ambient!);
-                return vec4(albedo.mul(light), 1);
+                return vec4(albedo.mul(light), depth.mul(float(10.0)).add(float(5.0)));
             })();
+            _buildingColorMat.transparent = true;
+            _buildingColorMat.blending = THREE.NoBlending;
             this.buildingColorPassNode = pass(scene, camera, { samples: 0 });
             this.buildingColorPassNode.setLayers(buildingLayers);
             this.buildingColorPassNode.overrideMaterial = _buildingColorMat;
             const buildingColorNode = this.buildingColorPassNode.getTextureNode("output");
-
-            // Pass: buildings only → depth encoded
-            this.translucentPassNode = pass(scene, camera, { samples: 0 });
-            this.translucentPassNode.setLayers(buildingLayers);
-            this.translucentPassNode.transparent = false;
-            this.translucentPassNode.overrideMaterial = _objectMarkerMaterial;
-            const objDepthEnc = this.translucentPassNode.getTextureNode("output").r;
+            const objDepthEnc = buildingColorNode.a;
 
             const hasObject = objDepthEnc.greaterThan(float(2.0));
             const objDepth = objDepthEnc.sub(float(5.0)).div(float(10.0));
@@ -289,7 +277,6 @@ export class ViewRenderManager implements IViewRenderManager {
         this.pipeline = undefined;
         this.passNode = undefined;
         this.buildingColorPassNode = undefined;
-        this.translucentPassNode = undefined;
         this.lensFlareNode = undefined;
         this.aerialNode = undefined;
         this.taaNode = undefined;
