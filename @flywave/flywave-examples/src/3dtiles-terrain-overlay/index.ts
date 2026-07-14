@@ -41,6 +41,9 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         canvas: canvas, // Specify render canvas
         theme: {
             // extends: "resources/tilezen_base_globe.json"
+            celestia:{
+                sunTime:new Date().setHours(7,30)
+            }
         }
     });
 };

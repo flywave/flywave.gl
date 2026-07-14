@@ -8,12 +8,11 @@ import {
     positionView,
     uniform,
     vec4,
-    Fn,
     vec3,
-    fract,
+    Fn,
     depth,
-    uv,
-    texture
+    normalView,
+    attribute
 } from "three/tsl";
 import { RenderPipeline, type Renderer } from "three/webgpu";
 import { MeshBasicNodeMaterial } from "three/webgpu";
@@ -39,7 +38,6 @@ import { vignette } from "./effects/vignette";
 import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
 import { bloom } from "./effects/bloom";
 import { outline } from "./effects/outline";
-import { translucentLayer } from "./effects/translucentLayer";
 import { TranslucentLayerEffect, TRANSLUCENT_LAYER_BIT } from "./TranslucentLayerEffect";
 
 /** Override material for buildings: encodes fragment depth */
@@ -47,6 +45,7 @@ const _objectMarkerMaterial = new MeshBasicNodeMaterial();
 _objectMarkerMaterial.colorNode = Fn(() => {
     return vec4(depth.mul(float(10.0)).add(float(5.0)), float(0.0), float(0.0), float(1.0));
 })();
+_objectMarkerMaterial.depthWrite = true;
 
 /** Override material for terrain pass: same depth encoding */
 const _terrainDepthMaterial = new MeshBasicNodeMaterial();
@@ -79,17 +78,17 @@ export class ViewRenderManager implements IViewRenderManager {
 
     private pipeline?: RenderPipeline;
     private passNode?: ReturnType<typeof pass>;
-    private translucentPassNode?: ReturnType<typeof pass>;
     private buildingColorPassNode?: ReturnType<typeof pass>;
+    private translucentPassNode?: ReturnType<typeof pass>;
     private terrainDepthPassNode?: ReturnType<typeof pass>;
     private lensFlareNode?: LensFlareNode;
     private aerialNode?: AerialPerspectiveNode;
     private taaNode?: TemporalAntialiasNode;
     private scene?: THREE.Scene;
     private camera?: THREE.Camera;
-
-    private buildingRT?: import("three").WebGLRenderTarget;
-    private buildingTextureNode?: any;
+    private _sunDir?: ReturnType<typeof uniform<"vec3">>;
+    private _ambient?: ReturnType<typeof uniform<"float">>;
+    private _sunDirWarned = false;
 
     bloomObjects: Set<THREE.Object3D> = new Set();
     bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
@@ -121,12 +120,6 @@ export class ViewRenderManager implements IViewRenderManager {
             Object.keys(mrtEntries).length > 1
                 ? pass(scene, camera, { samples: 0 }).setMRT(mrt(mrtEntries))
                 : pass(scene, camera, { samples: 0 });
-
-        // Main pass sees both terrain (layer 0) and buildings (layer 10)
-        const allLayers = new THREE.Layers();
-        allLayers.set(0);
-        allLayers.enable(TRANSLUCENT_LAYER_BIT);
-        this.passNode.setLayers(allLayers);
 
         const colorNode = this.passNode.getTextureNode("output");
         const depthNode = this.passNode.getTextureNode("depth");
@@ -213,12 +206,26 @@ export class ViewRenderManager implements IViewRenderManager {
             const buildingLayers = new THREE.Layers();
             buildingLayers.set(TRANSLUCENT_LAYER_BIT);
 
-            // Create render target for building color
-            const canvas = this.renderer.domElement as HTMLCanvasElement;
-            const w = canvas.clientWidth || 1;
-            const h = canvas.clientHeight || 1;
-            this.buildingRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
-            this.buildingTextureNode = texture(this.buildingRT.texture);
+            // Pass: buildings only → vertex color with sun-direction lighting
+            // (MeshStandardNodeMaterial + AtmosphereLightNode triggers WGSL error in
+            // secondary TSL passes due to three.js shared light node instance design)
+            this._sunDir = uniform(vec3(new THREE.Vector3(0, 1, 0)));
+            this._ambient = uniform(float(0.25));
+            const _buildingFallback = uniform(vec3(new THREE.Color(0xc4b89e)));
+            const _buildingColorMat = new MeshBasicNodeMaterial();
+            _buildingColorMat.colorNode = Fn(() => {
+                const vertexColor = attribute("color", "vec3");
+                const hasVertexColor = vertexColor.length().greaterThan(0.005);
+                const albedo = hasVertexColor.select(vertexColor, _buildingFallback);
+                const n = normalView.normalize();
+                const ndl = n.dot(this._sunDir!).max(0);
+                const light = ndl.mul(0.75).add(this._ambient!);
+                return vec4(albedo.mul(light), 1);
+            })();
+            this.buildingColorPassNode = pass(scene, camera, { samples: 0 });
+            this.buildingColorPassNode.setLayers(buildingLayers);
+            this.buildingColorPassNode.overrideMaterial = _buildingColorMat;
+            const buildingColorNode = this.buildingColorPassNode.getTextureNode("output");
 
             // Pass: buildings only → depth encoded
             this.translucentPassNode = pass(scene, camera, { samples: 0 });
@@ -230,7 +237,7 @@ export class ViewRenderManager implements IViewRenderManager {
             // Pass: full scene → depth encoded
             this.terrainDepthPassNode = pass(scene, camera, { samples: 0 });
             this.terrainDepthPassNode.transparent = false;
-            this.terrainDepthPassNode.overrideMaterial = _objectMarkerMaterial;
+            this.terrainDepthPassNode.overrideMaterial = _terrainDepthMaterial;
             const sceneDepthEnc = this.terrainDepthPassNode.getTextureNode("output").r;
 
             const hasObject = objDepthEnc.greaterThan(float(2.0));
@@ -241,10 +248,17 @@ export class ViewRenderManager implements IViewRenderManager {
                 .and(objDepth.sub(sceneDepth).greaterThan(float(0.001)));
             const underground = hasObject.and(isOccluded);
 
-            // Underground: darken terrain color
+            // Above ground: use main pass (full scene with lighting)
+            // Below ground: blend building vertex color over scene
             const alpha = float(0.3);
-            const blended = finalNode.rgb.mul(float(1.0).sub(alpha));
-            finalNode = vec4(underground.select(blended, finalNode.rgb), 1);
+            const buildingColor = vec4(
+                agxPunchyToneMapping(buildingColorNode.rgb, this.exposure),
+                1
+            );
+            const undergroundBlend = finalNode.rgb
+                .mul(float(1.0).sub(alpha))
+                .add(buildingColor.rgb.mul(alpha));
+            finalNode = vec4(underground.select(undergroundBlend, finalNode.rgb), 1);
         }
 
         finalNode = finalNode.add(dithering);
@@ -262,43 +276,20 @@ export class ViewRenderManager implements IViewRenderManager {
             this.buildNodeGraph(scene, camera);
         }
 
-        // Manually render buildings to a render target with lighting
-        if (this.translucentLayerEffect != null && this.buildingRT != null) {
-            const renderer = this.renderer;
-            // Temporarily disable shadows
-            const savedCastShadow: any[] = [];
-            scene.traverse(c => {
-                if (c.isDirectionalLight && c.castShadow) {
-                    savedCastShadow.push(c);
-                    c.castShadow = false;
-                }
-            });
-
-            const hidden: THREE.Object3D[] = [];
-            scene.traverse(c => {
-                if (c.isMesh && !(c.layers.mask & (1 << TRANSLUCENT_LAYER_BIT)) && c.visible) {
-                    c.visible = false;
-                    hidden.push(c);
-                }
-            });
-
-            const savedBg = scene.background;
-            const savedBgNode = scene.backgroundNode;
-            const savedEnvNode = scene.environmentNode;
-            scene.background = null;
-            scene.backgroundNode = null;
-            scene.environmentNode = null;
-
-            renderer.setRenderTarget(this.buildingRT);
-            renderer.autoClear = true;
-            renderer.render(scene, camera);
-            renderer.setRenderTarget(null);
-
-            for (const o of hidden) o.visible = true;
-            scene.background = savedBg;
-            scene.backgroundNode = savedBgNode;
-            scene.environmentNode = savedEnvNode;
-            for (const s of savedCastShadow) s.castShadow = true;
+        // Update sun direction for building color override material
+        if (this._sunDir != null) {
+            const atmoLight = scene.getObjectByProperty("type", "AtmosphereLight") as
+                | THREE.Object3D
+                | undefined;
+            if (atmoLight != null) {
+                this._sunDir.value.copy(atmoLight.position).normalize();
+            } else if (this.translucentLayerEffect?.hasObjects && !this._sunDirWarned) {
+                this._sunDirWarned = true;
+                console.warn(
+                    "ViewRenderManager: AtmosphereLight not found in scene — building underground " +
+                        "lighting will use default sun direction (0,1,0)"
+                );
+            }
         }
 
         this.pipeline.render();
@@ -312,6 +303,9 @@ export class ViewRenderManager implements IViewRenderManager {
         this.pipeline?.dispose();
         this.pipeline = undefined;
         this.passNode = undefined;
+        this.buildingColorPassNode = undefined;
+        this.translucentPassNode = undefined;
+        this.terrainDepthPassNode = undefined;
         this.lensFlareNode = undefined;
         this.aerialNode = undefined;
         this.taaNode = undefined;

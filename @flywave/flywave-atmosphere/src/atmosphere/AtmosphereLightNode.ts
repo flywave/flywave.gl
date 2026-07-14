@@ -23,6 +23,8 @@ export class AtmosphereLightNode extends AnalyticLightNode<AtmosphereLight> {
     private readonly intensity = uniform(1).setGroup(renderGroup);
     private readonly directionECEF = uniform("vec3").setGroup(renderGroup);
 
+    private _setupDone = false;
+
     constructor(light?: AtmosphereLight | null) {
         super(light);
         this.updateBeforeType = NodeUpdateType.FRAME;
@@ -65,7 +67,7 @@ export class AtmosphereLightNode extends AnalyticLightNode<AtmosphereLight> {
     }
 
     override setup(builder: NodeBuilder): unknown {
-        this.atmosphereContext = getAtmosphereContext(builder);
+        this.atmosphereContext ??= getAtmosphereContext(builder);
         return super.setup(builder);
     }
 

@@ -127,9 +127,6 @@ export class TranslucentLayerEffect {
         }
     }
 
-    private readonly shadowStates: Map<Object3D, { castShadow: boolean; receiveShadow: boolean }> =
-        new Map();
-
     addObject(object: Object3D, layerId: string): void {
         if (this.registeredObjects.has(object)) return;
         if (!this.layers.has(layerId)) {
