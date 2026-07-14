@@ -47,13 +47,6 @@ _objectMarkerMaterial.colorNode = Fn(() => {
 })();
 _objectMarkerMaterial.depthWrite = true;
 
-/** Override material for terrain pass: same depth encoding */
-const _terrainDepthMaterial = new MeshBasicNodeMaterial();
-_terrainDepthMaterial.colorNode = Fn(() => {
-    return vec4(depth.mul(float(10.0)).add(float(5.0)), float(0.0), float(0.0), float(1.0));
-})();
-_terrainDepthMaterial.depthWrite = true;
-
 export class ViewRenderManager implements IViewRenderManager {
     readonly config: IViewRenderConfig = {
         aerialPerspective: { enabled: false },
@@ -80,7 +73,6 @@ export class ViewRenderManager implements IViewRenderManager {
     private passNode?: ReturnType<typeof pass>;
     private buildingColorPassNode?: ReturnType<typeof pass>;
     private translucentPassNode?: ReturnType<typeof pass>;
-    private terrainDepthPassNode?: ReturnType<typeof pass>;
     private lensFlareNode?: LensFlareNode;
     private aerialNode?: AerialPerspectiveNode;
     private taaNode?: TemporalAntialiasNode;
@@ -234,18 +226,11 @@ export class ViewRenderManager implements IViewRenderManager {
             this.translucentPassNode.overrideMaterial = _objectMarkerMaterial;
             const objDepthEnc = this.translucentPassNode.getTextureNode("output").r;
 
-            // Pass: full scene → depth encoded
-            this.terrainDepthPassNode = pass(scene, camera, { samples: 0 });
-            this.terrainDepthPassNode.transparent = false;
-            this.terrainDepthPassNode.overrideMaterial = _terrainDepthMaterial;
-            const sceneDepthEnc = this.terrainDepthPassNode.getTextureNode("output").r;
-
             const hasObject = objDepthEnc.greaterThan(float(2.0));
             const objDepth = objDepthEnc.sub(float(5.0)).div(float(10.0));
-            const sceneDepth = sceneDepthEnc.sub(float(5.0)).div(float(10.0));
             const isOccluded = objDepth
-                .greaterThan(sceneDepth)
-                .and(objDepth.sub(sceneDepth).greaterThan(float(0.001)));
+                .greaterThan(depthNode)
+                .and(objDepth.sub(depthNode).greaterThan(float(0.001)));
             const underground = hasObject.and(isOccluded);
 
             // Above ground: use main pass (full scene with lighting)
@@ -305,7 +290,6 @@ export class ViewRenderManager implements IViewRenderManager {
         this.passNode = undefined;
         this.buildingColorPassNode = undefined;
         this.translucentPassNode = undefined;
-        this.terrainDepthPassNode = undefined;
         this.lensFlareNode = undefined;
         this.aerialNode = undefined;
         this.taaNode = undefined;
