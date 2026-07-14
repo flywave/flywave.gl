@@ -12,10 +12,18 @@ import {
     Fn,
     depth,
     normalView,
-    attribute
+    attribute,
+    min,
+    texture,
+    vec2,
+    floor,
+    positionLocal,
+    modelViewMatrix,
+    cameraProjectionMatrix,
+    modelWorldMatrix,
+    cameraViewMatrix
 } from "three/tsl";
-import { RenderPipeline, type Renderer } from "three/webgpu";
-import { MeshBasicNodeMaterial } from "three/webgpu";
+import { RenderPipeline, type Renderer, NodeMaterial, MeshBasicNodeMaterial } from "three/webgpu";
 import type { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
 
 import {
@@ -38,7 +46,11 @@ import { vignette } from "./effects/vignette";
 import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
 import { bloom } from "./effects/bloom";
 import { outline } from "./effects/outline";
-import { TranslucentLayerEffect, TRANSLUCENT_LAYER_BIT } from "./TranslucentLayerEffect";
+import {
+    TranslucentLayerEffect,
+    TRANSLUCENT_LAYER_BIT,
+    SPLAT_DEPTH_LAYER_BIT
+} from "./TranslucentLayerEffect";
 
 export class ViewRenderManager implements IViewRenderManager {
     readonly config: IViewRenderConfig = {

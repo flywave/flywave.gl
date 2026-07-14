@@ -4,9 +4,9 @@ import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import earcut from "earcut";
 import * as THREE from "three";
-import { Line2 } from "three/examples/jsm/lines/Line2.js";
+import { Line2NodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
+import { Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawableObject } from "./DrawableObject";
@@ -54,23 +54,21 @@ export class DrawPolygon extends DrawableObject {
 
     private windowHandler: WindowEventHandler;
 
-    protected createPolygonMaterial(color: number, opacity: number): THREE.MeshPhongMaterial {
-        return new THREE.MeshPhongMaterial({
-            color,
-            opacity,
-            transparent: true,
-            side: THREE.DoubleSide,
-            specular: 0x111111,
-            shininess: 30
-        });
+    protected createPolygonMaterial(color: number, opacity: number): MeshStandardNodeMaterial {
+        const mat = new MeshStandardNodeMaterial();
+        mat.color = new THREE.Color(color);
+        mat.opacity = opacity;
+        mat.transparent = true;
+        mat.side = THREE.DoubleSide;
+        mat.roughness = 0.8;
+        mat.metalness = 0.0;
+        return mat;
     }
 
-    protected createOutlineMaterial(color: number): LineMaterial {
-        return new LineMaterial({
+    protected createOutlineMaterial(color: number): Line2NodeMaterial {
+        return new Line2NodeMaterial({
             color,
             linewidth: 3,
-            dashed: false,
-            opacity: 1.0,
             transparent: true
         });
     }
@@ -81,11 +79,9 @@ export class DrawPolygon extends DrawableObject {
 
         for (let i = 0; i < this.vertices.length; i++) {
             const geometry = new LineGeometry();
-            const material = new LineMaterial({
+            const material = new Line2NodeMaterial({
                 color: 0x888888,
                 linewidth: 1,
-                dashed: false,
-                opacity: 1.0,
                 transparent: true
             });
 
@@ -116,17 +112,17 @@ export class DrawPolygon extends DrawableObject {
         }
     }
 
-    protected createOutlineEdgeMaterial(): LineMaterial {
-        return new LineMaterial({
+    protected createOutlineEdgeMaterial(): Line2NodeMaterial {
+        return new Line2NodeMaterial({
             color: 0xffd700,
             linewidth: 2,
             dashed: true,
             dashSize: 0.6,
             gapSize: 0.3,
-            depthTest: false,
-            depthWrite: false,
             transparent: true,
-            opacity: 0.8
+            opacity: 0.8,
+            depthTest: false,
+            depthWrite: false
         });
     }
 
@@ -325,8 +321,8 @@ export class DrawPolygon extends DrawableObject {
     }
 
     protected updateVisuals(): void {
-        const meshMaterial = this.mesh.material as THREE.MeshPhongMaterial;
-        const outlineMaterial = this.outline.material as LineMaterial;
+        const meshMaterial = this.mesh.material as MeshStandardNodeMaterial;
+        const outlineMaterial = this.outline.material as Line2NodeMaterial;
 
         if (this.isSelected) {
             meshMaterial.color.set(0x00ff00);
@@ -334,12 +330,10 @@ export class DrawPolygon extends DrawableObject {
             meshMaterial.emissiveIntensity = 0.3;
             outlineMaterial.color.set(0xffff00);
             meshMaterial.opacity = 0.8;
-            outlineMaterial.linewidth = 4;
         } else {
             meshMaterial.color.set(this.fillColor);
             outlineMaterial.color.set(this.outlineColor);
             meshMaterial.opacity = this.opacity;
-            outlineMaterial.linewidth = 3;
         }
     }
 

@@ -61,6 +61,13 @@ export class TextGeometry {
     }
 
     /**
+     * Scene used to render background glyphs.
+     */
+    get backgroundScene(): THREE.Scene {
+        return this.m_bgScene;
+    }
+
+    /**
      * Maximum glyph capacity.
      */
     readonly capacity: number;
@@ -81,6 +88,7 @@ export class TextGeometry {
     private m_geometry: THREE.BufferGeometry;
     private m_mesh: THREE.Mesh;
     private m_bgMesh: THREE.Mesh;
+    private m_bgScene: THREE.Scene;
 
     private readonly m_pickingDataArray: PickingData[] = [];
 
@@ -140,18 +148,21 @@ export class TextGeometry {
 
         this.m_mesh = new THREE.Mesh(this.m_geometry, material);
         this.m_bgMesh = new THREE.Mesh(this.m_geometry, backgroundMaterial);
-        this.m_mesh.renderOrder = Number.MAX_SAFE_INTEGER;
-        this.m_bgMesh.renderOrder = Number.MAX_SAFE_INTEGER - 1;
+        this.m_mesh.renderOrder = 2;
+        this.m_bgMesh.renderOrder = 1;
         this.m_mesh.frustumCulled = false;
         this.m_bgMesh.frustumCulled = false;
-        this.scene.add(this.m_bgMesh, this.m_mesh);
+        this.m_bgScene = new THREE.Scene();
+        this.m_bgScene.add(this.m_bgMesh);
+        this.scene.add(this.m_mesh);
     }
 
     /**
      * Release all allocated resources.
      */
     dispose() {
-        this.scene.remove(this.m_bgMesh, this.m_mesh);
+        this.m_bgScene.remove(this.m_bgMesh);
+        this.scene.remove(this.m_mesh);
         this.m_geometry.dispose();
     }
 
@@ -581,13 +592,15 @@ export class TextGeometry {
 
         this.m_pickingDataArray.length = this.m_currentCapacity;
 
-        this.scene.remove(this.m_bgMesh, this.m_mesh);
+        this.scene.remove(this.m_mesh);
+        this.m_bgScene.remove(this.m_bgMesh);
         this.m_mesh = new THREE.Mesh(this.m_geometry, this.m_mesh.material);
         this.m_bgMesh = new THREE.Mesh(this.m_geometry, this.m_bgMesh.material);
-        this.m_mesh.renderOrder = Number.MAX_SAFE_INTEGER;
-        this.m_bgMesh.renderOrder = Number.MAX_SAFE_INTEGER - 1;
+        this.m_mesh.renderOrder = 2;
+        this.m_bgMesh.renderOrder = 1;
         this.m_mesh.frustumCulled = false;
         this.m_bgMesh.frustumCulled = false;
-        this.scene.add(this.m_bgMesh, this.m_mesh);
+        this.m_bgScene.add(this.m_bgMesh);
+        this.scene.add(this.m_mesh);
     }
 }

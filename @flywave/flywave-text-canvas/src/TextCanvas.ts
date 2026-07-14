@@ -439,6 +439,7 @@ export class TextCanvas {
             if (layer.id >= (lowerLayerId ?? 0)) {
                 if (higherLayerId === undefined || layer.id < higherLayerId) {
                     layer.storage.update();
+                    this.m_renderer.render(layer.storage.backgroundScene, camera);
                     this.m_renderer.render(layer.storage.scene, camera);
                 } else {
                     break;

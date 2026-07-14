@@ -27,6 +27,9 @@ const LAYERS_PER_ROW = 128;
 /** Object3D.layers bit for translucent objects (bit 10) */
 export const TRANSLUCENT_LAYER_BIT = 10;
 
+/** Object3D.layers bit for gaussian splat depth prepass (bit 12) */
+export const SPLAT_DEPTH_LAYER_BIT = 12;
+
 /**
  * Data manager for translucent layer effect.
  *

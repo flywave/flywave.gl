@@ -171,6 +171,8 @@ export class SplatMesh extends Mesh {
         this.geometry = SplatGeometry.build();
         this.material = SplatMaterial.build();
 
+        this.layers.enable(12);
+
         this.setEnabled(false);
         this._useRGBACovariants = true;
 

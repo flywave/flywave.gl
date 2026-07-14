@@ -199,8 +199,8 @@ export class FontCatalog {
     ) {
         this.m_glyphTextureCache = new GlyphTextureCache(
             maxCodePointCount,
-            this.maxWidth + 1,
-            this.maxHeight + 1
+            this.maxWidth + 4,
+            this.maxHeight + 4
         );
 
         this.m_loadingJson = new Map<string, Promise<any>>();

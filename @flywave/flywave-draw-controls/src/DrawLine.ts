@@ -3,9 +3,9 @@
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
-import { Line2 } from "three/examples/jsm/lines/Line2.js";
+import { Line2NodeMaterial } from "three/webgpu";
+import { Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawableObject } from "./DrawableObject";
@@ -32,7 +32,7 @@ export class DrawLine extends DrawableObject {
         const material = this.createLineMaterial(this.lineColor, this.baseLineWidth);
 
         this.line = new Line2(geometry, material);
-        this.line.renderOrder = 1;
+        this.line.renderOrder = 10;
 
         this.lineContainer = new THREE.Object3D();
         this.lineContainer.add(this.line);
@@ -46,16 +46,15 @@ export class DrawLine extends DrawableObject {
 
     private windowHandler: WindowEventHandler;
 
-    protected createLineMaterial(color: number, linewidth: number): LineMaterial {
-        return new LineMaterial({
+    protected createLineMaterial(color: number, linewidth: number): Line2NodeMaterial {
+        const mat = new Line2NodeMaterial({
             color,
             linewidth,
             dashed: false,
-            opacity: 1.0,
-            depthTest: false,
             transparent: true,
             alphaToCoverage: true
         });
+        return mat;
     }
 
     public updateVertex(index: number, newVertex: GeoCoordinates): void {
@@ -141,6 +140,9 @@ export class DrawLine extends DrawableObject {
         const geometry = this.line.geometry as LineGeometry;
         geometry.setPositions(vertices);
 
+        const mat = this.line.material as Line2NodeMaterial;
+        mat.linewidth = this.baseLineWidth;
+
         if (this.vertexHandles.length !== this.vertices.length) {
             this.createVertexHandles();
         } else {
@@ -168,7 +170,7 @@ export class DrawLine extends DrawableObject {
     }
 
     protected updateVisuals(): void {
-        const material = this.line.material as LineMaterial;
+        const material = this.line.material as Line2NodeMaterial;
         if (this.isSelected) {
             material.color.set(0x00ff00);
             material.linewidth = this.baseLineWidth * 2;
@@ -229,25 +231,26 @@ export class DrawLine extends DrawableObject {
         const mainGeometry = this.line.geometry;
         const material = this.createOutlineMaterial();
 
-        this.outlineLine = new Line2(mainGeometry, material);
-        this.outlineLine.renderOrder = -10;
+        this.outlineLine = new Line2(mainGeometry as LineGeometry, material);
+        this.outlineLine.renderOrder = 0;
         this.outlineLine.raycast = () => {};
 
         this.lineContainer.add(this.outlineLine);
     }
 
-    protected createOutlineMaterial(): LineMaterial {
-        return new LineMaterial({
+    protected createOutlineMaterial(): Line2NodeMaterial {
+        const mat = new Line2NodeMaterial({
             color: 0xffd700,
             linewidth: 3,
             dashed: true,
             dashSize: 0.8,
             gapSize: 0.4,
-            depthTest: false,
-            depthWrite: false,
             transparent: true,
-            opacity: 0.8
+            opacity: 0.8,
+            depthTest: false,
+            depthWrite: false
         });
+        return mat;
     }
 
     protected createVertexHandles(): void {

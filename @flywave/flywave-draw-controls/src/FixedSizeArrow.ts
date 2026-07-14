@@ -2,6 +2,7 @@
 
 // FixedSizeArrow.ts
 import * as THREE from "three";
+import { MeshBasicNodeMaterial } from "three/webgpu";
 import type { Renderer } from "three/webgpu";
 
 /**
@@ -78,12 +79,11 @@ export class FixedSizeArrow extends THREE.Object3D {
 
         // Create arrow head
         const headGeometry = new THREE.ConeGeometry(headWidth / 2, headLength, 8);
-        const headMaterial = new THREE.MeshBasicMaterial({
-            color: this._headColor,
-            transparent: this._opacity < 1,
-            opacity: this._opacity,
-            depthTest: false
-        });
+        const headMaterial = new MeshBasicNodeMaterial();
+        headMaterial.color = new THREE.Color(this._headColor);
+        headMaterial.transparent = this._opacity < 1;
+        headMaterial.opacity = this._opacity;
+        headMaterial.depthTest = false;
 
         this._headMesh = new THREE.Mesh(headGeometry, headMaterial);
         this._headMesh.position.y = shaftLength + headLength / 2;
@@ -96,12 +96,11 @@ export class FixedSizeArrow extends THREE.Object3D {
             shaftLength,
             8
         );
-        const shaftMaterial = new THREE.MeshBasicMaterial({
-            color: this._shaftColor,
-            transparent: this._opacity < 1,
-            opacity: this._opacity,
-            depthTest: false
-        });
+        const shaftMaterial = new MeshBasicNodeMaterial();
+        shaftMaterial.color = new THREE.Color(this._shaftColor);
+        shaftMaterial.transparent = this._opacity < 1;
+        shaftMaterial.opacity = this._opacity;
+        shaftMaterial.depthTest = false;
 
         this._shaftMesh = new THREE.Mesh(shaftGeometry, shaftMaterial);
         this._shaftMesh.position.y = shaftLength / 2;
@@ -169,7 +168,7 @@ export class FixedSizeArrow extends THREE.Object3D {
      */
     public setHeadColor(color: THREE.Color | number | string): void {
         this._headColor = new THREE.Color(color);
-        if (this._headMesh && this._headMesh.material instanceof THREE.MeshBasicMaterial) {
+        if (this._headMesh && this._headMesh.material instanceof MeshBasicNodeMaterial) {
             this._headMesh.material.color.copy(this._headColor);
         }
     }
@@ -187,7 +186,7 @@ export class FixedSizeArrow extends THREE.Object3D {
      */
     public setShaftColor(color: THREE.Color | number | string): void {
         this._shaftColor = new THREE.Color(color);
-        if (this._shaftMesh && this._shaftMesh.material instanceof THREE.MeshBasicMaterial) {
+        if (this._shaftMesh && this._shaftMesh.material instanceof MeshBasicNodeMaterial) {
             this._shaftMesh.material.color.copy(this._shaftColor);
         }
     }
@@ -206,12 +205,12 @@ export class FixedSizeArrow extends THREE.Object3D {
     public setOpacity(opacity: number): void {
         this._opacity = THREE.MathUtils.clamp(opacity, 0, 1);
 
-        if (this._headMesh && this._headMesh.material instanceof THREE.MeshBasicMaterial) {
+        if (this._headMesh && this._headMesh.material instanceof MeshBasicNodeMaterial) {
             this._headMesh.material.opacity = this._opacity;
             this._headMesh.material.transparent = this._opacity < 1;
         }
 
-        if (this._shaftMesh && this._shaftMesh.material instanceof THREE.MeshBasicMaterial) {
+        if (this._shaftMesh && this._shaftMesh.material instanceof MeshBasicNodeMaterial) {
             this._shaftMesh.material.opacity = this._opacity;
             this._shaftMesh.material.transparent = this._opacity < 1;
         }

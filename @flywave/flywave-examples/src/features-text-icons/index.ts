@@ -48,9 +48,9 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
 
             definitions: {
                 defaultTextStyle: {
-                    color: "#78350F",
+                    color: "#000000",
                     backgroundColor: "#ffffff",
-                    backgroundSize: 5,
+                    backgroundSize: 2,
                     fontSize: 20,
                     fontName: "Noto Sans",
                     fontStyle: "Bold"
@@ -63,10 +63,10 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                         technique: "labeled-icon",
                         attr: {
                             text: ["get", "name"],
-                            color: "#B45309",
-                            backgroundColor: "#FFFBEB",
-                            backgroundOpacity: 0.95,
-                            backgroundSize: 3,
+                            color: "#000000",
+                            backgroundColor: "#ffffff",
+                            backgroundOpacity: 1.0,
+                            backgroundSize: 2,
                             imageTexture: "circle-stroked-11",
                             iconScale: 1.0,
                             size: 14,
@@ -90,10 +90,10 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                         technique: "text",
                         attr: {
                             text: ["get", "name"],
-                            color: "#92400E",
-                            backgroundColor: "#FFFBEB",
-                            backgroundOpacity: 0.9,
-                            backgroundSize: 3,
+                            color: "#000000",
+                            backgroundColor: "#ffffff",
+                            backgroundOpacity: 1.0,
+                            backgroundSize: 2,
                             size: 14,
                             fontName: "default",
                             fontStyle: "Bold",

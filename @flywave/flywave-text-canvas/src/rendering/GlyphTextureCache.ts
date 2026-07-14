@@ -206,13 +206,15 @@ export class GlyphTextureCache {
     }
 
     private copyGlyphToCache(hash: string, glyph: GlyphData, cacheLocation: THREE.Vector2) {
+        const padX = Math.floor((this.entryWidth - glyph.width) / 2);
+        const padY = Math.floor((this.entryHeight - glyph.height) / 2);
         this.m_copyTransform.set(
             1.0,
             0.0,
-            cacheLocation.x * this.entryWidth - glyph.offsetX,
+            cacheLocation.x * this.entryWidth - glyph.offsetX + padX,
             0.0,
             1.0,
-            cacheLocation.y * this.entryHeight - glyph.positions[0].y,
+            cacheLocation.y * this.entryHeight - glyph.positions[0].y + padY,
             0.0,
             0.0,
             0.0

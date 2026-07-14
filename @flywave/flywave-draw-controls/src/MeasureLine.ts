@@ -3,16 +3,12 @@
 import { type GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
-import { Line2 } from "three/examples/jsm/lines/Line2.js";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { Line2NodeMaterial } from "three/webgpu";
+import { Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
 import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawLine } from "./DrawLine";
 
-/**
- * Measurement line class
- * Adds measurement display functionality to ordinary lines, including distance labels and arrows
- */
 export class MeasureLine extends DrawLine {
     private arrowLines: Line2[] = [];
     private ndcVertexs: THREE.Vector3[] = [];
@@ -41,23 +37,13 @@ export class MeasureLine extends DrawLine {
         });
     }
 
-    /**
-     * 更新测量显示
-     */
     public update(): void {
-        // Call parent class update method
         super.update();
-
-        // Update measurement display
         this.updateMeasureDisplay();
     }
 
-    /**
-     * 更新测量显示元素
-     */
     private updateMeasureDisplay(): void {
         if (!this.vertices || this.vertices.length < 2) {
-            // If vertex count is less than 2, hide arrows
             if (this.arrowLines && this.arrowLines.length > 0) {
                 this.arrowLines.forEach(arrow => {
                     arrow.visible = false;
@@ -66,7 +52,6 @@ export class MeasureLine extends DrawLine {
             return;
         }
 
-        // Calculate distance
         this.distance = this.calculateDistance();
 
         this.ndcVertexs = this.vertices.map(geo => {
@@ -77,14 +62,8 @@ export class MeasureLine extends DrawLine {
                 0
             );
         });
-
-        // Note: Label display has been moved to MeasureToolControls for unified management
     }
 
-    /**
-     * Calculate total distance of line segment
-     * @returns Distance (meters)
-     */
     private calculateDistance(): number {
         if (!this.vertices || this.vertices.length < 2) {
             return 0;
@@ -100,15 +79,8 @@ export class MeasureLine extends DrawLine {
         return totalDistance;
     }
 
-    /**
-     * Calculate distance between two points
-     * @param point1 First point
-     * @param point2 Second point
-     * @returns Distance (meters)
-     */
     private calculateSegmentDistance(point1: GeoCoordinates, point2: GeoCoordinates): number {
-        // Use Haversine formula to calculate distance between two points on Earth's surface
-        const R = 6371e3; // Earth radius (meters)
+        const R = 6371e3;
         const lat1 = (point1.latitude * Math.PI) / 180;
         const lat2 = (point2.latitude * Math.PI) / 180;
         const deltaLat = ((point2.latitude - point1.latitude) * Math.PI) / 180;
@@ -122,11 +94,6 @@ export class MeasureLine extends DrawLine {
         return R * c;
     }
 
-    /**
-     * Format distance display
-     * @param distance Distance (meters)
-     * @returns Formatted distance string
-     */
     public formatDistance(distance: number): string {
         if (distance < 1) {
             return `${(distance * 100).toFixed(1)} cm`;
@@ -137,14 +104,9 @@ export class MeasureLine extends DrawLine {
         }
     }
 
-    /**
-     * Override parent class update visual effects method
-     */
     protected updateVisuals(): void {
-        // Call parent class method
         super.updateVisuals();
 
-        // Update arrow visibility - always visible
         if (this.arrowLines && this.arrowLines.length > 0) {
             this.arrowLines.forEach(arrow => {
                 arrow.visible = true;
@@ -152,55 +114,39 @@ export class MeasureLine extends DrawLine {
         }
     }
 
-    /**
-     * Override parent class line material creation method to make measurement lines use dashed blue style
-     */
-    protected createLineMaterial(color: number, linewidth: number): LineMaterial {
-        return new LineMaterial({
-            color: 0x000000, // Blue
+    protected createLineMaterial(color: number, linewidth: number): Line2NodeMaterial {
+        return new Line2NodeMaterial({
+            color: 0x000000,
             linewidth: 2,
-            dashed: true, // Dashed
+            dashed: true,
             dashSize: 0.5,
             gapSize: 0.3,
+            transparent: true,
             depthTest: false,
             depthWrite: false,
-
-            opacity: 1.0,
-            transparent: true,
             alphaToCoverage: true
         });
     }
 
-    /**
-     * Override parent class outline material creation method to make outline lines use dashed blue style
-     */
-    protected createOutlineMaterial(): LineMaterial {
-        return new LineMaterial({
-            color: 0xffffff, // White outline
+    protected createOutlineMaterial(): Line2NodeMaterial {
+        return new Line2NodeMaterial({
+            color: 0xffffff,
             linewidth: 2,
             dashed: true,
             dashSize: 0.8,
             gapSize: 0.4,
-            depthTest: false,
-            depthWrite: false,
             transparent: true,
-            opacity: 0.8
+            opacity: 0.8,
+            depthTest: false,
+            depthWrite: false
         });
     }
 
-    /**
-     * Get measurement distance
-     * @returns Distance (meters)
-     */
     public getDistance(): number {
         return this.distance;
     }
 
-    /**
-     * Release resources
-     */
     public dispose(): void {
-        // Clean up arrow lines
         if (this.arrowLines && this.arrowLines.length > 0) {
             this.arrowLines.forEach(arrow => {
                 this.remove(arrow);
@@ -210,7 +156,6 @@ export class MeasureLine extends DrawLine {
             this.arrowLines = [];
         }
 
-        // Call parent class cleanup method
         super.dispose();
     }
 }

@@ -4,6 +4,7 @@
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
+import { MeshBasicNodeMaterial } from "three/webgpu";
 
 import { DrawableObject } from "./DrawableObject";
 
@@ -44,13 +45,12 @@ export class PointObject extends DrawableObject {
         // Create selection ring (only regular points have selection rings)
         if (!isVertex) {
             const ringGeometry = new THREE.RingGeometry(1.5, 1.7, 32);
-            const ringMaterial = new THREE.MeshBasicMaterial({
-                color: 0xffff00,
-                transparent: true,
-                opacity: 0,
-                side: THREE.DoubleSide,
-                depthTest: false
-            });
+            const ringMaterial = new MeshBasicNodeMaterial();
+            ringMaterial.color = new THREE.Color(0xffff00);
+            ringMaterial.transparent = true;
+            ringMaterial.opacity = 0;
+            ringMaterial.side = THREE.DoubleSide;
+            ringMaterial.depthTest = false;
             this.ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
             this.ringMesh.rotation.x = Math.PI / 2;
             this.ringMesh.renderOrder = 99;
@@ -228,7 +228,7 @@ export class PointObject extends DrawableObject {
 
         // Update selection ring visibility (only for regular points)
         if (!this.isVertex && this.ringMesh) {
-            (this.ringMesh.material as THREE.MeshBasicMaterial).opacity = this.isSelected ? 0.8 : 0;
+            (this.ringMesh.material as MeshBasicNodeMaterial).opacity = this.isSelected ? 0.8 : 0;
         }
     }
 
