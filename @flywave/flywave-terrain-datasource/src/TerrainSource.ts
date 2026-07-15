@@ -146,6 +146,18 @@ export class TerrainResourceTile extends Tile {
     _distanceFromCamera: number = Number.MAX_SAFE_INTEGER;
     private readonly _resourceManager: TileResourceManager = new TileResourceManager();
 
+    shouldDisposeObjectGeometry(){
+        return false;
+    }
+
+    shouldDisposeObjectMaterial(){
+        return false;
+    }
+
+    shouldDisposeTexture(){
+        return false;
+    }
+
     get resourceManager() {
         return this._resourceManager;
     }
