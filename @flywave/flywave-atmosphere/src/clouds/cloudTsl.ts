@@ -3,6 +3,9 @@
 
 import {
     abs,
+    acos,
+    asin,
+    atan,
     Break,
     dot,
     exp,
@@ -99,7 +102,12 @@ export const getCubeSphereUv = Fn(([position]: [any]) => {
     return vec2(uvX, uvY).mul(0.5).add(0.5);
 });
 
-export const getGlobeUv = getCubeSphereUv;
+export const getGlobeUv = Fn(([position]: [any]) => {
+    const n = normalize(position);
+    const phi = atan(n.x, n.z);
+    const theta = n.y.clamp(-1, 1).asin();
+    return vec2(phi.div(float(2 * Math.PI)).add(0.5), theta.div(float(Math.PI)).add(0.5));
+});
 
 /* -------------------------------------------------------------------------- */
 /*  Weather sampling                                                           */
@@ -184,7 +192,8 @@ export const createSampleMedia = (u: CloudUniforms) => {
     const getLayerDensity = createGetLayerDensity(u);
 
     return Fn(
-        ([heightFraction, density, position, uv, jitter, cameraPosition]: [
+        ([heightFraction, density, position, uv, mipLevel, jitter, cameraPosition]: [
+            any,
             any,
             any,
             any,
@@ -196,24 +205,42 @@ export const createSampleMedia = (u: CloudUniforms) => {
             const localWeatherSpeed = length(u.localWeatherOffset);
             const evolution = surfaceNormal.negate().mul(localWeatherSpeed.mul(2e4));
 
-            // Shape texture — same as GLSL: (position + evolution) * shapeRepeat
-            const shapePosition = position.add(evolution).mul(u.shapeRepeat).add(u.shapeOffset);
+            // Turbulence
+            const turbulenceUv = uv.mul(u.localWeatherRepeat).mul(u.turbulenceRepeat);
+            const turbTex = texture(u.turbulenceTexture, turbulenceUv).rgb.mul(2).sub(1);
+            const turbWeight = dot(
+                density,
+                remapClamped(heightFraction, vec4(0.3, 0.3, 0.3, 0.3), vec4(0, 0, 0, 0))
+            );
+            const turbulence = u.turbulenceDisplacement.mul(turbTex).mul(turbWeight);
+
+            // Shape texture
+            const shapePosition = position
+                .add(evolution)
+                .add(turbulence)
+                .mul(u.shapeRepeat)
+                .add(u.shapeOffset);
             const shape = texture3D(u.shapeTexture, shapePosition).r;
             density.assign(
                 remapClamped(density, oneMinus(shape).mul(u.shapeAmounts), vec4(1, 1, 1, 1))
             );
 
-            // Shape detail
-            const detailPosition = position.mul(u.shapeDetailRepeat).add(u.shapeDetailOffset);
-            const detail = texture3D(u.shapeDetailTexture, detailPosition).r;
-            const detailPow = pow(detail, float(6));
-            const modifier = mix(
-                vec4(detailPow),
-                oneMinus(vec4(detail)),
-                remapClamped(heightFraction, vec4(0.2, 0.2, 0.2, 0.2), vec4(0.4, 0.4, 0.4, 0.4))
-            );
-            const modMixed = mix(vec4(0, 0, 0, 0), modifier, u.shapeDetailAmounts);
-            density.assign(remapClamped(density.mul(2), modMixed.mul(0.5), vec4(1, 1, 1, 1)));
+            // Shape detail (conditional like GLSL: only when close enough)
+            If(mipLevel.mul(0.5).add(jitter.sub(0.5).mul(0.5)).lessThan(0.5), () => {
+                const detailPosition = position
+                    .add(turbulence)
+                    .mul(u.shapeDetailRepeat)
+                    .add(u.shapeDetailOffset);
+                const detail = texture3D(u.shapeDetailTexture, detailPosition).r;
+                const detailPow = pow(detail, float(6));
+                const modifier = mix(
+                    vec4(detailPow),
+                    oneMinus(vec4(detail)),
+                    remapClamped(heightFraction, vec4(0.2, 0.2, 0.2, 0.2), vec4(0.4, 0.4, 0.4, 0.4))
+                );
+                const modMixed = mix(vec4(0, 0, 0, 0), modifier, u.shapeDetailAmounts);
+                density.assign(remapClamped(density.mul(2), modMixed.mul(0.5), vec4(1, 1, 1, 1)));
+            });
 
             // Apply density profile
             const layerDensity = getLayerDensity(heightFraction);
@@ -251,7 +278,15 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
             const uv = getGlobeUv(position);
             const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
             const density = sampleWeather(uv, height);
-            const media = sampleMedia(heightFraction, density, position, uv, jitter, rayOrigin);
+            const media = sampleMedia(
+                heightFraction,
+                density,
+                position,
+                uv,
+                float(0),
+                jitter,
+                rayOrigin
+            );
             opticalDepth.addAssign(media.y.mul(stepSize));
             rayDistance.addAssign(stepSize);
             stepSize.mulAssign(u.secondaryStepScale);
@@ -262,7 +297,15 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
             const uv = getGlobeUv(position);
             const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
             const density = sampleWeather(uv, height);
-            const media = sampleMedia(heightFraction, density, position, uv, jitter, rayOrigin);
+            const media = sampleMedia(
+                heightFraction,
+                density,
+                position,
+                uv,
+                float(0),
+                jitter,
+                rayOrigin
+            );
             opticalDepth.addAssign(media.y.mul(stepSize));
             rayDistance.addAssign(stepSize);
             stepSize.mulAssign(u.secondaryStepScale);
@@ -291,7 +334,13 @@ export const createMarchClouds = (u: CloudUniforms) => {
                 .add(u.perspectiveStepScale.sub(1).mul(rayNearFar.x))
                 .toVar();
             const rayDistance = stepSize.mul(jitter).mul(2).toVar();
-            const mipLevel = log2(max(float(1), rayDistance.mul(1e-5))).toVar();
+            // GLSL: mipLevel = log2(max(1, rayStartTexelsPerPixel + rayDistance * 1e-5))
+            // rayStartTexelsPerPixel = pow(2, startMipLevel), startMipLevel comes from texture resolution
+            // Approximate with 1.0 (full res)
+            const rayStartTexelsPerPixel = float(1).toVar();
+            const mipLevel = log2(
+                max(float(1), rayStartTexelsPerPixel.add(rayDistance.mul(1e-5)))
+            ).toVar();
 
             Loop({ start: 0, end: 500, type: "int" }, () => {
                 If(rayDistance.greaterThan(maxRayDistance), () => {
@@ -300,6 +349,15 @@ export const createMarchClouds = (u: CloudUniforms) => {
 
                 const position = rayDistance.mul(rayDirection).add(rayOrigin);
                 const height = length(position).sub(u.bottomRadius);
+                mipLevel.assign(
+                    log2(max(float(1), rayStartTexelsPerPixel.add(rayDistance.mul(1e-5))))
+                );
+
+                // Skip gaps between cloud layers (insideLayerIntervals)
+                const gtInt = step(u.minIntervalHeights, vec3(height));
+                const ltInt = step(vec3(height), u.maxIntervalHeights);
+                const inInterval = gtInt.mul(ltInt);
+                const isGap = inInterval.x.add(inInterval.y).add(inInterval.z).greaterThan(0.5);
 
                 const uv = getGlobeUv(position);
                 const heightFraction = remapClamped(
@@ -312,8 +370,9 @@ export const createMarchClouds = (u: CloudUniforms) => {
                 // Skip empty space: check if any density component > minDensity
                 const maxDensity = max(density.x, max(density.y, max(density.z, density.w)));
                 const isEmpty = maxDensity.lessThanEqual(u.minDensity);
+                const skip = isGap.or(isEmpty);
 
-                If(isEmpty, () => {
+                If(skip, () => {
                     stepSize.mulAssign(u.perspectiveStepScale);
                     rayDistance.addAssign(mix(stepSize, u.maxStepSize, min(float(1), mipLevel)));
                 }).Else(() => {
@@ -322,6 +381,7 @@ export const createMarchClouds = (u: CloudUniforms) => {
                         density,
                         position,
                         uv,
+                        mipLevel,
                         jitter,
                         rayOrigin
                     );
@@ -393,7 +453,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
         const bottomRadius = u.bottomRadius;
 
-        const cameraHeight = length(cameraPosition).sub(bottomRadius);
+        const cameraHeight = u.cameraHeight;
 
         const r = length(cameraPosition);
         const mu = dot(cameraPosition, rayDirection).div(r);

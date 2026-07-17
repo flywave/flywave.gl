@@ -2,12 +2,14 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
+    dot,
     Fn,
     float,
     mix,
     normalize,
     positionGeometry,
     screenCoordinate,
+    uv as uvTsl,
     vec3,
     vec4
 } from "three/tsl";
@@ -16,6 +18,7 @@ import { type NodeBuilder, type NodeFrame, TempNode, NodeUpdateType, Renderer } 
 import { inverseProjectionMatrix, projectionMatrix } from "../tsl/accessors";
 import { depthToViewZ } from "../tsl/transformations";
 import type { Node } from "../tsl/node";
+import { convertToTexture } from "../tsl/RenderTargetNode";
 import { getAtmosphereContext } from "./AtmosphereContext";
 
 import { CloudTextures } from "../clouds/CloudTextures";
@@ -90,7 +93,6 @@ export function updateCloudUniforms(atmosphereContext: any): void {
     _cloudUniforms.sunDirection.value.copy(atmosphereContext.sunDirectionECEF.value);
     _cloudUniforms.bottomRadius.value = atmosphereContext.parameters.bottomRadius;
 
-    // Compute cameraShapeOffset in JS (float64) to avoid precision loss in shader
     const pos = atmosphereContext.cameraPositionECEF?.value;
     const corr = atmosphereContext.altitudeCorrectionECEF?.value;
     const sr = _cloudUniforms.shapeRepeat.value;
@@ -99,6 +101,8 @@ export function updateCloudUniforms(atmosphereContext: any): void {
         const cy = pos.y + (corr?.y ?? 0);
         const cz = pos.z + (corr?.z ?? 0);
         _cloudUniforms.cameraShapeOffset.value.set(cx * sr.x, cy * sr.y, cz * sr.z);
+        const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
+        _cloudUniforms.cameraHeight.value = len - atmosphereContext.parameters.bottomRadius;
     }
 }
 
@@ -144,7 +148,25 @@ export class CloudRenderNode extends TempNode {
 
         const camPosCorrected = cameraPositionECEF.add(altitudeCorrectionECEF);
 
-        const sceneDistance = float(1e10);
+        // Depth occlusion: read depth buffer and convert to scene distance
+        let sceneDistance;
+        if (this._depthNode != null) {
+            const depthTex = convertToTexture(this._depthNode);
+            const depthVal = depthTex.sample(uvTsl()).r;
+            const viewZ = depthToViewZ(depthVal, camera);
+            // camera forward direction in ECEF
+            const camForwardView = vec3(0, 0, -1);
+            const camForwardECEF = matrixViewToECEF.mul(vec4(camForwardView, 0)).xyz;
+            const sceneDist = viewZ.negate().div(dot(rayDirection, camForwardECEF.normalize()));
+            // If depth is far (sky), use large distance
+            sceneDistance = mix(
+                sceneDist,
+                float(1e10),
+                depthVal.greaterThan(float(1).sub(1e-7)).toFloat()
+            );
+        } else {
+            sceneDistance = float(1e10);
+        }
 
         const clouds = _renderClouds(camPosCorrected, rayDirection, sceneDistance);
 

@@ -12,6 +12,7 @@ export class CloudUniforms {
     altitudeCorrection = uniform(new Vector3());
     sunDirection = uniform(new Vector3(1, 0, 0));
     cameraShapeOffset = uniform(new Vector3());
+    cameraHeight = uniform(0.0);
 
     // Participating medium
     scatteringCoefficient = uniform(1.0);
