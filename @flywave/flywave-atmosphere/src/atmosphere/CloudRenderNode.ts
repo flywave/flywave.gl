@@ -91,7 +91,6 @@ export function updateCloudUniforms(atmosphereContext: any): void {
     _cloudUniforms.bottomRadius.value = atmosphereContext.parameters.bottomRadius;
 
     // Compute cameraShapeOffset in JS (float64) to avoid precision loss in shader
-    // cameraShapeOffset = camPosCorrected * shapeRepeat
     const pos = atmosphereContext.cameraPositionECEF?.value;
     const corr = atmosphereContext.altitudeCorrectionECEF?.value;
     const sr = _cloudUniforms.shapeRepeat.value;

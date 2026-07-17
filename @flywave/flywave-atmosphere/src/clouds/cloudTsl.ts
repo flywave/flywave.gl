@@ -1,11 +1,6 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-/**
- * Core cloud rendering TSL functions.
- * Faithful port of three-geospatial's clouds.glsl and clouds.frag.
- */
-
 import {
     abs,
     Break,
@@ -34,8 +29,6 @@ import {
 
 import type { CloudUniforms } from "./CloudUniforms";
 
-const RECIPROCAL_PI = 1.0 / Math.PI;
-const RECIPROCAL_PI2 = 1.0 / (2.0 * Math.PI);
 const RECIPROCAL_PI4 = 1.0 / (4.0 * Math.PI);
 
 /* -------------------------------------------------------------------------- */
@@ -48,23 +41,6 @@ export const remap = Fn(([x, a, b]: [any, any, any]) => {
 
 export const remapClamped = Fn(([x, a, b]: [any, any, any]) => {
     return x.sub(a).div(b.sub(a)).clamp(0, 1);
-});
-
-/* -------------------------------------------------------------------------- */
-/*  Ray-sphere intersection (scalar, with proper discriminant masking)        */
-/* -------------------------------------------------------------------------- */
-
-export const raySphereIntersect = Fn(([origin, dir, radius]: [any, any, any]) => {
-    const b = dot(dir, origin);
-    const c = dot(origin, origin).sub(radius.mul(radius));
-    const disc = b.mul(b).sub(c);
-
-    const mask = step(disc, float(0));
-    const Q = sqrt(disc.max(0));
-
-    const near = mix(b.negate().sub(Q), float(-1), mask);
-    const far = mix(b.negate().add(Q), float(-1), mask);
-    return vec2(near, far);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -124,18 +100,6 @@ export const getCubeSphereUv = Fn(([position]: [any]) => {
 });
 
 export const getGlobeUv = getCubeSphereUv;
-
-/* -------------------------------------------------------------------------- */
-/*  Layer interval check                                                       */
-/* -------------------------------------------------------------------------- */
-
-export const createInsideLayerIntervals = (u: CloudUniforms) =>
-    Fn(([height]: [any]) => {
-        const gt = step(u.minIntervalHeights, vec3(height));
-        const lt = step(vec3(height), u.maxIntervalHeights);
-        const both = gt.mul(lt);
-        return both.x.add(both.y).add(both.z).greaterThan(0.5);
-    });
 
 /* -------------------------------------------------------------------------- */
 /*  Weather sampling                                                           */
@@ -202,53 +166,11 @@ export const approximateMultipleScattering = Fn(([opticalDepth, cosTheta]: [any,
     const attenuation = vec3(0.5, 0.5, 0.5);
     const scattering = float(0).toVar();
 
-    // 8 octaves unrolled
-    {
+    for (let i = 0; i < 8; i++) {
         const bl = exp(opticalDepth.mul(coeffs.y).negate());
         const phase = phaseFunction(cosTheta, coeffs.z);
         scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
+        if (i < 7) coeffs.mulAssign(attenuation);
     }
 
     return scattering;
@@ -270,21 +192,19 @@ export const createSampleMedia = (u: CloudUniforms) => {
             any,
             any
         ]) => {
+            const surfaceNormal = normalize(position);
             const localWeatherSpeed = length(u.localWeatherOffset);
+            const evolution = surfaceNormal.negate().mul(localWeatherSpeed.mul(2e4));
 
-            // Shape texture — relative position avoids ECEF float32 precision loss
-            const relPos = position.sub(cameraPosition);
-            const shapePosition = relPos
-                .mul(u.shapeRepeat)
-                .add(u.cameraShapeOffset)
-                .add(u.shapeOffset);
+            // Shape texture — same as GLSL: (position + evolution) * shapeRepeat
+            const shapePosition = position.add(evolution).mul(u.shapeRepeat).add(u.shapeOffset);
             const shape = texture3D(u.shapeTexture, shapePosition).r;
             density.assign(
                 remapClamped(density, oneMinus(shape).mul(u.shapeAmounts), vec4(1, 1, 1, 1))
             );
 
             // Shape detail
-            const detailPosition = relPos.mul(u.shapeDetailRepeat).add(u.shapeDetailOffset);
+            const detailPosition = position.mul(u.shapeDetailRepeat).add(u.shapeDetailOffset);
             const detail = texture3D(u.shapeDetailTexture, detailPosition).r;
             const detailPow = pow(detail, float(6));
             const modifier = mix(
@@ -367,12 +287,13 @@ export const createMarchClouds = (u: CloudUniforms) => {
             const transmittanceIntegral = float(1).toVar();
 
             const maxRayDistance = rayNearFar.y.sub(rayNearFar.x).toVar();
-            const stepSize = maxRayDistance.div(64).toVar();
-            const rayDistance = float(0).toVar();
+            const stepSize = u.minStepSize
+                .add(u.perspectiveStepScale.sub(1).mul(rayNearFar.x))
+                .toVar();
+            const rayDistance = stepSize.mul(jitter).mul(2).toVar();
+            const mipLevel = log2(max(float(1), rayDistance.mul(1e-5))).toVar();
 
-            Loop({ start: 0, end: 64, type: "int" }, () => {
-                rayDistance.addAssign(stepSize);
-
+            Loop({ start: 0, end: 500, type: "int" }, () => {
                 If(rayDistance.greaterThan(maxRayDistance), () => {
                     Break();
                 });
@@ -388,43 +309,64 @@ export const createMarchClouds = (u: CloudUniforms) => {
                 ).toVar();
                 const density = sampleWeather(uv, height).toVar();
 
-                const media = sampleMedia(heightFraction, density, position, uv, jitter, rayOrigin);
-                const mediaScattering = media.x;
-                const mediaExtinction = media.y;
-                const skyGradient = media.z;
+                // Skip empty space: check if any density component > minDensity
+                const maxDensity = max(density.x, max(density.y, max(density.z, density.w)));
+                const isEmpty = maxDensity.lessThanEqual(u.minDensity);
 
-                If(mediaExtinction.greaterThan(u.minExtinction), () => {
-                    const alpha = remapClamped(height, u.minHeight, u.maxHeight);
-                    const sunIrradiance = mix(u.sunIrradianceMin, u.sunIrradianceMax, alpha);
-
-                    const opticalDepth = marchOpticalDepth(position, u.sunDirection, jitter);
-
-                    let radiance = sunIrradiance.mul(
-                        approximateMultipleScattering(opticalDepth, cosTheta)
+                If(isEmpty, () => {
+                    stepSize.mulAssign(u.perspectiveStepScale);
+                    rayDistance.addAssign(mix(stepSize, u.maxStepSize, min(float(1), mipLevel)));
+                }).Else(() => {
+                    const media = sampleMedia(
+                        heightFraction,
+                        density,
+                        position,
+                        uv,
+                        jitter,
+                        rayOrigin
                     );
+                    const mediaScattering = media.x;
+                    const mediaExtinction = media.y;
+                    const skyGradient = media.z;
 
-                    const skyIrradiance = mix(u.skyIrradianceMin, u.skyIrradianceMax, alpha);
-                    radiance = radiance.add(
-                        skyIrradiance
-                            .mul(float(RECIPROCAL_PI4))
-                            .mul(skyGradient)
-                            .mul(u.skyLightScale)
-                    );
+                    If(mediaExtinction.greaterThan(u.minExtinction), () => {
+                        const alpha = remapClamped(height, u.minHeight, u.maxHeight);
+                        const sunIrradiance = mix(u.sunIrradianceMin, u.sunIrradianceMax, alpha);
 
-                    radiance = radiance.mul(mediaScattering);
+                        const opticalDepth = marchOpticalDepth(position, u.sunDirection, jitter);
 
-                    radiance = radiance.mul(
-                        oneMinus(
-                            u.powderScale.mul(exp(mediaExtinction.mul(u.powderExponent).negate()))
-                        )
-                    );
+                        let radiance = sunIrradiance.mul(
+                            approximateMultipleScattering(opticalDepth, cosTheta)
+                        );
 
-                    const transmittance = exp(mediaExtinction.mul(stepSize).negate());
-                    const clampedExt = max(mediaExtinction, float(1e-7));
-                    const integral = radiance.sub(radiance.mul(transmittance)).div(clampedExt);
+                        const skyIrradiance = mix(u.skyIrradianceMin, u.skyIrradianceMax, alpha);
+                        radiance = radiance.add(
+                            skyIrradiance
+                                .mul(float(RECIPROCAL_PI4))
+                                .mul(skyGradient)
+                                .mul(u.skyLightScale)
+                        );
 
-                    radianceIntegral.addAssign(transmittanceIntegral.mul(integral));
-                    transmittanceIntegral.mulAssign(transmittance);
+                        radiance = radiance.mul(mediaScattering);
+
+                        radiance = radiance.mul(
+                            oneMinus(
+                                u.powderScale.mul(
+                                    exp(mediaExtinction.mul(u.powderExponent).negate())
+                                )
+                            )
+                        );
+
+                        const transmittance = exp(mediaExtinction.mul(stepSize).negate());
+                        const clampedExt = max(mediaExtinction, float(1e-7));
+                        const integral = radiance.sub(radiance.mul(transmittance)).div(clampedExt);
+
+                        radianceIntegral.addAssign(transmittanceIntegral.mul(integral));
+                        transmittanceIntegral.mulAssign(transmittance);
+                    });
+
+                    stepSize.mulAssign(u.perspectiveStepScale);
+                    rayDistance.addAssign(stepSize);
                 });
 
                 If(transmittanceIntegral.lessThanEqual(u.minTransmittance), () => {
@@ -472,6 +414,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const rMin = bottomRadius.add(u.minHeight);
         const cMin = r2.sub(rMin.mul(rMin));
         const dMin = b.mul(b).sub(cMin);
+        const nearMin = b.negate().sub(sqrt(dMin.max(0)));
         const farMin = b.negate().add(sqrt(dMin.max(0)));
 
         const rMax = bottomRadius.add(u.maxHeight);
@@ -495,7 +438,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             .ElseIf(cameraHeight.lessThan(u.maxHeight), () => {
                 If(intersectsGround, () => {
                     rayNear.assign(float(0));
-                    rayFar.assign(farMin);
+                    rayFar.assign(nearMin);
                 }).Else(() => {
                     rayNear.assign(float(0));
                     rayFar.assign(farMax);
@@ -505,15 +448,17 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 rayNear.assign(nearMax);
                 rayFar.assign(farMax);
                 If(intersectsGround, () => {
-                    rayFar.assign(farMin);
+                    rayFar.assign(nearMin);
                 });
             });
 
         rayFar.assign(min(rayFar, sceneDistance));
 
-        const noGround = intersectsGround.not();
-        const validRange = rayFar.greaterThanEqual(rayNear);
-        const shouldMarch = noGround.and(validRange);
+        // GLSL: intersectsGround = any(lessThan(rayNearFar, vec2(0.0)))
+        //       intersectsScene = rayNearFar.y < rayNearFar.x
+        const intersectsGroundRay = rayNear.lessThan(0).or(rayFar.lessThan(0));
+        const intersectsScene = rayFar.lessThan(rayNear);
+        const shouldMarch = intersectsGroundRay.not().and(intersectsScene.not());
 
         const result = vec4(0, 0, 0, 0).toVar();
 
