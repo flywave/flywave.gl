@@ -158,3 +158,20 @@ export { agxPunchyToneMapping, AgXPunchyToneMapping } from "./tsl/AgxToneMapping
 export { TemporalAntialiasNode, temporalAntialias } from "./tsl/TemporalAntialiasNode";
 export { HighpVelocityNode, highpVelocity } from "./tsl/HighpVelocityNode";
 export { bloom as tslBloom, default as BloomNode } from "./tsl/BloomNode";
+
+// Cloud texture generation
+export { CloudTextures } from "./clouds/CloudTextures";
+export { CloudShapeTexture } from "./clouds/textures/CloudShapeTexture";
+export { CloudShapeDetailTexture } from "./clouds/textures/CloudShapeDetailTexture";
+export { LocalWeatherTexture } from "./clouds/textures/LocalWeatherTexture";
+export { TurbulenceTexture } from "./clouds/textures/TurbulenceTexture";
+export { CloudLayers, CloudLayer } from "./clouds/CloudLayer";
+export { DensityProfile as CloudDensityProfile } from "./clouds/CloudLayer";
+export { CloudUniforms } from "./clouds/CloudUniforms";
+export { createCloudRenderer } from "./clouds/cloudTsl";
+export {
+    CloudRenderNode,
+    cloudRender,
+    updateCloudUniforms,
+    setCloudReadyCallback
+} from "./atmosphere/CloudRenderNode";

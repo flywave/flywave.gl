@@ -211,6 +211,8 @@ export interface Celestia {
 
     sunCastShadow?: boolean;
 
+    clouds?: boolean;
+
     /**
      * Whether to show the ground intersection in atmosphere rendering.
      * @default true

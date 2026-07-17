@@ -32,10 +32,14 @@ import {
     aerialPerspective,
     convertToTexture,
     agxPunchyToneMapping,
-    AgXPunchyToneMapping,
+    AgXCunchyToneMapping,
     temporalAntialias,
     highpVelocity,
     shadowLength,
+    cloudRender,
+    setCloudReadyCallback,
+    updateCloudUniforms,
+    type CloudRenderNode,
     type LensFlareNode,
     type AerialPerspectiveNode,
     type TemporalAntialiasNode
@@ -62,6 +66,7 @@ export class ViewRenderManager implements IViewRenderManager {
         sepia: { enabled: false, amount: 0 },
         outline: { enabled: false, thickness: 0.002, color: "#ffffff" },
         taa: { enabled: false },
+        clouds: { enabled: false },
         lensFlare: {
             enabled: false,
             bloomIntensity: 0.05,
@@ -79,6 +84,7 @@ export class ViewRenderManager implements IViewRenderManager {
     private buildingColorPassNode?: ReturnType<typeof pass>;
     private lensFlareNode?: LensFlareNode;
     private aerialNode?: AerialPerspectiveNode;
+    private cloudNode?: CloudRenderNode;
     private taaNode?: TemporalAntialiasNode;
     private scene?: THREE.Scene;
     private camera?: THREE.Camera;
@@ -134,6 +140,15 @@ export class ViewRenderManager implements IViewRenderManager {
                 shadowLengthNode
             );
             outputNode = this.aerialNode;
+        }
+
+        if (this.config.clouds?.enabled) {
+            this.cloudNode = cloudRender(convertToTexture(outputNode), depthNode, this.renderer);
+            // Rebuild pipeline when cloud textures finish loading
+            setCloudReadyCallback(() => {
+                this.needsUpdate = true;
+            });
+            outputNode = this.cloudNode;
         }
 
         if (bloomEnabled) {
@@ -259,6 +274,14 @@ export class ViewRenderManager implements IViewRenderManager {
     render(scene: THREE.Scene, camera: THREE.Camera): void {
         if (this.needsUpdate || this.pipeline == null) {
             this.buildNodeGraph(scene, camera);
+        }
+
+        // Update cloud uniforms from atmosphere context
+        if (this.cloudNode != null) {
+            const atmoCtx = (scene as any).__atmosphereContext;
+            if (atmoCtx != null) {
+                updateCloudUniforms(atmoCtx);
+            }
         }
 
         // Update sun direction for building color override material

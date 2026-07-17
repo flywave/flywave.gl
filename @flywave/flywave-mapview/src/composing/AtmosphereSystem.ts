@@ -30,6 +30,7 @@ export interface AtmosphereSystemOptions {
     atmosphere?: boolean;
     sunTime?: number;
     sunCastShadow?: boolean;
+    clouds?: boolean;
     showGround?: boolean;
     raymarchScattering?: boolean;
     higherOrderScatteringTexture?: boolean;
@@ -63,6 +64,7 @@ export class AtmosphereSystem {
     private m_csmShadowNode?: CascadedShadowMapsNode;
     private m_atmosphereEnabled: boolean = true;
     private m_sunCastShadow: boolean = true;
+    private m_cloudsEnabled: boolean = false;
     private m_showGround: boolean = true;
     private m_raymarchScattering: boolean = true;
     private m_higherOrderScatteringTexture: boolean = true;
@@ -146,6 +148,8 @@ export class AtmosphereSystem {
             scene.environmentNode = skyEnvironment() as unknown as THREE.Scene["environmentNode"];
             const vrm = new ViewRenderManager(renderer);
             vrm.csmShadowNode = this.m_csmShadowNode;
+            // Expose atmosphere context for cloud rendering
+            (scene as any).__atmosphereContext = this.m_atmosphereContext;
             const canvas = renderer.domElement as HTMLCanvasElement;
             vrm.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
             vrm.exposure.value = this.m_toneMappingExposure;
@@ -200,6 +204,9 @@ export class AtmosphereSystem {
         }
         if (options?.sunCastShadow !== undefined) {
             this.m_sunCastShadow = options.sunCastShadow;
+        }
+        if (options?.clouds !== undefined) {
+            this.m_cloudsEnabled = options.clouds;
         }
         const ctx = this.m_atmosphereContext;
         if (ctx != null) {
@@ -378,6 +385,9 @@ export class AtmosphereSystem {
         if (vrm != null) {
             vrm.config.lensFlare.enabled = enabled;
             vrm.config.aerialPerspective.enabled = enabled;
+            if (vrm.config.clouds != null) {
+                vrm.config.clouds.enabled = enabled && this.m_cloudsEnabled;
+            }
             vrm.needsUpdate = true;
         }
     }
