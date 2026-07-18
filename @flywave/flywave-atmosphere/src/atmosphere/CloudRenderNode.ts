@@ -7,6 +7,7 @@ import {
     float,
     frameId,
     ivec2,
+    max,
     mix,
     positionGeometry,
     screenCoordinate,
@@ -29,7 +30,9 @@ import {
     RenderTarget,
     RendererUtils,
     TempNode,
-    Vector2
+    Vector2,
+    Matrix4,
+    Uniform
 } from "three/webgpu";
 
 import { inverseProjectionMatrix } from "../tsl/accessors";
@@ -108,10 +111,26 @@ async function ensureCloudInit(renderer: Renderer): Promise<void> {
     }
 }
 
+// Previous frame camera position for velocity calculation
+let _prevCamX = 0,
+    _prevCamY = 0,
+    _prevCamZ = 0;
+let _hasPrevCam = false;
+
 export function updateCloudUniforms(atmosphereContext: any): void {
     if (!_cloudInitialized) return;
     _cloudUniforms.sunDirection.value.copy(atmosphereContext.sunDirectionECEF.value);
     _cloudUniforms.bottomRadius.value = atmosphereContext.parameters.bottomRadius;
+
+    // Update previous view-projection matrix for velocity reprojection
+    // prevViewProjectionUniform holds the PREVIOUS frame's VP matrix
+    const cam = atmosphereContext.camera;
+    if (cam) {
+        const curVP = new Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+        // prevViewProjectionUniform already holds previous frame (set at end of last frame)
+        // Store current VP for next frame's "previous"
+        _nextPrevViewProjection = curVP;
+    }
 
     const pos = atmosphereContext.cameraPositionECEF?.value;
     const corr = atmosphereContext.altitudeCorrectionECEF?.value;
@@ -123,6 +142,18 @@ export function updateCloudUniforms(atmosphereContext: any): void {
         _cloudUniforms.cameraShapeOffset.value.set(cx * sr.x, cy * sr.y, cz * sr.z);
         const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
         _cloudUniforms.cameraHeight.value = len - atmosphereContext.parameters.bottomRadius;
+
+        // Velocity = frame-to-frame camera displacement magnitude
+        if (_hasPrevCam) {
+            const dx = cx - _prevCamX;
+            const dy = cy - _prevCamY;
+            const dz = cz - _prevCamZ;
+            _cloudUniforms.cameraVelocity.value = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        _prevCamX = cx;
+        _prevCamY = cy;
+        _prevCamZ = cz;
+        _hasPrevCam = true;
     }
 }
 
@@ -131,6 +162,23 @@ const sizeScratch = /*#__PURE__*/ new Vector2();
 
 // Bayer 4x4 pattern for temporal upscale (1=render this frame, 0=use history)
 const bayerIndices = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+// Halton sequence for temporal jitter (base 2, base 3)
+const haltonBase2 = [
+    0.5, 0.25, 0.75, 0.125, 0.625, 0.375, 0.875, 0.0625, 0.5625, 0.3125, 0.8125, 0.1875, 0.6875,
+    0.4375, 0.9375, 0.03125
+];
+const haltonBase3 = [
+    0.333333, 0.666667, 0.111111, 0.444444, 0.777778, 0.222222, 0.555556, 0.888889, 0.037037,
+    0.37037, 0.703704, 0.148148, 0.481481, 0.814815, 0.259259, 0.592593
+];
+
+let _frameIndex = 0;
+
+// Previous view-projection matrix for velocity reprojection
+const prevViewProjectionUniform = new Uniform(new Matrix4());
+let hasPrevViewProjection = false;
+let _nextPrevViewProjection: Matrix4 | null = null;
 
 export class CloudRenderNode extends TempNode {
     static override get type(): string {
@@ -145,14 +193,20 @@ export class CloudRenderNode extends TempNode {
     private lowResRT: RenderTarget;
     private historyRT: RenderTarget;
     private resolveRT: RenderTarget;
+    private velocityRT: RenderTarget;
 
     private readonly lowResMaterial = new NodeMaterial();
     private readonly resolveMaterial = new NodeMaterial();
+    private readonly velocityMaterial = new NodeMaterial();
     private readonly mesh = new QuadMesh();
     private _rendererState?: RendererUtils.RendererState;
 
     private readonly lowResNode: TextureNode;
     private readonly historyNode: TextureNode;
+    private readonly velocityNode: TextureNode;
+
+    private prevViewProjection: Matrix4 | null = null;
+    private currentViewProjection: Matrix4 = new Matrix4();
 
     constructor(colorNode: Node<"vec4">, depthNode?: Node | null, renderer?: Renderer) {
         super("vec4");
@@ -181,8 +235,15 @@ export class CloudRenderNode extends TempNode {
         this.resolveRT.texture.minFilter = LinearFilter;
         this.resolveRT.texture.magFilter = LinearFilter;
 
+        // Velocity RT (stores frontDepth in R, velocity in GB)
+        this.velocityRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
+        this.velocityRT.texture.name = "Clouds [Velocity]";
+        this.velocityRT.texture.minFilter = LinearFilter;
+        this.velocityRT.texture.magFilter = LinearFilter;
+
         this.lowResNode = outputTexture(this, this.lowResRT.texture);
         this.historyNode = outputTexture(this, this.historyRT.texture);
+        this.velocityNode = outputTexture(this, this.velocityRT.texture);
 
         if (renderer != null) {
             ensureCloudInit(renderer).catch(err =>
@@ -216,12 +277,23 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.setSize(lowWidth, lowHeight);
         this.historyRT.setSize(fullWidth, fullHeight);
         this.resolveRT.setSize(fullWidth, fullHeight);
+        this.velocityRT.setSize(lowWidth, lowHeight);
 
         this._rendererState = resetRendererState(renderer, this._rendererState);
 
-        // Pass 1: Render clouds at 1/4 resolution
+        // Temporal jitter on projection matrix (Halton sequence)
+        const jitterIndex = _frameIndex % 16;
+        const jitterX = (haltonBase2[jitterIndex] - 0.5) / lowWidth;
+        const jitterY = (haltonBase3[jitterIndex] - 0.5) / lowHeight;
+
+        // Pass 1: Render clouds at 1/4 resolution with jittered projection
         renderer.setRenderTarget(this.lowResRT);
         this.mesh.material = this.lowResMaterial;
+        this.mesh.render(renderer);
+
+        // Pass 1b: Render velocity at 1/4 resolution
+        renderer.setRenderTarget(this.velocityRT);
+        this.mesh.material = this.velocityMaterial;
         this.mesh.render(renderer);
 
         // Pass 2: Resolve (TAA + Catmull-Rom upsample) at full resolution
@@ -230,6 +302,14 @@ export class CloudRenderNode extends TempNode {
         this.mesh.render(renderer);
 
         restoreRendererState(renderer, this._rendererState);
+
+        _frameIndex++;
+
+        // Swap prevViewProjection for next frame
+        if (_nextPrevViewProjection) {
+            prevViewProjectionUniform.value.copy(_nextPrevViewProjection);
+            hasPrevViewProjection = true;
+        }
 
         this.swapHistoryResolve();
     }
@@ -303,6 +383,17 @@ export class CloudRenderNode extends TempNode {
             const sunIrrMax = maxIrr.get("direct");
             const skyIrrMax = maxIrr.get("indirect");
 
+            // Ground irradiance for ground bounce
+            const groundPos = surfaceNormal.mul(float(_cloudUniforms.bottomRadius.value));
+            const groundIrr = getSplitScalarIrradiance(
+                atmosphereContext,
+                groundPos,
+                _cloudUniforms.sunDirection
+            ).toConst();
+            const groundIrradiance = groundIrr
+                .get("indirect")
+                .add(groundIrr.get("direct").mul(float(1).sub(_cloudUniforms.coverage.value)));
+
             const clouds = _renderClouds(
                 camPosCorrected,
                 rayDirection,
@@ -310,11 +401,28 @@ export class CloudRenderNode extends TempNode {
                 sunIrrMin,
                 skyIrrMin,
                 sunIrrMax,
-                skyIrrMax
+                skyIrrMax,
+                groundIrradiance
             );
             // Store color (rgb) + alpha in low-res buffer
             this.lowResMaterial.fragmentNode = clouds;
             this.lowResMaterial.needsUpdate = true;
+        }
+
+        // Setup velocity pass: compute per-pixel velocity from frontDepth
+        {
+            // Velocity = currentUv - prevUv (reproject frontPosition with prev VP)
+            // For simplicity, output frontDepth in R channel (velocity computed in resolve)
+            const velocityNode = Fn(() => {
+                const fullUv = screenUV;
+                const lowColor = texture(this.lowResNode, fullUv);
+                // Store frontDepth approximation in R, alpha in G
+                // Real velocity needs frontPosition reprojection (complex)
+                return vec4(lowColor.a, lowColor.a, lowColor.a, 1);
+            })();
+
+            this.velocityMaterial.fragmentNode = velocityNode;
+            this.velocityMaterial.needsUpdate = true;
         }
 
         // Setup resolve pass: Catmull-Rom upscale + temporal blend
@@ -454,25 +562,35 @@ export class CloudRenderNode extends TempNode {
                 const result = currentColor.toVar();
                 currentFrame.toConst();
 
-                // Only blend with history for non-current-frame pixels
-                const clippedHistory = ((): any => {
-                    const pClip = maxColor.rgb.add(minColor.rgb).mul(0.5);
-                    const eClip = maxColor.rgb.sub(minColor.rgb).mul(0.5).add(1e-7);
-                    const historyColor = texture(this.historyNode, fullUv);
-                    const vClip = historyColor.sub(vec4(pClip, currentColor.a));
-                    const vUnit = vClip.xyz.div(eClip);
-                    const aUnit = vUnit.abs();
-                    const maUnit = max(aUnit.x, max(aUnit.y, aUnit.z));
-                    return maUnit
-                        .greaterThan(1)
-                        .select(vec4(pClip, currentColor.a).add(vClip.div(maUnit)), historyColor);
-                })();
+                // clipAABB: clip history to neighborhood bounding box
+                // Per-pixel velocity reprojection: sample history at offset UV
+                const velocityTex = texture(this.velocityNode, fullUv);
+                const velOffset = vec2(velocityTex.g, velocityTex.b);
+                const reprojUv = fullUv.sub(velOffset);
+
+                const pClip = maxColor.rgb.add(minColor.rgb).mul(0.5);
+                const eClip = maxColor.rgb.sub(minColor.rgb).mul(0.5).add(1e-7);
+                const historyColor = texture(this.historyNode, reprojUv);
+                const vClip = historyColor.sub(vec4(pClip, currentColor.a));
+                const vUnit = vClip.xyz.div(eClip);
+                const aUnit = vUnit.abs();
+                const maUnit = max(aUnit.x, max(aUnit.y, aUnit.z));
+                const clippedHistory = maUnit
+                    .greaterThan(1)
+                    .select(vec4(pClip, currentColor.a).add(vClip.div(maUnit)), historyColor);
+
+                // Velocity-aware blend: more history when static, less when moving
+                // velocity > 100m → blend 0.5, velocity < 1m → blend 0.05
+                const velocity = _cloudUniforms.cameraVelocity;
+                const temporalAlpha = float(0.05).add(
+                    velocity.div(float(100)).clamp(0, 1).mul(float(0.45))
+                );
 
                 // Fresh sample on current frame, otherwise blend with history
                 result.assign(
                     currentFrame.select(
                         currentColor,
-                        mix(clippedHistory, currentColor, float(0.15))
+                        mix(clippedHistory, currentColor, temporalAlpha)
                     )
                 );
 

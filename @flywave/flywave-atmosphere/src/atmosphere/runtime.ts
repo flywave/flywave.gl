@@ -598,7 +598,7 @@ const getIndirectRadianceToPointLookup = /*#__PURE__*/ FnVar(
     }
 );
 
-const getIndirectRadianceToPoint = /*#__PURE__*/ FnVar(
+export const getIndirectRadianceToPoint = /*#__PURE__*/ FnVar(
     (
         context: AtmosphereContext,
         camera: Node<Position>,

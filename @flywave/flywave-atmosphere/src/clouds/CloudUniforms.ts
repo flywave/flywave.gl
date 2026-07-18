@@ -13,6 +13,7 @@ export class CloudUniforms {
     sunDirection = uniform(new Vector3(1, 0, 0));
     cameraShapeOffset = uniform(new Vector3());
     cameraHeight = uniform(0.0);
+    cameraVelocity = uniform(0.0);
 
     // Participating medium
     scatteringCoefficient = uniform(1.0);
@@ -33,6 +34,11 @@ export class CloudUniforms {
     maxIterationCountToGround = uniform(3);
     minSecondaryStepSize = uniform(100.0);
     secondaryStepScale = uniform(2.0);
+
+    // Shadow length
+    maxShadowLengthIterationCount = uniform(500);
+    minShadowLengthStepSize = uniform(50.0);
+    maxShadowLengthRayDistance = uniform(200000.0);
 
     // Shape and weather
     localWeatherRepeat = uniform(new Vector2(100, 100));
