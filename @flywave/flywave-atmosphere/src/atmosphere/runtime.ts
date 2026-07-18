@@ -775,7 +775,7 @@ const getIndirectIrradiance = /*#__PURE__*/ FnVar(
     }
 );
 
-const getSplitScalarIrradiance = /*#__PURE__*/ FnVar(
+export const getSplitScalarIrradiance = /*#__PURE__*/ FnVar(
     (
         context: AtmosphereContext,
         point: Node<Position>,

@@ -8,7 +8,7 @@ import { CloudLayers } from "./CloudLayer";
 
 export class CloudUniforms {
     // Atmosphere
-    bottomRadius = uniform(6371000.0);
+    bottomRadius = uniform(6360000.0);
     altitudeCorrection = uniform(new Vector3());
     sunDirection = uniform(new Vector3(1, 0, 0));
     cameraShapeOffset = uniform(new Vector3());

@@ -31,6 +31,7 @@ import {
 } from "three/tsl";
 
 import type { CloudUniforms } from "./CloudUniforms";
+import { stbn } from "../tsl/STBNTextureNode";
 
 const RECIPROCAL_PI4 = 1.0 / (4.0 * Math.PI);
 
@@ -56,32 +57,42 @@ export const getCubeSphereUv = Fn(([position]: [any]) => {
     const maxF = max(f.x, max(f.y, f.z));
     const c = n.div(maxF);
 
-    const isY = f.y.greaterThan(f.x).and(f.y.greaterThan(f.z));
-    const isX = f.x.greaterThan(f.y).and(f.x.greaterThan(f.z));
-
     const m = vec2().toVar();
 
-    If(isY, () => {
-        If(c.y.greaterThan(0), () => {
-            m.assign(vec2(n.x.negate(), n.z));
-        }).Else(() => {
-            m.assign(n.xz);
-        });
-    })
-        .ElseIf(isX, () => {
-            If(c.x.greaterThan(0), () => {
-                m.assign(n.yz);
+    // Nested ifs to avoid .and() which doesn't work correctly in TSL
+    If(f.y.greaterThan(f.x), () => {
+        If(f.y.greaterThan(f.z), () => {
+            // Y dominant
+            If(c.y.greaterThan(0), () => {
+                m.assign(vec2(n.x.negate(), n.z));
             }).Else(() => {
-                m.assign(vec2(n.y.negate(), n.z));
+                m.assign(n.xz);
             });
-        })
-        .Else(() => {
+        }).Else(() => {
+            // Z dominant (z >= y > x)
             If(c.z.greaterThan(0), () => {
                 m.assign(n.xy);
             }).Else(() => {
                 m.assign(vec2(n.x, n.y.negate()));
             });
         });
+    }).Else(() => {
+        If(f.x.greaterThan(f.z), () => {
+            // X dominant
+            If(c.x.greaterThan(0), () => {
+                m.assign(n.yz);
+            }).Else(() => {
+                m.assign(vec2(n.y.negate(), n.z));
+            });
+        }).Else(() => {
+            // Z dominant (z >= x >= y)
+            If(c.z.greaterThan(0), () => {
+                m.assign(n.xy);
+            }).Else(() => {
+                m.assign(vec2(n.x, n.y.negate()));
+            });
+        });
+    });
 
     const m2 = m.mul(m);
     const q = m2.x.mul(-2).add(m2.y.mul(2)).sub(3);
@@ -102,12 +113,7 @@ export const getCubeSphereUv = Fn(([position]: [any]) => {
     return vec2(uvX, uvY).mul(0.5).add(0.5);
 });
 
-export const getGlobeUv = Fn(([position]: [any]) => {
-    const n = normalize(position);
-    const phi = atan(n.x, n.z);
-    const theta = n.y.clamp(-1, 1).asin();
-    return vec2(phi.div(float(2 * Math.PI)).add(0.5), theta.div(float(Math.PI)).add(0.5));
-});
+export const getGlobeUv = getCubeSphereUv;
 
 /* -------------------------------------------------------------------------- */
 /*  Weather sampling                                                           */
@@ -325,7 +331,17 @@ export const createMarchClouds = (u: CloudUniforms) => {
     const marchOpticalDepth = createMarchOpticalDepth(u);
 
     return Fn(
-        ([rayOrigin, rayDirection, rayNearFar, cosTheta, jitter]: [any, any, any, any, any]) => {
+        ([
+            rayOrigin,
+            rayDirection,
+            rayNearFar,
+            cosTheta,
+            jitter,
+            sunIrrMin,
+            skyIrrMin,
+            sunIrrMax,
+            skyIrrMax
+        ]: [any, any, any, any, any, any, any, any, any]) => {
             const radianceIntegral = vec3(0).toVar();
             const transmittanceIntegral = float(1).toVar();
 
@@ -391,7 +407,7 @@ export const createMarchClouds = (u: CloudUniforms) => {
 
                     If(mediaExtinction.greaterThan(u.minExtinction), () => {
                         const alpha = remapClamped(height, u.minHeight, u.maxHeight);
-                        const sunIrradiance = mix(u.sunIrradianceMin, u.sunIrradianceMax, alpha);
+                        const sunIrradiance = mix(sunIrrMin, sunIrrMax, alpha);
 
                         const opticalDepth = marchOpticalDepth(position, u.sunDirection, jitter);
 
@@ -399,7 +415,7 @@ export const createMarchClouds = (u: CloudUniforms) => {
                             approximateMultipleScattering(opticalDepth, cosTheta)
                         );
 
-                        const skyIrradiance = mix(u.skyIrradianceMin, u.skyIrradianceMax, alpha);
+                        const skyIrradiance = mix(skyIrrMin, skyIrrMax, alpha);
                         radiance = radiance.add(
                             skyIrradiance
                                 .mul(float(RECIPROCAL_PI4))
@@ -447,88 +463,108 @@ export const createMarchClouds = (u: CloudUniforms) => {
 export const createCloudRenderer = (u: CloudUniforms) => {
     const marchClouds = createMarchClouds(u);
 
-    return Fn(([cameraPosition, rayDirection, sceneDistance]: [any, any, any]) => {
-        const cosTheta = dot(u.sunDirection, rayDirection);
-        const jitter = float(0.5);
+    return Fn(
+        ([
+            cameraPosition,
+            rayDirection,
+            sceneDistance,
+            sunIrrMin,
+            skyIrrMin,
+            sunIrrMax,
+            skyIrrMax
+        ]: [any, any, any, any, any, any, any]) => {
+            const cosTheta = dot(u.sunDirection, rayDirection);
+            const jitter = stbn;
 
-        const bottomRadius = u.bottomRadius;
+            const bottomRadius = u.bottomRadius;
 
-        const cameraHeight = u.cameraHeight;
+            const cameraHeight = u.cameraHeight;
 
-        const r = length(cameraPosition);
-        const mu = dot(cameraPosition, rayDirection).div(r);
-        const intersectsGround = mu
-            .lessThan(0)
-            .and(
-                r
-                    .mul(r)
-                    .mul(mu.mul(mu).sub(1))
-                    .add(bottomRadius.mul(bottomRadius))
-                    .greaterThanEqual(0)
-            );
+            const r = length(cameraPosition);
+            const mu = dot(cameraPosition, rayDirection).div(r);
+            const intersectsGround = mu
+                .lessThan(0)
+                .and(
+                    r
+                        .mul(r)
+                        .mul(mu.mul(mu).sub(1))
+                        .add(bottomRadius.mul(bottomRadius))
+                        .greaterThanEqual(0)
+                );
 
-        // Scalar ray-sphere for individual radii
-        const b = dot(rayDirection, cameraPosition);
-        const r2 = dot(cameraPosition, cameraPosition);
+            // Scalar ray-sphere for individual radii
+            const b = dot(rayDirection, cameraPosition);
+            const r2 = dot(cameraPosition, cameraPosition);
 
-        const rMin = bottomRadius.add(u.minHeight);
-        const cMin = r2.sub(rMin.mul(rMin));
-        const dMin = b.mul(b).sub(cMin);
-        const nearMin = b.negate().sub(sqrt(dMin.max(0)));
-        const farMin = b.negate().add(sqrt(dMin.max(0)));
+            const rMin = bottomRadius.add(u.minHeight);
+            const cMin = r2.sub(rMin.mul(rMin));
+            const dMin = b.mul(b).sub(cMin);
+            const nearMin = b.negate().sub(sqrt(dMin.max(0)));
+            const farMin = b.negate().add(sqrt(dMin.max(0)));
 
-        const rMax = bottomRadius.add(u.maxHeight);
-        const cMax = r2.sub(rMax.mul(rMax));
-        const dMax = b.mul(b).sub(cMax);
-        const nearMax = b.negate().sub(sqrt(dMax.max(0)));
-        const farMax = b.negate().add(sqrt(dMax.max(0)));
+            const rMax = bottomRadius.add(u.maxHeight);
+            const cMax = r2.sub(rMax.mul(rMax));
+            const dMax = b.mul(b).sub(cMax);
+            const nearMax = b.negate().sub(sqrt(dMax.max(0)));
+            const farMax = b.negate().add(sqrt(dMax.max(0)));
 
-        const rayNear = float(-1).toVar();
-        const rayFar = float(-1).toVar();
+            const rayNear = float(-1).toVar();
+            const rayFar = float(-1).toVar();
 
-        If(cameraHeight.lessThan(u.minHeight), () => {
-            If(intersectsGround, () => {
-                rayNear.assign(float(-1));
-                rayFar.assign(float(-1));
-            }).Else(() => {
-                rayNear.assign(farMin);
-                rayFar.assign(min(farMax, u.maxRayDistance));
-            });
-        })
-            .ElseIf(cameraHeight.lessThan(u.maxHeight), () => {
+            If(cameraHeight.lessThan(u.minHeight), () => {
                 If(intersectsGround, () => {
-                    rayNear.assign(float(0));
-                    rayFar.assign(nearMin);
+                    rayNear.assign(float(-1));
+                    rayFar.assign(float(-1));
                 }).Else(() => {
-                    rayNear.assign(float(0));
-                    rayFar.assign(farMax);
+                    rayNear.assign(farMin);
+                    rayFar.assign(min(farMax, u.maxRayDistance));
                 });
             })
-            .Else(() => {
-                rayNear.assign(nearMax);
-                rayFar.assign(farMax);
-                If(intersectsGround, () => {
-                    rayFar.assign(nearMin);
+                .ElseIf(cameraHeight.lessThan(u.maxHeight), () => {
+                    If(intersectsGround, () => {
+                        rayNear.assign(float(0));
+                        rayFar.assign(nearMin);
+                    }).Else(() => {
+                        rayNear.assign(float(0));
+                        rayFar.assign(farMax);
+                    });
+                })
+                .Else(() => {
+                    rayNear.assign(nearMax);
+                    rayFar.assign(farMax);
+                    If(intersectsGround, () => {
+                        rayFar.assign(nearMin);
+                    });
                 });
+
+            rayFar.assign(min(rayFar, sceneDistance));
+
+            // GLSL: intersectsGround = any(lessThan(rayNearFar, vec2(0.0)))
+            //       intersectsScene = rayNearFar.y < rayNearFar.x
+            const intersectsGroundRay = rayNear.lessThan(0).or(rayFar.lessThan(0));
+            const intersectsScene = rayFar.lessThan(rayNear);
+            const shouldMarch = intersectsGroundRay.not().and(intersectsScene.not());
+
+            const result = vec4(0, 0, 0, 0).toVar();
+
+            If(shouldMarch, () => {
+                const origin = rayNear.mul(rayDirection).add(cameraPosition);
+                result.assign(
+                    marchClouds(
+                        origin,
+                        rayDirection,
+                        vec2(rayNear, rayFar),
+                        cosTheta,
+                        jitter,
+                        sunIrrMin,
+                        skyIrrMin,
+                        sunIrrMax,
+                        skyIrrMax
+                    )
+                );
             });
 
-        rayFar.assign(min(rayFar, sceneDistance));
-
-        // GLSL: intersectsGround = any(lessThan(rayNearFar, vec2(0.0)))
-        //       intersectsScene = rayNearFar.y < rayNearFar.x
-        const intersectsGroundRay = rayNear.lessThan(0).or(rayFar.lessThan(0));
-        const intersectsScene = rayFar.lessThan(rayNear);
-        const shouldMarch = intersectsGroundRay.not().and(intersectsScene.not());
-
-        const result = vec4(0, 0, 0, 0).toVar();
-
-        If(shouldMarch, () => {
-            const origin = rayNear.mul(rayDirection).add(cameraPosition);
-            result.assign(
-                marchClouds(origin, rayDirection, vec2(rayNear, rayFar), cosTheta, jitter)
-            );
-        });
-
-        return result;
-    });
+            return result;
+        }
+    );
 };
