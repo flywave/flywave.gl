@@ -68,5 +68,5 @@ export const stbnTexture = /*#__PURE__*/ nodeImmutable(STBNTextureNode);
 export const stbn = /*#__PURE__*/ Fn(() => {
     return stbnTexture
         .sample(vec3(screenCoordinate.xy, frameId.mod(64)).div(vec3(128, 128, 64)))
-        .r.toConst("stbn");
+        .r.toVar();
 }).once()();

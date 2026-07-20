@@ -50,6 +50,7 @@ export * from "./atmosphere/dimensional";
 export {
     AtmosphereContextBase,
     getAtmosphereContextBase,
+    registerAtmosphereContextBase,
     atmosphereParametersStruct,
     densityProfileLayerStruct,
     densityProfileStruct,
@@ -168,10 +169,11 @@ export { TurbulenceTexture } from "./clouds/textures/TurbulenceTexture";
 export { CloudLayers, CloudLayer } from "./clouds/CloudLayer";
 export { DensityProfile as CloudDensityProfile } from "./clouds/CloudLayer";
 export { CloudUniforms } from "./clouds/CloudUniforms";
-export { createCloudRenderer } from "./clouds/cloudTsl";
+export { createCloudRenderer, getCubeSphereUv } from "./clouds/cloudTsl";
 export {
     CloudRenderNode,
     cloudRender,
-    updateCloudUniforms,
-    setCloudReadyCallback
+    setCloudReadyCallback,
+    getCloudUniforms,
+    updateCloudUniforms
 } from "./atmosphere/CloudRenderNode";

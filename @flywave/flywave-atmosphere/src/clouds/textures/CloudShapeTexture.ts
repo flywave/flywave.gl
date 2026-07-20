@@ -18,7 +18,7 @@ import { type ComputeNode, type Renderer, Storage3DTexture } from "three/webgpu"
 import { NoColorSpace, HalfFloatType, RepeatWrapping } from "three";
 
 import { CLOUD_SHAPE_TEXTURE_SIZE } from "../cloudConstants";
-import { perlinNoise, worleyNoise, remap } from "../noise/noise";
+import { perlinNoise, worleyNoise, remapOut, remap } from "../noise/noise";
 import type { AnyFloatType } from "../../tsl/types";
 import { reinterpretType } from "../../tsl/types";
 
@@ -65,7 +65,7 @@ export class CloudShapeTexture {
                 worleyNoise(point, float(56.0)).oneMinus()
             ).dot(vec3(0.625, 0.25, 0.125));
 
-            const perlinWorley = remap(perlin, float(0.0), float(1.0), worleyFbm3, float(1.0));
+            const perlinWorley = remapOut(perlin, float(0.0), float(1.0), worleyFbm3, float(1.0));
 
             // --- Worley FBM (4 octaves: 8, 16, 32, 64) ---
             const n0 = worleyNoise(point, float(8.0)).oneMinus();
@@ -87,7 +87,7 @@ export class CloudShapeTexture {
             .computeKernel([4, 4, 4])
             .setName("CloudShape");
 
-        void renderer.compute(this.computeNode, [
+        return renderer.compute(this.computeNode, [
             Math.ceil(size / 4),
             Math.ceil(size / 4),
             Math.ceil(size / 4)

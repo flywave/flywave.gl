@@ -109,7 +109,7 @@ export class LocalWeatherTexture {
             .computeKernel([8, 8, 1])
             .setName("LocalWeather");
 
-        void renderer.compute(this.computeNode, [Math.ceil(size / 8), Math.ceil(size / 8), 1]);
+        return renderer.compute(this.computeNode, [Math.ceil(size / 8), Math.ceil(size / 8), 1]);
     }
 
     dispose(): void {

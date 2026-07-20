@@ -74,7 +74,7 @@ export class CloudShapeDetailTexture {
             .computeKernel([4, 4, 4])
             .setName("CloudShapeDetail");
 
-        void renderer.compute(this.computeNode, [
+        return renderer.compute(this.computeNode, [
             Math.ceil(size / 4),
             Math.ceil(size / 4),
             Math.ceil(size / 4)

@@ -1,6 +1,12 @@
 // @ts-nocheck
 /**
- * Cloud Rendering Preview
+ * Cloud Rendering Preview (Atmosphere + Clouds only)
+ *
+ * Uses CloudRenderNode which implements:
+ *   - 1/4 resolution cloud rendering
+ *   - Catmull-Rom upscale
+ *   - Temporal accumulation (16-frame Bayer pattern)
+ *   - Variance clipping (neighborhood clipping)
  *
  * Run: FILTER_EXAMPLE=cloud-render pnpm --filter @flywave/flywave-examples start
  * Open: http://localhost:8080/cloud-render.html
@@ -8,18 +14,37 @@
 
 import { PerspectiveCamera, OrthographicCamera, PlaneGeometry, Mesh, Scene, Vector3 } from "three";
 import { WebGPURenderer, NodeMaterial } from "three/webgpu";
-import { Fn, vec3, vec4, uniform, uv, normalize, float } from "three/tsl";
+import {
+    Fn,
+    vec3,
+    vec4,
+    uniform,
+    uv,
+    normalize,
+    float,
+    dot,
+    length,
+    mix,
+    sqrt,
+    texture,
+    screenUV
+} from "three/tsl";
 import { GUI } from "dat.gui";
 
 import {
-    CloudTextures,
-    CloudLayers,
-    CloudUniforms,
-    createCloudRenderer
+    AtmosphereContext,
+    AtmosphereParameters,
+    cloudRender,
+    registerAtmosphereContext,
+    registerAtmosphereContextBase,
+    updateCloudUniforms,
+    setCloudReadyCallback,
+    getCloudUniforms,
+    getCubeSphereUv
 } from "@flywave/flywave-atmosphere";
 
 const CANVAS_ID = "mapCanvas";
-const EARTH_RADIUS = 6371000;
+const EARTH_RADIUS = 6360000; // matches CloudUniforms.bottomRadius default
 
 async function main() {
     const canvas = document.getElementById(CANVAS_ID) as HTMLCanvasElement;
@@ -30,99 +55,56 @@ async function main() {
 
     const W = window.innerWidth;
     const H = window.innerHeight;
+    renderer.setPixelRatio(1);
     renderer.setSize(W, H);
-    renderer.setPixelRatio(window.devicePixelRatio);
-
-    // --- Generate cloud textures ---
-    const cloudTextures = new CloudTextures();
-    await cloudTextures.load(renderer);
-
-    // --- Cloud uniforms ---
-    const layers = new CloudLayers(CloudLayers.DEFAULT);
-    const uniforms = new CloudUniforms(layers);
-
-    // Link textures
-    uniforms.localWeatherTexture = cloudTextures.localWeatherTexture;
-    uniforms.shapeTexture = cloudTextures.shapeTexture;
-    uniforms.shapeDetailTexture = cloudTextures.shapeDetailTexture;
-    uniforms.turbulenceTexture = cloudTextures.turbulenceTexture;
-
-    // Exact values from three-geospatial CloudsEffect
-    uniforms.coverage.value = 0.3;
-    uniforms.scatteringCoefficient.value = 1;
-    uniforms.absorptionCoefficient.value = 0;
-
-    // Texture repeats
-    uniforms.localWeatherRepeat.value.setScalar(100);
-    uniforms.shapeRepeat.value.setScalar(0.0003);
-    uniforms.shapeDetailRepeat.value.setScalar(0.006);
-    uniforms.turbulenceRepeat.value = 20;
-    uniforms.turbulenceDisplacement.value = 350;
-
-    // Raymarch parameters (medium quality)
-    uniforms.minDensity.value = 1e-4;
-    uniforms.minExtinction.value = 1e-4;
-    uniforms.minTransmittance.value = 0.01;
-    uniforms.minStepSize.value = 50;
-    uniforms.maxStepSize.value = 1000;
-    uniforms.maxRayDistance.value = 100000;
-    uniforms.perspectiveStepScale.value = 1.01;
-    uniforms.maxIterationCountToSun.value = 2;
-
-    // Scattering
-    uniforms.skyLightScale.value = 1;
-    uniforms.powderScale.value = 0.8;
-    uniforms.powderExponent.value = 150;
-
-    // White sun, blue sky
-    uniforms.sunIrradianceMin.value.set(2.0, 2.0, 2.0);
-    uniforms.sunIrradianceMax.value.set(2.5, 2.5, 2.5);
-    uniforms.skyIrradianceMin.value.set(0.2, 0.4, 0.8);
-    uniforms.skyIrradianceMax.value.set(0.4, 0.6, 1.0);
-
-    // Sun direction (20° elevation)
-    {
-        const rad = (20 * Math.PI) / 180;
-        uniforms.sunDirection.value.copy(
-            new Vector3(Math.cos(rad), Math.sin(rad), -0.3).normalize()
-        );
-    }
-
-    // --- Cloud renderer ---
-    const renderClouds = createCloudRenderer(uniforms);
 
     // --- Camera setup ---
-    // Camera at 3000m, above low/mid cloud layers, looking down at ~30°
-    const camera = new PerspectiveCamera(70, W / H, 1, 1e7);
-    camera.position.set(0, EARTH_RADIUS + 3000, 0);
-
-    camera.rotation.order = "YXZ";
-    camera.rotation.set(-0.5, 0, 0); // look ~30° downward
+    // Match reference Clouds-Basic story exactly.
+    // Reference uses ECEF coords where camera world position is:
+    //   (4529606, 2614762, 3638805) — from (lon=30°, lat=35°, alt=300m)
+    // We treat ECEF as world (identity matrixWorldToECEF).
+    const camera = new PerspectiveCamera(75, W / H, 1, 4e5);
+    camera.position.set(4529606.670615005, 2614762.716348598, 3638805.5858316943);
+    // Quaternion dumped from reference:
+    camera.quaternion.set(
+        0.341611239061481,
+        3.177626864111724e-11,
+        -0.42250890119681356,
+        0.8395165214314373
+    );
+    camera.rotation.order = "XYZ";
+    camera.updateMatrixWorld();
 
     const quadCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 2);
 
-    // --- Full screen quad ---
-    const scene = new Scene();
-    const camPosU = uniform(new Vector3(0, EARTH_RADIUS + 3000, 0));
-    const camFwdU = uniform(new Vector3());
-    const camRightU = uniform(new Vector3());
-    const camUpU = uniform(new Vector3());
-
-    function updateCam() {
-        camera.updateMatrixWorld();
-        const f = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-        const r = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-        const u = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-        camPosU.value.copy(camera.position);
-        camFwdU.value.copy(f);
-        camRightU.value.copy(r);
-        camUpU.value.copy(u);
+    // --- Atmosphere context ---
+    const atmosphereParams = new AtmosphereParameters();
+    const atmosphereContext = new AtmosphereContext(atmosphereParams);
+    atmosphereContext.camera = camera;
+    atmosphereContext.renderer = renderer;
+    // ECEF identity = world space; sun direction set below
+    atmosphereContext.matrixWorldToECEF.value.identity();
+    {
+        // Match reference exactly: sun direction for (lon=30°, lat=35°, Jan 1 9:00).
+        // Dumped from reference story.
+        const sunDir = new Vector3(0.22300214114771516, 0.8937423487449461, -0.3892231482111538);
+        atmosphereContext.sunDirectionECEF.value.copy(sunDir);
     }
-    updateCam();
+    atmosphereContext.cameraPositionECEF.value.copy(camera.position);
+    // Match reference altitudeCorrection exactly (dumped from Clouds-Debug story).
+    // This corrects the WGS84 ellipsoid ECEF position to the osculating sphere
+    // of radius bottomRadius, so |cameraPosition + altitudeCorrection| = bottomRadius + geodetic_height.
+    atmosphereContext.altitudeCorrectionECEF.value.set(
+        -17858.25963455066,
+        -10308.866722186096,
+        10079.656185862143
+    );
+    registerAtmosphereContext(atmosphereContext);
+    registerAtmosphereContextBase(atmosphereContext);
 
-    // --- Mouse controls ---
+    // --- Mouse look (debug only) ---
     let yaw = 0,
-        pitch = -0.5;
+        pitch = 0;
     let isDragging = false;
     let lastX = 0,
         lastY = 0;
@@ -140,48 +122,183 @@ async function main() {
         lastX = e.clientX;
         lastY = e.clientY;
         camera.rotation.set(pitch, yaw, 0);
-        updateCam();
+        camera.updateMatrixWorld();
     });
     window.addEventListener("mouseup", () => {
         isDragging = false;
     });
 
     // --- Full screen quad ---
+    // CloudRenderNode takes a background color node and the renderer, then:
+    //   1. Renders clouds at 1/4 resolution into its own MRT
+    //   2. Upscales + temporal-accumulates into a resolve target
+    //   3. Returns a node that blends resolved clouds over the background
+    const scene = new Scene();
+
+    const camPosU = uniform(new Vector3(0, 0, 0));
+    const camFwdU = uniform(new Vector3(0, 0, -1));
+    const camRightU = uniform(new Vector3(1, 0, 0));
+    const camUpU = uniform(new Vector3(0, 1, 0));
+
+    function updateCamUniforms() {
+        camera.updateMatrixWorld();
+        const f = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        const r = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        const u = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+        camPosU.value.copy(camera.position);
+        camFwdU.value.copy(f);
+        camRightU.value.copy(r);
+        camUpU.value.copy(u);
+    }
+    updateCamUniforms();
+    // DON'T manually override cameraPositionECEF - let AtmosphereContext handle it correctly
+    // atmosphereContext.cameraPositionECEF.value.copy(camera.position);
+
+    // Background: approximate sky radiance so the cloud-over-sky blend matches
+    // reference (which uses a real sky). Without this, clouds render as raw
+    // orange radiance against pure black.
+    const backgroundNode = Fn(() => vec4(0.5, 0.7, 1.0, 1))();
+
+    // Cloud render node — the heart of the system.
+    // It internally calls createCloudRenderer() and manages all the buffers.
+    const cloudsNode = cloudRender(backgroundNode, null, renderer);
+    (window as any).__cloudsNode = cloudsNode;
+    (window as any).__cloudUniforms = getCloudUniforms();
+    (window as any).__renderer = renderer;
+
     const geo = new PlaneGeometry(2, 2);
     const mat = new NodeMaterial();
     mat.depthTest = false;
     mat.depthWrite = false;
-
+    const cloudsFrag = cloudsNode.context({ getAtmosphere: () => atmosphereContext });
+    // Direct resolveRT display via OutputTextureNode (triggers CloudRenderNode
+    // updateBefore so the pipeline actually renders each frame).
+    // Matches ref cloudsEffect.frag: premultiplied alpha blend
+    //   output.rgb = input.rgb * (1-a) + clouds.rgb
+    //   output.a   = input.a   * (1-a) + clouds.a
+    const cloudsResolve = (cloudsNode as any).resolveNodeTex;
     mat.fragmentNode = Fn(() => {
-        const ndc = uv().mul(2).sub(1);
-        const fovRad = float((camera.fov * Math.PI) / 180);
-        const tanHalfFov = fovRad.mul(0.5).tan();
-        const aspect = float(W / H);
-
-        const rayDir = normalize(
-            vec3(camFwdU)
-                .add(vec3(camRightU).mul(ndc.x.mul(tanHalfFov).mul(aspect)))
-                .add(vec3(camUpU).mul(ndc.y.mul(tanHalfFov)))
-        );
-
-        const clouds = renderClouds(camPosU, rayDir, float(1e10));
-
-        // Background sky color (gradient from horizon to zenith)
-        const skyColor = vec3(0.3, 0.5, 0.8).mul(ndc.y.mul(0.5).add(0.5));
-
-        // Blend clouds over sky
-        return vec4(skyColor.mul(oneMinusFloat(clouds.a)).add(clouds.rgb), 1);
+        const r = texture(cloudsResolve, screenUV);
+        const result = backgroundNode.rgb.mul(float(1).sub(r.a)).add(r.rgb);
+        return vec4(result, 1);
     })();
 
-    function oneMinusFloat(x: any) {
-        return float(1).sub(x);
-    }
+    // --- Pixel sampling for cross-project comparison ---
+    const sampleRT = () => {
+        if (window.__cloudsNode) {
+            const renderer = window.__renderer;
+            const cloudsNode = window.__cloudsNode as any;
+            const W = cloudsNode.lowResRT.width;
+            const H = cloudsNode.lowResRT.height;
+            (renderer as any)
+                .readRenderTargetPixelsAsync(cloudsNode.lowResRT, 0, 0, W, H, 0)
+                .then((buf: any) => {
+                    (window as any).__cloudsDebugSnapshot = { w: W, h: H, buf };
+                })
+                .catch((e: Error) => {
+                    (window as any).__cloudsDebugError = e.message;
+                });
+        }
+    };
+
+    // ===== Standalone debug shader (Mode 12: rayDir; Mode 11: camHt/ground/mu; Mode 30: globeUv) =====
+    const aspectUniform = uniform(W / H);
+    const tanHalfFovU = uniform(Math.tan((camera.fov * Math.PI) / 360));
+    const bottomRadiusU = uniform(EARTH_RADIUS);
+    const cameraHeightU = uniform(300);
+    const altCorrU = uniform(new Vector3(0, 0, 0));
+    const debugModeU = uniform(0);
+    const debugFrag = Fn(() => {
+        const ndc = uv().mul(2).sub(1);
+        const rayDir = normalize(
+            camRightU
+                .mul(ndc.x.mul(tanHalfFovU).mul(aspectUniform))
+                .add(camUpU.mul(ndc.y.mul(tanHalfFovU)))
+                .add(camFwdU)
+        );
+
+        const camPos = camPosU.add(altCorrU);
+        const camLen = camPos.length();
+        const mu = dot(camPos, rayDir).div(camLen);
+        const camHeight = cameraHeightU;
+        // TSL select(a, b): cond=true returns b (opposite of GLSL mix)
+        const intersectsGroundF = mu.lessThan(0).select(float(0), float(1));
+
+        // Ray-sphere intersection for min/max cloud heights
+        const b = dot(rayDir, camPos);
+        const r2 = dot(camPos, camPos);
+        const rMin = bottomRadiusU.add(float(750)); // minHeight
+        const cMin = r2.sub(rMin.mul(rMin));
+        const dMin = b.mul(b).sub(cMin).max(0);
+        const farMin = b.negate().add(sqrt(dMin));
+        const rMax = bottomRadiusU.add(float(8000)); // maxHeight
+        const cMax = r2.sub(rMax.mul(rMax));
+        const dMax = b.mul(b).sub(cMax).max(0);
+        const farMax = b.negate().add(sqrt(dMax));
+
+        // Mode 10: rayNear/rayFar/intersectsScene — match ref: /200000, B=!intersectsScene
+        const rayNear10 = farMin;
+        const rayFar10 = farMax.min(float(200000));
+        const m10 = debugModeU.equal(10).select(
+            vec4(
+                rayNear10.max(0).div(200000),
+                rayFar10.max(0).div(200000),
+                float(1), // no scene in standalone, intersectsScene=false → 1
+                1
+            ),
+            vec4(0, 0, 0, 0)
+        );
+
+        // Mode 12: rayDir
+        const m12 = debugModeU
+            .equal(12)
+            .select(vec4(rayDir.mul(0.5).add(0.5), 1), vec4(0, 0, 0, 0));
+        // Mode 11: camHt/intersectsGround/mu
+        const m11 = debugModeU
+            .equal(11)
+            .select(
+                vec4(camHeight.div(2000), intersectsGroundF, mu.mul(0.5).add(0.5), 1),
+                vec4(0, 0, 0, 0)
+            );
+        // Mode 30: globe UV at fixed sample pos (cameraPosition + rayDir * 100km)
+        const debugPos30 = camPos.add(rayDir.mul(100000));
+        const debugUv30 = getCubeSphereUv(debugPos30);
+        const m30 = debugModeU.equal(30).select(vec4(debugUv30, 0.5, 1), vec4(0, 0, 0, 0));
+
+        return m10.add(m12).add(m11).add(m30);
+    });
+    const origFragment = mat.fragmentNode;
+    const applyDebugMode = (mode: number) => {
+        if (mode === 10 || mode === 11 || mode === 12 || mode === 30) {
+            debugModeU.value = mode;
+            aspectUniform.value = window.innerWidth / window.innerHeight;
+            tanHalfFovU.value = Math.tan((camera.fov * Math.PI) / 360);
+            const u = getCloudUniforms();
+            if (u) {
+                cameraHeightU.value = u.cameraHeight.value;
+                altCorrU.value.copy(atmosphereContext.altitudeCorrectionECEF.value);
+            }
+            mat.fragmentNode = debugFrag();
+        } else if (mode >= 30 && mode < 40) {
+            // In-shader debug modes (31/32/33): cloud shader writes debug color
+            // to lowResRT. Bypass main material to show lowResRT directly.
+            const lowResNode = (cloudsNode as any).lowResNode;
+            mat.fragmentNode = Fn(() => vec4(texture(lowResNode).rgb, 1))();
+            mat.needsUpdate = true;
+        } else {
+            mat.fragmentNode = origFragment;
+        }
+        mat.needsUpdate = true;
+    };
+    (window as any).__applyDebugMode = applyDebugMode;
 
     const mesh = new Mesh(geo, mat);
     mesh.frustumCulled = false;
     scene.add(mesh);
+    (window as any).__scene = scene;
+    (window as any).__mesh = mesh;
 
-    // --- GUI ---
+    // --- GUI (limited; most params managed internally by CloudRenderNode) ---
     const gui = new GUI({ autoPlace: false });
     gui.domElement.style.position = "absolute";
     gui.domElement.style.top = "10px";
@@ -189,53 +306,46 @@ async function main() {
     gui.domElement.style.zIndex = "100";
     document.body.appendChild(gui.domElement);
 
-    const p = {
-        coverage: 0.45,
-        camHeight: 3000,
-        sunAngle: 20
-    };
-
-    gui.add(p, "coverage", 0, 1, 0.01).onChange((v: number) => {
-        uniforms.coverage.value = v;
-    });
-    gui.add(p, "camHeight", 500, 50000, 100).onChange((v: number) => {
+    const cam = gui.addFolder("camera");
+    const cp = { height: 300, fov: 75 };
+    cam.add(cp, "height", 100, 50000, 100).onChange((v: number) => {
         camera.position.y = EARTH_RADIUS + v;
-        updateCam();
-    });
-    gui.add(p, "sunAngle", 0, 90, 1).onChange((v: number) => {
-        const rad = (v * Math.PI) / 180;
-        uniforms.sunDirection.value.copy(
-            new Vector3(Math.cos(rad), Math.sin(rad), -0.3).normalize()
-        );
+        camera.updateMatrixWorld();
+        updateCamUniforms();
     });
 
-    // --- Resize ---
-    function onResize() {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        renderer.setSize(w, h);
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
+    // --- Animation loop ---
+    let lastSampleTime = 0;
+    let frameCount = 0;
+    let fps = 0;
+    let lastFpsTime = 0;
+    const info =
+        document.getElementById("info") || document.body.appendChild(document.createElement("div"));
+    if (!document.getElementById("info")) {
+        info.id = "info";
+        info.style.cssText =
+            "position:absolute;top:10px;left:10px;color:white;font:12px monospace;";
     }
-    window.addEventListener("resize", onResize);
 
-    // --- Info ---
-    const info = document.createElement("div");
-    info.style.cssText =
-        "position:absolute;bottom:10px;left:10px;color:#0f0;font:12px monospace;background:rgba(0,0,0,0.7);padding:8px;z-index:10;";
-    info.textContent = "Drag to look | GUI controls on right";
-    document.body.appendChild(info);
+    renderer.setAnimationLoop(() => {
+        updateCloudUniforms(atmosphereContext);
+        renderer.render(scene, quadCamera);
 
-    // --- Render ---
-    let cloudTime = 0;
-    renderer.setAnimationLoop(async () => {
-        cloudTime += 0.0002; // wind speed
-        uniforms.localWeatherOffset.value.set(cloudTime, cloudTime * 0.3);
+        const now = performance.now();
+        if (now - lastSampleTime > 500) {
+            lastSampleTime = now;
+            sampleRT();
+        }
+        frameCount++;
+        if (now - lastFpsTime > 500) {
+            fps = Math.round((frameCount * 1000) / (now - lastFpsTime));
+            frameCount = 0;
+            lastFpsTime = now;
+        }
         info.textContent = `Alt: ${(camera.position.y - EARTH_RADIUS).toFixed(0)}m | Yaw: ${(
             (yaw * 180) /
             Math.PI
-        ).toFixed(0)}° Pitch: ${((pitch * 180) / Math.PI).toFixed(0)}°`;
-        await renderer.renderAsync(scene, quadCamera);
+        ).toFixed(0)}° Pitch: ${((pitch * 180) / Math.PI).toFixed(0)}° | FPS: ${fps} | ${W}x${H}`;
     });
 }
 

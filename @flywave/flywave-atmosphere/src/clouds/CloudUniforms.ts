@@ -1,19 +1,25 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Vector2, Vector3, Vector4 } from "three";
+import { Matrix4, Vector2, Vector3, Vector4 } from "three";
 import { uniform, vec2, vec3, vec4, mat4 } from "three/tsl";
 
 import { CloudLayers } from "./CloudLayer";
 
 export class CloudUniforms {
     // Atmosphere
-    bottomRadius = uniform(6360000.0);
+    bottomRadius = uniform(6360000.5); // slightly different to test inline
     altitudeCorrection = uniform(new Vector3());
     sunDirection = uniform(new Vector3(1, 0, 0));
     cameraShapeOffset = uniform(new Vector3());
     cameraHeight = uniform(0.0);
     cameraVelocity = uniform(0.0);
+    // Meters → atmosphere-runtime length unit (km). Must match
+    // AtmosphereParameters.worldToUnit. Required because the atmosphere LUT
+    // lookups (getSplitScalarIlluminance, getIndirectLuminanceToPoint) expect
+    // positions in the same unit as parametersNode.bottomRadius/topRadius,
+    // which are pre-multiplied by worldToUnit at construction time.
+    worldToUnit = uniform(0.001);
 
     // Participating medium
     scatteringCoefficient = uniform(1.0);
@@ -35,10 +41,37 @@ export class CloudUniforms {
     minSecondaryStepSize = uniform(100.0);
     secondaryStepScale = uniform(2.0);
 
-    // Shadow length
-    maxShadowLengthIterationCount = uniform(500);
+    // Shadow length (disabled by default: we approximate without a BSM shadow map)
+    maxShadowLengthIterationCount = uniform(0);
     minShadowLengthStepSize = uniform(50.0);
     maxShadowLengthRayDistance = uniform(200000.0);
+
+    // Beer Shadow Map (BSM) uniforms
+    shadowCascadeCount = uniform(1);
+    shadowFar = uniform(50000.0);
+    shadowTexelSize = uniform(new Vector2(1 / 512, 1 / 512));
+    maxShadowFilterRadius = uniform(4.0);
+    // Per-cascade data (up to 4 cascades). With 1 cascade only [0] is used.
+    shadowMatrices = [
+        uniform(new Matrix4()),
+        uniform(new Matrix4()),
+        uniform(new Matrix4()),
+        uniform(new Matrix4())
+    ];
+    inverseShadowMatrices = [
+        uniform(new Matrix4()),
+        uniform(new Matrix4()),
+        uniform(new Matrix4()),
+        uniform(new Matrix4())
+    ];
+    shadowIntervals = [
+        uniform(new Vector2(0, 1)),
+        uniform(new Vector2(0, 1)),
+        uniform(new Vector2(0, 1)),
+        uniform(new Vector2(0, 1))
+    ];
+    // Shadow buffer textures (one per cascade). Set externally by CloudRenderNode.
+    shadowTextureNodes: (any | null)[] = [null, null, null, null];
 
     // Shape and weather
     localWeatherRepeat = uniform(new Vector2(100, 100));
@@ -78,15 +111,37 @@ export class CloudUniforms {
     densityProfileLinearTerms = uniform(new Vector4());
     densityProfileConstantTerms = uniform(new Vector4());
 
-    // Lighting (simplified)
-    sunIrradiance = uniform(new Vector3(1.5, 1.5, 1.5));
+    // Lighting (use real solar spectrum matching atmosphere parameters)
+    sunIrradiance = uniform(new Vector3(1.474, 1.8504, 1.91198));
     skyIrradianceMin = uniform(new Vector3(0.2, 0.3, 0.4));
     skyIrradianceMax = uniform(new Vector3(0.4, 0.5, 0.6));
     sunIrradianceMin = uniform(new Vector3(1.0, 0.9, 0.7));
     sunIrradianceMax = uniform(new Vector3(1.5, 1.4, 1.2));
 
+    // Screen resolution (for mip level computation)
+    resolution = uniform(new Vector2(1920, 1080));
+
+    // Mip level scale: 0.25 for temporal upscale, 1.0 for full-res
+    // Reference: CloudsMaterial.setSize sets mipLevelScale = 0.25
+    mipLevelScale = uniform(0.25);
+
+    // Matrices for velocity reprojection
+    prevViewProjection = uniform(new Matrix4());
+    ecefToWorld = uniform(new Matrix4());
+
+    // Jittered inverse projection matrix for temporal upscale
+    // Updated each frame with a sub-pixel offset based on Bayer 4x4 pattern
+    jitteredInverseProj = uniform(new Matrix4());
+
     // STBN
     frame = uniform(0);
+
+    // Debug visualization mode:
+    // 0 = normal cloud render
+    // 1 = rayNear (red), rayFar (green), shouldMarch (blue)
+    // 2 = cameraHeight (grayscale)
+    // 3 = cloud alpha only
+    debugMode = uniform(0);
 
     // Texture nodes (set externally by CloudTextures)
     localWeatherTextureNode: any = null;
@@ -103,6 +158,7 @@ export class CloudUniforms {
     readonly layers: CloudLayers;
 
     constructor(layers?: CloudLayers) {
+        console.log("[CloudUniforms] constructor called");
         this.layers = layers ?? new CloudLayers(CloudLayers.DEFAULT);
         this.updateLayers();
     }
@@ -149,8 +205,24 @@ export class CloudUniforms {
             layers[1].altitude + layers[1].height,
             layers[2].altitude + layers[2].height
         ];
-        this.minHeight.value = Math.min(alts[0], alts[1], alts[2]);
-        this.maxHeight.value = Math.max(topHeights[0], topHeights[1], topHeights[2]);
-        this.shadowTopHeight.value = this.maxHeight.value;
+        // Match reference: only layers with non-zero densityScale contribute to bounds.
+        let minH = Infinity;
+        let maxH = 0;
+        for (let i = 0; i < 3; ++i) {
+            if (layers[i].densityScale > 0 && layers[i].height > 0) {
+                if (alts[i] < minH) minH = alts[i];
+                if (topHeights[i] > maxH) maxH = topHeights[i];
+            }
+        }
+        this.minHeight.value = minH === Infinity ? 0 : minH;
+        this.maxHeight.value = maxH;
+        // shadowTopHeight: only layers with shadow=true contribute.
+        let shadowTopH = 0;
+        for (let i = 0; i < 3; ++i) {
+            if (layers[i].shadow && layers[i].height > 0) {
+                if (topHeights[i] > shadowTopH) shadowTopH = topHeights[i];
+            }
+        }
+        this.shadowTopHeight.value = shadowTopH;
     }
 }
