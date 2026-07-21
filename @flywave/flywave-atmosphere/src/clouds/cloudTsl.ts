@@ -199,13 +199,46 @@ export const henyeyGreenstein = Fn(([g, cosTheta]: [any, any]) => {
     return float(RECIPROCAL_PI4).mul(oneMinus(g2).div(denom));
 });
 
-export const phaseFunction = Fn(([cosTheta, attenuation]: [any, any]) => {
-    const g = vec2(0.7, -0.2).mul(attenuation);
-    const weights = vec2(0.5, 0.5);
+// Draine phase function for large particles (approximate Mie).
+// Ref: https://research.nvidia.com/labs/rtr/approximate-mie/
+const drainePhase = Fn(([cosTheta, g, alpha]: [any, any, any]) => {
+    const g2 = g.mul(g);
+    const u = cosTheta;
+    const numerator = float(1)
+        .sub(g2)
+        .mul(float(1).add(alpha.mul(u.mul(u))));
+    const denominator = float(4)
+        .mul(float(1).add(alpha.mul(float(1).add(g2.mul(2))).div(float(3))))
+        .mul(float(Math.PI))
+        .mul(pow(float(1).add(g2).sub(g.mul(2).mul(u)), float(1.5)));
+    return numerator.div(denominator);
+});
+
+// Dual-HG phase function with configurable anisotropy.
+const dualHG = Fn(([cosTheta, attenuation, u]: any) => {
+    const g = vec2(u.scatterAnisotropy1, u.scatterAnisotropy2).mul(attenuation);
+    const weights = vec2(float(1).sub(u.scatterAnisotropyMix), u.scatterAnisotropyMix);
     return dot(henyeyGreenstein(g, cosTheta), weights);
 });
 
-export const approximateMultipleScattering = Fn(([opticalDepth, cosTheta]: [any, any]) => {
+// Accurate Mie-fitted phase function (Draine + HG blend, d=10 fit params).
+const accurateMiePhase = Fn(([cosTheta, attenuation]: [any, any]) => {
+    const gHG = float(0.988176691700256);
+    const gD = float(0.5556712547839497);
+    const alpha = float(21.995520856274638);
+    const weight = float(0.4819554318404214);
+    const hg = henyeyGreenstein(vec2(gHG).mul(attenuation), cosTheta).x;
+    const dr = drainePhase(cosTheta, gD.mul(attenuation), alpha);
+    return mix(hg, dr, weight);
+});
+
+export const phaseFunction = Fn(([cosTheta, attenuation, u]: [any, any, any]) => {
+    const dual = dualHG(cosTheta, attenuation, u);
+    const accurate = accurateMiePhase(cosTheta, attenuation);
+    return u.accuratePhaseFunction.greaterThan(float(0.5)).select(accurate, dual);
+});
+
+export const approximateMultipleScattering = Fn(([opticalDepth, cosTheta, u]: [any, any, any]) => {
     const coeffs = vec3(1).toVar();
     const attenuation = vec3(0.5, 0.5, 0.5);
     const scattering = float(0).toVar();
@@ -213,49 +246,49 @@ export const approximateMultipleScattering = Fn(([opticalDepth, cosTheta]: [any,
     // 8 octaves manually unrolled (JS for-loops don't work inside TSL Fn)
     {
         const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
+        const phase = phaseFunction(cosTheta, coeffs.z, u);
         scattering.addAssign(coeffs.x.mul(bl).mul(phase));
         coeffs.mulAssign(attenuation);
     }
     {
         const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
+        const phase = phaseFunction(cosTheta, coeffs.z, u);
         scattering.addAssign(coeffs.x.mul(bl).mul(phase));
         coeffs.mulAssign(attenuation);
     }
     {
         const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
+        const phase = phaseFunction(cosTheta, coeffs.z, u);
         scattering.addAssign(coeffs.x.mul(bl).mul(phase));
         coeffs.mulAssign(attenuation);
     }
     {
         const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
+        const phase = phaseFunction(cosTheta, coeffs.z, u);
         scattering.addAssign(coeffs.x.mul(bl).mul(phase));
         coeffs.mulAssign(attenuation);
     }
     {
         const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
+        const phase = phaseFunction(cosTheta, coeffs.z, u);
         scattering.addAssign(coeffs.x.mul(bl).mul(phase));
         coeffs.mulAssign(attenuation);
     }
     {
         const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
+        const phase = phaseFunction(cosTheta, coeffs.z, u);
         scattering.addAssign(coeffs.x.mul(bl).mul(phase));
         coeffs.mulAssign(attenuation);
     }
     {
         const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
+        const phase = phaseFunction(cosTheta, coeffs.z, u);
         scattering.addAssign(coeffs.x.mul(bl).mul(phase));
         coeffs.mulAssign(attenuation);
     }
     {
         const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z);
+        const phase = phaseFunction(cosTheta, coeffs.z, u);
         scattering.addAssign(coeffs.x.mul(bl).mul(phase));
     }
 
@@ -805,7 +838,7 @@ export const createApproximateHaze = (u: CloudUniforms) => {
             const skyIrr = splitIrr.get("indirect");
 
             // Sun inscatter with phase function and shadow awareness
-            const phase = phaseFunction(cosTheta, float(0.2));
+            const phase = phaseFunction(cosTheta, float(0.2), u);
             let inscatter = sunIrr.mul(phase).mul(shadowTransmittance);
             // Sky inscatter (isotropic)
             inscatter.addAssign(
@@ -958,7 +991,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         opticalDepth.addAssign(shadowOD.mul(bsmCond));
 
                         let radiance = sunIrradiance.mul(
-                            approximateMultipleScattering(opticalDepth, cosTheta)
+                            approximateMultipleScattering(opticalDepth, cosTheta, u)
                         );
 
                         radiance = radiance.add(

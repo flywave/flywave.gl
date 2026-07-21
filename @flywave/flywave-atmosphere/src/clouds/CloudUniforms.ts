@@ -98,6 +98,12 @@ export class CloudUniforms {
     hazeScatteringCoefficient = uniform(0.9);
     hazeAbsorptionCoefficient = uniform(0.5);
 
+    // Phase function
+    accuratePhaseFunction = uniform(0.0); // 0 = dual-HG, 1 = Draine+HG Mie fit
+    scatterAnisotropy1 = uniform(0.7);
+    scatterAnisotropy2 = uniform(-0.2);
+    scatterAnisotropyMix = uniform(0.5);
+
     // Cloud layers (packed vec4)
     minLayerHeights = uniform(new Vector4());
     maxLayerHeights = uniform(new Vector4());
