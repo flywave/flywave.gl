@@ -24,6 +24,7 @@ import {
     normalize,
     oneMinus,
     pow,
+    saturate,
     screenUV,
     sin,
     sqrt,
@@ -702,26 +703,40 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         const jitter = getJitterRotation();
 
         // Always sample all cascades (texture selection must be compile-time).
-        // Max 4 cascades supported by uniforms.
+        // Max 3 cascades supported (matching SHADOW_CASCADE_COUNT).
         const od0 = sampleCascadePCF(0, posUncorrected, distanceToTop, distanceOffset, jitter);
         const od1 = sampleCascadePCF(1, posUncorrected, distanceToTop, distanceOffset, jitter);
         const od2 = sampleCascadePCF(2, posUncorrected, distanceToTop, distanceOffset, jitter);
 
-        // Cascade selection by view distance from camera.
+        // Cascade selection by view distance from camera with smooth fade.
+        // Fade zone = 10% of cascade range on each side of the boundary.
         const viewDist = length(rayPosition.sub(u.cameraPosition));
         const c0End = u.shadowIntervals[0].y.mul(u.shadowFar);
         const c1End = u.shadowIntervals[1].y.mul(u.shadowFar);
+        const fade0 = c0End.mul(float(0.1));
+        const fade1 = c1End.mul(float(0.1));
 
-        // pick = viewDist < c0End ? 0 : (viewDist < c1End ? 1 : 2)
-        const useC0 = viewDist.lessThan(c0End);
-        const useC1 = useC0.not().and(viewDist.lessThan(c1End));
-        // Gate by cascadeCount so unused cascades never contribute
+        // Gate by cascadeCount
         const c1Valid = u.shadowCascadeCount.greaterThan(1);
         const c2Valid = u.shadowCascadeCount.greaterThan(2);
-        const od1Gated = c1Valid.select(od1, od0);
-        const od2Gated = c2Valid.select(od2, od1Gated);
 
-        return useC0.select(od0, useC1.select(od1Gated, od2Gated));
+        // Blend weight for cascade 0→1 transition:
+        // w0 = 1 when dist < c0End - fade0, 0 when dist > c0End + fade0
+        const w0 = saturate(c0End.add(fade0).sub(viewDist).div(fade0.mul(2)));
+        // When only 1 cascade, force w0 = 1
+        const w0Final = c1Valid.select(w0, float(1));
+
+        // Blend weight for cascade 1→2 transition:
+        // w1 = 1 when dist < c1End - fade1, 0 when dist > c1End + fade1
+        const w1 = saturate(c1End.add(fade1).sub(viewDist).div(fade1.mul(2)));
+        const w1Final = c2Valid.select(w1, float(1));
+
+        // Stage 1: blend c0/c1
+        const od01 = mix(od1, od0, w0Final);
+        // Stage 2: blend (c0/c1) with c2
+        const od012 = mix(od2, od01, w1Final);
+
+        return od012;
     });
 };
 

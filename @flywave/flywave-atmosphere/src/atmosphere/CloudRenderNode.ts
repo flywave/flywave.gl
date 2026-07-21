@@ -63,11 +63,12 @@ let _onReadyCallback: (() => void) | null = null;
 
 const SHADOW_CASCADE_COUNT = 3;
 const SHADOW_MAP_SIZE = 1024;
+const SHADOW_MAX_FAR = 60000;
 
 const _cascadedShadowMaps = new CascadedShadowMaps({
     cascadeCount: SHADOW_CASCADE_COUNT,
     mapSize: new Vector2(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
-    maxFar: 60000,
+    maxFar: SHADOW_MAX_FAR,
     splitLambda: 0.5,
     fade: false
 });
