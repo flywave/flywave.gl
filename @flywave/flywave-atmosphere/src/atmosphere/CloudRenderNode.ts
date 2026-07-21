@@ -154,24 +154,15 @@ export function updateCloudUniforms(atmosphereContext: any): void {
     _cloudUniforms.sunDirection.value.copy(atmosphereContext.sunDirectionECEF.value);
     _cloudUniforms.bottomRadius.value = atmosphereContext.parameters.bottomRadius;
 
-    // Update previous view-projection matrix for velocity reprojection.
-    // Clouds render in altitudeCorrection-adjusted ECEF, so build a VP that
-    // maps ECEF-corrected positions to clip:
-    //   ECEF-corrected -> ECEF (subtract altCorr) -> world (matrixECEFToWorld)
-    //     -> view (matrixWorldInverse) -> clip (projectionMatrix)
-    // Since matrixECEFToWorld is identity in this project, ECEF == world.
+    // prevViewProjection = previous frame's projection × matrixWorldInverse.
+    // This maps world-space positions to clip space. The velocity pass converts
+    // ECEF positions to world via matrixECEFToWorld before applying this.
     const cam = atmosphereContext.camera;
     if (cam) {
-        // ECEF -> world: identity. So ECEF-corrected -> clip = projection × matrixWorldInverse × (pos - altCorr)
-        // Equivalently, prepend translation by -altCorr.
-        const altCorr = atmosphereContext.altitudeCorrectionECEF?.value;
-        const T = new Matrix4().makeTranslation(-altCorr.x, -altCorr.y, -altCorr.z);
-        const ECEFToClip = new Matrix4().multiplyMatrices(
+        _nextPrevViewProjection = new Matrix4().multiplyMatrices(
             cam.projectionMatrix,
             cam.matrixWorldInverse
         );
-        ECEFToClip.multiply(T);
-        _nextPrevViewProjection = ECEFToClip;
     }
 
     const pos = atmosphereContext.cameraPositionECEF?.value;
@@ -566,8 +557,14 @@ export class CloudRenderNode extends TempNode {
 
     private _buildFragmentNodes(host: NodeBuilder | Renderer): void {
         const atmosphereContext = getAtmosphereContext(host);
-        const { camera, matrixViewToECEF, cameraPositionECEF, altitudeCorrectionECEF, parameters } =
-            atmosphereContext;
+        const {
+            camera,
+            matrixViewToECEF,
+            matrixECEFToWorld,
+            cameraPositionECEF,
+            altitudeCorrectionECEF,
+            parameters
+        } = atmosphereContext;
 
         _cloudUniforms.bottomRadius.value = parameters.bottomRadius;
 
@@ -619,22 +616,19 @@ export class CloudRenderNode extends TempNode {
         }
 
         // Setup velocity pass: reproject pixel world position from a representative
-        // cloud-layer depth. Rather than relying on per-pixel scene depth (which
-        // may not be bound), we ray-march against the cloud-layer sphere at a
-        // midpoint height to get a stable world position for reprojection. This
-        // correctly captures camera motion (the dominant cause of TAA trailing).
+        // cloud-layer depth using GPU-side matrices (avoids CPU matrix composition
+        // bugs). Chain: ECEF-corrected → ECEF (−altCorr) → world (matrixECEFToWorld)
+        // → clip (prevViewProjection).
         {
             const velocityNode = Fn(() => {
                 const fullUv = screenUV;
 
-                // Reconstruct view ray direction at this pixel (same math as lowRes pass)
                 const geo = positionGeometry;
                 const positionView = inverseProjectionMatrix(camera).mul(vec4(geo, 1)).xyz;
                 const rayDir = matrixViewToECEF.mul(vec4(positionView, float(0))).xyz.normalize();
                 const camPos = cameraPositionECEF.add(altitudeCorrectionECEF);
 
-                // Ray-sphere intersection with a representative sphere at the
-                // midpoint of the cloud layer (bottomRadius + (minHeight + maxHeight) / 2).
+                // Ray-sphere intersection with cloud-layer midpoint sphere
                 const midHeight = _cloudUniforms.minHeight
                     .add(_cloudUniforms.maxHeight)
                     .mul(float(0.5));
@@ -647,11 +641,13 @@ export class CloudRenderNode extends TempNode {
                     .sub(sqrt(disc.max(0)))
                     .mul(0.5);
 
-                // World position in ECEF (clouds are rendered in altitudeCorrection-
-                // adjusted ECEF). Cloud shader assumes ECEF = world (ecefToWorld is
-                // identity), so prevViewProjection expects ECEF positions directly.
+                // hitPos is in altitudeCorrection-adjusted ECEF → subtract altCorr → ECEF
                 const hitPos = camPos.add(rayDir.mul(tNear.max(0)));
-                const prevClip = _cloudUniforms.prevViewProjection.mul(vec4(hitPos, 1));
+                const ecefPos = hitPos.sub(altitudeCorrectionECEF);
+                // ECEF → world via matrixECEFToWorld (GPU uniform)
+                const worldPos = matrixECEFToWorld.mul(vec4(ecefPos, 1));
+                // world → clip via prevViewProjection
+                const prevClip = _cloudUniforms.prevViewProjection.mul(worldPos);
                 const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
                 const velocity = fullUv.sub(prevUv);
 
