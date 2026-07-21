@@ -62,8 +62,11 @@ let _shadowMarch: ((cascadeIndex?: number) => any) | null = null;
 let _onReadyCallback: (() => void) | null = null;
 
 const SHADOW_CASCADE_COUNT = 3;
-const SHADOW_MAP_SIZE = 1024;
 const SHADOW_MAX_FAR = 60000;
+// Per-cascade resolution: near cascades need detail, far ones don't.
+// This reduces total BSM pixels by ~55% vs uniform 1024.
+const SHADOW_MAP_SIZES = [1024, 512, 256];
+const SHADOW_MAP_SIZE = SHADOW_MAP_SIZES[0];
 
 const _cascadedShadowMaps = new CascadedShadowMaps({
     cascadeCount: SHADOW_CASCADE_COUNT,
@@ -296,9 +299,10 @@ export class CloudRenderNode extends TempNode {
         this.resolveRT.texture.minFilter = LinearFilter;
         this.resolveRT.texture.magFilter = LinearFilter;
 
-        // Shadow RTs (BSM - Beer Shadow Map): one per cascade
+        // Shadow RTs (BSM - Beer Shadow Map): one per cascade with decreasing resolution
         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-            const rt = new RenderTarget(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, {
+            const sz = SHADOW_MAP_SIZES[i];
+            const rt = new RenderTarget(sz, sz, {
                 depthBuffer: false,
                 type: HalfFloatType
             });
@@ -381,9 +385,11 @@ export class CloudRenderNode extends TempNode {
                         matV2E.value ?? matV2E
                     );
                     _cloudUniforms.shadowFar.value = _cascadedShadowMaps.far;
+                    // Use cascade 0 texel size for PCF (fine-grained; far cascades
+                    // have coarser texels but PCF radius is small relative to them)
                     _cloudUniforms.shadowTexelSize.value.set(
-                        1 / SHADOW_MAP_SIZE,
-                        1 / SHADOW_MAP_SIZE
+                        1 / SHADOW_MAP_SIZES[0],
+                        1 / SHADOW_MAP_SIZES[0]
                     );
 
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
