@@ -59,7 +59,7 @@ let _renderClouds: ((a: any, b: any, c: any) => any) | null = null;
 let _shadowMarch: ((cascadeIndex?: number) => any) | null = null;
 let _onReadyCallback: (() => void) | null = null;
 
-const SHADOW_CASCADE_COUNT = 2;
+const SHADOW_CASCADE_COUNT = 3;
 const SHADOW_MAP_SIZE = 1024;
 
 const _cascadedShadowMaps = new CascadedShadowMaps({

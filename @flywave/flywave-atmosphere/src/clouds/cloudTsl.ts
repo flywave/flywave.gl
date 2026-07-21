@@ -7,6 +7,7 @@ import {
     asin,
     atan,
     Break,
+    cos,
     dFdx,
     dFdy,
     dot,
@@ -24,6 +25,7 @@ import {
     oneMinus,
     pow,
     screenUV,
+    sin,
     sqrt,
     step,
     struct,
@@ -624,19 +626,36 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         return { shadowUV, inBounds };
     };
 
-    // Helper: sample one cascade's BSM texture with 5-tap PCF.
-    // cascadeIdx is a compile-time constant (0 or 1) so texture() gets a concrete TextureNode.
+    // Per-frame rotation matrix for PCF taps + sub-texel jitter.
+    // Uses frame counter to cycle through 8 rotations, giving temporal
+    // softening when combined with TAA in the resolve pass.
+    const getJitterRotation = () => {
+        const angle = u.frame.mod(float(8)).mul(float(Math.PI / 4));
+        const cosA = cos(angle);
+        const sinA = sin(angle);
+        // Sub-texel jitter: rotate by angle, scale to half texel
+        const subTexel = vec2(cosA, sinA).mul(u.shadowTexelSize.mul(float(0.5)));
+        return { cosA, sinA, subTexel };
+    };
+
+    // Helper: sample one cascade's BSM texture with 5-tap rotated PCF + temporal jitter.
     const sampleCascadePCF = (
         cascadeIdx: number,
         posUncorrected: any,
         distanceToTop: any,
-        distanceOffset: any
+        distanceOffset: any,
+        jitter: any
     ) => {
         const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, posUncorrected);
         const tex = u.shadowTextureNodes[cascadeIdx];
 
         const sampleOD = (uvOffset: any): any => {
-            const uv = shadowUV.add(uvOffset);
+            // Rotate PCF offset by temporal angle
+            const rotated = vec2(
+                jitter.cosA.mul(uvOffset.x).sub(jitter.sinA.mul(uvOffset.y)),
+                jitter.sinA.mul(uvOffset.x).add(jitter.cosA.mul(uvOffset.y))
+            );
+            const uv = shadowUV.add(rotated).add(jitter.subTexel);
             const inB = step(float(0), uv.x)
                 .mul(step(uv.x, float(1)))
                 .mul(step(float(0), uv.y))
@@ -661,7 +680,6 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
             .add(sampleOD(offsetMM));
         const od = odSum.div(float(5));
 
-        // Append distanceToTop check to baseInBounds
         const fullBounds = baseInBounds.mul(step(float(0), distanceToTop));
         return fullBounds.greaterThan(0.5).select(od, float(0));
     };
@@ -681,17 +699,29 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
             .add(sqrt(disc.max(0)))
             .mul(0.5);
 
-        // Always sample both cascades (texture selection must be compile-time)
-        const od0 = sampleCascadePCF(0, posUncorrected, distanceToTop, distanceOffset);
-        const od1 = sampleCascadePCF(1, posUncorrected, distanceToTop, distanceOffset);
+        const jitter = getJitterRotation();
 
-        // Cascade selection: near samples use cascade 0, far samples use cascade 1.
-        // With single cascade, all samples use cascade 0.
+        // Always sample all cascades (texture selection must be compile-time).
+        // Max 4 cascades supported by uniforms.
+        const od0 = sampleCascadePCF(0, posUncorrected, distanceToTop, distanceOffset, jitter);
+        const od1 = sampleCascadePCF(1, posUncorrected, distanceToTop, distanceOffset, jitter);
+        const od2 = sampleCascadePCF(2, posUncorrected, distanceToTop, distanceOffset, jitter);
+
+        // Cascade selection by view distance from camera.
         const viewDist = length(rayPosition.sub(u.cameraPosition));
         const c0End = u.shadowIntervals[0].y.mul(u.shadowFar);
-        const useC0 = u.shadowCascadeCount.lessThanEqual(1).or(viewDist.lessThan(c0End));
+        const c1End = u.shadowIntervals[1].y.mul(u.shadowFar);
 
-        return useC0.select(od0, od1);
+        // pick = viewDist < c0End ? 0 : (viewDist < c1End ? 1 : 2)
+        const useC0 = viewDist.lessThan(c0End);
+        const useC1 = useC0.not().and(viewDist.lessThan(c1End));
+        // Gate by cascadeCount so unused cascades never contribute
+        const c1Valid = u.shadowCascadeCount.greaterThan(1);
+        const c2Valid = u.shadowCascadeCount.greaterThan(2);
+        const od1Gated = c1Valid.select(od1, od0);
+        const od2Gated = c2Valid.select(od2, od1Gated);
+
+        return useC0.select(od0, useC1.select(od1Gated, od2Gated));
     });
 };
 
