@@ -3,5 +3,6 @@
 export * from "./ground-modification-manager";
 export * from "./TerrainDecoderWorker";
 export * from "./dem-terrain/DEMTerrainSource";
+export { setProjector, setProjectorCameraPos } from "./dem-terrain/DEMTileMeshMaterial";
 export * from "./quantized-terrain";
 export * from "./TerrainSource";

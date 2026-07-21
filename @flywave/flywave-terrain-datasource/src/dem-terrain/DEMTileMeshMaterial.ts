@@ -23,7 +23,8 @@ import {
     vec2,
     vec3,
     vec4,
-    positionLocal
+    positionLocal,
+    positionWorld
 } from "three/tsl";
 
 function dummyTex(): THREE.DataTexture {
@@ -107,6 +108,22 @@ const _overlayTransform = uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
     ({ object }) => object.overlayTransform
 );
 const _imageryCount = uniform(0).onObjectUpdate(({ object }) => object.imageryCount);
+
+// --- Projector state (global, shared by all tiles) ---
+const _projState = {
+    texture: emptyTexture,
+    matrix: new THREE.Matrix4()
+};
+
+const _projTex = texture(emptyTexture);
+_projTex.onObjectUpdate(() => _projState.texture);
+
+const _projMat = uniform(new THREE.Matrix4());
+_projMat.onObjectUpdate(() => _projState.matrix);
+
+// RTE correction: the rendering system uses camera-relative positions,
+// so we need the main camera's world position to reconstruct absolute coords.
+const _projCameraPos = uniform(new THREE.Vector3());
 
 function buildNodes() {
     const webMercatorY = attribute("webMercatorY", "float");
@@ -233,6 +250,20 @@ function buildNodes() {
             color.assign(select(inRange.and(float(i).lessThan(_imageryCount)), patchColor, color));
         }
 
+        // Projector overlay: world-space → projector UV via OrthographicCamera matrix
+        // RTE fix: positionWorld is camera-relative, add cameraPos to get absolute
+        const trueWorldPos = positionWorld.add(_projCameraPos);
+        const projCoord = _projMat.mul(trueWorldPos);
+        const projUv = projCoord.xy.div(projCoord.w).mul(0.5).add(0.5);
+        const inProj = projUv.x
+            .greaterThanEqual(0)
+            .and(projUv.x.lessThanEqual(1))
+            .and(projUv.y.greaterThanEqual(0))
+            .and(projUv.y.lessThanEqual(1))
+            .and(projCoord.w.greaterThan(0));
+        const projColor = texture(_projTex, projUv);
+        color.assign(select(inProj, projColor, color));
+
         return color;
     })();
 
@@ -281,3 +312,12 @@ const defaultDEMTileMeshMaterial = new DEMTileMeshMaterial({
 }).markSharedSingleton();
 
 export { emptyTexture, emptyImageryTextures, defaultDEMTileMeshMaterial, DEMTileMeshMaterial };
+
+export function setProjector(tex: THREE.Texture, matrix: THREE.Matrix4) {
+    _projState.texture = tex;
+    _projState.matrix.copy(matrix);
+}
+
+export function setProjectorCameraPos(pos: THREE.Vector3) {
+    _projCameraPos.value.copy(pos);
+}

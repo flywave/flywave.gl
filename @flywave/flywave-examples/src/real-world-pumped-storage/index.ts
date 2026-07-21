@@ -12,7 +12,8 @@ import {
     MapViewEventNames,
     GUI
 } from "@flywave/flywave.gl";
-import { TextureLoader, RepeatWrapping } from "three";
+import { TextureLoader, ClampToEdgeWrapping, Matrix4, OrthographicCamera, Vector3 } from "three";
+import { setProjector, setProjectorCameraPos } from "@flywave/flywave.gl";
 
 const PROJECT_CONFIG = {
     PUMPED_STORAGE_3DTILES_URL: "/api/v1/tilesets/gkqj9pbfa7bt9dxex7t8hmp13a/tiles/tileset.json",
@@ -202,7 +203,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             extends: "resources/tilezen_base_globe.json",
             lights: [],
             celestia: {
-                sunTime: new Date().setHours(13),
+                sunTime: new Date().setHours(18),
                 sunCastShadow: true,
                 atmosphere: true
             }
@@ -263,18 +264,44 @@ const addTrenchModifier = (demTerrain: DEMTerrainSource): GeoBox => {
     return geoBox;
 };
 
-const addTrenchOverlay = (demTerrain: DEMTerrainSource, geoBox: GeoBox): void => {
+const addTrenchOverlay = (mapView: MapView, geoBox: GeoBox): void => {
     const textureLoader = new TextureLoader();
     textureLoader.load(PROJECT_CONFIG.OVERLAY_TEXTURE_URL, texture => {
-        texture.wrapS = RepeatWrapping;
-        texture.wrapT = RepeatWrapping;
-        demTerrain.getGroundOverlayProvider().addOverlays([
-            {
-                geoArea: geoBox,
-                texture
-            }
-        ]);
-        console.log("Trench overlay texture added");
+        texture.wrapS = ClampToEdgeWrapping;
+        texture.wrapT = ClampToEdgeWrapping;
+
+        const center = geoBox.center;
+        const swWorld = sphereProjection.projectPoint(geoBox.southWest, new Vector3());
+        const neWorld = sphereProjection.projectPoint(geoBox.northEast, new Vector3());
+        const halfW = Math.abs(neWorld.x - swWorld.x) / 2;
+        const halfH = Math.abs(neWorld.y - swWorld.y) / 2;
+        const dist = Math.max(halfW, halfH) * 2;
+        const centerWorld = sphereProjection.projectPoint(center, new Vector3());
+        const normal = centerWorld.clone().normalize();
+
+        // OrthographicCamera as projector — left/right/top/bottom = 精确矩形范围
+        const projCamera = new OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, dist * 5);
+        projCamera.position.copy(normal).multiplyScalar(dist);
+        projCamera.lookAt(0, 0, 0);
+        projCamera.updateMatrixWorld();
+        projCamera.updateProjectionMatrix();
+
+        const projMatrix = new Matrix4().multiplyMatrices(
+            projCamera.projectionMatrix,
+            projCamera.matrixWorldInverse
+        );
+
+        setProjector(texture, projMatrix);
+
+        // RTE fix: update camera world position each frame for correct absolute→projector transform
+        mapView.addEventListener(MapViewEventNames.WillRender, () => {
+            setProjectorCameraPos(mapView.camera.position);
+        });
+
+        console.log("Projector set via OrthographicCamera:", {
+            center: [center.latitude, center.longitude],
+            bounds: [-halfW, halfW, halfH, -halfH]
+        });
     });
 };
 
@@ -285,7 +312,7 @@ try {
     addPumpedStorageDataSource(mapView);
     const demTerrain = configureDEMTerrainSource(mapView);
     const trenchGeoBox = addTrenchModifier(demTerrain);
-    addTrenchOverlay(demTerrain, trenchGeoBox);
+    addTrenchOverlay(mapView, trenchGeoBox);
 
     (window as any).mapView = mapView;
 
