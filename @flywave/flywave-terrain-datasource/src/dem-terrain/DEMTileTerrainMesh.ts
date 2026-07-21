@@ -16,8 +16,8 @@ import {
 } from "three";
 import * as THREE from "three";
 
-import { type GroundOverlayTextureResource } from "../ground-overlay-provider";
 import { type HeightMapModifierManager } from "../ground-modification-manager";
+import { type ProjectorState } from "../projector-overlay";
 import { type WebTile } from "../WebImageryTileProvider";
 import {
     emptyTexture as matEmptyTexture,
@@ -64,7 +64,6 @@ export class HeightMapTerrainMesh extends Mesh {
     // --- Exposed properties (read by onObjectUpdate in DEMTileMeshMaterial) ---
     public heightMapTexture: THREE.Texture = matEmptyTexture;
     public modifierTexture: THREE.Texture | null = null;
-    public overlayTexture: THREE.Texture = matEmptyTexture;
     public imageryTextures: THREE.Texture[] = [...emptyImageryTextures];
     public imageryTransforms: THREE.Vector4[] = _identityImageryTransforms.map(v => v.clone());
     public packCol0: Vector4 = new Vector4();
@@ -80,8 +79,16 @@ export class HeightMapTerrainMesh extends Mesh {
     public modifierUVBounds: Vector4 = new Vector4();
     public modifierOp: number = 0;
     public hasModifier: number = 0;
-    public overlayTransform: Vector4 = new Vector4(1, 1, 0, 0);
     public imageryCount: number = 0;
+
+    /**
+     * Per-source projector overlay state. Bound once at mesh creation to the
+     * owning TerrainSource's ProjectorOverlayManager.state. The DEM tile
+     * material reads this every frame via TSL onObjectUpdate so that layer
+     * mutations (add / remove / update) and per-frame RTE camera-position
+     * refreshes propagate to every tile automatically.
+     */
+    public projectorState?: ProjectorState = undefined;
 
     // --- Internal state ---
     private m_uPatchPos: Matrix4;
@@ -365,22 +372,6 @@ export class HeightMapTerrainMesh extends Mesh {
             this.imageryTransforms[index].copy(item.transform);
         });
         this.imageryCount = webTilesUnifrom.length;
-    }
-
-    public setupOverlayerTexture(
-        groundOverlay: GroundOverlayTextureResource | null,
-        webTingScheme: TilingScheme
-    ): void {
-        if (groundOverlay) {
-            const transform = this.computeTextureUvTransform(groundOverlay.geoBox, webTingScheme);
-            if (transform) {
-                this.overlayTexture = groundOverlay.texture;
-                this.overlayTransform.copy(transform);
-                return;
-            }
-        }
-        this.overlayTexture = matEmptyTexture;
-        this.overlayTransform.set(0, 0, 0, 0);
     }
 
     private computeTextureUvTransform(

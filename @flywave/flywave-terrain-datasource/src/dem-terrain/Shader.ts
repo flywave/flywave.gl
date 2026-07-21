@@ -78,11 +78,6 @@ const shaderChunks = {
     
     uniform sampler2D sideTexture; 
 
-    #ifndef USE_OVERLAYER_MAP
-    uniform sampler2D overlayerImagery;
-    uniform mat3 overlayerImageryTransform;
-    #endif
-
     #ifndef USE_MAP
         varying vec2 vMapUv;
     #endif
@@ -118,18 +113,6 @@ const shaderChunks = {
         } 
  
         vec4 demColor = texture2D(uHeighMapTexture, vDemUv); 
-        #ifndef USE_OVERLAYER_MAP
-        // 对覆盖层贴图也应用同样的UV偏移
-        vec2 overLayertransformedUv = (overlayerImageryTransform * vec3(vMapUv, 1.0)).xy;
-      
-        if (overLayertransformedUv.x >= -0.001 && overLayertransformedUv.x <= 1.001 && 
-            overLayertransformedUv.y >= -0.01 && overLayertransformedUv.y <= 1.001) {
-            // if(demColor.a==0.0){
-                vec4 overLayerColor = texture2D(overlayerImagery, overLayertransformedUv); 
-                    color = mix(color, overLayerColor, overLayerColor.a);   
-            // }
-        }
-        #endif 
         return  color;
     }
     `,

@@ -48,16 +48,6 @@ export enum TaskType {
     RasterDEM = "raster-dem",
 
     /**
-     * Ground overlay processing task
-     *
-     * This task type handles the processing of ground overlay data, which
-     * includes images or textures that are draped over the terrain surface.
-     * It's used for loading and processing ground overlay data that is available
-     * as image bitmaps.
-     */
-    GroundOverlay = "ground-overlay",
-
-    /**
      * Tile geometry reprojection task
      *
      * This task type handles the reprojection of terrain geometry between different

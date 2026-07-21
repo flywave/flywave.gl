@@ -68,7 +68,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                 sunTime: new Date().setHours(13), // Set sun time to 1 PM
                 sunCastShadow: true, // Enable shadows
                 atmosphere: true // Enable atmospheric effect
-            },
+            }
             // postEffects: {
             //     brightnessContrast: {
             //         brightness: -0.17, // Brightness adjustment
@@ -190,39 +190,8 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
     // Set as map elevation data source
     mapView.setElevationSource(demTerrain);
 
-    // Add ground texture overlay
-    // addGroundOverlay(demTerrain);
-
     // Add ground modification
     // addGroundModification(demTerrain);
-};
-
-/**
- * Add ground texture overlay
- * @param demTerrain DEM terrain data source
- */
-const addGroundOverlay = (demTerrain: DEMTerrainSource): void => {
-    const textureLoader = new TextureLoader();
-
-    // Define overlay polygon coordinates
-    const overlayPolygon2 = new GeoPolygon([
-        [117.85102680375553, 36.834357945481926],
-        [117.85094036472515, 36.833819257349475],
-        [117.85440509102017, 36.8337251807215],
-        [117.85445426923172, 36.83431078084989],
-        [117.85102680375553, 36.834357945481926]
-    ]);
-
-    textureLoader.load(PROJECT_CONFIG.TEXTURE_PATH, texture => {
-        texture.wrapS = RepeatWrapping;
-        texture.wrapT = RepeatWrapping;
-        demTerrain.getGroundOverlayProvider().addOverlays([
-            {
-                geoArea: overlayPolygon2,
-                texture
-            }
-        ]);
-    });
 };
 
 /**

@@ -30,11 +30,6 @@ const terrainShaderChunks: TerrainShaderExtensions = {
         #endif
 
 
-        #ifndef USE_OVERLAYER_MAP
-        uniform sampler2D overlayerImagery;
-        uniform vec4 overlayerImageryTransform;
-        #endif
-
         uniform int imageryPatchCount;
         uniform vec4 imageryPatchTransform[5];
         uniform sampler2D imageryPatchArray[5];
@@ -62,20 +57,6 @@ const terrainShaderChunks: TerrainShaderExtensions = {
                 }
             }
 
-            #ifndef USE_OVERLAYER_MAP
-              vec2 overLayertransformedUv = vec2(
-                    vMapUv.x * overlayerImageryTransform.x + overlayerImageryTransform.z,
-                    vMapUv.y * overlayerImageryTransform.y + overlayerImageryTransform.w
-                ); 
-            if (overLayertransformedUv.x >= -0.00001 && overLayertransformedUv.x <= 1.00001 && 
-                    overLayertransformedUv.y >= -0.00001 && overLayertransformedUv.y <= 1.00001) {
-                    vec4 overLayerColor = texture2D(overlayerImagery, overLayertransformedUv);
-                    if(overLayerColor.a > 0.0){
-                        color = mix(color, overLayerColor, overLayerColor.a);
-                    }
-                }
-            #endif
-            
             return color;
         }
 

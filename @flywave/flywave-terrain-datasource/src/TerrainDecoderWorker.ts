@@ -17,8 +17,6 @@ import { TaskType, TERRAIN_TILE_DECODER_ID } from "./Constants";
 import { type SerializedDEMData } from "./dem-terrain/dem/DemData"; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { type DecodeTileParams, processDEMTile } from "./dem-terrain/TileWorkerDecoder";
 import { HeightMapModifierWorkerManager } from "./ground-modification-manager";
-import { type GroundOverlayTextureJSON } from "./ground-overlay-provider/GroundOverlayTexture";
-import { processGroundOverlayTile } from "./ground-overlay-provider/TileWorkerDecoder";
 import { type QuantizedMeshClipperOptions } from "./quantized-terrain/quantized-mesh/QuantizedMeshClipper";
 import { type QuantizedMeshLoaderOptions } from "./quantized-terrain/quantized-mesh/QuantizedMeshLoader";
 import { type QuantizedTerrainMeshData } from "./quantized-terrain/quantized-mesh/QuantizedTerrainMesh";
@@ -216,19 +214,6 @@ export class TerrainTileDecoder implements ITileDecoder {
             case TaskType.RasterDEM: {
                 const { dem } = await processDEMTile(data as unknown as DecodeTileParams);
                 tileTerrain = dem.serialize();
-                break;
-            }
-
-            // Handle ground overlay data
-            case TaskType.GroundOverlay: {
-                const imageData = await processGroundOverlayTile(
-                    data as unknown as {
-                        overlays: GroundOverlayTextureJSON[];
-                        geoBox: GeoBoxArray;
-                        flipY: boolean;
-                    }
-                );
-                tileTerrain = imageData;
                 break;
             }
 

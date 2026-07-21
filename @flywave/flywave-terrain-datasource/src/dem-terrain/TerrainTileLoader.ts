@@ -66,10 +66,6 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             .dataProvider()
             .getBestAvailableResourceTile(this.tile.tileKey);
 
-        const overlayImagery = this.dataSource
-            .getGroundOverlayProvider()
-            .getBestAvailableResourceTile(this.tile.tileKey);
-
         this.tile.clear();
         this.dataSource.getWebTileDataSources().forEach(webTiles => {
             const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
@@ -89,9 +85,9 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             }
             terrainMesh.updateUniforms();
             terrainMesh.setupImageryTexture(webTile.resource.value, webTiles.tilingScheme);
-            if (overlayImagery && overlayImagery.resource?.texture) {
-                terrainMesh.setupOverlayerTexture(overlayImagery.resource, webTiles.tilingScheme);
-            }
+            // Bind this tile to its source's projector overlay state so the
+            // DEM tile shader can sample all ground-projected layers.
+            terrainMesh.projectorState = this.dataSource.getProjectorOverlayManager().state;
             this.tile.objects.push(terrainMesh);
         });
     }

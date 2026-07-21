@@ -155,7 +155,6 @@ export abstract class BaseQuantizedTerrainSource<
         super.setTilingScheme(value);
         // Propagate tiling scheme to the main data provider
         this.dataProvider().setTilingScheme(value);
-        this.getGroundOverlayProvider()?.setTilingScheme(value);
     }
 
     /**

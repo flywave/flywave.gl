@@ -9,10 +9,10 @@ import {
     TileRenderDataSource,
     DEMTerrainSource,
     ArcGISTileProvider,
-    MapViewEventNames,
+    type ProjectorOverlayManager,
     GUI
 } from "@flywave/flywave.gl";
-import { TextureLoader, RepeatWrapping } from "three";
+import { TextureLoader, ClampToEdgeWrapping } from "three";
 
 const PROJECT_CONFIG = {
     PUMPED_STORAGE_3DTILES_URL: "/api/v1/tilesets/gkqj9pbfa7bt9dxex7t8hmp13a/tiles/tileset.json",
@@ -202,7 +202,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             extends: "resources/tilezen_base_globe.json",
             lights: [],
             celestia: {
-                sunTime: new Date().setHours(13),
+                sunTime: new Date().setHours(18),
                 sunCastShadow: true,
                 atmosphere: true
             }
@@ -263,18 +263,22 @@ const addTrenchModifier = (demTerrain: DEMTerrainSource): GeoBox => {
     return geoBox;
 };
 
-const addTrenchOverlay = (demTerrain: DEMTerrainSource, geoBox: GeoBox): void => {
+const addTrenchOverlay = (geoBox: GeoBox, manager: ProjectorOverlayManager): void => {
     const textureLoader = new TextureLoader();
     textureLoader.load(PROJECT_CONFIG.OVERLAY_TEXTURE_URL, texture => {
-        texture.wrapS = RepeatWrapping;
-        texture.wrapT = RepeatWrapping;
-        demTerrain.getGroundOverlayProvider().addOverlays([
-            {
-                geoArea: geoBox,
-                texture
-            }
-        ]);
-        console.log("Trench overlay texture added");
+        texture.wrapS = ClampToEdgeWrapping;
+        texture.wrapT = ClampToEdgeWrapping;
+
+        manager.addLayer({
+            texture,
+            geoBox,
+            opacity: 1,
+            blendMode: "normal"
+        });
+
+        console.log("Projector layer added:", {
+            center: [geoBox.center.latitude, geoBox.center.longitude]
+        });
     });
 };
 
@@ -285,9 +289,15 @@ try {
     addPumpedStorageDataSource(mapView);
     const demTerrain = configureDEMTerrainSource(mapView);
     const trenchGeoBox = addTrenchModifier(demTerrain);
-    addTrenchOverlay(demTerrain, trenchGeoBox);
+
+    // The projector overlay manager is owned by the terrain source (per-source
+    // state, auto-attached to the MapView for RTE correction during connect()).
+    const overlayManager = demTerrain.getProjectorOverlayManager();
+
+    addTrenchOverlay(trenchGeoBox, overlayManager);
 
     (window as any).mapView = mapView;
+    (window as any).overlayManager = overlayManager;
 
     console.log("Pumped storage power station visualization example initialized successfully");
 } catch (error) {

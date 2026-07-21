@@ -127,11 +127,6 @@ export abstract class TerrainTileLoader<
             return dataSource.loadProgressiveTileResources(this.tile, abortSignal);
         });
 
-        // Load resources from ground overlay provider
-        this.dataSource
-            .getGroundOverlayProvider()
-            .loadProgressiveTileResources(this.tile, abortSignal);
-
         // Process all resource tile loaders
         this.resourceTileLoader.forEach(resourceTileLoader => {
             resourceTileLoader["loadAbortController"] = this["loadAbortController"];
