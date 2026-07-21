@@ -12,6 +12,8 @@ import {
     positionGeometry,
     screenCoordinate,
     screenUV,
+    sqrt,
+    step,
     texture,
     uniform,
     vec2,
@@ -152,12 +154,24 @@ export function updateCloudUniforms(atmosphereContext: any): void {
     _cloudUniforms.sunDirection.value.copy(atmosphereContext.sunDirectionECEF.value);
     _cloudUniforms.bottomRadius.value = atmosphereContext.parameters.bottomRadius;
 
-    // Update previous view-projection matrix for velocity reprojection
-    // prevViewProjectionUniform holds the PREVIOUS frame's VP matrix
+    // Update previous view-projection matrix for velocity reprojection.
+    // Clouds render in altitudeCorrection-adjusted ECEF, so build a VP that
+    // maps ECEF-corrected positions to clip:
+    //   ECEF-corrected -> ECEF (subtract altCorr) -> world (matrixECEFToWorld)
+    //     -> view (matrixWorldInverse) -> clip (projectionMatrix)
+    // Since matrixECEFToWorld is identity in this project, ECEF == world.
     const cam = atmosphereContext.camera;
     if (cam) {
-        const curVP = new Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-        _nextPrevViewProjection = curVP;
+        // ECEF -> world: identity. So ECEF-corrected -> clip = projection × matrixWorldInverse × (pos - altCorr)
+        // Equivalently, prepend translation by -altCorr.
+        const altCorr = atmosphereContext.altitudeCorrectionECEF?.value;
+        const T = new Matrix4().makeTranslation(-altCorr.x, -altCorr.y, -altCorr.z);
+        const ECEFToClip = new Matrix4().multiplyMatrices(
+            cam.projectionMatrix,
+            cam.matrixWorldInverse
+        );
+        ECEFToClip.multiply(T);
+        _nextPrevViewProjection = ECEFToClip;
     }
 
     const pos = atmosphereContext.cameraPositionECEF?.value;
@@ -273,11 +287,22 @@ export class CloudRenderNode extends TempNode {
         this.resolveRT.texture.minFilter = LinearFilter;
         this.resolveRT.texture.magFilter = LinearFilter;
 
-        // Velocity RT (stores frontDepth in R, velocity in GB)
+        // Velocity RT (1/4 res, same as lowRes) stores per-pixel velocity in RG.
+        // Velocity = screenUV - prevUv (reprojected from depth-buffer-derived world pos).
         this.velocityRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
         this.velocityRT.texture.name = "Clouds [Velocity]";
         this.velocityRT.texture.minFilter = LinearFilter;
         this.velocityRT.texture.magFilter = LinearFilter;
+
+        this.historyRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
+        this.historyRT.texture.name = "Clouds [History]";
+        this.historyRT.texture.minFilter = LinearFilter;
+        this.historyRT.texture.magFilter = LinearFilter;
+
+        this.resolveRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
+        this.resolveRT.texture.name = "Clouds [Resolve]";
+        this.resolveRT.texture.minFilter = LinearFilter;
+        this.resolveRT.texture.magFilter = LinearFilter;
 
         // Shadow RTs (BSM - Beer Shadow Map): one per cascade
         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
@@ -296,8 +321,8 @@ export class CloudRenderNode extends TempNode {
         }
 
         this.lowResNode = outputTexture(this, this.lowResRT.texture);
-        this.historyNode = outputTexture(this, this.historyRT.texture);
         this.velocityNode = outputTexture(this, this.velocityRT.texture);
+        this.historyNode = outputTexture(this, this.historyRT.texture);
         this.resolveNodeTex = outputTexture(this, this.resolveRT.texture);
 
         if (renderer != null) {
@@ -341,7 +366,7 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.setSize(lowWidth, lowHeight);
         this.historyRT.setSize(fullWidth, fullHeight);
         this.resolveRT.setSize(fullWidth, fullHeight);
-        this.velocityRT.setSize(lowWidth, lowHeight);
+        this.velocityRT.setSize(fullWidth, fullHeight);
 
         // getMipLevel() uses resolution uniform for screen-space derivative
         // magnitude. It runs inside the low-res pass, so the resolution must
@@ -420,6 +445,17 @@ export class CloudRenderNode extends TempNode {
                     .catch((e: Error) => {
                         (globalThis as any).__cloudsDebugError = e.message;
                     });
+                // Also snapshot velocity RT
+                const Vw = this.velocityRT.width,
+                    Vh = this.velocityRT.height;
+                (renderer as any)
+                    .readRenderTargetPixelsAsync(this.velocityRT, 0, 0, Vw, Vh, 0)
+                    .then((buf: any) => {
+                        (globalThis as any).__cloudsVelocitySnapshot = { w: Vw, h: Vh, buf };
+                    })
+                    .catch((e: Error) => {
+                        (globalThis as any).__cloudsVelocityError = e.message;
+                    });
             } catch (e) {
                 (globalThis as any).__cloudsDebugError = (e as Error).message + " (sync)";
             }
@@ -451,7 +487,7 @@ export class CloudRenderNode extends TempNode {
             } catch (e) {}
         }
 
-        // Pass 1b: Render velocity at 1/4 resolution
+        // Pass 1b: Render velocity at full resolution (depth-based reprojection)
         renderer.setRenderTarget(this.velocityRT);
         this.mesh.material = this.velocityMaterial;
         this.mesh.render(renderer);
@@ -490,9 +526,13 @@ export class CloudRenderNode extends TempNode {
 
         _frameIndex++;
 
-        // Swap prevViewProjection for next frame
+        // Swap prevViewProjection for next frame.
+        // CRITICAL: this must happen AFTER all passes that use prevViewProjection
+        // (lowRes, velocity, resolve) have rendered. We swap at the very end of
+        // updateBefore so next frame sees this frame's VP as "previous".
         if (_nextPrevViewProjection) {
             prevViewProjectionUniform.value.copy(_nextPrevViewProjection);
+            _cloudUniforms.prevViewProjection.value.copy(_nextPrevViewProjection);
             hasPrevViewProjection = true;
         }
 
@@ -573,21 +613,50 @@ export class CloudRenderNode extends TempNode {
             const worldToUnit = parameters.worldToUnit;
             _cloudUniforms.worldToUnit.value = worldToUnit;
 
-            const clouds = _renderClouds(camPosCorrected, rayDirection, sceneDistance); // Store color (rgb) + alpha in low-res buffer
+            const clouds = _renderClouds(camPosCorrected, rayDirection, sceneDistance);
             this.lowResMaterial.fragmentNode = clouds.get("color");
             this.lowResMaterial.needsUpdate = true;
         }
 
-        // Setup velocity pass: compute per-pixel velocity from frontDepth
+        // Setup velocity pass: reproject pixel world position from a representative
+        // cloud-layer depth. Rather than relying on per-pixel scene depth (which
+        // may not be bound), we ray-march against the cloud-layer sphere at a
+        // midpoint height to get a stable world position for reprojection. This
+        // correctly captures camera motion (the dominant cause of TAA trailing).
         {
-            // Velocity = currentUv - prevUv (reproject frontPosition with prev VP)
-            // For simplicity, output frontDepth in R channel (velocity computed in resolve)
             const velocityNode = Fn(() => {
                 const fullUv = screenUV;
-                const lowColor = texture(this.lowResNode, fullUv);
-                // Store frontDepth approximation in R, alpha in G
-                // Real velocity needs frontPosition reprojection (complex)
-                return vec4(lowColor.a, lowColor.a, lowColor.a, 1);
+
+                // Reconstruct view ray direction at this pixel (same math as lowRes pass)
+                const geo = positionGeometry;
+                const positionView = inverseProjectionMatrix(camera).mul(vec4(geo, 1)).xyz;
+                const rayDir = matrixViewToECEF.mul(vec4(positionView, float(0))).xyz.normalize();
+                const camPos = cameraPositionECEF.add(altitudeCorrectionECEF);
+
+                // Ray-sphere intersection with a representative sphere at the
+                // midpoint of the cloud layer (bottomRadius + (minHeight + maxHeight) / 2).
+                const midHeight = _cloudUniforms.minHeight
+                    .add(_cloudUniforms.maxHeight)
+                    .mul(float(0.5));
+                const midR = _cloudUniforms.bottomRadius.add(midHeight);
+                const b = dot(rayDir, camPos).mul(2);
+                const c = dot(camPos, camPos).sub(midR.mul(midR));
+                const disc = b.mul(b).sub(c.mul(4));
+                const tNear = b
+                    .negate()
+                    .sub(sqrt(disc.max(0)))
+                    .mul(0.5);
+
+                // World position in ECEF (clouds are rendered in altitudeCorrection-
+                // adjusted ECEF). Cloud shader assumes ECEF = world (ecefToWorld is
+                // identity), so prevViewProjection expects ECEF positions directly.
+                const hitPos = camPos.add(rayDir.mul(tNear.max(0)));
+                const prevClip = _cloudUniforms.prevViewProjection.mul(vec4(hitPos, 1));
+                const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
+                const velocity = fullUv.sub(prevUv);
+
+                const hasHit = disc.greaterThan(0);
+                return hasHit.select(vec4(velocity, 0, 1), vec4(0, 0, 0, 1));
             })();
 
             this.velocityMaterial.fragmentNode = velocityNode;
@@ -766,23 +835,33 @@ export class CloudRenderNode extends TempNode {
 
                 const result = currentColor.toVar();
 
-                // History blend with variance clipping.
-                // Velocity reprojection omitted (would require prevViewProjection
-                // and frontPosition MRT). For static/slow camera, sampling history
-                // at the same UV works well enough and avoids the flicker caused
-                // by per-frame bayer hard-swap.
-                const historyColor = texture(this.historyNode, fullUv);
+                // Velocity-aware history reprojection.
+                // velocity is stored in lowResRT.textures[1] at 1/4 resolution.
+                // Sampling it at fullUv gives bilinear-interpolated velocity.
+                // History was written at full resolution last frame, so sample
+                // at fullUv - velocity.
+                const velocity = texture(this.velocityNode, fullUv).xy;
+                const historyUV = fullUv.sub(velocity);
+                const historyColor = texture(this.historyNode, historyUV);
+
+                // Reject history when reprojected UV leaves the screen
+                const outOfBounds = step(float(0), historyUV.x)
+                    .mul(step(historyUV.x, float(1)))
+                    .mul(step(float(0), historyUV.y))
+                    .mul(step(historyUV.y, float(1)));
+                // If out of bounds, fall back to current color (no history blend)
+                const safeHistory = outOfBounds.greaterThan(0.5).select(historyColor, currentColor);
 
                 // clipAABB: clip history color to neighborhood bounding box
                 const pClip = maxColor.rgb.add(minColor.rgb).mul(0.5);
                 const eClip = maxColor.rgb.sub(minColor.rgb).mul(0.5).add(1e-7);
-                const vClip = historyColor.sub(vec4(pClip, currentColor.a));
+                const vClip = safeHistory.sub(vec4(pClip, currentColor.a));
                 const vUnit = vClip.xyz.div(eClip);
                 const aUnit = vUnit.abs();
                 const maUnit = max(aUnit.x, max(aUnit.y, aUnit.z));
                 const clippedHistory = maUnit
                     .greaterThan(1)
-                    .select(vec4(pClip, currentColor.a).add(vClip.div(maUnit)), historyColor);
+                    .select(vec4(pClip, currentColor.a).add(vClip.div(maUnit)), safeHistory);
 
                 // Exponential accumulation: 90% history, 10% current.
                 // This is what the reference does in temporalAntialiasing mode
