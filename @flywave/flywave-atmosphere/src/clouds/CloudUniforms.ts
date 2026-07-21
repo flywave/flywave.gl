@@ -12,6 +12,7 @@ export class CloudUniforms {
     altitudeCorrection = uniform(new Vector3());
     sunDirection = uniform(new Vector3(1, 0, 0));
     cameraShapeOffset = uniform(new Vector3());
+    cameraPosition = uniform(new Vector3()); // ECEF, with altitudeCorrection applied (matches shader cameraPosition)
     cameraHeight = uniform(0.0);
     cameraVelocity = uniform(0.0);
     // Meters → atmosphere-runtime length unit (km). Must match

@@ -488,13 +488,15 @@ export const createMarchShadowLength = (u: CloudUniforms) => {
 
 const SHADOW_MAX_ITERATIONS = 48;
 
-export const createShadowMarchClouds = (u: CloudUniforms) => {
+export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number = 0) => {
     const sampleWeather = createSampleWeather(u);
     const sampleMedia = createSampleMedia(u);
+    // Bake cascade index into shader (constant for compiled material)
+    const invMat = u.inverseShadowMatrices[cascadeIndex];
 
     return Fn((): any => {
         const clip = screenUV.mul(2).sub(1);
-        const point = u.inverseShadowMatrices[0].mul(vec4(clip, float(-1), float(1)));
+        const point = invMat.mul(vec4(clip, float(-1), float(1)));
         const pDiv = point.xyz.div(point.w);
         const sunPosition = pDiv.add(u.altitudeCorrection);
 
@@ -607,6 +609,63 @@ export const createShadowMarchClouds = (u: CloudUniforms) => {
 /* -------------------------------------------------------------------------- */
 
 export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
+    // Helper: compute cascade-specific projection (UV + inBounds) for given index
+    const projectCascade = (cascadeIdx: number, posUncorrected: any) => {
+        const mat = u.shadowMatrices[cascadeIdx];
+        const clip = mat.mul(vec4(posUncorrected, 1));
+        const clipDiv = clip.xy.div(clip.w);
+        const shadowUV = clipDiv.mul(0.5).add(0.5);
+
+        const inBounds = step(float(0), shadowUV.x)
+            .mul(step(shadowUV.x, float(1)))
+            .mul(step(float(0), shadowUV.y))
+            .mul(step(shadowUV.y, float(1)));
+
+        return { shadowUV, inBounds };
+    };
+
+    // Helper: sample one cascade's BSM texture with 5-tap PCF.
+    // cascadeIdx is a compile-time constant (0 or 1) so texture() gets a concrete TextureNode.
+    const sampleCascadePCF = (
+        cascadeIdx: number,
+        posUncorrected: any,
+        distanceToTop: any,
+        distanceOffset: any
+    ) => {
+        const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, posUncorrected);
+        const tex = u.shadowTextureNodes[cascadeIdx];
+
+        const sampleOD = (uvOffset: any): any => {
+            const uv = shadowUV.add(uvOffset);
+            const inB = step(float(0), uv.x)
+                .mul(step(uv.x, float(1)))
+                .mul(step(float(0), uv.y))
+                .mul(step(uv.y, float(1)));
+            const shadow = texture(tex, uv);
+            const distFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
+            const od = min(shadow.b.add(shadow.a), shadow.g.mul(distFront));
+            return inB.greaterThan(0.5).select(od, float(0));
+        };
+
+        const r = u.maxShadowFilterRadius;
+        const texel = u.shadowTexelSize;
+        const offsetPP = vec2(r, r).mul(texel);
+        const offsetMP = vec2(r.negate(), r).mul(texel);
+        const offsetPM = vec2(r, r.negate()).mul(texel);
+        const offsetMM = vec2(r.negate(), r.negate()).mul(texel);
+
+        const odSum = sampleOD(vec2(0, 0))
+            .add(sampleOD(offsetPP))
+            .add(sampleOD(offsetMP))
+            .add(sampleOD(offsetPM))
+            .add(sampleOD(offsetMM));
+        const od = odSum.div(float(5));
+
+        // Append distanceToTop check to baseInBounds
+        const fullBounds = baseInBounds.mul(step(float(0), distanceToTop));
+        return fullBounds.greaterThan(0.5).select(od, float(0));
+    };
+
     return Fn(([rayPosition, distanceOffset]: [any, any]): any => {
         const posUncorrected = rayPosition.sub(u.altitudeCorrection);
 
@@ -617,31 +676,22 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         const shadowTopR = u.bottomRadius.add(u.shadowTopHeight);
         const c = dot(a, a).sub(shadowTopR.mul(shadowTopR));
         const disc = b.mul(b).sub(c.mul(4));
-        // Distance from sample point back UP to cloud top along incoming light dir.
-        // rayDir is -sunDir (toward scene); we want distance TO the top of the cloud
-        // layer along +sunDir, so use the far intersection (exit point of -sunDir ray
-        // = entry point of +sunDir ray from the top).
         const distanceToTop = b
             .negate()
             .add(sqrt(disc.max(0)))
             .mul(0.5);
 
-        const clip = u.shadowMatrices[0].mul(vec4(posUncorrected, 1));
-        const clipDiv = clip.xy.div(clip.w);
-        const shadowUV = clipDiv.mul(0.5).add(0.5);
+        // Always sample both cascades (texture selection must be compile-time)
+        const od0 = sampleCascadePCF(0, posUncorrected, distanceToTop, distanceOffset);
+        const od1 = sampleCascadePCF(1, posUncorrected, distanceToTop, distanceOffset);
 
-        const inBounds = step(float(0), shadowUV.x)
-            .mul(step(shadowUV.x, float(1)))
-            .mul(step(float(0), shadowUV.y))
-            .mul(step(shadowUV.y, float(1)))
-            .mul(step(float(0), distanceToTop));
+        // Cascade selection: near samples use cascade 0, far samples use cascade 1.
+        // With single cascade, all samples use cascade 0.
+        const viewDist = length(rayPosition.sub(u.cameraPosition));
+        const c0End = u.shadowIntervals[0].y.mul(u.shadowFar);
+        const useC0 = u.shadowCascadeCount.lessThanEqual(1).or(viewDist.lessThan(c0End));
 
-        const shadow = texture(u.shadowTextureNodes[0], shadowUV);
-
-        const distanceToFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
-        const opticalDepth = min(shadow.b.add(shadow.a), shadow.g.mul(distanceToFront));
-
-        return inBounds.greaterThan(0.5).select(opticalDepth, float(0));
+        return useC0.select(od0, od1);
     });
 };
 
@@ -763,16 +813,18 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const opticalDepth = sunMarchResult.x.toVar();
                         const sunRayDistance = sunMarchResult.y;
 
-                        const bsmCond = step(height, u.shadowTopHeight).mul(
-                            u.shadowCascadeCount.greaterThan(0)
-                        );
-                        If(bsmCond.greaterThan(0.5), () => {
-                            const shadowOD = sampleShadowOpticalDepth(
-                                position,
-                                sunRayDistance
-                            ).toConst();
-                            opticalDepth.addAssign(shadowOD);
-                        });
+                        const heightGate = step(height, u.shadowTopHeight);
+                        const cascadeGate = u.shadowCascadeCount
+                            .greaterThan(0)
+                            .select(float(1), float(0));
+                        const bsmCond = heightGate.mul(cascadeGate);
+                        // Always sample, gate via multiplication (TSL If may not always
+                        // compile body correctly with uniform-based conditions)
+                        const shadowOD = sampleShadowOpticalDepth(
+                            position,
+                            sunRayDistance
+                        ).toConst();
+                        opticalDepth.addAssign(shadowOD.mul(bsmCond));
 
                         let radiance = sunIrradiance.mul(
                             approximateMultipleScattering(opticalDepth, cosTheta)
@@ -877,8 +929,10 @@ export const createCloudRenderer = (u: CloudUniforms) => {
     const sampleWeather = createSampleWeather(u);
     const sampleMedia = createSampleMedia(u);
     const marchOpticalDepth = createMarchOpticalDepth(u);
-    const shadowMarchClouds = createShadowMarchClouds(u);
     const sampleShadowOpticalDepth = createSampleShadowOpticalDepth(u);
+    // Return a factory that produces a fresh Fn per cascade (bakes cascadeIndex in closure)
+    const shadowMarchFactory = (cascadeIndex: number = 0) =>
+        createShadowMarchClouds(u, cascadeIndex);
 
     const render = Fn(([cameraPosition, rayDirection, sceneDistance]: [any, any, any]) => {
         const cosTheta = dot(u.sunDirection, rayDirection);
@@ -1258,8 +1312,21 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             resultVelocity.assign(vec2(0));
         });
 
+        // Mode 99: dump bsmCond components for primary march sample position
+        If(debugMode.equal(99), () => {
+            const samplePos = cameraPosition.add(rayDirection.mul(rayNear.max(0).add(2000)));
+            const sampleHeight = length(samplePos).sub(u.bottomRadius);
+            const heightGate = step(sampleHeight, u.shadowTopHeight);
+            const cascadeGate = u.shadowCascadeCount.greaterThan(0).select(float(1), float(0));
+            resultColor.assign(
+                vec4(heightGate, cascadeGate, u.shadowCascadeCount.div(10), float(1))
+            );
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+
         return cloudRendererResultStruct(resultColor, resultFrontDepth, resultVelocity);
     });
 
-    return { render, shadowMarch: shadowMarchClouds };
+    return { render, shadowMarch: shadowMarchFactory };
 };
