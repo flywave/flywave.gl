@@ -77,11 +77,14 @@ export class CloudUniforms {
     // Shape and weather
     localWeatherRepeat = uniform(new Vector2(100, 100));
     localWeatherOffset = uniform(new Vector2(0, 0));
+    localWeatherVelocity = uniform(new Vector2(0, 0));
     coverage = uniform(0.3);
     shapeRepeat = uniform(new Vector3(0.0003, 0.0003, 0.0003));
     shapeOffset = uniform(new Vector3(0, 0, 0));
+    shapeVelocity = uniform(new Vector3(0, 0, 0));
     shapeDetailRepeat = uniform(new Vector3(0.006, 0.006, 0.006));
     shapeDetailOffset = uniform(new Vector3(0, 0, 0));
+    shapeDetailVelocity = uniform(new Vector3(0, 0, 0));
     turbulenceRepeat = uniform(20.0);
     turbulenceDisplacement = uniform(350.0);
 

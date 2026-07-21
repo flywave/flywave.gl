@@ -215,6 +215,7 @@ const haltonBase3 = [
 ];
 
 let _frameIndex = 0;
+let _prevFrameTime = 0;
 
 // Previous view-projection matrix for velocity reprojection
 const prevViewProjectionUniform = new Uniform(new Matrix4());
@@ -521,6 +522,26 @@ export class CloudRenderNode extends TempNode {
         renderer.setRenderTarget(this.historyRT);
         this.mesh.material = this.blitMaterial;
         this.mesh.render(renderer);
+
+        // Accumulate wind velocity into texture offsets (Euler integration)
+        const now = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
+        const dt = _prevFrameTime > 0 ? Math.min(now - _prevFrameTime, 0.1) : 0;
+        _prevFrameTime = now;
+        if (dt > 0) {
+            _cloudUniforms.localWeatherOffset.value.x +=
+                _cloudUniforms.localWeatherVelocity.value.x * dt;
+            _cloudUniforms.localWeatherOffset.value.y +=
+                _cloudUniforms.localWeatherVelocity.value.y * dt;
+            _cloudUniforms.shapeOffset.value.x += _cloudUniforms.shapeVelocity.value.x * dt;
+            _cloudUniforms.shapeOffset.value.y += _cloudUniforms.shapeVelocity.value.y * dt;
+            _cloudUniforms.shapeOffset.value.z += _cloudUniforms.shapeVelocity.value.z * dt;
+            _cloudUniforms.shapeDetailOffset.value.x +=
+                _cloudUniforms.shapeDetailVelocity.value.x * dt;
+            _cloudUniforms.shapeDetailOffset.value.y +=
+                _cloudUniforms.shapeDetailVelocity.value.y * dt;
+            _cloudUniforms.shapeDetailOffset.value.z +=
+                _cloudUniforms.shapeDetailVelocity.value.z * dt;
+        }
 
         _frameIndex++;
 
