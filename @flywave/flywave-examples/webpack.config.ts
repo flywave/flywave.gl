@@ -187,7 +187,18 @@ const browserConfig = merge(commonConfig, {
     //@ts-ignore
     devServer: {
         port: 8080,
-        headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Credentials": "true" }
+        headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Credentials": "true" },
+        proxy: [
+            {
+                context: ["/api"],
+                target: "http://60.16.5.72:45566",
+                changeOrigin: true,
+                secure: false,
+                headers: {
+                    Cookie: "FWAUSERID=s93tubaq4f8ruer6qrcztcbqso; FWAUTHTOKEN=somh5s4t7trztyw5dbrusq4ner; FWCSRF=gs6ek4wahf8c9jkxiw1eqy1gro"
+                }
+            }
+        ]
     },
     entry: webpackEntries,
     output: {

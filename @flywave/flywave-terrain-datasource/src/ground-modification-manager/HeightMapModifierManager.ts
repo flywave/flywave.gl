@@ -257,12 +257,36 @@ export class HeightMapModifierManager extends EventDispatcher<HeightMapModificat
             const texture = await createTextureFromSource(mod.source);
             if (mod.texture !== null) return;
             mod.texture = texture;
+            const range = this.calculateTextureHeightRange(texture);
+            mod.minHeight = range.min;
+            mod.maxHeight = range.max;
             this._version++;
             this.dispatchChangeEvent("update", [id]);
         } catch (e) {
             // eslint-disable-next-line no-console
             console.error(`Failed to create texture for modifier ${id}:`, e);
         }
+    }
+
+    private calculateTextureHeightRange(texture: DataTexture): { min: number; max: number } {
+        const image = texture.image as { data: Uint8Array; width: number; height: number };
+        const data = image.data;
+        const pixelCount = image.width * image.height;
+        let min = 0;
+        let max = 0;
+        for (let i = 0; i < pixelCount; i++) {
+            const idx = i * 4;
+            const alpha = data[idx + 3] / 255;
+            if (alpha < 0.01) continue;
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const modH = (r * 65536 + g * 256 + b) / 10 - 10000;
+            const effective = modH * alpha;
+            if (effective < min) min = effective;
+            if (effective > max) max = effective;
+        }
+        return { min, max };
     }
 
     private dispatchChangeEvent(
