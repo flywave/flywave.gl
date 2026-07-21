@@ -91,6 +91,13 @@ export class CloudUniforms {
     powderScale = uniform(0.8);
     powderExponent = uniform(150.0);
 
+    // Haze (analytical altitude-exponential fog)
+    hazeEnabled = uniform(1.0);
+    hazeDensityScale = uniform(3e-5);
+    hazeExponent = uniform(1e-3);
+    hazeScatteringCoefficient = uniform(0.9);
+    hazeAbsorptionCoefficient = uniform(0.5);
+
     // Cloud layers (packed vec4)
     minLayerHeights = uniform(new Vector4());
     maxLayerHeights = uniform(new Vector4());

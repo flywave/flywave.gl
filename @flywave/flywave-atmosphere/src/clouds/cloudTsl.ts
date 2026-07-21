@@ -741,6 +741,92 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
 };
 
 /* -------------------------------------------------------------------------- */
+/*  approximateHaze (analytical altitude-exponential fog)                     */
+/*  Based on https://iquilezles.org/articles/fog/                             */
+/* -------------------------------------------------------------------------- */
+
+export const createApproximateHaze = (u: CloudUniforms) => {
+    const remapClamped = Fn(([x, a, b]: [any, any, any]): any => {
+        return saturate(x.sub(a).div(b.sub(a)));
+    });
+
+    return Fn(
+        ([rayOrigin, rayDirection, maxRayDistance, cosTheta, shadowLength]: [
+            any,
+            any,
+            any,
+            any,
+            any
+        ]): any => {
+            // Coverage modulation: haze ramps in as cloud coverage goes from 0.2 to 0.4
+            const modulation = remapClamped(u.coverage, float(0.2), float(0.4));
+
+            // Exponential density at camera altitude
+            const heightTerm = u.cameraHeight.mul(modulation);
+            const earlyOut = heightTerm.lessThan(0);
+            const density = modulation
+                .mul(u.hazeDensityScale)
+                .mul(exp(u.cameraHeight.negate().mul(u.hazeExponent)));
+            const skipHaze = earlyOut.or(density.lessThan(1e-7));
+
+            // Blend surface normal between origin (ground) and horizon
+            const normalAtOrigin = rayOrigin.normalize();
+            const projOntoRay = dot(rayOrigin, rayDirection).mul(rayDirection);
+            const normalAtHorizon = rayOrigin.sub(projOntoRay).div(u.bottomRadius);
+            const blendAlpha = remapClamped(
+                dot(normalAtOrigin, normalAtHorizon),
+                float(0.9),
+                float(1.0)
+            );
+            const normal = mix(normalAtOrigin, normalAtHorizon, blendAlpha);
+
+            // Analytical optical depth (Iñigo Quílez exponential fog integral)
+            const angle = max(dot(normal, rayDirection), float(1e-5));
+            const exponent = angle.mul(u.hazeExponent);
+            const linearTerm = density.div(u.hazeExponent).div(angle);
+
+            const expTerm = float(1).sub(exp(maxRayDistance.mul(exponent).negate()));
+            const shadowExpTerm = float(1).sub(
+                exp(min(maxRayDistance, shadowLength).mul(exponent).negate())
+            );
+
+            const opticalDepth = expTerm.mul(linearTerm);
+            const shadowOpticalDepth = max(expTerm.sub(shadowExpTerm).mul(linearTerm), float(0));
+            const transmittance = saturate(float(1).sub(exp(opticalDepth.negate())));
+            const shadowTransmittance = saturate(float(1).sub(exp(shadowOpticalDepth.negate())));
+
+            // Inscattered light using atmosphere LUT irradiance at cloud layer
+            const samplePos = rayOrigin.add(rayDirection.mul(maxRayDistance.mul(0.5)));
+            const splitIrr = getSplitScalarIlluminance(
+                samplePos.mul(u.worldToUnit),
+                u.sunDirection
+            ).toConst();
+            const sunIrr = splitIrr.get("direct");
+            const skyIrr = splitIrr.get("indirect");
+
+            // Sun inscatter with phase function and shadow awareness
+            const phase = phaseFunction(cosTheta, float(0.2));
+            let inscatter = sunIrr.mul(phase).mul(shadowTransmittance);
+            // Sky inscatter (isotropic)
+            inscatter.addAssign(
+                skyIrr.mul(float(RECIPROCAL_PI4)).mul(u.skyLightScale).mul(transmittance)
+            );
+            // Single-scattering albedo
+            const albedo = u.hazeScatteringCoefficient.div(
+                u.hazeAbsorptionCoefficient.add(u.hazeScatteringCoefficient)
+            );
+            inscatter.mulAssign(albedo);
+
+            // Gate by hazeEnabled and early-out conditions
+            const enabled = u.hazeEnabled.greaterThan(0);
+            const shouldRender = enabled.and(skipHaze.not());
+            const result = vec4(inscatter, transmittance);
+            return shouldRender.select(result, vec4(0, 0, 0, 0));
+        }
+    );
+};
+
+/* -------------------------------------------------------------------------- */
 /*  marchClouds (primary raymarch)                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -975,6 +1061,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
     const sampleMedia = createSampleMedia(u);
     const marchOpticalDepth = createMarchOpticalDepth(u);
     const sampleShadowOpticalDepth = createSampleShadowOpticalDepth(u);
+    const approximateHaze = createApproximateHaze(u);
     // Return a factory that produces a fresh Fn per cascade (bakes cascadeIndex in closure)
     const shadowMarchFactory = (cascadeIndex: number = 0) =>
         createShadowMarchClouds(u, cascadeIndex);
@@ -1280,6 +1367,25 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
                 resultVelocity.assign(screenUV.sub(prevUv));
             });
+        });
+
+        // Apply haze (analytical fog) after cloud march and before debug overrides.
+        // Haze ray extends from camera near plane to the cloud top or scene distance.
+        If(u.hazeEnabled.greaterThan(0), () => {
+            const hazeOrigin = rayNear.mul(rayDirection).add(cameraPosition);
+            // Haze ray distance: up to scene distance, clamped to cloud layer top
+            const hazeRayDist = min(sceneDistance, rayFar);
+            const shadowLen = float(0);
+            const haze = approximateHaze(
+                hazeOrigin,
+                rayDirection,
+                hazeRayDist,
+                cosTheta,
+                shadowLen
+            ).toConst();
+            // Alpha-blend haze over existing color
+            resultColor.rgb.assign(resultColor.rgb.mix(haze.rgb, haze.a));
+            resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
         });
 
         // DEBUG OVERRIDE: modes 90+ overwrite final color after all processing
