@@ -3,6 +3,7 @@
 export * from "./ground-modification-manager";
 export * from "./TerrainDecoderWorker";
 export * from "./dem-terrain/DEMTerrainSource";
-export { setProjector, setProjectorCameraPos } from "./dem-terrain/DEMTileMeshMaterial";
+export { DEMTileMeshMaterial, defaultDEMTileMeshMaterial } from "./dem-terrain/DEMTileMeshMaterial";
+export * from "./projector-overlay";
 export * from "./quantized-terrain";
 export * from "./TerrainSource";

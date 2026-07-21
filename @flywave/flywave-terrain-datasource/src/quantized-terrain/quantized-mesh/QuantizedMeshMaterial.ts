@@ -78,13 +78,6 @@ const _imageryTransform = [
 
 const _imageryCount = uniform(0).onObjectUpdate(({ object }) => object.imageryCount);
 
-const _overlayTex = texture(emptyTransparentTex);
-_overlayTex.onObjectUpdate(({ object }) => object.overlayTexture ?? emptyTransparentTex);
-
-const _overlayTransform = uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-    ({ object }) => object.overlayTransform
-);
-
 const _waterMaskTex = texture(emptyTexture);
 _waterMaskTex.onObjectUpdate(({ object }) => object.waterMaskTexture ?? emptyTexture);
 
@@ -125,21 +118,6 @@ function buildNodes() {
                 .and(tUv.y.lessThanEqual(float(1.001)));
             const patchColor = texture(_imageryTex[i], tUv);
             color.assign(select(inRange.and(float(i).lessThan(_imageryCount)), patchColor, color));
-        }
-
-        {
-            const oUv = vec2(
-                mapUv.x.mul(_overlayTransform.x).add(_overlayTransform.z),
-                mapUv.y.mul(_overlayTransform.y).add(_overlayTransform.w)
-            );
-            const inRange = oUv.x
-                .greaterThanEqual(float(-0.00001))
-                .and(oUv.x.lessThanEqual(float(1.00001)))
-                .and(oUv.y.greaterThanEqual(float(-0.00001)))
-                .and(oUv.y.lessThanEqual(float(1.00001)));
-            const overlayColor = texture(_overlayTex, oUv);
-            const blended = tslMix(color, overlayColor, overlayColor.a);
-            color.assign(select(inRange.and(overlayColor.a.greaterThan(float(0))), blended, color));
         }
 
         return tslMix(color, vec4(1.0), float(0.1));

@@ -10,7 +10,6 @@ import { VisualStyle } from "@flywave/flywave-materials";
 import { MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 
-import { type GroundOverlayTextureResource } from "../../ground-overlay-provider";
 import { type WebTile } from "../../WebImageryTileProvider";
 import { StratumMaterial } from "./stratum-tile/StratumMaterial";
 import { type StratumTileData } from "./stratum-tile/StratumTileData";
@@ -128,29 +127,6 @@ export class QuantizedStratumMesh extends THREE.Mesh {
         });
         // Calculate and set UV transform for proper texture alignment
         material.imageryPatchs = webTilesUnifrom;
-    }
-
-    public setupOverlayerTexture(
-        groundOverlay: GroundOverlayTextureResource | null,
-        webTingScheme: TilingScheme,
-        quantizedTilingScheme: TilingScheme
-    ): void {
-        const material = this.material as StratumMaterial;
-        if (groundOverlay) {
-            const transform = this.computeTextureUvTransform(
-                groundOverlay.geoBox,
-                webTingScheme,
-                quantizedTilingScheme
-            );
-            if (transform) {
-                material.setupOverlayerTexture({
-                    transform,
-                    texture: groundOverlay.texture
-                });
-                return;
-            }
-        }
-        material.setupOverlayerTexture(null);
     }
 
     /**

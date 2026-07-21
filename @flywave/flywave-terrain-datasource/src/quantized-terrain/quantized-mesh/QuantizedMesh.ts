@@ -10,7 +10,6 @@ import {
 import { MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 
-import { type GroundOverlayTextureResource } from "../../ground-overlay-provider";
 import { type WebTile } from "../../WebImageryTileProvider";
 import { type QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
 import { ProjectionSwitchController } from "../../ProjectionSwitchController";
@@ -32,8 +31,6 @@ export class QuantizedMesh extends THREE.Mesh {
         new THREE.Vector4(1, 1, 0, 0)
     ];
     public imageryCount: number = 0;
-    public overlayTexture: THREE.Texture = emptyTransparentTex;
-    public overlayTransform: THREE.Vector4 = new THREE.Vector4(0, 0, 0, 0);
     public waterMaskTexture: THREE.Texture = emptyTexture;
     public waterMaskTranslationAndScale: THREE.Vector4 = new THREE.Vector4();
     public waterMaskNoisyTranslationAndScale: THREE.Vector4 = new THREE.Vector4();
@@ -99,27 +96,6 @@ export class QuantizedMesh extends THREE.Mesh {
             this.imageryTransforms[index].copy(item.transform);
         });
         this.imageryCount = webTilesUnifrom.length;
-    }
-
-    public setupOverlayerTexture(
-        groundOverlay: GroundOverlayTextureResource | null,
-        webTingScheme: TilingScheme,
-        quantizedTilingScheme: TilingScheme
-    ): void {
-        if (groundOverlay) {
-            const transform = this.computeTextureUvTransform(
-                groundOverlay.geoBox,
-                webTingScheme,
-                quantizedTilingScheme
-            );
-            if (transform) {
-                this.overlayTexture = groundOverlay.texture;
-                this.overlayTransform.copy(transform);
-                return;
-            }
-        }
-        this.overlayTexture = emptyTransparentTex;
-        this.overlayTransform.set(0, 0, 0, 0);
     }
 
     private setupWaterMask(waterResource: QuantizedTerrainMesh): void {

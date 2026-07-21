@@ -5,7 +5,6 @@ import { type MapView, type Tile, TextElement } from "@flywave/flywave-mapview";
 import { type BufferGeometry, type Material, Color, Object3D, Vector3 } from "three";
 
 import { HeightMapTerrainMesh } from "../dem-terrain/DEMTileTerrainMesh";
-import { type GroundOverlayTextureResource } from "../ground-overlay-provider";
 import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";
 import { type TerrainResourceTile } from "../TerrainSource";
 import { type WebTile } from "../WebImageryTileProvider";
@@ -110,10 +109,6 @@ class TileObjectMesh extends Object3D {
      */
     static makeMapViewQuantizedMesh(
         params: {
-            overlayImagery?: {
-                tileKey: TileKey;
-                resource: GroundOverlayTextureResource | null;
-            };
             quantizedData: QuantizedTerrainMesh;
             webTiles: WebTile[];
             webTingScheme: TilingScheme;
@@ -138,13 +133,6 @@ class TileObjectMesh extends Object3D {
             params.quantizedTilingScheme
         );
 
-        if (params.overlayImagery && params.overlayImagery.resource?.texture) {
-            mesh.setupOverlayerTexture(
-                params.overlayImagery.resource,
-                params.quantizedTilingScheme,
-                params.quantizedTilingScheme
-            );
-        }
         return new TileObjectMesh(
             mesh as Object3D & {
                 geometry: BufferGeometry;
@@ -164,10 +152,6 @@ class TileObjectMesh extends Object3D {
      * @returns A configured Object3D instance
      */
     static makeMapViewStratumMesh(params: {
-        overlayImagery?: {
-            tileKey: TileKey;
-            resource: GroundOverlayTextureResource | null;
-        };
         stratumData: QuantizedStratumResource;
         webTiles: WebTile[];
         webTingScheme: TilingScheme;
@@ -185,21 +169,6 @@ class TileObjectMesh extends Object3D {
             params.quantizedTilingScheme
         );
 
-        // mesh.setUpClipGeoBox(params.tile.geoBox, params.quantizedTilingScheme);
-
-        // let center = new Vector3().subVectors(
-        //     params.stratumData.tileData.center,
-        //     params.tile.center
-        // );
-        // mesh.position.copy(center).multiplyScalar(-1);
-
-        if (params.overlayImagery && params.overlayImagery.resource?.texture) {
-            mesh.setupOverlayerTexture(
-                params.overlayImagery.resource,
-                params.quantizedTilingScheme,
-                params.quantizedTilingScheme
-            );
-        }
         return mesh;
     }
 }
@@ -262,20 +231,11 @@ export class QuantizedStratumTileLoader extends TerrainTileLoader<
             .getPreciseResource(this.tile.tileKey);
         if (!stratumDataResource) return;
 
-        const overlayImagery = this.dataSource
-            .getGroundOverlayProvider()
-            .getBestAvailableResourceTile(this.tile.tileKey);
-
-        if (overlayImagery && overlayImagery.resource?.texture) {
-            overlayImagery.resource.texture.flipY = false;
-        }
-
         this.dataSource.getWebTileDataSources().forEach(webTiles => {
             const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
             if (!webTile) return;
 
             const mesh = TileObjectMesh.makeMapViewStratumMesh({
-                overlayImagery,
                 stratumData: stratumDataResource,
                 webTiles: webTile.resource.value,
                 tile: this.tile,
@@ -347,10 +307,6 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
             webTiles: WebTile[];
             webTingScheme: TilingScheme;
         },
-        overlayImagery?: {
-            tileKey: TileKey;
-            resource: GroundOverlayTextureResource | null;
-        },
         parent?: {
             tileKey: TileKey;
             resource: QuantizedTerrainMesh;
@@ -388,11 +344,6 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
             terrainMesh.setupImageryTexture(webTiles.webTiles, webTiles.webTingScheme);
         }
 
-        // Set up overlay imagery if available
-        if (overlayImagery && overlayImagery.resource?.texture) {
-            terrainMesh.setupOverlayerTexture(overlayImagery.resource, webTiles.webTingScheme);
-        }
-
         return terrainMesh;
     }
 
@@ -409,14 +360,6 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
         let quantizedDataResource = this.dataSource
             .dataProvider()
             .getBestAvailableResourceTile(this.tile.tileKey);
-
-        const overlayImagery = this.dataSource
-            .getGroundOverlayProvider()
-            .getBestAvailableResourceTile(this.tile.tileKey);
-
-        if (overlayImagery && overlayImagery.resource?.texture) {
-            overlayImagery.resource.texture.flipY = this.dataSource.isYAxisDown;
-        }
 
         let needDemDraw = false;
         if (
@@ -444,7 +387,6 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                             webTiles: webTile.resource.value,
                             webTingScheme: webTiles.tilingScheme
                         },
-                        overlayImagery,
                         quantizedDataResource
                     )
                 );
@@ -455,7 +397,6 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                         quantizedData: quantizedDataResource.resource,
                         webTiles: webTile.resource.value,
                         tile: this.tile,
-                        overlayImagery,
                         webTingScheme: webTiles.tilingScheme,
                         terrainSource: this.dataSource,
                         quantizedTilingScheme: this.dataSource.getTilingScheme()

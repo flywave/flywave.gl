@@ -43,15 +43,12 @@ import {
     HeightMapModifierManager,
     serializeHeightMapModifier
 } from "./ground-modification-manager";
-import {
-    type GroundOverlayProviderOptions,
-    GroundOverlayProvider
-} from "./ground-overlay-provider";
 import { type IResourceProvider } from "./ResourceProvider";
 import {
     ProjectionSwitchController,
     type ProjectionSwitchOptions
 } from "./ProjectionSwitchController";
+import { ProjectorOverlayManager } from "./projector-overlay";
 import { TileLRUCache, TileResourceManager } from "./TileResourceManager";
 import { type WebTileLoaderOptions, WebImageryTileProvider } from "./WebImageryTileProvider";
 import {
@@ -73,9 +70,6 @@ export interface TerrainSourceOptions<DataProviderType extends DataProvider = Da
 
     /** The data provider to use for downloading data (optional) */
     dataProvider?: DataProviderType;
-
-    /** The ground overlay provider to use for loading ground overlays */
-    groundOverlayOptions?: GroundOverlayProviderOptions;
 
     /** Options for projection switching animation */
     projectionSwitchOptions?: ProjectionSwitchOptions;
@@ -124,10 +118,13 @@ export interface ITerrainSource<ProviderType extends DataProvider = DataProvider
     /** Gets all web tile data sources used by this terrain source */
     getWebTileDataSources(): WebImageryTileProvider[];
 
-    /** Gets the ground modification manager */
-    getGroundOverlayProvider(): GroundOverlayProvider;
-
     getGroundModificationManager(): HeightMapModifierManager;
+
+    /**
+     * Gets the projector overlay manager that owns all ground-projected
+     * layers (images, canvas-drawn polylines, polygons, …) for this source.
+     */
+    getProjectorOverlayManager(): ProjectorOverlayManager;
 
     getElevationProvider(): ElevationProvider;
 
@@ -146,15 +143,15 @@ export class TerrainResourceTile extends Tile {
     _distanceFromCamera: number = Number.MAX_SAFE_INTEGER;
     private readonly _resourceManager: TileResourceManager = new TileResourceManager();
 
-    shouldDisposeObjectGeometry(){
+    shouldDisposeObjectGeometry() {
         return false;
     }
 
-    shouldDisposeObjectMaterial(){
+    shouldDisposeObjectMaterial() {
         return false;
     }
 
-    shouldDisposeTexture(){
+    shouldDisposeTexture() {
         return false;
     }
 
@@ -319,8 +316,8 @@ export abstract class TerrainSource<
     private readonly m_viewFrustum: ExtendedFrustum = new ExtendedFrustum();
     private readonly m_loadingQueue = new PriorityQueue<TileType>();
     private readonly m_tileCache = new TileLRUCache<TileType>(this);
-    private readonly m_groundOverlayProvider: GroundOverlayProvider;
     private readonly m_groundModificationManager: HeightMapModifierManager;
+    private readonly m_projectorOverlayManager: ProjectorOverlayManager;
     private m_tileBaseGeometryBuilder?: TileGeometryBuilder;
 
     private m_showDebugInfo: boolean = false;
@@ -353,15 +350,15 @@ export abstract class TerrainSource<
 
         this.m_loadingQueue.maxJobs = options.maxJobs || 20;
 
-        this.m_groundOverlayProvider = new GroundOverlayProvider(
-            options.groundOverlayOptions,
-            this
-        );
-
-        this.m_groundOverlayProvider.register(this);
-
         // Create ground modification manager
         this.m_groundModificationManager = new HeightMapModifierManager();
+
+        // Per-source projector overlay manager. Created eagerly so callers
+        // can add layers before connect(); the projection is bound lazily
+        // during connect() (via setProjection) once this.projection is
+        // available, at which point any pre-existing layers get their
+        // projector matrices computed.
+        this.m_projectorOverlayManager = new ProjectorOverlayManager();
 
         this.m_projectionSwitchController = new ProjectionSwitchController(
             this,
@@ -468,12 +465,12 @@ export abstract class TerrainSource<
         return this.m_materialProviders;
     }
 
-    getGroundOverlayProvider(): GroundOverlayProvider {
-        return this.m_groundOverlayProvider;
-    }
-
     getGroundModificationManager(): HeightMapModifierManager {
         return this.m_groundModificationManager;
+    }
+
+    getProjectorOverlayManager(): ProjectorOverlayManager {
+        return this.m_projectorOverlayManager;
     }
 
     /**
@@ -594,6 +591,11 @@ export abstract class TerrainSource<
         if (this.showDebugInfo) this.mapView.scene.add(this.m_debugObject);
         // Setup ground modification sync after decoder is connected
         await this.setupGroundModificationSync();
+        // Now that this.projection is available, bind it to the projector
+        // overlay manager (computes matrices for any layers added before
+        // connect) and wire per-frame RTE correction to the MapView.
+        this.m_projectorOverlayManager.setProjection(this.projection);
+        this.m_projectorOverlayManager.attachToMapView(this.mapView);
     }
 
     /**

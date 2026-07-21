@@ -78,24 +78,6 @@ class StratumMaterial extends VisualBatchMaterial {
         }
     }
 
-    public setupOverlayerTexture(overlayer?: {
-        transform: THREE.Vector4;
-        texture: THREE.Texture;
-    }): void {
-        const USE_OVERLAYER = this.defines.USE_OVERLAYER;
-        if (overlayer) {
-            this.uniforms.overlayerImagery.value = overlayer.texture;
-            this.uniforms.overlayerImageryTransform.value = overlayer.transform;
-            this.defines.USE_OVERLAYER = true;
-        } else {
-            this.uniforms.overlayerImagery.value = null;
-            this.uniforms.overlayerImageryTransform.value = null;
-            this.defines.USE_OVERLAYER = false;
-        }
-
-        this.needsUpdate = USE_OVERLAYER == this.defines.USE_OVERLAYER;
-    }
-
     /**
      * Sets the face visibility bitmask
      * @param {number} value - Bitmask representing visible face types
@@ -189,9 +171,6 @@ class StratumMaterial extends VisualBatchMaterial {
             imageryPatchCount: { value: 0 },
 
             clipPatchTransform: { value: new THREE.Vector4() },
-
-            overlayerImageryTransform: { value: new THREE.Vector4() },
-            overlayerImagery: { value: null },
 
             // Projection switching uniforms
             uCurrentGeometryProjectionType: { value: 0 },
@@ -313,10 +292,6 @@ class StratumMaterial extends VisualBatchMaterial {
             uniform sampler2D imageryPatchArray[${MAX_TEXTURE_PATCHES}];
             
 
-            #ifndef USE_OVERLAYER_MAP
-            uniform sampler2D overlayerImagery;
-            uniform vec4 overlayerImageryTransform;
-            #endif
             /**
              * Samples all active textures with UV transforms
              * @returns {vec4} Combined texture color
@@ -347,20 +322,6 @@ class StratumMaterial extends VisualBatchMaterial {
                         }
                     }
                 }
-                
-                #ifndef USE_OVERLAYER_MAP
-                    vec2 overLayertransformedUv = vec2(
-                        vUv.x * overlayerImageryTransform.x + overlayerImageryTransform.z,
-                        vUv.y * overlayerImageryTransform.y + overlayerImageryTransform.w
-                    ); 
-                    if (overLayertransformedUv.x >= 0.0 && overLayertransformedUv.x <= 1.0 && 
-                        overLayertransformedUv.y >= 0.0 && overLayertransformedUv.y <= 1.0) {
-                        vec4 overLayerColor = texture2D(overlayerImagery, overLayertransformedUv);
-                        if(overLayerColor.a > 0.0){
-                            color = mix(color, overLayerColor, overLayerColor.a);
-                        }
-                    }
-                #endif
                 return color;
             }
         `;
