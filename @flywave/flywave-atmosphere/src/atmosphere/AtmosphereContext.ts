@@ -38,6 +38,8 @@ export class AtmosphereContext extends AtmosphereContextBase {
             if (camera == null) {
                 return;
             }
+            // view → ECEF = matrixWorldToECEF × camera.matrixWorld
+            // (camera.matrixWorld transforms camera-local→world, i.e., view→world)
             value.multiplyMatrices(this.matrixWorldToECEF.value, camera.matrixWorld);
         });
 

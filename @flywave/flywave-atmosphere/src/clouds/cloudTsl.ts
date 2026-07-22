@@ -13,6 +13,7 @@ import {
     dot,
     exp,
     float,
+    floor,
     Fn,
     If,
     length,
@@ -23,6 +24,7 @@ import {
     mix,
     normalize,
     oneMinus,
+    positionGeometry,
     pow,
     saturate,
     screenUV,
@@ -32,6 +34,7 @@ import {
     struct,
     texture,
     texture3D,
+    textureLevel,
     vec2,
     vec3,
     vec4
@@ -704,7 +707,7 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         // Sun angular radius creates physical penumbra: at distance d from
         // cloud top, penumbra width ≈ d × tan(sunAngularRadius).
         // We approximate by scaling PCF radius with sun angular size.
-        const sunPenumbra = distanceToTop.mul(u.sunAngularRadius).mul(float(20));
+        const sunPenumbra = distanceToTop.mul(u.sunAngularRadius);
         const r = u.maxShadowFilterRadius.add(sunPenumbra);
         const texel = u.shadowTexelSize;
         const offsetPP = vec2(r, r).mul(texel);
@@ -1118,9 +1121,6 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const groundHit = step(float(0), groundDisc);
         const intersectsGround = muNeg.mul(groundHit);
 
-        // Ray-sphere intersection (matches reference for numerical precision)
-        // b' = 2*dot(d, o), c' = dot(o,o) - r², disc = b'² - 4*c', Q = sqrt(disc)
-        // intersection = (-b' ± Q) * 0.5
         const b = dot(rayDirection, cameraPosition).mul(2);
         const r2 = dot(cameraPosition, cameraPosition);
 
@@ -1138,36 +1138,20 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const nearMax = b.negate().sub(QMax).mul(0.5);
         const farMax = b.negate().add(QMax).mul(0.5);
 
-        const rayNear = float(-1).toVar();
-        const rayFar = float(-1).toVar();
+        const aboveMin = cameraHeight.greaterThanEqual(u.minHeight);
+        const aboveMax = cameraHeight.greaterThanEqual(u.maxHeight);
+        const noGround = intersectsGround.lessThanEqual(0.5);
 
-        If(cameraHeight.lessThan(u.minHeight), () => {
-            If(intersectsGround.greaterThan(0.5), () => {
-                rayNear.assign(float(-1));
-                rayFar.assign(float(-1));
-            }).Else(() => {
-                rayNear.assign(farMin);
-                rayFar.assign(min(farMax, u.maxRayDistance));
-            });
-        })
-            .ElseIf(cameraHeight.lessThan(u.maxHeight), () => {
-                If(intersectsGround.greaterThan(0.5), () => {
-                    rayNear.assign(float(0));
-                    rayFar.assign(nearMin);
-                }).Else(() => {
-                    rayNear.assign(float(0));
-                    rayFar.assign(farMax);
-                });
-            })
-            .Else(() => {
-                rayNear.assign(nearMax);
-                rayFar.assign(farMax);
-                If(intersectsGround.greaterThan(0.5), () => {
-                    rayFar.assign(nearMin);
-                });
-            });
+        const nearBelow = noGround.select(farMin, float(-1));
+        const farBelow = noGround.select(min(farMax, u.maxRayDistance), float(-1));
+        const farInside = noGround.select(farMax, nearMin);
+        const farAbove = noGround.select(farMax, nearMin);
 
-        rayFar.assign(min(rayFar, sceneDistance));
+        const rayNear = aboveMax.select(nearMax, aboveMin.select(float(0), nearBelow));
+        const rayFar = min(
+            aboveMax.select(farAbove, aboveMin.select(farInside, farBelow)),
+            sceneDistance
+        );
 
         const nearValid = step(float(0), rayNear);
         const farValid = step(float(0), rayFar);
@@ -1178,7 +1162,6 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const resultFrontDepth = float(-1).toVar();
         const resultVelocity = vec2(0, 0).toVar();
 
-        // ===== DEBUG MODES (cross-project comparison) =====
         // Modes 30-39 bypass normal march. Compute debug color unconditionally
         // (so sampleWeather runs outside If), then select between debug/march result.
         const debugMode = u.debugMode;
@@ -1189,126 +1172,16 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const debugUv31 = getCubeSphereUv(debugPos31);
         const debugWeather31 = sampleWeather(debugUv31, debugHeight31, float(0));
 
-        // Mode 38: weather texture at fixed UV (0.5, 0.5)
-        const m38Color = debugMode
-            .equal(38)
-            .select(texture(u.localWeatherTexture, vec2(0.5)), vec4(0, 0, 0, 0));
-        // Mode 12: rayDirection (geometry sanity)
-        const m12Color = debugMode
-            .equal(12)
-            .select(vec4(rayDirection.mul(0.5).add(0.5), 1), vec4(0, 0, 0, 0));
-        // Mode 11: cameraHeight / intersectsGround / mu
-        const m11Color = debugMode
-            .equal(11)
-            .select(
-                vec4(u.cameraHeight.div(2000), intersectsGround, mu.mul(0.5).add(0.5), 1),
-                vec4(0, 0, 0, 0)
-            );
-        // Mode 10: rayNear/rayFar/shouldMarch (matches ref: /200000)
-        const m10Color = debugMode
-            .equal(10)
-            .select(
-                vec4(rayNear.max(0).div(200000), rayFar.max(0).div(200000), shouldMarch, 1),
-                vec4(0, 0, 0, 0)
-            );
-        // Mode 37: weather texture at dynamic debugUv31
-        const m37Color = debugMode
-            .equal(37)
-            .select(
-                texture(
-                    u.localWeatherTexture,
-                    debugUv31.mul(u.localWeatherRepeat).add(u.localWeatherOffset)
-                ),
-                vec4(0, 0, 0, 0)
-            );
-        // Mode 31: sampleWeather density (vec4 = 4 cloud layers, matches ref)
-        const m31Density = debugWeather31.toVar();
-        const m31Color = debugMode
-            .equal(31)
-            .select(vec4(m31Density.x, m31Density.y, m31Density.z, m31Density.w), vec4(0, 0, 0, 0));
-        // Mode 33: sampleMedia output (scattering, extinction, skyGradient)
         const debugHeightFraction31 = remapClamped(
             vec4(debugHeight31),
             u.minLayerHeights,
             u.maxLayerHeights
         );
-        // Mode 32: heightFraction (input to sampleMedia)
-        const m32Color = debugMode
-            .equal(32)
-            .select(
-                vec4(
-                    debugHeightFraction31.x,
-                    debugHeightFraction31.y,
-                    debugHeightFraction31.z,
-                    debugHeightFraction31.w
-                ),
-                vec4(0, 0, 0, 0)
-            );
-
-        // Mode 96: debug raw height (before remap)
-        const m96Color = debugMode
-            .equal(96)
-            .select(vec4(debugHeight31, debugHeight31, debugHeight31, 1), vec4(0, 0, 0, 0));
-        // Mode 34: localWeather (after pow, before coverage mix)
+        const m31Density = debugWeather31.toVar();
         const debugWeatherUv34 = debugUv31.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
         const debugLocalWeather34 = exp(
             u.weatherExponents.mul(texture(u.localWeatherTexture, debugWeatherUv34, float(0)).log())
         );
-        const m34Color = debugMode.equal(34).select(debugLocalWeather34, vec4(0, 0, 0, 0));
-        // Mode 35: weatherUv frac part as R,G
-        const m35Color = debugMode
-            .equal(35)
-            .select(
-                vec4(
-                    debugWeatherUv34.x.sub(debugWeatherUv34.x.floor()),
-                    debugWeatherUv34.y.sub(debugWeatherUv34.y.floor()),
-                    0.5,
-                    1
-                ),
-                vec4(0, 0, 0, 0)
-            );
-        // Mode 28: debugPos31 normalized direction as RG
-        const debugPosLen = length(debugPos31);
-        const m28Color = debugMode
-            .equal(28)
-            .select(
-                vec4(
-                    debugPos31.x.div(debugPosLen).mul(0.5).add(0.5),
-                    debugPos31.y.div(debugPosLen).mul(0.5).add(0.5),
-                    0.5,
-                    1
-                ),
-                vec4(0, 0, 0, 0)
-            );
-        // Mode 29: cameraPosition normalized as RG (debug)
-        const camPosLen = length(cameraPosition);
-        const m29Color = debugMode
-            .equal(29)
-            .select(
-                vec4(
-                    cameraPosition.x.div(camPosLen).mul(0.5).add(0.5),
-                    cameraPosition.y.div(camPosLen).mul(0.5).add(0.5),
-                    0.5,
-                    1
-                ),
-                vec4(0, 0, 0, 0)
-            );
-        // Mode 27: cameraPosition.x / 1e7 as R (signed value in -1..1)
-        const m27Color = debugMode
-            .equal(27)
-            .select(
-                vec4(
-                    cameraPosition.x.div(1e7),
-                    cameraPosition.y.div(1e7),
-                    cameraPosition.z.div(1e7),
-                    1
-                ),
-                vec4(0, 0, 0, 0)
-            );
-        // Mode 26: bottomRadius uniform node direct dump
-        const m26Color = debugMode
-            .equal(26)
-            .select(vec4(u.bottomRadius.div(1e7), float(0), float(0), float(1)), vec4(0, 0, 0, 0));
         const debugMedia33 = sampleMedia(
             debugHeightFraction31,
             m31Density,
@@ -1318,43 +1191,33 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             float(0),
             cameraPosition
         );
-        const m33Color = debugMode.equal(33).select(vec4(debugMedia33.xyz, 1), vec4(0, 0, 0, 0));
-        // Mode 36: shape texture Z-axis slice at UV (0.5, 0.5, screenUV.x)
-        const m36Color = debugMode
-            .equal(36)
-            .select(
-                vec4(texture3D(u.shapeTexture, vec3(0.5, 0.5, screenUV.x)).r),
-                vec4(0, 0, 0, 0)
-            );
-        // Mode 39: debugUv31 as RG, debugHeight31/10000 as B (DEBUG DEBUG)
-        const m39Color = debugMode
-            .equal(39)
-            .select(vec4(debugUv31, debugHeight31.div(10000), 1), vec4(0, 0, 0, 0));
-        const debugColor = m10Color
-            .add(m11Color)
-            .add(m12Color)
-            .add(m26Color)
-            .add(m27Color)
-            .add(m28Color)
-            .add(m29Color)
-            .add(m32Color)
-            .add(m34Color)
-            .add(m35Color)
-            .add(m37Color)
-            .add(m38Color)
-            .add(m31Color)
-            .add(m33Color)
-            .add(m36Color)
-            .add(m39Color);
-        // If debug mode (30-39), override result. Compute is outside If,
-        // so sampleWeather runs unconditionally (no WGSL issues with bool math).
-        // debug bypass: when debugMode != 0, skip normal march
-        const isDebug = debugMode.greaterThan(0);
-        If(isDebug, () => {
-            resultColor.assign(debugColor);
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
+        const debugPosLen = length(debugPos31);
+        const camPosLen = length(cameraPosition);
+
+        // STEP 7: sampleMedia scattering * 100 (CONFIRMED MATCHING)
+        const sg_dist = rayNear.max(0).add(2000);
+        const sg_pos = cameraPosition.add(rayDirection.mul(sg_dist));
+        const sg_h = length(sg_pos).sub(u.bottomRadius);
+        const sg_uv = getCubeSphereUv(sg_pos);
+        const sg_hf = remapClamped(vec4(sg_h), u.minLayerHeights, u.maxLayerHeights);
+        const sg_density = sampleWeather(sg_uv, sg_h, float(0)).toVar();
+        const sg_media = sampleMedia(
+            sg_hf,
+            sg_density,
+            sg_pos,
+            sg_uv,
+            float(0),
+            float(0),
+            cameraPosition
+        );
+        resultColor.assign(vec4(vec3(sg_media.x.mul(100)), 1));
+        resultFrontDepth.assign(float(-1));
+        resultVelocity.assign(vec2(0));
+
+        return cloudRendererResultStruct(resultColor, resultFrontDepth, resultVelocity);
+
+        // Debug modes 10-39 are applied as FINAL overrides (after march + haze)
+        // to prevent normal pipeline from overwriting debug colors.
         If(debugMode.equal(0).and(shouldMarch.greaterThan(0.5)), () => {
             const origin = rayNear.mul(rayDirection).add(cameraPosition);
             const marchResult = marchClouds(
@@ -1433,12 +1296,149 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             resultFrontDepth.assign(float(-1));
             resultVelocity.assign(vec2(0));
         });
-        // Mode 12: rayDirection (geometry sanity check)
+
+        // Modes 10-39: moved here as FINAL overrides so march+haze don't clobber them
+        If(debugMode.equal(10), () => {
+            resultColor.assign(
+                vec4(rayNear.max(0).div(200000), rayFar.max(0).div(200000), shouldMarch, 1)
+            );
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(11), () => {
+            resultColor.assign(
+                vec4(u.cameraHeight.div(2000), intersectsGround, mu.mul(0.5).add(0.5), 1)
+            );
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
         If(debugMode.equal(12), () => {
             resultColor.assign(vec4(rayDirection.mul(0.5).add(0.5), 1));
             resultFrontDepth.assign(float(-1));
             resultVelocity.assign(vec2(0));
         });
+        If(debugMode.equal(23), () => {
+            resultColor.assign(vec4(positionGeometry, 1));
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(24), () => {
+            resultColor.assign(vec4(rayDirection, 1));
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(25), () => {
+            resultColor.assign(vec4(positionGeometry.mul(0.5).add(0.5), 1));
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(26), () => {
+            const ndc = screenUV.mul(2).sub(1);
+            resultColor.assign(vec4(ndc.x, ndc.y, float(0), float(1)));
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(27), () => {
+            resultColor.assign(
+                vec4(
+                    cameraPosition.x.div(1e7),
+                    cameraPosition.y.div(1e7),
+                    cameraPosition.z.div(1e7),
+                    1
+                )
+            );
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(28), () => {
+            resultColor.assign(
+                vec4(
+                    debugPos31.x.div(debugPosLen).mul(0.5).add(0.5),
+                    debugPos31.y.div(debugPosLen).mul(0.5).add(0.5),
+                    0.5,
+                    1
+                )
+            );
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(29), () => {
+            resultColor.assign(
+                vec4(
+                    cameraPosition.x.div(camPosLen).mul(0.5).add(0.5),
+                    cameraPosition.y.div(camPosLen).mul(0.5).add(0.5),
+                    0.5,
+                    1
+                )
+            );
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(31), () => {
+            resultColor.assign(vec4(m31Density.x, m31Density.y, m31Density.z, m31Density.w));
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(32), () => {
+            resultColor.assign(
+                vec4(
+                    debugHeightFraction31.x,
+                    debugHeightFraction31.y,
+                    debugHeightFraction31.z,
+                    debugHeightFraction31.w
+                )
+            );
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(33), () => {
+            resultColor.assign(vec4(debugMedia33.xyz, 1));
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(34), () => {
+            resultColor.assign(debugLocalWeather34);
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(35), () => {
+            resultColor.assign(
+                vec4(
+                    debugWeatherUv34.x.sub(debugWeatherUv34.x.floor()),
+                    debugWeatherUv34.y.sub(debugWeatherUv34.y.floor()),
+                    0.5,
+                    1
+                )
+            );
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(36), () => {
+            resultColor.assign(vec4(texture3D(u.shapeTexture, vec3(0.5, 0.5, screenUV.x)).r));
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(37), () => {
+            resultColor.assign(
+                texture(
+                    u.localWeatherTexture,
+                    debugUv31.mul(u.localWeatherRepeat).add(u.localWeatherOffset)
+                )
+            );
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(38), () => {
+            resultColor.assign(texture(u.localWeatherTexture, vec2(0.5)));
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+        If(debugMode.equal(39), () => {
+            resultColor.assign(vec4(debugUv31, debugHeight31.div(10000), 1));
+            resultFrontDepth.assign(float(-1));
+            resultVelocity.assign(vec2(0));
+        });
+
         // Mode 91: per-pixel sun irradiance via LUT (same fixed pos as ref)
         const debugPos91 = cameraPosition.add(rayDirection.mul(rayNear.max(0).add(2000)));
         const debugPosUnit91 = debugPos91.mul(u.worldToUnit);
@@ -1503,13 +1503,16 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
         // Mode 99: dump bsmCond components for primary march sample position
         If(debugMode.equal(99), () => {
-            const samplePos = cameraPosition.add(rayDirection.mul(rayNear.max(0).add(2000)));
-            const sampleHeight = length(samplePos).sub(u.bottomRadius);
-            const heightGate = step(sampleHeight, u.shadowTopHeight);
-            const cascadeGate = u.shadowCascadeCount.greaterThan(0).select(float(1), float(0));
-            resultColor.assign(
-                vec4(heightGate, cascadeGate, u.shadowCascadeCount.div(10), float(1))
-            );
+            // Use hardcoded ref rayDirection for entire image
+            const refDir = vec3(0.29150391, 0.57421875, -0.76464844);
+            const refDot = dot(refDir, cameraPosition).mul(2);
+            const refRMin = u.bottomRadius.add(u.minHeight);
+            const refR2 = dot(cameraPosition, cameraPosition);
+            const refCMin = refR2.sub(refRMin.mul(refRMin));
+            const refDisc = refDot.mul(refDot).sub(refCMin.mul(4));
+            const refQ = sqrt(refDisc.max(0));
+            const refFarMin = refDot.negate().add(refQ).mul(0.5);
+            resultColor.assign(vec4(refFarMin.div(1e5), refDot.div(1e5), float(0), float(1)));
             resultFrontDepth.assign(float(-1));
             resultVelocity.assign(vec2(0));
         });

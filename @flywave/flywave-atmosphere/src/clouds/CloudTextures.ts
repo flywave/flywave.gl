@@ -26,12 +26,12 @@ export class CloudTextures {
         const loader = new TextureLoader();
 
         this._localWeatherTexture = await loader.loadAsync(`${this._assetsPath}/local_weather.png`);
-        this._localWeatherTexture.minFilter = LinearMipMapLinearFilter;
+        this._localWeatherTexture.minFilter = LinearFilter;
         this._localWeatherTexture.magFilter = LinearFilter;
         this._localWeatherTexture.wrapS = RepeatWrapping;
         this._localWeatherTexture.wrapT = RepeatWrapping;
         this._localWeatherTexture.colorSpace = NoColorSpace;
-        this._localWeatherTexture.generateMipmaps = true;
+        this._localWeatherTexture.generateMipmaps = false;
         this._localWeatherTexture.needsUpdate = true;
 
         this._turbulenceTexture = await loader.loadAsync(`${this._assetsPath}/turbulence.png`);

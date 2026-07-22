@@ -12,7 +12,15 @@
  * Open: http://localhost:8080/cloud-render.html
  */
 
-import { PerspectiveCamera, OrthographicCamera, PlaneGeometry, Mesh, Scene, Vector3 } from "three";
+import {
+    PerspectiveCamera,
+    OrthographicCamera,
+    PlaneGeometry,
+    Mesh,
+    Scene,
+    Vector3,
+    NoToneMapping
+} from "three";
 import { WebGPURenderer, NodeMaterial } from "three/webgpu";
 import {
     Fn,
@@ -57,6 +65,7 @@ async function main() {
     const H = window.innerHeight;
     renderer.setPixelRatio(1);
     renderer.setSize(W, H);
+    renderer.toneMapping = NoToneMapping;
 
     // --- Camera setup ---
     // Match reference Clouds-Basic story exactly.
@@ -166,6 +175,12 @@ async function main() {
     (window as any).__cloudUniforms = getCloudUniforms();
     (window as any).__renderer = renderer;
 
+    // Apply high quality preset to enable shadow length (light shafts)
+    const cloudUniforms = (window as any).__cloudUniforms;
+    if (cloudUniforms) {
+        cloudUniforms.applyQualityPreset("high");
+    }
+
     const geo = new PlaneGeometry(2, 2);
     const mat = new NodeMaterial();
     mat.depthTest = false;
@@ -176,6 +191,7 @@ async function main() {
     // Matches ref cloudsEffect.frag: premultiplied alpha blend
     //   output.rgb = input.rgb * (1-a) + clouds.rgb
     //   output.a   = input.a   * (1-a) + clouds.a
+    // EXCLUSION TEST: display lowResRT directly (bypass resolve pass)
     const cloudsResolve = (cloudsNode as any).resolveNodeTex;
     mat.fragmentNode = Fn(() => {
         const r = texture(cloudsResolve, screenUV);
@@ -184,21 +200,114 @@ async function main() {
     })();
 
     // --- Pixel sampling for cross-project comparison ---
+    // Half-float (IEEE 754-2008 binary16) → float32 decoder
+    const halfToFloat = (h: number): number => {
+        const s = (h >> 15) & 1;
+        let e = (h >> 10) & 31;
+        let m = h & 1023;
+        if (e === 0) {
+            // subnormal: normalize it
+            if (m !== 0) {
+                while (!(m & 1024)) {
+                    m <<= 1;
+                    e--;
+                }
+                m &= 1023;
+            }
+            e = 127 - 15;
+        } else if (e === 31) {
+            // inf/nan
+            e = 255;
+        } else {
+            e += 127 - 15;
+        }
+        const bits = (s << 31) | (e << 23) | (m << 13);
+        return new Float32Array(new Uint32Array([bits]).buffer)[0];
+    };
+    // Decode a Uint16Array (half-float RGBA pixels, row-stride `stridePixels`) to Float32Array (packed RGBA)
+    const decodeHalfFloatPixels = (
+        buf: Uint16Array,
+        w: number,
+        h: number,
+        stridePixels: number
+    ): Float32Array => {
+        const out = new Float32Array(w * h * 4);
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const si = (y * stridePixels + x) * 4;
+                const di = (y * w + x) * 4;
+                out[di] = halfToFloat(buf[si]);
+                out[di + 1] = halfToFloat(buf[si + 1]);
+                out[di + 2] = halfToFloat(buf[si + 2]);
+                out[di + 3] = halfToFloat(buf[si + 3]);
+            }
+        }
+        return out;
+    };
     const sampleRT = () => {
         if (window.__cloudsNode) {
             const renderer = window.__renderer;
             const cloudsNode = window.__cloudsNode as any;
             const W = cloudsNode.lowResRT.width;
             const H = cloudsNode.lowResRT.height;
+            const bytesPerPixel = 8; // RGBA16Float
+            const stridePixels = (Math.ceil((W * bytesPerPixel) / 256) * 256) / bytesPerPixel;
             (renderer as any)
                 .readRenderTargetPixelsAsync(cloudsNode.lowResRT, 0, 0, W, H, 0)
-                .then((buf: any) => {
-                    (window as any).__cloudsDebugSnapshot = { w: W, h: H, buf };
+                .then((buf: Uint16Array) => {
+                    const floatBuf = decodeHalfFloatPixels(buf, W, H, stridePixels);
+                    (window as any).__cloudsDebugSnapshot = {
+                        w: W,
+                        h: H,
+                        buf,
+                        stride: stridePixels,
+                        floatBuf
+                    };
                 })
                 .catch((e: Error) => {
                     (window as any).__cloudsDebugError = e.message;
                 });
         }
+    };
+    // Console helper: read pixel (x,y) float values from latest snapshot
+    (window as any).__cloudsDebugPixel = (x: number, y: number) => {
+        const s = (window as any).__cloudsDebugSnapshot;
+        if (!s) return "No snapshot. Wait for auto-sample (500ms).";
+        const { w, h, floatBuf, stride } = s;
+        if (x < 0 || x >= w || y < 0 || y >= h)
+            return `Coord (${x},${y}) out of bounds [0-${w - 1}, 0-${h - 1}]`;
+        const i = (y * w + x) * 4;
+        return `(${floatBuf[i].toFixed(6)}, ${floatBuf[i + 1].toFixed(6)}, ${floatBuf[
+            i + 2
+        ].toFixed(6)}, ${floatBuf[i + 3].toFixed(6)})`;
+    };
+    // Console helper: dump a grid of pixels (e.g. 5x5 around center)
+    (window as any).__cloudsDebugGrid = (cx?: number, cy?: number, halfSize = 2) => {
+        const s = (window as any).__cloudsDebugSnapshot;
+        if (!s) return "No snapshot.";
+        const { w, h, floatBuf } = s;
+        cx = cx ?? Math.floor(w / 2);
+        cy = cy ?? Math.floor(h / 2);
+        let out = `Pixel grid centered at (${cx},${cy}):\n`;
+        for (let dy = -halfSize; dy <= halfSize; dy++) {
+            const row: string[] = [];
+            for (let dx = -halfSize; dx <= halfSize; dx++) {
+                const px = cx + dx,
+                    py = cy + dy;
+                if (px < 0 || px >= w || py < 0 || py >= h) {
+                    row.push("------");
+                    continue;
+                }
+                const i = (py * w + px) * 4;
+                row.push(
+                    `(${floatBuf[i].toFixed(4)},${floatBuf[i + 1].toFixed(4)},${floatBuf[
+                        i + 2
+                    ].toFixed(4)},${floatBuf[i + 3].toFixed(4)})`
+                );
+            }
+            out += `y=${cy + dy}: ${row.join(" | ")}\n`;
+        }
+        return out;
     };
 
     // ===== Standalone debug shader (Mode 12: rayDir; Mode 11: camHt/ground/mu; Mode 30: globeUv) =====
@@ -291,6 +400,20 @@ async function main() {
         mat.needsUpdate = true;
     };
     (window as any).__applyDebugMode = applyDebugMode;
+
+    // Console helper: set cloud debug mode (affects CloudRenderNode shader output)
+    (window as any).__cloudsDebugMode = (mode: number) => {
+        const u = getCloudUniforms();
+        if (u) u.debugMode.value = mode;
+        applyDebugMode(mode);
+        setTimeout(() => {
+            renderer.render(scene, quadCamera);
+            setTimeout(() => {
+                renderer.render(scene, quadCamera);
+                setTimeout(() => sampleRT(), 50);
+            }, 50);
+        }, 50);
+    };
 
     const mesh = new Mesh(geo, mat);
     mesh.frustumCulled = false;

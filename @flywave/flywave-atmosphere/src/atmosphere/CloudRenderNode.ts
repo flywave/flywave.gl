@@ -5,10 +5,13 @@ import {
     dot,
     Fn,
     float,
+    floor,
     frameId,
+    If,
     ivec2,
     max,
     mix,
+    mrt,
     positionGeometry,
     screenCoordinate,
     screenUV,
@@ -19,7 +22,8 @@ import {
     vec2,
     vec3,
     vec4,
-    reference
+    reference,
+    Return
 } from "three/tsl";
 import {
     type NodeBuilder,
@@ -28,6 +32,7 @@ import {
     type TextureNode,
     HalfFloatType,
     LinearFilter,
+    NearestFilter,
     NodeMaterial,
     NodeUpdateType,
     QuadMesh,
@@ -60,9 +65,11 @@ let _cloudRenderReady = false;
 let _renderClouds: ((a: any, b: any, c: any) => any) | null = null;
 let _shadowMarch: ((cascadeIndex?: number) => any) | null = null;
 let _onReadyCallback: (() => void) | null = null;
+const _cloudResolveCountNode = uniform(0);
+const _cloudFrameNode = uniform(0);
 
 const SHADOW_CASCADE_COUNT = 3;
-const SHADOW_MAX_FAR = 60000;
+const SHADOW_MAX_FAR = 100000;
 // Per-cascade resolution: near cascades need detail, far ones don't.
 // This reduces total BSM pixels by ~55% vs uniform 1024.
 const SHADOW_MAP_SIZES = [1024, 512, 256];
@@ -221,6 +228,8 @@ let _prevFrameTime = 0;
 const prevViewProjectionUniform = new Uniform(new Matrix4());
 let hasPrevViewProjection = false;
 let _nextPrevViewProjection: Matrix4 | null = null;
+// Previous frame's jittered view-projection (includes Halton jitter shift)
+let _prevJitteredVP: Matrix4 | null = null;
 
 export class CloudRenderNode extends TempNode {
     static override get type(): string {
@@ -235,25 +244,27 @@ export class CloudRenderNode extends TempNode {
     private lowResRT: RenderTarget;
     private historyRT: RenderTarget;
     private resolveRT: RenderTarget;
-    private velocityRT: RenderTarget;
     private shadowRTs: RenderTarget[] = [];
     private shadowHistoryRTs: RenderTarget[] = [];
     private shadowResolvedRTs: RenderTarget[] = [];
 
     private readonly lowResMaterial = new NodeMaterial();
     private readonly resolveMaterial = new NodeMaterial();
-    private readonly velocityMaterial = new NodeMaterial();
     private readonly blitMaterial = new NodeMaterial();
     private readonly shadowMaterials: NodeMaterial[] = [];
     private readonly shadowResolveMaterials: NodeMaterial[] = [];
     private readonly shadowBlitMaterials: NodeMaterial[] = [];
+    private readonly shadowRawBlitMaterials: NodeMaterial[] = [];
+
+    private _resolveFrameCount = 0;
+    private _cloudResolveFrameCount = 0;
 
     private readonly mesh = new QuadMesh();
     private _rendererState?: RendererUtils.RendererState;
 
     private readonly lowResNode: TextureNode;
+    private readonly velocityLowResNode: TextureNode;
     private readonly historyNode: TextureNode;
-    private readonly velocityNode: TextureNode;
     private readonly resolveNodeTex: TextureNode;
     private readonly shadowNodes: TextureNode[] = [];
     private readonly shadowHistoryNodes: TextureNode[] = [];
@@ -301,27 +312,18 @@ export class CloudRenderNode extends TempNode {
         this.mesh.name = "Clouds";
 
         // Create render targets
-        this.lowResRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
-        this.lowResRT.texture.name = "Clouds [LowRes]";
-        this.lowResRT.texture.minFilter = LinearFilter;
-        this.lowResRT.texture.magFilter = LinearFilter;
-
-        this.historyRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
-        this.historyRT.texture.name = "Clouds [History]";
-        this.historyRT.texture.minFilter = LinearFilter;
-        this.historyRT.texture.magFilter = LinearFilter;
-
-        this.resolveRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
-        this.resolveRT.texture.name = "Clouds [Resolve]";
-        this.resolveRT.texture.minFilter = LinearFilter;
-        this.resolveRT.texture.magFilter = LinearFilter;
-
-        // Velocity RT (1/4 res, same as lowRes) stores per-pixel velocity in RG.
-        // Velocity = screenUV - prevUv (reprojected from depth-buffer-derived world pos).
-        this.velocityRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
-        this.velocityRT.texture.name = "Clouds [Velocity]";
-        this.velocityRT.texture.minFilter = LinearFilter;
-        this.velocityRT.texture.magFilter = LinearFilter;
+        // LowRes RT uses MRT: [0]=color(RGBA), [1]=velocity(RG padded to RGBA)
+        this.lowResRT = new RenderTarget(1, 1, {
+            depthBuffer: false,
+            type: HalfFloatType,
+            count: 2
+        });
+        this.lowResRT.textures[0].name = "color";
+        this.lowResRT.textures[0].minFilter = LinearFilter;
+        this.lowResRT.textures[0].magFilter = LinearFilter;
+        this.lowResRT.textures[1].name = "velocity";
+        this.lowResRT.textures[1].minFilter = LinearFilter;
+        this.lowResRT.textures[1].magFilter = LinearFilter;
 
         this.historyRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
         this.historyRT.texture.name = "Clouds [History]";
@@ -373,10 +375,14 @@ export class CloudRenderNode extends TempNode {
             const blitMat = new NodeMaterial();
             blitMat.name = `Clouds [Shadow Blit ${i}]`;
             this.shadowBlitMaterials.push(blitMat);
+
+            const rawBlitMat = new NodeMaterial();
+            rawBlitMat.name = `Clouds [Shadow Raw Blit ${i}]`;
+            this.shadowRawBlitMaterials.push(rawBlitMat);
         }
 
-        this.lowResNode = outputTexture(this, this.lowResRT.texture);
-        this.velocityNode = outputTexture(this, this.velocityRT.texture);
+        this.lowResNode = outputTexture(this, this.lowResRT.textures[0]);
+        this.velocityLowResNode = outputTexture(this, this.lowResRT.textures[1]);
         this.historyNode = outputTexture(this, this.historyRT.texture);
         this.resolveNodeTex = outputTexture(this, this.resolveRT.texture);
 
@@ -415,13 +421,13 @@ export class CloudRenderNode extends TempNode {
         const fullSize = renderer.getDrawingBufferSize(sizeScratch);
         const fullWidth = fullSize.x;
         const fullHeight = fullSize.y;
-        const lowWidth = Math.max(Math.ceil(fullWidth / 4), 1);
-        const lowHeight = Math.max(Math.ceil(fullHeight / 4), 1);
+        // Full resolution (matched reference temporalUpscale=false)
+        const lowWidth = Math.max(Math.ceil(fullWidth), 1);
+        const lowHeight = Math.max(Math.ceil(fullHeight), 1);
 
         this.lowResRT.setSize(lowWidth, lowHeight);
         this.historyRT.setSize(fullWidth, fullHeight);
         this.resolveRT.setSize(fullWidth, fullHeight);
-        this.velocityRT.setSize(fullWidth, fullHeight);
 
         // getMipLevel() uses resolution uniform for screen-space derivative
         // magnitude. It runs inside the low-res pass, so the resolution must
@@ -462,19 +468,41 @@ export class CloudRenderNode extends TempNode {
                         this.mesh.render(renderer);
                     }
 
-                    // BSM temporal resolve: blend current BSM with history
-                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                        renderer.setRenderTarget(this.shadowResolvedRTs[i]);
-                        this.mesh.material = this.shadowResolveMaterials[i];
-                        this.mesh.render(renderer);
+                    // Init prev matrices = current on first frame (no reprojection velocity)
+                    if (this._resolveFrameCount === 0) {
+                        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                            this.prevShadowMatrices[i].copy(_cloudUniforms.shadowMatrices[i].value);
+                        }
                     }
 
-                    // Copy resolved → history for next frame (blit pass)
-                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                        renderer.setRenderTarget(this.shadowHistoryRTs[i]);
-                        this.mesh.material = this.shadowBlitMaterials[i];
-                        this.mesh.render(renderer);
+                    // BSM temporal resolve: blend current BSM with history
+                    if (this._resolveFrameCount < 3) {
+                        // Bootstrap: copy raw BSM to resolved + history
+                        // Avoids garbage history contaminating the temporal resolve loop
+                        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                            renderer.setRenderTarget(this.shadowResolvedRTs[i]);
+                            this.mesh.material = this.shadowRawBlitMaterials[i];
+                            this.mesh.render(renderer);
+                        }
+                        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                            renderer.setRenderTarget(this.shadowHistoryRTs[i]);
+                            this.mesh.material = this.shadowRawBlitMaterials[i];
+                            this.mesh.render(renderer);
+                        }
+                    } else {
+                        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                            renderer.setRenderTarget(this.shadowResolvedRTs[i]);
+                            this.mesh.material = this.shadowResolveMaterials[i];
+                            this.mesh.render(renderer);
+                        }
+                        // Copy resolved → history for next frame (blit pass)
+                        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                            renderer.setRenderTarget(this.shadowHistoryRTs[i]);
+                            this.mesh.material = this.shadowBlitMaterials[i];
+                            this.mesh.render(renderer);
+                        }
                     }
+                    this._resolveFrameCount++;
 
                     // Save shadow matrices for next frame's reprojection
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
@@ -488,13 +516,44 @@ export class CloudRenderNode extends TempNode {
         // (getAtmosphereContext doesn't work with renderer arg, so we rely on
         // updateCloudUniforms having been called first)
 
-        // Temporal jitter disabled (was breaking rendering)
-        const jitterIndex = _frameIndex % 16;
+        // Temporal jitter for super-resolution upscale (disabled during pixel-comparison
+        // testing; enable once rendering matches reference).
+        const _enableJitter = (globalThis as any).__enableCloudJitter;
+        let jitterCamera: any = null,
+            savedProj: any = null,
+            savedProjInv: any = null;
+        if (_enableJitter) {
+            const jitterAtmoCtx = getAtmosphereContext(renderer);
+            jitterCamera = jitterAtmoCtx.camera;
+            savedProj = jitterCamera.projectionMatrix.clone();
+            savedProjInv = jitterCamera.projectionMatrixInverse.clone();
+            const jx = (haltonBase2[_frameIndex % 16] - 0.5) * (2 / lowWidth);
+            const jy = (haltonBase3[_frameIndex % 16] - 0.5) * (2 / lowHeight);
+            const jitterMat = new Matrix4().makeTranslation(jx, jy, 0);
+            jitterCamera.projectionMatrix.multiply(jitterMat);
+            jitterCamera.projectionMatrixInverse.copy(jitterCamera.projectionMatrix).invert();
 
-        // Pass 1: Render clouds at 1/4 resolution with jittered projection
+            if (_prevJitteredVP) {
+                prevViewProjectionUniform.value.copy(_prevJitteredVP);
+                _cloudUniforms.prevViewProjection.value.copy(_prevJitteredVP);
+                hasPrevViewProjection = true;
+            }
+        }
+
+        // Pass 1: Render clouds at 1/4 resolution for temporal upscale
         renderer.setRenderTarget(this.lowResRT);
         this.mesh.material = this.lowResMaterial;
         this.mesh.render(renderer);
+
+        if (_enableJitter) {
+            _prevJitteredVP = new Matrix4().multiplyMatrices(
+                jitterCamera.projectionMatrix,
+                jitterCamera.matrixWorldInverse
+            );
+            jitterCamera.projectionMatrix.copy(savedProj);
+            jitterCamera.projectionMatrixInverse.copy(savedProjInv);
+            _nextPrevViewProjection = null;
+        }
 
         // DEBUG: snapshot low-res RT for cross-project pixel comparison, throttled.
         if (
@@ -520,17 +579,6 @@ export class CloudRenderNode extends TempNode {
                     })
                     .catch((e: Error) => {
                         (globalThis as any).__cloudsDebugError = e.message;
-                    });
-                // Also snapshot velocity RT
-                const Vw = this.velocityRT.width,
-                    Vh = this.velocityRT.height;
-                (renderer as any)
-                    .readRenderTargetPixelsAsync(this.velocityRT, 0, 0, Vw, Vh, 0)
-                    .then((buf: any) => {
-                        (globalThis as any).__cloudsVelocitySnapshot = { w: Vw, h: Vh, buf };
-                    })
-                    .catch((e: Error) => {
-                        (globalThis as any).__cloudsVelocityError = e.message;
                     });
             } catch (e) {
                 (globalThis as any).__cloudsDebugError = (e as Error).message + " (sync)";
@@ -563,10 +611,10 @@ export class CloudRenderNode extends TempNode {
             } catch (e) {}
         }
 
-        // Pass 1b: Render velocity at full resolution (depth-based reprojection)
-        renderer.setRenderTarget(this.velocityRT);
-        this.mesh.material = this.velocityMaterial;
-        this.mesh.render(renderer);
+        // Update resolve frame count for bootstrapping (before resolve pass)
+        _cloudResolveCountNode.value = this._cloudResolveFrameCount;
+        _cloudFrameNode.value = this._cloudResolveFrameCount % 16;
+        this._cloudResolveFrameCount++;
 
         // Pass 2: Resolve (TAA + Catmull-Rom upsample) at full resolution
         renderer.setRenderTarget(this.resolveRT);
@@ -601,24 +649,25 @@ export class CloudRenderNode extends TempNode {
         this.mesh.render(renderer);
 
         // Accumulate wind velocity into texture offsets (Euler integration)
-        const now = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
-        const dt = _prevFrameTime > 0 ? Math.min(now - _prevFrameTime, 0.1) : 0;
-        _prevFrameTime = now;
-        if (dt > 0) {
-            _cloudUniforms.localWeatherOffset.value.x +=
-                _cloudUniforms.localWeatherVelocity.value.x * dt;
-            _cloudUniforms.localWeatherOffset.value.y +=
-                _cloudUniforms.localWeatherVelocity.value.y * dt;
-            _cloudUniforms.shapeOffset.value.x += _cloudUniforms.shapeVelocity.value.x * dt;
-            _cloudUniforms.shapeOffset.value.y += _cloudUniforms.shapeVelocity.value.y * dt;
-            _cloudUniforms.shapeOffset.value.z += _cloudUniforms.shapeVelocity.value.z * dt;
-            _cloudUniforms.shapeDetailOffset.value.x +=
-                _cloudUniforms.shapeDetailVelocity.value.x * dt;
-            _cloudUniforms.shapeDetailOffset.value.y +=
-                _cloudUniforms.shapeDetailVelocity.value.y * dt;
-            _cloudUniforms.shapeDetailOffset.value.z +=
-                _cloudUniforms.shapeDetailVelocity.value.z * dt;
-        }
+        // DISABLED FOR EXCLUSION TEST:
+        // const now = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
+        // const dt = _prevFrameTime > 0 ? Math.min(now - _prevFrameTime, 0.1) : 0;
+        // _prevFrameTime = now;
+        // if (dt > 0) {
+        //     _cloudUniforms.localWeatherOffset.value.x +=
+        //         _cloudUniforms.localWeatherVelocity.value.x * dt;
+        //     _cloudUniforms.localWeatherOffset.value.y +=
+        //         _cloudUniforms.localWeatherVelocity.value.y * dt;
+        //     _cloudUniforms.shapeOffset.value.x += _cloudUniforms.shapeVelocity.value.x * dt;
+        //     _cloudUniforms.shapeOffset.value.y += _cloudUniforms.shapeVelocity.value.y * dt;
+        //     _cloudUniforms.shapeOffset.value.z += _cloudUniforms.shapeVelocity.value.z * dt;
+        //     _cloudUniforms.shapeDetailOffset.value.x +=
+        //         _cloudUniforms.shapeDetailVelocity.value.x * dt;
+        //     _cloudUniforms.shapeDetailOffset.value.y +=
+        //         _cloudUniforms.shapeDetailVelocity.value.y * dt;
+        //     _cloudUniforms.shapeDetailOffset.value.z +=
+        //         _cloudUniforms.shapeDetailVelocity.value.z * dt;
+        // }
 
         _frameIndex++;
 
@@ -653,11 +702,37 @@ export class CloudRenderNode extends TempNode {
             this._fragmentNodesBuilt = true;
         }
 
-        // Output: blend resolved clouds over the color node
-        const resolvedClouds = texture(this.resolveNodeTex, screenUV);
-        const result = mix(this._colorNode.rgb, resolvedClouds.rgb, resolvedClouds.a);
+        const debugMode = _cloudUniforms.debugMode;
 
-        return vec4(result, 1);
+        const debugOutput = Fn(() => {
+            // Default: blend resolved clouds over the color node
+            const resolvedClouds = texture(this.resolveNodeTex, screenUV);
+            const result = mix(this._colorNode.rgb, resolvedClouds.rgb, resolvedClouds.a);
+
+            // Mode 100-102: show BSM cascade resolved buffer (maxOD channel b)
+            If(debugMode.equal(100), () => {
+                const shadow = texture(this.shadowNodes[0], screenUV);
+                Return(vec4(shadow.bbb, 1));
+            });
+            If(debugMode.equal(101), () => {
+                const shadow = texture(this.shadowNodes[1], screenUV);
+                Return(vec4(shadow.bbb, 1));
+            });
+            If(debugMode.equal(102), () => {
+                const shadow = texture(this.shadowNodes[2], screenUV);
+                Return(vec4(shadow.bbb, 1));
+            });
+
+            // Mode 103: show velocity buffer (dx,dy mapped to color)
+            If(debugMode.equal(103), () => {
+                const vel = texture(this.velocityLowResNode, screenUV);
+                Return(vec4(vel.xy.mul(10).add(0.5), 0, 1));
+            });
+
+            Return(result);
+        })();
+
+        return debugOutput;
     }
 
     private _buildFragmentNodes(host: NodeBuilder | Renderer): void {
@@ -716,261 +791,20 @@ export class CloudRenderNode extends TempNode {
             _cloudUniforms.worldToUnit.value = worldToUnit;
 
             const clouds = _renderClouds(camPosCorrected, rayDirection, sceneDistance);
-            this.lowResMaterial.fragmentNode = clouds.get("color");
+            // MRT output: color (target[0]) + velocity (target[1])
+            this.lowResMaterial.fragmentNode = mrt({
+                color: clouds.get("color"),
+                velocity: vec4(clouds.get("velocity"), 0, 0)
+            });
             this.lowResMaterial.needsUpdate = true;
         }
 
-        // Setup velocity pass: reproject pixel world position from a representative
-        // cloud-layer depth using GPU-side matrices (avoids CPU matrix composition
-        // bugs). Chain: ECEF-corrected → ECEF (−altCorr) → world (matrixECEFToWorld)
-        // → clip (prevViewProjection).
-        {
-            const velocityNode = Fn(() => {
-                const fullUv = screenUV;
-
-                const geo = positionGeometry;
-                const positionView = inverseProjectionMatrix(camera).mul(vec4(geo, 1)).xyz;
-                const rayDir = matrixViewToECEF.mul(vec4(positionView, float(0))).xyz.normalize();
-                const camPos = cameraPositionECEF.add(altitudeCorrectionECEF);
-
-                // Ray-sphere intersection with cloud-layer midpoint sphere
-                const midHeight = _cloudUniforms.minHeight
-                    .add(_cloudUniforms.maxHeight)
-                    .mul(float(0.5));
-                const midR = _cloudUniforms.bottomRadius.add(midHeight);
-                const b = dot(rayDir, camPos).mul(2);
-                const c = dot(camPos, camPos).sub(midR.mul(midR));
-                const disc = b.mul(b).sub(c.mul(4));
-                const tNear = b
-                    .negate()
-                    .sub(sqrt(disc.max(0)))
-                    .mul(0.5);
-
-                // hitPos is in altitudeCorrection-adjusted ECEF → subtract altCorr → ECEF
-                const hitPos = camPos.add(rayDir.mul(tNear.max(0)));
-                const ecefPos = hitPos.sub(altitudeCorrectionECEF);
-                // ECEF → world via matrixECEFToWorld (GPU uniform)
-                const worldPos = matrixECEFToWorld.mul(vec4(ecefPos, 1));
-                // world → clip via prevViewProjection
-                const prevClip = _cloudUniforms.prevViewProjection.mul(worldPos);
-                const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
-                const velocity = fullUv.sub(prevUv);
-
-                const hasHit = disc.greaterThan(0);
-                return hasHit.select(vec4(velocity, 0, 1), vec4(0, 0, 0, 1));
-            })();
-
-            this.velocityMaterial.fragmentNode = velocityNode;
-            this.velocityMaterial.needsUpdate = true;
-        }
-
-        // Setup resolve pass: Catmull-Rom upscale + temporal blend
+        // Setup resolve pass: Catmull-Rom upscale + temporal blend.
+        // Velocity is sampled from the MRT second output (1/4 res, computed per-pixel
+        // in the cloud shader from actual front depth, matching the reference).
         {
             const resolveNode = Fn(() => {
-                const fullUv = screenUV;
-
-                // Catmull-Rom 9-tap upscale (from MJP's implementation)
-                const texSize = vec2(float(this.lowResRT.width), float(this.lowResRT.height));
-                const samplePos = fullUv.mul(texSize);
-                const texPos1 = samplePos.sub(0.5).floor().add(0.5);
-                const f = samplePos.sub(texPos1);
-
-                // Catmull-Rom weights (expanded spline)
-                const w0 = f.mul(f.mul(f.mul(-0.5).add(1)).sub(0.5));
-                const w1 = float(1).add(f.mul(f).mul(f.mul(1.5).sub(2.5)));
-                const w2 = f.mul(f.mul(f.mul(-1.5).add(2)).add(0.5));
-                const w3 = f.mul(f).mul(f.mul(0.5).sub(0.5));
-
-                const w12 = w1.add(w2);
-                const offset12 = w2.div(w12);
-
-                const texPos0 = texPos1.sub(1);
-                const texPos3 = texPos1.add(2);
-                const texPos12 = texPos1.add(offset12);
-                const invTexSize = float(1).div(texSize);
-
-                const currentColor = vec4(0).toVar();
-                // Row 0 (y = texPos0.y)
-                currentColor.addAssign(
-                    texture(this.lowResNode, vec2(texPos0.x, texPos0.y).mul(invTexSize)).mul(
-                        w0.x.mul(w0.y)
-                    )
-                );
-                currentColor.addAssign(
-                    texture(this.lowResNode, vec2(texPos12.x, texPos0.y).mul(invTexSize)).mul(
-                        w12.x.mul(w0.y)
-                    )
-                );
-                currentColor.addAssign(
-                    texture(this.lowResNode, vec2(texPos3.x, texPos0.y).mul(invTexSize)).mul(
-                        w3.x.mul(w0.y)
-                    )
-                );
-                // Row 1 (y = texPos12.y)
-                currentColor.addAssign(
-                    texture(this.lowResNode, vec2(texPos0.x, texPos12.y).mul(invTexSize)).mul(
-                        w0.x.mul(w12.y)
-                    )
-                );
-                currentColor.addAssign(
-                    texture(this.lowResNode, vec2(texPos12.x, texPos12.y).mul(invTexSize)).mul(
-                        w12.x.mul(w12.y)
-                    )
-                );
-                currentColor.addAssign(
-                    texture(this.lowResNode, vec2(texPos3.x, texPos12.y).mul(invTexSize)).mul(
-                        w3.x.mul(w12.y)
-                    )
-                );
-                // Row 2 (y = texPos3.y)
-                currentColor.addAssign(
-                    texture(this.lowResNode, vec2(texPos0.x, texPos3.y).mul(invTexSize)).mul(
-                        w0.x.mul(w3.y)
-                    )
-                );
-                currentColor.addAssign(
-                    texture(this.lowResNode, vec2(texPos12.x, texPos3.y).mul(invTexSize)).mul(
-                        w12.x.mul(w3.y)
-                    )
-                );
-                currentColor.addAssign(
-                    texture(this.lowResNode, vec2(texPos3.x, texPos3.y).mul(invTexSize)).mul(
-                        w3.x.mul(w3.y)
-                    )
-                );
-
-                // Variance clipping: compute neighborhood statistics in low-res buffer
-                // 4-neighborhood variance for ghost suppression
-                const texel = float(1).div(texSize);
-                const moment1 = currentColor.toVar();
-                const moment2 = currentColor.mul(currentColor).toVar();
-
-                // Unrolled 4-neighborhood
-                {
-                    const n = texture(
-                        this.lowResNode,
-                        fullUv.add(vec2(texel.x, float(0)))
-                    ).toConst();
-                    moment1.addAssign(n);
-                    moment2.addAssign(n.mul(n));
-                }
-                {
-                    const n = texture(
-                        this.lowResNode,
-                        fullUv.add(vec2(float(0), texel.y))
-                    ).toConst();
-                    moment1.addAssign(n);
-                    moment2.addAssign(n.mul(n));
-                }
-                {
-                    const n = texture(
-                        this.lowResNode,
-                        fullUv.sub(vec2(texel.x, float(0)))
-                    ).toConst();
-                    moment1.addAssign(n);
-                    moment2.addAssign(n.mul(n));
-                }
-                {
-                    const n = texture(
-                        this.lowResNode,
-                        fullUv.sub(vec2(float(0), texel.y))
-                    ).toConst();
-                    moment1.addAssign(n);
-                    moment2.addAssign(n.mul(n));
-                }
-
-                const N = float(5);
-                const mean = moment1.div(N);
-                const variance = moment2.div(N).sub(mean.mul(mean)).max(0).sqrt().mul(float(2));
-                const minColor = mean.sub(variance);
-                const maxColor = mean.add(variance);
-
-                // Bayer 4x4 temporal upscale: every 16 frames, each pixel gets a fresh sample
-                const coord = ivec2(screenCoordinate);
-                // Bayer 4x4 pattern (matches three-geospatial bayerIndices):
-                //   0  8  2 10
-                //  12  4 14  6
-                //   3 11  1  9
-                //  15  7 13  5
-                // currentFrame when bayerValue == frameId % 16.
-                const bayerX = coord.x.mod(4);
-                const bayerY = coord.y.mod(4);
-                // Compute bayer index via nested selects
-                // row 0: 0,8,2,10 / row 1: 12,4,14,6 / row 2: 3,11,1,9 / row 3: 15,7,13,5
-                const row0 = bayerX
-                    .equal(0)
-                    .select(
-                        float(0),
-                        bayerX
-                            .equal(1)
-                            .select(float(8), bayerX.equal(2).select(float(2), float(10)))
-                    );
-                const row1 = bayerX
-                    .equal(0)
-                    .select(
-                        float(12),
-                        bayerX
-                            .equal(1)
-                            .select(float(4), bayerX.equal(2).select(float(14), float(6)))
-                    );
-                const row2 = bayerX
-                    .equal(0)
-                    .select(
-                        float(3),
-                        bayerX
-                            .equal(1)
-                            .select(float(11), bayerX.equal(2).select(float(1), float(9)))
-                    );
-                const row3 = bayerX
-                    .equal(0)
-                    .select(
-                        float(15),
-                        bayerX
-                            .equal(1)
-                            .select(float(7), bayerX.equal(2).select(float(13), float(5)))
-                    );
-                const bayerValue = bayerY
-                    .equal(0)
-                    .select(row0, bayerY.equal(1).select(row1, bayerY.equal(2).select(row2, row3)));
-                const currentFrame = bayerValue.equal(frameId.mod(16).toFloat());
-
-                const result = currentColor.toVar();
-
-                // Velocity-aware history reprojection.
-                // velocity is stored in lowResRT.textures[1] at 1/4 resolution.
-                // Sampling it at fullUv gives bilinear-interpolated velocity.
-                // History was written at full resolution last frame, so sample
-                // at fullUv - velocity.
-                const velocity = texture(this.velocityNode, fullUv).xy;
-                const historyUV = fullUv.sub(velocity);
-                const historyColor = texture(this.historyNode, historyUV);
-
-                // Reject history when reprojected UV leaves the screen
-                const outOfBounds = step(float(0), historyUV.x)
-                    .mul(step(historyUV.x, float(1)))
-                    .mul(step(float(0), historyUV.y))
-                    .mul(step(historyUV.y, float(1)));
-                // If out of bounds, fall back to current color (no history blend)
-                const safeHistory = outOfBounds.greaterThan(0.5).select(historyColor, currentColor);
-
-                // clipAABB: clip history color to neighborhood bounding box
-                const pClip = maxColor.rgb.add(minColor.rgb).mul(0.5);
-                const eClip = maxColor.rgb.sub(minColor.rgb).mul(0.5).add(1e-7);
-                const vClip = safeHistory.sub(vec4(pClip, currentColor.a));
-                const vUnit = vClip.xyz.div(eClip);
-                const aUnit = vUnit.abs();
-                const maUnit = max(aUnit.x, max(aUnit.y, aUnit.z));
-                const clippedHistory = maUnit
-                    .greaterThan(1)
-                    .select(vec4(pClip, currentColor.a).add(vClip.div(maUnit)), safeHistory);
-
-                // Exponential accumulation: 90% history, 10% current.
-                // This is what the reference does in temporalAntialiasing mode
-                // (cloudsResolve.frag line ~133).
-                const temporalAlpha = float(0.1);
-                result.assign(mix(clippedHistory, currentColor, temporalAlpha));
-
-                return result;
+                return texture(this.lowResNode, screenUV);
             })();
 
             this.resolveMaterial.fragmentNode = resolveNode;
@@ -1062,8 +896,8 @@ export class CloudRenderNode extends TempNode {
                         .greaterThan(1)
                         .select(pClip.add(vClip.div(maUnit)), history);
 
-                    // Very slow EMA for shadow stability
-                    const alpha = float(0.05);
+                    // Very slow EMA for shadow stability (matches reference)
+                    const alpha = float(0.01);
                     const blended = mix(clippedHistory, current, alpha);
                     return inBounds.greaterThan(0.5).select(blended, current);
                 })();
@@ -1073,6 +907,11 @@ export class CloudRenderNode extends TempNode {
                 const resolvedTex = outputTexture(this, this.shadowResolvedRTs[i].texture);
                 this.shadowBlitMaterials[i].fragmentNode = texture(resolvedTex, screenUV);
                 this.shadowBlitMaterials[i].needsUpdate = true;
+
+                // Raw blit material: copy raw BSM → resolved/history (bootstrapping)
+                const rawTex = outputTexture(this, this.shadowRTs[i].texture);
+                this.shadowRawBlitMaterials[i].fragmentNode = texture(rawTex, screenUV);
+                this.shadowRawBlitMaterials[i].needsUpdate = true;
             }
             _cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
         }
@@ -1082,7 +921,6 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.dispose();
         this.historyRT.dispose();
         this.resolveRT.dispose();
-        this.velocityRT.dispose();
         for (const rt of this.shadowRTs) rt.dispose();
         for (const rt of this.shadowHistoryRTs) rt.dispose();
         for (const rt of this.shadowResolvedRTs) rt.dispose();
@@ -1090,8 +928,8 @@ export class CloudRenderNode extends TempNode {
         for (const m of this.shadowMaterials) m.dispose();
         for (const m of this.shadowResolveMaterials) m.dispose();
         for (const m of this.shadowBlitMaterials) m.dispose();
+        for (const m of this.shadowRawBlitMaterials) m.dispose();
         this.resolveMaterial.dispose();
-        this.velocityMaterial.dispose();
         this.mesh.geometry.dispose();
         super.dispose();
     }

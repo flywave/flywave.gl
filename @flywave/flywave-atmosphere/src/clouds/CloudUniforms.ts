@@ -96,7 +96,7 @@ export class CloudUniforms {
     powderExponent = uniform(150.0);
 
     // Haze (analytical altitude-exponential fog)
-    hazeEnabled = uniform(1.0);
+    hazeEnabled = uniform(0.0);
     hazeDensityScale = uniform(3e-5);
     hazeExponent = uniform(1e-3);
     hazeScatteringCoefficient = uniform(0.9);
