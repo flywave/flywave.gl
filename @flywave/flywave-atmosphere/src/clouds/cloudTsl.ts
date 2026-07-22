@@ -415,13 +415,11 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
             const iterationCount = rawCount.floor();
 
             If(iterationCount.lessThanEqual(0.5), () => {
-                // Fudge factor when no iterations
                 opticalDepth.assign(float(0.5));
             }).Else(() => {
                 const stepSize = u.minSecondaryStepSize.div(iterationCount).toVar();
                 totalDistance.assign(stepSize.mul(jitter));
 
-                // Unrolled iteration 0 (always executed when iterCount >= 1)
                 {
                     const pos = totalDistance.mul(rayDirection).add(rayOrigin);
                     const h = length(pos).sub(u.bottomRadius);
@@ -434,7 +432,6 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
                     stepSize.mulAssign(u.secondaryStepScale);
                 }
 
-                // Iteration 1 (only when iterCount >= 2)
                 If(iterationCount.greaterThan(1.5), () => {
                     const pos = totalDistance.mul(rayDirection).add(rayOrigin);
                     const h = length(pos).sub(u.bottomRadius);
@@ -447,7 +444,6 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
                     stepSize.mulAssign(u.secondaryStepScale);
                 });
 
-                // Iteration 2 (only when iterCount >= 3)
                 If(iterationCount.greaterThan(2.5), () => {
                     const pos = totalDistance.mul(rayDirection).add(rayOrigin);
                     const h = length(pos).sub(u.bottomRadius);
@@ -460,7 +456,6 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
                     stepSize.mulAssign(u.secondaryStepScale);
                 });
 
-                // Iteration 3 (only when iterCount >= 4)
                 If(iterationCount.greaterThan(3.5), () => {
                     const pos = totalDistance.mul(rayDirection).add(rayOrigin);
                     const h = length(pos).sub(u.bottomRadius);
@@ -889,6 +884,8 @@ export const createMarchClouds = (u: CloudUniforms): any => {
     return Fn(
         ([rayOrigin, rayDirection, rayNearFar, cosTheta, jitter]: [any, any, any, any, any]) => {
             const radianceIntegral = vec3(0).toVar();
+            const debugSunIrrSum = vec3(0).toVar();
+            const debugStepCount = float(0).toVar();
             const transmittanceIntegral = float(1).toVar();
             const weightedDistanceSum = float(0).toVar();
             const transmittanceSum = float(0).toVar();
@@ -913,12 +910,14 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                 scaledMip,
                 min(float(1), float(0.2).mul(camHeight).div(u.maxHeight))
             );
-            const rayStartTexelsPerPixel = exp(cameraAdjustedMip.mul(float(Math.LN2)));
+            const rayStartTexelsPerPixel = float(1);
 
             Loop({ start: 0, end: u.maxIterationCount, type: "int" }, () => {
                 If(rayDistance.greaterThan(maxRayDistance), () => {
                     Break();
                 });
+
+                debugStepCount.addAssign(float(1));
 
                 const position = rayDistance.mul(rayDirection).add(rayOrigin);
                 const height = length(position).sub(u.bottomRadius);
@@ -975,6 +974,9 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const sunIrradiance = splitIrr.get("direct");
                         const skyIrradiance = splitIrr.get("indirect");
 
+                        // STEP 8i: accumulate sunIrradiance for debug
+                        debugSunIrrSum.addAssign(sunIrradiance.mul(0.01));
+
                         const sunMarchResult = marchOpticalDepth(
                             position,
                             u.sunDirection,
@@ -985,18 +987,8 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const opticalDepth = sunMarchResult.x.toVar();
                         const sunRayDistance = sunMarchResult.y;
 
-                        const heightGate = step(height, u.shadowTopHeight);
-                        const cascadeGate = u.shadowCascadeCount
-                            .greaterThan(0)
-                            .select(float(1), float(0));
-                        const bsmCond = heightGate.mul(cascadeGate);
-                        // Always sample, gate via multiplication (TSL If may not always
-                        // compile body correctly with uniform-based conditions)
-                        const shadowOD = sampleShadowOpticalDepth(
-                            position,
-                            sunRayDistance
-                        ).toConst();
-                        opticalDepth.addAssign(shadowOD.mul(bsmCond));
+                        // STEP 9m: output mipLevel only
+                        debugSunIrrSum.addAssign(vec3(mipLevel, float(0), float(0)));
 
                         let radiance = sunIrradiance.mul(
                             approximateMultipleScattering(opticalDepth, cosTheta, u)
@@ -1040,6 +1032,9 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                             );
                         });
 
+                        // STEP 8k: accumulate radiance before mediaScattering
+                        debugSunIrrSum.addAssign(radiance.mul(0.001));
+
                         radiance = radiance.mul(mediaScattering);
 
                         radiance = radiance.mul(
@@ -1053,6 +1048,9 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const transmittance = exp(mediaExtinction.mul(stepSize).negate());
                         const clampedExt = max(mediaExtinction, float(1e-7));
                         const integral = radiance.sub(radiance.mul(transmittance)).div(clampedExt);
+
+                        // STEP 8n: accumulate integral WITH transmittanceIntegral
+                        debugSunIrrSum.addAssign(transmittanceIntegral.mul(integral).mul(0.01));
 
                         radianceIntegral.addAssign(transmittanceIntegral.mul(integral));
                         transmittanceIntegral.mulAssign(transmittance);
@@ -1077,7 +1075,8 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                 .select(weightedDistanceSum.div(transmittanceSum), float(-1));
             // DEBUG override: when u.debugMode==78, return step count in alpha channel
             // (marchClouds can't access debugMode directly; instead, hack via marchResult struct)
-            return marchCloudsResultStruct(vec4(radianceIntegral, alpha), frontDepth);
+            // STEP 9a: return opticalDepth accumulation
+            return marchCloudsResultStruct(vec4(debugSunIrrSum, float(1)), frontDepth);
         }
     );
 };
@@ -1194,23 +1193,22 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const debugPosLen = length(debugPos31);
         const camPosLen = length(cameraPosition);
 
-        // STEP 7: sampleMedia scattering * 100 (CONFIRMED MATCHING)
-        const sg_dist = rayNear.max(0).add(2000);
-        const sg_pos = cameraPosition.add(rayDirection.mul(sg_dist));
-        const sg_h = length(sg_pos).sub(u.bottomRadius);
-        const sg_uv = getCubeSphereUv(sg_pos);
-        const sg_hf = remapClamped(vec4(sg_h), u.minLayerHeights, u.maxLayerHeights);
-        const sg_density = sampleWeather(sg_uv, sg_h, float(0)).toVar();
-        const sg_media = sampleMedia(
-            sg_hf,
-            sg_density,
-            sg_pos,
-            sg_uv,
-            float(0),
-            float(0),
-            cameraPosition
-        );
-        resultColor.assign(vec4(vec3(sg_media.x.mul(100)), 1));
+        // STEP 8g: radianceIntegral, alpha=1
+        If(shouldMarch.greaterThan(0.5), () => {
+            const origin = rayNear.mul(rayDirection).add(cameraPosition);
+            const marchResult = marchClouds(
+                origin,
+                rayDirection,
+                vec2(rayNear, rayFar),
+                cosTheta,
+                jitter
+            ).toConst();
+            resultColor.assign(vec4(marchResult.get("color").rgb, 1));
+        });
+        resultFrontDepth.assign(float(-1));
+        resultVelocity.assign(vec2(0));
+
+        return cloudRendererResultStruct(resultColor, resultFrontDepth, resultVelocity);
         resultFrontDepth.assign(float(-1));
         resultVelocity.assign(vec2(0));
 
