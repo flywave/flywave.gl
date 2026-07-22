@@ -5,6 +5,7 @@ import { Matrix4, Vector2, Vector3, Vector4 } from "three";
 import { uniform, vec2, vec3, vec4, mat4 } from "three/tsl";
 
 import { CloudLayers } from "./CloudLayer";
+import { qualityPresets, type QualityPreset } from "./QualityPresets";
 
 export class CloudUniforms {
     // Atmosphere
@@ -241,5 +242,22 @@ export class CloudUniforms {
             }
         }
         this.shadowTopHeight.value = shadowTopH;
+    }
+
+    applyQualityPreset(preset: QualityPreset): void {
+        const p = qualityPresets[preset];
+        this.hazeEnabled.value = p.hazeEnabled ? 1 : 0;
+        this.accuratePhaseFunction.value = p.accuratePhaseFunction ? 1 : 0;
+        this.maxIterationCount.value = p.maxIterationCount;
+        this.minStepSize.value = p.minStepSize;
+        this.maxStepSize.value = p.maxStepSize;
+        this.maxRayDistance.value = p.maxRayDistance;
+        this.perspectiveStepScale.value = p.perspectiveStepScale;
+        this.minDensity.value = p.minDensity;
+        this.minExtinction.value = p.minExtinction;
+        this.minTransmittance.value = p.minTransmittance;
+        this.maxIterationCountToGround.value = p.maxIterationCountToGround;
+        this.maxIterationCountToSun.value = p.maxIterationCountToSun;
+        this.shadowCascadeCount.value = p.shadowCascadeCount;
     }
 }

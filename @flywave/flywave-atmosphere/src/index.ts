@@ -169,6 +169,8 @@ export { TurbulenceTexture } from "./clouds/textures/TurbulenceTexture";
 export { CloudLayers, CloudLayer } from "./clouds/CloudLayer";
 export { DensityProfile as CloudDensityProfile } from "./clouds/CloudLayer";
 export { CloudUniforms } from "./clouds/CloudUniforms";
+export { qualityPresets } from "./clouds/QualityPresets";
+export type { QualityPreset, QualityPresetConfig } from "./clouds/QualityPresets";
 export { createCloudRenderer, getCubeSphereUv } from "./clouds/cloudTsl";
 export {
     CloudRenderNode,
