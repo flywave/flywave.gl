@@ -21,6 +21,7 @@ export interface QualityPresetConfig {
     shadowMaxIterationCount: number;
     shadowMinStepSize: number;
     shadowMinTransmittance: number;
+    maxShadowLengthIterationCount: number;
 }
 
 const high: QualityPresetConfig = {
@@ -41,7 +42,8 @@ const high: QualityPresetConfig = {
     shadowMapSizes: [1024, 512, 256],
     shadowMaxIterationCount: 50,
     shadowMinStepSize: 100,
-    shadowMinTransmittance: 1e-4
+    shadowMinTransmittance: 1e-4,
+    maxShadowLengthIterationCount: 0
 };
 
 export const qualityPresets: Record<QualityPreset, QualityPresetConfig> = {
@@ -61,7 +63,8 @@ export const qualityPresets: Record<QualityPreset, QualityPresetConfig> = {
         shadowMapSizes: [512, 256],
         shadowMaxIterationCount: 25,
         shadowMinStepSize: 100,
-        shadowMinTransmittance: 1e-2
+        shadowMinTransmittance: 1e-2,
+        maxShadowLengthIterationCount: 0
     },
     medium: {
         ...high,
@@ -75,13 +78,18 @@ export const qualityPresets: Record<QualityPreset, QualityPresetConfig> = {
         shadowMapSizes: [512, 256, 256],
         shadowMaxIterationCount: 50,
         shadowMinStepSize: 100,
-        shadowMinTransmittance: 1e-4
+        shadowMinTransmittance: 1e-4,
+        maxShadowLengthIterationCount: 0
     },
-    high,
+    high: {
+        ...high,
+        maxShadowLengthIterationCount: 32
+    },
     ultra: {
         ...high,
         accuratePhaseFunction: true,
         minStepSize: 10,
-        shadowMapSizes: [1024, 1024, 512]
+        shadowMapSizes: [1024, 1024, 512],
+        maxShadowLengthIterationCount: 64
     }
 };

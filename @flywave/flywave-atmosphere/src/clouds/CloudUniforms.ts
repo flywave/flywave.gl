@@ -259,5 +259,6 @@ export class CloudUniforms {
         this.maxIterationCountToGround.value = p.maxIterationCountToGround;
         this.maxIterationCountToSun.value = p.maxIterationCountToSun;
         this.shadowCascadeCount.value = p.shadowCascadeCount;
+        this.maxShadowLengthIterationCount.value = p.maxShadowLengthIterationCount;
     }
 }

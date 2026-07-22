@@ -258,6 +258,26 @@ export class CloudRenderNode extends TempNode {
     private readonly shadowNodes: TextureNode[] = [];
     private readonly shadowHistoryNodes: TextureNode[] = [];
 
+    /** Cloud overlay texture (RGBA: color + alpha) for atmosphere composition */
+    get overlayTexture(): Texture {
+        return this.resolveRT.texture;
+    }
+
+    /** Resolved BSM textures per cascade for atmosphere shadow composition */
+    get shadowTextures(): Texture[] {
+        return this.shadowResolvedRTs.map(rt => rt.texture);
+    }
+
+    /** Shadow matrices per cascade (world→clip) for atmosphere shadow composition */
+    get shadowMatricesOut(): readonly Matrix4[] {
+        return this.prevShadowMatrices;
+    }
+
+    /** Cascade split intervals for atmosphere shadow composition */
+    get shadowIntervalsOut(): readonly Vector2[] {
+        return _cloudUniforms.shadowIntervals.map(u => u.value as Vector2);
+    }
+
     // Previous-frame shadow matrices for BSM temporal reprojection
     private prevShadowMatrices: Matrix4[] = [
         new Matrix4(),
