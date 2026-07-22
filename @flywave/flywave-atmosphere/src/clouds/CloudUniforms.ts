@@ -108,6 +108,10 @@ export class CloudUniforms {
     scatterAnisotropy2 = uniform(-0.2);
     scatterAnisotropyMix = uniform(0.5);
 
+    // Sun angular radius (radians). Earth: ~0.00465 rad (0.2666°).
+    // Larger values produce softer shadow penumbras via expanded PCF.
+    sunAngularRadius = uniform(0.00465);
+
     // Cloud layers (packed vec4)
     minLayerHeights = uniform(new Vector4());
     maxLayerHeights = uniform(new Vector4());

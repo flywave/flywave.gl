@@ -700,7 +700,12 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
             return inB.greaterThan(0.5).select(od, float(0));
         };
 
-        const r = u.maxShadowFilterRadius;
+        // PCF radius: base radius + sun angular radius contribution.
+        // Sun angular radius creates physical penumbra: at distance d from
+        // cloud top, penumbra width ≈ d × tan(sunAngularRadius).
+        // We approximate by scaling PCF radius with sun angular size.
+        const sunPenumbra = distanceToTop.mul(u.sunAngularRadius).mul(float(20));
+        const r = u.maxShadowFilterRadius.add(sunPenumbra);
         const texel = u.shadowTexelSize;
         const offsetPP = vec2(r, r).mul(texel);
         const offsetMP = vec2(r.negate(), r).mul(texel);
