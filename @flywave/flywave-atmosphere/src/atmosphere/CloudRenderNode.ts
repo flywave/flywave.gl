@@ -237,12 +237,16 @@ export class CloudRenderNode extends TempNode {
     private resolveRT: RenderTarget;
     private velocityRT: RenderTarget;
     private shadowRTs: RenderTarget[] = [];
+    private shadowHistoryRTs: RenderTarget[] = [];
+    private shadowResolvedRTs: RenderTarget[] = [];
 
     private readonly lowResMaterial = new NodeMaterial();
     private readonly resolveMaterial = new NodeMaterial();
     private readonly velocityMaterial = new NodeMaterial();
     private readonly blitMaterial = new NodeMaterial();
     private readonly shadowMaterials: NodeMaterial[] = [];
+    private readonly shadowResolveMaterials: NodeMaterial[] = [];
+    private readonly shadowBlitMaterials: NodeMaterial[] = [];
 
     private readonly mesh = new QuadMesh();
     private _rendererState?: RendererUtils.RendererState;
@@ -252,6 +256,15 @@ export class CloudRenderNode extends TempNode {
     private readonly velocityNode: TextureNode;
     private readonly resolveNodeTex: TextureNode;
     private readonly shadowNodes: TextureNode[] = [];
+    private readonly shadowHistoryNodes: TextureNode[] = [];
+
+    // Previous-frame shadow matrices for BSM temporal reprojection
+    private prevShadowMatrices: Matrix4[] = [
+        new Matrix4(),
+        new Matrix4(),
+        new Matrix4(),
+        new Matrix4()
+    ];
 
     private prevViewProjection: Matrix4 | null = null;
     private currentViewProjection: Matrix4 = new Matrix4();
@@ -311,10 +324,35 @@ export class CloudRenderNode extends TempNode {
             rt.texture.minFilter = LinearFilter;
             rt.texture.magFilter = LinearFilter;
             this.shadowRTs.push(rt);
-            this.shadowNodes.push(outputTexture(this, rt.texture));
+
+            // History + resolved RTs for BSM temporal accumulation
+            const resRT = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
+            resRT.texture.name = `Clouds [Shadow Res ${i}]`;
+            resRT.texture.minFilter = LinearFilter;
+            resRT.texture.magFilter = LinearFilter;
+            this.shadowResolvedRTs.push(resRT);
+
+            // shadowNodes point to resolved RTs (main march samples resolved BSM)
+            this.shadowNodes.push(outputTexture(this, resRT.texture));
+
             const mat = new NodeMaterial();
             mat.name = `Clouds [Shadow ${i}]`;
             this.shadowMaterials.push(mat);
+
+            const histRT = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
+            histRT.texture.name = `Clouds [Shadow Hist ${i}]`;
+            histRT.texture.minFilter = LinearFilter;
+            histRT.texture.magFilter = LinearFilter;
+            this.shadowHistoryRTs.push(histRT);
+            this.shadowHistoryNodes.push(outputTexture(this, histRT.texture));
+
+            const resMat = new NodeMaterial();
+            resMat.name = `Clouds [Shadow Resolve ${i}]`;
+            this.shadowResolveMaterials.push(resMat);
+
+            const blitMat = new NodeMaterial();
+            blitMat.name = `Clouds [Shadow Blit ${i}]`;
+            this.shadowBlitMaterials.push(blitMat);
         }
 
         this.lowResNode = outputTexture(this, this.lowResRT.texture);
@@ -402,6 +440,25 @@ export class CloudRenderNode extends TempNode {
                         renderer.setRenderTarget(this.shadowRTs[i]);
                         this.mesh.material = this.shadowMaterials[i];
                         this.mesh.render(renderer);
+                    }
+
+                    // BSM temporal resolve: blend current BSM with history
+                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                        renderer.setRenderTarget(this.shadowResolvedRTs[i]);
+                        this.mesh.material = this.shadowResolveMaterials[i];
+                        this.mesh.render(renderer);
+                    }
+
+                    // Copy resolved → history for next frame (blit pass)
+                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                        renderer.setRenderTarget(this.shadowHistoryRTs[i]);
+                        this.mesh.material = this.shadowBlitMaterials[i];
+                        this.mesh.render(renderer);
+                    }
+
+                    // Save shadow matrices for next frame's reprojection
+                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                        this.prevShadowMatrices[i].copy(_cloudUniforms.shadowMatrices[i].value);
                     }
                 }
             }
@@ -915,6 +972,87 @@ export class CloudRenderNode extends TempNode {
                 mat.fragmentNode = _shadowMarch(i)();
                 mat.needsUpdate = true;
                 _cloudUniforms.shadowTextureNodes[i] = this.shadowNodes[i];
+
+                // Shadow resolve: temporal accumulation per cascade
+                const resMat = this.shadowResolveMaterials[i];
+                const currentTex = outputTexture(this, this.shadowRTs[i].texture);
+                const historyTex = this.shadowHistoryNodes[i];
+                const invMat = _cloudUniforms.inverseShadowMatrices[i];
+                const prevMat = uniform(this.prevShadowMatrices[i]);
+
+                resMat.fragmentNode = Fn(() => {
+                    const uv = screenUV;
+                    const current = texture(currentTex, uv);
+
+                    // Reproject: reconstruct clip-space from UV, unproject via inverse
+                    // shadow matrix to get world pos, reproject with prev shadow matrix
+                    const clip = vec4(uv.mul(2).sub(1), float(-1), float(1));
+                    const worldPoint = invMat.mul(clip);
+                    const wpDiv = worldPoint.xyz.div(worldPoint.w);
+                    const prevClip = prevMat.mul(vec4(wpDiv, 1));
+                    const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
+
+                    // Bounds check
+                    const inBounds = step(float(0), prevUv.x)
+                        .mul(step(prevUv.x, float(1)))
+                        .mul(step(float(0), prevUv.y))
+                        .mul(step(prevUv.y, float(1)));
+
+                    const history = texture(historyTex, prevUv);
+
+                    // 3×3 neighborhood variance clipping on current
+                    const texSize = vec2(
+                        float(this.shadowRTs[i].width),
+                        float(this.shadowRTs[i].height)
+                    );
+                    const texel = vec2(float(1).div(texSize.x), float(1).div(texSize.y));
+                    let moment1 = current;
+                    let moment2 = current.mul(current);
+                    // 4 diagonal neighbors (sufficient for 4-channel BSM)
+                    moment1.addAssign(texture(currentTex, uv.add(vec2(texel.x, texel.y))));
+                    moment2.addAssign(texture(currentTex, uv.add(vec2(texel.x, texel.y))).pow(2));
+                    moment1.addAssign(texture(currentTex, uv.add(vec2(texel.x.negate(), texel.y))));
+                    moment2.addAssign(
+                        texture(currentTex, uv.add(vec2(texel.x.negate(), texel.y))).pow(2)
+                    );
+                    moment1.addAssign(texture(currentTex, uv.add(vec2(texel.x, texel.y.negate()))));
+                    moment2.addAssign(
+                        texture(currentTex, uv.add(vec2(texel.x, texel.y.negate()))).pow(2)
+                    );
+                    moment1.addAssign(
+                        texture(currentTex, uv.add(vec2(texel.x.negate(), texel.y.negate())))
+                    );
+                    moment2.addAssign(
+                        texture(currentTex, uv.add(vec2(texel.x.negate(), texel.y.negate()))).pow(2)
+                    );
+                    const N = float(5);
+                    const mean = moment1.div(N);
+                    const variance = moment2.div(N).sub(mean.mul(mean)).max(0).sqrt();
+                    const gamma = float(1);
+                    const minC = mean.sub(variance.mul(gamma));
+                    const maxC = mean.add(variance.mul(gamma));
+                    // clipAABB
+                    const pClip = maxC.add(minC).mul(0.5);
+                    const eClip = maxC.sub(minC).mul(0.5).add(1e-7);
+                    const vClip = history.sub(pClip);
+                    const vUnit = vClip.div(eClip);
+                    const aUnit = vUnit.abs();
+                    const maUnit = max(aUnit.x, max(aUnit.y, max(aUnit.z, aUnit.w)));
+                    const clippedHistory = maUnit
+                        .greaterThan(1)
+                        .select(pClip.add(vClip.div(maUnit)), history);
+
+                    // Very slow EMA for shadow stability
+                    const alpha = float(0.05);
+                    const blended = mix(clippedHistory, current, alpha);
+                    return inBounds.greaterThan(0.5).select(blended, current);
+                })();
+                resMat.needsUpdate = true;
+
+                // Blit material: copy resolved RT → history RT
+                const resolvedTex = outputTexture(this, this.shadowResolvedRTs[i].texture);
+                this.shadowBlitMaterials[i].fragmentNode = texture(resolvedTex, screenUV);
+                this.shadowBlitMaterials[i].needsUpdate = true;
             }
             _cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
         }
@@ -924,10 +1062,16 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.dispose();
         this.historyRT.dispose();
         this.resolveRT.dispose();
+        this.velocityRT.dispose();
         for (const rt of this.shadowRTs) rt.dispose();
+        for (const rt of this.shadowHistoryRTs) rt.dispose();
+        for (const rt of this.shadowResolvedRTs) rt.dispose();
         this.lowResMaterial.dispose();
         for (const m of this.shadowMaterials) m.dispose();
+        for (const m of this.shadowResolveMaterials) m.dispose();
+        for (const m of this.shadowBlitMaterials) m.dispose();
         this.resolveMaterial.dispose();
+        this.velocityMaterial.dispose();
         this.mesh.geometry.dispose();
         super.dispose();
     }
