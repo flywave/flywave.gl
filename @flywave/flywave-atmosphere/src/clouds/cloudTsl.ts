@@ -420,8 +420,47 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
                 const stepSize = u.minSecondaryStepSize.div(iterationCount).toVar();
                 totalDistance.assign(stepSize.mul(jitter));
 
-                const loopEnd = iterationCount.max(float(1)).min(float(8)).toInt();
-                Loop({ start: 0, end: loopEnd, type: "int" }, () => {
+                // Iteration 0 (always when iterationCount >= 1)
+                {
+                    const pos = totalDistance.mul(rayDirection).add(rayOrigin);
+                    const h = length(pos).sub(u.bottomRadius);
+                    const uv = getGlobeUv(pos);
+                    const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
+                    const density = sampleWeather(uv, h, mipLevel);
+                    const media = sampleMedia(hf, density, pos, uv, mipLevel, jitter, rayOrigin);
+                    opticalDepth.addAssign(media.y.mul(stepSize));
+                    totalDistance.addAssign(stepSize);
+                    stepSize.mulAssign(u.secondaryStepScale);
+                }
+
+                // Iteration 1 (when iterationCount >= 2)
+                If(iterationCount.greaterThan(1.5), () => {
+                    const pos = totalDistance.mul(rayDirection).add(rayOrigin);
+                    const h = length(pos).sub(u.bottomRadius);
+                    const uv = getGlobeUv(pos);
+                    const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
+                    const density = sampleWeather(uv, h, mipLevel);
+                    const media = sampleMedia(hf, density, pos, uv, mipLevel, jitter, rayOrigin);
+                    opticalDepth.addAssign(media.y.mul(stepSize));
+                    totalDistance.addAssign(stepSize);
+                    stepSize.mulAssign(u.secondaryStepScale);
+                });
+
+                // Iteration 2 (when iterationCount >= 3)
+                If(iterationCount.greaterThan(2.5), () => {
+                    const pos = totalDistance.mul(rayDirection).add(rayOrigin);
+                    const h = length(pos).sub(u.bottomRadius);
+                    const uv = getGlobeUv(pos);
+                    const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
+                    const density = sampleWeather(uv, h, mipLevel);
+                    const media = sampleMedia(hf, density, pos, uv, mipLevel, jitter, rayOrigin);
+                    opticalDepth.addAssign(media.y.mul(stepSize));
+                    totalDistance.addAssign(stepSize);
+                    stepSize.mulAssign(u.secondaryStepScale);
+                });
+
+                // Iteration 3 (when iterationCount >= 4)
+                If(iterationCount.greaterThan(3.5), () => {
                     const pos = totalDistance.mul(rayDirection).add(rayOrigin);
                     const h = length(pos).sub(u.bottomRadius);
                     const uv = getGlobeUv(pos);
@@ -940,7 +979,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const skyIrradiance = splitIrr.get("indirect");
 
                         // STEP 8i: accumulate sunIrradiance for debug
-                        debugSunIrrSum.addAssign(sunIrradiance.mul(0.01));
+                        // debugSunIrrSum.addAssign(sunIrradiance.mul(0.01));
 
                         const sunMarchResult = marchOpticalDepth(
                             position,
@@ -1006,7 +1045,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         });
 
                         // STEP 8k: accumulate radiance before mediaScattering
-                        debugSunIrrSum.addAssign(radiance.mul(0.001));
+                        // debugSunIrrSum.addAssign(radiance.mul(0.001));
 
                         radiance = radiance.mul(mediaScattering);
 
@@ -1023,7 +1062,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const integral = radiance.sub(radiance.mul(transmittance)).div(clampedExt);
 
                         // STEP 8n: accumulate integral WITH transmittanceIntegral
-                        debugSunIrrSum.addAssign(transmittanceIntegral.mul(integral).mul(0.01));
+                        // debugSunIrrSum.addAssign(transmittanceIntegral.mul(integral).mul(0.01));
 
                         radianceIntegral.addAssign(transmittanceIntegral.mul(integral));
                         transmittanceIntegral.mulAssign(transmittance);
