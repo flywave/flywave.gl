@@ -420,43 +420,8 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
                 const stepSize = u.minSecondaryStepSize.div(iterationCount).toVar();
                 totalDistance.assign(stepSize.mul(jitter));
 
-                {
-                    const pos = totalDistance.mul(rayDirection).add(rayOrigin);
-                    const h = length(pos).sub(u.bottomRadius);
-                    const uv = getGlobeUv(pos);
-                    const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
-                    const density = sampleWeather(uv, h, mipLevel);
-                    const media = sampleMedia(hf, density, pos, uv, mipLevel, jitter, rayOrigin);
-                    opticalDepth.addAssign(media.y.mul(stepSize));
-                    totalDistance.addAssign(stepSize);
-                    stepSize.mulAssign(u.secondaryStepScale);
-                }
-
-                If(iterationCount.greaterThan(1.5), () => {
-                    const pos = totalDistance.mul(rayDirection).add(rayOrigin);
-                    const h = length(pos).sub(u.bottomRadius);
-                    const uv = getGlobeUv(pos);
-                    const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
-                    const density = sampleWeather(uv, h, mipLevel);
-                    const media = sampleMedia(hf, density, pos, uv, mipLevel, jitter, rayOrigin);
-                    opticalDepth.addAssign(media.y.mul(stepSize));
-                    totalDistance.addAssign(stepSize);
-                    stepSize.mulAssign(u.secondaryStepScale);
-                });
-
-                If(iterationCount.greaterThan(2.5), () => {
-                    const pos = totalDistance.mul(rayDirection).add(rayOrigin);
-                    const h = length(pos).sub(u.bottomRadius);
-                    const uv = getGlobeUv(pos);
-                    const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
-                    const density = sampleWeather(uv, h, mipLevel);
-                    const media = sampleMedia(hf, density, pos, uv, mipLevel, jitter, rayOrigin);
-                    opticalDepth.addAssign(media.y.mul(stepSize));
-                    totalDistance.addAssign(stepSize);
-                    stepSize.mulAssign(u.secondaryStepScale);
-                });
-
-                If(iterationCount.greaterThan(3.5), () => {
+                const loopEnd = iterationCount.max(float(1)).min(float(8)).toInt();
+                Loop({ start: 0, end: loopEnd, type: "int" }, () => {
                     const pos = totalDistance.mul(rayDirection).add(rayOrigin);
                     const h = length(pos).sub(u.bottomRadius);
                     const uv = getGlobeUv(pos);
@@ -987,8 +952,16 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const opticalDepth = sunMarchResult.x.toVar();
                         const sunRayDistance = sunMarchResult.y;
 
-                        // STEP 9m: output mipLevel only
-                        debugSunIrrSum.addAssign(vec3(mipLevel, float(0), float(0)));
+                        const heightGate = step(height, u.shadowTopHeight);
+                        const cascadeGate = u.shadowCascadeCount
+                            .greaterThan(0)
+                            .select(float(1), float(0));
+                        const bsmCond = heightGate.mul(cascadeGate);
+                        const shadowOD = sampleShadowOpticalDepth(
+                            position,
+                            sunRayDistance
+                        ).toConst();
+                        opticalDepth.addAssign(shadowOD.mul(bsmCond));
 
                         let radiance = sunIrradiance.mul(
                             approximateMultipleScattering(opticalDepth, cosTheta, u)
@@ -1075,8 +1048,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                 .select(weightedDistanceSum.div(transmittanceSum), float(-1));
             // DEBUG override: when u.debugMode==78, return step count in alpha channel
             // (marchClouds can't access debugMode directly; instead, hack via marchResult struct)
-            // STEP 9a: return opticalDepth accumulation
-            return marchCloudsResultStruct(vec4(debugSunIrrSum, float(1)), frontDepth);
+            return marchCloudsResultStruct(vec4(radianceIntegral, alpha), frontDepth);
         }
     );
 };
