@@ -403,75 +403,87 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
             any,
             any
         ]) => {
-            const opticalDepth = float(0).toVar();
-            const totalDistance = float(0).toVar();
-            // Reference GLSL:
-            //   int i = int(max(0.0, remap(mipLevel, 0, 1, maxIterCount+1, 1) - jitter))
             const maxIter = maxIterationCount.toFloat();
-            const rawCount = max(
-                float(0),
-                remap(mipLevel, float(0), float(1), maxIter.add(1), float(1)).sub(jitter)
-            );
+            const inRange = maxIter.add(1).sub(float(1));
+            const mapped = float(1).add(inRange.mul(mipLevel.negate().add(1)));
+            const rawCount = max(float(0), mapped.sub(jitter));
             const iterationCount = rawCount.floor();
 
-            If(iterationCount.lessThanEqual(0.5), () => {
-                opticalDepth.assign(float(0.5));
-            }).Else(() => {
-                const stepSize = u.minSecondaryStepSize.div(iterationCount).toVar();
-                totalDistance.assign(stepSize.mul(jitter));
+            const isZero = iterationCount.lessThanEqual(0.5);
+            const active0 = iterationCount.greaterThan(0.5);
+            const active1 = iterationCount.greaterThan(1.5);
+            const active2 = iterationCount.greaterThan(2.5);
+            const active3 = iterationCount.greaterThan(3.5);
 
-                // Iteration 0 (always when iterationCount >= 1)
-                {
-                    const pos = totalDistance.mul(rayDirection).add(rayOrigin);
-                    const h = length(pos).sub(u.bottomRadius);
-                    const uv = getGlobeUv(pos);
-                    const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
-                    const density = sampleWeather(uv, h, mipLevel);
-                    const media = sampleMedia(hf, density, pos, uv, mipLevel, jitter, rayOrigin);
-                    opticalDepth.addAssign(media.y.mul(stepSize));
-                    totalDistance.addAssign(stepSize);
-                    stepSize.mulAssign(u.secondaryStepScale);
-                }
+            const safeCount = max(iterationCount, float(1));
+            const step0 = u.minSecondaryStepSize.div(safeCount);
+            const step1 = step0.mul(u.secondaryStepScale);
+            const step2 = step1.mul(u.secondaryStepScale);
+            const step3 = step2.mul(u.secondaryStepScale);
 
-                // Iteration 1 (when iterationCount >= 2)
-                If(iterationCount.greaterThan(1.5), () => {
-                    const pos = totalDistance.mul(rayDirection).add(rayOrigin);
-                    const h = length(pos).sub(u.bottomRadius);
-                    const uv = getGlobeUv(pos);
-                    const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
-                    const density = sampleWeather(uv, h, mipLevel);
-                    const media = sampleMedia(hf, density, pos, uv, mipLevel, jitter, rayOrigin);
-                    opticalDepth.addAssign(media.y.mul(stepSize));
-                    totalDistance.addAssign(stepSize);
-                    stepSize.mulAssign(u.secondaryStepScale);
-                });
+            const dist0 = step0.mul(jitter);
+            const dist1 = dist0.add(step0);
+            const dist2 = dist1.add(step1);
+            const dist3 = dist2.add(step2);
 
-                // Iteration 2 (when iterationCount >= 3)
-                If(iterationCount.greaterThan(2.5), () => {
-                    const pos = totalDistance.mul(rayDirection).add(rayOrigin);
-                    const h = length(pos).sub(u.bottomRadius);
-                    const uv = getGlobeUv(pos);
-                    const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
-                    const density = sampleWeather(uv, h, mipLevel);
-                    const media = sampleMedia(hf, density, pos, uv, mipLevel, jitter, rayOrigin);
-                    opticalDepth.addAssign(media.y.mul(stepSize));
-                    totalDistance.addAssign(stepSize);
-                    stepSize.mulAssign(u.secondaryStepScale);
-                });
+            const pos0 = dist0.mul(rayDirection).add(rayOrigin);
+            const pos1 = dist1.mul(rayDirection).add(rayOrigin);
+            const pos2 = dist2.mul(rayDirection).add(rayOrigin);
+            const pos3 = dist3.mul(rayDirection).add(rayOrigin);
 
-                // Iteration 3 (when iterationCount >= 4)
-                If(iterationCount.greaterThan(3.5), () => {
-                    const pos = totalDistance.mul(rayDirection).add(rayOrigin);
-                    const h = length(pos).sub(u.bottomRadius);
-                    const uv = getGlobeUv(pos);
-                    const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
-                    const density = sampleWeather(uv, h, mipLevel);
-                    const media = sampleMedia(hf, density, pos, uv, mipLevel, jitter, rayOrigin);
-                    opticalDepth.addAssign(media.y.mul(stepSize));
-                    totalDistance.addAssign(stepSize);
-                    stepSize.mulAssign(u.secondaryStepScale);
-                });
-            });
+            const hf0 = remapClamped(
+                vec4(length(pos0).sub(u.bottomRadius)),
+                u.minLayerHeights,
+                u.maxLayerHeights
+            );
+            const hf1 = remapClamped(
+                vec4(length(pos1).sub(u.bottomRadius)),
+                u.minLayerHeights,
+                u.maxLayerHeights
+            );
+            const hf2 = remapClamped(
+                vec4(length(pos2).sub(u.bottomRadius)),
+                u.minLayerHeights,
+                u.maxLayerHeights
+            );
+            const hf3 = remapClamped(
+                vec4(length(pos3).sub(u.bottomRadius)),
+                u.minLayerHeights,
+                u.maxLayerHeights
+            );
+
+            const uv0 = getGlobeUv(pos0);
+            const uv1 = getGlobeUv(pos1);
+            const uv2 = getGlobeUv(pos2);
+            const uv3 = getGlobeUv(pos3);
+
+            const h0 = length(pos0).sub(u.bottomRadius);
+            const h1 = length(pos1).sub(u.bottomRadius);
+            const h2 = length(pos2).sub(u.bottomRadius);
+            const h3 = length(pos3).sub(u.bottomRadius);
+
+            const d0 = sampleWeather(uv0, h0, mipLevel);
+            const d1 = sampleWeather(uv1, h1, mipLevel);
+            const d2 = sampleWeather(uv2, h2, mipLevel);
+            const d3 = sampleWeather(uv3, h3, mipLevel);
+
+            const m0 = sampleMedia(hf0, d0, pos0, uv0, mipLevel, jitter, rayOrigin);
+            const m1 = sampleMedia(hf1, d1, pos1, uv1, mipLevel, jitter, rayOrigin);
+            const m2 = sampleMedia(hf2, d2, pos2, uv2, mipLevel, jitter, rayOrigin);
+            const m3 = sampleMedia(hf3, d3, pos3, uv3, mipLevel, jitter, rayOrigin);
+
+            const od0 = active0.select(m0.y.mul(step0), float(0));
+            const od1 = active1.select(m1.y.mul(step1), float(0));
+            const od2 = active2.select(m2.y.mul(step2), float(0));
+            const od3 = active3.select(m3.y.mul(step3), float(0));
+
+            const opticalDepth = isZero.select(float(0.5), od0.add(od1).add(od2).add(od3));
+
+            const lastDist = active3.select(
+                dist3,
+                active2.select(dist2, active1.select(dist1, active0.select(dist0, float(0))))
+            );
+            const totalDistance = isZero.select(float(0), lastDist);
 
             return vec2(opticalDepth, totalDistance);
         }
@@ -893,6 +905,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
             const transmittanceIntegral = float(1).toVar();
             const weightedDistanceSum = float(0).toVar();
             const transmittanceSum = float(0).toVar();
+            const debugOpticalDepth = float(-1).toVar();
 
             const maxRayDistance = rayNearFar.y.sub(rayNearFar.x).toVar();
             const stepSize = u.minStepSize
@@ -996,10 +1009,11 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                             .greaterThan(0)
                             .select(float(1), float(0));
                         const bsmCond = heightGate.mul(cascadeGate);
-                        const shadowOD = sampleShadowOpticalDepth(
-                            position,
-                            sunRayDistance
-                        ).toConst();
+                        // const shadowOD = sampleShadowOpticalDepth(
+                        //     position,
+                        //     sunRayDistance
+                        // ).toConst();
+                        const shadowOD = float(0); // DEBUG: skip BSM shadow
                         opticalDepth.addAssign(shadowOD.mul(bsmCond));
 
                         let radiance = sunIrradiance.mul(
@@ -1119,7 +1133,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
     const render = Fn(([cameraPosition, rayDirection, sceneDistance]: [any, any, any]) => {
         const cosTheta = dot(u.sunDirection, rayDirection);
-        const jitter = stbn;
+        const jitter = float(0.5);
 
         const bottomRadius = u.bottomRadius;
         const cameraHeight = u.cameraHeight;
