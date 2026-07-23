@@ -629,62 +629,6 @@ export class CloudRenderNode extends TempNode {
             _nextPrevViewProjection = null;
         }
 
-        // DEBUG: snapshot low-res RT for cross-project pixel comparison, throttled.
-        if (
-            ((globalThis as any).__cloudsDebugFrame =
-                (((globalThis as any).__cloudsDebugFrame ?? 0) + 1) % 30) === 0
-        ) {
-            try {
-                const W = this.lowResRT.width,
-                    H = this.lowResRT.height;
-                (renderer as any)
-                    .readRenderTargetPixelsAsync(this.lowResRT, 0, 0, W, H, 0)
-                    .then((buf: any) => {
-                        // WebGPU readback aligns rows to 256 bytes; compute actual stride
-                        const bytesPerPixel = 4 * 2; // RGBA HalfFloat
-                        const stridePixels =
-                            (Math.ceil((W * bytesPerPixel) / 256) * 256) / bytesPerPixel;
-                        (globalThis as any).__cloudsDebugSnapshot = {
-                            w: W,
-                            h: H,
-                            buf,
-                            stride: stridePixels
-                        };
-                    })
-                    .catch((e: Error) => {
-                        (globalThis as any).__cloudsDebugError = e.message;
-                    });
-            } catch (e) {
-                (globalThis as any).__cloudsDebugError = (e as Error).message + " (sync)";
-            }
-        }
-
-        // DEBUG: snapshot shadow RT
-        if (
-            ((globalThis as any).__cloudsShadowFrame =
-                (((globalThis as any).__cloudsShadowFrame ?? 0) + 1) % 30) === 0
-        ) {
-            try {
-                // Snapshot cascade based on debug flag
-                const cascadeIdx = (globalThis as any).__cloudsShadowCascade ?? 0;
-                const W = this.shadowRTs[cascadeIdx].width,
-                    H = this.shadowRTs[cascadeIdx].height;
-                (renderer as any)
-                    .readRenderTargetPixelsAsync(this.shadowRTs[cascadeIdx], 0, 0, W, H, 0)
-                    .then((buf: any) => {
-                        (globalThis as any).__cloudsShadowSnapshot = {
-                            w: W,
-                            h: H,
-                            buf,
-                            cascade: cascadeIdx
-                        };
-                    })
-                    .catch((e: Error) => {
-                        (globalThis as any).__cloudsShadowError = e.message;
-                    });
-            } catch (e) {}
-        }
-
         // Update resolve frame count for bootstrapping (before resolve pass)
         _cloudResolveCountNode.value = this._cloudResolveFrameCount;
         _cloudFrameNode.value = this._cloudResolveFrameCount % 16;
@@ -694,25 +638,6 @@ export class CloudRenderNode extends TempNode {
         renderer.setRenderTarget(this.resolveRT);
         this.mesh.material = this.resolveMaterial;
         this.mesh.render(renderer);
-
-        // DEBUG: snapshot resolve RT
-        if (
-            ((globalThis as any).__cloudsResolveFrame =
-                (((globalThis as any).__cloudsResolveFrame ?? 0) + 1) % 60) === 0
-        ) {
-            try {
-                const W = this.resolveRT.width,
-                    H = this.resolveRT.height;
-                (renderer as any)
-                    .readRenderTargetPixelsAsync(this.resolveRT, 0, 0, W, H, 0)
-                    .then((buf: any) => {
-                        (globalThis as any).__cloudsResolveSnapshot = { w: W, h: H, buf };
-                    })
-                    .catch((e: Error) => {
-                        (globalThis as any).__cloudsResolveError = e.message;
-                    });
-            } catch (e) {}
-        }
 
         restoreRendererState(renderer, this._rendererState);
 

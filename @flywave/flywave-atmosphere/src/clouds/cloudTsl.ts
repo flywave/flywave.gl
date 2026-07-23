@@ -87,44 +87,24 @@ export const getCubeSphereUv = Fn(([position]: [any]) => {
     const maxF = max(f.x, max(f.y, f.z));
     const c = n.div(maxF);
 
-    const m = vec2().toVar();
+    const yDom = step(f.x, f.y).mul(step(f.z, f.y));
+    const xDom = step(f.y, f.x).mul(step(f.z, f.x)).mul(oneMinus(yDom));
+    const zDom = oneMinus(yDom).sub(xDom);
 
-    // GLSL: if (all(greaterThan(f.yy, f.xz)))
-    // = f.y > f.x && f.y > f.z
-    If(f.y.greaterThan(f.x), () => {
-        If(f.y.greaterThan(f.z), () => {
-            // Y dominant
-            If(c.y.greaterThan(0), () => {
-                m.assign(vec2(n.x.negate(), n.z));
-            }).Else(() => {
-                m.assign(n.xz);
-            });
-        }).Else(() => {
-            // Z dominant (f.z >= f.y > f.x)
-            If(c.z.greaterThan(0), () => {
-                m.assign(n.xy);
-            }).Else(() => {
-                m.assign(vec2(n.x, n.y.negate()));
-            });
-        });
-    }).Else(() => {
-        // f.x >= f.y
-        If(f.x.greaterThan(f.z), () => {
-            // X dominant
-            If(c.x.greaterThan(0), () => {
-                m.assign(n.yz);
-            }).Else(() => {
-                m.assign(vec2(n.y.negate(), n.z));
-            });
-        }).Else(() => {
-            // Z dominant (f.z >= f.x >= f.y)
-            If(c.z.greaterThan(0), () => {
-                m.assign(n.xy);
-            }).Else(() => {
-                m.assign(vec2(n.x, n.y.negate()));
-            });
-        });
-    });
+    const signY = step(float(0), c.y);
+    const signX = step(float(0), c.x);
+    const signZ = step(float(0), c.z);
+
+    const m = vec2(
+        yDom
+            .mul(mix(n.x, n.x.negate(), signY))
+            .add(xDom.mul(mix(n.y.negate(), n.y, signX)))
+            .add(zDom.mul(n.x)),
+        yDom
+            .mul(n.z)
+            .add(xDom.mul(n.z))
+            .add(zDom.mul(mix(n.y.negate(), n.y, signZ)))
+    );
 
     const m2 = m.mul(m);
     // GLSL: float q = dot(m2.xy, vec2(-2.0, 2.0)) - 3.0;
@@ -246,54 +226,12 @@ export const approximateMultipleScattering = Fn(([opticalDepth, cosTheta, u]: [a
     const attenuation = vec3(0.5, 0.5, 0.5);
     const scattering = float(0).toVar();
 
-    // 8 octaves manually unrolled (JS for-loops don't work inside TSL Fn)
-    {
+    Loop({ start: 0, end: 8, type: "int" }, () => {
         const bl = exp(opticalDepth.mul(coeffs.y).negate());
         const phase = phaseFunction(cosTheta, coeffs.z, u);
         scattering.addAssign(coeffs.x.mul(bl).mul(phase));
         coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z, u);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z, u);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z, u);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z, u);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z, u);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z, u);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    }
-    {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z, u);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-    }
+    });
 
     return scattering;
 });
@@ -410,82 +348,52 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
             const iterationCount = rawCount.floor();
 
             const isZero = iterationCount.lessThanEqual(0.5);
-            const active0 = iterationCount.greaterThan(0.5);
-            const active1 = iterationCount.greaterThan(1.5);
-            const active2 = iterationCount.greaterThan(2.5);
-            const active3 = iterationCount.greaterThan(3.5);
 
             const safeCount = max(iterationCount, float(1));
-            const step0 = u.minSecondaryStepSize.div(safeCount);
-            const step1 = step0.mul(u.secondaryStepScale);
-            const step2 = step1.mul(u.secondaryStepScale);
-            const step3 = step2.mul(u.secondaryStepScale);
+            const initialStepSize = u.minSecondaryStepSize.div(safeCount);
 
-            const dist0 = step0.mul(jitter);
-            const dist1 = dist0.add(step0);
-            const dist2 = dist1.add(step1);
-            const dist3 = dist2.add(step2);
+            const opticalDepth = float(0).toVar();
+            const currentStepSize = initialStepSize.toVar();
+            const currentDist = initialStepSize.mul(jitter).toVar();
+            const lastDist = float(0).toVar();
+            const stepsTaken = float(0).toVar();
 
-            const pos0 = dist0.mul(rayDirection).add(rayOrigin);
-            const pos1 = dist1.mul(rayDirection).add(rayOrigin);
-            const pos2 = dist2.mul(rayDirection).add(rayOrigin);
-            const pos3 = dist3.mul(rayDirection).add(rayOrigin);
+            Loop({ start: 0, end: 4, type: "int" }, () => {
+                If(stepsTaken.greaterThanEqual(iterationCount), () => {
+                    Break();
+                });
 
-            const hf0 = remapClamped(
-                vec4(length(pos0).sub(u.bottomRadius)),
-                u.minLayerHeights,
-                u.maxLayerHeights
-            );
-            const hf1 = remapClamped(
-                vec4(length(pos1).sub(u.bottomRadius)),
-                u.minLayerHeights,
-                u.maxLayerHeights
-            );
-            const hf2 = remapClamped(
-                vec4(length(pos2).sub(u.bottomRadius)),
-                u.minLayerHeights,
-                u.maxLayerHeights
-            );
-            const hf3 = remapClamped(
-                vec4(length(pos3).sub(u.bottomRadius)),
-                u.minLayerHeights,
-                u.maxLayerHeights
-            );
+                const position = currentDist.mul(rayDirection).add(rayOrigin);
+                const height = length(position).sub(u.bottomRadius);
+                const uv = getGlobeUv(position);
+                const heightFraction = remapClamped(
+                    vec4(height),
+                    u.minLayerHeights,
+                    u.maxLayerHeights
+                );
+                const density = sampleWeather(uv, height, mipLevel);
+                const media = sampleMedia(
+                    heightFraction,
+                    density,
+                    position,
+                    uv,
+                    mipLevel,
+                    jitter,
+                    rayOrigin
+                );
 
-            const uv0 = getGlobeUv(pos0);
-            const uv1 = getGlobeUv(pos1);
-            const uv2 = getGlobeUv(pos2);
-            const uv3 = getGlobeUv(pos3);
+                opticalDepth.addAssign(media.y.mul(currentStepSize));
+                lastDist.assign(currentDist);
 
-            const h0 = length(pos0).sub(u.bottomRadius);
-            const h1 = length(pos1).sub(u.bottomRadius);
-            const h2 = length(pos2).sub(u.bottomRadius);
-            const h3 = length(pos3).sub(u.bottomRadius);
+                currentDist.addAssign(currentStepSize);
+                currentStepSize.mulAssign(u.secondaryStepScale);
+                stepsTaken.addAssign(float(1));
+            });
 
-            const d0 = sampleWeather(uv0, h0, mipLevel);
-            const d1 = sampleWeather(uv1, h1, mipLevel);
-            const d2 = sampleWeather(uv2, h2, mipLevel);
-            const d3 = sampleWeather(uv3, h3, mipLevel);
-
-            const m0 = sampleMedia(hf0, d0, pos0, uv0, mipLevel, jitter, rayOrigin);
-            const m1 = sampleMedia(hf1, d1, pos1, uv1, mipLevel, jitter, rayOrigin);
-            const m2 = sampleMedia(hf2, d2, pos2, uv2, mipLevel, jitter, rayOrigin);
-            const m3 = sampleMedia(hf3, d3, pos3, uv3, mipLevel, jitter, rayOrigin);
-
-            const od0 = active0.select(m0.y.mul(step0), float(0));
-            const od1 = active1.select(m1.y.mul(step1), float(0));
-            const od2 = active2.select(m2.y.mul(step2), float(0));
-            const od3 = active3.select(m3.y.mul(step3), float(0));
-
-            const opticalDepth = isZero.select(float(0.5), od0.add(od1).add(od2).add(od3));
-
-            const lastDist = active3.select(
-                dist3,
-                active2.select(dist2, active1.select(dist1, active0.select(dist0, float(0))))
-            );
+            const finalOpticalDepth = isZero.select(float(0.5), opticalDepth);
             const totalDistance = isZero.select(float(0), lastDist);
 
-            return vec2(opticalDepth, totalDistance);
+            return vec2(finalOpticalDepth, totalDistance);
         }
     );
 };
@@ -689,40 +597,39 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, posUncorrected);
         const tex = u.shadowTextureNodes[cascadeIdx];
 
-        const sampleOD = (uvOffset: any): any => {
-            // Rotate PCF offset by temporal angle
-            const rotated = vec2(
-                jitter.cosA.mul(uvOffset.x).sub(jitter.sinA.mul(uvOffset.y)),
-                jitter.sinA.mul(uvOffset.x).add(jitter.cosA.mul(uvOffset.y))
-            );
-            const uv = shadowUV.add(rotated).add(jitter.subTexel);
-            const inB = step(float(0), uv.x)
-                .mul(step(uv.x, float(1)))
-                .mul(step(float(0), uv.y))
-                .mul(step(uv.y, float(1)));
-            const shadow = texture(tex, uv);
-            const distFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
-            const od = min(shadow.b.add(shadow.a), shadow.g.mul(distFront));
-            return inB.greaterThan(0.5).select(od, float(0));
-        };
-
-        // PCF radius: base radius + sun angular radius contribution.
-        // Sun angular radius creates physical penumbra: at distance d from
-        // cloud top, penumbra width ≈ d × tan(sunAngularRadius).
-        // We approximate by scaling PCF radius with sun angular size.
         const sunPenumbra = distanceToTop.mul(u.sunAngularRadius);
         const r = u.maxShadowFilterRadius.add(sunPenumbra);
         const texel = u.shadowTexelSize;
-        const offsetPP = vec2(r, r).mul(texel);
-        const offsetMP = vec2(r.negate(), r).mul(texel);
-        const offsetPM = vec2(r, r.negate()).mul(texel);
-        const offsetMM = vec2(r.negate(), r.negate()).mul(texel);
 
-        const odSum = sampleOD(vec2(0, 0))
-            .add(sampleOD(offsetPP))
-            .add(sampleOD(offsetMP))
-            .add(sampleOD(offsetPM))
-            .add(sampleOD(offsetMM));
+        const odSum = float(0).toVar();
+        Loop({ start: 0, end: 5, type: "int" }, () => {
+            const fi = float(0).toVar();
+            const sampleOD = (uvOffset: any): any => {
+                const rotated = vec2(
+                    jitter.cosA.mul(uvOffset.x).sub(jitter.sinA.mul(uvOffset.y)),
+                    jitter.sinA.mul(uvOffset.x).add(jitter.cosA.mul(uvOffset.y))
+                );
+                const uv = shadowUV.add(rotated).add(jitter.subTexel);
+                const inB = step(float(0), uv.x)
+                    .mul(step(uv.x, float(1)))
+                    .mul(step(float(0), uv.y))
+                    .mul(step(uv.y, float(1)));
+                const shadow = texture(tex, uv);
+                const distFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
+                const od = min(shadow.b.add(shadow.a), shadow.g.mul(distFront));
+                return inB.greaterThan(0.5).select(od, float(0));
+            };
+
+            const sx = fi
+                .equal(0)
+                .select(float(0), fi.mod(float(2)).mul(float(2)).sub(float(1)).mul(r));
+            const sy = fi
+                .equal(0)
+                .select(float(0), step(fi, float(2)).mul(float(2)).sub(float(1)).mul(r));
+            odSum.addAssign(sampleOD(vec2(sx, sy).mul(texel)));
+            fi.addAssign(float(1));
+        });
+
         const od = odSum.div(float(5));
 
         const fullBounds = baseInBounds.mul(step(float(0), distanceToTop));
@@ -732,7 +639,6 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
     return Fn(([rayPosition, distanceOffset]: [any, any]): any => {
         const posUncorrected = rayPosition.sub(u.altitudeCorrection);
 
-        // Light direction is -sunDirection (sunDirection points FROM scene TO sun)
         const rayDir = u.sunDirection.negate();
         const a = posUncorrected;
         const b = dot(rayDir, a).mul(2);
@@ -746,41 +652,30 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
 
         const jitter = getJitterRotation();
 
-        // Always sample all cascades (texture selection must be compile-time).
-        // Max 3 cascades supported (matching SHADOW_CASCADE_COUNT).
-        const od0 = sampleCascadePCF(0, posUncorrected, distanceToTop, distanceOffset, jitter);
-        const od1 = sampleCascadePCF(1, posUncorrected, distanceToTop, distanceOffset, jitter);
-        const od2 = sampleCascadePCF(2, posUncorrected, distanceToTop, distanceOffset, jitter);
-
-        // Cascade selection by view distance from camera with smooth fade.
-        // Fade zone = 10% of cascade range on each side of the boundary.
         const viewDist = length(rayPosition.sub(u.cameraPosition));
         const c0End = u.shadowIntervals[0].y.mul(u.shadowFar);
         const c1End = u.shadowIntervals[1].y.mul(u.shadowFar);
-        const fade0 = c0End.mul(float(0.1));
-        const fade1 = c1End.mul(float(0.1));
 
-        // Gate by cascadeCount
         const c1Valid = u.shadowCascadeCount.greaterThan(1);
         const c2Valid = u.shadowCascadeCount.greaterThan(2);
 
-        // Blend weight for cascade 0→1 transition:
-        // w0 = 1 when dist < c0End - fade0, 0 when dist > c0End + fade0
-        const w0 = saturate(c0End.add(fade0).sub(viewDist).div(fade0.mul(2)));
-        // When only 1 cascade, force w0 = 1
-        const w0Final = c1Valid.select(w0, float(1));
+        const od = float(0).toVar();
 
-        // Blend weight for cascade 1→2 transition:
-        // w1 = 1 when dist < c1End - fade1, 0 when dist > c1End + fade1
-        const w1 = saturate(c1End.add(fade1).sub(viewDist).div(fade1.mul(2)));
-        const w1Final = c2Valid.select(w1, float(1));
+        If(viewDist.greaterThan(c1End).and(c2Valid), () => {
+            od.assign(sampleCascadePCF(2, posUncorrected, distanceToTop, distanceOffset, jitter));
+        })
+            .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
+                od.assign(
+                    sampleCascadePCF(1, posUncorrected, distanceToTop, distanceOffset, jitter)
+                );
+            })
+            .Else(() => {
+                od.assign(
+                    sampleCascadePCF(0, posUncorrected, distanceToTop, distanceOffset, jitter)
+                );
+            });
 
-        // Stage 1: blend c0/c1
-        const od01 = mix(od1, od0, w0Final);
-        // Stage 2: blend (c0/c1) with c2
-        const od012 = mix(od2, od01, w1Final);
-
-        return od012;
+        return od;
     });
 };
 
@@ -1179,42 +1074,6 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
         const debugMode = u.debugMode;
 
-        const debugPos31 = vec3().toVar();
-        const debugHeight31 = float().toVar();
-        const debugUv31 = vec2().toVar();
-        const debugWeather31 = vec4().toVar();
-        const debugHeightFraction31 = vec4().toVar();
-        const m31Density = vec4().toVar();
-        const debugWeatherUv34 = vec2().toVar();
-        const debugLocalWeather34 = vec4().toVar();
-        const debugMedia33 = vec4().toVar();
-        const debugPosLen = float().toVar();
-        const camPosLen = float().toVar();
-
-        If(debugMode.greaterThanEqual(28).and(debugMode.lessThanEqual(39)), () => {
-            const pos = cameraPosition.add(rayDirection.mul(rayNear.max(0).add(2000)));
-            debugPos31.assign(pos);
-            const h = length(pos).sub(u.bottomRadius);
-            debugHeight31.assign(h);
-            const uv = getCubeSphereUv(pos);
-            debugUv31.assign(uv);
-            const weather = sampleWeather(uv, h, float(0));
-            debugWeather31.assign(weather);
-            m31Density.assign(weather);
-            const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
-            debugHeightFraction31.assign(hf);
-            const wuv = uv.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
-            debugWeatherUv34.assign(wuv);
-            debugLocalWeather34.assign(
-                exp(u.weatherExponents.mul(texture(u.localWeatherTexture, wuv, float(0)).log()))
-            );
-            debugMedia33.assign(
-                sampleMedia(hf, m31Density, pos, uv, float(0), float(0), cameraPosition)
-            );
-            debugPosLen.assign(length(pos));
-            camPosLen.assign(length(cameraPosition));
-        });
-
         // STEP 8g: marchClouds + aerial perspective + haze
         If(shouldMarch.greaterThan(0.5), () => {
             const origin = rayNear.mul(rayDirection).add(cameraPosition);
@@ -1304,234 +1163,6 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             // Alpha-blend haze over existing color
             resultColor.rgb.assign(resultColor.rgb.mix(haze.rgb, haze.a));
             resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
-        });
-
-        // DEBUG OVERRIDE: modes 90+ overwrite final color after all processing
-        // Mode 90: pure red (test visibility)
-        If(debugMode.equal(90), () => {
-            resultColor.assign(vec4(1, 0, 0, 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-
-        // Modes 10-39: moved here as FINAL overrides so march+haze don't clobber them
-        If(debugMode.equal(10), () => {
-            resultColor.assign(
-                vec4(rayNear.max(0).div(200000), rayFar.max(0).div(200000), shouldMarch, 1)
-            );
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(11), () => {
-            resultColor.assign(
-                vec4(u.cameraHeight.div(2000), intersectsGround, mu.mul(0.5).add(0.5), 1)
-            );
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(12), () => {
-            resultColor.assign(vec4(rayDirection.mul(0.5).add(0.5), 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(23), () => {
-            resultColor.assign(vec4(positionGeometry, 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(24), () => {
-            resultColor.assign(vec4(rayDirection, 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(25), () => {
-            resultColor.assign(vec4(positionGeometry.mul(0.5).add(0.5), 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(26), () => {
-            const ndc = screenUV.mul(2).sub(1);
-            resultColor.assign(vec4(ndc.x, ndc.y, float(0), float(1)));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(27), () => {
-            resultColor.assign(
-                vec4(
-                    cameraPosition.x.div(1e7),
-                    cameraPosition.y.div(1e7),
-                    cameraPosition.z.div(1e7),
-                    1
-                )
-            );
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(28), () => {
-            resultColor.assign(
-                vec4(
-                    debugPos31.x.div(debugPosLen).mul(0.5).add(0.5),
-                    debugPos31.y.div(debugPosLen).mul(0.5).add(0.5),
-                    0.5,
-                    1
-                )
-            );
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(29), () => {
-            resultColor.assign(
-                vec4(
-                    cameraPosition.x.div(camPosLen).mul(0.5).add(0.5),
-                    cameraPosition.y.div(camPosLen).mul(0.5).add(0.5),
-                    0.5,
-                    1
-                )
-            );
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(31), () => {
-            resultColor.assign(vec4(m31Density.x, m31Density.y, m31Density.z, m31Density.w));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(32), () => {
-            resultColor.assign(
-                vec4(
-                    debugHeightFraction31.x,
-                    debugHeightFraction31.y,
-                    debugHeightFraction31.z,
-                    debugHeightFraction31.w
-                )
-            );
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(33), () => {
-            resultColor.assign(vec4(debugMedia33.xyz, 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(34), () => {
-            resultColor.assign(debugLocalWeather34);
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(35), () => {
-            resultColor.assign(
-                vec4(
-                    debugWeatherUv34.x.sub(debugWeatherUv34.x.floor()),
-                    debugWeatherUv34.y.sub(debugWeatherUv34.y.floor()),
-                    0.5,
-                    1
-                )
-            );
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(36), () => {
-            resultColor.assign(vec4(texture3D(u.shapeTexture, vec3(0.5, 0.5, screenUV.x)).r));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(37), () => {
-            resultColor.assign(
-                texture(
-                    u.localWeatherTexture,
-                    debugUv31.mul(u.localWeatherRepeat).add(u.localWeatherOffset)
-                )
-            );
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(38), () => {
-            resultColor.assign(texture(u.localWeatherTexture, vec2(0.5)));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        If(debugMode.equal(39), () => {
-            resultColor.assign(vec4(debugUv31, debugHeight31.div(10000), 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-
-        // Mode 91: per-pixel sun irradiance via LUT (same fixed pos as ref)
-        const debugPos91 = cameraPosition.add(rayDirection.mul(rayNear.max(0).add(2000)));
-        const debugPosUnit91 = debugPos91.mul(u.worldToUnit);
-        const debugIrr91 = getSplitScalarIlluminance(debugPosUnit91, u.sunDirection).toConst();
-        If(debugMode.equal(91), () => {
-            resultColor.assign(vec4(debugIrr91.get("direct"), 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-        // Mode 92: per-pixel sky irradiance via LUT
-        If(debugMode.equal(92), () => {
-            resultColor.assign(vec4(debugIrr91.get("indirect"), 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-
-        // Mode 93: test PI2 constant for comparison
-        If(debugMode.equal(93), () => {
-            resultColor.assign(vec4(Math.PI * 2, Math.PI * 2, Math.PI * 2, 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-
-        // Mode 94: test rayleigh phase value for comparison
-        If(debugMode.equal(94), () => {
-            const phase93 = float(0.0746);
-            resultColor.assign(vec4(phase93, phase93, phase93, 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-
-        // Mode 95: raw irradiance LUT value (indirect / 2π)
-        If(debugMode.equal(95), () => {
-            resultColor.assign(vec4(debugIrr91.get("indirect").div(Math.PI * 2), 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-
-        // Mode 96: debug raw height
-        If(debugMode.equal(96), () => {
-            resultColor.assign(vec4(debugHeight31, debugHeight31, debugHeight31, 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-
-        // Mode 97: debug cameraPosition full vector
-        If(debugMode.equal(97), () => {
-            resultColor.assign(vec4(cameraPosition.x, cameraPosition.y, cameraPosition.z, 1));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-
-        // Mode 98: BSM shadow optical depth at sample position
-        If(debugMode.equal(98), () => {
-            const samplePos = cameraPosition.add(rayDirection.mul(rayNear.max(0).add(2000)));
-            const shadowOD = sampleShadowOpticalDepth(samplePos, float(0));
-            const shadowODVal = shadowOD.mul(float(0.1));
-            resultColor.assign(vec4(shadowODVal, shadowODVal, shadowODVal, float(1)));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
-        });
-
-        // Mode 99: dump bsmCond components for primary march sample position
-        If(debugMode.equal(99), () => {
-            // Use hardcoded ref rayDirection for entire image
-            const refDir = vec3(0.29150391, 0.57421875, -0.76464844);
-            const refDot = dot(refDir, cameraPosition).mul(2);
-            const refRMin = u.bottomRadius.add(u.minHeight);
-            const refR2 = dot(cameraPosition, cameraPosition);
-            const refCMin = refR2.sub(refRMin.mul(refRMin));
-            const refDisc = refDot.mul(refDot).sub(refCMin.mul(4));
-            const refQ = sqrt(refDisc.max(0));
-            const refFarMin = refDot.negate().add(refQ).mul(0.5);
-            resultColor.assign(vec4(refFarMin.div(1e5), refDot.div(1e5), float(0), float(1)));
-            resultFrontDepth.assign(float(-1));
-            resultVelocity.assign(vec2(0));
         });
 
         return cloudRendererResultStruct(resultColor, resultFrontDepth, resultVelocity);

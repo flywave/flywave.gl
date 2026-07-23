@@ -15,6 +15,7 @@
 11. [雾效 (Haze)](#11-雾效-haze)
 12. [质量预设](#12-质量预设)
 13. [迁移到 flywave.gl 的关键注意事项](#13-迁移到-flywavegl-的关键注意事项)
+14. [性能瓶颈分析 (TSL → WGSL)](#14-性能瓶颈分析-tsl--wgsl)
 
 ---
 
@@ -360,7 +361,7 @@ void main() {
     float cosTheta = dot(sunDirection, rayDirection);
 
     // 2. 计算射线与球层的交点
-    IntersectionResult intersections = getIntersections(cameraPosition, rayDirection);
+    IntersectionResult intersections = getIntersection(cameraPosition, rayDirection);
     vec2 rayNearFar = getRayNearFar(intersections);
 
     // 3. 限制射线到场景深度
@@ -992,3 +993,88 @@ vec4 approximateHaze(rayOrigin, rayDirection, maxRayDistance, cosTheta, shadowLe
 10. **Structured Volume Sampling**：阴影 pass 的体采样方法
 11. **Variance Clipping**：时域累积的颜色裁剪
 12. **Bayer jitter + temporal upscale**：低分辨率到高分辨率的时域上采样
+
+---
+
+## 14. 性能瓶颈分析 (TSL → WGSL)
+
+### 14.1 问题概述
+
+在相同渲染参数下（high preset、全分辨率、iteration count 等完全对齐），参考 GLSL 实现（WebGL2）达到 **60 FPS**，而 TSL 移植版（WebGPU/WGSL）仅 **1-2 FPS**。
+
+### 14.2 根因：TSL 的激进函数内联
+
+**核心发现**：Three.js TSL 在编译到 WGSL 时，会将所有 `Fn()` 节点**完全内联**到 `main` 函数中，不生成独立的 WGSL 函数调用。
+
+| 指标                 | GLSL (参考实现)         | WGSL (TSL 编译后)    |
+| -------------------- | ----------------------- | -------------------- |
+| Fragment Shader 大小 | **10.5 KB**             | **131 KB**           |
+| main 函数行数        | ~250 行（函数调用为主） | ~2350 行（全部内联） |
+| 独立 WGSL/GLSL 函数  | ~40 个                  | ~18 个（仅大气 LUT） |
+| if 语句数            | ~6                      | ~219                 |
+| FPS                  | **60**                  | **1-2**              |
+
+### 14.3 内联膨胀的来源
+
+TSL `Fn()` 内联导致循环体内代码急剧膨胀。以下是在 WGSL 中实测的各函数内联次数：
+
+| 被内联的函数                    | 调用次数 | 每次展开行数 | 总膨胀行数 | 占 main 比例 |
+| ------------------------------- | -------- | ------------ | ---------- | ------------ |
+| `getCubeSphereUv`               | 9 次     | ~84 行       | ~756 行    | 32%          |
+| `sampleWeather`                 | ~5 次    | ~30 行       | ~150 行    | 6%           |
+| `sampleMedia`                   | ~4 次    | ~80 行       | ~320 行    | 14%          |
+| `sampleShadowOpticalDepth`      | ~2 次    | ~100 行      | ~200 行    | 9%           |
+| `marchOpticalDepth`（嵌套循环） | ~2 次    | ~100 行      | ~200 行    | 9%           |
+
+**关键膨胀链**：
+
+1. `marchClouds` 主循环每次迭代调用 `sampleWeather` + `sampleMedia`
+2. `sampleWeather` 和 `sampleMedia` 各调用 `getCubeSphereUv`
+3. `marchClouds` 循环内还调用 `marchOpticalDepth`（向太阳和地面方向）
+4. `marchOpticalDepth` 内部又调用 `sampleWeather` + `sampleMedia` + `getCubeSphereUv`
+5. `sampleShadowOpticalDepth` 内部调用 3 个 cascade 的 `sampleCascadePCF`（每个 5-tap PCF）
+
+整个调用链被展开后，`marchClouds` 主循环体达到 **1398 行 / 67.6 KB**。
+
+### 14.4 GLSL 为何不受影响
+
+GLSL 编译器（如 Mesa/ANGLE）具备以下优化能力，TSL/WGSL 编译器不具备或被绕过：
+
+1. **保持函数独立**：GLSL 函数编译为独立的子程序，GPU 指令缓存只需装下单个函数
+2. `#ifdef` 预处理：未启用的功能（如 `#ifdef SHAPE_DETAIL`）在编译时完全移除
+3. **死代码消除**：`return;` 之后的代码被编译器自动删除
+4. **循环不内联**：`for` 循环体只编译一次，不会展开
+
+TSL 的 `Fn()` 基于节点图，每个调用点创建新的节点子树，编译器无法识别"这是同一个函数"。
+
+### 14.5 GPU 指令缓存溢出
+
+现代 GPU 的 L1 指令缓存通常为 **32-64 KB**。131 KB 的 WGSL shader 远超缓存容量：
+
+-   即使循环迭代数降到 10，FPS 不变（证明瓶颈不是循环次数）
+-   即使删除全部 debug If 块（-265 行），FPS 不变（证明不是分支开销）
+-   瓶颈是 **shader 指令本身太大**，GPU 反复 cache miss
+
+### 14.6 可行的优化方向
+
+由于 TSL 的内联行为是架构层面的，无法通过简单配置关闭，需要从代码结构层面减少内联膨胀：
+
+1. **getCubeSphereUv 无分支化**：将 12 个嵌套 `If()` 改为 `step()` + `mix()` 无分支算术（84 行 →30 行），×9 调用点 = 省 ~486 行
+
+2. **marchOpticalDepth 循环化**：将手动展开的 4 步（pos0-pos3）改为 TSL `Loop`，使 `getCubeSphereUv` + `sampleWeather` + `sampleMedia` 只出现 1 次而非 4 次
+
+3. **sampleShadowOpticalDepth cascade 合并**：3 个 cascade 各 5-tap PCF → 改为基于运行时距离只采样命中的 cascade
+
+4. **getSplitScalarIlluminance 外提**：从 marchClouds 循环内提取到循环外，使用云层平均高度做单次 LUT 查找
+
+5. **TSL `Fn()` 合并**：将多个小 `Fn()` 合并为大的 `Fn()`，减少节点图深度
+
+**预期目标**：将 WGSL 从 131KB 降至 ~30-40KB（接近 GPU 缓存上限），使全分辨率下达到 30+ FPS。
+
+### 14.7 已修复的设计 Bug
+
+在性能分析过程中，发现并修复了以下设计 bug（已在代码中提交）：
+
+1. **marchClouds 重复调用**：`cloudTsl.ts` 的 `render` 函数有两个 `If` 块都调用了 `marchClouds`（500 次迭代），当 `debugMode == 0` 时两个块都执行，导致主 raymarch 每像素跑了两遍。已合并为一个块。
+
+2. **Debug 变量无条件计算**：`sampleWeather`、`sampleMedia`、纹理采样等 debug 变量在所有像素上无条件执行（不受 `debugMode` 门控），已移入 `If(debugMode)` 块内。
