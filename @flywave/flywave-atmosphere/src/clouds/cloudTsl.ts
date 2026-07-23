@@ -1218,7 +1218,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const debugPosLen = length(debugPos31);
         const camPosLen = length(cameraPosition);
 
-        // STEP 8g: radianceIntegral, alpha=1
+        // STEP 8g: marchClouds + aerial perspective + haze
         If(shouldMarch.greaterThan(0.5), () => {
             const origin = rayNear.mul(rayDirection).add(cameraPosition);
             const marchResult = marchClouds(
@@ -1228,16 +1228,38 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 cosTheta,
                 jitter
             ).toConst();
-            resultColor.assign(vec4(marchResult.get("color").rgb, 1));
+
+            resultColor.assign(marchResult.get("color"));
+
+            const marchedFrontDepth = marchResult.get("frontDepth").toConst();
+            const hitClouds = marchedFrontDepth.greaterThanEqual(0).toConst();
+            If(hitClouds, () => {
+                const frontDepth = rayNear.add(marchedFrontDepth);
+                const frontPosition = cameraPosition.add(frontDepth.mul(rayDirection));
+
+                const shadowLen = float(0).toVar();
+                // SHADOW_LENGTH skipped (no BSM yet)
+
+                const luminanceTransfer = getIndirectLuminanceToPoint(
+                    cameraPosition.mul(u.worldToUnit),
+                    frontPosition.mul(u.worldToUnit),
+                    vec2(shadowLen.mul(u.worldToUnit), float(0)),
+                    u.sunDirection
+                ).toConst();
+                const transmittance = luminanceTransfer.get("transmittance");
+                const inscatter = luminanceTransfer.get("luminance");
+                resultColor.rgb.assign(
+                    resultColor.rgb.mul(transmittance).add(inscatter.mul(resultColor.a))
+                );
+
+                resultFrontDepth.assign(frontDepth);
+
+                const frontWorld = u.ecefToWorld.mul(vec4(frontPosition, 1)).xyz;
+                const prevClip = u.prevViewProjection.mul(vec4(frontWorld, 1));
+                const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
+                resultVelocity.assign(screenUV.sub(prevUv));
+            });
         });
-        resultFrontDepth.assign(float(-1));
-        resultVelocity.assign(vec2(0));
-
-        return cloudRendererResultStruct(resultColor, resultFrontDepth, resultVelocity);
-        resultFrontDepth.assign(float(-1));
-        resultVelocity.assign(vec2(0));
-
-        return cloudRendererResultStruct(resultColor, resultFrontDepth, resultVelocity);
 
         // Debug modes 10-39 are applied as FINAL overrides (after march + haze)
         // to prevent normal pipeline from overwriting debug colors.

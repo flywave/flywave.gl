@@ -166,7 +166,7 @@ async function main() {
     // Background: approximate sky radiance so the cloud-over-sky blend matches
     // reference (which uses a real sky). Without this, clouds render as raw
     // orange radiance against pure black.
-    const backgroundNode = Fn(() => vec4(0.5, 0.7, 1.0, 1))();
+    const backgroundNode = Fn(() => vec4(0, 0, 0, 1))();
 
     // Cloud render node — the heart of the system.
     // It internally calls createCloudRenderer() and manages all the buffers.
