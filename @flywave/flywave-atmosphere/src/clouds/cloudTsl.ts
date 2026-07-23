@@ -1260,8 +1260,6 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 resultVelocity.assign(screenUV.sub(prevUv));
             });
         });
-
-        // Debug modes 10-39 are applied as FINAL overrides (after march + haze)
         // to prevent normal pipeline from overwriting debug colors.
         If(debugMode.equal(0).and(shouldMarch.greaterThan(0.5)), () => {
             const origin = rayNear.mul(rayDirection).add(cameraPosition);

@@ -2,7 +2,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    and,
     dot,
     Fn,
     float,
@@ -13,6 +12,8 @@ import {
     max,
     mix,
     mrt,
+    not,
+    or,
     positionGeometry,
     screenCoordinate,
     screenUV,
@@ -571,8 +572,8 @@ export class CloudRenderNode extends TempNode {
         // (getAtmosphereContext doesn't work with renderer arg, so we rely on
         // updateCloudUniforms having been called first)
 
-        // Temporal jitter for super-resolution upscale
-        const _enableJitter = true;
+        // Camera jitter disabled — reference uses temporalUpscale={false}
+        const _enableJitter = false;
         let jitterCamera: any = null,
             savedProj: any = null,
             savedProjInv: any = null;
@@ -864,13 +865,44 @@ export class CloudRenderNode extends TempNode {
             const resolveNode = Fn(() => {
                 const coord = ivec2(screenCoordinate);
                 const uv = screenUV;
-
                 const currentColor = this.lowResNode.load(coord);
 
-                // Simplest temporal accumulation: blend history at same UV
-                // No velocity, no variance clipping - just test history persistence
+                // --- STEP A: simple same-UV blend (confirmed working) ---
+                // const historyColor = texture(this.historyNode, uv);
+                // return mix(historyColor, currentColor, float(0.05));
+
+                // --- STEP C: same-UV blend + variance clipping ---
                 const historyColor = texture(this.historyNode, uv);
-                return mix(historyColor, currentColor, float(0.1));
+                const clippedColor = _varianceClippingResolve(
+                    this.lowResNode,
+                    coord,
+                    currentColor,
+                    historyColor
+                );
+                return mix(clippedColor, currentColor, float(0.05));
+
+                // --- STEP B: velocity reprojection (parked) ---
+                // const closestDepth = float(1e7).toVar();
+                // const velocity = vec2(0).toVar();
+                // for (const [x, y] of _neighborOffsets9) {
+                //     const neighbor = this.velocityLowResNode.load(coord.add(ivec2(x, y)));
+                //     If(neighbor.r.lessThan(closestDepth), () => {
+                //         closestDepth.assign(neighbor.r);
+                //         velocity.assign(neighbor.gb);
+                //     });
+                // }
+                // const prevUv = uv.sub(velocity);
+                // const outOfBounds = prevUv.x
+                //     .lessThan(0)
+                //     .or(prevUv.x.greaterThan(1))
+                //     .or(prevUv.y.lessThan(0))
+                //     .or(prevUv.y.greaterThan(1));
+                // const result = currentColor.toVar();
+                // If(outOfBounds.not(), () => {
+                //     const historyColor = texture(this.historyNode, prevUv);
+                //     result.assign(mix(historyColor, currentColor, float(0.05)));
+                // });
+                // return result;
             })();
 
             this.resolveMaterial.fragmentNode = resolveNode;
