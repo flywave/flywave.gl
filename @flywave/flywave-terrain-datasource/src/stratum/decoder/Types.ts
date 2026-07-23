@@ -2,12 +2,20 @@ export interface ParseStratumMeshOptions {
     bounds?: [number, number, number, number];
 }
 
+// Stratum mesh format magic + version.
+export const STRATUM_MAGIC = "STRM";
+export const STRATUM_VERSION = 1;
+export const STRATUM_MESH_HEADER_SIZE = 112;
+
 export interface Header {
-    centerX?: number;
-    centerY?: number;
-    centerZ?: number;
-    minHeight?: number;
-    maxHeight?: number;
+    magic?: string;
+    version?: number;
+    bboxMinX?: number;
+    bboxMinY?: number;
+    bboxMinZ?: number;
+    bboxMaxX?: number;
+    bboxMaxY?: number;
+    bboxMaxZ?: number;
     boundingSphereCenterX?: number;
     boundingSphereCenterY?: number;
     boundingSphereCenterZ?: number;
@@ -146,7 +154,8 @@ export enum LayerType {
     Borehole = 1,
     Fault = 2,
     Collapse = 3,
-    Section = 4
+    Section = 4,
+    EmbeddedBody = 5
 }
 
 // 地层组
@@ -178,6 +187,42 @@ export interface SectionLine {
 
 export type StratumLithology = Record<string, string>;
 
+// 3D seismic data volume metadata (no raw amplitude data — loaded via FilePath).
+export interface SeismicCubeData {
+    id: string;
+    name: string;
+    inlineCount: number;
+    crosslineCount: number;
+    sampleCount: number;
+    sampleInterval: number;
+    inlineMin: number;
+    inlineMax: number;
+    crosslineMin: number;
+    crosslineMax: number;
+    timeMin: number;
+    timeMax: number;
+    cornerTL: [number, number, number];
+    cornerTR: [number, number, number];
+    cornerBL: [number, number, number];
+    cornerBR: [number, number, number];
+    azimuth: number;
+    minAmplitude: number;
+    maxAmplitude: number;
+    meanAmplitude: number;
+    rmsAmplitude: number;
+    sourceFormat: number;
+    isMigrated: boolean;
+    isStack: boolean;
+}
+
+// Embedded body metadata (karst caves, underground reservoirs, etc.).
+export interface EmbeddedBodyData {
+    id: string;
+    name: string;
+    lithology: string;
+    stratumId: string;
+}
+
 // 扩展类型
 export type Extensions = {
     metadata?: Metadata;
@@ -187,7 +232,9 @@ export type Extensions = {
     stratumLayers?: StratumLayer[];
     collapsePillars?: CollapsePillar[];
     sectionLines?: SectionLine[];
-    stratumLithology?: Record<string, string>; // 新增类型
+    stratumLithology?: Record<string, string>;
+    seismicCubes?: SeismicCubeData[];
+    embeddedBodies?: EmbeddedBodyData[];
 } & {
     [key: string]: any; // 允许其他未定义的扩展
 };

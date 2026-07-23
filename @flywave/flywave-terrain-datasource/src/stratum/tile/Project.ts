@@ -2,31 +2,31 @@ import { GeoBox, GeoCoordinatesLike, Projection } from "@flywave/flywave-geoutil
 import * as THREE from "three";
 
 export function toTileLocal(
-    header: { centerX?: number; centerY?: number; centerZ?: number },
+    header: { boundingSphereCenterX?: number; boundingSphereCenterY?: number; boundingSphereCenterZ?: number },
     geoPoint: GeoCoordinatesLike | THREE.Vector3,
     project?: Projection
 ): THREE.Vector3 {
-    const { centerX = 0, centerY = 0, centerZ = 0 } = header;
+    const { boundingSphereCenterX: cx = 0, boundingSphereCenterY: cy = 0, boundingSphereCenterZ: cz = 0 } = header;
     const point = project
         ? project.projectPoint(geoPoint as GeoCoordinatesLike)
         : (geoPoint as THREE.Vector3);
 
-    return new THREE.Vector3(point.x - centerX, point.y - centerY, point.z - centerZ);
+    return new THREE.Vector3(point.x - cx, point.y - cy, point.z - cz);
 }
 
 export function toTileWorld(
-    header: { centerX?: number; centerY?: number; centerZ?: number },
+    header: { boundingSphereCenterX?: number; boundingSphereCenterY?: number; boundingSphereCenterZ?: number },
     point: THREE.Vector3,
     project?: Projection
 ): GeoCoordinatesLike | THREE.Vector3 {
-    const { centerX = 0, centerY = 0, centerZ = 0 } = header;
+    const { boundingSphereCenterX: cx = 0, boundingSphereCenterY: cy = 0, boundingSphereCenterZ: cz = 0 } = header;
 
-    const ppoint = new THREE.Vector3(point.x + centerX, point.y + centerY, point.z + centerZ);
+    const ppoint = new THREE.Vector3(point.x + cx, point.y + cy, point.z + cz);
     return project ? project.unprojectPoint(ppoint) : ppoint;
 }
 
 export function toTileLocalLines(
-    header: { centerX?: number; centerY?: number; centerZ?: number },
+    header: { boundingSphereCenterX?: number; boundingSphereCenterY?: number; boundingSphereCenterZ?: number },
     lines: GeoCoordinatesLike[][] | THREE.Vector3[][],
     project?: Projection
 ): THREE.Vector3[][] {
@@ -34,7 +34,7 @@ export function toTileLocalLines(
 }
 
 export function toTileWorldLines(
-    header: { centerX?: number; centerY?: number; centerZ?: number },
+    header: { boundingSphereCenterX?: number; boundingSphereCenterY?: number; boundingSphereCenterZ?: number },
     lines: THREE.Vector3[][],
     project?: Projection
 ): GeoCoordinatesLike[][] | THREE.Vector3[][] {
@@ -45,21 +45,21 @@ export function toTileWorldLines(
 
 export function toTileWorldBBox(
     header: {
-        centerX?: number;
-        centerY?: number;
-        centerZ?: number;
+        boundingSphereCenterX?: number;
+        boundingSphereCenterY?: number;
+        boundingSphereCenterZ?: number;
     },
     bbox: THREE.Box3,
     project?: Projection
 ): GeoBox | THREE.Box3 {
-    const { centerX = 0, centerY = 0, centerZ = 0 } = header;
+    const { boundingSphereCenterX: cx = 0, boundingSphereCenterY: cy = 0, boundingSphereCenterZ: cz = 0 } = header;
 
     const min = new THREE.Vector3()
         .copy(bbox.min)
-        .add(new THREE.Vector3(centerX, centerY, centerZ));
+        .add(new THREE.Vector3(cx, cy, cz));
     const max = new THREE.Vector3()
         .copy(bbox.max)
-        .add(new THREE.Vector3(centerX, centerY, centerZ));
+        .add(new THREE.Vector3(cx, cy, cz));
 
     return project
         ? project.unprojectBox({
@@ -71,14 +71,14 @@ export function toTileWorldBBox(
 
 export function toTileLocalBBox(
     header: {
-        centerX?: number;
-        centerY?: number;
-        centerZ?: number;
+        boundingSphereCenterX?: number;
+        boundingSphereCenterY?: number;
+        boundingSphereCenterZ?: number;
     },
     bbox: GeoBox | THREE.Box3,
     project?: Projection
 ): THREE.Box3 {
-    const { centerX = 0, centerY = 0, centerZ = 0 } = header;
+    const { boundingSphereCenterX: cx = 0, boundingSphereCenterY: cy = 0, boundingSphereCenterZ: cz = 0 } = header;
 
     // 增加空值检查和后备方案
     const worldBox = project ? project.projectBox(bbox as GeoBox) : (bbox as THREE.Box3);
@@ -91,14 +91,14 @@ export function toTileLocalBBox(
 
     return new THREE.Box3(
         new THREE.Vector3(
-            preciseOffset(worldBox.min.x, centerX),
-            preciseOffset(worldBox.min.y, centerY),
-            preciseOffset(worldBox.min.z, centerZ)
+            preciseOffset(worldBox.min.x, cx),
+            preciseOffset(worldBox.min.y, cy),
+            preciseOffset(worldBox.min.z, cz)
         ),
         new THREE.Vector3(
-            preciseOffset(worldBox.max.x, centerX),
-            preciseOffset(worldBox.max.y, centerY),
-            preciseOffset(worldBox.max.z, centerZ)
+            preciseOffset(worldBox.max.x, cx),
+            preciseOffset(worldBox.max.y, cy),
+            preciseOffset(worldBox.max.z, cz)
         )
     );
 }

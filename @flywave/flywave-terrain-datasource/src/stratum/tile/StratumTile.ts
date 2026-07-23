@@ -441,13 +441,15 @@ class StratumTile {
 
     private initVertexData(res: DecodeResult) {
         if (!res.vertexData) return;
-        const { minHeight = 0, maxHeight = 0 } = this._header ?? {};
-        const [minX, minY] = this._bbox?.[0] ?? [0, 0];
-        const [maxX, maxY] = this._bbox?.[1] ?? [0, 0];
 
-        const xScale = maxX - minX;
-        const yScale = maxY - minY;
-        const zScale = maxHeight - minHeight;
+        // v1 header stores real BBox in source CRS; fall back to external bbox.
+        const minX = this._header?.bboxMinX ?? this._bbox?.[0]?.[0] ?? 0;
+        const minY = this._header?.bboxMinY ?? this._bbox?.[0]?.[1] ?? 0;
+        const minZ = this._header?.bboxMinZ ?? 0;
+        const maxX = this._header?.bboxMaxX ?? this._bbox?.[1]?.[0] ?? 0;
+        const maxY = this._header?.bboxMaxY ?? this._bbox?.[1]?.[1] ?? 0;
+        const maxZ = this._header?.bboxMaxZ ?? 0;
+
         const nCoords = res.vertexData.u.length;
 
         // 批量处理顶点坐标
@@ -458,9 +460,9 @@ class StratumTile {
 
         for (let i = 0; i < nCoords; i++) {
             const offset = i * 3;
-            positions[offset] = (uArr[i] / 32767) * xScale + minX;
-            positions[offset + 1] = (vArr[i] / 32767) * yScale + minY;
-            positions[offset + 2] = (hArr[i] / 32767) * zScale + minHeight;
+            positions[offset] = minX + (uArr[i] / 32767) * (maxX - minX);
+            positions[offset + 1] = minY + (vArr[i] / 32767) * (maxY - minY);
+            positions[offset + 2] = minZ + (hArr[i] / 32767) * (maxZ - minZ);
         }
 
         // 处理纹理坐标

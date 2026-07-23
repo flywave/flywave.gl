@@ -2,11 +2,14 @@ import {
     Borehole,
     BoreholeStratum,
     CollapsePillar,
+    EmbeddedBodyData,
     ExtensionHeader,
+    Extensions,
     FaultProfile,
     Material,
     Metadata,
     SectionLine,
+    SeismicCubeData,
     StratumLayer
 } from "./Types";
 
@@ -18,33 +21,31 @@ const STRATUM_MESH_BOREHOLE_EXTENSION_ID = 4;
 const STRATUM_MESH_COLLAPSE_EXTENSION_ID = 5;
 const STRATUM_MESH_SECTION_EXTENSION_ID = 6;
 const STRATUM_MESH_LITHOLOGY_EXTENSION_ID = 7;
+const STRATUM_MESH_SEISMIC_EXTENSION_ID = 8;
+const STRATUM_MESH_EMBEDDED_EXTENSION_ID = 9;
 
 export function decodeExtensions(
     dataView: DataView<ArrayBuffer>,
     offset: number = 0
 ): {
-    extensions: {
-        metadata?: Metadata;
-        materials?: Material[];
-        faultProfiles?: FaultProfile[];
-        boreholes?: Borehole[];
-        stratumLayers?: StratumLayer[];
-        collapsePillars?: CollapsePillar[];
-        sectionLines?: SectionLine[];
-        stratumLithology?: Record<string, string>; // 新增类型
-    };
+    extensions: Extensions;
     extensionsEndPosition: number;
 } {
     const extensions: any = {};
     let pos = offset;
 
-    while (pos < dataView.byteLength) {
-        // 读取扩展头
+    // v1 TLV: uint32 count, then per-ext (uint8 id + uint32 len + data).
+    const extCount = dataView.getUint32(pos, true);
+    pos += 4;
+
+    for (let i = 0; i < extCount; i++) {
         const header: ExtensionHeader = {
             extensionId: dataView.getUint8(pos),
             extensionLength: dataView.getUint32(pos + 1, true)
         };
         pos += 5; // 1 byte for id + 4 bytes for length
+
+        if (header.extensionLength === 0) continue;
 
         const extensionData = new Uint8Array(
             dataView.buffer,
@@ -74,6 +75,12 @@ export function decodeExtensions(
                 break;
             case STRATUM_MESH_LITHOLOGY_EXTENSION_ID:
                 extensions.stratumLithology = readStratumLithology(extensionData);
+                break;
+            case STRATUM_MESH_SEISMIC_EXTENSION_ID:
+                extensions.seismicCubes = readSeismicCubes(extensionData);
+                break;
+            case STRATUM_MESH_EMBEDDED_EXTENSION_ID:
+                extensions.embeddedBodies = readEmbeddedBodies(extensionData);
                 break;
         }
     }
@@ -382,4 +389,112 @@ function readStratumLithology(data: Uint8Array): Record<string, string> {
     }
 
     return lithologyMap;
+}
+
+// ====== 地震数据扩展 (ExtId=8) ======
+
+function readSeismicCubes(data: Uint8Array): SeismicCubeData[] {
+    const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    let pos = 0;
+
+    const count = dataView.getInt32(pos, true);
+    pos += 4;
+
+    const cubes: SeismicCubeData[] = [];
+    for (let i = 0; i < count; i++) {
+        const [id, idOffset] = readString(dataView, pos);
+        pos += 4 + idOffset;
+
+        const [name, nameOffset] = readString(dataView, pos);
+        pos += 4 + nameOffset;
+
+        const inlineCount = dataView.getInt32(pos, true);
+        const crosslineCount = dataView.getInt32(pos + 4, true);
+        const sampleCount = dataView.getInt32(pos + 8, true);
+        const sampleInterval = dataView.getFloat64(pos + 12, true);
+        pos += 20;
+
+        const inlineMin = dataView.getInt32(pos, true);
+        const inlineMax = dataView.getInt32(pos + 4, true);
+        const crosslineMin = dataView.getInt32(pos + 8, true);
+        const crosslineMax = dataView.getInt32(pos + 12, true);
+        pos += 16;
+
+        const timeMin = dataView.getFloat64(pos, true);
+        const timeMax = dataView.getFloat64(pos + 8, true);
+        pos += 16;
+
+        const cornerTL: [number, number, number] = [
+            dataView.getFloat64(pos, true),
+            dataView.getFloat64(pos + 8, true),
+            dataView.getFloat64(pos + 16, true)
+        ];
+        const cornerTR: [number, number, number] = [
+            dataView.getFloat64(pos + 24, true),
+            dataView.getFloat64(pos + 32, true),
+            dataView.getFloat64(pos + 40, true)
+        ];
+        const cornerBL: [number, number, number] = [
+            dataView.getFloat64(pos + 48, true),
+            dataView.getFloat64(pos + 56, true),
+            dataView.getFloat64(pos + 64, true)
+        ];
+        const cornerBR: [number, number, number] = [
+            dataView.getFloat64(pos + 72, true),
+            dataView.getFloat64(pos + 80, true),
+            dataView.getFloat64(pos + 88, true)
+        ];
+        pos += 96;
+
+        const azimuth = dataView.getFloat64(pos, true);
+        const minAmplitude = dataView.getFloat64(pos + 8, true);
+        const maxAmplitude = dataView.getFloat64(pos + 16, true);
+        const meanAmplitude = dataView.getFloat64(pos + 24, true);
+        const rmsAmplitude = dataView.getFloat64(pos + 32, true);
+        pos += 40;
+
+        const sourceFormat = dataView.getInt32(pos, true);
+        pos += 4;
+
+        const isMigrated = dataView.getUint8(pos) !== 0;
+        const isStack = dataView.getUint8(pos + 1) !== 0;
+        pos += 2;
+
+        cubes.push({
+            id, name, inlineCount, crosslineCount, sampleCount, sampleInterval,
+            inlineMin, inlineMax, crosslineMin, crosslineMax,
+            timeMin, timeMax, cornerTL, cornerTR, cornerBL, cornerBR,
+            azimuth, minAmplitude, maxAmplitude, meanAmplitude, rmsAmplitude,
+            sourceFormat, isMigrated, isStack
+        });
+    }
+    return cubes;
+}
+
+// ====== 嵌入体扩展 (ExtId=9) ======
+
+function readEmbeddedBodies(data: Uint8Array): EmbeddedBodyData[] {
+    const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    let pos = 0;
+
+    const count = dataView.getInt32(pos, true);
+    pos += 4;
+
+    const bodies: EmbeddedBodyData[] = [];
+    for (let i = 0; i < count; i++) {
+        const [id, idOffset] = readString(dataView, pos);
+        pos += 4 + idOffset;
+
+        const [name, nameOffset] = readString(dataView, pos);
+        pos += 4 + nameOffset;
+
+        const [lithology, lithologyOffset] = readString(dataView, pos);
+        pos += 4 + lithologyOffset;
+
+        const [stratumId, stratumIdOffset] = readString(dataView, pos);
+        pos += 4 + stratumIdOffset;
+
+        bodies.push({ id, name, lithology, stratumId });
+    }
+    return bodies;
 }

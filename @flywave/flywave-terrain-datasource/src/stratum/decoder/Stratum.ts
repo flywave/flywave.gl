@@ -6,11 +6,12 @@ import {
     DecodeTriangleIndicesResult,
     DecodeVertexDataResult,
     Header,
+    STRATUM_MAGIC,
+    STRATUM_MESH_HEADER_SIZE,
+    STRATUM_VERSION,
     StratumLayer,
     StratumVoxel
 } from "./Types";
-
-const STRATUM_MESH_HEADER_SIZE = 88;
 
 function decodeZigZag(value: number): number {
     return (value >> 1) ^ -(value & 1);
@@ -28,47 +29,63 @@ function clamp(val: number, minVal: number, maxVal: number): number {
 }
 
 function octDecode(x: number, y: number): [number, number, number] {
-    // 将输入的8位整数转换为归一化浮点数（范围[-1,1]）
     let fx = fromSnorm(x);
     let fy = fromSnorm(y);
+    let fz = 1.0 - (Math.abs(fx) + Math.abs(fy));
 
-    // 计算初始z分量（1 - |x| - |y|）
-    const fz = 1.0 - (Math.abs(fx) + Math.abs(fy));
-
-    // 如果z为负，说明在负半球，需调整x,y
     if (fz < 0.0) {
         const oldX = fx;
         fx = (1.0 - Math.abs(fy)) * signNotZero(oldX);
         fy = (1.0 - Math.abs(oldX)) * signNotZero(fy);
+        fz = 1.0 - (Math.abs(fx) + Math.abs(fy));
     }
 
-    // 构造向量并归一化
-    const vec = [fx, fy, fz];
-    const length = Math.sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]);
+    const length = Math.sqrt(fx * fx + fy * fy + fz * fz);
 
     if (length === 0) {
         return [0, 0, 0];
     }
 
-    return [vec[0] / length, vec[1] / length, vec[2] / length];
+    return [fx / length, fy / length, fz / length];
 }
 
 function decodeHeader(dataView: DataView): DecodeHeaderResult {
     const position = 0;
+
+    // Read magic (4 bytes)
+    const magicBytes = [
+        dataView.getUint8(0),
+        dataView.getUint8(1),
+        dataView.getUint8(2),
+        dataView.getUint8(3)
+    ];
+    const magic = String.fromCharCode(...magicBytes);
+
     const header: Header = {
-        centerX: dataView.getFloat64(position, true),
-        centerY: dataView.getFloat64(position + 8, true),
-        centerZ: dataView.getFloat64(position + 16, true),
-        minHeight: dataView.getFloat32(position + 24, true),
-        maxHeight: dataView.getFloat32(position + 28, true),
-        boundingSphereCenterX: dataView.getFloat64(position + 32, true),
-        boundingSphereCenterY: dataView.getFloat64(position + 40, true),
-        boundingSphereCenterZ: dataView.getFloat64(position + 48, true),
-        boundingSphereRadius: dataView.getFloat64(position + 56, true),
-        horizonOcclusionPointX: dataView.getFloat64(position + 64, true),
-        horizonOcclusionPointY: dataView.getFloat64(position + 72, true),
-        horizonOcclusionPointZ: dataView.getFloat64(position + 80, true)
+        magic,
+        version: dataView.getUint32(4, true),
+        bboxMinX: dataView.getFloat64(8, true),
+        bboxMinY: dataView.getFloat64(16, true),
+        bboxMinZ: dataView.getFloat64(24, true),
+        bboxMaxX: dataView.getFloat64(32, true),
+        bboxMaxY: dataView.getFloat64(40, true),
+        bboxMaxZ: dataView.getFloat64(48, true),
+        boundingSphereCenterX: dataView.getFloat64(56, true),
+        boundingSphereCenterY: dataView.getFloat64(64, true),
+        boundingSphereCenterZ: dataView.getFloat64(72, true),
+        boundingSphereRadius: dataView.getFloat64(80, true),
+        horizonOcclusionPointX: dataView.getFloat64(88, true),
+        horizonOcclusionPointY: dataView.getFloat64(96, true),
+        horizonOcclusionPointZ: dataView.getFloat64(104, true)
     };
+
+    // Validate magic + version.
+    if (magic !== STRATUM_MAGIC) {
+        throw new Error(`stratum: invalid magic "${magic}"`);
+    }
+    if (header.version !== STRATUM_VERSION) {
+        throw new Error(`stratum: unsupported version ${header.version}`);
+    }
 
     return {
         header,
@@ -116,18 +133,12 @@ function decodeVertexData(dataView: DataView, headerEndPosition: number): Decode
     let prevNv = 0;
 
     for (let i = 0; i < vertexCount; i++) {
-        const deltaNu = decodeZigZag(dataView.getUint16(position, true)) + prevNu;
+        prevNu += decodeZigZag(dataView.getUint16(position, true));
         position += 2;
-        const deltaNv = decodeZigZag(dataView.getUint16(position, true)) + prevNv;
+        prevNv += decodeZigZag(dataView.getUint16(position, true));
         position += 2;
 
-        const nx = prevNu + deltaNu;
-        const ny = prevNv + deltaNv;
-
-        prevNu = nx;
-        prevNv = ny;
-
-        const normal = octDecode(nx, ny);
+        const normal = octDecode(prevNu, prevNv);
         normalsArray[i * 3] = normal[0];
         normalsArray[i * 3 + 1] = normal[1];
         normalsArray[i * 3 + 2] = normal[2];
@@ -141,14 +152,11 @@ function decodeVertexData(dataView: DataView, headerEndPosition: number): Decode
     let prevUVu = 0;
     let prevUVv = 0;
     for (let i = 0; i < vertexCount; i++) {
-        const u = decodeZigZag(uvUnpacked[i * 2]) + prevUVu;
-        const v = decodeZigZag(uvUnpacked[i * 2 + 1]) + prevUVv;
+        prevUVu += decodeZigZag(uvUnpacked[i * 2]);
+        prevUVv += decodeZigZag(uvUnpacked[i * 2 + 1]);
 
-        prevUVu = u;
-        prevUVv = v;
-
-        uvsArray[i * 2] = u / 0xfff;
-        uvsArray[i * 2 + 1] = v / 0xfff;
+        uvsArray[i * 2] = (prevUVu & 0xffff) / 0xfff;
+        uvsArray[i * 2 + 1] = (prevUVv & 0xffff) / 0xfff;
     }
 
     const alignment = vertexCount > 65535 ? 4 : 2;
