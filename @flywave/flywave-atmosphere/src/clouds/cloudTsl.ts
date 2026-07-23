@@ -1177,101 +1177,46 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const resultFrontDepth = rayFar.toVar();
         const resultVelocity = vec2(0, 0).toVar();
 
-        // Modes 30-39 bypass normal march. Compute debug color unconditionally
-        // (so sampleWeather runs outside If), then select between debug/march result.
         const debugMode = u.debugMode;
 
-        // Shared debug sample position: rayNear + 2000m
-        const debugPos31 = cameraPosition.add(rayDirection.mul(rayNear.max(0).add(2000)));
-        const debugHeight31 = length(debugPos31).sub(u.bottomRadius);
-        const debugUv31 = getCubeSphereUv(debugPos31);
-        const debugWeather31 = sampleWeather(debugUv31, debugHeight31, float(0));
+        const debugPos31 = vec3().toVar();
+        const debugHeight31 = float().toVar();
+        const debugUv31 = vec2().toVar();
+        const debugWeather31 = vec4().toVar();
+        const debugHeightFraction31 = vec4().toVar();
+        const m31Density = vec4().toVar();
+        const debugWeatherUv34 = vec2().toVar();
+        const debugLocalWeather34 = vec4().toVar();
+        const debugMedia33 = vec4().toVar();
+        const debugPosLen = float().toVar();
+        const camPosLen = float().toVar();
 
-        const debugHeightFraction31 = remapClamped(
-            vec4(debugHeight31),
-            u.minLayerHeights,
-            u.maxLayerHeights
-        );
-        const m31Density = debugWeather31.toVar();
-        const debugWeatherUv34 = debugUv31.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
-        const debugLocalWeather34 = exp(
-            u.weatherExponents.mul(texture(u.localWeatherTexture, debugWeatherUv34, float(0)).log())
-        );
-        const debugMedia33 = sampleMedia(
-            debugHeightFraction31,
-            m31Density,
-            debugPos31,
-            debugUv31,
-            float(0),
-            float(0),
-            cameraPosition
-        );
-        const debugPosLen = length(debugPos31);
-        const camPosLen = length(cameraPosition);
+        If(debugMode.greaterThanEqual(28).and(debugMode.lessThanEqual(39)), () => {
+            const pos = cameraPosition.add(rayDirection.mul(rayNear.max(0).add(2000)));
+            debugPos31.assign(pos);
+            const h = length(pos).sub(u.bottomRadius);
+            debugHeight31.assign(h);
+            const uv = getCubeSphereUv(pos);
+            debugUv31.assign(uv);
+            const weather = sampleWeather(uv, h, float(0));
+            debugWeather31.assign(weather);
+            m31Density.assign(weather);
+            const hf = remapClamped(vec4(h), u.minLayerHeights, u.maxLayerHeights);
+            debugHeightFraction31.assign(hf);
+            const wuv = uv.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
+            debugWeatherUv34.assign(wuv);
+            debugLocalWeather34.assign(
+                exp(u.weatherExponents.mul(texture(u.localWeatherTexture, wuv, float(0)).log()))
+            );
+            debugMedia33.assign(
+                sampleMedia(hf, m31Density, pos, uv, float(0), float(0), cameraPosition)
+            );
+            debugPosLen.assign(length(pos));
+            camPosLen.assign(length(cameraPosition));
+        });
 
         // STEP 8g: marchClouds + aerial perspective + haze
         If(shouldMarch.greaterThan(0.5), () => {
-            const origin = rayNear.mul(rayDirection).add(cameraPosition);
-            const marchResult = marchClouds(
-                origin,
-                rayDirection,
-                vec2(rayNear, rayFar),
-                cosTheta,
-                jitter
-            ).toConst();
-
-            resultColor.assign(marchResult.get("color"));
-
-            const marchedFrontDepth = marchResult.get("frontDepth").toConst();
-            const hitClouds = marchedFrontDepth.greaterThanEqual(0).toConst();
-            If(hitClouds, () => {
-                const frontDepth = rayNear.add(marchedFrontDepth);
-                const frontPosition = cameraPosition.add(frontDepth.mul(rayDirection));
-
-                const shadowLen = float(0).toVar();
-                // SHADOW_LENGTH skipped (no BSM yet)
-
-                const luminanceTransfer = getIndirectLuminanceToPoint(
-                    cameraPosition.mul(u.worldToUnit),
-                    frontPosition.mul(u.worldToUnit),
-                    vec2(shadowLen.mul(u.worldToUnit), float(0)),
-                    u.sunDirection
-                ).toConst();
-                const transmittance = luminanceTransfer.get("transmittance");
-                const inscatter = luminanceTransfer.get("luminance");
-                resultColor.rgb.assign(
-                    resultColor.rgb.mul(transmittance).add(inscatter.mul(resultColor.a))
-                );
-
-                resultFrontDepth.assign(frontDepth);
-
-                const frontWorld = u.ecefToWorld.mul(
-                    vec4(frontPosition.sub(u.altitudeCorrection), 1)
-                ).xyz;
-                const curClip = u.viewProjection.mul(vec4(frontWorld, 1));
-                const curUv = curClip.xy.div(curClip.w).mul(0.5).add(0.5);
-                const prevClip = u.prevViewProjection.mul(vec4(frontWorld, 1));
-                const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
-                resultVelocity.assign(curUv.sub(prevUv));
-            });
-
-            // Non-cloud pixels: compute velocity using sceneDistance
-            If(hitClouds.not(), () => {
-                const ncDepth = sceneDistance.greaterThan(0).select(sceneDistance, rayFar);
-                const ncPosition = cameraPosition.add(ncDepth.mul(rayDirection));
-                const ncWorld = u.ecefToWorld.mul(
-                    vec4(ncPosition.sub(u.altitudeCorrection), 1)
-                ).xyz;
-                const ncCurClip = u.viewProjection.mul(vec4(ncWorld, 1));
-                const ncCurUv = ncCurClip.xy.div(ncCurClip.w).mul(0.5).add(0.5);
-                const ncPrevClip = u.prevViewProjection.mul(vec4(ncWorld, 1));
-                const ncPrevUv = ncPrevClip.xy.div(ncPrevClip.w).mul(0.5).add(0.5);
-                resultFrontDepth.assign(ncDepth);
-                resultVelocity.assign(ncCurUv.sub(ncPrevUv));
-            });
-        });
-        // to prevent normal pipeline from overwriting debug colors.
-        If(debugMode.equal(0).and(shouldMarch.greaterThan(0.5)), () => {
             const origin = rayNear.mul(rayDirection).add(cameraPosition);
             const marchResult = marchClouds(
                 origin,
@@ -1324,6 +1269,21 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 const prevClip = u.prevViewProjection.mul(vec4(frontWorld, 1));
                 const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
                 resultVelocity.assign(curUv.sub(prevUv));
+            });
+
+            // Non-cloud pixels: compute velocity using sceneDistance
+            If(hitClouds.not(), () => {
+                const ncDepth = sceneDistance.greaterThan(0).select(sceneDistance, rayFar);
+                const ncPosition = cameraPosition.add(ncDepth.mul(rayDirection));
+                const ncWorld = u.ecefToWorld.mul(
+                    vec4(ncPosition.sub(u.altitudeCorrection), 1)
+                ).xyz;
+                const ncCurClip = u.viewProjection.mul(vec4(ncWorld, 1));
+                const ncCurUv = ncCurClip.xy.div(ncCurClip.w).mul(0.5).add(0.5);
+                const ncPrevClip = u.prevViewProjection.mul(vec4(ncWorld, 1));
+                const ncPrevUv = ncPrevClip.xy.div(ncPrevClip.w).mul(0.5).add(0.5);
+                resultFrontDepth.assign(ncDepth);
+                resultVelocity.assign(ncCurUv.sub(ncPrevUv));
             });
         });
 
