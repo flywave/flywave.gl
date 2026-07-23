@@ -1257,9 +1257,26 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 const frontWorld = u.ecefToWorld.mul(
                     vec4(frontPosition.sub(u.altitudeCorrection), 1)
                 ).xyz;
+                const curClip = u.viewProjection.mul(vec4(frontWorld, 1));
+                const curUv = curClip.xy.div(curClip.w).mul(0.5).add(0.5);
                 const prevClip = u.prevViewProjection.mul(vec4(frontWorld, 1));
                 const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
-                resultVelocity.assign(screenUV.sub(prevUv));
+                resultVelocity.assign(curUv.sub(prevUv));
+            });
+
+            // Non-cloud pixels: compute velocity using sceneDistance
+            If(hitClouds.not(), () => {
+                const ncDepth = sceneDistance.greaterThan(0).select(sceneDistance, rayFar);
+                const ncPosition = cameraPosition.add(ncDepth.mul(rayDirection));
+                const ncWorld = u.ecefToWorld.mul(
+                    vec4(ncPosition.sub(u.altitudeCorrection), 1)
+                ).xyz;
+                const ncCurClip = u.viewProjection.mul(vec4(ncWorld, 1));
+                const ncCurUv = ncCurClip.xy.div(ncCurClip.w).mul(0.5).add(0.5);
+                const ncPrevClip = u.prevViewProjection.mul(vec4(ncWorld, 1));
+                const ncPrevUv = ncPrevClip.xy.div(ncPrevClip.w).mul(0.5).add(0.5);
+                resultFrontDepth.assign(ncDepth);
+                resultVelocity.assign(ncCurUv.sub(ncPrevUv));
             });
         });
         // to prevent normal pipeline from overwriting debug colors.
@@ -1311,9 +1328,11 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 const frontWorld = u.ecefToWorld.mul(
                     vec4(frontPosition.sub(u.altitudeCorrection), 1)
                 ).xyz;
+                const curClip = u.viewProjection.mul(vec4(frontWorld, 1));
+                const curUv = curClip.xy.div(curClip.w).mul(0.5).add(0.5);
                 const prevClip = u.prevViewProjection.mul(vec4(frontWorld, 1));
                 const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
-                resultVelocity.assign(screenUV.sub(prevUv));
+                resultVelocity.assign(curUv.sub(prevUv));
             });
         });
 

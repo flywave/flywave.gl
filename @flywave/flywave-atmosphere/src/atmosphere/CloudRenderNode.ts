@@ -236,6 +236,7 @@ export function updateCloudUniforms(atmosphereContext: any): void {
     if (corr) {
         _cloudUniforms.altitudeCorrection.value.copy(corr);
     }
+
     const sr = _cloudUniforms.shapeRepeat.value;
     if (pos) {
         const cx = pos.x + (corr?.x ?? 0);
@@ -490,13 +491,19 @@ export class CloudRenderNode extends TempNode {
         // match the low-res render target (matching reference CloudsMaterial).
         _cloudUniforms.resolution.value.set(lowWidth, lowHeight);
 
+        // ECEF→World: inverse of matrixWorldToECEF (updated every frame)
+        const atmoCtx = getAtmosphereContext(renderer);
+        const w2eVal = atmoCtx.matrixWorldToECEF.value;
+        if (w2eVal) {
+            _cloudUniforms.ecefToWorld.value.copy(w2eVal).invert();
+        }
+
         this._rendererState = resetRendererState(renderer, this._rendererState);
 
         // BSM pass: update cascade matrices and render shadow map before main pass
         if (_shadowMarch != null) {
             const ready = this.shadowMaterials.every(m => (m as any).fragmentNode != null);
             if (ready) {
-                const atmoCtx = getAtmosphereContext(renderer);
                 const cam = atmoCtx.camera as any;
                 const matV2E = atmoCtx.matrixViewToECEF;
                 if (cam && matV2E) {
@@ -578,8 +585,8 @@ export class CloudRenderNode extends TempNode {
             savedProj: any = null,
             savedProjInv: any = null;
 
-        const atmoCtx = getAtmosphereContext(renderer);
-        jitterCamera = atmoCtx.camera;
+        const atmoCtx2 = getAtmosphereContext(renderer);
+        jitterCamera = atmoCtx2.camera;
 
         if (_enableJitter) {
             savedProj = jitterCamera.projectionMatrix.clone();
@@ -597,6 +604,13 @@ export class CloudRenderNode extends TempNode {
             _cloudUniforms.prevViewProjection.value.copy(_prevJitteredVP);
             hasPrevViewProjection = true;
         }
+
+        // Current frame VP for velocity calculation (curUv - prevUv)
+        const curVP = new Matrix4().multiplyMatrices(
+            jitterCamera.projectionMatrix,
+            jitterCamera.matrixWorldInverse
+        );
+        _cloudUniforms.viewProjection.value.copy(curVP);
 
         // Pass 1: Render clouds at 1/4 resolution for temporal upscale
         renderer.setRenderTarget(this.lowResRT);
@@ -867,30 +881,8 @@ export class CloudRenderNode extends TempNode {
                 const uv = screenUV;
                 const currentColor = this.lowResNode.load(coord);
 
-                // --- STEP A: simple same-UV blend (confirmed working) ---
-                // const historyColor = texture(this.historyNode, uv);
-                // return mix(historyColor, currentColor, float(0.05));
-
-                // --- STEP C: same-UV blend + variance clipping ---
-                // const historyColor = texture(this.historyNode, uv);
-                // const clippedColor = _varianceClippingResolve(
-                //     this.lowResNode,
-                //     coord,
-                //     currentColor,
-                //     historyColor
-                // );
-                // return mix(clippedColor, currentColor, float(0.05));
-
-                // --- STEP B: velocity reprojection + variance clipping ---
-                const closestDepth = float(1e7).toVar();
-                const velocity = vec2(0).toVar();
-                for (const [x, y] of _neighborOffsets9) {
-                    const neighbor = this.velocityLowResNode.load(coord.add(ivec2(x, y)));
-                    If(neighbor.r.lessThan(closestDepth), () => {
-                        closestDepth.assign(neighbor.r);
-                        velocity.assign(neighbor.gb);
-                    });
-                }
+                const velSample = this.velocityLowResNode.load(coord);
+                const velocity = velSample.gb;
                 const prevUv = uv.sub(velocity);
                 const outOfBounds = prevUv.x
                     .lessThan(0)

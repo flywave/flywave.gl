@@ -149,6 +149,7 @@ export class CloudUniforms {
 
     // Matrices for velocity reprojection
     prevViewProjection = uniform(new Matrix4());
+    viewProjection = uniform(new Matrix4());
     ecefToWorld = uniform(new Matrix4());
 
     // Jittered inverse projection matrix for temporal upscale
