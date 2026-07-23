@@ -67,6 +67,7 @@ let _shadowMarch: ((cascadeIndex?: number) => any) | null = null;
 let _onReadyCallback: (() => void) | null = null;
 const _cloudResolveCountNode = uniform(0);
 const _cloudFrameNode = uniform(0);
+const _resolveTexelSize = uniform(new Vector2(1, 1));
 
 const SHADOW_CASCADE_COUNT = 3;
 const SHADOW_MAX_FAR = 100000;
@@ -428,6 +429,7 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.setSize(lowWidth, lowHeight);
         this.historyRT.setSize(fullWidth, fullHeight);
         this.resolveRT.setSize(fullWidth, fullHeight);
+        _resolveTexelSize.value.set(1 / fullWidth, 1 / fullHeight);
 
         // getMipLevel() uses resolution uniform for screen-space derivative
         // magnitude. It runs inside the low-res pass, so the resolution must
@@ -799,9 +801,7 @@ export class CloudRenderNode extends TempNode {
             this.lowResMaterial.needsUpdate = true;
         }
 
-        // Setup resolve pass: Catmull-Rom upscale + temporal blend.
-        // Velocity is sampled from the MRT second output (1/4 res, computed per-pixel
-        // in the cloud shader from actual front depth, matching the reference).
+        // Setup resolve pass: direct passthrough (no temporal accumulation)
         {
             const resolveNode = Fn(() => {
                 return texture(this.lowResNode, screenUV);
@@ -818,101 +818,8 @@ export class CloudRenderNode extends TempNode {
             this.blitMaterial.needsUpdate = true;
         }
 
-        // Shadow pass: render BSM from sun's POV, one material per cascade
+        // Shadow pass setup (BSM)
         if (_shadowMarch != null) {
-            for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                const mat = this.shadowMaterials[i];
-                mat.name = `Clouds [Shadow ${i}]`;
-                mat.fragmentNode = _shadowMarch(i)();
-                mat.needsUpdate = true;
-                _cloudUniforms.shadowTextureNodes[i] = this.shadowNodes[i];
-
-                // Shadow resolve: temporal accumulation per cascade
-                const resMat = this.shadowResolveMaterials[i];
-                const currentTex = outputTexture(this, this.shadowRTs[i].texture);
-                const historyTex = this.shadowHistoryNodes[i];
-                const invMat = _cloudUniforms.inverseShadowMatrices[i];
-                const prevMat = uniform(this.prevShadowMatrices[i]);
-
-                resMat.fragmentNode = Fn(() => {
-                    const uv = screenUV;
-                    const current = texture(currentTex, uv);
-
-                    // Reproject: reconstruct clip-space from UV, unproject via inverse
-                    // shadow matrix to get world pos, reproject with prev shadow matrix
-                    const clip = vec4(uv.mul(2).sub(1), float(-1), float(1));
-                    const worldPoint = invMat.mul(clip);
-                    const wpDiv = worldPoint.xyz.div(worldPoint.w);
-                    const prevClip = prevMat.mul(vec4(wpDiv, 1));
-                    const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
-
-                    // Bounds check
-                    const inBounds = step(float(0), prevUv.x)
-                        .mul(step(prevUv.x, float(1)))
-                        .mul(step(float(0), prevUv.y))
-                        .mul(step(prevUv.y, float(1)));
-
-                    const history = texture(historyTex, prevUv);
-
-                    // 3×3 neighborhood variance clipping on current
-                    const texSize = vec2(
-                        float(this.shadowRTs[i].width),
-                        float(this.shadowRTs[i].height)
-                    );
-                    const texel = vec2(float(1).div(texSize.x), float(1).div(texSize.y));
-                    let moment1 = current;
-                    let moment2 = current.mul(current);
-                    // 4 diagonal neighbors (sufficient for 4-channel BSM)
-                    moment1.addAssign(texture(currentTex, uv.add(vec2(texel.x, texel.y))));
-                    moment2.addAssign(texture(currentTex, uv.add(vec2(texel.x, texel.y))).pow(2));
-                    moment1.addAssign(texture(currentTex, uv.add(vec2(texel.x.negate(), texel.y))));
-                    moment2.addAssign(
-                        texture(currentTex, uv.add(vec2(texel.x.negate(), texel.y))).pow(2)
-                    );
-                    moment1.addAssign(texture(currentTex, uv.add(vec2(texel.x, texel.y.negate()))));
-                    moment2.addAssign(
-                        texture(currentTex, uv.add(vec2(texel.x, texel.y.negate()))).pow(2)
-                    );
-                    moment1.addAssign(
-                        texture(currentTex, uv.add(vec2(texel.x.negate(), texel.y.negate())))
-                    );
-                    moment2.addAssign(
-                        texture(currentTex, uv.add(vec2(texel.x.negate(), texel.y.negate()))).pow(2)
-                    );
-                    const N = float(5);
-                    const mean = moment1.div(N);
-                    const variance = moment2.div(N).sub(mean.mul(mean)).max(0).sqrt();
-                    const gamma = float(1);
-                    const minC = mean.sub(variance.mul(gamma));
-                    const maxC = mean.add(variance.mul(gamma));
-                    // clipAABB
-                    const pClip = maxC.add(minC).mul(0.5);
-                    const eClip = maxC.sub(minC).mul(0.5).add(1e-7);
-                    const vClip = history.sub(pClip);
-                    const vUnit = vClip.div(eClip);
-                    const aUnit = vUnit.abs();
-                    const maUnit = max(aUnit.x, max(aUnit.y, max(aUnit.z, aUnit.w)));
-                    const clippedHistory = maUnit
-                        .greaterThan(1)
-                        .select(pClip.add(vClip.div(maUnit)), history);
-
-                    // Very slow EMA for shadow stability (matches reference)
-                    const alpha = float(0.01);
-                    const blended = mix(clippedHistory, current, alpha);
-                    return inBounds.greaterThan(0.5).select(blended, current);
-                })();
-                resMat.needsUpdate = true;
-
-                // Blit material: copy resolved RT → history RT
-                const resolvedTex = outputTexture(this, this.shadowResolvedRTs[i].texture);
-                this.shadowBlitMaterials[i].fragmentNode = texture(resolvedTex, screenUV);
-                this.shadowBlitMaterials[i].needsUpdate = true;
-
-                // Raw blit material: copy raw BSM → resolved/history (bootstrapping)
-                const rawTex = outputTexture(this, this.shadowRTs[i].texture);
-                this.shadowRawBlitMaterials[i].fragmentNode = texture(rawTex, screenUV);
-                this.shadowRawBlitMaterials[i].needsUpdate = true;
-            }
             _cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
         }
     }
