@@ -418,7 +418,7 @@ export const createMarchShadowLength = (u: CloudUniforms, sampleShadowOpticalDep
             });
 
             const position = rayDistance.mul(rayDirection).add(rayOrigin);
-            const opticalDepth = sampleShadowOpticalDepth(position, float(0), float(0)).toConst();
+            const opticalDepth = sampleShadowOpticalDepth(position, float(0)).toConst();
             shadowLength.addAssign(
                 oneMinus(exp(opticalDepth.negate())).mul(stepSize).mul(attenuation)
             );
