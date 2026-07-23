@@ -1133,7 +1133,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
     const render = Fn(([cameraPosition, rayDirection, sceneDistance]: [any, any, any]) => {
         const cosTheta = dot(u.sunDirection, rayDirection);
-        const jitter = float(0.5);
+        const jitter = stbn;
 
         const bottomRadius = u.bottomRadius;
         const cameraHeight = u.cameraHeight;
@@ -1183,7 +1183,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const shouldMarch = nearValid.mul(farValid).mul(farGteNear);
 
         const resultColor = vec4(0, 0, 0, 0).toVar();
-        const resultFrontDepth = float(-1).toVar();
+        const resultFrontDepth = rayFar.toVar();
         const resultVelocity = vec2(0, 0).toVar();
 
         // Modes 30-39 bypass normal march. Compute debug color unconditionally

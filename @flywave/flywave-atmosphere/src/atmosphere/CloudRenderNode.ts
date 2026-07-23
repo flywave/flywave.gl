@@ -2,6 +2,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
+    and,
     dot,
     Fn,
     float,
@@ -68,6 +69,58 @@ let _onReadyCallback: (() => void) | null = null;
 const _cloudResolveCountNode = uniform(0);
 const _cloudFrameNode = uniform(0);
 const _resolveTexelSize = uniform(new Vector2(1, 1));
+
+const _varianceGamma = uniform(1.0);
+const _temporalAlpha = uniform(0.05);
+
+const _neighborOffsets9 = [
+    [-1, -1],
+    [-1, 0],
+    [-1, 1],
+    [0, -1],
+    [0, 0],
+    [0, 1],
+    [1, -1],
+    [1, 0],
+    [1, 1]
+];
+
+const _varianceOffsets8 = [
+    [-1, -1],
+    [-1, 1],
+    [1, -1],
+    [1, 1],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+    [-1, 0]
+];
+
+const _clipAABBResolve = Fn(([cur, hist, minC, maxC]: any) => {
+    const pClip = maxC.rgb.add(minC.rgb).mul(0.5).toConst();
+    const eClip = maxC.rgb.sub(minC.rgb).mul(0.5).add(1e-7);
+    const vClip = hist.sub(vec4(pClip, cur.a)).toConst();
+    const vUnit = vClip.xyz.div(eClip);
+    const absUnit = vUnit.abs().toConst();
+    const maxUnit = max(absUnit.x, absUnit.y, absUnit.z).toConst();
+    return maxUnit.greaterThan(1).select(vec4(pClip, cur.a).add(vClip.div(maxUnit)), hist);
+});
+
+const _varianceClippingResolve = Fn(([inputNode, coord, current, history]: any) => {
+    const moment1 = current.toVar();
+    const moment2 = current.pow2().toVar();
+    for (const [x, y] of _varianceOffsets8) {
+        const neighbor = inputNode.load(coord.add(ivec2(x, y))).toConst();
+        moment1.addAssign(neighbor);
+        moment2.addAssign(neighbor.pow2());
+    }
+    const N = _varianceOffsets8.length + 1;
+    const mean = moment1.div(N).toConst();
+    const variance = sqrt(moment2.div(N).sub(mean.pow2()).max(0)).mul(_varianceGamma).toConst();
+    const minColor = mean.sub(variance).toConst();
+    const maxColor = mean.add(variance).toConst();
+    return _clipAABBResolve(mean.clamp(minColor, maxColor), history, minColor, maxColor);
+});
 
 const SHADOW_CASCADE_COUNT = 3;
 const SHADOW_MAX_FAR = 100000;
@@ -518,15 +571,16 @@ export class CloudRenderNode extends TempNode {
         // (getAtmosphereContext doesn't work with renderer arg, so we rely on
         // updateCloudUniforms having been called first)
 
-        // Temporal jitter for super-resolution upscale (disabled during pixel-comparison
-        // testing; enable once rendering matches reference).
-        const _enableJitter = (globalThis as any).__enableCloudJitter;
+        // Temporal jitter for super-resolution upscale
+        const _enableJitter = true;
         let jitterCamera: any = null,
             savedProj: any = null,
             savedProjInv: any = null;
+
+        const atmoCtx = getAtmosphereContext(renderer);
+        jitterCamera = atmoCtx.camera;
+
         if (_enableJitter) {
-            const jitterAtmoCtx = getAtmosphereContext(renderer);
-            jitterCamera = jitterAtmoCtx.camera;
             savedProj = jitterCamera.projectionMatrix.clone();
             savedProjInv = jitterCamera.projectionMatrixInverse.clone();
             const jx = (haltonBase2[_frameIndex % 16] - 0.5) * (2 / lowWidth);
@@ -534,12 +588,13 @@ export class CloudRenderNode extends TempNode {
             const jitterMat = new Matrix4().makeTranslation(jx, jy, 0);
             jitterCamera.projectionMatrix.multiply(jitterMat);
             jitterCamera.projectionMatrixInverse.copy(jitterCamera.projectionMatrix).invert();
+        }
 
-            if (_prevJitteredVP) {
-                prevViewProjectionUniform.value.copy(_prevJitteredVP);
-                _cloudUniforms.prevViewProjection.value.copy(_prevJitteredVP);
-                hasPrevViewProjection = true;
-            }
+        // Always update prevViewProjection for velocity-based temporal accumulation
+        if (_prevJitteredVP) {
+            prevViewProjectionUniform.value.copy(_prevJitteredVP);
+            _cloudUniforms.prevViewProjection.value.copy(_prevJitteredVP);
+            hasPrevViewProjection = true;
         }
 
         // Pass 1: Render clouds at 1/4 resolution for temporal upscale
@@ -547,11 +602,13 @@ export class CloudRenderNode extends TempNode {
         this.mesh.material = this.lowResMaterial;
         this.mesh.render(renderer);
 
+        // Always compute current VP for next frame's velocity
+        _prevJitteredVP = new Matrix4().multiplyMatrices(
+            jitterCamera.projectionMatrix,
+            jitterCamera.matrixWorldInverse
+        );
+
         if (_enableJitter) {
-            _prevJitteredVP = new Matrix4().multiplyMatrices(
-                jitterCamera.projectionMatrix,
-                jitterCamera.matrixWorldInverse
-            );
             jitterCamera.projectionMatrix.copy(savedProj);
             jitterCamera.projectionMatrixInverse.copy(savedProjInv);
             _nextPrevViewProjection = null;
@@ -794,17 +851,26 @@ export class CloudRenderNode extends TempNode {
 
             const clouds = _renderClouds(camPosCorrected, rayDirection, sceneDistance);
             // MRT output: color (target[0]) + velocity (target[1])
+            // velocity texture: R = frontDepth, GB = velocity.xy (matching reference depthVelocityBuffer)
             this.lowResMaterial.fragmentNode = mrt({
                 color: clouds.get("color"),
-                velocity: vec4(clouds.get("velocity"), 0, 0)
+                velocity: vec4(clouds.get("frontDepth"), clouds.get("velocity"), 0)
             });
             this.lowResMaterial.needsUpdate = true;
         }
 
-        // Setup resolve pass: direct passthrough (no temporal accumulation)
+        // Setup resolve pass: temporal antialiasing (matches reference temporalAntialiasing)
         {
             const resolveNode = Fn(() => {
-                return texture(this.lowResNode, screenUV);
+                const coord = ivec2(screenCoordinate);
+                const uv = screenUV;
+
+                const currentColor = this.lowResNode.load(coord);
+
+                // Simplest temporal accumulation: blend history at same UV
+                // No velocity, no variance clipping - just test history persistence
+                const historyColor = texture(this.historyNode, uv);
+                return mix(historyColor, currentColor, float(0.1));
             })();
 
             this.resolveMaterial.fragmentNode = resolveNode;
