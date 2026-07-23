@@ -49,7 +49,7 @@ const high: QualityPresetConfig = {
 export const qualityPresets: Record<QualityPreset, QualityPresetConfig> = {
     low: {
         ...high,
-        hazeEnabled: false,
+        hazeEnabled: true,
         accuratePhaseFunction: false,
         maxIterationCount: 200,
         minStepSize: 100,
