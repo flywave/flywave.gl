@@ -872,37 +872,43 @@ export class CloudRenderNode extends TempNode {
                 // return mix(historyColor, currentColor, float(0.05));
 
                 // --- STEP C: same-UV blend + variance clipping ---
-                const historyColor = texture(this.historyNode, uv);
-                const clippedColor = _varianceClippingResolve(
-                    this.lowResNode,
-                    coord,
-                    currentColor,
-                    historyColor
-                );
-                return mix(clippedColor, currentColor, float(0.05));
+                // const historyColor = texture(this.historyNode, uv);
+                // const clippedColor = _varianceClippingResolve(
+                //     this.lowResNode,
+                //     coord,
+                //     currentColor,
+                //     historyColor
+                // );
+                // return mix(clippedColor, currentColor, float(0.05));
 
-                // --- STEP B: velocity reprojection (parked) ---
-                // const closestDepth = float(1e7).toVar();
-                // const velocity = vec2(0).toVar();
-                // for (const [x, y] of _neighborOffsets9) {
-                //     const neighbor = this.velocityLowResNode.load(coord.add(ivec2(x, y)));
-                //     If(neighbor.r.lessThan(closestDepth), () => {
-                //         closestDepth.assign(neighbor.r);
-                //         velocity.assign(neighbor.gb);
-                //     });
-                // }
-                // const prevUv = uv.sub(velocity);
-                // const outOfBounds = prevUv.x
-                //     .lessThan(0)
-                //     .or(prevUv.x.greaterThan(1))
-                //     .or(prevUv.y.lessThan(0))
-                //     .or(prevUv.y.greaterThan(1));
-                // const result = currentColor.toVar();
-                // If(outOfBounds.not(), () => {
-                //     const historyColor = texture(this.historyNode, prevUv);
-                //     result.assign(mix(historyColor, currentColor, float(0.05)));
-                // });
-                // return result;
+                // --- STEP B: velocity reprojection + variance clipping ---
+                const closestDepth = float(1e7).toVar();
+                const velocity = vec2(0).toVar();
+                for (const [x, y] of _neighborOffsets9) {
+                    const neighbor = this.velocityLowResNode.load(coord.add(ivec2(x, y)));
+                    If(neighbor.r.lessThan(closestDepth), () => {
+                        closestDepth.assign(neighbor.r);
+                        velocity.assign(neighbor.gb);
+                    });
+                }
+                const prevUv = uv.sub(velocity);
+                const outOfBounds = prevUv.x
+                    .lessThan(0)
+                    .or(prevUv.x.greaterThan(1))
+                    .or(prevUv.y.lessThan(0))
+                    .or(prevUv.y.greaterThan(1));
+                const result = currentColor.toVar();
+                If(outOfBounds.not(), () => {
+                    const historyColor = texture(this.historyNode, prevUv);
+                    const clippedColor = _varianceClippingResolve(
+                        this.lowResNode,
+                        coord,
+                        currentColor,
+                        historyColor
+                    );
+                    result.assign(mix(clippedColor, currentColor, float(0.05)));
+                });
+                return result;
             })();
 
             this.resolveMaterial.fragmentNode = resolveNode;

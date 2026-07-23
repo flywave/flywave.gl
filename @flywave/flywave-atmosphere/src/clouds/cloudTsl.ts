@@ -1254,7 +1254,9 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
                 resultFrontDepth.assign(frontDepth);
 
-                const frontWorld = u.ecefToWorld.mul(vec4(frontPosition, 1)).xyz;
+                const frontWorld = u.ecefToWorld.mul(
+                    vec4(frontPosition.sub(u.altitudeCorrection), 1)
+                ).xyz;
                 const prevClip = u.prevViewProjection.mul(vec4(frontWorld, 1));
                 const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
                 resultVelocity.assign(screenUV.sub(prevUv));
@@ -1306,7 +1308,9 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
                 resultFrontDepth.assign(frontDepth);
 
-                const frontWorld = u.ecefToWorld.mul(vec4(frontPosition, 1)).xyz;
+                const frontWorld = u.ecefToWorld.mul(
+                    vec4(frontPosition.sub(u.altitudeCorrection), 1)
+                ).xyz;
                 const prevClip = u.prevViewProjection.mul(vec4(frontWorld, 1));
                 const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
                 resultVelocity.assign(screenUV.sub(prevUv));
