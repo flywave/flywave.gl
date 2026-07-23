@@ -164,9 +164,9 @@ export class CloudLayers extends Array<CloudLayer> {
             weatherExponent: 1,
             shapeAlteringBias: 0.35,
             coverageFilterWidth: 0.5,
-            shadow: true
+            shadow: false
         },
-        { channel: "a", shadow: true }
+        { channel: "a", shadow: false }
     ]);
 
     constructor(options?: readonly CloudLayerLike[]) {
