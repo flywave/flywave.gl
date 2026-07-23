@@ -455,10 +455,6 @@ async function main() {
         renderer.render(scene, quadCamera);
 
         const now = performance.now();
-        if (now - lastSampleTime > 500) {
-            lastSampleTime = now;
-            sampleRT();
-        }
         frameCount++;
         if (now - lastFpsTime > 500) {
             fps = Math.round((frameCount * 1000) / (now - lastFpsTime));
