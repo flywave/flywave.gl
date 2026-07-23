@@ -1009,11 +1009,10 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                             .greaterThan(0)
                             .select(float(1), float(0));
                         const bsmCond = heightGate.mul(cascadeGate);
-                        // const shadowOD = sampleShadowOpticalDepth(
-                        //     position,
-                        //     sunRayDistance
-                        // ).toConst();
-                        const shadowOD = float(0); // DEBUG: skip BSM shadow
+                        const shadowOD = sampleShadowOpticalDepth(
+                            position,
+                            sunRayDistance
+                        ).toConst();
                         opticalDepth.addAssign(shadowOD.mul(bsmCond));
 
                         let radiance = sunIrradiance.mul(

@@ -917,6 +917,44 @@ export class CloudRenderNode extends TempNode {
         // Shadow pass setup (BSM)
         if (_shadowMarch != null) {
             _cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
+
+            for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                // Shadow march: renders BSM from sun's viewpoint
+                this.shadowMaterials[i].fragmentNode = _shadowMarch(i);
+                this.shadowMaterials[i].needsUpdate = true;
+
+                // Raw blit: copy raw shadow RT → resolved/history (bootstrap)
+                this.shadowRawBlitMaterials[i].fragmentNode = texture(
+                    outputTexture(this, this.shadowRTs[i].texture),
+                    screenUV
+                );
+                this.shadowRawBlitMaterials[i].needsUpdate = true;
+
+                // Blit: copy resolved RT → history RT
+                this.shadowBlitMaterials[i].fragmentNode = texture(
+                    outputTexture(this, this.shadowResolvedRTs[i].texture),
+                    screenUV
+                );
+                this.shadowBlitMaterials[i].needsUpdate = true;
+
+                // Resolve: temporal accumulation (current + history with variance clipping)
+                const shadowResolveNode = Fn(() => {
+                    const currentColor = texture(
+                        outputTexture(this, this.shadowRTs[i].texture),
+                        screenUV
+                    );
+                    const historyColor = texture(this.shadowHistoryNodes[i], screenUV);
+                    const clippedColor = _varianceClippingResolve(
+                        outputTexture(this, this.shadowRTs[i].texture),
+                        ivec2(screenCoordinate),
+                        currentColor,
+                        historyColor
+                    );
+                    return mix(clippedColor, currentColor, float(0.01));
+                })();
+                this.shadowResolveMaterials[i].fragmentNode = shadowResolveNode;
+                this.shadowResolveMaterials[i].needsUpdate = true;
+            }
         }
     }
 
