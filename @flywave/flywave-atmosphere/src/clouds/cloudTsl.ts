@@ -495,9 +495,7 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
 /*  Approximated without shadow map using marchOpticalDepth                    */
 /* -------------------------------------------------------------------------- */
 
-export const createMarchShadowLength = (u: CloudUniforms) => {
-    const marchOpticalDepth = createMarchOpticalDepth(u);
-
+export const createMarchShadowLength = (u: CloudUniforms, sampleShadowOpticalDepth: any) => {
     return Fn(([rayOrigin, rayDirection, rayNearFar, jitter]: [any, any, any, any]) => {
         const shadowLength = float(0).toVar();
         const maxRayDistance = rayNearFar.y.sub(rayNearFar.x).toVar();
@@ -512,13 +510,7 @@ export const createMarchShadowLength = (u: CloudUniforms) => {
             });
 
             const position = rayDistance.mul(rayDirection).add(rayOrigin);
-            const opticalDepth = marchOpticalDepth(
-                position,
-                u.sunDirection,
-                jitter,
-                float(0),
-                u.maxIterationCountToSun
-            ).x;
+            const opticalDepth = sampleShadowOpticalDepth(position, float(0)).toConst();
             shadowLength.addAssign(
                 oneMinus(exp(opticalDepth.negate())).mul(stepSize).mul(attenuation)
             );
@@ -1120,11 +1112,11 @@ const cloudRendererResultStruct = /*#__PURE__*/ struct(
 
 export const createCloudRenderer = (u: CloudUniforms) => {
     const marchClouds = createMarchClouds(u);
-    const marchShadowLength = createMarchShadowLength(u);
     const sampleWeather = createSampleWeather(u);
     const sampleMedia = createSampleMedia(u);
     const marchOpticalDepth = createMarchOpticalDepth(u);
     const sampleShadowOpticalDepth = createSampleShadowOpticalDepth(u);
+    const marchShadowLength = createMarchShadowLength(u, sampleShadowOpticalDepth);
     const approximateHaze = createApproximateHaze(u);
     // Return a factory that produces a fresh Fn per cascade (bakes cascadeIndex in closure)
     const shadowMarchFactory = (cascadeIndex: number = 0) =>

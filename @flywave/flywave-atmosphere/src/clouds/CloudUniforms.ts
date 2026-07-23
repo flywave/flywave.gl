@@ -44,7 +44,7 @@ export class CloudUniforms {
     secondaryStepScale = uniform(2.0);
 
     // Shadow length (disabled by default: we approximate without a BSM shadow map)
-    maxShadowLengthIterationCount = uniform(0);
+    maxShadowLengthIterationCount = uniform(500);
     minShadowLengthStepSize = uniform(50.0);
     maxShadowLengthRayDistance = uniform(200000.0);
 
