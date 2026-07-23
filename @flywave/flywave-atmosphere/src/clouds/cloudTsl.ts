@@ -681,67 +681,170 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
 
         If(earlyOut.not(), () => {
             If(viewDist.greaterThan(c1End).and(c2Valid), () => {
-                If(radius.lessThan(0.1), () => {
+                od.assign(
+                    radius
+                        .lessThan(0.1)
+                        .select(
+                            sampleCascadeSingle(
+                                2,
+                                posUncorrected,
+                                distanceToTop,
+                                distanceOffset,
+                                jitter
+                            ),
+                            sampleCascadePCF(
+                                2,
+                                posUncorrected,
+                                distanceToTop,
+                                distanceOffset,
+                                jitter
+                            )
+                        )
+                );
+            })
+                .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
+                    od.assign(
+                        radius
+                            .lessThan(0.1)
+                            .select(
+                                sampleCascadeSingle(
+                                    1,
+                                    posUncorrected,
+                                    distanceToTop,
+                                    distanceOffset,
+                                    jitter
+                                ),
+                                sampleCascadePCF(
+                                    1,
+                                    posUncorrected,
+                                    distanceToTop,
+                                    distanceOffset,
+                                    jitter
+                                )
+                            )
+                    );
+                })
+                .Else(() => {
+                    od.assign(
+                        radius
+                            .lessThan(0.1)
+                            .select(
+                                sampleCascadeSingle(
+                                    0,
+                                    posUncorrected,
+                                    distanceToTop,
+                                    distanceOffset,
+                                    jitter
+                                ),
+                                sampleCascadePCF(
+                                    0,
+                                    posUncorrected,
+                                    distanceToTop,
+                                    distanceOffset,
+                                    jitter
+                                )
+                            )
+                    );
+                });
+        });
+
+        return od;
+    });
+};
+
+export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
+    const projectCascade = (cascadeIdx: number, posUncorrected: any) => {
+        const mat = u.shadowMatrices[cascadeIdx];
+        const clip = mat.mul(vec4(posUncorrected, 1));
+        const clipDiv = clip.xy.div(clip.w);
+        const shadowUV = clipDiv.mul(0.5).add(0.5);
+
+        const inBounds = step(float(0), shadowUV.x)
+            .mul(step(shadowUV.x, float(1)))
+            .mul(step(float(0), shadowUV.y))
+            .mul(step(shadowUV.y, float(1)));
+
+        return { shadowUV, inBounds };
+    };
+
+    const getJitterRotation = () => {
+        const angle = u.frame.mod(float(8)).mul(float(Math.PI / 4));
+        const cosA = cos(angle);
+        const sinA = sin(angle);
+        const subTexel = vec2(cosA, sinA).mul(u.shadowTexelSize.mul(float(0.5)));
+        return { cosA, sinA, subTexel };
+    };
+
+    const sampleCascadeSingle = (
+        cascadeIdx: number,
+        posUncorrected: any,
+        distanceToTop: any,
+        distanceOffset: any,
+        jitter: any
+    ) => {
+        const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, posUncorrected);
+        const tex = u.shadowTextureNodes[cascadeIdx];
+        const uv = shadowUV.add(jitter.subTexel);
+        const shadow = texture(tex, uv);
+        const distFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
+        const od = min(shadow.b.add(shadow.a), shadow.g.mul(distFront));
+        const fullBounds = baseInBounds.mul(step(float(0), distanceToTop));
+        return fullBounds.greaterThan(0.5).select(od, float(0));
+    };
+
+    return Fn(([rayPosition, distanceOffset]: [any, any]): any => {
+        const posUncorrected = rayPosition.sub(u.altitudeCorrection);
+
+        const rayDir = u.sunDirection.negate();
+        const a = posUncorrected;
+        const b = dot(rayDir, a).mul(2);
+        const shadowTopR = u.bottomRadius.add(u.shadowTopHeight);
+        const c = dot(a, a).sub(shadowTopR.mul(shadowTopR));
+        const disc = b.mul(b).sub(c.mul(4));
+        const distanceToTop = b
+            .negate()
+            .add(sqrt(disc.max(0)))
+            .mul(0.5);
+
+        const earlyOut = distanceToTop.lessThanEqual(0);
+        const jitter = getJitterRotation();
+
+        const viewDist = length(rayPosition.sub(u.cameraPosition));
+        const c0End = u.shadowIntervals[0].y.mul(u.shadowFar);
+        const c1End = u.shadowIntervals[1].y.mul(u.shadowFar);
+
+        const c1Valid = u.shadowCascadeCount.greaterThan(1);
+        const c2Valid = u.shadowCascadeCount.greaterThan(2);
+
+        const od = float(0).toVar();
+
+        If(earlyOut.not(), () => {
+            If(viewDist.greaterThan(c1End).and(c2Valid), () => {
+                od.assign(
+                    sampleCascadeSingle(2, posUncorrected, distanceToTop, distanceOffset, jitter)
+                );
+            })
+                .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
                     od.assign(
                         sampleCascadeSingle(
-                            2,
+                            1,
                             posUncorrected,
                             distanceToTop,
                             distanceOffset,
                             jitter
                         )
                     );
-                }).Else(() => {
-                    od.assign(
-                        sampleCascadePCF(2, posUncorrected, distanceToTop, distanceOffset, jitter)
-                    );
-                });
-            })
-                .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
-                    If(radius.lessThan(0.1), () => {
-                        od.assign(
-                            sampleCascadeSingle(
-                                1,
-                                posUncorrected,
-                                distanceToTop,
-                                distanceOffset,
-                                jitter
-                            )
-                        );
-                    }).Else(() => {
-                        od.assign(
-                            sampleCascadePCF(
-                                1,
-                                posUncorrected,
-                                distanceToTop,
-                                distanceOffset,
-                                jitter
-                            )
-                        );
-                    });
                 })
                 .Else(() => {
-                    If(radius.lessThan(0.1), () => {
-                        od.assign(
-                            sampleCascadeSingle(
-                                0,
-                                posUncorrected,
-                                distanceToTop,
-                                distanceOffset,
-                                jitter
-                            )
-                        );
-                    }).Else(() => {
-                        od.assign(
-                            sampleCascadePCF(
-                                0,
-                                posUncorrected,
-                                distanceToTop,
-                                distanceOffset,
-                                jitter
-                            )
-                        );
-                    });
+                    od.assign(
+                        sampleCascadeSingle(
+                            0,
+                            posUncorrected,
+                            distanceToTop,
+                            distanceOffset,
+                            jitter
+                        )
+                    );
                 });
         });
 
@@ -1082,7 +1185,8 @@ export const createCloudRenderer = (u: CloudUniforms) => {
     const sampleMedia = createSampleMedia(u);
     const marchOpticalDepth = createMarchOpticalDepth(u);
     const sampleShadowOpticalDepth = createSampleShadowOpticalDepth(u);
-    const marchShadowLength = createMarchShadowLength(u, sampleShadowOpticalDepth);
+    const sampleShadowOpticalDepthSingle = createSampleShadowOpticalDepthSingle(u);
+    const marchShadowLength = createMarchShadowLength(u, sampleShadowOpticalDepthSingle);
     const approximateHaze = createApproximateHaze(u);
     // Return a factory that produces a fresh Fn per cascade (bakes cascadeIndex in closure)
     const shadowMarchFactory = (cascadeIndex: number = 0) =>
