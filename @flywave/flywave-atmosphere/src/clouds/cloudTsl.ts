@@ -418,7 +418,7 @@ export const createMarchShadowLength = (u: CloudUniforms, sampleShadowOpticalDep
             });
 
             const position = rayDistance.mul(rayDirection).add(rayOrigin);
-            const opticalDepth = sampleShadowOpticalDepth(position, float(0)).toConst();
+            const opticalDepth = sampleShadowOpticalDepth(position, float(0), float(0)).toConst();
             shadowLength.addAssign(
                 oneMinus(exp(opticalDepth.negate())).mul(stepSize).mul(attenuation)
             );
@@ -586,6 +586,23 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         return { cosA, sinA, subTexel };
     };
 
+    const sampleCascadeSingle = (
+        cascadeIdx: number,
+        posUncorrected: any,
+        distanceToTop: any,
+        distanceOffset: any,
+        jitter: any
+    ) => {
+        const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, posUncorrected);
+        const tex = u.shadowTextureNodes[cascadeIdx];
+        const uv = shadowUV.add(jitter.subTexel);
+        const shadow = texture(tex, uv);
+        const distFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
+        const od = min(shadow.b.add(shadow.a), shadow.g.mul(distFront));
+        const fullBounds = baseInBounds.mul(step(float(0), distanceToTop));
+        return fullBounds.greaterThan(0.5).select(od, float(0));
+    };
+
     // Helper: sample one cascade's BSM texture with 5-tap rotated PCF + temporal jitter.
     const sampleCascadePCF = (
         cascadeIdx: number,
@@ -636,7 +653,7 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         return fullBounds.greaterThan(0.5).select(od, float(0));
     };
 
-    return Fn(([rayPosition, distanceOffset]: [any, any]): any => {
+    return Fn(([rayPosition, distanceOffset, radius]: [any, any, any]): any => {
         const posUncorrected = rayPosition.sub(u.altitudeCorrection);
 
         const rayDir = u.sunDirection.negate();
@@ -650,6 +667,7 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
             .add(sqrt(disc.max(0)))
             .mul(0.5);
 
+        const earlyOut = distanceToTop.lessThanEqual(0);
         const jitter = getJitterRotation();
 
         const viewDist = length(rayPosition.sub(u.cameraPosition));
@@ -661,19 +679,71 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
 
         const od = float(0).toVar();
 
-        If(viewDist.greaterThan(c1End).and(c2Valid), () => {
-            od.assign(sampleCascadePCF(2, posUncorrected, distanceToTop, distanceOffset, jitter));
-        })
-            .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
-                od.assign(
-                    sampleCascadePCF(1, posUncorrected, distanceToTop, distanceOffset, jitter)
-                );
+        If(earlyOut.not(), () => {
+            If(viewDist.greaterThan(c1End).and(c2Valid), () => {
+                If(radius.lessThan(0.1), () => {
+                    od.assign(
+                        sampleCascadeSingle(
+                            2,
+                            posUncorrected,
+                            distanceToTop,
+                            distanceOffset,
+                            jitter
+                        )
+                    );
+                }).Else(() => {
+                    od.assign(
+                        sampleCascadePCF(2, posUncorrected, distanceToTop, distanceOffset, jitter)
+                    );
+                });
             })
-            .Else(() => {
-                od.assign(
-                    sampleCascadePCF(0, posUncorrected, distanceToTop, distanceOffset, jitter)
-                );
-            });
+                .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
+                    If(radius.lessThan(0.1), () => {
+                        od.assign(
+                            sampleCascadeSingle(
+                                1,
+                                posUncorrected,
+                                distanceToTop,
+                                distanceOffset,
+                                jitter
+                            )
+                        );
+                    }).Else(() => {
+                        od.assign(
+                            sampleCascadePCF(
+                                1,
+                                posUncorrected,
+                                distanceToTop,
+                                distanceOffset,
+                                jitter
+                            )
+                        );
+                    });
+                })
+                .Else(() => {
+                    If(radius.lessThan(0.1), () => {
+                        od.assign(
+                            sampleCascadeSingle(
+                                0,
+                                posUncorrected,
+                                distanceToTop,
+                                distanceOffset,
+                                jitter
+                            )
+                        );
+                    }).Else(() => {
+                        od.assign(
+                            sampleCascadePCF(
+                                0,
+                                posUncorrected,
+                                distanceToTop,
+                                distanceOffset,
+                                jitter
+                            )
+                        );
+                    });
+                });
+        });
 
         return od;
     });
@@ -898,7 +968,8 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const bsmCond = heightGate.mul(cascadeGate);
                         const shadowOD = sampleShadowOpticalDepth(
                             position,
-                            sunRayDistance
+                            sunRayDistance,
+                            u.maxShadowFilterRadius
                         ).toConst();
                         opticalDepth.addAssign(shadowOD.mul(bsmCond));
 
