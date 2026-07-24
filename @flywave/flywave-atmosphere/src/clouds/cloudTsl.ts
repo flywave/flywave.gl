@@ -957,11 +957,9 @@ export const createMarchClouds = (u: CloudUniforms): any => {
             // rayStartTexelsPerPixel = pow(2.0, mipLevel);
             const initialUv = getGlobeUv(rayOrigin);
             const baseMip = getMipLevel(initialUv.mul(u.localWeatherRepeat));
-            // Reference: multiply by mipLevelScale (0.25 for temporal upscale)
-            const scaledMip = baseMip.mul(u.mipLevelScale);
             const cameraAdjustedMip = mix(
                 float(0),
-                scaledMip,
+                baseMip,
                 min(float(1), float(0.2).mul(camHeight).div(u.maxHeight))
             );
             const rayStartTexelsPerPixel = pow(float(2), cameraAdjustedMip);

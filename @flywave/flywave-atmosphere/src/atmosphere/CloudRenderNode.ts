@@ -8,6 +8,7 @@ import {
     floor,
     frameId,
     If,
+    int,
     ivec2,
     max,
     mix,
@@ -70,8 +71,12 @@ let _onReadyCallback: (() => void) | null = null;
 const _cloudResolveCountNode = uniform(0);
 const _cloudFrameNode = uniform(0);
 const _resolveTexelSize = uniform(new Vector2(1, 1));
+const _jitteredInverseProjection = uniform(new Matrix4());
+const _temporalJitter = uniform(new Vector2());
+const _viewReprojectionMatrix = uniform(new Matrix4());
+const _reprojectionMatrix = uniform(new Matrix4());
 
-const _varianceGamma = uniform(1.0);
+const _varianceGamma = uniform(2.0);
 const _temporalAlpha = uniform(0.05);
 
 const _neighborOffsets9 = [
@@ -85,6 +90,19 @@ const _neighborOffsets9 = [
     [1, 0],
     [1, 1]
 ];
+
+// Get closest fragment: search 3x3 neighborhood for minimum front depth,
+// return its velocity. This handles the case where cloud edges move between
+// frames and the center pixel may not have the best velocity.
+const _getClosestFragment = Fn(([velocityTex, coord]: any) => {
+    const result = velocityTex.load(coord).toVar();
+    for (const [x, y] of _neighborOffsets9) {
+        if (x === 0 && y === 0) continue;
+        const neighbor = velocityTex.load(coord.add(ivec2(x, y))).toConst();
+        result.assign(neighbor.r.lessThan(result.r).select(neighbor, result));
+    }
+    return result;
+});
 
 const _varianceOffsets8 = [
     [-1, -1],
@@ -121,6 +139,58 @@ const _varianceClippingResolve = Fn(([inputNode, coord, current, history]: any) 
     const minColor = mean.sub(variance).toConst();
     const maxColor = mean.add(variance).toConst();
     return _clipAABBResolve(mean.clamp(minColor, maxColor), history, minColor, maxColor);
+});
+
+// UV-based variance clipping: samples low-res buffer at full-res UV with bilinear
+// interpolation, matching reference's textureOffset(colorBuffer, vUv, offset)
+const _lowResTexelSize = uniform(new Vector2(1, 1));
+
+const _varianceClippingUV = Fn(([inputNode, uv, current, history]: any) => {
+    const moment1 = current.toVar();
+    const moment2 = current.pow2().toVar();
+    for (const [x, y] of _varianceOffsets8) {
+        const sampleUv = uv.add(vec2(float(x), float(y)).mul(_lowResTexelSize));
+        const neighbor = texture(inputNode, sampleUv).toConst();
+        moment1.addAssign(neighbor);
+        moment2.addAssign(neighbor.pow2());
+    }
+    const N = _varianceOffsets8.length + 1;
+    const mean = moment1.div(N).toConst();
+    const variance = sqrt(moment2.div(N).sub(mean.pow2()).max(0)).mul(_varianceGamma).toConst();
+    const minColor = mean.sub(variance).toConst();
+    const maxColor = mean.add(variance).toConst();
+    return _clipAABBResolve(mean.clamp(minColor, maxColor), history, minColor, maxColor);
+});
+
+// Catmull-Rom texture sampling for sharper upscaling (5-tap bilinear optimization)
+const _historyTexSize = uniform(new Vector2(1, 1));
+
+const _textureCatmullRom = Fn(([texNode, uv]: any) => {
+    const texSize = _historyTexSize.toVar();
+    const samplePos = uv.mul(texSize);
+    const texPos1 = floor(samplePos.sub(0.5)).add(0.5);
+    const f = samplePos.sub(texPos1).toVar();
+    // Catmull-Rom spline weights: f * (-0.5 + f * (1.0 - 0.5*f)), etc.
+    const w0 = f.mul(float(-0.5).add(f.mul(float(1.0).sub(f.mul(0.5)))));
+    const w1 = float(1.0).add(f.mul(f).mul(float(-2.5).add(f.mul(1.5))));
+    const w2 = f.mul(float(0.5).add(f.mul(float(2.0).sub(f.mul(1.5)))));
+    const w3 = f.mul(f).mul(float(-0.5).add(f.mul(0.5)));
+    const w12 = w1.add(w2);
+    const offset12 = w2.div(w1.add(w2));
+    const texPos0 = texPos1.sub(1.0).div(texSize);
+    const texPos3 = texPos1.add(2.0).div(texSize);
+    const texPos12 = texPos1.add(offset12).div(texSize);
+    const result = vec4(0).toVar();
+    result.addAssign(texture(texNode, vec2(texPos0.x, texPos0.y)).mul(w0.x).mul(w0.y));
+    result.addAssign(texture(texNode, vec2(texPos12.x, texPos0.y)).mul(w12.x).mul(w0.y));
+    result.addAssign(texture(texNode, vec2(texPos3.x, texPos0.y)).mul(w3.x).mul(w0.y));
+    result.addAssign(texture(texNode, vec2(texPos0.x, texPos12.y)).mul(w0.x).mul(w12.y));
+    result.addAssign(texture(texNode, vec2(texPos12.x, texPos12.y)).mul(w12.x).mul(w12.y));
+    result.addAssign(texture(texNode, vec2(texPos3.x, texPos12.y)).mul(w3.x).mul(w12.y));
+    result.addAssign(texture(texNode, vec2(texPos0.x, texPos3.y)).mul(w0.x).mul(w3.y));
+    result.addAssign(texture(texNode, vec2(texPos12.x, texPos3.y)).mul(w12.x).mul(w3.y));
+    result.addAssign(texture(texNode, vec2(texPos3.x, texPos3.y)).mul(w3.x).mul(w3.y));
+    return result;
 });
 
 const SHADOW_CASCADE_COUNT = 3;
@@ -225,10 +295,10 @@ export function updateCloudUniforms(atmosphereContext: any): void {
     // ECEF positions to world via matrixECEFToWorld before applying this.
     const cam = atmosphereContext.camera;
     if (cam) {
-        _nextPrevViewProjection = new Matrix4().multiplyMatrices(
-            cam.projectionMatrix,
-            cam.matrixWorldInverse
-        );
+        if (!_prevProjectionMatrix) {
+            _prevProjectionMatrix = cam.projectionMatrix.clone();
+            _prevViewMatrix = cam.matrixWorldInverse.clone();
+        }
     }
 
     const pos = atmosphereContext.cameraPositionECEF?.value;
@@ -264,8 +334,19 @@ export function updateCloudUniforms(atmosphereContext: any): void {
 const { resetRendererState, restoreRendererState } = RendererUtils;
 const sizeScratch = /*#__PURE__*/ new Vector2();
 
-// Bayer 4x4 pattern for temporal upscale (1=render this frame, 0=use history)
+// Bayer 4x4 dither pattern (row-major: index = y*4+x)
 const bayerIndices = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+// Precomputed sub-pixel offsets for each frame (0-15).
+// offset = ((i%4 + 0.5)/4, (floor(i/4) + 0.5)/4) where bayerIndices[i] === frame
+const bayerOffsets: [number, number][] = Array.from({ length: 16 }, (_, frame) => {
+    for (let i = 0; i < 16; i++) {
+        if (bayerIndices[i] === frame) {
+            return [((i % 4) + 0.5) / 4, (Math.floor(i / 4) + 0.5) / 4];
+        }
+    }
+    return [0, 0];
+});
 
 // Halton sequence for temporal jitter (base 2, base 3)
 const haltonBase2 = [
@@ -283,9 +364,9 @@ let _prevFrameTime = 0;
 // Previous view-projection matrix for velocity reprojection
 const prevViewProjectionUniform = new Uniform(new Matrix4());
 let hasPrevViewProjection = false;
-let _nextPrevViewProjection: Matrix4 | null = null;
-// Previous frame's jittered view-projection (includes Halton jitter shift)
-let _prevJitteredVP: Matrix4 | null = null;
+// Previous frame's NON-jittered projection and view matrices
+let _prevProjectionMatrix: Matrix4 | null = null;
+let _prevViewMatrix: Matrix4 | null = null;
 
 export class CloudRenderNode extends TempNode {
     static override get type(): string {
@@ -477,19 +558,25 @@ export class CloudRenderNode extends TempNode {
         const fullSize = renderer.getDrawingBufferSize(sizeScratch);
         const fullWidth = fullSize.x;
         const fullHeight = fullSize.y;
-        // Full resolution (matched reference temporalUpscale=false)
-        const lowWidth = Math.max(Math.ceil(fullWidth), 1);
-        const lowHeight = Math.max(Math.ceil(fullHeight), 1);
+        // Temporal upscale: render cloud march at 1/4 resolution, upscale to full
+        const UPSCALE = 4;
+        const lowWidth = Math.max(Math.ceil(fullWidth / UPSCALE), 1);
+        const lowHeight = Math.max(Math.ceil(fullHeight / UPSCALE), 1);
+        // Virtual resolution for mip level (matches reference: lowRes * 4)
+        const virtualWidth = lowWidth * UPSCALE;
+        const virtualHeight = lowHeight * UPSCALE;
 
         this.lowResRT.setSize(lowWidth, lowHeight);
         this.historyRT.setSize(fullWidth, fullHeight);
         this.resolveRT.setSize(fullWidth, fullHeight);
         _resolveTexelSize.value.set(1 / fullWidth, 1 / fullHeight);
+        _lowResTexelSize.value.set(1 / lowWidth, 1 / lowHeight);
+        _historyTexSize.value.set(fullWidth, fullHeight);
 
-        // getMipLevel() uses resolution uniform for screen-space derivative
-        // magnitude. It runs inside the low-res pass, so the resolution must
-        // match the low-res render target (matching reference CloudsMaterial).
-        _cloudUniforms.resolution.value.set(lowWidth, lowHeight);
+        // getMipLevel() uses resolution for screen-space derivative magnitude.
+        // Virtual resolution = lowRes * 4 (what reference CloudsMaterial.setSize does)
+        _cloudUniforms.resolution.value.set(virtualWidth, virtualHeight);
+        _cloudUniforms.mipLevelScale.value = 0.25;
 
         // ECEF→World: inverse of matrixWorldToECEF (updated every frame)
         const atmoCtx = getAtmosphereContext(renderer);
@@ -582,55 +669,61 @@ export class CloudRenderNode extends TempNode {
         // (getAtmosphereContext doesn't work with renderer arg, so we rely on
         // updateCloudUniforms having been called first)
 
-        // Camera jitter disabled — reference uses temporalUpscale={false}
-        const _enableJitter = false;
-        let jitterCamera: any = null,
-            savedProj: any = null,
-            savedProjInv: any = null;
+        // Camera jitter: sub-pixel offset based on Bayer 4x4 pattern.
+        // Following reference approach: don't modify camera projection matrix.
+        // Instead, compute jittered inverse projection for ray direction, and
+        // apply same jitter to previous projection for reprojection.
+        const _enableJitter = true;
 
         const atmoCtx2 = getAtmosphereContext(renderer);
-        jitterCamera = atmoCtx2.camera;
+        const jitterCamera = atmoCtx2.camera;
 
+        let jitterDx = 0,
+            jitterDy = 0;
         if (_enableJitter) {
-            savedProj = jitterCamera.projectionMatrix.clone();
-            savedProjInv = jitterCamera.projectionMatrixInverse.clone();
-            const jx = (haltonBase2[_frameIndex % 16] - 0.5) * (2 / lowWidth);
-            const jy = (haltonBase3[_frameIndex % 16] - 0.5) * (2 / lowHeight);
-            const jitterMat = new Matrix4().makeTranslation(jx, jy, 0);
-            jitterCamera.projectionMatrix.multiply(jitterMat);
-            jitterCamera.projectionMatrixInverse.copy(jitterCamera.projectionMatrix).invert();
+            const frame = this._cloudResolveFrameCount % 16;
+            const [ox, oy] = bayerOffsets[frame];
+            // Reference: dx = ((offset - 0.5) / resolution) * 4, resolution = virtualWidth
+            jitterDx = ((ox - 0.5) / virtualWidth) * 4;
+            jitterDy = ((oy - 0.5) / virtualHeight) * 4;
+            _temporalJitter.value.set(jitterDx, jitterDy);
+
+            // Jittered inverse projection for ray direction
+            _jitteredInverseProjection.value.copy(jitterCamera.projectionMatrix);
+            _jitteredInverseProjection.value.elements[8] += jitterDx * 2;
+            _jitteredInverseProjection.value.elements[9] += jitterDy * 2;
+            _jitteredInverseProjection.value.invert();
+        } else {
+            _jitteredInverseProjection.value.copy(jitterCamera.projectionMatrixInverse);
+            _temporalJitter.value.set(0, 0);
         }
 
-        // Always update prevViewProjection for velocity-based temporal accumulation
-        if (_prevJitteredVP) {
-            prevViewProjectionUniform.value.copy(_prevJitteredVP);
-            _cloudUniforms.prevViewProjection.value.copy(_prevJitteredVP);
+        // viewProjection = (curProj + jitter) × curView — jittered to match ray direction
+        // prevViewProjection = (prevProj + jitter) × prevView — same jitter
+        // velocity = curUv - prevUv, jitter cancels in subtraction
+        const jitteredProj = jitterCamera.projectionMatrix.clone();
+        jitteredProj.elements[8] += jitterDx * 2;
+        jitteredProj.elements[9] += jitterDy * 2;
+        const curVP = new Matrix4().multiplyMatrices(jitteredProj, jitterCamera.matrixWorldInverse);
+        _cloudUniforms.viewProjection.value.copy(curVP);
+
+        if (_prevProjectionMatrix && _prevViewMatrix) {
+            const reprojection = new Matrix4().copy(_prevProjectionMatrix);
+            reprojection.elements[8] += jitterDx * 2;
+            reprojection.elements[9] += jitterDy * 2;
+            reprojection.multiply(_prevViewMatrix);
+            _cloudUniforms.prevViewProjection.value.copy(reprojection);
             hasPrevViewProjection = true;
         }
-
-        // Current frame VP for velocity calculation (curUv - prevUv)
-        const curVP = new Matrix4().multiplyMatrices(
-            jitterCamera.projectionMatrix,
-            jitterCamera.matrixWorldInverse
-        );
-        _cloudUniforms.viewProjection.value.copy(curVP);
 
         // Pass 1: Render clouds at 1/4 resolution for temporal upscale
         renderer.setRenderTarget(this.lowResRT);
         this.mesh.material = this.lowResMaterial;
         this.mesh.render(renderer);
 
-        // Always compute current VP for next frame's velocity
-        _prevJitteredVP = new Matrix4().multiplyMatrices(
-            jitterCamera.projectionMatrix,
-            jitterCamera.matrixWorldInverse
-        );
-
-        if (_enableJitter) {
-            jitterCamera.projectionMatrix.copy(savedProj);
-            jitterCamera.projectionMatrixInverse.copy(savedProjInv);
-            _nextPrevViewProjection = null;
-        }
+        // Save non-jittered projection + view for next frame's reprojection
+        _prevProjectionMatrix = jitterCamera.projectionMatrix.clone();
+        _prevViewMatrix = jitterCamera.matrixWorldInverse.clone();
 
         // Update resolve frame count for bootstrapping (before resolve pass)
         _cloudResolveCountNode.value = this._cloudResolveFrameCount;
@@ -671,16 +764,6 @@ export class CloudRenderNode extends TempNode {
         }
 
         _frameIndex++;
-
-        // Swap prevViewProjection for next frame.
-        // CRITICAL: this must happen AFTER all passes that use prevViewProjection
-        // (lowRes, velocity, resolve) have rendered. We swap at the very end of
-        // updateBefore so next frame sees this frame's VP as "previous".
-        if (_nextPrevViewProjection) {
-            prevViewProjectionUniform.value.copy(_nextPrevViewProjection);
-            _cloudUniforms.prevViewProjection.value.copy(_nextPrevViewProjection);
-            hasPrevViewProjection = true;
-        }
 
         this.swapHistoryResolve();
     }
@@ -760,15 +843,17 @@ export class CloudRenderNode extends TempNode {
         // Setup low-res pass: render clouds with STBN jitter
         {
             const geo = positionGeometry;
-            const positionView = inverseProjectionMatrix(camera).mul(vec4(geo, 1)).xyz;
+            // Reference: viewPosition = inverseProjectionMatrix(jittered) * position
+            const positionView = _jitteredInverseProjection.mul(vec4(geo, 1)).xyz;
             const rayDirection = matrixViewToECEF.mul(vec4(positionView, float(0))).xyz.normalize();
             const camPosCorrected = cameraPositionECEF.add(altitudeCorrectionECEF);
 
-            // Depth occlusion
+            // Depth occlusion: add temporalJitter to depth UV (matches reference)
             let sceneDistance;
             if (this._depthNode != null) {
                 const depthTex = convertToTexture(this._depthNode);
-                const depthVal = depthTex.sample(screenUV).r;
+                const depthUv = screenUV.add(_temporalJitter);
+                const depthVal = depthTex.sample(depthUv).r;
                 const viewZ = depthToViewZ(depthVal, camera);
                 const camForwardView = vec3(float(0), float(0), float(-1));
                 const camForwardECEF = matrixViewToECEF.mul(vec4(camForwardView, float(0))).xyz;
@@ -792,8 +877,6 @@ export class CloudRenderNode extends TempNode {
             _cloudUniforms.worldToUnit.value = worldToUnit;
 
             const clouds = _renderClouds(camPosCorrected, rayDirection, sceneDistance);
-            // MRT output: color (target[0]) + velocity (target[1])
-            // velocity texture: R = frontDepth, GB = velocity.xy (matching reference depthVelocityBuffer)
             this.lowResMaterial.fragmentNode = mrt({
                 color: clouds.get("color"),
                 velocity: vec4(clouds.get("frontDepth"), clouds.get("velocity"), 0)
@@ -801,32 +884,50 @@ export class CloudRenderNode extends TempNode {
             this.lowResMaterial.needsUpdate = true;
         }
 
-        // Setup resolve pass: temporal antialiasing (matches reference temporalAntialiasing)
+        // Setup resolve pass: temporal upscale from 1/4 to full resolution
         {
             const resolveNode = Fn(() => {
                 const coord = ivec2(screenCoordinate);
                 const uv = screenUV;
-                const currentColor = this.lowResNode.load(coord);
+                // Map full-res coord to low-res coord (integer division by 4)
+                const lowResCoord = coord.div(ivec2(4));
+                const currentColor = this.lowResNode.load(lowResCoord);
 
-                const velSample = this.velocityLowResNode.load(coord);
-                const velocity = velSample.gb;
-                const prevUv = uv.sub(velocity);
-                const outOfBounds = prevUv.x
-                    .lessThan(0)
-                    .or(prevUv.x.greaterThan(1))
-                    .or(prevUv.y.lessThan(0))
-                    .or(prevUv.y.greaterThan(1));
-                const result = currentColor.toVar();
-                If(outOfBounds.not(), () => {
-                    const historyColor = texture(this.historyNode, prevUv);
-                    const clippedColor = _varianceClippingResolve(
-                        this.lowResNode,
-                        coord,
-                        currentColor,
-                        historyColor
+                // Bayer 4x4 pattern: 1/16 of full-res pixels are "current frame"
+                const bx = coord.x.mod(int(4));
+                const by = coord.y.mod(int(4));
+                const bayerLut = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+                const bayerIdx = by.mul(int(4)).add(bx);
+                const bayerValue = int(bayerLut[0]).toVar();
+                for (let bi = 1; bi < 16; bi++) {
+                    bayerValue.assign(
+                        bayerIdx.equal(int(bi)).select(int(bayerLut[bi]), bayerValue)
                     );
-                    result.assign(mix(clippedColor, currentColor, float(0.05)));
-                });
+                }
+                const currentFrame = bayerValue.equal(int(_cloudFrameNode));
+
+                // Always temporal accumulate (even for currentFrame)
+                const result = currentColor.toVar();
+                {
+                    const closest = _getClosestFragment(this.velocityLowResNode, lowResCoord);
+                    const velocity = closest.gb;
+                    const prevUv = uv.sub(velocity);
+                    const outOfBounds = prevUv.x
+                        .lessThan(0)
+                        .or(prevUv.x.greaterThan(1))
+                        .or(prevUv.y.lessThan(0))
+                        .or(prevUv.y.greaterThan(1));
+                    If(outOfBounds.not(), () => {
+                        const historyColor = texture(this.historyNode, prevUv);
+                        const clippedColor = _varianceClippingUV(
+                            this.lowResNode,
+                            uv,
+                            currentColor,
+                            historyColor
+                        );
+                        result.assign(clippedColor);
+                    });
+                }
                 return result;
             })();
 

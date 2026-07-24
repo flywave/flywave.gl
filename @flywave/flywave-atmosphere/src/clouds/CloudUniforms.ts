@@ -153,7 +153,8 @@ export class CloudUniforms {
     mipLevelScale = uniform(1.0);
 
     // Matrices for velocity reprojection
-    prevViewProjection = uniform(new Matrix4());
+    prevViewProjection = uniform(new Matrix4()); // reprojectionMatrix: world→prevClip (for cloud velocity)
+    viewReprojection = uniform(new Matrix4()); // view→prevClip (for non-cloud velocity)
     viewProjection = uniform(new Matrix4());
     ecefToWorld = uniform(new Matrix4());
 
