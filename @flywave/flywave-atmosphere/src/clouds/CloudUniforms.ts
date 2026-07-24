@@ -148,8 +148,8 @@ export class CloudUniforms {
     resolution = uniform(new Vector2(1920, 1080));
 
     // Mip level scale: 0.25 for temporal upscale, 1.0 for full-res
-    // Reference: CloudsMaterial.setSize sets mipLevelScale = 0.25
-    mipLevelScale = uniform(0.25);
+    // Reference: temporalUpscale=true → 0.25, temporalUpscale=false → 1.0
+    mipLevelScale = uniform(1.0);
 
     // Matrices for velocity reprojection
     prevViewProjection = uniform(new Matrix4());

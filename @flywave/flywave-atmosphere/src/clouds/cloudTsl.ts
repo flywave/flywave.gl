@@ -68,12 +68,10 @@ export const remapClamped = Fn(([x, a, b]: [any, any, any]) => {
  */
 export const createGetMipLevel = (u: CloudUniforms) =>
     Fn(([uv]: [any]) => {
-        const mipLevelScale = float(0.1);
-        // GLSL: coord = uv * resolution (screen pixels)
         const coord = uv.mul(u.resolution);
         const ddx = dFdx(coord);
         const ddy = dFdy(coord);
-        const deltaMaxSqr = max(dot(ddx, ddx), dot(ddy, ddy)).mul(mipLevelScale);
+        const deltaMaxSqr = max(dot(ddx, ddx), dot(ddy, ddy)).mul(u.mipLevelScale);
         return max(float(0), float(0.5).mul(log2(max(float(1), deltaMaxSqr))));
     });
 
