@@ -794,26 +794,21 @@ export class CloudRenderNode extends TempNode {
             const result = mix(this._colorNode.rgb, resolvedClouds.rgb, resolvedClouds.a);
 
             // Mode 100-102: show BSM cascade resolved buffer (maxOD channel b)
-            If(debugMode.equal(100), () => {
-                const shadow = texture(this.shadowNodes[0], screenUV);
-                Return(vec4(shadow.bbb, 1));
-            });
-            If(debugMode.equal(101), () => {
-                const shadow = texture(this.shadowNodes[1], screenUV);
-                Return(vec4(shadow.bbb, 1));
-            });
-            If(debugMode.equal(102), () => {
-                const shadow = texture(this.shadowNodes[2], screenUV);
-                Return(vec4(shadow.bbb, 1));
-            });
+            const d100 = texture(this.shadowNodes[0], screenUV);
+            const d101 = texture(this.shadowNodes[1], screenUV);
+            const d102 = texture(this.shadowNodes[2], screenUV);
+            const d103 = texture(this.velocityLowResNode, screenUV);
 
-            // Mode 103: show velocity buffer (dx,dy mapped to color)
-            If(debugMode.equal(103), () => {
-                const vel = texture(this.velocityLowResNode, screenUV);
-                Return(vec4(vel.xy.mul(10).add(0.5), 0, 1));
-            });
+            const debugColor = vec4(0).toVar();
+            debugColor.assign(debugMode.equal(100).select(vec4(d100.bbb, 1), debugColor));
+            debugColor.assign(debugMode.equal(101).select(vec4(d101.bbb, 1), debugColor));
+            debugColor.assign(debugMode.equal(102).select(vec4(d102.bbb, 1), debugColor));
+            debugColor.assign(
+                debugMode.equal(103).select(vec4(d103.xy.mul(10).add(0.5), 0, 1), debugColor)
+            );
 
-            Return(result);
+            const isDebug = debugMode.greaterThan(99);
+            return isDebug.select(debugColor, vec4(result, 1));
         })();
 
         return debugOutput;
