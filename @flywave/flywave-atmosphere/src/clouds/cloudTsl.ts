@@ -1086,11 +1086,17 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                                 mipLevel,
                                 u.maxIterationCountToGround
                             ).x;
-                            // Reference: groundIrradiance = skyIrr + (1-coverage)*sunIrr
-                            // at ground level. We use the per-pixel sky/sun we just
-                            // computed and an approximate ground-level reduction.
-                            const groundIrradianceVal = skyIrradiance.add(
-                                oneMinus(u.coverage).mul(sunIrradiance)
+                            // Ground irradiance: project to ground level and compute
+                            // (matches reference getGroundSunSkyIrradiance)
+                            const groundPosition = position.sub(normalize(position).mul(height));
+                            const groundIrr = getSplitScalarIlluminance(
+                                groundPosition.mul(u.worldToUnit),
+                                u.sunDirection
+                            ).toConst();
+                            const groundSkyIrr = groundIrr.get("indirect");
+                            const groundSunIrr = groundIrr.get("direct");
+                            const groundIrradianceVal = groundSkyIrr.add(
+                                oneMinus(u.coverage).mul(groundSunIrr)
                             );
                             const groundAlbedo = float(0.3);
                             const bouncedRadiance = groundAlbedo

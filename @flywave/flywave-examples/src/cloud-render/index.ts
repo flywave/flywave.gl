@@ -179,6 +179,9 @@ async function main() {
     const cloudUniforms = (window as any).__cloudUniforms;
     if (cloudUniforms) {
         cloudUniforms.applyQualityPreset("high");
+        // Wind animation: set non-zero velocity (matching reference Clouds-Vanilla)
+        cloudUniforms.localWeatherVelocity.value.set(0.001, 0);
+        cloudUniforms.shapeVelocity.value.set(0.001, 0, 0);
     }
 
     const geo = new PlaneGeometry(2, 2);
