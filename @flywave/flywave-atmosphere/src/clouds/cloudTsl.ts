@@ -358,7 +358,7 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
             const lastDist = float(0).toVar();
             const stepsTaken = float(0).toVar();
 
-            Loop({ start: 0, end: 4, type: "int" }, () => {
+            Loop({ start: 0, end: 128, type: "int" }, () => {
                 If(stepsTaken.greaterThanEqual(iterationCount), () => {
                     Break();
                 });
@@ -443,6 +443,9 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
     const sampleMedia = createSampleMedia(u);
     // Bake cascade index into shader (constant for compiled material)
     const invMat = u.inverseShadowMatrices[cascadeIndex];
+    // Per-cascade mip level: [0.0, 0.5, 1.0, 2.0] (matching reference shadow.frag)
+    const SHADOW_MIP_LEVELS = [0.0, 0.5, 1.0, 2.0];
+    const cascadeMipLevel = float(SHADOW_MIP_LEVELS[cascadeIndex] ?? 0.0);
 
     return Fn((): any => {
         const clip = screenUV.mul(2).sub(1);
@@ -501,7 +504,7 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
             const height = length(position).sub(u.bottomRadius);
             const uv = getGlobeUv(position);
             const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
-            const density = sampleWeather(uv, height, float(0));
+            const density = sampleWeather(uv, height, cascadeMipLevel);
             const maxDensity = max(density.x, max(density.y, max(density.z, density.w)));
 
             If(maxDensity.greaterThan(u.minDensity), () => {
@@ -510,7 +513,7 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
                     density,
                     position,
                     uv,
-                    float(0),
+                    cascadeMipLevel,
                     stbn,
                     rayOrigin
                 );
@@ -618,36 +621,34 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         const r = u.maxShadowFilterRadius.add(sunPenumbra);
         const texel = u.shadowTexelSize;
 
+        const SHADOW_SAMPLE_COUNT = 8;
         const odSum = float(0).toVar();
-        Loop({ start: 0, end: 5, type: "int" }, () => {
-            const fi = float(0).toVar();
-            const sampleOD = (uvOffset: any): any => {
-                const rotated = vec2(
-                    jitter.cosA.mul(uvOffset.x).sub(jitter.sinA.mul(uvOffset.y)),
-                    jitter.sinA.mul(uvOffset.x).add(jitter.cosA.mul(uvOffset.y))
-                );
-                const uv = shadowUV.add(rotated).add(jitter.subTexel);
-                const inB = step(float(0), uv.x)
-                    .mul(step(uv.x, float(1)))
-                    .mul(step(float(0), uv.y))
-                    .mul(step(uv.y, float(1)));
-                const shadow = texture(tex, uv);
-                const distFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
-                const od = min(shadow.b.add(shadow.a), shadow.g.mul(distFront));
-                return inB.greaterThan(0.5).select(od, float(0));
-            };
+        const loopIdx = float(0).toVar();
+        Loop({ start: 0, end: SHADOW_SAMPLE_COUNT, type: "int" }, () => {
+            const goldenAngle = float(2.39996323);
+            const fi = loopIdx;
+            const angle = fi.mul(goldenAngle);
+            const vogelR = sqrt(fi.add(float(0.5)).div(float(SHADOW_SAMPLE_COUNT)));
+            const ox = cos(angle).mul(vogelR);
+            const oy = sin(angle).mul(vogelR);
 
-            const sx = fi
-                .equal(0)
-                .select(float(0), fi.mod(float(2)).mul(float(2)).sub(float(1)).mul(r));
-            const sy = fi
-                .equal(0)
-                .select(float(0), step(fi, float(2)).mul(float(2)).sub(float(1)).mul(r));
-            odSum.addAssign(sampleOD(vec2(sx, sy).mul(texel)));
-            fi.addAssign(float(1));
+            const rotated = vec2(
+                jitter.cosA.mul(ox).sub(jitter.sinA.mul(oy)),
+                jitter.sinA.mul(ox).add(jitter.cosA.mul(oy))
+            );
+            const uv = shadowUV.add(rotated.mul(r).mul(texel)).add(jitter.subTexel);
+            const inB = step(float(0), uv.x)
+                .mul(step(uv.x, float(1)))
+                .mul(step(float(0), uv.y))
+                .mul(step(uv.y, float(1)));
+            const shadow = texture(tex, uv);
+            const distFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
+            const od = min(shadow.b.add(shadow.a), shadow.g.mul(distFront));
+            odSum.addAssign(inB.greaterThan(0.5).select(od, float(0)));
+            loopIdx.addAssign(float(1));
         });
 
-        const od = odSum.div(float(5));
+        const od = odSum.div(float(SHADOW_SAMPLE_COUNT));
 
         const fullBounds = baseInBounds.mul(step(float(0), distanceToTop));
         return fullBounds.greaterThan(0.5).select(od, float(0));
@@ -673,78 +674,56 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         const viewDist = length(rayPosition.sub(u.cameraPosition));
         const c0End = u.shadowIntervals[0].y.mul(u.shadowFar);
         const c1End = u.shadowIntervals[1].y.mul(u.shadowFar);
-
         const c1Valid = u.shadowCascadeCount.greaterThan(1);
         const c2Valid = u.shadowCascadeCount.greaterThan(2);
 
+        // Fade margin: 10% of each cascade range
+        const c0FadeRange = c0End.sub(u.shadowIntervals[0].x.mul(u.shadowFar)).mul(0.1);
+        const c1FadeRange = c1End.sub(u.shadowIntervals[1].x.mul(u.shadowFar)).mul(0.1);
+
         const od = float(0).toVar();
 
-        If(earlyOut.not(), () => {
-            If(viewDist.greaterThan(c1End).and(c2Valid), () => {
-                od.assign(
-                    radius
-                        .lessThan(0.1)
-                        .select(
-                            sampleCascadeSingle(
-                                2,
-                                posUncorrected,
-                                distanceToTop,
-                                distanceOffset,
-                                jitter
-                            ),
-                            sampleCascadePCF(
-                                2,
-                                posUncorrected,
-                                distanceToTop,
-                                distanceOffset,
-                                jitter
-                            )
-                        )
+        const sampleCascade = (idx: number) =>
+            radius
+                .lessThan(0.1)
+                .select(
+                    sampleCascadeSingle(idx, posUncorrected, distanceToTop, distanceOffset, jitter),
+                    sampleCascadePCF(idx, posUncorrected, distanceToTop, distanceOffset, jitter)
                 );
+
+        If(earlyOut.not(), () => {
+            // c2 region
+            If(viewDist.greaterThan(c1End).and(c2Valid), () => {
+                od.assign(sampleCascade(2));
             })
+                // c1 region (with c0↔c1 fade at lower boundary, c1↔c2 fade at upper)
                 .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
-                    od.assign(
-                        radius
-                            .lessThan(0.1)
-                            .select(
-                                sampleCascadeSingle(
-                                    1,
-                                    posUncorrected,
-                                    distanceToTop,
-                                    distanceOffset,
-                                    jitter
-                                ),
-                                sampleCascadePCF(
-                                    1,
-                                    posUncorrected,
-                                    distanceToTop,
-                                    distanceOffset,
-                                    jitter
-                                )
-                            )
-                    );
+                    // Fade between c1 and c2 near upper boundary
+                    const c1UpperFade = viewDist
+                        .sub(c1End.sub(c1FadeRange))
+                        .div(c1FadeRange.max(1e-7))
+                        .clamp(0, 1);
+                    const od1 = sampleCascade(1);
+                    If(c2Valid.and(c1UpperFade.greaterThan(0)), () => {
+                        const od2 = sampleCascade(2);
+                        od.assign(mix(od1, od2, c1UpperFade));
+                    }).Else(() => {
+                        od.assign(od1);
+                    });
                 })
+                // c0 region (with c0↔c1 fade at upper boundary)
                 .Else(() => {
-                    od.assign(
-                        radius
-                            .lessThan(0.1)
-                            .select(
-                                sampleCascadeSingle(
-                                    0,
-                                    posUncorrected,
-                                    distanceToTop,
-                                    distanceOffset,
-                                    jitter
-                                ),
-                                sampleCascadePCF(
-                                    0,
-                                    posUncorrected,
-                                    distanceToTop,
-                                    distanceOffset,
-                                    jitter
-                                )
-                            )
-                    );
+                    const c0UpperFade = viewDist
+                        .sub(c0End.sub(c0FadeRange))
+                        .div(c0FadeRange.max(1e-7))
+                        .clamp(0, 1);
+                    const od0 = sampleCascade(0);
+                    If(c1Valid.and(c0UpperFade.greaterThan(0)), () => {
+                        const od1 = sampleCascade(1);
+                        od.assign(mix(od0, od1, c0UpperFade));
+                    }).Else(() => {
+                        od.assign(od0);
+                    });
                 });
         });
 
@@ -987,7 +966,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                 scaledMip,
                 min(float(1), float(0.2).mul(camHeight).div(u.maxHeight))
             );
-            const rayStartTexelsPerPixel = float(1);
+            const rayStartTexelsPerPixel = pow(float(2), cameraAdjustedMip);
 
             Loop({ start: 0, end: u.maxIterationCount, type: "int" }, () => {
                 If(rayDistance.greaterThan(maxRayDistance), () => {
@@ -1069,10 +1048,15 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                             .greaterThan(0)
                             .select(float(1), float(0));
                         const bsmCond = heightGate.mul(cascadeGate);
+                        const surfaceNormal = normalize(position);
+                        const sunDotNormal = dot(u.sunDirection, surfaceNormal);
+                        const shadowRadius = u.maxShadowFilterRadius.mul(
+                            sunDotNormal.sub(0.1).div(float(0).sub(0.1)).clamp(0, 1)
+                        );
                         const shadowOD = sampleShadowOpticalDepth(
                             position,
                             sunRayDistance,
-                            u.maxShadowFilterRadius
+                            shadowRadius
                         ).toConst();
                         opticalDepth.addAssign(shadowOD.mul(bsmCond));
 

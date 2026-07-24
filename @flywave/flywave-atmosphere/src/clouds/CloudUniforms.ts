@@ -53,6 +53,10 @@ export class CloudUniforms {
     shadowFar = uniform(50000.0);
     shadowTexelSize = uniform(new Vector2(1 / 512, 1 / 512));
     maxShadowFilterRadius = uniform(4.0);
+    // View matrix + camera near/far for cascade index selection
+    shadowViewMatrix = uniform(new Matrix4());
+    shadowCameraNear = uniform(1.0);
+    shadowCameraFar = uniform(100000.0);
     // Per-cascade data (up to 4 cascades). With 1 cascade only [0] is used.
     shadowMatrices = [
         uniform(new Matrix4()),

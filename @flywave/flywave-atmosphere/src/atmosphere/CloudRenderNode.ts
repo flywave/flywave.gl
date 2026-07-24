@@ -513,6 +513,9 @@ export class CloudRenderNode extends TempNode {
                         matV2E.value ?? matV2E
                     );
                     _cloudUniforms.shadowFar.value = _cascadedShadowMaps.far;
+                    _cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
+                    _cloudUniforms.shadowCameraNear.value = cam.near;
+                    _cloudUniforms.shadowCameraFar.value = cam.far;
                     // Use cascade 0 texel size for PCF (fine-grained; far cascades
                     // have coarser texels but PCF radius is small relative to them)
                     _cloudUniforms.shadowTexelSize.value.set(
@@ -648,25 +651,24 @@ export class CloudRenderNode extends TempNode {
         this.mesh.render(renderer);
 
         // Accumulate wind velocity into texture offsets (Euler integration)
-        // DISABLED FOR EXCLUSION TEST:
-        // const now = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
-        // const dt = _prevFrameTime > 0 ? Math.min(now - _prevFrameTime, 0.1) : 0;
-        // _prevFrameTime = now;
-        // if (dt > 0) {
-        //     _cloudUniforms.localWeatherOffset.value.x +=
-        //         _cloudUniforms.localWeatherVelocity.value.x * dt;
-        //     _cloudUniforms.localWeatherOffset.value.y +=
-        //         _cloudUniforms.localWeatherVelocity.value.y * dt;
-        //     _cloudUniforms.shapeOffset.value.x += _cloudUniforms.shapeVelocity.value.x * dt;
-        //     _cloudUniforms.shapeOffset.value.y += _cloudUniforms.shapeVelocity.value.y * dt;
-        //     _cloudUniforms.shapeOffset.value.z += _cloudUniforms.shapeVelocity.value.z * dt;
-        //     _cloudUniforms.shapeDetailOffset.value.x +=
-        //         _cloudUniforms.shapeDetailVelocity.value.x * dt;
-        //     _cloudUniforms.shapeDetailOffset.value.y +=
-        //         _cloudUniforms.shapeDetailVelocity.value.y * dt;
-        //     _cloudUniforms.shapeDetailOffset.value.z +=
-        //         _cloudUniforms.shapeDetailVelocity.value.z * dt;
-        // }
+        const now = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
+        const dt = _prevFrameTime > 0 ? Math.min(now - _prevFrameTime, 0.1) : 0;
+        _prevFrameTime = now;
+        if (dt > 0) {
+            _cloudUniforms.localWeatherOffset.value.x +=
+                _cloudUniforms.localWeatherVelocity.value.x * dt;
+            _cloudUniforms.localWeatherOffset.value.y +=
+                _cloudUniforms.localWeatherVelocity.value.y * dt;
+            _cloudUniforms.shapeOffset.value.x += _cloudUniforms.shapeVelocity.value.x * dt;
+            _cloudUniforms.shapeOffset.value.y += _cloudUniforms.shapeVelocity.value.y * dt;
+            _cloudUniforms.shapeOffset.value.z += _cloudUniforms.shapeVelocity.value.z * dt;
+            _cloudUniforms.shapeDetailOffset.value.x +=
+                _cloudUniforms.shapeDetailVelocity.value.x * dt;
+            _cloudUniforms.shapeDetailOffset.value.y +=
+                _cloudUniforms.shapeDetailVelocity.value.y * dt;
+            _cloudUniforms.shapeDetailOffset.value.z +=
+                _cloudUniforms.shapeDetailVelocity.value.z * dt;
+        }
 
         _frameIndex++;
 
@@ -845,7 +847,7 @@ export class CloudRenderNode extends TempNode {
 
             for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                 // Shadow march: renders BSM from sun's viewpoint
-                this.shadowMaterials[i].fragmentNode = _shadowMarch(i);
+                this.shadowMaterials[i].fragmentNode = _shadowMarch(i)();
                 this.shadowMaterials[i].needsUpdate = true;
 
                 // Raw blit: copy raw shadow RT → resolved/history (bootstrap)
@@ -862,16 +864,15 @@ export class CloudRenderNode extends TempNode {
                 );
                 this.shadowBlitMaterials[i].needsUpdate = true;
 
-                // Resolve: temporal accumulation (current + history with variance clipping)
+                // Resolve: temporal accumulation (current + history + variance clipping)
+                const shadowRTTex = outputTexture(this, this.shadowRTs[i].texture);
                 const shadowResolveNode = Fn(() => {
-                    const currentColor = texture(
-                        outputTexture(this, this.shadowRTs[i].texture),
-                        screenUV
-                    );
+                    const coord = ivec2(screenCoordinate);
+                    const currentColor = shadowRTTex.load(coord);
                     const historyColor = texture(this.shadowHistoryNodes[i], screenUV);
                     const clippedColor = _varianceClippingResolve(
-                        outputTexture(this, this.shadowRTs[i].texture),
-                        ivec2(screenCoordinate),
+                        shadowRTTex,
+                        coord,
                         currentColor,
                         historyColor
                     );
