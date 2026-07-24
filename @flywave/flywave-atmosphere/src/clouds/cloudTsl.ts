@@ -468,7 +468,7 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
                 .mul(0.5)
         );
 
-        const shadowBottomR = u.bottomRadius.add(u.minHeight);
+        const shadowBottomR = u.bottomRadius.add(u.shadowBottomHeight);
         const cBottom = aa.sub(shadowBottomR.mul(shadowBottomR));
         const discBottom = b.mul(b).sub(cBottom.mul(4));
         const rayFar = b

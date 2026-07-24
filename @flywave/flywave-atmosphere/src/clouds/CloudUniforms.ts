@@ -130,6 +130,7 @@ export class CloudUniforms {
     minHeight = uniform(750.0);
     maxHeight = uniform(1400.0);
     shadowTopHeight = uniform(8000.0);
+    shadowBottomHeight = uniform(0.0);
 
     // Density profile (packed)
     densityProfileExpTerms = uniform(new Vector4());
@@ -243,14 +244,17 @@ export class CloudUniforms {
         }
         this.minHeight.value = minH === Infinity ? 0 : minH;
         this.maxHeight.value = maxH;
-        // shadowTopHeight: only layers with shadow=true contribute.
+        // shadowTopHeight/shadowBottomHeight: only layers with shadow=true contribute.
         let shadowTopH = 0;
+        let shadowBottomH = Infinity;
         for (let i = 0; i < 3; ++i) {
             if (layers[i].shadow && layers[i].height > 0) {
                 if (topHeights[i] > shadowTopH) shadowTopH = topHeights[i];
+                if (alts[i] < shadowBottomH) shadowBottomH = alts[i];
             }
         }
         this.shadowTopHeight.value = shadowTopH;
+        this.shadowBottomHeight.value = shadowBottomH === Infinity ? 0 : shadowBottomH;
     }
 
     applyQualityPreset(preset: QualityPreset): void {
