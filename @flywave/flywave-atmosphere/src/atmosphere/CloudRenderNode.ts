@@ -368,6 +368,15 @@ export function updateCloudUniforms(atmosphereContext: any): void {
         cx = pos.x + corrX;
         cy = pos.y + corrY;
         cz = pos.z + corrZ;
+
+        // CRITICAL: update atmosphereContext uniforms — shader uses these directly
+        // (cameraPositionECEF/altitudeCorrectionECEF). onRenderUpdate hasn't fired yet.
+        if (atmosphereContext.cameraPositionECEF) {
+            atmosphereContext.cameraPositionECEF.value.copy(pos);
+        }
+        if (atmosphereContext.altitudeCorrectionECEF) {
+            atmosphereContext.altitudeCorrectionECEF.value.set(corrX, corrY, corrZ);
+        }
     }
 
     const sr = _cloudUniforms.shapeRepeat.value;
@@ -375,17 +384,6 @@ export function updateCloudUniforms(atmosphereContext: any): void {
     const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
     _cloudUniforms.cameraHeight.value = len - atmosphereContext.parameters.bottomRadius;
     _cloudUniforms.cameraPosition.value.set(cx, cy, cz);
-
-    if (!_hasPrevCam) {
-        console.log(
-            "[updateCloudUniforms] cx:",
-            cx.toFixed(1),
-            "height:",
-            (len - atmosphereContext.parameters.bottomRadius).toFixed(1),
-            "cam:",
-            !!cam
-        );
-    }
 
     if (_hasPrevCam) {
         const dx = cx - _prevCamX;
@@ -751,7 +749,7 @@ export class CloudRenderNode extends TempNode {
         // Following reference approach: don't modify camera projection matrix.
         // Instead, compute jittered inverse projection for ray direction, and
         // apply same jitter to previous projection for reprojection.
-        const _enableJitter = false;
+        const _enableJitter = true;
 
         const atmoCtx2 = getAtmosphereContext(renderer);
         const jitterCamera = atmoCtx2.camera;
@@ -789,8 +787,20 @@ export class CloudRenderNode extends TempNode {
             const reprojection = new Matrix4().copy(_prevProjectionMatrix);
             reprojection.elements[8] += jitterDx * 2;
             reprojection.elements[9] += jitterDy * 2;
-            reprojection.multiply(_prevViewMatrix);
+            // Strip translation from prevView (RTE-compatible)
+            const prevViewRot = _prevViewMatrix.clone();
+            prevViewRot.elements[12] = 0;
+            prevViewRot.elements[13] = 0;
+            prevViewRot.elements[14] = 0;
+            reprojection.multiply(prevViewRot);
             _cloudUniforms.prevViewProjection.value.copy(reprojection);
+            // viewReprojectionMatrix = reprojection × inverseView (rotation only)
+            // Strip translation to work in any camera space (RTE or ECEF)
+            const inverseViewRot = jitterCamera.matrixWorld.clone();
+            inverseViewRot.elements[12] = 0;
+            inverseViewRot.elements[13] = 0;
+            inverseViewRot.elements[14] = 0;
+            _viewReprojectionMatrix.value.copy(reprojection).multiply(inverseViewRot);
             hasPrevViewProjection = true;
         }
 
@@ -923,11 +933,15 @@ export class CloudRenderNode extends TempNode {
 
             // Depth occlusion: add temporalJitter to depth UV (matches reference)
             let sceneDistance;
+            let depthViewZ = float(4e5).toVar();
             if (this._depthNode != null) {
                 const depthTex = convertToTexture(this._depthNode);
                 const depthUv = screenUV.add(_temporalJitter);
                 const depthVal = depthTex.sample(depthUv).r;
                 const viewZ = depthToViewZ(depthVal, camera);
+                depthViewZ.assign(
+                    depthVal.greaterThan(float(1).sub(1e-7)).select(float(4e5), viewZ.negate())
+                );
                 const camForwardView = vec3(float(0), float(0), float(-1));
                 const camForwardECEF = matrixViewToECEF.mul(vec4(camForwardView, float(0))).xyz;
                 const sceneDist = viewZ.negate().div(dot(rayDirection, camForwardECEF.normalize()));
@@ -950,9 +964,18 @@ export class CloudRenderNode extends TempNode {
             _cloudUniforms.worldToUnit.value = worldToUnit;
 
             const clouds = _renderClouds(camPosCorrected, rayDirection, sceneDistance);
+            // View-space velocity using scene depth (matches reference clouds.frag:966-973)
+            const frontView = positionView.mul(depthViewZ);
+            const prevClip = _viewReprojectionMatrix.mul(vec4(frontView, 1));
+            // WebGPU screenUV is top-down but clip space Y is bottom-up — flip Y
+            const prevUv = vec2(
+                prevClip.x.div(prevClip.w).mul(0.5).add(0.5),
+                float(1).sub(prevClip.y.div(prevClip.w).mul(0.5).add(0.5))
+            );
+            const velocity = screenUV.sub(prevUv);
             this.lowResMaterial.fragmentNode = mrt({
                 color: clouds.get("color"),
-                velocity: vec4(clouds.get("frontDepth"), clouds.get("velocity"), 0)
+                velocity: vec4(depthViewZ, velocity, 0)
             });
             this.lowResMaterial.needsUpdate = true;
         }
