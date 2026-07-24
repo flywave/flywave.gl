@@ -894,7 +894,7 @@ export const createApproximateHaze = (u: CloudUniforms) => {
             const skyIrr = splitIrr.get("indirect");
 
             // Sun inscatter with phase function and shadow awareness
-            const phase = phaseFunction(cosTheta, float(0.2), u);
+            const phase = phaseFunction(cosTheta, float(1.0), u);
             let inscatter = sunIrr.mul(phase).mul(shadowTransmittance);
             // Sky inscatter (isotropic)
             inscatter.addAssign(
