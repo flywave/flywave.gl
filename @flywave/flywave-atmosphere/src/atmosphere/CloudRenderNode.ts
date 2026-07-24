@@ -44,7 +44,8 @@ import {
     TempNode,
     Vector2,
     Matrix4,
-    Uniform
+    Uniform,
+    Vector3
 } from "three/webgpu";
 
 import { inverseProjectionMatrix } from "../tsl/accessors";
@@ -290,9 +291,6 @@ export function updateCloudUniforms(atmosphereContext: any): void {
     _cloudUniforms.sunDirection.value.copy(atmosphereContext.sunDirectionECEF.value);
     _cloudUniforms.bottomRadius.value = atmosphereContext.parameters.bottomRadius;
 
-    // prevViewProjection = previous frame's projection × matrixWorldInverse.
-    // This maps world-space positions to clip space. The velocity pass converts
-    // ECEF positions to world via matrixECEFToWorld before applying this.
     const cam = atmosphereContext.camera;
     if (cam) {
         if (!_prevProjectionMatrix) {
@@ -301,34 +299,104 @@ export function updateCloudUniforms(atmosphereContext: any): void {
         }
     }
 
-    const pos = atmosphereContext.cameraPositionECEF?.value;
-    const corr = atmosphereContext.altitudeCorrectionECEF?.value;
-    if (corr) {
-        _cloudUniforms.altitudeCorrection.value.copy(corr);
+    // Manually compute cameraPositionECEF and altitudeCorrectionECEF from the live
+    // camera matrix. onRenderUpdate hasn't fired yet (fires during main render),
+    // so .value would be stale — causing jitter during camera movement in MapView.
+    let cx = 0,
+        cy = 0,
+        cz = 0;
+    if (cam) {
+        const w2e = atmosphereContext.matrixWorldToECEF.value;
+        const pos = new Vector3().setFromMatrixPosition(cam.matrixWorld);
+        if (w2e) pos.applyMatrix4(w2e);
+
+        // Altitude correction (exact copy of AtmosphereContext.onRenderUpdate logic)
+        const a = 6378137.0,
+            b = 6356752.314245;
+        const a2 = a * a,
+            b2 = b * b;
+        const rx = 1 / a2,
+            ry = 1 / a2,
+            rz = 1 / b2;
+        const x2 = pos.x * pos.x * rx,
+            y2 = pos.y * pos.y * ry,
+            z2 = pos.z * pos.z * rz;
+        const normSq = x2 + y2 + z2;
+        let corrX = 0,
+            corrY = 0,
+            corrZ = 0;
+        if (Number.isFinite(normSq) && normSq >= 0.1) {
+            const ratio = Math.sqrt(1 / normSq);
+            const ix = pos.x * ratio,
+                iy = pos.y * ratio,
+                iz = pos.z * ratio;
+            const gx = ix * rx * 2,
+                gy = iy * ry * 2,
+                gz = iz * rz * 2;
+            const gLen = Math.sqrt(gx * gx + gy * gy + gz * gz);
+            let lambda = ((1 - ratio) * pos.length()) / (gLen / 2);
+            let correction = 0;
+            let sx: number, sy: number, sz: number, error: number;
+            do {
+                lambda -= correction;
+                sx = 1 / (1 + lambda * rx);
+                sy = 1 / (1 + lambda * ry);
+                sz = 1 / (1 + lambda * rz);
+                const sx2 = sx * sx,
+                    sy2 = sy * sy,
+                    sz2 = sz * sz;
+                const sx3 = sx2 * sx,
+                    sy3 = sy2 * sy,
+                    sz3 = sz2 * sz;
+                error = x2 * sx2 + y2 * sy2 + z2 * sz2 - 1;
+                correction = error / ((x2 * sx3 * rx + y2 * sy3 * ry + z2 * sz3 * rz) * -2);
+            } while (Math.abs(error) > 1e-12);
+
+            const surfX = pos.x * sx,
+                surfY = pos.y * sy,
+                surfZ = pos.z * sz;
+            const nx = surfX / a2,
+                ny = surfY / a2,
+                nz = surfZ / b2;
+            const nLen = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
+            const br = atmosphereContext.parameters.bottomRadius;
+            corrX = nx * nLen * br - surfX;
+            corrY = ny * nLen * br - surfY;
+            corrZ = nz * nLen * br - surfZ;
+        }
+        _cloudUniforms.altitudeCorrection.value.set(corrX, corrY, corrZ);
+        cx = pos.x + corrX;
+        cy = pos.y + corrY;
+        cz = pos.z + corrZ;
     }
 
     const sr = _cloudUniforms.shapeRepeat.value;
-    if (pos) {
-        const cx = pos.x + (corr?.x ?? 0);
-        const cy = pos.y + (corr?.y ?? 0);
-        const cz = pos.z + (corr?.z ?? 0);
-        _cloudUniforms.cameraShapeOffset.value.set(cx * sr.x, cy * sr.y, cz * sr.z);
-        const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
-        _cloudUniforms.cameraHeight.value = len - atmosphereContext.parameters.bottomRadius;
-        _cloudUniforms.cameraPosition.value.set(cx, cy, cz);
+    // cameraShapeOffset not used by reference — shape texture follows absolute ECEF position
+    const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
+    _cloudUniforms.cameraHeight.value = len - atmosphereContext.parameters.bottomRadius;
+    _cloudUniforms.cameraPosition.value.set(cx, cy, cz);
 
-        // Velocity = frame-to-frame camera displacement magnitude
-        if (_hasPrevCam) {
-            const dx = cx - _prevCamX;
-            const dy = cy - _prevCamY;
-            const dz = cz - _prevCamZ;
-            _cloudUniforms.cameraVelocity.value = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        }
-        _prevCamX = cx;
-        _prevCamY = cy;
-        _prevCamZ = cz;
-        _hasPrevCam = true;
+    if (!_hasPrevCam) {
+        console.log(
+            "[updateCloudUniforms] cx:",
+            cx.toFixed(1),
+            "height:",
+            (len - atmosphereContext.parameters.bottomRadius).toFixed(1),
+            "cam:",
+            !!cam
+        );
     }
+
+    if (_hasPrevCam) {
+        const dx = cx - _prevCamX;
+        const dy = cy - _prevCamY;
+        const dz = cz - _prevCamZ;
+        _cloudUniforms.cameraVelocity.value = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    _prevCamX = cx;
+    _prevCamY = cy;
+    _prevCamZ = cz;
+    _hasPrevCam = true;
 }
 
 const { resetRendererState, restoreRendererState } = RendererUtils;
@@ -665,15 +733,25 @@ export class CloudRenderNode extends TempNode {
             }
         }
 
-        // Ensure camera matrices are up-to-date before QuadMesh render
-        // (getAtmosphereContext doesn't work with renderer arg, so we rely on
-        // updateCloudUniforms having been called first)
+        // Manually update atmosphere matrix uniforms before cloud passes render.
+        // onRenderUpdate fires during main render (after updateBefore), so without this
+        // cloud passes see last frame's matrices → "ghosting" when camera moves.
+        {
+            const atmoCtx = getAtmosphereContext(renderer);
+            const cam = atmoCtx.camera;
+            const w2e = atmoCtx.matrixWorldToECEF.value;
+            if (cam && w2e) {
+                atmoCtx.matrixViewToECEF.value.multiplyMatrices(w2e, cam.matrixWorld);
+                atmoCtx.matrixECEFToWorld.value.copy(w2e).invert();
+                _cloudUniforms.ecefToWorld.value.copy(w2e).invert();
+            }
+        }
 
         // Camera jitter: sub-pixel offset based on Bayer 4x4 pattern.
         // Following reference approach: don't modify camera projection matrix.
         // Instead, compute jittered inverse projection for ray direction, and
         // apply same jitter to previous projection for reprojection.
-        const _enableJitter = true;
+        const _enableJitter = false;
 
         const atmoCtx2 = getAtmosphereContext(renderer);
         const jitterCamera = atmoCtx2.camera;
