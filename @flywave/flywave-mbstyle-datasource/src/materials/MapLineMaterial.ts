@@ -33,6 +33,7 @@ const JOIN_MODE: Record<string, number> = {
 export class MapLineMaterial extends SolidLineMaterial {
     private m_paint: MapLineMaterialParams;
     private m_gradientTexture: THREE.DataTexture | null = null;
+    private m_patternTexture: THREE.Texture | null = null;
     private m_blur = 0;
     private m_translateX = 0;
     private m_translateY = 0;
@@ -78,6 +79,8 @@ export class MapLineMaterial extends SolidLineMaterial {
             shader.uniforms.uBlur = { value: 0 };
             shader.uniforms.uEmissive = { value: 0 };
             shader.uniforms.uGradientTex = { value: self.m_gradientTexture };
+            shader.uniforms.uPatternTex = { value: self.m_patternTexture };
+            shader.uniforms.uPatternSize = { value: new THREE.Vector2(256, 256) };
             shader.uniforms.uLineLength = { value: 1.0 };
 
             shader.fragmentShader =
@@ -113,11 +116,16 @@ export class MapLineMaterial extends SolidLineMaterial {
                 `
             );
 
-            // Inject emissive
+            // Inject pattern texture
+            shader.uniforms.uPatternTex = { value: null };
+            shader.uniforms.uPatternSize = { value: new THREE.Vector2(256, 256) };
             shader.fragmentShader = shader.fragmentShader.replace(
                 'gl_FragColor = vec4(outputDiffuse, alpha);',
                 `
-                vec3 emissiveOut = outputDiffuse + uEmissive;
+                // line-pattern
+                vec4 patColor = texture2D(uPatternTex, vec2(vCoords.x / uLineLength, 0.5));
+                vec3 patternOut = mix(outputDiffuse, patColor.rgb, patColor.a);
+                vec3 emissiveOut = patternOut + vec3(uEmissive);
                 gl_FragColor = vec4(emissiveOut, alpha);
                 `
             );
@@ -139,6 +147,11 @@ export class MapLineMaterial extends SolidLineMaterial {
         const mode = JOIN_MODE[join] ?? JOIN_MODE.miter;
         (this as any).setDefine?.('JOIN_MODE', mode);
         (this as any).setShaderMaterialDefine?.('JOIN_MODE', mode);
+    }
+
+    setPatternTexture(texture: THREE.Texture | null) {
+        this.m_patternTexture = texture;
+        this.needsUpdate = true;
     }
 
     setPaint(paint: Partial<MapLineMaterialParams>) {

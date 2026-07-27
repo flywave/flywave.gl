@@ -72,10 +72,13 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
                 uniform sampler2D uPatternMap;
                 uniform vec2 uPatternSize;
                 uniform vec2 uPatternOffset;
+                uniform float uFillOpacity;
                 varying vec2 vPatternUv;
                 void main() {
                 `
             );
+
+            // Pattern
             if (self.m_patternEnabled) {
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <colorspace_fragment>',
@@ -88,6 +91,14 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
                 );
             }
 
+            // Antialias: when disabled, render polygon with hard edges via polygonOffset
+            if (self.m_paint['fill-antialias'] === false) {
+                self.polygonOffset = true;
+                self.polygonOffsetFactor = -1;
+                self.polygonOffsetUnits = -1;
+            } else {
+                self.polygonOffset = false;
+            }
         };
     }
 
