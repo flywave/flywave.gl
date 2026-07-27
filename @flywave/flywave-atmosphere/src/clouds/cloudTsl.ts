@@ -451,13 +451,11 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
     const cascadeMipLevel = float(SHADOW_MIP_LEVELS[cascadeIndex] ?? 0.0);
 
     return Fn((): any => {
-        const clip = screenUV.mul(2).sub(1);
-        const point = invMat.mul(vec4(clip, float(-1), float(1)));
+        // WebGPU reversed-Z: near plane z_ndc = 1
+        const clip = vec3(screenUV.mul(2).sub(1), float(1));
+        const point = invMat.mul(vec4(clip, float(1)));
         const pDiv = point.xyz.div(point.w);
-        const sunPosition = u.ecefToWorld
-            .inverse()
-            .mul(vec4(pDiv, 1))
-            .xyz.add(u.altitudeCorrection);
+        const sunPosition = pDiv.add(u.altitudeCorrection);
 
         const rayDirection = u.sunDirection.negate().normalize();
 
@@ -556,7 +554,7 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
 
         return vec4(
             noSamples.select(maxRayDistance, frontDepth),
-            noSamples.toFloat(),
+            noSamples.select(float(0), meanExtinction),
             noSamples.select(float(0), maxOpticalDepth),
             noSamples.select(float(0), maxOpticalDepthTail)
         );
@@ -568,10 +566,12 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
 /* -------------------------------------------------------------------------- */
 
 export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
-    // Helper: compute cascade-specific projection (UV + inBounds) for given index
-    const projectCascade = (cascadeIdx: number, posUncorrected: any) => {
+    // Helper: compute cascade-specific projection (UV + inBounds) for given index.
+    // Input position is in corrected ECEF; convert to world space (matching reference).
+    const projectCascade = (cascadeIdx: number, positionECEF: any) => {
         const mat = u.shadowMatrices[cascadeIdx];
-        const clip = mat.mul(vec4(posUncorrected, 1));
+        const worldPos = u.ecefToWorld.mul(vec4(positionECEF.sub(u.altitudeCorrection), 1)).xyz;
+        const clip = mat.mul(vec4(worldPos, 1));
         const clipDiv = clip.xy.div(clip.w);
         const shadowUV = clipDiv.mul(0.5).add(0.5);
 
@@ -590,19 +590,18 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         const angle = u.frame.mod(float(8)).mul(float(Math.PI / 4));
         const cosA = cos(angle);
         const sinA = sin(angle);
-        // Sub-texel jitter: rotate by angle, scale to half texel
         const subTexel = vec2(cosA, sinA).mul(u.shadowTexelSize.mul(float(0.5)));
         return { cosA, sinA, subTexel };
     };
 
     const sampleCascadeSingle = (
         cascadeIdx: number,
-        posUncorrected: any,
+        positionECEF: any,
         distanceToTop: any,
         distanceOffset: any,
         jitter: any
     ) => {
-        const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, posUncorrected);
+        const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, positionECEF);
         const tex = u.shadowTextureNodes[cascadeIdx];
         const uv = shadowUV.add(jitter.subTexel);
         const shadow = texture(tex, uv);
@@ -615,12 +614,12 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
     // Helper: sample one cascade's BSM texture with 5-tap rotated PCF + temporal jitter.
     const sampleCascadePCF = (
         cascadeIdx: number,
-        posUncorrected: any,
+        positionECEF: any,
         distanceToTop: any,
         distanceOffset: any,
         jitter: any
     ) => {
-        const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, posUncorrected);
+        const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, positionECEF);
         const tex = u.shadowTextureNodes[cascadeIdx];
 
         const sunPenumbra = distanceToTop.mul(u.sunAngularRadius);
@@ -661,10 +660,11 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
     };
 
     return Fn(([rayPosition, distanceOffset, radius]: [any, any, any]): any => {
-        const posUncorrected = rayPosition.sub(u.altitudeCorrection);
-        const rayDir = u.sunDirection.negate();
+        // rayPosition is in corrected ECEF (same as reference).
+        // Compute distance to shadow top along sunDirection (NOT negated).
+        // Matches reference: raySphereSecondIntersection(rayPosition, sunDirection, 0, bottomRadius + shadowTopHeight)
         const a = rayPosition;
-        const b = dot(rayDir, a).mul(2);
+        const b = dot(u.sunDirection, a).mul(2);
         const shadowTopR = u.bottomRadius.add(u.shadowTopHeight);
         const c = dot(a, a).sub(shadowTopR.mul(shadowTopR));
         const disc = b.mul(b).sub(c.mul(4));
@@ -676,7 +676,12 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         const earlyOut = distanceToTop.lessThanEqual(0);
         const jitter = getJitterRotation();
 
-        const viewDist = length(rayPosition.sub(u.cameraPosition));
+        // Cascade index selection: convert ECEF position to world, then use view Z.
+        // Matches reference: getCascadeIndex(viewMatrix, worldPosition, intervals, near, far)
+        const worldPos = u.ecefToWorld.mul(vec4(rayPosition.sub(u.altitudeCorrection), 1)).xyz;
+        const viewPos = u.shadowViewMatrix.mul(vec4(worldPos, 1));
+        const viewZ = viewPos.z.negate();
+        const viewDist = viewZ;
         const c0End = u.shadowIntervals[0].y.mul(u.shadowFar);
         const c1End = u.shadowIntervals[1].y.mul(u.shadowFar);
         const c1Valid = u.shadowCascadeCount.greaterThan(1);
@@ -737,9 +742,11 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
 };
 
 export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
-    const projectCascade = (cascadeIdx: number, posUncorrected: any) => {
+    const projectCascade = (cascadeIdx: number, positionECEF: any) => {
         const mat = u.shadowMatrices[cascadeIdx];
-        const clip = mat.mul(vec4(posUncorrected, 1));
+        // ECEF → world: ecefToWorldMatrix × (positionECEF - altitudeCorrection)
+        const worldPos = u.ecefToWorld.mul(vec4(positionECEF.sub(u.altitudeCorrection), 1)).xyz;
+        const clip = mat.mul(vec4(worldPos, 1));
         const clipDiv = clip.xy.div(clip.w);
         const shadowUV = clipDiv.mul(0.5).add(0.5);
 
@@ -761,12 +768,12 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
 
     const sampleCascadeSingle = (
         cascadeIdx: number,
-        posUncorrected: any,
+        positionECEF: any,
         distanceToTop: any,
         distanceOffset: any,
         jitter: any
     ) => {
-        const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, posUncorrected);
+        const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, positionECEF);
         const tex = u.shadowTextureNodes[cascadeIdx];
         const uv = shadowUV.add(jitter.subTexel);
         const shadow = texture(tex, uv);
@@ -777,10 +784,9 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
     };
 
     return Fn(([rayPosition, distanceOffset]: [any, any]): any => {
-        const posUncorrected = rayPosition.sub(u.altitudeCorrection);
-        const rayDir = u.sunDirection.negate();
+        // Distance to shadow top along sunDirection (NOT negated).
         const a = rayPosition;
-        const b = dot(rayDir, a).mul(2);
+        const b = dot(u.sunDirection, a).mul(2);
         const shadowTopR = u.bottomRadius.add(u.shadowTopHeight);
         const c = dot(a, a).sub(shadowTopR.mul(shadowTopR));
         const disc = b.mul(b).sub(c.mul(4));
@@ -792,7 +798,10 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
         const earlyOut = distanceToTop.lessThanEqual(0);
         const jitter = getJitterRotation();
 
-        const viewDist = length(rayPosition.sub(u.cameraPosition));
+        // Cascade index selection: convert ECEF → world → view Z.
+        const worldPos = u.ecefToWorld.mul(vec4(rayPosition.sub(u.altitudeCorrection), 1)).xyz;
+        const viewPos = u.shadowViewMatrix.mul(vec4(worldPos, 1));
+        const viewDist = viewPos.z.negate();
         const c0End = u.shadowIntervals[0].y.mul(u.shadowFar);
         const c1End = u.shadowIntervals[1].y.mul(u.shadowFar);
 
@@ -809,24 +818,12 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
             })
                 .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
                     od.assign(
-                        sampleCascadeSingle(
-                            1,
-                            posUncorrected,
-                            distanceToTop,
-                            distanceOffset,
-                            jitter
-                        )
+                        sampleCascadeSingle(1, rayPosition, distanceToTop, distanceOffset, jitter)
                     );
                 })
                 .Else(() => {
                     od.assign(
-                        sampleCascadeSingle(
-                            0,
-                            posUncorrected,
-                            distanceToTop,
-                            distanceOffset,
-                            jitter
-                        )
+                        sampleCascadeSingle(0, rayPosition, distanceToTop, distanceOffset, jitter)
                     );
                 });
         });
@@ -1047,9 +1044,21 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const surfaceNormal = normalize(position);
 
                         // BSM shadow: cascade frustum coordinate mapping needs rewrite
-                        // BSM shadow: cascade in ECEF space, coordinates too large for ortho projection
-                        // Need RTC (relative-to-camera) space rewrite
-                        // If(height.lessThan(u.shadowTopHeight), () => { ... });
+                        If(height.lessThan(u.shadowTopHeight), () => {
+                            const shadowOD = sampleShadowOpticalDepth(
+                                position,
+                                sunRayDistance,
+                                u.maxShadowFilterRadius.mul(
+                                    remapClamped(
+                                        dot(u.sunDirection, surfaceNormal),
+                                        float(0.1),
+                                        float(0)
+                                    )
+                                ),
+                                jitter
+                            ).toVar();
+                            opticalDepth.addAssign(shadowOD);
+                        });
 
                         let radiance = sunIrradiance.mul(
                             approximateMultipleScattering(opticalDepth, cosTheta, u)

@@ -270,7 +270,7 @@ async function ensureCloudInit(renderer: Renderer): Promise<void> {
             const cr = _renderClouds as any;
             _renderClouds = cr.render;
             _shadowMarch = cr.shadowMarch;
-            _cloudUniforms.shadowCascadeCount.value = 1;
+            _cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
         }
         console.log("[CloudRenderNode] Cloud system initialized and ready");
 
@@ -656,6 +656,7 @@ export class CloudRenderNode extends TempNode {
         const w2eVal = atmoCtx.matrixWorldToECEF.value;
         if (w2eVal) {
             _cloudUniforms.ecefToWorld.value.copy(w2eVal).invert();
+            _cloudUniforms.worldToECEF.value.copy(w2eVal);
         }
 
         this._rendererState = resetRendererState(renderer, this._rendererState);
@@ -665,14 +666,42 @@ export class CloudRenderNode extends TempNode {
             const ready = this.shadowMaterials.every(m => (m as any).fragmentNode != null);
             if (ready) {
                 const cam = atmoCtx.camera as any;
-                const matV2E = atmoCtx.matrixViewToECEF;
-                if (cam && matV2E) {
+                const w2e = atmoCtx.matrixWorldToECEF.value;
+                if (cam && w2e) {
                     const origFar = cam.far;
                     cam.far = Math.max(cam.far, 100000);
                     cam.updateProjectionMatrix();
-                    // Camera is in ECEF space (matrixWorld position = ECEF coords)
-                    // So cascade matrix is in ECEF space, sunDirection stays in ECEF
-                    _cascadedShadowMaps.update(cam, _cloudUniforms.sunDirection.value);
+
+                    // Set worldToECEF / ecefToWorld uniforms (inverse of each other)
+                    _cloudUniforms.worldToECEF.value.copy(w2e);
+                    _cloudUniforms.ecefToWorld.value.copy(w2e).invert();
+
+                    // Convert sun direction from ECEF to world space for cascade update.
+                    const e2wRot = new Matrix4().copy(w2e).invert();
+                    const sunWorld = _cloudUniforms.sunDirection.value
+                        .clone()
+                        .transformDirection(e2wRot)
+                        .normalize();
+
+                    // Compute shadow camera distance like the reference:
+                    // distance = lerp(1e6, 1e3, zenithAngle)
+                    const camPosECEF = atmoCtx.cameraPositionECEF.value;
+                    const surfaceNormal = camPosECEF.clone().normalize();
+                    const zenithAngle = _cloudUniforms.sunDirection.value.dot(surfaceNormal);
+                    const shadowDistance = 1e6 * (1 - zenithAngle) + 1e3 * zenithAngle;
+
+                    _cascadedShadowMaps.update(cam, sunWorld, undefined, shadowDistance);
+
+                    // Store shadow view matrix for cascade index selection in shader
+                    _cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
+                    _cloudUniforms.shadowCameraNear.value = cam.near;
+                    _cloudUniforms.shadowCameraFar.value = _cascadedShadowMaps.far;
+                    _cloudUniforms.shadowFar.value = _cascadedShadowMaps.far;
+                    _cloudUniforms.shadowTexelSize.value.set(
+                        1 / SHADOW_MAP_SIZE,
+                        1 / SHADOW_MAP_SIZE
+                    );
+
                     cam.far = origFar;
                     cam.updateProjectionMatrix();
 
@@ -741,6 +770,7 @@ export class CloudRenderNode extends TempNode {
                 atmoCtx.matrixViewToECEF.value.multiplyMatrices(w2e, cam.matrixWorld);
                 atmoCtx.matrixECEFToWorld.value.copy(w2e).invert();
                 _cloudUniforms.ecefToWorld.value.copy(w2e).invert();
+                _cloudUniforms.worldToECEF.value.copy(w2e);
             }
         }
 

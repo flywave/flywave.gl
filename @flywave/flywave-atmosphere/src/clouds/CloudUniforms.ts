@@ -158,6 +158,7 @@ export class CloudUniforms {
     viewReprojection = uniform(new Matrix4()); // view→prevClip (for non-cloud velocity)
     viewProjection = uniform(new Matrix4());
     ecefToWorld = uniform(new Matrix4());
+    worldToECEF = uniform(new Matrix4());
 
     // Jittered inverse projection matrix for temporal upscale
     // Updated each frame with a sub-pixel offset based on Bayer 4x4 pattern

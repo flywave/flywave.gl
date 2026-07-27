@@ -17,18 +17,19 @@ export class FrustumCorners {
     }
 
     setFromCamera(inverseProjectionMatrix: Matrix4, far: number): this {
-        this.near[0].set(1, 1, -1);
-        this.near[1].set(1, -1, -1);
-        this.near[2].set(-1, -1, -1);
-        this.near[3].set(-1, 1, -1);
+        // WebGPU reversed-Z: near plane = z_ndc 1, far plane = z_ndc 0
+        this.near[0].set(1, 1, 1);
+        this.near[1].set(1, -1, 1);
+        this.near[2].set(-1, -1, 1);
+        this.near[3].set(-1, 1, 1);
         for (let i = 0; i < 4; ++i) {
             this.near[i].applyMatrix4(inverseProjectionMatrix);
         }
 
-        this.far[0].set(1, 1, 1);
-        this.far[1].set(1, -1, 1);
-        this.far[2].set(-1, -1, 1);
-        this.far[3].set(-1, 1, 1);
+        this.far[0].set(1, 1, 0);
+        this.far[1].set(1, -1, 0);
+        this.far[2].set(-1, -1, 0);
+        this.far[3].set(-1, 1, 0);
         for (let i = 0; i < 4; ++i) {
             const corner = this.far[i];
             corner.applyMatrix4(inverseProjectionMatrix);
