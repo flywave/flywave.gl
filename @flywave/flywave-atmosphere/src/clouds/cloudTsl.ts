@@ -1045,11 +1045,10 @@ export const createMarchClouds = (u: CloudUniforms): any => {
 
                         const surfaceNormal = normalize(position);
 
-                        // TODO: BSM shadow - needs cascade setup
+                        // BSM shadow: cascade textures have no data yet
                         // If(height.lessThan(u.shadowTopHeight), () => {
                         //     const shadowOD = sampleShadowOpticalDepth(
-                        //         position,
-                        //         sunRayDistance,
+                        //         position, sunRayDistance,
                         //         u.maxShadowFilterRadius.mul(
                         //             remapClamped(dot(u.sunDirection, surfaceNormal), float(0.1), float(0))
                         //         ),
