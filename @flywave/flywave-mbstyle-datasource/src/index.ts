@@ -4,6 +4,8 @@ export { MBExpressionEngine, MBValue, MBExpressionContext, MBStyleFeature } from
 export { MBFilterCompiler, CompiledFilter } from './MBFilterCompiler';
 export { MBLayerEvaluator, EvaluatedPaint, EvaluatedLayout, EvaluatedLayer } from './MBLayerEvaluator';
 export { MBMaterialFactory } from './MBMaterialFactory';
+export { CollisionIndex, CollisionBox } from './CollisionIndex';
+export { PlacementEngine, PlacementResult, SymbolInstance } from './PlacementEngine';
 export {
     StyleSpecification,
     SourceSpecification,
