@@ -10,19 +10,27 @@ export { MapFillMaterial, MapFillMaterialParams };
 export { MapLineMaterial, MapLineMaterialParams };
 export { MapCircleMaterial, MapCircleMaterialParams };
 export { MapExtrusionMaterial, MapExtrusionMaterialParams };
+export { MBRenderLayer } from './MBRenderLayer';
 
 const FALLBACK = new THREE.MeshBasicMaterial({ color: '#ff00ff' });
 
 export function createMBMaterial(
     layerType: LayerType,
     paint: Record<string, any>,
+    capabilities?: any,
 ): THREE.Material {
     switch (layerType) {
-        case 'background':
+        case 'background': {
+            const fillPaint = {
+                'fill-color': paint['background-color'] ?? '#000000',
+                'fill-opacity': paint['background-opacity'] ?? 1,
+            };
+            return new MapFillMaterial(fillPaint);
+        }
         case 'fill':
             return new MapFillMaterial(paint as any);
         case 'line':
-            return new MapLineMaterial(paint as any);
+            return new MapLineMaterial(paint as any, capabilities);
         case 'circle':
             return new MapCircleMaterial(paint as any);
         case 'fill-extrusion':
@@ -38,7 +46,14 @@ export function updateMBMaterial(
     paint: Record<string, any>,
 ): void {
     switch (layerType) {
-        case 'background':
+        case 'background': {
+            const fillPaint = {
+                'fill-color': paint['background-color'] ?? '#000000',
+                'fill-opacity': paint['background-opacity'] ?? 1,
+            };
+            (material as unknown as MapFillMaterial).setPaint(fillPaint);
+            break;
+        }
         case 'fill':
             (material as unknown as MapFillMaterial).setPaint(paint as any);
             break;

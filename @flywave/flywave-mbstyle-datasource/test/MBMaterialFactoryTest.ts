@@ -29,8 +29,8 @@ describe('MBMaterialFactory', () => {
             'line-width': 2,
             'line-opacity': 1,
         });
-        expect(mat.type).to.include('LineBasicMaterial');
-        expect((mat as any).color.getHexString()).to.equal('ff0000');
+        expect(mat.type).to.include('RawShaderMaterial'); // SolidLineMaterial based
+        expect(mat).to.have.property('lineWidth', 2);
     });
 
     it('creates circle material', () => {
@@ -38,10 +38,11 @@ describe('MBMaterialFactory', () => {
             'circle-color': '#00ff00',
             'circle-radius': 10,
             'circle-opacity': 0.5,
-        });
-        expect(mat.type).to.equal('PointsMaterial');
-        expect((mat as any).color.getHexString()).to.equal('00ff00');
-        expect(mat.opacity).to.equal(0.5);
+        }) as any;
+        expect(mat.type).to.equal('ShaderMaterial'); // MapCircleMaterial
+        expect(mat.uniforms.uColor.value.getHexString()).to.equal('00ff00');
+        expect(mat.uniforms.uOpacity.value).to.equal(0.5);
+        expect(mat.uniforms.uSize.value).to.equal(20);
     });
 
     it('creates extrusion material', () => {
