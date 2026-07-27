@@ -6,6 +6,8 @@ import { MapCircleMaterial } from '../src/materials/MapCircleMaterial';
 import { MapExtrusionMaterial } from '../src/materials/MapExtrusionMaterial';
 import { createMBMaterial, updateMBMaterial } from '../src/materials/index';
 
+const MOCK_CAPS = { isWebGL2: true, maxTextures: 16, maxVertexTextures: 16, maxTextureSize: 4096, maxVertexUniforms: 1024 };
+
 describe('MapFillMaterial', () => {
     it('creates with defaults', () => {
         const mat = new MapFillMaterial();
@@ -48,30 +50,29 @@ describe('MapFillMaterial', () => {
 
 describe('MapLineMaterial', () => {
     it('creates with defaults', () => {
-        const mat = new MapLineMaterial();
+        const mat = new MapLineMaterial({}, MOCK_CAPS as any);
         expect(mat).to.be.ok;
     });
 
-    it('applies line-color and opacity', () => {
+    it('applies line-color and width', () => {
         const mat = new MapLineMaterial({
             'line-color': '#ff0000',
-            'line-opacity': 0.5,
-        });
+            'line-width': 3,
+        }, MOCK_CAPS as any);
         expect(mat.color.getHexString()).to.equal('ff0000');
-        expect(mat.opacity).to.equal(0.5);
+        expect(mat.lineWidth).to.equal(3);
     });
 
     it('applies line-dasharray', () => {
         const mat = new MapLineMaterial({
             'line-dasharray': [4, 2],
-        });
+        }, MOCK_CAPS as any);
         expect(mat.dashSize).to.equal(4);
         expect(mat.gapSize).to.equal(2);
-        expect(mat.isDashed).to.be.true;
     });
 
     it('factory creates line material', () => {
-        const mat = createMBMaterial('line', { 'line-color': '#123' });
+        const mat = createMBMaterial('line', { 'line-color': '#123' }, MOCK_CAPS);
         expect(mat).to.be.instanceOf(MapLineMaterial);
     });
 });

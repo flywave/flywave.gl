@@ -18,7 +18,9 @@
             "@flywave/flywave-fetch": ["../flywave-fetch/src"],
             "@flywave/flywave-test-utils": ["../flywave-test-utils/src"],
             "@flywave/flywave-materials": ["../flywave-materials/src"],
-            "@flywave/flywave-materials/*": ["../flywave-materials/src/*"]
+            "@flywave/flywave-materials/*": ["../flywave-materials/src/*"],
+            "@flywave/flywave-lines": ["../flywave-lines/src"],
+            "@flywave/flywave-lines/*": ["../flywave-lines/src/*"]
         }
     },
     "include": ["src/**/*", "test/**/*"],
@@ -32,6 +34,7 @@
         { "path": "../flywave-utils" },
         { "path": "../flywave-fetch" },
         { "path": "../flywave-test-utils" },
-        { "path": "../flywave-materials" }
+        { "path": "../flywave-materials" },
+        { "path": "../flywave-lines" }
     ]
 }

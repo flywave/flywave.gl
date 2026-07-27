@@ -53,6 +53,22 @@ export class MBRenderLayer {
         const result: RenderableObject[] = [];
         const bufferGeometry = new THREE.BufferGeometry();
 
+        // Handle interleaved vertex attributes (used by SolidLine geometry)
+        if (geometry.interleavedVertexAttributes) {
+            for (const interleaved of geometry.interleavedVertexAttributes) {
+                const array = this.bufferToTypedArray(interleaved);
+                if (!array) continue;
+                const strideFloats = interleaved.stride / 4;
+                const buffer = new THREE.InterleavedBuffer(array, strideFloats);
+                for (const attr of interleaved.attributes) {
+                    const attrib = new THREE.InterleavedBufferAttribute(
+                        buffer, attr.itemSize, attr.offset / 4,
+                    );
+                    bufferGeometry.setAttribute(attr.name, attrib);
+                }
+            }
+        }
+
         for (const attr of geometry.vertexAttributes ?? []) {
             if (!attr.buffer) continue;
             const array = this.bufferToTypedArray(attr);
@@ -91,17 +107,17 @@ export class MBRenderLayer {
             const subGeometry = bufferGeometry.clone();
             subGeometry.addGroup(group.start, group.count, 0);
 
+            const geomType = geometry.type;
+
             let object: THREE.Object3D;
 
-            switch (layerType) {
-                case 'line': {
-                    if (material instanceof MapLineMaterial && material.isDashed) {
-                        object = new THREE.LineSegments(subGeometry, material);
-                    } else {
-                        object = new THREE.LineSegments(subGeometry, material);
-                    }
+            if (geomType === 'SolidLine' as any) {
+                // Triangulated line via SolidLineMaterial — use Mesh
+                object = new THREE.Mesh(subGeometry, material);
+            } else switch (layerType) {
+                case 'line':
+                    object = new THREE.LineSegments(subGeometry, material);
                     break;
-                }
                 case 'circle':
                     object = new THREE.Points(subGeometry, material);
                     break;
@@ -172,9 +188,12 @@ export class MBRenderLayer {
             case 'uint32':
                 array = new Uint32Array(buffer, byteOffset);
                 break;
-
             default:
-                array = new Float32Array(buffer, byteOffset);
+                if (buffer instanceof ArrayBuffer || (typeof SharedArrayBuffer !== 'undefined' && buffer instanceof SharedArrayBuffer)) {
+                    array = new Float32Array(buffer, byteOffset);
+                } else {
+                    return null;
+                }
         }
         return array;
     }

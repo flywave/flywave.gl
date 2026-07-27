@@ -19,6 +19,7 @@ const FALLBACK = new THREE.MeshBasicMaterial({ color: '#ff00ff' });
 export function createMBMaterial(
     layerType: LayerType,
     paint: Record<string, any>,
+    capabilities?: any,
 ): THREE.Material {
     switch (layerType) {
         case 'background': {
@@ -31,7 +32,7 @@ export function createMBMaterial(
         case 'fill':
             return new MapFillMaterial(paint as any);
         case 'line':
-            return new MapLineMaterial(paint as any);
+            return new MapLineMaterial(paint as any, capabilities);
         case 'circle':
             return new MapCircleMaterial(paint as any);
         case 'symbol':

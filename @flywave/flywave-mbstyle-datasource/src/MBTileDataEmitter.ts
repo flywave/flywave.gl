@@ -7,14 +7,16 @@ import {
     Group,
     GeometryType,
     AttributeMap,
+    InterleavedBufferAttribute,
 } from '@flywave/flywave-datasource-protocol';
-import { TileKey } from '@flywave/flywave-geoutils';
+import { TileKey, webMercatorProjection } from '@flywave/flywave-geoutils';
 import * as THREE from 'three';
 
 import { EvaluatedLayer } from './MBLayerEvaluator';
 import { ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
 import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
 import { webMercatorTile2TargetTile } from '@flywave/flywave-vectortile-datasource/OmvUtils';
+import { createLineGeometry, LineGroup } from '@flywave/flywave-lines';
 
 interface AccumulatedGeometry {
     positions: number[];
@@ -183,6 +185,12 @@ export class MBTileDataEmitter {
         }
     }
 
+    // Interleaved vertex data for triangulated lines
+    private m_lineInterleaved: number[] = [];
+    private m_lineIndices: number[] = [];
+    private m_lineGroupStarts: number[] = [];
+    private m_lineAttr: string[] = [];
+
     processLineFeature(
         layerName: string,
         extents: number,
@@ -193,33 +201,81 @@ export class MBTileDataEmitter {
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer);
-            const key = `${layer.id}:line`;
-            const geo = this.getOrCreateGeometry(key);
-            const featureStart = geo.indices.length;
 
             for (const lineGeo of geometry) {
-                const positions = lineGeo.positions;
-                for (let i = 0; i < positions.length; i++) {
-                    const w = this.project(positions[i]);
-                    geo.positions.push(w.x, w.y, 0);
-                    if (i < positions.length - 1) {
-                        const idx = geo.positions.length / 3;
-                        geo.indices.push(idx - 1, idx);
-                    }
+                // Convert tile-local to world
+                const worldPts: number[] = [];
+                for (const pt of lineGeo.positions) {
+                    const w = this.project(pt);
+                    worldPts.push(w.x, w.y, 0);
                 }
-            }
 
-            const count = geo.indices.length - featureStart;
-            if (count > 0) {
-                geo.groups.push({
-                    start: featureStart,
-                    count,
-                    materialIndex: techniqueIdx,
-                });
-                geo.featureStarts.push(featureStart);
-                geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
+                const center = this.m_decodeInfo.center;
+                const lineGeom = createLineGeometry(center, worldPts, webMercatorProjection);
+
+                // Store interleaved vertex data + remapped indices
+                const stride = 13; // extrusionCoord(3)+position(3)+tangent(3)+biTangent(4)
+                const baseVert = this.m_lineInterleaved.length / stride;
+                this.m_lineInterleaved.push(...lineGeom.vertices);
+
+                for (const idx of lineGeom.indices) {
+                    this.m_lineIndices.push(idx + baseVert);
+                }
+
+                const start = this.m_lineIndices.length - lineGeom.indices.length;
+                const fid = featureId ?? properties.$id ?? null;
+                this.m_lineGroupStarts.push(start, techniqueIdx);
+                this.m_lineAttr.push(JSON.stringify({ ...properties, $id: fid }));
             }
         }
+    }
+
+    /** Get stored triangulated line data for building the DecodedTile */
+    private getLineGeometries(): Geometry[] {
+        if (this.m_lineInterleaved.length === 0 || this.m_lineIndices.length === 0) return [];
+
+        const data = new Float32Array(this.m_lineInterleaved);
+        const indices = new Uint32Array(this.m_lineIndices);
+
+        const interleavedAttr: InterleavedBufferAttribute = {
+            buffer: data.buffer,
+            stride: 13 * 4,
+            type: 'float' as BufferElementType,
+            attributes: [
+                { name: 'extrusionCoord', offset: 0, itemSize: 3 },
+                { name: 'position', offset: 3 * 4, itemSize: 3 },
+                { name: 'tangent', offset: 6 * 4, itemSize: 3 },
+                { name: 'biTangent', offset: 9 * 4, itemSize: 4 },
+            ],
+        };
+
+        const groups: Group[] = [];
+        const end = this.m_lineIndices.length;
+        for (let i = 0; i < this.m_lineGroupStarts.length; i += 2) {
+            const start = this.m_lineGroupStarts[i];
+            const nextStart = i + 2 < this.m_lineGroupStarts.length
+                ? this.m_lineGroupStarts[i + 2] : end;
+            groups.push({
+                start,
+                count: nextStart - start,
+                technique: this.m_lineGroupStarts[i + 1],
+            });
+        }
+
+        return [{
+            type: GeometryType.SolidLine,
+            interleavedVertexAttributes: [interleavedAttr],
+            index: {
+                name: 'index',
+                buffer: indices.buffer,
+                type: 'uint32' as BufferElementType,
+                itemCount: 1,
+            },
+            groups,
+            featureStarts: [],
+            objInfos: this.m_lineAttr.map(a => JSON.parse(a)),
+            attachments: [],
+        }];
     }
 
     processPointFeature(
@@ -295,6 +351,7 @@ export class MBTileDataEmitter {
             geometries.push(geom);
         }
 
-        return { techniques: this.m_techniques, geometries };
+        const lineGeoms = this.getLineGeometries();
+        return { techniques: this.m_techniques, geometries: [...geometries, ...lineGeoms] };
     }
 }

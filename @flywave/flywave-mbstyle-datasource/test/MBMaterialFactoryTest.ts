@@ -24,13 +24,14 @@ describe('MBMaterialFactory', () => {
     });
 
     it('creates line material', () => {
+        const caps = { isWebGL2: true, maxTextures: 16, maxVertexTextures: 16, maxTextureSize: 4096, maxVertexUniforms: 1024 };
         const mat = MBMaterialFactory.create('line', {
             'line-color': '#ff0000',
             'line-width': 2,
             'line-opacity': 1,
-        });
-        expect(mat.type).to.include('LineBasicMaterial');
-        expect((mat as any).color.getHexString()).to.equal('ff0000');
+        }, { rendererCapabilities: caps }) as any;
+        expect(mat.type).to.include('RawShaderMaterial');
+        expect(mat.color.getHexString()).to.equal('ff0000');
     });
 
     it('creates circle material', () => {
