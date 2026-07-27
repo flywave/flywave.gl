@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 
-import { DecodedTile, IndexedTechnique, Geometry, Group } from '@flywave/flywave-datasource-protocol';
-import { Tile, MapView } from '@flywave/flywave-mapview';
+import { DecodedTile, IndexedTechnique, Geometry } from '@flywave/flywave-datasource-protocol';
+import { Tile } from '@flywave/flywave-mapview';
 
 import { LayerType } from '../MBStyleSpec';
 import { createMBMaterial, updateMBMaterial } from './index';
 import { MapFillMaterial } from './MapFillMaterial';
+import { MapLineMaterial } from './MapLineMaterial';
 
 interface RenderableObject {
     object: THREE.Object3D;
@@ -24,10 +25,6 @@ interface RenderableObject {
 export class MBRenderLayer {
     private m_materialCache = new Map<string, THREE.Material>();
 
-    constructor(
-        private m_mapView: MapView,
-    ) {}
-
     /**
      * Convert a DecodedTile into Three.js objects with Mapbox materials.
      * Called during tile geometry creation.
@@ -37,7 +34,6 @@ export class MBRenderLayer {
         decodedTile: DecodedTile,
     ): RenderableObject[] {
         const result: RenderableObject[] = [];
-        const mapView = this.m_mapView;
 
         for (const geometry of decodedTile.geometries) {
             if (!geometry.vertexAttributes) continue;
@@ -98,9 +94,14 @@ export class MBRenderLayer {
             let object: THREE.Object3D;
 
             switch (layerType) {
-                case 'line':
-                    object = new THREE.LineSegments(subGeometry, [material]);
+                case 'line': {
+                    if (material instanceof MapLineMaterial && material.isDashed) {
+                        object = new THREE.LineSegments(subGeometry, material);
+                    } else {
+                        object = new THREE.LineSegments(subGeometry, material);
+                    }
                     break;
+                }
                 case 'circle':
                     object = new THREE.Points(subGeometry, material);
                     break;
@@ -111,7 +112,6 @@ export class MBRenderLayer {
                 case 'background':
                 default: {
                     const mesh = new THREE.Mesh(subGeometry, material);
-                    // add outline if present
                     if (material instanceof MapFillMaterial && material.hasOutline) {
                         const edges = new THREE.EdgesGeometry(subGeometry);
                         const outlineMat = new THREE.LineBasicMaterial({

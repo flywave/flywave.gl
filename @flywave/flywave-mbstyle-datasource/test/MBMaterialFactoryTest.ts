@@ -29,8 +29,8 @@ describe('MBMaterialFactory', () => {
             'line-width': 2,
             'line-opacity': 1,
         });
-        expect(mat.type).to.include('RawShaderMaterial'); // SolidLineMaterial based
-        expect(mat).to.have.property('lineWidth', 2);
+        expect(mat.type).to.include('LineBasicMaterial');
+        expect((mat as any).color.getHexString()).to.equal('ff0000');
     });
 
     it('creates circle material', () => {

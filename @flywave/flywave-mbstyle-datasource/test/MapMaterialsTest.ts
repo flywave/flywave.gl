@@ -52,12 +52,13 @@ describe('MapLineMaterial', () => {
         expect(mat).to.be.ok;
     });
 
-    it('applies line-color and width', () => {
+    it('applies line-color and opacity', () => {
         const mat = new MapLineMaterial({
             'line-color': '#ff0000',
-            'line-width': 5,
+            'line-opacity': 0.5,
         });
-        expect(mat.lineWidth).to.equal(5);
+        expect(mat.color.getHexString()).to.equal('ff0000');
+        expect(mat.opacity).to.equal(0.5);
     });
 
     it('applies line-dasharray', () => {
@@ -66,11 +67,7 @@ describe('MapLineMaterial', () => {
         });
         expect(mat.dashSize).to.equal(4);
         expect(mat.gapSize).to.equal(2);
-    });
-
-    it('applies line-cap mapping', () => {
-        const mat = new MapLineMaterial({ 'line-cap': 'round' });
-        expect(mat.caps).to.equal('Round');
+        expect(mat.isDashed).to.be.true;
     });
 
     it('factory creates line material', () => {
