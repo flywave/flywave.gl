@@ -770,7 +770,7 @@ export class CloudRenderNode extends TempNode {
             const frame = this._cloudResolveFrameCount % 16;
             const [ox, oy] = bayerOffsets[frame];
             jitterDx = ((ox - 0.5) / virtualWidth) * 4;
-            jitterDy = -((oy - 0.5) / virtualHeight) * 4; // Flip Y for WebGPU clip space
+            jitterDy = -((oy - 0.5) / virtualHeight) * 4;
             _temporalJitter.value.set(jitterDx, jitterDy);
             _jitteredInverseProjection.value.copy(jitterCamera.projectionMatrix);
             _jitteredInverseProjection.value.elements[8] += jitterDx * 2;
@@ -994,11 +994,9 @@ export class CloudRenderNode extends TempNode {
                     float(1).div(_resolveTexelSize.y)
                 );
 
-                // Full-res pixel coordinate
-                const fullCoord = screenUV.mul(fullResSize);
-
-                const fx = fullCoord.x.floor();
-                const fy = fullCoord.y.floor();
+                // Full-res pixel coordinate from screenCoordinate (matches gl_FragCoord)
+                const fx = screenCoordinate.x.floor();
+                const fy = screenCoordinate.y.floor();
 
                 // Sample low-res color using nearest texel
                 const lowCoordX = fx.div(4).floor();
@@ -1015,8 +1013,10 @@ export class CloudRenderNode extends TempNode {
                 const b2 = vec4(2, 14, 1, 13);
                 const b3 = vec4(10, 6, 9, 5);
 
-                const mx = fx.sub(fx.div(4).floor().mul(4));
-                const my = fy.sub(fy.div(4).floor().mul(4));
+                const iPixX = screenCoordinate.x.floor().toInt();
+                const iPixY = screenCoordinate.y.floor().toInt();
+                const mx = iPixX.mod(4).toFloat();
+                const my = iPixY.mod(4).toFloat();
 
                 const row = mx
                     .lessThan(1)
@@ -1032,6 +1032,7 @@ export class CloudRenderNode extends TempNode {
                 const frameMod = _cloudResolveCountNode.mod(16);
                 const isCurrent = bayerVal.sub(frameMod).abs().lessThan(0.5);
 
+                // Full temporal resolve
                 // Full temporal resolve
                 const result = currentColor.toVar();
 

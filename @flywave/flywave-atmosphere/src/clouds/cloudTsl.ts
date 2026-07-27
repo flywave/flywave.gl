@@ -1041,11 +1041,38 @@ export const createMarchClouds = (u: CloudUniforms): any => {
 
                         const surfaceNormal = normalize(position);
 
-                        // STEP 3 EXCLUSION: disabled BSM shadow, skyIrradiance, ground bounce, powder
+                        // TODO: BSM shadow - needs cascade setup
+                        // If(height.lessThan(u.shadowTopHeight), () => {
+                        //     const shadowOD = sampleShadowOpticalDepth(
+                        //         position,
+                        //         sunRayDistance,
+                        //         u.maxShadowFilterRadius.mul(
+                        //             remapClamped(dot(u.sunDirection, surfaceNormal), float(0.1), float(0))
+                        //         ),
+                        //         jitter
+                        //     );
+                        //     opticalDepth.addAssign(shadowOD);
+                        // });
 
-                        let radiance = vec3(1.0).mul(exp(float(-1.0)));
+                        let radiance = sunIrradiance.mul(
+                            approximateMultipleScattering(opticalDepth, cosTheta, u)
+                        );
+
+                        // Sky irradiance
+                        radiance = radiance.add(
+                            skyIrradiance.mul(RECIPROCAL_PI4).mul(skyGradient).mul(u.skyLightScale)
+                        );
 
                         radiance = radiance.mul(mediaScattering);
+
+                        // Powder effect
+                        radiance = radiance.mul(
+                            float(1).sub(
+                                u.powderScale.mul(
+                                    exp(mediaExtinction.mul(u.powderExponent).negate())
+                                )
+                            )
+                        );
 
                         const transmittance = exp(mediaExtinction.mul(stepSize).negate());
                         const clampedExt = max(mediaExtinction, float(1e-7));
@@ -1232,7 +1259,23 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                     );
                 });
 
-                // STEP 3 EXCLUSION: disabled aerial perspective (getIndirectLuminanceToPoint)
+                // Apply aerial perspective to clouds
+                {
+                    const result = getIndirectLuminanceToPoint(
+                        cameraPosition.mul(u.worldToUnit),
+                        frontPosition.mul(u.worldToUnit),
+                        shadowLen.mul(u.worldToUnit),
+                        u.sunDirection
+                    ).toConst();
+                    const inscatter = result.get("luminance");
+                    const transmittance = result.get("transmittance");
+                    resultColor.assign(
+                        vec4(
+                            resultColor.rgb.mul(transmittance).add(inscatter.mul(resultColor.a)),
+                            resultColor.a
+                        )
+                    );
+                }
 
                 resultFrontDepth.assign(frontDepth);
 
@@ -1262,21 +1305,21 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             });
         });
 
-        // STEP 3 EXCLUSION: disabled haze
-        // If(u.hazeEnabled.greaterThan(0), () => {
-        //     const hazeOrigin = rayNear.mul(rayDirection).add(cameraPosition);
-        //     const hazeRayDist = min(sceneDistance, rayFar);
-        //     const shadowLen = float(0);
-        //     const haze = approximateHaze(
-        //         hazeOrigin,
-        //         rayDirection,
-        //         hazeRayDist,
-        //         cosTheta,
-        //         shadowLen
-        //     ).toConst();
-        //     resultColor.rgb.assign(resultColor.rgb.mix(haze.rgb, haze.a));
-        //     resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
-        // });
+        // Haze
+        If(u.hazeEnabled.greaterThan(0), () => {
+            const hazeOrigin = rayNear.mul(rayDirection).add(cameraPosition);
+            const hazeRayDist = min(sceneDistance, rayFar);
+            const shadowLen = float(0).toVar();
+            const haze = approximateHaze(
+                hazeOrigin,
+                rayDirection,
+                hazeRayDist,
+                cosTheta,
+                shadowLen
+            ).toConst();
+            resultColor.rgb.assign(resultColor.rgb.mix(haze.rgb, haze.a));
+            resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
+        });
 
         return cloudRendererResultStruct(resultColor, resultFrontDepth, resultVelocity);
     });
