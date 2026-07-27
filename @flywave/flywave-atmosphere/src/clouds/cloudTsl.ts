@@ -1045,7 +1045,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
 
                         const surfaceNormal = normalize(position);
 
-                        // BSM shadow: cascade textures have no data yet
+                        // BSM shadow: disabled (OutputTextureNode can't pass data between shadow passes)
                         // If(height.lessThan(u.shadowTopHeight), () => {
                         //     const shadowOD = sampleShadowOpticalDepth(
                         //         position, sunRayDistance,
@@ -1062,7 +1062,6 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         );
 
                         // Ground bounce: disabled (maxIterationCountToGround=0, matches reference medium preset)
-                        // If(height.lessThan(u.shadowTopHeight).and(mipLevel.lessThan(0.5)), () => { ... });
 
                         // Sky irradiance
                         radiance = radiance.add(

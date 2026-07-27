@@ -667,11 +667,14 @@ export class CloudRenderNode extends TempNode {
                 const cam = atmoCtx.camera as any;
                 const matV2E = atmoCtx.matrixViewToECEF;
                 if (cam && matV2E) {
+                    const origFar = cam.far;
+                    cam.far = Math.max(cam.far, 100000);
                     _cascadedShadowMaps.update(
                         cam,
                         _cloudUniforms.sunDirection.value,
                         matV2E.value ?? matV2E
                     );
+                    cam.far = origFar;
                     _cloudUniforms.shadowFar.value = _cascadedShadowMaps.far;
                     _cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
                     _cloudUniforms.shadowCameraNear.value = cam.near;
