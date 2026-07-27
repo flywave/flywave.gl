@@ -42,6 +42,7 @@ import {
     RenderTarget,
     RendererUtils,
     TempNode,
+    Texture,
     Vector2,
     Matrix4,
     Uniform,
@@ -469,6 +470,7 @@ export class CloudRenderNode extends TempNode {
     private readonly velocityLowResNode: TextureNode;
     private readonly historyNode: TextureNode;
     private readonly resolveNodeTex: TextureNode;
+    private readonly _resolveTexUniform = uniform(new Texture());
     private readonly shadowNodes: TextureNode[] = [];
     private readonly shadowHistoryNodes: TextureNode[] = [];
 
@@ -586,8 +588,8 @@ export class CloudRenderNode extends TempNode {
 
         this.lowResNode = outputTexture(this, this.lowResRT.textures[0]);
         this.velocityLowResNode = outputTexture(this, this.lowResRT.textures[1]);
-        this.historyNode = outputTexture(this, this.historyRT.texture);
-        this.resolveNodeTex = outputTexture(this, this.resolveRT.texture);
+        this.historyNode = texture(this.historyRT.texture);
+        this.resolveNodeTex = texture(this.resolveRT.texture);
 
         if (renderer != null) {
             ensureCloudInit(renderer).catch(err =>
@@ -624,11 +626,9 @@ export class CloudRenderNode extends TempNode {
         const fullSize = renderer.getDrawingBufferSize(sizeScratch);
         const fullWidth = fullSize.x;
         const fullHeight = fullSize.y;
-        // Temporal upscale: render cloud march at 1/4 resolution, upscale to full
         const UPSCALE = 4;
         const lowWidth = Math.max(Math.ceil(fullWidth / UPSCALE), 1);
         const lowHeight = Math.max(Math.ceil(fullHeight / UPSCALE), 1);
-        // Virtual resolution for mip level (matches reference: lowRes * 4)
         const virtualWidth = lowWidth * UPSCALE;
         const virtualHeight = lowHeight * UPSCALE;
 
@@ -754,17 +754,24 @@ export class CloudRenderNode extends TempNode {
         const atmoCtx2 = getAtmosphereContext(renderer);
         const jitterCamera = atmoCtx2.camera;
 
+        // Override near/far/fov — MapView's updateCameras() resets them dynamically
+        if (jitterCamera && jitterCamera.isPerspectiveCamera) {
+            jitterCamera.near = 1;
+            jitterCamera.far = 4e5;
+            jitterCamera.fov = 75;
+            const drawingBufferSize = renderer.getDrawingBufferSize(sizeScratch);
+            jitterCamera.aspect = drawingBufferSize.x / drawingBufferSize.y;
+            jitterCamera.updateProjectionMatrix();
+        }
+
         let jitterDx = 0,
             jitterDy = 0;
         if (_enableJitter) {
             const frame = this._cloudResolveFrameCount % 16;
             const [ox, oy] = bayerOffsets[frame];
-            // Reference: dx = ((offset - 0.5) / resolution) * 4, resolution = virtualWidth
             jitterDx = ((ox - 0.5) / virtualWidth) * 4;
-            jitterDy = ((oy - 0.5) / virtualHeight) * 4;
+            jitterDy = -((oy - 0.5) / virtualHeight) * 4; // Flip Y for WebGPU clip space
             _temporalJitter.value.set(jitterDx, jitterDy);
-
-            // Jittered inverse projection for ray direction
             _jitteredInverseProjection.value.copy(jitterCamera.projectionMatrix);
             _jitteredInverseProjection.value.elements[8] += jitterDx * 2;
             _jitteredInverseProjection.value.elements[9] += jitterDy * 2;
@@ -804,6 +811,9 @@ export class CloudRenderNode extends TempNode {
             hasPrevViewProjection = true;
         }
 
+        // Deferred blit from previous frame: resolveRT → historyRT
+        // (removed - using direct resolve to historyRT instead)
+
         // Pass 1: Render clouds at 1/4 resolution for temporal upscale
         renderer.setRenderTarget(this.lowResRT);
         this.mesh.material = this.lowResMaterial;
@@ -825,11 +835,13 @@ export class CloudRenderNode extends TempNode {
 
         restoreRendererState(renderer, this._rendererState);
 
-        // Blit resolveRT → historyRT so history is ready for next frame.
-        // This replaces the old swap (which broke direct texture references).
-        renderer.setRenderTarget(this.historyRT);
-        this.mesh.material = this.blitMaterial;
-        this.mesh.render(renderer);
+        // Swap resolveRT and historyRT (matches TemporalAntialiasNode pattern)
+        const oldResolve = this.resolveRT;
+        const oldHistory = this.historyRT;
+        this.resolveRT = oldHistory;
+        this.historyRT = oldResolve;
+        this.historyNode.value = oldResolve.texture;
+        this.resolveNodeTex.value = oldHistory.texture;
 
         // Accumulate wind velocity into texture offsets (Euler integration)
         const now = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
@@ -852,6 +864,11 @@ export class CloudRenderNode extends TempNode {
         }
 
         _frameIndex++;
+
+        // Debug: check for window.__cloudDebugMode every frame
+        if (typeof window !== "undefined" && (window as any).__cloudDebugMode !== undefined) {
+            _cloudUniforms.debugMode.value = (window as any).__cloudDebugMode;
+        }
 
         this.swapHistoryResolve();
     }
@@ -876,30 +893,9 @@ export class CloudRenderNode extends TempNode {
 
         const debugMode = _cloudUniforms.debugMode;
 
-        const debugOutput = Fn(() => {
-            // Default: blend resolved clouds over the color node
-            const resolvedClouds = texture(this.resolveNodeTex, screenUV);
-            const result = mix(this._colorNode.rgb, resolvedClouds.rgb, resolvedClouds.a);
-
-            // Mode 100-102: show BSM cascade resolved buffer (maxOD channel b)
-            const d100 = texture(this.shadowNodes[0], screenUV);
-            const d101 = texture(this.shadowNodes[1], screenUV);
-            const d102 = texture(this.shadowNodes[2], screenUV);
-            const d103 = texture(this.velocityLowResNode, screenUV);
-
-            const debugColor = vec4(0).toVar();
-            debugColor.assign(debugMode.equal(100).select(vec4(d100.bbb, 1), debugColor));
-            debugColor.assign(debugMode.equal(101).select(vec4(d101.bbb, 1), debugColor));
-            debugColor.assign(debugMode.equal(102).select(vec4(d102.bbb, 1), debugColor));
-            debugColor.assign(
-                debugMode.equal(103).select(vec4(d103.xy.mul(10).add(0.5), 0, 1), debugColor)
-            );
-
-            const isDebug = debugMode.greaterThan(99);
-            return isDebug.select(debugColor, vec4(result, 1));
-        })();
-
-        return debugOutput;
+        const resolvedClouds = texture(this.resolveNodeTex, screenUV);
+        const result = resolvedClouds.rgb;
+        return vec4(result, 1);
     }
 
     private _buildFragmentNodes(host: NodeBuilder | Renderer): void {
@@ -980,50 +976,92 @@ export class CloudRenderNode extends TempNode {
             this.lowResMaterial.needsUpdate = true;
         }
 
-        // Setup resolve pass: temporal upscale from 1/4 to full resolution
+        // Setup resolve pass: temporal upscale (Bayer + reprojection + variance clipping)
+        // Matches reference: cloudsResolve.frag → temporalUpscale()
         {
+            const bayerRows = [
+                vec4(0, 12, 3, 15),
+                vec4(8, 4, 11, 7),
+                vec4(2, 14, 1, 13),
+                vec4(10, 6, 9, 5)
+            ];
+
             const resolveNode = Fn(() => {
-                const coord = ivec2(screenCoordinate);
-                const uv = screenUV;
-                // Map full-res coord to low-res coord (integer division by 4)
-                const lowResCoord = coord.div(ivec2(4));
-                const currentColor = this.lowResNode.load(lowResCoord);
+                // Low-res size from texel uniform
+                const lowResSize = vec2(
+                    float(1).div(_lowResTexelSize.x),
+                    float(1).div(_lowResTexelSize.y)
+                );
+                // Full-res size from resolve texel uniform
+                const fullResSize = vec2(
+                    float(1).div(_resolveTexelSize.x),
+                    float(1).div(_resolveTexelSize.y)
+                );
 
-                // Bayer 4x4 pattern: 1/16 of full-res pixels are "current frame"
-                const bx = coord.x.mod(int(4));
-                const by = coord.y.mod(int(4));
-                const bayerLut = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-                const bayerIdx = by.mul(int(4)).add(bx);
-                const bayerValue = int(bayerLut[0]).toVar();
-                for (let bi = 1; bi < 16; bi++) {
-                    bayerValue.assign(
-                        bayerIdx.equal(int(bi)).select(int(bayerLut[bi]), bayerValue)
+                // Full-res pixel coordinate
+                const fullCoord = screenUV.mul(fullResSize);
+
+                const fx = fullCoord.x.floor();
+                const fy = fullCoord.y.floor();
+
+                // Sample low-res color using nearest texel
+                const lowCoordX = fx.div(4).floor();
+                const lowCoordY = fy.div(4).floor();
+                const lowUv = vec2(
+                    lowCoordX.add(0.5).div(lowResSize.x),
+                    lowCoordY.add(0.5).div(lowResSize.y)
+                );
+                const currentColor = texture(this.lowResNode, lowUv);
+
+                // Bayer pattern entirely in float
+                const b0 = vec4(0, 12, 3, 15);
+                const b1 = vec4(8, 4, 11, 7);
+                const b2 = vec4(2, 14, 1, 13);
+                const b3 = vec4(10, 6, 9, 5);
+
+                const mx = fx.sub(fx.div(4).floor().mul(4));
+                const my = fy.sub(fy.div(4).floor().mul(4));
+
+                const row = mx
+                    .lessThan(1)
+                    .select(b0, mx.lessThan(2).select(b1, mx.lessThan(3).select(b2, b3)));
+
+                const bayerVal = my
+                    .lessThan(1)
+                    .select(
+                        row.x,
+                        my.lessThan(2).select(row.y, my.lessThan(3).select(row.z, row.w))
                     );
-                }
-                const currentFrame = bayerValue.equal(int(_cloudFrameNode));
 
-                // Always temporal accumulate (even for currentFrame)
+                const frameMod = _cloudResolveCountNode.mod(16);
+                const isCurrent = bayerVal.sub(frameMod).abs().lessThan(0.5);
+
+                // Full temporal resolve: currentFrame=currentColor, else=reprojected+clipped history
                 const result = currentColor.toVar();
-                {
-                    const closest = _getClosestFragment(this.velocityLowResNode, lowResCoord);
-                    const velocity = closest.gb;
-                    const prevUv = uv.sub(velocity);
-                    const outOfBounds = prevUv.x
-                        .lessThan(0)
-                        .or(prevUv.x.greaterThan(1))
-                        .or(prevUv.y.lessThan(0))
-                        .or(prevUv.y.greaterThan(1));
-                    If(outOfBounds.not(), () => {
+
+                If(isCurrent.not(), () => {
+                    const velocityData = texture(this.velocityLowResNode, lowUv);
+                    const velocity = velocityData.yz;
+                    const prevUv = screenUV.sub(velocity);
+
+                    const inBounds = prevUv.x
+                        .greaterThanEqual(0)
+                        .and(prevUv.x.lessThanEqual(1))
+                        .and(prevUv.y.greaterThanEqual(0))
+                        .and(prevUv.y.lessThanEqual(1));
+
+                    If(inBounds, () => {
                         const historyColor = texture(this.historyNode, prevUv);
-                        const clippedColor = _varianceClippingUV(
+                        const clipped = _varianceClippingUV(
                             this.lowResNode,
-                            uv,
+                            screenUV,
                             currentColor,
                             historyColor
                         );
-                        result.assign(clippedColor);
+                        result.assign(clipped);
                     });
-                }
+                });
+
                 return result;
             })();
 

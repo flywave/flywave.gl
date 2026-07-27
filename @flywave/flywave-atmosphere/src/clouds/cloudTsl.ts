@@ -71,7 +71,7 @@ export const createGetMipLevel = (u: CloudUniforms) =>
         const coord = uv.mul(u.resolution);
         const ddx = dFdx(coord);
         const ddy = dFdy(coord);
-        const deltaMaxSqr = max(dot(ddx, ddx), dot(ddy, ddy)).mul(u.mipLevelScale);
+        const deltaMaxSqr = max(dot(ddx, ddx), dot(ddy, ddy)).mul(float(0.1));
         return max(float(0), float(0.5).mul(log2(max(float(1), deltaMaxSqr))));
     });
 
@@ -141,7 +141,7 @@ export const createSampleWeather = (u: CloudUniforms) =>
 
         // GLSL: textureLod(localWeatherTexture, uv * localWeatherRepeat + localWeatherOffset, mipLevel)
         const weatherUv = uv.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
-        const weatherTex = texture(u.localWeatherTexture, weatherUv, mipLevel);
+        const weatherTex = textureLevel(u.localWeatherTexture, weatherUv, mipLevel);
         const localWeather = exp(u.weatherExponents.mul(weatherTex.log()));
 
         const heightScale = shapeAlteringFunction(heightFraction, u.shapeAlteringBiases);
@@ -956,7 +956,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
             // mipLevel = mix(0.0, mipLevel, min(1.0, 0.2 * cameraHeight / maxHeight));
             // rayStartTexelsPerPixel = pow(2.0, mipLevel);
             const initialUv = getGlobeUv(rayOrigin);
-            const baseMip = getMipLevel(initialUv.mul(u.localWeatherRepeat));
+            const baseMip = getMipLevel(initialUv.mul(u.localWeatherRepeat)).mul(u.mipLevelScale);
             const cameraAdjustedMip = mix(
                 float(0),
                 baseMip,
@@ -1039,83 +1039,13 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const opticalDepth = sunMarchResult.x.toVar();
                         const sunRayDistance = sunMarchResult.y;
 
-                        const heightGate = step(height, u.shadowTopHeight);
-                        const cascadeGate = u.shadowCascadeCount
-                            .greaterThan(0)
-                            .select(float(1), float(0));
-                        const bsmCond = heightGate.mul(cascadeGate);
                         const surfaceNormal = normalize(position);
-                        const sunDotNormal = dot(u.sunDirection, surfaceNormal);
-                        const shadowRadius = u.maxShadowFilterRadius.mul(
-                            sunDotNormal.sub(0.1).div(float(0).sub(0.1)).clamp(0, 1)
-                        );
-                        const shadowOD = sampleShadowOpticalDepth(
-                            position,
-                            sunRayDistance,
-                            shadowRadius
-                        ).toConst();
-                        opticalDepth.addAssign(shadowOD.mul(bsmCond));
 
-                        let radiance = sunIrradiance.mul(
-                            approximateMultipleScattering(opticalDepth, cosTheta, u)
-                        );
+                        // STEP 3 EXCLUSION: disabled BSM shadow, skyIrradiance, ground bounce, powder
 
-                        radiance = radiance.add(
-                            skyIrradiance
-                                .mul(float(RECIPROCAL_PI4))
-                                .mul(skyGradient)
-                                .mul(u.skyLightScale)
-                        );
-
-                        // Ground bounce: light reflected from ground illuminates cloud bottoms
-                        // GLSL: if (height < shadowTopHeight && mipLevel < 0.5)
-                        // Gate by maxIterationCountToGround: when 0, skip entirely.
-                        const groundBounceCond = step(height, u.shadowTopHeight)
-                            .mul(step(mipLevel, float(0.5)))
-                            .mul(u.maxIterationCountToGround.greaterThan(0));
-                        If(groundBounceCond.greaterThan(0.5), () => {
-                            const groundDir = normalize(position).negate();
-                            const opticalDepthToGround = marchOpticalDepth(
-                                position,
-                                groundDir,
-                                jitter,
-                                mipLevel,
-                                u.maxIterationCountToGround
-                            ).x;
-                            // Ground irradiance: project to ground level and compute
-                            // (matches reference getGroundSunSkyIrradiance)
-                            const groundPosition = position.sub(normalize(position).mul(height));
-                            const groundIrr = getSplitScalarIlluminance(
-                                groundPosition.mul(u.worldToUnit),
-                                u.sunDirection
-                            ).toConst();
-                            const groundSkyIrr = groundIrr.get("indirect");
-                            const groundSunIrr = groundIrr.get("direct");
-                            const groundIrradianceVal = groundSkyIrr.add(
-                                oneMinus(u.coverage).mul(groundSunIrr)
-                            );
-                            const groundAlbedo = float(0.3);
-                            const bouncedRadiance = groundAlbedo
-                                .mul(float(RECIPROCAL_PI))
-                                .mul(groundIrradianceVal)
-                                .mul(exp(opticalDepthToGround.negate()));
-                            radiance = radiance.add(
-                                bouncedRadiance.mul(float(RECIPROCAL_PI4)).mul(u.groundBounceScale)
-                            );
-                        });
-
-                        // STEP 8k: accumulate radiance before mediaScattering
-                        // debugSunIrrSum.addAssign(radiance.mul(0.001));
+                        let radiance = vec3(1.0).mul(exp(float(-1.0)));
 
                         radiance = radiance.mul(mediaScattering);
-
-                        radiance = radiance.mul(
-                            oneMinus(
-                                u.powderScale.mul(
-                                    exp(mediaExtinction.mul(u.powderExponent).negate())
-                                )
-                            )
-                        );
 
                         const transmittance = exp(mediaExtinction.mul(stepSize).negate());
                         const clampedExt = max(mediaExtinction, float(1e-7));
@@ -1145,8 +1075,6 @@ export const createMarchClouds = (u: CloudUniforms): any => {
             const frontDepth = transmittanceSum
                 .greaterThan(0)
                 .select(weightedDistanceSum.div(transmittanceSum), float(-1));
-            // DEBUG override: when u.debugMode==78, return step count in alpha channel
-            // (marchClouds can't access debugMode directly; instead, hack via marchResult struct)
             return marchCloudsResultStruct(vec4(radianceIntegral, alpha), frontDepth);
         }
     );
@@ -1248,6 +1176,43 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
             resultColor.assign(marchResult.get("color"));
 
+            // Debug: globe UV at entry point
+            If(debugMode.equal(float(201)), () => {
+                const debugUv = getGlobeUv(origin);
+                resultColor.assign(vec4(debugUv, 0, 1));
+            });
+            // Debug: weather texture value at entry point
+            If(debugMode.equal(float(202)), () => {
+                const debugUv = getGlobeUv(origin);
+                const wUv = debugUv.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
+                const wVal = textureLevel(u.localWeatherTexture, wUv, float(0));
+                resultColor.assign(vec4(wVal.rgb, 1));
+            });
+            // Debug: shape texture value at entry point
+            If(debugMode.equal(float(203)), () => {
+                const debugUv = getGlobeUv(origin);
+                const shapePos = origin.mul(u.shapeRepeat);
+                const shapeVal = texture3D(u.shapeTexture, shapePos).r;
+                resultColor.assign(vec4(shapeVal, shapeVal, shapeVal, 1));
+            });
+            // Debug: camera height normalized
+            If(debugMode.equal(float(204)), () => {
+                const h = u.cameraHeight
+                    .sub(u.minHeight)
+                    .div(u.maxHeight.sub(u.minHeight))
+                    .clamp(0, 1);
+                resultColor.assign(vec4(h, h, h, 1));
+            });
+            // Debug: ray direction (XY) as color
+            If(debugMode.equal(float(205)), () => {
+                resultColor.assign(vec4(rayDirection.xy.mul(0.5).add(0.5), 0, 1));
+            });
+            // Debug: camera position as color (normalized)
+            If(debugMode.equal(float(206)), () => {
+                const cp = cameraPosition.mul(1e-7);
+                resultColor.assign(vec4(cp.xy, 0, 1));
+            });
+
             const marchedFrontDepth = marchResult.get("frontDepth").toConst();
             const hitClouds = marchedFrontDepth.greaterThanEqual(0).toConst();
             If(hitClouds, () => {
@@ -1267,17 +1232,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                     );
                 });
 
-                const luminanceTransfer = getIndirectLuminanceToPoint(
-                    cameraPosition.mul(u.worldToUnit),
-                    frontPosition.mul(u.worldToUnit),
-                    vec2(shadowLen.mul(u.worldToUnit), float(0)),
-                    u.sunDirection
-                ).toConst();
-                const transmittance = luminanceTransfer.get("transmittance");
-                const inscatter = luminanceTransfer.get("luminance");
-                resultColor.rgb.assign(
-                    resultColor.rgb.mul(transmittance).add(inscatter.mul(resultColor.a))
-                );
+                // STEP 3 EXCLUSION: disabled aerial perspective (getIndirectLuminanceToPoint)
 
                 resultFrontDepth.assign(frontDepth);
 
@@ -1307,24 +1262,21 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             });
         });
 
-        // Apply haze (analytical fog) after cloud march and before debug overrides.
-        // Haze ray extends from camera near plane to the cloud top or scene distance.
-        If(u.hazeEnabled.greaterThan(0), () => {
-            const hazeOrigin = rayNear.mul(rayDirection).add(cameraPosition);
-            // Haze ray distance: up to scene distance, clamped to cloud layer top
-            const hazeRayDist = min(sceneDistance, rayFar);
-            const shadowLen = float(0);
-            const haze = approximateHaze(
-                hazeOrigin,
-                rayDirection,
-                hazeRayDist,
-                cosTheta,
-                shadowLen
-            ).toConst();
-            // Alpha-blend haze over existing color
-            resultColor.rgb.assign(resultColor.rgb.mix(haze.rgb, haze.a));
-            resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
-        });
+        // STEP 3 EXCLUSION: disabled haze
+        // If(u.hazeEnabled.greaterThan(0), () => {
+        //     const hazeOrigin = rayNear.mul(rayDirection).add(cameraPosition);
+        //     const hazeRayDist = min(sceneDistance, rayFar);
+        //     const shadowLen = float(0);
+        //     const haze = approximateHaze(
+        //         hazeOrigin,
+        //         rayDirection,
+        //         hazeRayDist,
+        //         cosTheta,
+        //         shadowLen
+        //     ).toConst();
+        //     resultColor.rgb.assign(resultColor.rgb.mix(haze.rgb, haze.a));
+        //     resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
+        // });
 
         return cloudRendererResultStruct(resultColor, resultFrontDepth, resultVelocity);
     });

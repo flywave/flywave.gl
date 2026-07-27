@@ -170,6 +170,10 @@ export class CloudUniforms {
     // 1 = rayNear (red), rayFar (green), shouldMarch (blue)
     // 2 = cameraHeight (grayscale)
     // 3 = cloud alpha only
+    // 201 = globe UV at entry point (RG)
+    // 202 = weather texture at entry point (RGB)
+    // 203 = shape texture at entry point (grayscale)
+    // 204 = camera height normalized (grayscale)
     debugMode = uniform(0);
 
     // Texture nodes (set externally by CloudTextures)
