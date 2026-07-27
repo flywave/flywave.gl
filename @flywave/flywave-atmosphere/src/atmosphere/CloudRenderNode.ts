@@ -895,7 +895,9 @@ export class CloudRenderNode extends TempNode {
 
         const resolvedClouds = texture(this.resolveNodeTex, screenUV);
         const result = resolvedClouds.rgb;
-        return vec4(result, 1);
+        const alpha = resolvedClouds.a;
+        const bg = this._colorNode?.rgb ?? vec3(0);
+        return vec4(bg.mul(alpha.oneMinus()).add(result), 1);
     }
 
     private _buildFragmentNodes(host: NodeBuilder | Renderer): void {
@@ -1052,9 +1054,10 @@ export class CloudRenderNode extends TempNode {
 
                     If(inBounds, () => {
                         const historyColor = texture(this.historyNode, prevUv);
-                        const clipped = _varianceClippingUV(
+                        const lowCoord = ivec2(lowCoordX, lowCoordY);
+                        const clipped = _varianceClippingResolve(
                             this.lowResNode,
-                            screenUV,
+                            lowCoord,
                             currentColor,
                             historyColor
                         );
