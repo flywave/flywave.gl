@@ -1061,6 +1061,9 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                             approximateMultipleScattering(opticalDepth, cosTheta, u)
                         );
 
+                        // Ground bounce: disabled (maxIterationCountToGround=0, matches reference medium preset)
+                        // If(height.lessThan(u.shadowTopHeight).and(mipLevel.lessThan(0.5)), () => { ... });
+
                         // Sky irradiance
                         radiance = radiance.add(
                             skyIrradiance.mul(RECIPROCAL_PI4).mul(skyGradient).mul(u.skyLightScale)
