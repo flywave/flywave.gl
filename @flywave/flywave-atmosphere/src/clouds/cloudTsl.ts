@@ -1164,6 +1164,15 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const nearMax = b.negate().sub(QMax).mul(0.5);
         const farMax = b.negate().add(QMax).mul(0.5);
 
+        // Haze ray intersection: shadowTopHeight sphere
+        const rShadowTop = bottomRadius.add(u.shadowTopHeight);
+        const cShadowTop = r2.sub(rShadowTop.mul(rShadowTop));
+        const dShadowTop = b.mul(b).sub(cShadowTop.mul(4));
+        const QShadowTop = sqrt(dShadowTop.max(0));
+        const farShadowTop = b.negate().add(QShadowTop).mul(0.5);
+        // Haze near = cameraNear equivalent, far = shadowTopHeight intersection or ground
+        const hazeRayFar = intersectsGround.greaterThan(0.5).select(nearMin, farShadowTop);
+
         const aboveMin = cameraHeight.greaterThanEqual(u.minHeight);
         const aboveMax = cameraHeight.greaterThanEqual(u.maxHeight);
         const noGround = intersectsGround.lessThanEqual(0.5);
@@ -1307,8 +1316,8 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
         // Haze
         If(u.hazeEnabled.greaterThan(0), () => {
-            const hazeOrigin = rayNear.mul(rayDirection).add(cameraPosition);
-            const hazeRayDist = min(sceneDistance, rayFar);
+            const hazeOrigin = cameraPosition;
+            const hazeRayDist = hazeRayFar;
             const shadowLen = float(0).toVar();
             const haze = approximateHaze(
                 hazeOrigin,
