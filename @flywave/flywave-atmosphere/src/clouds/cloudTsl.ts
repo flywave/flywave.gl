@@ -884,10 +884,10 @@ export const createApproximateHaze = (u: CloudUniforms) => {
             const transmittance = saturate(float(1).sub(exp(opticalDepth.negate())));
             const shadowTransmittance = saturate(float(1).sub(exp(shadowOpticalDepth.negate())));
 
-            // Inscattered light using atmosphere LUT irradiance at cloud layer
-            const samplePos = rayOrigin.add(rayDirection.mul(maxRayDistance.mul(0.5)));
+            // Inscattered light using atmosphere LUT irradiance at ground position
+            const groundPos = rayOrigin.normalize().mul(u.bottomRadius);
             const splitIrr = getSplitScalarIlluminance(
-                samplePos.mul(u.worldToUnit),
+                groundPos.mul(u.worldToUnit),
                 u.sunDirection
             ).toConst();
             const sunIrr = splitIrr.get("direct");
@@ -1150,6 +1150,12 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const b = dot(rayDirection, cameraPosition).mul(2);
         const r2 = dot(cameraPosition, cameraPosition);
 
+        // bottomRadius sphere intersection (for haze ground clamp)
+        const cGround = r2.sub(bottomRadius.mul(bottomRadius));
+        const dGround = b.mul(b).sub(cGround.mul(4));
+        const QGround = sqrt(dGround.max(0));
+        const nearGround = b.negate().sub(QGround).mul(0.5);
+
         const rMin = bottomRadius.add(u.minHeight);
         const cMin = r2.sub(rMin.mul(rMin));
         const dMin = b.mul(b).sub(cMin.mul(4));
@@ -1171,7 +1177,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const QHazeMax = sqrt(dHazeMax.max(0));
         const farHazeMax = b.negate().add(QHazeMax).mul(0.5);
         // Haze near = 0, far = maxHeight intersection or ground
-        const hazeRayFar = intersectsGround.greaterThan(0.5).select(nearMin, farHazeMax);
+        const hazeRayFar = intersectsGround.greaterThan(0.5).select(nearGround, farHazeMax);
 
         const aboveMin = cameraHeight.greaterThanEqual(u.minHeight);
         const aboveMax = cameraHeight.greaterThanEqual(u.maxHeight);
