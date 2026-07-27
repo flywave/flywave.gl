@@ -812,7 +812,11 @@ export class CloudRenderNode extends TempNode {
         }
 
         // Deferred blit from previous frame: resolveRT → historyRT
-        // (removed - using direct resolve to historyRT instead)
+        if (this._cloudResolveFrameCount > 0) {
+            renderer.setRenderTarget(this.historyRT);
+            this.mesh.material = this.blitMaterial;
+            this.mesh.render(renderer);
+        }
 
         // Pass 1: Render clouds at 1/4 resolution for temporal upscale
         renderer.setRenderTarget(this.lowResRT);
@@ -828,21 +832,12 @@ export class CloudRenderNode extends TempNode {
         _cloudFrameNode.value = this._cloudResolveFrameCount % 16;
         this._cloudResolveFrameCount++;
 
-        // Pass 2: Resolve (TAA + Catmull-Rom upsample) at full resolution
+        // Pass 2: Resolve into resolveRT
         renderer.setRenderTarget(this.resolveRT);
         this.mesh.material = this.resolveMaterial;
         this.mesh.render(renderer);
 
         restoreRendererState(renderer, this._rendererState);
-
-        // Swap resolveRT and historyRT (matches TemporalAntialiasNode pattern)
-        const oldResolve = this.resolveRT;
-        const oldHistory = this.historyRT;
-        this.resolveRT = oldHistory;
-        this.historyRT = oldResolve;
-        this.historyNode.value = oldResolve.texture;
-        this.resolveNodeTex.value = oldHistory.texture;
-        this.resolveMaterial.needsUpdate = true;
 
         // Accumulate wind velocity into texture offsets (Euler integration)
         const now = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
@@ -1037,7 +1032,7 @@ export class CloudRenderNode extends TempNode {
                 const frameMod = _cloudResolveCountNode.mod(16);
                 const isCurrent = bayerVal.sub(frameMod).abs().lessThan(0.5);
 
-                // Full temporal resolve: currentFrame=currentColor, else=reprojected+clipped history
+                // Full temporal resolve
                 const result = currentColor.toVar();
 
                 If(isCurrent.not(), () => {
@@ -1054,8 +1049,39 @@ export class CloudRenderNode extends TempNode {
 
                     If(inBounds, () => {
                         const historyColor = texture(this.historyNode, prevUv);
-                        // DEBUG: no variance clipping, just output history
-                        result.assign(historyColor);
+                        const clipped = _varianceClippingResolve(
+                            this.lowResNode,
+                            lowCoord,
+                            currentColor,
+                            historyColor
+                        );
+                        result.assign(clipped);
+                    });
+                });
+
+                return result;
+
+                If(isCurrent.not(), () => {
+                    const lowCoord = ivec2(lowCoordX, lowCoordY);
+                    const velocityData = _getClosestFragment(this.velocityLowResNode, lowCoord);
+                    const velocity = velocityData.yz;
+                    const prevUv = screenUV.sub(velocity);
+
+                    const inBounds = prevUv.x
+                        .greaterThanEqual(0)
+                        .and(prevUv.x.lessThanEqual(1))
+                        .and(prevUv.y.greaterThanEqual(0))
+                        .and(prevUv.y.lessThanEqual(1));
+
+                    If(inBounds, () => {
+                        const historyColor = texture(this.historyNode, prevUv);
+                        const clipped = _varianceClippingResolve(
+                            this.lowResNode,
+                            lowCoord,
+                            currentColor,
+                            historyColor
+                        );
+                        result.assign(clipped);
                     });
                 });
 
