@@ -54,15 +54,15 @@ export class MBRenderLayer {
         const bufferGeometry = new THREE.BufferGeometry();
 
         // Handle interleaved vertex attributes (used by SolidLine geometry)
+        // Protocol uses element-level stride and offset (not bytes)
         if (geometry.interleavedVertexAttributes) {
             for (const interleaved of geometry.interleavedVertexAttributes) {
                 const array = this.bufferToTypedArray(interleaved);
                 if (!array) continue;
-                const strideFloats = interleaved.stride / 4;
-                const buffer = new THREE.InterleavedBuffer(array, strideFloats);
+                const buffer = new THREE.InterleavedBuffer(array, interleaved.stride);
                 for (const attr of interleaved.attributes) {
                     const attrib = new THREE.InterleavedBufferAttribute(
-                        buffer, attr.itemSize, attr.offset / 4,
+                        buffer, attr.itemSize, attr.offset,
                     );
                     bufferGeometry.setAttribute(attr.name, attrib);
                 }

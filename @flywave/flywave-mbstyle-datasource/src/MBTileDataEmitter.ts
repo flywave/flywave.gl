@@ -268,13 +268,13 @@ export class MBTileDataEmitter {
 
         const interleavedAttr: InterleavedBufferAttribute = {
             buffer: data.buffer,
-            stride: 13 * 4,
+            stride: 13,
             type: 'float' as BufferElementType,
             attributes: [
                 { name: 'extrusionCoord', offset: 0, itemSize: 3 },
-                { name: 'position', offset: 3 * 4, itemSize: 3 },
-                { name: 'tangent', offset: 6 * 4, itemSize: 3 },
-                { name: 'biTangent', offset: 9 * 4, itemSize: 4 },
+                { name: 'position', offset: 3, itemSize: 3 },
+                { name: 'tangent', offset: 6, itemSize: 3 },
+                { name: 'biTangent', offset: 9, itemSize: 4 },
             ],
         };
 
@@ -301,7 +301,7 @@ export class MBTileDataEmitter {
                 itemCount: 1,
             },
             groups,
-            featureStarts: [],
+            featureStarts: groups.map(g => g.start),
             objInfos: this.m_lineAttr.map(a => JSON.parse(a)),
             attachments: [],
         }];
