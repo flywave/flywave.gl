@@ -33,12 +33,6 @@ catalogs:
     '@here/harp-fontcatalog':
       specifier: ^0.1.6
       version: 0.1.6
-    '@here/olp-sdk-core':
-      specifier: ^1.8.1
-      version: 1.8.1
-    '@here/olp-sdk-dataservice-read':
-      specifier: ~1.13.1
-      version: 1.13.1
     '@here/quantized-mesh-decoder':
       specifier: ^1.2.8
       version: 1.2.8
@@ -1704,6 +1698,64 @@ importers:
         specifier: 'catalog:'
         version: 5.8.3
 
+  '@flywave/flywave-mbstyle-datasource':
+    dependencies:
+      '@flywave/flywave-datasource-protocol':
+        specifier: workspace:*
+        version: link:../flywave-datasource-protocol
+      '@flywave/flywave-fetch':
+        specifier: workspace:*
+        version: link:../flywave-fetch
+      '@flywave/flywave-geoutils':
+        specifier: workspace:*
+        version: link:../flywave-geoutils
+      '@flywave/flywave-mapview':
+        specifier: workspace:*
+        version: link:../flywave-mapview
+      '@flywave/flywave-mapview-decoder':
+        specifier: workspace:*
+        version: link:../flywave-mapview-decoder
+      '@flywave/flywave-utils':
+        specifier: workspace:*
+        version: link:../flywave-utils
+      '@flywave/flywave-vectortile-datasource':
+        specifier: workspace:*
+        version: link:../flywave-vectortile-datasource
+      three:
+        specifier: 'catalog:'
+        version: 0.178.0
+    devDependencies:
+      '@flywave/flywave-test-utils':
+        specifier: workspace:*
+        version: link:../flywave-test-utils
+      '@types/chai':
+        specifier: 'catalog:'
+        version: 4.3.20
+      '@types/mocha':
+        specifier: 'catalog:'
+        version: 10.0.10
+      '@types/node':
+        specifier: 'catalog:'
+        version: 16.18.126
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.178.0
+      chai:
+        specifier: 'catalog:'
+        version: 4.5.0
+      cross-env:
+        specifier: 'catalog:'
+        version: 7.0.3
+      mocha:
+        specifier: 'catalog:'
+        version: 11.7.0
+      source-map-support:
+        specifier: 'catalog:'
+        version: 0.5.21
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
   '@flywave/flywave-splats':
     dependencies:
       '@flywave/flywave-draco':
@@ -2043,7 +2095,7 @@ importers:
         version: 3.7.7
       three:
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
     devDependencies:
       '@flywave/flywave-datasource-protocol':
         specifier: workspace:*
@@ -2080,7 +2132,7 @@ importers:
         version: 9.0.11
       '@types/three':
         specifier: 'catalog:'
-        version: 0.174.0
+        version: 0.178.0
       chai:
         specifier: 'catalog:'
         version: 4.5.0
@@ -3115,21 +3167,6 @@ packages:
   '@here/harp-fontcatalog@0.1.6':
     resolution: {integrity: sha512-CdtsKtkX3paYBN5K7gJXLNDdekFLxcPHDjgFL1arz4IHN+9apVbWfW1Gq6oYLGPYLt1N0uzg/LU0G0hEffLV3w==}
     engines: {node: '>=9.11.1', npm: '>=5.8.0', yarn: '>=1.11.1'}
-
-  '@here/olp-sdk-core@1.8.1':
-    resolution: {integrity: sha512-Xk392zW7lubuSFOggVVEyZjLZ97uAvqGDM66cJCQi26S+uHnsunJM7636IHXc2PJYC0j6G7cQiJiY/MpbEzSRg==}
-    engines: {node: '>= 10.18.0'}
-
-  '@here/olp-sdk-dataservice-api@1.13.1':
-    resolution: {integrity: sha512-eey/7CYsqQ8IR/0cKDuJbkN/lMhSJJYw8wrLgIEoaVrZl1odTKjiH+9NZnm033inUCyS0BxU4RC4gm9fDV1Yxw==}
-    engines: {node: '>= 10.18.0'}
-
-  '@here/olp-sdk-dataservice-read@1.13.1':
-    resolution: {integrity: sha512-2cwp/66m1L7YKoe27693L58P5UDd7srjWICi3JfIMPZcJYbKWnmxnjYF88nqQMyTpax+oMzMlop5DgvcNCLpoQ==}
-    engines: {node: '>= 10.18.0'}
-
-  '@here/olp-sdk-fetch@1.9.0':
-    resolution: {integrity: sha512-wrmZjABACqT6JqucuZDiesJ1lnNY8rzKg05faJEnBStw9vU2eSYKItXe686+4TotT7LPHbLufLIZpJc3b7wEdw==}
 
   '@here/quantized-mesh-decoder@1.2.8':
     resolution: {integrity: sha512-fYOgpANVVMT38cHlCAIqzUun0cvhWGjpTI+jCbFtdfWgE24+sHtoCqPFvue6UhC9LA64j//lrdMKtryUvskqiA==}
@@ -5528,7 +5565,7 @@ packages:
     resolution: {integrity: sha512-oWb1Z6mkHIskLzEJ/XWX0srkpkTQ7vaopMQkyaEIoq0fmtFVxOthb8cCxeT+p3ynTdkk/RZwbgG4brR5BeWECw==}
     engines: {node: '>= 4.0'}
     os: [darwin]
-    deprecated: fsevents 1 will break on node v14+ and could be using insecure binaries. Upgrade to fsevents 2.
+    deprecated: Upgrade to fsevents v2 to mitigate potential security issues
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -9424,29 +9461,6 @@ snapshots:
       - supports-color
 
   '@here/harp-fontcatalog@0.1.6': {}
-
-  '@here/olp-sdk-core@1.8.1':
-    dependencies:
-      '@here/olp-sdk-dataservice-api': 1.13.1
-      '@here/olp-sdk-fetch': 1.9.0
-    transitivePeerDependencies:
-      - encoding
-
-  '@here/olp-sdk-dataservice-api@1.13.1': {}
-
-  '@here/olp-sdk-dataservice-read@1.13.1':
-    dependencies:
-      '@here/olp-sdk-core': 1.8.1
-      '@here/olp-sdk-dataservice-api': 1.13.1
-      '@here/olp-sdk-fetch': 1.9.0
-    transitivePeerDependencies:
-      - encoding
-
-  '@here/olp-sdk-fetch@1.9.0':
-    dependencies:
-      node-fetch: 2.7.0
-    transitivePeerDependencies:
-      - encoding
 
   '@here/quantized-mesh-decoder@1.2.8': {}
 

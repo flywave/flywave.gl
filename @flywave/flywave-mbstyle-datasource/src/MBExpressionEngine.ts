@@ -179,17 +179,17 @@ export class MBExpressionEngine {
             case 'step': {
                 const input = this.exec(args[0], ctx) as number;
                 const defaultValue = this.exec(args[1], ctx);
-                for (let i = 2; i < args.length - 1; i += 2) {
+                let lastOutput = defaultValue;
+                for (let i = 2; i < args.length; i += 2) {
                     const stop = args[i] as number;
+                    const output = this.exec(args[i + 1], ctx);
                     if (input >= stop) {
+                        lastOutput = output;
                         continue;
                     }
-                    return i > 2 ? this.exec(args[i - 1], ctx) : defaultValue;
+                    return lastOutput;
                 }
-                if (args.length % 2 === 0) {
-                    return this.exec(args[args.length - 1], ctx);
-                }
-                return defaultValue;
+                return lastOutput;
             }
 
             case 'interpolate': {

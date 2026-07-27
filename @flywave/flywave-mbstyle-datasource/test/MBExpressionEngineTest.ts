@@ -55,7 +55,9 @@ describe('MBExpressionEngine', () => {
         const ctx = createCtx({ zoom: 5 });
         expect(MBExpressionEngine.evaluate(['step', ['zoom'], 1, 10, 2, 20, 3], ctx)).to.equal(1);
         const ctx2 = createCtx({ zoom: 15 });
-        expect(MBExpressionEngine.evaluate(['step', ['zoom'], 1, 10, 2, 20, 3], ctx2)).to.equal(3);
+        expect(MBExpressionEngine.evaluate(['step', ['zoom'], 1, 10, 2, 20, 3], ctx2)).to.equal(2);
+        const ctx3 = createCtx({ zoom: 25 });
+        expect(MBExpressionEngine.evaluate(['step', ['zoom'], 1, 10, 2, 20, 3], ctx3)).to.equal(3);
     });
 
     it('evaluates interpolate expression', () => {
