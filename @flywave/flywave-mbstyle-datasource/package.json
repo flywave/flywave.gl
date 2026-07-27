@@ -1,0 +1,62 @@
+{
+    "name": "@flywave/flywave-mbstyle-datasource",
+    "version": "0.1.0",
+    "description": "Mapbox Style Data Source for flywave.gl",
+    "main": "lib/src/index.js",
+    "typings": "lib/src/index",
+    "exports": {
+        ".": {
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
+        },
+        "./*": {
+            "import": "./lib/src/*",
+            "require": "./lib/src/*"
+        }
+    },
+    "worker": {
+        "name": "@flywave/flywave-mbstyle-datasource-worker",
+        "main": "lib/index-worker.js"
+    },
+    "directories": {
+        "test": "test"
+    },
+    "scripts": {
+        "build": "tsc --build $EXTRA_TSC_ARGS",
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*Test.js",
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/anomalyco/flywave.gl.git",
+        "directory": "@flywave/flywave-mbstyle-datasource"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@flywave/flywave-datasource-protocol": "workspace:*",
+        "@flywave/flywave-geoutils": "workspace:*",
+        "@flywave/flywave-mapview": "workspace:*",
+        "@flywave/flywave-mapview-decoder": "workspace:*",
+        "@flywave/flywave-vectortile-datasource": "workspace:*",
+        "@flywave/flywave-utils": "workspace:*",
+        "@flywave/flywave-fetch": "workspace:*"
+    },
+    "devDependencies": {
+        "@flywave/flywave-test-utils": "workspace:*",
+        "@types/chai": "catalog:",
+        "@types/mocha": "catalog:",
+        "@types/node": "catalog:",
+        "@types/three": "catalog:",
+        "chai": "catalog:",
+        "cross-env": "catalog:",
+        "mocha": "catalog:",
+        "source-map-support": "catalog:",
+        "typescript": "catalog:"
+    },
+    "peerDependencies": {
+        "three": "catalog:"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}
