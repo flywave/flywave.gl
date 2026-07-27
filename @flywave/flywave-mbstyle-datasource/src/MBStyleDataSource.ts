@@ -44,7 +44,16 @@ class DelegatingDataProvider extends DataProvider {
     }
 
     protected async connect(): Promise<void> {
-        // delegate will be connected externally
+        // Trigger delegate's connect() through its own register mechanism
+        // This is called by DataProvider.register() when first client registers
+        if (this.delegate) {
+            try {
+                // OmvRestClient.connect() is protected, so we access it via register pattern
+                await (this.delegate as any).connect();
+            } catch (e) {
+                // Silently pass - the delegate may not need explicit connect
+            }
+        }
     }
 
     protected dispose(): void {
