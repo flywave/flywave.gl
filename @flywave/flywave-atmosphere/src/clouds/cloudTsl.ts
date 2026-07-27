@@ -1196,6 +1196,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const resultColor = vec4(0, 0, 0, 0).toVar();
         const resultFrontDepth = rayFar.toVar();
         const resultVelocity = vec2(0, 0).toVar();
+        const resultShadowLen = float(0).toVar();
 
         const debugMode = u.debugMode;
 
@@ -1268,6 +1269,8 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                     );
                 });
 
+                resultShadowLen.assign(shadowLen);
+
                 // Apply aerial perspective to clouds
                 {
                     const result = getIndirectLuminanceToPoint(
@@ -1316,15 +1319,14 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
         // Haze
         If(u.hazeEnabled.greaterThan(0), () => {
-            const hazeOrigin = cameraPosition;
-            const hazeRayDist = hazeRayFar;
-            const shadowLen = float(0).toVar();
+            const hazeOrigin = float(1).mul(rayDirection).add(cameraPosition);
+            const hazeRayDist = hazeRayFar.sub(1);
             const haze = approximateHaze(
                 hazeOrigin,
                 rayDirection,
                 hazeRayDist,
                 cosTheta,
-                shadowLen
+                resultShadowLen
             ).toConst();
             resultColor.rgb.assign(resultColor.rgb.mix(haze.rgb, haze.a));
             resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
