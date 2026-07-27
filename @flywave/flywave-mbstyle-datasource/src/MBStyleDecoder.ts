@@ -18,14 +18,14 @@ class MBStyleDataProcessor implements IGeometryProcessor {
 
     constructor(
         private m_tileKey: TileKey,
-        private m_projection: Projection,
+        private m_decodeInfo: DecodeInfo,
         private m_layerEvaluator: MBLayerEvaluator,
         private m_sourceId: string,
         private m_zoom: number,
     ) {}
 
     getDecodedTile(data: ArrayBufferLike): DecodedTile {
-        this.m_emitter = new MBTileDataEmitter(this.m_tileKey, this.m_projection, this.m_zoom);
+        this.m_emitter = new MBTileDataEmitter(this.m_tileKey, this.m_decodeInfo, this.m_zoom);
         return this.m_emitter.getDecodedTile();
     }
 
@@ -123,17 +123,16 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
 
         const buffer = data instanceof Uint8Array ? data.buffer : data;
-        const emitter = new MBTileDataEmitter(tileKey, projection, zoom);
+        const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
+        const emitter = new MBTileDataEmitter(tileKey, decodeInfo, zoom);
 
         const processor = new MBStyleDataProcessor(
-            tileKey, projection,
+            tileKey, decodeInfo,
             this.m_layerEvaluator,
             this.m_currentSourceId,
             zoom,
         );
         processor.setEmitter(emitter);
-
-        const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
 
         try {
             this.m_dataAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);

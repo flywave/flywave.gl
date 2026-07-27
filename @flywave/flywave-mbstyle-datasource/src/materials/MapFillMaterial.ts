@@ -41,6 +41,7 @@ void main() {
 export class MapFillMaterial extends THREE.MeshBasicMaterial {
     private m_paint: MapFillMaterialParams;
     private m_outlineColor: THREE.Color = new THREE.Color();
+    private m_translation: THREE.Vector3 = new THREE.Vector3();
 
     // Pattern uniforms
     private m_patternTexture: THREE.Texture | null = null;
@@ -122,7 +123,16 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
             this.m_patternEnabled = false;
         }
 
-        this.needsUpdate = true;
+        const translate = p['fill-translate'] as [number, number] | undefined;
+        if (translate && (translate[0] || translate[1])) {
+            this.translation.set(translate[0], translate[1], 0);
+        } else {
+            this.translation.set(0, 0, 0);
+        }
+    }
+
+    get translation(): THREE.Vector3 {
+        return this.m_translation;
     }
 
     setPatternTexture(texture: THREE.Texture, size: [number, number], offset: [number, number]) {

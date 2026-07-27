@@ -6,18 +6,26 @@ import {
     BufferElementType,
     Group,
     GeometryType,
+    AttributeMap,
 } from '@flywave/flywave-datasource-protocol';
-import { Projection, TileKey } from '@flywave/flywave-geoutils';
-
+import { TileKey } from '@flywave/flywave-geoutils';
 import * as THREE from 'three';
+
 import { EvaluatedLayer } from './MBLayerEvaluator';
 import { ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
+import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
+import { webMercatorTile2TargetTile } from '@flywave/flywave-vectortile-datasource/OmvUtils';
 
 interface AccumulatedGeometry {
     positions: number[];
     indices: number[];
     groups: Array<{ start: number; count: number; materialIndex: number }>;
+    featureStarts: number[];
+    objInfos: AttributeMap[];
 }
+
+const tmpV3 = new THREE.Vector3();
+const EXTENTS = 4096;
 
 export class MBTileDataEmitter {
     private m_geometries: Map<string, AccumulatedGeometry> = new Map();
@@ -27,18 +35,22 @@ export class MBTileDataEmitter {
 
     constructor(
         private m_tileKey: TileKey,
-        private m_projection: Projection,
-        private m_zoom: number
+        private m_decodeInfo: DecodeInfo,
+        private m_zoom: number,
     ) {}
 
-    private getOrCreateGeometry(layerId: string, type: string): AccumulatedGeometry {
-        const key = `${layerId}:${type}`;
+    private getOrCreateGeometry(key: string): AccumulatedGeometry {
         let geo = this.m_geometries.get(key);
         if (!geo) {
-            geo = { positions: [], indices: [], groups: [] };
+            geo = { positions: [], indices: [], groups: [], featureStarts: [], objInfos: [] };
             this.m_geometries.set(key, geo);
         }
         return geo;
+    }
+
+    private project(p: THREE.Vector2 | THREE.Vector3): THREE.Vector3 {
+        webMercatorTile2TargetTile(EXTENTS, this.m_decodeInfo, p, tmpV3, false);
+        return tmpV3.clone();
     }
 
     private paintToTechniqueProps(layer: EvaluatedLayer): Record<string, any> {
@@ -61,7 +73,7 @@ export class MBTileDataEmitter {
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'line':
-                props.technique = 'solid-line';
+                props.technique = layer.layout['line-cap'] === 'round' ? 'solid-line' : 'solid-line';
                 props.color = p['line-color'] ?? '#000000';
                 props.opacity = p['line-opacity'] ?? 1;
                 props.lineWidth = p['line-width'] ?? 1;
@@ -70,7 +82,6 @@ export class MBTileDataEmitter {
                     if (arr.length >= 2) {
                         props.dashSize = arr[0];
                         props.gapSize = arr[1];
-                        props.technique = 'dashed-line';
                     }
                 }
                 if (l.visibility === 'none') props.enabled = false;
@@ -121,6 +132,9 @@ export class MBTileDataEmitter {
                 name: props.technique,
                 _index: idx,
                 _renderOrder: layer.renderOrder,
+                _layerId: layer.id,
+                _paint: layer.paint,
+                _layout: layer.layout,
                 ...props,
             };
             this.m_techniques.push(technique as IndexedTechnique);
@@ -134,22 +148,37 @@ export class MBTileDataEmitter {
         geometry: IPolygonGeometry[],
         properties: Record<string, any>,
         featureId: string | number | undefined,
-        matchedLayers: EvaluatedLayer[]
+        matchedLayers: EvaluatedLayer[],
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer);
-            const geo = this.getOrCreateGeometry(layer.id, 'fill');
+            const key = `${layer.id}:fill`;
+            const geo = this.getOrCreateGeometry(key);
+            const featureStart = geo.indices.length;
 
             for (const polygon of geometry) {
                 for (const ring2d of polygon.rings) {
                     const startIdx = geo.positions.length / 3;
                     for (const pt of ring2d) {
-                        geo.positions.push(pt.x, pt.y, 0);
+                        const w = this.project(pt);
+                        geo.positions.push(w.x, w.y, w.z);
                     }
+                    // simple fan triangulation
                     for (let i = 2; i < ring2d.length; i++) {
                         geo.indices.push(startIdx, startIdx + i - 1, startIdx + i);
                     }
                 }
+            }
+
+            const count = geo.indices.length - featureStart;
+            if (count > 0) {
+                geo.groups.push({
+                    start: featureStart,
+                    count,
+                    materialIndex: techniqueIdx,
+                });
+                geo.featureStarts.push(featureStart);
+                geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
             }
         }
     }
@@ -160,21 +189,35 @@ export class MBTileDataEmitter {
         geometry: ILineGeometry[],
         properties: Record<string, any>,
         featureId: string | number | undefined,
-        matchedLayers: EvaluatedLayer[]
+        matchedLayers: EvaluatedLayer[],
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer);
-            const geo = this.getOrCreateGeometry(layer.id, 'line');
+            const key = `${layer.id}:line`;
+            const geo = this.getOrCreateGeometry(key);
+            const featureStart = geo.indices.length;
 
             for (const lineGeo of geometry) {
                 const positions = lineGeo.positions;
                 for (let i = 0; i < positions.length; i++) {
-                    const pt = positions[i];
-                    geo.positions.push(pt.x, pt.y, 0);
+                    const w = this.project(positions[i]);
+                    geo.positions.push(w.x, w.y, 0);
                     if (i < positions.length - 1) {
-                        geo.indices.push(geo.positions.length / 3 - 1, geo.positions.length / 3);
+                        const idx = geo.positions.length / 3;
+                        geo.indices.push(idx - 1, idx);
                     }
                 }
+            }
+
+            const count = geo.indices.length - featureStart;
+            if (count > 0) {
+                geo.groups.push({
+                    start: featureStart,
+                    count,
+                    materialIndex: techniqueIdx,
+                });
+                geo.featureStarts.push(featureStart);
+                geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
             }
         }
     }
@@ -185,15 +228,27 @@ export class MBTileDataEmitter {
         points: THREE.Vector3[],
         properties: Record<string, any>,
         featureId: string | number | undefined,
-        matchedLayers: EvaluatedLayer[]
+        matchedLayers: EvaluatedLayer[],
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer);
-            const geo = this.getOrCreateGeometry(layer.id, 'point');
+            const key = `${layer.id}:point`;
+            const geo = this.getOrCreateGeometry(key);
+            const featureStart = geo.indices.length;
 
             for (const pt of points) {
-                geo.positions.push(pt.x, pt.y, pt.z ?? 0);
+                const w = this.project(pt);
+                geo.positions.push(w.x, w.y, w.z);
             }
+
+            const count = points.length;
+            geo.groups.push({
+                start: featureStart,
+                count,
+                materialIndex: techniqueIdx,
+            });
+            geo.featureStarts.push(featureStart);
+            geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
         }
     }
 
@@ -204,7 +259,7 @@ export class MBTileDataEmitter {
             if (geo.positions.length === 0) continue;
 
             const positionArray = new Float32Array(geo.positions);
-            const indexArray = new Uint32Array(geo.indices);
+            const indexArray = geo.indices.length > 0 ? new Uint32Array(geo.indices) : undefined;
 
             const positionAttr: BufferAttribute = {
                 name: 'position',
@@ -212,27 +267,32 @@ export class MBTileDataEmitter {
                 type: 'float' as BufferElementType,
                 itemCount: 3,
             };
-            const indexAttr: BufferAttribute = {
-                name: 'index',
-                buffer: indexArray.buffer,
-                type: 'uint32' as BufferElementType,
-                itemCount: 1,
-            };
+
             const groups: Group[] = geo.groups.map(g => ({
                 start: g.start,
                 count: g.count,
                 technique: g.materialIndex,
             }));
 
-            geometries.push({
+            const geom: Geometry = {
                 type: GeometryType.Polygon,
                 vertexAttributes: [positionAttr],
-                index: indexAttr,
                 groups,
-                featureStarts: [],
-                objInfos: [],
+                featureStarts: geo.featureStarts,
+                objInfos: geo.objInfos,
                 attachments: [],
-            });
+            };
+
+            if (indexArray) {
+                geom.index = {
+                    name: 'index',
+                    buffer: indexArray.buffer,
+                    type: 'uint32' as BufferElementType,
+                    itemCount: 1,
+                };
+            }
+
+            geometries.push(geom);
         }
 
         return { techniques: this.m_techniques, geometries };
