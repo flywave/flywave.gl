@@ -454,7 +454,10 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
         const clip = screenUV.mul(2).sub(1);
         const point = invMat.mul(vec4(clip, float(-1), float(1)));
         const pDiv = point.xyz.div(point.w);
-        const sunPosition = pDiv.add(u.altitudeCorrection);
+        const sunPosition = u.ecefToWorld
+            .inverse()
+            .mul(vec4(pDiv, 1))
+            .xyz.add(u.altitudeCorrection);
 
         const rayDirection = u.sunDirection.negate().normalize();
 
@@ -553,7 +556,7 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
 
         return vec4(
             noSamples.select(maxRayDistance, frontDepth),
-            noSamples.select(float(0), meanExtinction),
+            noSamples.toFloat(),
             noSamples.select(float(0), maxOpticalDepth),
             noSamples.select(float(0), maxOpticalDepthTail)
         );
@@ -659,9 +662,8 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
 
     return Fn(([rayPosition, distanceOffset, radius]: [any, any, any]): any => {
         const posUncorrected = rayPosition.sub(u.altitudeCorrection);
-
         const rayDir = u.sunDirection.negate();
-        const a = posUncorrected;
+        const a = rayPosition;
         const b = dot(rayDir, a).mul(2);
         const shadowTopR = u.bottomRadius.add(u.shadowTopHeight);
         const c = dot(a, a).sub(shadowTopR.mul(shadowTopR));
@@ -776,9 +778,8 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
 
     return Fn(([rayPosition, distanceOffset]: [any, any]): any => {
         const posUncorrected = rayPosition.sub(u.altitudeCorrection);
-
         const rayDir = u.sunDirection.negate();
-        const a = posUncorrected;
+        const a = rayPosition;
         const b = dot(rayDir, a).mul(2);
         const shadowTopR = u.bottomRadius.add(u.shadowTopHeight);
         const c = dot(a, a).sub(shadowTopR.mul(shadowTopR));
@@ -1045,17 +1046,8 @@ export const createMarchClouds = (u: CloudUniforms): any => {
 
                         const surfaceNormal = normalize(position);
 
-                        // BSM shadow: disabled (OutputTextureNode can't pass data between shadow passes)
-                        // If(height.lessThan(u.shadowTopHeight), () => {
-                        //     const shadowOD = sampleShadowOpticalDepth(
-                        //         position, sunRayDistance,
-                        //         u.maxShadowFilterRadius.mul(
-                        //             remapClamped(dot(u.sunDirection, surfaceNormal), float(0.1), float(0))
-                        //         ),
-                        //         jitter
-                        //     );
-                        //     opticalDepth.addAssign(shadowOD);
-                        // });
+                        // BSM shadow: cascade frustum coordinate mapping needs rewrite
+                        // If(height.lessThan(u.shadowTopHeight), () => { ... });
 
                         let radiance = sunIrradiance.mul(
                             approximateMultipleScattering(opticalDepth, cosTheta, u)

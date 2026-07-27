@@ -567,7 +567,7 @@ export class CloudRenderNode extends TempNode {
             this.shadowResolvedRTs.push(resRT);
 
             // shadowNodes point to resolved RTs (main march samples resolved BSM)
-            this.shadowNodes.push(outputTexture(this, resRT.texture));
+            this.shadowNodes.push(texture(resRT.texture));
 
             const mat = new NodeMaterial();
             mat.name = `Clouds [Shadow ${i}]`;
@@ -578,7 +578,7 @@ export class CloudRenderNode extends TempNode {
             histRT.texture.minFilter = LinearFilter;
             histRT.texture.magFilter = LinearFilter;
             this.shadowHistoryRTs.push(histRT);
-            this.shadowHistoryNodes.push(outputTexture(this, histRT.texture));
+            this.shadowHistoryNodes.push(texture(histRT.texture));
 
             const resMat = new NodeMaterial();
             resMat.name = `Clouds [Shadow Resolve ${i}]`;
@@ -669,22 +669,14 @@ export class CloudRenderNode extends TempNode {
                 if (cam && matV2E) {
                     const origFar = cam.far;
                     cam.far = Math.max(cam.far, 100000);
+                    cam.updateProjectionMatrix();
                     _cascadedShadowMaps.update(
                         cam,
                         _cloudUniforms.sunDirection.value,
                         matV2E.value ?? matV2E
                     );
                     cam.far = origFar;
-                    _cloudUniforms.shadowFar.value = _cascadedShadowMaps.far;
-                    _cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
-                    _cloudUniforms.shadowCameraNear.value = cam.near;
-                    _cloudUniforms.shadowCameraFar.value = cam.far;
-                    // Use cascade 0 texel size for PCF (fine-grained; far cascades
-                    // have coarser texels but PCF radius is small relative to them)
-                    _cloudUniforms.shadowTexelSize.value.set(
-                        1 / SHADOW_MAP_SIZES[0],
-                        1 / SHADOW_MAP_SIZES[0]
-                    );
+                    cam.updateProjectionMatrix();
 
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                         const cascade = _cascadedShadowMaps.cascades[i];
@@ -706,17 +698,16 @@ export class CloudRenderNode extends TempNode {
 
                     // BSM temporal resolve: blend current BSM with history
                     if (this._resolveFrameCount < 3) {
-                        // Bootstrap: copy raw BSM to resolved + history
-                        // Avoids garbage history contaminating the temporal resolve loop
+                        // Bootstrap: copy raw BSM to resolved + history via native GPU copy
                         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                            renderer.setRenderTarget(this.shadowResolvedRTs[i]);
-                            this.mesh.material = this.shadowRawBlitMaterials[i];
-                            this.mesh.render(renderer);
-                        }
-                        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                            renderer.setRenderTarget(this.shadowHistoryRTs[i]);
-                            this.mesh.material = this.shadowRawBlitMaterials[i];
-                            this.mesh.render(renderer);
+                            renderer.copyTextureToTexture(
+                                this.shadowRTs[i].texture,
+                                this.shadowResolvedRTs[i].texture
+                            );
+                            renderer.copyTextureToTexture(
+                                this.shadowRTs[i].texture,
+                                this.shadowHistoryRTs[i].texture
+                            );
                         }
                     } else {
                         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
@@ -1121,20 +1112,20 @@ export class CloudRenderNode extends TempNode {
 
                 // Raw blit: copy raw shadow RT → resolved/history (bootstrap)
                 this.shadowRawBlitMaterials[i].fragmentNode = texture(
-                    outputTexture(this, this.shadowRTs[i].texture),
+                    this.shadowRTs[i].texture,
                     screenUV
                 );
                 this.shadowRawBlitMaterials[i].needsUpdate = true;
 
                 // Blit: copy resolved RT → history RT
                 this.shadowBlitMaterials[i].fragmentNode = texture(
-                    outputTexture(this, this.shadowResolvedRTs[i].texture),
+                    this.shadowResolvedRTs[i].texture,
                     screenUV
                 );
                 this.shadowBlitMaterials[i].needsUpdate = true;
 
                 // Resolve: temporal accumulation (current + history + variance clipping)
-                const shadowRTTex = outputTexture(this, this.shadowRTs[i].texture);
+                const shadowRTTex = texture(this.shadowRTs[i].texture);
                 const shadowResolveNode = Fn(() => {
                     const coord = ivec2(screenCoordinate);
                     const currentColor = shadowRTTex.load(coord);
