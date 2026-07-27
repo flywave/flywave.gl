@@ -692,8 +692,8 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
             radius
                 .lessThan(0.1)
                 .select(
-                    sampleCascadeSingle(idx, posUncorrected, distanceToTop, distanceOffset, jitter),
-                    sampleCascadePCF(idx, posUncorrected, distanceToTop, distanceOffset, jitter)
+                    sampleCascadeSingle(idx, rayPosition, distanceToTop, distanceOffset, jitter),
+                    sampleCascadePCF(idx, rayPosition, distanceToTop, distanceOffset, jitter)
                 );
 
         If(earlyOut.not(), () => {
@@ -804,7 +804,7 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
         If(earlyOut.not(), () => {
             If(viewDist.greaterThan(c1End).and(c2Valid), () => {
                 od.assign(
-                    sampleCascadeSingle(2, posUncorrected, distanceToTop, distanceOffset, jitter)
+                    sampleCascadeSingle(2, rayPosition, distanceToTop, distanceOffset, jitter)
                 );
             })
                 .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
@@ -1047,6 +1047,8 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const surfaceNormal = normalize(position);
 
                         // BSM shadow: cascade frustum coordinate mapping needs rewrite
+                        // BSM shadow: cascade in ECEF space, coordinates too large for ortho projection
+                        // Need RTC (relative-to-camera) space rewrite
                         // If(height.lessThan(u.shadowTopHeight), () => { ... });
 
                         let radiance = sunIrradiance.mul(

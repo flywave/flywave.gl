@@ -127,12 +127,7 @@ export class CascadedShadowMaps {
         return diagonalLength * 0.5;
     }
 
-    private updateMatrices(
-        camera: PerspectiveCamera,
-        sunDirection: Vector3,
-        matrixViewToTarget: Matrix4,
-        distance = 1
-    ): void {
+    private updateMatrices(camera: PerspectiveCamera, sunDirection: Vector3, distance = 1): void {
         const lightOrientationMatrix = matrixScratch1.lookAt(
             vectorScratch1.setScalar(0),
             vectorScratch2.copy(sunDirection).multiplyScalar(-1),
@@ -140,7 +135,7 @@ export class CascadedShadowMaps {
         );
         const cameraToLightMatrix = matrixScratch2.multiplyMatrices(
             matrixScratch2.copy(lightOrientationMatrix).invert(),
-            matrixViewToTarget
+            camera.matrixWorld
         );
 
         const frusta = this.frusta;
@@ -199,7 +194,7 @@ export class CascadedShadowMaps {
                 : camera.far * this.farScale;
 
         this.updateIntervals(camera);
-        this.updateMatrices(camera, sunDirection, matrixViewToTarget, distance);
+        this.updateMatrices(camera, sunDirection, distance);
 
         const cascades = this.cascades;
         const cascadeCount = this.cascadeCount;

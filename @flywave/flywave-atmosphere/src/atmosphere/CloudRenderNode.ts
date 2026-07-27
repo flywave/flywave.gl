@@ -670,11 +670,9 @@ export class CloudRenderNode extends TempNode {
                     const origFar = cam.far;
                     cam.far = Math.max(cam.far, 100000);
                     cam.updateProjectionMatrix();
-                    _cascadedShadowMaps.update(
-                        cam,
-                        _cloudUniforms.sunDirection.value,
-                        matV2E.value ?? matV2E
-                    );
+                    // Camera is in ECEF space (matrixWorld position = ECEF coords)
+                    // So cascade matrix is in ECEF space, sunDirection stays in ECEF
+                    _cascadedShadowMaps.update(cam, _cloudUniforms.sunDirection.value);
                     cam.far = origFar;
                     cam.updateProjectionMatrix();
 
