@@ -78,12 +78,24 @@ const camUp = [0.7094064060180906, 0.40957597947938945, 0.5735765582152];
 const applyOverride = () => {
     applyToneMappingOverride();
 
+    if (_autoRotate) {
+        _headingOffset += 0.002;
+    }
+
     const cam = mapView.camera;
     const rte = (mapView as any).getRteCamera?.();
 
     cam.position.set(camPos[0], camPos[1], camPos[2]);
     cam.quaternion.set(camQuat[0], camQuat[1], camQuat[2], camQuat[3]);
     cam.up.set(camUp[0], camUp[1], camUp[2]);
+
+    // Apply heading rotation around camera up axis
+    if (_headingOffset !== 0) {
+        const headingQuat = cam.quaternion.clone();
+        headingQuat.setFromAxisAngle(cam.up, _headingOffset);
+        cam.quaternion.premultiply(headingQuat);
+    }
+
     cam.rotation.order = "XYZ";
     cam.fov = 75;
     cam.updateProjectionMatrix();
@@ -104,3 +116,21 @@ const applyOverride = () => {
 };
 
 (window as any).mapView = mapView;
+
+// Auto-rotate camera for temporal reprojection testing
+let _autoRotate = false;
+let _headingOffset = 0;
+
+const btn = document.createElement("button");
+btn.textContent = "Auto Rotate";
+btn.style.cssText =
+    "position:absolute;top:10px;right:10px;z-index:9999;padding:8px 16px;font-size:14px;cursor:pointer;";
+document.body.appendChild(btn);
+btn.addEventListener("click", () => {
+    _autoRotate = !_autoRotate;
+    btn.textContent = _autoRotate ? "Stop Rotate" : "Auto Rotate";
+});
+
+(window as any).toggleRotate = () => {
+    _autoRotate = !_autoRotate;
+};
