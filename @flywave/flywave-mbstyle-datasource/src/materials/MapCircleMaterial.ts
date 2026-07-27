@@ -28,14 +28,22 @@ uniform float uStrokeWidth;
 uniform float uStrokeOpacity;
 uniform float uPitchAlignment;
 uniform vec3 uTranslate;
+uniform float uSizeAttenuation;
 
 varying float vAlpha;
 
 void main() {
     vec3 pos = position + uTranslate;
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+
+    // pitch-alignment: map → use size attenuation, viewport → screen-space size
+    float size = uSize;
+    if (uSizeAttenuation > 0.5) {
+        size = uSize * (300.0 / -mvPosition.z);
+    }
+
+    gl_PointSize = size;
     gl_Position = projectionMatrix * mvPosition;
-    gl_PointSize = uSize * (300.0 / -mvPosition.z);
     vAlpha = uOpacity;
 }
 `;
@@ -94,6 +102,7 @@ export class MapCircleMaterial extends THREE.ShaderMaterial {
                 uStrokeOpacity: { value: 1 },
                 uTranslate: { value: new THREE.Vector3(0, 0, 0) },
                 uPitchAlignment: { value: 0 },
+                uSizeAttenuation: { value: 1 },
             },
         });
         this.m_paint = { ...DEFAULTS, ...paint };
@@ -126,5 +135,11 @@ export class MapCircleMaterial extends THREE.ShaderMaterial {
         if (translate) {
             this.uniforms.uTranslate.value.set(translate[0], translate[1], 0);
         }
+
+        const pitchAlignment = p['circle-pitch-alignment'] ?? 'viewport';
+        this.uniforms.uPitchAlignment.value = pitchAlignment === 'map' ? 1 : 0;
+
+        const pitchScale = p['circle-pitch-scale'] ?? 'viewport';
+        this.uniforms.uSizeAttenuation.value = pitchScale === 'map' ? 1 : 0;
     }
 }
