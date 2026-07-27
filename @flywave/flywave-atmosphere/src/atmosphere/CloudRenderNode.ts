@@ -231,6 +231,7 @@ async function ensureCloudInit(renderer: Renderer): Promise<void> {
         _cloudUniforms.turbulenceTexture = _cloudTextures.turbulenceTexture;
 
         _cloudUniforms.coverage.value = 0.3;
+        _cloudUniforms.hazeEnabled.value = 1;
         _cloudUniforms.bottomRadius.value = 6360000.0;
         _cloudUniforms.scatteringCoefficient.value = 1;
         _cloudUniforms.absorptionCoefficient.value = 0;
@@ -370,6 +371,10 @@ export function updateCloudUniforms(atmosphereContext: any): void {
         cy = pos.y + corrY;
         cz = pos.z + corrZ;
 
+        // Camera height: osculating sphere height (matches reference geodetic height)
+        _cloudUniforms.cameraHeight.value =
+            Math.sqrt(cx * cx + cy * cy + cz * cz) - atmosphereContext.parameters.bottomRadius;
+
         // CRITICAL: update atmosphereContext uniforms — shader uses these directly
         // (cameraPositionECEF/altitudeCorrectionECEF). onRenderUpdate hasn't fired yet.
         if (atmosphereContext.cameraPositionECEF) {
@@ -382,10 +387,9 @@ export function updateCloudUniforms(atmosphereContext: any): void {
 
     const sr = _cloudUniforms.shapeRepeat.value;
     // cameraShapeOffset not used by reference — shape texture follows absolute ECEF position
-    // Camera geodetic altitude: length(cameraPositionECEF) - atmosphereParameters.bottomRadius
-    // This matches reference's Geodetic.height = 300m for current test camera
-    _cloudUniforms.cameraHeight.value =
-        Math.sqrt(cx * cx + cy * cy + cz * cz) - atmosphereContext.parameters.bottomRadius;
+    // Camera geodetic altitude: use original ECEF position length (before altitudeCorrection)
+    // Reference uses Geodetic.setFromECEF(cameraPositionECEF).height
+    _cloudUniforms.cameraHeight.value = 0;
     _cloudUniforms.cameraPosition.value.set(cx, cy, cz);
 
     if (_hasPrevCam) {

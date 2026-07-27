@@ -42,7 +42,12 @@ import {
 
 import type { CloudUniforms } from "./CloudUniforms";
 import { stbn } from "../tsl/STBNTextureNode";
-import { getIndirectLuminanceToPoint, getSplitScalarIlluminance } from "../atmosphere/runtime";
+import {
+    getIndirectLuminanceToPoint,
+    getSplitScalarIlluminance,
+    getSplitScalarIrradiance
+} from "../atmosphere/runtime";
+import { getAtmosphereContext } from "../atmosphere/AtmosphereContext";
 import { rayleighPhaseFunction, miePhaseFunction, getIrradiance } from "../atmosphere/common";
 import { getAtmosphereContextBase } from "../atmosphere/AtmosphereContextBase";
 import { getAtmosphereContext } from "../atmosphere/AtmosphereContext";
@@ -884,10 +889,9 @@ export const createApproximateHaze = (u: CloudUniforms) => {
             const transmittance = saturate(float(1).sub(exp(opticalDepth.negate())));
             const shadowTransmittance = saturate(float(1).sub(exp(shadowOpticalDepth.negate())));
 
-            // Inscattered light using atmosphere LUT irradiance at ground position
-            const groundPos = rayOrigin.normalize().mul(u.bottomRadius);
+            // Illuminance at camera position (matches reference vGroundIrradiance)
             const splitIrr = getSplitScalarIlluminance(
-                groundPos.mul(u.worldToUnit),
+                rayOrigin.mul(u.worldToUnit),
                 u.sunDirection
             ).toConst();
             const sunIrr = splitIrr.get("direct");
@@ -1176,8 +1180,11 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const dHazeMax = b.mul(b).sub(cHazeMax.mul(4));
         const QHazeMax = sqrt(dHazeMax.max(0));
         const farHazeMax = b.negate().add(QHazeMax).mul(0.5);
-        // Haze near = 0, far = maxHeight intersection or ground
-        const hazeRayFar = intersectsGround.greaterThan(0.5).select(nearGround, farHazeMax);
+        // Haze ray far: clamp to scene depth (matches reference)
+        const hazeRayFarRaw = intersectsGround.greaterThan(0.5).select(nearGround, farHazeMax);
+        const hazeRayFar = sceneDistance
+            .greaterThan(0)
+            .select(min(hazeRayFarRaw, sceneDistance), hazeRayFarRaw);
 
         const aboveMin = cameraHeight.greaterThanEqual(u.minHeight);
         const aboveMax = cameraHeight.greaterThanEqual(u.maxHeight);
@@ -1267,9 +1274,9 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                     const shadowRayFar = min(frontDepth, u.maxShadowLengthRayDistance);
                     shadowLen.assign(
                         marchShadowLength(
-                            cameraPosition,
+                            float(1).mul(rayDirection).add(cameraPosition),
                             rayDirection,
-                            vec2(float(0), shadowRayFar),
+                            vec2(float(1), shadowRayFar),
                             jitter
                         )
                     );
@@ -1307,8 +1314,25 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 resultVelocity.assign(curUv.sub(prevUv));
             });
 
-            // Non-cloud pixels: compute velocity using sceneDistance
+            // Non-cloud pixels: compute shadowLength + velocity
             If(hitClouds.not(), () => {
+                // Compute shadowLength for haze (matches reference)
+                // TEMP DISABLED: BSM may produce incorrect shadowLength
+                // If(u.maxShadowLengthIterationCount.greaterThan(0), () => {
+                //     const shadowRayFar = min(
+                //         sceneDistance.greaterThan(0).select(sceneDistance, rayFar),
+                //         u.maxShadowLengthRayDistance
+                //     );
+                //     resultShadowLen.assign(
+                //         marchShadowLength(
+                //             cameraPosition,
+                //             rayDirection,
+                //             vec2(float(0), shadowRayFar),
+                //             jitter
+                //         )
+                //     );
+                // });
+
                 const ncDepth = sceneDistance.greaterThan(0).select(sceneDistance, rayFar);
                 const ncPosition = cameraPosition.add(ncDepth.mul(rayDirection));
                 const ncWorld = u.ecefToWorld.mul(
@@ -1325,16 +1349,19 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
         // Haze
         If(u.hazeEnabled.greaterThan(0), () => {
-            const hazeOrigin = float(1).mul(rayDirection).add(cameraPosition);
-            const hazeRayDist = hazeRayFar.sub(1);
+            const hazeClampedFar = mix(
+                hazeRayFar,
+                min(resultFrontDepth, hazeRayFar),
+                resultColor.a
+            );
             const haze = approximateHaze(
-                hazeOrigin,
+                cameraPosition,
                 rayDirection,
-                hazeRayDist,
+                hazeClampedFar.sub(1),
                 cosTheta,
                 resultShadowLen
             ).toConst();
-            resultColor.rgb.assign(resultColor.rgb.mix(haze.rgb, haze.a));
+            resultColor.rgb.assign(mix(resultColor.rgb, haze.rgb, haze.a));
             resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
         });
 
