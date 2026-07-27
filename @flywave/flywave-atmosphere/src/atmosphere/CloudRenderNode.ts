@@ -382,6 +382,8 @@ export function updateCloudUniforms(atmosphereContext: any): void {
 
     const sr = _cloudUniforms.shapeRepeat.value;
     // cameraShapeOffset not used by reference — shape texture follows absolute ECEF position
+    // Camera geodetic altitude: length(cameraPositionECEF) - atmosphereParameters.bottomRadius
+    // This matches reference's Geodetic.height = 300m for current test camera
     _cloudUniforms.cameraHeight.value =
         Math.sqrt(cx * cx + cy * cy + cz * cz) - atmosphereContext.parameters.bottomRadius;
     _cloudUniforms.cameraPosition.value.set(cx, cy, cz);
