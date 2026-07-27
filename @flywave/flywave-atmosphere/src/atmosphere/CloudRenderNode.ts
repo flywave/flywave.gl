@@ -842,6 +842,7 @@ export class CloudRenderNode extends TempNode {
         this.historyRT = oldResolve;
         this.historyNode.value = oldResolve.texture;
         this.resolveNodeTex.value = oldHistory.texture;
+        this.resolveMaterial.needsUpdate = true;
 
         // Accumulate wind velocity into texture offsets (Euler integration)
         const now = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
@@ -895,9 +896,7 @@ export class CloudRenderNode extends TempNode {
 
         const resolvedClouds = texture(this.resolveNodeTex, screenUV);
         const result = resolvedClouds.rgb;
-        const alpha = resolvedClouds.a;
-        const bg = this._colorNode?.rgb ?? vec3(0);
-        return vec4(bg.mul(alpha.oneMinus()).add(result), 1);
+        return vec4(result, 1); // black background
     }
 
     private _buildFragmentNodes(host: NodeBuilder | Renderer): void {
@@ -1042,7 +1041,8 @@ export class CloudRenderNode extends TempNode {
                 const result = currentColor.toVar();
 
                 If(isCurrent.not(), () => {
-                    const velocityData = texture(this.velocityLowResNode, lowUv);
+                    const lowCoord = ivec2(lowCoordX, lowCoordY);
+                    const velocityData = _getClosestFragment(this.velocityLowResNode, lowCoord);
                     const velocity = velocityData.yz;
                     const prevUv = screenUV.sub(velocity);
 
@@ -1054,14 +1054,8 @@ export class CloudRenderNode extends TempNode {
 
                     If(inBounds, () => {
                         const historyColor = texture(this.historyNode, prevUv);
-                        const lowCoord = ivec2(lowCoordX, lowCoordY);
-                        const clipped = _varianceClippingResolve(
-                            this.lowResNode,
-                            lowCoord,
-                            currentColor,
-                            historyColor
-                        );
-                        result.assign(clipped);
+                        // DEBUG: no variance clipping, just output history
+                        result.assign(historyColor);
                     });
                 });
 

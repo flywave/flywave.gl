@@ -150,6 +150,7 @@ export class CloudUniforms {
 
     // Mip level scale: 0.25 for temporal upscale, 1.0 for full-res
     // Reference: temporalUpscale=true → 0.25, temporalUpscale=false → 1.0
+    // TODO: WebGPU StorageTexture doesn't support auto-mipmap. Need manual mipmap generation.
     mipLevelScale = uniform(1.0);
 
     // Matrices for velocity reprojection

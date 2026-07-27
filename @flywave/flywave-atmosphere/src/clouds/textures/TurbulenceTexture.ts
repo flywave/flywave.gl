@@ -12,8 +12,8 @@ import type { AnyFloatType } from "../../tsl/types";
 
 function perlin3d(point: any): any {
     const perlin1 = perlinNoise(point, 12.0, 3);
-    const perlin2 = perlinNoise(point.add(vec3(-19.1, 33.4, 47.2)).yzx, 12.0, 3);
-    const perlin3 = perlinNoise(point.add(vec3(74.2, -124.5, 99.4)).zxy, 12.0, 3);
+    const perlin2 = perlinNoise(point.yzx.add(vec3(-19.1, 33.4, 47.2)), 12.0, 3);
+    const perlin3 = perlinNoise(point.zxy.add(vec3(74.2, -124.5, 99.4)), 12.0, 3);
     return vec3(perlin1, perlin2, perlin3);
 }
 
