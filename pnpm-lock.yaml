@@ -1709,6 +1709,9 @@ importers:
       '@flywave/flywave-geoutils':
         specifier: workspace:*
         version: link:../flywave-geoutils
+      '@flywave/flywave-lines':
+        specifier: workspace:*
+        version: link:../flywave-lines
       '@flywave/flywave-mapview':
         specifier: workspace:*
         version: link:../flywave-mapview
@@ -1721,6 +1724,9 @@ importers:
       '@flywave/flywave-vectortile-datasource':
         specifier: workspace:*
         version: link:../flywave-vectortile-datasource
+      earcut:
+        specifier: 'catalog:'
+        version: 2.2.4
       three:
         specifier: 'catalog:'
         version: 0.178.0

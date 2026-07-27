@@ -18,6 +18,9 @@ import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
 import { webMercatorTile2TargetTile } from '@flywave/flywave-vectortile-datasource/OmvUtils';
 import { createLineGeometry, LineGroup } from '@flywave/flywave-lines';
 
+// Use earcut for proper polygon triangulation (concave + holes)
+import earcut from 'earcut';
+
 interface AccumulatedGeometry {
     positions: number[];
     indices: number[];
@@ -159,16 +162,42 @@ export class MBTileDataEmitter {
             const featureStart = geo.indices.length;
 
             for (const polygon of geometry) {
-                for (const ring2d of polygon.rings) {
-                    const startIdx = geo.positions.length / 3;
-                    for (const pt of ring2d) {
-                        const w = this.project(pt);
-                        geo.positions.push(w.x, w.y, w.z);
+                const rings = polygon.rings;
+                if (rings.length === 0) continue;
+
+                // Use earcut for proper polygon triangulation with hole support
+                const allVerts: number[] = [];
+                const holeIndices: number[] = [];
+
+                // Exterior ring
+                for (const pt of rings[0]) {
+                    allVerts.push(pt.x, pt.y);
+                }
+
+                // Interior rings (holes)
+                for (let r = 1; r < rings.length; r++) {
+                    holeIndices.push(allVerts.length / 2);
+                    for (const pt of rings[r]) {
+                        allVerts.push(pt.x, pt.y);
                     }
-                    // simple fan triangulation
-                    for (let i = 2; i < ring2d.length; i++) {
-                        geo.indices.push(startIdx, startIdx + i - 1, startIdx + i);
-                    }
+                }
+
+                // Triangulate with earcut
+                const triIndices = earcut(allVerts, holeIndices.length > 0 ? holeIndices : null, 2);
+
+                // Project and store vertices
+                const startIdx = geo.positions.length / 3;
+                const vertCount2d = allVerts.length / 2;
+                for (let i = 0; i < vertCount2d; i++) {
+                    const w = this.project(
+                        new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
+                    );
+                    geo.positions.push(w.x, w.y, 0);
+                }
+
+                // Store triangulated indices
+                for (let i = 0; i < triIndices.length; i++) {
+                    geo.indices.push(triIndices[i] + startIdx);
                 }
             }
 

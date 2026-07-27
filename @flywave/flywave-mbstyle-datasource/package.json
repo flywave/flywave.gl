@@ -40,7 +40,8 @@
         "@flywave/flywave-vectortile-datasource": "workspace:*",
         "@flywave/flywave-utils": "workspace:*",
         "@flywave/flywave-fetch": "workspace:*",
-        "@flywave/flywave-lines": "workspace:*"
+        "@flywave/flywave-lines": "workspace:*",
+        "earcut": "catalog:"
     },
     "devDependencies": {
         "@flywave/flywave-test-utils": "workspace:*",
