@@ -26,12 +26,15 @@ uniform float uOpacity;
 uniform vec3 uStrokeColor;
 uniform float uStrokeWidth;
 uniform float uStrokeOpacity;
+uniform float uPitchAlignment;
+uniform vec3 uTranslate;
 
 varying float vAlpha;
 
 void main() {
-    #include <begin_vertex>
-    #include <project_vertex>
+    vec3 pos = position + uTranslate;
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
     gl_PointSize = uSize * (300.0 / -mvPosition.z);
     vAlpha = uOpacity;
 }
@@ -89,6 +92,8 @@ export class MapCircleMaterial extends THREE.ShaderMaterial {
                 uStrokeColor: { value: new THREE.Color('#000000') },
                 uStrokeWidth: { value: 0 },
                 uStrokeOpacity: { value: 1 },
+                uTranslate: { value: new THREE.Vector3(0, 0, 0) },
+                uPitchAlignment: { value: 0 },
             },
         });
         this.m_paint = { ...DEFAULTS, ...paint };
@@ -115,6 +120,11 @@ export class MapCircleMaterial extends THREE.ShaderMaterial {
 
         if (p['circle-stroke-color']) {
             this.uniforms.uStrokeColor.value.set(p['circle-stroke-color']);
+        }
+
+        const translate = p['circle-translate'] as [number, number] | undefined;
+        if (translate) {
+            this.uniforms.uTranslate.value.set(translate[0], translate[1], 0);
         }
     }
 }

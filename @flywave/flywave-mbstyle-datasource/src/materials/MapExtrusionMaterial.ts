@@ -8,6 +8,8 @@ export interface MapExtrusionMaterialParams {
     'fill-extrusion-vertical-gradient'?: boolean;
     'fill-extrusion-pattern'?: string;
     'fill-extrusion-translate'?: [number, number];
+    'fill-extrusion-flood-light-color'?: string;
+    'fill-extrusion-flood-light-intensity'?: number;
 }
 
 const DEFAULTS: MapExtrusionMaterialParams = {
@@ -33,6 +35,9 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
             shader.uniforms.uVerticalGradient = { value: 1.0 };
             shader.uniforms.uAoIntensity = { value: 0.2 };
             shader.uniforms.uAoRadius = { value: 0.5 };
+            shader.uniforms.uFloodColor = { value: new THREE.Color('#ffffff') };
+            shader.uniforms.uFloodIntensity = { value: 0.0 };
+            shader.uniforms.uTranslate = { value: new THREE.Vector3() };
 
             const varyingDef = 'varying float vNormalizedHeight;';
 
@@ -41,8 +46,21 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
                 uniform float uVerticalGradient;
                 uniform float uAoIntensity;
                 uniform float uAoRadius;
+                uniform vec3 uFloodColor;
+                uniform float uFloodIntensity;
+                uniform vec3 uTranslate;
                 ${varyingDef}
             ` + shader.fragmentShader;
+
+            // Apply translate in vertex shader
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                'vec3 translatedPos = position + uTranslate;\n#include <begin_vertex>'
+            );
+            shader.vertexShader = shader.vertexShader.replace(
+                'vec3 transformed = vec3(position)',
+                'vec3 transformed = vec3(translatedPos)'
+            );
 
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
@@ -72,6 +90,9 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
                 `
                 // simple AO
                 float ao = 1.0 - uAoIntensity * (1.0 - vNormalizedHeight);
+                // flood light
+                vec3 flood = uFloodColor * uFloodIntensity;
+                vec3 litColor = ao * (gl_FragColor.rgb + flood);
                 #include <lights_fragment_begin>
                 `
             );
@@ -94,6 +115,15 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
         this.color.set(p['fill-extrusion-color']);
         this.opacity = p['fill-extrusion-opacity'];
         this.transparent = p['fill-extrusion-opacity'] < 1;
+
+        // These will be picked up by onBeforeCompile at render time
+        if (p['fill-extrusion-flood-light-color']) {
+            this.userData.floodColor = p['fill-extrusion-flood-light-color'];
+        }
+        if (p['fill-extrusion-flood-light-intensity'] !== undefined) {
+            this.userData.floodIntensity = p['fill-extrusion-flood-light-intensity'];
+        }
+
         this.needsUpdate = true;
     }
 }

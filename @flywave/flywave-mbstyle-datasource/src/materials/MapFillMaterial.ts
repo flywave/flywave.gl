@@ -7,6 +7,8 @@ export interface MapFillMaterialParams {
     'fill-pattern'?: string;
     'fill-translate'?: [number, number];
     'fill-antialias'?: boolean;
+    'fill-emissive-strength'?: number;
+    'fill-z-offset'?: number;
 }
 
 const DEFAULTS: MapFillMaterialParams = {
@@ -89,6 +91,14 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
         };
     }
 
+    setPatternTexture(texture: THREE.Texture | null, size?: [number, number], offset?: [number, number]) {
+        this.m_patternTexture = texture;
+        if (size) this.m_patternSize.set(size[0], size[1]);
+        if (offset) this.m_patternOffset.set(offset[0], offset[1]);
+        this.m_patternEnabled = texture !== null;
+        this.needsUpdate = true;
+    }
+
     setPaint(paint: Partial<MapFillMaterialParams>) {
         Object.assign(this.m_paint, paint);
         this.applyPaint();
@@ -113,9 +123,7 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
         this.transparent = p['fill-opacity'] < 1;
         this.depthWrite = !this.transparent;
 
-        if (p['fill-outline-color']) {
-            this.m_outlineColor.set(p['fill-outline-color']);
-        }
+        if (p['fill-outline-color']) this.m_outlineColor.set(p['fill-outline-color']);
 
         if (p['fill-pattern']) {
             this.m_patternEnabled = true;
@@ -125,20 +133,20 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
 
         const translate = p['fill-translate'] as [number, number] | undefined;
         if (translate && (translate[0] || translate[1])) {
-            this.translation.set(translate[0], translate[1], 0);
+            this.m_translation.set(translate[0], translate[1], 0);
         } else {
-            this.translation.set(0, 0, 0);
+            this.m_translation.set(0, 0, 0);
+        }
+
+        // emissive
+        const emissive = p['fill-emissive-strength'];
+        if (emissive !== undefined && 'emissive' in this && 'emissiveIntensity' in this) {
+            (this as any).emissiveIntensity = emissive;
         }
     }
 
     get translation(): THREE.Vector3 {
         return this.m_translation;
-    }
-
-    setPatternTexture(texture: THREE.Texture, size: [number, number], offset: [number, number]) {
-        this.m_patternTexture = texture;
-        this.m_patternSize.set(size[0], size[1]);
-        this.m_patternOffset.set(offset[0], offset[1]);
     }
 
     private patchShader() {
