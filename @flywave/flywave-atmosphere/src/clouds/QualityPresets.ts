@@ -26,7 +26,7 @@ export interface QualityPresetConfig {
 
 const high: QualityPresetConfig = {
     resolutionScale: 1,
-    hazeEnabled: false,
+    hazeEnabled: true,
     accuratePhaseFunction: false,
     maxIterationCount: 500,
     minStepSize: 50,

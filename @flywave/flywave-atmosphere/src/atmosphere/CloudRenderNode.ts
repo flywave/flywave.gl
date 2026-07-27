@@ -382,8 +382,8 @@ export function updateCloudUniforms(atmosphereContext: any): void {
 
     const sr = _cloudUniforms.shapeRepeat.value;
     // cameraShapeOffset not used by reference — shape texture follows absolute ECEF position
-    const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
-    _cloudUniforms.cameraHeight.value = len - atmosphereContext.parameters.bottomRadius;
+    _cloudUniforms.cameraHeight.value =
+        Math.sqrt(cx * cx + cy * cy + cz * cz) - atmosphereContext.parameters.bottomRadius;
     _cloudUniforms.cameraPosition.value.set(cx, cy, cz);
 
     if (_hasPrevCam) {
