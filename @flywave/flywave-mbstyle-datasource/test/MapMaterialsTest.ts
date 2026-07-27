@@ -4,6 +4,8 @@ import { MapFillMaterial } from '../src/materials/MapFillMaterial';
 import { MapLineMaterial } from '../src/materials/MapLineMaterial';
 import { MapCircleMaterial } from '../src/materials/MapCircleMaterial';
 import { MapExtrusionMaterial } from '../src/materials/MapExtrusionMaterial';
+import { MapHeatmapMaterial } from '../src/materials/MapHeatmapMaterial';
+import { MapHillshadeMaterial } from '../src/materials/MapHillshadeMaterial';
 import { createMBMaterial, updateMBMaterial } from '../src/materials/index';
 
 const MOCK_CAPS = { isWebGL2: true, maxTextures: 16, maxVertexTextures: 16, maxTextureSize: 4096, maxVertexUniforms: 1024 };
@@ -162,5 +164,37 @@ describe('updateMBMaterial', () => {
         const mat = createMBMaterial('circle', { 'circle-color': '#000' }) as MapCircleMaterial;
         updateMBMaterial(mat, 'circle', { 'circle-color': '#ff0' });
         expect(mat.uniforms.uColor.value.getHexString()).to.equal('ffff00');
+    });
+});
+
+describe('MapHeatmapMaterial', () => {
+    it('creates with defaults', () => {
+        const mat = new MapHeatmapMaterial();
+        expect(mat.uniforms.uRadius.value).to.equal(30);
+        expect(mat.uniforms.uOpacity.value).to.equal(1);
+    });
+
+    it('applies heatmap-radius', () => {
+        const mat = new MapHeatmapMaterial({ 'heatmap-radius': 50 });
+        expect(mat.uniforms.uRadius.value).to.equal(50);
+    });
+});
+
+describe('MapHillshadeMaterial', () => {
+    it('creates with defaults', () => {
+        const mat = new MapHillshadeMaterial();
+        expect(mat.uniforms.uExaggeration.value).to.equal(0.5);
+    });
+
+    it('applies hillshade-exaggeration', () => {
+        const mat = new MapHillshadeMaterial({ 'hillshade-exaggeration': 1 });
+        expect(mat.uniforms.uExaggeration.value).to.equal(1);
+    });
+
+    it('sets DEM texture', () => {
+        const mat = new MapHillshadeMaterial();
+        const tex = new THREE.DataTexture(new Uint8Array([0]), 1, 1, THREE.RGBAFormat);
+        mat.setDemTexture(tex);
+        expect(mat.uniforms.uDemTexture.value).to.equal(tex);
     });
 });

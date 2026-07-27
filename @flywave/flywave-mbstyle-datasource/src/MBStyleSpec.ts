@@ -332,7 +332,7 @@ export interface StyleSpecification {
     layers: LayerSpecification[];
 }
 
-export type LayerType = LayerSpecification['type'];
+export type LayerType = LayerSpecification['type'] | 'heatmap' | 'hillshade' | 'sky';
 
 export const GEOMETRY_TYPE_MAP: Record<string, string[]> = {
     fill: ['polygon'],
@@ -342,4 +342,6 @@ export const GEOMETRY_TYPE_MAP: Record<string, string[]> = {
     'fill-extrusion': ['polygon'],
     background: ['polygon'],
     raster: [],
+    heatmap: ['point'],
+    hillshade: ['polygon'],
 };

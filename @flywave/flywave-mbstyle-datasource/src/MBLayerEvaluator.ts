@@ -100,6 +100,25 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'background-color': '#000000',
         'background-opacity': 1,
     },
+    heatmap: {
+        'heatmap-radius': 30,
+        'heatmap-opacity': 1,
+        'heatmap-intensity': 1,
+        'heatmap-weight': 1,
+        'heatmap-color': [
+            [0, 'rgba(0,0,255,0)'],
+            [0.5, 'rgb(0,0,255)'],
+            [1, 'rgb(255,0,0)'],
+        ],
+    },
+    hillshade: {
+        'hillshade-illumination-direction': 335,
+        'hillshade-illumination-anchor': 'viewport',
+        'hillshade-exaggeration': 0.5,
+        'hillshade-highlight-color': '#FFFFFF',
+        'hillshade-shadow-color': '#000000',
+        'hillshade-accent-color': '#000000',
+    },
     raster: {
         'raster-opacity': 1,
         'raster-hue-rotate': 0,
@@ -167,6 +186,12 @@ export const LAYOUT_DEFAULTS: Record<string, Record<string, any>> = {
         visibility: 'visible',
     },
     'fill-extrusion': {
+        visibility: 'visible',
+    },
+    heatmap: {
+        visibility: 'visible',
+    },
+    hillshade: {
         visibility: 'visible',
     },
 };

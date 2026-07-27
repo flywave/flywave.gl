@@ -6,12 +6,16 @@ import { MapLineMaterial, MapLineMaterialParams } from './MapLineMaterial';
 import { MapCircleMaterial, MapCircleMaterialParams } from './MapCircleMaterial';
 import { MapExtrusionMaterial, MapExtrusionMaterialParams } from './MapExtrusionMaterial';
 import { MapIconMaterial, MapIconMaterialParams } from './MapIconMaterial';
+import { MapHeatmapMaterial, MapHeatmapMaterialParams } from './MapHeatmapMaterial';
+import { MapHillshadeMaterial, MapHillshadeMaterialParams } from './MapHillshadeMaterial';
 
 export { MapFillMaterial, MapFillMaterialParams };
 export { MapLineMaterial, MapLineMaterialParams };
 export { MapCircleMaterial, MapCircleMaterialParams };
 export { MapExtrusionMaterial, MapExtrusionMaterialParams };
 export { MapIconMaterial, MapIconMaterialParams, SpriteAtlas, SpriteIconInfo } from './MapIconMaterial';
+export { MapHeatmapMaterial, MapHeatmapMaterialParams } from './MapHeatmapMaterial';
+export { MapHillshadeMaterial, MapHillshadeMaterialParams } from './MapHillshadeMaterial';
 export { MBRenderLayer } from './MBRenderLayer';
 
 const FALLBACK = new THREE.MeshBasicMaterial({ color: '#ff00ff' });
@@ -39,6 +43,10 @@ export function createMBMaterial(
             return new MapIconMaterial(paint as any);
         case 'fill-extrusion':
             return new MapExtrusionMaterial(paint as any);
+        case 'heatmap':
+            return new MapHeatmapMaterial(paint as any);
+        case 'hillshade':
+            return new MapHillshadeMaterial(paint as any);
         default:
             return FALLBACK;
     }
@@ -72,6 +80,12 @@ export function updateMBMaterial(
             break;
         case 'fill-extrusion':
             (material as unknown as MapExtrusionMaterial).setPaint(paint as any);
+            break;
+        case 'heatmap':
+            (material as unknown as MapHeatmapMaterial).setPaint(paint as any);
+            break;
+        case 'hillshade':
+            (material as unknown as MapHillshadeMaterial).setPaint(paint as any);
             break;
     }
 }
