@@ -1,5 +1,4 @@
 import {
-    DecoderOptions,
     FlatTheme,
     Theme,
 } from '@flywave/flywave-datasource-protocol';
@@ -16,13 +15,9 @@ import {
     OmvRestClient,
     OmvRestClientParameters,
 } from '@flywave/flywave-vectortile-datasource/OmvRestClient';
-import { VECTOR_TILE_DECODER_SERVICE_TYPE } from '@flywave/flywave-vectortile-datasource/OmvDecoderDefs';
-import { LoggerManager } from '@flywave/flywave-utils';
 
 import { MBStyleManager, ResolvedSource } from './MBStyleManager';
 import { StyleSpecification } from './MBStyleSpec';
-
-const logger = LoggerManager.instance.create('MBStyleDataSource');
 
 export interface MBStyleDataSourceParameters {
     style: StyleSpecification | string;
@@ -36,24 +31,38 @@ export interface MBStyleDataSourceParameters {
 
 const MBSTYLE_DECODER_SERVICE_TYPE = 'mbstyle-vector-tile-decoder';
 
+class DelegatingDataProvider extends DataProvider {
+    delegate: DataProvider | null = null;
+
+    ready(): boolean {
+        return this.delegate?.ready() ?? true;
+    }
+
+    async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ArrayBufferLike | {}> {
+        if (!this.delegate) return new ArrayBuffer(0);
+        return this.delegate.getTile(tileKey, abortSignal);
+    }
+
+    protected async connect(): Promise<void> {
+        // delegate will be connected externally
+    }
+
+    protected dispose(): void {
+        this.delegate = null;
+    }
+}
+
 export class MBStyleDataSource extends TileDataSource {
     private m_styleManager: MBStyleManager;
     private m_styleParams: MBStyleDataSourceParameters;
+    private m_delegatingProvider: DelegatingDataProvider;
 
     constructor(params: MBStyleDataSourceParameters) {
-        const styleManager = new MBStyleManager();
+        const delegatingProvider = new DelegatingDataProvider();
 
-        const initialSources: TileDataSourceOptions = {
+        const options: TileDataSourceOptions = {
             tilingScheme: webMercatorTilingScheme,
-            dataProvider: {
-                getTile: async (_tileKey: TileKey) => new ArrayBuffer(0),
-                connect: async () => {},
-                dispose: async () => {},
-                register: (_client: any) => {},
-                unregister: (_client: any) => {},
-                m_clients: [],
-                m_connectPromise: undefined,
-            } as unknown as DataProvider,
+            dataProvider: delegatingProvider,
             concurrentDecoderServiceName:
                 params.concurrentDecoderServiceName ?? MBSTYLE_DECODER_SERVICE_TYPE,
             concurrentDecoderScriptUrl: params.decoderScriptUrl,
@@ -62,9 +71,10 @@ export class MBStyleDataSource extends TileDataSource {
             storageLevelOffset: params.storageLevelOffset ?? -1,
         };
 
-        super(new TileFactory(Tile), initialSources);
+        super(new TileFactory(Tile), options);
 
-        this.m_styleManager = styleManager;
+        this.m_delegatingProvider = delegatingProvider;
+        this.m_styleManager = new MBStyleManager();
         this.m_styleParams = params;
         this.cacheable = true;
         this.addGroundPlane = false;
@@ -96,23 +106,6 @@ export class MBStyleDataSource extends TileDataSource {
             throw new Error('Failed to load Mapbox Style');
         }
 
-        this.registerWorkerDecoder();
-        await this.configureDecoderForStyle();
-        await super.connect();
-    }
-
-    private registerWorkerDecoder(): void {
-        const scriptUrl = this.m_styleParams.decoderScriptUrl;
-        if (scriptUrl) {
-            // If custom decoder script URL provided, it will be used by
-            // ConcurrentDecoderFacade when the decoder service is created.
-        }
-    }
-
-    private async configureDecoderForStyle(): Promise<void> {
-        const style = this.m_styleManager.getStyle();
-        if (!style) return;
-
         const sources = this.m_styleManager.getResolvedSources();
 
         for (const [sourceId, source] of sources) {
@@ -121,7 +114,7 @@ export class MBStyleDataSource extends TileDataSource {
                     source,
                     this.m_styleParams.accessToken
                 );
-                (this as any).m_dataProvider = restClient;
+                this.m_delegatingProvider.delegate = restClient;
 
                 await this.decoder.configure(undefined, {
                     mbStyle: style,
@@ -131,11 +124,11 @@ export class MBStyleDataSource extends TileDataSource {
                 break;
             }
         }
+
+        await super.connect();
     }
 
-    async setTheme(theme: Theme | FlatTheme): Promise<void> {
-        // MBStyleDataSource does not use flywave's Theme system.
-        // Styles are driven by the Mapbox Style JSON passed in constructor.
+    async setTheme(_theme: Theme | FlatTheme): Promise<void> {
     }
 
     shouldPreloadTiles(): boolean {

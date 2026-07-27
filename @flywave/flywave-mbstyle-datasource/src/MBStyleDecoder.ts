@@ -6,29 +6,104 @@ import {
 import { Projection, TileKey } from '@flywave/flywave-geoutils';
 import { ThemedTileDecoder } from '@flywave/flywave-mapview-decoder/index-worker';
 import { OmvDataAdapter } from '@flywave/flywave-vectortile-datasource/adapters/omv/OmvDataAdapter';
-import { MapEnv } from '@flywave/flywave-datasource-protocol/index-decoder';
-
-import { MBLayerEvaluator, EvaluatedLayer } from './MBLayerEvaluator';
+import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
+import { IGeometryProcessor, ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
+import * as THREE from 'three';
+import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
 import { StyleSpecification } from './MBStyleSpec';
 
+class MBStyleDataProcessor implements IGeometryProcessor {
+    private m_emitter: MBTileDataEmitter | undefined;
+
+    constructor(
+        private m_tileKey: TileKey,
+        private m_projection: Projection,
+        private m_layerEvaluator: MBLayerEvaluator,
+        private m_sourceId: string,
+        private m_zoom: number,
+    ) {}
+
+    getDecodedTile(data: ArrayBufferLike): DecodedTile {
+        this.m_emitter = new MBTileDataEmitter(this.m_tileKey, this.m_projection, this.m_zoom);
+        return this.m_emitter.getDecodedTile();
+    }
+
+    setEmitter(emitter: MBTileDataEmitter) {
+        this.m_emitter = emitter;
+    }
+
+    processPointFeature(
+        layer: string,
+        extents: number,
+        geometry: THREE.Vector3[],
+        properties: Record<string, any>,
+        featureId: string | number | undefined,
+    ): void {
+        const matched = this.m_layerEvaluator.evaluate(
+            this.m_sourceId, layer,
+            { type: 'Point', properties, id: featureId },
+            this.m_zoom, 'point',
+        );
+        if (matched.length === 0 || !this.m_emitter) return;
+        this.m_emitter.processPointFeature(layer, extents, geometry, properties, featureId, matched);
+    }
+
+    processLineFeature(
+        layer: string,
+        extents: number,
+        geometry: ILineGeometry[],
+        properties: Record<string, any>,
+        featureId: string | number | undefined,
+    ): void {
+        const matched = this.m_layerEvaluator.evaluate(
+            this.m_sourceId, layer,
+            { type: 'LineString', properties, id: featureId },
+            this.m_zoom, 'line',
+        );
+        if (matched.length === 0 || !this.m_emitter) return;
+        this.m_emitter.processLineFeature(layer, extents, geometry, properties, featureId, matched);
+    }
+
+    processPolygonFeature(
+        layer: string,
+        extents: number,
+        geometry: IPolygonGeometry[],
+        properties: Record<string, any>,
+        featureId: string | number | undefined,
+    ): void {
+        const matched = this.m_layerEvaluator.evaluate(
+            this.m_sourceId, layer,
+            { type: 'Polygon', properties, id: featureId },
+            this.m_zoom, 'polygon',
+        );
+        if (matched.length === 0 || !this.m_emitter) return;
+        this.m_emitter.processFillFeature(layer, extents, geometry, properties, featureId, matched);
+    }
+}
+
 export class MBStyleDecoder extends ThemedTileDecoder {
-    private m_layerEvaluator: MBLayerEvaluator | undefined;
     private m_dataAdapter: OmvDataAdapter;
-    private m_style: StyleSpecification | undefined;
+    private m_layerEvaluator: MBLayerEvaluator | undefined;
+    private m_currentSourceId: string = '';
 
     constructor() {
         super();
         this.m_dataAdapter = new OmvDataAdapter();
     }
 
-    setStyle(style: StyleSpecification): void {
-        this.m_style = style;
-        this.m_layerEvaluator = new MBLayerEvaluator(style);
-    }
-
     connect(): Promise<void> {
         return Promise.resolve();
+    }
+
+    configure(options?: DecoderOptions, customOptions?: OptionsMap): void {
+        super.configure(options, customOptions);
+        if (customOptions?.mbStyle) {
+            this.m_layerEvaluator = new MBLayerEvaluator(customOptions.mbStyle as StyleSpecification);
+        }
+        if (customOptions?.currentSourceId) {
+            this.m_currentSourceId = customOptions.currentSourceId as string;
+        }
     }
 
     async decodeThemedTile(
@@ -37,79 +112,36 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         _styleSetEvaluator: any,
         projection: Projection
     ): Promise<DecodedTile> {
-        if (!this.m_layerEvaluator || !this.m_style) {
+        if (!this.m_layerEvaluator) {
             return { techniques: [], geometries: [] };
         }
 
-        const currentSourceId = (this as any).m_currentSourceId ?? '';
         const zoom = Math.max(0, tileKey.level - this.m_storageLevelOffset);
 
+        if (!(data instanceof ArrayBuffer || data instanceof Uint8Array)) {
+            return { techniques: [], geometries: [] };
+        }
+
+        const buffer = data instanceof Uint8Array ? data.buffer : data;
         const emitter = new MBTileDataEmitter(tileKey, projection, zoom);
 
-        this.m_dataAdapter.process(data, {} as any, {
-            processPointFeature: (
-                layer: string,
-                extents: number,
-                geometry: any[],
-                properties: any,
-                featureId: any
-            ) => {
-                const matchedLayers = this.m_layerEvaluator!.evaluate(
-                    currentSourceId,
-                    layer,
-                    { type: 'Point', properties, id: featureId },
-                    zoom,
-                    'point'
-                );
-                if (matchedLayers.length === 0) return;
-                emitter.processPointFeature(layer, extents, geometry, properties, featureId, matchedLayers);
-            },
-            processLineFeature: (
-                layer: string,
-                extents: number,
-                geometry: any[],
-                properties: any,
-                featureId: any
-            ) => {
-                const matchedLayers = this.m_layerEvaluator!.evaluate(
-                    currentSourceId,
-                    layer,
-                    { type: 'LineString', properties, id: featureId },
-                    zoom,
-                    'line'
-                );
-                if (matchedLayers.length === 0) return;
-                emitter.processLineFeature(layer, extents, geometry, properties, featureId, matchedLayers);
-            },
-            processPolygonFeature: (
-                layer: string,
-                extents: number,
-                geometry: any[],
-                properties: any,
-                featureId: any
-            ) => {
-                const matchedLayers = this.m_layerEvaluator!.evaluate(
-                    currentSourceId,
-                    layer,
-                    { type: 'Polygon', properties, id: featureId },
-                    zoom,
-                    'polygon'
-                );
-                if (matchedLayers.length === 0) return;
-                emitter.processFillFeature(layer, extents, geometry, properties, featureId, matchedLayers);
-            },
-        });
+        const processor = new MBStyleDataProcessor(
+            tileKey, projection,
+            this.m_layerEvaluator,
+            this.m_currentSourceId,
+            zoom,
+        );
+        processor.setEmitter(emitter);
+
+        const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
+
+        try {
+            this.m_dataAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
+        } catch (e) {
+            console.warn('MBStyleDecoder: decode error', e);
+            return { techniques: [], geometries: [] };
+        }
 
         return emitter.getDecodedTile();
-    }
-
-    configure(options?: DecoderOptions, customOptions?: OptionsMap): void {
-        super.configure(options, customOptions);
-        if (customOptions?.mbStyle) {
-            this.setStyle(customOptions.mbStyle as StyleSpecification);
-        }
-        if (customOptions?.currentSourceId) {
-            (this as any).m_currentSourceId = customOptions.currentSourceId;
-        }
     }
 }

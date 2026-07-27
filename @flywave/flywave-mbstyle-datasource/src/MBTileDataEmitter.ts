@@ -8,9 +8,10 @@ import {
     GeometryType,
 } from '@flywave/flywave-datasource-protocol';
 import { Projection, TileKey } from '@flywave/flywave-geoutils';
-import * as THREE from 'three';
 
+import * as THREE from 'three';
 import { EvaluatedLayer } from './MBLayerEvaluator';
+import { ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
 
 interface AccumulatedGeometry {
     positions: number[];
@@ -40,10 +41,6 @@ export class MBTileDataEmitter {
         return geo;
     }
 
-    /**
-     * Translate Mapbox paint properties to flywave technique properties
-     * so that the existing DecodedTileHelpers.createMaterial() pipeline works.
-     */
     private paintToTechniqueProps(layer: EvaluatedLayer): Record<string, any> {
         const p = layer.paint;
         const l = layer.layout;
@@ -56,7 +53,6 @@ export class MBTileDataEmitter {
                 props.opacity = p['background-opacity'] ?? 1;
                 props.renderOrder = -Infinity;
                 break;
-
             case 'fill':
                 props.technique = 'fill';
                 props.color = p['fill-color'] ?? '#000000';
@@ -64,7 +60,6 @@ export class MBTileDataEmitter {
                 props.outlineColor = p['fill-outline-color'];
                 if (l.visibility === 'none') props.enabled = false;
                 break;
-
             case 'line':
                 props.technique = 'solid-line';
                 props.color = p['line-color'] ?? '#000000';
@@ -80,7 +75,6 @@ export class MBTileDataEmitter {
                 }
                 if (l.visibility === 'none') props.enabled = false;
                 break;
-
             case 'circle':
                 props.technique = 'circles';
                 props.color = p['circle-color'] ?? '#000000';
@@ -88,11 +82,10 @@ export class MBTileDataEmitter {
                 props.radius = p['circle-radius'] ?? 5;
                 if (l.visibility === 'none') props.enabled = false;
                 break;
-
             case 'symbol':
-                if (p['icon-image'] || l['icon-image']) {
+                if (l['icon-image']) {
                     props.technique = 'labeled-icon';
-                    props.imageTexture = p['icon-image'] ?? l['icon-image'];
+                    props.imageTexture = l['icon-image'];
                     props.color = p['icon-color'] ?? '#000000';
                     props.opacity = p['icon-opacity'] ?? 1;
                     props.iconScale = l['icon-size'] ?? 1;
@@ -106,7 +99,6 @@ export class MBTileDataEmitter {
                 }
                 if (l.visibility === 'none') props.enabled = false;
                 break;
-
             case 'fill-extrusion':
                 props.technique = 'extruded-polygon';
                 props.color = p['fill-extrusion-color'] ?? '#000000';
@@ -116,7 +108,6 @@ export class MBTileDataEmitter {
                 if (l.visibility === 'none') props.enabled = false;
                 break;
         }
-
         return props;
     }
 
@@ -125,7 +116,6 @@ export class MBTileDataEmitter {
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
             this.m_layerToTechniqueIndex.set(layer.id, idx);
-
             const props = this.paintToTechniqueProps(layer);
             const technique: any = {
                 name: props.technique,
@@ -133,7 +123,6 @@ export class MBTileDataEmitter {
                 _renderOrder: layer.renderOrder,
                 ...props,
             };
-
             this.m_techniques.push(technique as IndexedTechnique);
         }
         return idx;
@@ -142,7 +131,7 @@ export class MBTileDataEmitter {
     processFillFeature(
         layerName: string,
         extents: number,
-        geometry: THREE.Vector3[][],
+        geometry: IPolygonGeometry[],
         properties: Record<string, any>,
         featureId: string | number | undefined,
         matchedLayers: EvaluatedLayer[]
@@ -150,33 +139,25 @@ export class MBTileDataEmitter {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer);
             const geo = this.getOrCreateGeometry(layer.id, 'fill');
-            const polygonIndices: number[] = [];
 
-            for (const ring of geometry) {
-                const startIdx = geo.positions.length / 3;
-                for (const pt of ring) {
-                    geo.positions.push(pt.x, pt.y, pt.z);
-                }
-                for (let i = 2; i < ring.length; i++) {
-                    polygonIndices.push(startIdx, startIdx + i - 1, startIdx + i);
+            for (const polygon of geometry) {
+                for (const ring2d of polygon.rings) {
+                    const startIdx = geo.positions.length / 3;
+                    for (const pt of ring2d) {
+                        geo.positions.push(pt.x, pt.y, 0);
+                    }
+                    for (let i = 2; i < ring2d.length; i++) {
+                        geo.indices.push(startIdx, startIdx + i - 1, startIdx + i);
+                    }
                 }
             }
-
-            const groupStart = geo.indices.length;
-            for (const idx of polygonIndices) geo.indices.push(idx);
-
-            geo.groups.push({
-                start: groupStart,
-                count: polygonIndices.length,
-                materialIndex: techniqueIdx,
-            });
         }
     }
 
     processLineFeature(
         layerName: string,
         extents: number,
-        lines: THREE.Vector3[][],
+        geometry: ILineGeometry[],
         properties: Record<string, any>,
         featureId: string | number | undefined,
         matchedLayers: EvaluatedLayer[]
@@ -185,20 +166,15 @@ export class MBTileDataEmitter {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer);
             const geo = this.getOrCreateGeometry(layer.id, 'line');
 
-            for (const line of lines) {
-                const groupStart = geo.indices.length;
-                for (let i = 0; i < line.length; i++) {
-                    const pt = line[i];
-                    geo.positions.push(pt.x, pt.y, pt.z);
-                    if (i < line.length - 1) {
+            for (const lineGeo of geometry) {
+                const positions = lineGeo.positions;
+                for (let i = 0; i < positions.length; i++) {
+                    const pt = positions[i];
+                    geo.positions.push(pt.x, pt.y, 0);
+                    if (i < positions.length - 1) {
                         geo.indices.push(geo.positions.length / 3 - 1, geo.positions.length / 3);
                     }
                 }
-                geo.groups.push({
-                    start: groupStart,
-                    count: (line.length - 1) * 2,
-                    materialIndex: techniqueIdx,
-                });
             }
         }
     }
@@ -215,15 +191,9 @@ export class MBTileDataEmitter {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer);
             const geo = this.getOrCreateGeometry(layer.id, 'point');
 
-            const groupStart = geo.indices.length;
             for (const pt of points) {
-                geo.positions.push(pt.x, pt.y, pt.z);
+                geo.positions.push(pt.x, pt.y, pt.z ?? 0);
             }
-            geo.groups.push({
-                start: groupStart,
-                count: points.length,
-                materialIndex: techniqueIdx,
-            });
         }
     }
 
