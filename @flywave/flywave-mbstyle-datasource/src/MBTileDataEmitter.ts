@@ -15,8 +15,8 @@ import * as THREE from 'three';
 import { EvaluatedLayer } from './MBLayerEvaluator';
 import { ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
 import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
-import { webMercatorTile2TargetTile } from '@flywave/flywave-vectortile-datasource/OmvUtils';
 import { createLineGeometry, LineGroup } from '@flywave/flywave-lines';
+import { EarthConstants } from '@flywave/flywave-geoutils';
 
 // Use earcut for proper polygon triangulation (concave + holes)
 import earcut from 'earcut';
@@ -31,6 +31,35 @@ interface AccumulatedGeometry {
 
 const tmpV3 = new THREE.Vector3();
 const EXTENTS = 4096;
+
+/**
+ * Convert tile-local coordinates to world coordinates.
+ * Inlined from OmvUtils to avoid exports field resolution issues.
+ */
+function lat2tile(lat: number, zoom: number): number {
+    return Math.round(
+        ((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2) * Math.pow(2, zoom)
+    );
+}
+
+function tile2world(
+    extents: number,
+    decodeInfo: DecodeInfo,
+    px: number, py: number,
+    target: THREE.Vector3,
+): void {
+    const { north, west } = decodeInfo.geoBox;
+    const N = Math.log2(extents);
+    const scale = Math.pow(2, decodeInfo.tileKey.level + N);
+    const top = lat2tile(north, decodeInfo.tileKey.level + N);
+    const left = Math.round(((west + 180) / 360) * scale);
+    const R = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
+
+    target.x = ((left + px) / scale) * R;
+    target.y = ((top + py) / scale) * R;
+    target.z = 0;
+    target.sub(decodeInfo.center);
+}
 
 export class MBTileDataEmitter {
     private m_geometries: Map<string, AccumulatedGeometry> = new Map();
@@ -54,7 +83,7 @@ export class MBTileDataEmitter {
     }
 
     private project(p: THREE.Vector2 | THREE.Vector3): THREE.Vector3 {
-        webMercatorTile2TargetTile(EXTENTS, this.m_decodeInfo, p, tmpV3, false);
+        tile2world(EXTENTS, this.m_decodeInfo, p.x, p.y, tmpV3);
         return tmpV3.clone();
     }
 
