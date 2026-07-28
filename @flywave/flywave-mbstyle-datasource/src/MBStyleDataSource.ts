@@ -17,7 +17,7 @@ import {
 } from '@flywave/flywave-vectortile-datasource/OmvRestClient';
 
 import { MBStyleManager, ResolvedSource } from './MBStyleManager';
-import { StyleSpecification } from './MBStyleSpec';
+import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
 
 export interface MBStyleDataSourceParameters {
     style: StyleSpecification | string;
@@ -30,6 +30,30 @@ export interface MBStyleDataSourceParameters {
 }
 
 const MBSTYLE_DECODER_SERVICE_TYPE = 'mbstyle-vector-tile-decoder';
+
+/**
+ * DataProvider that serves inline GeoJSON data for all tile requests.
+ * Used when a Mapbox style source has type "geojson" with inline data.
+ */
+class GeoJSONDataProvider extends DataProvider {
+    private m_geoJsonData: string;
+
+    constructor(data: any) {
+        super();
+        this.m_geoJsonData = typeof data === 'string' ? data : JSON.stringify(data);
+    }
+
+    ready(): boolean { return true; }
+
+    async getTile(_tileKey: TileKey): Promise<ArrayBufferLike | {}> {
+        // Return the same GeoJSON for every tile request.
+        // The decoder will process it with GeoJsonDataAdapter.
+        return this.m_geoJsonData;
+    }
+
+    protected async connect(): Promise<void> {}
+    protected dispose(): void {}
+}
 
 class DelegatingDataProvider extends DataProvider {
     delegate: DataProvider | null = null;
@@ -44,14 +68,11 @@ class DelegatingDataProvider extends DataProvider {
     }
 
     protected async connect(): Promise<void> {
-        // Trigger delegate's connect() through its own register mechanism
-        // This is called by DataProvider.register() when first client registers
         if (this.delegate) {
             try {
-                // OmvRestClient.connect() is protected, so we access it via register pattern
                 await (this.delegate as any).connect();
             } catch (e) {
-                // Silently pass - the delegate may not need explicit connect
+                // Silently pass
             }
         }
     }
@@ -117,6 +138,8 @@ export class MBStyleDataSource extends TileDataSource {
 
         const sources = this.m_styleManager.getResolvedSources();
 
+        // Priority 1: Find first vector tile source
+        let found = false;
         for (const [sourceId, source] of sources) {
             if (source.type === 'vector') {
                 const restClient = this.createOmvRestClient(
@@ -130,8 +153,34 @@ export class MBStyleDataSource extends TileDataSource {
                     currentSourceId: sourceId,
                 } as any);
 
+                found = true;
                 break;
             }
+        }
+
+        // Priority 2: Find first GeoJSON source
+        if (!found) {
+            for (const [sourceId, source] of sources) {
+                if (source.type === 'geojson') {
+                    const geoJsonSpec = (style.sources as any)[sourceId] as GeoJSONSourceSpec;
+                    const data = geoJsonSpec.data;
+                    if (data) {
+                        this.m_delegatingProvider.delegate = new GeoJSONDataProvider(data);
+
+                        await this.decoder.configure(undefined, {
+                            mbStyle: style,
+                            currentSourceId: sourceId,
+                        } as any);
+
+                        found = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!found) {
+            // No data sources found — style may only have background layers
         }
 
         await super.connect();

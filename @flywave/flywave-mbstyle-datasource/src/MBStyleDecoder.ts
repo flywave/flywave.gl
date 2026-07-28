@@ -24,11 +24,6 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         private m_zoom: number,
     ) {}
 
-    getDecodedTile(data: ArrayBufferLike): DecodedTile {
-        this.m_emitter = new MBTileDataEmitter(this.m_tileKey, this.m_decodeInfo, this.m_zoom);
-        return this.m_emitter.getDecodedTile();
-    }
-
     setEmitter(emitter: MBTileDataEmitter) {
         this.m_emitter = emitter;
     }
@@ -106,6 +101,21 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
     }
 
+    /**
+     * Override decodeTile to bypass m_styleSetEvaluator check.
+     * Our decoder uses MBLayerEvaluator instead of StyleSetEvaluator.
+     */
+    decodeTile(
+        data: ArrayBufferLike | {},
+        tileKey: TileKey,
+        projection: Projection
+    ): Promise<DecodedTile | undefined> {
+        if (!this.m_layerEvaluator) {
+            return Promise.resolve(undefined);
+        }
+        return this.decodeThemedTile(data, tileKey, undefined as any, projection);
+    }
+
     async decodeThemedTile(
         data: any,
         tileKey: TileKey,
@@ -137,7 +147,6 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         try {
             this.m_dataAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
         } catch (e) {
-            console.warn('MBStyleDecoder: decode error', e);
             return { techniques: [], geometries: [] };
         }
 

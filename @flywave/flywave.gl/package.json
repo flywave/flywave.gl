@@ -30,6 +30,7 @@
         "@flywave/flywave-mapview-decoder": "workspace:*",
         "@flywave/flywave-utils": "workspace:*",
         "@flywave/flywave-vectortile-datasource": "workspace:*",
+        "@flywave/flywave-mbstyle-datasource": "workspace:*",
         "@flywave/flywave-webpack-utils": "workspace:*",
         "@flywave/flywave-debug-datasource": "workspace:*",
         "@flywave/flywave-lrucache": "workspace:*",

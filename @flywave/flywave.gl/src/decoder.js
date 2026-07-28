@@ -8,14 +8,14 @@ let {
     GeoJsonTilerService,
     VectorTileDecoderService
 } = require("@flywave/flywave-vectortile-datasource/index-worker");
-// import ObjectDecoderService from "./objects/decoder/decoder";
+let { startMBStyleDecoderService } = require("@flywave/flywave-mbstyle-datasource/index-worker");
 
 VectorTileDecoderService.start();
 GeoJsonTilerService.start();
 QuantizedMeshTileDecoderService.default.start();
 DemTileDecoderService.default.start();
 CsgStratumDecoderService.default.start();
-// ObjectDecoderService.start();
+startMBStyleDecoderService();
 
 //Following code is only needed for datasource_custom example.
 // snippet:custom_datasource_example_custom_decoder_service_start.ts

@@ -95,7 +95,7 @@ export class MBTileDataEmitter {
                 props.technique = 'circles';
                 props.color = p['circle-color'] ?? '#000000';
                 props.opacity = p['circle-opacity'] ?? 1;
-                props.radius = p['circle-radius'] ?? 5;
+                props.size = p['circle-radius'] ?? 5;
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'symbol':
