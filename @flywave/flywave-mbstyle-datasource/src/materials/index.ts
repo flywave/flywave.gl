@@ -8,6 +8,7 @@ import { MapExtrusionMaterial, MapExtrusionMaterialParams } from './MapExtrusion
 import { MapIconMaterial, MapIconMaterialParams } from './MapIconMaterial';
 import { MapHeatmapMaterial, MapHeatmapMaterialParams } from './MapHeatmapMaterial';
 import { MapHillshadeMaterial, MapHillshadeMaterialParams } from './MapHillshadeMaterial';
+import { MBSDFTextMaterial, MapTextMaterialParams } from './MBSDFTextMaterial';
 
 export { MapFillMaterial, MapFillMaterialParams };
 export { MapLineMaterial, MapLineMaterialParams };
@@ -16,6 +17,7 @@ export { MapExtrusionMaterial, MapExtrusionMaterialParams };
 export { MapIconMaterial, MapIconMaterialParams, SpriteAtlas, SpriteIconInfo } from './MapIconMaterial';
 export { MapHeatmapMaterial, MapHeatmapMaterialParams } from './MapHeatmapMaterial';
 export { MapHillshadeMaterial, MapHillshadeMaterialParams } from './MapHillshadeMaterial';
+export { MBSDFTextMaterial, MapTextMaterialParams } from './MBSDFTextMaterial';
 export { MBRenderLayer } from './MBRenderLayer';
 
 const FALLBACK = new THREE.MeshBasicMaterial({ color: '#ff00ff' });
@@ -39,8 +41,12 @@ export function createMBMaterial(
             return new MapLineMaterial(paint as any, capabilities);
         case 'circle':
             return new MapCircleMaterial(paint as any);
-        case 'symbol':
+        case 'symbol': {
+            if (paint['text-field'] || (paint as any)['text-field']) {
+                return new MBSDFTextMaterial(paint as any);
+            }
             return new MapIconMaterial(paint as any);
+        }
         case 'fill-extrusion':
             return new MapExtrusionMaterial(paint as any);
         case 'heatmap':
