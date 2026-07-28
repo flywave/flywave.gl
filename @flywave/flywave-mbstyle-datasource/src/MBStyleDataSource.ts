@@ -19,6 +19,7 @@ import * as THREE from 'three';
 
 import { MBStyleManager, ResolvedSource } from './MBStyleManager';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
+import { SpriteAtlas } from './materials/MapIconMaterial';
 
 export interface MBStyleDataSourceParameters {
     style: StyleSpecification | string;
@@ -87,6 +88,7 @@ export class MBStyleDataSource extends TileDataSource {
     private m_styleManager: MBStyleManager;
     private m_styleParams: MBStyleDataSourceParameters;
     private m_delegatingProvider: DelegatingDataProvider;
+    private m_spriteAtlas: SpriteAtlas | null = null;
 
     constructor(params: MBStyleDataSourceParameters) {
         const delegatingProvider = new DelegatingDataProvider();
@@ -190,7 +192,27 @@ export class MBStyleDataSource extends TileDataSource {
             // No data sources found — style may only have background layers
         }
 
+        // Load sprite atlas if style has a sprite URL
+        if (style.sprite) {
+            await this.loadSpriteAtlas(style.sprite);
+        }
+
         await super.connect();
+    }
+
+    get spriteAtlas(): SpriteAtlas | null {
+        return this.m_spriteAtlas;
+    }
+
+    private async loadSpriteAtlas(spriteUrl: string): Promise<void> {
+        const spriteData = await this.m_styleManager.loadSprite(spriteUrl);
+        if (spriteData) {
+            const icons = new Map<string, any>();
+            for (const [name, info] of Object.entries(spriteData.json)) {
+                icons.set(name, info);
+            }
+            this.m_spriteAtlas = new SpriteAtlas(spriteData.image, icons);
+        }
     }
 
     async setTheme(_theme: Theme | FlatTheme): Promise<void> {
