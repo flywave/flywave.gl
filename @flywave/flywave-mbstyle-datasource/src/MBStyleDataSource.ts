@@ -15,6 +15,7 @@ import {
     OmvRestClient,
     OmvRestClientParameters,
 } from '@flywave/flywave-vectortile-datasource/OmvRestClient';
+import * as THREE from 'three';
 
 import { MBStyleManager, ResolvedSource } from './MBStyleManager';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
@@ -214,11 +215,13 @@ export class MBStyleDataSource extends TileDataSource {
             if (layer.type === 'background') {
                 const paint = (layer as any).paint ?? {};
                 const color = paint['background-color'];
+                const opacity = paint['background-opacity'] ?? 1;
                 if (color && this.mapView) {
-                    // Set the MapView clear color to the background color
-                    const env = this.mapView.env;
-                    if (env) {
-                        this.mapView.clearColor = color;
+                    // Convert hex color string to number for MapView.clearColor
+                    const c = new THREE.Color(color);
+                    (this.mapView as any).clearColor = c.getHex();
+                    if (opacity < 1) {
+                        (this.mapView as any).clearAlpha = opacity;
                     }
                 }
                 break;
@@ -234,11 +237,14 @@ export class MBStyleDataSource extends TileDataSource {
 
         const center = style.center;
         const zoom = style.zoom;
+        const bearing = style.bearing ?? 0;
+        const pitch = style.pitch ?? 0;
 
         if (center && typeof zoom === 'number') {
-            const GeoCoordinates = require('@flywave/flywave-geoutils').GeoCoordinates;
+            // Import GeoCoordinates dynamically to avoid circular dependency issues
+            const { GeoCoordinates } = require('@flywave/flywave-geoutils');
             const geoCoord = new GeoCoordinates(center[1], center[0]);
-            this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom);
+            this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom, bearing, pitch);
         }
     }
 }
