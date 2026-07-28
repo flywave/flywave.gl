@@ -19,6 +19,8 @@ export interface SymbolInstance {
     priority: number;
     /** Current opacity for fade transition */
     opacity: number;
+    /** Optional reference to the Three.js object for visibility control */
+    object?: any;
 }
 
 export interface PlacementResult {
