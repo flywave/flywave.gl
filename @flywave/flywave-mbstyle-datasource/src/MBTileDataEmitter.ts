@@ -16,6 +16,7 @@ import { EvaluatedLayer } from './MBLayerEvaluator';
 import { ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
 import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
 import { createLineGeometry, LineGroup } from '@flywave/flywave-lines';
+import { resolveTextField, applyTextTransform, shapeText } from './TextShaping';
 import { EarthConstants } from '@flywave/flywave-geoutils';
 
 // Use earcut for proper polygon triangulation (concave + holes)
@@ -87,7 +88,7 @@ export class MBTileDataEmitter {
         return tmpV3.clone();
     }
 
-    private paintToTechniqueProps(layer: EvaluatedLayer): Record<string, any> {
+    private paintToTechniqueProps(layer: EvaluatedLayer, properties?: Record<string, any>): Record<string, any> {
         const p = layer.paint;
         const l = layer.layout;
         const props: Record<string, any> = {};
@@ -104,13 +105,17 @@ export class MBTileDataEmitter {
                 props.color = p['fill-color'] ?? '#000000';
                 props.opacity = p['fill-opacity'] ?? 1;
                 props.outlineColor = p['fill-outline-color'];
+                props._translate = p['fill-translate'] ?? [0, 0];
+                props._translateAnchor = p['fill-translate-anchor'] ?? 'map';
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'line':
-                props.technique = layer.layout['line-cap'] === 'round' ? 'solid-line' : 'solid-line';
+                props.technique = 'solid-line';
                 props.color = p['line-color'] ?? '#000000';
                 props.opacity = p['line-opacity'] ?? 1;
                 props.lineWidth = p['line-width'] ?? 1;
+                props._translate = p['line-translate'] ?? [0, 0];
+                props._translateAnchor = p['line-translate-anchor'] ?? 'map';
                 if (p['line-dasharray']) {
                     const arr = p['line-dasharray'] as number[];
                     if (arr.length >= 2) {
@@ -125,6 +130,8 @@ export class MBTileDataEmitter {
                 props.color = p['circle-color'] ?? '#000000';
                 props.opacity = p['circle-opacity'] ?? 1;
                 props.size = p['circle-radius'] ?? 5;
+                props._translate = p['circle-translate'] ?? [0, 0];
+                props._translateAnchor = p['circle-translate-anchor'] ?? 'map';
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'symbol':
@@ -134,15 +141,41 @@ export class MBTileDataEmitter {
                     props.color = p['icon-color'] ?? '#000000';
                     props.opacity = p['icon-opacity'] ?? 1;
                     props.iconScale = l['icon-size'] ?? 1;
+                    if (l.visibility === 'none') props.enabled = false;
                 } else if (l['text-field']) {
                     props.technique = 'text';
-                    props.text = l['text-field'];
+                    // Resolve text field with token replacement using feature properties
+                    const rawText = typeof l['text-field'] === 'string'
+                        ? l['text-field']
+                        : String(l['text-field'] ?? '');
+                    const resolvedText = resolveTextField(rawText, properties ?? {});
+
+                    // Apply text transform
+                    const transform = l['text-transform'] ?? 'none';
+                    const transformedText = applyTextTransform(resolvedText, transform);
+
+                    props.text = transformedText;
                     props.color = p['text-color'] ?? '#000000';
                     props.opacity = p['text-opacity'] ?? 1;
                     props.size = l['text-size'] ?? 16;
                     props.fontName = l['text-font']?.[0];
+
+                    // Pre-compute shaped text for layout
+                    const shaped = shapeText(transformedText, {
+                        fontSize: l['text-size'] ?? 16,
+                        maxWidth: l['text-max-width'] ?? 10,
+                        lineHeight: l['text-line-height'] ?? 1.2,
+                        letterSpacing: l['text-letter-spacing'] ?? 0,
+                        justify: l['text-justify'] ?? 'center',
+                        anchor: l['text-anchor'] ?? 'center',
+                        transform: 'none', // already applied above
+                    });
+                    props._shaped = shaped;
+                    props._textWidth = shaped.right - shaped.left;
+                    props._textHeight = shaped.bottom - shaped.top;
+
+                    if (l.visibility === 'none') props.enabled = false;
                 }
-                if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'fill-extrusion':
                 props.technique = 'extruded-polygon';
@@ -156,12 +189,21 @@ export class MBTileDataEmitter {
         return props;
     }
 
-    private getOrCreateTechniqueIndex(layer: EvaluatedLayer): number {
-        let idx = this.m_layerToTechniqueIndex.get(layer.id);
+    private getOrCreateTechniqueIndex(layer: EvaluatedLayer, properties?: Record<string, any>): number {
+        // For text layers, technique key includes resolved text to allow per-feature text
+        const textKey = layer.type === 'symbol' && layer.layout['text-field']
+            ? resolveTextField(
+                typeof layer.layout['text-field'] === 'string' ? layer.layout['text-field'] : '',
+                properties ?? {},
+            )
+            : '';
+
+        const cacheKey = textKey ? `${layer.id}:${textKey}` : layer.id;
+        let idx = this.m_layerToTechniqueIndex.get(cacheKey);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
-            this.m_layerToTechniqueIndex.set(layer.id, idx);
-            const props = this.paintToTechniqueProps(layer);
+            this.m_layerToTechniqueIndex.set(cacheKey, idx);
+            const props = this.paintToTechniqueProps(layer, properties);
             const technique: any = {
                 name: props.technique,
                 _index: idx,
@@ -185,7 +227,7 @@ export class MBTileDataEmitter {
         matchedLayers: EvaluatedLayer[],
     ): void {
         for (const layer of matchedLayers) {
-            const techniqueIdx = this.getOrCreateTechniqueIndex(layer);
+            const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
             const key = `${layer.id}:fill`;
             const geo = this.getOrCreateGeometry(key);
             const featureStart = geo.indices.length;
@@ -258,7 +300,7 @@ export class MBTileDataEmitter {
         matchedLayers: EvaluatedLayer[],
     ): void {
         for (const layer of matchedLayers) {
-            const techniqueIdx = this.getOrCreateTechniqueIndex(layer);
+            const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
 
             for (const lineGeo of geometry) {
                 // Convert tile-local to world
@@ -345,7 +387,7 @@ export class MBTileDataEmitter {
         matchedLayers: EvaluatedLayer[],
     ): void {
         for (const layer of matchedLayers) {
-            const techniqueIdx = this.getOrCreateTechniqueIndex(layer);
+            const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
             const key = `${layer.id}:point`;
             const geo = this.getOrCreateGeometry(key);
             const featureStart = geo.indices.length;
