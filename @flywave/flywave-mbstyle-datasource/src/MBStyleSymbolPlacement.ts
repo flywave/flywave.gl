@@ -159,6 +159,8 @@ export class MBStyleSymbolPlacement {
                         priority: tech._renderOrder ?? 0,
                         opacity: 1,
                         object: obj,
+                        variableAnchors: layout['text-variable-anchor'] as string[] | undefined,
+                        textRadialOffset: layout['text-radial-offset'] as number ?? 0,
                     });
                 }
             }

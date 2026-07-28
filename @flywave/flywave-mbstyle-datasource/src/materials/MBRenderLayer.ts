@@ -119,16 +119,44 @@ export class MBRenderLayer {
                 // Icon/Text symbols: create Sprites or quads
                 if (material instanceof MapIconMaterial) {
                     const sprite = new THREE.Sprite(material);
+
+                    // icon-text-fit: scale icon to fit text bounding box
+                    const textFit = paint['icon-text-fit'] as string | undefined;
+                    if (textFit && textFit !== 'none') {
+                        const textSize = paint['text-size'] as number ?? 16;
+                        const textWidth = (technique as any)._textWidth ?? 5;
+                        const textHeight = (technique as any)._textHeight ?? 1.2;
+                        const padding = paint['icon-text-fit-padding'] as number[] ?? [0, 0, 0, 0];
+
+                        const fitW = textWidth * textSize + padding[0] + padding[2];
+                        const fitH = textHeight * textSize + padding[1] + padding[3];
+
+                        if (textFit === 'width' || textFit === 'both') {
+                            sprite.scale.x = fitW;
+                        }
+                        if (textFit === 'height' || textFit === 'both') {
+                            sprite.scale.y = fitH;
+                        }
+                    }
+
                     // Apply icon-offset
                     const offset = paint['icon-offset'] as [number, number] | undefined;
                     if (offset && (offset[0] || offset[1])) {
                         sprite.position.set(offset[0], offset[1], 0);
                     }
+
                     // Apply icon-anchor
                     const anchor = paint['icon-anchor'] as string | undefined;
                     if (anchor && anchor !== 'center') {
                         this.applyAnchor(sprite, anchor);
                     }
+
+                    // Apply icon-size scaling
+                    const iconSize = paint['icon-size'] as number ?? 1;
+                    if (iconSize !== 1 && !textFit) {
+                        sprite.scale.set(iconSize * 32, iconSize * 32, 1);
+                    }
+
                     object = sprite;
                 } else if (material instanceof MBSDFTextMaterial) {
                     // SDF text rendered as Mesh with glyph quads

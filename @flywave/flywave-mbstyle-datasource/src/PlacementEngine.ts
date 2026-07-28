@@ -21,6 +21,10 @@ export interface SymbolInstance {
     opacity: number;
     /** Optional reference to the Three.js object for visibility control */
     object?: any;
+    /** Variable anchors to try (e.g., ['center','top','bottom']) */
+    variableAnchors?: string[];
+    /** Offset applied per anchor */
+    textRadialOffset?: number;
 }
 
 export interface PlacementResult {
@@ -61,18 +65,28 @@ export class PlacementEngine {
             const prev = this.m_opacityMap.get(key);
 
             // Compute desired opacity (fade in/out)
-            // For simplification: visible symbols have full opacity,
-            // invisible ones have 0 opacity (instant, no fade)
             let visible = false;
+            let placedAnchor: string | undefined;
 
-            if (sym.ignorePlacement) {
+            if (sym.ignorePlacement || sym.allowOverlap) {
                 visible = true;
-            } else if (sym.allowOverlap) {
-                visible = true;
+            } else if (sym.variableAnchors && sym.variableAnchors.length > 0) {
+                // Try each variable anchor position
+                for (const anchor of sym.variableAnchors) {
+                    const offset = this.getAnchorBoxOffset(anchor, sym, sym.textRadialOffset ?? 0);
+                    if (this.canPlaceSymbol(sym, offset.dx, offset.dy)) {
+                        visible = true;
+                        placedAnchor = anchor;
+                        // Update symbol position to the successful anchor
+                        if (sym.object) {
+                            sym.object.position.x += offset.dx;
+                            sym.object.position.y += offset.dy;
+                        }
+                        break;
+                    }
+                }
             } else {
-                // Check collision with already-placed symbols
-                const canPlace = this.canPlaceSymbol(sym);
-                if (canPlace) {
+                if (this.canPlaceSymbol(sym)) {
                     visible = true;
                 }
             }
@@ -99,8 +113,8 @@ export class PlacementEngine {
         return results;
     }
 
-    private canPlaceSymbol(sym: SymbolInstance): boolean {
-        const boxes = this.getSymbolBoxes(sym);
+    private canPlaceSymbol(sym: SymbolInstance, dx: number = 0, dy: number = 0): boolean {
+        const boxes = this.getSymbolBoxes(sym, dx, dy);
         for (const b of boxes) {
             if (!this.m_collisionIndex.canPlace(b.x, b.y, b.w, b.h, false, sym.priority)) {
                 return false;
@@ -116,12 +130,12 @@ export class PlacementEngine {
         }
     }
 
-    private getSymbolBoxes(sym: SymbolInstance): CollisionBox[] {
+    private getSymbolBoxes(sym: SymbolInstance, dx: number = 0, dy: number = 0): CollisionBox[] {
         const boxes: CollisionBox[] = [];
         if (sym.iconBox) {
             boxes.push({
-                x: sym.screenX - sym.iconBox.w / 2,
-                y: sym.screenY - sym.iconBox.h / 2,
+                x: sym.screenX - sym.iconBox.w / 2 + dx,
+                y: sym.screenY - sym.iconBox.h / 2 + dy,
                 w: sym.iconBox.w,
                 h: sym.iconBox.h,
                 featureId: sym.featureId,
@@ -131,8 +145,8 @@ export class PlacementEngine {
         }
         if (sym.textBox) {
             boxes.push({
-                x: sym.screenX - sym.textBox.w / 2,
-                y: sym.screenY - sym.textBox.h / 2,
+                x: sym.screenX - sym.textBox.w / 2 + dx,
+                y: sym.screenY - sym.textBox.h / 2 + dy,
                 w: sym.textBox.w,
                 h: sym.textBox.h,
                 featureId: sym.featureId,
@@ -141,6 +155,35 @@ export class PlacementEngine {
             });
         }
         return boxes;
+    }
+
+    /**
+     * Compute offset for a variable anchor position.
+     */
+    private getAnchorBoxOffset(
+        anchor: string,
+        sym: SymbolInstance,
+        radialOffset: number,
+    ): { dx: number; dy: number } {
+        const tw = sym.textBox?.w ?? 0;
+        const th = sym.textBox?.h ?? 0;
+        const halfW = tw / 2 + radialOffset;
+        const halfH = th / 2 + radialOffset;
+
+        const offsets: Record<string, [number, number]> = {
+            'center': [0, 0],
+            'left': [-halfW, 0],
+            'right': [halfW, 0],
+            'top': [0, -halfH],
+            'bottom': [0, halfH],
+            'top-left': [-halfW, -halfH],
+            'top-right': [halfW, -halfH],
+            'bottom-left': [-halfW, halfH],
+            'bottom-right': [halfW, halfH],
+        };
+
+        const [dx, dy] = offsets[anchor] ?? [0, 0];
+        return { dx, dy };
     }
 
     clearOpacityCache(): void {
