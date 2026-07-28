@@ -7,6 +7,8 @@ import { LayerType } from '../MBStyleSpec';
 import { createMBMaterial, updateMBMaterial } from './index';
 import { MapFillMaterial } from './MapFillMaterial';
 import { MapLineMaterial } from './MapLineMaterial';
+import { MapIconMaterial } from './MapIconMaterial';
+import { MBSDFTextMaterial } from './MBSDFTextMaterial';
 
 interface RenderableObject {
     object: THREE.Object3D;
@@ -112,8 +114,31 @@ export class MBRenderLayer {
             let object: THREE.Object3D;
 
             if (geomType === 'SolidLine' as any) {
-                // Triangulated line via SolidLineMaterial — use Mesh
                 object = new THREE.Mesh(subGeometry, material);
+            } else if (layerType === 'symbol') {
+                // Icon/Text symbols: create Sprites or quads
+                if (material instanceof MapIconMaterial) {
+                    const sprite = new THREE.Sprite(material);
+                    // Apply icon-offset
+                    const offset = paint['icon-offset'] as [number, number] | undefined;
+                    if (offset && (offset[0] || offset[1])) {
+                        sprite.position.set(offset[0], offset[1], 0);
+                    }
+                    // Apply icon-anchor
+                    const anchor = paint['icon-anchor'] as string | undefined;
+                    if (anchor && anchor !== 'center') {
+                        this.applyAnchor(sprite, anchor);
+                    }
+                    object = sprite;
+                } else if (material instanceof MBSDFTextMaterial) {
+                    // SDF text rendered as Mesh with glyph quads
+                    const text = paint['text-field'] as string || '';
+                    const size = paint['text-size'] as number || 16;
+                    const mesh = this.buildTextMesh(text, size, paint, material);
+                    object = mesh;
+                } else {
+                    object = new THREE.Points(subGeometry, material);
+                }
             } else switch (layerType) {
                 case 'line':
                     object = new THREE.LineSegments(subGeometry, material);
@@ -167,6 +192,33 @@ export class MBRenderLayer {
             mat.dispose();
         }
         this.m_materialCache.clear();
+    }
+
+    private applyAnchor(sprite: THREE.Sprite, anchor: string) {
+        // Mapbox anchor types map to sprite center offsets
+        const map: Record<string, [number, number]> = {
+            'center': [0, 0], 'left': [-0.5, 0], 'right': [0.5, 0],
+            'top': [0, 0.5], 'bottom': [0, -0.5],
+            'top-left': [-0.5, 0.5], 'top-right': [0.5, 0.5],
+            'bottom-left': [-0.5, -0.5], 'bottom-right': [0.5, -0.5],
+        };
+        const offset = map[anchor] ?? [0, 0];
+        sprite.center.set(0.5 + offset[0], 0.5 + offset[1]);
+    }
+
+    private buildTextMesh(
+        text: string, size: number,
+        _paint: Record<string, any>,
+        _material: MBSDFTextMaterial,
+    ): THREE.Mesh {
+        // Simplified text rendering: create a planar quad for SDF text
+        const textLen = text.length;
+        const charWidth = size * 0.6;
+        const width = textLen * charWidth;
+        const height = size * 1.2;
+
+        const geom = new THREE.PlaneGeometry(width, height);
+        return new THREE.Mesh(geom, _material);
     }
 
     private getMaterialKey(technique: IndexedTechnique, paint: Record<string, any>): string {
