@@ -85,8 +85,14 @@ export class MBTileDataEmitter {
 
     private project(p: THREE.Vector2 | THREE.Vector3): THREE.Vector3 {
         tile2world(EXTENTS, this.m_decodeInfo, p.x, p.y, tmpV3);
+        // Apply line-z-offset if set (for elevated lines)
+        if (this.m_currentZOffset !== 0) {
+            tmpV3.z += this.m_currentZOffset;
+        }
         return tmpV3.clone();
     }
+
+    private m_currentZOffset: number = 0;
 
     private paintToTechniqueProps(layer: EvaluatedLayer, properties?: Record<string, any>): Record<string, any> {
         const p = layer.paint;
@@ -230,6 +236,7 @@ export class MBTileDataEmitter {
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
+            this.m_currentZOffset = layer.layout['line-z-offset'] ?? 0;
             const key = `${layer.id}:fill`;
             const geo = this.getOrCreateGeometry(key);
             const featureStart = geo.indices.length;
@@ -303,13 +310,14 @@ export class MBTileDataEmitter {
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
+            this.m_currentZOffset = layer.layout['line-z-offset'] ?? 0;
 
             for (const lineGeo of geometry) {
                 // Convert tile-local to world
                 const worldPts: number[] = [];
                 for (const pt of lineGeo.positions) {
                     const w = this.project(pt);
-                    worldPts.push(w.x, w.y, 0);
+                    worldPts.push(w.x, w.y, w.z);
                 }
 
                 const center = this.m_decodeInfo.center;
