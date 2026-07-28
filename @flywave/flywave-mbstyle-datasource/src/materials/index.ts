@@ -29,10 +29,11 @@ export function createMBMaterial(
 ): THREE.Material {
     switch (layerType) {
         case 'background': {
-            const fillPaint = {
+            const fillPaint: any = {
                 'fill-color': paint['background-color'] ?? '#000000',
                 'fill-opacity': paint['background-opacity'] ?? 1,
             };
+            if (paint['background-pattern']) fillPaint['fill-pattern'] = paint['background-pattern'];
             return new MapFillMaterial(fillPaint);
         }
         case 'fill':
@@ -65,10 +66,11 @@ export function updateMBMaterial(
 ): void {
     switch (layerType) {
         case 'background': {
-            const fillPaint = {
+            const fillPaint: any = {
                 'fill-color': paint['background-color'] ?? '#000000',
                 'fill-opacity': paint['background-opacity'] ?? 1,
             };
+            if (paint['background-pattern']) fillPaint['fill-pattern'] = paint['background-pattern'];
             (material as unknown as MapFillMaterial).setPaint(fillPaint);
             break;
         }

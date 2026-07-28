@@ -20,6 +20,7 @@ const DEFAULTS: MapExtrusionMaterialParams = {
 
 export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
     private m_paint: MapExtrusionMaterialParams;
+    private m_patternTexture: THREE.Texture | null = null;
 
     constructor(paint: Partial<MapExtrusionMaterialParams> = {}) {
         super({
@@ -38,6 +39,8 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
             shader.uniforms.uFloodColor = { value: new THREE.Color('#ffffff') };
             shader.uniforms.uFloodIntensity = { value: 0.0 };
             shader.uniforms.uTranslate = { value: new THREE.Vector3() };
+            shader.uniforms.uPatternTex = { value: self.m_patternTexture };
+            shader.uniforms.uPatternUvScale = { value: new THREE.Vector2(1, 1) };
 
             const varyingDef = 'varying float vNormalizedHeight;';
 
@@ -85,6 +88,12 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
                 );
             }
 
+            // Pattern texture uniforms
+            shader.fragmentShader = `
+                uniform sampler2D uPatternTex;
+                uniform vec2 uPatternUvScale;
+            ` + shader.fragmentShader;
+
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <lights_fragment_begin>',
                 `
@@ -93,12 +102,20 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
                 // flood light
                 vec3 flood = uFloodColor * uFloodIntensity;
                 vec3 litColor = ao * (gl_FragColor.rgb + flood);
+                // pattern
+                vec4 pat = texture2D(uPatternTex, vUv * uPatternUvScale);
+                litColor = mix(litColor, pat.rgb, pat.a);
                 #include <lights_fragment_begin>
                 `
             );
         };
 
         this.applyPaint();
+    }
+
+    setPatternTexture(texture: THREE.Texture | null) {
+        this.m_patternTexture = texture;
+        this.needsUpdate = true;
     }
 
     setPaint(paint: Partial<MapExtrusionMaterialParams>) {

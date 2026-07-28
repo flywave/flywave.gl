@@ -50,16 +50,20 @@ export class MapLineMaterial extends SolidLineMaterial {
         this.onBeforeCompile = (shader: any, renderer: any) => {
             if (origOnBeforeCompile) origOnBeforeCompile.call(self, shader, renderer);
 
-            // ----- Join mode uniform -----
+            // ----- Join + round limit uniforms -----
             shader.uniforms.uJoinMode = { value: self.getJoinMode() };
             shader.uniforms.uMiterLimit = { value: self.getMiterLimit() };
+            shader.uniforms.uRoundLimit = { value: self.getRoundLimit() };
             shader.vertexShader = shader.vertexShader.replace(
                 'float tanHalfAngle = tan(biTangent.w / 2.0);',
                 `
                 uniform float uJoinMode;
                 uniform float uMiterLimit;
+                uniform float uRoundLimit;
                 float tanHalfAngle = tan(biTangent.w / 2.0);
                 if (uJoinMode > 0.5) { tanHalfAngle = min(tanHalfAngle, uMiterLimit); }
+                // round-limit: clamp for round joins to avoid extreme extrusions
+                if (uJoinMode > 1.5) { tanHalfAngle = min(tanHalfAngle, uRoundLimit); }
                 `
             );
 
@@ -141,6 +145,10 @@ export class MapLineMaterial extends SolidLineMaterial {
 
     private getMiterLimit(): number {
         return this.m_paint['line-miter-limit'] ?? 2;
+    }
+
+    private getRoundLimit(): number {
+        return this.m_paint['line-round-limit'] ?? 1.05;
     }
 
     private setJoinType(join: string) {

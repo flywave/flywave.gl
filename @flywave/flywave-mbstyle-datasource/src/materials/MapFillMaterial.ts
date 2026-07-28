@@ -91,6 +91,16 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
                 );
             }
 
+            // Z-offset: shift vertices in z direction
+            if ((self as any)._zOffset) {
+                const zOff = (self as any)._zOffset;
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <project_vertex>',
+                    `vec4 zPos = vec4(position.x, position.y, position.z + ${zOff}.0, 1.0);
+                     #include <project_vertex>`
+                );
+            }
+
             // Antialias: when disabled, render polygon with hard edges via polygonOffset
             if (self.m_paint['fill-antialias'] === false) {
                 self.polygonOffset = true;
@@ -153,6 +163,12 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
         const emissive = p['fill-emissive-strength'];
         if (emissive !== undefined && 'emissive' in this && 'emissiveIntensity' in this) {
             (this as any).emissiveIntensity = emissive;
+        }
+
+        // z-offset (stored for onBeforeCompile use)
+        const zOffset = p['fill-z-offset'];
+        if (zOffset !== undefined) {
+            (this as any)._zOffset = zOffset;
         }
     }
 
