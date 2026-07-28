@@ -197,10 +197,7 @@ const _textureCatmullRom = Fn(([texNode, uv]: any) => {
 
 const SHADOW_CASCADE_COUNT = 3;
 const SHADOW_MAX_FAR = 100000;
-// Per-cascade resolution: near cascades need detail, far ones don't.
-// This reduces total BSM pixels by ~55% vs uniform 1024.
-const SHADOW_MAP_SIZES = [1024, 512, 256];
-const SHADOW_MAP_SIZE = SHADOW_MAP_SIZES[0];
+const SHADOW_MAP_SIZE = 512;
 
 const _cascadedShadowMaps = new CascadedShadowMaps({
     cascadeCount: SHADOW_CASCADE_COUNT,
@@ -231,7 +228,7 @@ async function ensureCloudInit(renderer: Renderer): Promise<void> {
         _cloudUniforms.turbulenceTexture = _cloudTextures.turbulenceTexture;
 
         _cloudUniforms.coverage.value = 0.3;
-        _cloudUniforms.hazeEnabled.value = 1;
+        _cloudUniforms.hazeEnabled.value = 0;
         _cloudUniforms.bottomRadius.value = 6360000.0;
         _cloudUniforms.scatteringCoefficient.value = 1;
         _cloudUniforms.absorptionCoefficient.value = 0;
@@ -388,9 +385,6 @@ export function updateCloudUniforms(atmosphereContext: any): void {
 
     const sr = _cloudUniforms.shapeRepeat.value;
     // cameraShapeOffset not used by reference — shape texture follows absolute ECEF position
-    // Camera geodetic altitude: use original ECEF position length (before altitudeCorrection)
-    // Reference uses Geodetic.setFromECEF(cameraPositionECEF).height
-    _cloudUniforms.cameraHeight.value = 0;
     _cloudUniforms.cameraPosition.value.set(cx, cy, cz);
 
     if (_hasPrevCam) {
@@ -549,7 +543,7 @@ export class CloudRenderNode extends TempNode {
 
         // Shadow RTs (BSM - Beer Shadow Map): one per cascade with decreasing resolution
         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-            const sz = SHADOW_MAP_SIZES[i];
+            const sz = SHADOW_MAP_SIZE;
             const rt = new RenderTarget(sz, sz, {
                 depthBuffer: false,
                 type: HalfFloatType
@@ -783,11 +777,9 @@ export class CloudRenderNode extends TempNode {
         const atmoCtx2 = getAtmosphereContext(renderer);
         const jitterCamera = atmoCtx2.camera;
 
-        // Override near/far/fov — MapView's updateCameras() resets them dynamically
+        // Only extend far plane to ensure clouds are visible; keep actual near/fov
         if (jitterCamera && jitterCamera.isPerspectiveCamera) {
-            jitterCamera.near = 1;
-            jitterCamera.far = 4e5;
-            jitterCamera.fov = 75;
+            jitterCamera.far = Math.max(jitterCamera.far, 4e5);
             const drawingBufferSize = renderer.getDrawingBufferSize(sizeScratch);
             jitterCamera.aspect = drawingBufferSize.x / drawingBufferSize.y;
             jitterCamera.updateProjectionMatrix();
@@ -919,8 +911,8 @@ export class CloudRenderNode extends TempNode {
         const debugMode = _cloudUniforms.debugMode;
 
         const resolvedClouds = texture(this.resolveNodeTex, screenUV);
-        const result = resolvedClouds.rgb;
-        return vec4(result, 1); // black background
+        const cloudColor = convertToTexture(this._colorNode);
+        return vec4(mix(cloudColor.rgb, resolvedClouds.rgb, resolvedClouds.a), 1);
     }
 
     private _buildFragmentNodes(host: NodeBuilder | Renderer): void {
