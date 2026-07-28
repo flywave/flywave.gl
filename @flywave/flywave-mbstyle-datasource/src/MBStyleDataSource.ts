@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { MBStyleManager, ResolvedSource } from './MBStyleManager';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
 import { SpriteAtlas } from './materials/MapIconMaterial';
+import { MBStyleRuntime } from './MBStyleRuntime';
 
 export interface MBStyleDataSourceParameters {
     style: StyleSpecification | string;
@@ -89,6 +90,8 @@ export class MBStyleDataSource extends TileDataSource {
     private m_styleParams: MBStyleDataSourceParameters;
     private m_delegatingProvider: DelegatingDataProvider;
     private m_spriteAtlas: SpriteAtlas | null = null;
+    private m_runtime: MBStyleRuntime | null = null;
+    private m_currentSourceId: string = '';
 
     constructor(params: MBStyleDataSourceParameters) {
         const delegatingProvider = new DelegatingDataProvider();
@@ -145,6 +148,18 @@ export class MBStyleDataSource extends TileDataSource {
         // Apply camera settings from style
         this.applyCameraSettings(style);
 
+        // Create runtime styling API
+        this.m_runtime = new MBStyleRuntime(style, () => {
+            // On style change: reconfigure decoder and mark tiles dirty
+            this.decoder.configure(undefined, {
+                mbStyle: this.m_runtime!.style,
+                currentSourceId: this.m_currentSourceId,
+            } as any);
+            if (this.mapView) {
+                this.mapView.markTilesDirty(this);
+            }
+        });
+
         const sources = this.m_styleManager.getResolvedSources();
 
         // Priority 1: Find first vector tile source
@@ -156,6 +171,7 @@ export class MBStyleDataSource extends TileDataSource {
                     this.m_styleParams.accessToken
                 );
                 this.m_delegatingProvider.delegate = restClient;
+                this.m_currentSourceId = sourceId;
 
                 await this.decoder.configure(undefined, {
                     mbStyle: style,
@@ -175,6 +191,7 @@ export class MBStyleDataSource extends TileDataSource {
                     const data = geoJsonSpec.data;
                     if (data) {
                         this.m_delegatingProvider.delegate = new GeoJSONDataProvider(data);
+                        this.m_currentSourceId = sourceId;
 
                         await this.decoder.configure(undefined, {
                             mbStyle: style,
@@ -204,6 +221,14 @@ export class MBStyleDataSource extends TileDataSource {
         return this.m_spriteAtlas;
     }
 
+    /**
+     * Runtime styling API for dynamic style manipulation.
+     * Usage: dataSource.runtime.setPaintProperty('water', 'fill-color', '#0000ff')
+     */
+    get runtime(): MBStyleRuntime | null {
+        return this.m_runtime;
+    }
+
     private async loadSpriteAtlas(spriteUrl: string): Promise<void> {
         const spriteData = await this.m_styleManager.loadSprite(spriteUrl);
         if (spriteData) {
@@ -216,6 +241,28 @@ export class MBStyleDataSource extends TileDataSource {
     }
 
     async setTheme(_theme: Theme | FlatTheme): Promise<void> {
+    }
+
+    /**
+     * Override setFeatureState to trigger tile re-decode when feature state changes.
+     * The base class stores feature state; we additionally mark tiles dirty
+     * so the decoder re-evaluates expressions with updated state.
+     */
+    setFeatureState(featureId: number | string, state: any): void {
+        super.setFeatureState(featureId, state);
+        // Mark all tiles dirty to trigger re-decode with updated feature state
+        if (this.mapView) {
+            this.mapView.markTilesDirty(this);
+        }
+        // Invalidate symbol placement
+        this.requestUpdate();
+    }
+
+    override removeFeatureState(featureId: number | string): void {
+        super.removeFeatureState(featureId);
+        if (this.mapView) {
+            this.mapView.markTilesDirty(this);
+        }
     }
 
     shouldPreloadTiles(): boolean {
