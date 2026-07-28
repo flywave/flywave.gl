@@ -18,6 +18,7 @@ export interface MapLineMaterialParams {
     'line-miter-limit'?: number;
     'line-round-limit'?: number;
     'line-emissive-strength'?: number;
+    'line-blend-mode'?: 'default' | 'multiply' | 'additive';
 }
 
 const DEFAULTS: MapLineMaterialParams = {
@@ -194,7 +195,23 @@ export class MapLineMaterial extends SolidLineMaterial {
         const grad = p['line-gradient'];
         if (grad && grad.length >= 2) this.buildGradientTexture(grad);
 
-        this.transparent = this.opacity < 1 || this.m_blur > 0;
+        // line-blend-mode
+        const blendMode = p['line-blend-mode'] ?? 'default';
+        switch (blendMode) {
+            case 'additive':
+                this.blending = THREE.AdditiveBlending;
+                this.depthWrite = false;
+                break;
+            case 'multiply':
+                this.blending = THREE.MultiplyBlending;
+                this.depthWrite = false;
+                break;
+            default:
+                this.blending = THREE.NormalBlending;
+                break;
+        }
+
+        this.transparent = this.opacity < 1 || this.m_blur > 0 || blendMode !== 'default';
         this.needsUpdate = true;
     }
 

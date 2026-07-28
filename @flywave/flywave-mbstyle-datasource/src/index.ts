@@ -9,6 +9,7 @@ export { MBGlyphLoader, GlyphMetrics, GlyphAtlas } from './MBGlyphLoader';
 export { PlacementEngine, PlacementResult, SymbolInstance } from './PlacementEngine';
 export { MBStyleSymbolPlacement } from './MBStyleSymbolPlacement';
 export { MBStyleRuntime } from './MBStyleRuntime';
+export { getLineAnchors, getLineCenterAnchor, LineAnchor } from './LineAnchor';
 export {
     StyleSpecification,
     SourceSpecification,

@@ -65,6 +65,7 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'line-dasharray': undefined,
         'line-translate': [0, 0],
         'line-translate-anchor': 'map',
+        'line-blend-mode': 'default',
     },
     symbol: {
         'icon-opacity': 1,
