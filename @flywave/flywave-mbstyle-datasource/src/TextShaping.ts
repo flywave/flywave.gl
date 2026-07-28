@@ -179,6 +179,7 @@ export function shapeText(
         justify: 'left' | 'center' | 'right' | 'auto';
         anchor: string;
         transform: string;
+        writingMode?: ('horizontal' | 'vertical')[];
     },
 ): ShapedText {
     const {
@@ -190,8 +191,16 @@ export function shapeText(
         transform,
     } = options;
 
+    const writingMode = options.writingMode?.[0] ?? 'horizontal';
+
     // Apply transform
     const transformed = applyTextTransform(text, transform);
+
+    if (writingMode === 'vertical') {
+        return shapeVerticalText(transformed, {
+            fontSize, maxWidth, lineHeight, letterSpacing, justify,
+        });
+    }
 
     // Break into lines
     const rawLines = wrapText(transformed, maxWidth, letterSpacing);
@@ -281,4 +290,75 @@ export function generateTextQuads(
     }
 
     return quads;
+}
+
+/**
+ * Detect if a character is CJK (for vertical writing mode decisions).
+ */
+export function isCJK(char: string): boolean {
+    const code = char.charCodeAt(0);
+    return (
+        (code >= 0x4e00 && code <= 0x9fff) ||   // CJK Unified Ideographs
+        (code >= 0x3040 && code <= 0x30ff) ||   // Hiragana + Katakana
+        (code >= 0x3400 && code <= 0x4dbf)      // CJK Extension A
+    );
+}
+
+/**
+ * Shape text in vertical writing mode (CJK).
+ * Characters are stacked top-to-bottom, lines flow right-to-left.
+ */
+function shapeVerticalText(
+    text: string,
+    options: {
+        fontSize: number;
+        maxWidth: number;
+        lineHeight: number;
+        letterSpacing: number;
+        justify: 'left' | 'center' | 'right' | 'auto';
+    },
+): ShapedText {
+    const { maxWidth, lineHeight, letterSpacing } = options;
+
+    // In vertical mode: each character is a "line" stacked vertically
+    // Multiple columns if text is very long
+    const chars = Array.from(text);
+    const maxCharsPerCol = Math.max(1, Math.floor(maxWidth / lineHeight));
+
+    // Split into columns
+    const columns: string[][] = [];
+    for (let i = 0; i < chars.length; i += maxCharsPerCol) {
+        columns.push(chars.slice(i, i + maxCharsPerCol));
+    }
+
+    const colWidth = lineHeight;
+    const totalWidth = columns.length * colWidth;
+    const maxColHeight = maxCharsPerCol * lineHeight;
+    const lines: ShapedLine[] = [];
+
+    const startX = -totalWidth / 2 + colWidth / 2;
+    const startY = -maxColHeight / 2 + lineHeight / 2;
+
+    for (let col = 0; col < columns.length; col++) {
+        const colChars = columns[col];
+        const colText = colChars.join('');
+        const colHeight = colChars.length * lineHeight;
+        lines.push({
+            text: colText,
+            width: colWidth,
+            position: [startX + col * colWidth, startY] as [number, number],
+        });
+    }
+
+    const halfW = totalWidth / 2;
+    const halfH = maxColHeight / 2;
+
+    return {
+        lines,
+        top: -halfH,
+        bottom: halfH,
+        left: -halfW,
+        right: halfW,
+        writingMode: 'vertical',
+    };
 }

@@ -4,6 +4,7 @@ export { MBExpressionEngine, MBValue, MBExpressionContext, MBStyleFeature } from
 export { MBFilterCompiler, CompiledFilter } from './MBFilterCompiler';
 export { MBLayerEvaluator, EvaluatedPaint, EvaluatedLayout, EvaluatedLayer } from './MBLayerEvaluator';
 export { MBMaterialFactory } from './MBMaterialFactory';
+export { resolveTextField, applyTextTransform, shapeText, isCJK } from './TextShaping';
 export { CollisionIndex, CollisionBox } from './CollisionIndex';
 export { MBGlyphLoader, GlyphMetrics, GlyphAtlas } from './MBGlyphLoader';
 export { PlacementEngine, PlacementResult, SymbolInstance } from './PlacementEngine';

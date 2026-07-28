@@ -169,6 +169,7 @@ export class MBTileDataEmitter {
                         justify: l['text-justify'] ?? 'center',
                         anchor: l['text-anchor'] ?? 'center',
                         transform: 'none', // already applied above
+                        writingMode: l['text-writing-mode'] as ('horizontal' | 'vertical')[],
                     });
                     props._shaped = shaped;
                     props._textWidth = shaped.right - shaped.left;

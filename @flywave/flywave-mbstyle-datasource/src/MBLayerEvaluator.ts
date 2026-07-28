@@ -66,6 +66,7 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'line-translate': [0, 0],
         'line-translate-anchor': 'map',
         'line-blend-mode': 'default',
+        'line-width-unit': 'pixels',
     },
     symbol: {
         'icon-opacity': 1,
@@ -181,6 +182,7 @@ export const LAYOUT_DEFAULTS: Record<string, Record<string, any>> = {
         'text-allow-overlap': false,
         'text-ignore-placement': false,
         'text-optional': false,
+        'text-writing-mode': ['horizontal'],
         visibility: 'visible',
     },
     circle: {

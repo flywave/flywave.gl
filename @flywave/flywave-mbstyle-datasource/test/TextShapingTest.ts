@@ -8,6 +8,7 @@ import {
     getAnchorOffset,
     shapeText,
     generateTextQuads,
+    isCJK,
 } from '../src/TextShaping';
 
 describe('TextShaping', () => {
@@ -223,6 +224,45 @@ describe('TextShaping', () => {
             const quads = generateTextQuads(shaped, 32, 0);
             expect(quads[0].width).to.be.greaterThan(0);
             expect(quads[0].height).to.equal(32);
+        });
+    });
+
+    describe('isCJK', () => {
+        it('detects CJK characters', () => {
+            expect(isCJK('中')).to.be.true;
+            expect(isCJK('あ')).to.be.true; // Hiragana
+            expect(isCJK('a')).to.be.false;
+            expect(isCJK('1')).to.be.false;
+        });
+    });
+
+    describe('shapeText vertical mode', () => {
+        it('shapes vertical CJK text', () => {
+            const shaped = shapeText('東京特許許可局', {
+                fontSize: 16,
+                maxWidth: 10,
+                lineHeight: 1.2,
+                letterSpacing: 0,
+                justify: 'center',
+                anchor: 'center',
+                transform: 'none',
+                writingMode: ['vertical'],
+            });
+            expect(shaped.writingMode).to.equal('vertical');
+            expect(shaped.lines.length).to.be.greaterThan(0);
+        });
+
+        it('shapes horizontal text by default', () => {
+            const shaped = shapeText('Hello', {
+                fontSize: 16,
+                maxWidth: 100,
+                lineHeight: 1.2,
+                letterSpacing: 0,
+                justify: 'center',
+                anchor: 'center',
+                transform: 'none',
+            });
+            expect(shaped.writingMode).to.equal('horizontal');
         });
     });
 });
