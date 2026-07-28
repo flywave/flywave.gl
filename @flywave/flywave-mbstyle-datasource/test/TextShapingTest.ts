@@ -10,6 +10,11 @@ import {
     generateTextQuads,
     isCJK,
     getGlyphMetrics,
+    isArabic,
+    isHebrew,
+    hasRTL,
+    reorderRTL,
+    shapeRTLText,
 } from '../src/TextShaping';
 
 describe('TextShaping', () => {
@@ -308,6 +313,35 @@ describe('TextShaping', () => {
             };
             const w = measureTextWidth('A', 0, lookup, 'test');
             expect(w).to.be.greaterThan(0);
+        });
+    });
+
+    describe('RTL / Arabic', () => {
+        it('detects Arabic characters', () => {
+            expect(isArabic('ا')).to.be.true;
+            expect(isArabic('a')).to.be.false;
+        });
+
+        it('detects RTL text', () => {
+            expect(hasRTL('سلام')).to.be.true;
+            expect(hasRTL('Hello')).to.be.false;
+        });
+
+        it('reverses RTL text', () => {
+            expect(reorderRTL('سلام')).to.equal('مالس');
+        });
+
+        it('leaves LTR text unchanged', () => {
+            expect(reorderRTL('Hello')).to.equal('Hello');
+        });
+
+        it('detects Hebrew characters', () => {
+            expect(isHebrew('ש')).to.be.true;
+        });
+
+        it('shapeRTLText handles Arabic', () => {
+            const result = shapeRTLText('السلام', 'none');
+            expect(hasRTL(result)).to.be.true;
         });
     });
 });
