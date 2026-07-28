@@ -136,6 +136,12 @@ export class MBStyleDataSource extends TileDataSource {
             throw new Error('Failed to load Mapbox Style');
         }
 
+        // Apply background color from background layers
+        this.applyBackgroundColor(style);
+
+        // Apply camera settings from style
+        this.applyCameraSettings(style);
+
         const sources = this.m_styleManager.getResolvedSources();
 
         // Priority 1: Find first vector tile source
@@ -198,5 +204,41 @@ export class MBStyleDataSource extends TileDataSource {
             this.minDataLevel,
             Math.min(this.maxDataLevel, zoomLevel + this.storageLevelOffset)
         );
+    }
+
+    /**
+     * Apply background color from style's background layers to MapView clear color.
+     */
+    private applyBackgroundColor(style: StyleSpecification): void {
+        for (const layer of style.layers ?? []) {
+            if (layer.type === 'background') {
+                const paint = (layer as any).paint ?? {};
+                const color = paint['background-color'];
+                if (color && this.mapView) {
+                    // Set the MapView clear color to the background color
+                    const env = this.mapView.env;
+                    if (env) {
+                        this.mapView.clearColor = color;
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    /**
+     * Apply camera settings (center, zoom, bearing, pitch) from the style.
+     */
+    private applyCameraSettings(style: StyleSpecification): void {
+        if (!this.mapView) return;
+
+        const center = style.center;
+        const zoom = style.zoom;
+
+        if (center && typeof zoom === 'number') {
+            const GeoCoordinates = require('@flywave/flywave-geoutils').GeoCoordinates;
+            const geoCoord = new GeoCoordinates(center[1], center[0]);
+            this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom);
+        }
     }
 }

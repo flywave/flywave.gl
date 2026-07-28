@@ -6,6 +6,7 @@ import {
 import { Projection, TileKey } from '@flywave/flywave-geoutils';
 import { ThemedTileDecoder } from '@flywave/flywave-mapview-decoder/index-worker';
 import { OmvDataAdapter } from '@flywave/flywave-vectortile-datasource/adapters/omv/OmvDataAdapter';
+import { GeoJsonDataAdapter } from '@flywave/flywave-vectortile-datasource/adapters/geojson/GeoJsonDataAdapter';
 import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
 import { IGeometryProcessor, ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
 import * as THREE from 'three';
@@ -78,13 +79,15 @@ class MBStyleDataProcessor implements IGeometryProcessor {
 }
 
 export class MBStyleDecoder extends ThemedTileDecoder {
-    private m_dataAdapter: OmvDataAdapter;
+    private m_omvAdapter: OmvDataAdapter;
+    private m_geoJsonAdapter: GeoJsonDataAdapter;
     private m_layerEvaluator: MBLayerEvaluator | undefined;
     private m_currentSourceId: string = '';
 
     constructor() {
         super();
-        this.m_dataAdapter = new OmvDataAdapter();
+        this.m_omvAdapter = new OmvDataAdapter();
+        this.m_geoJsonAdapter = new GeoJsonDataAdapter();
     }
 
     connect(): Promise<void> {
@@ -103,7 +106,6 @@ export class MBStyleDecoder extends ThemedTileDecoder {
 
     /**
      * Override decodeTile to bypass m_styleSetEvaluator check.
-     * Our decoder uses MBLayerEvaluator instead of StyleSetEvaluator.
      */
     decodeTile(
         data: ArrayBufferLike | {},
@@ -127,12 +129,6 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
 
         const zoom = Math.max(0, tileKey.level - this.m_storageLevelOffset);
-
-        if (!(data instanceof ArrayBuffer || data instanceof Uint8Array)) {
-            return { techniques: [], geometries: [] };
-        }
-
-        const buffer = data instanceof Uint8Array ? data.buffer : data;
         const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
         const emitter = new MBTileDataEmitter(tileKey, decodeInfo, zoom);
 
@@ -145,7 +141,23 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         processor.setEmitter(emitter);
 
         try {
-            this.m_dataAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
+            // Determine data format and use appropriate adapter
+            if (typeof data === 'string') {
+                // GeoJSON string from GeoJSONDataProvider
+                const geoJson = JSON.parse(data);
+                if (this.m_geoJsonAdapter.canProcess(geoJson)) {
+                    this.m_geoJsonAdapter.process(geoJson, decodeInfo, processor);
+                }
+            } else if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+                // GeoJSON object directly
+                if (this.m_geoJsonAdapter.canProcess(data)) {
+                    this.m_geoJsonAdapter.process(data, decodeInfo, processor);
+                }
+            } else if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+                // MVT binary data
+                const buffer = data instanceof Uint8Array ? data.buffer : data;
+                this.m_omvAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
+            }
         } catch (e) {
             return { techniques: [], geometries: [] };
         }

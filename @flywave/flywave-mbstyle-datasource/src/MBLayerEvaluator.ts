@@ -300,7 +300,12 @@ export class MBLayerEvaluator {
         const bySL = this.m_layersBySource.get(sourceId);
         if (!bySL) return [];
 
-        const candidates = bySL.get(sourceLayer) ?? [];
+        // Match by source-layer. For GeoJSON sources, the adapter passes "geojson"
+        // but Mapbox style layers may not set source-layer. Fall back to empty string.
+        let candidates = bySL.get(sourceLayer) ?? [];
+        if (candidates.length === 0) {
+            candidates = bySL.get('') ?? [];
+        }
         const results: EvaluatedLayer[] = [];
 
         const ctx: MBExpressionContext = { zoom, feature, featureState };
