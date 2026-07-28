@@ -9,6 +9,7 @@ import {
     shapeText,
     generateTextQuads,
     isCJK,
+    getGlyphMetrics,
 } from '../src/TextShaping';
 
 describe('TextShaping', () => {
@@ -263,6 +264,50 @@ describe('TextShaping', () => {
                 transform: 'none',
             });
             expect(shaped.writingMode).to.equal('horizontal');
+        });
+    });
+
+    describe('getGlyphMetrics', () => {
+        it('returns default metrics for Latin letter', () => {
+            const m = getGlyphMetrics('a');
+            expect(m.width).to.be.greaterThan(0);
+            expect(m.height).to.be.greaterThan(0);
+        });
+
+        it('returns wider metrics for CJK', () => {
+            const m = getGlyphMetrics('中');
+            expect(m.width).to.equal(1);
+        });
+
+        it('uses provided glyph lookup', () => {
+            const lookup = {
+                getMetrics: (_font: string, _char: string) => ({
+                    glyphId: 65, width: 10, height: 20, left: 0, top: 2, advance: 12,
+                }),
+            };
+            const m = getGlyphMetrics('A', lookup, 'test');
+            expect(m.width).to.equal(10);
+            expect(m.baseline).to.be.greaterThan(0);
+        });
+    });
+
+    describe('measureTextWidth with glyph lookup', () => {
+        it('uses glyph lookup when available', () => {
+            const lookup = {
+                getMetrics: (_font: string, _char: string) => ({
+                    glyphId: 65, width: 10, height: 20, left: 0, top: 2, advance: 8,
+                }),
+            };
+            const w = measureTextWidth('AB', 0, lookup, 'test');
+            expect(w).to.equal(16); // 8 + 8 from advance
+        });
+
+        it('falls back to default when no glyph data', () => {
+            const lookup = {
+                getMetrics: () => undefined,
+            };
+            const w = measureTextWidth('A', 0, lookup, 'test');
+            expect(w).to.be.greaterThan(0);
         });
     });
 });

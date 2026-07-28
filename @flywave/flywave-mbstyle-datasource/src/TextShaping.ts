@@ -19,8 +19,88 @@ export interface ShapedText {
     writingMode: 'horizontal' | 'vertical';
 }
 
-const DEFAULT_GLYPH_ADVANCE = 0.6; // em units per character
+export interface GlyphMetrics {
+    glyphId: number;
+    width: number;
+    height: number;
+    left: number;
+    top: number;
+    advance: number;
+}
+
+export interface GlyphLookup {
+    getMetrics(font: string, char: string): GlyphMetrics | undefined;
+}
+
+const DEFAULT_GLYPH_ADVANCE = 0.6;
 const SPACE_ADVANCE = 0.3;
+
+/**
+ * Measure text width using glyph metrics if available, falling back to estimation.
+ */
+export function measureTextWidth(
+    text: string,
+    letterSpacing: number = 0,
+    glyphLookup?: GlyphLookup,
+    fontName?: string,
+): number {
+    if (!text) return 0;
+    let width = 0;
+    for (const ch of text) {
+        if (glyphLookup && fontName) {
+            const m = glyphLookup.getMetrics(fontName, ch);
+            if (m) {
+                width += m.advance;
+                continue;
+            }
+        }
+        if (ch === ' ') {
+            width += SPACE_ADVANCE;
+        } else {
+            width += DEFAULT_GLYPH_ADVANCE;
+        }
+    }
+    width += letterSpacing * Math.max(0, text.length - 1);
+    return width;
+}
+
+/**
+ * Get the baseline offset for a glyph relative to the font's baseline.
+ * Returns (top, bottom) offsets in em units.
+ */
+export function getGlyphMetrics(
+    char: string,
+    glyphLookup?: GlyphLookup,
+    fontName?: string,
+): { width: number; height: number; top: number; left: number; baseline: number } {
+    if (glyphLookup && fontName) {
+        const m = glyphLookup.getMetrics(fontName, char);
+        if (m) {
+            return {
+                width: m.width,
+                height: m.height,
+                top: m.top,
+                left: m.left,
+                baseline: m.height + m.top,
+            };
+        }
+    }
+    // Default metrics for ASCII
+    const code = char.charCodeAt(0);
+    if (code >= 0x4e00) {
+        // CJK: square character, no descender
+        return { width: 1, height: 1, top: 0, left: 0, baseline: 0.8 };
+    }
+    // Latin: has descender for some chars
+    const hasDescender = 'gjpqy'.includes(char);
+    return {
+        width: DEFAULT_GLYPH_ADVANCE,
+        height: hasDescender ? 1.1 : 1,
+        top: hasDescender ? 0 : 0,
+        left: 0,
+        baseline: hasDescender ? 0.9 : 0.8,
+    };
+}
 
 /**
  * Resolve text-field expression to a string.
@@ -51,26 +131,6 @@ export function applyTextTransform(text: string, transform: string): string {
 }
 
 /**
- * Measure approximate text width in em units.
- */
-export function measureTextWidth(
-    text: string,
-    letterSpacing: number = 0,
-): number {
-    let width = 0;
-    for (const ch of text) {
-        if (ch === ' ') {
-            width += SPACE_ADVANCE;
-        } else {
-            width += DEFAULT_GLYPH_ADVANCE;
-        }
-    }
-    // Add letter spacing between characters
-    width += letterSpacing * Math.max(0, text.length - 1);
-    return width;
-}
-
-/**
  * Break text into lines based on max-width.
  * Uses greedy word wrapping.
  */
@@ -78,6 +138,8 @@ export function wrapText(
     text: string,
     maxWidth: number,
     letterSpacing: number = 0,
+    glyphLookup?: GlyphLookup,
+    fontName?: string,
 ): string[] {
     if (!text) return [];
 
@@ -86,7 +148,7 @@ export function wrapText(
     const result: string[] = [];
 
     for (const line of explicitLines) {
-        if (measureTextWidth(line, letterSpacing) <= maxWidth) {
+        if (measureTextWidth(line, letterSpacing, glyphLookup, fontName) <= maxWidth) {
             result.push(line);
             continue;
         }
@@ -97,7 +159,7 @@ export function wrapText(
 
         for (const word of words) {
             const testLine = currentLine ? currentLine + ' ' + word : word;
-            const testWidth = measureTextWidth(testLine, letterSpacing);
+            const testWidth = measureTextWidth(testLine, letterSpacing, glyphLookup, fontName);
 
             if (testWidth <= maxWidth) {
                 currentLine = testLine;
@@ -180,6 +242,8 @@ export function shapeText(
         anchor: string;
         transform: string;
         writingMode?: ('horizontal' | 'vertical')[];
+        glyphLookup?: GlyphLookup;
+        fontName?: string;
     },
 ): ShapedText {
     const {
@@ -189,6 +253,8 @@ export function shapeText(
         letterSpacing,
         justify,
         transform,
+        glyphLookup,
+        fontName,
     } = options;
 
     const writingMode = options.writingMode?.[0] ?? 'horizontal';
@@ -203,7 +269,7 @@ export function shapeText(
     }
 
     // Break into lines
-    const rawLines = wrapText(transformed, maxWidth, letterSpacing);
+    const rawLines = wrapText(transformed, maxWidth, letterSpacing, glyphLookup, fontName);
 
     // Measure lines
     const lines: ShapedLine[] = [];
@@ -215,7 +281,7 @@ export function shapeText(
 
     for (let i = 0; i < rawLines.length; i++) {
         const lineText = rawLines[i];
-        const lineWidth = measureTextWidth(lineText, letterSpacing);
+        const lineWidth = measureTextWidth(lineText, letterSpacing, glyphLookup, fontName);
         maxLineWidth = Math.max(maxLineWidth, lineWidth);
 
         const yOffset = startY + i * lineHeightEm;
