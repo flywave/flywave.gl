@@ -9,6 +9,7 @@ import { MapIconMaterial, MapIconMaterialParams } from './MapIconMaterial';
 import { MapHeatmapMaterial, MapHeatmapMaterialParams } from './MapHeatmapMaterial';
 import { MapHillshadeMaterial, MapHillshadeMaterialParams } from './MapHillshadeMaterial';
 import { MBSDFTextMaterial, MapTextMaterialParams } from './MBSDFTextMaterial';
+import { MapSDFIconMaterial } from './MapSDFIconMaterial';
 
 export { MapFillMaterial, MapFillMaterialParams };
 export { MapLineMaterial, MapLineMaterialParams };
@@ -18,6 +19,7 @@ export { MapIconMaterial, MapIconMaterialParams, SpriteAtlas, SpriteIconInfo } f
 export { MapHeatmapMaterial, MapHeatmapMaterialParams } from './MapHeatmapMaterial';
 export { MapHillshadeMaterial, MapHillshadeMaterialParams } from './MapHillshadeMaterial';
 export { MBSDFTextMaterial, MapTextMaterialParams } from './MBSDFTextMaterial';
+export { MapSDFIconMaterial } from './MapSDFIconMaterial';
 export { MBRenderLayer } from './MBRenderLayer';
 
 const FALLBACK = new THREE.MeshBasicMaterial({ color: '#ff00ff' });
@@ -68,6 +70,13 @@ export function createMBMaterial(
             if (paint['text-field'] || (paint as any)['text-field']) {
                 return new MBSDFTextMaterial(paint as any);
             }
+            // Use SDF icon material when halo properties are set
+            const hasHalo = paint['icon-halo-width'] !== undefined && paint['icon-halo-width'] > 0;
+            if (hasHalo) {
+                const mat = new MapSDFIconMaterial(paint as any);
+                if (atlas) mat.setSpriteAtlas(atlas, paint['icon-image'] ?? '');
+                return mat;
+            }
             const mat = new MapIconMaterial(paint as any);
             if (atlas) mat.setSpriteAtlas(atlas);
             return mat;
@@ -116,7 +125,12 @@ export function updateMBMaterial(
             (material as unknown as MapCircleMaterial).setPaint(paint as any);
             break;
         case 'symbol':
-            (material as unknown as MapIconMaterial).setPaint(paint as any);
+            if (material instanceof MapIconMaterial) {
+                (material as unknown as MapIconMaterial).setPaint(paint as any);
+            } else if (material instanceof MapSDFIconMaterial) {
+                (material as unknown as any).m_params = { ...(material as any).m_params, ...paint };
+                (material as any).applyParams?.();
+            }
             break;
         case 'fill-extrusion':
             (material as unknown as MapExtrusionMaterial).setPaint(paint as any);
