@@ -60,32 +60,73 @@ export class MBStyleSymbolPlacement {
 
     /**
      * Apply icon-rotation-alignment: 'map' rotates with bearing, 'viewport' stays upright.
+     * Also handles text-rotation-alignment.
      */
     private applyRotationAlignment(symbols: SymbolInstance[], bearing: number): void {
         for (const sym of symbols) {
             if (!sym.object) continue;
 
             const obj = sym.object as THREE.Object3D;
-            // Check technique for rotation-alignment
             const tech = obj.userData?.technique;
             if (!tech) continue;
 
             const layout = tech._layout ?? {};
-            const alignment = layout['icon-rotation-alignment'] ?? 'auto';
-            const placement = layout['symbol-placement'] ?? 'point';
+            const isText = tech.name === 'text';
+            const isIcon = tech.name === 'labeled-icon';
 
-            // For point placement: 'auto' = viewport, 'map' = rotate with bearing
-            // For line placement: 'auto' = map, 'viewport' = upright
-            const isMapAligned =
-                alignment === 'map' ||
-                (alignment === 'auto' && placement === 'line');
-
-            if (isMapAligned && (obj as any).isSprite) {
-                const bearingRad = -bearing * Math.PI / 180;
-                const mat = (obj as any).material;
-                if (mat) {
-                    mat.rotation = (tech._paint?.['icon-rotate'] ?? 0) * Math.PI / 180 + bearingRad;
+            // icon-rotation-alignment
+            if (isIcon) {
+                const alignment = layout['icon-rotation-alignment'] ?? 'auto';
+                const placement = layout['symbol-placement'] ?? 'point';
+                const isMapAligned = alignment === 'map' || (alignment === 'auto' && placement === 'line');
+                if (isMapAligned && (obj as any).isSprite) {
+                    const bearingRad = -bearing * Math.PI / 180;
+                    const mat = (obj as any).material;
+                    if (mat) {
+                        mat.rotation = (tech._paint?.['icon-rotate'] ?? 0) * Math.PI / 180 + bearingRad;
+                    }
                 }
+            }
+
+            // text-rotation-alignment
+            if (isText) {
+                const alignment = layout['text-rotation-alignment'] ?? 'auto';
+                const placement = layout['symbol-placement'] ?? 'point';
+                const isMapAligned = alignment === 'map' || (alignment === 'auto' && placement === 'line');
+                if (isMapAligned) {
+                    // For text meshes, apply rotation
+                    const bearingRad = -bearing * Math.PI / 180;
+                    const textRotate = (layout['text-rotate'] ?? 0) * Math.PI / 180;
+                    obj.rotation.z = textRotate + bearingRad;
+                } else {
+                    // Viewport aligned: only apply text-rotate
+                    const textRotate = (layout['text-rotate'] ?? 0) * Math.PI / 180;
+                    obj.rotation.z = textRotate;
+                }
+            }
+
+            // text-keep-upright: flip text if upside down
+            if (isText && layout['text-keep-upright'] !== false) {
+                const placement = layout['symbol-placement'] ?? 'point';
+                if (placement === 'line') {
+                    // For line placement, check if current rotation makes text upside down
+                    const currentRot = obj.rotation.z;
+                    const normalized = ((currentRot % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+                    if (normalized > Math.PI / 2 && normalized < 3 * Math.PI / 2) {
+                        obj.rotation.z += Math.PI; // Flip 180°
+                    }
+                }
+            }
+
+            // text-pitch-alignment: 'map' pitches with terrain, 'viewport' stays flat
+            // For Three.js, viewport = billboarded (default for sprites),
+            // map = needs to rotate with map pitch
+            const pitchAlign = isText
+                ? (layout['text-pitch-alignment'] ?? 'auto')
+                : (layout['icon-pitch-alignment'] ?? 'auto');
+            if (pitchAlign === 'map') {
+                const tilt = (this.m_mapView as any).tilt ?? 0;
+                obj.rotation.x = -tilt * Math.PI / 180;
             }
         }
     }

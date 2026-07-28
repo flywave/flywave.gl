@@ -208,6 +208,7 @@ export class MBTileDataEmitter {
                 name: props.technique,
                 _index: idx,
                 _renderOrder: layer.renderOrder,
+                renderOrder: layer.renderOrder, // Standard flywave property read by TileGeometryCreator
                 _layerId: layer.id,
                 _paint: layer.paint,
                 _layout: layer.layout,
