@@ -1,0 +1,48 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "pixelRatio": 2,
+      "height": 256,
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.002},
+        {"platform-tag-contains": "native-android", "threshold": 0.008}
+      ]
+    }
+  },
+  "center": [
+    49.857,
+    16.594
+  ],
+  "zoom": 6.9,
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": "local://data/pattern-line.geojson",
+      "lineMetrics": true
+    }
+  },
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#FFF"
+      }
+    },
+    {
+      "id": "line",
+      "type": "line",
+      "source": "geojson",
+      "paint": {
+        "line-pattern": "border-dot-13",
+        "line-width": 14
+      },
+      "layout": {
+        "line-join": "none"
+      }
+    }
+  ]
+}

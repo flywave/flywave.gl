@@ -1,0 +1,28 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 128,
+      "height": 64,
+      "spriteFormat": "raster",
+      "operations": [
+        ["setStyle", "local://mapbox-gl-styles/styles/satellite-v9.json"],
+        ["setZoom", 0],
+        ["wait"],
+        ["setSize", 128, 1024]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "web", "reason": "Implemented for mapbox-gl-native only"}
+      ],
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "flaky"}
+      ]
+    }
+  },
+  "center": [
+    179,
+    0
+  ],
+  "sources": {},
+  "layers": []
+}

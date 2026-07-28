@@ -1,0 +1,55 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 64,
+      "height": 64,
+      "operations": [
+        [
+          "addImage",
+          "marker",
+            "./sprites/dark.png"
+        ],
+        [
+          "addLayer",
+          {
+            "id": "geometry",
+            "type": "fill",
+            "source": "geometry",
+            "paint": {
+              "fill-pattern": "marker"
+            }
+          }
+        ],
+        [
+          "wait"
+        ],
+        [
+            "removeImage",
+            "marker"
+        ],
+        [
+            "addImage",
+            "marker",
+          "./sprites/1x.png"
+        ],
+        [
+            "wait"
+        ]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "skip - https://github.com/mapbox/mapbox-gl-native/issues/16021"}
+      ]
+    }
+  },
+  "sources": {
+    "geometry": {
+      "type": "geojson",
+      "data": {
+        "type": "Polygon",
+        "coordinates": [[[-180, 80], [180, 80], [180, -80], [-180, -80]]]
+      }
+    }
+  },
+  "layers": []
+}

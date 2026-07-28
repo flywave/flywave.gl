@@ -1,0 +1,52 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "pixelRatio": 2,
+      "height": 256,
+      "operations": [
+        ["wait"],
+        ["setPaintProperty", "line", "line-pattern", "border-dot-13"],
+        ["wait"]
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.00228},
+        {"platform-tag-contains": "native-android", "threshold": 0.017}
+      ]
+    }
+  },
+  "center": [
+    49.857,
+    16.594
+  ],
+  "zoom": 7,
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": "local://data/pattern-line.geojson",
+      "lineMetrics": true
+    }
+  },
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#FFF"
+      }
+    },
+    {
+      "id": "line",
+      "type": "line",
+      "source": "geojson",
+      "paint": {
+        "line-width": 14
+      },
+      "layout": {
+        "line-join": "none"
+      }
+    }
+  ]
+}

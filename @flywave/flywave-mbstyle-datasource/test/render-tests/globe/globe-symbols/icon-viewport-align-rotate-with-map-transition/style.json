@@ -1,0 +1,70 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "pixelRatio": 2,
+      "height": 64,
+      "width": 64,
+      "operations": [
+        ["setProjection", "globe"],
+        ["wait"]
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0005},
+        {"platform-tag-contains": "native", "threshold": 0.00055}
+      ]
+    }
+  },
+  "center": [
+    45,
+    45
+  ],
+  "zoom": 5.5,
+  "fog": {},
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [
+                        45.0,
+                        45.0
+                    ]
+                },
+                "id": 163
+            }
+          ]
+      }
+    }
+  },
+  "sprite": "local://sprites/sprite",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    },
+    {
+      "id": "point",
+      "type": "symbol",
+      "source": "geojson",
+      "layout": {
+        "icon-image": "triangle-stroked-12",
+        "icon-pitch-alignment": "viewport",
+        "icon-rotation-alignment": "map"
+      },
+      "paint": {
+        "icon-opacity": 1
+      }
+    }
+  ]
+}

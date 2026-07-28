@@ -1,0 +1,41 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 64,
+      "height": 64,
+      "operations": [
+        [
+          "setPaintProperty",
+          "background",
+          "background-color",
+          "white"
+        ],
+        [
+          "wait",
+          0
+        ],
+        [
+          "wait",
+          500
+        ]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "https://github.com/mapbox/mapbox-gl-native/issues/10619"}
+      ]
+    }
+  },
+  "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color-transition": {
+          "duration": 1000
+        },
+        "background-color": "red"
+      }
+    }
+  ]
+}

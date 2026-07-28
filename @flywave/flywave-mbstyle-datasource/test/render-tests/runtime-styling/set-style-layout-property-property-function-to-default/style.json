@@ -1,0 +1,131 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 64,
+      "height": 64,
+      "operations": [
+        [
+          "setStyle",
+          {
+            "version": 8,
+            "transition": {
+              "duration": 0
+            },
+            "sources": {
+              "geojson": {
+                "type": "geojson",
+                "data": {
+                  "type": "FeatureCollection",
+                  "features": [
+                    {
+                      "type": "Feature",
+                      "properties": {
+                        "rotate": -45
+                      },
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                          -10,
+                          0
+                        ]
+                      }
+                    },
+                    {
+                      "type": "Feature",
+                      "properties": {
+                        "rotate": 45
+                      },
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                          10,
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "sprite": "local://sprites/sprite",
+            "layers": [
+              {
+                "id": "symbol",
+                "type": "symbol",
+                "source": "geojson",
+                "layout": {
+                  "icon-image": "oneway"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          "wait"
+        ]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native-ios", "reason": "skip before fixing issue: http://mapbox.atlassian.net/browse/MAPSNAT-2780"},
+        {"platform-tag-contains": "native-macos", "reason": "skip before fixing issue: http://mapbox.atlassian.net/browse/MAPSNAT-2780"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0084}
+      ]
+    }
+  },
+  "transition": {
+    "duration": 0
+  },
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "rotate": -45
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -10,
+                0
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "rotate": 45
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                10,
+                0
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "sprite": "local://sprites/sprite",
+  "layers": [
+    {
+      "id": "symbol",
+      "type": "symbol",
+      "source": "geojson",
+      "layout": {
+        "icon-image": "oneway",
+        "icon-rotate": {
+          "type": "identity",
+          "property": "rotate"
+        }
+      }
+    }
+  ]
+}

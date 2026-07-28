@@ -1,0 +1,88 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "width": 128,
+      "height": 128,
+      "scaleFactor": 2,
+      "collisionDebug": true,
+      "operations": [
+        ["wait"]
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.00075},
+        {"platform-tag-contains": "native", "threshold": 0.0078}
+      ]
+    }
+  },
+  "zoom": 0.5,
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "Point",
+        "coordinates": [
+          0,
+          -10
+        ]
+      }
+    },
+    "geojson-2": {
+      "type": "geojson",
+      "data": {
+        "type": "Point",
+        "coordinates": [
+          0,
+          10
+        ]
+      }
+    }
+  },
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    },
+    {
+      "id": "symbol",
+      "type": "symbol",
+      "source": "geojson",
+      "paint": {
+        "text-halo-color": "rgba(255, 0, 0, 1)",
+        "text-halo-width": 3
+      },
+      "layout": {
+        "text-size-scale-range": [1, 1],
+        "text-field": "1x-1x",
+        "text-font": [
+          "Open Sans Semibold",
+          "Arial Unicode MS Bold"
+        ],
+        "text-size": 18
+      }
+    },
+    {
+      "id": "symbol-2",
+      "type": "symbol",
+      "source": "geojson-2",
+      "paint": {
+        "text-halo-color": "rgba(255, 0, 0, 1)",
+        "text-halo-width": 3
+      },
+      "layout": {
+        "text-size-scale-range": [1, 2],
+        "text-field": "1x-2x",
+        "text-font": [
+          "Open Sans Semibold",
+          "Arial Unicode MS Bold"
+        ],
+        "text-size": 18
+      }
+    }
+  ]
+}

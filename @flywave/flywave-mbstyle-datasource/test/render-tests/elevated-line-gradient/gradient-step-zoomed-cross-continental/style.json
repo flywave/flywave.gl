@@ -1,0 +1,105 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 256,
+      "height": 64,
+      "skip-test": [
+        {"platform-tag-contains": "web", "reason": "possibly related to incorrect line progress values near line-joins and line-caps"},
+        {"platform-tag-contains": "native", "reason": "skip - Known issues https://mapbox.atlassian.net/browse/MAPS3D-1494"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0015}
+      ]
+    }
+  },
+  "zoom": 17,
+  "center": [
+    -77.0336537,
+    38.89992645
+  ],
+  "sources": {
+    "gradient": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  -77.033643,
+                  38.899926
+                ],
+                [
+                  -120.033643,
+                  38.899926
+                ]
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  -77.033643,
+                  38.899926
+                ],
+                [
+                  -120.033643,
+                  38.899926
+                ]
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  -77.033643,
+                  38.899926
+                ],
+                [
+                  -120.033643,
+                  38.899926
+                ]
+              ]
+            }
+          }
+        ]
+      },
+      "lineMetrics": true
+    }
+  },
+  "layers": [
+    {
+      "id": "line",
+      "type": "line",
+      "source": "gradient",
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round",
+        "line-z-offset": 0.01
+      },
+      "paint": {
+        "line-width": 5,
+        "line-gradient": [
+          "step",
+          ["line-progress"],
+          "rgba(0, 0, 255, 0.1)",
+          0.000001, "red",
+          0.000002, "yellow",
+          0.0000025, "orange",
+          0.000003, "black",
+          1, "black"
+        ]
+      }
+    }
+  ]
+}

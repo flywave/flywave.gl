@@ -1,0 +1,43 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 128,
+      "width": 256,
+      "operations": [
+        ["wait"],
+        ["forceContextRestart"],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "skip not implemented"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.00675}
+      ]
+    }
+  },
+  "center": [
+    13.418056,
+    52.499167
+  ],
+  "zoom": 14,
+  "sources": {
+    "mapbox": {
+      "type": "vector",
+      "maxzoom": 14,
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.mvt"
+      ]
+    }
+  },
+  "layers": [
+    {
+      "id": "poi_label",
+      "type": "heatmap",
+      "source": "mapbox",
+      "source-layer": "poi_label",
+      "paint": {}
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 256,
+      "width": 256,
+      "operations": [
+        [
+          "wait"
+        ]
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.000275}
+      ]
+    }
+  },
+  "sources": {
+    "rgbterrain": {
+      "type": "raster-dem",
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.terrain.png"
+      ],
+      "maxzoom": 14,
+      "tileSize": 514
+    },
+    "buildings": {
+      "type": "vector",
+      "maxzoom": 16,
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.vector.pbf"
+      ]
+    }
+  },
+  "terrain": {
+    "source": "rgbterrain",
+    "exaggeration": 1
+  },
+  "zoom": 17.0,
+  "pitch": 40,
+  "center": [
+    2.154684,
+    41.367729
+  ],
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "green"
+      }
+    },
+    {
+      "id": "3d-building",
+      "type": "fill-extrusion",
+      "source": "buildings",
+      "source-layer": "building",
+      "minzoom": 15,
+      "layout": {},
+      "paint": {
+        "fill-extrusion-color": "gray"
+      }
+    }
+  ]
+}

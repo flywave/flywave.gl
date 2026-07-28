@@ -1,0 +1,57 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "pixelRatio": 2,
+      "height": 64,
+      "width": 64,
+      "operations": [
+        ["wait"],
+        ["setFeatureState", {"source": "geojson", "id": 1}, {"hover": true}],
+        ["wait"],
+        ["setFeatureState", {"source": "geojson", "id": 1}, {"hover": false}],
+        ["wait"]
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.001}
+      ]
+    }
+  },
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "Feature",
+        "id": 1,
+        "properties": {},
+        "geometry": {"type": "Point", "coordinates": [0, 0]}
+      }
+    }
+  },
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "symbol",
+      "type": "symbol",
+      "source": "geojson",
+      "layout": {
+        "text-allow-overlap": true,
+        "text-field": "T",
+        "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"]
+      },
+      "paint": {
+        "text-color": "blue"
+      },
+      "appearances": [
+        {
+          "name": "hover",
+          "condition": ["==", ["boolean", ["feature-state", "hover"], false], true],
+          "properties": {
+            "text-color": "red"
+          }
+        }
+      ]
+    }
+  ]
+}

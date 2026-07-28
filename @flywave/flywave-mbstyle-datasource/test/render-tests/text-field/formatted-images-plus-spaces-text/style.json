@@ -1,0 +1,57 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "pixelRatio": 2,
+      "height": 32,
+      "width": 128,
+      "skip-test": [
+        {"platform-tag-contains": "native-ios", "reason": "Needs to be investigated and fixed."}
+      ]
+    }
+  },
+  "center": [ 0, 0 ],
+  "zoom": 0,
+  "camera": {"camera-projection": "orthographic"},
+  "sources": {
+    "point": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [ 0, 27 ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "images",
+      "type": "symbol",
+      "source": "point",
+      "layout": {
+        "text-offset": [0, 2],
+        "text-size": 20,
+        "text-field": ["format", ["image", "london-overground"],
+                                 " ",
+                                 ["image", "london-underground"],
+                                 "   ",
+                                 ["image", "gb-national-rail.london-dlr"],
+                                 ["image", "de-s-bahn.de-u-bahn"]
+                                ],
+        "text-font": [
+          "Open Sans Semibold",
+          "Arial Unicode MS Bold"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,136 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 256,
+      "operations": [
+        [
+          "addImage",
+          "custom-marker",
+          "./image/marker.png"
+        ],
+        [
+          "addLayer",
+          {
+            "id": "fill",
+            "type": "fill",
+            "source": "mapbox",
+            "paint": {
+              "fill-pattern": "custom-marker"
+            }
+          }
+        ],
+        [
+          "wait"
+        ],
+        [
+          "removeImage",
+          "marker"
+        ],
+        [
+          "removeLayer",
+          "fill"
+        ],
+        [
+          "addLayer",
+          {
+            "id": "road",
+            "type": "line",
+            "source": "mapbox",
+            "paint": {
+              "line-width": 20,
+              "line-pattern": "information"
+            }
+          }
+        ],
+        [
+          "wait"
+        ]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native-android", "reason": "Needs to be investigated and fixed."},
+        {"platform-tag-contains": "native-ios", "reason": "Needs to be investigated and fixed."}
+      ]
+
+    }
+  },
+  "zoom": 11,
+  "sources": {
+     "mapbox": {
+       "type": "geojson",
+       "maxzoom": 10,
+       "data": {
+         "type": "FeatureCollection",
+         "features": [
+           {
+             "type": "Feature",
+             "properties": {
+               "class": "street"
+             },
+             "geometry": {
+               "type": "LineString",
+               "coordinates": [
+                 [
+                   10,
+                   -0.01
+                 ],
+                 [
+                   -10,
+                   -0.01
+                 ]
+               ]
+             }
+           },
+           {
+             "type": "Feature",
+             "properties": {
+               "class": "path"
+             },
+             "geometry": {
+               "type": "LineString",
+               "coordinates": [
+                 [
+                   -10,
+                   0
+                 ],
+                 [
+                   10,
+                   0
+                 ]
+               ]
+             }
+           },
+           {
+             "type": "Feature",
+             "properties": {
+               "class": "street"
+             },
+             "geometry": {
+               "type": "LineString",
+               "coordinates": [
+                 [
+                   -10,
+                   0.01
+                 ],
+                 [
+                   10,
+                   0.01
+                 ]
+               ]
+             }
+           }
+         ]
+       }
+     }
+   },
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    }
+  ]
+}

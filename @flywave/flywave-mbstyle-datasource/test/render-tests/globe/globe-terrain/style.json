@@ -1,0 +1,54 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 512,
+      "width": 512,
+      "skip-test": [
+        {"platform-tag-contains": "web-macos-safari", "reason": "Looks good but diff is too high"}
+      ],
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "Flaky metrics"},
+        {"platform-tag-contains": "native-android", "reason": "Flaky"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.001},
+        {"platform-tag-contains": "native", "threshold": 0.008}
+      ]
+    }
+  },
+  "projection": {
+    "name": "globe"
+  },
+  "center": [72.42, 37.062],
+  "zoom": 5.1,
+  "pitch": 70,
+  "terrain": {
+    "source": "rgbterrain",
+    "exaggeration": 10.0
+  },
+  "sources": {
+    "rgbterrain": {
+      "type": "raster-dem",
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.terrain.png"
+      ],
+      "maxzoom": 12,
+      "tileSize": 256
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    },
+    {
+      "id": "hillshade",
+      "type": "hillshade",
+      "source": "rgbterrain"
+    }
+  ]
+}

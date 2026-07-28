@@ -1,0 +1,79 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "pixelRatio": 2,
+      "height": 64,
+      "width": 64,
+      "operations": [
+        ["wait"],
+        ["setZoom", 0.5]
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.00074}
+      ]
+    }
+  },
+  "camera": {"camera-projection": "orthographic"},
+  "sources": {
+    "test_source": {
+      "type": "geojson",
+      "data": {
+        "type": "GeometryCollection",
+        "geometries": [
+          {
+            "type": "Point",
+            "coordinates": [
+              0, 0
+            ]
+          },
+          {
+            "type": "Point",
+            "coordinates": [
+              -20, 0
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "sprite": "local://sprites/sprite",
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "test_layer1",
+      "type": "symbol",
+      "source": "test_source",
+      "layout": {
+        "icon-image": "bank-12",
+        "icon-offset": [-15, 0]
+      },
+      "appearances": [
+        {
+          "condition": [">=", ["zoom"], 0.5],
+          "properties": {
+            "icon-size": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "test_layer2",
+      "type": "symbol",
+      "source": "test_source",
+      "layout": {
+        "icon-image": "bank-12",
+        "icon-offset": [15, 0]
+      },
+      "appearances": [
+        {
+          "condition": [">=", ["zoom"], 0.5],
+          "properties": {
+            "icon-size": 2
+          }
+        }
+      ]
+    }
+  ]
+}

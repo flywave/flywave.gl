@@ -1,0 +1,37 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 512,
+      "height": 512,
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "Flaky, under development"}
+      ]
+    }
+  },
+  "center": [
+    0,
+    0
+  ],
+  "zoom": 22,
+  "pitch": 85,
+  "sources": {
+    "model": {
+      "type": "model",
+      "models": {
+        "model-1" : {
+          "uri": "local://models/BoxVertexColors.glb",
+          "position": [0, 0],
+          "orientation": [0, 0, 0]
+        }
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "model",
+      "type": "model",
+      "source": "model"
+    }
+  ]
+}

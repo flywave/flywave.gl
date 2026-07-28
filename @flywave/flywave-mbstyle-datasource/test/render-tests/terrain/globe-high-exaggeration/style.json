@@ -1,0 +1,58 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 1000,
+      "height": 512,
+      "operations": [
+        ["setProjection", "globe"],
+        ["wait", 500]
+      ],
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "Flaky network metrics"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0004},
+        {"platform-tag-contains": "native", "threshold": 0.0004}
+      ]
+    }
+  },
+  "zoom": 5.13,
+  "terrain": {
+    "source": "rgbterrain",
+    "exaggeration": 100.0
+  },
+  "pitch": 45,
+  "bearing": -48,
+  "center": [99.13, 47.46],
+  "sources": {
+    "satellite": {
+      "type": "raster",
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.satellite.png"
+      ],
+      "tileSize": 256
+    },
+    "rgbterrain": {
+      "type": "raster-dem",
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.terrain.512.png"
+      ],
+      "maxzoom": 12,
+      "tileSize": 512
+    }
+  },
+  "fog": {
+    "star-intensity": 0
+  },
+  "layers": [
+    {
+      "id": "satellite",
+      "type": "raster",
+      "source": "satellite",
+      "paint": {
+        "raster-fade-duration": 0
+      }
+    }
+  ]
+}

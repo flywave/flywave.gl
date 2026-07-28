@@ -1,0 +1,103 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 512,
+      "height": 512,
+      "operations": [
+        ["setStyle", {
+          "version": 8,
+          "zoom": 0,
+          "center": [0, 0],
+          "sources": {},
+          "layers": [],
+          "imports": [{
+            "id": "basemap",
+            "url": "",
+            "data": {
+              "version": 8,
+              "projection": {
+                "name": "albers"
+              },
+              "sources": {
+                "mapbox": {
+                  "type": "vector",
+                  "tiles": ["local://tiles/mapbox.mapbox-streets-v8/{z}-{x}-{y}.mvt"]
+                }
+              },
+              "layers": [
+                {
+                  "id": "background",
+                  "type": "background",
+                  "paint": {
+                    "background-color": "pink"
+                  }
+                },
+                {
+                  "id": "country-boundaries",
+                  "type": "fill",
+                  "source": "mapbox",
+                  "source-layer": "country_boundaries",
+                  "layout": {},
+                  "paint": {
+                    "fill-color": "violet"
+                  }
+                }
+              ]
+            }
+          }]
+        }],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "skip - not yet implemented"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0003}
+      ]
+    }
+  },
+  "zoom": 0,
+  "center": [0, 0],
+  "sources": {},
+  "layers": [],
+  "imports": [
+    {
+      "id": "basemap",
+      "url": "",
+      "data": {
+        "version": 8,
+        "projection": {
+          "name": "globe"
+        },
+        "sources": {
+          "mapbox": {
+            "type": "vector",
+            "tiles": [
+              "local://tiles/mapbox.mapbox-streets-v8/{z}-{x}-{y}.mvt"
+            ]
+          }
+        },
+        "layers": [
+          {
+            "id": "background",
+            "type": "background",
+            "paint": {
+              "background-color": "pink"
+            }
+          },
+          {
+            "id": "country-boundaries",
+            "type": "fill",
+            "source": "mapbox",
+            "source-layer": "country_boundaries",
+            "layout": {},
+            "paint": {
+              "fill-color": "violet"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 256,
+      "width": 256,
+      "operations": [
+        ["setStyle", {
+          "version": 8,
+          "projection": {"name": "globe"},
+          "sources": {
+            "satellite": {
+                "type": "raster",
+                "tiles": [
+                  "local://tiles/{z}-{x}-{y}.satellite.png"
+                ],
+                "maxzoom": 17,
+                "tileSize": 256
+              }
+            },
+          "layers": [{
+                "id": "bg",
+                "type": "background",
+                "paint": {
+                    "background-color": "pink"
+            }
+            }, {
+                "id": "raster",
+                "type": "raster",
+                "source": "satellite"
+            }]
+        }],
+        ["wait"],
+        ["setStyle", {
+            "version": 8,
+            "projection": {"name": "albers"},
+            "sources": {
+              "satellite": {
+                  "type": "raster",
+                  "tiles": [
+                    "local://tiles/{z}-{x}-{y}.satellite.png"
+                  ],
+                  "maxzoom": 17,
+                  "tileSize": 256
+                }
+              },
+            "layers": [{
+                  "id": "bg",
+                  "type": "background",
+                  "paint": {
+                      "background-color": "pink"
+              }
+              }, {
+                  "id": "raster",
+                  "type": "raster",
+                  "source": "satellite"
+              }]
+          }],
+        ["wait"],
+        ["setStyle", {
+            "version": 8,
+            "projection": {"name": "globe"},
+            "sources": {
+              "satellite": {
+                  "type": "raster",
+                  "tiles": [
+                    "local://tiles/{z}-{x}-{y}.satellite.png"
+                  ],
+                  "maxzoom": 17,
+                  "tileSize": 256
+                }
+              },
+            "layers": [{
+                  "id": "bg",
+                  "type": "background",
+                  "paint": {
+                      "background-color": "pink"
+              }
+              }, {
+                  "id": "raster",
+                  "type": "raster",
+                  "source": "satellite"
+              }],
+            "fog": {}
+          }],
+          ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native-macos", "reason": "Difference depending on the GPU"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0008}
+      ]
+    }
+  },
+  "zoom": 0.5,
+  "sources": {},
+  "layers": []
+}

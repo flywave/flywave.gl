@@ -1,0 +1,72 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "_comment": "Verifies line-emissive-strength supports line-progress: emissive intensity ramps from 0 at line start to 1 at line end. Lights are dark so the line is only visible where emissive_strength is high, exercising the per-vertex line-progress evaluation path.",
+      "height": 64,
+      "width": 256
+    }
+  },
+  "center": [0, 0],
+  "zoom": 1,
+  "lights": [
+    {
+      "type": "ambient",
+      "id": "test_ambient",
+      "properties": {
+        "color": "rgba(255, 255, 255, 1)",
+        "intensity": 0.0
+      }
+    },
+    {
+      "type": "directional",
+      "id": "test_directional",
+      "properties": {
+        "color": "rgba(255, 255, 255, 1)",
+        "intensity": 0.0
+      }
+    }
+  ],
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "lineMetrics": true,
+      "data": {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [-160, 0],
+            [160, 0]
+          ]
+        }
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "black"
+      }
+    },
+    {
+      "id": "line",
+      "type": "line",
+      "source": "geojson",
+      "paint": {
+        "line-width": 16,
+        "line-color": "white",
+        "line-emissive-strength": [
+          "interpolate",
+          ["linear"],
+          ["line-progress"],
+          0, 0,
+          1, 1
+        ]
+      }
+    }
+  ]
+}

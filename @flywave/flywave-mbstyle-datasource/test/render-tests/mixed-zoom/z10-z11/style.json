@@ -1,0 +1,29 @@
+{
+    "version": 8,
+    "metadata": {
+        "test": {
+            "spriteFormat": "raster",
+            "width": 512,
+            "height": 512,
+            "debug": true,
+            "collisionDebug": true,
+            "operations": [
+              ["setStyle", "local://mapbox-gl-styles/styles/basic-v9.json"],
+              ["wait"],
+              ["setZoom", 11.1],
+              ["sleep", 3000]
+            ],
+            "skip-test": [
+                {"platform-tag-contains": "web", "reason": "current behavior conflicts with https://github.com/mapbox/mapbox-gl-js/pull/6803. can be fixed when https://github.com/mapbox/api-maps/issues/1480 is done"},
+                {"platform-tag-contains": "native", "reason": "https://github.com/mapbox/mapbox-gl-native/issues/10397"}
+            ]
+        }
+    },
+    "center": [
+        -118.303,
+        33.908
+    ],
+    "zoom": 10.5,
+    "sources": {},
+    "layers": []
+}

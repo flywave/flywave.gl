@@ -1,0 +1,20 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 64,
+      "height": 64
+    }
+  },
+  "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-opacity": 0.5,
+        "background-color": "red"
+      }
+    }
+  ]
+}

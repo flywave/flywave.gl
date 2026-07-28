@@ -1,0 +1,35 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 64,
+      "height": 64,
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "needs issue"}
+      ]
+    }
+  },
+  "zoom": 5,
+  "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": {
+          "stops": [
+            [
+              0,
+              "rgb(118,0,118)"
+            ],
+            [
+              10,
+              "rgb(255,155,0)"
+            ]
+          ],
+          "colorSpace": "hcl"
+        }
+      }
+    }
+  ]
+}

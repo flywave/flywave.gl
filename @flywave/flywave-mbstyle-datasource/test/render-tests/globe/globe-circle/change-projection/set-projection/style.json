@@ -1,0 +1,90 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 512,
+      "height": 512,
+      "operations": [
+        ["setProjection", "globe"],
+        ["wait"],
+        ["setProjection", "mercator"],
+        ["wait"],
+        ["setProjection", "globe"],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "web-windows-chrome", "reason": "Occasionally crashing with 'Error occured during [\"wait\"]':"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0009}
+      ],
+      "ignore-metrics": [
+        {"platform-tag-contains": "native-android-gl-adreno", "reason": "Flaky rendering metrics"}
+      ]
+    }
+  },
+  "fog": {},
+  "zoom": 1.5,
+  "sources": {
+    "satellite": {
+      "type": "raster",
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.satellite.png"
+      ],
+      "tileSize": 256
+    },
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "GeometryCollection",
+        "geometries": [
+          {
+            "type": "Point",
+            "coordinates": [
+              0, 0
+            ]
+          },
+          {
+            "type": "Point",
+            "coordinates": [
+              -20, 0
+            ]
+          },
+          {
+            "type": "Point",
+            "coordinates": [
+              -15, 8
+            ]
+          },
+          {
+            "type": "Point",
+            "coordinates": [
+              0, 20
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "satellite",
+      "type": "raster",
+      "source": "satellite",
+      "paint": {
+        "raster-fade-duration": 0
+      }
+    },
+    {
+      "id": "circle",
+      "type": "circle",
+      "source": "geojson",
+      "paint": {
+        "circle-radius": 30,
+        "circle-color": "purple",
+        "circle-pitch-alignment": "map",
+        "circle-pitch-scale": "map"
+      }
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "width": 256,
+      "height": 256,
+      "skip-test": [
+        {"platform-tag-contains": "web-linux-chrome", "reason": "Raster resampling is broken on Linux in Chrome https://github.com/mapbox/mapbox-gl-js/issues/7331"},
+        {"platform-tag-contains": "web-macos-chrome", "reason": "Antialiasing results in a slightly different appearance for icon pattern on globe. Appearance is still good but the dif is too high (this could use a platform-specific expected.png)"},
+        {"platform-tag-contains": "web-macos-safari", "reason": "Inconsistent star placement"},
+        {"platform-tag-contains": "web-windows-chrome", "reason": "Antialiasing results in a slightly different appearance for icon pattern on globe. Appearance is still good but the dif is too high (this could use a platform-specific expected.png)"},
+        {"platform-tag-contains": "native", "reason": "skip - https://github.com/mapbox/mapbox-gl-native-internal/issues/3425"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.007}
+      ]
+    }
+  },
+  "projection": {"name": "globe"},
+  "center": [
+    0,
+    80.0
+  ],
+  "zoom": 1.3,
+  "terrain": {
+    "source": "terrain-dem-v1",
+    "exaggeration": 200.0
+  },
+  "sources": {
+    "satellite": {
+      "type": "raster",
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.satellite.png"
+      ],
+      "tileSize": 256
+    },
+    "terrain-dem-v1": {
+      "type": "raster-dem",
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.terrain-dem-v1.514.png"
+      ],
+      "maxzoom": 14,
+      "tileSize": 514
+    }
+  },
+  "fog": {
+    "star-intensity": 0
+  },
+  "layers": [
+    {
+      "id": "satellite",
+      "type": "raster",
+      "source": "satellite",
+      "paint": {
+        "raster-fade-duration": 0
+      }
+    }
+  ]
+}

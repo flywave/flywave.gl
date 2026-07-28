@@ -1,0 +1,119 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "height": 256,
+      "skip-test": [
+        {"platform-tag-contains": "web-macos-safari", "reason": "Inconsistencies with fill pattern. Some are visibly noticeable, others subtle. Possibly nonodeterministic rendering."},
+        {"platform-tag-contains": "native", "reason": "https://github.com/mapbox/mapbox-gl-js/issues/3327"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0007}
+      ]
+    }
+  },
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "buffer": 0,
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "property": 20
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [
+                    -0.0004,
+                    0
+                  ],
+                  [
+                    -0.0002,
+                    0.0002
+                  ],
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    -0.0002,
+                    -0.0002
+                  ],
+                  [
+                    -0.0004,
+                    0
+                  ]
+                ]
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "property": 20
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [
+                    0,
+                    -0.0002
+                  ],
+                  [
+                    0,
+                    0.0002
+                  ],
+                  [
+                    0.0003,
+                    0.0002
+                  ],
+                  [
+                    0.0003,
+                    -0.0002
+                  ],
+                  [
+                    0,
+                    -0.0002
+                  ]
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "sprite": "local://sprites/standard",
+  "pitch": 60,
+  "zoom": 19,
+  "layers": [
+    {
+      "id": "extrusion",
+      "type": "fill-extrusion",
+      "source": "geojson",
+      "paint": {
+        "fill-extrusion-pattern": {
+          "stops": [
+            [
+              18,
+              "information"
+            ],
+            [
+              19,
+              "car"
+            ]
+          ],
+          "type": "interval"
+        },
+        "fill-extrusion-height": 10
+      }
+    }
+  ]
+}

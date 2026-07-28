@@ -1,0 +1,71 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "mapMode": "tile",
+      "debug": true,
+      "skip-test": [
+        {"platform-tag-contains": "web", "reason": "Mapbox-gl-js does not support tile-mode"},
+        {"platform-tag-contains": "native-linux", "reason": "https://github.com/mapbox/mapbox-gl-native-internal/issues/523"},
+        {"platform-tag-contains": "swiftshader", "reason": "https://github.com/mapbox/mapbox-gl-native-internal/issues/523"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0005},
+        {"platform-tag-contains": "native-android", "threshold": 0.004},
+        {"platform-tag-contains": "native-android-gl-mali", "threshold": 0.006}
+      ]
+    }
+  },
+  "center": [
+    13.417,
+    52.502
+  ],
+  "zoom": 14,
+  "camera": {"camera-projection": "orthographic"},
+  "sources": {
+    "mapbox": {
+      "type": "vector",
+      "maxzoom": 14,
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.mvt"
+      ]
+    }
+  },
+  "sprite": "local://sprites/icon-text-fit",
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    },
+    {
+      "id": "road",
+      "type": "symbol",
+      "source": "mapbox",
+      "source-layer": "road_label",
+      "layout": {
+        "text-variable-anchor": ["left", "right", "bottom", "top"],
+        "text-field": "{name}",
+        "text-font": [
+          "Open Sans Semibold",
+          "Arial Unicode MS Bold"
+        ],
+        "icon-image": "label",
+        "icon-text-fit": "both",
+        "icon-text-fit-padding": [
+          5,
+          10,
+          5,
+          10
+        ]
+      },
+      "paint": {
+        "icon-opacity": 1
+      }
+    }
+  ]
+}

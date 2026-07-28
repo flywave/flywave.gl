@@ -1,0 +1,59 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "pixelRatio": 0.5,
+      "height": 256,
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.006},
+        {"platform-tag-contains": "swiftshader", "threshold": 0.0055},
+        {"platform-tag-contains": "metal", "threshold": 0.0059}
+      ]
+    }
+  },
+  "center": [
+    13.418056,
+    52.499167
+  ],
+  "zoom": 14,
+  "camera": {"camera-projection": "orthographic"},
+  "sources": {
+    "mapbox": {
+      "type": "vector",
+      "maxzoom": 14,
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.mvt"
+      ]
+    }
+  },
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    },
+    {
+      "id": "icon-default",
+      "type": "symbol",
+      "source": "mapbox",
+      "source-layer": "poi_label",
+      "filter": [
+        "==",
+        "maki",
+        "restaurant"
+      ],
+      "layout": {
+        "symbol-placement": "point",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-image": "information"
+      },
+      "paint": {
+        "icon-opacity": 1
+      }
+    }
+  ]
+}

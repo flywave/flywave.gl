@@ -1,0 +1,72 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "pixelRatio": 2,
+      "width": 64,
+      "height": 64,
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0023},
+        {"platform-tag-contains": "native-android-gl-mali", "threshold": 0.0035},
+        {"platform-tag-contains": "native-android-gl-powervr", "threshold": 0.007},
+        {"platform-tag-contains": "metal", "threshold": 0.0035}
+      ]
+    }
+  },
+  "sprite": "local://sprites/standard",
+  "sources": {
+    "a": {
+      "type": "geojson",
+      "data": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -180,
+            10
+          ],
+          [
+            180,
+            10
+          ]
+        ]
+      }
+    },
+    "b": {
+      "type": "geojson",
+      "data": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -180,
+            -10
+          ],
+          [
+            180,
+            -10
+          ]
+        ]
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "a",
+      "type": "line",
+      "source": "a",
+      "paint": {
+        "line-width": 4,
+        "line-pattern": "border-dot-13"
+      }
+    },
+    {
+      "id": "b",
+      "type": "line",
+      "source": "b",
+      "paint": {
+        "line-width": 30,
+        "line-pattern": "rectangle-yellow-2"
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 1024,
+      "height": 768,
+      "fontstackCompositing": "server",
+      "operations": [
+        [
+          "setStyle",
+          "local://styles/standard-hd.json"
+        ],
+        ["wait"],
+        ["wait"],
+        ["wait"]
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.005}
+      ]
+    }
+  },
+  "center": [-73.976486, 40.762959],
+  "zoom": 17.37,
+  "bearing": 220.31,
+  "pitch": 34.79,
+  "sources": {},
+  "layers": []
+}

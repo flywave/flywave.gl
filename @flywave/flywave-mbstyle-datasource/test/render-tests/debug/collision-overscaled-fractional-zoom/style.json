@@ -1,0 +1,71 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "collisionDebug": true,
+      "height": 256,
+      "skip-test": [
+        {"platform-tag-contains": "web-macos-chrome", "reason": "Due to incorrect resampling or antialasing, shifted icons appear pixelated. Likely related to the above issue. Difs here are small, but the appearance is worse."},
+        {"platform-tag-contains": "web-windows-chrome", "reason": "Due to incorrect resampling or antialasing, shifted icons appear pixelated. Likely related to the above issue. Difs here are small, but the appearance is worse."},
+        {"platform-tag-contains": "native", "reason": "https://github.com/mapbox/mapbox-gl-native/issues/3841"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0004}
+      ]
+    }
+  },
+  "center": [
+    13.418056,
+    52.499167
+  ],
+  "zoom": 17.5,
+  "camera": {"camera-projection": "orthographic"},
+  "sources": {
+    "mapbox": {
+      "type": "vector",
+      "maxzoom": 14,
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.mvt"
+      ]
+    }
+  },
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "sprite": "local://sprites/sprite",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    },
+    {
+      "id": "line",
+      "type": "symbol",
+      "source": "mapbox",
+      "source-layer": "road_label",
+      "layout": {
+        "icon-image": "triangle-stroked-12",
+        "text-field": "test test",
+        "text-size": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          17,
+          10,
+          18,
+          30
+        ],
+        "text-font": [
+          "Open Sans Semibold",
+          "Arial Unicode MS Bold"
+        ],
+        "symbol-placement": "point",
+        "symbol-spacing": 20
+      },
+      "paint": {
+        "icon-opacity": 1
+      }
+    }
+  ]
+}

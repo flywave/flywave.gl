@@ -1,0 +1,28 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 64,
+      "height": 64,
+      "operations": [
+        ["setFog", {"color": "red"}],
+        ["wait"],
+        ["setFog", {}],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "skip - to be ported https://mapbox.atlassian.net/browse/MAPSNAT-1959"}
+      ]
+    }
+  },
+  "pitch": 80,
+  "zoom": 12,
+  "fog": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background"
+    }
+  ],
+  "sources": {}
+}

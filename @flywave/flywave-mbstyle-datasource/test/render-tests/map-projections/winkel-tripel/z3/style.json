@@ -1,0 +1,34 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 512,
+      "width": 512,
+      "operations": [
+        ["setProjection", "winkelTripel"],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "skip - https://github.com/mapbox/mapbox-gl-native-internal/issues/2534"}
+      ]
+    }
+  },
+  "zoom": 3,
+  "sources": {
+    "graticule": {
+      "type": "geojson",
+      "data": "local://data/graticule.geojson"
+    }
+  },
+  "layers": [
+    {
+      "id": "graticule",
+      "source": "graticule",
+      "type": "line",
+      "paint": {
+          "line-width": 1,
+          "line-color": "#aaa"
+      }
+    }
+  ]
+}

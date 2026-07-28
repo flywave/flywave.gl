@@ -1,0 +1,32 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "Flaky"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0005}
+      ]
+    }
+  },
+  "zoom": 5.5,
+  "pitch": 70.0,
+  "bearing": -16.8,
+  "longitude": 38.175,
+  "latitude": 19.955,
+  "sources": {},
+  "projection": {
+    "name": "globe"
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "purple"
+      }
+    }
+  ]
+}

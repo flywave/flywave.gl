@@ -1,0 +1,74 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "description": "Shift JIS 2-byte special characters and directional arrows placed on purely vertical lines. All of these characters are in needsRotationInVerticalMode so they should appear rotated 90° (lying sideways) rather than upright. The surrounding ア katakana are upright for contrast. See debug/shift-jis-vertical-text.html for the expected Chrome CSS rendering.",
+      "height": 512,
+      "width": 512
+    }
+  },
+  "zoom": 2,
+  "center": [-14.41400, 39.09187],
+  "sources": {
+    "mapbox": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": { "name": "ア‐ア―ア‥ア∥ア" },
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [[-30, 65], [-30, 15]]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": { "name": "ア～ア＝ア￣ア．ア" },
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [[-18, 65], [-18, 15]]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": { "name": "ア←ア→ア↑ア↓ア" },
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [[-6, 65], [-6, 15]]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "white" }
+    },
+    {
+      "id": "lines-symbol",
+      "type": "symbol",
+      "source": "mapbox",
+      "layout": {
+        "text-field": "{name}",
+        "symbol-placement": "line",
+        "symbol-spacing": 500,
+        "text-size": 30,
+        "text-allow-overlap": true,
+        "text-writing-mode": ["vertical", "horizontal"],
+        "text-font": ["NotoCJK"]
+      }
+    },
+    {
+      "id": "lines",
+      "type": "line",
+      "source": "mapbox",
+      "paint": { "line-opacity": 0.25 }
+    }
+  ]
+}

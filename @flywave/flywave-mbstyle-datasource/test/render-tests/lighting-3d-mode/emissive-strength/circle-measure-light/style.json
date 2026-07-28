@@ -1,0 +1,128 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 128,
+      "height": 256,
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "Flaky, under development"}
+      ]
+    }
+  },
+  "center": [
+    0,
+    0
+  ],
+  "zoom": 0,
+  "pitch": 60,
+  "lights": [
+    {
+      "type": "ambient",
+      "id": "test_ambient",
+      "properties": {
+        "color": "rgba(0, 0, 0, 1)",
+        "intensity": 0.0
+      }
+    },
+    {
+      "type": "directional",
+      "id": "test_directional",
+      "properties": {
+        "color": "rgba(0, 0, 0, 1)",
+        "intensity": 0.0
+      }
+    }
+  ],
+  "sources": {
+    "geojson1": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "color": "green"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                0,
+                0
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "geojson2": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "color": "blue"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                0,
+                60
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "circles1",
+      "type": "circle",
+      "source": "geojson1",
+      "paint": {
+        "circle-radius": 40,
+        "circle-color": [
+          "get",
+          "color"
+        ],
+        "circle-pitch-scale": "map",
+        "circle-pitch-alignment": "map",
+        "circle-emissive-strength": [
+          "interpolate",
+          ["linear"],
+          ["measure-light", "brightness"],
+          0.0,
+          1.0,
+          0.5,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "circles2",
+      "type": "circle",
+      "source": "geojson2",
+      "paint": {
+        "circle-radius": 20,
+        "circle-color": [
+          "get",
+          "color"
+        ],
+        "circle-pitch-scale": "map",
+        "circle-pitch-alignment": "map",
+        "circle-emissive-strength": [
+          "interpolate",
+          ["linear"],
+          ["measure-light", "brightness"],
+          0.0,
+          0.0,
+          0.5,
+          0.1
+        ]
+      }
+    }
+  ]
+}

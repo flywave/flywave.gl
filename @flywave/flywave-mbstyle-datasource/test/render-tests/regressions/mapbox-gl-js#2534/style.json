@@ -1,0 +1,54 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "operations": [
+        [
+          "setPaintProperty",
+          "land",
+          "fill-pattern",
+          null
+        ],
+        [
+          "wait"
+        ]
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0003}
+      ]
+    }
+  },
+  "sources": {
+    "mapbox": {
+      "type": "vector",
+      "maxzoom": 14,
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.mvt"
+      ]
+    }
+  },
+  "transition": {
+    "duration": 0
+  },
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    },
+    {
+      "id": "land",
+      "type": "fill",
+      "source": "mapbox",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#3bb2d0",
+        "fill-pattern": "zoo"
+      }
+    }
+  ]
+}

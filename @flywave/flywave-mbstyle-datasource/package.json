@@ -23,7 +23,7 @@
     },
     "scripts": {
         "build": "tsc --build $EXTRA_TSC_ARGS",
-        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*Test.js",
+        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*Test.js --exclude './test/*Compat*' --exclude './test/*Render*'",
         "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS"
     },
     "repository": {

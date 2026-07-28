@@ -1,0 +1,46 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 250,
+      "height": 64,
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "skip - https://mapbox.atlassian.net/browse/MAPSNAT-2559"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "web", "threshold": 0.00095}
+      ]
+    }
+  },
+  "camera": {"camera-projection": "orthographic"},
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "Point",
+        "coordinates": [
+          0,
+          0
+        ]
+      }
+    }
+  },
+  "sprite": "local://sprites/stretch",
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "symbol",
+      "type": "symbol",
+      "source": "geojson",
+      "layout": {
+        "text-field": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "text-font": [
+          "Open Sans Semibold",
+          "Arial Unicode MS Bold"
+        ],
+        "icon-image": "shield",
+        "icon-text-fit": "both"
+      }
+    }
+  ]
+}

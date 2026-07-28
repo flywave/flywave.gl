@@ -1,0 +1,83 @@
+{
+    "version": 8,
+    "metadata": {
+        "test": {
+            "width": 200,
+            "height": 200,
+            "collisionDebug": true,
+            "description": "Covers placement and collision for elevated text. There is also text completely behind terrain that shouldn't be visible.",
+            "operations": [
+                ["waitFrameReady", 30]
+            ],
+            "skip-test": [
+                {"platform-tag-contains": "native", "reason": "skip - not implemented in gl-native yet"}
+            ],
+            "ignore-metrics": [
+                {"platform-tag-contains": "native", "reason": "flaky due to occlusion/waitFrameReady"}
+            ],
+            "image-threshold": [
+                {"platform-tag-contains": "", "threshold": 0.01}
+            ]
+        }
+    },
+    "center": [-74.7546, 39.1667],
+    "pitch": 35,
+    "zoom": 9.1,
+    "bearing": -80,
+    "terrain": {
+        "source": "rgbterrain",
+        "exaggeration": 33
+    },
+    "sources": {
+        "us-counties": {
+            "type": "vector",
+            "maxzoom": 7,
+            "minzoom": 7,
+            "tiles": [
+                "local://tiles/counties-{z}-{x}-{y}.mvt"
+            ]
+        },
+        "rgbterrain": {
+            "type": "raster-dem",
+            "tiles": [
+              "local://tiles/const/{z}-{x}-{y}.terrain.512.png"
+            ],
+            "minzoom": 6,
+            "maxzoom": 7,
+            "tileSize": 512
+        }
+    },
+    "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+    "layers": [
+        {
+            "id": "background",
+            "type": "background",
+            "paint": {
+                "background-color": "white"
+            }
+        },
+        {
+            "id": "counties",
+            "type": "symbol",
+            "source": "us-counties",
+            "source-layer": "counties",
+            "layout": {
+                "text-field": "{name}",
+                "text-size": 11,
+                "symbol-spacing": 60,
+                "text-max-angle": 1000,
+                "text-pitch-alignment": "viewport",
+                "text-font": [
+                    "Open Sans Semibold",
+                    "Arial Unicode MS Bold"
+                ],
+                "symbol-placement": "line"
+            },
+            "paint": {
+                "icon-occlusion-opacity": 0,
+                "text-occlusion-opacity": 0
+            },
+            "interactive": true
+        }
+    ]
+}

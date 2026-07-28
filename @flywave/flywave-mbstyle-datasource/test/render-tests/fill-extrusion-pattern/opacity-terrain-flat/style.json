@@ -1,0 +1,128 @@
+{
+  "version": 8,
+  "metadata": {
+    "description": "Flat roof centroid attribute array is uploaded after terrain gets enabled.",
+    "test": {
+      "height": 256,
+      "operations": [
+        ["wait"],
+        ["setTerrain", {
+          "source": "rgbterrain",
+          "exaggeration": 0.05
+        }],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "web", "reason": "Deferred for globe view"},
+        {"platform-tag-contains": "web-macos-safari", "reason": "Inconsistencies with fill pattern. Some are visibly noticeable, others subtle. Possibly nonodeterministic rendering."},
+        {"platform-tag-contains": "native", "reason": "https://github.com/mapbox/mapbox-gl-js/issues/3327"},
+        {"platform-tag-contains": "native-linux", "reason": "flaky, https://mapbox.atlassian.net/browse/MAPSNAT-867"},
+        {"platform-tag-contains": "native-macos", "reason": "Difference in pattern depending on GPU"}
+      ]
+    }
+  },
+  "sources": {
+    "rgbterrain": {
+      "type": "raster-dem",
+      "tiles": [
+        "local://tiles/12-759-1609.terrain.png"
+      ],
+      "maxzoom": 11,
+      "tileSize": 256
+    },
+    "geojson": {
+      "type": "geojson",
+      "buffer": 0,
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "type": "building",
+              "height": 20
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [
+                    -0.0004,
+                    -0.0002
+                  ],
+                  [
+                    -0.0002,
+                    0
+                  ],
+                  [
+                    0,
+                    -0.0002
+                  ],
+                  [
+                    -0.0002,
+                    -0.0004
+                  ],
+                  [
+                    -0.0004,
+                    -0.0002
+                  ]
+                ]
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "type": "building",
+              "height": 20
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [
+                    0.0001,
+                    0.0001
+                  ],
+                  [
+                    0.0001,
+                    0.0005
+                  ],
+                  [
+                    0.0004,
+                    0.0005
+                  ],
+                  [
+                    0.0004,
+                    0.0001
+                  ],
+                  [
+                    0.0001,
+                    0.0001
+                  ]
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "sprite": "local://sprites/standard",
+  "pitch": 66,
+  "bearing": -60,
+  "zoom": 18,
+  "layers": [
+    {
+      "id": "extrusion",
+      "type": "fill-extrusion",
+      "source": "geojson",
+      "paint": {
+        "fill-extrusion-pattern": "information",
+        "fill-extrusion-opacity": 0.5,
+        "fill-extrusion-height": 10,
+        "fill-extrusion-ambient-occlusion-intensity": 0.6
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "spriteFormat": "raster",
+      "width": 512,
+      "height": 512,
+      "operations": [
+        ["setStyle", "local://styles/sanfrancisco.json"],
+        ["setZoom", 15 ],
+        ["setCenter", [-122.448635, 37.7669995] ],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "https://github.com/mapbox/mapbox-gl-native/issues/10412"}
+      ]
+    }
+  },
+  "sources": {},
+  "layers": []
+}

@@ -1,0 +1,64 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 168,
+      "width": 128,
+      "pixelRatio": 2,
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "not implemented in gl-native yet"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0002}
+      ]
+    }
+  },
+  "center": [ 0, 0 ],
+  "zoom": 0,
+  "terrain": {
+    "source": "dem"
+  },
+  "sources": {
+    "dem": {
+      "type": "raster-dem",
+      "tiles": [
+        "local://tiles/no/{z}-{x}-{y}.terrain.512.png"
+      ],
+      "maxzoom": 15,
+      "tileSize": 512
+    },
+    "vertical": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [ 0, 0 ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "vertical",
+      "type": "symbol",
+      "source": "vertical",
+      "layout": {
+        "text-writing-mode": ["vertical"],
+        "text-field": ["format", "London", ["image", "london-tfl-rail.london-underground"],
+                                 "IH", ["image", "au-national-route-6"], ["image", "school"], "ッ",{"font-scale": 1.8}],
+        "text-font": [
+          "Open Sans Semibold",
+          "Arial Unicode MS Bold"
+        ]
+      }
+    }
+  ]
+}

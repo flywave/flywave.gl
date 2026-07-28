@@ -1,0 +1,69 @@
+{
+  "version": 8,
+  "zoom": 1,
+  "metadata": {
+    "test": {
+      "width": 64,
+      "height": 64,
+      "operations": [
+        [
+          "addImage",
+          "marker",
+          "./image/marker.png"
+        ],
+        [
+          "addLayer",
+          {
+            "id": "fill",
+            "type": "fill",
+            "source": "geojson",
+            "paint": {
+              "fill-antialias": false,
+              "fill-pattern": "marker"
+            }
+          }
+        ],
+        [
+          "wait"
+        ]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native-android", "reason": "Needs to be investigated and fixed."},
+        {"platform-tag-contains": "native-ios", "reason": "Needs to be investigated and fixed."}
+      ]
+    }
+  },
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -10,
+              -10
+            ],
+            [
+              -10,
+              10
+            ],
+            [
+              10,
+              10
+            ],
+            [
+              10,
+              -10
+            ],
+            [
+              -10,
+              -10
+            ]
+          ]
+        ]
+      }
+    }
+  },
+  "layers": []
+}

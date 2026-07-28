@@ -1,0 +1,206 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 256,
+      "width": 256,
+      "operations": [
+        [
+          "wait"
+        ],
+        [
+          "setLights",
+          [
+            {
+              "type": "ambient",
+              "id": "environment",
+              "properties": {
+                "intensity": 0.2
+              }
+            },
+            {
+              "type": "directional",
+              "id": "sun_light",
+              "properties": {
+                "color": "rgba(255.0, 255.0, 255.0, 1.0)",
+                "intensity": 0.4,
+                "direction": [
+                  200.0,
+                  30.0
+                ]
+              }
+            }
+          ]
+        ],
+        [
+          "wait"
+        ]
+      ]
+    }
+  },
+  "transition": {
+    "duration": 0
+  },
+  "center": [
+    -113.2935,
+    35.9529
+  ],
+  "zoom": 11.2,
+  "pitch": 80,
+  "sources": {
+    "sample-point-a": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+              "coordinates": [
+                -113.2935,
+                35.9529
+              ],
+              "type": "Point"
+            }
+          }
+        ]
+      }
+    },
+    "sample-point-b": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+              "coordinates": [
+                -113.2735,
+                35.9529
+              ],
+              "type": "Point"
+            }
+          }
+        ]
+      }
+    },
+    "sample-point-c": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+              "coordinates": [
+                -113.3135,
+                35.9529
+              ],
+              "type": "Point"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "sprite": "local://sprites/sprite",
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "lights": [
+    {
+      "type": "ambient",
+      "id": "environment",
+      "properties": {
+        "intensity": 0.7
+      }
+    },
+    {
+      "type": "directional",
+      "id": "sun_light",
+      "properties": {
+        "color": "rgba(255.0, 255.0, 255.0, 1.0)",
+        "intensity": 0.8,
+        "direction": [
+          200.0,
+          30.0
+        ]
+      }
+    }
+  ],
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    },
+    {
+      "id": "sample-symbol-calculate-a",
+      "type": "symbol",
+      "source": "sample-point-a",
+      "symbol-placement": "point",
+      "layout": {
+        "icon-image": [
+          "image",
+          "triangle-stroked-12",
+          "building-12"
+        ]
+      },
+      "paint": {
+        "icon-image-cross-fade": [
+          "measure-light",
+          "brightness"
+        ]
+      }
+    },
+    {
+      "id": "sample-symbol-calculate-b",
+      "type": "symbol",
+      "source": "sample-point-b",
+      "symbol-placement": "point",
+      "layout": {
+        "icon-image": [
+          "image",
+          "triangle-stroked-12",
+          "building-12"
+        ]
+      },
+      "paint": {
+        "icon-image-cross-fade": [
+          "+",
+          0.3,
+          [
+            "measure-light",
+            "brightness"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "sample-symbol-calculate-c",
+      "type": "symbol",
+      "source": "sample-point-c",
+      "symbol-placement": "point",
+      "layout": {
+        "icon-image": [
+          "image",
+          "triangle-stroked-12",
+          "building-12"
+        ]
+      },
+      "paint": {
+        "icon-image-cross-fade": [
+          "+",
+          0.6,
+          [
+            "measure-light",
+            "brightness"
+          ]
+        ]
+      }
+    }
+  ]
+}

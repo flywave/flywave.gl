@@ -1,0 +1,25 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "spriteFormat": "raster",
+      "width": 512,
+      "height": 512,
+      "operations": [
+        ["setStyle", "local://styles/chicago.json"],
+        ["setCameraPosition", [-87.7942445, 41.7703965, 10000.0]],
+        ["lookAtPoint", [-87.6942445, 41.8703965]],
+        ["setZoom", 13 ],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "not implemented in gl-native yet"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.00016}
+      ]
+    }
+  },
+  "sources": {},
+  "layers": []
+}

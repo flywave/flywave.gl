@@ -1,0 +1,89 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 512,
+      "width": 512,
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "Flaky, under development"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.00075},
+        {"platform-tag-contains": "native-android-gl-mali", "threshold": 0.002}
+      ]
+    }
+  },
+  "lights": [
+    {
+      "type": "ambient",
+      "id": "environment",
+      "properties": {
+        "intensity": 0.0
+      }
+    },
+    {
+      "type": "directional",
+      "id": "sun_light",
+      "properties": {
+        "intensity": 1.0,
+        "cast-shadows": true,
+        "shadow-intensity": 1.0,
+        "direction": [195, 75]
+      }
+    }
+  ],
+  "sources": {
+    "mapbox": {
+      "type": "vector",
+      "maxzoom": 16,
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.vector.pbf"
+      ]
+    }
+  },
+  "pitch": 70,
+  "zoom": 16.2,
+  "bearing": 264,
+  "center": [
+    -122.3949,
+    37.7852
+  ],
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "lightgray"
+      }
+    },
+    {
+      "id": "land",
+      "type": "fill",
+      "source": "mapbox",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "lightblue"
+      }
+    },
+    {
+      "id": "road",
+      "type": "line",
+      "source": "mapbox",
+      "source-layer": "road",
+      "paint": {
+          "line-color": "lightyellow",
+          "line-width": 10
+      }
+    },
+    {
+      "id": "extrusion",
+      "type": "fill-extrusion",
+      "source": "mapbox",
+      "source-layer": "building",
+      "paint": {
+        "fill-extrusion-color": "white",
+        "fill-extrusion-height": ["get", "height"]
+      }
+    }
+  ]
+}

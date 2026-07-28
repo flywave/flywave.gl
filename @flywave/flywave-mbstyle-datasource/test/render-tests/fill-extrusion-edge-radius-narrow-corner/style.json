@@ -1,0 +1,79 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 64,
+      "height": 64,
+      "description": "https://github.com/mapbox/mapbox-gl-js/issues/13691 - a building footprint with vertices extremely close to each other, tessellated at a low (city-wide) zoom where tile-coordinate rounding collapses some of them to the same point. fill-extrusion-edge-radius must not produce a degenerate NaN vertex from this, which otherwise renders as a long stray triangle spanning far outside the building.",
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0001}
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "https://mapbox.atlassian.net/browse/MAPSNAT-4059"}
+      ]
+    }
+  },
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "maxzoom": 9,
+      "data": {
+        "type": "Feature",
+        "properties": {
+          "height": 15,
+          "min_height": 0
+        },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [7.230834513902664, 50.64097242263006],
+              [7.230921685695648, 50.64095881464951],
+              [7.230914980173111, 50.6409418046683],
+              [7.230979353189468, 50.640931598676616],
+              [7.2309766709804535, 50.64092309368186],
+              [7.231046408414841, 50.640912037186325],
+              [7.231022268533707, 50.640849950663295],
+              [7.231028974056244, 50.6408491001624],
+              [7.231026291847229, 50.640843997156765],
+              [7.231019586324692, 50.640844847657746],
+              [7.231007516384125, 50.640812528609814],
+              [7.230939120054245, 50.640823585128715],
+              [7.230963259935379, 50.640888223187204],
+              [7.230766117572784, 50.6409171401846],
+              [7.230782210826874, 50.64096051564729],
+              [7.230827808380127, 50.64095371165581],
+              [7.230834513902664, 50.64097242263006]
+            ]
+          ]
+        }
+      }
+    }
+  },
+  "center": [7.2309410478919744, 50.64089896072164],
+  "zoom": 12,
+  "pitch": 45,
+  "bearing": -17.6,
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#eeeeee"
+      }
+    },
+    {
+      "id": "extrusion",
+      "type": "fill-extrusion",
+      "source": "geojson",
+      "paint": {
+        "fill-extrusion-height": 15,
+        "fill-extrusion-base": 0,
+        "fill-extrusion-color": "#aaaaaa"
+      },
+      "layout": {
+        "fill-extrusion-edge-radius": 1
+      }
+    }
+  ]
+}

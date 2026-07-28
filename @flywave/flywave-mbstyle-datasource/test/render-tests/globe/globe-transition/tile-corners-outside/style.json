@@ -1,0 +1,44 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 512,
+      "height": 512,
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "skip - https://github.com/mapbox/mapbox-gl-js/pull/12075"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.05}
+      ]
+    }
+  },
+  "center": [22, 78.9],
+  "zoom": 5.65,
+  "sources": {
+    "mapbox": {
+      "type": "vector",
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.mvt"
+      ],
+      "maxzoom": 3
+    }
+  },
+  "projection": {
+    "name": "globe"
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {"background-color": "hsl(206, 100%, 74%)"}
+    },
+    {
+      "id": "country-boundaries",
+      "type": "fill",
+      "source": "mapbox",
+      "source-layer": "country_boundaries",
+      "layout": {},
+      "paint": {"fill-color": "hsl(43, 90%, 56%)"}
+    }
+  ]
+}

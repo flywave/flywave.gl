@@ -1,0 +1,84 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "collisionDebug": true,
+      "height": 160,
+      "width": 160,
+      "description": "Collision debug and occlusion test for text and icons.",
+      "operations": [
+        ["waitFrameReady", 30]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "web-linux-firefox", "reason": "Test fails to render. https://github.com/mapbox/mapbox-gl-js/issues/12406"},
+        {"platform-tag-contains": "native", "reason": "not implemented in gl-native yet"}
+      ],
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "flaky due to occlusion/waitFrameReady"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.005}
+      ]
+    }
+  },
+  "center": [
+    13.421,
+    52.499168
+  ],
+  "bearing": 36.8,
+  "pitch": 41,
+  "zoom": 14,
+  "terrain": {
+    "source": "rgbterrain",
+    "exaggeration": 3
+  },
+  "sources": {
+    "mapbox": {
+      "type": "vector",
+      "maxzoom": 14,
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.mvt"
+      ]
+    },
+    "rgbterrain": {
+      "type": "raster-dem",
+      "tiles": [
+        "local://tiles/const/{z}-{x}-{y}.terrain.512.png"
+      ],
+      "maxzoom": 15,
+      "tileSize": 512
+    }
+  },
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "sprite": "local://sprites/sprite",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    },
+    {
+      "id": "line",
+      "type": "symbol",
+      "source": "mapbox",
+      "source-layer": "road_label",
+      "layout": {
+        "icon-image": "triangle-stroked-12",
+        "text-field": "test test",
+        "text-font": [
+          "Open Sans Semibold",
+          "Arial Unicode MS Bold"
+        ],
+        "symbol-placement": "point",
+        "symbol-spacing": 20
+      },
+      "paint": {
+        "icon-opacity": 1,
+        "icon-occlusion-opacity": 0,
+        "text-occlusion-opacity": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "spriteFormat": "raster",
+      "pixelRatio": 1,
+      "width": 64,
+      "height": 64
+    }
+  },
+  "center": [
+    0,
+    0
+  ],
+  "zoom": 0,
+  "sources": {},
+  "sprite": "local://sprites/2x",
+  "layers": [
+    {
+      "id": "default",
+      "type": "background",
+      "paint": {
+        "background-pattern": "icon"
+      }
+    }
+  ]
+}

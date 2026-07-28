@@ -1,0 +1,81 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 200,
+      "height": 200,
+      "skip-test": [
+        {"platform-tag-contains": "web", "reason": "possibly related to incorrect line progress values near line-joins and line-caps"},
+        {"platform-tag-contains": "native", "reason": "skip - Known issues https://mapbox.atlassian.net/browse/MAPS3D-1494"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.003}
+      ]
+    }
+  },
+  "zoom": 3,
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              -1,
+              8
+            ],
+            [
+              8,
+              1
+            ],
+            [
+              1,
+              -8
+            ],
+            [
+              -8,
+              -1
+            ],
+            [
+              1,
+              4
+            ],
+            [
+              4,
+              -1
+            ],
+            [
+              -1,
+              -4
+            ],
+            [
+              -2,
+              0
+            ]
+          ]
+        }
+      },
+      "lineMetrics": true
+    }
+  },
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "line",
+      "type": "line",
+      "source": "geojson",
+      "paint": {
+        "line-width": 20,
+        "line-pattern": "information",
+        "line-trim-offset": [0.0, 0.4]
+      },
+      "layout": {
+        "line-join": "none",
+        "line-z-offset": 0.01
+      }
+    }
+  ]
+}

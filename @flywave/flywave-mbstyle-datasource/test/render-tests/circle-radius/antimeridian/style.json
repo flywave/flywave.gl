@@ -1,0 +1,39 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 514,
+      "height": 514,
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "skip - https://mapbox.atlassian.net/browse/MAPSNAT-2041"}
+      ]
+    }
+  },
+  "center": [
+    0,
+    0
+  ],
+  "zoom": 0,
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "Point",
+        "coordinates": [
+          179,
+          0
+        ]
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "circles",
+      "type": "circle",
+      "source": "geojson",
+      "paint": {
+        "circle-radius": 20
+      }
+    }
+  ]
+}

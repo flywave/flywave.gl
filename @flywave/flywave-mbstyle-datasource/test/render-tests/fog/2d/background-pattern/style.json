@@ -1,0 +1,26 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 128,
+      "height": 128
+    }
+  },
+  "pitch": 80,
+  "zoom": 12,
+  "sources": {},
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-pattern": "pedestrian-polygon"
+      }
+    }
+  ],
+  "fog": {
+    "range": [-1, 0],
+    "color": "white"
+  }
+}

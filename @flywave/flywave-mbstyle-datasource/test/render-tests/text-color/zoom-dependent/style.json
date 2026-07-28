@@ -1,0 +1,126 @@
+{
+    "comment": [
+        "Currently we have different behaviour for zoom-based paint properties:",
+        "* For feature dependent we calculate two values for overscaled tile zoom and overscaled tile zoom + 1,",
+        "  and interpolate between them. That means we ignore intermediate values and do not calculate interpolate",
+        "  function correctly.",
+        "* For feature independent we recalculate values and pass them as uniforms on every frame.",
+        "This test checks that we don't change that behaviour without explicit decision."
+    ],
+    "version": 8,
+    "metadata": {
+        "test": {
+            "height": 100,
+            "width": 100
+        }
+    },
+    "zoom": 1.25,
+    "sources": {
+        "test_source1": {
+            "type": "geojson",
+            "data": {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [0, -8]
+                },
+                "properties": {
+                    "first": "white",
+                    "second": "black"
+                }
+            }
+        },
+        "test_source2": {
+            "type": "geojson",
+            "data": {
+                "type": "Point",
+                "coordinates": [0, 0]
+            }
+        },
+        "test_source3": {
+            "type": "geojson",
+            "data": {
+                "type": "Point",
+                "coordinates": [0, 8]
+            }
+        }
+    },
+    "glyphs": "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
+    "layers": [
+        {
+            "id": "back",
+            "type": "background",
+            "paint": {
+                "background-color": "white"
+            }
+        },
+        {
+            "id": "test_layer1",
+            "type": "symbol",
+            "source": "test_source1",
+            "layout": {
+                "text-font": [
+                    "Open Sans Semibold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-field": "Light grey"
+            },
+            "paint": {
+                "text-color": ["interpolate",
+                    ["linear"],
+                    ["zoom"],
+                    1,
+                    ["get", "first"],
+                    1.3,
+                    "blue",
+                    1.5,
+                    ["get", "second"]
+                ]
+            }
+        },
+        {
+            "id": "test_layer2",
+            "type": "symbol",
+            "source": "test_source2",
+            "layout": {
+                "text-font": [
+                    "Open Sans Semibold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-field": "Grey"
+            },
+            "paint": {
+                "text-color": ["interpolate",
+                    ["linear"],
+                    ["zoom"],
+                    1,
+                    "white",
+                    1.5,
+                    "black"
+                ]
+            }
+        },
+        {
+            "id": "test_layer3",
+            "type": "symbol",
+            "source": "test_source3",
+            "layout": {
+                "text-font": [
+                    "Open Sans Semibold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-field": "Dark grey"
+            },
+            "paint": {
+                "text-color": ["interpolate",
+                    ["exponential", 0.01],
+                    ["zoom"],
+                    1,
+                    "white",
+                    1.5,
+                    "black"
+                ]
+            }
+        }
+    ]
+}

@@ -1,0 +1,66 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 64,
+      "height": 64,
+      "description": "Tests that text-translate transitions correctly by checking the rendering halfway through the (default 300ms long) transition from [-10, 0] to [10, 0].",
+      "operations": [
+        [
+          "setPaintProperty",
+          "symbol",
+          "text-translate",
+          [
+            10,
+            0
+          ]
+        ],
+        [
+          "wait",
+          0
+        ],
+        [
+          "wait",
+          150
+        ]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native", "reason": "https://github.com/mapbox/mapbox-gl-native/issues/10619"}
+      ]
+    }
+  },
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "Point",
+        "coordinates": [
+          0,
+          0
+        ]
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "symbol",
+      "type": "symbol",
+      "source": "geojson",
+      "layout": {
+        "symbol-placement": "point",
+        "text-field": "A",
+        "text-font": [
+          "Open Sans Semibold",
+          "Arial Unicode MS Bold"
+        ]
+      },
+      "paint": {
+        "text-translate": [
+          -10,
+          0
+        ]
+      }
+    }
+  ]
+}

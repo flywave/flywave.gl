@@ -1,0 +1,115 @@
+{
+    "version": 8,
+    "metadata": {
+        "test": {
+            "width": 128,
+            "height": 128,
+            "skip-test": [
+                {"platform-tag-contains": "native", "reason": "Skip - not yet implemented in gl-native"}
+            ],
+            "image-threshold": [
+                {"platform-tag-contains": "", "threshold": 0.002}
+            ]
+        }
+    },
+    "center": [0, 0],
+    "zoom": 0,
+    "sources": {
+        "geojson": {
+            "type": "geojson",
+            "data": {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[-150, 0], [150, 0]]
+                        }
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[0, -70], [0, 70]]
+                        }
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[-120, -60], [120, 60]]
+                        }
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[-120, 60], [120, -60]]
+                        }
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[-80, -70], [80, 70]]
+                        }
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[-80, 70], [80, -70]]
+                        }
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[-150, -35], [150, 35]]
+                        }
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[-150, 35], [150, -35]]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "layers": [
+        {
+            "id": "background",
+            "type": "background",
+            "paint": {
+                "background-color": "#000000"
+            }
+        },
+        {
+            "id": "lines",
+            "type": "line",
+            "source": "geojson",
+            "paint": {
+                "line-color": "rgba(100, 220, 255, 0.5)",
+                "line-width": 14,
+                "line-blend-mode": "additive",
+                "line-blend-additive-clamp": 1.0
+            },
+            "layout": {
+                "line-cap": "round",
+                "line-join": "round"
+            }
+        }
+    ]
+}

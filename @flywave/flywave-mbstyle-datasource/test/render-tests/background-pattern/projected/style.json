@@ -1,0 +1,43 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 256,
+      "height": 256,
+      "operations": [
+        ["setProjection", "albers"],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "web", "reason": "Pattern should be seamless across tile edges https://github.com/mapbox/mapbox-gl-js/issues/11221"},
+        {"platform-tag-contains": "native", "reason": "skip - https://github.com/mapbox/mapbox-gl-native-internal/issues/2534"}
+      ]
+    }
+  },
+  "zoom": 2,
+  "sources": {
+    "graticule": {
+      "type": "geojson",
+      "data": "local://data/graticule.geojson"
+    }
+  },
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-pattern": "cemetery"
+      }
+    },
+    {
+      "id": "graticule",
+      "source": "graticule",
+      "type": "line",
+      "paint": {
+          "line-width": 1,
+          "line-color": "#aaa"
+      }
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 150,
+      "height": 64,
+      "skip-test": [
+        {"platform-tag-contains": "native-ios", "reason": "Needs to be investigated and fixed."}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.005},
+        {"platform-tag-contains": "native", "threshold": 0.0093}
+      ]
+    }
+  },
+  "camera": {"camera-projection": "orthographic"},
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "Point",
+        "coordinates": [
+          0,
+          0
+        ]
+      }
+    }
+  },
+  "sprite": "local://sprites/icon-text-fit",
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "symbol",
+      "type": "symbol",
+      "source": "geojson",
+      "layout": {
+        "text-field": "ABCD efgh",
+        "text-size": 24,
+        "text-font": [
+          "Open Sans Semibold",
+          "Arial Unicode MS Bold"
+        ],
+        "icon-image": "small-box",
+        "icon-text-fit": "both",
+        "icon-text-fit-padding": [ 12, 8, 4, 2 ]
+      }
+    }
+  ]
+}

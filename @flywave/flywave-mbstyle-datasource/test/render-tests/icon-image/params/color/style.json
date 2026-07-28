@@ -1,0 +1,36 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "pixelRatio": 2,
+      "width": 64,
+      "height": 64,
+      "image-threshold": [
+        {"platform-tag-contains": "native", "threshold": 0.0006}
+      ]
+    }
+  },
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "Point",
+        "coordinates": [
+          0,
+          0
+        ]
+      }
+    }
+  },
+  "sprite": "local://sprites/park",
+  "layers": [
+    {
+      "id": "symbol",
+      "type": "symbol",
+      "source": "geojson",
+      "layout": {
+        "icon-image": ["image", "park", {"params": {"fill": "red"}}]
+      }
+    }
+  ]
+}

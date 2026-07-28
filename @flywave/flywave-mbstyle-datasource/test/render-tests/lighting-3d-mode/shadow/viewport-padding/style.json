@@ -1,0 +1,112 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 256,
+      "width": 512,
+      "operations": [
+        ["setProjection", "globe"],
+        ["setPadding", {
+          "top": 0.0,
+          "left": 0.0,
+          "bottom": 0.0,
+          "right": 450.0
+        }],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native-android-gl-powervr", "reason": "To be fixed - https://mapbox.atlassian.net/browse/MAPSNAT-3865"}
+      ],
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "Flaky, under development"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0025},
+        {"platform-tag-contains": "metal", "threshold": 0.003}
+      ]
+    }
+  },
+  "lights": [
+    {
+      "type": "ambient",
+      "id": "environment",
+      "properties": {
+        "intensity": 0.0
+      }
+    },
+    {
+      "type": "directional",
+      "id": "sun_light",
+      "properties": {
+        "intensity": 1.0,
+        "cast-shadows": true,
+        "shadow-intensity": 1.0,
+        "direction": [210, 75]
+      }
+    }
+  ],
+  "sources": {
+    "mapbox": {
+      "type": "vector",
+      "minzoom": 15,
+      "maxzoom": 16,
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.vector.pbf"
+      ]
+    }
+  },
+  "pitch": 75,
+  "zoom": 15.0,
+  "bearing": 264,
+  "center": [
+    -122.4147,
+    37.7902
+  ],
+  "layers": [
+    {
+      "id": "sky",
+      "type": "sky",
+      "paint": {
+        "sky-type": "atmosphere",
+        "sky-atmosphere-sun": [0, 0],
+        "sky-atmosphere-sun-intensity": 15
+      }
+    },
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "lightgray"
+      }
+    },
+    {
+      "id": "land",
+      "type": "fill",
+      "source": "mapbox",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "lightblue"
+      }
+    },
+    {
+      "id": "road",
+      "type": "line",
+      "source": "mapbox",
+      "source-layer": "road",
+      "paint": {
+          "line-color": "lightyellow",
+          "line-width": 10
+      }
+    },
+    {
+      "id": "extrusion",
+      "type": "fill-extrusion",
+      "source": "mapbox",
+      "source-layer": "building",
+      "paint": {
+        "fill-extrusion-color": "white",
+        "fill-extrusion-height": ["get", "height"]
+      }
+    }
+  ]
+}

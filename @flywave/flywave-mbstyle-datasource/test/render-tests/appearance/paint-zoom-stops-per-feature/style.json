@@ -1,0 +1,31 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "_comment": "Per-appearance zoom-stepped paint properties must evaluate at the render zoom, not freeze at the floor zoom. Appearance 'a' also steps icon-translate at the same boundary as icon-opacity, so the left icon must be both visible and shifted [20,-20] at zoom 2.5.",
+      "height": 64, "width": 256,
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.001}
+      ]
+    }
+  },
+  "center": [0, 0],
+  "zoom": 2.5,
+  "sprite": "local://sprites/sprite",
+  "sources": {"geojson": {"type": "geojson","data": {"type": "FeatureCollection","features": [
+    {"type": "Feature","properties": {"grp": "a", "on": 1},"geometry": {"type": "Point","coordinates": [-10, 0]}},
+    {"type": "Feature","properties": {"grp": "b", "on": 1},"geometry": {"type": "Point","coordinates": [0, 0]}},
+    {"type": "Feature","properties": {"grp": "c", "on": 1},"geometry": {"type": "Point","coordinates": [10, 0]}}
+  ]}}},
+  "layers": [
+    {"id": "background","type": "background","paint": {"background-color": "white"}},
+    {"id": "icon","type": "symbol","source": "geojson",
+     "layout": {"icon-image": "building-12"},
+     "paint": {"icon-opacity": 1},
+     "appearances": [
+       {"name": "a","condition": ["==", ["get", "grp"], "a"],"properties": {"icon-opacity": ["step", ["zoom"], 0, 2.25, ["get", "on"]], "icon-translate": ["step", ["zoom"], [0, 0], 2.25, [20, -20]]}},
+       {"name": "b","condition": ["==", ["get", "grp"], "b"],"properties": {"icon-opacity": ["step", ["zoom"], 0, 2.5, ["get", "on"]]}},
+       {"name": "c","condition": ["==", ["get", "grp"], "c"],"properties": {"icon-opacity": ["step", ["zoom"], 0, 2.75, ["get", "on"]]}}
+     ]}
+  ]
+}

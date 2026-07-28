@@ -1,0 +1,89 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 512,
+      "width": 512,
+      "operations": [
+        [
+          "wait"
+        ],
+        [
+          "setFilter",
+          "landmark",
+          [
+            "!",
+            [
+              "in",
+              [
+                "id"
+              ],
+              [
+                "literal",
+                [
+                  "24222973"
+                ]
+              ]
+            ]
+          ]
+        ],
+        [
+          "wait"
+        ]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "native-android", "reason": "MAPSNAT-3819: skip to stay within Firebase timout, move to internal tests once available - covered by new LOD counterpart"},
+        {"platform-tag-contains": "native-ios", "reason": "MAPSNAT-3819: skip to stay within Firebase timout, move to internal tests once available - covered by new LOD counterpart"}
+      ],
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "Flaky, under development"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0015}
+      ]
+    }
+  },
+  "sources": {
+    "landmark": {
+      "type": "batched-model",
+      "maxzoom": 14,
+      "tiles": [
+        "local://models/landmark/mbx-lod/{x}-{y}-{z}.glb"
+      ]
+    }
+  },
+  "zoom": 15.0,
+  "center": [
+      -122.40498,
+      37.79276
+  ],
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#aaaaaa"
+      }
+    },
+    {
+      "id": "landmark",
+      "type": "model",
+      "source": "landmark",
+      "filter": [
+        "!",
+        [
+          "in",
+          [
+            "id"
+          ],
+          [
+            "literal",
+            [
+              "14543549"
+            ]
+          ]
+        ]
+      ]
+    }
+  ]
+}

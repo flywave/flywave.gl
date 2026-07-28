@@ -1,0 +1,55 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 256,
+      "operations": [
+        ["wait"],
+        ["setPaintProperty", "line", "line-pattern", "border-dot-13"],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "web", "reason": "pattern issues"},
+        {"platform-tag-contains": "native", "reason": "skip - Known issues https://mapbox.atlassian.net/browse/MAPS3D-1494"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0008},
+        {"platform-tag-contains": "native-android", "threshold": 0.017}
+      ]
+    }
+  },
+  "center": [
+    49.857,
+    16.594
+  ],
+  "zoom": 7,
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": "local://data/pattern-line.geojson",
+      "lineMetrics": true
+    }
+  },
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#FFF"
+      }
+    },
+    {
+      "id": "line",
+      "type": "line",
+      "source": "geojson",
+      "paint": {
+        "line-width": 14
+      },
+      "layout": {
+        "line-join": "none",
+        "line-z-offset": 0.01
+      }
+    }
+  ]
+}

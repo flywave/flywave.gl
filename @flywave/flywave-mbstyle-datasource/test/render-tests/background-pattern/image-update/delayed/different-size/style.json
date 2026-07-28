@@ -1,0 +1,35 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 64,
+      "height": 64,
+      "operations": [
+        [
+          "addImage",
+          "marker",
+          "./image/marker2_18x18.png"
+        ],
+        ["wait"],
+        [
+          "updateImage",
+          "marker",
+          "./image/marker_20x20.png"
+        ]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "web", "reason": "Support image updates with different size"}
+      ]
+    }
+  },
+  "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-pattern": "marker"
+      }
+    }
+  ]
+}

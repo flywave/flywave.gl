@@ -1,0 +1,74 @@
+{
+    "version": 8,
+    "metadata": {
+        "test": {
+            "height": 200,
+            "width": 300,
+            "operations": [["wait"]],
+            "image-threshold": [
+                {"platform-tag-contains": "", "threshold": 0.001}
+            ]
+        }
+    },
+    "center": [0, 0],
+    "zoom": 13,
+    "pitch": 30,
+    "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+    "sources": {
+        "points": {
+            "type": "geojson",
+            "data": {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {"label": "near"},
+                        "geometry": {"type": "Point", "coordinates": [0.001, 0]}
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {"label": "near"},
+                        "geometry": {"type": "Point", "coordinates": [-0.001, 0]}
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {"label": "far"},
+                        "geometry": {"type": "Point", "coordinates": [0.005, 0]}
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {"label": "far"},
+                        "geometry": {"type": "Point", "coordinates": [-0.005, 0]}
+                    }
+                ]
+            }
+        }
+    },
+    "layers": [
+        {
+            "id": "background",
+            "type": "background",
+            "paint": {"background-color": "white"}
+        },
+        {
+            "id": "symbols",
+            "type": "symbol",
+            "source": "points",
+            "filter": [
+                "all",
+                ["case", ["<", ["pitch"], 60], true, false],
+                [">", ["distance", {"type": "Point", "coordinates": [0, 0]}], 300]
+            ],
+            "layout": {
+                "text-field": ["get", "label"],
+                "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+                "text-size": 14,
+                "text-allow-overlap": true,
+                "text-pitch-alignment": "viewport"
+            },
+            "paint": {
+                "text-color": "red"
+            }
+        }
+    ]
+}

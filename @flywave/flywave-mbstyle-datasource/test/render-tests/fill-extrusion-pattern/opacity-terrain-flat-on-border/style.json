@@ -1,0 +1,183 @@
+{
+  "version": 8,
+  "metadata": {
+    "description": "Tests various cases of flatRoofsUpdate().",
+    "test": {
+      "height": 256,
+      "operations": [
+        ["wait"],
+        ["setTerrain", {
+          "source": "rgbterrain",
+          "exaggeration": 0.03
+        }],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "web", "reason": "Inconsistent fill extrusion height rendering across tile boundaries https://github.com/mapbox/mapbox-gl-js/issues/10181"},
+        {"platform-tag-contains": "web-macos-safari", "reason": "Inconsistencies with fill pattern. Some are visibly noticeable, others subtle. Possibly nonodeterministic rendering."},
+        {"platform-tag-contains": "native", "reason": "https://github.com/mapbox/mapbox-gl-js/issues/3327"},
+        {"platform-tag-contains": "native-linux", "reason": "flaky, https://mapbox.atlassian.net/browse/MAPSNAT-867"},
+        {"platform-tag-contains": "native-macos", "reason": "Difference in pattern depending on GPU"},
+        {"platform-tag-contains": "swiftshader", "reason": "skip - swiftshader debugging needed"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "native-android-gl-mali", "threshold": 0.00025},
+        {"platform-tag-contains": "native-android-gl-powervr", "threshold": 0.00025},
+        {"platform-tag-contains": "swiftshader", "threshold": 0.0004}
+      ]
+    }
+  },
+  "sources": {
+    "rgbterrain": {
+      "type": "raster-dem",
+      "tiles": [
+        "local://tiles/11-378-804.terrain.png"
+      ],
+      "maxzoom": 11,
+      "tileSize": 256
+    },
+    "geojson": {
+      "type": "geojson",
+      "buffer": 0,
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+         {
+            "type": "Feature",
+            "properties": {
+              "type": "building",
+              "height": 10
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [ -0.0010,     0      ],
+                  [ -0.0007,     0.0003 ],
+                  [ -0.0003999,  0      ],
+                  [ -0.0007,    -0.0003 ],
+                  [ -0.0010,     0      ]
+                ]
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "type": "building",
+              "height": 10
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [ -0.0004,  0      ],
+                  [ -0.0002,  0.0002 ],
+                  [ 0,        0      ],
+                  [ -0.0002, -0.0002 ],
+                  [ -0.0004,  0      ]
+                ]
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "type": "building",
+              "height": 5
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [ -0.0001,  0.00035 ],
+                  [ -0.0001,  0.0004  ],
+                  [  0.0001,  0.0004  ],
+                  [  0.0001,  0.00035 ],
+                  [ -0.0001,  0.00035 ]
+                ]
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "type": "building",
+              "height": 10
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [ -0.00003,  0.00036 ],
+                  [ -0.00003,  0.00039 ],
+                  [  0.00003,  0.00039 ],
+                  [  0.00003,  0.00036 ],
+                  [ -0.00003,  0.00036 ]
+                ]
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "type": "building",
+              "height": 5
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [ -0.0002,  0.0002 ],
+                  [ -0.0002,  0.0003 ],
+                  [  0.0002,  0.0003 ],
+                  [  0.0002,  0.0002 ],
+                  [ -0.0002,  0.0002 ]
+                ]
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "type": "building",
+              "height": 5
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [ -0.0002,  0.0005 ],
+                  [ -0.0002,  0.0007 ],
+                  [  0.0002,  0.0007 ],
+                  [  0.0002,  0.0005 ],
+                  [ -0.0002,  0.0005 ]
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "sprite": "local://sprites/standard",
+  "pitch": 62.5,
+  "zoom": 18,
+  "bearing": -45,
+  "center": [-0.0002, 0.00012],
+  "layers": [
+    {
+      "id": "extrusion",
+      "type": "fill-extrusion",
+      "source": "geojson",
+      "paint": {
+        "fill-extrusion-pattern": "information",
+        "fill-extrusion-opacity": 0.5,
+        "fill-extrusion-height": {
+          "stops": [[0, 0], [100, 100]],
+          "property": "height"
+        }
+      }
+    }
+  ]
+}

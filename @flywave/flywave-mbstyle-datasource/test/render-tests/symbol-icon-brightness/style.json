@@ -1,0 +1,53 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "height": 128,
+      "width": 128,
+      "diff-calculation-threshold": 0.06,
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.0135}
+      ]
+    }
+  },
+  "center": [
+    13.418056,
+    52.499167
+  ],
+  "zoom": 14,
+  "camera": {"camera-projection": "orthographic"},
+  "sources": {
+    "mapbox": {
+      "type": "vector",
+      "maxzoom": 14,
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.mvt"
+      ]
+    }
+  },
+  "sprite": "local://sprites/sprite",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "white"
+      }
+    },
+    {
+      "id": "icon",
+      "type": "symbol",
+      "source": "mapbox",
+      "source-layer": "poi_label",
+      "filter": ["has", "maki"],
+      "paint": {
+        "icon-color-brightness-min": 0.4,
+        "icon-color-brightness-max": 0.8
+      },
+      "layout": {
+        "icon-image": "{maki}-12",
+        "symbol-placement": "point"
+      }
+    }
+  ]
+}

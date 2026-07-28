@@ -1,0 +1,43 @@
+{
+    "version": 8,
+    "metadata": {
+      "test": {        "width": 512,
+        "height": 512,
+        "operations": [
+          ["setProjection", "globe"],
+          ["wait"]
+        ],
+        "skip-test": [
+          {"platform-tag-contains": "web-macos-chrome", "reason": "Globe sometimes missing"},
+          {"platform-tag-contains": "web-windows-chrome", "reason": "Occasionally crashing with 'Error occured during [\"wait\"]':"},
+          {"platform-tag-contains": "native-linux", "reason": "skip - Requires support for standard derivatives"}
+        ],
+        "image-threshold": [
+          {"platform-tag-contains": "native", "threshold": 0.000348}
+        ]
+      }
+    },
+    "zoom": 1.5,
+    "sources": {
+      "satellite": {
+        "type": "raster",
+        "tiles": [
+          "local://tiles/{z}-{x}-{y}.satellite.png"
+        ],
+        "tileSize": 256
+      }
+    },
+    "fog": {
+      "star-intensity": 0
+    },
+    "layers": [
+      {
+        "id": "satellite",
+        "type": "raster",
+        "source": "satellite",
+        "paint": {
+          "raster-fade-duration": 0
+        }
+      }
+    ]
+}

@@ -1,0 +1,82 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "_comment": "Two line layers share the same layout (default everything) and the same source. The first has constant line-emissive-strength; the second uses line-progress. Without the group_by_layout split, both layers would share a bucket whose paint inspection only sees layers[0] (no line-progress) — the second layer's expression would then evaluate with lineProgress=0 and render as a constant-dark line instead of a gradient. With the split, the second layer gets its own bucket and renders the expected dark→bright gradient.",
+      "height": 64,
+      "width": 256
+    }
+  },
+  "center": [0, 0],
+  "zoom": 1,
+  "lights": [
+    {
+      "type": "ambient",
+      "id": "test_ambient",
+      "properties": {
+        "color": "rgba(255, 255, 255, 1)",
+        "intensity": 0.0
+      }
+    },
+    {
+      "type": "directional",
+      "id": "test_directional",
+      "properties": {
+        "color": "rgba(255, 255, 255, 1)",
+        "intensity": 0.0
+      }
+    }
+  ],
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "lineMetrics": true,
+      "data": {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [-160, 0],
+            [160, 0]
+          ]
+        }
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "black"
+      }
+    },
+    {
+      "id": "line-constant",
+      "type": "line",
+      "source": "geojson",
+      "paint": {
+        "line-width": 16,
+        "line-color": "white",
+        "line-emissive-strength": 0
+      }
+    },
+    {
+      "id": "line-progress",
+      "type": "line",
+      "source": "geojson",
+      "paint": {
+        "line-width": 16,
+        "line-color": "white",
+        "line-emissive-strength": [
+          "interpolate",
+          ["linear"],
+          ["line-progress"],
+          0, 0,
+          1, 1
+        ]
+      }
+    }
+  ]
+}

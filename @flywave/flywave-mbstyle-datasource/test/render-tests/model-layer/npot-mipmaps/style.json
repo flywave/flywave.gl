@@ -1,0 +1,46 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      "width": 512,
+      "height": 512,
+      "skip-test": [
+        {"platform-tag-contains": "native-ios", "reason": "npot mipmaps not supported in GLES2"}
+      ],
+      "ignore-metrics": [
+        {"platform-tag-contains": "native", "reason": "Flaky, under development"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.032}
+      ]
+    }
+  },
+  "center": [
+    0,
+    0
+  ],
+  "zoom": 22,
+  "pitch": 45,
+  "bearing": -45,
+  "sources": {
+    "model": {
+      "type": "model",
+      "models": {
+        "model-1" : {
+          "uri": "local://models/npot-box.glb",
+          "position": [0, 0]
+        }
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "model",
+      "type": "model",
+      "source": "model",
+      "paint": {
+        "model-scale": [5, 5, 5]
+      }
+    }
+  ]
+}

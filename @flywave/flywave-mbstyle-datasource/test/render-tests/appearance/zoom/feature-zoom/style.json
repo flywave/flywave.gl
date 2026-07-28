@@ -1,0 +1,77 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "pixelRatio": 2,
+      "height": 64,
+      "width": 64,
+      "operations": [
+            ["wait"],
+            ["setZoom", 12],
+            ["wait"]
+        ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.00074}
+      ]
+    }
+  },
+  "camera": {"camera-projection": "orthographic"},
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "image": "bank-12"
+            },
+            "id": 1,
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                0,
+                0
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "sprite": "local://sprites/sprite",
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "icon",
+      "type": "symbol",
+      "source": "geojson",
+      "layout": {
+       "icon-image": "bakery-12",
+        "icon-size": ["case", ["==", ["id"], 1], 0.5, 1],
+        "text-field": "Text",
+        "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+        "text-size": 10,
+        "text-offset": [0, 0],
+        "text-rotate": 0
+      },
+      "appearances": [
+        {
+          "name": "test",
+          "condition": [">=", ["zoom"], 12],
+          "properties": {
+            "icon-image": "bakery-12",
+            "icon-size": 2,
+            "icon-rotate": 90,
+            "icon-offset": [10, 10],
+            "text-size": 18,
+            "text-offset": [1, -1],
+            "text-rotate": 30
+          }
+        }
+      ]
+    }
+  ]
+}

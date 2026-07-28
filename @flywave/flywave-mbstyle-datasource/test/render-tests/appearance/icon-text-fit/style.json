@@ -1,0 +1,69 @@
+{
+  "version": 8,
+  "metadata": {
+    "test-purpose": "Verify that icon-text-fit works correctly when text properties (size, offset, rotate) change via appearance. Layout has size:20/offset:[0,0]/rotate:0, appearance has size:28/offset:[1,-1]/rotate:15.",
+    "test": {
+      "width": 200,
+      "height": 150,
+      "operations": [
+            ["wait"],
+            ["setZoom", 1],
+            ["wait"]
+        ]
+    }
+  },
+  "zoom": 0.5,
+  "sources": {
+    "geojson": {
+      "type": "geojson",
+      "data": {
+    "type": "FeatureCollection",
+    "features": [{
+        "type": "Feature",
+        "properties": {
+            "anchor": "center"
+        },
+        "geometry": {
+            "type": "Point", 
+            "coordinates": [ 0, 0 ]
+        }
+    }]
+      }
+    }
+  },
+  "sprite": "local://sprites/stretch",
+  "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "icons",
+      "type": "symbol",
+      "source": "geojson",
+      "layout": {
+        "text-field": "ASDF",
+        "text-size": 20,
+        "text-offset": [0, 0],
+        "text-rotate": 0,
+        "text-anchor": "center",
+        "text-font": [ "Open Sans Semibold", "Arial Unicode MS Bold" ],
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+        "icon-image": "nine-part",
+        "icon-text-fit": "both",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true
+      },
+      "appearances": [
+        {
+          "name": "test",
+          "condition": [">=", ["zoom"], 1],
+          "properties": {
+            "icon-image": "fifteen-part",
+            "text-size": 28,
+            "text-offset": [1, -1],
+            "text-rotate": 15
+          }
+        }
+      ]
+    }
+  ]
+}

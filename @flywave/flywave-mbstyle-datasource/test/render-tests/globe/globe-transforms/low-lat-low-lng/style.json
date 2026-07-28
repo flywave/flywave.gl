@@ -1,0 +1,47 @@
+{
+  "version": 8,
+  "metadata": {
+    "test": {
+      
+      "width": 512,
+      "height": 512,
+      "operations": [
+        ["wait"],
+        ["setProjection", "globe"],
+        ["wait"]
+      ],
+      "skip-test": [
+        {"platform-tag-contains": "web-macos-safari", "reason": "Inconsistent star placement"},
+        {"platform-tag-contains": "native", "reason": "skip - https://github.com/mapbox/mapbox-gl-native-internal/issues/3425"}
+      ],
+      "image-threshold": [
+        {"platform-tag-contains": "", "threshold": 0.001}
+      ]
+    }
+  },
+  "center": [
+    -170,
+    -70
+  ],
+  "zoom": 1,
+  "sources": {
+    "satellite": {
+      "type": "raster",
+      "tiles": [
+        "local://tiles/{z}-{x}-{y}.satellite.png"
+      ],
+      "tileSize": 256
+    }
+  },
+  "fog": {},
+  "sprite": "local://sprites/standard",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-pattern": "cemetery"
+      }
+    }
+  ]
+}
