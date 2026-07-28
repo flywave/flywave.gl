@@ -22,11 +22,19 @@ export { MBRenderLayer } from './MBRenderLayer';
 
 const FALLBACK = new THREE.MeshBasicMaterial({ color: '#ff00ff' });
 
+export interface CreateMaterialOptions {
+    capabilities?: any;
+    spriteAtlas?: any;
+}
+
 export function createMBMaterial(
     layerType: LayerType,
     paint: Record<string, any>,
-    capabilities?: any,
+    options?: CreateMaterialOptions,
 ): THREE.Material {
+    const capabilities = options?.capabilities;
+    const atlas = options?.spriteAtlas;
+
     switch (layerType) {
         case 'background': {
             const fillPaint: any = {
@@ -34,19 +42,35 @@ export function createMBMaterial(
                 'fill-opacity': paint['background-opacity'] ?? 1,
             };
             if (paint['background-pattern']) fillPaint['fill-pattern'] = paint['background-pattern'];
-            return new MapFillMaterial(fillPaint);
+            const mat = new MapFillMaterial(fillPaint);
+            if (paint['background-pattern'] && atlas) {
+                applyPatternTexture(mat, paint['background-pattern'], atlas);
+            }
+            return mat;
         }
-        case 'fill':
-            return new MapFillMaterial(paint as any);
-        case 'line':
-            return new MapLineMaterial(paint as any, capabilities);
+        case 'fill': {
+            const mat = new MapFillMaterial(paint as any);
+            if (paint['fill-pattern'] && atlas) {
+                applyPatternTexture(mat, paint['fill-pattern'], atlas);
+            }
+            return mat;
+        }
+        case 'line': {
+            const mat = new MapLineMaterial(paint as any, capabilities);
+            if (paint['line-pattern'] && atlas) {
+                mat.setPatternTexture(atlas.texture);
+            }
+            return mat;
+        }
         case 'circle':
             return new MapCircleMaterial(paint as any);
         case 'symbol': {
             if (paint['text-field'] || (paint as any)['text-field']) {
                 return new MBSDFTextMaterial(paint as any);
             }
-            return new MapIconMaterial(paint as any);
+            const mat = new MapIconMaterial(paint as any);
+            if (atlas) mat.setSpriteAtlas(atlas);
+            return mat;
         }
         case 'fill-extrusion':
             return new MapExtrusionMaterial(paint as any);
@@ -56,6 +80,14 @@ export function createMBMaterial(
             return new MapHillshadeMaterial(paint as any);
         default:
             return FALLBACK;
+    }
+}
+
+function applyPatternTexture(mat: MapFillMaterial, patternName: string, atlas: any) {
+    if (!atlas?.icons) return;
+    const info = atlas.icons.get?.(patternName);
+    if (info) {
+        mat.setPatternTexture(atlas.texture, [info.width, info.height]);
     }
 }
 

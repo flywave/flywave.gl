@@ -74,7 +74,7 @@ describe('MapLineMaterial', () => {
     });
 
     it('factory creates line material', () => {
-        const mat = createMBMaterial('line', { 'line-color': '#123' }, MOCK_CAPS);
+        const mat = createMBMaterial('line', { 'line-color': '#123' }, { capabilities: MOCK_CAPS });
         expect(mat).to.be.instanceOf(MapLineMaterial);
     });
 });
