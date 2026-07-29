@@ -229,7 +229,7 @@ async function ensureCloudInit(renderer: Renderer): Promise<void> {
         _cloudUniforms.turbulenceTexture = _cloudTextures.turbulenceTexture;
 
         _cloudUniforms.coverage.value = 0.3;
-        _cloudUniforms.hazeEnabled.value = 0;
+        _cloudUniforms.hazeEnabled.value = 1;
         _cloudUniforms.bottomRadius.value = 6360000.0;
         _cloudUniforms.scatteringCoefficient.value = 1;
         _cloudUniforms.absorptionCoefficient.value = 0;
@@ -270,13 +270,11 @@ async function ensureCloudInit(renderer: Renderer): Promise<void> {
             _shadowMarch = cr.shadowMarch;
             _cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
         }
-        console.log("[CloudRenderNode] Cloud system initialized and ready");
 
         if (_onReadyCallback) {
             _onReadyCallback();
         }
     } catch (err) {
-        console.error("[CloudRenderNode] Init failed:", err);
         _cloudInitialized = false;
     }
 }
@@ -599,9 +597,7 @@ export class CloudRenderNode extends TempNode {
         this.resolveNodeTex = texture(this.resolveRT.texture);
 
         if (renderer != null) {
-            ensureCloudInit(renderer).catch(err =>
-                console.error("[CloudRenderNode] init failed:", err)
-            );
+            ensureCloudInit(renderer).catch(() => {});
         }
     }
 
@@ -912,11 +908,6 @@ export class CloudRenderNode extends TempNode {
         }
 
         _frameIndex++;
-
-        // Debug: check for window.__cloudDebugMode every frame
-        if (typeof window !== "undefined" && (window as any).__cloudDebugMode !== undefined) {
-            _cloudUniforms.debugMode.value = (window as any).__cloudDebugMode;
-        }
 
         this.swapHistoryResolve();
     }

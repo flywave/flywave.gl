@@ -193,7 +193,6 @@ export class CloudUniforms {
     readonly layers: CloudLayers;
 
     constructor(layers?: CloudLayers) {
-        console.log("[CloudUniforms] constructor called");
         this.layers = layers ?? new CloudLayers(CloudLayers.DEFAULT);
         this.updateLayers();
     }
