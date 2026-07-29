@@ -6,27 +6,21 @@ import {
     Fn,
     float,
     floor,
-    frameId,
     If,
-    int,
     ivec2,
     max,
     mix,
     mrt,
     not,
-    or,
     positionGeometry,
     screenCoordinate,
     screenUV,
     sqrt,
-    step,
     texture,
     uniform,
     vec2,
     vec3,
-    vec4,
-    reference,
-    Return
+    vec4
 } from "three/tsl";
 import {
     type NodeBuilder,
@@ -35,7 +29,6 @@ import {
     type TextureNode,
     HalfFloatType,
     LinearFilter,
-    NearestFilter,
     NodeMaterial,
     NodeUpdateType,
     QuadMesh,
@@ -45,9 +38,7 @@ import {
     Texture,
     Vector2,
     Matrix4,
-    Uniform,
-    Vector3,
-    Quaternion
+    Vector3
 } from "three/webgpu";
 
 import { inverseProjectionMatrix } from "../tsl/accessors";
@@ -62,25 +53,13 @@ import { CloudLayers } from "../clouds/CloudLayer";
 import { CloudUniforms } from "../clouds/CloudUniforms";
 import { createCloudRenderer } from "../clouds/cloudTsl";
 import { CascadedShadowMaps } from "../clouds/CascadedShadowMaps";
-import { stbn } from "../tsl/STBNTextureNode";
+import { stbn, stbnTexture } from "../tsl/STBNTextureNode";
 
-const _cloudTextures = new CloudTextures();
-const _cloudUniforms = new CloudUniforms(new CloudLayers(CloudLayers.DEFAULT));
-let _cloudInitialized = false;
-let _cloudRenderReady = false;
-let _renderClouds: ((a: any, b: any, c: any) => any) | null = null;
-let _shadowMarch: ((cascadeIndex?: number) => any) | null = null;
-let _onReadyCallback: (() => void) | null = null;
-const _cloudResolveCountNode = uniform(0);
-const _cloudFrameNode = uniform(0);
-const _resolveTexelSize = uniform(new Vector2(1, 1));
-const _jitteredInverseProjection = uniform(new Matrix4());
-const _temporalJitter = uniform(new Vector2());
-const _viewReprojectionMatrix = uniform(new Matrix4());
-const _reprojectionMatrix = uniform(new Matrix4());
+const SHADOW_CASCADE_COUNT = 3;
+const SHADOW_MAX_FAR = 100000;
+const SHADOW_MAP_SIZE = 512;
 
 const _varianceGamma = uniform(2.0);
-const _temporalAlpha = uniform(0.05);
 
 const _neighborOffsets9 = [
     [-1, -1],
@@ -94,9 +73,6 @@ const _neighborOffsets9 = [
     [1, 1]
 ];
 
-// Get closest fragment: search 3x3 neighborhood for minimum front depth,
-// return its velocity. This handles the case where cloud edges move between
-// frames and the center pixel may not have the best velocity.
 const _getClosestFragment = Fn(([velocityTex, coord]: any) => {
     const result = velocityTex.load(coord).toVar();
     for (const [x, y] of _neighborOffsets9) {
@@ -144,172 +120,298 @@ const _varianceClippingResolve = Fn(([inputNode, coord, current, history]: any) 
     return _clipAABBResolve(mean.clamp(minColor, maxColor), history, minColor, maxColor);
 });
 
-// UV-based variance clipping: samples low-res buffer at full-res UV with bilinear
-// interpolation, matching reference's textureOffset(colorBuffer, vUv, offset)
-const _lowResTexelSize = uniform(new Vector2(1, 1));
+const { resetRendererState, restoreRendererState } = RendererUtils;
+const sizeScratch = /*#__PURE__*/ new Vector2();
 
-const _varianceClippingUV = Fn(([inputNode, uv, current, history]: any) => {
-    const moment1 = current.toVar();
-    const moment2 = current.pow2().toVar();
-    for (const [x, y] of _varianceOffsets8) {
-        const sampleUv = uv.add(vec2(float(x), float(y)).mul(_lowResTexelSize));
-        const neighbor = texture(inputNode, sampleUv).toConst();
-        moment1.addAssign(neighbor);
-        moment2.addAssign(neighbor.pow2());
-    }
-    const N = _varianceOffsets8.length + 1;
-    const mean = moment1.div(N).toConst();
-    const variance = sqrt(moment2.div(N).sub(mean.pow2()).max(0)).mul(_varianceGamma).toConst();
-    const minColor = mean.sub(variance).toConst();
-    const maxColor = mean.add(variance).toConst();
-    return _clipAABBResolve(mean.clamp(minColor, maxColor), history, minColor, maxColor);
-});
+const bayerIndices = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
-// Catmull-Rom texture sampling for sharper upscaling (5-tap bilinear optimization)
-const _historyTexSize = uniform(new Vector2(1, 1));
-
-const _textureCatmullRom = Fn(([texNode, uv]: any) => {
-    const texSize = _historyTexSize.toVar();
-    const samplePos = uv.mul(texSize);
-    const texPos1 = floor(samplePos.sub(0.5)).add(0.5);
-    const f = samplePos.sub(texPos1).toVar();
-    // Catmull-Rom spline weights: f * (-0.5 + f * (1.0 - 0.5*f)), etc.
-    const w0 = f.mul(float(-0.5).add(f.mul(float(1.0).sub(f.mul(0.5)))));
-    const w1 = float(1.0).add(f.mul(f).mul(float(-2.5).add(f.mul(1.5))));
-    const w2 = f.mul(float(0.5).add(f.mul(float(2.0).sub(f.mul(1.5)))));
-    const w3 = f.mul(f).mul(float(-0.5).add(f.mul(0.5)));
-    const w12 = w1.add(w2);
-    const offset12 = w2.div(w1.add(w2));
-    const texPos0 = texPos1.sub(1.0).div(texSize);
-    const texPos3 = texPos1.add(2.0).div(texSize);
-    const texPos12 = texPos1.add(offset12).div(texSize);
-    const result = vec4(0).toVar();
-    result.addAssign(texture(texNode, vec2(texPos0.x, texPos0.y)).mul(w0.x).mul(w0.y));
-    result.addAssign(texture(texNode, vec2(texPos12.x, texPos0.y)).mul(w12.x).mul(w0.y));
-    result.addAssign(texture(texNode, vec2(texPos3.x, texPos0.y)).mul(w3.x).mul(w0.y));
-    result.addAssign(texture(texNode, vec2(texPos0.x, texPos12.y)).mul(w0.x).mul(w12.y));
-    result.addAssign(texture(texNode, vec2(texPos12.x, texPos12.y)).mul(w12.x).mul(w12.y));
-    result.addAssign(texture(texNode, vec2(texPos3.x, texPos12.y)).mul(w3.x).mul(w12.y));
-    result.addAssign(texture(texNode, vec2(texPos0.x, texPos3.y)).mul(w0.x).mul(w3.y));
-    result.addAssign(texture(texNode, vec2(texPos12.x, texPos3.y)).mul(w12.x).mul(w3.y));
-    result.addAssign(texture(texNode, vec2(texPos3.x, texPos3.y)).mul(w3.x).mul(w3.y));
-    return result;
-});
-
-const SHADOW_CASCADE_COUNT = 3;
-const SHADOW_MAX_FAR = 100000;
-const SHADOW_MAP_SIZE = 512;
-
-const _cascadedShadowMaps = new CascadedShadowMaps({
-    cascadeCount: SHADOW_CASCADE_COUNT,
-    mapSize: new Vector2(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
-    maxFar: SHADOW_MAX_FAR,
-    splitLambda: 0.5,
-    fade: false
-});
-
-export function setCloudReadyCallback(cb: () => void): void {
-    _onReadyCallback = cb;
-}
-
-export function getCloudUniforms(): CloudUniforms | null {
-    return _cloudInitialized ? _cloudUniforms : null;
-}
-
-async function ensureCloudInit(renderer: Renderer): Promise<void> {
-    if (_cloudInitialized) return;
-    _cloudInitialized = true;
-
-    try {
-        await _cloudTextures.load(renderer);
-
-        _cloudUniforms.localWeatherTexture = _cloudTextures.localWeatherTexture;
-        _cloudUniforms.shapeTexture = _cloudTextures.shapeTexture;
-        _cloudUniforms.shapeDetailTexture = _cloudTextures.shapeDetailTexture;
-        _cloudUniforms.turbulenceTexture = _cloudTextures.turbulenceTexture;
-
-        _cloudUniforms.coverage.value = 0.3;
-        _cloudUniforms.hazeEnabled.value = 1;
-        _cloudUniforms.bottomRadius.value = 6360000.0;
-        _cloudUniforms.scatteringCoefficient.value = 1;
-        _cloudUniforms.absorptionCoefficient.value = 0;
-        _cloudUniforms.localWeatherRepeat.value.setScalar(100);
-        _cloudUniforms.shapeRepeat.value.setScalar(0.0003);
-        _cloudUniforms.shapeDetailRepeat.value.setScalar(0.006);
-        _cloudUniforms.turbulenceRepeat.value = 20;
-        _cloudUniforms.turbulenceDisplacement.value = 350;
-        _cloudUniforms.minDensity.value = 1e-5;
-        _cloudUniforms.minExtinction.value = 1e-5;
-        _cloudUniforms.minTransmittance.value = 1e-2;
-        _cloudUniforms.minStepSize.value = 50;
-        _cloudUniforms.maxStepSize.value = 1000;
-        _cloudUniforms.maxRayDistance.value = 2e5;
-        _cloudUniforms.perspectiveStepScale.value = 1.01;
-        _cloudUniforms.maxIterationCountToSun.value = 2;
-        _cloudUniforms.minSecondaryStepSize.value = 100;
-        _cloudUniforms.secondaryStepScale.value = 2;
-        _cloudUniforms.maxIterationCountToGround.value = 3;
-        _cloudUniforms.skyLightScale.value = 1;
-        _cloudUniforms.powderScale.value = 0.8;
-        _cloudUniforms.powderExponent.value = 150;
-        _cloudUniforms.sunIrradianceMin.value.set(2.0, 2.0, 2.0);
-        _cloudUniforms.sunIrradianceMax.value.set(2.5, 2.5, 2.5);
-        _cloudUniforms.skyIrradianceMin.value.set(0.2, 0.4, 0.8);
-        _cloudUniforms.skyIrradianceMax.value.set(0.4, 0.6, 1.0);
-
-        _renderClouds = createCloudRenderer(_cloudUniforms);
-        _cloudRenderReady = true;
-
-        if (
-            typeof _renderClouds === "object" &&
-            _renderClouds !== null &&
-            "render" in _renderClouds
-        ) {
-            const cr = _renderClouds as any;
-            _renderClouds = cr.render;
-            _shadowMarch = cr.shadowMarch;
-            _cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
-        }
-
-        if (_onReadyCallback) {
-            _onReadyCallback();
-        }
-    } catch (err) {
-        _cloudInitialized = false;
-    }
-}
-
-// Previous frame camera position for velocity calculation
-let _prevCamX = 0,
-    _prevCamY = 0,
-    _prevCamZ = 0;
-let _hasPrevCam = false;
-
-export function updateCloudUniforms(atmosphereContext: any): void {
-    if (!_cloudInitialized) return;
-    _cloudUniforms.sunDirection.value.copy(atmosphereContext.sunDirectionECEF.value);
-    _cloudUniforms.bottomRadius.value = atmosphereContext.parameters.bottomRadius;
-
-    const cam = atmosphereContext.camera;
-    if (cam) {
-        if (!_prevProjectionMatrix) {
-            _prevProjectionMatrix = cam.projectionMatrix.clone();
-            _prevViewMatrix = cam.matrixWorldInverse.clone();
+const bayerOffsets: [number, number][] = Array.from({ length: 16 }, (_, frame) => {
+    for (let i = 0; i < 16; i++) {
+        if (bayerIndices[i] === frame) {
+            return [((i % 4) + 0.5) / 4, (Math.floor(i / 4) + 0.5) / 4];
         }
     }
+    return [0, 0];
+});
 
-    // Manually compute cameraPositionECEF and altitudeCorrectionECEF from the live
-    // camera matrix. onRenderUpdate hasn't fired yet (fires during main render),
-    // so .value would be stale — causing jitter during camera movement in MapView.
-    let cx = 0,
-        cy = 0,
-        cz = 0;
-    if (cam) {
-        const w2e = atmosphereContext.matrixWorldToECEF.value;
-        const pos = new Vector3().setFromMatrixPosition(cam.matrixWorld);
+export class CloudRenderNode extends TempNode {
+    static override get type(): string {
+        return "CloudRenderNode";
+    }
+
+    _colorNode: Node<"vec4">;
+    _depthNode: Node | null = null;
+    _renderer: Renderer | null = null;
+
+    cloudAssetsPath = "resources/clouds/";
+    onReady: (() => void) | null = null;
+
+    private cloudTextures: CloudTextures | null = null;
+    private readonly cloudUniforms = new CloudUniforms(new CloudLayers(CloudLayers.DEFAULT));
+    private cloudInitialized = false;
+    private cloudRenderReady = false;
+    private renderCloudsFn: ((a: any, b: any, c: any) => any) | null = null;
+    private shadowMarchFn: ((cascadeIndex?: number) => any) | null = null;
+
+    private readonly cascadedShadowMaps = new CascadedShadowMaps({
+        cascadeCount: SHADOW_CASCADE_COUNT,
+        mapSize: new Vector2(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
+        maxFar: SHADOW_MAX_FAR,
+        splitLambda: 0.5,
+        fade: false
+    });
+
+    private readonly cloudResolveCountNode = uniform(0);
+    private readonly cloudFrameNode = uniform(0);
+    private readonly resolveTexelSize = uniform(new Vector2(1, 1));
+    private readonly lowResTexelSize = uniform(new Vector2(1, 1));
+    private readonly historyTexSize = uniform(new Vector2(1, 1));
+    private readonly jitteredInverseProjection = uniform(new Matrix4());
+    private readonly temporalJitter = uniform(new Vector2());
+    private readonly viewReprojectionMatrix = uniform(new Matrix4());
+
+    private frameIndex = 0;
+    private prevFrameTime = 0;
+    private prevProjectionMatrix: Matrix4 = new Matrix4();
+    private prevViewMatrix: Matrix4 = new Matrix4();
+    private readonly prevCamPos = new Vector3();
+    private hasPrevCamTransform = false;
+
+    private readonly _tmpJitteredProj = new Matrix4();
+    private readonly _tmpCurVP = new Matrix4();
+    private readonly _tmpReprojection = new Matrix4();
+    private readonly _tmpDeltaRot = new Matrix4();
+    private readonly _tmpDeltaTrans = new Matrix4();
+    private readonly _tmpDelta = new Matrix4();
+    private readonly _tmpE2wRot = new Matrix4();
+    private readonly _tmpSurfaceNormal = new Vector3();
+    private readonly _tmpSunWorld = new Vector3();
+    private readonly _tmpPos = new Vector3();
+
+    private prevCamX = 0;
+    private prevCamY = 0;
+    private prevCamZ = 0;
+    private hasPrevCam = false;
+
+    private lowResRT: RenderTarget;
+    private historyRT: RenderTarget;
+    private resolveRT: RenderTarget;
+    private shadowRTs: RenderTarget[] = [];
+    private shadowHistoryRTs: RenderTarget[] = [];
+    private shadowResolvedRTs: RenderTarget[] = [];
+
+    private readonly lowResMaterial = new NodeMaterial();
+    private readonly resolveMaterial = new NodeMaterial();
+    private readonly blitMaterial = new NodeMaterial();
+    private readonly shadowMaterials: NodeMaterial[] = [];
+    private readonly shadowResolveMaterials: NodeMaterial[] = [];
+    private readonly shadowBlitMaterials: NodeMaterial[] = [];
+    private readonly shadowRawBlitMaterials: NodeMaterial[] = [];
+
+    private _resolveFrameCount = 0;
+    private _cloudResolveFrameCount = 0;
+    private _fragmentNodesBuilt = false;
+
+    private readonly mesh = new QuadMesh();
+    private _rendererState?: RendererUtils.RendererState;
+
+    private readonly lowResNode: TextureNode;
+    private readonly velocityLowResNode: TextureNode;
+    private readonly historyNode: TextureNode;
+    private readonly resolveNodeTex: TextureNode;
+    private readonly shadowNodes: TextureNode[] = [];
+    private readonly shadowHistoryNodes: TextureNode[] = [];
+
+    private prevShadowMatrices: Matrix4[] = [
+        new Matrix4(),
+        new Matrix4(),
+        new Matrix4(),
+        new Matrix4()
+    ];
+
+    get overlayTexture(): Texture {
+        return this.resolveRT.texture;
+    }
+
+    get shadowTextures(): Texture[] {
+        return this.shadowResolvedRTs.map(rt => rt.texture);
+    }
+
+    get shadowMatricesOut(): readonly Matrix4[] {
+        return this.prevShadowMatrices;
+    }
+
+    get shadowIntervalsOut(): readonly Vector2[] {
+        return this.cloudUniforms.shadowIntervals.map(u => u.value as Vector2);
+    }
+
+    constructor(colorNode: Node<"vec4">, depthNode?: Node | null, renderer?: Renderer) {
+        super("vec4");
+        this.updateBeforeType = NodeUpdateType.FRAME;
+        this._colorNode = colorNode;
+        this._depthNode = depthNode ?? null;
+        this._renderer = renderer ?? null;
+
+        this.lowResMaterial.name = "Clouds [LowRes]";
+        this.resolveMaterial.name = "Clouds [Resolve]";
+        this.mesh.name = "Clouds";
+
+        this.lowResRT = new RenderTarget(1, 1, {
+            depthBuffer: false,
+            type: HalfFloatType,
+            count: 2
+        });
+        this.lowResRT.textures[0].name = "color";
+        this.lowResRT.textures[0].minFilter = LinearFilter;
+        this.lowResRT.textures[0].magFilter = LinearFilter;
+        this.lowResRT.textures[1].name = "velocity";
+        this.lowResRT.textures[1].minFilter = LinearFilter;
+        this.lowResRT.textures[1].magFilter = LinearFilter;
+
+        this.historyRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
+        this.historyRT.texture.name = "Clouds [History]";
+        this.historyRT.texture.minFilter = LinearFilter;
+        this.historyRT.texture.magFilter = LinearFilter;
+
+        this.resolveRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
+        this.resolveRT.texture.name = "Clouds [Resolve]";
+        this.resolveRT.texture.minFilter = LinearFilter;
+        this.resolveRT.texture.magFilter = LinearFilter;
+
+        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+            const sz = SHADOW_MAP_SIZE;
+            const rt = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
+            rt.texture.name = `Clouds [Shadow ${i}]`;
+            rt.texture.minFilter = LinearFilter;
+            rt.texture.magFilter = LinearFilter;
+            this.shadowRTs.push(rt);
+
+            const resRT = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
+            resRT.texture.name = `Clouds [Shadow Res ${i}]`;
+            resRT.texture.minFilter = LinearFilter;
+            resRT.texture.magFilter = LinearFilter;
+            this.shadowResolvedRTs.push(resRT);
+            this.shadowNodes.push(texture(resRT.texture));
+
+            const mat = new NodeMaterial();
+            mat.name = `Clouds [Shadow ${i}]`;
+            this.shadowMaterials.push(mat);
+
+            const histRT = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
+            histRT.texture.name = `Clouds [Shadow Hist ${i}]`;
+            histRT.texture.minFilter = LinearFilter;
+            histRT.texture.magFilter = LinearFilter;
+            this.shadowHistoryRTs.push(histRT);
+            this.shadowHistoryNodes.push(texture(histRT.texture));
+
+            const resMat = new NodeMaterial();
+            resMat.name = `Clouds [Shadow Resolve ${i}]`;
+            this.shadowResolveMaterials.push(resMat);
+
+            const blitMat = new NodeMaterial();
+            blitMat.name = `Clouds [Shadow Blit ${i}]`;
+            this.shadowBlitMaterials.push(blitMat);
+
+            const rawBlitMat = new NodeMaterial();
+            rawBlitMat.name = `Clouds [Shadow Raw Blit ${i}]`;
+            this.shadowRawBlitMaterials.push(rawBlitMat);
+        }
+
+        this.lowResNode = outputTexture(this, this.lowResRT.textures[0]);
+        this.velocityLowResNode = outputTexture(this, this.lowResRT.textures[1]);
+        this.historyNode = texture(this.historyRT.texture);
+        this.resolveNodeTex = texture(this.resolveRT.texture);
+
+        if (renderer != null) {
+            this.ensureCloudInit(renderer).catch(() => {});
+        }
+    }
+
+    override customCacheKey(): number {
+        return this._colorNode.customCacheKey?.() ?? 0;
+    }
+
+    get uniforms(): CloudUniforms | null {
+        return this.cloudInitialized ? this.cloudUniforms : null;
+    }
+
+    async ensureCloudInit(renderer: Renderer): Promise<void> {
+        if (this.cloudInitialized) return;
+        this.cloudInitialized = true;
+
+        try {
+            stbnTexture.url = this.cloudAssetsPath + "stbn.bin";
+            this.cloudTextures = await CloudTextures.load(this.cloudAssetsPath);
+
+            this.cloudUniforms.localWeatherTexture = this.cloudTextures.localWeatherTexture;
+            this.cloudUniforms.shapeTexture = this.cloudTextures.shapeTexture;
+            this.cloudUniforms.shapeDetailTexture = this.cloudTextures.shapeDetailTexture;
+            this.cloudUniforms.turbulenceTexture = this.cloudTextures.turbulenceTexture;
+
+            this.cloudUniforms.coverage.value = 0.3;
+            this.cloudUniforms.hazeEnabled.value = 1;
+            this.cloudUniforms.bottomRadius.value = 6360000.0;
+            this.cloudUniforms.scatteringCoefficient.value = 1;
+            this.cloudUniforms.absorptionCoefficient.value = 0;
+            this.cloudUniforms.localWeatherRepeat.value.setScalar(100);
+            this.cloudUniforms.shapeRepeat.value.setScalar(0.0003);
+            this.cloudUniforms.shapeDetailRepeat.value.setScalar(0.006);
+            this.cloudUniforms.turbulenceRepeat.value = 20;
+            this.cloudUniforms.turbulenceDisplacement.value = 350;
+            this.cloudUniforms.minDensity.value = 1e-5;
+            this.cloudUniforms.minExtinction.value = 1e-5;
+            this.cloudUniforms.minTransmittance.value = 1e-2;
+            this.cloudUniforms.minStepSize.value = 50;
+            this.cloudUniforms.maxStepSize.value = 1000;
+            this.cloudUniforms.maxRayDistance.value = 2e5;
+            this.cloudUniforms.perspectiveStepScale.value = 1.01;
+            this.cloudUniforms.maxIterationCountToSun.value = 2;
+            this.cloudUniforms.minSecondaryStepSize.value = 100;
+            this.cloudUniforms.secondaryStepScale.value = 2;
+            this.cloudUniforms.maxIterationCountToGround.value = 3;
+            this.cloudUniforms.skyLightScale.value = 1;
+            this.cloudUniforms.powderScale.value = 0.8;
+            this.cloudUniforms.powderExponent.value = 150;
+            this.cloudUniforms.sunIrradianceMin.value.set(2.0, 2.0, 2.0);
+            this.cloudUniforms.sunIrradianceMax.value.set(2.5, 2.5, 2.5);
+            this.cloudUniforms.skyIrradianceMin.value.set(0.2, 0.4, 0.8);
+            this.cloudUniforms.skyIrradianceMax.value.set(0.4, 0.6, 1.0);
+
+            const renderer2 = createCloudRenderer(this.cloudUniforms);
+            this.cloudRenderReady = true;
+
+            if (typeof renderer2 === "object" && renderer2 !== null && "render" in renderer2) {
+                const cr = renderer2 as any;
+                this.renderCloudsFn = cr.render;
+                this.shadowMarchFn = cr.shadowMarch;
+                this.cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
+            }
+
+            if (this.onReady) {
+                this.onReady();
+            }
+        } catch {
+            this.cloudInitialized = false;
+        }
+    }
+
+    private _updateAtmosphereUniforms(renderer: Renderer): void {
+        const ctx = getAtmosphereContext(renderer);
+        const cam = ctx.camera;
+        if (!cam) return;
+
+        this.cloudUniforms.sunDirection.value.copy(ctx.sunDirectionECEF.value);
+        this.cloudUniforms.bottomRadius.value = ctx.parameters.bottomRadius;
+
+        if (!this.hasPrevCamTransform) {
+            this.prevProjectionMatrix.copy(cam.projectionMatrix);
+            this.prevViewMatrix.copy(cam.matrixWorldInverse);
+        }
+
+        const w2e = ctx.matrixWorldToECEF.value;
+        const pos = this._tmpPos.setFromMatrixPosition(cam.matrixWorld);
         if (w2e) pos.applyMatrix4(w2e);
 
-        // Altitude correction (exact copy of AtmosphereContext.onRenderUpdate logic)
         const a = 6378137.0,
             b = 6356752.314245;
         const a2 = a * a,
@@ -358,269 +460,42 @@ export function updateCloudUniforms(atmosphereContext: any): void {
                 ny = surfY / a2,
                 nz = surfZ / b2;
             const nLen = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
-            const br = atmosphereContext.parameters.bottomRadius;
+            const br = ctx.parameters.bottomRadius;
             corrX = nx * nLen * br - surfX;
             corrY = ny * nLen * br - surfY;
             corrZ = nz * nLen * br - surfZ;
         }
-        _cloudUniforms.altitudeCorrection.value.set(corrX, corrY, corrZ);
-        cx = pos.x + corrX;
-        cy = pos.y + corrY;
-        cz = pos.z + corrZ;
 
-        // Camera height: osculating sphere height (matches reference geodetic height)
-        _cloudUniforms.cameraHeight.value =
-            Math.sqrt(cx * cx + cy * cy + cz * cz) - atmosphereContext.parameters.bottomRadius;
+        this.cloudUniforms.altitudeCorrection.value.set(corrX, corrY, corrZ);
+        const cx = pos.x + corrX,
+            cy = pos.y + corrY,
+            cz = pos.z + corrZ;
+        this.cloudUniforms.cameraPosition.value.set(cx, cy, cz);
+        this.cloudUniforms.cameraHeight.value =
+            Math.sqrt(cx * cx + cy * cy + cz * cz) - ctx.parameters.bottomRadius;
 
-        // CRITICAL: update atmosphereContext uniforms — shader uses these directly
-        // (cameraPositionECEF/altitudeCorrectionECEF). onRenderUpdate hasn't fired yet.
-        if (atmosphereContext.cameraPositionECEF) {
-            atmosphereContext.cameraPositionECEF.value.copy(pos);
+        if (ctx.cameraPositionECEF) ctx.cameraPositionECEF.value.copy(pos);
+        if (ctx.altitudeCorrectionECEF) ctx.altitudeCorrectionECEF.value.set(corrX, corrY, corrZ);
+
+        if (this.hasPrevCam) {
+            const dx = cx - this.prevCamX,
+                dy = cy - this.prevCamY,
+                dz = cz - this.prevCamZ;
+            this.cloudUniforms.cameraVelocity.value = Math.sqrt(dx * dx + dy * dy + dz * dz);
         }
-        if (atmosphereContext.altitudeCorrectionECEF) {
-            atmosphereContext.altitudeCorrectionECEF.value.set(corrX, corrY, corrZ);
-        }
+        this.prevCamX = cx;
+        this.prevCamY = cy;
+        this.prevCamZ = cz;
+        this.hasPrevCam = true;
     }
-
-    const sr = _cloudUniforms.shapeRepeat.value;
-    // cameraShapeOffset not used by reference — shape texture follows absolute ECEF position
-    _cloudUniforms.cameraPosition.value.set(cx, cy, cz);
-
-    if (_hasPrevCam) {
-        const dx = cx - _prevCamX;
-        const dy = cy - _prevCamY;
-        const dz = cz - _prevCamZ;
-        _cloudUniforms.cameraVelocity.value = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    }
-    _prevCamX = cx;
-    _prevCamY = cy;
-    _prevCamZ = cz;
-    _hasPrevCam = true;
-}
-
-const { resetRendererState, restoreRendererState } = RendererUtils;
-const sizeScratch = /*#__PURE__*/ new Vector2();
-
-// Bayer 4x4 dither pattern (row-major: index = y*4+x)
-const bayerIndices = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-
-// Precomputed sub-pixel offsets for each frame (0-15).
-// offset = ((i%4 + 0.5)/4, (floor(i/4) + 0.5)/4) where bayerIndices[i] === frame
-const bayerOffsets: [number, number][] = Array.from({ length: 16 }, (_, frame) => {
-    for (let i = 0; i < 16; i++) {
-        if (bayerIndices[i] === frame) {
-            return [((i % 4) + 0.5) / 4, (Math.floor(i / 4) + 0.5) / 4];
-        }
-    }
-    return [0, 0];
-});
-
-// Halton sequence for temporal jitter (base 2, base 3)
-const haltonBase2 = [
-    0.5, 0.25, 0.75, 0.125, 0.625, 0.375, 0.875, 0.0625, 0.5625, 0.3125, 0.8125, 0.1875, 0.6875,
-    0.4375, 0.9375, 0.03125
-];
-const haltonBase3 = [
-    0.333333, 0.666667, 0.111111, 0.444444, 0.777778, 0.222222, 0.555556, 0.888889, 0.037037,
-    0.37037, 0.703704, 0.148148, 0.481481, 0.814815, 0.259259, 0.592593
-];
-
-let _frameIndex = 0;
-let _prevFrameTime = 0;
-
-// Previous view-projection matrix for velocity reprojection
-const prevViewProjectionUniform = new Uniform(new Matrix4());
-let hasPrevViewProjection = false;
-// Previous frame's NON-jittered projection and view matrices
-let _prevProjectionMatrix: Matrix4 | null = null;
-let _prevViewMatrix: Matrix4 | null = null;
-// High-precision (float64) camera position for delta computation
-const _prevCamPos = new Vector3();
-const _prevCamQuat = new Quaternion();
-const _prevCamScale = new Vector3();
-let _hasPrevCamTransform = false;
-
-export class CloudRenderNode extends TempNode {
-    static override get type(): string {
-        return "CloudRenderNode";
-    }
-
-    _colorNode: Node<"vec4">;
-    _depthNode: Node | null = null;
-    _renderer: Renderer | null = null;
-
-    // Low-res render targets (1/4 resolution) for cloud rendering
-    private lowResRT: RenderTarget;
-    private historyRT: RenderTarget;
-    private resolveRT: RenderTarget;
-    private shadowRTs: RenderTarget[] = [];
-    private shadowHistoryRTs: RenderTarget[] = [];
-    private shadowResolvedRTs: RenderTarget[] = [];
-
-    private readonly lowResMaterial = new NodeMaterial();
-    private readonly resolveMaterial = new NodeMaterial();
-    private readonly blitMaterial = new NodeMaterial();
-    private readonly shadowMaterials: NodeMaterial[] = [];
-    private readonly shadowResolveMaterials: NodeMaterial[] = [];
-    private readonly shadowBlitMaterials: NodeMaterial[] = [];
-    private readonly shadowRawBlitMaterials: NodeMaterial[] = [];
-
-    private _resolveFrameCount = 0;
-    private _cloudResolveFrameCount = 0;
-
-    private readonly mesh = new QuadMesh();
-    private _rendererState?: RendererUtils.RendererState;
-
-    private readonly lowResNode: TextureNode;
-    private readonly velocityLowResNode: TextureNode;
-    private readonly historyNode: TextureNode;
-    private readonly resolveNodeTex: TextureNode;
-    private readonly _resolveTexUniform = uniform(new Texture());
-    private readonly shadowNodes: TextureNode[] = [];
-    private readonly shadowHistoryNodes: TextureNode[] = [];
-
-    /** Cloud overlay texture (RGBA: color + alpha) for atmosphere composition */
-    get overlayTexture(): Texture {
-        return this.resolveRT.texture;
-    }
-
-    /** Resolved BSM textures per cascade for atmosphere shadow composition */
-    get shadowTextures(): Texture[] {
-        return this.shadowResolvedRTs.map(rt => rt.texture);
-    }
-
-    /** Shadow matrices per cascade (world→clip) for atmosphere shadow composition */
-    get shadowMatricesOut(): readonly Matrix4[] {
-        return this.prevShadowMatrices;
-    }
-
-    /** Cascade split intervals for atmosphere shadow composition */
-    get shadowIntervalsOut(): readonly Vector2[] {
-        return _cloudUniforms.shadowIntervals.map(u => u.value as Vector2);
-    }
-
-    // Previous-frame shadow matrices for BSM temporal reprojection
-    private prevShadowMatrices: Matrix4[] = [
-        new Matrix4(),
-        new Matrix4(),
-        new Matrix4(),
-        new Matrix4()
-    ];
-
-    private prevViewProjection: Matrix4 | null = null;
-    private currentViewProjection: Matrix4 = new Matrix4();
-
-    constructor(colorNode: Node<"vec4">, depthNode?: Node | null, renderer?: Renderer) {
-        super("vec4");
-        this.updateBeforeType = NodeUpdateType.FRAME;
-        this._colorNode = colorNode;
-        this._depthNode = depthNode ?? null;
-        this._renderer = renderer ?? null;
-
-        this.lowResMaterial.name = "Clouds [LowRes]";
-        this.resolveMaterial.name = "Clouds [Resolve]";
-        this.mesh.name = "Clouds";
-
-        // Create render targets
-        // LowRes RT uses MRT: [0]=color(RGBA), [1]=velocity(RG padded to RGBA)
-        this.lowResRT = new RenderTarget(1, 1, {
-            depthBuffer: false,
-            type: HalfFloatType,
-            count: 2
-        });
-        this.lowResRT.textures[0].name = "color";
-        this.lowResRT.textures[0].minFilter = LinearFilter;
-        this.lowResRT.textures[0].magFilter = LinearFilter;
-        this.lowResRT.textures[1].name = "velocity";
-        this.lowResRT.textures[1].minFilter = LinearFilter;
-        this.lowResRT.textures[1].magFilter = LinearFilter;
-
-        this.historyRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
-        this.historyRT.texture.name = "Clouds [History]";
-        this.historyRT.texture.minFilter = LinearFilter;
-        this.historyRT.texture.magFilter = LinearFilter;
-
-        this.resolveRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
-        this.resolveRT.texture.name = "Clouds [Resolve]";
-        this.resolveRT.texture.minFilter = LinearFilter;
-        this.resolveRT.texture.magFilter = LinearFilter;
-
-        // Shadow RTs (BSM - Beer Shadow Map): one per cascade with decreasing resolution
-        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-            const sz = SHADOW_MAP_SIZE;
-            const rt = new RenderTarget(sz, sz, {
-                depthBuffer: false,
-                type: HalfFloatType
-            });
-            rt.texture.name = `Clouds [Shadow ${i}]`;
-            rt.texture.minFilter = LinearFilter;
-            rt.texture.magFilter = LinearFilter;
-            this.shadowRTs.push(rt);
-
-            // History + resolved RTs for BSM temporal accumulation
-            const resRT = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
-            resRT.texture.name = `Clouds [Shadow Res ${i}]`;
-            resRT.texture.minFilter = LinearFilter;
-            resRT.texture.magFilter = LinearFilter;
-            this.shadowResolvedRTs.push(resRT);
-
-            // shadowNodes point to resolved RTs (main march samples resolved BSM)
-            this.shadowNodes.push(texture(resRT.texture));
-
-            const mat = new NodeMaterial();
-            mat.name = `Clouds [Shadow ${i}]`;
-            this.shadowMaterials.push(mat);
-
-            const histRT = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
-            histRT.texture.name = `Clouds [Shadow Hist ${i}]`;
-            histRT.texture.minFilter = LinearFilter;
-            histRT.texture.magFilter = LinearFilter;
-            this.shadowHistoryRTs.push(histRT);
-            this.shadowHistoryNodes.push(texture(histRT.texture));
-
-            const resMat = new NodeMaterial();
-            resMat.name = `Clouds [Shadow Resolve ${i}]`;
-            this.shadowResolveMaterials.push(resMat);
-
-            const blitMat = new NodeMaterial();
-            blitMat.name = `Clouds [Shadow Blit ${i}]`;
-            this.shadowBlitMaterials.push(blitMat);
-
-            const rawBlitMat = new NodeMaterial();
-            rawBlitMat.name = `Clouds [Shadow Raw Blit ${i}]`;
-            this.shadowRawBlitMaterials.push(rawBlitMat);
-        }
-
-        this.lowResNode = outputTexture(this, this.lowResRT.textures[0]);
-        this.velocityLowResNode = outputTexture(this, this.lowResRT.textures[1]);
-        this.historyNode = texture(this.historyRT.texture);
-        this.resolveNodeTex = texture(this.resolveRT.texture);
-
-        if (renderer != null) {
-            ensureCloudInit(renderer).catch(() => {});
-        }
-    }
-
-    override customCacheKey(): number {
-        return this._colorNode.customCacheKey?.() ?? 0;
-    }
-
-    private swapHistoryResolve(): void {
-        // No swap: resolveRT keeps its texture identity (so direct references
-        // from main material remain valid). Instead we blit resolveRT into
-        // historyRT at the end of the frame.
-        // (Blit happens in updateBefore — see BlitNode below.)
-    }
-
-    private _fragmentNodesBuilt = false;
 
     override updateBefore({ renderer }: NodeFrame): void {
-        if (renderer == null || !_cloudRenderReady || _renderClouds == null) {
+        if (renderer == null || !this.cloudRenderReady || this.renderCloudsFn == null) {
             return;
         }
 
-        // First frame after becoming ready: build fragment nodes for low-res pass.
-        // setup() ran while still initializing so we do it here instead.
+        this._updateAtmosphereUniforms(renderer);
+
         if (!this._fragmentNodesBuilt) {
             this._buildFragmentNodes(renderer);
             this._fragmentNodesBuilt = true;
@@ -638,27 +513,23 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.setSize(lowWidth, lowHeight);
         this.historyRT.setSize(fullWidth, fullHeight);
         this.resolveRT.setSize(fullWidth, fullHeight);
-        _resolveTexelSize.value.set(1 / fullWidth, 1 / fullHeight);
-        _lowResTexelSize.value.set(1 / lowWidth, 1 / lowHeight);
-        _historyTexSize.value.set(fullWidth, fullHeight);
+        this.resolveTexelSize.value.set(1 / fullWidth, 1 / fullHeight);
+        this.lowResTexelSize.value.set(1 / lowWidth, 1 / lowHeight);
+        this.historyTexSize.value.set(fullWidth, fullHeight);
 
-        // getMipLevel() uses resolution for screen-space derivative magnitude.
-        // Virtual resolution = lowRes * 4 (what reference CloudsMaterial.setSize does)
-        _cloudUniforms.resolution.value.set(virtualWidth, virtualHeight);
-        _cloudUniforms.mipLevelScale.value = 0.25;
+        this.cloudUniforms.resolution.value.set(virtualWidth, virtualHeight);
+        this.cloudUniforms.mipLevelScale.value = 0.25;
 
-        // ECEF→World: inverse of matrixWorldToECEF (updated every frame)
         const atmoCtx = getAtmosphereContext(renderer);
         const w2eVal = atmoCtx.matrixWorldToECEF.value;
         if (w2eVal) {
-            _cloudUniforms.ecefToWorld.value.copy(w2eVal).invert();
-            _cloudUniforms.worldToECEF.value.copy(w2eVal);
+            this.cloudUniforms.ecefToWorld.value.copy(w2eVal).invert();
+            this.cloudUniforms.worldToECEF.value.copy(w2eVal);
         }
 
         this._rendererState = resetRendererState(renderer, this._rendererState);
 
-        // BSM pass: update cascade matrices and render shadow map before main pass
-        if (_shadowMarch != null) {
+        if (this.shadowMarchFn != null) {
             const ready = this.shadowMaterials.every(m => (m as any).fragmentNode != null);
             if (ready) {
                 const cam = atmoCtx.camera as any;
@@ -668,32 +539,27 @@ export class CloudRenderNode extends TempNode {
                     cam.far = Math.max(cam.far, 100000);
                     cam.updateProjectionMatrix();
 
-                    // Set worldToECEF / ecefToWorld uniforms (inverse of each other)
-                    _cloudUniforms.worldToECEF.value.copy(w2e);
-                    _cloudUniforms.ecefToWorld.value.copy(w2e).invert();
+                    this.cloudUniforms.worldToECEF.value.copy(w2e);
+                    this.cloudUniforms.ecefToWorld.value.copy(w2e).invert();
 
-                    // Convert sun direction from ECEF to world space for cascade update.
-                    const e2wRot = new Matrix4().copy(w2e).invert();
-                    const sunWorld = _cloudUniforms.sunDirection.value
-                        .clone()
+                    const e2wRot = this._tmpE2wRot.copy(w2e).invert();
+                    const sunWorld = this._tmpSunWorld
+                        .copy(this.cloudUniforms.sunDirection.value)
                         .transformDirection(e2wRot)
                         .normalize();
 
-                    // Compute shadow camera distance like the reference:
-                    // distance = lerp(1e6, 1e3, zenithAngle)
                     const camPosECEF = atmoCtx.cameraPositionECEF.value;
-                    const surfaceNormal = camPosECEF.clone().normalize();
-                    const zenithAngle = _cloudUniforms.sunDirection.value.dot(surfaceNormal);
+                    const surfaceNormal = this._tmpSurfaceNormal.copy(camPosECEF).normalize();
+                    const zenithAngle = this.cloudUniforms.sunDirection.value.dot(surfaceNormal);
                     const shadowDistance = 1e6 * (1 - zenithAngle) + 1e3 * zenithAngle;
 
-                    _cascadedShadowMaps.update(cam, sunWorld, undefined, shadowDistance);
+                    this.cascadedShadowMaps.update(cam, sunWorld, undefined, shadowDistance);
 
-                    // Store shadow view matrix for cascade index selection in shader
-                    _cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
-                    _cloudUniforms.shadowCameraNear.value = cam.near;
-                    _cloudUniforms.shadowCameraFar.value = _cascadedShadowMaps.far;
-                    _cloudUniforms.shadowFar.value = _cascadedShadowMaps.far;
-                    _cloudUniforms.shadowTexelSize.value.set(
+                    this.cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
+                    this.cloudUniforms.shadowCameraNear.value = cam.near;
+                    this.cloudUniforms.shadowCameraFar.value = this.cascadedShadowMaps.far;
+                    this.cloudUniforms.shadowFar.value = this.cascadedShadowMaps.far;
+                    this.cloudUniforms.shadowTexelSize.value.set(
                         1 / SHADOW_MAP_SIZE,
                         1 / SHADOW_MAP_SIZE
                     );
@@ -702,26 +568,27 @@ export class CloudRenderNode extends TempNode {
                     cam.updateProjectionMatrix();
 
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                        const cascade = _cascadedShadowMaps.cascades[i];
-                        _cloudUniforms.shadowMatrices[i].value.copy(cascade.matrix);
-                        _cloudUniforms.inverseShadowMatrices[i].value.copy(cascade.inverseMatrix);
-                        _cloudUniforms.shadowIntervals[i].value.copy(cascade.interval);
+                        const cascade = this.cascadedShadowMaps.cascades[i];
+                        this.cloudUniforms.shadowMatrices[i].value.copy(cascade.matrix);
+                        this.cloudUniforms.inverseShadowMatrices[i].value.copy(
+                            cascade.inverseMatrix
+                        );
+                        this.cloudUniforms.shadowIntervals[i].value.copy(cascade.interval);
 
                         renderer.setRenderTarget(this.shadowRTs[i]);
                         this.mesh.material = this.shadowMaterials[i];
                         this.mesh.render(renderer);
                     }
 
-                    // Init prev matrices = current on first frame (no reprojection velocity)
                     if (this._resolveFrameCount === 0) {
                         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                            this.prevShadowMatrices[i].copy(_cloudUniforms.shadowMatrices[i].value);
+                            this.prevShadowMatrices[i].copy(
+                                this.cloudUniforms.shadowMatrices[i].value
+                            );
                         }
                     }
 
-                    // BSM temporal resolve: blend current BSM with history
                     if (this._resolveFrameCount < 3) {
-                        // Bootstrap: copy raw BSM to resolved + history via native GPU copy
                         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                             renderer.copyTextureToTexture(
                                 this.shadowRTs[i].texture,
@@ -738,7 +605,6 @@ export class CloudRenderNode extends TempNode {
                             this.mesh.material = this.shadowResolveMaterials[i];
                             this.mesh.render(renderer);
                         }
-                        // Copy resolved → history for next frame (blit pass)
                         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                             renderer.setRenderTarget(this.shadowHistoryRTs[i]);
                             this.mesh.material = this.shadowBlitMaterials[i];
@@ -747,39 +613,27 @@ export class CloudRenderNode extends TempNode {
                     }
                     this._resolveFrameCount++;
 
-                    // Save shadow matrices for next frame's reprojection
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                        this.prevShadowMatrices[i].copy(_cloudUniforms.shadowMatrices[i].value);
+                        this.prevShadowMatrices[i].copy(this.cloudUniforms.shadowMatrices[i].value);
                     }
                 }
             }
         }
 
-        // Manually update atmosphere matrix uniforms before cloud passes render.
-        // onRenderUpdate fires during main render (after updateBefore), so without this
-        // cloud passes see last frame's matrices → "ghosting" when camera moves.
         {
-            const atmoCtx = getAtmosphereContext(renderer);
-            const cam = atmoCtx.camera;
-            const w2e = atmoCtx.matrixWorldToECEF.value;
+            const atmoCtx2 = getAtmosphereContext(renderer);
+            const cam = atmoCtx2.camera;
+            const w2e = atmoCtx2.matrixWorldToECEF.value;
             if (cam && w2e) {
-                atmoCtx.matrixViewToECEF.value.multiplyMatrices(w2e, cam.matrixWorld);
-                atmoCtx.matrixECEFToWorld.value.copy(w2e).invert();
-                _cloudUniforms.ecefToWorld.value.copy(w2e).invert();
-                _cloudUniforms.worldToECEF.value.copy(w2e);
+                atmoCtx2.matrixViewToECEF.value.multiplyMatrices(w2e, cam.matrixWorld);
+                atmoCtx2.matrixECEFToWorld.value.copy(w2e).invert();
+                this.cloudUniforms.ecefToWorld.value.copy(w2e).invert();
+                this.cloudUniforms.worldToECEF.value.copy(w2e);
             }
         }
 
-        // Camera jitter: sub-pixel offset based on Bayer 4x4 pattern.
-        // Following reference approach: don't modify camera projection matrix.
-        // Instead, compute jittered inverse projection for ray direction, and
-        // apply same jitter to previous projection for reprojection.
-        const _enableJitter = true;
+        const jitterCamera = atmoCtx.camera;
 
-        const atmoCtx2 = getAtmosphereContext(renderer);
-        const jitterCamera = atmoCtx2.camera;
-
-        // Only extend far plane to ensure clouds are visible; keep actual near/fov
         if (jitterCamera && jitterCamera.isPerspectiveCamera) {
             jitterCamera.far = Math.max(jitterCamera.far, 4e5);
             const drawingBufferSize = renderer.getDrawingBufferSize(sizeScratch);
@@ -789,148 +643,120 @@ export class CloudRenderNode extends TempNode {
 
         let jitterDx = 0,
             jitterDy = 0;
-        if (_enableJitter) {
-            const frame = this._cloudResolveFrameCount % 16;
-            const [ox, oy] = bayerOffsets[frame];
-            jitterDx = ((ox - 0.5) / virtualWidth) * 4;
-            jitterDy = -((oy - 0.5) / virtualHeight) * 4;
-            _temporalJitter.value.set(jitterDx, jitterDy);
-            _jitteredInverseProjection.value.copy(jitterCamera.projectionMatrix);
-            _jitteredInverseProjection.value.elements[8] += jitterDx * 2;
-            _jitteredInverseProjection.value.elements[9] += jitterDy * 2;
-            _jitteredInverseProjection.value.invert();
-        } else {
-            _jitteredInverseProjection.value.copy(jitterCamera.projectionMatrixInverse);
-            _temporalJitter.value.set(0, 0);
-        }
+        const frame = this._cloudResolveFrameCount % 16;
+        const [ox, oy] = bayerOffsets[frame];
+        jitterDx = ((ox - 0.5) / virtualWidth) * 4;
+        jitterDy = -((oy - 0.5) / virtualHeight) * 4;
+        this.temporalJitter.value.set(jitterDx, jitterDy);
+        this.jitteredInverseProjection.value.copy(jitterCamera.projectionMatrix);
+        this.jitteredInverseProjection.value.elements[8] += jitterDx * 2;
+        this.jitteredInverseProjection.value.elements[9] += jitterDy * 2;
+        this.jitteredInverseProjection.value.invert();
 
-        // viewProjection = (curProj + jitter) × curView — jittered to match ray direction
-        // prevViewProjection = (prevProj + jitter) × prevView — same jitter
-        // velocity = curUv - prevUv, jitter cancels in subtraction
-        const jitteredProj = jitterCamera.projectionMatrix.clone();
+        const jitteredProj = this._tmpJitteredProj.copy(jitterCamera.projectionMatrix);
         jitteredProj.elements[8] += jitterDx * 2;
         jitteredProj.elements[9] += jitterDy * 2;
-        const curVP = new Matrix4().multiplyMatrices(jitteredProj, jitterCamera.matrixWorldInverse);
-        _cloudUniforms.viewProjection.value.copy(curVP);
+        const curVP = this._tmpCurVP.multiplyMatrices(
+            jitteredProj,
+            jitterCamera.matrixWorldInverse
+        );
+        this.cloudUniforms.viewProjection.value.copy(curVP);
 
-        if (_prevProjectionMatrix && _prevViewMatrix && _hasPrevCamTransform) {
-            const reprojection = new Matrix4().copy(_prevProjectionMatrix);
+        if (this.hasPrevCamTransform) {
+            const reprojection = this._tmpReprojection.copy(this.prevProjectionMatrix);
             reprojection.elements[8] += jitterDx * 2;
             reprojection.elements[9] += jitterDy * 2;
-            reprojection.multiply(_prevViewMatrix);
-            _cloudUniforms.prevViewProjection.value.copy(reprojection);
+            reprojection.multiply(this.prevViewMatrix);
+            this.cloudUniforms.prevViewProjection.value.copy(reprojection);
 
-            // Build _viewReprojectionMatrix with high-precision translation.
-            // R_prev^-1 and R_cur come from Float32 matrices (rotation values are
-            // in [-1,1] so precision is fine). But translations are ECEF (~6.4M)
-            // and lose ~0.5m in Float32. We compute delta translation from
-            // camera.position (float64) and bake it into a rotation-only
-            // prevView × rotation-only curWorld, then manually add the delta.
-            const deltaRot = new Matrix4().multiplyMatrices(
-                _prevViewMatrix, // rotation part is precise
-                jitterCamera.matrixWorld // rotation part is precise
+            const deltaRot = this._tmpDeltaRot.multiplyMatrices(
+                this.prevViewMatrix,
+                jitterCamera.matrixWorld
             );
-            // Zero out translation from deltaRot (it's garbage anyway due to float32)
             deltaRot.elements[12] = 0;
             deltaRot.elements[13] = 0;
             deltaRot.elements[14] = 0;
-            // Compute frame-to-frame camera displacement in prev frame's view space
-            // using float64 camera positions
-            const dx = jitterCamera.position.x - _prevCamPos.x;
-            const dy = jitterCamera.position.y - _prevCamPos.y;
-            const dz = jitterCamera.position.z - _prevCamPos.z;
-            // Transform displacement by prevView rotation (float64 math via Matrix4)
-            const deltaTrans = new Matrix4().makeTranslation(
-                _prevViewMatrix.elements[0] * dx +
-                    _prevViewMatrix.elements[4] * dy +
-                    _prevViewMatrix.elements[8] * dz,
-                _prevViewMatrix.elements[1] * dx +
-                    _prevViewMatrix.elements[5] * dy +
-                    _prevViewMatrix.elements[9] * dz,
-                _prevViewMatrix.elements[2] * dx +
-                    _prevViewMatrix.elements[6] * dy +
-                    _prevViewMatrix.elements[10] * dz
+            const dx = jitterCamera.position.x - this.prevCamPos.x;
+            const dy = jitterCamera.position.y - this.prevCamPos.y;
+            const dz = jitterCamera.position.z - this.prevCamPos.z;
+            const deltaTrans = this._tmpDeltaTrans.makeTranslation(
+                this.prevViewMatrix.elements[0] * dx +
+                    this.prevViewMatrix.elements[4] * dy +
+                    this.prevViewMatrix.elements[8] * dz,
+                this.prevViewMatrix.elements[1] * dx +
+                    this.prevViewMatrix.elements[5] * dy +
+                    this.prevViewMatrix.elements[9] * dz,
+                this.prevViewMatrix.elements[2] * dx +
+                    this.prevViewMatrix.elements[6] * dy +
+                    this.prevViewMatrix.elements[10] * dz
             );
-            const delta = new Matrix4().multiplyMatrices(deltaRot, deltaTrans);
-            _viewReprojectionMatrix.value.multiplyMatrices(reprojection, delta);
-            hasPrevViewProjection = true;
+            const delta = this._tmpDelta.multiplyMatrices(deltaRot, deltaTrans);
+            this.viewReprojectionMatrix.value.multiplyMatrices(reprojection, delta);
         }
 
-        // Deferred blit from previous frame: resolveRT → historyRT
         if (this._cloudResolveFrameCount > 0) {
             renderer.setRenderTarget(this.historyRT);
             this.mesh.material = this.blitMaterial;
             this.mesh.render(renderer);
         }
 
-        // Pass 1: Render clouds at 1/4 resolution for temporal upscale
         renderer.setRenderTarget(this.lowResRT);
         this.mesh.material = this.lowResMaterial;
         this.mesh.render(renderer);
 
-        // Save non-jittered projection + view for next frame's reprojection
-        _prevProjectionMatrix = jitterCamera.projectionMatrix.clone();
-        _prevViewMatrix = jitterCamera.matrixWorldInverse.clone();
-        // Save float64 camera position for delta computation
-        _prevCamPos.copy(jitterCamera.position);
-        _hasPrevCamTransform = true;
+        this.prevProjectionMatrix.copy(jitterCamera.projectionMatrix);
+        this.prevViewMatrix.copy(jitterCamera.matrixWorldInverse);
+        this.prevCamPos.copy(jitterCamera.position);
+        this.hasPrevCamTransform = true;
 
-        // Update resolve frame count for bootstrapping (before resolve pass)
-        _cloudResolveCountNode.value = this._cloudResolveFrameCount;
-        _cloudFrameNode.value = this._cloudResolveFrameCount % 16;
+        this.cloudResolveCountNode.value = this._cloudResolveFrameCount;
+        this.cloudFrameNode.value = this._cloudResolveFrameCount % 16;
         this._cloudResolveFrameCount++;
 
-        // Pass 2: Resolve into resolveRT
         renderer.setRenderTarget(this.resolveRT);
         this.mesh.material = this.resolveMaterial;
         this.mesh.render(renderer);
 
         restoreRendererState(renderer, this._rendererState);
 
-        // Accumulate wind velocity into texture offsets (Euler integration)
         const now = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
-        const dt = _prevFrameTime > 0 ? Math.min(now - _prevFrameTime, 0.1) : 0;
-        _prevFrameTime = now;
+        const dt = this.prevFrameTime > 0 ? Math.min(now - this.prevFrameTime, 0.1) : 0;
+        this.prevFrameTime = now;
         if (dt > 0) {
-            _cloudUniforms.localWeatherOffset.value.x +=
-                _cloudUniforms.localWeatherVelocity.value.x * dt;
-            _cloudUniforms.localWeatherOffset.value.y +=
-                _cloudUniforms.localWeatherVelocity.value.y * dt;
-            _cloudUniforms.shapeOffset.value.x += _cloudUniforms.shapeVelocity.value.x * dt;
-            _cloudUniforms.shapeOffset.value.y += _cloudUniforms.shapeVelocity.value.y * dt;
-            _cloudUniforms.shapeOffset.value.z += _cloudUniforms.shapeVelocity.value.z * dt;
-            _cloudUniforms.shapeDetailOffset.value.x +=
-                _cloudUniforms.shapeDetailVelocity.value.x * dt;
-            _cloudUniforms.shapeDetailOffset.value.y +=
-                _cloudUniforms.shapeDetailVelocity.value.y * dt;
-            _cloudUniforms.shapeDetailOffset.value.z +=
-                _cloudUniforms.shapeDetailVelocity.value.z * dt;
+            this.cloudUniforms.localWeatherOffset.value.x +=
+                this.cloudUniforms.localWeatherVelocity.value.x * dt;
+            this.cloudUniforms.localWeatherOffset.value.y +=
+                this.cloudUniforms.localWeatherVelocity.value.y * dt;
+            this.cloudUniforms.shapeOffset.value.x += this.cloudUniforms.shapeVelocity.value.x * dt;
+            this.cloudUniforms.shapeOffset.value.y += this.cloudUniforms.shapeVelocity.value.y * dt;
+            this.cloudUniforms.shapeOffset.value.z += this.cloudUniforms.shapeVelocity.value.z * dt;
+            this.cloudUniforms.shapeDetailOffset.value.x +=
+                this.cloudUniforms.shapeDetailVelocity.value.x * dt;
+            this.cloudUniforms.shapeDetailOffset.value.y +=
+                this.cloudUniforms.shapeDetailVelocity.value.y * dt;
+            this.cloudUniforms.shapeDetailOffset.value.z +=
+                this.cloudUniforms.shapeDetailVelocity.value.z * dt;
         }
 
-        _frameIndex++;
-
-        this.swapHistoryResolve();
+        this.frameIndex++;
     }
 
     override setup(builder: NodeBuilder): unknown {
-        if (!_cloudRenderReady) {
-            if (!_cloudInitialized && builder.renderer != null) {
-                ensureCloudInit(builder.renderer);
+        if (!this.cloudRenderReady) {
+            if (!this.cloudInitialized && builder.renderer != null) {
+                this.ensureCloudInit(builder.renderer);
             }
             return this._colorNode;
         }
 
-        if (_renderClouds == null) {
+        if (this.renderCloudsFn == null) {
             return this._colorNode;
         }
 
-        // Build fragment nodes (also re-built in updateBefore on first ready frame)
         if (!this._fragmentNodesBuilt) {
             this._buildFragmentNodes(builder);
             this._fragmentNodesBuilt = true;
         }
-
-        const debugMode = _cloudUniforms.debugMode;
 
         const resolvedClouds = texture(this.resolveNodeTex, screenUV);
         const cloudColor = convertToTexture(this._colorNode);
@@ -939,39 +765,29 @@ export class CloudRenderNode extends TempNode {
 
     private _buildFragmentNodes(host: NodeBuilder | Renderer): void {
         const atmosphereContext = getAtmosphereContext(host);
-        const {
-            camera,
-            matrixViewToECEF,
-            matrixECEFToWorld,
-            cameraPositionECEF,
-            altitudeCorrectionECEF,
-            parameters
-        } = atmosphereContext;
+        const { camera, matrixViewToECEF, cameraPositionECEF, altitudeCorrectionECEF, parameters } =
+            atmosphereContext;
 
-        _cloudUniforms.bottomRadius.value = parameters.bottomRadius;
+        this.cloudUniforms.bottomRadius.value = parameters.bottomRadius;
 
-        // Bind shadow texture nodes early — low-res pass references them via
-        // sampleShadowOpticalDepth, so they must be non-null before that shader
-        // is built (otherwise TSL texture() call fails).
         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-            _cloudUniforms.shadowTextureNodes[i] = this.shadowNodes[i];
+            this.cloudUniforms.shadowTextureNodes[i] = this.shadowNodes[i];
         }
-        _cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
+        this.cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
 
-        // Setup low-res pass: render clouds with STBN jitter
+        const u = this.cloudUniforms;
+
         {
             const geo = positionGeometry;
-            // Reference: viewPosition = inverseProjectionMatrix(jittered) * position
-            const positionView = _jitteredInverseProjection.mul(vec4(geo, 1)).xyz;
+            const positionView = this.jitteredInverseProjection.mul(vec4(geo, 1)).xyz;
             const rayDirection = matrixViewToECEF.mul(vec4(positionView, float(0))).xyz.normalize();
             const camPosCorrected = cameraPositionECEF.add(altitudeCorrectionECEF);
 
-            // Depth occlusion: add temporalJitter to depth UV (matches reference)
             let sceneDistance;
             let depthViewZ = float(4e5).toVar();
             if (this._depthNode != null) {
                 const depthTex = convertToTexture(this._depthNode);
-                const depthUv = screenUV.add(_temporalJitter);
+                const depthUv = screenUV.add(this.temporalJitter);
                 const depthVal = depthTex.sample(depthUv).r;
                 const viewZ = depthToViewZ(depthVal, camera);
                 depthViewZ.assign(
@@ -990,28 +806,18 @@ export class CloudRenderNode extends TempNode {
             }
 
             const jitter = stbn;
+            u.worldToUnit.value = parameters.worldToUnit;
 
-            // Compute sun/sky irradiance from atmosphere LUT at cloud layer heights.
-            // The atmosphere runtime expects positions in the same unit as
-            // parametersNode.bottomRadius/topRadius (i.e. km). Cloud uniforms
-            // hold positions in meters, so multiply by worldToUnit here.
-            const worldToUnit = parameters.worldToUnit;
-            _cloudUniforms.worldToUnit.value = worldToUnit;
-
-            const clouds = _renderClouds(camPosCorrected, rayDirection, sceneDistance);
-            // Scene-depth velocity (for non-cloud pixels)
+            const clouds = this.renderCloudsFn(camPosCorrected, rayDirection, sceneDistance);
             const frontView = positionView.mul(depthViewZ);
-            const prevClip = _viewReprojectionMatrix.mul(vec4(frontView, 1));
-            // Flip Y: screenUV is Y-down but clip space UV is Y-up
+            const prevClip = this.viewReprojectionMatrix.mul(vec4(frontView, 1));
             const prevUv = vec2(
                 prevClip.x.div(prevClip.w).mul(0.5).add(0.5),
                 float(1).sub(prevClip.y.div(prevClip.w).mul(0.5).add(0.5))
             );
             const sceneVelocity = screenUV.sub(prevUv);
-            // Cloud velocity (for cloud pixels) — uses cloud front depth in ECEF
             const cloudVelocity = clouds.get("velocity");
             const cloudFrontDepth = clouds.get("frontDepth");
-            // Select cloud velocity where clouds are hit, scene velocity otherwise
             const useCloudVelocity = clouds.get("color").a.greaterThan(0);
             const finalVelocity = useCloudVelocity.select(cloudVelocity, sceneVelocity);
             const finalDepth = useCloudVelocity.select(cloudFrontDepth, depthViewZ);
@@ -1022,33 +828,20 @@ export class CloudRenderNode extends TempNode {
             this.lowResMaterial.needsUpdate = true;
         }
 
-        // Setup resolve pass: temporal upscale (Bayer + reprojection + variance clipping)
-        // Matches reference: cloudsResolve.frag → temporalUpscale()
         {
-            const bayerRows = [
-                vec4(0, 12, 3, 15),
-                vec4(8, 4, 11, 7),
-                vec4(2, 14, 1, 13),
-                vec4(10, 6, 9, 5)
-            ];
-
             const resolveNode = Fn(() => {
-                // Low-res size from texel uniform
                 const lowResSize = vec2(
-                    float(1).div(_lowResTexelSize.x),
-                    float(1).div(_lowResTexelSize.y)
+                    float(1).div(this.lowResTexelSize.x),
+                    float(1).div(this.lowResTexelSize.y)
                 );
-                // Full-res size from resolve texel uniform
                 const fullResSize = vec2(
-                    float(1).div(_resolveTexelSize.x),
-                    float(1).div(_resolveTexelSize.y)
+                    float(1).div(this.resolveTexelSize.x),
+                    float(1).div(this.resolveTexelSize.y)
                 );
 
-                // Full-res pixel coordinate from screenCoordinate (matches gl_FragCoord)
                 const fx = screenCoordinate.x.floor();
                 const fy = screenCoordinate.y.floor();
 
-                // Sample low-res color using nearest texel
                 const lowCoordX = fx.div(4).floor();
                 const lowCoordY = fy.div(4).floor();
                 const lowUv = vec2(
@@ -1057,7 +850,6 @@ export class CloudRenderNode extends TempNode {
                 );
                 const currentColor = texture(this.lowResNode, lowUv);
 
-                // Bayer pattern entirely in float
                 const b0 = vec4(0, 12, 3, 15);
                 const b1 = vec4(8, 4, 11, 7);
                 const b2 = vec4(2, 14, 1, 13);
@@ -1071,7 +863,6 @@ export class CloudRenderNode extends TempNode {
                 const row = mx
                     .lessThan(1)
                     .select(b0, mx.lessThan(2).select(b1, mx.lessThan(3).select(b2, b3)));
-
                 const bayerVal = my
                     .lessThan(1)
                     .select(
@@ -1079,10 +870,9 @@ export class CloudRenderNode extends TempNode {
                         my.lessThan(2).select(row.y, my.lessThan(3).select(row.z, row.w))
                     );
 
-                const frameMod = _cloudResolveCountNode.mod(16);
+                const frameMod = this.cloudResolveCountNode.mod(16);
                 const isCurrent = bayerVal.sub(frameMod).abs().lessThan(0.5);
 
-                // Full temporal resolve
                 const result = currentColor.toVar();
 
                 If(isCurrent.not(), () => {
@@ -1116,37 +906,31 @@ export class CloudRenderNode extends TempNode {
             this.resolveMaterial.needsUpdate = true;
         }
 
-        // Blit pass: copy resolveRT → historyRT (replaces swap)
         {
             this.blitMaterial.name = "Clouds [Blit]";
             this.blitMaterial.fragmentNode = texture(this.resolveNodeTex, screenUV);
             this.blitMaterial.needsUpdate = true;
         }
 
-        // Shadow pass setup (BSM)
-        if (_shadowMarch != null) {
-            _cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
+        if (this.shadowMarchFn != null) {
+            this.cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
 
             for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                // Shadow march: renders BSM from sun's viewpoint
-                this.shadowMaterials[i].fragmentNode = _shadowMarch(i)();
+                this.shadowMaterials[i].fragmentNode = this.shadowMarchFn(i)();
                 this.shadowMaterials[i].needsUpdate = true;
 
-                // Raw blit: copy raw shadow RT → resolved/history (bootstrap)
                 this.shadowRawBlitMaterials[i].fragmentNode = texture(
                     this.shadowRTs[i].texture,
                     screenUV
                 );
                 this.shadowRawBlitMaterials[i].needsUpdate = true;
 
-                // Blit: copy resolved RT → history RT
                 this.shadowBlitMaterials[i].fragmentNode = texture(
                     this.shadowResolvedRTs[i].texture,
                     screenUV
                 );
                 this.shadowBlitMaterials[i].needsUpdate = true;
 
-                // Resolve: temporal accumulation (current + history + variance clipping)
                 const shadowRTTex = texture(this.shadowRTs[i].texture);
                 const shadowResolveNode = Fn(() => {
                     const coord = ivec2(screenCoordinate);

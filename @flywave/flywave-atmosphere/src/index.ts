@@ -172,10 +172,4 @@ export { CloudUniforms } from "./clouds/CloudUniforms";
 export { qualityPresets } from "./clouds/QualityPresets";
 export type { QualityPreset, QualityPresetConfig } from "./clouds/QualityPresets";
 export { createCloudRenderer, getCubeSphereUv } from "./clouds/cloudTsl";
-export {
-    CloudRenderNode,
-    cloudRender,
-    setCloudReadyCallback,
-    getCloudUniforms,
-    updateCloudUniforms
-} from "./atmosphere/CloudRenderNode";
+export { CloudRenderNode, cloudRender } from "./atmosphere/CloudRenderNode";

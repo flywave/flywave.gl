@@ -295,11 +295,6 @@ const additionalAssets: Array<{ from: string; to: string; toType?: "dir" | "file
             toType: "dir"
         },
         {
-            from: path.join(__dirname, "../flywave-atmosphere/assets/clouds"),
-            to: "assets/clouds",
-            toType: "dir"
-        },
-        {
             from: __dirname + "/example-definitions.js.in",
             to: "example-definitions.js",
             toType: "file"

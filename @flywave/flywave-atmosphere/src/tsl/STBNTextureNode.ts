@@ -11,7 +11,6 @@ import {
     Texture3DNode
 } from "three/webgpu";
 
-import { DEFAULT_STBN_URL } from "../constants";
 import { STBNLoader } from "../STBNLoader";
 import { hashString } from "./utils";
 
@@ -28,7 +27,7 @@ const emptyTexture3D = /*#__PURE__*/ (() => {
 })();
 
 export class STBNTextureNode extends Texture3DNode {
-    url = DEFAULT_STBN_URL;
+    url = "resources/clouds/stbn.bin";
 
     private dataPromise?: Promise<void>;
 

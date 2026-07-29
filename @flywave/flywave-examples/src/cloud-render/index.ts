@@ -45,9 +45,6 @@ import {
     cloudRender,
     registerAtmosphereContext,
     registerAtmosphereContextBase,
-    updateCloudUniforms,
-    setCloudReadyCallback,
-    getCloudUniforms,
     getCubeSphereUv
 } from "@flywave/flywave-atmosphere";
 
@@ -172,7 +169,6 @@ async function main() {
     // It internally calls createCloudRenderer() and manages all the buffers.
     const cloudsNode = cloudRender(backgroundNode, null, renderer);
     (window as any).__cloudsNode = cloudsNode;
-    (window as any).__cloudUniforms = getCloudUniforms();
     (window as any).__renderer = renderer;
 
     // Apply high quality preset to enable shadow length (light shafts)
@@ -385,7 +381,7 @@ async function main() {
             debugModeU.value = mode;
             aspectUniform.value = window.innerWidth / window.innerHeight;
             tanHalfFovU.value = Math.tan((camera.fov * Math.PI) / 360);
-            const u = getCloudUniforms();
+            const u = (cloudsNode as any)?.uniforms;
             if (u) {
                 cameraHeightU.value = u.cameraHeight.value;
                 altCorrU.value.copy(atmosphereContext.altitudeCorrectionECEF.value);
@@ -406,7 +402,7 @@ async function main() {
 
     // Console helper: set cloud debug mode (affects CloudRenderNode shader output)
     (window as any).__cloudsDebugMode = (mode: number) => {
-        const u = getCloudUniforms();
+        const u = (cloudsNode as any)?.uniforms;
         if (u) u.debugMode.value = mode;
         applyDebugMode(mode);
         setTimeout(() => {
@@ -454,7 +450,7 @@ async function main() {
     }
 
     renderer.setAnimationLoop(() => {
-        updateCloudUniforms(atmosphereContext);
+        (cloudsNode as any)?.updateUniforms(atmosphereContext);
         renderer.render(scene, quadCamera);
 
         const now = performance.now();

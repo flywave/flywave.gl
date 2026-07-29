@@ -37,8 +37,6 @@ import {
     highpVelocity,
     shadowLength,
     cloudRender,
-    setCloudReadyCallback,
-    updateCloudUniforms,
     type CloudRenderNode,
     type LensFlareNode,
     type AerialPerspectiveNode,
@@ -143,11 +141,20 @@ export class ViewRenderManager implements IViewRenderManager {
         }
 
         if (this.config.clouds?.enabled) {
-            this.cloudNode = cloudRender(convertToTexture(outputNode), depthNode, this.renderer);
-            // Rebuild pipeline when cloud textures finish loading
-            setCloudReadyCallback(() => {
-                this.needsUpdate = true;
-            });
+            if (!this.cloudNode) {
+                this.cloudNode = cloudRender(
+                    convertToTexture(outputNode),
+                    depthNode,
+                    this.renderer
+                );
+                this.cloudNode.onReady = () => {
+                    this.cloudNode!.onReady = null;
+                    this.needsUpdate = true;
+                };
+            } else {
+                this.cloudNode._colorNode = convertToTexture(outputNode);
+                this.cloudNode._depthNode = depthNode ?? null;
+            }
             outputNode = this.cloudNode;
         }
 
@@ -274,14 +281,6 @@ export class ViewRenderManager implements IViewRenderManager {
     render(scene: THREE.Scene, camera: THREE.Camera): void {
         if (this.needsUpdate || this.pipeline == null) {
             this.buildNodeGraph(scene, camera);
-        }
-
-        // Update cloud uniforms from atmosphere context
-        if (this.cloudNode != null) {
-            const atmoCtx = (scene as any).__atmosphereContext;
-            if (atmoCtx != null) {
-                updateCloudUniforms(atmoCtx);
-            }
         }
 
         // Update sun direction for building color override material

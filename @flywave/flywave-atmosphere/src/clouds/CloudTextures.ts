@@ -4,7 +4,6 @@
 import {
     Data3DTexture,
     LinearFilter,
-    LinearMipMapLinearFilter,
     NoColorSpace,
     RedFormat,
     RepeatWrapping,
@@ -13,19 +12,35 @@ import {
     type Texture
 } from "three";
 import { type Renderer } from "three/webgpu";
+
+const _textureCache = new Map<string, Promise<CloudTextures>>();
+
 export class CloudTextures {
     private _shapeTexture: Data3DTexture | null = null;
     private _shapeDetailTexture: Data3DTexture | null = null;
     private _localWeatherTexture: Texture | null = null;
     private _turbulenceTexture: Texture | null = null;
 
-    private _assetsPath = "./assets/clouds";
+    private constructor() {}
 
-    async load(renderer?: Renderer): Promise<void> {
-        // Load 2D textures via TextureLoader
+    static async load(assetsPath: string = "resources/clouds/"): Promise<CloudTextures> {
+        const existing = _textureCache.get(assetsPath);
+        if (existing) return existing;
+
+        const promise = (async () => {
+            const instance = new CloudTextures();
+            await instance._doLoad(assetsPath);
+            return instance;
+        })();
+
+        _textureCache.set(assetsPath, promise);
+        return promise;
+    }
+
+    private async _doLoad(assetsPath: string): Promise<void> {
         const loader = new TextureLoader();
 
-        this._localWeatherTexture = await loader.loadAsync(`${this._assetsPath}/local_weather.png`);
+        this._localWeatherTexture = await loader.loadAsync(`${assetsPath}local_weather.png`);
         this._localWeatherTexture.minFilter = LinearFilter;
         this._localWeatherTexture.magFilter = LinearFilter;
         this._localWeatherTexture.wrapS = RepeatWrapping;
@@ -34,7 +49,7 @@ export class CloudTextures {
         this._localWeatherTexture.generateMipmaps = false;
         this._localWeatherTexture.needsUpdate = true;
 
-        this._turbulenceTexture = await loader.loadAsync(`${this._assetsPath}/turbulence.png`);
+        this._turbulenceTexture = await loader.loadAsync(`${assetsPath}turbulence.png`);
         this._turbulenceTexture.minFilter = LinearFilter;
         this._turbulenceTexture.magFilter = LinearFilter;
         this._turbulenceTexture.wrapS = RepeatWrapping;
@@ -42,12 +57,8 @@ export class CloudTextures {
         this._turbulenceTexture.colorSpace = NoColorSpace;
         this._turbulenceTexture.needsUpdate = true;
 
-        // Load 3D textures from raw binary data
-        this._shapeTexture = await this.load3DTexture(`${this._assetsPath}/shape.bin`, 128);
-        this._shapeDetailTexture = await this.load3DTexture(
-            `${this._assetsPath}/shape_detail.bin`,
-            32
-        );
+        this._shapeTexture = await this.load3DTexture(`${assetsPath}shape.bin`, 128);
+        this._shapeDetailTexture = await this.load3DTexture(`${assetsPath}shape_detail.bin`, 32);
     }
 
     private async load3DTexture(url: string, size: number): Promise<Data3DTexture> {
@@ -83,13 +94,4 @@ export class CloudTextures {
     get turbulenceTexture(): Texture {
         return this._turbulenceTexture!;
     }
-
-    dispose(): void {
-        this._shapeTexture?.dispose();
-        this._shapeDetailTexture?.dispose();
-        this._localWeatherTexture?.dispose();
-        this._turbulenceTexture?.dispose();
-    }
 }
-
-import { UnsignedByteType } from "three";

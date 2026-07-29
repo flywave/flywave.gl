@@ -214,6 +214,12 @@ export interface Celestia {
     clouds?: boolean;
 
     /**
+     * Resolved URL for cloud texture assets. Automatically resolved relative
+     * to the theme URL. Not user-configurable.
+     */
+    cloudAssetsUrl?: string;
+
+    /**
      * Whether to show the ground intersection in atmosphere rendering.
      * @default true
      */

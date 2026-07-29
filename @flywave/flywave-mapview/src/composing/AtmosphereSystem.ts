@@ -31,6 +31,7 @@ export interface AtmosphereSystemOptions {
     sunTime?: number;
     sunCastShadow?: boolean;
     clouds?: boolean;
+    cloudAssetsUrl?: string;
     showGround?: boolean;
     raymarchScattering?: boolean;
     higherOrderScatteringTexture?: boolean;
@@ -65,6 +66,7 @@ export class AtmosphereSystem {
     private m_atmosphereEnabled: boolean = true;
     private m_sunCastShadow: boolean = true;
     private m_cloudsEnabled: boolean = false;
+    private m_cloudAssetsUrl: string = "resources/clouds/";
     private m_showGround: boolean = true;
     private m_raymarchScattering: boolean = true;
     private m_higherOrderScatteringTexture: boolean = true;
@@ -207,6 +209,13 @@ export class AtmosphereSystem {
         }
         if (options?.clouds !== undefined) {
             this.m_cloudsEnabled = options.clouds;
+        }
+        if (options?.cloudAssetsUrl !== undefined) {
+            this.m_cloudAssetsUrl = options.cloudAssetsUrl;
+            const vrm = this.mapView?.mapRenderingManager?.viewRenderManager;
+            if (vrm?.cloudNode != null) {
+                vrm.cloudNode.cloudAssetsPath = options.cloudAssetsUrl;
+            }
         }
         const ctx = this.m_atmosphereContext;
         if (ctx != null) {

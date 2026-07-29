@@ -10,7 +10,7 @@ import {
     type Theme,
     PostEffects
 } from "@flywave/flywave-datasource-protocol";
-import { type UriResolver, LoggerManager } from "@flywave/flywave-utils";
+import { type UriResolver, LoggerManager, resolveReferenceUri } from "@flywave/flywave-utils";
 import isEqual from "lodash.isequal";
 import * as THREE from "three";
 
@@ -101,7 +101,11 @@ export class MapViewThemeManager {
         environment.updateLighting(theme.lights);
 
         this.m_theme.celestia = theme.celestia;
-        environment.updateAtmosphere(theme.celestia);
+        const celestia = { ...theme.celestia };
+        if (celestia.clouds && theme.url) {
+            celestia.cloudAssetsUrl = resolveReferenceUri(theme.url, "clouds/");
+        }
+        environment.updateAtmosphere(celestia);
 
         if (theme.enableShadows || theme.celestia?.sunCastShadow) {
             this.m_mapView.shadowsEnabled = true;
