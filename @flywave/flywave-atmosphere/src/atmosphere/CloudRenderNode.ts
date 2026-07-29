@@ -280,10 +280,17 @@ export class CloudRenderNode extends TempNode {
 
         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
             const sz = SHADOW_MAP_SIZE;
-            const rt = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
-            rt.texture.name = `Clouds [Shadow ${i}]`;
+            const rt = new RenderTarget(sz, sz, {
+                depthBuffer: false,
+                type: HalfFloatType,
+                count: 2
+            });
+            rt.texture.name = "color";
             rt.texture.minFilter = LinearFilter;
             rt.texture.magFilter = LinearFilter;
+            rt.textures[1].name = "velocity";
+            rt.textures[1].minFilter = LinearFilter;
+            rt.textures[1].magFilter = LinearFilter;
             this.shadowRTs.push(rt);
 
             const resRT = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
@@ -540,6 +547,7 @@ export class CloudRenderNode extends TempNode {
         if (this.shadowMarchFn != null) {
             const ready = this.shadowMaterials.every(m => (m as any).fragmentNode != null);
             if (ready) {
+                this.cloudUniforms.frame.value = this._cloudResolveFrameCount % 8;
                 const cam = atmoCtx.camera as any;
                 const w2e = atmoCtx.matrixWorldToECEF.value;
                 if (cam && w2e) {
@@ -574,6 +582,16 @@ export class CloudRenderNode extends TempNode {
 
                     cam.far = origFar;
                     cam.updateProjectionMatrix();
+
+                    // Wire previous frame cascade matrices for velocity reprojection.
+                    // reprojectionMatrices holds the matrices used in the LAST frame's
+                    // shadow render, enabling the shader to compute UV offset between
+                    // current and previous frame for temporal resolve.
+                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                        this.cloudUniforms.reprojectionMatrices[i].value.copy(
+                            this.prevShadowMatrices[i]
+                        );
+                    }
 
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                         const cascade = this.cascadedShadowMaps.cascades[i];
@@ -924,7 +942,50 @@ export class CloudRenderNode extends TempNode {
             this.cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
 
             for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                this.shadowMaterials[i].fragmentNode = this.shadowMarchFn(i)();
+                const shadowColor = this.shadowMarchFn(i)();
+
+                // Compute shadow velocity for temporal reprojection.
+                // Must be outside Fn() because mrt() cannot be returned from inside Fn().
+                // Uses the same ray math as createShadowMarchClouds.
+                const invMat = this.cloudUniforms.inverseShadowMatrices[i];
+                const clip = vec3(screenUV.mul(2).sub(1), float(1));
+                const point = invMat.mul(vec4(clip, float(1)));
+                const pDiv = point.xyz.div(point.w);
+                const sunPos = pDiv.add(this.cloudUniforms.altitudeCorrection);
+                const rayDir = this.cloudUniforms.sunDirection.negate().normalize();
+
+                const a = sunPos;
+                const b = dot(rayDir, a).mul(2);
+                const shadowR = this.cloudUniforms.bottomRadius.add(
+                    this.cloudUniforms.shadowTopHeight
+                );
+                const c = dot(a, a).sub(shadowR.mul(shadowR));
+                const disc = b.mul(b).sub(c.mul(4));
+                const rayNear = max(
+                    float(0),
+                    b
+                        .negate()
+                        .sub(sqrt(disc.max(0)))
+                        .mul(0.5)
+                );
+                const rayOrigin = rayNear.mul(rayDir).add(sunPos);
+
+                const frontDepth = shadowColor.x;
+                const noSamples = shadowColor.y.equal(0);
+                const frontPosition = frontDepth.mul(rayDir).add(rayOrigin);
+                const frontWorld = this.cloudUniforms.ecefToWorld.mul(
+                    vec4(frontPosition.sub(this.cloudUniforms.altitudeCorrection), 1)
+                ).xyz;
+                const prevClip = this.cloudUniforms.reprojectionMatrices[i].mul(
+                    vec4(frontWorld, 1)
+                );
+                const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
+                const velocity = noSamples.select(vec2(0), screenUV.sub(prevUv));
+
+                this.shadowMaterials[i].fragmentNode = mrt({
+                    color: shadowColor,
+                    velocity: vec4(velocity, 0, 0)
+                });
                 this.shadowMaterials[i].needsUpdate = true;
 
                 this.shadowRawBlitMaterials[i].fragmentNode = texture(
@@ -939,18 +1000,33 @@ export class CloudRenderNode extends TempNode {
                 );
                 this.shadowBlitMaterials[i].needsUpdate = true;
 
-                const shadowRTTex = texture(this.shadowRTs[i].texture);
+                const shadowColorTex = texture(this.shadowRTs[i].texture);
+                const shadowVelocityTex = texture(this.shadowRTs[i].textures[1]);
                 const shadowResolveNode = Fn(() => {
                     const coord = ivec2(screenCoordinate);
-                    const currentColor = shadowRTTex.load(coord);
-                    const historyColor = texture(this.shadowHistoryNodes[i], screenUV);
-                    const clippedColor = _varianceClippingResolve(
-                        shadowRTTex,
-                        coord,
-                        currentColor,
-                        historyColor
-                    );
-                    return mix(clippedColor, currentColor, float(0.01));
+                    const currentColor = shadowColorTex.load(coord);
+                    const velocityData = shadowVelocityTex.load(coord);
+                    const prevUv = screenUV.sub(velocityData.xy);
+                    const inBounds = prevUv.x
+                        .greaterThanEqual(0)
+                        .and(prevUv.x.lessThanEqual(1))
+                        .and(prevUv.y.greaterThanEqual(0))
+                        .and(prevUv.y.lessThanEqual(1));
+                    const result = currentColor.toVar();
+                    If(inBounds, () => {
+                        const historyColor = texture(this.shadowHistoryNodes[i], prevUv);
+                        const clipped = _varianceClippingResolve(
+                            shadowColorTex,
+                            coord,
+                            currentColor,
+                            historyColor
+                        );
+                        result.assign(clipped);
+                    });
+                    // 1% EMA feedback per frame. Shadow map is now deterministic
+                    // (stbnFixed in shadow march), so only PCF rotation in the main
+                    // render needs temporal smoothing.
+                    return mix(result, currentColor, float(0.01));
                 })();
                 this.shadowResolveMaterials[i].fragmentNode = shadowResolveNode;
                 this.shadowResolveMaterials[i].needsUpdate = true;

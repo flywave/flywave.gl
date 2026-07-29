@@ -41,7 +41,7 @@ import {
 } from "three/tsl";
 
 import type { CloudUniforms } from "./CloudUniforms";
-import { stbn } from "../tsl/STBNTextureNode";
+import { stbn, stbnFixed } from "../tsl/STBNTextureNode";
 import {
     getIndirectLuminanceToPoint,
     getSplitScalarIlluminance,
@@ -498,7 +498,9 @@ export const createMarchShadowLength = (u: CloudUniforms, sampleShadowOpticalDep
 
 /* -------------------------------------------------------------------------- */
 /*  Shadow march (BSM render pass): raymarch clouds from sun's POV             */
-/*  Outputs vec4(frontDepth, meanExtinction, maxOpticalDepth, maxOpticalDepthTail) */
+/*  Returns vec4(frontDepth, meanExtinction, maxOpticalDepth, tail)            */
+/*  NOTE: velocity is computed OUTSIDE this Fn (at material level) using       */
+/*  mrt() at the top level, because TSL's mrt() cannot be returned from Fn().  */
 /* -------------------------------------------------------------------------- */
 
 const SHADOW_MAX_ITERATIONS = 48;
@@ -648,11 +650,11 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         return { shadowUV, inBounds };
     };
 
-    // Per-frame rotation matrix for PCF taps + sub-texel jitter.
-    // Uses frame counter to cycle through 8 rotations, giving temporal
-    // softening when combined with TAA in the resolve pass.
+    // Per-pixel deterministic rotation for PCF taps + sub-texel jitter.
+    // Uses stbnFixed (blue noise, Z=0 slice) instead of frame counter or
+    // screen hash to avoid both temporal flickering and structured artifacts.
     const getJitterRotation = () => {
-        const angle = u.frame.mod(float(8)).mul(float(Math.PI / 4));
+        const angle = stbnFixed.mul(float(Math.PI * 2));
         const cosA = cos(angle);
         const sinA = sin(angle);
         const subTexel = vec2(cosA, sinA).mul(u.shadowTexelSize.mul(float(0.5)));
@@ -824,7 +826,7 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
     };
 
     const getJitterRotation = () => {
-        const angle = u.frame.mod(float(8)).mul(float(Math.PI / 4));
+        const angle = stbnFixed.mul(float(Math.PI * 2));
         const cosA = cos(angle);
         const sinA = sin(angle);
         const subTexel = vec2(cosA, sinA).mul(u.shadowTexelSize.mul(float(0.5)));

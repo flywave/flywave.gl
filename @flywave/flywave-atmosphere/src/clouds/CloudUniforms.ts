@@ -76,6 +76,14 @@ export class CloudUniforms {
         uniform(new Vector2(0, 1)),
         uniform(new Vector2(0, 1))
     ];
+    // Previous frame cascade matrices for shadow velocity reprojection.
+    // Populated from prevShadowMatrices in CloudRenderNode each frame.
+    reprojectionMatrices = [
+        uniform(new Matrix4()),
+        uniform(new Matrix4()),
+        uniform(new Matrix4()),
+        uniform(new Matrix4())
+    ];
     // Shadow buffer textures (one per cascade). Set externally by CloudRenderNode.
     shadowTextureNodes: (any | null)[] = [null, null, null, null];
 
