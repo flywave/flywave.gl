@@ -1143,10 +1143,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                     });
 
                     stepSize.mulAssign(u.perspectiveStepScale);
-                    const thinScale = mediaExtinction
-                        .greaterThan(u.minExtinction)
-                        .select(float(1), float(4));
-                    rayDistance.addAssign(stepSize.mul(thinScale));
+                    rayDistance.addAssign(stepSize);
                 });
 
                 If(transmittanceIntegral.lessThanEqual(u.minTransmittance), () => {
