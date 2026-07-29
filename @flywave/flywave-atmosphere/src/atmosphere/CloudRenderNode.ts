@@ -328,7 +328,8 @@ export class CloudRenderNode extends TempNode {
     }
 
     override customCacheKey(): number {
-        return this._colorNode.customCacheKey?.() ?? 0;
+        const key = this._colorNode.customCacheKey?.() ?? 0;
+        return key * 31 + (this.cloudRenderReady ? 1 : 0);
     }
 
     get uniforms(): CloudUniforms | null {

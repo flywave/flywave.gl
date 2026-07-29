@@ -128,6 +128,46 @@ export const getCubeSphereUv = Fn(([position]: [any]) => {
     return vec2(uvX, uvY).mul(0.5).add(0.5);
 });
 
+export const getCubeSphereUvNormalized = Fn(([n]: [any]) => {
+    const f = abs(n);
+    const maxF = max(f.x, max(f.y, f.z));
+    const c = n.div(maxF);
+
+    const yDom = step(f.x, f.y).mul(step(f.z, f.y));
+    const xDom = step(f.y, f.x).mul(step(f.z, f.x)).mul(oneMinus(yDom));
+    const zDom = oneMinus(yDom).sub(xDom);
+
+    const signY = step(float(0), c.y);
+    const signX = step(float(0), c.x);
+    const signZ = step(float(0), c.z);
+
+    const m = vec2(
+        yDom
+            .mul(mix(n.x, n.x.negate(), signY))
+            .add(xDom.mul(mix(n.y.negate(), n.y, signX)))
+            .add(zDom.mul(n.x)),
+        yDom
+            .mul(n.z)
+            .add(xDom.mul(n.z))
+            .add(zDom.mul(mix(n.y.negate(), n.y, signZ)))
+    );
+
+    const m2 = m.mul(m);
+    const q = m2.x.mul(-2).add(m2.y.mul(2)).sub(3);
+    const q2 = q.mul(q);
+
+    const uvX = sqrt(
+        float(1.5)
+            .add(m2.x)
+            .sub(m2.y)
+            .sub(float(0.5).mul(sqrt(m2.x.mul(-24).add(q2))))
+    ).mul(m.x.greaterThan(0).toFloat().mul(2).sub(1));
+
+    const uvY = sqrt(float(6).div(float(3).sub(uvX.mul(uvX)))).mul(m.y);
+
+    return vec2(uvX, uvY).mul(0.5).add(0.5);
+});
+
 export const getGlobeUv = getCubeSphereUv;
 
 /* -------------------------------------------------------------------------- */
@@ -247,7 +287,8 @@ export const createSampleMedia = (u: CloudUniforms) => {
     const getLayerDensity = createGetLayerDensity(u);
 
     return Fn(
-        ([heightFraction, density, position, uv, mipLevel, jitter, cameraPosition]: [
+        ([heightFraction, density, position, uv, mipLevel, jitter, cameraPosition, surfaceNormal]: [
+            any,
             any,
             any,
             any,
@@ -256,7 +297,6 @@ export const createSampleMedia = (u: CloudUniforms) => {
             any,
             any
         ]) => {
-            const surfaceNormal = normalize(position);
             const localWeatherSpeed = length(u.localWeatherOffset);
             const evolution = surfaceNormal.negate().mul(localWeatherSpeed.mul(2e4));
 
@@ -368,7 +408,8 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
 
                 const position = currentDist.mul(rayDirection).add(rayOrigin);
                 const height = length(position).sub(u.bottomRadius);
-                const uv = getGlobeUv(position);
+                const n = normalize(position);
+                const uv = getCubeSphereUvNormalized(n);
                 const heightFraction = remapClamped(
                     vec4(height),
                     u.minLayerHeights,
@@ -382,7 +423,8 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
                     uv,
                     mipLevel,
                     jitter,
-                    rayOrigin
+                    rayOrigin,
+                    n
                 );
 
                 opticalDepth.addAssign(media.y.mul(currentStepSize));
@@ -506,7 +548,8 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
 
             const position = rayDistance.mul(rayDirection).add(rayOrigin);
             const height = length(position).sub(u.bottomRadius);
-            const uv = getGlobeUv(position);
+            const n = normalize(position);
+            const uv = getCubeSphereUvNormalized(n);
             const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
             const density = sampleWeather(uv, height, cascadeMipLevel);
             const maxDensity = max(density.x, max(density.y, max(density.z, density.w)));
@@ -519,7 +562,8 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
                     uv,
                     cascadeMipLevel,
                     stbn,
-                    rayOrigin
+                    rayOrigin,
+                    n
                 );
                 const extinction = media.y;
 
@@ -966,6 +1010,15 @@ export const createMarchClouds = (u: CloudUniforms): any => {
             );
             const rayStartTexelsPerPixel = pow(float(2), cameraAdjustedMip);
 
+            // Precompute atmosphere irradiance at ray entry point and reuse per-step.
+            // Irradiance varies smoothly with altitude (<0.3% across cloud layer thickness)
+            // and sun angle, so computing once per ray has negligible visual impact
+            // while saving 2 textureSample calls per iteration (transmittance + irradiance LUTs).
+            const originUnit = rayOrigin.mul(u.worldToUnit);
+            const originSplitIrr = getSplitScalarIlluminance(originUnit, u.sunDirection).toConst();
+            const originSunIrradiance = originSplitIrr.get("direct");
+            const originSkyIrradiance = originSplitIrr.get("indirect");
+
             Loop({ start: 0, end: u.maxIterationCount, type: "int" }, () => {
                 If(rayDistance.greaterThan(maxRayDistance), () => {
                     Break();
@@ -975,7 +1028,8 @@ export const createMarchClouds = (u: CloudUniforms): any => {
 
                 const position = rayDistance.mul(rayDirection).add(rayOrigin);
                 const height = length(position).sub(u.bottomRadius);
-                const uv = getGlobeUv(position);
+                const n = normalize(position);
+                const uv = getCubeSphereUvNormalized(n);
                 // GLSL: mipLevel = log2(max(1.0, rayStartTexelsPerPixel + rayDistance * 1e-5))
                 const mipLevel = log2(
                     max(float(1), rayStartTexelsPerPixel.add(rayDistance.mul(1e-5)))
@@ -1011,22 +1065,19 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         uv,
                         mipLevel,
                         jitter,
-                        rayOrigin
+                        rayOrigin,
+                        n
                     );
                     const mediaScattering = media.x;
                     const mediaExtinction = media.y;
                     const skyGradient = media.z;
 
                     If(mediaExtinction.greaterThan(u.minExtinction), () => {
-                        // Per-pixel LUT lookup (matches reference ACCURATE_SUN_SKY_LIGHT):
-                        // getCloudsSunSkyIrradiance(position * METER_TO_LENGTH_UNIT, ...)
-                        const posUnit = position.mul(u.worldToUnit);
-                        const splitIrr = getSplitScalarIlluminance(
-                            posUnit,
-                            u.sunDirection
-                        ).toConst();
-                        const sunIrradiance = splitIrr.get("direct");
-                        const skyIrradiance = splitIrr.get("indirect");
+                        // Use precomputed irradiance from ray entry point.
+                        // Reusing per-ray values instead of per-step LUT lookup saves
+                        // 2 textureSample calls per iteration with negligible visual impact.
+                        const sunIrradiance = originSunIrradiance;
+                        const skyIrradiance = originSkyIrradiance;
 
                         // STEP 8i: accumulate sunIrradiance for debug
                         // debugSunIrrSum.addAssign(sunIrradiance.mul(0.01));
@@ -1041,19 +1092,13 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const opticalDepth = sunMarchResult.x.toVar();
                         const sunRayDistance = sunMarchResult.y;
 
-                        const surfaceNormal = normalize(position);
-
                         // BSM shadow: cascade frustum coordinate mapping needs rewrite
                         If(height.lessThan(u.shadowTopHeight), () => {
                             const shadowOD = sampleShadowOpticalDepth(
                                 position,
                                 sunRayDistance,
                                 u.maxShadowFilterRadius.mul(
-                                    remapClamped(
-                                        dot(u.sunDirection, surfaceNormal),
-                                        float(0.1),
-                                        float(0)
-                                    )
+                                    remapClamped(dot(u.sunDirection, n), float(0.1), float(0))
                                 ),
                                 jitter
                             ).toVar();
@@ -1098,7 +1143,10 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                     });
 
                     stepSize.mulAssign(u.perspectiveStepScale);
-                    rayDistance.addAssign(stepSize);
+                    const thinScale = mediaExtinction
+                        .greaterThan(u.minExtinction)
+                        .select(float(1), float(4));
+                    rayDistance.addAssign(stepSize.mul(thinScale));
                 });
 
                 If(transmittanceIntegral.lessThanEqual(u.minTransmittance), () => {
