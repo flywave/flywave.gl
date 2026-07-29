@@ -248,7 +248,7 @@ async function ensureCloudInit(renderer: Renderer): Promise<void> {
         _cloudUniforms.maxIterationCountToSun.value = 2;
         _cloudUniforms.minSecondaryStepSize.value = 100;
         _cloudUniforms.secondaryStepScale.value = 2;
-        _cloudUniforms.maxIterationCountToGround.value = 0; // Match reference medium preset
+        _cloudUniforms.maxIterationCountToGround.value = 3;
         _cloudUniforms.skyLightScale.value = 1;
         _cloudUniforms.powderScale.value = 0.8;
         _cloudUniforms.powderExponent.value = 150;

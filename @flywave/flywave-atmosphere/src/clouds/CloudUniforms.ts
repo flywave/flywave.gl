@@ -82,7 +82,7 @@ export class CloudUniforms {
     // Shape and weather
     localWeatherRepeat = uniform(new Vector2(100, 100));
     localWeatherOffset = uniform(new Vector2(0, 0));
-    localWeatherVelocity = uniform(new Vector2(0, 0));
+    localWeatherVelocity = uniform(new Vector2(0.001, 0));
     coverage = uniform(0.3);
     shapeRepeat = uniform(new Vector3(0.0003, 0.0003, 0.0003));
     shapeOffset = uniform(new Vector3(0, 0, 0));
