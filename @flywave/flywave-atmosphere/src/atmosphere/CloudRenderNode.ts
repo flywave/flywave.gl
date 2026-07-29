@@ -46,7 +46,8 @@ import {
     Vector2,
     Matrix4,
     Uniform,
-    Vector3
+    Vector3,
+    Quaternion
 } from "three/webgpu";
 
 import { inverseProjectionMatrix } from "../tsl/accessors";
@@ -435,6 +436,11 @@ let hasPrevViewProjection = false;
 // Previous frame's NON-jittered projection and view matrices
 let _prevProjectionMatrix: Matrix4 | null = null;
 let _prevViewMatrix: Matrix4 | null = null;
+// High-precision (float64) camera position for delta computation
+const _prevCamPos = new Vector3();
+const _prevCamQuat = new Quaternion();
+const _prevCamScale = new Vector3();
+let _hasPrevCamTransform = false;
 
 export class CloudRenderNode extends TempNode {
     static override get type(): string {
@@ -811,24 +817,46 @@ export class CloudRenderNode extends TempNode {
         const curVP = new Matrix4().multiplyMatrices(jitteredProj, jitterCamera.matrixWorldInverse);
         _cloudUniforms.viewProjection.value.copy(curVP);
 
-        if (_prevProjectionMatrix && _prevViewMatrix) {
+        if (_prevProjectionMatrix && _prevViewMatrix && _hasPrevCamTransform) {
             const reprojection = new Matrix4().copy(_prevProjectionMatrix);
             reprojection.elements[8] += jitterDx * 2;
             reprojection.elements[9] += jitterDy * 2;
-            // Strip translation from prevView (RTE-compatible)
-            const prevViewRot = _prevViewMatrix.clone();
-            prevViewRot.elements[12] = 0;
-            prevViewRot.elements[13] = 0;
-            prevViewRot.elements[14] = 0;
-            reprojection.multiply(prevViewRot);
+            reprojection.multiply(_prevViewMatrix);
             _cloudUniforms.prevViewProjection.value.copy(reprojection);
-            // viewReprojectionMatrix = reprojection × inverseView (rotation only)
-            // Strip translation to work in any camera space (RTE or ECEF)
-            const inverseViewRot = jitterCamera.matrixWorld.clone();
-            inverseViewRot.elements[12] = 0;
-            inverseViewRot.elements[13] = 0;
-            inverseViewRot.elements[14] = 0;
-            _viewReprojectionMatrix.value.copy(reprojection).multiply(inverseViewRot);
+
+            // Build _viewReprojectionMatrix with high-precision translation.
+            // R_prev^-1 and R_cur come from Float32 matrices (rotation values are
+            // in [-1,1] so precision is fine). But translations are ECEF (~6.4M)
+            // and lose ~0.5m in Float32. We compute delta translation from
+            // camera.position (float64) and bake it into a rotation-only
+            // prevView × rotation-only curWorld, then manually add the delta.
+            const deltaRot = new Matrix4().multiplyMatrices(
+                _prevViewMatrix, // rotation part is precise
+                jitterCamera.matrixWorld // rotation part is precise
+            );
+            // Zero out translation from deltaRot (it's garbage anyway due to float32)
+            deltaRot.elements[12] = 0;
+            deltaRot.elements[13] = 0;
+            deltaRot.elements[14] = 0;
+            // Compute frame-to-frame camera displacement in prev frame's view space
+            // using float64 camera positions
+            const dx = jitterCamera.position.x - _prevCamPos.x;
+            const dy = jitterCamera.position.y - _prevCamPos.y;
+            const dz = jitterCamera.position.z - _prevCamPos.z;
+            // Transform displacement by prevView rotation (float64 math via Matrix4)
+            const deltaTrans = new Matrix4().makeTranslation(
+                _prevViewMatrix.elements[0] * dx +
+                    _prevViewMatrix.elements[4] * dy +
+                    _prevViewMatrix.elements[8] * dz,
+                _prevViewMatrix.elements[1] * dx +
+                    _prevViewMatrix.elements[5] * dy +
+                    _prevViewMatrix.elements[9] * dz,
+                _prevViewMatrix.elements[2] * dx +
+                    _prevViewMatrix.elements[6] * dy +
+                    _prevViewMatrix.elements[10] * dz
+            );
+            const delta = new Matrix4().multiplyMatrices(deltaRot, deltaTrans);
+            _viewReprojectionMatrix.value.multiplyMatrices(reprojection, delta);
             hasPrevViewProjection = true;
         }
 
@@ -847,6 +875,9 @@ export class CloudRenderNode extends TempNode {
         // Save non-jittered projection + view for next frame's reprojection
         _prevProjectionMatrix = jitterCamera.projectionMatrix.clone();
         _prevViewMatrix = jitterCamera.matrixWorldInverse.clone();
+        // Save float64 camera position for delta computation
+        _prevCamPos.copy(jitterCamera.position);
+        _hasPrevCamTransform = true;
 
         // Update resolve frame count for bootstrapping (before resolve pass)
         _cloudResolveCountNode.value = this._cloudResolveFrameCount;
@@ -977,18 +1008,25 @@ export class CloudRenderNode extends TempNode {
             _cloudUniforms.worldToUnit.value = worldToUnit;
 
             const clouds = _renderClouds(camPosCorrected, rayDirection, sceneDistance);
-            // View-space velocity using scene depth (matches reference clouds.frag:966-973)
+            // Scene-depth velocity (for non-cloud pixels)
             const frontView = positionView.mul(depthViewZ);
             const prevClip = _viewReprojectionMatrix.mul(vec4(frontView, 1));
-            // WebGPU screenUV is top-down but clip space Y is bottom-up — flip Y
+            // Flip Y: screenUV is Y-down but clip space UV is Y-up
             const prevUv = vec2(
                 prevClip.x.div(prevClip.w).mul(0.5).add(0.5),
                 float(1).sub(prevClip.y.div(prevClip.w).mul(0.5).add(0.5))
             );
-            const velocity = screenUV.sub(prevUv);
+            const sceneVelocity = screenUV.sub(prevUv);
+            // Cloud velocity (for cloud pixels) — uses cloud front depth in ECEF
+            const cloudVelocity = clouds.get("velocity");
+            const cloudFrontDepth = clouds.get("frontDepth");
+            // Select cloud velocity where clouds are hit, scene velocity otherwise
+            const useCloudVelocity = clouds.get("color").a.greaterThan(0);
+            const finalVelocity = useCloudVelocity.select(cloudVelocity, sceneVelocity);
+            const finalDepth = useCloudVelocity.select(cloudFrontDepth, depthViewZ);
             this.lowResMaterial.fragmentNode = mrt({
                 color: clouds.get("color"),
-                velocity: vec4(depthViewZ, velocity, 0)
+                velocity: vec4(finalDepth, finalVelocity, 0)
             });
             this.lowResMaterial.needsUpdate = true;
         }
@@ -1054,34 +1092,7 @@ export class CloudRenderNode extends TempNode {
                 const isCurrent = bayerVal.sub(frameMod).abs().lessThan(0.5);
 
                 // Full temporal resolve
-                // Full temporal resolve
                 const result = currentColor.toVar();
-
-                If(isCurrent.not(), () => {
-                    const lowCoord = ivec2(lowCoordX, lowCoordY);
-                    const velocityData = _getClosestFragment(this.velocityLowResNode, lowCoord);
-                    const velocity = velocityData.yz;
-                    const prevUv = screenUV.sub(velocity);
-
-                    const inBounds = prevUv.x
-                        .greaterThanEqual(0)
-                        .and(prevUv.x.lessThanEqual(1))
-                        .and(prevUv.y.greaterThanEqual(0))
-                        .and(prevUv.y.lessThanEqual(1));
-
-                    If(inBounds, () => {
-                        const historyColor = texture(this.historyNode, prevUv);
-                        const clipped = _varianceClippingResolve(
-                            this.lowResNode,
-                            lowCoord,
-                            currentColor,
-                            historyColor
-                        );
-                        result.assign(clipped);
-                    });
-                });
-
-                return result;
 
                 If(isCurrent.not(), () => {
                     const lowCoord = ivec2(lowCoordX, lowCoordY);

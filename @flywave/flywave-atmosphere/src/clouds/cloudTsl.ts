@@ -1315,7 +1315,9 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 const curUv = curClip.xy.div(curClip.w).mul(0.5).add(0.5);
                 const prevClip = u.prevViewProjection.mul(vec4(frontWorld, 1));
                 const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
-                resultVelocity.assign(curUv.sub(prevUv));
+                const vel = curUv.sub(prevUv);
+                // Flip Y: screenUV is Y-down but clip space UV is Y-up
+                resultVelocity.assign(vec2(vel.x, vel.y.negate()));
             });
 
             // Non-cloud pixels: compute shadowLength + velocity
@@ -1347,7 +1349,8 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 const ncPrevClip = u.prevViewProjection.mul(vec4(ncWorld, 1));
                 const ncPrevUv = ncPrevClip.xy.div(ncPrevClip.w).mul(0.5).add(0.5);
                 resultFrontDepth.assign(ncDepth);
-                resultVelocity.assign(ncCurUv.sub(ncPrevUv));
+                const ncVel = ncCurUv.sub(ncPrevUv);
+                resultVelocity.assign(vec2(ncVel.x, ncVel.y.negate()));
             });
         });
 
