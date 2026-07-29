@@ -131,6 +131,19 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'raster-resampling': 'linear',
         'raster-fade-duration': 300,
     },
+    building: {
+        'building-color': '#cccccc',
+        'building-height': 10,
+        'building-base': 0,
+        'building-roof-color': '#aaaaaa',
+        'building-roof-shape': 'flat',
+        'building-facade-floors': 3,
+        'building-facade-unit-width': 6,
+        'building-emissive-strength': 0,
+    },
+    model: {
+        'model-opacity': 1,
+    },
 };
 
 export const LAYOUT_DEFAULTS: Record<string, Record<string, any>> = {
@@ -195,6 +208,12 @@ export const LAYOUT_DEFAULTS: Record<string, Record<string, any>> = {
         visibility: 'visible',
     },
     hillshade: {
+        visibility: 'visible',
+    },
+    building: {
+        visibility: 'visible',
+    },
+    model: {
         visibility: 'visible',
     },
 };

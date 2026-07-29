@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MapView } from '@flywave/flywave-mapview';
 import { PlacementEngine, SymbolInstance } from './PlacementEngine';
 import { MBStyleDataSource } from './MBStyleDataSource';
+import { getLineAnchors } from './LineAnchor';
 
 /**
  * Per-frame symbol placement controller for MBStyleDataSource.
@@ -40,19 +41,38 @@ export class MBStyleSymbolPlacement {
         const symbols = this.collectSymbols(camera, w, h);
         if (symbols.length === 0) return;
 
+        // Apply symbol-z-order: sort by viewport-y or source order
+        this.applyZOrder(symbols);
+
         // Apply icon-rotation-alignment
         this.applyRotationAlignment(symbols, bearing);
 
         // Only re-run placement if zoom changed (optimization)
         if (zoom !== this.m_lastZoom) {
             this.m_lastZoom = zoom;
-            const results = this.m_placementEngine.place(symbols, Date.now());
+            const results = this.m_placementEngine.place(symbols, Date.now(), zoom);
 
             for (const sym of symbols) {
                 const key = `${sym.layerId}:${sym.featureId}`;
                 const result = results.get(key);
                 if (result && sym.object) {
-                    sym.object.visible = result.visible;
+                    sym.object.visible = result.opacity > 0.01;
+                    if (result.opacity < 1) {
+                        sym.object.traverse((child: THREE.Object3D) => {
+                            if ((child as THREE.Mesh).material) {
+                                const mat = (child as THREE.Mesh).material as THREE.Material | THREE.Material[];
+                                if (Array.isArray(mat)) {
+                                    for (const m of mat) {
+                                        (m as any).opacity = result.opacity;
+                                        m.transparent = true;
+                                    }
+                                } else {
+                                    (mat as any).opacity = result.opacity;
+                                    (mat as any).transparent = true;
+                                }
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -109,11 +129,24 @@ export class MBStyleSymbolPlacement {
             if (isText && layout['text-keep-upright'] !== false) {
                 const placement = layout['symbol-placement'] ?? 'point';
                 if (placement === 'line') {
-                    // For line placement, check if current rotation makes text upside down
                     const currentRot = obj.rotation.z;
                     const normalized = ((currentRot % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
                     if (normalized > Math.PI / 2 && normalized < 3 * Math.PI / 2) {
-                        obj.rotation.z += Math.PI; // Flip 180°
+                        obj.rotation.z += Math.PI;
+                    }
+                }
+            }
+
+            // icon-keep-upright: flip icon if upside down
+            if (isIcon && layout['icon-keep-upright'] === true) {
+                const placement = layout['symbol-placement'] ?? 'point';
+                if (placement === 'line' && (obj as any).isSprite) {
+                    const mat = (obj as any).material;
+                    if (mat) {
+                        const normalized = ((mat.rotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+                        if (normalized > Math.PI / 2 && normalized < 3 * Math.PI / 2) {
+                            mat.rotation += Math.PI;
+                        }
                     }
                 }
             }
@@ -154,24 +187,68 @@ export class MBStyleSymbolPlacement {
                     if (!obj.userData?.technique) continue;
                     const tech = obj.userData.technique;
 
-                    // Only process symbol objects
                     if (tech.name !== 'text' && tech.name !== 'labeled-icon') continue;
 
-                    // Get world position
                     obj.getWorldPosition(worldPosition);
 
-                    // Project to screen
+                    const layout = tech._layout ?? {};
+                    const placement = layout['symbol-placement'] ?? 'point';
+                    const linePathData = obj.userData?.feature?.objInfos?.[0]?._linePath;
+
+                    if ((placement === 'line' || placement === 'line-center') && linePathData && linePathData.length >= 2) {
+                        const screenPts: THREE.Vector2[] = linePathData.map((pt: number[]) => {
+                            const wp = new THREE.Vector3(pt[0], pt[1], 0);
+                            obj.parent?.localToWorld(wp);
+                            const sp = wp.clone().project(camera);
+                            return new THREE.Vector2(
+                                (sp.x * 0.5 + 0.5) * canvasW,
+                                (-sp.y * 0.5 + 0.5) * canvasH,
+                            );
+                        });
+                        const spacing = (layout['symbol-spacing'] as number) ?? 250;
+                        const maxAngle = ((layout['text-max-angle'] as number) ?? 45) * Math.PI / 180;
+                        const anchors = getLineAnchors(screenPts, spacing, maxAngle);
+
+                        for (const anchor of anchors) {
+                            const feature = obj.userData.feature;
+                            const featureId = feature?.objInfos?.[0]?.$id ?? obj.id ?? '';
+                            const textSize = layout['text-size'] ?? 16;
+                            const iconSize = layout['icon-size'] ?? 1;
+                            let iconBox: { w: number; h: number } | undefined;
+                            let textBox: { w: number; h: number } | undefined;
+                            if (tech.name === 'labeled-icon') iconBox = { w: 32 * iconSize, h: 32 * iconSize };
+                            if (tech.name === 'text' || layout['text-field']) {
+                                textBox = {
+                                    w: (tech._textWidth ?? textSize * 5) * textSize,
+                                    h: (tech._textHeight ?? textSize * 1.2) * textSize,
+                                };
+                            }
+                            symbols.push({
+                                id: `${tile.tileKey.level}:${tile.tileKey.mortonCode()}:${featureId}:${anchor.segmentIndex}`,
+                                layerId: tech._layerId ?? '',
+                                featureId,
+                                screenX: anchor.x,
+                                screenY: anchor.y,
+                                iconBox,
+                                textBox,
+                                allowOverlap: layout['icon-allow-overlap'] === true || layout['text-allow-overlap'] === true,
+                                ignorePlacement: layout['icon-ignore-placement'] === true || layout['text-ignore-placement'] === true,
+                                priority: tech._renderOrder ?? 0,
+                                opacity: 1,
+                                object: obj,
+                                variableAnchors: layout['text-variable-anchor'] as string[] | undefined,
+                                textRadialOffset: layout['text-radial-offset'] as number ?? 0,
+                            });
+                        }
+                        continue;
+                    }
+
                     const screen = worldPosition.clone().project(camera);
                     const sx = (screen.x * 0.5 + 0.5) * canvasW;
                     const sy = (-screen.y * 0.5 + 0.5) * canvasH;
 
-                    // Get feature properties
                     const feature = obj.userData.feature;
                     const featureId = feature?.objInfos?.[0]?.$id ?? obj.id ?? '';
-
-                    // Estimate icon/text box size
-                    const layout = tech._layout ?? {};
-                    const paint = tech._paint ?? {};
                     const textSize = layout['text-size'] ?? 16;
                     const iconSize = layout['icon-size'] ?? 1;
 
@@ -208,6 +285,25 @@ export class MBStyleSymbolPlacement {
         }
 
         return symbols;
+    }
+
+    private applyZOrder(symbols: SymbolInstance[]): void {
+        for (const sym of symbols) {
+            if (!sym.object) continue;
+            const tech = sym.object.userData?.technique;
+            const zOrder = tech?._layout?.['symbol-z-order'] ?? 'auto';
+            switch (zOrder) {
+                case 'viewport-y':
+                    sym.priority = sym.screenY;
+                    if (sym.object) sym.object.renderOrder = 1000 - sym.screenY * 0.01;
+                    break;
+                case 'source':
+                    break;
+                case 'auto':
+                default:
+                    break;
+            }
+        }
     }
 
     /**

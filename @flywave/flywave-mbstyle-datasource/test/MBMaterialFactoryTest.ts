@@ -56,7 +56,7 @@ describe('MBMaterialFactory', () => {
     });
 
     it('returns magenta fallback for unknown type', () => {
-        const mat = MBMaterialFactory.create('raster' as any, {});
+        const mat = MBMaterialFactory.create('nonexistent-type' as any, {});
         expect((mat as any).color.getHexString()).to.equal('ff00ff');
     });
 });

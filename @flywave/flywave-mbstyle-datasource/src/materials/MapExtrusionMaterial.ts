@@ -10,6 +10,7 @@ export interface MapExtrusionMaterialParams {
     'fill-extrusion-translate'?: [number, number];
     'fill-extrusion-flood-light-color'?: string;
     'fill-extrusion-flood-light-intensity'?: number;
+    'isGlobe'?: boolean;
 }
 
 const DEFAULTS: MapExtrusionMaterialParams = {
@@ -21,6 +22,7 @@ const DEFAULTS: MapExtrusionMaterialParams = {
 export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
     private m_paint: MapExtrusionMaterialParams;
     private m_patternTexture: THREE.Texture | null = null;
+    private m_shaderUniforms: { [name: string]: THREE.IUniform } | null = null;
 
     constructor(paint: Partial<MapExtrusionMaterialParams> = {}) {
         super({
@@ -31,9 +33,9 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
 
         const self = this;
         this.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
-            shader.uniforms.uHeightBase = { value: 0.0 };
-            shader.uniforms.uHeightTop = { value: 1.0 };
-            shader.uniforms.uVerticalGradient = { value: 1.0 };
+            shader.uniforms.uHeightBase = { value: self.m_paint['fill-extrusion-base'] ?? 0 };
+            shader.uniforms.uHeightTop = { value: self.m_paint['fill-extrusion-height'] ?? 0 };
+            shader.uniforms.uVerticalGradient = { value: self.m_paint['fill-extrusion-vertical-gradient'] === false ? 0 : 1 };
             shader.uniforms.uAoIntensity = { value: 0.2 };
             shader.uniforms.uAoRadius = { value: 0.5 };
             shader.uniforms.uFloodColor = { value: new THREE.Color('#ffffff') };
@@ -41,6 +43,8 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
             shader.uniforms.uTranslate = { value: new THREE.Vector3() };
             shader.uniforms.uPatternTex = { value: self.m_patternTexture };
             shader.uniforms.uPatternUvScale = { value: new THREE.Vector2(1, 1) };
+            shader.uniforms.uExtrusionScale = { value: 1.0 };
+            self.m_shaderUniforms = shader.uniforms;
 
             const varyingDef = 'varying float vNormalizedHeight;';
 
@@ -71,9 +75,16 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
                 float hBase = uHeightBase;
                 float hTop = uHeightTop;
                 vec3 extrusionPos = position;
+                ${self.m_paint['isGlobe'] ? `
+                vec3 radialDir = normalize(position + vec3(0.001));
+                float normalizedHeight = (dot(extrusionPos, radialDir) - hBase) / (hTop - hBase + 0.001);
+                vNormalizedHeight = normalizedHeight;
+                vec3 transformed = extrusionPos + radialDir * uExtrusionScale * (uHeightTop - uHeightBase);
+                ` : `
                 float normalizedHeight = (extrusionPos.z - hBase) / (hTop - hBase + 0.001);
                 vNormalizedHeight = normalizedHeight;
                 #include <begin_vertex>
+                `}
                 `
             );
 
@@ -133,7 +144,20 @@ export class MapExtrusionMaterial extends THREE.MeshLambertMaterial {
         this.opacity = p['fill-extrusion-opacity'];
         this.transparent = p['fill-extrusion-opacity'] < 1;
 
-        // These will be picked up by onBeforeCompile at render time
+        const base = Number(p['fill-extrusion-base'] ?? 0);
+        const top = Number(p['fill-extrusion-height'] ?? 0);
+        const translate = p['fill-extrusion-translate'] ?? [0, 0];
+
+        if (this.m_shaderUniforms) {
+            this.m_shaderUniforms.uHeightBase.value = base;
+            this.m_shaderUniforms.uHeightTop.value = top;
+            this.m_shaderUniforms.uVerticalGradient.value =
+                p['fill-extrusion-vertical-gradient'] === false ? 0 : 1;
+            (this.m_shaderUniforms.uTranslate.value as THREE.Vector3).set(
+                translate[0], translate[1], 0,
+            );
+        }
+
         if (p['fill-extrusion-flood-light-color']) {
             this.userData.floodColor = p['fill-extrusion-flood-light-color'];
         }

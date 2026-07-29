@@ -37,8 +37,10 @@ export class MBStyleManager {
     private m_style: StyleSpecification | undefined;
     private m_resolvedSources: Map<string, ResolvedSource> = new Map();
     private m_spriteData: SpriteData | undefined;
+    private m_accessToken: string | undefined;
 
-    async loadStyle(style: StyleSpecification | string): Promise<void> {
+    async loadStyle(style: StyleSpecification | string, accessToken?: string): Promise<void> {
+        this.m_accessToken = accessToken;
         if (typeof style === 'string') {
             const response = await fetch(style);
             this.m_style = await response.json();
@@ -76,7 +78,10 @@ export class MBStyleManager {
     private resolveTileUrl(url: string): string | undefined {
         if (url.startsWith('mapbox://')) {
             const id = url.replace('mapbox://', '');
-            return `https://api.mapbox.com/v4/${id}/{z}/{x}/{y}.mvt`;
+            const tokenQuery = this.m_accessToken
+                ? `?access_token=${this.m_accessToken}`
+                : '';
+            return `https://api.mapbox.com/v4/${id}/{z}/{x}/{y}.mvt${tokenQuery}`;
         }
         if (url.includes('{z}') || url.includes('{x}') || url.includes('{y}')) {
             return url;

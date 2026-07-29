@@ -25,7 +25,7 @@ import earcut from 'earcut';
 interface AccumulatedGeometry {
     positions: number[];
     indices: number[];
-    groups: Array<{ start: number; count: number; materialIndex: number }>;
+    groups: Array<{ start: number; count: number; materialIndex: number; sortKey?: number }>;
     featureStarts: number[];
     objInfos: AttributeMap[];
 }
@@ -94,6 +94,15 @@ export class MBTileDataEmitter {
 
     private m_currentZOffset: number = 0;
 
+    private extractSortKey(layer: EvaluatedLayer): number | undefined {
+        const layout = layer.layout ?? {};
+        const sk = layout['fill-sort-key']
+            ?? layout['line-sort-key']
+            ?? layout['circle-sort-key']
+            ?? layout['symbol-sort-key'];
+        return typeof sk === 'number' ? sk : undefined;
+    }
+
     private paintToTechniqueProps(layer: EvaluatedLayer, properties?: Record<string, any>): Record<string, any> {
         const p = layer.paint;
         const l = layer.layout;
@@ -127,6 +136,12 @@ export class MBTileDataEmitter {
                     if (arr.length >= 2) {
                         props.dashSize = arr[0];
                         props.gapSize = arr[1];
+                        if (arr.length > 2) {
+                            props.dashArray = arr;
+                            let sum = 0;
+                            for (const v of arr) sum += v;
+                            props.dashTotalLength = sum;
+                        }
                     }
                 }
                 if (l.visibility === 'none') props.enabled = false;
@@ -190,6 +205,45 @@ export class MBTileDataEmitter {
                 props.opacity = p['fill-extrusion-opacity'] ?? 1;
                 props.height = p['fill-extrusion-height'] ?? 0;
                 props.floorHeight = p['fill-extrusion-base'] ?? 0;
+                if (l.visibility === 'none') props.enabled = false;
+                break;
+            case 'heatmap':
+                props.technique = 'heatmap';
+                props.color = p['heatmap-color'] ?? [[0, 'rgba(0,0,255,0)'], [0.5, 'blue'], [1, 'red']];
+                props.opacity = p['heatmap-opacity'] ?? 1;
+                props.size = p['heatmap-radius'] ?? 30;
+                props.intensity = p['heatmap-intensity'] ?? 1;
+                props.weight = p['heatmap-weight'] ?? 1;
+                if (l.visibility === 'none') props.enabled = false;
+                break;
+            case 'hillshade':
+                props.technique = 'hillshade';
+                props.color = p['hillshade-shadow-color'] ?? '#000000';
+                props.opacity = 1;
+                props.intensity = p['hillshade-exaggeration'] ?? 0.5;
+                if (l.visibility === 'none') props.enabled = false;
+                break;
+            case 'raster':
+                props.technique = 'fill';
+                props.color = '#ffffff';
+                props.opacity = p['raster-opacity'] ?? 1;
+                props._rasterTileUrl = properties?._rasterTileUrl ?? '';
+                props._isRaster = true;
+                if (l.visibility === 'none') props.enabled = false;
+                break;
+            case 'model':
+                props.technique = 'model';
+                props.modelId = l['model-id'] ?? properties?.['model-id'] ?? '';
+                props.opacity = 1;
+                if (l.visibility === 'none') props.enabled = false;
+                break;
+            case 'building':
+                props.technique = 'extruded-polygon';
+                props.color = p['building-color'] ?? '#cccccc';
+                props.opacity = 1;
+                props.height = p['building-height'] ?? properties?.height ?? properties?.['building-height'] ?? properties?.['height'] ?? 10;
+                props.floorHeight = p['building-base'] ?? properties?.base ?? properties?.['building-base'] ?? 0;
+                props._roofColor = p['building-roof-color'] ?? '#aaaaaa';
                 if (l.visibility === 'none') props.enabled = false;
                 break;
         }
@@ -287,6 +341,7 @@ export class MBTileDataEmitter {
                     start: featureStart,
                     count,
                     materialIndex: techniqueIdx,
+                    sortKey: this.extractSortKey(layer),
                 });
                 geo.featureStarts.push(featureStart);
                 geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
@@ -298,6 +353,7 @@ export class MBTileDataEmitter {
     private m_lineInterleaved: number[] = [];
     private m_lineIndices: number[] = [];
     private m_lineGroupStarts: number[] = [];
+    private m_lineSortKeys: number[] = [];
     private m_lineAttr: string[] = [];
 
     processLineFeature(
@@ -335,6 +391,7 @@ export class MBTileDataEmitter {
                 const start = this.m_lineIndices.length - lineGeom.indices.length;
                 const fid = featureId ?? properties.$id ?? null;
                 this.m_lineGroupStarts.push(start, techniqueIdx);
+                this.m_lineSortKeys.push(this.extractSortKey(layer) ?? 0);
                 this.m_lineAttr.push(JSON.stringify({ ...properties, $id: fid }));
             }
         }
@@ -361,15 +418,23 @@ export class MBTileDataEmitter {
 
         const groups: Group[] = [];
         const end = this.m_lineIndices.length;
-        for (let i = 0; i < this.m_lineGroupStarts.length; i += 2) {
-            const start = this.m_lineGroupStarts[i];
-            const nextStart = i + 2 < this.m_lineGroupStarts.length
-                ? this.m_lineGroupStarts[i + 2] : end;
+        const numGroups = this.m_lineGroupStarts.length / 2;
+        const order = Array.from({ length: numGroups }, (_, i) => i);
+        if (numGroups > 1 && this.m_lineSortKeys.some(k => k !== 0)) {
+            order.sort((a, b) => this.m_lineSortKeys[a] - this.m_lineSortKeys[b]);
+        }
+        const sortedAttrs: AttributeMap[] = [];
+        for (const i of order) {
+            const start = this.m_lineGroupStarts[i * 2];
+            const nextIdx = order.indexOf(i + 1);
+            const nextStart = (i + 1) < numGroups
+                ? this.m_lineGroupStarts[(i + 1) * 2] : end;
             groups.push({
                 start,
                 count: nextStart - start,
-                technique: this.m_lineGroupStarts[i + 1],
+                technique: this.m_lineGroupStarts[i * 2 + 1],
             });
+            sortedAttrs.push(JSON.parse(this.m_lineAttr[i]));
         }
 
         return [{
@@ -383,7 +448,7 @@ export class MBTileDataEmitter {
             },
             groups,
             featureStarts: groups.map(g => g.start),
-            objInfos: this.m_lineAttr.map(a => JSON.parse(a)),
+            objInfos: sortedAttrs,
             attachments: [],
         }];
     }
@@ -412,6 +477,7 @@ export class MBTileDataEmitter {
                 start: featureStart,
                 count,
                 materialIndex: techniqueIdx,
+                sortKey: this.extractSortKey(layer),
             });
             geo.featureStarts.push(featureStart);
             geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
@@ -423,6 +489,10 @@ export class MBTileDataEmitter {
 
         for (const [, geo] of this.m_geometries) {
             if (geo.positions.length === 0) continue;
+
+            if (geo.groups.length > 1 && geo.groups.some(g => g.sortKey !== undefined)) {
+                geo.groups.sort((a, b) => (a.sortKey ?? 0) - (b.sortKey ?? 0));
+            }
 
             const positionArray = new Float32Array(geo.positions);
             const indexArray = geo.indices.length > 0 ? new Uint32Array(geo.indices) : undefined;

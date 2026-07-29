@@ -16,6 +16,7 @@ import { StyleSpecification } from './MBStyleSpec';
 
 class MBStyleDataProcessor implements IGeometryProcessor {
     private m_emitter: MBTileDataEmitter | undefined;
+    private m_featureStates: Map<string | number, Record<string, any>> = new Map();
 
     constructor(
         private m_tileKey: TileKey,
@@ -29,6 +30,27 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         this.m_emitter = emitter;
     }
 
+    setFeatureStates(states: Map<string | number, Record<string, any>>) {
+        this.m_featureStates = states;
+    }
+
+    private getFeatureState(featureId: string | number | undefined): Record<string, any> | undefined {
+        if (featureId === undefined) return undefined;
+        return this.m_featureStates.get(featureId);
+    }
+
+    private tileToLocalLngLat(px: number, py: number): [number, number] {
+        const level = this.m_tileKey.level + Math.log2(4096);
+        const scale = Math.pow(2, level);
+        const tCol = this.m_tileKey.column;
+        const tRow = this.m_tileKey.row;
+        const n = Math.pow(2, this.m_tileKey.level);
+        const lng = ((tCol + px / 4096) / n) * 360 - 180;
+        const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (tRow + py / 4096) / n)));
+        const lat = latRad * 180 / Math.PI;
+        return [lng, lat];
+    }
+
     processPointFeature(
         layer: string,
         extents: number,
@@ -36,10 +58,13 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         properties: Record<string, any>,
         featureId: string | number | undefined,
     ): void {
+        const coords = geometry.length > 0
+            ? this.tileToLocalLngLat(geometry[0].x, geometry[0].y)
+            : [0, 0];
         const matched = this.m_layerEvaluator.evaluate(
             this.m_sourceId, layer,
-            { type: 'Point', properties, id: featureId },
-            this.m_zoom, 'point',
+            { type: 'Point', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
+            this.m_zoom, 'point', this.getFeatureState(featureId),
         );
         if (matched.length === 0 || !this.m_emitter) return;
         this.m_emitter.processPointFeature(layer, extents, geometry, properties, featureId, matched);
@@ -52,13 +77,40 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         properties: Record<string, any>,
         featureId: string | number | undefined,
     ): void {
+        const coords = geometry.length > 0 && geometry[0].positions.length > 0
+            ? this.tileToLocalLngLat(geometry[0].positions[0].x, geometry[0].positions[0].y)
+            : [0, 0];
         const matched = this.m_layerEvaluator.evaluate(
             this.m_sourceId, layer,
-            { type: 'LineString', properties, id: featureId },
-            this.m_zoom, 'line',
+            { type: 'LineString', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
+            this.m_zoom, 'line', this.getFeatureState(featureId),
         );
         if (matched.length === 0 || !this.m_emitter) return;
-        this.m_emitter.processLineFeature(layer, extents, geometry, properties, featureId, matched);
+
+        const symbolLayers = matched.filter(l => l.type === 'symbol');
+        const nonSymbolLayers = matched.filter(l => l.type !== 'symbol');
+
+        if (nonSymbolLayers.length > 0) {
+            this.m_emitter.processLineFeature(layer, extents, geometry, properties, featureId, nonSymbolLayers);
+        }
+
+        if (symbolLayers.length > 0 && geometry.length > 0 && geometry[0].positions.length > 1) {
+            const linePts: THREE.Vector3[] = [];
+            const positions = geometry[0].positions;
+            const step = Math.max(1, Math.floor(positions.length / 20));
+            for (let i = 0; i < positions.length; i += step) {
+                linePts.push(new THREE.Vector3(positions[i].x, positions[i].y, 0));
+            }
+            if (linePts.length >= 2) {
+                const midIdx = Math.floor(linePts.length / 2);
+                const midPt = linePts[midIdx];
+                this.m_emitter.processPointFeature(
+                    layer, extents, [midPt],
+                    { ...properties, _linePath: linePts.map(p => [p.x, p.y]) },
+                    featureId, symbolLayers,
+                );
+            }
+        }
     }
 
     processPolygonFeature(
@@ -68,10 +120,13 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         properties: Record<string, any>,
         featureId: string | number | undefined,
     ): void {
+        const coords = geometry.length > 0 && geometry[0].rings.length > 0 && geometry[0].rings[0].length > 0
+            ? this.tileToLocalLngLat(geometry[0].rings[0][0].x, geometry[0].rings[0][0].y)
+            : [0, 0];
         const matched = this.m_layerEvaluator.evaluate(
             this.m_sourceId, layer,
-            { type: 'Polygon', properties, id: featureId },
-            this.m_zoom, 'polygon',
+            { type: 'Polygon', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
+            this.m_zoom, 'polygon', this.getFeatureState(featureId),
         );
         if (matched.length === 0 || !this.m_emitter) return;
         this.m_emitter.processFillFeature(layer, extents, geometry, properties, featureId, matched);
@@ -83,6 +138,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_geoJsonAdapter: GeoJsonDataAdapter;
     private m_layerEvaluator: MBLayerEvaluator | undefined;
     private m_currentSourceId: string = '';
+    private m_featureStates: Map<string | number, Record<string, any>> = new Map();
 
     constructor() {
         super();
@@ -101,6 +157,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
         if (customOptions?.currentSourceId) {
             this.m_currentSourceId = customOptions.currentSourceId as string;
+        }
+        if (customOptions?.featureStates) {
+            this.m_featureStates = customOptions.featureStates as Map<string | number, Record<string, any>>;
         }
     }
 
@@ -139,6 +198,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             zoom,
         );
         processor.setEmitter(emitter);
+        processor.setFeatureStates(this.m_featureStates);
 
         try {
             // Determine data format and use appropriate adapter

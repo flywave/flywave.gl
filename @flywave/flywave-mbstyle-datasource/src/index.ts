@@ -6,7 +6,8 @@ export { MBLayerEvaluator, EvaluatedPaint, EvaluatedLayout, EvaluatedLayer } fro
 export { MBMaterialFactory } from './MBMaterialFactory';
 export { resolveTextField, applyTextTransform, shapeText, isCJK, isArabic, hasRTL, reorderRTL, shapeRTLText } from './TextShaping';
 export { CollisionIndex, CollisionBox } from './CollisionIndex';
-export { MBGlyphLoader, GlyphMetrics, GlyphAtlas } from './MBGlyphLoader';
+export { MBGlyphLoader, GlyphMetrics, GlyphAtlasData } from './MBGlyphLoader';
+export { parseGlyphPBF } from './GlyphPBFParser';
 export { PlacementEngine, PlacementResult, SymbolInstance } from './PlacementEngine';
 export { MBStyleSymbolPlacement } from './MBStyleSymbolPlacement';
 export { MBStyleRuntime } from './MBStyleRuntime';

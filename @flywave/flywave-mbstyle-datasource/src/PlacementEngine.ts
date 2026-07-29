@@ -43,19 +43,38 @@ const FADE_DURATION = 300; // ms
  */
 export class PlacementEngine {
     private m_collisionIndex = new CollisionIndex();
-    private m_opacityMap = new Map<string, { opacity: number; lastSeen: number }>();
+    private m_opacityMap = new Map<string, {
+        opacity: number;
+        lastSeen: number;
+        targetOpacity: number;
+        fadeStart: number;
+    }>();
+    private m_lastPlacementZoom = -1;
+    private m_lastPlacementTime = 0;
 
     /**
      * Run placement for a set of symbols.
      * Collision detection runs in screen space using the CollisionIndex.
+     *
+     * Cross-tile consistency: the CollisionIndex is NOT reset every frame.
+     * Instead, it persists between frames and only resets when the zoom level
+     * changes (indicating new tiles have loaded). This prevents symbol flickering.
      */
     place(
         symbols: SymbolInstance[],
         now: number,
+        zoom: number = 0,
     ): Map<string, PlacementResult> {
-        this.m_collisionIndex.reset();
+        const zoomChanged = Math.abs(zoom - this.m_lastPlacementZoom) > 0.5;
+        const timeSinceLast = now - this.m_lastPlacementTime;
+        const shouldReset = zoomChanged || timeSinceLast > 5000;
 
-        // Sort by priority (higher priority placed first)
+        if (shouldReset) {
+            this.m_collisionIndex.reset();
+            this.m_lastPlacementZoom = zoom;
+        }
+        this.m_lastPlacementTime = now;
+
         const sorted = [...symbols].sort((a, b) => b.priority - a.priority);
 
         const results = new Map<string, PlacementResult>();
@@ -64,20 +83,15 @@ export class PlacementEngine {
             const key = `${sym.layerId}:${sym.featureId}`;
             const prev = this.m_opacityMap.get(key);
 
-            // Compute desired opacity (fade in/out)
             let visible = false;
-            let placedAnchor: string | undefined;
 
             if (sym.ignorePlacement || sym.allowOverlap) {
                 visible = true;
             } else if (sym.variableAnchors && sym.variableAnchors.length > 0) {
-                // Try each variable anchor position
                 for (const anchor of sym.variableAnchors) {
                     const offset = this.getAnchorBoxOffset(anchor, sym, sym.textRadialOffset ?? 0);
                     if (this.canPlaceSymbol(sym, offset.dx, offset.dy)) {
                         visible = true;
-                        placedAnchor = anchor;
-                        // Update symbol position to the successful anchor
                         if (sym.object) {
                             sym.object.position.x += offset.dx;
                             sym.object.position.y += offset.dy;
@@ -91,19 +105,49 @@ export class PlacementEngine {
                 }
             }
 
-            // Place if visible
             if (visible) {
                 this.insertSymbol(sym);
             }
 
-            // Track opacity for future fade transitions
-            const opacity = visible ? 1.0 : 0.0;
-            this.m_opacityMap.set(key, { opacity, lastSeen: visible ? now : (prev?.lastSeen ?? now) });
+            const targetOpacity = visible ? 1.0 : 0.0;
+            const prevOpacity = prev?.opacity ?? 0.0;
+            const prevTarget = prev?.targetOpacity ?? 0.0;
+
+            let opacity: number;
+            if (targetOpacity !== prevTarget) {
+                opacity = prevOpacity;
+                this.m_opacityMap.set(key, {
+                    opacity: prevOpacity,
+                    lastSeen: now,
+                    targetOpacity,
+                    fadeStart: now,
+                });
+                const elapsed = 0;
+                const t = Math.min(1, elapsed / FADE_DURATION);
+                opacity = prevOpacity + (targetOpacity - prevOpacity) * t;
+            } else if (prev && prev.targetOpacity !== prevOpacity) {
+                const elapsed = now - prev.fadeStart;
+                const t = Math.min(1, elapsed / FADE_DURATION);
+                opacity = prevOpacity + (targetOpacity - prevOpacity) * t;
+                this.m_opacityMap.set(key, {
+                    opacity,
+                    lastSeen: now,
+                    targetOpacity,
+                    fadeStart: prev.fadeStart,
+                });
+            } else {
+                opacity = targetOpacity;
+                this.m_opacityMap.set(key, {
+                    opacity,
+                    lastSeen: now,
+                    targetOpacity,
+                    fadeStart: now,
+                });
+            }
 
             results.set(key, { visible, opacity });
         }
 
-        // Cleanup old entries
         for (const [key, val] of this.m_opacityMap) {
             if (now - val.lastSeen > 5000) {
                 this.m_opacityMap.delete(key);

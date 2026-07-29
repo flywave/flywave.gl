@@ -32,7 +32,7 @@ export interface LineAnchor {
 export function getLineAnchors(
     points: THREE.Vector2[],
     spacing: number,
-    maxAngle: number = Math.PI * 0.75,
+    maxAngle: number = 45 * Math.PI / 180,
 ): LineAnchor[] {
     if (points.length < 2) return [];
 

@@ -35,6 +35,9 @@ export class MapLineMaterial extends SolidLineMaterial {
     private m_paint: MapLineMaterialParams;
     private m_gradientTexture: THREE.DataTexture | null = null;
     private m_patternTexture: THREE.Texture | null = null;
+    private m_patternUVOffset = new THREE.Vector2(0, 0);
+    private m_patternUVScale = new THREE.Vector2(1, 1);
+    private m_patternRepeat = 0.01;
     private m_blur = 0;
     private m_translateX = 0;
     private m_translateY = 0;
@@ -69,30 +72,44 @@ export class MapLineMaterial extends SolidLineMaterial {
             );
 
             // ----- Translate uniform -----
-            shader.uniforms.uTransX = { value: 0 };
-            shader.uniforms.uTransY = { value: 0 };
+            shader.uniforms.uTransX = { value: self.m_translateX };
+            shader.uniforms.uTransY = { value: self.m_translateY };
+            shader.uniforms.uTranslateAnchor = { value: (self.m_paint['line-translate-anchor'] === 'viewport') ? 1 : 0 };
+            shader.uniforms.uBearing = { value: 0 };
             shader.vertexShader = shader.vertexShader.replace(
                 'vec3 pos = biTangent.xyz',
                 (match) => `uniform float uTransX; uniform float uTransY; ${match}`
             );
             shader.vertexShader = shader.vertexShader.replace(
                 'pos += biTangent.xyz * offset',
-                'pos += biTangent.xyz * offset + vec3(uTransX, uTransY, 0.0)'
+                `uniform float uTranslateAnchor; uniform float uBearing;
+                 vec2 trans = vec2(uTransX, uTransY);
+                 if (uTranslateAnchor > 0.5) {
+                   float c = cos(uBearing); float s = sin(uBearing);
+                   trans = vec2(trans.x * c - trans.y * s, trans.x * s + trans.y * c);
+                 }
+                 pos += biTangent.xyz * offset + vec3(trans, 0.0)`
             );
 
             // ----- Blur + Gradient + Emissive in fragment shader -----
-            shader.uniforms.uBlur = { value: 0 };
-            shader.uniforms.uEmissive = { value: 0 };
+            shader.uniforms.uBlur = { value: self.m_blur };
+            shader.uniforms.uEmissive = { value: self.m_emissiveStrength };
             shader.uniforms.uGradientTex = { value: self.m_gradientTexture };
             shader.uniforms.uPatternTex = { value: self.m_patternTexture };
             shader.uniforms.uPatternSize = { value: new THREE.Vector2(256, 256) };
             shader.uniforms.uLineLength = { value: 1.0 };
+            shader.uniforms.uPatternUVOffset = { value: self.m_patternUVOffset };
+            shader.uniforms.uPatternUVScale = { value: self.m_patternUVScale };
+            shader.uniforms.uPatternRepeat = { value: self.m_patternRepeat };
 
             shader.fragmentShader =
                 'uniform float uBlur;\n' +
                 'uniform float uEmissive;\n' +
                 'uniform sampler2D uGradientTex;\n' +
                 'uniform float uLineLength;\n' +
+                'uniform vec2 uPatternUVOffset;\n' +
+                'uniform vec2 uPatternUVScale;\n' +
+                'uniform float uPatternRepeat;\n' +
                 shader.fragmentShader;
 
             // Inject blur into alpha computation
@@ -121,16 +138,16 @@ export class MapLineMaterial extends SolidLineMaterial {
                 `
             );
 
-            // Inject pattern texture
-            shader.uniforms.uPatternTex = { value: null };
-            shader.uniforms.uPatternSize = { value: new THREE.Vector2(256, 256) };
             shader.fragmentShader = shader.fragmentShader.replace(
                 'gl_FragColor = vec4(outputDiffuse, alpha);',
                 `
-                // line-pattern
-                vec4 patColor = texture2D(uPatternTex, vec2(vCoords.x / uLineLength, 0.5));
-                vec3 patternOut = mix(outputDiffuse, patColor.rgb, patColor.a);
-                vec3 emissiveOut = patternOut + vec3(uEmissive);
+                vec3 emissiveOut = outputDiffuse + vec3(uEmissive);
+                if (uPatternRepeat > 0.0) {
+                    float patT = fract(vCoords.x * uPatternRepeat);
+                    vec2 patUv = uPatternUVOffset + vec2(patT, 0.5) * uPatternUVScale;
+                    vec4 patColor = texture2D(uPatternTex, patUv);
+                    emissiveOut = mix(emissiveOut, patColor.rgb, patColor.a);
+                }
                 gl_FragColor = vec4(emissiveOut, alpha);
                 `
             );
@@ -158,8 +175,16 @@ export class MapLineMaterial extends SolidLineMaterial {
         (this as any).setShaderMaterialDefine?.('JOIN_MODE', mode);
     }
 
-    setPatternTexture(texture: THREE.Texture | null) {
+    setPatternTexture(
+        texture: THREE.Texture | null,
+        uvOffset?: [number, number],
+        uvScale?: [number, number],
+        repeat?: number,
+    ) {
         this.m_patternTexture = texture;
+        if (uvOffset) this.m_patternUVOffset.set(uvOffset[0], uvOffset[1]);
+        if (uvScale) this.m_patternUVScale.set(uvScale[0], uvScale[1]);
+        if (repeat !== undefined) this.m_patternRepeat = repeat;
         this.needsUpdate = true;
     }
 
@@ -191,6 +216,16 @@ export class MapLineMaterial extends SolidLineMaterial {
         }
 
         if (p['line-join']) this.setJoinType(p['line-join']);
+
+        const cap = p['line-cap'];
+        if (cap) {
+            const capMap: Record<string, LineCaps> = {
+                butt: 'None' as LineCaps,
+                round: 'Round' as LineCaps,
+                square: 'Square' as LineCaps,
+            };
+            this.caps = capMap[cap] ?? ('Round' as LineCaps);
+        }
 
         const grad = p['line-gradient'];
         if (grad && grad.length >= 2) this.buildGradientTexture(grad);

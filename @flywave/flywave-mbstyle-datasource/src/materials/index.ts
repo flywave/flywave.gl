@@ -8,6 +8,8 @@ import { MapExtrusionMaterial, MapExtrusionMaterialParams } from './MapExtrusion
 import { MapIconMaterial, MapIconMaterialParams } from './MapIconMaterial';
 import { MapHeatmapMaterial, MapHeatmapMaterialParams } from './MapHeatmapMaterial';
 import { MapHillshadeMaterial, MapHillshadeMaterialParams } from './MapHillshadeMaterial';
+import { MapRasterMaterial, MapRasterMaterialParams } from './MapRasterMaterial';
+import { MapBuildingMaterial, MapBuildingMaterialParams } from './MapBuildingMaterial';
 import { MBSDFTextMaterial, MapTextMaterialParams } from './MBSDFTextMaterial';
 import { MapSDFIconMaterial } from './MapSDFIconMaterial';
 
@@ -18,6 +20,8 @@ export { MapExtrusionMaterial, MapExtrusionMaterialParams };
 export { MapIconMaterial, MapIconMaterialParams, SpriteAtlas, SpriteIconInfo } from './MapIconMaterial';
 export { MapHeatmapMaterial, MapHeatmapMaterialParams } from './MapHeatmapMaterial';
 export { MapHillshadeMaterial, MapHillshadeMaterialParams } from './MapHillshadeMaterial';
+export { MapRasterMaterial, MapRasterMaterialParams } from './MapRasterMaterial';
+export { MapBuildingMaterial, MapBuildingMaterialParams } from './MapBuildingMaterial';
 export { MBSDFTextMaterial, MapTextMaterialParams } from './MBSDFTextMaterial';
 export { MapSDFIconMaterial } from './MapSDFIconMaterial';
 export { MBRenderLayer } from './MBRenderLayer';
@@ -60,7 +64,7 @@ export function createMBMaterial(
         case 'line': {
             const mat = new MapLineMaterial(paint as any, capabilities);
             if (paint['line-pattern'] && atlas) {
-                mat.setPatternTexture(atlas.texture);
+                applyLinePatternTexture(mat, paint['line-pattern'], atlas);
             }
             return mat;
         }
@@ -81,12 +85,21 @@ export function createMBMaterial(
             if (atlas) mat.setSpriteAtlas(atlas);
             return mat;
         }
-        case 'fill-extrusion':
-            return new MapExtrusionMaterial(paint as any);
+        case 'fill-extrusion': {
+            const mat = new MapExtrusionMaterial(paint as any);
+            if (paint['fill-extrusion-pattern'] && atlas) {
+                applyExtrusionPatternTexture(mat, paint['fill-extrusion-pattern'], atlas);
+            }
+            return mat;
+        }
         case 'heatmap':
             return new MapHeatmapMaterial(paint as any);
         case 'hillshade':
             return new MapHillshadeMaterial(paint as any);
+        case 'raster':
+            return new MapRasterMaterial(paint as any);
+        case 'building':
+            return new MapBuildingMaterial(paint as any);
         default:
             return FALLBACK;
     }
@@ -98,6 +111,29 @@ function applyPatternTexture(mat: MapFillMaterial, patternName: string, atlas: a
     if (info) {
         mat.setPatternTexture(atlas.texture, [info.width, info.height]);
     }
+}
+
+function applyExtrusionPatternTexture(mat: MapExtrusionMaterial, patternName: string, atlas: any) {
+    if (!atlas?.icons) return;
+    const info = atlas.icons.get?.(patternName);
+    if (info && atlas.texture) {
+        mat.setPatternTexture(atlas.texture);
+    }
+}
+
+function applyLinePatternTexture(mat: MapLineMaterial, patternName: string, atlas: any) {
+    if (!atlas?.icons || !atlas.texture) return;
+    const info = atlas.icons.get?.(patternName);
+    if (!info) {
+        mat.setPatternTexture(atlas.texture);
+        return;
+    }
+    const texW = atlas.texture.image?.width ?? 1;
+    const texH = atlas.texture.image?.height ?? 1;
+    const uvOffset: [number, number] = [info.x / texW, info.y / texH];
+    const uvScale: [number, number] = [info.width / texW, info.height / texH];
+    const repeat = 1.0 / (info.width * 2);
+    mat.setPatternTexture(atlas.texture, uvOffset, uvScale, repeat);
 }
 
 export function updateMBMaterial(
@@ -140,6 +176,12 @@ export function updateMBMaterial(
             break;
         case 'hillshade':
             (material as unknown as MapHillshadeMaterial).setPaint(paint as any);
+            break;
+        case 'raster':
+            (material as unknown as MapRasterMaterial).setPaint(paint as any);
+            break;
+        case 'building':
+            (material as unknown as MapBuildingMaterial).setPaint(paint as any);
             break;
     }
 }

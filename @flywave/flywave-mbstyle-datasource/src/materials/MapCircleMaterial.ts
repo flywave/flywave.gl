@@ -29,6 +29,7 @@ uniform float uStrokeOpacity;
 uniform float uPitchAlignment;
 uniform vec3 uTranslate;
 uniform float uSizeAttenuation;
+uniform float uPitch;
 
 varying float vAlpha;
 
@@ -36,10 +37,12 @@ void main() {
     vec3 pos = position + uTranslate;
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
 
-    // pitch-alignment: map → use size attenuation, viewport → screen-space size
     float size = uSize;
     if (uSizeAttenuation > 0.5) {
         size = uSize * (300.0 / -mvPosition.z);
+    }
+    if (uPitchAlignment > 0.5 && uPitch > 0.0) {
+        size /= max(cos(uPitch), 0.3);
     }
 
     gl_PointSize = size;
@@ -103,6 +106,7 @@ export class MapCircleMaterial extends THREE.ShaderMaterial {
                 uTranslate: { value: new THREE.Vector3(0, 0, 0) },
                 uPitchAlignment: { value: 0 },
                 uSizeAttenuation: { value: 1 },
+                uPitch: { value: 0 },
             },
         });
         this.m_paint = { ...DEFAULTS, ...paint };

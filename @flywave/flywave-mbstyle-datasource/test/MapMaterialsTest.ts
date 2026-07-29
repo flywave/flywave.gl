@@ -147,7 +147,7 @@ describe('createMBMaterial', () => {
     });
 
     it('creates fallback for unknown type', () => {
-        const mat = createMBMaterial('raster' as any, {}) as THREE.MeshBasicMaterial;
+        const mat = createMBMaterial('nonexistent-type' as any, {}) as THREE.MeshBasicMaterial;
         expect(mat).to.be.instanceOf(THREE.MeshBasicMaterial);
         expect(mat.color.getHexString()).to.equal('ff00ff');
     });

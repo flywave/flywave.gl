@@ -4,6 +4,7 @@ import { DecodedTile, IndexedTechnique, Geometry } from '@flywave/flywave-dataso
 import { Tile } from '@flywave/flywave-mapview';
 
 import { LayerType } from '../MBStyleSpec';
+import { generateTextQuads } from '../TextShaping';
 import { createMBMaterial, updateMBMaterial } from './index';
 import { MapFillMaterial } from './MapFillMaterial';
 import { MapLineMaterial } from './MapLineMaterial';
@@ -26,6 +27,17 @@ interface RenderableObject {
  */
 export class MBRenderLayer {
     private m_materialCache = new Map<string, THREE.Material>();
+    private m_spriteAtlas: any = null;
+    private m_demTileUrl: string | null = null;
+
+    setSpriteAtlas(atlas: any): void {
+        this.m_spriteAtlas = atlas;
+        this.clearCache();
+    }
+
+    setDemTileUrl(url: string | null): void {
+        this.m_demTileUrl = url;
+    }
 
     /**
      * Convert a DecodedTile into Three.js objects with Mapbox materials.
@@ -100,8 +112,13 @@ export class MBRenderLayer {
             let material = this.m_materialCache.get(matKey);
 
             if (!material) {
-                material = createMBMaterial(layerType, paint);
+                material = createMBMaterial(layerType, paint, {
+                    spriteAtlas: this.m_spriteAtlas,
+                });
                 this.m_materialCache.set(matKey, material);
+                if (layerType === 'hillshade') {
+                    this.loadDemTexture(material, tile);
+                }
             } else {
                 updateMBMaterial(material, layerType, paint);
             }
@@ -141,8 +158,11 @@ export class MBRenderLayer {
 
                     // Apply icon-offset
                     const offset = paint['icon-offset'] as [number, number] | undefined;
-                    if (offset && (offset[0] || offset[1])) {
-                        sprite.position.set(offset[0], offset[1], 0);
+                    const translate = paint['icon-translate'] as [number, number] | undefined;
+                    const posX = (offset?.[0] ?? 0) + (translate?.[0] ?? 0);
+                    const posY = (offset?.[1] ?? 0) + (translate?.[1] ?? 0);
+                    if (posX || posY) {
+                        sprite.position.set(posX, posY, 0);
                     }
 
                     // Apply icon-anchor
@@ -151,10 +171,18 @@ export class MBRenderLayer {
                         this.applyAnchor(sprite, anchor);
                     }
 
-                    // Apply icon-size scaling
+                    // Apply icon-size scaling using actual icon dimensions
                     const iconSize = paint['icon-size'] as number ?? 1;
                     if (iconSize !== 1 && !textFit) {
-                        sprite.scale.set(iconSize * 32, iconSize * 32, 1);
+                        const iw = (material as MapIconMaterial).iconWidth || 32;
+                        const ih = (material as MapIconMaterial).iconHeight || 32;
+                        sprite.scale.set(iconSize * iw, iconSize * ih, 1);
+                    } else if (!textFit) {
+                        const iw = (material as MapIconMaterial).iconWidth || 32;
+                        const ih = (material as MapIconMaterial).iconHeight || 32;
+                        if (sprite.scale.x === 1 && sprite.scale.y === 1) {
+                            sprite.scale.set(iw, ih, 1);
+                        }
                     }
 
                     object = sprite;
@@ -172,9 +200,11 @@ export class MBRenderLayer {
                     object = new THREE.LineSegments(subGeometry, material);
                     break;
                 case 'circle':
+                case 'heatmap':
                     object = new THREE.Points(subGeometry, material);
                     break;
                 case 'fill-extrusion':
+                case 'raster':
                     object = new THREE.Mesh(subGeometry, material);
                     break;
                 case 'fill':
@@ -222,6 +252,27 @@ export class MBRenderLayer {
         this.m_materialCache.clear();
     }
 
+    private loadDemTexture(material: THREE.Material, tile: Tile): void {
+        if (!this.m_demTileUrl) return;
+        const mat = material as any;
+        if (typeof mat.setDemTexture !== 'function') return;
+        const tk = (tile as any).tileKey;
+        if (!tk) return;
+        const z = tk.level;
+        const x = tk.column;
+        const y = tk.row;
+        const url = this.m_demTileUrl
+            .replace('{z}', String(z))
+            .replace('{x}', String(x))
+            .replace('{y}', String(y));
+        const loader = new THREE.TextureLoader();
+        loader.load(url, (texture) => {
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            mat.setDemTexture(texture);
+        }, undefined, () => {});
+    }
+
     private applyAnchor(sprite: THREE.Sprite, anchor: string) {
         // Mapbox anchor types map to sprite center offsets
         const map: Record<string, [number, number]> = {
@@ -236,17 +287,89 @@ export class MBRenderLayer {
 
     private buildTextMesh(
         text: string, size: number,
-        _paint: Record<string, any>,
-        _material: MBSDFTextMaterial,
+        paint: Record<string, any>,
+        material: MBSDFTextMaterial,
     ): THREE.Mesh {
-        // Simplified text rendering: create a planar quad for SDF text
-        const textLen = text.length;
-        const charWidth = size * 0.6;
-        const width = textLen * charWidth;
-        const height = size * 1.2;
+        const shaped = (paint as any)._shaped;
+        const letterSpacing = (paint['text-letter-spacing'] as number) ?? 0;
 
-        const geom = new THREE.PlaneGeometry(width, height);
-        return new THREE.Mesh(geom, _material);
+        let quads: Array<{ x: number; y: number; w: number; h: number }>;
+        if (shaped) {
+            const fontSize = size;
+            const allQuads = generateTextQuads(shaped, fontSize, letterSpacing);
+            quads = allQuads.map(q => ({ x: q.x, y: q.y, w: q.width, h: q.height }));
+        } else {
+            const charWidth = size * 0.6;
+            const textLen = text.length;
+            quads = [];
+            for (let i = 0; i < textLen; i++) {
+                quads.push({
+                    x: i * charWidth - textLen * charWidth / 2,
+                    y: -size * 0.6,
+                    w: charWidth,
+                    h: size * 1.2,
+                });
+            }
+        }
+
+        if (quads.length === 0) {
+            const geom = new THREE.PlaneGeometry(size * 0.1, size * 0.1);
+            return new THREE.Mesh(geom, material);
+        }
+
+        const positions = new Float32Array(quads.length * 12);
+        const uvs = new Float32Array(quads.length * 12);
+        const indices = new Uint16Array(quads.length * 6);
+
+        for (let i = 0; i < quads.length; i++) {
+            const q = quads[i];
+            const x0 = q.x, y0 = q.y;
+            const x1 = q.x + q.w, y1 = q.y + q.h;
+
+            positions[i * 12 + 0] = x0; positions[i * 12 + 1] = y0;
+            positions[i * 12 + 2] = x1; positions[i * 12 + 3] = y0;
+            positions[i * 12 + 4] = x1; positions[i * 12 + 5] = y1;
+            positions[i * 12 + 6] = x0; positions[i * 12 + 7] = y0;
+            positions[i * 12 + 8] = x1; positions[i * 12 + 9] = y1;
+            positions[i * 12 + 10] = x0; positions[i * 12 + 11] = y1;
+
+            const tx = i / Math.max(quads.length, 1);
+            const tw = 1 / Math.max(quads.length, 1);
+            uvs[i * 12 + 0] = tx; uvs[i * 12 + 1] = 0;
+            uvs[i * 12 + 2] = tx + tw; uvs[i * 12 + 3] = 0;
+            uvs[i * 12 + 4] = tx + tw; uvs[i * 12 + 5] = 1;
+            uvs[i * 12 + 6] = tx; uvs[i * 12 + 7] = 0;
+            uvs[i * 12 + 8] = tx + tw; uvs[i * 12 + 9] = 1;
+            uvs[i * 12 + 10] = tx; uvs[i * 12 + 11] = 1;
+
+            const vi = i * 6;
+            indices[vi + 0] = i * 4 + 0;
+            indices[vi + 1] = i * 4 + 1;
+            indices[vi + 2] = i * 4 + 2;
+            indices[vi + 3] = i * 4 + 3;
+            indices[vi + 4] = i * 4 + 4;
+            indices[vi + 5] = i * 4 + 5;
+        }
+
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+        geom.setIndex(new THREE.BufferAttribute(indices, 1));
+
+        const mesh = new THREE.Mesh(geom, material);
+
+        const offset = paint['text-offset'] as [number, number] | undefined;
+        if (offset && (offset[0] || offset[1])) {
+            const emScale = size;
+            mesh.position.set(offset[0] * emScale, offset[1] * emScale, 0);
+        }
+
+        const radialOffset = paint['text-radial-offset'] as number | undefined;
+        if (radialOffset && radialOffset !== 0) {
+            mesh.position.x += radialOffset * size;
+        }
+
+        return mesh;
     }
 
     private getMaterialKey(technique: IndexedTechnique, paint: Record<string, any>): string {

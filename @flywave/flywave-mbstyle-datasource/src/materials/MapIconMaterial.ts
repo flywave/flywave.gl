@@ -65,6 +65,10 @@ export class SpriteAtlas {
 export class MapIconMaterial extends THREE.SpriteMaterial {
     private m_paint: MapIconMaterialParams;
     private m_spriteAtlas: SpriteAtlas | null = null;
+    private m_uvOffset = new THREE.Vector2(0, 0);
+    private m_uvScale = new THREE.Vector2(1, 1);
+    private m_iconWidth = 32;
+    private m_iconHeight = 32;
 
     constructor(paint: Partial<MapIconMaterialParams> = {}) {
         super({
@@ -72,6 +76,21 @@ export class MapIconMaterial extends THREE.SpriteMaterial {
             depthWrite: false,
         });
         this.m_paint = { ...DEFAULTS, ...paint };
+
+        const self = this;
+        this.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
+            shader.uniforms.uUvOffset = { value: self.m_uvOffset };
+            shader.uniforms.uUvScale = { value: self.m_uvScale };
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <common>',
+                `#include <common>\nuniform vec2 uUvOffset;\nuniform vec2 uUvScale;`
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                'texture2D( map, vUv )',
+                'texture2D( map, uUvOffset + vUv * uUvScale )'
+            );
+        };
+
         this.applyPaint();
     }
 
@@ -98,15 +117,23 @@ export class MapIconMaterial extends THREE.SpriteMaterial {
         if (this.m_spriteAtlas) {
             const uv = this.m_spriteAtlas.getIconUv(p['icon-image']);
             if (uv) {
-                const w = uv.uvMax[0] - uv.uvMin[0];
-                const h = uv.uvMax[1] - uv.uvMin[1];
-                (this as any).center.set(0.5, 0.5);
+                this.m_uvOffset.set(uv.uvMin[0], uv.uvMin[1]);
+                this.m_uvScale.set(uv.uvMax[0] - uv.uvMin[0], uv.uvMax[1] - uv.uvMin[1]);
                 this.map = this.m_spriteAtlas.texture;
+
+                const iconInfo = this.m_spriteAtlas.icons.get(p['icon-image']);
+                if (iconInfo) {
+                    this.m_iconWidth = iconInfo.width;
+                    this.m_iconHeight = iconInfo.height;
+                }
             }
         }
 
         this.needsUpdate = true;
     }
+
+    get iconWidth(): number { return this.m_iconWidth; }
+    get iconHeight(): number { return this.m_iconHeight; }
 
     dispose(): void {
         super.dispose();

@@ -104,10 +104,14 @@ export class MBFilterCompiler {
                     return !vals.includes(ctx.feature?.properties?.[key]);
                 };
             }
-            case 'within':
-                return () => true;
-            case '!within':
-                return () => true;
+            case 'within': {
+                const filterGeo = filter[1];
+                return (ctx) => MBFilterCompiler.withinFilter(filterGeo, ctx);
+            }
+            case '!within': {
+                const filterGeo = filter[1];
+                return (ctx) => !MBFilterCompiler.withinFilter(filterGeo, ctx);
+            }
             default: {
                 if (typeof op === 'string' && ['all', 'any', 'none'].includes(op)) {
                     const subFilters = filter.slice(1).map((f: any) => this.compile(f));
@@ -124,5 +128,42 @@ export class MBFilterCompiler {
                 return () => true;
             }
         }
+    }
+
+    private static pointInPolygon(
+        px: number, py: number,
+        ring: Array<[number, number]>,
+    ): boolean {
+        let inside = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const xi = ring[i][0], yi = ring[i][1];
+            const xj = ring[j][0], yj = ring[j][1];
+            const intersect = ((yi > py) !== (yj > py)) &&
+                (px < (xj - xi) * (py - yi) / (yj - yi + 1e-15) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    private static withinFilter(
+        filterGeo: any,
+        ctx: MBExpressionContext,
+    ): boolean {
+        if (!filterGeo || filterGeo.type !== 'Polygon') return true;
+        const featureGeo = (ctx.feature as any)?._geom;
+        if (!featureGeo) return true;
+
+        const fx = featureGeo.coordinates?.[0] ?? 0;
+        const fy = featureGeo.coordinates?.[1] ?? 0;
+
+        const outerRing = filterGeo.coordinates?.[0];
+        if (!outerRing) return false;
+
+        if (!this.pointInPolygon(fx, fy, outerRing)) return false;
+
+        for (let i = 1; i < filterGeo.coordinates.length; i++) {
+            if (this.pointInPolygon(fx, fy, filterGeo.coordinates[i])) return false;
+        }
+        return true;
     }
 }

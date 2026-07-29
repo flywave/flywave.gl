@@ -44,6 +44,8 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
     private m_paint: MapFillMaterialParams;
     private m_outlineColor: THREE.Color = new THREE.Color();
     private m_translation: THREE.Vector3 = new THREE.Vector3();
+    private m_translateAnchor: 'map' | 'viewport' = 'map';
+    private m_bearing: number = 0;
 
     // Pattern uniforms
     private m_patternTexture: THREE.Texture | null = null;
@@ -62,6 +64,17 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
             shader.uniforms.uPatternMap = { value: self.m_patternTexture };
             shader.uniforms.uPatternSize = { value: self.m_patternSize };
             shader.uniforms.uPatternOffset = { value: self.m_patternOffset };
+            shader.uniforms.uFillTranslate = { value: new THREE.Vector2(self.m_translation.x, self.m_translation.y) };
+            shader.uniforms.uTranslateAnchor = { value: self.m_translateAnchor === 'viewport' ? 1 : 0 };
+            shader.uniforms.uBearing = { value: self.m_bearing };
+            shader.vertexShader = shader.vertexShader.replace(
+                'vec3 transformed = vec3( position );',
+                `uniform vec2 uFillTranslate;\nuniform float uTranslateAnchor;\nuniform float uBearing;\nvec3 transformed = vec3( position.xy + rotateTranslate(uFillTranslate, uTranslateAnchor, uBearing), position.z );`
+            );
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <common>',
+                `#include <common>\nvec2 rotateTranslate(vec2 t, float anchor, float bearing) {\n  if (anchor > 0.5) {\n    float c = cos(bearing);\n    float s = sin(bearing);\n    return vec2(t.x * c - t.y * s, t.x * s + t.y * c);\n  }\n  return t;\n}`
+            );
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 PATTERN_VERT
@@ -93,11 +106,11 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
 
             // Z-offset: shift vertices in z direction
             if ((self as any)._zOffset) {
-                const zOff = (self as any)._zOffset;
+                const zOff = Number((self as any)._zOffset);
+                shader.uniforms.uZOffset = { value: zOff };
                 shader.vertexShader = shader.vertexShader.replace(
-                    '#include <project_vertex>',
-                    `vec4 zPos = vec4(position.x, position.y, position.z + ${zOff}.0, 1.0);
-                     #include <project_vertex>`
+                    'vec3 transformed = vec3( position );',
+                    'uniform float uZOffset;\nvec3 transformed = vec3( position.xy, position.z + uZOffset );'
                 );
             }
 
@@ -158,6 +171,7 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
         } else {
             this.m_translation.set(0, 0, 0);
         }
+        this.m_translateAnchor = (p as any)['fill-translate-anchor'] ?? 'map';
 
         // emissive
         const emissive = p['fill-emissive-strength'];
@@ -174,6 +188,11 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
 
     get translation(): THREE.Vector3 {
         return this.m_translation;
+    }
+
+    setBearing(bearing: number): void {
+        this.m_bearing = bearing;
+        this.needsUpdate = true;
     }
 
     private patchShader() {

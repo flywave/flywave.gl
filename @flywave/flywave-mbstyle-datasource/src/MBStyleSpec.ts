@@ -60,6 +60,9 @@ export interface GeoJSONSourceSpec {
     maxzoom?: number;
     minzoom?: number;
     attribution?: string;
+    cluster?: boolean;
+    clusterRadius?: number;
+    clusterMaxZoom?: number;
     [_: string]: unknown;
 }
 
@@ -302,7 +305,29 @@ export interface FogSpec {
     range?: [number, number];
     color?: MBColorSpec;
     'high-color'?: MBColorSpec;
+    'space-color'?: MBColorSpec;
     'horizon-blend'?: number;
+    'star-intensity'?: number;
+    'vertical-range'?: [number, number];
+}
+
+export interface SkySpec {
+    'sky-type'?: 'gradient' | 'atmosphere';
+    'sky-atmosphere-sun'?: [number, number];
+    'sky-atmosphere-sun-intensity'?: number;
+    'sky-atmosphere-color'?: MBColorSpec;
+    'sky-atmosphere-halo-color'?: MBColorSpec;
+    'sky-gradient'?: any;
+    'sky-gradient-center'?: [number, number];
+    'sky-opacity'?: number;
+}
+
+export interface Light3DProperties {
+    type: 'ambient' | 'directional' | 'flat';
+    color?: MBColorSpec;
+    intensity?: number;
+    direction?: [number, number, number];
+    'cast-shadow'?: boolean;
 }
 
 export interface TerrainSpec {
@@ -324,7 +349,9 @@ export interface StyleSpecification {
     pitch?: number;
     light?: LightSpec;
     fog?: FogSpec;
+    sky?: SkySpec;
     terrain?: TerrainSpec;
+    projection?: any;
     sources: SourcesSpecification;
     sprite?: string;
     glyphs?: string;
@@ -332,7 +359,7 @@ export interface StyleSpecification {
     layers: LayerSpecification[];
 }
 
-export type LayerType = LayerSpecification['type'] | 'heatmap' | 'hillshade' | 'sky';
+export type LayerType = LayerSpecification['type'] | 'heatmap' | 'hillshade' | 'sky' | 'model' | 'building' | 'clip' | 'slot';
 
 export const GEOMETRY_TYPE_MAP: Record<string, string[]> = {
     fill: ['polygon'],
@@ -341,7 +368,9 @@ export const GEOMETRY_TYPE_MAP: Record<string, string[]> = {
     circle: ['point'],
     'fill-extrusion': ['polygon'],
     background: ['polygon'],
-    raster: [],
+    raster: ['polygon'],
     heatmap: ['point'],
     hillshade: ['polygon'],
+    model: ['point'],
+    building: ['polygon'],
 };
