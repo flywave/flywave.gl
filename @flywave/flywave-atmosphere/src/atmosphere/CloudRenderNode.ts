@@ -327,6 +327,13 @@ export class CloudRenderNode extends TempNode {
         }
     }
 
+    // OPTIMIZATION: Include cloudRenderReady state in cache key.
+    // Before: customCacheKey() returned this._colorNode.customCacheKey?.() ?? 0.
+    //   When cloudRenderReady transitions from false→true (after async texture loading),
+    //   setup() needs to rebuild fragment nodes, but the cache key didn't change,
+    //   so the cached (pre-ready) shader was reused and clouds never rendered.
+    // After: key = colorKey * 31 + (cloudRenderReady ? 1 : 0), forcing cache miss
+    //   on the false→true transition.
     override customCacheKey(): number {
         const key = this._colorNode.customCacheKey?.() ?? 0;
         return key * 31 + (this.cloudRenderReady ? 1 : 0);

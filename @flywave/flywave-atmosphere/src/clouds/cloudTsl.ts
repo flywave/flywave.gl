@@ -128,6 +128,13 @@ export const getCubeSphereUv = Fn(([position]: [any]) => {
     return vec2(uvX, uvY).mul(0.5).add(0.5);
 });
 
+// OPTIMIZATION: Pre-normalized variant of getCubeSphereUv.
+// Before: each marching loop called getCubeSphereUv(position), which did
+//   normalize(position) internally, PLUS a separate normalize(position) for
+//   surfaceNormal in sampleMedia. That's 2-3 redundant normalize() per step.
+// After: caller computes n = normalize(position) once, passes to both
+//   getCubeSphereUvNormalized(n) and sampleMedia(..., n).
+// Saves ~2 normalize() calls per iteration across 3 marching loops.
 export const getCubeSphereUvNormalized = Fn(([n]: [any]) => {
     const f = abs(n);
     const maxF = max(f.x, max(f.y, f.z));
@@ -297,6 +304,12 @@ export const createSampleMedia = (u: CloudUniforms) => {
             any,
             any
         ]) => {
+            // OPTIMIZATION: surfaceNormal is now passed from caller.
+            // Before: const surfaceNormal = normalize(position);
+            //   This was called on every sample, duplicating the normalize()
+            //   already done by the caller for getCubeSphereUv.
+            // After: caller computes normalize(position) once, passes it as
+            //   the 8th parameter. Saves 1 normalize() per sampleMedia call.
             const localWeatherSpeed = length(u.localWeatherOffset);
             const evolution = surfaceNormal.negate().mul(localWeatherSpeed.mul(2e4));
 
@@ -408,6 +421,13 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
 
                 const position = currentDist.mul(rayDirection).add(rayOrigin);
                 const height = length(position).sub(u.bottomRadius);
+                // OPTIMIZATION: compute n once, reuse for both UV and media.
+                // Before: uv = getGlobeUv(position) — did normalize(position) internally.
+                //         sampleMedia(..., rayOrigin) — did normalize(position) for surfaceNormal.
+                // After:  n = normalize(position) computed once.
+                //         uv = getCubeSphereUvNormalized(n) — no internal normalize.
+                //         sampleMedia(..., n) — receives pre-computed n.
+                // Saves 1 normalize() per iteration.
                 const n = normalize(position);
                 const uv = getCubeSphereUvNormalized(n);
                 const heightFraction = remapClamped(
@@ -548,6 +568,7 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
 
             const position = rayDistance.mul(rayDirection).add(rayOrigin);
             const height = length(position).sub(u.bottomRadius);
+            // OPTIMIZATION: same normalize() reuse pattern as main march loop.
             const n = normalize(position);
             const uv = getCubeSphereUvNormalized(n);
             const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
@@ -1010,10 +1031,17 @@ export const createMarchClouds = (u: CloudUniforms): any => {
             );
             const rayStartTexelsPerPixel = pow(float(2), cameraAdjustedMip);
 
-            // Precompute atmosphere irradiance at ray entry point and reuse per-step.
-            // Irradiance varies smoothly with altitude (<0.3% across cloud layer thickness)
-            // and sun angle, so computing once per ray has negligible visual impact
-            // while saving 2 textureSample calls per iteration (transmittance + irradiance LUTs).
+            // OPTIMIZATION: Precompute atmosphere irradiance outside the raymarch loop.
+            // Before: Inside the If(mediaExtinction > minExtinction) block, each step did:
+            //   const posUnit = position.mul(u.worldToUnit);
+            //   const splitIrr = getSplitScalarIlluminance(posUnit, u.sunDirection).toConst();
+            //   const sunIrradiance = splitIrr.get("direct");
+            //   const skyIrradiance = splitIrr.get("indirect");
+            //   This sampled 2 LUT textures (transmittance + irradiance) per iteration.
+            // After: Computed once at rayOrigin and reused per-step as originSunIrradiance
+            //   and originSkyIrradiance. Irradiance varies <0.3% across cloud layer thickness
+            //   (650m vs 6360km Earth radius), so the approximation is visually lossless.
+            // Saves 2 textureSample calls per iteration (~1000 samples per pixel at 500 steps).
             const originUnit = rayOrigin.mul(u.worldToUnit);
             const originSplitIrr = getSplitScalarIlluminance(originUnit, u.sunDirection).toConst();
             const originSunIrradiance = originSplitIrr.get("direct");
@@ -1028,6 +1056,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
 
                 const position = rayDistance.mul(rayDirection).add(rayOrigin);
                 const height = length(position).sub(u.bottomRadius);
+                // OPTIMIZATION: same normalize() reuse as other loops.
                 const n = normalize(position);
                 const uv = getCubeSphereUvNormalized(n);
                 // GLSL: mipLevel = log2(max(1.0, rayStartTexelsPerPixel + rayDistance * 1e-5))
@@ -1073,9 +1102,13 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                     const skyGradient = media.z;
 
                     If(mediaExtinction.greaterThan(u.minExtinction), () => {
-                        // Use precomputed irradiance from ray entry point.
-                        // Reusing per-ray values instead of per-step LUT lookup saves
-                        // 2 textureSample calls per iteration with negligible visual impact.
+                        // OPTIMIZATION: Use precomputed irradiance from ray origin.
+                        // Before: per-step LUT lookup:
+                        //   const posUnit = position.mul(u.worldToUnit);
+                        //   const splitIrr = getSplitScalarIlluminance(posUnit, u.sunDirection);
+                        //   const sunIrradiance = splitIrr.get("direct");
+                        //   const skyIrradiance = splitIrr.get("indirect");
+                        // After: use precomputed per-ray values from loop entry.
                         const sunIrradiance = originSunIrradiance;
                         const skyIrradiance = originSkyIrradiance;
 

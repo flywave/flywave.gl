@@ -171,5 +171,7 @@ export { DensityProfile as CloudDensityProfile } from "./clouds/CloudLayer";
 export { CloudUniforms } from "./clouds/CloudUniforms";
 export { qualityPresets } from "./clouds/QualityPresets";
 export type { QualityPreset, QualityPresetConfig } from "./clouds/QualityPresets";
+// OPTIMIZATION: export getCubeSphereUvNormalized — pre-normalized UV mapping variant.
+// Added alongside getCubeSphereUv for external callers who already have normalized vectors.
 export { createCloudRenderer, getCubeSphereUv, getCubeSphereUvNormalized } from "./clouds/cloudTsl";
 export { CloudRenderNode, cloudRender } from "./atmosphere/CloudRenderNode";
