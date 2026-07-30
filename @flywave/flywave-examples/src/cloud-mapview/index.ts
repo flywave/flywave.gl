@@ -35,7 +35,7 @@ const mapView = new MapView({
     }
 });
 
-// mapView.beginAnimation();
+mapView.beginAnimation();
 
     const controls = new MapControls(mapView);
     const ui = new MapControlsUI(controls);

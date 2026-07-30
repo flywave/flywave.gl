@@ -48,7 +48,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                 atmosphere: true,
                 sunCastShadow: true,
                 clouds: true,
-                sunTime: new Date().setHours(17, 50)
+                sunTime: new Date().setHours(20, 50)
             }
         }
     });
