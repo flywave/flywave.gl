@@ -1,9 +1,9 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Vector2, Vector3, type Camera } from "three";
+import { Matrix4, Vector2, Vector3, type Camera } from "three";
 import { renderGroup, uniform } from "three/tsl";
-import { NodeBuilder, type Renderer } from "three/webgpu";
+import { NodeBuilder, type Renderer, type Texture } from "three/webgpu";
 
 import { AtmosphereContextBase } from "./AtmosphereContextBase";
 import { AtmosphereLUTNode } from "./AtmosphereLUTNode";
@@ -240,6 +240,24 @@ export class AtmosphereContext extends AtmosphereContextBase {
     showGround = true;
     accurateShadowScattering = true;
     raymarchScattering = true;
+
+    // Cloud shadow state. Populated by CloudRenderNode.updateBefore() each frame.
+    // Consumed by AtmosphereLightNode.setupDirect() to attenuate direct sun light.
+    cloudShadowEnabled = false;
+    cloudShadowTextureNodes: any[] = [null, null, null, null];
+    // Raw (non-temporally-resolved) shadow textures for ground shadow projection.
+    // Using raw textures avoids temporal mismatch with current-frame cascade matrices.
+    cloudShadowRawTextureNodes: any[] = [null, null, null, null];
+    cloudShadowMatrices: Matrix4[] = [new Matrix4(), new Matrix4(), new Matrix4(), new Matrix4()];
+    cloudShadowIntervals: Vector2[] = [
+        new Vector2(0, 1),
+        new Vector2(0, 1),
+        new Vector2(0, 1),
+        new Vector2(0, 1)
+    ];
+    cloudShadowCascadeCount = 0;
+    cloudShadowFar = 50000;
+    cloudShadowTopHeight = 8000;
 
     constructor(
         parameters = new AtmosphereParameters(),

@@ -220,6 +220,7 @@ export class CloudRenderNode extends TempNode {
     private readonly historyNode: TextureNode;
     private readonly resolveNodeTex: TextureNode;
     private readonly shadowNodes: TextureNode[] = [];
+    private readonly shadowRawNodes: TextureNode[] = [];
     private readonly shadowHistoryNodes: TextureNode[] = [];
 
     private prevShadowMatrices: Matrix4[] = [
@@ -299,6 +300,7 @@ export class CloudRenderNode extends TempNode {
             resRT.texture.magFilter = LinearFilter;
             this.shadowResolvedRTs.push(resRT);
             this.shadowNodes.push(texture(resRT.texture));
+            this.shadowRawNodes.push(texture(this.shadowRTs[i].texture));
 
             const mat = new NodeMaterial();
             mat.name = `Clouds [Shadow ${i}]`;
@@ -641,6 +643,22 @@ export class CloudRenderNode extends TempNode {
 
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                         this.prevShadowMatrices[i].copy(this.cloudUniforms.shadowMatrices[i].value);
+                    }
+
+                    // Push shadow data to AtmosphereContext for ground shadow projection.
+                    atmoCtx.cloudShadowEnabled = true;
+                    atmoCtx.cloudShadowCascadeCount = SHADOW_CASCADE_COUNT;
+                    atmoCtx.cloudShadowFar = this.cascadedShadowMaps.far;
+                    atmoCtx.cloudShadowTopHeight = this.cloudUniforms.shadowTopHeight.value;
+                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                        atmoCtx.cloudShadowTextureNodes[i] = this.shadowNodes[i];
+                        atmoCtx.cloudShadowRawTextureNodes[i] = this.shadowRawNodes[i];
+                        atmoCtx.cloudShadowMatrices[i].copy(
+                            this.cloudUniforms.shadowMatrices[i].value
+                        );
+                        atmoCtx.cloudShadowIntervals[i].copy(
+                            this.cloudUniforms.shadowIntervals[i].value as Vector2
+                        );
                     }
                 }
             }
@@ -1023,10 +1041,10 @@ export class CloudRenderNode extends TempNode {
                         );
                         result.assign(clipped);
                     });
-                    // 1% EMA feedback per frame. Shadow map is now deterministic
-                    // (stbnFixed in shadow march), so only PCF rotation in the main
-                    // render needs temporal smoothing.
-                    return mix(result, currentColor, float(0.01));
+                    // 8% EMA: faster convergence to reduce ground shadow shimmer
+                    // during camera movement. Cloud self-shadow has its own TAA to
+                    // cover the extra noise from faster convergence.
+                    return mix(result, currentColor, float(0.08));
                 })();
                 this.shadowResolveMaterials[i].fragmentNode = shadowResolveNode;
                 this.shadowResolveMaterials[i].needsUpdate = true;
