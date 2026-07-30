@@ -39,13 +39,15 @@ async function timeSlice<T>(iterable: Iterable<T>): Promise<T> {
                 if (done === true) {
                     resolve(value);
                 } else {
-                    requestIdleCallback(callback);
+                    // Use setTimeout(0) instead of requestIdleCallback for reliability
+                    // (iframe / devtools environments may delay idle callbacks indefinitely)
+                    setTimeout(callback, 0);
                 }
             } catch (error: unknown) {
                 reject(error instanceof Error ? error : new Error());
             }
         };
-        requestIdleCallback(callback);
+        setTimeout(callback, 0);
     });
 }
 

@@ -15,6 +15,8 @@ export { DataSourceModule } from "./modules/DataSourceModule";
 export { TextModule } from "./modules/TextModule";
 export { AnimationModule } from "./modules/AnimationModule";
 export { EnvironmentModule } from "./modules/EnvironmentModule";
+export { AtmosphereModule } from "./modules/AtmosphereModule";
+export { ToneMappingModule } from "./modules/ToneMappingModule";
 export { PostProcessingModule } from "./modules/PostProcessingModule";
 export { PostProcessingGUIModule } from "./modules/PostProcessingGUIModule";
 export { FogModule } from "./modules/FogModule";
@@ -34,6 +36,8 @@ export type { DataSourceData } from "./modules/DataSourceModule";
 export type { TextData } from "./modules/TextModule";
 export type { AnimationData } from "./modules/AnimationModule";
 export type { EnvironmentData } from "./modules/EnvironmentModule";
+export type { AtmosphereData } from "./modules/AtmosphereModule";
+export type { ToneMappingData } from "./modules/ToneMappingModule";
 export type { PostProcessingData } from "./modules/PostProcessingModule";
 export type { FogData } from "./modules/FogModule";
 

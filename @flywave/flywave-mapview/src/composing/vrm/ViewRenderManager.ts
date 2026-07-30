@@ -32,10 +32,12 @@ import {
     aerialPerspective,
     convertToTexture,
     agxPunchyToneMapping,
-    AgXPunchyToneMapping,
+    AgXCunchyToneMapping,
     temporalAntialias,
     highpVelocity,
     shadowLength,
+    cloudRender,
+    type CloudRenderNode,
     type LensFlareNode,
     type AerialPerspectiveNode,
     type TemporalAntialiasNode
@@ -62,6 +64,7 @@ export class ViewRenderManager implements IViewRenderManager {
         sepia: { enabled: false, amount: 0 },
         outline: { enabled: false, thickness: 0.002, color: "#ffffff" },
         taa: { enabled: false },
+        clouds: { enabled: false },
         lensFlare: {
             enabled: false,
             bloomIntensity: 0.05,
@@ -79,6 +82,8 @@ export class ViewRenderManager implements IViewRenderManager {
     private buildingColorPassNode?: ReturnType<typeof pass>;
     private lensFlareNode?: LensFlareNode;
     private aerialNode?: AerialPerspectiveNode;
+    private m_cloudNode?: CloudRenderNode;
+    private pendingCloudConfig?: Record<string, unknown>;
     private taaNode?: TemporalAntialiasNode;
     private scene?: THREE.Scene;
     private camera?: THREE.Camera;
@@ -91,6 +96,13 @@ export class ViewRenderManager implements IViewRenderManager {
     translucentLayerEffect?: TranslucentLayerEffect;
     csmShadowNode?: CascadedShadowMapsNode;
     exposure = uniform(3);
+
+    get aerialPerspectiveNode(): AerialPerspectiveNode | undefined {
+        return this.aerialNode;
+    }
+    get cloudNode(): CloudRenderNode | undefined {
+        return this.m_cloudNode;
+    }
 
     constructor(private readonly renderer: Renderer) {}
 
@@ -134,6 +146,28 @@ export class ViewRenderManager implements IViewRenderManager {
                 shadowLengthNode
             );
             outputNode = this.aerialNode;
+        }
+
+        if (this.config.clouds?.enabled) {
+            if (!this.m_cloudNode) {
+                this.m_cloudNode = cloudRender(
+                    convertToTexture(outputNode),
+                    depthNode,
+                    this.renderer
+                );
+                const pending = this.pendingCloudConfig;
+                this.m_cloudNode.onReady = () => {
+                    this.m_cloudNode!.onReady = null;
+                    if (pending) {
+                        this.m_cloudNode!.setConfig(pending as any);
+                    }
+                    this.needsUpdate = true;
+                };
+            } else {
+                this.m_cloudNode._colorNode = convertToTexture(outputNode);
+                this.m_cloudNode._depthNode = depthNode ?? null;
+            }
+            outputNode = this.m_cloudNode;
         }
 
         if (bloomEnabled) {
@@ -291,6 +325,7 @@ export class ViewRenderManager implements IViewRenderManager {
         this.buildingColorPassNode = undefined;
         this.lensFlareNode = undefined;
         this.aerialNode = undefined;
+        this.m_cloudNode = undefined;
         this.taaNode = undefined;
     }
 

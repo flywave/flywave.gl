@@ -3,26 +3,26 @@
 import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import { GUI } from "dat.gui";
 
-import { type AnimationData, AnimationModule } from "../modules/AnimationModule";
-import { type CameraData, CameraModule } from "../modules/CameraModule";
-import { type DataSourceData, DataSourceModule } from "../modules/DataSourceModule";
-import { type EnhancedTileData, EnhancedTileModule } from "../modules/EnhancedTileModule";
-import { type EnvironmentData, EnvironmentModule } from "../modules/EnvironmentModule";
+import { AnimationModule, type AnimationData } from "../modules/AnimationModule";
+import { AtmosphereModule } from "../modules/AtmosphereModule";
+import { CameraModule, type CameraData } from "../modules/CameraModule";
+import { DataSourceModule, type DataSourceData } from "../modules/DataSourceModule";
+import { EnhancedTileModule, type EnhancedTileData } from "../modules/EnhancedTileModule";
+import { EnvironmentModule, type EnvironmentData } from "../modules/EnvironmentModule";
 import { FogGUIModule } from "../modules/FogGUIModule";
-import { type MemoryData, MemoryModule } from "../modules/MemoryModule";
-// Module imports
-import { type PerformanceData, PerformanceModule } from "../modules/PerformanceModule";
+import { MemoryModule, type MemoryData } from "../modules/MemoryModule";
+import { PerformanceModule, type PerformanceData } from "../modules/PerformanceModule";
 import { PostProcessingGUIModule } from "../modules/PostProcessingGUIModule";
-import { type RenderingData, RenderingModule } from "../modules/RenderingModule";
-import { type TextData, TextModule } from "../modules/TextModule";
-import { type TileData, TileModule } from "../modules/TileModule";
-import { type VisibleTileSetData, VisibleTileSetModule } from "../modules/VisibleTileSetModule";
+import { RenderingModule, type RenderingData } from "../modules/RenderingModule";
+import { TextModule, type TextData } from "../modules/TextModule";
+import { TileModule, type TileData } from "../modules/TileModule";
+import { ToneMappingModule } from "../modules/ToneMappingModule";
+import { VisibleTileSetModule, type VisibleTileSetData } from "../modules/VisibleTileSetModule";
 
 export class ModularMapViewMonitor {
     private readonly gui: GUI;
     private readonly mapView: MapView;
 
-    // Modules
     private readonly performanceModule: PerformanceModule;
     private readonly cameraModule: CameraModule;
     private readonly renderingModule: RenderingModule;
@@ -34,10 +34,11 @@ export class ModularMapViewMonitor {
     private readonly textModule: TextModule;
     private readonly animationModule: AnimationModule;
     private readonly environmentModule: EnvironmentModule;
+    private readonly atmosphereModule: AtmosphereModule;
+    private readonly toneMappingModule: ToneMappingModule;
     private readonly postProcessingGUIModule: PostProcessingGUIModule;
     private readonly fogGUIModule: FogGUIModule;
 
-    // Data objects
     private readonly performanceData: PerformanceData;
     private readonly cameraData: CameraData;
     private readonly renderingData: RenderingData;
@@ -50,7 +51,6 @@ export class ModularMapViewMonitor {
     private readonly animationData: AnimationData;
     private readonly environmentData: EnvironmentData;
 
-    // Folders
     private readonly performanceFolder: GUI;
     private readonly cameraFolder: GUI;
     private readonly renderingFolder: GUI;
@@ -62,6 +62,8 @@ export class ModularMapViewMonitor {
     private readonly textFolder: GUI;
     private readonly animationFolder: GUI;
     private readonly environmentFolder: GUI;
+    private readonly atmosphereFolder: GUI;
+    private readonly toneMappingFolder: GUI;
     private readonly postProcessingFolder: GUI;
     private readonly fogFolder: GUI;
 
@@ -70,11 +72,9 @@ export class ModularMapViewMonitor {
     constructor(mapView: MapView, parentGui?: GUI) {
         this.mapView = mapView;
 
-        // Create or use existing GUI
         this.gui = parentGui || new GUI({ name: "MapView Monitor", width: 300 });
-        this.gui.close(); // Start closed to avoid cluttering the view
+        this.gui.close();
 
-        // Initialize modules
         this.performanceModule = new PerformanceModule();
         this.cameraModule = new CameraModule(mapView);
         this.renderingModule = new RenderingModule(mapView);
@@ -86,10 +86,11 @@ export class ModularMapViewMonitor {
         this.textModule = new TextModule(mapView);
         this.animationModule = new AnimationModule(mapView);
         this.environmentModule = new EnvironmentModule(mapView);
+        this.atmosphereModule = new AtmosphereModule(mapView, this.gui);
+        this.toneMappingModule = new ToneMappingModule(mapView, this.gui);
         this.postProcessingGUIModule = new PostProcessingGUIModule(mapView, this.gui);
         this.fogGUIModule = new FogGUIModule(mapView, this.gui);
 
-        // Create data objects
         this.performanceData = this.performanceModule.createData();
         this.cameraData = this.cameraModule.createData();
         this.renderingData = this.renderingModule.createData();
@@ -102,7 +103,6 @@ export class ModularMapViewMonitor {
         this.animationData = this.animationModule.createData();
         this.environmentData = this.environmentModule.createData();
 
-        // Setup folders
         this.performanceFolder = this.performanceModule.setupFolder(this.gui);
         this.cameraFolder = this.cameraModule.setupFolder(this.gui);
         this.renderingFolder = this.renderingModule.setupFolder(this.gui);
@@ -114,10 +114,11 @@ export class ModularMapViewMonitor {
         this.textFolder = this.textModule.setupFolder(this.gui);
         this.animationFolder = this.animationModule.setupFolder(this.gui);
         this.environmentFolder = this.environmentModule.setupFolder(this.gui);
+        this.atmosphereFolder = this.atmosphereModule.getFolder();
+        this.toneMappingFolder = this.toneMappingModule.getFolder();
         this.postProcessingFolder = this.postProcessingGUIModule.getFolder();
         this.fogFolder = this.fogGUIModule.getFolder();
 
-        // Bind controls
         this.performanceModule.bindControls(this.performanceFolder, this.performanceData);
         this.cameraModule.bindControls(this.cameraFolder, this.cameraData);
         this.renderingModule.bindControls(this.renderingFolder, this.renderingData);
@@ -130,44 +131,37 @@ export class ModularMapViewMonitor {
         this.animationModule.bindControls(this.animationFolder, this.animationData);
         this.environmentModule.bindControls(this.environmentFolder, this.environmentData);
 
-        // Close all folders by default
-        this.performanceFolder.close();
-        this.cameraFolder.close();
-        this.renderingFolder.close();
-        this.memoryFolder.close();
-        this.tileFolder.close();
-        this.enhancedTileFolder.close();
-        this.visibleTileSetFolder.close();
-        this.dataSourceFolder.close();
-        this.textFolder.close();
-        this.animationFolder.close();
-        this.environmentFolder.close();
-        this.postProcessingFolder.close();
-        this.fogFolder.close();
+        for (const f of [
+            this.performanceFolder,
+            this.cameraFolder,
+            this.renderingFolder,
+            this.memoryFolder,
+            this.tileFolder,
+            this.enhancedTileFolder,
+            this.visibleTileSetFolder,
+            this.dataSourceFolder,
+            this.textFolder,
+            this.animationFolder,
+            this.environmentFolder,
+            this.atmosphereFolder,
+            this.toneMappingFolder,
+            this.postProcessingFolder,
+            this.fogFolder
+        ]) {
+            f.close();
+        }
 
-        // Bind the update handler to this instance
         this.updateHandler = this.update.bind(this);
-
-        // Start listening to MapView render events
         this.mapView.addEventListener(MapViewEventNames.AfterRender, this.updateHandler);
     }
 
-    /**
-     * Clean up resources and stop updating
-     */
     dispose() {
-        // Remove event listener
         this.mapView.removeEventListener(MapViewEventNames.AfterRender, this.updateHandler);
-
-        // Remove from parent GUI if we created it
         if (this.gui.parent === undefined) {
             this.gui.destroy();
         }
     }
 
-    /**
-     * Update all monitored values
-     */
     private update() {
         try {
             this.performanceModule.updateData(this.performanceData);
@@ -181,84 +175,69 @@ export class ModularMapViewMonitor {
             this.textModule.updateData(this.textData);
             this.animationModule.updateData(this.animationData);
             this.environmentModule.updateData(this.environmentData);
+            this.atmosphereModule.update();
+            this.toneMappingModule.update();
             this.postProcessingGUIModule.update();
             this.fogGUIModule.update();
-            // ElevationModule and FrustumCullingModule don't need continuous updates as they're interactive
         } catch (e) {
             console.warn("Error updating monitor:", e);
         }
     }
 
-    /**
-     * Get the GUI instance for custom modifications
-     */
     getGUI(): GUI {
         return this.gui;
     }
 
-    /**
-     * Open the monitor panel
-     */
     open() {
         this.gui.open();
     }
 
-    /**
-     * Close the monitor panel
-     */
     close() {
         this.gui.close();
     }
 
-    // Module-specific getters for customization
     getPerformanceFolder(): GUI {
         return this.performanceFolder;
     }
-
     getCameraFolder(): GUI {
         return this.cameraFolder;
     }
-
     getRenderingFolder(): GUI {
         return this.renderingFolder;
     }
-
     getMemoryFolder(): GUI {
         return this.memoryFolder;
     }
-
     getTileFolder(): GUI {
         return this.tileFolder;
     }
-
     getEnhancedTileFolder(): GUI {
         return this.enhancedTileFolder;
     }
-
     getVisibleTileSetFolder(): GUI {
         return this.visibleTileSetFolder;
     }
-
     getDataSourceFolder(): GUI {
         return this.dataSourceFolder;
     }
-
     getTextFolder(): GUI {
         return this.textFolder;
     }
-
     getAnimationFolder(): GUI {
         return this.animationFolder;
     }
-
     getEnvironmentFolder(): GUI {
         return this.environmentFolder;
     }
-
+    getAtmosphereFolder(): GUI {
+        return this.atmosphereFolder;
+    }
+    getToneMappingFolder(): GUI {
+        return this.toneMappingFolder;
+    }
     getPostProcessingFolder(): GUI {
         return this.postProcessingFolder;
     }
-
     getFogFolder(): GUI {
         return this.fogFolder;
     }

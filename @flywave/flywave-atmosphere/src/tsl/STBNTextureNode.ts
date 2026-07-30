@@ -1,7 +1,7 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Fn, frameId, nodeImmutable, screenCoordinate, vec3 } from "three/tsl";
+import { Fn, frameId, float, nodeImmutable, screenCoordinate, vec3 } from "three/tsl";
 import {
     type NodeBuilder,
     Data3DTexture,
@@ -11,7 +11,6 @@ import {
     Texture3DNode
 } from "three/webgpu";
 
-import { DEFAULT_STBN_URL } from "../constants";
 import { STBNLoader } from "../STBNLoader";
 import { hashString } from "./utils";
 
@@ -28,7 +27,7 @@ const emptyTexture3D = /*#__PURE__*/ (() => {
 })();
 
 export class STBNTextureNode extends Texture3DNode {
-    url = DEFAULT_STBN_URL;
+    url = "resources/clouds/stbn.bin";
 
     private dataPromise?: Promise<void>;
 
@@ -68,5 +67,13 @@ export const stbnTexture = /*#__PURE__*/ nodeImmutable(STBNTextureNode);
 export const stbn = /*#__PURE__*/ Fn(() => {
     return stbnTexture
         .sample(vec3(screenCoordinate.xy, frameId.mod(64)).div(vec3(128, 128, 64)))
-        .r.toConst("stbn");
+        .r.toVar();
+}).once()();
+
+// Deterministic per-pixel noise (Z=0 slice, no frame dependency).
+// Use for passes that need stable per-frame jitter (e.g. shadow PCF rotation).
+export const stbnFixed = /*#__PURE__*/ Fn(() => {
+    return stbnTexture
+        .sample(vec3(screenCoordinate.xy, float(0)).div(vec3(128, 128, 64)))
+        .r.toVar();
 }).once()();

@@ -94,9 +94,9 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                 }
             ],
             enableShadows: true,
-            celestia: {
+            atmosphere: {
                 sunTime: new Date().setHours(17, 0, 0, 0),
-                atmosphere: false,
+                enabled: false,
                 sunCastShadow: true
             },
             postEffects: {

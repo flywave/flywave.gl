@@ -208,8 +208,15 @@ export class AtmosphereContextBase {
 }
 
 export function getAtmosphereContextBase(host: NodeBuilder | Renderer): AtmosphereContextBase {
-    const hostContext = host instanceof NodeBuilder ? host.context : host.contextNode.value;
-    if (typeof hostContext.getAtmosphere !== "function") {
+    const hostContext = host instanceof NodeBuilder ? host.context : host.contextNode?.value;
+    if (typeof hostContext?.getAtmosphere !== "function") {
+        if (fallbackContextBase != null) return fallbackContextBase;
+        console.error(
+            "[getAtmosphereContextBase] no getAtmosphere. hostContext keys:",
+            hostContext ? Object.keys(hostContext) : "<null>",
+            "host:",
+            host
+        );
         throw new Error("getAtmosphere() was not found in the context.");
     }
     const atmosphereContext = hostContext.getAtmosphere();
@@ -217,4 +224,10 @@ export function getAtmosphereContextBase(host: NodeBuilder | Renderer): Atmosphe
         throw new Error("getAtmosphere() must return an instanceof AtmosphereContextBase.");
     }
     return atmosphereContext;
+}
+
+let fallbackContextBase: AtmosphereContextBase | undefined;
+
+export function registerAtmosphereContextBase(context: AtmosphereContextBase): void {
+    fallbackContextBase = context;
 }

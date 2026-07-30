@@ -38,31 +38,24 @@ export class PerformanceModule {
             data.currentFps = Math.round(stats.frames["render.fps"] * 100) / 100;
         }
 
-        // Calculate FPS stats from the last few frames
-        const frameTimes =
-            this.stats.frameEvents.messages.size > 0
-                ? this.stats.frameEvents.messages.asArray()
-                : [];
-        if (frameTimes.length > 0) {
-            const fpsValues = frameTimes
-                .map((_: any, i: number) => {
-                    const frame = this.stats.frameEvents.frameEntries.get("render.fps");
-                    return frame ? frame.asArray()[i] : 0;
-                })
-                .filter((val: number) => val > 0);
-
+        const fpsBuffer = this.stats.frameEvents.frameEntries.get("render.fps");
+        if (fpsBuffer) {
+            const fpsValues = fpsBuffer.asArray().filter((v: number) => v > 0);
             if (fpsValues.length > 0) {
-                data.avgFps =
-                    Math.round(
-                        (fpsValues.reduce((a: number, b: number) => a + b, 0) / fpsValues.length) *
-                            100
-                    ) / 100;
-                data.minFps = Math.round(Math.min(...fpsValues) * 100) / 100;
-                data.maxFps = Math.round(Math.max(...fpsValues) * 100) / 100;
+                let sum = 0;
+                let min = Infinity;
+                let max = 0;
+                for (const v of fpsValues) {
+                    sum += v;
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                }
+                data.avgFps = Math.round((sum / fpsValues.length) * 100) / 100;
+                data.minFps = Math.round(min * 100) / 100;
+                data.maxFps = Math.round(max * 100) / 100;
             }
         }
 
-        // Frame time
         if (stats && stats.frames["render.frameRenderTime"]) {
             data.frameTime = Math.round(stats.frames["render.frameRenderTime"] * 100) / 100;
         }

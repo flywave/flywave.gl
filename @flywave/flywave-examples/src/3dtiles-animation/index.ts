@@ -43,11 +43,13 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         heading: 35.1, // Initial heading angle
         canvas: canvas, // Specify render canvas
         theme: {
-            // extends: "resources/tilezen_base_globe.json", // Base theme configuration
-            celestia: {
-                atmosphere: true,
+            atmosphere: {
+                enabled: true,
                 sunCastShadow: true,
-                sunTime: new Date().setHours(17, 50)
+                clouds: {
+                    quality: "low"
+                },
+                sunTime: new Date().setHours(20, 50)
             }
         }
     });

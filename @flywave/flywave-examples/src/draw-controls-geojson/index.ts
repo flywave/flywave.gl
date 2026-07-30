@@ -47,8 +47,8 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         heading: 0,
         theme: {
             extends: "resources/tilezen_base_globe.json",
-            celestia: {
-                atmosphere: true
+            atmosphere: {
+                enabled: true
             }
         }
     });

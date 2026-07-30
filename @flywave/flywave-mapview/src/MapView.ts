@@ -42,11 +42,11 @@ import * as THREE from "three";
 import { WebGPURenderer, type Renderer } from "three/webgpu";
 import { type RendererCapabilities } from "@flywave/flywave-materials";
 
+import { type AtmosphereThemeConfig } from "@flywave/flywave-datasource-protocol";
 import { AnimatedExtrusionHandler } from "./AnimatedExtrusionHandler";
 import { BackgroundDataSource } from "./BackgroundDataSource";
 import { CameraMovementDetector } from "./CameraMovementDetector";
 import { CameraUtils } from "./CameraUtils";
-import { type AtmosphereSystemOptions } from "./composing/AtmosphereSystem";
 import { type ClipPlanesEvaluator, createDefaultClipPlanesEvaluator } from "./ClipPlanesEvaluator";
 import {
     type IMapAntialiasSettings,
@@ -631,7 +631,7 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
     /**
      * Options for the atmosphere system
      */
-    atmosphereOptions?: AtmosphereSystemOptions;
+    atmosphereOptions?: AtmosphereThemeConfig;
 }
 
 /**

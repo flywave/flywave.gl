@@ -535,7 +535,7 @@ export class ThemeLoader {
             ...ThemeLoader.mergeImageTextures(theme, baseTheme),
             definitions,
             styles,
-            celestia: { ...baseTheme.celestia, ...theme.celestia }
+            atmosphere: { ...baseTheme.atmosphere, ...theme.atmosphere }
         };
     }
 

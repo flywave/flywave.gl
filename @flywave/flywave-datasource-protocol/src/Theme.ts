@@ -2,6 +2,7 @@
 
 import { type Vector3Like } from "@flywave/flywave-geoutils/math/Vector3Like";
 
+import { type AerialPerspectiveConfig, type CloudConfig } from "./AtmosphereConfig";
 import { type JsonExpr, type JsonValue } from "./Expr";
 import { type InterpolatedPropertyDefinition } from "./InterpolatedPropertyDefs";
 import { ITranslucentLayerConfig, type PostEffects } from "./PostEffects";
@@ -75,14 +76,22 @@ export interface Theme {
 
     /**
      * Define the style of the sky presented in the map scene.
+     *
+     * @remarks
+     * Only effective when atmosphere is disabled or in planar projection mode.
+     * In spherical (globe) mode with atmosphere enabled, the physical sky node
+     * (atmospheric scattering + sun + moon + stars) takes over.
      */
     sky?: Sky;
 
     /**
-     * Define the celestial bodies available in the map scene.
+     * Atmosphere, clouds, and celestial body configuration.
+     *
+     * @remarks
+     * Only effective in spherical (globe) projection mode. In planar mode,
+     * the atmosphere system is inactive and {@link Theme.sky} is used instead.
      */
-
-    celestia?: Celestia;
+    atmosphere?: AtmosphereThemeConfig;
 
     /**
      * Define the fog used in the map scene.
@@ -204,12 +213,60 @@ export interface Theme {
     toneMappingMode?: ToneMappingMode;
 }
 
-export interface Celestia {
-    atmosphere?: boolean;
+/**
+ * Tone mapping modes supported by the renderer.
+ */
+export type ToneMappingMode = "linear" | "reinhard" | "aces" | "agx" | "agx-punchy" | "neutral";
 
+/**
+ * A type representing symbolic render orders.
+ */
+export interface StylePriority {
+    /**
+     * The group of this `StylePriority`.
+     */
+    group: string;
+
+    /**
+     * The category of this `StylePriority`.
+     */
+    category?: string;
+}
+
+/**
+ * Atmosphere, clouds, and celestial body configuration.
+ *
+ * @remarks
+ * Only effective in spherical (globe) projection mode.
+ */
+export interface AtmosphereThemeConfig {
+    /**
+     * Enable the physical atmosphere rendering pipeline (sky, aerial perspective, lighting).
+     * @default true
+     */
+    enabled?: boolean;
+
+    /**
+     * Unix timestamp (ms) used to compute sun and moon positions.
+     */
     sunTime?: number;
 
+    /**
+     * Whether the atmosphere sun light casts shadows.
+     * @default true
+     */
     sunCastShadow?: boolean;
+
+    /**
+     * Cloud rendering configuration. `true` enables clouds with default settings.
+     * Pass an object for fine-grained control.
+     */
+    clouds?: boolean | CloudConfig;
+
+    /**
+     * Aerial perspective (atmospheric scattering) configuration. `true` enables with defaults.
+     */
+    aerialPerspective?: boolean | AerialPerspectiveConfig;
 
     /**
      * Whether to show the ground intersection in atmosphere rendering.
@@ -246,26 +303,6 @@ export interface Celestia {
      * @default true
      */
     constrainCamera?: boolean;
-}
-
-/**
- * Tone mapping modes supported by the renderer.
- */
-export type ToneMappingMode = "linear" | "reinhard" | "aces" | "agx" | "agx-punchy" | "neutral";
-
-/**
- * A type representing symbolic render orders.
- */
-export interface StylePriority {
-    /**
-     * The group of this `StylePriority`.
-     */
-    group: string;
-
-    /**
-     * The category of this `StylePriority`.
-     */
-    category?: string;
 }
 
 /**

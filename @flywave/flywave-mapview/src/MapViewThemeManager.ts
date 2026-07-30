@@ -10,14 +10,13 @@ import {
     type Theme,
     PostEffects
 } from "@flywave/flywave-datasource-protocol";
-import { type UriResolver, LoggerManager } from "@flywave/flywave-utils";
+import { type UriResolver, LoggerManager, resolveReferenceUri } from "@flywave/flywave-utils";
 import isEqual from "lodash.isequal";
 import * as THREE from "three";
 
 import { MapViewImageCache } from "./image/MapViewImageCache";
 import { type MapView } from "./MapView";
 import { ThemeLoader } from "./ThemeLoader";
-import type { AtmosphereSystemOptions } from "./composing/AtmosphereSystem";
 
 const logger = LoggerManager.instance.create("MapViewThemeManager");
 
@@ -100,10 +99,10 @@ export class MapViewThemeManager {
         this.m_theme.lights = theme.lights;
         environment.updateLighting(theme.lights);
 
-        this.m_theme.celestia = theme.celestia;
-        environment.updateAtmosphere(theme.celestia);
+        this.m_theme.atmosphere = theme.atmosphere;
+        environment.updateAtmosphere(theme.atmosphere);
 
-        if (theme.enableShadows || theme.celestia?.sunCastShadow) {
+        if (theme.enableShadows || theme.atmosphere?.sunCastShadow) {
             this.m_mapView.shadowsEnabled = true;
         } else {
             this.m_mapView.shadowsEnabled = false;
@@ -125,15 +124,7 @@ export class MapViewThemeManager {
             this.m_mapView.renderer.toneMappingExposure = theme.toneMappingExposure;
         }
         if (theme.toneMappingMode !== undefined || theme.toneMappingExposure !== undefined) {
-            const celestiaOptions = {
-                ...(theme.toneMappingMode !== undefined && {
-                    toneMappingMode: theme.toneMappingMode
-                }),
-                ...(theme.toneMappingExposure !== undefined && {
-                    toneMappingExposure: theme.toneMappingExposure
-                })
-            } as AtmosphereSystemOptions;
-            environment.updateAtmosphere(celestiaOptions);
+            environment.updateToneMapping(theme.toneMappingExposure, theme.toneMappingMode);
         }
 
         // Images and environment map.

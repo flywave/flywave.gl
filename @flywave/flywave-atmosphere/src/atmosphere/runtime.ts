@@ -598,7 +598,7 @@ const getIndirectRadianceToPointLookup = /*#__PURE__*/ FnVar(
     }
 );
 
-const getIndirectRadianceToPoint = /*#__PURE__*/ FnVar(
+export const getIndirectRadianceToPoint = /*#__PURE__*/ FnVar(
     (
         context: AtmosphereContext,
         camera: Node<Position>,
@@ -775,7 +775,7 @@ const getIndirectIrradiance = /*#__PURE__*/ FnVar(
     }
 );
 
-const getSplitScalarIrradiance = /*#__PURE__*/ FnVar(
+export const getSplitScalarIrradiance = /*#__PURE__*/ FnVar(
     (
         context: AtmosphereContext,
         point: Node<Position>,
