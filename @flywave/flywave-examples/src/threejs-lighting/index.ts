@@ -80,9 +80,9 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             extends: "resources/tilezen_base_globe.json",
             lights: [],
             enableShadows: true,
-            celestia: {
+            atmosphere: {
                 sunTime: new Date().setHours(17, 0, 0, 0),
-                atmosphere: true
+                enabled: true
             }
         }
     });

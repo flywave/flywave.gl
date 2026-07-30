@@ -56,10 +56,10 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                     color: "#ffffff" // Light source color
                 }
             ],
-            celestia: {
+            atmosphere: {
                 sunTime: new Date().setHours(13), // Set sun time to 1 PM
                 sunCastShadow: true, // Enable shadows
-                atmosphere: true // Enable atmospheric effect
+                enabled: true // Enable atmospheric effect
             },
             postEffects: {
                 brightnessContrast: {

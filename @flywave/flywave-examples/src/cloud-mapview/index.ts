@@ -18,8 +18,8 @@ const mapView = new MapView({
     heading: 0,
     canvas: canvas,
     theme: {
-        celestia: {
-            atmosphere: true,
+        atmosphere: {
+            enabled: true,
             sunCastShadow: false,
             clouds: true,
             sunTime: (() => {

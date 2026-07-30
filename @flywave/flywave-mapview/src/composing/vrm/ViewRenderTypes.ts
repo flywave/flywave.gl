@@ -57,7 +57,6 @@ export interface IAerialPerspectiveConfig {
 export interface ICloudsConfig {
     enabled: boolean;
 }
-
 export type ToneMappingMode = "linear" | "reinhard" | "aces" | "agx" | "agx-punchy" | "neutral";
 
 export interface IViewRenderConfig {

@@ -4,10 +4,9 @@ import { type MapView } from "@flywave/flywave-mapview";
 import { type GUI } from "dat.gui";
 
 export interface TextData {
-    renderedTextElements: number;
-    totalTextElements: number;
-    fontCatalogs: number;
-    loadingTextElements: number;
+    textCanvases: number;
+    loading: boolean;
+    updatePending: boolean;
 }
 
 export class TextModule {
@@ -23,28 +22,24 @@ export class TextModule {
 
     createData(): TextData {
         return {
-            renderedTextElements: 0,
-            totalTextElements: 0,
-            fontCatalogs: 0,
-            loadingTextElements: 0
+            textCanvases: 0,
+            loading: false,
+            updatePending: false
         };
     }
 
     updateData(data: TextData): void {
         const textRenderer = this.mapView.textElementsRenderer;
         if (textRenderer) {
-            // These are approximations since the actual properties might be different
-            data.renderedTextElements = (textRenderer as any).renderedElementsCount || 0;
-            data.totalTextElements = (textRenderer as any).totalElementsCount || 0;
-            data.fontCatalogs = (textRenderer as any).fontCatalogsCount || 0;
-            data.loadingTextElements = (textRenderer as any).loadingElementsCount || 0;
+            data.textCanvases = (textRenderer as any).m_textCanvases?.size ?? 0;
+            data.loading = textRenderer.loading;
+            data.updatePending = textRenderer.isUpdatePending;
         }
     }
 
     bindControls(folder: GUI, data: TextData): void {
-        folder.add(data, "renderedTextElements").name("Rendered Elements").listen();
-        folder.add(data, "totalTextElements").name("Total Elements").listen();
-        folder.add(data, "fontCatalogs").name("Font Catalogs").listen();
-        folder.add(data, "loadingTextElements").name("Loading Elements").listen();
+        folder.add(data, "textCanvases").name("Text Canvases").listen();
+        folder.add(data, "loading").name("Loading").listen();
+        folder.add(data, "updatePending").name("Update Pending").listen();
     }
 }

@@ -38,8 +38,8 @@ const createBaseMap = (): MapView => {
         canvas,
         theme: {
             extends: "resources/tilezen_base_globe.json",
-            celestia: {
-                atmosphere: true // Enable atmospheric effects
+            atmosphere: {
+                enabled: true // Enable atmospheric effects
             }
         }
     });

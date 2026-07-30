@@ -77,6 +77,23 @@ export class AerialPerspectiveNode extends TempNode {
         );
     }
 
+    setConfig(
+        config: Partial<{
+            correctGeometricError: boolean;
+            lighting: boolean;
+            transmittance: boolean;
+            inscattering: boolean;
+            moonScattering: boolean;
+        }>
+    ): void {
+        if (config.correctGeometricError != null)
+            this.correctGeometricError = config.correctGeometricError;
+        if (config.lighting != null) this.lighting = config.lighting;
+        if (config.transmittance != null) this.transmittance = config.transmittance;
+        if (config.inscattering != null) this.inscattering = config.inscattering;
+        if (config.moonScattering != null) this.moonScattering = config.moonScattering;
+    }
+
     override setup(builder: NodeBuilder): unknown {
         const atmosphereContext = getAtmosphereContext(builder);
 

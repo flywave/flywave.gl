@@ -49,10 +49,11 @@ import { convertToTexture } from "../tsl/RenderTargetNode";
 import { getAtmosphereContext } from "./AtmosphereContext";
 
 import { CloudTextures } from "../clouds/CloudTextures";
-import { CloudLayers } from "../clouds/CloudLayer";
+import { CloudLayers, type CloudLayerLike } from "../clouds/CloudLayer";
 import { CloudUniforms } from "../clouds/CloudUniforms";
 import { createCloudRenderer } from "../clouds/cloudTsl";
 import { CascadedShadowMaps } from "../clouds/CascadedShadowMaps";
+import { type QualityPreset } from "../clouds/QualityPresets";
 import { stbn, stbnTexture } from "../tsl/STBNTextureNode";
 
 const SHADOW_CASCADE_COUNT = 3;
@@ -143,7 +144,6 @@ export class CloudRenderNode extends TempNode {
     _depthNode: Node | null = null;
     _renderer: Renderer | null = null;
 
-    cloudAssetsPath = "resources/clouds/";
     onReady: (() => void) | null = null;
 
     private cloudTextures: CloudTextures | null = null;
@@ -352,13 +352,144 @@ export class CloudRenderNode extends TempNode {
         return this.cloudInitialized ? this.cloudUniforms : null;
     }
 
+    setConfig(
+        config: Partial<{
+            quality: QualityPreset;
+            coverage: number;
+            layers: CloudLayerLike[];
+            scatteringCoefficient: number;
+            absorptionCoefficient: number;
+            scatterAnisotropy1: number;
+            scatterAnisotropy2: number;
+            scatterAnisotropyMix: number;
+            accuratePhaseFunction: boolean;
+            skyLightScale: number;
+            groundBounceScale: number;
+            powderScale: number;
+            powderExponent: number;
+            maxIterationCount: number;
+            minStepSize: number;
+            maxStepSize: number;
+            maxRayDistance: number;
+            perspectiveStepScale: number;
+            minDensity: number;
+            minExtinction: number;
+            minTransmittance: number;
+            maxIterationCountToSun: number;
+            maxIterationCountToGround: number;
+            minSecondaryStepSize: number;
+            secondaryStepScale: number;
+            shadowCascadeCount: number;
+            shadowMapSize: number;
+            maxShadowFilterRadius: number;
+            hazeEnabled: boolean;
+            hazeDensityScale: number;
+            hazeExponent: number;
+            hazeScatteringCoefficient: number;
+            hazeAbsorptionCoefficient: number;
+            localWeatherRepeat: number;
+            localWeatherVelocity: [number, number];
+            shapeRepeat: number;
+            shapeVelocity: [number, number, number];
+            shapeDetailRepeat: number;
+            shapeDetailVelocity: [number, number, number];
+            turbulenceRepeat: number;
+            turbulenceDisplacement: number;
+            sunAngularRadius: number;
+        }>
+    ): void {
+        if (!this.cloudRenderReady) return;
+        const u = this.cloudUniforms;
+
+        if (config.quality != null) u.applyQualityPreset(config.quality);
+        if (config.coverage != null) u.coverage.value = config.coverage;
+        if (config.scatteringCoefficient != null)
+            u.scatteringCoefficient.value = config.scatteringCoefficient;
+        if (config.absorptionCoefficient != null)
+            u.absorptionCoefficient.value = config.absorptionCoefficient;
+        if (config.scatterAnisotropy1 != null)
+            u.scatterAnisotropy1.value = config.scatterAnisotropy1;
+        if (config.scatterAnisotropy2 != null)
+            u.scatterAnisotropy2.value = config.scatterAnisotropy2;
+        if (config.scatterAnisotropyMix != null)
+            u.scatterAnisotropyMix.value = config.scatterAnisotropyMix;
+        if (config.accuratePhaseFunction != null)
+            u.accuratePhaseFunction.value = config.accuratePhaseFunction ? 1 : 0;
+        if (config.skyLightScale != null) u.skyLightScale.value = config.skyLightScale;
+        if (config.groundBounceScale != null) u.groundBounceScale.value = config.groundBounceScale;
+        if (config.powderScale != null) u.powderScale.value = config.powderScale;
+        if (config.powderExponent != null) u.powderExponent.value = config.powderExponent;
+
+        if (config.maxIterationCount != null) u.maxIterationCount.value = config.maxIterationCount;
+        if (config.minStepSize != null) u.minStepSize.value = config.minStepSize;
+        if (config.maxStepSize != null) u.maxStepSize.value = config.maxStepSize;
+        if (config.maxRayDistance != null) u.maxRayDistance.value = config.maxRayDistance;
+        if (config.perspectiveStepScale != null)
+            u.perspectiveStepScale.value = config.perspectiveStepScale;
+        if (config.minDensity != null) u.minDensity.value = config.minDensity;
+        if (config.minExtinction != null) u.minExtinction.value = config.minExtinction;
+        if (config.minTransmittance != null) u.minTransmittance.value = config.minTransmittance;
+
+        if (config.maxIterationCountToSun != null)
+            u.maxIterationCountToSun.value = config.maxIterationCountToSun;
+        if (config.maxIterationCountToGround != null)
+            u.maxIterationCountToGround.value = config.maxIterationCountToGround;
+        if (config.minSecondaryStepSize != null)
+            u.minSecondaryStepSize.value = config.minSecondaryStepSize;
+        if (config.secondaryStepScale != null)
+            u.secondaryStepScale.value = config.secondaryStepScale;
+
+        if (config.shadowCascadeCount != null)
+            u.shadowCascadeCount.value = config.shadowCascadeCount;
+        if (config.maxShadowFilterRadius != null)
+            u.maxShadowFilterRadius.value = config.maxShadowFilterRadius;
+
+        if (config.hazeEnabled != null) u.hazeEnabled.value = config.hazeEnabled ? 1 : 0;
+        if (config.hazeDensityScale != null) u.hazeDensityScale.value = config.hazeDensityScale;
+        if (config.hazeExponent != null) u.hazeExponent.value = config.hazeExponent;
+        if (config.hazeScatteringCoefficient != null)
+            u.hazeScatteringCoefficient.value = config.hazeScatteringCoefficient;
+        if (config.hazeAbsorptionCoefficient != null)
+            u.hazeAbsorptionCoefficient.value = config.hazeAbsorptionCoefficient;
+
+        if (config.localWeatherRepeat != null)
+            u.localWeatherRepeat.value.setScalar(config.localWeatherRepeat);
+        if (config.localWeatherVelocity != null)
+            u.localWeatherVelocity.value.fromArray(config.localWeatherVelocity);
+        if (config.shapeRepeat != null) u.shapeRepeat.value.setScalar(config.shapeRepeat);
+        if (config.shapeVelocity != null) u.shapeVelocity.value.fromArray(config.shapeVelocity);
+        if (config.shapeDetailRepeat != null)
+            u.shapeDetailRepeat.value.setScalar(config.shapeDetailRepeat);
+        if (config.shapeDetailVelocity != null)
+            u.shapeDetailVelocity.value.fromArray(config.shapeDetailVelocity);
+        if (config.turbulenceRepeat != null) u.turbulenceRepeat.value = config.turbulenceRepeat;
+        if (config.turbulenceDisplacement != null)
+            u.turbulenceDisplacement.value = config.turbulenceDisplacement;
+
+        if (config.sunAngularRadius != null) u.sunAngularRadius.value = config.sunAngularRadius;
+
+        if (config.layers != null) {
+            u.layers.set(config.layers);
+            u.updateLayers();
+        }
+    }
+
+    setLayer(index: number, config: CloudLayerLike): void {
+        this.cloudUniforms.layers[index].set(config);
+        this.cloudUniforms.updateLayers();
+    }
+
+    setQuality(preset: QualityPreset): void {
+        this.cloudUniforms.applyQualityPreset(preset);
+    }
+
     async ensureCloudInit(renderer: Renderer): Promise<void> {
         if (this.cloudInitialized) return;
         this.cloudInitialized = true;
 
         try {
-            stbnTexture.url = this.cloudAssetsPath + "stbn.bin";
-            this.cloudTextures = await CloudTextures.load(this.cloudAssetsPath);
+            stbnTexture.url = "resources/clouds/stbn.bin";
+            this.cloudTextures = await CloudTextures.load("resources/clouds/");
 
             this.cloudUniforms.localWeatherTexture = this.cloudTextures.localWeatherTexture;
             this.cloudUniforms.shapeTexture = this.cloudTextures.shapeTexture;

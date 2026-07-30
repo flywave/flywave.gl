@@ -82,7 +82,7 @@ export class ViewRenderManager implements IViewRenderManager {
     private buildingColorPassNode?: ReturnType<typeof pass>;
     private lensFlareNode?: LensFlareNode;
     private aerialNode?: AerialPerspectiveNode;
-    private cloudNode?: CloudRenderNode;
+    private m_cloudNode?: CloudRenderNode;
     private taaNode?: TemporalAntialiasNode;
     private scene?: THREE.Scene;
     private camera?: THREE.Camera;
@@ -95,6 +95,13 @@ export class ViewRenderManager implements IViewRenderManager {
     translucentLayerEffect?: TranslucentLayerEffect;
     csmShadowNode?: CascadedShadowMapsNode;
     exposure = uniform(3);
+
+    get aerialPerspectiveNode(): AerialPerspectiveNode | undefined {
+        return this.aerialNode;
+    }
+    get cloudNode(): CloudRenderNode | undefined {
+        return this.m_cloudNode;
+    }
 
     constructor(private readonly renderer: Renderer) {}
 
@@ -141,21 +148,21 @@ export class ViewRenderManager implements IViewRenderManager {
         }
 
         if (this.config.clouds?.enabled) {
-            if (!this.cloudNode) {
-                this.cloudNode = cloudRender(
+            if (!this.m_cloudNode) {
+                this.m_cloudNode = cloudRender(
                     convertToTexture(outputNode),
                     depthNode,
                     this.renderer
                 );
-                this.cloudNode.onReady = () => {
-                    this.cloudNode!.onReady = null;
+                this.m_cloudNode.onReady = () => {
+                    this.m_cloudNode!.onReady = null;
                     this.needsUpdate = true;
                 };
             } else {
-                this.cloudNode._colorNode = convertToTexture(outputNode);
-                this.cloudNode._depthNode = depthNode ?? null;
+                this.m_cloudNode._colorNode = convertToTexture(outputNode);
+                this.m_cloudNode._depthNode = depthNode ?? null;
             }
-            outputNode = this.cloudNode;
+            outputNode = this.m_cloudNode;
         }
 
         if (bloomEnabled) {
@@ -313,6 +320,7 @@ export class ViewRenderManager implements IViewRenderManager {
         this.buildingColorPassNode = undefined;
         this.lensFlareNode = undefined;
         this.aerialNode = undefined;
+        this.m_cloudNode = undefined;
         this.taaNode = undefined;
     }
 

@@ -18,6 +18,13 @@ import * as THREE from "three";
 import { texture } from "three/tsl";
 import { type Renderer } from "three/webgpu";
 import { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
+import {
+    type AtmosphereThemeConfig,
+    type CloudConfig,
+    type AerialPerspectiveConfig,
+    type ToneMappingMode
+} from "@flywave/flywave-datasource-protocol";
+import { ProjectionType } from "@flywave/flywave-geoutils";
 
 import { ViewRenderManager } from "./vrm/ViewRenderManager";
 import { TranslucentLayerEffect, TRANSLUCENT_LAYER_BIT } from "./vrm/TranslucentLayerEffect";
@@ -25,22 +32,6 @@ import { type MapView } from "../MapView";
 import { EarthCelestialDirections } from "./celestial/EarthCelestialDirections";
 import { JulianDate } from "./celestial/JulianDate";
 import { Simon1994PlanetaryPositions } from "./celestial/Simon1994PlanetaryPositions";
-
-export interface AtmosphereSystemOptions {
-    atmosphere?: boolean;
-    sunTime?: number;
-    sunCastShadow?: boolean;
-    clouds?: boolean;
-    cloudAssetsUrl?: string;
-    showGround?: boolean;
-    raymarchScattering?: boolean;
-    higherOrderScatteringTexture?: boolean;
-    accurateShadowScattering?: boolean;
-    correctAltitude?: boolean;
-    constrainCamera?: boolean;
-    toneMappingExposure?: number;
-    toneMappingMode?: import("@flywave/flywave-datasource-protocol").ToneMappingMode;
-}
 
 const FRUSTUM_CORNERS = [
     { x: -1, y: -1, z: -1 },
@@ -66,7 +57,6 @@ export class AtmosphereSystem {
     private m_atmosphereEnabled: boolean = true;
     private m_sunCastShadow: boolean = true;
     private m_cloudsEnabled: boolean = false;
-    private m_cloudAssetsUrl: string = "resources/clouds/";
     private m_showGround: boolean = true;
     private m_raymarchScattering: boolean = true;
     private m_higherOrderScatteringTexture: boolean = true;
@@ -74,7 +64,7 @@ export class AtmosphereSystem {
     private m_correctAltitude: boolean = true;
     private m_constrainCamera: boolean = true;
     private m_toneMappingExposure: number = 3;
-    private m_toneMappingMode?: import("@flywave/flywave-datasource-protocol").ToneMappingMode;
+    private m_toneMappingMode?: ToneMappingMode;
     private m_lastCsmMaxFar: number = 0;
     private readonly m_scratchMoonPos = new THREE.Vector3();
 
@@ -83,6 +73,10 @@ export class AtmosphereSystem {
     constructor(private readonly mapView: MapView) {
         this.m_celestialDirections = new EarthCelestialDirections();
         this.init();
+    }
+
+    private get isSpherical(): boolean {
+        return this.mapView.projection.type === ProjectionType.Spherical;
     }
 
     private init(): void {
@@ -145,12 +139,8 @@ export class AtmosphereSystem {
                 backgroundNode?: THREE.Scene["backgroundNode"];
                 environmentNode?: THREE.Scene["environmentNode"];
             };
-            scene.background = null;
-            scene.backgroundNode = this.m_skyNode as THREE.Scene["backgroundNode"];
-            scene.environmentNode = skyEnvironment() as unknown as THREE.Scene["environmentNode"];
             const vrm = new ViewRenderManager(renderer);
             vrm.csmShadowNode = this.m_csmShadowNode;
-            // Expose atmosphere context for cloud rendering
             (scene as any).__atmosphereContext = this.m_atmosphereContext;
             const canvas = renderer.domElement as HTMLCanvasElement;
             vrm.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
@@ -197,24 +187,30 @@ export class AtmosphereSystem {
         }
     }
 
-    updateOptions(options?: AtmosphereSystemOptions): void {
+    updateOptions(options?: AtmosphereThemeConfig): void {
         if (options?.sunTime !== undefined) {
             this.currentDate = new Date(options.sunTime);
         }
-        if (options?.atmosphere !== undefined) {
-            this.m_atmosphereEnabled = options.atmosphere;
+        if (options?.enabled !== undefined) {
+            this.m_atmosphereEnabled = options.enabled;
         }
         if (options?.sunCastShadow !== undefined) {
             this.m_sunCastShadow = options.sunCastShadow;
         }
         if (options?.clouds !== undefined) {
-            this.m_cloudsEnabled = options.clouds;
-        }
-        if (options?.cloudAssetsUrl !== undefined) {
-            this.m_cloudAssetsUrl = options.cloudAssetsUrl;
+            this.m_cloudsEnabled = typeof options.clouds === "boolean" ? options.clouds : true;
             const vrm = this.mapView?.mapRenderingManager?.viewRenderManager;
-            if (vrm?.cloudNode != null) {
-                vrm.cloudNode.cloudAssetsPath = options.cloudAssetsUrl;
+            if (vrm?.cloudNode != null && typeof options.clouds === "object") {
+                vrm.cloudNode.setConfig(options.clouds);
+            }
+        }
+        if (
+            options?.aerialPerspective !== undefined &&
+            typeof options.aerialPerspective === "object"
+        ) {
+            const vrm = this.mapView?.mapRenderingManager?.viewRenderManager;
+            if (vrm?.aerialNode != null) {
+                vrm.aerialNode.setConfig(options.aerialPerspective);
             }
         }
         const ctx = this.m_atmosphereContext;
@@ -244,18 +240,21 @@ export class AtmosphereSystem {
                 ctx.constrainCamera = this.m_constrainCamera;
             }
         }
-        if (options?.toneMappingExposure !== undefined) {
-            this.m_toneMappingExposure = options.toneMappingExposure;
+        this.applyAtmosphereEnabled();
+    }
+
+    updateToneMapping(exposure?: number, mode?: ToneMappingMode): void {
+        if (exposure !== undefined) {
+            this.m_toneMappingExposure = exposure;
             const vrm = this.mapView.mapRenderingManager.viewRenderManager;
             if (vrm != null) {
                 vrm.exposure.value = this.m_toneMappingExposure;
             }
         }
-        if (options?.toneMappingMode !== undefined) {
-            this.m_toneMappingMode = options.toneMappingMode;
+        if (mode !== undefined) {
+            this.m_toneMappingMode = mode;
             this.applyToneMappingMode();
         }
-        this.applyAtmosphereEnabled();
     }
 
     private applyToneMappingMode(): void {
@@ -371,18 +370,19 @@ export class AtmosphereSystem {
     }
 
     private applyAtmosphereEnabled(): void {
-        const enabled = this.m_atmosphereEnabled;
+        const effective = this.m_atmosphereEnabled && this.isSpherical;
 
         if (this.m_atmosphereLight != null) {
-            this.m_atmosphereLight.visible = enabled;
-            this.m_atmosphereLight.castShadow = enabled && this.m_sunCastShadow;
+            this.m_atmosphereLight.visible = effective;
+            this.m_atmosphereLight.castShadow = effective && this.m_sunCastShadow;
         }
 
         const scene = this.mapView.scene as THREE.Scene & {
             backgroundNode?: THREE.Scene["backgroundNode"];
             environmentNode?: THREE.Scene["environmentNode"];
         };
-        if (enabled) {
+        if (effective) {
+            scene.background = null;
             scene.backgroundNode = this.m_skyNode as THREE.Scene["backgroundNode"];
             scene.environmentNode = skyEnvironment() as unknown as THREE.Scene["environmentNode"];
         } else {
@@ -392,10 +392,10 @@ export class AtmosphereSystem {
 
         const vrm = this.mapView.mapRenderingManager.viewRenderManager;
         if (vrm != null) {
-            vrm.config.lensFlare.enabled = enabled;
-            vrm.config.aerialPerspective.enabled = enabled;
+            vrm.config.lensFlare.enabled = effective;
+            vrm.config.aerialPerspective.enabled = effective;
             if (vrm.config.clouds != null) {
-                vrm.config.clouds.enabled = enabled && this.m_cloudsEnabled;
+                vrm.config.clouds.enabled = effective && this.m_cloudsEnabled;
             }
             vrm.needsUpdate = true;
         }

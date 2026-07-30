@@ -61,8 +61,8 @@ const initializeMapView = (
         canvas: canvas,
         theme: {
             extends: "resources/tilezen_base_globe.json",
-            celestia: {
-                atmosphere: true
+            atmosphere: {
+                enabled: true
             },
             postEffects: {
                 brightnessContrast: {

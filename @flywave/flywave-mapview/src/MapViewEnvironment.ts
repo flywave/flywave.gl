@@ -1,12 +1,18 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type GradientSky, type Light, type Sky } from "@flywave/flywave-datasource-protocol";
+import {
+    type AtmosphereThemeConfig,
+    type GradientSky,
+    type Light,
+    type Sky,
+    type ToneMappingMode
+} from "@flywave/flywave-datasource-protocol";
 import { type Vector3Like, ProjectionType } from "@flywave/flywave-geoutils";
 import { getOptionValue, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
 import { BackgroundDataSource } from "./BackgroundDataSource";
-import { AtmosphereSystem, type AtmosphereSystemOptions } from "./composing/AtmosphereSystem";
+import { AtmosphereSystem } from "./composing/AtmosphereSystem";
 import { type MapView, type MapViewOptions } from "./MapView";
 import { MapViewFog } from "./MapViewFog";
 import { SkyBackground } from "./SkyBackground";
@@ -120,8 +126,12 @@ export class MapViewEnvironment {
         }
     }
 
-    updateAtmosphere(options?: AtmosphereSystemOptions) {
+    updateAtmosphere(options?: AtmosphereThemeConfig) {
         this.m_atmosphere?.updateOptions(options);
+    }
+
+    updateToneMapping(exposure?: number, mode?: ToneMappingMode) {
+        this.m_atmosphere?.updateToneMapping(exposure, mode);
     }
 
     createLight(lightDescription: Light) {

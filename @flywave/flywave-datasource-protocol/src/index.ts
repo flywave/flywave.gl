@@ -14,6 +14,7 @@
  * @packageDocumentation
  */
 
+export * from "./AtmosphereConfig";
 export * from "./ColorUtils";
 export * from "./Expr";
 export * from "./Techniques";
