@@ -122,6 +122,7 @@ export class MBTileDataEmitter {
                 props.outlineColor = p['fill-outline-color'];
                 props._translate = p['fill-translate'] ?? [0, 0];
                 props._translateAnchor = p['fill-translate-anchor'] ?? 'map';
+                if (p['fill-pattern']) props._patternName = p['fill-pattern'];
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'line':
@@ -131,6 +132,7 @@ export class MBTileDataEmitter {
                 props.lineWidth = p['line-width'] ?? 1;
                 props._translate = p['line-translate'] ?? [0, 0];
                 props._translateAnchor = p['line-translate-anchor'] ?? 'map';
+                if (p['line-pattern']) props._patternName = p['line-pattern'];
                 if (p['line-dasharray']) {
                     const arr = p['line-dasharray'] as number[];
                     if (arr.length >= 2) {
@@ -143,6 +145,9 @@ export class MBTileDataEmitter {
                             props.dashTotalLength = sum;
                         }
                     }
+                }
+                if (p['line-gradient']) {
+                    props._lineGradientStops = p['line-gradient'];
                 }
                 if (l.visibility === 'none') props.enabled = false;
                 break;
@@ -162,6 +167,8 @@ export class MBTileDataEmitter {
                     props.color = p['icon-color'] ?? '#000000';
                     props.opacity = p['icon-opacity'] ?? 1;
                     props.iconScale = l['icon-size'] ?? 1;
+                    props._iconTranslate = p['icon-translate'] ?? [0, 0];
+                    props._iconTranslateAnchor = p['icon-translate-anchor'] ?? 'map';
                     if (l.visibility === 'none') props.enabled = false;
                 } else if (l['text-field']) {
                     props.technique = 'text';
@@ -195,6 +202,9 @@ export class MBTileDataEmitter {
                     props._shaped = shaped;
                     props._textWidth = shaped.right - shaped.left;
                     props._textHeight = shaped.bottom - shaped.top;
+                    props._textOffset = l['text-offset'];
+                    props._textTranslate = p['text-translate'] ?? [0, 0];
+                    props._textTranslateAnchor = p['text-translate-anchor'] ?? 'map';
 
                     if (l.visibility === 'none') props.enabled = false;
                 }
@@ -205,22 +215,37 @@ export class MBTileDataEmitter {
                 props.opacity = p['fill-extrusion-opacity'] ?? 1;
                 props.height = p['fill-extrusion-height'] ?? 0;
                 props.floorHeight = p['fill-extrusion-base'] ?? 0;
+                props._translate = p['fill-extrusion-translate'] ?? [0, 0];
+                props._translateAnchor = p['fill-extrusion-translate-anchor'] ?? 'map';
+                if (p['fill-extrusion-pattern']) props._patternName = p['fill-extrusion-pattern'];
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'heatmap':
-                props.technique = 'heatmap';
-                props.color = p['heatmap-color'] ?? [[0, 'rgba(0,0,255,0)'], [0.5, 'blue'], [1, 'red']];
+                // Native pipeline has no 'heatmap' technique guard, so emit as
+                // 'circles' (which produces point geometry) and flag it so the
+                // MaterialPatchManager can apply a heatmap-style shader.
+                props.technique = 'circles';
+                props._isHeatmap = true;
+                props.color = '#0000ff';
                 props.opacity = p['heatmap-opacity'] ?? 1;
                 props.size = p['heatmap-radius'] ?? 30;
-                props.intensity = p['heatmap-intensity'] ?? 1;
-                props.weight = p['heatmap-weight'] ?? 1;
+                props._heatmapIntensity = p['heatmap-intensity'] ?? 1;
+                props._heatmapWeight = p['heatmap-weight'] ?? 1;
+                props._heatmapColorStops = p['heatmap-color'] ?? [[0, 'rgba(0,0,255,0)'], [0.5, 'blue'], [1, 'red']];
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'hillshade':
-                props.technique = 'hillshade';
+                // Native pipeline has no 'hillshade' technique guard, so emit as
+                // 'fill' (textured polygon) and flag it. The per-tile DEM url is
+                // carried via feature properties (_hillshadeDemUrl) for the patcher.
+                props.technique = 'fill';
+                props._isHillshade = true;
+                props._hillshadeDemUrl = properties?._hillshadeDemUrl ?? '';
                 props.color = p['hillshade-shadow-color'] ?? '#000000';
                 props.opacity = 1;
-                props.intensity = p['hillshade-exaggeration'] ?? 0.5;
+                props._hillshadeIntensity = p['hillshade-exaggeration'] ?? 0.5;
+                props._hillshadeAccent = p['hillshade-accent-color'] ?? '#ffffff';
+                props._hillshadeHighlight = p['hillshade-highlight-color'] ?? '#ffffff';
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'raster':
@@ -290,7 +315,7 @@ export class MBTileDataEmitter {
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
-            this.m_currentZOffset = layer.layout['line-z-offset'] ?? 0;
+            this.m_currentZOffset = (layer.paint['fill-z-offset'] as number) ?? (layer.layout['line-z-offset'] as number) ?? 0;
             const key = `${layer.id}:fill`;
             const geo = this.getOrCreateGeometry(key);
             const featureStart = geo.indices.length;
@@ -366,7 +391,7 @@ export class MBTileDataEmitter {
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
-            this.m_currentZOffset = layer.layout['line-z-offset'] ?? 0;
+            this.m_currentZOffset = (layer.paint['line-z-offset'] as number) ?? (layer.layout['line-z-offset'] as number) ?? 0;
 
             for (const lineGeo of geometry) {
                 // Convert tile-local to world

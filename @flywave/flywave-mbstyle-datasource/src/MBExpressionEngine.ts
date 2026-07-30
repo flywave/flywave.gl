@@ -289,13 +289,6 @@ export class MBExpressionEngine {
                 return result;
             }
 
-            case 'slice': {
-                const str = String(this.exec(args[0], ctx) ?? '');
-                const start = this.exec(args[1], ctx) as number;
-                const end = args[2] !== undefined ? this.exec(args[2], ctx) as number : undefined;
-                return str.slice(start, end);
-            }
-
             case 'length': {
                 const val = this.exec(args[0], ctx);
                 if (typeof val === 'string') return val.length;
@@ -495,12 +488,6 @@ export class MBExpressionEngine {
                 if (Array.isArray(v)) return v.slice(start, end);
                 if (typeof v === 'string') return v.slice(start, end);
                 return v;
-            }
-
-            case 'length': {
-                const v = this.exec(args[0], ctx);
-                if (Array.isArray(v) || typeof v === 'string') return v.length;
-                return 0;
             }
 
             case 'number':

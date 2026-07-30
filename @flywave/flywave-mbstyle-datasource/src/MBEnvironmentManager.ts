@@ -3,6 +3,7 @@ import { MapView } from '@flywave/flywave-mapview';
 import { EarthConstants } from '@flywave/flywave-geoutils';
 import { FogSpec, SkySpec, Light3DProperties } from './MBStyleSpec';
 import { MapTerrainMaterial, createTerrainGrid } from './materials/MapTerrainMaterial';
+import { SpriteAtlas } from './materials/MapIconMaterial';
 
 export class MBEnvironmentManager {
     private m_ambientLight: THREE.AmbientLight | null = null;
@@ -284,7 +285,7 @@ export class MBEnvironmentManager {
 
     async applyBackgroundPattern(
         patternName: string | undefined,
-        spriteAtlasTexture: THREE.Texture | null,
+        spriteAtlas: SpriteAtlas | null,
         bgColor: string,
         bgOpacity: number,
     ): Promise<void> {
@@ -297,12 +298,29 @@ export class MBEnvironmentManager {
             this.m_backgroundQuad = null;
         }
 
-        if (!patternName || !spriteAtlasTexture) return;
+        if (!patternName || !spriteAtlas) return;
 
-        const tex = spriteAtlasTexture.clone();
+        // Resolve the specific pattern sub-rectangle inside the sprite atlas.
+        // Fall back to the full atlas when the named pattern is not present.
+        const uv = spriteAtlas.getIconUv(patternName);
+        const tex = spriteAtlas.texture.clone();
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(8, 8);
+        if (uv) {
+            const u0 = uv.uvMin[0];
+            const v0 = uv.uvMin[1];
+            const w = Math.max(uv.uvMax[0] - u0, 1e-6);
+            const h = Math.max(uv.uvMax[1] - v0, 1e-6);
+            tex.offset.set(u0, v0);
+            tex.repeat.set(w, h);
+        } else {
+            tex.offset.set(0, 0);
+            tex.repeat.set(1, 1);
+        }
+        // Tile the pattern sub-rectangle across the screen.
+        const baseRepeat = 8;
+        tex.repeat.x *= baseRepeat;
+        tex.repeat.y *= baseRepeat;
         tex.needsUpdate = true;
 
         const material = new THREE.MeshBasicMaterial({

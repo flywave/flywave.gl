@@ -44,6 +44,10 @@ export class MBStyleSymbolPlacement {
         // Apply symbol-z-order: sort by viewport-y or source order
         this.applyZOrder(symbols);
 
+        // Apply icon-translate / text-offset / text-translate (screen-space offset
+        // converted back to world via the camera, honoring translate-anchor).
+        this.applyOffsets(symbols, bearing, camera, w, h);
+
         // Apply icon-rotation-alignment
         this.applyRotationAlignment(symbols, bearing);
 
@@ -233,7 +237,9 @@ export class MBStyleSymbolPlacement {
                                 textBox,
                                 allowOverlap: layout['icon-allow-overlap'] === true || layout['text-allow-overlap'] === true,
                                 ignorePlacement: layout['icon-ignore-placement'] === true || layout['text-ignore-placement'] === true,
-                                priority: tech._renderOrder ?? 0,
+                                priority: typeof layout['symbol-sort-key'] === 'number'
+                            ? -(layout['symbol-sort-key'] as number)
+                            : (tech._renderOrder ?? 0),
                                 opacity: 1,
                                 object: obj,
                                 variableAnchors: layout['text-variable-anchor'] as string[] | undefined,
@@ -274,7 +280,9 @@ export class MBStyleSymbolPlacement {
                         textBox,
                         allowOverlap: layout['icon-allow-overlap'] === true || layout['text-allow-overlap'] === true,
                         ignorePlacement: layout['icon-ignore-placement'] === true || layout['text-ignore-placement'] === true,
-                        priority: tech._renderOrder ?? 0,
+                        priority: typeof layout['symbol-sort-key'] === 'number'
+                            ? -(layout['symbol-sort-key'] as number)
+                            : (tech._renderOrder ?? 0),
                         opacity: 1,
                         object: obj,
                         variableAnchors: layout['text-variable-anchor'] as string[] | undefined,
@@ -302,6 +310,96 @@ export class MBStyleSymbolPlacement {
                 case 'auto':
                 default:
                     break;
+            }
+        }
+    }
+
+    /**
+     * Apply icon-translate, text-offset, and text-translate.
+     *
+     * - text-offset is in ems → converted to pixels via text-size.
+     * - icon-translate / text-translate are in pixels.
+     * - translate-anchor 'map' rotates the offset with bearing; 'viewport' keeps
+     *   it screen-aligned.
+     *
+     * Offsets are applied in screen space and converted back to world using the
+     * camera (unproject at the object's depth), so the shift is correct regardless
+     * of zoom/pitch.
+     */
+    private applyOffsets(
+        symbols: SymbolInstance[],
+        bearing: number,
+        camera: THREE.Camera,
+        canvasW: number,
+        canvasH: number,
+    ): void {
+        const bearingRad = -bearing * Math.PI / 180;
+        const cosB = Math.cos(bearingRad);
+        const sinB = Math.sin(bearingRad);
+        const worldPos = new THREE.Vector3();
+        const screen = new THREE.Vector3();
+        const unproj = new THREE.Vector3();
+
+        for (const sym of symbols) {
+            const obj = sym.object as THREE.Object3D;
+            if (!obj) continue;
+            const tech = obj.userData?.technique;
+            if (!tech) continue;
+
+            let dxPx = 0;
+            let dyPx = 0;
+            let anchor: string = 'map';
+
+            if (tech.name === 'text') {
+                const layout = tech._layout ?? {};
+                const textOffset = tech._textOffset ?? layout['text-offset'];
+                const textSize = layout['text-size'] ?? tech.size ?? 16;
+                if (Array.isArray(textOffset)) {
+                    dxPx += Number(textOffset[0] ?? 0) * textSize;
+                    dyPx += Number(textOffset[1] ?? 0) * textSize;
+                }
+                const translate = tech._textTranslate ?? tech._paint?.['text-translate'];
+                if (Array.isArray(translate)) {
+                    dxPx += Number(translate[0] ?? 0);
+                    dyPx += Number(translate[1] ?? 0);
+                    anchor = tech._textTranslateAnchor ?? tech._paint?.['text-translate-anchor'] ?? 'map';
+                }
+            } else if (tech.name === 'labeled-icon') {
+                const translate = tech._iconTranslate ?? tech._paint?.['icon-translate'];
+                if (Array.isArray(translate)) {
+                    dxPx += Number(translate[0] ?? 0);
+                    dyPx += Number(translate[1] ?? 0);
+                    anchor = tech._iconTranslateAnchor ?? tech._paint?.['icon-translate-anchor'] ?? 'map';
+                }
+            }
+
+            if (dxPx === 0 && dyPx === 0) continue;
+
+            // 'map' anchor: rotate the pixel offset with bearing so it stays map-aligned.
+            let ox = dxPx;
+            let oy = dyPx;
+            if (anchor === 'map') {
+                const rx = ox * cosB - oy * sinB;
+                const ry = ox * sinB + oy * cosB;
+                ox = rx;
+                oy = ry;
+            }
+
+            obj.getWorldPosition(worldPos);
+            screen.copy(worldPos).project(camera);
+            // Convert pixel offset to NDC.
+            const ndx = (ox / canvasW) * 2;
+            const ndy = (oy / canvasH) * 2;
+            unproj.set(screen.x + ndx, screen.y + ndy, screen.z).unproject(camera);
+            // Apply the world delta to the object (preserve parent transform by
+            // converting delta into the object's local space).
+            const parent = obj.parent;
+            if (parent) {
+                const delta = unproj.sub(worldPos);
+                parent.worldToLocal(delta.add(obj.getWorldPosition(new THREE.Vector3())));
+                obj.position.copy(delta);
+            } else {
+                obj.position.copy(obj.position).add(unproj.sub(worldPos));
             }
         }
     }

@@ -104,8 +104,71 @@ class RasterTileDataProvider extends DataProvider {
 }
 
 /**
- * DataProvider that serves inline GeoJSON data for all tile requests.
+ * DataProvider for hillshade layers. Generates a tile-covering polygon per tile
+ * carrying the resolved raster-DEM tile url, so the emitter can emit a fill
+ * technique flagged as hillshade and the MaterialPatchManager can load the DEM
+ * and apply the hillshade shader.
  */
+class HillshadeTileDataProvider extends DataProvider {
+    private m_demUrlTemplate: string;
+
+    constructor(demUrlTemplate: string) {
+        super();
+        this.m_demUrlTemplate = demUrlTemplate;
+    }
+
+    ready(): boolean { return true; }
+
+    async getTile(tileKey: TileKey): Promise<ArrayBufferLike | {}> {
+        const z = tileKey.level;
+        const x = tileKey.column;
+        const y = tileKey.row;
+
+        const n = Math.pow(2, z);
+        const lngW = (x / n) * 360 - 180;
+        const lngE = ((x + 1) / n) * 360 - 180;
+        const latN = this.tile2lat(y, z);
+        const latS = this.tile2lat(y + 1, z);
+
+        const demUrl = this.m_demUrlTemplate
+            .replace('{z}', String(z))
+            .replace('{x}', String(x))
+            .replace('{y}', String(y));
+
+        const geojson = {
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [[
+                        [lngW, latN],
+                        [lngE, latN],
+                        [lngE, latS],
+                        [lngW, latS],
+                        [lngW, latN],
+                    ]],
+                },
+                properties: {
+                    _hillshadeDemUrl: demUrl,
+                    _tileCol: x,
+                    _tileRow: y,
+                    _tileZoom: z,
+                },
+            }],
+        };
+
+        return JSON.stringify(geojson);
+    }
+
+    private tile2lat(y: number, z: number): number {
+        const n = Math.PI - (2 * Math.PI * y) / Math.pow(2, z);
+        return (180 / Math.PI) * Math.atan(Math.sinh(n));
+    }
+
+    protected async connect(): Promise<void> {}
+    protected dispose(): void {}
+}
 class GeoJSONDataProvider extends DataProvider {
     private m_geoJsonData: string;
     private m_cluster: boolean = false;
@@ -423,6 +486,30 @@ export class MBStyleDataSource extends TileDataSource {
             }
         }
 
+        // Hillshade: if the style has a hillshade layer referencing a raster-dem
+        // source, set up a tile provider that emits tile-covering polygons carrying
+        // the per-tile DEM url. The emitter turns these into fill+_isHillshade
+        // techniques; the MaterialPatchManager loads the DEM and applies the shader.
+        if (!found) {
+            const hasHillshade = (style.layers ?? []).some(
+                (l: any) => l.type === 'hillshade' && (l.layout?.visibility ?? 'visible') === 'visible',
+            );
+            if (hasHillshade && this.m_demTileUrl) {
+                this.m_delegatingProvider.delegate = new HillshadeTileDataProvider(this.m_demTileUrl);
+                const hillshadeLayer = (style.layers ?? []).find(
+                    (l: any) => l.type === 'hillshade',
+                ) as any;
+                const hillshadeSourceId: string = hillshadeLayer?.source ?? 'hillshade-dem';
+                this.m_currentSourceId = hillshadeSourceId;
+                await this.decoder.configure(undefined, {
+                    mbStyle: style,
+                    currentSourceId: hillshadeSourceId,
+                    demTileUrl: this.m_demTileUrl,
+                } as any);
+                found = true;
+            }
+        }
+
         await this.decoder.configure(undefined, {
             mbStyle: style,
             currentSourceId: this.m_currentSourceId,
@@ -450,7 +537,7 @@ export class MBStyleDataSource extends TileDataSource {
                 if (pattern && this.m_spriteAtlas) {
                     await this.m_environment.applyBackgroundPattern(
                         pattern,
-                        this.m_spriteAtlas.texture,
+                        this.m_spriteAtlas,
                         bgPaint['background-color'] ?? '#000000',
                         bgPaint['background-opacity'] ?? 1,
                     );
