@@ -1203,7 +1203,8 @@ const cloudRendererResultStruct = /*#__PURE__*/ struct(
     {
         color: "vec4",
         frontDepth: "float",
-        velocity: "vec2"
+        velocity: "vec2",
+        shadowLength: "float"
     },
     "CloudRendererResult"
 );
@@ -1373,7 +1374,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                     const result = getIndirectLuminanceToPoint(
                         cameraPosition.mul(u.worldToUnit),
                         frontPosition.mul(u.worldToUnit),
-                        shadowLen.mul(u.worldToUnit),
+                        vec2(shadowLen.mul(u.worldToUnit), float(0)),
                         u.sunDirection
                     ).toConst();
                     const inscatter = result.get("luminance");
@@ -1402,22 +1403,22 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
             // Non-cloud pixels: compute shadowLength + velocity
             If(hitClouds.not(), () => {
-                // Compute shadowLength for haze (matches reference)
-                // TEMP DISABLED: BSM may produce incorrect shadowLength
-                // If(u.maxShadowLengthIterationCount.greaterThan(0), () => {
-                //     const shadowRayFar = min(
-                //         sceneDistance.greaterThan(0).select(sceneDistance, rayFar),
-                //         u.maxShadowLengthRayDistance
-                //     );
-                //     resultShadowLen.assign(
-                //         marchShadowLength(
-                //             cameraPosition,
-                //             rayDirection,
-                //             vec2(float(0), shadowRayFar),
-                //             jitter
-                //         )
-                //     );
-                // });
+                // Compute shadowLength for haze (matches reference clouds.frag #ifdef SHADOW_LENGTH
+                // non-cloud path: march from camera to scene distance, clamped at maxShadowLengthRayDistance)
+                If(u.maxShadowLengthIterationCount.greaterThan(0), () => {
+                    const shadowRayFar = min(
+                        sceneDistance.greaterThan(0).select(sceneDistance, rayFar),
+                        u.maxShadowLengthRayDistance
+                    );
+                    resultShadowLen.assign(
+                        marchShadowLength(
+                            cameraPosition.add(rayDirection.mul(float(1))),
+                            rayDirection,
+                            vec2(float(1), shadowRayFar),
+                            jitter
+                        )
+                    );
+                });
 
                 const ncDepth = sceneDistance.greaterThan(0).select(sceneDistance, rayFar);
                 const ncPosition = cameraPosition.add(ncDepth.mul(rayDirection));
@@ -1452,7 +1453,12 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
         });
 
-        return cloudRendererResultStruct(resultColor, resultFrontDepth, resultVelocity);
+        return cloudRendererResultStruct(
+            resultColor,
+            resultFrontDepth,
+            resultVelocity,
+            resultShadowLen
+        );
     });
 
     return { render, shadowMarch: shadowMarchFactory };

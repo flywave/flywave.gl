@@ -196,13 +196,17 @@ export class CloudRenderNode extends TempNode {
     private lowResRT: RenderTarget;
     private historyRT: RenderTarget;
     private resolveRT: RenderTarget;
+    private shadowLengthResolveRT: RenderTarget;
+    private shadowLengthHistoryRT: RenderTarget;
     private shadowRTs: RenderTarget[] = [];
     private shadowHistoryRTs: RenderTarget[] = [];
     private shadowResolvedRTs: RenderTarget[] = [];
 
     private readonly lowResMaterial = new NodeMaterial();
     private readonly resolveMaterial = new NodeMaterial();
+    private readonly shadowLengthResolveMaterial = new NodeMaterial();
     private readonly blitMaterial = new NodeMaterial();
+    private readonly shadowLengthBlitMaterial = new NodeMaterial();
     private readonly shadowMaterials: NodeMaterial[] = [];
     private readonly shadowResolveMaterials: NodeMaterial[] = [];
     private readonly shadowBlitMaterials: NodeMaterial[] = [];
@@ -217,8 +221,11 @@ export class CloudRenderNode extends TempNode {
 
     private readonly lowResNode: TextureNode;
     private readonly velocityLowResNode: TextureNode;
+    private readonly shadowLengthLowResNode: TextureNode;
     private readonly historyNode: TextureNode;
     private readonly resolveNodeTex: TextureNode;
+    private readonly shadowLengthResolveNodeTex: TextureNode;
+    private readonly shadowLengthHistoryNode: TextureNode;
     private readonly shadowNodes: TextureNode[] = [];
     private readonly shadowRawNodes: TextureNode[] = [];
     private readonly shadowHistoryNodes: TextureNode[] = [];
@@ -246,6 +253,10 @@ export class CloudRenderNode extends TempNode {
         return this.cloudUniforms.shadowIntervals.map(u => u.value as Vector2);
     }
 
+    get shadowLengthTexture(): Texture {
+        return this.shadowLengthResolveRT.texture;
+    }
+
     constructor(colorNode: Node<"vec4">, depthNode?: Node | null, renderer?: Renderer) {
         super("vec4");
         this.updateBeforeType = NodeUpdateType.FRAME;
@@ -260,7 +271,7 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT = new RenderTarget(1, 1, {
             depthBuffer: false,
             type: HalfFloatType,
-            count: 2
+            count: 3
         });
         this.lowResRT.textures[0].name = "color";
         this.lowResRT.textures[0].minFilter = LinearFilter;
@@ -268,6 +279,9 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.textures[1].name = "velocity";
         this.lowResRT.textures[1].minFilter = LinearFilter;
         this.lowResRT.textures[1].magFilter = LinearFilter;
+        this.lowResRT.textures[2].name = "shadowLength";
+        this.lowResRT.textures[2].minFilter = LinearFilter;
+        this.lowResRT.textures[2].magFilter = LinearFilter;
 
         this.historyRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
         this.historyRT.texture.name = "Clouds [History]";
@@ -278,6 +292,22 @@ export class CloudRenderNode extends TempNode {
         this.resolveRT.texture.name = "Clouds [Resolve]";
         this.resolveRT.texture.minFilter = LinearFilter;
         this.resolveRT.texture.magFilter = LinearFilter;
+
+        this.shadowLengthResolveRT = new RenderTarget(1, 1, {
+            depthBuffer: false,
+            type: HalfFloatType
+        });
+        this.shadowLengthResolveRT.texture.name = "Clouds [ShadowLength Resolve]";
+        this.shadowLengthResolveRT.texture.minFilter = LinearFilter;
+        this.shadowLengthResolveRT.texture.magFilter = LinearFilter;
+
+        this.shadowLengthHistoryRT = new RenderTarget(1, 1, {
+            depthBuffer: false,
+            type: HalfFloatType
+        });
+        this.shadowLengthHistoryRT.texture.name = "Clouds [ShadowLength History]";
+        this.shadowLengthHistoryRT.texture.minFilter = LinearFilter;
+        this.shadowLengthHistoryRT.texture.magFilter = LinearFilter;
 
         for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
             const sz = SHADOW_MAP_SIZE;
@@ -328,8 +358,11 @@ export class CloudRenderNode extends TempNode {
 
         this.lowResNode = outputTexture(this, this.lowResRT.textures[0]);
         this.velocityLowResNode = outputTexture(this, this.lowResRT.textures[1]);
+        this.shadowLengthLowResNode = outputTexture(this, this.lowResRT.textures[2]);
         this.historyNode = texture(this.historyRT.texture);
         this.resolveNodeTex = texture(this.resolveRT.texture);
+        this.shadowLengthResolveNodeTex = texture(this.shadowLengthResolveRT.texture);
+        this.shadowLengthHistoryNode = texture(this.shadowLengthHistoryRT.texture);
 
         if (renderer != null) {
             this.ensureCloudInit(renderer).catch(() => {});
@@ -661,6 +694,8 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.setSize(lowWidth, lowHeight);
         this.historyRT.setSize(fullWidth, fullHeight);
         this.resolveRT.setSize(fullWidth, fullHeight);
+        this.shadowLengthResolveRT.setSize(fullWidth, fullHeight);
+        this.shadowLengthHistoryRT.setSize(fullWidth, fullHeight);
         this.resolveTexelSize.value.set(1 / fullWidth, 1 / fullHeight);
         this.lowResTexelSize.value.set(1 / lowWidth, 1 / lowHeight);
         this.historyTexSize.value.set(fullWidth, fullHeight);
@@ -873,6 +908,10 @@ export class CloudRenderNode extends TempNode {
             renderer.setRenderTarget(this.historyRT);
             this.mesh.material = this.blitMaterial;
             this.mesh.render(renderer);
+
+            renderer.setRenderTarget(this.shadowLengthHistoryRT);
+            this.mesh.material = this.shadowLengthBlitMaterial;
+            this.mesh.render(renderer);
         }
 
         renderer.setRenderTarget(this.lowResRT);
@@ -890,6 +929,10 @@ export class CloudRenderNode extends TempNode {
 
         renderer.setRenderTarget(this.resolveRT);
         this.mesh.material = this.resolveMaterial;
+        this.mesh.render(renderer);
+
+        renderer.setRenderTarget(this.shadowLengthResolveRT);
+        this.mesh.material = this.shadowLengthResolveMaterial;
         this.mesh.render(renderer);
 
         restoreRendererState(renderer, this._rendererState);
@@ -998,7 +1041,8 @@ export class CloudRenderNode extends TempNode {
             const finalDepth = useCloudVelocity.select(cloudFrontDepth, depthViewZ);
             this.lowResMaterial.fragmentNode = mrt({
                 color: clouds.get("color"),
-                velocity: vec4(finalDepth, finalVelocity, 0)
+                velocity: vec4(finalDepth, finalVelocity, 0),
+                shadowLength: vec4(clouds.get("shadowLength").mul(u.worldToUnit), 0, 0, 0)
             });
             this.lowResMaterial.needsUpdate = true;
         }
@@ -1082,9 +1126,87 @@ export class CloudRenderNode extends TempNode {
         }
 
         {
+            this.shadowLengthResolveMaterial.name = "Clouds [ShadowLength Resolve]";
+            const slLowRes = this.shadowLengthLowResNode;
+            const slHistory = this.shadowLengthHistoryNode;
+            const velLowRes = this.velocityLowResNode;
+
+            const slResolveNode = Fn(() => {
+                const lowResSize = vec2(
+                    float(1).div(this.lowResTexelSize.x),
+                    float(1).div(this.lowResTexelSize.y)
+                );
+
+                const fx = screenCoordinate.x.floor();
+                const fy = screenCoordinate.y.floor();
+                const lowCoordX = fx.div(4).floor();
+                const lowCoordY = fy.div(4).floor();
+                const lowUv = vec2(
+                    lowCoordX.add(0.5).div(lowResSize.x),
+                    lowCoordY.add(0.5).div(lowResSize.y)
+                );
+                const currentSL = texture(slLowRes, lowUv).r;
+
+                const b0 = vec4(0, 12, 3, 15);
+                const b1 = vec4(8, 4, 11, 7);
+                const b2 = vec4(2, 14, 1, 13);
+                const b3 = vec4(10, 6, 9, 5);
+                const iPixX = screenCoordinate.x.floor().toInt();
+                const iPixY = screenCoordinate.y.floor().toInt();
+                const mx = iPixX.mod(4).toFloat();
+                const my = iPixY.mod(4).toFloat();
+                const row = mx
+                    .lessThan(1)
+                    .select(b0, mx.lessThan(2).select(b1, mx.lessThan(3).select(b2, b3)));
+                const bayerVal = my
+                    .lessThan(1)
+                    .select(
+                        row.x,
+                        my.lessThan(2).select(row.y, my.lessThan(3).select(row.z, row.w))
+                    );
+                const frameMod = this.cloudResolveCountNode.mod(16);
+                const isCurrent = bayerVal.sub(frameMod).abs().lessThan(0.5);
+
+                const result = currentSL.toVar();
+
+                If(isCurrent.not(), () => {
+                    const lowCoord = ivec2(lowCoordX, lowCoordY);
+                    const velocityData = _getClosestFragment(velLowRes, lowCoord);
+                    const velocity = velocityData.yz;
+                    const prevUv = screenUV.sub(velocity);
+
+                    const inBounds = prevUv.x
+                        .greaterThanEqual(0)
+                        .and(prevUv.x.lessThanEqual(1))
+                        .and(prevUv.y.greaterThanEqual(0))
+                        .and(prevUv.y.lessThanEqual(1));
+
+                    If(inBounds, () => {
+                        const historySL = texture(slHistory, prevUv).r;
+                        result.assign(historySL);
+                    });
+                });
+
+                return vec4(result, 0, 0, 1);
+            })();
+
+            this.shadowLengthResolveMaterial.fragmentNode = slResolveNode;
+            this.shadowLengthResolveMaterial.needsUpdate = true;
+        }
+
+        {
             this.blitMaterial.name = "Clouds [Blit]";
             this.blitMaterial.fragmentNode = texture(this.resolveNodeTex, screenUV);
             this.blitMaterial.needsUpdate = true;
+        }
+
+        {
+            this.shadowLengthBlitMaterial.name = "Clouds [ShadowLength Blit]";
+            this.shadowLengthBlitMaterial.fragmentNode = texture(
+                this.shadowLengthResolveNodeTex,
+                screenUV
+            );
+            this.shadowLengthBlitMaterial.needsUpdate = true;
         }
 
         if (this.shadowMarchFn != null) {
@@ -1188,15 +1310,20 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.dispose();
         this.historyRT.dispose();
         this.resolveRT.dispose();
+        this.shadowLengthResolveRT.dispose();
+        this.shadowLengthHistoryRT.dispose();
         for (const rt of this.shadowRTs) rt.dispose();
         for (const rt of this.shadowHistoryRTs) rt.dispose();
         for (const rt of this.shadowResolvedRTs) rt.dispose();
         this.lowResMaterial.dispose();
+        this.resolveMaterial.dispose();
+        this.shadowLengthResolveMaterial.dispose();
+        this.blitMaterial.dispose();
+        this.shadowLengthBlitMaterial.dispose();
         for (const m of this.shadowMaterials) m.dispose();
         for (const m of this.shadowResolveMaterials) m.dispose();
         for (const m of this.shadowBlitMaterials) m.dispose();
         for (const m of this.shadowRawBlitMaterials) m.dispose();
-        this.resolveMaterial.dispose();
         this.mesh.geometry.dispose();
         super.dispose();
     }
