@@ -1041,10 +1041,11 @@ export class CloudRenderNode extends TempNode {
                         );
                         result.assign(clipped);
                     });
-                    // 8% EMA: faster convergence to reduce ground shadow shimmer
-                    // during camera movement. Cloud self-shadow has its own TAA to
-                    // cover the extra noise from faster convergence.
-                    return mix(result, currentColor, float(0.08));
+                    // 1% EMA: matches original three-geospatial temporalAlpha.
+                    // Slower convergence but keeps per-frame shadow edge movement
+                    // below the visible threshold (~0.005 texels/frame) during
+                    // cascade texel snapping. Cloud self-shadow's TAA handles noise.
+                    return mix(result, currentColor, float(0.01));
                 })();
                 this.shadowResolveMaterials[i].fragmentNode = shadowResolveNode;
                 this.shadowResolveMaterials[i].needsUpdate = true;
