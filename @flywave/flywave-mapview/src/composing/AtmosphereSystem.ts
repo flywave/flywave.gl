@@ -200,8 +200,12 @@ export class AtmosphereSystem {
         if (options?.clouds !== undefined) {
             this.m_cloudsEnabled = typeof options.clouds === "boolean" ? options.clouds : true;
             const vrm = this.mapView?.mapRenderingManager?.viewRenderManager;
-            if (vrm?.cloudNode != null && typeof options.clouds === "object") {
-                vrm.cloudNode.setConfig(options.clouds);
+            if (typeof options.clouds === "object") {
+                if (vrm?.cloudNode != null) {
+                    vrm.cloudNode.setConfig(options.clouds);
+                } else if (vrm != null) {
+                    vrm.pendingCloudConfig = options.clouds;
+                }
             }
         }
         if (

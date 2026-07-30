@@ -83,6 +83,7 @@ export class ViewRenderManager implements IViewRenderManager {
     private lensFlareNode?: LensFlareNode;
     private aerialNode?: AerialPerspectiveNode;
     private m_cloudNode?: CloudRenderNode;
+    private pendingCloudConfig?: Record<string, unknown>;
     private taaNode?: TemporalAntialiasNode;
     private scene?: THREE.Scene;
     private camera?: THREE.Camera;
@@ -154,8 +155,12 @@ export class ViewRenderManager implements IViewRenderManager {
                     depthNode,
                     this.renderer
                 );
+                const pending = this.pendingCloudConfig;
                 this.m_cloudNode.onReady = () => {
                     this.m_cloudNode!.onReady = null;
+                    if (pending) {
+                        this.m_cloudNode!.setConfig(pending as any);
+                    }
                     this.needsUpdate = true;
                 };
             } else {

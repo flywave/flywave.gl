@@ -539,17 +539,7 @@ export class CloudRenderNode extends TempNode {
             this.cloudUniforms.shapeDetailRepeat.value.setScalar(0.006);
             this.cloudUniforms.turbulenceRepeat.value = 20;
             this.cloudUniforms.turbulenceDisplacement.value = 350;
-            this.cloudUniforms.minDensity.value = 1e-5;
-            this.cloudUniforms.minExtinction.value = 1e-5;
-            this.cloudUniforms.minTransmittance.value = 1e-2;
-            this.cloudUniforms.minStepSize.value = 50;
-            this.cloudUniforms.maxStepSize.value = 1000;
-            this.cloudUniforms.maxRayDistance.value = 2e5;
-            this.cloudUniforms.perspectiveStepScale.value = 1.01;
-            this.cloudUniforms.maxIterationCountToSun.value = 2;
-            this.cloudUniforms.minSecondaryStepSize.value = 100;
-            this.cloudUniforms.secondaryStepScale.value = 2;
-            this.cloudUniforms.maxIterationCountToGround.value = 3;
+            this.cloudUniforms.applyQualityPreset("low");
             this.cloudUniforms.skyLightScale.value = 1;
             this.cloudUniforms.powderScale.value = 0.8;
             this.cloudUniforms.powderExponent.value = 150;
