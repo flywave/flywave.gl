@@ -3,6 +3,7 @@ import { MapView } from '@flywave/flywave-mapview';
 import { PlacementEngine, SymbolInstance } from './PlacementEngine';
 import { MBStyleDataSource } from './MBStyleDataSource';
 import { getLineAnchors } from './LineAnchor';
+import { CrossTileSymbolIndex } from './CrossTileSymbolIndex';
 
 /**
  * Per-frame symbol placement controller for MBStyleDataSource.
@@ -18,12 +19,20 @@ import { getLineAnchors } from './LineAnchor';
  */
 export class MBStyleSymbolPlacement {
     private m_placementEngine = new PlacementEngine();
+    private m_crossTileIndex = new CrossTileSymbolIndex();
     private m_lastZoom = -1;
+    private m_collisionDebug = false;
+    private m_debugOverlay: THREE.LineSegments | null = null;
 
     constructor(
         private m_mapView: MapView,
         private m_dataSource: MBStyleDataSource,
     ) {}
+
+    /** Enable collision-box debug visualization (metadata.test.collisionDebug). */
+    setCollisionDebug(enabled: boolean): void {
+        this.m_collisionDebug = enabled;
+    }
 
     /**
      * Run symbol placement for the current frame.
@@ -41,6 +50,9 @@ export class MBStyleSymbolPlacement {
         const symbols = this.collectSymbols(camera, w, h);
         if (symbols.length === 0) return;
 
+        // Assign stable cross-tile IDs so fade opacity persists across frames/tiles.
+        this.assignCrossTileIDs(symbols, zoom);
+
         // Apply symbol-z-order: sort by viewport-y or source order
         this.applyZOrder(symbols);
 
@@ -57,7 +69,9 @@ export class MBStyleSymbolPlacement {
             const results = this.m_placementEngine.place(symbols, Date.now(), zoom);
 
             for (const sym of symbols) {
-                const key = `${sym.layerId}:${sym.featureId}`;
+                const key = sym.crossTileID
+                    ? `cid:${sym.crossTileID}`
+                    : `${sym.layerId}:${sym.featureId}`;
                 const result = results.get(key);
                 if (result && sym.object) {
                     sym.object.visible = result.opacity > 0.01;
@@ -80,12 +94,81 @@ export class MBStyleSymbolPlacement {
                 }
             }
         }
+
+        // Collision-box debug overlay.
+        if (this.m_collisionDebug) {
+            this.drawCollisionDebug(symbols, camera, w, h);
+        } else if (this.m_debugOverlay) {
+            this.m_debugOverlay.visible = false;
+        }
     }
 
     /**
-     * Apply icon-rotation-alignment: 'map' rotates with bearing, 'viewport' stays upright.
-     * Also handles text-rotation-alignment.
+     * Draw collision boxes as colored line rectangles (debug visualization).
+     * Blue = placed/visible, red = hidden/colliding.
      */
+    private drawCollisionDebug(
+        symbols: SymbolInstance[],
+        camera: THREE.Camera,
+        canvasW: number,
+        canvasH: number,
+    ): void {
+        const scene = (this.m_mapView as any).m_scene as THREE.Scene | undefined;
+        if (!scene) return;
+
+        if (!this.m_debugOverlay) {
+            const geom = new THREE.BufferGeometry();
+            const mat = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                transparent: true,
+                depthTest: false,
+                depthWrite: false,
+            });
+            this.m_debugOverlay = new THREE.LineSegments(geom, mat);
+            this.m_debugOverlay.frustumCulled = false;
+            this.m_debugOverlay.renderOrder = 9999;
+            scene.add(this.m_debugOverlay);
+        }
+        this.m_debugOverlay.visible = true;
+
+        // Build line segments for each symbol's boxes in screen space, then
+        // unproject to world at the symbol's depth.
+        const positions: number[] = [];
+        const colors: number[] = [];
+        const ndc = new THREE.Vector3();
+        const unproj = new THREE.Vector3();
+
+        const addBox = (cx: number, cy: number, w: number, h: number, placed: boolean) => {
+            const halfW = w / 2;
+            const halfH = h / 2;
+            const corners = [
+                [cx - halfW, cy - halfH], [cx + halfW, cy - halfH],
+                [cx + halfW, cy - halfH], [cx + halfW, cy + halfH],
+                [cx + halfW, cy + halfH], [cx - halfW, cy + halfH],
+                [cx - halfW, cy + halfH], [cx - halfW, cy - halfH],
+            ];
+            const r = placed ? 0.0 : 1.0;
+            const g = placed ? 0.0 : 0.5;
+            const b = placed ? 1.0 : 0.0;
+            for (const [px, py] of corners) {
+                ndc.set((px / canvasW) * 2 - 1, -(py / canvasH) * 2 + 1, 0.5);
+                ndc.unproject(camera);
+                positions.push(ndc.x, ndc.y, ndc.z);
+                colors.push(r, g, b);
+            }
+        };
+
+        for (const sym of symbols) {
+            const placed = sym.object ? (sym.object as any).visible !== false : true;
+            if (sym.iconBox) addBox(sym.screenX, sym.screenY, sym.iconBox.w, sym.iconBox.h, placed);
+            if (sym.textBox) addBox(sym.screenX, sym.screenY, sym.textBox.w, sym.textBox.h, placed);
+        }
+
+        const geo = this.m_debugOverlay.geometry;
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geo.attributes.position.needsUpdate = true;
+    }
     private applyRotationAlignment(symbols: SymbolInstance[], bearing: number): void {
         for (const sym of symbols) {
             if (!sym.object) continue;
@@ -244,6 +327,8 @@ export class MBStyleSymbolPlacement {
                                 object: obj,
                                 variableAnchors: layout['text-variable-anchor'] as string[] | undefined,
                                 textRadialOffset: layout['text-radial-offset'] as number ?? 0,
+                                text: tech.text ?? tech.imageTexture ?? '',
+                                tileKey: `${tile.tileKey.level}:${tile.tileKey.mortonCode()}`,
                             });
                         }
                         continue;
@@ -287,12 +372,43 @@ export class MBStyleSymbolPlacement {
                         object: obj,
                         variableAnchors: layout['text-variable-anchor'] as string[] | undefined,
                         textRadialOffset: layout['text-radial-offset'] as number ?? 0,
+                        text: tech.text ?? tech.imageTexture ?? '',
+                        tileKey: `${tile.tileKey.level}:${tile.tileKey.mortonCode()}`,
                     });
                 }
             }
         }
 
         return symbols;
+    }
+
+    /**
+     * Assign stable crossTileIDs by grouping symbols per layer and matching on
+     * (text content hash + quantized screen position). Symbols without text/icon
+     * content get no crossTileID and fall back to layerId:featureId opacity keys.
+     */
+    private assignCrossTileIDs(symbols: SymbolInstance[], zoom: number): void {
+        if (symbols.length === 0) return;
+        const byLayer = new Map<string, SymbolInstance[]>();
+        for (const sym of symbols) {
+            if (!sym.text) continue;
+            const arr = byLayer.get(sym.layerId);
+            if (arr) arr.push(sym); else byLayer.set(sym.layerId, [sym]);
+        }
+        for (const [layerId, syms] of byLayer) {
+            const idMap = this.m_crossTileIndex.assignIDs(layerId, syms.map(s => ({
+                localId: s.id,
+                text: s.text!,
+                screenX: s.screenX,
+                screenY: s.screenY,
+                tileKey: s.tileKey ?? '',
+                zoom,
+            })));
+            for (const s of syms) {
+                const cid = idMap.get(s.id);
+                if (cid) s.crossTileID = cid;
+            }
+        }
     }
 
     private applyZOrder(symbols: SymbolInstance[]): void {
@@ -365,6 +481,33 @@ export class MBStyleSymbolPlacement {
                     anchor = tech._textTranslateAnchor ?? tech._paint?.['text-translate-anchor'] ?? 'map';
                 }
             } else if (tech.name === 'labeled-icon') {
+                const layout = tech._layout ?? {};
+                const iconOffset = tech._iconOffset ?? layout['icon-offset'];
+                if (Array.isArray(iconOffset)) {
+                    // icon-offset is in pixels: [dx, dy] (y positive = down).
+                    dxPx += Number(iconOffset[0] ?? 0);
+                    dyPx += Number(iconOffset[1] ?? 0);
+                }
+                // icon-anchor positions the icon relative to the anchor point
+                // (only when there is no accompanying text-field, per Mapbox).
+                if (!layout['text-field']) {
+                    const iconAnchor = layout['icon-anchor'] ?? 'center';
+                    const atlas = (this.m_dataSource as any).spriteAtlas;
+                    const iconName = tech.imageTexture ?? layout['icon-image'];
+                    const iconInfo = atlas?.icons?.get(iconName);
+                    if (iconInfo && iconAnchor !== 'center') {
+                        const iconScale = layout['icon-size'] ?? 1;
+                        const halfW = (iconInfo.width ?? 0) * iconScale * 0.5;
+                        const halfH = (iconInfo.height ?? 0) * iconScale * 0.5;
+                        // NDC y-up: 'top' → content below point (−y); 'left' → content right (+x).
+                        const ax = iconAnchor.includes('left') ? +halfW
+                            : iconAnchor.includes('right') ? -halfW : 0;
+                        const ay = iconAnchor.includes('top') ? -halfH
+                            : iconAnchor.includes('bottom') ? +halfH : 0;
+                        dxPx += ax;
+                        dyPx += ay;
+                    }
+                }
                 const translate = tech._iconTranslate ?? tech._paint?.['icon-translate'];
                 if (Array.isArray(translate)) {
                     dxPx += Number(translate[0] ?? 0);

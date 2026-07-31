@@ -10,6 +10,9 @@ export { MBGlyphLoader, GlyphMetrics, GlyphAtlasData } from './MBGlyphLoader';
 export { parseGlyphPBF } from './GlyphPBFParser';
 export { PlacementEngine, PlacementResult, SymbolInstance } from './PlacementEngine';
 export { MBStyleSymbolPlacement } from './MBStyleSymbolPlacement';
+export { CrossTileSymbolIndex, symbolKey } from './CrossTileSymbolIndex';
+export { TerrainController, decodeDemImage } from './TerrainController';
+export { TerrainDepthOcclusion } from './TerrainDepthOcclusion';
 export { MBStyleRuntime } from './MBStyleRuntime';
 export { getLineAnchors, getLineCenterAnchor, LineAnchor } from './LineAnchor';
 export {

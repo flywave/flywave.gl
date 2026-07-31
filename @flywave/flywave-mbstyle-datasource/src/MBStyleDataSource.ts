@@ -293,6 +293,10 @@ export class MBStyleDataSource extends TileDataSource {
     private m_rasterTileUrl: string | null = null;
     private m_environment: MBEnvironmentManager | null = null;
     private m_materialPatcher: MBMaterialPatchManager | null = null;
+    private m_depthOcclusion: any = null;
+    private m_symbolPlacement: any = null;
+    private m_debugTileBoundaries = false;
+    private m_debugLines: any = null;
 
     constructor(params: MBStyleDataSourceParameters) {
         const delegatingProvider = new DelegatingDataProvider();
@@ -514,6 +518,7 @@ export class MBStyleDataSource extends TileDataSource {
             mbStyle: style,
             currentSourceId: this.m_currentSourceId,
             demTileUrl: this.m_demTileUrl,
+            pitch: style.pitch ?? 0,
         } as any);
 
         // Load sprite atlas if style has a sprite URL
@@ -547,8 +552,24 @@ export class MBStyleDataSource extends TileDataSource {
             this.m_materialPatcher = new MBMaterialPatchManager(this);
             this.m_materialPatcher.invalidate();
             const patcher = this.m_materialPatcher;
+            const self = this;
+
+            // Instantiate the symbol placement controller (collision detection,
+            // crossTileID, offsets, rotation alignment, opacity fade).
+            try {
+                const { MBStyleSymbolPlacement } = await import('./MBStyleSymbolPlacement');
+                self.m_symbolPlacement = new MBStyleSymbolPlacement(this.mapView, self);
+            } catch {}
+
+            const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
                 patcher.patchTileMaterials();
+                if (placement) placement.run();
+                if (self.m_debugTileBoundaries) self.drawTileBoundaries();
+                const tc = self.m_environment?.terrainController;
+                if (tc && tc.isMorphing) {
+                    tc.updateMorphing(Date.now());
+                }
             });
         }
 
@@ -561,6 +582,27 @@ export class MBStyleDataSource extends TileDataSource {
                 style.zoom ?? 8,
                 style.center ?? [0, 0],
             );
+            // Enable depth occlusion so circles/symbols behind terrain are hidden.
+            if (this.m_materialPatcher) {
+                this.m_materialPatcher.setDepthOcclusion(true);
+                this.m_materialPatcher.invalidate();
+            }
+            // Start soft depth occlusion (Scheme A): render terrain depth to a
+            // DepthTexture each frame (WillRender) and inject it into circle
+            // materials for smooth fade. Best-effort; falls back to Scheme C
+            // (hardware depthTest) if unavailable.
+            if (this.mapView && this.m_environment.terrainController) {
+                try {
+                    const { TerrainDepthOcclusion } = await import('./TerrainDepthOcclusion');
+                    this.m_depthOcclusion?.dispose();
+                    this.m_depthOcclusion = new TerrainDepthOcclusion(
+                        this.mapView, this.m_environment.terrainController);
+                    this.m_depthOcclusion.start();
+                    if (this.m_materialPatcher && this.m_depthOcclusion.depthTexture) {
+                        this.m_materialPatcher.setDepthTexture(this.m_depthOcclusion.depthTexture);
+                    }
+                } catch {}
+            }
         }
 
         if (this.m_environment && this.m_rasterTileUrl) {
@@ -602,43 +644,86 @@ export class MBStyleDataSource extends TileDataSource {
         const scene = (this.mapView as any)?.m_scene as THREE.Scene | undefined;
         if (!scene) return;
 
+        const LOCAL = '/base/mapbox-gl-js/test/integration/';
+        const resolveUrl = (u: string) => u?.replace(/^local:\/\//, LOCAL) ?? '';
+
         for (const layer of modelLayers) {
-            const sourceId = (layer as any).source;
-            if (!sourceId) continue;
-            const source = (style.sources as any)[sourceId];
-            if (!source) continue;
+            const layout = (layer as any).layout ?? {};
+            const modelScale = layout['model-scale'] ?? 1;
+            const modelRotation = layout['model-rotation'];
 
-            const modelUrl = typeof source.data === 'string'
-                ? source.data.replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/')
-                : source.url?.replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/') ?? '';
+            // Collect model definitions: inline `models` map in the layer, or
+            // from the referenced source.
+            const modelDefs: Array<{ url: string; position: number[] }> = [];
 
-            if (!modelUrl) continue;
+            // Inline models (mapbox HD: layer.models = { id: { uri, position } })
+            const inlineModels = (layer as any).models;
+            if (inlineModels && typeof inlineModels === 'object') {
+                for (const m of Object.values(inlineModels) as any[]) {
+                    if (m.uri) {
+                        modelDefs.push({ url: resolveUrl(m.uri), position: m.position ?? [] });
+                    }
+                }
+            }
 
-            const modelPositions = (layer as any).layout?.['model-position'];
-            const positionList = Array.isArray(modelPositions) && modelPositions.length > 0 && Array.isArray(modelPositions[0])
-                ? modelPositions
-                : (style.center ? [style.center] : [[0, 0]]);
-            const modelScale = (layer as any).layout?.['model-scale'] ?? 1;
+            // Source-based models (source.type with data/url)
+            if (modelDefs.length === 0) {
+                const sourceId = (layer as any).source;
+                const source = sourceId ? (style.sources as any)[sourceId] : null;
+                if (source) {
+                    const url = typeof source.data === 'string'
+                        ? resolveUrl(source.data)
+                        : resolveUrl(source.url);
+                    const positions = layout['model-position'];
+                    const positionList = Array.isArray(positions) && positions.length > 0 && Array.isArray(positions[0])
+                        ? positions
+                        : (style.center ? [style.center] : [[0, 0]]);
+                    for (const pos of positionList) {
+                        modelDefs.push({ url, position: pos });
+                    }
+                }
+            }
+
+            if (modelDefs.length === 0) continue;
 
             try {
                 const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
                 const loader = new GLTFLoader();
-                const gltf = await loader.loadAsync(modelUrl);
+                const { GeoCoordinates } = require('@flywave/flywave-geoutils');
+                const projection = (this.mapView as any).projection;
 
-                for (const pos of positionList) {
+                for (const def of modelDefs) {
+                    if (!def.url) continue;
+                    let gltf: any;
+                    try { gltf = await loader.loadAsync(def.url); } catch { continue; }
+
                     const model = gltf.scene.clone(true);
-                    const lng = pos[0];
-                    const lat = pos[1];
-                    const z = pos[2] ?? 0;
+                    const lng = def.position[0] ?? 0;
+                    const lat = def.position[1] ?? 0;
+                    const z = def.position[2] ?? 0;
 
-                    const { GeoCoordinates } = require('@flywave/flywave-geoutils');
-                    const geoCoord = new GeoCoordinates(lat, lng);
-                    const projection = (this.mapView as any).projection;
                     if (projection) {
+                        const geoCoord = new GeoCoordinates(lat, lng);
                         const worldPos = projection.projectPoint(geoCoord);
                         model.position.set(worldPos.x, worldPos.y, (worldPos as any).z ?? z);
                     }
-                    model.scale.setScalar(modelScale);
+
+                    // Scale: scalar or [x,y,z].
+                    if (Array.isArray(modelScale)) {
+                        model.scale.set(modelScale[0] ?? 1, modelScale[1] ?? 1, modelScale[2] ?? 1);
+                    } else {
+                        model.scale.setScalar(modelScale);
+                    }
+
+                    // Rotation: [x,y,z] Euler angles in degrees.
+                    if (Array.isArray(modelRotation)) {
+                        model.rotation.set(
+                            (modelRotation[0] ?? 0) * Math.PI / 180,
+                            (modelRotation[1] ?? 0) * Math.PI / 180,
+                            (modelRotation[2] ?? 0) * Math.PI / 180,
+                        );
+                    }
+
                     scene.add(model);
                 }
             } catch {}
@@ -651,6 +736,78 @@ export class MBStyleDataSource extends TileDataSource {
      */
     get runtime(): MBStyleRuntime | null {
         return this.m_runtime;
+    }
+
+    /** Enable collision-box debug overlay (metadata.test.collisionDebug). */
+    setCollisionDebug(enabled: boolean): void {
+        if (this.m_symbolPlacement) {
+            this.m_symbolPlacement.setCollisionDebug(enabled);
+        }
+    }
+
+    /** Toggle terrain wireframe overlay (metadata.test.showTerrainWireframe). */
+    setTerrainWireframe(enabled: boolean): void {
+        this.m_environment?.terrainController?.setWireframe(enabled);
+    }
+
+    /** Toggle tile-boundary debug overlay (metadata.test.debug). */
+    setDebugTileBoundaries(enabled: boolean): void {
+        this.m_debugTileBoundaries = enabled;
+        if (!enabled && this.m_debugLines) {
+            this.m_debugLines.visible = false;
+        }
+    }
+
+    /**
+     * Draw tile boundary rectangles in world space (debug visualization).
+     * Called each frame from AfterRender when debug mode is on.
+     */
+    private drawTileBoundaries(): void {
+        if (!this.m_debugTileBoundaries || !this.mapView) return;
+        const THREE = require('three');
+        const scene = (this.mapView as any).m_scene;
+        if (!scene) return;
+
+        if (!this.m_debugLines) {
+            const geom = new THREE.BufferGeometry();
+            const mat = new THREE.LineBasicMaterial({
+                color: 0xff00ff, transparent: true, depthTest: false, depthWrite: false,
+            });
+            this.m_debugLines = new THREE.LineSegments(geom, mat);
+            this.m_debugLines.frustumCulled = false;
+            this.m_debugLines.renderOrder = 9998;
+            scene.add(this.m_debugLines);
+        }
+        this.m_debugLines.visible = true;
+
+        const positions: number[] = [];
+        const EarthConstants = require('@flywave/flywave-geoutils').EarthConstants;
+        const C = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
+
+        // Iterate visible tiles and draw their world-space boundaries.
+        const tds = (this as any).m_mapView?.m_tileDataSources as any[];
+        if (!tds) return;
+        for (const ds of tds) {
+            if (ds !== this) continue;
+            const tiles = ds.m_tiles as Map<any, any> | undefined;
+            if (!tiles) continue;
+            for (const tile of tiles.values()) {
+                const tk = tile.tileKey;
+                if (!tk) continue;
+                const n = Math.pow(2, tk.level);
+                const ts = C / n;
+                const x0 = tk.column * ts;
+                const x1 = (tk.column + 1) * ts;
+                const y0 = C - (tk.row + 1) * ts;
+                const y1 = C - tk.row * ts;
+                // 4 edges
+                positions.push(x0, 0, y0, x1, 0, y0, x1, 0, y0, x1, 0, y1, x1, 0, y1, x0, 0, y1, x0, 0, y1, x0, 0, y0);
+            }
+        }
+
+        const geo = this.m_debugLines.geometry;
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geo.attributes.position.needsUpdate = true;
     }
 
     private async loadSpriteAtlas(spriteUrl: string): Promise<void> {

@@ -2,6 +2,11 @@ import * as THREE from 'three';
 
 export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
     private m_demTexture: THREE.Texture | null = null;
+    private m_demPrevTexture: THREE.Texture | null = null;
+    private m_demLerp: number = 1.0;
+    /** When true, the DEM texture's .r channel already holds height in meters
+     *  (R32F DataTexture from decodeDemImage). When false, it's RGB-encoded. */
+    private m_demIsFloat: boolean = false;
     private m_exaggeration: number = 1.0;
     private m_drapeTexture: THREE.Texture | null = null;
 
@@ -16,6 +21,9 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
         const self = this;
         this.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
             shader.uniforms.uDem = { value: self.m_demTexture };
+            shader.uniforms.uDemPrev = { value: self.m_demPrevTexture };
+            shader.uniforms.uDemLerp = { value: self.m_demLerp };
+            shader.uniforms.uDemIsFloat = { value: self.m_demIsFloat ? 1.0 : 0.0 };
             shader.uniforms.uExaggeration = { value: self.m_exaggeration };
             shader.uniforms.uDrape = { value: self.m_drapeTexture };
 
@@ -24,8 +32,21 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                 `
                 #include <common>
                 uniform sampler2D uDem;
+                uniform sampler2D uDemPrev;
+                uniform float uDemLerp;
+                uniform float uDemIsFloat;
                 uniform float uExaggeration;
                 uniform sampler2D uDrape;
+
+                float mbSampleElevation(sampler2D dem, vec2 uv) {
+                    vec4 s = texture2D(dem, uv);
+                    if (uDemIsFloat > 0.5) {
+                        // R32F: red channel already holds height in meters.
+                        return s.r;
+                    }
+                    // RGB-encoded Mapbox terrain-rgb.
+                    return (s.r * 65536.0 + s.g * 256.0 + s.b) * 0.1 - 10000.0;
+                }
                 `
             );
 
@@ -33,8 +54,13 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                 '#include <begin_vertex>',
                 `
                 vec2 demUv = vec2(uv.x, 1.0 - uv.y);
-                vec4 demSample = texture2D(uDem, demUv);
-                float elevation = (demSample.r * 256.0 * 256.0 + demSample.g * 256.0 + demSample.b) * 0.1 - 10000.0;
+                float elevation = mbSampleElevation(uDem, demUv);
+                // Vertex morphing: blend from previous DEM toward current over
+                // uDemLerp [0,1] (1 = fully current). Avoids popping on tile change.
+                if (uDemLerp < 1.0) {
+                    float prevElev = mbSampleElevation(uDemPrev, demUv);
+                    elevation = mix(prevElev, elevation, uDemLerp);
+                }
                 elevation *= uExaggeration;
                 vec3 transformed = vec3(position.x, position.y, elevation);
                 `
@@ -55,6 +81,23 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
 
     setDemTexture(texture: THREE.Texture | null): void {
         this.m_demTexture = texture;
+        this.needsUpdate = true;
+    }
+
+    /** Previous-frame DEM texture for morphing transitions. */
+    setDemPrevTexture(texture: THREE.Texture | null): void {
+        this.m_demPrevTexture = texture;
+        this.needsUpdate = true;
+    }
+
+    /** Morph progress [0,1]; 1 = fully current (no morphing). */
+    setDemLerp(lerp: number): void {
+        this.m_demLerp = lerp;
+    }
+
+    /** Set true when the DEM texture is an R32F DataTexture (pre-decoded heights). */
+    setDemIsFloat(isFloat: boolean): void {
+        this.m_demIsFloat = isFloat;
         this.needsUpdate = true;
     }
 

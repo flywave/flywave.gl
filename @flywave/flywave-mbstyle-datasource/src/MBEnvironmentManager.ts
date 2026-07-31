@@ -4,6 +4,7 @@ import { EarthConstants } from '@flywave/flywave-geoutils';
 import { FogSpec, SkySpec, Light3DProperties } from './MBStyleSpec';
 import { MapTerrainMaterial, createTerrainGrid } from './materials/MapTerrainMaterial';
 import { SpriteAtlas } from './materials/MapIconMaterial';
+import { TerrainController } from './TerrainController';
 
 export class MBEnvironmentManager {
     private m_ambientLight: THREE.AmbientLight | null = null;
@@ -13,7 +14,29 @@ export class MBEnvironmentManager {
     private m_skyMesh: THREE.Mesh | null = null;
     private m_stars: THREE.Points | null = null;
     private m_scene: THREE.Scene | null = null;
+
+    /** Whether 3D lighting is active (affects vector-layer shading). */
+    get hasLighting(): boolean { return this.m_directionalLight !== null; }
+    /** Lighting state for vector-layer Lambert injection (null if no lights). */
+    get lightingState(): {
+        dir: THREE.Vector3; dirColor: THREE.Color;
+        ambColor: THREE.Color; dirIntensity: number; ambIntensity: number;
+    } | null {
+        if (!this.m_directionalLight) return null;
+        const dir = this.m_directionalLight.position.clone().normalize();
+        return {
+            dir,
+            dirColor: (this.m_directionalLight.color ?? new THREE.Color('#fff')).clone(),
+            ambColor: (this.m_ambientLight?.color ?? new THREE.Color('#fff')).clone(),
+            dirIntensity: this.m_directionalLight.intensity ?? 0.5,
+            ambIntensity: this.m_ambientLight?.intensity ?? 0.5,
+        };
+    }
     private m_terrainMesh: THREE.Mesh | null = null;
+    private m_terrainController: TerrainController | null = null;
+
+    /** Multi-tile terrain controller (null if no terrain or single-tile fallback). */
+    get terrainController(): TerrainController | null { return this.m_terrainController; }
     private m_backgroundQuad: THREE.Mesh | null = null;
     private m_rasterQuad: THREE.Mesh | null = null;
     private m_imageQuads: THREE.Mesh[] = [];
@@ -355,21 +378,45 @@ export class MBEnvironmentManager {
         center: [number, number] = [0, 0],
     ): Promise<void> {
         if (!this.m_scene) return;
+        // Dispose previous terrain (legacy single mesh + multi-tile controller).
         if (this.m_terrainMesh) {
             this.m_scene.remove(this.m_terrainMesh);
             (this.m_terrainMesh.geometry as THREE.BufferGeometry).dispose();
             (this.m_terrainMesh.material as THREE.Material).dispose();
             this.m_terrainMesh = null;
         }
+        if (this.m_terrainController) {
+            this.m_terrainController.dispose();
+            this.m_terrainController = null;
+        }
         if (!terrain || !demTileUrl) return;
 
+        // Multi-tile terrain: build an N×N grid of DEM tiles around the center,
+        // each decoded to R32F and rendered as a skirted mesh. Falls back to the
+        // legacy single-tile mesh if the controller cannot run.
+        const terrainZoom = Math.min(Math.max(Math.floor(zoom), 0), 12);
+        try {
+            this.m_terrainController = new TerrainController(this.m_scene);
+            await this.m_terrainController.build(
+                demTileUrl,
+                terrainZoom,
+                center,
+                terrain.exaggeration ?? 1.0,
+                1, // radius → 3×3 grid around center
+            );
+            if (this.m_terrainController.meshCount > 0) return;
+            this.m_terrainController.dispose();
+            this.m_terrainController = null;
+        } catch {}
+
+        // Legacy fallback: single center tile.
         const lat = degToRad(center[1]);
-        const n = Math.pow(2, zoom);
+        const n = Math.pow(2, terrainZoom);
         const xTile = Math.floor(((center[0] + 180) / 360) * n);
         const yTile = Math.floor(((1 - Math.log(Math.tan(lat) + 1 / Math.cos(lat)) / Math.PI) / 2) * n);
 
         const url = demTileUrl
-            .replace('{z}', String(zoom))
+            .replace('{z}', String(terrainZoom))
             .replace('{x}', String(xTile))
             .replace('{y}', String(yTile));
 
@@ -536,6 +583,7 @@ export class MBEnvironmentManager {
         if (this.m_skyMesh) { this.m_scene?.remove(this.m_skyMesh); this.m_skyMesh = null; }
         if (this.m_stars) { this.m_scene?.remove(this.m_stars); this.m_stars = null; }
         if (this.m_terrainMesh) { this.m_scene?.remove(this.m_terrainMesh); this.m_terrainMesh = null; }
+        if (this.m_terrainController) { this.m_terrainController.dispose(); this.m_terrainController = null; }
         if (this.m_backgroundQuad) { this.m_scene?.remove(this.m_backgroundQuad); this.m_backgroundQuad = null; }
         if (this.m_rasterQuad) { this.m_scene?.remove(this.m_rasterQuad); this.m_rasterQuad = null; }
         for (const m of this.m_imageQuads) { this.m_scene?.remove(m); }

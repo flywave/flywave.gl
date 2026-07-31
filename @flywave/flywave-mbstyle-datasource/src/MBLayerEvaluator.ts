@@ -38,6 +38,7 @@ interface PreprocessedLayer {
     layoutDefs: Record<string, any>;
     renderOrder: number;
     visibility: 'visible' | 'none';
+    appearances: Array<{ name: string; condition: any; properties: Record<string, any> }> | undefined;
 }
 
 interface PaintPropertyDef {
@@ -226,7 +227,10 @@ export class MBLayerEvaluator {
     private m_layersBySource: Map<string, Map<string, PreprocessedLayer[]>> = new Map();
     private m_allLayers: PreprocessedLayer[] = [];
 
+    private m_config: Record<string, any> = {};
+
     constructor(style: StyleSpecification) {
+        this.m_config = (style as any)._config ?? {};
         this.prepare(style);
     }
 
@@ -258,6 +262,7 @@ export class MBLayerEvaluator {
                 layoutDefs: this.prepareLayout(type, (layer as any).layout),
                 renderOrder: index,
                 visibility,
+                appearances: (layer as any).appearances,
             };
 
             this.m_allLayers.push(pl);
@@ -317,7 +322,8 @@ export class MBLayerEvaluator {
         feature: MBStyleFeature,
         zoom: number,
         geometryType: string,
-        featureState?: Record<string, any>
+        featureState?: Record<string, any>,
+        pitch?: number,
     ): EvaluatedLayer[] {
         const bySL = this.m_layersBySource.get(sourceId);
         if (!bySL) return [];
@@ -330,7 +336,7 @@ export class MBLayerEvaluator {
         }
         const results: EvaluatedLayer[] = [];
 
-        const ctx: MBExpressionContext = { zoom, feature, featureState };
+        const ctx: MBExpressionContext = { zoom, pitch, feature, featureState, _config: this.m_config } as any;
 
         for (const pl of candidates) {
             if (pl.visibility === 'none') continue;
@@ -359,6 +365,30 @@ export class MBLayerEvaluator {
                     layout[key] = MBExpressionEngine.evaluate(raw, ctx);
                 } else {
                     layout[key] = raw;
+                }
+            }
+
+            // Apply appearances: conditional property overrides. Each appearance
+            // whose condition evaluates truthy merges its properties over the
+            // base paint/layout (last matching appearance wins).
+            if (pl.appearances) {
+                for (const app of pl.appearances) {
+                    try {
+                        const cond = MBExpressionEngine.evaluate(app.condition, ctx);
+                        if (cond) {
+                            for (const [key, val] of Object.entries(app.properties)) {
+                                const ev = isExpr(val)
+                                    ? MBExpressionEngine.evaluate(val, ctx)
+                                    : val;
+                                const paintDefaults = PAINT_DEFAULTS[pl.type];
+                                if (paintDefaults && key in paintDefaults) {
+                                    paint[key] = ev;
+                                } else {
+                                    layout[key] = ev;
+                                }
+                            }
+                        }
+                    } catch {}
                 }
             }
 

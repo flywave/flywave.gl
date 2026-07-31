@@ -9,6 +9,7 @@ export interface MBStyleFeature {
 
 export interface MBExpressionContext {
     zoom: number;
+    pitch?: number;
     feature?: MBStyleFeature;
     featureState?: Record<string, any>;
     id?: string | number | null;
@@ -88,6 +89,15 @@ export class MBExpressionEngine {
 
             case 'zoom':
                 return zoom;
+
+            case 'pitch':
+                return ctx.pitch ?? 0;
+
+            case 'config': {
+                // Read from the merged style's config map (set by mergeImports).
+                const configKey = this.exec(args[0], ctx) as string;
+                return (ctx as any)._config?.[configKey] ?? null;
+            }
 
             case 'geometry-type':
                 return feature?.type ?? null;

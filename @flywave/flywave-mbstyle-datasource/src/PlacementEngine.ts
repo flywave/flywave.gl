@@ -25,6 +25,12 @@ export interface SymbolInstance {
     variableAnchors?: string[];
     /** Offset applied per anchor */
     textRadialOffset?: number;
+    /** Stable cross-tile identity (assigned by CrossTileSymbolIndex). */
+    crossTileID?: number;
+    /** Label content (text or icon name) for cross-tile matching. */
+    text?: string;
+    /** Source tile key for cross-tile matching/pruning. */
+    tileKey?: string;
 }
 
 export interface PlacementResult {
@@ -80,7 +86,12 @@ export class PlacementEngine {
         const results = new Map<string, PlacementResult>();
 
         for (const sym of sorted) {
-            const key = `${sym.layerId}:${sym.featureId}`;
+            // Key the opacity map by crossTileID when available: this gives the
+            // same label a stable identity across frames/tiles, so fade opacity
+            // persists correctly. Fall back to the volatile layerId:featureId.
+            const key = sym.crossTileID
+                ? `cid:${sym.crossTileID}`
+                : `${sym.layerId}:${sym.featureId}`;
             const prev = this.m_opacityMap.get(key);
 
             let visible = false;
@@ -155,6 +166,15 @@ export class PlacementEngine {
         }
 
         return results;
+    }
+
+    /**
+     * Whether the last placement is still "recent" enough that callers can skip
+     * a new placement and reuse results (letting in-flight fades continue).
+     * Reference: mapbox stillRecent(now, zoom) ≈ commitTime + fadeDuration > now.
+     */
+    stillRecent(now: number): boolean {
+        return now - this.m_lastPlacementTime < FADE_DURATION;
     }
 
     private canPlaceSymbol(sym: SymbolInstance, dx: number = 0, dy: number = 0): boolean {

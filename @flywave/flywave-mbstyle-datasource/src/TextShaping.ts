@@ -36,6 +36,36 @@ const DEFAULT_GLYPH_ADVANCE = 0.6;
 const SPACE_ADVANCE = 0.3;
 
 /**
+ * Per-character advance estimates (in em units) for common Latin glyphs, based
+ * on typical sans-serif averages. Used when no real glyph metrics are available
+ * (no PBF font loaded). Much more accurate than a flat 0.6 for all chars — e.g.
+ * 'i' ≈ 0.28, 'm' ≈ 0.84 — so collision boxes fit labels properly.
+ */
+const LATIN_ADVANCE: Record<string, number> = {
+    // narrow
+    i: 0.28, j: 0.28, l: 0.28, t: 0.31, f: 0.33, r: 0.38,
+    I: 0.33, J: 0.39,
+    '1': 0.33, '.': 0.28, ',': 0.28, ':': 0.28, ';': 0.28,
+    '\'': 0.22, '"': 0.38, '!': 0.28, '|': 0.28, '(': 0.33, ')': 0.33,
+    // medium-narrow
+    c: 0.5, s: 0.5, a: 0.55, e: 0.55, g: 0.55, n: 0.55, o: 0.55,
+    p: 0.55, q: 0.55, u: 0.55, v: 0.5, x: 0.5, z: 0.5, b: 0.55, d: 0.55,
+    h: 0.55, k: 0.55,
+    '2': 0.55, '3': 0.55, '4': 0.55, '5': 0.55, '6': 0.55, '7': 0.5, '8': 0.55, '9': 0.55, '0': 0.55,
+    // medium (uppercase)
+    C: 0.72, G: 0.78, L: 0.61, E: 0.61, F: 0.56, P: 0.61, S: 0.61, T: 0.61,
+    Z: 0.61, B: 0.68, D: 0.72, H: 0.72, K: 0.67, N: 0.72, R: 0.67, U: 0.72,
+    V: 0.67, X: 0.67, Y: 0.61, A: 0.67, '-': 0.39, '/': 0.33, '+': 0.58,
+    '=': 0.58, '*': 0.44, '&': 0.67, '%': 0.83, '#': 0.58, '@': 0.86,
+    // wide
+    m: 0.84, w: 0.78, M: 0.83, W: 0.94, O: 0.78, Q: 0.78,
+};
+
+function estimateAdvance(ch: string): number {
+    return LATIN_ADVANCE[ch] ?? DEFAULT_GLYPH_ADVANCE;
+}
+
+/**
  * Measure text width using glyph metrics if available, falling back to estimation.
  */
 export function measureTextWidth(
@@ -57,7 +87,7 @@ export function measureTextWidth(
         if (ch === ' ') {
             width += SPACE_ADVANCE;
         } else {
-            width += DEFAULT_GLYPH_ADVANCE;
+            width += estimateAdvance(ch);
         }
     }
     width += letterSpacing * Math.max(0, text.length - 1);
@@ -94,7 +124,7 @@ export function getGlyphMetrics(
     // Latin: has descender for some chars
     const hasDescender = 'gjpqy'.includes(char);
     return {
-        width: DEFAULT_GLYPH_ADVANCE,
+        width: estimateAdvance(char),
         height: hasDescender ? 1.1 : 1,
         top: hasDescender ? 0 : 0,
         left: 0,

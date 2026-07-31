@@ -47,7 +47,68 @@ export class MBStyleManager {
         } else {
             this.m_style = { ...style };
         }
+        this.mergeImports();
         this.resolveSources();
+    }
+
+    /**
+     * Merge inline style imports (mapbox HD `imports` array). Each import may
+     * carry inline `data` (a sub-style) and `config` values. Sources, layers,
+     * lights, sprite and glyphs from imports are merged into the base style.
+     */
+    private mergeImports(): void {
+        if (!this.m_style) return;
+        const imports = (this.m_style as any).imports;
+        if (!Array.isArray(imports) || imports.length === 0) return;
+
+        const mergedLayers: any[] = [...(this.m_style.layers ?? [])];
+        const mergedSources: Record<string, any> = { ...(this.m_style.sources as any) };
+        const configMap: Record<string, any> = {};
+
+        for (const imp of imports) {
+            const data = imp.data;
+            if (!data) continue;
+            // Collect config values for ["config", key] expressions.
+            if (imp.config) {
+                for (const [k, v] of Object.entries(imp.config)) {
+                    configMap[k] = v;
+                }
+            }
+            // Merge sources.
+            if (data.sources) {
+                for (const [sid, spec] of Object.entries(data.sources)) {
+                    if (!mergedSources[sid]) mergedSources[sid] = spec;
+                }
+            }
+            // Append layers.
+            if (data.layers) {
+                mergedLayers.push(...data.layers);
+            }
+            // Use imported lights/sprite/glyphs if base lacks them.
+            if (data.lights && !(this.m_style as any).lights) {
+                (this.m_style as any).lights = data.lights;
+            }
+            if (data.sprite && !this.m_style.sprite) {
+                this.m_style.sprite = data.sprite;
+            }
+            if (data.glyphs && !this.m_style.glyphs) {
+                this.m_style.glyphs = data.glyphs;
+            }
+            if (data.fog && !(this.m_style as any).fog) {
+                (this.m_style as any).fog = data.fog;
+            }
+            if (data.sky && !(this.m_style as any).sky) {
+                (this.m_style as any).sky = data.sky;
+            }
+            if (data.terrain && !(this.m_style as any).terrain) {
+                (this.m_style as any).terrain = data.terrain;
+            }
+        }
+
+        this.m_style.layers = mergedLayers;
+        this.m_style.sources = mergedSources;
+        // Store config for expression evaluation.
+        (this.m_style as any)._config = configMap;
     }
 
     private resolveSources(): void {

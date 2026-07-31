@@ -25,8 +25,6 @@ import { MBStyleDataSource } from "../src/MBStyleDataSource";
 const INCOMPATIBLE_TYPES = new Set([
     "terrain",
     "globe",
-    "model",
-    "model-layer",
     "video",
     "custom-layer",
     "raster-particle",
@@ -312,6 +310,17 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 const dataSource = new MBStyleDataSource({ style });
 
                 await mapView.addDataSource(dataSource);
+
+                // Enable collision-box debug overlay when the test requests it.
+                if (metadata.collisionDebug) {
+                    dataSource.setCollisionDebug(true);
+                }
+                if (metadata.showTerrainWireframe) {
+                    dataSource.setTerrainWireframe(true);
+                }
+                if (metadata.debug) {
+                    dataSource.setDebugTileBoundaries(true);
+                }
 
                 await renderFrames(mapView, dataSource, 5);
 

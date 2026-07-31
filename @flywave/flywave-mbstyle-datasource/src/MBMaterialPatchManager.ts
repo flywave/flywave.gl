@@ -13,9 +13,29 @@ const patternTextureCache = new Map<string, THREE.Texture>();
 export class MBMaterialPatchManager {
     private m_patchedTiles = new WeakMap<object, MaterialPatchState>();
     private m_dataSource: MBStyleDataSource;
+    /** When true (terrain active), symbols/circles test against terrain depth. */
+    private m_depthOcclusion = false;
+    /** Depth texture from terrain (Scheme A soft fade); null = Scheme C only. */
+    private m_depthTexture: THREE.DepthTexture | null = null;
 
     constructor(dataSource: MBStyleDataSource) {
         this.m_dataSource = dataSource;
+    }
+
+    /**
+     * Toggle terrain depth occlusion. When enabled, circle/symbol materials are
+     * configured to test against the depth buffer (terrain renders first with
+     * renderOrder=-100 and writes depth), so labels behind hills get hidden.
+     * This is hardware depth-test occlusion (Scheme C) — no depth texture needed.
+     */
+    setDepthOcclusion(active: boolean): void {
+        this.m_depthOcclusion = active;
+    }
+
+    /** Provide the terrain DepthTexture for soft fade occlusion (Scheme A). */
+    setDepthTexture(tex: THREE.DepthTexture | null): void {
+        this.m_depthTexture = tex;
+        this.invalidate();
     }
 
     patchTileMaterials(): void {
@@ -78,6 +98,112 @@ export class MBMaterialPatchManager {
         }
     }
 
+    /**
+     * Convert a Mapbox translate ([dx, dy] in pixels) honoring translate-anchor.
+     * - 'map' (default): offset is map-aligned, returned unchanged.
+     * - 'viewport': offset is screen-aligned, so rotate by the current camera
+     *   bearing so it stays upright relative to the viewport.
+     *
+     * Computed at patch time from mapView.heading; sufficient for static tests.
+     */
+    private resolveTranslate(translate: number[] | undefined, anchor: string | undefined): number[] {
+        const t = translate ?? [0, 0];
+        if (!t || (t[0] === 0 && t[1] === 0)) return [0, 0];
+        if (anchor === 'viewport') {
+            const bearing = ((this.m_dataSource as any).mapView?.heading ?? 0) * Math.PI / 180;
+            const cos = Math.cos(bearing);
+            const sin = Math.sin(bearing);
+            return [t[0] * cos - t[1] * sin, t[0] * sin + t[1] * cos];
+        }
+        return [t[0], t[1]];
+    }
+
+    /**
+     * Center DEM info for terrain draping/displacement (null when no terrain).
+     */
+    private get centerDem(): { texture: THREE.Texture; originX: number; originY: number; size: number } | null {
+        return (this.m_dataSource as any).m_environment?.terrainController?.centerDem ?? null;
+    }
+
+    /**
+     * Inject 3D Lambert lighting into a material so fill-extrusion/building
+     * surfaces respond to the ambient + directional lights (lighting-3d-mode).
+     * Computes N·L in view/world space and modulates the fragment color.
+     */
+    private injectLighting(material: THREE.Material): boolean {
+        const ls = (this.m_dataSource as any).m_environment?.lightingState;
+        if (!ls) return false;
+        if ((material as any).__mbLitPatched) return false;
+        (material as any).__mbLitPatched = true;
+        const origOnCompile = material.onBeforeCompile;
+        material.onBeforeCompile = (shader: any) => {
+            if (origOnCompile) origOnCompile.call(material, shader);
+            shader.uniforms.uMBLightDir = { value: ls.dir };
+            shader.uniforms.uMBLightDirColor = { value: ls.dirColor };
+            shader.uniforms.uMBLightAmbColor = { value: ls.ambColor };
+            shader.uniforms.uMBLightDirI = { value: ls.dirIntensity };
+            shader.uniforms.uMBLightAmbI = { value: ls.ambIntensity };
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <common>',
+                `#include <common>
+                 uniform vec3 uMBLightDir; uniform vec3 uMBLightDirColor;
+                 uniform vec3 uMBLightAmbColor; uniform float uMBLightDirI; uniform float uMBLightAmbI;`
+            );
+            // Lambert: ambient + directional*N·L. vNormal is provided by three.js
+            // for lit materials; for basic materials it may be the geometry normal.
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <colorspace_fragment>',
+                `#include <colorspace_fragment>
+                 {
+                     vec3 mbN = normalize(vNormal);
+                     float mbDiff = max(dot(mbN, normalize(uMBLightDir)), 0.0);
+                     vec3 mbLight = uMBLightAmbColor * uMBLightAmbI
+                                  + uMBLightDirColor * uMBLightDirI * mbDiff;
+                     gl_FragColor.rgb *= mbLight;
+                 }`
+            );
+        };
+        material.needsUpdate = true;
+        return true;
+    }
+
+    /**
+     * Inject terrain DEM vertex displacement into a material so flat fill/line
+     * geometry conforms to the terrain surface (T4-lite draping, no FBO needed).
+     * Samples the center DEM tile at each vertex's world position and offsets Z.
+     * Must be chained BEFORE other onBeforeCompile overrides that also set it.
+     */
+    private injectTerrainDrape(material: THREE.Material): boolean {
+        const dem = this.centerDem;
+        if (!dem) return false;
+        if ((material as any).__mbDrapePatched) return false;
+        (material as any).__mbDrapePatched = true;
+        const origOnCompile = material.onBeforeCompile;
+        material.onBeforeCompile = (shader: any) => {
+            if (origOnCompile) origOnCompile.call(material, shader);
+            shader.uniforms.uMBDrapeDem = { value: dem.texture };
+            shader.uniforms.uMBDrapeOrigin = { value: new THREE.Vector2(dem.originX, dem.originY) };
+            shader.uniforms.uMBDrapeSize = { value: dem.size };
+            shader.vertexShader = shader.vertexShader.replace(
+                'void main() {',
+                `uniform sampler2D uMBDrapeDem;\nuniform vec2 uMBDrapeOrigin;\nuniform float uMBDrapeSize;\nvoid main() {`
+            );
+            // Sample DEM at the vertex's world position and offset Z so the
+            // geometry follows the terrain surface.
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <project_vertex>',
+                `{
+                     vec2 mbWP = (modelMatrix * vec4(transformed, 1.0)).xy;
+                     vec2 mbDU = (mbWP - uMBDrapeOrigin) / uMBDrapeSize;
+                     mbDU = clamp(mbDU, vec2(0.0), vec2(1.0));
+                     transformed.z += texture2D(uMBDrapeDem, mbDU).r;
+                 }\n#include <project_vertex>`
+            );
+        };
+        material.needsUpdate = true;
+        return true;
+    }
+
     private patchMaterial(material: THREE.Material, technique: any): void {
         if ((material as any).__mbPatched) return;
         (material as any).__mbPatched = true;
@@ -85,7 +211,6 @@ export class MBMaterialPatchManager {
         const techName = technique.name;
         const paint = technique._paint ?? {};
         const layout = technique._layout ?? {};
-
         switch (techName) {
             case 'fill':
                 if (technique._isHillshade) {
@@ -122,6 +247,9 @@ export class MBMaterialPatchManager {
         const url = technique._rasterTileUrl as string;
         if (!url) return;
 
+        // Terrain draping: make the raster tile conform to the terrain surface.
+        if (!!this.centerDem) this.injectTerrainDrape(material);
+
         const opacity = technique.opacity ?? 1;
         if ('opacity' in material) {
             (material as any).opacity = opacity;
@@ -137,6 +265,15 @@ export class MBMaterialPatchManager {
         const hasAdjust =
             brightness !== undefined || contrast !== undefined ||
             saturation !== undefined || hue !== undefined || colorVal !== undefined;
+
+        const resampling = paint['raster-resampling'] ?? paint['raster-filtering'] ?? 'linear';
+        const filterType = resampling === 'nearest'
+            ? THREE.NearestFilter : THREE.LinearFilter;
+        // visibility:'none' → raster should not render.
+        if (technique._layout?.visibility === 'none') {
+            (material as any).visible = false;
+            return;
+        }
 
         const applyAdjust = () => {
             if (!hasAdjust) return;
@@ -178,6 +315,9 @@ export class MBMaterialPatchManager {
         };
 
         const attach = (texture: THREE.Texture) => {
+            texture.minFilter = filterType;
+            texture.magFilter = filterType;
+            texture.needsUpdate = true;
             (material as any).map = texture;
             (material as any).color = new THREE.Color(0xffffff);
             applyAdjust();
@@ -191,18 +331,22 @@ export class MBMaterialPatchManager {
         }
 
         rasterTextureLoader.load(url, (texture) => {
-            texture.minFilter = THREE.LinearFilter;
-            texture.magFilter = THREE.LinearFilter;
+            texture.minFilter = filterType;
+            texture.magFilter = filterType;
             rasterTextureCache.set(url, texture);
             attach(texture);
         }, undefined, () => {});
     }
 
     private patchFillMaterial(material: THREE.Material, paint: any): void {
-        const translate = paint['fill-translate'] ?? [0, 0];
+        const translate = this.resolveTranslate(paint['fill-translate'], paint['fill-translate-anchor']);
         const outlineColor = paint['fill-outline-color'];
+        const hasTerrain = !!this.centerDem;
 
-        if ((!translate || (translate[0] === 0 && translate[1] === 0)) && !outlineColor) return;
+        if ((!translate || (translate[0] === 0 && translate[1] === 0)) && !outlineColor && !hasTerrain) return;
+
+        // Terrain draping: displace fill vertices to follow the terrain surface.
+        if (hasTerrain) this.injectTerrainDrape(material);
 
         const origOnCompile = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
@@ -241,14 +385,38 @@ export class MBMaterialPatchManager {
     }
 
     private patchLineMaterial(material: THREE.Material, paint: any, layout: any, technique: any): void {
+        // Terrain draping: displace line vertices to follow the terrain surface.
+        // Applied first so subsequent onBeforeCompile overrides chain correctly.
+        if (!!this.centerDem) this.injectTerrainDrape(material);
+
         const cap = layout['line-cap'];
         const join = layout['line-join'];
         const dashArray = paint['line-dasharray'] ?? layout['line-dasharray'];
         const gapWidth = paint['line-gap-width'];
-        const translate = paint['line-translate'] ?? technique._translate ?? [0, 0];
+        const blendMode = paint['line-blend-mode'];
+        const emissiveStrength = paint['line-emissive-strength'];
+        const translate = this.resolveTranslate(
+            paint['line-translate'] ?? technique._translate ?? [0, 0],
+            paint['line-translate-anchor'] ?? technique._translateAnchor ?? 'map',
+        );
         const gradientStops = technique._lineGradientStops;
         const patternName = technique._patternName;
+        // line-trim-offset: [start, end] in [0,1] of line-progress. Fragments
+        // outside the range are discarded (partial line rendering).
+        const trimOffset = paint['line-trim-offset'];
+        const hasTrim = Array.isArray(trimOffset) && trimOffset.length === 2;
         let modified = false;
+
+        if (blendMode === 'additive') {
+            (material as any).blending = (THREE as any).AdditiveBlending;
+            (material as any).transparent = true;
+            (material as any).depthWrite = false;
+            modified = true;
+        } else if (blendMode === 'multiply') {
+            (material as any).blending = (THREE as any).MultiplyBlending;
+            (material as any).transparent = true;
+            modified = true;
+        }
 
         if (cap) {
             const capMap: Record<string, string> = {
@@ -281,13 +449,43 @@ export class MBMaterialPatchManager {
             modified = true;
         }
 
+        // line-border → native SolidLineMaterial outline (outlineColor/outlineWidth).
+        const borderWidth = paint['line-border-width'];
+        const borderColor = paint['line-border-color'];
+        if (typeof borderWidth === 'number' && borderWidth > 0 && 'outlineWidth' in material) {
+            (material as any).outlineWidth = borderWidth;
+            if (borderColor !== undefined) {
+                (material as any).outlineColor = new THREE.Color(borderColor);
+            }
+            modified = true;
+        }
+
         const hasTranslate = translate && (translate[0] !== 0 || translate[1] !== 0);
         const hasGradient = Array.isArray(gradientStops) && gradientStops.length > 1;
+        const hasEmissive = typeof emissiveStrength === 'number' && emissiveStrength > 0;
         const patternTex = patternName ? this.extractPatternTexture(patternName) : undefined;
-        if (hasTranslate || hasGradient || patternTex) {
+        if (hasTranslate || hasGradient || patternTex || hasEmissive || hasTrim) {
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
+                if (hasTrim) {
+                    shader.uniforms.uMBTrimRange = { value: new THREE.Vector2(trimOffset[0], trimOffset[1]) };
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        '#include <common>',
+                        '#include <common>\nuniform vec2 uMBTrimRange;'
+                    );
+                    // Discard fragments whose normalized line-progress is outside
+                    // [start, end]. vCoords.x is cumulative distance; fract gives
+                    // a [0,1] progress proxy.
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        '#include <colorspace_fragment>',
+                        `#include <colorspace_fragment>
+                         {
+                             float mbProg = fract(vCoords.x);
+                             if (mbProg < uMBTrimRange.x || mbProg > uMBTrimRange.y) discard;
+                         }`
+                    );
+                }
                 if (hasTranslate) {
                     shader.uniforms.uMBTranslate = { value: new THREE.Vector2(translate[0], translate[1]) };
                     shader.vertexShader = shader.vertexShader.replace(
@@ -318,10 +516,12 @@ export class MBMaterialPatchManager {
                     );
                 }
                 if (patternTex) {
+                    const lineCrossFade = technique._patternCrossFade ?? 1;
                     shader.uniforms.uMBLinePattern = { value: patternTex };
+                    shader.uniforms.uMBLineCrossFade = { value: lineCrossFade };
                     shader.fragmentShader = shader.fragmentShader.replace(
                         'void main() {',
-                        'uniform sampler2D uMBLinePattern;\nvoid main() {'
+                        'uniform sampler2D uMBLinePattern;\nuniform float uMBLineCrossFade;\nvoid main() {'
                     );
                     // Tile the pattern image along the line using the cumulative
                     // distance varying (vCoords.x), scaled by the pattern width.
@@ -331,7 +531,19 @@ export class MBMaterialPatchManager {
                         'gl_FragColor = vec4( diffuse, opacity );',
                         `vec2 mbLP = vec2(fract(vCoords.x * uMBPatternScale), 0.5);
                          vec4 mbLPx = texture2D(uMBLinePattern, mbLP);
-                         gl_FragColor = vec4(mbLPx.rgb, mbLPx.a * opacity);`
+                         float mbLAlpha = mbLPx.a * opacity * uMBLineCrossFade;
+                         gl_FragColor = vec4(mix(diffuse, mbLPx.rgb, uMBLineCrossFade), mbLAlpha);`
+                    );
+                }
+                if (hasEmissive) {
+                    shader.uniforms.uMBEmissiveStrength = { value: emissiveStrength };
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        '#include <colorspace_fragment>',
+                        `#include <colorspace_fragment>\n gl_FragColor.rgb += diffuse * uMBEmissiveStrength;`
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        'void main() {',
+                        'uniform float uMBEmissiveStrength;\nvoid main() {'
                     );
                 }
             };
@@ -376,14 +588,25 @@ export class MBMaterialPatchManager {
     }
 
     private patchCircleMaterial(material: THREE.Material, paint: any): void {
-        const translate = paint['circle-translate'] ?? [0, 0];
+        const translate = this.resolveTranslate(paint['circle-translate'], paint['circle-translate-anchor']);
         const pitchScale = paint['circle-pitch-scale'];
+        // pitch-alignment drives the same sizeAttenuation behavior when set
+        // ('viewport' → screen-facing constant size, 'map' → scales with pitch).
+        const pitchAlignment = paint['circle-pitch-alignment'];
+        const effective = pitchAlignment ?? pitchScale;
         let modified = false;
 
-        if (pitchScale === 'viewport' && 'sizeAttenuation' in material) {
+        // Terrain depth occlusion: test circles against terrain depth so those
+        // behind hills are hidden (terrain renders first, writes depth).
+        if (this.m_depthOcclusion) {
+            (material as any).depthTest = true;
+            modified = true;
+        }
+
+        if (effective === 'viewport' && 'sizeAttenuation' in material) {
             (material as any).sizeAttenuation = false;
             modified = true;
-        } else if (pitchScale === 'map' && 'sizeAttenuation' in material) {
+        } else if (effective === 'map' && 'sizeAttenuation' in material) {
             (material as any).sizeAttenuation = true;
             modified = true;
         }
@@ -397,18 +620,56 @@ export class MBMaterialPatchManager {
             material.needsUpdate = true;
             modified = true;
         }
+
+        // Scheme A: soft depth fade. When a terrain DepthTexture is available,
+        // sample it at the fragment's screen position and fade alpha when behind
+        // terrain. Falls back to Scheme C (hard depthTest) when no texture.
+        if (this.m_depthOcclusion && this.m_depthTexture) {
+            const depthTex = this.m_depthTexture;
+            const canvas = (this.m_dataSource as any).mapView?.canvas;
+            const invSize = new THREE.Vector2(
+                1 / Math.max(1, canvas?.width ?? 1),
+                1 / Math.max(1, canvas?.height ?? 1),
+            );
+            const origOnCompile = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (origOnCompile) origOnCompile.call(material, shader);
+                shader.uniforms.u_terrainDepth = { value: depthTex };
+                shader.uniforms.u_terrainDepthInvSize = { value: invSize };
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <common>',
+                    '#include <common>\nuniform sampler2D u_terrainDepth;\nuniform vec2 u_terrainDepthInvSize;'
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <colorspace_fragment>',
+                    `#include <colorspace_fragment>
+                     {
+                         float mbTz = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).r;
+                         float mbOcclude = smoothstep(-0.002, 0.002, gl_FragCoord.z - mbTz);
+                         gl_FragColor.a *= (1.0 - mbOcclude);
+                     }`
+                );
+            };
+            material.needsUpdate = true;
+            modified = true;
+        }
     }
 
     private patchExtrusionMaterial(material: THREE.Material, paint: any, technique: any): void {
+        // 3D lighting: shade extruded surfaces by ambient + directional light.
+        this.injectLighting(material);
         const height = technique.height ?? paint['fill-extrusion-height'] ?? 0;
         const base = technique.floorHeight ?? paint['fill-extrusion-base'] ?? 0;
         const verticalGradient = paint['fill-extrusion-vertical-gradient'] !== false;
-        const translate = paint['fill-extrusion-translate'] ?? technique._translate ?? [0, 0];
+        const translate = this.resolveTranslate(
+            paint['fill-extrusion-translate'] ?? technique._translate ?? [0, 0],
+            paint['fill-extrusion-translate-anchor'] ?? technique._translateAnchor ?? 'map',
+        );
         const hasTranslate = translate && (translate[0] !== 0 || translate[1] !== 0);
         const patternTex = technique._patternName ? this.extractPatternTexture(technique._patternName) : undefined;
-        if (height === 0 && base === 0 && !verticalGradient && !hasTranslate && !patternTex) {
-            // Nothing to patch unless a pattern is requested.
-            if (!patternTex) return;
+        const hasTerrain = !!(this.m_dataSource as any).m_environment?.terrainController?.centerDem;
+        if (height === 0 && base === 0 && !verticalGradient && !hasTranslate && !patternTex && !hasTerrain) {
+            return;
         }
 
         // Apply pattern as a base texture (tiles across the footprint).
@@ -418,6 +679,10 @@ export class MBMaterialPatchManager {
         }
 
         const origOnCompile = material.onBeforeCompile;
+        // Terrain DEM for fill-extrusion-terrain: buildings sit on the terrain
+        // surface. Sample the center DEM tile at the vertex's world position.
+        const centerDem = (this.m_dataSource as any).m_environment?.terrainController?.centerDem;
+        const terrainExag = (this.m_dataSource as any).m_environment?.terrainController ? 1 : 0;
         material.onBeforeCompile = (shader: any) => {
             if (origOnCompile) origOnCompile.call(material, shader);
 
@@ -432,16 +697,34 @@ export class MBMaterialPatchManager {
                     'transformed.xy += uMBTranslate;\n#include <project_vertex>'
                 );
             }
-            if (height > 0 || base > 0) {
+            if (height > 0 || base > 0 || centerDem) {
                 shader.uniforms.uMBHeightBase = { value: base };
                 shader.uniforms.uMBHeightTop = { value: height };
+                // Terrain DEM uniforms (fill-extrusion-terrain).
+                const demUniforms = centerDem
+                    ? `uniform sampler2D uMBExtrusionDem;\nuniform vec2 uMBExtrusionDemOrigin;\nuniform float uMBExtrusionDemSize;\nuniform float uMBExtrusionExag;`
+                    : '';
+                if (centerDem) {
+                    shader.uniforms.uMBExtrusionDem = { value: centerDem.texture };
+                    shader.uniforms.uMBExtrusionDemOrigin = { value: new THREE.Vector2(centerDem.originX, centerDem.originY) };
+                    shader.uniforms.uMBExtrusionDemSize = { value: centerDem.size };
+                    shader.uniforms.uMBExtrusionExag = { value: terrainExag };
+                }
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
-                    'uniform float uMBHeightBase;\nuniform float uMBHeightTop;\nvoid main() {'
+                    `uniform float uMBHeightBase;\nuniform float uMBHeightTop;\n${demUniforms}\nvoid main() {`
                 );
+                // Compute extrusion height, plus terrain elevation at the world
+                // position (so the building base follows the terrain surface).
+                const terrainSample = centerDem
+                    ? `vec2 mbWorldPos = (modelMatrix * vec4(position, 1.0)).xy;
+                       vec2 mbDemUv = (mbWorldPos - uMBExtrusionDemOrigin) / uMBExtrusionDemSize;
+                       float mbTerrainElev = texture2D(uMBExtrusionDem, vec2(clamp(mbDemUv.x,0.0,1.0), clamp(mbDemUv.y,0.0,1.0))).r * uMBExtrusionExag;`
+                    : 'float mbTerrainElev = 0.0;';
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <begin_vertex>',
-                    `float mbH = uMBHeightBase + position.z * (uMBHeightTop - uMBHeightBase);
+                    `${terrainSample}
+                     float mbH = uMBHeightBase + position.z * (uMBHeightTop - uMBHeightBase) + mbTerrainElev;
                      vec3 transformed = vec3(position.x, position.y, mbH);`
                 );
             }
@@ -468,10 +751,15 @@ export class MBMaterialPatchManager {
     }
 
     private patchBuildingMaterial(material: THREE.Material, technique: any): void {
+        // 3D lighting: shade building surfaces by ambient + directional light.
+        this.injectLighting(material);
         const height = Number(technique.height ?? 10);
         const base = Number(technique.floorHeight ?? 0);
         const roofColor = technique._roofColor ?? '#aaaaaa';
         const emissive = technique._paint?.['building-emissive-strength'] ?? 0;
+        const facadeFloors = Number(technique._paint?.['building-facade-floors'] ?? Math.max(1, Math.round(height / 3)));
+        const facadeWidth = Number(technique._paint?.['building-facade-unit-width'] ?? 6);
+        const aoIntensity = Number(technique._paint?.['building-ambient-occlusion-intensity'] ?? 0);
 
         if (emissive > 0 && 'emissiveIntensity' in material) {
             (material as any).emissiveIntensity = emissive;
@@ -484,27 +772,54 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBHeightBase = { value: base };
             shader.uniforms.uMBHeightTop = { value: height };
             shader.uniforms.uMBRoofColor = { value: new THREE.Color(roofColor) };
+            shader.uniforms.uMBFacadeFloors = { value: facadeFloors };
+            shader.uniforms.uMBFacadeWidth = { value: facadeWidth };
+            shader.uniforms.uMBAO = { value: aoIntensity };
 
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
-                'uniform float uMBHeightBase;\nuniform float uMBHeightTop;\nvoid main() {'
+                `uniform float uMBHeightBase;\nuniform float uMBHeightTop;\n
+                 varying vec3 vMBWorldPos;\nvoid main() {`
             );
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `float mbH = uMBHeightBase + position.z * (uMBHeightTop - uMBHeightBase);
-                 vec3 transformed = vec3(position.x, position.y, mbH);`
+                 vec3 transformed = vec3(position.x, position.y, mbH);
+                 vMBWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
             );
 
             shader.fragmentShader = shader.fragmentShader.replace(
-                '#include <colorspace_fragment>',
-                `#include <colorspace_fragment>
-                 if (abs(dot(normalize(vNormal), vec3(0.0,0.0,1.0))) > 0.9) {
-                     gl_FragColor.rgb = uMBRoofColor;
-                 }`
+                '#include <common>',
+                `#include <common>
+                 uniform vec3 uMBRoofColor;
+                 uniform float uMBFacadeFloors; uniform float uMBFacadeWidth; uniform float uMBAO;
+                 varying vec3 vMBWorldPos;
+                 float mbHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`
             );
             shader.fragmentShader = shader.fragmentShader.replace(
-                'void main() {',
-                'uniform vec3 uMBRoofColor;\nvoid main() {'
+                '#include <colorspace_fragment>',
+                `#include <colorspace_fragment>
+                 {
+                     bool mbIsRoof = abs(dot(normalize(vNormal), vec3(0.0,0.0,1.0))) > 0.9;
+                     if (mbIsRoof) {
+                         gl_FragColor.rgb = uMBRoofColor;
+                     } else {
+                         // Procedural facade: window grid via hash.
+                         vec2 mbFUv = vec2(vMBWorldPos.x / uMBFacadeWidth,
+                                           (vMBWorldPos.z - uMBHeightBase) / max(uMBHeightTop - uMBHeightBase, 0.001) * uMBFacadeFloors);
+                         vec2 mbCell = floor(mbFUv);
+                         vec2 mbFrac = fract(mbFUv);
+                         float mbWinLit = mbHash(mbCell);
+                         // Window frame: darken edges, lit windows brighter.
+                         float mbEdge = step(0.15, mbFrac.x) * step(mbFrac.x, 0.85) * step(0.15, mbFrac.y) * step(mbFrac.y, 0.85);
+                         vec3 mbWinColor = mix(gl_FragColor.rgb * 0.3, gl_FragColor.rgb * 1.4, mbWinLit);
+                         gl_FragColor.rgb = mix(gl_FragColor.rgb, mbWinColor, mbEdge);
+                         // Ambient occlusion: darken near the base.
+                         float mbAoFactor = 1.0 - uMBAO * 0.5 * (1.0 - smoothstep(0.0, 0.15,
+                             (vMBWorldPos.z - uMBHeightBase) / max(uMBHeightTop - uMBHeightBase, 0.001)));
+                         gl_FragColor.rgb *= mbAoFactor;
+                     }
+                 }`
             );
         };
         material.needsUpdate = true;
@@ -528,11 +843,14 @@ export class MBMaterialPatchManager {
         const iconInfo = atlas.icons?.get(iconName);
         const isSdf = iconInfo?.sdf === true;
         const iconColor = technique.color ?? technique._paint?.['icon-color'] ?? '#ffffff';
+        const haloColor = technique._paint?.['icon-halo-color'] ?? '#000000';
+        const haloWidth = Number(technique._paint?.['icon-halo-width'] ?? 0);
+        const haloBlur = Number(technique._paint?.['icon-halo-blur'] ?? 0);
 
         (material as any).map = atlas.texture;
         // Non-SDF icons show the texture as-is (white multiplier); SDF icons are
-        // tinted by icon-color.
-        (material as any).color = new THREE.Color(isSdf ? iconColor : '#ffffff');
+        // tinted by icon-color (handled in the SDF shader branch below).
+        (material as any).color = new THREE.Color(isSdf ? '#ffffff' : '#ffffff');
         (material as any).transparent = true;
         (material as any).depthWrite = false;
 
@@ -548,10 +866,42 @@ export class MBMaterialPatchManager {
                     '#include <common>',
                     '#include <common>\nuniform vec2 uUvOffset;\nuniform vec2 uUvScale;'
                 );
-                shader.fragmentShader = shader.fragmentShader.replace(
-                    'texture2D( map, vUv )',
-                    'texture2D( map, uUvOffset + vUv * uUvScale )'
-                );
+                if (isSdf) {
+                    // SDF rendering: the atlas alpha channel holds the signed
+                    // distance. Fill the glyph with icon-color and draw a halo ring
+                    // (icon-halo-color) when halo-width > 0.
+                    shader.uniforms.uMBIconColor = { value: new THREE.Color(iconColor) };
+                    shader.uniforms.uMBHaloColor = { value: new THREE.Color(haloColor) };
+                    shader.uniforms.uMBHaloWidth = { value: haloWidth / 16.0 };
+                    shader.uniforms.uMBHaloBlur = { value: Math.max(haloBlur, 0.5) / 16.0 };
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        '#include <common>',
+                        `#include <common>
+                         uniform vec2 uUvOffset; uniform vec2 uUvScale;
+                         uniform vec3 uMBIconColor; uniform vec3 uMBHaloColor;
+                         uniform float uMBHaloWidth; uniform float uMBHaloBlur;`
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        '#include <colorspace_fragment>',
+                        `#include <colorspace_fragment>
+                         {
+                             float mbSdf = texture2D(map, uUvOffset + vUv * uUvScale).a;
+                             float mbEdge = 0.5;
+                             float mbFill = smoothstep(mbEdge - uMBHaloBlur, mbEdge + uMBHaloBlur, mbSdf);
+                             float mbHaloEdge = mbEdge - uMBHaloWidth;
+                             float mbHalo = smoothstep(mbHaloEdge - uMBHaloBlur, mbHaloEdge + uMBHaloBlur, mbSdf) - mbFill;
+                             vec3 mbCol = mix(uMBHaloColor, uMBIconColor, mbFill);
+                             float mbAlpha = max(mbFill, mbHalo * step(0.0001, uMBHaloWidth));
+                             gl_FragColor = vec4(mbCol, mbAlpha * opacity);
+                         }`
+                    );
+                } else {
+                    // Non-SDF: just remap UVs into the icon sub-rectangle.
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        'texture2D( map, vUv )',
+                        'texture2D( map, uUvOffset + vUv * uUvScale )'
+                    );
+                }
             };
             material.needsUpdate = true;
         }
@@ -632,7 +982,8 @@ export class MBMaterialPatchManager {
                      uniform vec3 uMBHsAccent;
                      uniform vec3 uMBHsHighlight;
                      float mbDemElev(vec2 uv){ vec4 c=texture2D(uMBDem,uv);
-                         return (c.r*65536.0+c.g*256.0+c.b)-65536.0; }
+                         // Mapbox terrain-rgb: height = (R*65536+G*256+B)/10 - 10000
+                         return (c.r*65536.0+c.g*256.0+c.b)/10.0-10000.0; }
                      void main() {`
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
@@ -762,12 +1113,18 @@ export class MBMaterialPatchManager {
     private patchFillPatternMaterial(material: THREE.Material, technique: any): void {
         const tex = this.extractPatternTexture(technique._patternName);
         if (!tex) return;
+        // Terrain draping: make patterned fill conform to the terrain surface.
+        if (!!this.centerDem) this.injectTerrainDrape(material);
         if ((material as any).__mbPatternPatched) return;
         (material as any).__mbPatternPatched = true;
 
         (material as any).map = tex;
         (material as any).color = new THREE.Color('#ffffff');
         (material as any).transparent = (technique.opacity ?? 1) < 1;
+
+        // Pattern cross-fade: modulate pattern contribution by the fade factor
+        // (0 = no pattern/base color, 1 = full pattern).
+        const crossFade = technique._patternCrossFade ?? 1;
 
         // Pattern tile size in world units. The sprite pixel size is mapped to
         // meters at roughly the sprite's pixelRatio; 1px ≈ 1 world unit scaled.
@@ -777,6 +1134,7 @@ export class MBMaterialPatchManager {
             if (origOnCompile) origOnCompile.call(material, shader);
             shader.uniforms.uMBPatternTex = { value: tex };
             shader.uniforms.uMBPatternScale = { value: tileScale };
+            shader.uniforms.uMBPatternCrossFade = { value: crossFade };
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
                 'uniform float uMBPatternScale;\nvarying vec2 vMBPatternUv;\nvoid main() {'
@@ -787,12 +1145,13 @@ export class MBMaterialPatchManager {
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
-                'uniform sampler2D uMBPatternTex;\nvarying vec2 vMBPatternUv;\nvoid main() {'
+                'uniform sampler2D uMBPatternTex;\nuniform float uMBPatternCrossFade;\nvarying vec2 vMBPatternUv;\nvoid main() {'
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 'gl_FragColor = vec4( diffuse, opacity );',
-                'vec4 mbPat = texture2D(uMBPatternTex, vMBPatternUv);\n' +
-                'gl_FragColor = vec4(mbPat.rgb, mbPat.a * opacity);'
+                `vec4 mbPat = texture2D(uMBPatternTex, vMBPatternUv);
+                 float mbPatAlpha = mbPat.a * opacity * uMBPatternCrossFade;
+                 gl_FragColor = vec4(mix(diffuse, mbPat.rgb, uMBPatternCrossFade), mbPatAlpha);`
             );
         };
         material.needsUpdate = true;

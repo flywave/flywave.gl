@@ -71,6 +71,17 @@ describe('TextShaping', () => {
             const w2 = measureTextWidth('ab', 0.5);
             expect(w2).to.be.greaterThan(w1);
         });
+
+        it('uses per-character advance estimates (narrow < wide)', () => {
+            // 'i' is narrow, 'm' is wide — a flat 0.6 would make them equal.
+            const wNarrow = measureTextWidth('iiiii', 0);
+            const wWide = measureTextWidth('mmmmm', 0);
+            expect(wNarrow).to.be.lessThan(wWide);
+        });
+
+        it('uppercase W is wider than uppercase I', () => {
+            expect(measureTextWidth('W', 0)).to.be.greaterThan(measureTextWidth('I', 0));
+        });
     });
 
     describe('wrapText', () => {

@@ -24,6 +24,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         private m_layerEvaluator: MBLayerEvaluator,
         private m_sourceId: string,
         private m_zoom: number,
+        private m_pitch: number = 0,
     ) {}
 
     setEmitter(emitter: MBTileDataEmitter) {
@@ -64,7 +65,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         const matched = this.m_layerEvaluator.evaluate(
             this.m_sourceId, layer,
             { type: 'Point', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
-            this.m_zoom, 'point', this.getFeatureState(featureId),
+            this.m_zoom, 'point', this.getFeatureState(featureId), this.m_pitch,
         );
         if (matched.length === 0 || !this.m_emitter) return;
         this.m_emitter.processPointFeature(layer, extents, geometry, properties, featureId, matched);
@@ -83,7 +84,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         const matched = this.m_layerEvaluator.evaluate(
             this.m_sourceId, layer,
             { type: 'LineString', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
-            this.m_zoom, 'line', this.getFeatureState(featureId),
+            this.m_zoom, 'line', this.getFeatureState(featureId), this.m_pitch,
         );
         if (matched.length === 0 || !this.m_emitter) return;
 
@@ -126,7 +127,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         const matched = this.m_layerEvaluator.evaluate(
             this.m_sourceId, layer,
             { type: 'Polygon', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
-            this.m_zoom, 'polygon', this.getFeatureState(featureId),
+            this.m_zoom, 'polygon', this.getFeatureState(featureId), this.m_pitch,
         );
         if (matched.length === 0 || !this.m_emitter) return;
         this.m_emitter.processFillFeature(layer, extents, geometry, properties, featureId, matched);
@@ -139,6 +140,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_layerEvaluator: MBLayerEvaluator | undefined;
     private m_currentSourceId: string = '';
     private m_featureStates: Map<string | number, Record<string, any>> = new Map();
+    private m_pitch: number = 0;
 
     constructor() {
         super();
@@ -160,6 +162,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
         if (customOptions?.featureStates) {
             this.m_featureStates = customOptions.featureStates as Map<string | number, Record<string, any>>;
+        }
+        if (customOptions?.pitch !== undefined) {
+            this.m_pitch = customOptions.pitch as number;
         }
     }
 
@@ -196,6 +201,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             this.m_layerEvaluator,
             this.m_currentSourceId,
             zoom,
+            this.m_pitch,
         );
         processor.setEmitter(emitter);
         processor.setFeatureStates(this.m_featureStates);

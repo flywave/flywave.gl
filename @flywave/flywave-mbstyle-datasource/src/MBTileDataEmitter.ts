@@ -103,7 +103,7 @@ export class MBTileDataEmitter {
         return typeof sk === 'number' ? sk : undefined;
     }
 
-    private paintToTechniqueProps(layer: EvaluatedLayer, properties?: Record<string, any>): Record<string, any> {
+    private paintToTechniqueProps(layer: EvaluatedLayer, properties?: Record<string, any>, symbolMode?: 'icon' | 'text'): Record<string, any> {
         const p = layer.paint;
         const l = layer.layout;
         const props: Record<string, any> = {};
@@ -122,7 +122,10 @@ export class MBTileDataEmitter {
                 props.outlineColor = p['fill-outline-color'];
                 props._translate = p['fill-translate'] ?? [0, 0];
                 props._translateAnchor = p['fill-translate-anchor'] ?? 'map';
-                if (p['fill-pattern']) props._patternName = p['fill-pattern'];
+                if (p['fill-pattern']) {
+                    props._patternName = p['fill-pattern'];
+                    props._patternCrossFade = p['fill-pattern-cross-fade'] ?? 1;
+                }
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'line':
@@ -132,7 +135,10 @@ export class MBTileDataEmitter {
                 props.lineWidth = p['line-width'] ?? 1;
                 props._translate = p['line-translate'] ?? [0, 0];
                 props._translateAnchor = p['line-translate-anchor'] ?? 'map';
-                if (p['line-pattern']) props._patternName = p['line-pattern'];
+                if (p['line-pattern']) {
+                    props._patternName = p['line-pattern'];
+                    props._patternCrossFade = p['line-pattern-cross-fade'] ?? 1;
+                }
                 if (p['line-dasharray']) {
                     const arr = p['line-dasharray'] as number[];
                     if (arr.length >= 2) {
@@ -161,7 +167,10 @@ export class MBTileDataEmitter {
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'symbol':
-                if (l['icon-image']) {
+                // When both icon-image and text-field are present, emit two
+                // techniques (icon + text) so labels render with icon + caption.
+                // symbolMode selects which one this call builds.
+                if (symbolMode === 'icon' || (symbolMode === undefined && l['icon-image'])) {
                     props.technique = 'labeled-icon';
                     props.imageTexture = l['icon-image'];
                     props.color = p['icon-color'] ?? '#000000';
@@ -169,8 +178,9 @@ export class MBTileDataEmitter {
                     props.iconScale = l['icon-size'] ?? 1;
                     props._iconTranslate = p['icon-translate'] ?? [0, 0];
                     props._iconTranslateAnchor = p['icon-translate-anchor'] ?? 'map';
+                    props._iconOffset = l['icon-offset'];
                     if (l.visibility === 'none') props.enabled = false;
-                } else if (l['text-field']) {
+                } else if (symbolMode === 'text' || (symbolMode === undefined && l['text-field'])) {
                     props.technique = 'text';
                     // Resolve text field with token replacement using feature properties
                     const rawText = typeof l['text-field'] === 'string'
@@ -217,7 +227,10 @@ export class MBTileDataEmitter {
                 props.floorHeight = p['fill-extrusion-base'] ?? 0;
                 props._translate = p['fill-extrusion-translate'] ?? [0, 0];
                 props._translateAnchor = p['fill-extrusion-translate-anchor'] ?? 'map';
-                if (p['fill-extrusion-pattern']) props._patternName = p['fill-extrusion-pattern'];
+                if (p['fill-extrusion-pattern']) {
+                    props._patternName = p['fill-extrusion-pattern'];
+                    props._patternCrossFade = p['fill-extrusion-pattern-cross-fade'] ?? 1;
+                }
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'heatmap':
@@ -275,7 +288,7 @@ export class MBTileDataEmitter {
         return props;
     }
 
-    private getOrCreateTechniqueIndex(layer: EvaluatedLayer, properties?: Record<string, any>): number {
+    private getOrCreateTechniqueIndex(layer: EvaluatedLayer, properties?: Record<string, any>, symbolMode?: 'icon' | 'text'): number {
         // For text layers, technique key includes resolved text to allow per-feature text
         const textKey = layer.type === 'symbol' && layer.layout['text-field']
             ? resolveTextField(
@@ -284,12 +297,12 @@ export class MBTileDataEmitter {
             )
             : '';
 
-        const cacheKey = textKey ? `${layer.id}:${textKey}` : layer.id;
+        const cacheKey = `${layer.id}:${symbolMode ?? ''}:${textKey}`;
         let idx = this.m_layerToTechniqueIndex.get(cacheKey);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
             this.m_layerToTechniqueIndex.set(cacheKey, idx);
-            const props = this.paintToTechniqueProps(layer, properties);
+            const props = this.paintToTechniqueProps(layer, properties, symbolMode);
             const technique: any = {
                 name: props.technique,
                 _index: idx,
@@ -487,25 +500,36 @@ export class MBTileDataEmitter {
         matchedLayers: EvaluatedLayer[],
     ): void {
         for (const layer of matchedLayers) {
-            const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
-            const key = `${layer.id}:point`;
-            const geo = this.getOrCreateGeometry(key);
-            const featureStart = geo.indices.length;
-
-            for (const pt of points) {
-                const w = this.project(pt);
-                geo.positions.push(w.x, w.y, w.z);
+            // Determine which symbol sub-techniques to emit. For symbol layers with
+            // both icon-image and text-field, emit both so icon+caption render.
+            let modes: Array<'icon' | 'text' | undefined>;
+            if (layer.type === 'symbol' && layer.layout['icon-image'] && layer.layout['text-field']) {
+                modes = ['icon', 'text'];
+            } else {
+                modes = [undefined];
             }
 
-            const count = points.length;
-            geo.groups.push({
-                start: featureStart,
-                count,
-                materialIndex: techniqueIdx,
-                sortKey: this.extractSortKey(layer),
-            });
-            geo.featureStarts.push(featureStart);
-            geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
+            for (const mode of modes) {
+                const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties, mode);
+                const key = `${layer.id}:point:${techniqueIdx}`;
+                const geo = this.getOrCreateGeometry(key);
+                const featureStart = geo.indices.length;
+
+                for (const pt of points) {
+                    const w = this.project(pt);
+                    geo.positions.push(w.x, w.y, w.z);
+                }
+
+                const count = points.length;
+                geo.groups.push({
+                    start: featureStart,
+                    count,
+                    materialIndex: techniqueIdx,
+                    sortKey: this.extractSortKey(layer),
+                });
+                geo.featureStarts.push(featureStart);
+                geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
+            }
         }
     }
 
