@@ -1,7 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type Tile3DBatchMeshTechniqueParams } from "@flywave/flywave-datasource-protocol";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
+import { WebGPURenderer } from "three/webgpu";
 
 import { B3DMBatchMaterial } from "../src/materials/B3DMBatchMaterial";
 
@@ -11,14 +12,14 @@ import { B3DMBatchMaterial } from "../src/materials/B3DMBatchMaterial";
 export class B3DMUnpackStyleRenderTest {
     private readonly scene: THREE.Scene;
     private readonly camera: THREE.Camera;
-    private readonly renderer: THREE.WebGLRenderer;
+    private readonly renderer: WebGPURenderer;
     private readonly material: B3DMBatchMaterial;
 
     constructor() {
         // Create scene
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer = new WebGPURenderer({ antialias: true });
         this.renderer.setSize(200, 200);
 
         // Create material

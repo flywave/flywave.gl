@@ -3,7 +3,7 @@
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
 import { assert } from "chai";
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 import { GeoBox } from "../src/coordinates/GeoBox";
 import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";

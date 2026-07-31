@@ -3,7 +3,7 @@
 import { GeoCoordinates, ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import { type MapControls } from "@flywave/flywave-map-controls";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { HeightHandle } from "./HeightHandle";

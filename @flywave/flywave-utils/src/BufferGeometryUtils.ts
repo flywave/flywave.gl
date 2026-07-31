@@ -15,7 +15,7 @@ import {
     TrianglesDrawMode,
     TriangleStripDrawMode,
     Vector3
-} from "three";
+} from "three/webgpu";
 
 /**
  * @module BufferGeometryUtils

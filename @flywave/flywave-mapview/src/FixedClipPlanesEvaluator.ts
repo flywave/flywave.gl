@@ -2,7 +2,7 @@
 
 import { type ViewRanges } from "@flywave/flywave-datasource-protocol/ViewRanges";
 import { type Projection } from "@flywave/flywave-geoutils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { type ClipPlanesEvaluator } from "./ClipPlanesEvaluator";
 import { type ElevationProvider } from "./ElevationProvider";

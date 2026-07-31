@@ -24,7 +24,7 @@ import {
 import * as TestUtils from "@flywave/flywave-test-utils/WebGLStub";
 import { assert, expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type BackgroundDataSource } from "../src/BackgroundDataSource";
 import { CameraUtils } from "../src/CameraUtils";
@@ -65,8 +65,8 @@ describe("MapView", function () {
         sandbox = sinon.createSandbox();
         clearColorStub = sandbox.stub();
         sandbox
-            .stub(THREE, "WebGLRenderer")
-            .returns(TestUtils.getWebGLRendererStub(sandbox, clearColorStub));
+            .stub(THREE, "WebGPURenderer" as never)
+            .returns(TestUtils.getRendererStub(sandbox, clearColorStub));
         sandbox.stub(FontCatalogLoader, "loadFontCatalog").resolves();
         if (inNodeContext) {
             const theGlobal: any = global;

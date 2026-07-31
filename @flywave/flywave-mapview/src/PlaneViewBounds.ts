@@ -9,7 +9,7 @@ import {
     ProjectionType
 } from "@flywave/flywave-geoutils";
 import { assert } from "@flywave/flywave-utils";
-import { type PerspectiveCamera, Frustum, Line3, Matrix4, Plane, Ray, Vector3 } from "three";
+import { type PerspectiveCamera, Frustum, Line3, Matrix4, Plane, Ray, Vector3 } from "three/webgpu";
 
 import { type TileCorners } from "./geometry/ProjectTilePlaneCorners";
 import { MapViewUtils } from "./Utils";

@@ -4,7 +4,7 @@
 
 import { Math2D } from "@flywave/flywave-utils";
 import { assert } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import {
     type IBox,

@@ -38,7 +38,7 @@ import {
     LogLevel,
     PerformanceTimer
 } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { WebGPURenderer, type Renderer } from "three/webgpu";
 import { type RendererCapabilities } from "@flywave/flywave-materials";
 

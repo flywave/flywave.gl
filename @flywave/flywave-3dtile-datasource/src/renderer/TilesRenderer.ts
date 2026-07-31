@@ -3,32 +3,8 @@
 import { type Projection } from "@flywave/flywave-geoutils";
 import { createThreeSceneFromGLTF } from "@flywave/flywave-gltf";
 import { ExtendedFrustum } from "@flywave/flywave-utils/ExtendedFrustum";
-import {
-    type Camera,
-    type Material,
-    type Texture,
-    BoxGeometry,
-    BufferAttribute,
-    BufferGeometry,
-    Euler,
-    EventDispatcher,
-    FrontSide,
-    Group,
-    InstancedBufferAttribute,
-    InstancedMesh,
-    LoadingManager,
-    Matrix4,
-    Mesh,
-    Object3D,
-    PerspectiveCamera,
-    Points,
-    Quaternion,
-    Scene,
-    TypedArray,
-    Vector2,
-    Vector3
-} from "three";
-import { PointsNodeMaterial } from "three/webgpu";
+import {type Camera, type Material, type Texture, BoxGeometry, BufferAttribute, BufferGeometry, Euler, EventDispatcher, FrontSide, Group, InstancedBufferAttribute, InstancedMesh, LoadingManager, Matrix4, Mesh, Object3D, PerspectiveCamera, Points, Quaternion, Scene, TypedArray, Vector2, Vector3, PointsNodeMaterial} from "three/webgpu";
+
 
 import { ITile, type Tile, type TileInternal } from "../base/Tile";
 import { TilesRendererBase } from "../base/TilesRendererBase";

@@ -4,7 +4,7 @@ import { type GeoCoordinatesLike, GeoCoordinates } from "@flywave/flywave-geouti
 import { type MapView } from "@flywave/flywave-mapview";
 import { PerformanceTimer } from "@flywave/flywave-utils";
 import * as TWEEN from "@tweenjs/tween.js";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type MapControls, EventNames } from "./MapControls";
 

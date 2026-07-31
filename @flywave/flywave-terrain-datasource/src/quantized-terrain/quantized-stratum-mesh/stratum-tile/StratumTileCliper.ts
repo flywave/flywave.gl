@@ -11,7 +11,7 @@ import {
     GeoPolygon
 } from "@flywave/flywave-geoutils";
 import { TriangleGeometryMerger } from "@flywave/flywave-utils";
-import { BufferAttribute, BufferGeometry, Sphere, Triangle, Vector3 } from "three";
+import { BufferAttribute, BufferGeometry, Sphere, Triangle, Vector3 } from "three/webgpu";
 import { Brush } from "three-bvh-csg";
 
 import { type StratumClipRegion } from "./StratumClipTypes";

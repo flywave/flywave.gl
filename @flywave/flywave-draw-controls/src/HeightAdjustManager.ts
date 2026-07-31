@@ -3,7 +3,7 @@
 // src/HeightAdjustManager.ts
 import { ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { HeightHandle } from "./HeightHandle";
 import { type PointObject } from "./PointObject";

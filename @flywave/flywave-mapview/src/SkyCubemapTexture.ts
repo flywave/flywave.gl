@@ -2,7 +2,7 @@
 
 import { type CubemapSky } from "@flywave/flywave-datasource-protocol";
 import { LoggerManager } from "@flywave/flywave-utils";
-import { type Texture, CubeTexture, CubeTextureLoader } from "three";
+import { type Texture, CubeTexture, CubeTextureLoader } from "three/webgpu";
 
 const logger = LoggerManager.instance.create("SkyCubemapTexture");
 

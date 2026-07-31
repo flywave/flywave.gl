@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { DirectionalLight } from "three";
+import { DirectionalLight } from "three/webgpu";
 import { renderGroup, uniform } from "three/tsl";
 
 export type AtmosphereLightBody = "sun" | "moon";

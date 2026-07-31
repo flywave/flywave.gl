@@ -12,7 +12,7 @@ import {
 } from "@flywave/flywave-datasource-protocol";
 import { type UriResolver, LoggerManager, resolveReferenceUri } from "@flywave/flywave-utils";
 import isEqual from "lodash.isequal";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { MapViewImageCache } from "./image/MapViewImageCache";
 import { type MapView } from "./MapView";

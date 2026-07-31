@@ -5,7 +5,7 @@
 
 import { expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { LodMesh } from "../src/geometry/LodMesh";
 

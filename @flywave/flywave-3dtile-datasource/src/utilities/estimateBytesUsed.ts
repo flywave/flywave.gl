@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 const {
     estimateBytesUsed: _estimateBytesUsed
 } = require("three/examples/jsm/utils/BufferGeometryUtils.js");

@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type ClippedVertex } from "@flywave/flywave-geometry/ClipPolygon";
-import { type Vector2, ShapeUtils } from "three";
+import { type Vector2, ShapeUtils } from "three/webgpu";
 
 /**
  * A class representing a ring of a polygon geometry.

@@ -2,7 +2,7 @@
 // import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader.js";
 import { TGALoader } from "three/examples/jsm/loaders/TGALoader.js";
-import { WebGLRenderer } from "three";
+import type { Renderer } from "three/webgpu";
 // import { read } from 'ktx-parse';
 
 export interface LoadedImage {
@@ -20,7 +20,7 @@ export class ImageLoader {
     private ddsLoader?: DDSLoader;
     private tgaLoader?: TGALoader;
 
-    constructor(webglRender?: WebGLRenderer) {
+    constructor(webglRender?: Renderer) {
         // 初始化加载器，但KTX2Loader在没有renderer时可能无法工作
         // 我们会处理这种情况
         try {

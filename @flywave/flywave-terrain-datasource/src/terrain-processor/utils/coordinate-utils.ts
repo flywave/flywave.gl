@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { GeoBox, GeoCoordinates, GeoLineString, GeoPolygon } from "@flywave/flywave-geoutils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 export class CoordinateUtils {
     static geoToTileSpace(

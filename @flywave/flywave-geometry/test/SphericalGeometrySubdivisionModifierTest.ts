@@ -4,7 +4,7 @@
 
 import * as geo from "@flywave/flywave-geoutils";
 import { assert } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { SphericalGeometrySubdivisionModifier } from "../src/SphericalGeometrySubdivisionModifier";
 

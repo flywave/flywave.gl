@@ -27,7 +27,7 @@ import {
     vec2,
     vec3,
     vec4,
-    float
+    float,
 } from "three/tsl";
 
 import type { Node } from "../../tsl/node";

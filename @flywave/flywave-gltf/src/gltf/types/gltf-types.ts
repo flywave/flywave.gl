@@ -5,7 +5,7 @@
 import { type ImageType } from "@flywave/flywave-utils";
 
 import type { GLTF } from "./gltf-json-schema";
-import { AnimationClip, Scene } from "three";
+import { AnimationClip, Scene } from "three/webgpu";
 
 /** GLTFLoader removes processed extensions from `extensionsUsed` and `extensionsUsed`
  * `processedExtensions` is used to track those extensions

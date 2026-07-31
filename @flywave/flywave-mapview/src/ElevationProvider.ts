@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type GeoCoordinates, type TileKey, type TilingScheme } from "@flywave/flywave-geoutils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { type TileDisplacementMap } from "./DisplacementMap";
 

@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type ValueMap } from "@flywave/flywave-datasource-protocol";
-import { type Vector3 } from "three";
+import { type Vector3 } from "three/webgpu";
 
 import {
     type IGeometryProcessor,

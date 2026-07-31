@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 /**
  * JavaScript events for custom objects. Stores all listeners to allow removing all listeners for

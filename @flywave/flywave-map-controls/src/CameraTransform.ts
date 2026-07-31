@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { ElevationProvider, MapView } from "@flywave/flywave-mapview";
-import { Matrix4, Quaternion, Spherical, Vector3, Vector4 } from "three";
+import { Matrix4, Quaternion, Spherical, Vector3, Vector4 } from "three/webgpu";
 
 import { slerpMatrices, sphericalLerp } from "./math";
 import { Projection } from "@flywave/flywave-geoutils";

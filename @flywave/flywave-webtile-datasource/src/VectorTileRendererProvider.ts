@@ -7,7 +7,7 @@ import {
     type OmvWithRestClientParams,
     VectorTileDataSource
 } from "@flywave/flywave-vectortile-datasource";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { WebTileDataProvider } from "./WebTileDataSource";
 

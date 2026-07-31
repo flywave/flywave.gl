@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { Vector2 } from "three";
+import { Vector2 } from "three/webgpu";
 
 function halton(index: number, base: number): number {
     let fraction = 1;

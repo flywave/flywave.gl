@@ -14,7 +14,7 @@ import {
     TextRenderStyle,
     VerticalAlignment
 } from "@flywave/flywave-text-canvas";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 const debugMaterial = new THREE.LineBasicMaterial({
     color: 0xff0000,

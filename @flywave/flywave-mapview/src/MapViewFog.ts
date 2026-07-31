@@ -4,7 +4,7 @@ import { type Fog } from "@flywave/flywave-datasource-protocol";
 import { HighPrecisionLineMaterial } from "@flywave/flywave-materials";
 import { RawShaderMaterial } from "@flywave/flywave-materials/RawShaderMaterial";
 import { assert, MathUtils } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type MapView } from "./MapView";
 

@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { JulianDate, TimeConstants } from "./JulianDate";
 import { TWO_PI } from "./Simon1994PlanetaryPositions";

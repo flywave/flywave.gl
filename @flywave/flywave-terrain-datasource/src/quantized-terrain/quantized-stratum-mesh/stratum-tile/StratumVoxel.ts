@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { fromVectors } from "@flywave/flywave-geoutils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type StratumVoxelData, FaceTypes } from "../decoder";
 import { BspObject } from "./BspObject";

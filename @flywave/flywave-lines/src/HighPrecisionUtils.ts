@@ -16,7 +16,7 @@ import {
     InterleavedBufferAttribute,
     Matrix4,
     Vector3
-} from "three";
+} from "three/webgpu";
 
 import * as HPL from "./HighPrecisionLines";
 import * as HPP from "./HighPrecisionPoints";

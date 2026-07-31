@@ -9,7 +9,7 @@ import {
     MapViewUtils
 } from "@flywave/flywave-mapview";
 import { LoggerManager } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 const logger = LoggerManager.instance.create("CameraKeyTrackAnimation");
 const MIN_DISTANCE = 0;

@@ -1,7 +1,7 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Matrix4, Vector3 } from "three";
+import { Matrix4, Vector3 } from "three/webgpu";
 
 /**
  * Interface for celestial direction computation.

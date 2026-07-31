@@ -5,7 +5,7 @@
  * Provides event dispatch and state management functions, suitable for interactive graphics applications
  */
 
-import { EventDispatcher, Vector2 } from "three";
+import { EventDispatcher, Vector2 } from "three/webgpu";
 
 /**
  * Window event map interface

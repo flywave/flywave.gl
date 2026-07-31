@@ -13,7 +13,7 @@ import {
 } from "@flywave/flywave-geoutils";
 import { assert, expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { CameraUtils } from "../src/CameraUtils";
 import { type ElevationProvider } from "../src/ElevationProvider";

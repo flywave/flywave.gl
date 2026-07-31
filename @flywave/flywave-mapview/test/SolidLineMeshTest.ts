@@ -5,7 +5,7 @@
 
 import { SolidLineMaterial } from "@flywave/flywave-materials";
 import { expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { DisplacedBufferGeometry } from "../src/geometry/DisplacedBufferGeometry";
 import { SolidLineMesh } from "../src/geometry/SolidLineMesh";

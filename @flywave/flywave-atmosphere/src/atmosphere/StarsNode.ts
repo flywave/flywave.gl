@@ -1,18 +1,10 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { HalfFloatType, Vector2 } from "three";
+import { HalfFloatType, Vector2, NodeUpdateType, RendererUtils, RenderTarget, TempNode, type NodeBuilder, type NodeFrame, type TextureNode, type UniformNode } from "three/webgpu";
 import { screenUV } from "three/tsl";
-import {
-    NodeUpdateType,
-    RendererUtils,
-    RenderTarget,
-    TempNode,
-    type NodeBuilder,
-    type NodeFrame,
-    type TextureNode,
-    type UniformNode
-} from "three/webgpu";
+
+
 
 import { outputTexture } from "../tsl/OutputTextureNode";
 

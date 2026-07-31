@@ -1,4 +1,4 @@
-import { Box3, Matrix4, Object3D, Vector2, Vector3, type PerspectiveCamera } from "three";
+import { Box3, Matrix4, Object3D, Vector2, Vector3, type PerspectiveCamera } from "three/webgpu";
 
 import { FrustumCorners } from "./FrustumCorners";
 import { splitFrustum, type FrustumSplitMode } from "./splitFrustum";

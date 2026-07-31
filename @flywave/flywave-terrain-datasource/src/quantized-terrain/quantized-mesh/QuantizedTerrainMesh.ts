@@ -26,7 +26,7 @@ import {
     Quaternion,
     Texture,
     Vector3
-} from "three";
+} from "three/webgpu";
 
 import DEMData, { SerializedDEMData } from "../../dem-terrain/dem/DemData";
 import { DemTileResource } from "../../dem-terrain/DEMTileProvider";

@@ -3,7 +3,7 @@
 import { type Fog as FogConfig } from "@flywave/flywave-datasource-protocol";
 import { SolidLineMaterial } from "@flywave/flywave-materials";
 import { assert } from "chai";
-import { BoxGeometry, Fog, Mesh, Scene } from "three";
+import { BoxGeometry, Fog, Mesh, Scene } from "three/webgpu";
 
 import { MapViewFog } from "../src/MapViewFog";
 

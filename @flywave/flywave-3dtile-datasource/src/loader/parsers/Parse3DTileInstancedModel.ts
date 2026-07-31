@@ -2,7 +2,7 @@
 
 import { eastNorthUpToFixedFrame } from "@flywave/flywave-geoutils";
 import { GL } from "@flywave/flywave-utils";
-import { Matrix4, Quaternion, Vector3 } from "three";
+import { Matrix4, Quaternion, Vector3 } from "three/webgpu";
 
 import Tile3DBatchTable from "../classes/Tile3DBatchTable";
 import Tile3DFeatureTable from "../classes/Tile3DFeatureTable";

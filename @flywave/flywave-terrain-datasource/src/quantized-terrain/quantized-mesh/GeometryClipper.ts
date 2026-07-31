@@ -12,7 +12,7 @@ import {
     Mesh,
     Triangle,
     Vector4
-} from "three";
+} from "three/webgpu";
 
 const SPLIT_VALUE = 0;
 const vertNames = ["a", "b", "c"] as const;

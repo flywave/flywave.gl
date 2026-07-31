@@ -7,7 +7,7 @@ import { TileLoader } from "@flywave/flywave-mapview-decoder";
 import { type ResourceProvider } from "./ResourceProvider";
 import { type ITerrainSource, type TerrainResourceTile } from "./TerrainSource";
 import { type ITileResource } from "./TileResourceManager";
-import { Color } from "three";
+import { Color } from "three/webgpu";
 
 /**
  * Tile loader for DEM (Digital Elevation Model) and TIN (Triangulated Irregular Network) data

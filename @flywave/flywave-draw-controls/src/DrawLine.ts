@@ -2,7 +2,7 @@
 
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { Line2NodeMaterial } from "three/webgpu";
 import { Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";

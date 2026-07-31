@@ -8,7 +8,7 @@ import {
     RedFormat,
     RepeatWrapping,
     UnsignedByteType
-} from "three";
+} from "three/webgpu";
 
 import { STBN_TEXTURE_DEPTH, STBN_TEXTURE_HEIGHT, STBN_TEXTURE_WIDTH } from "./constants";
 

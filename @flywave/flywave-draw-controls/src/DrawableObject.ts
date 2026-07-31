@@ -2,7 +2,7 @@
 
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 export abstract class DrawableObject extends THREE.Object3D {
     public isSelected: boolean = false;

@@ -3,7 +3,7 @@
 import { mercatorProjection } from "@flywave/flywave-geoutils";
 import { createLineGeometry } from "@flywave/flywave-lines";
 import { measureThroughputSync } from "@flywave/flywave-test-utils/lib/ProfileHelper";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 if (typeof window === "undefined") {
     const perfHooks = require("perf_hooks");

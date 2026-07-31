@@ -4,7 +4,7 @@ import { type FlatTheme, type Theme, type ValueMap } from "@flywave/flywave-data
 import { ExprPool } from "@flywave/flywave-datasource-protocol/ExprPool";
 import { type Projection, type TileKey, type TilingScheme } from "@flywave/flywave-geoutils";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type MapView } from "./MapView";
 import { type Tile } from "./Tile";

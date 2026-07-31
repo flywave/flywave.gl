@@ -1,8 +1,9 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Fn, fwidth, If, smoothstep, uniform, vec4 } from "three/tsl";
 import { TempNode, type NodeBuilder } from "three/webgpu";
+import { Fn, fwidth, If, smoothstep, uniform, vec4 } from "three/tsl";
+
 
 import type { Node } from "../tsl/node";
 

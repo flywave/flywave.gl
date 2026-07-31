@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { BufferAttribute, Uint16BufferAttribute } from "three";
+import { BufferAttribute, Uint16BufferAttribute } from "three/webgpu";
 
 import { type QParams2d, type QParams3d } from "../common";
 import { type Point3d } from "../core-geometry";

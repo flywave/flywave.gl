@@ -14,7 +14,7 @@ import {
 } from "@flywave/flywave.gl";
 import { CESIUM_ION_TOKEN } from "../token-config";
 import { GUI } from "dat.gui";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 // Configuration constants
 const CONFIG = {

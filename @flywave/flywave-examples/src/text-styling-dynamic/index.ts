@@ -14,7 +14,7 @@ import {
 } from "@flywave/flywave.gl";
 import { GUI } from "dat.gui";
 import * as Stats from "stats.js";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { WebGPURenderer } from "three/webgpu";
 
 /**

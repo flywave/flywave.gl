@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 /**
  * Use `ColorCache` to reuse a color specified by name and save allocation as well as

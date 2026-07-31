@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 import { getS2Cell } from "../s2geometry/S2CellUtils";
 import { getS2Region } from "./S2ToRegion";

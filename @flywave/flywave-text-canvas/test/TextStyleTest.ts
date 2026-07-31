@@ -3,7 +3,7 @@
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
 import { assert } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import {
     type TextRenderParameters,

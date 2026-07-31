@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Vector2 } from "three";
+import { Vector2 } from "three/webgpu";
 
 import { GeoBox } from "./GeoBox";
 import { GeoCoordinates, MAX_LATITUDE, MIN_LATITUDE } from "./GeoCoordinates";

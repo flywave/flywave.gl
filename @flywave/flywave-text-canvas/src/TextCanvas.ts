@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import type { Renderer } from "three/webgpu";
 
 import { type FontCatalog } from "./rendering/FontCatalog";
@@ -289,8 +289,8 @@ export class TextCanvas {
             id: DEFAULT_TEXT_CANVAS_LAYER,
             storage: new TextGeometry(
                 new THREE.Scene(),
-                this.m_material,
-                this.m_bgMaterial,
+                this.m_material as THREE.Material,
+                this.m_bgMaterial as THREE.Material,
                 this.minGlyphCount,
                 this.maxGlyphCount
             )
@@ -341,18 +341,18 @@ export class TextCanvas {
      * Currently active text rendering material.
      */
     get material(): THREE.Material {
-        return this.m_material;
+        return this.m_material as THREE.Material;
     }
 
     set material(value: THREE.Material) {
         if (this.m_ownsMaterial) {
-            this.m_material.dispose();
+            (this.m_material as THREE.Material).dispose();
             this.m_ownsMaterial = false;
         }
 
         this.m_material = value;
         for (const layer of this.m_layers) {
-            layer.storage.mesh.material = this.m_material;
+            layer.storage.mesh.material = this.m_material as THREE.Material;
         }
     }
 
@@ -360,18 +360,18 @@ export class TextCanvas {
      * Currently active text background rendering material.
      */
     get backgroundMaterial(): THREE.Material {
-        return this.m_bgMaterial;
+        return this.m_bgMaterial as THREE.Material;
     }
 
     set backgroundMaterial(value: THREE.Material) {
         if (this.m_ownsBgMaterial) {
-            this.m_bgMaterial.dispose();
+            (this.m_bgMaterial as THREE.Material).dispose();
             this.m_ownsBgMaterial = false;
         }
 
         this.m_bgMaterial = value;
         for (const layer of this.m_layers) {
-            layer.storage.backgroundMesh.material = this.m_bgMaterial;
+            layer.storage.backgroundMesh.material = this.m_bgMaterial as THREE.Material;
         }
     }
 
@@ -466,8 +466,8 @@ export class TextCanvas {
                 id: layerId,
                 storage: new TextGeometry(
                     new THREE.Scene(),
-                    this.m_material,
-                    this.m_bgMaterial,
+                    this.m_material as THREE.Material,
+                    this.m_bgMaterial as THREE.Material,
                     this.minGlyphCount,
                     this.maxGlyphCount
                 )

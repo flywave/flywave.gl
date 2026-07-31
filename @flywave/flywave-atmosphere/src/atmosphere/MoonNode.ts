@@ -1,24 +1,9 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    dFdx,
-    dFdy,
-    equirectUV,
-    Fn,
-    fwidth,
-    If,
-    max,
-    mix,
-    PI,
-    smoothstep,
-    sqrt,
-    uniform,
-    vec2,
-    vec3,
-    vec4
-} from "three/tsl";
 import { TempNode, type NodeBuilder, type SampleNode, type TextureNode } from "three/webgpu";
+import { dFdx, dFdy, equirectUV, Fn, fwidth, If, max, mix, PI, smoothstep, sqrt, uniform, vec2, vec3, vec4 } from "three/tsl";
+
 
 import { FnLayout } from "../tsl/FnLayout";
 import type { Node } from "../tsl/node";

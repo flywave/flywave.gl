@@ -11,7 +11,7 @@ import {
     Matrix4,
     Quaternion,
     Vector3
-} from "three";
+} from "three/webgpu";
 
 import type { GLTFLoaderOptions } from "../../gltf-loader";
 import { GLTFScenegraph } from "../api/gltf-scenegraph";

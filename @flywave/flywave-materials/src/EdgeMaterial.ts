@@ -1,24 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
-import {
-    Fn,
-    attribute,
-    mix as tslMix,
-    normalize,
-    smoothstep,
-    texture,
-    uniform,
-    uv as uvNode,
-    vec3,
-    vec4,
-    positionLocal,
-    normalLocal,
-    modelViewPosition,
-    cameraProjectionMatrix
-} from "three/tsl";
+import { Fn, attribute, mix as tslMix, normalize, smoothstep, texture, uniform, uv as uvNode, vec3, vec4, positionLocal, normalLocal, modelViewPosition, cameraProjectionMatrix } from "three/tsl";
+
 
 import { ExtrusionFeatureDefs } from "./MapMeshMaterialsDefs";
 

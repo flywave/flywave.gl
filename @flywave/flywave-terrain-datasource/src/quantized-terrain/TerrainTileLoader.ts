@@ -2,7 +2,7 @@
 
 import { type GeoBox, type TilingScheme, ProjectionType, TileKey } from "@flywave/flywave-geoutils";
 import { type MapView, type Tile, TextElement } from "@flywave/flywave-mapview";
-import { type BufferGeometry, type Material, Color, Object3D, Vector3 } from "three";
+import { type BufferGeometry, type Material, Color, Object3D, Vector3 } from "three/webgpu";
 
 import { HeightMapTerrainMesh } from "../dem-terrain/DEMTileTerrainMesh";
 import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";

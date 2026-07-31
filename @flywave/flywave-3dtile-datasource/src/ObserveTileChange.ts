@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { MathUtils } from "three";
+import { MathUtils } from "three/webgpu";
 import { ITile } from "./base/Tile";
 
 export type NotifyCallback = (tile: ITile, active: boolean) => void;

@@ -10,7 +10,7 @@ import {
     ProjectionType
 } from "@flywave/flywave-geoutils";
 import { assert } from "@flywave/flywave-utils";
-import { type PerspectiveCamera, Vector2, Vector3 } from "three";
+import { type PerspectiveCamera, Vector2, Vector3 } from "three/webgpu";
 
 import { CanvasSide, nextCanvasSide, previousCanvasSide, SphereHorizon } from "./SphereHorizon";
 import { MapViewUtils } from "./Utils";

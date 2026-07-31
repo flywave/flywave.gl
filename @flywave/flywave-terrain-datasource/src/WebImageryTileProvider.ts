@@ -10,7 +10,7 @@ import { LRUCache } from "@flywave/flywave-lrucache";
 import { type Tile } from "@flywave/flywave-mapview";
 import { textureToImageBitmap } from "@flywave/flywave-utils/TextureSerializer";
 import { type WebTileDataProvider } from "@flywave/flywave-webtile-datasource";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import {
     type HeightMapModificationEventParams,

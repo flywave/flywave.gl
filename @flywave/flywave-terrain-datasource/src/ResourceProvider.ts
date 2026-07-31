@@ -7,7 +7,7 @@ import {
     TileKey
 } from "@flywave/flywave-geoutils";
 import { DataProvider } from "@flywave/flywave-mapview-decoder";
-import { MathUtils } from "three";
+import { MathUtils } from "three/webgpu";
 
 import { type ITerrainSource, type TerrainResourceTile } from "./TerrainSource";
 import { type ITileResource, TileInvalidResource, TileValidResource } from "./TileResourceManager";

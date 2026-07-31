@@ -4,17 +4,8 @@
 // AtmosphereLUTNode extends Node and uses WebGPU-specific lifecycle hooks
 // (updateBeforeType, version, dispatchEvent) not fully typed in @types/three@0.184.
 
-import { Data3DTexture, FloatType, HalfFloatType, RGBAFormat, Texture } from "three";
-import {
-    type NodeBuilder,
-    type NodeFrame,
-    type Renderer,
-    type Texture3DNode,
-    type TextureNode,
-    Node,
-    NodeUpdateType,
-    RendererUtils
-} from "three/webgpu";
+import {Data3DTexture, FloatType, HalfFloatType, RGBAFormat, Texture, type NodeBuilder, type NodeFrame, type Renderer, type Texture3DNode, type TextureNode, Node, NodeUpdateType, RendererUtils} from "three/webgpu";
+
 
 import { isFloatLinearSupported } from "../capabilities";
 import { outputTexture3D } from "../tsl/OutputTexture3DNode";

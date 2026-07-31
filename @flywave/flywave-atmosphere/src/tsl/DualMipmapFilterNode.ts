@@ -1,14 +1,8 @@
 // @ts-nocheck
-import type { RenderTarget } from "three";
+
+import { NodeMaterial, QuadMesh, RendererUtils, type NodeBuilder, type NodeFrame, type TextureNode } from "three/webgpu";
 import { texture, uniform } from "three/tsl";
-import {
-    NodeMaterial,
-    QuadMesh,
-    RendererUtils,
-    type NodeBuilder,
-    type NodeFrame,
-    type TextureNode
-} from "three/webgpu";
+
 
 import { FilterNode } from "./FilterNode";
 import type { Node } from "./node";

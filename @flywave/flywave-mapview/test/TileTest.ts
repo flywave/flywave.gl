@@ -13,7 +13,7 @@ import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import { TaskQueue } from "@flywave/flywave-utils";
 import { assert, expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { DataSource } from "../src/DataSource";
 import { type TileGeometryLoader } from "../src/geometry/TileGeometryLoader";

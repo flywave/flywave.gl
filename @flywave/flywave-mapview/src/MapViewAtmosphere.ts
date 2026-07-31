@@ -8,7 +8,7 @@ import {
     SkyAtmosphereMaterial
 } from "@flywave/flywave-materials";
 import { assert } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { TiltViewClipPlanesEvaluator } from "./ClipPlanesEvaluator";
 import { type MapAnchor, type MapAnchors } from "./MapAnchors";
@@ -426,23 +426,23 @@ export class MapViewAtmosphere {
         // Sky material should be already created with mesh.
         assert(this.m_skyMaterial !== undefined);
         this.m_skyMesh.onBeforeRender = (
-            _renderer: THREE.WebGLRenderer,
-            _scene: THREE.Scene,
+            _renderer,
+            _scene,
             camera: THREE.Camera,
-            _geometry: THREE.BufferGeometry,
+            _geometry,
             material: THREE.Material,
-            _group: THREE.Group
+            _group
         ) => {
             onBeforeCallback(camera, material);
         };
 
         this.m_skyMesh.onAfterRender = (
-            _renderer: THREE.WebGLRenderer,
-            _scene: THREE.Scene,
+            _renderer,
+            _scene,
             camera: THREE.Camera,
-            _geometry: THREE.BufferGeometry,
-            _material: THREE.Material,
-            _group: THREE.Group
+            _geometry,
+            _material,
+            _group
         ) => {
             this.revertClipPlanes(camera);
         };
@@ -455,17 +455,14 @@ export class MapViewAtmosphere {
         if (this.m_materialVariant !== AtmosphereShadingVariant.ScatteringShader) {
             return;
         }
-        // Ground material should be already created.
         assert(this.m_groundMaterial !== undefined);
-        // Ground mesh does not need custom clip planes and uses the same camera setup as
-        // real (data source based) geometry.
         this.m_groundMesh.onBeforeRender = (
-            _renderer: THREE.WebGLRenderer,
-            _scene: THREE.Scene,
+            _renderer,
+            _scene,
             camera: THREE.Camera,
-            _geometry: THREE.BufferGeometry,
+            _geometry,
             material: THREE.Material,
-            _group: THREE.Group
+            _group
         ) => {
             if (material instanceof GroundAtmosphereMaterial) {
                 assert(material instanceof GroundAtmosphereMaterial);

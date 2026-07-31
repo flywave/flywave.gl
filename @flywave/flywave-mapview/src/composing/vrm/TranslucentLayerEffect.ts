@@ -7,7 +7,7 @@ import {
     LinearFilter,
     Scene,
     type Object3D
-} from "three";
+} from "three/webgpu";
 import { ITranslucentLayerConfig } from "@flywave/flywave-datasource-protocol";
 
 interface InternalLayerConfig extends ITranslucentLayerConfig {

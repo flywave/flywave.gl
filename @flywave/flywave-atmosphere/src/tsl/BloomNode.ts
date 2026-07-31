@@ -1,32 +1,7 @@
 // @ts-nocheck
-import {
-    HalfFloatType,
-    RenderTarget,
-    Vector2,
-    Vector3,
-    TempNode,
-    QuadMesh,
-    NodeMaterial,
-    RendererUtils,
-    NodeUpdateType
-} from "three/webgpu";
-import {
-    nodeObject,
-    Fn,
-    float,
-    uv,
-    passTexture,
-    uniform,
-    Loop,
-    texture,
-    luminance,
-    smoothstep,
-    mix,
-    vec4,
-    uniformArray,
-    add,
-    int
-} from "three/tsl";
+import { HalfFloatType, RenderTarget, Vector2, Vector3, TempNode, QuadMesh, NodeMaterial, RendererUtils, NodeUpdateType } from "three/webgpu";
+import { nodeObject, Fn, float, uv, passTexture, uniform, Loop, texture, luminance, smoothstep, mix, vec4, uniformArray, add, int } from "three/tsl";
+
 
 const _quadMesh = /*@__PURE__*/ new QuadMesh();
 const _size = /*@__PURE__*/ new Vector2();

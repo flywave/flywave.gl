@@ -1,0 +1,57 @@
+export const TrainState: any;
+export const SignalState: any;
+export class TrainSimulator {
+    constructor(dataSource: any, network: any);
+    m_trains: Map<any, any>;
+    m_signals: Map<any, any>;
+    m_carriageSpacing: number;
+    m_engineGap: number;
+    m_modelScale: number;
+    m_customEnvMap: THREE.Texture<HTMLImageElement, THREE.TextureEventMap>;
+    m_dataSource: any;
+    m_network: any;
+    loadEnvMap(url: any): Promise<void>;
+    loadModels(engineUrl: any, carriageUrl: any, scale?: number): Promise<void>;
+    m_engineModel: THREE.Group<THREE.Object3DEventMap>;
+    m_carriageModel: THREE.Group<THREE.Object3DEventMap>;
+    loadSignalModel(url: any, scale?: number): Promise<void>;
+    m_signalModel: THREE.Group<THREE.Object3DEventMap>;
+    loadRetarderModel(url: any): Promise<void>;
+    m_retarderModel: THREE.Group<THREE.Object3DEventMap>;
+    disableEnvMap(model: any): void;
+    createPlaceholder(color: any): THREE.Group<THREE.Object3DEventMap>;
+    createTrain(id: any, carriageCount: any, edgeId: any): {
+        id: any;
+        engine: THREE.Group<THREE.Object3DEventMap>;
+        carriages: THREE.Group<THREE.Object3DEventMap>[];
+        state: any;
+        pathPositions: any;
+        pathTangents: THREE.Vector3[];
+        pathTotalLength: number;
+        distance: number;
+        speed: number;
+        pathEdges: any[];
+    };
+    moveTrain(id: any, positions: any, edges: any, speed: any, onArrival: any, initialDistance?: number): boolean;
+    stopTrain(id: any): void;
+    waitTrain(id: any): void;
+    removeTrain(id: any): void;
+    createSignalAtPosition(id: any, lat: any, lon: any, alt: any, label: any, direction: any): void;
+    setSignal(id: any, state: any): void;
+    createRetarderInstances(id: any, basePosition: any, instances: any): void;
+    getSignalState(id: any): any;
+    getSignals(): Map<any, any>;
+    isEdgeOccupied(edgeId: any): any;
+    update(dt: any): void;
+    updateVisual(train: any): void;
+    applyRot(obj: any, pos: any, tangent: any): void;
+    lerp(positions: any, tangents: any, dist: any, total: any): {
+        position: any;
+        tangent: any;
+    };
+    getTrain(id: any): any;
+    getTrains(): any[];
+    getNetwork(): any;
+    get dataSource(): any;
+}
+import * as THREE from "three/webgpu";

@@ -9,7 +9,7 @@ const chaiAsPromised = require("chai-as-promised");
 chai.use(chaiAsPromised);
 
 import { OrientedBox3 } from "@flywave/flywave-geoutils";
-import { Matrix4, Ray, Vector3 } from "three";
+import { Matrix4, Ray, Vector3 } from "three/webgpu";
 
 import { load3DTiles } from "../src/loader";
 

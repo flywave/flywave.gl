@@ -3,7 +3,7 @@
 import { type Env } from "@flywave/flywave-datasource-protocol";
 import { Math2D } from "@flywave/flywave-utils";
 import type * as sinon from "sinon";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { PoiRenderer } from "../src/poi/PoiRenderer";
 import { type ScreenCollisions } from "../src/ScreenCollisions";

@@ -1,17 +1,8 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    Data3DTexture,
-    LinearFilter,
-    NoColorSpace,
-    RedFormat,
-    RepeatWrapping,
-    TextureLoader,
-    UnsignedByteType,
-    type Texture
-} from "three";
-import { type Renderer } from "three/webgpu";
+import {Data3DTexture, LinearFilter, NoColorSpace, RedFormat, RepeatWrapping, TextureLoader, UnsignedByteType, type Texture, type Renderer} from "three/webgpu";
+
 
 const _textureCache = new Map<string, Promise<CloudTextures>>();
 

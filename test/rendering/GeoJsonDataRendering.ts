@@ -21,7 +21,7 @@ import {
 import { type LookAtParams } from "@flywave/flywave-mapview";
 import { DataProvider } from "@flywave/flywave-mapview-decoder";
 import * as turf from "@turf/turf";
-import { Vector2, Vector3 } from "three";
+import { Vector2, Vector3 } from "three/webgpu";
 
 import * as polygon_crossing_antimeridian from "../resources/polygon_crossing_antimeridian.json";
 import { GeoJsonStore } from "./utils/GeoJsonStore";

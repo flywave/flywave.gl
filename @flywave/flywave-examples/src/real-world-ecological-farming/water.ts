@@ -7,27 +7,27 @@ import {
     Texture,
     TextureLoader,
     RepeatWrapping,
-    Vector3
-} from "three";
-import { NodeMaterial } from "three/webgpu";
+    Vector3,
+    NodeMaterial
+} from "three/webgpu";
 import {
-    texture,
-    vec2,
-    vec3,
     cameraPosition,
-    positionWorld,
-    positionGeometry,
-    mix,
-    normalize,
     dot,
-    reflect,
-    max,
-    pow,
-    length,
     float,
+    length,
+    max,
+    mix,
     mul,
+    normalize,
+    positionGeometry,
+    positionWorld,
+    pow,
+    reflect,
+    texture,
     time,
-    uniform
+    uniform,
+    vec2,
+    vec3
 } from "three/tsl";
 
 interface WaterMaterialOptions {

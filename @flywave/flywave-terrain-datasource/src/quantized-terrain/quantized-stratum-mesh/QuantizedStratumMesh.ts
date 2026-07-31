@@ -8,7 +8,7 @@ import {
 } from "@flywave/flywave-geoutils";
 import { VisualStyle } from "@flywave/flywave-materials";
 import { MapView } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type WebTile } from "../../WebImageryTileProvider";
 import { StratumMaterial } from "./stratum-tile/StratumMaterial";

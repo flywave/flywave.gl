@@ -1,15 +1,9 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { type NodeBuilder, Data3DTexture, NearestFilter, RedFormat, RepeatWrapping, Texture3DNode } from "three/webgpu";
 import { Fn, frameId, float, nodeImmutable, screenCoordinate, vec3 } from "three/tsl";
-import {
-    type NodeBuilder,
-    Data3DTexture,
-    NearestFilter,
-    RedFormat,
-    RepeatWrapping,
-    Texture3DNode
-} from "three/webgpu";
+
 
 import { STBNLoader } from "../STBNLoader";
 import { hashString } from "./utils";

@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
-import { DataTexture, EventDispatcher, LinearFilter, RGBAFormat } from "three";
+import { DataTexture, EventDispatcher, LinearFilter, RGBAFormat } from "three/webgpu";
 
 import {
     type HeightOperation,

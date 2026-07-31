@@ -76,7 +76,7 @@ import {
     struct,
     vec2,
     vec3,
-    vec4
+    vec4,
 } from "three/tsl";
 import type { Texture3DNode, TextureNode } from "three/webgpu";
 

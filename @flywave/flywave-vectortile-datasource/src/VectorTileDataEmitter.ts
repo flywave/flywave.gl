@@ -68,7 +68,7 @@ import { triangulateLine } from "@flywave/flywave-lines/TriangulateLines";
 import { ExtrusionFeatureDefs } from "@flywave/flywave-materials/MapMeshMaterialsDefs";
 import { assert, getOptionValue, LoggerManager, Math2D } from "@flywave/flywave-utils";
 import earcut from "earcut";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type DecodeInfo } from "./DecodeInfo";
 import { type ILineGeometry, type IPolygonGeometry } from "./IGeometryProcessor";

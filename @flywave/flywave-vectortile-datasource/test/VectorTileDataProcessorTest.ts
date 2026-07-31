@@ -5,7 +5,7 @@ import { StyleSetEvaluator } from "@flywave/flywave-datasource-protocol/index-de
 import { mercatorProjection, TileKey } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
 import * as sinon from "sinon";
-import { Vector2, Vector3 } from "three";
+import { Vector2, Vector3 } from "three/webgpu";
 
 import { type DataAdapter } from "../src/DataAdapter";
 import { type DecodeInfo } from "../src/DecodeInfo";

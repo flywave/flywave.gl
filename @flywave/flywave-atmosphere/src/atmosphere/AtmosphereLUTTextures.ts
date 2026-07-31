@@ -1,8 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Matrix3, Vector3, type Texture } from "three";
+import { Matrix3, Vector3, type Renderer, type Texture } from "three/webgpu";
 import { uniform } from "three/tsl";
-import type { Renderer } from "three/webgpu";
 
 import type { AnyFloatType } from "../tsl/types";
 

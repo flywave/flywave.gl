@@ -12,7 +12,7 @@ import {
     MapEnv
 } from "@flywave/flywave-datasource-protocol";
 import { assert, assertExists, LoggerManager } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type MapView } from "../MapView";
 import { type TextElement } from "../text/TextElement";

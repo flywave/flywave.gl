@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { GL } from "@flywave/flywave-utils";
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 // Prepare attribute for positions
 export function normalize3DTilePositionAttribute(tile, positions, options) {

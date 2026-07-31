@@ -8,7 +8,7 @@
 
 import { clipPolygon } from "@flywave/flywave-geometry/ClipPolygon";
 import { assert } from "chai";
-import { Vector2 } from "three";
+import { Vector2 } from "three/webgpu";
 
 import { Ring } from "../src/Ring";
 

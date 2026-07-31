@@ -9,7 +9,7 @@ import {
     type Point,
     type Polygon
 } from "@flywave/flywave-datasource-protocol";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 /**
  * Base class to create features.

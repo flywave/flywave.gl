@@ -2,7 +2,7 @@
 
 import { type Projection } from "@flywave/flywave-geoutils";
 import { assert } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 // Preallocate temp variables used during line generation.
 const tmpV = new THREE.Vector3();

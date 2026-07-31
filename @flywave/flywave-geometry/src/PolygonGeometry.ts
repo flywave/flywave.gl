@@ -1,4 +1,4 @@
-import { BufferGeometry, BufferAttribute, Vector2, Vector3, Box3, Plane, Ray } from "three";
+import { BufferGeometry, BufferAttribute, Vector2, Vector3, Box3, Plane, Ray } from "three/webgpu";
 import earcut from "earcut";
 import { Projection } from "@flywave/flywave-geoutils";
 

@@ -6,7 +6,8 @@ import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import { type FontCatalog, type TextCanvas } from "@flywave/flywave-text-canvas";
 import { assert, expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
+import { WebGPURenderer } from "three/webgpu";
 
 import { type PoiRenderer } from "../src/poi/PoiRenderer";
 import { ScreenCollisions } from "../src/ScreenCollisions";
@@ -164,7 +165,7 @@ export class TestFixture {
             this.m_viewState,
             this.m_screenProjector,
             stubPoiManager(this.sandbox),
-            sinon.createStubInstance(THREE.WebGLRenderer) as any,
+            sinon.createStubInstance(WebGPURenderer) as any,
             { isWebGL2: true, logarithmicDepthBuffer: false },
             [],
             this.m_options,

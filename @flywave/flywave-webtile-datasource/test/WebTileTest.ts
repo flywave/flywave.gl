@@ -6,7 +6,7 @@ import { type CopyrightInfo, type MapView, type Tile } from "@flywave/flywave-ma
 import { LoggerManager } from "@flywave/flywave-utils";
 import { expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { WebTileDataProvider, WebTileDataSource } from "../src/index";
 

@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Matrix4, Quaternion, Spherical, Vector3 } from "three";
+import { Matrix4, Quaternion, Spherical, Vector3 } from "three/webgpu";
 
 /**
  * Performs spherical linear interpolation (slerp) between two matrices

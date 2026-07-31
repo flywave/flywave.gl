@@ -13,7 +13,7 @@
  * @packageDocumentation
  */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 (self as any).THREE = THREE;
 
 import { TerrainTileDecoderService } from "@flywave/flywave-terrain-datasource";

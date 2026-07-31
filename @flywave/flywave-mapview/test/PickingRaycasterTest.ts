@@ -6,7 +6,7 @@
 import { Pickability } from "@flywave/flywave-datasource-protocol";
 import { expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { MapObjectAdapter } from "../src/MapObjectAdapter";
 import { PickingRaycaster } from "../src/PickingRaycaster";

@@ -18,7 +18,7 @@ import {
     vPlacementFromAlignment
 } from "@flywave/flywave-text-canvas";
 import { assert, Math2D, MathUtils } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type PoiManager } from "../poi/PoiManager";
 import { PoiRenderer } from "../poi/PoiRenderer";

@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type BufferGeometry, Mesh } from "three";
+import { type BufferGeometry, Mesh } from "three/webgpu";
 
 import { HEIGHT_MAP_HEIGHT, HEIGHT_MAP_WIDTH } from "../constants";
 import { type RenderEnvironment, getGlobalRenderEnvironment } from "../core/RenderEnvironment";

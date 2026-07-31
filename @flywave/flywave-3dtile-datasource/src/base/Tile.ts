@@ -8,7 +8,7 @@ import {
     type Object3D,
     type Scene,
     type Texture
-} from "three";
+} from "three/webgpu";
 
 import Tile3DBatchTable from "../loader/classes/Tile3DBatchTable";
 import Tile3DFeatureTable from "../loader/classes/Tile3DFeatureTable";

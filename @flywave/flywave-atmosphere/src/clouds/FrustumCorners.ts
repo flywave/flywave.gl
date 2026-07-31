@@ -1,4 +1,4 @@
-import { Vector3, type Matrix4 } from "three";
+import { Vector3, type Matrix4 } from "three/webgpu";
 
 export class FrustumCorners {
     readonly near = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];

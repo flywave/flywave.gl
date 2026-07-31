@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Vector2, Vector3 } from "three";
+import { Vector2, Vector3 } from "three/webgpu";
 
 /**
  * Transforms the given point in screen space into NDC space by taking the given screen dimension

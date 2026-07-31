@@ -1,21 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
-import {
-    Fn,
-    clamp,
-    dot,
-    float,
-    length,
-    min as tslMin,
-    texture,
-    uniform,
-    uv as uvNode,
-    vec2,
-    vec4
-} from "three/tsl";
+import { Fn, clamp, dot, float, length, min as tslMin, texture, uniform, uv as uvNode, vec2, vec4 } from "three/tsl";
+
 
 export class MaskedDistanceShader extends NodeMaterial {
     constructor() {

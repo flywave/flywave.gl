@@ -3,7 +3,7 @@
 import { type FeatureCollection, type StyleSet } from "@flywave/flywave-datasource-protocol";
 import { type Projection, mercatorProjection, sphereProjection } from "@flywave/flywave-geoutils";
 import { CameraUtils } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { GeoJsonTest } from "./utils/GeoJsonTest";
 import { ThemeBuilder } from "./utils/ThemeBuilder";

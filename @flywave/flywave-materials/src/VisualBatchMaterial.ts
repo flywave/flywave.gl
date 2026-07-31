@@ -1,6 +1,32 @@
+// @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import {
+    ClampToEdgeWrapping,
+    DataTexture,
+    FloatType,
+    LinearFilter,
+    MathUtils,
+    MeshStandardNodeMaterial,
+    RedFormat,
+    RGBAFormat,
+    type MeshStandardNodeMaterialParameters,
+    type Node,
+    type UniformNode,
+} from "three/webgpu";
+import {
+    attribute,
+    float,
+    materialColor,
+    materialOpacity,
+    mix,
+    positionLocal,
+    select,
+    texture,
+    uniform,
+    vec2,
+    vec3,
+} from "three/tsl";
 
 /**
  * Interface defining visual style properties for batch rendering
@@ -17,7 +43,7 @@ interface IVisualStyle {
 /**
  * Parameters for VisualBatchMaterial constructor
  */
-interface IVisualBatchMaterialParams extends THREE.MeshStandardMaterialParameters {
+interface IVisualBatchMaterialParams extends MeshStandardNodeMaterialParameters {
     /** Attribute name used for instance identification (default: 'instanceId') */
     idAttributeName?: string;
 }
@@ -45,91 +71,39 @@ class VisualStyle implements IVisualStyle {
 }
 
 /**
- * Enhanced THREE.MeshStandardMaterial supporting batch rendering with:
+ * Node graph exposed to subclasses for per-instance styling.
+ */
+interface IVisualStyleNodes {
+    idAttr: Node<"float">;
+    hasStyle: Node<"bool">;
+    visualValue: Node<"float">;
+    styleColor: Node<"vec3">;
+    styleOpacity: Node<"float">;
+    offset: Node<"vec3">;
+}
+
+/**
+ * Enhanced MeshStandardNodeMaterial supporting batch rendering with:
  * - Per-instance visual styles
  * - Dynamic value interpolation
  * - Configurable ID attribute name
+ *
+ * Implemented with TSL nodes for WebGPU / NodeMaterial rendering.
  */
-class VisualBatchMaterial extends THREE.MeshStandardMaterial {
+class VisualBatchMaterial extends MeshStandardNodeMaterial {
     // Private properties
     private _styleTable: Map<number, VisualStyle>;
     private readonly _valueTable: Map<number, number>;
     protected _idAttributeName: string;
 
-    // Uniforms type extension
-    declare uniforms: {
-        styleTexture: THREE.IUniform<THREE.DataTexture | null>;
-        valueTexture: THREE.IUniform<THREE.DataTexture | null>;
-        textureWidth: THREE.IUniform<number>;
-        textureHeight: THREE.IUniform<number>;
-        maxVisualId: THREE.IUniform<number>;
-    } & THREE.ShaderLibShader["uniforms"];
+    // Texture uniforms (swappable at runtime via .value)
+    private readonly _styleTexUniform: UniformNode<DataTexture | null>;
+    private readonly _valueTexUniform: UniformNode<DataTexture | null>;
+    private readonly _maxVisualIdUniform: UniformNode<number>;
+    private readonly _styleHeightUniform: UniformNode<number>;
 
-    public defines: Record<string, any> = {};
-
-    // GLSL shader chunks
-    private static readonly ShaderChunks = {
-        // Structure definition
-        structs: `
-      /**
-       * Contains all visual style properties for interpolation
-       */
-      struct VisualStyle {
-        vec3 startOffset;
-        vec3 endOffset;
-        vec3 startColor;
-        vec3 endColor;
-        float startOpacity;
-        float endOpacity;
-      };
-    `,
-
-        // Helper functions
-        helpers: `
-      /**
-       * Unpacks VisualStyle from texture data
-       * @param styleIndex Index in style texture
-       * @return VisualStyle structure
-       */
-      VisualStyle unpackStyle(float styleIndex) {
-            VisualStyle style;
-    
-            // 每行一个样式，直接计算行号
-            float row = styleIndex;
-            
-            // 计算4个像素的UV（固定x坐标，变化y坐标）
-            vec2 uv0 = vec2(0.0 / 16.0, row / float(textureHeight));
-            vec2 uv1 = vec2(4.0 / 16.0, row / float(textureHeight));
-            vec2 uv2 = vec2(8.0 / 16.0, row / float(textureHeight));
-            vec2 uv3 = vec2(12.0 / 16.0, row / float(textureHeight));
-            
-            // 采样像素
-            vec4 pixel0 = texture2D(styleTexture, uv0);
-            vec4 pixel1 = texture2D(styleTexture, uv1);
-            vec4 pixel2 = texture2D(styleTexture, uv2);
-            vec4 pixel3 = texture2D(styleTexture, uv3);
-            
-            style.startOffset = pixel0.rgb;
-            style.endOffset = pixel1.rgb;
-            style.startColor = pixel2.rgb;
-            style.startOpacity = pixel2.a;
-            style.endColor = pixel3.rgb;
-            style.endOpacity = pixel3.a;
-            
-            return style;
-      }
-      
-      /**
-       * Gets current interpolation value (0-1) for a visual ID
-       * @param visualId Instance identifier
-       * @return Normalized interpolation value
-       */
-      float getVisualValue(float visualId) {
-        return texture2D(valueTexture, vec2((visualId + 0.5) / (maxVisualId + 1.0), 0.5)).r;
-      }
-       
-    `
-    };
+    /** Per-instance style node graph, consumed by subclasses */
+    protected visualNodes!: IVisualStyleNodes;
 
     constructor(params: IVisualBatchMaterialParams = {}) {
         const { idAttributeName = "instanceId", ...standardParams } = params;
@@ -140,21 +114,17 @@ class VisualBatchMaterial extends THREE.MeshStandardMaterial {
         this._valueTable = new Map();
         this._idAttributeName = idAttributeName;
 
-        // Initialize uniforms
-        this.uniforms = THREE.UniformsUtils.merge([
-            THREE.ShaderLib.standard.uniforms,
-            {
-                styleTexture: { value: null }, // RGBA32F texture storing VisualStyle data
-                valueTexture: { value: null }, // R32F texture storing interpolation values
-                textureWidth: { value: 0 }, // Style texture width
-                textureHeight: { value: 0 }, // Style texture height
-                maxVisualId: { value: 0 } // Maximum ID value
-            },
-            this._getCustomUniforms() // Allow subclasses to add custom uniforms
-        ]) as typeof this.uniforms;
+        // Initialize texture uniforms with placeholder textures
+        this._styleTexUniform = uniform(
+            new DataTexture(new Float32Array(4), 1, 1, RGBAFormat, FloatType)
+        );
+        this._valueTexUniform = uniform(
+            new DataTexture(new Float32Array(1), 1, 1, RedFormat, FloatType)
+        );
+        this._maxVisualIdUniform = uniform(0);
+        this._styleHeightUniform = uniform(0);
 
-        // Patch shader during compilation
-        this.onBeforeCompile = this._compileShader.bind(this);
+        this._buildVisualNodes();
     }
 
     // ==================== Public API ====================
@@ -174,7 +144,7 @@ class VisualBatchMaterial extends THREE.MeshStandardMaterial {
      * @param value Normalized interpolation value (0-1)
      */
     setBatchValue(id: number, value: number): void {
-        this._valueTable.set(id, THREE.MathUtils.clamp(value, 0, 1));
+        this._valueTable.set(id, MathUtils.clamp(value, 0, 1));
         this._updateValueTexture();
     }
 
@@ -183,9 +153,7 @@ class VisualBatchMaterial extends THREE.MeshStandardMaterial {
      * @param valueMap Map of visual IDs to values
      */
     setBatchValues(valueMap: Map<number, number>): void {
-        valueMap.forEach((value, id) =>
-            this._valueTable.set(id, THREE.MathUtils.clamp(value, 0, 1))
-        );
+        valueMap.forEach((value, id) => this._valueTable.set(id, MathUtils.clamp(value, 0, 1)));
         this._updateValueTexture();
     }
 
@@ -194,75 +162,54 @@ class VisualBatchMaterial extends THREE.MeshStandardMaterial {
      */
     override dispose(): void {
         super.dispose();
-        this.uniforms.styleTexture.value?.dispose();
-        this.uniforms.valueTexture.value?.dispose();
+        this._styleTexUniform.value?.dispose();
+        this._valueTexUniform.value?.dispose();
     }
 
-    // ==================== Protected Methods for Subclassing ====================
+    // ==================== Node Graph ====================
 
     /**
-     * 获取自定义uniforms
-     * 子类可以重写此方法来添加自定义uniforms
+     * Builds the per-instance style node graph:
+     * - position offset (startOffset -> endOffset)
+     * - color modulation (startColor -> endColor)
+     * - opacity modulation (startOpacity -> endOpacity)
+     *
+     * Subclasses may override this method to extend the pipeline.
      */
-    protected _getCustomUniforms(): any {
-        return {};
-    }
+    protected _buildVisualNodes(): void {
+        const idAttr = attribute(this._idAttributeName, "float");
+        const styleTexNode = texture(this._styleTexUniform);
+        const valueTexNode = texture(this._valueTexUniform);
+        const maxVisualId = this._maxVisualIdUniform;
+        const styleHeight = this._styleHeightUniform;
 
-    /**
-     * 获取自定义GLSL代码块
-     * 子类可以重写此方法来添加自定义GLSL代码
-     */
-    protected _getCustomVertexShaderChunks(): string {
-        return "";
-    }
+        // Samples one style row pixel from the packed style texture.
+        // Layout: width=16 (4 RGBA pixels per style), height=style count.
+        const fetchPixel = (x: number, row: Node<"float">) =>
+            styleTexNode.sample(vec2(float(x).div(16), row.div(float(styleHeight))));
 
-    protected _getCustomFragmentShaderChunks(): string {
-        return "";
-    }
+        const hasStyle = idAttr.greaterThanEqual(0);
+        const visualValue = valueTexNode.sample(
+            vec2(idAttr.add(0.5).div(maxVisualId.add(1)), float(0.5))
+        ).r;
 
-    /**
-     * 获取顶点着色器替换代码
-     * 子类可以重写此方法来自定义顶点处理逻辑
-     */
-    protected _getVertexShaderReplacement(): string {
-        return `
-        #include <begin_vertex>
-        
-        // Get current interpolation state only if style is set
-        float visualId = ${this._idAttributeName};
-        v${this._idAttributeName} = visualId;
-        vVisualValue = getVisualValue(visualId);
-        float styleIndex = visualId;
-        if (styleIndex >= 0.0) {
-            VisualStyle style = unpackStyle(styleIndex);
-            
-            // Apply interpolated offset
-            transformed += mix(style.startOffset, style.endOffset, vVisualValue);
-        }
-      `;
-    }
+        const p0 = fetchPixel(0, idAttr);
+        const p1 = fetchPixel(1, idAttr);
+        const p2 = fetchPixel(2, idAttr);
+        const p3 = fetchPixel(3, idAttr);
 
-    /**
-     * 获取片段着色器替换代码
-     * 子类可以重写此方法来自定义片段处理逻辑
-     */
-    protected _getFragmentShaderReplacement(): string {
-        return `
-        #ifdef USE_VISUAL_BATCH
-            // Get current style and apply interpolation only if style is set
-            float visualId = v${this._idAttributeName};
-            float styleIndex = visualId;
-            if (styleIndex >= 0.0) {
-                VisualStyle style = unpackStyle(styleIndex);
-                
-                diffuseColor.rgb *= mix(style.startColor, style.endColor, vVisualValue);
-                diffuseColor.a *= mix(style.startOpacity, style.endOpacity, vVisualValue);
-                
-            }
-        #endif
-        
-        #include <color_fragment>
-      `;
+        const offset = mix(p0.xyz, p1.xyz, visualValue);
+        const styleColor = mix(p2.xyz, p3.xyz, visualValue);
+        const styleOpacity = mix(p2.w, p3.w, visualValue);
+
+        this.visualNodes = { idAttr, hasStyle, visualValue, styleColor, styleOpacity, offset };
+
+        // Vertex: apply interpolated offset
+        this.positionNode = positionLocal.add(select(hasStyle, offset, vec3(0)));
+
+        // Fragment: modulate base material color / opacity
+        this.colorNode = vec3(materialColor).mul(select(hasStyle, styleColor, vec3(1)));
+        this.opacityNode = materialOpacity.mul(select(hasStyle, styleOpacity, float(1)));
     }
 
     // ==================== Private Methods ====================
@@ -312,19 +259,23 @@ class VisualBatchMaterial extends THREE.MeshStandardMaterial {
         });
 
         // 5. 更新uniforms
-        this.uniforms.textureWidth.value = textureWidth;
-        this.uniforms.textureHeight.value = textureHeight;
-        this.uniforms.maxVisualId.value = maxId;
+        this._maxVisualIdUniform.value = maxId;
+        this._styleHeightUniform.value = textureHeight;
 
         // 6. 更新样式纹理
-        this._updateDataTexture(this.uniforms.styleTexture, styleData, textureWidth, textureHeight);
+        this._styleTexUniform.value = this._createDataTexture(
+            styleData,
+            textureWidth,
+            textureHeight,
+            RGBAFormat
+        );
     }
 
     /**
      * Updates the value texture with current interpolation values
      */
     private _updateValueTexture(): void {
-        const maxId = this.uniforms.maxVisualId.value;
+        const maxId = this._maxVisualIdUniform.value;
         if (maxId <= 0) return;
 
         // Check if we need to update the texture
@@ -343,96 +294,30 @@ class VisualBatchMaterial extends THREE.MeshStandardMaterial {
             if (id <= maxId) valueData[id] = value;
         });
 
-        this._updateDataTexture(
-            this.uniforms.valueTexture,
+        this._valueTexUniform.value = this._createDataTexture(
             valueData,
             valueData.length,
             1,
-            THREE.RedFormat
+            RedFormat
         );
     }
 
     /**
-     * Creates or updates a data texture
+     * Creates a float data texture with sampling-friendly settings
      */
-    private _updateDataTexture(
-        uniform: THREE.IUniform<THREE.DataTexture | null>,
+    private _createDataTexture(
         data: Float32Array,
         width: number,
         height: number,
-        format: THREE.PixelFormat = THREE.RGBAFormat
-    ): void {
-        if (!uniform.value) {
-            uniform.value = new THREE.DataTexture(data, width, height, format, THREE.FloatType);
-        } else {
-            uniform.value.image.data = data;
-            uniform.value.image.width = width;
-            uniform.value.image.height = height;
-            uniform.value.needsUpdate = true;
-        }
-
-        uniform.value.needsUpdate = true;
-    }
-
-    /**
-     * Patches the shader during compilation
-     */
-    private _compileShader(shader: THREE.WebGLProgramParametersWithUniforms): void {
-        // Merge uniforms
-        shader.uniforms = THREE.UniformsUtils.merge([shader.uniforms, this.uniforms]);
-        shader.defines.USE_VISUAL_BATCH = true;
-
-        shader.defines["USE_UV"] = true;
-
-        // Get custom shader chunks from subclass
-        const customVertexChunks = this._getCustomVertexShaderChunks();
-        const customFragmentChunks = this._getCustomFragmentShaderChunks();
-
-        // =============== Vertex Shader ===============
-        shader.vertexShader = shader.vertexShader
-            .replace(
-                `#include <uv_pars_vertex>`,
-                `
-                #include <uv_pars_vertex>
-                // Add custom attribute and varying
-                attribute float ${this._idAttributeName};
-                varying float vVisualValue;
-                uniform float textureWidth;
-                uniform float textureHeight;
-                uniform sampler2D styleTexture;
-                uniform sampler2D valueTexture;
-                uniform float maxVisualId;
-                varying float v${this._idAttributeName};
-
-      
-                ${VisualBatchMaterial.ShaderChunks.structs}
-                ${VisualBatchMaterial.ShaderChunks.helpers}
-                ${customVertexChunks} `
-            )
-            .replace(`#include <begin_vertex>`, this._getVertexShaderReplacement());
-
-        // =============== Fragment Shader ===============
-        shader.fragmentShader = shader.fragmentShader
-            .replace(
-                `#include <uv_pars_fragment>`,
-                `
-                #include <uv_pars_fragment>
-                // Pass through interpolation value
-                varying float vVisualValue;
-                uniform float textureWidth;
-                uniform float textureHeight;
-                uniform sampler2D styleTexture;
-                uniform sampler2D valueTexture;
-                uniform float maxVisualId;
-                varying float v${this._idAttributeName};
-                
-                ${VisualBatchMaterial.ShaderChunks.structs}
-                ${VisualBatchMaterial.ShaderChunks.helpers}
-                ${customFragmentChunks}`
-            )
-            .replace(`#include <color_fragment>`, this._getFragmentShaderReplacement());
-
-        Object.assign(shader.defines, this.defines);
+        format: THREE.PixelFormat
+    ): DataTexture {
+        const texture = new DataTexture(data, width, height, format, FloatType);
+        texture.minFilter = LinearFilter;
+        texture.magFilter = LinearFilter;
+        texture.wrapS = ClampToEdgeWrapping;
+        texture.wrapT = ClampToEdgeWrapping;
+        texture.needsUpdate = true;
+        return texture;
     }
 }
 

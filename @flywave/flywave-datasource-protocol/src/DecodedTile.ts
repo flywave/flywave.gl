@@ -11,7 +11,7 @@ import {
     sphereProjection,
     webMercatorProjection
 } from "@flywave/flywave-geoutils";
-import { type TypedArray } from "three";
+import { type TypedArray } from "three/webgpu";
 
 import { Env } from "./Expr";
 import { type AttrEvaluationContext, evaluateTechniqueAttr } from "./TechniqueAttr";

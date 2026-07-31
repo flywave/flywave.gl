@@ -39,7 +39,7 @@ import { FontCatalog } from "@flywave/flywave-text-canvas";
 import { getAppBaseUrl } from "@flywave/flywave-utils";
 import { assert } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { GeoJsonDataProvider } from "../src/GeoJsonDataProvider";
 import { VectorTileDecoder } from "../src/index-worker";
@@ -117,8 +117,8 @@ describe("MapView Picking", async function () {
         } as unknown as HTMLCanvasElement;
 
         sandbox
-            .stub(THREE, "WebGLRenderer")
-            .returns(TestUtils.getWebGLRendererStub(sandbox, sandbox.stub()));
+            .stub(THREE, "WebGPURenderer" as never)
+            .returns(TestUtils.getRendererStub(sandbox, sandbox.stub()));
 
         fakeElevationSource = {
             name: "terrain",

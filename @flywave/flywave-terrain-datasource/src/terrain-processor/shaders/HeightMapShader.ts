@@ -1,20 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
-import {
-    Fn,
-    attribute,
-    float,
-    floor as tslFloor,
-    mod,
-    uv as uvNode,
-    varying,
-    vec2,
-    vec4,
-    Discard
-} from "three/tsl";
+import { Fn, attribute, float, floor as tslFloor, mod, uv as uvNode, varying, vec2, vec4, Discard } from "three/tsl";
+
 
 import { FaceTypes } from "../../quantized-terrain/quantized-stratum-mesh/decoder";
 

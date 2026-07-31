@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { GL, octDecode } from "@flywave/flywave-utils";
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 import { type Tiles3DTileContent } from "../../types";
 

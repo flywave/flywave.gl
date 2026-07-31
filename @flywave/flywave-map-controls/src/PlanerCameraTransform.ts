@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type ElevationProvider, type MapView } from "@flywave/flywave-mapview";
-import { type Matrix4, Plane, Ray, Vector3, Vector4 } from "three";
+import { type Matrix4, Plane, Ray, Vector3, Vector4 } from "three/webgpu";
 
 import { CameraTransform } from "./CameraTransform";
 

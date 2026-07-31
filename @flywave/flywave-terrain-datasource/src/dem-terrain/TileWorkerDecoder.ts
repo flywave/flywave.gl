@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type GeoBoxArray, GeoBox } from "@flywave/flywave-geoutils";
-import { Texture } from "three";
+import { Texture } from "three/webgpu";
 
 import { type DEMEncoding, DEMData } from "./dem/DemData";
 

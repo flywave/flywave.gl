@@ -2,7 +2,7 @@
 
 import { type DracoMesh, DracoLoader } from "@flywave/flywave-draco";
 import { GL } from "@flywave/flywave-utils";
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 import Tile3DBatchTable from "../classes/Tile3DBatchTable";
 import Tile3DFeatureTable from "../classes/Tile3DFeatureTable";

@@ -1,18 +1,7 @@
 // @ts-nocheck
-import {
-    add,
-    Fn,
-    luminance,
-    mix,
-    texture,
-    uniform,
-    uv,
-    vec2,
-    vec3,
-    vec4,
-    viewportSize
-} from "three/tsl";
 import { type NodeBuilder, type TextureNode, TempNode } from "three/webgpu";
+import { add, Fn, luminance, mix, texture, uniform, uv, vec2, vec3, vec4, viewportSize } from "three/tsl";
+
 import invariant from "tiny-invariant";
 
 import { DownsampleThresholdNode } from "./DownsampleThresholdNode";

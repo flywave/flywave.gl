@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type Env, type Value } from "./Env";
 import { type OperatorDescriptor, ExprEvaluator, ExprEvaluatorContext } from "./ExprEvaluator";

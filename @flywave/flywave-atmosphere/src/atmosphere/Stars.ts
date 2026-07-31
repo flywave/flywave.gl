@@ -7,7 +7,7 @@ import {
     type Camera,
     type Intersection,
     type Raycaster
-} from "three";
+} from "three/webgpu";
 
 import { DEFAULT_STARS_DATA_URL } from "../constants";
 import { StarsNodeMaterial } from "./StarsNodeMaterial";

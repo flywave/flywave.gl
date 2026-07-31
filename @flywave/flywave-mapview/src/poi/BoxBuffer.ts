@@ -2,7 +2,7 @@
 
 import { type MemoryUsage } from "@flywave/flywave-text-canvas";
 import { Math2D } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { getPixelFromImage, screenToUvCoordinates } from "./PixelPicker";
 

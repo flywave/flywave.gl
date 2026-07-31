@@ -2,7 +2,7 @@
 
 import { type Env, type GeometryKindSet } from "@flywave/flywave-datasource-protocol";
 import { type Projection } from "@flywave/flywave-geoutils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type ElevationProvider } from "../ElevationProvider";
 import { type MapView } from "../MapView";

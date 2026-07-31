@@ -8,7 +8,7 @@ import {
     TEXTURE_PROPERTY_KEYS
 } from "@flywave/flywave-datasource-protocol";
 import { disableBlending, enableBlending, RawShaderMaterial } from "@flywave/flywave-materials";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { evaluateColorProperty } from "./DecodedTileHelpers";
 import { type MapView } from "./MapView";

@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type GeometryKind, type GeometryKindSet } from "@flywave/flywave-datasource-protocol";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { type MapObjectAdapterParams, MapObjectAdapter } from "../MapObjectAdapter";
 import { type Tile } from "../Tile";

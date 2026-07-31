@@ -1,37 +1,10 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    type Data3DTextureImageData,
-    type DataTextureImageData,
-    type Texture,
-    type Vector2,
-    type Vector3,
-    NoColorSpace
-} from "three";
-import {
-    acos,
-    cos,
-    float,
-    Fn,
-    globalId,
-    If,
-    Return,
-    sin,
-    sqrt,
-    texture,
-    texture3D,
-    textureStore,
-    uint,
-    uvec2,
-    uvec3,
-    vec2,
-    vec3,
-    vec4,
-    workgroupArray,
-    workgroupBarrier
-} from "three/tsl";
-import { type ComputeNode, type Renderer, Storage3DTexture, StorageTexture } from "three/webgpu";
+import { type Data3DTextureImageData, type DataTextureImageData, type Texture, type Vector2, type Vector3, NoColorSpace, type ComputeNode, type Renderer, Storage3DTexture, StorageTexture } from "three/webgpu";
+import { acos, cos, float, Fn, globalId, If, Return, sin, sqrt, texture, texture3D, textureStore, uint, uvec2, uvec3, vec2, vec3, vec4, workgroupArray, workgroupBarrier } from "three/tsl";
+
+
 
 import { FnVar } from "../tsl/FnVar";
 import type { Node } from "../tsl/node";

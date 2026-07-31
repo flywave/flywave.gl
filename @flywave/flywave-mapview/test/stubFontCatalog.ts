@@ -2,7 +2,7 @@
 
 import { FontCatalog, GlyphData } from "@flywave/flywave-text-canvas";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 const DEF_TEXTURE_SIZE = 1;
 

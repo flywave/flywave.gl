@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { Object3DUtils } from "../src/geometry/Object3DUtils";
 

@@ -3,7 +3,7 @@
 import { TileKey } from "@flywave/flywave-geoutils";
 import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import { expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { TextElementGroup } from "../src/text/TextElementGroup";
 import { type TextElementFilter } from "../src/text/TextElementGroupState";

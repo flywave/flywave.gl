@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { Feature, GeoCoordinates } from "@flywave/flywave.gl";
 import * as turf from "@turf/turf";
 import type { Polygon as TurfPolygon, Position } from "@turf/turf";

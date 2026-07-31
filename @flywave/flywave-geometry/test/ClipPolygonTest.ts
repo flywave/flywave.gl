@@ -2,7 +2,7 @@
 
 import { assert } from "chai";
 import earcut from "earcut";
-import { ShapeUtils, Vector2 } from "three";
+import { ShapeUtils, Vector2 } from "three/webgpu";
 
 import { clipPolygon } from "../src/ClipPolygon";
 

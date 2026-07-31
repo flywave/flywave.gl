@@ -3,7 +3,8 @@
 import { mercatorProjection } from "@flywave/flywave-geoutils";
 import { type SolidLineMaterialParameters, SolidLineMaterial } from "@flywave/flywave-materials";
 import { RenderingTestHelper } from "@flywave/flywave-test-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
+import { WebGPURenderer } from "three/webgpu";
 
 import { createLineGeometry, LineGroup } from "../../src/Lines";
 
@@ -37,12 +38,11 @@ describe("Rendering lines: ", function () {
     const cellSize = 150;
 
     let canvas: HTMLCanvasElement;
-    let webglRenderer: THREE.WebGLRenderer;
+    let webglRenderer: WebGPURenderer;
 
     beforeEach(() => {
         canvas = document.createElement("canvas");
-        // Enable backward compatibility with three.js <= 0.117
-        webglRenderer = new THREE.WebGLRenderer({ canvas });
+        webglRenderer = new WebGPURenderer({ canvas });
     });
 
     afterEach(() => {
@@ -293,7 +293,7 @@ describe("Rendering lines: ", function () {
         const lineStyle = {
             lineWidth: 2,
             color: "#FFF",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(linesConfig, this, "solid-lines-1px", lineStyle);
     });
@@ -303,7 +303,7 @@ describe("Rendering lines: ", function () {
             lineWidth: 2,
             color: "#FFF",
             offset: 2,
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(linesConfig, this, "solid-lines-1px-offset-2", lineStyle);
     });
@@ -313,7 +313,7 @@ describe("Rendering lines: ", function () {
             lineWidth: 2,
             color: "#FFF",
             offset: -2,
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(linesConfig, this, "solid-lines-1px-offset--2", lineStyle);
     });
@@ -326,7 +326,7 @@ describe("Rendering lines: ", function () {
         const lineStyle = {
             lineWidth: 2,
             color: "#FFF",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(config, this, "undisplaced-solid-lines-persective", lineStyle, camera);
     });
@@ -341,7 +341,7 @@ describe("Rendering lines: ", function () {
             lineWidth: 2,
             color: "#FFF",
             displacementMap,
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(config, this, "displaced-solid-lines-persective", lineStyle, camera);
     });
@@ -350,7 +350,7 @@ describe("Rendering lines: ", function () {
         const lineStyle = {
             lineWidth: 40,
             color: "#FFF",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(linesConfig, this, "solid-lines-20px", lineStyle);
     });
@@ -361,7 +361,7 @@ describe("Rendering lines: ", function () {
             color: "#F00",
             outlineWidth: 5,
             outlineColor: "#0F0",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(linesConfig, this, "solid-lines-outline", lineStyle);
     });
@@ -375,7 +375,7 @@ describe("Rendering lines: ", function () {
             dashColor: "#00F",
             outlineWidth: 3,
             outlineColor: "#0F0",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(linesConfig, this, "dashed-lines-outline", lineStyle);
     });
@@ -388,7 +388,7 @@ describe("Rendering lines: ", function () {
             dashSize: 4,
             outlineWidth: 3,
             outlineColor: "#0F0",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(linesConfig, this, "dashed-lines-outline-alpha", lineStyle);
     });
@@ -399,7 +399,7 @@ describe("Rendering lines: ", function () {
             color: "#FFF",
             gapSize: 2,
             dashSize: 2,
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(linesConfig, this, "dashed-lines-1px", lineStyle);
     });
@@ -411,7 +411,7 @@ describe("Rendering lines: ", function () {
             gapSize: 2,
             dashSize: 2,
             dashColor: "#0F0",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(linesConfig, this, "dashed-lines-color", lineStyle);
     });
@@ -422,7 +422,7 @@ describe("Rendering lines: ", function () {
             color: "#FFF",
             gapSize: 2,
             dashSize: 2,
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(linesConfig, this, "dashed-lines-20px", lineStyle);
     });
@@ -433,7 +433,7 @@ describe("Rendering lines: ", function () {
             color: "#FFF",
             opacity: 0.5,
             transparent: true,
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(checkOverDrawLines, this, "solid-lines-overdraw-20px", lineStyle);
     });
@@ -446,7 +446,7 @@ describe("Rendering lines: ", function () {
             transparent: true,
             gapSize: 2,
             dashSize: 2,
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(checkOverDrawLines, this, "dashed-lines-overdraw-20px", lineStyle);
     });
@@ -459,7 +459,7 @@ describe("Rendering lines: ", function () {
             gapSize: 16,
             dashSize: 16,
             dashColor: "#00F",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(
             linesConfig,
@@ -479,7 +479,7 @@ describe("Rendering lines: ", function () {
             dashColor: "#00F",
             outlineWidth: 3,
             outlineColor: "#0F0",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(
             linesConfig,
@@ -497,7 +497,7 @@ describe("Rendering lines: ", function () {
             gapSize: 16,
             dashSize: 16,
             dashColor: "#00F",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(
             linesConfig,
@@ -517,7 +517,7 @@ describe("Rendering lines: ", function () {
             dashColor: "#00F",
             outlineWidth: 3,
             outlineColor: "#0F0",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(
             linesConfig,
@@ -535,7 +535,7 @@ describe("Rendering lines: ", function () {
             gapSize: 0.01,
             dashSize: 32,
             dashColor: "#00F",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(
             linesConfig,
@@ -552,7 +552,7 @@ describe("Rendering lines: ", function () {
             opacity: 0.5,
             transparent: true,
             caps: "Round",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(
             linesConfig,
@@ -569,7 +569,7 @@ describe("Rendering lines: ", function () {
             opacity: 0.5,
             transparent: true,
             caps: "None",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(
             linesConfig,
@@ -586,7 +586,7 @@ describe("Rendering lines: ", function () {
             opacity: 0.5,
             transparent: true,
             caps: "Square",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(
             linesConfig,
@@ -603,7 +603,7 @@ describe("Rendering lines: ", function () {
             opacity: 0.5,
             transparent: true,
             caps: "TriangleOut",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(
             linesConfig,
@@ -620,7 +620,7 @@ describe("Rendering lines: ", function () {
             opacity: 0.5,
             transparent: true,
             caps: "TriangleIn",
-            rendererCapabilities: webglRenderer.capabilities
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false }
         };
         await renderLines(
             linesConfig,

@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
 import {
     Fn,
@@ -156,7 +156,7 @@ export class SdfTextMaterial extends NodeMaterial {
             )
         );
 
-        this.sdfParamsUniform = { value: this.sdfParamsNode.value };
+        this.sdfParamsUniform = { value: this.sdfParamsNode.value as THREE.Vector4 };
         this.isMsdf = params?.isMsdf ?? false;
         this.isBackground = params?.isBackground ?? false;
 
@@ -173,8 +173,14 @@ export class SdfTextMaterial extends NodeMaterial {
         const aRotation = attribute("aRotation", "float");
         const aWeight = attribute("aWeight", "float");
         const aBgWeight = attribute("aBgWeight", "float");
-        const aColor = attribute("aColor", "vec4");
-        const aBgColor = attribute("aBgColor", "vec4");
+        const aColor = attribute("aColor", "vec4") as unknown as THREE.Node<"vec4"> & {
+            rgb: THREE.Node<"vec3">;
+            a: THREE.Node<"float">;
+        };
+        const aBgColor = attribute("aBgColor", "vec4") as unknown as THREE.Node<"vec4"> & {
+            rgb: THREE.Node<"vec3">;
+            a: THREE.Node<"float">;
+        };
 
         this.fragmentNode = Fn(() => {
             const texSample = sdfTex;

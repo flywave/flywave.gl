@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type Intersection, type Raycaster, Ray, Vector3 } from "three";
+import { type Intersection, type Raycaster, Ray, Vector3 } from "three/webgpu";
 
 import { type ITile, type Tile } from "../base/Tile";
 import { type TilesRenderer } from "./TilesRenderer";

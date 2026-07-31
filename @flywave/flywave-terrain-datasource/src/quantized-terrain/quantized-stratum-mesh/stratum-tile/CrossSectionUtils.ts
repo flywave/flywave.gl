@@ -2,7 +2,7 @@
 
 import { type Projection } from "@flywave/flywave-geoutils";
 import { type MapAnchor } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type Material } from "../decoder";
 

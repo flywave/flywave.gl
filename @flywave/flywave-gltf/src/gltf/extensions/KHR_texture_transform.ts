@@ -4,7 +4,7 @@
  * https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_texture_transform/README.md
  */
 
-import { Matrix3, Vector3 } from "three";
+import { Matrix3, Vector3 } from "three/webgpu";
 
 import type { GLTFLoaderOptions } from "../../gltf-loader";
 import { GLTFScenegraph } from "../api/gltf-scenegraph";

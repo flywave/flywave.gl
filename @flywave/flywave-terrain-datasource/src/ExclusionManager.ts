@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type TileAvailability, type TileKey } from "@flywave/flywave-geoutils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 /**
  * Interface representing an exclusion region with a unique ID and tile availability information

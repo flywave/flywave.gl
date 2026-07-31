@@ -1,5 +1,5 @@
 import { BrushType, BrushSettings } from "../types";
-import { DataTexture, RGBAFormat, LinearFilter } from "three";
+import { DataTexture, RGBAFormat, LinearFilter } from "three/webgpu";
 
 export class BrushEngine {
     private rgbaBuffer: Uint8Array;

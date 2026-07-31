@@ -3,7 +3,7 @@
 import { loadSpz } from "@spz-loader/core";
 import { GLTFScenegraph } from "../../api/gltf-scenegraph";
 import type { GLTFMeshPrimitive } from "../../types/gltf-json-schema";
-import { MathUtils } from "three";
+import { MathUtils } from "three/webgpu";
 
 export const EXT_SPZ_COMPRESSION = "KHR_gaussian_splatting_compression_spz_2";
 

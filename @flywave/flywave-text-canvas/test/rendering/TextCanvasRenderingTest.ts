@@ -1,7 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { RenderingTestHelper } from "@flywave/flywave-test-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
+import { WebGPURenderer } from "three/webgpu";
 
 import {
     FontCatalog,
@@ -13,7 +14,7 @@ import {
 } from "../../src/index";
 
 describe("TextCanvas", function () {
-    let renderer: THREE.WebGLRenderer;
+    let renderer: WebGPURenderer;
     let camera: THREE.OrthographicCamera;
     let fontCatalog: FontCatalog;
 
@@ -34,8 +35,7 @@ describe("TextCanvas", function () {
         canvas.width = 100;
         canvas.height = 100;
 
-        // Enable backward compatibility with three.js <= 0.117
-        renderer = new THREE.WebGLRenderer({ canvas });
+        renderer = new WebGPURenderer({ canvas });
         renderer.autoClear = false;
         renderer.setClearColor(0xffffff);
         renderer.setSize(canvas.width, canvas.height);
@@ -69,6 +69,7 @@ describe("TextCanvas", function () {
             async () => {
                 const textCanvas = new TextCanvas({
                     renderer,
+                    rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false },
                     fontCatalog,
                     minGlyphCount: 12,
                     maxGlyphCount: 12
@@ -102,6 +103,7 @@ describe("TextCanvas", function () {
             async () => {
                 const textCanvas = new TextCanvas({
                     renderer,
+                    rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false },
                     fontCatalog,
                     minGlyphCount: 3,
                     maxGlyphCount: 20
@@ -135,6 +137,7 @@ describe("TextCanvas", function () {
             async () => {
                 const textCanvas = new TextCanvas({
                     renderer,
+                    rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false },
                     fontCatalog,
                     minGlyphCount: 3,
                     maxGlyphCount: 35
@@ -172,6 +175,7 @@ describe("TextCanvas", function () {
             async () => {
                 const textCanvas = new TextCanvas({
                     renderer,
+                    rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false },
                     fontCatalog,
                     minGlyphCount: 30,
                     maxGlyphCount: 30
@@ -220,6 +224,7 @@ describe("TextCanvas", function () {
             async () => {
                 const textCanvas = new TextCanvas({
                     renderer,
+                    rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false },
                     fontCatalog,
                     minGlyphCount: 12,
                     maxGlyphCount: 12

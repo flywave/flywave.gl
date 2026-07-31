@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type Task, PerformanceTimer, TaskQueue } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { TileTaskGroups } from "./MapView";
 import { PerformanceStatistics } from "./Statistics";

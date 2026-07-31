@@ -4,7 +4,7 @@ import {
     type BufferAttribute as ThreeBufferAttribute,
     type BufferGeometry as ThreeBufferGeometry,
     type InterleavedBufferAttribute as ThreeInterleavedBufferAttribute
-} from "three";
+} from "three/webgpu";
 
 import {
     type BufferAttribute,

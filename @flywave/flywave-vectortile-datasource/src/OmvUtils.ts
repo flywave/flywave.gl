@@ -7,7 +7,7 @@ import {
     isVector3Like,
     webMercatorProjection
 } from "@flywave/flywave-geoutils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type DecodeInfo } from "./DecodeInfo";
 

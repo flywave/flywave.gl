@@ -16,7 +16,7 @@ import {
     polarTilingScheme,
     TransverseMercatorUtils
 } from "@flywave/flywave-geoutils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type DataSourceOptions, DataSource } from "./DataSource";
 import { createMaterial } from "./DecodedTileHelpers";

@@ -1,15 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    type Color,
-    type Material,
-    type Sphere,
-    BufferAttribute,
-    BufferGeometry,
-    LineSegments,
-    Vector3
-} from "three";
-import { LineBasicNodeMaterial } from "three/webgpu";
+import {type Color, type Material, type Sphere, BufferAttribute, BufferGeometry, LineSegments, Vector3, LineBasicNodeMaterial} from "three/webgpu";
+
 
 const _vector = new Vector3();
 const axes = ["x", "y", "z"] as const;

@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 const currEdgeStart = new THREE.Vector2();
 const currEdgeGoal = new THREE.Vector2();

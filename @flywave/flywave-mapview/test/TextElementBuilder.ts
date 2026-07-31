@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type TextLayoutParameters, type TextRenderParameters } from "@flywave/flywave-text-canvas";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { TextElement } from "../src/text/TextElement";
 import { PoiInfoBuilder } from "./PoiInfoBuilder";

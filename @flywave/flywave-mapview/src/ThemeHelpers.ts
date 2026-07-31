@@ -8,7 +8,7 @@ import {
     type TextureDataType,
     type WrappingMode
 } from "@flywave/flywave-datasource-protocol";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 /**
  * Returns `three.js` pixel format object basing on a [[PixelFormat]] specified.

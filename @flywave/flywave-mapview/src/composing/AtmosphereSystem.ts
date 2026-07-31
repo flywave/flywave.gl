@@ -14,9 +14,10 @@ import {
     updateCelestialDirections,
     registerAtmosphereContext
 } from "@flywave/flywave-atmosphere";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
+import type { Renderer } from "three/webgpu";
 import { texture } from "three/tsl";
-import { type Renderer } from "three/webgpu";
+
 import { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
 import {
     type AtmosphereThemeConfig,

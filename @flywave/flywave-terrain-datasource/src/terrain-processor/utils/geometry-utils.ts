@@ -3,7 +3,7 @@
 import { GeoBox, GeoCoordinates, GeoLineString, GeoPolygon } from "@flywave/flywave-geoutils";
 import * as turf from "@turf/turf";
 import earcut from "earcut";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type GeometryResult } from "../core/types";
 import { CoordinateUtils } from "./coordinate-utils";

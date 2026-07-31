@@ -12,7 +12,7 @@ import {
 } from "@flywave/flywave-geoutils";
 import { assert } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { MapView } from "../src/MapView";
 import { PolarTileDataSource } from "../src/PolarTileDataSource";

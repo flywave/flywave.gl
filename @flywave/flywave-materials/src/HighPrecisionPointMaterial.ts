@@ -1,9 +1,20 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three";
-import { PointsNodeMaterial } from "three/webgpu";
-import { Fn, attribute, uniform, vec3, vec4, texture, pointUV, float } from "three/tsl";
+import * as THREE from "three/webgpu";
+import {
+    PointsNodeMaterial,
+} from "three/webgpu";
+import {
+    Fn,
+    attribute,
+    uniform,
+    vec3,
+    vec4,
+    texture,
+    pointUV,
+    float,
+} from "three/tsl";
 
 export interface HighPrecisionPointMaterialParameters {
     color?: number | string | THREE.Color;
@@ -28,6 +39,9 @@ export class HighPrecisionPointMaterial extends PointsNodeMaterial {
     private m_mvpU = uniform(new THREE.Matrix4());
     private m_eyeposU = uniform(new THREE.Vector3());
     private m_eyeposLowU = uniform(new THREE.Vector3());
+
+    private m_hpEye = new THREE.Vector3();
+    private m_hpMvp = new THREE.Matrix4();
     private m_mapU = uniform(new THREE.Texture());
 
     opacity: number = HighPrecisionPointMaterial.DEFAULT_OPACITY;
@@ -62,6 +76,28 @@ export class HighPrecisionPointMaterial extends PointsNodeMaterial {
 
         this.updateTransparency();
         this.setupNodes();
+        this.setupHpUpdate();
+    }
+
+    private setupHpUpdate() {
+        this.m_mvpU.onObjectUpdate(({ object, camera }) => {
+            const inv = object.matrixWorldInverse as THREE.Matrix4;
+            this.m_hpMvp.copy(camera.projectionMatrix).multiply(camera.matrixWorldInverse);
+            this.m_hpEye.set(0, 0, 0).applyMatrix4(inv);
+            const hi = new THREE.Vector3(
+                Math.fround(this.m_hpEye.x),
+                Math.fround(this.m_hpEye.y),
+                Math.fround(this.m_hpEye.z)
+            );
+            const lo = new THREE.Vector3(
+                this.m_hpEye.x - hi.x,
+                this.m_hpEye.y - hi.y,
+                this.m_hpEye.z - hi.z
+            );
+            this.m_eyeposU.value.copy(hi);
+            this.m_eyeposLowU.value.copy(lo);
+            return this.m_hpMvp;
+        });
     }
 
     private setupNodes() {

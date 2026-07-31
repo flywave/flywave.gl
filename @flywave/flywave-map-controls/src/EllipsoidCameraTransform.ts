@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Matrix4, Vector3, Vector4 } from "three";
+import { Matrix4, Vector3, Vector4 } from "three/webgpu";
 
 import { CameraTransform } from "./CameraTransform";
 import { EllipsoidProjection, SphereProjection } from "@flywave/flywave-geoutils";

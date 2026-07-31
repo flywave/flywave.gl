@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type Projection, GeoBox, GeoCoordinates, OrientedBox3 } from "@flywave/flywave-geoutils";
-import { type Box3, type Frustum, type Matrix4, type Ray, MathUtils, Sphere, Vector3 } from "three";
+import { type Box3, type Frustum, type Matrix4, type Ray, MathUtils, Sphere, Vector3 } from "three/webgpu";
 
 // Temporary vectors for calculations
 const _vecX = new Vector3();

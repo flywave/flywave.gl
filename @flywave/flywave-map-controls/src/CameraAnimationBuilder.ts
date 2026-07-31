@@ -3,7 +3,7 @@
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MathUtils } from "@flywave/flywave-geoutils/math/MathUtils";
 import { type LookAtParams, type MapView } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type CameraKeyTrackAnimationOptions, ControlPoint } from "./CameraKeyTrackAnimation";
 

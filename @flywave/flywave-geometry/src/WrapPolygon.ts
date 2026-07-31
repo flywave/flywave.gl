@@ -6,7 +6,7 @@ import {
     webMercatorProjection
 } from "@flywave/flywave-geoutils";
 import { Math2D } from "@flywave/flywave-utils";
-import { Vector2, Vector3 } from "three";
+import { Vector2, Vector3 } from "three/webgpu";
 
 import { ClippingEdge } from "./ClipPolygon";
 

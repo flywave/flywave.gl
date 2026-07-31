@@ -2,7 +2,7 @@
 
 import { type CubemapSky, type GradientSky } from "@flywave/flywave-datasource-protocol";
 import { type ProjectionType } from "@flywave/flywave-geoutils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { SkyCubemapTexture } from "./SkyCubemapTexture";
 import { SkyGradientTexture } from "./SkyGradientTexture";

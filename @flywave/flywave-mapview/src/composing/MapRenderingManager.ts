@@ -9,9 +9,15 @@ import {
     type ISepiaEffect,
     type IVignetteEffect
 } from "@flywave/flywave-datasource-protocol";
-import * as THREE from "three";
-import { mrt, uniform, vec3, diffuseColor } from "three/tsl";
-import type { Renderer } from "three/webgpu";
+import * as THREE from "three/webgpu";
+import { mrt,
+    diffuseColor } from "three/tsl";
+import type { Renderer,
+} from "three/webgpu";
+import {
+    uniform,
+    vec3,
+} from "three/tsl";
 
 import { type IPassManager } from "./IPassManager";
 import { type IViewRenderManager } from "./vrm";

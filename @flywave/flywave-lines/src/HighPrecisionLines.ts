@@ -1,56 +1,21 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type HighPrecisionLineMaterial } from "@flywave/flywave-materials";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { HighPrecisionUtils } from "./HighPrecisionUtils";
 
-/**
- * Declare interface for `HighPrecisionObject` which describes additional functionality to render
- * high-precision vertices.
- */
 export interface HighPrecisionObject extends THREE.Object3D {
-    /**
-     * Allow direct access to [[BufferGeometry]] without cast.
-     */
     bufferGeometry: THREE.BufferGeometry;
-
-    /**
-     * Allow direct access to [[ShaderMaterial]] without cast.
-     */
     shaderMaterial: THREE.ShaderMaterial;
-
-    /**
-     * Inversed World Matrix.
-     */
     matrixWorldInverse: THREE.Matrix4;
-
-    /**
-     * Sets up attributes for position (one attribute for major 32 bits position "halve", and one
-     * attribute for lower 32 bits).
-     */
     setPositions(positions: number[] | THREE.Vector3[]): void;
-
-    /**
-     * Prepare the objects "`onBeforeRender()`" callback to generate proper high-precision camera
-     * position.
-     */
     setupForRendering(): void;
 }
 
-/**
- * Class used to render high-precision wireframe lines.
- */
 export class HighPrecisionWireFrameLine extends THREE.Line implements HighPrecisionObject {
     matrixWorldInverse: THREE.Matrix4;
 
-    /**
-     * Creates a `HighPrecisionWireFrameLine` object.
-     *
-     * @param geometry - [[BufferGeometry]] used to render this object.
-     * @param material - [[HighPrecisionLineMaterial]] used to render this object.
-     * @param positions - Array of 2D/3D positions.
-     */
     constructor(
         geometry: THREE.BufferGeometry,
         material: HighPrecisionLineMaterial,
@@ -76,18 +41,7 @@ export class HighPrecisionWireFrameLine extends THREE.Line implements HighPrecis
         HighPrecisionUtils.setPositions(this, positions);
     }
 
-    setupForRendering(): void {
-        this.onBeforeRender = (
-            _renderer: THREE.WebGLRenderer,
-            _scene: THREE.Scene,
-            camera: THREE.Camera,
-            _geometry: THREE.BufferGeometry,
-            _material: THREE.Material,
-            _group: THREE.Group
-        ) => {
-            HighPrecisionUtils.updateHpUniforms(this, camera, this.material as any);
-        };
-    }
+    setupForRendering(): void {}
 
     updateMatrixWorld(force: boolean) {
         const doUpdateMatrixWorldInverse = this.matrixWorldNeedsUpdate || force;
@@ -100,19 +54,9 @@ export class HighPrecisionWireFrameLine extends THREE.Line implements HighPrecis
     }
 }
 
-/**
- * Class used to render high-precision lines.
- */
 export class HighPrecisionLine extends THREE.Mesh implements HighPrecisionObject {
     matrixWorldInverse: THREE.Matrix4;
 
-    /**
-     * Creates a `HighPrecisionLine` object.
-     *
-     * @param geometry - [[BufferGeometry]] used to render this object.
-     * @param material - [[HighPrecisionLineMaterial]] used to render this object.
-     * @param positions - Array of 2D/3D positions.
-     */
     constructor(
         geometry: THREE.BufferGeometry,
         material: HighPrecisionLineMaterial,
@@ -139,18 +83,7 @@ export class HighPrecisionLine extends THREE.Mesh implements HighPrecisionObject
         HighPrecisionUtils.setPositions(this, positions);
     }
 
-    setupForRendering(): void {
-        this.onBeforeRender = (
-            _renderer: THREE.WebGLRenderer,
-            _scene: THREE.Scene,
-            camera: THREE.Camera,
-            _geometry: THREE.BufferGeometry,
-            _material: THREE.Material,
-            _group: THREE.Group
-        ) => {
-            HighPrecisionUtils.updateHpUniforms(this, camera, this.material as any);
-        };
-    }
+    setupForRendering(): void {}
 
     updateMatrixWorld(force: boolean) {
         const doUpdateMatrixWorldInverse = this.matrixWorldNeedsUpdate || force;

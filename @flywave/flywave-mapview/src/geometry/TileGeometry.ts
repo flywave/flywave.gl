@@ -3,7 +3,7 @@
 import { GeometryType } from "@flywave/flywave-datasource-protocol";
 import { reconstructLineWidth } from "@flywave/flywave-lines";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 const logger = LoggerManager.instance.create("TileGeometry");
 

@@ -4,7 +4,7 @@ import { ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import { PickingRaycaster } from "@flywave/flywave-mapview/PickingRaycaster";
 import { type ICameraCollidable } from "@flywave/flywave-mapview";
-import { type Intersection, Raycaster, Vector2, Vector3 } from "three";
+import { type Intersection, Raycaster, Vector2, Vector3 } from "three/webgpu";
 
 import { BaseMapControls, BaseMapControlsOptions, EventNames } from "./BaseMapControls";
 import { EllipsoidCameraTransform } from "./EllipsoidCameraTransform";

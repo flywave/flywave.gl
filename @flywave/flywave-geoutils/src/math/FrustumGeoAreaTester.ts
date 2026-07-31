@@ -6,7 +6,7 @@
  * @license MIT
  */
 
-import { Matrix3, Matrix4, Plane, Vector3 } from "three";
+import { Matrix3, Matrix4, Plane, Vector3 } from "three/webgpu";
 
 import { type GeoBox } from "../coordinates/GeoBox";
 import { GeoCoordinates } from "../coordinates/GeoCoordinates";

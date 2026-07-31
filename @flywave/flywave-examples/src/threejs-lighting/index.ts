@@ -9,7 +9,7 @@ import {
     MapViewEventNames,
     sphereProjection
 } from "@flywave/flywave.gl";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { GUI } from "dat.gui";
 
 // Configuration constants

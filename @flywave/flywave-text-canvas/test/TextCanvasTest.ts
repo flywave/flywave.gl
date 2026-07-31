@@ -3,7 +3,8 @@
 import { getTestResourceUrl } from "@flywave/flywave-test-utils";
 import { assert } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
+import type { Renderer } from "three/webgpu";
 
 import {
     DefaultTextStyle,
@@ -119,7 +120,7 @@ const individualBounds: THREE.Box2[] = [];
 
 describe("TextCanvas", () => {
     let sandbox: sinon.SinonSandbox;
-    let webglRenderer = {};
+    let mockRenderer: Renderer;
     beforeEach(() => {
         sandbox = sinon.createSandbox();
         sandbox.stub(THREE, "TextureLoader").returns({
@@ -138,7 +139,7 @@ describe("TextCanvas", () => {
                 });
             }
         });
-        webglRenderer = { capabilities: { isWebGL2: false } };
+        mockRenderer = {} as Renderer;
     });
     afterEach(() => {
         sandbox.restore();
@@ -147,62 +148,49 @@ describe("TextCanvas", () => {
     const textRenderStyle = new TextRenderStyle();
     let textCanvas: TextCanvas;
 
-    for (const isWebGL2 of [false, true]) {
-        const webGLVersion = isWebGL2 ? "WebGL2" : "WebGL1";
-        it(`Creates an instance successfully for ${webGLVersion}`, async () => {
-            (webglRenderer as any).capabilities.isWebGL2 = isWebGL2;
+    it("Creates an instance successfully", async () => {
+        const catalogJson = await loadJSON(
+            getTestResourceUrl("@here/FLYWAVE-fontcatalog", "resources/Default_FontCatalog.json")
+        );
+        const replacementJson = await loadJSON(
+            getTestResourceUrl(
+                "@here/FLYWAVE-fontcatalog",
+                "resources/Default_Assets/Extra/Specials.json"
+            )
+        );
+        const replacementTexture = await loadTexture(
+            getTestResourceUrl(
+                "@here/FLYWAVE-fontcatalog",
+                "resources/Default_Assets/Extra/Specials.png"
+            )
+        );
 
-            const catalogJson = await loadJSON(
-                getTestResourceUrl(
-                    "@here/FLYWAVE-fontcatalog",
-                    "resources/Default_FontCatalog.json"
-                )
-            );
-            const replacementJson = await loadJSON(
-                getTestResourceUrl(
-                    "@here/FLYWAVE-fontcatalog",
-                    "resources/Default_Assets/Extra/Specials.json"
-                )
-            );
-            const replacementTexture = await loadTexture(
-                getTestResourceUrl(
-                    "@here/FLYWAVE-fontcatalog",
-                    "resources/Default_Assets/Extra/Specials.png"
-                )
-            );
-
-            const loadedFontCatalog = createFontCatalogStub(
-                getTestResourceUrl("@here/FLYWAVE-fontcatalog", "resources"),
-                catalogJson.name,
-                catalogJson.type,
-                catalogJson.size,
-                catalogJson.maxWidth,
-                catalogJson.maxHeight,
-                catalogJson.distanceRange,
-                catalogJson.fonts,
-                catalogJson.supportedBlocks,
-                256,
-                replacementJson,
-                replacementTexture
-            );
-            await loadedFontCatalog.loadCharset(textSample, textRenderStyle);
-            textCanvas = new TextCanvas({
-                renderer: webglRenderer as THREE.WebGLRenderer,
-                fontCatalog: loadedFontCatalog,
-                minGlyphCount: 16,
-                maxGlyphCount: 16
-            });
-
-            assert.strictEqual(textCanvas.maxGlyphCount, 16);
-            assert.deepEqual(
-                textCanvas.textRenderStyle.fontSize,
-                DefaultTextStyle.DEFAULT_FONT_SIZE
-            );
-            const expectedGLSLVersion = isWebGL2 ? THREE.GLSL3 : THREE.GLSL1;
-            assert.equal((textCanvas.material as any).glslVersion, expectedGLSLVersion);
-            assert.equal((textCanvas.backgroundMaterial as any).glslVersion, expectedGLSLVersion);
+        const loadedFontCatalog = createFontCatalogStub(
+            getTestResourceUrl("@here/FLYWAVE-fontcatalog", "resources"),
+            catalogJson.name,
+            catalogJson.type,
+            catalogJson.size,
+            catalogJson.maxWidth,
+            catalogJson.maxHeight,
+            catalogJson.distanceRange,
+            catalogJson.fonts,
+            catalogJson.supportedBlocks,
+            256,
+            replacementJson,
+            replacementTexture
+        );
+        await loadedFontCatalog.loadCharset(textSample, textRenderStyle);
+        textCanvas = new TextCanvas({
+            renderer: mockRenderer,
+            rendererCapabilities: { isWebGL2: true, logarithmicDepthBuffer: false },
+            fontCatalog: loadedFontCatalog,
+            minGlyphCount: 16,
+            maxGlyphCount: 16
         });
-    }
+
+        assert.strictEqual(textCanvas.maxGlyphCount, 16);
+        assert.deepEqual(textCanvas.textRenderStyle.fontSize, DefaultTextStyle.DEFAULT_FONT_SIZE);
+    });
     it("Successfully measures text.", () => {
         const result = textCanvas.measureText("Hello World!", bounds, {
             outputCharacterBounds: individualBounds

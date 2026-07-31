@@ -12,7 +12,7 @@ import {
 import * as TestUtils from "@flywave/flywave-test-utils/WebGLStub";
 import { assert } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { BoundsGenerator } from "../src/BoundsGenerator";
 import { projectTilePlaneCorners } from "../src/geometry/ProjectTilePlaneCorners";
@@ -41,8 +41,8 @@ describe("BoundsGenerator", function () {
         sandbox = sinon.createSandbox();
         clearColorStub = sandbox.stub();
         sandbox
-            .stub(THREE, "WebGLRenderer")
-            .returns(TestUtils.getWebGLRendererStub(sandbox, clearColorStub));
+            .stub(THREE, "WebGPURenderer" as never)
+            .returns(TestUtils.getRendererStub(sandbox, clearColorStub));
         if (inNodeContext) {
             const theGlobal: any = global;
             theGlobal.window = { window: { devicePixelRatio: 10 } };

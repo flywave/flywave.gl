@@ -9,7 +9,7 @@ import {
     isVector3Like
 } from "@flywave/flywave-geoutils";
 import { type GeoCoordLike } from "@flywave/flywave-geoutils/coordinates/GeoCoordLike";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 declare module "three" {
     interface Object3D {

@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { FlatArray } from "@flywave/flywave-utils";
-import { Vector2 } from "three";
+import { Vector2 } from "three/webgpu";
 
 import { type GeomEdge, getPointOrientation, isEdgeIntersecting, isQuadConvex } from "./Utils";
 

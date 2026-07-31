@@ -6,7 +6,7 @@
  * @license MIT
  */
 
-import { type Plane, type Triangle, Matrix3, Matrix4, Sphere, Vector3 } from "three";
+import { type Plane, type Triangle, Matrix3, Matrix4, Sphere, Vector3 } from "three/webgpu";
 
 import { type OrientedBox3 } from "./OrientedBox3";
 

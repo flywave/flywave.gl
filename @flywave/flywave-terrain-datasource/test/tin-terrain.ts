@@ -10,7 +10,7 @@ import {
     webMercatorTilingScheme
 } from "@flywave/flywave-geoutils";
 import { assert, expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { createLayerStrategy } from "../src/quantized-terrain/layer-strategy/LayerStrategy";
 // import { QuantizedTerrainSource } from "../src/tin-terrain/QuantizedTerrainSource";

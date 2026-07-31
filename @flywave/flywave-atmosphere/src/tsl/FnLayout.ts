@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Fn } from "three/tsl";
 import { StructTypeNode } from "three/webgpu";
+import { Fn } from "three/tsl";
 
 import type { Node, NodeType } from "./node";
 

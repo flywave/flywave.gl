@@ -3,14 +3,11 @@
 
 import {
     CubeCamera,
+    CubeRenderTarget,
     HalfFloatType,
     Mesh,
     RGBAFormat,
     Vector3,
-    WebGLCubeRenderTarget as CubeRenderTarget
-} from "three";
-import { Fn, pmremTexture, positionGeometry, uniform, vec4 } from "three/tsl";
-import {
     type NodeBuilder,
     type NodeFrame,
     type PMREMNode,
@@ -18,6 +15,7 @@ import {
     NodeUpdateType,
     TempNode
 } from "three/webgpu";
+import { Fn, pmremTexture, positionGeometry, uniform, vec4 } from "three/tsl";
 
 import { inverseProjectionMatrix } from "../tsl/accessors";
 import { getAtmosphereContext } from "./AtmosphereContext";

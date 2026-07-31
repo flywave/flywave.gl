@@ -8,7 +8,7 @@ import {
     LogLevel,
     WORKERCHANNEL_MSG_TYPE
 } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { WorkerLoader } from "./workers/WorkerLoader";
 

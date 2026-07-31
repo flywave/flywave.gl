@@ -15,7 +15,7 @@ import {
     FeaturesDataSource,
     FeatureCollection
 } from "@flywave/flywave.gl";
-import { Color, MathUtils, RepeatWrapping, TextureLoader } from "three";
+import { Color, MathUtils, RepeatWrapping, TextureLoader } from "three/webgpu";
 
 // Project configuration constants
 const PROJECT_CONFIG = {

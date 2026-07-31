@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type GeoPolygon, type Projection, ProjectionType } from "@flywave/flywave-geoutils";
-import { type PerspectiveCamera } from "three";
+import { type PerspectiveCamera } from "three/webgpu";
 
 import { PlaneViewBounds } from "./PlaneViewBounds";
 import { SphereViewBounds } from "./SphereViewBounds";

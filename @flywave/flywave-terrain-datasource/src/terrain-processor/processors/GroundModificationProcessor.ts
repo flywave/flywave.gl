@@ -2,21 +2,22 @@
 
 import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { CoordinateUtils } from "../utils/coordinate-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
 import {
     Fn,
-    float,
     dot,
+    float,
     floor as tslFloor,
     mod,
+    select,
     texture,
     uniform,
     uv as uvNode,
     vec2,
-    vec4,
-    select
+    vec4
 } from "three/tsl";
+
 import { type HeightMapModifier } from "../../ground-modification-manager/HeightMapModifierTypes";
 import { GROUND_MODIFICATION_HEIGHT, GROUND_MODIFICATION_WIDTH } from "../constants";
 import { type RenderEnvironment, getGlobalRenderEnvironment } from "../core/RenderEnvironment";

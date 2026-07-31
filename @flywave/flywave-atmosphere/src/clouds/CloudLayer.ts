@@ -1,7 +1,7 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Vector3, Vector4 } from "three";
+import { Vector3, Vector4 } from "three/webgpu";
 
 export interface DensityProfileLike {
     expTerm?: number;

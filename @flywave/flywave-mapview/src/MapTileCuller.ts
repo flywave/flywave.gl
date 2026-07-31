@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 /**
  * Second step tile culling: Do additional check for intersection of box and frustum by checking if

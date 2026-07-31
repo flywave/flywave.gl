@@ -9,7 +9,7 @@ import {
     SphereProjection
 } from "@flywave/flywave-geoutils";
 import { assert } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { CameraUtils } from "./CameraUtils";
 import { ElevationProvider } from "./ElevationProvider";

@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type BufferAttribute, type BufferGeometry, Vector3 } from "three";
+import { type BufferAttribute, type BufferGeometry, Vector3 } from "three/webgpu";
 
 const tmpVectorA = new Vector3();
 const tmpVectorB = new Vector3();

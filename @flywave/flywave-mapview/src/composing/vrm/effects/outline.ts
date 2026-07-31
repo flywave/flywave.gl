@@ -1,5 +1,5 @@
 // @ts-nocheck
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { Fn, uv, uniform, vec3, vec4, vec2, viewportSize, mul, abs, mix } from "three/tsl";
 
 export const outline = (inputNode, depthTexture, thickness = 0.002, edgeColor = "#ffffff") => {

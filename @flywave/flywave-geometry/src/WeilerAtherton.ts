@@ -2,7 +2,7 @@
 
 /* eslint-disable no-mixed-operators */
 import { FlatArray } from "@flywave/flywave-utils";
-import { Vector2 } from "three";
+import { Vector2 } from "three/webgpu";
 
 interface IPolygonNode {
     point: Vector2;

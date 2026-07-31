@@ -17,7 +17,7 @@ import { LoggerManager } from "@flywave/flywave-utils";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 chai.use(chaiAsPromised);
 

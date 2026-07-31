@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { QUAD_VERTEX_MEMORY_FOOTPRINT } from "../rendering/TextGeometry";
 import { FontStyle, FontVariant } from "../rendering/TextStyle";

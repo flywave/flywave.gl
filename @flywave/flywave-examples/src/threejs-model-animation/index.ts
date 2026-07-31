@@ -8,7 +8,7 @@ import {
     MapControlsUI,
     MapViewEventNames
 } from "@flywave/flywave.gl";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { GUI } from "dat.gui";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 

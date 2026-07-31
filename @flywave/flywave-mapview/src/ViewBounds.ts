@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type GeoPolygon, type Projection } from "@flywave/flywave-geoutils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 /**
  * View bounds for a given camera and world space projection.

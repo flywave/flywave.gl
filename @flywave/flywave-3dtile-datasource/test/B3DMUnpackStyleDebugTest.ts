@@ -5,7 +5,7 @@
 import { type Tile3DBatchMeshTechniqueParams } from "@flywave/flywave-datasource-protocol";
 import * as chai from "chai";
 const chaiAsPromised = require("chai-as-promised");
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { B3DMBatchMaterial } from "../src/materials/B3DMBatchMaterial";
 

@@ -3,7 +3,7 @@
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
 import { expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { DisplacedBufferAttribute } from "../src/geometry/DisplacedBufferAttribute";
 

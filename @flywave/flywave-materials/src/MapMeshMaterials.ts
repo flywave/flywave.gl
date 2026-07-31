@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type DisplacementFeatureParameters, DisplacementFeature } from "./DisplacementFeature";
 import { ExtrusionFeatureDefs } from "./MapMeshMaterialsDefs";
@@ -77,14 +77,19 @@ export namespace FadingFeature {
         fadeNear: number | undefined,
         fadeFar: number | undefined,
         updateUniforms: boolean,
-        additionalCallback?: (renderer: any, material: any) => void
+        additionalCallback?: (
+            renderer: THREE.Object3D["onBeforeRender"] extends Function
+                ? Parameters<NonNullable<THREE.Object3D["onBeforeRender"]>>[0]
+                : never,
+            material: FadingFeature
+        ) => void
     ) {
         object.onBeforeRender = (
-            renderer: any,
+            renderer,
             scene: THREE.Scene,
             camera: THREE.Camera,
             geometry: THREE.BufferGeometry,
-            material: any,
+            material: THREE.Material & FadingFeature,
             group: THREE.Group
         ) => {
             const fadingMaterial = material as FadingFeature;

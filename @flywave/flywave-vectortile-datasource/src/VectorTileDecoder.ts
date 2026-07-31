@@ -17,7 +17,7 @@ import {
     WorkerServiceManager
 } from "@flywave/flywave-mapview-decoder/index-worker";
 import { assert, LoggerManager, PerformanceTimer } from "@flywave/flywave-utils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { GeoJsonDataAdapter } from "./adapters/geojson/GeoJsonDataAdapter";
 import { GeoJsonVtDataAdapter } from "./adapters/geojson-vt/GeoJsonVtDataAdapter";

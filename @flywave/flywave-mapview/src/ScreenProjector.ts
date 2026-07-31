@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type Vector3Like } from "@flywave/flywave-geoutils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 /**
  * Determines whether a position in NDC (Normalized Device Coordinates) is inside the screen.

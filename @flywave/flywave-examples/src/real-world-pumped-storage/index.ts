@@ -12,7 +12,7 @@ import {
     type ProjectorOverlayManager,
     GUI
 } from "@flywave/flywave.gl";
-import { TextureLoader, ClampToEdgeWrapping } from "three";
+import { TextureLoader, ClampToEdgeWrapping } from "three/webgpu";
 
 const PROJECT_CONFIG = {
     PUMPED_STORAGE_3DTILES_URL: "/api/v1/tilesets/gkqj9pbfa7bt9dxex7t8hmp13a/tiles/tileset.json",

@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type PointStringParams } from "../common/render/primitives/point-string-params";
 import { type Point3d, Range3d } from "../core-geometry";

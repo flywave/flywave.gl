@@ -13,7 +13,7 @@ import { type GeoPointLike } from "@flywave/flywave-geoutils";
 import { type LookAtParams } from "@flywave/flywave-mapview";
 import * as turf from "@turf/turf";
 import { assert } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { GeoJsonStore } from "./utils/GeoJsonStore";
 import { GeoJsonTest } from "./utils/GeoJsonTest";

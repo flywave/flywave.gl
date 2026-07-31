@@ -4,7 +4,7 @@
 //    Chai uses properties instead of functions for some expect checks.
 
 import { expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type PickResult, PickObjectType } from "../src/PickHandler";
 import { PickListener } from "../src/PickListener";

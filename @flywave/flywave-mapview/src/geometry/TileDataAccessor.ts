@@ -2,7 +2,7 @@
 
 import { GeometryType, getFeatureId } from "@flywave/flywave-datasource-protocol";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { type Tile, type TileFeatureData } from "../Tile";
 import {

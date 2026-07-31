@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 /* eslint-disable no-console */
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { type LayerType, type StratumLayerData, FaceTypes } from "../decoder";
 import { type StratumTileData } from "./StratumTileData";

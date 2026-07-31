@@ -1,33 +1,11 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Matrix3, Matrix4, Vector2 } from "three";
+import { Matrix3, Matrix4, Vector2, AnalyticLightNode, NodeUpdateType, type NodeBuilder, type NodeFrame } from "three/webgpu";
+import { clamp, cos, dFdx, dFdy, dot, float, fract, If, max, min, mix, normalView, positionView, renderGroup, screenCoordinate, sin, sqrt, step, texture, uniform, vec2, vec4 } from "three/tsl";
 import type { DirectLightData, LightingContext } from "three/src/nodes/TSL.js";
-import {
-    clamp,
-    cos,
-    dFdx,
-    dFdy,
-    dot,
-    float,
-    fract,
-    If,
-    max,
-    min,
-    mix,
-    normalView,
-    positionView,
-    renderGroup,
-    screenCoordinate,
-    sin,
-    sqrt,
-    step,
-    texture,
-    uniform,
-    vec2,
-    vec4
-} from "three/tsl";
-import { AnalyticLightNode, NodeUpdateType, type NodeBuilder, type NodeFrame } from "three/webgpu";
+
+
 
 import { getAtmosphereContext, type AtmosphereContext } from "./AtmosphereContext";
 import type { AtmosphereLight } from "./AtmosphereLight";

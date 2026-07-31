@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type Object3D } from "three";
+import { type Object3D } from "three/webgpu";
 
 import {
     type AnalysisStyle,

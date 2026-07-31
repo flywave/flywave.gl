@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { CameraUtils } from "../src/CameraUtils";
 import { MAX_FOV_RAD, MIN_FOV_RAD } from "../src/FovCalculation";

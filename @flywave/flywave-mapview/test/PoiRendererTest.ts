@@ -10,7 +10,8 @@ import { Env } from "@flywave/flywave-datasource-protocol";
 import { Math2D } from "@flywave/flywave-utils";
 import { expect } from "chai";
 import sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
+import type { Renderer } from "three/webgpu";
 
 import { MapViewImageCache } from "../src/image/MapViewImageCache";
 import { MapView } from "../src/MapView";
@@ -104,7 +105,7 @@ describe("PoiRenderer", function () {
             capabilities: {
                 isWebGL2: false
             }
-        } as THREE.WebGLRenderer;
+        } as unknown as Renderer;
         const mapViewStub = sinon.createStubInstance(MapView);
         const testImageName = "testImage";
         const createPointLabel = (name: string) => {

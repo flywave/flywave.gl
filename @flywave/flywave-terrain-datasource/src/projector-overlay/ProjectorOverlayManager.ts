@@ -2,7 +2,7 @@
 
 import { type GeoBox, type Projection, sphereProjection } from "@flywave/flywave-geoutils";
 import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { MAX_PROJECTOR_LAYERS, ProjectorState } from "./ProjectorState";
 

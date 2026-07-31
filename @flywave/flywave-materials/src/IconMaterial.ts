@@ -1,9 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
 import { Fn, attribute, texture, uv as uvNode, vec4, positionLocal, varying } from "three/tsl";
+
 
 export interface IconMaterialParameters {
     map: THREE.Texture;

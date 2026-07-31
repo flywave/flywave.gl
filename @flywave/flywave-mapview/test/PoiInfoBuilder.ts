@@ -5,7 +5,7 @@ import {
     type LineMarkerTechnique,
     type PoiTechnique
 } from "@flywave/flywave-datasource-protocol";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { ImageItem } from "../src/image/Image";
 import { BoxBuffer } from "../src/poi/BoxBuffer";

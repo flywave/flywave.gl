@@ -2,7 +2,7 @@
 
 import { type GeoBoxJSON, type TileEncoding, GeoBox, TileKey } from "@flywave/flywave-geoutils";
 import { clamp, number as interpolate, warnOnce } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { TileValidResource } from "../../TileResourceManager";
 import DemMinMaxQuadTree from "./DemTree";

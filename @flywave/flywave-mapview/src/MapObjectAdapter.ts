@@ -5,7 +5,7 @@ import {
     type Technique,
     Pickability
 } from "@flywave/flywave-datasource-protocol";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { type DataSource } from "./DataSource";
 import { type MapAdapterUpdateEnv, MapMaterialAdapter } from "./MapMaterialAdapter";

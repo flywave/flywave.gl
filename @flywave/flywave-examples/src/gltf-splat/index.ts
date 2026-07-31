@@ -9,7 +9,7 @@ import {
     CopyrightElementHandler
 } from "@flywave/flywave.gl";
 import { loadGLTF, GLTFLoader } from "@flywave/flywave-gltf";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 // GLTF Splat model parameters
 interface GLTFSplatParams {

@@ -3,7 +3,7 @@
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
 import { assert, expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type BufferAttribute, type Geometry } from "../src/DecodedTile";
 import { ThreeBufferUtils } from "../src/ThreeBufferUtils";

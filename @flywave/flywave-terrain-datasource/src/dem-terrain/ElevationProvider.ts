@@ -12,7 +12,7 @@ import {
     ElevationProvider as IElevationProvider
 } from "@flywave/flywave-mapview";
 import { number as interpolate } from "@flywave/flywave-utils";
-import { type DataTexture, type Matrix3, Vector3 } from "three";
+import { type DataTexture, type Matrix3, Vector3 } from "three/webgpu";
 
 import { type InnerElevationProvider } from "../InnerElevationProvider";
 import type DEMData from "./dem/DemData";

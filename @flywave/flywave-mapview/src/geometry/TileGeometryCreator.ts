@@ -60,7 +60,7 @@ import {
     setDisplacementMapToMaterial
 } from "@flywave/flywave-materials";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import {
     applyBaseColorToMaterial,

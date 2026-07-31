@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import type { Color, Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4 } from "three";
+import type { Color, Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4 } from "three/webgpu";
 import { Node as ThreeNode } from "three/webgpu";
 
 export { ThreeNode as Node };

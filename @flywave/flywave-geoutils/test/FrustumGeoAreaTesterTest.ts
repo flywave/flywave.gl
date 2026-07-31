@@ -3,7 +3,7 @@
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
 import { assert, expect } from "chai";
-import { Box3, Matrix4, Sphere, Vector3 } from "three";
+import { Box3, Matrix4, Sphere, Vector3 } from "three/webgpu";
 
 import { geographicStandardTiling, sphereProjection, TileKey } from "../src";
 import { GeoBox } from "../src/coordinates/GeoBox";

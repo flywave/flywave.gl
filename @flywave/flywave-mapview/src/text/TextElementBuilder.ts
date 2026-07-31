@@ -18,7 +18,7 @@ import {
     ContextualArabicConverter
 } from "@flywave/flywave-text-canvas";
 import { assert, LoggerManager, MathUtils } from "@flywave/flywave-utils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { PoiBuilder } from "../poi/PoiBuilder";
 import { TextElement } from "./TextElement";

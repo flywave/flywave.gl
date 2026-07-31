@@ -9,7 +9,7 @@ import {
 import { type TileKey } from "@flywave/flywave-geoutils";
 import { type ILogger, assert, LoggerManager } from "@flywave/flywave-utils";
 import * as Long from "long";
-import { type Vector2, ShapeUtils, Vector3 } from "three";
+import { type Vector2, ShapeUtils, Vector3 } from "three/webgpu";
 
 import { type DataAdapter } from "../../DataAdapter";
 import { type DecodeInfo } from "../../DecodeInfo";

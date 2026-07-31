@@ -5,8 +5,10 @@ import {
     type Tile3DBatchMeshTechniqueParams,
     type TransitionValue
 } from "@flywave/flywave-datasource-protocol";
-import * as THREE from "three";
-import { MeshStandardNodeMaterial } from "three/webgpu";
+import * as THREE from "three/webgpu";
+import {
+    MeshStandardNodeMaterial,
+} from "three/webgpu";
 import {
     Fn,
     attribute,
@@ -20,7 +22,7 @@ import {
     positionLocal,
     mix,
     clamp,
-    greaterThanEqual
+    greaterThanEqual,
 } from "three/tsl";
 
 import { type BatchAnimation } from "../TileRenderDataSource";
@@ -48,7 +50,14 @@ const _styleTex = texture(_dummyTex);
 _styleTex.onObjectUpdate(({ material }) => material.styleTexture);
 
 const _animTex = texture(_dummyTex);
-_animTex.onObjectUpdate(({ material }) => material.animationTexture);
+_animTex.onObjectUpdate(({ material }) => {
+    const mat = material as B3DMBatchMaterial;
+    if (mat._animationManager?.isPlaying) {
+        mat._animationManager.update();
+        mat._updateAnimationTexture();
+    }
+    return mat.animationTexture;
+});
 
 const _texW = uniform(1).onObjectUpdate(({ material }) => material.textureWidth);
 const _texH = uniform(1).onObjectUpdate(({ material }) => material.textureHeight);
@@ -272,20 +281,6 @@ class B3DMBatchMaterial extends MeshStandardNodeMaterial {
         this._batchStyles.clear();
         this._animationManager.reset();
         this._updateStyleTexture();
-    }
-
-    onBeforeRender(
-        renderer: THREE.WebGLRenderer,
-        scene: THREE.Scene,
-        camera: THREE.Camera,
-        geometry: THREE.BufferGeometry,
-        object: THREE.Object3D,
-        group: THREE.Group
-    ): void {
-        if (this._animationManager.isPlaying) {
-            this._animationManager.update();
-            this._updateAnimationTexture();
-        }
     }
 
     private _updateAnimationTexture(): void {

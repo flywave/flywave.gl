@@ -12,7 +12,7 @@ import {
     webMercatorTilingScheme
 } from "@flywave/flywave-geoutils";
 import { assert, expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 const { Brush, Evaluator, SUBTRACTION } = require("three-bvh-csg");
 
 import { createLayerStrategy } from "../src/quantized-terrain/layer-strategy/LayerStrategy";

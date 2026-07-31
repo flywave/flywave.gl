@@ -14,7 +14,7 @@ import {
     type WebTileDataSourceOptions,
     WebTileDataSource
 } from "@flywave/flywave-webtile-datasource";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

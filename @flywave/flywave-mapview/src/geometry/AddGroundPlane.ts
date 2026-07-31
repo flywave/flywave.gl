@@ -8,7 +8,7 @@ import {
 import { SphericalGeometrySubdivisionModifier } from "@flywave/flywave-geometry/SphericalGeometrySubdivisionModifier";
 import { type Projection, ProjectionType } from "@flywave/flywave-geoutils";
 import { MapMeshBasicMaterial, MapMeshStandardMaterial } from "@flywave/flywave-materials";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type Tile } from "../Tile";
 import { LodMesh } from "./LodMesh";

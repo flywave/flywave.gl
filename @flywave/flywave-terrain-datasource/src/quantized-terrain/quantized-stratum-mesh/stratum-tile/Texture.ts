@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 export class TextureCacheLoader {
     private readonly _cache = new Map<string, THREE.Texture>();

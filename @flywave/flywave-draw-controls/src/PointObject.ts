@@ -3,7 +3,7 @@
 // src/PointObject.ts
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 
 import { DrawableObject } from "./DrawableObject";

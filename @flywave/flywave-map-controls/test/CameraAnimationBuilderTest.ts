@@ -4,7 +4,7 @@ import { GeoCoordinates, mercatorProjection } from "@flywave/flywave-geoutils";
 import { MapView } from "@flywave/flywave-mapview";
 import { assert } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { CameraAnimationBuilder } from "../src/CameraAnimationBuilder";
 import { type CameraKeyTrackAnimationOptions, ControlPoint } from "../src/CameraKeyTrackAnimation";

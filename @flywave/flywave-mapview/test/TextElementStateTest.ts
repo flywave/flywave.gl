@@ -10,7 +10,7 @@ import {
     VerticalPlacement
 } from "@flywave/flywave-text-canvas/rendering/TextStyle";
 import { expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { TextElementState } from "../src/text/TextElementState";
 import { TextElementType } from "../src/text/TextElementType";

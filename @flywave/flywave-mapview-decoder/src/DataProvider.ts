@@ -3,7 +3,7 @@
 import "@flywave/flywave-fetch";
 
 import { type TileKey } from "@flywave/flywave-geoutils";
-import { EventDispatcher } from "three";
+import { EventDispatcher } from "three/webgpu";
 
 /**
  * Interface for all `DataProvider` subclasses.

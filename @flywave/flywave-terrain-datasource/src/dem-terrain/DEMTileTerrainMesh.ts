@@ -13,8 +13,8 @@ import {
     Vector2,
     Vector3,
     Vector4
-} from "three";
-import * as THREE from "three";
+} from "three/webgpu";
+import * as THREE from "three/webgpu";
 
 import { type HeightMapModifierManager } from "../ground-modification-manager";
 import { type ProjectorState } from "../projector-overlay";

@@ -2,7 +2,7 @@
 
 import { type ValueMap } from "@flywave/flywave-datasource-protocol/index-decoder";
 import { webMercatorProjection } from "@flywave/flywave-geoutils";
-import { ShapeUtils, Vector2, Vector3 } from "three";
+import { ShapeUtils, Vector2, Vector3 } from "three/webgpu";
 
 import { type DataAdapter } from "../../DataAdapter";
 import { type DecodeInfo } from "../../DecodeInfo";

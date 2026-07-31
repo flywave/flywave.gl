@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type Vector4, Vector2, Vector3 } from "three";
+import { type Vector4, Vector2, Vector3 } from "three/webgpu";
 
 import { assert } from "./assert";
 import { clamp } from "./Utils";

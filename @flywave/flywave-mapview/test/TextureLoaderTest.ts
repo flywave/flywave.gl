@@ -10,7 +10,7 @@ chai.use(chai_as_promised);
 const { expect } = chai;
 import "@flywave/flywave-fetch";
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { TextureLoader } from "../src/TextureLoader";
 

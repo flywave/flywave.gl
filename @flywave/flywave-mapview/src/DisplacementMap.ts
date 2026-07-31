@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type GeoBox, type TileKey } from "@flywave/flywave-geoutils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 export interface DisplacementMap {
     xCountVertices: number;

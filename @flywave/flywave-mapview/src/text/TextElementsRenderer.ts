@@ -24,7 +24,7 @@ import {
     MathUtils,
     PerformanceTimer
 } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import type { Renderer } from "three/webgpu";
 import { type RendererCapabilities } from "@flywave/flywave-materials";
 

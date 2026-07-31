@@ -2,7 +2,7 @@
 
 import { type Vector2Like } from "@flywave/flywave-geoutils";
 import { assert } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { MAX_FOV_RAD, MIN_FOV_RAD } from "./FovCalculation";
 

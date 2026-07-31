@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 import { type MapView } from "./MapView";
 import { MapViewUtils } from "./Utils";

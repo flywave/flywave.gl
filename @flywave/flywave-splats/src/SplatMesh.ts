@@ -37,7 +37,7 @@ import {
     Vector3,
     Ray,
     Raycaster
-} from "three";
+} from "three/webgpu";
 
 import { SplatGeometry } from "./SplatGeometry";
 import { SplatMaterial } from "./SplatMaterial";
@@ -217,14 +217,7 @@ export class SplatMesh extends Mesh {
         }
     }
 
-    override onBeforeRender(
-        renderer: any,
-        scene: Scene,
-        camera: Camera,
-        geometry: BufferGeometry,
-        material: Material,
-        group: Group
-    ): void {
+    override onBeforeRender(renderer, scene, camera, geometry, material, group): void {
         this._frameIdThisUpdate = renderer.info.render.frame;
         this.sortDataAsync(camera);
         super.onBeforeRender(renderer, scene, camera, geometry, material, group);

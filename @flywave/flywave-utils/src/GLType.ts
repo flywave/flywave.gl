@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type TypedArray } from "three";
+import { type TypedArray } from "three/webgpu";
 
 interface glType {
     BYTE: number;

@@ -6,7 +6,7 @@ import {
     ConvertWebMercatorY,
     GeoCoordinates
 } from "@flywave/flywave-geoutils";
-import { BufferAttribute, BufferGeometry, MathUtils, Vector3 } from "three";
+import { BufferAttribute, BufferGeometry, MathUtils, Vector3 } from "three/webgpu";
 import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
 
 interface QuantizedAreaCliper {

@@ -7,7 +7,7 @@ import {
     ProjectionType
 } from "@flywave/flywave-geoutils";
 import { assert } from "@flywave/flywave-utils";
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 import { SubdivisionModifier } from "./SubdivisionModifier";
 

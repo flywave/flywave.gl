@@ -11,7 +11,7 @@ import { silenceLoggingAroundFunction } from "@flywave/flywave-test-utils";
 import { TextLayoutStyle, TextRenderStyle } from "@flywave/flywave-text-canvas";
 import { LogLevel } from "@flywave/flywave-utils";
 import { expect } from "chai";
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 import { TextElementBuilder } from "../src/text/TextElementBuilder";
 import { type TileTextStyleCache } from "../src/text/TileTextStyleCache";

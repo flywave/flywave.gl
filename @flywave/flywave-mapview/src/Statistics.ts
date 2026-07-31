@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { LoggerManager, PerformanceTimer } from "@flywave/flywave-utils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 const logger = LoggerManager.instance.create("Statistics");
 

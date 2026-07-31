@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type Frustum, type Plane, type Ray, Matrix4, Quaternion, Sphere, Vector3 } from "three";
+import { type Frustum, type Plane, type Ray, Matrix4, Quaternion, Sphere, Vector3 } from "three/webgpu";
 
 import { GeoBox } from "../coordinates/GeoBox";
 import { GeoCoordinates } from "../coordinates/GeoCoordinates";

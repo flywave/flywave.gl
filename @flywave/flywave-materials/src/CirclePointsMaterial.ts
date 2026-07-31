@@ -1,9 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
 import { Fn, fwidth, length, smoothstep, uniform, vec2, vec3, vec4, pointUV } from "three/tsl";
+
 
 export interface CirclePointsMaterialParameters {
     size?: number;

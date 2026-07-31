@@ -15,7 +15,7 @@ import {
     TextRenderStyle,
     VerticalAlignment
 } from "@flywave/flywave-text-canvas";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type DrawableObject } from "./DrawableObject";
 import { type DrawEvent, DrawEventNames } from "./DrawEventNames";

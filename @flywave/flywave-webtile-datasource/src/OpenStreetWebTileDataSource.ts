@@ -7,7 +7,7 @@ import {
     TextureLoader,
     UrlCopyrightProvider
 } from "@flywave/flywave-mapview";
-import { type Texture } from "three";
+import { type Texture } from "three/webgpu";
 
 import {
     WebTileDataProvider,

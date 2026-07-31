@@ -15,7 +15,7 @@ import {
     Mesh,
     Vector2,
     Vector3
-} from "three";
+} from "three/webgpu";
 
 import {
     type SerializedHeightMapModifier,

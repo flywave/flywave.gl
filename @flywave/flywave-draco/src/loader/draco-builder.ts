@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import type { TypedArray } from "three";
-import * as THREE from "three";
+import type { TypedArray } from "three/webgpu";
+import * as THREE from "three/webgpu";
 
 import type {
     draco_GeometryAttribute_Type,

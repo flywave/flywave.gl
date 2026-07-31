@@ -4,7 +4,7 @@ import { GeoCoordinates, GeoPolygon, mercatorProjection } from "@flywave/flywave
 import * as turf from "@turf/turf";
 import { makeCCW, quickDecomp } from "poly-decomp-es";
 import { ELEMENT, tesselate, WINDING } from "tess2-ts";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import earcut from "earcut";
 
 // Define Point and Polygon types to match definitions in PolygonDecomposer

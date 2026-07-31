@@ -23,8 +23,8 @@ import { type MapMeshBasicMaterial } from "@flywave/flywave-materials";
 import * as chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
-import * as THREE from "three";
-import { RawShaderMaterial } from "three";
+import * as THREE from "three/webgpu";
+import { RawShaderMaterial } from "three/webgpu";
 
 chai.use(chaiAsPromised);
 // Needed for using assert(...).isFulfilled for example
@@ -215,12 +215,11 @@ function getSolidLineTile(): DecodedTile {
     };
 }
 
-function checkGlslVersion(objects: THREE.Object3D[], isWebGL2: boolean) {
-    const expectedVersion = isWebGL2 ? THREE.GLSL3 : THREE.GLSL1;
+function checkGlslVersion(objects: THREE.Object3D[]) {
     objects.forEach(object => {
         const material = (object as any).material;
         if (material instanceof RawShaderMaterial) {
-            assert.equal(material.glslVersion, expectedVersion);
+            assert.equal(material.glslVersion, THREE.GLSL3);
         }
     });
 }
@@ -296,35 +295,28 @@ describe("TileGeometryCreator", () => {
         assert.equal(imageData.height, decodedDisplacementMap.yCountVertices);
     });
 
-    for (const isWebGL2 of [false, true]) {
-        const webGLVersion = isWebGL2 ? "WebGL2" : "WebGL1";
+    describe("material glslVersion", () => {
+        it("extruded polygon materials have expected glslVersion", () => {
+            const decodedTile: DecodedTile = getExtrudedPolygonTile();
+            tgc.createObjects(newTile, decodedTile, textureCallback);
 
-        describe(`${webGLVersion} support`, () => {
-            beforeEach(() => {
-                mapView.renderer.capabilities.isWebGL2 = isWebGL2;
-            });
-            it("extruded polygon materials have expected glslVersion", () => {
-                const decodedTile: DecodedTile = getExtrudedPolygonTile();
-                tgc.createObjects(newTile, decodedTile, textureCallback);
-
-                checkGlslVersion(newTile.objects, isWebGL2);
-            });
-
-            it("fill polygon materials have expected glslVersion", () => {
-                const decodedTile: DecodedTile = getFillTile();
-                tgc.createObjects(newTile, decodedTile, textureCallback);
-
-                checkGlslVersion(newTile.objects, isWebGL2);
-            });
-
-            it("solid line materials have expected glslVersion", () => {
-                const decodedTile: DecodedTile = getSolidLineTile();
-                tgc.createObjects(newTile, decodedTile, textureCallback);
-
-                checkGlslVersion(newTile.objects, isWebGL2);
-            });
+            checkGlslVersion(newTile.objects);
         });
-    }
+
+        it("fill polygon materials have expected glslVersion", () => {
+            const decodedTile: DecodedTile = getFillTile();
+            tgc.createObjects(newTile, decodedTile, textureCallback);
+
+            checkGlslVersion(newTile.objects);
+        });
+
+        it("solid line materials have expected glslVersion", () => {
+            const decodedTile: DecodedTile = getSolidLineTile();
+            tgc.createObjects(newTile, decodedTile, textureCallback);
+
+            checkGlslVersion(newTile.objects);
+        });
+    });
     describe("pickable geometry", () => {
         it("extruded polygon depth prepass and edges geometries are registered as non-pickable", () => {
             const decodedTile: DecodedTile = getExtrudedPolygonTile();

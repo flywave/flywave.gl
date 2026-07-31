@@ -21,26 +21,11 @@
  * Modified from the original source code.
  */
 
-import {
-    DirectionalLight,
-    MathUtils,
-    Matrix4,
-    PerspectiveCamera,
-    Vector2,
-    Vector3,
-    Vector4
-} from "three";
-import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
+import { DirectionalLight, MathUtils, Matrix4, PerspectiveCamera, Vector2, Vector3, Vector4, type NodeBuilder, type NodeFrame, type SampleNode, type TextureNode, NodeMaterial, NodeUpdateType, TempNode } from "three/webgpu";
 import { float, texture, uniform, uniformArray, uv, vec2, vec3, vec4 } from "three/tsl";
-import {
-    type NodeBuilder,
-    type NodeFrame,
-    type SampleNode,
-    type TextureNode,
-    NodeMaterial,
-    NodeUpdateType,
-    TempNode
-} from "three/webgpu";
+import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
+
+
 import invariant from "tiny-invariant";
 
 import { OnBeforeFrameUpdate } from "../tsl/events";

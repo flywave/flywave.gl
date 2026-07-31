@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 // meshMemoryUtils.ts
-import { type BufferGeometry, type Material, type Mesh, DataTexture, Texture } from "three";
+import { type BufferGeometry, type Material, type Mesh, DataTexture, Texture } from "three/webgpu";
 
 /**
  * 估计 Mesh 占用的内存大小

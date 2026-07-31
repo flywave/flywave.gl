@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 const UNIT_Z = new THREE.Vector3(0, 0, 1);
 const POINTS = [0, 1, 2, 1, 3, 2];

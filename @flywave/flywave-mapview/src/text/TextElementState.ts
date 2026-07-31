@@ -8,7 +8,7 @@ import {
     vPlacementFromAlignment
 } from "@flywave/flywave-text-canvas";
 import { assert } from "@flywave/flywave-utils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { LayoutState } from "./LayoutState";
 import { RenderState } from "./RenderState";

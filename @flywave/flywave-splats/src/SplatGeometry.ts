@@ -6,7 +6,7 @@ import {
     DynamicDrawUsage,
     InstancedBufferAttribute,
     InstancedBufferGeometry
-} from "three";
+} from "three/webgpu";
 
 export class SplatGeometry {
     static build(maxSplatCount = 1, useQuad = true) {

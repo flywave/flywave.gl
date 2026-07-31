@@ -3,7 +3,7 @@
 import { getTestResourceUrl } from "@flywave/flywave-test-utils";
 import { assert } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { FontCatalog, FontStyle, GlyphData, TextRenderStyle } from "../src/index";
 

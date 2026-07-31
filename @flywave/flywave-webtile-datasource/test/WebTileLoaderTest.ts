@@ -8,7 +8,7 @@ import { LoggerManager } from "@flywave/flywave-utils";
 import * as chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type WebTileDataProvider, WebTileDataSource } from "../src/WebTileDataSource";
 import { WebTileLoader } from "../src/WebTileLoader";

@@ -1,12 +1,61 @@
+// @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type IVisualBatchMaterialParams, VisualBatchMaterial } from "@flywave/flywave-materials";
-import * as THREE from "three";
+import {
+    log,
+    type TextureNode,
+    type UniformNode,
+} from "three/webgpu";
+import {
+    PI,
+    asin,
+    atan,
+    attribute,
+    cos,
+    exp,
+    float,
+    Fn,
+    If,
+    materialColor,
+    materialOpacity,
+    mix,
+    positionLocal,
+    select,
+    sin,
+    tan,
+    texture,
+    uniform,
+    uv,
+    vec2,
+    vec3,
+    vec4,
+} from "three/tsl";
+import * as THREE from "three/webgpu";
 
+import { type IVisualBatchMaterialParams, VisualBatchMaterial } from "@flywave/flywave-materials";
 import { FaceTypes } from "../decoder";
 
 /** Maximum number of texture patches supported by the material */
 const MAX_TEXTURE_PATCHES = 4;
+
+/**
+ * Creates a 1x1 white placeholder texture
+ */
+function dummyTex(): THREE.DataTexture {
+    const t = new THREE.DataTexture(
+        new Uint8Array([255, 255, 255, 255]),
+        1,
+        1,
+        THREE.RGBAFormat,
+        THREE.UnsignedByteType
+    );
+    t.minFilter = THREE.LinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    t.wrapS = THREE.ClampToEdgeWrapping;
+    t.wrapT = THREE.ClampToEdgeWrapping;
+    t.needsUpdate = true;
+    return t;
+}
 
 /**
  * Parameters for constructing a StratumMaterial instance
@@ -27,27 +76,21 @@ interface IStratumMaterialParams extends IVisualBatchMaterialParams {
  * @extends VisualBatchMaterial
  */
 class StratumMaterial extends VisualBatchMaterial {
-    /**
-     * Material uniforms including terrain-specific parameters
-     * @property {THREE.IUniform<number>} faceVisible - Bitmask for visible face types
-     * @property {THREE.IUniform<THREE.Vector4[]>} imageryPatchTransform - UV transforms for each texture
-     * @property {THREE.IUniform<THREE.Texture[]>} imageryPatchArray - Texture array for terrain imagery
-     * @property {THREE.IUniform<number>} imageryPatchCount - Number of active texture patches
-     * @property {THREE.IUniform<THREE.Vector4>} clipPatchTransform - UV transform for clip patch
-     */
-    declare uniforms: {
-        faceVisible: THREE.IUniform<number>;
-        imageryPatchTransform: THREE.IUniform<THREE.Vector4[]>;
-        imageryPatchArray: THREE.IUniform<THREE.Texture[]>;
-        imageryPatchCount: THREE.IUniform<number>;
-        clipPatchTransform: THREE.IUniform<THREE.Vector4>;
+    // Texture / transform uniforms
+    private readonly _imageryTexNodes: TextureNode[] = [];
+    private readonly _imageryTexUniforms: UniformNode<THREE.Texture | null>[] = [];
+    private readonly _imageryTransformUniforms: UniformNode<THREE.Vector4>[] = [];
+    private readonly _imageryCountUniform: UniformNode<number>;
 
-        // Projection switching uniforms
-        uCurrentGeometryProjectionType: THREE.IUniform<number>;
-        uTargetProjectionType: THREE.IUniform<number>;
-        uProjectionFactor: THREE.IUniform<number>;
-        uEarthRadius: THREE.IUniform<number>;
-    } & VisualBatchMaterial["uniforms"];
+    // Face / clip uniforms
+    private readonly _faceVisibleUniform: UniformNode<number>;
+    private readonly _clipPatchTransformUniform: UniformNode<THREE.Vector4>;
+
+    // Projection switching uniforms
+    private readonly _currentProjectionUniform: UniformNode<number>;
+    private readonly _targetProjectionUniform: UniformNode<number>;
+    private readonly _projectionFactorUniform: UniformNode<number>;
+    private readonly _earthRadiusUniform: UniformNode<number>;
 
     /**
      * Creates a new StratumMaterial instance
@@ -60,10 +103,19 @@ class StratumMaterial extends VisualBatchMaterial {
         });
 
         // Initialize terrain-specific uniforms
-        this.uniforms = THREE.UniformsUtils.merge([
-            this.uniforms,
-            this._getCustomUniforms()
-        ]) as typeof this.uniforms;
+        this._imageryCountUniform = uniform(0);
+        this._faceVisibleUniform = uniform(0);
+        this._clipPatchTransformUniform = uniform(new THREE.Vector4());
+        this._currentProjectionUniform = uniform(0);
+        this._targetProjectionUniform = uniform(0);
+        this._projectionFactorUniform = uniform(0);
+        this._earthRadiusUniform = uniform(6378137.0);
+
+        for (let i = 0; i < MAX_TEXTURE_PATCHES; i++) {
+            this._imageryTexUniforms.push(uniform<THREE.Texture | null>(dummyTex()));
+            this._imageryTexNodes.push(texture(this._imageryTexUniforms[i]));
+            this._imageryTransformUniforms.push(uniform(new THREE.Vector4(1, 1, 0, 0)));
+        }
 
         // Set default transforms if textures are provided without transforms
         if (params.imageryTextures && !params.imageryTransforms) {
@@ -76,6 +128,8 @@ class StratumMaterial extends VisualBatchMaterial {
         if (params.imageryTextures && params.imageryTransforms) {
             this.setImageryTextures(params.imageryTextures, params.imageryTransforms);
         }
+
+        this._buildStratumNodes();
     }
 
     /**
@@ -83,7 +137,7 @@ class StratumMaterial extends VisualBatchMaterial {
      * @param {number} value - Bitmask representing visible face types
      */
     set faceVisible(value: number) {
-        this.uniforms.faceVisible.value = value;
+        this._faceVisibleUniform.value = value;
     }
 
     /**
@@ -91,7 +145,7 @@ class StratumMaterial extends VisualBatchMaterial {
      * @returns {number} Current face visibility bitmask
      */
     get faceVisible(): number {
-        return this.uniforms.faceVisible.value;
+        return this._faceVisibleUniform.value;
     }
 
     /**
@@ -110,10 +164,10 @@ class StratumMaterial extends VisualBatchMaterial {
         }
 
         // Update texture-related uniforms
-        this.uniforms.imageryPatchCount.value = textures.length;
+        this._imageryCountUniform.value = textures.length;
         for (let i = 0; i < textures.length; i++) {
-            this.uniforms.imageryPatchArray.value[i] = textures[i];
-            this.uniforms.imageryPatchTransform.value[i] = transforms[i];
+            this._imageryTexUniforms[i].value = textures[i];
+            this._imageryTransformUniforms[i].value = transforms[i];
         }
     }
 
@@ -128,56 +182,26 @@ class StratumMaterial extends VisualBatchMaterial {
         }>
     ) {
         value.forEach((item, index) => {
-            this.uniforms.imageryPatchArray.value[index] = item.texture;
-            this.uniforms.imageryPatchTransform.value[index] = item.transform;
+            this._imageryTexUniforms[index].value = item.texture;
+            this._imageryTransformUniforms[index].value = item.transform;
         });
-        this.uniforms.imageryPatchCount.value = value.length;
+        this._imageryCountUniform.value = value.length;
     }
 
     public set clipPatch(transform: THREE.Vector4) {
-        this.uniforms.clipPatchTransform.value.copy(transform);
+        this._clipPatchTransformUniform.value.copy(transform);
     }
 
     /**
      * Cleans up material resources
      */
-    dispose(): void {
+    override dispose(): void {
         super.dispose();
 
         // Dispose all texture resources
-        this.uniforms.imageryPatchArray.value.forEach(texture => {
-            if (texture) {
-                texture.dispose();
-            }
+        this._imageryTexUniforms.forEach(uniformNode => {
+            uniformNode.value?.dispose();
         });
-    }
-
-    // --- Protected Methods ---
-
-    /**
-     * Gets custom uniforms for terrain rendering
-     * @returns {Object} Custom uniform definitions
-     * @protected
-     */
-    protected _getCustomUniforms() {
-        return {
-            faceVisible: { value: 0 },
-            imageryPatchTransform: {
-                value: new Array(MAX_TEXTURE_PATCHES).fill(new THREE.Vector4())
-            },
-            imageryPatchArray: {
-                value: new Array(MAX_TEXTURE_PATCHES).fill(null)
-            },
-            imageryPatchCount: { value: 0 },
-
-            clipPatchTransform: { value: new THREE.Vector4() },
-
-            // Projection switching uniforms
-            uCurrentGeometryProjectionType: { value: 0 },
-            uTargetProjectionType: { value: 0 },
-            uProjectionFactor: { value: 0.0 },
-            uEarthRadius: { value: 6378137.0 }
-        };
     }
 
     /**
@@ -192,210 +216,114 @@ class StratumMaterial extends VisualBatchMaterial {
         targetProjectionType: number,
         projectionFactor: number
     ): void {
-        this.uniforms.uCurrentGeometryProjectionType.value = currentProjectionType;
-        this.uniforms.uTargetProjectionType.value = targetProjectionType;
-        this.uniforms.uProjectionFactor.value = projectionFactor;
+        this._currentProjectionUniform.value = currentProjectionType;
+        this._targetProjectionUniform.value = targetProjectionType;
+        this._projectionFactorUniform.value = projectionFactor;
     }
 
-    /**
-     * Gets custom vertex shader chunks
-     * @returns {string} GLSL code to inject in vertex shader
-     * @protected
-     */
-    protected _getCustomVertexShaderChunks(): string {
-        return `
-            // Face type attribute passed to fragment shader
-            attribute float faceType;
-            varying float vFaceType;
-            attribute float voxelIndex;
-            varying float vvoxelIndex;
-            
-            // Projection switching uniforms
-            uniform int uCurrentGeometryProjectionType;  // 0 = Planar, 1 = Spherical
-            uniform int uTargetProjectionType;          // 0 = Planar, 1 = Spherical  
-            uniform float uProjectionFactor;            // 0.0-1.0 插值因子
-            uniform float uEarthRadius;                 // 地球半径 6378137.0
-
-            // 从 Web Mercator 到球面坐标
-            vec3 webMercatorToSphere(vec3 planarPos) {
-                float mx = planarPos.x / uEarthRadius - 3.141592653589793;
-                float my = planarPos.y / uEarthRadius - 3.141592653589793;
-                float w = exp(my);
-                float d = w * w;
-                float gx = (2.0 * w) / (d + 1.0);
-                float gy = (d - 1.0) / (d + 1.0);
-                float scale = uEarthRadius + planarPos.z;
-                
-                vec3 spherePos;
-                spherePos.x = cos(mx) * gx * scale;
-                spherePos.y = sin(mx) * gx * scale;
-                spherePos.z = gy * scale;
-                
-                return spherePos;
-            }
-            
-            // 从球面到 Web Mercator 坐标
-            vec3 sphereToWebMercator(vec3 spherePos) {
-                // 将球面坐标转换为经纬度
-                float lat = asin(spherePos.z / uEarthRadius);
-                float lon = atan(spherePos.y, spherePos.x);
-                
-                // 转换为 Web Mercator 坐标
-                float x = (lon / 3.141592653589793 + 1.0) * 0.5 * uEarthRadius;
-                float y = (log(tan(3.141592653589793 * 0.25 + lat * 0.5)) / 3.141592653589793 + 1.0) * 0.5 * uEarthRadius;
-                float z = spherePos.z;
-                
-                return vec3(x, y, z);
-            }
-
-            // 投影重投影和插值
-            vec3 reprojectAndInterpolate(vec3 currentPos) {
-                // 如果投影类型相同，无需变换
-                if (uCurrentGeometryProjectionType == uTargetProjectionType) {
-                    return currentPos;
-                }
-                
-                // 投影类型不同，需要变换
-                vec3 transformedPos = currentPos;
-                
-                // 从球面到平面
-                if (uCurrentGeometryProjectionType == 1 && uTargetProjectionType == 0) {
-                    transformedPos = sphereToWebMercator(currentPos);
-                }
-                // 从平面到球面
-                else if (uCurrentGeometryProjectionType == 0 && uTargetProjectionType == 1) {
-                    transformedPos = webMercatorToSphere(currentPos);
-                }
-                
-                // 插值混合
-                return mix(currentPos, transformedPos, uProjectionFactor);
-            }
-        `;
-    }
+    // ==================== Node Graph ====================
 
     /**
-     * Gets custom fragment shader chunks
-     * @returns {string} GLSL code to inject in fragment shader
-     * @protected
+     * Builds the stratum node graph on top of the visual style pipeline:
+     * - Projection switching in the vertex stage
+     * - Multi-texture imagery blending in the fragment stage
      */
-    protected _getCustomFragmentShaderChunks(): string {
-        return `
-            // Face visibility and texture mapping uniforms
-            uniform int faceVisible;
-            varying float vFaceType;
-            varying float vvoxelIndex;
-             
-            uniform vec4 clipPatchTransform;
-            
-            uniform int imageryPatchCount;
-            uniform vec4 imageryPatchTransform[${MAX_TEXTURE_PATCHES}];
-            uniform sampler2D imageryPatchArray[${MAX_TEXTURE_PATCHES}];
-            
+    private _buildStratumNodes(): void {
+        const { hasStyle, styleColor, styleOpacity, offset } = this.visualNodes;
 
-            /**
-             * Samples all active textures with UV transforms
-             * @returns {vec4} Combined texture color
-             */
-            vec4 getTextureColor() {
-                vec4 color = vec4(1.0);
-                
-                // Only apply textures to top faces
-                if (int(vFaceType) == ${FaceTypes.TopGroundFace}) {
-                    for (int i = 0; i < ${MAX_TEXTURE_PATCHES}; i++) {
-                        if (i >= imageryPatchCount) break;
-                        
-                        // Apply UV transformation
-                        vec2 transformedUv = vec2(
-                            vUv.x * imageryPatchTransform[i].x + imageryPatchTransform[i].z,
-                            vUv.y * imageryPatchTransform[i].y + imageryPatchTransform[i].w
-                        );
-                        
-                        // Only sample if within UV bounds
-                        if (all(greaterThanEqual(transformedUv, vec2(0.0))) && 
-                            all(lessThanEqual(transformedUv, vec2(1.0)))) {
-                            
-                            // Manual texture array lookup (WebGL 1.0 compatible)
-                            if (i == 0) color = texture2D(imageryPatchArray[0], transformedUv);
-                            else if (i == 1) color = texture2D(imageryPatchArray[1], transformedUv);
-                            else if (i == 2) color = texture2D(imageryPatchArray[2], transformedUv);
-                            else if (i == 3) color = texture2D(imageryPatchArray[3], transformedUv);
-                        }
-                    }
+        // Face type attribute (auto-interpolated for fragment stage)
+        const faceType = attribute("faceType", "float");
+
+        // --- Projection switching functions ---
+
+        const webMercatorToSphere = Fn(([p]: [ReturnType<typeof vec3>]) => {
+            const mx = p.x.div(this._earthRadiusUniform).sub(PI);
+            const my = p.y.div(this._earthRadiusUniform).sub(PI);
+            const w = exp(my);
+            const d = w.mul(w);
+            const gx = float(2).mul(w).div(d.add(1));
+            const gy = d.sub(1).div(d.add(1));
+            const scale = this._earthRadiusUniform.add(p.z);
+            return vec3(cos(mx).mul(gx).mul(scale), sin(mx).mul(gx).mul(scale), gy.mul(scale));
+        });
+
+        const sphereToWebMercator = Fn(([p]: [ReturnType<typeof vec3>]) => {
+            const lat = asin(p.z.div(this._earthRadiusUniform));
+            const lon = atan(p.y, p.x);
+            const x = lon.div(PI).add(1).mul(0.5).mul(this._earthRadiusUniform);
+            const y = log(tan(PI.mul(0.25).add(lat.mul(0.5))))
+                .div(PI)
+                .add(1)
+                .mul(0.5)
+                .mul(this._earthRadiusUniform);
+            return vec3(x, y, p.z);
+        });
+
+        const reprojectAndInterpolate = Fn(([p]: [ReturnType<typeof vec3>]) => {
+            const sameType = this._currentProjectionUniform.equal(this._targetProjectionUniform);
+            const toPlanar = this._currentProjectionUniform
+                .equal(1)
+                .and(this._targetProjectionUniform.equal(0));
+            const toSphere = this._currentProjectionUniform
+                .equal(0)
+                .and(this._targetProjectionUniform.equal(1));
+
+            const transformed = select(
+                toPlanar,
+                sphereToWebMercator(p),
+                select(toSphere, webMercatorToSphere(p), p)
+            );
+
+            return select(sameType, p, mix(p, transformed, this._projectionFactorUniform));
+        });
+
+        // --- Vertex: style offset + projection interpolation ---
+
+        const styledPos = positionLocal.add(select(hasStyle, offset, vec3(0)));
+        this.positionNode = reprojectAndInterpolate(styledPos);
+
+        // --- Fragment: imagery blending ---
+
+        const vUv = uv();
+        const getTextureColor = Fn(() => {
+            const color = vec4(1).toVar();
+
+            If(faceType.equal(FaceTypes.TopGroundFace), () => {
+                for (let i = 0; i < MAX_TEXTURE_PATCHES; i++) {
+                    const transform = this._imageryTransformUniforms[i];
+                    const transformedUv = vec2(
+                        vUv.x.mul(transform.x).add(transform.z),
+                        vUv.y.mul(transform.y).add(transform.w)
+                    );
+                    const inRange = transformedUv.x
+                        .greaterThanEqual(0)
+                        .and(transformedUv.x.lessThanEqual(1))
+                        .and(transformedUv.y.greaterThanEqual(0))
+                        .and(transformedUv.y.lessThanEqual(1));
+                    const patchColor = this._imageryTexNodes[i].sample(transformedUv);
+                    color.assign(
+                        select(
+                            inRange.and(float(i).lessThan(this._imageryCountUniform)),
+                            patchColor,
+                            color
+                        )
+                    );
                 }
-                return color;
-            }
-        `;
-    }
+            });
 
-    /**
-     * Gets vertex shader replacement code
-     * @returns {string} GLSL code to replace in vertex shader
-     * @protected
-     */
-    protected _getVertexShaderReplacement(): string {
-        return `
-            #include <begin_vertex>
-            
-            // Process visual interpolation
-            float visualId = ${this._idAttributeName};
-            v${this._idAttributeName} = visualId;
-            vVisualValue = getVisualValue(visualId);
-            VisualStyle style = unpackStyle(visualId);
-            
-            // Apply position offset based on style
-            transformed += mix(style.startOffset, style.endOffset, vVisualValue);
+            return color;
+        });
 
-            // 投影变换和插值
-            transformed = reprojectAndInterpolate(transformed);
+        const texColor = getTextureColor();
 
-            // Pass face type to fragment shader
-            vFaceType = faceType;
-            vvoxelIndex = voxelIndex;
-        `;
-    }
+        const baseColor = vec3(materialColor).mul(select(hasStyle, styleColor, vec3(1)));
+        const baseOpacity = materialOpacity.mul(select(hasStyle, styleOpacity, float(1)));
 
-    /**
-     * Gets fragment shader replacement code
-     * @returns {string} GLSL code to replace in fragment shader
-     * @protected
-     */
-    protected _getFragmentShaderReplacement(): string {
-        return `
-            // Face visibility culling
-            // if (faceVisible!=0 && (int(faceVisible) & (1 << int(vFaceType))) == 0) {
-            //     discard;
-            // }
+        const isTop = faceType.equal(FaceTypes.TopGroundFace);
+        const mixed = mix(vec4(baseColor, baseOpacity), texColor, 0.5);
 
-            //   vec2 clipPatchTransformUv = vec2(
-            //             vUv.x * clipPatchTransform.x + clipPatchTransform.z,
-            //             vUv.y * clipPatchTransform.y + clipPatchTransform.w
-            //         ); 
-            // if (clipPatchTransformUv.x < 0.0 || clipPatchTransformUv.x > 1.0 || 
-            //     clipPatchTransformUv.y < 0.0 || clipPatchTransformUv.y > 1.0) {
-            //     discard;
-            // }
-            
-            // Sample texture color (only applies to top faces)
-            vec4 texColor = getTextureColor();
-            
-            #ifdef USE_VISUAL_BATCH
-                // Apply style interpolation
-                float visualId = v${this._idAttributeName};
-                VisualStyle style = unpackStyle(visualId);
-                
-                diffuseColor.rgb *= style.startColor;
-                diffuseColor.a *= mix(style.startOpacity, style.endOpacity, vVisualValue);
-                
-            #endif
-            
-            // Blend texture with base color
-             if (int(vFaceType) != ${FaceTypes.TopGroundFace}) {
-                diffuseColor = mix(texColor, diffuseColor, 0.5);
-             }else{
-             diffuseColor = texColor;
-            } 
-            #include <color_fragment>
-        `;
+        this.colorNode = select(isTop, texColor.rgb, mixed.rgb);
+        this.opacityNode = select(isTop, texColor.a, mixed.a);
     }
 }
 

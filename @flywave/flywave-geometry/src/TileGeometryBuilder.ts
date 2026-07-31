@@ -12,10 +12,10 @@ import {
     mercatorProjection,
     SphereProjection
 } from "@flywave/flywave-geoutils";
-import { BufferAttribute, BufferGeometry, Matrix4, Vector3 } from "three";
+import { BufferAttribute, BufferGeometry, Matrix4, Vector3 } from "three/webgpu";
 
 // Extend Three.js BufferGeometry type with our custom mode property
-declare module "three" {
+declare module "three/webgpu" {
     interface BufferGeometry {
         mode?: GeometryMode;
     }

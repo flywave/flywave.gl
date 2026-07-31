@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 // CurveGenerator.ts
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 export type CurveType = "catmull-rom" | "cubic-bezier" | "quadratic-bezier" | "spline";
 

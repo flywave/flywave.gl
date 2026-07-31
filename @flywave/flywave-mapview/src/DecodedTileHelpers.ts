@@ -38,7 +38,7 @@ import {
     SolidLineMaterial
 } from "@flywave/flywave-materials";
 import { assert, LoggerManager, pick } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { DisplacedMesh } from "./geometry/DisplacedMesh";
 import { SolidLineMesh } from "./geometry/SolidLineMesh";

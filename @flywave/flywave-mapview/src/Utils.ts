@@ -18,7 +18,7 @@ import { type GeoCoordLike } from "@flywave/flywave-geoutils/coordinates/GeoCoor
 import { MathUtils } from "@flywave/flywave-geoutils/math/MathUtils";
 import { EarthConstants } from "@flywave/flywave-geoutils/projection/EarthConstants";
 import { assert, DOMUtils, LoggerManager } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { CameraUtils } from "./CameraUtils";
 import { type ElevationProvider } from "./ElevationProvider";

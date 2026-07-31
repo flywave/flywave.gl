@@ -8,7 +8,7 @@ import {
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapControls } from "@flywave/flywave-map-controls";
 import { type MapView } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type DrawableObject } from "./DrawableObject";
 import { DrawLine } from "./DrawLine";

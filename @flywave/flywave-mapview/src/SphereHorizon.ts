@@ -2,7 +2,7 @@
 
 import { EarthConstants, sphereProjection } from "@flywave/flywave-geoutils";
 import { Math2D } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { CameraUtils } from "./CameraUtils";
 import { MapViewUtils } from "./Utils";

@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { clamp, number as interpolate } from "@flywave/flywave-utils";
-import { type Vector3Like, type Vector3Tuple, Vector3 } from "three";
+import { number as interpolate } from "@flywave/flywave-utils";
+import { type Vector3Like, type Vector3Tuple, Vector3 } from "three/webgpu";
 
 import type DEMData from "./DemData";
 
@@ -165,8 +165,8 @@ const bilinearLerp = (
 
 const sampleElevation = (fx: number, fy: number, dem: DEMData): number => {
     const demSize = dem.dim;
-    const x = clamp(fx * demSize - 0.5, 0, demSize - 1);
-    const y = clamp(fy * demSize - 0.5, 0, demSize - 1);
+    const x = Math.max(0, Math.min(fx * demSize - 0.5, demSize - 1));
+    const y = Math.max(0, Math.min(fy * demSize - 0.5, demSize - 1));
 
     const ixMin = Math.floor(x);
     const iyMin = Math.floor(y);

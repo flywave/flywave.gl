@@ -1,8 +1,9 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Matrix4, Vector2, Vector3, Vector4 } from "three";
+import { Matrix4, Vector2, Vector3, Vector4 } from "three/webgpu";
 import { uniform, vec2, vec3, vec4, mat4 } from "three/tsl";
+
 
 import { CloudLayers } from "./CloudLayer";
 import { qualityPresets, type QualityPreset } from "./QualityPresets";

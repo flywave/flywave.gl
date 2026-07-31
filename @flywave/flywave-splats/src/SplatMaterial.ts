@@ -1,41 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import {
-    DataTexture,
-    DoubleSide,
-    NormalBlending,
-    NodeMaterial,
-    RGBAFormat,
-    UnsignedByteType,
-    Vector2
-} from "three/webgpu";
-import {
-    Fn,
-    attribute,
-    dot,
-    float,
-    floor as tslFloor,
-    length,
-    mat3,
-    min as tslMin,
-    mod,
-    normalize,
-    pow,
-    sqrt,
-    texture,
-    transpose,
-    uniform,
-    vec2,
-    vec3,
-    vec4,
-    positionLocal,
-    modelViewMatrix,
-    cameraProjectionMatrix,
-    modelWorldMatrix,
-    cameraViewMatrix,
-    cameraPosition
-} from "three/tsl";
+import { DataTexture, DoubleSide, NormalBlending, NodeMaterial, RGBAFormat, UnsignedByteType, Vector2 } from "three/webgpu";
+import { Fn, attribute, dot, float, floor as tslFloor, length, mat3, min as tslMin, mod, normalize, pow, sqrt, texture, transpose, uniform, vec2, vec3, vec4, positionLocal, modelViewMatrix, cameraProjectionMatrix, modelWorldMatrix, cameraViewMatrix, cameraPosition } from "three/tsl";
+
 
 let _sharedMaterial: NodeMaterial | null = null;
 let _sharedMaterialSH: NodeMaterial | null = null;

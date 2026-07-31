@@ -3,7 +3,7 @@
 import { MapMeshBasicMaterial, MapMeshStandardMaterial } from "@flywave/flywave-materials";
 import { LoggerManager } from "@flywave/flywave-utils";
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type TileFeatureData, getFeatureDataSize } from "../Tile";
 import { type LodMesh } from "./LodMesh";

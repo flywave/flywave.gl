@@ -8,7 +8,7 @@ import {
     ProjectionType
 } from "@flywave/flywave-geoutils";
 import { MapView } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type WebTile } from "../../WebImageryTileProvider";
 import { type QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
@@ -48,12 +48,6 @@ export class QuantizedMesh extends THREE.Mesh {
         this.receiveShadow = true;
 
         this.setupFromQuantizedTerrainMesh(quantizedTerrainMesh);
-
-        this.onBeforeRender = () => {
-            if (this.mapView) {
-                this.frameNumber = this.mapView.frameNumber ?? 0;
-            }
-        };
     }
 
     private setupFromQuantizedTerrainMesh(quantizedData: QuantizedTerrainMesh): void {
@@ -112,6 +106,13 @@ export class QuantizedMesh extends THREE.Mesh {
 
     private setupParentTileKey(parentGeobox: GeoBox): void {
         this.clipUvTransform = this._computeClipUvTransform(parentGeobox);
+    }
+
+    override updateMatrixWorld(force?: boolean): void {
+        super.updateMatrixWorld(force);
+        if (this.mapView) {
+            this.frameNumber = this.mapView.frameNumber ?? 0;
+        }
     }
 
     private computeTextureUvTransform(

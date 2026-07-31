@@ -2,7 +2,7 @@
 
 import { type DisplacementFeature, hasDisplacementFeature } from "@flywave/flywave-materials";
 import { assert } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { DisplacedBufferAttribute } from "./DisplacedBufferAttribute";
 import { type DisplacementRange, DisplacedBufferGeometry } from "./DisplacedBufferGeometry";

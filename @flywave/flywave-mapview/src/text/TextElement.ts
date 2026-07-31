@@ -17,7 +17,7 @@ import {
     TextRenderStyle
 } from "@flywave/flywave-text-canvas";
 import { type Math2D } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type ImageItem } from "../image/Image";
 import { type PickResult } from "../PickHandler";

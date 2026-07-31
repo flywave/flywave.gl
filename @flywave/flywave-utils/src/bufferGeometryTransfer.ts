@@ -9,7 +9,7 @@ import {
     InterleavedBufferAttribute,
     Sphere,
     Vector3
-} from "three";
+} from "three/webgpu";
 
 /**
  * 可序列化的几何体数据结构（增强版，包含类型信息）

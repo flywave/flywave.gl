@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { assert, expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { ScreenProjector } from "../src/ScreenProjector";
 

@@ -80,7 +80,7 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
             "@flywave/flywave.gl": path.resolve(__dirname, "../flywave.gl/src/index.ts")
         }
     },
-    externals: ["three", "three/webgpu", "three/tsl"],
+    externals: ["three", "three/tsl", "three/webgpu"],
     output: {
         path: path.join(process.cwd(), "dist/examples"),
         filename: "[name].bundle.js",

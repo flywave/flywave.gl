@@ -3,7 +3,7 @@
 import { OrientedBox3 } from "@flywave/flywave-geoutils";
 import { SolidLineMaterial } from "@flywave/flywave-materials";
 import { assert } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import {
     type DisplacementRange,

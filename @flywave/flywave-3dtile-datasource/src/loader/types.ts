@@ -3,7 +3,7 @@
 import type { FeatureTableJson, GLTFPostprocessed } from "@flywave/flywave-gltf";
 export type { FeatureTableJson };
 
-import { type Matrix4, type TypedArray, type Vector3 } from "three";
+import { type Matrix4, type TypedArray, type Vector3 } from "three/webgpu";
 
 export type LODMetricType = "geometricError" | "maxScreenThreshold";
 

@@ -1,8 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { LRUCache } from "@flywave/flywave-lrucache";
-import * as THREE from "three";
-import { RenderTarget, type Renderer, RendererUtils, QuadMesh } from "three/webgpu";
+import * as THREE from "three/webgpu";
+import { RenderTarget, NodeMaterial, type Renderer, RendererUtils, QuadMesh } from "three/webgpu";
 
 import { type Font, type FontMetrics } from "./FontCatalog";
 import { GlyphData } from "./GlyphData";
@@ -83,15 +83,15 @@ export class GlyphTextureCache {
         this.m_copyMaterial = new GlyphCopyMaterial({
             rendererCapabilities: GlyphTextureCache.DEFAULT_CAPABILITIES
         });
-        this.m_clearQuad = new QuadMesh(this.m_clearMaterial);
-        this.m_copyQuad = new QuadMesh(this.m_copyMaterial);
+        this.m_clearQuad = new QuadMesh(this.m_clearMaterial as THREE.Material);
+        this.m_copyQuad = new QuadMesh(this.m_copyMaterial as THREE.Material);
     }
 
     dispose(): void {
         this.m_entryCache.clear();
         this.m_rt.dispose();
-        this.m_clearMaterial.dispose();
-        this.m_copyMaterial.dispose();
+        (this.m_clearMaterial as THREE.Material).dispose();
+        (this.m_copyMaterial as THREE.Material).dispose();
         this.m_copyTextureSet.clear();
     }
 
@@ -138,7 +138,7 @@ export class GlyphTextureCache {
         if (willClear) {
             for (let i = 0; i < this.m_clearRects.length; i++) {
                 this.m_clearMaterial.clearRectUniform.value.copy(this.m_clearRects[i]);
-                this.m_clearMaterial.needsUpdate = true;
+                (this.m_clearMaterial as THREE.Material).needsUpdate = true;
                 this.m_clearQuad.render(renderer);
             }
             this.m_clearRects.length = 0;
@@ -151,7 +151,7 @@ export class GlyphTextureCache {
                 this.m_copyMaterial.setSourceTexture(entry.srcTexture);
                 this.m_copyMaterial.srcRectUniform.value.copy(entry.srcRect);
                 this.m_copyMaterial.dstRectUniform.value.copy(entry.dstRect);
-                this.m_copyMaterial.needsUpdate = true;
+                (this.m_copyMaterial as THREE.Material).needsUpdate = true;
                 this.m_copyQuad.render(renderer);
             }
             this.m_copyEntries.length = 0;

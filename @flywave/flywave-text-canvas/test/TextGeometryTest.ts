@@ -2,7 +2,7 @@
 
 import { expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type Font, type FontMetrics } from "../src/rendering/FontCatalog";
 import { GlyphData } from "../src/rendering/GlyphData";

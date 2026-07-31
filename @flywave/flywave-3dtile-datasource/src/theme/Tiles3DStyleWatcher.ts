@@ -8,7 +8,7 @@ import {
 } from "@flywave/flywave-datasource-protocol";
 import { type StyleSetOptions } from "@flywave/flywave-datasource-protocol/StyleSetEvaluator";
 import { type IMapRenderingManager } from "@flywave/flywave-mapview";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { type MeshStandardNodeMaterial } from "three/webgpu";
 
 import { type ITile, Tile } from "../base/Tile";
@@ -517,36 +517,6 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                     animation: this.animation
                 });
 
-                const rawOnBeforeRender = batchMaterial.onBeforeRender;
-                batchMaterial.onBeforeRender = (
-                    renderer: THREE.WebGLRenderer,
-                    scene: THREE.Scene,
-                    camera: THREE.Camera,
-                    geometry: THREE.BufferGeometry,
-                    object: THREE.Object3D,
-                    group: THREE.Group
-                ) => {
-                    rawOnBeforeRender?.call(
-                        batchMaterial,
-                        renderer,
-                        scene,
-                        camera,
-                        geometry,
-                        object,
-                        group
-                    );
-                    if (this.theme?.onMatrialRender) {
-                        this.theme?.onMatrialRender?.call(
-                            batchMaterial,
-                            renderer,
-                            scene,
-                            camera,
-                            geometry,
-                            object,
-                            group
-                        );
-                    }
-                };
                 batchMaterial.userData.originUUID = origin.uuid;
                 return batchMaterial;
             });
@@ -651,41 +621,10 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                         animation: this.animation
                     });
 
-                    // Set up custom rendering callback
-                    const rawOnBeforeRender = batchMaterial.onBeforeRender;
-                    batchMaterial.onBeforeRender = (
-                        renderer: THREE.WebGLRenderer,
-                        scene: THREE.Scene,
-                        camera: THREE.Camera,
-                        geometry: THREE.BufferGeometry,
-                        object: THREE.Object3D,
-                        group: THREE.Group
-                    ) => {
-                        rawOnBeforeRender?.call(
-                            batchMaterial,
-                            renderer,
-                            scene,
-                            camera,
-                            geometry,
-                            object,
-                            group
-                        );
-                        if (this.theme?.onMatrialRender) {
-                            this.theme.onMatrialRender.call(
-                                batchMaterial,
-                                renderer,
-                                scene,
-                                camera,
-                                geometry,
-                                object,
-                                group
-                            );
-                        }
+                    batchMaterial.userData = {
+                        originUUID: originalMaterial.uuid,
+                        instanceId: instancedObject.userData.instanceId
                     };
-
-                    batchMaterial.userData.originUUID = originalMaterial.uuid;
-                    batchMaterial.userData.instanceId = instancedObject.userData.instanceId;
-
                     return batchMaterial;
                 })
                 .filter((material): material is B3DMBatchMaterial => material !== null);

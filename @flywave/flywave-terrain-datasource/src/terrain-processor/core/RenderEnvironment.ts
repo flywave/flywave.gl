@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { WebGPURenderer } from "three/webgpu";
 
 import { DEFAULT_RENDER_HEIGHT, DEFAULT_RENDER_WIDTH } from "../constants";

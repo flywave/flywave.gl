@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import type { EdgeTable, IndexedEdgeParams } from "../common/render/primitives/edge-params";
 import type { RenderPass, RenderTarget, ShaderParams } from "./mesh-geometry";

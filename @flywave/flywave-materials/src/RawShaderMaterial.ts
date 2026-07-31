@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { convertFragmentShaderToWebGL2, convertVertexShaderToWebGL2 } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { getShaderMaterialDefine, setShaderMaterialDefine } from "./Utils";
 

@@ -23,37 +23,11 @@
 
 /* eslint-disable max-nested-callbacks */
 
-import { HalfFloatType, RenderTarget, RGFormat, type PerspectiveCamera } from "three";
+import { HalfFloatType, RenderTarget, RGFormat, type PerspectiveCamera, NodeMaterial, NodeUpdateType, QuadMesh, RendererUtils, type NodeBuilder, type NodeFrame, type TextureNode, type UniformArrayNode, type UniformNode } from "three/webgpu";
+import { and, Break, float, Fn, If, int, ivec2, Loop, max, min, screenCoordinate, uint, uniform, vec2, vec3, vec4 } from "three/tsl";
 import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
-import {
-    and,
-    Break,
-    float,
-    Fn,
-    If,
-    int,
-    ivec2,
-    Loop,
-    max,
-    min,
-    screenCoordinate,
-    uint,
-    uniform,
-    vec2,
-    vec3,
-    vec4
-} from "three/tsl";
-import {
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils,
-    type NodeBuilder,
-    type NodeFrame,
-    type TextureNode,
-    type UniformArrayNode,
-    type UniformNode
-} from "three/webgpu";
+
+
 
 import { FnVar } from "../../tsl/FnVar";
 import { outputTexture } from "../../tsl/OutputTextureNode";

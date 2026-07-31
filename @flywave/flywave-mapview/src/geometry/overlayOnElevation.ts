@@ -4,7 +4,7 @@ import { GeometryKind } from "@flywave/flywave-datasource-protocol";
 import { type Projection } from "@flywave/flywave-geoutils";
 import { setDisplacementMapToMaterial } from "@flywave/flywave-materials";
 import { assert } from "@flywave/flywave-utils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { type TileDisplacementMap } from "../DisplacementMap";
 import { type ElevationProvider } from "../ElevationProvider";

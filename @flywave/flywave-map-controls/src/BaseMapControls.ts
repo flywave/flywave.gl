@@ -2,7 +2,7 @@
 
 import { GeoCoordinates, Projection } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
-import { type Event, EventDispatcher, Matrix4, Vector3, Vector4 } from "three";
+import { type Event, EventDispatcher, Matrix4, Vector3, Vector4 } from "three/webgpu";
 
 import { type CameraTransform } from "./CameraTransform";
 import { MouseCursorManager } from "./MouseCursorManager";

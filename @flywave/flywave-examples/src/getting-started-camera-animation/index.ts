@@ -17,7 +17,7 @@ import {
 
 import { CameraAnimationBuilder, CameraKeyTrackAnimation, ControlPoint } from "@flywave/flywave.gl";
 import { GUI } from "dat.gui";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 // Define geographic location type
 type GeoLocations = Record<string, GeoCoordinates>;

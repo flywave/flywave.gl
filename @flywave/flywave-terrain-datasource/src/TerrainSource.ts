@@ -35,7 +35,7 @@ import { ExtendedFrustum } from "@flywave/flywave-utils/ExtendedFrustum";
 import { PriorityQueue } from "@flywave/flywave-utils/PriorityQueue";
 import { type WebTileDataProvider } from "@flywave/flywave-webtile-datasource";
 import debounce from "lodash.debounce";
-import { Matrix4, Object3D } from "three";
+import { Matrix4, Object3D } from "three/webgpu";
 
 import { TERRAIN_TILE_DECODER_ID } from "./Constants";
 import { ExclusionManager } from "./ExclusionManager";

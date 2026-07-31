@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type Box3Like } from "./Box3Like";
 import { type Vector3Like } from "./Vector3Like";

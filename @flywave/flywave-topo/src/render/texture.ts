@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { RenderTexture, TextureTransparency } from "../common";
 import { type IDisposable, assert } from "../utils";

@@ -11,7 +11,7 @@ import {
 } from "@flywave/flywave-geoutils";
 import { LRUCache } from "@flywave/flywave-lrucache";
 import { type TaskQueue, assert, MathUtils } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { BackgroundDataSource } from "./BackgroundDataSource";
 import { type ClipPlanesEvaluator } from "./ClipPlanesEvaluator";

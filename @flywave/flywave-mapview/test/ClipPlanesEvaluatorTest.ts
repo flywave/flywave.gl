@@ -13,7 +13,7 @@ import { type Box3Like } from "@flywave/flywave-geoutils/math/Box3Like";
 import { type OrientedBox3Like } from "@flywave/flywave-geoutils/math/OrientedBox3Like";
 import { type Vector3Like } from "@flywave/flywave-geoutils/math/Vector3Like";
 import { expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type ClipPlanesEvaluator, TiltViewClipPlanesEvaluator } from "../src/ClipPlanesEvaluator";
 import { type ElevationProvider } from "../src/ElevationProvider";

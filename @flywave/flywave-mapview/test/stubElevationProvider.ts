@@ -6,7 +6,7 @@ import {
     type TilingScheme,
     mercatorTilingScheme
 } from "@flywave/flywave-geoutils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type DisplacementMap, type TileDisplacementMap } from "../src/DisplacementMap";
 import { type ElevationProvider } from "../src/ElevationProvider";

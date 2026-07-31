@@ -10,7 +10,7 @@ import {
 } from "@flywave/flywave-geoutils";
 import { assert } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { DataSource } from "../src/DataSource";
 import { projectTilePlaneCorners } from "../src/geometry/ProjectTilePlaneCorners";

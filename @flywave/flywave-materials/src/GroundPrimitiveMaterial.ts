@@ -1,15 +1,22 @@
-import {
-    ShaderMaterial,
-    UniformsLib,
-    UniformsUtils,
-    Vector2,
-    Vector3,
-    Matrix4,
-    Color,
-    Texture,
-    Camera,
-    IUniform
-} from "three";
+import { ShaderMaterial, Vector2, Vector3, Matrix4, Color, Texture, Camera } from "three/webgpu";
+
+interface IUniform<TValue = any> {
+    value: TValue;
+}
+
+type UniformsSpec = Record<string, IUniform>;
+
+function mergeUniforms(...sources: UniformsSpec[]): UniformsSpec {
+    return Object.assign({}, ...sources);
+}
+
+function cloneUniforms(uniforms: UniformsSpec): UniformsSpec {
+    const cloned: UniformsSpec = {};
+    for (const key in uniforms) {
+        cloned[key] = { value: uniforms[key].value };
+    }
+    return cloned;
+}
 
 export interface GroundPrimitiveMaterialParameters {
     color?: Color | string | number;
@@ -72,8 +79,11 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
     };
 
     constructor(parameters: GroundPrimitiveMaterialParameters = {}) {
-        const uniforms = UniformsUtils.merge([
-            UniformsLib.common,
+        const uniforms = mergeUniforms(
+            {
+                diffuse: { value: new Color(0xffffff) },
+                opacity: { value: 1.0 }
+            },
             {
                 diffuse: { value: new Color(0xffffff) },
                 opacity: { value: 1.0 },
@@ -99,7 +109,7 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
                 // 调试
                 debugShowShadowVolume: { value: false }
             }
-        ]);
+        );
 
         super({
             uniforms,
@@ -324,7 +334,7 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
         super.copy(source);
 
         // 复制自定义uniforms
-        this.uniforms = UniformsUtils.clone(source.uniforms);
+        this.uniforms = cloneUniforms(source.uniforms as UniformsSpec) as typeof this.uniforms;
 
         return this;
     }
@@ -345,13 +355,5 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
         this.uniforms.map.value = null;
 
         super.dispose();
-    }
-}
-
-// 为Three.js的类型系统注册自定义属性
-declare module "three" {
-    interface ShaderMaterial {
-        // 确保类型兼容性
-        uniforms: { [key: string]: IUniform };
     }
 }

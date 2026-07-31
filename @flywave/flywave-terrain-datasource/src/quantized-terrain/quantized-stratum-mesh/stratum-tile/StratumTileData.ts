@@ -29,7 +29,7 @@ import {
     Uint16BufferAttribute,
     Vector3,
     Vector4
-} from "three";
+} from "three/webgpu";
 
 import DEMData from "../../../dem-terrain/dem/DemData";
 import { type StratumClipRegion } from "./StratumClipTypes";

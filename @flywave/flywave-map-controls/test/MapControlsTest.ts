@@ -8,7 +8,7 @@ import * as chai from "chai";
 import { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
 import sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 chai.use(chaiAsPromised);
 
@@ -39,8 +39,8 @@ describe("MapControls", function () {
     // methods to get it working correctl.
     const clearColorStub: sinon.SinonStub = sandbox.stub();
     sandbox
-        .stub(THREE, "WebGLRenderer")
-        .returns(TestUtils.getWebGLRendererStub(sandbox, clearColorStub));
+        .stub(THREE, "WebGPURenderer" as never)
+        .returns(TestUtils.getRendererStub(sandbox, clearColorStub));
     canvas = document.createElement("canvas");
     canvas.width = 1033;
     canvas.height = 1793;

@@ -14,7 +14,7 @@ import {
     TileKeyUtils
 } from "@flywave/flywave-geoutils";
 import { type CachedResource, assert, chainCallbacks, LoggerManager } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type CopyrightInfo } from "./copyrights/CopyrightInfo";
 import { type DataSource } from "./DataSource";

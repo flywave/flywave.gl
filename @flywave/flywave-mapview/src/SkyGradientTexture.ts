@@ -3,7 +3,7 @@
 import { type GradientSky } from "@flywave/flywave-datasource-protocol";
 import { ProjectionType } from "@flywave/flywave-geoutils";
 import { getOptionValue } from "@flywave/flywave-utils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 import {
     type Texture,
     Color,
@@ -13,7 +13,7 @@ import {
     Plane,
     RGBAFormat,
     Vector3
-} from "three";
+} from "three/webgpu";
 
 export const DEFAULT_TEXTURE_SIZE = 512;
 export const DEFAULT_MONOMIAL_POWER = 1;

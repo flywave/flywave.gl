@@ -16,7 +16,7 @@ import {
     offscreenCanvasSupported,
     prevPowerOfTwo
 } from "@flywave/flywave-utils";
-import { Box2, Vector2 } from "three";
+import { Box2, Vector2 } from "three/webgpu";
 
 import { TaskType } from "../Constants";
 import {

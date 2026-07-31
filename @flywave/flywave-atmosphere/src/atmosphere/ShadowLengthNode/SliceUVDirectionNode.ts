@@ -21,20 +21,11 @@
  * Modified from the original source code.
  */
 
-import { type Camera, type Vector2, FloatType, RenderTarget } from "three";
-import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
+import { type Camera, type Vector2, FloatType, RenderTarget, type NodeBuilder, type NodeFrame, type TextureNode, type UniformArrayNode, type UniformNode, NodeMaterial, NodeUpdateType, QuadMesh, RendererUtils } from "three/webgpu";
 import { Fn, If, max, min, screenCoordinate, uint, uvec2, vec4 } from "three/tsl";
-import {
-    type NodeBuilder,
-    type NodeFrame,
-    type TextureNode,
-    type UniformArrayNode,
-    type UniformNode,
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils
-} from "three/webgpu";
+import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
+
+
 
 import { bvecAnd, bvecNot } from "../../tsl/bvec";
 import { Node } from "../../tsl/node";

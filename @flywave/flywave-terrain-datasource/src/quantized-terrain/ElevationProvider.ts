@@ -12,7 +12,7 @@ import {
     ElevationProvider as IElevationProvider,
     TERRAIN_ZOOM_LEVEL
 } from "@flywave/flywave-mapview";
-import { type Vector3 } from "three";
+import { type Vector3 } from "three/webgpu";
 
 import { type InnerElevationProvider } from "../InnerElevationProvider";
 import { type BaseQuantizedTerrainSource } from "./BaseQuantizedTerrainSource";

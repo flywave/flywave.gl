@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type Projection, GeoCoordinates } from "@flywave/flywave-geoutils";
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 /**
  * 简单的距离插值细分器

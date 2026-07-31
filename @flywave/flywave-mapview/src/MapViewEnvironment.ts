@@ -9,7 +9,7 @@ import {
 } from "@flywave/flywave-datasource-protocol";
 import { type Vector3Like, ProjectionType } from "@flywave/flywave-geoutils";
 import { getOptionValue, LoggerManager } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { BackgroundDataSource } from "./BackgroundDataSource";
 import { AtmosphereSystem } from "./composing/AtmosphereSystem";

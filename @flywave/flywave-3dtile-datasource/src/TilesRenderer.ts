@@ -3,7 +3,7 @@
 import { type GeoBox, type Projection } from "@flywave/flywave-geoutils";
 import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import { type ITilesRenderer } from "@flywave/flywave-mapview/ITilesRenderer";
-import { type Raycaster, Matrix4, Object3D, Vector3 } from "three";
+import { type Raycaster, Matrix4, Object3D, Vector3 } from "three/webgpu";
 
 import { type ITile, type Tile, type TileInternal } from "./base/Tile";
 import { type Tiles3DTileContent } from "./loader";

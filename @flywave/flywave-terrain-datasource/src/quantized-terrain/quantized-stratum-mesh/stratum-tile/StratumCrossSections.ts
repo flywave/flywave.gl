@@ -7,7 +7,7 @@ import {
     OrientedBox3
 } from "@flywave/flywave-geoutils";
 import { FlatArray } from "@flywave/flywave-utils";
-import { Box3, BufferAttribute, BufferGeometry, Vector2, Vector3 } from "three";
+import { Box3, BufferAttribute, BufferGeometry, Vector2, Vector3 } from "three/webgpu";
 
 import { type CollapseProfile, type StratumProfile } from "./CrossSectionUtils";
 import { type StratumLayer } from "./StratumLayer";

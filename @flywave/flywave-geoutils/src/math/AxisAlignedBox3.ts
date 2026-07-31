@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type Plane, Vector3 } from "three";
+import { type Plane, Vector3 } from "three/webgpu";
 
 export enum Intersect {
     OUTSIDE,

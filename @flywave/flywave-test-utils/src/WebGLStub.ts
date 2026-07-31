@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import type * as sinon from "sinon";
-import { type Color } from "three";
+import { type Color } from "three/webgpu";
 
 interface Size {
     width: number;
@@ -17,11 +17,11 @@ function getSize(): { width: number; height: number } {
 }
 
 /**
- * Helper function to return options required for stub when mocking the WebGLRenderer
+ * Helper function to return options required for stub when mocking the WebGPURenderer
  * @param sandbox - The sinon sandbox
  * @param clearColorStub - The stub for clearing the color
  */
-export function getWebGLRendererStub(sandbox: sinon.SinonSandbox, clearColorStub: sinon.SinonStub) {
+export function getRendererStub(sandbox: sinon.SinonSandbox, clearColorStub: sinon.SinonStub) {
     return {
         getClearColor: (target: Color) => undefined,
         setClearColor: clearColorStub,
@@ -36,6 +36,7 @@ export function getWebGLRendererStub(sandbox: sinon.SinonSandbox, clearColorStub
         info: { autoReset: true, reset: () => undefined },
         debug: { checkShaderErrors: true },
         capabilities: { isWebGL2: false },
+        backend: {},
         setOpaqueSort: (a: any, b: any) => undefined,
         domElement: {
             addEventListener: () => {},
@@ -43,3 +44,6 @@ export function getWebGLRendererStub(sandbox: sinon.SinonSandbox, clearColorStub
         }
     };
 }
+
+/** @deprecated Use getRendererStub */
+export const getWebGLRendererStub = getRendererStub;

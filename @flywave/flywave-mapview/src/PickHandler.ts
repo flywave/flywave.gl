@@ -2,7 +2,7 @@
 
 import { type Technique, GeometryType, getFeatureId } from "@flywave/flywave-datasource-protocol";
 import { type TileKey, OrientedBox3 } from "@flywave/flywave-geoutils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type IntersectParams } from "./IntersectParams";
 import { type MapView } from "./MapView";

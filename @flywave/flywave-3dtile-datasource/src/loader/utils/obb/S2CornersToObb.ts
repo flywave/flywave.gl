@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type Projection, OrientedBox3 } from "@flywave/flywave-geoutils";
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 import type { S2HeightInfo } from "../s2/index";
 import { getS2LngLat, getS2OrientedBoundingBoxCornerPoints } from "../s2/index";

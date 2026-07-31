@@ -7,7 +7,7 @@ import {
     ArcGISTileProvider,
     MapControlsUI
 } from "@flywave/flywave.gl";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import ParticleSystem, {
     Body,
     Color,

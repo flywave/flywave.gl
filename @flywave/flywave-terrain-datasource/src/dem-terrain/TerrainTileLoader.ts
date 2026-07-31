@@ -6,7 +6,7 @@ import { type TerrainResourceTile } from "../TerrainSource";
 import { type DEMTerrainSource } from "./DEMTerrainSource";
 import { type DemTileResource } from "./DEMTileProvider";
 import { HeightMapTerrainMesh } from "./DEMTileTerrainMesh";
-import { Color } from "three";
+import { Color } from "three/webgpu";
 
 /**
  * Resource tile loader for DEM (Digital Elevation Model) data

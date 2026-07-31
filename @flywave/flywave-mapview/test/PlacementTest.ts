@@ -31,7 +31,7 @@ import { getAppBaseUrl } from "@flywave/flywave-utils";
 import { assert, expect } from "chai";
 import * as path from "path";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type PoiBuffer } from "../src/poi/PoiRenderer";
 import { ScreenCollisions } from "../src/ScreenCollisions";

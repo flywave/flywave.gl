@@ -4,7 +4,7 @@
 // TSL transformations use operator chaining and FnLayout patterns
 // not fully supported by @types/three@0.184.
 
-import type { Camera } from "three";
+import type { Camera } from "three/webgpu";
 import {
     cameraFar as cameraFarTSL,
     cameraNear as cameraNearTSL,
@@ -20,7 +20,7 @@ import {
     vec3,
     vec4,
     viewZToLogarithmicDepth,
-    viewZToPerspectiveDepth
+    viewZToPerspectiveDepth,
 } from "three/tsl";
 
 import { cameraFar, cameraNear } from "./accessors";

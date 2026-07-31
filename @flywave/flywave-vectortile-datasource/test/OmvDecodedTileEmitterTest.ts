@@ -18,7 +18,7 @@ import {
     webMercatorProjection
 } from "@flywave/flywave-geoutils";
 import { assert } from "chai";
-import { Vector2, Vector3 } from "three";
+import { Vector2, Vector3 } from "three/webgpu";
 
 import { DecodeInfo } from "../src/DecodeInfo";
 import { type IPolygonGeometry } from "../src/IGeometryProcessor";

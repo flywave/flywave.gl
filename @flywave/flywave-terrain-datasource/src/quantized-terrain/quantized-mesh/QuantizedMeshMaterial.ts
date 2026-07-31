@@ -1,20 +1,10 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { MeshStandardNodeMaterial } from "three/webgpu";
-import {
-    Fn,
-    float,
-    mix as tslMix,
-    select,
-    texture,
-    uniform,
-    uv as uvNode,
-    attribute,
-    vec2,
-    vec4
-} from "three/tsl";
+import { Fn, float, mix as tslMix, select, texture, uniform, uv as uvNode, attribute, vec2, vec4 } from "three/tsl";
+
 
 function dummyTex(): THREE.DataTexture {
     const t = new THREE.DataTexture(

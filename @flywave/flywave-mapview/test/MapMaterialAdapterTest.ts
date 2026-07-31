@@ -3,7 +3,7 @@
 import { Expr, MapEnv } from "@flywave/flywave-datasource-protocol";
 import { assert } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { MapMaterialAdapter } from "../src/MapMaterialAdapter";
 

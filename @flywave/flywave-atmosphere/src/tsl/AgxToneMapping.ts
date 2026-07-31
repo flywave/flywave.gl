@@ -1,5 +1,5 @@
 // @ts-nocheck
-import type { ToneMapping } from "three";
+import type { ToneMapping } from "three/webgpu";
 import { add, cdl, float, mat3, vec3 } from "three/tsl";
 
 import { FnLayout } from "./FnLayout";

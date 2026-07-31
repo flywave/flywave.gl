@@ -31,7 +31,7 @@ import {
     WrappingMode
 } from "@flywave/flywave-text-canvas";
 import { getOptionValue, LoggerManager } from "@flywave/flywave-utils";
-import type * as THREE from "three";
+import type * as THREE from "three/webgpu";
 
 import { ColorCache } from "../ColorCache";
 import { evaluateColorProperty } from "../DecodedTileHelpers";

@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { BufferAttribute, BufferGeometry, Sphere, Vector3, type DataTexture } from "three";
+import { BufferAttribute, BufferGeometry, Sphere, Vector3, type DataTexture } from "three/webgpu";
 
 import { ITileResource, TileValidResource } from "../TileResourceManager";
 import { GeoCoordinates, Projection } from "@flywave/flywave-geoutils";

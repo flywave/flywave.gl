@@ -3,7 +3,7 @@
 import { type Env, type ExtrudedPolygonTechnique } from "@flywave/flywave-datasource-protocol";
 import { ColorUtils } from "@flywave/flywave-datasource-protocol/ColorUtils";
 import { type MapMeshStandardMaterial, enforceBlending } from "@flywave/flywave-materials";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { evaluateBaseColorProperty } from "./DecodedTileHelpers";
 

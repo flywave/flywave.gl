@@ -8,7 +8,7 @@ import {
     OrientedBox3,
     webMercatorTilingScheme
 } from "@flywave/flywave-geoutils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type WorldTileProjectionCookie } from "./OmvUtils";
 

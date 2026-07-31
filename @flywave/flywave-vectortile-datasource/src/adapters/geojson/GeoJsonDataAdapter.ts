@@ -8,7 +8,7 @@ import {
     webMercatorProjection
 } from "@flywave/flywave-geoutils";
 import { type Vector2Like } from "@flywave/flywave-geoutils/math/Vector2Like";
-import { ShapeUtils, Vector2, Vector3 } from "three";
+import { ShapeUtils, Vector2, Vector3 } from "three/webgpu";
 
 import { type DataAdapter } from "../../DataAdapter";
 import { type DecodeInfo } from "../../DecodeInfo";

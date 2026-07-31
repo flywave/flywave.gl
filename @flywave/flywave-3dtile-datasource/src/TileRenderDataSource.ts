@@ -17,13 +17,13 @@ import { type DataSourceOptions, type MapView, DataSource, Tile } from "@flywave
 import { type IntersectParams } from "@flywave/flywave-mapview/IntersectParams";
 import { ThemeLoader } from "@flywave/flywave-mapview/ThemeLoader";
 import { type ICameraCollidable } from "@flywave/flywave-mapview";
-import { Intersection, Raycaster, type Matrix4 } from "three";
+import {Intersection, Raycaster, type Matrix4, type Material, type MaterialParameters} from "three/webgpu";
 
 import { type TileIntersection } from "./renderer/raycastTraverse";
 import { type CustomAttributeConfig, Tiles3DStyleWatcher } from "./theme/Tiles3DStyleWatcher";
 import { type TilesRendererOptions, TilesRenderer } from "./TilesRenderer";
 import { ITile } from "./ObserveTileChange";
-import { type Material, type MaterialParameters } from "three";
+
 import { MatrixTransformCallback } from "./renderer/TilesRenderer";
 
 interface TileExtraTheme {

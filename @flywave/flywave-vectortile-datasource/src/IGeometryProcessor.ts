@@ -2,7 +2,7 @@
 
 import { type ValueMap } from "@flywave/flywave-datasource-protocol/index-decoder";
 import { type GeoCoordinates } from "@flywave/flywave-geoutils";
-import { type Vector2, type Vector3 } from "three";
+import { type Vector2, type Vector3 } from "three/webgpu";
 
 /**
  * An interface to represent polygon geometries.

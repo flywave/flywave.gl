@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 export class PointStringMaterial extends THREE.PointsMaterial {
     constructor(weight: number, color: THREE.Color) {

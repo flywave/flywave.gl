@@ -22,7 +22,7 @@ import {
 import { createStratumTileFromBuffer } from "./quantized-stratum-mesh/stratum-tile";
 import { type DecodedStratumTileData } from "./quantized-stratum-mesh/stratum-tile/StratumTileData";
 import { SerializableGeometryData } from "@flywave/flywave-utils/bufferGeometryTransfer";
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 import { getProjection, getProjectionName } from "@flywave/flywave-datasource-protocol";
 
 /**

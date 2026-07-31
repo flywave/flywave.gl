@@ -37,7 +37,7 @@ import { getReferenceImageUrl } from "@flywave/flywave-test-utils/lib/rendering/
 import { getOptionValue } from "@flywave/flywave-utils";
 import { VectorTileDecoder } from "@flywave/flywave-vectortile-datasource/index-worker";
 import { assert } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 interface RenderingTestOptions extends TestOptions {
     /**

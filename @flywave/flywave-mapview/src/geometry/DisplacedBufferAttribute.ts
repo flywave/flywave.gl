@@ -2,7 +2,7 @@
 
 import { type Vector3Like } from "@flywave/flywave-geoutils";
 import { sampleBilinear } from "@flywave/flywave-utils";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { VertexCache } from "./VertexCache";
 

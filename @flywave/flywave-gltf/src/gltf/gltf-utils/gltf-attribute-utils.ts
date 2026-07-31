@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 // import type {TypedArray} from '../types/loader-utils';
-import { type TypedArray, BufferAttribute } from "three";
+import { type TypedArray, BufferAttribute } from "three/webgpu";
 
 import type { GLTFAccessor } from "../types/gltf-json-schema";
 import { getAccessorTypeFromSize, getComponentTypeFromArray } from "./gltf-utils";

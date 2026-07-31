@@ -2,7 +2,7 @@
 
 import { type Vector2Like, GeoCoordinates, sphereProjection } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
-import { MathUtils, PerspectiveCamera, Vector3 } from "three";
+import { MathUtils, PerspectiveCamera, Vector3 } from "three/webgpu";
 
 import { CameraUtils } from "../src/CameraUtils";
 import { CanvasSide, previousCanvasSide, SphereHorizon } from "../src/SphereHorizon";

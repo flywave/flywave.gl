@@ -4,7 +4,7 @@
 
 import { mercatorProjection } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { FixedClipPlanesEvaluator } from "../src/FixedClipPlanesEvaluator";
 

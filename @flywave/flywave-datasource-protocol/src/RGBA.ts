@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { MathUtils } from "three";
+import { MathUtils } from "three/webgpu";
 
 import { ColorUtils } from "./ColorUtils";
 import { parseStringEncodedColor } from "./StringEncodedNumeral";

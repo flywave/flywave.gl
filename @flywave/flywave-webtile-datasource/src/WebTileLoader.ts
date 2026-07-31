@@ -3,7 +3,7 @@
 import { type Tile, BaseTileLoader, TileLoaderState } from "@flywave/flywave-mapview";
 import { addGroundPlane } from "@flywave/flywave-mapview/geometry/AddGroundPlane";
 import { enableBlending } from "@flywave/flywave-materials";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type WebTileDataProvider, type WebTileDataSource } from "./WebTileDataSource";
 

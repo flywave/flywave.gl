@@ -4,8 +4,9 @@
 // TSL struct construction and field destructureation use patterns not
 // fully supported by @types/three@0.184.
 
-import { float, ivec2, struct, uint, uvec2, vec3 } from "three/tsl";
 import { NodeBuilder, type Renderer, type StructNode } from "three/webgpu";
+import { float, ivec2, struct, uint, uvec2, vec3 } from "three/tsl";
+
 
 import { reinterpretType } from "../tsl/types";
 import type { Node, NodeType } from "../tsl/node";

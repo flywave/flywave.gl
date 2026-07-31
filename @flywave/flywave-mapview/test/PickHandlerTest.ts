@@ -3,7 +3,7 @@
 import { TileKey } from "@flywave/flywave-geoutils";
 import { expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type MapView } from "../src/MapView";
 import { PickHandler } from "../src/PickHandler";

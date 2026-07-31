@@ -12,7 +12,7 @@ import {
     postProcessGLTF,
     createThreeSceneFromGLTF
 } from "@flywave/flywave-gltf";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { GLTFLoader as ThreeGLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 const MODEL_URL = "cctv.glb";

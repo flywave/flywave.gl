@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { defined } from "@flywave/flywave-utils";
-import { type Ray, Sphere as ThreeSphere, Vector3 } from "three";
+import { type Ray, Sphere as ThreeSphere, Vector3 } from "three/webgpu";
 
 // 重用向量对象以避免内存分配
 const fromPointsCurrentPos = new Vector3();

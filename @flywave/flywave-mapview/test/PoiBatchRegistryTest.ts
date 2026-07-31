@@ -3,14 +3,14 @@
 import { IconMaterial } from "@flywave/flywave-materials";
 import { expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type PoiLayer, PoiBatchRegistry } from "../src/poi/PoiRenderer";
 import { type TextElement } from "../src/text/TextElement";
 import { PoiInfoBuilder } from "./PoiInfoBuilder";
 
 describe("PoiBatchRegistry", () => {
-    const renderer = { capabilities: { isWebGL2: false } } as THREE.WebGLRenderer;
+    const capabilities = { isWebGL2: false, logarithmicDepthBuffer: false };
     let registry: PoiBatchRegistry;
     const textElement = {} as TextElement;
     const defaultPoiLayer: PoiLayer = {
@@ -19,7 +19,7 @@ describe("PoiBatchRegistry", () => {
     };
 
     beforeEach(() => {
-        registry = new PoiBatchRegistry(renderer.capabilities);
+        registry = new PoiBatchRegistry(capabilities);
     });
     describe("registerPoi", function () {
         it("return undefined if poiInfo has no image item", () => {

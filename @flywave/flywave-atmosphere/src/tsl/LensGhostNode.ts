@@ -1,6 +1,7 @@
 // @ts-nocheck
-import { add, sub, uniform, uv, vec3 } from "three/tsl";
 import { TempNode, type NodeBuilder, type TextureNode } from "three/webgpu";
+import { add, sub, uniform, uv, vec3 } from "three/tsl";
+
 import invariant from "tiny-invariant";
 
 import { FnLayout } from "./FnLayout";

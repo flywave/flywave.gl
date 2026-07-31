@@ -37,7 +37,7 @@ import {
     textureLevel,
     vec2,
     vec3,
-    vec4
+    vec4,
 } from "three/tsl";
 
 import type { CloudUniforms } from "./CloudUniforms";

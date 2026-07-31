@@ -3,7 +3,7 @@
 import { LoggerManager } from "@flywave/flywave-utils";
 import { assert } from "chai";
 import * as querystring from "querystring";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { UAParser } from "ua-parser-js";
 
 import { canvasToImageData, compareImages, loadImageData } from "./DomImageUtils";
@@ -217,19 +217,22 @@ interface WebGlInfo {
 }
 
 export function getWebGlInfo() {
-    //Enable backward compatibility with three.js <= 0.117
-    const renderer = new THREE.WebGLRenderer();
-    const context = renderer.getContext();
     const result: WebGlInfo = {};
-    const availableExtensions = context.getSupportedExtensions();
-    if (availableExtensions !== null && availableExtensions.includes("WEBGL_debug_renderer_info")) {
-        const infoExtension = context.getExtension("WEBGL_debug_renderer_info");
-        if (infoExtension !== null) {
-            result.vendor = context.getParameter(infoExtension.UNMASKED_VENDOR_WEBGL);
-            result.gpu = context.getParameter(infoExtension.UNMASKED_RENDERER_WEBGL);
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+    if (context) {
+        const availableExtensions = context.getSupportedExtensions();
+        if (
+            availableExtensions !== null &&
+            availableExtensions.includes("WEBGL_debug_renderer_info")
+        ) {
+            const infoExtension = context.getExtension("WEBGL_debug_renderer_info");
+            if (infoExtension !== null) {
+                result.vendor = context.getParameter(infoExtension.UNMASKED_VENDOR_WEBGL);
+                result.gpu = context.getParameter(infoExtension.UNMASKED_RENDERER_WEBGL);
+            }
         }
     }
-    renderer.dispose();
     return result;
 }
 

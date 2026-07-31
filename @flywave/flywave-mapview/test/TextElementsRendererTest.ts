@@ -3,7 +3,7 @@
 import { type TextStyleDefinition } from "@flywave/flywave-datasource-protocol";
 import { expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type TextElement } from "../src/text/TextElement";
 import { DEFAULT_FONT_CATALOG_NAME } from "../src/text/TextElementsRenderer";

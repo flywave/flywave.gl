@@ -1,8 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import type { Texture } from "three";
 import { TextureNode } from "three/webgpu";
-import type { NodeBuilder } from "three/webgpu";
+import type { Texture, NodeBuilder } from "three/webgpu";
 
 import { reinterpretType } from "./types";
 import type { Node as NodeT } from "./node";

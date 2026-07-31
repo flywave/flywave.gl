@@ -4,7 +4,7 @@ import { mercatorProjection, TileKey } from "@flywave/flywave-geoutils";
 import { type CopyrightInfo, type MapView, type Tile } from "@flywave/flywave-mapview";
 import { expect } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { CustomWebTileDataSource } from "../src/CustomWebTileDataSource";
 

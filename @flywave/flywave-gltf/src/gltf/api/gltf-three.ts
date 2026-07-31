@@ -1,48 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { SplatMesh } from "@flywave/flywave-splats";
-import {
-    type Camera,
-    type InstancedBufferAttribute,
-    type Object3D,
-    AnimationClip,
-    Bone,
-    BufferAttribute,
-    BufferGeometry,
-    DoubleSide,
-    DynamicDrawUsage,
-    EquirectangularReflectionMapping,
-    FrontSide,
-    Group,
-    InstancedMesh,
-    InterpolateDiscrete,
-    InterpolateLinear,
-    InterpolateSmooth,
-    LinearFilter,
-    LinearMipmapLinearFilter,
-    LinearMipmapNearestFilter,
-    NearestMipmapLinearFilter,
-    NearestMipmapNearestFilter,
-    LineSegments,
-    Material,
-    Matrix4,
-    Mesh,
-    NumberKeyframeTrack,
-    OrthographicCamera,
-    PerspectiveCamera,
-    Quaternion,
-    QuaternionKeyframeTrack,
-    RepeatWrapping,
-    Scene,
-    SRGBColorSpace,
-    Skeleton,
-    SkinnedMesh,
-    Texture,
-    Vector2,
-    Vector3,
-    VectorKeyframeTrack
-} from "three";
-import { LineBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
+import {type Camera, type InstancedBufferAttribute, type Object3D, AnimationClip, Bone, BufferAttribute, BufferGeometry, DoubleSide, DynamicDrawUsage, EquirectangularReflectionMapping, FrontSide, Group, InstancedMesh, InterpolateDiscrete, InterpolateLinear, InterpolateSmooth, LinearFilter, LinearMipmapLinearFilter, LinearMipmapNearestFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, LineSegments, Material, Matrix4, Mesh, NumberKeyframeTrack, OrthographicCamera, PerspectiveCamera, Quaternion, QuaternionKeyframeTrack, RepeatWrapping, Scene, SRGBColorSpace, Skeleton, SkinnedMesh, Texture, Vector2, Vector3, VectorKeyframeTrack, LineBasicNodeMaterial, MeshStandardNodeMaterial} from "three/webgpu";
+
 
 import type {
     AnimationChannel,

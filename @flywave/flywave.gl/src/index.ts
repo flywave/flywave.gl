@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { mapAssetsUriResolver, mapBundleMain } from "./BundleMain";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 const win = window as Window & { THREE?: typeof THREE };
 if (!win.THREE) {

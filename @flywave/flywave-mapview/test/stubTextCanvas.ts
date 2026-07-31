@@ -10,7 +10,7 @@ import {
     TextCanvas
 } from "@flywave/flywave-text-canvas";
 import type * as sinon from "sinon";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { TextCanvasFactory } from "../src/text/TextCanvasFactory";
 

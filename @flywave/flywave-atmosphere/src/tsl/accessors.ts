@@ -1,25 +1,21 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// TSL accessors use reference() and cached camera property lookups.
-// @types/three@0.184 cannot fully type these TSL reference patterns.
-
-import type { Camera, Vector3 } from "three";
+import type { Camera, Vector3, UniformNode } from "three/webgpu";
 import {
-    cameraFar as cameraFarTSL,
-    cameraNear as cameraNearTSL,
-    cameraPosition,
-    cameraProjectionMatrix,
-    cameraProjectionMatrixInverse,
-    cameraViewMatrix,
-    cameraWorldMatrix,
     Fn,
-    positionView,
+    uniform,
     reference,
     renderGroup,
-    uniform
+    cameraProjectionMatrix,
+    cameraViewMatrix,
+    cameraProjectionMatrixInverse,
+    cameraWorldMatrix,
+    cameraPosition,
+    cameraNear as cameraNearTSL,
+    cameraFar as cameraFarTSL,
+    positionView
 } from "three/tsl";
-import type { UniformNode } from "three/webgpu";
 
 let caches: WeakMap<object, Record<string, unknown>> | undefined;
 

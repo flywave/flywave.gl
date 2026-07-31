@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 // TextureSerializer.ts
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 /**
  * Converts a THREE.Texture to a transferable ImageBitmap

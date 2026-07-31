@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import type * as turf from "@turf/turf";
-import { Vector3 } from "three";
+import { Vector3 } from "three/webgpu";
 
 import { type CurveConfig, CurveGenerator } from "../math/CurveGenerator";
 import { HeightAwareBufferGenerator } from "../math/HeightAwareBufferGenerator";

@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { triangulate } from "@flywave/flywave-geometry";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { type CollapsePillarData, type StratumLayerData, LayerType } from "../decoder";
 import { BspObject } from "./BspObject";

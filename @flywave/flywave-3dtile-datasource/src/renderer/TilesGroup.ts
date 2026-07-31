@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type Intersection, type Raycaster, Group, Matrix4 } from "three";
+import { type Intersection, type Raycaster, Group, Matrix4 } from "three/webgpu";
 
 import { type TilesRenderer } from "./TilesRenderer";
 

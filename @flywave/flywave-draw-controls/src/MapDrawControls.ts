@@ -4,8 +4,8 @@ import { type GeoJson, type FeatureGeometry } from "@flywave/flywave-datasource-
 import { GeoCoordinates, ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapControls } from "@flywave/flywave-map-controls";
 import { type MapView, MapViewEventNames, type ICameraCollidable } from "@flywave/flywave-mapview";
-import * as THREE from "three";
-import { EventDispatcher } from "three";
+import * as THREE from "three/webgpu";
+import { EventDispatcher } from "three/webgpu";
 
 import { type DrawableObject } from "./DrawableObject";
 import { type DrawEvent, DrawEventNames } from "./DrawEventNames";
