@@ -189,13 +189,16 @@ export const shapeAlteringFunction = Fn(([heightFraction, bias]: [any, any]) => 
 
 export const createSampleWeather = (u: CloudUniforms) =>
     Fn(([uv, height, mipLevel]: [any, any, any]) => {
-        const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
+        // heightFraction is computed by callers that need it (main march, shadow march).
+        // Internal callers (marchOpticalDepth) compute it separately. No redundancy here.
 
         // GLSL: textureLod(localWeatherTexture, uv * localWeatherRepeat + localWeatherOffset, mipLevel)
         const weatherUv = uv.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
         const weatherTex = textureLevel(u.localWeatherTexture, weatherUv, mipLevel);
         const localWeather = exp(u.weatherExponents.mul(weatherTex.log()));
 
+        // heightFraction is needed for shapeAlteringFunction; compute locally (lightweight remap)
+        const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
         const heightScale = shapeAlteringFunction(heightFraction, u.shapeAlteringBiases);
         const factor = oneMinus(u.coverage.mul(heightScale));
         const density = remapClamped(
@@ -276,12 +279,21 @@ export const approximateMultipleScattering = Fn(([opticalDepth, cosTheta, u]: [a
     const attenuation = vec3(0.5, 0.5, 0.5);
     const scattering = float(0).toVar();
 
-    Loop({ start: 0, end: 8, type: "int" }, () => {
-        const bl = exp(opticalDepth.mul(coeffs.y).negate());
-        const phase = phaseFunction(cosTheta, coeffs.z, u);
-        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-        coeffs.mulAssign(attenuation);
-    });
+    if (u.accuratePhaseFunction.value > 0.5) {
+        Loop({ start: 0, end: 8, type: "int" }, () => {
+            const bl = exp(opticalDepth.mul(coeffs.y).negate());
+            const phase = accurateMiePhase(cosTheta, coeffs.z);
+            scattering.addAssign(coeffs.x.mul(bl).mul(phase));
+            coeffs.mulAssign(attenuation);
+        });
+    } else {
+        Loop({ start: 0, end: 8, type: "int" }, () => {
+            const bl = exp(opticalDepth.mul(coeffs.y).negate());
+            const phase = dualHG(cosTheta, coeffs.z, u);
+            scattering.addAssign(coeffs.x.mul(bl).mul(phase));
+            coeffs.mulAssign(attenuation);
+        });
+    }
 
     return scattering;
 });
@@ -414,7 +426,7 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
             const lastDist = float(0).toVar();
             const stepsTaken = float(0).toVar();
 
-            Loop({ start: 0, end: 128, type: "int" }, () => {
+            Loop({ start: 0, end: 16, type: "int" }, () => {
                 If(stepsTaken.greaterThanEqual(iterationCount), () => {
                     Break();
                 });
@@ -503,7 +515,7 @@ export const createMarchShadowLength = (u: CloudUniforms, sampleShadowOpticalDep
 /*  mrt() at the top level, because TSL's mrt() cannot be returned from Fn().  */
 /* -------------------------------------------------------------------------- */
 
-const SHADOW_MAX_ITERATIONS = 48;
+const SHADOW_MAX_ITERATIONS = 64; // Static upper bound for WGSL loop; dynamic break uses uniform
 
 export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number = 0) => {
     const sampleWeather = createSampleWeather(u);
@@ -551,7 +563,7 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
 
         const stepSize = maxRayDistance
             .div(float(SHADOW_MAX_ITERATIONS))
-            .max(u.minStepSize)
+            .max(u.shadowMinStepSize)
             .toVar();
         const rayDistance = stepSize.mul(stbn).toVar();
 
@@ -563,44 +575,67 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
         const transmittanceSum = float(0).toVar();
         const sampleCount = float(0).toVar();
 
+        const iterCount = float(0).toVar();
+
         Loop({ start: 0, end: SHADOW_MAX_ITERATIONS, type: "int" }, () => {
             If(rayDistance.greaterThan(maxRayDistance), () => {
+                Break();
+            });
+            If(iterCount.greaterThanEqual(u.shadowMaxIterationCount), () => {
                 Break();
             });
 
             const position = rayDistance.mul(rayDirection).add(rayOrigin);
             const height = length(position).sub(u.bottomRadius);
-            // OPTIMIZATION: same normalize() reuse pattern as main march loop.
-            const n = normalize(position);
-            const uv = getCubeSphereUvNormalized(n);
-            const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
-            const density = sampleWeather(uv, height, cascadeMipLevel);
-            const maxDensity = max(density.x, max(density.y, max(density.z, density.w)));
 
-            If(maxDensity.greaterThan(u.minDensity), () => {
-                const media = sampleMedia(
-                    heightFraction,
-                    density,
-                    position,
-                    uv,
-                    cascadeMipLevel,
-                    stbn,
-                    rayOrigin,
-                    n
+            // Gap-skip: skip empty space between cloud layers (matches main march)
+            const gtInt = step(u.minIntervalHeights, vec3(height));
+            const ltInt = step(vec3(height), u.maxIntervalHeights);
+            const inInterval = gtInt.mul(ltInt);
+            const isGap = inInterval.x.add(inInterval.y).add(inInterval.z).greaterThan(0.5);
+
+            If(isGap, () => {
+                rayDistance.addAssign(stepSize);
+                iterCount.addAssign(float(1));
+            }).Else(() => {
+                const n = normalize(position);
+                const uv = getCubeSphereUvNormalized(n);
+                const heightFraction = remapClamped(
+                    vec4(height),
+                    u.minLayerHeights,
+                    u.maxLayerHeights
                 );
-                const extinction = media.y;
+                const density = sampleWeather(uv, height, cascadeMipLevel);
+                const maxDensity = max(density.x, max(density.y, max(density.z, density.w)));
 
-                If(extinction.greaterThan(u.minExtinction), () => {
-                    extinctionSum.addAssign(extinction);
-                    maxOpticalDepth.addAssign(extinction.mul(stepSize));
-                    transmittanceIntegral.mulAssign(exp(extinction.negate().mul(stepSize)));
-                    weightedDistanceSum.addAssign(rayDistance.mul(transmittanceIntegral));
-                    transmittanceSum.addAssign(transmittanceIntegral);
-                    sampleCount.addAssign(float(1));
+                If(maxDensity.greaterThan(u.minDensity), () => {
+                    const media = sampleMedia(
+                        heightFraction,
+                        density,
+                        position,
+                        uv,
+                        cascadeMipLevel,
+                        stbn,
+                        rayOrigin,
+                        n
+                    );
+                    const extinction = media.y;
+
+                    If(extinction.greaterThan(u.minExtinction), () => {
+                        extinctionSum.addAssign(extinction);
+                        maxOpticalDepth.addAssign(extinction.mul(stepSize));
+                        transmittanceIntegral.mulAssign(exp(extinction.negate().mul(stepSize)));
+                        weightedDistanceSum.addAssign(rayDistance.mul(transmittanceIntegral));
+                        transmittanceSum.addAssign(transmittanceIntegral);
+                        sampleCount.addAssign(float(1));
+                    });
                 });
+
+                rayDistance.addAssign(stepSize);
+                iterCount.addAssign(float(1));
             });
 
-            If(transmittanceIntegral.lessThanEqual(u.minTransmittance), () => {
+            If(transmittanceIntegral.lessThanEqual(u.shadowMinTransmittance), () => {
                 maxOpticalDepthTail.assign(
                     min(
                         float(2)
@@ -611,8 +646,6 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
                 );
                 Break();
             });
-
-            rayDistance.addAssign(stepSize);
         });
 
         const noSamples = sampleCount.equal(0);
@@ -1181,7 +1214,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                     rayDistance.addAssign(stepSize);
                 });
 
-                If(transmittanceIntegral.lessThanEqual(u.minTransmittance), () => {
+                If(transmittanceIntegral.lessThanEqual(u.shadowMinTransmittance), () => {
                     Break();
                 });
             });
@@ -1403,22 +1436,26 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
             // Non-cloud pixels: compute shadowLength + velocity
             If(hitClouds.not(), () => {
-                // Compute shadowLength for haze (matches reference clouds.frag #ifdef SHADOW_LENGTH
-                // non-cloud path: march from camera to scene distance, clamped at maxShadowLengthRayDistance)
-                If(u.maxShadowLengthIterationCount.greaterThan(0), () => {
-                    const shadowRayFar = min(
-                        sceneDistance.greaterThan(0).select(sceneDistance, rayFar),
-                        u.maxShadowLengthRayDistance
-                    );
-                    resultShadowLen.assign(
-                        marchShadowLength(
-                            cameraPosition.add(rayDirection.mul(float(1))),
-                            rayDirection,
-                            vec2(float(1), shadowRayFar),
-                            jitter
-                        )
-                    );
-                });
+                // Only march shadow length when haze is enabled (avoids expensive march for sky pixels)
+                If(
+                    u.hazeEnabled
+                        .greaterThan(0)
+                        .and(u.maxShadowLengthIterationCount.greaterThan(0)),
+                    () => {
+                        const shadowRayFar = min(
+                            sceneDistance.greaterThan(0).select(sceneDistance, rayFar),
+                            u.maxShadowLengthRayDistance
+                        );
+                        resultShadowLen.assign(
+                            marchShadowLength(
+                                cameraPosition.add(rayDirection.mul(float(1))),
+                                rayDirection,
+                                vec2(float(1), shadowRayFar),
+                                jitter
+                            )
+                        );
+                    }
+                );
 
                 const ncDepth = sceneDistance.greaterThan(0).select(sceneDistance, rayFar);
                 const ncPosition = cameraPosition.add(ncDepth.mul(rayDirection));

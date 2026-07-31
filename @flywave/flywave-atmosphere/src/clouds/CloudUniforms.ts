@@ -52,6 +52,9 @@ export class CloudUniforms {
     shadowCascadeCount = uniform(1);
     shadowFar = uniform(50000.0);
     shadowTexelSize = uniform(new Vector2(1 / 512, 1 / 512));
+    shadowMaxIterationCount = uniform(48);
+    shadowMinStepSize = uniform(100.0);
+    shadowMinTransmittance = uniform(1e-4);
     maxShadowFilterRadius = uniform(4.0);
     // View matrix + camera near/far for cascade index selection
     shadowViewMatrix = uniform(new Matrix4());
@@ -286,6 +289,9 @@ export class CloudUniforms {
         this.maxIterationCountToGround.value = p.maxIterationCountToGround;
         this.maxIterationCountToSun.value = p.maxIterationCountToSun;
         this.shadowCascadeCount.value = p.shadowCascadeCount;
+        this.shadowMaxIterationCount.value = p.shadowMaxIterationCount;
+        this.shadowMinStepSize.value = p.shadowMinStepSize;
+        this.shadowMinTransmittance.value = p.shadowMinTransmittance;
         this.maxShadowLengthIterationCount.value = p.maxShadowLengthIterationCount;
     }
 }
