@@ -1,5 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+export { resolveResourceUrl } from "./resourceResolver";
+
 export * from "./capabilities";
 export * from "./constants";
 export { QuadGeometry } from "./atmosphere/QuadGeometry";

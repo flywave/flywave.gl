@@ -46,8 +46,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and viewpoint (a location in Shandong Province, China)
     const initialLocation = new GeoCoordinates(36.4902, 118.1742, 900);
 
-    return new MapView({
-        projection: sphereProjection, // Use spherical projection
+    return new MapView({ 
         target: initialLocation, // Initial target position
         zoomLevel: 17, // Initial zoom level
         tilt: 45, // Initial tilt angle

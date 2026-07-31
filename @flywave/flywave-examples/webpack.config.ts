@@ -55,12 +55,12 @@ function getCacheConfig(name: string): CacheConfig | false {
     return process.env.NO_HARD_SOURCE_CACHE
         ? false
         : {
-              type: "filesystem",
-              buildDependencies: {
-                  config: [__filename]
-              },
-              name: "flywave-examples_" + name
-          };
+            type: "filesystem",
+            buildDependencies: {
+                config: [__filename]
+            },
+            name: "flywave-examples_" + name
+        };
 }
 
 // 定义flywave-webpack-utils配置
@@ -103,11 +103,10 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
     },
     plugins: [
         new webpack.DefinePlugin({
-            THEMES: JSON.stringify(themeList),
-            FLYWAVE_BASE_URL: JSON.stringify("./"),
+            THEMES: JSON.stringify(themeList), 
             CESIUM_ION_TOKEN: JSON.stringify(
                 process.env.CESIUM_ION_TOKEN ||
-                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOTFkYWMzNC1mYjI1LTRlYTYtYTc2ZS04NWI1MTU2OTVlMDYiLCJpZCI6Mzg2NzksImlhdCI6MTY0MTE5NTAyNn0.4xsIJgYTK81yhRu67GG0x2FMit6zpYFCWsvWSwiFVV4"
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOTFkYWMzNC1mYjI1LTRlYTYtYTc2ZS04NWI1MTU2OTVlMDYiLCJpZCI6Mzg2NzksImlhdCI6MTY0MTE5NTAyNn0.4xsIJgYTK81yhRu67GG0x2FMit6zpYFCWsvWSwiFVV4"
             )
         })
     ]
@@ -254,7 +253,7 @@ const exampleDefs = Object.keys(allEntries).reduce(function (
     r[entry + ".html"] = path.relative(__dirname, allEntries[entry]);
     return r;
 },
-{});
+    {});
 
 interface CopyPattern {
     from: string;

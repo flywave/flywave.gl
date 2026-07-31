@@ -1,12 +1,12 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { resolveResourceUrl } from "./resourceResolver";
+
 export const STBN_TEXTURE_WIDTH = 128;
 export const STBN_TEXTURE_HEIGHT = 128;
 export const STBN_TEXTURE_DEPTH = 64;
 
-const atmosphereRef = "eac103980f20c0956f2d3215833e73514be08462";
-export const DEFAULT_PRECOMPUTED_TEXTURES_URL = `https://media.githubusercontent.com/media/takram-design-engineering/three-geospatial/${atmosphereRef}/packages/atmosphere/assets`;
-export const DEFAULT_STARS_DATA_URL = `https://media.githubusercontent.com/media/takram-design-engineering/three-geospatial/${atmosphereRef}/packages/atmosphere/assets/stars.bin`;
+export const DEFAULT_STARS_DATA_URL = resolveResourceUrl("resources/atmosphere/stars.bin");
 
 export const IRRADIANCE_TEXTURE_WIDTH = 64;
 export const IRRADIANCE_TEXTURE_HEIGHT = 16;

@@ -1,11 +1,18 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type NodeBuilder, Data3DTexture, NearestFilter, RedFormat, RepeatWrapping, Texture3DNode } from "three/webgpu";
+import {
+    type NodeBuilder,
+    Data3DTexture,
+    NearestFilter,
+    RedFormat,
+    RepeatWrapping,
+    Texture3DNode
+} from "three/webgpu";
 import { Fn, frameId, float, nodeImmutable, screenCoordinate, vec3 } from "three/tsl";
 
-
 import { STBNLoader } from "../STBNLoader";
+import { resolveResourceUrl } from "../resourceResolver";
 import { hashString } from "./utils";
 
 const emptyTexture3D = /*#__PURE__*/ (() => {
@@ -21,7 +28,7 @@ const emptyTexture3D = /*#__PURE__*/ (() => {
 })();
 
 export class STBNTextureNode extends Texture3DNode {
-    url = "resources/clouds/stbn.bin";
+    url = resolveResourceUrl("resources/clouds/stbn.bin");
 
     private dataPromise?: Promise<void>;
 

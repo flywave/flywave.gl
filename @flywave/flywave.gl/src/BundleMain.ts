@@ -36,8 +36,8 @@ class MapAssetsUriResolver implements UriResolver {
         // 1. Global variable (window.FLYWAVE_BASE_URL)
         // 2. Webpack DefinePlugin variable (FLYWAVE_BASE_URL)
         // 3. undefined (fallback to network resolution)
-        if (typeof FLYWAVE_BASE_URL !== "undefined") {
-            return FLYWAVE_BASE_URL;
+        if (!FLYWAVE_BASE_URL) {
+            return "https://unpkg.com/@flywave/flywave.gl@latest/dist";
         }
         if (typeof window !== "undefined" && window.FLYWAVE_BASE_URL) {
             return window.FLYWAVE_BASE_URL;
@@ -70,8 +70,7 @@ class MapAssetsUriResolver implements UriResolver {
         return uri;
     }
 }
-
-window.FLYWAVE_BASE_URL = "https://unpkg.com/@flywave/flywave.gl@latest/dist";
+ 
 
 // Export a singleton instance
 export const mapAssetsUriResolver = new MapAssetsUriResolver();

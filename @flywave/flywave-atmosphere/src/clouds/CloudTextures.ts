@@ -1,8 +1,19 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {Data3DTexture, LinearFilter, NoColorSpace, RedFormat, RepeatWrapping, TextureLoader, UnsignedByteType, type Texture, type Renderer} from "three/webgpu";
+import {
+    Data3DTexture,
+    LinearFilter,
+    NoColorSpace,
+    RedFormat,
+    RepeatWrapping,
+    TextureLoader,
+    UnsignedByteType,
+    type Texture,
+    type Renderer
+} from "three/webgpu";
 
+import { resolveResourceUrl } from "../resourceResolver";
 
 const _textureCache = new Map<string, Promise<CloudTextures>>();
 
@@ -15,16 +26,17 @@ export class CloudTextures {
     private constructor() {}
 
     static async load(assetsPath: string = "resources/clouds/"): Promise<CloudTextures> {
-        const existing = _textureCache.get(assetsPath);
+        const resolvedPath = resolveResourceUrl(assetsPath);
+        const existing = _textureCache.get(resolvedPath);
         if (existing) return existing;
 
         const promise = (async () => {
             const instance = new CloudTextures();
-            await instance._doLoad(assetsPath);
+            await instance._doLoad(resolvedPath);
             return instance;
         })();
 
-        _textureCache.set(assetsPath, promise);
+        _textureCache.set(resolvedPath, promise);
         return promise;
     }
 

@@ -1,7 +1,29 @@
 // @ts-nocheck
 import * as THREE from "three/webgpu";
 import { RenderPipeline, type Renderer, NodeMaterial, MeshBasicNodeMaterial } from "three/webgpu";
-import { float, mrt, output, pass, positionView, uniform, vec4, vec3, Fn, depth, normalView, attribute, min, texture, vec2, floor, positionLocal, modelViewMatrix, cameraProjectionMatrix, modelWorldMatrix, cameraViewMatrix } from "three/tsl";
+import {
+    float,
+    mrt,
+    output,
+    pass,
+    positionView,
+    uniform,
+    vec4,
+    vec3,
+    Fn,
+    depth,
+    normalView,
+    attribute,
+    min,
+    texture,
+    vec2,
+    floor,
+    positionLocal,
+    modelViewMatrix,
+    cameraProjectionMatrix,
+    modelWorldMatrix,
+    cameraViewMatrix
+} from "three/tsl";
 
 import type { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
 

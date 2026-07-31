@@ -12,7 +12,8 @@ import {
     sky,
     skyEnvironment,
     updateCelestialDirections,
-    registerAtmosphereContext
+    registerAtmosphereContext,
+    resolveResourceUrl
 } from "@flywave/flywave-atmosphere";
 import * as THREE from "three/webgpu";
 import type { Renderer } from "three/webgpu";
@@ -140,22 +141,20 @@ export class AtmosphereSystem {
                 backgroundNode?: THREE.Scene["backgroundNode"];
                 environmentNode?: THREE.Scene["environmentNode"];
             };
-            const vrm = new ViewRenderManager(renderer);
-            vrm.csmShadowNode = this.m_csmShadowNode;
-            (scene as any).__atmosphereContext = this.m_atmosphereContext;
-            const canvas = renderer.domElement as HTMLCanvasElement;
-            vrm.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
-            vrm.exposure.value = this.m_toneMappingExposure;
-            renderer.toneMapping = THREE.NoToneMapping;
-            this.mapView.mapRenderingManager.viewRenderManager = vrm;
-            this.mapView.mapRenderingManager.syncPostEffectsToVRM();
 
-            const cam = this.mapView.getRteCamera();
-            this.mapView.mapRenderingManager.setTranslucentRenderer(
-                renderer,
-                this.mapView.scene,
-                cam
-            );
+            if (this.isSpherical) {
+                const vrm = new ViewRenderManager(renderer);
+                vrm.csmShadowNode = this.m_csmShadowNode;
+                (scene as any).__atmosphereContext = this.m_atmosphereContext;
+                const canvas = renderer.domElement as HTMLCanvasElement;
+                vrm.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
+                vrm.exposure.value = this.m_toneMappingExposure;
+                renderer.toneMapping = THREE.NoToneMapping;
+                this.mapView.mapRenderingManager.viewRenderManager = vrm;
+                this.mapView.mapRenderingManager.syncPostEffectsToVRM();
+            } else {
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            }
 
             this.m_atmosphereLight.layers.enable(TRANSLUCENT_LAYER_BIT);
             this.mapView.scene.add(this.m_atmosphereLight);
@@ -307,14 +306,15 @@ export class AtmosphereSystem {
         if (skyNode == null) return;
 
         const loader = new THREE.TextureLoader();
+        const resolve = (uri: string) => resolveResourceUrl(uri);
 
-        const colorTex = loader.load("resources/moon/color.jpg", tex => {
+        const colorTex = loader.load(resolve("resources/moon/color.jpg"), tex => {
             tex.colorSpace = THREE.SRGBColorSpace;
             tex.anisotropy = 16;
         });
         skyNode.moonNode.colorNode = texture(colorTex);
 
-        const displacementTex = loader.load("resources/moon/displacement.jpg", tex => {
+        const displacementTex = loader.load(resolve("resources/moon/displacement.jpg"), tex => {
             tex.colorSpace = THREE.NoColorSpace;
             tex.generateMipmaps = false;
         });

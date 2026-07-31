@@ -1,9 +1,46 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type NodeBuilder, type NodeFrame, type Renderer, type TextureNode, HalfFloatType, LinearFilter, NodeMaterial, NodeUpdateType, QuadMesh, RenderTarget, RendererUtils, TempNode, Texture, Vector2, Matrix4, Vector3 } from "three/webgpu";
-import { dot, Fn, float, floor, If, ivec2, max, mix, mrt, not, positionGeometry, screenCoordinate, screenUV, sqrt, texture, uniform, vec2, vec3, vec4, struct } from "three/tsl";
-
+import {
+    type NodeBuilder,
+    type NodeFrame,
+    type Renderer,
+    type TextureNode,
+    HalfFloatType,
+    LinearFilter,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RenderTarget,
+    RendererUtils,
+    TempNode,
+    Texture,
+    Vector2,
+    Matrix4,
+    Vector3
+} from "three/webgpu";
+import {
+    dot,
+    Fn,
+    float,
+    floor,
+    If,
+    ivec2,
+    max,
+    mix,
+    mrt,
+    not,
+    positionGeometry,
+    screenCoordinate,
+    screenUV,
+    sqrt,
+    texture,
+    uniform,
+    vec2,
+    vec3,
+    vec4,
+    struct
+} from "three/tsl";
 
 import { inverseProjectionMatrix } from "../tsl/accessors";
 import { depthToViewZ } from "../tsl/transformations";
@@ -20,6 +57,7 @@ import { createCloudRenderer } from "../clouds/cloudTsl";
 import { CascadedShadowMaps } from "../clouds/CascadedShadowMaps";
 import { type QualityPreset } from "../clouds/QualityPresets";
 import { stbn, stbnTexture } from "../tsl/STBNTextureNode";
+import { resolveResourceUrl } from "../resourceResolver";
 
 const SHADOW_CASCADE_COUNT = 3;
 const SHADOW_MAX_FAR = 100000;
@@ -464,8 +502,8 @@ export class CloudRenderNode extends TempNode {
         this.cloudInitialized = true;
 
         try {
-            stbnTexture.url = "resources/clouds/stbn.bin";
-            this.cloudTextures = await CloudTextures.load("resources/clouds/");
+            stbnTexture.url = resolveResourceUrl("resources/clouds/stbn.bin");
+            this.cloudTextures = await CloudTextures.load(resolveResourceUrl("resources/clouds/"));
 
             this.cloudUniforms.localWeatherTexture = this.cloudTextures.localWeatherTexture;
             this.cloudUniforms.shapeTexture = this.cloudTextures.shapeTexture;
