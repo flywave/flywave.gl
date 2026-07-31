@@ -350,4 +350,4 @@ const defaultDEMTileMeshMaterial = new DEMTileMeshMaterial({
     blending: THREE.NoBlending
 }).markSharedSingleton();
 
-export { emptyTexture, emptyImageryTextures, defaultDEMTileMeshMaterial, DEMTileMeshMaterial };
+export { emptyTexture, emptyImageryTextures, defaultDEMTileMeshMaterial };

@@ -57,7 +57,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
             lights: [],
             atmosphere: {
-                enabled: false, // Disable atmospheric effects
+                enabled: true, // Disable atmospheric effects
                 sunTime: new Date().setHours(19, 0, 0, 0) // Set sun time
             },
             postEffects: {

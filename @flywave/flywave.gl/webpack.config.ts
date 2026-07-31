@@ -98,7 +98,7 @@ const browserConfigs = outputFormats.map(format => {
             library: format.library
         },
         optimization: {
-            sideEffects: false
+            sideEffects: true
         }, 
     };
 

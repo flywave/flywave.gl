@@ -386,7 +386,6 @@ export class FrustumIntersection {
             };
         }
 
-        // Project tile bounds center
         const center = tileBounds.getCenter(tmpVectors3[0]);
         const projectedPoint = tmpVector4
             .set(center.x, center.y, center.z, 1.0)

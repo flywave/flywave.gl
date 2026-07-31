@@ -46,6 +46,7 @@ import { depthToViewZ } from "../tsl/transformations";
 import type { Node } from "../tsl/node";
 import { outputTexture } from "../tsl/OutputTextureNode";
 import { convertToTexture } from "../tsl/RenderTargetNode";
+import { struct } from "three/tsl";
 import { getAtmosphereContext } from "./AtmosphereContext";
 
 import { CloudTextures } from "../clouds/CloudTextures";
@@ -208,7 +209,6 @@ export class CloudRenderNode extends TempNode {
 
     private readonly lowResMaterial = new NodeMaterial();
     private readonly resolveMaterial = new NodeMaterial();
-    private readonly blitMaterial = new NodeMaterial();
     private readonly shadowMaterial = new NodeMaterial();
     private readonly shadowResolveMaterial = new NodeMaterial();
 
@@ -222,11 +222,13 @@ export class CloudRenderNode extends TempNode {
     private readonly lowResNode: TextureNode;
     private readonly velocityLowResNode: TextureNode;
     private readonly shadowLengthLowResNode: TextureNode;
-    private readonly historyNode: TextureNode;
-    private readonly resolveNodeTex: TextureNode;
+    private historyNode: TextureNode;
+    private resolveNodeTex: TextureNode;
+    private compositeNode: TextureNode;
     private readonly shadowNodes: TextureNode[] = [];
     private readonly shadowHistoryNodes: TextureNode[] = [];
 
+    private readonly _tmpAtlasOffset = new Vector3();
     private prevShadowMatrices: Matrix4[] = [
         new Matrix4(),
         new Matrix4(),
@@ -235,7 +237,7 @@ export class CloudRenderNode extends TempNode {
     ];
 
     get overlayTexture(): Texture {
-        return this.resolveRT.texture;
+        return this.compositeNode.value;
     }
 
     get shadowTextures(): Texture[] {
@@ -256,7 +258,6 @@ export class CloudRenderNode extends TempNode {
     get shadowLengthTexture(): Texture {
         return this.lowResRT.textures[2];
     }
-
     constructor(colorNode: Node<"vec4">, depthNode?: Node | null, renderer?: Renderer) {
         super("vec4");
         this.updateBeforeType = NodeUpdateType.FRAME;
@@ -340,6 +341,7 @@ export class CloudRenderNode extends TempNode {
         this.shadowLengthLowResNode = outputTexture(this, this.lowResRT.textures[2]);
         this.historyNode = texture(this.historyRT.texture);
         this.resolveNodeTex = texture(this.resolveRT.texture);
+        this.compositeNode = texture(this.resolveRT.texture);
 
         if (renderer != null) {
             this.ensureCloudInit(renderer).catch(() => {});
@@ -735,15 +737,11 @@ export class CloudRenderNode extends TempNode {
                 this.mesh.render(renderer);
 
                 if (this._shadowResolveFrameCount < 3) {
-                    // Bootstrap: copy raw directly to resolved + history
+                    // Bootstrap: copy raw directly to resolved
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                         renderer.copyTextureToTexture(
                             this.shadowMRT.textures[i],
                             this.shadowResolvedMRT.textures[i]
-                        );
-                        renderer.copyTextureToTexture(
-                            this.shadowMRT.textures[i],
-                            this.shadowHistoryMRT.textures[i]
                         );
                     }
                 } else {
@@ -751,23 +749,17 @@ export class CloudRenderNode extends TempNode {
                     renderer.setRenderTarget(this.shadowResolvedMRT);
                     this.mesh.material = this.shadowResolveMaterial;
                     this.mesh.render(renderer);
-                    // Copy resolved → history for next frame
-                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                        renderer.copyTextureToTexture(
-                            this.shadowResolvedMRT.textures[i],
-                            this.shadowHistoryMRT.textures[i]
-                        );
-                    }
                 }
                 this._shadowResolveFrameCount++;
 
                 // Copy resolved to atlas for AtmosphereLightNode
                 for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                    this._tmpAtlasOffset.set(0, i * SHADOW_MAP_SIZE, 0);
                     renderer.copyTextureToTexture(
                         this.shadowResolvedMRT.textures[i],
                         this.shadowArrayTexture.texture,
                         null,
-                        new Vector3(0, i * SHADOW_MAP_SIZE, 0)
+                        this._tmpAtlasOffset
                     );
                 }
 
@@ -864,15 +856,21 @@ export class CloudRenderNode extends TempNode {
             this.viewReprojectionMatrix.value.multiplyMatrices(reprojection, delta);
         }
 
-        if (this._cloudResolveFrameCount > 0) {
-            renderer.setRenderTarget(this.historyRT);
-            this.mesh.material = this.blitMaterial;
-            this.mesh.render(renderer);
-        }
-
         renderer.setRenderTarget(this.lowResRT);
         this.mesh.material = this.lowResMaterial;
         this.mesh.render(renderer);
+
+        // Shadow ping-pong: swap AFTER cloud lowRes (which samples shadowNodes),
+        // BEFORE cloud resolve (which samples historyNode)
+        if (this.shadowMarchFn != null && this.shadowMaterial.fragmentNode != null) {
+            const tmpShadow = this.shadowResolvedMRT;
+            this.shadowResolvedMRT = this.shadowHistoryMRT;
+            this.shadowHistoryMRT = tmpShadow;
+            for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                this.shadowNodes[i].value = this.shadowResolvedMRT.textures[i];
+                this.shadowHistoryNodes[i].value = this.shadowHistoryMRT.textures[i];
+            }
+        }
 
         this.prevProjectionMatrix.copy(jitterCamera.projectionMatrix);
         this.prevViewMatrix.copy(jitterCamera.matrixWorldInverse);
@@ -886,6 +884,14 @@ export class CloudRenderNode extends TempNode {
         renderer.setRenderTarget(this.resolveRT);
         this.mesh.material = this.resolveMaterial;
         this.mesh.render(renderer);
+
+        // Ping-pong: swap resolve ↔ history for next frame (no blit pass needed)
+        this.compositeNode.value = this.resolveRT.texture;
+        const tmp = this.resolveRT;
+        this.resolveRT = this.historyRT;
+        this.historyRT = tmp;
+        this.resolveNodeTex.value = this.resolveRT.texture;
+        this.historyNode.value = this.historyRT.texture;
 
         restoreRendererState(renderer, this._rendererState);
 
@@ -923,7 +929,7 @@ export class CloudRenderNode extends TempNode {
             return this._colorNode;
         }
 
-        const resolvedClouds = texture(this.resolveNodeTex, screenUV);
+        const resolvedClouds = texture(this.compositeNode, screenUV);
         return vec4(mix(this._colorNode.rgb, resolvedClouds.rgb, resolvedClouds.a), 1);
     }
 
@@ -942,53 +948,70 @@ export class CloudRenderNode extends TempNode {
         const u = this.cloudUniforms;
 
         {
-            const geo = positionGeometry;
-            const positionView = this.jitteredInverseProjection.mul(vec4(geo, 1)).xyz;
-            const rayDirection = matrixViewToECEF.mul(vec4(positionView, float(0))).xyz.normalize();
-            const camPosCorrected = cameraPositionECEF.add(altitudeCorrectionECEF);
-
-            let sceneDistance;
-            let depthViewZ = float(4e5).toVar();
-            if (this._depthNode != null) {
-                const depthTex = convertToTexture(this._depthNode);
-                const depthUv = screenUV.add(this.temporalJitter);
-                const depthVal = depthTex.sample(depthUv).r;
-                const viewZ = depthToViewZ(depthVal, camera);
-                depthViewZ.assign(
-                    depthVal.greaterThan(float(1).sub(1e-7)).select(float(4e5), viewZ.negate())
-                );
-                const camForwardView = vec3(float(0), float(0), float(-1));
-                const camForwardECEF = matrixViewToECEF.mul(vec4(camForwardView, float(0))).xyz;
-                const sceneDist = viewZ.negate().div(dot(rayDirection, camForwardECEF.normalize()));
-                sceneDistance = mix(
-                    sceneDist,
-                    float(1e10),
-                    depthVal.greaterThan(float(1).sub(1e-7)).toFloat()
-                );
-            } else {
-                sceneDistance = float(1e10);
-            }
-
-            const jitter = stbn;
-            u.worldToUnit.value = parameters.worldToUnit;
-
-            const clouds = this.renderCloudsFn(camPosCorrected, rayDirection, sceneDistance);
-            const frontView = positionView.mul(depthViewZ);
-            const prevClip = this.viewReprojectionMatrix.mul(vec4(frontView, 1));
-            const prevUv = vec2(
-                prevClip.x.div(prevClip.w).mul(0.5).add(0.5),
-                float(1).sub(prevClip.y.div(prevClip.w).mul(0.5).add(0.5))
+            const lowResResult = struct(
+                { color: "vec4", velocity: "vec4", shadowLength: "float" },
+                "LowResResult"
             );
-            const sceneVelocity = screenUV.sub(prevUv);
-            const cloudVelocity = clouds.get("velocity");
-            const cloudFrontDepth = clouds.get("frontDepth");
-            const useCloudVelocity = clouds.get("color").a.greaterThan(0);
-            const finalVelocity = useCloudVelocity.select(cloudVelocity, sceneVelocity);
-            const finalDepth = useCloudVelocity.select(cloudFrontDepth, depthViewZ);
+
+            const lowResData = Fn(() => {
+                const geo = positionGeometry;
+                const positionView = this.jitteredInverseProjection.mul(vec4(geo, 1)).xyz;
+                const rayDirection = matrixViewToECEF
+                    .mul(vec4(positionView, float(0)))
+                    .xyz.normalize();
+                const camPosCorrected = cameraPositionECEF.add(altitudeCorrectionECEF);
+
+                let sceneDistance;
+                const depthViewZ = float(4e5).toVar();
+                if (this._depthNode != null) {
+                    const depthTex = convertToTexture(this._depthNode);
+                    const depthUv = screenUV.add(this.temporalJitter);
+                    const depthVal = depthTex.sample(depthUv).r;
+                    const viewZ = depthToViewZ(depthVal, camera);
+                    depthViewZ.assign(
+                        depthVal.greaterThan(float(1).sub(1e-7)).select(float(4e5), viewZ.negate())
+                    );
+                    const camForwardView = vec3(float(0), float(0), float(-1));
+                    const camForwardECEF = matrixViewToECEF.mul(vec4(camForwardView, float(0))).xyz;
+                    const sceneDist = viewZ
+                        .negate()
+                        .div(dot(rayDirection, camForwardECEF.normalize()));
+                    sceneDistance = mix(
+                        sceneDist,
+                        float(1e10),
+                        depthVal.greaterThan(float(1).sub(1e-7)).toFloat()
+                    );
+                } else {
+                    sceneDistance = float(1e10);
+                }
+
+                u.worldToUnit.value = parameters.worldToUnit;
+
+                const clouds = this.renderCloudsFn(camPosCorrected, rayDirection, sceneDistance);
+                const frontView = positionView.mul(depthViewZ);
+                const prevClip = this.viewReprojectionMatrix.mul(vec4(frontView, 1));
+                const prevUv = vec2(
+                    prevClip.x.div(prevClip.w).mul(0.5).add(0.5),
+                    float(1).sub(prevClip.y.div(prevClip.w).mul(0.5).add(0.5))
+                );
+                const sceneVelocity = screenUV.sub(prevUv);
+                const cloudVelocity = clouds.get("velocity");
+                const cloudFrontDepth = clouds.get("frontDepth");
+                const useCloudVelocity = clouds.get("color").a.greaterThan(0);
+                const finalVelocity = useCloudVelocity.select(cloudVelocity, sceneVelocity);
+                const finalDepth = useCloudVelocity.select(cloudFrontDepth, depthViewZ);
+
+                return lowResResult(
+                    clouds.get("color"),
+                    vec4(finalDepth, finalVelocity.x, finalVelocity.y, 0),
+                    clouds.get("shadowLength")
+                );
+            })();
+
             this.lowResMaterial.fragmentNode = mrt({
-                color: clouds.get("color"),
-                velocity: vec4(finalDepth, finalVelocity, 0),
-                shadowLength: vec4(clouds.get("shadowLength").mul(u.worldToUnit), 0, 0, 0)
+                color: lowResData.get("color"),
+                velocity: lowResData.get("velocity"),
+                shadowLength: vec4(lowResData.get("shadowLength").mul(u.worldToUnit), 0, 0, 0)
             });
             this.lowResMaterial.needsUpdate = true;
         }
@@ -1069,12 +1092,6 @@ export class CloudRenderNode extends TempNode {
 
             this.resolveMaterial.fragmentNode = resolveNode;
             this.resolveMaterial.needsUpdate = true;
-        }
-
-        {
-            this.blitMaterial.name = "Clouds [Blit]";
-            this.blitMaterial.fragmentNode = texture(this.resolveNodeTex, screenUV);
-            this.blitMaterial.needsUpdate = true;
         }
 
         // Combined shadow MRT: all cascades in 1 pass
@@ -1181,7 +1198,6 @@ export class CloudRenderNode extends TempNode {
         this.shadowArrayTexture.dispose();
         this.lowResMaterial.dispose();
         this.resolveMaterial.dispose();
-        this.blitMaterial.dispose();
         this.shadowMaterial.dispose();
         this.shadowResolveMaterial.dispose();
         this.mesh.geometry.dispose();
