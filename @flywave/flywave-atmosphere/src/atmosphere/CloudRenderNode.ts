@@ -196,23 +196,23 @@ export class CloudRenderNode extends TempNode {
     private lowResRT: RenderTarget;
     private historyRT: RenderTarget;
     private resolveRT: RenderTarget;
-    private shadowLengthResolveRT: RenderTarget;
-    private shadowLengthHistoryRT: RenderTarget;
-    private shadowRTs: RenderTarget[] = [];
-    private shadowHistoryRTs: RenderTarget[] = [];
-    private shadowResolvedRTs: RenderTarget[] = [];
+
+    // Single MRT RT for all shadow cascades: count = CASCADES
+    private shadowMRT!: RenderTarget;
+    private shadowResolvedMRT!: RenderTarget;
+    private shadowHistoryMRT!: RenderTarget;
+
+    // Combined array texture: all cascade shadows in a single binding (for AtmosphereLightNode).
+    private shadowArrayTexture!: RenderTarget;
+    private shadowArrayNode!: TextureNode;
 
     private readonly lowResMaterial = new NodeMaterial();
     private readonly resolveMaterial = new NodeMaterial();
-    private readonly shadowLengthResolveMaterial = new NodeMaterial();
     private readonly blitMaterial = new NodeMaterial();
-    private readonly shadowLengthBlitMaterial = new NodeMaterial();
-    private readonly shadowMaterials: NodeMaterial[] = [];
-    private readonly shadowResolveMaterials: NodeMaterial[] = [];
-    private readonly shadowBlitMaterials: NodeMaterial[] = [];
-    private readonly shadowRawBlitMaterials: NodeMaterial[] = [];
+    private readonly shadowMaterial = new NodeMaterial();
+    private readonly shadowResolveMaterial = new NodeMaterial();
 
-    private _resolveFrameCount = 0;
+    private _shadowResolveFrameCount = 0;
     private _cloudResolveFrameCount = 0;
     private _fragmentNodesBuilt = false;
 
@@ -224,10 +224,7 @@ export class CloudRenderNode extends TempNode {
     private readonly shadowLengthLowResNode: TextureNode;
     private readonly historyNode: TextureNode;
     private readonly resolveNodeTex: TextureNode;
-    private readonly shadowLengthResolveNodeTex: TextureNode;
-    private readonly shadowLengthHistoryNode: TextureNode;
     private readonly shadowNodes: TextureNode[] = [];
-    private readonly shadowRawNodes: TextureNode[] = [];
     private readonly shadowHistoryNodes: TextureNode[] = [];
 
     private prevShadowMatrices: Matrix4[] = [
@@ -242,7 +239,10 @@ export class CloudRenderNode extends TempNode {
     }
 
     get shadowTextures(): Texture[] {
-        return this.shadowResolvedRTs.map(rt => rt.texture);
+        return Array.from(
+            { length: SHADOW_CASCADE_COUNT },
+            (_, i) => this.shadowResolvedMRT.textures[i]
+        );
     }
 
     get shadowMatricesOut(): readonly Matrix4[] {
@@ -254,7 +254,7 @@ export class CloudRenderNode extends TempNode {
     }
 
     get shadowLengthTexture(): Texture {
-        return this.shadowLengthResolveRT.texture;
+        return this.lowResRT.textures[2];
     }
 
     constructor(colorNode: Node<"vec4">, depthNode?: Node | null, renderer?: Renderer) {
@@ -293,76 +293,53 @@ export class CloudRenderNode extends TempNode {
         this.resolveRT.texture.minFilter = LinearFilter;
         this.resolveRT.texture.magFilter = LinearFilter;
 
-        this.shadowLengthResolveRT = new RenderTarget(1, 1, {
-            depthBuffer: false,
-            type: HalfFloatType
-        });
-        this.shadowLengthResolveRT.texture.name = "Clouds [ShadowLength Resolve]";
-        this.shadowLengthResolveRT.texture.minFilter = LinearFilter;
-        this.shadowLengthResolveRT.texture.magFilter = LinearFilter;
-
-        this.shadowLengthHistoryRT = new RenderTarget(1, 1, {
-            depthBuffer: false,
-            type: HalfFloatType
-        });
-        this.shadowLengthHistoryRT.texture.name = "Clouds [ShadowLength History]";
-        this.shadowLengthHistoryRT.texture.minFilter = LinearFilter;
-        this.shadowLengthHistoryRT.texture.magFilter = LinearFilter;
-
-        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+        // Single MRT RT for all shadow cascades
+        {
             const sz = SHADOW_MAP_SIZE;
-            const rt = new RenderTarget(sz, sz, {
+            this.shadowMRT = new RenderTarget(sz, sz, {
                 depthBuffer: false,
                 type: HalfFloatType,
-                count: 2
+                count: SHADOW_CASCADE_COUNT
             });
-            rt.texture.name = "color";
-            rt.texture.minFilter = LinearFilter;
-            rt.texture.magFilter = LinearFilter;
-            rt.textures[1].name = "velocity";
-            rt.textures[1].minFilter = LinearFilter;
-            rt.textures[1].magFilter = LinearFilter;
-            this.shadowRTs.push(rt);
-
-            const resRT = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
-            resRT.texture.name = `Clouds [Shadow Res ${i}]`;
-            resRT.texture.minFilter = LinearFilter;
-            resRT.texture.magFilter = LinearFilter;
-            this.shadowResolvedRTs.push(resRT);
-            this.shadowNodes.push(texture(resRT.texture));
-            this.shadowRawNodes.push(texture(this.shadowRTs[i].texture));
-
-            const mat = new NodeMaterial();
-            mat.name = `Clouds [Shadow ${i}]`;
-            this.shadowMaterials.push(mat);
-
-            const histRT = new RenderTarget(sz, sz, { depthBuffer: false, type: HalfFloatType });
-            histRT.texture.name = `Clouds [Shadow Hist ${i}]`;
-            histRT.texture.minFilter = LinearFilter;
-            histRT.texture.magFilter = LinearFilter;
-            this.shadowHistoryRTs.push(histRT);
-            this.shadowHistoryNodes.push(texture(histRT.texture));
-
-            const resMat = new NodeMaterial();
-            resMat.name = `Clouds [Shadow Resolve ${i}]`;
-            this.shadowResolveMaterials.push(resMat);
-
-            const blitMat = new NodeMaterial();
-            blitMat.name = `Clouds [Shadow Blit ${i}]`;
-            this.shadowBlitMaterials.push(blitMat);
-
-            const rawBlitMat = new NodeMaterial();
-            rawBlitMat.name = `Clouds [Shadow Raw Blit ${i}]`;
-            this.shadowRawBlitMaterials.push(rawBlitMat);
+            this.shadowResolvedMRT = new RenderTarget(sz, sz, {
+                depthBuffer: false,
+                type: HalfFloatType,
+                count: SHADOW_CASCADE_COUNT
+            });
+            this.shadowHistoryMRT = new RenderTarget(sz, sz, {
+                depthBuffer: false,
+                type: HalfFloatType,
+                count: SHADOW_CASCADE_COUNT
+            });
+            for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                for (const rt of [this.shadowMRT, this.shadowResolvedMRT, this.shadowHistoryMRT]) {
+                    rt.textures[i].name = `c${i}`;
+                    rt.textures[i].minFilter = LinearFilter;
+                    rt.textures[i].magFilter = LinearFilter;
+                }
+                this.shadowNodes.push(texture(this.shadowResolvedMRT.textures[i]));
+                this.shadowHistoryNodes.push(texture(this.shadowHistoryMRT.textures[i]));
+            }
         }
+
+        // Combined shadow atlas: cascades stacked vertically (for AtmosphereLightNode).
+        this.shadowArrayTexture = new RenderTarget(
+            SHADOW_MAP_SIZE,
+            SHADOW_MAP_SIZE * SHADOW_CASCADE_COUNT,
+            { depthBuffer: false, type: HalfFloatType }
+        );
+        this.shadowArrayTexture.texture.minFilter = LinearFilter;
+        this.shadowArrayTexture.texture.magFilter = LinearFilter;
+        this.shadowArrayTexture.texture.name = "Clouds [Shadow Atlas]";
+        this.shadowArrayNode = texture(this.shadowArrayTexture.texture);
+
+        this.shadowMaterial.name = "Clouds [Shadow]";
 
         this.lowResNode = outputTexture(this, this.lowResRT.textures[0]);
         this.velocityLowResNode = outputTexture(this, this.lowResRT.textures[1]);
         this.shadowLengthLowResNode = outputTexture(this, this.lowResRT.textures[2]);
         this.historyNode = texture(this.historyRT.texture);
         this.resolveNodeTex = texture(this.resolveRT.texture);
-        this.shadowLengthResolveNodeTex = texture(this.shadowLengthResolveRT.texture);
-        this.shadowLengthHistoryNode = texture(this.shadowLengthHistoryRT.texture);
 
         if (renderer != null) {
             this.ensureCloudInit(renderer).catch(() => {});
@@ -684,8 +661,6 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.setSize(lowWidth, lowHeight);
         this.historyRT.setSize(fullWidth, fullHeight);
         this.resolveRT.setSize(fullWidth, fullHeight);
-        this.shadowLengthResolveRT.setSize(fullWidth, fullHeight);
-        this.shadowLengthHistoryRT.setSize(fullWidth, fullHeight);
         this.resolveTexelSize.value.set(1 / fullWidth, 1 / fullHeight);
         this.lowResTexelSize.value.set(1 / lowWidth, 1 / lowHeight);
         this.historyTexSize.value.set(fullWidth, fullHeight);
@@ -702,120 +677,115 @@ export class CloudRenderNode extends TempNode {
 
         this._rendererState = resetRendererState(renderer, this._rendererState);
 
-        if (this.shadowMarchFn != null) {
-            const ready = this.shadowMaterials.every(m => (m as any).fragmentNode != null);
-            if (ready) {
-                this.cloudUniforms.frame.value = this._cloudResolveFrameCount % 8;
-                const cam = atmoCtx.camera as any;
-                const w2e = atmoCtx.matrixWorldToECEF.value;
-                if (cam && w2e) {
-                    const origFar = cam.far;
-                    cam.far = Math.max(cam.far, 100000);
-                    cam.updateProjectionMatrix();
+        if (this.shadowMarchFn != null && this.shadowMaterial.fragmentNode != null) {
+            this.cloudUniforms.frame.value = this._cloudResolveFrameCount % 8;
+            const cam = atmoCtx.camera as any;
+            const w2e = atmoCtx.matrixWorldToECEF.value;
+            if (cam && w2e) {
+                const origFar = cam.far;
+                cam.far = Math.max(cam.far, 100000);
+                cam.updateProjectionMatrix();
 
-                    this.cloudUniforms.worldToECEF.value.copy(w2e);
-                    this.cloudUniforms.ecefToWorld.value.copy(w2e).invert();
+                this.cloudUniforms.worldToECEF.value.copy(w2e);
+                this.cloudUniforms.ecefToWorld.value.copy(w2e).invert();
 
-                    const e2wRot = this._tmpE2wRot.copy(w2e).invert();
-                    const sunWorld = this._tmpSunWorld
-                        .copy(this.cloudUniforms.sunDirection.value)
-                        .transformDirection(e2wRot)
-                        .normalize();
+                const e2wRot = this._tmpE2wRot.copy(w2e).invert();
+                const sunWorld = this._tmpSunWorld
+                    .copy(this.cloudUniforms.sunDirection.value)
+                    .transformDirection(e2wRot)
+                    .normalize();
 
-                    const camPosECEF = atmoCtx.cameraPositionECEF.value;
-                    const surfaceNormal = this._tmpSurfaceNormal.copy(camPosECEF).normalize();
-                    const zenithAngle = this.cloudUniforms.sunDirection.value.dot(surfaceNormal);
-                    const shadowDistance = 1e6 * (1 - zenithAngle) + 1e3 * zenithAngle;
+                const camPosECEF = atmoCtx.cameraPositionECEF.value;
+                const surfaceNormal = this._tmpSurfaceNormal.copy(camPosECEF).normalize();
+                const zenithAngle = this.cloudUniforms.sunDirection.value.dot(surfaceNormal);
+                const shadowDistance = 1e6 * (1 - zenithAngle) + 1e3 * zenithAngle;
 
-                    this.cascadedShadowMaps.update(cam, sunWorld, undefined, shadowDistance);
+                this.cascadedShadowMaps.update(cam, sunWorld, undefined, shadowDistance);
 
-                    this.cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
-                    this.cloudUniforms.shadowCameraNear.value = cam.near;
-                    this.cloudUniforms.shadowCameraFar.value = this.cascadedShadowMaps.far;
-                    this.cloudUniforms.shadowFar.value = this.cascadedShadowMaps.far;
-                    this.cloudUniforms.shadowTexelSize.value.set(
-                        1 / SHADOW_MAP_SIZE,
-                        1 / SHADOW_MAP_SIZE
+                this.cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
+                this.cloudUniforms.shadowCameraNear.value = cam.near;
+                this.cloudUniforms.shadowCameraFar.value = this.cascadedShadowMaps.far;
+                this.cloudUniforms.shadowFar.value = this.cascadedShadowMaps.far;
+                this.cloudUniforms.shadowTexelSize.value.set(
+                    1 / SHADOW_MAP_SIZE,
+                    1 / SHADOW_MAP_SIZE
+                );
+
+                cam.far = origFar;
+                cam.updateProjectionMatrix();
+
+                // Wire previous frame cascade matrices for velocity reprojection.
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                    this.cloudUniforms.reprojectionMatrices[i].value.copy(
+                        this.prevShadowMatrices[i]
                     );
+                }
 
-                    cam.far = origFar;
-                    cam.updateProjectionMatrix();
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                    const cascade = this.cascadedShadowMaps.cascades[i];
+                    this.cloudUniforms.shadowMatrices[i].value.copy(cascade.matrix);
+                    this.cloudUniforms.inverseShadowMatrices[i].value.copy(cascade.inverseMatrix);
+                    this.cloudUniforms.shadowIntervals[i].value.copy(cascade.interval);
+                }
 
-                    // Wire previous frame cascade matrices for velocity reprojection.
-                    // reprojectionMatrices holds the matrices used in the LAST frame's
-                    // shadow render, enabling the shader to compute UV offset between
-                    // current and previous frame for temporal resolve.
+                // Single MRT pass: all cascades at once
+                this.shadowMRT.setSize(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+                renderer.setRenderTarget(this.shadowMRT);
+                this.mesh.material = this.shadowMaterial;
+                this.mesh.render(renderer);
+
+                if (this._shadowResolveFrameCount < 3) {
+                    // Bootstrap: copy raw directly to resolved + history
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                        this.cloudUniforms.reprojectionMatrices[i].value.copy(
-                            this.prevShadowMatrices[i]
+                        renderer.copyTextureToTexture(
+                            this.shadowMRT.textures[i],
+                            this.shadowResolvedMRT.textures[i]
+                        );
+                        renderer.copyTextureToTexture(
+                            this.shadowMRT.textures[i],
+                            this.shadowHistoryMRT.textures[i]
                         );
                     }
-
+                } else {
+                    // Temporal resolve: 1 MRT pass, all cascades
+                    renderer.setRenderTarget(this.shadowResolvedMRT);
+                    this.mesh.material = this.shadowResolveMaterial;
+                    this.mesh.render(renderer);
+                    // Copy resolved → history for next frame
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                        const cascade = this.cascadedShadowMaps.cascades[i];
-                        this.cloudUniforms.shadowMatrices[i].value.copy(cascade.matrix);
-                        this.cloudUniforms.inverseShadowMatrices[i].value.copy(
-                            cascade.inverseMatrix
-                        );
-                        this.cloudUniforms.shadowIntervals[i].value.copy(cascade.interval);
-
-                        renderer.setRenderTarget(this.shadowRTs[i]);
-                        this.mesh.material = this.shadowMaterials[i];
-                        this.mesh.render(renderer);
-                    }
-
-                    if (this._resolveFrameCount === 0) {
-                        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                            this.prevShadowMatrices[i].copy(
-                                this.cloudUniforms.shadowMatrices[i].value
-                            );
-                        }
-                    }
-
-                    if (this._resolveFrameCount < 3) {
-                        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                            renderer.copyTextureToTexture(
-                                this.shadowRTs[i].texture,
-                                this.shadowResolvedRTs[i].texture
-                            );
-                            renderer.copyTextureToTexture(
-                                this.shadowRTs[i].texture,
-                                this.shadowHistoryRTs[i].texture
-                            );
-                        }
-                    } else {
-                        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                            renderer.setRenderTarget(this.shadowResolvedRTs[i]);
-                            this.mesh.material = this.shadowResolveMaterials[i];
-                            this.mesh.render(renderer);
-                        }
-                        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                            renderer.setRenderTarget(this.shadowHistoryRTs[i]);
-                            this.mesh.material = this.shadowBlitMaterials[i];
-                            this.mesh.render(renderer);
-                        }
-                    }
-                    this._resolveFrameCount++;
-
-                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                        this.prevShadowMatrices[i].copy(this.cloudUniforms.shadowMatrices[i].value);
-                    }
-
-                    // Push shadow data to AtmosphereContext for ground shadow projection.
-                    atmoCtx.cloudShadowEnabled = true;
-                    atmoCtx.cloudShadowCascadeCount = SHADOW_CASCADE_COUNT;
-                    atmoCtx.cloudShadowFar = this.cascadedShadowMaps.far;
-                    atmoCtx.cloudShadowTopHeight = this.cloudUniforms.shadowTopHeight.value;
-                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                        atmoCtx.cloudShadowTextureNodes[i] = this.shadowNodes[i];
-                        atmoCtx.cloudShadowRawTextureNodes[i] = this.shadowRawNodes[i];
-                        atmoCtx.cloudShadowMatrices[i].copy(
-                            this.cloudUniforms.shadowMatrices[i].value
-                        );
-                        atmoCtx.cloudShadowIntervals[i].copy(
-                            this.cloudUniforms.shadowIntervals[i].value as Vector2
+                        renderer.copyTextureToTexture(
+                            this.shadowResolvedMRT.textures[i],
+                            this.shadowHistoryMRT.textures[i]
                         );
                     }
+                }
+                this._shadowResolveFrameCount++;
+
+                // Copy resolved to atlas for AtmosphereLightNode
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                    renderer.copyTextureToTexture(
+                        this.shadowResolvedMRT.textures[i],
+                        this.shadowArrayTexture.texture,
+                        null,
+                        new Vector3(0, i * SHADOW_MAP_SIZE, 0)
+                    );
+                }
+
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                    this.prevShadowMatrices[i].copy(this.cloudUniforms.shadowMatrices[i].value);
+                }
+
+                // Push shadow data to AtmosphereContext for ground shadow projection.
+                atmoCtx.cloudShadowEnabled = true;
+                atmoCtx.cloudShadowCascadeCount = SHADOW_CASCADE_COUNT;
+                atmoCtx.cloudShadowFar = this.cascadedShadowMaps.far;
+                atmoCtx.cloudShadowTopHeight = this.cloudUniforms.shadowTopHeight.value;
+                atmoCtx.cloudShadowArrayNode = this.shadowArrayNode;
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                    atmoCtx.cloudShadowMatrices[i].copy(this.cloudUniforms.shadowMatrices[i].value);
+                    atmoCtx.cloudShadowIntervals[i].copy(
+                        this.cloudUniforms.shadowIntervals[i].value as Vector2
+                    );
                 }
             }
         }
@@ -898,10 +868,6 @@ export class CloudRenderNode extends TempNode {
             renderer.setRenderTarget(this.historyRT);
             this.mesh.material = this.blitMaterial;
             this.mesh.render(renderer);
-
-            renderer.setRenderTarget(this.shadowLengthHistoryRT);
-            this.mesh.material = this.shadowLengthBlitMaterial;
-            this.mesh.render(renderer);
         }
 
         renderer.setRenderTarget(this.lowResRT);
@@ -919,10 +885,6 @@ export class CloudRenderNode extends TempNode {
 
         renderer.setRenderTarget(this.resolveRT);
         this.mesh.material = this.resolveMaterial;
-        this.mesh.render(renderer);
-
-        renderer.setRenderTarget(this.shadowLengthResolveRT);
-        this.mesh.material = this.shadowLengthResolveMaterial;
         this.mesh.render(renderer);
 
         restoreRendererState(renderer, this._rendererState);
@@ -961,14 +923,8 @@ export class CloudRenderNode extends TempNode {
             return this._colorNode;
         }
 
-        if (!this._fragmentNodesBuilt) {
-            this._buildFragmentNodes(builder);
-            this._fragmentNodesBuilt = true;
-        }
-
         const resolvedClouds = texture(this.resolveNodeTex, screenUV);
-        const cloudColor = convertToTexture(this._colorNode);
-        return vec4(mix(cloudColor.rgb, resolvedClouds.rgb, resolvedClouds.a), 1);
+        return vec4(mix(this._colorNode.rgb, resolvedClouds.rgb, resolvedClouds.a), 1);
     }
 
     private _buildFragmentNodes(host: NodeBuilder | Renderer): void {
@@ -1116,182 +1072,101 @@ export class CloudRenderNode extends TempNode {
         }
 
         {
-            this.shadowLengthResolveMaterial.name = "Clouds [ShadowLength Resolve]";
-            const slLowRes = this.shadowLengthLowResNode;
-            const slHistory = this.shadowLengthHistoryNode;
-            const velLowRes = this.velocityLowResNode;
-
-            const slResolveNode = Fn(() => {
-                const lowResSize = vec2(
-                    float(1).div(this.lowResTexelSize.x),
-                    float(1).div(this.lowResTexelSize.y)
-                );
-
-                const fx = screenCoordinate.x.floor();
-                const fy = screenCoordinate.y.floor();
-                const lowCoordX = fx.div(4).floor();
-                const lowCoordY = fy.div(4).floor();
-                const lowUv = vec2(
-                    lowCoordX.add(0.5).div(lowResSize.x),
-                    lowCoordY.add(0.5).div(lowResSize.y)
-                );
-                const currentSL = texture(slLowRes, lowUv).r;
-
-                const b0 = vec4(0, 12, 3, 15);
-                const b1 = vec4(8, 4, 11, 7);
-                const b2 = vec4(2, 14, 1, 13);
-                const b3 = vec4(10, 6, 9, 5);
-                const iPixX = screenCoordinate.x.floor().toInt();
-                const iPixY = screenCoordinate.y.floor().toInt();
-                const mx = iPixX.mod(4).toFloat();
-                const my = iPixY.mod(4).toFloat();
-                const row = mx
-                    .lessThan(1)
-                    .select(b0, mx.lessThan(2).select(b1, mx.lessThan(3).select(b2, b3)));
-                const bayerVal = my
-                    .lessThan(1)
-                    .select(
-                        row.x,
-                        my.lessThan(2).select(row.y, my.lessThan(3).select(row.z, row.w))
-                    );
-                const frameMod = this.cloudResolveCountNode.mod(16);
-                const isCurrent = bayerVal.sub(frameMod).abs().lessThan(0.5);
-
-                const result = currentSL.toVar();
-
-                If(isCurrent.not(), () => {
-                    const lowCoord = ivec2(lowCoordX, lowCoordY);
-                    const velocityData = _getClosestFragment(velLowRes, lowCoord);
-                    const velocity = velocityData.yz;
-                    const prevUv = screenUV.sub(velocity);
-
-                    const inBounds = prevUv.x
-                        .greaterThanEqual(0)
-                        .and(prevUv.x.lessThanEqual(1))
-                        .and(prevUv.y.greaterThanEqual(0))
-                        .and(prevUv.y.lessThanEqual(1));
-
-                    If(inBounds, () => {
-                        const historySL = texture(slHistory, prevUv).r;
-                        result.assign(historySL);
-                    });
-                });
-
-                return vec4(result, 0, 0, 1);
-            })();
-
-            this.shadowLengthResolveMaterial.fragmentNode = slResolveNode;
-            this.shadowLengthResolveMaterial.needsUpdate = true;
-        }
-
-        {
             this.blitMaterial.name = "Clouds [Blit]";
             this.blitMaterial.fragmentNode = texture(this.resolveNodeTex, screenUV);
             this.blitMaterial.needsUpdate = true;
         }
 
-        {
-            this.shadowLengthBlitMaterial.name = "Clouds [ShadowLength Blit]";
-            this.shadowLengthBlitMaterial.fragmentNode = texture(
-                this.shadowLengthResolveNodeTex,
-                screenUV
-            );
-            this.shadowLengthBlitMaterial.needsUpdate = true;
-        }
-
+        // Combined shadow MRT: all cascades in 1 pass
         if (this.shadowMarchFn != null) {
             this.cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
 
-            for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-                const shadowColor = this.shadowMarchFn(i)();
+            // Shadow render: 1 MRT pass, all cascades
+            {
+                const mrtEntries: Record<string, any> = {};
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                    mrtEntries[`c${i}`] = this.shadowMarchFn(i)();
+                }
+                this.shadowMaterial.fragmentNode = mrt(mrtEntries);
+                this.shadowMaterial.needsUpdate = true;
+            }
 
-                // Compute shadow velocity for temporal reprojection.
-                // Must be outside Fn() because mrt() cannot be returned from inside Fn().
-                // Uses the same ray math as createShadowMarchClouds.
-                const invMat = this.cloudUniforms.inverseShadowMatrices[i];
-                const clip = vec3(screenUV.mul(2).sub(1), float(1));
-                const point = invMat.mul(vec4(clip, float(1)));
-                const pDiv = point.xyz.div(point.w);
-                const sunPos = pDiv.add(this.cloudUniforms.altitudeCorrection);
-                const rayDir = this.cloudUniforms.sunDirection.negate().normalize();
+            // Shadow temporal resolve: 1 MRT pass, all cascades
+            // Velocity computed analytically from frontDepth + current/prev matrices
+            this.shadowResolveMaterial.name = "Clouds [Shadow Resolve]";
+            {
+                const resolveEntries: Record<string, any> = {};
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                    const shadowColorTex = texture(this.shadowMRT.textures[i]);
+                    const shadowHistoryTex = this.shadowHistoryNodes[i];
 
-                const a = sunPos;
-                const b = dot(rayDir, a).mul(2);
-                const shadowR = this.cloudUniforms.bottomRadius.add(
-                    this.cloudUniforms.shadowTopHeight
-                );
-                const c = dot(a, a).sub(shadowR.mul(shadowR));
-                const disc = b.mul(b).sub(c.mul(4));
-                const rayNear = max(
-                    float(0),
-                    b
-                        .negate()
-                        .sub(sqrt(disc.max(0)))
-                        .mul(0.5)
-                );
-                const rayOrigin = rayNear.mul(rayDir).add(sunPos);
+                    const perCascade = Fn(() => {
+                        const coord = ivec2(screenCoordinate);
+                        const currentColor = shadowColorTex.load(coord).toVar();
 
-                const frontDepth = shadowColor.x;
-                const noSamples = shadowColor.y.equal(0);
-                const frontPosition = frontDepth.mul(rayDir).add(rayOrigin);
-                const frontWorld = this.cloudUniforms.ecefToWorld.mul(
-                    vec4(frontPosition.sub(this.cloudUniforms.altitudeCorrection), 1)
-                ).xyz;
-                const prevClip = this.cloudUniforms.reprojectionMatrices[i].mul(
-                    vec4(frontWorld, 1)
-                );
-                const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
-                const velocity = noSamples.select(vec2(0), screenUV.sub(prevUv));
+                        // Analytic velocity from frontDepth + projection matrices
+                        const frontDepth = currentColor.x;
+                        const invMat = this.cloudUniforms.inverseShadowMatrices[i];
+                        const clip = vec3(screenUV.mul(2).sub(1), float(1));
+                        const point = invMat.mul(vec4(clip, float(1)));
+                        const pDiv = point.xyz.div(point.w);
+                        const sunPos = pDiv.add(this.cloudUniforms.altitudeCorrection);
+                        const rayDir = this.cloudUniforms.sunDirection.negate().normalize();
 
-                this.shadowMaterials[i].fragmentNode = mrt({
-                    color: shadowColor,
-                    velocity: vec4(velocity, 0, 0)
-                });
-                this.shadowMaterials[i].needsUpdate = true;
-
-                this.shadowRawBlitMaterials[i].fragmentNode = texture(
-                    this.shadowRTs[i].texture,
-                    screenUV
-                );
-                this.shadowRawBlitMaterials[i].needsUpdate = true;
-
-                this.shadowBlitMaterials[i].fragmentNode = texture(
-                    this.shadowResolvedRTs[i].texture,
-                    screenUV
-                );
-                this.shadowBlitMaterials[i].needsUpdate = true;
-
-                const shadowColorTex = texture(this.shadowRTs[i].texture);
-                const shadowVelocityTex = texture(this.shadowRTs[i].textures[1]);
-                const shadowResolveNode = Fn(() => {
-                    const coord = ivec2(screenCoordinate);
-                    const currentColor = shadowColorTex.load(coord);
-                    const velocityData = shadowVelocityTex.load(coord);
-                    const prevUv = screenUV.sub(velocityData.xy);
-                    const inBounds = prevUv.x
-                        .greaterThanEqual(0)
-                        .and(prevUv.x.lessThanEqual(1))
-                        .and(prevUv.y.greaterThanEqual(0))
-                        .and(prevUv.y.lessThanEqual(1));
-                    const result = currentColor.toVar();
-                    If(inBounds, () => {
-                        const historyColor = texture(this.shadowHistoryNodes[i], prevUv);
-                        const clipped = _varianceClippingResolve(
-                            shadowColorTex,
-                            coord,
-                            currentColor,
-                            historyColor
+                        const a = sunPos;
+                        const b = dot(rayDir, a).mul(2);
+                        const shadowR = this.cloudUniforms.bottomRadius.add(
+                            this.cloudUniforms.shadowTopHeight
                         );
-                        result.assign(clipped);
-                    });
-                    // 1% EMA: matches original three-geospatial temporalAlpha.
-                    // Slower convergence but keeps per-frame shadow edge movement
-                    // below the visible threshold (~0.005 texels/frame) during
-                    // cascade texel snapping. Cloud self-shadow's TAA handles noise.
-                    return mix(result, currentColor, float(0.01));
-                })();
-                this.shadowResolveMaterials[i].fragmentNode = shadowResolveNode;
-                this.shadowResolveMaterials[i].needsUpdate = true;
+                        const c = dot(a, a).sub(shadowR.mul(shadowR));
+                        const disc = b.mul(b).sub(c.mul(4));
+                        const rayNear = max(
+                            float(0),
+                            b
+                                .negate()
+                                .sub(sqrt(disc.max(0)))
+                                .mul(0.5)
+                        );
+                        const rayOrigin = rayNear.mul(rayDir).add(sunPos);
+
+                        const noSamples = currentColor.y.equal(0);
+                        const frontPosition = frontDepth.mul(rayDir).add(rayOrigin);
+                        const frontWorld = this.cloudUniforms.ecefToWorld.mul(
+                            vec4(frontPosition.sub(this.cloudUniforms.altitudeCorrection), 1)
+                        ).xyz;
+                        const prevClip = this.cloudUniforms.reprojectionMatrices[i].mul(
+                            vec4(frontWorld, 1)
+                        );
+                        const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
+
+                        const result = currentColor.toVar();
+
+                        If(noSamples.not(), () => {
+                            const inBounds = prevUv.x
+                                .greaterThanEqual(0)
+                                .and(prevUv.x.lessThanEqual(1))
+                                .and(prevUv.y.greaterThanEqual(0))
+                                .and(prevUv.y.lessThanEqual(1));
+
+                            If(inBounds, () => {
+                                const historyColor = texture(shadowHistoryTex, prevUv);
+                                const clipped = _varianceClippingResolve(
+                                    shadowColorTex,
+                                    coord,
+                                    currentColor,
+                                    historyColor
+                                );
+                                result.assign(clipped);
+                            });
+                        });
+
+                        return mix(result, currentColor, float(0.01));
+                    })();
+
+                    resolveEntries[`c${i}`] = perCascade;
+                }
+                this.shadowResolveMaterial.fragmentNode = mrt(resolveEntries);
+                this.shadowResolveMaterial.needsUpdate = true;
             }
         }
     }
@@ -1300,20 +1175,15 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.dispose();
         this.historyRT.dispose();
         this.resolveRT.dispose();
-        this.shadowLengthResolveRT.dispose();
-        this.shadowLengthHistoryRT.dispose();
-        for (const rt of this.shadowRTs) rt.dispose();
-        for (const rt of this.shadowHistoryRTs) rt.dispose();
-        for (const rt of this.shadowResolvedRTs) rt.dispose();
+        this.shadowMRT.dispose();
+        this.shadowResolvedMRT.dispose();
+        this.shadowHistoryMRT.dispose();
+        this.shadowArrayTexture.dispose();
         this.lowResMaterial.dispose();
         this.resolveMaterial.dispose();
-        this.shadowLengthResolveMaterial.dispose();
         this.blitMaterial.dispose();
-        this.shadowLengthBlitMaterial.dispose();
-        for (const m of this.shadowMaterials) m.dispose();
-        for (const m of this.shadowResolveMaterials) m.dispose();
-        for (const m of this.shadowBlitMaterials) m.dispose();
-        for (const m of this.shadowRawBlitMaterials) m.dispose();
+        this.shadowMaterial.dispose();
+        this.shadowResolveMaterial.dispose();
         this.mesh.geometry.dispose();
         super.dispose();
     }

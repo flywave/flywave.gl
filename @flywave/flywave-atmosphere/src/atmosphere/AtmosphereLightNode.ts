@@ -64,6 +64,7 @@ export class AtmosphereLightNode extends AnalyticLightNode<AtmosphereLight> {
     );
     private cloudShadowTextureNodes: any[] = [null, null, null, null];
     private cloudShadowRawTextureNodes: any[] = [null, null, null, null];
+    private cloudShadowArrayNode: any = null;
     private _cloudShadowTexReady = false;
 
     private _setupDone = false;
@@ -106,15 +107,10 @@ export class AtmosphereLightNode extends AnalyticLightNode<AtmosphereLight> {
                 if (i < ctx.cloudShadowCascadeCount) {
                     this.cloudShadowMatrices[i].value.copy(ctx.cloudShadowMatrices[i]);
                     this.cloudShadowIntervals[i].value.copy(ctx.cloudShadowIntervals[i]);
-                    if (!this._cloudShadowTexReady && ctx.cloudShadowTextureNodes[i]) {
-                        this.cloudShadowTextureNodes[i] = ctx.cloudShadowTextureNodes[i];
-                    }
-                    if (!this._cloudShadowTexReady && ctx.cloudShadowRawTextureNodes[i]) {
-                        this.cloudShadowRawTextureNodes[i] = ctx.cloudShadowRawTextureNodes[i];
-                    }
                 }
             }
-            if (this.cloudShadowTextureNodes[0] != null) {
+            if (ctx.cloudShadowArrayNode != null && !this._cloudShadowTexReady) {
+                this.cloudShadowArrayNode = ctx.cloudShadowArrayNode;
                 this._cloudShadowTexReady = true;
             }
         } else {
@@ -282,6 +278,8 @@ export class AtmosphereLightNode extends AnalyticLightNode<AtmosphereLight> {
 
             // 8-tap Vogel disk PCF with IGN rotation and adaptive radius
             const odSum = float(0).toVar();
+            const sliceY = float(idx).div(float(3)); // each cascade occupies 1/3 of atlas height
+            const sliceH = float(1).div(float(3));
             for (let i = 0; i < N; i++) {
                 const fi = float(i);
                 const r = sqrt(fi.add(float(0.5)).div(float(N)));
@@ -289,12 +287,9 @@ export class AtmosphereLightNode extends AnalyticLightNode<AtmosphereLight> {
                 const ox = cos(theta).mul(r);
                 const oy = sin(theta).mul(r);
                 const uv = shadowUV.add(vec2(ox, oy).mul(filterRadius));
-                // Use temporally-resolved shadow texture for temporal stability.
-                // Raw BSM textures have 8-frame SVS noise (frame%8 controls sampling
-                // pattern) that causes visible flickering on ground during camera movement.
-                // The temporal resolve's slow EMA + velocity reprojection eliminates
-                // frame-to-frame variation while keeping cascade alignment correct.
-                const shadow = texture(this.cloudShadowTextureNodes[idx], uv);
+                // Sample from shadow atlas: remap UV into this cascade's vertical slice
+                const atlasUv = vec2(uv.x, uv.y.mul(sliceH).add(sliceY));
+                const shadow = texture(this.cloudShadowArrayNode, atlasUv);
                 const distFront = max(float(0), distanceToTop.sub(shadow.r));
                 odSum.addAssign(min(shadow.b, shadow.g.mul(distFront)));
             }

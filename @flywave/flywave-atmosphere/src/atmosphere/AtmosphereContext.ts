@@ -244,6 +244,7 @@ export class AtmosphereContext extends AtmosphereContextBase {
     // Cloud shadow state. Populated by CloudRenderNode.updateBefore() each frame.
     // Consumed by AtmosphereLightNode.setupDirect() to attenuate direct sun light.
     cloudShadowEnabled = false;
+    cloudShadowArrayNode: any = null;
     cloudShadowTextureNodes: any[] = [null, null, null, null];
     // Raw (non-temporally-resolved) shadow textures for ground shadow projection.
     // Using raw textures avoids temporal mismatch with current-frame cascade matrices.

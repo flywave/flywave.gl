@@ -140,21 +140,13 @@ export class ViewRenderManager implements IViewRenderManager {
                 const viewZUnitTex = this.passNode.getTextureNode("viewZUnit");
                 shadowLengthNode = shadowLength(this.csmShadowNode, viewZUnitTex);
             }
-            this.aerialNode = aerialPerspective(
-                convertToTexture(outputNode),
-                depthNode,
-                shadowLengthNode
-            );
+            this.aerialNode = aerialPerspective(outputNode, depthNode, shadowLengthNode);
             outputNode = this.aerialNode;
         }
 
         if (this.config.clouds?.enabled) {
             if (!this.m_cloudNode) {
-                this.m_cloudNode = cloudRender(
-                    convertToTexture(outputNode),
-                    depthNode,
-                    this.renderer
-                );
+                this.m_cloudNode = cloudRender(outputNode, depthNode, this.renderer);
                 const pending = this.pendingCloudConfig;
                 this.m_cloudNode.onReady = () => {
                     this.m_cloudNode!.onReady = null;
@@ -164,7 +156,7 @@ export class ViewRenderManager implements IViewRenderManager {
                     this.needsUpdate = true;
                 };
             } else {
-                this.m_cloudNode._colorNode = convertToTexture(outputNode);
+                this.m_cloudNode._colorNode = outputNode;
                 this.m_cloudNode._depthNode = depthNode ?? null;
             }
             outputNode = this.m_cloudNode;
