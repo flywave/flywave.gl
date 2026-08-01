@@ -118,12 +118,17 @@ export class MBStyleManager {
         for (const [sourceId, spec] of Object.entries(this.m_style.sources)) {
             const tileUrls = (spec as any).tiles ?? [];
             const url = (spec as any).url ?? '';
+            const scheme = (spec as any).scheme ?? 'xyz';
 
             if (url && tileUrls.length === 0) {
                 const tileUrl = this.resolveTileUrl(url);
                 if (tileUrl) tileUrls.push(tileUrl);
             }
 
+            // TMS scheme: flip y coordinate in tile URL template.
+            // flywave uses XYZ (y from top); TMS uses y from bottom: yTms = 2^z - 1 - yXyz.
+            // We can't modify flywave's internal y filling, so we note the scheme
+            // for the datasource to handle via a custom provider wrapper.
             const resolved: ResolvedSource = {
                 sourceId,
                 type: spec.type as any,
@@ -132,6 +137,7 @@ export class MBStyleManager {
                 maxzoom: (spec as any).maxzoom ?? 22,
                 attribution: (spec as any).attribution,
             };
+            (resolved as any).scheme = scheme;
             this.m_resolvedSources.set(sourceId, resolved);
         }
     }
@@ -151,6 +157,22 @@ export class MBStyleManager {
     }
 
     async loadSprite(spriteUrl: string): Promise<SpriteData | undefined> {
+        // Try icon_set (.pbf) format first; fall back to legacy (.json + .png).
+        const pbfUrl = spriteUrl.endsWith('.json')
+            ? spriteUrl.replace('.json', '.pbf')
+            : `${spriteUrl}.pbf`;
+        try {
+            const pbfResp = await fetch(pbfUrl);
+            if (pbfResp.ok) {
+                const data = await pbfResp.arrayBuffer();
+                const { decodeIconSet, renderIconToCanvas } = await import('./IconSetPBFDecoder');
+                const icons = decodeIconSet(data);
+                if (icons.length > 0) {
+                    return this.buildSpriteFromIconSet(icons);
+                }
+            }
+        } catch {}
+        // Fallback: legacy raster sprite (.json + .png).
         try {
             const [jsonUrl, imgExt] = spriteUrl.endsWith('.json')
                 ? [spriteUrl, 'png']
@@ -184,6 +206,49 @@ export class MBStyleManager {
             console.warn('Failed to load sprite:', spriteUrl, e);
             return undefined;
         }
+    }
+
+    /**
+     * Build a rasterized sprite atlas from decoded icon_set icons.
+     * Each icon is rasterized to a canvas, then packed into a single atlas.
+     */
+    private buildSpriteFromIconSet(icons: any[]): SpriteData {
+        const { renderIconToCanvas } = require('./IconSetPBFDecoder');
+        const json: Record<string, SpriteIconInfo> = {};
+        const dpr = 1; // pixelRatio; could be window.devicePixelRatio
+
+        // Render each icon to a canvas.
+        const canvases: Map<string, HTMLCanvasElement> = new Map();
+        let totalW = 0, maxH = 0;
+        for (const icon of icons) {
+            try {
+                const canvas = renderIconToCanvas(icon, dpr);
+                canvases.set(icon.name, canvas);
+                totalW += canvas.width + 2; // 2px padding
+                maxH = Math.max(maxH, canvas.height);
+            } catch {}
+        }
+
+        // Pack into a single row atlas (sufficient for test sprites).
+        const atlasCanvas = document.createElement('canvas');
+        atlasCanvas.width = Math.max(1, totalW);
+        atlasCanvas.height = Math.max(1, maxH);
+        const ctx = atlasCanvas.getContext('2d')!;
+        let xCursor = 0;
+        for (const [name, canvas] of canvases) {
+            ctx.drawImage(canvas, xCursor, 0);
+            json[name] = {
+                x: xCursor, y: 0,
+                width: canvas.width, height: canvas.height,
+                pixelRatio: dpr,
+            };
+            xCursor += canvas.width + 2;
+        }
+
+        const image = new Image();
+        image.src = atlasCanvas.toDataURL();
+        this.m_spriteData = { json, image };
+        return this.m_spriteData;
     }
 
     getStyle(): StyleSpecification | undefined {

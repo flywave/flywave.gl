@@ -33,6 +33,11 @@ export interface SpriteIconInfo {
 export class SpriteAtlas {
     readonly texture: THREE.Texture;
     readonly icons: Map<string, SpriteIconInfo>;
+    private m_canvas: HTMLCanvasElement | null = null;
+    private m_ctx: CanvasRenderingContext2D | null = null;
+    private m_cursorX = 0;
+    private m_cursorY = 0;
+    private m_rowHeight = 0;
 
     constructor(image: HTMLImageElement | ImageBitmap, icons: Map<string, SpriteIconInfo>) {
         this.texture = new THREE.Texture(image);
@@ -40,6 +45,64 @@ export class SpriteAtlas {
         this.texture.minFilter = THREE.LinearFilter;
         this.texture.magFilter = THREE.LinearFilter;
         this.icons = icons;
+        // Initialize canvas for dynamic additions (from the initial image).
+        this.initCanvas(image);
+    }
+
+    private initCanvas(image: HTMLImageElement | ImageBitmap): void {
+        if (typeof document === 'undefined') return;
+        const w = (image as HTMLImageElement).naturalWidth ?? (image as ImageBitmap).width ?? image.width;
+        const h = (image as HTMLImageElement).naturalHeight ?? (image as ImageBitmap).height ?? image.height;
+        // Create a larger canvas to accommodate dynamic additions.
+        const canvasW = Math.max(w * 2, 1024);
+        const canvasH = Math.max(h * 2, 1024);
+        this.m_canvas = document.createElement('canvas');
+        this.m_canvas.width = canvasW;
+        this.m_canvas.height = canvasH;
+        this.m_ctx = this.m_canvas.getContext('2d')!;
+        this.m_ctx.drawImage(image as any, 0, 0);
+        this.m_cursorX = w;
+        this.m_cursorY = 0;
+        this.m_rowHeight = 0;
+        // Replace the texture image with the canvas for dynamic updates.
+        (this.texture as any).image = this.m_canvas;
+        this.texture.needsUpdate = true;
+    }
+
+    /**
+     * Dynamically add an icon to the atlas at runtime (addImage operation).
+     * The icon is drawn to the canvas at the current cursor position.
+     */
+    addIcon(name: string, image: HTMLImageElement | HTMLCanvasElement | ImageBitmap, sdf: boolean = false): boolean {
+        if (!this.m_ctx || !this.m_canvas) return false;
+        if (this.icons.has(name)) return false;
+
+        const w = (image as any).naturalWidth ?? (image as any).width;
+        const h = (image as any).naturalHeight ?? (image as any).height;
+        const padding = 2;
+
+        // Simple row-packing.
+        if (this.m_cursorX + w + padding > this.m_canvas.width) {
+            this.m_cursorX = 0;
+            this.m_cursorY += this.m_rowHeight + padding;
+            this.m_rowHeight = 0;
+        }
+        if (this.m_cursorY + h + padding > this.m_canvas.height) return false;
+
+        this.m_ctx.drawImage(image as any, this.m_cursorX, this.m_cursorY);
+        this.icons.set(name, {
+            x: this.m_cursorX, y: this.m_cursorY,
+            width: w, height: h, pixelRatio: 1, sdf,
+        });
+        this.m_cursorX += w + padding;
+        this.m_rowHeight = Math.max(this.m_rowHeight, h);
+        this.texture.needsUpdate = true;
+        return true;
+    }
+
+    /** Remove an icon from the atlas (removeImage operation). */
+    removeIcon(name: string): boolean {
+        return this.icons.delete(name);
     }
 
     getIconUv(name: string): { uvMin: [number, number]; uvMax: [number, number] } | undefined {

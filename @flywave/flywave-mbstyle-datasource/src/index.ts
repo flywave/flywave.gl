@@ -13,6 +13,8 @@ export { MBStyleSymbolPlacement } from './MBStyleSymbolPlacement';
 export { CrossTileSymbolIndex, symbolKey } from './CrossTileSymbolIndex';
 export { TerrainController, decodeDemImage } from './TerrainController';
 export { TerrainDepthOcclusion } from './TerrainDepthOcclusion';
+export { decodeIconSet, renderIconToCanvas } from './IconSetPBFDecoder';
+export { buildGuardrailGeometry, createGuardrailMesh } from './ElevatedStructures';
 export { MBStyleRuntime } from './MBStyleRuntime';
 export { getLineAnchors, getLineCenterAnchor, LineAnchor } from './LineAnchor';
 export {

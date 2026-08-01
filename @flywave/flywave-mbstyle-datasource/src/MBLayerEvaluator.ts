@@ -324,6 +324,8 @@ export class MBLayerEvaluator {
         geometryType: string,
         featureState?: Record<string, any>,
         pitch?: number,
+        brightness?: number,
+        worldview?: string,
     ): EvaluatedLayer[] {
         const bySL = this.m_layersBySource.get(sourceId);
         if (!bySL) return [];
@@ -336,7 +338,7 @@ export class MBLayerEvaluator {
         }
         const results: EvaluatedLayer[] = [];
 
-        const ctx: MBExpressionContext = { zoom, pitch, feature, featureState, _config: this.m_config } as any;
+        const ctx: MBExpressionContext = { zoom, pitch, feature, featureState, _config: this.m_config, brightness, worldview } as any;
 
         for (const pl of candidates) {
             if (pl.visibility === 'none') continue;
@@ -352,7 +354,11 @@ export class MBLayerEvaluator {
 
             const paint: EvaluatedPaint = {};
             for (const [key, def] of Object.entries(pl.paintDefs)) {
-                if (def.type === 'expression') {
+                // Gradient/ramp expressions use shader-varying inputs (line-progress,
+                // heatmap-density) not available in JS. Store raw for patcher.
+                if (key === 'line-gradient' || key === 'line-border-gradient' || key === 'heatmap-color') {
+                    paint[key] = def.value;
+                } else if (def.type === 'expression') {
                     paint[key] = MBExpressionEngine.evaluate(def.value, ctx);
                 } else {
                     paint[key] = def.value;

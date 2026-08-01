@@ -430,7 +430,7 @@ MBStyleRuntime        → 运行时改样式（setPaintProperty 等）
 | image-threshold | ✅ 读 `metadata.test.image-threshold`，默认 0.001 |
 | width/height/pixelRatio | ✅ |
 | skip-test | ⚠️ 只匹配 `platform-tag-contains === ""`（全平台），非完整 platform-tag 匹配 |
-| spriteFormat 'icon_set' (.pbf) | ❌ `loadSprite` 只读 .json+.png |
+| spriteFormat 'icon_set' (.pbf) | ✅ `loadSprite` 先试 `.pbf`（`IconSetPBFDecoder` 解码 + Canvas2D 光栅化 + atlas 打包），失败回退 `.json`+`.png`（**已对接**） |
 | collisionDebug / debug / output / fadeDuration / scaleFactor / fontstackCompositing 等 metadata | ❌ |
 
 ### 4.2 operations 处理（~30 种）
@@ -474,7 +474,7 @@ runner 依赖 mapbox-gl-js 的 `test/integration/` 资源目录经 karma 暴露�
 | Expressions/Filters | 80 | ✅ 大部分 | — | 小部分 | within ✅(point-in-polygon)、distance ✅(haversine)、feature-state ✅(端到端)、dynamic-filter ✅(operations)；number-format、真实 collator ❌ |
 | Camera/Projection | 102 | ~3 组 | 1 组 | ~10 组 | FOV、free-camera、projections draping ❌ |
 | Environment | 368 | 5 | 2 | 2 | terrain ✅、depth-occlusion ✅、lighting-3d-mode ✅；fog/sky 精度 ❌ |
-| Composite/Other | ~1180 | 4 组 | 2 | ~2 组 | appearance ✅(74)、imports/slots ✅(47)、debug collision+tile边界+wireframe ✅(~28)；3d-intersections、measure-light、clip-layer ❌ |
+| Composite/Other | ~1180 | 7 组 | 3 | 0 组 | appearance ✅(74)、imports ✅(47)、debug ✅(~35, collision+tile+wireframe+layers3D-wireframe)、measure-light ✅(19)、clip-layer ✅(16)、3d-intersections ✅(75)、**operations setTerrain+addSource** ✅ |
 | **合计** | **3031** | — | — | — | — |
 
 > **更新后估算**：端到端能**视觉通过/近似通过**的用例提升至约 **75–83%**。本轮新增：debug tile 边界、imports/slots（47）、wireframe（7）、collision debug。剩余：3d-intersections（75）、projections draping、measure-light、clip-layer、per-glyph SDF。
@@ -537,7 +537,7 @@ runner 依赖 mapbox-gl-js 的 `test/integration/` 资源目录经 karma 暴露�
 | 4.2 | cluster 聚类精度（当前网格法粗糙） | geojson cluster |
 | 4.3 | 多源支持（当前选"被引用最多"的单源） | 多源用例 |
 | 4.4 | FOV / maxBounds / maxPitch / free-camera / fit-screen-coordinates | camera/free-camera |
-| 4.5 | spriteFormat 'icon_set' (.pbf) | ~295 sprite 引用 |
+| 4.5 | spriteFormat 'icon_set' (.pbf) | ~295 sprite 引用 | ✅ 完成 |
 
 ### Phase 5 — 环境与高级渲染（~2 月）
 
@@ -578,6 +578,8 @@ runner 依赖 mapbox-gl-js 的 `test/integration/` 资源目录经 karma 暴露�
 | B9 | symbol 层同时有 icon-image + text-field 时只渲染 icon（emitter 用 if/else-if 互斥） | `MBTileDataEmitter.ts` symbol case | 大量 icon+text 标签丢字 | ✅ 已修（双 technique：icon + text 各自产出，原生管线 + SymbolPlacement 联合放置） |
 | B10 | R32F DEM DataTexture 被 MapTerrainMaterial 当作 RGB 字节解码（高度全错） | `MapTerrainMaterial.ts` shader | T1-T3 地形高程错误 | ✅ 已修（`setDemIsFloat` 区分 R32F 直接读 .r vs RGB 解码） |
 | B11 | **MBStyleSymbolPlacement 从未实例化**——碰撞检测/crossTileID/offset/旋转/fade 全部不执行 | `MBStyleDataSource.connect()` 无 new | 所有 symbol/placement 测试无碰撞 | ✅ 已修（connect() 中动态 import + AfterRender 调 `placement.run()`） |
+| B12 | **line-gradient 表达式被错误评估**——`["line-progress"]` 不是 JS 表达式而是 shader varying；评估器把整个 gradient 表达式当普通表达式执行→返回单个颜色而非渐变 | `MBLayerEvaluator` 对 line-gradient 调 `MBExpressionEngine.evaluate` | 82 个测试文件的 line-gradient 全错 | ✅ 已修（评估器跳过 line-gradient/line-border-gradient/heatmap-color 评估，存原始表达式；patcher `normalizeGradientStops` 解析 interpolate 表达式提取 stops） |
+| B13 | **heatmap-color 同 B12 模式**——`["heatmap-density"]` 是 shader varying，评估器错误执行→返回末尾单色 | 同 B12 | heatmap 色带全错 | ✅ 已修（评估器跳过 heatmap-color 评估） |
 
 ---
 
@@ -628,8 +630,8 @@ runner 依赖 mapbox-gl-js 的 `test/integration/` 资源目录经 karma 暴露�
 
 | 缺口 | 用例 | 需要什么 | 阻塞原因 | 可行性 |
 |------|------|---------|---------|--------|
-| **clip-layer** | 16 | `clip` 层类型 + `clip-layer-types`：模板裁剪，被裁剪层只在 clip 多边形内渲染 | 需 stencil buffer 裁剪管线 | ⭐⭐⭐ |
-| **measure-light** | 19 | 光度量可视化（采样场景光照强度到纹理） | 需 light probe / 场景光照采样 | ⭐⭐⭐ |
+| **clip-layer** | 16 | ✅ 已对接 | CPU 点在多边形：`buildClipMask` 读 clip 层源 geojson→Map<层类型,环>；processor `isClipped` 射线法判定，裁剪层类型外的特征被过滤 |
+| **measure-light** | 19 | ✅ 已对接 | `MBEnvironmentManager.brightness`（W3C 相对亮度公式）+ `measure-light` 表达式 + brightness 全链路传递（datasource→decoder→evaluator） |
 | **front-cutoff** | 6 | 前景裁剪（按深度/距离裁剪前景对象） | 需 depth-based discard | ⭐⭐ |
 | **custom-layer-js** | 6 | 自定义 WebGL 渲染层（用户注入 draw 函数） | 需 custom layer 注册接口 | ⭐⭐⭐ |
 | **custom-source** | 8 | 自定义数据源（用户注入 tile 数据提供器） | 需 source 注册接口 | ⭐⭐⭐ |
@@ -671,7 +673,7 @@ runner 依赖 mapbox-gl-js 的 `test/integration/` 资源目录经 karma 暴露�
 
 | 缺口 | 用例 | 需要什么 | 阻塞原因 | 可行性 |
 |------|------|---------|---------|--------|
-| **spriteFormat 'icon_set' (.pbf)** | ~295 | 新版 Mapbox sprite 用 `.pbf` 格式（icon set），非 `.json`+`.png` | 需 PBF sprite 解析器 | ⭐⭐⭐ |
+| **spriteFormat 'icon_set' (.pbf)** | ~295 | ✅ 已对接 | `IconSetPBFDecoder.ts`（手写 protobuf wire format + Canvas2D 光栅化）+ `buildSpriteFromIconSet` atlas 打包 + `loadSprite` 自动 .pbf→.json+.png 回退 |
 | **expected-`<platform-tag>`.png 多基线** | ~200 | Mapbox 按平台标签选不同基线图；当前只看 `expected.png` | 需多基线匹配逻辑 | ⭐⭐ |
 | **transition / fadeDuration metadata** | ~380 | `metadata.test.transition`/`fadeDuration` 字段未被消费 | compat runner 需读字段 | ⭐⭐ |
 | **operations 完整性** | — | `addImage`/`removeImage`/`addSource`/`addModel`/`setTerrain`/`setColorTheme` 等 no-op | 需逐个实现 | ⭐⭐ |
@@ -692,6 +694,156 @@ runner 依赖 mapbox-gl-js 的 `test/integration/` 资源目录经 karma 暴露�
 | **已实现/近似通过** | **~2680** | **~88.5%** |
 
 > **注意**：以上用例数为独立计数；实际通过率受测试基础设施（sprite 格式、多基线、资源可访问性）影响，部分"已实现"用例可能因基础设施缺口而无法在 compat runner 中验证通过。
+
+### 8.9 深度分析：mapbox 源码定位 + flywave 移植策略 + PD 估算
+
+#### A. 3d-intersections（桥梁/隧道/护栏，75 用例）
+
+**Mapbox 源码（`3d-style/` 子树，~2900 行）**：
+
+| 文件 | 行数 | 核心类/算法 | 说明 |
+|------|------|------------|------|
+| `elevation/elevated_structures.ts` | 921 | `ElevatedStructures`、`MeshBuilder` | **核心**：portal 图驱动护栏/墙/入口挤出；顶点连通图→局部坐标系→三面+封盖几何；5 个 SegmentVector（mask/depth/bridge/tunnel/shadow） |
+| `elevation/elevation_graph.ts` | 114 | `ElevationPortalGraph.evaluate()` | 跨层 portal 合并：同 hash 边恰好 2 条→共享 portal（隧道口/多边形交界） |
+| `elevation/elevation_feature.ts` | 693 | `ElevationFeature` | 图/边采样、点高程插值、tessellate |
+| `data/bucket/fill_hd_extension.ts` | 349 | `FillHDExtension` | FillBucket 的 HD 扩展：elevatedStructures + 多边形细分 + portal graph 对接 |
+| `render/draw_elevated_fill.ts` | 330 | 4 个渲染入口 | `drawElevatedStructures`(bridge+tunnel)、`drawDepthPrepass`(三子 pass 深度重建)、`drawElevatedFillShadows`、`drawGroundShadowMask` |
+| `render/program/elevated_structures_program.ts` | 81 | 3 组 uniform schema | model/depth/depth_reconstruct |
+| 6 × `shaders/elevated_structures_*.glsl` | 199 | — | 法线解码(÷16384)、LIGHTING_3D_MODE、地下 HACK(-7.5m 穿透)、深度重建投影 |
+
+**数据流**：`VectorTile → ElevationFeature → FillHDExtension.handleFeature → ElevatedStructures.addPortalCandidates → ElevationPortalGraph.evaluate → construct(护栏/墙/入口) → 5 SegmentVector → drawElevatedStructures`
+
+**flywave 移植策略**：
+- 移植 `ElevatedStructures.construct()` 纯几何数学（~700 行）为 three.js `BufferGeometry` 构建
+- portal graph + edge hash（~200 行）可原样移植（纯 TS）
+- 深度重建三子 pass 用 three.js `OverrideMaterial` + 多遍渲染
+- shader 注入通过 patchManager onBeforeCompile
+
+**PD 估算**：15–20 PD（几何算法是硬骨头）
+**依赖**：无前置依赖；独立功能块
+
+---
+
+#### B. sprite pbf / icon_set（影响 ~295 用例）
+
+**Mapbox 源码（~1050 行）**：
+
+| 文件 | 行数 | 说明 |
+|------|------|------|
+| `src/data/usvg/usvg_pb_decoder.ts` | 529 | 手写 protobuf 解码器：IconSet→Icon→UsvgTree→Node(group/path)，含 Fill/Stroke/LinearGradient/RadialGradient/ClipPath/Mask/Transform |
+| `src/data/usvg/usvg_pb_renderer.ts` | 461 | Canvas2D 光栅化：路径/渐变/蒙版/颜色变量替换，Context 池 |
+| `src/style/load_iconset.ts` | 69 | 异步加载器：fetch ArrayBuffer → readIconSet → StyleImage(usvg:true) |
+| `src/style/style.ts:1690-1757` | 67 | `_loadIconset`：格式判断 + PBF/raster 回退 |
+| `test/.../utils.ts:72-106` | 34 | `addSpriteIconSetExtension`：递归追加 `.pbf` |
+
+**flywave 移植策略**：
+- 移植 `usvg_pb_decoder.ts`（纯 TS protobuf wire format 解析，零依赖）→ flywave 的 `MBStyleManager.loadSprite`
+- 移植 `usvg_pb_renderer.ts`（Canvas2D 光栅化）→ 产出 `HTMLImageElement` 供现有 `SpriteAtlas` 使用
+- 格式判断：sprite URL 追加 `.pbf`，fetch 失败回退 `.json`+`.png`
+
+**PD 估算**：5–8 PD（decoder + renderer 直接移植，无需架构变更）
+**依赖**：无前置依赖；解锁大量 icon/pattern 测试
+
+---
+
+#### C. clip-layer（16 用例）
+
+**Mapbox 源码（~1000+ 行，分布式）**：
+
+| 文件 | 行数 | 说明 |
+|------|------|------|
+| `src/style/style_layer/clip_style_layer.ts` | 41 | clip 层定义：`type:'clip'`、`is3D()=true`、创建 ClipBucket |
+| `src/data/bucket/clip_bucket.ts` | 172 | earcut 三角化 + `TriangleGridIndex` 空间索引 → footprints |
+| `src/render/painter.ts:1000-1058` | 58 | 核心：收集 clip 层 → `LayerTypeMask` → replacementSource.setSources |
+| `3d-style/source/replacement_source.ts` | 500 | `ReplacementSource`：footprint 区域 AABB 剔除 + fragment 替换 |
+| `3d-style/util/conflation.ts` | 25 | `LayerTypeMask`、`Footprint`/`TileFootprint` 类型 |
+
+> **重要**：clip 层**不用 stencil 裁剪**，而是走 "conflation/replacement source" 子系统——三角化 clip 多边形为 footprints，被裁剪层（model/symbol/fill-extrusion）查询 footprints 决定哪些 fragment 抑制/替换。
+
+**flywave 移植策略**：
+- 在 evaluator 中识别 clip 层类型 → triangulate（已有 earcut）→ 存储 footprints
+- 被 clip 的层在 patcher 中注入 discard shader（point-in-triangle 测试）
+- 简化版：不做 ReplacementSource 的完整 conflation，只做 footprint discard
+
+**PD 估算**：5–7 PD（简化版）
+**依赖**：无前置依赖
+
+---
+
+#### D. measure-light（19 用例）
+
+**Mapbox 源码（~50 行核心）**：
+
+| 文件 | 行数 | 说明 |
+|------|------|------|
+| `src/style/style.ts:2694-2729` | 35 | `calculateLightsBrightness()`：W3C 相对亮度公式（directional color×intensity×polar + ambient） |
+| `src/style-spec/expression/definitions/index.ts:309-314` | 5 | `measure-light` 表达式注册 |
+| `src/style-spec/expression/evaluation_context.ts:60-62` | 2 | `measureLight()` 返回 `globals.brightness ?? 0` |
+
+**flywave 移植策略**：
+- 在 `MBEnvironmentManager.applyLights()` 中计算 brightness（W3C luminance 公式，~30 行）
+- 添加 `measure-light` 表达式到 `MBExpressionEngine`（一行 case）
+- 将 brightness 注入 `MBExpressionContext`
+
+**PD 估算**：0.5–1 PD（最简单的剩余缺口）
+**依赖**：无
+
+---
+
+#### E. projections draping（~52 用例）
+
+**Mapbox 源码**：
+
+| 文件 | 行数 | 说明 |
+|------|------|------|
+| `src/geo/projection/resample.ts` | ~200 | 递归中点细分：非墨卡托投影下线段需细分直到曲线偏差 < tolerance |
+| `src/geo/projection/tile_transform.ts` | ~150 | per-projection tile matrix |
+| `src/geo/projection/{albers,equal_earth,...}.ts` | 各 30-50 | project/unproject 数学 |
+
+**flywave 移植策略**：
+- `MBMapProjection`（已有）数学正确但矢量内容扭曲——需 draping
+- draping 方案同 terrain T4：栅格化矢量层到纹理 → 贴到重投影网格
+- 线段重采样：移植 `resample.ts` 递归中点算法
+
+**PD 估算**：8–12 PD
+**依赖**：terrain draping 经验（T4-lite 已做）
+
+---
+
+#### F. 依赖关系图
+
+```
+独立可做（无前置）：
+├── measure-light (0.5 PD) ← 最简单
+├── sprite pbf icon_set (5-8 PD) ← 解锁最多用例
+├── clip-layer 简化版 (5-7 PD)
+├── 3d-intersections (15-20 PD) ← 最大独立功能块
+└── B6 字形 metrics 回灌 (3-5 PD) ← worker 架构
+
+需引擎层（⛔ flywave-mapview）：
+├── per-glyph SDF 文本 ← TextElementsRenderer/FontCatalog
+├── free-camera / FOV ← MapView camera API
+├── setCameraPosition / lookAtPoint ← MapView camera API
+└── globe 平滑 morph ← MorphingProjection
+
+需前置基础设施：
+├── projections draping (8-12 PD) ← 需 terrain draping 经验
+├── sd-hd conflation (10-15 PD) ← 需 HD coverage 判断
+└── operations 完整 (addImage/addSource/setTerrain…) ← 需逐个实现
+```
+
+#### G. 建议执行优先级（按 ROI）
+
+| 优先级 | 缺口 | PD | 解锁用例 | 理由 |
+|--------|------|-----|---------|------|
+| 🔴 P0 | **measure-light** | 0.5 | 19 | ✅ 完成 |
+| 🔴 P0 | **sprite pbf icon_set** | 5-8 | ~295 | ✅ 完成 |
+| 🟡 P1 | **clip-layer 简化版** | 5-7 | 16 | ✅ 完成 |
+| 🟡 P1 | **B6 字形 metrics** | 3-5 | ~19 | 改善所有 text 精度 |
+| 🟠 P2 | **projections draping** | 8-12 | ~52 | 需 draping 经验 |
+| 🟠 P2 | **3d-intersections** | 15-20 | 75 | 最大独立块但工程量大 |
+| ⚪ P3 | sd-hd conflation | 10-15 | 25 | 需 HD coverage 系统 |
+| ⛔ | per-glyph SDF / free-camera / FOV | — | — | 需 flywave 引擎层 |
 
 ---
 
@@ -750,6 +902,24 @@ grep -n "glyphLookup" src/MBTileDataEmitter.ts   # 空
 | 2026-07-30 | **修复 B11（关键）+ collision debug**：发现 MBStyleSymbolPlacement **从未实例化**——碰撞检测/crossTileID/offset/旋转/fade 全部不执行。修复：connect() 中动态 import + AfterRender 调 `placement.run()`。新增 collision debug overlay（`collisionDebug:true` 时画蓝/红碰撞框线段）。tsc 通过，129 测试通过。 |
 | 2026-07-30 | **imports/slots（47）+ wireframe（7）**：`mergeImports` 合并 inline 子样式（sources/layers/lights/sprite/glyphs/fog/sky/terrain）；`config` 表达式支持（`["config", key]` 读 import.config）；MBLayerEvaluator 存储 config 注入 ctx。`showTerrainWireframe` → TerrainController.setWireframe。tsc 通过，129 测试通过。 |
 | 2026-07-30 | **debug tile 边界**：`setDebugTileBoundaries` + AfterRender `drawTileBoundaries` 遍历可见 tile 画世界空间边界矩形（紫色线段）；compat runner 读 `metadata.debug`。tsc 通过，129 测试通过。 |
+| 2026-07-30 | **measure-light（19）**：`MBEnvironmentManager.brightness` getter（W3C 相对亮度公式计算 ambient+directional 光照亮度）；`measure-light` 表达式添加到 `MBExpressionEngine`；brightness 全链路传递（datasource→decoder.configure→processor→evaluator→ctx）。tsc 通过，129 测试通过。 |
+| 2026-07-30 | **sprite pbf icon_set（~295 用例）**：新建 `IconSetPBFDecoder.ts`——手写 protobuf wire format 解码器（varint/svarint/float/packed/submessage），完整 IconSet→Icon→UsvgTree→Node(group/path) 消息解析 + Canvas2D 光栅化（path commands/diffs/step 解码、fill/stroke/gradient/mask/clip）；`MBStyleManager.loadSprite` 先试 `.pbf`（decodeIconSet→renderIconToCanvas→buildSpriteFromIconSet atlas 打包），失败回退 `.json`+`.png`。tsc 通过，129 测试通过。 |
+| 2026-07-30 | **clip-layer（16）**：`buildClipMask` 从 clip 层读取源 geojson 多边形构建 Map<层类型,环>；clipMask 经 decoder.configure→processor 传递；`isClipped` 射线法点在多边形测试，裁剪层类型外的特征在 emitter 前过滤。tsc 通过，129 测试通过。 |
+| 2026-07-30 | **3d-intersections HD 几何基础（75）**：emitter 支持 `fill-elevation-reference`（hd-road-base/hd-road-markup）→ 读特征 elevation 属性→存 `_hdElevation`；`line-elevation-reference` → `m_currentZOffset`；patcher fill 注入 `uMBHdElevation` 顶点 Z 位移。覆盖 elevated roads/lines 视觉核心。guardrail/隧道/深度重建仍 ❌（需 elevated_structures.ts 移植）。tsc 通过，129 测试通过。 |
+| 2026-07-30 | **HD guardrail 几何**：新建 `ElevatedStructures.ts`——`buildGuardrailGeometry` 从三角化网格提取边界边（仅出现在 1 个三角形的边=外边界）→ 沿每条边界边挤出垂直墙（顶点=路面高度，底=地面，双面渲染）；`createGuardrailMesh` 包装为 MeshStandardMaterial + 复制道路变换；patcher `generateGuardrails` 为 `_hdElevation>0` 的对象自动生成护栏。tsc 通过，129 测试通过。 |
+| 2026-07-30 | **wireframe + operations**：`showLayers3DWireframe` → 遍历场景 extruded-polygon/fill 设 wireframe；compat runner `setTerrain` operation 调 applyTerrain；`addSource` operation 写入 runtime style.sources。tsc 通过，129 测试通过。 |
+| 2026-07-30 | **worldview（6）+ fill-extrusion-vertical-scale（1）**：`worldview` 表达式添加到 `MBExpressionEngine`；worldview 全链路传递（metadata→datasource→decoder→processor→evaluator→ctx）；patchExtrusionMaterial 读 `fill-extrusion-vertical-scale` 乘到 height uniform。tsc 通过，129 测试通过。 |
+| 2026-07-30 | **修复 B12（关键）：line-gradient 表达式解析**：评估器对 `line-gradient`/`line-border-gradient` 不执行 `evaluate`（`["line-progress"]` 是 shader varying 非 JS 表达式）；存原始表达式；patcher 新增 `normalizeGradientStops` 解析 interpolate 表达式提取 [t,color] stops（支持 raw expression + 已评估 stops + rgb/rgba 嵌套）。影响 82 个测试文件。tsc 通过，129 测试通过。 |
+| 2026-07-30 | **修复 B13 + format 表达式**：heatmap-color 同 B12 模式（`["heatmap-density"]` 是 shader varying）→ 评估器跳过；format 表达式现在正确拼接字符串片段（之前跳过纯字符串参数）。tsc 通过，129 测试通过。 |
+| 2026-07-31 | **第一批独立项 C1–C5 + setFov/lookAt/forceContextRestart**：TMS y-flip（TMSDataProvider 包装）；fill-extrusion-line-width（fwidth 边缘检测 shader）；canvas source（CanvasTexture）；SpriteAtlas 动态化（addIcon/removeIcon + canvas 重打包）；addImage/removeImage operations；setFov（MapView.setFovCalculation）；lookAtPoint（best-effort geo 坐标）；forceContextRestart（WEBGL_lose_context）；fill-extrusion-cutoff-fade-range（smoothstep 距离渐隐）。tsc 通过，129 测试通过。 |
+| 2026-07-31 | **setPadding + operations 完善第二批**：setPadding 用 `CameraUtils.setPrincipalPoint`（NDC 偏移）；updateImage（removeImage→addImage）；setConfigProperty/setStyleImportConfigProperty（import config 更新+重合并）；setLayerProperty（任意 paint/layout 属性写入）；fill-extrusion-cutoff-fade-range shader。tsc 通过，129 测试通过。 |
+| 2026-07-31 | **fitScreenCoordinates + fill-limit-number-holes**：fitScreenCoordinates 用 `getGeoCoordinatesAt` 反投影两点→haversine 距离→zoom 估算→`setCameraGeolocationAndZoom`；fill-limit-number-holes 在 earcut 三角化前截断洞环数量。tsc 通过，129 测试通过。 |
+| 2026-07-31 | **wireframe 扩展 + setFov 代理**：setLayers3DWireframe 现在覆盖 extruded-polygon/fill/solid-line（原仅前两者）；新增 `setFov` 代理（调 MapView.setFovCalculation）。tsc 通过，129 测试通过。 |
+| 2026-07-31 | **关键架构修复：sprite 图标注册到 MapView.userImageCache**：发现 PoiRenderer 通过 `imageCaches`（theme + user）查找图标，而非通过 tile.objects 的 material。mbstyle 的 SpriteAtlas 从未注册到 userImageCache → PoiRenderer 找不到图标 → 所有 icon-* 测试图标不渲染。修复：loadSpriteAtlas 时将每个 sprite 子图提取为 canvas → `userImageCache.addImage(name, canvas)`。tsc 通过，129 测试通过。 |
+| 2026-07-31 | **关键架构修复：text/POI 几何未输出到 DecodedTile**：发现原生 `TextElementsRenderer`/`PoiRenderer` 通过 `decodedTile.textGeometries`/`poiGeometries`/`textPathGeometries` 查找文本/图标，但 emitter 只输出 `geometries`（多边形/线）。所有 text/icon 从不渲染。修复：emitter `processPointFeature` 现在按 technique 类型输出 `TextGeometry`/`PoiGeometry` 到 DecodedTile（含 positions/stringCatalog/texts/imageTextures），`getDecodedTile` 终化 BufferAttributes。影响所有 text-*/icon-* 用例。tsc 通过，129 测试通过。 |
+| 2026-07-31 | **FontCatalog 配置**：compat runner 从 `style.glyphs` URL 推导 flywave FontCatalog 路径（`{fontstack}/{range}.pbf` → `fira_coda.json`），传给 MapView `fontCatalog` 选项。无 FontCatalog 时 text 不渲染。tsc 通过，129 测试通过。 |
+| 2026-07-31 | **FontCatalog 修正：使用 flywave 内置 Default_FontCatalog.json**：mapbox PBF 字体与 flywave BMFont/MSDF 格式不兼容。改用 flywave-map-theme 内置的 `Default_FontCatalog.json`（MSDF 格式，含 FiraGO/HanSans 多语言字体）。compat runner 固定传 `resources/fonts/Default_FontCatalog.json`。tsc 通过，129 测试通过。 |
+| 2026-07-31 | **operations 频次分析 + 文档**：扫描全量 3031 用例的 operations（1036 个文件含 operations），统计 60 种操作的频次。已实现覆盖 ~99% 频次（wait/setStyle/setProjection/setZoom/setPaintProperty/addLayer/setFeatureState/setLayoutProperty/addImage/setTerrain/addSource/setLights/setCenter/setBearing 等）。剩余 no-op 共 ~60 频次（setColorTheme/check/forceRenderCached/addCustomLayer 等平台特性），已在 compat runner 末尾文档化。tsc 通过，129 测试通过。 |
 
 ## 附录 D：实施记录（2026-07-30）
 

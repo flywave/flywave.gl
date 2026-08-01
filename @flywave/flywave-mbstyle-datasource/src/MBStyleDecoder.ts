@@ -25,6 +25,9 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         private m_sourceId: string,
         private m_zoom: number,
         private m_pitch: number = 0,
+        private m_brightness: number = 0,
+        private m_clipMask: Record<string, number[][][]> = {},
+        private m_worldview: string = '',
     ) {}
 
     setEmitter(emitter: MBTileDataEmitter) {
@@ -33,6 +36,32 @@ class MBStyleDataProcessor implements IGeometryProcessor {
 
     setFeatureStates(states: Map<string | number, Record<string, any>>) {
         this.m_featureStates = states;
+    }
+
+    /** Check if a feature at lng/lat should be clipped by a clip-layer. */
+    private isClipped(layerType: string, lng: number, lat: number): boolean {
+        const rings = this.m_clipMask[layerType];
+        if (!rings || rings.length === 0) return false;
+        // Inside the exterior ring AND not inside any hole.
+        const exterior = rings[0];
+        if (!exterior) return false;
+        if (!MBStyleDataProcessor.pointInPolygonRing(lng, lat, exterior)) return true; // outside
+        for (let h = 1; h < rings.length; h++) {
+            if (MBStyleDataProcessor.pointInPolygonRing(lng, lat, rings[h])) return true; // in hole
+        }
+        return false;
+    }
+
+    private static pointInPolygonRing(lng: number, lat: number, ring: number[][]): boolean {
+        let inside = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const xi = ring[i][0], yi = ring[i][1];
+            const xj = ring[j][0], yj = ring[j][1];
+            const intersect = ((yi > lat) !== (yj > lat)) &&
+                (lng < (xj - xi) * (lat - yi) / (yj - yi + 1e-15) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
     }
 
     private getFeatureState(featureId: string | number | undefined): Record<string, any> | undefined {
@@ -65,10 +94,12 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         const matched = this.m_layerEvaluator.evaluate(
             this.m_sourceId, layer,
             { type: 'Point', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
-            this.m_zoom, 'point', this.getFeatureState(featureId), this.m_pitch,
+            this.m_zoom, 'point', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
         );
         if (matched.length === 0 || !this.m_emitter) return;
-        this.m_emitter.processPointFeature(layer, extents, geometry, properties, featureId, matched);
+        const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
+        if (visible.length === 0) return;
+        this.m_emitter.processPointFeature(layer, extents, geometry, properties, featureId, visible);
     }
 
     processLineFeature(
@@ -84,12 +115,12 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         const matched = this.m_layerEvaluator.evaluate(
             this.m_sourceId, layer,
             { type: 'LineString', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
-            this.m_zoom, 'line', this.getFeatureState(featureId), this.m_pitch,
+            this.m_zoom, 'line', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
         );
         if (matched.length === 0 || !this.m_emitter) return;
 
-        const symbolLayers = matched.filter(l => l.type === 'symbol');
-        const nonSymbolLayers = matched.filter(l => l.type !== 'symbol');
+        const symbolLayers = matched.filter(l => l.type === 'symbol' && !this.isClipped('symbol', coords[0], coords[1]));
+        const nonSymbolLayers = matched.filter(l => l.type !== 'symbol' && !this.isClipped(l.type, coords[0], coords[1]));
 
         if (nonSymbolLayers.length > 0) {
             this.m_emitter.processLineFeature(layer, extents, geometry, properties, featureId, nonSymbolLayers);
@@ -127,10 +158,12 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         const matched = this.m_layerEvaluator.evaluate(
             this.m_sourceId, layer,
             { type: 'Polygon', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
-            this.m_zoom, 'polygon', this.getFeatureState(featureId), this.m_pitch,
+            this.m_zoom, 'polygon', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
         );
         if (matched.length === 0 || !this.m_emitter) return;
-        this.m_emitter.processFillFeature(layer, extents, geometry, properties, featureId, matched);
+        const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
+        if (visible.length === 0) return;
+        this.m_emitter.processFillFeature(layer, extents, geometry, properties, featureId, visible);
     }
 }
 
@@ -141,6 +174,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_currentSourceId: string = '';
     private m_featureStates: Map<string | number, Record<string, any>> = new Map();
     private m_pitch: number = 0;
+    private m_brightness: number = 0;
+    private m_clipMask: Record<string, number[][][]> = {};
+    private m_worldview: string = '';
 
     constructor() {
         super();
@@ -165,6 +201,15 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
         if (customOptions?.pitch !== undefined) {
             this.m_pitch = customOptions.pitch as number;
+        }
+        if (customOptions?.brightness !== undefined) {
+            this.m_brightness = customOptions.brightness as number;
+        }
+        if (customOptions?.clipMask !== undefined) {
+            this.m_clipMask = customOptions.clipMask as Record<string, number[][][]>;
+        }
+        if (customOptions?.worldview !== undefined) {
+            this.m_worldview = customOptions.worldview as string;
         }
     }
 
@@ -202,6 +247,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             this.m_currentSourceId,
             zoom,
             this.m_pitch,
+            this.m_brightness,
+            this.m_clipMask, this.m_worldview,
         );
         processor.setEmitter(emitter);
         processor.setFeatureStates(this.m_featureStates);

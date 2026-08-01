@@ -17,6 +17,33 @@ export class MBEnvironmentManager {
 
     /** Whether 3D lighting is active (affects vector-layer shading). */
     get hasLighting(): boolean { return this.m_directionalLight !== null; }
+
+    /**
+     * Scene brightness for `measure-light` expressions. Computed from the
+     * ambient + directional lights using the W3C relative-luminance formula.
+     * Reference: mapbox-gl-js style.ts:2694-2729 calculateLightsBrightness().
+     */
+    get brightness(): number {
+        const ambient = this.m_ambientLight;
+        const directional = this.m_directionalLight;
+        if (!ambient && !directional) return 0;
+
+        const relativeLuminance = (color: THREE.Color): number => {
+            // W3C: L = 0.2126*R_lin + 0.7152*G_lin + 0.0722*B_lin
+            // Approximate with sRGB-to-linear gamma.
+            const lin = (c: number) => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+            return 0.2126 * lin(color.r) + 0.7152 * lin(color.g) + 0.0722 * lin(color.b);
+        };
+
+        let total = 0;
+        if (ambient) {
+            total += relativeLuminance(ambient.color) * ambient.intensity;
+        }
+        if (directional) {
+            total += relativeLuminance(directional.color) * directional.intensity;
+        }
+        return Math.round(total * 1e6) / 1e6;
+    }
     /** Lighting state for vector-layer Lambert injection (null if no lights). */
     get lightingState(): {
         dir: THREE.Vector3; dirColor: THREE.Color;
@@ -518,22 +545,32 @@ export class MBEnvironmentManager {
         const sources = style.sources ?? {};
         for (const [, src] of Object.entries(sources)) {
             const source = src as any;
-            if (source.type !== 'image') continue;
+            if (source.type !== 'image' && source.type !== 'canvas') continue;
             if (!source.coordinates || source.coordinates.length < 4) continue;
 
-            const imgUrl = (source.url ?? '').replace(
-                /^local:\/\//,
-                '/base/mapbox-gl-js/test/integration/',
-            );
-            if (!imgUrl) continue;
-
-            const coords = source.coordinates;
+            // Canvas source: use the canvas element directly; Image source: fetch URL.
+            let texture: THREE.Texture;
             try {
-                const loader = new THREE.TextureLoader();
-                const texture = await loader.loadAsync(imgUrl);
+                if (source.type === 'canvas') {
+                    const canvasId = source.canvas;
+                    const canvasEl = typeof document !== 'undefined'
+                        ? (document.getElementById(canvasId) as HTMLCanvasElement)
+                        : null;
+                    if (!canvasEl) continue;
+                    texture = new THREE.CanvasTexture(canvasEl);
+                } else {
+                    const imgUrl = (source.url ?? '').replace(
+                        /^local:\/\//,
+                        '/base/mapbox-gl-js/test/integration/',
+                    );
+                    if (!imgUrl) continue;
+                    const loader = new THREE.TextureLoader();
+                    texture = await loader.loadAsync(imgUrl);
+                }
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
 
+                const coords = source.coordinates;
                 const proj = (this.m_mapView as any).projection;
                 if (!proj) continue;
 

@@ -99,6 +99,17 @@ export class MBExpressionEngine {
                 return (ctx as any)._config?.[configKey] ?? null;
             }
 
+            case 'measure-light': {
+                // Returns precomputed scene brightness (from ambient + directional
+                // lights). The brightness is stored on the context by the evaluator.
+                return (ctx as any).brightness ?? 0;
+            }
+
+            case 'worldview': {
+                // Returns the current geographic worldview (e.g. "AD", "JP").
+                return (ctx as any).worldview ?? '';
+            }
+
             case 'geometry-type':
                 return feature?.type ?? null;
 
@@ -395,9 +406,11 @@ export class MBExpressionEngine {
 
             case 'format': {
                 let result = '';
-                for (let i = 0; i < args.length; i++) {
-                    if (Array.isArray(args[i])) {
-                        result += String(this.exec(args[i], ctx) ?? '');
+                for (const arg of args) {
+                    if (Array.isArray(arg)) {
+                        result += String(this.exec(arg, ctx) ?? '');
+                    } else if (typeof arg === 'string') {
+                        result += arg;
                     }
                 }
                 return result;

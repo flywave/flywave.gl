@@ -8,6 +8,9 @@ import {
     GeometryType,
     AttributeMap,
     InterleavedBufferAttribute,
+    TextGeometry,
+    TextPathGeometry,
+    PoiGeometry,
 } from '@flywave/flywave-datasource-protocol';
 import { TileKey, webMercatorProjection } from '@flywave/flywave-geoutils';
 import * as THREE from 'three';
@@ -74,6 +77,22 @@ export class MBTileDataEmitter {
         private m_zoom: number,
     ) {}
 
+    private m_textGeometries: TextGeometry[] = [];
+    private m_textPathGeometries: TextPathGeometry[] = [];
+    private m_poiGeometries: PoiGeometry[] = [];
+    private m_stringCatalog: string[] = [];
+    private m_stringIndex: Map<string, number> = new Map();
+
+    private getStringIndex(s: string): number {
+        let idx = this.m_stringIndex.get(s);
+        if (idx === undefined) {
+            idx = this.m_stringCatalog.length;
+            this.m_stringCatalog.push(s);
+            this.m_stringIndex.set(s, idx);
+        }
+        return idx;
+    }
+
     private getOrCreateGeometry(key: string): AccumulatedGeometry {
         let geo = this.m_geometries.get(key);
         if (!geo) {
@@ -126,6 +145,14 @@ export class MBTileDataEmitter {
                     props._patternName = p['fill-pattern'];
                     props._patternCrossFade = p['fill-pattern-cross-fade'] ?? 1;
                 }
+                // HD elevation reference: roads/markings at their feature elevation.
+                const fillElevRef = l['fill-elevation-reference'];
+                if (fillElevRef) {
+                    const featElev = Number(properties?.elevation ?? properties?.height ?? properties?.z ?? properties?.level ?? 0);
+                    props._hdElevation = fillElevRef === 'hd-road-markup'
+                        ? featElev + 0.1  // markup sits slightly above road surface
+                        : featElev;
+                }
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'line':
@@ -135,6 +162,14 @@ export class MBTileDataEmitter {
                 props.lineWidth = p['line-width'] ?? 1;
                 props._translate = p['line-translate'] ?? [0, 0];
                 props._translateAnchor = p['line-translate-anchor'] ?? 'map';
+                // HD elevation reference: lines at their feature elevation.
+                const lineElevRef = l['line-elevation-reference'];
+                if (lineElevRef) {
+                    const featElev = Number(properties?.elevation ?? properties?.height ?? properties?.z ?? 0);
+                    this.m_currentZOffset = lineElevRef === 'hd-road-markup'
+                        ? featElev + 0.1
+                        : featElev;
+                }
                 if (p['line-pattern']) {
                     props._patternName = p['line-pattern'];
                     props._patternCrossFade = p['line-pattern-cross-fade'] ?? 1;
@@ -337,19 +372,25 @@ export class MBTileDataEmitter {
                 const rings = polygon.rings;
                 if (rings.length === 0) continue;
 
+                // fill-limit-number-holes: cap the number of interior rings.
+                const maxHoles = layer.paint['fill-limit-number-holes'] as number | undefined;
+                const effectiveRings = (maxHoles !== undefined && maxHoles >= 0)
+                    ? [rings[0], ...rings.slice(1, 1 + maxHoles)]
+                    : rings;
+
                 // Use earcut for proper polygon triangulation with hole support
                 const allVerts: number[] = [];
                 const holeIndices: number[] = [];
 
                 // Exterior ring
-                for (const pt of rings[0]) {
+                for (const pt of effectiveRings[0]) {
                     allVerts.push(pt.x, pt.y);
                 }
 
                 // Interior rings (holes)
-                for (let r = 1; r < rings.length; r++) {
+                for (let r = 1; r < effectiveRings.length; r++) {
                     holeIndices.push(allVerts.length / 2);
-                    for (const pt of rings[r]) {
+                    for (const pt of effectiveRings[r]) {
                         allVerts.push(pt.x, pt.y);
                     }
                 }
@@ -515,9 +556,25 @@ export class MBTileDataEmitter {
                 const geo = this.getOrCreateGeometry(key);
                 const featureStart = geo.indices.length;
 
+                const tech = this.m_techniques[techniqueIdx];
+
                 for (const pt of points) {
                     const w = this.project(pt);
                     geo.positions.push(w.x, w.y, w.z);
+
+                    // Emit native text/POI geometry for the TextElementsRenderer.
+                    if (tech.name === 'text' && tech.text) {
+                        this.emitTextGeometry(techniqueIdx, w, tech.text as string,
+                            { ...properties, $id: featureId ?? properties.$id ?? null });
+                    } else if (tech.name === 'labeled-icon') {
+                        const iconName = tech.imageTexture as string;
+                        const caption = (layer.layout['text-field'] && mode === 'icon')
+                            ? '' : (tech.text as string ?? '');
+                        this.emitPoiGeometry(techniqueIdx, w,
+                            iconName ?? '',
+                            caption || undefined,
+                            { ...properties, $id: featureId ?? properties.$id ?? null });
+                    }
                 }
 
                 const count = points.length;
@@ -531,6 +588,69 @@ export class MBTileDataEmitter {
                 geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
             }
         }
+    }
+
+    /** Emit a TextGeometry entry for the native TextElementsRenderer. */
+    private emitTextGeometry(
+        techniqueIdx: number,
+        pos: THREE.Vector3,
+        text: string,
+        attrs: AttributeMap,
+    ): void {
+        // Find or create a TextGeometry group for this technique.
+        let tg = this.m_textGeometries.find(t => t.technique === techniqueIdx);
+        if (!tg) {
+            tg = {
+                positions: {
+                    name: 'position',
+                    buffer: new Float32Array(0).buffer,
+                    type: 'float' as BufferElementType,
+                    itemCount: 3,
+                },
+                texts: [],
+                technique: techniqueIdx,
+                stringCatalog: this.m_stringCatalog,
+                objInfos: [],
+            };
+            this.m_textGeometries.push(tg);
+        }
+        // Accumulate positions in a temporary array, finalize in getDecodedTile.
+        if (!(tg as any)._positions) (tg as any)._positions = [];
+        (tg as any)._positions.push(pos.x, pos.y, pos.z);
+        tg.texts.push(this.getStringIndex(text));
+        tg.objInfos!.push(attrs);
+    }
+
+    /** Emit a PoiGeometry entry for the native PoiRenderer. */
+    private emitPoiGeometry(
+        techniqueIdx: number,
+        pos: THREE.Vector3,
+        iconName: string,
+        caption: string | undefined,
+        attrs: AttributeMap,
+    ): void {
+        let pg = this.m_poiGeometries.find(p => p.technique === techniqueIdx);
+        if (!pg) {
+            pg = {
+                positions: {
+                    name: 'position',
+                    buffer: new Float32Array(0).buffer,
+                    type: 'float' as BufferElementType,
+                    itemCount: 3,
+                },
+                texts: [],
+                technique: techniqueIdx,
+                stringCatalog: this.m_stringCatalog,
+                objInfos: [],
+                imageTextures: [],
+            };
+            this.m_poiGeometries.push(pg);
+        }
+        if (!(pg as any)._positions) (pg as any)._positions = [];
+        (pg as any)._positions.push(pos.x, pos.y, pos.z);
+        pg.texts.push(this.getStringIndex(caption ?? ''));
+        pg.imageTextures!.push(this.getStringIndex(iconName));
+        pg.objInfos!.push(attrs);
     }
 
     getDecodedTile(): DecodedTile {
@@ -581,6 +701,38 @@ export class MBTileDataEmitter {
         }
 
         const lineGeoms = this.getLineGeometries();
-        return { techniques: this.m_techniques, geometries: [...geometries, ...lineGeoms] };
+
+        // Finalize text/POI geometries: convert temp arrays to BufferAttributes.
+        for (const tg of [...this.m_textGeometries, ...this.m_poiGeometries] as any[]) {
+            const positions = (tg as any)._positions as number[] | undefined;
+            if (positions && positions.length > 0) {
+                const arr = new Float32Array(positions);
+                tg.positions = {
+                    name: 'position',
+                    buffer: arr.buffer,
+                    type: 'float' as BufferElementType,
+                    itemCount: 3,
+                };
+            }
+        }
+
+        const decodedTile: DecodedTile = {
+            techniques: this.m_techniques,
+            geometries: [...geometries, ...lineGeoms],
+        };
+
+        // Emit text/POI geometries so the native TextElementsRenderer/PoiRenderer
+        // can find them. Without these, no text or icons render.
+        if (this.m_textGeometries.length > 0) {
+            decodedTile.textGeometries = this.m_textGeometries;
+        }
+        if (this.m_textPathGeometries.length > 0) {
+            decodedTile.textPathGeometries = this.m_textPathGeometries;
+        }
+        if (this.m_poiGeometries.length > 0) {
+            decodedTile.poiGeometries = this.m_poiGeometries;
+        }
+
+        return decodedTile;
     }
 }

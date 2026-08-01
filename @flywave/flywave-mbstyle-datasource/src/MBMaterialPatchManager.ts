@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MBStyleDataSource } from './MBStyleDataSource';
+import { createGuardrailMesh } from './ElevatedStructures';
 
 interface MaterialPatchState {
     patched: boolean;
@@ -72,7 +73,28 @@ export class MBMaterialPatchManager {
             this.patchMaterial(material, tech);
             this.applyIconTextFit(obj, tech);
             this.patchIconObject(obj, tech);
+            this.generateGuardrails(obj, tech, tile);
         }
+    }
+
+    /**
+     * Generate guardrail walls for elevated road polygons (HD 3d-intersections).
+     * When a fill/extruded-polygon has _hdElevation > 0, extract boundary edges
+     * from the triangulated mesh and build vertical walls along them.
+     */
+    private generateGuardrails(obj: THREE.Object3D, technique: any, tile: any): void {
+        const elevation = technique._hdElevation ?? technique.height;
+        if (!elevation || elevation <= 0) return;
+        if ((obj as any).__mbGuardrails) return; // already generated
+        if (!(obj as any).isMesh) return;
+
+        const mesh = obj as THREE.Mesh;
+        const wallMesh = createGuardrailMesh(mesh, elevation);
+        if (!wallMesh) return;
+
+        (obj as any).__mbGuardrails = true;
+        // Add guardrails as a child so they inherit the tile's transform.
+        obj.add(wallMesh);
     }
 
     private applyIconTextFit(obj: THREE.Object3D, technique: any): void {
@@ -220,7 +242,7 @@ export class MBMaterialPatchManager {
                 } else if (technique._patternName) {
                     this.patchFillPatternMaterial(material, technique);
                 } else {
-                    this.patchFillMaterial(material, paint);
+                    this.patchFillMaterial(material, paint, technique);
                 }
                 break;
             case 'solid-line':
@@ -338,15 +360,35 @@ export class MBMaterialPatchManager {
         }, undefined, () => {});
     }
 
-    private patchFillMaterial(material: THREE.Material, paint: any): void {
+    private patchFillMaterial(material: THREE.Material, paint: any, technique?: any): void {
         const translate = this.resolveTranslate(paint['fill-translate'], paint['fill-translate-anchor']);
         const outlineColor = paint['fill-outline-color'];
         const hasTerrain = !!this.centerDem;
+        const hdElevation = technique?._hdElevation;
 
-        if ((!translate || (translate[0] === 0 && translate[1] === 0)) && !outlineColor && !hasTerrain) return;
+        if ((!translate || (translate[0] === 0 && translate[1] === 0)) && !outlineColor && !hasTerrain && hdElevation === undefined) return;
 
         // Terrain draping: displace fill vertices to follow the terrain surface.
         if (hasTerrain) this.injectTerrainDrape(material);
+
+        // HD elevation: displace fill to feature elevation (elevated roads).
+        if (hdElevation !== undefined && hdElevation !== 0) {
+            const elev = hdElevation;
+            const orig = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (orig) orig.call(material, shader);
+                shader.uniforms.uMBHdElevation = { value: elev };
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <project_vertex>',
+                    'transformed.z += uMBHdElevation;\n#include <project_vertex>'
+                );
+                shader.vertexShader = shader.vertexShader.replace(
+                    'void main() {',
+                    'uniform float uMBHdElevation;\nvoid main() {'
+                );
+            };
+            material.needsUpdate = true;
+        }
 
         const origOnCompile = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
@@ -660,6 +702,10 @@ export class MBMaterialPatchManager {
         this.injectLighting(material);
         const height = technique.height ?? paint['fill-extrusion-height'] ?? 0;
         const base = technique.floorHeight ?? paint['fill-extrusion-base'] ?? 0;
+        const verticalScale = paint['fill-extrusion-vertical-scale'] ?? 1;
+        const scaledHeight = height * verticalScale;
+        const lineWidth = paint['fill-extrusion-line-width'] ?? 0;
+        const cutoffFadeRange = paint['fill-extrusion-cutoff-fade-range'] ?? 0;
         const verticalGradient = paint['fill-extrusion-vertical-gradient'] !== false;
         const translate = this.resolveTranslate(
             paint['fill-extrusion-translate'] ?? technique._translate ?? [0, 0],
@@ -668,7 +714,7 @@ export class MBMaterialPatchManager {
         const hasTranslate = translate && (translate[0] !== 0 || translate[1] !== 0);
         const patternTex = technique._patternName ? this.extractPatternTexture(technique._patternName) : undefined;
         const hasTerrain = !!(this.m_dataSource as any).m_environment?.terrainController?.centerDem;
-        if (height === 0 && base === 0 && !verticalGradient && !hasTranslate && !patternTex && !hasTerrain) {
+        if (height === 0 && base === 0 && !verticalGradient && !hasTranslate && !patternTex && !hasTerrain && lineWidth === 0 && cutoffFadeRange === 0) {
             return;
         }
 
@@ -699,7 +745,7 @@ export class MBMaterialPatchManager {
             }
             if (height > 0 || base > 0 || centerDem) {
                 shader.uniforms.uMBHeightBase = { value: base };
-                shader.uniforms.uMBHeightTop = { value: height };
+                shader.uniforms.uMBHeightTop = { value: scaledHeight };
                 // Terrain DEM uniforms (fill-extrusion-terrain).
                 const demUniforms = centerDem
                     ? `uniform sampler2D uMBExtrusionDem;\nuniform vec2 uMBExtrusionDemOrigin;\nuniform float uMBExtrusionDemSize;\nuniform float uMBExtrusionExag;`
@@ -744,6 +790,42 @@ export class MBMaterialPatchManager {
                      varying float vMBHeight;
                      vec3 mbGradColor = mix(vec3(0.6), vec3(1.0), clamp(vMBHeight, 0.0, 1.0));
                      gl_FragColor.rgb *= mbGradColor;`
+                );
+            }
+
+            // fill-extrusion-line-width: edge outline effect via normal derivatives.
+            if (lineWidth > 0) {
+                shader.uniforms.uMBEdgeWidth = { value: lineWidth };
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <common>',
+                    '#include <common>\nuniform float uMBEdgeWidth;'
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <colorspace_fragment>',
+                    `#include <colorspace_fragment>
+                     {
+                         float mbEdge = length(fwidth(vNormal));
+                         float mbEdgeFactor = 1.0 - smoothstep(0.0, 0.5 / max(uMBEdgeWidth, 0.001), mbEdge);
+                         gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.4, mbEdgeFactor);
+                     }`
+                );
+            }
+
+            // fill-extrusion-cutoff-fade-range: fade opacity near the cutoff height.
+            if (cutoffFadeRange > 0) {
+                shader.uniforms.uMBCutoffFade = { value: cutoffFadeRange };
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <common>',
+                    '#include <common>\nuniform float uMBCutoffFade;'
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <colorspace_fragment>',
+                    `#include <colorspace_fragment>
+                     {
+                         float mbCutoffDist = abs(vViewPosition.z);
+                         float mbFade = smoothstep(0.0, uMBCutoffFade * 100.0, mbCutoffDist);
+                         gl_FragColor.a *= mbFade;
+                     }`
                 );
             }
         };
@@ -902,9 +984,9 @@ export class MBMaterialPatchManager {
                         'texture2D( map, uUvOffset + vUv * uUvScale )'
                     );
                 }
-            };
-            material.needsUpdate = true;
-        }
+            }
+        };
+        material.needsUpdate = true;
     }
 
     /**
@@ -1019,20 +1101,58 @@ export class MBMaterialPatchManager {
     }
 
     /**
+    /**
+     * Parse a raw gradient expression (or pre-evaluated stops) into normalized
+     * `[{t, r, g, b, a}]` stops. Handles:
+     *  - Raw interpolate: ["interpolate", ["linear"], ["line-progress"], 0, "red", 1, "blue"]
+     *  - Already-evaluated stops: [[0, "red"], [1, "blue"]]
+     *  - Heatmap color ramp: [[0, "rgba(...)"], [0.5, "blue"], ...]
+     */
+    private static normalizeGradientStops(raw: any): Array<{ t: number; r: number; g: number; b: number; a: number }> {
+        if (!raw) return [];
+        // Already-evaluated [[t,color],...] format.
+        if (Array.isArray(raw) && raw.length > 0 && Array.isArray(raw[0]) && raw[0].length === 2) {
+            return raw.map((s: any) => {
+                const c = MBMaterialPatchManager.parseColor(String(s[1]));
+                return { t: Number(s[0]) ?? 0, r: c[0], g: c[1], b: c[2], a: c[3] };
+            }).sort((a: any, b: any) => a.t - b.t);
+        }
+        // Raw interpolate expression: ["interpolate", [type], [input], stop1, color1, ...]
+        if (Array.isArray(raw) && raw[0] === 'interpolate') {
+            const stops: Array<{ t: number; r: number; g: number; b: number; a: number }> = [];
+            // args[0] = interpolation type, args[1] = input expression (skip both)
+            for (let i = 3; i < raw.length - 1; i += 2) {
+                const t = Number(raw[i]) ?? 0;
+                const colorVal = raw[i + 1];
+                // Color might be a raw string or a nested expression (e.g. ["rgb", r, g, b]).
+                let c: [number, number, number, number];
+                if (typeof colorVal === 'string') {
+                    c = MBMaterialPatchManager.parseColor(colorVal);
+                } else if (Array.isArray(colorVal) && colorVal[0] === 'rgb') {
+                    c = [colorVal[1], colorVal[2], colorVal[3], 1];
+                } else if (Array.isArray(colorVal) && colorVal[0] === 'rgba') {
+                    c = [colorVal[1], colorVal[2], colorVal[3], colorVal[4] ?? 1];
+                } else {
+                    c = MBMaterialPatchManager.parseColor(String(colorVal));
+                }
+                stops.push({ t, r: c[0], g: c[1], b: c[2], a: c[3] });
+            }
+            return stops.sort((a, b) => a.t - b.t);
+        }
+        return [];
+    }
+
+    /**
      * Build a 256x1 RGBA DataTexture from Mapbox color-expression stops:
      * `[[t, color], ...]`. Used by line-gradient and heatmap color ramps.
      */
     private static buildGradientTexture(stops: any): THREE.DataTexture {
         const size = 256;
         const data = new Uint8Array(size * 4);
-        if (!Array.isArray(stops) || stops.length === 0) {
+        const norm = MBMaterialPatchManager.normalizeGradientStops(stops);
+        if (norm.length === 0) {
             for (let i = 0; i < size; i++) { data[i*4+3] = 255; }
         } else {
-            const norm = stops.map((s: any) => {
-                const t = typeof s[0] === 'number' ? s[0] : 0;
-                const c = MBMaterialPatchManager.parseColor(String(s[1]));
-                return { t, r: c[0], g: c[1], b: c[2], a: c[3] };
-            }).sort((a: any, b: any) => a.t - b.t);
             for (let i = 0; i < size; i++) {
                 const p = i / (size - 1);
                 let lo = norm[0];

@@ -104,6 +104,25 @@ class RasterTileDataProvider extends DataProvider {
 }
 
 /**
+ * TMS scheme wrapper: flips the y (row) coordinate before delegating.
+ * TMS uses y from bottom; flywave uses XYZ (y from top).
+ * yTms = 2^z - 1 - yXyz
+ */
+class TMSDataProvider extends DataProvider {
+    private m_inner: DataProvider;
+    constructor(inner: DataProvider) { super(); this.m_inner = inner; }
+    ready(): boolean { return this.m_inner.ready(); }
+    async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ArrayBufferLike | {}> {
+        const n = Math.pow(2, tileKey.level);
+        const flippedRow = n - 1 - tileKey.row;
+        const flippedKey = TileKey.fromRowColumnLevel(flippedRow, tileKey.column, tileKey.level);
+        return this.m_inner.getTile(flippedKey, abortSignal);
+    }
+    protected async connect(): Promise<void> {}
+    protected dispose(): void {}
+}
+
+/**
  * DataProvider for hillshade layers. Generates a tile-covering polygon per tile
  * carrying the resolved raster-DEM tile url, so the emitter can emit a fill
  * technique flagged as hillshade and the MaterialPatchManager can load the DEM
@@ -297,6 +316,8 @@ export class MBStyleDataSource extends TileDataSource {
     private m_symbolPlacement: any = null;
     private m_debugTileBoundaries = false;
     private m_debugLines: any = null;
+    /** Clip polygons keyed by layer type: Map<layerType, polygonRing[]> */
+    private m_clipMask: Map<string, number[][][]> = new Map();
 
     constructor(params: MBStyleDataSourceParameters) {
         const delegatingProvider = new DelegatingDataProvider();
@@ -346,6 +367,9 @@ export class MBStyleDataSource extends TileDataSource {
         if (!style) {
             throw new Error('Failed to load Mapbox Style');
         }
+
+        // Detect clip layers and build clip mask (clip-layer-types → polygon rings).
+        this.buildClipMask(style);
 
         // Apply background color from background layers
         this.applyBackgroundColor(style);
@@ -397,7 +421,13 @@ export class MBStyleDataSource extends TileDataSource {
                 source,
                 this.m_styleParams.accessToken
             );
-            this.m_delegatingProvider.delegate = restClient;
+            // TMS scheme: wrap the rest client to flip y coordinate.
+            const scheme = (source as any).scheme ?? 'xyz';
+            if (scheme === 'tms') {
+                this.m_delegatingProvider.delegate = new TMSDataProvider(restClient);
+            } else {
+                this.m_delegatingProvider.delegate = restClient;
+            }
             this.m_currentSourceId = bestVectorSourceId;
 
             await this.decoder.configure(undefined, {
@@ -519,6 +549,9 @@ export class MBStyleDataSource extends TileDataSource {
             currentSourceId: this.m_currentSourceId,
             demTileUrl: this.m_demTileUrl,
             pitch: style.pitch ?? 0,
+            brightness: this.m_environment?.brightness ?? 0,
+            clipMask: Object.fromEntries(this.m_clipMask),
+            worldview: (style as any).metadata?.test?.worldview ?? '',
         } as any);
 
         // Load sprite atlas if style has a sprite URL
@@ -750,6 +783,36 @@ export class MBStyleDataSource extends TileDataSource {
         this.m_environment?.terrainController?.setWireframe(enabled);
     }
 
+    /** Toggle 3D layer wireframe overlay (metadata.test.showLayers3DWireframe). */
+    setLayers3DWireframe(enabled: boolean): void {
+        if (!this.mapView) return;
+        const scene = (this.mapView as any).m_scene as THREE.Scene;
+        if (!scene) return;
+        scene.traverse((obj: any) => {
+            if (obj.isMesh && obj.material && obj.userData?.technique) {
+                const tech = obj.userData.technique;
+                if (tech.name === 'extruded-polygon' || tech.name === 'fill' || tech.name === 'solid-line') {
+                    obj.material.wireframe = enabled;
+                }
+            }
+        });
+    }
+
+    /** Runtime setFov: delegate to MapView.setFovCalculation. */
+    setFov(fov: number): void {
+        (this.mapView as any)?.setFovCalculation?.({ type: 'fixed', fov });
+    }
+
+    /** Runtime addImage: inject an icon into the sprite atlas. */
+    addImage(name: string, image: HTMLImageElement | HTMLCanvasElement | ImageBitmap): boolean {
+        return this.m_spriteAtlas?.addIcon(name, image as any) ?? false;
+    }
+
+    /** Runtime removeImage: remove an icon from the sprite atlas. */
+    removeImage(name: string): boolean {
+        return this.m_spriteAtlas?.removeIcon(name) ?? false;
+    }
+
     /** Toggle tile-boundary debug overlay (metadata.test.debug). */
     setDebugTileBoundaries(enabled: boolean): void {
         this.m_debugTileBoundaries = enabled;
@@ -818,6 +881,34 @@ export class MBStyleDataSource extends TileDataSource {
                 icons.set(name, info);
             }
             this.m_spriteAtlas = new SpriteAtlas(spriteData.image, icons);
+
+            // Register individual icons in MapView's userImageCache so that
+            // PoiRenderer can find them by name. PoiRenderer uses imageCaches
+            // (theme + user) to look up icons by their technique imageTextureName.
+            // Without this, icons never render because PoiRenderer can't find them.
+            if (this.mapView) {
+                const userImageCache = (this.mapView as any).userImageCache;
+                if (userImageCache && typeof userImageCache.addImage === 'function') {
+                    const atlasImage = spriteData.image;
+                    for (const [name, info] of icons) {
+                        try {
+                            // Extract the icon sub-image from the atlas.
+                            if (typeof document !== 'undefined') {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = info.width;
+                                canvas.height = info.height;
+                                const ctx = canvas.getContext('2d')!;
+                                ctx.drawImage(
+                                    atlasImage as any,
+                                    info.x, info.y, info.width, info.height,
+                                    0, 0, info.width, info.height,
+                                );
+                                userImageCache.addImage(name, canvas);
+                            }
+                        } catch {}
+                    }
+                }
+            }
         }
     }
 
@@ -945,5 +1036,51 @@ export class MBStyleDataSource extends TileDataSource {
             const geoCoord = new GeoCoordinates(center[1], center[0]);
             this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom, bearing, pitch);
         }
+    }
+
+    /**
+     * Build clip mask from `clip` layers. Each clip layer references a polygon
+     * source and lists `clip-layer-types`. Features of those types outside the
+     * clip polygon are suppressed.
+     */
+    private buildClipMask(style: StyleSpecification): void {
+        this.m_clipMask.clear();
+        const clipLayers = (style.layers ?? []).filter((l: any) => l.type === 'clip');
+        for (const clipLayer of clipLayers) {
+            const layerTypes: string[] = (clipLayer as any).layout?.['clip-layer-types'] ?? [];
+            const sourceId = (clipLayer as any).source as string;
+            if (!sourceId) continue;
+            const source = (style.sources as any)[sourceId];
+            if (!source) continue;
+            // Extract polygon rings from inline geojson.
+            let rings: number[][][] = [];
+            const data = source.data;
+            if (data?.type === 'Polygon') {
+                rings = data.coordinates;
+            } else if (data?.type === 'MultiPolygon') {
+                rings = data.coordinates.flat();
+            } else if (data?.type === 'FeatureCollection') {
+                for (const f of data.features ?? []) {
+                    if (f.geometry?.type === 'Polygon') rings.push(...f.geometry.coordinates);
+                    if (f.geometry?.type === 'MultiPolygon') rings.push(...f.geometry.coordinates.flat());
+                }
+            }
+            for (const lt of layerTypes) {
+                this.m_clipMask.set(lt, rings);
+            }
+        }
+    }
+
+    /** Point-in-polygon test (ray casting) for clip mask. */
+    static pointInPolygonRing(lng: number, lat: number, ring: number[][]): boolean {
+        let inside = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const xi = ring[i][0], yi = ring[i][1];
+            const xj = ring[j][0], yj = ring[j][1];
+            const intersect = ((yi > lat) !== (yj > lat)) &&
+                (lng < (xj - xi) * (lat - yi) / (yj - yi + 1e-15) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
     }
 }
