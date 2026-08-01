@@ -1,9 +1,9 @@
 // image-loader.ts
-// import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader.js";
 import { TGALoader } from "three/examples/jsm/loaders/TGALoader.js";
-import type { Renderer } from "three/webgpu";
-// import { read } from 'ktx-parse';
+import type { WebGPURenderer } from "three/webgpu";
+import { read } from "ktx-parse";
 
 export interface LoadedImage {
     width: number;
@@ -13,45 +13,45 @@ export interface LoadedImage {
     mimeType: string;
 }
 
-// const webglRenderInstance = new WebGLRenderer();
+let sharedKTX2Loader: KTX2Loader | null = null;
+
+function getKTX2Loader(renderer?: WebGPURenderer): KTX2Loader {
+    if (sharedKTX2Loader != null) return sharedKTX2Loader;
+    const loader = new KTX2Loader();
+    loader.setTranscoderPath("https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/libs/basis/");
+    if (renderer) {
+        loader.detectSupport(renderer);
+    }
+    sharedKTX2Loader = loader;
+    return loader;
+}
 
 export class ImageLoader {
-    private ktx2Loader?: any;
+    private ktx2Loader: KTX2Loader | null = null;
     private ddsLoader?: DDSLoader;
     private tgaLoader?: TGALoader;
 
-    constructor(webglRender?: Renderer) {
-        // 初始化加载器，但KTX2Loader在没有renderer时可能无法工作
-        // 我们会处理这种情况
+    constructor(renderer?: WebGPURenderer) {
         try {
             this.ddsLoader = new DDSLoader();
             this.tgaLoader = new TGALoader();
-
-            // 尝试创建KTX2Loader，但不设置renderer
-            // this.ktx2Loader = new KTX2Loader();
-            // 设置transcoder路径
-            // this.ktx2Loader.setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/basis/');
-            // this.ktx2Loader.detectSupport(webglRender||webglRenderInstance);
+            this.ktx2Loader = getKTX2Loader(renderer ?? undefined);
         } catch (error) {
             console.warn("Some Three.js loaders failed to initialize:", error);
         }
     }
 
-    // 检测图片格式
     detectFormat(arrayBuffer: ArrayBuffer): string {
         if (arrayBuffer.byteLength < 4) return "unknown";
 
         const view = new Uint8Array(arrayBuffer, 0, 4);
 
-        // KTX2
         if (this.isKTX2(arrayBuffer)) return "ktx2";
 
-        // DDS
         if (view[0] === 0x44 && view[1] === 0x44 && view[2] === 0x53 && view[3] === 0x20) {
             return "dds";
         }
 
-        // TGA（简化检测）
         if (arrayBuffer.byteLength > 18) {
             const tgaHeader = new Uint8Array(arrayBuffer, 0, 18);
             const imageType = tgaHeader[2];
@@ -60,15 +60,12 @@ export class ImageLoader {
             }
         }
 
-        // PNG
         if (view[0] === 0x89 && view[1] === 0x50 && view[2] === 0x4e && view[3] === 0x47) {
             return "png";
         }
 
-        // JPEG
         if (view[0] === 0xff && view[1] === 0xd8) return "jpeg";
 
-        // WebP
         if (view[0] === 0x52 && view[1] === 0x49 && view[2] === 0x46 && view[3] === 0x46) {
             if (arrayBuffer.byteLength > 12) {
                 const webpView = new Uint8Array(arrayBuffer, 8, 4);
@@ -83,10 +80,8 @@ export class ImageLoader {
             }
         }
 
-        // BMP
         if (view[0] === 0x42 && view[1] === 0x4d) return "bmp";
 
-        // GIF
         if (view[0] === 0x47 && view[1] === 0x49 && view[2] === 0x46) return "gif";
 
         return "unknown";
@@ -101,24 +96,13 @@ export class ImageLoader {
         return header.every((byte, i) => byte === ktx2Identifier[i]);
     }
 
-    // 主加载方法
     async load(arrayBuffer: ArrayBuffer, mimeType?: string): Promise<LoadedImage> {
         const format = this.detectFormat(arrayBuffer);
 
         try {
             switch (format) {
                 case "ktx2":
-                    // 尝试使用KTX2Loader，如果失败则降级
-                    try {
-                        if (this.ktx2Loader) {
-                            const result = await this.loadWithKTX2Loader(arrayBuffer);
-                            if (result) return result;
-                        }
-                    } catch (error) {
-                        console.warn("KTX2Loader failed:", error);
-                    }
-                    // KTX2加载失败，尝试其他方法
-                    return await this.decodeKTX2Fallback(arrayBuffer);
+                    return await this.loadKTX2(arrayBuffer);
 
                 case "dds":
                     if (this.ddsLoader) {
@@ -140,176 +124,167 @@ export class ImageLoader {
                     return await this.loadStandardImage(arrayBuffer, mimeType || `image/${format}`);
 
                 default:
-                    // 尝试作为标准图片加载
                     return await this.loadStandardImage(arrayBuffer, mimeType || "image/png");
             }
         } catch (error) {
             console.warn(`Failed to load ${format} image:`, error);
         }
 
-        // 所有方法都失败，使用标准方法
         return await this.loadStandardImage(arrayBuffer, mimeType || "image/png");
     }
 
-    // 使用KTX2Loader加载
-    private async loadWithKTX2Loader(arrayBuffer: ArrayBuffer): Promise<LoadedImage> {
-        return new Promise((resolve, reject) => {
-            if (!this.ktx2Loader) {
-                reject(new Error("KTX2Loader not available"));
-                return;
-            }
+    private async loadKTX2(arrayBuffer: ArrayBuffer): Promise<LoadedImage> {
+        if (!this.ktx2Loader) {
+            console.warn("KTX2Loader not available, using fallback");
+            return await this.decodeKTX2Fallback(arrayBuffer);
+        }
 
-            const blob = new Blob([arrayBuffer], { type: "image/ktx2" });
-            const url = URL.createObjectURL(blob);
+        try {
+            const texture = await new Promise<any>((resolve, reject) => {
+                const blob = new Blob([arrayBuffer], { type: "image/ktx2" });
+                const url = URL.createObjectURL(blob);
+                this.ktx2Loader!.load(
+                    url,
+                    tex => {
+                        URL.revokeObjectURL(url);
+                        resolve(tex);
+                    },
+                    undefined,
+                    err => {
+                        URL.revokeObjectURL(url);
+                        reject(err);
+                    }
+                );
+            });
 
-            this.ktx2Loader.load(
-                url,
-                texture => {
-                    URL.revokeObjectURL(url);
-                    this.handleThreeTexture(texture, resolve, "KTX2");
-                },
-                undefined,
-                error => {
-                    URL.revokeObjectURL(url);
-                    reject(error);
-                }
-            );
-        });
+            return this.textureToLoadedImage(texture);
+        } catch (error) {
+            console.warn("KTX2Loader failed, trying fallback:", error);
+            return await this.decodeKTX2Fallback(arrayBuffer);
+        }
     }
 
-    // KTX2降级解码方案
     private async decodeKTX2Fallback(arrayBuffer: ArrayBuffer): Promise<LoadedImage> {
-        console.log("Using fallback KTX2 decoder");
-
-        // 方案1：尝试使用ktx-parse解析基本信息
         try {
-            const ktx = undefined; // read(new Uint8Array(arrayBuffer));
-            console.log("KTX2 Info:", ktx);
-            // 创建占位图，显示KTX2信息
-            const canvas = document.createElement("canvas");
-            canvas.width = Math.max(ktx.pixelWidth, 256);
-            canvas.height = Math.max(ktx.pixelHeight, 256);
+            const ktx = read(new Uint8Array(arrayBuffer));
+            const width = ktx.pixelWidth || 256;
+            const height = ktx.pixelHeight || 256;
 
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
             const ctx = canvas.getContext("2d");
             if (ctx) {
-                ctx.fillStyle = "#1a1a1a";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                ctx.fillStyle = "#4a9eff";
-                ctx.font = "bold 20px Arial";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText("KTX2 Texture", canvas.width / 2, canvas.height / 2 - 30);
-
-                ctx.font = "16px Arial";
-                ctx.fillText(
-                    `${ktx.pixelWidth}×${ktx.pixelHeight}`,
-                    canvas.width / 2,
-                    canvas.height / 2
-                );
-                ctx.fillText(`${ktx.levelCount} mipmaps`, canvas.width / 2, canvas.height / 2 + 30);
+                const imgData = ctx.createImageData(width, height);
+                const level0 = ktx.levels[0];
+                if (level0) {
+                    const data = level0.levelData;
+                    const bpp = ktx.vkFormat === 37 ? 4 : 4;
+                    const srcPixels = new Uint8Array(
+                        data.buffer || data,
+                        data.byteOffset || 0,
+                        Math.min(data.byteLength, width * height * bpp)
+                    );
+                    for (let i = 0; i < srcPixels.length && i < imgData.data.length; i++) {
+                        imgData.data[i] = srcPixels[i];
+                    }
+                }
+                ctx.putImageData(imgData, 0, 0);
             }
 
             return {
-                width: canvas.width,
-                height: canvas.height,
+                width,
+                height,
                 data: canvas,
                 compressed: false,
                 mimeType: "image/png"
             };
         } catch (error) {
-            console.warn("ktx-parse failed:", error);
+            console.warn("KTX2 fallback decode failed:", error);
+            return this.createPlaceholderImage("KTX2 (Decode Failed)");
         }
-
-        // 方案2：使用纯占位图
-        return this.createPlaceholderImage("KTX2 (Decode Failed)");
     }
 
-    // 使用DDSLoader加载
     private async loadWithDDSLoader(arrayBuffer: ArrayBuffer): Promise<LoadedImage> {
-        return new Promise((resolve, reject) => {
-            if (!this.ddsLoader) {
-                reject(new Error("DDSLoader not available"));
-                return;
-            }
-
-            try {
-                // DDSLoader的parse方法是同步的
-                const texture = (this.ddsLoader as any).parse(arrayBuffer);
-                this.handleThreeTexture(texture, resolve, "DDS");
-            } catch (error) {
-                reject(error);
-            }
-        });
+        if (!this.ddsLoader) throw new Error("DDSLoader not available");
+        const texture = (this.ddsLoader as any).parse(arrayBuffer);
+        return this.textureToLoadedImage(texture);
     }
 
-    // 使用TGALoader加载
     private async loadWithTGALoader(arrayBuffer: ArrayBuffer): Promise<LoadedImage> {
-        return new Promise((resolve, reject) => {
-            if (!this.tgaLoader) {
-                reject(new Error("TGALoader not available"));
-                return;
-            }
-
-            try {
-                const texture = (this.tgaLoader as any).parse(arrayBuffer);
-                this.handleThreeTexture(texture, resolve, "TGA");
-            } catch (error) {
-                reject(error);
-            }
-        });
+        if (!this.tgaLoader) throw new Error("TGALoader not available");
+        const texture = (this.tgaLoader as any).parse(arrayBuffer);
+        return this.textureToLoadedImage(texture);
     }
 
-    // 处理Three.js纹理对象的通用方法
-    private handleThreeTexture(
-        texture: any,
-        resolve: (value: LoadedImage) => void,
-        format: string
-    ): void {
-        let canvas: HTMLCanvasElement;
-
+    private textureToLoadedImage(texture: any): LoadedImage {
         if (texture.image) {
-            // 如果已经有image数据
             if (texture.image instanceof HTMLCanvasElement) {
-                canvas = texture.image;
+                return {
+                    width: texture.image.width,
+                    height: texture.image.height,
+                    data: texture.image,
+                    compressed: false,
+                    mimeType: "image/png"
+                };
             } else if (
                 texture.image instanceof HTMLImageElement ||
                 texture.image instanceof ImageBitmap
             ) {
-                canvas = document.createElement("canvas");
-                canvas.width = texture.image.width || texture.image.naturalWidth || 256;
-                canvas.height = texture.image.height || texture.image.naturalHeight || 256;
-
+                const w = texture.image.width || texture.image.naturalWidth || 256;
+                const h = texture.image.height || texture.image.naturalHeight || 256;
+                const canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
                 const ctx = canvas.getContext("2d");
-                if (ctx) {
-                    ctx.drawImage(texture.image, 0, 0);
-                }
-            } else {
-                // 其他类型，创建占位图
-                canvas = this.createPlaceholderCanvas(format, 256, 256);
+                if (ctx) ctx.drawImage(texture.image, 0, 0);
+                return {
+                    width: w,
+                    height: h,
+                    data: canvas,
+                    compressed: false,
+                    mimeType: "image/png"
+                };
             }
-        } else {
-            // 没有image数据，创建占位图
-            canvas = this.createPlaceholderCanvas(format, 256, 256);
         }
 
-        resolve({
-            width: canvas.width,
-            height: canvas.height,
-            data: canvas,
-            compressed: false,
-            mimeType: "image/png"
-        });
+        if (texture.mipmaps && texture.mipmaps.length > 0) {
+            const mipmap = texture.mipmaps[0];
+            if (mipmap.width && mipmap.height) {
+                const canvas = document.createElement("canvas");
+                canvas.width = mipmap.width;
+                canvas.height = mipmap.height;
+                const ctx = canvas.getContext("2d");
+                if (ctx && mipmap.data) {
+                    const imgData = ctx.createImageData(mipmap.width, mipmap.height);
+                    const src = new Uint8Array(mipmap.data.buffer || mipmap.data);
+                    const dst = imgData.data;
+                    const len = Math.min(src.length, dst.length);
+                    const bpp = mipmap.width * mipmap.height * 4;
+                    if (len >= bpp) {
+                        dst.set(src.subarray(0, bpp));
+                        ctx.putImageData(imgData, 0, 0);
+                    }
+                }
+                return {
+                    width: mipmap.width,
+                    height: mipmap.height,
+                    data: canvas,
+                    compressed: false,
+                    mimeType: "image/png"
+                };
+            }
+        }
+
+        return this.createPlaceholderImage("Texture");
     }
 
-    // 加载标准图片格式
     private async loadStandardImage(
         arrayBuffer: ArrayBuffer,
         mimeType: string
     ): Promise<LoadedImage> {
         const blob = new Blob([arrayBuffer], { type: mimeType });
 
-        // 优先使用ImageBitmap
         if (typeof createImageBitmap === "function") {
             try {
                 const imageBitmap = await createImageBitmap(blob);
@@ -325,7 +300,6 @@ export class ImageLoader {
             }
         }
 
-        // 回退到HTMLImageElement
         const image = await this.loadImageElement(blob);
         return {
             width: image.width,
@@ -340,17 +314,14 @@ export class ImageLoader {
         return new Promise((resolve, reject) => {
             const url = URL.createObjectURL(blob);
             const img = new Image();
-
             img.onload = () => {
                 URL.revokeObjectURL(url);
                 resolve(img);
             };
-
             img.onerror = error => {
                 URL.revokeObjectURL(url);
                 reject(new Error(`Failed to load image: ${error}`));
             };
-
             img.src = url;
         });
     }
@@ -378,22 +349,18 @@ export class ImageLoader {
         const ctx = canvas.getContext("2d");
         if (!ctx) return canvas;
 
-        // 背景
         ctx.fillStyle = "#2a2a2a";
         ctx.fillRect(0, 0, width, height);
 
-        // 网格
         ctx.strokeStyle = "#3a3a3a";
         ctx.lineWidth = 1;
         const gridSize = 32;
-
         for (let x = 0; x <= width; x += gridSize) {
             ctx.beginPath();
             ctx.moveTo(x, 0);
             ctx.lineTo(x, height);
             ctx.stroke();
         }
-
         for (let y = 0; y <= height; y += gridSize) {
             ctx.beginPath();
             ctx.moveTo(0, y);
@@ -401,19 +368,16 @@ export class ImageLoader {
             ctx.stroke();
         }
 
-        // 文字
         ctx.fillStyle = "#8a8a8a";
         ctx.font = "bold 18px Arial, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(text, width / 2, height / 2 - 15);
-
         ctx.font = "14px Arial, sans-serif";
-        ctx.fillText(`${width}×${height}`, width / 2, height / 2 + 15);
+        ctx.fillText(`${width}x${height}`, width / 2, height / 2 + 15);
 
         return canvas;
     }
 }
 
-// 创建一个全局实例方便使用
 export const imageLoader = new ImageLoader();

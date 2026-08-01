@@ -796,15 +796,12 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         useLogarithmicDepth: boolean
     ): number {
         assert(projection.type === ProjectionType.Spherical);
-        const r = EarthConstants.EQUATORIAL_RADIUS;
+        const d = camera.position.length();
+        const cameraAltitude = projection.groundDistance(camera.position);
+        const r = Math.max(d - cameraAltitude, 0);
         const minR = r + this.minElevation;
         const maxR = r + this.maxElevation;
-        const d = camera.position.length();
 
-        // If all frustum edges intersect the world, use as far distance the distance to the
-        // farthest intersection projected on eye vector. If principal point has a y offset <= 0,
-        // top frustum intersection is at same distance or farther than bottom intersection,
-        // otherwise both need to be checked.
         CameraUtils.getPrincipalPoint(camera, this.m_tmpV2);
         const isRightIntersectionFarther = this.m_tmpV2.x <= 0.0;
         const ndcX = isRightIntersectionFarther ? 1 : -1;
@@ -824,14 +821,13 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
                   projection as SphereProjection
               )
             : 0;
+
         const largestDist = Math.max(topDist ?? Infinity, bottomDist ?? Infinity);
         if (largestDist !== Infinity) {
             return largestDist;
         }
 
-        // If any frustum edge does not intersect (i.e horizon is visible in that viewport corner),
-        // use the horizon distance at the maximum elevation.
-        return SphericalProj.getFarDistanceFromElevatedHorizon(camera, d, r, maxR);
+        return SphericalProj.getFarDistanceFromElevatedHorizon(camera, d, minR, maxR);
     }
 
     private applyViewRangeConstraints(
@@ -849,26 +845,25 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
             elevationProvider
         );
 
-        // 定义缺失的 farMin 变量
         const cameraAltitude = projection.groundDistance(camera.position);
         const farMin = cameraAltitude - this.minElevation;
 
-        // 根据是否使用对数深度缓冲调整约束
         const farMax = useLogarithmicDepth
-            ? distance * this.farMaxRatio * 10 // 对数深度下可以设置更大的 far 值
+            ? distance * this.farMaxRatio * 10
             : distance * this.farMaxRatio;
 
-        const nearMin = useLogarithmicDepth
-            ? Math.max(this.nearMin, 0.001) // 对数深度下可以使用更小的 near 值
-            : this.nearMin;
+        const nearMin = useLogarithmicDepth ? Math.max(this.nearMin, 0.001) : this.nearMin;
 
         // Apply the constraints.
         viewRanges.near = Math.max(viewRanges.near, nearMin);
-        viewRanges.far = THREE.MathUtils.clamp(viewRanges.far, farMin, farMax);
+        if (projection.type === ProjectionType.Spherical) {
+            viewRanges.far = Math.max(viewRanges.far, farMin);
+        } else {
+            viewRanges.far = THREE.MathUtils.clamp(viewRanges.far, farMin, farMax);
+        }
 
-        // 对数深度下可以减少边距要求
         const marginRatio = useLogarithmicDepth
-            ? this.nearFarMarginRatio * 0.5 // 减少边距比例
+            ? this.nearFarMarginRatio * 0.5
             : this.nearFarMarginRatio;
 
         const nearFarMargin = (marginRatio * (viewRanges.near + viewRanges.far)) / 2;
@@ -879,7 +874,7 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
 
         // Set minimum and maximum view range.
         viewRanges.minimum = nearMin;
-        viewRanges.maximum = farMax;
+        viewRanges.maximum = projection.type === ProjectionType.Spherical ? viewRanges.far : farMax;
 
         return viewRanges;
     }
