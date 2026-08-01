@@ -142,19 +142,21 @@ export class AtmosphereSystem {
                 environmentNode?: THREE.Scene["environmentNode"];
             };
 
-            if (this.isSpherical) {
-                const vrm = new ViewRenderManager(renderer);
-                vrm.csmShadowNode = this.m_csmShadowNode;
-                (scene as any).__atmosphereContext = this.m_atmosphereContext;
-                const canvas = renderer.domElement as HTMLCanvasElement;
-                vrm.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
-                vrm.exposure.value = this.m_toneMappingExposure;
-                renderer.toneMapping = THREE.NoToneMapping;
-                this.mapView.mapRenderingManager.viewRenderManager = vrm;
-                this.mapView.mapRenderingManager.syncPostEffectsToVRM();
-            } else {
-                renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            if (!this.isSpherical) {
+                this.m_toneMappingExposure = 1;
+                this.m_toneMappingMode = "aces";
             }
+
+            const vrm = new ViewRenderManager(renderer);
+            vrm.csmShadowNode = this.m_csmShadowNode;
+            (scene as any).__atmosphereContext = this.m_atmosphereContext;
+            const canvas = renderer.domElement as HTMLCanvasElement;
+            vrm.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
+            vrm.exposure.value = this.m_toneMappingExposure;
+            renderer.toneMapping = THREE.NoToneMapping;
+            this.mapView.mapRenderingManager.viewRenderManager = vrm;
+            this.mapView.mapRenderingManager.syncPostEffectsToVRM();
+            this.applyToneMappingMode();
 
             this.m_atmosphereLight.layers.enable(TRANSLUCENT_LAYER_BIT);
             this.mapView.scene.add(this.m_atmosphereLight);
@@ -253,6 +255,9 @@ export class AtmosphereSystem {
             const vrm = this.mapView.mapRenderingManager.viewRenderManager;
             if (vrm != null) {
                 vrm.exposure.value = this.m_toneMappingExposure;
+            } else {
+                const renderer = this.mapView.renderer as import("three/webgpu").Renderer | null;
+                if (renderer != null) renderer.toneMappingExposure = this.m_toneMappingExposure;
             }
         }
         if (mode !== undefined) {
@@ -267,28 +272,12 @@ export class AtmosphereSystem {
         const renderer = this.mapView.renderer as import("three/webgpu").Renderer | null;
         if (renderer == null) return;
         const vrm = this.mapView.mapRenderingManager.viewRenderManager;
-        if (mode === "agx-punchy") {
-            renderer.toneMapping = THREE.NoToneMapping;
-            if (vrm != null) vrm.config.toneMappingMode = "agx-punchy";
-        } else {
-            if (vrm != null) vrm.config.toneMappingMode = mode;
-            switch (mode) {
-                case "linear":
-                    renderer.toneMapping = THREE.LinearToneMapping;
-                    break;
-                case "reinhard":
-                    renderer.toneMapping = THREE.ReinhardToneMapping;
-                    break;
-                case "aces":
-                    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-                    break;
-                case "agx":
-                    renderer.toneMapping = THREE.AgXToneMapping;
-                    break;
-                case "neutral":
-                    renderer.toneMapping = THREE.NeutralToneMapping;
-                    break;
-            }
+        renderer.toneMapping = THREE.NoToneMapping;
+        renderer.toneMappingExposure = this.m_toneMappingExposure;
+        if (vrm != null) {
+            vrm.config.toneMappingMode = mode;
+            vrm.exposure.value = this.m_toneMappingExposure;
+            vrm.needsUpdate = true;
         }
     }
 

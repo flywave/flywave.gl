@@ -184,8 +184,35 @@ export class ViewRenderManager implements IViewRenderManager {
         let finalNode = vec4(outputNode.rgb, 1);
         if (this.config.toneMappingMode === "agx-punchy") {
             finalNode = vec4(agxPunchyToneMapping(outputNode.rgb, this.exposure), 1);
+        } else {
+            const mode = this.config.toneMappingMode;
+            if (mode === "aces") {
+                finalNode = vec4(
+                    outputNode.rgb.toneMapping(THREE.ACESFilmicToneMapping, this.exposure),
+                    1
+                );
+            } else if (mode === "linear") {
+                finalNode = vec4(
+                    outputNode.rgb.toneMapping(THREE.LinearToneMapping, this.exposure),
+                    1
+                );
+            } else if (mode === "reinhard") {
+                finalNode = vec4(
+                    outputNode.rgb.toneMapping(THREE.ReinhardToneMapping, this.exposure),
+                    1
+                );
+            } else if (mode === "agx") {
+                finalNode = vec4(
+                    outputNode.rgb.toneMapping(THREE.AgXToneMapping, this.exposure),
+                    1
+                );
+            } else if (mode === "neutral") {
+                finalNode = vec4(
+                    outputNode.rgb.toneMapping(THREE.NeutralToneMapping, this.exposure),
+                    1
+                );
+            }
         }
-
         if (taaEnabled) {
             const velocityNode = this.passNode.getTextureNode("velocity");
             this.taaNode = temporalAntialias(finalNode, depthNode, velocityNode, camera);
@@ -264,7 +291,9 @@ export class ViewRenderManager implements IViewRenderManager {
             // Below ground: blend building vertex color over scene
             const alpha = float(0.3);
             const buildingColor = vec4(
-                agxPunchyToneMapping(buildingColorNode.rgb, this.exposure),
+                this.config.toneMappingMode === "agx-punchy"
+                    ? agxPunchyToneMapping(buildingColorNode.rgb, this.exposure)
+                    : buildingColorNode.rgb,
                 1
             );
             const undergroundBlend = finalNode.rgb
