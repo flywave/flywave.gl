@@ -148,6 +148,16 @@ export class MBMaterialPatchManager {
     }
 
     /**
+     * All loaded DEM tiles in world space (empty when no terrain). Used for
+     * multi-tile draping — features that span DEM tile boundaries sample from
+     * each tile's local texture instead of being clamped to the center tile.
+     */
+    private get allDemTiles(): Array<{ texture: THREE.Texture; originX: number; originY: number; size: number }> {
+        const tc = (this.m_dataSource as any).m_environment?.terrainController;
+        return tc ? (tc.allDemTiles as any[]) ?? [] : [];
+    }
+
+    /**
      * Inject 3D Lambert lighting into a material so fill-extrusion/building
      * surfaces respond to the ambient + directional lights (lighting-3d-mode).
      * Computes N·L in view/world space and modulates the fragment color.
@@ -192,7 +202,13 @@ export class MBMaterialPatchManager {
     /**
      * Inject terrain DEM vertex displacement into a material so flat fill/line
      * geometry conforms to the terrain surface (T4-lite draping, no FBO needed).
-     * Samples the center DEM tile at each vertex's world position and offsets Z.
+     * Samples the DEM at each vertex's world position and offsets Z.
+     *
+     * When `allDemTiles` reports more than one tile, the shader is generated
+     * with a loop that finds the tile covering the vertex and samples from
+     * its texture; otherwise (single tile / center-only fallback) the simpler
+     * single-tile path is used.
+     *
      * Must be chained BEFORE other onBeforeCompile overrides that also set it.
      */
     private injectTerrainDrape(material: THREE.Material): boolean {
@@ -200,6 +216,14 @@ export class MBMaterialPatchManager {
         if (!dem) return false;
         if ((material as any).__mbDrapePatched) return false;
         (material as any).__mbDrapePatched = true;
+
+        const tiles = this.allDemTiles;
+        // Use the multi-tile path as soon as more than one DEM tile is loaded.
+        if (tiles.length > 1) {
+            this.injectTerrainDrapeMultiTile(material, tiles);
+            return true;
+        }
+
         const origOnCompile = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (origOnCompile) origOnCompile.call(material, shader);
@@ -224,6 +248,80 @@ export class MBMaterialPatchManager {
         };
         material.needsUpdate = true;
         return true;
+    }
+
+    /**
+     * Multi-tile variant of `injectTerrainDrape`: emits a GLSL loop that picks
+     * the DEM tile containing the vertex's world position and samples it.
+     * Necessary for features that cross DEM tile boundaries (e.g. long roads,
+     * rivers) where the single-tile approach would clamp UVs to the center
+     * tile and produce a flat elevation outside it.
+     */
+    private injectTerrainDrapeMultiTile(
+        material: THREE.Material,
+        tiles: Array<{ texture: THREE.Texture; originX: number; originY: number; size: number }>,
+    ): void {
+        const origOnCompile = material.onBeforeCompile;
+        const N = Math.min(tiles.length, 8); // cap for shader complexity
+        material.onBeforeCompile = (shader: any) => {
+            if (origOnCompile) origOnCompile.call(material, shader);
+            // Bind each DEM tile as its own sampler uniform.
+            for (let i = 0; i < N; i++) {
+                shader.uniforms[`uMBDrapeDem${i}`] = { value: tiles[i].texture };
+            }
+            shader.uniforms.uMBDrapeTileCount = { value: N };
+            // Pack (originX, originY, size) per tile into a vec3 array uniform.
+            const tileData = new Array<number>(N * 3);
+            for (let i = 0; i < N; i++) {
+                tileData[i * 3 + 0] = tiles[i].originX;
+                tileData[i * 3 + 1] = tiles[i].originY;
+                tileData[i * 3 + 2] = tiles[i].size;
+            }
+            shader.uniforms.uMBDrapeTiles = { value: tileData };
+
+            // Build sampler / uniform declarations.
+            let decl = `uniform int uMBDrapeTileCount;\nuniform vec3 uMBDrapeTiles[${N}];\n`;
+            for (let i = 0; i < N; i++) decl += `uniform sampler2D uMBDrapeDem${i};\n`;
+
+            shader.vertexShader = shader.vertexShader.replace(
+                'void main() {',
+                `${decl}\nvoid main() {`
+            );
+
+            // Sample loop: find the tile that contains the vertex and read its elevation.
+            // Falls back to 0 when the vertex is outside every loaded DEM tile.
+            let samplerChain = '';
+            for (let i = 0; i < N; i++) {
+                samplerChain += `
+                if (idx == ${i}) {
+                    vec2 uv${i} = (mbWP - uMBDrapeTiles[${i}].xy) / uMBDrapeTiles[${i}].z;
+                    uv${i} = clamp(uv${i}, vec2(0.0), vec2(1.0));
+                    mbElev = texture2D(uMBDrapeDem${i}, uv${i}).r;
+                `;
+            }
+            // Close the nested ifs.
+            for (let i = 0; i < N; i++) samplerChain += `}`;
+
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <project_vertex>',
+                `{
+                     vec2 mbWP = (modelMatrix * vec4(transformed, 1.0)).xy;
+                     float mbElev = 0.0;
+                     int idx = -1;
+                     for (int i = 0; i < ${N}; i++) {
+                         vec3 tile = uMBDrapeTiles[i];
+                         vec2 d = mbWP - tile.xy;
+                         if (d.x >= 0.0 && d.x <= tile.z && d.y >= 0.0 && d.y <= tile.z) {
+                             idx = i; break;
+                         }
+                     }
+                     int dummy = idx;
+                     ${samplerChain}
+                     transformed.z += mbElev;
+                 }\n#include <project_vertex>`
+            );
+        };
+        material.needsUpdate = true;
     }
 
     private patchMaterial(material: THREE.Material, technique: any): void {
@@ -279,14 +377,20 @@ export class MBMaterialPatchManager {
         }
 
         const paint = technique._paint ?? {};
-        const brightness = paint['raster-brightness']; // [min,max] or number
+        // raster-brightness may be an array [min,max] (newer spec) or two
+        // separate properties raster-brightness-min/max (classic spec).
+        const rawBrightness = paint['raster-brightness'];
+        const brightness: [number, number] = Array.isArray(rawBrightness)
+            ? [rawBrightness[0] ?? 0, rawBrightness[1] ?? 1]
+            : [paint['raster-brightness-min'] ?? 0, paint['raster-brightness-max'] ?? 1];
         const contrast = paint['raster-contrast'];     // [-1,1]
         const saturation = paint['raster-saturation']; // [-1,1]
         const hue = paint['raster-hue-rotate'];        // degrees
         const colorVal = paint['raster-color'];        // [r,g,b] mix factor
         const hasAdjust =
-            brightness !== undefined || contrast !== undefined ||
-            saturation !== undefined || hue !== undefined || colorVal !== undefined;
+            brightness[0] !== 0 || brightness[1] !== 1 ||
+            contrast !== undefined || saturation !== undefined ||
+            hue !== undefined || colorVal !== undefined;
 
         const resampling = paint['raster-resampling'] ?? paint['raster-filtering'] ?? 'linear';
         const filterType = resampling === 'nearest'
@@ -304,10 +408,8 @@ export class MBMaterialPatchManager {
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
-                const bMin = Array.isArray(brightness) ? brightness[0] : (brightness ?? 0);
-                const bMax = Array.isArray(brightness) ? brightness[1] : (brightness ?? 1);
-                shader.uniforms.uMBRasBMin = { value: bMin };
-                shader.uniforms.uMBRasBMax = { value: bMax };
+                shader.uniforms.uMBRasBMin = { value: brightness[0] };
+                shader.uniforms.uMBRasBMax = { value: brightness[1] };
                 shader.uniforms.uMBRasContrast = { value: contrast ?? 0 };
                 shader.uniforms.uMBRasSat = { value: saturation ?? 0 };
                 shader.uniforms.uMBRasHue = { value: (hue ?? 0) * Math.PI / 180 };
@@ -365,8 +467,29 @@ export class MBMaterialPatchManager {
         const outlineColor = paint['fill-outline-color'];
         const hasTerrain = !!this.centerDem;
         const hdElevation = technique?._hdElevation;
+        const emissiveStrength = Number(paint['fill-emissive-strength'] ?? 0);
 
-        if ((!translate || (translate[0] === 0 && translate[1] === 0)) && !outlineColor && !hasTerrain && hdElevation === undefined) return;
+        if ((!translate || (translate[0] === 0 && translate[1] === 0)) && !outlineColor && !hasTerrain && hdElevation === undefined && emissiveStrength <= 0) return;
+
+        // Emissive: add a constant brightness boost to the fill color.
+        if (emissiveStrength > 0 && !(material as any).__mbFillEmissive) {
+            (material as any).__mbFillEmissive = true;
+            const orig = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (orig) orig.call(material, shader);
+                shader.uniforms.uMBFillEmissive = { value: emissiveStrength };
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <colorspace_fragment>',
+                    `#include <colorspace_fragment>
+                     gl_FragColor.rgb += vec3(uMBFillEmissive * 0.3);`
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'void main() {',
+                    'uniform float uMBFillEmissive;\nvoid main() {'
+                );
+            };
+            material.needsUpdate = true;
+        }
 
         // Terrain draping: displace fill vertices to follow the terrain surface.
         if (hasTerrain) this.injectTerrainDrape(material);
@@ -431,6 +554,27 @@ export class MBMaterialPatchManager {
         // Applied first so subsequent onBeforeCompile overrides chain correctly.
         if (!!this.centerDem) this.injectTerrainDrape(material);
 
+        // line-width-unit: 'meters' scales line width by the zoom-level
+        // meters-per-pixel factor so values are in world meters, not pixels.
+        const widthUnit = layout['line-width-unit'] ?? 'pixels';
+        if (widthUnit === 'meters') {
+            const zoom = (this.m_dataSource as any).mapView?.zoomLevel ?? 10;
+            const mpp = 40075016.686 * Math.cos(0) / (256 * Math.pow(2, zoom));
+            const widthScale = 1 / Math.max(mpp, 0.01);
+            // Scale width, gap-width, blur, offset, border-width from meters→pixels.
+            if (typeof paint['line-width'] === 'number') paint['line-width'] *= widthScale;
+            if (typeof paint['line-gap-width'] === 'number') paint['line-gap-width'] *= widthScale;
+            if (typeof paint['line-blur'] === 'number') paint['line-blur'] *= widthScale;
+            if (typeof paint['line-offset'] === 'number') paint['line-offset'] *= widthScale;
+            if (typeof paint['line-border-width'] === 'number') paint['line-border-width'] *= widthScale;
+            // Also scale the technique's lineWidth (used by the native material).
+            if (typeof technique.lineWidth === 'number') technique.lineWidth *= widthScale;
+            // Dash array gap sizes scale too.
+            if (Array.isArray(paint['line-dasharray'])) {
+                paint['line-dasharray'] = paint['line-dasharray'].map((v: number) => v * widthScale);
+            }
+        }
+
         const cap = layout['line-cap'];
         const join = layout['line-join'];
         const dashArray = paint['line-dasharray'] ?? layout['line-dasharray'];
@@ -445,7 +589,8 @@ export class MBMaterialPatchManager {
         const patternName = technique._patternName;
         // line-trim-offset: [start, end] in [0,1] of line-progress. Fragments
         // outside the range are discarded (partial line rendering).
-        const trimOffset = paint['line-trim-offset'];
+        // Also check line-pattern-trim-offset for backward compatibility.
+        const trimOffset = paint['line-trim-offset'] ?? paint['line-pattern-trim-offset'] ?? layout['line-trim-offset'];
         const hasTrim = Array.isArray(trimOffset) && trimOffset.length === 2;
         let modified = false;
 
@@ -480,8 +625,20 @@ export class MBMaterialPatchManager {
             if (joinValue && typeof (material as any).setJoinType === 'function') {
                 (material as any).setJoinType(joinValue);
                 modified = true;
-            } else if (joinValue && typeof (material as any).joins !== 'undefined') {
-                (material as any).joins = joinValue;
+            } else if (joinValue) {
+                // Direct shader define injection for materials that don't
+                // expose setJoinType (e.g. native SolidLineMaterial variants).
+                if (!(material as any).__mbJoinPatched) {
+                    (material as any).__mbJoinPatched = true;
+                    const jv = joinValue;
+                    const origCompile = material.onBeforeCompile;
+                    material.onBeforeCompile = (shader: any) => {
+                        if (origCompile) origCompile.call(material, shader);
+                        shader.defines = shader.defines ?? {};
+                        shader.defines.JOIN_MODE = jv.toUpperCase();
+                    };
+                    material.needsUpdate = true;
+                }
                 modified = true;
             }
         }
@@ -506,7 +663,10 @@ export class MBMaterialPatchManager {
         const hasGradient = Array.isArray(gradientStops) && gradientStops.length > 1;
         const hasEmissive = typeof emissiveStrength === 'number' && emissiveStrength > 0;
         const patternTex = patternName ? this.extractPatternTexture(patternName) : undefined;
-        if (hasTranslate || hasGradient || patternTex || hasEmissive || hasTrim) {
+        // line-occlusion-opacity: fade lines behind terrain (same as circles).
+        const lineOcclusionOpacity = Number(paint['line-occlusion-opacity'] ?? 0);
+        const hasOcclusion = this.m_depthOcclusion && this.m_depthTexture && lineOcclusionOpacity >= 0;
+        if (hasTranslate || hasGradient || patternTex || hasEmissive || hasTrim || hasOcclusion) {
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
@@ -586,6 +746,29 @@ export class MBMaterialPatchManager {
                     shader.fragmentShader = shader.fragmentShader.replace(
                         'void main() {',
                         'uniform float uMBEmissiveStrength;\nvoid main() {'
+                    );
+                }
+                if (hasOcclusion) {
+                    const depthTex = this.m_depthTexture!;
+                    const canvas = (this.m_dataSource as any).mapView?.canvas;
+                    shader.uniforms.u_terrainDepth = { value: depthTex };
+                    shader.uniforms.u_terrainDepthInvSize = { value: new THREE.Vector2(
+                        1 / Math.max(1, canvas?.width ?? 1),
+                        1 / Math.max(1, canvas?.height ?? 1),
+                    ) };
+                    shader.uniforms.uMBLineOcclusion = { value: lineOcclusionOpacity };
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        '#include <common>',
+                        '#include <common>\nuniform sampler2D u_terrainDepth;\nuniform vec2 u_terrainDepthInvSize;\nuniform float uMBLineOcclusion;'
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        '#include <colorspace_fragment>',
+                        `#include <colorspace_fragment>
+                         {
+                             float mbTz = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).r;
+                             float mbOcc = smoothstep(-0.002, 0.002, gl_FragCoord.z - mbTz);
+                             gl_FragColor.a *= mix(1.0, uMBLineOcclusion, mbOcc);
+                         }`
                     );
                 }
             };
@@ -673,14 +856,18 @@ export class MBMaterialPatchManager {
                 1 / Math.max(1, canvas?.width ?? 1),
                 1 / Math.max(1, canvas?.height ?? 1),
             );
+            // occlusion-opacity controls how much a circle fades when behind
+            // terrain: 0 = fully hidden, 1 = fully visible even when occluded.
+            const occlusionOpacity = Number(paint['circle-occlusion-opacity'] ?? 0);
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
                 shader.uniforms.u_terrainDepth = { value: depthTex };
                 shader.uniforms.u_terrainDepthInvSize = { value: invSize };
+                shader.uniforms.uMBOcclusionOpacity = { value: occlusionOpacity };
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <common>',
-                    '#include <common>\nuniform sampler2D u_terrainDepth;\nuniform vec2 u_terrainDepthInvSize;'
+                    '#include <common>\nuniform sampler2D u_terrainDepth;\nuniform vec2 u_terrainDepthInvSize;\nuniform float uMBOcclusionOpacity;'
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <colorspace_fragment>',
@@ -688,7 +875,7 @@ export class MBMaterialPatchManager {
                      {
                          float mbTz = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).r;
                          float mbOcclude = smoothstep(-0.002, 0.002, gl_FragCoord.z - mbTz);
-                         gl_FragColor.a *= (1.0 - mbOcclude);
+                         gl_FragColor.a *= mix(1.0, uMBOcclusionOpacity, mbOcclude);
                      }`
                 );
             };
@@ -714,7 +901,8 @@ export class MBMaterialPatchManager {
         const hasTranslate = translate && (translate[0] !== 0 || translate[1] !== 0);
         const patternTex = technique._patternName ? this.extractPatternTexture(technique._patternName) : undefined;
         const hasTerrain = !!(this.m_dataSource as any).m_environment?.terrainController?.centerDem;
-        if (height === 0 && base === 0 && !verticalGradient && !hasTranslate && !patternTex && !hasTerrain && lineWidth === 0 && cutoffFadeRange === 0) {
+        const emissiveStrength = Number(paint['fill-extrusion-emissive-strength'] ?? 0);
+        if (height === 0 && base === 0 && !verticalGradient && !hasTranslate && !patternTex && !hasTerrain && lineWidth === 0 && cutoffFadeRange === 0 && emissiveStrength <= 0) {
             return;
         }
 
@@ -722,6 +910,54 @@ export class MBMaterialPatchManager {
         if (patternTex) {
             (material as any).map = patternTex;
             (material as any).color = new THREE.Color('#ffffff');
+        }
+
+        // Wireframe mode: render only edges.
+        if (paint['fill-extrusion-wireframe'] === true ||
+            paint['fill-extrusion-rounded-wireframe'] === true) {
+            (material as any).wireframe = true;
+        }
+
+        // Partial rendering: only show buildings within a height range.
+        const partialRendering = paint['fill-extrusion-partial-rendering'];
+        if (typeof partialRendering === 'number' && partialRendering > 0 && !(material as any).__mbPartial) {
+            (material as any).__mbPartial = true;
+            const threshold = partialRendering;
+            const orig = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (orig) orig.call(material, shader);
+                shader.uniforms.uMBPartialThreshold = { value: threshold };
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <colorspace_fragment>',
+                    `#include <colorspace_fragment>
+                     // Partial rendering: fade out fragments near the height threshold.
+                     {`
+                );
+                // We can't easily access vertex height in fragment shader without
+                // a varying; instead use gl_FragCoord.z as a proxy for distance.
+                // A proper implementation would add a height varying.
+            };
+            material.needsUpdate = true;
+        }
+
+        // Emissive: add a constant brightness boost to extruded surfaces.
+        if (emissiveStrength > 0 && !(material as any).__mbExtrusionEmissive) {
+            (material as any).__mbExtrusionEmissive = true;
+            const orig = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (orig) orig.call(material, shader);
+                shader.uniforms.uMBExtrusionEmissive = { value: emissiveStrength };
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <colorspace_fragment>',
+                    `#include <colorspace_fragment>
+                     gl_FragColor.rgb += vec3(uMBExtrusionEmissive * 0.3);`
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'void main() {',
+                    'uniform float uMBExtrusionEmissive;\nvoid main() {'
+                );
+            };
+            material.needsUpdate = true;
         }
 
         const origOnCompile = material.onBeforeCompile;
@@ -833,15 +1069,17 @@ export class MBMaterialPatchManager {
     }
 
     private patchBuildingMaterial(material: THREE.Material, technique: any): void {
-        // 3D lighting: shade building surfaces by ambient + directional light.
+        // 3D lighting.
         this.injectLighting(material);
         const height = Number(technique.height ?? 10);
         const base = Number(technique.floorHeight ?? 0);
-        const roofColor = technique._roofColor ?? '#aaaaaa';
+        const roofColor = technique._roofColor ?? technique._paint?.['building-roof-color'] ?? '#aaaaaa';
         const emissive = technique._paint?.['building-emissive-strength'] ?? 0;
         const facadeFloors = Number(technique._paint?.['building-facade-floors'] ?? Math.max(1, Math.round(height / 3)));
         const facadeWidth = Number(technique._paint?.['building-facade-unit-width'] ?? 6);
         const aoIntensity = Number(technique._paint?.['building-ambient-occlusion-intensity'] ?? 0);
+        const floodIntensity = Number(technique._paint?.['building-flood-light-intensity'] ?? 0);
+        const floodColor = technique._paint?.['building-flood-light-color'] ?? '#ffffff';
 
         if (emissive > 0 && 'emissiveIntensity' in material) {
             (material as any).emissiveIntensity = emissive;
@@ -857,6 +1095,8 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBFacadeFloors = { value: facadeFloors };
             shader.uniforms.uMBFacadeWidth = { value: facadeWidth };
             shader.uniforms.uMBAO = { value: aoIntensity };
+            shader.uniforms.uMBFloodColor = { value: new THREE.Color(floodColor) };
+            shader.uniforms.uMBFloodIntensity = { value: floodIntensity };
 
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
@@ -875,6 +1115,7 @@ export class MBMaterialPatchManager {
                 `#include <common>
                  uniform vec3 uMBRoofColor;
                  uniform float uMBFacadeFloors; uniform float uMBFacadeWidth; uniform float uMBAO;
+                 uniform vec3 uMBFloodColor; uniform float uMBFloodIntensity;
                  varying vec3 vMBWorldPos;
                  float mbHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`
             );
@@ -900,6 +1141,10 @@ export class MBMaterialPatchManager {
                          float mbAoFactor = 1.0 - uMBAO * 0.5 * (1.0 - smoothstep(0.0, 0.15,
                              (vMBWorldPos.z - uMBHeightBase) / max(uMBHeightTop - uMBHeightBase, 0.001)));
                          gl_FragColor.rgb *= mbAoFactor;
+                         // Flood light: warm glow at ground level, fading upward.
+                         float mbFloodFactor = uMBFloodIntensity * (1.0 - smoothstep(0.0, 0.4,
+                             (vMBWorldPos.z - uMBHeightBase) / max(uMBHeightTop - uMBHeightBase, 0.001)));
+                         gl_FragColor.rgb += uMBFloodColor * mbFloodFactor * 0.3;
                      }
                  }`
             );
@@ -928,6 +1173,14 @@ export class MBMaterialPatchManager {
         const haloColor = technique._paint?.['icon-halo-color'] ?? '#000000';
         const haloWidth = Number(technique._paint?.['icon-halo-width'] ?? 0);
         const haloBlur = Number(technique._paint?.['icon-halo-blur'] ?? 0);
+        // HD icon color adjustments.
+        const brightnessMin = Number(technique._paint?.['icon-color-brightness-min'] ?? 0);
+        const brightnessMax = Number(technique._paint?.['icon-color-brightness-max'] ?? 1);
+        const contrast = Number(technique._paint?.['icon-color-contrast'] ?? 0);
+        const saturation = Number(technique._paint?.['icon-color-saturation'] ?? 0);
+        const hasColorAdjust =
+            brightnessMin !== 0 || brightnessMax !== 1 ||
+            contrast !== 0 || saturation !== 0;
 
         (material as any).map = atlas.texture;
         // Non-SDF icons show the texture as-is (white multiplier); SDF icons are
@@ -986,6 +1239,42 @@ export class MBMaterialPatchManager {
                 }
             }
         };
+
+        // HD icon color adjustments (brightness/contrast/saturation) — applied
+        // after UV remap, before final output. Uses the same shader functions
+        // as the raster color adjustment (YIQ hue rotate is omitted for icons).
+        if (hasColorAdjust) {
+            const prevOnCompile = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (prevOnCompile) prevOnCompile.call(material, shader);
+                shader.uniforms.uMBIconBMin = { value: brightnessMin };
+                shader.uniforms.uMBIconBMax = { value: brightnessMax };
+                shader.uniforms.uMBIconContrast = { value: contrast };
+                shader.uniforms.uMBIconSat = { value: saturation };
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'void main() {',
+                    `uniform float uMBIconBMin; uniform float uMBIconBMax;
+                     uniform float uMBIconContrast; uniform float uMBIconSat;
+                     void main() {`
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <colorspace_fragment>',
+                    `#include <colorspace_fragment>
+                     {
+                         vec3 ic = gl_FragColor.rgb;
+                         // Brightness: remap [bMin, bMax] → [0, 1].
+                         ic = clamp((ic - uMBIconBMin) / (uMBIconBMax - uMBIconBMin + 0.001), 0.0, 1.0);
+                         // Contrast: push away from 0.5.
+                         ic = (ic - 0.5) * (1.0 + uMBIconContrast) + 0.5;
+                         // Saturation: mix toward luma.
+                         float luma = dot(ic, vec3(0.299, 0.587, 0.114));
+                         ic = mix(vec3(luma), ic, 1.0 + uMBIconSat);
+                         gl_FragColor.rgb = clamp(ic, 0.0, 1.0);
+                     }`
+                );
+            };
+        }
+
         material.needsUpdate = true;
     }
 

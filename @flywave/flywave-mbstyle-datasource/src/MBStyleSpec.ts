@@ -63,6 +63,7 @@ export interface GeoJSONSourceSpec {
     cluster?: boolean;
     clusterRadius?: number;
     clusterMaxZoom?: number;
+    clusterProperties?: Record<string, any>;
     [_: string]: unknown;
 }
 
@@ -364,7 +365,11 @@ export type LayerType = LayerSpecification['type'] | 'heatmap' | 'hillshade' | '
 export const GEOMETRY_TYPE_MAP: Record<string, string[]> = {
     fill: ['polygon'],
     line: ['line'],
-    symbol: ['point', 'line'],
+    // Symbol layers can render on any geometry type (point, line, polygon).
+    // Mapbox symbol-geometry tests verify that symbols appear on the correct
+    // geometry type — restricting to ['point', 'line'] would suppress polygon
+    // symbols (e.g. labels at polygon centroids).
+    symbol: ['point', 'line', 'polygon'],
     circle: ['point'],
     'fill-extrusion': ['polygon'],
     background: ['polygon'],
@@ -373,4 +378,6 @@ export const GEOMETRY_TYPE_MAP: Record<string, string[]> = {
     hillshade: ['polygon'],
     model: ['point'],
     building: ['polygon'],
+    // 'clip' layers don't render features — just provide a mask polygon.
+    clip: [],
 };

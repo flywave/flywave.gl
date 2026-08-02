@@ -138,6 +138,104 @@ export class FontCatalog {
         return fontCatalogInfo;
     }
 
+    /**
+     * Creates a FontCatalog from in-memory data, bypassing HTTP fetch.
+     * Used by the mapbox-style datasource to convert PBF SDF glyphs into
+     * FontCatalog-compatible format at runtime.
+     *
+     * @param name - Catalog name.
+     * @param type - "sdf" or "msdf".
+     * @param size - Glyph size in pixels.
+     * @param maxWidth - Max glyph width.
+     * @param maxHeight - Max glyph height.
+     * @param distanceRange - SDF distance range.
+     * @param fonts - Font definitions.
+     * @param unicodeBlocks - Supported Unicode blocks.
+     * @param maxCodePointCount - GPU texture atlas capacity.
+     * @param replacementGlyph - Fallback glyph for missing code points.
+     * @returns New FontCatalog instance.
+     */
+    static fromData(
+        name: string,
+        type: string,
+        size: number,
+        maxWidth: number,
+        maxHeight: number,
+        distanceRange: number,
+        fonts: Font[],
+        unicodeBlocks: UnicodeBlock[],
+        maxCodePointCount: number,
+        replacementGlyph: GlyphData
+    ): FontCatalog {
+        return new FontCatalog(
+            "",
+            name,
+            type,
+            size,
+            maxWidth,
+            maxHeight,
+            distanceRange,
+            fonts,
+            unicodeBlocks,
+            maxCodePointCount,
+            replacementGlyph
+        );
+    }
+
+    /**
+     * Registers a pre-built glyph in the catalog's internal cache, bypassing
+     * the HTTP lazy-loading path. Used by the mapbox-style datasource to
+     * inject PBF-decoded SDF glyphs directly.
+     *
+     * @param fontName - Font name (must match a font in `this.fonts`).
+     * @param fontStyle - Font style key (e.g. "Regular").
+     * @param codePoint - Unicode code point.
+     * @param glyph - Pre-built GlyphData with source texture + UVs.
+     */
+    registerGlyph(fontName: string, fontStyle: string, codePoint: number, glyph: GlyphData): void {
+        const key = `${fontName}_${fontStyle}`;
+        let glyphMap = this.m_loadedGlyphs.get(key);
+        if (!glyphMap) {
+            glyphMap = new Map();
+            this.m_loadedGlyphs.set(key, glyphMap);
+        }
+        glyphMap.set(codePoint, glyph);
+        // Also add to the GPU texture cache so the glyph renders immediately.
+        const glyphHash = `${key}_${codePoint}`;
+        if (!this.m_glyphTextureCache.has(glyphHash)) {
+            this.m_glyphTextureCache.add(glyphHash, glyph);
+        }
+    }
+
+    /**
+     * Pre-loads a BMFont block JSON + page textures into the cache without
+     * triggering an HTTP fetch. Used by the mapbox-style datasource.
+     *
+     * @param fontName - Font name.
+     * @param blockName - Unicode block name (spaces replaced with underscores in URLs).
+     * @param json - Parsed BMFont block JSON (must have `chars[]` + `pages[]`).
+     * @param textures - Array of THREE.Textures, one per page.
+     */
+    preloadBlock(
+        fontName: string,
+        blockName: string,
+        json: any,
+        textures: THREE.Texture[]
+    ): void {
+        // Match the loadBlock() URL convention: `${url}/${name}_Assets/${fontName}/${block}.json`
+        // with url = "" for in-memory catalogs, so this becomes `${name}_Assets/${fontName}/${block}.json`.
+        const blockKey = `${this.name}${ASSETS_PATH}${fontName}/${blockName.replace(/ /g, "_")}`;
+        this.m_loadedJson.set(blockKey, json);
+        if (json.pages) {
+            for (let i = 0; i < json.pages.length; i++) {
+                const pageKey = `${blockKey}_${i}`;
+                if (textures[i]) {
+                    this.m_loadedPages.set(pageKey, textures[i]);
+                }
+            }
+        }
+    }
+
     static async loadTexture(url: string): Promise<THREE.Texture> {
         return await new Promise(resolve => {
             new THREE.TextureLoader().load(url, resolve);
@@ -185,7 +283,7 @@ export class FontCatalog {
      *
      * @returns New FontCatalog.
      */
-    private constructor(
+    constructor(
         readonly url: string,
         readonly name: string,
         readonly type: string,

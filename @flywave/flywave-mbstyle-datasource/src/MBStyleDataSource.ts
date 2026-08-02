@@ -123,6 +123,41 @@ class TMSDataProvider extends DataProvider {
 }
 
 /**
+ * Bounds-filtering wrapper: skips tiles outside a source's `bounds`
+ * rectangle [minLng, minLat, maxLng, maxLat]. Returns empty data for
+ * out-of-bounds tiles so the decoder renders nothing for them.
+ */
+class BoundsFilteredDataProvider extends DataProvider {
+    private m_inner: DataProvider;
+    private m_bounds: [number, number, number, number];
+    constructor(inner: DataProvider, bounds: [number, number, number, number]) {
+        super();
+        this.m_inner = inner;
+        this.m_bounds = bounds;
+    }
+    ready(): boolean { return this.m_inner.ready(); }
+    async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ArrayBufferLike | {}> {
+        // Compute tile geographic bounds.
+        const z = tileKey.level;
+        const x = tileKey.column;
+        const y = tileKey.row;
+        const n = Math.pow(2, z);
+        const tileW = (x / n) * 360 - 180;
+        const tileE = ((x + 1) / n) * 360 - 180;
+        const tileN = (180 / Math.PI) * Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n)));
+        const tileS = (180 / Math.PI) * Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n)));
+        const [minLng, minLat, maxLng, maxLat] = this.m_bounds;
+        // Skip if tile is entirely outside the bounds rectangle.
+        if (tileE < minLng || tileW > maxLng || tileS > maxLat || tileN < minLat) {
+            return JSON.stringify({ type: 'FeatureCollection', features: [] });
+        }
+        return this.m_inner.getTile(tileKey, abortSignal);
+    }
+    protected async connect(): Promise<void> {}
+    protected dispose(): void {}
+}
+
+/**
  * DataProvider for hillshade layers. Generates a tile-covering polygon per tile
  * carrying the resolved raster-DEM tile url, so the emitter can emit a fill
  * technique flagged as hillshade and the MaterialPatchManager can load the DEM
@@ -194,14 +229,27 @@ class GeoJSONDataProvider extends DataProvider {
     private m_clusterRadius: number = 50;
     private m_clusterMaxZoom: number = 16;
     private m_clusteredCache: Map<number, string> = new Map();
+    /**
+     * clusterProperties spec — e.g. `{ total: ['+', ['get', 'value']] }`.
+     * Each entry maps a cluster-property name to a `[aggregator, mapExpr]`
+     * pair. The map expression is evaluated per source point feature; the
+     * aggregator (`['+']`, `['max']`, `['min']`, etc.) combines the values.
+     */
+    private m_clusterProperties: Record<string, any> = {};
 
-    constructor(data: any, clusterOpts?: { cluster?: boolean; clusterRadius?: number; clusterMaxZoom?: number }) {
+    constructor(data: any, clusterOpts?: {
+        cluster?: boolean;
+        clusterRadius?: number;
+        clusterMaxZoom?: number;
+        clusterProperties?: Record<string, any>;
+    }) {
         super();
         this.m_geoJsonData = typeof data === 'string' ? data : JSON.stringify(data);
         if (clusterOpts) {
             this.m_cluster = clusterOpts.cluster ?? false;
             this.m_clusterRadius = clusterOpts.clusterRadius ?? 50;
             this.m_clusterMaxZoom = clusterOpts.clusterMaxZoom ?? 16;
+            this.m_clusterProperties = clusterOpts.clusterProperties ?? {};
         }
     }
 
@@ -248,10 +296,21 @@ class GeoJSONDataProvider extends DataProvider {
                         sumLng += f.geometry.coordinates[0];
                         sumLat += f.geometry.coordinates[1];
                     }
+                    const props: Record<string, any> = {
+                        cluster: true,
+                        cluster_id: `${zoom}:${group.length}`,
+                        point_count: group.length,
+                    };
+                    // Compute each declared clusterProperty by mapping every
+                    // source feature through the property's expression and
+                    // aggregating the resulting values.
+                    for (const [name, spec] of Object.entries(this.m_clusterProperties)) {
+                        props[name] = aggregateClusterProperty(spec, group);
+                    }
                     clusteredFeatures.push({
                         type: 'Feature',
                         geometry: { type: 'Point', coordinates: [sumLng / group.length, sumLat / group.length] },
-                        properties: { cluster: true, cluster_id: `${zoom}:${group.length}`, point_count: group.length },
+                        properties: props,
                     });
                 }
             }
@@ -274,6 +333,57 @@ class GeoJSONDataProvider extends DataProvider {
     protected dispose(): void {}
 }
 
+/**
+ * Aggregate one clusterProperty across a group of source features.
+ *
+ * The mapbox spec form is `clusterProperties: { name: [aggregator, mapExpr] }`
+ * where `aggregator` is an expression like `['+']` / `['max']` / `['min']`
+ * applied to the per-feature mapped values. We support the most common
+ * aggregators natively without needing the full expression engine.
+ */
+function aggregateClusterProperty(
+    spec: any,
+    group: any[],
+): number | any[] {
+    if (!Array.isArray(spec) || spec.length < 2) return 0;
+    const agg = spec[0];
+    const mapExpr = spec[1];
+    // Lazy import to avoid cycle when this file is loaded by the engine.
+    const { MBExpressionEngine } = require('./MBExpressionEngine');
+    const mapped = group.map((f) => {
+        return MBExpressionEngine.evaluate(mapExpr, {
+            zoom: 0,
+            feature: { type: 'Point', properties: f.properties ?? {}, id: f.id },
+        });
+    });
+    // Aggregator operator (a single-element expression like ['+']).
+    const op = Array.isArray(agg) ? agg[0] : agg;
+    switch (op) {
+        case '+': {
+            let s = 0;
+            for (const v of mapped) s += Number(v) || 0;
+            return s;
+        }
+        case 'max': {
+            let m = -Infinity;
+            for (const v of mapped) if (Number(v) > m) m = Number(v);
+            return m === -Infinity ? 0 : m;
+        }
+        case 'min': {
+            let m = Infinity;
+            for (const v of mapped) if (Number(v) < m) m = Number(v);
+            return m === Infinity ? 0 : m;
+        }
+        case '*': {
+            let p = 1;
+            for (const v of mapped) p *= Number(v) || 1;
+            return p;
+        }
+        default:
+            return mapped;
+    }
+}
+
 class DelegatingDataProvider extends DataProvider {
     delegate: DataProvider | null = null;
 
@@ -283,7 +393,14 @@ class DelegatingDataProvider extends DataProvider {
 
     async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ArrayBufferLike | {}> {
         if (!this.delegate) return new ArrayBuffer(0);
-        return this.delegate.getTile(tileKey, abortSignal);
+        try {
+            return await this.delegate.getTile(tileKey, abortSignal);
+        } catch {
+            // Sparse tilesets / 404s: return empty data instead of crashing
+            // the decode pipeline. The decoder handles empty FeatureCollections
+            // gracefully (no features → no geometry).
+            return JSON.stringify({ type: 'FeatureCollection', features: [] });
+        }
     }
 
     protected async connect(): Promise<void> {
@@ -310,9 +427,17 @@ export class MBStyleDataSource extends TileDataSource {
     private m_currentSourceId: string = '';
     private m_demTileUrl: string | null = null;
     private m_rasterTileUrl: string | null = null;
+    /**
+     * Cached mapbox glyph metrics (font→char→metrics), shared with the worker
+     * decoder so text shaping uses accurate advance widths. Filled lazily by
+     * `loadGlyphMetrics()` on first connect.
+     */
+    private m_glyphMetrics: Map<string, any> = new Map();
     private m_environment: MBEnvironmentManager | null = null;
     private m_materialPatcher: MBMaterialPatchManager | null = null;
     private m_depthOcclusion: any = null;
+    /** FBO-based texture draping for terrain (per-tile lazy bake). */
+    private m_terrainDraping: any = null;
     private m_symbolPlacement: any = null;
     private m_debugTileBoundaries = false;
     private m_debugLines: any = null;
@@ -394,6 +519,17 @@ export class MBStyleDataSource extends TileDataSource {
 
         const sources = this.m_styleManager.getResolvedSources();
 
+        // Set maxDataLevel from the style's tile sources so flywave overzooms
+        // (loads the highest-available parent tile and scales it up) when the
+        // map zoom exceeds a source's `maxzoom`. Without this, a source with
+        // maxzoom=14 viewed at z16 would request missing z16 tiles and render
+        // nothing instead of the scaled z14 parent.
+        const maxSourceZoom = Math.max(
+            1,
+            ...[...sources.values()].map(s => s.maxzoom ?? 22),
+        );
+        this.maxDataLevel = Math.min(22, maxSourceZoom);
+
         // Priority 1: Find best vector tile source (most layers referencing it)
         let found = false;
         const layerCounts = new Map<string, number>();
@@ -423,11 +559,16 @@ export class MBStyleDataSource extends TileDataSource {
             );
             // TMS scheme: wrap the rest client to flip y coordinate.
             const scheme = (source as any).scheme ?? 'xyz';
+            let delegate: DataProvider = restClient;
             if (scheme === 'tms') {
-                this.m_delegatingProvider.delegate = new TMSDataProvider(restClient);
-            } else {
-                this.m_delegatingProvider.delegate = restClient;
+                delegate = new TMSDataProvider(restClient);
             }
+            // Source bounds: wrap to filter out-of-bounds tiles (TileJSON).
+            const bounds = (source as any).bounds;
+            if (Array.isArray(bounds) && bounds.length === 4) {
+                delegate = new BoundsFilteredDataProvider(delegate, bounds as [number, number, number, number]);
+            }
+            this.m_delegatingProvider.delegate = delegate;
             this.m_currentSourceId = bestVectorSourceId;
 
             await this.decoder.configure(undefined, {
@@ -469,6 +610,7 @@ export class MBStyleDataSource extends TileDataSource {
                         cluster: geoJsonSpec.cluster,
                         clusterRadius: geoJsonSpec.clusterRadius,
                         clusterMaxZoom: geoJsonSpec.clusterMaxZoom,
+                        clusterProperties: (geoJsonSpec as any).clusterProperties,
                     });
                     this.m_currentSourceId = sourceId;
 
@@ -557,6 +699,17 @@ export class MBStyleDataSource extends TileDataSource {
         // Load sprite atlas if style has a sprite URL
         if (style.sprite) {
             await this.loadSpriteAtlas(style.sprite);
+            this.m_lastAppliedSprite = style.sprite;
+        }
+
+        // Preload real mapbox glyph metrics for the style's font stacks so
+        // the worker-based decoder can shape text accurately (line breaking
+        // and anchor placement match the actual font advances). The atlas
+        // bitmap itself still goes through flywave's FontCatalog; only the
+        // metrics are wired through here.
+        if (style.glyphs) {
+            await this.loadGlyphMetrics(style);
+            this.m_lastAppliedGlyphs = style.glyphs;
         }
 
         if (this.mapView) {
@@ -572,12 +725,14 @@ export class MBStyleDataSource extends TileDataSource {
             if (bgLayer) {
                 const bgPaint = (bgLayer as any).paint ?? {};
                 const pattern = bgPaint['background-pattern'];
+                const pitchAlign = bgPaint['background-pitch-alignment'] ?? 'map';
                 if (pattern && this.m_spriteAtlas) {
                     await this.m_environment.applyBackgroundPattern(
                         pattern,
                         this.m_spriteAtlas,
                         bgPaint['background-color'] ?? '#000000',
                         bgPaint['background-opacity'] ?? 1,
+                        pitchAlign,
                     );
                 }
             }
@@ -603,6 +758,9 @@ export class MBStyleDataSource extends TileDataSource {
                 if (tc && tc.isMorphing) {
                     tc.updateMorphing(Date.now());
                 }
+                // TerrainDraping has its own AfterRender listener that
+                // detects mesh count changes + morphing completion + lazy
+                // bake — no manual trigger needed here.
             });
         }
 
@@ -634,6 +792,22 @@ export class MBStyleDataSource extends TileDataSource {
                     if (this.m_materialPatcher && this.m_depthOcclusion.depthTexture) {
                         this.m_materialPatcher.setDepthTexture(this.m_depthOcclusion.depthTexture);
                     }
+                } catch {}
+            }
+
+            // Start FBO texture draping: bake non-terrain layers (raster
+            // satellite, fill patterns, etc.) into per-tile textures and
+            // feed them to the terrain material's uDrape uniform.
+            // Activated alongside depth occlusion — the two are complementary
+            // (depth occlusion hides labels behind hills; draping paints
+            // raster content on the DEM surface).
+            if (this.mapView && this.m_environment.terrainController) {
+                try {
+                    const { TerrainDraping } = await import('./TerrainDraping');
+                    this.m_terrainDraping?.dispose();
+                    this.m_terrainDraping = new TerrainDraping(
+                        this.mapView, this.m_environment.terrainController);
+                    this.m_terrainDraping.start();
                 } catch {}
             }
         }
@@ -798,6 +972,21 @@ export class MBStyleDataSource extends TileDataSource {
         });
     }
 
+    /** Toggle 2D layer wireframe overlay (metadata.test.showLayers2DWireframe). */
+    setLayers2DWireframe(enabled: boolean): void {
+        if (!this.mapView) return;
+        const scene = (this.mapView as any).m_scene as THREE.Scene;
+        if (!scene) return;
+        scene.traverse((obj: any) => {
+            if (obj.isMesh && obj.material && obj.userData?.technique) {
+                const tech = obj.userData.technique;
+                if (tech.name === 'circles' || tech.name === 'text' || tech.name === 'labeled-icon') {
+                    obj.material.wireframe = enabled;
+                }
+            }
+        });
+    }
+
     /** Runtime setFov: delegate to MapView.setFovCalculation. */
     setFov(fov: number): void {
         (this.mapView as any)?.setFovCalculation?.({ type: 'fixed', fov });
@@ -912,8 +1101,127 @@ export class MBStyleDataSource extends TileDataSource {
         }
     }
 
+    /**
+     * Preload mapbox PBF glyph metrics for every font stack referenced by the
+     * style's symbol layers. Only the basic Latin range (0-255) is fetched —
+     * that's all that's needed for accurate shaping of the latin labels that
+     * dominate the render-test corpus. The metrics are shipped to the worker
+     * decoder on the next `decoder.configure()` call.
+     */
+    private async loadGlyphMetrics(style: StyleSpecification): Promise<void> {
+        const glyphsUrl = style.glyphs;
+        if (!glyphsUrl) return;
+        // Collect unique font stacks from symbol layer layouts.
+        const fontStacks = new Set<string>();
+        for (const layer of style.layers ?? []) {
+            const tf = (layer as any).layout?.['text-font'];
+            if (Array.isArray(tf) && tf.length > 0) {
+                fontStacks.add(tf.join(','));
+            }
+        }
+        if (fontStacks.size === 0) return;
+
+        const { loadGlyphMetrics } = await import('./MBGlyphLoader');
+        // Basic Latin range covers most labels; load 0 (chars 0-255).
+        const RANGES = [0, 1]; // 0-255 + 256-511 (Latin-1 supplement + Extended-A)
+        for (const stack of fontStacks) {
+            // The mapbox URL template uses {fontstack}; PBF fontstack names
+            // are comma-separated. Pass the first font of the stack — PBF
+            // ranges are typically keyed by primary font.
+            const primaryFont = stack.split(',')[0];
+            await loadGlyphMetrics(primaryFont, RANGES, glyphsUrl, this.m_glyphMetrics);
+        }
+
+        // Push metrics to the decoder.
+        this.decoder.configure(undefined, {
+            mbStyle: style,
+            glyphMetrics: this.m_glyphMetrics,
+        } as any);
+    }
+
     async setTheme(_theme: Theme | FlatTheme): Promise<void> {
     }
+
+    /**
+     * Re-apply a fully-swapped style at runtime (the `setStyle` operation).
+     *
+     * Unlike the lightweight `runtime.setStyle()` path (which only
+     * reconfigures the decoder + marks tiles dirty), this method redoes the
+     * heavy parts of `connect()`: sprite atlas reload, glyph metrics reload,
+     * environment (lights/fog/sky/background), camera settings, projection,
+     * terrain, and models. Use it when the runtime style has been replaced
+     * wholesale — typically by the `setStyle` render-test operation.
+     *
+     * Cheap operations (background, camera, projection) always run; expensive
+     * network loads (sprite, glyphs) only run when the corresponding URL
+     * changed since the last apply.
+     */
+    async reloadStyle(): Promise<void> {
+        const style = this.m_runtime?.style ?? this.m_styleManager?.getStyle();
+        if (!style || !this.mapView) return;
+
+        // Cheap re-applies — always safe to re-run.
+        this.applyBackgroundColor(style);
+        this.applyCameraSettings(style);
+        this.applyProjection(style);
+        this.buildClipMask(style);
+
+        // Sprite atlas: reload only if the URL changed.
+        const newSprite = style.sprite;
+        if (newSprite && newSprite !== this.m_lastAppliedSprite) {
+            await this.loadSpriteAtlas(newSprite);
+            this.m_lastAppliedSprite = newSprite;
+        }
+
+        // Glyph metrics: reload only if the URL changed.
+        const newGlyphs = style.glyphs;
+        if (newGlyphs && newGlyphs !== this.m_lastAppliedGlyphs) {
+            this.m_glyphMetrics.clear();
+            await this.loadGlyphMetrics(style);
+            this.m_lastAppliedGlyphs = newGlyphs;
+        }
+
+        // Environment: lights/fog/sky/background-pattern.
+        if (this.m_environment) {
+            this.m_environment.applyLights((style as any).lights ?? (style as any).light ? [(style as any).light] : undefined);
+            this.m_environment.applyFog(style.fog);
+            this.m_environment.applySky(style.sky, style.fog);
+        }
+
+        // Terrain: re-apply if terrain spec changed.
+        if (this.m_environment && style.terrain) {
+            try {
+                await this.m_environment.applyTerrain(
+                    style.terrain as any,
+                    this.m_demTileUrl,
+                    style.zoom ?? 8,
+                    style.center ?? [0, 0],
+                );
+            } catch {}
+        }
+
+        // Models: re-load.
+        try {
+            await this.loadModels(style);
+        } catch {}
+
+        // Re-configure the decoder with the new style + push glyph metrics.
+        this.decoder.configure(undefined, {
+            mbStyle: style,
+            currentSourceId: this.m_currentSourceId,
+            glyphMetrics: this.m_glyphMetrics.size > 0 ? this.m_glyphMetrics : undefined,
+            clipMask: Object.fromEntries(this.m_clipMask),
+        } as any);
+
+        // Force a full re-decode of visible tiles.
+        this.mapView.markTilesDirty(this);
+        this.mapView.update();
+    }
+
+    /** Tracks the last sprite URL applied, to skip redundant reloads. */
+    private m_lastAppliedSprite: string | undefined;
+    /** Tracks the last glyphs URL applied, to skip redundant reloads. */
+    private m_lastAppliedGlyphs: string | undefined;
 
     /**
      * Override setFeatureState to trigger tile re-decode when feature state changes.

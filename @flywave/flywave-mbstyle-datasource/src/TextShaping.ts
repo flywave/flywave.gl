@@ -62,7 +62,13 @@ const LATIN_ADVANCE: Record<string, number> = {
 };
 
 function estimateAdvance(ch: string): number {
-    return LATIN_ADVANCE[ch] ?? DEFAULT_GLYPH_ADVANCE;
+    const latin = LATIN_ADVANCE[ch];
+    if (latin !== undefined) return latin;
+    // CJK ideographs and kana are full-width (≈1em square). Treating them as
+    // 1.0 instead of the Latin default 0.6 makes line-break widths match the
+    // visual square grid used by Mapbox for CJK text shaping.
+    if (isCJK(ch)) return 1.0;
+    return DEFAULT_GLYPH_ADVANCE;
 }
 
 /**
@@ -161,8 +167,84 @@ export function applyTextTransform(text: string, transform: string): string {
 }
 
 /**
+ * Characters that introduce an explicit break opportunity in CJK text
+ * (modeled after mapbox's getCanonicalBreakChance in shaping.ts).
+ * Even when CJK breaking is disabled, these act as soft break points.
+ */
+const CJK_BREAK_CHARS = new Set([
+    '\u3000', // ideographic space
+    '\u3001', // ideographic comma
+    '\u3002', // ideographic full stop
+    '\uFF0C', // fullwidth comma
+    '\uFF0E', // fullwidth full stop
+    '\uFF1A', // fullwidth colon
+    '\uFF1B', // fullwidth semicolon
+    '\uFF1F', // fullwidth question mark
+    '\uFF01', // fullwidth exclamation mark
+]);
+
+/**
+ * A token is an atomic unit considered during line breaking.
+ * For Latin text a token is a run of non-space characters (a "word").
+ * For CJK text each ideographic character is its own token.
+ *
+ * `leadingSep` is the whitespace (or empty string) that should appear
+ * *before* this token when joined onto a non-empty line — this lets us
+ * preserve the original spacing without emitting double spaces.
+ */
+interface BreakToken {
+    text: string;
+    /** Whether a line break is permitted *after* this token. */
+    canBreakAfter: boolean;
+    /** Separator (e.g. ' ') to insert before this token on a continued line. */
+    leadingSep: string;
+}
+
+/**
+ * Tokenize a line into break-opportunity units. CJK characters each become
+ * individual tokens (so any CJK char is a valid break point), while Latin
+ * runs are kept as whole words separated by spaces.
+ */
+function tokenizeForBreak(line: string): BreakToken[] {
+    const tokens: BreakToken[] = [];
+    let buf = '';
+    let pendingSep = '';
+
+    const flushWord = () => {
+        if (buf) {
+            tokens.push({ text: buf, canBreakAfter: false, leadingSep: pendingSep });
+            buf = '';
+            pendingSep = '';
+        }
+    };
+
+    for (const ch of line) {
+        if (ch === ' ') {
+            flushWord();
+            pendingSep = ' '; // a space attaches to the next word as its separator
+        } else if (isCJK(ch) || CJK_BREAK_CHARS.has(ch)) {
+            flushWord();
+            // A CJK ideograph is its own token; breaking is allowed after it.
+            // It does not need a space separator before it.
+            tokens.push({ text: ch, canBreakAfter: true, leadingSep: pendingSep });
+            pendingSep = '';
+        } else {
+            buf += ch;
+        }
+    }
+    flushWord();
+    return tokens;
+}
+
+/**
  * Break text into lines based on max-width.
- * Uses greedy word wrapping.
+ *
+ * Algorithm:
+ *  1. Each CJK ideograph is an independent break opportunity (matches Mapbox
+ *     behavior — CJK has no inter-word spaces).
+ *  2. Latin text uses greedy word wrapping on space boundaries.
+ *  3. A single word longer than maxWidth is broken at character boundaries
+ *     (char-level fallback), so overlong tokens no longer overflow.
  */
 export function wrapText(
     text: string,
@@ -183,22 +265,40 @@ export function wrapText(
             continue;
         }
 
-        // Greedy word wrap
-        const words = line.split(' ');
+        const tokens = tokenizeForBreak(line);
         let currentLine = '';
 
-        for (const word of words) {
-            const testLine = currentLine ? currentLine + ' ' + word : word;
-            const testWidth = measureTextWidth(testLine, letterSpacing, glyphLookup, fontName);
+        for (let i = 0; i < tokens.length; i++) {
+            const tok = tokens[i];
+            const candidate = currentLine + tok.leadingSep + tok.text;
+            const candidateWidth = measureTextWidth(candidate, letterSpacing, glyphLookup, fontName);
 
-            if (testWidth <= maxWidth) {
-                currentLine = testLine;
+            if (candidateWidth <= maxWidth) {
+                currentLine = candidate;
+                if (tok.canBreakAfter && i < tokens.length - 1) {
+                    // Peek: if the next token would overflow, break here.
+                    const next = tokens[i + 1];
+                    const probe = currentLine + next.leadingSep + next.text;
+                    if (measureTextWidth(probe, letterSpacing, glyphLookup, fontName) > maxWidth) {
+                        result.push(currentLine);
+                        currentLine = '';
+                    }
+                }
             } else {
+                // Token doesn't fit on the current line.
                 if (currentLine) {
                     result.push(currentLine);
+                    currentLine = '';
                 }
-                // If single word exceeds max-width, keep it (no char-level break for now)
-                currentLine = word;
+                // Try the token alone on a fresh line (drop its leading separator).
+                const tokWidth = measureTextWidth(tok.text, letterSpacing, glyphLookup, fontName);
+                if (tokWidth <= maxWidth) {
+                    currentLine = tok.text;
+                } else {
+                    // Single token overflows: char-level break fallback so the
+                    // word does not spill past maxWidth indefinitely.
+                    currentLine = breakOverlongWord(tok.text, maxWidth, letterSpacing, glyphLookup, fontName, result);
+                }
             }
         }
 
@@ -211,19 +311,71 @@ export function wrapText(
 }
 
 /**
+ * Break a single overlong word character-by-character, pushing each filled
+ * line into `out` and returning the leftover remainder as the active line.
+ */
+function breakOverlongWord(
+    word: string,
+    maxWidth: number,
+    letterSpacing: number,
+    glyphLookup: GlyphLookup | undefined,
+    fontName: string | undefined,
+    out: string[],
+): string {
+    let line = '';
+    for (const ch of Array.from(word)) {
+        const candidate = line + ch;
+        const w = measureTextWidth(candidate, letterSpacing, glyphLookup, fontName);
+        if (w <= maxWidth) {
+            line = candidate;
+        } else {
+            if (line) out.push(line);
+            line = ch;
+        }
+    }
+    return line;
+}
+
+/**
  * Justify a line of text within available width.
+ *
+ * For `justify: 'auto'`, the effective direction depends on the text-anchor:
+ *   - 'left' anchor → text is right-justified (grows away from anchor)
+ *   - 'right' anchor → text is left-justified
+ *   - center/top/bottom anchors → text is centered
+ *
+ * This is the mapbox "binary justify" behavior where `auto` doesn't always
+ * center — it follows the anchor direction.
  */
 export function getJustifyOffset(
     lineWidth: number,
     availableWidth: number,
     justify: 'left' | 'center' | 'right' | 'auto',
+    anchor?: string,
 ): number {
     const extra = availableWidth - lineWidth;
-    switch (justify) {
+    let effective = justify;
+    if (justify === 'auto') {
+        // Resolve auto based on anchor direction.
+        switch (anchor) {
+            case 'left':
+            case 'top-left':
+            case 'bottom-left':
+                effective = 'right';
+                break;
+            case 'right':
+            case 'top-right':
+            case 'bottom-right':
+                effective = 'left';
+                break;
+            default:
+                effective = 'center';
+        }
+    }
+    switch (effective) {
         case 'left': return 0;
         case 'right': return extra;
         case 'center': return extra / 2;
-        case 'auto': return extra / 2; // auto defaults to center for point placement
         default: return extra / 2;
     }
 }
@@ -282,6 +434,7 @@ export function shapeText(
         lineHeight,
         letterSpacing,
         justify,
+        anchor,
         transform,
         glyphLookup,
         fontName,
@@ -324,7 +477,7 @@ export function shapeText(
 
     // Apply justify offsets
     for (const line of lines) {
-        const offset = getJustifyOffset(line.width, maxLineWidth, justify);
+        const offset = getJustifyOffset(line.width, maxLineWidth, justify, anchor);
         line.position[0] = offset;
     }
 
@@ -402,10 +555,15 @@ export function isCJK(char: string): boolean {
 
 /**
  * Detect if a character is Arabic (for RTL shaping).
+ * Covers both the base Arabic block and the Arabic Presentation Forms
+ * (A and B) so that already-shaped text remains recognizable as Arabic.
  */
 export function isArabic(char: string): boolean {
-    const code = char.charCodeAt(0);
-    return (code >= 0x0600 && code <= 0x06FF) || (code >= 0x0750 && code <= 0x077F);
+    const code = char.codePointAt(0) ?? 0;
+    return (code >= 0x0600 && code <= 0x06FF) ||   // Arabic
+           (code >= 0x0750 && code <= 0x077F) ||   // Arabic Supplement
+           (code >= 0xFB50 && code <= 0xFDFF) ||   // Arabic Presentation Forms-A
+           (code >= 0xFE70 && code <= 0xFEFF);     // Arabic Presentation Forms-B
 }
 
 /**
@@ -428,25 +586,180 @@ export function hasRTL(text: string): boolean {
 
 /**
  * Reorder text for RTL display.
- * In a full implementation this would use the Unicode Bidi Algorithm.
- * Simplified: reverse the RTL segments within the text.
+ *
+ * Dispatches to a simplified UAX#9 Unicode Bidirectional Algorithm
+ * (`BidiAlgorithm.uax9Reorder`), which handles mixed LTR/RTL text including
+ * numbers and neutrals correctly. For pure-Latin input (no Arabic/Hebrew
+ * characters), returns the input unchanged via a fast path so there's no
+ * performance cost for the common case.
+ *
+ * If the algorithm module fails to load for any reason, falls back to the
+ * previous run-based reverse.
  */
 export function reorderRTL(text: string): string {
     if (!hasRTL(text)) return text;
-    // For pure RTL text: reverse the string
-    // For mixed LTR/RTL: keep LTR segments in place, reverse RTL segments
-    return text.split('').reverse().join('');
+    try {
+        // Lazy-require to avoid a static import cycle (BidiAlgorithm doesn't
+        // import from TextShaping, but the deferred load keeps the module
+        // graph clean and lets pure-LTR callers skip the cost entirely).
+        const { uax9Reorder } = require('./BidiAlgorithm');
+        return uax9Reorder(text) as string;
+    } catch {
+        // Fallback: run-based reverse (split into LTR/RTL runs, reverse each
+        // RTL run, reverse the run sequence).
+        return fallbackReorderRTL(text);
+    }
+}
+
+/** Run-based Bidi fallback used only if BidiAlgorithm fails to load. */
+function fallbackReorderRTL(text: string): string {
+    if (!hasRTL(text)) return text;
+
+    interface Run { text: string; rtl: boolean; }
+    const runs: Run[] = [];
+    let buf = '';
+    let bufRtl = false;
+    for (const ch of Array.from(text)) {
+        const rtl = isArabic(ch) || isHebrew(ch);
+        if (buf && rtl === bufRtl) {
+            buf += ch;
+        } else {
+            if (buf) runs.push({ text: buf, rtl: bufRtl });
+            buf = ch;
+            bufRtl = rtl;
+        }
+    }
+    if (buf) runs.push({ text: buf, rtl: bufRtl });
+
+    const processed = runs.map((r) => r.rtl ? Array.from(r.text).reverse().join('') : r.text);
+    return processed.reverse().join('');
 }
 
 /**
- * Reshape Arabic characters based on position (initial/medial/final/isolated).
- * This is a simplified placeholder. Full Arabic shaping requires
- * the Unicode Arabic Presentation Forms mapping.
+ * Arabic letter joining information. Each entry maps a base Arabic letter
+ * (U+0600..U+06FF) to its four contextual Presentation Forms:
+ *   [isolated, final, initial, medial]
+ * drawn from the Arabic Presentation Forms-A / Forms-B blocks.
+ *
+ * Reference: Unicode 15.0, ArabicSHaping.txt + context-based selection rules.
+ * The table covers the letters that actually appear in modern Arabic text;
+ * rare letters/ligatures fall through and stay unchanged.
+ */
+const ARABIC_PRESENTATION_FORMS: Record<number, [number, number, number, number]> = {
+    0x0621: [0xFE80, 0xFE80, 0xFE80, 0xFE80], // HAMZA
+    0x0622: [0xFE81, 0xFE82, 0xFE81, 0xFE82], // ALEF WITH MADDA ABOVE
+    0x0623: [0xFE83, 0xFE84, 0xFE83, 0xFE84], // ALEF WITH HAMZA ABOVE
+    0x0624: [0xFE85, 0xFE86, 0xFE85, 0xFE86], // WAW WITH HAMZA ABOVE
+    0x0625: [0xFE87, 0xFE88, 0xFE87, 0xFE88], // ALEF WITH HAMZA BELOW
+    0x0626: [0xFE89, 0xFE8A, 0xFE8B, 0xFE8C], // YEH WITH HAMZA ABOVE
+    0x0627: [0xFE8D, 0xFE8E, 0xFE8D, 0xFE8E], // ALEF
+    0x0628: [0xFE8F, 0xFE90, 0xFE91, 0xFE92], // BEH
+    0x0629: [0xFE93, 0xFE94, 0xFE93, 0xFE94], // TEH MARBUTA
+    0x062A: [0xFE95, 0xFE96, 0xFE97, 0xFE98], // TEH
+    0x062B: [0xFE99, 0xFE9A, 0xFE9B, 0xFE9C], // THEH
+    0x062C: [0xFE9D, 0xFE9E, 0xFE9F, 0xFEA0], // JEEM
+    0x062D: [0xFEA1, 0xFEA2, 0xFEA3, 0xFEA4], // HAH
+    0x062E: [0xFEA5, 0xFEA6, 0xFEA7, 0xFEA8], // KHAH
+    0x062F: [0xFEA9, 0xFEAA, 0xFEA9, 0xFEAA], // DAL
+    0x0630: [0xFEAB, 0xFEAC, 0xFEAB, 0xFEAC], // THAL
+    0x0631: [0xFEAD, 0xFEAE, 0xFEAD, 0xFEAE], // REH
+    0x0632: [0xFEAF, 0xFEB0, 0xFEAF, 0xFEB0], // ZAIN
+    0x0633: [0xFEB1, 0xFEB2, 0xFEB3, 0xFEB4], // SEEN
+    0x0634: [0xFEB5, 0xFEB6, 0xFEB7, 0xFEB8], // SHEEN
+    0x0635: [0xFEB9, 0xFEBA, 0xFEBB, 0xFEBC], // SAD
+    0x0636: [0xFEBD, 0xFEBE, 0xFEBF, 0xFEC0], // DAD
+    0x0637: [0xFEC1, 0xFEC2, 0xFEC3, 0xFEC4], // TAH
+    0x0638: [0xFEC5, 0xFEC6, 0xFEC7, 0xFEC8], // ZAH
+    0x0639: [0xFEC9, 0xFECA, 0xFECB, 0xFECC], // AIN
+    0x063A: [0xFECD, 0xFECE, 0xFECF, 0xFED0], // GHAIN
+    0x0641: [0xFED1, 0xFED2, 0xFED3, 0xFED4], // FEH
+    0x0642: [0xFED5, 0xFED6, 0xFED7, 0xFED8], // QAF
+    0x0643: [0xFED9, 0xFEDA, 0xFEDB, 0xFEDC], // KAF
+    0x0644: [0xFEDD, 0xFEDE, 0xFEDF, 0xFEE0], // LAM
+    0x0645: [0xFEE1, 0xFEE2, 0xFEE3, 0xFEE4], // MEEM
+    0x0646: [0xFEE5, 0xFEE6, 0xFEE7, 0xFEE8], // NOON
+    0x0647: [0xFEE9, 0xFEEA, 0xFEEB, 0xFEEC], // HEH
+    0x0648: [0xFEED, 0xFEEE, 0xFEED, 0xFEEE], // WAW
+    0x0649: [0xFEEF, 0xFEF0, 0xFBE8, 0xFBE9], // ALEF MAKSURA
+    0x064A: [0xFEF1, 0xFEF2, 0xFEF3, 0xFEF4], // YEH
+    // LAM-ALEF ligatures (two source code points collapse to one presentation form)
+    // Handled specially below.
+};
+
+/**
+ * Set of Arabic letters that can join with a following letter (i.e. their
+ * *initial* and *medial* forms exist). Letters not in this set only ever
+ * take isolated or final forms.
+ */
+const ARABIC_JOINERS = new Set<number>([
+    0x0626, 0x0628, 0x062A, 0x062B, 0x062C, 0x062D, 0x062E,
+    0x0633, 0x0634, 0x0635, 0x0636, 0x0637, 0x0638, 0x0639, 0x063A,
+    0x0641, 0x0642, 0x0643, 0x0644, 0x0645, 0x0646, 0x0647, 0x0649, 0x064A,
+]);
+
+/**
+ * Reshape Arabic characters based on position (initial/medial/final/isolated)
+ * using the Unicode Arabic Presentation Forms mapping. Non-Arabic characters
+ * are passed through unchanged. The input must already be in *visual* order
+ * (i.e. after `reorderRTL`).
  */
 export function reshapeArabic(text: string): string {
-    // TODO: Implement proper Arabic character shaping
-    // For now, return text unchanged (basic tests still pass with unshaped glyphs)
-    return text;
+    if (!text) return text;
+    const chars = Array.from(text);
+    const out: string[] = new Array(chars.length);
+
+    for (let i = 0; i < chars.length; i++) {
+        const code = chars[i].codePointAt(0)!;
+
+        // LAM-ALEF ligatures take priority over the per-letter form table:
+        // LAM (0x0644) followed by an ALEF variant collapses to a single
+        // Presentation Form glyph, consuming both source code points.
+        if (code === 0x0644 && i + 1 < chars.length) {
+            const next = chars[i + 1].codePointAt(0)!;
+            let ligature: number | undefined;
+            if (next === 0x0622) ligature = 0xFEF6;       // LAM + ALEF MADDA ABOVE
+            else if (next === 0x0623) ligature = 0xFEF8;   // LAM + ALEF HAMZA ABOVE
+            else if (next === 0x0625) ligature = 0xFEFA;   // LAM + ALEF HAMZA BELOW
+            else if (next === 0x0627) ligature = 0xFEFC;   // LAM + ALEF
+            if (ligature !== undefined) {
+                out[i] = String.fromCodePoint(ligature);
+                out[i + 1] = ''; // collapse the ALEF half
+                i++;
+                continue;
+            }
+        }
+
+        const forms = ARABIC_PRESENTATION_FORMS[code];
+        if (!forms) {
+            out[i] = chars[i];
+            continue;
+        }
+
+        const prevJoins = i > 0 && joinsBefore(chars[i - 1]);
+        const nextJoins = i < chars.length - 1 && joinsAfter(code, chars[i + 1]);
+
+        let idx: number;
+        if (prevJoins && nextJoins) idx = 3;       // medial
+        else if (prevJoins) idx = 1;                // final
+        else if (nextJoins) idx = 2;                // initial
+        else idx = 0;                               // isolated
+        out[i] = String.fromCodePoint(forms[idx]);
+    }
+    return out.join('');
+}
+
+/** Whether the previous character ends in a shape that joins to the next. */
+function joinsBefore(prevChar: string): boolean {
+    const code = prevChar.codePointAt(0)!;
+    return ARABIC_JOINERS.has(code) ||
+        code === 0x0640 /* TATWEEL */ ||
+        // Presentation Forms that are themselves medial/initial keep joining.
+        (code >= 0xFE8F && code <= 0xFEF4);
+}
+
+/** Whether the current letter can join forward to the next character. */
+function joinsAfter(curCode: number, _nextChar: string): boolean {
+    return ARABIC_JOINERS.has(curCode) || curCode === 0x0640;
 }
 
 /**

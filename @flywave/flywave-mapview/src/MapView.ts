@@ -81,6 +81,7 @@ import { MapViewState } from "./text/MapViewState";
 import { TextElement } from "./text/TextElement";
 import { TextElementsRenderer } from "./text/TextElementsRenderer";
 import { TextElementsRendererOptions } from "./text/TextElementsRendererOptions";
+import { FontCatalog } from "@flywave/flywave-text-canvas";
 import { Tile } from "./Tile";
 import { TileObjectRenderer } from "./TileObjectsRenderer";
 import { MapViewUtils } from "./Utils";
@@ -3905,6 +3906,19 @@ export class MapView extends EventDispatcher {
     ): Promise<void> {
         await this.m_textElementsRenderer.updateFontCatalogs(fontCatalogs);
         await this.m_textElementsRenderer.updateTextStyles(textStyles, defaultTextStyle);
+        this.update();
+    }
+
+    /**
+     * Injects a pre-built FontCatalog instance for the given name.
+     * Bypasses the URL-based loading flow. Used by the mapbox-style
+     * datasource to render text with PBF-decoded SDF glyphs.
+     *
+     * @param name - Catalog name (e.g. "default").
+     * @param catalog - Pre-built FontCatalog instance.
+     */
+    public setFontCatalog(name: string, catalog: FontCatalog): void {
+        this.m_textElementsRenderer.setFontCatalog(name, catalog);
         this.update();
     }
 

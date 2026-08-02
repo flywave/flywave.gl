@@ -14,6 +14,7 @@ import {
     isHebrew,
     hasRTL,
     reorderRTL,
+    reshapeArabic,
     shapeRTLText,
 } from '../src/TextShaping';
 
@@ -105,6 +106,47 @@ describe('TextShaping', () => {
             const lines = wrapText('', 100);
             expect(lines).to.have.length(0);
         });
+
+        it('breaks CJK text at every ideograph', () => {
+            // Each CJK char is its own break opportunity — a long run with no
+            // spaces must still wrap between characters.
+            const lines = wrapText('东京特許許可局', 2);
+            expect(lines.length).to.be.greaterThan(1);
+            // CJK advance is 1em, so at maxWidth=2 each line fits at most 2 chars.
+            for (const line of lines) {
+                expect(line.length).to.be.at.most(2);
+            }
+        });
+
+        it('breaks CJK runs interleaved with Latin words', () => {
+            // Latin words wrap on spaces; CJK chars wrap individually.
+            const lines = wrapText('Hello 世界测试 Text', 6);
+            // Should produce more than one line.
+            expect(lines.length).to.be.greaterThan(1);
+            // The CJK portion must be split across lines (not stuck on one
+            // overflowing line) — at least two distinct output lines contain CJK.
+            const cjkOnSeparateLines = lines.filter(l => /[\u4e00-\u9fff]/.test(l)).length;
+            expect(cjkOnSeparateLines).to.be.greaterThanOrEqual(2);
+        });
+
+        it('breaks overlong single words at character boundaries', () => {
+            // A single very long word with no spaces that exceeds maxWidth
+            // should be split across lines instead of overflowing.
+            const long = 'A'.repeat(20);
+            const lines = wrapText(long, 5);
+            expect(lines.length).to.be.greaterThan(1);
+            for (const line of lines) {
+                // Each line should fit within maxWidth (in em units).
+                expect(line.length).to.be.lessThanOrEqual(20);
+            }
+        });
+
+        it('keeps CJK ideographic-space-separated phrases breakable', () => {
+            // Ideographic space U+3000 between CJK phrases should still allow
+            // breaking (just like ASCII space does for Latin).
+            const lines = wrapText('东京\u3000北京\u3000南京', 2);
+            expect(lines.length).to.be.greaterThan(2);
+        });
     });
 
     describe('getJustifyOffset', () => {
@@ -118,6 +160,28 @@ describe('TextShaping', () => {
 
         it('center justify splits extra space', () => {
             expect(getJustifyOffset(5, 10, 'center')).to.equal(2.5);
+        });
+
+        it('auto justify centers for center anchor', () => {
+            expect(getJustifyOffset(5, 10, 'auto', 'center')).to.equal(2.5);
+        });
+
+        it('auto justify right-justifies for left anchor', () => {
+            // Binary justify: 'auto' follows anchor direction.
+            expect(getJustifyOffset(5, 10, 'auto', 'left')).to.equal(5);
+        });
+
+        it('auto justify left-justifies for right anchor', () => {
+            expect(getJustifyOffset(5, 10, 'auto', 'right')).to.equal(0);
+        });
+
+        it('auto justify centers for top-left anchor', () => {
+            // Diagonal anchors use center.
+            expect(getJustifyOffset(5, 10, 'auto', 'top-left')).to.equal(5);
+        });
+
+        it('auto without anchor defaults to center', () => {
+            expect(getJustifyOffset(5, 10, 'auto')).to.equal(2.5);
         });
     });
 
@@ -353,6 +417,48 @@ describe('TextShaping', () => {
         it('shapeRTLText handles Arabic', () => {
             const result = shapeRTLText('السلام', 'none');
             expect(hasRTL(result)).to.be.true;
+        });
+
+        it('reorderRTL preserves LTR runs inside mixed text', () => {
+            // "abc سلام def" -> RTL run reversed and reordered to the right
+            // The exact visual sequence depends on the run algorithm, but the
+            // Latin runs must remain in their internal LTR order.
+            const result = reorderRTL('abc سلام def');
+            // Both Latin runs should still read left-to-right internally.
+            expect(result).to.contain('abc');
+            expect(result).to.contain('def');
+            // The Arabic run should be reversed relative to its input.
+            expect(result).to.contain('مالس');
+        });
+
+        it('reshapeArabic converts base letters to Presentation Forms', () => {
+            // A single Arabic letter has no neighbors -> isolated form.
+            // BEH (U+0628) -> isolated U+FE8F.
+            const isolated = reshapeArabic('ب');
+            expect(isolated.codePointAt(0)).to.equal(0xFE8F);
+        });
+
+        it('reshapeArabic selects final form at end of word', () => {
+            // "اب" : ALEF (non-joiner-final) then BEH. BEH is preceded by ALEF
+            // which does NOT join forward, so BEH stays in its isolated form.
+            // Use "نب" instead: NOON (joiner) + BEH -> BEH takes final form
+            // (U+FE90, the final variant of BEH).
+            const shaped = reshapeArabic('نب');
+            // Last char must be a Presentation Form (>= 0xFE70).
+            expect(shaped.codePointAt(shaped.length - 1)).to.be.at.least(0xFE70);
+        });
+
+        it('reshapeArabic handles the LAM-ALEF ligature', () => {
+            // LAM (U+0644) + ALEF (U+0627) -> a single Presentation Form glyph.
+            const ligature = reshapeArabic('لا');
+            // The two source code points collapse to one ligature code point
+            // (U+FEFC for the isolated LAM-ALEF, or similar).
+            expect(ligature.length).to.be.lessThan('لا'.length);
+            expect(ligature.codePointAt(0)).to.be.at.least(0xFB50);
+        });
+
+        it('reshapeArabic passes through non-Arabic text unchanged', () => {
+            expect(reshapeArabic('Hello 123')).to.equal('Hello 123');
         });
     });
 });

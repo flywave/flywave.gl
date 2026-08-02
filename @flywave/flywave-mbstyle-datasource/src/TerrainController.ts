@@ -164,6 +164,33 @@ export class TerrainController {
     }
 
     /**
+     * All loaded DEM tiles in world-space terms, used for multi-tile draping.
+     * Each entry tells the patcher where in the world the tile's DEM texture
+     * lives so it can pick the right one per vertex.
+     */
+    get allDemTiles(): Array<{ texture: THREE.Texture; originX: number; originY: number; size: number }> {
+        const out: Array<{ texture: THREE.Texture; originX: number; originY: number; size: number }> = [];
+        for (let i = 0; i < this.m_meshes.length; i++) {
+            const mesh = this.m_meshes[i];
+            const demTex = this.m_demTextures[i];
+            if (!demTex || !mesh) continue;
+            // Reconstruct world bounds from mesh position + scale (XZ plane).
+            // The mesh is positioned at the tile center; its geometry is a
+            // unit-square-sized plane scaled to (tileSizeWorld / (C/4)).
+            const tileWorldSize = mesh.scale.x * (EarthConstants.EQUATORIAL_CIRCUMFERENCE / 4);
+            const cx = mesh.position.x;
+            const cz = mesh.position.z;
+            out.push({
+                texture: demTex,
+                originX: cx - tileWorldSize / 2,
+                originY: cz - tileWorldSize / 2,
+                size: tileWorldSize,
+            });
+        }
+        return out;
+    }
+
+    /**
      * Advance vertex morphing. Call once per frame (e.g. AfterRender). When a
      * rebuild swapped DEM textures, this animates each material's uDemLerp from
      * 0→1 over MORPH_DURATION so elevations transition smoothly (no popping).

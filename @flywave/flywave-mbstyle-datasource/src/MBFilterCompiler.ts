@@ -130,40 +130,12 @@ export class MBFilterCompiler {
         }
     }
 
-    private static pointInPolygon(
-        px: number, py: number,
-        ring: Array<[number, number]>,
-    ): boolean {
-        let inside = false;
-        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-            const xi = ring[i][0], yi = ring[i][1];
-            const xj = ring[j][0], yj = ring[j][1];
-            const intersect = ((yi > py) !== (yj > py)) &&
-                (px < (xj - xi) * (py - yi) / (yj - yi + 1e-15) + xi);
-            if (intersect) inside = !inside;
-        }
-        return inside;
-    }
-
     private static withinFilter(
         filterGeo: any,
         ctx: MBExpressionContext,
     ): boolean {
-        if (!filterGeo || filterGeo.type !== 'Polygon') return true;
-        const featureGeo = (ctx.feature as any)?._geom;
-        if (!featureGeo) return true;
-
-        const fx = featureGeo.coordinates?.[0] ?? 0;
-        const fy = featureGeo.coordinates?.[1] ?? 0;
-
-        const outerRing = filterGeo.coordinates?.[0];
-        if (!outerRing) return false;
-
-        if (!this.pointInPolygon(fx, fy, outerRing)) return false;
-
-        for (let i = 1; i < filterGeo.coordinates.length; i++) {
-            if (this.pointInPolygon(fx, fy, filterGeo.coordinates[i])) return false;
-        }
-        return true;
+        // Delegate to the expression engine so legacy filters and the
+        // expression form `["within", geo]` share the same geometry code.
+        return MBExpressionEngine.featureWithin(ctx.feature, filterGeo) as boolean;
     }
 }

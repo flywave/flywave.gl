@@ -17,6 +17,55 @@ export interface GlyphAtlasData {
     getMetrics(font: string, char: string): GlyphMetrics | undefined;
 }
 
+/**
+ * Standalone glyph-metrics loader. Returns a Map keyed by `${font}:${char}` →
+ * metrics. Pure data (no DOM/canvas dependency), so safe to call from a
+ * worker thread or anywhere fetch() is available. Used to wire real mapbox
+ * PBF metrics into the text-shaping path even when the actual SDF rendering
+ * still goes through flywave's own FontCatalog.
+ *
+ * The returned map is cumulative — repeated calls for different ranges
+ * accumulate into the same map (the caller is expected to cache it).
+ */
+export async function loadGlyphMetrics(
+    fontStack: string,
+    ranges: number[],
+    glyphUrlTemplate: string,
+    out: Map<string, GlyphMetrics> = new Map(),
+): Promise<Map<string, GlyphMetrics>> {
+    for (const range of ranges) {
+        const start = range * 256;
+        const end = start + 255;
+        const url = glyphUrlTemplate
+            .replace('{fontstack}', encodeURIComponent(fontStack))
+            .replace('{range}', `${start}-${end}`)
+            .replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/');
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) continue;
+            const buffer = await resp.arrayBuffer();
+            const fontstack = parseGlyphPBF(buffer);
+            if (!fontstack) continue;
+            for (const [id, g] of fontstack.glyphs) {
+                const char = String.fromCharCode(id);
+                out.set(`${fontStack}:${char}`, {
+                    glyphId: id,
+                    width: g.width,
+                    height: g.height,
+                    left: g.left,
+                    top: g.top,
+                    advance: g.advance / 24, // mapbox encodes advance at 24px em
+                    uvMin: [0, 0],
+                    uvMax: [0, 0],
+                });
+            }
+        } catch {
+            // network / parse failure — skip this range
+        }
+    }
+    return out;
+}
+
 const ATLAS_SIZE = 1024;
 const GLYPH_PADDING = 1;
 

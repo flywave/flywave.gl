@@ -338,6 +338,7 @@ export class MBEnvironmentManager {
         spriteAtlas: SpriteAtlas | null,
         bgColor: string,
         bgOpacity: number,
+        pitchAlignment: string = 'map',
     ): Promise<void> {
         if (!this.m_scene) return;
 
@@ -388,11 +389,25 @@ export class MBEnvironmentManager {
         this.m_backgroundQuad.renderOrder = -10000;
 
         this.m_backgroundQuad.onBeforeRender = (renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
-            const matrix = new THREE.Matrix4();
-            matrix.copy(camera.projectionMatrix);
-            matrix.invert();
-            this.m_backgroundQuad!.quaternion.setFromRotationMatrix(matrix);
-            this.m_backgroundQuad!.position.set(0, 0, -0.1);
+            if (pitchAlignment === 'viewport') {
+                // 'viewport' alignment: the background quad stays fixed to the
+                // screen regardless of camera orientation (billboard). It only
+                // tracks the inverse projection — no view rotation applied.
+                const matrix = new THREE.Matrix4();
+                matrix.copy(camera.projectionMatrix);
+                matrix.invert();
+                this.m_backgroundQuad!.quaternion.setFromRotationMatrix(matrix);
+                this.m_backgroundQuad!.position.set(0, 0, -0.1);
+            } else {
+                // 'map' alignment (default): the background quad follows the
+                // camera view matrix so the pattern appears anchored to the
+                // map surface. This matches mapbox's default behavior.
+                const matrix = new THREE.Matrix4();
+                matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+                matrix.invert();
+                this.m_backgroundQuad!.quaternion.setFromRotationMatrix(matrix);
+                this.m_backgroundQuad!.position.set(0, 0, -0.1);
+            }
         };
 
         this.m_scene.add(this.m_backgroundQuad);

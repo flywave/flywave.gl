@@ -13,6 +13,13 @@ const radToDeg = (r: number) => (r * 180) / Math.PI;
 export class MBMapProjection extends Projection {
     private m_config: ProjectionConfig;
     private m_circumference: number;
+    /**
+     * Marker consulted by `MBTileDataEmitter.tile2world` to decide whether
+     * tile-local points must be re-projected through `projectPoint` (Albers,
+     * EqualEarth, etc.) or whether they can stay in plain Web-Mercator world
+     * coordinates (the engine reprojects mercator→sphere itself for globe).
+     */
+    readonly mbCustomProjection = true;
 
     constructor(config: ProjectionConfig) {
         super(EarthConstants.EQUATORIAL_CIRCUMFERENCE);

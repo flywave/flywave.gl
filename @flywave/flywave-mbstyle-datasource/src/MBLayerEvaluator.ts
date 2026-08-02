@@ -53,8 +53,15 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'fill-opacity': 1,
         'fill-color': '#000000',
         'fill-outline-color': undefined,
+        'fill-pattern': undefined,
         'fill-translate': [0, 0],
         'fill-translate-anchor': 'map',
+        // HD fill properties.
+        'fill-z-offset': 0,
+        'fill-elevation-reference': undefined,
+        'fill-emissive-strength': 0,
+        'fill-pattern-cross-fade': 0,
+        'fill-construct-bridge-guard-rail': false,
     },
     line: {
         'line-opacity': 1,
@@ -68,6 +75,18 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'line-translate-anchor': 'map',
         'line-blend-mode': 'default',
         'line-width-unit': 'pixels',
+        // HD / extended line properties — processed so the patcher can consume them.
+        'line-trim-offset': [0, 1],
+        'line-border-width': 0,
+        'line-border-color': '#000000',
+        'line-border-gradient': undefined,
+        'line-emissive-strength': 0,
+        'line-pattern-cross-fade': 0,
+        'line-pitch': 0,
+        'line-cutout-opacity': 0,
+        'line-cutout-fade-width': 0,
+        'line-cutout-shadow-opacity': 0,
+        'line-occlusion-opacity': 0,
     },
     symbol: {
         'icon-opacity': 1,
@@ -75,11 +94,28 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'icon-halo-color': 'rgba(0,0,0,0)',
         'icon-halo-width': 0,
         'icon-halo-blur': 0,
+        'icon-translate': [0, 0],
+        'icon-translate-anchor': 'map',
         'text-opacity': 1,
         'text-color': '#000000',
         'text-halo-color': 'rgba(0,0,0,0)',
         'text-halo-width': 0,
         'text-halo-blur': 0,
+        'text-translate': [0, 0],
+        'text-translate-anchor': 'map',
+        // HD symbol properties.
+        'icon-emissive-strength': 0,
+        'text-emissive-strength': 0,
+        'icon-occlusion-opacity': 0,
+        'text-occlusion-opacity': 0,
+        'icon-color-brightness-min': 0,
+        'icon-color-brightness-max': 1,
+        'icon-color-contrast': 0,
+        'icon-color-saturation': 0,
+        'icon-image-cross-fade': 0,
+        'icon-size-scale-range': [0, Infinity],
+        'symbol-z-offset': 0,
+        'symbol-z-elevate': false,
     },
     circle: {
         'circle-radius': 5,
@@ -98,6 +134,25 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'fill-extrusion-height': 0,
         'fill-extrusion-base': 0,
         'fill-extrusion-vertical-gradient': true,
+        // HD / extended properties — evaluated so the patcher can consume them.
+        'fill-extrusion-vertical-scale': 1,
+        'fill-extrusion-translate': [0, 0],
+        'fill-extrusion-translate-anchor': 'map',
+        'fill-extrusion-cutoff-fade-range': 0,
+        'fill-extrusion-edge-radius': 0,
+        'fill-extrusion-line-width': 0,
+        'fill-extrusion-ambient-occlusion-intensity': 0,
+        'fill-extrusion-ambient-occlusion-ground-radius': 0,
+        'fill-extrusion-ambient-occlusion-ground-attenuation': 0,
+        'fill-extrusion-ambient-occlusion-wall-radius': 0,
+        'fill-extrusion-front-cutoff': 0,
+        'fill-extrusion-base-alignment': 'terrain',
+        'fill-extrusion-pattern-cross-fade': 0,
+        'fill-extrusion-emissive-strength': 0,
+        'fill-extrusion-flood-light-color': '#ffffff',
+        'fill-extrusion-flood-light-intensity': 0,
+        'fill-extrusion-flood-light-ground-radius': 0,
+        'fill-extrusion-flood-light-wall-radius': 0,
     },
     background: {
         'background-color': '#000000',
@@ -141,6 +196,15 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'building-facade-floors': 3,
         'building-facade-unit-width': 6,
         'building-emissive-strength': 0,
+        // HD building paint properties.
+        'building-ambient-occlusion-intensity': 0,
+        'building-ambient-occlusion-ground-radius': 0,
+        'building-ambient-occlusion-ground-attenuation': 0,
+        'building-ambient-occlusion-wall-radius': 0,
+        'building-flood-light-color': '#ffffff',
+        'building-flood-light-intensity': 0,
+        'building-window-color': undefined,
+        'building-door-color': undefined,
     },
     model: {
         'model-opacity': 1,
@@ -282,6 +346,7 @@ export class MBLayerEvaluator {
         const defaults = PAINT_DEFAULTS[type] ?? {};
         const result: Record<string, PaintPropertyDef> = {};
 
+        // Process known properties (those in PAINT_DEFAULTS).
         for (const [key, defVal] of Object.entries(defaults)) {
             const raw = paint?.[key];
             if (raw === undefined) {
@@ -290,6 +355,23 @@ export class MBLayerEvaluator {
                 result[key] = { type: 'expression', value: raw, default: defVal };
             } else {
                 result[key] = { type: 'constant', value: raw, default: defVal };
+            }
+        }
+
+        // Pass through any extra paint keys not in defaults (HD / experimental
+        // properties like fill-extrusion-front-cutoff, symbol-elevation-reference,
+        // raster-color-mix, etc.). These are stored as raw values so the patcher
+        // can read them from technique._paint.
+        if (paint && typeof paint === 'object') {
+            for (const key of Object.keys(paint)) {
+                if (!(key in result)) {
+                    const raw = paint[key];
+                    if (isExpr(raw)) {
+                        result[key] = { type: 'expression', value: raw, default: undefined };
+                    } else {
+                        result[key] = { type: 'constant', value: raw, default: undefined };
+                    }
+                }
             }
         }
 
@@ -302,6 +384,15 @@ export class MBLayerEvaluator {
         for (const [key, defVal] of Object.entries(defaults)) {
             const raw = layout?.[key];
             result[key] = raw !== undefined ? raw : defVal;
+        }
+        // Pass through extra layout keys not in defaults (HD properties like
+        // symbol-elevation-reference, model-id, model-type, etc.).
+        if (layout && typeof layout === 'object') {
+            for (const key of Object.keys(layout)) {
+                if (!(key in result)) {
+                    result[key] = layout[key];
+                }
+            }
         }
         return result;
     }

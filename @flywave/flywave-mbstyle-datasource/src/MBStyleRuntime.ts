@@ -238,6 +238,39 @@ export class MBStyleRuntime {
     }
 
     /**
+     * Add a source definition to the style at runtime. The datasource should
+     * listen for `onSourceChanged` to actually wire up a new data provider.
+     */
+    addSource(sourceId: string, source: any): void {
+        if (!this.m_style.sources) (this.m_style as any).sources = {};
+        (this.m_style.sources as any)[sourceId] = source;
+        this.m_onChange();
+    }
+
+    /**
+     * Remove a source from the style. Layers referencing the removed source
+     * will no longer render anything.
+     */
+    removeSource(sourceId: string): void {
+        if (this.m_style.sources && (this.m_style.sources as any)[sourceId]) {
+            delete (this.m_style.sources as any)[sourceId];
+            this.m_onChange();
+        }
+    }
+
+    /**
+     * Replace the data of an inline GeoJSON source. Triggers a reload of any
+     * affected tiles through `onChange`.
+     */
+    setGeoJSONSourceData(sourceId: string, data: any): void {
+        if (!this.m_style.sources) return;
+        const src = (this.m_style.sources as any)[sourceId];
+        if (!src) return;
+        src.data = typeof data === 'string' ? data : JSON.parse(JSON.stringify(data));
+        this.m_onChange();
+    }
+
+    /**
      * Get a paint property value.
      */
     getPaintProperty(layerId: string, prop: string): any {

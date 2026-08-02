@@ -14,6 +14,12 @@ class PbfReader {
     private buf: Uint8Array;
     private view: DataView;
     pos = 0;
+    /**
+     * Wire type of the most recent field tag returned by nextField(). Kept
+     * around so skipField() knows how to advance the cursor for unknown
+     * fields without re-reading the tag.
+     */
+    private m_lastWireType = 0;
 
     constructor(data: ArrayBuffer | Uint8Array) {
         this.buf = data instanceof Uint8Array ? data : new Uint8Array(data);
@@ -60,29 +66,42 @@ class PbfReader {
     /** Read the next field tag. Returns field number, or 0 if at end. */
     nextField(end: number): number {
         if (this.pos >= end) return 0;
-        return this.readVarint() >>> 3;
+        const tag = this.readVarint();
+        this.m_lastWireType = tag & 7;
+        return tag >>> 3;
     }
 
-    skipField(tag: number): void {
-        const wireType = tag & 7;
+    skipField(_fieldNumber: number): void {
+        // Uses the wire type stashed by nextField() — the field number arg is
+        // accepted only for API symmetry with the call sites.
+        const wireType = this.m_lastWireType;
         if (wireType === 0) this.readVarint();
         else if (wireType === 1) this.pos += 8;
-        else if (wireType === 2) this.pos += this.readVarint();
+        else if (wireType === 2) {
+            // NB: extract `readVarint()` first — `this.pos += this.readVarint()`
+            // would capture the pre-call value of `this.pos` and then add the
+            // returned length, dropping the varint's own byte count.
+            const len = this.readVarint();
+            this.pos += len;
+        }
         else if (wireType === 5) this.pos += 4;
     }
 
     readPackedVarint(target: number[]): void {
-        const end = this.pos + this.readVarint();
+        const len = this.readVarint();
+        const end = this.pos + len;
         while (this.pos < end) target.push(this.readVarint());
     }
 
     readPackedSVarint(target: number[]): void {
-        const end = this.pos + this.readVarint();
+        const len = this.readVarint();
+        const end = this.pos + len;
         while (this.pos < end) target.push(this.readSVarint());
     }
 
     readPackedFloat(target: number[]): void {
-        const end = this.pos + this.readVarint();
+        const len = this.readVarint();
+        const end = this.pos + len;
         while (this.pos < end) target.push(this.readFloat());
     }
 }
@@ -170,7 +189,7 @@ function readLinearGradient(pbf: PbfReader, end: number): LinearGradient {
     let field: number;
     while ((field = pbf.nextField(end))) {
         switch (field) {
-            case 3: { const se = pbf.pos + pbf.readVarint(); g.stops.push(readStop(pbf, se)); break; }
+            case 3: { const __len = pbf.readVarint(); const se = pbf.pos + __len; g.stops.push(readStop(pbf, se)); break; }
             case 4: g.x1 = pbf.readFloat(); break;
             case 5: g.y1 = pbf.readFloat(); break;
             case 6: g.x2 = pbf.readFloat(); break;
@@ -186,7 +205,7 @@ function readRadialGradient(pbf: PbfReader, end: number): RadialGradient {
     let field: number;
     while ((field = pbf.nextField(end))) {
         switch (field) {
-            case 3: { const se = pbf.pos + pbf.readVarint(); g.stops.push(readStop(pbf, se)); break; }
+            case 3: { const __len = pbf.readVarint(); const se = pbf.pos + __len; g.stops.push(readStop(pbf, se)); break; }
             case 4: g.cx = pbf.readFloat(); break;
             case 5: g.cy = pbf.readFloat(); break;
             case 6: g.r = pbf.readFloat(); break;
@@ -239,8 +258,8 @@ function readPath(pbf: PbfReader, end: number): Path {
     let field: number;
     while ((field = pbf.nextField(end))) {
         switch (field) {
-            case 1: { const se = pbf.pos + pbf.readVarint(); p.fill = readFill(pbf, se); break; }
-            case 2: { const se = pbf.pos + pbf.readVarint(); p.stroke = readStroke(pbf, se); break; }
+            case 1: { const __len = pbf.readVarint(); const se = pbf.pos + __len; p.fill = readFill(pbf, se); break; }
+            case 2: { const __len = pbf.readVarint(); const se = pbf.pos + __len; p.stroke = readStroke(pbf, se); break; }
             case 3: p.paintOrder = pbf.readVarint(); break;
             case 5: pbf.readPackedVarint(p.commands); break;
             case 6: p.step = pbf.readFloat(); break;
@@ -257,11 +276,11 @@ function readGroup(pbf: PbfReader, end: number): Group {
     let field: number;
     while ((field = pbf.nextField(end))) {
         switch (field) {
-            case 1: { const se = pbf.pos + pbf.readVarint(); g.transform = readTransform(pbf, se); break; }
+            case 1: { const __len = pbf.readVarint(); const se = pbf.pos + __len; g.transform = readTransform(pbf, se); break; }
             case 2: g.opacity = pbf.readVarint(); break;
             case 5: g.clipPathIdx = pbf.readVarint(); break;
             case 6: g.maskIdx = pbf.readVarint(); break;
-            case 7: { const se = pbf.pos + pbf.readVarint(); g.children.push(readNode(pbf, se)); break; }
+            case 7: { const __len = pbf.readVarint(); const se = pbf.pos + __len; g.children.push(readNode(pbf, se)); break; }
             default: pbf.skipField(field);
         }
     }
@@ -273,10 +292,10 @@ function readNode(pbf: PbfReader, end: number): Node {
     let field: number;
     while ((field = pbf.nextField(end))) {
         if (field === 1) {
-            const se = pbf.pos + pbf.readVarint();
+            const __len = pbf.readVarint(); const se = pbf.pos + __len;
             node.type = 'group'; node.group = readGroup(pbf, se);
         } else if (field === 2) {
-            const se = pbf.pos + pbf.readVarint();
+            const __len = pbf.readVarint(); const se = pbf.pos + __len;
             node.type = 'path'; node.path = readPath(pbf, se);
         } else {
             pbf.skipField(field);
@@ -292,9 +311,9 @@ function readUsvgTree(pbf: PbfReader, end: number): UsvgTree {
         switch (field) {
             case 1: tree.width = tree.height = pbf.readVarint(); break;
             case 2: tree.height = pbf.readVarint(); break;
-            case 3: { const se = pbf.pos + pbf.readVarint(); tree.children.push(readNode(pbf, se)); break; }
-            case 4: { const se = pbf.pos + pbf.readVarint(); tree.linearGradients.push(readLinearGradient(pbf, se)); break; }
-            case 5: { const se = pbf.pos + pbf.readVarint(); tree.radialGradients.push(readRadialGradient(pbf, se)); break; }
+            case 3: { const __len = pbf.readVarint(); const se = pbf.pos + __len; tree.children.push(readNode(pbf, se)); break; }
+            case 4: { const __len = pbf.readVarint(); const se = pbf.pos + __len; tree.linearGradients.push(readLinearGradient(pbf, se)); break; }
+            case 5: { const __len = pbf.readVarint(); const se = pbf.pos + __len; tree.radialGradients.push(readRadialGradient(pbf, se)); break; }
             default: pbf.skipField(field);
         }
     }
@@ -309,7 +328,7 @@ export function decodeIconSet(data: ArrayBuffer | Uint8Array): DecodedIcon[] {
     let field: number;
     while ((field = pbf.nextField(end))) {
         if (field === 1) {
-            const iconEnd = pbf.pos + pbf.readVarint();
+            const __len = pbf.readVarint(); const iconEnd = pbf.pos + __len;
             icons.push(readIconEntry(pbf, iconEnd));
         } else {
             pbf.skipField(field);
@@ -329,7 +348,7 @@ function readIconEntry(pbf: PbfReader, end: number): DecodedIcon {
         switch (field) {
             case 1: name = pbf.readString(); break;
             case 2: { // IconMetadata
-                const me = pbf.pos + pbf.readVarint();
+                const __len = pbf.readVarint(); const me = pbf.pos + __len;
                 let mf: number;
                 while ((mf = pbf.nextField(me))) {
                     switch (mf) {
@@ -340,7 +359,7 @@ function readIconEntry(pbf: PbfReader, end: number): DecodedIcon {
                 }
                 break;
             }
-            case 3: { const te = pbf.pos + pbf.readVarint(); tree = readUsvgTree(pbf, te); break; }
+            case 3: { const __len = pbf.readVarint(); const te = pbf.pos + __len; tree = readUsvgTree(pbf, te); break; }
             default: pbf.skipField(field);
         }
     }

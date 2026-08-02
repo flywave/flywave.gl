@@ -168,4 +168,81 @@ describe('MBLayerEvaluator', () => {
         expect(result).to.have.lengthOf(1);
         expect(result[0].renderOrder).to.equal(0); // first layer in style
     });
+
+    it('passes through non-default paint properties (HD properties)', () => {
+        const style = {
+            version: 8,
+            sources: { s: { type: 'geojson' as const, data: { type: 'FeatureCollection', features: [] } } },
+            layers: [{
+                id: 'l',
+                type: 'line',
+                source: 's',
+                paint: {
+                    'line-width': 3,
+                    'line-trim-offset': [0.2, 0.8],
+                    'line-border-width': 2,
+                    'line-border-color': '#ff0000',
+                },
+            }],
+        };
+        const evaluator = new MBLayerEvaluator(style as any);
+        const result = evaluator.evaluate('s', '', { type: 'LineString', properties: {} }, 10, 'line');
+        expect(result).to.have.lengthOf(1);
+        const paint = result[0].paint as any;
+        expect(paint['line-width']).to.equal(3);
+        expect(paint['line-trim-offset']).to.deep.equal([0.2, 0.8]);
+        expect(paint['line-border-width']).to.equal(2);
+        expect(paint['line-border-color']).to.equal('#ff0000');
+    });
+
+    it('passes through fill-extrusion HD properties', () => {
+        const style = {
+            version: 8,
+            sources: { s: { type: 'geojson' as const, data: { type: 'FeatureCollection', features: [] } } },
+            layers: [{
+                id: 'b',
+                type: 'fill-extrusion',
+                source: 's',
+                paint: {
+                    'fill-extrusion-height': 10,
+                    'fill-extrusion-color': '#cccccc',
+                    'fill-extrusion-ambient-occlusion-intensity': 0.5,
+                    'fill-extrusion-front-cutoff': 0.3,
+                },
+            }],
+        };
+        const evaluator = new MBLayerEvaluator(style as any);
+        const result = evaluator.evaluate('s', '', { type: 'Polygon', properties: {} }, 10, 'polygon');
+        expect(result).to.have.lengthOf(1);
+        const paint = result[0].paint as any;
+        expect(paint['fill-extrusion-height']).to.equal(10);
+        expect(paint['fill-extrusion-ambient-occlusion-intensity']).to.equal(0.5);
+        expect(paint['fill-extrusion-front-cutoff']).to.equal(0.3);
+    });
+
+    it('passes through non-default layout properties', () => {
+        const style = {
+            version: 8,
+            sources: { s: { type: 'geojson' as const, data: { type: 'FeatureCollection', features: [] } } },
+            layers: [{
+                id: 'l',
+                type: 'symbol',
+                source: 's',
+                layout: {
+                    'icon-image': 'marker',
+                    'symbol-elevation-reference': 'hd-road-markup',
+                    'model-id': 'bridge-1',
+                },
+            }],
+        };
+        const evaluator = new MBLayerEvaluator(style as any);
+        const result = evaluator.evaluate('s', '', { type: 'Point', properties: {} }, 10, 'point');
+        expect(result).to.have.lengthOf(1);
+        const layout = result[0].layout as any;
+        // Standard property.
+        expect(layout['icon-image']).to.equal('marker');
+        // HD layout properties should pass through.
+        expect(layout['symbol-elevation-reference']).to.equal('hd-road-markup');
+        expect(layout['model-id']).to.equal('bridge-1');
+    });
 });

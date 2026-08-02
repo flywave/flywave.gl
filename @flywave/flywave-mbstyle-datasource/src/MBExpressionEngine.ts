@@ -113,11 +113,19 @@ export class MBExpressionEngine {
             case 'geometry-type':
                 return feature?.type ?? null;
 
-            case '==':
-                return this.exec(args[0], ctx) === this.exec(args[1], ctx);
+            case '==': {
+                const a = this.exec(args[0], ctx);
+                const b = this.exec(args[1], ctx);
+                const collator = args.length > 2 ? this.exec(args[2], ctx) as any : undefined;
+                return MBExpressionEngine.collatorEquals(a, b, collator);
+            }
 
-            case '!=':
-                return this.exec(args[0], ctx) !== this.exec(args[1], ctx);
+            case '!=': {
+                const a = this.exec(args[0], ctx);
+                const b = this.exec(args[1], ctx);
+                const collator = args.length > 2 ? this.exec(args[2], ctx) as any : undefined;
+                return !MBExpressionEngine.collatorEquals(a, b, collator);
+            }
 
             case '>':
                 return (this.exec(args[0], ctx) as number) > (this.exec(args[1], ctx) as number);
@@ -405,12 +413,26 @@ export class MBExpressionEngine {
                 return this.exec(args[0], ctx);
 
             case 'format': {
+                // Build a text string from the format sections. Image
+                // sections (["image", name]) are skipped — they can't be
+                // rendered inline in the text path and would produce
+                // garbage if concatenated as their name. Section option
+                // objects ({"text-font": ..., "text-scale": ...}) are also
+                // skipped; only the raw text/string parts are concatenated.
                 let result = '';
                 for (const arg of args) {
-                    if (Array.isArray(arg)) {
-                        result += String(this.exec(arg, ctx) ?? '');
-                    } else if (typeof arg === 'string') {
+                    if (typeof arg === 'string') {
                         result += arg;
+                    } else if (Array.isArray(arg) && arg[0] === 'image') {
+                        // Inline image — skip (can't render in text path).
+                    } else if (Array.isArray(arg)) {
+                        // Sub-expression that evaluates to text.
+                        const v = this.exec(arg, ctx);
+                        if (typeof v === 'string') result += v;
+                        else if (typeof v === 'number') result += String(v);
+                    } else if (arg && typeof arg === 'object') {
+                        // Section options object — skip (font/scale/color
+                        // overrides not supported in simplified format).
                     }
                 }
                 return result;
@@ -434,6 +456,15 @@ export class MBExpressionEngine {
             case 'distance': {
                 const target = this.exec(args[0], ctx) as any;
                 return MBExpressionEngine.computeDistance(feature, target);
+            }
+
+            case 'within': {
+                // ["within", GeoJSONObject]: returns true if the feature's
+                // geometry is entirely contained inside the filter geometry.
+                // Supports Polygon and MultiPolygon filter geometries, and
+                // Point/LineString/Polygon feature geometries.
+                const filterGeo = this.exec(args[0], ctx) as any;
+                return MBExpressionEngine.featureWithin(feature, filterGeo);
             }
 
             case 'is-supported-script': {
@@ -524,6 +555,58 @@ export class MBExpressionEngine {
                 return v;
             }
 
+            case 'accumulated': {
+                // Returns the accumulated value of the current cluster property.
+                // Only meaningful for clustered GeoJSON sources. Outside a
+                // cluster context, returns 0 (the mapbox default for missing).
+                return (ctx as any).accumulated ?? 0;
+            }
+
+            case 'number-format': {
+                const v = Number(this.exec(args[0], ctx));
+                const opts = args.length > 1 ? (this.exec(args[1], ctx) as any) : undefined;
+                if (!isFinite(v)) return String(v);
+                const locale = opts?.locale ?? undefined;
+                // Mapbox spec uses kebab-case keys; accept both kebab and camel.
+                const getOpt = (k: string) => opts?.[k] ?? opts?.[k.replace(/-([a-z])/g, (_m, c) => c.toUpperCase())];
+                const optsObj: Intl.NumberFormatOptions = {};
+                if (opts?.currency) optsObj.currency = String(opts.currency);
+                const minFrac = getOpt('min-fraction-digits');
+                const maxFrac = getOpt('max-fraction-digits');
+                if (minFrac !== undefined) optsObj.minimumFractionDigits = Number(minFrac);
+                if (maxFrac !== undefined) optsObj.maximumFractionDigits = Number(maxFrac);
+                if (opts?.unit) optsObj.unit = String(opts.unit);
+                try {
+                    return new Intl.NumberFormat(locale, optsObj).format(v);
+                } catch {
+                    return String(v);
+                }
+            }
+
+            case 'keys': {
+                const v = this.exec(args[0], ctx);
+                return (v && typeof v === 'object') ? Object.keys(v) : [];
+            }
+
+            case 'values': {
+                const v = this.exec(args[0], ctx);
+                return (v && typeof v === 'object') ? Object.values(v) : [];
+            }
+
+            case 'zip': {
+                const arrays = args.map(a => {
+                    const v = this.exec(a, ctx);
+                    return Array.isArray(v) ? v : [];
+                });
+                if (arrays.length === 0) return [];
+                const len = Math.min(...arrays.map(a => a.length));
+                const result: any[][] = [];
+                for (let i = 0; i < len; i++) {
+                    result.push(arrays.map(a => a[i]));
+                }
+                return result;
+            }
+
             default:
                 return null;
         }
@@ -574,6 +657,125 @@ export class MBExpressionEngine {
             return min;
         }
         return Infinity;
+    }
+
+    /**
+     * Ray-casting point-in-polygon test (even-odd rule). Handles polygon
+     * holes by treating each ring independently.
+     */
+    private static pointInPolygon(
+        px: number, py: number,
+        ring: Array<[number, number] | number[]>,
+    ): boolean {
+        let inside = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const xi = ring[i][0], yi = ring[i][1];
+            const xj = ring[j][0], yj = ring[j][1];
+            const intersect = ((yi > py) !== (yj > py)) &&
+                (px < (xj - xi) * (py - yi) / (yj - yi + 1e-15) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    /**
+     * Returns true if `(px, py)` lies inside a Polygon (with holes) or
+     * MultiPolygon geometry.
+     */
+    private static pointInGeometry(px: number, py: number, geo: any): boolean {
+        if (!geo) return false;
+        const type = geo.type ?? geo.geometry?.type;
+        const coords = geo.coordinates ?? geo.geometry?.coordinates;
+        if (!coords) return false;
+
+        if (type === 'Polygon') {
+            // Outer ring must contain the point, no inner ring may.
+            if (!this.pointInPolygon(px, py, coords[0])) return false;
+            for (let i = 1; i < coords.length; i++) {
+                if (this.pointInPolygon(px, py, coords[i])) return false;
+            }
+            return true;
+        }
+        if (type === 'MultiPolygon') {
+            for (const poly of coords) {
+                if (this.pointInGeometry(px, py, { type: 'Polygon', coordinates: poly })) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return false;
+    }
+
+    /**
+     * Compare two values for `==` / `!=`, optionally honoring a collator
+     * produced by the `collator` expression. Without a collator, fall back to
+     * strict equality. With a collator, normalize strings according to its
+     * `caseSensitive` and `diacriticSensitive` flags (default both true).
+     */
+    private static collatorEquals(a: any, b: any, collator: any): boolean {
+        if (!collator || (typeof a !== 'string' && typeof b !== 'string')) {
+            return a === b;
+        }
+        const caseSensitive = collator.caseSensitive !== false;
+        const diacriticSensitive = collator.diacriticSensitive !== false;
+        let sa = String(a);
+        let sb = String(b);
+        if (!diacriticSensitive) {
+            // Strip combining diacritics by NFD-normalizing and removing
+            // the combining-mark range (U+0300..U+036F).
+            sa = sa.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            sb = sb.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+        if (!caseSensitive) {
+            sa = sa.toLowerCase();
+            sb = sb.toLowerCase();
+        }
+        return sa === sb;
+    }
+
+    /**
+     * Implementation of the `within` expression: returns true if every vertex
+     * of the feature's geometry lies inside the filter geometry. This is a
+     * conservative vertex-containment test — sufficient for render-test use
+     * cases where features are short relative to the filter polygon.
+     *
+     * Supported feature shapes (read off the MBStyleFeature payload set by
+     * `MBStyleDecoder`):
+     *   - `_geom.coordinates` (always present, a representative Point)
+     *   - `_lineGeom` (`[lng,lat][]`, set for LineString features)
+     *   - `_polyGeom` (`[lng,lat][][]` per ring, set for Polygon features)
+     */
+    public static featureWithin(feature: MBStyleFeature | undefined, filterGeo: any): boolean {
+        if (!feature || !filterGeo) return false;
+        const target = filterGeo?.geometry ?? filterGeo;
+        const type = target?.type;
+        if (type !== 'Polygon' && type !== 'MultiPolygon') return false;
+
+        const f = feature as any;
+
+        // Polygon feature: every ring vertex must be inside the filter.
+        if (f._polyGeom && Array.isArray(f._polyGeom)) {
+            for (const ring of f._polyGeom) {
+                for (const v of ring) {
+                    if (!this.pointInGeometry(v[0], v[1], target)) return false;
+                }
+            }
+            return true;
+        }
+        // LineString feature: every line vertex must be inside the filter.
+        if (f._lineGeom && Array.isArray(f._lineGeom)) {
+            for (const v of f._lineGeom) {
+                if (!this.pointInGeometry(v[0], v[1], target)) return false;
+            }
+            return true;
+        }
+        // Point feature (or fallback): test the representative point.
+        const geom = f._geom;
+        if (geom?.coordinates) {
+            return this.pointInGeometry(geom.coordinates[0], geom.coordinates[1], target);
+        }
+        return false;
     }
 
     private static interpolateColor(a: string, b: string, t: number): string {

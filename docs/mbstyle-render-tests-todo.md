@@ -24,60 +24,62 @@
 
 | # | 特性 | 测试数 | 状态 | 说明 |
 |---|------|--------|------|------|
-| **O.12-1** | **Projections (Albers 等)** | 57 | ⚠️ 数学已实现但未接入 | `MBProjection.ts` 有完整 project/unproject，但未注册为 `Projection` 子类；`applyProjection` 仅支持 mercator/globe |
+| **O.12-1** | **Projections (Albers 等)** | 57 | ✅ 已接入（部分 draping） | v15/v22：`MBMapProjection` 注册为 `Projection` 子类；v22 起 `tile2world` 对自定义投影做 (lng,lat)→projectPoint 重投影 + 线段细分，矢量要素真正落在 Albers/EqualEarth/WinkelTripel 空间。raster-sprite draping 仍未实现 |
 | **O.12-2** | **Lighting 3D** | 120 | ⚠️ 灯光已创建但材质未消费 | `applyLights` 创建 AmbientLight+DirectionalLight ✅，但自定义 MeshLambert/MeshStandard 材质是死代码 |
 | **O.12-3** | **Model Layer (glTF)** | 212 | ⚠️ GLTFLoader 能加载但定位有误 | 加载 .glb ✅，但位置固定在 `style.center`（单一全局中心），非 per-feature |
 | **O.12-4** | **Fog** | 63 | ✅ 工作 | `THREE.FogExp2` + `scene.fog` |
 | **O.12-5** | **Sky / Skybox** | 34 | ✅ 工作 | gradient + atmosphere + stars shader |
-| **O.12-6** | **Terrain (DEM)** | 69 | ⚠️ 材质是死代码，仅加载 z=0 单瓦片 | `MapTerrainMaterial` 从未实例化；`applyTerrain` 硬编码 z/x/y=0 |
-| **O.12-7** | **Terrain Depth Occlusion** | 15 | ❌ 未实现 | 需要 depth FBO + 片元采样 |
+| **O.12-6** | **Terrain (DEM)** | 69 | ✅ 多瓦片 draping（v23） | v22 前仅 centerDem 单瓦片；v23 起 `TerrainController.allDemTiles` + `injectTerrainDrapeMultiTile` 跨瓦片 draping；fill/line/circle/raster/extrusion 均接入；地形 morphing + skirt 完整 |
+| **O.12-7** | **Terrain Depth Occlusion** | 15 | ✅ 已实现 | `TerrainDepthOcclusion` 类：WillRender 钩子把 terrain 渲到 WebGLRenderTarget 的 DepthTexture；circle/symbol 片元着色器采样做软淡出（Scheme A）+ hardware depthTest 兜底（Scheme C） |
 | **O.12-8** | **Globe** | 122 | ✅ 原生工作 | `mapView.projection = sphereProjection` 激活原生管线 |
-| **O.12-9** | **Building + Facades** | 53 | ❌ 材质是死代码 | `MapBuildingMaterial` 从未实例化；`extrudeBuilding` 从未调用 |
-| **O.12-10** | **3D Intersections** | 75 | ❌ 未实现 | 需 elevated structures 系统 |
-| **O.12-11** | **Shadows (CSM)** | — | ❌ 未实现 | `renderer.shadowMap.enabled` 从未设置 |
+| **O.12-9** | **Building + Facades** | 53 | ⚠️ v17 接入基础 | `emitter` 读 feature height；`MaterialPatchManager` 识别 building technique → 注入 height extrusion + roof color shader；程序化立面（窗户 hash）未实现 |
+| **O.12-10** | **3D Intersections** | 75 | ⚠️ v22 部分 | `ElevatedStructures.ts` 实现 guardrail/wall 几何；`MBTileDataEmitter.resolveZOffset` 处理 line/fill-elevation-reference；完整桥梁/隧道几何未做 |
+| **O.12-11** | **Shadows (CSM)** | — | ✅ v14 启用 | `renderer.shadowMap.enabled = true` + `PCFSoftShadowMap`；CSM 级联阴影未做 |
 
 ### 按渲染路径分类的真实状态
 
 | 路径 | 状态 | 说明 |
 |------|------|------|
 | **Emitter → technique props → 原生材质** | ✅ 实际工作 | fill/line/circle/extrusion/symbol 的基础属性通过 technique props 工作 |
-| **Emitter → technique props → 原生材质 (高级属性)** | ⚠️ 部分 | 某些 props（translate/pitch-alignment/pattern 等）原生材质可能不消费 |
-| **自定义材质着色器补丁** | ❌ 死代码 | `MapFillMaterial.patchShader`/`MapLineMaterial.onBeforeCompile` 等从不执行 |
-| **MBRenderLayer.buildObjects** | ❌ 从未调用 | 整个 buildObjects → createMBMaterial 路径是死代码 |
-| **MBGlyphLoader** | ❌ 从未实例化 | PBF 解析器存在但未连接到 text 渲染管道 |
-| **MBProjection (非 globe/mercator)** | ❌ 从未导入 | Albers/EqualEarth 等数学函数存在但不影响渲染 |
+| **Emitter → technique props → 原生材质 (高级属性)** | ✅ v14-v29 大部分接入 | translate/pitch-alignment/pattern/sort-key/dasharray/z-offset/terrain draping 等通过 MBMaterialPatchManager 的 onBeforeCompile 注入 |
+| **自定义材质着色器补丁（MBMaterialPatchManager）** | ✅ v14 A1 | 不替换原生材质，而是在 AfterRender 钩子中通过 onBeforeCompile 注入 shader 补丁（fill-translate/extrusion-height/circle-translate/line-cap/terrain draping 等） |
+| **MBRenderLayer.buildObjects** | ❌ 死代码 | 被 MBMaterialPatchManager 替代，可安全移除 |
+| **MBGlyphLoader metrics** | ✅ v25 loadGlyphMetrics 主线程→worker 通路 | metrics 用于 shapeText 准确断行；atlas 渲染仍走 flywave FontCatalog |
+| **MBProjection (非 globe/mercator)** | ✅ v15/v22 MBMapProjection | `tile2world` 对自定义投影做 (lng,lat)→projectPoint 重投影 + 线段细分 |
 
-### 死代码清单（需要接入或移除）
+### 死代码清单（状态更新至 v29）
 
-| 文件 | 行数 | 状态 | 接入方案 |
-|------|------|------|---------|
-| `materials/MBRenderLayer.ts` | 379 | ❌ 从未调用 | 需注册为 Tile 的 geometry creator 替代 |
-| `materials/MapFillMaterial.ts` | 195 | ❌ 从未调用 | 需通过 TileGeometryCreator hook 注入 |
-| `materials/MapLineMaterial.ts` | 271 | ❌ 从未调用 | 同上 |
-| `materials/MapCircleMaterial.ts` | 148 | ❌ 从未调用 | 同上 |
-| `materials/MapExtrusionMaterial.ts` | 160 | ❌ 从未调用 | 同上 |
-| `materials/MapIconMaterial.ts` | 114 | ❌ 从未调用 | 同上 |
-| `materials/MBSDFTextMaterial.ts` | ~150 | ❌ 从未调用 | 同上 |
-| `materials/MapHeatmapMaterial.ts` | 140 | ❌ 从未调用 | 同上 |
-| `materials/MapHillshadeMaterial.ts` | 148 | ❌ 从未调用 | 同上 |
-| `materials/MapRasterMaterial.ts` | 130 | ❌ 从未调用 | 同上 |
-| `materials/MapTerrainMaterial.ts` | 110 | ❌ 从未调用 | 同上 |
-| `materials/MapBuildingMaterial.ts` | 140 | ❌ 从未调用 | 同上 |
-| `MBProjection.ts` (非 globe) | 250 | ❌ 从未导入 | 需创建 Projection 子类 |
-| `MBGlyphLoader.ts` | 220 | ❌ 从未实例化 | 需连接到 text 渲染 |
+> v13 审计时标记的 14 个死代码文件中，大部分已被 **MBMaterialPatchManager**（v14 A1）的 onBeforeCompile 注入方式替代。原生材质**不替换**，而是在 AfterRender 钩子中补丁 shader uniform/define。下表反映当前接入状态。
 
-### 关键 Bug（非死代码类）
+| 文件 | 行数 | 状态 | 说明 |
+|------|------|------|------|
+| `materials/MBRenderLayer.ts` | 379 | ❌ 仍死代码 | 被 MBMaterialPatchManager 替代，可安全移除 |
+| `materials/MapFillMaterial.ts` | 195 | ⚠️ 部分 | createMBMaterial 中引用但 buildObjects 路径未走；fill 属性通过 patchManager 的 patchFillMaterial 接入 |
+| `materials/MapLineMaterial.ts` | 271 | ⚠️ 部分 | 同 fill；line 属性通过 patchLineMaterial 接入 |
+| `materials/MapCircleMaterial.ts` | 148 | ⚠️ 部分 | circle 属性通过 patchCircleMaterial 接入 |
+| `materials/MapExtrusionMaterial.ts` | 160 | ⚠️ 部分 | extrusion 属性通过 patchExtrusionMaterial 接入 |
+| `materials/MapIconMaterial.ts` | 114 | ⚠️ 部分 | icon 属性通过 patchIconObject 接入 |
+| `materials/MBSDFTextMaterial.ts` | ~150 | ❌ 仍死代码 | SDF text 通过 flywave 原生 TextElementsRenderer 渲染 |
+| `materials/MapHeatmapMaterial.ts` | 140 | ⚠️ 部分 | heatmap 通过 emitter→circles + patchHeatmapMaterial 接入 |
+| `materials/MapHillshadeMaterial.ts` | 148 | ⚠️ 部分 | hillshade 通过 emitter→fill + patchHillshadeMaterial 接入 |
+| `materials/MapRasterMaterial.ts` | 130 | ⚠️ 部分 | raster 通过 RasterTileDataProvider + patchRasterMaterial 接入 |
+| `materials/MapTerrainMaterial.ts` | 110 | ✅ v14 接入 | TerrainController 直接实例化并使用 |
+| `materials/MapBuildingMaterial.ts` | 140 | ⚠️ v17 部分 | building 通过 emitter + patchManager 接入；程序化立面未做 |
+| `MBProjection.ts` (非 globe) | 250 | ✅ v15 接入 | `MBMapProjection` extends Projection，通过 mapView.projection 激活 |
+| `MBGlyphLoader.ts` | 220 | ⚠️ v25 部分 | metrics 通路已连接（loadGlyphMetrics），atlas 仍需 FontCatalog 转换 |
 
-| # | Bug | 文件 | 严重性 |
-|---|-----|------|--------|
-| B1 | `applyTerrain` 硬编码 z=0/x=0/y=0 | `MBEnvironmentManager.ts:290` | 高 |
-| B2 | `loadModels` 定位到单一 `style.center` | `MBStyleDataSource.ts:395` | 高 |
-| B3 | `CollisionIndex` 每帧 reset，无跨瓦片一致性 | `PlacementEngine.ts:61` | 中 |
-| B4 | `line-dasharray` 仅取前 2 元素 | `MBTileDataEmitter.ts:134` | 中 |
-| B5 | `renderer.shadowMap.enabled` 从未设置 | `MBEnvironmentManager.ts` | 低 |
-| B6 | 多源循环 break 在第一个匹配后 | `MBStyleDataSource.ts:252` | 中 |
-| B7 | `background-pattern` 无全屏四边形 | `MBStyleDataSource.ts:472` | 中 |
-| B8 | `image` source 类型未检测 | `MBStyleDataSource.ts` | 中 |
+### 关键 Bug（非死代码类）— 已全部修复
+
+| # | Bug | 文件 | 严重性 | 状态 |
+|---|-----|------|--------|------|
+| B1 | `applyTerrain` 硬编码 z=0/x=0/y=0 | `MBEnvironmentManager.ts:290` | 高 | ✅ v14 A4 |
+| B2 | `loadModels` 定位到单一 `style.center` | `MBStyleDataSource.ts:395` | 高 | ✅ v14 A5 |
+| B3 | `CollisionIndex` 每帧 reset，无跨瓦片一致性 | `PlacementEngine.ts:61` | 中 | ✅ v16 B3 |
+| B4 | `line-dasharray` 仅取前 2 元素 | `MBTileDataEmitter.ts:134` | 中 | ✅ v14 A7 |
+| B5 | `renderer.shadowMap.enabled` 从未设置 | `MBEnvironmentManager.ts` | 低 | ✅ v14 A6 |
+| B6 | 多源循环 break 在第一个匹配后 | `MBStyleDataSource.ts:252` | 中 | ✅ v14 A8 |
+| B7 | `background-pattern` 无全屏四边形 | `MBStyleDataSource.ts:472` | 中 | ✅ v15 B1 |
+| B8 | `image` source 类型未检测 | `MBStyleDataSource.ts` | 中 | ✅ v16 B2 |
 
 ### 修订后的实施计划（按实际可行性排序）
 
@@ -88,7 +90,7 @@
 | # | 任务 | 文件 | 复杂度 | 效果 |
 |---|------|------|--------|------|
 | A1 | 将 MBRenderLayer 接入 TileGeometryCreator | ✅ 完成 → 改为 MBMaterialPatchManager | ⭐⭐⭐ | 原生材质后创建补丁（onBeforeCompile 注入 fill-translate/extrusion-height/line-cap/circle-translate） |
-| A2 | 将 MBGlyphLoader 接入 text 渲染 | ⏳ 待做 | ⭐⭐ | PBF 字体渲染（需接入 flywave TextElementsRenderer） |
+| A2 | 将 MBGlyphLoader 接入 text 渲染 | ⚠️ v25 部分完成 | ⭐⭐ | v25: metrics 通路打通（loadGlyphMetrics → worker → shapeText），text shaping 使用真实 advance；SDF atlas 渲染仍需 FontCatalog 转换（暂未做） |
 | A3 | 将 MBProjection 接入 mapView.projection（非 globe） | ⏳ 待做 | ⭐⭐⭐ | 需创建 Projection 子类 |
 | A4 | 修复 applyTerrain z/x/y 硬编码 | ✅ 完成 | ⭐ | 按 zoom+center 计算正确 DEM 瓦片坐标 |
 | A5 | 修复 loadModels per-feature 定位 | ✅ 完成 | ⭐⭐ | 支持 model-position 多坐标列表 |
@@ -114,53 +116,63 @@
 | C2 | Terrain depth occlusion | ⭐⭐⭐⭐ | 15 个 depth-occlusion 测试 |
 | C3 | Building extrudeBuilding 接入 | ⭐⭐⭐ | 53 个 building 测试 |
 | C4 | 3D Intersections / elevated structures | ⭐⭐⭐⭐⭐ | 75 个测试 |
-| C5 | Projections draping 模式 | ⭐⭐⭐⭐ | 非球体投影渲染 |
+| C5 | Projections draping 模式 | ⭐⭐⭐⭐ | 非球体投影渲染（v22 已完成矢量重投影 + 线段细分；raster/sprite draping 仍待做） |
 | C6 | Paint cross-fade / transition | ⭐⭐⭐ | runtime-styling 过渡 |
 
 ### 各层属性真实实现状态（审计修正后）
 
 #### Fill 层
 
-| 属性 | 通过原生路径 | 通过自定义材质(死代码) | 真实状态 |
-|------|------------|---------------------|---------|
+| 属性 | 通过原生路径 | 通过 MBMaterialPatchManager | 真实状态 |
+|------|------------|---------------------------|---------|
 | fill-color | ✅ technique.color | — | ✅ |
 | fill-opacity | ✅ technique.opacity | — | ✅ |
-| fill-outline-color | ❌ 原生不画 | ⚠️ EdgesGeometry(死) | ❌ |
-| fill-translate | ❌ 原生不消费 _translate | ⚠️ uFillTranslate(死) | ❌ |
-| fill-pattern | ❌ 原生不消费 | ⚠️ uPatternMap(死) | ❌ |
-| fill-antialias | ❌ | ⚠️ polygonOffset(死) | ❌ |
+| fill-outline-color | — | ✅ v18 D3 EdgesGeometry 描边 shader | ✅ |
+| fill-translate | — | ✅ v14 A1 onBeforeCompile uniform 注入 | ✅ |
+| fill-pattern | — | ✅ v18 patchFillPatternMaterial 子矩形 UV | ✅ |
+| fill-antialias | — | ⚠️ polygonOffset 切换（非真实 MSAA） | ⚠️ |
 | fill-sort-key | ✅ group sort | — | ✅ |
-| fill-z-offset | ❌ | ⚠️ uniform(死) | ❌ |
+| fill-z-offset | — | ✅ v18 P2-1 字符串拼接 bug 修复 + uniform | ✅ |
 
 #### Line 层
 
-| 属性 | 通过原生路径 | 真实状态 |
-|------|------------|---------|
-| line-color/width/opacity/blur/offset | ✅ technique props | ✅ |
-| line-gradient | ✅ technique.gradient | ✅ |
-| line-dasharray | ⚠️ 仅前 2 元素 | ⚠️ |
-| line-cap/join | ❌ 原生用默认 | ❌ |
-| line-pattern/translate/pitch/trim-offset/border | ❌ | ❌ |
+| 属性 | 通过原生路径 | 通过 MBMaterialPatchManager | 真实状态 |
+|------|------------|---------------------------|---------|
+| line-color/width/opacity/blur/offset | ✅ technique props | — | ✅ |
+| line-gradient | ✅ technique.gradient | — | ✅ |
+| line-dasharray | — | ✅ v14 A7 完整数组 + v18 D4 GLSL 循环 | ✅ |
+| line-cap | — | ✅ v14 A1 SolidLineMaterial cap 设置 | ✅ |
+| line-join | — | ⚠️ v14 setJoinType 可选链（可能 no-op） | ⚠️ |
+| line-pattern | — | ⚠️ v18 子矩形 UV（uLineLength 仍硬编码） | ⚠️ |
+| line-translate | — | ✅ v14 uniform 注入 | ✅ |
+| line-pitch/trim-offset/border | — | ❌ | ❌ |
+| line-gap-width | — | ✅ v19 E4 secondaryWidth | ✅ |
+| line-blend-mode | ✅ additive/multiply/default | — | ✅ |
+| line-sort-key | ✅ group sort | — | ✅ |
 
 #### Circle 层
 
-| 属性 | 通过原生路径 | 真实状态 |
-|------|------------|---------|
-| circle-color/radius/blur/opacity/stroke-* | ✅ | ✅ |
-| circle-pitch-scale/pitch-alignment/translate | ❌ 原生不消费 | ❌ |
-| circle-sort-key | ✅ group sort | ✅ |
+| 属性 | 通过原生路径 | 通过 MBMaterialPatchManager | 真实状态 |
+|------|------------|---------------------------|---------|
+| circle-color/radius/blur/opacity/stroke-* | ✅ | — | ✅ |
+| circle-pitch-scale | — | ✅ v18 D5 sizeAttenuation 注入 | ✅ |
+| circle-pitch-alignment | — | ✅ v18 P5-4 pitch-aware 点大小 | ✅ |
+| circle-translate | — | ✅ v14 uniform 注入 | ✅ |
+| circle-sort-key | ✅ group sort | — | ✅ |
 
 #### Symbol 层
 
-| 属性 | 通过原生路径 | 真实状态 |
-|------|------------|---------|
-| text-field(token)/size/color/halo-*/opacity/anchor/transform/letter-spacing/line-height/max-width | ✅ via shapeText + technique | ✅ |
-| icon-image/size/color/opacity/rotate/offset/anchor | ✅ via technique | ✅ |
-| text-offset/radial-offset | ⚠️ emitter stores but placement path may not consume | ⚠️ |
-| text-writing-mode | ⚠️ shaping works but per-glyph quad rendering is horizontal | ⚠️ |
-| icon-text-fit | ❌ 原生不测量文本包围盒 | ❌ |
-| symbol-placement: line | ✅ getLineAnchors | ✅ |
-| CrossTileSymbolIndex | ❌ 每帧 reset | ❌ |
+| 属性 | 通过原生路径 | 通过 MBMaterialPatchManager | 真实状态 |
+|------|------------|---------------------------|---------|
+| text-field(token)/size/color/halo-*/opacity/anchor/transform/letter-spacing/line-height/max-width | ✅ via shapeText + technique | — | ✅ |
+| icon-image/size/color/opacity/rotate/offset/anchor | ✅ via technique | ✅ v14 patchIconObject UV | ✅ |
+| text-offset/radial-offset | ⚠️ | ✅ v18 P1-7 应用到四边形 | ✅ |
+| text-writing-mode | ✅ v18 vertical shaping | — | ✅ |
+| icon-text-fit | — | ✅ v18 D2 applyIconTextFit | ✅ |
+| symbol-placement: line | ✅ v18 getLineAnchors | — | ✅ |
+| CrossTileSymbolIndex | ✅ v16 基础实现 | — | ✅ |
+| text-justify | ✅ left/center/right/auto | — | ⚠️ 无 binary justify |
+| text-font / text-font-metrics | ⚠️ v25 metrics 通路 | — | ⚠️ atlas 仍走 FontCatalog |
 
 #### 表达式
 
@@ -168,14 +180,15 @@
 |--------|------|
 | get/has/id/zoom/geometry-type/==/!=/>/<in/match/case/coalesce/interpolate/step | ✅ |
 | rgb/rgba/hsl/hsla/to-color/cubic-bezier/within/distance/collator/array/at/slice | ✅ |
-| accumulated/line-progress/number-format | ❌ |
+| accumulated/number-format | ✅ (v21) |
+| line-progress | ❌（需瓦片几何上下文） |
 
 #### 测试 Runner Operations
 
 | 操作 | 状态 |
 |------|------|
 | wait/setPaintProperty/setLayoutProperty/addLayer/removeLayer/moveLayer/setFilter/setStyle/setFeatureState/setZoom/setCenter/setBearing/setPitch/setProjection(mercator/globe)/easeTo | ✅ |
-| addImage/removeImage/updateImage/setLight/setLights/setFog/setTerrain/addModel/addSource/setPadding/setCameraPosition/lookAtPoint/fitScreenCoordinates/forceContextRestart | ❌ no-op |
+| addImage/removeImage/updateImage/setLight/setLights/setFog/setTerrain/addModel/addSource/setPadding/lookAtPoint/fitScreenCoordinates/forceContextRestart/setRenderWorldCopies/setWorldview/setCustomTexture | ✅ v18-v27 已实现（setCameraPosition 仍 no-op — 需 FreeCamera 引擎扩展）|
 
 ---
 
@@ -277,22 +290,22 @@
 
 | 属性 | 测试数 | 状态 | 优先级 | 实现位置 / 说明 |
 |------|--------|------|--------|-----------------|
-| `fill-extrusion-color` | 8 | ✅ | P0 | `MapExtrusionMaterial.ts:132` |
-| `fill-extrusion-height` | 6 | ⚠️ | P0 | uniform `uHeightBase/uHeightTop` 存在（`:34-35`）但 **`applyPaint` 从不设置**，emitter 传了 `height`/`floorHeight`（`MBTileDataEmitter.ts:191-192`）但无消费 → 默认 0/1 |
-| `fill-extrusion-base` | 12 | ⚠️ | P1 | 同上 |
-| `fill-extrusion-opacity` | 3 | ✅ | P0 | `:133` |
-| `fill-extrusion-vertical-gradient` | 3 | ✅ | P1 | 着色器分支 `:80-89` |
-| `fill-extrusion-translate` | 4 | ⚠️ | P1 | uniform 声明（`:41`），`applyPaint` 不填值 |
-| `fill-extrusion-translate-anchor` | 2 | ❌ | P2 | 无 |
-| `fill-extrusion-pattern` | 15 | ❌ | P1 | `setPatternTexture` 是死代码，`MBMaterialFactory.ts:84-85` 从不调用 |
+| `fill-extrusion-color` | 8 | ✅ | P0 | patchExtrusionMaterial |
+| `fill-extrusion-height` | 6 | ✅ | P0 | v18 P1-1 patchExtrusionMaterial 读 technique.height + onBeforeCompile 注入 height shader |
+| `fill-extrusion-base` | 12 | ✅ | P1 | v18 P1-1 同上（floorHeight） |
+| `fill-extrusion-opacity` | 3 | ✅ | P0 | technique.opacity |
+| `fill-extrusion-vertical-gradient` | 3 | ✅ | P1 | v19 E2 patchExtrusionMaterial 顶点高度 varying + 渐变 shader |
+| `fill-extrusion-translate` | 4 | ✅ | P1 | v14 uniform 注入 |
+| `fill-extrusion-translate-anchor` | 2 | ⚠️ | P2 | v18 P5-2 方位角旋转（部分） |
+| `fill-extrusion-pattern` | 15 | ✅ | P1 | v18 P2-4 patchExtrusionMaterial patternTex + map |
 | `fill-extrusion-pattern-cross-fade` | 4 | ❌ | P2 | 无 |
 | `fill-extrusion-multiple` | 2 | ✅ | P1 | 多层 |
 | `fill-extrusion-geometry` | 1 | ❌ | P3 | linestring 几何无 |
 | `fill-extrusion-partial-rendering` | 4 | ❌ | P2 | 无 |
-| `fill-extrusion-terrain` | 13 | ❌ | P2 | 需 terrain |
-| `fill-extrusion-wireframe` / `-rounded-wireframe` / `-edge-radius-narrow-corner` / `-cutoff-fade-range` / `-vertical-scale` / `-no-mercator-projection` / `-line-width` | 各 1–9 | ❌ | P3 | 全无 |
-
-**关键修复**：把 `MapExtrusionMaterial.applyPaint` 接到 emitter 传来的 `height`/`floorHeight`，否则所有 3D 建筑物都是平的。**单项改动可解锁 18 个 height/base 测试**。
+| `fill-extrusion-terrain` | 13 | ⚠️ | P2 | v23 multi-tile DEM draping 接入（vertex draping，非 texture draping） |
+| `fill-extrusion-vertical-scale` | — | ✅ | P3 | v18 patchExtrusionMaterial verticalScale uniform |
+| `fill-extrusion-cutoff-fade-range` | — | ✅ | P3 | v18 patchExtrusionMaterial cutoffFadeRange |
+| `fill-extrusion-wireframe` / `-rounded-wireframe` / `-edge-radius-narrow-corner` / `-no-mercator-projection` / `-line-width` | 各 1–9 | ❌ | P3 | 全无 |
 
 ---
 
@@ -302,7 +315,7 @@
 |------|--------|------|--------|-----------------|
 | `background-color` | 6 | ✅ | P0 | `MBStyleDataSource.ts:282-299` → `MapView.clearColor` |
 | `background-opacity` | 3 | ✅ | P0 | `clearAlpha` |
-| `background-pattern` | 13 | ⚠️ | P1 | 工厂路由到 `MapFillMaterial + applyPatternTexture`（`MBMaterialFactory.ts:46-49`），但 `applyBackgroundColor` 只读 color/opacity，**pattern 被静默忽略** |
+| `background-pattern` | 13 | ✅ | P1 | v15 B1 applyBackgroundPattern 在 EnvironmentManager 中创建 sprite atlas 纹理平铺的 NDC quad |
 | `background-visibility` | 2 | ✅ | P0 | |
 | `background-pitch-alignment` | 5 | ❌ | P2 | 无 |
 
@@ -312,7 +325,7 @@
 
 | 属性 | 测试数 | 状态 | 优先级 | 实现位置 / 说明 |
 |------|--------|------|--------|-----------------|
-| `icon-image` | 16 | ⚠️ | P0 | `MapIconMaterial.applyPaint` 调 `spriteAtlas.getIconUv`（`:99-100`）但只赋 `this.map = texture`，**从不写入 sprite 的 per-icon UV**，所有图标显示整张 atlas |
+| `icon-image` | 16 | ✅ | P0 | v14 P1-6 patchIconObject 把 per-icon UV 写入 uUvOffset/uUvScale，sprite atlas 子矩形正确采样 |
 | `icon-size` | 18 | ✅ | P0 | `MBRenderLayer.ts:155-158` `sprite.scale` |
 | `icon-color` | 7 | ✅ | P0 | `:94` |
 | `icon-opacity` | 9 | ✅ | P0 | `:95` |
@@ -344,7 +357,7 @@
 |------|--------|------|--------|-----------------|
 | `text-field` (token `{name}`) | 23 | ✅ | P0 | `TextShaping.ts:109-120` `resolveTextField`，emitter `:157` |
 | `text-font` | 4 | ⚠️ | P0 | 传给 `MBGlyphLoader`（`MBTileDataEmitter.ts:167`），但 loader **忽略字体栈**，用 canvas fallback 绘制（`MBGlyphLoader.ts:43-85`），**无 PBF 解析** |
-| `text-font-metrics` | 15 | ❌ | P1 | 无 baseline/vertical shaping |
+| `text-font-metrics` | 15 | ⚠️ v25 部分实现 | P1 | v25: glyph metrics 主线程预加载（基础拉丁 0-511）→ worker decoder → emitter shapeText 使用真实 advance；但 SDF atlas 渲染仍走 flywave FontCatalog，baseline/vertical shaping 未完全对齐 |
 | `text-size` | 13 | ✅ | P0 | |
 | `text-color` | 9 | ✅ | P0 | `MBSDFTextMaterial.ts:141` |
 | `text-halo-color` / `-width` / `-blur` | 13 | ✅ | P0 | `:78-82, 142-144` |
@@ -353,11 +366,11 @@
 | `text-offset` | 20 | ⚠️ | P1 | 在默认值中，**从不应用到渲染四边形** |
 | `text-radial-offset` | 1 | ✅ | P1 | `PlacementEngine.ts:170-186` |
 | `text-anchor` | 11 | ✅ | P0 | `TextShaping.ts:204-225` |
-| `text-justify` | 4 | ⚠️ | P1 | `getJustifyOffset`（`:186-199`）支持 left/center/right/auto，**无 binary justify** |
+| `text-justify` | 4 | ✅ | P1 | v31：`getJustifyOffset` 含 binary justify — `auto` 根据锚点方向决定（left 锚点→right justify，right 锚点→left justify，center→center） |
 | `text-transform` | 3 | ✅ | P0 | `applyTextTransform`（`:125-131`）（旧文档标记 ❌ 有误） |
 | `text-letter-spacing` | 5 | ✅ | P1 | `measureTextWidth`（`:63`） |
 | `text-line-height` | 2 | ✅ | P1 | `:278` |
-| `text-max-width` | 8 | ✅ | P1 | `wrapText`（`:137-181`）贪心换行，**无超长词的字符级断行** |
+| `text-max-width` | 8 | ✅ | P1 | `wrapText`（v21：token-based 贪心换行 + CJK 单字断点 + 超长词字符级回退） |
 | `text-max-angle` | 2 | ❌ | P2 | 默认值有，但 `LineAnchor.ts:65-70` 硬编码 maxAngle，emitter 不传 |
 | `text-max-attributes` | 1 | ❌ | P3 | |
 | `text-variable-anchor` | 31 | ✅ | P1 | `PlacementEngine.ts:73-87`（旧文档标记 ❌ 有误） |
@@ -366,7 +379,7 @@
 | `text-pitch-alignment` | 12 | ✅ | P1 | `MBStyleSymbolPlacement.ts:124-130` |
 | `text-rotation-alignment` | 6 | ✅ | P1 | `MBStyleSymbolPlacement.ts:92-106` |
 | `text-pitch-scaling` | 1 | ❌ | P2 | |
-| `text-arabic` | 5 | ❌ | P2 | `reshapeArabic` 是 TODO 桩（`TextShaping.ts:416-420`），`reorderRTL` 仅整串反转（`:404-409`），**无真实 Bidi 算法** |
+| `text-arabic` | 5 | ⚠️ | P2 | v21：`reshapeArabic` 已实现完整 Unicode Presentation Forms 映射 + LAM-ALEF 连字；v28 `reorderRTL` 改用完整 UAX#9 Bidi（`BidiAlgorithm.uax9Reorder`，含 W1-W7 弱类型 / N0-N2 中性 / I1-I2 隐式层级 / L1 空格重置） |
 | `text-translate` | 3 | ⚠️ | P1 | 部分实现 |
 | `text-translate-anchor` | 2 | ❌ | P2 | |
 | `text-visibility` | 2 | ✅ | P0 | |
@@ -378,17 +391,17 @@
 
 | 功能 | 状态 | 优先级 |
 |------|------|--------|
-| 文本断行 (max-width) | ✅ 贪心换行 | P0 |
-| 字符级断行（超长词） | ❌ | P1 |
-| 对齐 (justify) | ⚠️ 无 binary | P0 |
+| 文本断行 (max-width) | ✅ 贪心换行 + CJK 单字断点（v21） | P0 |
+| 字符级断行（超长词） | ✅ 字符级回退（v21） | P1 |
+| 对齐 (justify) | ✅ v31 含 binary justify（auto 根据锚点方向决定） | P0 |
 | 大小写转换 (transform) | ✅ | P0 |
 | 字间距 (letter-spacing) | ✅ | P1 |
 | 行高 (line-height) | ✅ | P1 |
 | Token 替换 ({name}) | ✅ | P0 |
 | Format 表达式 | ⚠️ `format` 简化版，忽略 scale/font | P1 |
-| CJK 断行 | ❌ | P2 |
-| Arabic shaping | ❌ 桩 | P2 |
-| Bidi 算法 | ❌ 仅反转 | P2 |
+| CJK 断行 | ✅ 每表意字单字断点（v21） | P2 |
+| Arabic shaping | ✅ Unicode Presentation Forms（v21） | P2 |
+| Bidi 算法 | ✅ v28 完整 UAX#9（BidiAlgorithm.ts — W/N/I/L 规则；跳过 explicit embedding 控制字符） | P2 |
 | Vertical writing mode | ✅ | P2 |
 | Per-glyph SDF 渲染 | ❌ 当前是整标签单 quad | P0（架构重构） |
 
@@ -401,11 +414,11 @@
 | 属性 | 测试数 | 状态 | 优先级 | 实现位置 / 说明 |
 |------|--------|------|--------|-----------------|
 | `symbol-placement: point` | — | ✅ | P0 | 默认路径 |
-| `symbol-placement: line` | 10 | ⚠️ | P0 | `LineAnchor.ts` 算锚点，但 `MBStyleSymbolPlacement.collectSymbols`（`:134-211`）**从不调用 `getLineAnchors`**，永远只投影第一个点 |
-| `symbol-placement: line-center` | — | ⚠️ | P1 | `getLineCenterAnchor` 存在（`:124`）但未用 |
-| `symbol-spacing` | 5 | ❌ | P1 | 仅默认值，从不传 `getLineAnchors` |
-| `symbol-z-order` | 11 | ❌ | P1 | 仅默认值 |
-| `symbol-sort-key` | 8 | ❌ | P1 | 仅 spec |
+| `symbol-placement: line` | 10 | ✅ | P0 | v18 已完成：`MBStyleDecoder.processLineFeature` 存储 `_linePath`，`MBStyleSymbolPlacement.collectSymbols`（`:285-313`）调 `getLineAnchors` 沿线放置 |
+| `symbol-placement: line-center` | — | ✅ | P1 | v18 已完成：`getLineCenterAnchor` 经由 `placement === 'line-center'` 分支接入 |
+| `symbol-spacing` | 5 | ✅ | P1 | v18 已完成：`collectSymbols`（`:295`）从 `layout['symbol-spacing']` 读取并传给 `getLineAnchors` |
+| `symbol-z-order` | 11 | ⚠️ | P1 | v17 部分实现：`viewport-y` 排序（renderOrder 按 screenY 设置）已接入；`'viewport-y'` 之外的 z-order 模式未支持 |
+| `symbol-sort-key` | 8 | ⚠️ | P1 | emitter 已读 `symbol-sort-key`，但 placement 阶段未在收集后按 sort-key 重排 |
 | `symbol-visibility` | 2 | ✅ | P0 | |
 | `symbol-opacity` | 1 | ✅ | P1 | |
 | `symbol-geometry` | 6 | ❌ | P2 | |
@@ -417,11 +430,11 @@
 | 功能 | 状态 | 优先级 | 说明 |
 |------|------|--------|------|
 | CollisionIndex 空间网格 | ✅ | P0 | `CollisionIndex.ts` |
-| PlacementEngine 布局 | ⚠️ | P0 | `place()` 每帧 `collisionIndex.reset()`（`PlacementEngine.ts:56`），**碰撞态是单帧的**，非 Mapbox 的 cross-tile/cross-zoom |
-| 跨瓦片符号一致性 (`CrossTileSymbolIndex`) | ❌ | P1 | |
+| PlacementEngine 布局 | ✅ | P0 | v16 已修复：`place()` 不再每帧 reset collision，仅 zoom 变化时重置 |
+| 跨瓦片符号一致性 (`CrossTileSymbolIndex`) | ✅ 基础 | P1 | v16 已完成 `CrossTileSymbolIndex` 基础实现（zoom 变化才重置） |
 | icon/text 联合放置 | ⚠️ | P0 | |
-| opacity 渐变过渡 | ❌ | P1 | `FADE_DURATION` 定义（`:35`）但 `place()` 返回 binary 0/1（`:100`） |
-| 沿线标注放置 | ❌ | P1 | 见 `symbol-placement: line` |
+| opacity 渐变过渡 | ✅ | P1 | v18（P2-8）已实现：基于 `FADE_DURATION` 时间插值 |
+| 沿线标注放置 | ✅ | P1 | v18 已完成（见 `symbol-placement: line`）|
 
 ---
 
@@ -431,22 +444,22 @@
 
 | 类别 | 已支持 | 缺失 |
 |------|--------|------|
-| 数据访问 | `get`, `has`, `id`, `zoom`, `geometry-type`, `properties`, `feature-state`, `literal`, `var`, `let`, `image`, `format`(简化) | `accumulated`, `line-progress` |
-| 比较/逻辑 | `==`, `!=`, `>`, `>=`, `<`, `<=`, `!`, `all`, `any`, `none`, `in`, `match`, `case`, `coalesce` | — |
-| 插值 | `interpolate` (exponential + linear), `step` | **`cubic-bezier` 插值** ❌ |
-| 类型转换 | `to-number`, `to-string`, `to-boolean`, `typeof` | `array`（始终返 `[]`，损坏）, `boolean`/`object`/`string`/`number` 断言 |
-| 字符串 | `upcase`, `downcase`, `concat`, `slice`(仅字符串), `length` | 数组 `at`/`slice`/`zip`/`keys`/`values` |
+| 数据访问 | `get`, `has`, `id`, `zoom`, `geometry-type`, `properties`, `feature-state`, `literal`, `var`, `let`, `image`, `format`(简化), `accumulated`(v21) | `line-progress`（需瓦片几何上下文） |
+| 比较/逻辑 | `==`, `!=`, `>`, `>=`, `<`, `<=`, `!`, `all`, `any`, `none`, `in`, `match`, `case`, `coalesce`（v26: `==`/`!=` 支持 collator） | — |
+| 插值 | `interpolate` (exponential + linear + cubic-bezier), `step` | — |
+| 类型转换 | `to-number`, `to-string`, `to-boolean`, `typeof`, `array`, `boolean`/`object`/`string`/`number` 断言（v21 增强） | — |
+| 字符串 | `upcase`, `downcase`, `concat`, `slice`(字符串+数组), `length`, `at`, `keys`/`values`/`zip`(v21), `number-format`(v21) | — |
 | 数学 | `+`, `-`, `*`, `/`, `%`, `^`, `abs`, `floor`, `ceil`, `round`, `min`, `max`, `sqrt`, `ln`, `ln2`, `log10`, `log2`, `sin`, `cos`, `tan`, `pi`, `e` | — |
-| 颜色 | `interpolateColor`（仅 `#rrggbb`/`#rrggbbaa`） | `rgb`/`rgba`/`hsl`/`hsla`/`to-color` ❌，无 `rgb()`/`hsl()`/命名色解析 |
-| 几何/复杂 | — | `within` ❌, `distance` ❌, `is-supported-script` ❌, `collator` ❌, `resolved-locale`/`number-format` ❌ |
+| 颜色 | `interpolateColor`（`#rrggbb`/`#rrggbbaa`/命名色），`rgb`/`rgba`/`hsl`/`hsla`/`to-color`（v7 完成） | `rgb()`/`hsl()` CSS 函数形式 |
+| 几何/复杂 | `within`(legacy+expression，v26 含 LineString/Polygon feature)，`distance`，`collator`(v26 含实际比较)，`is-supported-script`(基础)，`resolved-locale` | 完整 UAX#9 collator |
 
 | 测试分类 | 测试数 | 状态 | 优先级 |
 |------|--------|------|--------|
 | filter 基础 | 4 | ✅ | P0 |
 | dynamic-filter | 27 | ⚠️ 引擎支持，但运行时切换依赖全量 re-decode | P1 |
 | feature-state | 25 | ⚠️ 引擎支持，但无跨瓦片持久 feature-state 存储 | P1 |
-| within | 11 | ❌ 显式桩为 `() => true`（`MBFilterCompiler.ts:107-110`） | P2 |
-| collator | 2 | ❌ | P3 |
+| within | 11 | ✅ v22 legacy + 表达式形式；v26 LineString/Polygon 要素支持 | P2 |
+| collator | 2 | ✅ v26 实际 case/diacritic-insensitive 比较 | P3 |
 | is-supported-script | 2 | ❌ | P3 |
 | distance | 6 | ❌ | P2 |
 
@@ -456,13 +469,13 @@
 
 | 属性 | 状态 | 优先级 | 说明 |
 |------|------|--------|------|
-| heatmap-color | ⚠️ | P1 | `MapHeatmapMaterial.ts`（140 行）材质完整写好 |
-| heatmap-intensity | ⚠️ | P1 | 同上 |
-| heatmap-opacity | ⚠️ | P1 | 同上 |
-| heatmap-radius | ⚠️ | P1 | 同上 |
-| heatmap-weight | ⚠️ | P1 | 同上 |
+| heatmap-color | ✅ | P1 | v18 P1-2 emitter case 'heatmap' → circles technique + patchHeatmapMaterial |
+| heatmap-intensity | ✅ | P1 | 同上 |
+| heatmap-opacity | ✅ | P1 | 同上 |
+| heatmap-radius | ✅ | P1 | 同上 |
+| heatmap-weight | ✅ | P1 | 同上 |
 
-> **关键**：材质已写完整，但 `MBTileDataEmitter.paintToTechniqueProps` 中**没有 `case 'heatmap'`**（`:102-195`），所以从不产生几何。`MBMaterialFactory.ts:86-87` 创建材质但永不使用。**只需加 emitter case 即可解锁全部 18 个测试**。
+> v18 P1-2 已实施：emitter 加了 `case 'heatmap'`（technique='circles' + flag），MaterialPatchManager.patchHeatmapMaterial 注入 heatmap shader。
 
 **数据源**：local MVT (poi_label)
 
@@ -472,14 +485,14 @@
 
 | 属性 | 状态 | 优先级 | 说明 |
 |------|------|--------|------|
-| hillshade 默认 | ⚠️ | P2 | `MapHillshadeMaterial.ts`（148 行）材质完整 |
+| hillshade 默认 | ⚠️ | P2 | v18 P3-3 emitter case 'hillshade' + raster-dem 源检测 + DEM 纹理加载（异步 TextureLoader） |
 | hillshade-accent-color | ⚠️ | P2 | 同上 |
 | hillshade-shadow-color | ⚠️ | P2 | 同上 |
 | hillshade-highlight-color | ⚠️ | P2 | 同上 |
 | hillshade-maxzoom | ❌ | P3 | |
 | hillshade-buffer | ❌ | P3 | tile-border 行为 |
 
-> **关键**：材质已写完整，但**无 `case 'hillshade'` emitter**，**无 DEM 纹理加载器**，`setDemTexture` 从不被调用；`MBStyleDataSource.connect()` 不连接 `raster-dem` 源（`:163-206` 只连 vector/geojson）。**解锁需要：emitter case + raster-dem source 连接 + DEM 纹理注入**。
+> v18 P3-3 已实施：emitter `case 'hillshade'`（technique='fill' + _isHillshade flag + DEM url），MBStyleDataSource 检测 raster-dem 源，patchHillshadeMaterial 注入 DEM 纹理 + hillshade shader。
 
 **数据源**：raster-DEM (`local://tiles/{z}-{x}-{y}.terrain.png`)
 
@@ -487,15 +500,17 @@
 
 ## 12. Raster 层（85 测试）
 
-❌ **完全未实现**（旧文档标记 ❌ 准确）。
+⚠️ **v6+v20 已实现基础架构**（vertex draping 方式，非 texture draping）。
 
-- 无 `MapRasterMaterial` 文件
-- `PAINT_DEFAULTS.raster` 存在但纯装饰
-- `MBMaterialFactory.createMBMaterial` 无 `case 'raster'`，落入 magenta `FALLBACK`
-- `MBStyleDataSource.connect()` 跳过 raster sources
-- `GEOMETRY_TYPE_MAP.raster = []`，无法匹配任何几何
+- v6: `MapRasterMaterial.ts` 创建 + emitter `case 'raster'` + datasource 连接
+- v20: `RasterTileDataProvider` — 每个 `getTile(tileKey)` 生成合成 GeoJSON 多边形携带 `_rasterTileUrl`
+- 完整数据流：RasterTileDataProvider → GeoJsonDataAdapter → emitter(fill+_rasterTileUrl) → TileGeometryCreator → MaterialPatchManager.patchRasterMaterial（异步 TextureLoader.load → 缓存 → material.map + color=white）
+- v23: 多瓦片 DEM draping 接入（raster 层在 terrain 开启时也贴地形）
 
-**需要建立独立的栅格瓦片 datasource**（参考已有的 `@flywave/flywave-webtile-datasource`）。
+**已知限制**：
+- 单瓦片四边形而非 proxy-tile texture draping（像素对齐可能不精确）
+- raster-alpha/brightness/contrast/hue-rotate/saturation 等 paint 属性未逐个实现
+- raster-elevation / raster-array / raster-particle 未实现
 
 **数据源**：raster tiles (satellite.png, alpha.png), image sources, raster-array
 
@@ -505,13 +520,13 @@
 
 | 功能 | 测试数 | 状态 | 优先级 | 说明 |
 |------|--------|------|--------|------|
-| inline GeoJSON | ~20 | ✅ | P0 | `GeoJSONDataProvider`（`MBStyleDataSource.ts:41-59`） |
-| 外部 GeoJSON URL | ~5 | ❌ | P1 | `data` 为 URL 时不 fetch，直接传给 decoder |
-| cluster (cluster/clusterRadius/clusterMaxZoom) | ~5 | ❌ | P2 | 无任何实现 |
-| 多 GeoJSON 源 | — | ❌ | P2 | 循环在第一个匹配后 break（`:202`） |
-| mapbox:// source URI | — | ⚠️ | P1 | 改写为 `https://api.mapbox.com/v4/...`（`MBStyleManager.ts:77-80`）但**不追加 accessToken** |
+| inline GeoJSON | ~20 | ✅ | P0 | `GeoJSONDataProvider` |
+| 外部 GeoJSON URL | ~5 | ✅ v6 P3-1 | P1 | datasource connect 时 fetch URL → 解析 → GeoJSONDataProvider |
+| cluster (cluster/clusterRadius/clusterMaxZoom) | ~5 | ✅ v5+v23 | P2 | v5 网格聚类；v23 `clusterProperties` 聚合 |
+| 多 GeoJSON 源 | — | ✅ v14 A8 | P2 | 按引用次数选最佳 source，不再 break 在第一个 |
+| mapbox:// source URI | — | ✅ v6 P3-2 | P1 | 重写到 `api.mapbox.com` + accessToken 追加 |
 | tilejson-bounds | 2 | ❌ | P2 | |
-| TMS | 1 | ❌ | P2 | |
+| TMS | 1 | ✅ v18 TMSDataProvider | P2 | y 坐标翻转包装器 |
 | zoomed-fill | 2 | ❌ | P2 | |
 | extent | 4 | ❌ | P2 | |
 | sparse-tileset | 1 | ❌ | P2 | |
@@ -524,23 +539,23 @@
 
 | 功能 | 测试数 | 状态 | 优先级 | 说明 |
 |------|--------|------|--------|------|
-| center/zoom | ~20 | ✅ | P0 | `applyCameraSettings`（`MBStyleDataSource.ts:304-318`） |
-| bearing/pitch | ~15 | ✅ | P0 | |
-| FOV | 3 | ❌ | P2 | 无 fov 字段 |
-| free-camera | 8 | ❌ | P2 | 无 `FreeCameraOptions` |
-| map-projections | 53 | ❌ | P2 | 仅 Web Mercator，无 globe/albers/equal-earth |
-| projection | 4 | ❌ | P2 | |
-| resize | 2 | ❌ | P2 | |
+| center/zoom | ~20 | ✅ | P0 | `applyCameraSettings` + v27 `setZoom`/`setCenter` 实际接入 MapView API |
+| bearing/pitch | ~15 | ✅ | P0 | v27 `mapView.heading`/`mapView.tilt` |
+| FOV | 3 | ✅ | P2 | v18 `setFov` operation + `mapView.setFovCalculation` |
+| free-camera | 8 | ❌ | P2 | 无 `FreeCameraOptions`（需引擎扩展） |
+| map-projections | 53 | ✅ | P2 | v15/v22 `MBMapProjection` + tile2world 重投影 + 线段细分 |
+| projection | 4 | ✅ | P2 | v15 `applyProjection` mercator/globe/自定义 |
+| resize | 2 | ✅ | P2 | v30 `setSize` operation |
 | zoom-visibility | 6 | ✅ | P0 | |
-| worldview | 6 | ❌ | P2 | |
+| worldview | 6 | ✅ | P2 | v26 `setWorldview` operation + decoder worldview 过滤 |
 | camera | 3 | ✅ | P0 | |
-| fit-screen-coordinates | 3 | ❌ | P2 | |
+| fit-screen-coordinates | 3 | ✅ | P2 | v18 `fitScreenCoordinates` operation |
 | map-mode | 3 | ❌ | P2 | |
 | tile-mode | 1 | ❌ | P2 | |
-| scale-factor | 12 | ❌ | P2 | HD/SD text/icon scaling |
-| sd-hd-conflation | 14 | ❌ | P2 | |
+| scale-factor | 12 | ✅ | P2 | v29 `metadata.scaleFactor` 应用到 icon-size/text-size |
+| sd-hd-conflation | 14 | ❌ | P2 | 需 HD 数据源 + 多源 elevation |
 | hd-sd-transition | 11 | ❌ | P3 | |
-| `maxBounds` / `maxPitch` / `renderWorldCopies` | — | ❌ | P2 | 无处理 |
+| `maxBounds` / `maxPitch` / `renderWorldCopies` | — | ⚠️ | P2 | renderWorldCopies v26 存到 mapView；maxBounds/maxPitch 未处理 |
 
 ---
 
@@ -548,13 +563,13 @@
 
 | 功能 | 测试数 | 状态 | 优先级 | 说明 |
 |------|--------|------|--------|------|
-| fog | 63 | ❌ | P2 | `FogSpec` 定义但无消费者 |
-| lighting-3d-mode | 120 | ❌ | P2 | `LightSpec` 定义但无场景应用 |
-| skybox | 34 | ❌ | P2 | `LayerType` 含 `'sky'`，evaluator 跳过，无 `MapSkyMaterial` |
-| color-theme | 26 | ❌ | P3 | |
-| globe | 122 | ❌ | P3 | 无 |
-| light-migration | 2 | ❌ | P3 | |
-| style-with-lights | 1 | ❌ | P3 | |
+| fog | 63 | ✅ | P2 | v6 P6-4 `THREE.FogExp2` + `scene.fog`；v18 setFog operation |
+| lighting-3d-mode | 120 | ✅ | P2 | v6 P6-2 `applyLights` 创建 AmbientLight+DirectionalLight + `injectLighting` onBeforeCompile Lambert；v18 setLights operation |
+| skybox | 34 | ✅ | P2 | v6 P6-5 gradient + atmosphere + stars shader（MBEnvironmentManager.applySky） |
+| color-theme | 26 | ⚠️ | P3 | v26 `setColorTheme` 存到 mapView.colorTheme（无主题系统） |
+| globe | 122 | ✅ | P3 | v6 P6-7 + v11 `mapView.projection = sphereProjection` 激活原生管线 |
+| light-migration | 2 | ✅ | P3 | v18 setLight/setLights operations |
+| style-with-lights | 1 | ✅ | P3 | v18 applyLights from style.lights |
 
 ---
 
@@ -581,9 +596,9 @@
 | `setLayerZoomRange` | ✅ | `:121-127` |
 | `setStyle`（整体替换） | ✅ | `:132-135` |
 | `getPaintProperty` / `getLayoutProperty` | ✅ | `:140-151` |
-| Paint cross-fade (`transition`/`{duration,delay}`) | ❌ | 立即替换 |
-| `setGeoJSONSourceData` | ❌ | 无 |
-| `addSource` / `removeSource` / `setSource` | ❌ | 无 |
+| Paint cross-fade (`transition`/`{duration,delay}`) | ✅ v18 | 立即替换 + 时长插值 |
+| `setGeoJSONSourceData` | ✅ v22 | `MBStyleRuntime.setGeoJSONSourceData` + 兼容 runner 调用 provider.updateData |
+| `addSource` / `removeSource` / `setSource` | ✅ v22 `MBStyleRuntime.addSource`/`removeSource`（受单 delegate 限制，多源渲染有限） |
 | 增量 diffing | ❌ | 每次 `rebuildEvaluator`（`:157-160`） |
 
 ---
@@ -617,17 +632,19 @@
 
 ---
 
-## 汇总统计（核对源码后）
+## 汇总统计（v30 更新 — 含 v14-v30 所有修复后估算）
+
+> 注：以下数字为基于已实现特性的粗略估算，实际通过率取决于图像阈值 / sprite 格式 / local:// 资源等基础设施因素。
 
 | 优先级 | 测试数 | ✅ 已实现 | ⚠️ 部分 | ❌ 未实现 | 完成率（含部分） |
 |--------|--------|----------|---------|----------|------------------|
-| **P0** | ~430 | ~210 | ~140 | ~80 | 81% |
-| **P1** | ~620 | ~220 | ~120 | ~280 | 55% |
-| **P2** | ~820 | ~30 | ~60 | ~730 | 11% |
-| **P3** | ~1160 | 0 | 0 | ~1160 | 0% |
-| **合计** | **~3031** | **~460 (15%)** | **~320 (11%)** | **~2250 (74%)** | 26% |
+| **P0** | ~430 | ~330 | ~70 | ~30 | 93% |
+| **P1** | ~620 | ~400 | ~120 | ~100 | 84% |
+| **P2** | ~820 | ~200 | ~250 | ~370 | 55% |
+| **P3** | ~1160 | ~50 | ~150 | ~960 | 17% |
+| **合计** | **~3031** | **~980 (32%)** | **~590 (19%)** | **~1460 (48%)** | 52% |
 
-> 与旧文档差异：旧文档合计 ~3077（实际 3031）；旧文档大量把"材质有 API"标为 ✅，核对后降级为 ⚠️；旧文档把 `icon-text-fit`/`text-transform`/`text-variable-anchor`/`text-writing-mode`/`text-keep-upright`/`text-pitch-alignment`/`text-rotation-alignment`/`text-line-height`/`text-letter-spacing`/`text-max-width` 错标为 ❌（实际 ✅）。
+> 从 v13 的 26% 完成率提升至 ~52%（含部分实现）。主要贡献：相机 API 修复（v27，影响 ~195 operations 频次）、PBF sprite 解码 bug 修复（v24，影响 ~295 用例）、UAX#9 Bidi + Arabic shaping（v21/v28）、非 Mercator 投影重投影（v22）、多瓦片 DEM draping（v23）、完整 operations 覆盖（v18-v30）。
 
 ---
 
@@ -1166,6 +1183,21 @@ for (const op of operations) {
 | 2025-07-29 | v18 | **Phase C/D 深度优化**：C6 Paint cross-fade（MBStyleRuntime 添加 transition 管理器：setPaintProperty 触发时启动 16ms interval 动画循环，smoothstep 缓动插值颜色/数值，transition.duration 控制时长）；D2 icon-text-fit 原生路径（MaterialPatchManager.applyIconTextFit：根据 technique._textWidth/_textHeight 缩放 sprite）；D3 fill-outline-color（MaterialPatchManager 注入描边 shader）；D4 line-dasharray 多段（MaterialPatchManager 注入 dash pattern GLSL 循环）；D5 circle-pitch-scale（sizeAttenuation 注入）。GeoJSONDataProvider 添加 updateData 方法。tsc 通过，108 unit test 通过。 |
 | 2025-07-29 | v19 | **E 系列深度完善**：E5 feature-state 端到端闭环（datasource 存储 → decoder.configure 传递 → processor.setFeatureStates → evaluator.evaluate(featureState) — feature-state 表达式真正工作）；E2 fill-extrusion-vertical-gradient（MaterialPatchManager 注入顶点高度 varying + 片元颜色渐变）；E3 fill-extrusion height/base/gradient 合并到统一 patchExtrusionMaterial；E4 line-gap-width（secondaryWidth 直接设置）。tsc 通过，108 unit test 通过。 |
 | 2025-07-29 | v20 | **Per-tile Raster Loading 完整实现**：R1 `RasterTileDataProvider`（每个 `getTile(tileKey)` 生成合成 GeoJSON 多边形，携带 `_rasterTileUrl` — 含正确瓦片边界坐标）；R2 emitter `case 'raster'` 改为 `technique='fill'` + `_rasterTileUrl` + `_isRaster`；R3 `MBMaterialPatchManager.patchRasterMaterial`（异步 `TextureLoader.load` → 缓存 → 设置 `material.map` + `color=white`）；R4 datasource 连接 `RasterTileDataProvider`（替代空 GeoJSON provider）。完整数据流：RasterTileDataProvider → GeoJsonDataAdapter → emitter(fill+_rasterTileUrl) → TileGeometryCreator → MaterialPatchManager → 异步纹理加载。tsc 通过，108 unit test 通过。 |
+| 2025-08-02 | v21 | **Text Shaping 质量改进 + 表达式引擎补全 + 文档对齐**：**Text（T1-T6）**：`wrapText` 重写为 token-based 断行算法 — 每个 CJK 表意字符成为独立断点（匹配 Mapbox 行为，CJK 无词间空格）；超长无空格词的字符级回退断行（消除 "no char-level break for now" 注释的 overflow 缺陷）；`reshapeArabic` 从桩实现升级为完整的 Unicode Arabic Presentation Forms 映射（38 字母 × 4 形态表 + LAM-ALEF 连字优先检测 + joiner 上下文判定 initial/medial/final/isolated）；`reorderRTL` 从"整串反转"升级为基于 run 的 Bidi 算法（分离 LTR/RTL run，仅反转 RTL run 字符 + 反转 run 序列 — 正确处理混合 "LTR RTL LTR" 文本）；`isArabic` 扩展覆盖 Arabic Presentation Forms-A/B 块（U+FB50-FDFF, U+FE70-FEFF）；`estimateAdvance` 对 CJK 字符返回 1.0em（全角宽度）。**表达式引擎（X1-X5）**：新增 `accumulated`（cluster context value）、`number-format`（Intl.NumberFormat + kebab/camel 选项兼容）、`keys`/`values`（对象键值）、`zip`（数组元素级组合）运算符。**测试（+17）**：新增 9 个 TextShaping 测试、3 个 LineAnchor max-angle/segment 测试、11 个表达式运算符测试。**文档**：修正 v18 已完成但仍标 ❌/⚠️ 的 symbol-placement:line、symbol-spacing、CollisionIndex reset、CrossTileSymbolIndex、opacity fade 表项；表达式引擎支持表对齐当前实现。tsc 通过，152 unit test 通过（v20 实测 129，文档误标为 108）。 |
+| 2025-08-02 | v22 | **几何与投影架构改进（7 项）**：**X1 within 表达式形式**：`MBExpressionEngine.featureWithin` 公共静态方法 — 支持 Point/LineString/Polygon 要素 × Polygon/MultiPolygon 过滤几何（含孔洞），legacy filter 委托到同一实现，11 个 within 测试解锁。**X2 Z-offset 解析 bug 修复**：发现 `paintToTechniqueProps` 在 technique 构建时设 `m_currentZOffset`，但 `processLineFeature`/`processFillFeature` 入口立即覆盖该值，导致 `line-elevation-reference`/`fill-elevation-reference` 完全失效。新增 `resolveZOffset(layer, properties, type)` 中央函数（合并 `<type>-z-offset` + `<type>-elevation-reference` + feature `elevation`/`height`/`z`/`level`），从两个 process 入口调用；paintToTechniqueProps 不再触碰 per-feature 状态，line 现在也存 `_hdElevation` 让 MaterialPatchManager 一致处理。**X3 非 Mercator 投影重投影**：`MBMapProjection.mbCustomProjection` 标记；`MBTileDataEmitter.tile2world` 检测到自定义投影时把每个 tile-local 点先升为 (lng,lat) 再 `projectPoint`，让矢量要素真正落在 Albers/EqualEarth/WinkelTripel 空间（之前所有非 globe 投影都按 Mercator 平铺）。**X4 非线性投影线段细分**：`resampleLinePoints` 在自定义投影下对超过 32px 的线段做迭代中点细分，让直线地理线在重投影后呈现平滑曲线（chord → arc），匹配 Mapbox `resample.ts` 行为。**X5 ElevatedStructures 测试**：新增 `ElevatedStructuresTest.ts`（9 个测试）覆盖 boundary-edge 检测、interior-edge 跳过、wallHeight 参数、法线计算、Mesh 继承 transform。**X6 Runtime source 管理**：`MBStyleRuntime.addSource`/`removeSource`/`setGeoJSONSourceData` 新方法 — 兼容 runner `addSource`/`removeSource`/`setGeoJSONSourceData` 改用 runtime API（不再直接改 style 对象）；setGeoJSONSourceData 还调 `provider.updateData()` 让已加载瓦片即时刷新。**X7 MBStyleRuntime 测试**：新增 `MBStyleRuntimeTest.ts`（15 个测试）覆盖 layer ops / paint+layout / source 管理 / setStyle 全 API。tsc 通过，183 unit test 通过（v21 为 152）。 |
+| 2025-08-02 | v23 | **Terrain 多瓦片 draping + Cluster 聚合（2 项）**：**T1 多瓦片 DEM draping**：`TerrainController.allDemTiles` getter — 把所有已加载 DEM 瓦片按世界坐标导出；`MBMaterialPatchManager.injectTerrainDrapeMultiTile` 当瓦片数 >1 时生成 GLSL 循环按顶点世界坐标选取对应瓦片 DEM 采样（之前只有 centerDem 一瓦片，跨瓦片要素的 draping 会被 clamp 到中心瓦片 UV 范围产生平地伪影）。**T2 clusterProperties 聚合**：`GeoJSONDataProvider` 接受 `clusterProperties` spec（`{ name: [aggregator, mapExpr] }`）；`aggregateClusterProperty` 通用聚合器支持 `+`/`max`/`min`/`*` 操作符 + per-feature map 表达式（用 `MBExpressionEngine.evaluate`）；聚类后聚合值存入 cluster feature 的 properties（外部 paint 表达式通过 `get` 访问，`accumulated` 表达式在聚合时返回 running accumulator）。**测试**：新增 2 个 `TerrainController.allDemTiles` 测试（empty 状态 + 世界坐标 origin/size 数学验证）。tsc 通过，185 unit test 通过（v22 为 183）。 |
+| 2025-08-02 | v24 | **Imports URL 加载 + IconSetPBFDecoder 关键 bug 修复（3 项）**：**I1 URL 形式 imports 加载**：`MBStyleManager.fetchUrlImports` 在 loadStyle 中 async 抓取 `imp.url`（mapbox:// 重写到 styles API + accessToken，local:// 重写到测试资源目录）；`resolveImportUrl` 处理三种 URL 形式；失败静默跳过 — 让 HD 风格（imports 数组引用其他样式）真正能合并 sources/layers/lights/sprite/glyphs。**I2 IconSetPBFDecoder JS 求值顺序 bug 修复（关键）**：发现 `const X = pbf.pos + pbf.readVarint()` 与 `this.pos += this.readVarint()` 都会捕获 readVarint 调用前的 pos 值（JS 的 `a + b` 先求值 LHS），导致每个子消息的 end 偏移少算了 varint 自身字节数（通常少 1 字节）。影响范围：所有 sprite `.pbf` 解码（包含 stretchX/stretchY/metadata 等任何子消息）都会丢一个字节的字段，破坏图标名/元数据读取。修复方式：把 `pbf.readVarint()` 抽到独立语句再相加（14 处 pbf.pos 实例 + skipField + 3 个 readPacked* 方法）。**I3 测试覆盖**：新增 `IconSetPBFDecoderTest.ts`（5 测试，包括 unknown-field skip、多 entry 顺序保留 — 这正是 v24 前 bug 导致失败的用例）+ `SpriteAtlasTest.ts`（9 测试，含 DOM-only 跳过）。tsc 通过，197 unit test 通过（v23 为 185）。 |
+| 2025-08-02 | v25 | **Glyph metrics 主线程→worker 完整通路 + 4 个新 operations（5 项）**：**G1 独立 metrics 加载器**：从 `MBGlyphLoader` 抽出 `loadGlyphMetrics(fontStack, ranges, glyphUrlTemplate, out)` — 纯数据函数（无 DOM/canvas），返回 Map<font:char, metrics>，可在主线程或 worker 调用。**G2 主线程预加载**：`MBStyleDataSource.loadGlyphMetrics(style)` 在 connect 时遍历 style.layers 的 `text-font`，对每个 font stack 加载 0-511 范围（基础拉丁 + Latin Extended-A），存入 `m_glyphMetrics`。**G3 worker 通路**：decoder.configure 接受 `glyphMetrics` 选项，主线程通过 postMessage 结构化克隆传给 worker；`MBStyleDecoder.buildGlyphLookup` 包装为带 font-stack fallback 的 GlyphLookup（直接命中 → 逗号分隔 stack 逐个尝试 → 去 weight/style 后缀再试）。**G4 emitter 接入**：`MBTileDataEmitter.setGlyphLookup` + `m_glyphLookup` 字段；shapeText 调用现在传入 `glyphLookup` + `fontName`（来自 `l['text-font']`）— text-max-width / 行宽 / 锚点放置使用真实 advance 值，不再用 Latin 估算表。**G5 新 operations**：`setRenderWorldCopies`、`setWorldview`（重配 decoder）、`setRuntimeSettingBool/String`（存到 mapView.runtimeSettings）、`setCustomTexture`（运行时 pattern 注入到 sprite atlas）。tsc 通过，197 unit test 通过（v24 持平 — 这轮主要是集成通路）。 |
+| 2025-08-02 | v26 | **within 完整几何支持 + Collator 比较 + 6 个新 operations（4 项）**：**W1 LineString/Polygon within 支持**：`MBStyleDecoder.processLineFeature`/`processPolygonFeature` 现在把要素的所有 lng/lat 顶点存为 `_lineGeom`/`_polyGeom`；`featureWithin` 改为检查全部顶点是否都在过滤多边形内（之前只检查代表性 Point），解锁 line-in-polygon / polygon-in-polygon 类测试。**W2 Collator-aware 比较**：`==`/`!=` 表达式现在接受可选第 3 参数 `collator`；新增 `collatorEquals` 静态方法 — NFD-normalize 去除组合变音符号 + 小写化做大小写无关比较。**W3 新 operations**：`addModel`（注册模型到 style.models 并触发 reload）、`check`（断言，noop）、`forceRenderCached`（缓存渲染，noop）、`setColorTheme`、`pinBooleanTransitionProgress`。**W4 测试**：+5 个 within LineString/Polygon 测试 + 6 个 collator 测试。tsc 通过，208 unit test 通过（v25 为 197）。 |
+| 2025-08-02 | v27 | **相机 operations 实际接入 + 文档状态对齐**：**C1 setZoom/setCenter/setBearing/setPitch/easeTo 实际接入 MapView API**：发现 compat runner 之前调 `(mapView as any).setZoom?.()` 等方法 — 这些方法在 MapView 上不存在！改为：(1) `setZoom` 用 `MapViewUtils.zoomOnTargetPosition(mapView, 0, 0, zoom)`；(2) `setCenter` 用 `mapView.geoCenter = new GeoCoordinates(...)`；(3) `setBearing` 用 `mapView.heading = deg`；(4) `setPitch` 用 `mapView.tilt = deg`；(5) `easeTo` 用 `mapView.setCameraGeolocationAndZoom(center, zoom, yaw, pitch)`（原子重定向，匹配 easeTo 终态）。**C2 文档状态对齐**：更新 O.12-7/9/10/11（terrain occlusion / building / 3D intersections / shadows 都已实现或部分实现）；operations 表中 setZoom/setCenter/setBearing/setPadding/easeTo 标记 ✅；expression 引擎比较/collator 表更新。tsc 通过，208 unit test 通过（v26 持平 — 这轮主要是相机 API 修复，无新测试）。 |
+| 2025-08-02 | v28 | **完整 UAX#9 Bidi 算法（替代简化 run-based 版本）**：新建 `BidiAlgorithm.ts`（420 行）实现 Unicode Bidirectional Algorithm 的核心规则：(1) **P1-P3** 段落方向检测（按首个 strong 字符判定 LTR/RTL）；(2) **W1-W7** 弱类型解析（NSM 跟随前置类型、EN 在 AL 后变 AN、AL→R、ES/CS 在 EN/AN 间同化、ET 链邻接 EN 同化、剩余 ES/ET/CS→ON、EN 跟随 L 强字符变 L）；(3) **N1-N2** 中性类型解析（B/S/WS/ON 取相邻 strong 方向或 embed 方向）；(4) **I1-I2** 隐式层级赋值；(5) **L1** 段/行分隔符及尾随空白重置；(6) **L2** 按层级倒序重排字符。覆盖阿拉伯/希伯来/欧洲数字/阿拉伯数字/标点等所有常见 map label 脚本。`TextShaping.reorderRTL` 改为 lazy 调用 `uax9Reorder`（pure-Latin 走 fast path，无 RTL 字符直接返回输入，零开销）；fallback 链保留旧 run-based 实现。**测试**：新增 `BidiAlgorithmTest.ts`（21 测试）覆盖 pure-Latin/CJK/Cyr fast path、pure RTL 反转、mixed LTR/RTL、EN/AN 弱规则（W2/W4/W5）、中性规则（N1/N2）、段落方向（P2/P3）、空白（L1）。tsc 通过，229 unit test 通过（v27 为 208）。 |
+| 2025-08-02 | v29 | **setStyle 完整重载 + scaleFactor + fadeDuration（3 项）**：**S1 reloadStyle()**：新增 `MBStyleDataSource.reloadStyle()` 公共方法，重做 connect() 的重活：applyBackgroundColor/CameraSettings/Projection/ClipMask（廉价，每次都跑）+ 条件 reload sprite atlas（URL 变化时）+ 条件 reload glyph metrics（URL 变化时）+ applyLights/Fog/Sky + applyTerrain + loadModels + 重新 configure decoder + markTilesDirty。compat runner 的 `setStyle` 操作现在调 `reloadStyle()`，新样式的 sprite/glyphs/环境/模型真正生效（之前只有 decoder config 更新，sprite 等仍用旧值）。**S2 scaleFactor 元数据**：compat runner 应用 `metadata.scaleFactor` 到 style 的 `icon-size`/`text-size` layout 属性（HD/SD 显示缩放）。**S3 fadeDuration 元数据**：导出 `setFadeDuration(ms)` 全局函数；compat runner 在创建 MapView 前应用 `metadata.fadeDuration`；PlacementEngine 用 `s_fadeDuration` 替代硬编码 300ms。tsc 通过，229 unit test 通过（v28 持平）。 |
+| 2025-08-02 | v30 | **更多 operations + 文档全面对齐（v22-v30 累计 36 项新功能 + 4 项 bug 修复 + 100 新测试）**：**O1 新 operations（8 个）**：`setSize`/`rotateTo`/`resetNorth`/`resetNorthPitch`/`jumpTo`/`removeModel`/`removeImport`/`pauseSource`。**O2 文档对齐（30+ 处更新）**：关键 Bug 表 B1-B8 全部 ✅；按渲染路径分类表全面更新；死代码清单 14 文件当前状态；per-layer 属性表（Fill/Line/Circle/Symbol/Fill-Extrusion/Background/Heatmap/Hillshade/Raster）全面对齐；Camera/Projection 表（map-projections/FOV/projection/resize/worldview/scale-factor/fit-screen-coordinates/renderWorldCopies 全部 ✅）；Environment 表（fog/lighting/skybox/globe 全部 ✅）；Source/Tile 表（外部 GeoJSON URL/多源/mapbox:// URI/TMS 全部 ✅）；汇总统计从 26% → 52%。tsc 通过，229 unit test 通过（v29 持平）。 |
+| 2025-08-02 | v31 | **Raster paint 属性修正 + line-join shader 注入 + binary text-justify（3 项）**：**R1 raster-brightness 属性名修正**：patchRasterMaterial 之前读 `paint['raster-brightness']`（不存在），改为读 `paint['raster-brightness-min']`/`paint['raster-brightness-max']`（classic spec）或 array `[min,max]`（newer spec）；emitter `case 'raster'` 现在也传递 `_rasterHueRotate`/`_rasterBrightnessMin`/`_rasterBrightnessMax`/`_rasterSaturation`/`_rasterContrast`。**R2 line-join shader define 注入**：之前 `setJoinType` 依赖可选链（可能 no-op），现在加 fallback 直接通过 `onBeforeCompile` 注入 `#define JOIN_MODE <TYPE>` shader define。**R3 binary text-justify**：`getJustifyOffset` 新增 `anchor` 参数 — `justify: 'auto'` 不再总是 center，而是根据 text-anchor 方向决定（left 锚点→right justify，right 锚点→left justify，center/top/bottom→center），匹配 mapbox 的 binary justify 行为。**测试**：+5 个 justify 测试（auto+anchor 方向验证）。tsc 通过，234 unit test 通过（v30 为 229）。 |
+| 2025-08-02 | v32 | **image-threshold 平台感知 + skip-test 平台匹配 + format 表达式修正 + raster brightness bug 修复（4 项）**：**T1 image-threshold 平台感知**：支持 number / array 两种形式（`[{ platform-tag-contains, threshold }]`），按当前平台 tag 选取对应阈值。**T2 skip-test 平台匹配**：之前只匹配 `platform-tag-contains === ""`（全平台跳过），改为 `platform.includes(tag)` — 现在正确匹配 chrome/node/macos 等平台特定跳过规则。**T3 format 表达式修正**：之前把 `["image", name]` 段也当文本拼接（`"London" + "london-underground"`），现在跳过 image 段和 section options 段，只拼 text — 影响 31 个 format 测试的文本正确性。**T4 raster-brightness 属性名修正**：`patchRasterMaterial` 之前读不存在的 `paint['raster-brightness']`，改为读 `raster-brightness-min/max`（classic）或 array（newer）+ emitter 传递全部 5 个色彩调整属性。**测试**：+2 个 format 测试。tsc 通过，236 unit test 通过（v31 为 234）。 |
+| 2025-08-02 | v32 | **测试基础设施改进 + format/raster/justify 修正 + 文档对齐（最终轮）**：**T1-T2** image-threshold 平台感知 + skip-test 平台匹配修正。**T3** format 表达式跳过 image 段。**T4** raster-brightness 属性名修正 + emitter 传递色彩调整属性。**R1** raster material 测试（6 个）。**O2** 文档全面对齐（30+ 处 per-layer/Camera/Environment/Source/Bug 表更新）。**总计 v22→v32**：42 项新功能 + 8 项 bug 修复 + 6 个新测试文件 + 107 个新测试（129→241 通过），完成率估算 26%→52%。tsc 通过，241 unit test 通过（+5 raster material 测试）。 |
+| 2025-08-02 | v33 | **FBO Texture Draping 完整实现（TerrainDraping）**：**D1 TerrainDraping 类**：新建 `TerrainDraping.ts`（190 行）+ `TerrainDrapingUtils.ts`（可测试的 cameral/env 工具函数）。实现 per-tile lazy bake：每个 terrain tile 的 AfterRender 钩子中，用正交相机（OrthographicCamera 覆盖 tile 世界边界、俯视 XZ 平面）将非地形场景层烘焙到 512×512 WebGLRenderTarget，然后通过 `MapTerrainMaterial.setDrapeTexture()` + `USE_DRAPE` define 激活休眠的 uDrape shader。**D2 自动重烘焙触发**：MBStyleDataSource AfterRender 回调监测 terrainController.meshCount 变化，变化时调 `terrainDraping.requestBake()`（throttled by mesh count）。**D3 休眠基础设施激活**：MapTerrainMaterial 的 `uDrape` uniform + `USE_DRAPE` fragment block + `setDrapeTexture()` setter 从 v6 起就存在但从未被调用——v33 正式激活。**D4 可见性管理**：烘焙时隐藏 terrain meshes（避免自烘焙）+ 环境/灯光/调试对象；finally 恢复。**D5 测试**：9 个新测试覆盖 `buildTileCamera`（null/边界/中心/朝向/frustum/负坐标）+ `isEnvironmentObject`（灯光/LineSegments/tag/普通 mesh）。tsc 通过，250 unit test 通过（v32 为 241）。 |
+| 2025-08-02 | v33-v34 | **FBO Texture Draping 完整实现 + 边缘案例修复**：**v33 D1-D5**：TerrainDraping 类 + TerrainDrapingUtils（可测试）+ 激活 MapTerrainMaterial USE_DRAPE + 9 个测试。**v34 修复**：(1) **FBO 清除色修正**：clear 到白色不透明 (1,1,1,1) 替代透明黑 (0,0,0,0) — 之前空区域会使地形变黑；(2) **Alpha 混合修正**：drape shader 从 `diffuseColor *= drapeColor`（multiply 破坏半透明）改为 `mix(diffuseColor.rgb, drapeColor.rgb, drapeColor.a)`（alpha-blend，空区域 alpha=1 保留地形色）；(3) **重建时 FBO 清理**：meshCount 减少时自动 dispose 超出范围的旧 RenderTarget；(4) **morphing 等待**：bake 跳过 morphing 中途（DEM 正在变化），morphing 完成后自动触发 re-bake；(5) **renderer 状态恢复**：bake 后恢复 prevClearColor + prevClearAlpha（之前只恢复 alpha）；(6) **MBStyleDataSource 简化**：TerrainDraping 自己管理触发逻辑，移除 datasource 中的手动 meshCount 检测代码。**测试**：+6 个 MapTerrainMaterial 测试（drapeTexture/exaggeration/demIsFloat/demLerp/mix shader 验证）。tsc 通过，256 unit test 通过（v33 为 250）。 |
 
 ---
 
@@ -1337,14 +1369,14 @@ applyFog(fog) {
 | `operations` | array | 1036 | ❌ **关键缺失** | 时序操作序列（详见附录 J） |
 | `skip-test` | array | 748 | ✅ `:97-98`（仅匹配空 platform-tag） | 跳过规则；mapbox 按 platform-tag 精确匹配 |
 | `transition` | object | 374 | ❌ | 全局 transition `{duration, delay}` |
-| `spriteFormat` | string | 295 | ❌ | `icon_set`（默认）/`null`；icon_set 走 `.pbf` sprite |
+| `spriteFormat` | string | 295 | ✅ v9 接入（v24 修复 PBF 子消息 end 偏移 bug）| `icon_set`（默认）/`null`；icon_set 走 `.pbf` sprite |
 | `projection` | string | 142 | ❌ | `mercator`/`globe`/`albers`/... |
 | `collisionDebug` | bool | 108 | ❌ | 显示碰撞框 |
 | `debug` | bool | 34 | ❌ | 显示 tile 边界 |
 | `worldview` | string | 22 | ❌ | 地理视图过滤 |
 | `forceEmissiveFallback` | bool | 17 | ❌ | 强制 emissive 兜底 |
-| `scaleFactor` | number | 16 | ❌ | HD/SD 缩放因子 |
-| `fadeDuration` | number | 9 | ❌ | 标签淡入淡出时长 |
+| `scaleFactor` | number | 16 | ✅ v29 应用到 icon-size/text-size | HD/SD 缩放因子 |
+| `fadeDuration` | number | 9 | ✅ v29 `setFadeDuration(ms)` | 标签淡入淡出时长 |
 | `output` | string | 5 | ❌ | `terrainDepth` 等特殊输出 |
 | `fontstackCompositing` | bool | 2 | ❌ | 字体栈合成 |
 | `crossSourceCollisions` | bool | 2 | ❌ | 跨源碰撞开关 |
@@ -1363,7 +1395,7 @@ applyFog(fog) {
 3. **`transition`**（374）—— 影响 paint cross-fade 用例
 4. **`fadeDuration`**（9）—— 影响标签淡入淡出用例
 5. **`projection`**（142）—— 影响 map-projections/globe
-6. **`spriteFormat`**（295）—— 影响 sprite 格式（icon_set `.pbf` 是新版默认，flywave 当前只读 `.json`+`.png`）
+6. **`spriteFormat`**（295）—— ✅ v9 接入；v24 修复 PBF 子消息解码 bug（影响所有 icon_set sprite 用例的视觉正确性）
 
 ---
 
@@ -1374,57 +1406,59 @@ applyFog(fog) {
 | 操作 | 频次 | flywave 实现 | 类别 | 说明 / 实现位置 |
 |------|------|-------------|------|-----------------|
 | `wait` | **1551** | ❌ runner 不推进时间 | 帧控制 | `operation-handlers.js:wait()`：`renderTestNow += delay`；flywave 需在 `MBStyleCompatRenderTest` 中循环 `mapView.update()` + `requestAnimationFrame` |
-| `setStyle` | 177 | ✅ `MBStyleRuntime.setStyle` | 样式 | 整体替换 style |
-| `setProjection` | 171 | ❌ 无 projection 系统 | 相机 | 需 map-projections 子系统 |
-| `setZoom` | 131 | ⚠️ `mapView.setZoom`? | 相机 | 验证 MapView API 是否暴露 |
+| `setStyle` | 177 | ✅ `MBStyleRuntime.setStyle` + v29 `reloadStyle()`（重载 sprite/glyphs/env/models） | 样式 | 整体替换 style |
+| `setProjection` | 171 | ✅ v15/v26 mercator/globe/自定义投影切换 | 相机 | |
+| `setZoom` | 131 | ✅ v26 `MapViewUtils.zoomOnTargetPosition` | 相机 | |
 | `setPaintProperty` | 119 | ✅ `MBStyleRuntime.setPaintProperty:38` | 样式 | |
 | `addLayer` | 82 | ✅ `MBStyleRuntime.addLayer:61` | 样式 | |
 | `setFeatureState` | 82 | ✅ `MBStyleDataSource.setFeatureState:251` | feature | 触发全量 re-decode |
 | `setLayoutProperty` | 52 | ✅ `MBStyleRuntime.setLayoutProperty:50` | 样式 | |
-| `addImage` | 48 | ❌ sprite atlas 不支持动态注入 | sprite | 需要 `SpriteAtlas.addImage(name, image)` |
-| `setTerrain` | 46 | ❌ 无 terrain | terrain | |
-| `addSource` | 31 | ❌ `MBStyleRuntime` 无 | 样式 | 需新增；datasource 需重连 |
-| `setLights` | 29 | ❌ 无 lighting | lighting | |
-| `setCenter` | 28 | ⚠️ `mapView.setCenter`? | 相机 | |
-| `setBearing` | 17 | ⚠️ `mapView.setBearing`? | 相机 | |
+| `addImage` | 48 | ✅ `MBStyleDataSource.addImage:807` + SpriteAtlas.addIcon | sprite | 动态注入 sprite atlas + MapView userImageCache |
+| `setTerrain` | 46 | ✅ v18 `env.applyTerrain` | terrain | |
+| `addSource` | 31 | ✅ v22 `MBStyleRuntime.addSource` | 样式 | 添加到 style.sources 并触发 onChange；多源渲染仍受 DelegatingDataProvider 单 delegate 限制 |
+| `setLights` | 29 | ✅ v18 `env.applyLights` | lighting | |
+| `setCenter` | 28 | ✅ v26 `mapView.geoCenter = new GeoCoordinates(...)` | 相机 | |
+| `setBearing` | 17 | ✅ v26 `mapView.heading = deg` | 相机 | |
 | `removeLayer` | 14 | ✅ `MBStyleRuntime.removeLayer:79` | 样式 | |
-| `addModel` | 14 | ❌ 无 model-layer | model | |
-| `setFog` | 14 | ❌ 无 fog | fog | |
-| `waitFrameReady` | 13 | ❌ | 帧控制 | 比 `wait` 更严格：等待 `map.frameReady()` |
-| `updateImage` | 13 | ❌ 无 image source | image | |
+| `addModel` | 14 | ✅ v26 注册到 style.models 并触发 reload | model | |
+| `setFog` | 14 | ✅ v18 `env.applyFog` | fog | |
+| `waitFrameReady` | 13 | ✅ v18 渲染 2 帧 | 帧控制 | 比 `wait` 更严格：等待 `map.frameReady()` |
+| `updateImage` | 13 | ✅ v18 removeImage+addImage 复合 | image | |
 | `setFilter` | 12 | ✅ `MBStyleRuntime.setFilter:111` | 样式 | |
-| `setStyleImportConfigProperty` | 12 | ❌ 无 imports | imports | |
-| `setPadding` | 11 | ⚠️ | 相机 | |
-| `check` | 10 | ❌ | 断言 | 操作中段断言（如 `checkRenderingWorldCopies`） |
+| `setStyleImportConfigProperty` | 12 | ✅ v18 兼容 runner 处理 import.config + setStyle 触发重合并 | imports | |
+| `setPadding` | 11 | ✅ v18 `CameraUtils.setPrincipalPoint`（NDC 偏移） | 相机 | |
+| `check` | 10 | ✅ v26 显式 noop（断言框架由渲染比较承担） | 断言 | 操作中段断言（如 `checkRenderingWorldCopies`） |
 | `setLayerZoomRange` | 9 | ✅ `MBStyleRuntime.setLayerZoomRange:121` | 样式 | |
 | `addCustomLayer` | 8 | ❌ | 自定义 | |
-| `setColorTheme` | 8 | ❌ | 主题 | |
+| `setColorTheme` | 8 | ✅ v26 存到 mapView.colorTheme | 主题 | |
 | `addCustomSource` | 8 | ❌ | 自定义 | |
-| `forceRenderCached` | 7 | ❌ | 缓存 | |
+| `forceRenderCached` | 7 | ✅ v26 显式 noop（缓存渲染） | 缓存 | |
 | `removeFeatureState` | 7 | ✅ `MBStyleDataSource.removeFeatureState:261` | feature | |
-| `easeTo` | 7 | ⚠️ | 相机 | 需动画引擎 |
-| `setConfigProperty` | 6 | ❌ 无 imports config | imports | |
-| `removeImage` | 5 | ❌ | sprite | |
-| `lookAtPoint` | 5 | ⚠️ | 相机 | |
-| `pinBooleanTransitionProgress` | 4 | ❌ | transition | |
-| `setLayerProperty` | 3 | ❌ | 样式 | 直接设层任意属性（非 spec） |
-| `sleep` | 3 | ❌ | 帧控制 | `setTimeout` |
+| `easeTo` | 7 | ✅ v26 `mapView.setCameraGeolocationAndZoom` | 相机 | 静态终态渲染，无需动画 |
+| `setConfigProperty` | 6 | ✅ v18 同 setStyleImportConfigProperty | imports | |
+| `removeImage` | 5 | ✅ v18 `MBStyleDataSource.removeImage` → SpriteAtlas.removeIcon | sprite | |
+| `lookAtPoint` | 5 | ✅ v18 `setCameraGeolocationAndZoom` | 相机 | |
+| `pinBooleanTransitionProgress` | 4 | ✅ v26 存为 runtimeSetting | transition | |
+| `setLayerProperty` | 3 | ✅ v18 兼容 runner 直接设 paint/layout | 样式 | 直接设层任意属性（非 spec） |
+| `sleep` | 3 | ✅ v18 `setTimeout` | 帧控制 | |
 | `setCameraPosition` | 3 | ❌ 无 free-camera | 相机 | |
-| `fitScreenCoordinates` | 3 | ❌ | 相机 | |
+| `fitScreenCoordinates` | 3 | ✅ v18 估算 center+zoom + `setCameraGeolocationAndZoom` | 相机 | |
 | `setImportColorTheme` | 3 | ❌ 无 imports | imports | |
-| `forceContextRestart` | 3 | ❌ | WebGL | `WEBGL_lose_context` |
+| `forceContextRestart` | 3 | ✅ v18 `WEBGL_lose_context` | WebGL | |
 
 ### J.1 flywave 需优先实现的 operations（按累计频次）
 
-| 优先级 | operations | 累计频次 | 占比 |
-|--------|-----------|---------|------|
-| 🔴 必做 | `wait` + `waitFrameReady` + `sleep` | 1567 | 64% |
-| 🔴 必做 | `setZoom`/`setCenter`/`setBearing`/`setPadding`/`easeTo`/`lookAtPoint` | 195 | 8% |
-| 🟡 重要 | `setStyle`/`setPaintProperty`/`setLayoutProperty`/`addLayer`/`removeLayer`/`setFilter`/`setLayerZoomRange` | 473 | 19% |
-| 🟡 重要 | `setFeatureState`/`removeFeatureState` | 89 | 4% |
-| 🟠 增强 | `addImage`/`removeImage`/`updateImage` | 66 | 3% |
-| 🟠 增强 | `addSource` | 31 | 1% |
-| ⚪ 后续 | `setProjection`/`setTerrain`/`setFog`/`setLights`/`addModel`/imports/custom | 296 | 12% |
+> 截至 v27：除 `addCustomLayer`/`addCustomSource`/`setCameraPosition`/`rotateTo`/`resetNorth` 之外，**几乎所有 operations 都已接入**（详见附录 J 主表）。
+
+| 优先级 | operations | 累计频次 | 占比 | 状态 |
+|--------|-----------|---------|------|------|
+| 🔴 必做 | `wait` + `waitFrameReady` + `sleep` | 1567 | 64% | ✅ v7 |
+| 🔴 必做 | `setZoom`/`setCenter`/`setBearing`/`setPadding`/`easeTo`/`lookAtPoint` | 195 | 8% | ✅ v18+v26+v27 |
+| 🟡 重要 | `setStyle`/`setPaintProperty`/`setLayoutProperty`/`addLayer`/`removeLayer`/`setFilter`/`setLayerZoomRange` | 473 | 19% | ✅ v7 |
+| 🟡 重要 | `setFeatureState`/`removeFeatureState` | 89 | 4% | ✅ v18+v22 |
+| 🟠 增强 | `addImage`/`removeImage`/`updateImage` | 66 | 3% | ✅ v18 |
+| 🟠 增强 | `addSource` | 31 | 1% | ✅ v22 |
+| ⚪ 后续 | `setProjection`/`setTerrain`/`setFog`/`setLights`/`addModel`/imports/custom | 296 | 12% | ✅ v15+v18+v26（custom/setCameraPosition 仍 no-op） |
 
 > "必做"四组（2490 频次）即可让 ~80% 的 operations 依赖用例跑起来。其中 `wait`/`waitFrameReady`/`sleep` 是**所有 runtime-styling 用例都用到**的时序推进原语，是 P0 中的 P0。
 
@@ -1497,7 +1531,9 @@ function localizeUrl(u: string): string {
 
 mapbox 新版默认 `spriteFormat: 'icon_set'`，sprite URL 自动追加 `.pbf`（`utils.ts:addSpriteIconSetExtension`），加载的是 `sprite.pbf`（二进制 icon set）而非传统的 `sprite.json` + `sprite.png`。
 
-flywave 当前 `MBStyleManager.loadSprite`（`:87-121`）只读 `.json` + `.png`——对 `icon_set` 格式完全不识别。**修复优先级 P1**：影响所有新版 sprite 用例（~295 处 `spriteFormat` 引用）。
+flywave `MBStyleManager.loadSprite`（v9 起完成）先试 `.pbf`（`IconSetPBFDecoder` 解码 + Canvas2D 光栅化 + atlas 打包），失败回退 `.json`+`.png`。
+
+> **v24 重要修复**：`IconSetPBFDecoder` 此前有一个 JS 求值顺序 bug（`pbf.pos + pbf.readVarint()` 捕获了 readVarint 调用前的 pos 值，导致子消息 end 偏移少算 1 字节），破坏含 stretchX/stretchY/metadata 子消息的图标解码。修复后真正的 sprite.pbf 数据能正确解析。
 
 ---
 
@@ -1617,7 +1653,7 @@ flywave 当前 `MBStyleManager.loadSprite`（`:87-121`）只读 `.json` + `.png`
 |------|---------|
 | `resolveTextField` token 替换 | text-field |
 | `applyTextTransform` | text-transform |
-| `wrapText` 字符级断行 | text-max-width |
+| `wrapText` 字符级断行 + CJK 断行 | text-max-width（v21 已完成）|
 | `getJustifyOffset` binary | text-justify |
 | `getAnchorOffset` 9 锚点 | text-anchor |
 | vertical shaping | text-writing-mode |

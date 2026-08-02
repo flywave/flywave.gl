@@ -39,11 +39,92 @@ const EXTENTS = 4096;
 /**
  * Convert tile-local coordinates to world coordinates.
  * Inlined from OmvUtils to avoid exports field resolution issues.
+ *
+ * For the built-in Web-Mercator / Spherical (globe) projections this uses
+ * the same fast integer-tile math as before — flywave's engine reprojects
+ * Mercator world coords onto the sphere itself. For custom MBMapProjection
+ * instances (Albers, EqualEarth, WinkelTripel, …) each tile-local point is
+ * first lifted to its (lng, lat) and then run through the active
+ * projection's `projectPoint`, so vector features land in the correct
+ * projection-space position instead of being placed as a flat Mercator slab.
  */
 function lat2tile(lat: number, zoom: number): number {
     return Math.round(
         ((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2) * Math.pow(2, zoom)
     );
+}
+
+/**
+ * Inverse of the Web-Mercator tile y mapping: given the tile's northern
+ * latitude `north`, the integer `top` tile row, the per-tile `py` pixel
+ * offset and the global `scale` (= 2^(level+N)), return the geographic
+ * latitude of the requested point. Used to feed custom projections.
+ */
+function tileYToLat(top: number, py: number, scale: number): number {
+    const n = Math.PI - (2 * Math.PI * (top + py)) / scale;
+    return (180 / Math.PI) * Math.atan(Math.sinh(n));
+}
+
+/**
+ * Maximum tile-local distance (in tile-extent units) that a single line
+ * segment may cover without being subdivided under a non-Mercator custom
+ * projection. 32 px on a 4096-px tile ≈ 0.78% of the tile width — small
+ * enough that the chord and the true projected curve differ by sub-pixel
+ * amounts at every zoom level we render tests at.
+ */
+const RESAMPLE_MAX_SEG_PX = 32;
+
+/**
+ * Recursive midpoint subdivision of a tile-local polyline. Subdivides any
+ * segment longer than `RESAMPLE_MAX_SEG_PX` until all segments are short
+ * enough that reprojecting them through a non-linear projection yields an
+ * effectively smooth curve. Points are interpolated linearly in tile-local
+ * space — equivalent to interpolating in Web-Mercator world space — which is
+ * the closest approximation of a rhumb-line on the sphere and matches
+ * Mapbox's `resample.ts` behaviour for short distances.
+ */
+function resampleLinePoints(
+    positions: ArrayLike<THREE.Vector2 | THREE.Vector3>,
+    _extents: number,
+): (THREE.Vector2 | THREE.Vector3)[] {
+    const n = positions.length;
+    if (n < 2) {
+        const copy: (THREE.Vector2 | THREE.Vector3)[] = [];
+        for (let i = 0; i < n; i++) copy.push(positions[i]);
+        return copy;
+    }
+    const out: (THREE.Vector2 | THREE.Vector3)[] = [positions[0]];
+    for (let i = 1; i < n; i++) {
+        subdivideInto(positions[i - 1], positions[i], out);
+    }
+    return out;
+}
+
+function subdivideInto(
+    a: THREE.Vector2 | THREE.Vector3,
+    b: THREE.Vector2 | THREE.Vector3,
+    out: (THREE.Vector2 | THREE.Vector3)[],
+): void {
+    // Use a stack-based iterative subdivision to avoid pathological
+    // recursion on very long segments.
+    const stack: Array<[THREE.Vector2 | THREE.Vector3, THREE.Vector2 | THREE.Vector3]> = [[a, b]];
+    while (stack.length > 0) {
+        const [pa, pb] = stack.pop()!;
+        const dx = (pb as any).x - (pa as any).x;
+        const dy = (pb as any).y - (pa as any).y;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= RESAMPLE_MAX_SEG_PX) {
+            out.push(pb);
+            continue;
+        }
+        // Insert midpoint and recurse on each half. Construct the same
+        // vector type as the input to preserve downstream typing.
+        const mid = (pa as any).clone
+            ? (pa as any).clone().lerp(pb, 0.5)
+            : new THREE.Vector2((pa as any).x + dx * 0.5, (pa as any).y + dy * 0.5);
+        stack.push([mid, pb]);
+        stack.push([pa, mid]);
+    }
 }
 
 function tile2world(
@@ -59,6 +140,19 @@ function tile2world(
     const left = Math.round(((west + 180) / 360) * scale);
     const R = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
 
+    const proj: any = decodeInfo.targetProjection;
+    if (proj?.mbCustomProjection === true) {
+        // Reproject: tile-local → (lng, lat) → custom-projection world.
+        const lng = ((left + px) / scale) * 360 - 180;
+        const lat = tileYToLat(top, py, scale);
+        const w = proj.projectPoint({ longitude: lng, latitude: lat, altitude: 0 });
+        target.x = w.x;
+        target.y = w.y;
+        target.z = (w as any).z ?? 0;
+        target.sub(decodeInfo.center);
+        return;
+    }
+
     target.x = ((left + px) / scale) * R;
     target.y = ((top + py) / scale) * R;
     target.z = 0;
@@ -70,12 +164,23 @@ export class MBTileDataEmitter {
     private m_techniqueIndex = 0;
     private m_techniques: IndexedTechnique[] = [];
     private m_layerToTechniqueIndex: Map<string, number> = new Map();
+    /**
+     * Optional real-font glyph metrics (from PBF), used as the `glyphLookup`
+     * for accurate text shaping. Set by the decoder when the main thread has
+     * preloaded mapbox glyph ranges for the style's font stacks.
+     */
+    private m_glyphLookup: { getMetrics: (font: string, char: string) => any } | undefined;
 
     constructor(
         private m_tileKey: TileKey,
         private m_decodeInfo: DecodeInfo,
         private m_zoom: number,
     ) {}
+
+    /** Install a real-font metrics lookup for text shaping. */
+    setGlyphLookup(lookup: { getMetrics: (font: string, char: string) => any }): void {
+        this.m_glyphLookup = lookup;
+    }
 
     private m_textGeometries: TextGeometry[] = [];
     private m_textPathGeometries: TextPathGeometry[] = [];
@@ -93,6 +198,20 @@ export class MBTileDataEmitter {
         return idx;
     }
 
+    /**
+     * The tile extent (default 4096). Set per-tile by the adapter via
+     * `setExtents()` so non-standard tile sizes (e.g. 1024) are handled
+     * correctly in coordinate conversion.
+     */
+    private m_extents: number = 4096;
+
+    /** Set the tile extent (called by the decoder before processing). */
+    setExtents(extents: number): void {
+        this.m_extents = extents > 0 ? extents : 4096;
+    }
+
+    get extents(): number { return this.m_extents; }
+
     private getOrCreateGeometry(key: string): AccumulatedGeometry {
         let geo = this.m_geometries.get(key);
         if (!geo) {
@@ -103,7 +222,7 @@ export class MBTileDataEmitter {
     }
 
     private project(p: THREE.Vector2 | THREE.Vector3): THREE.Vector3 {
-        tile2world(EXTENTS, this.m_decodeInfo, p.x, p.y, tmpV3);
+        tile2world(this.m_extents, this.m_decodeInfo, p.x, p.y, tmpV3);
         // Apply line-z-offset if set (for elevated lines)
         if (this.m_currentZOffset !== 0) {
             tmpV3.z += this.m_currentZOffset;
@@ -112,6 +231,40 @@ export class MBTileDataEmitter {
     }
 
     private m_currentZOffset: number = 0;
+
+    /**
+     * Resolve the per-feature Z offset for a layer, combining:
+     *   - the explicit `<type>-z-offset` paint/layout property, and
+     *   - the `<type>-elevation-reference` layout property, which reads the
+     *     feature's `elevation`/`height`/`z`/`level` property and lifts the
+     *     feature to that height (HD elevated-line / bridge support).
+     *
+     * `type` is the layer type prefix: 'fill', 'line', or 'fill-extrusion'.
+     */
+    private resolveZOffset(
+        layer: EvaluatedLayer,
+        properties: Record<string, any> | undefined,
+        type: 'fill' | 'line' | 'fill-extrusion',
+    ): number {
+        const paint = layer.paint ?? {};
+        const layout = layer.layout ?? {};
+
+        // Explicit z-offset property.
+        let z = Number(paint[`${type}-z-offset`] ?? layout[`${type}-z-offset`] ?? 0);
+
+        // HD elevation reference: lift feature to its real-world elevation.
+        const elevRef = layout[`${type}-elevation-reference`];
+        if (elevRef) {
+            const featElev = Number(
+                properties?.elevation ?? properties?.height ??
+                properties?.z ?? properties?.level ?? 0,
+            );
+            z += elevRef === 'hd-road-markup'
+                ? featElev + 0.1 // markup sits slightly above the road surface
+                : featElev;
+        }
+        return z;
+    }
 
     private extractSortKey(layer: EvaluatedLayer): number | undefined {
         const layout = layer.layout ?? {};
@@ -162,11 +315,14 @@ export class MBTileDataEmitter {
                 props.lineWidth = p['line-width'] ?? 1;
                 props._translate = p['line-translate'] ?? [0, 0];
                 props._translateAnchor = p['line-translate-anchor'] ?? 'map';
-                // HD elevation reference: lines at their feature elevation.
+                // HD elevation reference: stored on the technique as
+                // `_hdElevation` for the MaterialPatchManager; the per-feature
+                // Z offset that lifts the line geometry itself is computed
+                // centrally in `resolveZOffset()` (called by processLineFeature).
                 const lineElevRef = l['line-elevation-reference'];
                 if (lineElevRef) {
                     const featElev = Number(properties?.elevation ?? properties?.height ?? properties?.z ?? 0);
-                    this.m_currentZOffset = lineElevRef === 'hd-road-markup'
+                    props._hdElevation = lineElevRef === 'hd-road-markup'
                         ? featElev + 0.1
                         : featElev;
                 }
@@ -243,6 +399,8 @@ export class MBTileDataEmitter {
                         anchor: l['text-anchor'] ?? 'center',
                         transform: 'none', // already applied above
                         writingMode: l['text-writing-mode'] as ('horizontal' | 'vertical')[],
+                        glyphLookup: this.m_glyphLookup as any,
+                        fontName: Array.isArray(l['text-font']) ? l['text-font'].join(',') : l['text-font'],
                     });
                     props._shaped = shaped;
                     props._textWidth = shaped.right - shaped.left;
@@ -302,6 +460,13 @@ export class MBTileDataEmitter {
                 props.opacity = p['raster-opacity'] ?? 1;
                 props._rasterTileUrl = properties?._rasterTileUrl ?? '';
                 props._isRaster = true;
+                // Pass through raster color-adjustment paint properties
+                // so MaterialPatchManager can inject them as shader uniforms.
+                props._rasterHueRotate = p['raster-hue-rotate'] ?? 0;
+                props._rasterBrightnessMin = p['raster-brightness-min'] ?? 0;
+                props._rasterBrightnessMax = p['raster-brightness-max'] ?? 1;
+                props._rasterSaturation = p['raster-saturation'] ?? 0;
+                props._rasterContrast = p['raster-contrast'] ?? 0;
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'model':
@@ -363,7 +528,7 @@ export class MBTileDataEmitter {
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
-            this.m_currentZOffset = (layer.paint['fill-z-offset'] as number) ?? (layer.layout['line-z-offset'] as number) ?? 0;
+            this.m_currentZOffset = this.resolveZOffset(layer, properties, 'fill');
             const key = `${layer.id}:fill`;
             const geo = this.getOrCreateGeometry(key);
             const featureStart = geo.indices.length;
@@ -443,14 +608,22 @@ export class MBTileDataEmitter {
         featureId: string | number | undefined,
         matchedLayers: EvaluatedLayer[],
     ): void {
+        const needsResample = (this.m_decodeInfo.targetProjection as any)?.mbCustomProjection === true;
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
-            this.m_currentZOffset = (layer.paint['line-z-offset'] as number) ?? (layer.layout['line-z-offset'] as number) ?? 0;
+            this.m_currentZOffset = this.resolveZOffset(layer, properties, 'line');
 
             for (const lineGeo of geometry) {
-                // Convert tile-local to world
+                // Convert tile-local to world. Under a non-Mercator custom
+                // projection, subdivide each segment first so straight
+                // geographic lines bend smoothly when reprojected (Albers,
+                // EqualEarth, …) instead of becoming chordal polylines.
+                const pts = needsResample
+                    ? resampleLinePoints(lineGeo.positions, extents)
+                    : lineGeo.positions;
+
                 const worldPts: number[] = [];
-                for (const pt of lineGeo.positions) {
+                for (const pt of pts) {
                     const w = this.project(pt);
                     worldPts.push(w.x, w.y, w.z);
                 }

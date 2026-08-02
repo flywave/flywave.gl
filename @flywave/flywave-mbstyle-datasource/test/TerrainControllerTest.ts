@@ -1,6 +1,8 @@
 import { assert } from 'chai';
+import * as THREE from 'three';
 import { decodeTerrainElevation, createTerrainGrid } from '../src/materials/MapTerrainMaterial';
-import { createSkirtedGrid } from '../src/TerrainController';
+import { createSkirtedGrid, TerrainController } from '../src/TerrainController';
+import { buildTileCamera, isEnvironmentObject } from '../src/TerrainDrapingUtils';
 
 describe('Terrain algorithms', () => {
     describe('decodeTerrainElevation (Mapbox terrain-rgb)', () => {
@@ -63,6 +65,118 @@ describe('Terrain algorithms', () => {
                 if (pos.getY(i) < -1e-6) { hasLowered = true; break; }
             }
             assert.isTrue(hasLowered, 'at least one skirt vertex should be below the plane');
+        });
+    });
+
+    describe('TerrainController.allDemTiles', () => {
+        it('starts empty before any tile is loaded', () => {
+            const scene = new THREE.Scene();
+            const tc = new TerrainController(scene);
+            assert.strictEqual(tc.allDemTiles.length, 0);
+            assert.strictEqual(tc.centerDem, null);
+            tc.dispose();
+        });
+
+        it('exposes each loaded tile with world-space origin and size', () => {
+            // Inspect the geometry of allDemTiles by manually populating the
+            // controller via its private mesh list — we cannot easily fake
+            // an HTTP DEM load in a unit test. Instead we verify that the
+            // public getter's math is correct for a synthetic mesh.
+            const scene = new THREE.Scene();
+            const tc = new TerrainController(scene);
+            const C = 40075016.686;
+            const tileWorldSize = C / 4;
+            // Synthesise a mesh matching what loadAndAddTile would produce.
+            const mesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(1, 1),
+                new THREE.MeshBasicMaterial(),
+            );
+            mesh.position.set(5 * tileWorldSize + tileWorldSize / 2, 0, 7 * tileWorldSize + tileWorldSize / 2);
+            mesh.scale.set(1, 1, 1);
+            const fakeTexture = new THREE.DataTexture(
+                new Float32Array([0]), 1, 1, THREE.RedFormat, THREE.FloatType,
+            );
+            // Inject into the private fields the getter reads.
+            (tc as any).m_meshes.push(mesh);
+            (tc as any).m_demTextures.push(fakeTexture);
+            const tiles = tc.allDemTiles;
+            assert.strictEqual(tiles.length, 1);
+            // Origin is the corner of the tile, not the center.
+            assert.closeTo(tiles[0].originX, 5 * tileWorldSize, 1e-3);
+            assert.closeTo(tiles[0].originY, 7 * tileWorldSize, 1e-3);
+            assert.closeTo(tiles[0].size, tileWorldSize, 1e-3);
+            fakeTexture.dispose();
+            tc.dispose();
+        });
+    });
+
+    describe('TerrainDraping.buildTileCamera', () => {
+        it('returns null for zero-size tile', () => {
+            assert.isNull(buildTileCamera({ originX: 0, originY: 0, size: 0 }));
+        });
+
+        it('builds an OrthographicCamera covering the tile bounds', () => {
+            const tile = { originX: 100, originY: 200, size: 50 };
+            const cam = buildTileCamera(tile);
+            assert.isNotNull(cam);
+            if (!cam) return;
+            assert.instanceOf(cam, THREE.OrthographicCamera);
+            assert.strictEqual(cam.left, 100);
+            assert.strictEqual(cam.right, 150);
+            assert.strictEqual(cam.top, 250);
+            assert.strictEqual(cam.bottom, 200);
+        });
+
+        it('positions camera at tile center looking down', () => {
+            const tile = { originX: 0, originY: 0, size: 1000 };
+            const cam = buildTileCamera(tile);
+            if (!cam) return;
+            assert.closeTo(cam.position.x, 500, 0.1);
+            assert.closeTo(cam.position.z, 500, 0.1);
+            assert.strictEqual(cam.up.z, 1);
+        });
+
+        it('camera frustum matches the tile size', () => {
+            const tile = { originX: 0, originY: 0, size: 800 };
+            const cam = buildTileCamera(tile);
+            if (!cam) return;
+            const width = cam.right - cam.left;
+            const height = cam.top - cam.bottom;
+            assert.closeTo(width, height, 0.001);
+            assert.closeTo(width, 800, 0.001);
+        });
+
+        it('handles negative origin coordinates', () => {
+            const tile = { originX: -500, originY: 100, size: 200 };
+            const cam = buildTileCamera(tile);
+            if (!cam) return;
+            assert.closeTo(cam.left, -500, 0.001);
+            assert.closeTo(cam.right, -300, 0.001);
+            assert.closeTo(cam.top, 300, 0.001);
+            assert.closeTo(cam.bottom, 100, 0.001);
+        });
+    });
+
+    describe('isEnvironmentObject', () => {
+        it('identifies lights as environment objects', () => {
+            const light = new THREE.AmbientLight();
+            assert.isTrue(isEnvironmentObject(light as any));
+        });
+
+        it('identifies LineSegments as environment objects', () => {
+            const lines = new THREE.LineSegments(new THREE.BufferGeometry());
+            assert.isTrue(isEnvironmentObject(lines as any));
+        });
+
+        it('identifies tagged environment objects', () => {
+            const obj = new THREE.Object3D();
+            obj.userData.__mbEnvironment = true;
+            assert.isTrue(isEnvironmentObject(obj));
+        });
+
+        it('does not flag regular meshes', () => {
+            const mesh = new THREE.Mesh(new THREE.BufferGeometry());
+            assert.isFalse(isEnvironmentObject(mesh));
         });
     });
 });

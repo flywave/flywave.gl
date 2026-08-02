@@ -1145,6 +1145,21 @@ export class TextElementsRenderer {
         }
     }
 
+    /**
+     * Injects a pre-built FontCatalog instance directly, bypassing the
+     * URL-based loadFontCatalog flow. Used by the mapbox-style datasource
+     * to render text with PBF-decoded SDF glyphs.
+     *
+     * @param name - Catalog name (e.g. "default").
+     * @param catalog - Pre-built FontCatalog instance.
+     */
+    public setFontCatalog(name: string, catalog: FontCatalog): void {
+        catalog.showReplacementGlyphs = this.showReplacementGlyphs;
+        const loadedTextCanvas = this.m_textCanvasFactory.createTextCanvas(catalog, name);
+        this.m_textCanvases.set(name, loadedTextCanvas);
+        this.m_textStyleCache.updateTextCanvases(this.m_textCanvases);
+    }
+
     private updateGlyphDebugMesh() {
         const debugGlyphs = debugContext.getValue("DEBUG_GLYPHS");
         if (debugGlyphs === undefined) {

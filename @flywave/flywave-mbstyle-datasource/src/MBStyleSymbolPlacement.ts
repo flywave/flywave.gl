@@ -374,6 +374,7 @@ export class MBStyleSymbolPlacement {
                         textRadialOffset: layout['text-radial-offset'] as number ?? 0,
                         text: tech.text ?? tech.imageTexture ?? '',
                         tileKey: `${tile.tileKey.level}:${tile.tileKey.mortonCode()}`,
+                        iconOptional: layout['icon-optional'] === true,
                     });
                 }
             }
@@ -516,7 +517,24 @@ export class MBStyleSymbolPlacement {
                 }
             }
 
-            if (dxPx === 0 && dyPx === 0) continue;
+            if (dxPx === 0 && dyPx === 0) {
+                // Even without XY offset, check for Z offset (symbol-z-offset).
+                const zOffset = Number(tech._paint?.['symbol-z-offset'] ?? tech._layout?.['symbol-z-offset'] ?? 0);
+                const zElevate = tech._paint?.['symbol-z-elevate'] ?? tech._layout?.['symbol-z-elevate'] ?? false;
+                if (zOffset === 0 && !zElevate) continue;
+                // Apply Z offset directly to world position.
+                obj.getWorldPosition(worldPos);
+                const parent = obj.parent;
+                if (parent) {
+                    const target = worldPos.clone();
+                    target.z += zOffset;
+                    parent.worldToLocal(target);
+                    obj.position.copy(target);
+                } else {
+                    obj.position.z += zOffset;
+                }
+                continue;
+            }
 
             // 'map' anchor: rotate the pixel offset with bearing so it stays map-aligned.
             let ox = dxPx;
@@ -543,6 +561,12 @@ export class MBStyleSymbolPlacement {
                 obj.position.copy(delta);
             } else {
                 obj.position.copy(obj.position).add(unproj.sub(worldPos));
+            }
+
+            // Also apply symbol-z-offset (world Z displacement).
+            const zOffset = Number(tech._paint?.['symbol-z-offset'] ?? tech._layout?.['symbol-z-offset'] ?? 0);
+            if (zOffset !== 0) {
+                obj.position.z += zOffset;
             }
         }
     }

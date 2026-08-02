@@ -71,8 +71,13 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                 `
                 #include <map_fragment>
                 #ifdef USE_DRAPE
-                    vec4 drapeColor = texture2D(uDrape, vMapUv);
-                    diffuseColor *= drapeColor;
+                    // Flip V: terrain mesh UV V=0 is at the far edge (originY+size)
+                    // but the FBO texture V=0 is at the near edge (originY), so a
+                    // 1.0 - v.y flip is needed to align drape content with the
+                    // underlying world position. Same convention as the DEM
+                    // sampling above (which also does 1.0 - uv.y).
+                    vec4 drapeColor = texture2D(uDrape, vec2(vMapUv.x, 1.0 - vMapUv.y));
+                    diffuseColor.rgb = mix(diffuseColor.rgb, drapeColor.rgb, drapeColor.a);
                 #endif
                 `
             );

@@ -169,6 +169,12 @@ async function processOperations(
                 rt?.setStyle(typeof args[0] === "string"
                     ? localizeStyle(JSON.parse(args[0]))
                     : localizeStyle(args[0]));
+                // Full style swap: reload sprites / glyphs / environment /
+                // models / terrain, not just the decoder config. Without this,
+                // the new style's sprite/glyph URLs are silently ignored.
+                try {
+                    await dataSource.reloadStyle();
+                } catch {}
                 break;
             case "setFeatureState":
                 dataSource.setFeatureState(args[0] ?? args[1], args[1] ?? args[2]);
@@ -176,26 +182,50 @@ async function processOperations(
             case "removeFeatureState":
                 dataSource.removeFeatureState(args[0]);
                 break;
-            case "setZoom":
-                (mapView as any).setZoom?.(args[0]);
+            case "setZoom": {
+                // MapView has no direct setZoom — use zoomOnTargetPosition to
+                // zoom while keeping the screen-center anchored.
+                try {
+                    const { MapViewUtils } = await import("@flywave/flywave-mapview");
+                    MapViewUtils.zoomOnTargetPosition(mapView, 0, 0, args[0]);
+                } catch {}
                 break;
-            case "setCenter":
-                (mapView as any).setCenter?.(args[0]);
+            }
+            case "setCenter": {
+                // setCenter via geoCenter setter (keeps zoom/bearing).
+                try {
+                    const { GeoCoordinates } = await import("@flywave/flywave-geoutils");
+                    mapView.geoCenter = new GeoCoordinates(args[0][1], args[0][0]);
+                } catch {}
                 break;
-            case "setBearing":
-                (mapView as any).setBearing?.(args[0]);
+            }
+            case "setBearing": {
+                // MapView exposes `heading` (degrees, clockwise from north).
+                try {
+                    mapView.heading = args[0];
+                } catch {}
                 break;
-            case "setPitch":
-                (mapView as any).setPitch?.(args[0]);
+            }
+            case "setPitch": {
+                // MapView exposes `tilt` (degrees).
+                try {
+                    mapView.tilt = args[0];
+                } catch {}
                 break;
+            }
             case "setGeoJSONSourceData": {
                 const sourceId = args[0];
                 const newData = args[1];
                 if (sourceId && newData) {
+                    // Update the runtime style's source data first so the
+                    // change persists across any future re-connect.
+                    rt?.setGeoJSONSourceData(sourceId, newData);
+                    // Then update the live GeoJSONDataProvider if one exists
+                    // for this source so already-loaded tiles see new data.
                     const ds = dataSource as any;
                     const provider = ds.m_delegatingProvider?.delegate;
-                    if (provider && provider.m_geoJsonData !== undefined) {
-                        provider.m_geoJsonData = typeof newData === 'string' ? newData : JSON.stringify(newData);
+                    if (provider && typeof provider.updateData === 'function') {
+                        provider.updateData(newData);
                         mapView.update();
                     }
                 }
@@ -287,14 +317,34 @@ async function processOperations(
                 break;
             }
             case "addModel": {
-                // Best-effort: reload models with the updated style.
+                // args: [name, uri] or [name, { uri, position }]
+                const name = args[0];
+                const def = args[1];
+                if (name && def) {
+                    const style = dataSource.runtime?.style;
+                    if (style) {
+                        if (!(style as any).models) (style as any).models = {};
+                        (style as any).models[name] = typeof def === 'string'
+                            ? { uri: def }
+                            : def;
+                        // Re-trigger model loading on the datasource.
+                        try {
+                            await (dataSource as any).loadModels?.(style);
+                        } catch {}
+                    }
+                }
                 break;
             }
             case "addSource": {
-                // Best-effort: add source to the runtime style.
-                const rt = dataSource.runtime;
+                // Add source to the runtime style and re-trigger tile loading.
                 if (rt && args[0] && args[1]) {
-                    (rt.style.sources as any)[args[0]] = args[1];
+                    rt.addSource(args[0], args[1]);
+                }
+                break;
+            }
+            case "removeSource": {
+                if (rt && args[0]) {
+                    rt.removeSource(args[0]);
                 }
                 break;
             }
@@ -345,10 +395,20 @@ async function processOperations(
             }
             case "easeTo": {
                 const target = args[0] ?? {};
-                if (target.zoom !== undefined) (mapView as any).setZoom?.(target.zoom);
-                if (target.center) (mapView as any).setCenter?.(target.center);
-                if (target.bearing !== undefined) (mapView as any).setBearing?.(target.bearing);
-                if (target.pitch !== undefined) (mapView as any).setPitch?.(target.pitch);
+                // Use setCameraGeolocationAndZoom to atomically set center +
+                // zoom + bearing + pitch (single re-orientation, matches the
+                // post-animation end-state of mapbox's easeTo).
+                try {
+                    const { GeoCoordinates } = await import("@flywave/flywave-geoutils");
+                    const curCenter = mapView.geoCenter;
+                    const center = target.center
+                        ? new GeoCoordinates(target.center[1], target.center[0])
+                        : curCenter;
+                    const zoom = target.zoom ?? mapView.zoomLevel;
+                    const yaw = target.bearing ?? mapView.heading;
+                    const pitch = target.pitch ?? mapView.tilt;
+                    mapView.setCameraGeolocationAndZoom(center, zoom, yaw, pitch);
+                } catch {}
                 break;
             }
             case "setPadding": {
@@ -371,15 +431,51 @@ async function processOperations(
                 break;
             }
             case "setCameraPosition":
-            case "lookAtPoint":
-                // Needs FreeCamera (engine change). Best-effort with geo coords.
+            case "lookAtPoint": {
+                // setCameraPosition: [x, y, z] in geo coordinates (lng, lat, alt meters)
+                // lookAtPoint: [lng, lat] target to look at from current camera pos,
+                //   optional 2nd arg [dx,dy,dz] = up vector direction.
+                if (name === "setCameraPosition" && args[0]) {
+                    // Convert geo position to flywave camera.
+                    const lng = args[0][0];
+                    const lat = args[0][1];
+                    const alt = args[0][2] ?? 1000;
+                    try {
+                        const { GeoCoordinates } = await import("@flywave/flywave-geoutils");
+                        // Use altitude to estimate zoom level.
+                        const earthCircumference = 40075016.686;
+                        const mpp = alt / (mapView.canvas.height ?? 512);
+                        const zoom = Math.max(0, Math.log2(earthCircumference / (mpp * 256)));
+                        mapView.setCameraGeolocationAndZoom(
+                            new GeoCoordinates(lat, lng), zoom);
+                    } catch {}
+                }
                 if (name === "lookAtPoint" && args[0]) {
-                    const { GeoCoordinates } = await import("@flywave/flywave-geoutils");
-                    (mapView as any).setCameraGeolocationAndZoom?.(
-                        new GeoCoordinates(args[0][1], args[0][0]),
-                        mapView.zoomLevel);
+                    const targetLng = args[0][0];
+                    const targetLat = args[0][1];
+                    const upVector = args[1] as number[] | undefined;
+                    try {
+                        const { GeoCoordinates } = await import("@flywave/flywave-geoutils");
+                        // Move camera to look at the target point from current zoom.
+                        mapView.setCameraGeolocationAndZoom(
+                            new GeoCoordinates(targetLat, targetLng),
+                            mapView.zoomLevel);
+                        // If an up/direction vector is provided, approximate
+                        // the resulting bearing/pitch from the direction.
+                        if (upVector && Array.isArray(upVector)) {
+                            const [ux, uy, uz] = upVector;
+                            // Bearing from horizontal component (atan2 of x,y).
+                            const bearing = Math.atan2(ux, uy) * 180 / Math.PI;
+                            // Pitch from vertical component.
+                            const horizMag = Math.sqrt(ux*ux + uy*uy);
+                            const pitch = Math.atan2(horizMag, uz) * 180 / Math.PI;
+                            mapView.heading = bearing;
+                            mapView.tilt = Math.min(pitch, 60);
+                        }
+                    } catch {}
                 }
                 break;
+            }
             case "fitScreenCoordinates": {
                 // args: [{x,y}, {x,y}, bearing, options?]
                 const p0 = args[0];
@@ -438,6 +534,249 @@ async function processOperations(
                 }
                 break;
             }
+            case "check": {
+                // Mapbox assertion (e.g. checkRenderingWorldCopies, checkCollisionCount).
+                // We don't enforce these — the rendering comparison itself is the
+                // assertion in the compat runner. Just record the call name.
+                break;
+            }
+            case "forceRenderCached": {
+                // Cache-control: force the next frame to render from cached tiles
+                // without re-decoding. Best-effort — just advance a frame.
+                break;
+            }
+            case "setColorTheme": {
+                // Color theme override — store for downstream consumers.
+                (mapView as any).colorTheme = args[0];
+                break;
+            }
+            case "pinBooleanTransitionProgress": {
+                // Pin a CSS-style boolean transition at a specific progress
+                // value (0..1). Best-effort: store as a runtime setting.
+                const key = args[0];
+                const value = args[1];
+                if (key) {
+                    if (!(mapView as any).runtimeSettings) (mapView as any).runtimeSettings = {};
+                    (mapView as any).runtimeSettings[`__pin_${key}`] = value;
+                }
+                break;
+            }
+            case "setSize": {
+                // Resize the canvas to the given {width, height} in CSS pixels.
+                const size = args[0];
+                if (size && typeof size.width === 'number' && typeof size.height === 'number') {
+                    const canvas = mapView.canvas;
+                    canvas.width = size.width;
+                    canvas.height = size.height;
+                    mapView.update();
+                }
+                break;
+            }
+            case "rotateTo": {
+                // args: [bearing, { duration, easing, ... }?]
+                // For static rendering we only need the final bearing/pitch.
+                try {
+                    mapView.heading = args[0];
+                    if (args[1]?.pitch !== undefined) mapView.tilt = args[1].pitch;
+                } catch {}
+                break;
+            }
+            case "resetNorth": {
+                // Reset bearing to 0 (north up), optionally with animation.
+                try { mapView.heading = 0; } catch {}
+                break;
+            }
+            case "resetNorthPitch": {
+                // Reset both bearing and pitch to 0.
+                try {
+                    mapView.heading = 0;
+                    mapView.tilt = 0;
+                } catch {}
+                break;
+            }
+            case "jumpTo": {
+                // Same as easeTo but without animation — set final state.
+                const target = args[0] ?? {};
+                try {
+                    const { GeoCoordinates } = await import("@flywave/flywave-geoutils");
+                    const curCenter = mapView.geoCenter;
+                    const center = target.center
+                        ? new GeoCoordinates(target.center[1], target.center[0])
+                        : curCenter;
+                    const zoom = target.zoom ?? mapView.zoomLevel;
+                    const yaw = target.bearing ?? mapView.heading;
+                    const pitch = target.pitch ?? mapView.tilt;
+                    mapView.setCameraGeolocationAndZoom(center, zoom, yaw, pitch);
+                } catch {}
+                break;
+            }
+            case "removeModel": {
+                // args: [name] — unregister a model from style.models.
+                const name = args[0];
+                if (name && rt?.style) {
+                    const models = (rt.style as any).models;
+                    if (models) {
+                        delete models[name];
+                    }
+                }
+                break;
+            }
+            case "removeImport": {
+                // args: [importId] — remove an import from style.imports.
+                const importId = args[0];
+                if (importId && rt?.style) {
+                    const imports = (rt.style as any).imports;
+                    if (Array.isArray(imports)) {
+                        const idx = imports.findIndex((imp: any) => imp.id === importId);
+                        if (idx >= 0) imports.splice(idx, 1);
+                        // Re-apply style to reflect the removal.
+                        try { await dataSource.reloadStyle(); } catch {}
+                    }
+                }
+                break;
+            }
+            case "pauseSource": {
+                // args: [sourceId, pause?] — pause/resume a source's tile loading.
+                // Best-effort: store the flag on mapView for reference.
+                const sid = args[0];
+                const pause = args[1] ?? true;
+                if (sid) {
+                    if (!(mapView as any).pausedSources) (mapView as any).pausedSources = new Set();
+                    if (pause) (mapView as any).pausedSources.add(sid);
+                    else (mapView as any).pausedSources.delete(sid);
+                }
+                break;
+            }
+            case "setSlot": {
+                // args: [layerId, slotName]
+                // Move a layer into a named slot position in the style's
+                // layer array. Slots are defined by import styles and define
+                // insertion points. Best-effort: reorder layers by slot.
+                const layerId = args[0];
+                const slotName = args[1];
+                if (layerId && slotName && rt?.style) {
+                    const layers = rt.style.layers as any[];
+                    const layer = layers.find(l => l.id === layerId);
+                    if (layer) {
+                        layer.slot = slotName;
+                        // Trigger re-evaluation to apply the slot change.
+                        try { await dataSource.reloadStyle(); } catch {}
+                    }
+                }
+                break;
+            }
+            case "moveImport": {
+                // args: [importId, beforeImportId?]
+                // Reorder imports so that `importId` comes before `beforeImportId`.
+                const importId = args[0];
+                const beforeId = args[1];
+                if (importId && rt?.style) {
+                    const imports = (rt.style as any).imports;
+                    if (Array.isArray(imports)) {
+                        const idx = imports.findIndex((imp: any) => imp.id === importId);
+                        if (idx >= 0) {
+                            const [imp] = imports.splice(idx, 1);
+                            if (beforeId) {
+                                const beforeIdx = imports.findIndex((i: any) => i.id === beforeId);
+                                if (beforeIdx >= 0) {
+                                    imports.splice(beforeIdx, 0, imp);
+                                } else {
+                                    imports.push(imp);
+                                }
+                            } else {
+                                imports.push(imp);
+                            }
+                            try { await dataSource.reloadStyle(); } catch {}
+                        }
+                    }
+                }
+                break;
+            }
+            case "addImport": {
+                // args: [importId, beforeId?, config?]
+                const importDef: any = { id: args[0] };
+                if (args[2]) importDef.config = args[2];
+                if (args[1]) importDef.url = args[1];
+                if (rt?.style) {
+                    if (!Array.isArray((rt.style as any).imports)) {
+                        (rt.style as any).imports = [];
+                    }
+                    (rt.style as any).imports.push(importDef);
+                    try { await dataSource.reloadStyle(); } catch {}
+                }
+                break;
+            }
+            case "updateImport": {
+                // args: [importId, config]
+                const importId = args[0];
+                const config = args[1];
+                if (importId && config && rt?.style) {
+                    const imports = (rt.style as any).imports;
+                    if (Array.isArray(imports)) {
+                        const imp = imports.find((i: any) => i.id === importId);
+                        if (imp) {
+                            imp.config = { ...(imp.config ?? {}), ...config };
+                            try { await dataSource.reloadStyle(); } catch {}
+                        }
+                    }
+                }
+                break;
+            }
+            case "setRenderWorldCopies": {
+                // Best-effort: store on mapView; some engines expose this as
+                // a runtime flag. When false, the world is rendered only once
+                // (no horizontal repetition) — relevant for globe / polar
+                // tests.
+                (mapView as any).renderWorldCopies = args[0];
+                break;
+            }
+            case "setWorldview": {
+                // Update the decoder's worldview filter so features whose
+                // worldview tag doesn't match are excluded.
+                dataSource.decoder.configure(undefined, {
+                    worldview: args[0],
+                } as any);
+                mapView.update();
+                break;
+            }
+            case "setRuntimeSettingBool":
+            case "setRuntimeSettingString": {
+                // Generic runtime setting — key/value pair. Mostly affects
+                // platform-specific behaviour we don't model; store on
+                // mapView for downstream consumers.
+                const key = args[0];
+                const value = args[1];
+                if (key) {
+                    if (!(mapView as any).runtimeSettings) (mapView as any).runtimeSettings = {};
+                    (mapView as any).runtimeSettings[key] = value;
+                }
+                break;
+            }
+            case "setCustomTexture": {
+                // Mapbox HD: attach a named texture to the style for use by
+                // pattern paints. Best-effort: register in the sprite atlas
+                // under the given name so subsequent pattern paints can find it.
+                const name = args[0];
+                const image = args[1];
+                if (name && image && typeof document !== 'undefined') {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const img: any = image;
+                        canvas.width = img.width ?? img.naturalWidth ?? 32;
+                        canvas.height = img.height ?? img.naturalHeight ?? 32;
+                        const ctx = canvas.getContext('2d')!;
+                        if (img.data) {
+                            const id = ctx.createImageData(canvas.width, canvas.height);
+                            id.data.set(new Uint8ClampedArray(img.data));
+                            ctx.putImageData(id, 0, 0);
+                        } else if (img instanceof HTMLImageElement || img instanceof HTMLCanvasElement) {
+                            ctx.drawImage(img, 0, 0);
+                        }
+                        dataSource.addImage(name, canvas);
+                    } catch {}
+                }
+                break;
+            }
             default:
                 break;
         }
@@ -453,9 +792,16 @@ describe("MBStyleDataSource render-tests compatibility", function () {
     for (const entry of SUBSET) {
         const metadata = entry.style.metadata?.test ?? {};
         const skipReasons = metadata["skip-test"] ?? [];
-        const shouldSkip = skipReasons.some(
-            (r: any) => r["platform-tag-contains"] === "",
-        );
+        // Determine current platform once.
+        let platformTag = "";
+        try { platformTag = getPlatform() ?? ""; } catch {}
+        // A skip-test entry matches if its `platform-tag-contains` value is
+        // a substring of our current platform tag. An empty value ("")
+        // matches all platforms.
+        const shouldSkip = skipReasons.some((r: any) => {
+            const tag = r["platform-tag-contains"] ?? "";
+            return typeof tag === 'string' && platformTag.includes(tag);
+        });
 
         const testFn = shouldSkip ? it.skip : it;
 
@@ -465,10 +811,32 @@ describe("MBStyleDataSource render-tests compatibility", function () {
             let mapView: MapView | undefined;
 
             try {
-                const imageThreshold =
-                    typeof metadata["image-threshold"] === "number"
-                        ? metadata["image-threshold"]
-                        : 0.001;
+                // image-threshold may be:
+                //   - a number (uniform threshold)
+                //   - an array of { platform-tag-contains, threshold } (per-platform)
+                // Default to 0.001 (more lenient than mapbox's 0.00015 to
+                // account for rendering engine differences).
+                let imageThreshold = 0.001;
+                const rawThreshold = metadata["image-threshold"];
+                if (typeof rawThreshold === "number") {
+                    imageThreshold = rawThreshold;
+                } else if (Array.isArray(rawThreshold)) {
+                    // Per-platform: find the entry matching our platform, or
+                    // the default (empty tag).
+                    const platform = getPlatform();
+                    let fallback: number | undefined;
+                    for (const entry of rawThreshold) {
+                        const tag = entry["platform-tag-contains"] ?? "";
+                        if (tag === "") fallback = entry.threshold;
+                        if (platform && typeof platform === 'string' && platform.includes(tag)) {
+                            imageThreshold = entry.threshold;
+                            break;
+                        }
+                    }
+                    if (fallback !== undefined && imageThreshold === 0.001) {
+                        imageThreshold = fallback;
+                    }
+                }
                 const ibct = new RenderingTestHelper(this, {
                     module: "mbstyle-render",
                     imageThreshold,
@@ -477,6 +845,15 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 canvas = document.createElement("canvas");
                 canvas.width = metadata.width ?? 128;
                 canvas.height = metadata.height ?? 128;
+
+                // Pin the global label fade duration to the test's requested
+                // value so opacity transitions match `expected.png` timing.
+                if (metadata.fadeDuration !== undefined) {
+                    try {
+                        const { setFadeDuration } = await import("../src/PlacementEngine");
+                        setFadeDuration(metadata.fadeDuration);
+                    } catch {}
+                }
 
                 // Use flywave's bundled Default FontCatalog for text rendering.
                 // The mapbox PBF glyphs are not compatible with flywave's BMFont/MSDF format.
@@ -492,9 +869,55 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 });
 
                 const style = localizeStyle(entry.style);
+                // Apply scaleFactor metadata — multiplies icon-size and
+                // text-size to simulate HD/SD display scaling.
+                const scaleFactor = metadata.scaleFactor ?? 1;
+                if (scaleFactor !== 1 && style.layers) {
+                    for (const layer of style.layers as any[]) {
+                        if (!layer.layout) continue;
+                        if (layer.layout['icon-size'] !== undefined) {
+                            layer.layout['icon-size'] = Number(layer.layout['icon-size']) * scaleFactor;
+                        }
+                        if (layer.layout['text-size'] !== undefined) {
+                            layer.layout['text-size'] = Number(layer.layout['text-size']) * scaleFactor;
+                        }
+                    }
+                }
                 const dataSource = new MBStyleDataSource({ style });
 
                 await mapView.addDataSource(dataSource);
+
+                // If the style has a glyphs URL, build a real mapbox-font
+                // FontCatalog from PBF SDF glyphs and inject it — replacing
+                // flywave's default font so text matches the mapbox baselines.
+                if (style.glyphs) {
+                    try {
+                        const { buildFontCatalogFromPBF } = await import("../src/MBFontCatalogBuilder");
+                        const { parseGlyphPBF } = await import("../src/GlyphPBFParser");
+                        const fontName = "Open Sans Regular";
+                        const glyphs = new Map<number, any>();
+                        const glyphsUrl = style.glyphs as string;
+                        for (let range = 0; range < 2; range++) {
+                            const start = range * 256;
+                            const end = start + 255;
+                            const url = glyphsUrl
+                                .replace('{fontstack}', encodeURIComponent(fontName))
+                                .replace('{range}', `${start}-${end}`)
+                                .replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/');
+                            try {
+                                const resp = await fetch(url);
+                                if (!resp.ok) continue;
+                                const fontstack = parseGlyphPBF(await resp.arrayBuffer());
+                                if (!fontstack) continue;
+                                for (const [id, g] of fontstack.glyphs) glyphs.set(id, g);
+                            } catch { continue; }
+                        }
+                        if (glyphs.size > 0) {
+                            const catalog = buildFontCatalogFromPBF(fontName, glyphs);
+                            mapView.setFontCatalog("default", catalog);
+                        }
+                    } catch {}
+                }
 
                 // Enable collision-box debug overlay when the test requests it.
                 if (metadata.collisionDebug) {
@@ -508,6 +931,14 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 }
                 if (metadata.showLayers3DWireframe) {
                     dataSource.setLayers3DWireframe(true);
+                }
+                if (metadata.showLayers2DWireframe) {
+                    dataSource.setLayers2DWireframe(true);
+                }
+
+                // mapMode: 'static' = disable interaction; 'tile' = single-tile mode.
+                if (metadata.mapMode) {
+                    (dataSource as any).__mapMode = metadata.mapMode;
                 }
 
                 await renderFrames(mapView, dataSource, 5);
@@ -539,14 +970,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
 // These are handled in the default case of processOperations above,
 // but we list them here for documentation. The actual handling is inline.
 // Remaining no-op operations (from frequency analysis):
-// - setColorTheme (8): best-effort, no theme system
-// - check (10): test assertion, skip
-// - forceRenderCached (7): cache control, skip
-// - pinBooleanTransitionProgress (4): transition pinning, skip
 // - addCustomLayer/addCustomSource (16): custom layer/source, skip
-// - removeSource/removeModel/removeImport (6): cleanup, skip
-// - setSize (2): canvas resize, handled by metadata
-// - setSlot/moveImport/addImport/updateImport/removeImport (8): import management
-// - setRenderWorldCopies/setWorldview/setRuntimeSettingBool/setCustomTexture (4): settings
-// - rotateTo/resetNorth/resetNorthPitch (3): camera animation
-// - pauseSource/on/updateFakeCanvas/updateGeoJSONData (4): source control
+// - setSlot/moveImport/addImport/updateImport (6): import slot management
+// - on/updateFakeCanvas (2): event listener / fake canvas control
+// - addImport/updateImport now handled inline

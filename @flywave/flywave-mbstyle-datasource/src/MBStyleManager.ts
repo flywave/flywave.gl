@@ -47,8 +47,67 @@ export class MBStyleManager {
         } else {
             this.m_style = { ...style };
         }
+        // Fetch any URL-based imports first so mergeImports() can include
+        // their sources/layers/lights/etc. alongside inline imports.
+        await this.fetchUrlImports();
         this.mergeImports();
         this.resolveSources();
+    }
+
+    /**
+     * For each entry in `style.imports` that uses URL form (no inline `data`),
+     * fetch the referenced style JSON and attach it as `imp.data` so the
+     * subsequent synchronous `mergeImports()` call can fold it in. URL-form
+     * imports are how Mapbox HD styles reference base maps
+     * (e.g. `mapbox://styles/mapbox/streets-v12`).
+     *
+     * `mapbox://` URLs are rewritten to the public styles API and have the
+     * access token appended; any other URL is fetched verbatim. Failures are
+     * silent — the import is skipped, mirroring Mapbox's tolerance for
+     * missing base styles.
+     */
+    private async fetchUrlImports(): Promise<void> {
+        if (!this.m_style) return;
+        const imports = (this.m_style as any).imports;
+        if (!Array.isArray(imports) || imports.length === 0) return;
+
+        await Promise.all(imports.map(async (imp: any) => {
+            if (imp.data) return; // inline — already merged
+            const url = imp.url;
+            if (!url || typeof url !== 'string') return;
+            try {
+                const fetchUrl = this.resolveImportUrl(url);
+                const resp = await fetch(fetchUrl);
+                if (!resp.ok) return;
+                const json = await resp.json();
+                // Wrap the imported style as the `data` slot that mergeImports
+                // expects (a partial StyleSpecification).
+                imp.data = json;
+            } catch {
+                // network / parse failure — silently skip
+            }
+        }));
+    }
+
+    /**
+     * Resolve an import URL: rewrite `mapbox://styles/...` to the public CDN
+     * and append the access token if known. Other URLs are returned unchanged.
+     */
+    private resolveImportUrl(url: string): string {
+        if (url.startsWith('mapbox://styles/')) {
+            const id = url.replace('mapbox://styles/', '');
+            const base = `https://api.mapbox.com/styles/v1/${id}`;
+            return this.m_accessToken ? `${base}?access_token=${this.m_accessToken}` : base;
+        }
+        if (url.startsWith('mapbox://')) {
+            const id = url.replace('mapbox://', '');
+            const base = `https://api.mapbox.com/${id}`;
+            return this.m_accessToken ? `${base}?access_token=${this.m_accessToken}` : base;
+        }
+        if (url.startsWith('local://')) {
+            return url.replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/');
+        }
+        return url;
     }
 
     /**
@@ -138,6 +197,12 @@ export class MBStyleManager {
                 attribution: (spec as any).attribution,
             };
             (resolved as any).scheme = scheme;
+            // Preserve source bounds (TileJSON `bounds` property) so the
+            // datasource can filter out tiles outside the valid area.
+            const bounds = (spec as any).bounds;
+            if (Array.isArray(bounds) && bounds.length === 4) {
+                (resolved as any).bounds = bounds;
+            }
             this.m_resolvedSources.set(sourceId, resolved);
         }
     }

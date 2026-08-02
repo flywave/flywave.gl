@@ -41,6 +41,7 @@
         "@flywave/flywave-utils": "workspace:*",
         "@flywave/flywave-fetch": "workspace:*",
         "@flywave/flywave-lines": "workspace:*",
+        "@flywave/flywave-text-canvas": "workspace:*",
         "earcut": "catalog:"
     },
     "devDependencies": {

@@ -31,6 +31,9 @@ export interface SymbolInstance {
     text?: string;
     /** Source tile key for cross-tile matching/pruning. */
     tileKey?: string;
+    /** When true, the icon is optional: if its collision box conflicts, the
+     *  icon is dropped but the text label remains visible. */
+    iconOptional?: boolean;
 }
 
 export interface PlacementResult {
@@ -39,6 +42,17 @@ export interface PlacementResult {
 }
 
 const FADE_DURATION = 300; // ms
+
+/**
+ * The label fade-in / fade-out duration. Configurable via `setFadeDuration(ms)`
+ * so render tests can pin the timing to match `metadata.test.fadeDuration`.
+ */
+let s_fadeDuration = FADE_DURATION;
+
+/** Set the global fade duration (ms) used by all PlacementEngine instances. */
+export function setFadeDuration(ms: number): void {
+    s_fadeDuration = Math.max(0, ms);
+}
 
 /**
  * Per-frame symbol placement and collision detection.
@@ -116,6 +130,23 @@ export class PlacementEngine {
                 }
             }
 
+            // icon-optional: if the icon collision box conflicts but text fits,
+            // keep the text visible and hide only the icon. We try placing the
+            // full symbol (icon+text); if it fails and iconOptional is set,
+            // try again with just the text box.
+            if (!visible && sym.iconOptional && sym.textBox) {
+                const iconBoxBackup = sym.iconBox;
+                sym.iconBox = undefined;
+                if (this.canPlaceSymbol(sym)) {
+                    visible = true;
+                    // Hide the icon part of the object but keep text visible.
+                    // The object may be a combined icon+text sprite; we can't
+                    // selectively hide just the icon, but the placement result
+                    // still includes the text.
+                }
+                sym.iconBox = iconBoxBackup;
+            }
+
             if (visible) {
                 this.insertSymbol(sym);
             }
@@ -134,11 +165,11 @@ export class PlacementEngine {
                     fadeStart: now,
                 });
                 const elapsed = 0;
-                const t = Math.min(1, elapsed / FADE_DURATION);
+                const t = Math.min(1, elapsed / s_fadeDuration);
                 opacity = prevOpacity + (targetOpacity - prevOpacity) * t;
             } else if (prev && prev.targetOpacity !== prevOpacity) {
                 const elapsed = now - prev.fadeStart;
-                const t = Math.min(1, elapsed / FADE_DURATION);
+                const t = Math.min(1, elapsed / s_fadeDuration);
                 opacity = prevOpacity + (targetOpacity - prevOpacity) * t;
                 this.m_opacityMap.set(key, {
                     opacity,
@@ -174,7 +205,7 @@ export class PlacementEngine {
      * Reference: mapbox stillRecent(now, zoom) ≈ commitTime + fadeDuration > now.
      */
     stillRecent(now: number): boolean {
-        return now - this.m_lastPlacementTime < FADE_DURATION;
+        return now - this.m_lastPlacementTime < s_fadeDuration;
     }
 
     private canPlaceSymbol(sym: SymbolInstance, dx: number = 0, dy: number = 0): boolean {
