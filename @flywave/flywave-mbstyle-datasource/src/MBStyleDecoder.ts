@@ -359,13 +359,15 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             if (typeof data === 'string') {
                 // GeoJSON string from GeoJSONDataProvider
                 const geoJson = JSON.parse(data);
-                if (this.m_geoJsonAdapter.canProcess(geoJson)) {
-                    this.m_geoJsonAdapter.process(geoJson, decodeInfo, processor);
+                const normalized = MBStyleDecoder.normalizeGeoJson(geoJson);
+                if (this.m_geoJsonAdapter.canProcess(normalized)) {
+                    this.m_geoJsonAdapter.process(normalized, decodeInfo, processor);
                 }
             } else if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
                 // GeoJSON object directly
-                if (this.m_geoJsonAdapter.canProcess(data)) {
-                    this.m_geoJsonAdapter.process(data, decodeInfo, processor);
+                const normalized = MBStyleDecoder.normalizeGeoJson(data);
+                if (this.m_geoJsonAdapter.canProcess(normalized)) {
+                    this.m_geoJsonAdapter.process(normalized, decodeInfo, processor);
                 }
             } else if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
                 // MVT binary data
@@ -377,5 +379,31 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
 
         return emitter.getDecodedTile();
+    }
+
+    /**
+     * Normalize bare GeoJSON geometries (LineString, Polygon, Point, ...) and
+     * Feature objects into a FeatureCollection, which is what the adapters
+     * accept. Mapbox-style sources commonly store a single bare geometry.
+     */
+    private static normalizeGeoJson(data: any): any {
+        if (!data || typeof data !== 'object') return data;
+        if (data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+            return data;
+        }
+        if (data.type === 'Feature') {
+            return { type: 'FeatureCollection', features: [data] };
+        }
+        const geometryTypes = new Set([
+            'Point', 'MultiPoint', 'LineString', 'MultiLineString',
+            'Polygon', 'MultiPolygon', 'GeometryCollection',
+        ]);
+        if (geometryTypes.has(data.type)) {
+            return {
+                type: 'FeatureCollection',
+                features: [{ type: 'Feature', geometry: data, properties: {} }],
+            };
+        }
+        return data;
     }
 }

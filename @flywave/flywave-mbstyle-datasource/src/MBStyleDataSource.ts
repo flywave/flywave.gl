@@ -1339,17 +1339,19 @@ export class MBStyleDataSource extends TileDataSource {
     private applyCameraSettings(style: StyleSpecification): void {
         if (!this.mapView) return;
 
-        const center = style.center;
-        const zoom = style.zoom;
+        // Mapbox render tests: the camera is driven by the style. Missing
+        // center defaults to [0,0]; missing zoom keeps the current zoom.
+        const center = style.center ?? [0, 0];
+        const zoom = typeof style.zoom === 'number' ? style.zoom : this.mapView.zoomLevel;
         const bearing = style.bearing ?? 0;
         const pitch = style.pitch ?? 0;
 
-        if (center && typeof zoom === 'number') {
+        try {
             // Import GeoCoordinates dynamically to avoid circular dependency issues
             const { GeoCoordinates } = require('@flywave/flywave-geoutils');
             const geoCoord = new GeoCoordinates(center[1], center[0]);
             this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom, bearing, pitch);
-        }
+        } catch {}
     }
 
     /**

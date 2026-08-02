@@ -417,15 +417,30 @@ export class MBStyleSymbolPlacement {
             if (!sym.object) continue;
             const tech = sym.object.userData?.technique;
             const zOrder = tech?._layout?.['symbol-z-order'] ?? 'auto';
+            const overlap = sym.allowOverlap;
             switch (zOrder) {
                 case 'viewport-y':
-                    sym.priority = sym.screenY;
-                    if (sym.object) sym.object.renderOrder = 1000 - sym.screenY * 0.01;
-                    break;
-                case 'source':
+                    // Mapbox: symbols are drawn in ascending viewport-y order so
+                    // the bottom-most symbol overlaps the ones above it. A higher
+                    // renderOrder draws later (on top); a lower placement priority
+                    // means the symbol is processed (and inserted) last.
+                    sym.priority = -sym.screenY;
+                    if (sym.object) sym.object.renderOrder = 1000 + sym.screenY * 0.01;
                     break;
                 case 'auto':
+                    // 'auto' behaves like 'viewport-y' when the symbols may
+                    // overlap (and no symbol-sort-key is set); otherwise it
+                    // falls back to source order (below).
+                    if (overlap) {
+                        sym.priority = -sym.screenY;
+                        if (sym.object) sym.object.renderOrder = 1000 + sym.screenY * 0.01;
+                    }
+                    break;
+                case 'source':
                 default:
+                    // 'source' (and line-placement 'auto'): draw in source
+                    // feature order — the object creation order already matches
+                    // the source order, so nothing to do.
                     break;
             }
         }

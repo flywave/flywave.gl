@@ -8,3 +8,4 @@ export * from "./TestDataUtils.web";
 export * from "./TestUtils";
 export * from "./rendering/RenderingTestHelper";
 export * from "./rendering/ReferenceImageLocator";
+export * from "./rendering/DomImageUtils";
