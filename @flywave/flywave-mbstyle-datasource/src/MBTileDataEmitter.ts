@@ -313,6 +313,9 @@ export class MBTileDataEmitter {
                 props.color = p['line-color'] ?? '#000000';
                 props.opacity = p['line-opacity'] ?? 1;
                 props.lineWidth = p['line-width'] ?? 1;
+                // Mapbox line-width/offset/dash values are in CSS pixels — the
+                // SolidLineMaterial converts them to world units via metricUnit.
+                props.metricUnit = 'Pixel';
                 props._translate = p['line-translate'] ?? [0, 0];
                 props._translateAnchor = p['line-translate-anchor'] ?? 'map';
                 // HD elevation reference: stored on the technique as

@@ -16,11 +16,8 @@ import {
     RenderingTestHelper,
     TestOptions,
     setReferenceImageResolver,
-    canvasToImageData,
-    loadImageData,
 } from "@flywave/flywave-test-utils";
 import { assert } from "chai";
-import * as THREE from "three";
 
 import { ALL_TESTS as INDEXED_TESTS } from "./render-tests-index";
 import { MBStyleDataSource } from "../src/MBStyleDataSource";
@@ -877,16 +874,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     pixelRatio: metadata.pixelRatio ?? 1,
                     tileCacheSize: 0,
                     fontCatalog: fontCatalogUrl,
-                    clipPlanesEvaluator: {
-                        minElevation: -1e9,
-                        maxElevation: 1e9,
-                        evaluateClipPlanes: () => ({
-                            near: 100,
-                            far: 1e9,
-                            minimum: -1e9,
-                            maximum: 1e9,
-                        }),
-                    } as any,
+                    logarithmicDepthBuffer: false,
                 });
 
                 const style = localizeStyle(entry.style);
@@ -910,13 +898,6 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 });
 
                 await mapView.addDataSource(dataSource);
-                if (process.env.WIDE_CLIP || (window as any).__karma__?.config?.args?.includes?.("wide-clip")) {
-                    try {
-                        mapView.camera.near = 1000;
-                        mapView.camera.far = 1000000000;
-                        mapView.camera.updateProjectionMatrix();
-                    } catch {}
-                }
 
                 // If the style has a glyphs URL, build real mapbox-font
                 // FontCatalogs from PBF SDF glyphs and inject them — replacing
@@ -989,143 +970,6 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 if (operations.length > 0) {
                     await processOperations(mapView, dataSource, operations);
                     await renderFrames(mapView, dataSource, 3);
-                }
-
-                if (process.env.DUMP_ACTUAL_PIXELS ||
-                    (window as any).__karma__?.config?.args?.includes?.("dump-actual-pixels")) {
-                    try {
-                        const imgData = await canvasToImageData(canvas);
-                        const d = imgData.data;
-                        let colored = 0;
-                        let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
-                        const hist = new Map<string, number>();
-                        for (let i = 0; i < d.length; i += 4) {
-                            const r = d[i], g = d[i + 1], b = d[i + 2];
-                            const key = `${r >> 4},${g >> 4},${b >> 4}`;
-                            hist.set(key, (hist.get(key) ?? 0) + 1);
-                            if (!(r < 10 && g < 10 && b < 10)) {
-                                colored++;
-                                const x = (i / 4) % canvas.width;
-                                const y = Math.floor((i / 4) / canvas.width);
-                                if (x < minX) minX = x;
-                                if (x > maxX) maxX = x;
-                                if (y < minY) minY = y;
-                                if (y > maxY) maxY = y;
-                            }
-                        }
-                        const top = [...hist.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
-                        console.log(`[DUMP] ${entry.name}: colored=${colored} bbox=(${minX},${minY},${maxX},${maxY}) top=${JSON.stringify(top)}`);
-                        const refUrl = `/base/@flywave/flywave-mbstyle-datasource/test/render-tests/${entry.name}/expected.png`;
-                        const refImg = await loadImageData(refUrl);
-                        const rd = refImg.data;
-                        const refHist = new Map<string, number>();
-                        for (let i = 0; i < rd.length; i += 4) {
-                            const key = `${rd[i] >> 4},${rd[i + 1] >> 4},${rd[i + 2] >> 4}`;
-                            refHist.set(key, (refHist.get(key) ?? 0) + 1);
-                        }
-                        const refTop = [...refHist.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
-                        console.log(`[DUMP] ${entry.name}: REF ${refImg.width}x${refImg.height} top=${JSON.stringify(refTop)} p0=(${d[0]},${d[1]},${d[2]}) refp0=(${rd[0]},${rd[1]},${rd[2]})`);
-                        try {
-                            const { compareImages } = await import("@flywave/flywave-test-utils");
-                            const cmp = compareImages(imgData, refImg, { threshold: 0.1 });
-                            console.log(`[DUMP] ${entry.name}: pixelmatch=${cmp.mismatchedPixels}`);
-                        } catch (e) { console.log(`[DUMP] pixelmatch err ${e}`); }
-                        {
-                            const samples: string[] = [];
-                            for (let sy = 0; sy < canvas.height; sy += 32) {
-                                for (let sx = 0; sx < canvas.width; sx += 32) {
-                                    const idx = (sy * canvas.width + sx) * 4;
-                                    if (!(d[idx] > 245 && d[idx + 1] > 245 && d[idx + 2] > 245)) {
-                                        samples.push(`(${sx},${sy})=${d[idx]},${d[idx + 1]},${d[idx + 2]}`);
-                                    }
-                                }
-                            }
-                            console.log(`[DUMP] ${entry.name}: nonwhiteSamples=${samples.slice(0, 10).join(" ")}`);
-                        }
-                        try {
-                            const ds = dataSource as any;
-                            const delegateName = ds.m_delegatingProvider?.delegate?.constructor?.name;
-                            const tileDataSources = ds.m_mapView?.m_tileDataSources?.length;
-                            const ready = typeof dataSource.ready === 'function' ? dataSource.ready() : dataSource.ready;
-                            console.log(`[DUMP] ${entry.name}: ready=${ready} delegate=${delegateName} currentSourceId=${ds.m_currentSourceId} maxDataLevel=${dataSource.maxDataLevel} minDataLevel=${dataSource.minDataLevel} mapviewDS=${tileDataSources}`);
-                            const scene = ds.m_mapView?.scene;
-                            if (scene) {
-                                let objs = 0;
-                                let sprites = 0;
-                                const details: string[] = [];
-                                scene.traverse((o: any) => {
-                                    objs++;
-                                    if (o.isSprite) sprites++;
-                                    if (o.isMesh || o.isLine || o.isSprite) {
-                                        if (o.userData?.technique) {
-                                            const wp = new THREE.Vector3();
-                                            o.getWorldPosition(wp);
-                                            const geom: any = o.geometry;
-                                            const posAttr = geom?.attributes?.position;
-                                            const box = o.geometry?.boundingBox;
-                                            const mat: any = o.material;
-                                            details.push(`${o.userData.technique.name}:${o.type} pos=(${o.position.x.toFixed(0)},${o.position.y.toFixed(0)},${o.position.z.toFixed(0)}) nVerts=${posAttr?.count ?? "?"} matOp=${mat?.opacity ?? "?"} matTrans=${mat?.transparent ?? "?"} matColor=${mat?.color ? mat.color.getHexString() : "?"}`);
-                                            if (o.userData.technique.name === "solid-line" && posAttr?.count) {
-                                                const verts: number[] = [];
-                                                for (let vi = 0; vi < Math.min(posAttr.count, 6); vi++) {
-                                                    verts.push(posAttr.getX(vi).toFixed(0), posAttr.getY(vi).toFixed(0), posAttr.getZ(vi).toFixed(0));
-                                                }
-                                                details.push(`verts=[${verts.join(" ")}]`);
-                                            }
-                                        } else if (o.type) {
-                                            details.push(`${o.type}`);
-                                        }
-                                    }
-                                });
-                                console.log(`[DUMP] ${entry.name}: sceneObjects=${objs} sprites=${sprites} detail=${details.slice(0, 14).join(" | ")}`);
-                                const cam = ds.m_mapView?.camera;
-                                if (cam) {
-                                    const gc = ds.m_mapView?.geoCenter;
-                                    console.log(`[DUMP] ${entry.name}: geoCenter=(${gc?.latitude?.toFixed?.(2)},${gc?.longitude?.toFixed?.(2)}) zoom=${mapView.zoomLevel} camera pos=(${cam.position.x.toFixed(0)},${cam.position.y.toFixed(0)},${cam.position.z.toFixed(0)}) near=${cam.near} far=${cam.far}`);
-                                }
-                            }
-                            try {
-                                const vt = ds.m_mapView?.m_visibleTiles;
-                                const list = vt?.dataSourceTileList ?? [];
-                                const info = list.map((e: any) => `ds=${e.dataSource?.name} z=${e.zoomLevel} visible=${e.visibleTiles?.length ?? 0} rendered=${e.renderedTiles?.size ?? 0} loading=${e.numTilesLoading}`).join(" | ");
-                                console.log(`[DUMP] ${entry.name}: zoomLevel=${mapView.zoomLevel} renderList=[${info}]`);
-                                for (const e of list) {
-                                    for (const tile of e.visibleTiles ?? []) {
-                                        console.log(`[DUMP] ${entry.name}: vTile=${tile.tileKey?.level}-${tile.tileKey?.column}-${tile.tileKey?.row} objects=${tile.objects?.length ?? 0} decoded=${tile.decodedTile ? "yes" : "no"} loaderState=${tile.tileLoader?.state ?? "none"} loaderName=${tile.tileLoader?.constructor?.name}`);
-                                    }
-                                }
-                            } catch (e) { console.log(`[DUMP] renderList err ${e}`); }
-                            try {
-                                const dec = dataSource.decoder as any;
-                                console.log(`[DUMP] ${entry.name}: decoder.m_layerEvaluator=${dec.m_layerEvaluator ? "set" : "UNDEFINED"} currentSourceId=${dec.m_currentSourceId}`);
-                                const provider = ds.m_delegatingProvider?.delegate;
-                                const { TileKey } = await import("@flywave/flywave-geoutils");
-                                const tk = new TileKey(1, 0, 0);
-                                const payload = await provider?.getTile?.(tk);
-                                const dt = await dec.decodeTile?.(payload, tk, (ds.m_mapView as any).projection);
-                                console.log(`[DUMP] ${entry.name}: manualDecode payloadType=${typeof payload} techniques=${dt?.techniques?.length ?? "?"} geometries=${dt?.geometries?.length ?? "?"}`);
-                                if (dt) {
-                                    const tNames = (dt.techniques ?? []).map((t: any) => `${t.name}:${t._layerId ?? ""}`).join(",");
-                                    const gTypes = (dt.geometries ?? []).map((g: any) => `${g.type ?? "?"}(${g.positions?.buffer?.byteLength ?? 0}b)`).join(",");
-                                    console.log(`[DUMP] ${entry.name}: manualDecode techs=[${tNames}] geoms=[${gTypes}] poi=${(dt as any).poiGeometries?.length ?? 0} textGeom=${(dt as any).textGeometries?.length ?? 0}`);
-                                }
-                            } catch (e) { console.log(`[DUMP] decoder err ${e}`); }
-                            try {
-                                const mv = mapView as any;
-                                const info = mv.renderer?.info?.render;
-                                const gl = mv.renderer?.getContext?.();
-                                const rteCam = mv.m_rteCamera;
-                                console.log(`[DUMP] ${entry.name}: renderCalls=${info?.calls} triangles=${info?.triangles} clearColor=${mv.clearColor} sameCanvas=${gl?.canvas === canvas} rtePos=(${rteCam?.position?.x?.toFixed?.(0)},${rteCam?.position?.y?.toFixed?.(0)},${rteCam?.position?.z?.toFixed?.(0)})`);
-                                if (gl) {
-                                    const px = new Uint8Array(4);
-                                    gl.readPixels(128, 128, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-                                    console.log(`[DUMP] ${entry.name}: readPixels(center)=(${px[0]},${px[1]},${px[2]},${px[3]})`);
-                                }
-                            } catch (e) { console.log(`[DUMP] rendererr err ${e}`); }
-                        } catch (e) { console.log(`[DUMP] state err ${e}`); }
-                    } catch (e) {
-                        console.log(`[DUMP] ${entry.name}: error ${e}`);
-                    }
                 }
 
                 // Mapbox's image-threshold is the max FRACTION of mismatched

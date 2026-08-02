@@ -29,6 +29,13 @@ export class MBExpressionEngine {
         ctx: MBExpressionContext
     ): MBValue {
         if (!isExprArray(raw)) {
+            // Legacy "function" paint/layout values use the object form
+            // `{ base?, type?, stops: [[zoom, value], ...] }`. Evaluate against
+            // the current zoom so callers receive concrete values instead of
+            // the raw object (which otherwise becomes NaN downstream).
+            if (raw !== null && typeof raw === 'object' && !Array.isArray(raw) && Array.isArray(raw.stops)) {
+                return MBExpressionEngine.evaluateLegacyStops(raw, ctx);
+            }
             return raw;
         }
         const key = JSON.stringify(raw);
@@ -38,6 +45,55 @@ export class MBExpressionEngine {
             this.expressionCache.set(key, compiled);
         }
         return compiled(ctx);
+    }
+
+    /**
+     * Evaluate a legacy Mapbox GL "function" style value of the form
+     * `{ base?, type?, stops: [[zoom, value], ...] }`. `type` may be
+     * `"exponential"` (default, interpolated), `"interval"` (step) or
+     * `"categorical"`. When a `property` is present the stops are keyed by a
+     * feature property instead of zoom; only the zoom-based form is evaluated
+     * here (feature-property functions are rare in the test corpus).
+     */
+    private static evaluateLegacyStops(raw: any, ctx: MBExpressionContext): MBValue {
+        const stops: Array<[number, any]> = raw.stops;
+        if (!Array.isArray(stops) || stops.length === 0) return raw;
+        const type = raw.type ?? 'exponential';
+        const property = raw.property;
+
+        if (property !== undefined) {
+            // Feature-property function: find the matching stop by property value.
+            const input = ctx.feature?.properties?.[property];
+            for (const [k, v] of stops) {
+                if (String(k) === String(input)) return v;
+            }
+            const last = stops[stops.length - 1];
+            return last?.[1];
+        }
+
+        const input = ctx.zoom;
+        if (input <= stops[0][0]) return stops[0][1];
+        if (input >= stops[stops.length - 1][0]) return stops[stops.length - 1][1];
+
+        for (let i = 0; i < stops.length - 1; i++) {
+            if (input >= stops[i][0] && input < stops[i + 1][0]) {
+                const a = stops[i][1];
+                const b = stops[i + 1][1];
+                if (type === 'interval') return a;
+                if (type === 'categorical') return a;
+                const t = (input - stops[i][0]) / (stops[i + 1][0] - stops[i][0]);
+                const base = raw.base ?? 1;
+                const curve = base !== 1 ? (Math.pow(base, t) - 1) / (base - 1) : t;
+                if (typeof a === 'number' && typeof b === 'number') {
+                    return a + (b - a) * curve;
+                }
+                if (typeof a === 'string' && typeof b === 'string' && a[0] === '#') {
+                    return this.interpolateColor(a, b, curve);
+                }
+                return a;
+            }
+        }
+        return stops[stops.length - 1][1];
     }
 
     static clearCache() {

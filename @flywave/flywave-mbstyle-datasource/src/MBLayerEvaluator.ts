@@ -284,7 +284,15 @@ export const LAYOUT_DEFAULTS: Record<string, Record<string, any>> = {
 };
 
 function isExpr(v: any): v is ExpressionSpecification {
-    return Array.isArray(v) && typeof v[0] === 'string';
+    if (Array.isArray(v) && typeof v[0] === 'string') return true;
+    // Legacy "function" form `{ base?, type?, stops: [...] }` — must go
+    // through the expression engine so paint/layout get concrete values.
+    return (
+        v !== null &&
+        typeof v === 'object' &&
+        !Array.isArray(v) &&
+        Array.isArray((v as any).stops)
+    );
 }
 
 export class MBLayerEvaluator {
