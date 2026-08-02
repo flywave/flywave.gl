@@ -47,6 +47,18 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         // 使用更现代的浏览器配置
         browsers: ["ChromeDebug"],
         customLaunchers: {
+            ChromeHeadlessNoSandbox: {
+                base: "ChromeHeadless",
+                flags: [
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--use-gl=angle",
+                    "--use-angle=swiftshader",
+                    "--enable-unsafe-swiftshader",
+                    "--enable-webgl",
+                    "--ignore-gpu-blocklist"
+                ]
+            },
             ChromeDebug: {
                 base: "Chrome",
                 flags: [
@@ -82,7 +94,7 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             // "@flywave/flywave-utils/**/*.ts",
             // "@flywave/flywave-geoutils/**/*.ts",
             // "@flywave/flywave-map-controls/**/*.ts",
-            "@flywave/flywave-3dtile-render/**/*.ts",
+            "@flywave/flywave-mbstyle-datasource/test/MBStyleCompatRenderTest.ts",
             // "@flywave/flywave-mapview/**/*.ts",
             // "@flywave/flywave-mapview-decoder/**/*.ts",
             // "@flywave/flywave-materials/**/*.ts",
@@ -117,6 +129,20 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             {
                 pattern: "@flywave/flywave-3dtile-render/test/data/**/*.*",
                 included: false
+            },
+            {
+                pattern: "@flywave/flywave-map-theme/resources/fonts/**/*.*",
+                included: false
+            },
+            {
+                pattern: "@flywave/flywave-mbstyle-datasource/test/render-tests/**/expected.png",
+                included: false,
+                served: true
+            },
+            {
+                pattern: "@flywave/flywave-mbstyle-datasource/test/rendering/integration/**/*.*",
+                included: false,
+                served: true
             }
             // {
             //     pattern: "@flywave/flywave-mapview/test/resources/*.*",
@@ -139,7 +165,6 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         // Files that are to be excluded from the list included above.
         exclude: [
             "@flywave/**/node_modules/**/*",
-            "**/test/rendering/**/*.*",
             "@flywave/flywave-test-utils/lib/rendering/RenderingTestResultServer.ts",
             "@flywave/flywave-test-utils/lib/rendering/RenderingTestResultCli.ts",
             "@flywave/flywave-datasource-protocol/test/ThemeTypingsTest.ts",
@@ -150,7 +175,8 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
                 reporter: "html",
                 ui: "bdd",
                 timeout: 5000
-            }
+            },
+            args: process.env.KARMA_ARGS ? process.env.KARMA_ARGS.split(" ") : []
         },
         // 预处理配置
         preprocessors: {
@@ -180,6 +206,7 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         proxies: {
             "/draco": "/base/node_modules/three/examples/jsm/libs/draco",
             "/@flywave": "/base/@flywave",
+            "/resources/fonts/": "/base/@flywave/flywave-map-theme/resources/fonts/",
             "/@here/harp-fontcatalog/resources/": isMapSdk
                 ? "/base/@flywave/flywave-text-canvas/resources/fonts/"
                 : "/base/node_modules/@here/harp-fontcatalog/resources/"
@@ -230,6 +257,8 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
                 ],
                 fallback: {
                     fs: false,
+                    path: require.resolve("path-browserify"),
+                    url: require.resolve("url/"),
                     querystring: require.resolve("querystring-es3"),
                     process: require.resolve("process/browser"),
                     os: require.resolve("os-browserify/browser"),

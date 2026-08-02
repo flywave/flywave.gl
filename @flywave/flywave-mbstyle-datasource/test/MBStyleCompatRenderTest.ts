@@ -15,12 +15,21 @@ import {
     getPlatform,
     RenderingTestHelper,
     TestOptions,
+    setReferenceImageResolver,
 } from "@flywave/flywave-test-utils";
 import { assert } from "chai";
-import * as fs from "fs";
-import * as path from "path";
 
+import { ALL_TESTS as INDEXED_TESTS } from "./render-tests-index";
 import { MBStyleDataSource } from "../src/MBStyleDataSource";
+import { MBStyleDecoder } from "../src/MBStyleDecoder";
+
+// Compare against the local expected.png that ships with each ported
+// render-test fixture (karma serves them under /base/), instead of the
+// default `/reference-image?` endpoint which needs an external result server.
+setReferenceImageResolver((imageProps) => {
+    const name = imageProps.name ?? "";
+    return `/base/@flywave/flywave-mbstyle-datasource/test/render-tests/${name}/expected.png`;
+});
 
 const INCOMPATIBLE_TYPES = new Set([
     "terrain",
@@ -38,38 +47,13 @@ interface TestEntry {
     style: any;
 }
 
+/**
+ * In the karma/browser environment Node's fs is unavailable, so the test list
+ * is loaded from the pre-generated ./render-tests-index module (see
+ * scripts/generate-mbstyle-test-index.js).
+ */
 function discoverTests(): TestEntry[] {
-    const root = path.join(__dirname, "..", "render-tests");
-    const results: TestEntry[] = [];
-
-    function scanDir(dir: string, prefix: string): void {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        const stylePath = path.join(dir, "style.json");
-        if (fs.existsSync(stylePath)) {
-            try {
-                const style = JSON.parse(fs.readFileSync(stylePath, "utf8"));
-                const layers = style.layers ?? [];
-                const skip = layers.some(
-                    (l: any) => INCOMPATIBLE_TYPES.has(l.type),
-                );
-                if (!skip) {
-                    results.push({ name: prefix, stylePath, style });
-                }
-            } catch {}
-            return;
-        }
-        for (const e of entries) {
-            if (!e.isDirectory()) continue;
-            scanDir(path.join(dir, e.name), prefix ? `${prefix}/${e.name}` : e.name);
-        }
-    }
-
-    const topDirs = fs.readdirSync(root, { withFileTypes: true });
-    for (const td of topDirs) {
-        if (!td.isDirectory()) continue;
-        scanDir(path.join(root, td.name), td.name);
-    }
-    return results;
+    return INDEXED_TESTS.map((t) => ({ name: t.name, stylePath: "", style: t.style }));
 }
 
 const ALL_TESTS = discoverTests();
@@ -77,7 +61,7 @@ console.log(`[MBStyleCompat] ${ALL_TESTS.length} compatible tests loaded`);
 
 function localizeUrl(u: string): string {
     if (!u.startsWith("local://")) return u;
-    const ROOT = "/base/mapbox-gl-js/test/integration";
+    const ROOT = "/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration";
     return u
         .replace(/^local:\/\/data\//, `${ROOT}/data/`)
         .replace(/^local:\/\/tiles\//, `${ROOT}/tiles/`)
@@ -118,6 +102,11 @@ async function renderFrames(
             if (frames >= n) {
                 mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
                 resolve();
+            } else {
+                // Re-request a frame so the render loop keeps producing
+                // AfterRender events even when the scene is static (the loop
+                // otherwise stops once no update is pending).
+                mapView.update();
             }
         };
         mapView.addEventListener(MapViewEventNames.AfterRender, handler);
@@ -785,9 +774,28 @@ async function processOperations(
 }
 
 describe("MBStyleDataSource render-tests compatibility", function () {
-    const SUBSET = process.env.TEST_SUBSET
-        ? ALL_TESTS.slice(0, parseInt(process.env.TEST_SUBSET))
-        : ALL_TESTS;
+    // TEST_FILTER = substring(s) matched against the test name (e.g.
+    // "hillshade-buffer" or "symbol-z-order/viewport-y"). Read from env (node
+    // side, for ts-mocha) or karma client args (browser side).
+    const envFilter = process.env.TEST_FILTER;
+    const karmaFilters = (window as any).__karma__?.config?.args
+        ?.filter?.((a: string) => a.startsWith("filter="))
+        .map((a: string) => a.slice("filter=".length));
+    const nameFilters = [
+        ...(envFilter ? [envFilter] : []),
+        ...(karmaFilters ?? []),
+    ];
+    let SUBSET = ALL_TESTS;
+    if (nameFilters.length > 0) {
+        SUBSET = ALL_TESTS.filter((e) =>
+            nameFilters.some((f) => e.name.includes(f)),
+        );
+        console.log(
+            `[MBStyleCompat] filtered to ${SUBSET.length} tests matching "${nameFilters.join('", "')}"`,
+        );
+    } else if (process.env.TEST_SUBSET) {
+        SUBSET = ALL_TESTS.slice(0, parseInt(process.env.TEST_SUBSET));
+    }
 
     for (const entry of SUBSET) {
         const metadata = entry.style.metadata?.test ?? {};
@@ -883,38 +891,52 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         }
                     }
                 }
-                const dataSource = new MBStyleDataSource({ style });
+                const dataSource = new MBStyleDataSource({
+                    style,
+                    decoder: new MBStyleDecoder(),
+                });
 
                 await mapView.addDataSource(dataSource);
 
-                // If the style has a glyphs URL, build a real mapbox-font
-                // FontCatalog from PBF SDF glyphs and inject it — replacing
+                // If the style has a glyphs URL, build real mapbox-font
+                // FontCatalogs from PBF SDF glyphs and inject them — replacing
                 // flywave's default font so text matches the mapbox baselines.
                 if (style.glyphs) {
                     try {
                         const { buildFontCatalogFromPBF } = await import("../src/MBFontCatalogBuilder");
                         const { parseGlyphPBF } = await import("../src/GlyphPBFParser");
-                        const fontName = "Open Sans Regular";
-                        const glyphs = new Map<number, any>();
                         const glyphsUrl = style.glyphs as string;
-                        for (let range = 0; range < 2; range++) {
-                            const start = range * 256;
-                            const end = start + 255;
-                            const url = glyphsUrl
-                                .replace('{fontstack}', encodeURIComponent(fontName))
-                                .replace('{range}', `${start}-${end}`)
-                                .replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/');
-                            try {
-                                const resp = await fetch(url);
-                                if (!resp.ok) continue;
-                                const fontstack = parseGlyphPBF(await resp.arrayBuffer());
-                                if (!fontstack) continue;
-                                for (const [id, g] of fontstack.glyphs) glyphs.set(id, g);
-                            } catch { continue; }
+                        // Collect the font stacks actually referenced by the
+                        // style's symbol layers (fall back to a sensible default).
+                        const fontStacks = new Set<string>();
+                        for (const layer of (style.layers ?? []) as any[]) {
+                            const tf = layer.layout?.['text-font'];
+                            if (Array.isArray(tf)) {
+                                for (const f of tf) fontStacks.add(f);
+                            }
                         }
-                        if (glyphs.size > 0) {
-                            const catalog = buildFontCatalogFromPBF(fontName, glyphs);
-                            mapView.setFontCatalog("default", catalog);
+                        if (fontStacks.size === 0) fontStacks.add("Open Sans Regular");
+                        for (const fontName of fontStacks) {
+                            const glyphs = new Map<number, any>();
+                            for (let range = 0; range < 2; range++) {
+                                const start = range * 256;
+                                const end = start + 255;
+                                const url = glyphsUrl
+                                    .replace('{fontstack}', encodeURIComponent(fontName))
+                                    .replace('{range}', `${start}-${end}`)
+                                    .replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
+                                try {
+                                    const resp = await fetch(url);
+                                    if (!resp.ok) continue;
+                                    const fontstack = parseGlyphPBF(await resp.arrayBuffer());
+                                    if (!fontstack) continue;
+                                    for (const [id, g] of fontstack.glyphs) glyphs.set(id, g);
+                                } catch { continue; }
+                            }
+                            if (glyphs.size > 0) {
+                                const catalog = buildFontCatalogFromPBF(fontName, glyphs);
+                                mapView.setFontCatalog(fontName, catalog);
+                            }
                         }
                     } catch {}
                 }
@@ -949,7 +971,16 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     await renderFrames(mapView, dataSource, 3);
                 }
 
-                await ibct.assertCanvasMatchesReference(canvas, entry.name);
+                // Mapbox's image-threshold is the max FRACTION of mismatched
+                // pixels allowed (e.g. 0.001 = 0.1%); convert it to a pixel
+                // count. pixelmatch's per-channel threshold is fixed at 0.1.
+                const maxMismatch = Math.ceil(
+                    (imageThreshold * canvas.width * canvas.height) || 0,
+                );
+                await ibct.assertCanvasMatchesReference(canvas, entry.name, {
+                    threshold: 0.1,
+                    maxMismatchedPixels: maxMismatch,
+                });
 
                 mapView.dispose();
             } finally {

@@ -7,6 +7,7 @@ import { Tile } from '@flywave/flywave-mapview';
 import { MapViewEventNames } from '@flywave/flywave-mapview';
 import {
     DataProvider,
+    ITileDecoder,
     TileDataSource,
     TileDataSourceOptions,
     TileFactory,
@@ -33,6 +34,10 @@ export interface MBStyleDataSourceParameters {
     storageLevelOffset?: number;
     minDisplayLevel?: number;
     maxDisplayLevel?: number;
+    /** In-process decoder (e.g. `new MBStyleDecoder()`) to bypass the worker
+     *  facade. Useful for karma/unit environments where the worker bundle is
+     *  not served. */
+    decoder?: ITileDecoder;
 }
 
 const MBSTYLE_DECODER_SERVICE_TYPE = 'mbstyle-vector-tile-decoder';
@@ -450,9 +455,10 @@ export class MBStyleDataSource extends TileDataSource {
         const options: TileDataSourceOptions = {
             tilingScheme: webMercatorTilingScheme,
             dataProvider: delegatingProvider,
+            decoder: params.decoder,
             concurrentDecoderServiceName:
-                params.concurrentDecoderServiceName ?? MBSTYLE_DECODER_SERVICE_TYPE,
-            concurrentDecoderScriptUrl: params.decoderScriptUrl,
+                params.decoder ? undefined : (params.concurrentDecoderServiceName ?? MBSTYLE_DECODER_SERVICE_TYPE),
+            concurrentDecoderScriptUrl: params.decoder ? undefined : params.decoderScriptUrl,
             minDataLevel: 1,
             maxDataLevel: 22,
             storageLevelOffset: params.storageLevelOffset ?? -1,
@@ -599,7 +605,7 @@ export class MBStyleDataSource extends TileDataSource {
                 let data: any = geoJsonSpec.data;
                 if (typeof data === 'string' && data.trim() !== '') {
                     try {
-                        const url = data.replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/');
+                        const url = data.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
                         const resp = await fetch(url);
                         data = await resp.json();
                     } catch (e) {
@@ -634,7 +640,7 @@ export class MBStyleDataSource extends TileDataSource {
                 const tiles = demSpec?.tiles ?? [];
                 const tileUrl = tiles[0] ?? source.tileUrls[0] ?? '';
                 if (tileUrl) {
-                    this.m_demTileUrl = tileUrl.replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/');
+                    this.m_demTileUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
                 }
                 break;
             }
@@ -646,7 +652,7 @@ export class MBStyleDataSource extends TileDataSource {
                 const tiles = rasterSpec?.tiles ?? [];
                 const tileUrl = tiles[0] ?? source.tileUrls[0] ?? '';
                 if (tileUrl) {
-                    const resolvedUrl = tileUrl.replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/');
+                    const resolvedUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
                     this.m_delegatingProvider.delegate = new RasterTileDataProvider(resolvedUrl);
                     this.m_currentSourceId = sourceId;
                     this.m_rasterTileUrl = resolvedUrl;
@@ -851,7 +857,7 @@ export class MBStyleDataSource extends TileDataSource {
         const scene = (this.mapView as any)?.m_scene as THREE.Scene | undefined;
         if (!scene) return;
 
-        const LOCAL = '/base/mapbox-gl-js/test/integration/';
+        const LOCAL = '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/';
         const resolveUrl = (u: string) => u?.replace(/^local:\/\//, LOCAL) ?? '';
 
         for (const layer of modelLayers) {

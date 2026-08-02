@@ -576,7 +576,7 @@ export class MBEnvironmentManager {
                 } else {
                     const imgUrl = (source.url ?? '').replace(
                         /^local:\/\//,
-                        '/base/mapbox-gl-js/test/integration/',
+                        '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/',
                     );
                     if (!imgUrl) continue;
                     const loader = new THREE.TextureLoader();

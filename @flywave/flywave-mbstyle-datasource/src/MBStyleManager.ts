@@ -105,7 +105,7 @@ export class MBStyleManager {
             return this.m_accessToken ? `${base}?access_token=${this.m_accessToken}` : base;
         }
         if (url.startsWith('local://')) {
-            return url.replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/');
+            return url.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
         }
         return url;
     }

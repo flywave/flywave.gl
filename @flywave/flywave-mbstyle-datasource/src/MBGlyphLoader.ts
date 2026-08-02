@@ -39,7 +39,7 @@ export async function loadGlyphMetrics(
         const url = glyphUrlTemplate
             .replace('{fontstack}', encodeURIComponent(fontStack))
             .replace('{range}', `${start}-${end}`)
-            .replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/');
+            .replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
         try {
             const resp = await fetch(url);
             if (!resp.ok) continue;
@@ -108,7 +108,7 @@ export class MBGlyphLoader {
         const url = glyphUrlTemplate
             .replace('{fontstack}', encodeURIComponent(fontStack))
             .replace('{range}', `${start}-${end}`)
-            .replace(/^local:\/\//, '/base/mapbox-gl-js/test/integration/');
+            .replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
 
         try {
             const response = await fetch(url);
