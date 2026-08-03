@@ -17,6 +17,7 @@
             "@flywave/flywave-geometry/*": ["../flywave-geometry/src/*"],
             "@flywave/flywave-examples/*": ["./src/*"],
             "@flywave/flywave-heightmap-painter": ["../flywave-heightmap-painter/src"],
+            "@flywave/flywave-inspector": ["../flywave-inspector/src"]
         }
     },
     "include": [
@@ -32,6 +33,9 @@
         },
         {
             "path": "../flywave-geometry"
+        },
+        {
+            "path": "../flywave-heightmap-painter"
         },
         {
             "path": "../flywave-heightmap-painter"
