@@ -12,7 +12,13 @@
  */
 export function convertVertexShaderToWebGL2(vertexShader: string): string {
     return (
-        ["#define attribute in", "#define varying out", "#define texture2D texture"].join("\n") +
+        [
+            "precision highp float;",
+            "precision highp int;",
+            "#define attribute in",
+            "#define varying out",
+            "#define texture2D texture",
+        ].join("\n") +
         "\n" +
         vertexShader
     );
@@ -28,7 +34,7 @@ export function convertFragmentShaderToWebGL2(fragmentShader: string): string {
     return (
         [
             "#define varying in",
-            "out highp vec4 pc_fragColor;",
+            "layout(location = 0) out highp vec4 pc_fragColor;",
             "#define gl_FragColor pc_fragColor",
             "#define gl_FragDepthEXT gl_FragDepth",
             "#define texture2D texture",

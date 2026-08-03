@@ -30,28 +30,46 @@ export class RawShaderMaterial extends THREE.RawShaderMaterial {
      * another material.
      */
     constructor(params?: RawShaderMaterialParameters) {
-        const isWebGL2 = params?.rendererCapabilities.isWebGL2 === true;
+        // Built-in declarations that three.js ALWAYS injects via the
+        // ShaderMaterial prefix (position, normal, and the camera matrices).
+        // Conditional attributes (uv, tangent, color) are left in the shader
+        // because three only declares them when a matching #define is set.
+        const STRIP_ATTRS = ["position", "normal", "uv"];
+        const STRIP_UNIFORMS = [
+            "modelMatrix", "modelViewMatrix", "projectionMatrix",
+            "viewMatrix", "normalMatrix", "cameraPosition",
+        ];
+        const stripBuiltins = (src: string | undefined): string | undefined => {
+            if (!src) return src;
+            let out = src;
+            for (const name of [...STRIP_ATTRS, ...STRIP_UNIFORMS]) {
+                // Remove `attribute ... <name>;` and `uniform ... <name>;` lines.
+                out = out.replace(
+                    new RegExp(`^\\s*attribute\\s+\\w+\\s+${name}\\s*;\\s*$`, "gm"),
+                    "",
+                );
+                out = out.replace(
+                    new RegExp(`^\\s*uniform\\s+\\w+\\s+${name}\\s*;\\s*$`, "gm"),
+                    "",
+                );
+            }
+            return out;
+        };
 
         const shaderParams: THREE.ShaderMaterialParameters | undefined = params
             ? {
                   ...params,
-                  glslVersion: isWebGL2 ? THREE.GLSL3 : THREE.GLSL1,
-                  vertexShader:
-                      isWebGL2 && params.vertexShader
-                          ? convertVertexShaderToWebGL2(params.vertexShader)
-                          : params.vertexShader,
-                  fragmentShader:
-                      isWebGL2 && params.fragmentShader
-                          ? convertFragmentShaderToWebGL2(params.fragmentShader)
-                          : params.fragmentShader
+                  vertexShader: stripBuiltins(params.vertexShader),
+                  fragmentShader: stripBuiltins(params.fragmentShader),
               }
             : undefined;
-        // Remove properties that are not in THREE.ShaderMaterialParameters, otherwise THREE.js
-        // will log warnings.
         if (shaderParams) {
             delete (shaderParams as any).rendererCapabilities;
         }
         super(shaderParams);
+        // Force three.js to use the ShaderMaterial prefix path. three@0.178's
+        // RawShaderMaterial path produces 0 rasterized fragments on SwiftShader.
+        (this as any).isRawShaderMaterial = false;
         this.invalidateFog();
         this.invalidateLogarithmicDepthBuffer(params?.rendererCapabilities.logarithmicDepthBuffer as boolean);
         this.setOpacity(shaderParams?.opacity);
