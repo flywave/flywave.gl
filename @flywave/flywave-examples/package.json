@@ -61,8 +61,6 @@
         "access": "public"
     },
     "dependencies": {
-        "@flywave/flywave-gltf": "workspace:*",
-        "@flywave/flywave-inspector": "workspace:*",
         "@turf/turf": "catalog:",
         "@types/earcut": "catalog:",
         "earcut": "catalog:",
