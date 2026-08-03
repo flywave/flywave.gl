@@ -187,7 +187,7 @@ export const SkyAtmosphereShader: THREE.ShaderMaterialParameters = {
         v_rayleighColor = atmColor.rayleigh;
         v_vertToCamera = u_eyePositionWorld - position.xyz;
 
-        gl_Position = u_modelViewProjection * position;
+        gl_Position = u_modelViewProjection * vec4(position, 1.0);
        // #include <logdepthbuf_vertex>
     }
     `,

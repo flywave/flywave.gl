@@ -500,7 +500,7 @@ export class SolidLineMaterial
                                 ? displacementMap
                                 : new THREE.DataTexture(new Uint8Array(0), 0, 0)
                         ),
-                        displacementMapUvMatrix: new THREE.Uniform(params.displacementMapUvMatrix),
+                        displacementMapUvMatrix: new THREE.Uniform(params.displacementMapUvMatrix ?? new THREE.Matrix3()),
                         drawRange: new THREE.Uniform(
                             new THREE.Vector2(
                                 SolidLineMaterial.DEFAULT_DRAW_RANGE_START,

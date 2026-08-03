@@ -219,7 +219,7 @@ export const GroundAtmosphereShader: THREE.ShaderMaterialParameters = {
         v_vertToCamera = u_eyePositionWorld - position.xyz;
         v_vertToOrigin = normalize(position.xyz);
 
-        gl_Position = u_modelViewProjection * position;
+        gl_Position = u_modelViewProjection * vec4(position, 1.0);
         //#include <logdepthbuf_vertex>
 
     }

@@ -22,7 +22,7 @@ export interface RawShaderMaterialParameters
 /**
  * Base class for all raw shader materials. Ensures WebGL2 compatibility for WebGL1 shaders.
  */
-export class RawShaderMaterial extends THREE.RawShaderMaterial {
+export class RawShaderMaterial extends THREE.ShaderMaterial {
     /**
      * The constructor of `RawShaderMaterial`.
      *
@@ -67,9 +67,6 @@ export class RawShaderMaterial extends THREE.RawShaderMaterial {
             delete (shaderParams as any).rendererCapabilities;
         }
         super(shaderParams);
-        // Force three.js to use the ShaderMaterial prefix path. three@0.178's
-        // RawShaderMaterial path produces 0 rasterized fragments on SwiftShader.
-        (this as any).isRawShaderMaterial = false;
         this.invalidateFog();
         this.invalidateLogarithmicDepthBuffer(params?.rendererCapabilities.logarithmicDepthBuffer as boolean);
         this.setOpacity(shaderParams?.opacity);

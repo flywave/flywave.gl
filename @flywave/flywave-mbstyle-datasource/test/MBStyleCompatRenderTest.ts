@@ -983,7 +983,6 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 }
 
 
-
                 // Mapbox's image-threshold is the max FRACTION of mismatched
                 // pixels allowed (e.g. 0.001 = 0.1%); convert it to a pixel
                 // count. pixelmatch's per-channel threshold is fixed at 0.1.
