@@ -1339,6 +1339,21 @@ export class MBMaterialPatchManager {
             if ((material as any).__mbHillshadePatched) return;
             (material as any).__mbHillshadePatched = true;
             (material as any).map = demTex;
+
+            // Determine the DEM border/buffer: mapbox raster-dem tiles may ship
+            // pre-padded images (e.g. 258x258 for buffer=1, 260x260 for buffer=2)
+            // where the extra pixels hold neighbouring tiles' elevation so that
+            // surface normals at tile edges are correct. The tile's UV [0,1]
+            // maps to the inner data region; one-pixel finite-difference steps
+            // reach into the border at the edges.
+            const demImg: any = (demTex as any).image;
+            const imgSize = demImg?.width ?? demImg?.naturalWidth ?? 256;
+            const tileSize = technique._hillshadeTileSize ?? 256;
+            const buffer = Math.max(0, (imgSize - tileSize) / 2);
+            const dataFrac = tileSize / imgSize;       // fraction of texture that is data
+            const borderFrac = buffer / imgSize;        // border offset (in UV)
+            const pxStep = 1.0 / imgSize;               // one DEM pixel in UV
+
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
@@ -1352,18 +1367,25 @@ export class MBMaterialPatchManager {
                      uniform float uMBHsIntensity;
                      uniform vec3 uMBHsAccent;
                      uniform vec3 uMBHsHighlight;
+                     uniform vec4 uMBDemParams; // x=dataFrac, y=borderFrac, z=pxStep, w=unused
+                     // Mapbox terrain-rgb: height = (R*65536+G*256+B)/10 - 10000
                      float mbDemElev(vec2 uv){ vec4 c=texture2D(uMBDem,uv);
-                         // Mapbox terrain-rgb: height = (R*65536+G*256+B)/10 - 10000
                          return (c.r*65536.0+c.g*256.0+c.b)/10.0-10000.0; }
+                     // Map tile-local UV (0..1 over the tile) into the DEM texture's
+                     // inner data region, honouring the pre-padded border.
+                     vec2 mbDemUv(vec2 tileUv){
+                         return uMBDemParams.y + tileUv * uMBDemParams.x;
+                     }
                      void main() {`
                 );
+                shader.uniforms.uMBDemParams = { value: new THREE.Vector4(dataFrac, borderFrac, pxStep, 0) };
                 shader.fragmentShader = shader.fragmentShader.replace(
                     'gl_FragColor = vec4( diffuse, opacity );',
-                    `vec2 mbPx = 1.0/vec2(64.0);
-                     float mbL=mbDemElev(vUv-vec2(mbPx.x,0.0));
-                     float mbR=mbDemElev(vUv+vec2(mbPx.x,0.0));
-                     float mbD=mbDemElev(vUv-vec2(0.0,mbPx.y));
-                     float mbU=mbDemElev(vUv+vec2(0.0,mbPx.y));
+                    `vec2 mbUv = mbDemUv(vUv);
+                     float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+                     float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+                     float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+                     float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));
                      float mbSlope=max(dot(mbN,mbLight),0.0);

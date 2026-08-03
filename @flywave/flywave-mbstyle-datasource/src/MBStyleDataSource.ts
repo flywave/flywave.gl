@@ -1,5 +1,6 @@
 import {
     FlatTheme,
+    ITileDecoder,
     Theme,
 } from '@flywave/flywave-datasource-protocol';
 import { TileKey, webMercatorTilingScheme, sphereProjection, mercatorProjection, ProjectionType } from '@flywave/flywave-geoutils';
@@ -7,7 +8,6 @@ import { Tile } from '@flywave/flywave-mapview';
 import { MapViewEventNames } from '@flywave/flywave-mapview';
 import {
     DataProvider,
-    ITileDecoder,
     TileDataSource,
     TileDataSourceOptions,
     TileFactory,
@@ -170,10 +170,12 @@ class BoundsFilteredDataProvider extends DataProvider {
  */
 class HillshadeTileDataProvider extends DataProvider {
     private m_demUrlTemplate: string;
+    private m_tileSize: number;
 
-    constructor(demUrlTemplate: string) {
+    constructor(demUrlTemplate: string, tileSize: number = 256) {
         super();
         this.m_demUrlTemplate = demUrlTemplate;
+        this.m_tileSize = tileSize;
     }
 
     ready(): boolean { return true; }
@@ -210,6 +212,7 @@ class HillshadeTileDataProvider extends DataProvider {
                 },
                 properties: {
                     _hillshadeDemUrl: demUrl,
+                    _tileSize: this.m_tileSize,
                     _tileCol: x,
                     _tileRow: y,
                     _tileZoom: z,
@@ -431,6 +434,7 @@ export class MBStyleDataSource extends TileDataSource {
     private m_runtime: MBStyleRuntime | null = null;
     private m_currentSourceId: string = '';
     private m_demTileUrl: string | null = null;
+    private m_demTileSize: number = 256;
     private m_rasterTileUrl: string | null = null;
     /**
      * Cached mapbox glyph metrics (font→char→metrics), shared with the worker
@@ -641,6 +645,7 @@ export class MBStyleDataSource extends TileDataSource {
                 const tileUrl = tiles[0] ?? source.tileUrls[0] ?? '';
                 if (tileUrl) {
                     this.m_demTileUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
+                    this.m_demTileSize = demSpec?.tileSize ?? 256;
                 }
                 break;
             }
@@ -677,7 +682,7 @@ export class MBStyleDataSource extends TileDataSource {
                 (l: any) => l.type === 'hillshade' && (l.layout?.visibility ?? 'visible') === 'visible',
             );
             if (hasHillshade && this.m_demTileUrl) {
-                this.m_delegatingProvider.delegate = new HillshadeTileDataProvider(this.m_demTileUrl);
+                this.m_delegatingProvider.delegate = new HillshadeTileDataProvider(this.m_demTileUrl, this.m_demTileSize);
                 const hillshadeLayer = (style.layers ?? []).find(
                     (l: any) => l.type === 'hillshade',
                 ) as any;

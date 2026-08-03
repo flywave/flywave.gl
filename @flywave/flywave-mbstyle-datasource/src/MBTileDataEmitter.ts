@@ -335,13 +335,18 @@ export class MBTileDataEmitter {
                 }
                 if (p['line-dasharray']) {
                     const arr = p['line-dasharray'] as number[];
+                    // Mapbox line-dasharray values are multiples of the line
+                    // width, so the dash scales with zoom when line-width is a
+                    // zoom function. Multiply by the (pixel) line-width here;
+                    // metricUnit:'Pixel' then converts the product to world units.
+                    const lw = (props.lineWidth as number) ?? 1;
                     if (arr.length >= 2) {
-                        props.dashSize = arr[0];
-                        props.gapSize = arr[1];
+                        props.dashSize = arr[0] * lw;
+                        props.gapSize = arr[1] * lw;
                         if (arr.length > 2) {
-                            props.dashArray = arr;
+                            props.dashArray = arr.map((v: number) => v * lw);
                             let sum = 0;
-                            for (const v of arr) sum += v;
+                            for (const v of arr) sum += v * lw;
                             props.dashTotalLength = sum;
                         }
                     }
@@ -450,6 +455,9 @@ export class MBTileDataEmitter {
                 props.technique = 'fill';
                 props._isHillshade = true;
                 props._hillshadeDemUrl = properties?._hillshadeDemUrl ?? '';
+                // Carry the source tileSize so the patcher can compute the DEM
+                // border/buffer from the loaded image dimensions.
+                props._hillshadeTileSize = properties?._tileSize ?? 256;
                 props.color = p['hillshade-shadow-color'] ?? '#000000';
                 props.opacity = 1;
                 props._hillshadeIntensity = p['hillshade-exaggeration'] ?? 0.5;

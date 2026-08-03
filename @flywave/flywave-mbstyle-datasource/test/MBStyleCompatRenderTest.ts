@@ -851,8 +851,17 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 } as any);
 
                 canvas = document.createElement("canvas");
-                canvas.width = metadata.width ?? 128;
-                canvas.height = metadata.height ?? 128;
+                // Mapbox render-test harness defaults: 512x512 (overridden per-test).
+                canvas.width = metadata.width ?? 512;
+                canvas.height = metadata.height ?? 512;
+
+                // Pre-create a WebGL2 context that explicitly requests a stencil
+                // buffer — the SolidLineMaterial relies on stencil testing, and the
+                // default context may be created without stencil in some headless
+                // drivers (SwiftShader), which makes all lines invisible.
+                const ctx =
+                    canvas.getContext("webgl2", { stencil: true, antialias: true, preserveDrawingBuffer: true }) as any ??
+                    canvas.getContext("webgl", { stencil: true, antialias: true, preserveDrawingBuffer: true }) as any;
 
                 // Pin the global label fade duration to the test's requested
                 // value so opacity transitions match `expected.png` timing.
@@ -869,6 +878,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
 
                 mapView = new MapView({
                     canvas,
+                    context: ctx ?? undefined,
                     theme: {},
                     preserveDrawingBuffer: true,
                     pixelRatio: metadata.pixelRatio ?? 1,
