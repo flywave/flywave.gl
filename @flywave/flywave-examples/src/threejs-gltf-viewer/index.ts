@@ -11,7 +11,7 @@ import {
     GLTFLoader,
     postProcessGLTF,
     createThreeSceneFromGLTF
-} from "@flywave/flywave-gltf";
+} from "@flywave/flywave.gl";
 import * as THREE from "three/webgpu";
 import { GLTFLoader as ThreeGLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
