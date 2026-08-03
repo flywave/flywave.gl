@@ -21,6 +21,16 @@ function getKTX2Loader(renderer?: WebGPURenderer): KTX2Loader {
     loader.setTranscoderPath("https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/libs/basis/");
     if (renderer) {
         loader.detectSupport(renderer);
+    } else {
+        (loader as any).workerConfig = {
+            astcSupported: false,
+            astcHDRSupported: false,
+            etc1Supported: false,
+            etc2Supported: false,
+            dxtSupported: false,
+            bptcSupported: false,
+            pvrtcSupported: false
+        };
     }
     sharedKTX2Loader = loader;
     return loader;
@@ -39,6 +49,11 @@ export class ImageLoader {
         } catch (error) {
             console.warn("Some Three.js loaders failed to initialize:", error);
         }
+    }
+
+    setRenderer(renderer: WebGPURenderer): void {
+        if (sharedKTX2Loader != null) return;
+        getKTX2Loader(renderer);
     }
 
     detectFormat(arrayBuffer: ArrayBuffer): string {

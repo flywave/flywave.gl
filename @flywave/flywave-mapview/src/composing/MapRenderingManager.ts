@@ -10,14 +10,9 @@ import {
     type IVignetteEffect
 } from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three/webgpu";
-import { mrt,
-    diffuseColor } from "three/tsl";
-import type { Renderer,
-} from "three/webgpu";
-import {
-    uniform,
-    vec3,
-} from "three/tsl";
+import { mrt, diffuseColor } from "three/tsl";
+import type { Renderer } from "three/webgpu";
+import { uniform, vec3 } from "three/tsl";
 
 import { type IPassManager } from "./IPassManager";
 import { type IViewRenderManager } from "./vrm";
@@ -374,7 +369,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     setDepthPickingStencilRef(stencilRef: number): void {}
     setDepthReadingFilter(classificationType: number): void {}
     readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null {
-        return null;
+        return this.viewRenderManager?.readDepth(ndc) ?? null;
     }
 
     set dynamicMsaaSamplingLevel(samplingLevel: MSAASampling) {

@@ -8,7 +8,7 @@ import {
     MapControlsUI,
     CopyrightElementHandler
 } from "@flywave/flywave.gl";
-import { loadGLTF, GLTFLoader } from "@flywave/flywave-gltf";
+import { loadGLTF, GLTFLoader } from "@flywave/flywave.gl";
 import * as THREE from "three/webgpu";
 
 // GLTF Splat model parameters

@@ -81,6 +81,7 @@ export interface IViewRenderManager {
     bloomIgnoreObjects: Set<THREE.Object3D>;
     translucentLayerEffect?: TranslucentLayerEffect;
     exposure: { value: number };
+    gpuPicking: boolean;
     render(scene: THREE.Scene, camera: THREE.Camera): void;
     setSize(width: number, height: number): void;
     dispose(): void;
@@ -88,4 +89,5 @@ export interface IViewRenderManager {
     getColorTexture(): THREE.Texture | null;
     getDepthTexture(): THREE.Texture | null;
     readDepthAsync(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null>;
+    readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null;
 }

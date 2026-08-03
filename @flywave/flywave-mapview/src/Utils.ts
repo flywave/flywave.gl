@@ -717,6 +717,9 @@ export namespace MapViewUtils {
      * @param projection - The world space projection.
      * @param camera - The camera whose target will be computed.
      * @param elevationProvider - If provided, elevation at the camera position will be used.
+     * @param collidables - Optional collidable data sources for CPU raycast fallback.
+     * @param depthProvider - If provided, reads screen-center depth from GPU (one-frame-delayed).
+     * When available, this replaces CPU raycast entirely.
      * @returns The target, the distance to it and a boolean flag set to false in case an elevation
      * provider was passed but the elevation was not available yet.
      */
@@ -724,7 +727,8 @@ export namespace MapViewUtils {
         projection: Projection,
         camera: THREE.Camera,
         elevationProvider?: ElevationProvider,
-        collidables?: ICameraCollidable[]
+        collidables?: ICameraCollidable[],
+        depthProvider?: () => number | null
     ): { target: THREE.Vector3; distance: number; altitude?: number; final: boolean } {
         const cameraPitch = extractAttitude({ projection }, camera).pitch;
 
@@ -741,8 +745,23 @@ export namespace MapViewUtils {
             : undefined;
         const final = !elevationProvider || elevation !== undefined;
 
-        // Even for a tilt of 90° raycastTargetFromCamera is returning some point almost at
-        // infinity.
+        // GPU depth fast-path: unproject screen-center depth to world target
+        if (depthProvider && camera instanceof THREE.PerspectiveCamera) {
+            const depth = depthProvider();
+            if (depth !== null && depth > 0 && depth < 1) {
+                const ndcDepth = depth * 2.0 - 1.0;
+                const ndcVec = cache.vector3[2].set(0, 0, ndcDepth);
+                const target = ndcVec.unproject(camera);
+                if (elevation !== undefined) {
+                    const surfaceNormal = projection.surfaceNormal(target, cache.vector3[3]);
+                    target.add(surfaceNormal.multiplyScalar(elevation));
+                }
+                const distance = camera.position.distanceTo(target);
+                return { target, distance, altitude: elevation, final };
+            }
+        }
+
+        // CPU fallback: raycast against collidables or projection surface
         const target =
             cameraPitch < MAX_TILT_RAD
                 ? getWorldTargetFromCamera(camera, projection, elevation, collidables)

@@ -148,6 +148,7 @@ export class AtmosphereSystem {
             }
 
             const vrm = new ViewRenderManager(renderer);
+            vrm.gpuPicking = this.mapView.gpuPickingEnabled;
             vrm.csmShadowNode = this.m_csmShadowNode;
             (scene as any).__atmosphereContext = this.m_atmosphereContext;
             const canvas = renderer.domElement as HTMLCanvasElement;

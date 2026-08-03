@@ -98,6 +98,13 @@ export class ViewRenderManager implements IViewRenderManager {
     csmShadowNode?: CascadedShadowMapsNode;
     exposure = uniform(3);
 
+    gpuPicking: boolean = false;
+
+    private mrtKeys: string[] = ["output"];
+    private pickDepthTexIndex: number = -1;
+    private cachedDepth: number | null = null;
+    private depthReadInFlight: boolean = false;
+
     get aerialPerspectiveNode(): AerialPerspectiveNode | undefined {
         return this.aerialNode;
     }
@@ -124,6 +131,18 @@ export class ViewRenderManager implements IViewRenderManager {
         if (aerialEnabled && hasCSM) {
             mrtEntries.viewZUnit = positionView.z.mul(WORLD_TO_UNIT);
         }
+        if (this.gpuPicking) {
+            const clipPos = cameraProjectionMatrix.mul(positionView);
+            const ndcDepth = clipPos.z.div(clipPos.w);
+            mrtEntries.pickDepth = vec4(
+                ndcDepth.mul(float(0.5)).add(float(0.5)),
+                float(0),
+                float(0),
+                float(1)
+            );
+        }
+
+        this.mrtKeys = Object.keys(mrtEntries);
 
         this.passNode =
             Object.keys(mrtEntries).length > 1
@@ -132,6 +151,10 @@ export class ViewRenderManager implements IViewRenderManager {
 
         const colorNode = this.passNode.getTextureNode("output");
         const depthNode = this.passNode.getTextureNode("depth");
+
+        if (this.gpuPicking) {
+            this.passNode.getTextureNode("pickDepth");
+        }
 
         let outputNode = colorNode;
 
@@ -310,6 +333,13 @@ export class ViewRenderManager implements IViewRenderManager {
         );
         this.pipeline.outputColorTransform = true;
         this.needsUpdate = false;
+
+        const rt = this.passNode?.renderTarget;
+        if (rt && this.gpuPicking) {
+            this.pickDepthTexIndex = rt.textures.findIndex(
+                (t: THREE.Texture) => t.name === "pickDepth"
+            );
+        }
     }
 
     render(scene: THREE.Scene, camera: THREE.Camera): void {
@@ -334,6 +364,10 @@ export class ViewRenderManager implements IViewRenderManager {
         }
 
         this.pipeline.render();
+
+        if (this.gpuPicking) {
+            this.requestCenterDepthRead();
+        }
     }
 
     setSize(width: number, height: number): void {
@@ -349,6 +383,7 @@ export class ViewRenderManager implements IViewRenderManager {
         this.aerialNode = undefined;
         this.m_cloudNode = undefined;
         this.taaNode = undefined;
+        this.cachedDepth = null;
     }
 
     getColorTexture(): THREE.Texture | null {
@@ -359,22 +394,62 @@ export class ViewRenderManager implements IViewRenderManager {
         return this.passNode?.renderTarget?.depthTexture ?? null;
     }
 
+    readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null {
+        if (!this.gpuPicking) return null;
+        return this.cachedDepth;
+    }
+
     async readDepthAsync(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null> {
         const rt = this.passNode?.renderTarget;
-        if (rt == null) return null;
+        if (rt == null || this.pickDepthTexIndex < 0) return null;
+
+        const ndcX = ndc instanceof THREE.Vector3 ? ndc.x : (ndc as THREE.Vector2).x;
+        const ndcY = ndc instanceof THREE.Vector3 ? ndc.y : (ndc as THREE.Vector2).y;
 
         const width = rt.width;
         const height = rt.height;
-        const x = Math.round((ndc.x * 0.5 + 0.5) * width);
-        const y = Math.round((ndc.y * 0.5 + 0.5) * height);
+        const x = Math.round((ndcX * 0.5 + 0.5) * width);
+        const y = Math.round((ndcY * 0.5 + 0.5) * height);
         if (x < 0 || x >= width || y < 0 || y >= height) return null;
 
         try {
-            const buffer = new Float32Array(4);
-            await this.renderer.readRenderTargetPixelsAsync(rt, x, y, 1, 1, buffer);
-            return buffer[0];
+            const data = await this.renderer.readRenderTargetPixelsAsync(
+                rt, x, y, 1, 1, this.pickDepthTexIndex
+            );
+            return halfFloatToNumber((data as Uint16Array)[0]);
         } catch {
             return null;
         }
     }
+
+    private requestCenterDepthRead(): void {
+        const rt = this.passNode?.renderTarget;
+        if (rt == null || this.depthReadInFlight || this.pickDepthTexIndex < 0) return;
+
+        const width = rt.width;
+        const height = rt.height;
+        const cx = Math.round(width * 0.5);
+        const cy = Math.round(height * 0.5);
+
+        this.depthReadInFlight = true;
+
+        this.renderer
+            .readRenderTargetPixelsAsync(rt, cx, cy, 1, 1, this.pickDepthTexIndex)
+            .then((data: ArrayBufferView) => {
+                this.cachedDepth = halfFloatToNumber((data as Uint16Array)[0]);
+                this.depthReadInFlight = false;
+            })
+            .catch(() => {
+                this.depthReadInFlight = false;
+            });
+    }
+}
+
+function halfFloatToNumber(u16: number): number {
+    const s = (u16 >> 15) & 1;
+    const e = (u16 >> 10) & 0x1f;
+    const f = u16 & 0x3ff;
+    if (e === 0) return 0;
+    if (e === 31) return f ? NaN : (s ? -Infinity : Infinity);
+    return (s ? -1 : 1) * Math.pow(2, e - 15) * (1 + f / 1024);
 }

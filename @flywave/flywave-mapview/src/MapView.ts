@@ -632,6 +632,22 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
      * Options for the atmosphere system
      */
     atmosphereOptions?: AtmosphereThemeConfig;
+
+    /**
+     * Enable GPU-based depth readback for camera collision and world position queries.
+     *
+     * @remarks
+     * When `true` (default), the renderer caches the screen-center depth value each frame
+     * via async GPU readback. This allows camera collision detection (`updateLookAtSettings`)
+     * and `getWorldPositionAt` to use GPU depth instead of CPU raycasting — eliminating
+     * per-frame BVH traversal against terrain and 3D tiles.
+     *
+     * The depth is one frame delayed, which is imperceptible at interactive frame rates.
+     * Falls back to CPU raycast automatically when GPU depth is unavailable.
+     *
+     * @default true
+     */
+    enableGpuPicking?: boolean;
 }
 
 /**
@@ -897,6 +913,9 @@ export class MapView extends EventDispatcher {
     private readonly m_sphere = new THREE.Sphere(undefined, EarthConstants.EQUATORIAL_RADIUS);
 
     private readonly m_options: MapViewOptions;
+    get gpuPickingEnabled(): boolean {
+        return this.m_options.enableGpuPicking !== false;
+    }
     private readonly m_visibleTileSetOptions: VisibleTileSetOptions;
 
     private readonly m_uriResolver?: UriResolver;
@@ -3442,7 +3461,8 @@ export class MapView extends EventDispatcher {
             this.projection,
             this.camera,
             this.elevationProvider,
-            collidables
+            collidables,
+            () => this.mapRenderingManager?.readDepth(new THREE.Vector2(0, 0)) ?? null
         );
         if (!final) {
             this.update();
