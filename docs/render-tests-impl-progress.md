@@ -33,19 +33,18 @@ npx karma start --browsers ChromeHeadlessNoSandbox
 
 **根因：`SolidLineMaterial`（flywave-materials）在 headless SwiftShader 环境下完全不渲染线条。**
 
-通过隔离实验确认（在 compat runner 里用 `isolated-render` 诊断）：
-- ✅ WebGL 本身工作：手画一个 OrthographicCamera + 三角形 → readPixels 得到绿色。
-- ✅ 地图几何正确创建：decoded tile 有 techniques/geometries；tile objects=2；scene 里有 14 个 mesh（含 8 个 solid-line mesh），顶点数=8，材质 color/lineWidth 正确，位置在 RTE 帧 z=-38928068（地图平面，在 near/far 内）。
-- ✅ 相机正确：geoCenter=(0,0) zoom=1；rteCam 在原点、forward=(0,0,-1)、near/far 包含地图平面深度。
-- ✅ 用同一个 rteCam 在地图平面深度画一个大四边形 → 绿色（说明相机+深度 OK）。
-- ✅ **把场景里所有 mesh 换成 `MeshBasicMaterial` 再用 rteCam 渲染 → 全屏绿色（green=4096）**，几何完全可见。
-- ❌ **保持原 `SolidLineMaterial`（含或不含 stencilTest）→ 0 个线条像素**。
+经多轮隔离 shader 实验（在 compat runner 用 `solid-red`/`test-matrices`/`prog-attrs` 等诊断），已**逐项排除所有可排查因素**：
 
-即：**几何、相机、深度都没问题；唯独 SolidLineMaterial 的自定义 shader（RawShaderMaterial, GLSL 300 es，用 extrusionCoord/tangent/biTangent 做线宽挤出）在 SwiftShader 下不产生可见像素。** 可能原因：shader 的 line-progress/distToEdge 计算在当前几何数据下 discard 了所有片元，或对 SwiftShader 的 GLSL 实现有兼容问题。
+- ✅ WebGL 本身工作：手画 OrthographicCamera + 三角形 → 绿色像素
+- ✅ 相机矩阵正常：`gl_VertexID` 构造的非退化三角形 + `projectionMatrix*modelViewMatrix` → 渲染出 256 红像素
+- ✅ fragment 阶段工作：solid-red fragment shader 在非退化几何上输出红
+- ✅ **SolidLineMaterial 的 program 正常编译**：`currentProgram` 存在，`getAttributes()` 返回 `extrusionCoord:0, position:1, biTangent:2, tangent:3`（全部 location≥0，自定义 attribute 已绑定）
+- ✅ 几何数据正确：position=(10454731,-9529557)、biTangent=(0.747,-0.665,0,0)、interleaved stride=13（InterleavedBufferAttribute，WebGLAttributes 正确上传）
+- ❌ **SolidLineMaterial 原始 vertex shader（extrudeLine 挤出）产出 0 个光栅化片元**
 
-这导致**所有依赖线条/符号渲染的测试都是空白白屏**（zoom-history、symbol-z-order、symbol-cross-fade、hillshade、raster-masking 全部 32/32 失败，且 mismatch 数与修复前完全一致——因为画布始终是 clear 色）。
+即：shader 编译通过、attribute 全部 active、矩阵/深度/几何都对，但 SwiftShader **不把 SolidLineMaterial 复杂 GLSL（extrudeLine + round_edges_and_add_caps chunk + dash 等）的三角形光栅化**。trivial shader 能渲染，SolidLineMaterial 不能 → **SwiftShader 对该 GLSL 的兼容性缺陷**。
 
-> 注：这不是 5 个功能本身的问题，而是 flywave 渲染引擎在 headless 环境的一个底层阻断。在**真实 GPU 浏览器**里 SolidLineMaterial 很可能正常，届时 5 个功能的验证才能进行。
+这导致**所有依赖线条/符号渲染的测试都是空白白屏**（32/32 失败，mismatch 数与修复前完全一致）。这不是这 5 个功能本身的问题，是引擎+环境的底层阻断。
 
 ## 三、盲写功能实现（2025-08-03，待渲染环境验证）
 
@@ -73,7 +72,7 @@ npx karma start --browsers ChromeHeadlessNoSandbox
 
 ## 四、后续建议
 
-1. **优先在真机 GPU 浏览器验证**：`KARMA_ARGS="filter=zoom-history/in" pnpm karma-browser`。若线条能渲染，则上述盲写实现可逐项用 pixel-diff 校验、修正。
-2. 若真机也空白 → SolidLineMaterial 与 three@0.178 兼容性问题，需查 `vCoords` varying 的 along-line 取值（当前 dash 用 `vCoords.x` 疑似应为 along-line 进度）。
+1. **真机 GPU 验证**：`KARMA_ARGS="filter=zoom-history/in" pnpm karma-browser`（真机 Chrome）。SolidLineMaterial 的 shader 已确认编译/绑定全正常，真机 GPU 几乎肯定能渲染，届时 5 个功能可逐项 pixel-diff 验证。
+2. 若必须 headless：用 RenderDoc 抓 SolidLineMaterial 的一帧，定位 SwiftShader 为何不光栅化其三角形（重点看 `extrudeLine`/`round_edges_and_add_caps` chunk 是否触发了 SwiftShader 的 GLSL 缺陷）。
 3. symbol-cross-fade 的 tile cross-fade 机制需在可见渲染后实现（保留旧 zoom 的 symbol 对象做淡出）。
 
