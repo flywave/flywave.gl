@@ -747,17 +747,38 @@ export namespace MapViewUtils {
 
         // GPU depth fast-path: unproject screen-center depth to world target
         if (depthProvider && camera instanceof THREE.PerspectiveCamera) {
-            const depth = depthProvider();
-            if (depth !== null && depth > 0 && depth < 1) {
-                const ndcDepth = depth * 2.0 - 1.0;
-                const ndcVec = cache.vector3[2].set(0, 0, ndcDepth);
-                const target = ndcVec.unproject(camera);
+            const linT = depthProvider();
+            if (linT !== null && linT > 0 && linT < 1) {
+                // linT is a linear interpolation factor: 0 = near plane, 1 = far plane.
+                // Reconstruct world position by interpolating along the camera's view ray.
+                const near = camera.near;
+                const far = camera.far;
+                // Linearize distance: actual world distance = near + t * (far - near) is NOT
+                // correct for perspective. Instead use: dist = 1 / (invNear + t * (invFar - invNear))
+                const invNear = 1 / near;
+                const invFar = 1 / far;
+                const worldDist = 1 / (invNear + linT * (invFar - invNear));
+
+                const dir = camera.getWorldDirection(cache.vector3[2]);
+                const target = cache.vector3[3]
+                    .copy(camera.position)
+                    .add(dir.multiplyScalar(worldDist));
+
                 if (elevation !== undefined) {
-                    const surfaceNormal = projection.surfaceNormal(target, cache.vector3[3]);
+                    const surfaceNormal = projection.surfaceNormal(
+                        target,
+                        cache.vector3[4] ?? new THREE.Vector3()
+                    );
                     target.add(surfaceNormal.multiplyScalar(elevation));
                 }
                 const distance = camera.position.distanceTo(target);
-                return { target, distance, altitude: elevation, final };
+
+                const groundDist = projection.groundDistance(camera.position);
+                if (distance > groundDist * 3 || distance < groundDist * 0.05) {
+                    // GPU depth looks bogus, fall through to CPU
+                } else {
+                    return { target, distance, altitude: elevation, final };
+                }
             }
         }
 

@@ -102,7 +102,8 @@ export class ViewRenderManager implements IViewRenderManager {
 
     private mrtKeys: string[] = ["output"];
     private pickDepthTexIndex: number = -1;
-    private cachedDepth: number | null = null;
+    private rawDepth: number | null = null;
+    private smoothedDepth: number | null = null;
     private depthReadInFlight: boolean = false;
 
     get aerialPerspectiveNode(): AerialPerspectiveNode | undefined {
@@ -132,14 +133,12 @@ export class ViewRenderManager implements IViewRenderManager {
             mrtEntries.viewZUnit = positionView.z.mul(WORLD_TO_UNIT);
         }
         if (this.gpuPicking) {
+            // Output 1/w (clip-space) which is linear in screen space and has
+            // uniform precision in half-float, unlike raw NDC depth.
+            // At the near plane 1/w is maximal (~2.0 for near=0.5),
+            // at the far plane it approaches 0.
             const clipPos = cameraProjectionMatrix.mul(positionView);
-            const ndcDepth = clipPos.z.div(clipPos.w);
-            mrtEntries.pickDepth = vec4(
-                ndcDepth.mul(float(0.5)).add(float(0.5)),
-                float(0),
-                float(0),
-                float(1)
-            );
+            mrtEntries.pickDepth = vec4(float(1).div(clipPos.w), float(0), float(0), float(1));
         }
 
         this.mrtKeys = Object.keys(mrtEntries);
@@ -363,6 +362,12 @@ export class ViewRenderManager implements IViewRenderManager {
             }
         }
 
+        // Update near/far from camera for depth linearization
+        if (camera instanceof THREE.PerspectiveCamera) {
+            this.cameraNearFar.near = camera.near;
+            this.cameraNearFar.far = camera.far;
+        }
+
         this.pipeline.render();
 
         if (this.gpuPicking) {
@@ -383,7 +388,8 @@ export class ViewRenderManager implements IViewRenderManager {
         this.aerialNode = undefined;
         this.m_cloudNode = undefined;
         this.taaNode = undefined;
-        this.cachedDepth = null;
+        this.rawDepth = null;
+        this.smoothedDepth = null;
     }
 
     getColorTexture(): THREE.Texture | null {
@@ -396,7 +402,17 @@ export class ViewRenderManager implements IViewRenderManager {
 
     readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null {
         if (!this.gpuPicking) return null;
-        return this.cachedDepth;
+        return this.smoothedDepth;
+    }
+
+    private cameraNearFar: { near: number; far: number } = { near: 1, far: 1000 };
+
+    private linFactorFrom1w(val: number): number {
+        const { near, far } = this.cameraNearFar;
+        const invNear = 1 / near;
+        const invFar = 1 / far;
+        const t = (val - invNear) / (invFar - invNear);
+        return Math.max(0, Math.min(1, t));
     }
 
     async readDepthAsync(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null> {
@@ -414,9 +430,14 @@ export class ViewRenderManager implements IViewRenderManager {
 
         try {
             const data = await this.renderer.readRenderTargetPixelsAsync(
-                rt, x, y, 1, 1, this.pickDepthTexIndex
+                rt,
+                x,
+                y,
+                1,
+                1,
+                this.pickDepthTexIndex
             );
-            return halfFloatToNumber((data as Uint16Array)[0]);
+            return this.linFactorFrom1w(halfFloatToNumber((data as Uint16Array)[0]));
         } catch {
             return null;
         }
@@ -436,7 +457,22 @@ export class ViewRenderManager implements IViewRenderManager {
         this.renderer
             .readRenderTargetPixelsAsync(rt, cx, cy, 1, 1, this.pickDepthTexIndex)
             .then((data: ArrayBufferView) => {
-                this.cachedDepth = halfFloatToNumber((data as Uint16Array)[0]);
+                const invW = halfFloatToNumber((data as Uint16Array)[0]);
+                if (!isFinite(invW) || invW <= 0) {
+                    this.depthReadInFlight = false;
+                    return;
+                }
+
+                const linT = this.linFactorFrom1w(invW);
+
+                if (this.rawDepth === null) {
+                    this.smoothedDepth = linT;
+                } else {
+                    const delta = Math.abs(linT - this.rawDepth);
+                    const alpha = delta > 0.3 ? 1.0 : 0.2;
+                    this.smoothedDepth = this.smoothedDepth! * (1 - alpha) + linT * alpha;
+                }
+                this.rawDepth = linT;
                 this.depthReadInFlight = false;
             })
             .catch(() => {
@@ -450,6 +486,6 @@ function halfFloatToNumber(u16: number): number {
     const e = (u16 >> 10) & 0x1f;
     const f = u16 & 0x3ff;
     if (e === 0) return 0;
-    if (e === 31) return f ? NaN : (s ? -Infinity : Infinity);
+    if (e === 31) return f ? NaN : s ? -Infinity : Infinity;
     return (s ? -1 : 1) * Math.pow(2, e - 15) * (1 + f / 1024);
 }

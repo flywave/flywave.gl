@@ -2720,16 +2720,21 @@ export class MapView extends EventDispatcher {
 
     private getWorldPositionAtByDepth(x: number, y: number): THREE.Vector3 | null {
         const ndc = this.getNormalizedScreenCoordinates(x, y);
-        const ndcVector = new THREE.Vector3(ndc.x, ndc.y, 0.5);
-        const depth = this.mapRenderingManager.readDepth(ndcVector);
+        const linT = this.mapRenderingManager?.readDepth(ndc);
 
-        if (depth === null) {
+        if (linT === null || linT <= 0 || linT >= 1) {
             return null;
         }
-        const ndcWithDepth = new THREE.Vector3(ndc.x, ndc.y, depth * 2.0 - 1.0);
 
-        const worldPosition = new THREE.Vector3();
-        return this.ndcToView(ndcWithDepth, worldPosition).add(this.camera.position);
+        const near = this.camera.near;
+        const far = this.camera.far;
+        const invNear = 1 / near;
+        const invFar = 1 / far;
+        const worldDist = 1 / (invNear + linT * (invFar - invNear));
+
+        const dir = new THREE.Vector3();
+        this.camera.getWorldDirection(dir);
+        return dir.multiplyScalar(worldDist).add(this.camera.position);
     }
 
     private getWorldPositionAtWithRaycast(
