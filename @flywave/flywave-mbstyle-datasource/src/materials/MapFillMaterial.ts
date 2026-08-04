@@ -16,16 +16,6 @@ const DEFAULTS: MapFillMaterialParams = {
     'fill-opacity': 1,
 };
 
-const PATTERN_VERT = `
-#include <common>
-varying vec2 vPatternUv;
-void main() {
-    #include <begin_vertex>
-    #include <project_vertex>
-    vPatternUv = position.xy;
-}
-`;
-
 const PATTERN_FRAG = `
 uniform sampler2D uPatternMap;
 uniform vec2 uPatternSize;
@@ -67,28 +57,44 @@ export class MapFillMaterial extends THREE.MeshBasicMaterial {
             shader.uniforms.uFillTranslate = { value: new THREE.Vector2(self.m_translation.x, self.m_translation.y) };
             shader.uniforms.uTranslateAnchor = { value: self.m_translateAnchor === 'viewport' ? 1 : 0 };
             shader.uniforms.uBearing = { value: self.m_bearing };
-            shader.vertexShader = shader.vertexShader.replace(
-                'vec3 transformed = vec3( position );',
-                `uniform vec2 uFillTranslate;\nuniform float uTranslateAnchor;\nuniform float uBearing;\nvec3 transformed = vec3( position.xy + rotateTranslate(uFillTranslate, uTranslateAnchor, uBearing), position.z );`
-            );
+
+            // Inject global-scope declarations (uniforms + helper fn + varying)
+            // WITHOUT duplicating `void main()` — three.js resolves the
+            // #include directives AFTER onBeforeCompile.
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <common>',
-                `#include <common>\nvec2 rotateTranslate(vec2 t, float anchor, float bearing) {\n  if (anchor > 0.5) {\n    float c = cos(bearing);\n    float s = sin(bearing);\n    return vec2(t.x * c - t.y * s, t.x * s + t.y * c);\n  }\n  return t;\n}`
+                `#include <common>\n` +
+                `uniform vec2 uFillTranslate;\n` +
+                `uniform float uTranslateAnchor;\n` +
+                `uniform float uBearing;\n` +
+                `varying vec2 vPatternUv;\n` +
+                `vec2 rotateTranslate(vec2 t, float anchor, float bearing) {\n` +
+                `  if (anchor > 0.5) {\n` +
+                `    float c = cos(bearing);\n` +
+                `    float s = sin(bearing);\n` +
+                `    return vec2(t.x * c - t.y * s, t.x * s + t.y * c);\n` +
+                `  }\n` +
+                `  return t;\n` +
+                `}\n`
             );
             shader.vertexShader = shader.vertexShader.replace(
-                '#include <begin_vertex>',
-                PATTERN_VERT
+                'vec3 transformed = vec3( position );',
+                `vec3 transformed = vec3( position.xy + rotateTranslate(uFillTranslate, uTranslateAnchor, uBearing), position.z );`
             );
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <project_vertex>',
+                `#include <project_vertex>\n    vPatternUv = position.xy;`
+            );
+
+            // Pattern uniforms at global scope (no nested main).
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
-                `
-                uniform sampler2D uPatternMap;
-                uniform vec2 uPatternSize;
-                uniform vec2 uPatternOffset;
-                uniform float uFillOpacity;
-                varying vec2 vPatternUv;
-                void main() {
-                `
+                `uniform sampler2D uPatternMap;\n` +
+                `uniform vec2 uPatternSize;\n` +
+                `uniform vec2 uPatternOffset;\n` +
+                `uniform float uFillOpacity;\n` +
+                `varying vec2 vPatternUv;\n` +
+                `void main() {`
             );
 
             // Pattern
