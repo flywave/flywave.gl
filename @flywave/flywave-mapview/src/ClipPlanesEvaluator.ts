@@ -856,11 +856,7 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
 
         // Apply the constraints.
         viewRanges.near = Math.max(viewRanges.near, nearMin);
-        if (projection.type === ProjectionType.Spherical) {
-            viewRanges.far = Math.max(viewRanges.far, farMin);
-        } else {
-            viewRanges.far = THREE.MathUtils.clamp(viewRanges.far, farMin, farMax);
-        }
+        viewRanges.far = THREE.MathUtils.clamp(viewRanges.far, farMin, farMax);
 
         const marginRatio = useLogarithmicDepth
             ? this.nearFarMarginRatio * 0.5
@@ -874,7 +870,7 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
 
         // Set minimum and maximum view range.
         viewRanges.minimum = nearMin;
-        viewRanges.maximum = projection.type === ProjectionType.Spherical ? viewRanges.far : farMax;
+        viewRanges.maximum = farMax;
 
         return viewRanges;
     }
