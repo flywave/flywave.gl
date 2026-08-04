@@ -14,9 +14,7 @@ import { EventLog } from "./EventLog";
 
 const CANVAS_ID = "mapCanvas";
 
-function createLayout(): { mapContainer: HTMLElement; sidebar: HTMLElement } {
-    const mapContainer = document.getElementById("app") ?? document.body;
-    mapContainer.style.cssText = "position:absolute;left:0;top:0;width:60%;height:100%;";
+function createLayout(): { sidebar: HTMLElement } {
 
     const sidebar = document.createElement("div");
     sidebar.style.cssText =
@@ -25,17 +23,17 @@ function createLayout(): { mapContainer: HTMLElement; sidebar: HTMLElement } {
 
     const overviewWrapper = document.createElement("div");
     overviewWrapper.style.cssText =
-        "flex:1 1 60%;min-height:0;position:relative;border-bottom:1px solid #333;";
+        "flex:1 1 50%;min-height:0;position:relative;border-bottom:1px solid #333;";
     sidebar.appendChild(overviewWrapper);
 
     overviewWrapper.dataset.role = "overview";
 
     const logWrapper = document.createElement("div");
-    logWrapper.style.cssText = "flex:1 1 40%;min-height:0;";
+    logWrapper.style.cssText = "flex:1 1 50%;min-height:0;";
     sidebar.appendChild(logWrapper);
     logWrapper.dataset.role = "log";
 
-    return { mapContainer, sidebar };
+    return { sidebar };
 }
 
 async function main() {
@@ -85,7 +83,7 @@ async function main() {
     let collectInterval = 0;
     mapView.addEventListener(MapViewEventNames.AfterRender, () => {
         collectInterval++;
-        if (collectInterval % 3 !== 0) return;
+        if (collectInterval % 10 !== 0) return;
 
         const result = collector.collect();
         overview.update(result);

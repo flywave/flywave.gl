@@ -175,23 +175,32 @@ export class TileOverviewCanvas {
                 continue;
 
             let fill: string;
+            let stroke = "rgba(255,255,255,0.08)";
+            let strokeWidth = 0.5;
+
             if (this.createAnimations.has(mortonId)) {
-                fill = "rgba(255, 230, 0, 0.9)";
+                fill = "rgba(255, 230, 0, 1.0)";
+                stroke = "rgba(255, 200, 0, 1)";
+                strokeWidth = 1.5;
             } else if (tile.isVisible && tile.hasMesh) {
-                fill = "rgba(0, 200, 80, 0.7)";
+                fill = "rgba(0, 220, 60, 0.9)";
+                stroke = "rgba(150, 255, 150, 0.8)";
+                strokeWidth = 1;
             } else if (tile.hasMesh) {
-                fill = "rgba(0, 130, 50, 0.4)";
+                fill = "rgba(40, 90, 140, 0.7)";
+                stroke = "rgba(80, 140, 200, 0.5)";
             } else if (tile.isVisible) {
-                fill = "rgba(80, 150, 255, 0.5)";
+                fill = "rgba(255, 165, 0, 0.7)";
+                stroke = "rgba(255, 200, 100, 0.6)";
             } else {
-                fill = "rgba(80, 80, 120, 0.3)";
+                fill = "rgba(100, 100, 160, 0.5)";
             }
 
             ctx.fillStyle = fill;
             ctx.fillRect(x, y, width, height);
 
-            ctx.strokeStyle = tile.isVisible ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.08)";
-            ctx.lineWidth = 0.5;
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = strokeWidth;
             ctx.strokeRect(x, y, width, height);
         }
     }
@@ -306,12 +315,14 @@ export class TileOverviewCanvas {
     private drawStats(stats: SnapshotResult["stats"]) {
         const ctx = this.ctx;
         const lines = [
-            `Cached: ${stats.totalCached}`,
-            `Mesh: ${stats.withMesh}`,
-            `Visible: ${stats.visible}`,
-            `Evicted: ${stats.evictedThisFrame}`,
-            `Created: ${stats.createdThisFrame}`,
-            this.followCamera ? "[following camera]" : "[free roam — click to follow]"
+            `Cached: ${stats.totalCached}  Mesh: ${stats.withMesh}  Visible: ${stats.visible}  Evicted: ${stats.evictedThisFrame}  Created: ${stats.createdThisFrame}`,
+            "",
+            "🟢 bright green = visible + mesh   🔵 blue = cached mesh, not visible",
+            "🟠 orange = visible, no mesh      ⬜ dark = cached, no mesh",
+            "🟡 yellow flash = new            🔴 red fade = evicted",
+            this.followCamera
+                ? "[following camera — click to free roam]"
+                : "[free roam — click to follow camera]"
         ];
         ctx.font = "11px monospace";
         let y = 20;

@@ -1158,7 +1158,7 @@ export class MapView extends EventDispatcher {
         this.mapRenderingManager = useMapRenderingManager
             ? useMapRenderingManager(width, height, this)
             : new MapRenderingManager(width, height, this.m_options.dynamicPixelRatio);
-        this.mapRenderingManager.gpuPicking = this.m_options.enableGpuPicking !== true;
+        this.mapRenderingManager.gpuPicking = this.m_options.enableGpuPicking !== undefined;
 
         this.m_animatedExtrusionHandler = new AnimatedExtrusionHandler(this);
 
