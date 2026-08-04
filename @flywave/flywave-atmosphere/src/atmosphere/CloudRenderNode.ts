@@ -189,7 +189,6 @@ export class CloudRenderNode extends TempNode {
     private readonly _tmpDeltaTrans = new Matrix4();
     private readonly _tmpDelta = new Matrix4();
     private readonly _tmpE2wRot = new Matrix4();
-    private readonly _cloudProj = new Matrix4();
     private readonly _tmpSurfaceNormal = new Vector3();
     private readonly _tmpSunWorld = new Vector3();
     private readonly _tmpPos = new Vector3();
@@ -807,15 +806,9 @@ export class CloudRenderNode extends TempNode {
         const jitterCamera = atmoCtx.camera;
 
         if (jitterCamera && jitterCamera.isPerspectiveCamera) {
-            const origFar = jitterCamera.far;
-            const origAspect = jitterCamera.aspect;
             jitterCamera.far = Math.max(jitterCamera.far, 4e5);
             const drawingBufferSize = renderer.getDrawingBufferSize(sizeScratch);
             jitterCamera.aspect = drawingBufferSize.x / drawingBufferSize.y;
-            jitterCamera.updateProjectionMatrix();
-            this._cloudProj.copy(jitterCamera.projectionMatrix);
-            jitterCamera.far = origFar;
-            jitterCamera.aspect = origAspect;
             jitterCamera.updateProjectionMatrix();
         }
 
@@ -826,12 +819,12 @@ export class CloudRenderNode extends TempNode {
         jitterDx = ((ox - 0.5) / virtualWidth) * 4;
         jitterDy = -((oy - 0.5) / virtualHeight) * 4;
         this.temporalJitter.value.set(jitterDx, jitterDy);
-        this.jitteredInverseProjection.value.copy(this._cloudProj);
+        this.jitteredInverseProjection.value.copy(jitterCamera.projectionMatrix);
         this.jitteredInverseProjection.value.elements[8] += jitterDx * 2;
         this.jitteredInverseProjection.value.elements[9] += jitterDy * 2;
         this.jitteredInverseProjection.value.invert();
 
-        const jitteredProj = this._tmpJitteredProj.copy(this._cloudProj);
+        const jitteredProj = this._tmpJitteredProj.copy(jitterCamera.projectionMatrix);
         jitteredProj.elements[8] += jitterDx * 2;
         jitteredProj.elements[9] += jitterDy * 2;
         const curVP = this._tmpCurVP.multiplyMatrices(
@@ -888,7 +881,7 @@ export class CloudRenderNode extends TempNode {
             }
         }
 
-        this.prevProjectionMatrix.copy(this._cloudProj);
+        this.prevProjectionMatrix.copy(jitterCamera.projectionMatrix);
         this.prevViewMatrix.copy(jitterCamera.matrixWorldInverse);
         this.prevCamPos.copy(jitterCamera.position);
         this.hasPrevCamTransform = true;
