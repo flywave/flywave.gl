@@ -92,6 +92,8 @@ try {
     // 2. Initialize map view
     const mapView = initializeMapView(canvas);
 
+    mapView.beginAnimation();
+
     // 3. Initialize map controls
     initializeMapControls(mapView, canvas);
 

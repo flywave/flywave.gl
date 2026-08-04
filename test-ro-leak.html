@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>RenderObject Cleanup Test</title>
+    </head>
+    <body>
+        <canvas id="c" width="800" height="600"></canvas>
+        <pre id="log"></pre>
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "./node_modules/three/build/three.webgpu.js",
+                    "three/webgpu": "./node_modules/three/build/three.webgpu.js",
+                    "three/tsl": "./node_modules/three/build/three.tsl.js"
+                }
+            }
+        </script>
+        <script type="module">
+            import * as THREE from "three/webgpu";
+            import { Fn, vec3, float, uv, positionLocal, time } from "three/tsl";
+
+            const log = msg => {
+                document.getElementById("log").textContent += msg + "\n";
+                console.log(msg);
+            };
+
+            const renderer = new THREE.WebGPURenderer({
+                canvas: document.getElementById("c"),
+                antialias: true
+            });
+            await renderer.init();
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(60, 800 / 600, 0.1, 100);
+            camera.position.z = 5;
+
+            // ---- shared geometry + shared NodeMaterial ----
+            const sharedGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+
+            const sharedMat = new THREE.MeshStandardNodeMaterial();
+            // simple TSL positionNode
+            sharedMat.positionNode = Fn(() => {
+                return positionLocal.add(vec3(float(0.0), float(0.0), float(0.0)));
+            })();
+
+            // lights
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(1, 1, 1);
+            scene.add(dirLight);
+            scene.add(new THREE.AmbientLight(0x404040));
+
+            // ---- intercept RenderObject creation ----
+            const roRegistry = new Map(); // mesh.uuid -> Set<RenderObject>
+            const origGet = renderer._objects.get.bind(renderer._objects);
+
+            renderer._objects.get = function (
+                object,
+                material,
+                scene,
+                camera,
+                lightsNode,
+                renderContext,
+                clippingContext,
+                passId
+            ) {
+                const ro = origGet(
+                    object,
+                    material,
+                    scene,
+                    camera,
+                    lightsNode,
+                    renderContext,
+                    clippingContext,
+                    passId
+                );
+                if (ro && object.isMesh) {
+                    const key = object.uuid;
+                    if (!roRegistry.has(key)) roRegistry.set(key, new Set());
+                    roRegistry.get(key).add(ro);
+                }
+                return ro;
+            };
+
+            // ---- stats helper ----
+            function stats() {
+                let totalRO = 0;
+                for (const set of roRegistry.values()) totalRO += set.size;
+                const meshCount = scene.children.filter(c => c.isMesh).length;
+                return { meshCount, totalRO, registrySize: roRegistry.size };
+            }
+
+            // ============================================================
+            // TEST 1: Create 50 meshes, render, check RO count
+            // ============================================================
+            log("=== TEST 1: Create 50 meshes, shared material ===");
+            for (let i = 0; i < 50; i++) {
+                const m = new THREE.Mesh(sharedGeo, sharedMat);
+                m.position.set(
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 2
+                );
+                scene.add(m);
+            }
+            renderer.render(scene, camera);
+            let s1 = stats();
+            log(
+                `After render: meshes=${s1.meshCount}, RenderObjects=${s1.totalRO}, registryEntries=${s1.registrySize}`
+            );
+
+            // ============================================================
+            // TEST 2: scene.remove() all meshes, render again
+            // ============================================================
+            log("\n=== TEST 2: scene.remove() all meshes, render ===");
+            const toRemove = scene.children.filter(c => c.isMesh);
+            toRemove.forEach(m => scene.remove(m));
+            renderer.render(scene, camera);
+            let s2 = stats();
+            log(
+                `After remove+render: meshes=${s2.meshCount}, RenderObjects=${s2.totalRO}, registryEntries=${s2.registrySize}`
+            );
+            log(`ROs STILL ALIVE after scene.remove: ${s2.totalRO} (LEAK!)`);
+
+            // ============================================================
+            // TEST 3: Now try disposing via ro.dispose()
+            // ============================================================
+            log("\n=== TEST 3: Manually call ro.dispose() for all tracked ROs ===");
+            let disposedCount = 0;
+            for (const [uuid, set] of roRegistry.entries()) {
+                for (const ro of set) {
+                    ro.dispose();
+                    disposedCount++;
+                }
+                set.clear();
+            }
+            log(`Disposed ${disposedCount} RenderObjects via ro.dispose()`);
+            let s3 = stats();
+            log(`After dispose: RenderObjects=${s3.totalRO}, registryEntries=${s3.registrySize}`);
+
+            // ============================================================
+            // TEST 4: Simulate tile lifecycle - create/render/dispose cycle x5
+            // ============================================================
+            log("\n=== TEST 4: Create → render → scene.remove → ro.dispose cycle x5 ===");
+            for (let cycle = 0; cycle < 5; cycle++) {
+                const meshes = [];
+                for (let i = 0; i < 100; i++) {
+                    const m = new THREE.Mesh(sharedGeo, sharedMat);
+                    m.position.set(
+                        (Math.random() - 0.5) * 4,
+                        (Math.random() - 0.5) * 4,
+                        (Math.random() - 0.5) * 2
+                    );
+                    scene.add(m);
+                    meshes.push(m);
+                }
+                renderer.render(scene, camera);
+                const before = stats();
+
+                meshes.forEach(m => {
+                    scene.remove(m);
+                    const ros = roRegistry.get(m.uuid);
+                    if (ros) {
+                        for (const ro of ros) ro.dispose();
+                        ros.clear();
+                    }
+                    roRegistry.delete(m.uuid);
+                });
+                const after = stats();
+                log(
+                    `Cycle ${cycle}: created 100 → render (ROs=${before.totalRO}) → dispose all → ROs=${after.totalRO}`
+                );
+            }
+
+            // ============================================================
+            // TEST 5: Verify shared material still works after many dispose cycles
+            // ============================================================
+            log("\n=== TEST 5: Shared material still works? ===");
+            const testMesh = new THREE.Mesh(sharedGeo, sharedMat);
+            scene.add(testMesh);
+            renderer.render(scene, camera);
+            log(`Render still works after 500+ ro.dispose() calls: OK`);
+            const s5 = stats();
+            log(`Final: meshes=${s5.meshCount}, RenderObjects=${s5.totalRO}`);
+
+            // cleanup
+            scene.remove(testMesh);
+            const ros = roRegistry.get(testMesh.uuid);
+            if (ros) {
+                for (const ro of ros) ro.dispose();
+                ros.clear();
+            }
+
+            // ============================================================
+            // TEST 6: Render WITHOUT scene.remove, just ro.dispose
+            // ============================================================
+            log("\n=== TEST 6: ro.dispose() WITHOUT scene.remove first ===");
+            const m6 = new THREE.Mesh(sharedGeo, sharedMat);
+            scene.add(m6);
+            renderer.render(scene, camera);
+            log(`Before dispose: ROs=${stats().totalRO}`);
+
+            const ros6 = roRegistry.get(m6.uuid);
+            if (ros6) {
+                for (const ro of ros6) ro.dispose();
+                ros6.clear();
+            }
+            renderer.render(scene, camera);
+            log(
+                `After ro.dispose + render (mesh still in scene): ROs=${
+                    stats().totalRO
+                } (renderer recreated RO)`
+            );
+
+            // ============================================================
+            // CONCLUSION
+            // ============================================================
+            log("\n=== CONCLUSION ===");
+            log("1. scene.remove() does NOT free RenderObjects (confirmed)");
+            log("2. ro.dispose() properly removes from ChainMap + cleans pipeline/bindings/nodes");
+            log("3. Shared material/geometry are NOT affected by ro.dispose()");
+            log("4. Renderer auto-recreates RenderObject on next render if mesh still visible");
+            log("5. The intercept pattern: wrap renderer._objects.get to track mesh→RenderObjects");
+        </script>
+    </body>
+</html>

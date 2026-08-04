@@ -70,7 +70,10 @@ class MapAssetsUriResolver implements UriResolver {
         return uri;
     }
 }
- 
+
+if(window.FLYWAVE_BASE_URL){
+    window.FLYWAVE_BASE_URL = '';
+}
 
 // Export a singleton instance
 export const mapAssetsUriResolver = new MapAssetsUriResolver();

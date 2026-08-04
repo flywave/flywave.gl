@@ -66,6 +66,27 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             .dataProvider()
             .getBestAvailableResourceTile(this.tile.tileKey);
 
+        const existingMesh = this.tile.cachedMesh as HeightMapTerrainMesh | null;
+
+        if (existingMesh) {
+            this.tile.objects.length = 0;
+            if (demTile && demTile.resource) {
+                const texture = demTile.resource.demData.getPixels();
+                if (texture) {
+                    existingMesh.setHeightMap(texture, demTile.tileKey);
+                }
+            }
+            existingMesh.updateUniforms();
+            this.dataSource.getWebTileDataSources().forEach(webTiles => {
+                const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
+                if (!webTile) return;
+                existingMesh.setupImageryTexture(webTile.resource.value, webTiles.tilingScheme);
+            });
+            existingMesh.projectorState = this.dataSource.getProjectorOverlayManager().state;
+            this.tile.objects.push(existingMesh);
+            return;
+        }
+
         this.tile.clear();
         this.dataSource.getWebTileDataSources().forEach(webTiles => {
             const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
@@ -85,9 +106,8 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             }
             terrainMesh.updateUniforms();
             terrainMesh.setupImageryTexture(webTile.resource.value, webTiles.tilingScheme);
-            // Bind this tile to its source's projector overlay state so the
-            // DEM tile shader can sample all ground-projected layers.
             terrainMesh.projectorState = this.dataSource.getProjectorOverlayManager().state;
+            this.tile.cachedMesh = terrainMesh;
             this.tile.objects.push(terrainMesh);
         });
     }

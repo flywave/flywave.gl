@@ -39,7 +39,7 @@ import {
     PerformanceTimer
 } from "@flywave/flywave-utils";
 import * as THREE from "three/webgpu";
-import { WebGPURenderer, type Renderer } from "three/webgpu";
+import { type Renderer, WebGPURenderer } from "three/webgpu";
 import { type RendererCapabilities } from "@flywave/flywave-materials";
 
 import { type AtmosphereThemeConfig } from "@flywave/flywave-datasource-protocol";
@@ -1158,7 +1158,7 @@ export class MapView extends EventDispatcher {
         this.mapRenderingManager = useMapRenderingManager
             ? useMapRenderingManager(width, height, this)
             : new MapRenderingManager(width, height, this.m_options.dynamicPixelRatio);
-        this.mapRenderingManager.gpuPicking = this.m_options.enableGpuPicking !== false;
+        this.mapRenderingManager.gpuPicking = this.m_options.enableGpuPicking !== true;
 
         this.m_animatedExtrusionHandler = new AnimatedExtrusionHandler(this);
 

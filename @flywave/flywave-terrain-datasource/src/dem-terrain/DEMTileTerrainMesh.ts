@@ -22,7 +22,8 @@ import { type WebTile } from "../WebImageryTileProvider";
 import {
     emptyTexture as matEmptyTexture,
     emptyImageryTextures,
-    defaultDEMTileMeshMaterial
+    defaultDEMTileMeshMaterial,
+    DEMTileMeshMaterial
 } from "./DEMTileMeshMaterial";
 import { ProjectionSwitchController } from "../ProjectionSwitchController";
 
@@ -123,7 +124,14 @@ export class HeightMapTerrainMesh extends Mesh {
             tile.tileKey
         );
 
-        super(geometryWithTransform.geometry, defaultDEMTileMeshMaterial);
+        super(
+            geometryWithTransform.geometry,
+            new DEMTileMeshMaterial({
+                wireframe: false,
+                transparent: false,
+                blending: THREE.NoBlending
+            })
+        );
 
         this.m_tile = tile;
         this.m_terrainTilingScheme = tilingScheme;

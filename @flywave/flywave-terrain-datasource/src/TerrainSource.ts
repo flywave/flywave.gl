@@ -35,7 +35,7 @@ import { ExtendedFrustum } from "@flywave/flywave-utils/ExtendedFrustum";
 import { PriorityQueue } from "@flywave/flywave-utils/PriorityQueue";
 import { type WebTileDataProvider } from "@flywave/flywave-webtile-datasource";
 import debounce from "lodash.debounce";
-import { Matrix4, Object3D } from "three/webgpu";
+import { Matrix4, Mesh, Object3D, type Material } from "three/webgpu";
 
 import { TERRAIN_TILE_DECODER_ID } from "./Constants";
 import { ExclusionManager } from "./ExclusionManager";
@@ -142,13 +142,14 @@ export class TerrainResourceTile extends Tile {
     _isUsed: boolean = false;
     _distanceFromCamera: number = Number.MAX_SAFE_INTEGER;
     private readonly _resourceManager: TileResourceManager = new TileResourceManager();
+    private _cachedMesh: Object3D | null = null;
 
     shouldDisposeObjectGeometry() {
         return false;
     }
 
     shouldDisposeObjectMaterial() {
-        return false;
+        return true;
     }
 
     shouldDisposeTexture() {
@@ -157,6 +158,14 @@ export class TerrainResourceTile extends Tile {
 
     get resourceManager() {
         return this._resourceManager;
+    }
+
+    get cachedMesh(): Object3D | null {
+        return this._cachedMesh;
+    }
+
+    set cachedMesh(mesh: Object3D | null) {
+        this._cachedMesh = mesh;
     }
 
     /**
@@ -191,10 +200,21 @@ export class TerrainResourceTile extends Tile {
      * @param fromLru - Whether the disposal is from LRU cache eviction
      */
     dispose(fromLru: boolean = false) {
+        if (fromLru && this._cachedMesh) {
+            const mesh = this._cachedMesh as Mesh;
+            if (mesh.material) {
+                (mesh.material as Material).dispose();
+            }
+            this._cachedMesh = null;
+        }
         super.dispose();
         if (fromLru) {
             this._resourceManager.dispose();
         }
+    }
+
+    clear() {
+        super.clear();
     }
 }
 
@@ -206,6 +226,26 @@ export class ShadowTerrainResourceTile extends TerrainResourceTile {
 
     get resourceManager() {
         return this.resTile.resourceManager;
+    }
+
+    get cachedMesh(): Object3D | null {
+        return this.resTile.cachedMesh;
+    }
+
+    set cachedMesh(mesh: Object3D | null) {
+        this.resTile.cachedMesh = mesh;
+    }
+
+    shouldDisposeObjectGeometry() {
+        return false;
+    }
+
+    shouldDisposeObjectMaterial() {
+        return false;
+    }
+
+    shouldDisposeTexture() {
+        return false;
     }
 
     removeTileResource(resourceKey: string) {
@@ -243,7 +283,6 @@ export class ShadowTerrainResourceTile extends TerrainResourceTile {
         const datasource = this.dataSource as ITerrainSource;
         datasource.debugObject.remove(this.m_orientedBoxHelper);
         super.dispose();
-        this.resTile.dispose();
         this.m_orientedBoxHelper?.dispose();
     }
 }

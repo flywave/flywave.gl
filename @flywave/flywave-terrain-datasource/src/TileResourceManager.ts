@@ -135,6 +135,15 @@ export class TileLRUCache<TileType extends TerrainResourceTile> extends LRUCache
     }
 
     /**
+     * Gets all tiles in the cache
+     *
+     * @returns Array of all cached tiles
+     */
+    getAllTiles(): TileType[] {
+        return Array.from(this._tileMap.values());
+    }
+
+    /**
      * Removes all tiles from the cache
      */
     removeAllTiles(): void {

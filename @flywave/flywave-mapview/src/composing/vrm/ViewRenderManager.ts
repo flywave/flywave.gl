@@ -102,9 +102,11 @@ export class ViewRenderManager implements IViewRenderManager {
 
     private mrtKeys: string[] = ["output"];
     private pickDepthTexIndex: number = -1;
-    private rawDepth: number | null = null;
-    private smoothedDepth: number | null = null;
+    private cachedInvW: number | null = null;
     private depthReadInFlight: boolean = false;
+
+    private stagingBuffer: GPUBuffer | null = null;
+    private stagingBufferSize: number = 0;
 
     get aerialPerspectiveNode(): AerialPerspectiveNode | undefined {
         return this.aerialNode;
@@ -389,6 +391,8 @@ export class ViewRenderManager implements IViewRenderManager {
         this.m_cloudNode = undefined;
         this.taaNode = undefined;
         this.cachedInvW = null;
+        this.stagingBuffer?.destroy();
+        this.stagingBuffer = null;
     }
 
     getColorTexture(): THREE.Texture | null {
@@ -454,22 +458,53 @@ export class ViewRenderManager implements IViewRenderManager {
         const rt = this.passNode?.renderTarget;
         if (rt == null || this.depthReadInFlight || this.pickDepthTexIndex < 0) return;
 
+        const backend = (this.renderer as any).backend;
+        const device = backend?.device;
+        if (!device) return;
+
+        const pickDepthTex = rt.textures[this.pickDepthTexIndex];
+        if (!pickDepthTex) return;
+        const textureData = backend.get(pickDepthTex);
+        const gpuTexture = textureData?.texture;
+        if (!gpuTexture) return;
+
         const width = rt.width;
         const height = rt.height;
         const cx = Math.round(width * 0.5);
         const cy = Math.round(height * 0.5);
 
+        const bytesPerRow = Math.ceil(8 / 256) * 256;
+
+        if (this.stagingBuffer === null || this.stagingBufferSize !== bytesPerRow) {
+            this.stagingBuffer?.destroy();
+            this.stagingBuffer = device.createBuffer({
+                size: bytesPerRow,
+                usage: 0x0008 | 0x0001 // COPY_DST | MAP_READ
+            });
+            this.stagingBufferSize = bytesPerRow;
+        }
+
+        const encoder = device.createCommandEncoder();
+        encoder.copyTextureToBuffer(
+            { texture: gpuTexture, origin: { x: cx, y: cy, z: 0 } },
+            { buffer: this.stagingBuffer, bytesPerRow },
+            { width: 1, height: 1, depthOrArrayLayers: 1 }
+        );
+        device.queue.submit([encoder.finish()]);
+
         this.depthReadInFlight = true;
 
-        this.renderer
-            .readRenderTargetPixelsAsync(rt, cx, cy, 1, 1, this.pickDepthTexIndex)
-            .then((data: ArrayBufferView) => {
-                const invW = halfFloatToNumber((data as Uint16Array)[0]);
-                if (!isFinite(invW) || invW <= 0) {
-                    this.depthReadInFlight = false;
-                    return;
+        this.stagingBuffer
+            .mapAsync(GPUMapMode.READ)
+            .then(() => {
+                const mapped = this.stagingBuffer!.getMappedRange();
+                const raw = new Uint16Array(mapped, 0, 1)[0];
+                this.stagingBuffer!.unmap();
+
+                const invW = halfFloatToNumber(raw);
+                if (isFinite(invW) && invW > 0) {
+                    this.cachedInvW = invW;
                 }
-                this.cachedInvW = invW;
                 this.depthReadInFlight = false;
             })
             .catch(() => {
