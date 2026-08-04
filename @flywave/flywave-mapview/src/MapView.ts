@@ -634,17 +634,7 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
     atmosphereOptions?: AtmosphereThemeConfig;
 
     /**
-     * Enable GPU-based depth readback for camera collision and world position queries.
-     *
-     * @remarks
-     * When `true` (default), the renderer caches the screen-center depth value each frame
-     * via async GPU readback. This allows camera collision detection (`updateLookAtSettings`)
-     * and `getWorldPositionAt` to use GPU depth instead of CPU raycasting — eliminating
-     * per-frame BVH traversal against terrain and 3D tiles.
-     *
-     * The depth is one frame delayed, which is imperceptible at interactive frame rates.
-     * Falls back to CPU raycast automatically when GPU depth is unavailable.
-     *
+     * Enable GPU depth readback for camera collision and world position queries.
      * @default true
      */
     enableGpuPicking?: boolean;
@@ -913,9 +903,6 @@ export class MapView extends EventDispatcher {
     private readonly m_sphere = new THREE.Sphere(undefined, EarthConstants.EQUATORIAL_RADIUS);
 
     private readonly m_options: MapViewOptions;
-    get gpuPickingEnabled(): boolean {
-        return this.m_options.enableGpuPicking !== false;
-    }
     private readonly m_visibleTileSetOptions: VisibleTileSetOptions;
 
     private readonly m_uriResolver?: UriResolver;
@@ -1171,6 +1158,7 @@ export class MapView extends EventDispatcher {
         this.mapRenderingManager = useMapRenderingManager
             ? useMapRenderingManager(width, height, this)
             : new MapRenderingManager(width, height, this.m_options.dynamicPixelRatio);
+        this.mapRenderingManager.gpuPicking = this.m_options.enableGpuPicking !== false;
 
         this.m_animatedExtrusionHandler = new AnimatedExtrusionHandler(this);
 
@@ -2720,21 +2708,16 @@ export class MapView extends EventDispatcher {
 
     private getWorldPositionAtByDepth(x: number, y: number): THREE.Vector3 | null {
         const ndc = this.getNormalizedScreenCoordinates(x, y);
-        const linT = this.mapRenderingManager?.readDepth(ndc);
+        const ndcVector = new THREE.Vector3(ndc.x, ndc.y, 0.5);
+        const depth = this.mapRenderingManager.readDepth(ndcVector);
 
-        if (linT === null || linT <= 0 || linT >= 1) {
+        if (depth === null) {
             return null;
         }
+        const ndcWithDepth = new THREE.Vector3(ndc.x, ndc.y, depth * 2.0 - 1.0);
 
-        const near = this.camera.near;
-        const far = this.camera.far;
-        const invNear = 1 / near;
-        const invFar = 1 / far;
-        const worldDist = 1 / (invNear + linT * (invFar - invNear));
-
-        const dir = new THREE.Vector3();
-        this.camera.getWorldDirection(dir);
-        return dir.multiplyScalar(worldDist).add(this.camera.position);
+        const worldPosition = new THREE.Vector3();
+        return this.ndcToView(ndcWithDepth, worldPosition).add(this.camera.position);
     }
 
     private getWorldPositionAtWithRaycast(
@@ -3462,13 +3445,38 @@ export class MapView extends EventDispatcher {
         const collidables = this.dataSources.filter(
             ds => ds.enableCameraCollision && typeof (ds as any).raycast === "function"
         ) as unknown as ICameraCollidable[];
-        let { target, distance, final, altitude } = MapViewUtils.getTargetAndDistance(
-            this.projection,
-            this.camera,
-            this.elevationProvider,
-            collidables,
-            () => this.mapRenderingManager?.readDepth(new THREE.Vector2(0, 0)) ?? null
-        );
+
+        // GPU depth fast-path: skip CPU raycast when available
+        const gpuDepth = this.mapRenderingManager?.readDepth(new THREE.Vector2(0, 0)) ?? null;
+        let target: THREE.Vector3;
+        let distance: number;
+        let final: boolean;
+        let altitude: number | undefined;
+
+        if (
+            gpuDepth !== null &&
+            gpuDepth > 0 &&
+            gpuDepth < 1 &&
+            this.camera instanceof THREE.PerspectiveCamera
+        ) {
+            const ndcZ = gpuDepth * 2.0 - 1.0;
+            target = new THREE.Vector3(0, 0, ndcZ).unproject(this.camera);
+            distance = this.camera.position.distanceTo(target);
+            final = true;
+            altitude = undefined;
+        } else {
+            const result = MapViewUtils.getTargetAndDistance(
+                this.projection,
+                this.camera,
+                this.elevationProvider,
+                collidables
+            );
+            target = result.target;
+            distance = result.distance;
+            final = result.final;
+            altitude = result.altitude;
+        }
+
         if (!final) {
             this.update();
         }

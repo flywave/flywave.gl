@@ -51,6 +51,7 @@ export interface IMapRenderingManager extends IPassManager {
     staticMsaaSamplingLevel: MSAASampling;
 
     viewRenderManager?: IViewRenderManager;
+    gpuPicking: boolean;
 
     render(
         renderer: Renderer,
@@ -148,8 +149,27 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_lowResPixelRatio?: number;
     private m_customEffects: Map<string, ICustomEffect> = new Map();
     private m_pendingBloomObjects: THREE.Object3D[] = [];
+    private m_gpuPicking: boolean = false;
 
-    viewRenderManager?: IViewRenderManager;
+    private _viewRenderManager?: IViewRenderManager;
+    get viewRenderManager(): IViewRenderManager | undefined {
+        return this._viewRenderManager;
+    }
+    set viewRenderManager(vrm: IViewRenderManager | undefined) {
+        this._viewRenderManager = vrm;
+        if (vrm) vrm.gpuPicking = this.m_gpuPicking;
+    }
+
+    set gpuPicking(value: boolean) {
+        this.m_gpuPicking = value;
+        if (this._viewRenderManager) {
+            this._viewRenderManager.gpuPicking = value;
+            this._viewRenderManager.needsUpdate = true;
+        }
+    }
+    get gpuPicking(): boolean {
+        return this.m_gpuPicking;
+    }
 
     constructor(
         width: number,

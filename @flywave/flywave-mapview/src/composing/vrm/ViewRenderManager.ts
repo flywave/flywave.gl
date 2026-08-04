@@ -388,8 +388,7 @@ export class ViewRenderManager implements IViewRenderManager {
         this.aerialNode = undefined;
         this.m_cloudNode = undefined;
         this.taaNode = undefined;
-        this.rawDepth = null;
-        this.smoothedDepth = null;
+        this.cachedInvW = null;
     }
 
     getColorTexture(): THREE.Texture | null {
@@ -400,20 +399,20 @@ export class ViewRenderManager implements IViewRenderManager {
         return this.passNode?.renderTarget?.depthTexture ?? null;
     }
 
+    private cachedInvW: number | null = null;
+
     readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null {
-        if (!this.gpuPicking) return null;
-        return this.smoothedDepth;
+        if (!this.gpuPicking || this.cachedInvW === null || this.camera == null) return null;
+        // Use the actual projection matrix instead of hand-written formula
+        const zEye = -1 / this.cachedInvW;
+        const pm = this.camera.projectionMatrix.elements;
+        const zClip = pm[10] * zEye + pm[14];
+        const wClip = -zEye;
+        const ndcZ = zClip / wClip;
+        return ndcZ * 0.5 + 0.5;
     }
 
     private cameraNearFar: { near: number; far: number } = { near: 1, far: 1000 };
-
-    private linFactorFrom1w(val: number): number {
-        const { near, far } = this.cameraNearFar;
-        const invNear = 1 / near;
-        const invFar = 1 / far;
-        const t = (val - invNear) / (invFar - invNear);
-        return Math.max(0, Math.min(1, t));
-    }
 
     async readDepthAsync(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null> {
         const rt = this.passNode?.renderTarget;
@@ -437,7 +436,15 @@ export class ViewRenderManager implements IViewRenderManager {
                 1,
                 this.pickDepthTexIndex
             );
-            return this.linFactorFrom1w(halfFloatToNumber((data as Uint16Array)[0]));
+            const invW = halfFloatToNumber((data as Uint16Array)[0]);
+            if (!isFinite(invW) || invW <= 0) return null;
+            if (this.camera == null) return null;
+            const zEye = -1 / invW;
+            const pm = this.camera.projectionMatrix.elements;
+            const zClip = pm[10] * zEye + pm[14];
+            const wClip = -zEye;
+            const ndcZ = zClip / wClip;
+            return ndcZ * 0.5 + 0.5;
         } catch {
             return null;
         }
@@ -462,17 +469,7 @@ export class ViewRenderManager implements IViewRenderManager {
                     this.depthReadInFlight = false;
                     return;
                 }
-
-                const linT = this.linFactorFrom1w(invW);
-
-                if (this.rawDepth === null) {
-                    this.smoothedDepth = linT;
-                } else {
-                    const delta = Math.abs(linT - this.rawDepth);
-                    const alpha = delta > 0.3 ? 1.0 : 0.2;
-                    this.smoothedDepth = this.smoothedDepth! * (1 - alpha) + linT * alpha;
-                }
-                this.rawDepth = linT;
+                this.cachedInvW = invW;
                 this.depthReadInFlight = false;
             })
             .catch(() => {

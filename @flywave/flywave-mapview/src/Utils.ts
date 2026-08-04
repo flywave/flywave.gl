@@ -717,9 +717,6 @@ export namespace MapViewUtils {
      * @param projection - The world space projection.
      * @param camera - The camera whose target will be computed.
      * @param elevationProvider - If provided, elevation at the camera position will be used.
-     * @param collidables - Optional collidable data sources for CPU raycast fallback.
-     * @param depthProvider - If provided, reads screen-center depth from GPU (one-frame-delayed).
-     * When available, this replaces CPU raycast entirely.
      * @returns The target, the distance to it and a boolean flag set to false in case an elevation
      * provider was passed but the elevation was not available yet.
      */
@@ -727,8 +724,7 @@ export namespace MapViewUtils {
         projection: Projection,
         camera: THREE.Camera,
         elevationProvider?: ElevationProvider,
-        collidables?: ICameraCollidable[],
-        depthProvider?: () => number | null
+        collidables?: ICameraCollidable[]
     ): { target: THREE.Vector3; distance: number; altitude?: number; final: boolean } {
         const cameraPitch = extractAttitude({ projection }, camera).pitch;
 
@@ -745,44 +741,8 @@ export namespace MapViewUtils {
             : undefined;
         const final = !elevationProvider || elevation !== undefined;
 
-        // GPU depth fast-path: unproject screen-center depth to world target
-        if (depthProvider && camera instanceof THREE.PerspectiveCamera) {
-            const linT = depthProvider();
-            if (linT !== null && linT > 0 && linT < 1) {
-                // linT is a linear interpolation factor: 0 = near plane, 1 = far plane.
-                // Reconstruct world position by interpolating along the camera's view ray.
-                const near = camera.near;
-                const far = camera.far;
-                // Linearize distance: actual world distance = near + t * (far - near) is NOT
-                // correct for perspective. Instead use: dist = 1 / (invNear + t * (invFar - invNear))
-                const invNear = 1 / near;
-                const invFar = 1 / far;
-                const worldDist = 1 / (invNear + linT * (invFar - invNear));
-
-                const dir = camera.getWorldDirection(cache.vector3[2]);
-                const target = cache.vector3[3]
-                    .copy(camera.position)
-                    .add(dir.multiplyScalar(worldDist));
-
-                if (elevation !== undefined) {
-                    const surfaceNormal = projection.surfaceNormal(
-                        target,
-                        cache.vector3[4] ?? new THREE.Vector3()
-                    );
-                    target.add(surfaceNormal.multiplyScalar(elevation));
-                }
-                const distance = camera.position.distanceTo(target);
-
-                const groundDist = projection.groundDistance(camera.position);
-                if (distance > groundDist * 3 || distance < groundDist * 0.05) {
-                    // GPU depth looks bogus, fall through to CPU
-                } else {
-                    return { target, distance, altitude: elevation, final };
-                }
-            }
-        }
-
-        // CPU fallback: raycast against collidables or projection surface
+        // Even for a tilt of 90° raycastTargetFromCamera is returning some point almost at
+        // infinity.
         const target =
             cameraPitch < MAX_TILT_RAD
                 ? getWorldTargetFromCamera(camera, projection, elevation, collidables)
