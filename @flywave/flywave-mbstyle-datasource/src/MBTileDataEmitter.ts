@@ -514,6 +514,7 @@ export class MBTileDataEmitter {
             idx = this.m_techniqueIndex++;
             this.m_layerToTechniqueIndex.set(cacheKey, idx);
             const props = this.paintToTechniqueProps(layer, properties, symbolMode);
+            const preExtruded = props.technique === 'solid-line';
             const technique: any = {
                 name: props.technique,
                 _index: idx,
@@ -522,8 +523,16 @@ export class MBTileDataEmitter {
                 _layerId: layer.id,
                 _paint: layer.paint,
                 _layout: layer.layout,
+                // Lines are pre-extruded in JS (position already contains the
+                // ribbon width); tell the material not to extrude again in GLSL.
+                _preExtrudedLines: preExtruded,
                 ...props,
             };
+            if (preExtruded) {
+                // Near-zero lineWidth → the SolidLineMaterial's shader extrusion
+                // becomes negligible; the baked geometry provides the width.
+                technique.lineWidth = 0.0001;
+            }
             this.m_techniques.push(technique as IndexedTechnique);
         }
         return idx;
@@ -610,6 +619,7 @@ export class MBTileDataEmitter {
     private m_lineGroupStarts: number[] = [];
     private m_lineSortKeys: number[] = [];
     private m_lineAttr: string[] = [];
+    private m_preExtrudedLines = false;
 
     processLineFeature(
         layerName: string,
@@ -642,6 +652,28 @@ export class MBTileDataEmitter {
                 const center = this.m_decodeInfo.center;
                 const lineGeom = createLineGeometry(center, worldPts, webMercatorProjection);
 
+                // Pre-extrude the centerline ribbon in JS so the renderer does not
+                // depend on the SolidLineMaterial's GLSL extrusion (which fails to
+                // rasterize on SwiftShader). The shader is told to use `position`
+                // directly via the `_preExtrudedLines` technique flag.
+                const lineWidthPx = Number(layer.paint?.['line-width'] ?? 1);
+                // Convert CSS px to world units at the tile's zoom (approx, matches
+                // the mapview's $pixelToMeters for the tile center latitude).
+                const lat = center.y > 0 ? 0 : 0; // planar fallback; world y already scaled
+                const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE *
+                    Math.max(Math.cos((this.m_decodeInfo.projectedBoundingBox?.extents?.y ?? 0) * Math.PI / 180), 0.01) /
+                    (256 * Math.pow(2, this.m_zoom));
+                const worldHalfWidth = lineWidthPx * metersPerPixel / 2;
+                // Bake extrusion into each vertex's position: pos += biTangent*hw*sign(ec.y)
+                const verts = lineGeom.vertices;
+                for (let v = 0; v < verts.length; v += 13) {
+                    const sy = verts[v + 1] >= 0 ? 1 : -1; // sign of extrusionCoord.y
+                    verts[v + 3] += verts[v + 9] * worldHalfWidth * sy;   // pos.x += biTangent.x*hw*sign
+                    verts[v + 4] += verts[v + 10] * worldHalfWidth * sy;  // pos.y += biTangent.y*hw*sign
+                    verts[v + 5] += verts[v + 11] * worldHalfWidth * sy;  // pos.z += biTangent.z*hw*sign
+                }
+                this.m_preExtrudedLines = true;
+
                 // Store interleaved vertex data + remapped indices
                 const stride = 13; // extrusionCoord(3)+position(3)+tangent(3)+biTangent(4)
                 const baseVert = this.m_lineInterleaved.length / stride;
@@ -656,8 +688,80 @@ export class MBTileDataEmitter {
                 this.m_lineGroupStarts.push(start, techniqueIdx);
                 this.m_lineSortKeys.push(this.extractSortKey(layer) ?? 0);
                 this.m_lineAttr.push(JSON.stringify({ ...properties, $id: fid }));
+
+                // Also emit the pre-extruded ribbon as a simple fill geometry so the
+                // line renders even where the SolidLineMaterial shader extrusion
+                // fails (SwiftShader). The fill technique carries the line color.
+                this.emitRibbonFill(layer, lineGeom, baseVert);
             }
         }
+    }
+
+    /**
+     * Emit a pre-extruded line ribbon as a plain fill geometry (positions baked
+     * into `position`, no shader extrusion). Falls back to the fill pipeline
+     * which rasterizes triangles directly.
+     */
+    private emitRibbonFill(
+        layer: EvaluatedLayer,
+        lineGeom: { vertices: number[]; indices: number[] },
+        baseVert: number,
+    ): void {
+        const paint = layer.paint ?? {};
+        const key = `${layer.id}:line-ribbon`;
+        const geo = this.getOrCreateGeometry(key);
+        const featureStart = geo.indices.length;
+        const startIdx = geo.positions.length / 3;
+
+        // Copy the baked ribbon positions (offset 3 in the stride-13 data).
+        for (let v = 0; v < lineGeom.vertices.length; v += 13) {
+            geo.positions.push(
+                lineGeom.vertices[v + 3],
+                lineGeom.vertices[v + 4],
+                lineGeom.vertices[v + 5],
+            );
+        }
+        // Remap the line indices into the fill geometry.
+        for (const idx of lineGeom.indices) {
+            geo.indices.push(idx + startIdx);
+        }
+
+        // Use a fill technique so the mapview creates a simple fill material.
+        const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer);
+        const count = geo.indices.length - featureStart;
+        if (count > 0) {
+            geo.groups.push({
+                start: featureStart,
+                count,
+                materialIndex: ribbonTechIdx,
+                sortKey: this.extractSortKey(layer),
+            });
+            geo.featureStarts.push(featureStart);
+            geo.objInfos.push({ ...(this.m_lineAttr.length > 0 ? JSON.parse(this.m_lineAttr[this.m_lineAttr.length - 1]) : {}), $id: null });
+        }
+    }
+
+    private getOrCreateRibbonTechniqueIndex(layer: EvaluatedLayer): number {
+        const key = `${layer.id}:line-ribbon-tech`;
+        let idx = this.m_layerToTechniqueIndex.get(key);
+        if (idx === undefined) {
+            idx = this.m_techniqueIndex++;
+            this.m_layerToTechniqueIndex.set(key, idx);
+            const paint = layer.paint ?? {};
+            const technique: any = {
+                name: 'fill',
+                _index: idx,
+                _renderOrder: layer.renderOrder + 0.5,
+                renderOrder: layer.renderOrder + 0.5,
+                _layerId: layer.id,
+                _paint: paint,
+                _layout: layer.layout,
+                color: paint['line-color'] ?? '#000000',
+                opacity: paint['line-opacity'] ?? 1,
+            };
+            this.m_techniques.push(technique as IndexedTechnique);
+        }
+        return idx;
     }
 
     /** Get stored triangulated line data for building the DecodedTile */
@@ -666,18 +770,40 @@ export class MBTileDataEmitter {
 
         const data = new Float32Array(this.m_lineInterleaved);
         const indices = new Uint32Array(this.m_lineIndices);
+        const vertexCount = data.length / 13;
 
-        const interleavedAttr: InterleavedBufferAttribute = {
-            buffer: data.buffer,
-            stride: 13,
-            type: 'float' as BufferElementType,
-            attributes: [
-                { name: 'extrusionCoord', offset: 0, itemSize: 3 },
-                { name: 'position', offset: 3, itemSize: 3 },
-                { name: 'tangent', offset: 6, itemSize: 3 },
-                { name: 'biTangent', offset: 9, itemSize: 4 },
-            ],
-        };
+        // SwiftShader (ANGLE/Vulkan) fails to rasterize SolidLineMaterial
+        // triangles when the custom attributes (biTangent, extrusionCoord,
+        // tangent) are read from an INTERLEAVED buffer in the shader. Emit the
+        // same data as separate (non-interleaved) buffers instead, which binds
+        // and renders correctly.
+        const extCoords = new Float32Array(vertexCount * 3);
+        const positions = new Float32Array(vertexCount * 3);
+        const tangents = new Float32Array(vertexCount * 3);
+        const biTangents = new Float32Array(vertexCount * 4);
+        for (let v = 0; v < vertexCount; v++) {
+            const src = v * 13;
+            extCoords[v * 3] = data[src];
+            extCoords[v * 3 + 1] = data[src + 1];
+            extCoords[v * 3 + 2] = data[src + 2];
+            positions[v * 3] = data[src + 3];
+            positions[v * 3 + 1] = data[src + 4];
+            positions[v * 3 + 2] = data[src + 5];
+            tangents[v * 3] = data[src + 6];
+            tangents[v * 3 + 1] = data[src + 7];
+            tangents[v * 3 + 2] = data[src + 8];
+            biTangents[v * 4] = data[src + 9];
+            biTangents[v * 4 + 1] = data[src + 10];
+            biTangents[v * 4 + 2] = data[src + 11];
+            biTangents[v * 4 + 3] = data[src + 12];
+        }
+
+        const vertexAttributes: BufferAttribute[] = [
+            { name: 'extrusionCoord', buffer: extCoords.buffer, type: 'float' as BufferElementType, itemCount: 3 },
+            { name: 'position', buffer: positions.buffer, type: 'float' as BufferElementType, itemCount: 3 },
+            { name: 'tangent', buffer: tangents.buffer, type: 'float' as BufferElementType, itemCount: 3 },
+            { name: 'biTangent', buffer: biTangents.buffer, type: 'float' as BufferElementType, itemCount: 4 },
+        ];
 
         const groups: Group[] = [];
         const end = this.m_lineIndices.length;
@@ -702,7 +828,7 @@ export class MBTileDataEmitter {
 
         return [{
             type: GeometryType.SolidLine,
-            interleavedVertexAttributes: [interleavedAttr],
+            vertexAttributes,
             index: {
                 name: 'index',
                 buffer: indices.buffer,
