@@ -169,9 +169,9 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
             const processed = await renderGroundModificationHeightMap(
                 heightMapModifiers,
                 drawGeoBox,
-                new Texture(this._demMap.rawImageData),
-                this._demMap.rawImageData.width,
-                this._demMap.rawImageData.height,
+                new Texture(this._demMap.rawImageData!),
+                this._demMap.rawImageData!.width,
+                this._demMap.rawImageData!.height,
                 flipY
             );
 
@@ -284,7 +284,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
 
         console.log(this.tileKey.toArray());
         return DemTileResource.createDemTileResourceFromImageryData(
-            this._demMap.rawImageData,
+            this._demMap.rawImageData!,
             this.tileKey,
             this.terrainSource,
             this._demMap.encoding

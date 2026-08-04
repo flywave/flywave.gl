@@ -79,7 +79,7 @@ export const processDEMTile = async (params: DecodeTileParams): Promise<DecodeTi
 
     const dem = new DEMData(
         uid,
-        rawimagePixels,
+        undefined,
         imagePixels,
         GeoBox.fromArray(geoBox),
         encoding,

@@ -242,6 +242,8 @@ export default class DemMinMaxQuadTree {
 
         // Build tree recursively
         this._construct(mips, 0, 0, maxLvl, 0);
+
+        this._trimToActualSize();
     }
 
     raycastRoot(
@@ -434,6 +436,16 @@ export default class DemMinMaxQuadTree {
         this._leaves = newLeaves;
         this._childOffsets = newChildOffsets;
         this._capacity = newCapacity;
+    }
+
+    private _trimToActualSize(): void {
+        if (this._nodeCount < this._capacity) {
+            this._maximums = this._maximums.slice(0, this._nodeCount);
+            this._minimums = this._minimums.slice(0, this._nodeCount);
+            this._leaves = this._leaves.slice(0, this._nodeCount);
+            this._childOffsets = this._childOffsets.slice(0, this._nodeCount);
+            this._capacity = this._nodeCount;
+        }
     }
 
     private _construct(

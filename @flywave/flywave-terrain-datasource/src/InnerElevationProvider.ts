@@ -22,13 +22,11 @@ export interface InnerElevationProvider extends ElevationProvider {
      * @param geoPoint - The geographic coordinates to get elevation for
      * @param defaultIfNotLoaded - Default elevation value to return if data is not loaded
      * @param level - Optional level to get elevation at specific zoom level
-     * @param ignoreGroundModification - Whether to ignore ground modifications
      * @returns Object containing the elevation value and optionally the tile key
      */
     getHeightWithInTileKey(
         geoPoint: GeoCoordinates,
         defaultIfNotLoaded: number | null,
-        level?: number,
-        ignoreGroundModification?: boolean
+        level?: number
     ): { altitude: number; tileKey?: TileKey };
 }

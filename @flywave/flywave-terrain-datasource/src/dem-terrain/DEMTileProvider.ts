@@ -284,7 +284,6 @@ export class DemTileResource extends TileValidResource {
                 const data = tileTerrain as SerializedDEMData;
 
                 const dem = DEMData.fromSerialized(data);
-                dem.sourceImage = imgData;
                 // if (polygons?.length)
                 //     document.body.appendChild(createCanvasFromImageData(data.data));
                 if (!borderReady && !dem.neighboringTiles) {

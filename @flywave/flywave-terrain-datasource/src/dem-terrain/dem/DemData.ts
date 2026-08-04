@@ -53,7 +53,6 @@ export default class DEMData extends TileValidResource {
     public readonly height: number;
     public readonly width: number;
     public readonly pixels: Uint8Array;
-    public readonly rawPixels: Uint8Array;
 
     public sourceImage?: HTMLImageElement | ImageBitmap | ImageData;
     public texture?: THREE.DataTexture;
@@ -78,7 +77,7 @@ export default class DEMData extends TileValidResource {
      */
     constructor(
         uid: string | number,
-        public rawImageData: ImageData,
+        public rawImageData: ImageData | undefined,
         public data: ImageData,
         geoBox: GeoBox,
         encoding: DEMEncoding = "mapbox",
@@ -104,7 +103,6 @@ export default class DEMData extends TileValidResource {
         this.stride = data.height;
         this.dim = data.height - 2;
         this.pixels = new Uint8Array(data.data.buffer);
-        this.rawPixels = new Uint8Array(this.rawImageData.data.buffer);
         this.encoding = encoding;
         this.borderReady = borderReady;
 
@@ -123,19 +121,15 @@ export default class DEMData extends TileValidResource {
      * @returns New DEMData instance
      */
     static fromSerialized(serialized: SerializedDEMData): DEMData {
-        // 直接使用传输过来的 ImageData，避免不必要的拷贝
         const rawImageData = serialized.rawImageData;
 
-        // 从 pixels 创建处理后的 ImageData
         const processedImageData = new ImageData(
             new Uint8ClampedArray(serialized.pixels.buffer),
             serialized.width,
             serialized.height
         );
 
-        // 重建 GeoBox
         const geoBox = GeoBox.fromJSON(serialized.geoBox);
-        // 创建 DEMData 实例
         const demData = new DEMData(
             serialized.uid,
             rawImageData,
@@ -143,7 +137,7 @@ export default class DEMData extends TileValidResource {
             geoBox,
             serialized.encoding,
             serialized.borderReady,
-            false // 不立即构建四叉树
+            false
         );
 
         demData.borderReady = serialized.borderReady;
@@ -168,8 +162,8 @@ export default class DEMData extends TileValidResource {
             borderReady: this.borderReady,
             height: this.height,
             width: this.width,
-            pixels: this.pixels, // 直接引用
-            rawImageData: this.rawImageData, // 直接使用 ImageData 对象
+            pixels: this.pixels,
+            rawImageData: this.rawImageData,
             geoBox: this.geoBox.toJSON()
         };
 
@@ -188,7 +182,7 @@ export default class DEMData extends TileValidResource {
 
     /** Calculate total memory usage in bytes */
     getBytesUsed(): number {
-        return this.rawImageData.data.byteLength + this.pixels.byteLength;
+        return (this.rawImageData?.data.byteLength ?? 0) + this.pixels.byteLength;
     }
 
     /** Fill border pixels by duplicating edge values */
@@ -247,20 +241,13 @@ export default class DEMData extends TileValidResource {
      * @param clampToEdge - Whether to clamp coordinates to edges
      * @returns Elevation value
      */
-    get(
-        x: number,
-        y: number,
-        clampToEdge: boolean = true,
-        ignoreGroundModification?: boolean
-    ): number {
+    get(x: number, y: number, clampToEdge: boolean = true): number {
         if (clampToEdge) {
             x = clamp(x, -1, this.dim);
             y = clamp(y, -1, this.dim);
         }
         const index = this._idx(x, y) * 4;
-        const [r, g, b] = ignoreGroundModification
-            ? this.rawPixels.slice(index, index + 3)
-            : this.pixels.slice(index, index + 3);
+        const [r, g, b] = this.pixels.slice(index, index + 3);
         return this._unpackFn(r, g, b);
     }
 
@@ -541,6 +528,13 @@ export default class DEMData extends TileValidResource {
     /** Dispose of resources */
     protected disposeResources(): void {
         this.texture?.dispose();
+        this.texture = undefined;
+        this._tree = undefined;
+        this.rawImageData = undefined;
+        this.data = undefined as unknown as ImageData;
+        (this as any).pixels = new Uint8Array(0);
+        this.sourceImage = undefined;
+        this._neighboringTiles = undefined;
     }
 
     /**
@@ -549,27 +543,16 @@ export default class DEMData extends TileValidResource {
      * @param y - Normalized Y coordinate (0-1 range)
      * @returns The interpolated height value at the specified coordinates
      */
-    public getByScale(x: number, y: number, ignoreGroundModification?: boolean): number {
-        // Scale normalized coordinates to pixel dimensions
+    public getByScale(x: number, y: number): number {
         x = x * this.dim;
         y = y * this.dim;
 
-        // Get integer pixel coordinates
         const i = Math.floor(x);
         const j = Math.floor(y);
 
-        // Perform bilinear interpolation between four surrounding pixels
         return interpolate(
-            interpolate(
-                this.get(i, j, undefined, ignoreGroundModification),
-                this.get(i, j + 1, undefined, ignoreGroundModification),
-                y - j
-            ),
-            interpolate(
-                this.get(i + 1, j, undefined, ignoreGroundModification),
-                this.get(i + 1, j + 1, undefined, ignoreGroundModification),
-                y - j
-            ),
+            interpolate(this.get(i, j), this.get(i, j + 1), y - j),
+            interpolate(this.get(i + 1, j), this.get(i + 1, j + 1), y - j),
             x - i
         );
     }

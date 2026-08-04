@@ -59,14 +59,12 @@ export class ElevationProvider implements InnerElevationProvider {
      * @param geoPoint - The geographic coordinates to get elevation for
      * @param defaultIfNotLoaded - Default elevation value to return if data is not loaded
      * @param level - Optional level to get elevation at specific zoom level
-     * @param ignoreGroundModification - Whether to ignore ground modifications
      * @returns Object containing the elevation value and optionally the tile key
      */
     getHeightWithInTileKey(
         geoPoint: GeoCoordinates,
         defaultIfNotLoaded: number | null = null,
-        level?: number,
-        ignoreGroundModification?: boolean
+        level?: number
     ): { altitude: number; tileKey: TileKey } {
         if (!this.dataSource.dataProvider().layerStrategy.getAvailability()) {
             return { altitude: defaultIfNotLoaded, tileKey: undefined };
@@ -92,9 +90,7 @@ export class ElevationProvider implements InnerElevationProvider {
                     const x = (normaledGeoPoint.lng - southWest.lng) / longitudeSpan;
                     const y = (normaledGeoPoint.lat - southWest.lat) / latitudeSpan;
                     return {
-                        altitude:
-                            tile?.demMap?.getByScale(x, y, ignoreGroundModification) ||
-                            defaultIfNotLoaded,
+                        altitude: tile?.demMap?.getByScale(x, y) || defaultIfNotLoaded,
                         tileKey: tk
                     };
 
@@ -202,7 +198,6 @@ export class ElevationProvider implements InnerElevationProvider {
      * @param geoPoint - Geographic coordinate of the point
      * @param defaultIfNotLoaded - Value that is returned if the terrain tile of the provided point is not loaded
      * @param level - Optional zoom level to query
-     * @param ignoreGroundModification - Whether to ignore ground modifications
      * @returns Altitude in meters, or null if no data is available
      * If there is no loaded tile that carries information for the requested
      * point elevation, returns `defaultIfNotLoaded`.
@@ -211,15 +206,9 @@ export class ElevationProvider implements InnerElevationProvider {
     private getAtPoint(
         geoPoint: GeoCoordinates,
         defaultIfNotLoaded?: number | null,
-        level?: number,
-        ignoreGroundModification?: boolean
+        level?: number
     ): number | null {
-        return this.getHeightWithInTileKey(
-            geoPoint,
-            defaultIfNotLoaded,
-            level,
-            ignoreGroundModification
-        ).altitude;
+        return this.getHeightWithInTileKey(geoPoint, defaultIfNotLoaded, level).altitude;
     }
 
     /**

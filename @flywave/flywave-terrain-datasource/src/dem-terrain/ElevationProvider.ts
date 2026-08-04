@@ -80,14 +80,12 @@ class ElevationProvider implements InnerElevationProvider {
      * @param geoPoint - The geographic coordinates to get elevation for
      * @param defaultIfNotLoaded - Default elevation value to return if data is not loaded
      * @param level - Optional level to get elevation at specific zoom level
-     * @param ignoreGroundModification - Whether to ignore ground modifications
      * @returns Object containing the elevation value and optionally the tile key
      */
     getHeightWithInTileKey(
         geoPoint: GeoCoordinates,
         defaultIfNotLoaded: number | null = null,
-        level?: number,
-        ignoreGroundModification?: boolean
+        level?: number
     ): { altitude: number; tileKey: TileKey } {
         if (!this.dataSource) {
             return { altitude: defaultIfNotLoaded, tileKey: undefined };
@@ -133,16 +131,8 @@ class ElevationProvider implements InnerElevationProvider {
 
         return {
             altitude: interpolate(
-                interpolate(
-                    dem.get(i, j, undefined, ignoreGroundModification),
-                    dem.get(i, j + 1, undefined, ignoreGroundModification),
-                    y - j
-                ),
-                interpolate(
-                    dem.get(i + 1, j, undefined, ignoreGroundModification),
-                    dem.get(i + 1, j + 1, undefined, ignoreGroundModification),
-                    y - j
-                ),
+                interpolate(dem.get(i, j), dem.get(i, j + 1), y - j),
+                interpolate(dem.get(i + 1, j), dem.get(i + 1, j + 1), y - j),
                 x - i
             ),
             tileKey: demTile.tileKey

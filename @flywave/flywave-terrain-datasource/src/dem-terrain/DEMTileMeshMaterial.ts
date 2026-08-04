@@ -3,8 +3,29 @@
 
 import * as THREE from "three/webgpu";
 import { MeshStandardNodeMaterial } from "three/webgpu";
-import { Fn, If, attribute, clamp, cross, dot, float, floor as tslFloor, fract, mix as tslMix, normalize, select, texture, transformNormalToView, uniform, uv as uvNode, vec2, vec3, vec4, positionLocal, positionWorld } from "three/tsl";
-
+import {
+    Fn,
+    If,
+    attribute,
+    clamp,
+    cross,
+    dot,
+    float,
+    floor as tslFloor,
+    fract,
+    mix as tslMix,
+    normalize,
+    select,
+    texture,
+    transformNormalToView,
+    uniform,
+    uv as uvNode,
+    vec2,
+    vec3,
+    vec4,
+    positionLocal,
+    positionWorld
+} from "three/tsl";
 
 function dummyTex(): THREE.DataTexture {
     const t = new THREE.DataTexture(

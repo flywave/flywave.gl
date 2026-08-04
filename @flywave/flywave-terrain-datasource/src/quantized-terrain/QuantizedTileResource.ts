@@ -59,10 +59,9 @@ export interface IHeightMap {
      *
      * @param x - Normalized x coordinate (0-1)
      * @param y - Normalized y coordinate (0-1)
-     * @param ignoreGroundModification - Whether to ignore ground modifications
      * @returns Height value at the specified coordinates
      */
-    getByScale(x: number, y: number, ignoreGroundModification?: boolean): number;
+    getByScale(x: number, y: number): number;
 }
 
 /**
