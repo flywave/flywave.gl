@@ -16,9 +16,8 @@
             "@flywave/flywave-geometry": ["../flywave-geometry/src"],
             "@flywave/flywave-geometry/*": ["../flywave-geometry/src/*"],
             "@flywave/flywave-examples/*": ["./src/*"],
-            "@flywave/flywave-heightmap-painter": ["../flywave-heightmap-painter/src"], 
-            "@flywave/flywave-impostor":["../flywave-impostor/src"],
-            "@flywave/flywave-inspector": ["../flywave-inspector/src"],
+            "@flywave/flywave-heightmap-painter": ["../flywave-heightmap-painter/src"],
+            "@flywave/flywave-inspector": ["../flywave-inspector/src"]
         }
     },
     "include": [
@@ -37,9 +36,6 @@
         },
         {
             "path": "../flywave-heightmap-painter"
-        },
-        {
-            "path": "../flywave-impostor"
         },
         {
             "path": "../flywave-heightmap-painter"
