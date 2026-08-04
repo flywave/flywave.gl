@@ -213,31 +213,16 @@ export class ViewRenderManager implements IViewRenderManager {
             finalNode = vec4(agxPunchyToneMapping(outputNode.rgb, this.exposure), 1);
         } else {
             const mode = this.config.toneMappingMode;
-            if (mode === "aces") {
-                finalNode = vec4(
-                    outputNode.rgb.toneMapping(THREE.ACESFilmicToneMapping, this.exposure),
-                    1
-                );
-            } else if (mode === "linear") {
-                finalNode = vec4(
-                    outputNode.rgb.toneMapping(THREE.LinearToneMapping, this.exposure),
-                    1
-                );
-            } else if (mode === "reinhard") {
-                finalNode = vec4(
-                    outputNode.rgb.toneMapping(THREE.ReinhardToneMapping, this.exposure),
-                    1
-                );
-            } else if (mode === "agx") {
-                finalNode = vec4(
-                    outputNode.rgb.toneMapping(THREE.AgXToneMapping, this.exposure),
-                    1
-                );
-            } else if (mode === "neutral") {
-                finalNode = vec4(
-                    outputNode.rgb.toneMapping(THREE.NeutralToneMapping, this.exposure),
-                    1
-                );
+            const tmMapping: Record<string, number> = {
+                aces: THREE.ACESFilmicToneMapping,
+                linear: THREE.LinearToneMapping,
+                reinhard: THREE.ReinhardToneMapping,
+                agx: THREE.AgXToneMapping,
+                neutral: THREE.NeutralToneMapping
+            };
+            const tm = tmMapping[mode];
+            if (tm !== undefined) {
+                finalNode = outputNode.toneMapping(tm, this.exposure);
             }
         }
         if (taaEnabled) {

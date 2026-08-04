@@ -252,6 +252,13 @@ export interface AtmosphereThemeConfig {
     sunTime?: number;
 
     /**
+     * Transition duration in milliseconds for smoothly interpolating `sunTime`.
+     * Set to `0` for instant updates (no interpolation).
+     * @default 2000
+     */
+    sunTimeTransitionDuration?: number;
+
+    /**
      * Whether the atmosphere sun light casts shadows.
      * @default true
      */

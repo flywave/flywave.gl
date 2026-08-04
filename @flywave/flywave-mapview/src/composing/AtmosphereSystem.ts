@@ -51,6 +51,9 @@ export class AtmosphereSystem {
     private static readonly SHADOW_DISABLE_DISTANCE = 2e5;
 
     private currentDate?: Date;
+    private targetDate?: Date;
+    private m_sunTimeTransitionDuration: number = 2000;
+    private m_lastSunTimeUpdateMs: number = 0;
     private readonly m_celestialDirections: EarthCelestialDirections;
     private m_atmosphereContext?: AtmosphereContext;
     private m_skyNode?: SkyNode;
@@ -168,8 +171,19 @@ export class AtmosphereSystem {
         return this.m_atmosphereContext;
     }
 
+    get isSunTimeAnimating(): boolean {
+        return this.targetDate !== undefined;
+    }
+
     update(date?: Date): void {
-        const d = date ?? this.currentDate ?? new Date();
+        if (date !== undefined) {
+            this.currentDate = date;
+            this.targetDate = undefined;
+        } else {
+            this.interpolateSunTime();
+        }
+
+        const d = this.currentDate ?? new Date();
 
         if (this.m_atmosphereContext != null) {
             updateCelestialDirections(
@@ -190,7 +204,14 @@ export class AtmosphereSystem {
 
     updateOptions(options?: AtmosphereThemeConfig): void {
         if (options?.sunTime !== undefined) {
-            this.currentDate = new Date(options.sunTime);
+            this.targetDate = new Date(options.sunTime);
+            if (this.currentDate === undefined) {
+                this.currentDate = new Date(options.sunTime);
+                this.targetDate = undefined;
+            }
+        }
+        if (options?.sunTimeTransitionDuration !== undefined) {
+            this.m_sunTimeTransitionDuration = options.sunTimeTransitionDuration;
         }
         if (options?.enabled !== undefined) {
             this.m_atmosphereEnabled = options.enabled;
@@ -281,12 +302,108 @@ export class AtmosphereSystem {
     }
 
     getCurrentDate(): Date {
-        return this.currentDate ?? new Date();
+        return this.currentDate ?? this.targetDate ?? new Date();
     }
 
-    setCurrentDate(date: Date): void {
-        this.currentDate = date;
+    setCurrentDate(date: Date, instant: boolean = false): void {
+        if (instant || this.m_sunTimeTransitionDuration <= 0) {
+            this.currentDate = date;
+            this.targetDate = undefined;
+        } else {
+            this.targetDate = date;
+            if (this.currentDate === undefined) {
+                this.currentDate = new Date(date.getTime());
+                this.targetDate = undefined;
+            }
+        }
         this.update();
+        this.mapView.update();
+    }
+
+    private static readonly MS_PER_DAY = 86400000;
+
+    private timeOfDayMs(d: Date): number {
+        return (
+            ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000 +
+            d.getMilliseconds()
+        );
+    }
+
+    private interpolateSunTime(): void {
+        if (this.targetDate === undefined || this.currentDate === undefined) {
+            return;
+        }
+
+        const now = performance.now();
+        if (this.m_lastSunTimeUpdateMs === 0) {
+            this.m_lastSunTimeUpdateMs = now;
+        }
+        const deltaMs = Math.min(now - this.m_lastSunTimeUpdateMs, 100);
+        this.m_lastSunTimeUpdateMs = now;
+
+        const target = this.targetDate;
+        const duration = this.m_sunTimeTransitionDuration;
+
+        if (duration <= 0) {
+            this.currentDate = new Date(target.getTime());
+            this.targetDate = undefined;
+            this.m_lastSunTimeUpdateMs = 0;
+            return;
+        }
+
+        // Step 1: Instantly snap calendar date (year/month/day) to target
+        const cur = this.currentDate;
+        if (
+            cur.getFullYear() !== target.getFullYear() ||
+            cur.getMonth() !== target.getMonth() ||
+            cur.getDate() !== target.getDate()
+        ) {
+            this.currentDate = new Date(
+                target.getFullYear(),
+                target.getMonth(),
+                target.getDate(),
+                cur.getHours(),
+                cur.getMinutes(),
+                cur.getSeconds(),
+                cur.getMilliseconds()
+            );
+        }
+
+        if (deltaMs <= 0) return;
+
+        // Step 2: Interpolate time-of-day (ms since midnight) using shortest path
+        const curTod = this.timeOfDayMs(this.currentDate);
+        const tgtTod = this.timeOfDayMs(target);
+
+        let diff = tgtTod - curTod;
+        if (diff > AtmosphereSystem.MS_PER_DAY / 2) diff -= AtmosphereSystem.MS_PER_DAY;
+        if (diff < -AtmosphereSystem.MS_PER_DAY / 2) diff += AtmosphereSystem.MS_PER_DAY;
+
+        if (Math.abs(diff) < 1) {
+            this.currentDate = new Date(target.getTime());
+            this.targetDate = undefined;
+            this.m_lastSunTimeUpdateMs = 0;
+            return;
+        }
+
+        const timeConstant = duration / 5;
+        const alpha = 1 - Math.exp(-deltaMs / timeConstant);
+        const newTod = curTod + diff * alpha;
+
+        // Wrap into [0, MS_PER_DAY) and construct date on target's calendar day
+        const wrappedTod =
+            ((newTod % AtmosphereSystem.MS_PER_DAY) + AtmosphereSystem.MS_PER_DAY) %
+            AtmosphereSystem.MS_PER_DAY;
+        const totalSec = Math.floor(wrappedTod / 1000);
+        this.currentDate = new Date(
+            target.getFullYear(),
+            target.getMonth(),
+            target.getDate(),
+            Math.floor(totalSec / 3600),
+            Math.floor((totalSec % 3600) / 60),
+            totalSec % 60,
+            Math.round(wrappedTod % 1000)
+        );
     }
 
     private loadMoonTextures(): void {

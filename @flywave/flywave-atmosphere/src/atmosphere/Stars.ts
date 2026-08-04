@@ -52,23 +52,23 @@ export class Stars extends Sprite {
         // Byte 0-5: int16 position (x, y, z)
         // Byte 6: uint8 magnitude
         // Byte 7-9: uint8 color (r, g, b)
-        const count = data.byteLength / 10;
+        const count = Math.floor(data.byteLength / 10);
         const positions = new Float32Array(count * 3);
         const magnitudes = new Float32Array(count);
         const colors = new Float32Array(count * 3);
 
         // As of r180, instancedBufferAttribute doesn't support buffers other than
         // floating-point types. Manually normalize the values here.
-        const shorts = new Int16Array(data);
+        const view = new DataView(data);
         const bytes = new Uint8Array(data);
         for (
-            let index = 0, vec3Index = 0, shortIndex = 0, byteIndex = 0;
+            let index = 0, vec3Index = 0, byteIndex = 0;
             index < count;
-            ++index, vec3Index += 3, shortIndex += 5, byteIndex += 10
+            ++index, vec3Index += 3, byteIndex += 10
         ) {
-            positions[vec3Index + 0] = shorts[shortIndex + 0] / 0x7fff;
-            positions[vec3Index + 1] = shorts[shortIndex + 1] / 0x7fff;
-            positions[vec3Index + 2] = shorts[shortIndex + 2] / 0x7fff;
+            positions[vec3Index + 0] = view.getInt16(byteIndex + 0, true) / 0x7fff;
+            positions[vec3Index + 1] = view.getInt16(byteIndex + 2, true) / 0x7fff;
+            positions[vec3Index + 2] = view.getInt16(byteIndex + 4, true) / 0x7fff;
             magnitudes[index] = bytes[byteIndex + 6] / 0xff;
             colors[vec3Index + 0] = bytes[byteIndex + 7] / 0xff;
             colors[vec3Index + 1] = bytes[byteIndex + 8] / 0xff;

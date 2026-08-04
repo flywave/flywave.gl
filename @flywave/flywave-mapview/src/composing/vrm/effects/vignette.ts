@@ -8,6 +8,6 @@ export const vignette = (inputNode, offset = 1, darkness = 1) => {
         const dist = coord.sub(0.5).length().mul(1.5);
         const vignetteFactor = dist.sub(uniform(offset)).max(0).oneMinus();
         const factor = vignetteFactor.mul(vignetteFactor).mul(uniform(darkness)).oneMinus();
-        return vec4(color.mul(factor), 1);
+        return vec4(color.rgb.mul(factor), 1);
     })();
 };

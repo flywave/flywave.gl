@@ -17,4 +17,5 @@ export * from "./CameraKeyTrackAnimation";
 export * from "./CameraAnimationBuilder";
 export * from "./MapControls";
 export * from "./MouseCursorManager";
+export * from "./PivotIndicator";
 export * from "./MapThumbnailGenerator";

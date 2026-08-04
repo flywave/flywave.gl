@@ -2530,7 +2530,8 @@ export class MapView extends EventDispatcher {
             this.m_updatePending ||
             this.m_animatedExtrusionHandler.isAnimating ||
             this.m_textElementsRenderer.isUpdatePending ||
-            this.m_textElementsRenderer.loading
+            this.m_textElementsRenderer.loading ||
+            this.m_sceneEnvironment?.isSunTimeAnimating === true
         );
     }
 

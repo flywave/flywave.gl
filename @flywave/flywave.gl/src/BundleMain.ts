@@ -71,7 +71,7 @@ class MapAssetsUriResolver implements UriResolver {
     }
 }
 
-if(window.FLYWAVE_BASE_URL){
+if(!window.FLYWAVE_BASE_URL){
     window.FLYWAVE_BASE_URL = '';
 }
 

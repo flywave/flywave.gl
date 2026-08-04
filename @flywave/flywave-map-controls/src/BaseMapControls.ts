@@ -6,12 +6,14 @@ import { type Event, EventDispatcher, Matrix4, Vector3, Vector4 } from "three/we
 
 import { type CameraTransform } from "./CameraTransform";
 import { MouseCursorManager } from "./MouseCursorManager";
+import { PivotIndicator, type PivotIndicatorOptions } from "./PivotIndicator";
 import { WindowEventHandler } from "@flywave/flywave-utils";
 
 export interface BaseMapControlsOptions {
     zoomEnabled?: boolean;
     tiltEnabled?: boolean;
     maxTiltAngle?: number;
+    pivotIndicator?: PivotIndicatorOptions | boolean;
 }
 
 interface MouseState {
@@ -124,6 +126,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
     protected windowEventHandler: WindowEventHandler;
     private readonly mouseCursorManager: MouseCursorManager;
+    private m_pivotIndicator?: PivotIndicator;
 
     private _enabled: boolean = true;
     public get enabled() {
@@ -135,6 +138,10 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
     public get eventHandler() {
         return this.windowEventHandler;
+    }
+
+    public get pivotIndicator(): PivotIndicator | undefined {
+        return this.m_pivotIndicator;
     }
 
     protected abstract get cameraTransform(): CameraTransform<Projection>;
@@ -160,11 +167,18 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
                 this.mouseCursorManager?.setDoubleClickZooming();
             }
         });
+
+        if (options?.pivotIndicator !== false) {
+            const pivotOpts =
+                typeof options?.pivotIndicator === "object" ? options.pivotIndicator : undefined;
+            this.m_pivotIndicator = new PivotIndicator(this.mapView.canvas, pivotOpts);
+        }
     }
 
     public destroy() {
         this.windowEventHandler.clearEvent();
         this.mouseCursorManager?.dispose();
+        this.m_pivotIndicator?.dispose();
         this.distory = true;
 
         if (this.m_animationFrameHandle !== undefined) {
@@ -275,6 +289,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.updateMouseState(mouseX, mouseY, mouseZ, mouseDown);
 
         this.applyToMapView();
+
+        this.updatePivotIndicator(mouseDown);
 
         this.dispatchEvent(EventUpdate);
         return false;
@@ -565,6 +581,22 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.mouseState.z = z;
         this.mouseState.prevDown = [...this.mouseState.down];
         this.mouseState.down = [...down] as [boolean, boolean, boolean];
+    }
+
+    private updatePivotIndicator(mouseDown: boolean[]): void {
+        if (this.m_pivotIndicator == null || !this.m_pivotIndicator.enabled) return;
+
+        if (mouseDown[2]) {
+            const w = this.mapView.getCanvasClientSize().width;
+            const h = this.mapView.getCanvasClientSize().height;
+            this.m_pivotIndicator.show(w / 2, h / 2);
+        } else {
+            this.m_pivotIndicator.hide();
+        }
+        this.m_pivotIndicator.update();
+        if (this.m_pivotIndicator.isAnimating) {
+            this.mapView.update();
+        }
     }
 
     public isPanning(): boolean {

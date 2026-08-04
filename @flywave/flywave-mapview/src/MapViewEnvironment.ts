@@ -80,6 +80,10 @@ export class MapViewEnvironment {
         return this.m_atmosphere;
     }
 
+    get isSunTimeAnimating(): boolean {
+        return this.m_atmosphere?.isSunTimeAnimating ?? false;
+    }
+
     updateBackgroundDataSource() {
         if (this.m_backgroundDataSource) {
             this.m_backgroundDataSource.updateStorageLevelOffset();
