@@ -158,6 +158,13 @@ export class AtmosphereSystem {
             renderer.toneMapping = THREE.NoToneMapping;
             this.mapView.mapRenderingManager.viewRenderManager = vrm;
             this.mapView.mapRenderingManager.syncPostEffectsToVRM();
+
+            const cam = this.mapView.getRteCamera();
+            this.mapView.mapRenderingManager.setTranslucentRenderer(
+                renderer,
+                this.mapView.scene,
+                cam
+            );
             this.applyToneMappingMode();
 
             this.m_atmosphereLight.layers.enable(TRANSLUCENT_LAYER_BIT);
