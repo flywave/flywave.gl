@@ -107,6 +107,9 @@ export class ViewRenderManager implements IViewRenderManager {
 
     private stagingBuffer: GPUBuffer | null = null;
     private stagingBufferSize: number = 0;
+    private lastCameraPos: THREE.Vector3 = new THREE.Vector3();
+    private lastCameraDir: THREE.Vector3 = new THREE.Vector3();
+    private tmpDir: THREE.Vector3 = new THREE.Vector3();
 
     get aerialPerspectiveNode(): AerialPerspectiveNode | undefined {
         return this.aerialNode;
@@ -373,7 +376,14 @@ export class ViewRenderManager implements IViewRenderManager {
         this.pipeline.render();
 
         if (this.gpuPicking) {
-            this.requestCenterDepthRead();
+            const moved =
+                this.lastCameraPos.distanceToSquared(camera.position) > 0.01 ||
+                this.lastCameraDir.distanceToSquared(camera.getWorldDirection(this.tmpDir)) >
+                    0.0001;
+            this.lastCameraPos.copy(camera.position);
+            if (moved) {
+                this.requestCenterDepthRead();
+            }
         }
     }
 

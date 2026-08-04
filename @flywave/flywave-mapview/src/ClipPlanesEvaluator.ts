@@ -169,7 +169,7 @@ namespace SphericalProj {
                 raycaster.ray.origin,
                 tmpVectors[0].addVectors(camera.position, raycaster.ray.direction),
                 R
-            ) > -1
+            ) === -1
         ) {
             intersection = null;
         }
