@@ -1,10 +1,16 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Matrix4, Vector2, Vector3, type Camera, NodeBuilder, type Renderer, type Texture } from "three/webgpu";
+import {
+    Matrix4,
+    Vector2,
+    Vector3,
+    type Camera,
+    NodeBuilder,
+    type Renderer,
+    type Texture
+} from "three/webgpu";
 import { renderGroup, uniform } from "three/tsl";
-
-
 
 import { AtmosphereContextBase } from "./AtmosphereContextBase";
 import { AtmosphereLUTNode } from "./AtmosphereLUTNode";
@@ -86,6 +92,10 @@ export class AtmosphereContext extends AtmosphereContextBase {
         .setGroup(renderGroup)
         .setName("altitudeCorrectionECEF")
         .onRenderUpdate((frame, { value }) => {
+            if (this._overrideAltitudeCorrectionECEF != null) {
+                value.copy(this._overrideAltitudeCorrectionECEF);
+                return;
+            }
             const camera = this.camera ?? frame.camera;
             if (camera == null) {
                 value.setScalar(0);
@@ -235,6 +245,7 @@ export class AtmosphereContext extends AtmosphereContextBase {
 
     camera?: Camera;
     _overrideCameraPositionECEF?: Vector3 | null;
+    _overrideAltitudeCorrectionECEF?: Vector3 | null;
     ellipsoidRadius = 6378137;
     correctAltitude = true;
     constrainCamera = true;

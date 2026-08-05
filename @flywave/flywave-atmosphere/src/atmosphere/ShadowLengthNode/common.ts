@@ -21,9 +21,8 @@
  * Modified from the original source code.
  */
 
-import type {Camera, SampleNode, TextureNode} from "three/webgpu";
-
-
+import type { Camera, SampleNode, TextureNode } from "three/webgpu";
+import { float, vec2, vec3, vec4 } from "three/tsl";
 
 import { cameraFar, inverseProjectionMatrix, inverseViewMatrix } from "../../tsl/accessors";
 import { FnLayout } from "../../tsl/FnLayout";

@@ -631,6 +631,15 @@ export class CloudRenderNode extends TempNode {
         if (ctx.cameraPositionECEF) ctx.cameraPositionECEF.value.copy(pos);
         if (ctx.altitudeCorrectionECEF) ctx.altitudeCorrectionECEF.value.set(corrX, corrY, corrZ);
 
+        // Prevent onRenderUpdate from overwriting with RTE camera position (0,0,0).
+        // RTE cameras have matrixWorld.position = origin, so the automatic onRenderUpdate
+        // would compute wrong ECEF values. Store copies that onRenderUpdate can safely read.
+        if (!ctx._overrideCameraPositionECEF) ctx._overrideCameraPositionECEF = new Vector3();
+        if (!ctx._overrideAltitudeCorrectionECEF)
+            ctx._overrideAltitudeCorrectionECEF = new Vector3();
+        ctx._overrideCameraPositionECEF.copy(pos);
+        ctx._overrideAltitudeCorrectionECEF.set(corrX, corrY, corrZ);
+
         if (this.hasPrevCam) {
             const dx = cx - this.prevCamX,
                 dy = cy - this.prevCamY,
@@ -938,7 +947,7 @@ export class CloudRenderNode extends TempNode {
             return this._colorNode;
         }
 
-        const resolvedClouds = texture(this.compositeNode, screenUV);
+        const resolvedClouds = this.compositeNode;
         return vec4(mix(this._colorNode.rgb, resolvedClouds.rgb, resolvedClouds.a), 1);
     }
 
@@ -968,7 +977,7 @@ export class CloudRenderNode extends TempNode {
                 const rayDirection = matrixViewToECEF
                     .mul(vec4(positionView, float(0)))
                     .xyz.normalize();
-                const camPosCorrected = cameraPositionECEF.add(altitudeCorrectionECEF);
+                const camPosCorrected = u.cameraPosition; // u.cameraPosition already has altitudeCorrection applied
 
                 let sceneDistance;
                 const depthViewZ = float(4e5).toVar();

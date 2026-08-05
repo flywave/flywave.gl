@@ -37,7 +37,7 @@ import {
     textureLevel,
     vec2,
     vec3,
-    vec4,
+    vec4
 } from "three/tsl";
 
 import type { CloudUniforms } from "./CloudUniforms";
@@ -1262,15 +1262,15 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const bottomRadius = u.bottomRadius;
         const cameraHeight = u.cameraHeight;
 
-        const r = length(cameraPosition);
-        const mu = dot(cameraPosition, rayDirection).div(r);
+        const r = length(u.cameraPosition);
+        const mu = dot(u.cameraPosition, rayDirection).div(r);
         const muNeg = step(mu, float(0));
         const groundDisc = r.mul(r).mul(mu.mul(mu).sub(1)).add(bottomRadius.mul(bottomRadius));
         const groundHit = step(float(0), groundDisc);
         const intersectsGround = muNeg.mul(groundHit);
 
-        const b = dot(rayDirection, cameraPosition).mul(2);
-        const r2 = dot(cameraPosition, cameraPosition);
+        const b = dot(rayDirection, u.cameraPosition).mul(2);
+        const r2 = dot(u.cameraPosition, u.cameraPosition);
 
         // bottomRadius sphere intersection (for haze ground clamp)
         const cGround = r2.sub(bottomRadius.mul(bottomRadius));
@@ -1333,7 +1333,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
         // STEP 8g: marchClouds + aerial perspective + haze
         If(shouldMarch.greaterThan(0.5), () => {
-            const origin = rayNear.mul(rayDirection).add(cameraPosition);
+            const origin = rayNear.mul(rayDirection).add(u.cameraPosition);
             const marchResult = marchClouds(
                 origin,
                 rayDirection,
@@ -1377,7 +1377,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             });
             // Debug: camera position as color (normalized)
             If(debugMode.equal(float(206)), () => {
-                const cp = cameraPosition.mul(1e-7);
+                const cp = u.cameraPosition.mul(1e-7);
                 resultColor.assign(vec4(cp.xy, 0, 1));
             });
 
@@ -1385,14 +1385,14 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             const hitClouds = marchedFrontDepth.greaterThanEqual(0).toConst();
             If(hitClouds, () => {
                 const frontDepth = rayNear.add(marchedFrontDepth);
-                const frontPosition = cameraPosition.add(frontDepth.mul(rayDirection));
+                const frontPosition = u.cameraPosition.add(frontDepth.mul(rayDirection));
 
                 const shadowLen = float(0).toVar();
                 If(u.maxShadowLengthIterationCount.greaterThan(0), () => {
                     const shadowRayFar = min(frontDepth, u.maxShadowLengthRayDistance);
                     shadowLen.assign(
                         marchShadowLength(
-                            float(1).mul(rayDirection).add(cameraPosition),
+                            float(1).mul(rayDirection).add(u.cameraPosition),
                             rayDirection,
                             vec2(float(1), shadowRayFar),
                             jitter
@@ -1448,7 +1448,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                         );
                         resultShadowLen.assign(
                             marchShadowLength(
-                                cameraPosition.add(rayDirection.mul(float(1))),
+                                u.cameraPosition.add(rayDirection.mul(float(1))),
                                 rayDirection,
                                 vec2(float(1), shadowRayFar),
                                 jitter
@@ -1458,7 +1458,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 );
 
                 const ncDepth = sceneDistance.greaterThan(0).select(sceneDistance, rayFar);
-                const ncPosition = cameraPosition.add(ncDepth.mul(rayDirection));
+                const ncPosition = u.cameraPosition.add(ncDepth.mul(rayDirection));
                 const ncWorld = u.ecefToWorld.mul(
                     vec4(ncPosition.sub(u.altitudeCorrection), 1)
                 ).xyz;
@@ -1480,7 +1480,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 resultColor.a
             );
             const haze = approximateHaze(
-                cameraPosition,
+                u.cameraPosition,
                 rayDirection,
                 hazeClampedFar.sub(1),
                 cosTheta,

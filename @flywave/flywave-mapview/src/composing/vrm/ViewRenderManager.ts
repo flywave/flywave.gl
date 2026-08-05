@@ -172,6 +172,11 @@ export class ViewRenderManager implements IViewRenderManager {
             outputNode = this.aerialNode;
         }
 
+        if (this.config.lensFlare.enabled) {
+            this.lensFlareNode = lensFlare(convertToTexture(outputNode));
+            outputNode = this.lensFlareNode;
+        }
+
         if (this.config.clouds?.enabled) {
             if (!this.m_cloudNode) {
                 this.m_cloudNode = cloudRender(outputNode, depthNode, this.renderer);
@@ -201,11 +206,6 @@ export class ViewRenderManager implements IViewRenderManager {
                 this.config.bloom.threshold
             );
             outputNode = outputNode.add(bloomPass);
-        }
-
-        if (this.config.lensFlare.enabled) {
-            this.lensFlareNode = lensFlare(convertToTexture(outputNode));
-            outputNode = this.lensFlareNode;
         }
 
         let finalNode = vec4(outputNode.rgb, 1);
