@@ -166,9 +166,9 @@ export class CloudRenderNode extends TempNode {
     private readonly cascadedShadowMaps = new CascadedShadowMaps({
         cascadeCount: SHADOW_CASCADE_COUNT,
         mapSize: new Vector2(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
-        maxFar: null,
-        splitLambda: 0.6,
-        fade: true
+        maxFar: SHADOW_MAX_FAR,
+        splitLambda: 0.5,
+        fade: false
     });
 
     private readonly cloudResolveCountNode = uniform(0);
@@ -723,8 +723,11 @@ export class CloudRenderNode extends TempNode {
                     .normalize();
 
                 const camPosECEF = atmoCtx.cameraPositionECEF.value;
+                const surfaceNormal = this._tmpSurfaceNormal.copy(camPosECEF).normalize();
+                const zenithAngle = this.cloudUniforms.sunDirection.value.dot(surfaceNormal);
+                const shadowDistance = 1e6 * (1 - zenithAngle) + 1e3 * zenithAngle;
 
-                this.cascadedShadowMaps.update(cam, sunWorld, undefined, 1);
+                this.cascadedShadowMaps.update(cam, sunWorld, undefined, shadowDistance);
 
                 this.cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
                 this.cloudUniforms.shadowCameraNear.value = cam.near;

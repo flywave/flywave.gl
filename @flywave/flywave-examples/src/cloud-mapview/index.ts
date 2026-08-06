@@ -53,19 +53,19 @@ const applyToneMappingOverride = () => {
     if (_toneMappingApplied) return;
     const vrm = (mapView as any).mapRenderingManager?.viewRenderManager;
     if (vrm) {
-        vrm.config.toneMappingMode = "linear";
-        vrm.exposure.value = 1;
+        vrm.config.toneMappingMode = "agx";
+        vrm.exposure.value = 3;
         vrm.needsUpdate = true;
         _toneMappingApplied = true;
     }
     const atmoSystem = (mapView as any).m_atmosphereSystem;
     if (atmoSystem) {
-        atmoSystem.m_toneMappingMode = "linear";
-        atmoSystem.m_toneMappingExposure = 1;
+        atmoSystem.m_toneMappingMode = "agx";
+        atmoSystem.m_toneMappingExposure = 3;
     }
     const renderer = (mapView as any).renderer;
     if (renderer) {
-        renderer.toneMapping = 0; // NoToneMapping
+        renderer.toneMapping = 0; // NoToneMapping - VRM handles it
         renderer.toneMappingExposure = 1;
     }
 };

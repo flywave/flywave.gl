@@ -1,11 +1,40 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Matrix3, Matrix4, Vector2, AnalyticLightNode, NodeUpdateType, type NodeBuilder, type NodeFrame } from "three/webgpu";
-import { clamp, cos, dFdx, dFdy, dot, float, fract, If, max, min, mix, normalView, positionView, renderGroup, screenCoordinate, sin, sqrt, step, texture, uniform, vec2, vec4 } from "three/tsl";
+import {
+    Matrix3,
+    Matrix4,
+    Vector2,
+    AnalyticLightNode,
+    NodeUpdateType,
+    type NodeBuilder,
+    type NodeFrame
+} from "three/webgpu";
+import {
+    clamp,
+    cos,
+    dFdx,
+    dFdy,
+    dot,
+    float,
+    fract,
+    If,
+    max,
+    min,
+    mix,
+    normalView,
+    positionView,
+    renderGroup,
+    screenCoordinate,
+    sin,
+    sqrt,
+    step,
+    texture,
+    uniform,
+    vec2,
+    vec4
+} from "three/tsl";
 import type { DirectLightData, LightingContext } from "three/src/nodes/TSL.js";
-
-
 
 import { getAtmosphereContext, type AtmosphereContext } from "./AtmosphereContext";
 import type { AtmosphereLight } from "./AtmosphereLight";
@@ -217,7 +246,10 @@ export class AtmosphereLightNode extends AnalyticLightNode<AtmosphereLight> {
             .add(sqrt(disc.max(0)))
             .mul(0.5);
 
-        // worldPos for cascade projection (same as cloudTsl.ts projectCascade)
+        // worldPos for cascade projection. Cascade matrices are built with the
+        // main camera (ECEF world), but positionECEF is RTE world + altitudeCorrection.
+        // Subtract altitudeCorrection to get RTE world, then add cameraPositionECEF
+        // to get corrected ECEF world matching cascade matrix space.
         const worldPos = ecefToWorld.mul(vec4(positionECEF.sub(altitudeCorrection), 1)).xyz;
 
         // Compute screen-space shadow texel size via cascade-0 UV derivatives.
