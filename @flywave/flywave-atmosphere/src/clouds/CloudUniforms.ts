@@ -4,7 +4,6 @@
 import { Matrix4, Vector2, Vector3, Vector4 } from "three/webgpu";
 import { uniform, vec2, vec3, vec4, mat4 } from "three/tsl";
 
-
 import { CloudLayers } from "./CloudLayer";
 import { qualityPresets, type QualityPreset } from "./QualityPresets";
 
@@ -55,8 +54,10 @@ export class CloudUniforms {
     shadowTexelSize = uniform(new Vector2(1 / 512, 1 / 512));
     shadowMaxIterationCount = uniform(48);
     shadowMinStepSize = uniform(100.0);
+    shadowMaxStepSize = uniform(1000.0);
     shadowMinTransmittance = uniform(1e-4);
-    maxShadowFilterRadius = uniform(4.0);
+    maxShadowFilterRadius = uniform(6.0);
+    shadowLayerMask = uniform(new Vector4(1, 1, 0, 0));
     // View matrix + camera near/far for cascade index selection
     shadowViewMatrix = uniform(new Matrix4());
     shadowCameraNear = uniform(1.0);
@@ -94,7 +95,7 @@ export class CloudUniforms {
     // Shape and weather
     localWeatherRepeat = uniform(new Vector2(100, 100));
     localWeatherOffset = uniform(new Vector2(0, 0));
-    localWeatherVelocity = uniform(new Vector2(0.001, 0));
+    localWeatherVelocity = uniform(new Vector2(0, 0));
     coverage = uniform(0.3);
     shapeRepeat = uniform(new Vector3(0.0003, 0.0003, 0.0003));
     shapeOffset = uniform(new Vector3(0, 0, 0));
@@ -178,6 +179,7 @@ export class CloudUniforms {
 
     // STBN
     frame = uniform(0);
+    temporalJitter = uniform(new Vector2(0, 0));
 
     // Debug visualization mode:
     // 0 = normal cloud render
@@ -273,6 +275,13 @@ export class CloudUniforms {
         }
         this.shadowTopHeight.value = shadowTopH;
         this.shadowBottomHeight.value = shadowBottomH === Infinity ? 0 : shadowBottomH;
+
+        // shadowLayerMask: 1 for layers with shadow=true, 0 otherwise
+        const mask = [0, 0, 0, 0];
+        for (let i = 0; i < 4; ++i) {
+            mask[i] = (layers as any)[i]?.shadow ? 1 : 0;
+        }
+        this.shadowLayerMask.value.set(mask[0], mask[1], mask[2], mask[3]);
     }
 
     applyQualityPreset(preset: QualityPreset): void {
@@ -292,6 +301,7 @@ export class CloudUniforms {
         this.shadowCascadeCount.value = p.shadowCascadeCount;
         this.shadowMaxIterationCount.value = p.shadowMaxIterationCount;
         this.shadowMinStepSize.value = p.shadowMinStepSize;
+        this.shadowMaxStepSize.value = p.shadowMaxStepSize;
         this.shadowMinTransmittance.value = p.shadowMinTransmittance;
         this.maxShadowLengthIterationCount.value = p.maxShadowLengthIterationCount;
     }

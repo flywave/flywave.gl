@@ -1,4 +1,10 @@
-import { MapView, GeoCoordinates, ellipsoidProjection,MapControlsUI, MapControls } from "@flywave/flywave.gl";
+import {
+    MapView,
+    GeoCoordinates,
+    ellipsoidProjection,
+    MapControlsUI,
+    MapControls
+} from "@flywave/flywave.gl";
 
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
@@ -37,8 +43,8 @@ const mapView = new MapView({
 
 mapView.beginAnimation();
 
-    const controls = new MapControls(mapView);
-    const ui = new MapControlsUI(controls);
+const controls = new MapControls(mapView);
+const ui = new MapControlsUI(controls);
 // Disable VRM tone mapping for debugging.
 // setToneMapping may run before VRM exists, so we hook updateCameras to
 // force VRM config once until it sticks, then stop to avoid pipeline rebuilds.
@@ -49,8 +55,14 @@ const applyToneMappingOverride = () => {
     if (vrm) {
         vrm.config.toneMappingMode = "linear";
         vrm.exposure.value = 1;
+        vrm.config.aerialPerspective.enabled = false;
+        vrm.config.lensFlare.enabled = false;
         vrm.needsUpdate = true;
         _toneMappingApplied = true;
+    }
+    const scene = (mapView as any).scene;
+    if (scene) {
+        scene.backgroundNode = null;
     }
     const atmoSystem = (mapView as any).m_atmosphereSystem;
     if (atmoSystem) {
@@ -87,34 +99,34 @@ const applyOverride = () => {
     const cam = mapView.camera;
     const rte = (mapView as any).getRteCamera?.();
 
-    // cam.position.set(camPos[0], camPos[1], camPos[2]);
-    // cam.quaternion.set(camQuat[0], camQuat[1], camQuat[2], camQuat[3]);
-    // cam.up.set(camUp[0], camUp[1], camUp[2]);
+    cam.position.set(camPos[0], camPos[1], camPos[2]);
+    cam.quaternion.set(camQuat[0], camQuat[1], camQuat[2], camQuat[3]);
+    cam.up.set(camUp[0], camUp[1], camUp[2]);
 
-    // // Apply heading rotation around camera up axis
-    // if (_headingOffset !== 0) {
-    //     const headingQuat = cam.quaternion.clone();
-    //     headingQuat.setFromAxisAngle(cam.up, _headingOffset);
-    //     cam.quaternion.premultiply(headingQuat);
-    // }
+    // Apply heading rotation around camera up axis
+    if (_headingOffset !== 0) {
+        const headingQuat = cam.quaternion.clone();
+        headingQuat.setFromAxisAngle(cam.up, _headingOffset);
+        cam.quaternion.premultiply(headingQuat);
+    }
 
-    // cam.rotation.order = "XYZ";
-    // cam.fov = 75;
-    // cam.updateProjectionMatrix();
-    // cam.updateMatrixWorld();
+    cam.rotation.order = "XYZ";
+    cam.fov = 75;
+    cam.updateProjectionMatrix();
+    cam.updateMatrixWorld();
 
-    // if (rte) {
-    //     rte.position.setScalar(0);
-    //     rte.quaternion.copy(cam.quaternion);
-    //     rte.up.copy(cam.up);
-    //     rte.rotation.order = "XYZ";
-    //     rte.fov = 75;
-    //     rte.near = 1;
-    //     rte.far = 4e5;
-    //     rte.aspect = cam.aspect;
-    //     rte.updateProjectionMatrix();
-    //     rte.updateMatrixWorld(true);
-    // }
+    if (rte) {
+        rte.position.setScalar(0);
+        rte.quaternion.copy(cam.quaternion);
+        rte.up.copy(cam.up);
+        rte.rotation.order = "XYZ";
+        rte.fov = 75;
+        rte.near = 1;
+        rte.far = 4e5;
+        rte.aspect = cam.aspect;
+        rte.updateProjectionMatrix();
+        rte.updateMatrixWorld(true);
+    }
 };
 
 (window as any).mapView = mapView;

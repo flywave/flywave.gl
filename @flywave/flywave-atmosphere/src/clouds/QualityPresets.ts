@@ -20,6 +20,7 @@ export interface QualityPresetConfig {
     shadowMapSize: number;
     shadowMaxIterationCount: number;
     shadowMinStepSize: number;
+    shadowMaxStepSize: number;
     shadowMinTransmittance: number;
     maxShadowLengthIterationCount: number;
 }
@@ -42,6 +43,7 @@ const high: QualityPresetConfig = {
     shadowMapSize: 512,
     shadowMaxIterationCount: 50,
     shadowMinStepSize: 100,
+    shadowMaxStepSize: 1000,
     shadowMinTransmittance: 1e-4,
     maxShadowLengthIterationCount: 500
 };

@@ -26,7 +26,10 @@ import {
     floor,
     If,
     ivec2,
+    int,
+    Loop,
     max,
+    min,
     mix,
     mrt,
     not,
@@ -65,6 +68,7 @@ const SHADOW_MAX_FAR = 100000;
 const SHADOW_MAP_SIZE = 512;
 
 const _varianceGamma = uniform(2.0);
+const _shadowVarianceGamma = uniform(1.0);
 
 const _neighborOffsets9 = [
     [-1, -1],
@@ -109,7 +113,7 @@ const _clipAABBResolve = Fn(([cur, hist, minC, maxC]: any) => {
     return maxUnit.greaterThan(1).select(vec4(pClip, cur.a).add(vClip.div(maxUnit)), hist);
 });
 
-const _varianceClippingResolve = Fn(([inputNode, coord, current, history]: any) => {
+const _varianceClippingResolve = Fn(([inputNode, coord, current, history, gamma]: any) => {
     const moment1 = current.toVar();
     const moment2 = current.pow2().toVar();
     for (const [x, y] of _varianceOffsets8) {
@@ -119,7 +123,8 @@ const _varianceClippingResolve = Fn(([inputNode, coord, current, history]: any) 
     }
     const N = _varianceOffsets8.length + 1;
     const mean = moment1.div(N).toConst();
-    const variance = sqrt(moment2.div(N).sub(mean.pow2()).max(0)).mul(_varianceGamma).toConst();
+    const g = gamma ?? _varianceGamma;
+    const variance = sqrt(moment2.div(N).sub(mean.pow2()).max(0)).mul(g).toConst();
     const minColor = mean.sub(variance).toConst();
     const maxColor = mean.add(variance).toConst();
     return _clipAABBResolve(mean.clamp(minColor, maxColor), history, minColor, maxColor);
@@ -161,9 +166,9 @@ export class CloudRenderNode extends TempNode {
     private readonly cascadedShadowMaps = new CascadedShadowMaps({
         cascadeCount: SHADOW_CASCADE_COUNT,
         mapSize: new Vector2(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
-        maxFar: SHADOW_MAX_FAR,
-        splitLambda: 0.5,
-        fade: false
+        maxFar: null,
+        splitLambda: 0.6,
+        fade: true
     });
 
     private readonly cloudResolveCountNode = uniform(0);
@@ -522,7 +527,7 @@ export class CloudRenderNode extends TempNode {
             this.cloudUniforms.shapeDetailRepeat.value.setScalar(0.006);
             this.cloudUniforms.turbulenceRepeat.value = 20;
             this.cloudUniforms.turbulenceDisplacement.value = 350;
-            this.cloudUniforms.applyQualityPreset("low");
+            this.cloudUniforms.applyQualityPreset("high");
             this.cloudUniforms.skyLightScale.value = 1;
             this.cloudUniforms.powderScale.value = 0.8;
             this.cloudUniforms.powderExponent.value = 150;
@@ -698,7 +703,7 @@ export class CloudRenderNode extends TempNode {
         }
 
         if (this.shadowMarchFn != null && this.shadowMaterial.fragmentNode != null) {
-            this.cloudUniforms.frame.value = this._cloudResolveFrameCount % 8;
+            this.cloudUniforms.frame.value = this._cloudResolveFrameCount % 64;
             const cam = atmoCtx.camera as any;
             const w2e = atmoCtx.matrixWorldToECEF.value;
             if (cam && w2e) {
@@ -716,11 +721,8 @@ export class CloudRenderNode extends TempNode {
                     .normalize();
 
                 const camPosECEF = atmoCtx.cameraPositionECEF.value;
-                const surfaceNormal = this._tmpSurfaceNormal.copy(camPosECEF).normalize();
-                const zenithAngle = this.cloudUniforms.sunDirection.value.dot(surfaceNormal);
-                const shadowDistance = 1e6 * (1 - zenithAngle) + 1e3 * zenithAngle;
 
-                this.cascadedShadowMaps.update(cam, sunWorld, undefined, shadowDistance);
+                this.cascadedShadowMaps.update(cam, sunWorld, undefined, 1);
 
                 this.cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
                 this.cloudUniforms.shadowCameraNear.value = cam.near;
@@ -828,6 +830,7 @@ export class CloudRenderNode extends TempNode {
         jitterDx = ((ox - 0.5) / virtualWidth) * 4;
         jitterDy = -((oy - 0.5) / virtualHeight) * 4;
         this.temporalJitter.value.set(jitterDx, jitterDy);
+        this.cloudUniforms.temporalJitter.value.set(jitterDx, jitterDy);
         this.jitteredInverseProjection.value.copy(jitterCamera.projectionMatrix);
         this.jitteredInverseProjection.value.elements[8] += jitterDx * 2;
         this.jitteredInverseProjection.value.elements[9] += jitterDy * 2;
@@ -1139,13 +1142,28 @@ export class CloudRenderNode extends TempNode {
                         const coord = ivec2(screenCoordinate);
                         const currentColor = shadowColorTex.load(coord).toVar();
 
-                        // Analytic velocity from frontDepth + projection matrices
-                        const frontDepth = currentColor.x;
+                        // 9-tap closest fragment: find minimum frontDepth in 3x3 neighborhood
+                        const closestDepth = float(1e7).toVar();
+                        const ox = int(-1).toVar();
+                        Loop({ start: -1, end: 2, type: "int" }, () => {
+                            const oy = int(-1).toVar();
+                            Loop({ start: -1, end: 2, type: "int" }, () => {
+                                const neighbor = shadowColorTex.load(coord.add(ivec2(ox, oy)));
+                                closestDepth.assign(min(closestDepth, neighbor.x));
+                                oy.addAssign(int(1));
+                            });
+                            ox.addAssign(int(1));
+                        });
+
+                        // Use closest-fragment frontDepth for velocity
+                        const frontDepth = closestDepth;
                         const invMat = this.cloudUniforms.inverseShadowMatrices[i];
-                        const clip = vec3(screenUV.mul(2).sub(1), float(1));
+                        const clip = vec3(screenUV.mul(2).sub(1), float(-1));
                         const point = invMat.mul(vec4(clip, float(1)));
                         const pDiv = point.xyz.div(point.w);
-                        const sunPos = pDiv.add(this.cloudUniforms.altitudeCorrection);
+                        const sunPos = this.cloudUniforms.worldToECEF
+                            .mul(vec4(pDiv, float(1)))
+                            .xyz.add(this.cloudUniforms.altitudeCorrection);
                         const rayDir = this.cloudUniforms.sunDirection.negate().normalize();
 
                         const a = sunPos;
@@ -1157,14 +1175,10 @@ export class CloudRenderNode extends TempNode {
                         const disc = b.mul(b).sub(c.mul(4));
                         const rayNear = max(
                             float(0),
-                            b
-                                .negate()
-                                .sub(sqrt(disc.max(0)))
-                                .mul(0.5)
+                            disc.lessThan(0).select(float(0), b.negate().sub(sqrt(disc)).mul(0.5))
                         );
                         const rayOrigin = rayNear.mul(rayDir).add(sunPos);
 
-                        const noSamples = currentColor.y.equal(0);
                         const frontPosition = frontDepth.mul(rayDir).add(rayOrigin);
                         const frontWorld = this.cloudUniforms.ecefToWorld.mul(
                             vec4(frontPosition.sub(this.cloudUniforms.altitudeCorrection), 1)
@@ -1176,7 +1190,7 @@ export class CloudRenderNode extends TempNode {
 
                         const result = currentColor.toVar();
 
-                        If(noSamples.not(), () => {
+                        {
                             const inBounds = prevUv.x
                                 .greaterThanEqual(0)
                                 .and(prevUv.x.lessThanEqual(1))
@@ -1189,13 +1203,14 @@ export class CloudRenderNode extends TempNode {
                                     shadowColorTex,
                                     coord,
                                     currentColor,
-                                    historyColor
+                                    historyColor,
+                                    _shadowVarianceGamma
                                 );
-                                result.assign(clipped);
+                                result.assign(mix(clipped, currentColor, float(0.01)));
                             });
-                        });
+                        }
 
-                        return mix(result, currentColor, float(0.01));
+                        return result;
                     })();
 
                     resolveEntries[`c${i}`] = perCascade;

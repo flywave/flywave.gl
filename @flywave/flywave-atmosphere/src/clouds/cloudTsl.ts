@@ -16,6 +16,7 @@ import {
     floor,
     Fn,
     If,
+    int,
     length,
     log2,
     Loop,
@@ -27,7 +28,9 @@ import {
     positionGeometry,
     pow,
     saturate,
+    screenCoordinate,
     screenUV,
+    sign,
     sin,
     sqrt,
     step,
@@ -189,15 +192,34 @@ export const shapeAlteringFunction = Fn(([heightFraction, bias]: [any, any]) => 
 
 export const createSampleWeather = (u: CloudUniforms) =>
     Fn(([uv, height, mipLevel]: [any, any, any]) => {
-        // heightFraction is computed by callers that need it (main march, shadow march).
-        // Internal callers (marchOpticalDepth) compute it separately. No redundancy here.
-
         // GLSL: textureLod(localWeatherTexture, uv * localWeatherRepeat + localWeatherOffset, mipLevel)
         const weatherUv = uv.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
         const weatherTex = textureLevel(u.localWeatherTexture, weatherUv, mipLevel);
         const localWeather = exp(u.weatherExponents.mul(weatherTex.log()));
 
         // heightFraction is needed for shapeAlteringFunction; compute locally (lightweight remap)
+        const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
+        const heightScale = shapeAlteringFunction(heightFraction, u.shapeAlteringBiases);
+        const factor = oneMinus(u.coverage.mul(heightScale));
+        const density = remapClamped(
+            mix(localWeather, vec4(1, 1, 1, 1), u.coverageFilterWidths),
+            factor,
+            factor.add(u.coverageFilterWidths)
+        );
+
+        return density;
+    });
+
+// Shadow-specific variant: multiplies localWeather by shadowLayerMask (#ifdef SHADOW)
+export const createSampleWeatherShadow = (u: CloudUniforms) =>
+    Fn(([uv, height, mipLevel]: [any, any, any]) => {
+        const weatherUv = uv.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
+        const weatherTex = textureLevel(u.localWeatherTexture, weatherUv, mipLevel);
+        const localWeather = exp(u.weatherExponents.mul(weatherTex.log()));
+
+        // #ifdef SHADOW: localWeather *= shadowLayerMask;
+        localWeather.mulAssign(u.shadowLayerMask);
+
         const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
         const heightScale = shapeAlteringFunction(heightFraction, u.shapeAlteringBiases);
         const factor = oneMinus(u.coverage.mul(heightScale));
@@ -495,7 +517,7 @@ export const createMarchShadowLength = (u: CloudUniforms, sampleShadowOpticalDep
             });
 
             const position = rayDistance.mul(rayDirection).add(rayOrigin);
-            const opticalDepth = sampleShadowOpticalDepth(position, float(0)).toConst();
+            const opticalDepth = sampleShadowOpticalDepth(position, float(0), float(0)).toConst();
             shadowLength.addAssign(
                 oneMinus(exp(opticalDepth.negate())).mul(stepSize).mul(attenuation)
             );
@@ -509,6 +531,53 @@ export const createMarchShadowLength = (u: CloudUniforms, sampleShadowOpticalDep
 };
 
 /* -------------------------------------------------------------------------- */
+/*  Structured Volume Sampling for shadow march                                */
+/*  https://github.com/huwb/volsample                                          */
+/* -------------------------------------------------------------------------- */
+
+const getIcosahedralStructureNormal = Fn(([direction, jitter]: [any, any]) => {
+    const a = float(0.85065080835204);
+    const b = float(0.5257311121191336);
+    const kT = float(0.6180339887498948);
+    const kT2 = float(0.38196601125010515);
+
+    const absD = abs(direction);
+    const selector1 = dot(absD, vec3(1, kT2, kT.negate()));
+    const selector2 = dot(absD, vec3(kT.negate(), 1, kT2));
+    const selector3 = dot(absD, vec3(kT2, kT.negate(), 1));
+
+    const v1 = selector1.greaterThan(0).select(vec3(a, b, 0), vec3(b.negate(), 0, a));
+    const v2 = selector2.greaterThan(0).select(vec3(0, a, b), vec3(a, b.negate(), 0));
+    const v3 = selector3.greaterThan(0).select(vec3(b, 0, a), vec3(0, a, b.negate()));
+
+    const octantSign = sign(direction);
+    const s1 = v1.mul(octantSign);
+    const s2 = v2.mul(octantSign);
+    const s3 = v3.mul(octantSign);
+
+    const base = vec3(0.5, 0.5, 1);
+    const dot1 = dot(s1, base);
+    const dot2 = dot(s2, base);
+    const dot3 = dot(s3, base);
+
+    const w1 = exp(vec3(dot1, dot2, dot3).mul(40));
+    const wSum = w1.x.add(w1.y).add(w1.z);
+    const w = w1.div(wSum);
+
+    return jitter.lessThan(w.x).select(s1, jitter.lessThan(w.x.add(w.y)).select(s2, s3));
+});
+
+const intersectStructuredPlanes = Fn(
+    ([normal, rayOrigin, rayDirection, samplePeriod]: [any, any, any, any]) => {
+        const NoD = dot(rayDirection, normal);
+        const stepSize = samplePeriod.div(NoD.abs());
+        let stepOffset = dot(rayOrigin, normal).mod(samplePeriod).negate().div(NoD);
+        stepOffset = stepOffset.lessThan(0).select(stepOffset.add(stepSize), stepOffset);
+        return vec2(stepOffset, stepSize);
+    }
+);
+
+/* -------------------------------------------------------------------------- */
 /*  Shadow march (BSM render pass): raymarch clouds from sun's POV             */
 /*  Returns vec4(frontDepth, meanExtinction, maxOpticalDepth, tail)            */
 /*  NOTE: velocity is computed OUTSIDE this Fn (at material level) using       */
@@ -518,7 +587,7 @@ export const createMarchShadowLength = (u: CloudUniforms, sampleShadowOpticalDep
 const SHADOW_MAX_ITERATIONS = 64; // Static upper bound for WGSL loop; dynamic break uses uniform
 
 export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number = 0) => {
-    const sampleWeather = createSampleWeather(u);
+    const sampleWeather = createSampleWeatherShadow(u);
     const sampleMedia = createSampleMedia(u);
     // Bake cascade index into shader (constant for compiled material)
     const invMat = u.inverseShadowMatrices[cascadeIndex];
@@ -527,11 +596,11 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
     const cascadeMipLevel = float(SHADOW_MIP_LEVELS[cascadeIndex] ?? 0.0);
 
     return Fn((): any => {
-        // WebGPU reversed-Z: near plane z_ndc = 1
-        const clip = vec3(screenUV.mul(2).sub(1), float(1));
+        // Unproject near plane of orthographic frustum (GLSL convention: z=-1)
+        const clip = vec3(screenUV.mul(2).sub(1), float(-1));
         const point = invMat.mul(vec4(clip, float(1)));
         const pDiv = point.xyz.div(point.w);
-        const sunPosition = pDiv.add(u.altitudeCorrection);
+        const sunPosition = u.worldToECEF.mul(vec4(pDiv, float(1))).xyz.add(u.altitudeCorrection);
 
         const rayDirection = u.sunDirection.negate().normalize();
 
@@ -542,30 +611,35 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
         const shadowTopR = u.bottomRadius.add(u.shadowTopHeight);
         const cTop = aa.sub(shadowTopR.mul(shadowTopR));
         const discTop = b.mul(b).sub(cTop.mul(4));
+        const rayNearMiss = discTop.lessThan(0);
         const rayNear = max(
             float(0),
-            b
-                .negate()
-                .sub(sqrt(discTop.max(0)))
-                .mul(0.5)
+            rayNearMiss.select(float(0), b.negate().sub(sqrt(discTop)).mul(0.5))
         );
 
         const shadowBottomR = u.bottomRadius.add(u.shadowBottomHeight);
         const cBottom = aa.sub(shadowBottomR.mul(shadowBottomR));
         const discBottom = b.mul(b).sub(cBottom.mul(4));
-        const rayFar = b
-            .negate()
-            .sub(sqrt(discBottom.max(0)))
-            .mul(0.5);
+        const rayFarMiss = discBottom.lessThan(0);
+        const rayFar = rayFarMiss.select(float(1e6), b.negate().sub(sqrt(discBottom)).mul(0.5));
+        const rayFarClamped = rayFar.lessThan(0).select(float(1e6), rayFar);
 
-        const maxRayDistance = rayFar.sub(rayNear).max(0);
+        const maxRayDistance = rayFarClamped.sub(rayNear).max(0);
         const rayOrigin = rayNear.mul(rayDirection).add(sunPosition);
 
-        const stepSize = maxRayDistance
-            .div(float(SHADOW_MAX_ITERATIONS))
-            .max(u.shadowMinStepSize)
-            .toVar();
-        const rayDistance = stepSize.mul(stbn).toVar();
+        // Structured Volume Sampling: icosahedral plane-based step sizes
+        const samplePeriod = maxRayDistance
+            .div(u.shadowMaxIterationCount.toFloat())
+            .clamp(u.shadowMinStepSize, u.shadowMaxStepSize);
+        const structNormal = getIcosahedralStructureNormal(rayDirection, stbn);
+        const svsResult = intersectStructuredPlanes(
+            structNormal,
+            rayOrigin,
+            rayDirection,
+            samplePeriod
+        );
+        const rayDistance = svsResult.x.sub(svsResult.y.mul(stbn)).toVar();
+        const stepSize = svsResult.y.toVar();
 
         const extinctionSum = float(0).toVar();
         const maxOpticalDepth = float(0).toVar();
@@ -683,15 +757,16 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         return { shadowUV, inBounds };
     };
 
-    // Per-pixel deterministic rotation for PCF taps + sub-texel jitter.
-    // Uses stbnFixed (blue noise, Z=0 slice) instead of frame counter or
-    // screen hash to avoid both temporal flickering and structured artifacts.
     const getJitterRotation = () => {
-        const angle = stbnFixed.mul(float(Math.PI * 2));
+        // Interleaved Gradient Noise (IGN) - standard implementation (Epic Games)
+        // Reference: IGN(gl_FragCoord.xy + temporalJitter * resolution)
+        const magic = vec3(0.06711056, 0.00583715, 52.9829189);
+        const coord = screenCoordinate.add(u.temporalJitter.mul(u.resolution));
+        const ign = magic.z.mul(dot(coord, magic.xy).fract()).fract();
+        const angle = ign.mul(float(Math.PI * 2));
         const cosA = cos(angle);
         const sinA = sin(angle);
-        const subTexel = vec2(cosA, sinA).mul(u.shadowTexelSize.mul(float(0.5)));
-        return { cosA, sinA, subTexel };
+        return { cosA, sinA };
     };
 
     const sampleCascadeSingle = (
@@ -703,7 +778,7 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
     ) => {
         const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, positionECEF);
         const tex = u.shadowTextureNodes[cascadeIdx];
-        const uv = shadowUV.add(jitter.subTexel);
+        const uv = shadowUV;
         const shadow = texture(tex, uv);
         const distFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
         const od = min(shadow.b.add(shadow.a), shadow.g.mul(distFront));
@@ -711,7 +786,7 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         return fullBounds.greaterThan(0.5).select(od, float(0));
     };
 
-    // Helper: sample one cascade's BSM texture with 5-tap rotated PCF + temporal jitter.
+    // Helper: sample one cascade's BSM texture with 16-tap rotated PCF.
     const sampleCascadePCF = (
         cascadeIdx: number,
         positionECEF: any,
@@ -722,8 +797,7 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, positionECEF);
         const tex = u.shadowTextureNodes[cascadeIdx];
 
-        const sunPenumbra = distanceToTop.mul(u.sunAngularRadius);
-        const r = u.maxShadowFilterRadius.add(sunPenumbra);
+        const r = u.maxShadowFilterRadius;
         const texel = u.shadowTexelSize;
 
         const SHADOW_SAMPLE_COUNT = 8;
@@ -741,15 +815,11 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
                 jitter.cosA.mul(ox).sub(jitter.sinA.mul(oy)),
                 jitter.sinA.mul(ox).add(jitter.cosA.mul(oy))
             );
-            const uv = shadowUV.add(rotated.mul(r).mul(texel)).add(jitter.subTexel);
-            const inB = step(float(0), uv.x)
-                .mul(step(uv.x, float(1)))
-                .mul(step(float(0), uv.y))
-                .mul(step(uv.y, float(1)));
+            const uv = shadowUV.add(rotated.mul(r).mul(texel));
             const shadow = texture(tex, uv);
             const distFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
             const od = min(shadow.b.add(shadow.a), shadow.g.mul(distFront));
-            odSum.addAssign(inB.greaterThan(0.5).select(od, float(0)));
+            odSum.addAssign(od);
             loopIdx.addAssign(float(1));
         });
 
@@ -768,30 +838,20 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         const shadowTopR = u.bottomRadius.add(u.shadowTopHeight);
         const c = dot(a, a).sub(shadowTopR.mul(shadowTopR));
         const disc = b.mul(b).sub(c.mul(4));
-        const distanceToTop = b
-            .negate()
-            .add(sqrt(disc.max(0)))
-            .mul(0.5);
+        const distanceToTop = disc
+            .lessThan(0)
+            .select(float(-1), b.negate().add(sqrt(disc)).mul(0.5));
 
         const earlyOut = distanceToTop.lessThanEqual(0);
         const jitter = getJitterRotation();
+        const jitterVal = stbn;
 
-        // Cascade index selection: convert ECEF position to world, then use view Z.
-        // Matches reference: getCascadeIndex(viewMatrix, worldPosition, intervals, near, far)
+        // Stochastic cascade selection (matches reference getFadedCascadeIndex)
         const worldPos = u.ecefToWorld.mul(vec4(rayPosition.sub(u.altitudeCorrection), 1)).xyz;
         const viewPos = u.shadowViewMatrix.mul(vec4(worldPos, 1));
-        const viewZ = viewPos.z.negate();
-        const viewDist = viewZ;
-        const c0End = u.shadowIntervals[0].y.mul(u.shadowFar);
-        const c1End = u.shadowIntervals[1].y.mul(u.shadowFar);
-        const c1Valid = u.shadowCascadeCount.greaterThan(1);
-        const c2Valid = u.shadowCascadeCount.greaterThan(2);
-
-        // Fade margin: 10% of each cascade range
-        const c0FadeRange = c0End.sub(u.shadowIntervals[0].x.mul(u.shadowFar)).mul(0.1);
-        const c1FadeRange = c1End.sub(u.shadowIntervals[1].x.mul(u.shadowFar)).mul(0.1);
-
-        const od = float(0).toVar();
+        const orthoDepth = u.shadowCameraFar
+            .add(viewPos.z)
+            .div(u.shadowCameraFar.sub(u.shadowCameraNear));
 
         const sampleCascade = (idx: number) =>
             radius
@@ -801,39 +861,78 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
                     sampleCascadePCF(idx, rayPosition, distanceToTop, distanceOffset, jitter)
                 );
 
+        const od = float(0).toVar();
+
         If(earlyOut.not(), () => {
-            // c2 region
-            If(viewDist.greaterThan(c1End).and(c2Valid), () => {
-                od.assign(sampleCascade(2));
+            const i0x = u.shadowIntervals[0].x;
+            const i0y = u.shadowIntervals[0].y;
+            const i1x = u.shadowIntervals[1].x;
+            const i1y = u.shadowIntervals[1].y;
+
+            const cascadeIdx = int(0).toVar();
+            const useNext = float(0).toVar();
+
+            const c0Center = i0x.add(i0y).mul(0.5);
+            const c0Closest = orthoDepth.lessThan(c0Center).select(i0x, i0y);
+            const c0Margin = c0Closest.mul(c0Closest).mul(0.5);
+            const c0IntX = i0x.sub(c0Margin.mul(0.5));
+            const c0IntY = i0y.add(c0Margin.mul(0.5));
+            const c0Alpha = min(orthoDepth.sub(c0IntX), c0IntY.sub(orthoDepth))
+                .div(c0Margin.max(1e-7))
+                .clamp(0, 1);
+
+            const c1Center = i1x.add(i1y).mul(0.5);
+            const c1Closest = orthoDepth.lessThan(c1Center).select(i1x, i1y);
+            const c1Margin = c1Closest.mul(c1Closest).mul(0.5);
+            const c1IntX = i1x.sub(c1Margin.mul(0.5));
+            const c1IntY = i1y.add(c1Margin.mul(0.5));
+            const c1Alpha = orthoDepth.sub(c1IntX).div(c1Margin.max(1e-7)).clamp(0, 1);
+
+            If(u.shadowCascadeCount.greaterThan(2).and(orthoDepth.greaterThanEqual(c1IntY)), () => {
+                cascadeIdx.assign(int(2));
             })
-                // c1 region (with c0↔c1 fade at lower boundary, c1↔c2 fade at upper)
-                .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
-                    // Fade between c1 and c2 near upper boundary
-                    const c1UpperFade = viewDist
-                        .sub(c1End.sub(c1FadeRange))
-                        .div(c1FadeRange.max(1e-7))
-                        .clamp(0, 1);
-                    const od1 = sampleCascade(1);
-                    If(c2Valid.and(c1UpperFade.greaterThan(0)), () => {
-                        const od2 = sampleCascade(2);
-                        od.assign(mix(od1, od2, c1UpperFade));
-                    }).Else(() => {
-                        od.assign(od1);
-                    });
-                })
-                // c0 region (with c0↔c1 fade at upper boundary)
+                .ElseIf(
+                    u.shadowCascadeCount.greaterThan(1).and(orthoDepth.greaterThanEqual(c0IntY)),
+                    () => {
+                        cascadeIdx.assign(int(1));
+                        If(
+                            u.shadowCascadeCount
+                                .greaterThan(2)
+                                .and(orthoDepth.greaterThanEqual(c1IntX))
+                                .and(c1Alpha.lessThan(1)),
+                            () => {
+                                useNext.assign(
+                                    jitterVal.lessThanEqual(c1Alpha).select(float(1), float(0))
+                                );
+                            }
+                        );
+                    }
+                )
                 .Else(() => {
-                    const c0UpperFade = viewDist
-                        .sub(c0End.sub(c0FadeRange))
-                        .div(c0FadeRange.max(1e-7))
-                        .clamp(0, 1);
-                    const od0 = sampleCascade(0);
-                    If(c1Valid.and(c0UpperFade.greaterThan(0)), () => {
-                        const od1 = sampleCascade(1);
-                        od.assign(mix(od0, od1, c0UpperFade));
-                    }).Else(() => {
-                        od.assign(od0);
-                    });
+                    cascadeIdx.assign(int(0));
+                    If(
+                        u.shadowCascadeCount
+                            .greaterThan(1)
+                            .and(orthoDepth.greaterThanEqual(c0IntX))
+                            .and(c0Alpha.lessThan(1)),
+                        () => {
+                            useNext.assign(
+                                jitterVal.lessThanEqual(c0Alpha).select(float(1), float(0))
+                            );
+                        }
+                    );
+                });
+
+            const finalIdx = useNext.greaterThan(0.5).select(cascadeIdx.add(int(1)), cascadeIdx);
+
+            If(finalIdx.equal(int(0)), () => {
+                od.assign(sampleCascade(0));
+            })
+                .ElseIf(finalIdx.equal(int(1)), () => {
+                    od.assign(sampleCascade(1));
+                })
+                .Else(() => {
+                    od.assign(sampleCascade(2));
                 });
         });
 
@@ -859,11 +958,13 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
     };
 
     const getJitterRotation = () => {
-        const angle = stbnFixed.mul(float(Math.PI * 2));
+        const magic = vec3(0.06711056, 0.00583715, 52.9829189);
+        const coord = screenCoordinate.add(u.temporalJitter.mul(u.resolution));
+        const ign = magic.z.mul(dot(coord, magic.xy).fract()).fract();
+        const angle = ign.mul(float(Math.PI * 2));
         const cosA = cos(angle);
         const sinA = sin(angle);
-        const subTexel = vec2(cosA, sinA).mul(u.shadowTexelSize.mul(float(0.5)));
-        return { cosA, sinA, subTexel };
+        return { cosA, sinA };
     };
 
     const sampleCascadeSingle = (
@@ -875,7 +976,7 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
     ) => {
         const { shadowUV, inBounds: baseInBounds } = projectCascade(cascadeIdx, positionECEF);
         const tex = u.shadowTextureNodes[cascadeIdx];
-        const uv = shadowUV.add(jitter.subTexel);
+        const uv = shadowUV;
         const shadow = texture(tex, uv);
         const distFront = max(float(0), distanceToTop.sub(distanceOffset).sub(shadow.r));
         const od = min(shadow.b.add(shadow.a), shadow.g.mul(distFront));
@@ -883,48 +984,111 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
         return fullBounds.greaterThan(0.5).select(od, float(0));
     };
 
-    return Fn(([rayPosition, distanceOffset]: [any, any]): any => {
+    return Fn(([rayPosition, distanceOffset, radius]: [any, any, any]): any => {
         // Distance to shadow top along sunDirection (NOT negated).
         const a = rayPosition;
         const b = dot(u.sunDirection, a).mul(2);
         const shadowTopR = u.bottomRadius.add(u.shadowTopHeight);
         const c = dot(a, a).sub(shadowTopR.mul(shadowTopR));
         const disc = b.mul(b).sub(c.mul(4));
-        const distanceToTop = b
-            .negate()
-            .add(sqrt(disc.max(0)))
-            .mul(0.5);
+        const distanceToTop = disc
+            .lessThan(0)
+            .select(float(-1), b.negate().add(sqrt(disc)).mul(0.5));
 
         const earlyOut = distanceToTop.lessThanEqual(0);
         const jitter = getJitterRotation();
+        const jitterVal = stbn;
 
-        // Cascade index selection: convert ECEF → world → view Z.
+        // Stochastic cascade selection (matches reference getFadedCascadeIndex)
         const worldPos = u.ecefToWorld.mul(vec4(rayPosition.sub(u.altitudeCorrection), 1)).xyz;
         const viewPos = u.shadowViewMatrix.mul(vec4(worldPos, 1));
-        const viewDist = viewPos.z.negate();
-        const c0End = u.shadowIntervals[0].y.mul(u.shadowFar);
-        const c1End = u.shadowIntervals[1].y.mul(u.shadowFar);
+        // viewZToOrthographicDepth: (far + viewZ) / (far - near)
+        const orthoDepth = u.shadowCameraFar
+            .add(viewPos.z)
+            .div(u.shadowCameraFar.sub(u.shadowCameraNear));
 
-        const c1Valid = u.shadowCascadeCount.greaterThan(1);
-        const c2Valid = u.shadowCascadeCount.greaterThan(2);
+        const sampleCascade = (idx: number) =>
+            sampleCascadeSingle(idx, rayPosition, distanceToTop, distanceOffset, jitter);
 
         const od = float(0).toVar();
 
         If(earlyOut.not(), () => {
-            If(viewDist.greaterThan(c1End).and(c2Valid), () => {
-                od.assign(
-                    sampleCascadeSingle(2, rayPosition, distanceToTop, distanceOffset, jitter)
-                );
+            // Compute cascade index with stochastic fade
+            // Interval 0: [0, c0End], Interval 1: [c0End, c1End], Interval 2: [c1End, 1]
+            const i0x = u.shadowIntervals[0].x;
+            const i0y = u.shadowIntervals[0].y;
+            const i1x = u.shadowIntervals[1].x;
+            const i1y = u.shadowIntervals[1].y;
+
+            // Check each cascade for fade
+            const cascadeIdx = int(0).toVar();
+            const useNext = float(0).toVar();
+
+            // Check cascade 0 → 1 boundary
+            const c0Center = i0x.add(i0y).mul(0.5);
+            const c0Closest = orthoDepth.lessThan(c0Center).select(i0x, i0y);
+            const c0Margin = c0Closest.mul(c0Closest).mul(0.5);
+            const c0IntX = i0x.sub(c0Margin.mul(0.5));
+            const c0IntY = i0y.add(c0Margin.mul(0.5));
+            const c0Alpha = min(orthoDepth.sub(c0IntX), c0IntY.sub(orthoDepth))
+                .div(c0Margin.max(1e-7))
+                .clamp(0, 1);
+
+            // Check cascade 1 → 2 boundary
+            const c1Center = i1x.add(i1y).mul(0.5);
+            const c1Closest = orthoDepth.lessThan(c1Center).select(i1x, i1y);
+            const c1Margin = c1Closest.mul(c1Closest).mul(0.5);
+            const c1IntX = i1x.sub(c1Margin.mul(0.5));
+            const c1IntY = i1y.add(c1Margin.mul(0.5));
+            const c1Alpha = orthoDepth.sub(c1IntX).div(c1Margin.max(1e-7)).clamp(0, 1);
+
+            If(u.shadowCascadeCount.greaterThan(2).and(orthoDepth.greaterThanEqual(c1IntY)), () => {
+                cascadeIdx.assign(int(2));
             })
-                .ElseIf(viewDist.greaterThan(c0End).and(c1Valid), () => {
-                    od.assign(
-                        sampleCascadeSingle(1, rayPosition, distanceToTop, distanceOffset, jitter)
+                .ElseIf(
+                    u.shadowCascadeCount.greaterThan(1).and(orthoDepth.greaterThanEqual(c0IntY)),
+                    () => {
+                        // In c1 region, possibly fading to c2
+                        cascadeIdx.assign(int(1));
+                        If(
+                            u.shadowCascadeCount
+                                .greaterThan(2)
+                                .and(orthoDepth.greaterThanEqual(c1IntX))
+                                .and(c1Alpha.lessThan(1)),
+                            () => {
+                                useNext.assign(
+                                    jitterVal.lessThanEqual(c1Alpha).select(float(1), float(0))
+                                );
+                            }
+                        );
+                    }
+                )
+                .Else(() => {
+                    // In c0 region, possibly fading to c1
+                    cascadeIdx.assign(int(0));
+                    If(
+                        u.shadowCascadeCount
+                            .greaterThan(1)
+                            .and(orthoDepth.greaterThanEqual(c0IntX))
+                            .and(c0Alpha.lessThan(1)),
+                        () => {
+                            useNext.assign(
+                                jitterVal.lessThanEqual(c0Alpha).select(float(1), float(0))
+                            );
+                        }
                     );
+                });
+
+            const finalIdx = useNext.greaterThan(0.5).select(cascadeIdx.add(int(1)), cascadeIdx);
+
+            If(finalIdx.equal(int(0)), () => {
+                od.assign(sampleCascade(0));
+            })
+                .ElseIf(finalIdx.equal(int(1)), () => {
+                    od.assign(sampleCascade(1));
                 })
                 .Else(() => {
-                    od.assign(
-                        sampleCascadeSingle(0, rayPosition, distanceToTop, distanceOffset, jitter)
-                    );
+                    od.assign(sampleCascade(2));
                 });
         });
 
@@ -1066,21 +1230,26 @@ export const createMarchClouds = (u: CloudUniforms): any => {
             );
             const rayStartTexelsPerPixel = pow(float(2), cameraAdjustedMip);
 
-            // OPTIMIZATION: Precompute atmosphere irradiance outside the raymarch loop.
-            // Before: Inside the If(mediaExtinction > minExtinction) block, each step did:
-            //   const posUnit = position.mul(u.worldToUnit);
-            //   const splitIrr = getSplitScalarIlluminance(posUnit, u.sunDirection).toConst();
-            //   const sunIrradiance = splitIrr.get("direct");
-            //   const skyIrradiance = splitIrr.get("indirect");
-            //   This sampled 2 LUT textures (transmittance + irradiance) per iteration.
-            // After: Computed once at rayOrigin and reused per-step as originSunIrradiance
-            //   and originSkyIrradiance. Irradiance varies <0.3% across cloud layer thickness
-            //   (650m vs 6360km Earth radius), so the approximation is visually lossless.
-            // Saves 2 textureSample calls per iteration (~1000 samples per pixel at 500 steps).
-            const originUnit = rayOrigin.mul(u.worldToUnit);
-            const originSplitIrr = getSplitScalarIlluminance(originUnit, u.sunDirection).toConst();
-            const originSunIrradiance = originSplitIrr.get("direct");
-            const originSkyIrradiance = originSplitIrr.get("indirect");
+            // Precompute irradiance at minHeight and maxHeight for per-step height interpolation.
+            // Matches reference getCloudsSunSkyIrradiance (non-accurate path):
+            //   alpha = remapClamped(height, minHeight, maxHeight)
+            //   skyIrr = mix(minSky, maxSky, alpha)
+            //   sunIrr = mix(minSun, maxSun, alpha)
+            const minUnit = u.bottomRadius.add(u.minHeight).mul(u.worldToUnit);
+            const maxUnit = u.bottomRadius.add(u.maxHeight).mul(u.worldToUnit);
+            const surfaceNormal = normalize(rayOrigin);
+            const minIrr = getSplitScalarIlluminance(
+                surfaceNormal.mul(minUnit),
+                u.sunDirection
+            ).toConst();
+            const maxIrr = getSplitScalarIlluminance(
+                surfaceNormal.mul(maxUnit),
+                u.sunDirection
+            ).toConst();
+            const minSunIrradiance = minIrr.get("direct");
+            const maxSunIrradiance = maxIrr.get("direct");
+            const minSkyIrradiance = minIrr.get("indirect");
+            const maxSkyIrradiance = maxIrr.get("indirect");
 
             Loop({ start: 0, end: u.maxIterationCount, type: "int" }, () => {
                 If(rayDistance.greaterThan(maxRayDistance), () => {
@@ -1099,122 +1268,127 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                     max(float(1), rayStartTexelsPerPixel.add(rayDistance.mul(1e-5)))
                 );
 
-                // Skip gaps between cloud layers (insideLayerIntervals)
+                // Skip gaps between cloud layers (insideLayerIntervals) - BEFORE weather sample
                 const gtInt = step(u.minIntervalHeights, vec3(height));
                 const ltInt = step(vec3(height), u.maxIntervalHeights);
                 const inInterval = gtInt.mul(ltInt);
                 const isGap = inInterval.x.add(inInterval.y).add(inInterval.z).greaterThan(0.5);
 
-                const heightFraction = remapClamped(
-                    vec4(height),
-                    u.minLayerHeights,
-                    u.maxLayerHeights
-                ).toVar();
-                const density = sampleWeather(uv, height, mipLevel).toVar();
-
-                // Skip empty space: check if any density component > minDensity
-                const maxDensity = max(density.x, max(density.y, max(density.z, density.w)));
-                const isEmpty = maxDensity.lessThanEqual(u.minDensity);
-                // Skip if gap OR empty: use step arithmetic instead of .or()
-                const skipCond = isGap.toFloat().add(isEmpty.toFloat()).greaterThan(0.5);
-
-                If(skipCond, () => {
+                If(isGap, () => {
                     stepSize.mulAssign(u.perspectiveStepScale);
                     rayDistance.addAssign(mix(stepSize, u.maxStepSize, min(float(1), mipLevel)));
                 }).Else(() => {
-                    const media = sampleMedia(
-                        heightFraction,
-                        density,
-                        position,
-                        uv,
-                        mipLevel,
-                        jitter,
-                        rayOrigin,
-                        n
-                    );
-                    const mediaScattering = media.x;
-                    const mediaExtinction = media.y;
-                    const skyGradient = media.z;
+                    const heightFraction = remapClamped(
+                        vec4(height),
+                        u.minLayerHeights,
+                        u.maxLayerHeights
+                    ).toVar();
+                    const density = sampleWeather(uv, height, mipLevel).toVar();
 
-                    If(mediaExtinction.greaterThan(u.minExtinction), () => {
-                        // OPTIMIZATION: Use precomputed irradiance from ray origin.
-                        // Before: per-step LUT lookup:
-                        //   const posUnit = position.mul(u.worldToUnit);
-                        //   const splitIrr = getSplitScalarIlluminance(posUnit, u.sunDirection);
-                        //   const sunIrradiance = splitIrr.get("direct");
-                        //   const skyIrradiance = splitIrr.get("indirect");
-                        // After: use precomputed per-ray values from loop entry.
-                        const sunIrradiance = originSunIrradiance;
-                        const skyIrradiance = originSkyIrradiance;
+                    // Skip empty space
+                    const maxDensity = max(density.x, max(density.y, max(density.z, density.w)));
+                    const isEmpty = maxDensity.lessThanEqual(u.minDensity);
 
-                        // STEP 8i: accumulate sunIrradiance for debug
-                        // debugSunIrrSum.addAssign(sunIrradiance.mul(0.01));
-
-                        const sunMarchResult = marchOpticalDepth(
+                    If(isEmpty, () => {
+                        stepSize.mulAssign(u.perspectiveStepScale);
+                        rayDistance.addAssign(
+                            mix(stepSize, u.maxStepSize, min(float(1), mipLevel))
+                        );
+                    }).Else(() => {
+                        const media = sampleMedia(
+                            heightFraction,
+                            density,
                             position,
-                            u.sunDirection,
-                            jitter,
+                            uv,
                             mipLevel,
-                            u.maxIterationCountToSun
-                        ).toConst();
-                        const opticalDepth = sunMarchResult.x.toVar();
-                        const sunRayDistance = sunMarchResult.y;
+                            jitter,
+                            rayOrigin,
+                            n
+                        );
+                        const mediaScattering = media.x;
+                        const mediaExtinction = media.y;
+                        const skyGradient = media.z;
 
-                        // BSM shadow: cascade frustum coordinate mapping needs rewrite
-                        If(height.lessThan(u.shadowTopHeight), () => {
-                            const shadowOD = sampleShadowOpticalDepth(
+                        If(mediaExtinction.greaterThan(u.minExtinction), () => {
+                            // Per-step height-interpolated irradiance (matches reference)
+                            const irrAlpha = remapClamped(height, u.minHeight, u.maxHeight);
+                            const sunIrradiance = mix(minSunIrradiance, maxSunIrradiance, irrAlpha);
+                            const skyIrradiance = mix(minSkyIrradiance, maxSkyIrradiance, irrAlpha);
+
+                            // STEP 8i: accumulate sunIrradiance for debug
+                            // debugSunIrrSum.addAssign(sunIrradiance.mul(0.01));
+
+                            const sunMarchResult = marchOpticalDepth(
                                 position,
-                                sunRayDistance,
-                                u.maxShadowFilterRadius.mul(
-                                    remapClamped(dot(u.sunDirection, n), float(0.1), float(0))
-                                ),
-                                jitter
-                            ).toVar();
-                            opticalDepth.addAssign(shadowOD);
+                                u.sunDirection,
+                                jitter,
+                                mipLevel,
+                                u.maxIterationCountToSun
+                            ).toConst();
+                            const opticalDepth = sunMarchResult.x.toVar();
+                            const sunRayDistance = sunMarchResult.y;
+
+                            // BSM shadow: cascade frustum coordinate mapping needs rewrite
+                            If(height.lessThan(u.shadowTopHeight), () => {
+                                const shadowOD = sampleShadowOpticalDepth(
+                                    position,
+                                    sunRayDistance,
+                                    u.maxShadowFilterRadius.mul(
+                                        remapClamped(dot(u.sunDirection, n), float(0.1), float(0))
+                                    ),
+                                    jitter
+                                ).toVar();
+                                opticalDepth.addAssign(shadowOD);
+                            });
+
+                            let radiance = sunIrradiance.mul(
+                                approximateMultipleScattering(opticalDepth, cosTheta, u)
+                            );
+
+                            // Ground bounce: disabled (maxIterationCountToGround=0, matches reference medium preset)
+
+                            // Sky irradiance
+                            radiance = radiance.add(
+                                skyIrradiance
+                                    .mul(RECIPROCAL_PI4)
+                                    .mul(skyGradient)
+                                    .mul(u.skyLightScale)
+                            );
+
+                            radiance = radiance.mul(mediaScattering);
+
+                            // Powder effect
+                            radiance = radiance.mul(
+                                float(1).sub(
+                                    u.powderScale.mul(
+                                        exp(mediaExtinction.mul(u.powderExponent).negate())
+                                    )
+                                )
+                            );
+
+                            const transmittance = exp(mediaExtinction.mul(stepSize).negate());
+                            const clampedExt = max(mediaExtinction, float(1e-7));
+                            const integral = radiance
+                                .sub(radiance.mul(transmittance))
+                                .div(clampedExt);
+
+                            // STEP 8n: accumulate integral WITH transmittanceIntegral
+                            // debugSunIrrSum.addAssign(transmittanceIntegral.mul(integral).mul(0.01));
+
+                            radianceIntegral.addAssign(transmittanceIntegral.mul(integral));
+                            transmittanceIntegral.mulAssign(transmittance);
+
+                            // Accumulate for frontDepth (aerial perspective)
+                            weightedDistanceSum.addAssign(transmittanceIntegral.mul(rayDistance));
+                            transmittanceSum.addAssign(transmittanceIntegral);
                         });
 
-                        let radiance = sunIrradiance.mul(
-                            approximateMultipleScattering(opticalDepth, cosTheta, u)
-                        );
-
-                        // Ground bounce: disabled (maxIterationCountToGround=0, matches reference medium preset)
-
-                        // Sky irradiance
-                        radiance = radiance.add(
-                            skyIrradiance.mul(RECIPROCAL_PI4).mul(skyGradient).mul(u.skyLightScale)
-                        );
-
-                        radiance = radiance.mul(mediaScattering);
-
-                        // Powder effect
-                        radiance = radiance.mul(
-                            float(1).sub(
-                                u.powderScale.mul(
-                                    exp(mediaExtinction.mul(u.powderExponent).negate())
-                                )
-                            )
-                        );
-
-                        const transmittance = exp(mediaExtinction.mul(stepSize).negate());
-                        const clampedExt = max(mediaExtinction, float(1e-7));
-                        const integral = radiance.sub(radiance.mul(transmittance)).div(clampedExt);
-
-                        // STEP 8n: accumulate integral WITH transmittanceIntegral
-                        // debugSunIrrSum.addAssign(transmittanceIntegral.mul(integral).mul(0.01));
-
-                        radianceIntegral.addAssign(transmittanceIntegral.mul(integral));
-                        transmittanceIntegral.mulAssign(transmittance);
-
-                        // Accumulate for frontDepth (aerial perspective)
-                        weightedDistanceSum.addAssign(transmittanceIntegral.mul(rayDistance));
-                        transmittanceSum.addAssign(transmittanceIntegral);
+                        stepSize.mulAssign(u.perspectiveStepScale);
+                        rayDistance.addAssign(stepSize);
                     });
-
-                    stepSize.mulAssign(u.perspectiveStepScale);
-                    rayDistance.addAssign(stepSize);
                 });
 
-                If(transmittanceIntegral.lessThanEqual(u.shadowMinTransmittance), () => {
+                If(transmittanceIntegral.lessThanEqual(u.minTransmittance), () => {
                     Break();
                 });
             });
@@ -1390,11 +1564,12 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 const shadowLen = float(0).toVar();
                 If(u.maxShadowLengthIterationCount.greaterThan(0), () => {
                     const shadowRayFar = min(frontDepth, u.maxShadowLengthRayDistance);
+                    const shadowRayNear = float(1); // camera near plane
                     shadowLen.assign(
                         marchShadowLength(
-                            float(1).mul(rayDirection).add(u.cameraPosition),
+                            shadowRayNear.mul(rayDirection).add(u.cameraPosition),
                             rayDirection,
-                            vec2(float(1), shadowRayFar),
+                            vec2(shadowRayNear, shadowRayFar),
                             jitter
                         )
                     );
@@ -1415,7 +1590,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                     resultColor.assign(
                         vec4(
                             resultColor.rgb.mul(transmittance).add(inscatter.mul(resultColor.a)),
-                            resultColor.a
+                            float(1)
                         )
                     );
                 }
@@ -1480,11 +1655,11 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 resultColor.a
             );
             const haze = approximateHaze(
-                u.cameraPosition,
+                float(1).mul(rayDirection).add(u.cameraPosition),
                 rayDirection,
                 hazeClampedFar.sub(1),
                 cosTheta,
-                resultShadowLen
+                float(0)
             ).toConst();
             resultColor.rgb.assign(mix(resultColor.rgb, haze.rgb, haze.a));
             resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
