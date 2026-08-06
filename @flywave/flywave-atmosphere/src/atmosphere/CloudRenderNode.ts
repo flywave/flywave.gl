@@ -60,7 +60,7 @@ import { CloudUniforms } from "../clouds/CloudUniforms";
 import { createCloudRenderer } from "../clouds/cloudTsl";
 import { CascadedShadowMaps } from "../clouds/CascadedShadowMaps";
 import { type QualityPreset } from "../clouds/QualityPresets";
-import { stbn, stbnTexture } from "../tsl/STBNTextureNode";
+import { stbn, stbnTexture, stbnFrameUniform } from "../tsl/STBNTextureNode";
 import { resolveResourceUrl } from "../resourceResolver";
 
 const SHADOW_CASCADE_COUNT = 3;
@@ -702,8 +702,10 @@ export class CloudRenderNode extends TempNode {
             if (dt) this._depthTexUniform.value = dt;
         }
 
+        this.cloudUniforms.frame.value = this._cloudResolveFrameCount % 64;
+        stbnFrameUniform.value = this._cloudResolveFrameCount % 64;
+
         if (this.shadowMarchFn != null && this.shadowMaterial.fragmentNode != null) {
-            this.cloudUniforms.frame.value = this._cloudResolveFrameCount % 64;
             const cam = atmoCtx.camera as any;
             const w2e = atmoCtx.matrixWorldToECEF.value;
             if (cam && w2e) {
@@ -973,7 +975,6 @@ export class CloudRenderNode extends TempNode {
                 { color: "vec4", velocity: "vec4", shadowLength: "float" },
                 "LowResResult"
             );
-
             const lowResData = Fn(() => {
                 const geo = positionGeometry;
                 const positionView = this.jitteredInverseProjection.mul(vec4(geo, 1)).xyz;
@@ -1100,7 +1101,7 @@ export class CloudRenderNode extends TempNode {
                         const historyColor = texture(this.historyNode, prevUv);
                         const clipped = _varianceClippingResolve(
                             this.lowResNode,
-                            lowCoord,
+                            ivec2(lowCoordX, lowCoordY),
                             currentColor,
                             historyColor
                         );

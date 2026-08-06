@@ -9,7 +9,7 @@ import {
     RepeatWrapping,
     Texture3DNode
 } from "three/webgpu";
-import { Fn, frameId, float, nodeImmutable, screenCoordinate, vec3 } from "three/tsl";
+import { Fn, nodeImmutable, screenCoordinate, uniform, vec3 } from "three/tsl";
 
 import { STBNLoader } from "../STBNLoader";
 import { resolveResourceUrl } from "../resourceResolver";
@@ -65,11 +65,15 @@ export class STBNTextureNode extends Texture3DNode {
 
 export const stbnTexture = /*#__PURE__*/ nodeImmutable(STBNTextureNode);
 
+export const stbnFrameUniform = /*#__PURE__*/ uniform(0);
+
 export const stbn = /*#__PURE__*/ Fn(() => {
     return stbnTexture
-        .sample(vec3(screenCoordinate.xy, frameId.mod(64)).div(vec3(128, 128, 64)))
-        .r.toVar();
-}).once()();
+        .sample(
+            vec3(screenCoordinate.xy, stbnFrameUniform.toFloat().mod(64)).div(vec3(128, 128, 64))
+        )
+        .r.toConst("stbn");
+})();
 
 // Deterministic per-pixel noise (Z=0 slice, no frame dependency).
 // Use for passes that need stable per-frame jitter (e.g. shadow PCF rotation).

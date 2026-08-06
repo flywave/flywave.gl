@@ -55,14 +55,8 @@ const applyToneMappingOverride = () => {
     if (vrm) {
         vrm.config.toneMappingMode = "linear";
         vrm.exposure.value = 1;
-        vrm.config.aerialPerspective.enabled = false;
-        vrm.config.lensFlare.enabled = false;
         vrm.needsUpdate = true;
         _toneMappingApplied = true;
-    }
-    const scene = (mapView as any).scene;
-    if (scene) {
-        scene.backgroundNode = null;
     }
     const atmoSystem = (mapView as any).m_atmosphereSystem;
     if (atmoSystem) {

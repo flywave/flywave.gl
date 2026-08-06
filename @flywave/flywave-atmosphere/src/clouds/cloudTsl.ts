@@ -1505,7 +1505,6 @@ export const createCloudRenderer = (u: CloudUniforms) => {
 
         const debugMode = u.debugMode;
 
-        // STEP 8g: marchClouds + aerial perspective + haze
         If(shouldMarch.greaterThan(0.5), () => {
             const origin = rayNear.mul(rayDirection).add(u.cameraPosition);
             const marchResult = marchClouds(
@@ -1549,6 +1548,11 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             If(debugMode.equal(float(205)), () => {
                 resultColor.assign(vec4(rayDirection.xy.mul(0.5).add(0.5), 0, 1));
             });
+            // Debug: STBN noise value
+            If(debugMode.equal(float(207)), () => {
+                const s = stbn.toVar();
+                resultColor.assign(vec4(s, s, s, 1));
+            });
             // Debug: camera position as color (normalized)
             If(debugMode.equal(float(206)), () => {
                 const cp = u.cameraPosition.mul(1e-7);
@@ -1590,7 +1594,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                     resultColor.assign(
                         vec4(
                             resultColor.rgb.mul(transmittance).add(inscatter.mul(resultColor.a)),
-                            float(1)
+                            resultColor.a
                         )
                     );
                 }
@@ -1605,7 +1609,6 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 const prevClip = u.prevViewProjection.mul(vec4(frontWorld, 1));
                 const prevUv = prevClip.xy.div(prevClip.w).mul(0.5).add(0.5);
                 const vel = curUv.sub(prevUv);
-                // Flip Y: screenUV is Y-down but clip space UV is Y-up
                 resultVelocity.assign(vec2(vel.x, vel.y.negate()));
             });
 
@@ -1659,7 +1662,7 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 rayDirection,
                 hazeClampedFar.sub(1),
                 cosTheta,
-                float(0)
+                resultShadowLen
             ).toConst();
             resultColor.rgb.assign(mix(resultColor.rgb, haze.rgb, haze.a));
             resultColor.a.assign(resultColor.a.mul(float(1).sub(haze.a)).add(haze.a));
