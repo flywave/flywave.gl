@@ -982,24 +982,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     await renderFrames(mapView, dataSource, 3);
                 }
 
-                if ((window as any).__karma__?.config?.args?.includes?.("mat-info")) {
-                    try {
-                        const r = (mapView as any).renderer;
-                        r.render((mapView as any).scene, (mapView as any).m_rteCamera);
-                        const seen = new Set<string>();
-                        (mapView as any).scene.traverse((o: any) => {
-                            if (o.isMesh && o.userData?.technique) {
-                                const key = o.userData.technique.name;
-                                if (seen.has(key)) return;
-                                seen.add(key);
-                                const m = o.material;
-                                const props = r.properties?.get?.(m);
-                                const hasProg = !!(props?.currentProgram ?? [...(props?.programs?.values?.() ?? [])][0]);
-                                console.log(`[MAT] tech=${key} matCtor=${m?.constructor?.name} isRaw=${m?.isRawShaderMaterial} hasProgram=${hasProg} transparent=${m?.transparent} side=${m?.side}`);
-                            }
-                        });
-                    } catch (e) { console.log(`[MAT] err ${e}`); }
-                }
+
 
                 // Mapbox's image-threshold is the max FRACTION of mismatched
                 // pixels allowed (e.g. 0.001 = 0.1%); convert it to a pixel
