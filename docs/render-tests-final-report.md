@@ -93,7 +93,44 @@ npx karma start --browsers ChromeHeadlessNoSandbox
 KARMA_ARGS="filter=zoom-history/in" pnpm karma-browser
 ```
 
-## 六、后续路径（按优先级）
+## 六、自动化渲染对比管道（已实现）
+
+自动渲染 style → 与 expected.png 对比 → 生成 diff → 评估差异。
+
+```bash
+# 运行（CHROME_BIN 指向 chrome/chrome-headless-shell）
+CHROME_BIN=<path> node scripts/run-mbstyle-render-tests.js zoom-history
+# 或跑多个分类
+CHROME_BIN=<path> node scripts/run-mbstyle-render-tests.js symbol-z-order default-across
+
+# 可选 env
+MBSTYLE_REPORT=/path/to/output   # 结果输出目录（默认 rendering-test-results/mbstyle）
+MBSTYLE_PORT=8091                # 结果服务器端口（默认 8081）
+```
+
+### 流程
+1. **启动结果服务器**（`RenderingTestResultServer`）：保存每个测试的 `actual.png`、`diff.png`、`.ibct-result.json`，并提供 HTML 报告 `/ibct-report`。
+2. **运行 karma headless**：渲染每个 style，用本地 `expected.png` 对比（`pixelmatch`），POST 结果到服务器。
+3. **输出摘要**：每个测试 pass/fail + mismatched pixels 数；`open http://localhost:PORT/ibct-report` 查看 HTML 报告（含 actual/diff 图）。
+
+### 输出示例
+```
+=== Summary: 0 passed, 32 failed ===
+  FAIL zoom-history/in (1162 mismatched pixels)
+  FAIL hillshade-buffer/tile-edge-buffer-0 (61000 mismatched pixels)
+  ...
+```
+结果保存在 `MBSTYLE_REPORT/ChromeHeadless-.../mbstyle-render-<name>.<extra>.png`。
+
+### 组件
+- `scripts/run-mbstyle-render-tests.js`：runner（启动服务器 + karma + 摘要）
+- `MBStyleCompatRenderTest.ts`：支持 `KARMA_ARGS="feedback-url=http://host:port"`，把结果 POST 到服务器
+- `RenderingTestResultServer`：新增 CORS（karma 跨域 POST）
+- `index.web.ts`：导出 `RenderingTestResultReporter`
+
+> 当前 32 个测试全部 FAIL（mismatch 数如上），因为 headless SwiftShader 渲染空白（见第三节）。管道本身验证有效——diff 图像正确生成（空白 vs expected）。真机 GPU 渲染正常后，同一管道直接输出真实通过率。
+
+## 七、后续路径（按优先级）
 
 1. **真机 GPU 验证**（首选）：`pnpm karma-browser`。代码层面全部正确，真机渲染正常后 5 个功能逐项 pixel-diff 修正。
 2. **修复 EffectComposer**（headless 可选）：查 `MapRenderingManager` 的 composer 输出 pass 为何不合成到 canvas。
