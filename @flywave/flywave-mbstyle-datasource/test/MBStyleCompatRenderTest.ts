@@ -16,6 +16,8 @@ import {
     RenderingTestHelper,
     TestOptions,
     setReferenceImageResolver,
+    setGlobalReporter,
+    RenderingTestResultReporter,
 } from "@flywave/flywave-test-utils";
 import { assert } from "chai";
 
@@ -774,6 +776,18 @@ async function processOperations(
 }
 
 describe("MBStyleDataSource render-tests compatibility", function () {
+    // Route comparison results (actual/diff images + pass/fail) to an external
+    // result server so an automated report can be generated. Pass
+    // `feedback-url=http://host:port` via KARMA_ARGS.
+    const feedbackUrl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("feedback-url="),
+    )?.slice("feedback-url=".length);
+    before(function () {
+        if (feedbackUrl) {
+            setGlobalReporter(new RenderingTestResultReporter(feedbackUrl));
+        }
+    });
+
     // TEST_FILTER = substring(s) matched against the test name (e.g.
     // "hillshade-buffer" or "symbol-z-order/viewport-y"). Read from env (node
     // side, for ts-mocha) or karma client args (browser side).

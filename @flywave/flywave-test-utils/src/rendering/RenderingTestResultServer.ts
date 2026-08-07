@@ -164,6 +164,18 @@ export function installMiddleware(app: express.Router, basePath: string) {
 
     outputBasePath = basePath;
 
+    // Allow cross-origin feedback POSTs from a karma/browser test page.
+    app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        if (req.method === "OPTIONS") {
+            res.status(204).end();
+            return;
+        }
+        next();
+    });
+
     // tslint gives a false alert b/c bodyParser is a function(deprecated) and a namespace.
     // We are using the non-deprecated namespace here, so all fine.
     const jsonParser = bodyParser.json({ limit: 1024 * 1024 * 16 });
