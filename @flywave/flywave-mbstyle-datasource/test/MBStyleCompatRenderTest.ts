@@ -990,6 +990,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 const maxMismatch = Math.ceil(
                     (imageThreshold * canvas.width * canvas.height) || 0,
                 );
+
                 await ibct.assertCanvasMatchesReference(canvas, entry.name, {
                     threshold: 0.1,
                     maxMismatchedPixels: maxMismatch,

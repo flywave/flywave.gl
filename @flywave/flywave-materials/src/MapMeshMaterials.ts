@@ -728,6 +728,7 @@ export namespace ExtrusionFeature {
     export function isEnabled(extrusionMaterial: ExtrusionFeature) {
         return (
             extrusionMaterial.extrusionRatio !== undefined &&
+            extrusionMaterial.extrusionRatio !== ExtrusionFeatureDefs.DEFAULT_RATIO_MAX &&
             extrusionMaterial.extrusionRatio >= ExtrusionFeatureDefs.DEFAULT_RATIO_MIN
         );
     }
