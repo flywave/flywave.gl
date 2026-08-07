@@ -234,6 +234,7 @@ export class CloudRenderNode extends TempNode {
     private historyNode: TextureNode;
     private resolveNodeTex: TextureNode;
     private compositeNode: TextureNode;
+    private compositeShadowLengthNode: TextureNode;
     private readonly shadowNodes: TextureNode[] = [];
     private readonly shadowHistoryNodes: TextureNode[] = [];
 
@@ -265,7 +266,8 @@ export class CloudRenderNode extends TempNode {
     }
 
     get shadowLengthTexture(): Texture {
-        return this.lowResRT.textures[2];
+        // Return resolved (full-res) shadowLength, not low-res raw.
+        return this.compositeShadowLengthNode.value;
     }
     constructor(colorNode: Node<"vec4">, depthNode?: Node | null, renderer?: Renderer) {
         super("vec4");
@@ -293,16 +295,31 @@ export class CloudRenderNode extends TempNode {
         this.lowResRT.textures[2].minFilter = LinearFilter;
         this.lowResRT.textures[2].magFilter = LinearFilter;
 
-        this.historyRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
-        this.historyRT.texture.name = "Clouds [History]";
-        this.historyRT.texture.minFilter = LinearFilter;
-        this.historyRT.texture.magFilter = LinearFilter;
+        // 2-attachment MRT: color + shadowLength. Texture names MUST match mrt()
+        // keys (MRTNode.setup matches by texture.name).
+        this.resolveRT = new RenderTarget(1, 1, {
+            depthBuffer: false,
+            type: HalfFloatType,
+            count: 2
+        });
+        this.resolveRT.textures[0].name = "color";
+        this.resolveRT.textures[0].minFilter = LinearFilter;
+        this.resolveRT.textures[0].magFilter = LinearFilter;
+        this.resolveRT.textures[1].name = "shadowLength";
+        this.resolveRT.textures[1].minFilter = LinearFilter;
+        this.resolveRT.textures[1].magFilter = LinearFilter;
 
-        this.resolveRT = new RenderTarget(1, 1, { depthBuffer: false, type: HalfFloatType });
-        this.resolveRT.texture.name = "Clouds [Resolve]";
-        this.resolveRT.texture.minFilter = LinearFilter;
-        this.resolveRT.texture.magFilter = LinearFilter;
-
+        this.historyRT = new RenderTarget(1, 1, {
+            depthBuffer: false,
+            type: HalfFloatType,
+            count: 2
+        });
+        this.historyRT.textures[0].name = "color";
+        this.historyRT.textures[0].minFilter = LinearFilter;
+        this.historyRT.textures[0].magFilter = LinearFilter;
+        this.historyRT.textures[1].name = "shadowLength";
+        this.historyRT.textures[1].minFilter = LinearFilter;
+        this.historyRT.textures[1].magFilter = LinearFilter;
         // Single MRT RT for all shadow cascades
         {
             const sz = SHADOW_MAP_SIZE;
@@ -351,6 +368,7 @@ export class CloudRenderNode extends TempNode {
         this.historyNode = texture(this.historyRT.texture);
         this.resolveNodeTex = texture(this.resolveRT.texture);
         this.compositeNode = texture(this.resolveRT.texture);
+        this.compositeShadowLengthNode = texture(this.resolveRT.textures[1]);
 
         if (renderer != null) {
             this.ensureCloudInit(renderer).catch(() => {});
@@ -913,6 +931,7 @@ export class CloudRenderNode extends TempNode {
 
         // Ping-pong: swap resolve ↔ history for next frame (no blit pass needed)
         this.compositeNode.value = this.resolveRT.texture;
+        this.compositeShadowLengthNode.value = this.resolveRT.textures[1];
         const tmp = this.resolveRT;
         this.resolveRT = this.historyRT;
         this.historyRT = tmp;
@@ -955,8 +974,11 @@ export class CloudRenderNode extends TempNode {
             return this._colorNode;
         }
 
-        const resolvedClouds = this.compositeNode;
-        return vec4(mix(this._colorNode.rgb, resolvedClouds.rgb, resolvedClouds.a), 1);
+        // Match reference: CloudRenderNode does NOT composite clouds into the
+        // scene (skipRendering). It only produces the cloud color texture; the
+        // actual compositing happens in AerialPerspectiveNode (overlay mechanism).
+        // CloudRenderNode passes the scene color through unchanged.
+        return this._colorNode;
     }
 
     private _buildFragmentNodes(host: NodeBuilder | Renderer): void {
@@ -1115,7 +1137,26 @@ export class CloudRenderNode extends TempNode {
                 return result;
             })();
 
-            this.resolveMaterial.fragmentNode = resolveNode;
+            // shadowLength resolve: upsample from low-res to full-res.
+            const resolveShadowLength = Fn(() => {
+                const lowResSize = vec2(
+                    float(1).div(this.lowResTexelSize.x),
+                    float(1).div(this.lowResTexelSize.y)
+                );
+                const lowCoordX = screenCoordinate.x.floor().div(4).floor();
+                const lowCoordY = screenCoordinate.y.floor().div(4).floor();
+                const lowUv = vec2(
+                    lowCoordX.add(0.5).div(lowResSize.x),
+                    lowCoordY.add(0.5).div(lowResSize.y)
+                );
+                const currentLen = texture(this.shadowLengthLowResNode, lowUv);
+                return vec4(currentLen.r, float(0), float(0), float(0));
+            })();
+
+            this.resolveMaterial.fragmentNode = mrt({
+                color: resolveNode,
+                shadowLength: resolveShadowLength
+            });
             this.resolveMaterial.needsUpdate = true;
         }
 

@@ -1,8 +1,8 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type NodeBuilder, type TextureNode, TempNode } from "three/webgpu";
-import { add, Fn, If, mix, positionGeometry, positionView, remapClamp, screenCoordinate, vec2, vec3, vec4, viewportDepthTexture, viewportSharedTexture, viewportUV } from "three/tsl";
+import { type NodeBuilder, type Texture, type TextureNode, TempNode } from "three/webgpu";
+import { add, float, Fn, If, mix, positionGeometry, positionView, remapClamp, screenCoordinate, screenUV, texture, vec2, vec3, vec4, viewportDepthTexture, viewportSharedTexture, viewportUV } from "three/tsl";
 
 
 import { inverseProjectionMatrix, projectionMatrix } from "../tsl/accessors";
@@ -39,6 +39,27 @@ export class AerialPerspectiveNode extends TempNode {
     transmittance = true;
     inscattering = true;
     moonScattering = false;
+
+    // Cloud shadow length texture (god rays). Set from CloudRenderNode.
+    cloudShadowLengthTexture: Texture | null = null;
+
+    // Cloud overlay texture (cloud color + alpha). Set from CloudRenderNode.
+    // AerialPerspective composites clouds at the end (matches reference overlay).
+    cloudOverlayTexture: Texture | null = null;
+
+    setCloudShadowLength(tex: Texture | null): void {
+        if (this.cloudShadowLengthTexture !== tex) {
+            this.cloudShadowLengthTexture = tex;
+            this.needsUpdate = true;
+        }
+    }
+
+    setCloudOverlay(tex: Texture | null): void {
+        if (this.cloudOverlayTexture !== tex) {
+            this.cloudOverlayTexture = tex;
+            this.needsUpdate = true;
+        }
+    }
 
     constructor(
         scope: AerialPerspectiveNodeScope,
@@ -101,6 +122,25 @@ export class AerialPerspectiveNode extends TempNode {
             _shadowLengthNode: shadowLengthNode,
             _skyNode: skyNode
         } = this;
+
+        // Merge cloud shadow length (god rays) into the effective shadow length
+        // used by both surfaceLuminance and skyNode. Matches reference where
+        // AerialPerspective reads cloud shadowLengthBuffer after clouds render.
+        let effectiveShadowLengthNode = shadowLengthNode;
+        if (this.cloudShadowLengthTexture != null) {
+            const cloudShadowLen = texture(this.cloudShadowLengthTexture).sample(viewportUV).r;
+            const cloudShadowLenVec2 = vec2(cloudShadowLen, float(0));
+            effectiveShadowLengthNode =
+                shadowLengthNode != null ? shadowLengthNode.add(cloudShadowLenVec2) : cloudShadowLenVec2;
+        }
+
+        // SkyNode also needs the merged shadow length (ground pixels reach sky
+        // branch in reversed-Z, and sky radiance uses shadowLength for god rays).
+        // TEMP: disabled to test if it causes the afterglow to disappear.
+        // if (skyNode != null) {
+        //     skyNode._shadowLengthNode = effectiveShadowLengthNode;
+        // }
+
         const depth = depthNode.load(screenCoordinate).r.toConst();
 
         const getCameraPositionUnit = (): Node<"vec3"> => {
@@ -241,7 +281,7 @@ export class AerialPerspectiveNode extends TempNode {
             const solarLuminanceTransfer = getIndirectLuminanceToPoint(
                 cameraPositionUnit.add(altitudeCorrectionUnit),
                 positionUnit.add(altitudeCorrectionUnit),
-                shadowLengthNode ?? vec2(0),
+                effectiveShadowLengthNode ?? vec2(0),
                 sunDirectionECEF
             ).toConst();
             const transmittance = solarLuminanceTransfer.get("transmittance");
@@ -252,7 +292,7 @@ export class AerialPerspectiveNode extends TempNode {
                 const lunarLuminanceTransfer = getIndirectLuminanceToPoint(
                     cameraPositionUnit.add(altitudeCorrectionUnit),
                     positionUnit.add(altitudeCorrectionUnit),
-                    shadowLengthNode ?? vec2(0),
+                    effectiveShadowLengthNode ?? vec2(0),
                     moonDirectionECEF
                 ).toConst();
 
@@ -287,6 +327,15 @@ export class AerialPerspectiveNode extends TempNode {
             ).Else(() => {
                 luminance.rgb.assign(surfaceLuminance);
             });
+
+            // Composite clouds at the end (matches reference overlay mechanism:
+            // outputColor.rgb = outputColor.rgb * (1 - overlay.a) + overlay.rgb).
+            // AerialPerspective processed the scene WITHOUT clouds; now blend them in.
+            if (this.cloudOverlayTexture != null) {
+                const overlay = texture(this.cloudOverlayTexture).sample(viewportUV);
+                luminance.rgb.assign(luminance.rgb.mul(overlay.a.oneMinus()).add(overlay.rgb));
+            }
+
             return luminance;
         })();
     }

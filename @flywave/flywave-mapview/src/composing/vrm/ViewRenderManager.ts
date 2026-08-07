@@ -162,21 +162,9 @@ export class ViewRenderManager implements IViewRenderManager {
 
         let outputNode = colorNode;
 
-        if (aerialEnabled) {
-            let shadowLengthNode = null;
-            if (hasCSM) {
-                const viewZUnitTex = this.passNode.getTextureNode("viewZUnit");
-                shadowLengthNode = shadowLength(this.csmShadowNode, viewZUnitTex);
-            }
-            this.aerialNode = aerialPerspective(outputNode, depthNode, shadowLengthNode);
-            outputNode = this.aerialNode;
-        }
-
-        if (this.config.lensFlare.enabled) {
-            this.lensFlareNode = lensFlare(convertToTexture(outputNode));
-            outputNode = this.lensFlareNode;
-        }
-
+        // Clouds first (matches reference EffectComposer order: Clouds before
+        // AerialPerspective). AerialPerspective then processes the cloud+scene
+        // composite and applies god rays from cloud shadowLength.
         if (this.config.clouds?.enabled) {
             if (!this.m_cloudNode) {
                 this.m_cloudNode = cloudRender(outputNode, depthNode, this.renderer);
@@ -193,6 +181,26 @@ export class ViewRenderManager implements IViewRenderManager {
                 this.m_cloudNode._depthNode = depthNode ?? null;
             }
             outputNode = this.m_cloudNode;
+        }
+
+        if (aerialEnabled) {
+            let shadowLengthNode = null;
+            if (hasCSM) {
+                const viewZUnitTex = this.passNode.getTextureNode("viewZUnit");
+                shadowLengthNode = shadowLength(this.csmShadowNode, viewZUnitTex);
+            }
+            this.aerialNode = aerialPerspective(outputNode, depthNode, shadowLengthNode);
+            // Feed cloud shadow length (god rays) + cloud overlay into aerial perspective.
+            if (this.m_cloudNode != null) {
+                this.aerialNode.setCloudShadowLength(this.m_cloudNode.shadowLengthTexture);
+                this.aerialNode.setCloudOverlay(this.m_cloudNode.overlayTexture);
+            }
+            outputNode = this.aerialNode;
+        }
+
+        if (this.config.lensFlare.enabled) {
+            this.lensFlareNode = lensFlare(convertToTexture(outputNode));
+            outputNode = this.lensFlareNode;
         }
 
         if (bloomEnabled) {
