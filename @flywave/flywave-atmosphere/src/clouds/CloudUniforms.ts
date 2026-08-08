@@ -52,7 +52,7 @@ export class CloudUniforms {
     shadowCascadeCount = uniform(1);
     shadowFar = uniform(50000.0);
     shadowTexelSize = uniform(new Vector2(1 / 512, 1 / 512));
-    shadowMaxIterationCount = uniform(48);
+    shadowMaxIterationCount = uniform(50);
     shadowMinStepSize = uniform(100.0);
     shadowMaxStepSize = uniform(1000.0);
     shadowMinTransmittance = uniform(1e-4);

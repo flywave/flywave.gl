@@ -14,6 +14,7 @@ import {
     exp,
     float,
     floor,
+    fract,
     Fn,
     If,
     int,
@@ -455,13 +456,6 @@ export const createMarchOpticalDepth = (u: CloudUniforms) => {
 
                 const position = currentDist.mul(rayDirection).add(rayOrigin);
                 const height = length(position).sub(u.bottomRadius);
-                // OPTIMIZATION: compute n once, reuse for both UV and media.
-                // Before: uv = getGlobeUv(position) — did normalize(position) internally.
-                //         sampleMedia(..., rayOrigin) — did normalize(position) for surfaceNormal.
-                // After:  n = normalize(position) computed once.
-                //         uv = getCubeSphereUvNormalized(n) — no internal normalize.
-                //         sampleMedia(..., n) — receives pre-computed n.
-                // Saves 1 normalize() per iteration.
                 const n = normalize(position);
                 const uv = getCubeSphereUvNormalized(n);
                 const heightFraction = remapClamped(
@@ -849,8 +843,9 @@ export const createSampleShadowOpticalDepth = (u: CloudUniforms) => {
         // Stochastic cascade selection (matches reference getFadedCascadeIndex)
         const worldPos = u.ecefToWorld.mul(vec4(rayPosition.sub(u.altitudeCorrection), 1)).xyz;
         const viewPos = u.shadowViewMatrix.mul(vec4(worldPos, 1));
-        const orthoDepth = u.shadowCameraFar
-            .add(viewPos.z)
+        const orthoDepth = viewPos.z
+            .negate()
+            .sub(u.shadowCameraNear)
             .div(u.shadowCameraFar.sub(u.shadowCameraNear));
 
         const sampleCascade = (idx: number) =>
@@ -1203,12 +1198,9 @@ export const createMarchClouds = (u: CloudUniforms): any => {
     return Fn(
         ([rayOrigin, rayDirection, rayNearFar, cosTheta, jitter]: [any, any, any, any, any]) => {
             const radianceIntegral = vec3(0).toVar();
-            const debugSunIrrSum = vec3(0).toVar();
-            const debugStepCount = float(0).toVar();
             const transmittanceIntegral = float(1).toVar();
             const weightedDistanceSum = float(0).toVar();
             const transmittanceSum = float(0).toVar();
-            const debugOpticalDepth = float(-1).toVar();
 
             const maxRayDistance = rayNearFar.y.sub(rayNearFar.x).toVar();
             const stepSize = u.minStepSize
@@ -1256,8 +1248,6 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                     Break();
                 });
 
-                debugStepCount.addAssign(float(1));
-
                 const position = rayDistance.mul(rayDirection).add(rayOrigin);
                 const height = length(position).sub(u.bottomRadius);
                 // OPTIMIZATION: same normalize() reuse as other loops.
@@ -1289,6 +1279,9 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                     const maxDensity = max(density.x, max(density.y, max(density.z, density.w)));
                     const isEmpty = maxDensity.lessThanEqual(u.minDensity);
 
+                    // ---- DEBUG 315-318: pre-sampleMedia diagnostics (all samples) ----
+                    // Each in its own If to avoid deep select chains (which broke
+                    // compilation when containing textureLevel calls).
                     If(isEmpty, () => {
                         stepSize.mulAssign(u.perspectiveStepScale);
                         rayDistance.addAssign(
@@ -1310,13 +1303,12 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const skyGradient = media.z;
 
                         If(mediaExtinction.greaterThan(u.minExtinction), () => {
-                            // Per-step height-interpolated irradiance (matches reference)
-                            const irrAlpha = remapClamped(height, u.minHeight, u.maxHeight);
-                            const sunIrradiance = mix(minSunIrradiance, maxSunIrradiance, irrAlpha);
-                            const skyIrradiance = mix(minSkyIrradiance, maxSkyIrradiance, irrAlpha);
-
-                            // STEP 8i: accumulate sunIrradiance for debug
-                            // debugSunIrrSum.addAssign(sunIrradiance.mul(0.01));
+                            const accurateIrr = getSplitScalarIlluminance(
+                                position.mul(u.worldToUnit),
+                                u.sunDirection
+                            ).toConst();
+                            const sunIrradiance = accurateIrr.get("direct");
+                            const skyIrradiance = accurateIrr.get("indirect");
 
                             const sunMarchResult = marchOpticalDepth(
                                 position,
@@ -1328,7 +1320,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                             const opticalDepth = sunMarchResult.x.toVar();
                             const sunRayDistance = sunMarchResult.y;
 
-                            // BSM shadow: cascade frustum coordinate mapping needs rewrite
+                            // BSM shadow
                             If(height.lessThan(u.shadowTopHeight), () => {
                                 const shadowOD = sampleShadowOpticalDepth(
                                     position,
@@ -1345,9 +1337,8 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                                 approximateMultipleScattering(opticalDepth, cosTheta, u)
                             );
 
-                            // Ground bounce: disabled (maxIterationCountToGround=0, matches reference medium preset)
+                            // Ground bounce: disabled (maxIterationCountToGround=0)
 
-                            // Sky irradiance
                             radiance = radiance.add(
                                 skyIrradiance
                                     .mul(RECIPROCAL_PI4)
@@ -1357,7 +1348,6 @@ export const createMarchClouds = (u: CloudUniforms): any => {
 
                             radiance = radiance.mul(mediaScattering);
 
-                            // Powder effect
                             radiance = radiance.mul(
                                 float(1).sub(
                                     u.powderScale.mul(
@@ -1371,25 +1361,20 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                             const integral = radiance
                                 .sub(radiance.mul(transmittance))
                                 .div(clampedExt);
-
-                            // STEP 8n: accumulate integral WITH transmittanceIntegral
-                            // debugSunIrrSum.addAssign(transmittanceIntegral.mul(integral).mul(0.01));
-
                             radianceIntegral.addAssign(transmittanceIntegral.mul(integral));
                             transmittanceIntegral.mulAssign(transmittance);
 
-                            // Accumulate for frontDepth (aerial perspective)
                             weightedDistanceSum.addAssign(transmittanceIntegral.mul(rayDistance));
                             transmittanceSum.addAssign(transmittanceIntegral);
                         });
 
                         stepSize.mulAssign(u.perspectiveStepScale);
                         rayDistance.addAssign(stepSize);
-                    });
-                });
 
-                If(transmittanceIntegral.lessThanEqual(u.minTransmittance), () => {
-                    Break();
+                        If(transmittanceIntegral.lessThanEqual(u.minTransmittance), () => {
+                            Break();
+                        });
+                    });
                 });
             });
 
@@ -1503,8 +1488,6 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const resultVelocity = vec2(0, 0).toVar();
         const resultShadowLen = float(0).toVar();
 
-        const debugMode = u.debugMode;
-
         If(shouldMarch.greaterThan(0.5), () => {
             const origin = rayNear.mul(rayDirection).add(u.cameraPosition);
             const marchResult = marchClouds(
@@ -1516,48 +1499,6 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             ).toConst();
 
             resultColor.assign(marchResult.get("color"));
-
-            // Debug: globe UV at entry point
-            If(debugMode.equal(float(201)), () => {
-                const debugUv = getGlobeUv(origin);
-                resultColor.assign(vec4(debugUv, 0, 1));
-            });
-            // Debug: weather texture value at entry point
-            If(debugMode.equal(float(202)), () => {
-                const debugUv = getGlobeUv(origin);
-                const wUv = debugUv.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
-                const wVal = textureLevel(u.localWeatherTexture, wUv, float(0));
-                resultColor.assign(vec4(wVal.rgb, 1));
-            });
-            // Debug: shape texture value at entry point
-            If(debugMode.equal(float(203)), () => {
-                const debugUv = getGlobeUv(origin);
-                const shapePos = origin.mul(u.shapeRepeat);
-                const shapeVal = texture3D(u.shapeTexture, shapePos).r;
-                resultColor.assign(vec4(shapeVal, shapeVal, shapeVal, 1));
-            });
-            // Debug: camera height normalized
-            If(debugMode.equal(float(204)), () => {
-                const h = u.cameraHeight
-                    .sub(u.minHeight)
-                    .div(u.maxHeight.sub(u.minHeight))
-                    .clamp(0, 1);
-                resultColor.assign(vec4(h, h, h, 1));
-            });
-            // Debug: ray direction (XY) as color
-            If(debugMode.equal(float(205)), () => {
-                resultColor.assign(vec4(rayDirection.xy.mul(0.5).add(0.5), 0, 1));
-            });
-            // Debug: STBN noise value
-            If(debugMode.equal(float(207)), () => {
-                const s = stbn.toVar();
-                resultColor.assign(vec4(s, s, s, 1));
-            });
-            // Debug: camera position as color (normalized)
-            If(debugMode.equal(float(206)), () => {
-                const cp = u.cameraPosition.mul(1e-7);
-                resultColor.assign(vec4(cp.xy, 0, 1));
-            });
 
             const marchedFrontDepth = marchResult.get("frontDepth").toConst();
             const hitClouds = marchedFrontDepth.greaterThanEqual(0).toConst();

@@ -167,7 +167,7 @@ export class CloudRenderNode extends TempNode {
         cascadeCount: SHADOW_CASCADE_COUNT,
         mapSize: new Vector2(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
         maxFar: SHADOW_MAX_FAR,
-        splitLambda: 0.5,
+        splitLambda: 0.6,
         fade: false
     });
 
