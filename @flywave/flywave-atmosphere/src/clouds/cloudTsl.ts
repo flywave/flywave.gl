@@ -997,9 +997,9 @@ export const createSampleShadowOpticalDepthSingle = (u: CloudUniforms) => {
         // Stochastic cascade selection (matches reference getFadedCascadeIndex)
         const worldPos = u.ecefToWorld.mul(vec4(rayPosition.sub(u.altitudeCorrection), 1)).xyz;
         const viewPos = u.shadowViewMatrix.mul(vec4(worldPos, 1));
-        // viewZToOrthographicDepth: (far + viewZ) / (far - near)
-        const orthoDepth = u.shadowCameraFar
-            .add(viewPos.z)
+        const orthoDepth = viewPos.z
+            .negate()
+            .sub(u.shadowCameraNear)
             .div(u.shadowCameraFar.sub(u.shadowCameraNear));
 
         const sampleCascade = (idx: number) =>
