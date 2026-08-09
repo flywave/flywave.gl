@@ -194,6 +194,12 @@ export class ViewRenderManager implements IViewRenderManager {
             if (this.m_cloudNode != null) {
                 this.aerialNode.setCloudShadowLength(this.m_cloudNode.shadowLengthTexture);
                 this.aerialNode.setCloudOverlay(this.m_cloudNode.overlayTexture);
+                // RT ping-pong swap changes texture references each frame.
+                // Update aerial node's texture refs after every swap.
+                this.m_cloudNode.onTexturesSwapped = () => {
+                    this.aerialNode.setCloudShadowLength(this.m_cloudNode!.shadowLengthTexture);
+                    this.aerialNode.setCloudOverlay(this.m_cloudNode!.overlayTexture);
+                };
             }
             outputNode = this.aerialNode;
         }

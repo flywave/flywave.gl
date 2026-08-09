@@ -1487,6 +1487,20 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const resultFrontDepth = rayFar.toVar();
         const resultVelocity = vec2(0, 0).toVar();
         const resultShadowLen = float(0).toVar();
+        const hitClouds = float(0).toVar();
+
+        // shadowRayNearFar: matches reference getShadowRayNearFar
+        const shadowTopH = u.bottomRadius.add(u.shadowTopHeight);
+        const camBelowShadowTop = u.cameraHeight.lessThan(u.shadowTopHeight);
+        const shadowNear = camBelowShadowTop.select(float(1), nearMin); // cameraNear=1 or cloud near
+        const shadowFarRaw = camBelowShadowTop.select(
+            intersectsGround.greaterThan(0.5).select(nearGround, farMax),
+            intersectsGround.greaterThan(0.5).select(nearGround, farMax)
+        );
+        const shadowRayNearFar = vec2(shadowNear, min(shadowFarRaw, u.maxShadowLengthRayDistance));
+        const shadowRayValid = shadowRayNearFar.x
+            .greaterThanEqual(0)
+            .and(shadowRayNearFar.y.greaterThanEqual(0));
 
         If(shouldMarch.greaterThan(0.5), () => {
             const origin = rayNear.mul(rayDirection).add(u.cameraPosition);
@@ -1501,20 +1515,24 @@ export const createCloudRenderer = (u: CloudUniforms) => {
             resultColor.assign(marchResult.get("color"));
 
             const marchedFrontDepth = marchResult.get("frontDepth").toConst();
-            const hitClouds = marchedFrontDepth.greaterThanEqual(0).toConst();
+            hitClouds.assign(marchedFrontDepth.greaterThanEqual(0));
             If(hitClouds, () => {
                 const frontDepth = rayNear.add(marchedFrontDepth);
                 const frontPosition = u.cameraPosition.add(frontDepth.mul(rayDirection));
 
                 const shadowLen = float(0).toVar();
                 If(u.maxShadowLengthIterationCount.greaterThan(0), () => {
-                    const shadowRayFar = min(frontDepth, u.maxShadowLengthRayDistance);
-                    const shadowRayNear = float(1); // camera near plane
+                    // Clamp shadow ray at the cloud front depth (matches reference)
+                    const clampedShadowFar = mix(
+                        shadowRayNearFar.y,
+                        min(frontDepth, shadowRayNearFar.y),
+                        resultColor.a
+                    );
                     shadowLen.assign(
                         marchShadowLength(
-                            shadowRayNear.mul(rayDirection).add(u.cameraPosition),
+                            shadowRayNearFar.x.mul(rayDirection).add(u.cameraPosition),
                             rayDirection,
-                            vec2(shadowRayNear, shadowRayFar),
+                            vec2(shadowRayNearFar.x, clampedShadowFar),
                             jitter
                         )
                     );
@@ -1552,43 +1570,32 @@ export const createCloudRenderer = (u: CloudUniforms) => {
                 const vel = curUv.sub(prevUv);
                 resultVelocity.assign(vec2(vel.x, vel.y.negate()));
             });
+        });
 
-            // Non-cloud pixels: compute shadowLength + velocity
-            If(hitClouds.not(), () => {
-                // Only march shadow length when haze is enabled (avoids expensive march for sky pixels)
-                If(
-                    u.hazeEnabled
-                        .greaterThan(0)
-                        .and(u.maxShadowLengthIterationCount.greaterThan(0)),
-                    () => {
-                        const shadowRayFar = min(
-                            sceneDistance.greaterThan(0).select(sceneDistance, rayFar),
-                            u.maxShadowLengthRayDistance
-                        );
-                        resultShadowLen.assign(
-                            marchShadowLength(
-                                u.cameraPosition.add(rayDirection.mul(float(1))),
-                                rayDirection,
-                                vec2(float(1), shadowRayFar),
-                                jitter
-                            )
-                        );
-                    }
+        // Non-cloud pixels (including ground where shouldMarch=0):
+        // Must be OUTSIDE If(shouldMarch) so ground pixels get shadow length.
+        If(hitClouds.not(), () => {
+            If(shadowRayValid.and(u.maxShadowLengthIterationCount.greaterThan(0)), () => {
+                resultShadowLen.assign(
+                    marchShadowLength(
+                        shadowRayNearFar.x.mul(rayDirection).add(u.cameraPosition),
+                        rayDirection,
+                        shadowRayNearFar,
+                        jitter
+                    )
                 );
-
-                const ncDepth = sceneDistance.greaterThan(0).select(sceneDistance, rayFar);
-                const ncPosition = u.cameraPosition.add(ncDepth.mul(rayDirection));
-                const ncWorld = u.ecefToWorld.mul(
-                    vec4(ncPosition.sub(u.altitudeCorrection), 1)
-                ).xyz;
-                const ncCurClip = u.viewProjection.mul(vec4(ncWorld, 1));
-                const ncCurUv = ncCurClip.xy.div(ncCurClip.w).mul(0.5).add(0.5);
-                const ncPrevClip = u.prevViewProjection.mul(vec4(ncWorld, 1));
-                const ncPrevUv = ncPrevClip.xy.div(ncPrevClip.w).mul(0.5).add(0.5);
-                resultFrontDepth.assign(ncDepth);
-                const ncVel = ncCurUv.sub(ncPrevUv);
-                resultVelocity.assign(vec2(ncVel.x, ncVel.y.negate()));
             });
+
+            const ncDepth = sceneDistance.greaterThan(0).select(sceneDistance, rayFar);
+            const ncPosition = u.cameraPosition.add(ncDepth.mul(rayDirection));
+            const ncWorld = u.ecefToWorld.mul(vec4(ncPosition.sub(u.altitudeCorrection), 1)).xyz;
+            const ncCurClip = u.viewProjection.mul(vec4(ncWorld, 1));
+            const ncCurUv = ncCurClip.xy.div(ncCurClip.w).mul(0.5).add(0.5);
+            const ncPrevClip = u.prevViewProjection.mul(vec4(ncWorld, 1));
+            const ncPrevUv = ncPrevClip.xy.div(ncPrevClip.w).mul(0.5).add(0.5);
+            resultFrontDepth.assign(ncDepth);
+            const ncVel = ncCurUv.sub(ncPrevUv);
+            resultVelocity.assign(vec2(ncVel.x, ncVel.y.negate()));
         });
 
         // Haze

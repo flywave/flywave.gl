@@ -2,8 +2,25 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type NodeBuilder, type Texture, type TextureNode, TempNode } from "three/webgpu";
-import { add, float, Fn, If, mix, positionGeometry, positionView, remapClamp, screenCoordinate, screenUV, texture, vec2, vec3, vec4, viewportDepthTexture, viewportSharedTexture, viewportUV } from "three/tsl";
-
+import {
+    add,
+    float,
+    Fn,
+    If,
+    mix,
+    positionGeometry,
+    positionView,
+    remapClamp,
+    screenCoordinate,
+    screenUV,
+    texture,
+    vec2,
+    vec3,
+    vec4,
+    viewportDepthTexture,
+    viewportSharedTexture,
+    viewportUV
+} from "three/tsl";
 
 import { inverseProjectionMatrix, projectionMatrix } from "../tsl/accessors";
 import { rayEllipsoidIntersection } from "../tsl/math";
@@ -131,15 +148,16 @@ export class AerialPerspectiveNode extends TempNode {
             const cloudShadowLen = texture(this.cloudShadowLengthTexture).sample(viewportUV).r;
             const cloudShadowLenVec2 = vec2(cloudShadowLen, float(0));
             effectiveShadowLengthNode =
-                shadowLengthNode != null ? shadowLengthNode.add(cloudShadowLenVec2) : cloudShadowLenVec2;
+                shadowLengthNode != null
+                    ? shadowLengthNode.add(cloudShadowLenVec2)
+                    : cloudShadowLenVec2;
         }
 
         // SkyNode also needs the merged shadow length (ground pixels reach sky
         // branch in reversed-Z, and sky radiance uses shadowLength for god rays).
-        // TEMP: disabled to test if it causes the afterglow to disappear.
-        // if (skyNode != null) {
-        //     skyNode._shadowLengthNode = effectiveShadowLengthNode;
-        // }
+        if (skyNode != null) {
+            skyNode._shadowLengthNode = effectiveShadowLengthNode;
+        }
 
         const depth = depthNode.load(screenCoordinate).r.toConst();
 

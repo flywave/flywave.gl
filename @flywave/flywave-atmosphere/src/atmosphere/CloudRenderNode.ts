@@ -224,6 +224,7 @@ export class CloudRenderNode extends TempNode {
     private _shadowResolveFrameCount = 0;
     private _cloudResolveFrameCount = 0;
     private _fragmentNodesBuilt = false;
+    onTexturesSwapped?: () => void;
 
     private readonly mesh = new QuadMesh();
     private _rendererState?: RendererUtils.RendererState;
@@ -247,7 +248,7 @@ export class CloudRenderNode extends TempNode {
     ];
 
     get overlayTexture(): Texture {
-        return this.compositeNode.value;
+        return this.resolveRT.texture;
     }
 
     get shadowTextures(): Texture[] {
@@ -266,8 +267,7 @@ export class CloudRenderNode extends TempNode {
     }
 
     get shadowLengthTexture(): Texture {
-        // Return resolved (full-res) shadowLength, not low-res raw.
-        return this.compositeShadowLengthNode.value;
+        return this.resolveRT.textures[1];
     }
     constructor(colorNode: Node<"vec4">, depthNode?: Node | null, renderer?: Renderer) {
         super("vec4");
@@ -937,6 +937,10 @@ export class CloudRenderNode extends TempNode {
         this.historyRT = tmp;
         this.resolveNodeTex.value = this.resolveRT.texture;
         this.historyNode.value = this.historyRT.texture;
+
+        // Notify external consumers (AerialPerspectiveNode) that RT textures
+        // changed due to ping-pong swap, so they update their texture references.
+        this.onTexturesSwapped?.();
 
         restoreRendererState(renderer, this._rendererState);
 
