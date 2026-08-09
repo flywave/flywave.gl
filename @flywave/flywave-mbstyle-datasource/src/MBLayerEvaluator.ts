@@ -425,6 +425,7 @@ export class MBLayerEvaluator {
         pitch?: number,
         brightness?: number,
         worldview?: string,
+        center?: [number, number],
     ): EvaluatedLayer[] {
         const bySL = this.m_layersBySource.get(sourceId);
         if (!bySL) return [];
@@ -437,7 +438,7 @@ export class MBLayerEvaluator {
         }
         const results: EvaluatedLayer[] = [];
 
-        const ctx: MBExpressionContext = { zoom, pitch, feature, featureState, _config: this.m_config, brightness, worldview } as any;
+        const ctx: MBExpressionContext = { zoom, pitch, feature, featureState, _config: this.m_config, brightness, worldview, center } as any;
 
         for (const pl of candidates) {
             if (pl.visibility === 'none') continue;

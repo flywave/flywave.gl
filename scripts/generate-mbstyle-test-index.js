@@ -73,7 +73,11 @@ export interface CompatTestEntry {
     style: any;
 }
 
-export const ALL_TESTS: CompatTestEntry[] = ${JSON.stringify(filtered, null, 2)};
+// The JSON string is parsed at module load. Emitting a raw object literal for
+// the full ~3000-test set makes TypeScript attempt a giant union type
+// (TS2590: "Expression produces a union type that is too complex"), so the
+// fixtures are shipped as a serialized string instead.
+export const ALL_TESTS: CompatTestEntry[] = JSON.parse(${JSON.stringify(JSON.stringify(filtered))});
 `;
 fs.writeFileSync(OUT, content);
 console.log(

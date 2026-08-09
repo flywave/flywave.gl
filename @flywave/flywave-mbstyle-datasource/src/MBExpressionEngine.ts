@@ -13,6 +13,8 @@ export interface MBExpressionContext {
     feature?: MBStyleFeature;
     featureState?: Record<string, any>;
     id?: string | number | null;
+    /** Map center as [lng, lat], for `distance-from-center`. */
+    center?: [number, number] | number[];
 }
 
 type CompiledExpression = (ctx: MBExpressionContext) => MBValue;
@@ -148,6 +150,18 @@ export class MBExpressionEngine {
 
             case 'pitch':
                 return ctx.pitch ?? 0;
+
+            case 'distance-from-center': {
+                // Distance (meters) from the feature to the map center. Uses the
+                // feature's first vertex (`_geom.coordinates` = [lng, lat]) and
+                // the map center supplied on the expression context.
+                const from = feature?._geom?.coordinates;
+                const center = (ctx as any).center;
+                if (!Array.isArray(from) || from.length < 2 || !Array.isArray(center) || center.length < 2) {
+                    return 0;
+                }
+                return MBExpressionEngine.haversine(from[1], from[0], center[1], center[0]);
+            }
 
             case 'config': {
                 // Read from the merged style's config map (set by mergeImports).

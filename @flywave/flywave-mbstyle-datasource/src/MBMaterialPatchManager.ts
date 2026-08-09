@@ -40,22 +40,13 @@ export class MBMaterialPatchManager {
     }
 
     patchTileMaterials(): void {
-        const ds = this.m_dataSource as any;
-        const tileDataSources = ds.m_mapView?.m_tileDataSources as any[];
-        if (!tileDataSources) return;
+        const tiles = this.m_dataSource.getDecodedTiles();
+        for (const tile of tiles) {
+            if (!tile.objects || tile.objects.length === 0) continue;
+            if (this.m_patchedTiles.has(tile)) continue;
 
-        for (const tds of tileDataSources) {
-            if (tds !== this.m_dataSource) continue;
-            const tiles = tds.m_tiles as Map<any, any> | undefined;
-            if (!tiles) continue;
-
-            for (const tile of tiles.values()) {
-                if (!tile.objects || tile.objects.length === 0) continue;
-                if (this.m_patchedTiles.has(tile)) continue;
-
-                this.patchTile(tile);
-                this.m_patchedTiles.set(tile, { patched: true });
-            }
+            this.patchTile(tile);
+            this.m_patchedTiles.set(tile, { patched: true });
         }
     }
 
@@ -837,10 +828,22 @@ export class MBMaterialPatchManager {
         }
 
         if (translate && (translate[0] !== 0 || translate[1] !== 0)) {
+            const tx = translate[0];
+            const ty = translate[1];
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
-                shader.uniforms.uMBTranslate = { value: new THREE.Vector2(translate[0], translate[1]) };
+                shader.uniforms.uMBTranslate = { value: new THREE.Vector2(tx, ty) };
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <common>',
+                    '#include <common>\nuniform vec2 uMBTranslate;'
+                );
+                // CirclePointsMaterial (RawShaderMaterial) sets `transformed`
+                // in main(); offset it before the modelView transform.
+                shader.vertexShader = shader.vertexShader.replace(
+                    'vec3 transformed = vec3(position);',
+                    'vec3 transformed = vec3(position);\n    transformed.xy += uMBTranslate;'
+                );
             };
             material.needsUpdate = true;
             modified = true;

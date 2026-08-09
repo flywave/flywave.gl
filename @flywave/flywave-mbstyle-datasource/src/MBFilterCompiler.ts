@@ -24,12 +24,24 @@ export class MBFilterCompiler {
         if (!Array.isArray(filter)) return false;
         const op = filter[0];
         if (typeof op !== 'string') return false;
+
+        // `within`/`!within` and the combinators `all`/`any`/`none` are valid in
+        // both forms; the legacy compiler recurses through `compile()` so nested
+        // sub-filters still get correct (expression vs legacy) dispatch.
+        if (['all', 'any', 'none', 'within', '!within'].includes(op)) {
+            return true;
+        }
+
+        // Atomic legacy operators are only legacy when the key is a plain string
+        // (e.g. `["==", "class", "road"]`). Expression-form filters use an array
+        // here (`["==", ["get","class"], "road"]`) and must go to the expression
+        // engine — routing them to the legacy compiler treats the array as a
+        // property key and culls every feature.
         return [
             'has', '!has', '==', '!=',
             '>', '>=', '<', '<=',
             'in', '!in',
-            'within', '!within',
-        ].includes(op);
+        ].includes(op) && typeof filter[1] === 'string';
     }
 
     private static compileLegacy(filter: any[]): CompiledFilter {

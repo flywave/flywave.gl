@@ -19,7 +19,7 @@ import { EvaluatedLayer } from './MBLayerEvaluator';
 import { ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
 import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
 import { createLineGeometry, LineGroup } from '@flywave/flywave-lines';
-import { resolveTextField, applyTextTransform, shapeText } from './TextShaping';
+import { resolveTextField, applyTextTransform, shapeText, shapeRTLText } from './TextShaping';
 import { EarthConstants } from '@flywave/flywave-geoutils';
 
 // Use earcut for proper polygon triangulation (concave + holes)
@@ -372,12 +372,15 @@ export class MBTileDataEmitter {
                 if (symbolMode === 'icon' || (symbolMode === undefined && l['icon-image'])) {
                     props.technique = 'labeled-icon';
                     props.imageTexture = l['icon-image'];
-                    props.color = p['icon-color'] ?? '#000000';
+                    // PoiBuilder reads `iconColor` (it ignores `color`).
+                    props.iconColor = p['icon-color'] ?? '#000000';
                     props.opacity = p['icon-opacity'] ?? 1;
                     props.iconScale = l['icon-size'] ?? 1;
                     props._iconTranslate = p['icon-translate'] ?? [0, 0];
                     props._iconTranslateAnchor = p['icon-translate-anchor'] ?? 'map';
-                    props._iconOffset = l['icon-offset'];
+                    if (typeof l['symbol-sort-key'] === 'number') props.priority = l['symbol-sort-key'];
+                    props.mayOverlap = l['icon-allow-overlap'] === true;
+                    props.reserveSpace = l['icon-ignore-placement'] !== true;
                     if (l.visibility === 'none') props.enabled = false;
                 } else if (symbolMode === 'text' || (symbolMode === undefined && l['text-field'])) {
                     props.technique = 'text';
@@ -387,9 +390,11 @@ export class MBTileDataEmitter {
                         : String(l['text-field'] ?? '');
                     const resolvedText = resolveTextField(rawText, properties ?? {});
 
-                    // Apply text transform
+                    // Apply text transform, then Bidi-reorder + Arabic-reshape
+                    // when the text contains RTL (Arabic/Hebrew) characters.
+                    // shapeRTLText is a fast path (returns unchanged) for LTR text.
                     const transform = l['text-transform'] ?? 'none';
-                    const transformedText = applyTextTransform(resolvedText, transform);
+                    const transformedText = shapeRTLText(resolvedText, transform);
 
                     props.text = transformedText;
                     props.color = p['text-color'] ?? '#000000';
@@ -416,6 +421,32 @@ export class MBTileDataEmitter {
                     props._textOffset = l['text-offset'];
                     props._textTranslate = p['text-translate'] ?? [0, 0];
                     props._textTranslateAnchor = p['text-translate-anchor'] ?? 'map';
+
+                    // Map mapbox text layout props onto the native TextTechnique
+                    // props consumed by TextElementsRenderer / TextStyleCache.
+                    const fontSize = (l['text-size'] as number) ?? 16;
+                    props.tracking = ((l['text-letter-spacing'] as number) ?? 0) * fontSize;
+                    props.leading = ((l['text-line-height'] as number) ?? 1.2) * fontSize;
+                    const maxWidth = l['text-max-width'];
+                    if (typeof maxWidth === 'number') {
+                        props.lineWidth = maxWidth * fontSize;
+                        props.wrappingMode = 'Word';
+                    }
+                    props.rotation = ((l['text-rotate'] as number) ?? 0) * Math.PI / 180;
+                    const justify = (l['text-justify'] as string) ?? 'center';
+                    props.hAlignment = justify === 'left' ? 'Left' : justify === 'right' ? 'Right' : 'Center';
+                    const anchor = (l['text-anchor'] as string) ?? 'center';
+                    props.vAlignment = anchor.startsWith('top') ? 'Above'
+                        : anchor.startsWith('bottom') ? 'Below' : 'Center';
+                    if (typeof l['symbol-sort-key'] === 'number') props.priority = l['symbol-sort-key'];
+                    props.mayOverlap = l['text-allow-overlap'] === true;
+                    props.reserveSpace = l['text-ignore-placement'] !== true;
+                    const textOffset = l['text-offset'] as number[] | undefined;
+                    if (Array.isArray(textOffset)) {
+                        // em → px; native yOffset is positive = up (mapbox positive y = down).
+                        props.xOffset = (textOffset[0] ?? 0) * fontSize;
+                        props.yOffset = -((textOffset[1] ?? 0)) * fontSize;
+                    }
 
                     if (l.visibility === 'none') props.enabled = false;
                 }
@@ -499,6 +530,18 @@ export class MBTileDataEmitter {
         return props;
     }
 
+    private static evaluatedCacheKey(layer: EvaluatedLayer): string {
+        // Serialize the feature-evaluated paint/layout so data-driven properties
+        // (circle-color/radius, line-width, fill-extrusion-height, icon/text-size…)
+        // produce one technique per distinct value instead of baking the first
+        // feature's value into a single per-layer technique.
+        try {
+            return `${JSON.stringify(layer.paint)}|${JSON.stringify(layer.layout)}`;
+        } catch {
+            return '';
+        }
+    }
+
     private getOrCreateTechniqueIndex(layer: EvaluatedLayer, properties?: Record<string, any>, symbolMode?: 'icon' | 'text'): number {
         // For text layers, technique key includes resolved text to allow per-feature text
         const textKey = layer.type === 'symbol' && layer.layout['text-field']
@@ -508,7 +551,7 @@ export class MBTileDataEmitter {
             )
             : '';
 
-        const cacheKey = `${layer.id}:${symbolMode ?? ''}:${textKey}`;
+        const cacheKey = `${layer.id}:${symbolMode ?? ''}:${textKey}:${MBTileDataEmitter.evaluatedCacheKey(layer)}`;
         let idx = this.m_layerToTechniqueIndex.get(cacheKey);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;

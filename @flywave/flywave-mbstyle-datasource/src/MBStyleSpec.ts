@@ -370,7 +370,9 @@ export const GEOMETRY_TYPE_MAP: Record<string, string[]> = {
     // geometry type — restricting to ['point', 'line'] would suppress polygon
     // symbols (e.g. labels at polygon centroids).
     symbol: ['point', 'line', 'polygon'],
-    circle: ['point'],
+    // Circle layers render points on any geometry type (mapbox places circles
+    // at line vertices and polygon ring vertices).
+    circle: ['point', 'line', 'polygon'],
     'fill-extrusion': ['polygon'],
     background: ['polygon'],
     raster: ['polygon'],

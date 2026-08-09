@@ -156,10 +156,22 @@ async function processOperations(
             case "setLayerZoomRange":
                 rt?.setLayerZoomRange(args[0], args[1], args[2]);
                 break;
-            case "setStyle":
-                rt?.setStyle(typeof args[0] === "string"
-                    ? localizeStyle(JSON.parse(args[0]))
-                    : localizeStyle(args[0]));
+            case "setStyle": {
+                let newStyle = args[0];
+                if (typeof newStyle === "string") {
+                    // URL / local:// path to a style JSON → fetch + parse;
+                    // inline JSON string → parse directly.
+                    const url = localizeUrl(newStyle.trim().startsWith("{")
+                        ? newStyle
+                        : newStyle.replace(/^local:\/\//, "/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/"));
+                    if (url.trim().startsWith("{")) {
+                        newStyle = JSON.parse(url);
+                    } else {
+                        const resp = await fetch(url);
+                        newStyle = resp.ok ? await resp.json() : {};
+                    }
+                }
+                rt?.setStyle(localizeStyle(newStyle));
                 // Full style swap: reload sprites / glyphs / environment /
                 // models / terrain, not just the decoder config. Without this,
                 // the new style's sprite/glyph URLs are silently ignored.
@@ -167,6 +179,7 @@ async function processOperations(
                     await dataSource.reloadStyle();
                 } catch {}
                 break;
+            }
             case "setFeatureState":
                 dataSource.setFeatureState(args[0] ?? args[1], args[1] ?? args[2]);
                 break;
@@ -286,6 +299,11 @@ async function processOperations(
                 const env = (dataSource as any).m_environment;
                 if (env && args[0]) {
                     env.applyLights(Array.isArray(args[0]) ? args[0] : [args[0]]);
+                    // Re-ship the new brightness so `measure-light` appearance
+                    // conditions re-evaluate on the updated lights.
+                    try {
+                        (dataSource as any).refreshDecoderBrightness?.();
+                    } catch {}
                 }
                 break;
             }

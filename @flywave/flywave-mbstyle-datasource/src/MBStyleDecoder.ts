@@ -28,6 +28,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         private m_brightness: number = 0,
         private m_clipMask: Record<string, number[][][]> = {},
         private m_worldview: string = '',
+        private m_center: [number, number] = [0, 0],
     ) {}
 
     setEmitter(emitter: MBTileDataEmitter) {
@@ -66,7 +67,12 @@ class MBStyleDataProcessor implements IGeometryProcessor {
 
     private getFeatureState(featureId: string | number | undefined): Record<string, any> | undefined {
         if (featureId === undefined) return undefined;
-        return this.m_featureStates.get(featureId);
+        const direct = this.m_featureStates.get(featureId);
+        if (direct) return direct;
+        // Feature ids are stored both as numbers and strings across the
+        // pipeline; try the other representation before giving up.
+        const alt = typeof featureId === 'number' ? String(featureId) : Number(featureId);
+        return this.m_featureStates.get(alt);
     }
 
     private tileToLocalLngLat(px: number, py: number, extent: number = 4096): [number, number] {
@@ -103,6 +109,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_sourceId, layer,
             { type: 'Point', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
             this.m_zoom, 'point', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
+            undefined, this.m_center,
         );
         if (matched.length === 0 || !this.m_emitter) return;
         const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
@@ -147,14 +154,24 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_sourceId, layer,
             feat,
             this.m_zoom, 'line', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
+            undefined, this.m_center,
         );
         if (matched.length === 0 || !this.m_emitter) return;
 
         const symbolLayers = matched.filter(l => l.type === 'symbol' && !this.isClipped('symbol', coords[0], coords[1]));
-        const nonSymbolLayers = matched.filter(l => l.type !== 'symbol' && !this.isClipped(l.type, coords[0], coords[1]));
+        const nonSymbolLayers = matched.filter(l => l.type !== 'symbol' && l.type !== 'circle' && !this.isClipped(l.type, coords[0], coords[1]));
+        // Circle layers render one circle per line vertex.
+        const circleLayers = matched.filter(l => l.type === 'circle' && !this.isClipped('circle', coords[0], coords[1]));
 
         if (nonSymbolLayers.length > 0) {
             this.m_emitter.processLineFeature(layer, extents, geometry, properties, featureId, nonSymbolLayers);
+        }
+
+        if (circleLayers.length > 0 && geometry.length > 0 && geometry[0].positions.length > 0) {
+            const pts: THREE.Vector3[] = geometry[0].positions.map(
+                (p) => new THREE.Vector3(p.x, p.y, 0),
+            );
+            this.m_emitter.processPointFeature(layer, extents, pts, properties, featureId, circleLayers);
         }
 
         if (symbolLayers.length > 0 && geometry.length > 0 && geometry[0].positions.length > 1) {
@@ -211,11 +228,28 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_sourceId, layer,
             feat,
             this.m_zoom, 'polygon', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
+            undefined, this.m_center,
         );
         if (matched.length === 0 || !this.m_emitter) return;
         const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
         if (visible.length === 0) return;
-        this.m_emitter.processFillFeature(layer, extents, geometry, properties, featureId, visible);
+
+        // Circle layers render one circle per polygon ring vertex.
+        const circleLayers = visible.filter(l => l.type === 'circle');
+        if (circleLayers.length > 0) {
+            const ring = geometry.length > 0 && geometry[0].rings.length > 0
+                ? geometry[0].rings[0]
+                : [];
+            const pts = ring.map((pt) => new THREE.Vector3(pt.x, pt.y, 0));
+            if (pts.length > 0) {
+                this.m_emitter.processPointFeature(layer, extents, pts, properties, featureId, circleLayers);
+            }
+        }
+
+        const fillLayers = visible.filter(l => l.type !== 'circle');
+        if (fillLayers.length > 0) {
+            this.m_emitter.processFillFeature(layer, extents, geometry, properties, featureId, fillLayers);
+        }
     }
 }
 
@@ -229,6 +263,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_brightness: number = 0;
     private m_clipMask: Record<string, number[][][]> = {};
     private m_worldview: string = '';
+    private m_center: [number, number] = [0, 0];
     /**
      * Real mapbox PBF glyph metrics (font→char→metrics) loaded by the main
      * thread and shipped to the worker. Used by the emitter as a `glyphLookup`
@@ -269,6 +304,12 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
         if (customOptions?.worldview !== undefined) {
             this.m_worldview = customOptions.worldview as string;
+        }
+        if (customOptions?.center !== undefined) {
+            const c = customOptions.center as number[];
+            if (Array.isArray(c) && c.length >= 2) {
+                this.m_center = [c[0], c[1]];
+            }
         }
         if (customOptions?.glyphMetrics !== undefined) {
             this.m_glyphMetrics = customOptions.glyphMetrics as Map<string, any>;
@@ -350,6 +391,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             this.m_pitch,
             this.m_brightness,
             this.m_clipMask, this.m_worldview,
+            this.m_center,
         );
         processor.setEmitter(emitter);
         processor.setFeatureStates(this.m_featureStates);

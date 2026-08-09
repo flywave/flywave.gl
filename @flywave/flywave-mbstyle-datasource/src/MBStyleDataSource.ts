@@ -481,6 +481,26 @@ export class MBStyleDataSource extends TileDataSource {
         return this.m_styleManager;
     }
 
+    /**
+     * Iterate all tiles currently cached by this data source.
+     *
+     * The mapview stores decoded tiles in `MapView.m_visibleTiles.m_dataSourceCache`
+     * (a `DataSourceCache` keyed by mortonCode+offset+dataSource). Historically the
+     * patcher/placement code read a non-existent `m_tiles` property, which made the
+     * material patcher and symbol placement iterate nothing.
+     */
+    getDecodedTiles(): Tile[] {
+        const tiles: Tile[] = [];
+        const mapView = (this as any).m_mapView as any;
+        const cache = mapView?.m_visibleTiles?.m_dataSourceCache as any;
+        if (cache?.m_tileCache?.forEach) {
+            cache.m_tileCache.forEach((tile: Tile) => {
+                if (tile.dataSource === this) tiles.push(tile);
+            });
+        }
+        return tiles;
+    }
+
     private createOmvRestClient(
         source: ResolvedSource,
         accessToken?: string
@@ -521,6 +541,9 @@ export class MBStyleDataSource extends TileDataSource {
             this.decoder.configure(undefined, {
                 mbStyle: this.m_runtime!.style,
                 currentSourceId: this.m_currentSourceId,
+                pitch: this.m_runtime!.style.pitch ?? 0,
+                brightness: this.m_environment?.brightness ?? 0,
+                center: this.m_runtime!.style.center ?? [0, 0],
             } as any);
             if (this.mapView) {
                 this.mapView.markTilesDirty(this);
@@ -697,16 +720,6 @@ export class MBStyleDataSource extends TileDataSource {
             }
         }
 
-        await this.decoder.configure(undefined, {
-            mbStyle: style,
-            currentSourceId: this.m_currentSourceId,
-            demTileUrl: this.m_demTileUrl,
-            pitch: style.pitch ?? 0,
-            brightness: this.m_environment?.brightness ?? 0,
-            clipMask: Object.fromEntries(this.m_clipMask),
-            worldview: (style as any).metadata?.test?.worldview ?? '',
-        } as any);
-
         // Load sprite atlas if style has a sprite URL
         if (style.sprite) {
             await this.loadSpriteAtlas(style.sprite);
@@ -747,6 +760,19 @@ export class MBStyleDataSource extends TileDataSource {
                     );
                 }
             }
+
+            // Configure the decoder with the environment's computed brightness
+            // (for `measure-light` expressions) now that lights are applied.
+            await this.decoder.configure(undefined, {
+                mbStyle: style,
+                currentSourceId: this.m_currentSourceId,
+                demTileUrl: this.m_demTileUrl,
+                pitch: style.pitch ?? 0,
+                brightness: this.m_environment.brightness,
+                clipMask: Object.fromEntries(this.m_clipMask),
+                worldview: (style as any).metadata?.test?.worldview ?? '',
+                center: style.center ?? [0, 0],
+            } as any);
 
             this.m_materialPatcher = new MBMaterialPatchManager(this);
             this.m_materialPatcher.invalidate();
@@ -831,6 +857,7 @@ export class MBStyleDataSource extends TileDataSource {
                 Math.min(Math.max(Math.floor(style.zoom ?? 0), 0), 12),
                 style.center ?? [0, 0],
                 rasterPaint,
+                rasterLayer as any,
             );
         }
 
@@ -1048,24 +1075,18 @@ export class MBStyleDataSource extends TileDataSource {
         const C = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
 
         // Iterate visible tiles and draw their world-space boundaries.
-        const tds = (this as any).m_mapView?.m_tileDataSources as any[];
-        if (!tds) return;
-        for (const ds of tds) {
-            if (ds !== this) continue;
-            const tiles = ds.m_tiles as Map<any, any> | undefined;
-            if (!tiles) continue;
-            for (const tile of tiles.values()) {
-                const tk = tile.tileKey;
-                if (!tk) continue;
-                const n = Math.pow(2, tk.level);
-                const ts = C / n;
-                const x0 = tk.column * ts;
-                const x1 = (tk.column + 1) * ts;
-                const y0 = C - (tk.row + 1) * ts;
-                const y1 = C - tk.row * ts;
-                // 4 edges
-                positions.push(x0, 0, y0, x1, 0, y0, x1, 0, y0, x1, 0, y1, x1, 0, y1, x0, 0, y1, x0, 0, y1, x0, 0, y0);
-            }
+        const tiles = this.getDecodedTiles();
+        for (const tile of tiles) {
+            const tk = tile.tileKey;
+            if (!tk) continue;
+            const n = Math.pow(2, tk.level);
+            const ts = C / n;
+            const x0 = tk.column * ts;
+            const x1 = (tk.column + 1) * ts;
+            const y0 = C - (tk.row + 1) * ts;
+            const y1 = C - tk.row * ts;
+            // 4 edges
+            positions.push(x0, 0, y0, x1, 0, y0, x1, 0, y0, x1, 0, y1, x1, 0, y1, x0, 0, y1, x0, 0, y1, x0, 0, y0);
         }
 
         const geo = this.m_debugLines.geometry;
@@ -1240,7 +1261,12 @@ export class MBStyleDataSource extends TileDataSource {
      * so the decoder re-evaluates expressions with updated state.
      */
     setFeatureState(featureId: number | string, state: any): void {
-        super.setFeatureState(featureId, state);
+        // Mapbox render-test operations pass a descriptor
+        // {source, sourceLayer, id} as the feature id. The decoder resolves
+        // feature state by the decoded feature's numeric/string `id`, so
+        // normalize the descriptor to just its id.
+        const normalizedKey = this.normalizeFeatureStateKey(featureId);
+        super.setFeatureState(normalizedKey, state);
         if (this.mapView) {
             this.mapView.markTilesDirty(this);
         }
@@ -1249,7 +1275,7 @@ export class MBStyleDataSource extends TileDataSource {
         if (!(this as any).m_featureStates) {
             (this as any).m_featureStates = new Map();
         }
-        (this as any).m_featureStates.set(featureId, state);
+        (this as any).m_featureStates.set(normalizedKey, state);
 
         this.decoder.configure(undefined, {
             mbStyle: this.m_styleManager.getStyle(),
@@ -1259,7 +1285,49 @@ export class MBStyleDataSource extends TileDataSource {
     }
 
     override removeFeatureState(featureId: number | string): void {
-        super.removeFeatureState(featureId);
+        const normalizedKey = this.normalizeFeatureStateKey(featureId);
+        super.removeFeatureState(normalizedKey);
+        if (this.mapView) {
+            this.mapView.markTilesDirty(this);
+        }
+        const states = (this as any).m_featureStates as Map<any, any> | undefined;
+        if (states) {
+            states.delete(normalizedKey);
+        }
+        this.decoder.configure(undefined, {
+            mbStyle: this.m_styleManager.getStyle(),
+            currentSourceId: this.m_currentSourceId,
+            featureStates: (this as any).m_featureStates ?? new Map(),
+        } as any);
+    }
+
+    /** Extract the numeric/string feature id from a mapbox feature-state descriptor. */
+    private normalizeFeatureStateKey(featureId: number | string): number | string {
+        if (typeof featureId === 'object' && featureId !== null) {
+            const desc = featureId as any;
+            const id = desc?.id ?? desc?.featureId;
+            return (id === undefined || id === null) ? String(desc?.source ?? '') : id;
+        }
+        return featureId;
+    }
+
+    /**
+     * Re-ship the environment's current brightness (for `measure-light`
+     * expressions) to the decoder. Called after lights change at runtime so
+     * appearance conditions re-evaluate with up-to-date brightness.
+     */
+    refreshDecoderBrightness(): void {
+        const style = this.m_styleManager.getStyle();
+        this.decoder.configure(undefined, {
+            mbStyle: style,
+            currentSourceId: this.m_currentSourceId,
+            demTileUrl: this.m_demTileUrl,
+            pitch: style.pitch ?? 0,
+            brightness: this.m_environment?.brightness ?? 0,
+            clipMask: Object.fromEntries(this.m_clipMask),
+            worldview: (style as any).metadata?.test?.worldview ?? '',
+            center: style.center ?? [0, 0],
+        } as any);
         if (this.mapView) {
             this.mapView.markTilesDirty(this);
         }

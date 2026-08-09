@@ -18,15 +18,26 @@ export class MBEnvironmentManager {
     /** Whether 3D lighting is active (affects vector-layer shading). */
     get hasLighting(): boolean { return this.m_directionalLight !== null; }
 
+    private m_ambientColor: THREE.Color | null = null;
+    private m_ambientIntensity: number = 0;
+    private m_directionalColor: THREE.Color | null = null;
+    private m_directionalIntensity: number = 0;
+    private m_directionalPolar: number = 0;
+
     /**
-     * Scene brightness for `measure-light` expressions. Computed from the
-     * ambient + directional lights using the W3C relative-luminance formula.
-     * Reference: mapbox-gl-js style.ts:2694-2729 calculateLightsBrightness().
+     * Scene brightness for `measure-light` expressions. Mirrors mapbox-gl-js
+     * `Style.calculateLightsBrightness()` (style.ts):
+     *
+     *   directionalBrightness = relLum(dirColor) * dirIntensity * polarIntensity
+     *   ambientBrightness     = relLum(ambColor) * ambIntensity
+     *   brightness            = (directionalBrightness + ambientBrightness) / 2
+     *
+     * where `polarIntensity = 1 - polar/90` and `polar` is the directional light's
+     * elevation angle in degrees (0 = overhead/zenith, 90 = horizon).
+     * Reference: mapbox-gl-js src/style/style.ts:2694-2745.
      */
     get brightness(): number {
-        const ambient = this.m_ambientLight;
-        const directional = this.m_directionalLight;
-        if (!ambient && !directional) return 0;
+        if (!this.m_ambientColor && !this.m_directionalColor) return 0;
 
         const relativeLuminance = (color: THREE.Color): number => {
             // W3C: L = 0.2126*R_lin + 0.7152*G_lin + 0.0722*B_lin
@@ -36,12 +47,14 @@ export class MBEnvironmentManager {
         };
 
         let total = 0;
-        if (ambient) {
-            total += relativeLuminance(ambient.color) * ambient.intensity;
+        if (this.m_directionalColor) {
+            const polarIntensity = 1.0 - this.m_directionalPolar / 90.0;
+            total += relativeLuminance(this.m_directionalColor) * this.m_directionalIntensity * polarIntensity;
         }
-        if (directional) {
-            total += relativeLuminance(directional.color) * directional.intensity;
+        if (this.m_ambientColor) {
+            total += relativeLuminance(this.m_ambientColor) * this.m_ambientIntensity;
         }
+        total /= 2.0;
         return Math.round(total * 1e6) / 1e6;
     }
     /** Lighting state for vector-layer Lambert injection (null if no lights). */
@@ -84,16 +97,20 @@ export class MBEnvironmentManager {
 
         if (!lights || lights.length === 0) {
             if (legacyLight) {
-                this.m_ambientLight = new THREE.AmbientLight(
-                    new THREE.Color(legacyLight.color ?? '#ffffff'),
-                    legacyLight.intensity ?? 0.5,
-                );
+                const legacyColor = new THREE.Color(legacyLight.color ?? '#ffffff');
+                const legacyIntensity = legacyLight.intensity ?? 0.5;
+                this.m_ambientColor = legacyColor;
+                this.m_ambientIntensity = legacyIntensity;
+                this.m_ambientLight = new THREE.AmbientLight(legacyColor, legacyIntensity);
                 this.m_scene.add(this.m_ambientLight);
                 if (legacyLight.position) {
                     const pos = legacyLight.position;
+                    this.m_directionalColor = legacyColor;
+                    this.m_directionalIntensity = legacyIntensity;
+                    this.m_directionalPolar = 0;
                     this.m_directionalLight = new THREE.DirectionalLight(
-                        new THREE.Color(legacyLight.color ?? '#ffffff'),
-                        legacyLight.intensity ?? 0.5,
+                        legacyColor,
+                        legacyIntensity,
                     );
                     this.m_directionalLight.position.set(pos[0], pos[1], pos[2]);
                     this.m_scene.add(this.m_directionalLight);
@@ -104,20 +121,26 @@ export class MBEnvironmentManager {
 
         for (const light of lights) {
             if (light.type === 'ambient') {
-                this.m_ambientLight = new THREE.AmbientLight(
-                    new THREE.Color(light.color ?? '#ffffff'),
-                    (light.intensity ?? 0.5) * 2,
-                );
+                const color = new THREE.Color(light.color ?? '#ffffff');
+                const intensity = (light.intensity ?? 0.5) * 2;
+                this.m_ambientColor = color;
+                this.m_ambientIntensity = light.intensity ?? 0.5;
+                this.m_ambientLight = new THREE.AmbientLight(color, intensity);
                 this.m_scene.add(this.m_ambientLight);
             } else if (light.type === 'directional') {
-                this.m_directionalLight = new THREE.DirectionalLight(
-                    new THREE.Color(light.color ?? '#ffffff'),
-                    (light.intensity ?? 0.5) * 2,
-                );
+                const color = new THREE.Color(light.color ?? '#ffffff');
+                const intensity = (light.intensity ?? 0.5) * 2;
+                this.m_directionalColor = color;
+                this.m_directionalIntensity = light.intensity ?? 0.5;
+                this.m_directionalLight = new THREE.DirectionalLight(color, intensity);
                 if (light.direction) {
                     const d = light.direction;
-                    this.m_directionalLight.position.set(d[0], d[1], d[2]);
+                    // mapbox direction = [azimuth, polar, distance?] in degrees;
+                    // polar (elevation) drives the measure-light term.
+                    this.m_directionalPolar = Array.isArray(d) ? (d[1] ?? 0) : 0;
+                    this.m_directionalLight.position.set(d[0], d[1], d[2] ?? 1);
                 } else {
+                    this.m_directionalPolar = 0;
                     this.m_directionalLight.position.set(0.5, 1, 0.5);
                 }
                 if (light['cast-shadow']) {
@@ -492,6 +515,11 @@ export class MBEnvironmentManager {
             this.m_directionalLight = null;
         }
         if (this.m_hemisphereLight) { this.m_scene?.remove(this.m_hemisphereLight); this.m_hemisphereLight = null; }
+        this.m_ambientColor = null;
+        this.m_ambientIntensity = 0;
+        this.m_directionalColor = null;
+        this.m_directionalIntensity = 0;
+        this.m_directionalPolar = 0;
     }
 
     async applyRasterSource(
@@ -499,6 +527,7 @@ export class MBEnvironmentManager {
         zoom: number = 0,
         center: [number, number] = [0, 0],
         paint: Record<string, any> = {},
+        layer?: { visibility?: string; minzoom?: number; maxzoom?: number },
     ): Promise<void> {
         if (!this.m_scene) return;
         if (this.m_rasterQuad) {
@@ -507,6 +536,10 @@ export class MBEnvironmentManager {
             (this.m_rasterQuad.material as THREE.Material).dispose();
             this.m_rasterQuad = null;
         }
+        // Respect the raster layer's visibility and zoom range.
+        if (layer?.visibility === 'none') return;
+        if (layer?.minzoom !== undefined && zoom < layer.minzoom) return;
+        if (layer?.maxzoom !== undefined && zoom >= layer.maxzoom) return;
         if (!rasterTileUrl) return;
 
         const lat = degToRad(center[1]);

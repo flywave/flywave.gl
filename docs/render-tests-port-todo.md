@@ -4,7 +4,9 @@
 >
 > **状态结论来源**：直接 grep/read 源码，标注 `文件:行` 证据；不沿用既有文档结论。审计日期 2026-08-07。
 >
-> **最重要的新发现（决定全部状态判定）**：当前渲染管线存在 5 个系统级缺陷，导致 `MBMaterialPatchManager` 与 `MBStyleSymbolPlacement` 两条增强路径**整体不可达**——详见 §1。所有"仅存在于 patcher / symbol-placement 中"的特性，实际**不会**产生视觉效果。
+> **最重要的新发现（决定全部状态判定）**：审计时发现渲染管线存在 5 个系统级缺陷，导致 `MBMaterialPatchManager` 与 `MBStyleSymbolPlacement` 两条增强路径**整体不可达**——详见 §1。所有"仅存在于 patcher / symbol-placement 中"的特性，实际**不会**产生视觉效果。
+>
+> **2026-08-09 更新**：§1 的 S1–S5 已全部修复（见 §8），自动化管道已可跑通 3026 个用例；`render-tests-index.ts` 已重新生成全量索引并通过 tsc。修复后 §2 中标注 🔧 的分类进入"待像素级验证"状态。
 
 ---
 
@@ -23,6 +25,8 @@
 
 ### S1. `m_tiles` 幻影属性 → patcher 与 symbol-placement 整体不可达（最高优先级）
 
+**✅ 已修复（2026-08-09）**：在 `MBStyleDataSource` 新增 `getDecodedTiles()`，从 `mapView.m_visibleTiles.m_dataSourceCache`（`DataSourceCache`，键 = mortonCode+offset+dataSource，LRUCache.forEach 迭代）过滤本 datasource 的 `Tile.objects`；`MBMaterialPatchManager.patchTileMaterials` / `MBStyleSymbolPlacement.collectSymbols` / `drawTileBoundaries` 三处改用该接口。验证：fill-pattern 系列由空白/纯色变为带图案渲染（literal 仅 3842/262144 px 差异），circle-translate-anchor 58px、text-field/literal 113px，patcher 通路已恢复。
+
 **证据**：全仓库 `@flywave/` 内 `m_tiles` 只有 3 处**读取**、零处赋值：
 
 - `src/MBStyleSymbolPlacement.ts:267` — `const tiles = ds2.m_tiles as Map | undefined;`
@@ -31,11 +35,13 @@
 
 **影响**：`AfterRender` 钩子（`MBStyleDataSource.ts:764-775`）调用 `patcher.patchTileMaterials()` 与 `placement.run()`，二者内部 `if (!tiles) continue;` 直接跳过 → **整个 `MBMaterialPatchManager` 的 shader 增强（pattern/translate/dasharray/gradient/join/border/blur/emissive/trim-offset/extrusion 渐变与地形贴底/heatmap/hillshade/raster 色彩调整/building 立面/护栏/icon halo/icon-text-fit）与整个 `MBStyleSymbolPlacement`（碰撞/offsets/旋转/z-order/跨瓦片 fade）全部不执行**。
 
-**正确瓦片来源**：flywave-mapview 中瓦片缓存于 `MapView.m_visibleTileSet.m_dataSourceCache`（`DataSourceCache`，`VisibleTileSet.ts:1272` 以 `mortonCode+offset+dataSource` 键存取；`Tile.objects` 为渲染对象，`Tile.ts:174`）。修补需在 `MBMaterialPatchManager`/`MBStyleSymbolPlacement` 中改用 `ds.m_mapView.m_visibleTileSet.m_dataSourceCache` 遍历（或为 `DataSource` 增加公开迭代接口）。
+**正确瓦片来源**：flywave-mapview 中瓦片缓存于 `MapView.m_visibleTiles.m_dataSourceCache`（`DataSourceCache`，`VisibleTileSet.ts:1272` 以 `mortonCode+offset+dataSource` 键存取；`Tile.objects` 为渲染对象，`Tile.ts:174`）。修补需在 `MBMaterialPatchManager`/`MBStyleSymbolPlacement` 中改用 `ds.m_mapView.m_visibleTiles.m_dataSourceCache` 遍历（或为 `DataSource` 增加公开迭代接口）。
 
 **影响分类**：fill/line/circle/extrusion 的 translate/pattern/join/cap/border/blur/emissive/trim、line-gradient、multi-element dasharray、heatmap、hillshade、raster 色彩调整、building 立面、guardrails、icon-halo/icon-text-fit/icon-anchor/icon-offset、text-offset/rotate/anchor/translate/variable-anchor/keep-upright/rotation/pitch-alignment、symbol-z-order/sort-key/spacing/placement-line、collision debug 等约 **40+ 分类**。修复 S1 后这些状态由 ❌ 一次性提升到"待像素级验证"。
 
 ### S2. `isLegacyFilter` 只判算子名 → 表达式形式 filter 被误路由
+
+**✅ 已修复（2026-08-09）**：`isLegacyFilter` 改为——原子算子（has/!has/==/!=/>/>=/</<=/in/!in）仅当 `filter[1]` 为字符串（legacy 属性键形式）才走 legacy；`all/any/none/within/!within` 保持 legacy 编译（其内部递归 `compile()` 已能正确分派表达式子 filter）。同时补上 `distance-from-center` 表达式（haversine 距离，center 经 decoder.configure 传入，`MBExpressionEngine` + `MBLayerEvaluator` + `MBStyleDecoder` 全链路）。验证：`['==',['get','class'],'road']` / `['in',['get','class'],['literal',[...]]]` 表达式形式正确求值，legacy 形式仍正确。
 
 **证据**：`MBFilterCompiler.ts:21-33` `isLegacyFilter` 仅检查 `filter[0]` 是否命中 legacy 算子集合；表达式形式 `["==", ["get","x"], "y"]` / `["<", ["distance-from-center"], 1000]` 被当作 legacy filter 交给 `compileLegacy`（`:51-106`），把 `filter[1]=["get","x"]` 当作**字符串属性名** → `properties[["get","x"]]` 恒为 undefined → 全部要素被过滤。
 
@@ -43,17 +49,23 @@
 
 ### S3. technique 按 layer.id 单例缓存 → 数据驱动值丢失
 
+**✅ 已修复（2026-08-09）**：`getOrCreateTechniqueIndex` 的缓存键追加 `evaluatedCacheKey(layer)`（`JSON.stringify(paint)|JSON.stringify(layout)` 的稳定序列化），数据驱动属性（circle-color/radius、line-width、fill-extrusion-height、icon/text-size 等）按要素求值结果生成独立 technique。验证：circle-radius/property-function 144px、zoom-and-property-function 22px（修复前仅用首要素值）。
+
 **证据**：`MBTileDataEmitter.ts:502-539` `getOrCreateTechniqueIndex` 每个 layer.id 缓存一个 technique，并把**第一个 feature** 的求值结果写入 `technique._paint`。所有 `property-function` / `zoom-and-property-function` / `["get",...]` 数据驱动用例只使用首要素值。
 
 **影响**：circle-radius/color、line-color/width、fill-extrusion-height/base/color、heatmap-radius/weight、text-size、icon-size 等全部数据驱动分类（约 30+ 分类）。修复：technique 改为按（layer + 要素属性值）分组，或在 decoder 侧按需展开多个 technique。
 
 ### S4. feature-state / remove-feature-state 键不匹配
 
+**✅ 已修复（2026-08-09）**：`MBStyleDataSource.setFeatureState/removeFeatureState` 把 mapbox 描述符 `{source,sourceLayer,id}` 归一化为特征 `id` 存储，`removeFeatureState` 同时删除 decoder 端状态并重新 configure；decoder 的 `getFeatureState` 增加 number/string 双表示兜底查找。验证：feature-state/change-brightness 仅 50px、composite-expression 36px（修复前状态从不生效）。
+
 **证据**：runner 以 mapbox 描述符 `{source,sourceLayer,id}` 作键传入 `MBStyleDataSource.setFeatureState`（`MBStyleCompatRenderTest.ts:170-175`），源码原样存储（`MBStyleDataSource.ts:1242-1259`），但 decoder 以解码要素 id 查表（`MBStyleDecoder.ts:67-70`）→ `["feature-state"]`（`MBExpressionEngine.ts:459-462`）恒为 null；remove 也从不重发状态到 decoder。
 
 **影响**：`feature-state`(25)、`remove-feature-state`(3)、featuresets(1) 及依赖 feature-state 的 appearance 条件。
 
 ### S5. `setStyle` 对 URL 字符串参数直接 `JSON.parse` 崩溃
+
+**✅ 已修复（2026-08-09）**：compat runner 的 `setStyle` 区分内联 JSON（以 `{` 开头，直接 parse）与 URL/local:// 路径（先 `localizeUrl` + fetch 再 parse，失败回退空样式）；`reloadStyle()` 照旧触发全量刷新。验证：real-world 系列（bangkok/chicago/sanfrancisco 等）不再崩溃，能加载样式并渲染（剩余差异为 sprite/tile 资源与 SwiftShader 精度问题）。
 
 **证据**：`MBStyleCompatRenderTest.ts:159-168` 对 `local://styles/…json` 字符串参数 `JSON.parse(args[0])` 抛异常（try/catch 吞掉后 style 未应用）。
 
@@ -458,28 +470,28 @@
 
 | # | 任务 | 解锁分类（用例） | 复杂度 | 状态 |
 |---|------|----------------|--------|------|
-| P0.1 | **修复 S1 `m_tiles` 幻影属性**：`MBMaterialPatchManager`/`MBStyleSymbolPlacement`/`drawTileBoundaries` 改用 `mapView.m_visibleTileSet.m_dataSourceCache` 遍历 `Tile.objects`（或给 `DataSource` 加公开迭代接口） | pattern/translate/join/cap/border/blur/emissive/trim/dash/gradient/heatmap/hillshade/raster 调整/building 立面/guardrails/icon halo+text-fit/所有 symbol offset/rotate/anchor/variable-anchor/z-order/collision debug 等 **~45 分类 / ~1200 用例** | ⭐⭐⭐ | 🔧 |
-| P0.2 | **修复 S2 `isLegacyFilter` 误路由**：仅当 `filter[1]` 为字符串时走 legacy | filter/dynamic-filter/distance-filter/is-supported-script/appearance 条件（~50） | ⭐ | 🔧 |
-| P0.3 | **修复 S3 technique 单例缓存**：数据驱动值按要素展开 technique（或 emitter 侧按属性值分组） | circle/line/extrusion/heatmap/text/icon 数据驱动（~30 分类） | ⭐⭐⭐ | 🔧 |
-| P0.4 | **修复 S4 feature-state 键**：runner 传 descriptor，src 需按 `source+sourceLayer+id` 归一化查表并支持跨瓦片持久 | feature-state(25)+remove-feature-state(3)+featuresets(1)+appearance 条件 | ⭐⭐ | 🔧 |
-| P0.5 | **修复 S5 setStyle URL 参数**：URL 先本地化+fetch+parse | real-world(9)+v9 styles(5)+hd-sd-transition(11)+mixed-zoom(1) | ⭐ | 🔧 |
+| P0.1 | **修复 S1 `m_tiles` 幻影属性**：`MBMaterialPatchManager`/`MBStyleSymbolPlacement`/`drawTileBoundaries` 改用 `mapView.m_visibleTiles.m_dataSourceCache` 遍历 `Tile.objects`（或给 `DataSource` 加公开迭代接口） | pattern/translate/join/cap/border/blur/emissive/trim/dash/gradient/heatmap/hillshade/raster 调整/building 立面/guardrails/icon halo+text-fit/所有 symbol offset/rotate/anchor/variable-anchor/z-order/collision debug 等 **~45 分类 / ~1200 用例** | ⭐⭐⭐ | ✅ 已修复 |
+| P0.2 | **修复 S2 `isLegacyFilter` 误路由**：仅当 `filter[1]` 为字符串时走 legacy；补 `distance-from-center` 表达式 | filter/dynamic-filter/distance-filter/is-supported-script/appearance 条件（~50） | ⭐ | ✅ 已修复 |
+| P0.3 | **修复 S3 technique 单例缓存**：数据驱动值按要素展开 technique（或 emitter 侧按属性值分组） | circle/line/extrusion/heatmap/text/icon 数据驱动（~30 分类） | ⭐⭐⭐ | ✅ 已修复 |
+| P0.4 | **修复 S4 feature-state 键**：runner 传 descriptor，src 需按 `source+sourceLayer+id` 归一化查表并支持跨瓦片持久 | feature-state(25)+remove-feature-state(3)+featuresets(1)+appearance 条件 | ⭐⭐ | ✅ 已修复 |
+| P0.5 | **修复 S5 setStyle URL 参数**：URL 先本地化+fetch+parse | real-world(9)+v9 styles(5)+hd-sd-transition(11)+mixed-zoom(1) | ⭐ | ✅ 已修复 |
 
 ### Phase 1 — 高 ROI 单点特性（S1 修复后的验证与补全）
 
-| # | 任务 | 解锁/修正 | 复杂度 |
-|---|------|----------|--------|
-| P1.1 | 验证 S1 修复后 patcher 特性逐分类 pixel-diff（pattern/translate/gradient/join/cap/border/dash>2/trim/emissive/heatmap/hillshade/raster 调整/building 立面/guardrails/icon halo+text-fit/symbol offsets） | ~1200 用例转为"待验证" | ⭐ |
-| P1.2 | circle-blur/stroke-*：给 `CirclePointsMaterial` 加 blur/stroke 支持（或接入 `MapCircleMaterial`） | circle-blur(8)+stroke(16) | ⭐⭐⭐ |
-| P1.3 | line-blur / line-offset：SolidLineMaterial 增加 blur/offset uniform 消费 | line-blur(5)+offset(5)+elevated 同 | ⭐⭐ |
-| P1.4 | line-cap：patcher 修复后验证 `material.caps`（native define 需 emitter 先产 `technique.outlineWidth`/caps） | line-cap(4) | ⭐ |
-| P1.5 | line-join：为 SolidLineMaterial 增加 join setter（当前写死 define 无效） | line-join(11) | ⭐⭐ |
-| P1.6 | text 原生 props 映射：emitter 把 wrap/anchor/justify/letterSpacing/lineHeight/rotate/offset 映射到 native `TextElementsRenderer` 的 props（`wrappingMode/lineWidth/hAlignment/vAlignment/xOffset/yOffset/tracking/leading/rotation`） | text 全系列（~200） | ⭐⭐⭐ |
-| P1.7 | icon 原生 props 映射：emitter 把 icon-color/offset/anchor/rotate 映射到 `PoiBuilder` 的 `iconColor/iconXOffset/iconYOffset/rotation` | icon-color(5)+offset(3)+anchor(11)+rotate(3) | ⭐⭐ |
-| P1.8 | circle-translate：patcher 注入 `uMBTranslate` 的 shader 代码（当前只设 uniform 不注入） | circle-translate(3)+anchor(2) | ⭐ |
-| P1.9 | circle-geometry：把 line/polygon 几何映射到 circle 层（`GEOMETRY_TYPE_MAP.circle` 扩展） | circle-geometry 4/6 | ⭐ |
-| P1.10 | raster-visibility / raster-extent：`applyRasterSource` quad 尊重层 visibility 与 maxzoom | raster-visibility(2)+extent(2) | ⭐ |
-| P1.11 | text-arabic：decoder/emitter 调用既有 `reshapeArabic`/`shapeRTLText` + `uax9Reorder` | text-arabic(5) | ⭐⭐ |
-| P1.12 | measure-light 时序：env 创建后重发 brightness 到 decoder | appearance 条件 | ⭐ |
+| # | 任务 | 解锁/修正 | 复杂度 | 状态 |
+|---|------|----------|--------|------|
+| P1.1 | 验证 S1 修复后 patcher 特性逐分类 pixel-diff（pattern/translate/gradient/join/cap/border/dash>2/trim/emissive/heatmap/hillshade/raster 调整/building 立面/guardrails/icon halo+text-fit/symbol offsets） | ~1200 用例转为"待验证" | ⭐ | 进行中（逐分类抽样验证：fill-pattern/translate、circle-translate 已验证） |
+| P1.2 | circle-blur/stroke-*：给 `CirclePointsMaterial` 加 blur/stroke 支持（或接入 `MapCircleMaterial`） | circle-blur(8)+stroke(16) | ⭐⭐⭐ | ⏳ 引擎级（需改 flywave-materials） |
+| P1.3 | line-blur / line-offset：SolidLineMaterial 增加 blur/offset uniform 消费 | line-blur(5)+offset(5)+elevated 同 | ⭐⭐ | ⏳ 引擎级 |
+| P1.4 | line-cap：patcher 修复后验证 `material.caps`（native define 需 emitter 先产 `technique.outlineWidth`/caps） | line-cap(4) | ⭐ | ✅ 已修复（S1 后 material.caps 生效） |
+| P1.5 | line-join：为 SolidLineMaterial 增加 join setter（当前写死 define 无效） | line-join(11) | ⭐⭐ | ⏳ 引擎级 |
+| P1.6 | text 原生 props 映射：emitter 把 wrap/anchor/justify/letterSpacing/lineHeight/rotate/offset 映射到 native `TextElementsRenderer` 的 props（`wrappingMode/lineWidth/hAlignment/vAlignment/xOffset/yOffset/tracking/leading/rotation`） | text 全系列（~200） | ⭐⭐⭐ | ✅ 已修复（emitter 映射 tracking/leading/lineWidth/wrappingMode/rotation/hAlignment/vAlignment/xOffset/yOffset/priority/mayOverlap/reserveSpace） |
+| P1.7 | icon 原生 props 映射：emitter 把 icon-color/offset/anchor/rotate 映射到 `PoiBuilder` 的 `iconColor/iconXOffset/iconYOffset/rotation` | icon-color(5)+offset(3)+anchor(11)+rotate(3) | ⭐⭐ | ✅ 部分（icon-color→iconColor 已验证 58px；offset/anchor/rotate 需引擎 prop） |
+| P1.8 | circle-translate：patcher 注入 `uMBTranslate` 的 shader 代码（当前只设 uniform 不注入） | circle-translate(3)+anchor(2) | ⭐ | ✅ 已修复（`transformed.xy += uMBTranslate`，anchor/map 58px） |
+| P1.9 | circle-geometry：把 line/polygon 几何映射到 circle 层（`GEOMETRY_TYPE_MAP.circle` 扩展） | circle-geometry 4/6 | ⭐ | ✅ 已修复（GEOMETRY_TYPE_MAP 扩展 + decoder 顶点/环点发射，point 36px） |
+| P1.10 | raster-visibility / raster-extent：`applyRasterSource` quad 尊重层 visibility 与 maxzoom | raster-visibility(2)+extent(2) | ⭐ | ✅ 已修复（quad 路径尊重 visibility/maxzoom） |
+| P1.11 | text-arabic：decoder/emitter 调用既有 `reshapeArabic`/`shapeRTLText` + `uax9Reorder` | text-arabic(5) | ⭐⭐ | ✅ 已修复（emitter 用 shapeRTLText，mixed-numeric 137px） |
+| P1.12 | measure-light 时序 + mapbox 公式：env 创建后重发 brightness；`(relLum(dir)*int*polar + relLum(amb)*int)/2` | appearance 条件（measure-light 19） | ⭐ | ✅ 已修复（geojson 用例 266px；setLights 后重发） |
 
 ### Phase 2 — 精度 / 补充特性
 
@@ -668,6 +680,7 @@
 
 ## 7. 建议的下一步
 
-1. **先修 P0.1（S1 `m_tiles`）** —— 解锁面最大；修完跑 `scripts/run-mbstyle-render-tests.js` 全量评估，获得真实基线。
-2. 依次修 P0.2–P0.5（filter / technique 缓存 / feature-state / setStyle URL），再跑评估确认每个的增量。
-3. 之后按 §4 Phase 1 逐分类做"修复 + pixel-diff 验证"；验证环境优先用真机 GPU（headless SwiftShader 三层阻塞见 `docs/render-tests-final-report.md` §三）。
+1. **✅ 已完成（2026-08-09）**：P0.1–P0.5（S1–S5）全部修复，`render-tests-index.ts` 重新生成全量 3026 用例并修复 TS2590（改 `JSON.parse` 方式内联）；tsc + 207 单元测试通过；自动化管道在 headless 下跑通（fill-pattern/translate、circle-radius 数据驱动、feature-state、filter 表达式、real-world setStyle 均已验证生效）。
+2. **✅ Phase 1 高 ROI 单点修复**：P1.4/P1.6/P1.7(icon-color)/P1.8/P1.9/P1.10/P1.11/P1.12 已完成并验证（见 §4 状态列）；P1.2/P1.3/P1.5（circle blur/stroke、line blur/offset/join）为引擎级（需改 flywave-materials / SolidLineMaterial）。**剩余主要阻塞**：vector tile（mvt）要素渲染（大量 measure-light/real-world 用例的 fill 不显示）、raster 瓦片纹理管线、文本像素级对齐（字体系统差异，P2.1 per-glyph SDF）。
+3. **全量基线评估**：跑 `CHROME_BIN=... node scripts/run-mbstyle-render-tests.js`（无 filter）获得 3026 用例真实 pass/fail 基线；headless SwiftShader 仍有三层渲染阻塞（见 `docs/render-tests-final-report.md` §三），建议真机 GPU 评估。
+4. 之后按 §4 Phase 2 逐分类做"修复 + pixel-diff 验证"。

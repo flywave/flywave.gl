@@ -255,19 +255,12 @@ export class MBStyleSymbolPlacement {
         const symbols: SymbolInstance[] = [];
         const worldPosition = new THREE.Vector3();
 
-        // Iterate all tiles from the datasource
-        const ds = this.m_dataSource as any;
-        const tileDataSources = ds.m_mapView?.m_tileDataSources as any[];
-        if (!tileDataSources) return symbols;
+        // Iterate all tiles from the datasource (stored in mapview's
+        // VisibleTileSet cache; see MBStyleDataSource.getDecodedTiles).
+        const tiles = this.m_dataSource.getDecodedTiles();
+        if (tiles.length === 0) return symbols;
 
-        for (const ds2 of tileDataSources) {
-            if (ds2 !== this.m_dataSource) continue;
-
-            // Access tiles through the tile visitor
-            const tiles = ds2.m_tiles as Map<any, any> | undefined;
-            if (!tiles) continue;
-
-            for (const tile of tiles.values()) {
+        for (const tile of tiles) {
                 if (!tile.objects) continue;
 
                 for (const obj of tile.objects) {
@@ -378,7 +371,6 @@ export class MBStyleSymbolPlacement {
                     });
                 }
             }
-        }
 
         return symbols;
     }
