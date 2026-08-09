@@ -715,8 +715,9 @@ export class StratumTileData {
 
         this._demMap = new DEMData("", rawData, geoBox);
 
-        this._header.maxHeight = this._demMap.tree._maximums[0];
-        this._header.minHeight = this._demMap.tree._minimums[0];
+        const { min, max } = this._demMap.getMinMaxElevation();
+        this._header.maxHeight = max;
+        this._header.minHeight = min;
     }
 
     /**

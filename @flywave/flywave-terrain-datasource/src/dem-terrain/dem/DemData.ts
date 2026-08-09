@@ -244,6 +244,19 @@ export default class DEMData extends TileValidResource {
         return this._unpackFn(r, g, b);
     }
 
+    /** Scan all pixels and return {min, max} elevation */
+    getMinMaxElevation(): { min: number; max: number } {
+        let min = Infinity;
+        let max = -Infinity;
+        const px = this.pixels;
+        for (let i = 0; i < px.length; i += 4) {
+            const elev = this._unpackFn(px[i], px[i + 1], px[i + 2]);
+            if (elev < min) min = elev;
+            if (elev > max) max = elev;
+        }
+        return { min, max };
+    }
+
     /**
      * Get min/max elevation for a child tile
      * @param childrenTileKey - Child tile key

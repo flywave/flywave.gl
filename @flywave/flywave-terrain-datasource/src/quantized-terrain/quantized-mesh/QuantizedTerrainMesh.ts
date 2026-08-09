@@ -163,7 +163,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
 
         this.quantizedGeometry.drawRange = originDrawRange;
 
-        this._demMap = new DEMData("", rawData, geoBox, undefined, true, true);
+        this._demMap = new DEMData("", rawData, geoBox, undefined, true, false);
 
         if (heightMapModifiers?.length) {
             const processed = await renderGroundModificationHeightMap(
@@ -181,14 +181,15 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
                 drawGeoBox,
                 undefined,
                 false,
-                true
+                false
             );
 
             this._groundElevationModified = true;
         }
 
-        this.metaData.maxHeight = this._demMap.tree._maximums[0];
-        this.metaData.minHeight = this._demMap.tree._minimums[0];
+        const { min, max } = this._demMap.getMinMaxElevation();
+        this.metaData.maxHeight = max;
+        this.metaData.minHeight = min;
     }
 
     toQuantizedTerrainMeshData(): QuantizedTerrainMeshData {
