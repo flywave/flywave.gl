@@ -233,6 +233,7 @@ export class CloudRenderNode extends TempNode {
     private readonly velocityLowResNode: TextureNode;
     private readonly shadowLengthLowResNode: TextureNode;
     private historyNode: TextureNode;
+    private historyShadowLengthNode: TextureNode;
     private resolveNodeTex: TextureNode;
     private compositeNode: TextureNode;
     private compositeShadowLengthNode: TextureNode;
@@ -366,6 +367,7 @@ export class CloudRenderNode extends TempNode {
         this.velocityLowResNode = outputTexture(this, this.lowResRT.textures[1]);
         this.shadowLengthLowResNode = outputTexture(this, this.lowResRT.textures[2]);
         this.historyNode = texture(this.historyRT.texture);
+        this.historyShadowLengthNode = texture(this.historyRT.textures[1]);
         this.resolveNodeTex = texture(this.resolveRT.texture);
         this.compositeNode = texture(this.resolveRT.texture);
         this.compositeShadowLengthNode = texture(this.resolveRT.textures[1]);
@@ -937,6 +939,7 @@ export class CloudRenderNode extends TempNode {
         this.historyRT = tmp;
         this.resolveNodeTex.value = this.resolveRT.texture;
         this.historyNode.value = this.historyRT.texture;
+        this.historyShadowLengthNode.value = this.historyRT.textures[1];
 
         // Notify external consumers (AerialPerspectiveNode) that RT textures
         // changed due to ping-pong swap, so they update their texture references.
@@ -1113,6 +1116,8 @@ export class CloudRenderNode extends TempNode {
                 const isCurrent = bayerVal.sub(frameMod).abs().lessThan(0.5);
 
                 const result = currentColor.toVar();
+                const currentShadowLen = texture(this.shadowLengthLowResNode, lowUv).r.toVar();
+                const resultShadowLen = currentShadowLen.toVar();
 
                 If(isCurrent.not(), () => {
                     const lowCoord = ivec2(lowCoordX, lowCoordY);
@@ -1135,26 +1140,86 @@ export class CloudRenderNode extends TempNode {
                             historyColor
                         );
                         result.assign(clipped);
+
+                        // Shadow length: variance clipping (matches reference cloudsResolve.frag)
+                        const historyShadowLen = texture(this.historyShadowLengthNode, prevUv).r;
+                        const shadowClipped = _varianceClippingResolve(
+                            this.shadowLengthLowResNode,
+                            ivec2(lowCoordX, lowCoordY),
+                            vec4(currentShadowLen, float(0), float(0), float(1)),
+                            vec4(historyShadowLen, float(0), float(0), float(1))
+                        );
+                        resultShadowLen.assign(shadowClipped.r);
                     });
                 });
 
                 return result;
             })();
 
-            // shadowLength resolve: upsample from low-res to full-res.
+            // shadowLength resolve: shares temporal logic with color resolve above
             const resolveShadowLength = Fn(() => {
                 const lowResSize = vec2(
                     float(1).div(this.lowResTexelSize.x),
                     float(1).div(this.lowResTexelSize.y)
                 );
-                const lowCoordX = screenCoordinate.x.floor().div(4).floor();
-                const lowCoordY = screenCoordinate.y.floor().div(4).floor();
-                const lowUv = vec2(
-                    lowCoordX.add(0.5).div(lowResSize.x),
-                    lowCoordY.add(0.5).div(lowResSize.y)
+                const fx2 = screenCoordinate.x.floor();
+                const fy2 = screenCoordinate.y.floor();
+                const lowCoordX2 = fx2.div(4).floor();
+                const lowCoordY2 = fy2.div(4).floor();
+                const lowUv2 = vec2(
+                    lowCoordX2.add(0.5).div(lowResSize.x),
+                    lowCoordY2.add(0.5).div(lowResSize.y)
                 );
-                const currentLen = texture(this.shadowLengthLowResNode, lowUv);
-                return vec4(currentLen.r, float(0), float(0), float(0));
+                const currentLen = texture(this.shadowLengthLowResNode, lowUv2).r.toVar();
+
+                // Same Bayer pattern as color resolve
+                const b0 = vec4(0, 12, 3, 15);
+                const b1 = vec4(8, 4, 11, 7);
+                const b2 = vec4(2, 14, 1, 13);
+                const b3 = vec4(10, 6, 9, 5);
+                const iPixX2 = screenCoordinate.x.floor().toInt();
+                const iPixY2 = screenCoordinate.y.floor().toInt();
+                const mx2 = iPixX2.mod(4).toFloat();
+                const my2 = iPixY2.mod(4).toFloat();
+                const row2 = mx2
+                    .lessThan(1)
+                    .select(b0, mx2.lessThan(2).select(b1, mx2.lessThan(3).select(b2, b3)));
+                const bayerVal2 = my2
+                    .lessThan(1)
+                    .select(
+                        row2.x,
+                        my2.lessThan(2).select(row2.y, my2.lessThan(3).select(row2.z, row2.w))
+                    );
+                const frameMod2 = this.cloudResolveCountNode.mod(16);
+                const isCurrent2 = bayerVal2.sub(frameMod2).abs().lessThan(0.5);
+
+                const resultLen = currentLen.toVar();
+
+                If(isCurrent2.not(), () => {
+                    const lowCoord = ivec2(lowCoordX2, lowCoordY2);
+                    const velocityData = _getClosestFragment(this.velocityLowResNode, lowCoord);
+                    const velocity = velocityData.yz;
+                    const prevUv = screenUV.sub(velocity);
+
+                    const inBounds = prevUv.x
+                        .greaterThanEqual(0)
+                        .and(prevUv.x.lessThanEqual(1))
+                        .and(prevUv.y.greaterThanEqual(0))
+                        .and(prevUv.y.lessThanEqual(1));
+
+                    If(inBounds, () => {
+                        const historyLen = texture(this.historyShadowLengthNode, prevUv).r;
+                        const shadowClipped = _varianceClippingResolve(
+                            this.shadowLengthLowResNode,
+                            ivec2(lowCoordX2, lowCoordY2),
+                            vec4(currentLen, float(0), float(0), float(1)),
+                            vec4(historyLen, float(0), float(0), float(1))
+                        );
+                        resultLen.assign(shadowClipped.r);
+                    });
+                });
+
+                return vec4(resultLen, float(0), float(0), float(0));
             })();
 
             this.resolveMaterial.fragmentNode = mrt({
