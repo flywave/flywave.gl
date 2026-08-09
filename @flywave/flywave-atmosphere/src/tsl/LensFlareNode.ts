@@ -27,7 +27,7 @@ export class LensFlareNode extends TempNode {
     bloomNode: MipmapSurfaceBlurNode;
     glareNode: LensGlareNode;
 
-    bloomIntensity = uniform(0.05);
+    bloomIntensity = uniform(0.005);
 
     featuresNode: RenderTargetNode;
 
