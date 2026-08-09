@@ -11,7 +11,7 @@ import { type DEMEncoding, DEMData } from "./dem/DemData";
 export interface DecodeTileParams {
     uid: string;
     encoding: DEMEncoding;
-    rawImageData: ImageData;
+    imageData: ImageData;
     geoBox: GeoBoxArray;
     padding: number;
     buildQuadTree: boolean;
@@ -74,18 +74,9 @@ export const processDEMTile = async (params: DecodeTileParams): Promise<DecodeTi
     validateDecodeParams(params);
     const { uid, encoding, geoBox } = params;
 
-    const rawimagePixels = await getImageData(params.rawImageData, params.padding);
-    const imagePixels = rawimagePixels;
+    const imagePixels = await getImageData(params.imageData, params.padding);
 
-    const dem = new DEMData(
-        uid,
-        undefined,
-        imagePixels,
-        GeoBox.fromArray(geoBox),
-        encoding,
-        false,
-        true
-    );
+    const dem = new DEMData(uid, imagePixels, GeoBox.fromArray(geoBox), encoding, false, true);
 
     return {
         dem,

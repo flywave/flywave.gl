@@ -244,16 +244,14 @@ export class DemTileResource extends TileValidResource {
         const padding = 1 - buffer;
         const borderReady = padding < 1;
 
-        let rawImageData: ImageData;
+        let imageData: ImageData;
         if (imgData instanceof ImageData) {
-            rawImageData = imgData as ImageData;
+            imageData = imgData as ImageData;
         } else {
             const transfer =
                 window.ImageBitmap && imgData instanceof ImageBitmap && offscreenCanvasSupported();
 
-            rawImageData = (
-                transfer ? imgData : browser.getImageData(imgData, padding)
-            ) as ImageData;
+            imageData = (transfer ? imgData : browser.getImageData(imgData, padding)) as ImageData;
         }
         const geoBox = terrainSource.getTilingScheme().getGeoBox(tileKey);
 
@@ -267,7 +265,7 @@ export class DemTileResource extends TileValidResource {
                 {
                     type: TaskType.RasterDEM,
                     coord: tileKey,
-                    rawImageData,
+                    imageData,
                     encoding,
                     geoBox: geoBox.toArray(),
                     padding,

@@ -230,7 +230,6 @@ export class StratumTileData {
                 const dem = decodedData._demMap;
                 this._demMap = new DEMData(
                     dem.uid,
-                    dem.rawImageData,
                     dem as unknown as ImageData,
                     this.geoBox,
                     dem.encoding,
@@ -714,7 +713,7 @@ export class StratumTileData {
 
         const rawData = await renderHeightMap(this.stratumTileGeometry, undefined, "stratum");
 
-        this._demMap = new DEMData("", rawData, rawData, geoBox);
+        this._demMap = new DEMData("", rawData, geoBox);
 
         this._header.maxHeight = this._demMap.tree._maximums[0];
         this._header.minHeight = this._demMap.tree._minimums[0];

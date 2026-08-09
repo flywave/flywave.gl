@@ -163,22 +163,21 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
 
         this.quantizedGeometry.drawRange = originDrawRange;
 
-        this._demMap = new DEMData("", rawData, rawData, geoBox, undefined, true, true);
+        this._demMap = new DEMData("", rawData, geoBox, undefined, true, true);
 
         if (heightMapModifiers?.length) {
             const processed = await renderGroundModificationHeightMap(
                 heightMapModifiers,
                 drawGeoBox,
-                new Texture(this._demMap.rawImageData!),
-                this._demMap.rawImageData!.width,
-                this._demMap.rawImageData!.height,
+                new Texture(this._demMap.data),
+                this._demMap.data.width,
+                this._demMap.data.height,
                 flipY
             );
 
             this._demMap = new DEMData(
                 "",
-                rawData,
-                processed?.image,
+                processed?.image ?? rawData,
                 drawGeoBox,
                 undefined,
                 false,
@@ -282,9 +281,8 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
     ): Promise<void> {
         if (!this._demMap) return Promise.resolve();
 
-        console.log(this.tileKey.toArray());
         return DemTileResource.createDemTileResourceFromImageryData(
-            this._demMap.rawImageData!,
+            this._demMap.data,
             this.tileKey,
             this.terrainSource,
             this._demMap.encoding

@@ -30,7 +30,6 @@ export interface SerializedDEMData {
     height: number;
     width: number;
     pixels: Uint8Array;
-    rawImageData: ImageData; // 直接使用 ImageData
     geoBox: GeoBoxJSON;
     tree?: {
         minimums: Float32Array;
@@ -68,7 +67,6 @@ export default class DEMData extends TileValidResource {
     /**
      * Creates a new DEMData instance
      * @param uid - Unique identifier for this DEM data
-     * @param rawImageData - Original image data
      * @param data - Processed image data
      * @param geoBox - Geographic bounding box
      * @param encoding - DEM encoding format
@@ -77,7 +75,6 @@ export default class DEMData extends TileValidResource {
      */
     constructor(
         uid: string | number,
-        public rawImageData: ImageData | undefined,
         public data: ImageData,
         geoBox: GeoBox,
         encoding: DEMEncoding = "mapbox",
@@ -121,8 +118,6 @@ export default class DEMData extends TileValidResource {
      * @returns New DEMData instance
      */
     static fromSerialized(serialized: SerializedDEMData): DEMData {
-        const rawImageData = serialized.rawImageData;
-
         const processedImageData = new ImageData(
             new Uint8ClampedArray(serialized.pixels.buffer),
             serialized.width,
@@ -132,7 +127,6 @@ export default class DEMData extends TileValidResource {
         const geoBox = GeoBox.fromJSON(serialized.geoBox);
         const demData = new DEMData(
             serialized.uid,
-            rawImageData,
             processedImageData,
             geoBox,
             serialized.encoding,
@@ -163,7 +157,6 @@ export default class DEMData extends TileValidResource {
             height: this.height,
             width: this.width,
             pixels: this.pixels,
-            rawImageData: this.rawImageData,
             geoBox: this.geoBox.toJSON()
         };
 
@@ -182,7 +175,7 @@ export default class DEMData extends TileValidResource {
 
     /** Calculate total memory usage in bytes */
     getBytesUsed(): number {
-        return (this.rawImageData?.data.byteLength ?? 0) + this.pixels.byteLength;
+        return this.pixels.byteLength;
     }
 
     /** Fill border pixels by duplicating edge values */
@@ -530,7 +523,6 @@ export default class DEMData extends TileValidResource {
         this.texture?.dispose();
         this.texture = undefined;
         this._tree = undefined;
-        this.rawImageData = undefined;
         this.data = undefined as unknown as ImageData;
         (this as any).pixels = new Uint8Array(0);
         this.sourceImage = undefined;
