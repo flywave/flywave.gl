@@ -34,7 +34,7 @@ const mapView = new MapView({
                 const longitude = 30;
                 const offset = longitude / 15;
                 const dayOfYear = 1;
-                const timeOfDay = 9.0;
+                const timeOfDay = 9;
                 return epoch + (dayOfYear * 24 + timeOfDay - offset) * 3600000;
             })()
         }
@@ -45,6 +45,14 @@ mapView.beginAnimation();
 
 const controls = new MapControls(mapView);
 const ui = new MapControlsUI(controls);
+
+// Camera info HUD
+const camHud = document.createElement("div");
+camHud.id = "camHud";
+camHud.style.cssText =
+    "position:absolute;bottom:10px;left:10px;z-index:9999;font-size:12px;color:#0f0;background:rgba(0,0,0,0.7);padding:4px 8px;border-radius:4px;font-family:monospace;pointer-events:none;";
+camHud.textContent = "cam: loading...";
+document.body.appendChild(camHud);
 // Disable VRM tone mapping for debugging.
 // setToneMapping may run before VRM exists, so we hook updateCameras to
 // force VRM config once until it sticks, then stop to avoid pipeline rebuilds.
@@ -53,19 +61,19 @@ const applyToneMappingOverride = () => {
     if (_toneMappingApplied) return;
     const vrm = (mapView as any).mapRenderingManager?.viewRenderManager;
     if (vrm) {
-        vrm.config.toneMappingMode = "agx";
+        vrm.config.toneMappingMode = "agx-punchy";
         vrm.exposure.value = 3;
         vrm.needsUpdate = true;
         _toneMappingApplied = true;
     }
     const atmoSystem = (mapView as any).m_atmosphereSystem;
     if (atmoSystem) {
-        atmoSystem.m_toneMappingMode = "agx";
+        atmoSystem.m_toneMappingMode = "agx-punchy";
         atmoSystem.m_toneMappingExposure = 3;
     }
     const renderer = (mapView as any).renderer;
     if (renderer) {
-        renderer.toneMapping = 0; // NoToneMapping - VRM handles it
+        renderer.toneMapping = 0;
         renderer.toneMappingExposure = 1;
     }
 };
@@ -106,6 +114,8 @@ const applyOverride = () => {
 
     cam.rotation.order = "XYZ";
     cam.fov = 75;
+    cam.near = 1;
+    cam.far = 4e5;
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
 
@@ -120,6 +130,21 @@ const applyOverride = () => {
         rte.aspect = cam.aspect;
         rte.updateProjectionMatrix();
         rte.updateMatrixWorld(true);
+    }
+
+    // Camera info HUD
+    const hud = document.getElementById("camHud");
+    if (hud) {
+        const m = cam.matrixWorld.elements;
+        const p = cam.projectionMatrix.elements;
+        hud.textContent =
+            `cam: fov=${cam.fov} near=${cam.near.toFixed(1)} far=${cam.far} | ` +
+            `MW=[${m[0].toFixed(3)},${m[1].toFixed(3)},${m[2].toFixed(3)},${m[4].toFixed(
+                3
+            )},${m[5].toFixed(3)},${m[6].toFixed(3)},${m[8].toFixed(3)},${m[9].toFixed(
+                3
+            )},${m[10].toFixed(3)}] | ` +
+            `up=(${cam.up.x.toFixed(3)},${cam.up.y.toFixed(3)},${cam.up.z.toFixed(3)})`;
     }
 };
 
@@ -142,3 +167,34 @@ btn.addEventListener("click", () => {
 (window as any).toggleRotate = () => {
     _autoRotate = !_autoRotate;
 };
+
+// Sun time slider (adjust hour of day to see god rays at different sun angles)
+const sunTimeLabel = document.createElement("label");
+sunTimeLabel.textContent = "Hour: 9.0";
+sunTimeLabel.style.cssText =
+    "position:absolute;top:50px;right:10px;z-index:9999;font-size:14px;color:#fff;background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;pointer-events:none;";
+document.body.appendChild(sunTimeLabel);
+
+const sunTimeSlider = document.createElement("input");
+sunTimeSlider.type = "range";
+sunTimeSlider.min = "0";
+sunTimeSlider.max = "24";
+sunTimeSlider.step = "0.1";
+sunTimeSlider.value = "9";
+sunTimeSlider.style.cssText = "position:absolute;top:75px;right:10px;z-index:9999;width:180px;";
+document.body.appendChild(sunTimeSlider);
+
+sunTimeSlider.addEventListener("input", () => {
+    const hour = parseFloat(sunTimeSlider.value);
+    sunTimeLabel.textContent = `Hour: ${hour.toFixed(1)}`;
+    const year = new Date().getFullYear();
+    const epoch = Date.UTC(year, 0, 1, 0, 0, 0, 0);
+    const longitude = 30;
+    const offset = longitude / 15;
+    const dayOfYear = 1;
+    const sunTime = epoch + (dayOfYear * 24 + hour - offset) * 3600000;
+    const atmo = (mapView as any).m_sceneEnvironment?.atmosphere;
+    if (atmo) {
+        atmo.setCurrentDate(new Date(sunTime), true);
+    }
+});
