@@ -42,6 +42,9 @@ const EndInteractionUpdate = {
     type: EventNames.EndInteraction
 } as Event<EventNames.EndInteraction, any>;
 
+// Reusable scratch vector for projecting the rotation pivot into screen space.
+const s_pivotNdc: Vector3 = new Vector3();
+
 interface EventMap {
     [EventNames.Update]: typeof EventUpdate;
     [EventNames.BeginInteraction]: typeof BeginInteractionUpdate;
@@ -586,10 +589,25 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private updatePivotIndicator(mouseDown: boolean[]): void {
         if (this.m_pivotIndicator == null || !this.m_pivotIndicator.enabled) return;
 
-        if (mouseDown[2]) {
-            const w = this.mapView.getCanvasClientSize().width;
-            const h = this.mapView.getCanvasClientSize().height;
-            this.m_pivotIndicator.show(w / 2, h / 2);
+        if (mouseDown[2] && this.lastHitCenterDistance > 0) {
+            // Project the orbit pivot (the 3D point the camera rotates around) into screen
+            // space, so the indicator marks the actual rotation center rather than a fixed
+            // screen-center point.
+            const camera = this.mapView.camera;
+            camera.updateMatrixWorld();
+
+            const ndc = s_pivotNdc.copy(this.lastHitCenter).project(camera);
+            const { width, height } = this.mapView.getCanvasClientSize();
+            const sx = (ndc.x * 0.5 + 0.5) * width;
+            const sy = (-ndc.y * 0.5 + 0.5) * height;
+
+            // Only show when the pivot is in front of the camera and within the frustum;
+            // otherwise let it fade out.
+            if (ndc.z > -1 && ndc.z < 1) {
+                this.m_pivotIndicator.show(sx, sy);
+            } else {
+                this.m_pivotIndicator.hide();
+            }
         } else {
             this.m_pivotIndicator.hide();
         }
