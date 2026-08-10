@@ -360,7 +360,9 @@ export class MBTileDataEmitter {
                 props.technique = 'circles';
                 props.color = p['circle-color'] ?? '#000000';
                 props.opacity = p['circle-opacity'] ?? 1;
-                props.size = p['circle-radius'] ?? 5;
+                // Mapbox circle-radius is the disc RADIUS in pixels; the native
+                // CirclePointsMaterial gl_PointSize is the disc DIAMETER.
+                props.size = (p['circle-radius'] ?? 5) * 2;
                 props._translate = p['circle-translate'] ?? [0, 0];
                 props._translateAnchor = p['circle-translate-anchor'] ?? 'map';
                 if (l.visibility === 'none') props.enabled = false;

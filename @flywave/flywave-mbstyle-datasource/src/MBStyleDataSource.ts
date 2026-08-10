@@ -1357,13 +1357,15 @@ export class MBStyleDataSource extends TileDataSource {
                     // Convert hex color string to number for MapView.clearColor
                     const c = new THREE.Color(color);
                     (this.mapView as any).clearColor = c.getHex();
-                    if (opacity < 1) {
-                        (this.mapView as any).clearAlpha = opacity;
-                    }
+                    (this.mapView as any).clearAlpha = opacity;
                 }
                 break;
             }
         }
+        // NOTE: without a background-color layer the engine keeps its opaque
+        // white clear; the render-test comparison alpha-composites the RGBA
+        // reference over white (see flywave-test-utils compareImages), so the
+        // transparent reference background matches the white canvas.
     }
 
     /**
@@ -1413,9 +1415,15 @@ export class MBStyleDataSource extends TileDataSource {
         if (!this.mapView) return;
 
         // Mapbox render tests: the camera is driven by the style. Missing
-        // center defaults to [0,0]; missing zoom keeps the current zoom.
+        // center defaults to [0,0]; missing zoom defaults to 0 (mapbox's Map
+        // default, map.ts:235). NOT "keep the current zoom" — a freshly created
+        // MapView's default camera is degenerate (m_targetDistance=0 → extreme
+        // zoom), which would push content off-screen for tests without a zoom.
         const center = style.center ?? [0, 0];
-        const zoom = typeof style.zoom === 'number' ? style.zoom : this.mapView.zoomLevel;
+        // flywave's camera zoom convention shows a level-z tile at 256px while
+        // mapbox shows it at 512px (calculateDistanceFromZoomLevel /256). To
+        // match mapbox's world scale, offset the camera zoom by +1.
+        const zoom = (typeof style.zoom === 'number' ? style.zoom : 0) + 1;
         const bearing = style.bearing ?? 0;
         const pitch = style.pitch ?? 0;
 

@@ -129,6 +129,31 @@ export function compareImages(
 ) {
     const { width, height } = actualImage;
 
+    // Mapbox render-test references are RGBA with a TRANSPARENT background
+    // (alpha 0 where nothing is drawn), while the engine's canvas capture is
+    // fully opaque. Alpha-composite the reference over white (matching the
+    // engine's default clear colour) so the comparison reflects visual content
+    // differences rather than the alpha channel. References that are already
+    // fully opaque (e.g. styles with a background layer) pass through untouched.
+    let ref = referenceImage;
+    let refHasAlpha = false;
+    for (let i = 3; i < referenceImage.data.length; i += 4) {
+        if (referenceImage.data[i] !== 255) { refHasAlpha = true; break; }
+    }
+    if (refHasAlpha) {
+        ref = new ImageData(width, height);
+        const d = referenceImage.data;
+        const o = ref.data;
+        for (let i = 0; i < d.length; i += 4) {
+            const a = d[i + 3] / 255;
+            const inv = 1 - a;
+            o[i] = d[i] * a + 255 * inv;
+            o[i + 1] = d[i + 1] * a + 255 * inv;
+            o[i + 2] = d[i + 2] * a + 255 * inv;
+            o[i + 3] = 255;
+        }
+    }
+
     const diffCanvas = document.createElement("canvas");
     diffCanvas.width = width;
     diffCanvas.height = height;
@@ -136,7 +161,7 @@ export function compareImages(
     const diffData = diffContext.createImageData(width, height);
 
     const mismatchedPixels = pixelmatch(
-        referenceImage.data,
+        ref.data,
         actualImage.data,
         diffData.data,
         width,

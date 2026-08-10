@@ -189,9 +189,10 @@ async function processOperations(
             case "setZoom": {
                 // MapView has no direct setZoom — use zoomOnTargetPosition to
                 // zoom while keeping the screen-center anchored.
+                // flywave camera zoom = mapbox zoom + 1 (see applyCameraSettings).
                 try {
                     const { MapViewUtils } = await import("@flywave/flywave-mapview");
-                    MapViewUtils.zoomOnTargetPosition(mapView, 0, 0, args[0]);
+                    MapViewUtils.zoomOnTargetPosition(mapView, 0, 0, (args[0] ?? 0) + 1);
                 } catch {}
                 break;
             }
@@ -413,7 +414,7 @@ async function processOperations(
                     const center = target.center
                         ? new GeoCoordinates(target.center[1], target.center[0])
                         : curCenter;
-                    const zoom = target.zoom ?? mapView.zoomLevel;
+                    const zoom = target.zoom !== undefined ? target.zoom + 1 : mapView.zoomLevel;
                     const yaw = target.bearing ?? mapView.heading;
                     const pitch = target.pitch ?? mapView.tilt;
                     mapView.setCameraGeolocationAndZoom(center, zoom, yaw, pitch);
@@ -612,7 +613,7 @@ async function processOperations(
                     const center = target.center
                         ? new GeoCoordinates(target.center[1], target.center[0])
                         : curCenter;
-                    const zoom = target.zoom ?? mapView.zoomLevel;
+                    const zoom = target.zoom !== undefined ? target.zoom + 1 : mapView.zoomLevel;
                     const yaw = target.bearing ?? mapView.heading;
                     const pitch = target.pitch ?? mapView.tilt;
                     mapView.setCameraGeolocationAndZoom(center, zoom, yaw, pitch);
