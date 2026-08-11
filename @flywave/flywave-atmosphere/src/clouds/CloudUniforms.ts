@@ -125,6 +125,23 @@ export class CloudUniforms {
     scatterAnisotropy2 = uniform(-0.2);
     scatterAnisotropyMix = uniform(0.5);
 
+    // Multi-scattering octave count for the analytical approximation
+    // (upper bound is 8; the loop breaks early once this count is reached).
+    multiScatteringOctaves = uniform(8);
+
+    // Per-sample sky/sun irradiance: 1 = accurate (call illuminance integrator
+    // at every sample), 0 = fast (interpolate precomputed layer top/bottom).
+    accurateSunSkyLight = uniform(1.0);
+
+    // Domain-warping turbulence on/off: 1 = sample turbulence texture and warp
+    // shape/detail positions, 0 = skip texture fetch (cheaper, less organic).
+    turbulenceEnabled = uniform(1.0);
+
+    // Optical-depth tail scale: compensates shadow-density under-estimation
+    // caused by early ray termination. Consumed via the BSM texture's alpha
+    // channel in sampleShadowOpticalDepth (shadow.b + shadow.a).
+    opticalDepthTailScale = uniform(2.0);
+
     // Sun angular radius (radians). Earth: ~0.00465 rad (0.2666°).
     // Larger values produce softer shadow penumbras via expanded PCF.
     sunAngularRadius = uniform(0.00465);

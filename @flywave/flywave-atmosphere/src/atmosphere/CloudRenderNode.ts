@@ -158,6 +158,12 @@ export class CloudRenderNode extends TempNode {
 
     private cloudTextures: CloudTextures | null = null;
     private readonly cloudUniforms = new CloudUniforms(new CloudLayers(CloudLayers.DEFAULT));
+    // Runtime-tunable rendering switches (JS-side; drive RT sizing, jitter,
+    // shadow TAA and shadow-length via CloudRenderNode logic, not uniforms).
+    private m_temporalUpscale = true;
+    private m_resolutionScale = 4;
+    private m_shadowTemporalPass = true;
+    private m_lightShafts = true;
     private cloudInitialized = false;
     private cloudRenderReady = false;
     // Config passed to setConfig() before textures finished loading
@@ -425,7 +431,6 @@ export class CloudRenderNode extends TempNode {
             minSecondaryStepSize: number;
             secondaryStepScale: number;
             shadowCascadeCount: number;
-            shadowMapSize: number;
             maxShadowFilterRadius: number;
             hazeEnabled: boolean;
             hazeDensityScale: number;
@@ -441,6 +446,18 @@ export class CloudRenderNode extends TempNode {
             turbulenceRepeat: number;
             turbulenceDisplacement: number;
             sunAngularRadius: number;
+            // ── Added for reference-implementation parity ──
+            temporalUpscale: boolean;
+            resolutionScale: number;
+            accurateSunSkyLight: boolean;
+            multiScatteringOctaves: number;
+            turbulence: boolean;
+            shapeDetail: boolean;
+            lightShafts: boolean;
+            shadowTemporalPass: boolean;
+            shadowSplitMode: "uniform" | "logarithmic" | "practical";
+            shadowSplitLambda: number;
+            opticalDepthTailScale: number;
         }>
     ): void {
         if (!this.cloudRenderReady) {
@@ -519,6 +536,60 @@ export class CloudRenderNode extends TempNode {
 
         if (config.sunAngularRadius != null) u.sunAngularRadius.value = config.sunAngularRadius;
 
+        // ── Reference-parity fields ───────────────────────────────────────
+        // JS-side switches persisted on the node; consumed in updateBefore.
+        if (config.temporalUpscale != null) {
+            this.m_temporalUpscale = config.temporalUpscale;
+            // The resolve Fn bakes BLOCK (= m_resolutionScale or 1) as a build-
+            // time constant, so switching temporalUpscale needs a rebuild.
+            this._fragmentNodesBuilt = false;
+        }
+        if (config.resolutionScale != null) {
+            this.m_resolutionScale = Math.max(1, Math.floor(config.resolutionScale));
+            this._fragmentNodesBuilt = false;
+        }
+        if (config.lightShafts != null) {
+            this.m_lightShafts = config.lightShafts;
+            // lightShafts is implemented as maxShadowLengthIterationCount > 0.
+            // When disabling, force the count to 0; when (re-)enabling, restore
+            // the current preset's value if it had been zeroed.
+            if (config.lightShafts) {
+                if (u.maxShadowLengthIterationCount.value === 0) {
+                    u.maxShadowLengthIterationCount.value = 500; // "high" default
+                }
+            } else {
+                u.maxShadowLengthIterationCount.value = 0;
+            }
+        }
+        if (config.shadowTemporalPass != null) {
+            this.m_shadowTemporalPass = config.shadowTemporalPass;
+            // Reset bootstrap so the new mode takes effect immediately.
+            this._shadowResolveFrameCount = 0;
+        }
+        if (config.shadowSplitLambda != null) {
+            this.cascadedShadowMaps.splitLambda = config.shadowSplitLambda;
+        }
+        if (config.shadowSplitMode != null) {
+            this.cascadedShadowMaps.splitMode = config.shadowSplitMode;
+        }
+        // Shader-side uniforms.
+        if (config.accurateSunSkyLight != null)
+            u.accurateSunSkyLight.value = config.accurateSunSkyLight ? 1 : 0;
+        if (config.multiScatteringOctaves != null)
+            u.multiScatteringOctaves.value = Math.max(
+                1,
+                Math.min(8, Math.floor(config.multiScatteringOctaves))
+            );
+        if (config.turbulence != null) u.turbulenceEnabled.value = config.turbulence ? 1 : 0;
+        if (config.opticalDepthTailScale != null)
+            u.opticalDepthTailScale.value = config.opticalDepthTailScale;
+        if (config.shapeDetail != null && !config.shapeDetail) {
+            // Override every layer's shapeDetailAmount to 0 (the shader's
+            // If(sum(shapeDetailAmounts) > 0) guard then skips detail sampling).
+            for (const layer of u.layers) layer.shapeDetailAmount = 0;
+            u.updateLayers();
+        }
+
         if (config.layers != null) {
             u.layers.set(config.layers);
             u.updateLayers();
@@ -557,6 +628,14 @@ export class CloudRenderNode extends TempNode {
             this.cloudUniforms.shapeDetailRepeat.value.setScalar(0.006);
             this.cloudUniforms.turbulenceRepeat.value = 20;
             this.cloudUniforms.turbulenceDisplacement.value = 350;
+            // Default wind so enabled clouds drift visibly without an explicit
+            // velocity config. User-supplied values (including [0,0] to freeze)
+            // override these via pendingConfig -> setConfig below.
+            this.cloudUniforms.localWeatherVelocity.value.set(0.001, 0);
+            this.cloudUniforms.shapeVelocity.value.set(0.001, 0, 0);
+            // Detail texture repeats ~20x more often than shape, so scale its
+            // velocity down to keep the visual drift proportionate.
+            this.cloudUniforms.shapeDetailVelocity.value.set(0.0003, 0, 0);
             this.cloudUniforms.applyQualityPreset("high");
             this.cloudUniforms.skyLightScale.value = 1;
             this.cloudUniforms.powderScale.value = 0.8;
@@ -709,7 +788,9 @@ export class CloudRenderNode extends TempNode {
         const fullSize = renderer.getDrawingBufferSize(sizeScratch);
         const fullWidth = fullSize.x;
         const fullHeight = fullSize.y;
-        const UPSCALE = 4;
+        // temporalUpscale=false → full-resolution render every frame (UPSCALE=1).
+        // temporalUpscale=true  → render at 1/m_resolutionScale and upscale.
+        const UPSCALE = this.m_temporalUpscale ? this.m_resolutionScale : 1;
         const lowWidth = Math.max(Math.ceil(fullWidth / UPSCALE), 1);
         const lowHeight = Math.max(Math.ceil(fullHeight / UPSCALE), 1);
         const virtualWidth = lowWidth * UPSCALE;
@@ -723,7 +804,11 @@ export class CloudRenderNode extends TempNode {
         this.historyTexSize.value.set(fullWidth, fullHeight);
 
         this.cloudUniforms.resolution.value.set(virtualWidth, virtualHeight);
-        this.cloudUniforms.mipLevelScale.value = 0.25;
+        // mipLevelScale scales weather-texture LOD to match the reduced pixel
+        // density. 0.25 matches a 4× downsample; 1.0 at full resolution.
+        this.cloudUniforms.mipLevelScale.value = this.m_temporalUpscale
+            ? 1 / UPSCALE
+            : 1.0;
 
         const atmoCtx = getAtmosphereContext(renderer);
         const w2eVal = atmoCtx.matrixWorldToECEF.value;
@@ -798,8 +883,10 @@ export class CloudRenderNode extends TempNode {
                 this.mesh.material = this.shadowMaterial;
                 this.mesh.render(renderer);
 
-                if (this._shadowResolveFrameCount < 3) {
-                    // Bootstrap: copy raw directly to resolved
+                if (!this.m_shadowTemporalPass || this._shadowResolveFrameCount < 3) {
+                    // Bootstrap (or shadow TAA disabled): copy raw directly to
+                    // resolved. When shadowTemporalPass is off, this raw copy
+                    // runs every frame — faster, but noisier shadows.
                     for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                         renderer.copyTextureToTexture(
                             this.shadowMRT.textures[i],
@@ -812,7 +899,11 @@ export class CloudRenderNode extends TempNode {
                     this.mesh.material = this.shadowResolveMaterial;
                     this.mesh.render(renderer);
                 }
-                this._shadowResolveFrameCount++;
+                // Only advance the TAA frame counter while the pass is enabled;
+                // when disabled we stay in the bootstrap branch indefinitely.
+                if (this.m_shadowTemporalPass) {
+                    this._shadowResolveFrameCount++;
+                }
 
                 // Copy resolved to atlas for AtmosphereLightNode
                 for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
@@ -868,19 +959,25 @@ export class CloudRenderNode extends TempNode {
         let jitterDx = 0,
             jitterDy = 0;
         const frame = this._cloudResolveFrameCount % 16;
-        const [ox, oy] = bayerOffsets[frame];
-        jitterDx = ((ox - 0.5) / virtualWidth) * 4;
-        jitterDy = -((oy - 0.5) / virtualHeight) * 4;
+        if (this.m_temporalUpscale) {
+            const [ox, oy] = bayerOffsets[frame];
+            jitterDx = ((ox - 0.5) / virtualWidth) * 4;
+            jitterDy = -((oy - 0.5) / virtualHeight) * 4;
+        }
         this.temporalJitter.value.set(jitterDx, jitterDy);
         this.cloudUniforms.temporalJitter.value.set(jitterDx, jitterDy);
         this.jitteredInverseProjection.value.copy(jitterCamera.projectionMatrix);
-        this.jitteredInverseProjection.value.elements[8] += jitterDx * 2;
-        this.jitteredInverseProjection.value.elements[9] += jitterDy * 2;
+        if (this.m_temporalUpscale) {
+            this.jitteredInverseProjection.value.elements[8] += jitterDx * 2;
+            this.jitteredInverseProjection.value.elements[9] += jitterDy * 2;
+        }
         this.jitteredInverseProjection.value.invert();
 
         const jitteredProj = this._tmpJitteredProj.copy(jitterCamera.projectionMatrix);
-        jitteredProj.elements[8] += jitterDx * 2;
-        jitteredProj.elements[9] += jitterDy * 2;
+        if (this.m_temporalUpscale) {
+            jitteredProj.elements[8] += jitterDx * 2;
+            jitteredProj.elements[9] += jitterDy * 2;
+        }
         const curVP = this._tmpCurVP.multiplyMatrices(
             jitteredProj,
             jitterCamera.matrixWorldInverse
@@ -889,8 +986,10 @@ export class CloudRenderNode extends TempNode {
 
         if (this.hasPrevCamTransform) {
             const reprojection = this._tmpReprojection.copy(this.prevProjectionMatrix);
-            reprojection.elements[8] += jitterDx * 2;
-            reprojection.elements[9] += jitterDy * 2;
+            if (this.m_temporalUpscale) {
+                reprojection.elements[8] += jitterDx * 2;
+                reprojection.elements[9] += jitterDy * 2;
+            }
             reprojection.multiply(this.prevViewMatrix);
             this.cloudUniforms.prevViewProjection.value.copy(reprojection);
 
@@ -924,8 +1023,13 @@ export class CloudRenderNode extends TempNode {
         this.mesh.render(renderer);
 
         // Shadow ping-pong: swap AFTER cloud lowRes (which samples shadowNodes),
-        // BEFORE cloud resolve (which samples historyNode)
-        if (this.shadowMarchFn != null && this.shadowMaterial.fragmentNode != null) {
+        // BEFORE cloud resolve (which samples historyNode). Skipped when shadow
+        // TAA is disabled — history is unused, so no need to rotate the buffers.
+        if (
+            this.shadowMarchFn != null &&
+            this.shadowMaterial.fragmentNode != null &&
+            this.m_shadowTemporalPass
+        ) {
             const tmpShadow = this.shadowResolvedMRT;
             this.shadowResolvedMRT = this.shadowHistoryMRT;
             this.shadowHistoryMRT = tmpShadow;
@@ -1019,6 +1123,15 @@ export class CloudRenderNode extends TempNode {
 
         const u = this.cloudUniforms;
 
+        // BLOCK = low-res pixel block size. When temporalUpscale is on, this
+        // equals m_resolutionScale (e.g. 4 → each low-res texel maps a 4×4
+        // full-res block). When off, BLOCK = 1: low-res == full-res, the Bayer
+        // pattern degenerates (every pixel is "current"), and history
+        // reprojection is skipped — yielding a full-res direct path.
+        // Read once at Fn build time; changes require _fragmentNodesBuilt
+        // reset (see setConfig).
+        const BLOCK = this.m_temporalUpscale ? this.m_resolutionScale : 1;
+
         {
             const lowResResult = struct(
                 { color: "vec4", velocity: "vec4", shadowLength: "float" },
@@ -1101,8 +1214,8 @@ export class CloudRenderNode extends TempNode {
                 const fx = screenCoordinate.x.floor();
                 const fy = screenCoordinate.y.floor();
 
-                const lowCoordX = fx.div(4).floor();
-                const lowCoordY = fy.div(4).floor();
+                const lowCoordX = fx.div(BLOCK).floor();
+                const lowCoordY = fy.div(BLOCK).floor();
                 const lowUv = vec2(
                     lowCoordX.add(0.5).div(lowResSize.x),
                     lowCoordY.add(0.5).div(lowResSize.y)
@@ -1122,8 +1235,8 @@ export class CloudRenderNode extends TempNode {
 
                 const iPixX = screenCoordinate.x.floor().toInt();
                 const iPixY = screenCoordinate.y.floor().toInt();
-                const mx = iPixX.mod(4).toFloat();
-                const my = iPixY.mod(4).toFloat();
+                const mx = iPixX.mod(BLOCK).toFloat();
+                const my = iPixY.mod(BLOCK).toFloat();
 
                 const row = mx
                     .lessThan(1)
@@ -1187,8 +1300,8 @@ export class CloudRenderNode extends TempNode {
                 );
                 const fx2 = screenCoordinate.x.floor();
                 const fy2 = screenCoordinate.y.floor();
-                const lowCoordX2 = fx2.div(4).floor();
-                const lowCoordY2 = fy2.div(4).floor();
+                const lowCoordX2 = fx2.div(BLOCK).floor();
+                const lowCoordY2 = fy2.div(BLOCK).floor();
                 const lowUv2 = vec2(
                     lowCoordX2.add(0.5).div(lowResSize.x),
                     lowCoordY2.add(0.5).div(lowResSize.y)
@@ -1204,8 +1317,8 @@ export class CloudRenderNode extends TempNode {
                 const b3 = vec4(10, 6, 9, 5);
                 const iPixX2 = screenCoordinate.x.floor().toInt();
                 const iPixY2 = screenCoordinate.y.floor().toInt();
-                const mx2 = iPixX2.mod(4).toFloat();
-                const my2 = iPixY2.mod(4).toFloat();
+                const mx2 = iPixX2.mod(BLOCK).toFloat();
+                const my2 = iPixY2.mod(BLOCK).toFloat();
                 const row2 = mx2
                     .lessThan(1)
                     .select(b0, mx2.lessThan(2).select(b1, mx2.lessThan(3).select(b2, b3)));

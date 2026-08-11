@@ -214,6 +214,7 @@ export default class DEMData extends TileValidResource {
         );
         this.texture.minFilter = THREE.LinearFilter;
         this.texture.magFilter = THREE.LinearFilter;
+        this.texture.generateMipmaps = false;
         this.texture.flipY = true;
         this.texture.wrapS = THREE.ClampToEdgeWrapping;
         this.texture.wrapT = THREE.ClampToEdgeWrapping;

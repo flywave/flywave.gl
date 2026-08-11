@@ -9,6 +9,12 @@ import {
     WindowEventHandler,
     TileIntersection
 } from "@flywave/flywave.gl";
+import {
+    MapViewMonitor,
+    AtmosphereModule,
+    ToneMappingModule,
+    PostProcessingModule
+} from "@flywave/flywave-inspector";
 
 import { PropertiesTable } from "./PropertiesTable.js";
 
@@ -283,6 +289,12 @@ try {
 
     // 7. Set up mouse click event handler
     setupMouseClickHandler(mapView, cesiumIonDataSource, propertiesTable);
+
+    // 8. Initialize inspector debug panels
+    const monitor = new MapViewMonitor(mapView);
+    new AtmosphereModule(mapView, (monitor as any).gui);
+    new ToneMappingModule(mapView, (monitor as any).gui);
+    new PostProcessingModule(mapView);
 
     console.log("3D Tiles animation example initialized successfully");
 } catch (error) {

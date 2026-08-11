@@ -8,7 +8,7 @@ export interface ToneMappingData {
     mode: string;
 }
 
-const TONE_MAPPING_MODES = ["linear", "reinhard", "aces", "agx", "agx-punchy", "neutral"];
+const TONE_MAPPING_MODES = ["linear", "reinhard", "cineon", "aces", "agx", "agx-punchy", "neutral"];
 
 export class ToneMappingModule {
     private readonly mapView: MapView;

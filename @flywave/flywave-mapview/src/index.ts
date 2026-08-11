@@ -50,7 +50,6 @@ export * from "./image/ImageCache";
 export * from "./image/MapViewImageCache";
 export * from "./MapAnchors";
 export * from "./MapView";
-export * from "./MapViewAtmosphere";
 export * from "./MapViewFog";
 export * from "./MapViewPoints";
 export * from "./PickHandler";

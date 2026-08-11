@@ -48,8 +48,9 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         theme: {
             // extends: "resources/tilezen_base_globe.json", // Base theme configuration
             atmosphere: {
+                clouds:true,
                 enabled: true // Enable atmospheric effect
-            }
+            },
         }
     });
 };

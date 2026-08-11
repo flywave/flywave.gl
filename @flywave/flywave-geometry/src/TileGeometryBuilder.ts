@@ -447,30 +447,30 @@ class TileGeometryBuilder {
             if (level >= maxDetailLevel) {
                 const size = (1 << subdivision) + 1;
 
-                mode = this.generateSimplePatchWithSkirt(size * 2, size * 2, 0, 0, 1, 1, true);
+                mode = this.generateSimplePatchWithSkirt(size, size, 0, 0, 1, 1, true);
                 mode.is_simple_patch = true;
             } else {
                 needsNormalCalculation = true;
                 mode =
                     level >= minDetailLevel
                         ? this.generatePatchWithBucketsAndSkirt(
-                              subdivision,
-                              level,
-                              row,
-                              0,
-                              tileCount,
-                              tileCount,
-                              true
-                          )
+                            subdivision,
+                            level,
+                            row,
+                            0,
+                            tileCount,
+                            tileCount,
+                            true
+                        )
                         : this.generatePatchWithBuckets(
-                              subdivision,
-                              level,
-                              row,
-                              0,
-                              tileCount,
-                              tileCount,
-                              true
-                          );
+                            subdivision,
+                            level,
+                            row,
+                            0,
+                            tileCount,
+                            tileCount,
+                            true
+                        );
                 mode.is_simple_patch = false;
             }
             this.models.set(cacheKey, mode);
@@ -546,7 +546,7 @@ class TileGeometryBuilder {
                 this.tileScheme.subdivisionScheme.getSubdivisionX(0)
             ) /
                 (1 << tileKey.level)) *
-                4.0,
+            4.0,
             1000
         );
 
@@ -912,8 +912,8 @@ class TileGeometryBuilder {
                         ? convertWebMercatorY.convert(geoPos.latitudeInRadians)
                         : 1 - convertWebMercatorY.convert(geoPos.latitudeInRadians)
                     : isYAxisDown
-                    ? 1 - v
-                    : v;
+                        ? 1 - v
+                        : v;
 
                 // Store original position to skritMap
                 {

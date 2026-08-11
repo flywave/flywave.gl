@@ -6,7 +6,8 @@ import {
     DEMTerrainSource,
     ArcGISTileProvider,
     MapControlsUI,
-    MapThumbnailGenerator
+    MapThumbnailGenerator,
+    sphereProjection
 } from "@flywave/flywave.gl";
 
 /**
@@ -33,7 +34,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const initialLocation = new GeoCoordinates(36.48619699228674, 118.17270928364879);
 
     return new MapView({
-        projection: ellipsoidProjection, // Use ellipsoidal projection
+        projection: sphereProjection, // Use ellipsoidal projection
         target: initialLocation, // Initial target position
         enablePolarDataSource: false, // Disable polar data source
         zoomLevel: 15, // Initial zoom level
@@ -43,6 +44,9 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
             atmosphere: {
+                clouds: {
+                    quality: "low"
+                },
                 enabled: true // Enable atmospheric effects
             }
         }

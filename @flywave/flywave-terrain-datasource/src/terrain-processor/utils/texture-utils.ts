@@ -53,6 +53,9 @@ export class TextureUtils {
 
         const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
         texture.flipY = flipY;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.generateMipmaps = true;
         texture.needsUpdate = true;
         return texture;
     }
@@ -456,6 +459,9 @@ export class TextureUtils {
             THREE.RGBAFormat,
             THREE.FloatType
         );
+        texture.minFilter = THREE.NearestFilter;
+        texture.magFilter = THREE.NearestFilter;
+        texture.generateMipmaps = false;
         texture.needsUpdate = true;
 
         return { texture, width: textureWidth, height: 1 };

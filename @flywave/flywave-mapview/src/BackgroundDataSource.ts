@@ -10,13 +10,13 @@ import {
 import { DataSource } from "./DataSource";
 import { addGroundPlane } from "./geometry/AddGroundPlane";
 import { Tile } from "./Tile";
-import { ATMOSPHERE_GROUND_RENDER_ORDER } from "./MapViewAtmosphere";
 
 /**
  * Provides background geometry for all tiles.
  */
 export class BackgroundDataSource extends DataSource {
-    static readonly GROUND_RENDER_ORDER = ATMOSPHERE_GROUND_RENDER_ORDER;
+    // Render the background ground plane before everything else.
+    static readonly GROUND_RENDER_ORDER = Number.MIN_SAFE_INTEGER;
     private static readonly DEFAULT_TILING_SCHEME = webMercatorTilingScheme;
     private m_tilingScheme: TilingScheme = BackgroundDataSource.DEFAULT_TILING_SCHEME;
 

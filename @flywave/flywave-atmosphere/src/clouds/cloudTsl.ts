@@ -303,14 +303,19 @@ export const approximateMultipleScattering = Fn(([opticalDepth, cosTheta, u]: [a
     const scattering = float(0).toVar();
 
     if (u.accuratePhaseFunction.value > 0.5) {
-        Loop({ start: 0, end: 8, type: "int" }, () => {
+        Loop({ start: 0, end: 8, type: "int" }, ({ i }) => {
+            // Upper bound stays 8 (the natural convergence ceiling of the
+            // 0.5-attenuated series); break early once the configured octave
+            // count is reached.
+            If(i.greaterThanEqual(u.multiScatteringOctaves), () => Break());
             const bl = exp(opticalDepth.mul(coeffs.y).negate());
             const phase = accurateMiePhase(cosTheta, coeffs.z);
             scattering.addAssign(coeffs.x.mul(bl).mul(phase));
             coeffs.mulAssign(attenuation);
         });
     } else {
-        Loop({ start: 0, end: 8, type: "int" }, () => {
+        Loop({ start: 0, end: 8, type: "int" }, ({ i }) => {
+            If(i.greaterThanEqual(u.multiScatteringOctaves), () => Break());
             const bl = exp(opticalDepth.mul(coeffs.y).negate());
             const phase = dualHG(cosTheta, coeffs.z, u);
             scattering.addAssign(coeffs.x.mul(bl).mul(phase));
@@ -348,14 +353,19 @@ export const createSampleMedia = (u: CloudUniforms) => {
             const localWeatherSpeed = length(u.localWeatherOffset);
             const evolution = surfaceNormal.negate().mul(localWeatherSpeed.mul(2e4));
 
-            // Turbulence (match reference: no mip level, implicit derivatives)
-            const turbulenceUv = uv.mul(u.localWeatherRepeat).mul(u.turbulenceRepeat);
-            const turbTex = texture(u.turbulenceTexture, turbulenceUv).rgb.mul(2).sub(1);
-            const turbWeight = dot(
-                density,
-                remapClamped(heightFraction, vec4(0.3, 0.3, 0.3, 0.3), vec4(0, 0, 0, 0))
-            );
-            const turbulence = u.turbulenceDisplacement.mul(turbTex).mul(turbWeight);
+            // Turbulence (match reference: no mip level, implicit derivatives).
+            // Guarded by a runtime uniform so the texture fetch can be skipped
+            // entirely when turbulence is disabled (cheaper, less organic clouds).
+            const turbulence = vec3(0).toVar();
+            If(u.turbulenceEnabled.greaterThan(float(0.5)), () => {
+                const turbulenceUv = uv.mul(u.localWeatherRepeat).mul(u.turbulenceRepeat);
+                const turbTex = texture(u.turbulenceTexture, turbulenceUv).rgb.mul(2).sub(1);
+                const turbWeight = dot(
+                    density,
+                    remapClamped(heightFraction, vec4(0.3, 0.3, 0.3, 0.3), vec4(0, 0, 0, 0))
+                );
+                turbulence.assign(u.turbulenceDisplacement.mul(turbTex).mul(turbWeight));
+            });
 
             // Shape texture
             const shapePosition = position
@@ -706,7 +716,7 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
             If(transmittanceIntegral.lessThanEqual(u.shadowMinTransmittance), () => {
                 maxOpticalDepthTail.assign(
                     min(
-                        float(2)
+                        u.opticalDepthTailScale
                             .mul(stepSize)
                             .mul(exp(float(1).sub(sampleCount))),
                         stepSize.mul(0.5)
@@ -1303,12 +1313,31 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                         const skyGradient = media.z;
 
                         If(mediaExtinction.greaterThan(u.minExtinction), () => {
-                            const accurateIrr = getSplitScalarIlluminance(
-                                position.mul(u.worldToUnit),
-                                u.sunDirection
-                            ).toConst();
-                            const sunIrradiance = accurateIrr.get("direct");
-                            const skyIrradiance = accurateIrr.get("indirect");
+                            // Per-sample sky/sun irradiance: accurate mode calls the
+                            // illuminance integrator at every sample; fast mode
+                            // interpolates the precomputed layer-top/bottom values.
+                            const sunIrradiance = vec3(0).toVar();
+                            const skyIrradiance = vec3(0).toVar();
+                            If(u.accurateSunSkyLight.greaterThan(float(0.5)), () => {
+                                const accurateIrr = getSplitScalarIlluminance(
+                                    position.mul(u.worldToUnit),
+                                    u.sunDirection
+                                ).toConst();
+                                sunIrradiance.assign(accurateIrr.get("direct"));
+                                skyIrradiance.assign(accurateIrr.get("indirect"));
+                            }).Else(() => {
+                                const heightAlpha = remapClamped(
+                                    height,
+                                    u.minHeight,
+                                    u.maxHeight
+                                );
+                                sunIrradiance.assign(
+                                    mix(minSunIrradiance, maxSunIrradiance, heightAlpha)
+                                );
+                                skyIrradiance.assign(
+                                    mix(minSkyIrradiance, maxSkyIrradiance, heightAlpha)
+                                );
+                            });
 
                             const sunMarchResult = marchOpticalDepth(
                                 position,

@@ -151,8 +151,9 @@ export class WebImageryTileProvider extends ResourceProvider<
      * @param texture - The texture to configure
      */
     private configureTexture(texture: THREE.Texture) {
-        texture.minFilter = THREE.LinearFilter;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
         texture.magFilter = THREE.LinearFilter;
+        texture.generateMipmaps = true;
         texture.flipY = false;
         texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
     }

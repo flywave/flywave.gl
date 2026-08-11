@@ -216,7 +216,14 @@ export interface Theme {
 /**
  * Tone mapping modes supported by the renderer.
  */
-export type ToneMappingMode = "linear" | "reinhard" | "aces" | "agx" | "agx-punchy" | "neutral";
+export type ToneMappingMode =
+    | "linear"
+    | "reinhard"
+    | "cineon"
+    | "aces"
+    | "agx"
+    | "agx-punchy"
+    | "neutral";
 
 /**
  * A type representing symbolic render orders.
@@ -241,72 +248,124 @@ export interface StylePriority {
  */
 export interface AtmosphereThemeConfig {
     /**
-     * Enable the physical atmosphere rendering pipeline (sky, aerial perspective, lighting).
+     * Enable the physical atmosphere rendering pipeline (sky, aerial
+     * perspective, lighting).
+     *
+     * When `false`, the sky node, atmosphere light, environment lighting and
+     * both clouds and aerial perspective are disabled together.
+     *
      * @default true
      */
     enabled?: boolean;
 
     /**
-     * Unix timestamp (ms) used to compute sun and moon positions.
+     * Unix timestamp in milliseconds used to compute sun and moon positions.
+     *
+     * The time-of-day is derived from this value; it controls light direction,
+     * color temperature (day/sunset/night), moon phase and star visibility.
+     * When omitted at runtime, the current wall-clock time is used.
+     *
+     * Range: any valid Unix epoch milliseconds (e.g. `Date.now()`, or a fixed
+     * timestamp like `1710000000000`). No clamping is applied.
      */
     sunTime?: number;
 
     /**
-     * Transition duration in milliseconds for smoothly interpolating `sunTime`.
-     * Set to `0` for instant updates (no interpolation).
+     * Duration in milliseconds over which `sunTime` changes are smoothly
+     * interpolated. Set to `0` for an instant snap to the new sun position.
+     *
+     * Range: `[0, +∞)`. Recommended `0`–`10000`. Values larger than a few
+     * seconds make the sun appear to drift slowly across the sky.
+     *
      * @default 2000
      */
     sunTimeTransitionDuration?: number;
 
     /**
-     * Whether the atmosphere sun light casts shadows.
+     * Whether the atmosphere sun light casts shadows on the scene
+     * (tiles, 3D models, terrain). Disabling improves performance but removes
+     * all sun-direction shadows; cloud self-shadowing is controlled separately
+     * inside `clouds`.
+     *
      * @default true
      */
     sunCastShadow?: boolean;
 
     /**
-     * Cloud rendering configuration. `true` enables clouds with default settings.
-     * Pass an object for fine-grained control.
+     * Cloud rendering configuration.
+     *
+     * - `true` — enable clouds with default settings.
+     * - `false` / omitted — clouds disabled.
+     * - `object` — enable with fine-grained control (see {@link CloudConfig}).
+     *
+     * Clouds are rendered by a volumetric raymarcher at reduced resolution
+     * with temporal upscale. Enabling has a significant GPU cost; pick a
+     * `quality` preset accordingly.
      */
     clouds?: boolean | CloudConfig;
 
     /**
-     * Aerial perspective (atmospheric scattering) configuration. `true` enables with defaults.
+     * Aerial perspective (atmospheric scattering over the scene) configuration.
+     *
+     * - `true` — enable with default settings (distance-based haze/fog tinted
+     *   by sky and sun color).
+     * - `false` / omitted — disabled.
+     * - `object` — fine-grained control (see {@link AerialPerspectiveConfig}).
+     *
+     * Only takes effect when `enabled` is `true`.
      */
     aerialPerspective?: boolean | AerialPerspectiveConfig;
 
     /**
-     * Whether to show the ground intersection in atmosphere rendering.
+     * Whether to render the ground/atmosphere intersection band (the horizon
+     * haze that meets the terrain). Disable for a cleaner horizon edge.
+     *
      * @default true
      */
     showGround?: boolean;
 
     /**
-     * Whether to use raymarching for scattering computation.
+     * Whether to use raymarching for atmospheric scattering computation.
+     * When `false`, a faster analytical/LUT approximation is used instead.
+     * Disable for a perf boost at the cost of physical accuracy near the
+     * horizon.
+     *
      * @default true
      */
     raymarchScattering?: boolean;
 
     /**
-     * Whether to use higher order scattering texture for multi-scattering.
+     * Whether to use the precomputed higher-order scattering texture for
+     * multi-scattered light. Produces more realistic sky colors (especially
+     * at sunrise/sunset) at a small texture-lookup cost.
+     *
      * @default true
      */
     higherOrderScatteringTexture?: boolean;
 
     /**
-     * Whether to use accurate shadow scattering.
+     * Whether to compute accurate scattering inside shadowed regions
+     * (in-scattering through shadow volumes). Disabling yields slightly
+     * cheaper but less physically correct shadow tinting.
+     *
      * @default true
      */
     accurateShadowScattering?: boolean;
 
     /**
-     * Whether to correct altitude for ellipsoidal earth.
+     * Whether to correct atmospheric altitude using the ellipsoidal Earth
+     * model (WGS84) instead of a sphere. Improves altitude accuracy at
+     * mid/high latitudes; negligible visual difference near the equator.
+     *
      * @default true
      */
     correctAltitude?: boolean;
 
     /**
-     * Whether to constrain camera within atmosphere boundaries.
+     * Whether to constrain the camera within the atmosphere boundaries.
+     * When `true`, zooming out beyond the atmosphere shell keeps the camera
+     * clipped to a valid altitude so the sky does not invert or break up.
+     *
      * @default true
      */
     constrainCamera?: boolean;

@@ -37,6 +37,7 @@ function dummyTex(): THREE.DataTexture {
     );
     t.minFilter = THREE.LinearFilter;
     t.magFilter = THREE.LinearFilter;
+    t.generateMipmaps = false;
     t.wrapS = THREE.ClampToEdgeWrapping;
     t.wrapT = THREE.ClampToEdgeWrapping;
     t.needsUpdate = true;

@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
-import { DataTexture, EventDispatcher, LinearFilter, RGBAFormat } from "three/webgpu";
+import { DataTexture, EventDispatcher, LinearFilter, LinearMipmapLinearFilter, RGBAFormat } from "three/webgpu";
 
 import {
     type HeightOperation,
@@ -61,8 +61,9 @@ async function createTextureFromSource(source: HeightMapSourceData): Promise<Dat
     }
 
     const texture = new DataTexture(data, width, height, RGBAFormat);
-    texture.minFilter = LinearFilter;
+    texture.minFilter = LinearMipmapLinearFilter;
     texture.magFilter = LinearFilter;
+    texture.generateMipmaps = true;
     texture.needsUpdate = true;
     return texture;
 }

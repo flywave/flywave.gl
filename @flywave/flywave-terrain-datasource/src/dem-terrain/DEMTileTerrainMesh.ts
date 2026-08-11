@@ -236,8 +236,9 @@ export class HeightMapTerrainMesh extends Mesh {
         }
 
         const tex = new DataTexture(merged, w, h, RGBAFormat);
-        tex.minFilter = LinearFilter;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
         tex.magFilter = LinearFilter;
+        tex.generateMipmaps = true;
         tex.needsUpdate = true;
         this.m_mergedTexture = tex;
         this.m_modifierTexture = tex;

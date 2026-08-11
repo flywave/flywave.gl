@@ -121,7 +121,6 @@ export class MapViewThemeManager {
 
         if (theme.toneMappingExposure !== undefined) {
             this.m_theme.toneMappingExposure = theme.toneMappingExposure;
-            this.m_mapView.renderer.toneMappingExposure = theme.toneMappingExposure;
         }
         if (theme.toneMappingMode !== undefined || theme.toneMappingExposure !== undefined) {
             environment.updateToneMapping(theme.toneMappingExposure, theme.toneMappingMode);

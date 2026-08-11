@@ -14,6 +14,9 @@ function dummyTex(): THREE.DataTexture {
         THREE.RGBAFormat,
         THREE.UnsignedByteType
     );
+    t.minFilter = THREE.LinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    t.generateMipmaps = false;
     t.needsUpdate = true;
     return t;
 }
@@ -26,6 +29,9 @@ function transparentTex(): THREE.DataTexture {
         THREE.RGBAFormat,
         THREE.UnsignedByteType
     );
+    t.minFilter = THREE.LinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    t.generateMipmaps = false;
     t.needsUpdate = true;
     return t;
 }
