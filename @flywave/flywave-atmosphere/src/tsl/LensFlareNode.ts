@@ -28,6 +28,9 @@ export class LensFlareNode extends TempNode {
     glareNode: LensGlareNode;
 
     bloomIntensity = uniform(0.005);
+    ghostIntensity = uniform(1e-5);
+    haloIntensity = uniform(1e-5);
+    glareIntensity = uniform(1e-5);
 
     featuresNode: RenderTargetNode;
 
@@ -42,6 +45,10 @@ export class LensFlareNode extends TempNode {
         this.bloomNode = new MipmapSurfaceBlurNode(null, 8);
         this.glareNode = new LensGlareNode();
 
+        this.ghostNode.intensity = this.ghostIntensity;
+        this.haloNode.intensity = this.haloIntensity;
+        this.glareNode.intensity = this.glareIntensity;
+
         this.featuresNode = renderTarget(add(this.ghostNode, this.haloNode), {
             name: "LensFlare [Features]",
             resolutionScale: 0.5
@@ -50,6 +57,19 @@ export class LensFlareNode extends TempNode {
         this.thresholdNode.resolutionScale = 0.5;
         this.blurNode.resolutionScale = 0.5; // Relative to thresholdNode: 0.25
         this.glareNode.resolutionScale = 1; // Relative to thresholdNode: 0.5
+    }
+
+    setConfig(config: {
+        enabled?: boolean;
+        bloomIntensity?: number;
+        ghostIntensity?: number;
+        haloIntensity?: number;
+        glareIntensity?: number;
+    }): void {
+        if (config.bloomIntensity != null) this.bloomIntensity.value = config.bloomIntensity;
+        if (config.ghostIntensity != null) this.ghostIntensity.value = config.ghostIntensity;
+        if (config.haloIntensity != null) this.haloIntensity.value = config.haloIntensity;
+        if (config.glareIntensity != null) this.glareIntensity.value = config.glareIntensity;
     }
 
     override setup(builder: NodeBuilder): unknown {

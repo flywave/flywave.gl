@@ -72,6 +72,20 @@ export class AtmosphereSystem {
     private m_accurateShadowScattering: boolean = true;
     private m_correctAltitude: boolean = true;
     private m_constrainCamera: boolean = true;
+    private m_atmosphereOverrides: {
+        rayleighScale: number;
+        mieScale: number;
+        groundAlbedo: number;
+        miePhaseFunctionG: number;
+        luminanceScale: number;
+    } = {
+        rayleighScale: 1,
+        mieScale: 1,
+        groundAlbedo: 0.3,
+        miePhaseFunctionG: 0.8,
+        luminanceScale: 0
+    };
+    private m_rebuildScheduled: boolean = false;
     private m_toneMappingExposure: number = 3;
     private m_toneMappingMode?: ToneMappingMode;
     private m_lastCsmMaxFar: number = 0;
@@ -89,9 +103,23 @@ export class AtmosphereSystem {
     }
 
     private init(): void {
-        const parameters = new AtmosphereParameters();
-        const lutNode = new AtmosphereLUTNode(parameters);
-        this.m_atmosphereContext = new AtmosphereContext(parameters, lutNode);
+        this.buildAtmosphereContext();
+        this.init2();
+    }
+
+    private buildAtmosphereContext(): void {
+        const baseParams = new AtmosphereParameters();
+        const o = this.m_atmosphereOverrides;
+
+        baseParams.rayleighScattering.multiplyScalar(o.rayleighScale);
+        baseParams.mieScattering.multiplyScalar(o.mieScale);
+        baseParams.mieExtinction.multiplyScalar(o.mieScale);
+        baseParams.groundAlbedo.setScalar(o.groundAlbedo);
+        baseParams.miePhaseFunctionG = o.miePhaseFunctionG;
+        if (o.luminanceScale > 0) baseParams.luminanceScale = o.luminanceScale;
+
+        const lutNode = new AtmosphereLUTNode(baseParams);
+        this.m_atmosphereContext = new AtmosphereContext(baseParams, lutNode);
         this.m_atmosphereContext.camera = this.mapView.camera;
         this.m_atmosphereContext._overrideCameraPositionECEF = this.mapView.camera.position;
         this.m_atmosphereContext.showGround = this.m_showGround;
@@ -100,7 +128,26 @@ export class AtmosphereSystem {
         this.m_atmosphereContext.correctAltitude = this.m_correctAltitude;
         this.m_atmosphereContext.constrainCamera = this.m_constrainCamera;
         registerAtmosphereContext(this.m_atmosphereContext);
+    }
 
+    private rebuildAtmosphere(): void {
+        if (!this.m_atmosphereContext) return;
+        this.m_atmosphereContext.dispose();
+        this.buildAtmosphereContext();
+
+        const renderer = this.mapView.renderer as Renderer & {
+            contextNode?: { value: Record<string, unknown> };
+        };
+        if (renderer?.contextNode?.value) {
+            renderer.contextNode.value[AtmosphereSystem.CONTEXT_KEY] = () =>
+                this.m_atmosphereContext;
+        }
+
+        const vrm = this.mapView?.mapRenderingManager?.viewRenderManager;
+        if (vrm) vrm.needsUpdate = true;
+    }
+
+    private init2(): void {
         this.m_skyNode = sky();
         this.m_skyNode.showSun = true;
         this.m_skyNode.showMoon = true;
@@ -236,10 +283,7 @@ export class AtmosphereSystem {
         if (options?.clouds !== undefined) {
             this.m_cloudsEnabled = typeof options.clouds === "boolean" ? options.clouds : true;
             if (typeof options.clouds === "object") {
-                // Persist the full config so it survives the VRM/cloudNode not
-                // existing yet (updateOptions typically runs during MapView
-                // init, before the first render creates the VRM).
-                this.m_cloudConfig = { ...options.clouds };
+                this.m_cloudConfig = { ...this.m_cloudConfig, ...options.clouds };
                 this.applyCloudConfig();
             }
         }
@@ -248,37 +292,94 @@ export class AtmosphereSystem {
             typeof options.aerialPerspective === "object"
         ) {
             const vrm = this.mapView?.mapRenderingManager?.viewRenderManager;
-            if (vrm?.aerialNode != null) {
-                vrm.aerialNode.setConfig(options.aerialPerspective);
+            if (vrm) {
+                vrm.config.aerialPerspective = {
+                    ...vrm.config.aerialPerspective,
+                    ...options.aerialPerspective
+                };
+                if (vrm.aerialNode != null) {
+                    vrm.aerialNode.setConfig(options.aerialPerspective);
+                }
             }
         }
         const ctx = this.m_atmosphereContext;
+        let needsPipelineRebuild = false;
         if (ctx != null) {
-            if (options?.showGround !== undefined) {
+            if (options?.showGround !== undefined && options.showGround !== this.m_showGround) {
                 this.m_showGround = options.showGround;
                 ctx.showGround = this.m_showGround;
+                needsPipelineRebuild = true;
             }
-            if (options?.raymarchScattering !== undefined) {
+            if (
+                options?.raymarchScattering !== undefined &&
+                options.raymarchScattering !== this.m_raymarchScattering
+            ) {
                 this.m_raymarchScattering = options.raymarchScattering;
                 ctx.raymarchScattering = this.m_raymarchScattering;
+                needsPipelineRebuild = true;
             }
-            if (options?.higherOrderScatteringTexture !== undefined) {
+            if (
+                options?.higherOrderScatteringTexture !== undefined &&
+                options.higherOrderScatteringTexture !== this.m_higherOrderScatteringTexture
+            ) {
                 this.m_higherOrderScatteringTexture = options.higherOrderScatteringTexture;
                 ctx.parameters.higherOrderScatteringTexture = this.m_higherOrderScatteringTexture;
+                needsPipelineRebuild = true;
             }
-            if (options?.accurateShadowScattering !== undefined) {
+            if (
+                options?.accurateShadowScattering !== undefined &&
+                options.accurateShadowScattering !== this.m_accurateShadowScattering
+            ) {
                 this.m_accurateShadowScattering = options.accurateShadowScattering;
                 ctx.accurateShadowScattering = this.m_accurateShadowScattering;
+                needsPipelineRebuild = true;
             }
-            if (options?.correctAltitude !== undefined) {
+            if (
+                options?.correctAltitude !== undefined &&
+                options.correctAltitude !== this.m_correctAltitude
+            ) {
                 this.m_correctAltitude = options.correctAltitude;
                 ctx.correctAltitude = this.m_correctAltitude;
+                needsPipelineRebuild = true;
             }
-            if (options?.constrainCamera !== undefined) {
+            if (
+                options?.constrainCamera !== undefined &&
+                options.constrainCamera !== this.m_constrainCamera
+            ) {
                 this.m_constrainCamera = options.constrainCamera;
                 ctx.constrainCamera = this.m_constrainCamera;
+                needsPipelineRebuild = true;
             }
         }
+        if (needsPipelineRebuild) {
+            const vrm = this.mapView?.mapRenderingManager?.viewRenderManager;
+            if (vrm != null) vrm.needsUpdate = true;
+        }
+        let needsAtmosphereRebuild = false;
+        const ap = options?.atmosphereParams;
+        if (ap != null && typeof ap === "object") {
+            if (ap.rayleighScale != null && ap.rayleighScale !== this.m_atmosphereOverrides.rayleighScale) {
+                this.m_atmosphereOverrides.rayleighScale = ap.rayleighScale;
+                needsAtmosphereRebuild = true;
+            }
+            if (ap.mieScale != null && ap.mieScale !== this.m_atmosphereOverrides.mieScale) {
+                this.m_atmosphereOverrides.mieScale = ap.mieScale;
+                needsAtmosphereRebuild = true;
+            }
+            if (ap.groundAlbedo != null && ap.groundAlbedo !== this.m_atmosphereOverrides.groundAlbedo) {
+                this.m_atmosphereOverrides.groundAlbedo = ap.groundAlbedo;
+                needsAtmosphereRebuild = true;
+            }
+            if (ap.miePhaseFunctionG != null && ap.miePhaseFunctionG !== this.m_atmosphereOverrides.miePhaseFunctionG) {
+                this.m_atmosphereOverrides.miePhaseFunctionG = ap.miePhaseFunctionG;
+                needsAtmosphereRebuild = true;
+            }
+            if (ap.luminanceScale != null && ap.luminanceScale !== this.m_atmosphereOverrides.luminanceScale) {
+                this.m_atmosphereOverrides.luminanceScale = ap.luminanceScale;
+                needsAtmosphereRebuild = true;
+            }
+        }
+        if (needsAtmosphereRebuild) this.rebuildAtmosphere();
         this.applyAtmosphereEnabled();
     }
 
@@ -515,30 +616,55 @@ export class AtmosphereSystem {
     private applyAtmosphereEnabled(): void {
         const effective = this.m_atmosphereEnabled && this.isSpherical;
 
-        if (this.m_atmosphereLight != null) {
-            this.m_atmosphereLight.visible = effective;
-            this.m_atmosphereLight.castShadow = effective && this.m_sunCastShadow;
-        }
+        const vrm = this.mapView.mapRenderingManager.viewRenderManager;
+        const desiredLensFlare = effective;
+        const desiredAerial = effective;
+        const desiredClouds = effective && this.m_cloudsEnabled;
+
+        const vrmChanged =
+            vrm == null ||
+            vrm.config.lensFlare.enabled !== desiredLensFlare ||
+            vrm.config.aerialPerspective.enabled !== desiredAerial ||
+            (vrm.config.clouds != null && vrm.config.clouds.enabled !== desiredClouds);
+
+        const lightNeedsUpdate =
+            this.m_atmosphereLight != null &&
+            (this.m_atmosphereLight.visible !== effective ||
+                this.m_atmosphereLight.castShadow !== (effective && this.m_sunCastShadow));
 
         const scene = this.mapView.scene as THREE.Scene & {
             backgroundNode?: THREE.Scene["backgroundNode"];
             environmentNode?: THREE.Scene["environmentNode"];
         };
-        if (effective) {
-            scene.background = null;
-            scene.backgroundNode = this.m_skyNode as THREE.Scene["backgroundNode"];
-            scene.environmentNode = skyEnvironment() as unknown as THREE.Scene["environmentNode"];
-        } else {
-            scene.backgroundNode = null;
-            scene.environmentNode = null;
+        const sceneNeedsUpdate = effective
+            ? scene.backgroundNode !== (this.m_skyNode as THREE.Scene["backgroundNode"])
+            : scene.backgroundNode != null || scene.environmentNode != null;
+
+        if (!vrmChanged && !lightNeedsUpdate && !sceneNeedsUpdate) {
+            return;
         }
 
-        const vrm = this.mapView.mapRenderingManager.viewRenderManager;
-        if (vrm != null) {
-            vrm.config.lensFlare.enabled = effective;
-            vrm.config.aerialPerspective.enabled = effective;
+        if (lightNeedsUpdate && this.m_atmosphereLight != null) {
+            this.m_atmosphereLight.visible = effective;
+            this.m_atmosphereLight.castShadow = effective && this.m_sunCastShadow;
+        }
+
+        if (sceneNeedsUpdate) {
+            if (effective) {
+                scene.background = null;
+                scene.backgroundNode = this.m_skyNode as THREE.Scene["backgroundNode"];
+                scene.environmentNode = skyEnvironment() as unknown as THREE.Scene["environmentNode"];
+            } else {
+                scene.backgroundNode = null;
+                scene.environmentNode = null;
+            }
+        }
+
+        if (vrmChanged && vrm != null) {
+            vrm.config.lensFlare.enabled = desiredLensFlare;
+            vrm.config.aerialPerspective.enabled = desiredAerial;
             if (vrm.config.clouds != null) {
-                vrm.config.clouds.enabled = effective && this.m_cloudsEnabled;
+                vrm.config.clouds.enabled = desiredClouds;
             }
             vrm.needsUpdate = true;
         }

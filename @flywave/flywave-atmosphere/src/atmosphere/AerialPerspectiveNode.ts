@@ -110,12 +110,28 @@ export class AerialPerspectiveNode extends TempNode {
             moonScattering: boolean;
         }>
     ): void {
-        if (config.correctGeometricError != null)
+        let changed = false;
+        if (config.correctGeometricError != null && this.correctGeometricError !== config.correctGeometricError) {
             this.correctGeometricError = config.correctGeometricError;
-        if (config.lighting != null) this.lighting = config.lighting;
-        if (config.transmittance != null) this.transmittance = config.transmittance;
-        if (config.inscattering != null) this.inscattering = config.inscattering;
-        if (config.moonScattering != null) this.moonScattering = config.moonScattering;
+            changed = true;
+        }
+        if (config.lighting != null && this.lighting !== config.lighting) {
+            this.lighting = config.lighting;
+            changed = true;
+        }
+        if (config.transmittance != null && this.transmittance !== config.transmittance) {
+            this.transmittance = config.transmittance;
+            changed = true;
+        }
+        if (config.inscattering != null && this.inscattering !== config.inscattering) {
+            this.inscattering = config.inscattering;
+            changed = true;
+        }
+        if (config.moonScattering != null && this.moonScattering !== config.moonScattering) {
+            this.moonScattering = config.moonScattering;
+            changed = true;
+        }
+        if (changed) this.needsUpdate = true;
     }
 
     override setup(builder: NodeBuilder): unknown {

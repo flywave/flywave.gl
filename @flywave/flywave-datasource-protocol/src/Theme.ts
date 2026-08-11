@@ -369,6 +369,28 @@ export interface AtmosphereThemeConfig {
      * @default true
      */
     constrainCamera?: boolean;
+
+    /**
+     * Physical atmosphere parameter overrides.
+     *
+     * These control the underlying atmospheric scattering model. Changing any
+     * value triggers a one-time LUT texture rebuild (a brief hitch).
+     *
+     * Scale factors (rayleighScale, mieScale) are relative to Earth-standard
+     * defaults: 1.0 = normal, 2.0 = double, 0.5 = half.
+     */
+    atmosphereParams?: {
+        /** Rayleigh scattering multiplier (sky blue intensity / atmosphere thickness). @default 1 */
+        rayleighScale?: number;
+        /** Mie scattering + extinction multiplier (fog / haze amount). @default 1 */
+        mieScale?: number;
+        /** Ground albedo (0–1, grayscale). Reflectance of the ground affecting sky color near horizon. @default 0.3 */
+        groundAlbedo?: number;
+        /** Mie phase function G (0–1). Higher = stronger forward-scatter (brighter fog around sun). @default 0.8 */
+        miePhaseFunctionG?: number;
+        /** Luminance scale override. 0 = auto-computed from solar luminance. Controls overall sky/scene brightness. @default 0 */
+        luminanceScale?: number;
+    };
 }
 
 /**

@@ -583,10 +583,19 @@ export class CloudRenderNode extends TempNode {
         if (config.turbulence != null) u.turbulenceEnabled.value = config.turbulence ? 1 : 0;
         if (config.opticalDepthTailScale != null)
             u.opticalDepthTailScale.value = config.opticalDepthTailScale;
-        if (config.shapeDetail != null && !config.shapeDetail) {
-            // Override every layer's shapeDetailAmount to 0 (the shader's
-            // If(sum(shapeDetailAmounts) > 0) guard then skips detail sampling).
-            for (const layer of u.layers) layer.shapeDetailAmount = 0;
+        if (config.shapeDetail != null) {
+            // Restore or zero out per-layer shapeDetailAmount based on the flag
+            for (const layer of u.layers) {
+                layer.shapeDetailAmount = config.shapeDetail
+                    ? (layer.userShapeDetailAmount ?? 1)
+                    : 0;
+            }
+            if (!config.shapeDetail) {
+                // Cache the current amounts so they can be restored later
+                for (const layer of u.layers) {
+                    layer.userShapeDetailAmount = layer.shapeDetailAmount;
+                }
+            }
             u.updateLayers();
         }
 
@@ -1228,36 +1237,72 @@ export class CloudRenderNode extends TempNode {
                 const lowCoord = ivec2(lowCoordX, lowCoordY);
                 const currentColor = this.lowResNode.load(lowCoord);
 
-                const b0 = vec4(0, 12, 3, 15);
-                const b1 = vec4(8, 4, 11, 7);
-                const b2 = vec4(2, 14, 1, 13);
-                const b3 = vec4(10, 6, 9, 5);
-
-                const iPixX = screenCoordinate.x.floor().toInt();
-                const iPixY = screenCoordinate.y.floor().toInt();
-                const mx = iPixX.mod(BLOCK).toFloat();
-                const my = iPixY.mod(BLOCK).toFloat();
-
-                const row = mx
-                    .lessThan(1)
-                    .select(b0, mx.lessThan(2).select(b1, mx.lessThan(3).select(b2, b3)));
-                const bayerVal = my
-                    .lessThan(1)
-                    .select(
-                        row.x,
-                        my.lessThan(2).select(row.y, my.lessThan(3).select(row.z, row.w))
-                    );
-
-                const frameMod = this.cloudResolveCountNode.mod(16);
-                const isCurrent = bayerVal.sub(frameMod).abs().lessThan(0.5);
-
                 const result = currentColor.toVar();
                 const currentShadowLen = texture(this.shadowLengthLowResNode, lowUv).r.toVar();
                 const resultShadowLen = currentShadowLen.toVar();
 
-                If(isCurrent.not(), () => {
-                    const lowCoord = ivec2(lowCoordX, lowCoordY);
-                    const velocityData = _getClosestFragment(this.velocityLowResNode, lowCoord);
+                if (BLOCK > 1) {
+                    const b0 = vec4(0, 12, 3, 15);
+                    const b1 = vec4(8, 4, 11, 7);
+                    const b2 = vec4(2, 14, 1, 13);
+                    const b3 = vec4(10, 6, 9, 5);
+
+                    const iPixX = screenCoordinate.x.floor().toInt();
+                    const iPixY = screenCoordinate.y.floor().toInt();
+                    const mx = iPixX.mod(BLOCK).toFloat();
+                    const my = iPixY.mod(BLOCK).toFloat();
+
+                    const row = mx
+                        .lessThan(1)
+                        .select(b0, mx.lessThan(2).select(b1, mx.lessThan(3).select(b2, b3)));
+                    const bayerVal = my
+                        .lessThan(1)
+                        .select(
+                            row.x,
+                            my.lessThan(2).select(row.y, my.lessThan(3).select(row.z, row.w))
+                        );
+
+                    const frameMod = this.cloudResolveCountNode.mod(16);
+                    const isCurrent = bayerVal.sub(frameMod).abs().lessThan(0.5);
+
+                    If(isCurrent.not(), () => {
+                        const lowCoord2 = ivec2(lowCoordX, lowCoordY);
+                        const velocityData = _getClosestFragment(this.velocityLowResNode, lowCoord2);
+                        const velocity = velocityData.yz;
+                        const prevUv = screenUV.sub(velocity);
+
+                        const inBounds = prevUv.x
+                            .greaterThanEqual(0)
+                            .and(prevUv.x.lessThanEqual(1))
+                            .and(prevUv.y.greaterThanEqual(0))
+                            .and(prevUv.y.lessThanEqual(1));
+
+                        If(inBounds, () => {
+                            const historyColor = texture(this.historyNode, prevUv);
+                            const clipped = _varianceClippingResolve(
+                                this.lowResNode,
+                                ivec2(lowCoordX, lowCoordY),
+                                currentColor,
+                                historyColor
+                            );
+                            result.assign(clipped);
+
+                            const historyShadowLen = texture(this.historyShadowLengthNode, prevUv).r;
+                            const shadowClipped = _varianceClippingResolve(
+                                this.shadowLengthLowResNode,
+                                ivec2(lowCoordX, lowCoordY),
+                                vec4(currentShadowLen, float(0), float(0), float(1)),
+                                vec4(historyShadowLen, float(0), float(0), float(1))
+                            );
+                            resultShadowLen.assign(shadowClipped.r);
+                        });
+                    });
+                } else {
+                    // Temporal anti-aliasing path (temporalUpscale=false):
+                    // Full-resolution render with light temporal accumulation
+                    // to smooth out per-frame aliasing at cloud edges.
+                    const coord = ivec2(screenCoordinate.x.floor(), screenCoordinate.y.floor());
+                    const velocityData = _getClosestFragment(this.velocityLowResNode, coord);
                     const velocity = velocityData.yz;
                     const prevUv = screenUV.sub(velocity);
 
@@ -1267,27 +1312,28 @@ export class CloudRenderNode extends TempNode {
                         .and(prevUv.y.greaterThanEqual(0))
                         .and(prevUv.y.lessThanEqual(1));
 
+                    const temporalAlpha = float(0.1);
+
                     If(inBounds, () => {
                         const historyColor = texture(this.historyNode, prevUv);
                         const clipped = _varianceClippingResolve(
                             this.lowResNode,
-                            ivec2(lowCoordX, lowCoordY),
+                            coord,
                             currentColor,
                             historyColor
                         );
-                        result.assign(clipped);
+                        result.assign(mix(clipped, currentColor, temporalAlpha));
 
-                        // Shadow length: variance clipping (matches reference cloudsResolve.frag)
                         const historyShadowLen = texture(this.historyShadowLengthNode, prevUv).r;
                         const shadowClipped = _varianceClippingResolve(
                             this.shadowLengthLowResNode,
-                            ivec2(lowCoordX, lowCoordY),
+                            coord,
                             vec4(currentShadowLen, float(0), float(0), float(1)),
                             vec4(historyShadowLen, float(0), float(0), float(1))
                         );
-                        resultShadowLen.assign(shadowClipped.r);
+                        resultShadowLen.assign(mix(shadowClipped.r, currentShadowLen, temporalAlpha));
                     });
-                });
+                }
 
                 return result;
             })();
@@ -1310,32 +1356,55 @@ export class CloudRenderNode extends TempNode {
                     .load(ivec2(lowCoordX2, lowCoordY2))
                     .r.toVar();
 
-                // Same Bayer pattern as color resolve
-                const b0 = vec4(0, 12, 3, 15);
-                const b1 = vec4(8, 4, 11, 7);
-                const b2 = vec4(2, 14, 1, 13);
-                const b3 = vec4(10, 6, 9, 5);
-                const iPixX2 = screenCoordinate.x.floor().toInt();
-                const iPixY2 = screenCoordinate.y.floor().toInt();
-                const mx2 = iPixX2.mod(BLOCK).toFloat();
-                const my2 = iPixY2.mod(BLOCK).toFloat();
-                const row2 = mx2
-                    .lessThan(1)
-                    .select(b0, mx2.lessThan(2).select(b1, mx2.lessThan(3).select(b2, b3)));
-                const bayerVal2 = my2
-                    .lessThan(1)
-                    .select(
-                        row2.x,
-                        my2.lessThan(2).select(row2.y, my2.lessThan(3).select(row2.z, row2.w))
-                    );
-                const frameMod2 = this.cloudResolveCountNode.mod(16);
-                const isCurrent2 = bayerVal2.sub(frameMod2).abs().lessThan(0.5);
-
                 const resultLen = currentLen.toVar();
 
-                If(isCurrent2.not(), () => {
-                    const lowCoord = ivec2(lowCoordX2, lowCoordY2);
-                    const velocityData = _getClosestFragment(this.velocityLowResNode, lowCoord);
+                if (BLOCK > 1) {
+                    const b0 = vec4(0, 12, 3, 15);
+                    const b1 = vec4(8, 4, 11, 7);
+                    const b2 = vec4(2, 14, 1, 13);
+                    const b3 = vec4(10, 6, 9, 5);
+                    const iPixX2 = screenCoordinate.x.floor().toInt();
+                    const iPixY2 = screenCoordinate.y.floor().toInt();
+                    const mx2 = iPixX2.mod(BLOCK).toFloat();
+                    const my2 = iPixY2.mod(BLOCK).toFloat();
+                    const row2 = mx2
+                        .lessThan(1)
+                        .select(b0, mx2.lessThan(2).select(b1, mx2.lessThan(3).select(b2, b3)));
+                    const bayerVal2 = my2
+                        .lessThan(1)
+                        .select(
+                            row2.x,
+                            my2.lessThan(2).select(row2.y, my2.lessThan(3).select(row2.z, row2.w))
+                        );
+                    const frameMod2 = this.cloudResolveCountNode.mod(16);
+                    const isCurrent2 = bayerVal2.sub(frameMod2).abs().lessThan(0.5);
+
+                    If(isCurrent2.not(), () => {
+                        const lowCoord3 = ivec2(lowCoordX2, lowCoordY2);
+                        const velocityData = _getClosestFragment(this.velocityLowResNode, lowCoord3);
+                        const velocity = velocityData.yz;
+                        const prevUv = screenUV.sub(velocity);
+
+                        const inBounds = prevUv.x
+                            .greaterThanEqual(0)
+                            .and(prevUv.x.lessThanEqual(1))
+                            .and(prevUv.y.greaterThanEqual(0))
+                            .and(prevUv.y.lessThanEqual(1));
+
+                        If(inBounds, () => {
+                            const historyLen = texture(this.historyShadowLengthNode, prevUv).r;
+                            const shadowClipped = _varianceClippingResolve(
+                                this.shadowLengthLowResNode,
+                                ivec2(lowCoordX2, lowCoordY2),
+                                vec4(currentLen, float(0), float(0), float(1)),
+                                vec4(historyLen, float(0), float(0), float(1))
+                            );
+                            resultLen.assign(shadowClipped.r);
+                        });
+                    });
+                } else {
+                    const coord2 = ivec2(screenCoordinate.x.floor(), screenCoordinate.y.floor());
+                    const velocityData = _getClosestFragment(this.velocityLowResNode, coord2);
                     const velocity = velocityData.yz;
                     const prevUv = screenUV.sub(velocity);
 
@@ -1345,17 +1414,19 @@ export class CloudRenderNode extends TempNode {
                         .and(prevUv.y.greaterThanEqual(0))
                         .and(prevUv.y.lessThanEqual(1));
 
+                    const temporalAlpha2 = float(0.1);
+
                     If(inBounds, () => {
                         const historyLen = texture(this.historyShadowLengthNode, prevUv).r;
                         const shadowClipped = _varianceClippingResolve(
                             this.shadowLengthLowResNode,
-                            ivec2(lowCoordX2, lowCoordY2),
+                            coord2,
                             vec4(currentLen, float(0), float(0), float(1)),
                             vec4(historyLen, float(0), float(0), float(1))
                         );
-                        resultLen.assign(shadowClipped.r);
+                        resultLen.assign(mix(shadowClipped.r, currentLen, temporalAlpha2));
                     });
-                });
+                }
 
                 return vec4(resultLen, float(0), float(0), float(0));
             })();

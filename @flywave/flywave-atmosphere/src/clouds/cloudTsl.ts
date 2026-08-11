@@ -302,26 +302,12 @@ export const approximateMultipleScattering = Fn(([opticalDepth, cosTheta, u]: [a
     const attenuation = vec3(0.5, 0.5, 0.5);
     const scattering = float(0).toVar();
 
-    if (u.accuratePhaseFunction.value > 0.5) {
-        Loop({ start: 0, end: 8, type: "int" }, ({ i }) => {
-            // Upper bound stays 8 (the natural convergence ceiling of the
-            // 0.5-attenuated series); break early once the configured octave
-            // count is reached.
-            If(i.greaterThanEqual(u.multiScatteringOctaves), () => Break());
-            const bl = exp(opticalDepth.mul(coeffs.y).negate());
-            const phase = accurateMiePhase(cosTheta, coeffs.z);
-            scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-            coeffs.mulAssign(attenuation);
-        });
-    } else {
-        Loop({ start: 0, end: 8, type: "int" }, ({ i }) => {
-            If(i.greaterThanEqual(u.multiScatteringOctaves), () => Break());
-            const bl = exp(opticalDepth.mul(coeffs.y).negate());
-            const phase = dualHG(cosTheta, coeffs.z, u);
-            scattering.addAssign(coeffs.x.mul(bl).mul(phase));
-            coeffs.mulAssign(attenuation);
-        });
-    }
+    Loop({ start: 0, end: u.multiScatteringOctaves, type: "int" }, () => {
+        const bl = exp(opticalDepth.mul(coeffs.y).negate());
+        const phase = phaseFunction(cosTheta, coeffs.z, u);
+        scattering.addAssign(coeffs.x.mul(bl).mul(phase));
+        coeffs.mulAssign(attenuation);
+    });
 
     return scattering;
 });

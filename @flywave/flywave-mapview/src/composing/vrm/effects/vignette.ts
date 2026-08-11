@@ -5,9 +5,8 @@ export const vignette = (inputNode, offset = 1, darkness = 1) => {
     return Fn(() => {
         const color = inputNode.toVar();
         const coord = uv();
-        const dist = coord.sub(0.5).length().mul(1.5);
-        const vignetteFactor = dist.sub(uniform(offset)).max(0).oneMinus();
-        const factor = vignetteFactor.mul(vignetteFactor).mul(uniform(darkness)).oneMinus();
-        return vec4(color.rgb.mul(factor), 1);
+        const dist = coord.sub(0.5).length().mul(2);
+        const factor = uniform(darkness).mul(dist.sub(uniform(offset)).max(0)).oneMinus();
+        return vec4(color.rgb.mul(factor.clamp(0, 1)), 1);
     })();
 };

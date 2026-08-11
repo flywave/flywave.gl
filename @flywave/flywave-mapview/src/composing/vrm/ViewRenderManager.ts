@@ -67,11 +67,11 @@ export class ViewRenderManager implements IViewRenderManager {
         clouds: { enabled: false },
         antialiasing: "taa",
         lensFlare: {
-            enabled: false,
-            bloomIntensity: 0.05,
-            ghostIntensity: 0.005,
-            haloIntensity: 0.005,
-            glareIntensity: 1
+            enabled: true,
+            bloomIntensity: 0.005,
+            ghostIntensity: 1e-5,
+            haloIntensity: 1e-5,
+            glareIntensity: 1e-5
         },
         toneMappingMode: "agx-punchy"
     };
@@ -188,6 +188,9 @@ export class ViewRenderManager implements IViewRenderManager {
                 this.m_cloudNode._depthNode = depthNode ?? null;
             }
             outputNode = this.m_cloudNode;
+        } else if (this.m_cloudNode != null) {
+            this.m_cloudNode.dispose();
+            this.m_cloudNode = undefined;
         }
 
         if (aerialEnabled) {
@@ -197,6 +200,7 @@ export class ViewRenderManager implements IViewRenderManager {
                 shadowLengthNode = shadowLength(this.csmShadowNode, viewZUnitTex);
             }
             this.aerialNode = aerialPerspective(outputNode, depthNode, shadowLengthNode);
+            this.aerialNode.setConfig(this.config.aerialPerspective);
             // Feed cloud shadow length (god rays) + cloud overlay into aerial perspective.
             if (this.m_cloudNode != null) {
                 this.aerialNode.setCloudShadowLength(this.m_cloudNode.shadowLengthTexture);
@@ -212,8 +216,17 @@ export class ViewRenderManager implements IViewRenderManager {
         }
 
         if (this.config.lensFlare.enabled) {
-            this.lensFlareNode = lensFlare(convertToTexture(outputNode));
+            if (!this.lensFlareNode) {
+                this.lensFlareNode = lensFlare(convertToTexture(outputNode));
+                this.lensFlareNode.setConfig(this.config.lensFlare);
+            } else {
+                this.lensFlareNode.inputNode = convertToTexture(outputNode);
+                this.lensFlareNode.setConfig(this.config.lensFlare);
+            }
             outputNode = this.lensFlareNode;
+        } else if (this.lensFlareNode != null) {
+            this.lensFlareNode.dispose();
+            this.lensFlareNode = undefined;
         }
 
         if (bloomEnabled) {

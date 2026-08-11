@@ -52,6 +52,11 @@ export interface ILensFlareConfig {
 
 export interface IAerialPerspectiveConfig {
     enabled: boolean;
+    lighting?: boolean;
+    transmittance?: boolean;
+    inscattering?: boolean;
+    moonScattering?: boolean;
+    correctGeometricError?: boolean;
 }
 
 export interface ICloudsConfig {
