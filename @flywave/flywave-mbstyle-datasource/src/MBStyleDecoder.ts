@@ -109,7 +109,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_sourceId, layer,
             { type: 'Point', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
             this.m_zoom, 'point', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
-            undefined, this.m_center,
+            this.m_worldview, this.m_center,
         );
         if (matched.length === 0 || !this.m_emitter) return;
         const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
@@ -154,7 +154,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_sourceId, layer,
             feat,
             this.m_zoom, 'line', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
-            undefined, this.m_center,
+            this.m_worldview, this.m_center,
         );
         if (matched.length === 0 || !this.m_emitter) return;
 
@@ -228,7 +228,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_sourceId, layer,
             feat,
             this.m_zoom, 'polygon', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
-            undefined, this.m_center,
+            this.m_worldview, this.m_center,
         );
         if (matched.length === 0 || !this.m_emitter) return;
         const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
@@ -374,7 +374,12 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             return { techniques: [], geometries: [] };
         }
 
-        const zoom = Math.max(0, tileKey.level - this.m_storageLevelOffset);
+        // The camera zoom is stored in mapbox+1 convention (flywave shows a
+        // level-z tile at 256px vs mapbox's 512px, so applyCameraSettings
+        // offsets by +1). `tileKey.level - storageLevelOffset` resolves to the
+        // camera zoom; subtract 1 to evaluate zoom expressions at the mapbox
+        // zoom the test style actually specifies.
+        const zoom = Math.max(0, tileKey.level - this.m_storageLevelOffset - 1);
         const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
         const emitter = new MBTileDataEmitter(tileKey, decodeInfo, zoom);
         // Hand the cached real-font metrics to the emitter so text shaping

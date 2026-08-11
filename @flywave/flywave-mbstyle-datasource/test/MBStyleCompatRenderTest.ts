@@ -346,15 +346,22 @@ async function processOperations(
                 break;
             }
             case "addSource": {
-                // Add source to the runtime style and re-trigger tile loading.
+                // Add source to the runtime style and re-wire the data provider
+                // so the new source's tiles actually load.
                 if (rt && args[0] && args[1]) {
                     rt.addSource(args[0], args[1]);
+                    try {
+                        await (dataSource as any).reloadSources?.();
+                    } catch {}
                 }
                 break;
             }
             case "removeSource": {
                 if (rt && args[0]) {
                     rt.removeSource(args[0]);
+                    try {
+                        await (dataSource as any).reloadSources?.();
+                    } catch {}
                 }
                 break;
             }

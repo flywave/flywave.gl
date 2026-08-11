@@ -907,11 +907,41 @@ export class MBTileDataEmitter {
 
             for (const mode of modes) {
                 const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties, mode);
+                const tech = this.m_techniques[techniqueIdx];
+
+                // symbol-placement: line / line-center — place text along the
+                // feature's line path via the native TextPathGeometry pipeline.
+                const placement = layer.layout['symbol-placement'] ?? 'point';
+                if (tech.name === 'text' && (placement === 'line' || placement === 'line-center')) {
+                    const linePath = properties?._linePath;
+                    if (Array.isArray(linePath) && linePath.length >= 2) {
+                        const path: number[] = [];
+                        let lenSqr = 0;
+                        for (let i = 0; i < linePath.length; i++) {
+                            const pt = linePath[i];
+                            const w = this.project(new THREE.Vector3(pt[0], pt[1], 0));
+                            path.push(w.x, w.y, w.z);
+                            if (i > 0) {
+                                const dx = w.x - path[(i - 1) * 3];
+                                const dy = w.y - path[(i - 1) * 3 + 1];
+                                const dz = w.z - path[(i - 1) * 3 + 2];
+                                lenSqr += dx * dx + dy * dy + dz * dz;
+                            }
+                        }
+                        this.m_textPathGeometries.push({
+                            path,
+                            pathLengthSqr: lenSqr,
+                            text: tech.text as string,
+                            technique: techniqueIdx,
+                            objInfos: { ...properties, $id: featureId ?? properties.$id ?? null },
+                        });
+                    }
+                    continue;
+                }
+
                 const key = `${layer.id}:point:${techniqueIdx}`;
                 const geo = this.getOrCreateGeometry(key);
                 const featureStart = geo.indices.length;
-
-                const tech = this.m_techniques[techniqueIdx];
 
                 for (const pt of points) {
                     const w = this.project(pt);

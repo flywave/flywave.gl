@@ -463,7 +463,7 @@ export class MBStyleDataSource extends TileDataSource {
             concurrentDecoderServiceName:
                 params.decoder ? undefined : (params.concurrentDecoderServiceName ?? MBSTYLE_DECODER_SERVICE_TYPE),
             concurrentDecoderScriptUrl: params.decoder ? undefined : params.decoderScriptUrl,
-            minDataLevel: 1,
+            minDataLevel: 0,
             maxDataLevel: 22,
             storageLevelOffset: params.storageLevelOffset ?? -1,
         };
@@ -499,6 +499,130 @@ export class MBStyleDataSource extends TileDataSource {
             });
         }
         return tiles;
+    }
+
+    /**
+     * Re-run source resolution + provider wiring after runtime `addSource` /
+     * `removeSource`, so newly added sources' tiles actually load.
+     */
+    async reloadSources(): Promise<void> {
+        const style = this.m_styleManager.getStyle();
+        if (!style) return;
+        await this.m_styleManager.reloadSources();
+        const sources = this.m_styleManager.getResolvedSources();
+        await this.wireTileSources(style, sources);
+        // Re-derive maxDataLevel from the (possibly new) sources.
+        const maxSourceZoom = Math.max(
+            1,
+            ...[...sources.values()].map(s => s.maxzoom ?? 22),
+        );
+        this.maxDataLevel = Math.min(22, maxSourceZoom);
+        if (this.mapView) {
+            this.mapView.markTilesDirty(this);
+            this.mapView.update();
+        }
+    }
+
+    /**
+     * Wire the "best" tile source (most layers referencing it: vector first,
+     * then geojson) into the delegating data provider. Sets `m_currentSourceId`
+     * and `m_delegatingProvider.delegate`.
+     */
+    private async wireTileSources(style: StyleSpecification, sources: Map<string, ResolvedSource>): Promise<boolean> {
+        let found = false;
+        const layerCounts = new Map<string, number>();
+        for (const layer of style.layers ?? []) {
+            const src = (layer as any).source as string;
+            if (src) layerCounts.set(src, (layerCounts.get(src) ?? 0) + 1);
+        }
+
+        // Priority 1: best vector tile source.
+        let bestVectorSourceId: string | null = null;
+        let bestVectorCount = 0;
+        for (const [sourceId, source] of sources) {
+            if (source.type === 'vector') {
+                const count = layerCounts.get(sourceId) ?? 0;
+                if (count > bestVectorCount || bestVectorSourceId === null) {
+                    bestVectorSourceId = sourceId;
+                    bestVectorCount = count;
+                }
+            }
+        }
+
+        if (bestVectorSourceId) {
+            const source = sources.get(bestVectorSourceId)!;
+            const restClient = this.createOmvRestClient(
+                source,
+                this.m_styleParams.accessToken
+            );
+            // TMS scheme: wrap the rest client to flip y coordinate.
+            const scheme = (source as any).scheme ?? 'xyz';
+            let delegate: DataProvider = restClient;
+            if (scheme === 'tms') {
+                delegate = new TMSDataProvider(restClient);
+            }
+            // Source bounds: wrap to filter out-of-bounds tiles (TileJSON).
+            const bounds = (source as any).bounds;
+            if (Array.isArray(bounds) && bounds.length === 4) {
+                delegate = new BoundsFilteredDataProvider(delegate, bounds as [number, number, number, number]);
+            }
+            this.m_delegatingProvider.delegate = delegate;
+            this.m_currentSourceId = bestVectorSourceId;
+
+            await this.decoder.configure(undefined, {
+                mbStyle: style,
+                currentSourceId: bestVectorSourceId,
+            } as any);
+
+            found = true;
+        }
+
+        // Priority 2: best GeoJSON source.
+        if (!found) {
+            let bestGeoSourceId: string | null = null;
+            let bestGeoCount = 0;
+            for (const [sourceId, source] of sources) {
+                if (source.type === 'geojson') {
+                    const count = layerCounts.get(sourceId) ?? 0;
+                    if (count > bestGeoCount || bestGeoSourceId === null) {
+                        bestGeoSourceId = sourceId;
+                        bestGeoCount = count;
+                    }
+                }
+            }
+
+            if (bestGeoSourceId) {
+                const sourceId = bestGeoSourceId;
+                const geoJsonSpec = (style.sources as any)[sourceId] as GeoJSONSourceSpec;
+                let data: any = geoJsonSpec.data;
+                if (typeof data === 'string' && data.trim() !== '') {
+                    try {
+                        const url = data.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
+                        const resp = await fetch(url);
+                        data = await resp.json();
+                    } catch (e) {
+                    }
+                }
+                if (data) {
+                    this.m_delegatingProvider.delegate = new GeoJSONDataProvider(data, {
+                        cluster: geoJsonSpec.cluster,
+                        clusterRadius: geoJsonSpec.clusterRadius,
+                        clusterMaxZoom: geoJsonSpec.clusterMaxZoom,
+                        clusterProperties: (geoJsonSpec as any).clusterProperties,
+                    });
+                    this.m_currentSourceId = sourceId;
+
+                    await this.decoder.configure(undefined, {
+                        mbStyle: style,
+                        currentSourceId: sourceId,
+                    } as any);
+
+                    found = true;
+                }
+            }
+        }
+
+        return found;
     }
 
     private createOmvRestClient(
@@ -563,103 +687,9 @@ export class MBStyleDataSource extends TileDataSource {
         );
         this.maxDataLevel = Math.min(22, maxSourceZoom);
 
-        // Priority 1: Find best vector tile source (most layers referencing it)
-        let found = false;
-        const layerCounts = new Map<string, number>();
-        for (const layer of style.layers ?? []) {
-            const src = (layer as any).source as string;
-            if (src) layerCounts.set(src, (layerCounts.get(src) ?? 0) + 1);
-        }
-
-        let bestVectorSourceId: string | null = null;
-        let bestVectorCount = 0;
-        for (const [sourceId, source] of sources) {
-            if (source.type === 'vector') {
-                const count = layerCounts.get(sourceId) ?? 0;
-                if (count > bestVectorCount || bestVectorSourceId === null) {
-                    bestVectorSourceId = sourceId;
-                    bestVectorCount = count;
-                    const resolved = source;
-                }
-            }
-        }
-
-        if (bestVectorSourceId) {
-            const source = sources.get(bestVectorSourceId)!;
-            const restClient = this.createOmvRestClient(
-                source,
-                this.m_styleParams.accessToken
-            );
-            // TMS scheme: wrap the rest client to flip y coordinate.
-            const scheme = (source as any).scheme ?? 'xyz';
-            let delegate: DataProvider = restClient;
-            if (scheme === 'tms') {
-                delegate = new TMSDataProvider(restClient);
-            }
-            // Source bounds: wrap to filter out-of-bounds tiles (TileJSON).
-            const bounds = (source as any).bounds;
-            if (Array.isArray(bounds) && bounds.length === 4) {
-                delegate = new BoundsFilteredDataProvider(delegate, bounds as [number, number, number, number]);
-            }
-            this.m_delegatingProvider.delegate = delegate;
-            this.m_currentSourceId = bestVectorSourceId;
-
-            await this.decoder.configure(undefined, {
-                mbStyle: style,
-                currentSourceId: bestVectorSourceId,
-            } as any);
-
-            found = true;
-        }
-
-        // Priority 2: Find best GeoJSON source (most layers referencing it)
-        if (!found) {
-            let bestGeoSourceId: string | null = null;
-            let bestGeoCount = 0;
-            for (const [sourceId, source] of sources) {
-                if (source.type === 'geojson') {
-                    const count = layerCounts.get(sourceId) ?? 0;
-                    if (count > bestGeoCount || bestGeoSourceId === null) {
-                        bestGeoSourceId = sourceId;
-                        bestGeoCount = count;
-                    }
-                }
-            }
-
-            if (bestGeoSourceId) {
-                const sourceId = bestGeoSourceId;
-                const geoJsonSpec = (style.sources as any)[sourceId] as GeoJSONSourceSpec;
-                let data: any = geoJsonSpec.data;
-                if (typeof data === 'string' && data.trim() !== '') {
-                    try {
-                        const url = data.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
-                        const resp = await fetch(url);
-                        data = await resp.json();
-                    } catch (e) {
-                    }
-                }
-                if (data) {
-                    this.m_delegatingProvider.delegate = new GeoJSONDataProvider(data, {
-                        cluster: geoJsonSpec.cluster,
-                        clusterRadius: geoJsonSpec.clusterRadius,
-                        clusterMaxZoom: geoJsonSpec.clusterMaxZoom,
-                        clusterProperties: (geoJsonSpec as any).clusterProperties,
-                    });
-                    this.m_currentSourceId = sourceId;
-
-                    await this.decoder.configure(undefined, {
-                        mbStyle: style,
-                        currentSourceId: sourceId,
-                    } as any);
-
-                    found = true;
-                }
-            }
-        }
-
-        if (!found) {
-            // No data sources found — style may only have background layers
-        }
+        // Wire the "best" tile source (vector, then geojson) to the delegating
+        // provider. Sets m_currentSourceId and the provider delegate.
+        let found = await this.wireTileSources(style, sources);
 
         for (const [sourceId, source] of sources) {
             if (source.type === 'raster-dem') {
@@ -1350,20 +1380,37 @@ export class MBStyleDataSource extends TileDataSource {
     private applyBackgroundColor(style: StyleSpecification): void {
         for (const layer of style.layers ?? []) {
             if (layer.type === 'background') {
+                // background-visibility: "none" hides the background entirely.
+                const vis = (layer as any).layout?.visibility ?? 'visible';
+                if (vis === 'none') {
+                    return;
+                }
                 const paint = (layer as any).paint ?? {};
-                const color = paint['background-color'];
+                const rawColor = paint['background-color'];
                 const opacity = paint['background-opacity'] ?? 1;
-                if (color && this.mapView) {
-                    // Convert hex color string to number for MapView.clearColor
+                // Resolve zoom functions / expressions for the background color
+                // (mapbox default is black when a background layer exists).
+                let color = '#000000';
+                if (rawColor) {
+                    try {
+                        const { MBExpressionEngine } = require('./MBExpressionEngine');
+                        const evaluated = MBExpressionEngine.evaluate(rawColor, {
+                            zoom: style.zoom ?? 0,
+                            feature: undefined,
+                        } as any);
+                        if (typeof evaluated === 'string') color = evaluated;
+                    } catch {}
+                }
+                if (this.mapView) {
                     const c = new THREE.Color(color);
                     (this.mapView as any).clearColor = c.getHex();
                     (this.mapView as any).clearAlpha = opacity;
                 }
-                break;
+                return;
             }
         }
-        // NOTE: without a background-color layer the engine keeps its opaque
-        // white clear; the render-test comparison alpha-composites the RGBA
+        // NOTE: without a background layer the engine keeps its opaque white
+        // clear; the render-test comparison alpha-composites the RGBA
         // reference over white (see flywave-test-utils compareImages), so the
         // transparent reference background matches the white canvas.
     }

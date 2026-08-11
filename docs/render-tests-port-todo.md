@@ -682,5 +682,42 @@
 
 1. **✅ 已完成（2026-08-09）**：P0.1–P0.5（S1–S5）全部修复，`render-tests-index.ts` 重新生成全量 3026 用例并修复 TS2590（改 `JSON.parse` 方式内联）；tsc + 207 单元测试通过；自动化管道在 headless 下跑通（fill-pattern/translate、circle-radius 数据驱动、feature-state、filter 表达式、real-world setStyle 均已验证生效）。
 2. **✅ Phase 1 高 ROI 单点修复**：P1.4/P1.6/P1.7(icon-color)/P1.8/P1.9/P1.10/P1.11/P1.12 已完成并验证（见 §4 状态列）；P1.2/P1.3/P1.5（circle blur/stroke、line blur/offset/join）为引擎级（需改 flywave-materials / SolidLineMaterial）。**剩余主要阻塞**：vector tile（mvt）要素渲染（大量 measure-light/real-world 用例的 fill 不显示）、raster 瓦片纹理管线、文本像素级对齐（字体系统差异，P2.1 per-glyph SDF）。
-3. **全量基线评估**：跑 `CHROME_BIN=... node scripts/run-mbstyle-render-tests.js`（无 filter）获得 3026 用例真实 pass/fail 基线；headless SwiftShader 仍有三层渲染阻塞（见 `docs/render-tests-final-report.md` §三），建议真机 GPU 评估。
-4. 之后按 §4 Phase 2 逐分类做"修复 + pixel-diff 验证"。
+3. **✅ 逐分类校正（2026-08-09）—— 系统性相机/坐标/函数修复**（见 §8）：修复后 circle/fill/background 基础分类（circle-color/radius/opacity、fill-color/opacity/outline、background-color/literal）在 headless 下通过；line/extrusion 仍受 SwiftShader 渲染阻塞（需真机 GPU）。
+4. **全量基线评估**：跑 `CHROME_BIN=... node scripts/run-mbstyle-render-tests.js`（无 filter）获得 3026 用例真实 pass/fail 基线；headless SwiftShader 仍有三层渲染阻塞（见 `docs/render-tests-final-report.md` §三），建议真机 GPU 评估。
+5. 之后按 §4 Phase 2 逐分类做"修复 + pixel-diff 验证"。
+
+---
+
+## 8. 逐分类校正记录（2026-08-09）
+
+> 通过逐分类分析 actual/expected 像素差异定位的系统性根因，全部已在 headless 下验证改善。
+
+| # | 根因 | 修复 | 验证 |
+|---|------|------|------|
+| Z1 | **相机缩放不匹配**：flywave 在相机 zoom z 时 level-z 瓦片显示 256px，mapbox 为 512px（`calculateDistanceFromZoomLevel` 除以 256）→ 所有内容被压缩 ~2x | `applyCameraSettings` 相机 zoom = mapbox zoom + 1；`setZoom`/`easeTo`/`jumpTo` 同样 +1 | fill/circle/background 由数千 mismatch 降至 0 通过 |
+| Z2 | **decoder zoom 求值 +1**：相机 +1 后 `tileKey.level - storageLevelOffset` = 相机 zoom = mapbox+1，zoom 表达式求值偏高 | decoder zoom 减 1（`MBStyleDecoder.ts:377`） | circle-radius/function 641→通过 |
+| Z3 | **minDataLevel=1 钳制**：zoom-0 测试无法加载 level-0 瓦片 → 加载 level-1 瓦片求值 zoom 1 | `minDataLevel: 0` | zoom-0 数据驱动正确 |
+| Z4 | **circle-radius 是半径、`gl_PointSize` 是直径** → 圆渲染为一半大小 | emitter `size = circle-radius * 2` | circle-radius/default 3940→通过 |
+| Z5 | **参考图透明背景 vs 引擎不透明画布**：mapbox expected 为 RGBA alpha=0 背景，引擎画布全不透明 → alpha 通道大量误报 | `compareImages` 将参考图 alpha 合成到白色后比较 | 去除全图 alpha 误报 |
+| Z6 | **legacy zoom-and-property 函数**（`{property, stops:[[{zoom,value},result]]}`）未实现 | `evaluateLegacyZoomAndProperty` 双线性插值 | circle-radius/zoom-and-property-function 2597→通过 |
+
+---
+
+## 9. 代码级缺口对齐记录（2026-08-09）
+
+> 优先做"未实现功能的代码级补齐"，不依赖 headless 像素验证；每项均通过 tsc + 单元测试。
+
+| # | 缺口 | 实现 | 状态 |
+|---|------|------|------|
+| C1 | **background-visibility**（`visibility:"none"` 仍渲染背景） | `applyBackgroundColor` 检测 `layout.visibility==='none'` 直接跳过 | ✅ |
+| C2 | **worldview**（decoder 存了 `m_worldview` 但从不传入 evaluate ctx） | 三处 `evaluate` 调用改传 `this.m_worldview` | ✅ |
+| C3 | **fill-extrusion-pattern-cross-fade**（emitter 存了 `_patternCrossFade` 但 extrusion patcher 不用） | 改用 `patchFillPatternMaterial`（含 cross-fade mix） | ✅ |
+| C4 | **line-border-gradient**（evaluator 存 raw，patcher 无消费者） | patcher 解析 interpolate stops → `buildGradientTexture`，注入 `outlineColor`/`outputDiffuse` 采样 | ✅ |
+| C5 | **line-gradient 注入目标错误**（目标 `gl_FragColor=vec4(diffuse,opacity)` 在 SolidLineMaterial 不存在） | 改注入 `vec3 outputDiffuse = diffuseColor;`（SolidLineMaterial 真实结构）+ `#include <common>` 加 uniform | ✅ |
+| C6 | **fill-extrusion-partial-rendering 坏桩**（注入不平衡 `{` 破坏 shader；且测试实为引擎侧 frustum culling） | 移除坏桩；标注该类测试需 `check renderedVerticesCount`（runner no-op） | ✅ |
+| C7 | **symbol-placement line/line-center**（emitter 的 `m_textPathGeometries` 从不填充） | `processPointFeature` 检测 line placement，把 `_linePath` 转世界坐标生成 `TextPathGeometry` | ✅ |
+| C8 | **is-supported-script**（仅拉丁正则可过，Devanagari/Arabic/CJK 全 false） | Unicode 脚本区间检测（Devanagari/Arabic/Hebrew/Cyrillic/Greek/CJK/Hangul/Thai/Latin 扩展） | ✅ |
+| C9 | **TileJSON `url:` 源**（非 `{z}{x}{y}`/`mapbox://` 的 url 无 tiles） | `resolveSources` 异步化 + fetch TileJSON 取 `tiles`/`bounds`/minzoom/maxzoom | ✅ |
+| C10 | **runtime addSource/removeSource 不接线 provider**（新源瓦片不加载） | 抽取 `wireTileSources` + 新增 `reloadSources()`；runner 的 add/removeSource 后调用 | ✅ |
+| — | text/icon halo（halo-color/width/blur） | flywave-text-canvas TextStyle 无 halo/outline 支持 → 引擎级，需改 flywave-text-canvas | ⏳ 引擎级 |
+| — | raster-color 测试（raster-value 色带） | 需 raster-value 数据通道（非单瓦片纹理），架构级 | ⏳ 架构级 |

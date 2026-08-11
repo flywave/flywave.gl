@@ -57,11 +57,18 @@ export class MBExpressionEngine {
      * feature property instead of zoom; only the zoom-based form is evaluated
      * here (feature-property functions are rare in the test corpus).
      */
-    private static evaluateLegacyStops(raw: any, ctx: MBExpressionContext): MBValue {
-        const stops: Array<[number, any]> = raw.stops;
+    private static evaluateLegacyStops(raw: any, ctx: MBExpressionContext): MBValue {        const stops: Array<[any, any]> = raw.stops;
         if (!Array.isArray(stops) || stops.length === 0) return raw;
         const type = raw.type ?? 'exponential';
         const property = raw.property;
+
+        // Legacy zoom-and-property function:
+        //   { property, stops: [[{zoom, value}, result], ...] }
+        // The stop keys are {zoom, value} objects forming a grid of property
+        // stops per zoom level. Evaluate with bilinear interpolation.
+        if (property !== undefined && typeof stops[0][0] === 'object' && stops[0][0] !== null && 'zoom' in stops[0][0]) {
+            return MBExpressionEngine.evaluateLegacyZoomAndProperty(raw, ctx);
+        }
 
         if (property !== undefined) {
             // Feature-property function: find the matching stop by property value.
@@ -96,6 +103,79 @@ export class MBExpressionEngine {
             }
         }
         return stops[stops.length - 1][1];
+    }
+
+    /**
+     * Evaluate a legacy zoom-and-property function:
+     *   { property, base?, stops: [[{zoom, value}, result], ...] }
+     *
+     * The stops are a flat grid: consecutive `{zoom, value}` keys share the same
+     * zoom and form that zoom level's property→result stops. Evaluation performs
+     * bilinear interpolation in (zoom, property) space.
+     */
+    private static evaluateLegacyZoomAndProperty(raw: any, ctx: MBExpressionContext): MBValue {
+        const property = raw.property as string;
+        const stops: Array<[{ zoom: number; value: number }, any]> = raw.stops;
+        const base = raw.base ?? 1;
+        const input = ctx.feature?.properties?.[property];
+        const propInput = typeof input === 'number' ? input : Number(input ?? 0);
+        const zoomInput = ctx.zoom;
+
+        // Group stops by zoom level (they appear consecutively in the list).
+        const levels: { zoom: number; stops: Array<[number, any]> }[] = [];
+        for (const [key, value] of stops) {
+            const zoom = key.zoom;
+            let level = levels[levels.length - 1];
+            if (!level || level.zoom !== zoom) {
+                level = { zoom, stops: [] };
+                levels.push(level);
+            }
+            level.stops.push([key.value, value]);
+        }
+        if (levels.length === 0) return raw;
+
+        // Interpolate the property within a single zoom level (linear).
+        const interpolateProperty = (levelStops: Array<[number, any]>, p: number): any => {
+            if (p <= levelStops[0][0]) return levelStops[0][1];
+            if (p >= levelStops[levelStops.length - 1][0]) return levelStops[levelStops.length - 1][1];
+            for (let i = 0; i < levelStops.length - 1; i++) {
+                if (p >= levelStops[i][0] && p < levelStops[i + 1][0]) {
+                    const [pa, va] = levelStops[i];
+                    const [pb, vb] = levelStops[i + 1];
+                    if (typeof va === 'number' && typeof vb === 'number') {
+                        const t = (p - pa) / (pb - pa);
+                        return va + (vb - va) * t;
+                    }
+                    return va;
+                }
+            }
+            return levelStops[levelStops.length - 1][1];
+        };
+
+        // Clamp / select surrounding zoom levels.
+        const first = levels[0].zoom;
+        const last = levels[levels.length - 1].zoom;
+        if (zoomInput <= first) return interpolateProperty(levels[0].stops, propInput);
+        if (zoomInput >= last) return interpolateProperty(levels[levels.length - 1].stops, propInput);
+
+        for (let i = 0; i < levels.length - 1; i++) {
+            const za = levels[i].zoom;
+            const zb = levels[i + 1].zoom;
+            if (zoomInput >= za && zoomInput < zb) {
+                const ra = interpolateProperty(levels[i].stops, propInput);
+                const rb = interpolateProperty(levels[i + 1].stops, propInput);
+                let t = (zoomInput - za) / (zb - za);
+                const curve = base !== 1 ? (Math.pow(base, t) - 1) / (base - 1) : t;
+                if (typeof ra === 'number' && typeof rb === 'number') {
+                    return ra + (rb - ra) * curve;
+                }
+                if (typeof ra === 'string' && typeof rb === 'string' && ra[0] === '#') {
+                    return MBExpressionEngine.interpolateColor(ra, rb, curve);
+                }
+                return ra;
+            }
+        }
+        return interpolateProperty(levels[levels.length - 1].stops, propInput);
     }
 
     static clearCache() {
@@ -540,7 +620,7 @@ export class MBExpressionEngine {
             case 'is-supported-script': {
                 const script = this.exec(args[0], ctx) as string;
                 if (!script) return true;
-                return /^[a-zA-Z\s]+$/.test(String(script));
+                return MBExpressionEngine.isSupportedScript(String(script));
             }
 
             case 'collator': {
@@ -680,6 +760,34 @@ export class MBExpressionEngine {
             default:
                 return null;
         }
+    }
+    /**
+     * Check whether a text string uses a script the renderer can display.
+     * Mirrors mapbox's `is-supported-script` (text can render iff its script
+     * has glyph coverage). Supported here: Latin/ASCII, Cyrillic, Greek,
+     * Arabic, Hebrew, Devanagari, Han (CJK), Hiragana/Katakana, Hangul, Thai.
+     */
+    private static isSupportedScript(text: string): boolean {
+        if (!text) return true;
+        for (const ch of text) {
+            const cp = ch.codePointAt(0)!;
+            if (cp < 0x80 || /\s/.test(ch)) continue;
+            const supported =
+                (cp >= 0x0900 && cp <= 0x097F) || // Devanagari
+                (cp >= 0x0600 && cp <= 0x06FF) || // Arabic
+                (cp >= 0x0750 && cp <= 0x077F) || // Arabic Supplement
+                (cp >= 0x0590 && cp <= 0x05FF) || // Hebrew
+                (cp >= 0x0400 && cp <= 0x04FF) || // Cyrillic
+                (cp >= 0x0370 && cp <= 0x03FF) || // Greek
+                (cp >= 0x4E00 && cp <= 0x9FFF) || // CJK Unified Ideographs
+                (cp >= 0x3040 && cp <= 0x30FF) || // Hiragana / Katakana
+                (cp >= 0xAC00 && cp <= 0xD7AF) || // Hangul
+                (cp >= 0x0E00 && cp <= 0x0E7F) || // Thai
+                (cp >= 0x1E00 && cp <= 0x1EFF) || // Latin Extended Additional
+                (cp >= 0x00C0 && cp <= 0x024F);    // Latin-1 + Extended
+            if (!supported) return false;
+        }
+        return true;
     }
 
     private static haversine(

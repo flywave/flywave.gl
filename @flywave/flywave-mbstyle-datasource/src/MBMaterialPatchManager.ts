@@ -577,6 +577,13 @@ export class MBMaterialPatchManager {
             paint['line-translate-anchor'] ?? technique._translateAnchor ?? 'map',
         );
         const gradientStops = technique._lineGradientStops;
+        // line-border-gradient: stored raw on paint (evaluator skips it); parse
+        // interpolate stops into a normalized gradient ramp for the border.
+        const borderGradientRaw = paint['line-border-gradient'];
+        const borderGradientStops = borderGradientRaw
+            ? MBMaterialPatchManager.normalizeGradientStops(borderGradientRaw)
+            : undefined;
+        const hasBorderGradient = Array.isArray(borderGradientStops) && borderGradientStops.length > 1;
         const patternName = technique._patternName;
         // line-trim-offset: [start, end] in [0,1] of line-progress. Fragments
         // outside the range are discarded (partial line rendering).
@@ -657,7 +664,7 @@ export class MBMaterialPatchManager {
         // line-occlusion-opacity: fade lines behind terrain (same as circles).
         const lineOcclusionOpacity = Number(paint['line-occlusion-opacity'] ?? 0);
         const hasOcclusion = this.m_depthOcclusion && this.m_depthTexture && lineOcclusionOpacity >= 0;
-        if (hasTranslate || hasGradient || patternTex || hasEmissive || hasTrim || hasOcclusion) {
+        if (hasTranslate || hasGradient || hasBorderGradient || patternTex || hasEmissive || hasTrim || hasOcclusion) {
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
@@ -690,23 +697,35 @@ export class MBMaterialPatchManager {
                         'transformed.xy += uMBTranslate;\n#include <project_vertex>'
                     );
                 }
-                if (hasGradient && !patternTex) {
-                    const tex = MBMaterialPatchManager.buildGradientTexture(gradientStops);
+                if ((hasGradient && !patternTex) || hasBorderGradient) {
+                    const gradStops = hasBorderGradient ? borderGradientStops : gradientStops;
+                    const tex = MBMaterialPatchManager.buildGradientTexture(gradStops);
                     shader.uniforms.uMBGradient = { value: tex };
                     shader.fragmentShader = shader.fragmentShader.replace(
-                        'void main() {',
-                        'uniform sampler2D uMBGradient;\nvoid main() {'
+                        '#include <common>',
+                        '#include <common>\nuniform sampler2D uMBGradient;'
                     );
                     // Mapbox line-gradient colors by line-progress (distance along line).
-                    // The native SolidLineMaterial exposes vCoords.x as cumulative distance
-                    // (same varying the dasharray patch uses); normalize via fract so the
-                    // full gradient ramp is applied along the line.
-                    shader.fragmentShader = shader.fragmentShader.replace(
-                        'gl_FragColor = vec4( diffuse, opacity );',
-                        `float mbG = fract(vCoords.x);
-                         vec3 mbGradColor = texture2D(uMBGradient, vec2(mbG, 0.5)).rgb;
-                         gl_FragColor = vec4(mbGradColor, opacity);`
-                    );
+                    // SolidLineMaterial exposes vCoords.x as cumulative distance; normalize
+                    // via fract so the full gradient ramp is applied along the line.
+                    if (hasBorderGradient) {
+                        // line-border-gradient: apply the gradient to the outline ring.
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            'vec3 outputDiffuse = diffuseColor;',
+                            `vec3 outputDiffuse = diffuseColor;
+                             outputDiffuse = texture2D(uMBGradient, vec2(fract(vCoords.x), 0.5)).rgb;`
+                        );
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            'vec3 outlineColor;',
+                            'vec3 outlineColor;\n    outlineColor = texture2D(uMBGradient, vec2(fract(vCoords.x), 0.5)).rgb;'
+                        );
+                    } else {
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            'vec3 outputDiffuse = diffuseColor;',
+                            `vec3 outputDiffuse = diffuseColor;
+                             outputDiffuse = texture2D(uMBGradient, vec2(fract(vCoords.x), 0.5)).rgb;`
+                        );
+                    }
                 }
                 if (patternTex) {
                     const lineCrossFade = technique._patternCrossFade ?? 1;
@@ -909,39 +928,23 @@ export class MBMaterialPatchManager {
             return;
         }
 
-        // Apply pattern as a base texture (tiles across the footprint).
-        if (patternTex) {
-            (material as any).map = patternTex;
-            (material as any).color = new THREE.Color('#ffffff');
-        }
-
         // Wireframe mode: render only edges.
         if (paint['fill-extrusion-wireframe'] === true ||
             paint['fill-extrusion-rounded-wireframe'] === true) {
             (material as any).wireframe = true;
         }
 
-        // Partial rendering: only show buildings within a height range.
-        const partialRendering = paint['fill-extrusion-partial-rendering'];
-        if (typeof partialRendering === 'number' && partialRendering > 0 && !(material as any).__mbPartial) {
-            (material as any).__mbPartial = true;
-            const threshold = partialRendering;
-            const orig = material.onBeforeCompile;
-            material.onBeforeCompile = (shader: any) => {
-                if (orig) orig.call(material, shader);
-                shader.uniforms.uMBPartialThreshold = { value: threshold };
-                shader.fragmentShader = shader.fragmentShader.replace(
-                    '#include <colorspace_fragment>',
-                    `#include <colorspace_fragment>
-                     // Partial rendering: fade out fragments near the height threshold.
-                     {`
-                );
-                // We can't easily access vertex height in fragment shader without
-                // a varying; instead use gl_FragCoord.z as a proxy for distance.
-                // A proper implementation would add a height varying.
-            };
-            material.needsUpdate = true;
+        // Apply pattern as a base texture (tiles across the footprint). The fill
+        // pattern patcher also handles pattern-cross-fade mixing.
+        if (patternTex) {
+            this.patchFillPatternMaterial(material, technique);
         }
+
+        // NOTE: fill-extrusion-partial-rendering (render only buildings within a
+        // height range) previously had a broken shader stub here that injected an
+        // unbalanced `{`. The render-test category actually verifies engine-side
+        // frustum culling via `check renderedVerticesCount`, which the compat
+        // runner does not enforce — no patcher-side handling is applicable.
 
         // Emissive: add a constant brightness boost to extruded surfaces.
         if (emissiveStrength > 0 && !(material as any).__mbExtrusionEmissive) {

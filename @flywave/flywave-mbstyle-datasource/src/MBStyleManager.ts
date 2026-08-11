@@ -51,7 +51,7 @@ export class MBStyleManager {
         // their sources/layers/lights/etc. alongside inline imports.
         await this.fetchUrlImports();
         this.mergeImports();
-        this.resolveSources();
+        await this.resolveSources();
     }
 
     /**
@@ -170,18 +170,44 @@ export class MBStyleManager {
         (this.m_style as any)._config = configMap;
     }
 
-    private resolveSources(): void {
+    /**
+     * Re-resolve sources from the current style (after runtime addSource /
+     * removeSource / setStyle). Async because TileJSON `url:` sources fetch.
+     */
+    async reloadSources(): Promise<void> {
+        await this.resolveSources();
+    }
+
+    private async resolveSources(): Promise<void> {
         if (!this.m_style) return;
         this.m_resolvedSources.clear();
 
         for (const [sourceId, spec] of Object.entries(this.m_style.sources)) {
-            const tileUrls = (spec as any).tiles ?? [];
+            const tileUrls: string[] = [...(spec as any).tiles ?? []];
             const url = (spec as any).url ?? '';
             const scheme = (spec as any).scheme ?? 'xyz';
 
             if (url && tileUrls.length === 0) {
                 const tileUrl = this.resolveTileUrl(url);
-                if (tileUrl) tileUrls.push(tileUrl);
+                if (tileUrl) {
+                    tileUrls.push(tileUrl);
+                } else {
+                    // Not a {z}/{x}/{y} template nor mapbox:// — treat as a
+                    // TileJSON document: fetch it and use its `tiles` + `bounds`.
+                    try {
+                        const fetchUrl = url.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
+                        const resp = await fetch(fetchUrl);
+                        if (resp.ok) {
+                            const tilejson = await resp.json();
+                            for (const t of tilejson.tiles ?? []) tileUrls.push(t);
+                            if (!Array.isArray((spec as any).bounds) && Array.isArray(tilejson.bounds)) {
+                                (spec as any).bounds = tilejson.bounds;
+                            }
+                            if ((spec as any).minzoom === undefined) (spec as any).minzoom = tilejson.minzoom ?? 0;
+                            if ((spec as any).maxzoom === undefined) (spec as any).maxzoom = tilejson.maxzoom ?? 22;
+                        }
+                    } catch {}
+                }
             }
 
             // TMS scheme: flip y coordinate in tile URL template.
