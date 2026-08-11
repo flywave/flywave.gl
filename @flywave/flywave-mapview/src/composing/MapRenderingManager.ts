@@ -339,6 +339,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_translucentLayerEffect?: TranslucentLayerEffect;
 
     addTranslucentObject(object: THREE.Object3D, layer: string): void {
+        const wasEmpty = this.m_translucentLayerEffect?.hasObjects === false;
         this.m_translucentLayerEffect?.addObject(object, layer);
         object.traverse(child => {
             const mat = (child as THREE.Mesh).material as BloomMrtMaterial | undefined;
@@ -348,6 +349,7 @@ export class MapRenderingManager implements IMapRenderingManager {
                 this.rebuildMrtNode(mat);
             }
         });
+        if (wasEmpty && this.viewRenderManager) this.viewRenderManager.needsUpdate = true;
     }
     removeTranslucentObject(object: THREE.Object3D): void {
         this.m_translucentLayerEffect?.removeObject(object);
@@ -358,6 +360,8 @@ export class MapRenderingManager implements IMapRenderingManager {
                 this.rebuildMrtNode(mat);
             }
         });
+        const isEmpty = this.m_translucentLayerEffect?.hasObjects === false;
+        if (isEmpty && this.viewRenderManager) this.viewRenderManager.needsUpdate = true;
     }
     addTranslucentLayer(layer: string, layerConfig: ITranslucentLayerConfig): void {
         this.m_translucentLayerEffect?.addLayer(layer, layerConfig);

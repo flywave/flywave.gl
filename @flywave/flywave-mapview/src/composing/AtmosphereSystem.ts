@@ -285,12 +285,11 @@ export class AtmosphereSystem {
     updateToneMapping(exposure?: number, mode?: ToneMappingMode): void {
         if (exposure !== undefined) {
             this.m_toneMappingExposure = exposure;
+            const renderer = this.mapView.renderer as import("three/webgpu").Renderer | null;
+            if (renderer != null) renderer.toneMappingExposure = this.m_toneMappingExposure;
             const vrm = this.mapView.mapRenderingManager.viewRenderManager;
             if (vrm != null) {
                 vrm.exposure.value = this.m_toneMappingExposure;
-            } else {
-                const renderer = this.mapView.renderer as import("three/webgpu").Renderer | null;
-                if (renderer != null) renderer.toneMappingExposure = this.m_toneMappingExposure;
             }
         }
         if (mode !== undefined) {

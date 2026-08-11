@@ -43,9 +43,6 @@ import {
     type TemporalAntialiasNode
 } from "@flywave/flywave-atmosphere";
 
-// three.js official SMAA — same as webgpu_postprocessing_smaa.html example
-import { smaa as smaaTSL } from "three/examples/jsm/tsl/display/SMAANode.js";
-
 import type { IViewRenderConfig, IViewRenderManager } from "./ViewRenderTypes";
 import { vignette } from "./effects/vignette";
 import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
@@ -68,7 +65,7 @@ export class ViewRenderManager implements IViewRenderManager {
         outline: { enabled: false, thickness: 0.002, color: "#ffffff" },
         taa: { enabled: false },
         clouds: { enabled: false },
-        antialiasing: "smaa",
+        antialiasing: "taa",
         lensFlare: {
             enabled: false,
             bloomIntensity: 0.05,
@@ -135,7 +132,6 @@ export class ViewRenderManager implements IViewRenderManager {
         this.camera = camera;
 
         const taaEnabled = this.config.antialiasing === "taa";
-        const smaaEnabled = this.config.antialiasing === "smaa";
         const bloomEnabled = this.config.bloom.enabled;
         const aerialEnabled = this.config.aerialPerspective.enabled;
         const hasCSM = this.csmShadowNode != null;
@@ -149,10 +145,6 @@ export class ViewRenderManager implements IViewRenderManager {
             mrtEntries.viewZUnit = positionView.z.mul(WORLD_TO_UNIT);
         }
         if (this.gpuPicking) {
-            // Output 1/w (clip-space) which is linear in screen space and has
-            // uniform precision in half-float, unlike raw NDC depth.
-            // At the near plane 1/w is maximal (~2.0 for near=0.5),
-            // at the far plane it approaches 0.
             const clipPos = cameraProjectionMatrix.mul(positionView);
             mrtEntries.pickDepth = vec4(float(1).div(clipPos.w), float(0), float(0), float(1));
         }
@@ -237,27 +229,7 @@ export class ViewRenderManager implements IViewRenderManager {
             outputNode = outputNode.add(bloomPass);
         }
 
-        let finalNode = vec4(outputNode.rgb, 1);
-        if (this.config.toneMappingMode === "agx-punchy") {
-            finalNode = vec4(agxPunchyToneMapping(outputNode.rgb, this.exposure), 1);
-        } else {
-            const mode = this.config.toneMappingMode;
-            const tmMapping: Record<string, number> = {
-                aces: THREE.ACESFilmicToneMapping,
-                linear: THREE.LinearToneMapping,
-                reinhard: THREE.ReinhardToneMapping,
-                agx: THREE.AgXToneMapping,
-                neutral: THREE.NeutralToneMapping
-            };
-            const tm = tmMapping[mode];
-            if (tm !== undefined) {
-                finalNode = outputNode.toneMapping(tm, this.exposure);
-            }
-        }
-
-        if (smaaEnabled) {
-            finalNode = smaaTSL(convertToTexture(finalNode));
-        }
+        let finalNode = this.applyToneMapping(outputNode);
 
         if (taaEnabled) {
             const velocityNode = this.passNode.getTextureNode("velocity");
@@ -298,13 +270,9 @@ export class ViewRenderManager implements IViewRenderManager {
             finalNode = sepia(finalNode, this.config.sepia.amount);
         }
 
-        if (this.translucentLayerEffect != null) {
+        if (this.translucentLayerEffect != null && this.translucentLayerEffect.hasObjects) {
             const buildingLayers = new THREE.Layers();
             buildingLayers.set(TRANSLUCENT_LAYER_BIT);
-
-            // Pass: buildings only → vertex color with sun-direction lighting
-            // (MeshStandardNodeMaterial + AtmosphereLightNode triggers WGSL error in
-            // secondary TSL passes due to three.js shared light node instance design)
             this._sunDir = uniform(vec3(new THREE.Vector3(0, 1, 0)));
             this._ambient = uniform(float(0.25));
             const _buildingFallback = uniform(vec3(new THREE.Color(0xc4b89e)));
@@ -316,7 +284,7 @@ export class ViewRenderManager implements IViewRenderManager {
                 const n = normalView.normalize();
                 const ndl = n.dot(this._sunDir!).max(0);
                 const light = ndl.mul(0.75).add(this._ambient!);
-                return vec4(albedo.mul(light), depth.mul(float(10.0)).add(float(5.0)));
+                return vec4(albedo.mul(light), float(1));
             })();
             _buildingColorMat.transparent = true;
             _buildingColorMat.blending = THREE.NoBlending;
@@ -324,17 +292,9 @@ export class ViewRenderManager implements IViewRenderManager {
             this.buildingColorPassNode.setLayers(buildingLayers);
             this.buildingColorPassNode.overrideMaterial = _buildingColorMat;
             const buildingColorNode = this.buildingColorPassNode.getTextureNode("output");
-            const objDepthEnc = buildingColorNode.a;
 
-            const hasObject = objDepthEnc.greaterThan(float(2.0));
-            const objDepth = objDepthEnc.sub(float(5.0)).div(float(10.0));
-            const isOccluded = objDepth
-                .greaterThan(depthNode)
-                .and(objDepth.sub(depthNode).greaterThan(float(0.001)));
-            const underground = hasObject.and(isOccluded);
+            const hasObject = buildingColorNode.a.greaterThan(float(0.5));
 
-            // Above ground: use main pass (full scene with lighting)
-            // Below ground: blend building vertex color over scene
             const alpha = float(0.3);
             const buildingColor = vec4(
                 this.config.toneMappingMode === "agx-punchy"
@@ -345,7 +305,7 @@ export class ViewRenderManager implements IViewRenderManager {
             const undergroundBlend = finalNode.rgb
                 .mul(float(1.0).sub(alpha))
                 .add(buildingColor.rgb.mul(alpha));
-            finalNode = vec4(underground.select(undergroundBlend, finalNode.rgb), 1);
+            finalNode = vec4(hasObject.select(undergroundBlend, finalNode.rgb), 1);
         }
 
         finalNode = finalNode.add(dithering);
@@ -363,6 +323,29 @@ export class ViewRenderManager implements IViewRenderManager {
                 (t: THREE.Texture) => t.name === "pickDepth"
             );
         }
+    }
+
+    private applyToneMapping(color: any, mode?: string, exposure: any = this.exposure): any {
+        const tmMode = mode ?? this.config.toneMappingMode;
+        if (tmMode === "agx-punchy") {
+            return vec4(agxPunchyToneMapping(color.rgb, exposure), 1);
+        }
+        const tmMapping: Record<string, number> = {
+            aces: THREE.ACESFilmicToneMapping,
+            linear: THREE.LinearToneMapping,
+            reinhard: THREE.ReinhardToneMapping,
+            cineon: THREE.CineonToneMapping,
+            agx: THREE.AgXToneMapping,
+            neutral: THREE.NeutralToneMapping
+        };
+        const tm = tmMapping[tmMode];
+        if (tm !== undefined) {
+            return color.toneMapping(tm, exposure);
+        }
+        console.warn(
+            `ViewRenderManager: unsupported tone mapping mode "${tmMode}", falling back to aces`
+        );
+        return color.toneMapping(THREE.ACESFilmicToneMapping, exposure);
     }
 
     render(scene: THREE.Scene, camera: THREE.Camera): void {
