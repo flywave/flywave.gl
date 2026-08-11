@@ -15,7 +15,7 @@ import type { Renderer } from "three/webgpu";
 import { uniform, vec3 } from "three/tsl";
 
 import { type IPassManager } from "./IPassManager";
-import { type IViewRenderManager } from "./vrm";
+import { type IViewRenderManager, type AntialiasingMode } from "./vrm";
 import { TranslucentLayerEffect } from "./vrm/TranslucentLayerEffect";
 
 export enum MSAASampling {
@@ -32,6 +32,16 @@ export interface IMapAntialiasSettings {
     staticMsaaSamplingLevel?: MSAASampling;
 }
 
+/**
+ * Material carrying the bloom/translucent multi-render-target (MRT) node and the
+ * per-object userData the bloom/translucent passes key off. `mrtNode` is left
+ * as `Node | null` (the return type of three's `mrt()`) instead of `unknown`.
+ */
+type BloomMrtMaterial = THREE.Material & {
+    mrtNode: THREE.Node | null;
+    userData?: Record<string, unknown>;
+};
+
 export interface ICustomEffect {
     id: string;
     enabled: boolean;
@@ -46,6 +56,7 @@ export interface IMapRenderingManager extends IPassManager {
     hueSaturation: IHueSaturationEffect;
     brightnessContrast: IBrightnessContrastEffect;
     taaEnabled: boolean;
+    antialiasing: AntialiasingMode;
     dynamicMsaaSamplingLevel: MSAASampling;
     msaaEnabled: boolean;
     staticMsaaSamplingLevel: MSAASampling;
@@ -86,7 +97,7 @@ export interface IMapRenderingManager extends IPassManager {
     removeCustomEffect(effectId: string): boolean;
     getCustomEffect(effectId: string): ICustomEffect | undefined;
     setCustomEffectEnabled(effectId: string, enabled: boolean): boolean;
-    updateCustomEffect(effectId: string, updater: (effect: unknown) => void): boolean;
+    updateCustomEffect(effectId: string, updater: (effect: ICustomEffect) => void): boolean;
     getAllCustomEffects(): ICustomEffect[];
 
     setDepthPickingStencilRef(stencilRef: number): void;
@@ -140,6 +151,11 @@ export class MapRenderingManager implements IMapRenderingManager {
     };
 
     taaEnabled: boolean = false;
+    /**
+     * Active anti-aliasing strategy. Drives `vrm.config.antialiasing`.
+     * `taaEnabled` is kept as a deprecated alias (maps to "taa").
+     */
+    antialiasing: AntialiasingMode = "none";
 
     private m_msaaEnabled: boolean = true;
     private m_width: number = 1;
@@ -215,6 +231,10 @@ export class MapRenderingManager implements IMapRenderingManager {
         vrm.config.sepia.amount = this.sepia.amount;
 
         vrm.config.taa.enabled = this.taaEnabled;
+        // Resolve the active AA mode: the explicit `antialiasing` field wins,
+        // but the deprecated `taaEnabled` boolean still maps to "taa".
+        vrm.config.antialiasing =
+            this.antialiasing !== "none" ? this.antialiasing : this.taaEnabled ? "taa" : "none";
 
         vrm.needsUpdate = true;
     }
@@ -286,10 +306,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     }
     private applyBloomMrtNode(object: THREE.Object3D, intensity: number): void {
         object.traverse(child => {
-            const mat = (child as THREE.Mesh).material as THREE.Material & {
-                mrtNode?: unknown;
-                userData?: Record<string, unknown>;
-            };
+            const mat = (child as THREE.Mesh).material as BloomMrtMaterial | undefined;
             if (mat != null) {
                 mat.userData = mat.userData ?? {};
                 mat.userData.__bloomIntensity = intensity;
@@ -301,10 +318,8 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.viewRenderManager?.bloomIgnoreObjects.add(object);
     }
 
-    private rebuildMrtNode(
-        mat: THREE.Material & { mrtNode?: unknown; userData?: Record<string, unknown> }
-    ): void {
-        const entries: Record<string, any> = {};
+    private rebuildMrtNode(mat: BloomMrtMaterial): void {
+        const entries: Record<string, THREE.Node> = {};
         const bloomIntensity = mat.userData?.__bloomIntensity;
         if (bloomIntensity != null) {
             entries.bloomIntensity = uniform(bloomIntensity);
@@ -326,7 +341,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     addTranslucentObject(object: THREE.Object3D, layer: string): void {
         this.m_translucentLayerEffect?.addObject(object, layer);
         object.traverse(child => {
-            const mat = (child as THREE.Mesh).material as any;
+            const mat = (child as THREE.Mesh).material as BloomMrtMaterial | undefined;
             if (mat && !mat.userData?.__translucentLayerId) {
                 mat.userData = mat.userData || {};
                 mat.userData.__translucentLayerId = layer;
@@ -337,7 +352,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     removeTranslucentObject(object: THREE.Object3D): void {
         this.m_translucentLayerEffect?.removeObject(object);
         object.traverse(child => {
-            const mat = (child as THREE.Mesh).material as any;
+            const mat = (child as THREE.Mesh).material as BloomMrtMaterial | undefined;
             if (mat?.userData?.__translucentLayerId) {
                 delete mat.userData.__translucentLayerId;
                 this.rebuildMrtNode(mat);
@@ -374,7 +389,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
         return false;
     }
-    updateCustomEffect(effectId: string, updater: (effect: unknown) => void): boolean {
+    updateCustomEffect(effectId: string, updater: (effect: ICustomEffect) => void): boolean {
         const e = this.m_customEffects.get(effectId);
         if (e) {
             updater(e);

@@ -97,7 +97,7 @@ import {
     VisibleTileSet
 } from "./VisibleTileSet";
 
-declare const process: any;
+// `process` is provided globally by @types/node (see tsconfig types: ["node"]).
 
 // Cache value, because access to process.env.NODE_ENV is SLOW!
 const isProduction = process.env.NODE_ENV === "production";
@@ -805,7 +805,7 @@ export class MapView extends EventDispatcher {
 
     private m_renderLabels: boolean = true;
 
-    private m_movementFinishedUpdateTimerId?: any;
+    private m_movementFinishedUpdateTimerId?: ReturnType<typeof setTimeout>;
     private m_postEffects?: PostEffects;
 
     private readonly m_screenProjector: ScreenProjector;
@@ -885,8 +885,9 @@ export class MapView extends EventDispatcher {
 
     private m_forceCameraAspect: number | undefined = undefined;
 
-    // type any as it returns different types depending on the environment
-    private m_taskSchedulerTimeout: any = undefined;
+    // ReturnType<typeof setTimeout> stays correct across browser (number) and
+    // Node (NodeJS.Timeout) environments; the value is only used with clearTimeout.
+    private m_taskSchedulerTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
 
     //
     // sources
@@ -1689,7 +1690,7 @@ export class MapView extends EventDispatcher {
     addEventListener(type: MapViewEventNames, listener: (event: RenderEvent) => void): void;
 
     // overrides with THREE.js base classes are not recognized by tslint.
-    addEventListener(type: string, listener: any): void {
+    addEventListener(type: string, listener: (event: RenderEvent) => void): void {
         super.addEventListener(type, listener);
     }
 
@@ -1710,7 +1711,7 @@ export class MapView extends EventDispatcher {
     removeEventListener(type: MapViewEventNames, listener?: (event: RenderEvent) => void): void;
 
     // overrides with THREE.js base classes are not recognized by tslint.
-    removeEventListener(type: string, listener?: any): void {
+    removeEventListener(type: string, listener?: (event: RenderEvent) => void): void {
         super.removeEventListener(type, listener);
     }
 
@@ -3091,8 +3092,14 @@ export class MapView extends EventDispatcher {
                     this.m_postEffects.brightnessContrast
                 );
             }
-            if (this.m_postEffects.taa !== undefined) {
+            if (this.m_postEffects.antialiasing !== undefined) {
+                this.mapRenderingManager.antialiasing = this.m_postEffects.antialiasing;
+                // Keep the deprecated boolean in sync for legacy consumers.
+                this.mapRenderingManager.taaEnabled = this.m_postEffects.antialiasing === "taa";
+            } else if (this.m_postEffects.taa !== undefined) {
+                // Deprecated: `taa: true` → `antialiasing: "taa"`.
                 this.mapRenderingManager.taaEnabled = this.m_postEffects.taa;
+                this.mapRenderingManager.antialiasing = this.m_postEffects.taa ? "taa" : "none";
             }
         }
 
@@ -3444,7 +3451,9 @@ export class MapView extends EventDispatcher {
      */
     protected updateLookAtSettings() {
         const collidables = this.dataSources.filter(
-            ds => ds.enableCameraCollision && typeof (ds as any).raycast === "function"
+            ds =>
+                ds.enableCameraCollision &&
+                typeof (ds as unknown as ICameraCollidable).raycast === "function"
         ) as unknown as ICameraCollidable[];
 
         // GPU depth fast-path: skip CPU raycast when available

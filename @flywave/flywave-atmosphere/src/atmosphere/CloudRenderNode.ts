@@ -160,6 +160,10 @@ export class CloudRenderNode extends TempNode {
     private readonly cloudUniforms = new CloudUniforms(new CloudLayers(CloudLayers.DEFAULT));
     private cloudInitialized = false;
     private cloudRenderReady = false;
+    // Config passed to setConfig() before textures finished loading
+    // (cloudRenderReady == false). Applied at the end of ensureCloudInit so
+    // user-supplied quality/parameters take effect over the "high" default.
+    private pendingConfig: Record<string, unknown> | null = null;
     private renderCloudsFn: ((a: any, b: any, c: any) => any) | null = null;
     private shadowMarchFn: ((cascadeIndex?: number) => any) | null = null;
 
@@ -439,7 +443,13 @@ export class CloudRenderNode extends TempNode {
             sunAngularRadius: number;
         }>
     ): void {
-        if (!this.cloudRenderReady) return;
+        if (!this.cloudRenderReady) {
+            // Cloud textures are still loading. Stash the config and apply it
+            // once ensureCloudInit finishes, otherwise the user's quality
+            // preset is silently lost (the "high" default would win).
+            this.pendingConfig = config as Record<string, unknown>;
+            return;
+        }
         const u = this.cloudUniforms;
 
         if (config.quality != null) u.applyQualityPreset(config.quality);
@@ -564,6 +574,13 @@ export class CloudRenderNode extends TempNode {
                 this.renderCloudsFn = cr.render;
                 this.shadowMarchFn = cr.shadowMarch;
                 this.cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
+            }
+
+            // Apply any config that arrived while textures were still loading,
+            // so user-supplied quality/parameters override the "high" default.
+            if (this.pendingConfig != null) {
+                this.setConfig(this.pendingConfig as any);
+                this.pendingConfig = null;
             }
 
             if (this.onReady) {
@@ -1090,7 +1107,13 @@ export class CloudRenderNode extends TempNode {
                     lowCoordX.add(0.5).div(lowResSize.x),
                     lowCoordY.add(0.5).div(lowResSize.y)
                 );
-                const currentColor = texture(this.lowResNode, lowUv);
+                // Use texel() (unfiltered, like GLSL texelFetch) instead of
+                // texture() (bilinear filtered). The reference uses
+                // texelFetch(colorBuffer, lowResCoord, 0) which preserves
+                // sharp 4×4 pixel blocks at cloud edges — bilinear smears
+                // them into smooth ramps that SMAA cannot detect.
+                const lowCoord = ivec2(lowCoordX, lowCoordY);
+                const currentColor = this.lowResNode.load(lowCoord);
 
                 const b0 = vec4(0, 12, 3, 15);
                 const b1 = vec4(8, 4, 11, 7);
@@ -1170,7 +1193,9 @@ export class CloudRenderNode extends TempNode {
                     lowCoordX2.add(0.5).div(lowResSize.x),
                     lowCoordY2.add(0.5).div(lowResSize.y)
                 );
-                const currentLen = texture(this.shadowLengthLowResNode, lowUv2).r.toVar();
+                const currentLen = this.shadowLengthLowResNode
+                    .load(ivec2(lowCoordX2, lowCoordY2))
+                    .r.toVar();
 
                 // Same Bayer pattern as color resolve
                 const b0 = vec4(0, 12, 3, 15);

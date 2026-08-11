@@ -1489,14 +1489,14 @@ export const createCloudRenderer = (u: CloudUniforms) => {
         const resultShadowLen = float(0).toVar();
         const hitClouds = float(0).toVar();
 
-        // shadowRayNearFar: matches reference getShadowRayNearFar
+        // shadowRayNearFar: aligned with reference getShadowRayNearFar.
+        // Always start shadow march at cameraNear=1 when camera is below
+        // shadow top — the reference does this unconditionally (not just
+        // for ground-hit pixels), producing longer shadow shafts in open sky.
         const shadowTopH = u.bottomRadius.add(u.shadowTopHeight);
         const camBelowShadowTop = u.cameraHeight.lessThan(u.shadowTopHeight);
-        const shadowNear = camBelowShadowTop.select(float(1), nearMin); // cameraNear=1 or cloud near
-        const shadowFarRaw = camBelowShadowTop.select(
-            intersectsGround.greaterThan(0.5).select(nearGround, farMax),
-            intersectsGround.greaterThan(0.5).select(nearGround, farMax)
-        );
+        const shadowNear = camBelowShadowTop.select(float(1), nearMin);
+        const shadowFarRaw = intersectsGround.greaterThan(0.5).select(nearGround, farMax);
         const shadowRayNearFar = vec2(shadowNear, min(shadowFarRaw, u.maxShadowLengthRayDistance));
         const shadowRayValid = shadowRayNearFar.x
             .greaterThanEqual(0)

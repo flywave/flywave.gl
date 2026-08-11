@@ -12,6 +12,26 @@ import {
 import { DEFAULT_STARS_DATA_URL } from "../constants";
 import { StarsNodeMaterial } from "./StarsNodeMaterial";
 
+// Up to three SkyNode instances exist per scene (sky background, sky
+// environment, aerial perspective). Each constructs a StarsNode → Stars.
+// Without this cache, stars.bin was fetched and parsed 3× (the latter two
+// SkyNodes have showStars=false, but the fetch happened unconditionally in
+// the constructor). Cache the ArrayBuffer Promise by URL so all instances
+// share a single network request.
+const starsBufferCache = new Map<string, Promise<ArrayBuffer>>();
+
+function loadStarsBuffer(url: string): Promise<ArrayBuffer> {
+    let promise = starsBufferCache.get(url);
+    if (promise == null) {
+        promise = new FileLoader()
+            .setResponseType("arraybuffer")
+            .loadAsync(url)
+            .then(data => data as ArrayBuffer);
+        starsBufferCache.set(url, promise);
+    }
+    return promise;
+}
+
 export class Stars extends Sprite {
     override material = new StarsNodeMaterial();
     override frustumCulled = false;
@@ -22,11 +42,9 @@ export class Stars extends Sprite {
         super();
 
         if (typeof data === "string") {
-            new FileLoader()
-                .setResponseType("arraybuffer")
-                .loadAsync(data)
-                .then(data => {
-                    this.createBuffers(data as ArrayBuffer);
+            loadStarsBuffer(data)
+                .then(buffer => {
+                    this.createBuffers(buffer);
                 })
                 .catch((error: unknown) => {
                     // eslint-disable-next-line no-console

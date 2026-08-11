@@ -62,6 +62,10 @@ export class AtmosphereSystem {
     private m_atmosphereEnabled: boolean = true;
     private m_sunCastShadow: boolean = true;
     private m_cloudsEnabled: boolean = false;
+    // Full cloud config (including quality preset + per-parameter overrides).
+    // Kept here because the VRM/cloudNode may not exist yet when updateOptions
+    // runs; applyCloudConfig() pushes it to the cloudNode once it is ready.
+    private m_cloudConfig: Record<string, unknown> | null = null;
     private m_showGround: boolean = true;
     private m_raymarchScattering: boolean = true;
     private m_higherOrderScatteringTexture: boolean = true;
@@ -158,6 +162,9 @@ export class AtmosphereSystem {
             renderer.toneMapping = THREE.NoToneMapping;
             this.mapView.mapRenderingManager.viewRenderManager = vrm;
             this.mapView.mapRenderingManager.syncPostEffectsToVRM();
+            // VRM now exists — push any cloud config that updateOptions()
+            // received earlier (it had no VRM to apply to at that time).
+            this.applyCloudConfig();
 
             const cam = this.mapView.getRteCamera();
             this.mapView.mapRenderingManager.setTranslucentRenderer(
@@ -228,13 +235,12 @@ export class AtmosphereSystem {
         }
         if (options?.clouds !== undefined) {
             this.m_cloudsEnabled = typeof options.clouds === "boolean" ? options.clouds : true;
-            const vrm = this.mapView?.mapRenderingManager?.viewRenderManager;
             if (typeof options.clouds === "object") {
-                if (vrm?.cloudNode != null) {
-                    vrm.cloudNode.setConfig(options.clouds);
-                } else if (vrm != null) {
-                    vrm.pendingCloudConfig = options.clouds;
-                }
+                // Persist the full config so it survives the VRM/cloudNode not
+                // existing yet (updateOptions typically runs during MapView
+                // init, before the first render creates the VRM).
+                this.m_cloudConfig = { ...options.clouds };
+                this.applyCloudConfig();
             }
         }
         if (
@@ -290,6 +296,27 @@ export class AtmosphereSystem {
         if (mode !== undefined) {
             this.m_toneMappingMode = mode;
             this.applyToneMappingMode();
+        }
+    }
+
+    /**
+     * Push the persisted cloud config (quality preset + overrides) to the
+     * cloudNode. Called from updateOptions() and re-callable later once the
+     * VRM/cloudNode has been created by the first render.
+     */
+    private applyCloudConfig(): void {
+        if (this.m_cloudConfig == null) return;
+        const vrm = this.mapView?.mapRenderingManager?.viewRenderManager;
+        if (vrm == null) return;
+        // Re-apply whenever the cloud node finishes its async init, in case
+        // updateOptions ran before the node existed.
+        vrm.onCloudNodeReady = () => this.applyCloudConfig();
+        if (vrm.cloudNode != null) {
+            vrm.cloudNode.setConfig(this.m_cloudConfig as any);
+        } else {
+            // CloudNode is created lazily in buildNodeGraph; hand the config
+            // over via the VRM's pending slot so it is applied on creation.
+            vrm.pendingCloudConfig = this.m_cloudConfig;
         }
     }
 

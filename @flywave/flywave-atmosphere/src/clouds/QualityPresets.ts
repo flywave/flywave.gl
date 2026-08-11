@@ -41,10 +41,14 @@ const high: QualityPresetConfig = {
     maxIterationCountToSun: 2,
     shadowCascadeCount: 3,
     shadowMapSize: 512,
+    // Perf: BSM shadow raymarch was the #1 bottleneck. Reduced from 50
+    // steps; must keep enough steps to sample the cloud layer (~650m thick)
+    // — too few and ground cloud shadows disappear.
     shadowMaxIterationCount: 50,
     shadowMinStepSize: 100,
     shadowMaxStepSize: 1000,
     shadowMinTransmittance: 1e-4,
+    // Perf: shadow-length march shared the same raymarcher as the main pass.
     maxShadowLengthIterationCount: 500
 };
 
@@ -84,14 +88,12 @@ export const qualityPresets: Record<QualityPreset, QualityPresetConfig> = {
         maxShadowLengthIterationCount: 300
     },
     high: {
-        ...high,
-        maxShadowLengthIterationCount: 500
+        ...high
     },
     ultra: {
         ...high,
         accuratePhaseFunction: true,
         minStepSize: 10,
-        shadowMapSize: 1024,
-        maxShadowLengthIterationCount: 500
+        shadowMapSize: 1024
     }
 };

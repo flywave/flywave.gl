@@ -1,5 +1,12 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+/**
+ * Anti-aliasing mode. A single field selects the active AA strategy (they are
+ * mutually exclusive): `"none"` disables AA, `"taa"` uses temporal AA,
+ * `"smaa"` uses subpixel morphological AA.
+ */
+export type AntialiasingMode = "none" | "taa" | "smaa";
+
 export interface PostEffects {
     bloom?: IBloomEffect;
     outline?: IOutlineEffect;
@@ -7,6 +14,13 @@ export interface PostEffects {
     sepia?: ISepiaEffect;
     hueSaturation?: IHueSaturationEffect;
     brightnessContrast?: IBrightnessContrastEffect;
+    /**
+     * Anti-aliasing strategy selector (mutually exclusive). Replaces the
+     * legacy `taa?: boolean` field; `taa: true` is still accepted as a
+     * deprecated alias for `antialiasing: "taa"`.
+     */
+    antialiasing?: AntialiasingMode;
+    /** @deprecated Use `antialiasing: "taa"` instead. */
     taa?: boolean;
 }
 

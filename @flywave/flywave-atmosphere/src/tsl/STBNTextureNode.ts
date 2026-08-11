@@ -68,11 +68,9 @@ export const stbnTexture = /*#__PURE__*/ nodeImmutable(STBNTextureNode);
 export const stbnFrameUniform = /*#__PURE__*/ uniform(0);
 
 export const stbn = /*#__PURE__*/ Fn(() => {
-    return stbnTexture
-        .sample(
-            vec3(screenCoordinate.xy, stbnFrameUniform.toFloat().mod(64)).div(vec3(128, 128, 64))
-        )
-        .r.toConst("stbn");
+    return stbnTexture.sample(
+        vec3(screenCoordinate.xy, stbnFrameUniform.toFloat().mod(64)).div(vec3(128, 128, 64))
+    ).r;
 })();
 
 // Deterministic per-pixel noise (Z=0 slice, no frame dependency).

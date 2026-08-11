@@ -12,6 +12,8 @@ rendering-test-results/
 /input/
 /markdown/
 /temp/
+.zcode/
+three-geospatial/
 credentials.js
 @flywave/flywave.gl/dist
 dist

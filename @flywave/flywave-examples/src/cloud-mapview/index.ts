@@ -6,6 +6,40 @@ import {
     MapControls
 } from "@flywave/flywave.gl";
 
+/**
+ * Example-only access to MapView internals for live camera/AA/sun-time
+ * debugging. These members are not part of the public API; the shape is kept
+ * here so the example stays type-checked instead of reaching through `any`.
+ */
+interface MapViewInternals {
+    mapRenderingManager?: {
+        viewRenderManager?: {
+            config: { toneMappingMode: string; antialiasing: "none" | "taa" | "smaa" };
+            exposure: { value: number };
+            needsUpdate: boolean;
+        };
+    };
+    m_atmosphereSystem?: {
+        m_toneMappingMode: string;
+        m_toneMappingExposure: number;
+    };
+    m_sceneEnvironment?: {
+        atmosphere?: { setCurrentDate(date: Date, smooth: boolean): void };
+    };
+    renderer?: {
+        toneMapping: number;
+        toneMappingExposure: number;
+    };
+    updateCameras(...args: unknown[]): void;
+    getRteCamera?(): MapView["camera"] | null;
+}
+
+// Demo globals exposed for interactive debugging in the browser console.
+interface DemoWindow extends Window {
+    mapView?: MapView;
+    toggleRotate?: () => void;
+}
+
 const getMapCanvas = (): HTMLCanvasElement => {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
     if (!canvas) {
@@ -24,10 +58,14 @@ const mapView = new MapView({
     heading: 0,
     canvas: canvas,
     theme: {
+        postEffects: {
+            antialiasing: "smaa"
+        },
         atmosphere: {
             enabled: true,
             sunCastShadow: false,
-            clouds: true,
+            clouds: { quality: "low" },
+
             sunTime: (() => {
                 const year = new Date().getFullYear();
                 const epoch = Date.UTC(year, 0, 1, 0, 0, 0, 0);
@@ -59,19 +97,20 @@ document.body.appendChild(camHud);
 let _toneMappingApplied = false;
 const applyToneMappingOverride = () => {
     if (_toneMappingApplied) return;
-    const vrm = (mapView as any).mapRenderingManager?.viewRenderManager;
+    const internals = mapView as unknown as MapViewInternals;
+    const vrm = internals.mapRenderingManager?.viewRenderManager;
     if (vrm) {
         vrm.config.toneMappingMode = "agx-punchy";
         vrm.exposure.value = 3;
         vrm.needsUpdate = true;
         _toneMappingApplied = true;
     }
-    const atmoSystem = (mapView as any).m_atmosphereSystem;
+    const atmoSystem = internals.m_atmosphereSystem;
     if (atmoSystem) {
         atmoSystem.m_toneMappingMode = "agx-punchy";
         atmoSystem.m_toneMappingExposure = 3;
     }
-    const renderer = (mapView as any).renderer;
+    const renderer = internals.renderer;
     if (renderer) {
         renderer.toneMapping = 0;
         renderer.toneMappingExposure = 1;
@@ -79,8 +118,9 @@ const applyToneMappingOverride = () => {
 };
 
 // Match reference project camera
-const origUpdateCameras = (mapView as any).updateCameras.bind(mapView);
-(mapView as any).updateCameras = function (...args: any[]) {
+const internalsForHook = mapView as unknown as MapViewInternals;
+const origUpdateCameras = internalsForHook.updateCameras.bind(mapView);
+internalsForHook.updateCameras = function (...args: unknown[]) {
     origUpdateCameras(...args);
     applyOverride();
 };
@@ -99,7 +139,7 @@ const applyOverride = () => {
     }
 
     const cam = mapView.camera;
-    const rte = (mapView as any).getRteCamera?.();
+    const rte = (mapView as unknown as MapViewInternals).getRteCamera?.();
 
     cam.position.set(camPos[0], camPos[1], camPos[2]);
     cam.quaternion.set(camQuat[0], camQuat[1], camQuat[2], camQuat[3]);
@@ -148,7 +188,7 @@ const applyOverride = () => {
     }
 };
 
-(window as any).mapView = mapView;
+(window as unknown as DemoWindow).mapView = mapView;
 
 // Auto-rotate camera for temporal reprojection testing
 let _autoRotate = false;
@@ -164,9 +204,28 @@ btn.addEventListener("click", () => {
     btn.textContent = _autoRotate ? "Stop Rotate" : "Auto Rotate";
 });
 
-(window as any).toggleRotate = () => {
+(window as unknown as DemoWindow).toggleRotate = () => {
     _autoRotate = !_autoRotate;
 };
+
+// Anti-aliasing toggle button: cycles none → smaa → taa → none for A/B compare
+const aaModes: ("none" | "smaa" | "taa")[] = ["none", "smaa", "taa"];
+let _aaIndex = aaModes.indexOf("smaa"); // default matches postEffects config
+const aaBtn = document.createElement("button");
+aaBtn.textContent = `AA: ${aaModes[_aaIndex]}`;
+aaBtn.style.cssText =
+    "position:absolute;top:10px;right:120px;z-index:9999;padding:8px 16px;font-size:14px;cursor:pointer;";
+document.body.appendChild(aaBtn);
+aaBtn.addEventListener("click", () => {
+    _aaIndex = (_aaIndex + 1) % aaModes.length;
+    const mode = aaModes[_aaIndex];
+    aaBtn.textContent = `AA: ${mode}`;
+    const vrm = (mapView as unknown as MapViewInternals).mapRenderingManager?.viewRenderManager;
+    if (vrm) {
+        vrm.config.antialiasing = mode;
+        vrm.needsUpdate = true;
+    }
+});
 
 // Sun time slider (adjust hour of day to see god rays at different sun angles)
 const sunTimeLabel = document.createElement("label");
@@ -193,7 +252,7 @@ sunTimeSlider.addEventListener("input", () => {
     const offset = longitude / 15;
     const dayOfYear = 1;
     const sunTime = epoch + (dayOfYear * 24 + hour - offset) * 3600000;
-    const atmo = (mapView as any).m_sceneEnvironment?.atmosphere;
+    const atmo = (mapView as unknown as MapViewInternals).m_sceneEnvironment?.atmosphere;
     if (atmo) {
         atmo.setCurrentDate(new Date(sunTime), true);
     }

@@ -43,7 +43,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             // extends: "resources/tilezen_base_globe.json", // Bas÷e theme configuration
             atmosphere: {
                 enabled: true,
-                clouds:true,
+                clouds: false,
                 sunTime: new Date().setHours(18),
                 sunCastShadow: true
             }
@@ -93,7 +93,7 @@ try {
 
     // 2. Initialize map view
     const mapView = initializeMapView(canvas);
-    (window as any).__mapView = mapView;
+    (window as unknown as { __mapView: typeof mapView }).__mapView = mapView;
 
     // 3. Initialize map controls
     initializeMapControls(mapView, canvas);

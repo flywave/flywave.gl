@@ -59,6 +59,9 @@ export interface ICloudsConfig {
 }
 export type ToneMappingMode = "linear" | "reinhard" | "aces" | "agx" | "agx-punchy" | "neutral";
 
+/** Anti-aliasing strategy: "none" | "taa" | "smaa" (mutually exclusive). */
+export type AntialiasingMode = "none" | "taa" | "smaa";
+
 export interface IViewRenderConfig {
     aerialPerspective: IAerialPerspectiveConfig;
     bloom: IBloomConfig;
@@ -71,6 +74,7 @@ export interface IViewRenderConfig {
     clouds?: ICloudsConfig;
     lensFlare: ILensFlareConfig;
     toneMappingMode: ToneMappingMode;
+    antialiasing: AntialiasingMode;
 }
 
 import type { TranslucentLayerEffect } from "./TranslucentLayerEffect";

@@ -33,7 +33,6 @@ import {
     aerialPerspective,
     convertToTexture,
     agxPunchyToneMapping,
-    AgXCunchyToneMapping,
     temporalAntialias,
     highpVelocity,
     shadowLength,
@@ -43,6 +42,9 @@ import {
     type AerialPerspectiveNode,
     type TemporalAntialiasNode
 } from "@flywave/flywave-atmosphere";
+
+// three.js official SMAA — same as webgpu_postprocessing_smaa.html example
+import { smaa as smaaTSL } from "three/examples/jsm/tsl/display/SMAANode.js";
 
 import type { IViewRenderConfig, IViewRenderManager } from "./ViewRenderTypes";
 import { vignette } from "./effects/vignette";
@@ -66,6 +68,7 @@ export class ViewRenderManager implements IViewRenderManager {
         outline: { enabled: false, thickness: 0.002, color: "#ffffff" },
         taa: { enabled: false },
         clouds: { enabled: false },
+        antialiasing: "smaa",
         lensFlare: {
             enabled: false,
             bloomIntensity: 0.05,
@@ -85,6 +88,13 @@ export class ViewRenderManager implements IViewRenderManager {
     private aerialNode?: AerialPerspectiveNode;
     private m_cloudNode?: CloudRenderNode;
     private pendingCloudConfig?: Record<string, unknown>;
+    /**
+     * Called once the cloud render node finishes its async texture load and is
+     * ready to accept config. AtmosphereSystem hooks this to push the persisted
+     * cloud config (quality preset + overrides) that arrived before the node
+     * existed.
+     */
+    onCloudNodeReady?: () => void;
     private taaNode?: TemporalAntialiasNode;
     private scene?: THREE.Scene;
     private camera?: THREE.Camera;
@@ -124,7 +134,8 @@ export class ViewRenderManager implements IViewRenderManager {
         this.pipeline?.dispose();
         this.camera = camera;
 
-        const taaEnabled = this.config.taa.enabled;
+        const taaEnabled = this.config.antialiasing === "taa";
+        const smaaEnabled = this.config.antialiasing === "smaa";
         const bloomEnabled = this.config.bloom.enabled;
         const aerialEnabled = this.config.aerialPerspective.enabled;
         const hasCSM = this.csmShadowNode != null;
@@ -174,6 +185,10 @@ export class ViewRenderManager implements IViewRenderManager {
                     if (pending) {
                         this.m_cloudNode!.setConfig(pending as any);
                     }
+                    // Let AtmosphereSystem push its persisted config now that the
+                    // node is ready (covers the case where updateOptions ran
+                    // before the VRM/cloudNode existed).
+                    this.onCloudNodeReady?.();
                     this.needsUpdate = true;
                 };
             } else {
@@ -239,6 +254,11 @@ export class ViewRenderManager implements IViewRenderManager {
                 finalNode = outputNode.toneMapping(tm, this.exposure);
             }
         }
+
+        if (smaaEnabled) {
+            finalNode = smaaTSL(convertToTexture(finalNode));
+        }
+
         if (taaEnabled) {
             const velocityNode = this.passNode.getTextureNode("velocity");
             this.taaNode = temporalAntialias(finalNode, depthNode, velocityNode, camera);
