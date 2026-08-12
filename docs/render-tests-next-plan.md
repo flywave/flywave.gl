@@ -52,6 +52,8 @@ CHROME_BIN="/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" \
 
 ### A2. line 预挤出宽度修复（R2，~280 用例）
 
+> **2026-08-12 状态更新**：mpp 已改（`EQUATORIAL_CIRCUMFERENCE / (256 * 2^zoom)`，`MBTileDataEmitter.ts`），并顺带修复两个更大的系统性 bug（详见 `render-tests-diff-analysis.md` §11）：B1 mvt 解码分支顺序（ArrayBuffer 被对象分支吞掉，**所有 vector 瓦片从未解码**）、B2 mvt y 坐标约定错位（`MapView.projection` 默认 base `MercatorProjection` 下原点 vs OMV 上原点像素，几何整体离屏）。line-color 0/5 → 有内容（~75px 片段）。**剩余：~100px 残差偏移排查 + `lineWidth=0.0001`/双份渲染收口尚未做**（本次只验证了 mpp 修复，未恢复真实线宽）。
+
 - **改动**：`MBTileDataEmitter.ts:707-711`
   - mpp 改为 `EarthConstants.EQUATORIAL_CIRCUMFERENCE / (256 * Math.pow(2, this.m_zoom))`，删除伪 `cos(extents.y°)` 与死变量 `lat`。
   - 删除 `:576-580` 的 `technique.lineWidth = 0.0001`（恢复真实线宽），并给 `_preExtrudedLines` 补消费者（SolidLineMaterial 侧跳过 GLSL 挤出）或删死标志——**建议恢复真实线宽**，真机 GPU 上原生 shader 挤出才是正确路径；若双份渲染（烘焙 ribbon + shader 挤出）导致线变粗，则保留烘焙、显式关闭 shader 挤出。

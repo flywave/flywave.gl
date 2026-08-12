@@ -784,13 +784,28 @@
 
 ### 10.7 Phase A 修复记录（2026-08-12，`docs/render-tests-next-plan.md`）
 
-> 逐项验证：改代码 → tsc + 单元测试（257 passing，2 个既有失败与本次无关）→ 单分类 render-test（Edge 150 headless + SwiftShader）→ 更新文档。
+> 逐项验证：改代码 → tsc + 单元测试（257 passing，2 个既有失败与本次无关）→ 单分类 render-test（Edge 150 headless + SwiftShader）→ 更新文档。commit：`9bf3469a`（A1 + A2 前半）。
 
-| # | 修复 | 验证 |
+| # | 修复 | 验证 / 状态 |
 |---|------|------|
-| A1 ✅ | **text/icon 坐标空间（R1）**：`MBTileDataEmitter.ts` 新增 `projectWorld(p)=project(p).add(center)`，line-placement path（`:922`）、`emitTextGeometry`/`emitPoiGeometry` 三处改用；mesh 路径保持 `project`（tile 中心相对）；harness `MBStyleCompatRenderTest.ts` MapView 创建后设 `mapView.disableFading = true` | text-size/default 122px（修复前整帧空白 4096px）、icon-image/literal 58px、text-field/literal 113px、token 276px、symbol-placement/line-center 701px（沿线文字已渲染）；对照 fill-color/default+literal 0px 通过、icon/text-rotation-alignment point 15px 通过 → **无相邻回归** |
-| A2 | line mpp 修复（R2） | ⏳ 待做 |
+| A1 ✅ | **text/icon 坐标空间（R1）**：`MBTileDataEmitter.ts` 新增 `projectWorld(p)=project(p).add(center)`，line-placement path、`emitTextGeometry`/`emitPoiGeometry` 三处改用；mesh 路径保持 `project`（tile 中心相对）；harness `MBStyleCompatRenderTest.ts` MapView 创建后设 `mapView.disableFading = true` | text-size/default 122px（修复前整帧空白 4096px）、icon-image/literal 58px、text-field/literal 113px、token 276px、symbol-placement/line-center 701px（沿线文字已渲染）→ **text/icon 整域空白已消除**，剩余为字体度量精度项 |
+| A2 ⚠️ | **line 宽度 + 2 个系统性发现**（见下） | line-color 0/5 → **有内容**（~75px 片段，仍需位置/宽度调优）；fill-color 与基线一致（见下） |
 | A3 | extruded-polygon shader 编译（R3） | ⏳ 待做 |
 | A4 | 纹理回调补 `mapView.update()`（R9） | ⏳ 待做 |
 
-> 剩余差异均为字体度量/精度项（`MBFontCatalogBuilder` advance/offsetY、对齐），属后续精度梯队（next-plan §C2）。
+#### A2 过程中发现的两个系统性 bug（远大于 mpp 本身，已修）
+
+> 排查 line 空白时发现：**所有 mvt 瓦片数据此前从未真正解码**，解码后又有 **y 坐标约定错位**——这两点解释了 §7/§10.4"mvt 矢量瓦片渲染阻塞"（3d-intersections 全域无数据、line/fill-from-tiles 全空白）。
+
+| # | Bug | 修复 | 影响 |
+|---|-----|------|------|
+| B1 | **`MBStyleDecoder.decodeThemedTile` 分支顺序**：`typeof (ArrayBuffer) === 'object'`，先命中"GeoJSON 对象"分支被静默吞掉，`instanceof ArrayBuffer` 分支**永远不可达** → 所有 vector 瓦片 never decoded（`processLineFeature`/`processFillFeature` 从不被调用，fetched 的 mvt 字节数正确但 decode 空跑） | 二进制分支提到对象分支之前（`MBStyleDecoder.ts`） | **解锁全部 mvt 渲染**（line/fill-from-tiles/extrusion/heatmap/3d-intersections/measure-light/real-world 等 ~100+ 分类的前置） |
+| B2 | **mvt y 坐标约定与运行时世界不一致**：`MapView.projection` 默认是 base `MercatorProjection`（下原点，y 向北增，Berlin 相机/tile.center ≈26.9M），而 OMV 原始 mapbox 像素（y 向下）经原始 `tile2world` 得到**上原点**（≈13.1M）→ mvt 几何全部落在相机 ~13.7M 之外（屏幕外） | 在 MB processor 对 mvt 数据做 `py' = (scale − 2·top) − py` 线性翻转（等价转成 GeoJSON adapter 的 world2tile 约定，`setMvtYOffset` 仅在 ArrayBuffer 分支开启，geojson 不受影响） | mvt 几何与 geojson 共用同一 `project()` 通道；geojson 填充（fill-color）保持基线行为不变 |
+
+**验证状态**：
+- 用 `git stash` 对照：fill-color/default 在**纯基线（未改动）**即 784 像素差异——非本次回归，属既有精度项。
+- line-color 从全空白（0 黑像素）变为渲染出内容（~75 黑像素，位于视口底部）——解码 + 坐标修复生效，但**仍有残差偏移**（相机焦点/瓦片选择/剩余约定细节，待后续排查）。
+- tsc 通过；257 单元测试通过（2 个既有失败：RawShaderMaterial 断言、circle-radius×2，均与本次无关）。
+- 其余 mvt 依赖分类（fill-from-tiles、fill-extrusion、heatmap 等）**未及批量验证**（用户中止验证），是下一步验证重点。
+
+> 下一步建议：1) 先批量跑 `line-color fill-color fill-extrusion-color heatmap-radius` 确认 mvt 域整体收益；2) 排查 line 残余 ~100px 偏移（对照 `TileObjectRenderer` 中 object 世界坐标 vs 相机焦点）；3) 再继续 A3（extrusion shader）。

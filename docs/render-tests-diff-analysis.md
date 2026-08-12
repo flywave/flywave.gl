@@ -179,3 +179,16 @@ model-layer 批在第 25 个用例处浏览器崩溃（重连 3 次失败），�
 **预估**：P0 四项修完后，"空白俱乐部"（line/text/icon/extrusion/raster/heatmap ~1200 用例）大部分进入"有内容可比"状态；叠加 R4 瓦片修复后，通过率有望从 6.56% 提升到 30–50% 量级（之后才是逐分类像素精度工作）。
 
 **文档更正**：`docs/render-tests-final-report.md` §三的"三层阻断均为 SwiftShader 缺陷、真机不受影响"结论应修正——line 空白的直接原因是宽度计算 bug；层 2/3（composer/toBlob）与 fill/circle 正常渲染的事实矛盾。
+
+---
+
+## 11. 补充根因（2026-08-12，A2 排查中发现，R4 未覆盖）
+
+> 排查 line 空白时实证发现两个比 mpp 更底层的 bug，已修复（commit `9bf3469a`）。二者共同解释了 §7/§10.4 的"mvt 矢量瓦片渲染阻塞"——**不是瓦片集合错位，而是瓦片根本没解码、解码后又整体离屏**。
+
+| # | 根因 | 证据 | 修复 |
+|---|------|------|------|
+| B1 | **MVT 解码分支顺序 bug**：`MBStyleDecoder.decodeThemedTile` 中 `typeof (new ArrayBuffer) === 'object'`，ArrayBuffer 先命中"GeoJSON 对象"分支被静默吞掉（`normalizeGeoJson` 原样返回 → `canProcess` false → 无操作），`instanceof ArrayBuffer` 分支**永远不可达** → 所有 vector 瓦片 never decoded | 瓦片 fetch 成功（4 个 mvt，字节数与 fixture 一致）但 `processLineFeature`/`processFillFeature` 从未被调用、decode 无任何输出 | 二进制分支提到对象分支之前（`MBStyleDecoder.ts`） |
+| B2 | **mvt y 坐标约定错位**：`MapView.projection` 默认是 base `MercatorProjection`（下原点，y 向北增；Berlin 相机/tile.center ≈ 26.9M），而 OMV 原始 mapbox 像素（y 向下）经原始 `tile2world` 得到上原点（≈ 13.1M）→ 几何世界坐标在相机 ~13.7M 之外，全部屏幕外 | 浏览器探针：`projName=MercatorProjection`、`projectPoint(52.499,13.418)=21531200,26928398`（=相机位置，下原点）；对象世界坐标 13.1M vs 相机 26.9M | MB processor 对 mvt 数据 `py' = (scale − 2·top) − py`（转成与 GeoJSON/world2tile 一致约定，仅 ArrayBuffer 分支开启；geojson 填充保持基线行为不变） |
+
+**验证**：line-color 从全空白（0 黑像素）变为有内容（~75 黑像素）；fill-color 经 `git stash` 对照确认与基线一致（784px，非回归）。剩余 ~100px 残差偏移（相机焦点/瓦片选择细节）待继续排查。
