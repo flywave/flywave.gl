@@ -230,6 +230,16 @@ export class MBTileDataEmitter {
         return tmpV3.clone();
     }
 
+    /**
+     * Project into absolute world coordinates (without `sub(center)`).
+     * Text/POI geometry is consumed by the native TextElementsRenderer /
+     * PoiManager as absolute world positions, unlike mesh geometry which is
+     * tile-center-relative (see VectorTileDataEmitter:360-378).
+     */
+    private projectWorld(p: THREE.Vector2 | THREE.Vector3): THREE.Vector3 {
+        return this.project(p).add(this.m_decodeInfo.center);
+    }
+
     private m_currentZOffset: number = 0;
 
     /**
@@ -702,11 +712,11 @@ export class MBTileDataEmitter {
                 // rasterize on SwiftShader). The shader is told to use `position`
                 // directly via the `_preExtrudedLines` technique flag.
                 const lineWidthPx = Number(layer.paint?.['line-width'] ?? 1);
-                // Convert CSS px to world units at the tile's zoom (approx, matches
-                // the mapview's $pixelToMeters for the tile center latitude).
-                const lat = center.y > 0 ? 0 : 0; // planar fallback; world y already scaled
-                const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE *
-                    Math.max(Math.cos((this.m_decodeInfo.projectedBoundingBox?.extents?.y ?? 0) * Math.PI / 180), 0.01) /
+                // Convert CSS px to world units at the tile's zoom. Pixel → world
+                // is linear (no latitude term): the world tile at level z spans
+                // EQUATORIAL_CIRCUMFERENCE/2^z and is displayed at 256px, so one
+                // CSS pixel = CIRCUMFERENCE/(256 * 2^zoom).
+                const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                     (256 * Math.pow(2, this.m_zoom));
                 const worldHalfWidth = lineWidthPx * metersPerPixel / 2;
                 // Bake extrusion into each vertex's position: pos += biTangent*hw*sign(ec.y)
@@ -919,7 +929,7 @@ export class MBTileDataEmitter {
                         let lenSqr = 0;
                         for (let i = 0; i < linePath.length; i++) {
                             const pt = linePath[i];
-                            const w = this.project(new THREE.Vector3(pt[0], pt[1], 0));
+                            const w = this.projectWorld(new THREE.Vector3(pt[0], pt[1], 0));
                             path.push(w.x, w.y, w.z);
                             if (i > 0) {
                                 const dx = w.x - path[(i - 1) * 3];
@@ -948,14 +958,16 @@ export class MBTileDataEmitter {
                     geo.positions.push(w.x, w.y, w.z);
 
                     // Emit native text/POI geometry for the TextElementsRenderer.
+                    // These are consumed as absolute world coordinates.
+                    const ww = this.projectWorld(pt);
                     if (tech.name === 'text' && tech.text) {
-                        this.emitTextGeometry(techniqueIdx, w, tech.text as string,
+                        this.emitTextGeometry(techniqueIdx, ww, tech.text as string,
                             { ...properties, $id: featureId ?? properties.$id ?? null });
                     } else if (tech.name === 'labeled-icon') {
                         const iconName = tech.imageTexture as string;
                         const caption = (layer.layout['text-field'] && mode === 'icon')
                             ? '' : (tech.text as string ?? '');
-                        this.emitPoiGeometry(techniqueIdx, w,
+                        this.emitPoiGeometry(techniqueIdx, ww,
                             iconName ?? '',
                             caption || undefined,
                             { ...properties, $id: featureId ?? properties.$id ?? null });

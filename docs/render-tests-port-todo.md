@@ -781,3 +781,16 @@
 5. **P2 model-layer 批拆分重跑**（或跳过挂起用例）：补 180 个未上报结果。
 
 > **2026-08-12 差异根因调查已完成**：见 `docs/render-tests-diff-analysis.md`——6 个代码 bug（text/icon 坐标空间、line 宽度计算、extrusion shader 编译失败、raster uv/重渲、heatmap shader 串、纹理回调无重渲）+ 2 个语义未实现（瓦片级别错位/DEM 寻址）+ fog 模型不匹配，**证伪了 final-report §三的"SwiftShader 三层阻塞"结论**。按该文 P0-1~P0-4 修复后大部分"空白域"可转为可比状态。
+
+### 10.7 Phase A 修复记录（2026-08-12，`docs/render-tests-next-plan.md`）
+
+> 逐项验证：改代码 → tsc + 单元测试（257 passing，2 个既有失败与本次无关）→ 单分类 render-test（Edge 150 headless + SwiftShader）→ 更新文档。
+
+| # | 修复 | 验证 |
+|---|------|------|
+| A1 ✅ | **text/icon 坐标空间（R1）**：`MBTileDataEmitter.ts` 新增 `projectWorld(p)=project(p).add(center)`，line-placement path（`:922`）、`emitTextGeometry`/`emitPoiGeometry` 三处改用；mesh 路径保持 `project`（tile 中心相对）；harness `MBStyleCompatRenderTest.ts` MapView 创建后设 `mapView.disableFading = true` | text-size/default 122px（修复前整帧空白 4096px）、icon-image/literal 58px、text-field/literal 113px、token 276px、symbol-placement/line-center 701px（沿线文字已渲染）；对照 fill-color/default+literal 0px 通过、icon/text-rotation-alignment point 15px 通过 → **无相邻回归** |
+| A2 | line mpp 修复（R2） | ⏳ 待做 |
+| A3 | extruded-polygon shader 编译（R3） | ⏳ 待做 |
+| A4 | 纹理回调补 `mapView.update()`（R9） | ⏳ 待做 |
+
+> 剩余差异均为字体度量/精度项（`MBFontCatalogBuilder` advance/offsetY、对齐），属后续精度梯队（next-plan §C2）。
