@@ -15,3 +15,6 @@ rendering-test-results/
 credentials.js
 @flywave/flywave.gl/dist
 mapbox-gl-js/
+chunked-render-tests.log
+full-render-tests.log
+smoke-render-tests.log
