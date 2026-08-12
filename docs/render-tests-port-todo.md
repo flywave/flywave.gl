@@ -7,6 +7,8 @@
 > **最重要的新发现（决定全部状态判定）**：审计时发现渲染管线存在 5 个系统级缺陷，导致 `MBMaterialPatchManager` 与 `MBStyleSymbolPlacement` 两条增强路径**整体不可达**——详见 §1。所有"仅存在于 patcher / symbol-placement 中"的特性，实际**不会**产生视觉效果。
 >
 > **2026-08-09 更新**：§1 的 S1–S5 已全部修复（见 §8），自动化管道已可跑通 3026 个用例；`render-tests-index.ts` 已重新生成全量索引并通过 tsc。修复后 §2 中标注 🔧 的分类进入"待像素级验证"状态。
+>
+> **2026-08-12 更新**：完成**首次全量实测基线**（3031 用例，Edge 151 headless + SwiftShader）：2775 个上报结果中 **182 通过（6.56%）**，455 个失败差异 ≤600px（近失），256 个因浏览器崩溃/超时未上报。实测远低于 §3 的 50–60% 估算，text/line/raster/fog/skybox/lighting 等系整域全红——详见 §10。
 
 ---
 
@@ -461,6 +463,8 @@
 | Runtime/Composite | ~800 | ~12 | ~9 | ~12 组 |
 
 > **当前端到端可视觉通过估计：约 15–25%**（仅 native technique 通道）。**修复 S1–S5 后可提升至约 50–60%**（patcher 增强恢复 + filter/feature-state/style 修复）。后续逐项像素校正为精度工作。
+>
+> **⚠️ 2026-08-12 实测证伪**：全量基线（§10）显示实际通过率仅 **6.56%**（182/2775），上述 50–60% 估算过于乐观。
 
 ---
 
@@ -683,7 +687,7 @@
 1. **✅ 已完成（2026-08-09）**：P0.1–P0.5（S1–S5）全部修复，`render-tests-index.ts` 重新生成全量 3026 用例并修复 TS2590（改 `JSON.parse` 方式内联）；tsc + 207 单元测试通过；自动化管道在 headless 下跑通（fill-pattern/translate、circle-radius 数据驱动、feature-state、filter 表达式、real-world setStyle 均已验证生效）。
 2. **✅ Phase 1 高 ROI 单点修复**：P1.4/P1.6/P1.7(icon-color)/P1.8/P1.9/P1.10/P1.11/P1.12 已完成并验证（见 §4 状态列）；P1.2/P1.3/P1.5（circle blur/stroke、line blur/offset/join）为引擎级（需改 flywave-materials / SolidLineMaterial）。**剩余主要阻塞**：vector tile（mvt）要素渲染（大量 measure-light/real-world 用例的 fill 不显示）、raster 瓦片纹理管线、文本像素级对齐（字体系统差异，P2.1 per-glyph SDF）。
 3. **✅ 逐分类校正（2026-08-09）—— 系统性相机/坐标/函数修复**（见 §8）：修复后 circle/fill/background 基础分类（circle-color/radius/opacity、fill-color/opacity/outline、background-color/literal）在 headless 下通过；line/extrusion 仍受 SwiftShader 渲染阻塞（需真机 GPU）。
-4. **全量基线评估**：跑 `CHROME_BIN=... node scripts/run-mbstyle-render-tests.js`（无 filter）获得 3026 用例真实 pass/fail 基线；headless SwiftShader 仍有三层渲染阻塞（见 `docs/render-tests-final-report.md` §三），建议真机 GPU 评估。
+4. **✅ 全量基线评估（2026-08-12）**：已用分批脚本跑完全量 3031 用例（见 §10）。**182/2775 通过（6.56%）**，远低于此前 50–60% 估算；text/line/raster/fog/skybox/lighting/model 整域全红，需优先排查"整域 0 通过"的系统性原因（文本管线、SwiftShader 线段挤出、栅格纹理）。
 5. 之后按 §4 Phase 2 逐分类做"修复 + pixel-diff 验证"。
 
 ---
@@ -721,3 +725,59 @@
 | C10 | **runtime addSource/removeSource 不接线 provider**（新源瓦片不加载） | 抽取 `wireTileSources` + 新增 `reloadSources()`；runner 的 add/removeSource 后调用 | ✅ |
 | — | text/icon halo（halo-color/width/blur） | flywave-text-canvas TextStyle 无 halo/outline 支持 → 引擎级，需改 flywave-text-canvas | ⏳ 引擎级 |
 | — | raster-color 测试（raster-value 色带） | 需 raster-value 数据通道（非单瓦片纹理），架构级 | ⏳ 架构级 |
+
+---
+
+## 10. 全量基线实测（2026-08-12）
+
+### 10.1 运行环境与本次修复的基建问题
+
+- **浏览器**：本机无 Chrome，使用 **Microsoft Edge 151 headless**（Chromium 内核，`CHROME_BIN` 指向 Edge）+ SwiftShader（`--use-angle=swiftshader`）。
+- **构建修复**：根 `node_modules` 依赖链接缺失（`process/browser`、`earcut` 解析失败）→ `pnpm install` 重新链接后 webpack 构建通过（注意：`@flywave/flywave-terrain-datasource` 的 `prepare` 脚本有**先于本次基线存在**的 stratum TS 编译错误，导致 `pnpm install` 退出码非 0，但链接已完成，与 render-tests 无关）。
+- **结果服务器**：管道被强杀后会遗留孤儿 `RenderingTestResultServer` 进程占用端口 → 下一次运行 EADDRINUSE 崩溃，runner 上报 "Failed to fetch"。重跑前需 `lsof -iTCP:<port>` 清理。
+- **karma 容错**（`karma.options.js`）：`browserNoActivityTimeout` 60s→300s、`browserDisconnectTimeout` 10s→60s、新增 `browserDisconnectTolerance: 3`（渲染器崩溃后自动重连续跑）。
+- **分批脚本**（新增 `scripts/run-mbstyle-render-tests-chunked.js`）：单跑全量时浏览器在第 24 个用例（3d-intersections）崩溃导致整轮中止；改为按分类分批（小类合并 ≤80 用例/批，大类单独），崩溃只损失当前批。结果按用例名落盘，可断点累计。
+
+### 10.2 总量数字
+
+| 指标 | 数值 |
+|------|------|
+| 用例总数 | 3031 |
+| 实际上报结果 | 2775 |
+| **通过** | **182（6.56%）** |
+| 失败（差异 >600px） | 2138 |
+| 失败（差异 ≤600px，"近失"） | 455 |
+| 未上报（崩溃/超时/挂起） | 256 |
+
+- 结果目录：`rendering-test-results/mbstyle/`（含每用例 actual/diff 图与 `*.ibct-result.json`）；分类统计：`baseline-stats.txt`。
+- 复现命令：`CHROME_BIN="/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" node scripts/run-mbstyle-render-tests-chunked.js`
+
+### 10.3 通过分布（182 通过）
+
+- **runtime-styling 66/181**（最大通过组）、**geojson 11/30**、**combinations 8/126**、**zoom-visibility 6/6（全绿）**、appearance 5/74、circle-radius 5/7、circle-geometry 4/6。
+- 2–3 个通过：background-color、circle-blur/color/opacity、filter、feature-state、globe、icon/text-rotation-alignment、background-visibility、config、fill-color/opacity、imports、raster-extent、remove-feature-state、terrain、line-width（zero-width）、elevated-line-* 零星。
+- 其余为 1 个通过的零星项（多为 `visibility:none`、`zero-width`、`default`、`missing` 等"渲染为空/基色即正确"的用例）。
+
+### 10.4 未上报的 256 个用例
+
+- **model-layer 180/212 未上报**：该批在第 25 个用例处浏览器崩溃（重连 3 次后仍失败），批超时（20min）终止 → 绝大部分 model-layer 用例无结果。
+- map-projections 25 未上报；其余为 1–5 个的零星缺失（GLJS-584、basic-v9、raster-particle、style-with-lights、tile-mode、resize、symbol-distance-fade、symbol-icon-*、text-max-attributes、icon-secondary-coords-uint16、occlusion-terrain-depth、mixed-zoom 等）——多为该批内挂起/崩溃点前未完成的用例。
+- **3d-intersections 请求 `local://tiles/3d-intersections/15-*.mvt` 全部 404**：本地 fixtures 只有 z14/z16 瓦片（`test/rendering/integration/tiles/3d-intersections/` 仅 14-8717-5683、16-* 等 5 个文件），z15 瓦片从未入库 → 该域 75 用例实质在"无数据"下渲染。这印证了 §7 提到的 **mvt 矢量瓦片渲染阻塞**。
+
+### 10.5 实测与文档估算的矛盾点（需优先复查）
+
+1. **text-\* 整域 0 通过**（text-size/color/field/font/opacity 等 §2.6 标注 ✅ 的 native 通道也全红，仅 text-keep-upright/text-pitch-alignment 各 1 个"空渲染即正确"通过）→ 文本管线在 headless 下可能**整体不出字**（字体 atlas/glyph PBF 注入或 TextElementsRenderer SwiftShader 问题），而非像素精度问题。**这是最大的单域阻塞（~273 用例）**。
+2. **line-\* / elevated-line-\* 整域 ~0 通过**（仅 zero-width/visibility 等空渲染用例通过）→ 与 `render-tests-final-report.md` §三的 SwiftShader 线段挤出阻塞一致，需真机 GPU 或修 EffectComposer 验证。
+3. **fill/background/circle 基础分类仅部分通过**（fill-color 2/8、background-color 3/6、circle-color 3/5；§7 称"基础分类已通过"的说法过于乐观）→ literal/default 过了但 function/zoom 变体仍有差异，Z1–Z6 修复未完全覆盖。
+4. **fog 0/63、skybox 0/34、lighting-3d-mode 0/116、building 0/52、heatmap 0/18、hillshade 0/20、raster 全系 ~0** → 这些 §2 标 ⚠️/🔧 的域实测确认**无一视觉对齐**。
+5. §3 的"修复 S1–S5 后 50–60% 通过"估算**不成立**：实测 6.56%（+455 近失也才 ~23%）。patcher 通路恢复（S1）并未带来大面积通过，说明 patcher 输出与 mapbox 参考存在系统性视觉差异（坐标/缩放/材质语义），而非"通路通了即对齐"。
+
+### 10.6 基线结论与下一步（更新优先级）
+
+1. **P0 排查 text 整域不出字**（~273 用例 + symbol/icon 依赖字体的用例）：验证 headless 下 `local://glyphs/*.pbf` 是否加载、FontCatalog 注入是否生效、TextElementsRenderer 在 SwiftShader 是否有输出。
+2. **P0 修 mvt 瓦片 fixtures**：3d-intersections z15 瓦片缺失（404）；排查 real-world/measure-light 的 mvt 加载链路。
+3. **P1 真机 GPU 跑同一基线**：区分"SwiftShader 渲染阻塞"与"实现错误"（line/fill-extrusion/debug/raster 等域在 SwiftShader 下结论不可靠）。
+4. **P1 逐域看 diff 图定性**：455 个近失（≤600px）是第一梯队（worldview、filter、zoom-history、circle-color/function 等）；`http://localhost:PORT/ibct-report` 可逐用例看 actual/diff。
+5. **P2 model-layer 批拆分重跑**（或跳过挂起用例）：补 180 个未上报结果。
+
+> **2026-08-12 差异根因调查已完成**：见 `docs/render-tests-diff-analysis.md`——6 个代码 bug（text/icon 坐标空间、line 宽度计算、extrusion shader 编译失败、raster uv/重渲、heatmap shader 串、纹理回调无重渲）+ 2 个语义未实现（瓦片级别错位/DEM 寻址）+ fog 模型不匹配，**证伪了 final-report §三的"SwiftShader 三层阻塞"结论**。按该文 P0-1~P0-4 修复后大部分"空白域"可转为可比状态。

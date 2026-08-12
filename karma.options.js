@@ -269,11 +269,14 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         // 日志级别
         logLevel: "INFO",
 
-        // 浏览器无活动超时
-        browserNoActivityTimeout: 60000,
+        // 浏览器无活动超时（render-tests 全量跑时长用例较多，放宽）
+        browserNoActivityTimeout: 300000,
 
-        // 浏览器断开超时
-        browserDisconnectTimeout: 10000
+        // 浏览器断开超时（SwiftShader 下重负载 3D 用例可能卡顿，放宽）
+        browserDisconnectTimeout: 60000,
+
+        // 断开后自动重连次数（渲染器崩溃后 karma 重启浏览器续跑）
+        browserDisconnectTolerance: 3
     };
 };
 
