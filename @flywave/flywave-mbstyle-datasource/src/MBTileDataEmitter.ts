@@ -230,6 +230,16 @@ export class MBTileDataEmitter {
         return tmpV3.clone();
     }
 
+    /**
+     * Project into absolute world coordinates (without `sub(center)`).
+     * Text/POI geometry is consumed by the native TextElementsRenderer /
+     * PoiManager as absolute world positions, unlike mesh geometry which is
+     * tile-center-relative (see VectorTileDataEmitter:360-378).
+     */
+    private projectWorld(p: THREE.Vector2 | THREE.Vector3): THREE.Vector3 {
+        return this.project(p).add(this.m_decodeInfo.center);
+    }
+
     private m_currentZOffset: number = 0;
 
     /**
@@ -461,6 +471,12 @@ export class MBTileDataEmitter {
                 props.floorHeight = p['fill-extrusion-base'] ?? 0;
                 props._translate = p['fill-extrusion-translate'] ?? [0, 0];
                 props._translateAnchor = p['fill-extrusion-translate-anchor'] ?? 'map';
+                // Disable the extrusion "grow" animation: AnimatedExtrusionHandler
+                // defaults to enabled and, when it starts animating, injects old
+                // extrusion shader chunks (geometryNormal) that conflict with the
+                // current three.js normal_fragment_begin (nonPerturbedNormal),
+                // failing the fragment shader compile and hiding all extrusions.
+                props.animateExtrusion = false;
                 if (p['fill-extrusion-pattern']) {
                     props._patternName = p['fill-extrusion-pattern'];
                     props._patternCrossFade = p['fill-extrusion-pattern-cross-fade'] ?? 1;
@@ -702,12 +718,14 @@ export class MBTileDataEmitter {
                 // rasterize on SwiftShader). The shader is told to use `position`
                 // directly via the `_preExtrudedLines` technique flag.
                 const lineWidthPx = Number(layer.paint?.['line-width'] ?? 1);
-                // Convert CSS px to world units at the tile's zoom (approx, matches
-                // the mapview's $pixelToMeters for the tile center latitude).
-                const lat = center.y > 0 ? 0 : 0; // planar fallback; world y already scaled
-                const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE *
-                    Math.max(Math.cos((this.m_decodeInfo.projectedBoundingBox?.extents?.y ?? 0) * Math.PI / 180), 0.01) /
-                    (256 * Math.pow(2, this.m_zoom));
+                // Convert CSS px to world units at the DISPLAY zoom. The camera
+                // is driven at mapbox zoom + 1 (see applyCameraSettings), so a
+                // level-z tile renders at 512px rather than 256px. Pixel → world
+                // is linear (no latitude term): the world tile at level z spans
+                // EQUATORIAL_CIRCUMFERENCE/2^z, so one CSS pixel =
+                // CIRCUMFERENCE/(256 * 2^displayZoom) with displayZoom = m_zoom+1.
+                const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                    (256 * Math.pow(2, this.m_zoom + 1));
                 const worldHalfWidth = lineWidthPx * metersPerPixel / 2;
                 // Bake extrusion into each vertex's position: pos += biTangent*hw*sign(ec.y)
                 const verts = lineGeom.vertices;
@@ -718,7 +736,6 @@ export class MBTileDataEmitter {
                     verts[v + 5] += verts[v + 11] * worldHalfWidth * sy;  // pos.z += biTangent.z*hw*sign
                 }
                 this.m_preExtrudedLines = true;
-
                 // Store interleaved vertex data + remapped indices
                 const stride = 13; // extrusionCoord(3)+position(3)+tangent(3)+biTangent(4)
                 const baseVert = this.m_lineInterleaved.length / stride;
@@ -766,9 +783,13 @@ export class MBTileDataEmitter {
                 lineGeom.vertices[v + 5],
             );
         }
-        // Remap the line indices into the fill geometry.
-        for (const idx of lineGeom.indices) {
-            geo.indices.push(idx + startIdx);
+        // Remap the line indices into the fill geometry. `createLineGeometry`
+        // winds its triangles CW when viewed from above (camera +Z); the fill
+        // material uses FrontSide culling, so reverse the winding to CCW.
+        for (let i = 0; i < lineGeom.indices.length; i += 3) {
+            geo.indices.push(lineGeom.indices[i] + startIdx);
+            geo.indices.push(lineGeom.indices[i + 2] + startIdx);
+            geo.indices.push(lineGeom.indices[i + 1] + startIdx);
         }
 
         // Use a fill technique so the mapview creates a simple fill material.
@@ -787,7 +808,15 @@ export class MBTileDataEmitter {
     }
 
     private getOrCreateRibbonTechniqueIndex(layer: EvaluatedLayer): number {
-        const key = `${layer.id}:line-ribbon-tech`;
+        // The ribbon-fill material carries the per-feature line color. Key the
+        // technique by the resolved line color (plus opacity) so categorical /
+        // data-driven line-colors produce one technique per distinct value —
+        // the full evaluatedCacheKey also embeds per-feature layout variance
+        // (e.g. `line-z-offset`), which would fragment each color into several
+        // identical techniques.
+        const color = layer.paint?.['line-color'] ?? '#000000';
+        const opacity = layer.paint?.['line-opacity'] ?? 1;
+        const key = `${layer.id}:line-ribbon-tech:${String(color)}:${String(opacity)}`;
         let idx = this.m_layerToTechniqueIndex.get(key);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
@@ -919,7 +948,7 @@ export class MBTileDataEmitter {
                         let lenSqr = 0;
                         for (let i = 0; i < linePath.length; i++) {
                             const pt = linePath[i];
-                            const w = this.project(new THREE.Vector3(pt[0], pt[1], 0));
+                            const w = this.projectWorld(new THREE.Vector3(pt[0], pt[1], 0));
                             path.push(w.x, w.y, w.z);
                             if (i > 0) {
                                 const dx = w.x - path[(i - 1) * 3];
@@ -948,14 +977,16 @@ export class MBTileDataEmitter {
                     geo.positions.push(w.x, w.y, w.z);
 
                     // Emit native text/POI geometry for the TextElementsRenderer.
+                    // These are consumed as absolute world coordinates.
+                    const ww = this.projectWorld(pt);
                     if (tech.name === 'text' && tech.text) {
-                        this.emitTextGeometry(techniqueIdx, w, tech.text as string,
+                        this.emitTextGeometry(techniqueIdx, ww, tech.text as string,
                             { ...properties, $id: featureId ?? properties.$id ?? null });
                     } else if (tech.name === 'labeled-icon') {
                         const iconName = tech.imageTexture as string;
                         const caption = (layer.layout['text-field'] && mode === 'icon')
                             ? '' : (tech.text as string ?? '');
-                        this.emitPoiGeometry(techniqueIdx, w,
+                        this.emitPoiGeometry(techniqueIdx, ww,
                             iconName ?? '',
                             caption || undefined,
                             { ...properties, $id: featureId ?? properties.$id ?? null });
@@ -1088,10 +1119,13 @@ export class MBTileDataEmitter {
         const lineGeoms = this.getLineGeometries();
 
         // Finalize text/POI geometries: convert temp arrays to BufferAttributes.
+        // NOTE: the native consumers (TileGeometryCreator.createTextElements,
+        // PoiManager) reinterpret this buffer as Float64Array, so the positions
+        // MUST be packed as float64 bytes (see VectorTileDataEmitter:1759).
         for (const tg of [...this.m_textGeometries, ...this.m_poiGeometries] as any[]) {
             const positions = (tg as any)._positions as number[] | undefined;
             if (positions && positions.length > 0) {
-                const arr = new Float32Array(positions);
+                const arr = new Float64Array(positions);
                 tg.positions = {
                     name: 'position',
                     buffer: arr.buffer,

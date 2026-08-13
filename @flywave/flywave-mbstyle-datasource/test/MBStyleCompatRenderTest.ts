@@ -927,6 +927,10 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     logarithmicDepthBuffer: false,
                 });
 
+                // render-tests capture a static frame shortly after load; disable
+                // the 800ms text fade-in so glyph opacity matches the baseline.
+                mapView.disableFading = true;
+
                 const style = localizeStyle(entry.style);
                 // Apply scaleFactor metadata — multiplies icon-size and
                 // text-size to simulate HD/SD display scaling.

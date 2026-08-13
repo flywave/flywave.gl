@@ -306,7 +306,7 @@ export class MapMaterialAdapter {
             this.material.opacity = actualOpacity;
         }
 
-        (this.material as any).color.setRGB(r, g, b);
+        (this.material as any).color.setRGB(r, g, b, THREE.SRGBColorSpace);
 
         const opaque = actualOpacity >= 1.0;
         if (!opaque) {

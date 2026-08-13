@@ -70,7 +70,7 @@ vExtrusionAxis = vec4(normalMatrix * extrusionAxis.xyz, extrusionAxis.w);
 	#endif
 #endif
 // non perturbed normal for clearcoat among others
-vec3 geometryNormal = normal;
+vec3 nonPerturbedNormal = normal;
 `,
     extrusion_pars_fragment: `
 #ifdef ZFIGHTING_WORKAROUND

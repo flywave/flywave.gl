@@ -324,6 +324,14 @@ export class TileGeometryCreator {
 
         this.createLabelRejectionElements(tile, decodedTile);
 
+        // Symbol-only tiles (text/POI without any mesh geometry) produce no
+        // render objects, so hasGeometry stays false and VisibleTileSet never
+        // adds them to renderedTiles — the text placement would never see
+        // their text elements (cf. BackgroundDataSource.forceHasGeometry).
+        if (tile.objects.length === 0 && tile.hasTextElements()) {
+            tile.forceHasGeometry(true);
+        }
+
         // HARP-7899, disable ground plane for globe
         if (tile.dataSource.addGroundPlane && tile.projection.type === ProjectionType.Planar) {
             // The ground plane is required for when we zoom in and we fall back to the parent

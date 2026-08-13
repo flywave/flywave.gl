@@ -9,6 +9,7 @@ import { OmvDataAdapter } from '@flywave/flywave-vectortile-datasource/adapters/
 import { GeoJsonDataAdapter } from '@flywave/flywave-vectortile-datasource/adapters/geojson/GeoJsonDataAdapter';
 import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
 import { IGeometryProcessor, ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
+import { lat2tile } from '@flywave/flywave-vectortile-datasource/OmvUtils';
 import * as THREE from 'three';
 import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
@@ -17,6 +18,45 @@ import { StyleSpecification } from './MBStyleSpec';
 class MBStyleDataProcessor implements IGeometryProcessor {
     private m_emitter: MBTileDataEmitter | undefined;
     private m_featureStates: Map<string | number, Record<string, any>> = new Map();
+    /**
+     * Y-offset applied to raw MVT (y-down) tile coordinates so they land in
+     * the same world2tile convention the GeoJSON adapter produces. The MapView
+     * world is the base `mercatorProjection` (y grows north, `tile.center` and
+     * the camera are bottom-origin), while `tile2world` expects the GeoJSON
+     * convention — raw OMV pixels must be flipped: py' = scale - 2*top - py.
+     */
+    private m_mvtYOffset: number | null = null;
+
+    /** Set the MVT y-flip constant (null = GeoJSON source, no transform). */
+    setMvtYOffset(offset: number | null): void {
+        this.m_mvtYOffset = offset;
+    }
+
+    private mvtTransform(p: THREE.Vector2): THREE.Vector2 {
+        if (this.m_mvtYOffset === null) return p;
+        return new THREE.Vector2(p.x, this.m_mvtYOffset - p.y);
+    }
+
+    private transformLineGeometry(geometry: ILineGeometry[]): ILineGeometry[] {
+        if (this.m_mvtYOffset === null) return geometry;
+        return geometry.map(g => ({
+            ...g,
+            positions: g.positions.map(p => this.mvtTransform(p)),
+        }));
+    }
+
+    private transformPolygonGeometry(geometry: IPolygonGeometry[]): IPolygonGeometry[] {
+        if (this.m_mvtYOffset === null) return geometry;
+        return geometry.map(g => ({
+            ...g,
+            rings: g.rings.map(ring => ring.map(p => this.mvtTransform(p))),
+        }));
+    }
+
+    private transformPoints(points: THREE.Vector3[]): THREE.Vector3[] {
+        if (this.m_mvtYOffset === null) return points;
+        return points.map(p => new THREE.Vector3(p.x, this.m_mvtYOffset! - p.y, p.z));
+    }
 
     constructor(
         private m_tileKey: TileKey,
@@ -114,7 +154,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         if (matched.length === 0 || !this.m_emitter) return;
         const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
         if (visible.length === 0) return;
-        this.m_emitter.processPointFeature(layer, extents, geometry, properties, featureId, visible);
+        this.m_emitter.processPointFeature(layer, extents, this.transformPoints(geometry), properties, featureId, visible);
     }
 
     processLineFeature(
@@ -164,13 +204,13 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         const circleLayers = matched.filter(l => l.type === 'circle' && !this.isClipped('circle', coords[0], coords[1]));
 
         if (nonSymbolLayers.length > 0) {
-            this.m_emitter.processLineFeature(layer, extents, geometry, properties, featureId, nonSymbolLayers);
+            this.m_emitter.processLineFeature(layer, extents, this.transformLineGeometry(geometry), properties, featureId, nonSymbolLayers);
         }
 
         if (circleLayers.length > 0 && geometry.length > 0 && geometry[0].positions.length > 0) {
-            const pts: THREE.Vector3[] = geometry[0].positions.map(
+            const pts: THREE.Vector3[] = this.transformPoints(geometry[0].positions.map(
                 (p) => new THREE.Vector3(p.x, p.y, 0),
-            );
+            ));
             this.m_emitter.processPointFeature(layer, extents, pts, properties, featureId, circleLayers);
         }
 
@@ -184,9 +224,10 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             if (linePts.length >= 2) {
                 const midIdx = Math.floor(linePts.length / 2);
                 const midPt = linePts[midIdx];
+                const transformedPts = this.transformPoints(linePts);
                 this.m_emitter.processPointFeature(
-                    layer, extents, [midPt],
-                    { ...properties, _linePath: linePts.map(p => [p.x, p.y]) },
+                    layer, extents, this.transformPoints([midPt]),
+                    { ...properties, _linePath: transformedPts.map(p => [p.x, p.y]) },
                     featureId, symbolLayers,
                 );
             }
@@ -240,7 +281,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             const ring = geometry.length > 0 && geometry[0].rings.length > 0
                 ? geometry[0].rings[0]
                 : [];
-            const pts = ring.map((pt) => new THREE.Vector3(pt.x, pt.y, 0));
+            const pts = this.transformPoints(ring.map((pt) => new THREE.Vector3(pt.x, pt.y, 0)));
             if (pts.length > 0) {
                 this.m_emitter.processPointFeature(layer, extents, pts, properties, featureId, circleLayers);
             }
@@ -248,7 +289,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
 
         const fillLayers = visible.filter(l => l.type !== 'circle');
         if (fillLayers.length > 0) {
-            this.m_emitter.processFillFeature(layer, extents, geometry, properties, featureId, fillLayers);
+            this.m_emitter.processFillFeature(layer, extents, this.transformPolygonGeometry(geometry), properties, featureId, fillLayers);
         }
     }
 }
@@ -402,24 +443,49 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         processor.setFeatureStates(this.m_featureStates);
 
         try {
-            // Determine data format and use appropriate adapter
-            if (typeof data === 'string') {
+            // Determine data format and use appropriate adapter.
+            // NOTE: `typeof (new ArrayBuffer(1)) === 'object'`, so the binary
+            // check must come BEFORE the generic object (GeoJSON) branch or
+            // vector tiles are silently swallowed and never decoded.
+            if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+                // MVT binary data. Raw OMV coordinates are y-down (mapbox MVT);
+                // flip them into the world2tile convention the GeoJSON adapter
+                // uses (see MBStyleDataProcessor.m_mvtYOffset).
+                const buffer = data instanceof Uint8Array ? data.buffer : data;
+                const N = Math.log2(emitter.extents);
+                const scale = Math.pow(2, tileKey.level + N);
+                const { north } = decodeInfo.geoBox;
+                const top = lat2tile(north, tileKey.level + N);
+                processor.setMvtYOffset(scale - 2 * top);
+                this.m_omvAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
+            } else if (typeof data === 'string') {
                 // GeoJSON string from GeoJSONDataProvider
+                // The GeoJSON adapter projects through webMercatorProjection
+                // (y-down), but the MapView/camera/tile space uses the base
+                // MercatorProjection (y-up). Apply the same y-flip the MVT path
+                // uses so features land in the map's y-up world (mirror around
+                // R/2: py' = scale - 2*top - py).
+                const N = Math.log2(emitter.extents);
+                const scale = Math.pow(2, tileKey.level + N);
+                const { north } = decodeInfo.geoBox;
+                const top = lat2tile(north, tileKey.level + N);
+                processor.setMvtYOffset(scale - 2 * top);
                 const geoJson = JSON.parse(data);
                 const normalized = MBStyleDecoder.normalizeGeoJson(geoJson);
                 if (this.m_geoJsonAdapter.canProcess(normalized)) {
                     this.m_geoJsonAdapter.process(normalized, decodeInfo, processor);
                 }
             } else if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
-                // GeoJSON object directly
+                // GeoJSON object directly — same y-flip as above.
+                const N = Math.log2(emitter.extents);
+                const scale = Math.pow(2, tileKey.level + N);
+                const { north } = decodeInfo.geoBox;
+                const top = lat2tile(north, tileKey.level + N);
+                processor.setMvtYOffset(scale - 2 * top);
                 const normalized = MBStyleDecoder.normalizeGeoJson(data);
                 if (this.m_geoJsonAdapter.canProcess(normalized)) {
                     this.m_geoJsonAdapter.process(normalized, decodeInfo, processor);
                 }
-            } else if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
-                // MVT binary data
-                const buffer = data instanceof Uint8Array ? data.buffer : data;
-                this.m_omvAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
             }
         } catch (e) {
             return { techniques: [], geometries: [] };

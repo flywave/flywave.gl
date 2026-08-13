@@ -435,6 +435,7 @@ export class MBStyleDataSource extends TileDataSource {
     private m_currentSourceId: string = '';
     private m_demTileUrl: string | null = null;
     private m_demTileSize: number = 256;
+    private m_demMaxZoom: number = 22;
     private m_rasterTileUrl: string | null = null;
     /**
      * Cached mapbox glyph metrics (font→char→metrics), shared with the worker
@@ -551,6 +552,19 @@ export class MBStyleDataSource extends TileDataSource {
 
         if (bestVectorSourceId) {
             const source = sources.get(bestVectorSourceId)!;
+            // Mapbox `tileSize: 512` semantic: a 512px tile covers the world of
+            // a 256px tile one level down, so a camera zoom z loads data at
+            // z-1. flywave couples the requested tile level and the decoder's
+            // zoom-expression value to `storageLevelOffset`; -2 for 512px tiles
+            // makes dataZoom = cameraZoom-2 (request z-1 tiles) while the
+            // decoder evaluates zoom expressions at mapbox zoom (=level+1).
+            const rawSpec = (style.sources as any)?.[bestVectorSourceId] as any;
+            const tileSize = rawSpec?.tileSize ?? (source as any).tileSize ?? 256;
+            const desiredOffset = tileSize > 256 ? -2 : -1;
+            // TileDataSource.connect() later forwards storageLevelOffset to the
+            // decoder (see TileDataSource.ts), which derives the zoom-expression
+            // value from it — so just set the datasource offset here.
+            this.storageLevelOffset = desiredOffset;
             const restClient = this.createOmvRestClient(
                 source,
                 this.m_styleParams.accessToken
@@ -699,6 +713,7 @@ export class MBStyleDataSource extends TileDataSource {
                 if (tileUrl) {
                     this.m_demTileUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
                     this.m_demTileSize = demSpec?.tileSize ?? 256;
+                    this.m_demMaxZoom = demSpec?.maxzoom ?? source.maxzoom ?? 22;
                 }
                 break;
             }
@@ -839,6 +854,8 @@ export class MBStyleDataSource extends TileDataSource {
                 this.m_demTileUrl,
                 style.zoom ?? 8,
                 style.center ?? [0, 0],
+                this.m_demMaxZoom,
+                this.m_demTileSize,
             );
             // Enable depth occlusion so circles/symbols behind terrain are hidden.
             if (this.m_materialPatcher) {
@@ -1258,6 +1275,8 @@ export class MBStyleDataSource extends TileDataSource {
                     this.m_demTileUrl,
                     style.zoom ?? 8,
                     style.center ?? [0, 0],
+                    this.m_demMaxZoom,
+                    this.m_demTileSize,
                 );
             } catch {}
         }
@@ -1470,9 +1489,17 @@ export class MBStyleDataSource extends TileDataSource {
         // flywave's camera zoom convention shows a level-z tile at 256px while
         // mapbox shows it at 512px (calculateDistanceFromZoomLevel /256). To
         // match mapbox's world scale, offset the camera zoom by +1.
-        const zoom = (typeof style.zoom === 'number' ? style.zoom : 0) + 1;
-        const bearing = style.bearing ?? 0;
+        // flywave's zoomLevel getter derives from the camera's *line-of-sight*
+        // distance to target; a non-zero pitch lengthens that distance and
+        // lowers the reported zoom (14.79 instead of 15 at pitch 30). Mapbox's
+        // zoom is pitch-independent, so compensate: request a vertical zoom
+        // whose slanted distance maps back to the desired mapbox+1 zoom.
+        //   reported(z) = z + log2(cos(pitch))  →  z = desired − log2(cos(pitch))
         const pitch = style.pitch ?? 0;
+        const zoom =
+            (typeof style.zoom === 'number' ? style.zoom : 0) + 1 -
+            (pitch > 0 ? Math.log2(Math.cos(pitch * Math.PI / 180)) : 0);
+        const bearing = style.bearing ?? 0;
 
         try {
             // Import GeoCoordinates dynamically to avoid circular dependency issues

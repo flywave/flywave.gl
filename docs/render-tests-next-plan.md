@@ -52,24 +52,22 @@ CHROME_BIN="/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" \
 
 ### A2. line 预挤出宽度修复（R2，~280 用例）
 
-- **改动**：`MBTileDataEmitter.ts:707-711`
-  - mpp 改为 `EarthConstants.EQUATORIAL_CIRCUMFERENCE / (256 * Math.pow(2, this.m_zoom))`，删除伪 `cos(extents.y°)` 与死变量 `lat`。
-  - 删除 `:576-580` 的 `technique.lineWidth = 0.0001`（恢复真实线宽），并给 `_preExtrudedLines` 补消费者（SolidLineMaterial 侧跳过 GLSL 挤出）或删死标志——**建议恢复真实线宽**，真机 GPU 上原生 shader 挤出才是正确路径；若双份渲染（烘焙 ribbon + shader 挤出）导致线变粗，则保留烘焙、显式关闭 shader 挤出。
-- **验证**：`run-mbstyle-render-tests.js line-color line-width` → line-color/default 出现黑色路网。
-- **验收**：line-\*/elevated-line-\* actual 有内容；记录 solid-line 与 ribbon fill 是否双份渲染。
+> **2026-08-12 状态更新**：mpp 已改（`EQUATORIAL_CIRCUMFERENCE / (256 * 2^zoom)`，`MBTileDataEmitter.ts`），并顺带修复两个更大的系统性 bug（详见 `render-tests-diff-analysis.md` §11）：B1 mvt 解码分支顺序（ArrayBuffer 被对象分支吞掉，**所有 vector 瓦片从未解码**）、B2 mvt y 坐标约定错位（`MapView.projection` 默认 base `MercatorProjection` 下原点 vs OMV 上原点像素，几何整体离屏）。line-color 0/5 → 有内容（~75px 片段）。
+>
+> **2026-08-13 ✅ 已完成（commit `11ab47ac`）**：line 空白根因实际是**三角形绕向**——`createLineGeometry` 产出的 ribbon 三角形从上方（camera +Z）看是 **CW**，而 ribbon-fill 用的 `fill` technique 材质（`MapMeshBasicMaterial`，FrontSide 剔除）把 CW 三角形全部背面剔除 → 道路只剩 join/cap 处的碎片（75–1846px 而非 58813px）。`emitRibbonFill` 逐三角形翻转绕向为 CCW 后，**整条路网正常光栅化**。同时修正线宽烘焙的像素→米比例（相机在 mapbox zoom+1 显示，需用 `m_zoom+1`），路宽从 2 倍过粗校正。
+> - 结果：**line-color/default 55527 → 337 mismatch**（literal 334、elevated-line-color/literal 335、property-function-identity 220）。
+> - 剩余：line-color/function（zoom 色彩函数）与 property-function（categorical）**颜色比预期亮**（如绿路 0,160,0 vs 预期 0,128,0），为颜色空间精度项（C2）；`lineWidth=0.0001` 与 `_preExtrudedLines` 死标志仍保留（SwiftShader 兜底路径，双份渲染收口未做）。
 
 ### A3. extruded-polygon shader 编译失败（R3，~143 用例）
 
-- **改动**：
-  - `MBTileDataEmitter.ts` 的 extruded-polygon technique 显式 `animateExtrusion: false`（阻断 `AnimatedExtrusionHandler` 默认开启动画的路径，`AnimatedExtrusionHandler.ts:48,117-121`）。
-  - `@flywave/flywave-materials`（或 mapview）的 `ExtrusionChunks.ts:44-74`：`extrusion_normal_fragment_begin` 更新到当前 three 的 chunk API（`geometryNormal` → `nonPerturbedNormal`），消除 434 次 shader 编译错误。
-- **验证**：`run-mbstyle-render-tests.js fill-extrusion-color building` → actual 出现立体块；日志 shader error 归零。
-- **验收**：fill-extrusion-\*/building actual 出图（高度/墙面不对可接受，记入长期项）。
+> **2026-08-13 ✅ 已完成（commit `92d8f07f`）**：
+> - `MBTileDataEmitter.ts` 的 extruded-polygon technique 显式 `animateExtrusion: false`（阻断 `AnimatedExtrusionHandler` 默认开启动画的路径，`AnimatedExtrusionHandler.ts:48,117-121`）。
+> - `@flywave/flywave-materials` 的 `ExtrusionChunks.ts:44-74`：`extrusion_normal_fragment_begin` 更新到当前 three 的 chunk API（`geometryNormal` → `nonPerturbedNormal`），**shader 编译错误 434 → 0**。
+> - 结构性缺口仍在：emitter 只 earcut 出 z=0 平面 footprint，未烘焙 `extrusionAxis` 顶点属性（R3-长期），fill-extrusion-\*/building 仍为空白——待 C3（extrusion 几何烘焙）。
 
 ### A4. 异步纹理回调补重渲（R9，横切）
 
-- **改动**：`MBMaterialPatchManager.ts:448-453`（raster）、`:1411-1416`（hillshade）及所有纹理/异步资源 load 回调末尾补 `mapView.update()`（无参或按 mapview API 触发一次重渲）。
-- **验证**：随 A3/R5 一起验证（zoomed-raster/overzoom 的瓦片纹理应上屏）。
+> **2026-08-13 ✅ 已完成（commit `9827d023`）**：`MBMaterialPatchManager.ts` 的 raster（`:448-453`）与 hillshade（`:1417-1422`）纹理 load 回调末尾补 `mapView.update()`。验证时 raster 仍不显示——因 R4 瓦片级别错位（Berlin raster 测试请求 z12/z16，fixtures 只有 z17-Berlin）+ env quad 的 z≤12 钳制，属 R4/R5 的 fixture/路径问题，非本项本身。
 
 **Phase A 完成标志**：line/text/icon/fill-extrusion/building actual 整域有内容；重跑全量基线，通过率预计升到 15–25%。
 

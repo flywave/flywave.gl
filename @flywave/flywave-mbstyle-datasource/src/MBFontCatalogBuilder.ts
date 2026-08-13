@@ -101,7 +101,10 @@ export function buildFontCatalogFromPBF(
             atlas.texture,
             font,
         );
-        catalog.registerGlyph(fontName, "Regular", codePoint, glyphData);
+        // The lookup hash in FontCatalog.loadCharset/getGlyph is
+        // `${font.name}_${fontStyle}` where fontStyle is the *numeric*
+        // FontStyle enum (Regular = 0), so register with the same key.
+        catalog.registerGlyph(fontName, String(FontStyle.Regular), codePoint, glyphData);
     }
 
     return catalog;

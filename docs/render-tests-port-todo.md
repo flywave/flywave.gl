@@ -781,3 +781,108 @@
 5. **P2 model-layer 批拆分重跑**（或跳过挂起用例）：补 180 个未上报结果。
 
 > **2026-08-12 差异根因调查已完成**：见 `docs/render-tests-diff-analysis.md`——6 个代码 bug（text/icon 坐标空间、line 宽度计算、extrusion shader 编译失败、raster uv/重渲、heatmap shader 串、纹理回调无重渲）+ 2 个语义未实现（瓦片级别错位/DEM 寻址）+ fog 模型不匹配，**证伪了 final-report §三的"SwiftShader 三层阻塞"结论**。按该文 P0-1~P0-4 修复后大部分"空白域"可转为可比状态。
+
+### 10.7 Phase A 修复记录（2026-08-12，`docs/render-tests-next-plan.md`）
+
+> 逐项验证：改代码 → tsc + 单元测试（257 passing，2 个既有失败与本次无关）→ 单分类 render-test（Edge 150 headless + SwiftShader）→ 更新文档。commit：`9bf3469a`（A1 + A2 前半）。
+
+| # | 修复 | 验证 / 状态 |
+|---|------|------|
+| A1 ✅ | **text/icon 坐标空间（R1）**：`MBTileDataEmitter.ts` 新增 `projectWorld(p)=project(p).add(center)`，line-placement path、`emitTextGeometry`/`emitPoiGeometry` 三处改用；mesh 路径保持 `project`（tile 中心相对）；harness `MBStyleCompatRenderTest.ts` MapView 创建后设 `mapView.disableFading = true` | text-size/default 122px（修复前整帧空白 4096px）、icon-image/literal 58px、text-field/literal 113px、token 276px、symbol-placement/line-center 701px（沿线文字已渲染）→ **text/icon 整域空白已消除**，剩余为字体度量精度项 |
+| A2 ✅ | **line 空白根因 = ribbon 三角形绕向**：`createLineGeometry` 产 CW 三角形，`emitRibbonFill` 的 fill 材质（FrontSide）背面剔除 → 只有 join/cap 碎片（75–1846px）。`emitRibbonFill` 逐三角形翻转绕向为 CCW + 线宽比例改用显示 zoom（`m_zoom+1`） | **line-color/default 55527 → 337 mismatch**（literal 334、elevated literal 335、property-function-identity 220）。line-\*/elevated-line-\* 整域从空白变为完整路网；剩余为颜色空间精度（function/property-function 亮 25%） |
+| A3 ✅ | extruded-polygon shader 编译（R3） | **shader error 434 → 0**（`animateExtrusion:false` + `geometryNormal`→`nonPerturbedNormal`）。结构性缺口仍在：无 `extrusionAxis` 属性烘焙 → fill-extrusion/building 仍空白（C3 长期项） |
+| A4 ✅ | 纹理回调补 `mapView.update()`（R9） | raster/hillshade patcher 纹理回调已补。raster 仍不显示：R4 瓦片级别错位（Berlin raster 请求 z12/z16，fixtures 仅 z17-Berlin）+ env quad z≤12 钳制 → 属 R4/R5 |
+
+#### A2 过程中发现的两个系统性 bug（远大于 mpp 本身，已修）
+
+> 排查 line 空白时发现：**所有 mvt 瓦片数据此前从未真正解码**，解码后又有 **y 坐标约定错位**——这两点解释了 §7/§10.4"mvt 矢量瓦片渲染阻塞"（3d-intersections 全域无数据、line/fill-from-tiles 全空白）。
+
+| # | Bug | 修复 | 影响 |
+|---|-----|------|------|
+| B1 | **`MBStyleDecoder.decodeThemedTile` 分支顺序**：`typeof (ArrayBuffer) === 'object'`，先命中"GeoJSON 对象"分支被静默吞掉，`instanceof ArrayBuffer` 分支**永远不可达** → 所有 vector 瓦片 never decoded（`processLineFeature`/`processFillFeature` 从不被调用，fetched 的 mvt 字节数正确但 decode 空跑） | 二进制分支提到对象分支之前（`MBStyleDecoder.ts`） | **解锁全部 mvt 渲染**（line/fill-from-tiles/extrusion/heatmap/3d-intersections/measure-light/real-world 等 ~100+ 分类的前置） |
+| B2 | **mvt y 坐标约定与运行时世界不一致**：`MapView.projection` 默认是 base `MercatorProjection`（下原点，y 向北增，Berlin 相机/tile.center ≈26.9M），而 OMV 原始 mapbox 像素（y 向下）经原始 `tile2world` 得到**上原点**（≈13.1M）→ mvt 几何全部落在相机 ~13.7M 之外（屏幕外） | 在 MB processor 对 mvt 数据做 `py' = (scale − 2·top) − py` 线性翻转（等价转成 GeoJSON adapter 的 world2tile 约定，`setMvtYOffset` 仅在 ArrayBuffer 分支开启，geojson 不受影响） | mvt 几何与 geojson 共用同一 `project()` 通道；geojson 填充（fill-color）保持基线行为不变 |
+
+**验证状态**：
+- 用 `git stash` 对照：fill-color/default 在**纯基线（未改动）**即 784 像素差异——非本次回归，属既有精度项。
+- line-color 从全空白（0 黑像素）变为渲染出内容（~75 黑像素，位于视口底部）——解码 + 坐标修复生效，但**仍有残差偏移**（相机焦点/瓦片选择/剩余约定细节，待后续排查）。
+- tsc 通过；257 单元测试通过（2 个既有失败：RawShaderMaterial 断言、circle-radius×2，均与本次无关）。
+- 其余 mvt 依赖分类（fill-from-tiles、fill-extrusion、heatmap 等）**未及批量验证**（用户中止验证），是下一步验证重点。
+
+> 下一步建议：1) 先批量跑 `line-color fill-color fill-extrusion-color heatmap-radius` 确认 mvt 域整体收益；2) 排查 line 残余 ~100px 偏移（对照 `TileObjectRenderer` 中 object 世界坐标 vs 相机焦点）；3) 再继续 A3（extrusion shader）。
+
+> **2026-08-13 进展**：A2 根因定位为 **ribbon 三角形绕向（CW → 被 FrontSide fill 材质背面剔除）**，`emitRibbonFill` 翻转绕向 + 线宽改用显示 zoom 后，line-color/default 从 55527 → 337 mismatch，line-\* 整域出图。A3（extrusion shader：`animateExtrusion:false` + `nonPerturbedNormal`）把 shader 编译错误从 434 降到 0；结构性缺口（无 `extrusionAxis` 烘焙）仍在，fill-extrusion/building 空白待 C3。A4（纹理回调补 `mapView.update()`）已落地。
+>
+> **2026-08-13 再进展（commit `82cad1fa`）—— 颜色空间系统性修复**：`MapMaterialAdapter.applyMaterialBaseColor` 把 sRGB 通道值直接传给 `THREE.Color.setRGB`，r178 + ColorManagement 下被当作 linear 空间输入，输出端 linear→sRGB 再转换使所有材质颜色变亮 ~1.46x（绿 128→188）。改传 `SRGBColorSpace` 后颜色精确往返：**fill-color/function 784→0、circle-color/function 0、line-color/function 55038→106、literal 334→106、multiply 104、opacity 110、zoom-and-property 192**。同时 `getOrCreateRibbonTechniqueIndex` 改为按 **color+opacity** 键（原先只按 layer.id，数据驱动/categorical 线色全部用了首要素颜色）。
+>
+> **遗留**：`line-color/property-function`（6 色 categorical）仍 ~36k。已深度排查：geometry/techniques/materials/objects 全部逐项验证正确（每色一个 technique 且几何 range 连续正确、材质颜色正确创建），但渲染只出 purple+blue（其余 4 色缺失），且 road layer 被注入 `line-z-offset:0.01`（来源未定位，fixture 与源码均无写入点）导致部分要素 z=0.01。怀疑是**多材质 geometry 分组 + z-fighting** 的组合问题，留作专项。
+>
+> **2026-08-13 第三轮（R4 瓦片级别 + geojson y + heatmap）**：
+> - **R4.1 pitch 相机补偿（`2224b6d5`）**：flywave zoomLevel 由相机视线距离反推，pitch 使斜距变长 → reported zoom 从 15 掉到 14.79，dataZoom 落到 z13。`applyCameraSettings` 请求 `zoom = mapbox+1 − log2(cos(pitch))` 使斜距映射回目标 zoom。**icon-pitch-scaling 等 pitch 测试从请求 z13（404）改为 z14（存在）**；pitch 0 不受影响。
+> - **R4.2 tileSize:512 语义（`67538a43`）**：512px 瓦片覆盖 256px 瓦片低一级的范围，按 source `tileSize` 设 `storageLevelOffset=-2`（dataZoom=cameraZoom−2，decoder zoom 表达式仍按 mapbox zoom=level+1）。**3d-intersections/tile-border 从请求 z18 改为 z17**；256px 源保持 −1。
+> - **R4.3 DEM maxzoom 钳制（`58eabe20`）**：`applyTerrain` 硬编码 `min(zoom,12)`，改为按 raster-dem source `maxzoom` 钳制 + tileSize 偏移。**decrease-dynamic-exaggeration-to-zero-fog 从 z12 改为 z9（存在）**，buildings-depth-regression（tileSize 512, maxzoom 14）→ z13。
+> - **geojson y-flip（`7d81ae37`）**：geojson 适配器经 webMercatorProjection（y-down）投影，而 MapView 用 base Mercator（y-up），内联 geojson 面/线南北镜像。decoder 对 geojson 应用与 mvt 相同的 y-flip（`py' = scale − 2·top − py`）。**3 色 geojson debug 测试线落位正确**；fill-color 无回归。
+> - **heatmap R6 + m_patchedTiles（`cce8a418`）**：替换串从不存在（`vec4(diffuse,opacity)`）改为 CirclePointsMaterial 实际目标（`vec4(diffuseColor, alpha)`）；patchTileMaterials 改为按对象数变化重新 patch（首帧背景 quad 先附加、解码点后附加，原来一次 patch 后跳过导致 heatmap 点永不 patch）。
+> - **遗留**：property-function 多色仍只出 purple+blue（需 THREE 多材质分组专项）；icon-pitch-scaling 缺 5373 行瓦片 + glyph 字体（fixture 覆盖）；raster/hillshade 纹理上屏（R5/R7）；fill-extrusion `extrusionAxis` 烘焙（C3）。
+
+---
+
+## 11. 第二轮验收记录（2026-08-13）
+
+### 11.1 本轮修复验收（用户提交的 R4.1–R4.3 / geojson y-flip / heatmap R6 / SRGB）
+
+验证方式：tsc（通过）+ 受影响分类 render-test 专项（79 用例，Edge 151 headless）。结论：
+
+| 修复 | 验收结果 |
+|------|----------|
+| SRGB 色彩空间（`82cad1fa`） | ✅ circle-color/function 492→0 通过；fill-color/function 修复通过 |
+| geojson y-flip（`7d81ae37`） | ✅ geojson 分类 **11/30 → 22/30 通过**（inline/external 全系列 0 差异） |
+| R4.1 pitch 补偿 / R4.2 tileSize:512 / R4.3 DEM maxzoom | ✅ 瓦片请求级别已对齐（icon-pitch-scaling z13→z14；3d-intersections z18→z17；terrain fog z12→z9），剩余失败为 fixture 覆盖缺口（5373 行瓦片、glyph 字体缺失） |
+| heatmap R6（`cce8a418`） | ⚠️ 部分生效：actual 从空白变为**蓝色圆点**（shader 替换 + re-patch 生效），但无 density→ramp 渐变（单 pass 近似的固有限制，需双 pass，C4） |
+| line（A2 系列） | ⚠️ line-color/default actual **出线了**（黑色粗线可见，0→有内容），但只出现在画面下半部（落位/覆盖范围仍不对，mismatch 51691）；elevated-line-color 类 mismatch 降至 ~338 |
+
+### 11.2 R1（text/icon 空白）追查与完成 —— 三个断点（本轮新增修复）
+
+R1 在 §10/diff-analysis 中判为"坐标空间"单因，验收发现修复后**仍空白**，继续用浏览器埋点逐段排查，共找到并修复三个断点：
+
+1. **text/poi positions buffer 类型错误**（`MBTileDataEmitter.ts:1125`）：打包为 `Float32Array`，但原生消费端 `TileGeometryCreator.createTextElements:517` / `PoiManager.addPois:180` 直接把 buffer 按 `Float64Array` 解读 → `BufferAttribute.count=0` → 零 TextElement。**修为 `Float64Array`**（对齐原生 `VectorTileDataEmitter.ts:1759`）。
+2. **FontCatalog 注册键不匹配**（`MBFontCatalogBuilder.ts:104`）：注册键 `"font_Regular"`，查找键 `` `${font.name}_${fontStyle}` `` 其中 `fontStyle` 是数字枚举（`FontStyle.Regular=0`）→ 永不命中 → replacement glyph 被跳过。**修为 `String(FontStyle.Regular)`**。
+3. **symbol-only 瓦片不进 renderedTiles**（根因中的根因）：纯符号瓦片有 textGeometries 但 `objects.length===0`（emitter 为 symbol 层产 points 几何数据但无 mesh 对象）→ `Tile.hasGeometry=false` → `VisibleTileSet.populateRenderedTiles`（`VisibleTileSet.ts:1097-1101`）不收录 → `placeText` 的 `hasTextElements` 恒 false → 文本元素创建了却永不放置。**修复**：`TileGeometryCreator.createTileObjects` 在 `objects.length===0 && hasTextElements()` 时 `tile.forceHasGeometry(true)`（沿用 `BackgroundDataSource:79` 既有模式）。
+
+**验证**：text-size/default actual 出现 "ABC"、text-field/literal 出现 "Test"（文本管线端到端打通）；mismatch 从"空白基线"变为位置/字体差异（155/148px），进入像素精度阶段。埋点日志已全部移除，mapview + mbstyle 双包 tsc 通过。
+
+**仍遗留**：**icon 仍空白**（icon-image/literal mismatch 58 不变）——POI 路径（`preparePois`→`PoiManager.addPois`→`PoiBuilder`）的 ImageTexture 查找/精灵注册还有独立断点，需同款埋点排查（见 §11.4）。
+
+### 11.3 基建备忘
+
+- `run-mbstyle-render-tests.js` 跑完不退出（服务器常驻），后台任务被停时**一定遗留孤儿 `RenderingTestResultServer`** 占端口 → 下次运行 EADDRINUSE 且结果写入旧目录。重跑前 `pkill -f RenderingTestResultServer.js`。
+- `@flywave/flywave-mbstyle-datasource` 的 `npm test` 脚本指向 `./test/*Test.js`（不存在，编译产物在 `lib/test/`），且 lib 内模块解析缺 workspace 链接——单测请用项目既有方式（用户环境 257 通过），该脚本需另行修复。
+
+### 11.4 下一步方向（按 ROI 排序）
+
+1. **P0 icon POI 链路**（~150 用例）：`PoiManager.addPois` → `addPoi` → `PoiBuilder` 的 `imageTexture` 解析（sprite ImageTexture 注册名 vs technique.imageTexture 查找键），同款埋点法一次定位。
+2. **P0 文本像素对齐**（~273 用例的第一梯队）：当前文字渲染在左上、期望居中——查 anchor/offset 语义与 `tile.offset`、PBF catalog 注入（harness 目前命中 Default catalog 而非 PBF，`MBFontCatalogBuilder` advance/offsetY 度量修正）。
+3. **P0 line 落位**（~280 用例）：线已出但只覆盖下半画面——查 ribbon 顶点坐标空间（y-flip/tile offset）与瓦片覆盖。
+4. **P1 fill-extrusion 几何烘焙**（C3，~143 用例）：emitter 产屋顶/墙面三角形 + `extrusionAxis`（A3 只解了 shader 编译，几何仍是平面 footprint）。
+5. **P1 raster/hillshade 纹理上屏**（R5/R7，~105 用例）：uv 合成 + DEM 寻址 + A4 重渲验证。
+6. **P1 heatmap 双 pass**（C4，18 用例）+ property-function 多色分组（THREE 多材质 z-fighting 专项）。
+7. **P2 model-layer 崩溃定位**（212 用例，拆小批重跑）+ 真机 GPU 基线对照。
+
+### 11.5 第二轮全量基线（2026-08-13，含 R1 三修复）
+
+| 指标 | 第一轮（08-12） | 第二轮（08-13） | Δ |
+|------|----------------|----------------|---|
+| 上报结果 | 2775 | 2646 | −129 |
+| **通过** | **182（6.56%）** | **204（7.71%）** | **+22** |
+| 近失（≤600px） | 455 | 477 | +22 |
+| 未上报 | 256 | 385 | +129 |
+
+**通过的增量分布**：feature-state 3→6、geojson 11→17、fill-color 2→3、remove-feature-state 2→3（全绿）、lighting-3d-mode 0→2、map-projections 1→2、imports 2→3、combinations 8→10、runtime-styling 66→68；新增 extent、fill-extrusion-base、fill-pattern、worldview、tms、zoomed-fill、circle-sort-key 等零星通过。
+
+**未上报增量来源**：model-layer 批第 25 例附近再次崩溃（180 未上报，同第一轮）；本轮新增 fog 批 38、skybox 批 33、text-writing-mode 批 32 未上报（批内挂起/超时）；3d-intersections 25（崩溃点提前）。
+
+**关键判断**：
+- text-\* 仍 ~0 通过，但**性质已变**：文本管线已通（actual 有文字），失败原因是位置偏移（文字在左上、期望居中）+ 命中 Default catalog 而非 PBF 字体度量——属像素精度问题而非"空白"，对应 §11.4 第 2 项。
+- 通过率增幅 (+1.15pt) 低于预期，因为 R1 修复解锁的是"可渲染"，而大量 text/symbol 用例需先过"位置/字体"两关才能转为通过；预期 §11.4 第 1–3 项完成后有阶跃。
+- model-layer 崩溃（两轮同点）成为最大的未上报源，建议下轮优先定位（拆 10 例/批重跑）。
+
+> 第二轮结果目录：`rendering-test-results/mbstyle/`（已重跑覆盖）；通过清单：`baseline2-pass.txt`。
