@@ -26,31 +26,18 @@ export class FogModule {
     }
 
     updateData(data: FogData): void {
-        this.mapView.fog.enabled = data.enabled;
-
-        const theme = this.mapView.theme;
-        if (!theme.fog) {
-            theme.fog = {
+        this.mapView.patchTheme({
+            fog: {
                 color: data.color,
                 ratio: data.ratio,
                 range: data.range
-            };
-        } else {
-            theme.fog.color = data.color;
-            theme.fog.ratio = data.ratio;
-            theme.fog.range = data.range;
-        }
-
-        this.mapView.fog.reset(theme.fog);
-        this.mapView.update();
+            }
+        });
     }
 
     syncWithMap(data: FogData): void {
-        const theme = this.mapView.theme;
-        const fogConfig = theme?.fog;
-
+        const fogConfig = this.mapView.getThemeSync()?.fog;
         if (fogConfig) {
-            data.enabled = this.mapView.fog.enabled;
             data.color = fogConfig.color || data.color;
             data.ratio = fogConfig.ratio !== undefined ? fogConfig.ratio : data.ratio;
             data.range = fogConfig.range !== undefined ? fogConfig.range : data.range;

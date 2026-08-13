@@ -5,7 +5,6 @@ import { type GUI } from "dat.gui";
 
 export interface AtmosphereData {
     enabled: boolean;
-    sunCastShadow: boolean;
     sunTime: number;
     cloudsEnabled: boolean;
     cloudCoverage: number;
@@ -35,7 +34,6 @@ export class AtmosphereModule {
     private createDefaultData(): AtmosphereData {
         return {
             enabled: true,
-            sunCastShadow: true,
             sunTime: Date.now(),
             cloudsEnabled: false,
             cloudCoverage: 0.5,
@@ -47,10 +45,9 @@ export class AtmosphereModule {
     }
 
     private syncFromTheme(): void {
-        const atmo = this.mapView.theme?.atmosphere;
+        const atmo = this.mapView.getThemeSync()?.atmosphere;
         if (!atmo) return;
         if (atmo.enabled !== undefined) this.currentData.enabled = atmo.enabled;
-        if (atmo.sunCastShadow !== undefined) this.currentData.sunCastShadow = atmo.sunCastShadow;
         if (atmo.sunTime !== undefined) this.currentData.sunTime = atmo.sunTime;
         if (typeof atmo.clouds === "boolean") {
             this.currentData.cloudsEnabled = atmo.clouds;
@@ -76,10 +73,6 @@ export class AtmosphereModule {
         this.folder
             .add(this.currentData, "enabled")
             .name("Enabled")
-            .onChange(() => this.applyChanges());
-        this.folder
-            .add(this.currentData, "sunCastShadow")
-            .name("Sun Shadows")
             .onChange(() => this.applyChanges());
 
         const sunTimeController = this.folder
@@ -129,21 +122,21 @@ export class AtmosphereModule {
 
     private applyChanges(): void {
         this.userInteracting = true;
-        this.mapView.sceneEnvironment.updateAtmosphere({
-            enabled: this.currentData.enabled,
-            sunCastShadow: this.currentData.sunCastShadow,
-            sunTime: this.currentData.sunTime,
-            clouds: this.currentData.cloudsEnabled
-                ? {
-                      coverage: this.currentData.cloudCoverage,
-                      quality: this.currentData.cloudQuality as any,
-                      powderScale: this.currentData.cloudPowderScale,
-                      scatteringCoefficient: this.currentData.cloudScatteringCoefficient
-                  }
-                : false,
-            aerialPerspective: this.currentData.aerialPerspectiveEnabled
+        this.mapView.patchTheme({
+            atmosphere: {
+                enabled: this.currentData.enabled,
+                sunTime: this.currentData.sunTime,
+                clouds: this.currentData.cloudsEnabled
+                    ? {
+                          coverage: this.currentData.cloudCoverage,
+                          quality: this.currentData.cloudQuality as any,
+                          powderScale: this.currentData.cloudPowderScale,
+                          scatteringCoefficient: this.currentData.cloudScatteringCoefficient
+                      }
+                    : false,
+                aerialPerspective: this.currentData.aerialPerspectiveEnabled
+            }
         });
-        this.mapView.update();
     }
 
     getFolder(): GUI {

@@ -116,6 +116,39 @@ export class TileTransformation {
     }
 
     /**
+     * Zero-allocation variant of {@link interpolate}. Writes results into the
+     * provided scratch objects instead of creating new ones every frame.
+     *
+     * @param t Interpolation factor (0 = sphere, 1 = mercator)
+     * @param outPosition Pre-allocated Vector3 to receive the interpolated position
+     * @param outRotation Pre-allocated Matrix4 to receive the interpolated rotation
+     * @returns `true` if a rotation matrix was written, `false` if rotation is identity
+     */
+    interpolateTo(t: number, outPosition: Vector3, outRotation: Matrix4): boolean {
+        t = Math.max(0, Math.min(1, t));
+
+        outPosition.lerpVectors(this.spherePosition, this.mercatorPosition, t);
+
+        if (this.sphereRotation && this.mercatorRotation) {
+            this.interpolateMatrices(this.sphereRotation, this.mercatorRotation, outRotation, t);
+            return true;
+        } else if (this.sphereRotation) {
+            if (t < 0.5) {
+                outRotation.copy(this.sphereRotation);
+                return true;
+            }
+            return false;
+        } else if (this.mercatorRotation) {
+            if (t > 0.5) {
+                outRotation.copy(this.mercatorRotation);
+                return true;
+            }
+            return false;
+        }
+        return false;
+    }
+
+    /**
      * Interpolates between two matrices
      */
     private interpolateMatrices(
@@ -454,23 +487,23 @@ class TileGeometryBuilder {
                 mode =
                     level >= minDetailLevel
                         ? this.generatePatchWithBucketsAndSkirt(
-                            subdivision,
-                            level,
-                            row,
-                            0,
-                            tileCount,
-                            tileCount,
-                            true
-                        )
+                              subdivision,
+                              level,
+                              row,
+                              0,
+                              tileCount,
+                              tileCount,
+                              true
+                          )
                         : this.generatePatchWithBuckets(
-                            subdivision,
-                            level,
-                            row,
-                            0,
-                            tileCount,
-                            tileCount,
-                            true
-                        );
+                              subdivision,
+                              level,
+                              row,
+                              0,
+                              tileCount,
+                              tileCount,
+                              true
+                          );
                 mode.is_simple_patch = false;
             }
             this.models.set(cacheKey, mode);
@@ -546,7 +579,7 @@ class TileGeometryBuilder {
                 this.tileScheme.subdivisionScheme.getSubdivisionX(0)
             ) /
                 (1 << tileKey.level)) *
-            4.0,
+                4.0,
             1000
         );
 
@@ -912,8 +945,8 @@ class TileGeometryBuilder {
                         ? convertWebMercatorY.convert(geoPos.latitudeInRadians)
                         : 1 - convertWebMercatorY.convert(geoPos.latitudeInRadians)
                     : isYAxisDown
-                        ? 1 - v
-                        : v;
+                    ? 1 - v
+                    : v;
 
                 // Store original position to skritMap
                 {

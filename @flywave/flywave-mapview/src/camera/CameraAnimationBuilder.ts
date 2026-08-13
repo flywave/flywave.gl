@@ -2,22 +2,12 @@
 
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MathUtils } from "@flywave/flywave-geoutils/math/MathUtils";
-import { type LookAtParams, type MapView } from "@flywave/flywave-mapview";
+import { type LookAtParams, type MapView } from "../MapView";
 import * as THREE from "three/webgpu";
 
 import { type CameraKeyTrackAnimationOptions, ControlPoint } from "./CameraKeyTrackAnimation";
 
-/**
- * A Utility class for the creation of Camera Animations
- * @beta
- */
 export class CameraAnimationBuilder {
-    /**
-     * Get the current [[LookAtParams]] from [[MapView]]
-     * @beta
-     *
-     * @param mapView - The MapView
-     */
     static getLookAtFromView(
         mapView: MapView
     ): Pick<LookAtParams, "target" | "tilt" | "heading" | "distance"> {
@@ -29,16 +19,6 @@ export class CameraAnimationBuilder {
         };
     }
 
-    /**
-     * Appends a [[ControlPoint]] to [[CameraKeyTrackAnimationOptions]]
-     * @beta
-     *
-     * @param options - The [[CameraKeyTrackAnimationOptions]] that the [[ControlPoint]] should be
-     * appended to
-     * @param point - The [[ControlPoint]] to append.
-     * @param appendTime - The time it should take from the former end of the animation to the
-     * appended [[ControlPoint]] in seconds, per default takes the controlpoints timestamp
-     */
     static appendControlPoint(
         options: CameraKeyTrackAnimationOptions,
         point: ControlPoint,
@@ -57,15 +37,6 @@ export class CameraAnimationBuilder {
         options.controlPoints.push(point);
     }
 
-    /**
-     * Adds a [[ControlPoint]] to the beginning of an [[CameraKeyTrackAnimationOptions]]
-     * @beta
-     *
-     * @param options -
-     * @param point -
-     * @param prependTime - The time the animation from the inserted key to the next should take,
-     *  in seconds, @default 10 seconds
-     */
     static prependControlPoint(
         options: CameraKeyTrackAnimationOptions,
         point: ControlPoint,
@@ -79,18 +50,6 @@ export class CameraAnimationBuilder {
         options.controlPoints.unshift(point);
     }
 
-    /**
-     *
-     * Creates Options for a Bow Animation from the start to the target [[ControlPoint]]
-     * @beta
-     *
-     * @param mapView -
-     * @param startControlPoint -
-     * @param targetControlPoint -
-     * @param altitude - The maximal altitude the bow should have, defaults to twice the start to
-     * target distance
-     * @param duration - The duration of the Animation in seconds, @default 10
-     */
     static createBowFlyToOptions(
         mapView: MapView,
         startControlPoint: ControlPoint,
@@ -107,14 +66,11 @@ export class CameraAnimationBuilder {
                 startWorldTarget.distanceTo(
                     mapView.projection.projectPoint(targetControlPoint.target)
                 );
-        // use a minimum altitude of the sum of distances to
-        // actually create a bow for small distance CP
         maxAltitude = Math.max(
             startControlPoint.distance + targetControlPoint.distance,
             maxAltitude
         );
 
-        //calculate two ControlPoints on the maximal altitude in between the start and target points
         const midCoord0 = GeoCoordinates.lerp(
             startControlPoint.target as GeoCoordinates,
             targetControlPoint.target as GeoCoordinates,
@@ -164,13 +120,6 @@ export class CameraAnimationBuilder {
         return { controlPoints };
     }
 
-    /**
-     * Creates [[CameraKeyTrackAnimationOptions]] for an Orbit Animation
-     * @beta
-     *
-     * @param startControlPoint -
-     * @param duration -
-     */
     static createOrbitOptions(
         startControlPoint: ControlPoint,
         duration: number = 10

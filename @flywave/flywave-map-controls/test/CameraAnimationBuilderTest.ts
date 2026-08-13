@@ -6,8 +6,11 @@ import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three/webgpu";
 
-import { CameraAnimationBuilder } from "../src/CameraAnimationBuilder";
-import { type CameraKeyTrackAnimationOptions, ControlPoint } from "../src/CameraKeyTrackAnimation";
+import {
+    CameraAnimationBuilder,
+    type CameraKeyTrackAnimationOptions,
+    ControlPoint
+} from "@flywave/flywave-mapview";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

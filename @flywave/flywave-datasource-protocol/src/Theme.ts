@@ -211,6 +211,51 @@ export interface Theme {
      * @default "agx-punchy"
      */
     toneMappingMode?: ToneMappingMode;
+
+    /**
+     * Lens flare effect configuration.
+     *
+     * @remarks
+     * Only effective in spherical (globe) projection mode with atmosphere
+     * enabled. Simulates atmospheric lens artifacts (ghosts, halo, glare,
+     * bloom) when looking towards the sun.
+     */
+    lensFlare?: LensFlareThemeConfig;
+}
+
+/**
+ * Lens flare effect configuration for the {@link Theme}.
+ */
+export interface LensFlareThemeConfig {
+    /**
+     * Enable the lens flare effect.
+     * @default false
+     */
+    enabled?: boolean;
+
+    /**
+     * Intensity of the bloom component (soft glow around the sun).
+     * @default 1.0
+     */
+    bloomIntensity?: number;
+
+    /**
+     * Intensity of ghost artifacts (colored circular reflections).
+     * @default 1.0
+     */
+    ghostIntensity?: number;
+
+    /**
+     * Intensity of the halo ring around the sun.
+     * @default 1.0
+     */
+    haloIntensity?: number;
+
+    /**
+     * Intensity of the glare (star-burst spikes radiating from the sun).
+     * @default 1.0
+     */
+    glareIntensity?: number;
 }
 
 /**
@@ -286,6 +331,12 @@ export interface AtmosphereThemeConfig {
      * (tiles, 3D models, terrain). Disabling improves performance but removes
      * all sun-direction shadows; cloud self-shadowing is controlled separately
      * inside `clouds`.
+     *
+     * @deprecated Use {@link Theme.enableShadows} as the single shadow switch.
+     * When atmosphere is enabled and `enableShadows` is `true`, the sun light
+     * automatically casts shadows. This field is kept for backward
+     * compatibility with existing theme JSON and will be removed in a future
+     * version.
      *
      * @default true
      */

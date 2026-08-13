@@ -21,15 +21,19 @@ export class ToneMappingModule {
         this.folder = gui.addFolder("🎨 Tone Mapping");
         this.folder.close();
         this.currentData = {
-            exposure: this.mapView.renderer.toneMappingExposure ?? 1,
-            mode: this.detectMode()
+            exposure: 1,
+            mode: "agx-punchy"
         };
+        this.syncFromTheme();
         this.setupControls();
     }
 
-    private detectMode(): string {
-        const vrm = this.mapView.mapRenderingManager?.viewRenderManager;
-        return vrm?.config?.toneMappingMode ?? "agx-punchy";
+    private syncFromTheme(): void {
+        const theme = this.mapView.getThemeSync();
+        if (theme?.toneMappingExposure !== undefined)
+            this.currentData.exposure = theme.toneMappingExposure;
+        if (theme?.toneMappingMode !== undefined) this.currentData.mode = theme.toneMappingMode;
+        this.folder.updateDisplay();
     }
 
     private setupControls(): void {
@@ -46,10 +50,10 @@ export class ToneMappingModule {
 
     private applyChanges(): void {
         this.userInteracting = true;
-        this.mapView.sceneEnvironment.updateToneMapping(
-            this.currentData.exposure,
-            this.currentData.mode as any
-        );
+        this.mapView.patchTheme({
+            toneMappingExposure: this.currentData.exposure,
+            toneMappingMode: this.currentData.mode as any
+        });
     }
 
     getFolder(): GUI {
@@ -61,9 +65,5 @@ export class ToneMappingModule {
             this.userInteracting = false;
             return;
         }
-        this.currentData.exposure =
-            this.mapView.renderer.toneMappingExposure ?? this.currentData.exposure;
-        this.currentData.mode = this.detectMode();
-        this.folder.updateDisplay();
     }
 }

@@ -48,6 +48,10 @@ export class MapControls extends BaseMapControls {
         this.m_cameraTransformPlanar = new PlanarCameraTransform(mapView);
         this.m_cameraTransformEllipsoid = new EllipsoidCameraTransform(mapView);
 
+        this.addEventListener(EventNames.BeginInteraction, () => {
+            mapView.stopCameraAnimation();
+        });
+
         this.startAnimation();
     }
 

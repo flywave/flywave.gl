@@ -3,6 +3,7 @@
 import {
     type AtmosphereThemeConfig,
     type GradientSky,
+    type LensFlareThemeConfig,
     type Light,
     type Sky,
     type ToneMappingMode
@@ -136,6 +137,16 @@ export class MapViewEnvironment {
 
     updateToneMapping(exposure?: number, mode?: ToneMappingMode) {
         this.m_atmosphere?.updateToneMapping(exposure, mode);
+    }
+
+    updateLensFlare(config?: LensFlareThemeConfig) {
+        const vrm = this.m_mapView.mapRenderingManager?.viewRenderManager;
+        if (vrm == null) return;
+        const merged = {
+            ...vrm.config.lensFlare,
+            ...(config ?? { enabled: false })
+        };
+        vrm.setLensFlareConfig(merged);
     }
 
     createLight(lightDescription: Light) {

@@ -102,6 +102,7 @@ export interface IViewRenderManager {
     setSize(width: number, height: number): void;
     dispose(): void;
     needsUpdate: boolean;
+    setLensFlareConfig(config: ILensFlareConfig): void;
     getColorTexture(): THREE.Texture | null;
     getDepthTexture(): THREE.Texture | null;
     readDepthAsync(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null>;

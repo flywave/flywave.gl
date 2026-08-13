@@ -42,9 +42,6 @@ const EndInteractionUpdate = {
     type: EventNames.EndInteraction
 } as Event<EventNames.EndInteraction, any>;
 
-// Reusable scratch vector for projecting the rotation pivot into screen space.
-const s_pivotNdc: Vector3 = new Vector3();
-
 interface EventMap {
     [EventNames.Update]: typeof EventUpdate;
     [EventNames.BeginInteraction]: typeof BeginInteractionUpdate;
@@ -227,6 +224,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         return false;
     }
 
+    private m_interactionActive: boolean = false;
+
     protected update(): boolean {
         if (!this.enabled) {
             this.windowEventHandler.lastMouseZ = this.mouseState.z;
@@ -240,6 +239,20 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
         const isMoving =
             Math.abs(mouseX - this.mouseState.x) > 1 || Math.abs(mouseY - this.mouseState.y) > 1;
+
+        const isClick = mouseDown[0] && !this.mouseState.prevDown[0];
+        const isWheel = mouseZ !== this.mouseState.z;
+        const interactionStarting = isClick || isWheel;
+        const interactionEnding =
+            !mouseDown[0] && !mouseDown[1] && !mouseDown[2] && mouseZ === this.mouseState.z;
+
+        if (interactionStarting && !this.m_interactionActive) {
+            this.m_interactionActive = true;
+            this.dispatchEvent(BeginInteractionUpdate);
+        } else if (interactionEnding && this.m_interactionActive && !isMoving) {
+            this.m_interactionActive = false;
+            this.dispatchEvent(EndInteractionUpdate);
+        }
 
         this.mouseCursorManager?.update(mouseDown, mouseZ - this.mouseState.z, isMoving);
 
@@ -590,21 +603,23 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         if (this.m_pivotIndicator == null || !this.m_pivotIndicator.enabled) return;
 
         if (mouseDown[2] && this.lastHitCenterDistance > 0) {
-            // Project the orbit pivot (the 3D point the camera rotates around) into screen
-            // space, so the indicator marks the actual rotation center rather than a fixed
-            // screen-center point.
-            const camera = this.mapView.camera;
-            camera.updateMatrixWorld();
-
-            const ndc = s_pivotNdc.copy(this.lastHitCenter).project(camera);
             const { width, height } = this.mapView.getCanvasClientSize();
-            const sx = (ndc.x * 0.5 + 0.5) * width;
-            const sy = (-ndc.y * 0.5 + 0.5) * height;
 
-            // Only show when the pivot is in front of the camera and within the frustum;
-            // otherwise let it fade out.
-            if (ndc.z > -1 && ndc.z < 1) {
-                this.m_pivotIndicator.show(sx, sy);
+            const origin = new Vector3();
+            const target = new Vector3();
+            const cx = width / 2;
+            const cy = height / 2;
+            this.cameraTransform.unprojectToWorld(origin, cx, cy, 0);
+            this.cameraTransform.unprojectToWorld(target, cx, cy, -1);
+
+            const hitPoint = new Vector3();
+            const dist = this.rayCastWorld(hitPoint, origin, target);
+
+            if (dist > 0) {
+                this.lastHitCenter.copy(hitPoint);
+                this.lastHitCenterDistance = dist;
+                this.getDistanceToGlobe(hitPoint, this.lastHitGravity);
+                this.m_pivotIndicator.show(cx, cy);
             } else {
                 this.m_pivotIndicator.hide();
             }

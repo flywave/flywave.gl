@@ -203,20 +203,8 @@ function buildNodes() {
 
     const smoothElevationVertex = Fn(([t]: [ReturnType<typeof vec2>]) => {
         const demUv = tileUvToDemSample(t);
-        const tc = demUv.mul(texSizeF);
-        const fc = tslFloor(tc);
-        const fr = fract(tc);
-        const u00 = clamp(fc.div(texSizeF), vec2(0), vec2(1));
-        const u10 = clamp(fc.add(vec2(1, 0)).div(texSizeF), vec2(0), vec2(1));
-        const u01 = clamp(fc.add(vec2(0, 1)).div(texSizeF), vec2(0), vec2(1));
-        const u11 = clamp(fc.add(vec2(1, 1)).div(texSizeF), vec2(0), vec2(1));
-        const h00 = decodeElevation(texture(_heightMapTex, u00));
-        const h10 = decodeElevation(texture(_heightMapTex, u10));
-        const h01 = decodeElevation(texture(_heightMapTex, u01));
-        const h11 = decodeElevation(texture(_heightMapTex, u11));
-        const h0 = tslMix(h00, h10, fr.x);
-        const h1 = tslMix(h01, h11, fr.x);
-        return applyModifier(tslMix(h0, h1, fr.y), t);
+        const h = decodeElevation(texture(_heightMapTex, demUv));
+        return applyModifier(h, t);
     });
 
     const computeMvPos = Fn(([fUv, fPos]: [ReturnType<typeof vec2>, ReturnType<typeof vec3>]) => {

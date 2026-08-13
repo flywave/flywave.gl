@@ -64,7 +64,7 @@ const mapView = new MapView({
         atmosphere: {
             enabled: true,
             sunCastShadow: false,
-            clouds: { quality: "low"  },
+            clouds: { quality: "low" },
 
             sunTime: (() => {
                 const year = new Date().getFullYear();
@@ -97,24 +97,13 @@ document.body.appendChild(camHud);
 let _toneMappingApplied = false;
 const applyToneMappingOverride = () => {
     if (_toneMappingApplied) return;
-    const internals = mapView as unknown as MapViewInternals;
-    const vrm = internals.mapRenderingManager?.viewRenderManager;
-    if (vrm) {
-        vrm.config.toneMappingMode = "agx-punchy";
-        vrm.exposure.value = 3;
-        vrm.needsUpdate = true;
+    try {
+        mapView.patchTheme({
+            toneMappingMode: "agx-punchy",
+            toneMappingExposure: 3
+        });
         _toneMappingApplied = true;
-    }
-    const atmoSystem = internals.m_atmosphereSystem;
-    if (atmoSystem) {
-        atmoSystem.m_toneMappingMode = "agx-punchy";
-        atmoSystem.m_toneMappingExposure = 3;
-    }
-    const renderer = internals.renderer;
-    if (renderer) {
-        renderer.toneMapping = 0;
-        renderer.toneMappingExposure = 1;
-    }
+    } catch {}
 };
 
 // Match reference project camera
@@ -220,11 +209,9 @@ aaBtn.addEventListener("click", () => {
     _aaIndex = (_aaIndex + 1) % aaModes.length;
     const mode = aaModes[_aaIndex];
     aaBtn.textContent = `AA: ${mode}`;
-    const vrm = (mapView as unknown as MapViewInternals).mapRenderingManager?.viewRenderManager;
-    if (vrm) {
-        vrm.config.antialiasing = mode;
-        vrm.needsUpdate = true;
-    }
+    mapView.patchTheme({
+        postEffects: { antialiasing: mode }
+    });
 });
 
 // Sun time slider (adjust hour of day to see god rays at different sun angles)
@@ -252,8 +239,7 @@ sunTimeSlider.addEventListener("input", () => {
     const offset = longitude / 15;
     const dayOfYear = 1;
     const sunTime = epoch + (dayOfYear * 24 + hour - offset) * 3600000;
-    const atmo = (mapView as unknown as MapViewInternals).m_sceneEnvironment?.atmosphere;
-    if (atmo) {
-        atmo.setCurrentDate(new Date(sunTime), true);
-    }
+    mapView.patchTheme({
+        atmosphere: { sunTime }
+    });
 });

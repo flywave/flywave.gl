@@ -50,14 +50,13 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
         canvas: canvas, // Specify render canvas
-        dynamicPixelRatio: 0.6,
         theme: {
             atmosphere: {
                 enabled: true,
                 sunCastShadow: true,
-                clouds: {
-                    quality: "high"
-                },
+                // clouds: {
+                //     quality: "high"
+                // },
                 sunTime: new Date(new Date().setMonth(9)).setHours(12, 30)
             },
             postEffects: {
@@ -110,8 +109,7 @@ const create3DTilesDataSource = (mapView: MapView): CesiumIonDataSource => {
             url: "http://127.0.0.1/%E5%8C%85%E8%A5%BF3dtile/tileset.json",
             receiveShadow: true,
             errorTarget: 30,
-            castShadow: true,
-            shadowCastErrorThreshold: 60,
+            castShadow: true, 
             transform: new Matrix4().fromArray([
                 -0.337273, 0.00054, -0.941407, 0, -0.612574, 0.759208, 0.219899, 0, 0.714842,
                 0.650848, -0.25573, 0, 4565629.4, 4129077, -8011465.5, 1
@@ -332,11 +330,9 @@ try {
         aaIndex = (aaIndex + 1) % aaModes.length;
         const mode = aaModes[aaIndex];
         aaBtn.textContent = `AA: ${mode}`;
-        const vrm = (mapView as any).mapRenderingManager?.viewRenderManager;
-        if (vrm) {
-            vrm.config.antialiasing = mode;
-            vrm.needsUpdate = true;
-        }
+        mapView.patchTheme({
+            postEffects: { antialiasing: mode }
+        });
     });
 } catch (error) {
     console.error("Error occurred while initializing 3D Tiles animation example:", error);

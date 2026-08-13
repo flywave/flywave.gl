@@ -120,6 +120,7 @@ function processTextures(gltf: GLTFPostprocessed): { map: Map<string, Texture>; 
         let texture: Texture;
         if (image?.compressedTexture instanceof CompressedTexture) {
             texture = image.compressedTexture;
+            texture.needsUpdate = true;
         } else {
             texture = new Texture();
             texture.flipY = false;

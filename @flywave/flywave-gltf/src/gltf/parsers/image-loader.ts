@@ -171,7 +171,7 @@ export class ImageLoader {
 
     private async loadKTX2(arrayBuffer: ArrayBuffer): Promise<LoadedImage> {
         if (!this.ktx2Loader) {
-            console.warn("KTX2Loader not available, using fallback");
+            console.warn("[KTX2] KTX2Loader not available, using fallback");
             return await this.decodeKTX2Fallback(arrayBuffer);
         }
 
@@ -197,7 +197,7 @@ export class ImageLoader {
 
             return this.textureToLoadedImage(texture);
         } catch (error) {
-            console.warn("KTX2Loader failed, trying fallback:", error);
+            console.warn("[KTX2] Loader failed, trying fallback:", error);
             return await this.decodeKTX2Fallback(arrayBuffer);
         }
     }

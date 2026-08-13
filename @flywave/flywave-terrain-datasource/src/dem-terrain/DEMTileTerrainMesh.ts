@@ -92,7 +92,8 @@ export class HeightMapTerrainMesh extends Mesh {
     public projectorState?: ProjectorState = undefined;
 
     // --- Internal state ---
-    private m_uPatchPos: Matrix4;
+    private m_uPatchPos: Matrix4 = new Matrix4();
+    private readonly _scratchInterpPos: Vector3 = new Vector3();
     private m_uHeightMapPos?: Vector3;
     private m_isSimplePatch: boolean = false;
     private m_uHeighMapTexture: THREE.Texture = matEmptyTexture;
@@ -274,15 +275,16 @@ export class HeightMapTerrainMesh extends Mesh {
     updateProjectionTransform() {
         const projectionFactor = this.m_projectionSwitchController.projectionFactor;
 
-        const interpolatedTransform = this.m_transformation.interpolate(projectionFactor);
+        const hasRotation = this.m_transformation.interpolateTo(
+            projectionFactor,
+            this._scratchInterpPos,
+            this.m_uPatchPos
+        );
 
-        if (interpolatedTransform.rotation) {
-            this.m_uPatchPos = interpolatedTransform.rotation;
-            this._decomposePatchPos(this.m_uPatchPos);
-        } else {
-            this.m_uPatchPos = new Matrix4();
-            this._decomposePatchPos(this.m_uPatchPos);
+        if (!hasRotation) {
+            this.m_uPatchPos.identity();
         }
+        this._decomposePatchPos(this.m_uPatchPos);
         this.skirtHeight = this.m_skirtHeight;
 
         this.quaternion.identity();
@@ -292,7 +294,7 @@ export class HeightMapTerrainMesh extends Mesh {
             this.rotateZ(currentZRotation);
         }
 
-        this.displacement.copy(interpolatedTransform.position).sub(this.m_tile.center);
+        this.displacement.copy(this._scratchInterpPos).sub(this.m_tile.center);
 
         this.projectionFactor = projectionFactor;
     }

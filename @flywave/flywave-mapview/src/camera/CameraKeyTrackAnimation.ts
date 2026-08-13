@@ -1,45 +1,24 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
-import {
-    type LookAtParams,
-    type MapView,
-    type RenderEvent,
-    MapViewEventNames,
-    MapViewUtils
-} from "@flywave/flywave-mapview";
 import { LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three/webgpu";
+
+import { type LookAtParams, type MapView, type RenderEvent, MapViewEventNames } from "../MapView";
+import { MapViewUtils } from "../Utils";
 
 const logger = LoggerManager.instance.create("CameraKeyTrackAnimation");
 const MIN_DISTANCE = 0;
 
-/**
- * The Options used to create a ControlPoint
- * @beta
- */
 export interface ControlPointOptions
     extends Partial<Pick<LookAtParams, "target" | "tilt" | "heading" | "distance">> {
-    /**
-     * A timestamp for the [[ControlPoint]], describes when during the animation the
-     * [[ControlPoint]] should be reached, in seconds
-     */
     timestamp: number;
-    /**
-     * A name for the ControlPoint
-     */
     name?: string;
 }
-/**
- * A ControlPoint used to defined the Track of the [[CameraKeyTrackAnimation]]
- * @beta
- */
+
 export class ControlPoint
     implements Pick<LookAtParams, "target" | "tilt" | "heading" | "distance">
 {
-    /**
-     * The time, when this ControlPoint should be reached in the animation flow, in seconds.
-     */
     timestamp: number = 0;
     target: GeoCoordinates;
     name?: string;
@@ -59,47 +38,15 @@ export class ControlPoint
     }
 }
 
-/**
- * The options to create a CameraKeyTrackAnimation
- * @beta
- */
 export interface CameraKeyTrackAnimationOptions {
-    /**
-     * The [[ControlPoint]]s the animation should pass
-     */
     controlPoints: ControlPoint[];
-    /**
-     * An optional name for the animation, @default ""
-     */
     name?: string;
-    /**
-     * The [[THREE.InterpolationModes]]  for the animation.
-     * @default THREE.InterpolateSmooth
-     */
     interpolation?: THREE.InterpolationModes;
-    /**
-     * See [[THREE.AnimationActionLoopStyles]]
-     * @default THREE.LoopOnce
-     */
-    loop?: THREE.AnimationActionLoopStyles; //types seem outdate too, should be THREE.LoopModes
-    /**
-     * If `true`the Animation will interpolate rotations only clockwise.
-     * @default true
-     */
+    loop?: THREE.AnimationActionLoopStyles;
     rotateOnlyClockwise?: boolean;
-    /**
-     * Defines how often the Animation should be repeated.
-     * @default 1
-     */
     repetitions?: number;
 }
 
-/**
- * The KeyFrameTracks from THREE.js used in this animation are directly bound to an
- * [[THREE.Object3D]] to manipulate its properties.
- * Therefore this Dummy object is used, the animation manipulates its properties, which then are
- * used to set the actual paramters of [[MapView]]
- */
 class AnimationDummy extends THREE.Object3D {
     distance: number = 0;
 
@@ -109,10 +56,6 @@ class AnimationDummy extends THREE.Object3D {
     }
 }
 
-/**
- * A [[CameraAnimation]] along of a set of [[ControlPoint]]s
- * @beta
- */
 export class CameraKeyTrackAnimation {
     private readonly m_animationClip: THREE.AnimationClip;
     private readonly m_animationMixer: THREE.AnimationMixer;
@@ -146,8 +89,8 @@ export class CameraKeyTrackAnimation {
         const timestamps = this.m_options.controlPoints.map(point => {
             return point.timestamp;
         });
-        const posValues: [number?] = [];
-        const rotValues: [number?] = [];
+        const posValues: number[] = [];
+        const rotValues: number[] = [];
         this.m_options.controlPoints.map(point => {
             const worldPos = this.m_mapView.projection.projectPoint(point.target);
             posValues.push(worldPos.x);
@@ -232,9 +175,6 @@ export class CameraKeyTrackAnimation {
         this.m_options.rotateOnlyClockwise = value;
     }
 
-    /**
-     * Start the Animation
-     */
     start(time?: number, onFinished?: () => void): void {
         if (this.m_running) {
             this.stop();
@@ -247,15 +187,10 @@ export class CameraKeyTrackAnimation {
         this.m_running = true;
     }
 
-    /**
-     * Stop the Animation
-     */
     stop(): void {
         this.m_mapView.removeEventListener(MapViewEventNames.Render, this.m_animateCb);
         this.m_mapView.endAnimation();
         if (this.m_onFinished !== undefined) {
-            // called asynchronously, as the last animate event still will get dispatched
-            // and should run before the onFinished callback
             window.setTimeout(this.m_onFinished, 0);
         }
         this.m_running = false;

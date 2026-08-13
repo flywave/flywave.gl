@@ -60,7 +60,6 @@ export class AtmosphereSystem {
     private m_atmosphereLight?: AtmosphereLight;
     private m_csmShadowNode?: CascadedShadowMapsNode;
     private m_atmosphereEnabled: boolean = true;
-    private m_sunCastShadow: boolean = true;
     private m_cloudsEnabled: boolean = false;
     // Full cloud config (including quality preset + per-parameter overrides).
     // Kept here because the VRM/cloudNode may not exist yet when updateOptions
@@ -278,7 +277,7 @@ export class AtmosphereSystem {
             this.m_atmosphereEnabled = options.enabled;
         }
         if (options?.sunCastShadow !== undefined) {
-            this.m_sunCastShadow = options.sunCastShadow;
+            this.mapView.shadowsEnabled = options.sunCastShadow;
         }
         if (options?.clouds !== undefined) {
             this.m_cloudsEnabled = typeof options.clouds === "boolean" ? options.clouds : true;
@@ -300,6 +299,7 @@ export class AtmosphereSystem {
                 if (vrm.aerialNode != null) {
                     vrm.aerialNode.setConfig(options.aerialPerspective);
                 }
+                vrm.needsUpdate = true;
             }
         }
         const ctx = this.m_atmosphereContext;
@@ -358,7 +358,10 @@ export class AtmosphereSystem {
         let needsAtmosphereRebuild = false;
         const ap = options?.atmosphereParams;
         if (ap != null && typeof ap === "object") {
-            if (ap.rayleighScale != null && ap.rayleighScale !== this.m_atmosphereOverrides.rayleighScale) {
+            if (
+                ap.rayleighScale != null &&
+                ap.rayleighScale !== this.m_atmosphereOverrides.rayleighScale
+            ) {
                 this.m_atmosphereOverrides.rayleighScale = ap.rayleighScale;
                 needsAtmosphereRebuild = true;
             }
@@ -366,15 +369,24 @@ export class AtmosphereSystem {
                 this.m_atmosphereOverrides.mieScale = ap.mieScale;
                 needsAtmosphereRebuild = true;
             }
-            if (ap.groundAlbedo != null && ap.groundAlbedo !== this.m_atmosphereOverrides.groundAlbedo) {
+            if (
+                ap.groundAlbedo != null &&
+                ap.groundAlbedo !== this.m_atmosphereOverrides.groundAlbedo
+            ) {
                 this.m_atmosphereOverrides.groundAlbedo = ap.groundAlbedo;
                 needsAtmosphereRebuild = true;
             }
-            if (ap.miePhaseFunctionG != null && ap.miePhaseFunctionG !== this.m_atmosphereOverrides.miePhaseFunctionG) {
+            if (
+                ap.miePhaseFunctionG != null &&
+                ap.miePhaseFunctionG !== this.m_atmosphereOverrides.miePhaseFunctionG
+            ) {
                 this.m_atmosphereOverrides.miePhaseFunctionG = ap.miePhaseFunctionG;
                 needsAtmosphereRebuild = true;
             }
-            if (ap.luminanceScale != null && ap.luminanceScale !== this.m_atmosphereOverrides.luminanceScale) {
+            if (
+                ap.luminanceScale != null &&
+                ap.luminanceScale !== this.m_atmosphereOverrides.luminanceScale
+            ) {
                 this.m_atmosphereOverrides.luminanceScale = ap.luminanceScale;
                 needsAtmosphereRebuild = true;
             }
@@ -588,7 +600,7 @@ export class AtmosphereSystem {
             return;
         }
 
-        if (!light.castShadow && this.m_atmosphereEnabled && this.m_sunCastShadow) {
+        if (!light.castShadow && this.m_atmosphereEnabled && this.mapView.shadowsEnabled) {
             light.castShadow = true;
         }
 
@@ -630,7 +642,7 @@ export class AtmosphereSystem {
         const lightNeedsUpdate =
             this.m_atmosphereLight != null &&
             (this.m_atmosphereLight.visible !== effective ||
-                this.m_atmosphereLight.castShadow !== (effective && this.m_sunCastShadow));
+                this.m_atmosphereLight.castShadow !== (effective && this.mapView.shadowsEnabled));
 
         const scene = this.mapView.scene as THREE.Scene & {
             backgroundNode?: THREE.Scene["backgroundNode"];
@@ -646,14 +658,15 @@ export class AtmosphereSystem {
 
         if (lightNeedsUpdate && this.m_atmosphereLight != null) {
             this.m_atmosphereLight.visible = effective;
-            this.m_atmosphereLight.castShadow = effective && this.m_sunCastShadow;
+            this.m_atmosphereLight.castShadow = effective && this.mapView.shadowsEnabled;
         }
 
         if (sceneNeedsUpdate) {
             if (effective) {
                 scene.background = null;
                 scene.backgroundNode = this.m_skyNode as THREE.Scene["backgroundNode"];
-                scene.environmentNode = skyEnvironment() as unknown as THREE.Scene["environmentNode"];
+                scene.environmentNode =
+                    skyEnvironment() as unknown as THREE.Scene["environmentNode"];
             } else {
                 scene.backgroundNode = null;
                 scene.environmentNode = null;

@@ -12,10 +12,11 @@ import {
     ArcGISTileProvider,
     MapControlsUI,
     mercatorProjection,
-    sphereProjection
+    sphereProjection,
+    CameraAnimationBuilder,
+    CameraKeyTrackAnimation,
+    ControlPoint
 } from "@flywave/flywave.gl";
-
-import { CameraAnimationBuilder, CameraKeyTrackAnimation, ControlPoint } from "@flywave/flywave.gl";
 import { GUI } from "dat.gui";
 import * as THREE from "three/webgpu";
 
@@ -235,7 +236,7 @@ const initializeUIControls = (
     // Add fly to specified location control
     gui.add(options, "flyTo", [...Object.keys(geoLocations)])
         .onChange((location: string) => {
-            flyTo(location, map, geoLocations, options, animationOptions, updateCameraAnimation);
+            flyTo(location, map, geoLocations, options, updateCameraAnimation);
         })
         .listen();
 
@@ -355,31 +356,19 @@ const flyTo = (
     map: MapView,
     geoLocations: GeoLocations,
     options: UIOptions,
-    animationOptions: AnimationOptions,
     updateCameraAnimation: (animation: CameraKeyTrackAnimation | undefined) => void
 ): void => {
     stopAnimation(options, updateCameraAnimation);
     options.flyTo = location;
     if (location !== "") {
-        const target = new ControlPoint({
+        map.flyTo({
             target: geoLocations[location] as GeoCoordinates,
-            distance: location.includes("Beijing") ? 3000 : 1500, // Use larger distance for Beijing, smaller distance for Jinan
+            distance: location.includes("Beijing") ? 3000 : 1500,
             tilt: 25,
             heading: Math.random() * 360,
-            timestamp: 10
+            duration: 10,
+            curve: "bow"
         });
-        const flyToOpts = CameraAnimationBuilder.createBowFlyToOptions(
-            map,
-            new ControlPoint({
-                ...CameraAnimationBuilder.getLookAtFromView(map),
-                timestamp: 0
-            }),
-            target
-        );
-        Object.assign(flyToOpts, animationOptions);
-        const newAnimation = new CameraKeyTrackAnimation(map, flyToOpts);
-        newAnimation.start();
-        updateCameraAnimation(newAnimation);
     }
 };
 

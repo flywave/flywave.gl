@@ -37,34 +37,12 @@ export interface PostProcessingData {
 
 export class PostProcessingModule {
     private readonly mapView: MapView;
-    private readonly mapRenderingManager: IMapRenderingManager | undefined;
 
     constructor(mapView: MapView) {
         this.mapView = mapView;
-        this.mapRenderingManager = mapView.mapRenderingManager;
     }
 
     getDefaultData(): PostProcessingData {
-        if (this.mapRenderingManager) {
-            return {
-                bloom: {
-                    enabled: this.mapRenderingManager.bloom.enabled,
-                    strength: this.mapRenderingManager.bloom.strength || 0,
-                    radius: this.mapRenderingManager.bloom.radius || 0,
-                    luminancePassThreshold:
-                        this.mapRenderingManager.bloom.luminancePassThreshold || 0
-                },
-                vignette: { ...this.mapRenderingManager.vignette },
-                sepia: { ...this.mapRenderingManager.sepia },
-                hueSaturation: { ...this.mapRenderingManager.hueSaturation },
-                brightnessContrast: { ...this.mapRenderingManager.brightnessContrast },
-                taaEnabled: this.mapRenderingManager.taaEnabled,
-                dynamicMsaaSamplingLevel: this.mapRenderingManager.dynamicMsaaSamplingLevel,
-                msaaEnabled: this.mapRenderingManager.msaaEnabled,
-                staticMsaaSamplingLevel: this.mapRenderingManager.staticMsaaSamplingLevel
-            };
-        }
-
         return {
             bloom: { enabled: false, strength: 2.5, radius: 0.7, luminancePassThreshold: 0.0 },
             vignette: { enabled: false, offset: 1.0, darkness: 1.0 },
@@ -79,29 +57,38 @@ export class PostProcessingModule {
     }
 
     syncWithMap(data: PostProcessingData): void {
-        if (!this.mapRenderingManager) return;
-        Object.assign(data.bloom, this.mapRenderingManager.bloom);
-        Object.assign(data.vignette, this.mapRenderingManager.vignette);
-        Object.assign(data.sepia, this.mapRenderingManager.sepia);
-        Object.assign(data.hueSaturation, this.mapRenderingManager.hueSaturation);
-        Object.assign(data.brightnessContrast, this.mapRenderingManager.brightnessContrast);
-        data.taaEnabled = this.mapRenderingManager.taaEnabled;
-        data.dynamicMsaaSamplingLevel = this.mapRenderingManager.dynamicMsaaSamplingLevel;
-        data.msaaEnabled = this.mapRenderingManager.msaaEnabled;
-        data.staticMsaaSamplingLevel = this.mapRenderingManager.staticMsaaSamplingLevel;
+        const pe = this.mapView.getThemeSync()?.postEffects;
+        if (pe?.bloom) Object.assign(data.bloom, pe.bloom);
+        if (pe?.vignette) Object.assign(data.vignette, pe.vignette);
+        if (pe?.sepia) Object.assign(data.sepia, pe.sepia);
+        if (pe?.hueSaturation) Object.assign(data.hueSaturation, pe.hueSaturation);
+        if (pe?.brightnessContrast) Object.assign(data.brightnessContrast, pe.brightnessContrast);
+        if (pe?.antialiasing) data.taaEnabled = pe.antialiasing === "taa";
+        else if (pe?.taa !== undefined) data.taaEnabled = pe.taa;
+        const rm = this.mapView.mapRenderingManager;
+        if (rm) {
+            data.dynamicMsaaSamplingLevel = rm.dynamicMsaaSamplingLevel;
+            data.msaaEnabled = rm.msaaEnabled;
+            data.staticMsaaSamplingLevel = rm.staticMsaaSamplingLevel;
+        }
     }
 
     updateData(data: PostProcessingData): void {
-        if (!this.mapRenderingManager) return;
-        Object.assign(this.mapRenderingManager.bloom, data.bloom);
-        Object.assign(this.mapRenderingManager.vignette, data.vignette);
-        Object.assign(this.mapRenderingManager.sepia, data.sepia);
-        Object.assign(this.mapRenderingManager.hueSaturation, data.hueSaturation);
-        Object.assign(this.mapRenderingManager.brightnessContrast, data.brightnessContrast);
-        this.mapRenderingManager.taaEnabled = data.taaEnabled;
-        this.mapRenderingManager.dynamicMsaaSamplingLevel = data.dynamicMsaaSamplingLevel;
-        this.mapRenderingManager.msaaEnabled = data.msaaEnabled;
-        this.mapRenderingManager.staticMsaaSamplingLevel = data.staticMsaaSamplingLevel;
-        this.mapRenderingManager.syncPostEffectsToVRM();
+        this.mapView.patchTheme({
+            postEffects: {
+                bloom: { ...data.bloom },
+                vignette: { ...data.vignette },
+                sepia: { ...data.sepia },
+                hueSaturation: { ...data.hueSaturation },
+                brightnessContrast: { ...data.brightnessContrast },
+                antialiasing: data.taaEnabled ? "taa" : "none"
+            }
+        });
+        const rm = this.mapView.mapRenderingManager as IMapRenderingManager | undefined;
+        if (rm) {
+            rm.dynamicMsaaSamplingLevel = data.dynamicMsaaSamplingLevel;
+            rm.msaaEnabled = data.msaaEnabled;
+            rm.staticMsaaSamplingLevel = data.staticMsaaSamplingLevel;
+        }
     }
 }

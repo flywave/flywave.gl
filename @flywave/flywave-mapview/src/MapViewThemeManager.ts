@@ -6,6 +6,7 @@ import {
     type FlatTheme,
     type ImageDefinitions,
     type ImageTexture,
+    type LensFlareThemeConfig,
     type PoiTableRef,
     type Theme,
     PostEffects
@@ -28,9 +29,15 @@ export class MapViewThemeManager {
     private m_updatePromise: Promise<void> | undefined;
     private m_abortControllers: AbortController[] = [];
     private readonly m_theme: Theme = {};
+    private m_themeLoaded: boolean = false;
+    private m_themeReadyPromise: Promise<void>;
+    private m_themeReadyResolve: () => void = () => {};
 
     constructor(private readonly m_mapView: MapView, private readonly m_uriResolver?: UriResolver) {
         this.m_imageCache = new MapViewImageCache();
+        this.m_themeReadyPromise = new Promise(resolve => {
+            this.m_themeReadyResolve = resolve;
+        });
     }
 
     async setTheme(theme: Theme | FlatTheme | string): Promise<Theme> {
@@ -44,18 +51,98 @@ export class MapViewThemeManager {
         });
         await this.m_updatePromise;
         this.m_updatePromise = undefined;
+        this.m_themeLoaded = true;
+        this.m_themeReadyResolve();
         return this.m_theme;
     }
 
     async getTheme(): Promise<Theme> {
-        if (this.isUpdating()) {
-            await this.m_updatePromise;
+        await this.m_themeReadyPromise;
+        return this.m_theme;
+    }
+
+    getThemeSync(): Theme {
+        if (this.isUpdating() || !this.m_themeLoaded) {
+            throw new Error("Style is not done loading");
         }
         return this.m_theme;
     }
 
     isUpdating(): boolean {
         return this.m_updatePromise !== undefined;
+    }
+
+    get themeLoaded(): boolean {
+        return this.m_themeLoaded;
+    }
+
+    patchTheme(delta: Theme): void {
+        if (this.isUpdating() || !this.m_themeLoaded) {
+            throw new Error("Style is not done loading");
+        }
+
+        const asyncSections: ReadonlySet<string> = new Set([
+            "images",
+            "imageTextures",
+            "environment",
+            "poiTables",
+            "textStyles",
+            "fontCatalogs",
+            "defaultTextStyle",
+            "styles",
+            "definitions",
+            "extends",
+            "$schema",
+            "url"
+        ]);
+
+        for (const key of Object.keys(delta)) {
+            if (asyncSections.has(key)) {
+                logger.warn(`patchTheme cannot modify "${key}" — use setTheme() for this property`);
+            }
+        }
+
+        const changedKeys = MapViewThemeManager.deepMergePatch(
+            this.m_theme as unknown as Record<string, unknown>,
+            delta as unknown as Record<string, unknown>
+        );
+
+        if (changedKeys.size === 0) return;
+
+        const environment = this.m_mapView.sceneEnvironment;
+
+        if (changedKeys.has("atmosphere")) {
+            environment.updateAtmosphere(this.m_theme.atmosphere);
+        }
+        if (changedKeys.has("fog")) {
+            environment.fog.reset(this.m_theme.fog);
+        }
+        if (changedKeys.has("sky")) {
+            environment.updateSkyBackground(this.m_theme.sky, this.m_theme.clearColor);
+        }
+        if (changedKeys.has("lights")) {
+            environment.updateLighting(this.m_theme.lights);
+        }
+        if (changedKeys.has("clearColor") || changedKeys.has("clearAlpha")) {
+            environment.updateClearColor(this.m_theme.clearColor, this.m_theme.clearAlpha);
+        }
+        if (changedKeys.has("postEffects")) {
+            this.m_mapView.postEffects = this.m_theme.postEffects;
+        }
+        if (changedKeys.has("toneMappingExposure") || changedKeys.has("toneMappingMode")) {
+            environment.updateToneMapping(
+                this.m_theme.toneMappingExposure,
+                this.m_theme.toneMappingMode
+            );
+        }
+        if (changedKeys.has("enableShadows")) {
+            this.m_mapView.shadowsEnabled = this.m_theme.enableShadows === true;
+        }
+        if (changedKeys.has("lensFlare")) {
+            environment.updateLensFlare(this.m_theme.lensFlare);
+        }
+
+        this.m_mapView.update();
     }
 
     /**
@@ -124,6 +211,11 @@ export class MapViewThemeManager {
         }
         if (theme.toneMappingMode !== undefined || theme.toneMappingExposure !== undefined) {
             environment.updateToneMapping(theme.toneMappingExposure, theme.toneMappingMode);
+        }
+
+        if (theme.lensFlare !== undefined) {
+            this.m_theme.lensFlare = theme.lensFlare;
+            environment.updateLensFlare(theme.lensFlare);
         }
 
         // Images and environment map.
@@ -202,6 +294,62 @@ export class MapViewThemeManager {
 
     dispose() {
         this.m_imageCache.clear();
+    }
+
+    private static isPlainObject(v: unknown): v is Record<string, unknown> {
+        return (
+            typeof v === "object" &&
+            v !== null &&
+            !Array.isArray(v) &&
+            !(v instanceof Date) &&
+            !(v instanceof RegExp)
+        );
+    }
+
+    private static deepEqualValue(a: unknown, b: unknown): boolean {
+        if (a === b) return true;
+        if (a === null || b === null) return false;
+        if (typeof a !== typeof b) return false;
+        if (typeof a !== "object") return a === b;
+        if (Array.isArray(a) || Array.isArray(b)) {
+            return isEqual(a, b);
+        }
+        return isEqual(a, b);
+    }
+
+    private static deepMergePatch(
+        target: Record<string, unknown>,
+        patch: Record<string, unknown>
+    ): Set<string> {
+        const changed = new Set<string>();
+
+        for (const key of Object.keys(patch)) {
+            const patchVal = patch[key];
+
+            if (patchVal === undefined) {
+                continue;
+            }
+
+            const targetVal = target[key];
+
+            if (this.isPlainObject(patchVal) && this.isPlainObject(targetVal)) {
+                const subChanged = this.deepMergePatch(targetVal, patchVal);
+                if (subChanged.size > 0) {
+                    changed.add(key);
+                }
+            } else {
+                if (!this.deepEqualValue(targetVal, patchVal)) {
+                    target[key] = Array.isArray(patchVal)
+                        ? (patchVal as unknown[]).map(item =>
+                              this.isPlainObject(item) ? { ...item } : item
+                          )
+                        : patchVal;
+                    changed.add(key);
+                }
+            }
+        }
+
+        return changed;
     }
 
     private async loadPoiTables(poiTables?: PoiTableRef[]) {

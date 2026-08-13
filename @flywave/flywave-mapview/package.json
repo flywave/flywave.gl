@@ -46,6 +46,7 @@
     "license": "Apache-2.0",
     "dependencies": {
         "@flywave/flywave-atmosphere": "workspace:*",
+        "@tweenjs/tween.js": "catalog:",
         "rbush": "catalog:"
     },
     "devDependencies": {

@@ -22,6 +22,7 @@
 export * from "./AnimatedExtrusionHandler";
 export * from "./BaseTileLoader";
 export * from "./BoundsGenerator";
+export * from "./camera";
 export * from "./CameraMovementDetector";
 export * from "./CameraUtils";
 export * from "./ClipPlanesEvaluator";

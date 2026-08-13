@@ -1137,7 +1137,21 @@ export abstract class TilesRenderer extends TilesRendererBase {
     }
 
     override updateTileShadows(root: Tile): void {
-        if (this.shadowCastErrorThreshold === 0) return;
+        if (this.shadowCastErrorThreshold === 0) {
+            this.activeTiles.forEach(tile => {
+                const t = tile as Tile;
+                if (t.__loadingState !== LOADED || !t.__hasRenderableContent) return;
+                const scene = t.cached?.scene;
+                if (!scene) return;
+                scene.traverse((c: Mesh) => {
+                    if (!c.material) return;
+                    if (c.castShadow !== this.castShadow) c.castShadow = this.castShadow;
+                    if (c.receiveShadow !== this.receiveShadow)
+                        c.receiveShadow = this.receiveShadow;
+                });
+            });
+            return;
+        }
         this.activeTiles.forEach(tile => {
             const t = tile as Tile;
             if (t.__loadingState !== LOADED || !t.__hasRenderableContent) return;
@@ -1150,7 +1164,9 @@ export abstract class TilesRenderer extends TilesRendererBase {
                     : this.castShadow &&
                       (t.__distanceFromCamera ?? Infinity) <= this.shadowCastErrorThreshold;
             scene.traverse((c: Mesh) => {
-                if (c.material && c.castShadow !== shouldCast) c.castShadow = shouldCast;
+                if (!c.material) return;
+                if (c.castShadow !== shouldCast) c.castShadow = shouldCast;
+                if (c.receiveShadow !== this.receiveShadow) c.receiveShadow = this.receiveShadow;
             });
         });
     }

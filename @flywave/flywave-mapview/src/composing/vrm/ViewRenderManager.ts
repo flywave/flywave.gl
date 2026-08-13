@@ -45,7 +45,7 @@ import {
 
 import { smaaWrapped } from "@flywave/flywave-atmosphere";
 
-import type { IViewRenderConfig, IViewRenderManager } from "./ViewRenderTypes";
+import type { IViewRenderConfig, IViewRenderManager, ILensFlareConfig } from "./ViewRenderTypes";
 import { vignette } from "./effects/vignette";
 import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
 import { bloom } from "./effects/bloom";
@@ -428,6 +428,14 @@ export class ViewRenderManager implements IViewRenderManager {
         this.cachedInvW = null;
         this.stagingBuffer?.destroy();
         this.stagingBuffer = null;
+    }
+
+    setLensFlareConfig(config: ILensFlareConfig): void {
+        this.config.lensFlare = config;
+        if (this.lensFlareNode != null) {
+            this.lensFlareNode.setConfig(config);
+        }
+        this.needsUpdate = true;
     }
 
     getColorTexture(): THREE.Texture | null {

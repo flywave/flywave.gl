@@ -72,12 +72,14 @@ import { overlayOnElevation } from "./geometry/overlayOnElevation";
 import { TileGeometryManager } from "./geometry/TileGeometryManager";
 import { MapViewImageCache } from "./image/MapViewImageCache";
 import { type IntersectParams } from "./IntersectParams";
-import type { ITilesRenderer } from "./ITilesRenderer";
 import { MapAnchors } from "./MapAnchors";
 import { MapViewEnvironment } from "./MapViewEnvironment";
 import { type MapViewFog } from "./MapViewFog";
 import { MapViewTaskScheduler } from "./MapViewTaskScheduler";
 import { MapViewThemeManager } from "./MapViewThemeManager";
+import { CameraKeyTrackAnimation, ControlPoint } from "./camera/CameraKeyTrackAnimation";
+import { CameraAnimationBuilder } from "./camera/CameraAnimationBuilder";
+import type { FlyToOptions, FlyToBoundsOptions } from "./camera/FlyTo";
 import { type PickResult, PickHandler } from "./PickHandler";
 import { PoiManager } from "./poi/PoiManager";
 import { PoiTableManager } from "./poi/PoiTableManager";
@@ -1565,6 +1567,34 @@ export class MapView extends EventDispatcher {
     }
 
     /**
+     * Returns the current resolved `Theme` synchronously.
+     *
+     * @throws {Error} `"Style is not done loading"` if {@link setTheme} has not completed yet.
+     */
+    getThemeSync(): Theme {
+        return this.m_themeManager.getThemeSync();
+    }
+
+    /**
+     * Apply a partial theme delta to the current resolved theme.
+     *
+     * @remarks
+     * Deep-merges `delta` into the already-loaded theme and only dispatches
+     * the changed sections to their respective subsystems (atmosphere, fog,
+     * postEffects, etc.). Throws if {@link setTheme} has not completed yet.
+     *
+     * Properties that require async loading (images, fonts, POI tables,
+     * styles, etc.) cannot be modified through this method — use
+     * {@link setTheme} instead.
+     *
+     * @param delta - A partial theme object containing only the properties to change.
+     * @throws {Error} `"Style is not done loading"` if called before `setTheme` resolves.
+     */
+    patchTheme(delta: Theme): void {
+        this.m_themeManager.patchTheme(delta);
+    }
+
+    /**
      * {@link @flywave/flywave-utils#UriResolver} used to resolve application/deployment
      * specific `URI`s into actual `URLs` that can be loaded with `fetch`.
      */
@@ -2507,6 +2537,106 @@ export class MapView extends EventDispatcher {
             this.ANIMATION_FINISHED_EVENT.time = Date.now();
             this.dispatchEvent(this.ANIMATION_FINISHED_EVENT);
         }
+    }
+
+    private m_activeCameraAnimation?: CameraKeyTrackAnimation;
+
+    flyTo(options: FlyToOptions): Promise<void> {
+        return new Promise<void>(resolve => {
+            if (this.m_activeCameraAnimation?.isRunning()) {
+                this.m_activeCameraAnimation.stop();
+            }
+
+            const start = new ControlPoint({
+                timestamp: 0,
+                target: this.target,
+                tilt: this.tilt,
+                heading: this.heading,
+                distance: this.targetDistance
+            });
+
+            const targetDistance =
+                options.distance ??
+                (options.zoomLevel !== undefined
+                    ? MapViewUtils.calculateDistanceFromZoomLevel(this, options.zoomLevel)
+                    : this.targetDistance);
+
+            const end = new ControlPoint({
+                timestamp: options.duration ?? 5,
+                target: options.target ?? this.target,
+                tilt: options.tilt ?? this.tilt,
+                heading: options.heading ?? this.heading,
+                distance: targetDistance
+            });
+
+            const duration = options.duration ?? 5;
+            const flyOptions =
+                options.curve === "bow"
+                    ? CameraAnimationBuilder.createBowFlyToOptions(
+                          this,
+                          start,
+                          end,
+                          options.altitude,
+                          duration
+                      )
+                    : { controlPoints: [start, end] };
+
+            const animation = new CameraKeyTrackAnimation(this, flyOptions);
+            this.m_activeCameraAnimation = animation;
+            animation.start(undefined, () => resolve());
+        });
+    }
+
+    flyToBounds(options: FlyToBoundsOptions): Promise<void> {
+        return new Promise<void>(resolve => {
+            this.lookAt({
+                bounds: options.bounds,
+                tilt: options.tilt,
+                heading: options.heading
+            });
+
+            const start = new ControlPoint({
+                timestamp: 0,
+                target: this.target,
+                tilt: this.tilt,
+                heading: this.heading,
+                distance: this.targetDistance
+            });
+
+            const end = new ControlPoint({
+                timestamp: options.duration ?? 5,
+                target: this.target,
+                tilt: this.tilt,
+                heading: this.heading,
+                distance: this.targetDistance
+            });
+
+            const duration = options.duration ?? 5;
+            const flyOptions =
+                options.curve === "bow"
+                    ? CameraAnimationBuilder.createBowFlyToOptions(
+                          this,
+                          start,
+                          end,
+                          options.altitude,
+                          duration
+                      )
+                    : { controlPoints: [start, end] };
+
+            const animation = new CameraKeyTrackAnimation(this, flyOptions);
+            this.m_activeCameraAnimation = animation;
+            animation.start(undefined, () => resolve());
+        });
+    }
+
+    stopCameraAnimation(): void {
+        if (this.m_activeCameraAnimation?.isRunning()) {
+            this.m_activeCameraAnimation.stop();
+        }
+    }
+
+    get isCameraAnimating(): boolean {
+        return this.m_activeCameraAnimation?.isRunning() ?? false;
     }
 
     /**
