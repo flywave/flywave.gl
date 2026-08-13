@@ -200,7 +200,8 @@ async function loadImage(gltf: GLTFWithBuffers, image: any, index: number, optio
             width: result.width,
             height: result.height,
             data: result.data as unknown as Uint8Array,
-            compressed: result.compressed
+            compressed: result.compressed,
+            ...(result.compressedTexture ? { compressedTexture: result.compressedTexture } : {})
         };
     } catch (error) {
         console.error("Failed to load image:", error);

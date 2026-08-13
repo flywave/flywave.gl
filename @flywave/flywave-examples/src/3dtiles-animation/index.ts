@@ -7,7 +7,8 @@ import {
     MapControlsUI,
     Theme,
     WindowEventHandler,
-    TileIntersection
+    TileIntersection,
+    TileRenderDataSource
 } from "@flywave/flywave.gl";
 import {
     MapViewMonitor,
@@ -17,6 +18,7 @@ import {
 } from "@flywave/flywave-inspector";
 
 import { PropertiesTable } from "./PropertiesTable.js";
+import { Matrix4 } from "three";
 
 /**
  * Get map canvas element
@@ -39,7 +41,7 @@ const getMapCanvas = (): HTMLCanvasElement => {
  */
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and viewpoint (New York City, near Statue of Liberty)
-    const initialLocation = new GeoCoordinates(40.6959, -74.0162);
+    const initialLocation = new GeoCoordinates(40.611294303495846, 109.746860690045);
 
     return new MapView({
         projection: ellipsoidProjection, // Use ellipsoidal projection
@@ -48,15 +50,21 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
         canvas: canvas, // Specify render canvas
+        dynamicPixelRatio: 0.6,
         theme: {
             atmosphere: {
                 enabled: true,
                 sunCastShadow: true,
                 clouds: {
-                    quality: "low"
+                    quality: "high"
                 },
-                sunTime: new Date().setHours(18, 30)
-            }
+                sunTime: new Date(new Date().setMonth(9)).setHours(12, 30)
+            },
+            postEffects: {
+                antialiasing: "smaa"
+            },
+            toneMappingExposure: 10,
+            toneMappingMode: "neutral"
         }
     });
 };
@@ -95,7 +103,20 @@ const create3DTilesDataSource = (mapView: MapView): CesiumIonDataSource => {
     });
 
     // Add data source to map view
-    mapView.addDataSource(cesiumIonDataSource);
+    // mapView.addDataSource(cesiumIonDataSource);
+
+    mapView.addDataSource(
+        new TileRenderDataSource({
+            url: "http://127.0.0.1/%E5%8C%85%E8%A5%BF3dtile/tileset.json",
+            receiveShadow: true,
+            errorTarget: 30,
+            castShadow: true,
+            transform: new Matrix4().fromArray([
+                -0.337273, 0.00054, -0.941407, 0, -0.612574, 0.759208, 0.219899, 0, 0.714842,
+                0.650848, -0.25573, 0, 4565629.4, 4129077, -8011465.5, 1
+            ])
+        })
+    );
 
     return cesiumIonDataSource;
 };
@@ -282,13 +303,13 @@ try {
     const cesiumIonDataSource = create3DTilesDataSource(mapView);
 
     // 5. Set 3D Tiles style theme
-    set3DTilesTheme(cesiumIonDataSource);
+    // set3DTilesTheme(cesiumIonDataSource);
 
     // 6. Initialize properties table component
     const propertiesTable = initializePropertiesTable();
 
     // 7. Set up mouse click event handler
-    setupMouseClickHandler(mapView, cesiumIonDataSource, propertiesTable);
+    // setupMouseClickHandler(mapView, cesiumIonDataSource, propertiesTable);
 
     // 8. Initialize inspector debug panels
     const monitor = new MapViewMonitor(mapView);
@@ -297,6 +318,25 @@ try {
     new PostProcessingModule(mapView);
 
     console.log("3D Tiles animation example initialized successfully");
+
+    // AA toggle button: cycles none → smaa → taa → none for A/B compare
+    const aaModes = ["none", "smaa", "taa"] as const;
+    let aaIndex = aaModes.indexOf("smaa");
+    const aaBtn = document.createElement("button");
+    aaBtn.textContent = `AA: ${aaModes[aaIndex]}`;
+    aaBtn.style.cssText =
+        "position:absolute;top:10px;right:10px;z-index:9999;padding:8px 16px;font-size:14px;cursor:pointer;";
+    document.body.appendChild(aaBtn);
+    aaBtn.addEventListener("click", () => {
+        aaIndex = (aaIndex + 1) % aaModes.length;
+        const mode = aaModes[aaIndex];
+        aaBtn.textContent = `AA: ${mode}`;
+        const vrm = (mapView as any).mapRenderingManager?.viewRenderManager;
+        if (vrm) {
+            vrm.config.antialiasing = mode;
+            vrm.needsUpdate = true;
+        }
+    });
 } catch (error) {
     console.error("Error occurred while initializing 3D Tiles animation example:", error);
 }

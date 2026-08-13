@@ -161,6 +161,7 @@ export { agxPunchyToneMapping, AgXPunchyToneMapping } from "./tsl/AgxToneMapping
 export { TemporalAntialiasNode, temporalAntialias } from "./tsl/TemporalAntialiasNode";
 export { HighpVelocityNode, highpVelocity } from "./tsl/HighpVelocityNode";
 export { bloom as tslBloom, default as BloomNode } from "./tsl/BloomNode";
+export { smaaWrapped } from "./tsl/SMAAWrapperNode";
 
 // Cloud texture generation
 export { CloudTextures } from "./clouds/CloudTextures";

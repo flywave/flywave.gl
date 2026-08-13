@@ -1,8 +1,50 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { SplatMesh } from "@flywave/flywave-splats";
-import {type Camera, type InstancedBufferAttribute, type Object3D, AnimationClip, Bone, BufferAttribute, BufferGeometry, DoubleSide, DynamicDrawUsage, EquirectangularReflectionMapping, FrontSide, Group, InstancedMesh, InterpolateDiscrete, InterpolateLinear, InterpolateSmooth, LinearFilter, LinearMipmapLinearFilter, LinearMipmapNearestFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, LineSegments, Material, Matrix4, Mesh, NumberKeyframeTrack, OrthographicCamera, PerspectiveCamera, Quaternion, QuaternionKeyframeTrack, RepeatWrapping, Scene, SRGBColorSpace, Skeleton, SkinnedMesh, Texture, Vector2, Vector3, VectorKeyframeTrack, LineBasicNodeMaterial, MeshStandardNodeMaterial} from "three/webgpu";
-
+import {
+    type Camera,
+    type InstancedBufferAttribute,
+    type Object3D,
+    AnimationClip,
+    Bone,
+    BufferAttribute,
+    BufferGeometry,
+    CompressedTexture,
+    DoubleSide,
+    DynamicDrawUsage,
+    EquirectangularReflectionMapping,
+    FrontSide,
+    Group,
+    InstancedMesh,
+    InterpolateDiscrete,
+    InterpolateLinear,
+    InterpolateSmooth,
+    LinearFilter,
+    LinearMipmapLinearFilter,
+    LinearMipmapNearestFilter,
+    NearestMipmapLinearFilter,
+    NearestMipmapNearestFilter,
+    LineSegments,
+    Material,
+    Matrix4,
+    Mesh,
+    NumberKeyframeTrack,
+    OrthographicCamera,
+    PerspectiveCamera,
+    Quaternion,
+    QuaternionKeyframeTrack,
+    RepeatWrapping,
+    Scene,
+    SRGBColorSpace,
+    Skeleton,
+    SkinnedMesh,
+    Texture,
+    Vector2,
+    Vector3,
+    VectorKeyframeTrack,
+    LineBasicNodeMaterial,
+    MeshStandardNodeMaterial
+} from "three/webgpu";
 
 import type {
     AnimationChannel,
@@ -73,11 +115,18 @@ function processTextures(gltf: GLTFPostprocessed): { map: Map<string, Texture>; 
     if (!gltf.textures) return { map: textureMap, array: textureArray };
 
     for (const gltfTexture of gltf.textures) {
-        const texture = new Texture();
-        texture.flipY = false;
-        if (gltfTexture.source?.image) {
-            texture.image = gltfTexture.source.image.data;
-            texture.needsUpdate = true;
+        const image = gltfTexture.source?.image as any;
+
+        let texture: Texture;
+        if (image?.compressedTexture instanceof CompressedTexture) {
+            texture = image.compressedTexture;
+        } else {
+            texture = new Texture();
+            texture.flipY = false;
+            if (image) {
+                texture.image = image.data;
+                texture.needsUpdate = true;
+            }
         }
 
         applySamplerParameters(gltfTexture, texture);

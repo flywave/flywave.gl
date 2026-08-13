@@ -111,7 +111,10 @@ export class AerialPerspectiveNode extends TempNode {
         }>
     ): void {
         let changed = false;
-        if (config.correctGeometricError != null && this.correctGeometricError !== config.correctGeometricError) {
+        if (
+            config.correctGeometricError != null &&
+            this.correctGeometricError !== config.correctGeometricError
+        ) {
             this.correctGeometricError = config.correctGeometricError;
             changed = true;
         }
@@ -362,9 +365,8 @@ export class AerialPerspectiveNode extends TempNode {
                 luminance.rgb.assign(surfaceLuminance);
             });
 
-            // Composite clouds at the end (matches reference overlay mechanism:
-            // outputColor.rgb = outputColor.rgb * (1 - overlay.a) + overlay.rgb).
-            // AerialPerspective processed the scene WITHOUT clouds; now blend them in.
+            // Composite clouds (simple alpha blend, matching the original
+            // cloudsEffect.frag which does NOT have depth edge masking).
             if (this.cloudOverlayTexture != null) {
                 const overlay = texture(this.cloudOverlayTexture).sample(viewportUV);
                 luminance.rgb.assign(luminance.rgb.mul(overlay.a.oneMinus()).add(overlay.rgb));

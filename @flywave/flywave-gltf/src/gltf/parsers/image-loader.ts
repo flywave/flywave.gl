@@ -2,8 +2,10 @@
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader.js";
 import { TGALoader } from "three/examples/jsm/loaders/TGALoader.js";
+import { CompressedTexture, Texture } from "three/webgpu";
 import type { WebGPURenderer } from "three/webgpu";
 import { read } from "ktx-parse";
+import type { UriResolver } from "@flywave/flywave-utils";
 
 export interface LoadedImage {
     width: number;
@@ -11,49 +13,68 @@ export interface LoadedImage {
     data: ImageBitmap | HTMLImageElement | HTMLCanvasElement;
     compressed: boolean;
     mimeType: string;
+    compressedTexture?: CompressedTexture;
 }
 
-let sharedKTX2Loader: KTX2Loader | null = null;
+const DEFAULT_TRANSCODER_PATH = "resources/libs/basis/";
 
-function getKTX2Loader(renderer?: WebGPURenderer): KTX2Loader {
-    if (sharedKTX2Loader != null) return sharedKTX2Loader;
-    const loader = new KTX2Loader();
-    loader.setTranscoderPath("https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/libs/basis/");
-    if (renderer) {
-        loader.detectSupport(renderer);
-    } else {
-        (loader as any).workerConfig = {
-            astcSupported: false,
-            astcHDRSupported: false,
-            etc1Supported: false,
-            etc2Supported: false,
-            dxtSupported: false,
-            bptcSupported: false,
-            pvrtcSupported: false
-        };
+let sharedKTX2Loader: KTX2Loader | null = null;
+let transcoderPathResolved = false;
+
+function ensureKTX2Loader(
+    renderer?: WebGPURenderer | null,
+    uriResolver?: UriResolver | null
+): KTX2Loader {
+    if (sharedKTX2Loader == null) {
+        sharedKTX2Loader = new KTX2Loader();
     }
-    sharedKTX2Loader = loader;
-    return loader;
+
+    if (!transcoderPathResolved) {
+        let path = DEFAULT_TRANSCODER_PATH;
+        if (uriResolver) {
+            path = uriResolver.resolveUri(DEFAULT_TRANSCODER_PATH);
+        }
+        sharedKTX2Loader.setTranscoderPath(path);
+        transcoderPathResolved = true;
+    }
+
+    if (renderer) {
+        sharedKTX2Loader.detectSupport(renderer as any);
+    }
+
+    return sharedKTX2Loader;
 }
 
 export class ImageLoader {
     private ktx2Loader: KTX2Loader | null = null;
     private ddsLoader?: DDSLoader;
     private tgaLoader?: TGALoader;
+    private renderer: WebGPURenderer | null = null;
+    private uriResolver: UriResolver | null = null;
 
-    constructor(renderer?: WebGPURenderer) {
+    constructor(renderer?: WebGPURenderer, uriResolver?: UriResolver) {
         try {
             this.ddsLoader = new DDSLoader();
             this.tgaLoader = new TGALoader();
-            this.ktx2Loader = getKTX2Loader(renderer ?? undefined);
+            this.renderer = renderer ?? null;
+            this.uriResolver = uriResolver ?? null;
+            this.ktx2Loader = ensureKTX2Loader(this.renderer, this.uriResolver);
         } catch (error) {
             console.warn("Some Three.js loaders failed to initialize:", error);
         }
     }
 
+    configure(renderer: WebGPURenderer, uriResolver?: UriResolver): void {
+        this.renderer = renderer;
+        if (uriResolver) {
+            this.uriResolver = uriResolver;
+            transcoderPathResolved = false;
+        }
+        this.ktx2Loader = ensureKTX2Loader(this.renderer, this.uriResolver);
+    }
+
     setRenderer(renderer: WebGPURenderer): void {
-        if (sharedKTX2Loader != null) return;
-        getKTX2Loader(renderer);
+        this.configure(renderer);
     }
 
     detectFormat(arrayBuffer: ArrayBuffer): string {
@@ -156,21 +177,23 @@ export class ImageLoader {
 
         try {
             const texture = await new Promise<any>((resolve, reject) => {
-                const blob = new Blob([arrayBuffer], { type: "image/ktx2" });
-                const url = URL.createObjectURL(blob);
-                this.ktx2Loader!.load(
-                    url,
-                    tex => {
-                        URL.revokeObjectURL(url);
-                        resolve(tex);
-                    },
-                    undefined,
-                    err => {
-                        URL.revokeObjectURL(url);
-                        reject(err);
-                    }
+                this.ktx2Loader!.parse(
+                    arrayBuffer,
+                    (tex: any) => resolve(tex),
+                    (err: any) => reject(err)
                 );
             });
+
+            if (texture instanceof CompressedTexture) {
+                return {
+                    width: texture.image.width,
+                    height: texture.image.height,
+                    data: this.createPlaceholderCanvas("", 1, 1),
+                    compressed: true,
+                    mimeType: "image/ktx2",
+                    compressedTexture: texture as CompressedTexture
+                };
+            }
 
             return this.textureToLoadedImage(texture);
         } catch (error) {
@@ -194,15 +217,14 @@ export class ImageLoader {
                 const level0 = ktx.levels[0];
                 if (level0) {
                     const data = level0.levelData;
-                    const bpp = ktx.vkFormat === 37 ? 4 : 4;
+                    const bpp = 4;
                     const srcPixels = new Uint8Array(
                         data.buffer || data,
                         data.byteOffset || 0,
                         Math.min(data.byteLength, width * height * bpp)
                     );
-                    for (let i = 0; i < srcPixels.length && i < imgData.data.length; i++) {
-                        imgData.data[i] = srcPixels[i];
-                    }
+                    const copyLen = Math.min(srcPixels.length, imgData.data.length);
+                    imgData.data.set(srcPixels.subarray(0, copyLen));
                 }
                 ctx.putImageData(imgData, 0, 0);
             }
@@ -233,6 +255,17 @@ export class ImageLoader {
     }
 
     private textureToLoadedImage(texture: any): LoadedImage {
+        if (texture instanceof CompressedTexture) {
+            return {
+                width: texture.image.width,
+                height: texture.image.height,
+                data: this.createPlaceholderCanvas("", 1, 1),
+                compressed: true,
+                mimeType: "image/ktx2",
+                compressedTexture: texture
+            };
+        }
+
         if (texture.image) {
             if (texture.image instanceof HTMLCanvasElement) {
                 return {
@@ -274,9 +307,8 @@ export class ImageLoader {
                     const imgData = ctx.createImageData(mipmap.width, mipmap.height);
                     const src = new Uint8Array(mipmap.data.buffer || mipmap.data);
                     const dst = imgData.data;
-                    const len = Math.min(src.length, dst.length);
                     const bpp = mipmap.width * mipmap.height * 4;
-                    if (len >= bpp) {
+                    if (src.length >= bpp) {
                         dst.set(src.subarray(0, bpp));
                         ctx.putImageData(imgData, 0, 0);
                     }
@@ -364,32 +396,34 @@ export class ImageLoader {
         const ctx = canvas.getContext("2d");
         if (!ctx) return canvas;
 
-        ctx.fillStyle = "#2a2a2a";
-        ctx.fillRect(0, 0, width, height);
+        if (text) {
+            ctx.fillStyle = "#2a2a2a";
+            ctx.fillRect(0, 0, width, height);
 
-        ctx.strokeStyle = "#3a3a3a";
-        ctx.lineWidth = 1;
-        const gridSize = 32;
-        for (let x = 0; x <= width; x += gridSize) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, height);
-            ctx.stroke();
-        }
-        for (let y = 0; y <= height; y += gridSize) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(width, y);
-            ctx.stroke();
-        }
+            ctx.strokeStyle = "#3a3a3a";
+            ctx.lineWidth = 1;
+            const gridSize = 32;
+            for (let x = 0; x <= width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
 
-        ctx.fillStyle = "#8a8a8a";
-        ctx.font = "bold 18px Arial, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(text, width / 2, height / 2 - 15);
-        ctx.font = "14px Arial, sans-serif";
-        ctx.fillText(`${width}x${height}`, width / 2, height / 2 + 15);
+            ctx.fillStyle = "#8a8a8a";
+            ctx.font = "bold 18px Arial, sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, width / 2, height / 2 - 15);
+            ctx.font = "14px Arial, sans-serif";
+            ctx.fillText(`${width}x${height}`, width / 2, height / 2 + 15);
+        }
 
         return canvas;
     }

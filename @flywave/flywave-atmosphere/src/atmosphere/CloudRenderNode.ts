@@ -87,7 +87,7 @@ const _getClosestFragment = Fn(([velocityTex, coord]: any) => {
     for (const [x, y] of _neighborOffsets9) {
         if (x === 0 && y === 0) continue;
         const neighbor = velocityTex.load(coord.add(ivec2(x, y))).toConst();
-        result.assign(neighbor.r.lessThan(result.r).select(neighbor, result));
+        result.assign(neighbor.r.greaterThan(result.r).select(neighbor, result));
     }
     return result;
 });
@@ -586,9 +586,7 @@ export class CloudRenderNode extends TempNode {
         if (config.shapeDetail != null) {
             // Restore or zero out per-layer shapeDetailAmount based on the flag
             for (const layer of u.layers) {
-                layer.shapeDetailAmount = config.shapeDetail
-                    ? (layer.userShapeDetailAmount ?? 1)
-                    : 0;
+                layer.shapeDetailAmount = config.shapeDetail ? layer.userShapeDetailAmount ?? 1 : 0;
             }
             if (!config.shapeDetail) {
                 // Cache the current amounts so they can be restored later
@@ -815,9 +813,7 @@ export class CloudRenderNode extends TempNode {
         this.cloudUniforms.resolution.value.set(virtualWidth, virtualHeight);
         // mipLevelScale scales weather-texture LOD to match the reduced pixel
         // density. 0.25 matches a 4× downsample; 1.0 at full resolution.
-        this.cloudUniforms.mipLevelScale.value = this.m_temporalUpscale
-            ? 1 / UPSCALE
-            : 1.0;
+        this.cloudUniforms.mipLevelScale.value = this.m_temporalUpscale ? 1 / UPSCALE : 1.0;
 
         const atmoCtx = getAtmosphereContext(renderer);
         const w2eVal = atmoCtx.matrixWorldToECEF.value;
@@ -1158,22 +1154,29 @@ export class CloudRenderNode extends TempNode {
                 const depthViewZ = float(4e5).toVar();
                 if (this._depthNode != null) {
                     const depthTex = convertToTexture(this._depthNode);
-                    const depthUv = screenUV.add(this.temporalJitter);
-                    const depthVal = depthTex.sample(depthUv).r;
+                    // Sample 4 corners of the BLOCK×BLOCK full-res area instead
+                    // of a single jittered sample. Pick the max depth value,
+                    // which in reversed-Z corresponds to the NEAREST geometry.
+                    // This ensures foreground objects (buildings, terrain) are
+                    // always detected at edges, preventing cloud alpha from
+                    // flickering when the jittered sample lands on background.
+                    const halfBlock = float(BLOCK).mul(0.5);
+                    const offset = this.resolveTexelSize.mul(halfBlock);
+                    const d00 = depthTex.sample(screenUV.add(offset.mul(vec2(-1, -1)))).r;
+                    const d10 = depthTex.sample(screenUV.add(offset.mul(vec2(1, -1)))).r;
+                    const d01 = depthTex.sample(screenUV.add(offset.mul(vec2(-1, 1)))).r;
+                    const d11 = depthTex.sample(screenUV.add(offset.mul(vec2(1, 1)))).r;
+                    const depthVal = max(max(d00, d10), max(d01, d11));
+                    // reversed-Z: depth ≈ 0 means sky (far), depth ≈ 1 means near
+                    const isSky = depthVal.lessThanEqual(float(1e-6));
                     const viewZ = depthToViewZ(depthVal, camera);
-                    depthViewZ.assign(
-                        depthVal.greaterThan(float(1).sub(1e-7)).select(float(4e5), viewZ.negate())
-                    );
+                    depthViewZ.assign(isSky.select(float(4e5), viewZ.negate()));
                     const camForwardView = vec3(float(0), float(0), float(-1));
                     const camForwardECEF = matrixViewToECEF.mul(vec4(camForwardView, float(0))).xyz;
                     const sceneDist = viewZ
                         .negate()
                         .div(dot(rayDirection, camForwardECEF.normalize()));
-                    sceneDistance = mix(
-                        sceneDist,
-                        float(1e10),
-                        depthVal.greaterThan(float(1).sub(1e-7)).toFloat()
-                    );
+                    sceneDistance = mix(sceneDist, float(1e10), isSky.toFloat());
                 } else {
                     sceneDistance = float(1e10);
                 }
@@ -1267,7 +1270,10 @@ export class CloudRenderNode extends TempNode {
 
                     If(isCurrent.not(), () => {
                         const lowCoord2 = ivec2(lowCoordX, lowCoordY);
-                        const velocityData = _getClosestFragment(this.velocityLowResNode, lowCoord2);
+                        const velocityData = _getClosestFragment(
+                            this.velocityLowResNode,
+                            lowCoord2
+                        );
                         const velocity = velocityData.yz;
                         const prevUv = screenUV.sub(velocity);
 
@@ -1287,7 +1293,10 @@ export class CloudRenderNode extends TempNode {
                             );
                             result.assign(clipped);
 
-                            const historyShadowLen = texture(this.historyShadowLengthNode, prevUv).r;
+                            const historyShadowLen = texture(
+                                this.historyShadowLengthNode,
+                                prevUv
+                            ).r;
                             const shadowClipped = _varianceClippingResolve(
                                 this.shadowLengthLowResNode,
                                 ivec2(lowCoordX, lowCoordY),
@@ -1331,7 +1340,9 @@ export class CloudRenderNode extends TempNode {
                             vec4(currentShadowLen, float(0), float(0), float(1)),
                             vec4(historyShadowLen, float(0), float(0), float(1))
                         );
-                        resultShadowLen.assign(mix(shadowClipped.r, currentShadowLen, temporalAlpha));
+                        resultShadowLen.assign(
+                            mix(shadowClipped.r, currentShadowLen, temporalAlpha)
+                        );
                     });
                 }
 
@@ -1381,7 +1392,10 @@ export class CloudRenderNode extends TempNode {
 
                     If(isCurrent2.not(), () => {
                         const lowCoord3 = ivec2(lowCoordX2, lowCoordY2);
-                        const velocityData = _getClosestFragment(this.velocityLowResNode, lowCoord3);
+                        const velocityData = _getClosestFragment(
+                            this.velocityLowResNode,
+                            lowCoord3
+                        );
                         const velocity = velocityData.yz;
                         const prevUv = screenUV.sub(velocity);
 

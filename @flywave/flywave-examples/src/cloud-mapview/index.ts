@@ -64,7 +64,7 @@ const mapView = new MapView({
         atmosphere: {
             enabled: true,
             sunCastShadow: false,
-            clouds: { quality: "low" },
+            clouds: { quality: "low"  },
 
             sunTime: (() => {
                 const year = new Date().getFullYear();

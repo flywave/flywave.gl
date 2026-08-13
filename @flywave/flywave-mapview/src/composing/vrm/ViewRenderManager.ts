@@ -43,6 +43,8 @@ import {
     type TemporalAntialiasNode
 } from "@flywave/flywave-atmosphere";
 
+import { smaaWrapped } from "@flywave/flywave-atmosphere";
+
 import type { IViewRenderConfig, IViewRenderManager } from "./ViewRenderTypes";
 import { vignette } from "./effects/vignette";
 import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
@@ -93,6 +95,7 @@ export class ViewRenderManager implements IViewRenderManager {
      */
     onCloudNodeReady?: () => void;
     private taaNode?: TemporalAntialiasNode;
+    private _smaaNode?: ReturnType<typeof smaa>;
     private scene?: THREE.Scene;
     private camera?: THREE.Camera;
     private _sunDir?: ReturnType<typeof uniform<"vec3">>;
@@ -248,6 +251,13 @@ export class ViewRenderManager implements IViewRenderManager {
             const velocityNode = this.passNode.getTextureNode("velocity");
             this.taaNode = temporalAntialias(finalNode, depthNode, velocityNode, camera);
             finalNode = this.taaNode;
+        } else if (this.config.antialiasing === "smaa") {
+            const smaaNode = smaaWrapped(finalNode);
+            this._smaaNode = smaaNode;
+            finalNode = smaaNode;
+            console.log("[VRM] SMAA wrapper node created and attached to pipeline");
+        } else {
+            this._smaaNode = null;
         }
 
         if (this.config.outline.enabled) {

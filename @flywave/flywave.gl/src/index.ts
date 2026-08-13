@@ -2,6 +2,7 @@
 
 import { mapAssetsUriResolver, mapBundleMain } from "./BundleMain";
 import * as THREE from "three/webgpu";
+import { imageLoader } from "@flywave/flywave-gltf";
 
 const win = window as Window & { THREE?: typeof THREE };
 if (!win.THREE) {
@@ -45,6 +46,10 @@ export class MapView extends RawMapView {
         super({
             ...options,
             uriResolver: mapAssetsUriResolver
+        });
+
+        this.ready.then(() => {
+            imageLoader.configure(this.renderer as any, mapAssetsUriResolver);
         });
     }
 }
