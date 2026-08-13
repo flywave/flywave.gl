@@ -1119,10 +1119,13 @@ export class MBTileDataEmitter {
         const lineGeoms = this.getLineGeometries();
 
         // Finalize text/POI geometries: convert temp arrays to BufferAttributes.
+        // NOTE: the native consumers (TileGeometryCreator.createTextElements,
+        // PoiManager) reinterpret this buffer as Float64Array, so the positions
+        // MUST be packed as float64 bytes (see VectorTileDataEmitter:1759).
         for (const tg of [...this.m_textGeometries, ...this.m_poiGeometries] as any[]) {
             const positions = (tg as any)._positions as number[] | undefined;
             if (positions && positions.length > 0) {
-                const arr = new Float32Array(positions);
+                const arr = new Float64Array(positions);
                 tg.positions = {
                     name: 'position',
                     buffer: arr.buffer,
