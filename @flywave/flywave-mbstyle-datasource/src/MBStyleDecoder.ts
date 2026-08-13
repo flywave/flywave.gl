@@ -460,15 +460,28 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 this.m_omvAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
             } else if (typeof data === 'string') {
                 // GeoJSON string from GeoJSONDataProvider
-                processor.setMvtYOffset(null);
+                // The GeoJSON adapter projects through webMercatorProjection
+                // (y-down), but the MapView/camera/tile space uses the base
+                // MercatorProjection (y-up). Apply the same y-flip the MVT path
+                // uses so features land in the map's y-up world (mirror around
+                // R/2: py' = scale - 2*top - py).
+                const N = Math.log2(emitter.extents);
+                const scale = Math.pow(2, tileKey.level + N);
+                const { north } = decodeInfo.geoBox;
+                const top = lat2tile(north, tileKey.level + N);
+                processor.setMvtYOffset(scale - 2 * top);
                 const geoJson = JSON.parse(data);
                 const normalized = MBStyleDecoder.normalizeGeoJson(geoJson);
                 if (this.m_geoJsonAdapter.canProcess(normalized)) {
                     this.m_geoJsonAdapter.process(normalized, decodeInfo, processor);
                 }
             } else if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
-                // GeoJSON object directly
-                processor.setMvtYOffset(null);
+                // GeoJSON object directly — same y-flip as above.
+                const N = Math.log2(emitter.extents);
+                const scale = Math.pow(2, tileKey.level + N);
+                const { north } = decodeInfo.geoBox;
+                const top = lat2tile(north, tileKey.level + N);
+                processor.setMvtYOffset(scale - 2 * top);
                 const normalized = MBStyleDecoder.normalizeGeoJson(data);
                 if (this.m_geoJsonAdapter.canProcess(normalized)) {
                     this.m_geoJsonAdapter.process(normalized, decodeInfo, processor);
