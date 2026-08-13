@@ -789,9 +789,9 @@
 | # | 修复 | 验证 / 状态 |
 |---|------|------|
 | A1 ✅ | **text/icon 坐标空间（R1）**：`MBTileDataEmitter.ts` 新增 `projectWorld(p)=project(p).add(center)`，line-placement path、`emitTextGeometry`/`emitPoiGeometry` 三处改用；mesh 路径保持 `project`（tile 中心相对）；harness `MBStyleCompatRenderTest.ts` MapView 创建后设 `mapView.disableFading = true` | text-size/default 122px（修复前整帧空白 4096px）、icon-image/literal 58px、text-field/literal 113px、token 276px、symbol-placement/line-center 701px（沿线文字已渲染）→ **text/icon 整域空白已消除**，剩余为字体度量精度项 |
-| A2 ⚠️ | **line 宽度 + 2 个系统性发现**（见下） | line-color 0/5 → **有内容**（~75px 片段，仍需位置/宽度调优）；fill-color 与基线一致（见下） |
-| A3 | extruded-polygon shader 编译（R3） | ⏳ 待做 |
-| A4 | 纹理回调补 `mapView.update()`（R9） | ⏳ 待做 |
+| A2 ✅ | **line 空白根因 = ribbon 三角形绕向**：`createLineGeometry` 产 CW 三角形，`emitRibbonFill` 的 fill 材质（FrontSide）背面剔除 → 只有 join/cap 碎片（75–1846px）。`emitRibbonFill` 逐三角形翻转绕向为 CCW + 线宽比例改用显示 zoom（`m_zoom+1`） | **line-color/default 55527 → 337 mismatch**（literal 334、elevated literal 335、property-function-identity 220）。line-\*/elevated-line-\* 整域从空白变为完整路网；剩余为颜色空间精度（function/property-function 亮 25%） |
+| A3 ✅ | extruded-polygon shader 编译（R3） | **shader error 434 → 0**（`animateExtrusion:false` + `geometryNormal`→`nonPerturbedNormal`）。结构性缺口仍在：无 `extrusionAxis` 属性烘焙 → fill-extrusion/building 仍空白（C3 长期项） |
+| A4 ✅ | 纹理回调补 `mapView.update()`（R9） | raster/hillshade patcher 纹理回调已补。raster 仍不显示：R4 瓦片级别错位（Berlin raster 请求 z12/z16，fixtures 仅 z17-Berlin）+ env quad z≤12 钳制 → 属 R4/R5 |
 
 #### A2 过程中发现的两个系统性 bug（远大于 mpp 本身，已修）
 
@@ -809,3 +809,5 @@
 - 其余 mvt 依赖分类（fill-from-tiles、fill-extrusion、heatmap 等）**未及批量验证**（用户中止验证），是下一步验证重点。
 
 > 下一步建议：1) 先批量跑 `line-color fill-color fill-extrusion-color heatmap-radius` 确认 mvt 域整体收益；2) 排查 line 残余 ~100px 偏移（对照 `TileObjectRenderer` 中 object 世界坐标 vs 相机焦点）；3) 再继续 A3（extrusion shader）。
+
+> **2026-08-13 进展**：A2 根因定位为 **ribbon 三角形绕向（CW → 被 FrontSide fill 材质背面剔除）**，`emitRibbonFill` 翻转绕向 + 线宽改用显示 zoom 后，line-color/default 从 55527 → 337 mismatch，line-\* 整域出图。A3（extrusion shader：`animateExtrusion:false` + `nonPerturbedNormal`）把 shader 编译错误从 434 降到 0；结构性缺口（无 `extrusionAxis` 烘焙）仍在，fill-extrusion/building 空白待 C3。A4（纹理回调补 `mapView.update()`）已落地。下一优先级：**R4 瓦片级别错位**（raster/hillshade/heatmap 依赖；Berlin raster 测试请求 z12/z16 而 fixtures 仅 z17-Berlin）、**line-color function/property-function 颜色空间**（绿路 0,160,0 vs 预期 0,128,0，亮 25%）、heatmap shader 串（R6）。
