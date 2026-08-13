@@ -808,7 +808,15 @@ export class MBTileDataEmitter {
     }
 
     private getOrCreateRibbonTechniqueIndex(layer: EvaluatedLayer): number {
-        const key = `${layer.id}:line-ribbon-tech`;
+        // The ribbon-fill material carries the per-feature line color. Key the
+        // technique by the resolved line color (plus opacity) so categorical /
+        // data-driven line-colors produce one technique per distinct value —
+        // the full evaluatedCacheKey also embeds per-feature layout variance
+        // (e.g. `line-z-offset`), which would fragment each color into several
+        // identical techniques.
+        const color = layer.paint?.['line-color'] ?? '#000000';
+        const opacity = layer.paint?.['line-opacity'] ?? 1;
+        const key = `${layer.id}:line-ribbon-tech:${String(color)}:${String(opacity)}`;
         let idx = this.m_layerToTechniqueIndex.get(key);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
