@@ -551,6 +551,19 @@ export class MBStyleDataSource extends TileDataSource {
 
         if (bestVectorSourceId) {
             const source = sources.get(bestVectorSourceId)!;
+            // Mapbox `tileSize: 512` semantic: a 512px tile covers the world of
+            // a 256px tile one level down, so a camera zoom z loads data at
+            // z-1. flywave couples the requested tile level and the decoder's
+            // zoom-expression value to `storageLevelOffset`; -2 for 512px tiles
+            // makes dataZoom = cameraZoom-2 (request z-1 tiles) while the
+            // decoder evaluates zoom expressions at mapbox zoom (=level+1).
+            const rawSpec = (style.sources as any)?.[bestVectorSourceId] as any;
+            const tileSize = rawSpec?.tileSize ?? (source as any).tileSize ?? 256;
+            const desiredOffset = tileSize > 256 ? -2 : -1;
+            // TileDataSource.connect() later forwards storageLevelOffset to the
+            // decoder (see TileDataSource.ts), which derives the zoom-expression
+            // value from it — so just set the datasource offset here.
+            this.storageLevelOffset = desiredOffset;
             const restClient = this.createOmvRestClient(
                 source,
                 this.m_styleParams.accessToken
