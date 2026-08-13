@@ -441,6 +441,8 @@ export class MBEnvironmentManager {
         demTileUrl: string | null,
         zoom: number = 8,
         center: [number, number] = [0, 0],
+        demMaxZoom: number = 22,
+        demTileSize: number = 256,
     ): Promise<void> {
         if (!this.m_scene) return;
         // Dispose previous terrain (legacy single mesh + multi-tile controller).
@@ -459,7 +461,14 @@ export class MBEnvironmentManager {
         // Multi-tile terrain: build an N×N grid of DEM tiles around the center,
         // each decoded to R32F and rendered as a skirted mesh. Falls back to the
         // legacy single-tile mesh if the controller cannot run.
-        const terrainZoom = Math.min(Math.max(Math.floor(zoom), 0), 12);
+        // Mapbox raster-dem semantics: request DEM at the camera zoom, but never
+        // above the source's `maxzoom` (reuse the maxzoom parent tile, overzoomed
+        // by flywave), and offset one level for tileSize 512/514.
+        const tileSizeOffset = demTileSize > 256 ? 1 : 0;
+        const terrainZoom = Math.max(
+            0,
+            Math.min(Math.floor(zoom), demMaxZoom) - tileSizeOffset,
+        );
         try {
             this.m_terrainController = new TerrainController(this.m_scene);
             await this.m_terrainController.build(

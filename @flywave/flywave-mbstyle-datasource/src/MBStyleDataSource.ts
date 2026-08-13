@@ -435,6 +435,7 @@ export class MBStyleDataSource extends TileDataSource {
     private m_currentSourceId: string = '';
     private m_demTileUrl: string | null = null;
     private m_demTileSize: number = 256;
+    private m_demMaxZoom: number = 22;
     private m_rasterTileUrl: string | null = null;
     /**
      * Cached mapbox glyph metrics (font→char→metrics), shared with the worker
@@ -712,6 +713,7 @@ export class MBStyleDataSource extends TileDataSource {
                 if (tileUrl) {
                     this.m_demTileUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
                     this.m_demTileSize = demSpec?.tileSize ?? 256;
+                    this.m_demMaxZoom = demSpec?.maxzoom ?? source.maxzoom ?? 22;
                 }
                 break;
             }
@@ -852,6 +854,8 @@ export class MBStyleDataSource extends TileDataSource {
                 this.m_demTileUrl,
                 style.zoom ?? 8,
                 style.center ?? [0, 0],
+                this.m_demMaxZoom,
+                this.m_demTileSize,
             );
             // Enable depth occlusion so circles/symbols behind terrain are hidden.
             if (this.m_materialPatcher) {
@@ -1271,6 +1275,8 @@ export class MBStyleDataSource extends TileDataSource {
                     this.m_demTileUrl,
                     style.zoom ?? 8,
                     style.center ?? [0, 0],
+                    this.m_demMaxZoom,
+                    this.m_demTileSize,
                 );
             } catch {}
         }
