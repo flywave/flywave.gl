@@ -814,4 +814,12 @@
 >
 > **2026-08-13 再进展（commit `82cad1fa`）—— 颜色空间系统性修复**：`MapMaterialAdapter.applyMaterialBaseColor` 把 sRGB 通道值直接传给 `THREE.Color.setRGB`，r178 + ColorManagement 下被当作 linear 空间输入，输出端 linear→sRGB 再转换使所有材质颜色变亮 ~1.46x（绿 128→188）。改传 `SRGBColorSpace` 后颜色精确往返：**fill-color/function 784→0、circle-color/function 0、line-color/function 55038→106、literal 334→106、multiply 104、opacity 110、zoom-and-property 192**。同时 `getOrCreateRibbonTechniqueIndex` 改为按 **color+opacity** 键（原先只按 layer.id，数据驱动/categorical 线色全部用了首要素颜色）。
 >
-> **遗留**：`line-color/property-function`（6 色 categorical）仍 ~36k。已深度排查：geometry/techniques/materials/objects 全部逐项验证正确（每色一个 technique 且几何 range 连续正确、材质颜色正确创建），但渲染只出 purple+blue（其余 4 色缺失），且 road layer 被注入 `line-z-offset:0.01`（来源未定位，fixture 与源码均无写入点）导致部分要素 z=0.01。怀疑是**多材质 geometry 分组 + z-fighting** 的组合问题，留作专项。下一优先级：**R4 瓦片级别错位**（raster/hillshade/heatmap 依赖）、**property-function 多色渲染**、heatmap shader 串（R6）。
+> **遗留**：`line-color/property-function`（6 色 categorical）仍 ~36k。已深度排查：geometry/techniques/materials/objects 全部逐项验证正确（每色一个 technique 且几何 range 连续正确、材质颜色正确创建），但渲染只出 purple+blue（其余 4 色缺失），且 road layer 被注入 `line-z-offset:0.01`（来源未定位，fixture 与源码均无写入点）导致部分要素 z=0.01。怀疑是**多材质 geometry 分组 + z-fighting** 的组合问题，留作专项。
+>
+> **2026-08-13 第三轮（R4 瓦片级别 + geojson y + heatmap）**：
+> - **R4.1 pitch 相机补偿（`2224b6d5`）**：flywave zoomLevel 由相机视线距离反推，pitch 使斜距变长 → reported zoom 从 15 掉到 14.79，dataZoom 落到 z13。`applyCameraSettings` 请求 `zoom = mapbox+1 − log2(cos(pitch))` 使斜距映射回目标 zoom。**icon-pitch-scaling 等 pitch 测试从请求 z13（404）改为 z14（存在）**；pitch 0 不受影响。
+> - **R4.2 tileSize:512 语义（`67538a43`）**：512px 瓦片覆盖 256px 瓦片低一级的范围，按 source `tileSize` 设 `storageLevelOffset=-2`（dataZoom=cameraZoom−2，decoder zoom 表达式仍按 mapbox zoom=level+1）。**3d-intersections/tile-border 从请求 z18 改为 z17**；256px 源保持 −1。
+> - **R4.3 DEM maxzoom 钳制（`58eabe20`）**：`applyTerrain` 硬编码 `min(zoom,12)`，改为按 raster-dem source `maxzoom` 钳制 + tileSize 偏移。**decrease-dynamic-exaggeration-to-zero-fog 从 z12 改为 z9（存在）**，buildings-depth-regression（tileSize 512, maxzoom 14）→ z13。
+> - **geojson y-flip（`7d81ae37`）**：geojson 适配器经 webMercatorProjection（y-down）投影，而 MapView 用 base Mercator（y-up），内联 geojson 面/线南北镜像。decoder 对 geojson 应用与 mvt 相同的 y-flip（`py' = scale − 2·top − py`）。**3 色 geojson debug 测试线落位正确**；fill-color 无回归。
+> - **heatmap R6 + m_patchedTiles（`cce8a418`）**：替换串从不存在（`vec4(diffuse,opacity)`）改为 CirclePointsMaterial 实际目标（`vec4(diffuseColor, alpha)`）；patchTileMaterials 改为按对象数变化重新 patch（首帧背景 quad 先附加、解码点后附加，原来一次 patch 后跳过导致 heatmap 点永不 patch）。
+> - **遗留**：property-function 多色仍只出 purple+blue（需 THREE 多材质分组专项）；icon-pitch-scaling 缺 5373 行瓦片 + glyph 字体（fixture 覆盖）；raster/hillshade 纹理上屏（R5/R7）；fill-extrusion `extrusionAxis` 烘焙（C3）。
