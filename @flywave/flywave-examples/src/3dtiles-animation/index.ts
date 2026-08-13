@@ -61,7 +61,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                 sunTime: new Date(new Date().setMonth(9)).setHours(12, 30)
             },
             postEffects: {
-                antialiasing: "smaa"
+                antialiasing: "taa"
             },
             toneMappingExposure: 10,
             toneMappingMode: "neutral"
@@ -111,6 +111,7 @@ const create3DTilesDataSource = (mapView: MapView): CesiumIonDataSource => {
             receiveShadow: true,
             errorTarget: 30,
             castShadow: true,
+            shadowCastErrorThreshold: 60,
             transform: new Matrix4().fromArray([
                 -0.337273, 0.00054, -0.941407, 0, -0.612574, 0.759208, 0.219899, 0, 0.714842,
                 0.650848, -0.25573, 0, 4565629.4, 4129077, -8011465.5, 1

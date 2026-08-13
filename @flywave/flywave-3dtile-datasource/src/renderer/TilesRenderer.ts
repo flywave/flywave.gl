@@ -3,12 +3,37 @@
 import { type Projection } from "@flywave/flywave-geoutils";
 import { createThreeSceneFromGLTF } from "@flywave/flywave-gltf";
 import { ExtendedFrustum } from "@flywave/flywave-utils/ExtendedFrustum";
-import {type Camera, type Material, type Texture, BoxGeometry, BufferAttribute, BufferGeometry, Euler, EventDispatcher, FrontSide, Group, InstancedBufferAttribute, InstancedMesh, LoadingManager, Matrix4, Mesh, Object3D, PerspectiveCamera, Points, Quaternion, Scene, TypedArray, Vector2, Vector3, PointsNodeMaterial} from "three/webgpu";
-
+import {
+    type Camera,
+    type Material,
+    type Texture,
+    BoxGeometry,
+    BufferAttribute,
+    BufferGeometry,
+    Euler,
+    EventDispatcher,
+    FrontSide,
+    Group,
+    InstancedBufferAttribute,
+    InstancedMesh,
+    LoadingManager,
+    Matrix4,
+    Mesh,
+    Object3D,
+    PerspectiveCamera,
+    Points,
+    Quaternion,
+    Scene,
+    TypedArray,
+    Vector2,
+    Vector3,
+    PointsNodeMaterial
+} from "three/webgpu";
 
 import { ITile, type Tile, type TileInternal } from "../base/Tile";
 import { TilesRendererBase } from "../base/TilesRendererBase";
 import { type ViewErrorTarget } from "../base/traverseFunctions";
+import { LOADED } from "../base/constants";
 
 // Type for matrix transformation function
 export type MatrixTransformCallback = (matrix: Matrix4) => Matrix4;
@@ -222,6 +247,17 @@ export abstract class TilesRenderer extends TilesRendererBase {
      * @default false
      */
     receiveShadow: boolean = false;
+
+    /**
+     * SSE threshold below which visible tiles are considered too small to
+     * cast meaningful shadows. Tiles whose `__error` falls below this
+     * value (far/small on screen) will have `castShadow` disabled.
+     *
+     * Set to `0` to disable (all tiles always cast).
+     *
+     * @default 0 (disabled)
+     */
+    shadowCastErrorThreshold: number = 0;
 
     /**
      * Shared material for points rendering
@@ -1097,6 +1133,25 @@ export abstract class TilesRenderer extends TilesRendererBase {
             scene,
             tile,
             visible
+        });
+    }
+
+    override updateTileShadows(root: Tile): void {
+        if (this.shadowCastErrorThreshold === 0) return;
+        this.activeTiles.forEach(tile => {
+            const t = tile as Tile;
+            if (t.__loadingState !== LOADED || !t.__hasRenderableContent) return;
+            const scene = t.cached?.scene;
+            if (!scene) return;
+            const error = t.__error ?? 0;
+            const shouldCast =
+                error > 0
+                    ? this.castShadow && error >= this.shadowCastErrorThreshold
+                    : this.castShadow &&
+                      (t.__distanceFromCamera ?? Infinity) <= this.shadowCastErrorThreshold;
+            scene.traverse((c: Mesh) => {
+                if (c.material && c.castShadow !== shouldCast) c.castShadow = shouldCast;
+            });
         });
     }
 

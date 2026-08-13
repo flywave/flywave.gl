@@ -17,7 +17,13 @@ import { type DataSourceOptions, type MapView, DataSource, Tile } from "@flywave
 import { type IntersectParams } from "@flywave/flywave-mapview/IntersectParams";
 import { ThemeLoader } from "@flywave/flywave-mapview/ThemeLoader";
 import { type ICameraCollidable } from "@flywave/flywave-mapview";
-import {Intersection, Raycaster, type Matrix4, type Material, type MaterialParameters} from "three/webgpu";
+import {
+    Intersection,
+    Raycaster,
+    type Matrix4,
+    type Material,
+    type MaterialParameters
+} from "three/webgpu";
 
 import { type TileIntersection } from "./renderer/raycastTraverse";
 import { type CustomAttributeConfig, Tiles3DStyleWatcher } from "./theme/Tiles3DStyleWatcher";
@@ -178,6 +184,16 @@ export interface TileRenderDataSourceOptions extends DataSourceOptions {
     receiveShadow?: boolean;
 
     /**
+     * Adaptive shadow LOD: tiles whose camera distance exceeds this
+     * threshold (far from camera) will have `castShadow` disabled at
+     * runtime to save shadow-map draw calls.
+     * Only effective when `castShadow: true`.
+     *
+     * @default 0 (disabled)
+     */
+    shadowCastErrorThreshold?: number;
+
+    /**
      * Per-datasource post-processing effects configuration.
      *
      * @remarks
@@ -268,6 +284,10 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
         };
 
         this.m_tilesRenderer = new TilesRenderer(rendererOptions);
+
+        if (options.shadowCastErrorThreshold !== undefined) {
+            this.m_tilesRenderer.shadowCastErrorThreshold = options.shadowCastErrorThreshold;
+        }
 
         // Set matrix transform callback if provided
         if (options.matrixTransformCallback) {

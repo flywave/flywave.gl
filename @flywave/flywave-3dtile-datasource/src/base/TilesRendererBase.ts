@@ -397,6 +397,8 @@ export class TilesRendererBase {
         markVisibleTiles(root as TileInternal, this);
         toggleTiles(root as TileInternal, this);
 
+        this.updateTileShadows(root as TileInternal);
+
         // Sort and load queued tiles
         const queuedTiles = this.queuedTiles;
         queuedTiles.sort(lruCache.unloadPriorityCallback);
@@ -417,6 +419,17 @@ export class TilesRendererBase {
             this.dispatchEvent({ type: "tiles-load-end" });
             this.isLoading = false;
         }
+    }
+
+    /**
+     * Called after {@link toggleTiles} to update per-tile shadow flags
+     * based on screen-space error. Override in subclasses to implement
+     * adaptive shadow LOD.
+     *
+     * @param root The root tile
+     */
+    updateTileShadows(root: TileInternal): void {
+        // no-op by default
     }
 
     /**
