@@ -712,12 +712,14 @@ export class MBTileDataEmitter {
                 // rasterize on SwiftShader). The shader is told to use `position`
                 // directly via the `_preExtrudedLines` technique flag.
                 const lineWidthPx = Number(layer.paint?.['line-width'] ?? 1);
-                // Convert CSS px to world units at the tile's zoom. Pixel → world
+                // Convert CSS px to world units at the DISPLAY zoom. The camera
+                // is driven at mapbox zoom + 1 (see applyCameraSettings), so a
+                // level-z tile renders at 512px rather than 256px. Pixel → world
                 // is linear (no latitude term): the world tile at level z spans
-                // EQUATORIAL_CIRCUMFERENCE/2^z and is displayed at 256px, so one
-                // CSS pixel = CIRCUMFERENCE/(256 * 2^zoom).
+                // EQUATORIAL_CIRCUMFERENCE/2^z, so one CSS pixel =
+                // CIRCUMFERENCE/(256 * 2^displayZoom) with displayZoom = m_zoom+1.
                 const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
-                    (256 * Math.pow(2, this.m_zoom));
+                    (256 * Math.pow(2, this.m_zoom + 1));
                 const worldHalfWidth = lineWidthPx * metersPerPixel / 2;
                 // Bake extrusion into each vertex's position: pos += biTangent*hw*sign(ec.y)
                 const verts = lineGeom.vertices;
@@ -728,7 +730,6 @@ export class MBTileDataEmitter {
                     verts[v + 5] += verts[v + 11] * worldHalfWidth * sy;  // pos.z += biTangent.z*hw*sign
                 }
                 this.m_preExtrudedLines = true;
-
                 // Store interleaved vertex data + remapped indices
                 const stride = 13; // extrusionCoord(3)+position(3)+tangent(3)+biTangent(4)
                 const baseVert = this.m_lineInterleaved.length / stride;
@@ -776,9 +777,13 @@ export class MBTileDataEmitter {
                 lineGeom.vertices[v + 5],
             );
         }
-        // Remap the line indices into the fill geometry.
-        for (const idx of lineGeom.indices) {
-            geo.indices.push(idx + startIdx);
+        // Remap the line indices into the fill geometry. `createLineGeometry`
+        // winds its triangles CW when viewed from above (camera +Z); the fill
+        // material uses FrontSide culling, so reverse the winding to CCW.
+        for (let i = 0; i < lineGeom.indices.length; i += 3) {
+            geo.indices.push(lineGeom.indices[i] + startIdx);
+            geo.indices.push(lineGeom.indices[i + 2] + startIdx);
+            geo.indices.push(lineGeom.indices[i + 1] + startIdx);
         }
 
         // Use a fill technique so the mapview creates a simple fill material.
