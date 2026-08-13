@@ -4,6 +4,9 @@ import { createGuardrailMesh } from './ElevatedStructures';
 
 interface MaterialPatchState {
     patched: boolean;
+    /** Number of tile.objects already patched, so newly-attached objects
+     *  (e.g. async-decoded points added after the first frame) get patched too. */
+    objectCount: number;
 }
 
 const rasterTextureCache = new Map<string, THREE.Texture>();
@@ -43,10 +46,14 @@ export class MBMaterialPatchManager {
         const tiles = this.m_dataSource.getDecodedTiles();
         for (const tile of tiles) {
             if (!tile.objects || tile.objects.length === 0) continue;
-            if (this.m_patchedTiles.has(tile)) continue;
+
+            const state = this.m_patchedTiles.get(tile);
+            // Re-patch when new objects were attached since the last pass (tiles
+            // grow asynchronously: background quad first, decoded points later).
+            if (state !== undefined && state.objectCount === tile.objects.length) continue;
 
             this.patchTile(tile);
-            this.m_patchedTiles.set(tile, { patched: true });
+            this.m_patchedTiles.set(tile, { patched: true, objectCount: tile.objects.length });
         }
     }
 
@@ -1321,7 +1328,7 @@ export class MBMaterialPatchManager {
                 'uniform sampler2D uMBHeatRamp;\nuniform float uMBHeatIntensity;\nuniform float uMBHeatWeight;\nvoid main() {'
             );
             shader.fragmentShader = shader.fragmentShader.replace(
-                'gl_FragColor = vec4( diffuse, opacity );',
+                'gl_FragColor = vec4(diffuseColor, alpha);',
                 `vec2 mbHp = gl_PointCoord - vec2(0.5);
                  float mbHd = dot(mbHp, mbHp) * 4.0;
                  float mbHfall = exp(-mbHd * uMBHeatIntensity);
