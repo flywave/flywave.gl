@@ -1470,9 +1470,17 @@ export class MBStyleDataSource extends TileDataSource {
         // flywave's camera zoom convention shows a level-z tile at 256px while
         // mapbox shows it at 512px (calculateDistanceFromZoomLevel /256). To
         // match mapbox's world scale, offset the camera zoom by +1.
-        const zoom = (typeof style.zoom === 'number' ? style.zoom : 0) + 1;
-        const bearing = style.bearing ?? 0;
+        // flywave's zoomLevel getter derives from the camera's *line-of-sight*
+        // distance to target; a non-zero pitch lengthens that distance and
+        // lowers the reported zoom (14.79 instead of 15 at pitch 30). Mapbox's
+        // zoom is pitch-independent, so compensate: request a vertical zoom
+        // whose slanted distance maps back to the desired mapbox+1 zoom.
+        //   reported(z) = z + log2(cos(pitch))  →  z = desired − log2(cos(pitch))
         const pitch = style.pitch ?? 0;
+        const zoom =
+            (typeof style.zoom === 'number' ? style.zoom : 0) + 1 -
+            (pitch > 0 ? Math.log2(Math.cos(pitch * Math.PI / 180)) : 0);
+        const bearing = style.bearing ?? 0;
 
         try {
             // Import GeoCoordinates dynamically to avoid circular dependency issues
