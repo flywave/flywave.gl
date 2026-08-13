@@ -450,6 +450,12 @@ export class MBMaterialPatchManager {
             texture.magFilter = filterType;
             rasterTextureCache.set(url, texture);
             attach(texture);
+            // Async texture arrival must trigger a new frame — the render-test
+            // model is a static frame sequence, so without an update the just-
+            // attached texture is never drawn.
+            try {
+                (this.m_dataSource as any).mapView?.update?.();
+            } catch {}
         }, undefined, () => {});
     }
 
@@ -1413,6 +1419,10 @@ export class MBMaterialPatchManager {
                 texture.magFilter = THREE.LinearFilter;
                 rasterTextureCache.set(url, texture);
                 applyShader(texture);
+                // Async DEM/texture arrival → trigger a new frame (see raster path).
+                try {
+                    (this.m_dataSource as any).mapView?.update?.();
+                } catch {}
             }, undefined, () => {});
         }
     }
