@@ -471,6 +471,12 @@ export class MBTileDataEmitter {
                 props.floorHeight = p['fill-extrusion-base'] ?? 0;
                 props._translate = p['fill-extrusion-translate'] ?? [0, 0];
                 props._translateAnchor = p['fill-extrusion-translate-anchor'] ?? 'map';
+                // Disable the extrusion "grow" animation: AnimatedExtrusionHandler
+                // defaults to enabled and, when it starts animating, injects old
+                // extrusion shader chunks (geometryNormal) that conflict with the
+                // current three.js normal_fragment_begin (nonPerturbedNormal),
+                // failing the fragment shader compile and hiding all extrusions.
+                props.animateExtrusion = false;
                 if (p['fill-extrusion-pattern']) {
                     props._patternName = p['fill-extrusion-pattern'];
                     props._patternCrossFade = p['fill-extrusion-pattern-cross-fade'] ?? 1;
