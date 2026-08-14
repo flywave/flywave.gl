@@ -47,6 +47,10 @@ function dummyTex(): THREE.DataTexture {
 const emptyTexture = dummyTex();
 const emptyImageryTextures = [dummyTex(), dummyTex(), dummyTex(), dummyTex(), dummyTex()];
 
+// Height-map texture node (shared singleton across all DEM tiles).
+// Primarily consumed by positionNode (vertex stage) for terrain displacement.
+// IMPORTANT: also referenced in colorNode (fragment stage) — see WORKAROUND
+// note in buildNodes() regarding WebGPU vertex-only texture binding stability.
 const _heightMapTex = texture(emptyTexture);
 _heightMapTex.onObjectUpdate(({ object }) => object.heightMapTexture ?? emptyTexture);
 
@@ -291,6 +295,39 @@ function buildNodes() {
                 .and(layerAlpha.greaterThanEqual(0.001));
             color.assign(select(active, tslMix(color, projColor, layerAlpha), color));
         }
+
+        // ---------------------------------------------------------------------------
+        // WORKAROUND: WebGPU vertex-only texture binding instability
+        // ---------------------------------------------------------------------------
+        // Root cause:
+        //   _heightMapTex is primarily consumed by positionNode (vertex stage)
+        //   to displace terrain vertices by elevation. When it is ONLY
+        //   referenced from the vertex stage, three/webgpu sets the binding
+        //   visibility to GPUShaderStage.VERTEX only. Under this vertex-only
+        //   visibility, certain tiles intermittently get a stale or incorrect
+        //   texture binding after LOD splits / tile reloads — manifesting as
+        //   entire tiles rendered with wrong elevation (mirrored, repeated, or
+        //   corrupted terrain).
+        //
+        //   Confirmed by two observations:
+        //     1. Rendering the height-map directly in colorNode (fragment stage)
+        //        eliminated the bug entirely — because the binding then had
+        //        visibility = VERTEX | FRAGMENT (both stages).
+        //     2. Replacing the texture object (forcing a fresh GPU upload and
+        //        re-bind) temporarily fixed individual tiles.
+        //
+        // Fix:
+        //   Sample _heightMapTex once in the fragment stage and add it to the
+        //   final color with a negligible weight (0.0001). This forces the
+        //   binding visibility to VERTEX | FRAGMENT, which is stable. The
+        //   visual impact is imperceptible (< 0.01% brightness shift).
+        //
+        //   This can be removed once three/webgpu stabilizes vertex-only
+        //   texture bindings, or if the height-map is moved to a mechanism
+        //   that does not rely on vertex-stage texture sampling.
+        // ---------------------------------------------------------------------------
+        const _demUvForVisibility = tileUvToDemSample(texUv);
+        color.assign(color.add(texture(_heightMapTex, _demUvForVisibility).mul(0.0001)));
 
         return color;
     })();
