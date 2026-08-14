@@ -198,6 +198,13 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
             this.lastMouseZ += wheelDelta;
         }
 
+        // A wheel event carries the pointer position — keep lastMouseX/Y in
+        // sync. Touchpad scrolling never fires mousemove, so without this the
+        // pick/zoom target falls back to a stale (0,0) position (i.e. the
+        // screen corner after load) instead of the actual cursor.
+        this.lastMouseX = event.offsetX;
+        this.lastMouseY = event.offsetY;
+
         event.preventDefault();
         this.dispatchConditionalEvent("mousewheel", event);
     };

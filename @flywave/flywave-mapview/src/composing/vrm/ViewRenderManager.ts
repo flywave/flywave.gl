@@ -56,6 +56,27 @@ import {
     SPLAT_DEPTH_LAYER_BIT
 } from "./TranslucentLayerEffect";
 
+interface DepthSlot {
+    /** Pixel the cached invW was read from, in render-target pixels. */
+    px: number;
+    py: number;
+    invW: number | null;
+    inFlight: boolean;
+    camPos: THREE.Vector3;
+    camDir: THREE.Vector3;
+}
+
+function createDepthSlot(): DepthSlot {
+    return {
+        px: -1,
+        py: -1,
+        invW: null,
+        inFlight: false,
+        camPos: new THREE.Vector3(),
+        camDir: new THREE.Vector3()
+    };
+}
+
 export class ViewRenderManager implements IViewRenderManager {
     readonly config: IViewRenderConfig = {
         aerialPerspective: { enabled: false },
@@ -110,16 +131,26 @@ export class ViewRenderManager implements IViewRenderManager {
 
     gpuPicking: boolean = false;
 
+    /**
+     * The camera-relative camera the pass actually renders with (positioned
+     * at the origin) — the pose that produced the pickDepth contents. GPU
+     * depth must be unprojected with THIS camera, not MapView's geo-world
+     * camera (the two frames are ~Earth-radius apart).
+     */
+    get renderCamera(): THREE.Camera | undefined {
+        return this.camera;
+    }
+
     private mrtKeys: string[] = ["output"];
     private pickDepthTexIndex: number = -1;
-    private cachedInvW: number | null = null;
-    private depthReadInFlight: boolean = false;
-
-    private stagingBuffer: GPUBuffer | null = null;
-    private stagingBufferSize: number = 0;
     private lastCameraPos: THREE.Vector3 = new THREE.Vector3();
     private lastCameraDir: THREE.Vector3 = new THREE.Vector3();
     private tmpDir: THREE.Vector3 = new THREE.Vector3();
+
+    /** Screen-center depth, auto-refreshed on camera motion (updateLookAtSettings). */
+    private centerSlot: DepthSlot = createDepthSlot();
+    /** Depth of the last non-center pixel queried through {@link readDepth}. */
+    private querySlot: DepthSlot = createDepthSlot();
 
     get aerialPerspectiveNode(): AerialPerspectiveNode | undefined {
         return this.aerialNode;
@@ -409,6 +440,12 @@ export class ViewRenderManager implements IViewRenderManager {
             if (moved) {
                 this.requestCenterDepthRead();
             }
+            // Keep the query slot continuously fresh while it is in use —
+            // same reliable mechanism as the center cache (per-frame refresh,
+            // inFlight-throttled), instead of one-shot call-time requests.
+            if (this.querySlot.px >= 0 && performance.now() - this.querySlotLastUse < 1000) {
+                this.requestDepthRead(this.querySlot, this.querySlot.px, this.querySlot.py);
+            }
         }
     }
 
@@ -425,9 +462,8 @@ export class ViewRenderManager implements IViewRenderManager {
         this.aerialNode = undefined;
         this.m_cloudNode = undefined;
         this.taaNode = undefined;
-        this.cachedInvW = null;
-        this.stagingBuffer?.destroy();
-        this.stagingBuffer = null;
+        this.centerSlot = createDepthSlot();
+        this.querySlot = createDepthSlot();
     }
 
     setLensFlareConfig(config: ILensFlareConfig): void {
@@ -446,17 +482,82 @@ export class ViewRenderManager implements IViewRenderManager {
         return this.passNode?.renderTarget?.depthTexture ?? null;
     }
 
-    private cachedInvW: number | null = null;
-
+    /**
+     * Synchronous depth lookup at the given NDC position. The screen center is
+     * kept warm by render(); any other pixel is tracked by the query slot,
+     * which render() refreshes EVERY FRAME while recently used (same reliable
+     * mechanism as the center cache). readDepth only reads — no call-time
+     * request races.
+     */
     readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null {
-        if (!this.gpuPicking || this.cachedInvW === null || this.camera == null) return null;
+        if (!this.gpuPicking || this.camera == null) return null;
+        const rt = this.passNode?.renderTarget;
+        if (rt == null || this.pickDepthTexIndex < 0) return null;
+
+        const { x, y } = this.ndcToPixel(ndc, rt);
+        if (x < 0 || x >= rt.width || y < 0 || y >= rt.height) return null;
+
+        this.querySlotLastUse = performance.now();
+
+        if (x === Math.round(rt.width * 0.5) && y === Math.round(rt.height * 0.5)) {
+            const moved =
+                this.centerSlot.camPos.distanceToSquared(this.camera.position) > 0.01 ||
+                this.centerSlot.camDir.distanceToSquared(
+                    this.camera.getWorldDirection(this.tmpDir)
+                ) > 0.0001;
+            if (moved) {
+                this.requestDepthRead(this.centerSlot, x, y);
+            }
+            return this.centerSlot.invW === null
+                ? null
+                : this.invWToNdcZ(this.centerSlot.invW);
+        }
+
+        const slot = this.querySlot;
+        // Retarget only when the pixel actually moved beyond tolerance — hand
+        // jitter wanders ±1px between events and an exact comparison reset
+        // the slot on every call, keeping it permanently cold (all MISS).
+        if (Math.abs(slot.px - x) > 2 || Math.abs(slot.py - y) > 2) {
+            slot.px = x;
+            slot.py = y;
+            slot.invW = null;
+            this.requestDepthRead(slot, x, y);
+            return null;
+        }
+
+        // Pixel matches → serve whatever the continuous per-frame refresh has
+        // (Cesium "previous frame depth" semantics).
+        this.requestDepthRead(slot, x, y); // keep refreshing (inFlight throttles)
+        return slot.invW === null ? null : this.invWToNdcZ(slot.invW);
+    }
+
+    private querySlotLastUse: number = 0;
+
+    private invWToNdcZ(invW: number): number {
         // Use the actual projection matrix instead of hand-written formula
-        const zEye = -1 / this.cachedInvW;
-        const pm = this.camera.projectionMatrix.elements;
+        const zEye = -1 / invW;
+        const pm = this.camera!.projectionMatrix.elements;
         const zClip = pm[10] * zEye + pm[14];
         const wClip = -zEye;
         const ndcZ = zClip / wClip;
         return ndcZ * 0.5 + 0.5;
+    }
+
+    /**
+     * NDC → render-target pixel, top-left origin (WebGPU texture row 0 is the
+     * top). Same convention as MapViewPoints' ndcToScreen — the inverse of
+     * MapView.getNormalizedScreenCoordinates — but in render-target pixels,
+     * rounded to the NEAREST pixel (ceil grabs the neighbor across 0.5px
+     * boundaries, which on silhouette edges is a different surface).
+     */
+    private ndcToPixel(
+        ndc: THREE.Vector2 | THREE.Vector3,
+        rt: THREE.RenderTarget
+    ): { x: number; y: number } {
+        return {
+            x: Math.round(((ndc.x + 1) / 2) * rt.width),
+            y: Math.round(((1 - ndc.y) / 2) * rt.height)
+        };
     }
 
     private cameraNearFar: { near: number; far: number } = { near: 1, far: 1000 };
@@ -465,14 +566,8 @@ export class ViewRenderManager implements IViewRenderManager {
         const rt = this.passNode?.renderTarget;
         if (rt == null || this.pickDepthTexIndex < 0) return null;
 
-        const ndcX = ndc instanceof THREE.Vector3 ? ndc.x : (ndc as THREE.Vector2).x;
-        const ndcY = ndc instanceof THREE.Vector3 ? ndc.y : (ndc as THREE.Vector2).y;
-
-        const width = rt.width;
-        const height = rt.height;
-        const x = Math.round((ndcX * 0.5 + 0.5) * width);
-        const y = Math.round((ndcY * 0.5 + 0.5) * height);
-        if (x < 0 || x >= width || y < 0 || y >= height) return null;
+        const { x, y } = this.ndcToPixel(ndc, rt);
+        if (x < 0 || x >= rt.width || y < 0 || y >= rt.height) return null;
 
         try {
             const data = await this.renderer.readRenderTargetPixelsAsync(
@@ -499,61 +594,46 @@ export class ViewRenderManager implements IViewRenderManager {
 
     private requestCenterDepthRead(): void {
         const rt = this.passNode?.renderTarget;
-        if (rt == null || this.depthReadInFlight || this.pickDepthTexIndex < 0) return;
-
-        const backend = (this.renderer as any).backend;
-        const device = backend?.device;
-        if (!device) return;
-
-        const pickDepthTex = rt.textures[this.pickDepthTexIndex];
-        if (!pickDepthTex) return;
-        const textureData = backend.get(pickDepthTex);
-        const gpuTexture = textureData?.texture;
-        if (!gpuTexture) return;
-
-        const width = rt.width;
-        const height = rt.height;
-        const cx = Math.round(width * 0.5);
-        const cy = Math.round(height * 0.5);
-
-        const bytesPerRow = Math.ceil(8 / 256) * 256;
-
-        if (this.stagingBuffer === null || this.stagingBufferSize !== bytesPerRow) {
-            this.stagingBuffer?.destroy();
-            this.stagingBuffer = device.createBuffer({
-                size: bytesPerRow,
-                usage: 0x0008 | 0x0001 // COPY_DST | MAP_READ
-            });
-            this.stagingBufferSize = bytesPerRow;
-        }
-
-        const encoder = device.createCommandEncoder();
-        encoder.copyTextureToBuffer(
-            { texture: gpuTexture, origin: { x: cx, y: cy, z: 0 } },
-            { buffer: this.stagingBuffer, bytesPerRow },
-            { width: 1, height: 1, depthOrArrayLayers: 1 }
+        if (rt == null) return;
+        this.requestDepthRead(
+            this.centerSlot,
+            Math.round(rt.width * 0.5),
+            Math.round(rt.height * 0.5)
         );
-        device.queue.submit([encoder.finish()]);
+    }
 
-        this.depthReadInFlight = true;
+    private requestDepthRead(slot: DepthSlot, x: number, y: number): void {
+        // Serialize ALL depth readbacks — concurrent readRenderTargetPixelsAsync
+        // calls (query slot + per-frame center refresh) trample each other's
+        // results and resolve to 0, starving every consumer.
+        if (slot.inFlight || this.depthReadBusy || this.pickDepthTexIndex < 0) return;
+        const rt = this.passNode?.renderTarget;
+        if (rt == null || this.camera == null) return;
 
-        this.stagingBuffer
-            .mapAsync(GPUMapMode.READ)
-            .then(() => {
-                const mapped = this.stagingBuffer!.getMappedRange();
-                const raw = new Uint16Array(mapped, 0, 1)[0];
-                this.stagingBuffer!.unmap();
+        slot.camPos.copy(this.camera.position);
+        slot.camDir.copy(this.camera.getWorldDirection(this.tmpDir));
 
-                const invW = halfFloatToNumber(raw);
+        slot.inFlight = true;
+        this.depthReadBusy = true;
+
+        this.renderer
+            .readRenderTargetPixelsAsync(rt, x, y, 1, 1, this.pickDepthTexIndex)
+            .then(data => {
+                const invW = halfFloatToNumber((data as Uint16Array)[0]);
                 if (isFinite(invW) && invW > 0) {
-                    this.cachedInvW = invW;
+                    slot.invW = invW;
+                    slot.px = x;
+                    slot.py = y;
                 }
-                this.depthReadInFlight = false;
             })
-            .catch(() => {
-                this.depthReadInFlight = false;
+            .catch(() => {})
+            .finally(() => {
+                slot.inFlight = false;
+                this.depthReadBusy = false;
             });
     }
+
+    private depthReadBusy: boolean = false;
 }
 
 function halfFloatToNumber(u16: number): number {

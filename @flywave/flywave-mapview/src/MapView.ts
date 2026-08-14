@@ -3586,22 +3586,39 @@ export class MapView extends EventDispatcher {
                 typeof (ds as unknown as ICameraCollidable).raycast === "function"
         ) as unknown as ICameraCollidable[];
 
-        // GPU depth fast-path: skip CPU raycast when available
+        // GPU depth fast-path: skip CPU raycast when available. pickDepth is
+        // rendered by the camera-relative render camera (at the origin) — the
+        // depth MUST be unprojected with that camera and the point shifted
+        // into the geo frame (render frame + (geoCamPos - renderCamPos)),
+        // otherwise m_targetWorldPos drifts by an Earth radius and the camera
+        // slowly sinks below ground.
         const gpuDepth = this.mapRenderingManager?.readDepth(new THREE.Vector2(0, 0)) ?? null;
         let target: THREE.Vector3;
         let distance: number;
         let final: boolean;
         let altitude: number | undefined;
 
+        const renderCam = this.mapRenderingManager?.viewRenderManager?.renderCamera;
+        let gpuTargetUsed = false;
         if (
             gpuDepth !== null &&
             gpuDepth > 0 &&
             gpuDepth < 1 &&
-            this.camera instanceof THREE.PerspectiveCamera
+            this.camera instanceof THREE.PerspectiveCamera &&
+            renderCam
         ) {
             const ndcZ = gpuDepth * 2.0 - 1.0;
-            target = new THREE.Vector3(0, 0, ndcZ).unproject(this.camera);
+            target = new THREE.Vector3(0, 0, ndcZ)
+                .unproject(renderCam)
+                .add(this.camera.position.clone().sub(renderCam.position));
             distance = this.camera.position.distanceTo(target);
+            // Degenerate hit — the camera has reached (or is inside) the
+            // surface at the screen center. Fall back to the CPU path, it
+            // also restores the min-height constraint (altitude) that the
+            // GPU fast-path skips.
+            gpuTargetUsed = distance >= this.camera.near;
+        }
+        if (gpuTargetUsed) {
             final = true;
             altitude = undefined;
         } else {

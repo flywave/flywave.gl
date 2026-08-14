@@ -98,6 +98,8 @@ export interface IViewRenderManager {
     translucentLayerEffect?: TranslucentLayerEffect;
     exposure: { value: number };
     gpuPicking: boolean;
+    /** Camera-relative camera the pass renders with (produces the pickDepth MRT). */
+    readonly renderCamera?: THREE.Camera;
     render(scene: THREE.Scene, camera: THREE.Camera): void;
     setSize(width: number, height: number): void;
     dispose(): void;

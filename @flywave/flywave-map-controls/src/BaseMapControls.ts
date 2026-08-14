@@ -355,6 +355,13 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
                 return hitDistance;
             } else {
                 this.isPanHit = false;
+                // A real wheel tick with no valid target (waiting for the GPU
+                // lock at a new cursor position) must invalidate the previous
+                // gesture's target — otherwise the zoom inertia tail keeps
+                // chasing the OLD locked point under the new cursor.
+                if (isWheel) {
+                    this.lastHitDistance = 0;
+                }
             }
         }
         return -1;
@@ -404,7 +411,10 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
                     damping = (this.limitZoomOut * 2 - distanceRatio) / this.limitZoomOut;
                 }
 
-                this.cameraTransform.zoom(this.lastHit, zoomDelta * damping);
+                // Clamp the lerp factor: cumulative wheel bursts push it past
+                // 1, which overshoots THROUGH the target and diverges.
+                const f = Math.max(-0.9, Math.min(0.9, zoomDelta * damping));
+                this.cameraTransform.zoom(this.lastHit, f);
             }
         }
 
