@@ -54,9 +54,9 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             atmosphere: {
                 enabled: true,
                 sunCastShadow: true,
-                // clouds: {
-                //     quality: "high"
-                // },
+                clouds: {
+                    quality: "high"
+                },
                 sunTime: new Date(new Date().setMonth(9)).setHours(12, 30)
             },
             postEffects: {
@@ -108,7 +108,7 @@ const create3DTilesDataSource = (mapView: MapView): CesiumIonDataSource => {
         new TileRenderDataSource({
             url: "http://127.0.0.1/%E5%8C%85%E8%A5%BF3dtile/tileset.json",
             receiveShadow: true,
-            errorTarget: 30,
+            errorTarget: 100,
             castShadow: true, 
             transform: new Matrix4().fromArray([
                 -0.337273, 0.00054, -0.941407, 0, -0.612574, 0.759208, 0.219899, 0, 0.714842,
