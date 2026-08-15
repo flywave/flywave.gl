@@ -38,6 +38,17 @@ export class MBExpressionEngine {
             if (raw !== null && typeof raw === 'object' && !Array.isArray(raw) && Array.isArray(raw.stops)) {
                 return MBExpressionEngine.evaluateLegacyStops(raw, ctx);
             }
+            // Legacy `{ type: "identity", property: "x" }` function: the value
+            // IS the feature property (mapbox style-spec "identity" function).
+            if (
+                raw !== null &&
+                typeof raw === 'object' &&
+                !Array.isArray(raw) &&
+                (raw as any).type === 'identity' &&
+                typeof (raw as any).property === 'string'
+            ) {
+                return ctx.feature?.properties?.[(raw as any).property] ?? null;
+            }
             return raw;
         }
         const key = JSON.stringify(raw);

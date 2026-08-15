@@ -1058,3 +1058,11 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 **验证**：`fill-extrusion-color/literal` 屋顶 `(11,11,255)`、墙面 `(6,6,212)` 与 expected **逐像素一致**（此前墙面为 `(0,0,250→211)` 错误渐变）。fill-extrusion-color 分类净 **−2487 px**：property-function 11315→9048、no-alpha-no-multiply 38341→38023、default 1427→1414、use-theme 1369→1408；data-driven-zero-alpha 15280→15313（3D-lights 路径保持基线）。3 个既有通过项（edge-radius-narrow-corner/tile-border/pattern-missing）无回归，组合分类既有通过无回归。残余 ~1400px 为**屋顶/墙面边界 2px 几何偏移**（预存在，非光照）。
 
 **遗留**：fill-extrusion `function`/`zoom-and-property-function`（期望紫色/zoom 插值）仍全蓝——zoom 函数求值偏位（预存在 Z2 问题）；fill-extrusion-opacity 半透明叠加（translucent 组合）未对齐；屋顶/墙面边界偏移。3D `lights`（lighting-3d-mode 116 例）仍需专项。
+
+### 12.16 icon-anchor 落地（2026-08-16）
+
+- `MBEnvironmentManager`/`MBMaterialPatchManager` 之外，`flywave-mapview` 的 `PoiRenderer.computeIconScreenBox` 现在识别 `_iconAnchor`：按 mapbox `shapeIcon` 对齐语义 `(0.5 - hAlign)*w / (vAlign - 0.5)*h`（注意 mapbox Y 屏幕向下 vs three Y 向上，垂直方向取反）把图标盒移到锚点。
+- `MBTileDataEmitter` symbol 分支：`props._iconAnchor = layout['icon-anchor']`；`icon-offset`（em 单位）→ `iconXOffset/iconYOffset`（px = em × icon-size，y 取反）；`icon-allow-overlap`/`icon-ignore-placement` → 原生 `iconMayOverlap`/`iconReserveSpace`（此前只设 `mayOverlap`/`reserveSpace`，PoiBuilder 读的是前者）。
+- `MBExpressionEngine` 增加 legacy `{type:'identity', property:'x'}` 函数求值（返回 feature property）；`MBLayerEvaluator.isExpr` 同样识别 identity 对象，使其进入 per-feature 求值。
+
+**验证**：icon-anchor 分类从 **2/11 → 9/11**（default/center/left/right/top/bottom/四角 全 0px 通过）；baseline4 既有通过项（icon-color/icon-image/icon-halo 等）零回归。剩余：property-function（identity 已求值但 9 个同点要素仅放置 1 个——原生 Placement 深水区）；icon-rotate（48-53px，引擎无 rotation 支持）；icon-translate（~8000px，mvt 符号源空白，同 R4 fixture/符号管线）。

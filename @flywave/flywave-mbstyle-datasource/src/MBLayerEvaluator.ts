@@ -287,11 +287,23 @@ function isExpr(v: any): v is ExpressionSpecification {
     if (Array.isArray(v) && typeof v[0] === 'string') return true;
     // Legacy "function" form `{ base?, type?, stops: [...] }` — must go
     // through the expression engine so paint/layout get concrete values.
-    return (
+    if (
         v !== null &&
         typeof v === 'object' &&
         !Array.isArray(v) &&
         Array.isArray((v as any).stops)
+    ) {
+        return true;
+    }
+    // Legacy `{ type: "identity", property: "x" }` function — the value is the
+    // feature property; must be evaluated per feature (MBExpressionEngine handles
+    // the identity form in `evaluate`).
+    return (
+        v !== null &&
+        typeof v === 'object' &&
+        !Array.isArray(v) &&
+        (v as any).type === 'identity' &&
+        typeof (v as any).property === 'string'
     );
 }
 

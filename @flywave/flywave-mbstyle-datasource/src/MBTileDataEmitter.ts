@@ -404,6 +404,18 @@ export class MBTileDataEmitter {
                     props.iconScale = l['icon-size'] ?? 1;
                     props._iconTranslate = p['icon-translate'] ?? [0, 0];
                     props._iconTranslateAnchor = p['icon-translate-anchor'] ?? 'map';
+                    // Mapbox `icon-anchor` — the native PoiRenderer shifts the
+                    // icon box so the named edge/corner sits at the symbol point.
+                    props._iconAnchor = l['icon-anchor'] ?? 'center';
+                    // Mapbox `icon-offset` (in ems, relative to icon-size): shift
+                    // the icon box center by em × iconSize px. PoiRenderer applies
+                    // these as pre-scale pixel offsets.
+                    const iconOffsetArr = l['icon-offset'];
+                    if (Array.isArray(iconOffsetArr)) {
+                        const iconFontSize = (l['icon-size'] as number) ?? 1;
+                        props.iconXOffset = (iconOffsetArr[0] ?? 0) * iconFontSize;
+                        props.iconYOffset = -((iconOffsetArr[1] ?? 0)) * iconFontSize;
+                    }
                     // SDF icon halo (private-prefixed; consumed by PoiBuilder for
                     // the IconMaterial halo uniforms). icon-halo-width/blur are in
                     // ems (mapbox); converted to SDF field units at render time.
@@ -411,7 +423,12 @@ export class MBTileDataEmitter {
                     props._iconHaloWidth = p['icon-halo-width'] ?? 0;
                     props._iconHaloBlur = p['icon-halo-blur'] ?? 0;
                     if (typeof l['symbol-sort-key'] === 'number') props.priority = l['symbol-sort-key'];
+                    // Native PoiBuilder reads `iconMayOverlap`/`iconReserveSpace`
+                    // (NOT `mayOverlap`/`reserveSpace`); map `icon-allow-overlap` /
+                    // `icon-ignore-placement` onto the native prop names.
+                    props.iconMayOverlap = l['icon-allow-overlap'] === true;
                     props.mayOverlap = l['icon-allow-overlap'] === true;
+                    props.iconReserveSpace = l['icon-ignore-placement'] !== true;
                     props.reserveSpace = l['icon-ignore-placement'] !== true;
                     if (l.visibility === 'none') props.enabled = false;
                 } else if (symbolMode === 'text' || (symbolMode === undefined && l['text-field'])) {

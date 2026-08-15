@@ -458,10 +458,34 @@ export class PoiRenderer {
         const iconXOffset = getPropertyValue(technique.iconXOffset, env);
         const iconYOffset = getPropertyValue(technique.iconYOffset, env);
 
+        // Mapbox `icon-anchor` aligns the icon box so the named edge/corner is at
+        // the symbol point. The native box is centered at screenPosition + offset,
+        // so shift the center by (0.5 - alignment) * (icon size in px at scale 1)
+        // to reproduce the anchor (mapbox shapeIcon: x1 = dx - w*hAlign, etc.).
+        const iconAnchor = getPropertyValue((technique as any)._iconAnchor, env) as string | undefined;
+        let anchorShiftX = 0;
+        let anchorShiftY = 0;
+        if (typeof iconAnchor === "string" && iconAnchor !== "center") {
+            let horizontalAlign = 0.5;
+            let verticalAlign = 0.5;
+            if (/right/.test(iconAnchor)) horizontalAlign = 1;
+            else if (/left/.test(iconAnchor)) horizontalAlign = 0;
+            if (/bottom/.test(iconAnchor)) verticalAlign = 1;
+            else if (/top/.test(iconAnchor)) verticalAlign = 0;
+            const pxWidth = poiInfo.computedWidth!;
+            const pxHeight = poiInfo.computedHeight!;
+            anchorShiftX = (0.5 - horizontalAlign) * pxWidth;
+            // Mapbox Y is screen-down; the native screenPosition.y is screen-up
+            // (three.js), so negate the vertical alignment shift.
+            anchorShiftY = (verticalAlign - 0.5) * pxHeight;
+        }
+
         const centerX =
-            screenPosition.x + (typeof iconXOffset === "number" ? iconXOffset : 0) * scale;
+            screenPosition.x + (typeof iconXOffset === "number" ? iconXOffset : 0) * scale +
+            anchorShiftX * scale;
         const centerY =
-            screenPosition.y + (typeof iconYOffset === "number" ? iconYOffset : 0) * scale;
+            screenPosition.y + (typeof iconYOffset === "number" ? iconYOffset : 0) * scale +
+            anchorShiftY * scale;
 
         screenBox.x = centerX - width / 2;
         screenBox.y = centerY - height / 2;
