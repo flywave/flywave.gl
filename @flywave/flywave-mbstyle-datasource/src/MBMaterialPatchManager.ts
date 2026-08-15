@@ -933,8 +933,6 @@ export class MBMaterialPatchManager {
     }
 
     private patchExtrusionMaterial(material: THREE.Material, paint: any, technique: any): void {
-        // 3D lighting: shade extruded surfaces by ambient + directional light.
-        this.injectLighting(material);
         const height = technique.height ?? paint['fill-extrusion-height'] ?? 0;
         const base = technique.floorHeight ?? paint['fill-extrusion-base'] ?? 0;
         const verticalScale = paint['fill-extrusion-vertical-scale'] ?? 1;
@@ -942,6 +940,36 @@ export class MBMaterialPatchManager {
         const lineWidth = paint['fill-extrusion-line-width'] ?? 0;
         const cutoffFadeRange = paint['fill-extrusion-cutoff-fade-range'] ?? 0;
         const verticalGradient = paint['fill-extrusion-vertical-gradient'] !== false;
+
+        // Mapbox fill-extrusion lighting (legacy `light` model). Mapbox ALWAYS
+        // lights extruded surfaces even without a `light` in the style, using a
+        // default light { position: [1.15, 210, 30], color: white, intensity: 0.5 }.
+        // When the style uses the 3D `lights` API instead, the LIGHTING_3D_MODE
+        // shader path applies — the three.js scene lights (added by applyLights)
+        // light the material directly, so the legacy Lambert injection (which is
+        // still used by building materials) is applied instead.
+        const lightState = (this.m_dataSource as any).m_environment?.extrusionLightState;
+        const use3DLights = lightState?.use3DLights === true;
+        if (use3DLights) {
+            this.injectLighting(material);
+        }
+        // Viewport-anchored light: mapbox rotates the light position by -bearing
+        // (`anchor: viewport`) but never by pitch. The per-fragment flat normal is
+        // computed from view-space position derivatives, so we pass both the
+        // world-space light direction and a view→world rotation to dot them in a
+        // consistent (world/tile) frame — the rotation preserves the dot product.
+        const mapView = (this.m_dataSource as any).mapView;
+        const camera = mapView?.camera as THREE.PerspectiveCamera | undefined;
+        const bearingRad = ((mapView?.heading ?? 0) * Math.PI) / 180;
+        let lightDirWorld = (lightState?.dir ?? new THREE.Vector3(0.2875, -0.498, 0.996)).clone();
+        if (bearingRad !== 0) {
+            lightDirWorld.applyAxisAngle(new THREE.Vector3(0, 0, 1), -bearingRad);
+        }
+        const lightColor = lightState?.color ?? new THREE.Color('#ffffff');
+        const lightIntensity = lightState?.intensity ?? 0.5;
+        const viewToWorld = camera
+            ? new THREE.Matrix3().setFromMatrix4(camera.matrixWorld)
+            : new THREE.Matrix3();
         const translate = this.resolveTranslate(
             paint['fill-extrusion-translate'] ?? technique._translate ?? [0, 0],
             paint['fill-extrusion-translate-anchor'] ?? technique._translateAnchor ?? 'map',
@@ -1056,9 +1084,17 @@ export class MBMaterialPatchManager {
                 );
             }
 
-            if (verticalGradient) {
-                shader.uniforms.uMBGradTop = { value: new THREE.Color(1, 1, 1) };
-                shader.uniforms.uMBGradBottom = { value: new THREE.Color(0.6, 0.6, 0.6) };
+            // Mapbox fill-extrusion lighting (legacy light model): ambient 0.03 +
+            // NdotL with luminance-adjusted intensity, plus a per-face vertical
+            // gradient for side surfaces. Computed on the sRGB paint color.
+            // Skipped when the style uses the 3D `lights` API (LIGHTING_3D_MODE
+            // shader path handles those separately).
+            if (!use3DLights) {
+                shader.uniforms.uMBLightDirWorld = { value: lightDirWorld };
+                shader.uniforms.uMBLightColor = { value: lightColor };
+                shader.uniforms.uMBLightIntensity = { value: lightIntensity };
+                shader.uniforms.uMBViewToWorld = { value: viewToWorld };
+                shader.uniforms.uMBVerticalGradient = { value: verticalGradient ? 1 : 0 };
                 // Varyings must be declared at global scope — injecting the
                 // declaration next to the assignment (inside main()) is a GLSL
                 // compile error.
@@ -1073,13 +1109,49 @@ export class MBMaterialPatchManager {
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <common>',
-                    '#include <common>\nvarying float vMBHeight;'
+                    `#include <common>
+                     varying float vMBHeight;
+                     uniform vec3 uMBLightDirWorld; uniform vec3 uMBLightColor;
+                     uniform float uMBLightIntensity; uniform mat3 uMBViewToWorld;
+                     uniform float uMBVerticalGradient;
+                     uniform float uMBHeightBase; uniform float uMBHeightTop;
+                     vec3 linearToSrgb(vec3 c) {
+                         return mix(pow(c, vec3(1.0 / 2.4)) * 1.055 - 0.055, c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308))));
+                     }
+                     vec3 srgbToLinear(vec3 c) {
+                         return mix(pow((c + 0.055) / 1.055, vec3(2.4)), c / 12.92, vec3(lessThanEqual(c, vec3(0.04045))));
+                     }`
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <colorspace_fragment>',
                     `#include <colorspace_fragment>
-                     vec3 mbGradColor = mix(vec3(0.6), vec3(1.0), clamp(vMBHeight, 0.0, 1.0));
-                     gl_FragColor.rgb *= mbGradColor;`
+                     {
+                         // The renderer's output color space is linear (the
+                         // mapview captures to sRGB only at compositing time), so
+                         // gl_FragColor.rgb at this point is the LINEAR paint color.
+                         // Mapbox's fill-extrusion lighting is computed on the
+                         // sRGB paint values and yields an sRGB result; convert the
+                         // input to sRGB, do the mapbox math, then linearize the
+                         // output so the final capture reproduces the sRGB result.
+                         vec3 mbPaintSrgb = linearToSrgb(gl_FragColor.rgb);
+                         float mbColorValue = dot(mbPaintSrgb, vec3(0.2126, 0.7152, 0.0722));
+                         vec3 mbColor = mbPaintSrgb + vec3(0.03);
+                         // Flat normal: FLAT_SHADED so vNormal is undefined; use
+                         // screen-space derivatives, rotated into world space.
+                         vec3 mbViewN = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+                         vec3 mbWorldN = normalize(uMBViewToWorld * mbViewN);
+                         // Roof normals point up (mapbox encodes roof as (0,0,1)
+                         // with normal.y == 0, i.e. no vertical gradient); walls are
+                         // horizontal. Detect via the world-space vertical component.
+                         float mbNdotL = clamp(dot(mbWorldN, uMBLightDirWorld), 0.0, 1.0);
+                         mbNdotL = mix(1.0 - uMBLightIntensity, max(1.0 - mbColorValue + uMBLightIntensity, 1.0), mbNdotL);
+                         if (abs(mbWorldN.z) < 0.5) {
+                             float mbR = mix(0.7, 0.98, 1.0 - uMBLightIntensity);
+                             mbNdotL *= (1.0 - uMBVerticalGradient) + uMBVerticalGradient * clamp((vMBHeight + uMBHeightBase) * pow(uMBHeightTop / 150.0, 0.5), mbR, 1.0);
+                         }
+                         vec3 mbResultSrgb = clamp(mbColor * mbNdotL * uMBLightColor, mix(vec3(0.0), vec3(0.3), 1.0 - uMBLightColor), vec3(1.0));
+                         gl_FragColor.rgb = srgbToLinear(mbResultSrgb);
+                     }`
                 );
             }
 

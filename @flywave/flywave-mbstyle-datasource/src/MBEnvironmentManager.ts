@@ -18,6 +18,15 @@ export class MBEnvironmentManager {
     /** Whether 3D lighting is active (affects vector-layer shading). */
     get hasLighting(): boolean { return this.m_directionalLight !== null; }
 
+    /**
+     * True when the style uses the 3D `lights` API (`lighting-3d-mode` shader
+     * path) instead of the legacy `light` model. Fill-extrusion shading then
+     * follows the LIGHTING_3D_MODE formula (a separate pipeline) rather than the
+     * legacy default-light model, so the legacy shader injection must be skipped.
+     */
+    get use3DLights(): boolean { return this.m_use3DLights; }
+    private m_use3DLights = false;
+
     private m_ambientColor: THREE.Color | null = null;
     private m_ambientIntensity: number = 0;
     private m_directionalColor: THREE.Color | null = null;
@@ -72,6 +81,37 @@ export class MBEnvironmentManager {
             ambIntensity: this.m_ambientLight?.intensity ?? 0.5,
         };
     }
+
+    /**
+     * Fill-extrusion lighting state (mapbox `light` model). Mapbox ALWAYS lights
+     * extruded surfaces, even without a `light` in the style: the default light
+     * is `{ anchor: viewport, color: white, intensity: 0.5, position: [1.15, 210, 30] }`
+     * (r, azimuthal°, polar°). Returns the same params whether or not the style
+     * specifies lights, so `patchExtrusionMaterial` can always shade walls.
+     */
+    get extrusionLightState(): {
+        dir: THREE.Vector3; color: THREE.Color; intensity: number; use3DLights: boolean;
+    } {
+        const degToRad = THREE.MathUtils.degToRad;
+        // sphericalPositionToCartesian([1.15, 210, 30]) — mapbox default light.
+        const r = 1.15, azimuthal = 210, polar = 30;
+        const a = degToRad(azimuthal + 90), p = degToRad(polar);
+        const dir = new THREE.Vector3(
+            r * Math.cos(a) * Math.sin(p),
+            r * Math.sin(a) * Math.sin(p),
+            r * Math.cos(p),
+        );
+        if (this.m_directionalLight) {
+            const c = (this.m_directionalLight.color ?? new THREE.Color('#fff')).clone();
+            return {
+                dir: this.m_directionalLight.position.clone(),
+                color: c,
+                intensity: this.m_directionalLight.intensity ?? 0.5,
+                use3DLights: this.m_use3DLights,
+            };
+        }
+        return { dir, color: new THREE.Color('#ffffff'), intensity: 0.5, use3DLights: false };
+    }
     private m_terrainMesh: THREE.Mesh | null = null;
     private m_terrainController: TerrainController | null = null;
 
@@ -88,6 +128,7 @@ export class MBEnvironmentManager {
     applyLights(lights: Light3DProperties[] | undefined, legacyLight?: any): void {
         if (!this.m_scene) return;
         this.clearLights();
+        this.m_use3DLights = Array.isArray(lights) && lights.length > 0;
 
         const renderer = (this.m_mapView as any).renderer;
         if (renderer) {

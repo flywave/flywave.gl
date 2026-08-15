@@ -1041,3 +1041,20 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 **发现 3：颜色管线**：材质色已正确应用（#999999，afterSetRGB 验证），但墙面渲染恒为 90（#999×0.59 或白×0.35 巧合相等）——亮度由 sRGB/linear/tone-mapping 管线 + 未注入 lighting 主导，非材质色问题。
 
 **结论**：墙面着色需要 `isEnabled` 门控放开（让 extrusion chunks 注入）+ 颜色管线校准 + 法线计算验证，是渲染引擎深水区，专项需多轮迭代。当前代码库 = fix1 + 本轮确定修复（3-digit hex、harness 竞态、高 pitch、ping 超时）。
+
+### 12.15 fill-extrusion 墙面光照落地（2026-08-16）
+
+**方案（绕过 extrusion chunks 注入，直接在 patcher 实现 mapbox 公式）**：
+- `MBEnvironmentManager` 新增 `extrusionLightState`：mapbox **默认光** `{position:[1.15,210,30] spherical, color:white, intensity:0.5}`（mapbox 无 `light` 时也恒有默认光），并记录 `use3DLights`（样式用 3D `lights` API 时为 true）。
+- `MBMaterialPatchManager.patchExtrusionMaterial`：删掉原来错误的 `mix(0.6→1.0, vMBHeight)` 垂直渐变；改为按 `fill_extrusion.vertex.glsl` 公式在 fragment 注入：
+  1. `colorvalue = luminance(paint)`；`color += 0.03`（ambient）。
+  2. `NdotL = clamp(dot(worldFlatNormal, lightDirWorld), 0, 1)`（FLAT_SHADED 导数法线 × `camera.matrixWorld` 转世界系；光方向按 viewport anchor 旋转 `-bearing`）。
+  3. `NdotL = mix(1-intensity, max(1-colorvalue+intensity, 1.0), NdotL)`。
+  4. 侧面（`abs(worldN.z)<0.5`）：`NdotL *= (1-vg) + vg*clamp((vMBHeight+base)*pow(height/150,0.5), r, 1)`，`r=mix(0.7,0.98,1-intensity)`。
+  5. `result = clamp((paint+0.03)*NdotL*lightColor, mix(0,0.3,1-lightColor), 1)`。
+- **颜色空间**：mapview 渲染输出为 linear（`colorspace_fragment` 恒等），故注入在 fragment 里对 `gl_FragColor.rgb`（linear paint）先 `linearToSrgb` 再做 mapbox sRGB 算术，输出前 `srgbToLinear` 还原，使最终捕获结果 = mapbox 参考。
+- 3D `lights` 样式（如 `data-driven-zero-alpha`/`no-alpha-no-multiply`，走 `LIGHTING_3D_MODE`）保持原 `injectLighting` Lambert 路径，不套 legacy 公式（避免双重重阴影）。
+
+**验证**：`fill-extrusion-color/literal` 屋顶 `(11,11,255)`、墙面 `(6,6,212)` 与 expected **逐像素一致**（此前墙面为 `(0,0,250→211)` 错误渐变）。fill-extrusion-color 分类净 **−2487 px**：property-function 11315→9048、no-alpha-no-multiply 38341→38023、default 1427→1414、use-theme 1369→1408；data-driven-zero-alpha 15280→15313（3D-lights 路径保持基线）。3 个既有通过项（edge-radius-narrow-corner/tile-border/pattern-missing）无回归，组合分类既有通过无回归。残余 ~1400px 为**屋顶/墙面边界 2px 几何偏移**（预存在，非光照）。
+
+**遗留**：fill-extrusion `function`/`zoom-and-property-function`（期望紫色/zoom 插值）仍全蓝——zoom 函数求值偏位（预存在 Z2 问题）；fill-extrusion-opacity 半透明叠加（translucent 组合）未对齐；屋顶/墙面边界偏移。3D `lights`（lighting-3d-mode 116 例）仍需专项。
