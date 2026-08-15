@@ -110,7 +110,7 @@ const create3DTilesDataSource = (mapView: MapView): CesiumIonDataSource => {
             receiveShadow: true,
             errorTarget: 100, 
             castShadow: true,
-            shadowCastErrorThreshold:1000,
+            shadowCastErrorThreshold:10000,
             transform: new Matrix4().fromArray([
                 -0.337273, 0.00054, -0.941407, 0, -0.612574, 0.759208, 0.219899, 0, 0.714842,
                 0.650848, -0.25573, 0, 4565629.4, 4129077, -8011465.5, 1
@@ -298,6 +298,7 @@ try {
 
     // 2. Initialize map view
     const mapView = initializeMapView(canvas);
+    (globalThis as any).mapView = mapView; // debug handle
 
     // 3. Initialize map controls
     initializeMapControls(mapView);

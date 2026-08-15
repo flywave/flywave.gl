@@ -49,7 +49,7 @@ class GpuPickTest {
             canvas: canvas,
             enableGpuPicking: true,
             theme: {
-                atmosphere: { enabled: true, sunTime: new Date(new Date().setMonth(9)).setHours(22, 30) },
+                atmosphere: { enabled: true, sunTime: new Date(new Date().setHours(22, 0)).getTime() },
                 postEffects: { antialiasing: "taa" },
                 toneMappingExposure: 1.5,
                 styles: {
@@ -66,6 +66,8 @@ class GpuPickTest {
                 }
             }
         });
+        (globalThis as any).mapView = this.mapView;   // debug handle
+        (globalThis as any).gpuDs = this.dataSource;  // debug handle
 
         const controls = new MapControls(this.mapView);
         const ui = new MapControlsUI(controls);

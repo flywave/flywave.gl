@@ -233,8 +233,8 @@ class RootTile extends Tile {
         super(dataSource, tileKey);
         this.objects.push(tempObject);
 
-        this["m_maxGeometryHeight"] = 10000; 
-        this["m_minGeometryHeight"] = -10000;
+        this["m_maxGeometryHeight"] = 1; 
+        this["m_minGeometryHeight"] = -1;
     }
 
     raycast(rayCaster: Raycaster, intersects: Intersection[], recursive?: boolean): void {
