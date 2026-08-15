@@ -272,6 +272,10 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         // 浏览器无活动超时（render-tests 全量跑时长用例较多，放宽）
         browserNoActivityTimeout: 300000,
 
+        // 浏览器响应 ping 的超时：SwiftShader 下重负载用例（dynamic-filter 等）
+        // 主线程可能偶发阻塞 60-120s，默认 60s 会误判 DISCONNECTED 整批重跑
+        pingTimeout: 180000,
+
         // 浏览器断开超时（SwiftShader 下重负载 3D 用例可能卡顿，放宽）
         browserDisconnectTimeout: 60000,
 

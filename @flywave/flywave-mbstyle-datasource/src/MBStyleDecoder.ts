@@ -145,8 +145,11 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         const coords = geometry.length > 0
             ? this.tileToLocalLngLat(geometry[0].x, geometry[0].y, extents)
             : [0, 0];
+        // Multi-source styles: each feature is tagged with its source id by the
+        // CompositeGeoDataProvider; evaluate against that source's layers.
+        const effectiveSourceId = (properties?._sourceId as string) || this.m_sourceId;
         const matched = this.m_layerEvaluator.evaluate(
-            this.m_sourceId, layer,
+            effectiveSourceId, layer,
             { type: 'Point', properties, id: featureId, _geom: { type: 'Point', coordinates: coords } },
             this.m_zoom, 'point', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
             this.m_worldview, this.m_center,
@@ -190,8 +193,9 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             _geom: { type: 'Point', coordinates: coords },
         };
         if (lineVertices) feat._lineGeom = lineVertices;
+        const effectiveSourceId = (properties?._sourceId as string) || this.m_sourceId;
         const matched = this.m_layerEvaluator.evaluate(
-            this.m_sourceId, layer,
+            effectiveSourceId, layer,
             feat,
             this.m_zoom, 'line', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
             this.m_worldview, this.m_center,
@@ -265,8 +269,9 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             _geom: { type: 'Point', coordinates: coords },
         };
         if (polyRings) feat._polyGeom = polyRings;
+        const effectiveSourceId = (properties?._sourceId as string) || this.m_sourceId;
         const matched = this.m_layerEvaluator.evaluate(
-            this.m_sourceId, layer,
+            effectiveSourceId, layer,
             feat,
             this.m_zoom, 'polygon', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
             this.m_worldview, this.m_center,

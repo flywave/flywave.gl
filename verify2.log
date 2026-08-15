@@ -1,0 +1,233 @@
+RenderingTestResultServer: start standaloneServer:  rendering-test-results/mbstyle-verify2
+RenderingTestResultServer: serving IBCT report at /ibct-report endpoint
+RenderingTestResultServer: accepting IBCT results at /ibct-feedback endpoint
+node:events:495
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use ::1:8095
+    at Server.setupListenHandle [as _listen2] (node:net:1817:16)
+    at listenInCluster (node:net:1865:12)
+    at GetAddrInfoReqWrap.doListen [as callback] (node:net:2014:7)
+    at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:109:8)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1844:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '::1',
+  port: 8095
+}
+
+Node.js v18.20.1
+tsconfig-paths-webpack-plugin: Using config file at /Users/xuning/Work/flywave.gl/tsconfig.karma.json
+Matched test files: [
+  '@flywave/flywave-mbstyle-datasource/test/MBStyleCompatRenderTest.ts',
+  {
+    pattern: 'node_modules/three/examples/jsm/libs/draco/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-3dtile-render/test/data/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-map-theme/resources/fonts/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-mbstyle-datasource/test/render-tests/**/expected.png',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-mbstyle-datasource/test/rendering/integration/**/*.*',
+    included: false
+  }
+]
+[33m13 08 2026 18:33:06.727:WARN [filelist]: [39mPattern "/Users/xuning/Work/flywave.gl/@flywave/flywave-3dtile-render/test/data/**/*.*" does not match any file.
+Webpack bundling...
+asset [1m[32mcommons.js[39m[22m 39 MiB [1m[32m[emitted][39m[22m (name: commons) (id hint: commons)
+asset [1m[32mruntime.js[39m[22m 16.4 KiB [1m[32m[emitted][39m[22m (name: runtime)
+asset [1m[32mMBStyleCompatRenderTest.706409308.js[39m[22m 516 bytes [1m[32m[emitted][39m[22m (name: MBStyleCompatRenderTest.706409308)
+Entrypoint [1mMBStyleCompatRenderTest.706409308[39m[22m 39 MiB = [1m[32mruntime.js[39m[22m 16.4 KiB [1m[32mcommons.js[39m[22m 39 MiB [1m[32mMBStyleCompatRenderTest.706409308.js[39m[22m 516 bytes
+webpack 5.99.9 compiled [1m[32msuccessfully[39m[22m in 4926 ms
+[33m13 08 2026 18:33:12.984:WARN [filelist]: [39mPattern "/Users/xuning/Work/flywave.gl/@flywave/flywave-3dtile-render/test/data/**/*.*" does not match any file.
+[32m13 08 2026 18:33:13.603:INFO [karma-server]: [39mKarma v6.4.4 server started at http://localhost:9876/
+[32m13 08 2026 18:33:13.603:INFO [launcher]: [39mLaunching browsers ChromeHeadlessNoSandbox with concurrency unlimited
+[32m13 08 2026 18:33:13.607:INFO [launcher]: [39mStarting browser ChromeHeadless
+[32m13 08 2026 18:33:15.602:INFO [Edge 151.0.0.0 (Mac OS 10.15.7)]: [39mConnected on socket Tp9YAVAkJ-h2NK4gAAAB with id 56831959
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: [36m'RenderingTestHelper:', 'WebGlInfo', Object{vendor: 'Google Inc. (Google)', gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)'}[39m
+
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: 'RenderingTestHelper:', 'WebGlInfo', Object{vendor: 'Google Inc. (Google)', gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)'}
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: [36m'[MBStyleCompat] 3026 compatible tests loaded'[39m
+
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: '[MBStyleCompat] 3026 compatible tests loaded'
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: [36m'[MBStyleCompat] filtered to 12 tests matching "text-size/default", "text-field/literal", "icon-image/literal", "text-color/"'[39m
+
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: '[MBStyleCompat] filtered to 12 tests matching "text-size/default", "text-field/literal", "icon-image/literal", "text-color/"'
+
+[1A[2KEdge 151.0.0.0 (Mac OS 10.15.7): Executed 0 of 12[32m SUCCESS[39m (0 secs / 0 secs)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility icon-image/literal FAILED[39m
+	AssertionError: 58 mismatched pixels, reference image: icon-image/literal: expected 58 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 1 of 12[31m (1 FAILED)[39m (0 secs / 0.352 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility icon-image/literal FAILED
+	AssertionError: 58 mismatched pixels, reference image: icon-image/literal: expected 58 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/default FAILED[39m
+	AssertionError: 5774 mismatched pixels, reference image: text-color/default: expected 5774 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 2 of 12[31m (2 FAILED)[39m (0 secs / 0.649 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/default FAILED
+	AssertionError: 5774 mismatched pixels, reference image: text-color/default: expected 5774 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/function FAILED[39m
+	AssertionError: 5716 mismatched pixels, reference image: text-color/function: expected 5716 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 3 of 12[31m (3 FAILED)[39m (0 secs / 0.923 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/function FAILED
+	AssertionError: 5716 mismatched pixels, reference image: text-color/function: expected 5716 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/literal FAILED[39m
+	AssertionError: 5751 mismatched pixels, reference image: text-color/literal: expected 5751 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 4 of 12[31m (4 FAILED)[39m (0 secs / 1.258 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/literal FAILED
+	AssertionError: 5751 mismatched pixels, reference image: text-color/literal: expected 5751 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[33m13 08 2026 18:33:17.253:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/glyphs/Open%20Sans%20Regular/0-255.pbf
+[33m13 08 2026 18:33:17.266:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/glyphs/Open%20Sans%20Regular/256-511.pbf
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/missing-image-in-text-color-condition FAILED[39m
+	AssertionError: 151 mismatched pixels, reference image: text-color/missing-image-in-text-color-condition: expected 151 to be at most 9
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 5 of 12[31m (5 FAILED)[39m (0 secs / 1.494 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/missing-image-in-text-color-condition FAILED
+	AssertionError: 151 mismatched pixels, reference image: text-color/missing-image-in-text-color-condition: expected 151 to be at most 9
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/property-function FAILED[39m
+	AssertionError: 228 mismatched pixels, reference image: text-color/property-function: expected 228 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 6 of 12[31m (6 FAILED)[39m (0 secs / 1.737 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/property-function FAILED
+	AssertionError: 228 mismatched pixels, reference image: text-color/property-function: expected 228 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/use-theme FAILED[39m
+	AssertionError: 374 mismatched pixels, reference image: text-color/use-theme: expected 374 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 7 of 12[31m (7 FAILED)[39m (0 secs / 1.967 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/use-theme FAILED
+	AssertionError: 374 mismatched pixels, reference image: text-color/use-theme: expected 374 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/zoom-and-feature-dependent FAILED[39m
+	AssertionError: 521 mismatched pixels, reference image: text-color/zoom-and-feature-dependent: expected 521 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 8 of 12[31m (8 FAILED)[39m (0 secs / 2.211 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/zoom-and-feature-dependent FAILED
+	AssertionError: 521 mismatched pixels, reference image: text-color/zoom-and-feature-dependent: expected 521 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/zoom-and-feature-dependent-composite FAILED[39m
+	AssertionError: 160 mismatched pixels, reference image: text-color/zoom-and-feature-dependent-composite: expected 160 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 9 of 12[31m (9 FAILED)[39m (0 secs / 2.437 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/zoom-and-feature-dependent-composite FAILED
+	AssertionError: 160 mismatched pixels, reference image: text-color/zoom-and-feature-dependent-composite: expected 160 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/zoom-dependent FAILED[39m
+	AssertionError: 579 mismatched pixels, reference image: text-color/zoom-dependent: expected 579 to be at most 10
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 10 of 12[31m (10 FAILED)[39m (0 secs / 2.62 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/zoom-dependent FAILED
+	AssertionError: 579 mismatched pixels, reference image: text-color/zoom-dependent: expected 579 to be at most 10
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-field/literal FAILED[39m
+	AssertionError: 113 mismatched pixels, reference image: text-field/literal: expected 113 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 11 of 12[31m (11 FAILED)[39m (0 secs / 2.82 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-field/literal FAILED
+	AssertionError: 113 mismatched pixels, reference image: text-field/literal: expected 113 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-size/default FAILED[39m
+	AssertionError: 122 mismatched pixels, reference image: text-size/default: expected 122 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 12 of 12[31m (12 FAILED)[39m (0 secs / 2.984 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-size/default FAILED
+	AssertionError: 122 mismatched pixels, reference image: text-size/default: expected 122 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51195:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_444812/commons.js:51083:58)
+[1A[2KEdge 151.0.0.0 (Mac OS 10.15.7): Executed 12 of 12[31m (12 FAILED)[39m (2.987 secs / 2.984 secs)
+[31mTOTAL: 12 FAILED, 0 SUCCESS[39m
+TOTAL: 12 FAILED, 0 SUCCESS
+Handlebars: Access has been denied to resolve the property "statements" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "branches" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "functions" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "lines" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+
+=============================== Coverage summary ===============================
+Statements   : Unknown% ( 0/0 )
+Branches     : Unknown% ( 0/0 )
+Functions    : Unknown% ( 0/0 )
+Lines        : Unknown% ( 0/0 )
+================================================================================
+
+No test results were recorded (server may not have received feedback).
+
+=== Render-test evaluation complete ===
+Results saved to: rendering-test-results/mbstyle-verify2
+Open the HTML report:  http://localhost:8095/ibct-report
+(press Ctrl-C to stop the result server)

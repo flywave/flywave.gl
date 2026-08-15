@@ -39,7 +39,7 @@ export class SpriteAtlas {
     private m_cursorY = 0;
     private m_rowHeight = 0;
 
-    constructor(image: HTMLImageElement | ImageBitmap, icons: Map<string, SpriteIconInfo>) {
+    constructor(image: HTMLImageElement | ImageBitmap | HTMLCanvasElement, icons: Map<string, SpriteIconInfo>) {
         this.texture = new THREE.Texture(image);
         this.texture.needsUpdate = true;
         this.texture.minFilter = THREE.LinearFilter;
@@ -49,7 +49,7 @@ export class SpriteAtlas {
         this.initCanvas(image);
     }
 
-    private initCanvas(image: HTMLImageElement | ImageBitmap): void {
+    private initCanvas(image: HTMLImageElement | ImageBitmap | HTMLCanvasElement): void {
         if (typeof document === 'undefined') return;
         const w = (image as HTMLImageElement).naturalWidth ?? (image as ImageBitmap).width ?? image.width;
         const h = (image as HTMLImageElement).naturalHeight ?? (image as ImageBitmap).height ?? image.height;

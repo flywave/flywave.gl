@@ -113,7 +113,8 @@ class PoiBatch {
     constructor(
         private readonly m_rendererCapabilities: THREE.WebGLCapabilities,
         readonly imageItem: ImageItem,
-        private readonly m_onDispose: () => void
+        private readonly m_onDispose: () => void,
+        haloParams?: { haloColor?: THREE.Color; haloWidth?: number; haloBlur?: number }
     ) {
         // Texture images should be generated with premultiplied alpha
         const premultipliedAlpha = true;
@@ -138,7 +139,11 @@ class PoiBatch {
 
         this.m_material = new IconMaterial({
             rendererCapabilities: this.m_rendererCapabilities,
-            map: texture
+            map: texture,
+            sdf: this.imageItem.sdf === true,
+            haloColor: haloParams?.haloColor,
+            haloWidth: haloParams?.haloWidth,
+            haloBlur: haloParams?.haloBlur
         });
 
         this.m_poiBuffers = new Map();
@@ -269,13 +274,30 @@ export class PoiBatchRegistry {
         // ImageTextures in it. If the imageTexture is not set, imageTextureName has the actual
         // image name.
         assert(poiInfo.imageTextureName !== undefined);
-        const batchKey = imageTexture?.image ?? poiInfo.imageTextureName!;
+        let batchKey = imageTexture?.image ?? poiInfo.imageTextureName!;
+
+        // SDF icons: the halo uniforms change the rendered pixels, so split
+        // the batch per (icon, halo) signature. Width/blur are mapbox ems →
+        // SDF field units (0.75 edge over an ~8px radius ≈ 0.094/px at scale 1).
+        let haloParams: { haloColor?: THREE.Color; haloWidth?: number; haloBlur?: number } | undefined;
+        if (imageItem.sdf) {
+            const widthField = (poiInfo.iconHaloWidth ?? 0) * 0.094;
+            const blurField = (poiInfo.iconHaloBlur ?? 0) * 0.094;
+            const colorHex = poiInfo.iconHaloColor?.getHexString() ?? '0';
+            batchKey += `#h${widthField.toFixed(3)},${blurField.toFixed(3)},${colorHex}`;
+            haloParams = {
+                haloColor: poiInfo.iconHaloColor,
+                haloWidth: widthField,
+                haloBlur: blurField
+            };
+        }
+
         let batch = this.m_batchMap.get(batchKey);
 
         if (batch === undefined) {
             batch = new PoiBatch(this.m_rendererCapabilities, imageItem, () => {
                 this.deleteBatch(batchKey);
-            });
+            }, haloParams);
             this.m_batchMap.set(batchKey, batch);
         }
 

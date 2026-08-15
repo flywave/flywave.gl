@@ -22,7 +22,7 @@ export interface ResolvedSource {
  */
 export interface SpriteData {
     json: Record<string, SpriteIconInfo>;
-    image: HTMLImageElement | ImageBitmap;
+    image: HTMLImageElement | ImageBitmap | HTMLCanvasElement;
 }
 
 export interface SpriteIconInfo {
@@ -31,6 +31,7 @@ export interface SpriteIconInfo {
     width: number;
     height: number;
     pixelRatio: number;
+    sdf?: boolean;
 }
 
 export class MBStyleManager {
@@ -259,7 +260,7 @@ export class MBStyleManager {
                 const { decodeIconSet, renderIconToCanvas } = await import('./IconSetPBFDecoder');
                 const icons = decodeIconSet(data);
                 if (icons.length > 0) {
-                    return this.buildSpriteFromIconSet(icons);
+                    return this.buildSpriteFromIconSet(icons, spriteUrl);
                 }
             }
         } catch {}
@@ -302,25 +303,76 @@ export class MBStyleManager {
     /**
      * Build a rasterized sprite atlas from decoded icon_set icons.
      * Each icon is rasterized to a canvas, then packed into a single atlas.
+     *
+     * The atlas is returned as a canvas (not an HTMLImageElement) so consumers
+     * can draw from it synchronously — a `toDataURL()`-backed Image decodes
+     * asynchronously and would produce blank sub-images when cut immediately.
+     *
+     * When the legacy `.json`/`.png` pair exists next to the icon_set, icons
+     * missing from the pbf are merged in from the png (some fixtures ship an
+     * incomplete icon_set, e.g. no `dot.sdf` / road shields).
      */
-    private buildSpriteFromIconSet(icons: any[]): SpriteData {
+    private async buildSpriteFromIconSet(icons: any[], spriteUrl?: string): Promise<SpriteData> {
         const { renderIconToCanvas } = require('./IconSetPBFDecoder');
         const json: Record<string, SpriteIconInfo> = {};
         const dpr = 1; // pixelRatio; could be window.devicePixelRatio
 
         // Render each icon to a canvas.
         const canvases: Map<string, HTMLCanvasElement> = new Map();
-        let totalW = 0, maxH = 0;
         for (const icon of icons) {
             try {
                 const canvas = renderIconToCanvas(icon, dpr);
                 canvases.set(icon.name, canvas);
-                totalW += canvas.width + 2; // 2px padding
-                maxH = Math.max(maxH, canvas.height);
+            } catch {}
+        }
+
+        // Merge legacy sprite icons missing from the icon_set.
+        if (spriteUrl) {
+            try {
+                const jsonUrl = spriteUrl.endsWith('.json')
+                    ? spriteUrl
+                    : `${spriteUrl}.json`;
+                const jsonResp = await fetch(jsonUrl);
+                if (jsonResp.ok) {
+                    const legacyJson = await jsonResp.json() as Record<string, SpriteIconInfo>;
+                    const missing = Object.entries(legacyJson).filter(([name]) => !canvases.has(name));
+                    if (missing.length > 0) {
+                        const imgUrl = jsonUrl.replace(/\.json$/, '.png');
+                        const imgResp = await fetch(imgUrl);
+                        if (imgResp.ok) {
+                            const blob = await imgResp.blob();
+                            const legacyImage = new Image();
+                            await new Promise<void>((resolve, reject) => {
+                                legacyImage.onload = () => resolve();
+                                legacyImage.onerror = reject;
+                                legacyImage.src = URL.createObjectURL(blob);
+                            });
+                            for (const [name, info] of missing) {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = info.width;
+                                canvas.height = info.height;
+                                canvas.getContext('2d')!.drawImage(
+                                    legacyImage,
+                                    info.x, info.y, info.width, info.height,
+                                    0, 0, info.width, info.height,
+                                );
+                                canvases.set(name, canvas);
+                                // Record pixelRatio/sdf so the pack loop below
+                                // can carry them into the merged json.
+                                (canvas as any).__spriteInfo = info;
+                            }
+                        }
+                    }
+                }
             } catch {}
         }
 
         // Pack into a single row atlas (sufficient for test sprites).
+        let totalW = 0, maxH = 0;
+        for (const [, canvas] of canvases) {
+            totalW += canvas.width + 2; // 2px padding
+            maxH = Math.max(maxH, canvas.height);
+        }
         const atlasCanvas = document.createElement('canvas');
         atlasCanvas.width = Math.max(1, totalW);
         atlasCanvas.height = Math.max(1, maxH);
@@ -328,17 +380,17 @@ export class MBStyleManager {
         let xCursor = 0;
         for (const [name, canvas] of canvases) {
             ctx.drawImage(canvas, xCursor, 0);
+            const legacyInfo = (canvas as any).__spriteInfo as SpriteIconInfo | undefined;
             json[name] = {
                 x: xCursor, y: 0,
                 width: canvas.width, height: canvas.height,
-                pixelRatio: dpr,
+                pixelRatio: legacyInfo?.pixelRatio ?? dpr,
+                ...(legacyInfo?.sdf ? { sdf: true } : {}),
             };
             xCursor += canvas.width + 2;
         }
 
-        const image = new Image();
-        image.src = atlasCanvas.toDataURL();
-        this.m_spriteData = { json, image };
+        this.m_spriteData = { json, image: atlasCanvas };
         return this.m_spriteData;
     }
 

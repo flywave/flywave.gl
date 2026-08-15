@@ -2397,8 +2397,18 @@ export class MapView extends EventDispatcher {
             const maxPitchDegWithCurvature = THREE.MathUtils.radToDeg(maxPitchRadWithCurvature);
             limitedPitch = Math.min(limitedPitch, maxPitchDegWithCurvature);
         }
-        MapViewUtils.zoomOnTargetPosition(this, 0, 0, zoomLevel);
-        MapViewUtils.setRotation(this, yawDeg, limitedPitch);
+        // Orbit around the target (like `lookAt`): the geo position stays at the
+        // screen center for any pitch. Rotating the camera in place instead
+        // (zoomOnTargetPosition + setRotation) pivots around the camera and
+        // displaces the view target by cameraHeight*tan(pitch), pushing content
+        // at the requested location out of the frustum at high pitch.
+        // yaw is counter-clockwise here, `lookAt` heading is clockwise.
+        this.lookAtImpl({
+            target: geoPos,
+            zoomLevel,
+            heading: -yawDeg,
+            tilt: limitedPitch
+        });
         this.update();
     }
 
@@ -3384,22 +3394,29 @@ export class MapView extends EventDispatcher {
             return;
         }
 
-        if (this.maxFps === 0) {
-            // Render with max fps
-            this.render(frameStartTime);
-        } else {
-            // Limit fps by skipping frames
-
-            // Magic ingredient to compensate time flux.
-            const fudgeTimeInMs = 3;
-            const frameInterval = 1000 / this.maxFps;
-            const previousFrameTime =
-                this.m_previousFrameTimeStamp === undefined ? 0 : this.m_previousFrameTimeStamp;
-            const targetTime = previousFrameTime + frameInterval - fudgeTimeInMs;
-
-            if (frameStartTime >= targetTime) {
+        try {
+            if (this.maxFps === 0) {
+                // Render with max fps
                 this.render(frameStartTime);
+            } else {
+                // Limit fps by skipping frames
+
+                // Magic ingredient to compensate time flux.
+                const fudgeTimeInMs = 3;
+                const frameInterval = 1000 / this.maxFps;
+                const previousFrameTime =
+                    this.m_previousFrameTimeStamp === undefined ? 0 : this.m_previousFrameTimeStamp;
+                const targetTime = previousFrameTime + frameInterval - fudgeTimeInMs;
+
+                if (frameStartTime >= targetTime) {
+                    this.render(frameStartTime);
+                }
             }
+        } catch (error) {
+            // A single bad frame must not permanently kill the render loop,
+            // otherwise every subsequent frame (and any later test cases that
+            // reuse this MapView) silently stops rendering.
+            logger.error("MapView.renderLoop: render failed, continuing loop", error);
         }
 
         // Continue rendering if update is pending or animation is running

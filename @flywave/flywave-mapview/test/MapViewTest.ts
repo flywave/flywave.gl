@@ -112,26 +112,21 @@ describe("MapView", function () {
     });
 
     //
-    // This test is broken, because `setCameraGeolocationAndZoom` doesn't behave as expected, i.e
-    // it offsets actual `geoCenter` a little.
+    // `setCameraGeolocationAndZoom` now orbits the target (lookAt semantics), so
+    // the requested geo position stays at the screen center for any pitch.
+    // (Previously it rotated the camera in place, which displaced the view
+    // target by cameraHeight*tan(pitch) — this test was skipped for that.)
     //
-    // TODO: check who is right? this test or `setCameraGeolocationAndZoom` implementation
-    //
-    it.skip("Correctly sets geolocation and zoom", function () {
+    it("Correctly sets geolocation and zoom", function () {
         const coords: GeoCoordinates = new GeoCoordinates(52.5145, 13.3501);
-
-        const rotationSpy = sinon.spy(MapViewUtils, "setRotation");
-        const zoomSpy = sinon.spy(MapViewUtils, "zoomOnTargetPosition");
 
         mapView = new MapView(mapViewOptions);
         mapView.setCameraGeolocationAndZoom(coords, 18, 10, 20);
 
-        expect(zoomSpy.calledOnce).to.be.true;
-        expect(zoomSpy.calledWith(mapView, 0, 0, 18)).to.be.true;
-        expect(rotationSpy.calledOnce).to.be.true;
-        expect(rotationSpy.calledWith(mapView, 10, 20)).to.be.true;
         expect(mapView.geoCenter.latitude).to.be.closeTo(coords.latitude, 0.000000000001);
         expect(mapView.geoCenter.longitude).to.be.closeTo(coords.longitude, 0.000000000001);
+        expect(mapView.zoomLevel).to.be.closeTo(18, 0.01);
+        expect(mapView.tilt).to.be.closeTo(20, 0.01);
     });
 
     describe("lookAt", function () {

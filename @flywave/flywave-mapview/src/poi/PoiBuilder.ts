@@ -134,6 +134,19 @@ export class PoiBuilder {
         const iconColor =
             iconColorRaw !== null ? ColorCache.instance.getColor(iconColorRaw) : undefined;
 
+        // SDF icon halo parameters (private-prefixed on the technique by the
+        // mbstyle emitter). Width/blur stay in mapbox ems; PoiRenderer converts
+        // to SDF field units when configuring the IconMaterial.
+        const iconHaloColorRaw = getPropertyValue((technique as any)._iconHaloColor, env);
+        const iconHaloColor =
+            iconHaloColorRaw !== null && iconHaloColorRaw !== undefined
+                ? ColorCache.instance.getColor(iconHaloColorRaw)
+                : undefined;
+        const iconHaloWidth =
+            getPropertyValue((technique as any)._iconHaloWidth, env) ?? 0;
+        const iconHaloBlur =
+            getPropertyValue((technique as any)._iconHaloBlur, env) ?? 0;
+
         const poiInfo = {
             technique,
             imageTextureName,
@@ -148,6 +161,9 @@ export class PoiBuilder {
             reserveSpace: iconReserveSpace,
             iconBrightness: technique.iconBrightness,
             iconColor,
+            iconHaloColor,
+            iconHaloWidth,
+            iconHaloBlur,
             iconMinZoomLevel: this.m_iconMinZoomLevel,
             iconMaxZoomLevel: this.m_iconMaxZoomLevel,
             textMinZoomLevel: this.m_textMinZoomLevel,

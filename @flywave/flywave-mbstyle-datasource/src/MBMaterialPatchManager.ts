@@ -58,9 +58,9 @@ export class MBMaterialPatchManager {
     }
 
     private patchTile(tile: any): void {
-        const decodedTile = tile.decodedTile;
-        if (!decodedTile?.techniques) return;
-
+        // NOTE: do not gate on tile.decodedTile here — Tile.removeDecodedTile()
+        // clears it as soon as geometry loading finishes, which made this whole
+        // patcher a silent no-op. Everything needed is on obj.userData.technique.
         for (const obj of tile.objects) {
             const tech = obj.userData?.technique;
             if (!tech) continue;
@@ -81,7 +81,10 @@ export class MBMaterialPatchManager {
      * from the triangulated mesh and build vertical walls along them.
      */
     private generateGuardrails(obj: THREE.Object3D, technique: any, tile: any): void {
-        const elevation = technique._hdElevation ?? technique.height;
+        // Guardrails are only for HD elevated roads (3d-intersections). Gating on
+        // technique.height would add ghost walls around every fill-extrusion
+        // building.
+        const elevation = technique._hdElevation;
         if (!elevation || elevation <= 0) return;
         if ((obj as any).__mbGuardrails) return; // already generated
         if (!(obj as any).isMesh) return;
@@ -179,13 +182,19 @@ export class MBMaterialPatchManager {
                  uniform vec3 uMBLightDir; uniform vec3 uMBLightDirColor;
                  uniform vec3 uMBLightAmbColor; uniform float uMBLightDirI; uniform float uMBLightAmbI;`
             );
-            // Lambert: ambient + directional*N·L. vNormal is provided by three.js
-            // for lit materials; for basic materials it may be the geometry normal.
+            // Lambert: ambient + directional*N·L. vNormal is not declared in
+            // FLAT_SHADED programs (extruded-polygon sets flatShading), so derive
+            // the flat normal from screen-space derivatives there (same approach
+            // as three's normal_fragment_begin).
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <colorspace_fragment>',
                 `#include <colorspace_fragment>
                  {
-                     vec3 mbN = normalize(vNormal);
+                     #ifdef FLAT_SHADED
+                         vec3 mbN = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+                     #else
+                         vec3 mbN = normalize(vNormal);
+                     #endif
                      float mbDiff = max(dot(mbN, normalize(uMBLightDir)), 0.0);
                      vec3 mbLight = uMBLightAmbColor * uMBLightAmbI
                                   + uMBLightDirColor * uMBLightDirI * mbDiff;
@@ -476,7 +485,11 @@ export class MBMaterialPatchManager {
         if ((!translate || (translate[0] === 0 && translate[1] === 0)) && !outlineColor && !hasTerrain && hdElevation === undefined && emissiveStrength <= 0) return;
 
         // Emissive: add a constant brightness boost to the fill color.
-        if (emissiveStrength > 0 && !(material as any).__mbFillEmissive) {
+        // Only meaningful for lit (standard) materials — an unlit basic material
+        // already shows the full paint color (mapbox: emissive strength
+        // counteracts 3D light shading), so boosting it would wash the fill out.
+        const isLit = (material as any).type === 'MeshStandardMaterial';
+        if (emissiveStrength > 0 && isLit && !(material as any).__mbFillEmissive) {
             (material as any).__mbFillEmissive = true;
             const orig = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
@@ -941,6 +954,13 @@ export class MBMaterialPatchManager {
             return;
         }
 
+        // A requested pattern that is absent from the sprite atlas renders
+        // nothing in mapbox (missing pattern = invisible layer).
+        if (technique._patternName && !patternTex) {
+            material.visible = false;
+            return;
+        }
+
         // Wireframe mode: render only edges.
         if (paint['fill-extrusion-wireframe'] === true ||
             paint['fill-extrusion-rounded-wireframe'] === true) {
@@ -998,7 +1018,11 @@ export class MBMaterialPatchManager {
                     'transformed.xy += uMBTranslate;\n#include <project_vertex>'
                 );
             }
-            if (height > 0 || base > 0 || centerDem) {
+            // position.z is already in meters (baked by
+            // MBTileDataEmitter.emitExtrudedPolygon), so the height uniforms are
+            // only needed for normalization (vertical gradient) and terrain.
+            const needHeightUniforms = height > 0 || base > 0 || !!centerDem || verticalGradient;
+            if (needHeightUniforms) {
                 shader.uniforms.uMBHeightBase = { value: base };
                 shader.uniforms.uMBHeightTop = { value: scaledHeight };
                 // Terrain DEM uniforms (fill-extrusion-terrain).
@@ -1015,8 +1039,10 @@ export class MBMaterialPatchManager {
                     'void main() {',
                     `uniform float uMBHeightBase;\nuniform float uMBHeightTop;\n${demUniforms}\nvoid main() {`
                 );
-                // Compute extrusion height, plus terrain elevation at the world
-                // position (so the building base follows the terrain surface).
+            }
+            if (height > 0 || base > 0 || centerDem) {
+                // Add terrain elevation at the world position (so the building
+                // base follows the terrain surface).
                 const terrainSample = centerDem
                     ? `vec2 mbWorldPos = (modelMatrix * vec4(position, 1.0)).xy;
                        vec2 mbDemUv = (mbWorldPos - uMBExtrusionDemOrigin) / uMBExtrusionDemSize;
@@ -1025,7 +1051,7 @@ export class MBMaterialPatchManager {
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <begin_vertex>',
                     `${terrainSample}
-                     float mbH = uMBHeightBase + position.z * (uMBHeightTop - uMBHeightBase) + mbTerrainElev;
+                     float mbH = position.z + mbTerrainElev;
                      vec3 transformed = vec3(position.x, position.y, mbH);`
                 );
             }
@@ -1033,16 +1059,25 @@ export class MBMaterialPatchManager {
             if (verticalGradient) {
                 shader.uniforms.uMBGradTop = { value: new THREE.Color(1, 1, 1) };
                 shader.uniforms.uMBGradBottom = { value: new THREE.Color(0.6, 0.6, 0.6) };
+                // Varyings must be declared at global scope — injecting the
+                // declaration next to the assignment (inside main()) is a GLSL
+                // compile error.
+                shader.vertexShader = shader.vertexShader.replace(
+                    'void main() {',
+                    'varying float vMBHeight;\nvoid main() {'
+                );
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <fog_vertex>',
                     `#include <fog_vertex>
-                     varying float vMBHeight;
                      vMBHeight = (transformed.z - uMBHeightBase) / max(uMBHeightTop - uMBHeightBase, 0.001);`
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <common>',
+                    '#include <common>\nvarying float vMBHeight;'
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <colorspace_fragment>',
                     `#include <colorspace_fragment>
-                     varying float vMBHeight;
                      vec3 mbGradColor = mix(vec3(0.6), vec3(1.0), clamp(vMBHeight, 0.0, 1.0));
                      gl_FragColor.rgb *= mbGradColor;`
                 );
@@ -1059,7 +1094,14 @@ export class MBMaterialPatchManager {
                     '#include <colorspace_fragment>',
                     `#include <colorspace_fragment>
                      {
-                         float mbEdge = length(fwidth(vNormal));
+                         // vNormal is not declared under FLAT_SHADED; use the
+                         // derivative-based flat normal there.
+                         #ifdef FLAT_SHADED
+                             vec3 mbEdgeN = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+                         #else
+                             vec3 mbEdgeN = normalize(vNormal);
+                         #endif
+                         float mbEdge = length(fwidth(mbEdgeN));
                          float mbEdgeFactor = 1.0 - smoothstep(0.0, 0.5 / max(uMBEdgeWidth, 0.001), mbEdge);
                          gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.4, mbEdgeFactor);
                      }`
@@ -1124,7 +1166,8 @@ export class MBMaterialPatchManager {
             );
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
-                `float mbH = uMBHeightBase + position.z * (uMBHeightTop - uMBHeightBase);
+                `// position.z is already in meters (baked by the emitter).
+                 float mbH = position.z;
                  vec3 transformed = vec3(position.x, position.y, mbH);
                  vMBWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
             );
@@ -1133,6 +1176,7 @@ export class MBMaterialPatchManager {
                 '#include <common>',
                 `#include <common>
                  uniform vec3 uMBRoofColor;
+                 uniform float uMBHeightBase; uniform float uMBHeightTop;
                  uniform float uMBFacadeFloors; uniform float uMBFacadeWidth; uniform float uMBAO;
                  uniform vec3 uMBFloodColor; uniform float uMBFloodIntensity;
                  varying vec3 vMBWorldPos;
@@ -1142,7 +1186,14 @@ export class MBMaterialPatchManager {
                 '#include <colorspace_fragment>',
                 `#include <colorspace_fragment>
                  {
-                     bool mbIsRoof = abs(dot(normalize(vNormal), vec3(0.0,0.0,1.0))) > 0.9;
+                     // vNormal is not declared under FLAT_SHADED (always set for
+                     // extruded-polygon); derive the flat normal from derivatives.
+                     #ifdef FLAT_SHADED
+                         vec3 mbFaceNormal = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+                     #else
+                         vec3 mbFaceNormal = normalize(vNormal);
+                     #endif
+                     bool mbIsRoof = abs(dot(mbFaceNormal, vec3(0.0,0.0,1.0))) > 0.9;
                      if (mbIsRoof) {
                          gl_FragColor.rgb = uMBRoofColor;
                      } else {

@@ -59,6 +59,21 @@ export interface PoiInfo {
     iconBrightness?: number;
 
     /**
+     * Halo color for SDF icons (RGBA).
+     */
+    iconHaloColor?: THREE.Color;
+
+    /**
+     * Halo width for SDF icons, in mapbox ems (scaled to SDF field units).
+     */
+    iconHaloWidth?: number;
+
+    /**
+     * Halo blur for SDF icons, in mapbox ems (scaled to SDF field units).
+     */
+    iconHaloBlur?: number;
+
+    /**
      * Name of the POI table {@link PoiTable}.
      */
     poiTableName?: string;

@@ -5,6 +5,7 @@
  */
 import {
     FontCatalogConfig,
+    getPropertyValue,
     LineMarkerTechnique,
     TextStyleDefinition
 } from "@flywave/flywave-datasource-protocol";
@@ -1858,7 +1859,12 @@ export class TextElementsRenderer {
             renderParams.fadeAnimationRunning =
                 renderParams.fadeAnimationRunning || iconRenderState!.isFading();
 
-            const opacity = iconRenderState.opacity * distanceFadeFactor;
+            const techniqueOpacity =
+                (getPropertyValue(
+                    (poiInfo!.technique as any).opacity,
+                    this.m_viewState.env
+                ) as number | null) ?? 1;
+            const opacity = iconRenderState.opacity * distanceFadeFactor * techniqueOpacity;
             if (opacity > 0) {
                 // Same as for text, don't allocate screen space for an icon that's fading out so
                 // that any label blocked by it gets a chance to be placed as soon as any other

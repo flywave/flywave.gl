@@ -1,0 +1,148 @@
+RenderingTestResultServer: start standaloneServer:  rendering-test-results/mbstyle-verify3
+RenderingTestResultServer: serving IBCT report at /ibct-report endpoint
+RenderingTestResultServer: accepting IBCT results at /ibct-feedback endpoint
+RenderingTestResultServer: listening on port localhost:8097!
+tsconfig-paths-webpack-plugin: Using config file at /Users/xuning/Work/flywave.gl/tsconfig.karma.json
+Matched test files: [
+  '@flywave/flywave-mbstyle-datasource/test/MBStyleCompatRenderTest.ts',
+  {
+    pattern: 'node_modules/three/examples/jsm/libs/draco/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-3dtile-render/test/data/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-map-theme/resources/fonts/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-mbstyle-datasource/test/render-tests/**/expected.png',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-mbstyle-datasource/test/rendering/integration/**/*.*',
+    included: false
+  }
+]
+[33m13 08 2026 19:24:16.286:WARN [filelist]: [39mPattern "/Users/xuning/Work/flywave.gl/@flywave/flywave-3dtile-render/test/data/**/*.*" does not match any file.
+Webpack bundling...
+asset [1m[32mcommons.js[39m[22m 39 MiB [1m[32m[emitted][39m[22m (name: commons) (id hint: commons)
+asset [1m[32mruntime.js[39m[22m 16.4 KiB [1m[32m[emitted][39m[22m (name: runtime)
+asset [1m[32mMBStyleCompatRenderTest.706409308.js[39m[22m 516 bytes [1m[32m[emitted][39m[22m (name: MBStyleCompatRenderTest.706409308)
+Entrypoint [1mMBStyleCompatRenderTest.706409308[39m[22m 39 MiB = [1m[32mruntime.js[39m[22m 16.4 KiB [1m[32mcommons.js[39m[22m 39 MiB [1m[32mMBStyleCompatRenderTest.706409308.js[39m[22m 516 bytes
+webpack 5.99.9 compiled [1m[32msuccessfully[39m[22m in 3961 ms
+[33m13 08 2026 19:24:21.340:WARN [filelist]: [39mPattern "/Users/xuning/Work/flywave.gl/@flywave/flywave-3dtile-render/test/data/**/*.*" does not match any file.
+[32m13 08 2026 19:24:21.916:INFO [karma-server]: [39mKarma v6.4.4 server started at http://localhost:9876/
+[32m13 08 2026 19:24:21.917:INFO [launcher]: [39mLaunching browsers ChromeHeadlessNoSandbox with concurrency unlimited
+[32m13 08 2026 19:24:21.920:INFO [launcher]: [39mStarting browser ChromeHeadless
+[32m13 08 2026 19:24:23.169:INFO [Edge 151.0.0.0 (Mac OS 10.15.7)]: [39mConnected on socket HYtEdXyBCSqKxmTZAAAB with id 57805435
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: [36m'RenderingTestHelper:', 'WebGlInfo', Object{vendor: 'Google Inc. (Google)', gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)'}[39m
+
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: 'RenderingTestHelper:', 'WebGlInfo', Object{vendor: 'Google Inc. (Google)', gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)'}
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: [36m'[MBStyleCompat] 3026 compatible tests loaded'[39m
+
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: '[MBStyleCompat] 3026 compatible tests loaded'
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: [36m'[MBStyleCompat] filtered to 4 tests matching "text-size/default", "text-field/literal", "icon-image/literal", "text-color/default"'[39m
+
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: '[MBStyleCompat] filtered to 4 tests matching "text-size/default", "text-field/literal", "icon-image/literal", "text-color/default"'
+
+[1A[2KEdge 151.0.0.0 (Mac OS 10.15.7): Executed 0 of 4[32m SUCCESS[39m (0 secs / 0 secs)
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"Edge-151.0.0.0-MacOS","name":"icon-image/literal"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 58 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-icon-image/literal.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-icon-image/literal.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-icon-image/literal.ibct-result.json
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility icon-image/literal FAILED[39m
+	AssertionError: 58 mismatched pixels, reference image: icon-image/literal: expected 58 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51196:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51084:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 1 of 4[31m (1 FAILED)[39m (0 secs / 0.284 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility icon-image/literal FAILED
+	AssertionError: 58 mismatched pixels, reference image: icon-image/literal: expected 58 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51196:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51084:58)
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"Edge-151.0.0.0-MacOS","name":"text-color/default"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 5774 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-text-color/default.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-text-color/default.diff.png
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/default FAILED[39m
+	AssertionError: 5774 mismatched pixels, reference image: text-color/default: expected 5774 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51196:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51084:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 2 of 4[31m (2 FAILED)[39m (0 secs / 0.583 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-color/default FAILED
+	AssertionError: 5774 mismatched pixels, reference image: text-color/default: expected 5774 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51196:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51084:58)
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-text-color/default.ibct-result.json
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"Edge-151.0.0.0-MacOS","name":"text-field/literal"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 113 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-text-field/literal.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-text-field/literal.diff.png
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-field/literal FAILED[39m
+	AssertionError: 113 mismatched pixels, reference image: text-field/literal: expected 113 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51196:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51084:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 3 of 4[31m (3 FAILED)[39m (0 secs / 0.756 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-field/literal FAILED
+	AssertionError: 113 mismatched pixels, reference image: text-field/literal: expected 113 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51196:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51084:58)
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-text-field/literal.ibct-result.json
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"Edge-151.0.0.0-MacOS","name":"text-size/default"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 122 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-text-size/default.current.png
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-size/default FAILED[39m
+	AssertionError: 122 mismatched pixels, reference image: text-size/default: expected 122 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51196:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51084:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 4 of 4[31m (4 FAILED)[39m (0 secs / 0.95 secs)
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-text-size/default.diff.png
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility text-size/default FAILED
+	AssertionError: 122 mismatched pixels, reference image: text-size/default: expected 122 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51196:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_935370/commons.js:51084:58)
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-verify3/Edge-151.0.0.0-MacOS/mbstyle-render-text-size/default.ibct-result.json
+[1A[2KEdge 151.0.0.0 (Mac OS 10.15.7): Executed 4 of 4[31m (4 FAILED)[39m (0.971 secs / 0.95 secs)
+[31mTOTAL: 4 FAILED, 0 SUCCESS[39m
+TOTAL: 4 FAILED, 0 SUCCESS
+Handlebars: Access has been denied to resolve the property "statements" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "branches" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "functions" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "lines" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+
+=============================== Coverage summary ===============================
+Statements   : Unknown% ( 0/0 )
+Branches     : Unknown% ( 0/0 )
+Functions    : Unknown% ( 0/0 )
+Lines        : Unknown% ( 0/0 )
+================================================================================
+
+=== Summary: 0 passed, 4 failed ===
+  FAIL icon-image/literal (58 mismatched pixels)
+  FAIL text-color/default (5774 mismatched pixels)
+  FAIL text-field/literal (113 mismatched pixels)
+  FAIL text-size/default (122 mismatched pixels)
+
+=== Render-test evaluation complete ===
+Results saved to: rendering-test-results/mbstyle-verify3
+Open the HTML report:  http://localhost:8097/ibct-report
+(press Ctrl-C to stop the result server)

@@ -28,6 +28,12 @@ export class ImageItem {
     mipMaps?: ImageData[];
     /** Turns to `true` if the loading has been cancelled. */
     cancelled?: boolean;
+    /**
+     * `true` if this image is an SDF icon whose alpha channel holds a signed
+     * distance field (edge at ~0.75) rather than plain coverage. Consumed by
+     * the POI renderer to enable the SDF/halo rendering path.
+     */
+    sdf?: boolean;
     /** `loadingPromise` is only used during loading/generating the image. */
     private loadingPromise?: Promise<ImageItem | undefined>;
 

@@ -141,26 +141,29 @@ function parseGlyph(data: Uint8Array): ParsedGlyph | null {
         const wireType = tag & 0x7;
 
         switch (fieldNumber) {
+            // Mapbox glyph proto (see mapbox-gl-js parse_glyph_pbf.ts):
+            //   1 = id, 2 = bitmap (bytes), 3 = width, 4 = height,
+            //   5 = left (sint32), 6 = top (sint32), 7 = advance.
             case 1: {
                 const [v, np] = readVarint(data, offset); glyph.id = v; offset = np; break;
             }
             case 2: {
-                const [v, np] = readVarint(data, offset); glyph.width = v; offset = np; break;
+                const [v, np] = readBytes(data, offset); glyph.bitmap = v; offset = np; break;
             }
             case 3: {
-                const [v, np] = readVarint(data, offset); glyph.height = v; offset = np; break;
+                const [v, np] = readVarint(data, offset); glyph.width = v; offset = np; break;
             }
             case 4: {
-                const [v, np] = readSVarint(data, offset); glyph.left = v; offset = np; break;
+                const [v, np] = readVarint(data, offset); glyph.height = v; offset = np; break;
             }
             case 5: {
-                const [v, np] = readSVarint(data, offset); glyph.top = v; offset = np; break;
+                const [v, np] = readSVarint(data, offset); glyph.left = v; offset = np; break;
             }
             case 6: {
-                const [v, np] = readVarint(data, offset); glyph.advance = v; offset = np; break;
+                const [v, np] = readSVarint(data, offset); glyph.top = v; offset = np; break;
             }
             case 7: {
-                const [v, np] = readBytes(data, offset); glyph.bitmap = v; offset = np; break;
+                const [v, np] = readVarint(data, offset); glyph.advance = v; offset = np; break;
             }
             default:
                 offset = skipField(data, offset, wireType);

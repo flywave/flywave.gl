@@ -207,10 +207,22 @@ export class FrustumIntersection {
         }
 
         const workList = [...this.m_rootTileKeys.values()];
+        // Safety cap against explosive subdivision at extreme pitch angles.
+        // Without a bound this loop can expand to millions of tiles, blocking
+        // the main thread for minutes and eventually throwing
+        // `RangeError: Map maximum size exceeded`. Bail out to an approximate,
+        // non-final result instead.
+        const maxProcessedTiles = 200000;
+        let processedTiles = 0;
         while (workList.length > 0) {
             const tileEntry = workList.pop();
 
             if (tileEntry === undefined) {
+                break;
+            }
+
+            if (++processedTiles > maxProcessedTiles) {
+                cache.calculationFinal = false;
                 break;
             }
 
@@ -224,8 +236,13 @@ export class FrustumIntersection {
                 continue;
             }
 
-            // Stop subdivision if area of tile is too small(mixed LOD only)
-            if (this.m_enableMixedLod && tileEntry.area < targetTileArea) {
+            // Stop subdivision if area of tile is too small (mixed LOD only).
+            // Also apply at extreme pitch: the frustum-to-ground footprint
+            // explodes (far tiles become sub-pixel) and enumerating all of them
+            // at the max zoom starves the frame loop; keeping them as lower-zoom
+            // (overzoomed) tiles bounds the work without changing normal views.
+            const pitch = MapViewUtils.extractAttitude(this.mapView, this.m_camera).pitch;
+            if (tileEntry.area < targetTileArea && (this.m_enableMixedLod || pitch > Math.PI / 3)) {
                 continue;
             }
 

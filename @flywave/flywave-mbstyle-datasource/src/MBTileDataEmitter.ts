@@ -28,6 +28,11 @@ import earcut from 'earcut';
 interface AccumulatedGeometry {
     positions: number[];
     indices: number[];
+    /** Per-vertex extrusion axis (vec4) for extruded-polygon techniques. */
+    extrusionAxis: number[];
+    /** Line-segment indices for the extruded-polygon edge (roof outline). */
+    edgeIndex: number[];
+    edgeFeatureStarts: number[];
     groups: Array<{ start: number; count: number; materialIndex: number; sortKey?: number }>;
     featureStarts: number[];
     objInfos: AttributeMap[];
@@ -215,7 +220,16 @@ export class MBTileDataEmitter {
     private getOrCreateGeometry(key: string): AccumulatedGeometry {
         let geo = this.m_geometries.get(key);
         if (!geo) {
-            geo = { positions: [], indices: [], groups: [], featureStarts: [], objInfos: [] };
+            geo = {
+                positions: [],
+                indices: [],
+                extrusionAxis: [],
+                edgeIndex: [],
+                edgeFeatureStarts: [],
+                groups: [],
+                featureStarts: [],
+                objInfos: [],
+            };
             this.m_geometries.set(key, geo);
         }
         return geo;
@@ -390,6 +404,12 @@ export class MBTileDataEmitter {
                     props.iconScale = l['icon-size'] ?? 1;
                     props._iconTranslate = p['icon-translate'] ?? [0, 0];
                     props._iconTranslateAnchor = p['icon-translate-anchor'] ?? 'map';
+                    // SDF icon halo (private-prefixed; consumed by PoiBuilder for
+                    // the IconMaterial halo uniforms). icon-halo-width/blur are in
+                    // ems (mapbox); converted to SDF field units at render time.
+                    props._iconHaloColor = p['icon-halo-color'] ?? 'rgba(0,0,0,0)';
+                    props._iconHaloWidth = p['icon-halo-width'] ?? 0;
+                    props._iconHaloBlur = p['icon-halo-blur'] ?? 0;
                     if (typeof l['symbol-sort-key'] === 'number') props.priority = l['symbol-sort-key'];
                     props.mayOverlap = l['icon-allow-overlap'] === true;
                     props.reserveSpace = l['icon-ignore-placement'] !== true;
@@ -436,11 +456,24 @@ export class MBTileDataEmitter {
 
                     // Map mapbox text layout props onto the native TextTechnique
                     // props consumed by TextElementsRenderer / TextStyleCache.
+                    //
+                    // LineTypesetter accumulates advance/tracking and compares
+                    // line widths in *catalog em-pixel* units (the PBF catalog
+                    // is a 24px em), then scales by textSize/catalogSize. So all
+                    // layout values below are expressed against the 24px catalog
+                    // em, not the render text size.
+                    const CATALOG_EM = 24;
                     const fontSize = (l['text-size'] as number) ?? 16;
-                    props.tracking = ((l['text-letter-spacing'] as number) ?? 0) * fontSize;
-                    props.leading = ((l['text-line-height'] as number) ?? 1.2) * fontSize;
+                    props.tracking = ((l['text-letter-spacing'] as number) ?? 0) * CATALOG_EM;
+                    // Lines advance by (lineHeight + leading) * textSize/catalogSize.
+                    // The PBF catalog lineHeight is 1em, so the extra spacing needed
+                    // to reach text-line-height * textSize is (line-height - 1) em.
+                    props.leading = (((l['text-line-height'] as number) ?? 1.2) - 1) * CATALOG_EM;
                     const maxWidth = l['text-max-width'];
                     if (typeof maxWidth === 'number') {
+                        // LineTypesetter accumulates lineCurrX in screen pixels
+                        // ((advanceX + tracking) * textSize/catalogSize), so the
+                        // wrap width must be screen pixels too.
                         props.lineWidth = maxWidth * fontSize;
                         props.wrappingMode = 'Word';
                     }
@@ -448,8 +481,12 @@ export class MBTileDataEmitter {
                     const justify = (l['text-justify'] as string) ?? 'center';
                     props.hAlignment = justify === 'left' ? 'Left' : justify === 'right' ? 'Right' : 'Center';
                     const anchor = (l['text-anchor'] as string) ?? 'center';
-                    props.vAlignment = anchor.startsWith('top') ? 'Above'
-                        : anchor.startsWith('bottom') ? 'Below' : 'Center';
+                    // Mapbox anchors align the text box edge to the point:
+                    // 'top' puts the box top at the point (text below it), which
+                    // is harp's "Below"; 'bottom' puts the box bottom at the
+                    // point (text above it), which is harp's "Above".
+                    props.vAlignment = anchor.startsWith('top') ? 'Below'
+                        : anchor.startsWith('bottom') ? 'Above' : 'Center';
                     if (typeof l['symbol-sort-key'] === 'number') props.priority = l['symbol-sort-key'];
                     props.mayOverlap = l['text-allow-overlap'] === true;
                     props.reserveSpace = l['text-ignore-placement'] !== true;
@@ -610,9 +647,33 @@ export class MBTileDataEmitter {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
             this.m_currentZOffset = this.resolveZOffset(layer, properties, 'fill');
-            const key = `${layer.id}:fill`;
+            // Key by technique: a geometry's groups must all share one technique.
+            // TileGeometryCreator builds one single-material object per group and
+            // three.js then draws the object's ENTIRE index buffer with that
+            // material — mixing techniques in one geometry makes the last-drawn
+            // technique's color win for every feature (data-driven colors all
+            // rendering with the same color).
+            const key = `${layer.id}:fill:${techniqueIdx}`;
             const geo = this.getOrCreateGeometry(key);
             const featureStart = geo.indices.length;
+
+            const isExtruded =
+                this.m_techniques[techniqueIdx]?.name === 'extruded-polygon' ||
+                layer.type === 'fill-extrusion' ||
+                layer.type === 'building';
+
+            if (isExtruded) {
+                this.emitExtrudedPolygon(
+                    geo,
+                    layer,
+                    geometry,
+                    techniqueIdx,
+                    featureStart,
+                    featureId,
+                    properties,
+                );
+                continue;
+            }
 
             for (const polygon of geometry) {
                 const rings = polygon.rings;
@@ -671,6 +732,110 @@ export class MBTileDataEmitter {
                 geo.featureStarts.push(featureStart);
                 geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
             }
+        }
+    }
+
+    /**
+     * Emit extruded-polygon geometry (fill-extrusion / building layers):
+     * walls + roof triangles, a per-vertex `extrusionAxis` attribute and the
+     * roof-outline `edgeIndex`. The mapview's extruded-polygon material
+     * (MapMeshStandardMaterial + ExtrusionChunks) requires the `extrusionAxis`
+     * attribute; without it the mesh silently fails to render.
+     *
+     * World coordinates are meters (R = equatorial circumference), so the
+     * mapbox `fill-extrusion-height`/`base` meters map directly onto the Z
+     * offset. For each footprint vertex two vertices are emitted: the bottom
+     * (z = floorHeight, extrusionAxis.w = 0) and the top (z = height,
+     * extrusionAxis = (0,0,height-floorHeight,1)); the roof uses the top
+     * vertices of the earcut triangulation and the walls are quads around
+     * every ring edge.
+     */
+    private emitExtrudedPolygon(
+        geo: AccumulatedGeometry,
+        layer: EvaluatedLayer,
+        geometry: IPolygonGeometry[],
+        techniqueIdx: number,
+        featureStart: number,
+        featureId: string | number | undefined,
+        properties: Record<string, any>,
+    ): void {
+        const rawHeight = layer.paint['fill-extrusion-height'] as number ?? 0;
+        const rawFloor = layer.paint['fill-extrusion-base'] as number ?? 0;
+        const floorHeight = rawFloor;
+        // Avoid fully flat extrusions (normal computation / shader issues).
+        const height = Math.max(rawFloor + 1, rawHeight);
+
+        for (const polygon of geometry) {
+            const rings = polygon.rings;
+            if (rings.length === 0) continue;
+
+            // Flatten ring vertices (tile-local 2D) and record hole offsets
+            // for earcut.
+            const allVerts: number[] = [];
+            const holeIndices: number[] = [];
+            for (const pt of rings[0]) allVerts.push(pt.x, pt.y);
+            for (let r = 1; r < rings.length; r++) {
+                holeIndices.push(allVerts.length / 2);
+                for (const pt of rings[r]) allVerts.push(pt.x, pt.y);
+            }
+            const triIndices = earcut(allVerts, holeIndices.length > 0 ? holeIndices : null, 2);
+            const ringCount = allVerts.length / 2;
+
+            // Emit bottom + top vertices for every footprint vertex.
+            const baseVertex = geo.positions.length / 3;
+            for (let i = 0; i < ringCount; i++) {
+                const w = this.project(
+                    new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
+                );
+                // bottom vertex
+                geo.positions.push(w.x, w.y, floorHeight);
+                geo.extrusionAxis.push(0, 0, 0, 0);
+                // top vertex
+                geo.positions.push(w.x, w.y, height);
+                geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
+            }
+
+            // Roof triangles reference the TOP vertices.
+            for (let i = 0; i < triIndices.length; i++) {
+                geo.indices.push(baseVertex + triIndices[i] * 2 + 1);
+            }
+
+            // Walls: a quad per ring edge (two triangles).
+            for (let r = 0; r < rings.length; r++) {
+                const ring = rings[r];
+                const ringStart = r === 0 ? 0 : holeIndices[r - 1];
+                for (let i = 0; i < ring.length; i++) {
+                    const a = ringStart + i;
+                    const b = ringStart + (i + 1) % ring.length;
+                    const b0 = baseVertex + a * 2;
+                    const t0 = b0 + 1;
+                    const b1 = baseVertex + b * 2;
+                    const t1 = b1 + 1;
+                    geo.indices.push(b0, t0, t1, t1, b1, b0);
+                }
+            }
+
+            // Roof outline (edge) indices — exterior ring top vertices.
+            const edgeStart = geo.edgeIndex.length;
+            const exterior = rings[0];
+            for (let i = 0; i < exterior.length; i++) {
+                const a = i;
+                const b = (i + 1) % exterior.length;
+                geo.edgeIndex.push(baseVertex + a * 2 + 1, baseVertex + b * 2 + 1);
+            }
+            geo.edgeFeatureStarts.push(edgeStart);
+        }
+
+        const count = geo.indices.length - featureStart;
+        if (count > 0) {
+            geo.groups.push({
+                start: featureStart,
+                count,
+                materialIndex: techniqueIdx,
+                sortKey: this.extractSortKey(layer),
+            });
+            geo.featureStarts.push(featureStart);
+            geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
         }
     }
 
@@ -770,7 +935,11 @@ export class MBTileDataEmitter {
         baseVert: number,
     ): void {
         const paint = layer.paint ?? {};
-        const key = `${layer.id}:line-ribbon`;
+        // Key by ribbon technique: see the fill key comment in
+        // processFillFeature — groups sharing a geometry must use one technique,
+        // otherwise every per-technique object draws the whole index buffer.
+        const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer);
+        const key = `${layer.id}:line-ribbon:${ribbonTechIdx}`;
         const geo = this.getOrCreateGeometry(key);
         const featureStart = geo.indices.length;
         const startIdx = geo.positions.length / 3;
@@ -793,7 +962,6 @@ export class MBTileDataEmitter {
         }
 
         // Use a fill technique so the mapview creates a simple fill material.
-        const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer);
         const count = geo.indices.length - featureStart;
         if (count > 0) {
             geo.groups.push({
@@ -1089,6 +1257,16 @@ export class MBTileDataEmitter {
                 itemCount: 3,
             };
 
+            const vertexAttributes: BufferAttribute[] = [positionAttr];
+            if (geo.extrusionAxis.length > 0) {
+                vertexAttributes.push({
+                    name: 'extrusionAxis',
+                    buffer: new Float32Array(geo.extrusionAxis).buffer,
+                    type: 'float' as BufferElementType,
+                    itemCount: 4,
+                });
+            }
+
             const groups: Group[] = geo.groups.map(g => ({
                 start: g.start,
                 count: g.count,
@@ -1097,12 +1275,22 @@ export class MBTileDataEmitter {
 
             const geom: Geometry = {
                 type: GeometryType.Polygon,
-                vertexAttributes: [positionAttr],
+                vertexAttributes,
                 groups,
                 featureStarts: geo.featureStarts,
                 objInfos: geo.objInfos,
                 attachments: [],
             };
+
+            if (geo.edgeIndex.length > 0) {
+                geom.edgeIndex = {
+                    name: 'edgeIndex',
+                    buffer: new Uint32Array(geo.edgeIndex).buffer,
+                    type: 'uint32' as BufferElementType,
+                    itemCount: 1,
+                };
+                geom.edgeFeatureStarts = geo.edgeFeatureStarts;
+            }
 
             if (indexArray) {
                 geom.index = {

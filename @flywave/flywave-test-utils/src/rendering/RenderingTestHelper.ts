@@ -95,7 +95,10 @@ export function getPlatform(): string {
         platformParts = platformParts
             .filter(str => str !== undefined && str !== "")
             .map(str => str!.replace(/ /g, ""));
-        return platformParts.join("-");
+        // Normalize to the `web-<browser>-<os>` convention used by the
+        // mapbox-gl-js render-test harness so `skip-test` rules with
+        // `platform-tag-contains: "web"` actually match on browser runs.
+        return `web-${platformParts.join("-")}`;
     }
 }
 

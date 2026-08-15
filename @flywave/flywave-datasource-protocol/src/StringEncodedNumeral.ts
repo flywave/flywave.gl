@@ -57,26 +57,21 @@ const StringEncodedPixels: StringEncodedNumeralFormat = {
 const StringEncodedHex: StringEncodedNumeralFormat = {
     type: StringEncodedNumeralType.Hex,
     size: 4,
-    regExp: /^\#((?:[0-9A-Fa-f][0-9A-Fa-f]){4}|[0-9A-Fa-f]{4})$/,
+    regExp: /^\#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/,
     decoder: (encodedValue: string, target: number[]) => {
         const match = StringEncodedHex.regExp.exec(encodedValue);
         if (match === null) {
             return false;
         }
-        const hex = match[1];
+        const hex = match[0].substring(1);
         const size = hex.length;
-        // Only few sizes are possible for given reg-exp.
-        assert(size === 4 || size === 8, `Matched incorrect hex color format`);
-        // Note that we simply ignore alpha channel value.
-        // TODO: To be resolved with HARP-7517
-        if (size === 4) {
-            // #RGB or #RGBA
+        // #RGB / #RGBA / #RRGGBB / #RRGGBBAA (alpha ignored).
+        if (size === 3 || size === 4) {
             target[0] = parseInt(hex.charAt(0) + hex.charAt(0), 16) / 255;
             target[1] = parseInt(hex.charAt(1) + hex.charAt(1), 16) / 255;
             target[2] = parseInt(hex.charAt(2) + hex.charAt(2), 16) / 255;
             target[3] = size === 4 ? parseInt(hex.charAt(3) + hex.charAt(3), 16) / 255 : 1;
-        } else if (size === 8) {
-            // #RRGGBB or #RRGGBBAA
+        } else if (size === 6 || size === 8) {
             target[0] = parseInt(hex.charAt(0) + hex.charAt(1), 16) / 255;
             target[1] = parseInt(hex.charAt(2) + hex.charAt(3), 16) / 255;
             target[2] = parseInt(hex.charAt(4) + hex.charAt(5), 16) / 255;

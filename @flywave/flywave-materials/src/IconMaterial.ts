@@ -34,18 +34,45 @@ precision highp float;
 precision highp int;
 
 uniform sampler2D map;
+uniform bool uIsSdf;
+uniform float uEdge;
+uniform float uGamma;
+uniform vec3 uHaloColor;
+uniform float uHaloWidth;
+uniform float uHaloBlur;
 
 varying vec4 vColor;
 varying vec2 vUv;
 
 void main() {
 
-    vec4 color = texture2D(map, vUv.xy);
-    color *= vColor;
-    if (color.a < 0.05) {
-        discard;
+    vec4 tex = texture2D(map, vUv.xy);
+
+    if (!uIsSdf) {
+        vec4 color = tex * vColor;
+        if (color.a < 0.05) {
+            discard;
+        }
+        gl_FragColor = color;
+        return;
     }
-    gl_FragColor = color;
+
+    // SDF icon: the alpha channel holds the signed distance field with the
+    // glyph edge at uEdge (0.75 for mapbox sprites). The halo is the ring
+    // between the fill edge and a lower (outer) threshold, matching mapbox's
+    // buff = (6 - halo_width)/SDF_PX.
+    float d = tex.a;
+    float fillA = smoothstep(uEdge - uGamma, uEdge + uGamma, d);
+    float haloA = smoothstep(
+            uEdge - uHaloWidth - uHaloBlur - uGamma,
+            uEdge - uHaloWidth + uGamma,
+            d) * (1.0 - fillA);
+
+    // Premultiplied output: fill uses the (premultiplied) vertex color; the
+    // halo color is multiplied by the icon opacity (vColor.a).
+    vec3 rgb = vColor.rgb * fillA + uHaloColor.rgb * vColor.a * haloA;
+    float alpha = fillA + haloA;
+    gl_FragColor = vec4(rgb, alpha);
 }`;
 
 /**
@@ -56,6 +83,30 @@ export interface IconMaterialParameters extends RendererMaterialParameters {
      * Texture map.
      */
     map: THREE.Texture;
+    /**
+     * Enable the SDF rendering path (texture alpha = distance field).
+     */
+    sdf?: boolean;
+    /**
+     * SDF edge value in the texture (mapbox sprites use 0.75).
+     */
+    edge?: number;
+    /**
+     * SDF edge antialiasing width.
+     */
+    gamma?: number;
+    /**
+     * Halo color (RGB).
+     */
+    haloColor?: THREE.Color;
+    /**
+     * Halo width in SDF field units (0..1).
+     */
+    haloWidth?: number;
+    /**
+     * Halo blur in SDF field units (0..1).
+     */
+    haloBlur?: number;
 }
 
 /**
@@ -76,13 +127,24 @@ export class IconMaterial extends RawShaderMaterial {
                   vertexShader: vertexSource,
                   fragmentShader: fragmentSource,
                   uniforms: {
-                      map: new THREE.Uniform(params.map)
+                      map: new THREE.Uniform(params.map),
+                      uIsSdf: new THREE.Uniform(params.sdf === true),
+                      uEdge: new THREE.Uniform(params.edge ?? 0.75),
+                      uGamma: new THREE.Uniform(params.gamma ?? 0.03),
+                      uHaloColor: new THREE.Uniform(params.haloColor ?? new THREE.Color(0, 0, 0)),
+                      uHaloWidth: new THREE.Uniform(params.haloWidth ?? 0),
+                      uHaloBlur: new THREE.Uniform(params.haloBlur ?? 0)
                   },
                   depthTest: false,
                   depthWrite: false,
                   transparent: true,
 
-                  vertexColors: true,
+                  // NOTE: do NOT set `vertexColors: true` here. The vertex
+                  // shader declares its own `attribute vec4 color` (RGBA with
+                  // per-vertex opacity); `vertexColors` would make three.js
+                  // inject its own `attribute vec3 color` into the
+                  // ShaderMaterial prefix, causing a redefinition compile
+                  // error and icons never rendering.
                   premultipliedAlpha: true,
                   rendererCapabilities: params.rendererCapabilities
               }

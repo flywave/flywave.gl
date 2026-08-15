@@ -114,6 +114,33 @@ async function renderFrames(
         mapView.addEventListener(MapViewEventNames.AfterRender, handler);
         mapView.update();
     });
+
+    // Wait for a settled frame (all tiles loaded + no pending updates) so the
+    // screenshot doesn't capture a partially-loaded state — the cause of
+    // paint-icon-and-text / line-color flakes. `FrameComplete` fires after a
+    // render where `isDynamicFrame` is false. If the map is already settled
+    // after the N frames, keep the captured state (an extra update would
+    // re-place text labels and disturb their final layout).
+    if ((mapView as any).isDynamicFrame) {
+        await new Promise<void>((resolve) => {
+            let settled = false;
+            let timer: ReturnType<typeof setTimeout>;
+            const handler = () => {
+                settled = true;
+                mapView.removeEventListener(MapViewEventNames.FrameComplete, handler);
+                clearTimeout(timer);
+                resolve();
+            };
+            timer = setTimeout(() => {
+                if (!settled) {
+                    mapView.removeEventListener(MapViewEventNames.FrameComplete, handler);
+                    resolve();
+                }
+            }, 15000);
+            mapView.addEventListener(MapViewEventNames.FrameComplete, handler);
+            mapView.update();
+        });
+    }
 }
 
 async function processOperations(
@@ -854,7 +881,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
         const testFn = shouldSkip ? it.skip : it;
 
         testFn(entry.name, async function () {
-            this.timeout(60000);
+            this.timeout(180000);
             let canvas: HTMLCanvasElement | undefined;
             let mapView: MapView | undefined;
 
@@ -914,7 +941,13 @@ describe("MBStyleDataSource render-tests compatibility", function () {
 
                 // Use flywave's bundled Default FontCatalog for text rendering.
                 // The mapbox PBF glyphs are not compatible with flywave's BMFont/MSDF format.
-                const fontCatalogUrl = 'resources/fonts/Default_FontCatalog.json';
+                // When the style references PBF glyphs we inject a PBF-built catalog
+                // named "default" below; passing a fontCatalog URL here would make the
+                // bundled catalog load asynchronously and overwrite that injection, so
+                // only load it for styles without glyphs.
+                const fontCatalogUrl = (entry.style as any)?.glyphs
+                    ? undefined
+                    : 'resources/fonts/Default_FontCatalog.json';
 
                 mapView = new MapView({
                     canvas,
@@ -971,8 +1004,12 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                             }
                         }
                         if (fontStacks.size === 0) fontStacks.add("Open Sans Regular");
+                        // Merge glyphs from every referenced stack into a single
+                        // catalog (Basic Latin codepoints overlap between stacks).
+                        const glyphs = new Map<number, any>();
+                        let catalogFontName = "";
                         for (const fontName of fontStacks) {
-                            const glyphs = new Map<number, any>();
+                            if (catalogFontName === "") catalogFontName = fontName;
                             for (let range = 0; range < 2; range++) {
                                 const start = range * 256;
                                 const end = start + 255;
@@ -988,10 +1025,15 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     for (const [id, g] of fontstack.glyphs) glyphs.set(id, g);
                                 } catch { continue; }
                             }
-                            if (glyphs.size > 0) {
-                                const catalog = buildFontCatalogFromPBF(fontName, glyphs);
-                                mapView.setFontCatalog(fontName, catalog);
-                            }
+                        }
+                        if (glyphs.size > 0) {
+                            // TextStyleCache selects the canvas via
+                            // style.fontCatalogName, which the TextTechnique
+                            // protocol never sets — it always falls back to
+                            // "default". Register under that name so the PBF
+                            // catalog is actually used.
+                            const catalog = buildFontCatalogFromPBF(catalogFontName, glyphs);
+                            mapView.setFontCatalog("default", catalog);
                         }
                     } catch {}
                 }
@@ -1020,6 +1062,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
 
                 await renderFrames(mapView, dataSource, 5);
 
+
                 const operations = metadata.operations ?? [];
                 if (operations.length > 0) {
                     await processOperations(mapView, dataSource, operations);
@@ -1034,6 +1077,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 const maxMismatch = Math.ceil(
                     (imageThreshold * canvas.width * canvas.height) || 0,
                 );
+
 
                 await ibct.assertCanvasMatchesReference(canvas, entry.name, {
                     threshold: 0.1,

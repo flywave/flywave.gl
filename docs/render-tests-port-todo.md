@@ -886,3 +886,158 @@ R1 在 §10/diff-analysis 中判为"坐标空间"单因，验收发现修复后*
 - model-layer 崩溃（两轮同点）成为最大的未上报源，建议下轮优先定位（拆 10 例/批重跑）。
 
 > 第二轮结果目录：`rendering-test-results/mbstyle/`（已重跑覆盖）；通过清单：`baseline2-pass.txt`。
+
+## 12. 第三轮全量基线（2026-08-14，含 text R1–R4 + border/SDF + icon 四断点 + 崩溃三件套）
+
+### 12.1 汇总
+
+| 指标 | 第一轮（08-12） | 第二轮（08-13） | 第三轮（08-14） | Δ(3 vs 2) |
+|------|----------------|----------------|----------------|-----------|
+| 上报结果 | 2775 | 2646 | 2765 | +119 |
+| **通过** | **182（6.56%）** | **204（7.71%）** | **212（7.67%）** | **+8** |
+
+> 第三轮结果目录：`rendering-test-results/mbstyle-baseline3/`；通过清单见下（212 例）。
+
+**净变化拆解（相对第二轮）**：
+- **净增 +18**：appearance/paint-* 4（icon+material 修复连带）、icon-anchor 2、icon-color 4、icon-halo-color/width 2、icon-image 2、icon-size/camera-function-high-base-sdf 1、placement/symbol-layers-same-layout-properties 1、text-max-width/force-newline+force-double-newline 2。
+- **净失 −10**：
+  - **5 例为 skip 正确生效（非回归）**：`appearance/empty-image-in-appearance`、`appearance/non-existent-image-in-appearance`、`elevated-line-pattern-trim-offset/globe-*`（3）——均带 `platform-tag-contains: "web"` skip 标注，第二轮只因 `getPlatform()` 返回 `ChromeHeadless-…`（不含 "web"）误跑误过；第三轮平台 tag 归一化为 `web-ChromeHeadless-…` 后官方 skip 命中。
+  - **5 例为 icon SDF 边缘抖动（阈值边缘，待 SDF shader）**：`icon-rotation-alignment/viewport-symbol-placement-line`（15→25px）、runtime-styling `layout-property-property-expression/function-to-default` + `set-style-layout-property-*`×2（各 40px vs 阈值 34，icon-rotate 置空后 oneway 图标 SDF 阈值化边缘差）。
+- **合计净增 +8**（212 vs 204）。
+
+### 12.2 本轮验证的关键修复（§11.4 状态改写）
+
+| §11.4 条目 | 状态 | 落地 |
+|-----------|------|------|
+| 1. icon POI 链路 | ✅ 完成 | 四断点：① sprite.pbf 缺 30 图标且不回退 → `MBStyleManager.buildSpriteFromIconSet` pbf+legacy 合并（注册 387 = 357+30，dot.sdf ✓）；② pbf 图集 toDataURL 异步解码 → 图集 canvas 直传（`SpriteData.image` 加 HTMLCanvasElement）；③ **IconMaterial `vertexColors:true` 与 shader 自带 `attribute vec4 color` 冲突 → VALIDATE_STATUS false**，删标志；④ icon-opacity 未应用 + SDF 图标阈值化（0.75 边缘）+ RGB 置白。icon 批 214 例通过 11→22。 |
+| 2. 文本像素对齐 | ✅ 大体完成 | GlyphPBFParser 字段序修复（mapbox proto：bitmap=2/width=3/height=4/left=5/top=6/advance=7）；border/stride（w+6×h+6 逐行拷贝）；SDF 边缘 0.75→0.5 重映射（−64）；R1 default catalog 注入、R2 锚点反转、R3 行高 1em+leading、R4 advance/distanceRange=8/offsetY；`force-newline`/`force-double-newline` 0 mismatch。 |
+| 3. line 落位 | ⚠️ 改写 | 非 phantom（HEAD 不可复现），line-color 337px 逐像素对齐；真实工作面改为 pattern/dasharray/variable-width 等功能缺口。 |
+| 7. model-layer 崩溃 | ✅ 完成 | 崩溃三件套：FrustumIntersection 20 万瓦片上限、MapView.renderLoop try/catch、平台 tag 归一化。model-layer 212 例 **192 全上报、0 DISCONNECTED**（第二轮 180 未上报）。 |
+
+### 12.3 第三轮新的未上报源
+
+- **`building/` 批第 3 例反复 DISCONNECTED（karma 重启 3 次同点挂，~48/53 例损失）**——全量里唯一硬阻塞批次，主线程阻塞 >60s，为 fill-extrusion 高频用例，直接指向 §11.4 第 4 项（C3 几何烘焙）待排查。
+- 其余批次（含此前崩溃的 fog/skybox/text-writing-mode/3d-intersections）全部跑完 0 DISCONNECTED；385 未上报源清零。
+
+### 12.4 第三轮通过清单（212 例，按分类）
+
+runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state 6、zoom-visibility 6、circle-radius 5、circle-color 4、icon-color 4、circle-geometry 4、fill-color 3、remove-feature-state 3、circle-blur 3、background-color 3、circle-opacity 3、imports 3、globe 3、filter 3、fill-opacity 2、terrain 2、icon-rotation-alignment 2、icon-image 2、config 2、fill-visibility 2、text-max-width 2、raster-extent 2、icon-halo-color 2、lighting-3d-mode 2、background-visibility 2、map-projections 2、line-width 2、icon-anchor 2、elevated-line-width 2、sparse-tileset 1、zoomed-fill 1、line-visibility 1、icon-halo-width 1、circle-sort-key 1、icon-rotate 1、circle-translate 1、fill-translate 1、symbol-visibility 1、fill-pattern 1、text-visibility 1、circle-stroke-width 1、3d-intersections 1、elevated-line-visibility 1、clip-layer 1、icon-size 1、icon-pitch-alignment 1、fill-extrusion-pattern 1、extent 1、text-pitch-alignment 1、worldview 1、placement 1、fill-antialias 1、zoomed-raster 1、fill-extrusion-base 1、tms 1、raster-visibility 1、icon-visibility 1、icon-opacity 1、fill-outline-color 1、empty 1。
+
+### 12.5 下一步
+
+1. **C3 fill-extrusion 几何烘焙**（§11.4 第 4 项，~143 例）——进度见 §12.6。
+2. **icon-halo SDF shader**——可再收 icon-halo-* + runtime-styling icon-rotate 近失带 ~10 例。
+3. 之后回 §11.4 第 5 项（raster/hillshade）与第 6 项（heatmap）。
+
+### 12.6 C3 fill-extrusion 进度（2026-08-14）
+
+**已完成并验证（几何层 ✅）**
+- `MBTileDataEmitter` 新增 `emitExtrudedPolygon`：每 footprint 顶点复制 bottom(z=floor)/top(z=height)，`extrusionAxis` bottom=(0,0,0,0)/top=(0,0,Δh,1)，屋顶用 top 顶点 earcut、墙面 perimeter quad、`edgeIndex` 屋顶轮廓。世界单位=米（R=赤道周长），`fill-extrusion-height/base` 直接作 z。`getDecodedTile` 输出 extrusionAxis 顶点属性 + edgeIndex/edgeFeatureStarts。mesh 创建/挂载/visible 均验证正常。
+
+**多源修复 ✅（架构清晰、高 ROI）**
+- 原 `wireTileSources` 只接一个源（vector 优先，其次 geojson）→ `rect`(fill)+`geojson`(fill-extrusion) 等样式里 geojson 数据根本不解码（debug 证实 `sourceId=rect layer=geojson`）。
+- 新增 `CompositeGeoDataProvider`：合并所有 GeoJSON 格式源（geojson/raster/rect/hillshade），每 feature 打 `_sourceId`，decoder 按 feature 源评估（`properties._sourceId ?? m_sourceId`）。单源走原始 provider（避免重序列化回归）；裸几何（Polygon/LineString/Point）wrap 成 FeatureCollection。
+- 实测：fill-extrusion 9 例 mismatch 显著下降（opacity/default 98801→82085、terrain/flat-roof-over-border 110660→102747 等），opacity 首次渲染出黑色建筑；12 个对照分类回归全 +0（fill-color 0 mismatch 保持）。
+
+**遗留阻塞（渲染层，需专项）**
+- **visible tile set 漏中心瓦片**（本轮最终定位）：含 lng0/lat0 的中心瓦片**已解码（willRender=true）但 objects 未进 sceneRoot**——pitch-60 + 1 级 overzoom 下 FrustumIntersection/visible tile 计算只返回周边瓦片，建筑只从邻瓦片的未裁剪重复几何部分上屏（opacity 部分可见、color/literal 完全离屏）。疑点：FrustumIntersection 200k 上限在极端 pitch 下提前返回、或 overzoom 瓦片 level 与相机 zoom 的换算。已排除：材质/颜色/背面剔除/NaN/几何/RTE 定位（全部验证正确）。
+- 已通过数仍 2（与 base3 相同）；渲染内容已出但未过像素阈值。
+- `building/` 批的 DISCONNECTED 是长时运行负载偶发（隔离跑 50/53 完成无挂起），非确定性 bug。
+
+> 调试要点：karma webpack 配了 filesystem 缓存，worker bundle 会用到旧代码——调试时用 `HARP_NO_HARD_SOURCE_CACHE=true`。
+
+### 12.7 icon-halo SDF 渲染（2026-08-14）
+
+**背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
+
+**5 步修复（全部落地）**
+1. `MBTileDataEmitter.ts` icon 分支增发 `_iconHaloColor/_iconHaloWidth/_iconHaloBlur`（私有前缀，不动 protocol）。
+2. `PoiBuilder` 仿 iconColor 用 `getPropertyValue` 读三个 halo 属性进 `PoiInfo`（新增 iconHaloColor/Width/Blur 字段）。
+3. `MBStyleDataSource.loadSpriteAtlas`：sdf 图标保留原始 alpha 场（RGB 置白），`ImageItem` 加 `sdf?` 标志并在注册时设置。
+4. `flywave-materials/IconMaterial` 加 SDF 模式：uniforms `uIsSdf/uEdge(0.75)/uGamma/uHaloColor/uHaloWidth/uHaloBlur`，fragment 分支：
+   `fillA = smoothstep(edge±gamma, d)`，`haloA = smoothstep(edge-width-blur-gamma, edge-width+gamma, d)*(1-fillA)`，输出 `rgb = vColor.rgb*fillA + uHaloColor.rgb*vColor.a*haloA`（premultiplied）。
+5. `PoiRenderer` batch 接线：sdf 图标 batchKey 追加 halo 签名（width/blur 换算 field 单位 ×0.094、haloColor hex），构造 `IconMaterial` 时按 `imageItem.sdf` + halo params 配置。
+
+**实测**：icon 全批 18 分类 0 回归；净增 **+4 通过**（icon-halo-color/literal、icon-halo-width/function、icon-halo-width/property-function、runtime-styling/set-style-layer-change-source）。近失大幅下降：icon-halo-color/property-function 98→8、icon-halo-width/function 102→3、width/property-function 66→0、blur/default 44→6。icon-halo-blur 系列仍失败（104–270，blur 的 mapbox 单位换算待第二阶段）；icon-halo-color/multiply 44→98（半透明红 halo + multiply blend 边缘，黑引用）。
+
+**遗留**：icon-halo-blur 系列、icon-halo-color/multiply 的 blend 处理；halo 的 icon-scale 补偿（第二阶段）；非 SDF 图标（pbf vector 357 个）不受影响。
+
+### 12.8 轨道相机修复 + 高 pitch 挂起（2026-08-14）
+
+**根因（用户排查）**：`MapView.setCameraGeolocationAndZoom` 用 `setRotation` 只转四元数不移机位 → pitch 60 时视点偏离 style 中心 ~91m → 中心瓦片落出视锥。此前「材质颜色正确但全白」「字面 vs 数据驱动」均为表象。已修：
+- `MapView.ts`：改用 lookAtImpl 轨道语义（目标钉屏幕中心）；
+- `MBStyleDataSource.ts`：删 `-log2(cos(pitch))` 补偿；
+- 连带修复：`MBMaterialPatchManager.patchTile` 门控失效、高度重复缩放、共享 geometry 多 technique 颜色覆盖、FLAT_SHADED vNormal 编译错误、无光源补默认环境光、MapViewTest.ts:114 跳过测试重写。
+- fill-extrusion 四用例 mismatch：38574→1375、28662→1439、31124→1011、40179→11315。vs baseline3 重叠 617 例：+8 通过、3 新失败（已修）。
+
+**高 pitch 挂起（本轮修复）**：轨道相机在 pitch 73.5（dynamic-filter/symbols/point/combined-pitch-distance/high-pitch-far-hidden，zoom 10.85）下 >300s 挂起（每帧渲染/几何创建重，非 compute 本身）。修复：`FrustumIntersection` 的 area 细分停止（瓦片屏幕面积 < target 时停止细分，保留为低 zoom overzoom 瓦片）在 **pitch > 60° 时也生效**（原仅 m_enableMixedLod）。实测：该用例 9.6s 完成（原 >300s）；回归抽样 15 分类净 +2（fill-color +1、icon-halo-color +1），fill-extrusion 改善保持（1375/1439/1011/11315 与 fix1 一致）。
+
+**后续**：全量套件现已可单趟跑完（此前提 575/3026 断开）。剩余 fill-extrusion 失败（opacity/*、vertical-gradient、zoom-function 颜色）属表达式求值/光照对齐，与本次阻塞无关。
+
+### 12.9 第四轮全量基线（2026-08-15，轨道相机 + halo + 高 pitch 修复后）
+
+| 指标 | 第二轮（08-13） | 第三轮（08-14） | 第四轮（08-15） | Δ(4 vs 3) |
+|------|----------------|----------------|----------------|-----------|
+| 上报结果 | 2646 | 2765 | 2827 | +62 |
+| **通过** | **204（7.71%）** | **212（7.67%）** | **231（8.17%）** | **+19** |
+
+> 第四轮结果目录：`rendering-test-results/mbstyle-baseline4/`；通过清单：`baseline4-pass.txt`。
+
+**净变化（vs 第三轮）**：净增 +20、净失 1。
+- **净增 20**（本轮修复直接收益）：
+  - 轨道相机 + fill-extrusion：`combinations/fill-extrusion-translucent--*` 5 例、`fill-extrusion-edge-radius-narrow-corner`、`fill-color/zoom-and-property-function`、`dynamic-filter/symbols/point/combined-pitch-geojson-distance`
+  - halo：`icon-halo-color/literal`、`icon-halo-width/function`、`icon-halo-width/property-function`、`runtime-styling/set-style-layer-change-source`
+  - 其他（用户修复连带）：`circle-camera-orthographic-projection`、`circle-pitch-alignment/viewport-scale-viewport`、`circle-pitch-scale/viewport`、`line-sort-key/long-key-values`、`measure-light/*` 3 例、`slots/set-layer-imported-slot`
+- **净失 1**：`appearance/paint-icon-and-text`（0→27px，阈值边缘，SDF/AA 亚像素差）。
+
+**运行质量**：**0 新 DISCONNECTED**（此前 model-layer 批崩溃点已修复、building 批不再挂起、高 pitch 批 9.6s 完成）；全量 3026 用例**单趟跑完**（此前提 575/3026 断开）。仅 dynamic-filter 批因单个重测试主线程阻塞 >60s 触发 karma 重启重跑（最终仍完成，批内用例部分重算）。
+
+**遗留**：fill-extrusion 仍 0 通过（近失 1011-11315 为表达式求值/光照对齐，需专项）；appearance/paint-icon-and-text 阈值边缘；dynamic-filter 批个别重测试的 ping 超时（负载相关）。
+
+### 12.10 harness 竞态修复（2026-08-15）
+
+**问题**：`renderFrames` 只等 N 个 AfterRender 帧即截图，瓦片可能仍在加载 → paint-icon-and-text（base4 0→27）、line-color 等 flake，基线数字不可信。
+
+**修复**（`MBStyleCompatRenderTest.ts` renderFrames）：N 帧后若 `isDynamicFrame`（瓦片未全加载/有 pending 更新）为真，再等一个 `FrameComplete` 事件（瓦片全加载 + 无 pending 后触发）；若已 settle 直接返回——**不额外 update**（否则重排文本破坏 text-max-width/force-double-newline 这类像素完美用例，实测多 update 使其 0→全白）。
+
+**验证**：paint-icon-and-text 恢复 0 mismatch 通过；force-double-newline 保持 0；回归 12 分类净 +2（appearance），其余 0 回归。
+
+> 注：line-color/default 337px 是已知 AA/线宽舍入差（非竞态），与 elevated-line 338px 同源。
+
+### 12.11 fill-extrusion 表达式求值 / 光照排查（2026-08-15）
+
+**结论**：fill-extrusion 剩余失败分两类，均需专项：
+1. **颜色 stops 求值**：`fill-extrusion-color/property-function`（11315）布局正确、红/绿/蓝三建筑颜色**已正确**；剩余差为**墙面光照明暗**（expected 墙 197-255 两档，current 全 255 均匀）——非颜色求值问题。
+2. **光照模型/墙法线**（核心阻塞）：无光源 style 下补 DirectionalLight（intensity 0.5，mapbox 默认方位）+ 改 extrusionAxis.w=0（墙面用 FLAT_SHADED 导数法线）**均无效**——墙面颜色恒为 90/153=0.59（改光强度墙色不变），说明光照根本未作用于墙面，疑点指向 extrusion shader 的 FLAT_SHADED 法线计算（`cross(dFdx,dFdy)` 对所有墙片元产出同向法线）或材质未接场景光。已回退实验改动（保持 fix1 的 Math.PI ambient + w=1），需专项攻 `ExtrusionChunks.extrusion_normal_fragment_begin`。
+3. 附带：部分 fill-extrusion expected 为黑底参考（透明合成黑），与 harness 白底 clear 色的背景差占 mismatch 一部分。
+
+**已保持**：fill-extrusion 4 通过（combinations/fill-extrusion-translucent--* 3 + edge-radius）、harness 竞态修复（paint-icon-and-text 0、force-double-newline 0）、高 pitch area 停止。实验改动全部回退，代码库处于 fix1 + 本轮确定修复的干净状态。
+
+### 12.12 dynamic-filter 批 ping 超时修复（2026-08-15）
+
+**问题**：dynamic-filter 批（含 feature-state/color-theme，84 例）在全量长时运行下于 71/84 处 DISCONNECTED（主线程偶发阻塞 >60s，karma 默认 pingTimeout 误判）→ 整批重跑浪费 ~10min。
+
+**修复**：
+- `karma.options.js`：加 `pingTimeout: 180000`（浏览器响应 ping 超时 60s→180s），合法慢用例（SwiftShader 下重负载 3D）不再误判断开。
+- `MBStyleCompatRenderTest.ts`：`this.timeout(60000)→180000`（与 pingTimeout 对齐，避免 mocha 先于 karma 掐断重用例）。
+
+**验证**：feature-state+color-theme+dynamic-filter 批 **84/84 完成、0 DISCONNECTED**（9min47s，原 71/84 断开重跑）。隔离确认 dynamic-filter 27/27 均可完成（无真实挂起，仅负载慢）。
+
+### 12.13 text 域 SDF 像素精度评估（2026-08-15）
+
+近失（15-500px，真实引用）排查结论，三类阻塞：
+1. **引用损坏（24%）**：63/258 text-* expected 为纯黑空图（text-size/*、text-halo-width/default 等）——参考数据未捕获文字，渲出字反而 mismatch，不可修。
+2. **SDF 亚像素精度**：`text-line-height/data-driven`（34px，真实引用）diff 为多字形边缘抗锯齿差（非系统性）；行高求值已正确（0.8/2 的 pitch 12.8/32px 与 mapbox 一致）。属报告第二阶段深调。
+3. **text halo 功能缺口**（text-halo-* 309-425）：全链路无 halo。与 icon halo（批级 uniform）不同，同一 canvas 内不同标签 halo 参数不同 → 需改 TextCanvas 顶点格式（vColor 后加 halo 属性），大幅改动。
+
+**结论**：text SDF 精度短期 ROI 低（引用损坏占大头 + 深调/大改）。当前代码库 = fix1 + 本轮确定修复（harness 竞态、高 pitch area 停止、ping 超时），全量基线数字可信。建议下轮转 fill-extrusion 光照的 `ExtrusionChunks` 法线专项或 heatmap 双 pass（C4）。
+
+### 12.14 fill-extrusion 光照专项排查 + 3-digit hex 修复（2026-08-15）
+
+**发现 1：`parseStringEncodedColor` 不支持 3 位 hex**（`StringEncodedNumeral.ts`）：正则只匹配 `#RRGGBB`/`#RRGGBBAA`，`#999` 解析失败 → `applyMaterialBaseColor` 早退 → 材质保持默认白。已修复（`#RGB`/`#RGBA` 展开），零回归（9 分类净 0），是真实正确性 bug。
+
+**发现 2：extrusion shader chunks 未注入**：`ExtrusionFeature.isEnabled` 要求 `extrusionRatio != DEFAULT_RATIO_MAX(=1)`；本管线 `animateExtrusion=false` → ratio=1 → **chunks 全部未注入** → 材质是普通 `MapMeshStandardMaterial`（无 extrusionAxis 用法、无 FLAT_SHADED 法线覆盖）→ 墙面 NdotL 恒定（光照不作用墙面）与墙体着色缺失的机制。
+
+**发现 3：颜色管线**：材质色已正确应用（#999999，afterSetRGB 验证），但墙面渲染恒为 90（#999×0.59 或白×0.35 巧合相等）——亮度由 sRGB/linear/tone-mapping 管线 + 未注入 lighting 主导，非材质色问题。
+
+**结论**：墙面着色需要 `isEnabled` 门控放开（让 extrusion chunks 注入）+ 颜色管线校准 + 法线计算验证，是渲染引擎深水区，专项需多轮迭代。当前代码库 = fix1 + 本轮确定修复（3-digit hex、harness 竞态、高 pitch、ping 超时）。

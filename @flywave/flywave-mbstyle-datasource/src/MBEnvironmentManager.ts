@@ -115,6 +115,18 @@ export class MBEnvironmentManager {
                     this.m_directionalLight.position.set(pos[0], pos[1], pos[2]);
                     this.m_scene.add(this.m_directionalLight);
                 }
+            } else {
+                // Mapbox always has a default light (style-spec: anchor viewport,
+                // color white, intensity 0.5); without any scene light the lit
+                // materials used for extrusions (MeshStandardMaterial) render
+                // black. A full-strength ambient reproduces mapbox's mostly-flat
+                // default look (roofs at full paint color). Intensity PI cancels
+                // the 1/PI factor of three's physical BRDF_Lambert term so the
+                // surface shows its exact diffuse color. Kept out of
+                // m_ambientColor/m_ambientIntensity so `brightness` (measure-light)
+                // stays 0 as before for light-less styles.
+                this.m_ambientLight = new THREE.AmbientLight(new THREE.Color('#ffffff'), Math.PI);
+                this.m_scene.add(this.m_ambientLight);
             }
             return;
         }

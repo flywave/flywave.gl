@@ -426,6 +426,92 @@ class DelegatingDataProvider extends DataProvider {
     }
 }
 
+/**
+ * Combines multiple GeoJSON-producing tile providers into one. Styles may
+ * reference several sources (e.g. a synthetic `rect` fill + a GeoJSON
+ * fill-extrusion); previously only one source was wired so the others' data
+ * never decoded. Each source's features are tagged with `_sourceId` so the
+ * decoder can evaluate them against the correct style layers.
+ */
+class CompositeGeoDataProvider extends DataProvider {
+    private m_entries: Array<{ sourceId: string; provider: DataProvider }> = [];
+
+    add(sourceId: string, provider: DataProvider): void {
+        this.m_entries.push({ sourceId, provider });
+    }
+
+    get size(): number {
+        return this.m_entries.length;
+    }
+
+    /** The single source provider when only one source is combined. */
+    getSingleProvider(): DataProvider | null {
+        return this.m_entries.length === 1 ? this.m_entries[0].provider : null;
+    }
+
+    ready(): boolean {
+        return this.m_entries.every(e => e.provider.ready());
+    }
+
+    async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ArrayBufferLike | {}> {
+        const features: any[] = [];
+        for (const { sourceId, provider } of this.m_entries) {
+            let data: any;
+            try {
+                data = await provider.getTile(tileKey, abortSignal);
+            } catch {
+                continue;
+            }
+            let fc: any = data;
+            if (typeof data === 'string') {
+                try {
+                    fc = JSON.parse(data);
+                } catch {
+                    continue;
+                }
+            }
+            // A source may hold a bare geometry (Polygon/LineString/Point)
+            // instead of a FeatureCollection — wrap it so it can be merged.
+            if (fc && typeof fc === 'object' && !Array.isArray(fc.features)) {
+                const geometryTypes = new Set([
+                    'Point', 'MultiPoint', 'LineString', 'MultiLineString',
+                    'Polygon', 'MultiPolygon', 'GeometryCollection',
+                ]);
+                if (fc.type && geometryTypes.has(fc.type)) {
+                    fc = {
+                        type: 'FeatureCollection',
+                        features: [{ type: 'Feature', geometry: fc, properties: {} }],
+                    };
+                }
+            }
+            if (!fc || !Array.isArray(fc.features)) {
+                continue;
+            }
+            for (const f of fc.features) {
+                features.push({
+                    ...f,
+                    properties: { ...(f.properties ?? {}), _sourceId: sourceId },
+                });
+            }
+        }
+        return JSON.stringify({ type: 'FeatureCollection', features });
+    }
+
+    protected async connect(): Promise<void> {
+        for (const e of this.m_entries) {
+            try {
+                await (e.provider as any).connect();
+            } catch {
+                // Silently pass
+            }
+        }
+    }
+
+    protected dispose(): void {
+        this.m_entries = [];
+    }
+}
+
 export class MBStyleDataSource extends TileDataSource {
     private m_styleManager: MBStyleManager;
     private m_styleParams: MBStyleDataSourceParameters;
@@ -525,12 +611,16 @@ export class MBStyleDataSource extends TileDataSource {
     }
 
     /**
-     * Wire the "best" tile source (most layers referencing it: vector first,
-     * then geojson) into the delegating data provider. Sets `m_currentSourceId`
-     * and `m_delegatingProvider.delegate`.
+     * Wire the style's tile sources into the delegating data provider.
+     *
+     * A vector (MVT) source — when present — takes priority (binary tiles
+     * cannot be merged with GeoJSON). Otherwise every GeoJSON-format source
+     * (geojson / raster / hillshade / synthetic rect providers) is combined
+     * into a single [[CompositeGeoDataProvider]] so multi-source styles (e.g.
+     * a `rect` fill + a GeoJSON fill-extrusion) render all their layers.
+     * Sets `m_currentSourceId` and `m_delegatingProvider.delegate`.
      */
     private async wireTileSources(style: StyleSpecification, sources: Map<string, ResolvedSource>): Promise<boolean> {
-        let found = false;
         const layerCounts = new Map<string, number>();
         for (const layer of style.layers ?? []) {
             const src = (layer as any).source as string;
@@ -588,25 +678,15 @@ export class MBStyleDataSource extends TileDataSource {
                 currentSourceId: bestVectorSourceId,
             } as any);
 
-            found = true;
+            return true;
         }
 
-        // Priority 2: best GeoJSON source.
-        if (!found) {
-            let bestGeoSourceId: string | null = null;
-            let bestGeoCount = 0;
-            for (const [sourceId, source] of sources) {
-                if (source.type === 'geojson') {
-                    const count = layerCounts.get(sourceId) ?? 0;
-                    if (count > bestGeoCount || bestGeoSourceId === null) {
-                        bestGeoSourceId = sourceId;
-                        bestGeoCount = count;
-                    }
-                }
-            }
+        // No vector source: combine every GeoJSON-format source.
+        const composite = new CompositeGeoDataProvider();
+        let currentSourceId = '';
 
-            if (bestGeoSourceId) {
-                const sourceId = bestGeoSourceId;
+        for (const [sourceId, source] of sources) {
+            if (source.type === 'geojson') {
                 const geoJsonSpec = (style.sources as any)[sourceId] as GeoJSONSourceSpec;
                 let data: any = geoJsonSpec.data;
                 if (typeof data === 'string' && data.trim() !== '') {
@@ -618,25 +698,62 @@ export class MBStyleDataSource extends TileDataSource {
                     }
                 }
                 if (data) {
-                    this.m_delegatingProvider.delegate = new GeoJSONDataProvider(data, {
+                    composite.add(sourceId, new GeoJSONDataProvider(data, {
                         cluster: geoJsonSpec.cluster,
                         clusterRadius: geoJsonSpec.clusterRadius,
                         clusterMaxZoom: geoJsonSpec.clusterMaxZoom,
                         clusterProperties: (geoJsonSpec as any).clusterProperties,
-                    });
-                    this.m_currentSourceId = sourceId;
-
-                    await this.decoder.configure(undefined, {
-                        mbStyle: style,
-                        currentSourceId: sourceId,
-                    } as any);
-
-                    found = true;
+                    }));
+                    if (!currentSourceId) currentSourceId = sourceId;
+                }
+            } else if (source.type === 'raster') {
+                const rasterSpec = (style.sources as any)[sourceId];
+                const tiles = rasterSpec?.tiles ?? [];
+                const tileUrl = tiles[0] ?? source.tileUrls[0] ?? '';
+                if (tileUrl) {
+                    const resolvedUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
+                    composite.add(sourceId, new RasterTileDataProvider(resolvedUrl));
+                    this.m_rasterTileUrl = resolvedUrl;
+                    if (!currentSourceId) currentSourceId = sourceId;
                 }
             }
         }
 
-        return found;
+        // Hillshade: emit tile-covering polygons carrying the per-tile DEM url.
+        const hasHillshade = (style.layers ?? []).some(
+            (l: any) => l.type === 'hillshade' && (l.layout?.visibility ?? 'visible') === 'visible',
+        );
+        if (hasHillshade && this.m_demTileUrl) {
+            const hillshadeLayer = (style.layers ?? []).find(
+                (l: any) => l.type === 'hillshade',
+            ) as any;
+            const hillshadeSourceId: string = hillshadeLayer?.source ?? 'hillshade-dem';
+            composite.add(hillshadeSourceId, new HillshadeTileDataProvider(this.m_demTileUrl, this.m_demTileSize));
+            if (!currentSourceId) currentSourceId = hillshadeSourceId;
+        }
+
+        if (composite.size === 1) {
+            // Single GeoJSON-format source: use the raw provider directly so the
+            // tile data is delivered unmodified (no re-serialization).
+            const only = composite.getSingleProvider();
+            if (!only) return false;
+            this.m_delegatingProvider.delegate = only;
+        } else if (composite.size > 0) {
+            this.m_delegatingProvider.delegate = composite;
+        } else {
+            return false;
+        }
+
+        this.m_currentSourceId = currentSourceId;
+
+        await this.decoder.configure(undefined, {
+            mbStyle: style,
+            currentSourceId: currentSourceId,
+            demTileUrl: this.m_demTileUrl,
+            rasterTileUrl: this.m_rasterTileUrl,
+        } as any);
+
+        return true;
     }
 
     private createOmvRestClient(
@@ -701,10 +818,8 @@ export class MBStyleDataSource extends TileDataSource {
         );
         this.maxDataLevel = Math.min(22, maxSourceZoom);
 
-        // Wire the "best" tile source (vector, then geojson) to the delegating
-        // provider. Sets m_currentSourceId and the provider delegate.
-        let found = await this.wireTileSources(style, sources);
-
+        // Resolve the DEM source URL first — the hillshade provider (wired
+        // inside wireTileSources) needs it.
         for (const [sourceId, source] of sources) {
             if (source.type === 'raster-dem') {
                 const demSpec = (style.sources as any)[sourceId];
@@ -719,51 +834,9 @@ export class MBStyleDataSource extends TileDataSource {
             }
         }
 
-        for (const [sourceId, source] of sources) {
-            if (source.type === 'raster' && !found) {
-                const rasterSpec = (style.sources as any)[sourceId];
-                const tiles = rasterSpec?.tiles ?? [];
-                const tileUrl = tiles[0] ?? source.tileUrls[0] ?? '';
-                if (tileUrl) {
-                    const resolvedUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
-                    this.m_delegatingProvider.delegate = new RasterTileDataProvider(resolvedUrl);
-                    this.m_currentSourceId = sourceId;
-                    this.m_rasterTileUrl = resolvedUrl;
-                    await this.decoder.configure(undefined, {
-                        mbStyle: style,
-                        currentSourceId: sourceId,
-                        demTileUrl: this.m_demTileUrl,
-                        rasterTileUrl: resolvedUrl,
-                    } as any);
-                    found = true;
-                    break;
-                }
-            }
-        }
-
-        // Hillshade: if the style has a hillshade layer referencing a raster-dem
-        // source, set up a tile provider that emits tile-covering polygons carrying
-        // the per-tile DEM url. The emitter turns these into fill+_isHillshade
-        // techniques; the MaterialPatchManager loads the DEM and applies the shader.
-        if (!found) {
-            const hasHillshade = (style.layers ?? []).some(
-                (l: any) => l.type === 'hillshade' && (l.layout?.visibility ?? 'visible') === 'visible',
-            );
-            if (hasHillshade && this.m_demTileUrl) {
-                this.m_delegatingProvider.delegate = new HillshadeTileDataProvider(this.m_demTileUrl, this.m_demTileSize);
-                const hillshadeLayer = (style.layers ?? []).find(
-                    (l: any) => l.type === 'hillshade',
-                ) as any;
-                const hillshadeSourceId: string = hillshadeLayer?.source ?? 'hillshade-dem';
-                this.m_currentSourceId = hillshadeSourceId;
-                await this.decoder.configure(undefined, {
-                    mbStyle: style,
-                    currentSourceId: hillshadeSourceId,
-                    demTileUrl: this.m_demTileUrl,
-                } as any);
-                found = true;
-            }
-        }
+        // Wire the style's tile sources (vector priority, else a composite of
+        // all GeoJSON-format sources). Sets m_currentSourceId and delegate.
+        await this.wireTileSources(style, sources);
 
         // Load sprite atlas if style has a sprite URL
         if (style.sprite) {
@@ -1171,6 +1244,27 @@ export class MBStyleDataSource extends TileDataSource {
                                     info.x, info.y, info.width, info.height,
                                     0, 0, info.width, info.height,
                                 );
+                                if (info.sdf === true) {
+                                    // SDF icons store the distance field in
+                                    // the alpha channel (edge at 0.75≈192).
+                                    // Keep the raw field (RGB → white for
+                                    // vertex-color tinting) so the POI renderer
+                                    // can reconstruct the glyph + halo from it;
+                                    // the ImageItem is flagged as sdf.
+                                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                                    const d = imgData.data;
+                                    for (let p = 0; p < d.length; p += 4) {
+                                        d[p] = 255;
+                                        d[p + 1] = 255;
+                                        d[p + 2] = 255;
+                                    }
+                                    ctx.putImageData(imgData, 0, 0);
+                                    const item = userImageCache.addImage(name, canvas);
+                                    if (item && typeof (item as any).then !== 'function') {
+                                        (item as any).sdf = true;
+                                    }
+                                    continue;
+                                }
                                 userImageCache.addImage(name, canvas);
                             }
                         } catch {}
@@ -1489,16 +1583,10 @@ export class MBStyleDataSource extends TileDataSource {
         // flywave's camera zoom convention shows a level-z tile at 256px while
         // mapbox shows it at 512px (calculateDistanceFromZoomLevel /256). To
         // match mapbox's world scale, offset the camera zoom by +1.
-        // flywave's zoomLevel getter derives from the camera's *line-of-sight*
-        // distance to target; a non-zero pitch lengthens that distance and
-        // lowers the reported zoom (14.79 instead of 15 at pitch 30). Mapbox's
-        // zoom is pitch-independent, so compensate: request a vertical zoom
-        // whose slanted distance maps back to the desired mapbox+1 zoom.
-        //   reported(z) = z + log2(cos(pitch))  →  z = desired − log2(cos(pitch))
+        // No pitch compensation: setCameraGeolocationAndZoom now orbits the
+        // target (lookAt semantics), so the reported zoom is pitch-independent.
         const pitch = style.pitch ?? 0;
-        const zoom =
-            (typeof style.zoom === 'number' ? style.zoom : 0) + 1 -
-            (pitch > 0 ? Math.log2(Math.cos(pitch * Math.PI / 180)) : 0);
+        const zoom = (typeof style.zoom === 'number' ? style.zoom : 0) + 1;
         const bearing = style.bearing ?? 0;
 
         try {

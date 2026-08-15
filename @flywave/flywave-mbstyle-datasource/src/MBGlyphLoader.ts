@@ -153,8 +153,11 @@ export class MBGlyphLoader {
 
     private packPBFGlyph(fontStack: string, glyph: ParsedGlyph): void {
         if (!this.m_atlasCtx) return;
-        const w = glyph.width;
-        const h = glyph.height;
+        // The PBF bitmap includes a 3px SDF border on every side, so its
+        // stride is width+6 and its size is (width+6) x (height+6).
+        const BORDER = 3;
+        const w = glyph.width + 2 * BORDER;
+        const h = glyph.height + 2 * BORDER;
 
         if (this.m_cursorX + w + GLYPH_PADDING > ATLAS_SIZE) {
             this.m_cursorX = 0;
@@ -166,12 +169,20 @@ export class MBGlyphLoader {
         const px = this.m_cursorX;
         const py = this.m_cursorY;
         const imgData = this.m_atlasCtx.createImageData(w, h);
-        for (let i = 0; i < w * h; i++) {
-            const v = glyph.bitmap[i] ?? 0;
-            imgData.data[i * 4 + 0] = v;
-            imgData.data[i * 4 + 1] = v;
-            imgData.data[i * 4 + 2] = v;
-            imgData.data[i * 4 + 3] = 255;
+        if (glyph.bitmap.length > 0) {
+            // Mapbox bakes its SDF with the glyph edge at 0.75 (see
+            // symbol.fragment.glsl `buff`); flywave's shader expects the edge
+            // at 0.5, so remap by -64.
+            for (let r = 0; r < h; r++) {
+                for (let c = 0; c < w; c++) {
+                    const v = Math.max(0, (glyph.bitmap[r * w + c] ?? 0) - 64);
+                    const o = (r * w + c) * 4;
+                    imgData.data[o + 0] = v;
+                    imgData.data[o + 1] = v;
+                    imgData.data[o + 2] = v;
+                    imgData.data[o + 3] = 255;
+                }
+            }
         }
         this.m_atlasCtx.putImageData(imgData, px, py);
 
@@ -180,8 +191,8 @@ export class MBGlyphLoader {
             glyphId: glyph.id,
             width: w,
             height: h,
-            left: glyph.left,
-            top: glyph.top,
+            left: glyph.left - BORDER,
+            top: glyph.top - BORDER,
             advance: glyph.advance / 24,
             uvMin: [px / ATLAS_SIZE, py / ATLAS_SIZE],
             uvMax: [(px + w) / ATLAS_SIZE, (py + h) / ATLAS_SIZE],
