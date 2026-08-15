@@ -57,6 +57,18 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private readonly lastHit: Vector3 = new Vector3();
     private isPanHit: boolean = false;
     private readonly panHit: Vector3 = new Vector3();
+
+    /**
+     * Re-anchors an active drag to the given world point. Used when a drag
+     * started on a cold-pixel fallback anchor and the (authoritative) GPU
+     * pick resolves a frame or two later — the drag swaps to the correct
+     * anchor instead of staying glued to the math-surface point.
+     */
+    protected rebasePanHit(point: Vector3): void {
+        if (this.isPanHit && this.windowEventHandler.mouseDown[0]) {
+            this.panHit.copy(point);
+        }
+    }
     private lastHitCenterDistance: number = -1;
     private readonly lastHitCenter: Vector3 = new Vector3();
     private readonly lastHitCenterClick: Vector3 = new Vector3();
@@ -706,7 +718,12 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         return hitDistance;
     }
 
-    protected abstract rayCastWorld(result: Vector3, origin: Vector3, target: Vector3): number;
+    protected abstract rayCastWorld(
+        result: Vector3,
+        origin: Vector3,
+        target: Vector3,
+        noFallback?: boolean
+    ): number;
 
     private rayCastZoomPoint(
         result: Vector3,
@@ -715,7 +732,9 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         isWheel: boolean
     ): number {
         if (!this.lockCenterPoint || !isWheel) {
-            return this.rayCastWorld(result, origin, target);
+            // Wheel ticks must wait for a valid GPU collision point before
+            // any camera movement; clicks are one-shot and keep the fallback.
+            return this.rayCastWorld(result, origin, target, isWheel);
         } else {
             const cameraPos = new Vector3();
             this.cameraTransform.getOrigin(cameraPos);

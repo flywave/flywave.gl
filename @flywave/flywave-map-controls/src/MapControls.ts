@@ -27,7 +27,12 @@ export class MapControls extends BaseMapControls {
     private m_collisionLockX: number = 0;
     private m_collisionLockY: number = 0;
 
-    protected rayCastWorld(result: Vector3, origin: Vector3, target: Vector3): number {
+    protected rayCastWorld(
+        result: Vector3,
+        origin: Vector3,
+        target: Vector3,
+        noFallback?: boolean
+    ): number {
         const weh = this.windowEventHandler;
         // 条件②：像素位置不变 → 锁定值生效
         if (
@@ -46,6 +51,18 @@ export class MapControls extends BaseMapControls {
             this.m_collisionLockX = weh.lastMouseX;
             this.m_collisionLockY = weh.lastMouseY;
             return gpuDistance;
+        }
+
+        // zoom（滚轮）规则：没获取到有效的 GPU 碰撞点之前不执行任何摄像机
+        // 移动——光标下的目标是已渲染的，读取只需 1~2 帧，等待即可。
+        // 兜底只在 GPU 明确回答"该像素没有东西"（虚空）之后才允许接管。
+        if (noFallback && this.mapView.mapRenderingManager.gpuPicking) {
+            const gpuAnsweredEmpty =
+                Math.abs(weh.lastMouseX - this.m_gpuEmptyX) <= 2 &&
+                Math.abs(weh.lastMouseY - this.m_gpuEmptyY) <= 2;
+            if (!gpuAnsweredEmpty) {
+                return -1; // 等待 GPU 的答案，本拍不动相机
+            }
         }
 
         const canvasClientSize = this.mapView.getCanvasClientSize();
@@ -131,9 +148,15 @@ export class MapControls extends BaseMapControls {
     }
 
     private m_gpuFetchBusy = false;
+    // Pixel where the GPU definitively answered "nothing here" (void/sky) —
+    // only there may the fallback drive the wheel zoom.
+    private m_gpuEmptyX = -9999;
+    private m_gpuEmptyY = -9999;
 
     /**
-     * 读取失败继续等待：异步可靠直读光标像素深度，读到有效值后入锁。
+     * 读取失败继续等待：异步可靠直读光标像素深度，读到有效值后入锁
+     * （锁的 xy 用提交时的像素，防止解析期间光标移动导致点与 xy 错配）；
+     * 读到明确的空（虚空）则记录该像素，允许兜底接管滚轮。
      */
     private fetchGpuDepthAsync(
         ndc: THREE.Vector2 | THREE.Vector3,
@@ -143,17 +166,29 @@ export class MapControls extends BaseMapControls {
         if (this.m_gpuFetchBusy) return;
         const vrm = this.mapView.mapRenderingManager.viewRenderManager;
         if (!vrm) return;
+        // 提交时刻的屏幕像素 —— 锁的 xy 必须和深度的像素同源
+        const { width, height } = this.mapView.getCanvasClientSize();
+        const pixelX = Math.round(((ndc.x + 1) / 2) * width);
+        const pixelY = Math.round(((1 - ndc.y) / 2) * height);
         this.m_gpuFetchBusy = true;
         vrm.readDepthAsync(ndc)
             .then(depth => {
                 this.m_gpuFetchBusy = false;
-                if (depth === null || depth <= 0 || depth >= 1) return;
+                if (depth === null || depth <= 0 || depth >= 1) {
+                    // GPU 明确回答该像素没有东西（虚空）——允许兜底
+                    this.m_gpuEmptyX = pixelX;
+                    this.m_gpuEmptyY = pixelY;
+                    return;
+                }
                 const point = new Vector3();
                 if (this.buildGpuPoint(point, ndc, depth, camera, renderCam) > 0) {
-                    // 读取到值 → 直接入锁（同 xy）
+                    // 读取到值 → 直接入锁（提交时的像素）
                     this.m_collisionLock = point.clone();
-                    this.m_collisionLockX = this.windowEventHandler.lastMouseX;
-                    this.m_collisionLockY = this.windowEventHandler.lastMouseY;
+                    this.m_collisionLockX = pixelX;
+                    this.m_collisionLockY = pixelY;
+                    // A drag that started on the cold-pixel fallback anchor
+                    // swaps to the authoritative GPU point.
+                    this.rebasePanHit(point);
                 }
             })
             .catch(() => {
@@ -179,7 +214,30 @@ export class MapControls extends BaseMapControls {
             mapView.stopCameraAnimation();
         });
 
+        // Prewarm the depth slot under the cursor while hovering, so the
+        // pick at a click/wheel instant is a GPU hit (not a cold-slot miss
+        // falling to the math-surface fallback — which anchored drags away
+        // from the GPU point).
+        this.windowEventHandler.addEventListener("mousemove", () => this.prewarmGpuDepth());
+
         this.startAnimation();
+    }
+
+    private prewarmGpuDepth(): void {
+        const mrm = this.mapView.mapRenderingManager;
+        if (!mrm.gpuPicking) return;
+
+        const camera = this.mapView.camera;
+        if (!(camera instanceof PerspectiveCamera)) return;
+
+        const renderCam = mrm.viewRenderManager?.renderCamera;
+        if (!renderCam) return;
+
+        const ndc = this.mapView.getNormalizedScreenCoordinates(
+            this.windowEventHandler.lastMouseX,
+            this.windowEventHandler.lastMouseY
+        );
+        mrm.readDepth(ndc);
     }
 
     protected get cameraTransform(): CameraTransform {

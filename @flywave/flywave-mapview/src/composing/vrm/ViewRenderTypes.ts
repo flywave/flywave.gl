@@ -109,4 +109,10 @@ export interface IViewRenderManager {
     getDepthTexture(): THREE.Texture | null;
     readDepthAsync(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null>;
     readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null;
+    /** Reads depth AND pickId in one readback; null for sky. */
+    readPickAsync(
+        ndc: THREE.Vector2 | THREE.Vector3
+    ): Promise<{ depth: number; pickId: number } | null>;
+    /** Camera-relative render camera for unprojecting GPU depth. */
+    readonly pickCamera?: THREE.Camera;
 }

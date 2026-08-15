@@ -24,6 +24,7 @@ import {
     Points,
     Quaternion,
     Scene,
+    Sphere,
     TypedArray,
     Vector2,
     Vector3,
@@ -58,6 +59,37 @@ const INITIAL_FRUSTUM_CULLED = Symbol("INITIAL_FRUSTUM_CULLED");
 // Constants for axis vectors
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
+
+// Reused scratch sphere for the shadow-cast size judgment.
+const _shadowSphere = new Sphere();
+
+// ─── GPU Picking meshId registry ───────────────────────────────────────────
+// Assigns unique per-tile pickIds (written as vertex attributes), and maps
+// them back to the tile/mesh for identification after a GPU depth read.
+// Ids start at 1 (0 = sky/background in the pickDepth MRT's G channel).
+const _meshIdRegistry = new Map<number, { tile: Tile; scene: THREE.Object3D }>();
+let _nextMeshId = 1;
+
+function assignMeshId(tile: Tile, scene: THREE.Object3D): number {
+    const id = _nextMeshId++;
+    _meshIdRegistry.set(id, { tile, scene });
+    // Write the id as a vertex attribute on every geometry in this tile's
+    // scene — all vertices share the same value (tile-level identity).
+    scene.traverse((c: THREE.Object3D) => {
+        const mesh = c as Mesh;
+        if (mesh.geometry && mesh.geometry.getAttribute("position")) {
+            const count = mesh.geometry.getAttribute("position").count;
+            const arr = new Float32Array(count);
+            arr.fill(id);
+            mesh.geometry.setAttribute("aPickId", new BufferAttribute(arr, 1));
+        }
+    });
+    return id;
+}
+
+export function getMeshById(id: number): { tile: Tile; scene: THREE.Object3D } | undefined {
+    return _meshIdRegistry.get(id);
+}
 
 // Temporary object for view error calculations
 const viewErrorTarget = {
@@ -242,16 +274,26 @@ export abstract class TilesRenderer extends TilesRendererBase {
     castShadow: boolean = false;
 
     /**
-     * Whether loaded tile meshes receive shadows.
+     * Whether to receive shadows for loaded tile meshes.
      *
      * @default false
      */
     receiveShadow: boolean = false;
 
     /**
-     * SSE threshold below which visible tiles are considered too small to
-     * cast meaningful shadows. Tiles whose `__error` falls below this
-     * value (far/small on screen) will have `castShadow` disabled.
+     * Whether loaded tile meshes render as wireframe — for inspecting the
+     * model's mesh structure.
+     *
+     * @default false
+     */
+    wireframe: boolean = false;
+
+    /**
+     * Minimum visible size, in SCREEN PIXELS (standard SSE with the
+     * objective geometricError = bounding-sphere DIAMETER, not the
+     * dataset-declared value), for a tile to cast shadows. A tile casts
+     * only when its bounding sphere subtends at least this many pixels —
+     * big visible objects cast, small/far ones are skipped for performance.
      *
      * Set to `0` to disable (all tiles always cast).
      *
@@ -1007,6 +1049,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
                     c.castShadow = this.castShadow;
                     c.receiveShadow = this.receiveShadow;
                 }
+                this.applyWireframe(c);
             }
         });
 
@@ -1025,6 +1068,11 @@ export abstract class TilesRenderer extends TilesRendererBase {
         tile.cached.textures = textures;
         tile.cached.scene = scene;
         tile.cached.bytesUsed = estimateBytesUsed(scene);
+
+        // Assign a unique meshId for GPU picking (vertex attribute + registry)
+        if (extension !== "pnts") {
+            assignMeshId(tile as Tile, scene);
+        }
 
         tile["rebindTileContent"](metadata);
 
@@ -1148,6 +1196,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
                     if (c.castShadow !== this.castShadow) c.castShadow = this.castShadow;
                     if (c.receiveShadow !== this.receiveShadow)
                         c.receiveShadow = this.receiveShadow;
+                    this.applyWireframe(c);
                 });
             });
             return;
@@ -1157,18 +1206,48 @@ export abstract class TilesRenderer extends TilesRendererBase {
             if (t.__loadingState !== LOADED || !t.__hasRenderableContent) return;
             const scene = t.cached?.scene;
             if (!scene) return;
-            const error = t.__error ?? 0;
-            const shouldCast =
-                error > 0
-                    ? this.castShadow && error >= this.shadowCastErrorThreshold
-                    : this.castShadow &&
-                      (t.__distanceFromCamera ?? Infinity) <= this.shadowCastErrorThreshold;
+
+            // Objective shadow-size judgment (BasePrimitive.getError style):
+            // geometricError = sphere DIAMETER (not the dataset-declared
+            // value, which some datasets set unreasonably), converted to
+            // screen PIXELS via the standard SSE formula. A tile casts only
+            // when its bounding sphere subtends at least the threshold in
+            // pixels — big visible objects cast, small ones are skipped.
+            let shouldCast = this.castShadow;
+            if (shouldCast && this.cameras.length > 0) {
+                const boundingVolume = t.cached?.boundingVolume;
+                if (boundingVolume) {
+                    const info = this.cameraInfo[0];
+                    boundingVolume.getSphere(_shadowSphere);
+                    const geometricError = _shadowSphere.radius * 2;
+                    const pixels = info.isOrthographic
+                        ? geometricError / info.pixelSize
+                        : geometricError /
+                          (Math.max(boundingVolume.distanceToPoint(info.position), 1e-6) *
+                              info.sseDenominator);
+                    shouldCast = pixels >= this.shadowCastErrorThreshold;
+                }
+            }
+
             scene.traverse((c: Mesh) => {
                 if (!c.material) return;
                 if (c.castShadow !== shouldCast) c.castShadow = shouldCast;
                 if (c.receiveShadow !== this.receiveShadow) c.receiveShadow = this.receiveShadow;
+                this.applyWireframe(c);
             });
         });
+    }
+
+    /**
+     * Applies the wireframe inspection flag to a mesh's material(s).
+     */
+    private applyWireframe(c: Mesh): void {
+        const mats = Array.isArray(c.material) ? c.material : [c.material];
+        for (const m of mats) {
+            if (m && "wireframe" in m && m.wireframe !== this.wireframe) {
+                m.wireframe = this.wireframe;
+            }
+        }
     }
 
     /**

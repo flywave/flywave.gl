@@ -184,12 +184,22 @@ export interface TileRenderDataSourceOptions extends DataSourceOptions {
     receiveShadow?: boolean;
 
     /**
-     * Adaptive shadow LOD: tiles whose camera distance exceeds this
-     * threshold (far from camera) will have `castShadow` disabled at
-     * runtime to save shadow-map draw calls.
+     * Whether loaded tile meshes render as wireframe — for inspecting the
+     * model's mesh structure.
+     *
+     * @default false
+     */
+    wireframe?: boolean;
+
+    /**
+     * Adaptive shadow LOD by VISIBLE SIZE in screen pixels: a tile casts
+     * shadows only when its bounding sphere (diameter as the objective
+     * geometricError, independent of dataset-declared values) subtends at
+     * least this many pixels. Big visible objects cast, small/far ones are
+     * skipped to save shadow-map draw calls.
      * Only effective when `castShadow: true`.
      *
-     * @default 0 (disabled)
+     * @default 0 (disabled — all tiles cast)
      */
     shadowCastErrorThreshold?: number;
 
@@ -280,7 +290,8 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
             transform: options.transform,
             debugBoundingVolume: options.debugBoundingVolume,
             castShadow: options.castShadow,
-            receiveShadow: options.receiveShadow
+            receiveShadow: options.receiveShadow,
+            wireframe: options.wireframe
         };
 
         this.m_tilesRenderer = new TilesRenderer(rendererOptions);

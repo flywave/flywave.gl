@@ -63,6 +63,14 @@ export interface TilesRendererOptions {
      * @default false
      */
     receiveShadow?: boolean;
+
+    /**
+     * Whether loaded tile meshes render as wireframe — for inspecting the
+     * model's mesh structure.
+     *
+     * @default false
+     */
+    wireframe?: boolean;
 }
 
 /**
@@ -107,6 +115,7 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
         // Set cast shadow option
         this.castShadow = options.castShadow ?? false;
         this.receiveShadow = options.receiveShadow ?? false;
+        this.wireframe = options.wireframe ?? false;
     }
 
     protected get dracoPath() {

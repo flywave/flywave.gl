@@ -1161,7 +1161,7 @@ export class MapView extends EventDispatcher {
         this.mapRenderingManager = useMapRenderingManager
             ? useMapRenderingManager(width, height, this)
             : new MapRenderingManager(width, height, this.m_options.dynamicPixelRatio);
-        this.mapRenderingManager.gpuPicking = this.m_options.enableGpuPicking !== undefined;
+        this.mapRenderingManager.gpuPicking = this.m_options.enableGpuPicking !== false;
 
         this.m_animatedExtrusionHandler = new AnimatedExtrusionHandler(this);
 
@@ -2958,6 +2958,43 @@ export class MapView extends EventDispatcher {
      */
     intersectMapObjects(x: number, y: number, parameters?: IntersectParams): PickResult[] {
         return this.m_pickHandler.intersectMapObjects(x, y, parameters);
+    }
+
+    /**
+     * GPU depth picking: reads the pickDepth MRT (depth + meshId) at the given
+     * screen position and resolves the world-space hit point and the picked
+     * mesh's identity.
+     *
+     * The GPU path is O(1) per query (one pixel readback) regardless of scene
+     * complexity, unlike `intersectMapObjects` which traverses all geometry.
+     * Requires `enableGpuPicking: true`.
+     *
+     * @param x - The X position in css/client coordinates.
+     * @param y - The Y position in css/client coordinates.
+     * @returns The world position, distance, and mesh reference, or null if
+     *          the position hits sky/background or no geometry is rendered.
+     */
+    async pickAt(
+        x: number,
+        y: number
+    ): Promise<{ worldPoint: THREE.Vector3; distance: number; meshId: number } | null> {
+        const vrm = this.mapRenderingManager?.viewRenderManager;
+        if (!vrm || !this.mapRenderingManager.gpuPicking) return null;
+
+        const renderCam = vrm.pickCamera;
+        if (!renderCam) return null;
+
+        const ndc = this.getNormalizedScreenCoordinates(x, y);
+        const result = await vrm.readPickAsync(ndc);
+        if (result === null) return null;
+
+        // Unproject: render camera frame → geo frame
+        const worldPoint = new THREE.Vector3(ndc.x, ndc.y, result.depth * 2.0 - 1.0)
+            .unproject(renderCam)
+            .add(this.camera.position.clone().sub(renderCam.position));
+        const distance = this.camera.position.distanceTo(worldPoint);
+
+        return { worldPoint, distance, meshId: result.pickId };
     }
 
     /**

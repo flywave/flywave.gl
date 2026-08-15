@@ -7,6 +7,7 @@ import {
     output,
     pass,
     positionView,
+    select,
     uniform,
     vec4,
     vec3,
@@ -179,8 +180,18 @@ export class ViewRenderManager implements IViewRenderManager {
             mrtEntries.viewZUnit = positionView.z.mul(WORLD_TO_UNIT);
         }
         if (this.gpuPicking) {
+            // pickDepth MRT packs depth AND identity:
+            //   R = 1/w (view depth) — pure, unmodified
+            //   G = aPickId vertex attribute (per-tile mesh ID)
+            //     0 = sky/background (unit sphere, no aPickId attribute)
+            //     1+ = real geometry with registered meshId
+            // Decode: G > 0 → real geometry; look up mesh via registry.
             const clipPos = cameraProjectionMatrix.mul(positionView);
-            mrtEntries.pickDepth = vec4(float(1).div(clipPos.w), float(0), float(0), float(1));
+            const invW = float(1).div(clipPos.w);
+            const aPickId = attribute("aPickId", "float");
+            const isSky = positionView.length().lessThan(1.5);
+            const pickId = select(isSky, float(0), aPickId);
+            mrtEntries.pickDepth = vec4(invW, pickId, float(0), float(1));
         }
 
         this.mrtKeys = Object.keys(mrtEntries);
@@ -525,8 +536,23 @@ export class ViewRenderManager implements IViewRenderManager {
             return null;
         }
 
-        // Pixel matches → serve whatever the continuous per-frame refresh has
-        // (Cesium "previous frame depth" semantics).
+        // Serve only when the camera has NOT moved since the value was
+        // captured: the slot's depth is 1-2 frames old (readback latency);
+        // unprojecting it with the CURRENT camera mixes two poses and drifts
+        // the point by the per-frame camera motion — during fast zoom (up to
+        // 90% of remaining distance per frame) that put points tens of meters
+        // behind walls. When moved, report a miss: the async fetch path
+        // (fetchGpuDepthAsync) captures matrices at submit time and is
+        // pose-consistent.
+        const moved =
+            slot.camPos.distanceToSquared(this.camera.position) > 0.01 ||
+            slot.camDir.distanceToSquared(this.camera.getWorldDirection(this.tmpDir)) >
+                0.0001;
+        if (moved) {
+            this.requestDepthRead(slot, x, y);
+            return null;
+        }
+
         this.requestDepthRead(slot, x, y); // keep refreshing (inFlight throttles)
         return slot.invW === null ? null : this.invWToNdcZ(slot.invW);
     }
@@ -578,7 +604,11 @@ export class ViewRenderManager implements IViewRenderManager {
                 1,
                 this.pickDepthTexIndex
             );
-            const invW = halfFloatToNumber((data as Uint16Array)[0]);
+            // pickDepth packs depth (R) and pickId (G): check G > 0 for geometry
+            const raw = data as Uint16Array;
+            const pickId = halfFloatToNumber(raw[1]);
+            if (!(pickId > 0)) return null; // sky/background
+            const invW = halfFloatToNumber(raw[0]);
             if (!isFinite(invW) || invW <= 0) return null;
             if (this.camera == null) return null;
             const zEye = -1 / invW;
@@ -590,6 +620,51 @@ export class ViewRenderManager implements IViewRenderManager {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Reads depth AND pickId from the pickDepth MRT at the given NDC position.
+     * Returns null for sky/background (pickId = 0). The pickId can be looked
+     * up via the datasource's mesh registry to identify the exact mesh hit.
+     */
+    async readPickAsync(
+        ndc: THREE.Vector2 | THREE.Vector3
+    ): Promise<{ depth: number; pickId: number } | null> {
+        const rt = this.passNode?.renderTarget;
+        if (rt == null || this.pickDepthTexIndex < 0) return null;
+
+        const { x, y } = this.ndcToPixel(ndc, rt);
+        if (x < 0 || x >= rt.width || y < 0 || y >= rt.height) return null;
+
+        try {
+            const data = await this.renderer.readRenderTargetPixelsAsync(
+                rt,
+                x,
+                y,
+                1,
+                1,
+                this.pickDepthTexIndex
+            );
+            const raw = data as Uint16Array;
+            const pickId = halfFloatToNumber(raw[1]);
+            if (!(pickId > 0)) return null; // sky
+            const invW = halfFloatToNumber(raw[0]);
+            if (!isFinite(invW) || invW <= 0) return null;
+            if (this.camera == null) return null;
+            const zEye = -1 / invW;
+            const pm = this.camera.projectionMatrix.elements;
+            const ndcZ = (pm[10] * zEye + pm[14]) / -zEye;
+            return { depth: ndcZ * 0.5 + 0.5, pickId };
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * The camera-relative render camera — needed to unproject GPU depth.
+     */
+    get pickCamera(): THREE.Camera | undefined {
+        return this.camera;
     }
 
     private requestCenterDepthRead(): void {
@@ -619,7 +694,13 @@ export class ViewRenderManager implements IViewRenderManager {
         this.renderer
             .readRenderTargetPixelsAsync(rt, x, y, 1, 1, this.pickDepthTexIndex)
             .then(data => {
-                const invW = halfFloatToNumber((data as Uint16Array)[0]);
+                // pickDepth texture packs depth (R) and pickId (G):
+                //   R = invW (view depth), G = pickId (0 = sky, 1 = geometry)
+                // Only serve when G > 0 (real geometry) AND R > 0 (valid depth).
+                const raw = data as Uint16Array;
+                const pickId = halfFloatToNumber(raw[1]);
+                if (!(pickId > 0)) return; // sky/background → miss
+                const invW = halfFloatToNumber(raw[0]);
                 if (isFinite(invW) && invW > 0) {
                     slot.invW = invW;
                     slot.px = x;
