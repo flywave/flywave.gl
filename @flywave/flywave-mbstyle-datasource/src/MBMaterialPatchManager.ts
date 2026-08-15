@@ -476,6 +476,13 @@ export class MBMaterialPatchManager {
     }
 
     private patchFillMaterial(material: THREE.Material, paint: any, technique?: any): void {
+        // Pre-extruded line ribbons: per-color meshes are coplanar; disable
+        // depth testing so the drawn (feature) order decides which color wins
+        // at crossings (mapbox painter's algorithm for one line layer).
+        if (technique?._isLineRibbon) {
+            (material as any).depthTest = false;
+            (material as any).depthWrite = false;
+        }
         const translate = this.resolveTranslate(paint['fill-translate'], paint['fill-translate-anchor']);
         const outlineColor = paint['fill-outline-color'];
         const hasTerrain = !!this.centerDem;

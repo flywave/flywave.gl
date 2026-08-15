@@ -1015,6 +1015,11 @@ export class MBTileDataEmitter {
                 _layerId: layer.id,
                 _paint: paint,
                 _layout: layer.layout,
+                // Pre-extruded line ribbons: the per-color meshes are coplanar
+                // (z=0) and must not depth-test against each other — the drawn
+                // order (feature order) decides which color wins at crossings,
+                // matching mapbox's painter's algorithm for a single line layer.
+                _isLineRibbon: true,
                 color: paint['line-color'] ?? '#000000',
                 opacity: paint['line-opacity'] ?? 1,
             };

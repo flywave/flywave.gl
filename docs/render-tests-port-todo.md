@@ -1066,3 +1066,10 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - `MBExpressionEngine` 增加 legacy `{type:'identity', property:'x'}` 函数求值（返回 feature property）；`MBLayerEvaluator.isExpr` 同样识别 identity 对象，使其进入 per-feature 求值。
 
 **验证**：icon-anchor 分类从 **2/11 → 9/11**（default/center/left/right/top/bottom/四角 全 0px 通过）；baseline4 既有通过项（icon-color/icon-image/icon-halo 等）零回归。剩余：property-function（identity 已求值但 9 个同点要素仅放置 1 个——原生 Placement 深水区）；icon-rotate（48-53px，引擎无 rotation 支持）；icon-translate（~8000px，mvt 符号源空白，同 R4 fixture/符号管线）。
+
+### 12.17 line 数据驱动 ribbon 深化（2026-08-16）
+
+- `MBTileDataEmitter` ribbon-fill technique 打 `_isLineRibbon` 标记；`MBMaterialPatchManager.patchFillMaterial` 对 ribbon-fill 关闭 depthTest/depthWrite（共面 ribbon 不互相深度裁剪，靠绘制顺序决定交叉处颜色）。
+- 核对 `getOrCreateRibbonTechniqueIndex`（§8 `82cad1fa` 已按 color+opacity 分键）与 `emitRibbonFill` 逐 feature 发几何：categorical line-color 6 类全部正确分派（path→red/service→yellow/street→blue/main→purple 等，已逐类验证）。
+
+**验证**：line-color/property-function 从 **~36k → 1088px**（§8 后进一步确认）；property-function-identity 160px；line-color/default 337px。baseline4 既有 line 通过项（line-width/visibility/dash 等）零回归。剩余 1088px 为**交叉处 per-color mesh 批量 vs per-feature 顺序**差异（mapbox 单 mesh 逐要素顶点色，我们按颜色分 mesh；交叉处红黄覆盖顺序不完全一致）——引擎级（需 vertex-color 或 per-feature object）。
