@@ -67,15 +67,15 @@ const _shadowSphere = new Sphere();
 // Assigns unique per-tile pickIds (written as vertex attributes), and maps
 // them back to the tile/mesh for identification after a GPU depth read.
 // Ids start at 1 (0 = sky/background in the pickDepth MRT's G channel).
-const _meshIdRegistry = new Map<number, { tile: Tile; scene: THREE.Object3D }>();
+const _meshIdRegistry = new Map<number, { tile: Tile; scene: Object3D }>();
 let _nextMeshId = 1;
 
-function assignMeshId(tile: Tile, scene: THREE.Object3D): number {
+function assignMeshId(tile: Tile, scene: Object3D): number {
     const id = _nextMeshId++;
     _meshIdRegistry.set(id, { tile, scene });
     // Write the id as a vertex attribute on every geometry in this tile's
     // scene — all vertices share the same value (tile-level identity).
-    scene.traverse((c: THREE.Object3D) => {
+    scene.traverse((c: Object3D) => {
         const mesh = c as Mesh;
         if (mesh.geometry && mesh.geometry.getAttribute("position")) {
             const count = mesh.geometry.getAttribute("position").count;
@@ -87,7 +87,7 @@ function assignMeshId(tile: Tile, scene: THREE.Object3D): number {
     return id;
 }
 
-export function getMeshById(id: number): { tile: Tile; scene: THREE.Object3D } | undefined {
+export function getMeshById(id: number): { tile: Tile; scene: Object3D } | undefined {
     return _meshIdRegistry.get(id);
 }
 
