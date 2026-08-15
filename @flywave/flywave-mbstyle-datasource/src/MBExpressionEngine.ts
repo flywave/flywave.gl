@@ -110,6 +110,16 @@ export class MBExpressionEngine {
                 if (typeof a === 'string' && typeof b === 'string' && a[0] === '#') {
                     return this.interpolateColor(a, b, curve);
                 }
+                // Interpolate named / rgb() colors too (mapbox interpolates any
+                // color; 'blue'/'red' must produce a purple midpoint).
+                if (
+                    typeof a === 'string' &&
+                    typeof b === 'string' &&
+                    MBExpressionEngine.isColorString(a) &&
+                    MBExpressionEngine.isColorString(b)
+                ) {
+                    return this.interpolateColor(a, b, curve);
+                }
                 return a;
             }
         }
@@ -153,9 +163,16 @@ export class MBExpressionEngine {
                 if (p >= levelStops[i][0] && p < levelStops[i + 1][0]) {
                     const [pa, va] = levelStops[i];
                     const [pb, vb] = levelStops[i + 1];
+                    const t = (p - pa) / (pb - pa);
                     if (typeof va === 'number' && typeof vb === 'number') {
-                        const t = (p - pa) / (pb - pa);
                         return va + (vb - va) * t;
+                    }
+                    if (
+                        typeof va === 'string' && typeof vb === 'string' &&
+                        (va[0] === '#' || MBExpressionEngine.isColorString(va)) &&
+                        MBExpressionEngine.isColorString(vb)
+                    ) {
+                        return MBExpressionEngine.interpolateColor(va, vb, t);
                     }
                     return va;
                 }
@@ -180,7 +197,11 @@ export class MBExpressionEngine {
                 if (typeof ra === 'number' && typeof rb === 'number') {
                     return ra + (rb - ra) * curve;
                 }
-                if (typeof ra === 'string' && typeof rb === 'string' && ra[0] === '#') {
+                if (
+                    typeof ra === 'string' && typeof rb === 'string' &&
+                    (ra[0] === '#' || MBExpressionEngine.isColorString(ra)) &&
+                    MBExpressionEngine.isColorString(rb)
+                ) {
                     return MBExpressionEngine.interpolateColor(ra, rb, curve);
                 }
                 return ra;
@@ -1018,6 +1039,22 @@ export class MBExpressionEngine {
         const lc = c.toLowerCase().trim();
         if (named[lc]) return { r: named[lc][0], g: named[lc][1], b: named[lc][2], a: lc === 'transparent' ? 0 : 1 };
         return { r: 0, g: 0, b: 0, a: 1 };
+    }
+
+    /**
+     * True when `c` is a colour literal (hex, named, rgb()/hsl()) rather than an
+     * arbitrary string (e.g. an image name), so legacy colour stops can be
+     * interpolated safely.
+     */
+    private static isColorString(c: string): boolean {
+        if (typeof c !== 'string') return false;
+        const hex = c.replace('#', '');
+        if (/^[0-9a-fA-F]{6}$/.test(hex) || /^[0-9a-fA-F]{8}$/.test(hex)) return true;
+        if (/^rgba?\(/.test(c) || /^hsla?\(/.test(c)) return true;
+        const named = ['red', 'green', 'blue', 'white', 'black', 'yellow', 'cyan', 'magenta',
+            'orange', 'purple', 'gray', 'grey', 'brown', 'pink', 'lime', 'navy', 'teal',
+            'olive', 'maroon', 'silver', 'gold', 'transparent'];
+        return named.includes(c.toLowerCase().trim());
     }
 
     private static rgbToHex(r: number, g: number, b: number, a: number): string {

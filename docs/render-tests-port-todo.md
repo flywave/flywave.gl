@@ -1073,3 +1073,15 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - 核对 `getOrCreateRibbonTechniqueIndex`（§8 `82cad1fa` 已按 color+opacity 分键）与 `emitRibbonFill` 逐 feature 发几何：categorical line-color 6 类全部正确分派（path→red/service→yellow/street→blue/main→purple 等，已逐类验证）。
 
 **验证**：line-color/property-function 从 **~36k → 1088px**（§8 后进一步确认）；property-function-identity 160px；line-color/default 337px。baseline4 既有 line 通过项（line-width/visibility/dash 等）零回归。剩余 1088px 为**交叉处 per-color mesh 批量 vs per-feature 顺序**差异（mapbox 单 mesh 逐要素顶点色，我们按颜色分 mesh；交叉处红黄覆盖顺序不完全一致）——引擎级（需 vertex-color 或 per-feature object）。
+
+### 12.18 legacy 颜色 stop 插值修复（2026-08-16）
+
+**根因**：`MBExpressionEngine` 的 legacy `{stops:[[zoom,value],...]}`（zoom 函数）与 zoom-and-property 网格函数的颜色插值只处理 `#hex`（`a[0]==='#'`），命名色（'blue'/'red'/'yellow' 等）不插值 → `fill-extrusion-color/function` 在 zoom 18 恒返回首个 stop 的 blue（应 interpolate 成 purple）。
+
+**修复**：新增 `MBExpressionEngine.isColorString()`（hex / rgba()/hsla() / 命名色）；`evaluateLegacyStops` 与 `evaluateLegacyZoomAndProperty`（zoom 插值 + property 插值两处）在两端都是颜色时一律 `interpolateColor`。
+
+**验证**：
+- `fill-extrusion-color/function`：**39393 → 1732px**，紫色 (184,10,184) vs 期望 (183,10,183) 逐像素对齐（残余为屋顶/墙面边界偏移）。
+- `fill-extrusion-color/zoom-and-property-function`：**34125 → 8981px**，zoom 18 下 green/gray/purple 三色全部正确（134/135,135,135,182/184,10,182）。
+- 表达式引擎回归：数值插值（@18→2）、hex 插值（#800080）、categorical、interval 均正确；identity 无回归。
+- 回归套件（circle-color/radius、fill-color、line-color 17 通过）baseline4 零回归。
