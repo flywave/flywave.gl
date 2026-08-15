@@ -80,7 +80,7 @@ import { MapViewThemeManager } from "./MapViewThemeManager";
 import { CameraKeyTrackAnimation, ControlPoint } from "./camera/CameraKeyTrackAnimation";
 import { CameraAnimationBuilder } from "./camera/CameraAnimationBuilder";
 import type { FlyToOptions, FlyToBoundsOptions } from "./camera/FlyTo";
-import { type PickResult, PickHandler, PickObjectType } from "./PickHandler";
+import { type PickResult, PickHandler } from "./PickHandler";
 import { PoiManager } from "./poi/PoiManager";
 import { PoiTableManager } from "./poi/PoiTableManager";
 import { PolarTileDataSource } from "./PolarTileDataSource";
@@ -2957,49 +2957,7 @@ export class MapView extends EventDispatcher {
      * @returns The list of intersection results.
      */
     intersectMapObjects(x: number, y: number, parameters?: IntersectParams): PickResult[] {
-        // GPU fast path: O(1) depth + meshId readback (requires enableGpuPicking).
-        // Falls through to CPU when GPU misses (or useGpuPick === false).
-        if (
-            this.mapRenderingManager?.gpuPicking &&
-            parameters?.useGpuPick !== false
-        ) {
-            const gpuResult = this.tryGpuPick(x, y);
-            if (gpuResult !== null) return [gpuResult];
-            if (parameters?.useGpuPick === true) return []; // GPU-only, no fallback
-        }
         return this.m_pickHandler.intersectMapObjects(x, y, parameters);
-    }
-
-    /**
-     * Synchronous GPU pick: reads the pickDepth slot (depth + meshId) at the
-     * given screen position. The slot is refreshed every frame while in use;
-     * on a cold pixel the first call misses and the next one hits.
-     */
-    private tryGpuPick(x: number, y: number): PickResult | null {
-        const mrm = this.mapRenderingManager;
-        const vrm = mrm?.viewRenderManager;
-        if (!mrm || !vrm) return null;
-
-        const renderCam = vrm.pickCamera;
-        if (!renderCam || !(this.camera instanceof THREE.PerspectiveCamera)) return null;
-
-        const ndc = this.getNormalizedScreenCoordinates(x, y);
-        const depth = mrm.readDepth(ndc);
-        if (depth === null || depth <= 0 || depth >= 1) return null;
-
-        const worldPoint = new THREE.Vector3(ndc.x, ndc.y, depth * 2.0 - 1.0)
-            .unproject(renderCam)
-            .add(this.camera.position.clone().sub(renderCam.position));
-        const distance = this.camera.position.distanceTo(worldPoint);
-        if (distance < this.camera.near) return null;
-
-        return {
-            type: PickObjectType.Object3D,
-            point: worldPoint,
-            distance,
-            dataSourceName: undefined,
-            dataSourceOrder: undefined
-        };
     }
 
     /**

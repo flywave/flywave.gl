@@ -7,7 +7,6 @@ import {
     MapControlsUI,
     Theme,
     WindowEventHandler,
-    TileIntersection,
     TileRenderDataSource
 } from "@flywave/flywave.gl";
 import {
@@ -266,10 +265,11 @@ const setupMouseClickHandler = (
         });
         let pick = picks[0];
 
-        if (pick && pick.tile) {
-            // Get properties of selected object
-            const properties = pick.tile.getBatchPropertiesByIntersection(pick, "_batchid");
+        // Batch-table lookup through the datasource: tile is derived from
+        // the intersection's object internally.
+        const properties = pick ? dataSource.getBatchProperties(pick, "_batchid") : undefined;
 
+        if (properties !== undefined) {
             // Display properties in table
             propertiesTable.show(properties);
 

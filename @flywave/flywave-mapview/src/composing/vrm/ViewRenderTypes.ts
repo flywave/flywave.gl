@@ -109,10 +109,16 @@ export interface IViewRenderManager {
     getDepthTexture(): THREE.Texture | null;
     readDepthAsync(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null>;
     readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null;
-    /** Reads depth AND pickId in one readback; null for sky. */
-    readPickAsync(
+    /**
+     * Synchronous depth + pickId lookup from the slot cache; null when no
+     * readback is available yet (cold pixel / camera moved), pickId 0 when
+     * the GPU definitively answered "sky".
+     */
+    readPickSync(
         ndc: THREE.Vector2 | THREE.Vector3
-    ): Promise<{ depth: number; pickId: number } | null>;
+    ): { depth: number; pickId: number } | null;
+    /** Resolves a pickId to the object rendered with it (prunes stale). */
+    getPickedObject(pickId: number): THREE.Object3D | undefined;
     /** Camera-relative render camera for unprojecting GPU depth. */
     readonly pickCamera?: THREE.Camera;
 }

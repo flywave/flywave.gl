@@ -1,6 +1,12 @@
 // @ts-nocheck
 import * as THREE from "three/webgpu";
-import { RenderPipeline, type Renderer, NodeMaterial, MeshBasicNodeMaterial } from "three/webgpu";
+import {
+    RenderPipeline,
+    type Renderer,
+    NodeMaterial,
+    MeshBasicNodeMaterial,
+    NodeUpdateType
+} from "three/webgpu";
 import {
     float,
     mrt,
@@ -23,7 +29,8 @@ import {
     modelViewMatrix,
     cameraProjectionMatrix,
     modelWorldMatrix,
-    cameraViewMatrix
+    cameraViewMatrix,
+    mod
 } from "three/tsl";
 
 import type { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
@@ -62,6 +69,8 @@ interface DepthSlot {
     px: number;
     py: number;
     invW: number | null;
+    /** Cached pickId (MRT G channel) — 0 = sky/no geometry, >0 = meshId. */
+    pickId: number | null;
     inFlight: boolean;
     camPos: THREE.Vector3;
     camDir: THREE.Vector3;
@@ -72,6 +81,7 @@ function createDepthSlot(): DepthSlot {
         px: -1,
         py: -1,
         invW: null,
+        pickId: null,
         inFlight: false,
         camPos: new THREE.Vector3(),
         camDir: new THREE.Vector3()
@@ -153,6 +163,33 @@ export class ViewRenderManager implements IViewRenderManager {
     /** Depth of the last non-center pixel queried through {@link readDepth}. */
     private querySlot: DepthSlot = createDepthSlot();
 
+    /** Dense pickId assignment: rendered object → id (weak — no retention). */
+    private gpuPickIds = new WeakMap<THREE.Object3D, number>();
+    /** Dense pickId → rendered object (validated for scene connectivity). */
+    private gpuPickRegistry = new Map<number, THREE.Object3D>();
+    private nextGpuPickId = 1;
+    /** Scene root for connectivity validation of registry entries. */
+    private pickSceneRoot: THREE.Object3D | null = null;
+
+    /**
+     * Resolves a pickId (decoded from the pickDepth MRT) to the object that
+     * was rendered with it. Entries whose object has left the scene graph
+     * since (unloaded tile) are pruned here.
+     */
+    getPickedObject(pickId: number): THREE.Object3D | undefined {
+        if (pickId <= 0) return undefined;
+        const object = this.gpuPickRegistry.get(pickId);
+        if (object === undefined) return undefined;
+        let root: THREE.Object3D | null = object;
+        while (root !== null && root.parent !== null) root = root.parent;
+        if (root !== this.pickSceneRoot) {
+            this.gpuPickRegistry.delete(pickId);
+            this.gpuPickIds.delete(object);
+            return undefined;
+        }
+        return object;
+    }
+
     get aerialPerspectiveNode(): AerialPerspectiveNode | undefined {
         return this.aerialNode;
     }
@@ -165,6 +202,7 @@ export class ViewRenderManager implements IViewRenderManager {
     private buildNodeGraph(scene: THREE.Scene, camera: THREE.Camera): void {
         this.pipeline?.dispose();
         this.camera = camera;
+        this.pickSceneRoot = scene;
 
         const taaEnabled = this.config.antialiasing === "taa";
         const bloomEnabled = this.config.bloom.enabled;
@@ -182,16 +220,33 @@ export class ViewRenderManager implements IViewRenderManager {
         if (this.gpuPicking) {
             // pickDepth MRT packs depth AND identity:
             //   R = 1/w (view depth) — pure, unmodified
-            //   G = aPickId vertex attribute (per-tile mesh ID)
-            //     0 = sky/background (unit sphere, no aPickId attribute)
-            //     1+ = real geometry with registered meshId
-            // Decode: G > 0 → real geometry; look up mesh via registry.
+            //   G/B = dense pickId split into two 11-bit halves (half-float
+            //         channels hold integers exactly only up to 2048)
+            // Decode: pickId = G + B * 2048.
+            //
+            // The pickId is a dense id assigned by the renderer itself at
+            // draw time (uniform with NodeUpdateType.OBJECT runs once per
+            // rendered object, frame.object is that object) — every mesh
+            // drawn through this pass is automatically identifiable, no
+            // cooperation from data sources or loaders required. The sky
+            // (unit sphere at the camera-relative origin) writes 0 → miss.
             const clipPos = cameraProjectionMatrix.mul(positionView);
             const invW = float(1).div(clipPos.w);
-            const aPickId = attribute("aPickId", "float");
+            const self = this;
+            const uPickId = uniform(0).onUpdate(function (frame: any) {
+                const object: THREE.Object3D = frame.object;
+                let id = self.gpuPickIds.get(object);
+                if (id === undefined) {
+                    id = self.nextGpuPickId++;
+                    self.gpuPickIds.set(object, id);
+                    self.gpuPickRegistry.set(id, object);
+                }
+                this.value = id;
+            }, NodeUpdateType.OBJECT);
             const isSky = positionView.length().lessThan(1.5);
-            const pickId = select(isSky, float(0), aPickId);
-            mrtEntries.pickDepth = vec4(invW, pickId, float(0), float(1));
+            const idLo = select(isSky, float(0), mod(uPickId, float(2048)));
+            const idHi = select(isSky, float(0), floor(uPickId.div(float(2048))));
+            mrtEntries.pickDepth = vec4(invW, idLo, idHi, float(1));
         }
 
         this.mrtKeys = Object.keys(mrtEntries);
@@ -475,6 +530,8 @@ export class ViewRenderManager implements IViewRenderManager {
         this.taaNode = undefined;
         this.centerSlot = createDepthSlot();
         this.querySlot = createDepthSlot();
+        this.gpuPickRegistry.clear();
+        this.pickSceneRoot = null;
     }
 
     setLensFlareConfig(config: ILensFlareConfig): void {
@@ -501,6 +558,36 @@ export class ViewRenderManager implements IViewRenderManager {
      * request races.
      */
     readDepth(ndc: THREE.Vector2 | THREE.Vector3): number | null {
+        const slot = this.acquirePickSlot(ndc);
+        if (slot === null || slot.invW === null) return null;
+        return this.invWToNdcZ(slot.invW);
+    }
+
+    /**
+     * Synchronous depth + pickId lookup at the given NDC position — the GPU
+     * picking entry used by MapView.intersectMapObjects. Same slot mechanics
+     * as {@link readDepth}.
+     *
+     * @returns null when no readback is available yet (cold pixel / camera
+     * moved); `{ depth, pickId: 0 }` when the GPU definitively answered
+     * "sky/background"; `{ depth, pickId > 0 }` when geometry was hit — the
+     * pickId is the meshId registered by the owning data source.
+     */
+    readPickSync(
+        ndc: THREE.Vector2 | THREE.Vector3
+    ): { depth: number; pickId: number } | null {
+        const slot = this.acquirePickSlot(ndc);
+        if (slot === null || slot.pickId === null || slot.invW === null) return null;
+        return { depth: this.invWToNdcZ(slot.invW), pickId: slot.pickId };
+    }
+
+    /**
+     * Routes an NDC position to the depth slot tracking it (center slot for
+     * the screen center, query slot otherwise), triggers refreshes, and
+     * applies the staleness rules. Returns the slot to read from, or null
+     * when GPU picking is off / the pixel is out of bounds.
+     */
+    private acquirePickSlot(ndc: THREE.Vector2 | THREE.Vector3): DepthSlot | null {
         if (!this.gpuPicking || this.camera == null) return null;
         const rt = this.passNode?.renderTarget;
         if (rt == null || this.pickDepthTexIndex < 0) return null;
@@ -519,9 +606,7 @@ export class ViewRenderManager implements IViewRenderManager {
             if (moved) {
                 this.requestDepthRead(this.centerSlot, x, y);
             }
-            return this.centerSlot.invW === null
-                ? null
-                : this.invWToNdcZ(this.centerSlot.invW);
+            return this.centerSlot;
         }
 
         const slot = this.querySlot;
@@ -532,6 +617,7 @@ export class ViewRenderManager implements IViewRenderManager {
             slot.px = x;
             slot.py = y;
             slot.invW = null;
+            slot.pickId = null;
             this.requestDepthRead(slot, x, y);
             return null;
         }
@@ -554,7 +640,7 @@ export class ViewRenderManager implements IViewRenderManager {
         }
 
         this.requestDepthRead(slot, x, y); // keep refreshing (inFlight throttles)
-        return slot.invW === null ? null : this.invWToNdcZ(slot.invW);
+        return slot;
     }
 
     private querySlotLastUse: number = 0;
@@ -604,9 +690,10 @@ export class ViewRenderManager implements IViewRenderManager {
                 1,
                 this.pickDepthTexIndex
             );
-            // pickDepth packs depth (R) and pickId (G): check G > 0 for geometry
+            // pickDepth packs depth (R) and pickId (G/B): G + B * 2048
             const raw = data as Uint16Array;
-            const pickId = halfFloatToNumber(raw[1]);
+            const pickId =
+                halfFloatToNumber(raw[1]) + halfFloatToNumber(raw[2]) * 2048;
             if (!(pickId > 0)) return null; // sky/background
             const invW = halfFloatToNumber(raw[0]);
             if (!isFinite(invW) || invW <= 0) return null;
@@ -617,44 +704,6 @@ export class ViewRenderManager implements IViewRenderManager {
             const wClip = -zEye;
             const ndcZ = zClip / wClip;
             return ndcZ * 0.5 + 0.5;
-        } catch {
-            return null;
-        }
-    }
-
-    /**
-     * Reads depth AND pickId from the pickDepth MRT at the given NDC position.
-     * Returns null for sky/background (pickId = 0). The pickId can be looked
-     * up via the datasource's mesh registry to identify the exact mesh hit.
-     */
-    async readPickAsync(
-        ndc: THREE.Vector2 | THREE.Vector3
-    ): Promise<{ depth: number; pickId: number } | null> {
-        const rt = this.passNode?.renderTarget;
-        if (rt == null || this.pickDepthTexIndex < 0) return null;
-
-        const { x, y } = this.ndcToPixel(ndc, rt);
-        if (x < 0 || x >= rt.width || y < 0 || y >= rt.height) return null;
-
-        try {
-            const data = await this.renderer.readRenderTargetPixelsAsync(
-                rt,
-                x,
-                y,
-                1,
-                1,
-                this.pickDepthTexIndex
-            );
-            const raw = data as Uint16Array;
-            const pickId = halfFloatToNumber(raw[1]);
-            if (!(pickId > 0)) return null; // sky
-            const invW = halfFloatToNumber(raw[0]);
-            if (!isFinite(invW) || invW <= 0) return null;
-            if (this.camera == null) return null;
-            const zEye = -1 / invW;
-            const pm = this.camera.projectionMatrix.elements;
-            const ndcZ = (pm[10] * zEye + pm[14]) / -zEye;
-            return { depth: ndcZ * 0.5 + 0.5, pickId };
         } catch {
             return null;
         }
@@ -694,15 +743,24 @@ export class ViewRenderManager implements IViewRenderManager {
         this.renderer
             .readRenderTargetPixelsAsync(rt, x, y, 1, 1, this.pickDepthTexIndex)
             .then(data => {
-                // pickDepth texture packs depth (R) and pickId (G):
-                //   R = invW (view depth), G = pickId (0 = sky, 1 = geometry)
-                // Only serve when G > 0 (real geometry) AND R > 0 (valid depth).
+                // pickDepth texture packs depth and identity:
+                //   R = invW (view depth), G/B = pickId split into two
+                //   11-bit halves (decode: G + B * 2048). pickId 0 = sky.
+                // Only serve when pickId > 0 (real geometry) AND R > 0.
                 const raw = data as Uint16Array;
-                const pickId = halfFloatToNumber(raw[1]);
-                if (!(pickId > 0)) return; // sky/background → miss
+                const pickId =
+                    halfFloatToNumber(raw[1]) + halfFloatToNumber(raw[2]) * 2048;
+                if (!(pickId > 0)) {
+                    // Definitive empty (sky/background): clear any stale geometry
+                    // value so consumers see a miss, not the previous hit.
+                    slot.invW = null;
+                    slot.pickId = 0;
+                    return;
+                }
                 const invW = halfFloatToNumber(raw[0]);
                 if (isFinite(invW) && invW > 0) {
                     slot.invW = invW;
+                    slot.pickId = pickId;
                     slot.px = x;
                     slot.py = y;
                 }

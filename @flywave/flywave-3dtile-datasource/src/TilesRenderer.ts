@@ -3,13 +3,15 @@
 import { type GeoBox, type Projection } from "@flywave/flywave-geoutils";
 import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import { type ITilesRenderer } from "@flywave/flywave-mapview/ITilesRenderer";
-import { type Raycaster, Matrix4, Object3D, Vector3 } from "three/webgpu";
+import { type Intersection, type Raycaster, Matrix4, Object3D, Vector3 } from "three/webgpu";
 
 import { type ITile, type Tile, type TileInternal } from "./base/Tile";
 import { type Tiles3DTileContent } from "./loader";
 import { type Observe3DTileChange } from "./ObserveTileChange";
-import { type TileIntersection } from "./renderer/raycastTraverse";
 import { TilesRenderer as ThreeTilesRenderer } from "./renderer/TilesRenderer";
+
+// Scratch vector for saving/restoring the caller's ray origin.
+const _savedRayOrigin = new Vector3();
 
 /**
  * Event name for TilesRenderer update events
@@ -250,42 +252,29 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
     }
 
     /**
-     * Performs raycasting for picking operations
-     * @param raycaster - The raycaster to use
-     * @param intersects - Array to store intersection results
+     * Performs raycasting for picking and camera collision.
+     *
+     * Contract: the caller's ray only needs a correct DIRECTION (cast from
+     * the camera through the target pixel) — the origin's coordinate frame
+     * is not trusted. PickHandler passes an RTE ray (origin at the world
+     * origin), MapControls/MapViewUtils pass geo rays (origin at the geo
+     * camera, large ECEF coordinates); direction is frame-invariant, so the
+     * origin is simply rebuilt at the render-space origin (= the eye, where
+     * the camera-relative scene content expects it). Output points are in
+     * render space; consumers translate with `.add(camera.position)` when
+     * they need geo coordinates.
      */
-    raycast = (raycaster: Raycaster, intersects: TileIntersection[]): void => {
+    raycast = (raycaster: Raycaster, intersects: Intersection[]): void => {
         if (this.mapView == null) return;
-        const oldRayOrigin = new Vector3();
-        oldRayOrigin.copy(raycaster.ray.origin);
-        raycaster.ray.origin.copy(this.mapView.camera.position);
-        this.object.position.set(0, 0, 0);
-        this.object.updateMatrixWorld();
-
-        const _intersects: TileIntersection[] = [];
+        const savedOrigin = _savedRayOrigin.copy(raycaster.ray.origin);
+        raycaster.ray.origin.set(0, 0, 0);
         try {
-            super.raycast(raycaster, _intersects);
-        } catch (e) {
-            // console.error("Raycast error:", e);
+            super.raycast(raycaster, intersects);
+        } catch {
+            // Swallow raycast errors (matches previous behaviour).
+        } finally {
+            raycaster.ray.origin.copy(savedOrigin);
         }
-
-        _intersects.forEach(e => {
-            // Ensure each intersection object has a tile property
-            if (!e.tile) {
-                // If no tile property, try to get tile info from the object
-                let obj = e.object;
-                while (obj && !obj.userData?.tile) {
-                    obj = obj.parent;
-                }
-                if (obj?.userData?.tile) {
-                    e.tile = obj.userData.tile;
-                }
-            }
-            e.point.sub(this.mapView.camera.position);
-            intersects.push(e);
-        });
-
-        raycaster.ray.origin.copy(oldRayOrigin);
     };
 
     /**

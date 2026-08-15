@@ -3,6 +3,7 @@
 import { GL } from "@flywave/flywave-utils";
 import {
     type BufferGeometry,
+    type Intersection,
     type Material,
     type Matrix4,
     type Object3D,
@@ -20,7 +21,6 @@ import {
     type Tiles3DTileJSONPostprocessed,
     type Tiles3DTilesetJSONPostprocessed
 } from "../loader/types";
-import { type TileIntersection } from "../renderer/raycastTraverse";
 import { SphereHelper } from "../renderer/SphereHelper";
 import { type TileBoundingVolume } from "../utilities/TileBoundingVolume";
 import { OrientedBoxHelper } from "@flywave/flywave-geoutils";
@@ -630,17 +630,19 @@ export class Tile extends TileInternal {
     }
 
     /**
-     * Gets batch properties by TileIntersection and batch name
+     * Gets batch properties by intersection and batch name
      *
-     * This method extracts the batch ID from a TileIntersection and uses it
+     * This method extracts the batch ID from a standard three.js
+     * intersection (object geometry attributes + index/face) and uses it
      * to retrieve the corresponding batch properties.
      *
-     * @param intersection - TileIntersection object
+     * @param intersection - Standard three.js intersection (works with any
+     * picking path — CPU raycast or GPU pick)
      * @param batchName - Name of the geometry attribute containing batch IDs (default: "_BATCHID")
      * @returns Record containing batch properties or undefined if not found
      */
     getBatchPropertiesByIntersection(
-        intersection: TileIntersection,
+        intersection: Intersection,
         batchName: string = "_BATCHID"
     ): Record<string, any> {
         let batchId: number | undefined;

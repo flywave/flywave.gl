@@ -19,16 +19,16 @@ import { ThemeLoader } from "@flywave/flywave-mapview/ThemeLoader";
 import { type ICameraCollidable } from "@flywave/flywave-mapview";
 import {
     Intersection,
+    Object3D,
     Raycaster,
     type Matrix4,
     type Material,
-    type MaterialParameters
-} from "three/webgpu";
+    type MaterialParameters} from "three/webgpu";
 
-import { type TileIntersection } from "./renderer/raycastTraverse";
 import { type CustomAttributeConfig, Tiles3DStyleWatcher } from "./theme/Tiles3DStyleWatcher";
 import { type TilesRendererOptions, TilesRenderer } from "./TilesRenderer";
 import { ITile } from "./ObserveTileChange";
+import type { Tile as InternalTile } from "./base/Tile";
 
 import { MatrixTransformCallback } from "./renderer/TilesRenderer";
 
@@ -227,16 +227,18 @@ export interface TileRenderDataSourceOptions extends DataSourceOptions {
     enableCameraCollision?: boolean;
 }
 
+let tempObject =  new Object3D();
 class RootTile extends Tile {
     constructor(tileKey: TileKey, dataSource: TileRenderDataSource) {
         super(dataSource, tileKey);
+        this.objects.push(tempObject);
+
+        this["m_maxGeometryHeight"] = 10000; 
+        this["m_minGeometryHeight"] = -10000;
     }
 
     raycast(rayCaster: Raycaster, intersects: Intersection[], recursive?: boolean): void {
-        (this.dataSource as TileRenderDataSource).raycast(
-            rayCaster,
-            intersects as TileIntersection[]
-        );
+        (this.dataSource as TileRenderDataSource).raycast(rayCaster, intersects);
     }
 }
 
@@ -277,7 +279,8 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
         super({
             name: "TileRenderDataSource",
             ...options,
-            maxDataLevel: 0
+            maxDataLevel: 0,
+            minDataLevel:0
         });
 
         this.m_options = options;
@@ -658,8 +661,37 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
      * @param raycaster - The raycaster to use
      * @param intersections - Array to store intersection results
      */
-    raycast(raycaster: Raycaster, intersections: TileIntersection[]): void {
+    raycast(raycaster: Raycaster, intersections: Intersection[]): void {
         this.m_tilesRenderer.raycast(raycaster, intersections);
+    }
+
+    /**
+     * Returns the batch-table properties for the picked face.
+     *
+     * Accepts the standard three.js intersection from any picking path —
+     * `MapView.intersectMapObjects` results (`PickResult.intersection`,
+     * GPU or CPU alike) or a raw raycaster intersection. The owning tile is
+     * derived from the intersection's object (parent walk to the
+     `userData.tile` stamped on the tile scene).
+     *
+     * @param intersection - Standard three.js intersection
+     * @param batchName - Geometry attribute holding batch IDs (default "_BATCHID")
+     * @returns Batch properties or undefined if not found
+     */
+    getBatchProperties(
+        intersection: Intersection,
+        batchName: string = "_BATCHID"
+    ): Record<string, any> | undefined {
+        let obj: Object3D | null = intersection.object;
+        while (
+            obj !== null &&
+            (obj.userData as { tile?: InternalTile } | undefined)?.tile === undefined
+        ) {
+            obj = obj.parent;
+        }
+        const tile = (obj?.userData as { tile?: InternalTile } | undefined)?.tile;
+        if (tile === undefined) return undefined;
+        return tile.getBatchPropertiesByIntersection(intersection, batchName);
     }
 
     /**
@@ -667,11 +699,11 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
      * @param x - Screen x coordinate
      * @param y - Screen y coordinate
      * @param parameters - Optional intersection parameters
-     * @returns Array of tile intersections
+     * @returns Array of intersections
      */
-    intersectMapObjects(x: number, y: number, parameters?: IntersectParams): TileIntersection[] {
+    intersectMapObjects(x: number, y: number, parameters?: IntersectParams): Intersection[] {
         const rayCaster = this.mapView.pickHandler.setupRaycaster(x, y);
-        const intersects: TileIntersection[] = [];
+        const intersects: Intersection[] = [];
         this.m_tilesRenderer.raycast(rayCaster, intersects);
 
         return intersects;

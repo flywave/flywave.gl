@@ -183,6 +183,18 @@ export class PickHandler {
      * @returns the list of intersection results.
      */
     intersectMapObjects(x: number, y: number, parameters?: IntersectParams): PickResult[] {
+        // GPU fast path: O(1) depth + pickId readback (requires enableGpuPicking),
+        // returning the same full PickResult as the CPU path below. Falls
+        // through to CPU when the GPU has no answer yet or missed sky.
+        if (
+            this.mapView.mapRenderingManager?.gpuPicking &&
+            parameters?.useGpuPick !== false
+        ) {
+            const gpuResult = this.tryGpuPick(x, y);
+            if (gpuResult !== null) return [gpuResult];
+            if (parameters?.useGpuPick === true) return []; // GPU-only, no fallback
+        }
+
         const ndc = this.mapView.getNormalizedScreenCoordinates(x, y);
         const rayCaster = this.setupRaycaster(x, y);
         const pickListener = new PickListener(parameters);
@@ -254,9 +266,107 @@ export class PickHandler {
             this.mapView.getNormalizedScreenCoordinates(x, y),
             this.camera
         );
+        // Required by three's Sprite/Points raycast implementations (they
+        // early-out without it) — benefits both the CPU tile path and the
+        // GPU pick's lazy detail raycast.
+        this.m_pickingRaycaster.camera = this.camera;
 
         this.mapView.renderer.getSize(this.m_pickingRaycaster.canvasSize);
         return this.m_pickingRaycaster;
+    }
+
+    /**
+     * Synchronous GPU pick: reads the pickDepth slot (depth + pickId) at the
+     * given screen position and resolves the pickId to its object through
+     * the renderer's registry. The result carries the cheap fields
+     * immediately (exact hit point, distance, object identity, tile
+     * attribution, type); the four face-derived detail fields
+     * (`intersection` with face normal / UV / faceIndex, `userData`,
+     * `featureId`, `technique`) are LAZY — reading any of them triggers a
+     * targeted single-object raycast (frozen at pick time) through the same
+     * result builder the CPU path uses, then caches. Not reading them costs
+     * nothing beyond the O(1) readback. The lazy set is kept minimal by
+     * design: only face-level data justifies a trigger.
+     *
+     * Because some scene content is positioned camera-relatively each
+     * frame, deferred detail reads are exact within the frame of the pick;
+     * reading them after the camera has moved may yield `undefined`.
+     */
+    private tryGpuPick(x: number, y: number): PickResult | null {
+        const vrm = this.mapView.mapRenderingManager?.viewRenderManager;
+        if (vrm === undefined) return null;
+
+        const renderCam = vrm.pickCamera;
+        if (!renderCam || !(this.camera instanceof THREE.PerspectiveCamera)) return null;
+
+        const ndc = this.mapView.getNormalizedScreenCoordinates(x, y);
+        const pick = vrm.readPickSync(ndc);
+        if (pick === null || pick.pickId <= 0) return null; // cold, or definitive sky
+
+        const object = vrm.getPickedObject(pick.pickId);
+        if (object === undefined) return null; // object unloaded → CPU fallback
+
+        const worldPoint = new THREE.Vector3(ndc.x, ndc.y, pick.depth * 2.0 - 1.0)
+            .unproject(renderCam)
+            .add(this.camera.position.clone().sub(renderCam.position));
+        const distance = this.camera.position.distanceTo(worldPoint);
+        if (distance < this.camera.near) return null;
+
+        // Cheap tile attribution (no raycast): the visible tile whose
+        // bounding box contains the hit point — same walk as the CPU loop.
+        this.raycasterFromScreenPoint(x, y);
+        let tile: Tile | undefined;
+        for (const { tile: visibleTile } of this.getIntersectedTiles(
+            this.m_pickingRaycaster
+        )) {
+            tmpOBB.copy(visibleTile.boundingBox);
+            tmpOBB.position.sub(this.mapView.worldCenter);
+            tmpOBB.position.x += visibleTile.computeWorldOffsetX();
+            if (tmpOBB.containsPoint(worldPoint)) {
+                tile = visibleTile;
+                break;
+            }
+        }
+
+        const result: PickResult = {
+            type: PickObjectType.Object3D,
+            point: worldPoint,
+            distance,
+            dataSourceName: object.userData?.dataSource,
+            dataSourceOrder: tile?.dataSource?.dataSourceOrder,
+            tileKey: tile?.tileKey,
+            renderOrder: object.renderOrder
+        };
+
+        // Frozen picking ray — deferred detail reads stay consistent with
+        // the already-returned point/distance.
+        const frozenRay = this.m_pickingRaycaster.ray.clone();
+
+        let details: PickResult | null | undefined; // undefined = not yet fetched
+        const ensureDetails = (): PickResult | null => {
+            if (details === undefined) {
+                this.m_pickingRaycaster.ray.copy(frozenRay);
+                const intersects = this.m_pickingRaycaster.intersectObject(object, true);
+                details =
+                    intersects.length > 0 ? this.createResult(intersects[0], tile) : null;
+            }
+            return details;
+        };
+
+        // Lazy detail fields — reading ANY of these runs the deferred raycast
+        // exactly once (then caches). Keep this set minimal: only fields
+        // that genuinely require face-level data may trigger; everything
+        // else must stay eager. `type` stays eager (Object3D) on purpose —
+        // casual `pick.type` switches must not cost a raycast.
+        for (const key of ["intersection", "userData", "featureId", "technique"] as const) {
+            Object.defineProperty(result, key, {
+                get: () => ensureDetails()?.[key],
+                enumerable: true,
+                configurable: true
+            });
+        }
+
+        return result;
     }
 
     private createResult(intersection: THREE.Intersection, tile?: Tile): PickResult {

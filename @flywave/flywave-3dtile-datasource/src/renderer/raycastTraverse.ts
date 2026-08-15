@@ -2,24 +2,13 @@
 
 import { type Intersection, type Raycaster, Ray, Vector3 } from "three/webgpu";
 
-import { type ITile, type Tile } from "../base/Tile";
+import { type ITile } from "../base/Tile";
 import { type TilesRenderer } from "./TilesRenderer";
-
-/**
- * Extended intersection result that includes the intersected tile
- *
- * This interface extends the standard Three.js Intersection interface
- * to include a reference to the tile that was intersected during raycasting.
- */
-export type TileIntersection = Intersection & {
-    /** The tile that was intersected */
-    tile: Tile;
-};
 
 // Temporary variables for raycasting calculations
 const _localRay = new Ray();
 const _vec = new Vector3();
-const _hitArray: TileIntersection[] = [];
+const _hitArray: Intersection[] = [];
 
 /**
  * Sort function for intersections by distance (ascending)
@@ -34,8 +23,7 @@ function distanceSort(a: Intersection, b: Intersection): number {
 /**
  * Intersects a ray with a tile's scene content
  *
- * This function performs raycasting against the 3D objects in a tile's scene
- * and converts the results to TileIntersection objects.
+ * This function performs raycasting against the 3D objects in a tile's scene.
  *
  * @param tile The tile containing the scene
  * @param raycaster The raycaster to use
@@ -46,29 +34,17 @@ function intersectTileScene(
     tile: ITile,
     raycaster: Raycaster,
     renderer: TilesRenderer,
-    intersects: TileIntersection[]
+    intersects: Intersection[]
 ): void {
     const { scene } = tile.cached;
-
-    // Create temporary array to store intersections
-    const tempIntersects: Intersection[] = [];
-    raycaster.intersectObject(scene, true, tempIntersects);
-
-    // Convert standard Intersection to TileIntersection and set tile property
-    tempIntersects.forEach(intersect => {
-        const tileIntersect: TileIntersection = {
-            ...intersect,
-            tile: tile as Tile
-        };
-        intersects.push(tileIntersect);
-    });
+    raycaster.intersectObject(scene, true, intersects);
 }
 
 /**
  * Finds the first hit when raycasting against a tile's scene
  *
- * This function finds the closest intersection when raycasting against
- * a single tile's scene content.
+ * This function finds the closest intersection when raycasting against a
+ * single tile's scene content.
  *
  * @param tile The tile to test
  * @param raycaster The raycaster to use
@@ -79,7 +55,7 @@ function intersectTileSceneFirstHit(
     tile: ITile,
     raycaster: Raycaster,
     renderer: TilesRenderer
-): TileIntersection | null {
+): Intersection | null {
     intersectTileScene(tile, raycaster, renderer, _hitArray);
     _hitArray.sort(distanceSort);
 
@@ -119,7 +95,7 @@ export function raycastTraverseFirstHit(
     tile: ITile,
     raycaster: Raycaster,
     localRay: Ray | null = null
-): TileIntersection | null {
+): Intersection | null {
     const { group, activeTiles } = renderer;
 
     // Transform ray to local group space if not provided
@@ -153,14 +129,13 @@ export function raycastTraverseFirstHit(
     potentialHits.sort((a, b) => a.distance - b.distance);
 
     // Check the current tile if it's active
-    let bestHit: TileIntersection | null = null;
+    let bestHit: Intersection | null = null;
     let bestHitDistSq = Infinity;
 
     if (activeTiles.has(tile)) {
         const hit = intersectTileSceneFirstHit(tile, raycaster, renderer);
         if (hit) {
             bestHit = hit;
-            bestHit.tile = tile as Tile; // Ensure tile property is set
             bestHitDistSq = hit.distance * hit.distance;
         }
     }
@@ -179,7 +154,6 @@ export function raycastTraverseFirstHit(
             const hitDistSq = hit.distance * hit.distance;
             if (hitDistSq < bestHitDistSq) {
                 bestHit = hit;
-                bestHit.tile = childTile; // Ensure tile property is set
                 bestHitDistSq = hitDistSq;
             }
         }
@@ -205,7 +179,7 @@ export function raycastTraverse(
     renderer: TilesRenderer,
     tile: ITile,
     raycaster: Raycaster,
-    intersects: TileIntersection[],
+    intersects: Intersection[],
     localRay: Ray | null = null
 ): void {
     // Skip uninitialized tiles
@@ -229,14 +203,7 @@ export function raycastTraverse(
 
     // Check the tile's scene if it's active
     if (activeTiles.has(tile)) {
-        const tileIntersects: TileIntersection[] = [];
-        intersectTileScene(tile, raycaster, renderer, tileIntersects);
-
-        // Set tile property for each intersection object
-        tileIntersects.forEach(intersect => {
-            intersect.tile = tile as Tile;
-            intersects.push(intersect);
-        });
+        intersectTileScene(tile, raycaster, renderer, intersects);
     }
 
     // Recursively check child tiles

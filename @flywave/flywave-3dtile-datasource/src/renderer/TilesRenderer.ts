@@ -63,34 +63,6 @@ const Y_AXIS = new Vector3(0, 1, 0);
 // Reused scratch sphere for the shadow-cast size judgment.
 const _shadowSphere = new Sphere();
 
-// ─── GPU Picking meshId registry ───────────────────────────────────────────
-// Assigns unique per-tile pickIds (written as vertex attributes), and maps
-// them back to the tile/mesh for identification after a GPU depth read.
-// Ids start at 1 (0 = sky/background in the pickDepth MRT's G channel).
-const _meshIdRegistry = new Map<number, { tile: Tile; scene: Object3D }>();
-let _nextMeshId = 1;
-
-function assignMeshId(tile: Tile, scene: Object3D): number {
-    const id = _nextMeshId++;
-    _meshIdRegistry.set(id, { tile, scene });
-    // Write the id as a vertex attribute on every geometry in this tile's
-    // scene — all vertices share the same value (tile-level identity).
-    scene.traverse((c: Object3D) => {
-        const mesh = c as Mesh;
-        if (mesh.geometry && mesh.geometry.getAttribute("position")) {
-            const count = mesh.geometry.getAttribute("position").count;
-            const arr = new Float32Array(count);
-            arr.fill(id);
-            mesh.geometry.setAttribute("aPickId", new BufferAttribute(arr, 1));
-        }
-    });
-    return id;
-}
-
-export function getMeshById(id: number): { tile: Tile; scene: Object3D } | undefined {
-    return _meshIdRegistry.get(id);
-}
-
 // Temporary object for view error calculations
 const viewErrorTarget = {
     inView: false,
@@ -1069,10 +1041,10 @@ export abstract class TilesRenderer extends TilesRendererBase {
         tile.cached.scene = scene;
         tile.cached.bytesUsed = estimateBytesUsed(scene);
 
-        // Assign a unique meshId for GPU picking (vertex attribute + registry)
-        if (extension !== "pnts") {
-            assignMeshId(tile as Tile, scene);
-        }
+        // Stamp the owning tile on the scene once — lets queries derive the
+        // tile from any intersection.object via a parent walk
+        // (TileRenderDataSource.getBatchProperties).
+        scene.userData.tile = tile;
 
         tile["rebindTileContent"](metadata);
 
