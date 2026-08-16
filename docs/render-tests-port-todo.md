@@ -1033,6 +1033,26 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **遗留**：残余 mismatch 均为 1–2px AA 边缘对齐（top-row white 被 pixelmatch 判 mismatch）；与 line-color 337px 同源（AA/线宽舍入）。
 
+### 12.23 icon-size camera 函数求值修复（2026-08-16）
+
+**背景**：icon-size 9/18 近失。`camera-function-*` 用例（`icon-size: {"stops":[...]}` zoom 函数）actual 恒为 ~0.9× 期望——排查（埋点确认）根因是**解码器用整数瓦片级别求值 zoom 函数**：style zoom 0.5 → 相机 zoom 1.5 → 数据 zoom 0.5 → 瓦片级别 floor 到 0 → 解码器 `zoom = tileKey.level - storageLevelOffset - 1 = 0`，`icon-size` 在 zoom 0 求值 = 1 而非 1.5。
+
+**修复（对齐 mgl `symbol_size.getSizeData`——camera 函数在连续相机 zoom 求值）**：
+1. `MBStyleDecoder` 新增 `m_mapboxZoom`（自定义选项），`decodeThemedTile` 用它代替整数瓦片级别推导（无则回退）。
+2. `MBStyleDataSource` 新增 `pushMapboxZoom()`：`applyCameraSettings` 后 + 每次 `AfterRender` 把 `mapView.zoomLevel - 1`（mapbox zoom）configure 进解码器。
+3. 顺带确认 harness 初始相机未设 style.zoom 的问题：`MBStyleCompatRenderTest` 在 MapView 创建后按 `style.zoom+1`/`style.center` 定位相机（`applyCameraSettings` 实际已处理，此条为防御）。
+
+**验证**（`rendering-test-results/mbstyle-isize5/`）：
+- **icon-size 4/18 → 9/18 通过**（+5）：camera-function-sdf/plain、composite-function-sdf/plain/both-scale 全部通过（0–1 mismatch），camera-function-high-base-sdf、default、small-stretch-area 保持。
+- 近失：camera-function-high-base-plain 13、function 16、composite-function-both-scale 10。
+- 尝试 raster-sprite 优先（对齐 mgl `_loadIconset` 对非 Mapbox URL 回退 raster）——icon-size 再 +2（plain 1→0），但 `icon-image/stretchable` 3060→11688 回归（pbf 渲染的 stretchable 图标更贴合基线），**已回退**。
+- **零回归**：icon-color 4/5、icon-anchor 10/11、icon-image 2/12 持平；mbstyle 单测 208 passing（+1 camera-function iconScale 用例，1 既有 circle-radius×2 失败无关）。
+
+**遗留**：
+- `*-rasterized`（432–3793）：mgl 按 `getRasterizedIconSize` 在 maxSize 栅格化再缩放，单 atlas 位图无重栅格化。
+- `property-function-*`（152–2092）：数据驱动 icon-size 按要素求值，多要素共享 technique 的装箱问题。
+- `literal` 139 / `function` 16 / `depends-on-coalesce-image` 681：AA 边缘（icon 渲染 0.9× box，与 mgl 基线差 1–2px）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。

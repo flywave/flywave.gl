@@ -311,6 +311,13 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_worldview: string = '';
     private m_center: [number, number] = [0, 0];
     /**
+     * Mapbox camera zoom (fractional, without the flywave +1 offset). Set by
+     * the data source from the live camera so zoom/camera expressions
+     * (icon-size camera functions, dynamic-filter, …) evaluate at the actual
+     * mapbox zoom instead of the floored integer tile level.
+     */
+    private m_mapboxZoom: number | undefined;
+    /**
      * Real mapbox PBF glyph metrics (font→char→metrics) loaded by the main
      * thread and shipped to the worker. Used by the emitter as a `glyphLookup`
      * when shaping text, so layout/line-breaking matches the actual font's
@@ -359,6 +366,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
         if (customOptions?.glyphMetrics !== undefined) {
             this.m_glyphMetrics = customOptions.glyphMetrics as Map<string, any>;
+        }
+        if (customOptions?.mapboxZoom !== undefined) {
+            this.m_mapboxZoom = customOptions.mapboxZoom as number;
         }
     }
 
@@ -424,8 +434,14 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         // level-z tile at 256px vs mapbox's 512px, so applyCameraSettings
         // offsets by +1). `tileKey.level - storageLevelOffset` resolves to the
         // camera zoom; subtract 1 to evaluate zoom expressions at the mapbox
-        // zoom the test style actually specifies.
-        const zoom = Math.max(0, tileKey.level - this.m_storageLevelOffset - 1);
+        // zoom the test style actually specifies. When the data source pushes
+        // the live (fractional) mapbox camera zoom, use that instead — camera
+        // functions (icon-size/text-size stops, dynamic-filter distance) must
+        // evaluate at the continuous camera zoom, not the floored tile level.
+        const zoom = Math.max(0,
+            this.m_mapboxZoom !== undefined
+                ? this.m_mapboxZoom
+                : tileKey.level - this.m_storageLevelOffset - 1);
         const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
         const emitter = new MBTileDataEmitter(tileKey, decodeInfo, zoom);
         // Hand the cached real-font metrics to the emitter so text shaping

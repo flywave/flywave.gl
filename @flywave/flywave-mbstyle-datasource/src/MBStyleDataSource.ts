@@ -812,6 +812,7 @@ export class MBStyleDataSource extends TileDataSource {
 
         // Apply camera settings from style
         this.applyCameraSettings(style);
+        this.pushMapboxZoom();
 
         // Create runtime styling API
         this.m_runtime = new MBStyleRuntime(style, () => {
@@ -947,6 +948,10 @@ export class MBStyleDataSource extends TileDataSource {
                 if (tc && tc.isMorphing) {
                     tc.updateMorphing(Date.now());
                 }
+                // Push the live mapbox camera zoom to the decoder so camera
+                // functions (icon-size/text-size stops, dynamic-filter) evaluate
+                // at the continuous zoom, not the floored integer tile level.
+                self.pushMapboxZoom();
                 // TerrainDraping has its own AfterRender listener that
                 // detects mesh count changes + morphing completion + lazy
                 // bake — no manual trigger needed here.
@@ -1630,7 +1635,6 @@ export class MBStyleDataSource extends TileDataSource {
      */
     private applyCameraSettings(style: StyleSpecification): void {
         if (!this.mapView) return;
-
         // Mapbox render tests: the camera is driven by the style. Missing
         // center defaults to [0,0]; missing zoom defaults to 0 (mapbox's Map
         // default, map.ts:235). NOT "keep the current zoom" — a freshly created
@@ -1651,6 +1655,23 @@ export class MBStyleDataSource extends TileDataSource {
             const { GeoCoordinates } = require('@flywave/flywave-geoutils');
             const geoCoord = new GeoCoordinates(center[1], center[0]);
             this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom, bearing, pitch);
+        } catch {}
+    }
+
+    /**
+     * Push the live mapbox camera zoom (flywave zoom − 1) to the decoder so
+     * camera functions (icon-size/text-size stops, dynamic-filter distance)
+     * evaluate at the continuous mapbox zoom instead of the floored integer
+     * tile level. Called after applyCameraSettings and on every AfterRender.
+     */
+    private pushMapboxZoom(): void {
+        try {
+            const camZoom = (this.mapView as any)?.zoomLevel;
+            if (typeof camZoom === 'number') {
+                (this.decoder as any).configure?.(undefined, {
+                    mapboxZoom: Math.max(0, camZoom - 1),
+                } as any);
+            }
         } catch {}
     }
 

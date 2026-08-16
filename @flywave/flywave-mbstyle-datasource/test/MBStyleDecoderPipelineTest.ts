@@ -446,6 +446,37 @@ describe('MBStyle decode pipeline', () => {
         expect(tech._iconFitTextB).to.be.closeTo(tech._iconFitTextH / 2, 1e-6);
     });
 
+    it('emits camera-function icon-size into iconScale', () => {
+        const style: StyleSpecification = {
+            version: 8,
+            sources: {},
+            layers: [{
+                id: 'sym', type: 'symbol' as any, source: 'geojson',
+                layout: {
+                    'icon-image': 'dot.sdf',
+                    'icon-size': { stops: [[0, 1], [1, 2]] },
+                },
+            } as any],
+        };
+
+        const evaluator = new MBLayerEvaluator(style);
+        const tileKey = TileKey.fromRowColumnLevel(0, 0, 0);
+        const decodeInfo = createDecodeInfo(tileKey);
+        const emitter = new MBTileDataEmitter(tileKey, decodeInfo, 0.5);
+
+        const matched = evaluator.evaluate('geojson', '',
+            { type: 'Point', properties: {} }, 0.5, 'point');
+        emitter.processPointFeature('geojson', 4096,
+            [new THREE.Vector3(100, 100, 0)],
+            {}, undefined, matched);
+
+        const decodedTile = emitter.getDecodedTile();
+        const tech: any = decodedTile.techniques.find(t => t.name === 'labeled-icon');
+        expect(tech).not.to.be.undefined;
+        // camera-function at zoom 0.5 → 1.5.
+        expect(tech.iconScale).to.equal(1.5);
+    });
+
     it('skips icon-text-fit emission when value is none', () => {
         const style: StyleSpecification = {
             version: 8,
