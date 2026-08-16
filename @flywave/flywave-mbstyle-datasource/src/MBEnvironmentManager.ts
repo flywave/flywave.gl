@@ -158,7 +158,9 @@ export class MBEnvironmentManager {
         const ambIntensity = this.m_3DAmbient?.intensity ?? 0.5;
         const dirColor = this.m_3DDirectional?.color ?? [1, 1, 1];
         const dirIntensity = this.m_3DDirectional?.intensity ?? 0.5;
-        const direction = this.m_3DDirectional?.direction ?? [0, 90];
+        // Mapbox 3D `lights` directional default direction [210, 30] (style-spec
+        // properties_light_directional.direction default).
+        const direction = this.m_3DDirectional?.direction ?? [210, 30];
 
         // sphericalDirectionToCartesian (util.ts): a = az+90°, p = polar°
         const a = (direction[0] + 90) * Math.PI / 180;
@@ -302,9 +304,14 @@ export class MBEnvironmentManager {
                 this.m_ambientLight = new THREE.AmbientLight(new THREE.Color(color[0], color[1], color[2]), intensity);
                 this.m_scene.add(this.m_ambientLight);
             } else if (light.type === 'directional') {
-                const direction: [number, number] = Array.isArray(p.direction) && p.direction.length >= 2
-                    ? [p.direction[0], p.direction[1]]
-                    : [0, 90];
+                // `direction` may be a plain [azimuth, polar] or a literal
+                // expression `['literal', [az, polar]]` (mapbox 3D lights).
+                const rawDir = Array.isArray(p.direction) && p.direction[0] === 'literal'
+                    ? p.direction[1]
+                    : p.direction;
+                const direction: [number, number] = Array.isArray(rawDir) && rawDir.length >= 2
+                    ? [rawDir[0], rawDir[1]]
+                    : [210, 30];
                 this.m_3DDirectional = { color, intensity, direction };
                 this.m_directionalColor = new THREE.Color(color[0], color[1], color[2]);
                 this.m_directionalIntensity = intensity;

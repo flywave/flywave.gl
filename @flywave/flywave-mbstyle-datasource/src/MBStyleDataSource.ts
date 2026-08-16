@@ -884,6 +884,10 @@ export class MBStyleDataSource extends TileDataSource {
                 (style as any).lights as any,
                 style.light,
             );
+            // applyBackgroundColor ran before the environment existed; re-run it
+            // now that lighting3DState is configured so the background clear
+            // color picks up the 3D-lights ground radiance.
+            this.applyBackgroundColor(style);
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
             // A `sky` layer's paint drives the skybox (gradient/atmosphere),
             // mirroring mapbox's sky_style_layer. The top-level `style.sky`
@@ -1402,6 +1406,7 @@ export class MBStyleDataSource extends TileDataSource {
         // Environment: lights/fog/sky/background-pattern.
         if (this.m_environment) {
             this.m_environment.applyLights((style as any).lights ?? (style as any).light ? [(style as any).light] : undefined);
+            this.applyBackgroundColor(style);
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
             this.m_environment.applySky(
                 this.buildSkyFromLayers(style) ?? style.sky,
