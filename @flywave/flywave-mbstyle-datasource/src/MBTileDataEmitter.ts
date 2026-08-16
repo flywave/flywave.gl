@@ -481,6 +481,54 @@ export class MBTileDataEmitter {
                         props.iconXOffset = (iconOffsetArr[0] ?? 0) * iconFontSize;
                         props.iconYOffset = -((iconOffsetArr[1] ?? 0)) * iconFontSize;
                     }
+                    // Mapbox `icon-text-fit` (+ padding): stretch the icon box to
+                    // the shaped text bounds (mgl shaping_shared.fitIconToText).
+                    // The text bounds are anchor-relative (mgl shaping.ts:712-715
+                    // shifts left/top by -hAlign*width / -vAlign*height), so we
+                    // emit the four anchor-shifted edges in px; PoiRenderer places
+                    // the fitted box at those edges (mgl fitIconToText). Padding
+                    // order is [top, right, bottom, left] (mapbox).
+                    const iconTextFit = l['icon-text-fit'];
+                    if (iconTextFit && iconTextFit !== 'none' && l['text-field']) {
+                        const fitRaw = typeof l['text-field'] === 'string'
+                            ? l['text-field'] : String(l['text-field'] ?? '');
+                        const fitResolved = resolveTextField(fitRaw, properties ?? {});
+                        const fitTransform = l['text-transform'] ?? 'none';
+                        const fitShaped = shapeText(shapeRTLText(fitResolved, fitTransform), {
+                            fontSize: (l['text-size'] as number) ?? 16,
+                            maxWidth: (l['text-max-width'] as number) ?? 10,
+                            lineHeight: (l['text-line-height'] as number) ?? 1.2,
+                            letterSpacing: (l['text-letter-spacing'] as number) ?? 0,
+                            justify: (l['text-justify'] as 'left' | 'center' | 'right' | 'auto') ?? 'center',
+                            anchor: (l['text-anchor'] as string) ?? 'center',
+                            transform: 'none',
+                            writingMode: l['text-writing-mode'] as ('horizontal' | 'vertical')[],
+                            glyphLookup: this.m_glyphLookup as any,
+                            fontName: Array.isArray(l['text-font']) ? l['text-font'].join(',') : l['text-font'],
+                        });
+                        props._iconTextFit = iconTextFit;
+                        props._iconTextFitPadding = l['icon-text-fit-padding'] ?? [0, 0, 0, 0];
+                        // Convert em-unit shaping to pixel dims at the text size.
+                        const fitTextSize = (l['text-size'] as number) ?? 16;
+                        const fitW = (fitShaped.right - fitShaped.left) * fitTextSize;
+                        const fitH = (fitShaped.bottom - fitShaped.top) * fitTextSize;
+                        // Anchor alignment (mgl getAnchorAlignment): the shaped box
+                        // from shapeText is centered; shift its left/top so the box
+                        // is positioned relative to the symbol point like mgl.
+                        const fitAnchor = (l['text-anchor'] as string) ?? 'center';
+                        let hAlign = 0.5;
+                        let vAlign = 0.5;
+                        if (/right/.test(fitAnchor)) hAlign = 1;
+                        else if (/left/.test(fitAnchor)) hAlign = 0;
+                        if (/bottom/.test(fitAnchor)) vAlign = 1;
+                        else if (/top/.test(fitAnchor)) vAlign = 0;
+                        props._iconFitTextL = (-hAlign) * fitW;
+                        props._iconFitTextR = props._iconFitTextL + fitW;
+                        props._iconFitTextT = (-vAlign) * fitH;
+                        props._iconFitTextB = props._iconFitTextT + fitH;
+                        props._iconFitTextW = fitW;
+                        props._iconFitTextH = fitH;
+                    }
                     // SDF icon halo (private-prefixed; consumed by PoiBuilder for
                     // the IconMaterial halo uniforms). icon-halo-width/blur are in
                     // ems (mapbox); converted to SDF field units at render time.

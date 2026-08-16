@@ -323,12 +323,16 @@ export class PoiBatchRegistry {
         assert(poiInfo.uvBox !== undefined);
 
         let color: THREE.Color;
-        if (poiInfo.iconBrightness !== undefined) {
+        // Mapbox only applies `icon-color` (and brightness) to SDF icons.
+        // Raster/non-SDF icons sample the texture directly — tinting them with
+        // the default black `icon-color` would render a solid black box.
+        const applyColor = poiInfo.imageItem?.sdf === true;
+        if (applyColor && poiInfo.iconBrightness !== undefined) {
             color = tmpIconColor.setScalar(poiInfo.iconBrightness);
             if (poiInfo.iconColor !== undefined) {
                 color = tmpIconColor.multiply(poiInfo.iconColor);
             }
-        } else if (poiInfo.iconColor !== undefined) {
+        } else if (applyColor && poiInfo.iconColor !== undefined) {
             color = poiInfo.iconColor;
         } else {
             color = neutralColor;
@@ -458,39 +462,97 @@ export class PoiRenderer {
         const iconXOffset = getPropertyValue(technique.iconXOffset, env);
         const iconYOffset = getPropertyValue(technique.iconYOffset, env);
 
-        // Mapbox `icon-anchor` aligns the icon box so the named edge/corner is at
-        // the symbol point. The native box is centered at screenPosition + offset,
-        // so shift the center by (0.5 - alignment) * (icon size in px at scale 1)
-        // to reproduce the anchor (mapbox shapeIcon: x1 = dx - w*hAlign, etc.).
-        const iconAnchor = getPropertyValue((technique as any)._iconAnchor, env) as string | undefined;
+        // Mapbox `icon-text-fit`: stretch the icon box to the shaped text bounds
+        // (mgl shaping_shared.fitIconToText). The fitted box is positioned at the
+        // anchor-relative text edges (emitter emits _iconFitTextL/R/T/B in px),
+        // and icon-anchor is ignored (the icon is centered on / stretched to the
+        // text). For the non-fitted dimension the icon is centered on the text.
+        const iconTextFit = poiInfo.iconTextFit;
+        let fitWidth = width;
+        let fitHeight = height;
+        let fitCenterX = screenPosition.x + (typeof iconXOffset === "number" ? iconXOffset : 0) * scale;
+        let fitCenterY = screenPosition.y + (typeof iconYOffset === "number" ? iconYOffset : 0) * scale;
         let anchorShiftX = 0;
         let anchorShiftY = 0;
-        if (typeof iconAnchor === "string" && iconAnchor !== "center") {
-            let horizontalAlign = 0.5;
-            let verticalAlign = 0.5;
-            if (/right/.test(iconAnchor)) horizontalAlign = 1;
-            else if (/left/.test(iconAnchor)) horizontalAlign = 0;
-            if (/bottom/.test(iconAnchor)) verticalAlign = 1;
-            else if (/top/.test(iconAnchor)) verticalAlign = 0;
-            const pxWidth = poiInfo.computedWidth!;
-            const pxHeight = poiInfo.computedHeight!;
-            anchorShiftX = (0.5 - horizontalAlign) * pxWidth;
-            // Mapbox Y is screen-down; the native screenPosition.y is screen-up
-            // (three.js), so negate the vertical alignment shift.
-            anchorShiftY = (verticalAlign - 0.5) * pxHeight;
+        if (iconTextFit !== undefined) {
+            const pad = poiInfo.iconTextFitPadding ?? [0, 0, 0, 0];
+            const textL = poiInfo.iconFitTextL;
+            const textR = poiInfo.iconFitTextR;
+            const textT = poiInfo.iconFitTextT;
+            const textB = poiInfo.iconFitTextB;
+            const fitW = poiInfo.iconFitTextW ?? 0;
+            const fitH = poiInfo.iconFitTextH ?? 0;
+            // Fall back to a centered box when the emitter did not provide
+            // anchor-relative edges (defensive).
+            const hasEdges =
+                typeof textL === "number" && typeof textR === "number" &&
+                typeof textT === "number" && typeof textB === "number";
+            let leftPx = hasEdges ? textL! : -fitW / 2;
+            let rightPx = hasEdges ? textR! : fitW / 2;
+            let topPx = hasEdges ? textT! : -fitH / 2;
+            let bottomPx = hasEdges ? textB! : fitH / 2;
+
+            if (iconTextFit === "width" || iconTextFit === "both") {
+                // left = textLeft - pad[3]; right = textRight + pad[1]
+                leftPx -= pad[3];
+                rightPx += pad[1];
+                fitWidth = (rightPx - leftPx) * scale;
+            } else {
+                // Non-fitted dimension: centered on the text, natural icon size.
+                fitWidth = width;
+            }
+            if (iconTextFit === "height" || iconTextFit === "both") {
+                // top = textTop - pad[0]; bottom = textBottom + pad[2]
+                topPx -= pad[0];
+                bottomPx += pad[2];
+                fitHeight = (bottomPx - topPx) * scale;
+            } else {
+                fitHeight = height;
+            }
+
+            // Center the fitted box at the mid-point of the fitted bounds
+            // (mgl: box is drawn between left..right / top..bottom, plus the
+            // icon-offset shift already applied to the center). Mapbox Y is
+            // screen-down while the native screenPosition.y is screen-up, so
+            // the vertical text offset is negated (same as the icon-anchor
+            // shift above).
+            fitCenterX = screenPosition.x +
+                (typeof iconXOffset === "number" ? iconXOffset : 0) * scale +
+                ((leftPx + rightPx) / 2) * scale;
+            fitCenterY = screenPosition.y +
+                (typeof iconYOffset === "number" ? iconYOffset : 0) * scale -
+                ((topPx + bottomPx) / 2) * scale;
+        } else {
+            // Mapbox `icon-anchor` aligns the icon box so the named edge/corner
+            // is at the symbol point. The native box is centered at
+            // screenPosition + offset, so shift the center by
+            // (0.5 - alignment) * (icon size in px at scale 1) to reproduce the
+            // anchor (mapbox shapeIcon: x1 = dx - w*hAlign, etc.).
+            const iconAnchor = getPropertyValue((technique as any)._iconAnchor, env) as string | undefined;
+            if (typeof iconAnchor === "string" && iconAnchor !== "center") {
+                let horizontalAlign = 0.5;
+                let verticalAlign = 0.5;
+                if (/right/.test(iconAnchor)) horizontalAlign = 1;
+                else if (/left/.test(iconAnchor)) horizontalAlign = 0;
+                if (/bottom/.test(iconAnchor)) verticalAlign = 1;
+                else if (/top/.test(iconAnchor)) verticalAlign = 0;
+                const pxWidth = poiInfo.computedWidth!;
+                const pxHeight = poiInfo.computedHeight!;
+                anchorShiftX = (0.5 - horizontalAlign) * pxWidth;
+                // Mapbox Y is screen-down; the native screenPosition.y is
+                // screen-up (three.js), so negate the vertical alignment shift.
+                anchorShiftY = (verticalAlign - 0.5) * pxHeight;
+            }
+            fitCenterX = screenPosition.x + (typeof iconXOffset === "number" ? iconXOffset : 0) * scale +
+                anchorShiftX * scale;
+            fitCenterY = screenPosition.y + (typeof iconYOffset === "number" ? iconYOffset : 0) * scale +
+                anchorShiftY * scale;
         }
 
-        const centerX =
-            screenPosition.x + (typeof iconXOffset === "number" ? iconXOffset : 0) * scale +
-            anchorShiftX * scale;
-        const centerY =
-            screenPosition.y + (typeof iconYOffset === "number" ? iconYOffset : 0) * scale +
-            anchorShiftY * scale;
-
-        screenBox.x = centerX - width / 2;
-        screenBox.y = centerY - height / 2;
-        screenBox.w = width;
-        screenBox.h = height;
+        screenBox.x = fitCenterX - fitWidth / 2;
+        screenBox.y = fitCenterY - fitHeight / 2;
+        screenBox.w = fitWidth;
+        screenBox.h = fitHeight;
 
         return screenBox;
     }

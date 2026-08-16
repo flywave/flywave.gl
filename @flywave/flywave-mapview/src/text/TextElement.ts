@@ -74,6 +74,48 @@ export interface PoiInfo {
     iconHaloBlur?: number;
 
     /**
+     * Mapbox `icon-text-fit` value ('width' | 'height' | 'both') when the icon
+     * should be stretched to the shaped text bounds. Undefined = no fit.
+     */
+    iconTextFit?: "width" | "height" | "both";
+
+    /**
+     * Mapbox `icon-text-fit-padding`, order [top, right, bottom, left].
+     */
+    iconTextFitPadding?: [number, number, number, number];
+
+    /**
+     * Shaped text width in pixels (at the text size), used by the fit.
+     */
+    iconFitTextW?: number;
+
+    /**
+     * Shaped text height in pixels (at the text size), used by the fit.
+     */
+    iconFitTextH?: number;
+
+    /**
+     * Anchor-relative left edge of the shaped text in pixels (mgl shaping
+     * shifts the box by -hAlign * width). Used to position the fitted box.
+     */
+    iconFitTextL?: number;
+
+    /**
+     * Anchor-relative right edge of the shaped text in pixels.
+     */
+    iconFitTextR?: number;
+
+    /**
+     * Anchor-relative top edge of the shaped text in pixels.
+     */
+    iconFitTextT?: number;
+
+    /**
+     * Anchor-relative bottom edge of the shaped text in pixels.
+     */
+    iconFitTextB?: number;
+
+    /**
      * Name of the POI table {@link PoiTable}.
      */
     poiTableName?: string;

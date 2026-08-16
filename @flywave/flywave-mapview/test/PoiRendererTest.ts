@@ -102,6 +102,118 @@ describe("PoiRenderer", function () {
             expect(screenBox.w).to.equal(16);
             expect(screenBox.h).to.equal(16);
         });
+
+        it("stretches both dimensions to the text bounds for icon-text-fit: both", function () {
+            const poiInfo = {
+                computedWidth: 32,
+                computedHeight: 32,
+                mayOverlap: false,
+                buffer: {} as PoiBuffer,
+                technique: {},
+                iconTextFit: "both",
+                iconTextFitPadding: [5, 10, 5, 10],
+                iconFitTextW: 100,
+                iconFitTextH: 20
+            };
+            const env = new Env();
+            const screenBox = new Math2D.Box();
+
+            PoiRenderer.computeIconScreenBox(
+                poiInfo as any,
+                new THREE.Vector2(),
+                1.0,
+                env,
+                screenBox
+            );
+            // width = textW + pad[1] + pad[3]; height = textH + pad[0] + pad[2].
+            expect(screenBox.w).to.equal(120);
+            expect(screenBox.h).to.equal(30);
+            expect(screenBox.x).to.equal(-60);
+            expect(screenBox.y).to.equal(-15);
+        });
+
+        it("stretches only the fitted dimension for icon-text-fit: width", function () {
+            const poiInfo = {
+                computedWidth: 32,
+                computedHeight: 32,
+                mayOverlap: false,
+                buffer: {} as PoiBuffer,
+                technique: {},
+                iconTextFit: "width",
+                iconTextFitPadding: [5, 10, 5, 10],
+                iconFitTextW: 100,
+                iconFitTextH: 20
+            };
+            const env = new Env();
+            const screenBox = new Math2D.Box();
+
+            PoiRenderer.computeIconScreenBox(
+                poiInfo as any,
+                new THREE.Vector2(),
+                1.0,
+                env,
+                screenBox
+            );
+            // Width stretched; height keeps the natural icon size.
+            expect(screenBox.w).to.equal(120);
+            expect(screenBox.h).to.equal(32);
+        });
+
+        it("stretches only the fitted dimension for icon-text-fit: height", function () {
+            const poiInfo = {
+                computedWidth: 32,
+                computedHeight: 32,
+                mayOverlap: false,
+                buffer: {} as PoiBuffer,
+                technique: {},
+                iconTextFit: "height",
+                iconTextFitPadding: [5, 10, 5, 10],
+                iconFitTextW: 100,
+                iconFitTextH: 20
+            };
+            const env = new Env();
+            const screenBox = new Math2D.Box();
+
+            PoiRenderer.computeIconScreenBox(
+                poiInfo as any,
+                new THREE.Vector2(),
+                1.0,
+                env,
+                screenBox
+            );
+            // Height stretched; width keeps the natural icon size.
+            expect(screenBox.w).to.equal(32);
+            expect(screenBox.h).to.equal(30);
+        });
+
+        it("ignores icon-anchor when icon-text-fit is set", function () {
+            const poiInfo = {
+                computedWidth: 32,
+                computedHeight: 32,
+                mayOverlap: false,
+                buffer: {} as PoiBuffer,
+                technique: {
+                    _iconAnchor: "left"
+                },
+                iconTextFit: "both",
+                iconTextFitPadding: [0, 0, 0, 0],
+                iconFitTextW: 64,
+                iconFitTextH: 16
+            };
+            const env = new Env();
+            const screenBox = new Math2D.Box();
+
+            PoiRenderer.computeIconScreenBox(
+                poiInfo as any,
+                new THREE.Vector2(),
+                1.0,
+                env,
+                screenBox
+            );
+            // icon-anchor is ignored; box stays centered on the symbol point.
+            expect(screenBox.x).to.equal(-32);
+            expect(screenBox.y).to.equal(-8);
+        });
     });
 
     describe("search for cached images", function () {

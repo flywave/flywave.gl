@@ -147,6 +147,27 @@ export class PoiBuilder {
         const iconHaloBlur =
             getPropertyValue((technique as any)._iconHaloBlur, env) ?? 0;
 
+        // Mapbox `icon-text-fit` (+ padding + shaped text px dims). The emitter
+        // attaches these (private-prefixed) to the icon technique; PoiRenderer
+        // uses them to stretch the icon box to the text bounds (mgl fitIconToText).
+        const iconTextFit = getPropertyValue((technique as any)._iconTextFit, env);
+        const rawFitPadding =
+            getPropertyValue((technique as any)._iconTextFitPadding, env) ?? [0, 0, 0, 0];
+        const iconTextFitPadding: [number, number, number, number] = Array.isArray(rawFitPadding)
+            ? [
+                  typeof rawFitPadding[0] === "number" ? rawFitPadding[0] : 0,
+                  typeof rawFitPadding[1] === "number" ? rawFitPadding[1] : 0,
+                  typeof rawFitPadding[2] === "number" ? rawFitPadding[2] : 0,
+                  typeof rawFitPadding[3] === "number" ? rawFitPadding[3] : 0,
+              ]
+            : [0, 0, 0, 0];
+        const iconFitTextW = getPropertyValue((technique as any)._iconFitTextW, env);
+        const iconFitTextH = getPropertyValue((technique as any)._iconFitTextH, env);
+        const iconFitTextL = getPropertyValue((technique as any)._iconFitTextL, env);
+        const iconFitTextR = getPropertyValue((technique as any)._iconFitTextR, env);
+        const iconFitTextT = getPropertyValue((technique as any)._iconFitTextT, env);
+        const iconFitTextB = getPropertyValue((technique as any)._iconFitTextB, env);
+
         const poiInfo = {
             technique,
             imageTextureName,
@@ -164,6 +185,23 @@ export class PoiBuilder {
             iconHaloColor,
             iconHaloWidth,
             iconHaloBlur,
+            iconTextFit:
+                iconTextFit !== undefined && iconTextFit !== null && iconTextFit !== 'none'
+                    ? iconTextFit
+                    : undefined,
+            iconTextFitPadding,
+            iconFitTextW:
+                typeof iconFitTextW === 'number' && Number.isFinite(iconFitTextW) ? iconFitTextW : 0,
+            iconFitTextH:
+                typeof iconFitTextH === 'number' && Number.isFinite(iconFitTextH) ? iconFitTextH : 0,
+            iconFitTextL:
+                typeof iconFitTextL === 'number' && Number.isFinite(iconFitTextL) ? iconFitTextL : undefined,
+            iconFitTextR:
+                typeof iconFitTextR === 'number' && Number.isFinite(iconFitTextR) ? iconFitTextR : undefined,
+            iconFitTextT:
+                typeof iconFitTextT === 'number' && Number.isFinite(iconFitTextT) ? iconFitTextT : undefined,
+            iconFitTextB:
+                typeof iconFitTextB === 'number' && Number.isFinite(iconFitTextB) ? iconFitTextB : undefined,
             iconMinZoomLevel: this.m_iconMinZoomLevel,
             iconMaxZoomLevel: this.m_iconMaxZoomLevel,
             textMinZoomLevel: this.m_textMinZoomLevel,

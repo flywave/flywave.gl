@@ -995,6 +995,27 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 > 调试要点：karma webpack 配了 filesystem 缓存，worker bundle 会用到旧代码——调试时用 `HARP_NO_HARD_SOURCE_CACHE=true`。
 
+### 12.21 icon-text-fit 接线（2026-08-16）
+
+**背景**：icon-text-fit 是单分类最大空白（41 例全 0 通过，§13.2 G3）。`MBMaterialPatchManager.applyIconTextFit` 是粗糙桩（对 `tile.objects` 的 `isSprite` 缩放），而真实 POI 走 `PoiRenderer.computeIconScreenBox`——桩从未执行，功能整体未接线。
+
+**实现（对齐 mgl `shaping_shared.fitIconToText` + `shaping.ts:712-715`）**：
+1. `MBTileDataEmitter.ts` symbol-icon 分支：当 `icon-text-fit !== 'none'` 且有 text-field 时，用与 text 分支相同的 shapeText 计算文本，发射 **anchor 相对**的四边（`_iconFitTextL/R/T/B`，px = em×textSize；`L = -hAlign×W`，`T = -vAlign×H`，mgl 的 anchor 移位）+ `_iconTextFit`/`_iconTextFitPadding`（[top,right,bottom,left]）。
+2. `PoiBuilder.build`：透传四个字段进 `PoiInfo`。
+3. `PoiRenderer.computeIconScreenBox`：fit 时 box 精确按 mgl 公式定位（`left = textL - pad[3]`、`right = textR + pad[1]`、`top = textT - pad[0]`、`bottom = textB + pad[2]`），fit 维度拉伸、非 fit 维度以自然图标尺寸居中于文本；**忽略 icon-anchor**（mgl 注释：fit 时 anchor 不生效）；Y 轴取反（mapbox 屏幕向下 vs three 向上，与已验证的 icon-anchor 路径一致）。
+4. **非 SDF 图标不再被 icon-color 染色**（`PoiRenderer.addPoi`）：mgl `symbol.fragment.glsl` 仅对 `u_is_sdf` 图标应用 `v_fill_np_color`；非 SDF 直接采样纹理。修复后默认黑 `icon-color` 不再把 `label` 等普通图标渲染成黑块。
+
+**验证**（Edge 150 headless + SwiftShader，`rendering-test-results/mbstyle-itf3/`）：
+- **icon-text-fit 分类 0 → 7/41 通过**：none/width/width-padding/height/height-padding/both/both-padding（117–184px）。`both` 312→141、`height` 940→118、`both-padding` 2033→142。
+- **anchor 语义正确**：width-text-anchor 5383→1992、both-text-anchor 8095→2357、both-text-anchor-icon-anchor 8201→2357（9 锚点箱位正确铺开）。
+- **零回归**：icon-anchor 10/11、icon-color 4/5（非 SDF 染色修复连带）、icon-image 2/12、icon-halo-color 3/7 保持；mbstyle 单测 206 passing（+2 新用例，1 既有 circle-radius×2 失败与本次无关）。
+
+**遗留（引擎级）**：
+- `*-2x`（both-2x 11878）：fitted box 需按 devicePixelRatio 缩放（期望 192×80 physical vs 当前 168×40，高度恰 2× 差）——DPR 在 screenBox 坐标系的传播。
+- `stretch-*`（9 例，3147–11041）：需 mgl `scaleShapedIconImage` 的 stretchX/stretchY 九宫格重栅格化（非均匀拉伸）。
+- `text-variable-anchor`（40206–62233）与 `placement-line`（95790）：variable anchor 放置 + line placement，独立引擎特性。
+- `*-text-anchor` 残余（1992–4595）：icon 箱位已正确，残余为文本未随 anchor 渲染（text 管线）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
@@ -1134,3 +1155,33 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - `fill-extrusion-color/zoom-and-property-function`：**34125 → 8981px**，zoom 18 下 green/gray/purple 三色全部正确（134/135,135,135,182/184,10,182）。
 - 表达式引擎回归：数值插值（@18→2）、hex 插值（#800080）、categorical、interval 均正确；identity 无回归。
 - 回归套件（circle-color/radius、fill-color、line-color 17 通过）baseline4 零回归。
+
+---
+
+## 13. 测试空白主要原因分析与对齐排序（2026-08-16）
+
+> 依据 §10–§12 全部修复记录 + 08-16 逐分类复跑结果（`rendering-test-results/mbstyle-*`，最新一轮，495 用例）整理。最新全量基线为 baseline4（08-15）：**231/2827 通过（8.17%）**，0 DISCONNECTED。
+
+### 13.1 主要空白原因（按优先级）
+
+| # | 原因 | 影响分类（用例） | 关键证据 |
+|---|------|----------------|----------|
+| G1 | **引擎级材质/shader 缺口**（SolidLineMaterial 无 blur/offset/join/cap、CirclePointsMaterial 无 blur/stroke、TextCanvas 无 halo、POI 无 rotation props） | line-blur/offset/join/cap、elevated-line-*、circle-blur/stroke、text-halo-*、icon-halo-blur、icon-rotate | line-join 6/11 近失、line-cap 2/4 近失、icon-halo-blur 5/5 全近失（6–270px）、line-color 已到 1088px；文档 P1.2/P1.3/P1.5、C7 |
+| G2 | **fill-extrusion/building 渲染收口**（zoom 函数求值偏位 Z2、屋顶/墙面边界 2px、facades/roof-shape/conflation 未实现） | fill-extrusion-*（~143）、building（53） | fill-extrusion-color 1414–15313px（0 通过）、building 30 例 140k–253k 空白、depth-occlusion 0/14 |
+| G3 | **icon-text-fit 0/41 未排查**（patcher applyIconTextFit 可达但未验证文本缩放进 icon 盒语义） | icon-text-fit（41） | 全 0 通过，仅 2 近失 |
+| G4 | **text 域引用损坏 + SDF 亚像素精度**（63/258 期望图为纯黑空图不可修） | text-*（~273） | §12.13；text-line-height 34px、halo 需引擎级 |
+| G5 | **raster/image 纹理仍未上屏**（双路径未收口） | raster（~85）、image（20） | raster-opacity 121k、image/raster-brightness 158k |
+| G6 | **heatmap 双 pass 刚落地待微调** | heatmap（18） | data-expression 324px 近失、default/literal 15–31k |
+| G7 | **fog/skybox/lighting-3d 代码已落地未验收** | fog（63）、skybox（34）、lighting-3d-mode（116） | §12.19 D6 均标注"待渲染 harness 验收" |
+| G8 | **model-layer 内容不对齐 / depth-occlusion** | model-layer（212）、depth-occlusion（14） | model-layer fill-extrusion--default 279994、0 DISCONNECTED 已解决 |
+
+### 13.2 对齐执行顺序（目标：先吃近失梯队，再收整域空白）
+
+1. **G1 近失梯队精度**（改动小、可直接转通过）：fill-outline-color（7/8 近失，12–192px）、icon-size（9/18 近失）、line-join/elevated-line-join（6/9 近失）、icon-halo-blur（5/5 近失）、icon-halo-color（4/7）、line-color（4/5）、line-cap（2/4）、elevated-line-color（3/3）、icon-rotate（2/3）、fill-color（2/8）。
+2. **G2 fill-extrusion/building 收口**：修复 Z2 zoom 求值偏位 + 屋顶/墙面边界偏移 → 17 例近失转通过。
+3. **G3 icon-text-fit 埋点排查**：单分类最大空白，需按 R1 三断点方式定位。
+4. **G6 heatmap 双 pass 微调**：data-expression 已 324px，前景最好。
+5. **G5 raster/image 双路径收口**。
+6. **G7 fog/skybox/lights 渲染 harness 验收**。
+7. **G4 text SDF 精度（可修部分）**。
+8. **G8 model-layer 内容对齐 / depth-occlusion**。

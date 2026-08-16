@@ -366,4 +366,81 @@ describe('MBStyle decode pipeline', () => {
         expect(mgr.extrusionLightState.use3DLights).to.equal(true);
         expect(mgr.lighting3DState).not.to.be.null;
     });
+
+    it('emits anchor-relative icon-text-fit bounds on the icon technique', () => {
+        const style: StyleSpecification = {
+            version: 8,
+            sources: {},
+            layers: [{
+                id: 'sym', type: 'symbol' as any, source: 'geojson',
+                layout: {
+                    'text-field': 'ABC',
+                    'text-font': ['Open Sans Semibold'],
+                    'text-anchor': 'left',
+                    'text-size': 20,
+                    'icon-image': 'label',
+                    'icon-text-fit': 'both',
+                    'icon-text-fit-padding': [5, 10, 5, 10],
+                },
+            } as any],
+        };
+
+        const evaluator = new MBLayerEvaluator(style);
+        const tileKey = TileKey.fromRowColumnLevel(0, 0, 0);
+        const decodeInfo = createDecodeInfo(tileKey);
+        const emitter = new MBTileDataEmitter(tileKey, decodeInfo, 0);
+
+        const matched = evaluator.evaluate('geojson', '',
+            { type: 'Point', properties: {} }, 0, 'point');
+        emitter.processPointFeature('geojson', 4096,
+            [new THREE.Vector3(100, 100, 0)],
+            {}, undefined, matched);
+
+        const decodedTile = emitter.getDecodedTile();
+        const tech: any = decodedTile.techniques.find(t => t.name === 'labeled-icon');
+        expect(tech).not.to.be.undefined;
+        expect(tech._iconTextFit).to.equal('both');
+        // Padding order [top, right, bottom, left].
+        expect(tech._iconTextFitPadding).to.deep.equal([5, 10, 5, 10]);
+        // text-anchor 'left' → horizontalAlign 0, so the box starts at the
+        // symbol point and extends right (left edge = 0, right edge = +W).
+        expect(tech._iconFitTextL).to.equal(0);
+        expect(tech._iconFitTextR).to.be.greaterThan(0);
+        expect(tech._iconFitTextW).to.equal(tech._iconFitTextR);
+        // Vertical: 'left' anchor → verticalAlign stays 0.5 (centered).
+        expect(tech._iconFitTextT).to.be.closeTo(-tech._iconFitTextH / 2, 1e-6);
+        expect(tech._iconFitTextB).to.be.closeTo(tech._iconFitTextH / 2, 1e-6);
+    });
+
+    it('skips icon-text-fit emission when value is none', () => {
+        const style: StyleSpecification = {
+            version: 8,
+            sources: {},
+            layers: [{
+                id: 'sym', type: 'symbol' as any, source: 'geojson',
+                layout: {
+                    'text-field': 'ABC',
+                    'text-font': ['Open Sans Semibold'],
+                    'icon-image': 'label',
+                    'icon-text-fit': 'none',
+                },
+            } as any],
+        };
+
+        const evaluator = new MBLayerEvaluator(style);
+        const tileKey = TileKey.fromRowColumnLevel(0, 0, 0);
+        const decodeInfo = createDecodeInfo(tileKey);
+        const emitter = new MBTileDataEmitter(tileKey, decodeInfo, 0);
+
+        const matched = evaluator.evaluate('geojson', '',
+            { type: 'Point', properties: {} }, 0, 'point');
+        emitter.processPointFeature('geojson', 4096,
+            [new THREE.Vector3(100, 100, 0)],
+            {}, undefined, matched);
+
+        const decodedTile = emitter.getDecodedTile();
+        const tech: any = decodedTile.techniques.find(t => t.name === 'labeled-icon');
+        expect(tech).not.to.be.undefined;
+        expect(tech._iconTextFit).to.be.undefined;
+    });
 });
