@@ -792,6 +792,55 @@
 | A2 ✅ | **line 空白根因 = ribbon 三角形绕向**：`createLineGeometry` 产 CW 三角形，`emitRibbonFill` 的 fill 材质（FrontSide）背面剔除 → 只有 join/cap 碎片（75–1846px）。`emitRibbonFill` 逐三角形翻转绕向为 CCW + 线宽比例改用显示 zoom（`m_zoom+1`） | **line-color/default 55527 → 337 mismatch**（literal 334、elevated literal 335、property-function-identity 220）。line-\*/elevated-line-\* 整域从空白变为完整路网；剩余为颜色空间精度（function/property-function 亮 25%） |
 | A3 ✅ | extruded-polygon shader 编译（R3） | **shader error 434 → 0**（`animateExtrusion:false` + `geometryNormal`→`nonPerturbedNormal`）。结构性缺口仍在：无 `extrusionAxis` 属性烘焙 → fill-extrusion/building 仍空白（C3 长期项） |
 | A4 ✅ | 纹理回调补 `mapView.update()`（R9） | raster/hillshade patcher 纹理回调已补。raster 仍不显示：R4 瓦片级别错位（Berlin raster 请求 z12/z16，fixtures 仅 z17-Berlin）+ env quad z≤12 钳制 → 属 R4/R5 |
+| A4.1 ✅ | **raster 瓦片级别错位（R4）修复**：raster fixtures 存在的是 **cameraZoom 级别**（z17 = level-17 在 camera 17 下 256px 满视口），而 `MBStyleDataSource` 默认 `storageLevelOffset=-1`（矢量约定 dataZoom=cameraZoom-1=z16）→ Berlin raster 请求 z16 satellite（缺失）404。修复：`wireTileSources` 中 **raster-only 样式（无矢量源）且调用方未显式传 offset 时置 `storageLevelOffset=0`**（dataZoom=cameraZoom），使 zoom-16/17/20 的 Berlin raster 测试全部加载存在的 z17 卫星瓦片。矢量（heatmap 等）路径不变（offset -1）。**env quad z≤12 钳制（R5）另记** |
+
+#### 数据缺口 + R7 hillshade + R8 fog（2026-08-16 第三阶段）
+
+| # | 修复 | 验证 / 状态 |
+|---|------|------|
+| D1 ✅ | **model-layer fixtures 补齐**：`mapbox-gl-js/test/integration/models/`（133 文件：glb/gltf/vector.pbf/dem terrain/landmark）整目录拷入 `test/rendering/integration/models/`（此前空） | 补 model-layer 与 landmark 资源缺口 |
+| D2 ✅ | **3d-intersections z15 确认无需补**：`tileSize:512 → offset −2`（R4.2）已使 dataZoom=z16–17（clamp maxzoom 17），fixtures 有 z16/z17；z15 请求是首轮基线旧现象 | 验证通过 |
+| D3 ✅ | **hillshade DEM 寻址（R7）**：`HillshadeTileDataProvider` 原按 tileKey.level 填 `{z}`（raster-dem-only 样式 offset -1 → dataZoom=z16，404）；改为 **tileSize>256 时 DEM 级别 = z−2**（`14-3355-6247.png` 存在）、x/y 按父瓦片换算（`Math.floor(x/2^shift)`）；tileSize 256 保持 z（`11-379-804.terrain.png` 存在） | MAPSNAT-3205 请求 z16→z14；projected 保持 z11 |
+| D4 ✅ | **fill/raster/hillshade 几何补 uv**：`AccumulatedGeometry` 加 `uvs`，`processFillFeature` 对 `_rasterTileUrl`/`_hillshadeDemUrl` technique 发瓦片归一化 uv（`x/extents, y/extents`），`getDecodedTile` 输出 `uv` 属性（r178 材质采样 DEM/卫星不再坍缩到 (0,0) 角） | 修复 vUv 恒 (0,0) 导致 DEM/卫星纹理只显示单角像素 |
+| D5 ✅ | **r178 shader 替换串修正**：`patchHillshadeMaterial`/`patchRasterMaterial` 原替换 `'gl_FragColor = vec4( diffuse, opacity );'` 在 three r178 中**不存在**（MeshBasic 最终输出在 `#include <opaque_fragment>`，即 `vec4(outgoingLight, diffuseColor.a)`）→ 全部 no-op；改为**注入 `#include <opaque_fragment>` 之后** | hillshade 法线/坡度着色与 raster brightness/contrast/saturation/hue 调整恢复生效 |
+| D6 ✅ | **fog 模型（R8）**：`FogExp2`（米制世界瞬间饱和）→ 线性 `THREE.Fog`，near/far = `range[0]/[1] × 1000`（mapbox km 范围映射到 flywave 米制世界，range 可负）；近似替换 mapbox 指数衰减，alpha 上限与 horizon-blend 留作后续 | fog 从全屏饱和色变为随距离渐入 |
+
+> 注：`14-8802-5373.mvt`（icon-pitch-scaling 所需行 5373 瓦片）在 mgl 与 flywave 均无，记为 known-gap 无法复制。
+
+### 12.19 3D lights（lighting-3d-mode，2026-08-16）
+
+**根因**：
+1. `applyLights` 读 `light.color`，而 mapbox 3D `lights` API 结构是 `{type, id, properties:{color,intensity,direction}}` → 灯光从未正确应用（3D lights 全 127 例失败）。
+2. 即使读对，2D ground 层（fill/background/raster/circle）用 `MeshBasicMaterial` 不受 three 灯光影响，且 THREE 光照模型 ≠ mapbox `apply_lighting`。
+
+**实现（对齐 mapbox `3d-style/render/lights.ts` + `_prelude_lighting.glsl`）**：
+- `MBEnvironmentManager`：修复 `applyLights` 读取 `light.properties`；新增 `lighting3DState` getter，CPU 计算：
+  - `ambientColorLinear/directionalColorLinear` = `sRGBToLinearAndScale`（v^2.2 × intensity）
+  - `dir` = `sphericalDirectionToCartesian`（azimuth+90°/polar，polar 0=zenith）
+  - `groundRadiance` = `linearVec3TosRGB(ambientContrib + dirContrib)`，ground 层 lit 为 `color × u_ground_radiance`
+- `MBMaterialPatchManager.injectGroundLighting`：ground 层（fill/line/circle）注入 `gl_FragColor.rgb = mix(gl_FragColor.rgb × uMBGroundRad, gl_FragColor.rgb, emissive_strength)`（`apply_lighting_with_emission_ground`）；因补丁顺序（ground 先注册、后注册的 hillshade/raster 块插在其前），ground 光照**最后应用**（对调整后颜色再打光，符合 mapbox）；uniform 注入 `void main() {` 前兼容 RawShaderMaterial（circle/line）。handler 每次编译动态读当前灯状态 + `patchTileMaterials` 检测灯签名变化强制重编译（支持运行时 `setLights` 操作）。
+- `MBStyleDataSource.applyBackgroundColor`：background（clearColor）按 `color × groundRadiance`（emissive 混合），与其它 ground 层一致。
+
+**验证**：tsc 通过；单元测试 7+10+43+15 通过（1 个既有失败无关）；ground radiance 数学与 mapbox 公式逐项核对（pitch-45/70、intensity 缩放、dir 无方向默认 [0,90]）一致。**待渲染 harness 逐用例验收**（本环境无法跑 GPU harness）。
+
+**extrusion 补充（`injectExtrusion3DLighting`）**：fill-extrusion 在 use3DLights 时改用 mapbox `apply_lighting_with_emission` 公式（世界空间 FLAT_SHADED 法线 × `uMB3DViewToWorld`，`k = amb·adf + dir·max(NdotL,0)`，`lit = color·pow(k,1/2.2)`，emissive mix），替换原简化 Lambert（`injectLighting`）；handler 每次编译动态读灯状态。
+
+**building 补充**：`patchBuildingMaterial` 在 use3DLights 时于 **procedural facade 块之后**追加同一 `apply_lighting` 公式（世界法线），使灯光作用在窗户/洪水光/AO 着色后的最终颜色上（mapbox 语义）；legacy light 保持 `injectLighting` Lambert。
+
+**单测锁定**：`MBStyleDecoderPipelineTest` 新增 `computes mapbox 3D-lights ground radiance`——验证 `lighting3DState.groundRadiance` 与 mapbox 公式逐值一致（红 ambient + 绿 directional@[0,90] → [1,0,0]；pitch-45 → green 0.854；intensity 0.39 → 0.652），防止公式回归。
+
+**修复**：`extrusionLightState` 在无 directional 光时 `use3DLights` 被强制 false（仅 ambient 的 3D-lights 样式 extrusion/building 会错误走 legacy 路径）→ 改为恒返回 `this.m_use3DLights`（3D-lights shader 路径的 uniform 来自 `lighting3DState`，不经此 getter 的 dir/color）；单测断言补充。
+
+### 12.20 r178 shader 替换串系统性核查（2026-08-16）
+
+**发现**：`MBMaterialPatchManager` 尚有 3 处 `gl_FragColor = vec4( diffuse, opacity );` 替换目标在 three r178 中**不存在**（MeshBasic 输出在 `#include <opaque_fragment>`；SolidLineMaterial 用 `outputDiffuse`/`alpha`）→ 静默 no-op：
+1. **line-pattern**（`patchLineMaterial`）：目标与变量名双重错误（`diffuse`/`opacity` 不存在于 SolidLineMaterial）→ 改 `outputDiffuse`/`alpha` 双分支。
+2. **multi-element dasharray**：同上 → 改 `outputDiffuse`/`alpha` 双分支 + `discard` 逻辑。
+3. **fill-pattern**（`patchFillPatternMaterial`，MeshBasic）：目标改为 `#include <opaque_fragment>` 之后（`diffuse`/`opacity` 有效）。
+
+**验证**：全部替换目标对实际 shader 源（meshbasic/meshphysical/CirclePointsMaterial/SolidLineMaterial）逐一存在性检查 ✓；fill/extrusion/building/hillshade/raster/pattern 注入后括号平衡 ✓；剩余 `gl_FragColor = vec4( diffuse, opacity );` 仅存在于注释。tsc 通过、单测无回归。
+
+**遗留**：3D-lights 的 extrusion/building 组合需 GPU 逐像素验收（本环境无法跑渲染 harness）。
 
 #### A2 过程中发现的两个系统性 bug（远大于 mpp 本身，已修）
 

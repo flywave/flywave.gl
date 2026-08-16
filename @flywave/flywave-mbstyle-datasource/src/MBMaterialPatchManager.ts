@@ -16,6 +16,8 @@ const patternTextureCache = new Map<string, THREE.Texture>();
 
 export class MBMaterialPatchManager {
     private m_patchedTiles = new WeakMap<object, MaterialPatchState>();
+    /** Ground-radiance signature of the last patched lighting state. */
+    private m_lastLightSig = '';
     private m_dataSource: MBStyleDataSource;
     /** When true (terrain active), symbols/circles test against terrain depth. */
     private m_depthOcclusion = false;
@@ -44,6 +46,25 @@ export class MBMaterialPatchManager {
 
     patchTileMaterials(): void {
         const tiles = this.m_dataSource.getDecodedTiles();
+
+        // Runtime `setLights` (render-test operations) changes the 3D-lights
+        // state after materials were patched; force a recompile so the ground-
+        // lighting uniforms refresh (the onBeforeCompile handler reads the
+        // current state each compile).
+        const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
+        const sig = ls ? ls.groundRadiance.map(v => v.toFixed(4)).join(',') : '';
+        if (sig !== this.m_lastLightSig) {
+            this.m_lastLightSig = sig;
+            for (const tile of tiles) {
+                for (const obj of tile.objects) {
+                    const m = (obj as any).material as THREE.Material | undefined;
+                    if (m && (m as any).__mbGroundLitHandler) {
+                        (m as any).needsUpdate = true;
+                    }
+                }
+            }
+        }
+
         for (const tile of tiles) {
             if (!tile.objects || tile.objects.length === 0) continue;
 
@@ -156,6 +177,131 @@ export class MBMaterialPatchManager {
     private get allDemTiles(): Array<{ texture: THREE.Texture; originX: number; originY: number; size: number }> {
         const tc = (this.m_dataSource as any).m_environment?.terrainController;
         return tc ? (tc.allDemTiles as any[]) ?? [] : [];
+    }
+
+    /**
+     * Inject mapbox 3D `lights` ground lighting into a 2D layer material
+     * (fill/line/circle/raster/pattern). Mirrors `apply_lighting_ground` +
+     * `apply_lighting_with_emission_ground` in mapbox `_prelude_lighting.glsl`:
+     *
+     *   ground(color) = color * u_ground_radiance
+     *   out = mix(ground(color), color, emissive_strength)
+     *
+     * `u_ground_radiance` is computed on the CPU (see MBEnvironmentManager
+     * `lighting3DState`); it is in sRGB (mapbox `linearVec3TosRGB`), while the
+     * fragment color is linear — matching mapbox's linear-color × sRGB-radiance.
+     */
+    private injectGroundLighting(material: THREE.Material, technique: any, techName: string): void {
+        if ((material as any).__mbGroundLitHandler) return;
+        (material as any).__mbGroundLitHandler = true;
+
+        const paint = technique._paint ?? {};
+        const emissiveKey = techName === 'solid-line' ? 'line-emissive-strength'
+            : techName === 'circles' ? 'circle-emissive-strength'
+            : 'fill-emissive-strength';
+        const emissive = Number(paint[emissiveKey] ?? 0);
+
+        const origOnCompile = material.onBeforeCompile;
+        material.onBeforeCompile = (shader: any) => {
+            if (origOnCompile) origOnCompile.call(material, shader);
+            // Read the CURRENT lights each compile so runtime `setLights`
+            // (render-test operations) refreshes the uniforms on recompile.
+            const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
+            const rad = ls ? ls.groundRadiance : [1, 1, 1];
+            const emi = ls ? emissive : 0;
+            shader.uniforms.uMBGroundRad = { value: rad };
+            shader.uniforms.uMBEmissive = { value: emi };
+            // Uniforms at global scope (works for both standard `#include
+            // <common>` materials and custom RawShaderMaterials).
+            shader.fragmentShader = shader.fragmentShader.replace(
+                'void main() {',
+                `uniform vec3 uMBGroundRad; uniform float uMBEmissive;\nvoid main() {`
+            );
+            if (techName === 'circles') {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'gl_FragColor = vec4(diffuseColor, alpha);',
+                    `gl_FragColor = vec4(mix(diffuseColor * uMBGroundRad, diffuseColor, uMBEmissive), alpha);`
+                );
+            } else if (techName === 'solid-line') {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'gl_FragColor = vec4( outputDiffuse, alpha );',
+                    `gl_FragColor = vec4(mix(outputDiffuse * uMBGroundRad, outputDiffuse, uMBEmissive), alpha);`
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'gl_FragColor = vec4( outputDiffuse * vColor, alpha );',
+                    `gl_FragColor = vec4(mix(outputDiffuse * vColor * uMBGroundRad, outputDiffuse * vColor, uMBEmissive), alpha);`
+                );
+            } else {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <opaque_fragment>',
+                    `#include <opaque_fragment>
+                     gl_FragColor.rgb = mix(gl_FragColor.rgb * uMBGroundRad, gl_FragColor.rgb, uMBEmissive);`
+                );
+            }
+        };
+        material.needsUpdate = true;
+    }
+
+    /**
+     * Inject mapbox 3D `lights` lighting into fill-extrusion/building surfaces
+     * (LIGHTING_3D_MODE). Mirrors `apply_lighting_with_emission` in mapbox
+     * `_prelude_lighting.glsl` with the world-space flat normal:
+     *
+     *   dir_factor = max(dot(normal, u_lighting_directional_dir), 0)
+     *   ambient_directional_factor = vertical_factor * ambient_directional_factor
+     *   k = ambientColor * ambient_directional_factor + dirColor * dir_factor
+     *   lit = color * pow(k, 1/2.2)          (linearProduct)
+     *   out = mix(lit, color, emissive_strength)
+     */
+    private injectExtrusion3DLighting(material: THREE.Material, emissiveStrength: number): void {
+        if ((material as any).__mbExtrusion3DLit) return;
+        (material as any).__mbExtrusion3DLit = true;
+
+        const origOnCompile = material.onBeforeCompile;
+        material.onBeforeCompile = (shader: any) => {
+            if (origOnCompile) origOnCompile.call(material, shader);
+            // Read the CURRENT lights each compile so runtime `setLights`
+            // refreshes the uniforms on recompile.
+            const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
+            const mapView = (this.m_dataSource as any).mapView;
+            const camera = mapView?.camera as THREE.PerspectiveCamera | undefined;
+            const viewToWorld = camera
+                ? new THREE.Matrix3().setFromMatrix4(camera.matrixWorld)
+                : new THREE.Matrix3();
+            shader.uniforms.uMB3DAmb = { value: ls ? ls.ambientColorLinear : [1, 1, 1] };
+            shader.uniforms.uMB3DDirColor = { value: ls ? ls.directionalColorLinear : [1, 1, 1] };
+            shader.uniforms.uMB3DDir = { value: ls ? ls.dir : [0, 0, 1] };
+            shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
+            shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
+            shader.fragmentShader = shader.fragmentShader.replace(
+                'void main() {',
+                `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
+                 uniform mat3 uMB3DViewToWorld; uniform float uMB3DEmissive;
+                 void main() {`
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <opaque_fragment>',
+                `#include <opaque_fragment>
+                 {
+                     #ifdef FLAT_SHADED
+                         vec3 mbN3 = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+                     #else
+                         vec3 mbN3 = normalize(vNormal);
+                     #endif
+                     mbN3 = normalize(uMB3DViewToWorld * mbN3);
+                     float mbNdotL = dot(mbN3, uMB3DDir);
+                     float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
+                     float mbDirFactorMin = 1.0 - 0.3 * min(mbDirLum, 1.0);
+                     float mbAmbDir = mix(mbDirFactorMin, 1.0, min(mbNdotL + 1.0, 1.0));
+                     float mbVert = mix(0.92, 1.0, mbN3.z * 0.5 + 0.5);
+                     float mbADF = mbVert * mbAmbDir;
+                     vec3 mbK = uMB3DAmb * mbADF + uMB3DDirColor * max(mbNdotL, 0.0);
+                     vec3 mbLit = gl_FragColor.rgb * pow(mbK, vec3(1.0 / 2.2));
+                     gl_FragColor.rgb = mix(mbLit, gl_FragColor.rgb, uMB3DEmissive);
+                 }`
+            );
+        };
+        material.needsUpdate = true;
     }
 
     /**
@@ -338,6 +484,13 @@ export class MBMaterialPatchManager {
         const techName = technique.name;
         const paint = technique._paint ?? {};
         const layout = technique._layout ?? {};
+
+        // Mapbox 3D `lights` API (lighting-3d-mode): 2D ground layers are lit as
+        // `color * u_ground_radiance` (mix toward `color` by emissive-strength).
+        // Applied first so per-layer patches below can still wrap the shader.
+        if (techName === 'fill' || techName === 'solid-line' || techName === 'circles') {
+            this.injectGroundLighting(material, technique, techName);
+        }
         switch (techName) {
             case 'fill':
                 if (technique._isHillshade) {
@@ -427,8 +580,9 @@ export class MBMaterialPatchManager {
                      void main() {`
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
-                    'gl_FragColor = vec4( diffuse, opacity );',
-                    `vec3 mbR = diffuse;
+                    '#include <opaque_fragment>',
+                    `#include <opaque_fragment>
+                     vec3 mbR = diffuse;
                      mbR = clamp((mbR - uMBRasBMin) / max(uMBRasBMax - uMBRasBMin, 0.001), 0.0, 1.0);
                      mbR = (mbR - 0.5) * (1.0 + uMBRasContrast) + 0.5;
                      float mbL = dot(mbR, vec3(0.299, 0.587, 0.114));
@@ -772,12 +926,22 @@ export class MBMaterialPatchManager {
                     // distance varying (vCoords.x), scaled by the pattern width.
                     const pscale = 1 / Math.max(1, (patternTex.image?.width ?? 32));
                     shader.uniforms.uMBPatternScale = { value: pscale };
+                    // SolidLineMaterial outputs via `outputDiffuse`/`alpha`
+                    // (two branches: with/without vColor) — not the r178-invalid
+                    // `gl_FragColor = vec4( diffuse, opacity );`.
                     shader.fragmentShader = shader.fragmentShader.replace(
-                        'gl_FragColor = vec4( diffuse, opacity );',
+                        'gl_FragColor = vec4( outputDiffuse, alpha );',
                         `vec2 mbLP = vec2(fract(vCoords.x * uMBPatternScale), 0.5);
                          vec4 mbLPx = texture2D(uMBLinePattern, mbLP);
-                         float mbLAlpha = mbLPx.a * opacity * uMBLineCrossFade;
-                         gl_FragColor = vec4(mix(diffuse, mbLPx.rgb, uMBLineCrossFade), mbLAlpha);`
+                         float mbLAlpha = mbLPx.a * alpha * uMBLineCrossFade;
+                         gl_FragColor = vec4(mix(outputDiffuse, mbLPx.rgb, uMBLineCrossFade), mbLAlpha);`
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        'gl_FragColor = vec4( outputDiffuse * vColor, alpha );',
+                        `vec2 mbLP = vec2(fract(vCoords.x * uMBPatternScale), 0.5);
+                         vec4 mbLPx = texture2D(uMBLinePattern, mbLP);
+                         float mbLAlpha = mbLPx.a * alpha * uMBLineCrossFade;
+                         gl_FragColor = vec4(mix(outputDiffuse * vColor, mbLPx.rgb, uMBLineCrossFade), mbLAlpha);`
                     );
                 }
                 if (hasEmissive) {
@@ -832,8 +996,10 @@ export class MBMaterialPatchManager {
                     'void main() {',
                     `uniform float uMBDashPattern[${dashArray.length}];\nuniform float uMBDashCount;\nuniform float uMBDashTotal;\nvoid main() {`
                 );
-                shader.fragmentShader = shader.fragmentShader.replace(
-                    'gl_FragColor = vec4( diffuse, opacity );',
+                // SolidLineMaterial outputs via `outputDiffuse`/`alpha` (two
+                // branches: with/without vColor) — not the r178-invalid
+                // `gl_FragColor = vec4( diffuse, opacity );`.
+                const dashBlock = (outputExpr: string) =>
                     `float mbDashPos = fract(vCoords.x / uMBDashTotal * uMBDashCount);
                      float mbDashAccum = 0.0;
                      bool mbDashVisible = true;
@@ -847,7 +1013,14 @@ export class MBMaterialPatchManager {
                          mbDashAccum += segLen;
                      }
                      if (!mbDashVisible) discard;
-                     gl_FragColor = vec4( diffuse, opacity );`
+                     gl_FragColor = vec4( ${outputExpr}, alpha );`;
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'gl_FragColor = vec4( outputDiffuse, alpha );',
+                    dashBlock('outputDiffuse')
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'gl_FragColor = vec4( outputDiffuse * vColor, alpha );',
+                    dashBlock('outputDiffuse * vColor')
                 );
             };
             material.needsUpdate = true;
@@ -957,8 +1130,11 @@ export class MBMaterialPatchManager {
         // still used by building materials) is applied instead.
         const lightState = (this.m_dataSource as any).m_environment?.extrusionLightState;
         const use3DLights = lightState?.use3DLights === true;
+        const emissiveStrength = Number(paint['fill-extrusion-emissive-strength'] ?? 0);
         if (use3DLights) {
-            this.injectLighting(material);
+            // LIGHTING_3D_MODE: mapbox `apply_lighting_with_emission` with the
+            // world-space flat normal (replaces the simple Lambert fallback).
+            this.injectExtrusion3DLighting(material, emissiveStrength);
         }
         // Viewport-anchored light: mapbox rotates the light position by -bearing
         // (`anchor: viewport`) but never by pitch. The per-fragment flat normal is
@@ -984,7 +1160,6 @@ export class MBMaterialPatchManager {
         const hasTranslate = translate && (translate[0] !== 0 || translate[1] !== 0);
         const patternTex = technique._patternName ? this.extractPatternTexture(technique._patternName) : undefined;
         const hasTerrain = !!(this.m_dataSource as any).m_environment?.terrainController?.centerDem;
-        const emissiveStrength = Number(paint['fill-extrusion-emissive-strength'] ?? 0);
         if (height === 0 && base === 0 && !verticalGradient && !hasTranslate && !patternTex && !hasTerrain && lineWidth === 0 && cutoffFadeRange === 0 && emissiveStrength <= 0) {
             return;
         }
@@ -1209,8 +1384,14 @@ export class MBMaterialPatchManager {
     }
 
     private patchBuildingMaterial(material: THREE.Material, technique: any): void {
-        // 3D lighting.
-        this.injectLighting(material);
+        // 3D lighting: LIGHTING_3D_MODE uses the mapbox `apply_lighting` formula
+        // (applied after the procedural facade block below); legacy light keeps
+        // the simple Lambert injection.
+        const lightState = (this.m_dataSource as any).m_environment?.extrusionLightState;
+        const use3DLights = lightState?.use3DLights === true;
+        if (!use3DLights) {
+            this.injectLighting(material);
+        }
         const height = Number(technique.height ?? 10);
         const base = Number(technique.floorHeight ?? 0);
         const roofColor = technique._roofColor ?? technique._paint?.['building-roof-color'] ?? '#aaaaaa';
@@ -1237,6 +1418,19 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBAO = { value: aoIntensity };
             shader.uniforms.uMBFloodColor = { value: new THREE.Color(floodColor) };
             shader.uniforms.uMBFloodIntensity = { value: floodIntensity };
+            if (use3DLights) {
+                const l3 = (this.m_dataSource as any).m_environment?.lighting3DState;
+                const mapView = (this.m_dataSource as any).mapView;
+                const camera = mapView?.camera as THREE.PerspectiveCamera | undefined;
+                const viewToWorld = camera
+                    ? new THREE.Matrix3().setFromMatrix4(camera.matrixWorld)
+                    : new THREE.Matrix3();
+                shader.uniforms.uMB3DAmb = { value: l3 ? l3.ambientColorLinear : [1, 1, 1] };
+                shader.uniforms.uMB3DDirColor = { value: l3 ? l3.directionalColorLinear : [1, 1, 1] };
+                shader.uniforms.uMB3DDir = { value: l3 ? l3.dir : [0, 0, 1] };
+                shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
+                shader.uniforms.uMB3DEmissive = { value: l3 ? emissive : 0 };
+            }
 
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
@@ -1259,6 +1453,9 @@ export class MBMaterialPatchManager {
                  uniform float uMBFacadeFloors; uniform float uMBFacadeWidth; uniform float uMBAO;
                  uniform vec3 uMBFloodColor; uniform float uMBFloodIntensity;
                  varying vec3 vMBWorldPos;
+                 ${use3DLights
+                     ? 'uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir; uniform mat3 uMB3DViewToWorld; uniform float uMB3DEmissive;'
+                     : ''}
                  float mbHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`
             );
             shader.fragmentShader = shader.fragmentShader.replace(
@@ -1295,6 +1492,20 @@ export class MBMaterialPatchManager {
                              (vMBWorldPos.z - uMBHeightBase) / max(uMBHeightTop - uMBHeightBase, 0.001)));
                          gl_FragColor.rgb += uMBFloodColor * mbFloodFactor * 0.3;
                      }
+                     ${use3DLights ? `
+                     // LIGHTING_3D_MODE apply_lighting_with_emission (world normal).
+                     {
+                         vec3 mbWN = normalize(uMB3DViewToWorld * mbFaceNormal);
+                         float mbNdotL = dot(mbWN, uMB3DDir);
+                         float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
+                         float mbDirFactorMin = 1.0 - 0.3 * min(mbDirLum, 1.0);
+                         float mbAmbDir = mix(mbDirFactorMin, 1.0, min(mbNdotL + 1.0, 1.0));
+                         float mbVert = mix(0.92, 1.0, mbWN.z * 0.5 + 0.5);
+                         float mbADF = mbVert * mbAmbDir;
+                         vec3 mbK = uMB3DAmb * mbADF + uMB3DDirColor * max(mbNdotL, 0.0);
+                         vec3 mbLit = gl_FragColor.rgb * pow(mbK, vec3(1.0 / 2.2));
+                         gl_FragColor.rgb = mix(mbLit, gl_FragColor.rgb, uMB3DEmissive);
+                     }` : ''}
                  }`
             );
         };
@@ -1528,9 +1739,13 @@ export class MBMaterialPatchManager {
                      void main() {`
                 );
                 shader.uniforms.uMBDemParams = { value: new THREE.Vector4(dataFrac, borderFrac, pxStep, 0) };
+                // In three r178 MeshBasicMaterial the final colour is written by
+                // `#include <opaque_fragment>` (not an inline `gl_FragColor = ...`
+                // line), so inject the hillshade override right after it.
                 shader.fragmentShader = shader.fragmentShader.replace(
-                    'gl_FragColor = vec4( diffuse, opacity );',
-                    `vec2 mbUv = mbDemUv(vUv);
+                    '#include <opaque_fragment>',
+                    `#include <opaque_fragment>
+                     vec2 mbUv = mbDemUv(vUv);
                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
@@ -1610,7 +1825,7 @@ export class MBMaterialPatchManager {
      * Build a 256x1 RGBA DataTexture from Mapbox color-expression stops:
      * `[[t, color], ...]`. Used by line-gradient and heatmap color ramps.
      */
-    private static buildGradientTexture(stops: any): THREE.DataTexture {
+    static buildGradientTexture(stops: any): THREE.DataTexture {
         const size = 256;
         const data = new Uint8Array(size * 4);
         const norm = MBMaterialPatchManager.normalizeGradientStops(stops);
@@ -1732,8 +1947,9 @@ export class MBMaterialPatchManager {
                 'uniform sampler2D uMBPatternTex;\nuniform float uMBPatternCrossFade;\nvarying vec2 vMBPatternUv;\nvoid main() {'
             );
             shader.fragmentShader = shader.fragmentShader.replace(
-                'gl_FragColor = vec4( diffuse, opacity );',
-                `vec4 mbPat = texture2D(uMBPatternTex, vMBPatternUv);
+                '#include <opaque_fragment>',
+                `#include <opaque_fragment>
+                 vec4 mbPat = texture2D(uMBPatternTex, vMBPatternUv);
                  float mbPatAlpha = mbPat.a * opacity * uMBPatternCrossFade;
                  gl_FragColor = vec4(mix(diffuse, mbPat.rgb, uMBPatternCrossFade), mbPatAlpha);`
             );

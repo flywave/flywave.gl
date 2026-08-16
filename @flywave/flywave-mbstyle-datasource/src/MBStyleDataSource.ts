@@ -185,6 +185,16 @@ class HillshadeTileDataProvider extends DataProvider {
         const x = tileKey.column;
         const y = tileKey.row;
 
+        // Mapbox raster-dem semantics: DEM tiles are stored one level lower for
+        // 512/514px sources (tileSize 514 covers a 512px world → parent tile),
+        // so request the DEM at `z - 2` for large tileSize, else `z`. The DEM
+        // x/y must be recomputed at the DEM level (parent tile of this quad).
+        const demOffset = this.m_tileSize > 256 ? 2 : 0;
+        const demZ = Math.max(0, z - demOffset);
+        const shift = z - demZ;
+        const demX = Math.floor(x / Math.pow(2, shift));
+        const demY = Math.floor(y / Math.pow(2, shift));
+
         const n = Math.pow(2, z);
         const lngW = (x / n) * 360 - 180;
         const lngE = ((x + 1) / n) * 360 - 180;
@@ -192,9 +202,9 @@ class HillshadeTileDataProvider extends DataProvider {
         const latS = this.tile2lat(y + 1, z);
 
         const demUrl = this.m_demUrlTemplate
-            .replace('{z}', String(z))
-            .replace('{x}', String(x))
-            .replace('{y}', String(y));
+            .replace('{z}', String(demZ))
+            .replace('{x}', String(demX))
+            .replace('{y}', String(demY));
 
         const geojson = {
             type: 'FeatureCollection',
@@ -535,6 +545,7 @@ export class MBStyleDataSource extends TileDataSource {
     /** FBO-based texture draping for terrain (per-tile lazy bake). */
     private m_terrainDraping: any = null;
     private m_symbolPlacement: any = null;
+    private m_heatmapRenderer: any = null;
     private m_debugTileBoundaries = false;
     private m_debugLines: any = null;
     /** Clip polygons keyed by layer type: Map<layerType, polygonRing[]> */
@@ -684,6 +695,7 @@ export class MBStyleDataSource extends TileDataSource {
         // No vector source: combine every GeoJSON-format source.
         const composite = new CompositeGeoDataProvider();
         let currentSourceId = '';
+        let hasRasterSource = false;
 
         for (const [sourceId, source] of sources) {
             if (source.type === 'geojson') {
@@ -707,6 +719,7 @@ export class MBStyleDataSource extends TileDataSource {
                     if (!currentSourceId) currentSourceId = sourceId;
                 }
             } else if (source.type === 'raster') {
+                hasRasterSource = true;
                 const rasterSpec = (style.sources as any)[sourceId];
                 const tiles = rasterSpec?.tiles ?? [];
                 const tileUrl = tiles[0] ?? source.tileUrls[0] ?? '';
@@ -717,6 +730,16 @@ export class MBStyleDataSource extends TileDataSource {
                     if (!currentSourceId) currentSourceId = sourceId;
                 }
             }
+        }
+
+        // Raster fixtures are stored at the CAMERA zoom level (dataZoom =
+        // cameraZoom) rather than one level below like vector tiles — the
+        // satellite fixtures carry the imagery a camera at zoom Z displays
+        // (level Z = 256px = full viewport). flywave's default -1 offset would
+        // request level cameraZoom-1 tiles (e.g. z16 for a z17 camera) that do
+        // not exist, so raster-only styles need offset 0 to load the fixtures.
+        if (hasRasterSource && this.m_styleParams.storageLevelOffset === undefined) {
+            this.storageLevelOffset = 0;
         }
 
         // Hillshade: emit tile-covering polygons carrying the per-tile DEM url.
@@ -904,10 +927,21 @@ export class MBStyleDataSource extends TileDataSource {
                 self.m_symbolPlacement = new MBStyleSymbolPlacement(this.mapView, self);
             } catch {}
 
+            // Two-pass density→ramp heatmap renderer. `run()` early-returns when
+            // no decoded tile carries heatmap kernels, so non-heatmap styles are
+            // unaffected.
+            try {
+                const { MBHeatmapRenderer } = await import('./MBHeatmapRenderer');
+                self.m_heatmapRenderer = new MBHeatmapRenderer(this.mapView, self);
+            } catch {}
+
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
                 patcher.patchTileMaterials();
                 if (placement) placement.run();
+                if (self.m_heatmapRenderer) {
+                    self.m_heatmapRenderer.run();
+                }
                 if (self.m_debugTileBoundaries) self.drawTileBoundaries();
                 const tc = self.m_environment?.terrainController;
                 if (tc && tc.isMorphing) {
@@ -1444,6 +1478,16 @@ export class MBStyleDataSource extends TileDataSource {
         } as any);
     }
 
+    /**
+     * Release GPU resources held by the heatmap renderer (density render
+     * target, ramp textures) before the base class tears down providers.
+     */
+    override dispose(): void {
+        this.m_heatmapRenderer?.dispose?.();
+        this.m_heatmapRenderer = null;
+        super.dispose();
+    }
+
     /** Extract the numeric/string feature id from a mapbox feature-state descriptor. */
     private normalizeFeatureStateKey(featureId: number | string): number | string {
         if (typeof featureId === 'object' && featureId !== null) {
@@ -1516,7 +1560,20 @@ export class MBStyleDataSource extends TileDataSource {
                 }
                 if (this.mapView) {
                     const c = new THREE.Color(color);
-                    (this.mapView as any).clearColor = c.getHex();
+                    // Mapbox 3D `lights` (lighting-3d-mode): the background is a
+                    // ground layer → `color * u_ground_radiance` (mix toward
+                    // `color` by background-emissive-strength), matching the
+                    // shader injection applied to other ground layers.
+                    const ls = this.m_environment?.lighting3DState;
+                    if (ls) {
+                        const rad = ls.groundRadiance;
+                        const lit = new THREE.Color(c.r * rad[0], c.g * rad[1], c.b * rad[2]);
+                        const emissive = Number(paint['background-emissive-strength'] ?? 0);
+                        if (emissive > 0) lit.lerp(c, Math.min(emissive, 1));
+                        (this.mapView as any).clearColor = lit.getHex();
+                    } else {
+                        (this.mapView as any).clearColor = c.getHex();
+                    }
                     (this.mapView as any).clearAlpha = opacity;
                 }
                 return;

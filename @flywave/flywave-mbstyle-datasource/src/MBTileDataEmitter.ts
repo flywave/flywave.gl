@@ -30,6 +30,8 @@ interface AccumulatedGeometry {
     indices: number[];
     /** Per-vertex extrusion axis (vec4) for extruded-polygon techniques. */
     extrusionAxis: number[];
+    /** Tile-normalized UVs (raster / hillshade texture fills). */
+    uvs: number[];
     /** Line-segment indices for the extruded-polygon edge (roof outline). */
     edgeIndex: number[];
     edgeFeatureStarts: number[];
@@ -193,6 +195,68 @@ export class MBTileDataEmitter {
     private m_stringCatalog: string[] = [];
     private m_stringIndex: Map<string, number> = new Map();
 
+    /**
+     * Heatmap point sources collected for the two-pass density→ramp renderer.
+     * Positions are absolute world coordinates (tile-local + center), the same
+     * space the native TextElementsRenderer consumes, so the heatmap pass can
+     * project them straight through the mapview camera. `weight`/`radius` are
+     * the per-feature evaluated `heatmap-weight`/`heatmap-radius`; `technique`
+     * indexes into `DecodedTile.techniques` for the color-ramp/intensity props.
+     *
+     * When `heatmap-radius` is a zoom-dependent function, `radiusExpr` carries
+     * the raw style expression + the feature properties so the renderer can
+     * re-evaluate it every frame at the live camera zoom (continuous radius
+     * under zoom, instead of stepping at tile level changes).
+     */
+    private m_heatmapPoints: Array<{
+        x: number; y: number; z: number;
+        weight: number;
+        radius: number;       // CSS px at the decode/reference zoom
+        technique: number;
+        radiusExpr?: any;
+        properties?: Record<string, any>;
+    }> = [];
+
+    /**
+     * Record a heatmap kernel point for the two-pass heatmap renderer.
+     */
+    addHeatmapPoint(
+        pos: THREE.Vector3,
+        weight: number,
+        radius: number,
+        techniqueIdx: number,
+        radiusExpr?: any,
+        properties?: Record<string, any>,
+    ): void {
+        this.m_heatmapPoints.push({
+            x: pos.x, y: pos.y, z: pos.z, weight, radius, technique: techniqueIdx,
+            ...(radiusExpr !== undefined ? { radiusExpr, properties } : {}),
+        });
+    }
+
+    /**
+     * Whether a raw paint value depends on the camera zoom (legacy zoom /
+     * zoom-and-property functions, or expression trees containing `["zoom"]`).
+     * Only such values need per-frame re-evaluation on the renderer side.
+     */
+    private static exprDependsOnZoom(raw: any): boolean {
+        if (Array.isArray(raw)) {
+            for (const el of raw) {
+                if (typeof el === 'string' && el === 'zoom') return true;
+                if (Array.isArray(el) && MBTileDataEmitter.exprDependsOnZoom(el)) return true;
+            }
+            return false;
+        }
+        if (raw !== null && typeof raw === 'object' && !Array.isArray(raw) && Array.isArray(raw.stops)) {
+            // Legacy function: numeric stops → zoom function; {zoom, value} keys
+            // → zoom-and-property; categorical/property-only → feature-property.
+            const first = raw.stops[0]?.[0];
+            if (first !== null && typeof first === 'object' && !Array.isArray(first)) return 'zoom' in first;
+            return typeof first === 'number';
+        }
+        return false;
+    }
+
     private getStringIndex(s: string): number {
         let idx = this.m_stringIndex.get(s);
         if (idx === undefined) {
@@ -224,6 +288,7 @@ export class MBTileDataEmitter {
                 positions: [],
                 indices: [],
                 extrusionAxis: [],
+                uvs: [],
                 edgeIndex: [],
                 edgeFeatureStarts: [],
                 groups: [],
@@ -692,6 +757,12 @@ export class MBTileDataEmitter {
                 continue;
             }
 
+            // Raster / hillshade texture fills need tile-normalized UVs so the
+            // patcher's texture sampling (raster imagery / DEM) maps over the
+            // whole tile quad instead of collapsing to the (0,0) corner.
+            const tech: any = this.m_techniques[techniqueIdx];
+            const needsUv = Boolean(tech?._rasterTileUrl || tech?._hillshadeDemUrl);
+
             for (const polygon of geometry) {
                 const rings = polygon.rings;
                 if (rings.length === 0) continue;
@@ -730,6 +801,9 @@ export class MBTileDataEmitter {
                         new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
                     );
                     geo.positions.push(w.x, w.y, 0);
+                    if (needsUv) {
+                        geo.uvs.push(allVerts[i * 2] / extents, allVerts[i * 2 + 1] / extents);
+                    }
                 }
 
                 // Store triangulated indices
@@ -1126,7 +1200,28 @@ export class MBTileDataEmitter {
 
             for (const mode of modes) {
                 const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties, mode);
-                const tech = this.m_techniques[techniqueIdx];
+                const tech: any = this.m_techniques[techniqueIdx];
+
+                // Heatmap layers: collect kernels for the two-pass density→ramp
+                // renderer instead of the native circles points pipeline (which
+                // cannot accumulate overlapping densities).
+                if (layer.type === 'heatmap' && tech._isHeatmap) {
+                    const weight = Number(tech._heatmapWeight ?? 1);
+                    const radius = Number(tech.size ?? 30);
+                    // Zoom-dependent radius: carry the raw expression so the
+                    // renderer can interpolate it continuously per frame.
+                    const rawRadius = (layer as any).paintDefs?.['heatmap-radius']?.value;
+                    const zoomDep = MBTileDataEmitter.exprDependsOnZoom(rawRadius);
+                    for (const pt of points) {
+                        const w = this.projectWorld(pt);
+                        this.addHeatmapPoint(
+                            w, weight, radius, techniqueIdx,
+                            zoomDep ? rawRadius : undefined,
+                            zoomDep ? properties : undefined,
+                        );
+                    }
+                    continue;
+                }
 
                 // symbol-placement: line / line-center — place text along the
                 // feature's line path via the native TextPathGeometry pipeline.
@@ -1288,6 +1383,14 @@ export class MBTileDataEmitter {
                     itemCount: 4,
                 });
             }
+            if (geo.uvs.length > 0) {
+                vertexAttributes.push({
+                    name: 'uv',
+                    buffer: new Float32Array(geo.uvs).buffer,
+                    type: 'float' as BufferElementType,
+                    itemCount: 2,
+                });
+            }
 
             const groups: Group[] = geo.groups.map(g => ({
                 start: g.start,
@@ -1360,6 +1463,11 @@ export class MBTileDataEmitter {
         }
         if (this.m_poiGeometries.length > 0) {
             decodedTile.poiGeometries = this.m_poiGeometries;
+        }
+
+        // Heatmap kernel points for the two-pass density→ramp renderer.
+        if (this.m_heatmapPoints.length > 0) {
+            (decodedTile as any).heatmapPoints = this.m_heatmapPoints;
         }
 
         return decodedTile;

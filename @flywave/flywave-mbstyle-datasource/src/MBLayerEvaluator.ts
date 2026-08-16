@@ -24,6 +24,14 @@ export interface EvaluatedLayer {
     paint: EvaluatedPaint;
     layout: EvaluatedLayout;
     renderOrder: number;
+    /**
+     * Raw (pre-evaluation) paint property defs — `{ type, value, default }`
+     * where `value` is the original style value (constant, expression, or
+     * legacy function). Consumers that need to re-evaluate a property at a
+     * different context (e.g. per-frame zoom interpolation for heatmap-radius)
+     * read the raw value from here.
+     */
+    paintDefs?: Record<string, PaintPropertyDef>;
 }
 
 interface PreprocessedLayer {
@@ -41,7 +49,7 @@ interface PreprocessedLayer {
     appearances: Array<{ name: string; condition: any; properties: Record<string, any> }> | undefined;
 }
 
-interface PaintPropertyDef {
+export interface PaintPropertyDef {
     type: 'constant' | 'expression' | 'transitionable';
     value: any;
     default: any;
@@ -518,6 +526,7 @@ export class MBLayerEvaluator {
                 paint,
                 layout,
                 renderOrder: pl.renderOrder,
+                paintDefs: pl.paintDefs,
             });
         }
 

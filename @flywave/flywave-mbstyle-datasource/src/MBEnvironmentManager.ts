@@ -10,7 +10,7 @@ export class MBEnvironmentManager {
     private m_ambientLight: THREE.AmbientLight | null = null;
     private m_directionalLight: THREE.DirectionalLight | null = null;
     private m_hemisphereLight: THREE.HemisphereLight | null = null;
-    private m_fog: THREE.FogExp2 | null = null;
+    private m_fog: THREE.Fog | null = null;
     private m_skyMesh: THREE.Mesh | null = null;
     private m_stars: THREE.Points | null = null;
     private m_scene: THREE.Scene | null = null;
@@ -32,6 +32,12 @@ export class MBEnvironmentManager {
     private m_directionalColor: THREE.Color | null = null;
     private m_directionalIntensity: number = 0;
     private m_directionalPolar: number = 0;
+
+    /** 3D `lights` API configs (sRGB [0,1] colors + intensity + direction). */
+    private m_3DAmbient: { color: [number, number, number]; intensity: number } | null = null;
+    private m_3DDirectional: {
+        color: [number, number, number]; intensity: number; direction: [number, number];
+    } | null = null;
 
     /**
      * Scene brightness for `measure-light` expressions. Mirrors mapbox-gl-js
@@ -83,6 +89,68 @@ export class MBEnvironmentManager {
     }
 
     /**
+     * Mapbox 3D `lights` API state (lighting-3d-mode). Mirrors mapbox-gl-js
+     * `3d-style/render/lights.ts` `lightsUniformValues`:
+     *
+     *   - ambient/directional colors converted to LINEAR and scaled by intensity
+     *     (`sRGBToLinearAndScale`: v^2.2 * s),
+     *   - `dir` = spherical [azimuth, polar] → cartesian toward the light
+     *     (polar 0 = zenith; `z = cos(polar)`),
+     *   - `groundRadiance` = `linearVec3TosRGB(ambientContrib + dirContrib)` where
+     *     ground layers (fill/background/raster/circle) are lit as
+     *     `color * u_ground_radiance` (`apply_lighting_ground`).
+     */
+    get lighting3DState(): {
+        ambientColorLinear: [number, number, number];
+        directionalColorLinear: [number, number, number];
+        dir: [number, number, number];
+        groundRadiance: [number, number, number];
+    } | null {
+        if (!this.m_use3DLights) return null;
+        const ambColor = this.m_3DAmbient?.color ?? [1, 1, 1];
+        const ambIntensity = this.m_3DAmbient?.intensity ?? 0.5;
+        const dirColor = this.m_3DDirectional?.color ?? [1, 1, 1];
+        const dirIntensity = this.m_3DDirectional?.intensity ?? 0.5;
+        const direction = this.m_3DDirectional?.direction ?? [0, 90];
+
+        // sphericalDirectionToCartesian (util.ts): a = az+90°, p = polar°
+        const a = (direction[0] + 90) * Math.PI / 180;
+        const p = direction[1] * Math.PI / 180;
+        const dirVec: [number, number, number] = [
+            Math.cos(a) * Math.sin(p),
+            Math.sin(a) * Math.sin(p),
+            Math.cos(p),
+        ];
+
+        const sRGBToLinearAndScale = (v: [number, number, number], s: number): [number, number, number] =>
+            [Math.pow(v[0], 2.2) * s, Math.pow(v[1], 2.2) * s, Math.pow(v[2], 2.2) * s];
+        const linearVec3TosRGB = (v: [number, number, number]): [number, number, number] =>
+            [Math.pow(v[0], 1 / 2.2), Math.pow(v[1], 1 / 2.2), Math.pow(v[2], 1 / 2.2)];
+
+        const ambientLinear = sRGBToLinearAndScale(ambColor, ambIntensity);
+        const dirLinear = sRGBToLinearAndScale(dirColor, dirIntensity);
+
+        // calculateGroundRadiance with ground normal (0, 0, 1).
+        const NdotL = dirVec[2];
+        const dirLuminance = dirLinear[0] * 0.2126 + dirLinear[1] * 0.7152 + dirLinear[2] * 0.0722;
+        const directionalFactorMin = 1 - 0.3 * Math.min(dirLuminance, 1);
+        const ambientDirectionalFactor =
+            directionalFactorMin + (1 - directionalFactorMin) * Math.min(NdotL + 1, 1);
+        const radiance: [number, number, number] = [
+            ambientLinear[0] * ambientDirectionalFactor + dirLinear[0] * dirVec[2],
+            ambientLinear[1] * ambientDirectionalFactor + dirLinear[1] * dirVec[2],
+            ambientLinear[2] * ambientDirectionalFactor + dirLinear[2] * dirVec[2],
+        ];
+
+        return {
+            ambientColorLinear: ambientLinear,
+            directionalColorLinear: dirLinear,
+            dir: dirVec,
+            groundRadiance: linearVec3TosRGB(radiance),
+        };
+    }
+
+    /**
      * Fill-extrusion lighting state (mapbox `light` model). Mapbox ALWAYS lights
      * extruded surfaces, even without a `light` in the style: the default light
      * is `{ anchor: viewport, color: white, intensity: 0.5, position: [1.15, 210, 30] }`
@@ -110,7 +178,10 @@ export class MBEnvironmentManager {
                 use3DLights: this.m_use3DLights,
             };
         }
-        return { dir, color: new THREE.Color('#ffffff'), intensity: 0.5, use3DLights: false };
+        // Keep use3DLights true even without a directional light (a style may
+        // declare only an ambient 3D light); the 3D-lights shader path reads its
+        // own uniforms from lighting3DState, not from this getter's dir/color.
+        return { dir, color: new THREE.Color('#ffffff'), intensity: 0.5, use3DLights: this.m_use3DLights };
     }
     private m_terrainMesh: THREE.Mesh | null = null;
     private m_terrainController: TerrainController | null = null;
@@ -173,30 +244,31 @@ export class MBEnvironmentManager {
         }
 
         for (const light of lights) {
+            // Mapbox 3D `lights` API objects are `{ type, id, properties: {...} }`.
+            const p = (light as any).properties ?? light;
+            const color = MBEnvironmentManager.parseMBColor(p.color ?? '#ffffff');
+            const intensity = p.intensity ?? 0.5;
             if (light.type === 'ambient') {
-                const color = new THREE.Color(light.color ?? '#ffffff');
-                const intensity = (light.intensity ?? 0.5) * 2;
-                this.m_ambientColor = color;
-                this.m_ambientIntensity = light.intensity ?? 0.5;
-                this.m_ambientLight = new THREE.AmbientLight(color, intensity);
+                this.m_3DAmbient = { color, intensity };
+                this.m_ambientColor = new THREE.Color(color[0], color[1], color[2]);
+                this.m_ambientIntensity = intensity;
+                this.m_ambientLight = new THREE.AmbientLight(new THREE.Color(color[0], color[1], color[2]), intensity);
                 this.m_scene.add(this.m_ambientLight);
             } else if (light.type === 'directional') {
-                const color = new THREE.Color(light.color ?? '#ffffff');
-                const intensity = (light.intensity ?? 0.5) * 2;
-                this.m_directionalColor = color;
-                this.m_directionalIntensity = light.intensity ?? 0.5;
-                this.m_directionalLight = new THREE.DirectionalLight(color, intensity);
-                if (light.direction) {
-                    const d = light.direction;
-                    // mapbox direction = [azimuth, polar, distance?] in degrees;
-                    // polar (elevation) drives the measure-light term.
-                    this.m_directionalPolar = Array.isArray(d) ? (d[1] ?? 0) : 0;
-                    this.m_directionalLight.position.set(d[0], d[1], d[2] ?? 1);
-                } else {
-                    this.m_directionalPolar = 0;
-                    this.m_directionalLight.position.set(0.5, 1, 0.5);
-                }
-                if (light['cast-shadow']) {
+                const direction: [number, number] = Array.isArray(p.direction) && p.direction.length >= 2
+                    ? [p.direction[0], p.direction[1]]
+                    : [0, 90];
+                this.m_3DDirectional = { color, intensity, direction };
+                this.m_directionalColor = new THREE.Color(color[0], color[1], color[2]);
+                this.m_directionalIntensity = intensity;
+                this.m_directionalPolar = direction[1];
+                this.m_directionalLight = new THREE.DirectionalLight(
+                    new THREE.Color(color[0], color[1], color[2]),
+                    intensity,
+                );
+                const dirVec = this.directionalVec(direction);
+                this.m_directionalLight.position.set(dirVec[0], dirVec[1], dirVec[2]);
+                if (p['cast-shadow']) {
                     this.m_directionalLight.castShadow = true;
                     this.m_directionalLight.shadow.mapSize.width = 2048;
                     this.m_directionalLight.shadow.mapSize.height = 2048;
@@ -206,6 +278,48 @@ export class MBEnvironmentManager {
                 this.m_scene.add(this.m_directionalLight);
                 this.m_scene.add(this.m_directionalLight.target);
             }
+        }
+    }
+
+    /**
+     * Convert a light `direction: [azimuth, polar]` (mapbox 3D lights) to the
+     * cartesian vector toward the light (polar 0 = zenith). Mirrors
+     * `sphericalDirectionToCartesian` in mapbox-gl-js util.ts.
+     */
+    private directionalVec(direction: [number, number]): [number, number, number] {
+        const a = (direction[0] + 90) * Math.PI / 180;
+        const p = direction[1] * Math.PI / 180;
+        return [
+            Math.cos(a) * Math.sin(p),
+            Math.sin(a) * Math.sin(p),
+            Math.cos(p),
+        ];
+    }
+
+    /** Parse an MBColorSpec (hex / #RGB / rgba() / named) into sRGB [0,1] RGB. */
+    private static parseMBColor(c: any): [number, number, number] {
+        if (Array.isArray(c) && c.length >= 3) {
+            return [Number(c[0]) / 255, Number(c[1]) / 255, Number(c[2]) / 255];
+        }
+        const s = String(c).trim();
+        if (s.startsWith('#')) {
+            const h = s.slice(1);
+            if (h.length === 3 || h.length === 4) {
+                const e = h.length === 3 ? h.split('').map(ch => ch + ch).join('') : h;
+                return [parseInt(e.slice(0, 2), 16) / 255, parseInt(e.slice(2, 4), 16) / 255, parseInt(e.slice(4, 6), 16) / 255];
+            }
+            if (h.length === 6 || h.length === 8) {
+                return [parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255];
+            }
+        }
+        const m = s.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)/);
+        if (m) return [+m[1] / 255, +m[2] / 255, +m[3] / 255];
+        // Named color fallback via THREE.Color (hex output).
+        try {
+            const t = new THREE.Color(s);
+            return [t.r, t.g, t.b];
+        } catch {
+            return [1, 1, 1];
         }
     }
 
@@ -220,10 +334,24 @@ export class MBEnvironmentManager {
             this.m_fog = null;
         }
         if (!fog) return;
+        // Mapbox fog model (`fog.ts` / `_prelude_fog.fragment.glsl`):
+        //   fog_range(depth) = (depth - range[0]) / (range[1] - range[0])
+        // where `depth` is the camera-to-fragment distance in KILOMETERS (the
+        // range is also in km and may start negative — relative to the horizon).
+        //   fog_opacity(t) = color.a * min(1, 1.00747 * (1 - exp(-6t))^3)
+        // and (Mercator) it is multiplied by a horizon-blend that fades fog when
+        // looking straight down.
+        //
+        // THREE.FogExp2 saturated instantly in flywave's meter world (density
+        // 1/range * 0.3 → exp factor ≈ 1 at km distances), so switch to a linear
+        // THREE.Fog whose near/far map directly onto the km range (×1000).
+        // Approximation: the smoothstep ramp replaces mapbox's exponential
+        // falloff; the alpha cap and horizon-blend are documented follow-ups.
         const range = fog.range ?? [0.5, 10];
-        const density = range[1] > 0 ? 1.0 / range[1] : 0.1;
+        const nearM = range[0] * 1000;
+        const farM = range[1] * 1000;
         const color = new THREE.Color(fog.color ?? '#ffffff');
-        this.m_fog = new THREE.FogExp2(color.getHex(), density * 0.3);
+        this.m_fog = new THREE.Fog(color.getHex(), nearM, farM);
         this.m_scene.fog = this.m_fog;
     }
 
@@ -582,6 +710,8 @@ export class MBEnvironmentManager {
         this.m_directionalColor = null;
         this.m_directionalIntensity = 0;
         this.m_directionalPolar = 0;
+        this.m_3DAmbient = null;
+        this.m_3DDirectional = null;
     }
 
     async applyRasterSource(
