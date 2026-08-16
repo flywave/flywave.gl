@@ -1078,6 +1078,20 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **遗留**：icon-rotate 残余 31–46px 为 oneway 图标 45° 对角 AA + 既有 icon-size 0.9× box 基线。
 
+### 12.26 heatmap 双 pass 持久 kernel 缓存（2026-08-16）
+
+**根因（heatmap 间歇性空白）**：`Tile.attachGeometryLoadedCallback`（`Tile.ts:1106-1111`）在几何加载完成即 `removeDecodedTile()` 清空 `m_decodedTile`。`MBHeatmapRenderer.run()` 每帧 `getDecodedTiles()` 读 `tile.decodedTile.heatmapPoints`——只在**加载中的短暂窗口**有 kernel，之后恒空 → heatmap 随机空白（hm5 有 blob、hm7/hm9 无）。
+
+**修复**：
+1. `MBHeatmapRenderer` 新增 `m_tileKernels: Map<Tile, {kernels, techniques}>`：run() 首见某 tile 时快照其 `decodedTile.heatmapPoints` + techniques 入缓存；每帧按 `getDecodedTiles()` 存活集修剪。
+2. `buildGroups` 改收 `Array<{kernels, techniques}>`（不再读 `tile.decodedTile`）。
+3. `dispose()` 清缓存。
+
+**验证**（`rendering-test-results/mbstyle-hm10/`，mgl `ZERO=1/255/16` 对齐）：
+- heatmap 从**间歇空白**变为**稳定渲染**：heatmap-radius/data-expression 324→308、opacity/default 3983→649、color/default 15675→9234、weight/default 31389→19547。
+- 208 单测通过（heatmap 分组测试改新签名，1 既有 circle-radius×2 失败无关）。
+- 遗留：data-expression blob 40×14 vs 期望 45×20（kernel/ramp 密度阈值校准，G6 精度项）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。

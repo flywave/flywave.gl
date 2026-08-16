@@ -318,24 +318,24 @@ describe('MBStyle decode pipeline', () => {
         // Two tiles; tile A holds layers a + b (different technique indices),
         // tile B holds layer a again under a different index. All of layer a's
         // kernels must land in one group keyed by its layerId.
-        const tileA = { decodedTile: {
+        const tileA = {
             techniques: [
                 { _isHeatmap: true, _layerId: 'hm-a', renderOrder: 1, _heatmapIntensity: 2, opacity: 0.5, _heatmapColorStops: [['sA']] },
                 { _isHeatmap: true, _layerId: 'hm-b', renderOrder: 5, _heatmapIntensity: 1, opacity: 1, _heatmapColorStops: [['sB']] },
             ],
-            heatmapPoints: [
+            kernels: [
                 { x: 1, y: 2, z: 0, weight: 1, radius: 10, technique: 0 },
                 { x: 3, y: 4, z: 0, weight: 2, radius: 20, technique: 1 },
             ],
-        } };
-        const tileB = { decodedTile: {
+        };
+        const tileB = {
             techniques: [
                 { _isHeatmap: true, _layerId: 'hm-a', renderOrder: 1, _heatmapIntensity: 2, opacity: 0.5, _heatmapColorStops: [['sA']] },
             ],
-            heatmapPoints: [
+            kernels: [
                 { x: 5, y: 6, z: 0, weight: 3, radius: 30, technique: 0 },
             ],
-        } };
+        };
 
         const groups = MBHeatmapRenderer.buildGroups([tileA as any, tileB as any], buildRamp);
         expect(groups.size).to.equal(2);

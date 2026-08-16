@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { MapView } from '@flywave/flywave-mapview';
+import { MapView, Tile } from '@flywave/flywave-mapview';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { MBMaterialPatchManager } from './MBMaterialPatchManager';
 import { MBStyleDataSource } from './MBStyleDataSource';
@@ -77,6 +77,17 @@ export class MBHeatmapRenderer {
     private m_rampCache = new Map<string, THREE.Texture>();
     private m_kernelAllocated = 0;
 
+    /**
+     * Persistent per-tile kernel cache. The mapview clears a tile's
+     * `decodedTile` as soon as geometry loading finishes
+     * (Tile.attachGeometryLoadedCallback → removeDecodedTile), so reading
+     * `tile.decodedTile.heatmapPoints` per-frame only works during the brief
+     * loading window. Cache the kernels + techniques here (world-space points
+     * don't need the decoded tile afterwards) and prune tiles that leave the
+     * visible set.
+     */
+    private m_tileKernels = new Map<Tile, { kernels: HeatmapKernel[]; techniques: any[] }>();
+
     private m_v3 = new THREE.Vector3();
 
     constructor(
@@ -105,8 +116,27 @@ export class MBHeatmapRenderer {
 
         // 1) Group kernels by heatmap layer across all decoded tiles, resolving
         //    each kernel's per-tile technique index to the layer's render config.
+        //    The decoded tile is transient (cleared after geometry loads), so
+        //    cache kernels per-tile here and keep them until the tile leaves.
+        const tiles = this.m_dataSource.getDecodedTiles();
+        for (const tile of tiles) {
+            if (this.m_tileKernels.has(tile)) continue;
+            const decoded = (tile as any)?.decodedTile as any;
+            const pts = decoded?.heatmapPoints as HeatmapKernel[] | undefined;
+            if (pts && pts.length > 0) {
+                this.m_tileKernels.set(tile, {
+                    kernels: [...pts],
+                    techniques: decoded.techniques ?? [],
+                });
+            }
+        }
+        const live = new Set(tiles);
+        for (const [tile] of [...this.m_tileKernels]) {
+            if (!live.has(tile)) this.m_tileKernels.delete(tile);
+        }
+        const kernels = [...this.m_tileKernels.values()];
         const groups = MBHeatmapRenderer.buildGroups(
-            this.m_dataSource.getDecodedTiles(),
+            kernels,
             (stops: any) => {
                 const key = JSON.stringify(stops ?? null);
                 let tex = this.m_rampCache.get(key);
@@ -138,10 +168,12 @@ export class MBHeatmapRenderer {
         const exprZoom = (this.m_mapView as any).zoomLevel - 1;
         // mapbox heatmap kernel: height = weight * intensity * GAUSS_COEF, shape
         // exp(-0.5 * 3^2 * r^2) with r = pixelDist / heatmap-radius. The quad is
-        // sized via S so the kernel falls to ZERO = 1/255 exactly at its edge
-        // (no visible cutoff) instead of a fixed exp(-1) skirt.
+        // sized via S so the kernel falls to ZERO exactly at its edge (no
+        // visible cutoff). mgl heatmap.vertex uses ZERO = 1/255/16 (an
+        // empirically chosen 16x below the ubyte quantization floor to
+        // minimize artifacts on overlapping kernels).
         const GAUSS_COEF = 0.398942; // 1 / sqrt(2*PI)
-        const ZERO = 1 / 255;
+        const ZERO = 1 / 255 / 16;
         let maxCount = 0;
         for (const g of ordered) {
             for (const k of g.raw) {
@@ -240,6 +272,7 @@ export class MBHeatmapRenderer {
         this.m_compMesh = null;
         for (const tex of this.m_rampCache.values()) tex.dispose();
         this.m_rampCache.clear();
+        this.m_tileKernels.clear();
     }
 
     /**
@@ -249,13 +282,13 @@ export class MBHeatmapRenderer {
      * cached ramp texture so callers control texture lifecycle.
      */
     static buildGroups(
-        tiles: Array<{ decodedTile?: any }>,
+        tileKernels: Array<{ kernels: HeatmapKernel[]; techniques: any[] }>,
         getRamp: (stops: any) => { texture: THREE.Texture; key: string },
     ): Map<string, HeatmapLayerGroup> {
         const groups = new Map<string, HeatmapLayerGroup>();
-        for (const tile of tiles) {
-            const techs = tile?.decodedTile?.techniques as any[] | undefined;
-            const pts = tile?.decodedTile?.heatmapPoints as HeatmapKernel[] | undefined;
+        for (const entry of tileKernels) {
+            const techs = entry.techniques as any[] | undefined;
+            const pts = entry.kernels as HeatmapKernel[] | undefined;
             if (!pts || pts.length === 0 || !techs) continue;
             for (const p of pts) {
                 const tech = techs[p.technique];
