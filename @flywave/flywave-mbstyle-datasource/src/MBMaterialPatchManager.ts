@@ -209,7 +209,13 @@ export class MBMaterialPatchManager {
             const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
             const rad = ls ? ls.groundRadiance : [1, 1, 1];
             const emi = ls ? emissive : 0;
-            shader.uniforms.uMBGroundRad = { value: rad };
+            // groundRadiance is in sRGB (mapbox apply_lighting_ground: color is
+            // sRGB × sRGB radiance, output sRGB). The flywave fragment color at
+            // this injection point is LINEAR, so convert the radiance to linear
+            // before multiplying: linearColor × srgbToLinear(rad) ≡ the mapbox
+            // sRGB product, linearized for the renderer's output conversion.
+            const linRad = rad.map((v: number) => Math.pow(v, 2.2)) as [number, number, number];
+            shader.uniforms.uMBGroundRad = { value: linRad };
             shader.uniforms.uMBEmissive = { value: emi };
             // Uniforms at global scope (works for both standard `#include
             // <common>` materials and custom RawShaderMaterials).
