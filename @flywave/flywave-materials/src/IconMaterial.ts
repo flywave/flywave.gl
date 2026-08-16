@@ -58,15 +58,16 @@ void main() {
     }
 
     // SDF icon: the alpha channel holds the signed distance field with the
-    // glyph edge at uEdge (0.75 for mapbox sprites). The halo is the ring
-    // between the fill edge and a lower (outer) threshold, matching mapbox's
-    // buff = (6 - halo_width)/SDF_PX.
+    // glyph edge at uEdge (0.75 for mapbox sprites). Fill matches mapbox
+    // symbol.fragment: buff=0.75, gamma=EDGE_GAMMA → smoothstep(buff-gamma,
+    // buff+gamma, dist). The halo ring sits at buff_halo = uEdge - uHaloWidth
+    // with a blur-width gamma (mapbox: buff=(6-halo_width)/SDF_PX,
+    // gamma=(halo_blur*1.19/SDF_PX + EDGE_GAMMA)).
     float d = tex.a;
     float fillA = smoothstep(uEdge - uGamma, uEdge + uGamma, d);
-    float haloA = smoothstep(
-            uEdge - uHaloWidth - uHaloBlur - uGamma,
-            uEdge - uHaloWidth + uGamma,
-            d) * (1.0 - fillA);
+    float haloBuff = uEdge - uHaloWidth;
+    float haloGamma = uHaloBlur + uGamma;
+    float haloA = smoothstep(haloBuff - haloGamma, haloBuff + haloGamma, d) * (1.0 - fillA);
 
     // Premultiplied output: fill uses the (premultiplied) vertex color; the
     // halo color is multiplied by the icon opacity (vColor.a).

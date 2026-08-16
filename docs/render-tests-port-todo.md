@@ -1053,6 +1053,20 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - `property-function-*`（152–2092）：数据驱动 icon-size 按要素求值，多要素共享 technique 的装箱问题。
 - `literal` 139 / `function` 16 / `depends-on-coalesce-image` 681：AA 边缘（icon 渲染 0.9× box，与 mgl 基线差 1–2px）。
 
+### 12.24 icon-halo-blur SDF 公式对齐（2026-08-16）
+
+**根因**：icon-halo-blur 5 例全近失（6–270px）。`IconMaterial` 的 halo 用 `smoothstep(edge - width - blur, edge - width, d)` 单侧扩展，blur 换算 `×0.094` 偏小——mgl `symbol.fragment.glsl` 是**居中 gamma**：`buff = (6 - halo_width)/SDF_PX`（SDF_PX=8）、`gamma = (halo_blur×1.19/SDF_PX + EDGE_GAMMA)/(fontScale×gamma_scale)`、`alpha = smoothstep(buff-gamma, buff+gamma, dist)`。旧公式 halo 环过窄、blur 过窄（0.094 vs 1.19/8=0.149）。
+
+**修复**：
+1. `flywave-materials/IconMaterial.ts` fragment：halo 改居中 smoothstep——`haloBuff = uEdge - uHaloWidth`、`haloGamma = uHaloBlur + uGamma`、`haloA = smoothstep(haloBuff-haloGamma, haloBuff+haloGamma, d) × (1-fillA)`。
+2. `PoiRenderer` batch 换算对齐 mgl：`widthField = width/8`、`blurField = blur×1.19/8`（原 `×0.094`）。
+
+**验证**（`rendering-test-results/mbstyle-hb2/`）：
+- **icon-halo-blur 0/5 → 4/5 通过**：default/function/literal/powevr-workaround 全过（0–2px）。
+- **icon-halo-width 3/4 → 4/4**（literal 从近失转通过）。
+- **icon-halo-color 3/7 → 5/7**（同一 SDF halo 公式连带收益；multiply/opacity 98px 遗留为半透明 blend 边缘）。
+- 遗留：`property-function`（数据驱动 blur，205px，双要素 halo 外缘差）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
