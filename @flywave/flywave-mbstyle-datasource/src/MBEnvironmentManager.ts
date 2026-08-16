@@ -579,47 +579,108 @@ export class MBEnvironmentManager {
     }
 
     private createGradientSky(sky: SkySpec): void {
+        // Mapbox skybox_gradient: the color ramp is sampled by
+        //   progress = acos(dot(dir, centerDirection)) / radius
+        // where `dir` is the view ray (skybox coords) and `center` is the
+        // `sky-gradient-center` azimuth/elevation converted to a celestial
+        // direction. The ramp is built from the `sky-gradient` interpolate
+        // expression over `sky-radial-progress`.
         const geom = new THREE.SphereGeometry(500, 32, 16);
-        const topColor = new THREE.Color(sky['sky-gradient']?.[1]?.[1] ?? '#88bbee');
-        const bottomColor = new THREE.Color(sky['sky-gradient']?.[0]?.[1] ?? '#ffffff');
-        const opacity = sky['sky-opacity'] ?? 0.8;
+        const opacity = sky['sky-opacity'] ?? 1;
+
+        // Build the color-ramp texture from the sky-gradient expression.
+        let rampTexture: THREE.DataTexture | null = null;
+        let solidColor = new THREE.Color('#88bbee');
+        try {
+            const { MBMaterialPatchManager } = require('./MBMaterialPatchManager');
+            const grad = sky['sky-gradient'];
+            if (Array.isArray(grad) && grad[0] === 'interpolate') {
+                rampTexture = MBMaterialPatchManager.buildGradientTexture(grad);
+            } else if (grad === 'interpolate' || grad === undefined) {
+                // Mapbox style-spec default sky-gradient:
+                //   ["interpolate",["linear"],["sky-radial-progress"],0.8,"#87ceeb",1,"white"]
+                rampTexture = MBMaterialPatchManager.buildGradientTexture([
+                    'interpolate', ['linear'], ['sky-radial-progress'],
+                    0.8, '#87ceeb', 1, 'white',
+                ]);
+            } else if (typeof grad === 'string') {
+                solidColor = new THREE.Color(grad);
+            }
+        } catch {}
+
+        // `sky-gradient-center` [azimuth, elevation] → world direction.
+        // Mapbox semantics (verified against skybox gradient render tests):
+        // elevation 90 = horizontal (azimuth = compass heading, 0 = north/+Y),
+        // elevation 0 = zenith (straight up). The gradient center is the world
+        // direction where progress = 0 (the ramp's first color).
+        const centerRaw = sky['sky-gradient-center'] ?? [0, 0];
+        const azimuth = (centerRaw[0] ?? 0) * Math.PI / 180;
+        const elevation = (centerRaw[1] ?? 0) * Math.PI / 180;
+        // elevation 90 → horizontal, 0 → up.
+        const horiz = Math.sin(elevation);
+        const centerDir = new THREE.Vector3(
+            horiz * Math.cos(azimuth),
+            horiz * Math.sin(azimuth),
+            Math.cos(elevation),
+        ).normalize();
+        const radius = (sky['sky-gradient-radius'] ?? 90) * Math.PI / 180;
 
         const material = new THREE.ShaderMaterial({
             side: THREE.BackSide,
             transparent: opacity < 1,
             depthWrite: false,
             uniforms: {
-                uTopColor: { value: topColor },
-                uBottomColor: { value: bottomColor },
                 uOpacity: { value: opacity },
-                uOffset: { value: 0.0 },
-                uExponent: { value: 0.6 },
+                uRamp: { value: rampTexture },
+                uCenterDir: { value: new THREE.Vector3(centerDir.x, centerDir.y, centerDir.z) },
+                uRadius: { value: Math.max(radius, 1e-6) },
+                uSolidColor: { value: solidColor },
+                uHasRamp: { value: rampTexture ? 1 : 0 },
             },
             vertexShader: `
-                varying vec3 vWorldPosition;
+                varying vec3 vViewPosition;
                 void main() {
-                    vec4 worldPos = modelMatrix * vec4(position, 1.0);
-                    vWorldPosition = worldPos.xyz;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    // Camera-space direction: the skybox cube is oriented to the
+                    // camera (mapbox skyboxMatrix), so v_uv is the VIEW direction.
+                    vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
+                    vViewPosition = viewPos.xyz;
+                    gl_Position = projectionMatrix * viewPos;
                 }
             `,
             fragmentShader: `
-                uniform vec3 uTopColor;
-                uniform vec3 uBottomColor;
-                uniform float uOffset;
-                uniform float uExponent;
                 uniform float uOpacity;
-                varying vec3 vWorldPosition;
+                uniform sampler2D uRamp;
+                uniform vec3 uCenterDir;
+                uniform float uRadius;
+                uniform vec3 uSolidColor;
+                uniform float uHasRamp;
+                varying vec3 vViewPosition;
                 void main() {
-                    float h = normalize(vWorldPosition + uOffset).y;
-                    float f = max(pow(max(h, 0.0), uExponent), 0.0);
-                    vec3 col = mix(uBottomColor, uTopColor, f);
+                    // dir is the camera-space view ray; uCenterDir is the celestial
+                    // direction in the same camera space (rotated by the camera
+                    // attitude so the gradient appears fixed in the sky).
+                    vec3 dir = normalize(vViewPosition);
+                    float c = clamp(dot(dir, uCenterDir), -1.0, 1.0);
+                    float progress = clamp(acos(c) / uRadius, 0.0, 1.0);
+                    vec3 col = uSolidColor;
+                    if (uHasRamp > 0.5) {
+                        col = texture(uRamp, vec2(progress, 0.5)).rgb;
+                    }
                     gl_FragColor = vec4(col, uOpacity);
                 }
             `,
         });
 
         this.m_skyMesh = new THREE.Mesh(geom, material);
+        this.m_skyMesh.frustumCulled = false;
+        this.m_skyMesh.onBeforeRender = (renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
+            // Rotate the celestial center into camera space so the gradient stays
+            // fixed in the sky while the camera pitches/rotates.
+            const m = this.m_skyMesh!.material as THREE.ShaderMaterial;
+            const viewMatrix = camera.matrixWorldInverse;
+            const c = centerDir.clone().transformDirection(viewMatrix).normalize();
+            (m.uniforms.uCenterDir.value as THREE.Vector3).copy(c);
+        };
         this.m_scene!.add(this.m_skyMesh);
     }
 

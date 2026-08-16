@@ -320,6 +320,7 @@ export interface SkySpec {
     'sky-atmosphere-halo-color'?: MBColorSpec;
     'sky-gradient'?: any;
     'sky-gradient-center'?: [number, number];
+    'sky-gradient-radius'?: number;
     'sky-opacity'?: number;
 }
 

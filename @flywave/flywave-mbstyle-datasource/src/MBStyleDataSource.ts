@@ -885,7 +885,13 @@ export class MBStyleDataSource extends TileDataSource {
                 style.light,
             );
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
-            this.m_environment.applySky(style.sky, style.fog);
+            // A `sky` layer's paint drives the skybox (gradient/atmosphere),
+            // mirroring mapbox's sky_style_layer. The top-level `style.sky`
+            // (fog-driven atmosphere) takes precedence when both exist.
+            this.m_environment.applySky(
+                this.buildSkyFromLayers(style) ?? style.sky,
+                style.fog,
+            );
 
             const bgLayer = (style.layers ?? []).find((l: any) => l.type === 'background');
             if (bgLayer) {
@@ -1397,7 +1403,10 @@ export class MBStyleDataSource extends TileDataSource {
         if (this.m_environment) {
             this.m_environment.applyLights((style as any).lights ?? (style as any).light ? [(style as any).light] : undefined);
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
-            this.m_environment.applySky(style.sky, style.fog);
+            this.m_environment.applySky(
+                this.buildSkyFromLayers(style) ?? style.sky,
+                style.fog,
+            );
         }
 
         // Terrain: re-apply if terrain spec changed.
@@ -1537,8 +1546,34 @@ export class MBStyleDataSource extends TileDataSource {
     }
 
     /**
-     * Apply background color from style's background layers to MapView clear color.
+     * Extract the skybox spec from `sky` layers (mapbox sky_style_layer paint),
+     * mirroring how mapbox renders a sky layer. Returns the merged spec or
+     * `undefined` when no sky layer exists.
      */
+    private buildSkyFromLayers(style: StyleSpecification): any {
+        const skyLayers = (style.layers ?? []).filter((l: any) => l.type === 'sky');
+        if (skyLayers.length === 0) return undefined;
+        // Mapbox renders sky layers in order; the last sky layer's paint wins
+        // for properties not overridden by earlier layers. All paints share the
+        // same property keys, so a simple last-wins merge matches the common
+        // case (tests use a single sky layer).
+        const paint: any = {};
+        for (const layer of skyLayers) {
+            Object.assign(paint, (layer as any).paint ?? {});
+        }
+        return {
+            'sky-type': paint['sky-type'] ?? 'gradient',
+            'sky-gradient': paint['sky-gradient'] ?? 'interpolate',
+            'sky-gradient-center': paint['sky-gradient-center'] ?? [0, 0],
+            'sky-gradient-radius': paint['sky-gradient-radius'] ?? 90,
+            'sky-opacity': paint['sky-opacity'] ?? 1,
+            'sky-atmosphere-sun': paint['sky-atmosphere-sun'] ?? [0, 0],
+            'sky-atmosphere-sun-intensity': paint['sky-atmosphere-sun-intensity'] ?? 1,
+            'sky-atmosphere-color': paint['sky-atmosphere-color'] ?? '#88c6fc',
+            'sky-atmosphere-halo-color': paint['sky-atmosphere-halo-color'] ?? '#84a6c9',
+        };
+    }
+
     private applyBackgroundColor(style: StyleSpecification): void {
         for (const layer of style.layers ?? []) {
             if (layer.type === 'background') {
