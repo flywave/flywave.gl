@@ -1261,3 +1261,80 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 6. **G7 fog/skybox/lights 渲染 harness 验收**。
 7. **G4 text SDF 精度（可修部分）**。
 8. **G8 model-layer 内容对齐 / depth-occlusion**。
+
+### 13.3 执行进度快照（2026-08-16 会话末，7 个 commit：3b8da244 → 43f69980）
+
+> 按 §13.1 的 G 分组，记录"前 → 后"与遗留。所有修复均对齐 mgl 源码；单测 208 通过（1 既有 circle-radius×2 失败，与本次无关），tsc 全绿，工作区干净。
+
+| 项 | 前 | 后 | commit | 遗留 |
+|---|---|---|---|---|
+| G3 icon-text-fit | 0/41 | **7/41** | 3b8da244 | `*-2x` DPR 缩放、`stretch-*` 九宫格、`text-variable-anchor`/`placement-line`、text-anchor 文本渲染 |
+| G1 fill-outline-color | 1/8 | **2/8** | 57baa3e0 | 残余 1–2px AA 边缘（pixelmatch 4px 阈值内），与 line-color 337px 同源 |
+| G1 icon-size（camera 函数） | 4/18 | **9/18** | af54f113 | `*-rasterized`（432–3793，需 maxSize 重栅格化）、`property-function-*`（152–2092，数据驱动装箱）、`literal` 139/`function` 16（AA 边缘） |
+| G1 icon-halo-blur | 0/5 | **4/5** | f1b5a066 | `property-function`（数据驱动 blur 205px） |
+| G1 icon-halo-width | 3/4 | **4/4** | f1b5a066 | — |
+| G1 icon-halo-color | 3/7 | **5/7** | f1b5a066 | multiply/opacity 98px（半透明 blend 边缘） |
+| G1 icon-rotate | 1/3 | 1/3（近失 53→31） | 62ca4139 | oneway 45° 对角 AA + icon-size 0.9× box 基线 |
+| G6 heatmap | 间歇空白 | **稳定渲染**（data-expression 324→308、opacity 3983→649） | 43f69980 | kernel 密度→ramp 阈值校准（blob 40×14 vs 期望 45×20） |
+
+---
+
+## 14. 未完成项（待办清单，2026-08-16 会话末保存）
+
+> 按优先级/ROI 排序。每项含：根因摘要、已验证数据、所需改动域、复杂级。已完成项见 §12.21–§12.26。
+
+### P0 — 引擎级渲染深水区（G2，解锁面最大）
+
+**F1. fill-extrusion 墙面几何对齐 mgl（G2 核心阻塞）**
+- 现状：fill-extrusion-color 7 例 1414–15313px（0 通过）。§12.15 光照已落地；§12.6 几何（emitExtrudedPolygon 简化 footprint quads）已落地。
+- 根因：**building 实测 330×146 vs 期望 318×145（宽 12px、高 1px）**——侧壁每边多 ~6px。mgl 用 `a_join_normal_inside` + `u_width_scale × line_width` 墙面挤出（`fill_extrusion.vertex.glsl:242-245`），我们简化 quads 无 join/宽度处理。
+- 方案：移植 mgl join-normal 墙面挤出（`line_width`/`u_width_scale` 按每边偏移）+ 校验 footprint 尺寸。
+- 用例：fill-extrusion-*（~91）+ building（53）。**期望收益最大（~140 例）**。
+
+**F2. fill-extrusion 残余**：zoom 函数求值偏位（function 全蓝，Z2）、屋顶/墙面边界 2px 偏移、`no-alpha-no-multiply`（38023px，3D-lights 路径）、`data-driven-zero-alpha`（15313px）。
+- 依赖 F1（几何对齐后这些残余才可独立验证）。
+
+### P1 — 近失可快速转通过（G1 剩余）
+
+**F3. heatmap kernel/ramp 密度阈值校准（G6）**
+- 现状：data-expression 308px（threshold 5px）、opacity/default 649px。
+- 根因：blob 40×14 vs 期望 45×20（kernel 可见边缘提前）。mgl 用 **0.25× 分辨率 density FBO**（`draw_heatmap.ts:37-40`）+ HalfFloat；我们全分辨率 ubyte RT。
+- 方案：① RT 分辨率 0.25× + HalfFloat（需验证 `OES_texture_half_float` 支持）；② 核对 kernel 密度→ramp 的 t 映射（期望在 r=1.0×radius 处仍可见蓝，我们已白）。
+- 用例：heatmap-* 18 例。
+
+**F4. icon-halo-blur/property-function（205px）**：数据驱动 blur 双要素，halo 外缘差（§12.24 遗留）。
+
+**F5. icon-halo-color/multiply + opacity（各 98px）**：半透明红 halo + multiply/opacity blend 边缘（§12.24 遗留）。
+
+**F6. icon-size 残余**：`*-rasterized`（mgl `getRasterizedIconSize` maxSize 重栅格化）、`property-function-*`（数据驱动装箱）、`literal`/`function`（AA 边缘 + 0.9× box 基线）。
+
+**F7. icon-text-fit 残余**：`*-2x`（DPR 缩放）、`stretch-*`（九宫格重栅格化，`scaleShapedIconImage`）、`text-variable-anchor`、`placement-line`、`*-text-anchor`（文本未随 anchor 渲染）。
+
+### P2 — 引擎几何 / 材质（需改 flywave-lines / flywave-materials / flywave-mapview）
+
+**F8. line-join / line-cap（G1，6/11 + 2/4 近失）**：`TriangulateLines` 恒 bevel；mgl bevel/miter/round 角几何。**line-color 337px 基线**（AA/线宽舍入）与 line-cap butt 337px 同源，须先修。
+- 用例：line-join（11）+ elevated-line-join（9）+ line-cap（4）+ elevated-line-cap（4）+ line-color（5）+ elevated-line-color（3）。
+
+**F9. line-blur / line-offset（G1）**：SolidLineMaterial 无 blur/offset uniform 消费（P1.3 引擎级）。
+
+**F10. circle-blur / circle-stroke-***：CirclePointsMaterial 无 blur/stroke（P1.2 引擎级）。
+
+### P3 — 大工程（G4/G5/G7/G8，架构/引擎级）
+
+- **F11. raster/image 双路径收口（G5）**：raster-opacity 121k（纹理未上屏）；image raster paint 忽略；双路径（env quad vs 逐瓦片）未收口。
+- **F12. fog/skybox/lights 验收（G7）**：§12.19/D6 代码已落地，需渲染 harness 逐用例验收（lighting 0/116、fog 0/63、skybox 0/34）。
+- **F13. text SDF 精度（G4）**：63/258 期望图纯黑（引用损坏不可修）；SDF 亚像素 + halo（需改 TextCanvas 顶点格式）。
+- **F14. model-layer / depth-occlusion（G8）**：崩溃已修（192 上报 0 DISCONNECTED）但内容不对齐（fill-extrusion--default 279994）；occlusion 软淡入在 patcher。
+- **F15. building roof-shape / conflation / 3d-intersections / terrain dynamic-exaggeration / color-theme**：§2.13–§2.15 全 ❌/🔧 域，engine 级。
+
+### 验证流程备忘（每项 DoD）
+
+```
+改代码 → pnpm --filter @flywave/flywave-mbstyle-datasource exec tsc --noEmit
+      → mocha ./lib/test/*Test.js（208 passing，1 既有 circle-radius×2 失败无关）
+      → CHROME_BIN=/usr/bin/microsoft-edge MBSTYLE_PORT=8099 \
+        MBSTYLE_REPORT=rendering-test-results/<cat> node scripts/run-mbstyle-render-tests.js <分类>
+      → 更新本文件 §12.2x + §14 状态 → commit
+```
+- karma webpack 有 filesystem 缓存，调试用 `HARP_NO_HARD_SOURCE_CACHE=true`。
+- 重跑前 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 清孤儿 `RenderingTestResultServer`。
