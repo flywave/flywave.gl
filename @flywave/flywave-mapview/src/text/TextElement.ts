@@ -74,6 +74,13 @@ export interface PoiInfo {
     iconHaloBlur?: number;
 
     /**
+     * Mapbox `icon-rotate` in degrees (clockwise). The icon quad corners are
+     * rotated around the symbol point (mgl quads.getIconQuads: tl/tr/bl/br
+     * rotated by angle = iconRotate * PI/180).
+     */
+    iconRotate?: number;
+
+    /**
      * Mapbox `icon-text-fit` value ('width' | 'height' | 'both') when the icon
      * should be stretched to the shaped text bounds. Undefined = no fit.
      */

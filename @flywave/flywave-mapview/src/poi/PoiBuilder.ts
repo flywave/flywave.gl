@@ -146,6 +146,8 @@ export class PoiBuilder {
             getPropertyValue((technique as any)._iconHaloWidth, env) ?? 0;
         const iconHaloBlur =
             getPropertyValue((technique as any)._iconHaloBlur, env) ?? 0;
+        const iconRotate =
+            getPropertyValue((technique as any)._iconRotate, env) ?? 0;
 
         // Mapbox `icon-text-fit` (+ padding + shaped text px dims). The emitter
         // attaches these (private-prefixed) to the icon technique; PoiRenderer
@@ -185,6 +187,8 @@ export class PoiBuilder {
             iconHaloColor,
             iconHaloWidth,
             iconHaloBlur,
+            iconRotate:
+                typeof iconRotate === 'number' && Number.isFinite(iconRotate) ? iconRotate : 0,
             iconTextFit:
                 iconTextFit !== undefined && iconTextFit !== null && iconTextFit !== 'none'
                     ? iconTextFit

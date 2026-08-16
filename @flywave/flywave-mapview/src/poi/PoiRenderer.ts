@@ -344,7 +344,8 @@ export class PoiBatchRegistry {
             color,
             opacity,
             viewDistance,
-            poiInfo.textElement
+            poiInfo.textElement,
+            poiInfo.iconRotate
         );
     }
 

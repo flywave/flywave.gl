@@ -265,7 +265,8 @@ export class BoxBuffer {
         color: THREE.Color,
         opacity: number,
         distance: number,
-        pickInfo?: any
+        pickInfo?: any,
+        rotateDeg?: number
     ): boolean {
         if (!this.canAddElements()) {
             return false;
@@ -288,10 +289,33 @@ export class BoxBuffer {
         const baseVertex = positionAttribute.count;
         const baseIndex = indexAttribute.count;
 
-        positionAttribute.setXYZ(baseVertex, x, y, distance);
-        positionAttribute.setXYZ(baseVertex + 1, x + w, y, distance);
-        positionAttribute.setXYZ(baseVertex + 2, x, y + h, distance);
-        positionAttribute.setXYZ(baseVertex + 3, x + w, y + h, distance);
+        // Mapbox `icon-rotate`: rotate the four quad corners around the box
+        // center (mgl getIconQuads rotates tl/tr/bl/br by the angle).
+        let cx = x + w / 2;
+        let cy = y + h / 2;
+        let cosA = 1;
+        let sinA = 0;
+        if (typeof rotateDeg === 'number' && rotateDeg !== 0) {
+            const angle = rotateDeg * Math.PI / 180;
+            cosA = Math.cos(angle);
+            sinA = Math.sin(angle);
+        }
+        const corners = [
+            [x, y],
+            [x + w, y],
+            [x, y + h],
+            [x + w, y + h],
+        ];
+        for (let i = 0; i < 4; i++) {
+            const dx = corners[i][0] - cx;
+            const dy = corners[i][1] - cy;
+            corners[i][0] = cx + dx * cosA - dy * sinA;
+            corners[i][1] = cy + dx * sinA + dy * cosA;
+        }
+        positionAttribute.setXYZ(baseVertex, corners[0][0], corners[0][1], distance);
+        positionAttribute.setXYZ(baseVertex + 1, corners[1][0], corners[1][1], distance);
+        positionAttribute.setXYZ(baseVertex + 2, corners[2][0], corners[2][1], distance);
+        positionAttribute.setXYZ(baseVertex + 3, corners[3][0], corners[3][1], distance);
 
         colorAttribute.normalized = false;
         colorAttribute.setXYZW(baseVertex, r, g, b, a);

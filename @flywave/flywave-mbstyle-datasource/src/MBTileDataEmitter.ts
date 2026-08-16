@@ -535,6 +535,9 @@ export class MBTileDataEmitter {
                     props._iconHaloColor = p['icon-halo-color'] ?? 'rgba(0,0,0,0)';
                     props._iconHaloWidth = p['icon-halo-width'] ?? 0;
                     props._iconHaloBlur = p['icon-halo-blur'] ?? 0;
+                    // Mapbox `icon-rotate` (degrees, clockwise). The PoiRenderer
+                    // rotates the icon quad corners around the symbol point.
+                    props._iconRotate = l['icon-rotate'] ?? 0;
                     if (typeof l['symbol-sort-key'] === 'number') props.priority = l['symbol-sort-key'];
                     // Native PoiBuilder reads `iconMayOverlap`/`iconReserveSpace`
                     // (NOT `mayOverlap`/`reserveSpace`); map `icon-allow-overlap` /

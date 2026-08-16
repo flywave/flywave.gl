@@ -1067,6 +1067,17 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - **icon-halo-color 3/7 → 5/7**（同一 SDF halo 公式连带收益；multiply/opacity 98px 遗留为半透明 blend 边缘）。
 - 遗留：`property-function`（数据驱动 blur，205px，双要素 halo 外缘差）。
 
+### 12.25 icon-rotate 旋转接线（2026-08-16）
+
+**实现（对齐 mgl `quads.getIconQuads`——tl/tr/bl/br 四角绕中心旋转 angle=iconRotate×PI/180）**：
+1. `MBTileDataEmitter` symbol-icon 分支发 `_iconRotate`（`l['icon-rotate'] ?? 0`，布局属性）。
+2. `PoiBuilder`/`PoiInfo` 透传 `iconRotate`。
+3. `BoxBuffer.addBox` 新增可选 `rotateDeg`：4 个 box 角绕中心旋转（此前 axis-aligned）。
+
+**验证**（`rendering-test-results/mbstyle-irot/`）：icon-rotate/literal 48→46、property-function 53→31（旋转已生效，残余为对角线 AA/箭头形状）；with-offset 107 PASS 保持。icon-color 4/5、icon-anchor 10/11、icon-size 8/18 零回归。
+
+**遗留**：icon-rotate 残余 31–46px 为 oneway 图标 45° 对角 AA + 既有 icon-size 0.9× box 基线。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
