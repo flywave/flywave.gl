@@ -884,7 +884,7 @@ export class MBStyleDataSource extends TileDataSource {
                 (style as any).lights as any,
                 style.light,
             );
-            this.m_environment.applyFog(style.fog);
+            this.m_environment.applyFog(style.fog, style.zoom ?? 0);
             this.m_environment.applySky(style.sky, style.fog);
 
             const bgLayer = (style.layers ?? []).find((l: any) => l.type === 'background');
@@ -1396,7 +1396,7 @@ export class MBStyleDataSource extends TileDataSource {
         // Environment: lights/fog/sky/background-pattern.
         if (this.m_environment) {
             this.m_environment.applyLights((style as any).lights ?? (style as any).light ? [(style as any).light] : undefined);
-            this.m_environment.applyFog(style.fog);
+            this.m_environment.applyFog(style.fog, style.zoom ?? 0);
             this.m_environment.applySky(style.sky, style.fog);
         }
 

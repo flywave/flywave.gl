@@ -6,6 +6,53 @@ import { MapTerrainMaterial, createTerrainGrid } from './materials/MapTerrainMat
 import { SpriteAtlas } from './materials/MapIconMaterial';
 import { TerrainController } from './TerrainController';
 
+// Mapbox fog uses an exponential opacity ramp (`_prelude_fog.fragment.glsl`):
+//   fog_range(depth) = (depth - range[0]) / (range[1] - range[0])   [km]
+//   fog_opacity(t)   = color.a * min(1, 1.00747 * (1 - exp(-6t))^3)
+// instead of THREE.Fog's linear smoothstep ramp. Override the standard fog
+// shader chunks so every material (MapMeshBasicMaterial/Standard, ground
+// plane, ...) picks up the mapbox curve. The scene.fog near/far carry the
+// FOV-adjusted km range (converted to meters: ×1000).
+THREE.ShaderChunk.fog_pars_fragment = `
+#ifdef USE_FOG
+	uniform vec3 fogColor;
+	varying float vFogDepth;
+	uniform float fogNear;
+	uniform float fogFar;
+	uniform float fogAlpha;
+#endif
+`;
+THREE.ShaderChunk.fog_fragment = `
+#ifdef USE_FOG
+	float fogDepthKm = vFogDepth / 1000.0;
+	float fogT = (fogDepthKm - fogNear / 1000.0) / max(fogFar / 1000.0 - fogNear / 1000.0, 0.001);
+	float fogFalloff = 1.0 - min(1.0, exp(-6.0 * fogT));
+	fogFalloff *= fogFalloff * fogFalloff;
+	float fogFactor = fogAlpha * min(1.0, 1.00747 * fogFalloff);
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
+#endif
+`;
+THREE.ShaderChunk.fog_pars_vertex = `
+#ifdef USE_FOG
+	varying float vFogDepth;
+#endif
+`;
+// Make `fogAlpha` a standard fog uniform (alpha of the fog color) and feed it
+// from the scene fog object so the mapbox opacity ramp can scale by alpha.
+// `UniformsLib.fog` is the live template, but the per-shader `ShaderLib.*.uniforms`
+// were merged (copied) from it at three's module-load time, so they must be
+// patched too — otherwise the GLSL `uniform float fogAlpha;` default stays 0
+// and the fog is disabled.
+if (!('fogAlpha' in THREE.UniformsLib.fog)) {
+    (THREE.UniformsLib.fog as any).fogAlpha = { value: 1 };
+    for (const lib of Object.values(THREE.ShaderLib)) {
+        const u = (lib as any).uniforms;
+        if (u && typeof u === 'object' && !('fogAlpha' in u)) {
+            (u as any).fogAlpha = { value: 1 };
+        }
+    }
+}
+
 export class MBEnvironmentManager {
     private m_ambientLight: THREE.AmbientLight | null = null;
     private m_directionalLight: THREE.DirectionalLight | null = null;
@@ -323,7 +370,7 @@ export class MBEnvironmentManager {
         }
     }
 
-    applyFog(fog: FogSpec | undefined): void {
+    applyFog(fog: FogSpec | undefined, styleZoom = 0): void {
         if (!this.m_scene) return;
         const isGlobe = (this.m_mapView as any).projection?.type === 1;
         if (isGlobe) {
@@ -333,31 +380,171 @@ export class MBEnvironmentManager {
             this.m_scene.fog = null;
             this.m_fog = null;
         }
+        this.m_fogState = null;
         if (!fog) return;
-        // Mapbox fog model (`fog.ts` / `_prelude_fog.fragment.glsl`):
+
+        // Evaluate zoom-functions for the fog's style-driven properties at the
+        // style zoom (mapbox fog spec: range/color/high-color/space-color/
+        // horizon-blend/star-intensity all support zoom interpolation).
+        const evalZoom = (value: any, fallback: any): any => {
+            if (value === undefined) return fallback;
+            try {
+                const { MBExpressionEngine } = require('./MBExpressionEngine');
+                const out = MBExpressionEngine.evaluate(value, { zoom: styleZoom, feature: undefined } as any);
+                return out ?? fallback;
+            } catch {
+                return value;
+            }
+        };
+
+        // Mapbox fog model (`fog.ts` / `_prelude_fog.fragment.glsl`).
+        // The fog depth is the camera-to-fragment distance in km; the range is
+        // FOV-adjusted the same way mapbox does (`state.range`):
+        //   fovAdjustedRange = [range[0] + shift, range[1] + shift]
+        //   shift = 0.5 / tan(fov/2)
+        // Fog opacity is an exponential ramp (not linear):
         //   fog_range(depth) = (depth - range[0]) / (range[1] - range[0])
-        // where `depth` is the camera-to-fragment distance in KILOMETERS (the
-        // range is also in km and may start negative — relative to the horizon).
         //   fog_opacity(t) = color.a * min(1, 1.00747 * (1 - exp(-6t))^3)
         // and (Mercator) it is multiplied by a horizon-blend that fades fog when
         // looking straight down.
-        //
-        // THREE.FogExp2 saturated instantly in flywave's meter world (density
-        // 1/range * 0.3 → exp factor ≈ 1 at km distances), so switch to a linear
-        // THREE.Fog whose near/far map directly onto the km range (×1000).
-        // Approximation: the smoothstep ramp replaces mapbox's exponential
-        // falloff; the alpha cap and horizon-blend are documented follow-ups.
-        const range = fog.range ?? [0.5, 10];
-        const nearM = range[0] * 1000;
-        const farM = range[1] * 1000;
-        const color = new THREE.Color(fog.color ?? '#ffffff');
+        const rawRange: [number, number] = evalZoom(fog.range, [0.5, 10]);
+        const nearM = rawRange[0] * 1000;
+        const farM = rawRange[1] * 1000;
+        const rawColor = evalZoom(fog.color, '#ffffff');
+        const color = new THREE.Color(rawColor);
+        const alpha = typeof rawColor === 'string' && /^#[\da-fA-F]{8}$/.test(rawColor)
+            ? parseInt(rawColor.slice(7, 9), 16) / 255
+            : 1;
         this.m_fog = new THREE.Fog(color.getHex(), nearM, farM);
+        // Feed the fog color alpha into the shared fog-uniform template so
+        // recompiled materials pick up the mapbox opacity ramp's alpha scale.
+        (THREE.UniformsLib.fog as any).fogAlpha.value = alpha;
         this.m_scene.fog = this.m_fog;
+        const rawHorizonBlend = evalZoom(fog['horizon-blend'], ['interpolate', ['linear'], ['zoom'], 4, 0.2, 7, 0.1]);
+        const rawSpaceColor = fog['space-color'] !== undefined
+            ? fog['space-color']
+            : ['interpolate', ['linear'], ['zoom'], 4, '#010b19', 7, '#367ab9'];
+        const rawHighColor = evalZoom(fog['high-color'], '#245cdf');
+        this.m_fogState = {
+            color: color.clone(),
+            alpha,
+            // mapbox drawAtmosphere: horizonBlend = mapValue(horizon-blend, 0..1, 0.0005..0.25)
+            horizonBlend: Number(evalZoom(rawHorizonBlend, 0.2)) * 0.2495 + 0.0005,
+            highColor: new THREE.Color(rawHighColor),
+            spaceColor: new THREE.Color(evalZoom(rawSpaceColor, '#010b19')),
+        };
+        // Mapbox renders the atmosphere glow (space→high→fog gradient) in the
+        // sky region whenever fog is enabled and the horizon is visible — even
+        // without an explicit `sky` layer. Create a camera-centered dome that
+        // reproduces the `atmosphere.fragment.glsl` gradient.
+        this.createFogAtmosphereDome();
+        if (fog['star-intensity'] && fog['star-intensity'] > 0) {
+            this.createStars(fog['star-intensity']);
+        }
+    }
+
+    private m_fogState: {
+        color: THREE.Color;
+        alpha: number;
+        horizonBlend: number;
+        highColor: THREE.Color;
+        spaceColor: THREE.Color;
+    } | null = null;
+
+    /**
+     * Create/update the fog-driven atmosphere gradient dome in the sky region.
+     *
+     * Mirrors mapbox `drawAtmosphereGlow` (`atmosphere.fragment.glsl`):
+     * the sky is a gradient from `space-color` (zenith) through `high-color`
+     * to the fog color at the horizon, with an exponential fadeout driven by
+     * `horizon-blend`. The dome is centered on the RTE camera (origin), so each
+     * fragment's world position is the view direction; the elevation above the
+     * horizon determines the gradient position.
+     */
+    private createFogAtmosphereDome(): void {
+        if (!this.m_scene || !this.m_fogState) return;
+        const fog = this.m_fogState;
+
+        if (!this.m_skyMesh) {
+            const geom = new THREE.SphereGeometry(1000, 32, 16);
+            const material = new THREE.ShaderMaterial({
+                side: THREE.BackSide,
+                transparent: false,
+                depthWrite: false,
+                depthTest: true,
+                uniforms: {
+                    uFogColor: { value: fog.color.clone() },
+                    uFogAlpha: { value: fog.alpha },
+                    uHighColor: { value: fog.highColor.clone() },
+                    uHighAlpha: { value: 1.0 },
+                    uSpaceColor: { value: fog.spaceColor.clone() },
+                    uSpaceAlpha: { value: 1.0 },
+                    uFadeout: { value: fog.horizonBlend },
+                },
+                vertexShader: `
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 uFogColor;
+                    uniform float uFogAlpha;
+                    uniform vec3 uHighColor;
+                    uniform float uHighAlpha;
+                    uniform vec3 uSpaceColor;
+                    uniform float uSpaceAlpha;
+                    uniform float uFadeout;
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vec3 dir = normalize(vWorldPosition);
+                        // Elevation above the horizon (world z-up, camera at origin).
+                        float elevation = asin(clamp(dir.z, -1.0, 1.0));
+                        // The atmosphere glow only fills the sky region above the
+                        // horizon; the ground below is covered by the (fogged)
+                        // map plane. Match mapbox: the atmosphere is drawn with a
+                        // read-only depth test and is occluded by ground geometry,
+                        // so skip below-horizon fragments here.
+                        if (elevation <= 0.0) discard;
+                        float horizonAngle = elevation / 3.14159265359;
+                        float t = exp(-horizonAngle / max(uFadeout, 0.0005));
+                        vec3 c0 = mix(uSpaceColor, uHighColor, uHighAlpha);
+                        vec3 c1 = mix(c0, uFogColor, uFogAlpha);
+                        vec3 c2 = mix(c0, c1, t);
+                        // Mapbox blends the gradient with premultiplied alpha
+                        // over a clear color of space-color:
+                        //   result = space*(1-t) + c2*t
+                        // Fold that in here so the dome is self-contained and
+                        // does not depend on the canvas clear color.
+                        vec3 col = mix(uSpaceColor, c2, t);
+                        gl_FragColor = vec4(col, 1.0);
+                    }
+                `,
+            });
+            this.m_skyMesh = new THREE.Mesh(geom, material);
+            this.m_skyMesh.frustumCulled = false;
+            this.m_skyMesh.renderOrder = 1000;
+            this.m_skyMesh.userData.__mbFogAtmosphereDome = true;
+            this.m_scene.add(this.m_skyMesh);
+        } else {
+            const material = this.m_skyMesh.material as THREE.ShaderMaterial;
+            if (material.uniforms) {
+                material.uniforms.uFogColor.value.copy(fog.color);
+                material.uniforms.uFogAlpha.value = fog.alpha;
+                material.uniforms.uHighColor.value.copy(fog.highColor);
+                material.uniforms.uSpaceColor.value.copy(fog.spaceColor);
+                material.uniforms.uFadeout.value = fog.horizonBlend;
+            }
+        }
     }
 
     applySky(sky: SkySpec | undefined, fog: FogSpec | undefined): void {
         if (!this.m_scene) return;
-        if (this.m_skyMesh) {
+        // A sky mesh created by `createFogAtmosphereDome` (fog-driven atmosphere
+        // glow) must survive this call when no explicit `sky` layer exists — it
+        // is only replaced when an explicit sky is actually applied below.
+        if (this.m_skyMesh && !this.m_skyMesh.userData.__mbFogAtmosphereDome) {
             this.m_scene.remove(this.m_skyMesh);
             this.m_skyMesh = null;
         }
@@ -372,6 +559,12 @@ export class MBEnvironmentManager {
         }
 
         if (!sky) return;
+
+        // An explicit sky replaces the fog-driven atmosphere dome.
+        if (this.m_skyMesh && this.m_skyMesh.userData.__mbFogAtmosphereDome) {
+            this.m_scene.remove(this.m_skyMesh);
+            this.m_skyMesh = null;
+        }
 
         const skyType = sky['sky-type'] ?? 'gradient';
         if (skyType === 'gradient') {
