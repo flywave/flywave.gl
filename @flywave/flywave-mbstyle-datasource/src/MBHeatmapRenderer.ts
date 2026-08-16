@@ -406,7 +406,9 @@ export class MBHeatmapRenderer {
                     vec2 fc = vec2(gl_FragCoord.x, uViewport.y - gl_FragCoord.y);
                     float r = length(fc - vCenter) / max(vRadiusPx, 0.0001);
                     float val = vWeight * uIntensity * 0.398942 * exp(-0.5 * 9.0 * r * r);
-                    gl_FragColor = vec4(vec3(val), val);
+                    // mapbox heatmap pass 1: density in the RED channel, alpha
+                    // constant 1 (the composite pass reads the .r channel).
+                    gl_FragColor = vec4(val, 1.0, 1.0, 1.0);
                 }
             `,
         });
@@ -484,7 +486,8 @@ export class MBHeatmapRenderer {
                 uniform float uOpacity;
                 varying vec2 vUv;
                 void main() {
-                    float d = texture2D(uDensity, vUv).a;
+                    // mapbox heatmap composite reads the RED density channel.
+                    float d = texture2D(uDensity, vUv).r;
                     vec4 col = texture2D(uRamp, vec2(d, 0.5));
                     // mapbox: gl_FragColor = color * u_opacity (all channels).
                     gl_FragColor = vec4(col.rgb * uOpacity, col.a * uOpacity);
