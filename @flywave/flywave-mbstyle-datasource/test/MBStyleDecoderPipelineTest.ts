@@ -103,6 +103,40 @@ describe('MBStyle decode pipeline', () => {
         expect(decodedTile.techniques.length).to.be.greaterThan(0);
     });
 
+    it('emits a fill outline ribbon for fill-outline-color', () => {
+        const style: StyleSpecification = {
+            version: 8,
+            sources: {},
+            layers: [{
+                id: 'fill', type: 'fill', source: 'geojson',
+                paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-outline-color': 'blue' },
+            }],
+        };
+
+        const evaluator = new MBLayerEvaluator(style);
+        const tileKey = TileKey.fromRowColumnLevel(0, 0, 0);
+        const decodeInfo = createDecodeInfo(tileKey);
+        const emitter = new MBTileDataEmitter(tileKey, decodeInfo, 0);
+
+        const polygon = { rings: [[
+                new THREE.Vector2(100, 100), new THREE.Vector2(300, 100),
+                new THREE.Vector2(300, 300), new THREE.Vector2(100, 100),
+            ]] };
+        const matched = evaluator.evaluate('geojson', '', { type: 'Polygon', properties: {} }, 0, 'polygon');
+        emitter.processFillFeature('geojson', 4096, [polygon as any], {}, undefined, matched);
+
+        const decodedTile = emitter.getDecodedTile();
+        const outlineTech = decodedTile.techniques.find(t => (t as any)._isFillOutline) as any;
+        expect(outlineTech).not.to.be.undefined;
+        expect(outlineTech.name).to.equal('fill');
+        expect(outlineTech.color).to.equal('blue');
+        // The outline ribbon is a Polygon geometry group with indices.
+        const outlineGeom = decodedTile.geometries.find(g =>
+            g.groups.some((gr: any) => gr.technique === outlineTech._index)) as any;
+        expect(outlineGeom).not.to.be.undefined;
+        expect(outlineGeom.index.buffer.byteLength).to.be.greaterThan(0);
+    });
+
     it('produces valid DecodedTile from point features', () => {
         const style: StyleSpecification = {
             version: 8,

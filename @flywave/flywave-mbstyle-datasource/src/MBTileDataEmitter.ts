@@ -860,6 +860,19 @@ export class MBTileDataEmitter {
                 }
             }
 
+            // `fill-outline-color`: stroke the polygon boundary as a thin line.
+            // mgl renders the outline with the `fillOutline` program — a 1px
+            // screen-space AA stroke along the boundary segments (draw_fill.ts
+            // stroke pass + lineIndexBuffer). Emit the exterior + hole rings as
+            // pre-extruded solid-lines with the outline color.
+            if (!needsUv && layer.paint?.['fill-outline-color']) {
+                for (const polygon of geometry) {
+                    const rings = polygon.rings;
+                    if (rings.length === 0) continue;
+                    this.emitFillOutline(layer, rings, properties, featureId);
+                }
+            }
+
             const count = geo.indices.length - featureStart;
             if (count > 0) {
                 geo.groups.push({
@@ -871,6 +884,89 @@ export class MBTileDataEmitter {
                 geo.featureStarts.push(featureStart);
                 geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
             }
+        }
+    }
+
+    /**
+     * Emit the boundary rings of a filled polygon as a thin baked fill ribbon
+     * carrying the `fill-outline-color`. Mirrors mgl `fillOutline`: a ~1px
+     * stroke along the polygon outline. Rings are closed polylines (exterior +
+     * holes). Uses the same pre-extruded-ribbon approach as `emitRibbonFill`
+     * (the SolidLineMaterial's GLSL extrusion does not rasterize on
+     * SwiftShader, so the width is baked into `position` and a plain fill
+     * technique renders the triangles).
+     */
+    private emitFillOutline(
+        layer: EvaluatedLayer,
+        rings: THREE.Vector2[][],
+        properties: Record<string, any>,
+        featureId: string | number | undefined,
+    ): void {
+        const outlineTechIdx = this.getOrCreateOutlineTechniqueIndex(layer);
+        const key = `${layer.id}:fill-outline:${outlineTechIdx}`;
+        const geo = this.getOrCreateGeometry(key);
+        const featureStart = geo.indices.length;
+        // mgl's fillOutline stroke is `alpha = 1 - smoothstep(0, 1, dist)` over
+        // the boundary; with MSAA a 1px ribbon peaks ~50%. Bake a 2px-wide
+        // ribbon so the center is fully opaque (matching the 1px visual).
+        const lineWidthPx = 2;
+        const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+            (256 * Math.pow(2, this.m_zoom + 1));
+        const worldHalfWidth = lineWidthPx * metersPerPixel / 2;
+
+        for (const ring of rings) {
+            if (ring.length < 2) continue;
+            // Close the ring (mgl lineIndexBuffer draws segments between
+            // consecutive vertices, including the closing edge).
+            const closed = [...ring, ring[0]];
+
+            const worldPts: number[] = [];
+            for (const pt of closed) {
+                const w = this.project(pt);
+                worldPts.push(w.x, w.y, w.z);
+            }
+
+            const center = this.m_decodeInfo.center;
+            const lineGeom = createLineGeometry(center, worldPts, webMercatorProjection);
+            if (lineGeom.vertices.length === 0 || lineGeom.indices.length === 0) continue;
+
+            // Bake the outline width into the ribbon positions (same as
+            // processLineFeature / emitRibbonFill).
+            const verts = lineGeom.vertices;
+            for (let v = 0; v < verts.length; v += 13) {
+                const sy = verts[v + 1] >= 0 ? 1 : -1;
+                verts[v + 3] += verts[v + 9] * worldHalfWidth * sy;
+                verts[v + 4] += verts[v + 10] * worldHalfWidth * sy;
+                verts[v + 5] += verts[v + 11] * worldHalfWidth * sy;
+            }
+
+            const startIdx = geo.positions.length / 3;
+            for (let v = 0; v < lineGeom.vertices.length; v += 13) {
+                geo.positions.push(
+                    lineGeom.vertices[v + 3],
+                    lineGeom.vertices[v + 4],
+                    lineGeom.vertices[v + 5],
+                );
+            }
+            // Reverse CW winding to CCW (fill material FrontSide culling).
+            for (let i = 0; i < lineGeom.indices.length; i += 3) {
+                geo.indices.push(lineGeom.indices[i] + startIdx);
+                geo.indices.push(lineGeom.indices[i + 2] + startIdx);
+                geo.indices.push(lineGeom.indices[i + 1] + startIdx);
+            }
+        }
+
+        const count = geo.indices.length - featureStart;
+        if (count > 0) {
+            geo.groups.push({
+                start: featureStart,
+                count,
+                materialIndex: outlineTechIdx,
+                sortKey: this.extractSortKey(layer),
+            });
+            geo.featureStarts.push(featureStart);
+            const fid = featureId ?? properties.$id ?? null;
+            geo.objInfos.push({ ...properties, $id: fid });
         }
     }
 
@@ -1144,6 +1240,39 @@ export class MBTileDataEmitter {
                 _isLineRibbon: true,
                 color: paint['line-color'] ?? '#000000',
                 opacity: paint['line-opacity'] ?? 1,
+            };
+            this.m_techniques.push(technique as IndexedTechnique);
+        }
+        return idx;
+    }
+
+    /**
+     * Technique for a `fill-outline-color` ring: a 1px fill ribbon in the
+     * outline color rendered just above the fill. Mirrors mgl's `fillOutline`
+     * program — a screen-space 1px stroke along the polygon boundary.
+     */
+    private getOrCreateOutlineTechniqueIndex(layer: EvaluatedLayer): number {
+        const color = layer.paint?.['fill-outline-color'];
+        const key = `${layer.id}:fill-outline-tech:${String(color)}`;
+        let idx = this.m_layerToTechniqueIndex.get(key);
+        if (idx === undefined) {
+            idx = this.m_techniqueIndex++;
+            this.m_layerToTechniqueIndex.set(key, idx);
+            const paint = layer.paint ?? {};
+            const technique: any = {
+                name: 'fill',
+                _index: idx,
+                _renderOrder: layer.renderOrder + 0.5,
+                renderOrder: layer.renderOrder + 0.5,
+                _layerId: layer.id,
+                _paint: paint,
+                _layout: layer.layout,
+                color: color ?? '#000000',
+                // mgl multiplies the outline by fill-opacity (the `opacity`
+                // pragma in fill_outline shaders) and by the outline color's own
+                // alpha (glFragColor = out_color * alpha * opacity).
+                opacity: paint['fill-opacity'] ?? 1,
+                _isFillOutline: true,
             };
             this.m_techniques.push(technique as IndexedTechnique);
         }

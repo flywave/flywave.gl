@@ -1016,6 +1016,23 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - `text-variable-anchor`（40206–62233）与 `placement-line`（95790）：variable anchor 放置 + line placement，独立引擎特性。
 - `*-text-anchor` 残余（1992–4595）：icon 箱位已正确，残余为文本未随 anchor 渲染（text 管线）。
 
+### 12.22 fill-outline-color 接线（2026-08-16）
+
+**背景**：fill-outline-color 8 例中 7 例近失（12–192px）。`MBMaterialPatchManager` 用 `fwidth(gl_FragCoord.z)` 边缘 hack 注入——平坦 fill 的深度导数恒 0，从不触发，轮廓从未渲染（`literal` actual 恒白）。
+
+**实现（对齐 mgl `draw_fill.ts` stroke pass + `fill_outline` shader）**：
+- mgl 轮廓 = 沿多边形边界的 ~1px **屏幕空间 AA 描边**（`lineIndexBuffer` 边界线段 + `alpha = 1 - smoothstep(0,1,dist)`）。不透明度 = `fill-outline-color` 自带 alpha × `fill-opacity`（`outline_color`/`opacity` pragma）。
+- `MBTileDataEmitter.processFillFeature`：当 `paint['fill-outline-color']` 存在时，对外环 + 内环（holes）发闭合 polyline；经 `createLineGeometry` 生成 ribbon，把 2px 线宽烘焙进 `position`（与 `processLineFeature`/`emitRibbonFill` 同机制，SolidLineMaterial 的 GLSL 挤出在 SwiftShader 不栅格化），以 **fill technique**（`color=outline-color`, `opacity=fill-opacity`, `renderOrder=layer+0.5`）写入独立 Polygon geometry 组。
+- 首版走 SolidLine 管线失败：`_preExtrudedLines` 标志无人消费，SolidLine 路径实际不渲染；改为 ribbon-fill（与 line-color 同解法）后轮廓上屏。
+- 2px 线宽：1px ribbon 经 MSAA 峰值 ~50% alpha，2px 使中心全饱和（mgl 视觉 ~1px）。
+
+**验证**（`rendering-test-results/mbstyle-foc3/`）：
+- **2/8 通过**（default、function），`fill` 34→27、`literal` 104→52、`property-function` 193→127（pixelmatch 0.00075×4096≈4px 阈值，残余为 AA 边缘像素级差异：蓝色 (0,0,255) vs 期望 (24,24,233)，绿色 function 因 AA 分布巧合完全对齐而 0 mismatch）。
+- `opacity`（fill-opacity 0.5 × outline alpha 1 → ~42%）与 `multiply`（outline alpha 0.5）语义已实现（`opacity: paint['fill-opacity']`，颜色 alpha 由 material adapter 携带）。
+- **零回归**：fill-color 4/8、fill-opacity 2/9、fill-visibility 2/2、background-color 3/6 与 baseline 持平；mbstyle 单测 207 passing（+1 outline 用例，1 既有 circle-radius×2 失败无关）。
+
+**遗留**：残余 mismatch 均为 1–2px AA 边缘对齐（top-row white 被 pixelmatch 判 mismatch）；与 line-color 337px 同源（AA/线宽舍入）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
