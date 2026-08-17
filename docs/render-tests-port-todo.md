@@ -11,6 +11,8 @@
 > **2026-08-12 更新**：完成**首次全量实测基线**（3031 用例，Edge 151 headless + SwiftShader）：2775 个上报结果中 **182 通过（6.56%）**，455 个失败差异 ≤600px（近失），256 个因浏览器崩溃/超时未上报。实测远低于 §3 的 50–60% 估算，text/line/raster/fog/skybox/lighting 等系整域全红——详见 §10。
 >
 > **2026-08-17 更新**：§14 冻结后的 5 个 commit（fog 模型 / skybox 接线 / 3D-lights 修正 ×2 / heatmap 双 pass 通道对齐）完成 G7 全量验收（§12.27）：lighting-3d-mode 2→**10 通过**、skybox 0→**1**、fog 0 通过但近失 3（space-color-use-theme 39 第一梯队）、heatmap 仍 0（data-expression 308 近失）。§14 的 F12 已勾除、F3 状态已更新。
+>
+> **2026-08-17 更新（F3 落地）**：heatmap 双 pass 对齐 mgl 全链（§12.28），**0/18 → 15/18**（opacity/intensity/weight 全绿、color 2/2、radius 4/7）。§14 F3 完成，仅剩 antimeridian / pitch30 / projected 三个单测。
 
 ---
 
@@ -1125,6 +1127,24 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - **heatmap 通道对齐未带来新通过**（data-expression 308px 与 §12.26 相同）——density→ramp 阈值校准仍是 F3 主线。
 - 单测 257 passing + 2 既有失败（RawShaderMaterial、circle-radius×2），tsc 全绿，5 个 commit 无回归。
 
+### 12.28 heatmap 双 pass 对齐 mgl 全链（2026-08-17，commit `6fa78651`，§14 F3 落地）
+
+**根因（§14 F3 三要素 + 2 个新发现 bug）**：
+1. **密度 FBO 分辨率**：mgl 用 `painter.width*0.25` offscreen FBO（`draw_heatmap.ts:37-40`，RGBA16F）+ 双线性上采样回屏——点采样累积 + upsample 塑造可见密度场（peak 降至 0.13-0.31、尾部展宽）；我们全分辨率 RGBA8。
+2. **默认 heatmap-color ramp 错误**：`MBLayerEvaluator.paintDefs` + emitter 默认 `[[0,rgba],[0.5,blue],[1,red]]`（只有蓝→红）；spec 默认是 `0/transparent, 0.1/royalblue, 0.3/cyan, 0.5/lime, 0.7/yellow, 1/red`。所有未显式设置 heatmap-color 的用例此前只渲蓝。
+3. **命名色 parseColor 被 r178 ColorManagement 污染**：`new THREE.Color('royalblue')` 在 linear-srgb 工作空间返回 `(0.053,0.141,0.753)`，`Math.round(r*255)=13` → 命名色 ramp 全偏暗（royalblue→(13,36,192)，期望 (65,105,225)）。修 `convertLinearToSRGB()`。纯色（cyan/lime/red/yellow）不受影响故此前未暴露。
+4. **heatmap-color 表达式 ramp 全黑**：`p['heatmap-color']` 为编译后表达式对象 `["memo",["interpolate",...]]`（`MemoCallExpr` 序列化），`normalizeGradientStops` 只认 `raw[0]==='interpolate'` → 返回空 → 黑 texture。修：JSON 规范化非 Array 对象 + 循环解包 `memo`。
+5. **composite premultiplied blend**：mgl `gl_FragColor = color*u_opacity`（已预乘），`colorModeForRenderPass()` = `[ONE, ONE_MINUS_SRC_ALPHA]`；我们用 NormalBlending（`[SRC_ALPHA, ONE_MINUS_SRC_ALPHA]`）→ opacity<1 双重预乘偏暗（heatmap-opacity/literal act (191,128,128) vs 期望 (255,127,127)）。修 CustomBlending ONE/OneMinusSrcAlpha。
+
+**额外**：反子午线 world copies（`projectToPx(k.x±R)`，R=赤道周长）——mgl offscreen pass 遍历 MultiTileID 含回绕副本；antimeridian 用例 x=0 处已出核但仍 4786px（密度峰值 cyan vs 期望 lime，深水区）。
+
+**实施**：`MBHeatmapRenderer`（0.25× FBO + HalfFloat、composite blend、world copies）、`MBLayerEvaluator` + `MBTileDataEmitter`（默认 ramp）、`MBMaterialPatchManager`（parseColor sRGB + normalizeGradientStops memo 解包）。
+
+**验证**（`rendering-test-results/mbstyle-hm20/`，Edge headless + SwiftShader，`HARP_NO_HARD_SOURCE_CACHE=true`）：
+- **heatmap 0/18 → 15/18**：heatmap-opacity 3/3（default/function/literal）、heatmap-intensity 3/3、heatmap-weight 3/3、heatmap-color 2/2（default + expression 全黑修好）、heatmap-radius 4/7（default/literal/function/data-expression）。data-expression 从 308px 近失 → 通过，density 场与 mgl 逐 texel 一致（0.25× 模拟验证）。
+- tsc 绿；单测 257 passing + 2 既有失败（RawShaderMaterial、circle-radius×2）无回归。
+- **遗留**：`heatmap-radius/antimeridian`（4786px，回绕副本密度偏 cyan vs 期望 lime）、`pitch30`（16181px，俯仰地面平面 quad 椭圆化未实现）、`projected`（13060px，自定义投影）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
@@ -1280,7 +1300,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 | G3 | **icon-text-fit 0/41 未排查**（patcher applyIconTextFit 可达但未验证文本缩放进 icon 盒语义） | icon-text-fit（41） | 全 0 通过，仅 2 近失 |
 | G4 | **text 域引用损坏 + SDF 亚像素精度**（63/258 期望图为纯黑空图不可修） | text-*（~273） | §12.13；text-line-height 34px、halo 需引擎级 |
 | G5 | **raster/image 纹理仍未上屏**（双路径未收口） | raster（~85）、image（20） | raster-opacity 121k、image/raster-brightness 158k |
-| G6 | **heatmap 双 pass 刚落地待微调** | heatmap（18） | data-expression 324px 近失、default/literal 15–31k |
+| G6 | **heatmap 双 pass 刚落地待微调** | heatmap（18） | **✅ 已对齐（08-17，§12.28）：0→15/18**（opacity/intensity/weight 全绿）；遗留 antimeridian/pitch30/projected 3 例 |
 | G7 | **fog/skybox/lighting-3d 代码已落地未验收** | fog（63）、skybox（34）、lighting-3d-mode（116） | **✅ 已验收（08-17，§12.27）**：lighting 10 通过、skybox 1、fog 0（近失 3）；剩余为 fog 像素级对齐 + lighting fill-pattern/stroke 子域 |
 | G8 | **model-layer 内容不对齐 / depth-occlusion** | model-layer（212）、depth-occlusion（14） | model-layer fill-extrusion--default 279994、0 DISCONNECTED 已解决 |
 
@@ -1330,10 +1350,9 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 ### P1 — 近失可快速转通过（G1 剩余）
 
 **F3. heatmap kernel/ramp 密度阈值校准（G6）**
-- 现状：data-expression 308px（threshold 5px）、opacity/default 649px；08-17 `23525745` 双 pass 通道对齐（density→R、alpha 恒 1）落地后全量复跑仍 **0/18 通过**、data-expression 保持 308px（§12.27）。
-- 根因：blob 40×14 vs 期望 45×20（kernel 可见边缘提前）。mgl 用 **0.25× 分辨率 density FBO**（`draw_heatmap.ts:37-40`）+ HalfFloat；我们全分辨率 ubyte RT。
-- 方案：① RT 分辨率 0.25× + HalfFloat（需验证 `OES_texture_half_float` 支持）；② 核对 kernel 密度→ramp 的 t 映射（期望在 r=1.0×radius 处仍可见蓝，我们已白）。
-- 用例：heatmap-* 18 例。
+- **✅ 已完成（2026-08-17，§12.28，commit `6fa78651`）：0/18 → 15/18 通过。**
+- 落地要素：① `MBHeatmapRenderer` 密度 FBO 0.25× + RGBA16F（默认 ramp 也对齐 v8）；② composite premultiplied blend（[ONE, ONE_MINUS_SRC_ALPHA]）；③ `parseColor` 命名色 linear→sRGB（r178 ColorManagement）；④ `normalizeGradientStops` 解包 `["memo", expr]` 编译表达式（顺带修好 heatmap-color/expression 全黑）；⑤ 反子午线 world copies。
+- 遗留 3 例：`antimeridian`（4786px，回绕副本密度 cyan vs lime）、`pitch30`（16181px，俯仰地面 quad 椭圆化）、`projected`（13060px，自定义投影）。
 
 **F4. icon-halo-blur/property-function（205px）**：数据驱动 blur 双要素，halo 外缘差（§12.24 遗留）。
 
