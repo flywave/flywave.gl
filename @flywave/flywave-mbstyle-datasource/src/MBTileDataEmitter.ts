@@ -32,6 +32,12 @@ interface AccumulatedGeometry {
     extrusionAxis: number[];
     /** Tile-normalized UVs (raster / hillshade texture fills). */
     uvs: number[];
+    /**
+     * Per-vertex line-ribbon edge coordinate (-1/+1): the patcher turns it
+     * into the mapbox-style ~1px alpha feather at the ribbon edge. Only
+     * ribbon geometries fill this.
+     */
+    edge?: number[];
     /** Line-segment indices for the extruded-polygon edge (roof outline). */
     edgeIndex: number[];
     edgeFeatureStarts: number[];
@@ -1245,7 +1251,7 @@ export class MBTileDataEmitter {
                 // Also emit the pre-extruded ribbon as a simple fill geometry so the
                 // line renders even where the SolidLineMaterial shader extrusion
                 // fails (SwiftShader). The fill technique carries the line color.
-                this.emitRibbonFill(layer, lineGeom, baseVert);
+                this.emitRibbonFill(layer, lineGeom, baseVert, worldPts, worldHalfWidth);
             }
         }
     }
@@ -1259,6 +1265,8 @@ export class MBTileDataEmitter {
         layer: EvaluatedLayer,
         lineGeom: { vertices: number[]; indices: number[] },
         baseVert: number,
+        worldPts: number[],
+        worldHalfWidth: number,
     ): void {
         const paint = layer.paint ?? {};
         // Key by ribbon technique: see the fill key comment in
@@ -1270,14 +1278,18 @@ export class MBTileDataEmitter {
         const featureStart = geo.indices.length;
         const startIdx = geo.positions.length / 3;
 
-        // Copy the baked ribbon positions (offset 3 in the stride-13 data).
+        // Copy the baked ribbon positions (offset 3 in the stride-13 data)
+        // plus the extrusion sign (-1/+1) as the AA-feather coordinate.
+        geo.edge = geo.edge ?? [];
         for (let v = 0; v < lineGeom.vertices.length; v += 13) {
             geo.positions.push(
                 lineGeom.vertices[v + 3],
                 lineGeom.vertices[v + 4],
                 lineGeom.vertices[v + 5],
             );
+            geo.edge.push(lineGeom.vertices[v + 1] >= 0 ? 1 : -1);
         }
+        this.emitRibbonCaps(layer, geo, worldPts, worldHalfWidth);
         // Remap the line indices into the fill geometry. `createLineGeometry`
         // winds its triangles CW when viewed from above (camera +Z); the fill
         // material uses FrontSide culling, so reverse the winding to CCW.
@@ -1298,6 +1310,75 @@ export class MBTileDataEmitter {
             });
             geo.featureStarts.push(featureStart);
             geo.objInfos.push({ ...(this.m_lineAttr.length > 0 ? JSON.parse(this.m_lineAttr[this.m_lineAttr.length - 1]) : {}), $id: null });
+        }
+    }
+
+    /**
+     * Append `line-cap` geometry (square / round) to a baked line ribbon, using
+     * the ORIGINAL (unbaked) centerline points: mgl extends the end cross-section
+     * by half the width (square) or draws a half-disc fan (round). Butt = none.
+     */
+    private emitRibbonCaps(
+        layer: EvaluatedLayer,
+        geo: AccumulatedGeometry,
+        worldPts: number[],
+        worldHalfWidth: number,
+    ): void {
+        const cap = layer.layout?.['line-cap'];
+        if (cap !== 'round' && cap !== 'square') return;
+        const n = worldPts.length / 3;
+        if (n < 2) return;
+        const x0 = worldPts[0], y0 = worldPts[1], z0 = worldPts[2];
+        const xN = worldPts[(n - 1) * 3], yN = worldPts[(n - 1) * 3 + 1], zN = worldPts[(n - 1) * 3 + 2];
+        if (Math.abs(x0 - xN) < 1e-9 && Math.abs(y0 - yN) < 1e-9) return;
+
+        const pushVertex = (x: number, y: number, z: number, e: number): number => {
+            geo.positions.push(x, y, z);
+            geo.edge!.push(e);
+            return geo.positions.length / 3 - 1;
+        };
+        // CCW (viewed from +Z) triangles only — the fill material is FrontSide.
+        const pushTri = (i: number, j: number, k: number) => {
+            const px = geo.positions;
+            const area2 =
+                (px[j * 3] - px[i * 3]) * (px[k * 3 + 1] - px[i * 3 + 1]) -
+                (px[j * 3 + 1] - px[i * 3 + 1]) * (px[k * 3] - px[i * 3]);
+            if (area2 >= 0) geo.indices.push(i, j, k);
+            else geo.indices.push(i, k, j);
+        };
+
+        for (const end of [0, 1]) {
+            const cx = end === 0 ? x0 : xN;
+            const cy = end === 0 ? y0 : yN;
+            const cz = end === 0 ? z0 : zN;
+            const oi = end === 0 ? 1 : n - 2;
+            const ox = worldPts[oi * 3], oy = worldPts[oi * 3 + 1];
+            let dx = cx - ox, dy = cy - oy;
+            const dl = Math.hypot(dx, dy) || 1;
+            dx /= dl; dy /= dl; // outward unit direction beyond the endpoint
+            const nx = -dy, ny = dx; // left normal
+            const hw = worldHalfWidth;
+
+            if (cap === 'square') {
+                const a1 = pushVertex(cx + nx * hw, cy + ny * hw, cz, 1);
+                const a2 = pushVertex(cx - nx * hw, cy - ny * hw, cz, -1);
+                const c1 = pushVertex(cx + nx * hw + dx * hw, cy + ny * hw + dy * hw, cz, 1);
+                const c2 = pushVertex(cx - nx * hw + dx * hw, cy - ny * hw + dy * hw, cz, -1);
+                pushTri(a1, a2, c2);
+                pushTri(a1, c2, c1);
+            } else {
+                const c = pushVertex(cx, cy, cz, 0);
+                const K = 8;
+                const theta0 = Math.atan2(ny, nx);
+                let prevV = -1;
+                for (let k = 0; k <= K; k++) {
+                    const th = theta0 + (Math.PI * k) / K;
+                    const v = pushVertex(cx + Math.cos(th) * hw, cy + Math.sin(th) * hw, cz, 1);
+                    if (k === 0) { prevV = v; continue; }
+                    pushTri(c, prevV, v);
+                    prevV = v;
+                }
+            }
         }
     }
 
@@ -1329,6 +1410,7 @@ export class MBTileDataEmitter {
                 // order (feature order) decides which color wins at crossings,
                 // matching mapbox's painter's algorithm for a single line layer.
                 _isLineRibbon: true,
+                _ribbonWidthPx: Number(paint['line-width'] ?? 1),
                 color: paint['line-color'] ?? '#000000',
                 opacity: paint['line-opacity'] ?? 1,
             };
@@ -1649,6 +1731,14 @@ export class MBTileDataEmitter {
                     buffer: new Float32Array(geo.extrusionAxis).buffer,
                     type: 'float' as BufferElementType,
                     itemCount: 4,
+                });
+            }
+            if (geo.edge && geo.edge.length > 0) {
+                vertexAttributes.push({
+                    name: 'aRibbonEdge',
+                    buffer: new Float32Array(geo.edge).buffer,
+                    type: 'float' as BufferElementType,
+                    itemCount: 1,
                 });
             }
             if (geo.uvs.length > 0) {
