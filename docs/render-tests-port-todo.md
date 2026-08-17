@@ -13,6 +13,8 @@
 > **2026-08-17 更新**：§14 冻结后的 5 个 commit（fog 模型 / skybox 接线 / 3D-lights 修正 ×2 / heatmap 双 pass 通道对齐）完成 G7 全量验收（§12.27）：lighting-3d-mode 2→**10 通过**、skybox 0→**1**、fog 0 通过但近失 3（space-color-use-theme 39 第一梯队）、heatmap 仍 0（data-expression 308 近失）。§14 的 F12 已勾除、F3 状态已更新。
 >
 > **2026-08-17 更新（F3 落地）**：heatmap 双 pass 对齐 mgl 全链（§12.28），**0/18 → 15/18**（opacity/intensity/weight 全绿、color 2/2、radius 4/7）。§14 F3 完成，仅剩 antimeridian / pitch30 / projected 三个单测。
+>
+> **2026-08-17 当前快照（最新）**：§12.21–§12.28 的 08-16/17 系列修复全部落地——icon-text-fit 0→**7/41**（3b8da244）、fill-outline-color 1→**2/8**（57baa3e0）、icon-size 4→**9/18**（af54f113）、icon-halo-blur 0→**4/5** + width 3→**4/4** + color 3→**5/7**（f1b5a066）、icon-rotate 四角旋转接线（62ca4139）、heatmap 0/18→**15/18**（6fa78651）、lighting-3d-mode 2→**10** + skybox 0→**1**（G7 验收，§12.27）。最新全量基线仍为 baseline4（08-15，§12.9）**231/2827（8.17%）**，0 DISCONNECTED。剩余主线：F1 fill-extrusion 墙面几何对齐（~140 例）、F8 line-join/cap、F11 raster/image、G4 text 像素精度（见 §14 待办清单）。
 
 ---
 
@@ -469,6 +471,8 @@
 > **当前端到端可视觉通过估计：约 15–25%**（仅 native technique 通道）。**修复 S1–S5 后可提升至约 50–60%**（patcher 增强恢复 + filter/feature-state/style 修复）。后续逐项像素校正为精度工作。
 >
 > **⚠️ 2026-08-12 实测证伪**：全量基线（§10）显示实际通过率仅 **6.56%**（182/2775），上述 50–60% 估算过于乐观。
+>
+> **2026-08-17 实测更新**：历轮全量基线——round1 182/2775（6.56%）→ round2 204/2646（7.71%）→ round3 212/2765（7.67%）→ **baseline4 231/2827（8.17%）**（§10/§11.5/§12.1/§12.9）。此后 08-16/17 定向修复再增：lighting-3d-mode 2→10、skybox 0→1、heatmap 0→15/18、icon-text-fit 0→7/41、icon-size 4→9/18、icon-halo 三分类 0+3+3 → 4/5+4/4+5/7（详见 §12.21–§12.28）。
 
 ---
 
@@ -1374,7 +1378,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 ### P3 — 大工程（G4/G5/G7/G8，架构/引擎级）
 
 - **F11. raster/image 双路径收口（G5）**：raster-opacity 121k（纹理未上屏）；image raster paint 忽略；双路径（env quad vs 逐瓦片）未收口。
-- **F12. fog/skybox/lights 验收（G7）**：**✅ 已验收（2026-08-17，§12.27）**——lighting-3d-mode 2→**10 通过**（ground 层光照全对齐，含 background/color-ambient/ambient-directional/pitched-45、emissive-strength*/background/fill/fill-outline、fill、fill-outline）、skybox 0→**1**（gradient/default）、fog 0 通过但近失 3（space-color-use-theme 39、fill-outline 418、line-gradient 591）、heatmap 0 通过（data-expression 308 近失）。**剩余**：fog 63 例整域待像素级对齐（空间色/2D 叠加）；skybox atmosphere 等子域；lighting 的 fill-pattern/stroke 子域 + bright-v9 pitch-*/fill-extrusion 6 个重型 3D 挂起未上报。
+- **F12. fog/skybox/lights 验收（G7）**：**✅ 已验收（2026-08-17，§12.27）**——lighting-3d-mode 2→**10 通过**（ground 层光照全对齐，含 background/color-ambient/ambient-directional/pitched-45、emissive-strength*/background/fill/fill-outline、fill、fill-outline）、skybox 0→**1**（gradient/default）、fog 0 通过但近失 3（space-color-use-theme 39、fill-outline 418、line-gradient 591）（heatmap 已由 F3/§12.28 独立跟进：0/18→15/18）。**剩余**：fog 63 例整域待像素级对齐（空间色/2D 叠加）；skybox atmosphere 等子域；lighting 的 fill-pattern/stroke 子域 + bright-v9 pitch-*/fill-extrusion 6 个重型 3D 挂起未上报。
 - **F13. text SDF 精度（G4）**：63/258 期望图纯黑（引用损坏不可修）；SDF 亚像素 + halo（需改 TextCanvas 顶点格式）。
 - **F14. model-layer / depth-occlusion（G8）**：崩溃已修（192 上报 0 DISCONNECTED）但内容不对齐（fill-extrusion--default 279994）；occlusion 软淡入在 patcher。
 - **F15. building roof-shape / conflation / 3d-intersections / terrain dynamic-exaggeration / color-theme**：§2.13–§2.15 全 ❌/🔧 域，engine 级。
