@@ -1169,7 +1169,10 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - terrain 2/67（cache-invalidation×2）与 baseline4 持平；building 0/30、depth-occlusion 0/14 维持（各有独立阻塞）。
 - tsc 绿；`MBStyleDecoderPipelineTest` 新增"每数据驱动色值一个 extruded 几何组"用例（12 passing + 2 既有失败不变）。
 
-**遗留（F2a，新开）**：`fill-extrusion-color/property-function`（8237px）与 `zoom-and-property-function`（8171px）——排查发现 **fixture 本身是半块方块**（红=lng∈[-0.0003,0] 西半、蓝=东半，mgl 原版相同；expected 仍完整渲染到 y=255）。我们的渲染缺失**南墙整体 + 屋顶南侧 ~20px**（即 y' 最负一侧）；已验证几何完整到达 emitter（SW 瓦片 x[3201,4096] 全环、5 顶点），数据链（provider→adapter→processor→emitter）无裁剪——截断在渲染侧（TileGeometryCreator/DepthPrePass/Stencil 嫌疑，另见 fovreg 日志出现过 `boundingSphere.radius=NaN` 告警），需专项埋点。
+**遗留（F2a，新开）**：`fill-extrusion-color/property-function`（8237px）与 `zoom-and-property-function`（8171px）——排查发现 **fixture 本身是半块方块**（红=lng∈[-0.0003,0] 西半、蓝=东半，mgl 原版相同；expected 仍完整渲染到 y=255）。我们的渲染缺失**南墙整体 + 屋顶南侧 ~20px**（即 y' 最负一侧）；已验证几何完整到达 emitter（SW 瓦片 x[3201,4096] 全环、5 顶点），数据链（provider→adapter→processor→emitter）无裁剪——截断在渲染侧，需专项埋点。**已排除/已确认**：
+- 深度预通道非根因：technique 置 `enableDepthPrePass:false` 后 pitch-0 缺失不变（且引入 literal 系回归，已回退）。
+- **pitch=0 实验**（fixture 临时改 0 + 重生成索引）：红/蓝屋顶正常渲染（被画布裁剪仅剩边缘条 y=63/191），**唯独居中绿方块（跨 4 瓦片角点）完全消失**——多 technique 的 extruded 对象按瓦片/pitch 有选择性缺失，指向 VisibleTileSet/TileGeometryCreator 对象挂载或剔除，需浏览器断点级调试。
+- 注意：`render-tests-index.ts` 内联全部 fixture，改 style.json 后必须 `node scripts/generate-mbstyle-test-index.js` 重生成才生效。
 
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
