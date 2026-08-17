@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import { MapView, Tile } from '@flywave/flywave-mapview';
+import { EarthConstants } from '@flywave/flywave-geoutils';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { MBMaterialPatchManager } from './MBMaterialPatchManager';
 import { MBStyleDataSource } from './MBStyleDataSource';
@@ -63,6 +64,16 @@ export class MBHeatmapRenderer {
     private m_rt: THREE.WebGLRenderTarget | null = null;
     private m_rtW = 0;
     private m_rtH = 0;
+
+    /**
+     * Density accumulation buffer resolution relative to the drawing buffer.
+     * mapbox draws heatmap kernels into a 0.25x offscreen FBO (0.5x on globe)
+     * and composites it back with bilinear filtering (draw_heatmap.ts:37-40);
+     * the point-sampled accumulation + upsample shapes the visible density
+     * field, so matching it is required for pixel alignment.
+     */
+    private readonly m_rtScale = 0.25;
+    private m_rtHalfFloat = false;
 
     private m_scene: THREE.Scene;
     private m_camera: THREE.Camera;
@@ -175,12 +186,12 @@ export class MBHeatmapRenderer {
         const GAUSS_COEF = 0.398942; // 1 / sqrt(2*PI)
         const ZERO = 1 / 255 / 16;
         let maxCount = 0;
+        // World repeat distance in world x-units (a full 360° of longitude maps
+        // to one equatorial circumference). Kernels near the antimeridian must
+        // be drawn at wrapped world copies, like mgl's renderWorldCopies.
+        const worldRepeatX = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
         for (const g of ordered) {
             for (const k of g.raw) {
-                this.m_v3.set(k.x, k.y, k.z).project(camera);
-                if (this.m_v3.z > 1) continue; // behind camera
-                const sx = (this.m_v3.x * 0.5 + 0.5) * w;
-                const sy = (1 - (this.m_v3.y * 0.5 + 0.5)) * h;
                 let radiusCssPx = k.radius;
                 if (k.radiusExpr !== undefined) {
                     const r = MBExpressionEngine.evaluate(k.radiusExpr, {
@@ -197,14 +208,36 @@ export class MBHeatmapRenderer {
                     S = Math.min(Math.sqrt(-2 * Math.log(ratio)) / 3, 32);
                 }
                 const half = Math.max(S * rPx, 1);
-                // Cull with the per-point quad half-size so large kernels
-                // straddling the screen edge still contribute.
-                if (sx < -half || sx > w + half || sy < -half || sy > h + half) continue;
-                g.px.push(sx);
-                g.py.push(sy);
-                g.half.push(half);
-                g.radiusPx.push(rPx);
-                g.weight.push(k.weight);
+                const emitKernel = (sx: number, sy: number) => {
+                    // Cull with the per-point quad half-size so large kernels
+                    // straddling the screen edge still contribute.
+                    if (sx < -half || sx > w + half || sy < -half || sy > h + half) return;
+                    // Pass density-buffer-space values (mapbox accumulates into a
+                    // 0.25x offscreen buffer, see m_rtScale).
+                    const s = this.m_rtScale;
+                    g.px.push(sx * s);
+                    g.py.push(sy * s);
+                    g.half.push(half * s);
+                    g.radiusPx.push(rPx * s);
+                    g.weight.push(k.weight);
+                };
+                const projectToPx = (x: number, y: number, z: number): [number, number] | null => {
+                    this.m_v3.set(x, y, z).project(camera);
+                    if (this.m_v3.z > 1) return null; // behind camera
+                    const sx = (this.m_v3.x * 0.5 + 0.5) * w;
+                    const sy = (1 - (this.m_v3.y * 0.5 + 0.5)) * h;
+                    return [sx, sy];
+                };
+                const base = projectToPx(k.x, k.y, k.z);
+                if (!base) continue;
+                emitKernel(base[0], base[1]);
+                // Wrapped world copies (± one world along x) — mgl renders the
+                // offscreen pass over all MultiTileIDs, including the
+                // antimeridian replicates.
+                const west = projectToPx(k.x - worldRepeatX, k.y, k.z);
+                if (west) emitKernel(west[0], west[1]);
+                const east = projectToPx(k.x + worldRepeatX, k.y, k.z);
+                if (east) emitKernel(east[0], east[1]);
             }
             if (g.px.length > maxCount) maxCount = g.px.length;
         }
@@ -316,15 +349,24 @@ export class MBHeatmapRenderer {
     }
 
     private ensureRenderTarget(renderer: THREE.WebGLRenderer, w: number, h: number): void {
-        if (this.m_rt && this.m_rtW === w && this.m_rtH === h) return;
+        const rtW = Math.max(Math.ceil(w * this.m_rtScale), 1);
+        const rtH = Math.max(Math.ceil(h * this.m_rtScale), 1);
+        if (this.m_rt && this.m_rtW === rtW && this.m_rtH === rtH) return;
         this.m_rt?.dispose();
-        this.m_rt = new THREE.WebGLRenderTarget(w, h, {
+        // mapbox uses RGBA16F when available (Framebuffer.createWithTexture),
+        // falling back to RGBA8. WebGL2 natively supports rendering to and
+        // linearly filtering RGBA16F; otherwise fall back to ubyte.
+        const webgl2 = (renderer.capabilities as any)?.isWebGL2;
+        const type = webgl2 ? THREE.HalfFloatType : THREE.UnsignedByteType;
+        this.m_rt = new THREE.WebGLRenderTarget(rtW, rtH, {
             minFilter: THREE.LinearFilter,
             magFilter: THREE.LinearFilter,
             format: THREE.RGBAFormat,
+            type,
         });
-        this.m_rtW = w;
-        this.m_rtH = h;
+        this.m_rtHalfFloat = type === THREE.HalfFloatType;
+        this.m_rtW = rtW;
+        this.m_rtH = rtH;
     }
 
     private ensureKernelGeometry(count: number): void {
@@ -468,6 +510,14 @@ export class MBHeatmapRenderer {
             transparent: true,
             depthTest: false,
             depthWrite: false,
+            // mapbox composites the density ramp with premultiplied blending
+            // ([ONE, ONE_MINUS_SRC_ALPHA], painter.colorModeForRenderPass):
+            // gl_FragColor = color * u_opacity is already premultiplied, so the
+            // output must NOT be re-premultiplied by its alpha in the blend.
+            blending: THREE.CustomBlending,
+            blendEquation: THREE.AddEquation,
+            blendSrc: THREE.OneFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
             uniforms: {
                 uDensity: { value: null },
                 uRamp: { value: null },

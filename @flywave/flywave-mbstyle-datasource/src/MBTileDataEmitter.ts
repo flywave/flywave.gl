@@ -664,7 +664,11 @@ export class MBTileDataEmitter {
                 props.size = p['heatmap-radius'] ?? 30;
                 props._heatmapIntensity = p['heatmap-intensity'] ?? 1;
                 props._heatmapWeight = p['heatmap-weight'] ?? 1;
-                props._heatmapColorStops = p['heatmap-color'] ?? [[0, 'rgba(0,0,255,0)'], [0.5, 'blue'], [1, 'red']];
+                // Default ramp matches mapbox style-spec v8 (v8.json paint_heatmap).
+                props._heatmapColorStops = p['heatmap-color'] ?? [
+                    [0, 'rgba(0,0,255,0)'], [0.1, 'royalblue'], [0.3, 'cyan'],
+                    [0.5, 'lime'], [0.7, 'yellow'], [1, 'red'],
+                ];
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'hillshade':

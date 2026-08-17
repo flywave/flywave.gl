@@ -1795,6 +1795,21 @@ export class MBMaterialPatchManager {
      */
     private static normalizeGradientStops(raw: any): Array<{ t: number; r: number; g: number; b: number; a: number }> {
         if (!raw) return [];
+        // Compiled mapview expression nodes (MemoCallExpr / CallExpr) are objects
+        // that serialize to ["memo", [...]] / ["interpolate", ...] via JSON;
+        // normalize them to plain nested arrays so the branches below apply.
+        if (!Array.isArray(raw) && typeof raw === 'object') {
+            try {
+                raw = JSON.parse(JSON.stringify(raw));
+            } catch {
+                return [];
+            }
+        }
+        // Unwrap the mapview expression-compiler's ["memo", inner] wrapper (and
+        // any nested copies) — MemoCallExpr serializes as ["memo", <expr>].
+        while (Array.isArray(raw) && raw[0] === 'memo') {
+            raw = raw[1];
+        }
         // Already-evaluated [[t,color],...] format.
         if (Array.isArray(raw) && raw.length > 0 && Array.isArray(raw[0]) && raw[0].length === 2) {
             return raw.map((s: any) => {
@@ -1871,9 +1886,12 @@ export class MBMaterialPatchManager {
         const m = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/);
         if (m) return [+m[1], +m[2], +m[3], m[4] !== undefined ? +m[4] : 1];
         // Named CSS colors (white/red/blue/royalblue/cyan/green/...) — mapbox
-        // sky-gradient / color ramp stops commonly use them.
+        // sky-gradient / color ramp stops commonly use them. three r178's
+        // ColorManagement stores named colors in the linear-srgb working space,
+        // so convert back to sRGB before reading the 0-255 channels.
         try {
-            const named = new (require('three').Color)(c);
+            const named = new (require('three')).Color(c);
+            named.convertLinearToSRGB();
             return [Math.round(named.r * 255), Math.round(named.g * 255), Math.round(named.b * 255), 1];
         } catch {
             return [0, 0, 255, 0];

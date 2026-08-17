@@ -171,10 +171,14 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'heatmap-opacity': 1,
         'heatmap-intensity': 1,
         'heatmap-weight': 1,
+        // Default ramp matches mapbox style-spec v8 (v8.json paint_heatmap).
         'heatmap-color': [
             [0, 'rgba(0,0,255,0)'],
-            [0.5, 'rgb(0,0,255)'],
-            [1, 'rgb(255,0,0)'],
+            [0.1, 'royalblue'],
+            [0.3, 'cyan'],
+            [0.5, 'lime'],
+            [0.7, 'yellow'],
+            [1, 'red'],
         ],
     },
     hillshade: {
