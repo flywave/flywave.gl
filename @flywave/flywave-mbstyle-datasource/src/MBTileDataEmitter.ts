@@ -338,6 +338,41 @@ export class MBTileDataEmitter {
     }
 
     /**
+     * Scale an evaluated CSS color's RGB channels by its own alpha and return
+     * the opaque result (`rgba(100,100,100,0.2)` → `rgb(20, 20, 20)`).
+     * Returns the input unchanged when alpha is 1 and `null` when alpha is 0
+     * (feature must not render at all).
+     */
+    private static scaleColorByAlpha(value: any): any {
+        if (typeof value !== 'string') return value;
+        const m = value.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/i);
+        if (m) {
+            if (m[4] === undefined || Number(m[4]) >= 1) return value;
+            const a = Number(m[4]);
+            if (a <= 0) return null;
+            return `rgb(${Math.round(+m[1] * a)}, ${Math.round(+m[2] * a)}, ${Math.round(+m[3] * a)})`;
+        }
+        if (/^#[0-9a-f]{8}$/i.test(value)) {
+            const a = parseInt(value.slice(7, 9), 16) / 255;
+            if (a >= 1) return value.slice(0, 7);
+            if (a <= 0) return null;
+            const ch = [1, 3, 5].map(i =>
+                Math.round(parseInt(value.slice(i, i + 2), 16) * a));
+            return `rgb(${ch[0]}, ${ch[1]}, ${ch[2]})`;
+        }
+        if (/^#[0-9a-f]{4}$/i.test(value)) {
+            const a = parseInt(value[3], 16) / 15;
+            if (a >= 1) return value.slice(0, 4);
+            if (a <= 0) return null;
+            const ch = [0, 1, 2].map(i =>
+                Math.round(parseInt(value[i], 16) * 17 * a));
+            return `rgb(${ch[0]}, ${ch[1]}, ${ch[2]})`;
+        }
+        return value;
+    }
+
+
+    /**
      * Resolve the per-feature Z offset for a layer, combining:
      *   - the explicit `<type>-z-offset` paint/layout property, and
      *   - the `<type>-elevation-reference` layout property, which reads the
@@ -651,7 +686,22 @@ export class MBTileDataEmitter {
                 break;
             case 'fill-extrusion':
                 props.technique = 'extruded-polygon';
-                props.color = p['fill-extrusion-color'] ?? '#000000';
+                // mapbox semantics for the fill-extrusion-color alpha channel
+                // ("no-alpha-no-multiply"): the extrusion renders OPAQUE with
+                // its color premultiplied by the alpha — expected.png shows
+                // (lit×0.2, alpha=255), not alpha blending. An alpha of 0
+                // removes the feature entirely (draw_fill_extrusion.ts
+                // `color.a !== 0` gate / data-driven-zero-alpha).
+                {
+                    const c = MBTileDataEmitter.scaleColorByAlpha(
+                        p['fill-extrusion-color'] ?? '#000000'
+                    );
+                    if (c === null) {
+                        props.enabled = false;
+                    } else {
+                        props.color = c;
+                    }
+                }
                 props.opacity = p['fill-extrusion-opacity'] ?? 1;
                 props.height = p['fill-extrusion-height'] ?? 0;
                 props.floorHeight = p['fill-extrusion-base'] ?? 0;

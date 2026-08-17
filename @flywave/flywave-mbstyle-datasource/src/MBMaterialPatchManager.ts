@@ -302,7 +302,13 @@ export class MBMaterialPatchManager {
                      float mbVert = mix(0.92, 1.0, mbN3.z * 0.5 + 0.5);
                      float mbADF = mbVert * mbAmbDir;
                      vec3 mbK = uMB3DAmb * mbADF + uMB3DDirColor * max(mbNdotL, 0.0);
-                     vec3 mbLit = gl_FragColor.rgb * pow(mbK, vec3(1.0 / 2.2));
+                     // mapbox linearProduct(color, k) = color·k^(1/2.2) with
+                     // color in sRGB. gl_FragColor here is LINEAR, and the
+                     // engine sRGB-converts at output: multiplying the linear
+                     // color by k yields (color_lin·k)^(1/2.2) =
+                     // color_srgb·k^(1/2.2) — the mapbox result. Applying
+                     // pow(k,1/2.2) directly would double the exponent.
+                     vec3 mbLit = gl_FragColor.rgb * mbK;
                      gl_FragColor.rgb = mix(mbLit, gl_FragColor.rgb, uMB3DEmissive);
                  }`
             );

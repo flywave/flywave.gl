@@ -301,8 +301,22 @@ export class MBEnvironmentManager {
                 this.m_3DAmbient = { color, intensity };
                 this.m_ambientColor = new THREE.Color(color[0], color[1], color[2]);
                 this.m_ambientIntensity = intensity;
-                this.m_ambientLight = new THREE.AmbientLight(new THREE.Color(color[0], color[1], color[2]), intensity);
-                this.m_scene.add(this.m_ambientLight);
+                // NOTE: 3D `lights` styles must NOT put their colored lights in
+                // the three.js scene: lit materials (extruded-polygon etc.) get
+                // the mapbox `apply_lighting` formula injected by
+                // MBMaterialPatchManager.injectExtrusion3DLighting, which
+                // multiplies the material's already-lit color — colored scene
+                // lights would darken it twice (data-driven-zero-alpha). A
+                // neutral full ambient keeps the standard material's base
+                // output equal to its diffuse color (BRDF_Lambert = c/π with
+                // π·intensity ambient irradiance), i.e. "unlit".
+                if (!this.m_ambientLight) {
+                    // Intensity π: ambient irradiance is color·intensity while
+                    // BRDF_Lambert divides by π, so π·1 white yields base =
+                    // diffuse color exactly (see the note above).
+                    this.m_ambientLight = new THREE.AmbientLight(0xffffff, Math.PI);
+                    this.m_scene.add(this.m_ambientLight);
+                }
             } else if (light.type === 'directional') {
                 // `direction` may be a plain [azimuth, polar] or a literal
                 // expression `['literal', [az, polar]]` (mapbox 3D lights).
@@ -329,8 +343,8 @@ export class MBEnvironmentManager {
                     this.m_directionalLight.shadow.camera.near = 0.1;
                     this.m_directionalLight.shadow.camera.far = 1000;
                 }
-                this.m_scene.add(this.m_directionalLight);
-                this.m_scene.add(this.m_directionalLight.target);
+                // Kept out of the scene — see the ambient note above about
+                // double lighting of manually-injected materials.
             }
         }
     }

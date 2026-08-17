@@ -1660,7 +1660,18 @@ export class MBStyleDataSource extends TileDataSource {
                     const ls = this.m_environment?.lighting3DState;
                     if (ls) {
                         const rad = ls.groundRadiance;
-                        const lit = new THREE.Color(c.r * rad[0], c.g * rad[1], c.b * rad[2]);
+                        // `c` is linear (ColorManagement) and `getHex()`
+                        // converts back to sRGB, so multiplying by the LINEAR
+                        // radiance (rad^2.2) yields the mapbox sRGB result
+                        // `color_srgb · groundRadiance` (see linearProduct).
+                        const radLin = [
+                            Math.pow(rad[0], 2.2),
+                            Math.pow(rad[1], 2.2),
+                            Math.pow(rad[2], 2.2),
+                        ];
+                        const lit = new THREE.Color(
+                            c.r * radLin[0], c.g * radLin[1], c.b * radLin[2]
+                        );
                         const emissive = Number(paint['background-emissive-strength'] ?? 0);
                         if (emissive > 0) lit.lerp(c, Math.min(emissive, 1));
                         (this.mapView as any).clearColor = lit.getHex();

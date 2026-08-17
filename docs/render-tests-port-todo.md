@@ -19,6 +19,8 @@
 > **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。
 >
 > **2026-08-17 更新（F2a 落地——近裁剪面贴地，§12.30）**：property-function/zoom-and-property 半块方块缺南墙+屋顶的根因是**相机近平面按 maxElevation=0 求解贴在地面**，高出地面的挤出内容（最靠近相机一侧）被 GPU 近平面裁剪——同时解释 §12.6 C3 未解的"最靠近相机内容缺失"签名。修复：emitter 上报 `DecodedTile.maxGeometryHeight` + datasource 扫描样式设 `DataSource.maxGeometryHeight`（两级：解码后近平面/geoBox、解码前 cull box）。**fill-extrusion-color/property-function 8237→PASS(66px)、zoom-and-property 8171→PASS(1px)**，零回归。§14 F2a 勾除。
+>
+> **2026-08-17 更新（F2 落地——color alpha 语义 + 3D-lights 双重光照，§12.31）**：`no-alpha-no-multiply` 37842→**PASS 0**（mapbox 对 fill-extrusion-color alpha 不做 blend，RGB×alpha 预乘不透明；alpha=0 剔除要素）；`data-driven-zero-alpha` 28010→**1288 近失**（场景灯双重光照/ambient π/linear 域 ×k/clearColor linear radiance 四项修复，红蓝黄逐色对齐；残余=cast-shadow 阴影）；lighting-3d-mode 连带 10→**12** 通过零回归。§14 F2 主体完成。
 
 ---
 
@@ -1203,6 +1205,23 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - 剩余失败与 F2a 无关：`no-alpha-no-multiply`（37842，3D-lights 路径 F2）、`data-driven-zero-alpha`（28010）、base 的 rounded-edge/terrain/negative 系（独立特性）。
 - tsc 绿；单测 harness 本环境因 workspace 链接/ESM 解析无法运行（§11.3 既有问题，改动为纯增量字段，风险低）。
 
+### 12.31 F2 落地：fill-extrusion color alpha 语义 + 3D-lights 双重光照修复（2026-08-17 深夜）
+
+**F2 两用例根因（对照 mgl `draw_fill_extrusion.ts` + expected.png 像素取证）**：
+
+1. **`no-alpha-no-multiply`（37842px）**：mapbox 对 `fill-extrusion-color` 的 alpha 通道**不做 blend**——extrusion 不透明渲染，颜色 RGB 被 alpha **预乘**（expected 为 (lit×0.2, alpha=255) 的不透明深灰，非半透明混合）。修复：emitter `scaleColorByAlpha`（rgba/#hex8/#hex4 → RGB×alpha 的不透明 `rgb()`）；alpha=0 → `enabled=false`（要素整体不渲染，对应 mgl `color.a !== 0` 门控 / data-driven-zero-alpha 的绿方块不可见）。**37842 → PASS 0**。
+2. **`data-driven-zero-alpha`（28010px，LIGHTING_3D_MODE 路径）**：三重叠加——
+   - alpha-0 绿方块（上项已修）；
+   - **场景灯双重光照**：`applyLights` 把 3D lights 的 AmbientLight/DirectionalLight 加进 THREE scene，而 `injectExtrusion3DLighting` 又在 gl_FragColor（已含 THREE 光照）上乘 mapbox 公式 → 双重变暗（且 THREE 物理光照 /π）。修复：3D lights 分支**不把有色灯加入 scene**，只挂一个中性 `AmbientLight(white, π)`（π 抵消 BRDF_Lambert 的 /π，使 standard 材质底色=diffuse）；
+   - **pow 双重指数**：`linearProduct(color,k)=color·k^(1/2.2)` 是 sRGB 域运算，我们的 gl_FragColor 是 linear 且引擎输出端才转 sRGB——linear 域应直接 `×k`（(c_lin·k)^(1/2.2) = c_srgb·k^(1/2.2)），原先 `×pow(k,1/2.2)` 使指数翻倍。
+   - **背景 groundRadiance 同类 bug**：`applyBackgroundColor` 的 `c×rad`（rad 为 sRGB 值）经 getHex 线性→sRGB 回转换后变成 c×rad^(1/2.2)（243 vs 期望 228）——改为乘 **linear** radiance（rad^2.2）。
+   - 数值验证：红屋顶 145→**229**（期望 228）、墙 212（期望 211）、蓝 249/233（期望 249/233）、黄底 229（期望 228）逐色对齐。**28010 → 1288px 近失**，残余 1288px = mgl cast-shadow 地面阴影（阴影渲染器为独立特性，不在 F2 范围）。
+
+**验证**（`rendering-test-results/mbstyle-f2f|f2reg/`，Edge headless + SwiftShader，`HARP_NO_HARD_SOURCE_CACHE=true`——注意 karma webpack 会缓存旧 bundle，改代码后必须带此变量重跑，否则结果字节级不变造成误判）：
+- fill-extrusion-color：no-alpha-no-multiply **PASS 0**、data-driven-zero-alpha 1288 近失、property-function/zoom-and-property PASS 66/1、literal/default/function/use-theme PASS 0 全保持（零回归）。
+- **lighting-3d-mode 10 → 12 通过**（color-light-intensity、color-light-pitched-70 因 clearColor linear radiance 修复连带转通过），其余 114 上报零回归。
+- tsc 绿；单测 harness 本环境无法运行（§11.3 既有）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
@@ -1401,7 +1420,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - 收益：fill-extrusion-color 0→**3**（0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations +1、circle function 系 +2；净 **+11**（代价：circle-pitch viewport 系 2 例 40° 侥幸通过→215px 近失）。
 - join-normal 路径仅 `fill-extrusion-line-width ≠ 0` 的 wallMode 用例（`fill-extrusion-line-width` 分类 9 例）需要，届时再移植。
 
-**F2. fill-extrusion 残余**：`no-alpha-no-multiply`（37842px，3D-lights 路径）、`data-driven-zero-alpha`（28038px）、opacity 半透明叠加。
+**F2. fill-extrusion 残余**：**✅ 主体完成（2026-08-17 深夜，§12.31）**——`no-alpha-no-multiply` 37842→**PASS 0**（color alpha = 预乘不透明，alpha-0 要素剔除）；`data-driven-zero-alpha` 28010→**1288 近失**（3D-lights 双重光照/π/pow 指数/clearColor radiance 四项修复，逐色对齐，残余 1288px = cast-shadow 地面阴影，独立特性另记）；lighting-3d-mode 连带 10→12。**剩余**：cast-shadow 阴影渲染器、fill-extrusion-opacity<1 的三 pass 半透明（combinations translucent 系）。
 - **F2a（✅ 已完成 2026-08-17 晚，§12.30）**：根因不是瓦片挂载，而是**相机近裁剪面贴地**——`TiltViewClipPlanesEvaluator` 以 `maxElevation`（=瓦片 geoBox 最高点，恒 0）求解 near plane，挤出屋顶（高于地面、更靠近相机）落在 near 之前被 GPU 裁剪。修复：emitter 上报 `DecodedTile.maxGeometryHeight` + datasource 扫描样式设 `DataSource.maxGeometryHeight`。**property-function 8237→PASS(66px)、zoom-and-property 8171→PASS(1px)**，literal/default/function 零回归。
 
 ### P1 — 近失可快速转通过（G1 剩余）
