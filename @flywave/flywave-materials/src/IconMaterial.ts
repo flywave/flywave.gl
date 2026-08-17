@@ -38,6 +38,7 @@ uniform bool uIsSdf;
 uniform float uEdge;
 uniform float uGamma;
 uniform vec3 uHaloColor;
+uniform float uHaloAlpha;
 uniform float uHaloWidth;
 uniform float uHaloBlur;
 
@@ -67,12 +68,18 @@ void main() {
     float fillA = smoothstep(uEdge - uGamma, uEdge + uGamma, d);
     float haloBuff = uEdge - uHaloWidth;
     float haloGamma = uHaloBlur + uGamma;
-    float haloA = smoothstep(haloBuff - haloGamma, haloBuff + haloGamma, d) * (1.0 - fillA);
-
-    // Premultiplied output: fill uses the (premultiplied) vertex color; the
-    // halo color is multiplied by the icon opacity (vColor.a).
-    vec3 rgb = vColor.rgb * fillA + uHaloColor.rgb * vColor.a * haloA;
-    float alpha = fillA + haloA;
+    // Mapbox draws the SDF halo and fill as two separate passes: the fill is
+    // then blended ON TOP of the halo (alpha accumulates where both cover —
+    // the halo covers the fill core too, no (1-fillA) cut). Emulate that
+    // two-layer composite in one pass: top = fill (premultiplied vColor,
+    // rgb = color·op, a = op), bottom = halo premultiplied by its color alpha
+    // and icon-opacity.
+    float haloCov = smoothstep(haloBuff - haloGamma, haloBuff + haloGamma, d);
+    float aFill = fillA * vColor.a;
+    float aHalo = haloCov * uHaloAlpha * vColor.a;
+    vec3 rgbHalo = uHaloColor.rgb * aHalo;
+    vec3 rgb = vColor.rgb * fillA + rgbHalo * (1.0 - aFill);
+    float alpha = aFill + aHalo * (1.0 - aFill);
     gl_FragColor = vec4(rgb, alpha);
 }`;
 
@@ -100,6 +107,11 @@ export interface IconMaterialParameters extends RendererMaterialParameters {
      * Halo color (RGB).
      */
     haloColor?: THREE.Color;
+    /**
+     * Halo color alpha (icon-halo-color rgba alpha, mapbox premultiplies the
+     * halo by it).
+     */
+    haloAlpha?: number;
     /**
      * Halo width in SDF field units (0..1).
      */
@@ -131,8 +143,11 @@ export class IconMaterial extends RawShaderMaterial {
                       map: new THREE.Uniform(params.map),
                       uIsSdf: new THREE.Uniform(params.sdf === true),
                       uEdge: new THREE.Uniform(params.edge ?? 0.75),
-                      uGamma: new THREE.Uniform(params.gamma ?? 0.03),
+                      // Mapbox EDGE_GAMMA = 0.105 / devicePixelRatio (1x here);
+                      // it feeds both the fill edge AA and the halo blur gamma.
+                      uGamma: new THREE.Uniform(params.gamma ?? 0.105),
                       uHaloColor: new THREE.Uniform(params.haloColor ?? new THREE.Color(0, 0, 0)),
+                      uHaloAlpha: new THREE.Uniform(params.haloAlpha ?? 1),
                       uHaloWidth: new THREE.Uniform(params.haloWidth ?? 0),
                       uHaloBlur: new THREE.Uniform(params.haloBlur ?? 0)
                   },

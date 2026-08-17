@@ -64,6 +64,11 @@ export interface PoiInfo {
     iconHaloColor?: THREE.Color;
 
     /**
+     * Halo color alpha (mapbox premultiplies the halo by its color's alpha).
+     */
+    iconHaloAlpha?: number;
+
+    /**
      * Halo width for SDF icons, in mapbox ems (scaled to SDF field units).
      */
     iconHaloWidth?: number;

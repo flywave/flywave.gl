@@ -1222,6 +1222,19 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - **lighting-3d-mode 10 → 12 通过**（color-light-intensity、color-light-pitched-70 因 clearColor linear radiance 修复连带转通过），其余 114 上报零回归。
 - tsc 绿；单测 harness 本环境无法运行（§11.3 既有）。
 
+### 12.32 F4/F5 落地：icon-halo 半透明 blend 与 alpha 通道（2026-08-18）
+
+**F5（icon-halo-color/multiply+opacity，各 98px）根因（三层）**：
+1. **mgl 双 pass 语义**：halo 与 fill 是两次独立 draw——fill 混在 halo 之上（重叠区 alpha 累积，halo 覆盖 fill 核心无 (1-fillA) 截断）。IconMaterial 改为单 pass 双层合成：`rgb = fill_rgb·fillA + halo_premult·(1−aFill)`、`alpha = aFill + aHalo·(1−aFill)`。
+2. **halo 色 alpha 通道全程丢失**：引擎对 `*Color` 命名的 technique 属性做数值归一（`parseStringEncodedColor` 打包为 number 时 **alpha 置 0**，再 ColorCache 反解成白色）。修复：emitter 把 `icon-halo-color` 拆为 alpha 剥离的 `rgb()` 字符串 + 独立数字属性 `_iconHaloAlpha`（数字不受归一影响）；PoiBuilder 优先读 `_iconHaloAlpha`；PoiRenderer batchKey/参数、IconMaterial 新增 `uHaloAlpha` uniform。
+3. **输出 alpha 未随 icon-opacity 缩放**（半透明 halo 渲染为不透明环）：alpha 统一 ×vColor.a。
+- 附带：IconMaterial `uGamma` 默认 0.03 → **0.105**（mgl `EDGE_GAMMA=0.105/dpr`，@1x）。
+
+**验证**（`rendering-test-results/mbstyle-f45d/`，Edge headless + SwiftShader）：
+- **icon-halo-color 5/7 → 7/7**（multiply 98→PASS 0、opacity 98→PASS 0）；icon-halo-width 4/4、icon-halo-blur 4/5 保持。
+- 零回归：icon-color 4/5、icon-image 2/12、icon-size 9/18（camera/composite-function 系全保持）、icon-halo-blur literal/function 系全保持。
+- **F4（blur/property-function 203px）重定性**：非 halo 数学问题——fixture 两要素（x=0/1 → blur 1/3）**同点放置被原生 Placement 收敛为 1 个**（与 icon-anchor/property-function、icon-size/property-function 同根，§12.16 已记"同点要素仅放置 1 个"引擎深水区），归入 placement 专项而非 F4。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
@@ -1430,9 +1443,9 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - 落地要素：① `MBHeatmapRenderer` 密度 FBO 0.25× + RGBA16F（默认 ramp 也对齐 v8）；② composite premultiplied blend（[ONE, ONE_MINUS_SRC_ALPHA]）；③ `parseColor` 命名色 linear→sRGB（r178 ColorManagement）；④ `normalizeGradientStops` 解包 `["memo", expr]` 编译表达式（顺带修好 heatmap-color/expression 全黑）；⑤ 反子午线 world copies。
 - 遗留 3 例：`antimeridian`（4786px，回绕副本密度 cyan vs lime）、`pitch30`（16181px，俯仰地面 quad 椭圆化）、`projected`（13060px，自定义投影）。
 
-**F4. icon-halo-blur/property-function（205px）**：数据驱动 blur 双要素，halo 外缘差（§12.24 遗留）。
+**F4. icon-halo-blur/property-function（205px）**：**✅ 重定性（2026-08-18，§12.32）**——非 halo 公式问题，是 fixture 双要素（blur 1/3）**同点放置被原生 Placement 收敛为 1 个**（与 icon-anchor/icon-size property-function 同根，§12.16 placement 深水区）。halo 数学已由 §12.32 对齐（blur 分类 4/5，literal/function/default/powevr 全绿）。归入 placement 专项。
 
-**F5. icon-halo-color/multiply + opacity（各 98px）**：半透明红 halo + multiply/opacity blend 边缘（§12.24 遗留）。
+**F5. icon-halo-color/multiply + opacity（各 98px）**：**✅ 已完成（2026-08-18，§12.32）**——mgl 双 pass fill-over-halo 合成 + `*Color` 属性数值归一丢 alpha（emitter 拆 `_iconHaloAlpha`）+ 输出 alpha ×icon-opacity + uGamma=0.105。**icon-halo-color 5/7 → 7/7**，icon-halo-width/blur 保持，icon-size/color/image 零回归。
 
 **F6. icon-size 残余**：`*-rasterized`（mgl `getRasterizedIconSize` maxSize 重栅格化）、`property-function-*`（数据驱动装箱）、`literal`/`function`（AA 边缘 + 0.9× box 基线）。
 

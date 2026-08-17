@@ -114,7 +114,7 @@ class PoiBatch {
         private readonly m_rendererCapabilities: THREE.WebGLCapabilities,
         readonly imageItem: ImageItem,
         private readonly m_onDispose: () => void,
-        haloParams?: { haloColor?: THREE.Color; haloWidth?: number; haloBlur?: number }
+        haloParams?: { haloColor?: THREE.Color; haloAlpha?: number; haloWidth?: number; haloBlur?: number }
     ) {
         // Texture images should be generated with premultiplied alpha
         const premultipliedAlpha = true;
@@ -142,6 +142,7 @@ class PoiBatch {
             map: texture,
             sdf: this.imageItem.sdf === true,
             haloColor: haloParams?.haloColor,
+            haloAlpha: haloParams?.haloAlpha,
             haloWidth: haloParams?.haloWidth,
             haloBlur: haloParams?.haloBlur
         });
@@ -280,14 +281,16 @@ export class PoiBatchRegistry {
         // the batch per (icon, halo) signature. Mapbox halo_width/blur are in
         // ems; the shader uses SDF field units with SDF_PX=8 (symbol.fragment:
         // buff=(6-halo_width)/SDF_PX, gamma=(halo_blur*1.19/SDF_PX+EDGE_GAMMA)).
-        let haloParams: { haloColor?: THREE.Color; haloWidth?: number; haloBlur?: number } | undefined;
+        let haloParams: { haloColor?: THREE.Color; haloAlpha?: number; haloWidth?: number; haloBlur?: number } | undefined;
         if (imageItem.sdf) {
             const widthField = (poiInfo.iconHaloWidth ?? 0) / 8;
             const blurField = (poiInfo.iconHaloBlur ?? 0) * 1.19 / 8;
             const colorHex = poiInfo.iconHaloColor?.getHexString() ?? '0';
-            batchKey += `#h${widthField.toFixed(3)},${blurField.toFixed(3)},${colorHex}`;
+            const haloAlpha = poiInfo.iconHaloAlpha ?? 1;
+            batchKey += `#h${widthField.toFixed(3)},${blurField.toFixed(3)},${colorHex},${haloAlpha.toFixed(3)}`;
             haloParams = {
                 haloColor: poiInfo.iconHaloColor,
+                haloAlpha,
                 haloWidth: widthField,
                 haloBlur: blurField
             };

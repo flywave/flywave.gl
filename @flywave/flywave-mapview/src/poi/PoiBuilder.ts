@@ -138,6 +138,19 @@ export class PoiBuilder {
         // mbstyle emitter). Width/blur stay in mapbox ems; PoiRenderer converts
         // to SDF field units when configuring the IconMaterial.
         const iconHaloColorRaw = getPropertyValue((technique as any)._iconHaloColor, env);
+        // mapbox `icon-halo-color` alpha. The emitter splits it into the
+        // numeric `_iconHaloAlpha` (string `*Color` props get alpha-stripped by
+        // the engine's color normalization); keep the regex as fallback.
+        let iconHaloAlpha = getPropertyValue((technique as any)._iconHaloAlpha, env);
+        if (typeof iconHaloAlpha !== 'number') {
+            iconHaloAlpha = undefined;
+        }
+        if (iconHaloAlpha === undefined && typeof iconHaloColorRaw === 'string') {
+            const m = iconHaloColorRaw.match(
+                /rgba?\s*\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)/i
+            );
+            if (m) iconHaloAlpha = Number(m[1]);
+        }
         const iconHaloColor =
             iconHaloColorRaw !== null && iconHaloColorRaw !== undefined
                 ? ColorCache.instance.getColor(iconHaloColorRaw)
@@ -185,6 +198,7 @@ export class PoiBuilder {
             iconBrightness: technique.iconBrightness,
             iconColor,
             iconHaloColor,
+            iconHaloAlpha,
             iconHaloWidth,
             iconHaloBlur,
             iconRotate:

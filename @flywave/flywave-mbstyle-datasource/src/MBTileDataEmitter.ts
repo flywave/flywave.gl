@@ -583,7 +583,23 @@ export class MBTileDataEmitter {
                     // SDF icon halo (private-prefixed; consumed by PoiBuilder for
                     // the IconMaterial halo uniforms). icon-halo-width/blur are in
                     // ems (mapbox); converted to SDF field units at render time.
-                    props._iconHaloColor = p['icon-halo-color'] ?? 'rgba(0,0,0,0)';
+                    // The color alpha travels as a separate numeric prop: any
+                    // `*Color`-named string prop gets packed to a number by the
+                    // engine's color normalization (parseStringEncodedColor),
+                    // which drops the alpha channel.
+                    {
+                        const haloRaw = p['icon-halo-color'] ?? 'rgba(0,0,0,0)';
+                        const hm = typeof haloRaw === 'string'
+                            ? haloRaw.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/i)
+                            : null;
+                        if (hm) {
+                            props._iconHaloColor = `rgb(${hm[1]}, ${hm[2]}, ${hm[3]})`;
+                            props._iconHaloAlpha = hm[4] !== undefined ? Number(hm[4]) : 1;
+                        } else {
+                            props._iconHaloColor = haloRaw;
+                            props._iconHaloAlpha = 1;
+                        }
+                    }
                     props._iconHaloWidth = p['icon-halo-width'] ?? 0;
                     props._iconHaloBlur = p['icon-halo-blur'] ?? 0;
                     // Mapbox `icon-rotate` (degrees, clockwise). The PoiRenderer
