@@ -508,4 +508,76 @@ describe('MBStyle decode pipeline', () => {
         expect(tech).not.to.be.undefined;
         expect(tech._iconTextFit).to.be.undefined;
     });
+
+    it('emits one extruded geometry group per data-driven color feature', () => {
+        // fill-extrusion-color/property-function regression: three buildings
+        // with a data-driven color must each produce their own geometry group
+        // covering the full footprint (walls + roof), regardless of feature
+        // order or position inside the tile.
+        const style: StyleSpecification = {
+            version: 8,
+            sources: {},
+            layers: [{
+                id: 'extrusion', type: 'fill-extrusion' as any, source: 'geojson',
+                paint: {
+                    'fill-extrusion-height': 10,
+                    'fill-extrusion-color': {
+                        property: 'property',
+                        stops: [[10, 'rgba(255,0,0,1)'], [20, 'rgba(0,255,0,1)'], [30, 'rgba(0,0,255,1)']],
+                    } as any,
+                },
+            } as any],
+        };
+
+        const evaluator = new MBLayerEvaluator(style);
+        const tileKey = TileKey.fromRowColumnLevel(0, 0, 0);
+        const decodeInfo = createDecodeInfo(tileKey);
+        const emitter = new MBTileDataEmitter(tileKey, decodeInfo, 0);
+
+        // Three squares at distinct south/center/north positions, mirroring the
+        // actual test fixture (lat -0.00047..-0.00017 / ±0.00015 / 0..0.00047).
+        const extents = 4096;
+        const mkSquare = (cx: number, cy: number, half: number) => ({
+            rings: [[
+                new THREE.Vector2(cx - half, cy - half),
+                new THREE.Vector2(cx - half, cy + half),
+                new THREE.Vector2(cx + half, cy + half),
+                new THREE.Vector2(cx + half, cy - half),
+                new THREE.Vector2(cx - half, cy - half),
+            ]],
+        });
+        const feats = [
+            { poly: mkSquare(2048, 800, 250), props: { property: 10 } },
+            { poly: mkSquare(2048, 2048, 150), props: { property: 20 } },
+            { poly: mkSquare(2048, 3300, 250), props: { property: 30 } },
+        ];
+        for (const f of feats) {
+            const matched = evaluator.evaluate('geojson', '',
+                { type: 'Polygon', properties: f.props }, 0, 'polygon');
+            emitter.processFillFeature('geojson', extents, [f.poly as any], f.props, undefined, matched);
+        }
+
+        const decodedTile = emitter.getDecodedTile();
+        // One technique per distinct color value.
+        const extTechs = decodedTile.techniques.filter((t: any) => t.name === 'extruded-polygon');
+        expect(extTechs.length).to.equal(3);
+        // Three geometry groups, each with indices + extrusionAxis and the
+        // full z-extent (ground 0 → roof 10).
+        expect(decodedTile.geometries.length).to.equal(3);
+        for (const geo of decodedTile.geometries) {
+            const g = geo as any;
+            expect(g.index).to.not.be.undefined;
+            const posAttr = g.vertexAttributes.find((a: any) => a.name === 'position');
+            const axisAttr = g.vertexAttributes.find((a: any) => a.name === 'extrusionAxis');
+            expect(axisAttr).to.not.be.undefined;
+            const pos = new Float32Array(posAttr.buffer);
+            let minZ = Infinity, maxZ = -Infinity;
+            for (let i = 2; i < pos.length; i += 3) {
+                minZ = Math.min(minZ, pos[i]);
+                maxZ = Math.max(maxZ, pos[i]);
+            }
+            expect(minZ).to.equal(0);
+            expect(maxZ).to.equal(10);
+        }
+    });
 });

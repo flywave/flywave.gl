@@ -958,6 +958,13 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     tileCacheSize: 0,
                     fontCatalog: fontCatalogUrl,
                     logarithmicDepthBuffer: false,
+                    // mapbox's default vertical fov (transform.ts:247
+                    // 0.6435011087932844 rad = 36.87°); flywave's default is
+                    // 40°. The fov drives the camera distance
+                    // (focalLength-based), so the default changes the
+                    // perspective ratio: pitched views render near edges too
+                    // wide / far edges too narrow vs mapbox baselines.
+                    fovCalculation: { type: 'fixed', fov: 36.86989764584402 },
                 });
 
                 // render-tests capture a static frame shortly after load; disable

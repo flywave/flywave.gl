@@ -15,6 +15,8 @@
 > **2026-08-17 更新（F3 落地）**：heatmap 双 pass 对齐 mgl 全链（§12.28），**0/18 → 15/18**（opacity/intensity/weight 全绿、color 2/2、radius 4/7）。§14 F3 完成，仅剩 antimeridian / pitch30 / projected 三个单测。
 >
 > **2026-08-17 当前快照（最新）**：§12.21–§12.28 的 08-16/17 系列修复全部落地——icon-text-fit 0→**7/41**（3b8da244）、fill-outline-color 1→**2/8**（57baa3e0）、icon-size 4→**9/18**（af54f113）、icon-halo-blur 0→**4/5** + width 3→**4/4** + color 3→**5/7**（f1b5a066）、icon-rotate 四角旋转接线（62ca4139）、heatmap 0/18→**15/18**（6fa78651）、lighting-3d-mode 2→**10** + skybox 0→**1**（G7 验收，§12.27）。最新全量基线仍为 baseline4（08-15，§12.9）**231/2827（8.17%）**，0 DISCONNECTED。剩余主线：F1 fill-extrusion 墙面几何对齐（~140 例）、F8 line-join/cap、F11 raster/image、G4 text 像素精度（见 §14 待办清单）。
+>
+> **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。遗留：property-function/zoom-and-property 的 fixture 本身是**半块方块**（红=lng<0 西半、蓝=东半），expected 仍全高渲染，我们南侧 ~20px 屋顶+南墙缺失（渲染侧，疑 DepthPrePass/Stencil，几何完整到达 emitter 已验证）——另记 F2a。
 
 ---
 
@@ -1149,6 +1151,27 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - tsc 绿；单测 257 passing + 2 既有失败（RawShaderMaterial、circle-radius×2）无回归。
 - **遗留**：`heatmap-radius/antimeridian`（4786px，回绕副本密度偏 cyan vs 期望 lime）、`pitch30`（16181px，俯仰地面平面 quad 椭圆化未实现）、`projected`（13060px，自定义投影）。
 
+### 12.29 F1 落地：FOV 36.87° 对齐（2026-08-17，G2 核心阻塞解除）
+
+**根因排查（证伪原文档假设）**：
+1. §14 F1 原假设"墙面外扩 ~6px（mgl join-normal 墙面挤出）"不成立：mgl `fill-extrusion-line-width` **默认 0**（wallMode 关闭，`fill_extrusion_bucket.ts:934` 才走 join-normal 路径）、`fill-extrusion-edge-radius` 默认 0 → 默认墙面就在 footprint 顶点上，与我们 `emitExtrudedPolygon` 的简化 quad 完全一致。
+2. 像素取证：`fill-extrusion-color/literal` 期望图近墙顶宽 316 / current 330、远侧屋顶反而更窄、总高 145 vs 146 —— 透视更激进的签名（近大远小 + 视高微增），非几何外扩（外扩应双向等宽）。
+3. **数值模拟定位**：模拟 mgl 相机（`transform.ts:2518` `cameraToCenterDistance = 0.5/tan(fov/2)*height` + pitch 从天底角）投影该用例三个方块——`fov=36.87°` 精确复现 expected（近墙顶 317.7 vs 316、bbox y 57.7..202.8 vs 58..202），`fov=40°` 复现 current（330.4 vs 330、58.8..205.2 vs 59..204）。
+4. 真因：**flywave 默认 FOV 40°**（`flywave-mapview/src/FovCalculation.ts:44 DEFAULT_FOV_CALCULATION = {type:'fixed',fov:40}`）vs **mapbox 默认 36.87°**（`transform.ts:247 _fov = 0.6435011087932844`）。FOV 同时决定焦距与相机距离（`calculateDistanceFromZoomLevel = focalLength*tileSize/256`）——中心平面比例不变，但透视比率整体偏激。
+
+**修复**：`MBStyleCompatRenderTest.ts` 建 MapView 时传 `fovCalculation:{type:'fixed', fov:36.86989764584402}`（harness 级；`setFov` 操作仍可覆盖）。生产代码零改动。
+
+**验证**（`rendering-test-results/mbstyle-fov1|fovreg|fov2/`，Edge 151 headless + SwiftShader）：
+- **fill-extrusion-color 0→3**（default/function/literal 全 **0 mismatch** 像素级一致）、**base 1→5**（+default/function/zoom-and-property/literal）、height 0→1、fill-extrusion-terrain 0→1、combinations 15→16（extrusion 系连带）、circle-color 4→5、circle-radius 5→6（function 系连带）。**净 +11**。
+- 回归批（icon-image/color/anchor/size/halo×3/text-fit/text-field/text-size/fill-color/fill-outline/line-color/circle-pitch×2/circle-translate/elevated-line-color，~180 例）：除下述 2 例外全部与修复前持平——
+  - `circle-pitch-scale/viewport`、`circle-pitch-alignment/viewport-scale-viewport`：40° 下侥幸 0mm → 36.87° 下 215px 近失（sizeAttenuation 视口换算，归入 G1 近失梯队，非错误方向）。
+  - `icon-text-fit` 0/42 **非本次回归**：与修复前（mbstyle-itf3）mm 值逐字节相同（none=117/width=184/both=141…），该批在 itf3 保存时已全红（文本不渲染，F7 遗留），§12.21 的 7/41 无法在当前 HEAD 复现，需另行排查。
+- terrain 2/67（cache-invalidation×2）与 baseline4 持平；building 0/30、depth-occlusion 0/14 维持（各有独立阻塞）。
+- tsc 绿；`MBStyleDecoderPipelineTest` 新增"每数据驱动色值一个 extruded 几何组"用例（12 passing + 2 既有失败不变）。
+
+**遗留（F2a，新开）**：`fill-extrusion-color/property-function`（8237px）与 `zoom-and-property-function`（8171px）——排查发现 **fixture 本身是半块方块**（红=lng∈[-0.0003,0] 西半、蓝=东半，mgl 原版相同；expected 仍完整渲染到 y=255）。我们的渲染缺失**南墙整体 + 屋顶南侧 ~20px**（即 y' 最负一侧）；已验证几何完整到达 emitter（SW 瓦片 x[3201,4096] 全环、5 顶点），数据链（provider→adapter→processor→emitter）无裁剪——截断在渲染侧（TileGeometryCreator/DepthPrePass/Stencil 嫌疑，另见 fovreg 日志出现过 `boundingSphere.radius=NaN` 告警），需专项埋点。
+
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
@@ -1343,13 +1366,12 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 ### P0 — 引擎级渲染深水区（G2，解锁面最大）
 
 **F1. fill-extrusion 墙面几何对齐 mgl（G2 核心阻塞）**
-- 现状：fill-extrusion-color 7 例 1414–15313px（0 通过）。§12.15 光照已落地；§12.6 几何（emitExtrudedPolygon 简化 footprint quads）已落地。
-- 根因：**building 实测 330×146 vs 期望 318×145（宽 12px、高 1px）**——侧壁每边多 ~6px。mgl 用 `a_join_normal_inside` + `u_width_scale × line_width` 墙面挤出（`fill_extrusion.vertex.glsl:242-245`），我们简化 quads 无 join/宽度处理。
-- 方案：移植 mgl join-normal 墙面挤出（`line_width`/`u_width_scale` 按每边偏移）+ 校验 footprint 尺寸。
-- 用例：fill-extrusion-*（~91）+ building（53）。**期望收益最大（~140 例）**。
+- **✅ 已完成（2026-08-17，§12.29）——且原根因假设被证伪**：mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）+ `edge-radius=0`，默认墙面就在 footprint 上，与我们相同，**无需移植 join-normal 墙面挤出**。真因是 **FOV 40° vs mapbox 36.87°**（相机透视比率），harness 已设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。
+- 收益：fill-extrusion-color 0→**3**（0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations +1、circle function 系 +2；净 **+11**（代价：circle-pitch viewport 系 2 例 40° 侥幸通过→215px 近失）。
+- join-normal 路径仅 `fill-extrusion-line-width ≠ 0` 的 wallMode 用例（`fill-extrusion-line-width` 分类 9 例）需要，届时再移植。
 
-**F2. fill-extrusion 残余**：zoom 函数求值偏位（function 全蓝，Z2）、屋顶/墙面边界 2px 偏移、`no-alpha-no-multiply`（38023px，3D-lights 路径）、`data-driven-zero-alpha`（15313px）。
-- 依赖 F1（几何对齐后这些残余才可独立验证）。
+**F2. fill-extrusion 残余**：`no-alpha-no-multiply`（37842px，3D-lights 路径）、`data-driven-zero-alpha`（28038px）、opacity 半透明叠加。
+- **F2a（新，§12.29 遗留）**：property-function/zoom-and-property 的**半块方块 fixture** 渲染缺南墙 + 屋顶南侧 ~20px——几何完整到达 emitter，截断在渲染侧（TileGeometryCreator/DepthPrePass/Stencil/NaN boundingSphere 嫌疑），需浏览器埋点专项。
 
 ### P1 — 近失可快速转通过（G1 剩余）
 
