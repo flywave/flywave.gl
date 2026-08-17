@@ -631,7 +631,55 @@ export class MBStyleDataSource extends TileDataSource {
      * a `rect` fill + a GeoJSON fill-extrusion) render all their layers.
      * Sets `m_currentSourceId` and `m_delegatingProvider.delegate`.
      */
+    /**
+     * Report a conservative maximum extrusion height to the engine.
+     *
+     * `DataSource.maxGeometryHeight` enlarges the tile bounding boxes used by
+     * the frustum culling *before* tiles are decoded (FrustumIntersection).
+     * Without it the boxes hug the ground plane, so at high pitch the tiles
+     * nearest the camera — whose elevated content is still on screen — can be
+     * culled. Per-tile precision comes from `DecodedTile.maxGeometryHeight`
+     * (see MBTileDataEmitter); this scan only needs a safe upper bound.
+     */
+    private applyMaxGeometryHeight(style: StyleSpecification): void {
+        let maxHeight = 0;
+        for (const layer of style.layers ?? []) {
+            const l = layer as any;
+            if (l.type !== 'fill-extrusion' && l.type !== 'building') continue;
+            maxHeight = Math.max(
+                maxHeight,
+                MBStyleDataSource.scanMaxNumber(l.paint?.['fill-extrusion-height'])
+            );
+        }
+        if (maxHeight > 0) {
+            this.maxGeometryHeight = Math.max(this.maxGeometryHeight, maxHeight);
+        }
+    }
+
+    /** Best-effort maximum numeric value reachable by a property/expression. */
+    private static scanMaxNumber(value: any): number {
+        if (typeof value === 'number') return value;
+        if (value === null || typeof value !== 'object') return 0;
+        // Legacy function {stops:[[zoom,value],...]} / property functions.
+        if (Array.isArray(value.stops)) {
+            let max = 0;
+            for (const stop of value.stops) {
+                max = Math.max(max, MBStyleDataSource.scanMaxNumber(stop?.[1] ?? stop));
+            }
+            return max;
+        }
+        if (Array.isArray(value)) {
+            let max = 0;
+            for (const item of value) {
+                max = Math.max(max, MBStyleDataSource.scanMaxNumber(item));
+            }
+            return max;
+        }
+        return 0;
+    }
+
     private async wireTileSources(style: StyleSpecification, sources: Map<string, ResolvedSource>): Promise<boolean> {
+        this.applyMaxGeometryHeight(style);
         const layerCounts = new Map<string, number>();
         for (const layer of style.layers ?? []) {
             const src = (layer as any).source as string;

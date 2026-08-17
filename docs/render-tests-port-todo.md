@@ -16,7 +16,9 @@
 >
 > **2026-08-17 当前快照（最新）**：§12.21–§12.28 的 08-16/17 系列修复全部落地——icon-text-fit 0→**7/41**（3b8da244）、fill-outline-color 1→**2/8**（57baa3e0）、icon-size 4→**9/18**（af54f113）、icon-halo-blur 0→**4/5** + width 3→**4/4** + color 3→**5/7**（f1b5a066）、icon-rotate 四角旋转接线（62ca4139）、heatmap 0/18→**15/18**（6fa78651）、lighting-3d-mode 2→**10** + skybox 0→**1**（G7 验收，§12.27）。最新全量基线仍为 baseline4（08-15，§12.9）**231/2827（8.17%）**，0 DISCONNECTED。剩余主线：F1 fill-extrusion 墙面几何对齐（~140 例）、F8 line-join/cap、F11 raster/image、G4 text 像素精度（见 §14 待办清单）。
 >
-> **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。遗留：property-function/zoom-and-property 的 fixture 本身是**半块方块**（红=lng<0 西半、蓝=东半），expected 仍全高渲染，我们南侧 ~20px 屋顶+南墙缺失（渲染侧，疑 DepthPrePass/Stencil，几何完整到达 emitter 已验证）——另记 F2a。
+> **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。
+>
+> **2026-08-17 更新（F2a 落地——近裁剪面贴地，§12.30）**：property-function/zoom-and-property 半块方块缺南墙+屋顶的根因是**相机近平面按 maxElevation=0 求解贴在地面**，高出地面的挤出内容（最靠近相机一侧）被 GPU 近平面裁剪——同时解释 §12.6 C3 未解的"最靠近相机内容缺失"签名。修复：emitter 上报 `DecodedTile.maxGeometryHeight` + datasource 扫描样式设 `DataSource.maxGeometryHeight`（两级：解码后近平面/geoBox、解码前 cull box）。**fill-extrusion-color/property-function 8237→PASS(66px)、zoom-and-property 8171→PASS(1px)**，零回归。§14 F2a 勾除。
 
 ---
 
@@ -1169,11 +1171,37 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - terrain 2/67（cache-invalidation×2）与 baseline4 持平；building 0/30、depth-occlusion 0/14 维持（各有独立阻塞）。
 - tsc 绿；`MBStyleDecoderPipelineTest` 新增"每数据驱动色值一个 extruded 几何组"用例（12 passing + 2 既有失败不变）。
 
-**遗留（F2a，新开）**：`fill-extrusion-color/property-function`（8237px）与 `zoom-and-property-function`（8171px）——排查发现 **fixture 本身是半块方块**（红=lng∈[-0.0003,0] 西半、蓝=东半，mgl 原版相同；expected 仍完整渲染到 y=255）。我们的渲染缺失**南墙整体 + 屋顶南侧 ~20px**（即 y' 最负一侧）；已验证几何完整到达 emitter（SW 瓦片 x[3201,4096] 全环、5 顶点），数据链（provider→adapter→processor→emitter）无裁剪——截断在渲染侧，需专项埋点。**已排除/已确认**：
-- 深度预通道非根因：technique 置 `enableDepthPrePass:false` 后 pitch-0 缺失不变（且引入 literal 系回归，已回退）。
-- **pitch=0 实验**（fixture 临时改 0 + 重生成索引）：红/蓝屋顶正常渲染（被画布裁剪仅剩边缘条 y=63/191），**唯独居中绿方块（跨 4 瓦片角点）完全消失**——多 technique 的 extruded 对象按瓦片/pitch 有选择性缺失，指向 VisibleTileSet/TileGeometryCreator 对象挂载或剔除，需浏览器断点级调试。
-- 注意：`render-tests-index.ts` 内联全部 fixture，改 style.json 后必须 `node scripts/generate-mbstyle-test-index.js` 重生成才生效。
+**遗留（F2a，新开，含完整调查链）**：`fill-extrusion-color/property-function`（8237px）与 `zoom-and-property-function`（8171px）——排查发现 **fixture 本身是半块方块**（红=lng∈[-0.0003,0] 西半、蓝=东半，mgl 原版相同；expected 仍完整渲染到 y=255）。我们的渲染缺失**南墙整体 + 屋顶南侧 ~20px**。逐层排查结论：
 
+1. **数据链无裁剪**（已排除）：几何完整到达 emitter（SW 瓦片 x[3201,4096] 全环、5 顶点，provider→adapter→processor→emitter 埋点验证）；解码单测锁定"每数据驱动色值一个 extruded 几何组、z 0→10 完整"。
+2. **对象创建无缺失**（已排除，2026-08-17 晚补充）：在 `TileGeometryCreator`（`buildObject` 之后）埋点 `[dbg-obj]`——**全部 10 个瓦片都创建了 red/green/blue 三色 extruded 对象**（各 10/10 瓦片、verts=10、group=0+36、skips=[0] 单次创建）。对象创建不是瓶颈。（注：会话中曾误判"无 green 对象"，系日志去重前误数，已修正。）
+3. **depth-prepass 已排除**：technique 置 `enableDepthPrePass:false` 后缺失不变（且引入 literal 系回归，已回退）。
+4. **pitch=0 实验**（fixture 临时改 0 + `node scripts/generate-mbstyle-test-index.js` 重生成索引后才生效——**索引内联全部 fixture，改 style.json 必须重生成**）：三建筑仅剩 2 对 1–2px 水平细线（y≈63/64、191/192，x 142–369，共 ~454px；其中 y=63 行 x256–368 为蓝色），**三个屋顶全部不渲染、居中绿方块完全消失**（色统计仅有墙面暗色 (6,6,212)/(115,8,8) 各 ~16px，无任何屋顶亮色、无绿色）——"最靠近相机的内容缺失"签名。
+5. **当前头号嫌疑：中心瓦片 objects 未进 sceneRoot**——与 §12.6 C3 时期记录的未解现象**完全同构**（"含 lng0/lat0 的中心瓦片已解码 willRender=true 但 objects 未进 sceneRoot，pitch-60 + 1 级 overzoom 下 FrustumIntersection/visible tile 计算只返回周边瓦片"）。对象已创建 ≠ 对象进场景：**下一断点 = `VisibleTileSet.populateRenderedTiles` → `Tile.attachTileObjects`/sceneRoot 挂载链路**，核对 pitch 0 时中心瓦片（18/131072/131072）与 pitch 60 时南行瓦片（18/*131073）是否在 renderedTiles 内、其 objects 是否挂上。
+6. 复现/继续调试备忘：
+   - 重新加埋点位置：`TileGeometryCreator.ts` `buildObject(...)` 之后（extruded 分支打 tileKey+color+group）；以及 `VisibleTileSet.populateRenderedTiles` / Tile objects 挂载处。
+   - 运行：`CHROME_BIN=/usr/bin/microsoft-edge MBSTYLE_PORT=8099 MBSTYLE_REPORT=rendering-test-results/<dir> node scripts/run-mbstyle-render-tests.js fill-extrusion-color`（`HARP_NO_HARD_SOURCE_CACHE=true` 防 karma webpack 缓存旧码；跑前 `pkill -f RenderingTestResultServer`）。
+   - 已证伪方向勿重复：墙面几何外扩（F1 原假设）、mvt/geojson 裁剪、emitter 分组、depth-prepass、材质/颜色/背面剔除/NaN/RTE（§12.6 已排除项）。
+
+
+### 12.30 F2a 落地：近裁剪面贴地是"最靠近相机内容缺失"的真因（2026-08-17 晚）
+
+**根因（静态代码链定位，未再需要运行时埋点）**：
+
+1. **症状统一解释**：pitch-0 实验的"三个屋顶全不渲染、仅剩墙面细线、居中绿方块消失"与 pitch-60 的"南墙 + 屋顶南侧 ~20px 缺失"，共同签名是**高出地面且最靠近相机的内容被裁剪**——这是 GPU 近裁剪面（near plane）行为，不是瓦片挂载/剔除问题（对象创建 10/10 已排除，方向证伪）。
+2. **机制链**：`VisibleTileSet.update()` 用 renderedTiles 的 `tile.geoBox.maxAltitude` 作为 `clipPlanesEvaluator.maxElevation`（VisibleTileSet.ts:633-657）→ `TiltViewClipPlanesEvaluator.evaluateDistancePlanarProj`（ClipPlanesEvaluator.ts:664-672）以 `near = (z − maxElevation)/cos(bottomAngle) × cos(bottomFov) − margin` 求近平面。我们的 `DecodedTile` 从不上报 `maxGeometryHeight`/`boundingBox` → `Tile.elevateGeoBox`（Tile.ts:734-740）保持 geoBox 海拔 0 → **near plane 就贴在地面**。挤出屋顶（z=10m）在屏幕下缘一侧比 near 更近 → 整片被裁。
+3. **数值验证**（zoom 18，相机距地 ~229m，nearFarMargin≈13）：pitch 0 时 near ≈ 229−6.7 ≈ 222，屋顶 219 < 222 → 全裁（只剩 AA 细线）；设置 maxElevation=10 后 near ≈ 212 → 屋顶可见。与实验观测逐项吻合。
+4. **literal fixture 为何通过**：单一小方块位于屏幕中心（沿视线距离处，天然远于 near plane）；跨瓦片大范围 fixture 的南半（屏幕底/最近相机）才落入裁剪区。
+
+**修复（生产代码两处，harness 零改动）**：
+- `MBTileDataEmitter`：新增 `m_maxGeometryHeight` 追踪——`emitExtrudedPolygon` 记 `height + zOffset`、`processLineFeature` 记 elevated-line z 偏移；`getDecodedTile()` 输出 `decodedTile.maxGeometryHeight`。引擎链 `Tile.set decodedTile` → `elevateGeoBox()` → geoBox 抬升 → 近平面/包围盒同步上移。
+- `MBStyleDataSource.applyMaxGeometryHeight(style)`（`wireTileSources` 开头调用）：扫描 fill-extrusion/building 层的 `fill-extrusion-height`（字面量 + legacy stops 递归取最大），设 `DataSource.maxGeometryHeight`——供瓦片解码前 `FrustumIntersection` 的剔除包围盒（第一阶段 cull box）使用，防止高 pitch 下最近瓦片被错误剔除。
+
+**验证**（`rendering-test-results/mbstyle-f2a/`，Edge headless + SwiftShader）：
+- **fill-extrusion-color/property-function 8237px → PASS（66px）**、**zoom-and-property-function 8171px → PASS（1px）**——F2a 两大目标用例转通过。
+- 零回归：color 的 default/function/literal/use-theme 保持 PASS 0；fill-extrusion-base default/function/literal/zoom-and-property/tile-border PASS 0（与 F1 后状态一致）。
+- 剩余失败与 F2a 无关：`no-alpha-no-multiply`（37842，3D-lights 路径 F2）、`data-driven-zero-alpha`（28010）、base 的 rounded-edge/terrain/negative 系（独立特性）。
+- tsc 绿；单测 harness 本环境因 workspace 链接/ESM 解析无法运行（§11.3 既有问题，改动为纯增量字段，风险低）。
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
@@ -1374,7 +1402,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - join-normal 路径仅 `fill-extrusion-line-width ≠ 0` 的 wallMode 用例（`fill-extrusion-line-width` 分类 9 例）需要，届时再移植。
 
 **F2. fill-extrusion 残余**：`no-alpha-no-multiply`（37842px，3D-lights 路径）、`data-driven-zero-alpha`（28038px）、opacity 半透明叠加。
-- **F2a（新，§12.29 遗留）**：property-function/zoom-and-property 的**半块方块 fixture** 渲染缺南墙 + 屋顶南侧 ~20px——几何完整到达 emitter，截断在渲染侧（TileGeometryCreator/DepthPrePass/Stencil/NaN boundingSphere 嫌疑），需浏览器埋点专项。
+- **F2a（✅ 已完成 2026-08-17 晚，§12.30）**：根因不是瓦片挂载，而是**相机近裁剪面贴地**——`TiltViewClipPlanesEvaluator` 以 `maxElevation`（=瓦片 geoBox 最高点，恒 0）求解 near plane，挤出屋顶（高于地面、更靠近相机）落在 near 之前被 GPU 裁剪。修复：emitter 上报 `DecodedTile.maxGeometryHeight` + datasource 扫描样式设 `DataSource.maxGeometryHeight`。**property-function 8237→PASS(66px)、zoom-and-property 8171→PASS(1px)**，literal/default/function 零回归。
 
 ### P1 — 近失可快速转通过（G1 剩余）
 

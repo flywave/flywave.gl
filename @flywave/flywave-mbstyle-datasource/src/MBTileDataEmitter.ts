@@ -322,6 +322,22 @@ export class MBTileDataEmitter {
     private m_currentZOffset: number = 0;
 
     /**
+     * Maximum geometry z (meters) emitted for this tile. Reported as
+     * `DecodedTile.maxGeometryHeight` so the engine lifts the tile's geoBox
+     * above the extruded content — otherwise the camera near plane hugs the
+     * ground plane and clips the geometry closest to the camera (extrusion
+     * roofs / elevated lines), see `Tile.elevateGeoBox` and
+     * `TiltViewClipPlanesEvaluator`.
+     */
+    private m_maxGeometryHeight: number = 0;
+
+    private noteGeometryHeight(z: number): void {
+        if (z > this.m_maxGeometryHeight) {
+            this.m_maxGeometryHeight = z;
+        }
+    }
+
+    /**
      * Resolve the per-feature Z offset for a layer, combining:
      *   - the explicit `<type>-z-offset` paint/layout property, and
      *   - the `<type>-elevation-reference` layout property, which reads the
@@ -1006,6 +1022,7 @@ export class MBTileDataEmitter {
         const floorHeight = rawFloor;
         // Avoid fully flat extrusions (normal computation / shader issues).
         const height = Math.max(rawFloor + 1, rawHeight);
+        this.noteGeometryHeight(height + this.m_currentZOffset);
 
         for (const polygon of geometry) {
             const rings = polygon.rings;
@@ -1101,6 +1118,7 @@ export class MBTileDataEmitter {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
             this.m_currentZOffset = this.resolveZOffset(layer, properties, 'line');
+            this.noteGeometryHeight(this.m_currentZOffset);
 
             for (const lineGeo of geometry) {
                 // Convert tile-local to world. Under a non-Mercator custom
@@ -1636,6 +1654,9 @@ export class MBTileDataEmitter {
             techniques: this.m_techniques,
             geometries: [...geometries, ...lineGeoms],
         };
+        if (this.m_maxGeometryHeight > 0) {
+            decodedTile.maxGeometryHeight = this.m_maxGeometryHeight;
+        }
 
         // Emit text/POI geometries so the native TextElementsRenderer/PoiRenderer
         // can find them. Without these, no text or icons render.
