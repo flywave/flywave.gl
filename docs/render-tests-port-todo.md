@@ -21,6 +21,15 @@
 > **2026-08-17 更新（F2a 落地——近裁剪面贴地，§12.30）**：property-function/zoom-and-property 半块方块缺南墙+屋顶的根因是**相机近平面按 maxElevation=0 求解贴在地面**，高出地面的挤出内容（最靠近相机一侧）被 GPU 近平面裁剪——同时解释 §12.6 C3 未解的"最靠近相机内容缺失"签名。修复：emitter 上报 `DecodedTile.maxGeometryHeight` + datasource 扫描样式设 `DataSource.maxGeometryHeight`（两级：解码后近平面/geoBox、解码前 cull box）。**fill-extrusion-color/property-function 8237→PASS(66px)、zoom-and-property 8171→PASS(1px)**，零回归。§14 F2a 勾除。
 >
 > **2026-08-17 更新（F2 落地——color alpha 语义 + 3D-lights 双重光照，§12.31）**：`no-alpha-no-multiply` 37842→**PASS 0**（mapbox 对 fill-extrusion-color alpha 不做 blend，RGB×alpha 预乘不透明；alpha=0 剔除要素）；`data-driven-zero-alpha` 28010→**1288 近失**（场景灯双重光照/ambient π/linear 域 ×k/clearColor linear radiance 四项修复，红蓝黄逐色对齐；残余=cast-shadow 阴影）；lighting-3d-mode 连带 10→**12** 通过零回归。§14 F2 主体完成。
+>
+> **2026-08-18 会话总结（line 域 ribbon 管线对齐大轮，commit `90c061d4`→`58e24339`，§12.33–§12.49）**：
+> - **方法论**：代码端分批闭环（七批）+ 二分法渲染验证（每轮单变量，karma ~7min/轮）；几何数学验证必须配真实数据鲁棒性验证（短段路网证伪 earcut 单环方案）。
+> - **转通过**：line-join/miter·bevel·default（历史千级近失）、line-gradient/gradient、line-pattern/literal。
+> - **进入近失带**：line-trim-offset 全族（48 例，120–4597px）、line-border 全族（13 例，737–4864px）、line-pattern 系（opacity 37/with-dasharray 102/@2x 693）、cross-fade（221–2350）、sprites 2x-icon（41）、symbol-elevation collision（220/387）、line-translate/literal（754）、line-offset/literal（1180）、meters-default（2672）、line-blur/default（745）。
+> - **新实现清单**：join 全语义（miter-limit/round-limit/bevel/round/none，矩形+外角楔形鲁棒构造）、caps、gradient/pattern 上 ribbon 全链（colorspace 后注入/alpha 通道/v 拉伸线宽/u 纵横比/@2x pixelRatio/sprite 竞态）、line-border 双边条、trim-color/fade、cross-fade 双纹理（line+fill）、per-progress 变宽、blur 中心衰减公式（数值拟合）、translate/offset 几何烘焙（实测方向）、meters 全链、symbol-elevation、icon/text-translate、text-radial-offset、text-max-angle 分段、sprite @2x 选择、image raster paint、['image'] 可用性回退。
+> - **零回归**：line-color 344≈337 基线全程保持；既有通过项（line-join 系/gradient）稳定。
+> - **known-gap**：raster premultiplied 上传（three 链路不可用，121k 为既有基线）；大 line-offset（>20px）瓦片截断（mgl 是屏幕空间 shader）；blur 晕圈 blend 隔离（与全量 AA feather 同专项）；int-zoom pattern 白点相位；gradient-vector-tile 多 feature 进度。
+
 
 ---
 
@@ -1435,6 +1444,34 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **教训（重要）**：raster 系 110–121k 是**文档既有基线失败值**（§13.1 G5 "raster-opacity 121k"，F11 双路径未收口）——本轮曾误判为 premultiply 回归，两轮回退后核对历史值确认非回归。最终 raster 代码回退到 D5 版本（premultiply/CustomBlending/colorspace 三项尝试全部撤销，记 known-gap：raster premultiplied 上传在 three 链路上不可用）。
 - icon-translate 8066 = §12.16 既有基线（mvt 符号源空白），非新错。
+
+## 15. 下一步计划（2026-08-18 会话末冻结，按 ROI 排序）
+
+### P0 — 上一轮验收的直接跟进（有明确取证方向）
+| # | 任务 | 依据 | 复杂度 |
+|---|------|------|--------|
+| N1 | **sprites pattern @2x 尺度校准**（1x-screen-2x-pattern 3556 / 2x-screen-2x-pattern 14803）：icon 已生效（41 近失）但 pattern 系仍差——对照 2x-screen-1x-icon 成功路径排查 patternWorld 在 @2x sprite 下的换算链 | §12.48/12.49 | ⭐⭐ |
+| N2 | **symbol-elevation ground/sea 系**（24–26k 恒定）：terrain/globe 场景依赖——先跑无 terrain 的 sea-zero-without-terrain 单例取证（24328），判断是 elevation 值差还是场景基线差 | §12.49 | ⭐⭐ |
+| N3 | **icon-translate / text-translate 符号源空白**（8k/10k 既有基线）：§12.16 记录 mvt 符号源不渲染——与 icon-text-fit/property-function 的"同点要素仅放置 1 个"同为 placement 深水区 | §12.16/12.49 | ⭐⭐⭐⭐ |
+| N4 | **int-zoom pattern 白点相位**（32122）：宽度 base 插值已排除、密度已修 u 纵横比——残余为逐点位置校准，需像素级 diff 取证 | §12.42 | ⭐⭐⭐ |
+
+### P1 — 架构/引擎级专项（单开多轮）
+| # | 任务 | 说明 | 复杂度 |
+|---|------|------|--------|
+| N5 | **透明通道 blend 隔离专项**（一项三题）：全量 AA feather 启用（§12.36 门控）、blur 晕圈几何外扩（§12.39 回退的 rev2）、半透明线交叉的 mgl 式单 pass 合成 | line-color 337→0 的最后一公里 | ⭐⭐⭐⭐ |
+| N6 | **大 line-offset 屏幕空间方案**：mgl offset 是 shader uniform（跨瓦片无缝），我们烘焙几何在 >20px 时瓦片截断（line-border/aliasing 56837 主源）| 需 vertex shader 位移注入 | ⭐⭐⭐ |
+| N7 | **raster 双路径收口（F11）**：raster 系 121k 既有基线从未通过；premultiplied 上传在 three 链不可用（§12.49 教训）——需逐瓦片纹理管线重构 | ~85 例 | ⭐⭐⭐⭐ |
+| N8 | **gradient-vector-tile 多 feature 进度**（13976）+ per-progress 宽度像素校准 | §12.40 | ⭐⭐⭐ |
+
+### P2 — 全量基线复核
+| # | 任务 | 说明 |
+|---|------|------|
+| N9 | **跑第五轮全量基线**（baseline5）：本会话累计大量近失带转正，需全量重估通过率（预期 baseline4 231 → 显著提升；line/trim/border/cross-fade/sprites 系是主要增量）| 分批脚本 + ~2h |
+
+### 验证流程备忘（沿用）
+- 代码端分批闭环 → 单批 karma 验证（HARP_NO_HARD_SOURCE_CACHE=true，改代码后必带）；
+- 每轮验收前**核对文档历史基线值**（§12.49 raster 误判教训）；
+- `pkill -f RenderingTestResultServer` 清孤儿；结果读 `rendering-test-results/<dir>/web-*/`。
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
