@@ -1492,7 +1492,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 | # | 任务 | 依据 | 复杂度 |
 |---|------|------|--------|
 | N1 | **sprites pattern @2x 尺度校准**（1x-screen-2x-pattern 3556 / 2x-screen-2x-pattern 14803）：**主体完成（2026-08-18，§12.50）**——真因是 pattern 全黑三重 bug（atlas 超 MAX_TEXTURE_SIZE / quad 定位数学非法 / flipY 采样错位），已全部修复 + mgl displaySize 平铺语义；fill-pattern 进入 392–795 近失带。**剩余 N1b**：sprites/background-pattern 像素校准（水平周期、暗度、相位）→ 转通过 | §12.48/12.49 | ⭐⭐ |
-| N2 | **symbol-elevation ground/sea 系**（24–26k 恒定）：terrain/globe 场景依赖——先跑无 terrain 的 sea-zero-without-terrain 单例取证（24328），判断是 elevation 值差还是场景基线差 | §12.49 | ⭐⭐ |
+| N2 | **symbol-elevation ground/sea 系**：**主体完成（2026-08-19，§12.55/12.58）**——真因是 raster 背景（N7 连带 24k→1.9k 近失）；mgl 404 父级回落已源码证实。**剩余**：sea 远距裁剪幅度校准（tilt 已触发但过度，farClipEnabled 门控中）+ 符号 SDF 边缘 | §12.55 | ⭐⭐ |
 | N3 | **icon-translate / text-translate 符号源空白**（8k/10k 既有基线）：§12.16 记录 mvt 符号源不渲染——与 icon-text-fit/property-function 的"同点要素仅放置 1 个"同为 placement 深水区 | §12.16/12.49 | ⭐⭐⭐⭐ |
 | N4 | **int-zoom pattern 白点相位**（32122）：宽度 base 插值已排除、密度已修 u 纵横比——残余为逐点位置校准，需像素级 diff 取证 | §12.42 | ⭐⭐⭐ |
 
@@ -1501,7 +1501,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 |---|------|------|--------|
 | N5 | **透明通道 blend 隔离专项**（一项三题）：全量 AA feather 启用（§12.36 门控）、blur 晕圈几何外扩（§12.39 回退的 rev2）、半透明线交叉的 mgl 式单 pass 合成 | line-color 337→0 的最后一公里 | ⭐⭐⭐⭐ |
 | N6 | **大 line-offset 屏幕空间方案**：mgl offset 是 shader uniform（跨瓦片无缝），我们烘焙几何在 >20px 时瓦片截断（line-border/aliasing 56837 主源）| 需 vertex shader 位移注入 | ⭐⭐⭐ |
-| N7 | **raster 双路径收口（F11）**：raster 系 121k 既有基线从未通过；premultiplied 上传在 three 链不可用（§12.49 教训）——需逐瓦片纹理管线重构 | ~85 例 | ⭐⭐⭐⭐ |
+| N7 | **raster 双路径收口（F11）**：**主体完成（2026-08-19，§12.54–12.57）**——material.map 无效改自注入采样/全局 UV 归一化/父级回落/sRGB 域合成/mgl 精确公式，121k→559–19.8k，brightness/function + underzoom + raster-loading 转通过。**剩余**：基底 14171（瓦片内部亚像素，疑 SwiftShader 不可达）、image 对齐校准（MapAnchor 已上屏 106k，朝向/亮度）、sea 裁剪 | ~85 例 | ⭐⭐⭐⭐ |
 | N8 | **gradient-vector-tile 多 feature 进度**（13976）+ per-progress 宽度像素校准 | §12.40 | ⭐⭐⭐ |
 
 ### P2 — 全量基线复核
