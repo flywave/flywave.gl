@@ -908,15 +908,18 @@ export class MBStyleDataSource extends TileDataSource {
             }
         }
 
-        // Wire the style's tile sources (vector priority, else a composite of
-        // all GeoJSON-format sources). Sets m_currentSourceId and delegate.
-        await this.wireTileSources(style, sources);
-
-        // Load sprite atlas if style has a sprite URL
+        // Load the sprite atlas BEFORE wiring tile sources: tile decoding
+        // starts inside wireTileSources and the emitter reads the sprite
+        // registry (image availability, pattern tile sizes) at decode time —
+        // loading it after races and drops line-pattern entirely.
         if (style.sprite) {
             await this.loadSpriteAtlas(style.sprite);
             this.m_lastAppliedSprite = style.sprite;
         }
+
+        // Wire the style's tile sources (vector priority, else a composite of
+        // all GeoJSON-format sources). Sets m_currentSourceId and delegate.
+        await this.wireTileSources(style, sources);
 
         // Preload real mapbox glyph metrics for the style's font stacks so
         // the worker-based decoder can shape text accurately (line breaking
@@ -1333,9 +1336,14 @@ export class MBStyleDataSource extends TileDataSource {
             // can resolve availability (coalesce fallback chains), and the
             // sprite pixel sizes to the emitter for line-pattern tiling.
             MBExpressionEngine.setAvailableImages(new Set(icons.keys()));
-            const spriteInfos = new Map<string, { width: number; height: number }>();
+            const spriteInfos = new Map<string,
+                { width: number; height: number; pixelRatio?: number }>();
             for (const [name, info] of icons) {
-                spriteInfos.set(name, { width: info.width, height: info.height });
+                spriteInfos.set(name, {
+                    width: info.width,
+                    height: info.height,
+                    pixelRatio: (info as any).pixelRatio,
+                });
             }
             MBTileDataEmitter.setSpriteInfos(spriteInfos);
             this.m_spriteAtlas = new SpriteAtlas(spriteData.image, icons);

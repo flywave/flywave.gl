@@ -58,6 +58,43 @@ interface AccumulatedGeometry {
 }
 
 const tmpV3 = new THREE.Vector3();
+
+/**
+ * Parse `["interpolate", …, ["line-progress"], t1, v1, …]` (also through the
+ * compiler's `["memo", …]` wrapper / serialized object form) into [[t, v], …]
+ * numeric stops. Returns undefined when the expression is not a
+ * line-progress interpolate.
+ */
+function parseProgressStopsStatic(raw: any): Array<[number, number]> | undefined {
+    if (!raw) return undefined;
+    if (!Array.isArray(raw) && typeof raw === 'object') {
+        try { raw = JSON.parse(JSON.stringify(raw)); } catch { return undefined; }
+    }
+    while (Array.isArray(raw) && raw[0] === 'memo') raw = raw[1];
+    if (!Array.isArray(raw) || raw[0] !== 'interpolate') return undefined;
+    const input = raw[1];
+    if (!Array.isArray(input) || !JSON.stringify(input).includes('line-progress')) return undefined;
+    const stops: Array<[number, number]> = [];
+    for (let i = 3; i + 1 < raw.length; i += 2) {
+        const t = Number(raw[i]);
+        const v = Number(raw[i + 1]);
+        if (Number.isFinite(t) && Number.isFinite(v)) stops.push([t, v]);
+    }
+    return stops.length > 1 ? stops : undefined;
+}
+
+/** Linear interpolation over sorted [[t, v], …] stops. */
+function interpProgressStops(stops: Array<[number, number]>, t: number): number {
+    if (t <= stops[0][0]) return stops[0][1];
+    if (t >= stops[stops.length - 1][0]) return stops[stops.length - 1][1];
+    for (let i = 0; i < stops.length - 1; i++) {
+        if (t >= stops[i][0] && t <= stops[i + 1][0]) {
+            const f = (t - stops[i][0]) / Math.max(stops[i + 1][0] - stops[i][0], 1e-9);
+            return stops[i][1] + (stops[i + 1][1] - stops[i][1]) * f;
+        }
+    }
+    return stops[stops.length - 1][1];
+}
 const EXTENTS = 4096;
 
 /**
@@ -211,9 +248,11 @@ export class MBTileDataEmitter {
      * the sprite atlas is loaded (decoding happens after that await, so the
      * static is populated in time). Used to size `line-pattern` tiles.
      */
-    private static s_spriteInfos: Map<string, { width: number; height: number }> | null = null;
+    private static s_spriteInfos: Map<string,
+        { width: number; height: number; pixelRatio?: number }> | null = null;
 
-    static setSpriteInfos(infos: Map<string, { width: number; height: number }> | null): void {
+    static setSpriteInfos(infos: Map<string,
+        { width: number; height: number; pixelRatio?: number }> | null): void {
         MBTileDataEmitter.s_spriteInfos = infos;
     }
 
@@ -480,9 +519,18 @@ export class MBTileDataEmitter {
                 props.technique = 'solid-line';
                 props.color = p['line-color'] ?? '#000000';
                 props.opacity = p['line-opacity'] ?? 1;
-                props.lineWidth = p['line-width'] ?? 1;
                 // Mapbox line-width/offset/dash values are in CSS pixels — the
                 // SolidLineMaterial converts them to world units via metricUnit.
+                // Under line-width-unit:meters the width is already metric:
+                // pre-divide by the px→world factor so the Pixel conversion
+                // restores the metric value.
+                const lineMeters = (l?.['line-width-unit'] ?? 'pixels') === 'meters';
+                const mppTech = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                    (256 * Math.pow(2, this.m_zoom + 1));
+                props.lineWidth = p['line-width'] ?? 1;
+                if (lineMeters && typeof props.lineWidth === 'number') {
+                    props.lineWidth = props.lineWidth / mppTech;
+                }
                 props.metricUnit = 'Pixel';
                 props._translate = p['line-translate'] ?? [0, 0];
                 props._translateAnchor = p['line-translate-anchor'] ?? 'map';
@@ -1025,6 +1073,9 @@ export class MBTileDataEmitter {
         const outlineTechIdx = this.getOrCreateOutlineTechniqueIndex(layer);
         const key = `${layer.id}:fill-outline:${outlineTechIdx}`;
         const geo = this.getOrCreateGeometry(key);
+        geo.edge = geo.edge ?? [];
+        geo.dist = geo.dist ?? [];
+        geo.len = geo.len ?? [];
         const featureStart = geo.indices.length;
         // mgl's fillOutline stroke is `alpha = 1 - smoothstep(0, 1, dist)` over
         // the boundary; with MSAA a 1px ribbon peaks ~50%. Bake a 2px-wide
@@ -1046,34 +1097,10 @@ export class MBTileDataEmitter {
                 worldPts.push(w.x, w.y, w.z);
             }
 
-            const center = this.m_decodeInfo.center;
-            const lineGeom = createLineGeometry(center, worldPts, webMercatorProjection);
-            if (lineGeom.vertices.length === 0 || lineGeom.indices.length === 0) continue;
-
-            // Bake the outline width into the ribbon positions (same as
-            // processLineFeature / emitRibbonFill).
-            const verts = lineGeom.vertices;
-            for (let v = 0; v < verts.length; v += 13) {
-                const sy = verts[v + 1] >= 0 ? 1 : -1;
-                verts[v + 3] += verts[v + 9] * worldHalfWidth * sy;
-                verts[v + 4] += verts[v + 10] * worldHalfWidth * sy;
-                verts[v + 5] += verts[v + 11] * worldHalfWidth * sy;
-            }
-
-            const startIdx = geo.positions.length / 3;
-            for (let v = 0; v < lineGeom.vertices.length; v += 13) {
-                geo.positions.push(
-                    lineGeom.vertices[v + 3],
-                    lineGeom.vertices[v + 4],
-                    lineGeom.vertices[v + 5],
-                );
-            }
-            // Reverse CW winding to CCW (fill material FrontSide culling).
-            for (let i = 0; i < lineGeom.indices.length; i += 3) {
-                geo.indices.push(lineGeom.indices[i] + startIdx);
-                geo.indices.push(lineGeom.indices[i + 2] + startIdx);
-                geo.indices.push(lineGeom.indices[i + 1] + startIdx);
-            }
+            // Reuse the join-aware ribbon body (miter joins at ring
+            // corners, exactly like line rendering) instead of the legacy
+            // averaged-bitangent bake.
+            this.emitRibbonBody(layer, geo, worldPts, worldHalfWidth);
         }
 
         const count = geo.indices.length - featureStart;
@@ -1232,6 +1259,24 @@ export class MBTileDataEmitter {
                     worldPts.push(w.x, w.y, w.z);
                 }
 
+                // `line-translate` [x east, y north] px: displace the
+                // centerline in the map plane (baked geometrically — the
+                // shader uniform path proved ineffective on the fill
+                // materials). Measured against mgl references: +x moves the
+                // rendering right, +y moves it DOWN (screen), so north is
+                // the NEGATIVE world-y direction in this frame.
+                const translate = layer.paint?.['line-translate'] as number[] | undefined;
+                if (translate && (translate[0] !== 0 || translate[1] !== 0)) {
+                    const mppT = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                        (256 * Math.pow(2, this.m_zoom + 1));
+                    const twx = translate[0] * mppT;
+                    const twy = -translate[1] * mppT;
+                    for (let i = 0; i < worldPts.length; i += 3) {
+                        worldPts[i] += twx;
+                        worldPts[i + 1] += twy;
+                    }
+                }
+
                 // `line-offset` (px): displace the CENTERLINE along the left
                 // normal of each segment (mgl: positive values shift left)
                 // before any ribbon/join geometry is derived from it, so
@@ -1241,25 +1286,11 @@ export class MBTileDataEmitter {
                 const center = this.m_decodeInfo.center;
                 const mppOffset = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                     (256 * Math.pow(2, this.m_zoom + 1));
+                // Under line-width-unit:meters the offset is metric too.
+                const offsetUnit = layer.layout?.['line-width-unit'] ?? 'pixels';
                 if (offsetPx !== 0 && worldPts.length >= 6) {
-                    const ow = offsetPx * mppOffset;
-                    const cn = worldPts.length / 3;
-                    const offs: number[] = [];
-                    for (let i = 0; i < cn - 1; i++) {
-                        const ux = worldPts[(i + 1) * 3] - worldPts[i * 3];
-                        const uy = worldPts[(i + 1) * 3 + 1] - worldPts[i * 3 + 1];
-                        const l = Math.hypot(ux, uy) || 1;
-                        // Left normal of travel direction.
-                        offs.push(-uy / l * ow, ux / l * ow);
-                    }
-                    for (let i = 0; i < cn; i++) {
-                        const prev = Math.max(i - 1, 0);
-                        const next = Math.min(i, cn - 2);
-                        const ox = (offs[prev * 2] + offs[next * 2]) / 2;
-                        const oy = (offs[prev * 2 + 1] + offs[next * 2 + 1]) / 2;
-                        worldPts[i * 3] += ox;
-                        worldPts[i * 3 + 1] += oy;
-                    }
+                    const ow = offsetUnit === 'meters' ? offsetPx : offsetPx * mppOffset;
+                    this.offsetPolyline(worldPts, ow);
                 }
 
                 const lineGeom = createLineGeometry(center, worldPts, webMercatorProjection);
@@ -1278,11 +1309,44 @@ export class MBTileDataEmitter {
                 const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                     (256 * Math.pow(2, this.m_zoom + 1));
                 // `line-width-unit: meters` — the width is metric, no px→world
-                // conversion (world units are meters on the equator).
-                const widthUnit = layer.paint?.['line-width-unit'] ?? 'pixels';
+                // conversion (world units are meters on the equator). NOTE:
+                // line-width-unit is a LAYOUT property.
+                const widthUnit = layer.layout?.['line-width-unit'] ?? 'pixels';
+                // NOTE: blurring would want the ribbon geometry widened by
+                // the blur radius, but in dense road networks the widened
+                // ribbons overlap and stack into large black regions —
+                // reverted; the fade is clipped at the line edge instead.
                 const worldHalfWidth = widthUnit === 'meters'
                     ? lineWidthPx / 2
                     : lineWidthPx * metersPerPixel / 2;
+                // Variable-width lines: `line-width` may itself be a
+                // line-progress interpolate (e.g. gradient-vector-tile:
+                // 30px at progress 0.1 tapering to 0.5). The evaluator has
+                // no line-progress input (it resolves to null there), so
+                // parse the RAW stops and compute a per-vertex half width
+                // from the cumulative distance.
+                let progressHalfWidths: number[] | undefined;
+                const rawWidthSpec = (layer as any).paintDefs?.['line-width']?.value;
+                const pwStops = parseProgressStopsStatic(rawWidthSpec);
+                if (pwStops && worldPts.length >= 6) {
+                    const cn = worldPts.length / 3;
+                    const segLens: number[] = [0];
+                    let total = 0;
+                    for (let i = 1; i < cn; i++) {
+                        total += Math.hypot(
+                            worldPts[i * 3] - worldPts[(i - 1) * 3],
+                            worldPts[i * 3 + 1] - worldPts[(i - 1) * 3 + 1],
+                            worldPts[i * 3 + 2] - worldPts[(i - 1) * 3 + 2],
+                        );
+                        segLens.push(total);
+                    }
+                    if (total > 0) {
+                        const halfOf = (w: number) =>
+                            widthUnit === 'meters' ? w / 2 : (w * metersPerPixel) / 2;
+                        progressHalfWidths = segLens.map(sl =>
+                            halfOf(interpProgressStops(pwStops, sl / total)));
+                    }
+                }
                 // Bake extrusion into each vertex's position: pos += biTangent*hw*sign(ec.y)
                 const verts = lineGeom.vertices;
                 for (let v = 0; v < verts.length; v += 13) {
@@ -1291,21 +1355,34 @@ export class MBTileDataEmitter {
                     verts[v + 4] += verts[v + 10] * worldHalfWidth * sy;  // pos.y += biTangent.y*hw*sign
                     verts[v + 5] += verts[v + 11] * worldHalfWidth * sy;  // pos.z += biTangent.z*hw*sign
                 }
-                this.m_preExtrudedLines = true;
+                // Gradient / pattern / blurred lines render via the RIBBON
+                // only: the SolidLine fallback path's gradient sampler uses
+                // fract(vCoords.x) on the metric cumulative distance (noise)
+                // and samples the sRGB ramp in the linear domain (2.2x
+                // brightening); for blurred lines its OPAQUE copy covers the
+                // ribbon's alpha ramp entirely. Drawing both also
+                // double-blends translucent lines.
+                const skipSolidLine = Boolean(
+                    layer.paint?.['line-gradient'] ||
+                    layer.paint?.['line-pattern'] ||
+                    (Number(layer.paint?.['line-blur'] ?? 0) !== 0));
+                if (!skipSolidLine) this.m_preExtrudedLines = true;
                 // Store interleaved vertex data + remapped indices
                 const stride = 13; // extrusionCoord(3)+position(3)+tangent(3)+biTangent(4)
                 const baseVert = this.m_lineInterleaved.length / stride;
-                this.m_lineInterleaved.push(...lineGeom.vertices);
+                if (!skipSolidLine) {
+                    this.m_lineInterleaved.push(...lineGeom.vertices);
 
-                for (const idx of lineGeom.indices) {
-                    this.m_lineIndices.push(idx + baseVert);
+                    for (const idx of lineGeom.indices) {
+                        this.m_lineIndices.push(idx + baseVert);
+                    }
+
+                    const start = this.m_lineIndices.length - lineGeom.indices.length;
+                    const fid = featureId ?? properties.$id ?? null;
+                    this.m_lineGroupStarts.push(start, techniqueIdx);
+                    this.m_lineSortKeys.push(this.extractSortKey(layer) ?? 0);
+                    this.m_lineAttr.push(JSON.stringify({ ...properties, $id: fid }));
                 }
-
-                const start = this.m_lineIndices.length - lineGeom.indices.length;
-                const fid = featureId ?? properties.$id ?? null;
-                this.m_lineGroupStarts.push(start, techniqueIdx);
-                this.m_lineSortKeys.push(this.extractSortKey(layer) ?? 0);
-                this.m_lineAttr.push(JSON.stringify({ ...properties, $id: fid }));
 
                 // Also emit the pre-extruded ribbon as a simple fill geometry so the
                 // line renders even where the SolidLineMaterial shader extrusion
@@ -1320,11 +1397,118 @@ export class MBTileDataEmitter {
                     );
                     cumDist.push(cumDist[i - 1] + d);
                 }
+                // Under meters the shader's px width needs the conversion.
                 this.emitRibbonFill(layer, worldPts, worldHalfWidth, cumDist,
-                    widthUnit === 'meters' ? worldHalfWidth * 2 / metersPerPixel : undefined,
-                    lineGeom);
+                    widthUnit === 'meters' ? lineWidthPx / metersPerPixel : undefined,
+                    lineGeom, progressHalfWidths);
+                // line-border: edge ribbons under the main line (constant
+                // width only — variable-width borders are not a test case).
+                if (!progressHalfWidths) {
+                    this.emitRibbonBorder(layer, worldPts, worldHalfWidth, cumDist, metersPerPixel);
+                }
             }
         }
+    }
+
+    /**
+     * Displace a polyline along the RIGHT normal of each segment (mgl's
+     * positive line-offset direction in this frame), averaging the two
+     * adjacent segment normals at vertices to avoid gaps at corners.
+     * Mutates `pts` in place.
+     */
+    private offsetPolyline(pts: number[], ow: number): void {
+        const cn = pts.length / 3;
+        if (ow === 0 || cn < 2) return;
+        const offs: number[] = [];
+        for (let i = 0; i < cn - 1; i++) {
+            const ux = pts[(i + 1) * 3] - pts[i * 3];
+            const uy = pts[(i + 1) * 3 + 1] - pts[i * 3 + 1];
+            const l = Math.hypot(ux, uy) || 1;
+            offs.push(uy / l * ow, -ux / l * ow);
+        }
+        for (let i = 0; i < cn; i++) {
+            const prev = Math.max(i - 1, 0);
+            const next = Math.min(i, cn - 2);
+            pts[i * 3] += (offs[prev * 2] + offs[next * 2]) / 2;
+            pts[i * 3 + 1] += (offs[prev * 2 + 1] + offs[next * 2 + 1]) / 2;
+        }
+    }
+
+    /**
+     * `line-border` / `line-border-width`+`line-border-color`: two thin
+     * ribbons along the main line's edges, rendered UNDER the main ribbon
+     * (their fill technique has a slightly lower renderOrder). The border
+     * centerlines are the main centerline offset by ±(halfWidth − borderW/2).
+     */
+    private emitRibbonBorder(
+        layer: EvaluatedLayer,
+        worldPts: number[],
+        worldHalfWidth: number,
+        cumDist: number[] | undefined,
+        metersPerPixel: number,
+    ): void {
+        const bwRaw = Number(layer.paint?.['line-border-width'] ?? 0);
+        if (!(bwRaw > 0) || worldPts.length < 6) return;
+        const borderColor = layer.paint?.['line-border-color'] ?? '#000000';
+        const meters = (layer.layout?.['line-width-unit'] ?? 'pixels') === 'meters';
+        const bwWorld = meters ? bwRaw : bwRaw * metersPerPixel;
+        const borderHalf = Math.min(bwWorld / 2, worldHalfWidth);
+        const shift = worldHalfWidth - borderHalf;
+
+        const borderTechIdx = this.getOrCreateBorderTechniqueIndex(layer, borderColor);
+        const key = `${layer.id}:line-border:${borderTechIdx}`;
+        const geo = this.getOrCreateGeometry(key);
+        geo.edge = geo.edge ?? [];
+        geo.dist = geo.dist ?? [];
+        geo.len = geo.len ?? [];
+        const featureStart = geo.indices.length;
+
+        for (const side of [1, -1]) {
+            const pts = [...worldPts];
+            this.offsetPolyline(pts, side * shift);
+            this.emitRibbonBody(layer, geo, pts, borderHalf, cumDist);
+            this.emitRibbonCaps(layer, geo, pts, borderHalf, cumDist);
+        }
+
+        const count = geo.indices.length - featureStart;
+        if (count > 0) {
+            geo.groups.push({
+                start: featureStart,
+                count,
+                materialIndex: borderTechIdx,
+                sortKey: this.extractSortKey(layer),
+            });
+            geo.featureStarts.push(featureStart);
+            geo.objInfos.push({});
+        }
+    }
+
+    private getOrCreateBorderTechniqueIndex(layer: EvaluatedLayer, borderColor: any): number {
+        const key = `${layer.id}:line-border-tech:${String(borderColor)}`;
+        let idx = this.m_layerToTechniqueIndex.get(key);
+        if (idx === undefined) {
+            idx = this.m_techniqueIndex++;
+            this.m_layerToTechniqueIndex.set(key, idx);
+            const paint = layer.paint ?? {};
+            const technique: any = {
+                name: 'fill',
+                _index: idx,
+                // Just below the main ribbon (+0.5) so the line covers the
+                // border's inner halves.
+                _renderOrder: layer.renderOrder + 0.4,
+                renderOrder: layer.renderOrder + 0.4,
+                _layerId: layer.id,
+                _paint: { ...paint, 'fill-color': borderColor },
+                _layout: layer.layout,
+                _isLineRibbon: true,
+                _ribbonWidthPx: Number(paint['line-border-width'] ?? 1),
+                _ribbonBlurPx: 0,
+                color: borderColor,
+                opacity: 1,
+            };
+            this.m_techniques.push(technique as IndexedTechnique);
+        }
+        return idx;
     }
 
     /**
@@ -1339,6 +1523,7 @@ export class MBTileDataEmitter {
         cumDist?: number[],
         effectiveWidthPx?: number,
         lineGeom?: { vertices: number[]; indices: number[] },
+        hwPerPoint?: number[],
     ): void {
         // Key by ribbon technique: see the fill key comment in
         // processFillFeature — groups sharing a geometry must use one technique,
@@ -1355,8 +1540,8 @@ export class MBTileDataEmitter {
         geo.len = geo.len ?? [];
         const featureStart = geo.indices.length;
 
-        this.emitRibbonBody(layer, geo, worldPts, worldHalfWidth, cumDist);
-        this.emitRibbonCaps(layer, geo, worldPts, worldHalfWidth, cumDist);
+        this.emitRibbonBody(layer, geo, worldPts, worldHalfWidth, cumDist, hwPerPoint);
+        this.emitRibbonCaps(layer, geo, worldPts, worldHalfWidth, cumDist, hwPerPoint);
 
         // Use a fill technique so the mapview creates a simple fill material.
         const count = geo.indices.length - featureStart;
@@ -1388,6 +1573,7 @@ export class MBTileDataEmitter {
         worldPts: number[],
         worldHalfWidth: number,
         cumDist?: number[],
+        hwPerPoint?: number[],
     ): void {
         const n0 = worldPts.length / 3;
         if (n0 < 2) return;
@@ -1400,6 +1586,7 @@ export class MBTileDataEmitter {
         // and degenerate normals.
         const pts: number[] = [];
         const rawD: number[] = [];
+        const rawHW: number[] = [];
         for (let i = 0; i < m0; i++) {
             const m = pts.length / 3;
             if (m > 0 &&
@@ -1410,6 +1597,7 @@ export class MBTileDataEmitter {
             }
             pts.push(worldPts[i * 3], worldPts[i * 3 + 1], worldPts[i * 3 + 2]);
             rawD.push(cumDist ? cumDist[i] : i);
+            rawHW.push(hwPerPoint ? hwPerPoint[i] : worldHalfWidth);
         }
         while (pts.length / 3 > 1 && closed) {
             const m = pts.length / 3;
@@ -1417,6 +1605,7 @@ export class MBTileDataEmitter {
                 Math.abs(pts[1] - pts[(m - 1) * 3 + 1]) < 1e-12) {
                 pts.length -= 3;
                 rawD.length -= 1;
+                rawHW.length -= 1;
             } else break;
         }
         const np = pts.length / 3;
@@ -1437,6 +1626,8 @@ export class MBTileDataEmitter {
         };
         // Absolute distance (world meters) for line-pattern tiling.
         const lenAt = (i: number) => rawD[((i % n) + n) % n];
+        // Per-point half width (variable-width / line-progress lines).
+        const hwAt = (i: number) => rawHW[((i % n) + n) % n];
         const join = String(layer.layout?.['line-join'] ?? 'miter');
         const miterLimit = Number(layer.layout?.['line-miter-limit'] ?? 2);
         const roundLimit = Number(layer.layout?.['line-round-limit'] ?? 1.05);
@@ -1454,13 +1645,13 @@ export class MBTileDataEmitter {
                 const nx = -uy, ny = ux; // left normal
                 const ax = pts[s * 3], ay = pts[s * 3 + 1], az = pts[s * 3 + 2];
                 const bx = pts[e * 3], by = pts[e * 3 + 1], bz = pts[e * 3 + 2];
-                const hw = worldHalfWidth;
+                const hwS = hwAt(s), hwE = hwAt(e);
                 const base = geo.positions.length / 3;
                 geo.positions.push(
-                    ax + nx * hw, ay + ny * hw, az,
-                    bx + nx * hw, by + ny * hw, bz,
-                    bx - nx * hw, by - ny * hw, bz,
-                    ax - nx * hw, ay - ny * hw, az,
+                    ax + nx * hwS, ay + ny * hwS, az,
+                    bx + nx * hwE, by + ny * hwE, bz,
+                    bx - nx * hwE, by - ny * hwE, bz,
+                    ax - nx * hwS, ay - ny * hwS, az,
                 );
                 geo.edge!.push(1, 1, -1, -1);
                 geo.dist!.push(distAt(s), distAt(e), distAt(e), distAt(s));
@@ -1503,7 +1694,6 @@ export class MBTileDataEmitter {
         // the tile-clipped fragments vector tiles are full of — and plain
         // rectangles overlap at every corner, which double-blends on
         // alpha-blended ribbon materials.)
-        const hw = worldHalfWidth;
         const pushV = (x: number, y: number, z: number, e: number, d: number, l: number): number => {
             geo.positions.push(x, y, z);
             geo.edge!.push(e);
@@ -1520,77 +1710,22 @@ export class MBTileDataEmitter {
             else geo.indices.push(i, k, j);
         };
 
-        // Per-vertex join context: outer side sign and the inner (converging)
-        // offset intersection. Endpoints of open lines have no corner — the
-        // plain cross-section is used on both sides.
-        const outerSign: number[] = [];
-        const innerPt: Array<[number, number]> = [];
-        for (let i = 0; i < n; i++) {
-            const hasCorner = closed ? true : i > 0 && i < n - 1;
-            if (!hasCorner) {
-                outerSign.push(0);
-                innerPt.push([px(i), py(i)]);
-                continue;
-            }
-            const iN = (i - 1 + n) % n;
-            const cross = dx[iN] * dy[i] - dy[iN] * dx[i];
-            if (cross === 0) {
-                outerSign.push(0);
-                innerPt.push([px(i), py(i)]);
-                continue;
-            }
-            const sOut = cross > 0 ? -1 : 1; // left turn -> right side outer
-            outerSign.push(sOut);
-            const sIn = -sOut;
-            const pnx = -dy[iN] * sIn, pny = dx[iN] * sIn;
-            const nx = -dy[i] * sIn, ny = dx[i] * sIn;
-            const cx = px(i), cy = py(i);
-            const ax = cx + pnx * hw, ay = cy + pny * hw;
-            const bx = cx + nx * hw, by = cy + ny * hw;
-            const den = dx[iN] * dy[i] - dy[iN] * dx[i];
-            if (Math.abs(den) > 1e-6) {
-                let t = ((bx - ax) * dy[i] - (by - ay) * dx[i]) / den;
-                t = Math.max(-hw * miterLimit, Math.min(hw * miterLimit, t));
-                innerPt.push([ax + dx[iN] * t, ay + dy[iN] * t]);
-            } else {
-                innerPt.push([bx, by]);
-            }
-        }
-
-        // 1) Per-segment trapezoids: outer edge along the segment's outer
-        // normal, inner ends at the vertex inner-intersection points.
+        // 1) Per-segment rectangles (butt ends; overlaps at corners are
+        // covered by the join wedges and are invisible for opaque lines).
+        // Variable-width lines produce trapezoids (per-end half widths).
         const segCount = closed ? n : n - 1;
         for (let s = 0; s < segCount; s++) {
             const e = (s + 1) % n;
             const ux = dx[s], uy = dy[s];
-            const nx = -uy, ny = ux; // left normal of the segment
+            const nx = -uy, ny = ux; // left normal
             const dS = distAt(s), dE = distAt(e), lS = lenAt(s), lE = lenAt(e);
-            // Outer corner of vertex v w.r.t. this segment: plain offset at
-            // endpoints/collinear vertices, the side-specific corner at turns.
-            const outer = (v: number): [number, number] => {
-                const os = outerSign[v];
-                const sign = os === 0 ? 1 : os;
-                return [px(v) + nx * sign * hw, py(v) + ny * sign * hw];
-            };
-            // Inner corner: the shared offset intersection at turns so
-            // neighboring trapezoids tile without overlap.
-            const inner = (v: number): [number, number] => {
-                if (outerSign[v] === 0) {
-                    const sign = 1;
-                    return [px(v) - nx * sign * hw, py(v) - ny * sign * hw];
-                }
-                return innerPt[v];
-            };
-            const [aox, aoy] = outer(s);
-            const [box, boy] = outer(e);
-            const [aix, aiy] = inner(s);
-            const [bix, biy] = inner(e);
-            const v1 = pushV(aox, aoy, pz(s), outerSign[s] === 0 ? 1 : outerSign[s], dS, lS);
-            const v2 = pushV(box, boy, pz(e), outerSign[e] === 0 ? 1 : outerSign[e], dE, lE);
-            const v3 = pushV(bix, biy, pz(e), outerSign[e] === 0 ? -1 : -outerSign[e], dE, lE);
-            const v4 = pushV(aix, aiy, pz(s), outerSign[s] === 0 ? -1 : -outerSign[s], dS, lS);
-            pushTri(v1, v4, v3);
-            pushTri(v1, v3, v2);
+            const hwS = hwAt(s), hwE = hwAt(e);
+            const a1 = pushV(px(s) + nx * hwS, py(s) + ny * hwS, pz(s), 1, dS, lS);
+            const a2 = pushV(px(e) + nx * hwE, py(e) + ny * hwE, pz(e), 1, dE, lE);
+            const b1 = pushV(px(e) - nx * hwE, py(e) - ny * hwE, pz(e), -1, dE, lE);
+            const b2 = pushV(px(s) - nx * hwS, py(s) - ny * hwS, pz(s), -1, dS, lS);
+            pushTri(a1, b2, b1);
+            pushTri(a1, b1, a2);
         }
 
         // 2) Outer-side join wedges at interior vertices (closed lines wrap:
@@ -1622,21 +1757,21 @@ export class MBTileDataEmitter {
                 while (d > Math.PI) d -= 2 * Math.PI;
                 while (d < -Math.PI) d += 2 * Math.PI;
                 const K = Math.max(1, Math.ceil(Math.abs(d) / (Math.PI / 8)));
-                let prev = pushV(cx + Math.cos(a0) * hw, cy + Math.sin(a0) * hw, cz, s, dI, lI);
+                let prev = pushV(cx + Math.cos(a0) * hwAt(i), cy + Math.sin(a0) * hwAt(i), cz, s, dI, lI);
                 for (let k = 1; k <= K; k++) {
                     const th = a0 + (d * k) / K;
-                    const v = pushV(cx + Math.cos(th) * hw, cy + Math.sin(th) * hw, cz, s, dI, lI);
+                    const v = pushV(cx + Math.cos(th) * hwAt(i), cy + Math.sin(th) * hwAt(i), cz, s, dI, lI);
                     pushTri(cV, prev, v);
                     prev = v;
                 }
             } else if ((join === 'miter' || join === 'round') && mLen <= miterLimit) {
                 // Miter wedge: two triangles from the corner points to the apex.
-                const o1 = pushV(cx + pnx * hw, cy + pny * hw, cz, s, dI, lI);
-                const o2 = pushV(cx + nx * hw, cy + ny * hw, cz, s, dI, lI);
+                const o1 = pushV(cx + pnx * hwAt(i), cy + pny * hwAt(i), cz, s, dI, lI);
+                const o2 = pushV(cx + nx * hwAt(i), cy + ny * hwAt(i), cz, s, dI, lI);
                 let mx = pnx + nx, my = pny + ny;
                 const ml = Math.hypot(mx, my) || 1;
                 mx /= ml; my /= ml;
-                const r = hw / Math.max(1e-6, mx * pnx + my * pny);
+                const r = hwAt(i) / Math.max(1e-6, mx * pnx + my * pny);
                 const apex = pushV(cx + mx * r, cy + my * r, cz, s, dI, lI);
                 const cV = pushV(cx, cy, cz, 0, dI, lI);
                 pushTri(o1, cV, apex);
@@ -1644,8 +1779,8 @@ export class MBTileDataEmitter {
             } else {
                 // Bevel (also the miter-over-limit fallback): fill between the
                 // two outer corner points and the vertex.
-                const o1 = pushV(cx + pnx * hw, cy + pny * hw, cz, s, dI, lI);
-                const o2 = pushV(cx + nx * hw, cy + ny * hw, cz, s, dI, lI);
+                const o1 = pushV(cx + pnx * hwAt(i), cy + pny * hwAt(i), cz, s, dI, lI);
+                const o2 = pushV(cx + nx * hwAt(i), cy + ny * hwAt(i), cz, s, dI, lI);
                 const cV = pushV(cx, cy, cz, 0, dI, lI);
                 pushTri(o1, cV, o2);
             }
@@ -1663,6 +1798,7 @@ export class MBTileDataEmitter {
         worldPts: number[],
         worldHalfWidth: number,
         cumDist?: number[],
+        hwPerPoint?: number[],
     ): void {
         const cap = layer.layout?.['line-cap'];
         if (cap !== 'round' && cap !== 'square') return;
@@ -1699,7 +1835,10 @@ export class MBTileDataEmitter {
             const dl = Math.hypot(dx, dy) || 1;
             dx /= dl; dy /= dl; // outward unit direction beyond the endpoint
             const nx = -dy, ny = dx; // left normal
-            const hw = worldHalfWidth;
+            // Variable-width lines: the cap width is the endpoint's width.
+            const hw = hwPerPoint
+                ? hwPerPoint[end === 0 ? 0 : worldPts.length / 3 - 1]
+                : worldHalfWidth;
             // line-gradient coordinate at this end (0 / 1 normalized) plus the
             // absolute distance for line-pattern tiling.
             const totalD = cumDist ? cumDist[n - 1] : 1;
@@ -1753,11 +1892,15 @@ export class MBTileDataEmitter {
             // u = aRibbonLen / patternWorldW, v = cross / patternWorldH.
             let patternWorld: [number, number] | undefined;
             if (patternName && MBTileDataEmitter.s_spriteInfos) {
-                const info = MBTileDataEmitter.s_spriteInfos.get(patternName);
+                const info = MBTileDataEmitter.s_spriteInfos.get(patternName) as any;
                 if (info) {
                     const mpp = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                         (256 * Math.pow(2, this.m_zoom + 1));
-                    patternWorld = [info.width * mpp, info.height * mpp];
+                    // @2x sprites carry double-resolution pixels — divide by
+                    // the sprite's pixelRatio so the pattern size stays
+                    // correct in CSS px.
+                    const pr = Number(info.pixelRatio ?? 1) || 1;
+                    patternWorld = [info.width / pr * mpp, info.height / pr * mpp];
                 }
             }
             const technique: any = {
@@ -1774,12 +1917,20 @@ export class MBTileDataEmitter {
                 // line-pattern: sprite name + world-space tile size.
                 ...(patternName ? { _patternName: patternName } : {}),
                 ...(patternWorld ? { _ribbonPatternWorld: patternWorld } : {}),
+                // line-trim-offset / line-pattern-trim-offset [start, end] in
+                // line-progress units — the patcher discards outside range.
+                ...((Array.isArray(paint['line-trim-offset']) || Array.isArray(paint['line-pattern-trim-offset']))
+                    ? { _trimOffset: paint['line-trim-offset'] ?? paint['line-pattern-trim-offset'] }
+                    : {}),
                 // Pre-extruded line ribbons: the per-color meshes are coplanar
                 // (z=0) and must not depth-test against each other — the drawn
                 // order (feature order) decides which color wins at crossings,
                 // matching mapbox's painter's algorithm for a single line layer.
                 _isLineRibbon: true,
                 _ribbonWidthPx: Number(paint['line-width'] ?? 1),
+                // line-blur stays in CSS px even under line-width-unit:meters
+                // (fitted against the meters-blur reference: the alpha ramp
+                // matches clamp(1 - distCenter/blurPx) with the RAW value).
                 _ribbonBlurPx: Number(paint['line-blur'] ?? 0),
                 _translate: paint['line-translate'] ?? [0, 0],
                 _translateAnchor: paint['line-translate-anchor'] ?? 'map',

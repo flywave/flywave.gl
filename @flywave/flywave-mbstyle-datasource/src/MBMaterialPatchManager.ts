@@ -506,7 +506,12 @@ export class MBMaterialPatchManager {
         }
         switch (techName) {
             case 'fill':
-                if (technique._isHillshade) {
+                if (technique._isLineRibbon) {
+                    // Line ribbons always go through the ribbon patcher —
+                    // even patterned ones (their sampler lives there; routing
+                    // them to the fill-pattern patcher renders a black line).
+                    this.patchFillMaterial(material, paint, technique);
+                } else if (technique._isHillshade) {
                     this.patchHillshadeMaterial(material, technique);
                 } else if (technique._rasterTileUrl) {
                     this.patchRasterMaterial(material, technique);
@@ -701,19 +706,54 @@ export class MBMaterialPatchManager {
             const patVScale = patTex && patternWorld
                 ? (widthPx * mpp / 2) / Math.max(patternWorld[1], 1e-9)
                 : 0;
-            const translateWorld = lt && (lt[0] !== 0 || lt[1] !== 0)
-                ? [lt[0] * mpp, lt[1] * mpp] : undefined;
+            // NOTE: line-translate is applied GEOMETRICALLY in the emitter
+            // (baked into the ribbon positions) — the uniform path had no
+            // visual effect on the fill materials.
+            const translateWorld = undefined as unknown as number[] | undefined;
+            void lt;
+            // The ~1px AA feather is only active for blurred lines: on the
+            // (alpha-blended, tile-fading) ribbon materials it costs ~1px of
+            // semi-transparent edge along the whole network — a large net
+            // mismatch vs mgl's specific AA (verified: line-color 344 with it
+            // off vs 1780 with it on). Re-enable for all lines together with
+            // the transparent-pass ordering fix.
+            const featherEnabled = blurPx > 0;
+            // Pattern sprites (and gradient ramps) carry their own alpha —
+            // e.g. border-dot-13 is mostly TRANSPARENT with the "black" RGB
+            // being the unpacked residue of alpha-0 texels. Without blending
+            // those regions render as solid black. Blurred lines need it for
+            // the center-fade alpha ramp.
+            if (patTex || rampTex || blurPx > 0) {
+                (material as any).transparent = true;
+                (material as any).depthWrite = false;
+            }
             if (!(material as any).__mbRibbonAA && widthPx > 0) {
                 (material as any).__mbRibbonAA = true;
+                // line-trim-offset / line-pattern-trim-offset [start, end]:
+                // discard fragments outside the line-progress range.
+                const trimOffset = technique._trimOffset as number[] | undefined;
+                const hasTrim = Array.isArray(trimOffset) && trimOffset.length === 2;
                 const orig = material.onBeforeCompile;
                 material.onBeforeCompile = (shader: any) => {
                     if (orig) orig.call(material, shader);
                     shader.uniforms.uMBRibbonWidth = { value: widthPx };
                     shader.uniforms.uMBRibbonBlur = { value: blurPx };
+                    if (hasTrim) {
+                        shader.uniforms.uMBTrimRange = {
+                            value: new THREE.Vector2(trimOffset[0], trimOffset[1]),
+                        };
+                    }
                     if (rampTex) shader.uniforms.uMBRamp = { value: rampTex };
                     if (patTex && patternWorld) {
                         shader.uniforms.uMBPat = { value: patTex };
-                        shader.uniforms.uMBPatUScale = { value: 1 / Math.max(patternWorld[0], 1e-9) };
+                        // mgl stretches the pattern vertically to the line
+                        // width and keeps the aspect ratio along u: the
+                        // horizontal tile period is patternW * lineW/patternH
+                        // in world units.
+                        shader.uniforms.uMBPatUScale = {
+                            value: patternWorld[1] /
+                                Math.max(patternWorld[0] * Math.max(widthPx * mpp, 1e-9), 1e-9),
+                        };
                         shader.uniforms.uMBPatVScale = { value: patVScale };
                     }
                     if (translateWorld) {
@@ -725,7 +765,7 @@ export class MBMaterialPatchManager {
                         'void main() {',
                         `attribute float aRibbonEdge;
                          varying float vMBRibbonEdge;
-                         ${rampTex ? 'attribute float aRibbonDist;\nvarying float vMBRibbonDist;' : ''}
+                         ${rampTex || hasTrim ? 'attribute float aRibbonDist;\nvarying float vMBRibbonDist;' : ''}
                          ${patTex ? 'attribute float aRibbonLen;\nvarying float vMBRibbonLen;' : ''}
                          ${translateWorld ? 'uniform vec2 uMBTranslate;' : ''}
                          void main() {`
@@ -734,7 +774,7 @@ export class MBMaterialPatchManager {
                         '#include <begin_vertex>',
                         `#include <begin_vertex>
                          vMBRibbonEdge = aRibbonEdge;
-                         ${rampTex ? 'vMBRibbonDist = aRibbonDist;' : ''}
+                         ${rampTex || hasTrim ? 'vMBRibbonDist = aRibbonDist;' : ''}
                          ${patTex ? 'vMBRibbonLen = aRibbonLen;' : ''}
                          ${translateWorld ? 'transformed.xy += uMBTranslate;' : ''}`
                     );
@@ -743,29 +783,39 @@ export class MBMaterialPatchManager {
                         `varying float vMBRibbonEdge;
                          uniform float uMBRibbonWidth;
                          uniform float uMBRibbonBlur;
-                         ${rampTex ? 'varying float vMBRibbonDist;\nuniform sampler2D uMBRamp;' : ''}
+                         ${rampTex || hasTrim ? 'varying float vMBRibbonDist;\nuniform sampler2D uMBRamp;\nuniform vec2 uMBTrimRange;' : ''}
                          ${patTex ? 'varying float vMBRibbonLen;\nuniform sampler2D uMBPat;\nuniform float uMBPatUScale;\nuniform float uMBPatVScale;' : ''}
                          void main() {`
                     );
+                    // Inject AFTER the colorspace conversion: the ramp /
+                    // pattern textures hold sRGB values, and injecting before
+                    // colorspace_fragment would linearize them again
+                    // (~2.2x brightening — verified on line-gradient).
                     shader.fragmentShader = shader.fragmentShader.replace(
-                        '#include <opaque_fragment>',
-                        `#include <opaque_fragment>
+                        '#include <colorspace_fragment>',
+                        `#include <colorspace_fragment>
                          {
+                             // line-trim-offset: discard fragments whose
+                             // line-progress is outside [start, end].
+                             ${hasTrim ? 'if (vMBRibbonDist < uMBTrimRange.x || vMBRibbonDist > uMBTrimRange.y) discard;' : ''}
                              // line-pattern: tile the sprite along the ribbon
                              // (u = abs world distance, v = cross distance).
-                             ${patTex ? `vec4 mbPat = texture2D(uMBPat, vec2(vMBRibbonLen * uMBPatUScale, vMBRibbonEdge * uMBPatVScale));
+                             ${patTex ? `vec4 mbPat = texture2D(uMBPat, vec2(vMBRibbonLen * uMBPatUScale, vMBRibbonEdge * 0.5 + 0.5));
                                         gl_FragColor = vec4(mbPat.rgb, mbPat.a * gl_FragColor.a);` : ''}
                              // line-gradient: override the paint color with the
-                             // ramp sampled at the line-progress coordinate.
-                             ${rampTex ? 'gl_FragColor.rgb = texture2D(uMBRamp, vec2(clamp(vMBRibbonDist, 0.0, 1.0), 0.5)).rgb;' : ''}
-                             // Distance from the ribbon edge in px; a ~1px
-                             // linear feather, widened by line-blur (mgl-style
-                             // edge ramp — interior stays fully opaque).
-                             float mbDistIn = (1.0 - abs(vMBRibbonEdge)) * uMBRibbonWidth;
-                             float mbRamp = uMBRibbonBlur > 0.0
-                                 ? clamp((mbDistIn + uMBRibbonBlur * 0.5) / (uMBRibbonBlur + 1.0), 0.0, 1.0)
-                                 : clamp(mbDistIn, 0.0, 1.0);
-                             gl_FragColor.a *= mbRamp;
+                             // ramp sampled at the line-progress coordinate
+                             // (the ramp's own alpha channel multiplies too —
+                             // stops like rgba(0,0,255,0) fade the line ends).
+                             ${rampTex ? `vec4 mbGrad = texture2D(uMBRamp, vec2(clamp(vMBRibbonDist, 0.0, 1.0), 0.5));
+                                         gl_FragColor.rgb = mbGrad.rgb;
+                                         gl_FragColor.a *= mbGrad.a;` : ''}
+                             // Distance from the ribbon edge in px; the edge
+                             // ramp is only applied for blurred lines (see
+                             // the featherEnabled note above). mgl's line
+                             // blur fades linearly from the CENTER:
+                             // alpha = clamp(1 - distCenter/blur).
+                             ${featherEnabled ? `float mbDistCenter = abs(vMBRibbonEdge) * uMBRibbonWidth * 0.5;
+                                 gl_FragColor.a *= clamp(1.0 - mbDistCenter / max(uMBRibbonBlur, 0.5), 0.0, 1.0);` : ''}
                          }`
                     );
                 };

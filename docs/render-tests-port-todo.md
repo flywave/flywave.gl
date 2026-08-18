@@ -1290,10 +1290,99 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **已知近似**：gradient stops 的 alpha 通道未应用（仅 rgb）；pattern 的 v 锚点为中心对称（mgl 从上边缘起铺）；两者共存时 gradient 覆盖 pattern 的 rgb。
 
+### 12.36 F8 验收 + 两个渲染级根因修复（2026-08-18，`rendering-test-results/mbstyle-final1/`）
+
+**首轮验收暴露的两大根因（二分法定位，各耗时 4 轮对照）**：
+1. **单一 earcut 环在短段下自交**：vector tile 的道路碎段常短于线宽，inner 交点构造的环自交（standalone 复现 3 处自交/coverage 1.26）→ earcut 丢三角形 → 渲染碎片化+变细（line-color 337→11686）。**修复**：改为**逐段矩形 + 外角 join 楔形**（每角独立三角形组，任意几何鲁棒）。二分中间态：梯形条带（inner 精确交点）反而更差（角部 105px vs 矩形 10px），弃用。
+2. **AA feather 在半透明 ribbon 材质上的全网周长放大**：ribbon fill 材质因 tile-fading 处于透明混合，1px 线性羽化 × 路网总边长 ≈ +1400px（line-color 344→1780 实测）。**修复**：feather 仅 `line-blur>0` 时激活（blur 系 5575→745），全量 feather 与透明通道排序专项一并解决。
+
+**验收结果（26 passed / 310 上报）**：
+- **line-join/miter、bevel、default 首次通过**（历史近失千级）；round 21px、property-function 39px、none 233px（gaps 语义正确）；elevated-line-join 同步（10px 级）。
+- **line-color 344/341/326 ≈ 基线 337 零回归**；line-cap butt 344/square 301/round 1309 持平；line-blur/default 5575→745；line-offset/translate default 745（接线生效，进入近失带）。
+- **line-gradient 全族从无渲染 → 有渐变**（2726-67px；runtime-remove 67 近失）——像素校准项（ramp 采样/进度归一）。
+- **line-pattern literal 170 / opacity 103 / with-dasharray 170 近失**；join-none/pitch/int-zoom 系 1-5 万（pattern 平铺密度与宽度的换算待校准）。
+- **待查 bug**：`line-width-unit:meters`（2-5 万，疑似仍按 px 换算或 mpp 取值错）；`line-translate/offset literal`（1.8 万，px→world 换算或方向错，default 近失说明通路已通）。
+
+**教训**：① "数学验证正确的几何构造"在真实数据（短段路网）下未必成立——鲁棒性 > 精确性优先；② 二分法（禁用注入/恢复旧路径/开关 wedge）4 轮内锁定两个独立根因；③ 每轮 karma ~7min，一次只改一个变量。
+
+### 12.37 三问题深查（2026-08-18，meters-unit / translate·offset / gradient·pattern 像素校准）
+
+**1. line-width-unit:meters（24287 → 2672 近失）**：`line-width-unit` 是 **layout** 属性，代码读的 paint → 恒 miss。改读 `layer.layout`。
+
+**2. line-translate / line-offset literal（18621/17576 → 754/1180 近失）**：
+- translate 的 shader uniform 注入路径**无效**（埋点证实 uniform/数值正确但渲染零位移，MeshBasicMaterial 替换目标都在——原因未深究）→ 改为 **emitter 几何烘焙**（中心线整体位移），实测 mgl 参考 [x,y]=[5,5] 屏幕位移 (5,+5)（y 向下）→ `twy = -ty·mpp`。
+- offset 方向实测与初版相反 → 翻转为右法线。
+- 教训：互相关位移测量要按稀疏 crop 局部做，全局 centroid/roll 对称路网不可靠。
+
+**3. gradient / pattern 像素校准（gradient 2726→通过；pattern literal 237→164、opacity 169→78、join-none 系 3 万→大幅收敛）**，四个独立根因：
+- **a. 可见层是 SolidLine 而非 ribbon**（推翻"SwiftShader 不栅格化 SolidLine"旧假设——`_preExtrudedLines` 后其实一直在画！）：其 gradient 注入 `fract(vCoords.x)` 对**米制**累计距离取小数 = 噪声进度（绿色缺失）+ sRGB ramp 在 linear 域采样（2.2x 亮化）。修复：**gradient/pattern 线抑制 SolidLine 几何**，只走 ribbon（`skipSolidLine`）；同时消除双画。
+- **b. ribbon 注入点在 `colorspace_fragment` 之前会被再转换**（§12.31 同款）→ 移到 colorspace 之后（sRGB 纹理值直出）。
+- **c. ramp alpha 通道未应用**（起点 `rgba(0,0,255,0)` 应透明）→ `gl_FragColor.a *= mbGrad.a`，gradient 主用例转通过。
+- **d. pattern v 映射**：mgl 把图案高度**拉伸至线宽**（`v = edge·0.5+0.5`），非世界比例平铺——border 类图案（上下边框）按比例采样全落黑带（int-zoom 黑线根因之一）。
+- **e. sprite 竞态**：`wireTileSources`（触发解码）先于 `loadSpriteAtlas` → pattern technique 创建时 `_ribbonPatternWorld` 缺失 → 黑线。已调换顺序（同时修正 image-fallback 的 availableImages 时序）。
+- **f. patcher 路由**：`case 'fill'` 里 `_patternName` 被路由到 `patchFillPatternMaterial`（fill 语义）绕开 ribbon 采样器 → ribbon 优先路由。
+
+**残余**：`line-pattern/int-zoom-constant-width` 34207（u 平铺密度——`m_zoom` 整数 vs fractional zoom 7.3 的 mpp 偏差 ~2.46x）；`line-gradient/vector-tile` 13976（mvt 多 feature 进度归一）；`meters-offset/blur/border` 连带项。line-color/miter/bevel 等已通过项零回归。
+
+### 12.38 第四轮收尾（2026-08-18，fix7/fix8）
+
+- **meters-offset 24470 → 4698**：`line-offset` 在 `line-width-unit:meters` 下同为米制（跟随 unit 直接按米位移）。
+- **line-pattern/literal 转通过**：pattern sprite 的"黑色"区域实为 alpha-0 透明（RGB 残留），材质 opaque 时被画成实心黑 → pattern/gradient ribbon 置 `transparent:true`（仅限带纹理的 ribbon，规避全量透明重排）。
+- **meters-blur**：blur 米→px 换算 + mgl 中心衰减公式（`1−distCenter/blur`），14813→14005，仍深水（渐变分布细节未对齐，mismatch 主源待逐像素分析）。
+- **未动**：int-zoom-constant-width 35072（宽度 zoom 函数 + pattern 密度双因素）；gradient-vector-tile（**line-width 也是 line-progress 函数**——宽度沿进度变化，需 per-progress 宽度的深水实现）；meters-border（line-border 未实现）。
+- 回归：line-color 344 / line-blur default 745 / gradient 主用例 / line-join 系全部保持。
+
+### 12.39 blur 深挖（2026-08-18，fix9–fix12）
+
+**已确定（数值拟合自 meters-blur 参考剖面）**：
+- mgl blur 公式：`alpha = clamp(1 − distCenter/blur)`（distCenter 距线中心）；
+- **blur 单位恒为 CSS px，不跟随 line-width-unit:meters**（拟合 blur=5px 与参考逐点吻合；曾按米换算反而偏差）；
+- blur 线的 ribbon 材质必须 `transparent:true`（否则 alpha 无效——与 pattern 黑线同款根因）；
+- SolidLine 副本对 blur 无影响（抑制前后数值不变，ribbon 始终是可见层）。
+
+**未闭环（需专项）**：mgl 的晕圈延伸到 halfWidth+blur 之外——几何外扩实验（fix11）在密集路网中外扩矩形互相重叠、透明叠加堆成大片黑（14362→46930），已回退。正确做法需 mgl 式的 per-line blend 隔离（或单 pass 合成），与"全量 AA feather + 透明排序"是同一专项。
+
+**最终态（fix12 全量回归）**：10 passed 保持；line-color/line-cap 344 零回归；meters-blur 13537（线内渐变生效、晕圈截断在几何边缘）；meters-offset 4698；int-zoom 35072（pattern 白点相位，宽度插值已排除——base 曲线实现正确）。
+
+### 12.40 代码端闭环第五批（2026-08-18，延后渲染验证）
+
+1. **pattern u 纵横比**（int-zoom/meters-pattern 主嫌疑）：mgl 把 pattern v 拉伸至线宽、**u 保持纵横比**——平铺周期 = patternW·(lineW/patternH) 世界单位。`uMBPatUScale = patternH/(patternW·lineWorld)`（原为 1/patternW，密度差 lineW/patternH 倍）。
+2. **line-border（meters-border 24282 + line-border 分类 13 例）**：ribbon 几何实现——`emitRibbonBorder` 用 `offsetPolyline`（自 line-offset 抽取复用）生成 ±(hw−bw/2) 两条边线，各自走 `emitRibbonBody`（join 语义与主线一致），独立 fill technique（renderOrder −0.1 在主 ribbon 之下）。宽度单位跟随 width-unit。
+3. **per-progress 变宽线（gradient-vector-tile 13976）**：`line-width` 本身是 `["line-progress"]` interpolate 时（evaluator 无该 input → 求值 null → 线宽 0），从 `paintDefs` 取 raw stops（`parseProgressStopsStatic`，含 memo 解包）按 cumDist 计算 **per-vertex 半宽**，贯通 body（矩形→梯形、join 楔形）/caps（端点宽）。变宽线不发 border。
+
+待统一验证批：line-pattern line-width-unit line-border line-gradient line-color line-join line-cap line-blur line-offset line-translate。
+
+
+
+
+
+
+
+
+### 12.41 代码端闭环第六批（2026-08-18，延后渲染验证）
+
+1. **fill-outline 换用 join-aware ribbon body**：`emitFillOutline` 弃用 legacy averaged-bitangent bake，直接调 `emitRibbonBody`（环角 miter join 与线渲染一致，edge/dist/len 属性同步）。
+2. **meters 下 SolidLine 单位**：`paintToTechniqueProps` 在 `line-width-unit:meters` 时把 `lineWidth` 预除 mpp（metricUnit:'Pixel' 换算后还原米制）；dash 尺寸因乘 lineWidth 自动连带。
+3. **line-trim-offset on ribbon**（18+12+18+12 例）：ribbon technique 携带 `_trimOffset`，patcher 注入 `uMBTrimRange` + `discard`（progress 区间外），`aRibbonDist` varying 条件扩展为 gradient||trim。
+4. **@2x pattern 尺寸**：sprite 注册表带 `pixelRatio`，`patternWorld` 除 pr（@2x/3x-on-2x 用例）。
+
+待统一验证批（含第五批）：line-pattern line-pattern-trim-offset line-trim-offset line-width-unit line-border line-gradient line-color line-join line-cap line-blur line-offset line-translate fill-outline-color elevated-line-pattern elevated-line-gradient
+
+### 12.42 第五+六批统一验收（2026-08-18，`mbstyle-r56/`，209 上报 / 10 通过）
+
+**新进入可比/近失带**：
+- **line-trim-offset 全族（18+18+12 例）**：从完全未接线 → 全线渲染，120–4597px 近失带（gradient-*/pure-color-*/trim-color-* 系列）。trim discard 通路验证 ✓，残余为 fade 变体（trim-fade 的渐隐未做）与像素校准。
+- **line-border 全族（13 例）**：从未实现 → 737–4864px 近失带（default 768/color 737/trim-offset 791）。`aliasing` 56837 的主源是未实现的 **line-gap-width**（该用例第 2 层 width 10+gap 10），非 border 本身。
+- line-pattern：opacity 78→37、with-dasharray 237→102、@2x 897→693、property-function 2194→1775、step-curve 2169→1783、int-zoom 35072→32122。
+- meters-blur 13537→8300（连带波动）。
+
+**持平确认**：line-color 406（344 基线带内波动）、line-cap 344、line-join 系保持通过、gradient 主用例保持、meters-default/offset 持平。
+
+**fill-outline（join body 切换）**：27→53 / 104→56 / 127→169——均值近似持平，miter join 在锐角环角略增差异，保留（一致性收益大于像素噪声）。
+
+**下轮优先**：line-gap-width 语义（aliasing 主源 + line-gap-width 分类 5 例）、line-trim-fade 渐隐变体、border 默认色核对（line-border/default 无 border-color 时 mgl 默认值待证）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
-
-
-
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
 
