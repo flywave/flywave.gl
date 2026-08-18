@@ -1540,6 +1540,20 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **连带**：N2 symbol-elevation sea/ground 系的 satellite 背景依赖已解锁，下轮取证。
 
+### 12.55 N2：symbol-elevation ground/sea 系取证（2026-08-19，`mbstyle-n2a/`）
+
+**N7 raster 修复直接连带**：sea/ground 全系 24–26k → **1.3–9.3k**（无新代码）：
+- sea-zero-without-terrain 24328→**1871**、sea-constant-without-terrain →1953、map-aligned →1294、sea-data-driven →1880（1.3–2k 近失带）；
+- ground-zero/constant/data-driven →9033–9282；sea-on-terrain →8474；collision-mixed →9772；
+- collision-with-symbol-z-elevate top/bottom 387/220 保持（§12.49）；
+- z-elevation-with-offset 146k / collision-boxes 66k 为 collision-box 调试渲染独立缺口。
+
+**残余定位**（sea-zero 剖析，1871/40000）：
+1. **顶部 5 行地面裁剪缺失（~1000px）**：expected 在 y=0..4 为黑（mgl 对超过可见地面距离的区域不画瓦片，pitch 65 下视顶射线仰角仅 6.6°，远处瓦片被 mgl 裁剪），current 的 z1 世界图回退纹理覆盖了该区（N7 的父级回落走得太深——mgl 只回退到已缓存的父级，不做任意深度祖先遍历）。修法：回退深度限制（如 ≤2 级）或按 mgl 可见距离裁剪瓦片请求（N2b）。
+2. **符号本体差异（~850px）**：icon 区域（cols 80–120）的 SDF/边缘差，与 sprites 系 ±3 噪声同类。
+
+**结论**：N2 的"terrain/globe 场景依赖"定性已被 N7 证伪——就是 raster 背景缺失。sea 系转通过只差顶部裁剪一项（N2b 入口）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
