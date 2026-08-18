@@ -171,6 +171,7 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             "**/*.d.ts"
         ].map(file => fixPrefix(file)),
         client: {
+            captureLogs: true,
             mocha: {
                 reporter: "html",
                 ui: "bdd",
