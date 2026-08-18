@@ -20,6 +20,8 @@ import {
 import * as THREE from 'three';
 
 import { MBStyleManager, ResolvedSource } from './MBStyleManager';
+import { MBExpressionEngine } from './MBExpressionEngine';
+import { MBTileDataEmitter } from './MBTileDataEmitter';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
 import { SpriteAtlas } from './materials/MapIconMaterial';
 import { MBStyleRuntime } from './MBStyleRuntime';
@@ -1249,11 +1251,20 @@ export class MBStyleDataSource extends TileDataSource {
 
     /** Runtime addImage: inject an icon into the sprite atlas. */
     addImage(name: string, image: HTMLImageElement | HTMLCanvasElement | ImageBitmap): boolean {
+        MBExpressionEngine.addAvailableImage(name);
+        const w = (image as any).width ?? 0;
+        const h = (image as any).height ?? 0;
+        if (w > 0 && h > 0) {
+            // Keep the pattern-size registry in sync for runtime-added images.
+            const cur = (MBTileDataEmitter as any).s_spriteInfos as Map<string, any> | null;
+            cur?.set(name, { width: w, height: h });
+        }
         return this.m_spriteAtlas?.addIcon(name, image as any) ?? false;
     }
 
     /** Runtime removeImage: remove an icon from the sprite atlas. */
     removeImage(name: string): boolean {
+        MBExpressionEngine.removeAvailableImage(name);
         return this.m_spriteAtlas?.removeIcon(name) ?? false;
     }
 
@@ -1318,6 +1329,15 @@ export class MBStyleDataSource extends TileDataSource {
             for (const [name, info] of Object.entries(spriteData.json)) {
                 icons.set(name, info);
             }
+            // Publish the icon names to the expression engine so `["image", …]`
+            // can resolve availability (coalesce fallback chains), and the
+            // sprite pixel sizes to the emitter for line-pattern tiling.
+            MBExpressionEngine.setAvailableImages(new Set(icons.keys()));
+            const spriteInfos = new Map<string, { width: number; height: number }>();
+            for (const [name, info] of icons) {
+                spriteInfos.set(name, { width: info.width, height: info.height });
+            }
+            MBTileDataEmitter.setSpriteInfos(spriteInfos);
             this.m_spriteAtlas = new SpriteAtlas(spriteData.image, icons);
 
             // Register individual icons in MapView's userImageCache so that

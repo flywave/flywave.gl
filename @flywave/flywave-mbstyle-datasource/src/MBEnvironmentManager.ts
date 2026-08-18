@@ -1058,10 +1058,23 @@ export class MBEnvironmentManager {
         this.m_imageQuads = [];
 
         const sources = style.sources ?? {};
-        for (const [, src] of Object.entries(sources)) {
+        for (const [sourceId, src] of Object.entries(sources)) {
             const source = src as any;
             if (source.type !== 'image' && source.type !== 'canvas') continue;
             if (!source.coordinates || source.coordinates.length < 4) continue;
+
+            // Merge the paints of the raster layers referencing this source —
+            // mgl applies raster-* paint to image-source rendering too.
+            const layerPaint: Record<string, any> = {};
+            let layerHidden = false;
+            for (const l of style.layers ?? []) {
+                const layer = l as any;
+                if (layer.type === 'raster' && layer.source === sourceId) {
+                    if (layer.layout?.visibility === 'none') layerHidden = true;
+                    Object.assign(layerPaint, layer.paint ?? {});
+                }
+            }
+            if (layerHidden) continue;
 
             // Canvas source: use the canvas element directly; Image source: fetch URL.
             let texture: THREE.Texture;
@@ -1084,7 +1097,11 @@ export class MBEnvironmentManager {
                 }
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
-
+                const resampling = layerPaint['raster-resampling'] ?? 'linear';
+                if (resampling === 'nearest') {
+                    texture.minFilter = THREE.NearestFilter;
+                    texture.magFilter = THREE.NearestFilter;
+                }
                 const coords = source.coordinates;
                 const proj = (this.m_mapView as any).projection;
                 if (!proj) continue;
@@ -1114,12 +1131,60 @@ export class MBEnvironmentManager {
                 geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
                 geom.setIndex(new THREE.BufferAttribute(indices, 1));
 
+                const rasterOpacity = Number(layerPaint['raster-opacity'] ?? 1);
                 const material = new THREE.MeshBasicMaterial({
                     map: texture,
                     side: THREE.DoubleSide,
                     depthWrite: false,
                     transparent: true,
+                    opacity: rasterOpacity,
                 });
+
+                // raster brightness / contrast / saturation / hue-rotate —
+                // same math as MBMaterialPatchManager.patchRasterMaterial, but
+                // self-contained on gl_FragColor (image quads are plain
+                // MeshBasicMaterial with `map`).
+                const rawBrightness = layerPaint['raster-brightness'];
+                const bMin = Array.isArray(rawBrightness) ? (rawBrightness[0] ?? 0)
+                    : (layerPaint['raster-brightness-min'] ?? 0);
+                const bMax = Array.isArray(rawBrightness) ? (rawBrightness[1] ?? 1)
+                    : (layerPaint['raster-brightness-max'] ?? 1);
+                const contrast = layerPaint['raster-contrast'];
+                const saturation = layerPaint['raster-saturation'];
+                const hueDeg = layerPaint['raster-hue-rotate'];
+                if (bMin !== 0 || bMax !== 1 || contrast !== undefined ||
+                    saturation !== undefined || hueDeg !== undefined) {
+                    material.onBeforeCompile = (shader: any) => {
+                        shader.uniforms.uMBImgBMin = { value: bMin };
+                        shader.uniforms.uMBImgBMax = { value: bMax };
+                        shader.uniforms.uMBImgContrast = { value: contrast ?? 0 };
+                        shader.uniforms.uMBImgSat = { value: saturation ?? 0 };
+                        shader.uniforms.uMBImgHue = { value: (hueDeg ?? 0) * Math.PI / 180 };
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            'void main() {',
+                            `uniform float uMBImgBMin; uniform float uMBImgBMax;
+                             uniform float uMBImgContrast; uniform float uMBImgSat; uniform float uMBImgHue;
+                             void main() {`
+                        );
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            '#include <opaque_fragment>',
+                            `#include <opaque_fragment>
+                             {
+                                 vec3 mbR = gl_FragColor.rgb;
+                                 mbR = clamp((mbR - uMBImgBMin) / max(uMBImgBMax - uMBImgBMin, 0.001), 0.0, 1.0);
+                                 mbR = (mbR - 0.5) * (1.0 + uMBImgContrast) + 0.5;
+                                 float mbL = dot(mbR, vec3(0.299, 0.587, 0.114));
+                                 mbR = mix(vec3(mbL), mbR, 1.0 + uMBImgSat);
+                                 float mbCa = cos(uMBImgHue); float mbSa = sin(uMBImgHue);
+                                 mat3 mbHue = mat3(
+                                     vec3(mbCa + 0.299*(1.0-mbCa), 0.587*(1.0-mbCa) - 0.327*mbSa, 0.114*(1.0-mbCa) + 0.921*mbSa),
+                                     vec3(0.299*(1.0-mbCa) - 0.714*mbSa, mbCa + 0.587*(1.0-mbCa), 0.114*(1.0-mbCa) + 0.530*mbSa),
+                                     vec3(0.299*(1.0-mbCa) + 0.165*mbSa, 0.587*(1.0-mbCa) - 0.330*mbSa, mbCa + 0.114*(1.0-mbCa)));
+                                 gl_FragColor.rgb = clamp(mbHue * mbR, 0.0, 1.0);
+                             }`
+                        );
+                    };
+                }
 
                 const mesh = new THREE.Mesh(geom, material);
                 mesh.renderOrder = -90;

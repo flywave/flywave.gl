@@ -38,6 +38,17 @@ interface AccumulatedGeometry {
      * ribbon geometries fill this.
      */
     edge?: number[];
+    /**
+     * Per-vertex normalized line distance (0..1 along the feature) for
+     * `line-gradient` ramp sampling on ribbons. Only ribbon geometries fill
+     * this.
+     */
+    dist?: number[];
+    /**
+     * Per-vertex ABSOLUTE line distance (world meters along the feature) for
+     * `line-pattern` tiling on ribbons (u = len / patternWorldWidth).
+     */
+    len?: number[];
     /** Line-segment indices for the extruded-polygon edge (roof outline). */
     edgeIndex: number[];
     edgeFeatureStarts: number[];
@@ -193,6 +204,17 @@ export class MBTileDataEmitter {
     /** Install a real-font metrics lookup for text shaping. */
     setGlyphLookup(lookup: { getMetrics: (font: string, char: string) => any }): void {
         this.m_glyphLookup = lookup;
+    }
+
+    /**
+     * Sprite size registry (name → px size) published by the datasource once
+     * the sprite atlas is loaded (decoding happens after that await, so the
+     * static is populated in time). Used to size `line-pattern` tiles.
+     */
+    private static s_spriteInfos: Map<string, { width: number; height: number }> | null = null;
+
+    static setSpriteInfos(infos: Map<string, { width: number; height: number }> | null): void {
+        MBTileDataEmitter.s_spriteInfos = infos;
     }
 
     private m_textGeometries: TextGeometry[] = [];
@@ -872,6 +894,7 @@ export class MBTileDataEmitter {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
             this.m_currentZOffset = this.resolveZOffset(layer, properties, 'fill');
+            this.noteGeometryHeight(this.m_currentZOffset);
             // Key by technique: a geometry's groups must all share one technique.
             // TileGeometryCreator builds one single-material object per group and
             // three.js then draws the object's ENTIRE index buffer with that
@@ -943,7 +966,9 @@ export class MBTileDataEmitter {
                     const w = this.project(
                         new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
                     );
-                    geo.positions.push(w.x, w.y, 0);
+                    // Keep the resolved `fill-z-offset` (m_currentZOffset is
+                    // folded into `project()`); pushing 0 dropped it.
+                    geo.positions.push(w.x, w.y, w.z);
                     if (needsUv) {
                         geo.uvs.push(allVerts[i * 2] / extents, allVerts[i * 2 + 1] / extents);
                     }
@@ -1207,7 +1232,36 @@ export class MBTileDataEmitter {
                     worldPts.push(w.x, w.y, w.z);
                 }
 
+                // `line-offset` (px): displace the CENTERLINE along the left
+                // normal of each segment (mgl: positive values shift left)
+                // before any ribbon/join geometry is derived from it, so
+                // joins/caps stay consistent. Interpolate per-vertex between
+                // the two adjacent segment normals to avoid gaps at corners.
+                const offsetPx = Number(layer.paint?.['line-offset'] ?? 0);
                 const center = this.m_decodeInfo.center;
+                const mppOffset = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                    (256 * Math.pow(2, this.m_zoom + 1));
+                if (offsetPx !== 0 && worldPts.length >= 6) {
+                    const ow = offsetPx * mppOffset;
+                    const cn = worldPts.length / 3;
+                    const offs: number[] = [];
+                    for (let i = 0; i < cn - 1; i++) {
+                        const ux = worldPts[(i + 1) * 3] - worldPts[i * 3];
+                        const uy = worldPts[(i + 1) * 3 + 1] - worldPts[i * 3 + 1];
+                        const l = Math.hypot(ux, uy) || 1;
+                        // Left normal of travel direction.
+                        offs.push(-uy / l * ow, ux / l * ow);
+                    }
+                    for (let i = 0; i < cn; i++) {
+                        const prev = Math.max(i - 1, 0);
+                        const next = Math.min(i, cn - 2);
+                        const ox = (offs[prev * 2] + offs[next * 2]) / 2;
+                        const oy = (offs[prev * 2 + 1] + offs[next * 2 + 1]) / 2;
+                        worldPts[i * 3] += ox;
+                        worldPts[i * 3 + 1] += oy;
+                    }
+                }
+
                 const lineGeom = createLineGeometry(center, worldPts, webMercatorProjection);
 
                 // Pre-extrude the centerline ribbon in JS so the renderer does not
@@ -1223,7 +1277,12 @@ export class MBTileDataEmitter {
                 // CIRCUMFERENCE/(256 * 2^displayZoom) with displayZoom = m_zoom+1.
                 const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                     (256 * Math.pow(2, this.m_zoom + 1));
-                const worldHalfWidth = lineWidthPx * metersPerPixel / 2;
+                // `line-width-unit: meters` — the width is metric, no px→world
+                // conversion (world units are meters on the equator).
+                const widthUnit = layer.paint?.['line-width-unit'] ?? 'pixels';
+                const worldHalfWidth = widthUnit === 'meters'
+                    ? lineWidthPx / 2
+                    : lineWidthPx * metersPerPixel / 2;
                 // Bake extrusion into each vertex's position: pos += biTangent*hw*sign(ec.y)
                 const verts = lineGeom.vertices;
                 for (let v = 0; v < verts.length; v += 13) {
@@ -1251,7 +1310,19 @@ export class MBTileDataEmitter {
                 // Also emit the pre-extruded ribbon as a simple fill geometry so the
                 // line renders even where the SolidLineMaterial shader extrusion
                 // fails (SwiftShader). The fill technique carries the line color.
-                this.emitRibbonFill(layer, lineGeom, baseVert, worldPts, worldHalfWidth);
+                // Cumulative centerline distance (0..1) feeds `line-gradient`.
+                const cumDist: number[] = [0];
+                for (let i = 1; i < worldPts.length / 3; i++) {
+                    const d = Math.hypot(
+                        worldPts[i * 3] - worldPts[(i - 1) * 3],
+                        worldPts[i * 3 + 1] - worldPts[(i - 1) * 3 + 1],
+                        worldPts[i * 3 + 2] - worldPts[(i - 1) * 3 + 2],
+                    );
+                    cumDist.push(cumDist[i - 1] + d);
+                }
+                this.emitRibbonFill(layer, worldPts, worldHalfWidth, cumDist,
+                    widthUnit === 'meters' ? worldHalfWidth * 2 / metersPerPixel : undefined,
+                    lineGeom);
             }
         }
     }
@@ -1263,41 +1334,29 @@ export class MBTileDataEmitter {
      */
     private emitRibbonFill(
         layer: EvaluatedLayer,
-        lineGeom: { vertices: number[]; indices: number[] },
-        baseVert: number,
         worldPts: number[],
         worldHalfWidth: number,
+        cumDist?: number[],
+        effectiveWidthPx?: number,
+        lineGeom?: { vertices: number[]; indices: number[] },
     ): void {
-        const paint = layer.paint ?? {};
         // Key by ribbon technique: see the fill key comment in
         // processFillFeature — groups sharing a geometry must use one technique,
         // otherwise every per-technique object draws the whole index buffer.
         const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer);
+        if (effectiveWidthPx !== undefined) {
+            // meters-unit lines: the AA-feather ramp needs the width in px.
+            (this.m_techniques[ribbonTechIdx] as any)._ribbonWidthPx = effectiveWidthPx;
+        }
         const key = `${layer.id}:line-ribbon:${ribbonTechIdx}`;
         const geo = this.getOrCreateGeometry(key);
-        const featureStart = geo.indices.length;
-        const startIdx = geo.positions.length / 3;
-
-        // Copy the baked ribbon positions (offset 3 in the stride-13 data)
-        // plus the extrusion sign (-1/+1) as the AA-feather coordinate.
         geo.edge = geo.edge ?? [];
-        for (let v = 0; v < lineGeom.vertices.length; v += 13) {
-            geo.positions.push(
-                lineGeom.vertices[v + 3],
-                lineGeom.vertices[v + 4],
-                lineGeom.vertices[v + 5],
-            );
-            geo.edge.push(lineGeom.vertices[v + 1] >= 0 ? 1 : -1);
-        }
-        this.emitRibbonCaps(layer, geo, worldPts, worldHalfWidth);
-        // Remap the line indices into the fill geometry. `createLineGeometry`
-        // winds its triangles CW when viewed from above (camera +Z); the fill
-        // material uses FrontSide culling, so reverse the winding to CCW.
-        for (let i = 0; i < lineGeom.indices.length; i += 3) {
-            geo.indices.push(lineGeom.indices[i] + startIdx);
-            geo.indices.push(lineGeom.indices[i + 2] + startIdx);
-            geo.indices.push(lineGeom.indices[i + 1] + startIdx);
-        }
+        geo.dist = geo.dist ?? [];
+        geo.len = geo.len ?? [];
+        const featureStart = geo.indices.length;
+
+        this.emitRibbonBody(layer, geo, worldPts, worldHalfWidth, cumDist);
+        this.emitRibbonCaps(layer, geo, worldPts, worldHalfWidth, cumDist);
 
         // Use a fill technique so the mapview creates a simple fill material.
         const count = geo.indices.length - featureStart;
@@ -1314,6 +1373,286 @@ export class MBTileDataEmitter {
     }
 
     /**
+     * Generate the ribbon body polygon honoring `line-join` (miter with
+     * `line-miter-limit` fallback / bevel / round), aligned with mgl's
+     * `line_bucket` join geometry. The ribbon is a simple polygon: the two
+     * offset side curves of the centerline, joined per vertex — the OUTER side
+     * of a turn gets the join geometry (miter apex / bevel edge / arc fan),
+     * the INNER side converges to the intersection of the two offset lines
+     * (clamped like a miter, so sharp turns do not spike). Triangulated with
+     * earcut; triangles are re-oriented CCW for the FrontSide fill material.
+     */
+    private emitRibbonBody(
+        layer: EvaluatedLayer,
+        geo: AccumulatedGeometry,
+        worldPts: number[],
+        worldHalfWidth: number,
+        cumDist?: number[],
+    ): void {
+        const n0 = worldPts.length / 3;
+        if (n0 < 2) return;
+        const closed =
+            n0 > 3 &&
+            Math.abs(worldPts[0] - worldPts[(n0 - 1) * 3]) < 1e-9 &&
+            Math.abs(worldPts[1] - worldPts[(n0 - 1) * 3 + 1]) < 1e-9;
+        const m0 = closed ? n0 - 1 : n0;
+        // Drop consecutive duplicate points — they yield zero-length segments
+        // and degenerate normals.
+        const pts: number[] = [];
+        const rawD: number[] = [];
+        for (let i = 0; i < m0; i++) {
+            const m = pts.length / 3;
+            if (m > 0 &&
+                Math.abs(worldPts[i * 3] - worldPts[(m - 1) * 3]) < 1e-12 &&
+                Math.abs(worldPts[i * 3 + 1] - worldPts[(m - 1) * 3 + 1]) < 1e-12 &&
+                Math.abs(worldPts[i * 3 + 2] - worldPts[(m - 1) * 3 + 2]) < 1e-12) {
+                continue;
+            }
+            pts.push(worldPts[i * 3], worldPts[i * 3 + 1], worldPts[i * 3 + 2]);
+            rawD.push(cumDist ? cumDist[i] : i);
+        }
+        while (pts.length / 3 > 1 && closed) {
+            const m = pts.length / 3;
+            if (Math.abs(pts[0] - pts[(m - 1) * 3]) < 1e-12 &&
+                Math.abs(pts[1] - pts[(m - 1) * 3 + 1]) < 1e-12) {
+                pts.length -= 3;
+                rawD.length -= 1;
+            } else break;
+        }
+        const np = pts.length / 3;
+        if (np < (closed ? 3 : 2)) return;
+        const n = np;
+        // Normalized 0..1 distance along the feature for line-gradient.
+        let total = rawD[n - 1];
+        if (closed) {
+            total += Math.hypot(
+                pts[0] - pts[(n - 1) * 3],
+                pts[1] - pts[(n - 1) * 3 + 1],
+                pts[2] - pts[(n - 1) * 3 + 2],
+            );
+        }
+        const distAt = (i: number) => {
+            const t = rawD[((i % n) + n) % n];
+            return total > 0 ? t / total : 0;
+        };
+        // Absolute distance (world meters) for line-pattern tiling.
+        const lenAt = (i: number) => rawD[((i % n) + n) % n];
+        const join = String(layer.layout?.['line-join'] ?? 'miter');
+        const miterLimit = Number(layer.layout?.['line-miter-limit'] ?? 2);
+        const roundLimit = Number(layer.layout?.['line-round-limit'] ?? 1.05);
+
+        // `line-join: none` — mgl draws each segment as an independent
+        // rectangle: no corner join at all (visible gaps at turns).
+        if (join === 'none') {
+            const segCount = closed ? n : n - 1;
+            for (let s = 0; s < segCount; s++) {
+                const e = (s + 1) % n;
+                let ux = pts[e * 3] - pts[s * 3];
+                let uy = pts[e * 3 + 1] - pts[s * 3 + 1];
+                const l = Math.hypot(ux, uy) || 1;
+                ux /= l; uy /= l;
+                const nx = -uy, ny = ux; // left normal
+                const ax = pts[s * 3], ay = pts[s * 3 + 1], az = pts[s * 3 + 2];
+                const bx = pts[e * 3], by = pts[e * 3 + 1], bz = pts[e * 3 + 2];
+                const hw = worldHalfWidth;
+                const base = geo.positions.length / 3;
+                geo.positions.push(
+                    ax + nx * hw, ay + ny * hw, az,
+                    bx + nx * hw, by + ny * hw, bz,
+                    bx - nx * hw, by - ny * hw, bz,
+                    ax - nx * hw, ay - ny * hw, az,
+                );
+                geo.edge!.push(1, 1, -1, -1);
+                geo.dist!.push(distAt(s), distAt(e), distAt(e), distAt(s));
+                geo.len!.push(lenAt(s), lenAt(e), lenAt(e), lenAt(s));
+                // CCW (viewed from +Z) for the FrontSide fill material.
+                geo.indices.push(base, base + 3, base + 2, base, base + 2, base + 1);
+            }
+            return;
+        }
+
+        // Unit direction of the outgoing segment at each point (wraps when
+        // closed; at the LAST point of an open line, keep the incoming
+        // direction — wrapping there builds a bowtie ring).
+        const dx: number[] = [];
+        const dy: number[] = [];
+        for (let i = 0; i < n; i++) {
+            const j = closed ? (i + 1) % n : i + 1;
+            if (!closed && j >= n) {
+                // Last point of an open line: keep the incoming direction.
+                dx.push(dx[i - 1]);
+                dy.push(dy[i - 1]);
+                continue;
+            }
+            const ux = pts[j * 3] - pts[i * 3];
+            const uy = pts[j * 3 + 1] - pts[i * 3 + 1];
+            const l = Math.hypot(ux, uy) || 1;
+            dx.push(ux / l);
+            dy.push(uy / l);
+        }
+
+        const px = (i: number) => pts[((i % n) + n) % n * 3];
+        const py = (i: number) => pts[((i % n) + n) % n * 3 + 1];
+        const pz = (i: number) => pts[((i % n) + n) % n * 3 + 2];
+
+        // Robust construction: per-segment TRAPEZOIDS whose inner ends
+        // converge to the offset-line intersection, plus outer-side JOIN
+        // WEDGES that share edges with the trapezoids exactly — zero
+        // overlap, zero gap. (A global offset ring + earcut
+        // self-intersects when segments are shorter than the line width —
+        // the tile-clipped fragments vector tiles are full of — and plain
+        // rectangles overlap at every corner, which double-blends on
+        // alpha-blended ribbon materials.)
+        const hw = worldHalfWidth;
+        const pushV = (x: number, y: number, z: number, e: number, d: number, l: number): number => {
+            geo.positions.push(x, y, z);
+            geo.edge!.push(e);
+            geo.dist!.push(d);
+            geo.len!.push(l);
+            return geo.positions.length / 3 - 1;
+        };
+        const p3 = geo.positions;
+        const pushTri = (i: number, j: number, k: number) => {
+            const area2 =
+                (p3[j * 3] - p3[i * 3]) * (p3[k * 3 + 1] - p3[i * 3 + 1]) -
+                (p3[j * 3 + 1] - p3[i * 3 + 1]) * (p3[k * 3] - p3[i * 3]);
+            if (area2 >= 0) geo.indices.push(i, j, k);
+            else geo.indices.push(i, k, j);
+        };
+
+        // Per-vertex join context: outer side sign and the inner (converging)
+        // offset intersection. Endpoints of open lines have no corner — the
+        // plain cross-section is used on both sides.
+        const outerSign: number[] = [];
+        const innerPt: Array<[number, number]> = [];
+        for (let i = 0; i < n; i++) {
+            const hasCorner = closed ? true : i > 0 && i < n - 1;
+            if (!hasCorner) {
+                outerSign.push(0);
+                innerPt.push([px(i), py(i)]);
+                continue;
+            }
+            const iN = (i - 1 + n) % n;
+            const cross = dx[iN] * dy[i] - dy[iN] * dx[i];
+            if (cross === 0) {
+                outerSign.push(0);
+                innerPt.push([px(i), py(i)]);
+                continue;
+            }
+            const sOut = cross > 0 ? -1 : 1; // left turn -> right side outer
+            outerSign.push(sOut);
+            const sIn = -sOut;
+            const pnx = -dy[iN] * sIn, pny = dx[iN] * sIn;
+            const nx = -dy[i] * sIn, ny = dx[i] * sIn;
+            const cx = px(i), cy = py(i);
+            const ax = cx + pnx * hw, ay = cy + pny * hw;
+            const bx = cx + nx * hw, by = cy + ny * hw;
+            const den = dx[iN] * dy[i] - dy[iN] * dx[i];
+            if (Math.abs(den) > 1e-6) {
+                let t = ((bx - ax) * dy[i] - (by - ay) * dx[i]) / den;
+                t = Math.max(-hw * miterLimit, Math.min(hw * miterLimit, t));
+                innerPt.push([ax + dx[iN] * t, ay + dy[iN] * t]);
+            } else {
+                innerPt.push([bx, by]);
+            }
+        }
+
+        // 1) Per-segment trapezoids: outer edge along the segment's outer
+        // normal, inner ends at the vertex inner-intersection points.
+        const segCount = closed ? n : n - 1;
+        for (let s = 0; s < segCount; s++) {
+            const e = (s + 1) % n;
+            const ux = dx[s], uy = dy[s];
+            const nx = -uy, ny = ux; // left normal of the segment
+            const dS = distAt(s), dE = distAt(e), lS = lenAt(s), lE = lenAt(e);
+            // Outer corner of vertex v w.r.t. this segment: plain offset at
+            // endpoints/collinear vertices, the side-specific corner at turns.
+            const outer = (v: number): [number, number] => {
+                const os = outerSign[v];
+                const sign = os === 0 ? 1 : os;
+                return [px(v) + nx * sign * hw, py(v) + ny * sign * hw];
+            };
+            // Inner corner: the shared offset intersection at turns so
+            // neighboring trapezoids tile without overlap.
+            const inner = (v: number): [number, number] => {
+                if (outerSign[v] === 0) {
+                    const sign = 1;
+                    return [px(v) - nx * sign * hw, py(v) - ny * sign * hw];
+                }
+                return innerPt[v];
+            };
+            const [aox, aoy] = outer(s);
+            const [box, boy] = outer(e);
+            const [aix, aiy] = inner(s);
+            const [bix, biy] = inner(e);
+            const v1 = pushV(aox, aoy, pz(s), outerSign[s] === 0 ? 1 : outerSign[s], dS, lS);
+            const v2 = pushV(box, boy, pz(e), outerSign[e] === 0 ? 1 : outerSign[e], dE, lE);
+            const v3 = pushV(bix, biy, pz(e), outerSign[e] === 0 ? -1 : -outerSign[e], dE, lE);
+            const v4 = pushV(aix, aiy, pz(s), outerSign[s] === 0 ? -1 : -outerSign[s], dS, lS);
+            pushTri(v1, v4, v3);
+            pushTri(v1, v3, v2);
+        }
+
+        // 2) Outer-side join wedges at interior vertices (closed lines wrap:
+        // every vertex is a corner; open lines skip the two endpoints).
+        // The wedge shares its edges with the adjacent trapezoids' outer
+        // corners exactly — no overlap, no gap.
+        const firstCorner = closed ? 0 : 1;
+        const lastCorner = closed ? n : n - 1;
+        for (let i = firstCorner; i < lastCorner; i++) {
+            const iN = (i - 1 + n) % n;
+            const cx = px(i), cy = py(i), cz = pz(i);
+            const cross = dx[iN] * dy[i] - dy[iN] * dx[i];
+            if (cross === 0) continue; // collinear — rectangles already touch
+            // Outer side: left turn (cross > 0) -> right side (-1).
+            const s = cross > 0 ? -1 : 1;
+            const pnx = -dy[iN] * s, pny = dx[iN] * s;
+            const nx = -dy[i] * s, ny = dx[i] * s;
+            const dI = distAt(i), lI = lenAt(i);
+            const dot = pnx * nx + pny * ny;
+            const mLen = dot > 1e-6 ? 1 / dot : Infinity;
+            // mgl `line-round-limit`: shallow turns round -> miter.
+            const turnAngle = Math.acos(Math.max(-1, Math.min(1,
+                dx[iN] * dx[i] + dy[iN] * dy[i])));
+            const useRound = join === 'round' && turnAngle >= roundLimit;
+            if (useRound) {
+                const cV = pushV(cx, cy, cz, 0, dI, lI);
+                const a0 = Math.atan2(pny, pnx);
+                let d = Math.atan2(ny, nx) - a0;
+                while (d > Math.PI) d -= 2 * Math.PI;
+                while (d < -Math.PI) d += 2 * Math.PI;
+                const K = Math.max(1, Math.ceil(Math.abs(d) / (Math.PI / 8)));
+                let prev = pushV(cx + Math.cos(a0) * hw, cy + Math.sin(a0) * hw, cz, s, dI, lI);
+                for (let k = 1; k <= K; k++) {
+                    const th = a0 + (d * k) / K;
+                    const v = pushV(cx + Math.cos(th) * hw, cy + Math.sin(th) * hw, cz, s, dI, lI);
+                    pushTri(cV, prev, v);
+                    prev = v;
+                }
+            } else if ((join === 'miter' || join === 'round') && mLen <= miterLimit) {
+                // Miter wedge: two triangles from the corner points to the apex.
+                const o1 = pushV(cx + pnx * hw, cy + pny * hw, cz, s, dI, lI);
+                const o2 = pushV(cx + nx * hw, cy + ny * hw, cz, s, dI, lI);
+                let mx = pnx + nx, my = pny + ny;
+                const ml = Math.hypot(mx, my) || 1;
+                mx /= ml; my /= ml;
+                const r = hw / Math.max(1e-6, mx * pnx + my * pny);
+                const apex = pushV(cx + mx * r, cy + my * r, cz, s, dI, lI);
+                const cV = pushV(cx, cy, cz, 0, dI, lI);
+                pushTri(o1, cV, apex);
+                pushTri(cV, o2, apex);
+            } else {
+                // Bevel (also the miter-over-limit fallback): fill between the
+                // two outer corner points and the vertex.
+                const o1 = pushV(cx + pnx * hw, cy + pny * hw, cz, s, dI, lI);
+                const o2 = pushV(cx + nx * hw, cy + ny * hw, cz, s, dI, lI);
+                const cV = pushV(cx, cy, cz, 0, dI, lI);
+                pushTri(o1, cV, o2);
+            }
+        }
+    }
+
+    /**
      * Append `line-cap` geometry (square / round) to a baked line ribbon, using
      * the ORIGINAL (unbaked) centerline points: mgl extends the end cross-section
      * by half the width (square) or draws a half-disc fan (round). Butt = none.
@@ -1323,6 +1662,7 @@ export class MBTileDataEmitter {
         geo: AccumulatedGeometry,
         worldPts: number[],
         worldHalfWidth: number,
+        cumDist?: number[],
     ): void {
         const cap = layer.layout?.['line-cap'];
         if (cap !== 'round' && cap !== 'square') return;
@@ -1332,9 +1672,11 @@ export class MBTileDataEmitter {
         const xN = worldPts[(n - 1) * 3], yN = worldPts[(n - 1) * 3 + 1], zN = worldPts[(n - 1) * 3 + 2];
         if (Math.abs(x0 - xN) < 1e-9 && Math.abs(y0 - yN) < 1e-9) return;
 
-        const pushVertex = (x: number, y: number, z: number, e: number): number => {
+        const pushVertex = (x: number, y: number, z: number, e: number, d: number, l: number): number => {
             geo.positions.push(x, y, z);
             geo.edge!.push(e);
+            geo.dist!.push(d);
+            geo.len!.push(l);
             return geo.positions.length / 3 - 1;
         };
         // CCW (viewed from +Z) triangles only — the fill material is FrontSide.
@@ -1358,22 +1700,29 @@ export class MBTileDataEmitter {
             dx /= dl; dy /= dl; // outward unit direction beyond the endpoint
             const nx = -dy, ny = dx; // left normal
             const hw = worldHalfWidth;
+            // line-gradient coordinate at this end (0 / 1 normalized) plus the
+            // absolute distance for line-pattern tiling.
+            const totalD = cumDist ? cumDist[n - 1] : 1;
+            const dEnd = cumDist
+                ? (end === 0 ? cumDist[0] : cumDist[n - 1]) / (totalD || 1)
+                : end;
+            const lEnd = cumDist ? (end === 0 ? cumDist[0] : cumDist[n - 1]) : end;
 
             if (cap === 'square') {
-                const a1 = pushVertex(cx + nx * hw, cy + ny * hw, cz, 1);
-                const a2 = pushVertex(cx - nx * hw, cy - ny * hw, cz, -1);
-                const c1 = pushVertex(cx + nx * hw + dx * hw, cy + ny * hw + dy * hw, cz, 1);
-                const c2 = pushVertex(cx - nx * hw + dx * hw, cy - ny * hw + dy * hw, cz, -1);
+                const a1 = pushVertex(cx + nx * hw, cy + ny * hw, cz, 1, dEnd, lEnd);
+                const a2 = pushVertex(cx - nx * hw, cy - ny * hw, cz, -1, dEnd, lEnd);
+                const c1 = pushVertex(cx + nx * hw + dx * hw, cy + ny * hw + dy * hw, cz, 1, dEnd, lEnd);
+                const c2 = pushVertex(cx - nx * hw + dx * hw, cy - ny * hw + dy * hw, cz, -1, dEnd, lEnd);
                 pushTri(a1, a2, c2);
                 pushTri(a1, c2, c1);
             } else {
-                const c = pushVertex(cx, cy, cz, 0);
+                const c = pushVertex(cx, cy, cz, 0, dEnd, lEnd);
                 const K = 8;
                 const theta0 = Math.atan2(ny, nx);
                 let prevV = -1;
                 for (let k = 0; k <= K; k++) {
                     const th = theta0 + (Math.PI * k) / K;
-                    const v = pushVertex(cx + Math.cos(th) * hw, cy + Math.sin(th) * hw, cz, 1);
+                    const v = pushVertex(cx + Math.cos(th) * hw, cy + Math.sin(th) * hw, cz, 1, dEnd, lEnd);
                     if (k === 0) { prevV = v; continue; }
                     pushTri(c, prevV, v);
                     prevV = v;
@@ -1391,12 +1740,26 @@ export class MBTileDataEmitter {
         // identical techniques.
         const color = layer.paint?.['line-color'] ?? '#000000';
         const opacity = layer.paint?.['line-opacity'] ?? 1;
-        const key = `${layer.id}:line-ribbon-tech:${String(color)}:${String(opacity)}`;
+        const gradient = layer.paint?.['line-gradient'];
+        const patternName = layer.paint?.['line-pattern'] as string | undefined;
+        const key = `${layer.id}:line-ribbon-tech:${String(color)}:${String(opacity)}:${gradient ? 'grad' : ''}:${patternName ?? ''}`;
         let idx = this.m_layerToTechniqueIndex.get(key);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
             this.m_layerToTechniqueIndex.set(key, idx);
             const paint = layer.paint ?? {};
+            // line-pattern: resolve the sprite's pixel size and convert to
+            // world units at the decode display zoom so the patcher can tile
+            // u = aRibbonLen / patternWorldW, v = cross / patternWorldH.
+            let patternWorld: [number, number] | undefined;
+            if (patternName && MBTileDataEmitter.s_spriteInfos) {
+                const info = MBTileDataEmitter.s_spriteInfos.get(patternName);
+                if (info) {
+                    const mpp = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                        (256 * Math.pow(2, this.m_zoom + 1));
+                    patternWorld = [info.width * mpp, info.height * mpp];
+                }
+            }
             const technique: any = {
                 name: 'fill',
                 _index: idx,
@@ -1405,12 +1768,21 @@ export class MBTileDataEmitter {
                 _layerId: layer.id,
                 _paint: paint,
                 _layout: layer.layout,
+                // line-gradient: per-feature line-progress ramp consumed by
+                // the patcher (aRibbonDist varying → ramp texture sample).
+                ...(gradient ? { _lineGradientStops: gradient } : {}),
+                // line-pattern: sprite name + world-space tile size.
+                ...(patternName ? { _patternName: patternName } : {}),
+                ...(patternWorld ? { _ribbonPatternWorld: patternWorld } : {}),
                 // Pre-extruded line ribbons: the per-color meshes are coplanar
                 // (z=0) and must not depth-test against each other — the drawn
                 // order (feature order) decides which color wins at crossings,
                 // matching mapbox's painter's algorithm for a single line layer.
                 _isLineRibbon: true,
                 _ribbonWidthPx: Number(paint['line-width'] ?? 1),
+                _ribbonBlurPx: Number(paint['line-blur'] ?? 0),
+                _translate: paint['line-translate'] ?? [0, 0],
+                _translateAnchor: paint['line-translate-anchor'] ?? 'map',
                 color: paint['line-color'] ?? '#000000',
                 opacity: paint['line-opacity'] ?? 1,
             };
@@ -1740,6 +2112,22 @@ export class MBTileDataEmitter {
                     type: 'float' as BufferElementType,
                     itemCount: 1,
                 });
+                if (geo.dist && geo.dist.length === geo.edge.length) {
+                    vertexAttributes.push({
+                        name: 'aRibbonDist',
+                        buffer: new Float32Array(geo.dist).buffer,
+                        type: 'float' as BufferElementType,
+                        itemCount: 1,
+                    });
+                    if (geo.len && geo.len.length === geo.edge.length) {
+                        vertexAttributes.push({
+                            name: 'aRibbonLen',
+                            buffer: new Float32Array(geo.len).buffer,
+                            type: 'float' as BufferElementType,
+                            itemCount: 1,
+                        });
+                    }
+                }
             }
             if (geo.uvs.length > 0) {
                 vertexAttributes.push({

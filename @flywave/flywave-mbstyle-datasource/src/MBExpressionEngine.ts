@@ -26,6 +26,28 @@ function isExprArray(v: any): v is [string, ...any[]] {
 export class MBExpressionEngine {
     private static expressionCache = new Map<string, CompiledExpression>();
 
+    /**
+     * Names of the currently available style images (sprite atlas icons +
+     * runtime-added images). When set, `["image", name]` returns null for
+     * missing names so `["coalesce", ["image", a], ["image", b], …]` falls
+     * through to the first available one (mgl `image-fallback` semantics).
+     */
+    private static availableImages: Set<string> | null = null;
+
+    static setAvailableImages(names: Set<string> | null): void {
+        MBExpressionEngine.availableImages = names;
+    }
+
+    static addAvailableImage(name: string): void {
+        if (MBExpressionEngine.availableImages) {
+            MBExpressionEngine.availableImages.add(name);
+        }
+    }
+
+    static removeAvailableImage(name: string): void {
+        MBExpressionEngine.availableImages?.delete(name);
+    }
+
     static evaluate(
         raw: any,
         ctx: MBExpressionContext
@@ -591,8 +613,18 @@ export class MBExpressionEngine {
                 return props;
             }
 
-            case 'image':
-                return this.exec(args[0], ctx);
+            case 'image': {
+                const name = this.exec(args[0], ctx);
+                // mgl semantics: an image expression resolves to null when the
+                // name is not in the style's available images (drives
+                // coalesce fallback chains).
+                if (MBExpressionEngine.availableImages &&
+                    (typeof name !== 'string' ||
+                        !MBExpressionEngine.availableImages.has(name))) {
+                    return null;
+                }
+                return name;
+            }
 
             case 'format': {
                 // Build a text string from the format sections. Image

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { EarthConstants } from '@flywave/flywave-geoutils';
 import { MBStyleDataSource } from './MBStyleDataSource';
 import { createGuardrailMesh } from './ElevatedStructures';
 
@@ -648,6 +649,128 @@ export class MBMaterialPatchManager {
         if (technique?._isLineRibbon) {
             (material as any).depthTest = false;
             (material as any).depthWrite = false;
+            // line-blend-mode on the ribbon fill material (mgl 'additive' /
+            // 'multiply' glass modes; the SolidLine path below handles the
+            // native material).
+            const blendMode = technique._paint?.['line-blend-mode'];
+            if (blendMode === 'additive') {
+                material.blending = THREE.AdditiveBlending;
+            } else if (blendMode === 'multiply') {
+                material.blending = THREE.MultiplyBlending;
+            }
+            // mgl-style ~1px alpha feather at the ribbon edges: the emitter
+            // bakes a per-vertex edge coordinate (-1/+1 across the ribbon
+            // width) plus the width in px on the technique. The feather only
+            // becomes visible on alpha-blended materials (line-opacity < 1);
+            // opaque ribbons are unchanged (flipping `transparent` on here
+            // catastrophically reorders the transparent pass — see the F8
+            // note in docs/render-tests-port-todo.md §14).
+            const widthPx = Number(technique._ribbonWidthPx ?? 1);
+            const blurPx = Number(technique._ribbonBlurPx ?? 0);
+            // line-gradient: ramp texture sampled by the per-vertex
+            // line-progress (aRibbonDist). Built once per technique and
+            // cached on the material.
+            const gradientStops = technique._lineGradientStops;
+            if (gradientStops && !(material as any).__mbRibbonRamp) {
+                (material as any).__mbRibbonRamp =
+                    MBMaterialPatchManager.buildGradientTexture(gradientStops);
+            }
+            const rampTex = (material as any).__mbRibbonRamp as THREE.Texture | undefined;
+            // line-pattern: extract a repeating tile texture + its world size.
+            const patternName = technique._patternName as string | undefined;
+            const patternWorld = technique._ribbonPatternWorld as [number, number] | undefined;
+            if (patternName && patternWorld && !(material as any).__mbRibbonPat) {
+                const pat = this.extractPatternTexture(patternName);
+                if (pat) {
+                    pat.wrapS = THREE.RepeatWrapping;
+                    pat.wrapT = THREE.RepeatWrapping;
+                    (material as any).__mbRibbonPat = pat;
+                }
+            }
+            const patTex = (material as any).__mbRibbonPat as THREE.Texture | undefined;
+            // line-translate: px → world units at the current display zoom
+            // (map anchor: x east / y north; viewport-anchor bearing rotation
+            // is not applied — approximation shared with circle-translate).
+            const lt = technique._translate as number[] | undefined;
+            const mapView = (this.m_dataSource as any).mapView;
+            const displayZoom = mapView?.zoomLevel ?? 1;
+            const mpp = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                (256 * Math.pow(2, displayZoom));
+            // v-coordinate scale: cross distance (world) per unit edge (±1)
+            // divided by the pattern tile's world height.
+            const patVScale = patTex && patternWorld
+                ? (widthPx * mpp / 2) / Math.max(patternWorld[1], 1e-9)
+                : 0;
+            const translateWorld = lt && (lt[0] !== 0 || lt[1] !== 0)
+                ? [lt[0] * mpp, lt[1] * mpp] : undefined;
+            if (!(material as any).__mbRibbonAA && widthPx > 0) {
+                (material as any).__mbRibbonAA = true;
+                const orig = material.onBeforeCompile;
+                material.onBeforeCompile = (shader: any) => {
+                    if (orig) orig.call(material, shader);
+                    shader.uniforms.uMBRibbonWidth = { value: widthPx };
+                    shader.uniforms.uMBRibbonBlur = { value: blurPx };
+                    if (rampTex) shader.uniforms.uMBRamp = { value: rampTex };
+                    if (patTex && patternWorld) {
+                        shader.uniforms.uMBPat = { value: patTex };
+                        shader.uniforms.uMBPatUScale = { value: 1 / Math.max(patternWorld[0], 1e-9) };
+                        shader.uniforms.uMBPatVScale = { value: patVScale };
+                    }
+                    if (translateWorld) {
+                        shader.uniforms.uMBTranslate = {
+                            value: new THREE.Vector2(translateWorld[0], translateWorld[1]),
+                        };
+                    }
+                    shader.vertexShader = shader.vertexShader.replace(
+                        'void main() {',
+                        `attribute float aRibbonEdge;
+                         varying float vMBRibbonEdge;
+                         ${rampTex ? 'attribute float aRibbonDist;\nvarying float vMBRibbonDist;' : ''}
+                         ${patTex ? 'attribute float aRibbonLen;\nvarying float vMBRibbonLen;' : ''}
+                         ${translateWorld ? 'uniform vec2 uMBTranslate;' : ''}
+                         void main() {`
+                    );
+                    shader.vertexShader = shader.vertexShader.replace(
+                        '#include <begin_vertex>',
+                        `#include <begin_vertex>
+                         vMBRibbonEdge = aRibbonEdge;
+                         ${rampTex ? 'vMBRibbonDist = aRibbonDist;' : ''}
+                         ${patTex ? 'vMBRibbonLen = aRibbonLen;' : ''}
+                         ${translateWorld ? 'transformed.xy += uMBTranslate;' : ''}`
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        'void main() {',
+                        `varying float vMBRibbonEdge;
+                         uniform float uMBRibbonWidth;
+                         uniform float uMBRibbonBlur;
+                         ${rampTex ? 'varying float vMBRibbonDist;\nuniform sampler2D uMBRamp;' : ''}
+                         ${patTex ? 'varying float vMBRibbonLen;\nuniform sampler2D uMBPat;\nuniform float uMBPatUScale;\nuniform float uMBPatVScale;' : ''}
+                         void main() {`
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        '#include <opaque_fragment>',
+                        `#include <opaque_fragment>
+                         {
+                             // line-pattern: tile the sprite along the ribbon
+                             // (u = abs world distance, v = cross distance).
+                             ${patTex ? `vec4 mbPat = texture2D(uMBPat, vec2(vMBRibbonLen * uMBPatUScale, vMBRibbonEdge * uMBPatVScale));
+                                        gl_FragColor = vec4(mbPat.rgb, mbPat.a * gl_FragColor.a);` : ''}
+                             // line-gradient: override the paint color with the
+                             // ramp sampled at the line-progress coordinate.
+                             ${rampTex ? 'gl_FragColor.rgb = texture2D(uMBRamp, vec2(clamp(vMBRibbonDist, 0.0, 1.0), 0.5)).rgb;' : ''}
+                             // Distance from the ribbon edge in px; a ~1px
+                             // linear feather, widened by line-blur (mgl-style
+                             // edge ramp — interior stays fully opaque).
+                             float mbDistIn = (1.0 - abs(vMBRibbonEdge)) * uMBRibbonWidth;
+                             float mbRamp = uMBRibbonBlur > 0.0
+                                 ? clamp((mbDistIn + uMBRibbonBlur * 0.5) / (uMBRibbonBlur + 1.0), 0.0, 1.0)
+                                 : clamp(mbDistIn, 0.0, 1.0);
+                             gl_FragColor.a *= mbRamp;
+                         }`
+                    );
+                };
+                material.needsUpdate = true;
+            }
         }
         const translate = this.resolveTranslate(paint['fill-translate'], paint['fill-translate-anchor']);
         const outlineColor = paint['fill-outline-color'];

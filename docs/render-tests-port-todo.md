@@ -131,11 +131,11 @@
 | line-blur | 5 | ❌ | 无消费者（SolidLineMaterial 无 blur uniform） |
 | line-offset | 5 | ❌ | emitter 不产 offset，patcher 无 |
 | line-gap-width | 5 | 🔧 | native 需 `secondaryWidth`（emitter 不产）；patcher `:646` 设的 `material.secondaryWidth` 不存在且不可达 |
-| line-gradient | 14 | 🔧 | patcher `:702-719` buildGradientTexture，S1 |
+| line-gradient | 14 | 🔧 | patcher `:702-719` buildGradientTexture，S1；**2026-08-18 ribbon 路径已接线（§12.35，渲染验证待跑）** |
 | line-dasharray | 30 | ⚠️ | 2 元素经 native `USE_DASHED_LINE`（`DecodedTileHelpers.ts:526-530`）✅；>2 元素 patcher `:779-812`，S1 不可达 |
 | line-cap | 4 | 🔧 | patcher `:608-617` `material.caps`，S1 |
 | line-join | 11 | 🔧 | patcher `:619-644`（无 `setJoinType`，写死 define），S1 |
-| line-pattern | 20 | 🔧 | patcher `:720-739`，S1 |
+| line-pattern | 20 | 🔧 | patcher `:720-739`，S1；**2026-08-18 ribbon 路径已接线（§12.35，渲染验证待跑）** |
 | line-pattern-cross-fade | 5 | 🔧 | 同 pattern，S1 |
 | line-pattern-trim-offset | 18 | 🔧 | patcher `:593,682-689`，S1 |
 | line-trim-offset | 18 | 🔧 | 同，S1 |
@@ -1235,7 +1235,65 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - 零回归：icon-color 4/5、icon-image 2/12、icon-size 9/18（camera/composite-function 系全保持）、icon-halo-blur literal/function 系全保持。
 - **F4（blur/property-function 203px）重定性**：非 halo 数学问题——fixture 两要素（x=0/1 → blur 1/3）**同点放置被原生 Placement 收敛为 1 个**（与 icon-anchor/property-function、icon-size/property-function 同根，§12.16 已记"同点要素仅放置 1 个"引擎深水区），归入 placement 专项而非 F4。
 
+### 12.33 F8 续：line-join 几何 + round-limit + AA feather 接线（2026-08-18，代码落地，渲染验证待跑）
+
+**背景**：`90c061d4` 落地了 line-cap 端头几何；但填充 ribbon 主体来自 `createLineGeometry` 的 averaged-bitangent 挤出——**恒为无限 miter**，bevel/round/`line-miter-limit` 回退无法在其上叠加，须整体重造 ribbon 主体。
+
+**实现（`MBTileDataEmitter.emitRibbonBody`）**：
+- ribbon 主体改为**单一简单多边形**：中心线两侧 offset 曲线，拐角外侧按 `line-join` 生成连接几何（miter 尖角 / bevel 平边 / round 圆弧扇，步长 π/8 与 cap 一致），**内侧收敛到两条 offset 线的交点**（按 miter-limit 钳制，急弯不尖刺）；earcut 三角化 + 逐三角形 CCW 纠向（FrontSide）。
+- `line-join: none`：每段独立矩形（mgl 无角连接语义，转角留缺口）。
+- `line-round-limit`（默认 1.05）：浅于阈值的转角 round→miter（mgl 语义，视觉等价更省几何）。
+- `line-miter-limit`（默认 2）：超限 miter 回退 bevel——mgl 默认行为，此前我们是无限 miter。
+- 闭合线（首≈尾）：所有顶点按 join 处理、不发 cap；重复点/零长段先剔除。
+- **aRibbonEdge 语义修正**：边 ±1 / 内部 0 的带符号坐标，贯穿 body/caps。
+- **AA feather 闭环（`MBMaterialPatchManager.patchFillMaterial` ribbon 分支）**：注入 `aRibbonEdge` varying + `uMBRibbonWidth` uniform，`gl_FragColor.a *= clamp((1-|vEdge|)*widthPx, 0, 1)` —— mgl 式 ~1px 线性羽化。仅在材质已透明（line-opacity<1）时可见；**不主动置 `transparent:true`**（90c061d4 已记录会灾难性重排透明通道绘制顺序，337→54701，须与渲染顺序专项一并解决）。
+
+**过程 bug 教训（首版全红 55711）**：① 重构时丢掉 `geo.edge` 初始化 → decode 抛异常整域空白；② 开放折线最后一点的出方向 `% n` 环回首点 → 领结自交环 → 线宽减半（34000 vs 58813 dark px）。修后 standalone 数值验证：直线=矩形 ±hw、L 形=外 miter 尖角(12,-2)+内交点(8,2)、Z 形双角正确。
+
+**验证状态**：tsc 绿；standalone 几何数值验证通过；渲染 harness **未跑**（用户要求先代码端闭环）。join3 结果目录为修复前中间态，勿作基线。
+
+**遗留**：渲染验证（line-join 11 例 / line-cap / line-color 337px 基线是否收敛）、不透明线 AA（需透明通道排序专项）、dasharray×join 组合。
+
+### 12.34 代码端批量闭环（2026-08-18 第二批，全部延后渲染验证）
+
+> 按用户要求：先修代码、最后统一验证。以下全部 tsc 绿 + standalone 静态推理，未跑渲染 harness。
+
+**Line 域（F8/F9 延伸，`MBTileDataEmitter` / `MBMaterialPatchManager`）**：
+1. **line-offset（F9 半项，5+5 例）**：中心线沿左法线位移（mgl 正值向左），角点用相邻两段法线均值防缺口；join/caps 自动一致（从位移后中心线派生）。
+2. **line-blur（F9 半项，5 例）**：ribbon AA feather 扩展 `uMBRibbonBlur` —— `clamp((distIn + blur/2)/(blur+1))` 边缘坡道近似 mgl blur（内部保持不透明）。
+3. **line-translate（4 例）**：ribbon technique 携带 `_translate/_translateAnchor`，patcher 注入 `uMBTranslate`（px→world 按 displayZoom 换算；viewport-anchor 旋转未做，与 circle-translate 同级近似）。
+4. **line-blend-mode（6 例）**：ribbon fill 材质映射 additive/multiply → THREE blend mode。
+5. **line-width-unit:'meters'（6 例）**：ribbon 宽度直接按米（世界单位=米），AA feather 的 `_ribbonWidthPx` 换算为有效 px。
+
+**Fill 域**：
+6. **fill-z-offset（P2.3，4 例）**：`processFillFeature` 顶点 `push(w.x,w.y,0)` 丢 z → 改 `w.z`（`project()` 已折叠 `m_currentZOffset`）；并补 `noteGeometryHeight`（近裁剪面上报）。
+
+**Image 域（P2.7，image 7 raster 子类）**：
+7. `applyImageSources` 合并引用该 image source 的 raster 层 paint：visibility 门控、`raster-opacity`、`raster-resampling`（Nearest/Linear）、brightness/contrast/saturation/hue-rotate shader 注入（与 `patchRasterMaterial` 同数学，自包含于 gl_FragColor）。
+
+**表达式（image-fallback-nested，19 例）**：
+8. `MBExpressionEngine` 新增静态 `availableImages` 注册表：`["image",name]` 对不可用名返回 null → `coalesce` 链回退（mgl 语义）。`loadSpriteAtlas` 发布图集名、`addImage/removeImage` 增删。时序安全：`configure` 中 `await loadSpriteAtlas` 先于解码求值。
+
+**未动（调查项）**：line-gap-width（expected 全黑无法取证，mgl gap 语义待查源码）、dasharray×ribbon 双渲染疑云（SwiftShader 下 SolidLine 不栅格化但 dash 测试通过的原因未明）、不透明 ribbon 的 AA（需透明通道排序专项）。
+
+### 12.35 代码端闭环第三批：line-gradient / line-pattern 上 ribbon（2026-08-18，延后渲染验证）
+
+**背景**：line-gradient（14+12 例）/ line-pattern（20+19+18+12 例）此前仅 SolidLine 死路径消费（SwiftShader 不栅格化），ribbon 填充路径完全无消费。
+
+**实现（全链）**：
+1. **emitter**：`AccumulatedGeometry` 新增 `dist`（0..1 归一化线进度）/`len`（绝对世界米数）双属性，`emitRibbonBody`（body/join/none 分支）与 `emitRibbonCaps` 全部顶点同步 push；`getDecodedTile` 发射 `aRibbonDist`/`aRibbonLen` 顶点属性。
+2. **technique**：`getOrCreateRibbonTechniqueIndex` 键扩展 `grad`/`patternName`；携带 `_lineGradientStops`（paint 原始表达式）与 `_patternName`+`_ribbonPatternWorld`（sprite px × mpp 换算世界尺寸，来自新静态注册表 `MBTileDataEmitter.setSpriteInfos`，由 `loadSpriteAtlas` 发布、`addImage` 增量维护）。
+3. **patcher（ribbon 注入扩展）**：
+   - gradient：`buildGradientTexture`（既有）→ `uMBRamp`，`gl_FragColor.rgb = texture2D(uMBRamp, vec2(vDist, .5)).rgb`。
+   - pattern：`extractPatternTexture`（既有，Repeat 包裹）→ `uMBPat`，`u = aRibbonLen/patternWorldW`、`v = vEdge×(halfWidthWorld/patternWorldH)`，输出 `vec4(mp.rgb, mp.a×alpha)`（图案 alpha × line-opacity）。
+   - feather/blur/translate 注入不变，pattern→gradient→feather 顺序应用。
+
+**已知近似**：gradient stops 的 alpha 通道未应用（仅 rgb）；pattern 的 v 锚点为中心对称（mgl 从上边缘起铺）；两者共存时 gradient 覆盖 pattern 的 rgb。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
+
+
+
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
 
@@ -1454,9 +1512,10 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 ### P2 — 引擎几何 / 材质（需改 flywave-lines / flywave-materials / flywave-mapview）
 
 **F8. line-join / line-cap（G1，6/11 + 2/4 近失）**：`TriangulateLines` 恒 bevel；mgl bevel/miter/round 角几何。**line-color 337px 基线**（AA/线宽舍入）与 line-cap butt 337px 同源，须先修。
+- **进行中（2026-08-18）**：cap 几何已落地（`90c061d4`）；join 几何主体重造 + `line-join:none`/`line-round-limit`/`line-miter-limit` + AA feather shader 接线已完成代码侧闭环（§12.33），**渲染验证待跑**。
 - 用例：line-join（11）+ elevated-line-join（9）+ line-cap（4）+ elevated-line-cap（4）+ line-color（5）+ elevated-line-color（3）。
 
-**F9. line-blur / line-offset（G1）**：SolidLineMaterial 无 blur/offset uniform 消费（P1.3 引擎级）。
+**F9. line-blur / line-offset（G1）**：SolidLineMaterial 无 blur/offset uniform 消费（P1.3 引擎级）。**→ 2026-08-18 代码侧已绕开引擎**：offset 走中心线几何位移、blur 走 ribbon AA feather 扩展（§12.34），渲染验证待跑。
 
 **F10. circle-blur / circle-stroke-***：CirclePointsMaterial 无 blur/stroke（P1.2 引擎级）。
 
