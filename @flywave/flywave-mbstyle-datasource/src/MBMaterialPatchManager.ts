@@ -638,6 +638,12 @@ export class MBMaterialPatchManager {
                 };
                 shader.uniforms.uMBRasHue = { value: (hue ?? 0) * Math.PI / 180 };
                 shader.uniforms.uMBRasBase = { value: baseSrgb };
+                // When padded, the ORIGINAL image size lives in __mbPadPx
+                // (the canvas is +2); unpadded textures use their own size.
+                const padPx: [number, number] = (texture as any).__mbPadPx
+                    ?? [(texture as any).image?.width ?? 256, (texture as any).image?.height ?? 256];
+                shader.uniforms.uMBRasPadPx = { value: padPx };
+                shader.uniforms.uMBRasFullPx = { value: [padPx[0], padPx[1]] };
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
                     'varying vec2 vMBRasUv;\nvoid main() {',
@@ -654,6 +660,7 @@ export class MBMaterialPatchManager {
                      uniform float uMBRasBMin; uniform float uMBRasBMax;
                      uniform float uMBRasContrast; uniform float uMBRasSat; uniform float uMBRasHue;
                      uniform vec3 uMBRasBase;
+                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx;
                      vec3 mbSrgbEnc(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
                      vec3 mbSrgbDec(vec3 c) { return mix(c / 12.92, pow((max(c, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
                      void main() {`,
@@ -661,7 +668,11 @@ export class MBMaterialPatchManager {
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <opaque_fragment>',
                     `#include <opaque_fragment>
-                     vec4 mbRasT = texture2D(uMBRasMap, uMBRasUvOff + vMBRasUv * uMBRasUvScl);
+                     // Map the tile UV into the padded texture: the unpadded
+                     // image occupies [1/W .. 1-1/W] of the padded canvas.
+                     vec2 mbRasUV = uMBRasUvOff + vMBRasUv * uMBRasUvScl;
+                     vec2 mbRasSmp = (vec2(1.0) + mbRasUV * uMBRasFullPx) / (uMBRasFullPx + 2.0);
+                     vec4 mbRasT = texture2D(uMBRasMap, mbRasSmp);
                      // mgl applies the raster paint adjustments on the sRGB
                      // texture values; the framebuffer is linear, so round
                      // trip through the transfer function.
@@ -701,8 +712,40 @@ export class MBMaterialPatchManager {
         rasterTextureLoader.load(url, (texture) => {
             texture.minFilter = filterType;
             texture.magFilter = filterType;
-            rasterTextureCache.set(url, texture);
-            attach(texture);
+            // Pad the tile with a 1px replicated border so LINEAR filtering
+            // at tile seams has neighbour texels (each tile is an isolated
+            // texture; mgl samples from a padded atlas). The shader maps UVs
+            // through the padding accordingly.
+            let padded: THREE.Texture = texture;
+            const img: any = (texture as any).image;
+            try {
+                if (typeof document !== 'undefined' && img) {
+                    const w = img.width ?? img.naturalWidth;
+                    const h = img.height ?? img.naturalHeight;
+                    const cv = document.createElement('canvas');
+                    cv.width = w + 2; cv.height = h + 2;
+                    const cx = cv.getContext('2d')!;
+                    cx.drawImage(img, 1, 1);
+                    // edge replication
+                    cx.drawImage(img, 0, 0, w, 1, 1, 0, w, 1);          // top
+                    cx.drawImage(img, 0, h - 1, w, 1, 1, h + 1, w, 1);  // bottom
+                    cx.drawImage(img, 0, 0, 1, h, 0, 1, 1, h);          // left
+                    cx.drawImage(img, w - 1, 0, 1, h, w + 1, 1, 1, h);  // right
+                    // corners
+                    cx.drawImage(img, 0, 0, 1, 1, 0, 0, 1, 1);
+                    cx.drawImage(img, w - 1, 0, 1, 1, w + 1, 0, 1, 1);
+                    cx.drawImage(img, 0, h - 1, 1, 1, 0, h + 1, 1, 1);
+                    cx.drawImage(img, w - 1, h - 1, 1, 1, w + 1, h + 1, 1, 1);
+                    padded = new THREE.CanvasTexture(cv);
+                    padded.colorSpace = THREE.SRGBColorSpace;
+                    padded.minFilter = filterType;
+                    padded.magFilter = filterType;
+                    (padded as any).__mbPadPx = [w, h];
+                    padded.needsUpdate = true;
+                }
+            } catch {}
+            rasterTextureCache.set(url, padded);
+            attach(padded);
             // Async texture arrival must trigger a new frame — the render-test
             // model is a static frame sequence, so without an update the just-
             // attached texture is never drawn.

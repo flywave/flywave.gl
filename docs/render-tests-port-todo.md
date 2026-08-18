@@ -1588,6 +1588,8 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **N3b 半纹元实验（同日，已回退）**：对采样加半纹元内缩（N1b sprites 同法）→ default 14171→14878、overzoom 559→4848（更差）——栅格不是半纹元偏移；明暗倒置点向瓦片缝聚拢的特征更像**相邻瓦片边缘的线性过滤跨缝采样**（每瓦片独立纹理，边缘纹元在两瓦片间无邻域，mgl atlas 有 padding 而我们独立纹理无）——候选修法：给每瓦片纹理加 1px 边界扩展（canvas 复制边缘纹元），下轮实验。
 
+**N3b 边缘扩展实验（同日，保留）**：已实现 1px 复制边 padding + UV 变换——14171/559/1871 **逐数值不变**（中性）：1:1 缩放下双线性采样恰在纹元中心、不插值，缝隙边缘本就不产生差异。保留（对缩放场景正确）。**基底 14171 定性更新：差异在瓦片内部**（特征线半像素级抖动 + 峰值衰减，195 vs 237），非缝隙、非平移、非半纹元——疑 mgl 参考的 GPU 各向异性采样或瓦片内坐标量化，SwiftShader 环境下可能不可达（与 sprites ±3 噪声同类）。raster paint 族剩余转通过依赖真机 GPU 复核。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
