@@ -466,7 +466,8 @@ class TileGeometryBuilder {
         const level = tileKey.level;
         const { maxDetailLevel, minDetailLevel } = this;
 
-        const subdivision = Math.max(7 - level, 4);
+        // 网格密度：6 为基准、下限 3（相比原始 7 基准降一档，三角形数约 1/4）
+        const subdivision = Math.max(6 - level, 3);
         const tileCount = 1 << level;
         let cacheKey: string;
 
@@ -536,7 +537,8 @@ class TileGeometryBuilder {
     getTileGeometryWithTransform(tileKey: TileKey): TileGeometryWithTransform {
         const row = tileKey.row;
         const level = tileKey.level;
-        const subdivision = Math.max(7 - level, 4);
+        // 网格密度：6 为基准、下限 3（相比原始 7 基准降一档，三角形数约 1/4）
+        const subdivision = Math.max(6 - level, 3);
 
         const cacheKey =
             level >= this.maxDetailLevel ? `simple.patch/${subdivision}` : `${level}/${row}/patch`;
@@ -1089,7 +1091,10 @@ class TileGeometryBuilder {
             geoBox.northEast.latitudeInRadians
         );
 
-        if (isCentered && (tileCountX > 1 || tileCountY > 1)) {
+        // level 1 时 countX = tileCount/2 = 1，若只看 countX>1 会跳过居中，
+        // 导致顶点保持绝对世界坐标而 mesh 又被平移到 tile 球面中心，四个 tile 错位。
+        // level 0 几何覆盖全球且 spherePosition 为原点，必须保持不居中。
+        if (isCentered && (tileCountX > 1 || tileCountY > 1 || level > 0)) {
             const centerGeo = geoBox.center;
 
             // Sphere center

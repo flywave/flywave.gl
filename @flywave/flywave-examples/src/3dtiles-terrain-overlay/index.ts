@@ -35,7 +35,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     return new MapView({
         projection: ellipsoidProjection, // Use ellipsoid projection
         target: initialLocation, // Initial target position
-        zoomLevel: 17, // Initial zoom level
+        zoomLevel: 1, // Initial zoom level
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
         canvas: canvas, // Specify render canvas

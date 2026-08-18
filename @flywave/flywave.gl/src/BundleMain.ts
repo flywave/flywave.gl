@@ -20,22 +20,29 @@ declare const FLYWAVE_BASE_URL: string | undefined;
 /**
  * UriResolver for map assets.
  *
- * If a base directory for resources is specified, it resolves URIs relative to that directory.
- * Otherwise, it attempts to resolve URIs from the network.
- *
- * The base resource URL can be defined in two ways:
- * 1. As a global variable: window.FLYWAVE_BASE_URL
- * 2. Through webpack DefinePlugin: FLYWAVE_BASE_URL
+ * Relative URIs are resolved against the configured base resource URL; absolute
+ * http(s) URIs pass through unchanged. See
+ * {@link MapAssetsUriResolver.baseResourceUrl} for the exact precedence between
+ * `FLYWAVE_BASE_URL` (webpack DefinePlugin or global variable), the
+ * `window.FLYWAVE_BASE_URL` override and the unpkg.com CDN fallback.
  */
 class MapAssetsUriResolver implements UriResolver {
     /**
      * Get the current base resource URL
      */
     get baseResourceUrl(): string | undefined {
-        // Priority order for determining base resource URL:
-        // 1. Global variable (window.FLYWAVE_BASE_URL)
-        // 2. Webpack DefinePlugin variable (FLYWAVE_BASE_URL)
-        // 3. undefined (fallback to network resolution)
+        // Actual precedence (keep this comment in sync with the code below):
+        // 1. FLYWAVE_BASE_URL is falsy (undefined or "") -> CDN fallback: relative
+        //    URIs resolve against the published package on unpkg.com (@latest).
+        // 2. FLYWAVE_BASE_URL truthy + window.FLYWAVE_BASE_URL truthy (assigned
+        //    before this bundle loads) -> the window value wins (self-hosted).
+        // 3. FLYWAVE_BASE_URL truthy + window value empty -> undefined: URIs are
+        //    returned unchanged and resolved by the browser relative to the page.
+        //
+        // Note: in builds without the webpack DefinePlugin, FLYWAVE_BASE_URL is a
+        // free variable that resolves to window.FLYWAVE_BASE_URL at runtime; the
+        // module side effect below sets it to "" in that case, so case 1 applies
+        // unless the page assigned a value beforehand.
         if (!FLYWAVE_BASE_URL) {
             return "https://unpkg.com/@flywave/flywave.gl@latest/dist";
         }
@@ -71,8 +78,12 @@ class MapAssetsUriResolver implements UriResolver {
     }
 }
 
-if(!window.FLYWAVE_BASE_URL){
-    window.FLYWAVE_BASE_URL = '';
+// Ensure the global exists so free-variable lookups of FLYWAVE_BASE_URL (builds
+// without the DefinePlugin) don't throw. The empty string is falsy, which selects
+// the CDN fallback in baseResourceUrl. Assignments after this module has loaded
+// have no effect - set window.FLYWAVE_BASE_URL before loading this bundle.
+if (!window.FLYWAVE_BASE_URL) {
+    window.FLYWAVE_BASE_URL = "";
 }
 
 // Export a singleton instance
@@ -134,7 +145,7 @@ const getActualDecoderScriptUrl = () => {
 /**
  * Guess decoder script URL.
  *
- * Assumes that decoder script - `FLYWAVE-decoders.js` is in same place as main bundle and calculates
+ * Assumes that decoder script - `flywave-decoders.js` is in same place as main bundle and calculates
  * it's URL.
  *
  * Minified version of `flywave.gl.js` bundle loads minified version of decoder.

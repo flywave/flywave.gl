@@ -219,7 +219,7 @@ export class ViewRenderManager implements IViewRenderManager {
         }
         if (this.gpuPicking) {
             // pickDepth MRT packs depth AND identity:
-            //   R = 1/w (view depth) — pure, unmodified
+            //   R = 1/w (view depth) — zeroed for non-scene draws (background)
             //   G/B = dense pickId split into two 11-bit halves (half-float
             //         channels hold integers exactly only up to 2048)
             // Decode: pickId = G + B * 2048.
@@ -228,13 +228,34 @@ export class ViewRenderManager implements IViewRenderManager {
             // draw time (uniform with NodeUpdateType.OBJECT runs once per
             // rendered object, frame.object is that object) — every mesh
             // drawn through this pass is automatically identifiable, no
-            // cooperation from data sources or loaders required. The sky
-            // (unit sphere at the camera-relative origin) writes 0 → miss.
-            const clipPos = cameraProjectionMatrix.mul(positionView);
-            const invW = float(1).div(clipPos.w);
+            // cooperation from data sources or loaders required.
+            //
+            // Objects OUTSIDE the pick scene graph draw with pickId 0 → miss.
+            // That covers three's background sphere (scene.backgroundNode —
+            // the sky AND the atmosphere's ground shading, which is shader
+            // color on that sphere, never geometry) plus any manually
+            // injected fullscreen quad. Connectivity is re-checked every draw
+            // because the positionView length test below cannot detect the
+            // background: three reconstructs fragment-stage positionView from
+            // clip space when the material has a vertexNode, and the
+            // background material forces clip z to the far plane, so its
+            // |positionView| is the far-plane distance, not the unit-sphere
+            // radius — isSky never fires there and the background would
+            // otherwise leak a garbage near-camera depth past the pickId>0
+            // gate of readDepth/readDepthAsync.
             const self = this;
             const uPickId = uniform(0).onUpdate(function (frame: any) {
                 const object: THREE.Object3D = frame.object;
+                // Same connectivity rule as getPickedObject: only descendants
+                // of the picked scene root are identifiable. The background
+                // mesh (never parented into the scene) reads 0 → every gated
+                // consumer sees a definitive miss and falls back to CPU.
+                let root: THREE.Object3D | null = object;
+                while (root !== null && root.parent !== null) root = root.parent;
+                if (root !== self.pickSceneRoot) {
+                    this.value = 0;
+                    return;
+                }
                 let id = self.gpuPickIds.get(object);
                 if (id === undefined) {
                     id = self.nextGpuPickId++;
@@ -243,6 +264,11 @@ export class ViewRenderManager implements IViewRenderManager {
                 }
                 this.value = id;
             }, NodeUpdateType.OBJECT);
+            const clipPos = cameraProjectionMatrix.mul(positionView);
+            // Non-scene draws (pickId 0) also zero R, so a consumer reading
+            // depth WITHOUT the pickId gate sees invW <= 0 → miss instead of
+            // the background sphere's bogus ~1m-from-camera depth.
+            const invW = select(uPickId.lessThan(float(0.5)), float(0), float(1).div(clipPos.w));
             const isSky = positionView.length().lessThan(1.5);
             const idLo = select(isSky, float(0), mod(uPickId, float(2048)));
             const idHi = select(isSky, float(0), floor(uPickId.div(float(2048))));

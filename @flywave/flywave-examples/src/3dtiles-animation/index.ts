@@ -106,11 +106,12 @@ const create3DTilesDataSource = (mapView: MapView): CesiumIonDataSource => {
 
     mapView.addDataSource(
         new TileRenderDataSource({
-            url: "http://127.0.0.1/%E5%8C%85%E8%A5%BF3dtile/tileset.json",
+            url: "http://192.168.1.9/%E5%8C%85%E8%A5%BF3dtile/tileset.json",
             receiveShadow: true,
             errorTarget: 100, 
+            // wireframe:true,
             castShadow: true,
-            shadowCastErrorThreshold:10000,
+            shadowCastErrorThreshold:5000,
             transform: new Matrix4().fromArray([
                 -0.337273, 0.00054, -0.941407, 0, -0.612574, 0.759208, 0.219899, 0, 0.714842,
                 0.650848, -0.25573, 0, 4565629.4, 4129077, -8011465.5, 1
