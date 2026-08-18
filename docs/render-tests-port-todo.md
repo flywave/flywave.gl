@@ -1592,6 +1592,8 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 ### 12.58 N5 代码优先批：MapAnchor 挂载 + minzoom/token/公式（2026-08-19，`mbstyle-n5*/`）
 
+**角点顺序（第 5 重，§12.58 续）**：mapbox `coordinates` 顺序是 [tl,tr,br,bl]，历史代码错位取 wgs[1] 作 tl——内容整体旋转错位（区域/均值均吻合但逐像素错乱）。修正后 **image/default 106847→31357**、raster-opacity→7020、raster-brightness→11456。
+
 **image-source 上屏根因（第 4 重）**：直接 `m_scene.add` 的自定义 MeshBasicMaterial 几何**从不显示**（onBeforeRender 触发、NDC 在视锥内、纯红材质也全白）——m_sceneRoot 每帧清空重建（`MapView.ts:3527`），瓦片/锚点对象走 `TileObjectRenderer`/`MapAnchors.update`（`world − camera` 定位）进 sceneRoot；裸加 m_scene 的对象不在渲染通路。**修复：image quad 改为 MapAnchor**（`.anchor = 世界坐标`，引擎每帧定位）——**image/default 158652→106847（61% 像素上屏）**、image/wrap 72793→**16209 近失**、raster-brightness 158559→73865。附带：image paint 注入对齐 mgl 公式 + sRGB 合成（§12.56/57 同款）、±C 世界副本、异步加载后 requestUpdate。
 
 **underzoom minzoom 语义修正**：mgl `coveringTiles` 对 z<minzoom `return []`（完全不画，非 overzoom 服务）——`zoomed-raster/underzoom` **转通过**（131k 全黑 → PASS）。探测起始层钳制到 maxzoom 保留。

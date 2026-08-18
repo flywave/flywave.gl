@@ -1241,11 +1241,14 @@ export class MBEnvironmentManager {
                 // per-frame-rendered scene root (`world − camera`), which is
                 // the only reliable placement for custom geometry (direct
                 // m_scene adds never showed up despite in-frustum NDC).
+                // mapbox image `coordinates` order: [topLeft, topRight,
+                // bottomRight, bottomLeft] — the historical code read them
+                // shifted by one (wgs[1] as tl), scrambling the texture.
                 const w = (i: number): THREE.Vector3 => new THREE.Vector3(wgs[i].x, wgs[i].y, 0);
-                const tl = w(1);
-                const tr = w(2);
-                const br = w(3);
-                const bl = w(0);
+                const tl = w(0);
+                const tr = w(1);
+                const br = w(2);
+                const bl = w(3);
                 const anchor = tl.clone();
 
                 const positions = new Float32Array([
