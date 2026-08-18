@@ -830,33 +830,34 @@ export class MBEnvironmentManager {
 
         if (!patternName || !spriteAtlas) return;
 
-        // Resolve the specific pattern sub-rectangle inside the sprite atlas.
-        // Fall back to the full atlas when the named pattern is not present.
+        // Resolve the specific pattern sub-rectangle inside the sprite atlas
+        // (image space, origin top-left). Fall back to the full atlas when the
+        // named pattern is not present.
         const uv = spriteAtlas.getIconUv(patternName);
         const tex = spriteAtlas.texture.clone();
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        // NOTE: a sub-rectangle of an atlas CANNOT be tiled with texture
+        // offset/repeat — RepeatWrapping repeats the WHOLE atlas. Tiling is
+        // done in the fragment shader (see onBeforeCompile below), so the
+        // uvTransform stays identity and vMapUv equals the plane's [0,1] uv.
+        tex.offset.set(0, 0);
+        tex.repeat.set(1, 1);
+        let u0 = 0;
+        let v0 = 0;
         let w = 1;
         let h = 1;
         if (uv) {
-            const u0 = uv.uvMin[0];
-            const v0 = uv.uvMin[1];
+            u0 = uv.uvMin[0];
+            v0 = uv.uvMin[1];
             w = Math.max(uv.uvMax[0] - u0, 1e-6);
             h = Math.max(uv.uvMax[1] - v0, 1e-6);
-            // getIconUv works in image space (origin top-left), but the
-            // texture is uploaded with flipY — UV v runs bottom-up. Mapping
-            // the image-space range directly samples the atlas' EMPTY rows
-            // below the packed sprites, rendering pure black. Flip v:
-            // image range [v0, v0+h] → UV range [1-v0-h, 1-v0].
-            tex.offset.set(u0, 1 - v0 - h);
         }
-        // Tile the pattern sub-rectangle across the screen. Mapbox tiles a
-        // background pattern every `displaySize` logical screen pixels
-        // (`patternPosition.displaySize` in draw_background/pattern.ts —
-        // sprite physical px / sprite pixelRatio), i.e. displaySize × screen
-        // DPR in device pixels. The legacy fixed repeat of 8 only matched
-        // 512px canvases with 64px patterns by coincidence; @2x sprites and
-        // small viewports tiled at the wrong scale.
+        // Mapbox tiles a background pattern every `displaySize` logical screen
+        // pixels (`patternPosition.displaySize` in draw_background/pattern.ts
+        // — sprite physical px / sprite pixelRatio), i.e. displaySize × screen
+        // DPR in device pixels.
         const iconInfo = spriteAtlas.icons.get(patternName);
         // Sprite display size (logical px) in the given axis.
         const disp = (axis: 0 | 1): number => {
@@ -864,24 +865,44 @@ export class MBEnvironmentManager {
             const pr = Number((iconInfo as any).pixelRatio ?? 1) || 1;
             return (axis === 0 ? iconInfo.width : iconInfo.height) / pr;
         };
+        const tileCount = { value: new THREE.Vector2(8, 8) };
+        // Pattern phase: mgl anchors the pattern to WORLD pixel 0 (mercator
+        // origin lng −180 / lat 85.05), not the screen origin — see
+        // get_pattern_pos in _prelude.vertex.glsl (pixel_coord comes from the
+        // tile's world pixel offset). At zoom 0 / 64px viewport this is a
+        // visible 4px phase vs screen anchoring.
+        const tilePhase = { value: new THREE.Vector2(0, 0) };
+        const updatePhase = (renderer: THREE.WebGLRenderer): void => {
+            try {
+                const { GeoCoordinates } = require('@flywave/flywave-geoutils');
+                const worldOrigin = new GeoCoordinates(85.05112878, -180);
+                const p = (this.m_mapView as any).getScreenPosition(worldOrigin);
+                if (!p) return;
+                const buf = renderer.getDrawingBufferSize(new THREE.Vector2());
+                const css = renderer.getSize(new THREE.Vector2());
+                const screenPr = css.x > 0 ? buf.x / css.x : 1;
+                const tw = disp(0) * screenPr;
+                const th = disp(1) * screenPr;
+                if (tw > 0) tilePhase.value.x = ((p.x * screenPr) / tw) % 1;
+                if (th > 0) tilePhase.value.y = ((p.y * screenPr) / th) % 1;
+            } catch {
+                // fall back to screen anchoring
+            }
+        };
         const updateRepeat = (renderer: THREE.WebGLRenderer): void => {
             const buf = renderer.getDrawingBufferSize(new THREE.Vector2());
             const css = renderer.getSize(new THREE.Vector2());
             const screenPr = css.x > 0 ? buf.x / css.x : 1;
             if (disp(0) > 0 && disp(1) > 0 && buf.x > 0 && buf.y > 0) {
-                tex.repeat.x = w * (buf.x / (disp(0) * screenPr));
-                tex.repeat.y = h * (buf.y / (disp(1) * screenPr));
-            } else {
-                tex.repeat.x = w * 8;
-                tex.repeat.y = h * 8;
+                tileCount.value.set(
+                    buf.x / (disp(0) * screenPr),
+                    buf.y / (disp(1) * screenPr),
+                );
             }
+            updatePhase(renderer);
         };
         const renderer0 = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
         if (renderer0) updateRepeat(renderer0);
-        else {
-            tex.repeat.x = w * 8;
-            tex.repeat.y = h * 8;
-        }
         tex.needsUpdate = true;
 
         const material = new THREE.MeshBasicMaterial({
@@ -895,6 +916,47 @@ export class MBEnvironmentManager {
             depthWrite: false,
             depthTest: false,
         });
+        // Tile the atlas sub-rectangle in the fragment shader:
+        //   tx = fract(uv.x * nx - phaseX), ty = fract((1-uv.y) * ny - phaseY)
+        //   (y from top; phase = world-origin screen offset / tile size)
+        //   sample uv = (u0 + tx*w, 1 - v0 - ty*h)            (flipY space)
+        material.onBeforeCompile = (shader: any) => {
+            shader.uniforms.uMBPatOrigin = { value: new THREE.Vector2(u0, v0) };
+            shader.uniforms.uMBPatSize = { value: new THREE.Vector2(w, h) };
+            shader.uniforms.uMBPatCount = tileCount;
+            shader.uniforms.uMBPatPhase = tilePhase;
+            // Sprite size in atlas texels (for the half-texel seam inset).
+            shader.uniforms.uMBPatPxSize = {
+                value: new THREE.Vector2(
+                    iconInfo ? iconInfo.width : 1,
+                    iconInfo ? iconInfo.height : 1),
+            };
+            shader.fragmentShader = shader.fragmentShader.replace(
+                'void main() {',
+                `uniform vec2 uMBPatOrigin; uniform vec2 uMBPatSize; uniform vec2 uMBPatCount; uniform vec2 uMBPatPhase; uniform vec2 uMBPatPxSize;
+                 void main() {`,
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <map_fragment>',
+                `#ifdef USE_MAP
+                    vec2 mbPatT = vec2(
+                        fract(vMapUv.x * uMBPatCount.x - uMBPatPhase.x),
+                        fract((1.0 - vMapUv.y) * uMBPatCount.y - uMBPatPhase.y));
+                    // Half-texel inset: LINEAR filtering at the fract seam
+                    // would blend in the atlas' neighbouring (padding) texels.
+                    vec2 mbPatPx = clamp(1.0 / uMBPatPxSize, 0.0, 0.25);
+                    vec2 mbPatF = mbPatPx * 0.5 + mbPatT * (1.0 - mbPatPx);
+                    vec2 mbPatUv = vec2(
+                        uMBPatOrigin.x + mbPatF.x * uMBPatSize.x,
+                        1.0 - uMBPatOrigin.y - mbPatF.y * uMBPatSize.y);
+                    vec4 sampledDiffuseColor = texture2D(map, mbPatUv);
+                    #ifdef DECODE_VIDEO_TEXTURE
+                        sampledDiffuseColor = sRGBTransferEOTF(sampledDiffuseColor);
+                    #endif
+                    diffuseColor *= sampledDiffuseColor;
+                #endif`,
+            );
+        };
 
         const geom = new THREE.PlaneGeometry(2, 2);
         this.m_backgroundQuad = new THREE.Mesh(geom, material);

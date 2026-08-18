@@ -1448,6 +1448,19 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **测试基建备忘**：karma 直跑取 console 需 `npx karma start karma.conf.js --log-level debug`（不指定 config 不会加载 customLauncher）；每轮强制 `timeout ≤400s` + 事后 `pkill -f "RenderingTestResultServe[r]"`（方括号防 pkill 自匹配——本轮曾因 pkill 全命令匹配自杀整条管线）。
 
+### 12.51 N1b：pattern 平铺四项像素级对齐（2026-08-18，`mbstyle-n1b*/`）
+
+在 §12.50 基础上继续把 sprites pattern 校准到逐像素（`1x-screen-2x-pattern` 剖析：expected 周期 20×56 逻辑 px、色 (248,77,77)、世界锚定相位）：
+
+1. **子矩形平铺必须走 shader**：`offset/repeat + RepeatWrapping` 只能平铺**整张 atlas**（wrap 以整纹理为周期），此前实际只画出左上一个 tile。改为 onBeforeCompile 替换 `#include <map_fragment>`：`tx=fract(uv.x·nx−phaseX), ty=fract((1−uv.y)·ny−phaseY)`，采样 `uv=(u0+tx·w, 1−v0−ty·h)`（flipY 空间）；半 texel 内缩防 atlas padding 渗色（`uMBPatPxSize` uniform）。
+2. **sRGB 双重编码**：atlas 纹理未标 colorSpace → 字节当 linear、输出端再 encode → G/B 通道翻倍（77→149 精确复现双重编码特征）。`tex.colorSpace = SRGBColorSpace` 后主色 (248,77,77) 与 expected 逐像素一致。
+3. **世界锚定相位**：mgl `get_pattern_pos` 以**世界像素 0**（mercator 原点 lng −180/lat 85.05）为相位原点（`pixel_coord` 来自 tile 世界偏移），非屏幕原点——zoom 0/64px 视口下差 4px（实测暗条纹 15 vs 11）。`mapView.getScreenPosition(GeoCoordinates(85.05112878,-180))` 每帧算屏幕偏移 → `uMBPatPhase`。修后暗条纹位置逐像素对齐（mad 1.5，best shift 0）。
+4. **tileCount**：`buf/disp/DPR`（§12.50 已定），垂直周期 56px 首轮即对。
+
+**结果**：sprites pattern 4 例 3514/3556/13916/14803 → **2185/2294/9912/9241**；残余为 ±1–3 强度的全图散布噪声（~1000 px >1/255，max 66 在 tile 接缝 AA）——SwiftShader vs 参考 GPU 的舍入/抖动差，阈值 17 px 在本环境不可达（macOS 真机或可通过）。**未转通过但结构性对齐完成**。
+
+**遗留（下轮 N1c）**：① `background-pattern/literal` 11926——`pedestrian-polygon`（PBF icon_set）光栅化的透明 texel 变不透明浅色（expected 有 373 纯黑像素，current 全图无黑）→ `IconSetPBFDecoder.renderIconToCanvas` 的 alpha/背景合成语义待查；② fill-pattern 保持 392–795 近失带（无回归）；③ `wrapping/uneven/moire` 大值待 macOS 基线核对定性。
+
 ### 12.49 七–十一批统一验收（2026-08-18，`mbstyle-r711/` + `mbstyle-rasfix*/`）
 
 **生效确认**：
