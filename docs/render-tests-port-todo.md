@@ -22,6 +22,8 @@
 >
 > **2026-08-17 更新（F2 落地——color alpha 语义 + 3D-lights 双重光照，§12.31）**：`no-alpha-no-multiply` 37842→**PASS 0**（mapbox 对 fill-extrusion-color alpha 不做 blend，RGB×alpha 预乘不透明；alpha=0 剔除要素）；`data-driven-zero-alpha` 28010→**1288 近失**（场景灯双重光照/ambient π/linear 域 ×k/clearColor linear radiance 四项修复，红蓝黄逐色对齐；残余=cast-shadow 阴影）；lighting-3d-mode 连带 10→**12** 通过零回归。§14 F2 主体完成。
 >
+> **2026-08-18 深夜更新（baseline5）**：N9 第五轮全量基线 **375/2810（13.35%）**，vs baseline4 231（8.17%）净 **+144**（§12.53）。N1 系列（pattern 三重根因/shader 平铺/sRGB/世界相位/icon_set 光栅化对齐）与 line 域大轮全部兑现为通过数。下一优先级：N7 raster 双路径（sRGB 修正已预研待验）、N2 symbol-elevation（被 raster 阻塞）。
+
 > **2026-08-18 会话总结（line 域 ribbon 管线对齐大轮，commit `90c061d4`→`58e24339`，§12.33–§12.49）**：
 > - **方法论**：代码端分批闭环（七批）+ 二分法渲染验证（每轮单变量，karma ~7min/轮）；几何数学验证必须配真实数据鲁棒性验证（短段路网证伪 earcut 单环方案）。
 > - **转通过**：line-join/miter·bevel·default（历史千级近失）、line-gradient/gradient、line-pattern/literal。
@@ -1511,6 +1513,15 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - 代码端分批闭环 → 单批 karma 验证（HARP_NO_HARD_SOURCE_CACHE=true，改代码后必带）；
 - 每轮验收前**核对文档历史基线值**（§12.49 raster 误判教训）；
 - `pkill -f RenderingTestResultServer` 清孤儿；结果读 `rendering-test-results/<dir>/web-*/`。
+
+### 12.53 第五轮全量基线 baseline5（2026-08-18 夜，N9）
+
+**2810 上报 / 375 通过（13.35%）**，vs baseline4 231/2827（8.17%）：**净 +144（+151 新增 / −7 失去）**。通过清单落盘 `baseline5-pass.txt`。
+
+- **增量来源**（与 08-16→08-18 修复轮次对应）：runtime-styling +35、icon-anchor +8、appearance/icon-bbox +8、icon-size +7、fill-extrusion-color +6（FOV/近平面/alpha 三修）、heatmap 系 +13（双 pass）、icon-halo 系 +8、line-join/elevated-line-join +6（ribbon join）、image-fallback-nested +8、lighting-3d-mode/background +5、text-rotation-alignment +3 等。
+- **失去 7**：circle-camera-orthographic-projection、circle-pitch-alignment|pitch-scale/viewport 系 2（FOV 36.87 修正的已知代价，§12.29）、fill-extrusion-edge-radius-narrow-corner、fill-pattern/wrapping-with-interpolation（N1 系 pattern 改动，待 N1c 后复核）、placement/symbol-layers-same-layout-properties、text-max-width/force-double-newline（偶发，harness 竞态带）。
+- **运行说明**：Linux Edge150 headless + SwiftShader（与 macOS 基线环境不同，绝对值含环境噪声）；跑到中段时 raster sRGB 色彩空间修正（N7 预研，见 §12.54）已入工作区被后续 chunk 混入——raster 系数字为混合态，定性不变（仍未通过）。
+- 216 用例未上报（崩溃/超时批，与 baseline4 的 219 相当）。
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 

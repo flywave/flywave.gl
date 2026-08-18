@@ -630,6 +630,10 @@ export class MBMaterialPatchManager {
             // match mgl's raster upload, but the premultiplied upload path
             // blanks the tiles entirely (raster-* ~110k full-image mismatch,
             // mbstyle-r711) — reverted to plain alpha blending.
+            // Satellite/aerial PNGs are sRGB — without the tag the raw bytes
+            // are treated as linear and the output encode washes them out
+            // (same double-encode signature as the background-pattern quad).
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.needsUpdate = true;
             (material as any).map = texture;
             (material as any).color = new THREE.Color(0xffffff);

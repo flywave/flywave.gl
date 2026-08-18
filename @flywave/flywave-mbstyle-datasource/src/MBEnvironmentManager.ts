@@ -1142,6 +1142,7 @@ export class MBEnvironmentManager {
             const texture = await loader.loadAsync(url);
             texture.minFilter = THREE.LinearFilter;
             texture.magFilter = THREE.LinearFilter;
+            texture.colorSpace = THREE.SRGBColorSpace;
             // NOTE: premultiplied upload blanks tiles (r711 regression) —
             // plain alpha blending.
 
