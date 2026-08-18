@@ -551,8 +551,11 @@ export class MBMaterialPatchManager {
 
         const opacity = technique.opacity ?? 1;
         if ('opacity' in material) {
-            (material as any).opacity = opacity;
-            (material as any).transparent = opacity < 1;
+            // The injected shader composites raster-opacity over the base
+            // color opaquely (sRGB-domain, mgl semantics) — keep the material
+            // opaque so the linear-framebuffer blending can't interfere.
+            (material as any).opacity = 1;
+            (material as any).transparent = false;
         }
 
         const paint = technique._paint ?? {};
@@ -588,6 +591,20 @@ export class MBMaterialPatchManager {
         // folded into the same injection; with default paint values it is
         // the identity transform.
         const rect = (technique._rasterUvRect as number[] | undefined) ?? [0, 0, 1, 1];
+        // Base under the raster: the style's background color (mgl default
+        // black when a background layer exists, engine white otherwise).
+        // raster-opacity blending must happen in sRGB NUMERIC space like mgl
+        // (blending linear values then encoding gives 196 where mgl has 167);
+        // for opacity < 1 the composite is computed opaquely in the shader.
+        let baseSrgb: [number, number, number] = [1, 1, 1];
+        try {
+            const style = (this.m_dataSource as any).styleManager?.getStyle?.();
+            const bgLayer = (style?.layers ?? []).find((l: any) => l.type === 'background');
+            if (bgLayer) {
+                const c = new THREE.Color(bgLayer.paint?.['background-color'] ?? '#000000');
+                baseSrgb = [c.r, c.g, c.b];
+            }
+        } catch {}
         const attach = (texture: THREE.Texture) => {
             texture.minFilter = filterType;
             texture.magFilter = filterType;
@@ -613,6 +630,7 @@ export class MBMaterialPatchManager {
                 shader.uniforms.uMBRasContrast = { value: contrast ?? 0 };
                 shader.uniforms.uMBRasSat = { value: saturation ?? 0 };
                 shader.uniforms.uMBRasHue = { value: (hue ?? 0) * Math.PI / 180 };
+                shader.uniforms.uMBRasBase = { value: baseSrgb };
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
                     'varying vec2 vMBRasUv;\nvoid main() {',
@@ -628,13 +646,19 @@ export class MBMaterialPatchManager {
                      uniform vec2 uMBRasUvOff; uniform vec2 uMBRasUvScl;
                      uniform float uMBRasBMin; uniform float uMBRasBMax;
                      uniform float uMBRasContrast; uniform float uMBRasSat; uniform float uMBRasHue;
+                     uniform vec3 uMBRasBase;
+                     vec3 mbSrgbEnc(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
+                     vec3 mbSrgbDec(vec3 c) { return mix(c / 12.92, pow((max(c, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
                      void main() {`,
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <opaque_fragment>',
                     `#include <opaque_fragment>
                      vec4 mbRasT = texture2D(uMBRasMap, uMBRasUvOff + vMBRasUv * uMBRasUvScl);
-                     vec3 mbR = mbRasT.rgb;
+                     // mgl applies the raster paint adjustments on the sRGB
+                     // texture values; the framebuffer is linear, so round
+                     // trip through the transfer function.
+                     vec3 mbR = mbSrgbEnc(mbRasT.rgb);
                      mbR = clamp((mbR - uMBRasBMin) / max(uMBRasBMax - uMBRasBMin, 0.001), 0.0, 1.0);
                      mbR = (mbR - 0.5) * (1.0 + uMBRasContrast) + 0.5;
                      float mbL = dot(mbR, vec3(0.299, 0.587, 0.114));
@@ -645,7 +669,15 @@ export class MBMaterialPatchManager {
                          vec3(0.299*(1.0-mbCa) - 0.714*mbSa, mbCa + 0.587*(1.0-mbCa), 0.114*(1.0-mbCa) + 0.530*mbSa),
                          vec3(0.299*(1.0-mbCa) + 0.165*mbSa, 0.587*(1.0-mbCa) - 0.330*mbSa, mbCa + 0.114*(1.0-mbCa)));
                      mbR = clamp(mbHue * mbR, 0.0, 1.0);
-                     gl_FragColor = vec4(mbR, mbRasT.a * ${opacity.toFixed(3)});`,
+                     if (${opacity.toFixed(3)} < 1.0) {
+                         // Opaque sRGB-domain composite over the base color
+                         // (the framebuffer blends in LINEAR — 0.5 over white
+                         // would render 196 where mgl references show 167).
+                         vec3 mbMix = mix(uMBRasBase, mbR, ${opacity.toFixed(3)} * mbRasT.a);
+                         gl_FragColor = vec4(mbSrgbDec(mbMix), 1.0);
+                     } else {
+                         gl_FragColor = vec4(mbSrgbDec(mbR), mbRasT.a);
+                     }`,
                 );
             };
             material.needsUpdate = true;

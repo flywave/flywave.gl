@@ -1560,6 +1560,19 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **N2c 竞态修复（同日，已验证）**：`renderFrames` 对含 raster 层的样式在 settle 后追加一帧有界等待（5s）——首位的 raster-opacity/default 从 121556 稳定回 **14171**（overzoom 559 保持），批位波动消除。text 像素级用例不含 raster 层，额外 update 安全。
 
+### 12.56 N2c 续：raster opacity/调整链色彩空间对齐（2026-08-19，`mbstyle-n2*/`）
+
+**根因**：mgl 在 **sRGB 数值域**做 raster-opacity 混合与 raster-brightness/contrast 调整；我们的帧缓冲是**线性域**（colorspace_fragment 恒等 + 末端合成统一编码）——0.5 opacity 在线性域混合后编码得 196，mgl 参考 167（线性 0.541→sRGB 0.767 精确复现观测值）。
+
+**修复**（`patchRasterMaterial` 注入）：
+1. **opacity<1 改 shader 内 sRGB 域不透明合成**：`mix(base_srgb, srgbEnc(tile), opacity)` 后 `srgbDec` 写回线性帧缓冲，材质恒不透明（线性混合被旁路）。base = 样式背景色（无 background 层=白）。
+2. **调整链（brightness/contrast/saturation/hue）在 sRGB 域运算**：采样值 `srgbEnc` 后走调整公式再 `srgbDec` 输出。
+3. 顺带修复 material.opacity 与注入 alpha 双重相乘（opacity 0.5² → 0.25）。
+
+**结果**：raster-opacity/literal **75397→3201**、function **111034→5083**（残余=基底 14171 的 opacity 缩放版）；raster-contrast/literal 61636→19772、saturation 保持 14k 带、brightness/hue 部分改善（调整公式与 mgl `raster_conversion` 的具体形式仍有差异，下轮对照 `shaders/raster_base.fragment.glsl` 精修）。defaults 全部稳定 14171 无回归。
+
+**基建**：harness raster 等待升级为 10 轮有界轮询（单帧等待仍偶发白屏捕获——n2i 复现）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。

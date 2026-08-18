@@ -153,25 +153,32 @@ async function renderFrames(
         (l: any) => l.type === "raster",
     );
     if (hasRaster) {
-        await new Promise<void>((resolve) => {
-            let done = false;
-            const timer = setTimeout(() => {
-                if (!done) {
+        // Bounded polling: tile textures attach asynchronously in the
+        // material patcher and a texture may land after the single settled
+        // frame (observed as white captures). Give late attaches several
+        // update/render cycles to make it into the framebuffer.
+        for (let i = 0; i < 10; i++) {
+            await new Promise<void>((resolve) => {
+                let done = false;
+                const timer = setTimeout(() => {
+                    if (!done) {
+                        done = true;
+                        mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
+                        resolve();
+                    }
+                }, 1500);
+                const handler = () => {
+                    if (done) return;
                     done = true;
+                    clearTimeout(timer);
                     mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
                     resolve();
-                }
-            }, 5000);
-            const handler = () => {
-                if (done) return;
-                done = true;
-                clearTimeout(timer);
-                mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
-                resolve();
-            };
-            mapView.addEventListener(MapViewEventNames.AfterRender, handler);
-            mapView.update();
-        });
+                };
+                mapView.addEventListener(MapViewEventNames.AfterRender, handler);
+                mapView.update();
+            });
+            await new Promise((r) => setTimeout(r, 100));
+        }
     }
 }
 
