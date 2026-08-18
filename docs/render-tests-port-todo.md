@@ -1573,6 +1573,19 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **基建**：harness raster 等待升级为 10 轮有界轮询（单帧等待仍偶发白屏捕获——n2i 复现）。
 
+### 12.57 raster 调整链 mgl 精确公式（2026-08-19，`mbstyle-n3a/`）
+
+对照 `raster.fragment.glsl` + `raster_program.ts`/`util.ts` 重写调整链（原为我们自造公式）：
+- **spin（hue-rotate）**：`spinWeights` 三分量点积（[(2c+1)/3, (-√3s-c+1)/3, (√3s-c+1)/3]，xyz/zxy/yzx 旋转点积），非 hue 矩阵；
+- **saturation**：`average=(r+g+b)/3`（非 luma 0.299 权重），factor = s>0 ? 1-1/(1.001-s) : -s；
+- **contrast**：factor = c>0 ? 1/(1.001-c) : 1+c；
+- **brightness**：`mix(low, high, rgb)` 直接插值（非 clamp((x-min)/(max-min))）；
+- 顺序 spin→sat→contrast→brightness，中间不 clamp，sRGB 域（§12.56）。
+
+**结果**：**raster-brightness/function 转通过**（raster 调整族首例）；brightness/literal 96181→**5081**、hue-rotate function 123729→13858 / literal→14347、contrast function→16975 / literal→19162、saturation function→14456——全族收敛到基底带。**raster paint 家族现在唯一阻塞 = 基底 14171**。
+
+**基底 14171 取证**：非全局平移（best shift 0,0）、非翻转（v/h flip 均 43+）、均值吻合（76.5 vs 74）——局部明暗倒置点（cur≈190 vs exp≈15，~30k px >16）散布且向 256px 瓦片缝聚拢（0-16px 内 6.4k），疑瓦片内容/采样半像素或 parent 交叉淡入差异，需 diff 图视觉取证（N3b 入口）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。

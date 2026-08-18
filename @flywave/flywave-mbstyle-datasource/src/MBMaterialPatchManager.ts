@@ -627,8 +627,15 @@ export class MBMaterialPatchManager {
                 shader.uniforms.uMBRasUvScl = { value: [rect[2], rect[3]] };
                 shader.uniforms.uMBRasBMin = { value: brightness[0] };
                 shader.uniforms.uMBRasBMax = { value: brightness[1] };
-                shader.uniforms.uMBRasContrast = { value: contrast ?? 0 };
-                shader.uniforms.uMBRasSat = { value: saturation ?? 0 };
+                // mgl CPU-side factors (util.ts contrastFactor/saturationFactor)
+                const c0 = contrast ?? 0;
+                const s0 = saturation ?? 0;
+                shader.uniforms.uMBRasContrast = {
+                    value: c0 > 0 ? 1 / (1.001 - c0) : 1 + c0,
+                };
+                shader.uniforms.uMBRasSat = {
+                    value: s0 > 0 ? 1 - 1 / (1.001 - s0) : -s0,
+                };
                 shader.uniforms.uMBRasHue = { value: (hue ?? 0) * Math.PI / 180 };
                 shader.uniforms.uMBRasBase = { value: baseSrgb };
                 shader.vertexShader = shader.vertexShader.replace(
@@ -658,17 +665,19 @@ export class MBMaterialPatchManager {
                      // mgl applies the raster paint adjustments on the sRGB
                      // texture values; the framebuffer is linear, so round
                      // trip through the transfer function.
+                     // mgl raster.fragment.glsl order: spin → saturation →
+                     // contrast → brightness, on unclamped sRGB values.
                      vec3 mbR = mbSrgbEnc(mbRasT.rgb);
-                     mbR = clamp((mbR - uMBRasBMin) / max(uMBRasBMax - uMBRasBMin, 0.001), 0.0, 1.0);
-                     mbR = (mbR - 0.5) * (1.0 + uMBRasContrast) + 0.5;
-                     float mbL = dot(mbR, vec3(0.299, 0.587, 0.114));
-                     mbR = mix(vec3(mbL), mbR, 1.0 + uMBRasSat);
                      float mbCa = cos(uMBRasHue); float mbSa = sin(uMBRasHue);
-                     mat3 mbHue = mat3(
-                         vec3(mbCa + 0.299*(1.0-mbCa), 0.587*(1.0-mbCa) - 0.327*mbSa, 0.114*(1.0-mbCa) + 0.921*mbSa),
-                         vec3(0.299*(1.0-mbCa) - 0.714*mbSa, mbCa + 0.587*(1.0-mbCa), 0.114*(1.0-mbCa) + 0.530*mbSa),
-                         vec3(0.299*(1.0-mbCa) + 0.165*mbSa, 0.587*(1.0-mbCa) - 0.330*mbSa, mbCa + 0.114*(1.0-mbCa)));
-                     mbR = clamp(mbHue * mbR, 0.0, 1.0);
+                     vec3 mbSpin = vec3(
+                         (2.0 * mbCa + 1.0) / 3.0,
+                         (-1.7320508 * mbSa - mbCa + 1.0) / 3.0,
+                         (1.7320508 * mbSa - mbCa + 1.0) / 3.0);
+                     mbR = vec3(dot(mbR, mbSpin.xyz), dot(mbR, mbSpin.zxy), dot(mbR, mbSpin.yzx));
+                     float mbAvg = (mbR.r + mbR.g + mbR.b) / 3.0;
+                     mbR += (mbAvg - mbR) * uMBRasSat;
+                     mbR = (mbR - 0.5) * uMBRasContrast + 0.5;
+                     mbR = mix(vec3(uMBRasBMin), vec3(uMBRasBMax), mbR);
                      if (${opacity.toFixed(3)} < 1.0) {
                          // Opaque sRGB-domain composite over the base color
                          // (the framebuffer blends in LINEAR — 0.5 over white
