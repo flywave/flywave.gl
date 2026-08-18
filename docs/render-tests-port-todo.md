@@ -1604,6 +1604,12 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **harness**：raster 等待改 10 轮有界轮询（§12.55 延续）。
 
+### 12.59 sea 远距裁剪标定 + image 亚像素定性（2026-08-19，`mbstyle-n6*/`）
+
+**sea 远距裁剪闭环**：① 触发条件修复（`mapView.pitch` 不存在 → `tilt`，d1 = 相机→geoCenter 焦点距离）；② RTE 相机四元数为 identity（俯仰不在相机朝向）→ 比较量从 view-Z 分量改为 **眼距长度**（朝向无关）；③ fragment 补 `varying float vMBRasEyeDist` 声明（缺失导致链接错误、材质全白 121556 一次回归）；④ 引擎 RTE model-view 帧对世界米有 ~3× 缩放（观测标定：40% 裁剪位对应真距 d1×1.16 而shader值=d1×3.5）→ `rasFar ×= 3.0`。**结果：sea-zero 34814→1899**（回到 1871 基线带，raster 14171 无回归）。顶部黑条净收益尚为 −28px（裁剪线位置仍差一点，微调因子留给下轮）。
+
+**image 亚像素定性**：harness `compareImages` 确认参考 alpha 合成白底（区外白=白不差）——31357 全部为区内内容错位；掩码 xor 仅 525、均值精确、最佳整数平移 (3,−3) 仅 69143→57029——**~3px 对角偏移 + 重采样差**（角点投影 vs mgl mercator 数学的亚像素系统差），需投影精度专项。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。

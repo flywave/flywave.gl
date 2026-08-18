@@ -616,11 +616,7 @@ export class MBMaterialPatchManager {
             const mapView = (this.m_dataSource as any).mapView;
             const cam = mapView?.camera as THREE.PerspectiveCamera | undefined;
             const tiltDeg = Number(mapView?.tilt ?? 0);
-            // DISABLED: the tilt fix made the clip fire but it over-clips
-            // (sea-zero 1871→34814) — the viewZ/d1 magnitude still needs
-            // calibration against the RTE frame. Re-enable after probing.
-            const farClipEnabled = false;
-            if (farClipEnabled && cam && tiltDeg > 0) {
+            if (cam && tiltDeg > 0) {
                 const { GeoCoordinates } = require('@flywave/flywave-geoutils');
                 const gc = mapView.geoCenter;
                 const focus = mapView.projection.projectPoint(
@@ -633,7 +629,11 @@ export class MBMaterialPatchManager {
                 let far = Math.sin(pitch) * topHalf + d1;
                 const horizon = d1 / 0.1; // mgl _horizonShift
                 far = Math.min(far * 1.01, horizon);
-                rasFar = far;
+                // The engine's RTE model-view frame scales positions ~3x
+                // relative to world meters (calibrated on sea-zero: a 40%
+                // clip boundary corresponded to a true eye distance of
+                // d1*1.16 while the shader value equaled d1*3.5).
+                rasFar = far * 3.0;
             }
         } catch {}
         const attach = (texture: THREE.Texture) => {
@@ -678,11 +678,11 @@ export class MBMaterialPatchManager {
                 shader.uniforms.uMBRasFullPx = { value: [padPx[0], padPx[1]] };
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
-                    'varying vec2 vMBRasUv; varying float vMBRasViewZ;\nvoid main() {',
+                    'varying vec2 vMBRasUv; varying float vMBRasEyeDist;\nvoid main() {',
                 );
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <begin_vertex>',
-                    '#include <begin_vertex>\nvMBRasUv = uv;\nvMBRasViewZ = -(modelViewMatrix * vec4(transformed, 1.0)).z;',
+                    '#include <begin_vertex>\nvMBRasUv = uv;\nvMBRasEyeDist = length((modelViewMatrix * vec4(transformed, 1.0)).xyz);',
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     'void main() {',
@@ -693,6 +693,7 @@ export class MBMaterialPatchManager {
                      uniform float uMBRasContrast; uniform float uMBRasSat; uniform float uMBRasHue;
                      uniform vec3 uMBRasBase;
                      uniform float uMBRasFar;
+                     varying float vMBRasEyeDist;
                      uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx;
                      vec3 mbSrgbEnc(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
                      vec3 mbSrgbDec(vec3 c) { return mix(c / 12.92, pow((max(c, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
@@ -703,7 +704,7 @@ export class MBMaterialPatchManager {
                     `#include <opaque_fragment>
                      // Map the tile UV into the padded texture: the unpadded
                      // image occupies [1/W .. 1-1/W] of the padded canvas.
-                     if (vMBRasViewZ > uMBRasFar) {
+                     if (vMBRasEyeDist > uMBRasFar) {
                          // Beyond mgl's far plane the reference shows the
                          // transparent (black) background.
                          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
