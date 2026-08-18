@@ -1554,6 +1554,8 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **结论**：N2 的"terrain/globe 场景依赖"定性已被 N7 证伪——就是 raster 背景缺失。sea 系转通过只差顶部裁剪一项（N2b 入口）。
 
+**N2b 补充实验（同日）**：① 回退深度限 2 级 + 黑底 → sea-zero 1915（持平）、raster-opacity/default 反弹 14171→51452、underzoom 104k→131k 全黑；② 改为 mgl 字面语义（请求层钳制 [minzoom,maxzoom]、`coveringZoomLevel=floor(z+1)`，404 黑底）→ sea 系全面恶化至 17–21k（expected 实际显示 z12 父级影像铺满，纯静态服务器无回落——mgl 端必有覆盖/错误回落机制未还原，疑 `_findLoadedParent` 对 raster error 的保留路径）。**结论：任意深度祖先探测（§12.54 版本）实测最优，已保留**；mgl 的真实回落机制留待读 source_cache 源码后重做（下轮入口）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
