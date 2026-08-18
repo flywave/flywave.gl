@@ -1459,7 +1459,19 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **结果**：sprites pattern 4 例 3514/3556/13916/14803 → **2185/2294/9912/9241**；残余为 ±1–3 强度的全图散布噪声（~1000 px >1/255，max 66 在 tile 接缝 AA）——SwiftShader vs 参考 GPU 的舍入/抖动差，阈值 17 px 在本环境不可达（macOS 真机或可通过）。**未转通过但结构性对齐完成**。
 
-**遗留（下轮 N1c）**：① `background-pattern/literal` 11926——已取证（karma console 埋点）：`pedestrian-polygon` 光栅 64×64、透明区 25%（与 expected 26% 黑区几何吻合 ✓），但内部 alpha 是 **58–245 渐变**（mean 127，无 255 不透明像素），expected 为实心 (168,175,203)——PBF usvg 树的 gradient/alpha 解码语义（`IconSetPBFDecoder.applyFillStyle` 的 stops opacity 或 group opacity 乘法）与 mgl 不一致，需对照 mgl icon_set 光栅化实现专项；② fill-pattern 保持 392–795 近失带（无回归）；③ `wrapping/uneven/moire` 大值待 macOS 基线核对定性。
+### 12.52 N1c：icon_set 光栅化对齐 mgl + literal 引用定性（2026-08-18，`mbstyle-n1c*/`）
+
+**对照 mgl `usvg_pb_renderer.ts` 移植四项到 `IconSetPBFDecoder`**（解码器字段映射本已一致）：
+1. **gradient.transform**（linear/radial gradient 的 field 1）此前被 skip——现在读入并在 fill/stroke 时 `ctx.transform` 附加（mgl `setTransform(grad∘current)` 语义）；
+2. **单 stop 渐变折叠为纯色**（mgl `stops.length===1` 分支）；
+3. **stops opacity × fill/stroke opacity**（此前漏乘 fill alpha）；
+4. **stroke 的渐变 paint 支持**（此前渐变 stroke 落到 rgb 兜底）。
+
+**background-pattern/literal 11926 定性：引用损坏（不可修）**。取证链：解码 `pedestrian-polygon` 为实心 rgb (169,182,208) + **32 个 MOVE 子路径的 1.5px 宽斜线 hatch**（16 条对角四边形）——任何光栅化都必然产出连续 AA 值；而 expected.png **仅 3 种唯一颜色**（(168,175,203)×8192 / (168,179,204)×4096 / 黑×4096），且 (168,175,203) ≠ sprite 色 (169,182,208)——来自真实光栅化的 3 色平图在数学上不可能（legacy standard.png 的同区域也是半透明 hatch，结构一致）。归入 §12.13 同类"引用损坏"（text-* 63 例先例）。修复后数值不变（11926）非代码问题。
+
+**回归**：icon-image/icon-color/icon-halo-color 三分类 43 例，baseline4 的 9 个通过项全部保持 + icon-halo 5 个 §12.32 修复项保持，0 回归。
+
+**遗留**：background-pattern/pitch/zoomed 等 12k 案例与 literal 同源（同一 hatch sprite 引用）；`wrapping/uneven/moire` 大值待 macOS 基线核对定性；② fill-pattern 保持 392–795 近失带。
 
 ### 12.49 七–十一批统一验收（2026-08-18，`mbstyle-r711/` + `mbstyle-rasfix*/`）
 

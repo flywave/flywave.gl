@@ -116,8 +116,8 @@ const PaintOrder = { FILL_AND_STROKE: 1, STROKE_AND_FILL: 2 } as const;
 
 interface Transform { sx: number; ky: number; kx: number; sy: number; tx: number; ty: number; }
 interface Stop { offset: number; opacity: number; r: number; g: number; b: number; }
-interface LinearGradient { x1: number; y1: number; x2: number; y2: number; stops: Stop[]; }
-interface RadialGradient { cx: number; cy: number; r: number; fx: number; fy: number; fr: number; stops: Stop[]; }
+interface LinearGradient { x1: number; y1: number; x2: number; y2: number; stops: Stop[]; transform?: Transform; }
+interface RadialGradient { cx: number; cy: number; r: number; fx: number; fy: number; fr: number; stops: Stop[]; transform?: Transform; }
 interface Fill { paint: string; r: number; g: number; b: number; linearIdx: number; radialIdx: number; opacity: number; }
 interface Stroke extends Fill { width: number; dasharray: number[]; linecap: number; linejoin: number; }
 
@@ -189,6 +189,7 @@ function readLinearGradient(pbf: PbfReader, end: number): LinearGradient {
     let field: number;
     while ((field = pbf.nextField(end))) {
         switch (field) {
+            case 1: { const __len = pbf.readVarint(); const se = pbf.pos + __len; g.transform = readTransform(pbf, se); break; }
             case 3: { const __len = pbf.readVarint(); const se = pbf.pos + __len; g.stops.push(readStop(pbf, se)); break; }
             case 4: g.x1 = pbf.readFloat(); break;
             case 5: g.y1 = pbf.readFloat(); break;
@@ -205,6 +206,7 @@ function readRadialGradient(pbf: PbfReader, end: number): RadialGradient {
     let field: number;
     while ((field = pbf.nextField(end))) {
         switch (field) {
+            case 1: { const __len = pbf.readVarint(); const se = pbf.pos + __len; g.transform = readTransform(pbf, se); break; }
             case 3: { const __len = pbf.readVarint(); const se = pbf.pos + __len; g.stops.push(readStop(pbf, se)); break; }
             case 4: g.cx = pbf.readFloat(); break;
             case 5: g.cy = pbf.readFloat(); break;
@@ -460,27 +462,68 @@ function renderPath(ctx: CanvasRenderingContext2D, path: Path, tree: UsvgTree): 
 }
 
 function applyFillStyle(ctx: CanvasRenderingContext2D, fill: Fill, tree: UsvgTree): void {
+    // Mirrors mgl's fillPath (usvg_pb_renderer.ts): stops multiply by the
+    // fill opacity, a single stop degrades to a solid color, and the
+    // gradient's own transform is applied to the context so the gradient
+    // coordinates resolve in the correct user space.
     const alpha = fill.opacity / 255;
-    if (fill.paint === 'rgb_color') {
-        ctx.fillStyle = `rgba(${fill.r},${fill.g},${fill.b},${alpha})`;
-    } else if (fill.paint === 'linear_gradient_idx' && tree.linearGradients[fill.linearIdx]) {
+    const stopCss = (s: Stop): string => `rgba(${s.r},${s.g},${s.b},${(s.opacity / 255) * alpha})`;
+    if (fill.paint === 'linear_gradient_idx' && tree.linearGradients[fill.linearIdx]) {
         const g = tree.linearGradients[fill.linearIdx];
-        const grad = ctx.createLinearGradient(g.x1, g.y1, g.x2, g.y2);
-        for (const s of g.stops) grad.addColorStop(s.offset, `rgba(${s.r},${s.g},${s.b},${s.opacity / 255})`);
-        ctx.fillStyle = grad;
+        if (g.transform) applyGradientTransform(ctx, g.transform);
+        if (g.stops.length === 1) {
+            ctx.fillStyle = stopCss(g.stops[0]);
+        } else {
+            const grad = ctx.createLinearGradient(g.x1, g.y1, g.x2, g.y2);
+            for (const s of g.stops) grad.addColorStop(s.offset, stopCss(s));
+            ctx.fillStyle = grad;
+        }
     } else if (fill.paint === 'radial_gradient_idx' && tree.radialGradients[fill.radialIdx]) {
         const g = tree.radialGradients[fill.radialIdx];
-        const grad = ctx.createRadialGradient(g.fx, g.fy, g.fr, g.cx, g.cy, g.r);
-        for (const s of g.stops) grad.addColorStop(s.offset, `rgba(${s.r},${s.g},${s.b},${s.opacity / 255})`);
-        ctx.fillStyle = grad;
+        if (g.transform) applyGradientTransform(ctx, g.transform);
+        if (g.stops.length === 1) {
+            ctx.fillStyle = stopCss(g.stops[0]);
+        } else {
+            const grad = ctx.createRadialGradient(g.fx, g.fy, g.fr, g.cx, g.cy, g.r);
+            for (const s of g.stops) grad.addColorStop(s.offset, stopCss(s));
+            ctx.fillStyle = grad;
+        }
     } else {
         ctx.fillStyle = `rgba(${fill.r},${fill.g},${fill.b},${alpha})`;
     }
 }
 
+// mgl: context.setTransform(makeTransform(g.transform).preMultiplySelf(context.getTransform()))
+// — i.e. additional user-space transform for gradient coordinates.
+function applyGradientTransform(ctx: CanvasRenderingContext2D, t: Transform): void {
+    ctx.transform(t.sx, t.ky, t.kx, t.sy, t.tx, t.ty);
+}
+
 function applyStrokeStyle(ctx: CanvasRenderingContext2D, s: Stroke, tree: UsvgTree): void {
     const alpha = s.opacity / 255;
-    ctx.strokeStyle = `rgba(${s.r},${s.g},${s.b},${alpha})`;
+    if (s.paint === 'linear_gradient_idx' && tree.linearGradients[s.linearIdx]) {
+        const g = tree.linearGradients[s.linearIdx];
+        if (g.transform) applyGradientTransform(ctx, g.transform);
+        if (g.stops.length === 1) {
+            ctx.strokeStyle = `rgba(${g.stops[0].r},${g.stops[0].g},${g.stops[0].b},${(g.stops[0].opacity / 255) * alpha})`;
+        } else {
+            const grad = ctx.createLinearGradient(g.x1, g.y1, g.x2, g.y2);
+            for (const st of g.stops) grad.addColorStop(st.offset, `rgba(${st.r},${st.g},${st.b},${(st.opacity / 255) * alpha})`);
+            ctx.strokeStyle = grad;
+        }
+    } else if (s.paint === 'radial_gradient_idx' && tree.radialGradients[s.radialIdx]) {
+        const g = tree.radialGradients[s.radialIdx];
+        if (g.transform) applyGradientTransform(ctx, g.transform);
+        if (g.stops.length === 1) {
+            ctx.strokeStyle = `rgba(${g.stops[0].r},${g.stops[0].g},${g.stops[0].b},${(g.stops[0].opacity / 255) * alpha})`;
+        } else {
+            const grad = ctx.createRadialGradient(g.fx, g.fy, g.fr, g.cx, g.cy, g.r);
+            for (const st of g.stops) grad.addColorStop(st.offset, `rgba(${st.r},${st.g},${st.b},${(st.opacity / 255) * alpha})`);
+            ctx.strokeStyle = grad;
+        }
+    } else {
+        ctx.strokeStyle = `rgba(${s.r},${s.g},${s.b},${alpha})`;
+    }
     ctx.lineWidth = s.width;
     ctx.lineCap = (['', 'butt', 'round', 'square'][s.linecap] ?? 'butt') as CanvasLineCap;
     ctx.lineJoin = (['', 'miter', 'miter-clip', 'round', 'bevel'][s.linejoin] ?? 'miter') as CanvasLineJoin;
