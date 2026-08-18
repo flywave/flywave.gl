@@ -141,6 +141,38 @@ async function renderFrames(
             mapView.update();
         });
     }
+
+    // Raster styles: tile textures attach asynchronously in the material
+    // patcher — the settle logic above can complete before the texture-loaded
+    // frame renders (observed as order-of-tests flakes: raster-opacity varied
+    // 14k–121k for identical code). For styles with a raster layer, request
+    // one extra bounded frame so late texture attaches make it into the
+    // capture. Text-perfect cases never carry raster layers, so the extra
+    // update is safe.
+    const hasRaster = ((dataSource as any).styleManager?.getStyle?.()?.layers ?? []).some(
+        (l: any) => l.type === "raster",
+    );
+    if (hasRaster) {
+        await new Promise<void>((resolve) => {
+            let done = false;
+            const timer = setTimeout(() => {
+                if (!done) {
+                    done = true;
+                    mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
+                    resolve();
+                }
+            }, 5000);
+            const handler = () => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
+                resolve();
+            };
+            mapView.addEventListener(MapViewEventNames.AfterRender, handler);
+            mapView.update();
+        });
+    }
 }
 
 async function processOperations(

@@ -1558,6 +1558,8 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **N2c 远距裁剪实验（2026-08-19，已回退）**：按 mgl `far_z.ts farthestPixelDistanceOnPlane` 公式实现 view-Z 距离裁剪（超远输出黑）注入 raster shader——sea-zero 纹丝不动（1871，裁剪未触发：疑 mapView.pitch/camera z 语义或 patch 时机取值不对），且发现 **raster 系数值随批内位置大幅波动**（raster-opacity/default 同代码 14171/27340/51452/121556）——异步纹理挂载与静态 harness 截图存在竞态（attach 后虽 requestUpdate，FrameComplete 判定不等纹理），这解释 raster-opacity 系一直无法稳定通过。下轮应先修 harness 等待（纹理挂载计入 pending）再评估像素对齐。
 
+**N2c 竞态修复（同日，已验证）**：`renderFrames` 对含 raster 层的样式在 settle 后追加一帧有界等待（5s）——首位的 raster-opacity/default 从 121556 稳定回 **14171**（overzoom 559 保持），批位波动消除。text 像素级用例不含 raster 层，额外 update 安全。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
