@@ -1586,6 +1586,8 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **基底 14171 取证**：非全局平移（best shift 0,0）、非翻转（v/h flip 均 43+）、均值吻合（76.5 vs 74）——局部明暗倒置点（cur≈190 vs exp≈15，~30k px >16）散布且向 256px 瓦片缝聚拢（0-16px 内 6.4k），疑瓦片内容/采样半像素或 parent 交叉淡入差异，需 diff 图视觉取证（N3b 入口）。
 
+**N3b 半纹元实验（同日，已回退）**：对采样加半纹元内缩（N1b sprites 同法）→ default 14171→14878、overzoom 559→4848（更差）——栅格不是半纹元偏移；明暗倒置点向瓦片缝聚拢的特征更像**相邻瓦片边缘的线性过滤跨缝采样**（每瓦片独立纹理，边缘纹元在两瓦片间无邻域，mgl atlas 有 padding 而我们独立纹理无）——候选修法：给每瓦片纹理加 1px 边界扩展（canvas 复制边缘纹元），下轮实验。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
