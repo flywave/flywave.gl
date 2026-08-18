@@ -1459,7 +1459,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **结果**：sprites pattern 4 例 3514/3556/13916/14803 → **2185/2294/9912/9241**；残余为 ±1–3 强度的全图散布噪声（~1000 px >1/255，max 66 在 tile 接缝 AA）——SwiftShader vs 参考 GPU 的舍入/抖动差，阈值 17 px 在本环境不可达（macOS 真机或可通过）。**未转通过但结构性对齐完成**。
 
-**遗留（下轮 N1c）**：① `background-pattern/literal` 11926——`pedestrian-polygon`（PBF icon_set）光栅化的透明 texel 变不透明浅色（expected 有 373 纯黑像素，current 全图无黑）→ `IconSetPBFDecoder.renderIconToCanvas` 的 alpha/背景合成语义待查；② fill-pattern 保持 392–795 近失带（无回归）；③ `wrapping/uneven/moire` 大值待 macOS 基线核对定性。
+**遗留（下轮 N1c）**：① `background-pattern/literal` 11926——已取证（karma console 埋点）：`pedestrian-polygon` 光栅 64×64、透明区 25%（与 expected 26% 黑区几何吻合 ✓），但内部 alpha 是 **58–245 渐变**（mean 127，无 255 不透明像素），expected 为实心 (168,175,203)——PBF usvg 树的 gradient/alpha 解码语义（`IconSetPBFDecoder.applyFillStyle` 的 stops opacity 或 group opacity 乘法）与 mgl 不一致，需对照 mgl icon_set 光栅化实现专项；② fill-pattern 保持 392–795 近失带（无回归）；③ `wrapping/uneven/moire` 大值待 macOS 基线核对定性。
 
 ### 12.49 七–十一批统一验收（2026-08-18，`mbstyle-r711/` + `mbstyle-rasfix*/`）
 
