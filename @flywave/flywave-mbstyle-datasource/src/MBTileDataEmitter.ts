@@ -49,6 +49,19 @@ interface AccumulatedGeometry {
      * `line-pattern` tiling on ribbons (u = len / patternWorldWidth).
      */
     len?: number[];
+    /**
+     * Per-vertex `line-offset` displacement vector (vec2, world units).
+     * mgl applies line-offset in the VERTEX SHADER (`offset2 = offset *
+     * a_extrude * EXTRUDE_SCALE * normal.y * mat2(t,-u,u,t)`, added to the
+     * tile position before projection) — a screen/tile-space uniform
+     * displacement that is INVISIBLE to tile clipping and culling. Our former
+     * geometric bake displaced positions outside the tile's clip volume,
+     * truncating offsets >~20px at tile boundaries (known-gap, §12.33). The
+     * vector now rides an attribute and the ribbon patcher adds it to
+     * `transformed.xy` after culling. Kept in lockstep with `edge` (vec2 per
+     * vertex; zero when the feature has no offset).
+     */
+    offs?: number[];
     /** Line-segment indices for the extruded-polygon edge (roof outline). */
     edgeIndex: number[];
     edgeFeatureStarts: number[];
@@ -1351,21 +1364,23 @@ export class MBTileDataEmitter {
                     }
                 }
 
-                // `line-offset` (px): displace the CENTERLINE along the left
-                // normal of each segment (mgl: positive values shift left)
-                // before any ribbon/join geometry is derived from it, so
-                // joins/caps stay consistent. Interpolate per-vertex between
-                // the two adjacent segment normals to avoid gaps at corners.
+                // `line-offset` (px): mgl displaces the line in the VERTEX
+                // SHADER (screen/tile space, invisible to tile clipping —
+                // see AccumulatedGeometry.offs). The geometric bake truncated
+                // offsets >~20px at tile boundaries, so the displacement now
+                // rides the `aRibbonOffs` attribute and the ribbon patcher
+                // adds it to `transformed.xy` after culling. The per-vertex
+                // direction (segment right-normal, averaged at corners) is
+                // recomputed inside emitRibbonBody/Caps on the deduped points.
                 const offsetPx = Number(layer.paint?.['line-offset'] ?? 0);
                 const center = this.m_decodeInfo.center;
                 const mppOffset = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                     (256 * Math.pow(2, this.m_zoom + 1));
                 // Under line-width-unit:meters the offset is metric too.
                 const offsetUnit = layer.layout?.['line-width-unit'] ?? 'pixels';
-                if (offsetPx !== 0 && worldPts.length >= 6) {
-                    const ow = offsetUnit === 'meters' ? offsetPx : offsetPx * mppOffset;
-                    this.offsetPolyline(worldPts, ow);
-                }
+                const offsetWorld = offsetPx !== 0 && worldPts.length >= 6
+                    ? (offsetUnit === 'meters' ? offsetPx : offsetPx * mppOffset)
+                    : 0;
 
                 const lineGeom = createLineGeometry(center, worldPts, webMercatorProjection);
 
@@ -1439,7 +1454,10 @@ export class MBTileDataEmitter {
                 const skipSolidLine = Boolean(
                     layer.paint?.['line-gradient'] ||
                     layer.paint?.['line-pattern'] ||
-                    (Number(layer.paint?.['line-blur'] ?? 0) !== 0));
+                    (Number(layer.paint?.['line-blur'] ?? 0) !== 0) ||
+                    // Offset lines displace ONLY via the ribbon shader path —
+                    // the SolidLine copy would render undisplaced underneath.
+                    offsetWorld !== 0);
                 if (!skipSolidLine) this.m_preExtrudedLines = true;
                 // Store interleaved vertex data + remapped indices
                 const stride = 13; // extrusionCoord(3)+position(3)+tangent(3)+biTangent(4)
@@ -1474,11 +1492,11 @@ export class MBTileDataEmitter {
                 // Under meters the shader's px width needs the conversion.
                 this.emitRibbonFill(layer, worldPts, worldHalfWidth, cumDist,
                     widthUnit === 'meters' ? lineWidthPx / metersPerPixel : undefined,
-                    lineGeom, progressHalfWidths);
+                    lineGeom, progressHalfWidths, offsetWorld);
                 // line-border: edge ribbons under the main line (constant
                 // width only — variable-width borders are not a test case).
                 if (!progressHalfWidths) {
-                    this.emitRibbonBorder(layer, worldPts, worldHalfWidth, cumDist, metersPerPixel);
+                    this.emitRibbonBorder(layer, worldPts, worldHalfWidth, cumDist, metersPerPixel, offsetWorld);
                 }
             }
         }
@@ -1551,6 +1569,7 @@ export class MBTileDataEmitter {
         worldHalfWidth: number,
         cumDist: number[] | undefined,
         metersPerPixel: number,
+        offsetWorld = 0,
     ): void {
         const bwRaw = Number(layer.paint?.['line-border-width'] ?? 0);
         if (!(bwRaw > 0) || worldPts.length < 6) return;
@@ -1566,13 +1585,20 @@ export class MBTileDataEmitter {
         geo.edge = geo.edge ?? [];
         geo.dist = geo.dist ?? [];
         geo.len = geo.len ?? [];
+        geo.offs = geo.offs ?? [];
+        if (offsetWorld !== 0) {
+            // The border is part of the line in mgl — the shader offset
+            // displacement applies to it identically (the side-shift below
+            // stays baked; only `line-offset` moves to the shader).
+            (this.m_techniques[borderTechIdx] as any)._ribbonHasOffset = true;
+        }
         const featureStart = geo.indices.length;
 
         for (const side of [1, -1]) {
             const pts = [...worldPts];
             this.offsetPolyline(pts, side * shift);
-            this.emitRibbonBody(layer, geo, pts, borderHalf, cumDist);
-            this.emitRibbonCaps(layer, geo, pts, borderHalf, cumDist);
+            this.emitRibbonBody(layer, geo, pts, borderHalf, cumDist, undefined, offsetWorld);
+            this.emitRibbonCaps(layer, geo, pts, borderHalf, cumDist, undefined, offsetWorld);
         }
 
         const count = geo.indices.length - featureStart;
@@ -1632,6 +1658,7 @@ export class MBTileDataEmitter {
         effectiveWidthPx?: number,
         lineGeom?: { vertices: number[]; indices: number[] },
         hwPerPoint?: number[],
+        offsetWorld = 0,
     ): void {
         // Key by ribbon technique: see the fill key comment in
         // processFillFeature — groups sharing a geometry must use one technique,
@@ -1646,10 +1673,14 @@ export class MBTileDataEmitter {
         geo.edge = geo.edge ?? [];
         geo.dist = geo.dist ?? [];
         geo.len = geo.len ?? [];
+        geo.offs = geo.offs ?? [];
+        if (offsetWorld !== 0) {
+            (this.m_techniques[ribbonTechIdx] as any)._ribbonHasOffset = true;
+        }
         const featureStart = geo.indices.length;
 
-        this.emitRibbonBody(layer, geo, worldPts, worldHalfWidth, cumDist, hwPerPoint);
-        this.emitRibbonCaps(layer, geo, worldPts, worldHalfWidth, cumDist, hwPerPoint);
+        this.emitRibbonBody(layer, geo, worldPts, worldHalfWidth, cumDist, hwPerPoint, offsetWorld);
+        this.emitRibbonCaps(layer, geo, worldPts, worldHalfWidth, cumDist, hwPerPoint, offsetWorld);
 
         // Use a fill technique so the mapview creates a simple fill material.
         const count = geo.indices.length - featureStart;
@@ -1682,6 +1713,7 @@ export class MBTileDataEmitter {
         worldHalfWidth: number,
         cumDist?: number[],
         hwPerPoint?: number[],
+        offsetWorld = 0,
     ): void {
         const n0 = worldPts.length / 3;
         if (n0 < 2) return;
@@ -1719,6 +1751,29 @@ export class MBTileDataEmitter {
         const np = pts.length / 3;
         if (np < (closed ? 3 : 2)) return;
         const n = np;
+        // `line-offset` shader displacement vectors (world units): per-point
+        // segment right-normal scaled by `offsetWorld`, averaged between the
+        // two adjacent segment normals at interior vertices — exactly the
+        // math the former geometric bake (offsetPolyline) applied to the
+        // positions. Now it rides the aRibbonOffs attribute so tile
+        // clipping/culling never sees the displaced geometry (mgl parity).
+        geo.offs = geo.offs ?? [];
+        const offsAt = (i: number): [number, number] => {
+            if (offsetWorld === 0) return [0, 0];
+            const seg = (k: number): [number, number] => {
+                const j = closed ? (k + 1) % n : Math.min(k + 1, n - 1);
+                const ux = pts[j * 3] - pts[k * 3];
+                const uy = pts[j * 3 + 1] - pts[k * 3 + 1];
+                const l = Math.hypot(ux, uy) || 1;
+                return [uy / l * offsetWorld, -ux / l * offsetWorld];
+            };
+            if (n < 2) return [0, 0];
+            if (!closed && i === 0) return seg(0);
+            if (!closed && i >= n - 1) return seg(n - 2);
+            const a = seg((i - 1 + n) % n);
+            const b = seg(i);
+            return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        };
         // Normalized 0..1 distance along the feature for line-gradient.
         let total = rawD[n - 1];
         if (closed) {
@@ -1754,6 +1809,7 @@ export class MBTileDataEmitter {
                 const ax = pts[s * 3], ay = pts[s * 3 + 1], az = pts[s * 3 + 2];
                 const bx = pts[e * 3], by = pts[e * 3 + 1], bz = pts[e * 3 + 2];
                 const hwS = hwAt(s), hwE = hwAt(e);
+                const oS = offsAt(s), oE = offsAt(e);
                 const base = geo.positions.length / 3;
                 geo.positions.push(
                     ax + nx * hwS, ay + ny * hwS, az,
@@ -1764,6 +1820,7 @@ export class MBTileDataEmitter {
                 geo.edge!.push(1, 1, -1, -1);
                 geo.dist!.push(distAt(s), distAt(e), distAt(e), distAt(s));
                 geo.len!.push(lenAt(s), lenAt(e), lenAt(e), lenAt(s));
+                geo.offs!.push(oS[0], oS[1], oE[0], oE[1], oE[0], oE[1], oS[0], oS[1]);
                 // CCW (viewed from +Z) for the FrontSide fill material.
                 geo.indices.push(base, base + 3, base + 2, base, base + 2, base + 1);
             }
@@ -1802,11 +1859,12 @@ export class MBTileDataEmitter {
         // the tile-clipped fragments vector tiles are full of — and plain
         // rectangles overlap at every corner, which double-blends on
         // alpha-blended ribbon materials.)
-        const pushV = (x: number, y: number, z: number, e: number, d: number, l: number): number => {
+        const pushV = (x: number, y: number, z: number, e: number, d: number, l: number, o: [number, number] = [0, 0]): number => {
             geo.positions.push(x, y, z);
             geo.edge!.push(e);
             geo.dist!.push(d);
             geo.len!.push(l);
+            geo.offs!.push(o[0], o[1]);
             return geo.positions.length / 3 - 1;
         };
         const p3 = geo.positions;
@@ -1828,10 +1886,11 @@ export class MBTileDataEmitter {
             const nx = -uy, ny = ux; // left normal
             const dS = distAt(s), dE = distAt(e), lS = lenAt(s), lE = lenAt(e);
             const hwS = hwAt(s), hwE = hwAt(e);
-            const a1 = pushV(px(s) + nx * hwS, py(s) + ny * hwS, pz(s), 1, dS, lS);
-            const a2 = pushV(px(e) + nx * hwE, py(e) + ny * hwE, pz(e), 1, dE, lE);
-            const b1 = pushV(px(e) - nx * hwE, py(e) - ny * hwE, pz(e), -1, dE, lE);
-            const b2 = pushV(px(s) - nx * hwS, py(s) - ny * hwS, pz(s), -1, dS, lS);
+            const oS = offsAt(s), oE = offsAt(e);
+            const a1 = pushV(px(s) + nx * hwS, py(s) + ny * hwS, pz(s), 1, dS, lS, oS);
+            const a2 = pushV(px(e) + nx * hwE, py(e) + ny * hwE, pz(e), 1, dE, lE, oE);
+            const b1 = pushV(px(e) - nx * hwE, py(e) - ny * hwE, pz(e), -1, dE, lE, oE);
+            const b2 = pushV(px(s) - nx * hwS, py(s) - ny * hwS, pz(s), -1, dS, lS, oS);
             pushTri(a1, b2, b1);
             pushTri(a1, b1, a2);
         }
@@ -1852,6 +1911,7 @@ export class MBTileDataEmitter {
             const pnx = -dy[iN] * s, pny = dx[iN] * s;
             const nx = -dy[i] * s, ny = dx[i] * s;
             const dI = distAt(i), lI = lenAt(i);
+            const oI = offsAt(i);
             const dot = pnx * nx + pny * ny;
             const mLen = dot > 1e-6 ? 1 / dot : Infinity;
             // mgl `line-round-limit`: shallow turns round -> miter.
@@ -1859,37 +1919,37 @@ export class MBTileDataEmitter {
                 dx[iN] * dx[i] + dy[iN] * dy[i])));
             const useRound = join === 'round' && turnAngle >= roundLimit;
             if (useRound) {
-                const cV = pushV(cx, cy, cz, 0, dI, lI);
+                const cV = pushV(cx, cy, cz, 0, dI, lI, oI);
                 const a0 = Math.atan2(pny, pnx);
                 let d = Math.atan2(ny, nx) - a0;
                 while (d > Math.PI) d -= 2 * Math.PI;
                 while (d < -Math.PI) d += 2 * Math.PI;
                 const K = Math.max(1, Math.ceil(Math.abs(d) / (Math.PI / 8)));
-                let prev = pushV(cx + Math.cos(a0) * hwAt(i), cy + Math.sin(a0) * hwAt(i), cz, s, dI, lI);
+                let prev = pushV(cx + Math.cos(a0) * hwAt(i), cy + Math.sin(a0) * hwAt(i), cz, s, dI, lI, oI);
                 for (let k = 1; k <= K; k++) {
                     const th = a0 + (d * k) / K;
-                    const v = pushV(cx + Math.cos(th) * hwAt(i), cy + Math.sin(th) * hwAt(i), cz, s, dI, lI);
+                    const v = pushV(cx + Math.cos(th) * hwAt(i), cy + Math.sin(th) * hwAt(i), cz, s, dI, lI, oI);
                     pushTri(cV, prev, v);
                     prev = v;
                 }
             } else if ((join === 'miter' || join === 'round') && mLen <= miterLimit) {
                 // Miter wedge: two triangles from the corner points to the apex.
-                const o1 = pushV(cx + pnx * hwAt(i), cy + pny * hwAt(i), cz, s, dI, lI);
-                const o2 = pushV(cx + nx * hwAt(i), cy + ny * hwAt(i), cz, s, dI, lI);
+                const o1 = pushV(cx + pnx * hwAt(i), cy + pny * hwAt(i), cz, s, dI, lI, oI);
+                const o2 = pushV(cx + nx * hwAt(i), cy + ny * hwAt(i), cz, s, dI, lI, oI);
                 let mx = pnx + nx, my = pny + ny;
                 const ml = Math.hypot(mx, my) || 1;
                 mx /= ml; my /= ml;
                 const r = hwAt(i) / Math.max(1e-6, mx * pnx + my * pny);
-                const apex = pushV(cx + mx * r, cy + my * r, cz, s, dI, lI);
-                const cV = pushV(cx, cy, cz, 0, dI, lI);
+                const apex = pushV(cx + mx * r, cy + my * r, cz, s, dI, lI, oI);
+                const cV = pushV(cx, cy, cz, 0, dI, lI, oI);
                 pushTri(o1, cV, apex);
                 pushTri(cV, o2, apex);
             } else {
                 // Bevel (also the miter-over-limit fallback): fill between the
                 // two outer corner points and the vertex.
-                const o1 = pushV(cx + pnx * hwAt(i), cy + pny * hwAt(i), cz, s, dI, lI);
-                const o2 = pushV(cx + nx * hwAt(i), cy + ny * hwAt(i), cz, s, dI, lI);
-                const cV = pushV(cx, cy, cz, 0, dI, lI);
+                const o1 = pushV(cx + pnx * hwAt(i), cy + pny * hwAt(i), cz, s, dI, lI, oI);
+                const o2 = pushV(cx + nx * hwAt(i), cy + ny * hwAt(i), cz, s, dI, lI, oI);
+                const cV = pushV(cx, cy, cz, 0, dI, lI, oI);
                 pushTri(o1, cV, o2);
             }
         }
@@ -1907,6 +1967,7 @@ export class MBTileDataEmitter {
         worldHalfWidth: number,
         cumDist?: number[],
         hwPerPoint?: number[],
+        offsetWorld = 0,
     ): void {
         const cap = layer.layout?.['line-cap'];
         if (cap !== 'round' && cap !== 'square') return;
@@ -1915,12 +1976,14 @@ export class MBTileDataEmitter {
         const x0 = worldPts[0], y0 = worldPts[1], z0 = worldPts[2];
         const xN = worldPts[(n - 1) * 3], yN = worldPts[(n - 1) * 3 + 1], zN = worldPts[(n - 1) * 3 + 2];
         if (Math.abs(x0 - xN) < 1e-9 && Math.abs(y0 - yN) < 1e-9) return;
+        geo.offs = geo.offs ?? [];
 
-        const pushVertex = (x: number, y: number, z: number, e: number, d: number, l: number): number => {
+        const pushVertex = (x: number, y: number, z: number, e: number, d: number, l: number, o: [number, number] = [0, 0]): number => {
             geo.positions.push(x, y, z);
             geo.edge!.push(e);
             geo.dist!.push(d);
             geo.len!.push(l);
+            geo.offs!.push(o[0], o[1]);
             return geo.positions.length / 3 - 1;
         };
         // CCW (viewed from +Z) triangles only — the fill material is FrontSide.
@@ -1954,22 +2017,33 @@ export class MBTileDataEmitter {
                 ? (end === 0 ? cumDist[0] : cumDist[n - 1]) / (totalD || 1)
                 : end;
             const lEnd = cumDist ? (end === 0 ? cumDist[0] : cumDist[n - 1]) : end;
+            // line-offset displacement at this endpoint: the endpoint's own
+            // segment right-normal × offsetWorld (offsetPolyline clamps the
+            // endpoint average to its single adjacent segment — same here).
+            let oEnd: [number, number] = [0, 0];
+            if (offsetWorld !== 0) {
+                // dx,dy is the OUTWARD unit direction = -(segment direction)
+                // at end 0 and +(segment direction) at end 1. The right
+                // normal of the segment (uy, -ux) therefore flips with it.
+                const sgn = end === 0 ? -1 : 1;
+                oEnd = [sgn * dy * offsetWorld, -sgn * dx * offsetWorld];
+            }
 
             if (cap === 'square') {
-                const a1 = pushVertex(cx + nx * hw, cy + ny * hw, cz, 1, dEnd, lEnd);
-                const a2 = pushVertex(cx - nx * hw, cy - ny * hw, cz, -1, dEnd, lEnd);
-                const c1 = pushVertex(cx + nx * hw + dx * hw, cy + ny * hw + dy * hw, cz, 1, dEnd, lEnd);
-                const c2 = pushVertex(cx - nx * hw + dx * hw, cy - ny * hw + dy * hw, cz, -1, dEnd, lEnd);
+                const a1 = pushVertex(cx + nx * hw, cy + ny * hw, cz, 1, dEnd, lEnd, oEnd);
+                const a2 = pushVertex(cx - nx * hw, cy - ny * hw, cz, -1, dEnd, lEnd, oEnd);
+                const c1 = pushVertex(cx + nx * hw + dx * hw, cy + ny * hw + dy * hw, cz, 1, dEnd, lEnd, oEnd);
+                const c2 = pushVertex(cx - nx * hw + dx * hw, cy - ny * hw + dy * hw, cz, -1, dEnd, lEnd, oEnd);
                 pushTri(a1, a2, c2);
                 pushTri(a1, c2, c1);
             } else {
-                const c = pushVertex(cx, cy, cz, 0, dEnd, lEnd);
+                const c = pushVertex(cx, cy, cz, 0, dEnd, lEnd, oEnd);
                 const K = 8;
                 const theta0 = Math.atan2(ny, nx);
                 let prevV = -1;
                 for (let k = 0; k <= K; k++) {
                     const th = theta0 + (Math.PI * k) / K;
-                    const v = pushVertex(cx + Math.cos(th) * hw, cy + Math.sin(th) * hw, cz, 1, dEnd, lEnd);
+                    const v = pushVertex(cx + Math.cos(th) * hw, cy + Math.sin(th) * hw, cz, 1, dEnd, lEnd, oEnd);
                     if (k === 0) { prevV = v; continue; }
                     pushTri(c, prevV, v);
                     prevV = v;
@@ -2457,6 +2531,17 @@ export class MBTileDataEmitter {
                             buffer: new Float32Array(geo.len).buffer,
                             type: 'float' as BufferElementType,
                             itemCount: 1,
+                        });
+                    }
+                    if (geo.offs && geo.offs.length === geo.edge.length * 2) {
+                        // line-offset shader displacement vector (mgl applies
+                        // the offset in the vertex shader — see
+                        // AccumulatedGeometry.offs).
+                        vertexAttributes.push({
+                            name: 'aRibbonOffs',
+                            buffer: new Float32Array(geo.offs).buffer,
+                            type: 'float' as BufferElementType,
+                            itemCount: 2,
                         });
                     }
                 }

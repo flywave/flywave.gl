@@ -1500,9 +1500,9 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 | # | 任务 | 说明 | 复杂度 |
 |---|------|------|--------|
 | N5 | **透明通道 blend 隔离专项**（一项三题）：全量 AA feather 启用（§12.36 门控）、blur 晕圈几何外扩（§12.39 回退的 rev2）、半透明线交叉的 mgl 式单 pass 合成 | line-color 337→0 的最后一公里 | ⭐⭐⭐⭐ |
-| N6 | **大 line-offset 屏幕空间方案**：mgl offset 是 shader uniform（跨瓦片无缝），我们烘焙几何在 >20px 时瓦片截断（line-border/aliasing 56837 主源）| 需 vertex shader 位移注入 | ⭐⭐⭐ |
+| N6 | **大 line-offset 屏幕空间方案**：**代码已完成（2026-08-19，§12.60）**——offset 从几何烘焙迁移为 `aRibbonOffs` 顶点属性 + ribbon patcher `transformed.xy` 位移（mgl `line.vertex.glsl` 语义对齐，裁剪/剔除不可见）；offset 线走 ribbon-only。**待渲染验证** | 需 vertex shader 位移注入 | ⭐⭐⭐ |
 | N7 | **raster 双路径收口（F11）**：**主体完成（2026-08-19，§12.54–12.57）**——material.map 无效改自注入采样/全局 UV 归一化/父级回落/sRGB 域合成/mgl 精确公式，121k→559–19.8k，brightness/function + underzoom + raster-loading 转通过。**剩余**：基底 14171（瓦片内部亚像素，疑 SwiftShader 不可达）、image 对齐校准（MapAnchor 已上屏 106k，朝向/亮度）、sea 裁剪 | ~85 例 | ⭐⭐⭐⭐ |
-| N8 | **gradient-vector-tile 多 feature 进度**（13976）+ per-progress 宽度像素校准 | §12.40 | ⭐⭐⭐ |
+| N8 | **gradient-vector-tile 多 feature 进度**（13976）+ per-progress 宽度像素校准：**已源码取证（§12.60）**——mgl progress 分母为瓦片缓冲内整段 feature 长度（clipLine Range 映射），我们按裁剪后碎片归一化；修法依赖解码层 buffer 几何，需像素取证先行 | §12.40 | ⭐⭐⭐ |
 
 ### P2 — 全量基线复核
 | # | 任务 | 说明 |
@@ -1609,6 +1609,19 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 **sea 远距裁剪闭环**：① 触发条件修复（`mapView.pitch` 不存在 → `tilt`，d1 = 相机→geoCenter 焦点距离）；② RTE 相机四元数为 identity（俯仰不在相机朝向）→ 比较量从 view-Z 分量改为 **眼距长度**（朝向无关）；③ fragment 补 `varying float vMBRasEyeDist` 声明（缺失导致链接错误、材质全白 121556 一次回归）；④ 引擎 RTE model-view 帧对世界米有 ~3× 缩放（观测标定：40% 裁剪位对应真距 d1×1.16 而shader值=d1×3.5）→ `rasFar ×= 3.0`。**结果：sea-zero 34814→1899**（回到 1871 基线带，raster 14171 无回归）。顶部黑条净收益尚为 −28px（裁剪线位置仍差一点，微调因子留给下轮）。
 
 **image 亚像素定性**：harness `compareImages` 确认参考 alpha 合成白底（区外白=白不差）——31357 全部为区内内容错位；掩码 xor 仅 525、均值精确、最佳整数平移 (3,−3) 仅 69143→57029——**~3px 对角偏移 + 重采样差**（角点投影 vs mgl mercator 数学的亚像素系统差），需投影精度专项。
+
+### 12.60 N6 代码优先批：line-offset 迁移至顶点着色器位移（2026-08-19，延后渲染验证）
+
+**mgl 源码对照**（`mapbox-gl-js/src/shaders/line.vertex.glsl:265-340`）：line-offset 是**顶点着色器位移**——`offset2 = offset · a_extrude · EXTRUDE_SCALE · normal.y · mat2(t,−u,u,t)`，`pos += offset2 · u_pixels_to_tile_units` 后才进 `u_matrix`。位移发生在瓦片裁剪/剔除**之后**的 GPU 阶段，因此任意 offset 跨瓦片无缝；我们此前的几何烘焙把顶点推出瓦片裁剪体 → **>20px 瓦片截断**（known-gap，§12.33）。
+
+**实现**（对齐 mgl 语义）：
+1. **emitter**（`MBTileDataEmitter.ts`）：`processLineFeature` 不再 `offsetPolyline(worldPts, ow)` 烘焙；改为 `offsetWorld` 标量下传 `emitRibbonFill`/`emitRibbonBorder`。`emitRibbonBody`/`emitRibbonCaps` 在**去重后的点集**上按原 averaging 数学（段右法向 × ow，角点取两侧平均）逐顶点计算位移向量，与 `edge/dist/len` 同步写入 `geo.offs`（vec2/顶点，无 offset 时为 0）；`getDecodedTile` 发射 `aRibbonOffs`（itemCount 2）属性。line-border 的 ±(hw−bw/2) 边线位移保持烘焙，`line-offset` 部分与主线同样走 shader。闭合环的 offset 法向做环绕（比旧烘焙的端点钳制更正确）。
+2. **skipSolidLine 扩展**：offset≠0 时跳过 SolidLine 原生路径（与 gradient/pattern/blur 同策略）——否则未位移的 SolidLine 副本会叠在位移后的 ribbon 下面。
+3. **patcher**（`MBMaterialPatchManager.ts` ribbon 注入）：technique `_ribbonHasOffset`（emitter 在 offset≠0 时置位，含 border technique）门控注入 `attribute vec2 aRibbonOffs;` + `begin_vertex` 后 `transformed.xy += aRibbonOffs;`（与既有 `uMBTranslate` 同空间，世界米）。
+
+**验证**：包内 `tsc --build` 零错误。mocha 单测因工作区模块链接缺失（`flywave-mapview/node_modules/@flywave/...` MODULE_NOT_FOUND，§10.1 同类环境问题）无法在本机执行——与本次改动无关。渲染验证（line-offset/literal 1180、elevated-line-offset、line-border 56837 主源、meters-offset）留待攒批 karma。
+
+**N8 顺带源码取证**（gradient-vector-tile 多 feature 进度，`line_bucket.ts:574-640/1031-1040`）：mgl 的 progress = `(totalFeatureLength · lineClips.start + distance) / totalFeatureLength`——分母是**瓦片内缓冲数据的整段 feature 长度**（clipLine 子段经 `subsegment.progress` Range 映射），我们的 cumDist 按**裁剪后碎片**归一化 0..1。跨瓦片/被裁剪的 feature 渐变与 per-progress 宽度都会错段。修法需 emitter 侧拿到裁剪前（含 buffer）的整段长度——依赖 vectortile 解码层是否保留 buffer 几何，**需一轮像素取证**再动代码，本批不动。
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 

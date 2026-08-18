@@ -871,6 +871,10 @@ export class MBMaterialPatchManager {
             // visual effect on the fill materials.
             const translateWorld = undefined as unknown as number[] | undefined;
             void lt;
+            // line-offset rides the aRibbonOffs attribute (mgl applies the
+            // offset in the vertex shader, invisible to tile clipping — the
+            // geometric bake truncated offsets >~20px at tile boundaries).
+            const hasOffset = Boolean(technique._ribbonHasOffset);
             // The ~1px AA feather is only active for blurred lines: on the
             // (alpha-blended, tile-fading) ribbon materials it costs ~1px of
             // semi-transparent edge along the whole network — a large net
@@ -955,6 +959,7 @@ export class MBMaterialPatchManager {
                          ${rampTex || hasTrim ? 'attribute float aRibbonDist;\nvarying float vMBRibbonDist;' : ''}
                          ${patTex ? 'attribute float aRibbonLen;\nvarying float vMBRibbonLen;' : ''}
                          ${translateWorld ? 'uniform vec2 uMBTranslate;' : ''}
+                         ${hasOffset ? 'attribute vec2 aRibbonOffs;' : ''}
                          void main() {`
                     );
                     shader.vertexShader = shader.vertexShader.replace(
@@ -963,7 +968,8 @@ export class MBMaterialPatchManager {
                          vMBRibbonEdge = aRibbonEdge;
                          ${rampTex || hasTrim ? 'vMBRibbonDist = aRibbonDist;' : ''}
                          ${patTex ? 'vMBRibbonLen = aRibbonLen;' : ''}
-                         ${translateWorld ? 'transformed.xy += uMBTranslate;' : ''}`
+                         ${translateWorld ? 'transformed.xy += uMBTranslate;' : ''}
+                         ${hasOffset ? 'transformed.xy += aRibbonOffs;' : ''}`
                     );
                     shader.fragmentShader = shader.fragmentShader.replace(
                         'void main() {',
