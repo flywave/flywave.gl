@@ -1556,6 +1556,8 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **N2b 补充实验（同日）**：① 回退深度限 2 级 + 黑底 → sea-zero 1915（持平）、raster-opacity/default 反弹 14171→51452、underzoom 104k→131k 全黑；② 改为 mgl 字面语义（请求层钳制 [minzoom,maxzoom]、`coveringZoomLevel=floor(z+1)`，404 黑底）→ sea 系全面恶化至 17–21k（expected 实际显示 z12 父级影像铺满，纯静态服务器无回落——mgl 端必有覆盖/错误回落机制未还原，疑 `_findLoadedParent` 对 raster error 的保留路径）。**结论：任意深度祖先探测（§12.54 版本）实测最优，已保留**；且已从 mgl 源码**证实该语义正确**：`source_cache.ts _tileLoaded` 对 HTTP 404 的处理就是"try to load the parent tile … continue until we find one that loads successfully"（递归父级回落）。顶部黑条的真正来源是 mgl 对超远距离瓦片的裁剪（远于视顶射线落点的瓦片不画），非回落机制——下轮 N2c 只需实现该距离裁剪 + 符号边缘对齐即可冲击 sea 系转通过。
 
+**N2c 远距裁剪实验（2026-08-19，已回退）**：按 mgl `far_z.ts farthestPixelDistanceOnPlane` 公式实现 view-Z 距离裁剪（超远输出黑）注入 raster shader——sea-zero 纹丝不动（1871，裁剪未触发：疑 mapView.pitch/camera z 语义或 patch 时机取值不对），且发现 **raster 系数值随批内位置大幅波动**（raster-opacity/default 同代码 14171/27340/51452/121556）——异步纹理挂载与静态 harness 截图存在竞态（attach 后虽 requestUpdate，FrameComplete 判定不等纹理），这解释 raster-opacity 系一直无法稳定通过。下轮应先修 harness 等待（纹理挂载计入 pending）再评估像素对齐。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
