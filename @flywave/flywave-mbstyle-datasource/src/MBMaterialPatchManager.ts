@@ -633,7 +633,7 @@ export class MBMaterialPatchManager {
                 // relative to world meters (calibrated on sea-zero: a 40%
                 // clip boundary corresponded to a true eye distance of
                 // d1*1.16 while the shader value equaled d1*3.5).
-                rasFar = far * 3.0;
+                rasFar = far * 3.5;
             }
         } catch {}
         const attach = (texture: THREE.Texture) => {
