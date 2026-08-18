@@ -249,6 +249,23 @@ export class MBStyleManager {
     }
 
     async loadSprite(spriteUrl: string): Promise<SpriteData | undefined> {
+        // mgl picks a @2x sprite variant for devicePixelRatio >= 2 (sprite
+        // ratio is clamped to 2). Try the high-res variant first, falling
+        // back to the base URL for every stage below.
+        const spriteRatio = (typeof window !== 'undefined'
+            ? Math.min(2, window.devicePixelRatio || 1) : 1);
+        let base = spriteUrl;
+        if (spriteRatio >= 2 && !/@[0-9]x(\.json|\.png)?$/.test(spriteUrl)) {
+            const hi = spriteUrl.replace(/(\.json)?$/, m => `@2x${m}`);
+            try {
+                const probe = await fetch(hi.endsWith('.json') ? hi : `${hi}.json`);
+                if (probe.ok) {
+                    // Both .json/.png (or .pbf) variants exist — use @2x.
+                    base = hi;
+                }
+            } catch {}
+        }
+        spriteUrl = base;
         // Try icon_set (.pbf) format first; fall back to legacy (.json + .png).
         const pbfUrl = spriteUrl.endsWith('.json')
             ? spriteUrl.replace('.json', '.pbf')

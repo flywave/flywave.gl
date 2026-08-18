@@ -1382,6 +1382,60 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **下轮优先**：line-gap-width 语义（aliasing 主源 + line-gap-width 分类 5 例）、line-trim-fade 渐隐变体、border 默认色核对（line-border/default 无 border-color 时 mgl 默认值待证）。
 
+### 12.43 line-gap-width 定性 + trim-color/fade 实现（2026-08-18，commit `5cc43fcf` 后）
+
+**line-gap-width 语义取证（aliasing 剖面）**：mgl 对单条线**无视觉差异**（线宽仍 = line-width，gap 只在相邻 casing 线间起作用，shader 实现）→ 无需几何实现，跳过。
+**aliasing 56837 重新定性**：主源 (a) **大 line-offset（30–60px）的瓦片边缘截断**——mgl 的 offset 是屏幕空间 shader uniform（跨瓦片无缝），我们烘焙在几何（瓦片内截断）；普通测试 offset 2–10px 影响小，>20px 需屏幕空间方案（深水）；(b) 多层下黑 border 部分缺失（单层 default 768 正常，待专项）。
+
+**line-trim-color / line-trim-fade-range 实现**（trim-color-fade/trim-fade-pitched 等 ~8 变体）：
+- technique 携带 `_trimColor`（默认 'transparent'）+ `_trimFade` [in, out]；
+- patcher：discard 替换为混合——`t = max(smoothstep(start, start−fadeIn, d), smoothstep(end, end+fadeOut, d))`；trimColor.a=0 时折叠为 discard（兼容旧行为）；a=1 时 rgb 替换为 trimColor、边缘按 t 渐变。
+
+待验证：line-trim-offset line-pattern-trim-offset line-border line-gradient。
+
+### 12.44 代码端闭环第七批（2026-08-18，延后渲染验证）
+
+1. **line-border-gradient**（line-border/gradient 2169）：border technique 继承主线 `_lineGradientStops`（mgl border 是线 shader 的一部分，随 gradient 渲染）。
+2. **raster premultiplied alpha**（raster-masking 4 例 + raster-alpha）：`patchRasterMaterial` attach 与 `applyRasterSource` env quad 两路径——纹理 `premultiplyAlpha=true` + `CustomBlending(ONE, ONE_MINUS_SRC_ALPHA)`（对齐 mgl raster 上传/混合）。已知近似：three 的 material.opacity 只乘 alpha 不乘 rgb，opacity<1 的 premultiplied 输出偏亮。
+3. trim-color/fade（§12.43）一并待验证。
+
+### 12.45 代码端闭环第八批（2026-08-18，延后渲染验证）
+
+1. **raster opacity/colorspace 修正**：`patchRasterMaterial` 注入移到 `colorspace_fragment` 之后（原先 opaque 后会被再亮化——raster 调整系历史值待复核）；`material.opacity=1` + `uMBRasOpacity` uniform 同时驱动 rgb+alpha（mgl `color×opacity` premultiplied 语义，three 只乘 alpha 的偏差修正）。
+2. **symbol-elevation（17 例）**：`processPointFeature` symbol 分支补 `resolveZOffset('symbol')`（symbol-z-offset / symbol-elevation-reference 抬升 POI/text 几何，`noteGeometryHeight` 上报近裁剪面）。
+3. **icon-translate / text-translate（3+2 例）**：几何烘焙进 POI/text 世界坐标（与 line-translate 同方向约定 `twy=−ty·mpp`）。
+
+待统一验证批：raster-masking raster-alpha raster-opacity raster-brightness line-trim-offset line-pattern-trim-offset line-border line-gradient line-pattern symbol-elevation icon-translate text-translate line-color line-join。
+
+### 12.46 代码端闭环第九批（2026-08-18，延后渲染验证）
+
+1. **text-radial-offset**：emitter 按 anchor 象限的 ±0.7071 单位向量换算进 technique xOffset/yOffset（center 行为同 bottom 向下；纯水平锚 dy=0），叠加在 text-offset 之上。
+2. **icon-text-fit `*-2x` 复核**：harness `pixelRatio` metadata 已传入 MapView（cur 400×300 = 200×150@2x ✓），§12.21 时代"高度恰 2× 差"诊断可能已过期——待下轮验证观察，暂不改 PoiRenderer。
+
+### 12.47 代码端闭环第十批（2026-08-18，延后渲染验证）
+
+1. **text-max-angle**（2 例）：emitter line-placement 分支新增 `splitPathByAngle`——急弯（转角 > text-max-angle，默认 45°）处把 path 切成直段，每段独立 TextPathGeometry（对齐 mgl getLineAnchors 不跨弯放置）。
+2. **line-pattern-cross-fade**（5 例）：`["image", a, b]` + zoom 驱动 cross-fade（0..1）——emitter 从 paintDefs raw 解析第二候选名（evaluated paint 给首个可用名），technique 携带 `_patternName2/_patternFade`；patcher 采两纹理 `mix(mbPat, mbPat2, fade)`。近似：fade 的 tile 级解码时求值（非逐帧连续）。
+3. text-radial-offset（§12.46）同批待验证。
+
+### 12.48 代码端闭环第十一批（2026-08-18，延后渲染验证，"攒完"批）
+
+1. **fill-pattern-cross-fade**（4 例）：fill technique 从 paintDefs raw 解析 `["image",a,b]` 第二候选（`_patternName2`）；`patchFillPatternMaterial` 双纹理 `mix(mbPat, tex2, crossFade)`（原单纹理 alpha 调制升级）。
+2. **sprite @2x 选择**（sprites 8 例 + icon-pixelratio 1 例连带）：`loadSprite` 按 `min(2, devicePixelRatio)` 先探测 `@2x` 变体（json/png/pbf 后缀派生），失败回退 1x。@2x 下 icon 按物理像素注册（mgl 同）；pattern 尺寸已除 pixelRatio（§12.41）。
+
+七–十一批全部代码端闭环完毕，剩余项均需跑测取证（多层 border 埋点、icon-text-fit-2x 复核、blur 晕圈 blend 隔离专项）。
+
+### 12.49 七–十一批统一验收（2026-08-18，`mbstyle-r711/` + `mbstyle-rasfix*/`）
+
+**生效确认**：
+- **sprites @2x**（`loadSprite` 探测）：2x-screen-1x-icon **41 近失**、2x-screen-2x-icon 304（@2x 图标注册生效）；pattern 系 3.5–14k（pattern @2x 尺度仍偏，下轮校准）。
+- **line-pattern-cross-fade**：221–2350 近失带（双纹理 mix 生效）；fill 版 1932–5505。
+- **symbol-elevation**：`collision-with-symbol-z-elevate` top/bottom **387/220 近失**（z 抬升生效）；ground/sea 系 24–26k 为 terrain/globe 场景级依赖（非 elevation 值本身）。
+- 零回归：line-join 系/gradient 主用例保持通过；line-color 410、line-cap 344 基线带。
+
+**教训（重要）**：raster 系 110–121k 是**文档既有基线失败值**（§13.1 G5 "raster-opacity 121k"，F11 双路径未收口）——本轮曾误判为 premultiply 回归，两轮回退后核对历史值确认非回归。最终 raster 代码回退到 D5 版本（premultiply/CustomBlending/colorspace 三项尝试全部撤销，记 known-gap：raster premultiplied 上传在 three 链路上不可用）。
+- icon-translate 8066 = §12.16 既有基线（mvt 符号源空白），非新错。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。

@@ -579,6 +579,11 @@ export class MBMaterialPatchManager {
             return;
         }
 
+        // D5-verified injection point: after opaque_fragment, writing the
+        // sRGB-adjusted value into gl_FragColor (the material's output
+        // conversion is a no-op here — verified pixel-aligned historically).
+        // Do NOT move this behind colorspace_fragment: that brightens the
+        // whole raster 2-4x (mbstyle-r711 regression).
         const applyAdjust = () => {
             if (!hasAdjust) return;
             if ((material as any).__mbRasterAdj) return;
@@ -620,6 +625,10 @@ export class MBMaterialPatchManager {
         const attach = (texture: THREE.Texture) => {
             texture.minFilter = filterType;
             texture.magFilter = filterType;
+            // NOTE: premultiplyAlpha + CustomBlending(ONE, …) was tried to
+            // match mgl's raster upload, but the premultiplied upload path
+            // blanks the tiles entirely (raster-* ~110k full-image mismatch,
+            // mbstyle-r711) — reverted to plain alpha blending.
             texture.needsUpdate = true;
             (material as any).map = texture;
             (material as any).color = new THREE.Color(0xffffff);
@@ -693,6 +702,18 @@ export class MBMaterialPatchManager {
                 }
             }
             const patTex = (material as any).__mbRibbonPat as THREE.Texture | undefined;
+            // line-pattern-cross-fade: second candidate texture + blend.
+            const patternName2 = technique._patternName2 as string | undefined;
+            if (patternName2 && patternWorld && !(material as any).__mbRibbonPat2) {
+                const pat2 = this.extractPatternTexture(patternName2);
+                if (pat2) {
+                    pat2.wrapS = THREE.RepeatWrapping;
+                    pat2.wrapT = THREE.RepeatWrapping;
+                    (material as any).__mbRibbonPat2 = pat2;
+                }
+            }
+            const patTex2 = (material as any).__mbRibbonPat2 as THREE.Texture | undefined;
+            const patFade = Number(technique._patternFade ?? 0);
             // line-translate: px → world units at the current display zoom
             // (map anchor: x east / y north; viewport-anchor bearing rotation
             // is not applied — approximation shared with circle-translate).
@@ -733,6 +754,21 @@ export class MBMaterialPatchManager {
                 // discard fragments outside the line-progress range.
                 const trimOffset = technique._trimOffset as number[] | undefined;
                 const hasTrim = Array.isArray(trimOffset) && trimOffset.length === 2;
+                // Trimmed-out parts render in `line-trim-color` (default
+                // 'transparent' = hidden); `line-trim-fade-range` [in, out]
+                // fades the trim edges in progress units.
+                let trimColor: THREE.Color | undefined;
+                let trimAlpha = 0;
+                let trimFade: [number, number] = [0, 0];
+                if (hasTrim) {
+                    const tcRaw = technique._trimColor as string | undefined;
+                    if (tcRaw && tcRaw !== 'transparent') {
+                        trimColor = new THREE.Color(tcRaw);
+                        trimAlpha = 1;
+                    }
+                    const tf = technique._trimFade as number[] | undefined;
+                    if (Array.isArray(tf) && tf.length === 2) trimFade = [tf[0], tf[1]];
+                }
                 const orig = material.onBeforeCompile;
                 material.onBeforeCompile = (shader: any) => {
                     if (orig) orig.call(material, shader);
@@ -742,10 +778,22 @@ export class MBMaterialPatchManager {
                         shader.uniforms.uMBTrimRange = {
                             value: new THREE.Vector2(trimOffset[0], trimOffset[1]),
                         };
+                        shader.uniforms.uMBTrimColor = {
+                            value: new THREE.Vector4(
+                                trimColor?.r ?? 0, trimColor?.g ?? 0,
+                                trimColor?.b ?? 0, trimAlpha),
+                        };
+                        shader.uniforms.uMBTrimFade = {
+                            value: new THREE.Vector2(trimFade[0], trimFade[1]),
+                        };
                     }
                     if (rampTex) shader.uniforms.uMBRamp = { value: rampTex };
                     if (patTex && patternWorld) {
                         shader.uniforms.uMBPat = { value: patTex };
+                        if (patTex2) {
+                            shader.uniforms.uMBPat2 = { value: patTex2 };
+                            shader.uniforms.uMBPatFade = { value: patFade };
+                        }
                         // mgl stretches the pattern vertically to the line
                         // width and keeps the aspect ratio along u: the
                         // horizontal tile period is patternW * lineW/patternH
@@ -783,8 +831,8 @@ export class MBMaterialPatchManager {
                         `varying float vMBRibbonEdge;
                          uniform float uMBRibbonWidth;
                          uniform float uMBRibbonBlur;
-                         ${rampTex || hasTrim ? 'varying float vMBRibbonDist;\nuniform sampler2D uMBRamp;\nuniform vec2 uMBTrimRange;' : ''}
-                         ${patTex ? 'varying float vMBRibbonLen;\nuniform sampler2D uMBPat;\nuniform float uMBPatUScale;\nuniform float uMBPatVScale;' : ''}
+                         ${rampTex || hasTrim ? 'varying float vMBRibbonDist;\nuniform sampler2D uMBRamp;\nuniform vec2 uMBTrimRange;\nuniform vec4 uMBTrimColor;\nuniform vec2 uMBTrimFade;' : ''}
+                         ${patTex ? `varying float vMBRibbonLen;\nuniform sampler2D uMBPat;\nuniform float uMBPatUScale;\nuniform float uMBPatVScale;${patTex2 ? '\nuniform sampler2D uMBPat2;\nuniform float uMBPatFade;' : ''}` : ''}
                          void main() {`
                     );
                     // Inject AFTER the colorspace conversion: the ramp /
@@ -795,12 +843,21 @@ export class MBMaterialPatchManager {
                         '#include <colorspace_fragment>',
                         `#include <colorspace_fragment>
                          {
-                             // line-trim-offset: discard fragments whose
-                             // line-progress is outside [start, end].
-                             ${hasTrim ? 'if (vMBRibbonDist < uMBTrimRange.x || vMBRibbonDist > uMBTrimRange.y) discard;' : ''}
+                             // line-trim-offset: fragments outside [start,
+                             // end] render in the trim color ('transparent'
+                             // collapses to discard); the two edges fade over
+                             // the fade-range in progress units.
+                             ${hasTrim ? `float mbTrimT = max(
+                                 smoothstep(uMBTrimRange.x, uMBTrimRange.x - max(uMBTrimFade.x, 1e-4), vMBRibbonDist),
+                                 smoothstep(uMBTrimRange.y, uMBTrimRange.y + max(uMBTrimFade.y, 1e-4), vMBRibbonDist));
+                                 if (mbTrimT >= 1.0 && uMBTrimColor.a <= 0.0) discard;
+                                 gl_FragColor.rgb = mix(gl_FragColor.rgb, uMBTrimColor.rgb, mbTrimT * uMBTrimColor.a);
+                                 gl_FragColor.a = mix(gl_FragColor.a, 0.0, mbTrimT * (1.0 - uMBTrimColor.a));` : ''}
                              // line-pattern: tile the sprite along the ribbon
                              // (u = abs world distance, v = cross distance).
-                             ${patTex ? `vec4 mbPat = texture2D(uMBPat, vec2(vMBRibbonLen * uMBPatUScale, vMBRibbonEdge * 0.5 + 0.5));
+                             ${patTex ? `vec4 mbPat = texture2D(uMBPat, vec2(vMBRibbonLen * uMBPatUScale, vMBRibbonEdge * 0.5 + 0.5));${patTex2 ? `
+                                        vec4 mbPat2 = texture2D(uMBPat2, vec2(vMBRibbonLen * uMBPatUScale, vMBRibbonEdge * 0.5 + 0.5));
+                                        mbPat = mix(mbPat, mbPat2, uMBPatFade);` : ''}
                                         gl_FragColor = vec4(mbPat.rgb, mbPat.a * gl_FragColor.a);` : ''}
                              // line-gradient: override the paint color with the
                              // ramp sampled at the line-progress coordinate
@@ -2132,8 +2189,12 @@ export class MBMaterialPatchManager {
         (material as any).transparent = (technique.opacity ?? 1) < 1;
 
         // Pattern cross-fade: modulate pattern contribution by the fade factor
-        // (0 = no pattern/base color, 1 = full pattern).
+        // (0 = no pattern/base color, 1 = full pattern). With a second
+        // candidate (["image", a, b]) the two tiles blend by the fade.
         const crossFade = technique._patternCrossFade ?? 1;
+        const tex2 = technique._patternName2
+            ? this.extractPatternTexture(technique._patternName2)
+            : undefined;
 
         // Pattern tile size in world units. The sprite pixel size is mapped to
         // meters at roughly the sprite's pixelRatio; 1px ≈ 1 world unit scaled.
@@ -2144,6 +2205,7 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBPatternTex = { value: tex };
             shader.uniforms.uMBPatternScale = { value: tileScale };
             shader.uniforms.uMBPatternCrossFade = { value: crossFade };
+            if (tex2) shader.uniforms.uMBPatternTex2 = { value: tex2 };
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
                 'uniform float uMBPatternScale;\nvarying vec2 vMBPatternUv;\nvoid main() {'
@@ -2154,12 +2216,13 @@ export class MBMaterialPatchManager {
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
-                'uniform sampler2D uMBPatternTex;\nuniform float uMBPatternCrossFade;\nvarying vec2 vMBPatternUv;\nvoid main() {'
+                `uniform sampler2D uMBPatternTex;${tex2 ? '\nuniform sampler2D uMBPatternTex2;' : ''}\nuniform float uMBPatternCrossFade;\nvarying vec2 vMBPatternUv;\nvoid main() {`
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <opaque_fragment>',
                 `#include <opaque_fragment>
-                 vec4 mbPat = texture2D(uMBPatternTex, vMBPatternUv);
+                 vec4 mbPat = texture2D(uMBPatternTex, vMBPatternUv);${tex2 ? `
+                 mbPat = mix(mbPat, texture2D(uMBPatternTex2, vMBPatternUv), uMBPatternCrossFade);` : ''}
                  float mbPatAlpha = mbPat.a * opacity * uMBPatternCrossFade;
                  gl_FragColor = vec4(mix(diffuse, mbPat.rgb, uMBPatternCrossFade), mbPatAlpha);`
             );

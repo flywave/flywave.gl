@@ -451,7 +451,7 @@ export class MBTileDataEmitter {
     private resolveZOffset(
         layer: EvaluatedLayer,
         properties: Record<string, any> | undefined,
-        type: 'fill' | 'line' | 'fill-extrusion',
+        type: 'fill' | 'line' | 'fill-extrusion' | 'symbol',
     ): number {
         const paint = layer.paint ?? {};
         const layout = layer.layout ?? {};
@@ -504,6 +504,25 @@ export class MBTileDataEmitter {
                 if (p['fill-pattern']) {
                     props._patternName = p['fill-pattern'];
                     props._patternCrossFade = p['fill-pattern-cross-fade'] ?? 1;
+                    // ["image", a, b] + cross-fade: resolve the second
+                    // candidate for two-texture blending (same as the ribbon
+                    // line-pattern-cross-fade path).
+                    const fade = Number(p['fill-pattern-cross-fade'] ?? 1);
+                    if (Number.isFinite(fade) && fade > 0 && fade < 1) {
+                        let rawPat: any = (layer as any).paintDefs?.['fill-pattern']?.value;
+                        if (!Array.isArray(rawPat) && typeof rawPat === 'object') {
+                            try { rawPat = JSON.parse(JSON.stringify(rawPat)); } catch { rawPat = undefined; }
+                        }
+                        while (Array.isArray(rawPat) && rawPat[0] === 'memo') rawPat = rawPat[1];
+                        if (Array.isArray(rawPat) && rawPat[0] === 'image') {
+                            for (const cand of rawPat.slice(1)) {
+                                if (typeof cand === 'string' && cand !== props._patternName) {
+                                    props._patternName2 = cand;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
                 // HD elevation reference: roads/markings at their feature elevation.
                 const fillElevRef = l['fill-elevation-reference'];
@@ -771,6 +790,24 @@ export class MBTileDataEmitter {
                         // em → px; native yOffset is positive = up (mapbox positive y = down).
                         props.xOffset = (textOffset[0] ?? 0) * fontSize;
                         props.yOffset = -((textOffset[1] ?? 0)) * fontSize;
+                    }
+                    // `text-radial-offset` (ems): shift ALONG the anchor's
+                    // outward diagonal unit vector (mgl: equivalent to a
+                    // text-offset of radial·(±0.7071, ±0.7071) picked by the
+                    // anchor quadrant; 'center' behaves like 'bottom').
+                    const radial = Number(l['text-radial-offset'] ?? 0);
+                    if (radial !== 0) {
+                        const R = Math.SQRT1_2;
+                        const hasV = anchor.startsWith('top') || anchor.startsWith('bottom');
+                        const hasH = anchor.includes('left') || anchor.includes('right');
+                        const dxUnit = anchor.includes('left') ? R
+                            : anchor.includes('right') ? -R : 0;
+                        let dyUnit = anchor.startsWith('top') ? R
+                            : anchor.startsWith('bottom') ? -R : 0;
+                        if (!hasV && !hasH) dyUnit = R; // center: pushes down
+                        // mapbox +y is down; native yOffset positive = up.
+                        props.xOffset = (props.xOffset ?? 0) + radial * dxUnit * fontSize;
+                        props.yOffset = (props.yOffset ?? 0) - radial * dyUnit * fontSize;
                     }
 
                     if (l.visibility === 'none') props.enabled = false;
@@ -1410,6 +1447,37 @@ export class MBTileDataEmitter {
         }
     }
 
+
+    /**
+     * Split a world-space polyline at interior vertices where the bend
+     * between adjacent segments exceeds `maxAngleDeg` (mgl getLineAnchors'
+     * text-max-angle gate). Returns one segment per straight-enough run.
+     */
+    private splitPathByAngle(path: number[], maxAngleDeg: number): number[][] {
+        const n = path.length / 3;
+        if (n < 3) return [path];
+        const maxRad = (maxAngleDeg * Math.PI) / 180;
+        const segments: number[][] = [];
+        let start = 0;
+        for (let i = 1; i < n - 1; i++) {
+            const ax = path[(i + 1) * 3] - path[i * 3];
+            const ay = path[(i + 1) * 3 + 1] - path[i * 3 + 1];
+            const bx = path[i * 3] - path[(i - 1) * 3];
+            const by = path[i * 3 + 1] - path[(i - 1) * 3 + 1];
+            const la = Math.hypot(ax, ay) || 1;
+            const lb = Math.hypot(bx, by) || 1;
+            const cos = (ax * bx + ay * by) / (la * lb);
+            const turn = Math.acos(Math.max(-1, Math.min(1, cos)));
+            if (turn > maxRad) {
+                const seg = path.slice(start * 3, (i + 1) * 3);
+                if (seg.length >= 6) segments.push(seg);
+                start = i;
+            }
+        }
+        const tail = path.slice(start * 3);
+        if (tail.length >= 6) segments.push(tail);
+        return segments.length > 0 ? segments : [path];
+    }
     /**
      * Displace a polyline along the RIGHT normal of each segment (mgl's
      * positive line-offset direction in this frame), averaging the two
@@ -1503,6 +1571,9 @@ export class MBTileDataEmitter {
                 _isLineRibbon: true,
                 _ribbonWidthPx: Number(paint['line-border-width'] ?? 1),
                 _ribbonBlurPx: 0,
+                // mgl draws the border with the same line gradient as the
+                // main line (the border is part of the line's shader).
+                ...(paint['line-gradient'] ? { _lineGradientStops: paint['line-gradient'] } : {}),
                 color: borderColor,
                 opacity: 1,
             };
@@ -1903,6 +1974,29 @@ export class MBTileDataEmitter {
                     patternWorld = [info.width / pr * mpp, info.height / pr * mpp];
                 }
             }
+            // line-pattern-cross-fade (zoom-driven 0..1): blend between the
+            // two candidates of ["image", a, b]. The evaluated paint gives the
+            // first AVAILABLE name; the second candidate comes from the raw
+            // expression. The cross-fade paint value is a plain number here.
+            let patternName2: string | undefined;
+            let patternFade: number | undefined;
+            const fadeVal = Number(paint['line-pattern-cross-fade'] ?? NaN);
+            if (patternName && Number.isFinite(fadeVal) && fadeVal > 0 && fadeVal < 1) {
+                let rawPat: any = (layer as any).paintDefs?.['line-pattern']?.value;
+                if (!Array.isArray(rawPat) && typeof rawPat === 'object') {
+                    try { rawPat = JSON.parse(JSON.stringify(rawPat)); } catch { rawPat = undefined; }
+                }
+                while (Array.isArray(rawPat) && rawPat[0] === 'memo') rawPat = rawPat[1];
+                if (Array.isArray(rawPat) && rawPat[0] === 'image') {
+                    for (const cand of rawPat.slice(1)) {
+                        if (typeof cand === 'string' && cand !== patternName) {
+                            patternName2 = cand;
+                            break;
+                        }
+                    }
+                    if (patternName2) patternFade = fadeVal;
+                }
+            }
             const technique: any = {
                 name: 'fill',
                 _index: idx,
@@ -1917,10 +2011,18 @@ export class MBTileDataEmitter {
                 // line-pattern: sprite name + world-space tile size.
                 ...(patternName ? { _patternName: patternName } : {}),
                 ...(patternWorld ? { _ribbonPatternWorld: patternWorld } : {}),
+                ...(patternName2 ? { _patternName2: patternName2, _patternFade: patternFade } : {}),
                 // line-trim-offset / line-pattern-trim-offset [start, end] in
-                // line-progress units — the patcher discards outside range.
+                // line-progress units — the patcher discards/fades outside
+                // range. `line-trim-color` colors the trimmed-out parts
+                // ('transparent' = hidden), `line-trim-fade-range` [in, out]
+                // fades the two trim edges.
                 ...((Array.isArray(paint['line-trim-offset']) || Array.isArray(paint['line-pattern-trim-offset']))
-                    ? { _trimOffset: paint['line-trim-offset'] ?? paint['line-pattern-trim-offset'] }
+                    ? {
+                        _trimOffset: paint['line-trim-offset'] ?? paint['line-pattern-trim-offset'],
+                        _trimColor: paint['line-trim-color'] ?? 'transparent',
+                        _trimFade: paint['line-trim-fade-range'] ?? [0, 0],
+                    }
                     : {}),
                 // Pre-extruded line ribbons: the per-color meshes are coplanar
                 // (z=0) and must not depth-test against each other — the drawn
@@ -2062,6 +2164,12 @@ export class MBTileDataEmitter {
         matchedLayers: EvaluatedLayer[],
     ): void {
         for (const layer of matchedLayers) {
+            // symbol-elevation: symbol-z-offset / symbol-elevation-reference
+            // lift the POI/text geometry (consumed by `project()`).
+            if (layer.type === 'symbol') {
+                this.m_currentZOffset = this.resolveZOffset(layer, properties, 'symbol');
+                this.noteGeometryHeight(this.m_currentZOffset);
+            }
             // Determine which symbol sub-techniques to emit. For symbol layers with
             // both icon-image and text-field, emit both so icon+caption render.
             let modes: Array<'icon' | 'text' | undefined>;
@@ -2115,13 +2223,29 @@ export class MBTileDataEmitter {
                                 lenSqr += dx * dx + dy * dy + dz * dz;
                             }
                         }
-                        this.m_textPathGeometries.push({
-                            path,
-                            pathLengthSqr: lenSqr,
-                            text: tech.text as string,
-                            technique: techniqueIdx,
-                            objInfos: { ...properties, $id: featureId ?? properties.$id ?? null },
-                        });
+                        // `text-max-angle` (default 45°): mgl's getLineAnchors
+                        // never places labels across a bend sharper than the
+                        // limit — split the path into straight-enough sections
+                        // so each gets its own (native) placement.
+                        const maxAngle = Number(layer.layout['text-max-angle'] ?? 45);
+                        const segments = this.splitPathByAngle(path, maxAngle);
+                        for (const seg of segments) {
+                            let segLen = 0;
+                            for (let i = 3; i < seg.length; i += 3) {
+                                segLen += Math.hypot(
+                                    seg[i] - seg[i - 3],
+                                    seg[i + 1] - seg[i - 2],
+                                    seg[i + 2] - seg[i - 1],
+                                );
+                            }
+                            this.m_textPathGeometries.push({
+                                path: seg,
+                                pathLengthSqr: segLen * segLen,
+                                text: tech.text as string,
+                                technique: techniqueIdx,
+                                objInfos: { ...properties, $id: featureId ?? properties.$id ?? null },
+                            });
+                        }
                     }
                     continue;
                 }
@@ -2130,6 +2254,22 @@ export class MBTileDataEmitter {
                 const geo = this.getOrCreateGeometry(key);
                 const featureStart = geo.indices.length;
 
+                // icon-translate / text-translate [x east, y north] px —
+                // baked into the POI/text world positions (same empirical
+                // direction convention as line-translate).
+                const translatePx = layer.type === 'symbol'
+                    ? (mode === 'text'
+                        ? layer.paint?.['text-translate'] as number[] | undefined
+                        : layer.paint?.['icon-translate'] as number[] | undefined)
+                    : undefined;
+                let twx = 0, twy = 0;
+                if (translatePx && (translatePx[0] !== 0 || translatePx[1] !== 0)) {
+                    const mppS = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                        (256 * Math.pow(2, this.m_zoom + 1));
+                    twx = translatePx[0] * mppS;
+                    twy = -translatePx[1] * mppS;
+                }
+
                 for (const pt of points) {
                     const w = this.project(pt);
                     geo.positions.push(w.x, w.y, w.z);
@@ -2137,6 +2277,10 @@ export class MBTileDataEmitter {
                     // Emit native text/POI geometry for the TextElementsRenderer.
                     // These are consumed as absolute world coordinates.
                     const ww = this.projectWorld(pt);
+                    if (twx !== 0 || twy !== 0) {
+                        ww.x += twx;
+                        ww.y += twy;
+                    }
                     if (tech.name === 'text' && tech.text) {
                         this.emitTextGeometry(techniqueIdx, ww, tech.text as string,
                             { ...properties, $id: featureId ?? properties.$id ?? null });
