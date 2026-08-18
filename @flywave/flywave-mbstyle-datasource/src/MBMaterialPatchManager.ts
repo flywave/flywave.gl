@@ -580,33 +580,61 @@ export class MBMaterialPatchManager {
             return;
         }
 
-        // D5-verified injection point: after opaque_fragment, writing the
-        // sRGB-adjusted value into gl_FragColor (the material's output
-        // conversion is a no-op here — verified pixel-aligned historically).
-        // Do NOT move this behind colorspace_fragment: that brightens the
-        // whole raster 2-4x (mbstyle-r711 regression).
-        const applyAdjust = () => {
-            if (!hasAdjust) return;
-            if ((material as any).__mbRasterAdj) return;
-            (material as any).__mbRasterAdj = true;
+        // MapMeshBasicMaterial compiles WITHOUT USE_MAP (material.map is
+        // ignored — verified: the compiled fragment shader has neither
+        // USE_MAP nor vMapUv), so the tile texture must be sampled via an
+        // injected varying, exactly like the hillshade DEM path. The
+        // brightness/contrast/saturation/hue chain (mgl raster paint) is
+        // folded into the same injection; with default paint values it is
+        // the identity transform.
+        const rect = (technique._rasterUvRect as number[] | undefined) ?? [0, 0, 1, 1];
+        const attach = (texture: THREE.Texture) => {
+            texture.minFilter = filterType;
+            texture.magFilter = filterType;
+            // NOTE: premultiplyAlpha + CustomBlending(ONE, …) was tried to
+            // match mgl's raster upload, but the premultiplied upload path
+            // blanks the tiles entirely (raster-* ~110k full-image mismatch,
+            // mbstyle-r711) — reverted to plain alpha blending.
+            // Satellite/aerial PNGs are sRGB (decode on sample; the material
+            // output conversion then re-encodes — round trip correct).
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.needsUpdate = true;
+            (material as any).color = new THREE.Color(0xffffff);
+            if ((material as any).__mbRasterSampled) return;
+            (material as any).__mbRasterSampled = true;
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
+                shader.uniforms.uMBRasMap = { value: texture };
+                shader.uniforms.uMBRasUvOff = { value: [rect[0], rect[1]] };
+                shader.uniforms.uMBRasUvScl = { value: [rect[2], rect[3]] };
                 shader.uniforms.uMBRasBMin = { value: brightness[0] };
                 shader.uniforms.uMBRasBMax = { value: brightness[1] };
                 shader.uniforms.uMBRasContrast = { value: contrast ?? 0 };
                 shader.uniforms.uMBRasSat = { value: saturation ?? 0 };
                 shader.uniforms.uMBRasHue = { value: (hue ?? 0) * Math.PI / 180 };
+                shader.vertexShader = shader.vertexShader.replace(
+                    'void main() {',
+                    'varying vec2 vMBRasUv;\nvoid main() {',
+                );
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <begin_vertex>',
+                    '#include <begin_vertex>\nvMBRasUv = uv;',
+                );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     'void main() {',
-                    `uniform float uMBRasBMin; uniform float uMBRasBMax;
+                    `varying vec2 vMBRasUv;
+                     uniform sampler2D uMBRasMap;
+                     uniform vec2 uMBRasUvOff; uniform vec2 uMBRasUvScl;
+                     uniform float uMBRasBMin; uniform float uMBRasBMax;
                      uniform float uMBRasContrast; uniform float uMBRasSat; uniform float uMBRasHue;
-                     void main() {`
+                     void main() {`,
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <opaque_fragment>',
                     `#include <opaque_fragment>
-                     vec3 mbR = diffuse;
+                     vec4 mbRasT = texture2D(uMBRasMap, uMBRasUvOff + vMBRasUv * uMBRasUvScl);
+                     vec3 mbR = mbRasT.rgb;
                      mbR = clamp((mbR - uMBRasBMin) / max(uMBRasBMax - uMBRasBMin, 0.001), 0.0, 1.0);
                      mbR = (mbR - 0.5) * (1.0 + uMBRasContrast) + 0.5;
                      float mbL = dot(mbR, vec3(0.299, 0.587, 0.114));
@@ -617,27 +645,9 @@ export class MBMaterialPatchManager {
                          vec3(0.299*(1.0-mbCa) - 0.714*mbSa, mbCa + 0.587*(1.0-mbCa), 0.114*(1.0-mbCa) + 0.530*mbSa),
                          vec3(0.299*(1.0-mbCa) + 0.165*mbSa, 0.587*(1.0-mbCa) - 0.330*mbSa, mbCa + 0.114*(1.0-mbCa)));
                      mbR = clamp(mbHue * mbR, 0.0, 1.0);
-                     gl_FragColor = vec4(mbR, opacity);`
+                     gl_FragColor = vec4(mbR, mbRasT.a * ${opacity.toFixed(3)});`,
                 );
             };
-            material.needsUpdate = true;
-        };
-
-        const attach = (texture: THREE.Texture) => {
-            texture.minFilter = filterType;
-            texture.magFilter = filterType;
-            // NOTE: premultiplyAlpha + CustomBlending(ONE, …) was tried to
-            // match mgl's raster upload, but the premultiplied upload path
-            // blanks the tiles entirely (raster-* ~110k full-image mismatch,
-            // mbstyle-r711) — reverted to plain alpha blending.
-            // Satellite/aerial PNGs are sRGB — without the tag the raw bytes
-            // are treated as linear and the output encode washes them out
-            // (same double-encode signature as the background-pattern quad).
-            texture.colorSpace = THREE.SRGBColorSpace;
-            texture.needsUpdate = true;
-            (material as any).map = texture;
-            (material as any).color = new THREE.Color(0xffffff);
-            applyAdjust();
             material.needsUpdate = true;
         };
 

@@ -1523,6 +1523,23 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - **运行说明**：Linux Edge150 headless + SwiftShader（与 macOS 基线环境不同，绝对值含环境噪声）；跑到中段时 raster sRGB 色彩空间修正（N7 预研，见 §12.54）已入工作区被后续 chunk 混入——raster 系数字为混合态，定性不变（仍未通过）。
 - 216 用例未上报（崩溃/超时批，与 baseline4 的 219 相当）。
 
+### 12.54 N7：raster 逐瓦片管线上屏（2026-08-19 凌晨，`mbstyle-n7*/`）
+
+**三重根因**（与 N1 pattern 全黑同构的取证链，karma console 埋点定位）：
+
+1. **MapMeshBasicMaterial 忽略 `material.map`**：编译产物无 USE_MAP/vMapUv（埋点实锤）——挂 map 无效，瓦片按 technique 白色渲染。修复：onBeforeCompile 自注入 `vMBRasUv` varying + `uMBRasMap` 采样（hillshade 同法），brightness/contrast/saturation/hue 调整链折入同一注入（默认值恒等）。
+2. **栅格瓦片 UV 是全局坐标**：composite geojson 的瓦片四边形 y≈1.8e8（level 17 全局行号），`y/extents` 的小数部分恒定 → 纹理竖向塌缩成 2 条水平带（埋点实锤 verts=[0,184639488,...]）。修复：raster 要素 UV 按自身 bbox 归一化（每要素恰一个瓦片四边形 → bbox↔[0,1]² 一一对应）。
+3. **纹理 sRGB**：卫星 PNG 标 `SRGBColorSpace`（否则双重编码发白，N1b 同源）。
+4. **父级回落（mgl overzoom 语义）**：`RasterTileDataProvider` 逐级探测祖先瓦片（GET 缓存存在性），404 时用最深存在祖先 URL + UV 子矩形（`_rasterUvRect` offset/scale 注入采样）。
+
+**结果**（Linux 环境）：
+- **raster-loading/missing 转通过**；raster-opacity/default 121556→**14171**（近失带，残余为瓦片级亚像素对齐）；contrast/hue/saturation default 同 14171（调整链恒等验证 ✓）。
+- zoomed-raster：overzoom 559、fractional 1876（近失）；raster-masking/overlapping-zoom 842；retina 10239；该批 3 例转通过。
+- 仍大：opacity function/literal 75-79k（operations setZoom 后瓦片层错位）、underzoom 104k（minzoom 语义）、raster-resampling 45k、image 系 157k（image-source 画布路径独立）。
+- 方向验证：垂直翻转假设证伪（翻转更差 103k vs 30k）。
+
+**连带**：N2 symbol-elevation sea/ground 系的 satellite 背景依赖已解锁，下轮取证。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。

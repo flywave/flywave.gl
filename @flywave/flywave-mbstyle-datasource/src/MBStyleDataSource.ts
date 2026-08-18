@@ -70,10 +70,42 @@ class RasterTileDataProvider extends DataProvider {
         const latN = this.tile2lat(y, z);
         const latS = this.tile2lat(y + 1, z);
 
+        // mgl overzooms from the closest available ancestor when a raster
+        // tile 404s (render-test satellite fixtures live at a lower level
+        // than the camera zoom, e.g. z12 fixtures under a z16 camera).
+        // Resolve the deepest existing ancestor and emit the parent URL plus
+        // the child's UV sub-rectangle inside the ancestor image.
+        let srcZ = z;
+        let srcX = x;
+        let srcY = y;
+        for (let zz = z; zz >= 0; zz--) {
+            const shift = z - zz;
+            const u = this.m_tileUrlTemplate
+                .replace('{z}', String(zz))
+                .replace('{x}', String(Math.floor(x / Math.pow(2, shift))))
+                .replace('{y}', String(Math.floor(y / Math.pow(2, shift))));
+            // eslint-disable-next-line no-await-in-loop
+            const ok = await RasterTileDataProvider.tileExists(u);
+            if (ok) {
+                srcZ = zz;
+                srcX = Math.floor(x / Math.pow(2, shift));
+                srcY = Math.floor(y / Math.pow(2, shift));
+                break;
+            }
+        }
+        const shift = z - srcZ;
+        const span = Math.pow(2, shift);
         const rasterUrl = this.m_tileUrlTemplate
-            .replace('{z}', String(z))
-            .replace('{x}', String(x))
-            .replace('{y}', String(y));
+            .replace('{z}', String(srcZ))
+            .replace('{x}', String(srcX))
+            .replace('{y}', String(srcY));
+        // Child's sub-rect in the ancestor IMAGE space (y top-down). Geometry
+        // UVs run (0,0)=tile north-west; with flipY texture upload the
+        // sampling transform is offset=(fx0, 1-fy0-fh), scale=(fw, fh).
+        const fw = 1 / span;
+        const fx0 = (x - srcX * span) * fw;
+        const fy0 = (y - srcY * span) * fw;
+        const uvRect = [fx0, 1 - fy0 - fw, fw, fw];
 
         const geojson = {
             type: 'FeatureCollection',
@@ -91,6 +123,7 @@ class RasterTileDataProvider extends DataProvider {
                 },
                 properties: {
                     _rasterTileUrl: rasterUrl,
+                    _rasterUvRect: uvRect,
                     _tileCol: x,
                     _tileRow: y,
                     _tileZoom: z,
@@ -99,6 +132,26 @@ class RasterTileDataProvider extends DataProvider {
         };
 
         return JSON.stringify(geojson);
+    }
+
+    /** HEAD-probe cache: which tile URLs exist for the current template. */
+    private static readonly s_existingTiles = new Set<string>();
+    private static readonly s_missingTiles = new Set<string>();
+    private static async tileExists(url: string): Promise<boolean> {
+        if (RasterTileDataProvider.s_existingTiles.has(url)) return true;
+        if (RasterTileDataProvider.s_missingTiles.has(url)) return false;
+        try {
+            // GET (not HEAD): the karma static server may not answer HEAD.
+            const resp = await fetch(url);
+            if (resp.ok) {
+                RasterTileDataProvider.s_existingTiles.add(url);
+                return true;
+            }
+            RasterTileDataProvider.s_missingTiles.add(url);
+            return false;
+        } catch {
+            return false;
+        }
     }
 
     private tile2lat(y: number, z: number): number {

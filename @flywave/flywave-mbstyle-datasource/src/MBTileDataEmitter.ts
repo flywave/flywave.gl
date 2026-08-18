@@ -889,6 +889,9 @@ export class MBTileDataEmitter {
                 props.opacity = p['raster-opacity'] ?? 1;
                 props._rasterTileUrl = properties?._rasterTileUrl ?? '';
                 props._isRaster = true;
+                // Parent-overzoom sub-rect [offX, offY, sclX, sclY] inside the
+                // resolved ancestor tile image (flipY-adjusted).
+                props._rasterUvRect = properties?._rasterUvRect ?? [0, 0, 1, 1];
                 // Pass through raster color-adjustment paint properties
                 // so MaterialPatchManager can inject them as shader uniforms.
                 props._rasterHueRotate = p['raster-hue-rotate'] ?? 0;
@@ -1041,6 +1044,22 @@ export class MBTileDataEmitter {
                     }
                 }
 
+                // Raster tile quads carry GLOBAL tile y (e.g. ~1.8e8 at
+                // level 17) — dividing by `extents` yields uv values whose
+                // fractional part is constant, collapsing the texture to
+                // horizontal bands. Normalize UVs by the feature's own bbox
+                // (each raster feature is exactly one tile quad, so the bbox
+                // maps 1:1 onto [0,1]²).
+                let rbMinX = Infinity, rbMinY = Infinity, rbMaxX = -Infinity, rbMaxY = -Infinity;
+                if (needsUv && (tech as any)._isRaster) {
+                    for (let i = 0; i < allVerts.length; i += 2) {
+                        if (allVerts[i] < rbMinX) rbMinX = allVerts[i];
+                        if (allVerts[i] > rbMaxX) rbMaxX = allVerts[i];
+                        if (allVerts[i + 1] < rbMinY) rbMinY = allVerts[i + 1];
+                        if (allVerts[i + 1] > rbMaxY) rbMaxY = allVerts[i + 1];
+                    }
+                }
+
                 // Triangulate with earcut
                 const triIndices = earcut(allVerts, holeIndices.length > 0 ? holeIndices : null, 2);
 
@@ -1055,7 +1074,14 @@ export class MBTileDataEmitter {
                     // folded into `project()`); pushing 0 dropped it.
                     geo.positions.push(w.x, w.y, w.z);
                     if (needsUv) {
-                        geo.uvs.push(allVerts[i * 2] / extents, allVerts[i * 2 + 1] / extents);
+                        if ((tech as any)._isRaster && rbMaxX > rbMinX && rbMaxY > rbMinY) {
+                            geo.uvs.push(
+                                (allVerts[i * 2] - rbMinX) / (rbMaxX - rbMinX),
+                                (allVerts[i * 2 + 1] - rbMinY) / (rbMaxY - rbMinY),
+                            );
+                        } else {
+                            geo.uvs.push(allVerts[i * 2] / extents, allVerts[i * 2 + 1] / extents);
+                        }
                     }
                 }
 
