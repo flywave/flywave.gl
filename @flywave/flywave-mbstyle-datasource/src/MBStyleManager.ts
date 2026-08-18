@@ -384,27 +384,48 @@ export class MBStyleManager {
             } catch {}
         }
 
-        // Pack into a single row atlas (sufficient for test sprites).
-        let totalW = 0, maxH = 0;
-        for (const [, canvas] of canvases) {
-            totalW += canvas.width + 2; // 2px padding
-            maxH = Math.max(maxH, canvas.height);
+        // Pack into a shelf atlas capped well below the GL max texture size
+        // (16384 on most implementations). A single-row layout previously
+        // produced e.g. a 49562px-wide canvas for the `standard` icon set —
+        // beyond MAX_TEXTURE_SIZE the upload silently fails and every sprite
+        // sampled from the atlas renders black.
+        const MAX_ATLAS_DIM = 8192;
+        const pad = 2;
+        // First pass: shelf rows.
+        const placements: { name: string; canvas: HTMLCanvasElement; x: number; y: number }[] = [];
+        let xCursor = 0;
+        let yCursor = 0;
+        let rowH = 0;
+        let atlasW = 0;
+        let atlasH = 0;
+        for (const [name, canvas] of canvases) {
+            const w = Math.min(canvas.width, MAX_ATLAS_DIM);
+            const h = Math.min(canvas.height, MAX_ATLAS_DIM);
+            if (xCursor + w + pad > MAX_ATLAS_DIM && xCursor > 0) {
+                // wrap to a new shelf row
+                yCursor += rowH + pad;
+                xCursor = 0;
+                rowH = 0;
+            }
+            placements.push({ name, canvas, x: xCursor, y: yCursor });
+            xCursor += w + pad;
+            rowH = Math.max(rowH, h);
+            atlasW = Math.max(atlasW, xCursor);
+            atlasH = Math.max(atlasH, yCursor + rowH);
         }
         const atlasCanvas = document.createElement('canvas');
-        atlasCanvas.width = Math.max(1, totalW);
-        atlasCanvas.height = Math.max(1, maxH);
+        atlasCanvas.width = Math.max(1, Math.min(atlasW, MAX_ATLAS_DIM));
+        atlasCanvas.height = Math.max(1, Math.min(atlasH, MAX_ATLAS_DIM));
         const ctx = atlasCanvas.getContext('2d')!;
-        let xCursor = 0;
-        for (const [name, canvas] of canvases) {
-            ctx.drawImage(canvas, xCursor, 0);
-            const legacyInfo = (canvas as any).__spriteInfo as SpriteIconInfo | undefined;
-            json[name] = {
-                x: xCursor, y: 0,
-                width: canvas.width, height: canvas.height,
+        for (const p of placements) {
+            ctx.drawImage(p.canvas, p.x, p.y);
+            const legacyInfo = (p.canvas as any).__spriteInfo as SpriteIconInfo | undefined;
+            json[p.name] = {
+                x: p.x, y: p.y,
+                width: p.canvas.width, height: p.canvas.height,
                 pixelRatio: legacyInfo?.pixelRatio ?? dpr,
                 ...(legacyInfo?.sdf ? { sdf: true } : {}),
             };
-            xCursor += canvas.width + 2;
         }
 
         this.m_spriteData = { json, image: atlasCanvas };

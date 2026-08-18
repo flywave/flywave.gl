@@ -836,26 +836,60 @@ export class MBEnvironmentManager {
         const tex = spriteAtlas.texture.clone();
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
+        let w = 1;
+        let h = 1;
         if (uv) {
             const u0 = uv.uvMin[0];
             const v0 = uv.uvMin[1];
-            const w = Math.max(uv.uvMax[0] - u0, 1e-6);
-            const h = Math.max(uv.uvMax[1] - v0, 1e-6);
-            tex.offset.set(u0, v0);
-            tex.repeat.set(w, h);
-        } else {
-            tex.offset.set(0, 0);
-            tex.repeat.set(1, 1);
+            w = Math.max(uv.uvMax[0] - u0, 1e-6);
+            h = Math.max(uv.uvMax[1] - v0, 1e-6);
+            // getIconUv works in image space (origin top-left), but the
+            // texture is uploaded with flipY — UV v runs bottom-up. Mapping
+            // the image-space range directly samples the atlas' EMPTY rows
+            // below the packed sprites, rendering pure black. Flip v:
+            // image range [v0, v0+h] → UV range [1-v0-h, 1-v0].
+            tex.offset.set(u0, 1 - v0 - h);
         }
-        // Tile the pattern sub-rectangle across the screen.
-        const baseRepeat = 8;
-        tex.repeat.x *= baseRepeat;
-        tex.repeat.y *= baseRepeat;
+        // Tile the pattern sub-rectangle across the screen. Mapbox tiles a
+        // background pattern every `displaySize` logical screen pixels
+        // (`patternPosition.displaySize` in draw_background/pattern.ts —
+        // sprite physical px / sprite pixelRatio), i.e. displaySize × screen
+        // DPR in device pixels. The legacy fixed repeat of 8 only matched
+        // 512px canvases with 64px patterns by coincidence; @2x sprites and
+        // small viewports tiled at the wrong scale.
+        const iconInfo = spriteAtlas.icons.get(patternName);
+        // Sprite display size (logical px) in the given axis.
+        const disp = (axis: 0 | 1): number => {
+            if (!iconInfo) return 0;
+            const pr = Number((iconInfo as any).pixelRatio ?? 1) || 1;
+            return (axis === 0 ? iconInfo.width : iconInfo.height) / pr;
+        };
+        const updateRepeat = (renderer: THREE.WebGLRenderer): void => {
+            const buf = renderer.getDrawingBufferSize(new THREE.Vector2());
+            const css = renderer.getSize(new THREE.Vector2());
+            const screenPr = css.x > 0 ? buf.x / css.x : 1;
+            if (disp(0) > 0 && disp(1) > 0 && buf.x > 0 && buf.y > 0) {
+                tex.repeat.x = w * (buf.x / (disp(0) * screenPr));
+                tex.repeat.y = h * (buf.y / (disp(1) * screenPr));
+            } else {
+                tex.repeat.x = w * 8;
+                tex.repeat.y = h * 8;
+            }
+        };
+        const renderer0 = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
+        if (renderer0) updateRepeat(renderer0);
+        else {
+            tex.repeat.x = w * 8;
+            tex.repeat.y = h * 8;
+        }
         tex.needsUpdate = true;
 
         const material = new THREE.MeshBasicMaterial({
             map: tex,
-            color: new THREE.Color(bgColor),
+            // mapbox's background_pattern shader has no u_color uniform —
+            // the pattern is drawn as-is. Multiplying by background-color
+            // (default #000000) would paint the whole quad black.
+            color: new THREE.Color('#ffffff'),
             transparent: bgOpacity < 1,
             opacity: bgOpacity,
             depthWrite: false,
@@ -867,29 +901,52 @@ export class MBEnvironmentManager {
         this.m_backgroundQuad.frustumCulled = false;
         this.m_backgroundQuad.renderOrder = -10000;
 
+        // The previous placement derived the quad orientation from
+        // inverse(projection * view) via setFromRotationMatrix — but the
+        // inverse projection is not a rotation matrix, so the extracted
+        // quaternion is garbage and the quad ended up edge-on/invisible
+        // (every background-pattern case rendered as pure black).
+        // Instead: place the quad on the camera axis, oriented with the
+        // camera and scaled to exactly cover the frustum at that depth.
         this.m_backgroundQuad.onBeforeRender = (renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
-            if (pitchAlignment === 'viewport') {
-                // 'viewport' alignment: the background quad stays fixed to the
-                // screen regardless of camera orientation (billboard). It only
-                // tracks the inverse projection — no view rotation applied.
-                const matrix = new THREE.Matrix4();
-                matrix.copy(camera.projectionMatrix);
-                matrix.invert();
-                this.m_backgroundQuad!.quaternion.setFromRotationMatrix(matrix);
-                this.m_backgroundQuad!.position.set(0, 0, -0.1);
-            } else {
-                // 'map' alignment (default): the background quad follows the
-                // camera view matrix so the pattern appears anchored to the
-                // map surface. This matches mapbox's default behavior.
-                const matrix = new THREE.Matrix4();
-                matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-                matrix.invert();
-                this.m_backgroundQuad!.quaternion.setFromRotationMatrix(matrix);
-                this.m_backgroundQuad!.position.set(0, 0, -0.1);
-            }
+            updateRepeat(renderer);
+            // Robust fullscreen placement: unproject the four NDC corners at
+            // mid-depth and fit the quad to them. Deriving orientation from
+            // camera.quaternion / inverse(P·V) is unreliable here (MapView
+            // cameras may carry a stale quaternion; inverse projection is not
+            // a rotation matrix), which previously left the quad edge-on and
+            // invisible.
+            camera.updateMatrixWorld();
+            const corners: THREE.Vector3[] = [
+                new THREE.Vector3(-1, -1, 0), new THREE.Vector3(1, -1, 0),
+                new THREE.Vector3(1, 1, 0), new THREE.Vector3(-1, 1, 0),
+            ].map(c => c.unproject(camera));
+            const center = new THREE.Vector3();
+            for (const c of corners) center.add(c);
+            center.multiplyScalar(0.25);
+            // Edge midpoints → center axes: +x from left/right, +y from
+            // bottom/top. This also captures pitch-induced perspective skew.
+            const right = corners[2].clone().add(corners[1]).multiplyScalar(0.5)
+                .sub(corners[3].clone().add(corners[0]).multiplyScalar(0.5));
+            const up = corners[3].clone().add(corners[2]).multiplyScalar(0.5)
+                .sub(corners[0].clone().add(corners[1]).multiplyScalar(0.5));
+            const normal = right.clone().cross(up).normalize();
+            const m = new THREE.Matrix4().makeBasis(
+                right.clone().normalize(),
+                up.clone().normalize(),
+                normal,
+            );
+            this.m_backgroundQuad!.position.copy(center);
+            this.m_backgroundQuad!.quaternion.setFromRotationMatrix(m);
+            // PlaneGeometry(2,2) spans ±1 → scale by half the edge lengths.
+            this.m_backgroundQuad!.scale.set(right.length() / 2, up.length() / 2, 1);
         };
 
         this.m_scene.add(this.m_backgroundQuad);
+                // The quad is added asynchronously (sprite fetch) — likely after the
+        // last scheduled frame. Adding a scene object does not itself request
+        // a redraw, so without this the pattern never appears in the capture.
+        (this.m_mapView as any).update?.();
     }
 
     async applyTerrain(

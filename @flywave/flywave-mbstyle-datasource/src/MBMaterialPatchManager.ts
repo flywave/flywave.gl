@@ -14,6 +14,7 @@ const rasterTextureCache = new Map<string, THREE.Texture>();
 const rasterTextureLoader = new THREE.TextureLoader();
 // Cache of cropped sprite sub-rect textures used for fill/line/extrusion patterns.
 const patternTextureCache = new Map<string, THREE.Texture>();
+let patternTextureCacheAtlas: unknown = null;
 
 export class MBMaterialPatchManager {
     private m_patchedTiles = new WeakMap<object, MaterialPatchState>();
@@ -1166,7 +1167,11 @@ export class MBMaterialPatchManager {
                     );
                     // Tile the pattern image along the line using the cumulative
                     // distance varying (vCoords.x), scaled by the pattern width.
-                    const pscale = 1 / Math.max(1, (patternTex.image?.width ?? 32));
+                    // @2x sprites: divide physical px by the sprite pixelRatio
+                    // to get the logical display size (mgl displaySize).
+                    const psi = (this.m_dataSource as any).spriteAtlas?.icons?.get(patternName);
+                    const pspr = Math.max(1, Number(psi?.pixelRatio ?? 1) || 1);
+                    const pscale = pspr / Math.max(1, (patternTex.image?.width ?? 32));
                     shader.uniforms.uMBPatternScale = { value: pscale };
                     // SolidLineMaterial outputs via `outputDiffuse`/`alpha`
                     // (two branches: with/without vColor) — not the r178-invalid
@@ -2142,6 +2147,13 @@ export class MBMaterialPatchManager {
     private extractPatternTexture(patternName: string): THREE.Texture | undefined {
         const atlas = (this.m_dataSource as any).spriteAtlas;
         if (!atlas) return undefined;
+        // setStyle can swap the sprite atlas (e.g. 1x → @2x) — drop stale
+        // extractions from a previous atlas so scales/textures refresh.
+        if (patternTextureCacheAtlas !== atlas) {
+            for (const t of patternTextureCache.values()) t.dispose();
+            patternTextureCache.clear();
+            patternTextureCacheAtlas = atlas;
+        }
         const cached = patternTextureCache.get(patternName);
         if (cached) return cached;
         const info = atlas.icons?.get(patternName);
@@ -2198,7 +2210,12 @@ export class MBMaterialPatchManager {
 
         // Pattern tile size in world units. The sprite pixel size is mapped to
         // meters at roughly the sprite's pixelRatio; 1px ≈ 1 world unit scaled.
-        const tileScale = 1 / Math.max(1, (tex.image?.width ?? 32));
+        // @2x sprites carry double-resolution pixels — divide by the sprite's
+        // pixelRatio so the tile matches the sprite's logical display size
+        // (mgl `displaySize`, same as the line-ribbon patternWorld path).
+        const spriteInfo = (this.m_dataSource as any).spriteAtlas?.icons?.get(technique._patternName);
+        const spritePr = Math.max(1, Number(spriteInfo?.pixelRatio ?? 1) || 1);
+        const tileScale = spritePr / Math.max(1, (tex.image?.width ?? 32));
         const origOnCompile = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (origOnCompile) origOnCompile.call(material, shader);

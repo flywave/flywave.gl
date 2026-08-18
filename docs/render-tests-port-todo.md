@@ -1434,6 +1434,20 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 七–十一批全部代码端闭环完毕，剩余项均需跑测取证（多层 border 埋点、icon-text-fit-2x 复核、blur 晕圈 blend 隔离专项）。
 
+### 12.50 N1 排查——pattern 全黑三重根因 + 修复（2026-08-18，`mbstyle-n1*/`）
+
+**重大发现：background-pattern quad 从未真正渲染过**。§2.1 的"background-pattern ✅13"是 08-07 代码审计结论（非像素验证）；r711 的 3556/14803 与本 Linux 环境纯黑 current 的 mismatch 完全一致——即 macOS 上也是黑的。本轮（Linux Edge150 + SwiftShader）逐层取证（karma `--log-level debug` + console 埋点，`pkill -f "RenderingTestResultServe[r]"` 防自杀）定位三个叠加根因，全部修复：
+
+1. **单行 atlas 打包超 GL MAX_TEXTURE_SIZE**（`buildSpriteFromIconSet` 单行拼接 → `standard` icon set 产出 **49562px** 宽 canvas → 纹理上传静默失败 → 全黑）。修复：shelf 行打包，`MAX_ATLAS_DIM=8192`（`SpriteAtlas.initCanvas` 还会 ×2 扩 canvas，8192→16358 ≤ 16384 侥幸可用，后续可再压）。
+2. **background quad 定位数学非法**：`setFromRotationMatrix(inverse(P·V))`——逆投影不是旋转矩阵，四元数产出垃圾 → quad 侧立/不可见（黑屏上仅剩 1-2px sliver）。修复：onBeforeRender 里对 NDC 四角（z=0）`unproject(camera)` 拟合 quad（position=质心、basis=边向量、scale=边长/2），对 pitch/透视 skew 天然正确；MapView 相机 world-scale 裁剪面（near≈14.6M）下 mid-depth 安全。
+3. **flipY 采样错位**：`getIconUv` 是图像空间（原点左上），纹理 flipY 上传后 v 轴反向——原 offset 直取 `[u0,v0]` 采样到 atlas 打包区下方的**空白行** → 黑。修复：`offset.y = 1 - v0 - h`。
+4. **mgl 语义修正**（本轮 N1 原任务）：① quad 材质不再乘 `background-color`（mgl `background_pattern` shader 无 u_color，默认黑会把整屏乘黑）→ 恒白；② 平铺周期从固定 `repeat=8` 改为 **mgl displaySize 语义**：`period = sprite物理px/pixelRatio × 屏幕DPR`（设备像素），onBeforeRender 里按 `renderer.getDrawingBufferSize/getSize` 动态算（512 画布+64px pattern 的旧巧合值 8 保持等价，零回归）；③ quad 异步添加后补 `mapView.update()` 请求重绘。
+5. **fill/solid-line pattern @2x 尺度**：`patchFillPatternMaterial` 的 `tileScale=1/物理宽` 改为 `pixelRatio/物理宽`（=1/逻辑宽，对齐 ribbon 的 patternWorld 语义）；solid-line trim 路径 `pscale` 同修；`patternTextureCache` 增加 atlas 更换失效（setStyle 换 sprite 不再用旧纹理）。
+
+**验证（`mbstyle-n1final/`，Linux 环境 44 例）**：pattern 全域从"全黑 16k+"进入渲染态——fill-pattern/literal 3842→**394**、opacity →**392**、color-theme →482、zoomed →795、missing →784；background-pattern 系 16384→2779–13112；sprites pattern 3556/14803→3458/14554（垂直周期已对 56px，水平/亮度待校准）。**尚未转通过**——剩余像素校准（水平周期、暗度/预乘、相位）为下轮 N1b；fill-pattern 的 moire/uneven/wrapping 大值需先与 macOS 基线核对再定性。
+
+**测试基建备忘**：karma 直跑取 console 需 `npx karma start karma.conf.js --log-level debug`（不指定 config 不会加载 customLauncher）；每轮强制 `timeout ≤400s` + 事后 `pkill -f "RenderingTestResultServe[r]"`（方括号防 pkill 自匹配——本轮曾因 pkill 全命令匹配自杀整条管线）。
+
 ### 12.49 七–十一批统一验收（2026-08-18，`mbstyle-r711/` + `mbstyle-rasfix*/`）
 
 **生效确认**：
@@ -1450,7 +1464,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 ### P0 — 上一轮验收的直接跟进（有明确取证方向）
 | # | 任务 | 依据 | 复杂度 |
 |---|------|------|--------|
-| N1 | **sprites pattern @2x 尺度校准**（1x-screen-2x-pattern 3556 / 2x-screen-2x-pattern 14803）：icon 已生效（41 近失）但 pattern 系仍差——对照 2x-screen-1x-icon 成功路径排查 patternWorld 在 @2x sprite 下的换算链 | §12.48/12.49 | ⭐⭐ |
+| N1 | **sprites pattern @2x 尺度校准**（1x-screen-2x-pattern 3556 / 2x-screen-2x-pattern 14803）：**主体完成（2026-08-18，§12.50）**——真因是 pattern 全黑三重 bug（atlas 超 MAX_TEXTURE_SIZE / quad 定位数学非法 / flipY 采样错位），已全部修复 + mgl displaySize 平铺语义；fill-pattern 进入 392–795 近失带。**剩余 N1b**：sprites/background-pattern 像素校准（水平周期、暗度、相位）→ 转通过 | §12.48/12.49 | ⭐⭐ |
 | N2 | **symbol-elevation ground/sea 系**（24–26k 恒定）：terrain/globe 场景依赖——先跑无 terrain 的 sea-zero-without-terrain 单例取证（24328），判断是 elevation 值差还是场景基线差 | §12.49 | ⭐⭐ |
 | N3 | **icon-translate / text-translate 符号源空白**（8k/10k 既有基线）：§12.16 记录 mvt 符号源不渲染——与 icon-text-fit/property-function 的"同点要素仅放置 1 个"同为 placement 深水区 | §12.16/12.49 | ⭐⭐⭐⭐ |
 | N4 | **int-zoom pattern 白点相位**（32122）：宽度 base 插值已排除、密度已修 u 纵横比——残余为逐点位置校准，需像素级 diff 取证 | §12.42 | ⭐⭐⭐ |
