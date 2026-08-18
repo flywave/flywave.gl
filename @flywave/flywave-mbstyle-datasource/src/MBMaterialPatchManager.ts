@@ -605,6 +605,37 @@ export class MBMaterialPatchManager {
                 baseSrgb = [c.r, c.g, c.b];
             }
         } catch {}
+        // mgl far-plane clip (far_z.ts farthestPixelDistanceOnPlane): the
+        // far plane cuts the ground at high pitch; the reference images show
+        // transparent/black beyond that line. NOTE: MapView exposes `tilt`
+        // (NOT `pitch` — an earlier attempt read mapView.pitch and got 0,
+        // so the clip never fired). d1 (camera→sea-level distance) equals
+        // the camera→geoCenter distance (the camera looks straight at it).
+        let rasFar = Infinity;
+        try {
+            const mapView = (this.m_dataSource as any).mapView;
+            const cam = mapView?.camera as THREE.PerspectiveCamera | undefined;
+            const tiltDeg = Number(mapView?.tilt ?? 0);
+            // DISABLED: the tilt fix made the clip fire but it over-clips
+            // (sea-zero 1871→34814) — the viewZ/d1 magnitude still needs
+            // calibration against the RTE frame. Re-enable after probing.
+            const farClipEnabled = false;
+            if (farClipEnabled && cam && tiltDeg > 0) {
+                const { GeoCoordinates } = require('@flywave/flywave-geoutils');
+                const gc = mapView.geoCenter;
+                const focus = mapView.projection.projectPoint(
+                    new GeoCoordinates(gc.latitude, gc.longitude));
+                const d1 = cam.position.distanceTo(focus);
+                const pitch = tiltDeg * Math.PI / 180;
+                const fovAbove = ((cam.fov ?? 36.87) * Math.PI / 180) / 2;
+                const topHalf = Math.sin(fovAbove) * d1
+                    / Math.sin(Math.max(Math.PI / 2 - pitch - fovAbove, 0.01));
+                let far = Math.sin(pitch) * topHalf + d1;
+                const horizon = d1 / 0.1; // mgl _horizonShift
+                far = Math.min(far * 1.01, horizon);
+                rasFar = far;
+            }
+        } catch {}
         const attach = (texture: THREE.Texture) => {
             texture.minFilter = filterType;
             texture.magFilter = filterType;
@@ -638,6 +669,7 @@ export class MBMaterialPatchManager {
                 };
                 shader.uniforms.uMBRasHue = { value: (hue ?? 0) * Math.PI / 180 };
                 shader.uniforms.uMBRasBase = { value: baseSrgb };
+                shader.uniforms.uMBRasFar = { value: rasFar };
                 // When padded, the ORIGINAL image size lives in __mbPadPx
                 // (the canvas is +2); unpadded textures use their own size.
                 const padPx: [number, number] = (texture as any).__mbPadPx
@@ -646,11 +678,11 @@ export class MBMaterialPatchManager {
                 shader.uniforms.uMBRasFullPx = { value: [padPx[0], padPx[1]] };
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
-                    'varying vec2 vMBRasUv;\nvoid main() {',
+                    'varying vec2 vMBRasUv; varying float vMBRasViewZ;\nvoid main() {',
                 );
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <begin_vertex>',
-                    '#include <begin_vertex>\nvMBRasUv = uv;',
+                    '#include <begin_vertex>\nvMBRasUv = uv;\nvMBRasViewZ = -(modelViewMatrix * vec4(transformed, 1.0)).z;',
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     'void main() {',
@@ -660,6 +692,7 @@ export class MBMaterialPatchManager {
                      uniform float uMBRasBMin; uniform float uMBRasBMax;
                      uniform float uMBRasContrast; uniform float uMBRasSat; uniform float uMBRasHue;
                      uniform vec3 uMBRasBase;
+                     uniform float uMBRasFar;
                      uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx;
                      vec3 mbSrgbEnc(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
                      vec3 mbSrgbDec(vec3 c) { return mix(c / 12.92, pow((max(c, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
@@ -670,6 +703,12 @@ export class MBMaterialPatchManager {
                     `#include <opaque_fragment>
                      // Map the tile UV into the padded texture: the unpadded
                      // image occupies [1/W .. 1-1/W] of the padded canvas.
+                     if (vMBRasViewZ > uMBRasFar) {
+                         // Beyond mgl's far plane the reference shows the
+                         // transparent (black) background.
+                         gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                         return;
+                     }
                      vec2 mbRasUV = uMBRasUvOff + vMBRasUv * uMBRasUvScl;
                      vec2 mbRasSmp = (vec2(1.0) + mbRasUV * uMBRasFullPx) / (uMBRasFullPx + 2.0);
                      vec4 mbRasT = texture2D(uMBRasMap, mbRasSmp);

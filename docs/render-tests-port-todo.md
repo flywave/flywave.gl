@@ -1590,6 +1590,18 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **N3b 边缘扩展实验（同日，保留）**：已实现 1px 复制边 padding + UV 变换——14171/559/1871 **逐数值不变**（中性）：1:1 缩放下双线性采样恰在纹元中心、不插值，缝隙边缘本就不产生差异。保留（对缩放场景正确）。**基底 14171 定性更新：差异在瓦片内部**（特征线半像素级抖动 + 峰值衰减，195 vs 237），非缝隙、非平移、非半纹元——疑 mgl 参考的 GPU 各向异性采样或瓦片内坐标量化，SwiftShader 环境下可能不可达（与 sprites ±3 噪声同类）。raster paint 族剩余转通过依赖真机 GPU 复核。
 
+### 12.58 N5 代码优先批：MapAnchor 挂载 + minzoom/token/公式（2026-08-19，`mbstyle-n5*/`）
+
+**image-source 上屏根因（第 4 重）**：直接 `m_scene.add` 的自定义 MeshBasicMaterial 几何**从不显示**（onBeforeRender 触发、NDC 在视锥内、纯红材质也全白）——m_sceneRoot 每帧清空重建（`MapView.ts:3527`），瓦片/锚点对象走 `TileObjectRenderer`/`MapAnchors.update`（`world − camera` 定位）进 sceneRoot；裸加 m_scene 的对象不在渲染通路。**修复：image quad 改为 MapAnchor**（`.anchor = 世界坐标`，引擎每帧定位）——**image/default 158652→106847（61% 像素上屏）**、image/wrap 72793→**16209 近失**、raster-brightness 158559→73865。附带：image paint 注入对齐 mgl 公式 + sRGB 合成（§12.56/57 同款）、±C 世界副本、异步加载后 requestUpdate。
+
+**underzoom minzoom 语义修正**：mgl `coveringTiles` 对 z<minzoom `return []`（完全不画，非 overzoom 服务）——`zoomed-raster/underzoom` **转通过**（131k 全黑 → PASS）。探测起始层钳制到 maxzoom 保留。
+
+**icon-image token 解析（N3 深水区首个代码级根因）**：`"{maki}-12"` 类 token 从不做属性替换（text-field 有、icon 没有）→ mvt 符号层全空白。修复：`resolveTextField` 复用到 imageTexture + technique 缓存键含解析后 icon 名。**icon-image/token 空白→425 近失、icon-translate/literal 8066→2810**。
+
+**sea 远距裁剪**：tilt 修正后裁剪可触发但过度（sea-zero 1871→34814，幅度校准未完成，已用 `farClipEnabled=false` 门控保留代码）。
+
+**harness**：raster 等待改 10 轮有界轮询（§12.55 延续）。
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。

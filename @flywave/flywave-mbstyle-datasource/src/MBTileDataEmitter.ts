@@ -608,7 +608,12 @@ export class MBTileDataEmitter {
                 // symbolMode selects which one this call builds.
                 if (symbolMode === 'icon' || (symbolMode === undefined && l['icon-image'])) {
                     props.technique = 'labeled-icon';
-                    props.imageTexture = l['icon-image'];
+                    // Mapbox icon tokens ("{maki}-12") resolve against the
+                    // feature properties (same as text-field tokens) — mvt
+                    // symbol sources stayed blank without this.
+                    props.imageTexture = typeof l['icon-image'] === 'string'
+                        ? resolveTextField(l['icon-image'], properties ?? {})
+                        : l['icon-image'];
                     // PoiBuilder reads `iconColor` (it ignores `color`).
                     props.iconColor = p['icon-color'] ?? '#000000';
                     props.opacity = p['icon-opacity'] ?? 1;
@@ -940,8 +945,14 @@ export class MBTileDataEmitter {
                 properties ?? {},
             )
             : '';
+        // Resolved icon tokens likewise key the technique — features with
+        // different {token} values must not share the first feature's icon.
+        const iconKey = layer.type === 'symbol' && typeof layer.layout['icon-image'] === 'string'
+            && layer.layout['icon-image'].includes('{')
+            ? resolveTextField(layer.layout['icon-image'], properties ?? {})
+            : '';
 
-        const cacheKey = `${layer.id}:${symbolMode ?? ''}:${textKey}:${MBTileDataEmitter.evaluatedCacheKey(layer)}`;
+        const cacheKey = `${layer.id}:${symbolMode ?? ''}:${textKey}:${iconKey}:${MBTileDataEmitter.evaluatedCacheKey(layer)}`;
         let idx = this.m_layerToTechniqueIndex.get(cacheKey);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;

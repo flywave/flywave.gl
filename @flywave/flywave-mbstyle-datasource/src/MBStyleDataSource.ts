@@ -51,10 +51,14 @@ const MBSTYLE_DECODER_SERVICE_TYPE = 'mbstyle-vector-tile-decoder';
  */
 class RasterTileDataProvider extends DataProvider {
     private m_tileUrlTemplate: string;
+    private m_minZoom: number;
+    private m_maxZoom: number;
 
-    constructor(tileUrlTemplate: string) {
+    constructor(tileUrlTemplate: string, minZoom: number = 0, maxZoom: number = 22) {
         super();
         this.m_tileUrlTemplate = tileUrlTemplate;
+        this.m_minZoom = minZoom;
+        this.m_maxZoom = maxZoom;
     }
 
     ready(): boolean { return true; }
@@ -75,10 +79,16 @@ class RasterTileDataProvider extends DataProvider {
         // than the camera zoom, e.g. z12 fixtures under a z16 camera).
         // Resolve the deepest existing ancestor and emit the parent URL plus
         // the child's UV sub-rectangle inside the ancestor image.
-        let srcZ = z;
-        let srcX = x;
-        let srcY = y;
-        for (let zz = z; zz >= 0; zz--) {
+        // mgl coveringTiles: `if (z < options.minzoom) return []` — below
+        // the source minzoom NOTHING is drawn (zoomed-raster/underzoom's
+        // expected is pure black). Overzoom clamps the request to maxzoom.
+        if (z < this.m_minZoom) {
+            return JSON.stringify({ type: 'FeatureCollection', features: [] });
+        }
+        let srcZ = Math.min(z, this.m_maxZoom);
+        let srcX = Math.floor(x / Math.pow(2, z - srcZ));
+        let srcY = Math.floor(y / Math.pow(2, z - srcZ));
+        for (let zz = srcZ; zz >= 0; zz--) {
             const shift = z - zz;
             const u = this.m_tileUrlTemplate
                 .replace('{z}', String(zz))
@@ -92,6 +102,13 @@ class RasterTileDataProvider extends DataProvider {
                 srcY = Math.floor(y / Math.pow(2, shift));
                 break;
             }
+            srcZ = zz - 1;
+        }
+        if (srcZ < 0) {
+            // No tile anywhere (not even z0) — keep the original request
+            // URL; the texture load will fail and the patcher paints the
+            // background color.
+            srcZ = Math.min(Math.max(z, this.m_minZoom), this.m_maxZoom);
         }
         const shift = z - srcZ;
         const span = Math.pow(2, shift);
@@ -828,7 +845,8 @@ export class MBStyleDataSource extends TileDataSource {
                 const tileUrl = tiles[0] ?? source.tileUrls[0] ?? '';
                 if (tileUrl) {
                     const resolvedUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
-                    composite.add(sourceId, new RasterTileDataProvider(resolvedUrl));
+                    composite.add(sourceId, new RasterTileDataProvider(resolvedUrl,
+                        rasterSpec?.minzoom ?? 0, rasterSpec?.maxzoom ?? 22));
                     this.m_rasterTileUrl = resolvedUrl;
                     if (!currentSourceId) currentSourceId = sourceId;
                 }

@@ -1173,6 +1173,7 @@ export class MBEnvironmentManager {
         if (!this.m_scene) return;
 
         for (const mesh of this.m_imageQuads) {
+            (this.m_mapView as any).mapAnchors?.remove?.(mesh);
             this.m_scene.remove(mesh);
             (mesh.geometry as THREE.BufferGeometry).dispose();
             (mesh.material as THREE.Material).dispose();
@@ -1216,6 +1217,7 @@ export class MBEnvironmentManager {
                     if (!imgUrl) continue;
                     const loader = new THREE.TextureLoader();
                     texture = await loader.loadAsync(imgUrl);
+                    texture.colorSpace = THREE.SRGBColorSpace;
                 }
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
@@ -1233,17 +1235,24 @@ export class MBEnvironmentManager {
                     return proj.projectPoint(new GeoCoordinates(c[1], c[0]));
                 });
 
-                const C = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
-                const tl = new THREE.Vector3(wgs[1].x, C - wgs[1].y, 0);
-                const tr = new THREE.Vector3(wgs[2].x, C - wgs[2].y, 0);
-                const br = new THREE.Vector3(wgs[3].x, C - wgs[3].y, 0);
-                const bl = new THREE.Vector3(wgs[0].x, C - wgs[0].y, 0);
+                // Build the quad in WORLD coordinates (projection output,
+                // no y-flip) relative to an anchor corner, then register it
+                // as a MapAnchor — the engine re-positions anchors into the
+                // per-frame-rendered scene root (`world − camera`), which is
+                // the only reliable placement for custom geometry (direct
+                // m_scene adds never showed up despite in-frustum NDC).
+                const w = (i: number): THREE.Vector3 => new THREE.Vector3(wgs[i].x, wgs[i].y, 0);
+                const tl = w(1);
+                const tr = w(2);
+                const br = w(3);
+                const bl = w(0);
+                const anchor = tl.clone();
 
                 const positions = new Float32Array([
-                    tl.x, tl.y, 0,
-                    tr.x, tr.y, 0,
-                    br.x, br.y, 0,
-                    bl.x, bl.y, 0,
+                    0, 0, 0,
+                    tr.x - anchor.x, tr.y - anchor.y, 0,
+                    br.x - anchor.x, br.y - anchor.y, 0,
+                    bl.x - anchor.x, bl.y - anchor.y, 0,
                 ]);
                 const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
                 const uvs = new Float32Array([0, 1, 1, 1, 1, 0, 0, 0]);
@@ -1258,61 +1267,118 @@ export class MBEnvironmentManager {
                     map: texture,
                     side: THREE.DoubleSide,
                     depthWrite: false,
-                    transparent: true,
-                    opacity: rasterOpacity,
+                    transparent: false,
                 });
 
-                // raster brightness / contrast / saturation / hue-rotate —
-                // same math as MBMaterialPatchManager.patchRasterMaterial, but
-                // self-contained on gl_FragColor (image quads are plain
-                // MeshBasicMaterial with `map`).
+                // raster paints — the SAME mgl-exact chain as the per-tile
+                // raster path (MBMaterialPatchManager.patchRasterMaterial):
+                // spin dot-product rotation, average-based saturation,
+                // CPU-side contrast/saturation factors, brightness as a
+                // direct mix, all in sRGB numeric space. Unlike
+                // MapMeshBasicMaterial (identity colorspace_fragment), the
+                // built-in MeshBasicMaterial re-encodes after
+                // opaque_fragment, so values are decoded back to linear
+                // before the write.
                 const rawBrightness = layerPaint['raster-brightness'];
                 const bMin = Array.isArray(rawBrightness) ? (rawBrightness[0] ?? 0)
                     : (layerPaint['raster-brightness-min'] ?? 0);
                 const bMax = Array.isArray(rawBrightness) ? (rawBrightness[1] ?? 1)
                     : (layerPaint['raster-brightness-max'] ?? 1);
-                const contrast = layerPaint['raster-contrast'];
-                const saturation = layerPaint['raster-saturation'];
-                const hueDeg = layerPaint['raster-hue-rotate'];
-                if (bMin !== 0 || bMax !== 1 || contrast !== undefined ||
-                    saturation !== undefined || hueDeg !== undefined) {
+                const c0 = Number(layerPaint['raster-contrast'] ?? 0);
+                const s0 = Number(layerPaint['raster-saturation'] ?? 0);
+                const hueDeg = Number(layerPaint['raster-hue-rotate'] ?? 0);
+                const opacityVal = Number.isFinite(rasterOpacity) ? rasterOpacity : 1;
+                const hasPaint =
+                    bMin !== 0 || bMax !== 1 || c0 !== 0 || s0 !== 0 || hueDeg !== 0 ||
+                    opacityVal < 1;
+                if (hasPaint) {
+                    const conFactor = c0 > 0 ? 1 / (1.001 - c0) : 1 + c0;
+                    const satFactor = s0 > 0 ? 1 - 1 / (1.001 - s0) : -s0;
+                    const hueRad = hueDeg * Math.PI / 180;
+                    // Base under the image: the style background color (mgl
+                    // default black when a background layer exists, else the
+                    // engine's opaque white).
+                    let baseSrgb: [number, number, number] = [1, 1, 1];
+                    try {
+                        const bgLayer = (style?.layers ?? []).find((l: any) => l.type === 'background');
+                        if (bgLayer) {
+                            const bc = new THREE.Color(bgLayer.paint?.['background-color'] ?? '#000000');
+                            baseSrgb = [bc.r, bc.g, bc.b];
+                        }
+                    } catch {}
+                    const origCompile = material.onBeforeCompile;
                     material.onBeforeCompile = (shader: any) => {
+                        if (origCompile) origCompile.call(material, shader);
                         shader.uniforms.uMBImgBMin = { value: bMin };
                         shader.uniforms.uMBImgBMax = { value: bMax };
-                        shader.uniforms.uMBImgContrast = { value: contrast ?? 0 };
-                        shader.uniforms.uMBImgSat = { value: saturation ?? 0 };
-                        shader.uniforms.uMBImgHue = { value: (hueDeg ?? 0) * Math.PI / 180 };
+                        shader.uniforms.uMBImgContrast = { value: conFactor };
+                        shader.uniforms.uMBImgSat = { value: satFactor };
+                        shader.uniforms.uMBImgHue = { value: hueRad };
+                        shader.uniforms.uMBImgOpacity = { value: opacityVal };
+                        shader.uniforms.uMBImgBase = { value: baseSrgb };
                         shader.fragmentShader = shader.fragmentShader.replace(
                             'void main() {',
                             `uniform float uMBImgBMin; uniform float uMBImgBMax;
                              uniform float uMBImgContrast; uniform float uMBImgSat; uniform float uMBImgHue;
+                             uniform float uMBImgOpacity; uniform vec3 uMBImgBase;
+                             vec3 mbImgSrgbEnc(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
+                             vec3 mbImgSrgbDec(vec3 c) { return mix(c / 12.92, pow((max(c, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
                              void main() {`
                         );
                         shader.fragmentShader = shader.fragmentShader.replace(
                             '#include <opaque_fragment>',
                             `#include <opaque_fragment>
                              {
-                                 vec3 mbR = gl_FragColor.rgb;
-                                 mbR = clamp((mbR - uMBImgBMin) / max(uMBImgBMax - uMBImgBMin, 0.001), 0.0, 1.0);
-                                 mbR = (mbR - 0.5) * (1.0 + uMBImgContrast) + 0.5;
-                                 float mbL = dot(mbR, vec3(0.299, 0.587, 0.114));
-                                 mbR = mix(vec3(mbL), mbR, 1.0 + uMBImgSat);
-                                 float mbCa = cos(uMBImgHue); float mbSa = sin(uMBImgHue);
-                                 mat3 mbHue = mat3(
-                                     vec3(mbCa + 0.299*(1.0-mbCa), 0.587*(1.0-mbCa) - 0.327*mbSa, 0.114*(1.0-mbCa) + 0.921*mbSa),
-                                     vec3(0.299*(1.0-mbCa) - 0.714*mbSa, mbCa + 0.587*(1.0-mbCa), 0.114*(1.0-mbCa) + 0.530*mbSa),
-                                     vec3(0.299*(1.0-mbCa) + 0.165*mbSa, 0.587*(1.0-mbCa) - 0.330*mbSa, mbCa + 0.114*(1.0-mbCa)));
-                                 gl_FragColor.rgb = clamp(mbHue * mbR, 0.0, 1.0);
+                                 // gl_FragColor is linear here (sRGB texture
+                                 // decoded on sample); colorspace_fragment
+                                 // encodes after us.
+                                 vec4 imgT = texture2D(map, vMapUv);
+                                 vec3 mbR = mbImgSrgbEnc(imgT.rgb);
+                                 // spin (mgl spinWeights)
+                                 float ca = cos(uMBImgHue); float sa = sin(uMBImgHue);
+                                 vec3 spin = vec3(
+                                     (2.0 * ca + 1.0) / 3.0,
+                                     (-1.7320508 * sa - ca + 1.0) / 3.0,
+                                     (1.7320508 * sa - ca + 1.0) / 3.0);
+                                 mbR = vec3(dot(mbR, spin.xyz), dot(mbR, spin.zxy), dot(mbR, spin.yzx));
+                                 float avg = (mbR.r + mbR.g + mbR.b) / 3.0;
+                                 mbR += (avg - mbR) * uMBImgSat;
+                                 mbR = (mbR - 0.5) * uMBImgContrast + 0.5;
+                                 mbR = mix(vec3(uMBImgBMin), vec3(uMBImgBMax), mbR);
+                                 // sRGB-domain opaque composite for opacity
+                                 // (the framebuffer blends linearly).
+                                 vec3 outSrgb = mix(uMBImgBase, mbR, uMBImgOpacity * imgT.a);
+                                 gl_FragColor = vec4(mbImgSrgbDec(outSrgb), 1.0);
                              }`
                         );
                     };
                 }
 
-                const mesh = new THREE.Mesh(geom, material);
+                const mesh = new THREE.Mesh(geom, material) as any;
                 mesh.renderOrder = -90;
                 mesh.frustumCulled = false;
-                this.m_scene.add(mesh);
+                mesh.anchor = { x: anchor.x, y: anchor.y, z: 0 };
+                (this.m_mapView as any).mapAnchors?.add?.(mesh);
                 this.m_imageQuads.push(mesh);
+                // mgl `renderWorldCopies` (default on): repeat the image at
+                // ±equator world copies — image/wrap fixtures cross the
+                // antimeridian and expect the neighbours visible.
+                const Cw = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
+                for (const dx of [-Cw, Cw]) {
+                    const m2 = new THREE.Mesh(geom, material) as any;
+                    m2.renderOrder = -90;
+                    m2.frustumCulled = false;
+                    m2.anchor = { x: anchor.x + dx, y: anchor.y, z: 0 };
+                    (this.m_mapView as any).mapAnchors?.add?.(m2);
+                    this.m_imageQuads.push(m2);
+                }
+                // Image styles usually have no tile sources — the render loop
+                // has already stopped by the time the async image decode
+                // finishes. Request a frame so the quad makes it into the
+                // capture.
+                try {
+                    (this.m_mapView as any).update?.();
+                } catch {}
             } catch {}
         }
     }
