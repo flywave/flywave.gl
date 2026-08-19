@@ -2587,10 +2587,27 @@ export class MBTileDataEmitter {
                     : undefined;
                 let twx = 0, twy = 0;
                 if (translatePx && (translatePx[0] !== 0 || translatePx[1] !== 0)) {
+                    let tx = translatePx[0];
+                    let ty = translatePx[1];
+                    // `*-translate-anchor: viewport` rotates the translate by
+                    // +bearing in the map frame (mgl painter.translatePosMatrix),
+                    // same as line-translate.
+                    const anchor = mode === 'text'
+                        ? layer.paint?.['text-translate-anchor']
+                        : layer.paint?.['icon-translate-anchor'];
+                    if (anchor === 'viewport' && this.m_bearing !== 0) {
+                        const ang = this.m_bearing * Math.PI / 180;
+                        const cos = Math.cos(ang);
+                        const sin = Math.sin(ang);
+                        const r0 = tx * cos - ty * sin;
+                        const r1 = tx * sin + ty * cos;
+                        tx = r0;
+                        ty = r1;
+                    }
                     const mppS = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                         (256 * Math.pow(2, this.m_zoom + 1));
-                    twx = translatePx[0] * mppS;
-                    twy = -translatePx[1] * mppS;
+                    twx = tx * mppS;
+                    twy = -ty * mppS;
                 }
 
                 for (const pt of points) {
