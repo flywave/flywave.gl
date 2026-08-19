@@ -16,6 +16,8 @@
 >
 > **2026-08-17 当前快照（最新）**：§12.21–§12.28 的 08-16/17 系列修复全部落地——icon-text-fit 0→**7/41**（3b8da244）、fill-outline-color 1→**2/8**（57baa3e0）、icon-size 4→**9/18**（af54f113）、icon-halo-blur 0→**4/5** + width 3→**4/4** + color 3→**5/7**（f1b5a066）、icon-rotate 四角旋转接线（62ca4139）、heatmap 0/18→**15/18**（6fa78651）、lighting-3d-mode 2→**10** + skybox 0→**1**（G7 验收，§12.27）。最新全量基线仍为 baseline4（08-15，§12.9）**231/2827（8.17%）**，0 DISCONNECTED。剩余主线：F1 fill-extrusion 墙面几何对齐（~140 例）、F8 line-join/cap、F11 raster/image、G4 text 像素精度（见 §14 待办清单）。
 >
+> **2026-08-19 快照（dash 校准，§12.63）**：`4d45e37b`+`a9f41ee7` 完成 §12.62 遗留三项——dash 周期单位（floorwidth + 2^frac 瓦片锚点）、zero-dash 隐形、data-driven 分键 + meters 单位 + 形状 SDF（butt/square/round cap 复刻 mgl line_atlas）。数值验证 period 与 expected.png 逐像素吻合。渲染验证攒批延后。
+>
 > **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。
 >
 > **2026-08-17 更新（F2a 落地——近裁剪面贴地，§12.30）**：property-function/zoom-and-property 半块方块缺南墙+屋顶的根因是**相机近平面按 maxElevation=0 求解贴在地面**，高出地面的挤出内容（最靠近相机一侧）被 GPU 近平面裁剪——同时解释 §12.6 C3 未解的"最靠近相机内容缺失"签名。修复：emitter 上报 `DecodedTile.maxGeometryHeight` + datasource 扫描样式设 `DataSource.maxGeometryHeight`（两级：解码后近平面/geoBox、解码前 cull box）。**fill-extrusion-color/property-function 8237→PASS(66px)、zoom-and-property 8171→PASS(1px)**，零回归。§14 F2a 勾除。
@@ -1668,6 +1670,19 @@ if (border_color.a == 0.0) {                     // 未显式设 border-color
 **验证**（line-dasharray 全量，Edge headless + SwiftShader）：zoom-history 6324→**387**、less-than-one 5889→**298**、long-segment 11550→**8171**、overscaled 2007→**347**、zoom-history-line-metrics 875→**154**、feature-dash-const-cap 1156→**516**、composite-dash-composite-cap 1132→592；**function/line-width-constant 88→4 PASS**。long-segment current 现出 6 段（原 1 段实线）。净改善巨大。
 
 **遗留（dash 周期/密度像素校准）**：zoom-history 14 vs 1 段、overscaled 31 vs 11 段（dashWorld 周期需对照 mgl `line_bucket.ts` dash 单位精修）；`zero-values` [0,0] 边界（hasDash 需 dashWorld[0]>0，[0,0] 应隐形未处理）；data-driven dasharray 的 line-width 求值（composite/property-function 系 +73/+77 轻微回退）。
+
+### 12.63 dash 校准对齐 mgl 源码（2026-08-19，commits `4d45e37b` + `a9f41ee7`，代码落地，渲染验证攒批延后）
+
+**§12.62 遗留三项全部处理**（对照 `line_bucket.ts` / `line.vertex.glsl` / `line.fragment.glsl` / `line_atlas.ts` 源码逐项取证）：
+
+1. **dash 周期单位（dashWorld）**：真因是**双重**——① 周期应按 `line-floorwidth`（`LineFloorwidthProperty`/`useIntegerZoom`：line-width 在 **floor(camera zoom)** 求值）而非连续线宽；② `a_linesofar` 锚在 **floor-zoom 瓦片网格**（`u_tile_units_to_pixels` 以 `tileZoom` 计算，`transform.ts:568` 取整），屏幕周期带 `2^(zoom−floor(zoom))` 因子。修复：`evaluateFloorLineWidth`（重求值 raw spec @floor zoom，数据驱动带 feature）+ `mppDash` 用 `floor(m_zoom+1)`。**数值验证**：long-segment `[1,1]×50@12.15` 周期 100px→**111px**（expected.png 实测 111 逐像素吻合）、fractional-zoom 11.3、zoom-history 48、overscaled 10、meters-dasharray 98 全部吻合。
+2. **zero-dash 隐形**：mgl `line_atlas.addDash` 折叠零长 range——DASH 和为 0（`[0]`/`[0,0]`/`[0,0,0,0]`）只剩 gap → 整线隐形；空数组 `[]` 推 `[1]` → 实线；gap 为 0（`[x,0]`）→ 实线。修复：`dashSumDash`（偶数下标和）+ emitter 整层 skip + technique `_dashInvisible` + patcher `discard`。
+3. **data-driven dasharray/line-width 分键**：technique key 从 `hasDash` 布尔升级为 `dashSig = JSON(dashArr)@floorWidth`——每要素不同 dasharray/线宽不再共享首要素值。
+4. **meters 单位**：`dashWorldFor`——`line-width-unit:meters` 下 dash/pattern 跳过 px→world 换算（世界单位即米；mgl 的 period 恒为 `totalLength × width_px`，meters 经 `u_floor_width_scale` 折回像素）。
+5. **dash 形状 SDF（cap 对齐 mgl line_atlas）**：片段 shader 复刻 atlas SDF——**butt**=矩形、**square**=半宽外扩矩形（capLength=0.5·stretch → 外扩 0.5·width）、**round**=胶囊（半径 halfW 圆帽，含周期回绕的下一段探测）。双缘 ~1px AA 用 `uMBDashPx`（世界米/像素），替代原 `fwidth(mod())`（mod 在相位回绕处爆炸成整段模糊）。CPU 仿真验证：butt 20/20px、square/round 32/8px（含 6px 外扩）逐周期吻合。
+6. **pattern u 平铺同享 floor 锚点 + meters 分支**（§15 N4 int-zoom 连带，密度已是 floor 锚定）。
+
+**状态**：tsc 绿；MBExpressionEngineTest 43 passing、MBStyleDecoderPipelineTest 12 passing（2 既有失败无关）。渲染验证（line-dasharray 全量 + line-pattern 全量）攒批延后。
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
