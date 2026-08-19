@@ -948,9 +948,19 @@ export class MBMaterialPatchManager {
                     shader.uniforms.uMBRibbonWidth = { value: widthPx };
                     shader.uniforms.uMBRibbonBlur = { value: blurPx };
                     if (hasDash) {
+                        const dashLayout = technique._layout ?? {};
+                        const dashCap = String(dashLayout['line-cap'] ?? 'butt');
+                        const dashCapMode = dashCap === 'round' ? 1 : (dashCap === 'square' ? 2 : 0);
+                        const dashUnit = dashLayout['line-width-unit'] ?? 'pixels';
+                        const dashHalfW = dashUnit === 'meters'
+                            ? widthPx / 2
+                            : (widthPx * mpp) / 2;
                         shader.uniforms.uMBDashSize = {
                             value: new THREE.Vector2(dashWorld[0], dashWorld[1]),
                         };
+                        shader.uniforms.uMBDashCap = { value: dashCapMode };
+                        shader.uniforms.uMBDashHalfW = { value: dashHalfW };
+                        shader.uniforms.uMBDashPx = { value: mpp };
                     }
                     if (hasTrim) {
                         shader.uniforms.uMBTrimRange = {
@@ -1018,7 +1028,7 @@ export class MBMaterialPatchManager {
                           uniform float uMBRibbonWidth;
                           uniform float uMBRibbonBlur;
                           ${rampTex || hasTrim ? 'varying float vMBRibbonDist;\nuniform sampler2D uMBRamp;\nuniform vec2 uMBTrimRange;\nuniform vec4 uMBTrimColor;\nuniform vec2 uMBTrimFade;' : ''}
-                          ${patTex || hasDash ? `varying float vMBRibbonLen;${patTex ? '\nuniform sampler2D uMBPat;\nuniform float uMBPatUScale;\nuniform float uMBPatVScale;' + (patTex2 ? '\nuniform sampler2D uMBPat2;\nuniform float uMBPatFade;' : '') : ''}${hasDash ? '\nuniform vec2 uMBDashSize;' : ''}` : ''}
+                          ${patTex || hasDash ? `varying float vMBRibbonLen;${patTex ? '\nuniform sampler2D uMBPat;\nuniform float uMBPatUScale;\nuniform float uMBPatVScale;' + (patTex2 ? '\nuniform sampler2D uMBPat2;\nuniform float uMBPatFade;' : '') : ''}${hasDash ? '\nuniform vec2 uMBDashSize;\nuniform float uMBDashCap;\nuniform float uMBDashHalfW;\nuniform float uMBDashPx;' : ''}` : ''}
                           void main() {`
                     );
                     // Inject AFTER the colorspace conversion: the ramp /
@@ -1055,22 +1065,37 @@ export class MBMaterialPatchManager {
                               ${rampTex ? `vec4 mbGrad = texture2D(uMBRamp, vec2(clamp(vMBRibbonDist, 0.0, 1.0), 0.5));
                                           gl_FragColor.rgb = mbGrad.rgb * ${borderDarken};
                                           gl_FragColor.a *= mbGrad.a;` : ''}
-                              // line-dasharray: mgl dashes along a_linesofar
-                              // (accumulated feature distance) in line-width
-                              // units; the ribbon dashes along aRibbonLen
-                              // (world meters) with uMBDashSize = [dashLen,
-                              // gapLen] world units. Dash "on" for phase < dash,
-                              // AA-faded at BOTH dash edges (~1px) via
-                              // fwidth(aRibbonLen) — the world meters spanned
-                              // by one screen pixel. The former
-                              // fwidth(mod()) exploded at the phase wrap
-                              // (mod jumps dashLen→0), smearing a multi-period
-                              // fade over the whole line.
+                              // line-dasharray: mgl dashes along a_linesofar (accumulated
+                              // feature distance) in line-width units; the
+                              // ribbon dashes along aRibbonLen (world meters)
+                              // with uMBDashSize = [dashLen, gapLen] world
+                              // units. The dash shape is a signed distance
+                              // field over the period — replicating mgl's line
+                              // atlas SDF (line_atlas.ts addDash) — so the
+                              // cap style (butt rect / square rect extended by
+                              // halfW / round capsule) is exact and both dash
+                              // edges get a ~1px AA via uMBDashPx (world
+                              // meters per pixel). The former fwidth(mod())
+                              // approach exploded at the phase wrap.
                               ${hasDash ? `float mbDashTotal = uMBDashSize.x + uMBDashSize.y;
-                                  float mbDashPhase = mod(vMBRibbonLen, mbDashTotal);
-                                  float mbDashIn = min(mbDashPhase, uMBDashSize.x - mbDashPhase);
-                                  float mbDashEdge = max(fwidth(vMBRibbonLen), 1e-5);
-                                  float mbDashA = clamp(mbDashIn / mbDashEdge, 0.0, 1.0);
+                                  float mbPhase = mod(vMBRibbonLen, mbDashTotal);
+                                  float mbEdge = uMBDashSize.x;
+                                  float mbCross = abs(vMBRibbonEdge) * uMBDashHalfW;
+                                  float mbDashA;
+                                  if (uMBDashCap == 1.0) {
+                                      float mbProj = clamp(mbPhase, 0.0, mbEdge);
+                                      float mbC1 = length(vec2(mbPhase - mbProj, mbCross)) - uMBDashHalfW;
+                                      float mbProj2 = clamp(mbPhase - mbDashTotal, 0.0, mbEdge);
+                                      float mbC2 = length(vec2(mbPhase - mbDashTotal - mbProj2, mbCross)) - uMBDashHalfW;
+                                      mbDashA = clamp(1.0 - min(mbC1, mbC2) / max(uMBDashPx, 1e-5), 0.0, 1.0);
+                                  } else {
+                                      float mbExt = uMBDashCap == 2.0 ? uMBDashHalfW : 0.0;
+                                      float mbDCur = max(mbPhase - mbEdge - mbExt, 0.0);
+                                      float mbDNext = max(mbDashTotal - mbExt - mbPhase, 0.0);
+                                      float mbAlong = min(mbDCur, mbDNext);
+                                      float mbDist = length(vec2(mbAlong, max(mbCross - uMBDashHalfW, 0.0)));
+                                      mbDashA = clamp(1.0 - mbDist / max(uMBDashPx, 1e-5), 0.0, 1.0);
+                                  }
                                   gl_FragColor.a *= mbDashA;` : ''}
                              // Distance from the ribbon edge in px; the edge
                              // ramp is only applied for blurred lines (see
