@@ -1904,6 +1904,14 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **下一轮入口**：① 查红材质来源（TileGeometryCreator 为 extruded-polygon 创建的 attachment 材质数组）；② 验证主材质实际 blend alpha（为何 0.47）：检查 `enforceBlending`/premultiplied 设置与引擎 extrusion shader 的 alpha 处理；③ R 通道已对齐意味着修好混合后该族有望整体转近失。
 
+**§12.74 第三轮取证（2026-08-20 三，两个疑点均有答案）**：
+
+1. **红材质破案**：`SolidLineMaterial.DEFAULT_COLOR = 0xff0000`（flywave-materials）——第三个材质是 extrusion 几何 `edgeIndex`（roof outline 线）的 SolidLine 材质，technique 无 lineColor 时落默认红色。与本缺陷无关（边线像素少）。
+2. **等效 alpha 精确测定 = 0.5（非 0.47）**：ASCII 对照显示**几何形状逐像素一致**（梯形 + 地平线完全对齐），唯一差异是整面亮度——CUR 墙 = `0.5·wall + 0.5·bg`（天区上 137 灰、青地上 (10,137,137) 全部吻合 0.5 混合）。即 paint opacity 0.75 在管线某处变成 **0.5（= 0.75×⅔，又一次 16/24 因子！）**。
+3. **注入点强制 `gl_FragColor.a = 0.75` 无任何效果**（80180 逐像素不变）→ 最终 alpha 在我们注入点**之后**的引擎 shader 链决定（`MapMeshMaterials.ts` 无自研 opacity 处理，疑在 three 标准 chunk 之后还有引擎 FadingFeature/dynamicOpacity 或两遍深度的 EqualDepth 材质链）。
+
+**第四轮入口（收窄到一条线）**：追踪 0.75→0.5 的 ×⅔ 位置——① 埋点 dump 引擎侧 extruded-polygon 材质在渲染时的 `material.opacity` 与 three 编译后 uniform `opacity` 值；② 检查 `DepthPrePass` 主材质 `EqualDepth` 链是否有 alpha 重算；③ 若 ×⅔ 来自某处 `textSize/catalogSize` 型单位换算误用，全局搜引擎中 `/1.5`、`*0.666` 类常量。形状已全对齐、R 通道已对齐——这是最后一块砖。
+
 
 
 
