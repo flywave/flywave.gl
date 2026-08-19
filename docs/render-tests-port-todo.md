@@ -1912,6 +1912,13 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **第四轮入口（收窄到一条线）**：追踪 0.75→0.5 的 ×⅔ 位置——① 埋点 dump 引擎侧 extruded-polygon 材质在渲染时的 `material.opacity` 与 three 编译后 uniform `opacity` 值；② 检查 `DepthPrePass` 主材质 `EqualDepth` 链是否有 alpha 重算；③ 若 ×⅔ 来自某处 `textSize/catalogSize` 型单位换算误用，全局搜引擎中 `/1.5`、`*0.666` 类常量。形状已全对齐、R 通道已对齐——这是最后一块砖。
 
+**§12.74 第四轮取证（2026-08-20 四，机制破译：premultiplied 画布 + 有效 alpha 0.4627）**：
+
+1. **材质侧全部正确**（per-frame dump）：主材质 `opacity=0.75 transparent=false CustomBlending(SRC_ALPHA,1−SRC_ALPHA) EqualDepth`、prepass 克隆 opacity=1 colorWrite-off ✓；无 vertexColors、无 FadingFeature、引擎无运行时 opacity 改写；shader 尾部（dump 编译产物）在 `#include <colorspace_fragment>` 后仅 fog/premultiplied/dithering，均不写 alpha。
+2. **强制红色终值探针破译"恒定 137"之谜**：片元强制 `(1,0,0,0.75)` 输出后墙区 = `(255,137,137)`——**G/B 恒 137 与片元输出无关** = `(1−a_eff)·255` → **GL 画布中墙体为 premultiplied 且有效 alpha ≈ 0.4627**（捕获时合成白底：R = 0.4627·255+137 → 饱和 255，G/B = 137 恒定）。前几轮的"137 灰/0.5 混合"全部由此派生。
+3. **0.4627 的来源待定**（次轮一行埋点可定）：候选 ① **EqualDepth 双面画**：墙 quad 的 front/back 面（DoubleSide 或无剔除）深度相同 → 都通过 EQUAL → 两次 0.75 blend 得 0.5625（≠0.4627 但结构吻合）；② uniform `opacity` ≠ material.opacity（three refreshUniforms 链）；③ 两次 ×0.68（√0.4627）换算。验证法：`renderer.getContext()` readPixels 原始画布 alpha + 关闭 `flatShading/DoubleSide` 单变量对照。
+
+
 
 
 
