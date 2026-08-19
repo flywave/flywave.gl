@@ -1936,6 +1936,14 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **代码现状**：prepass 禁用 + CustomBlending + shader alpha 三层保险已提交（全部正确语义，blend 生效即对齐）；`fill-extrusion-opacity/literal` 70929（几何/颜色正确、混合待生效）。该域在 headless 环境到此为止，标记 **待真机验证**。
 
+### 12.75 会话收尾审计 + fog 域评估（2026-08-20）
+
+**全修复回归审计**（`mbstyle-final1/`，translate×3 族 + line-blend + zero-width + fill-outline 共 35 例）：**26 PASS 全部保持**——circle-translate 5/5、fill-translate 5/5、fill-extrusion-translate 4/6、line-blend-mode 6/6、line-width/zero×4、fill-outline 2/8；`fill-extrusion-translate/literal-opacity` 68k→**67242**（prepass 修复连带改善）。fill-outline 余 6 例近失 53-195。
+
+**fog 域评估**（baseline5 数据 + 剖面取证）：近失梯队 = high-color 族 1717-1814、default 2536、empty-update 2910、high-color-use-theme 3074。垂直剖面：**我们的地平线雾带比 mgl 高 ~3px 且更亮**（row2-3: cur 240/89 vs exp 158/0）——mgl fog = 逐片元射线方向 + `exp(−3t²)` horizon blend + range 映射（`_prelude_fog.fragment.glsl`），我们的 FogExp2+渐变天空是近似。**像素对齐需把 mgl fog 实现为屏幕空间后处理 pass**（对已渲染地图按射线方向逐像素混 fog 色）——工程量与 additive 双 pass 同级或更大，建议作为独立专项（下一会话），入口：MBHeatmapRenderer 式 AfterRender 后处理 + `u_frustum_*` 四角射线插值。
+
+**会话总结**（runner 修复以来 21 commits）：通过数收益 = line-blend 1→6、fill-outline 2→4（另 6 例进近失带）、circle/fill/extrusion-translate 0→14、text 域解锁全域渲染、additive/fill-extrusion 半透明/line AA 三套渲染基础设施落地；文档 §12.67-§12.75 完整记录每个域的根因、证据链与下一步入口。**待真机验证项**：fill-extrusion 半透明 blend（三层保险已就位）。
+
 
 
 
