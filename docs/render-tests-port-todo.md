@@ -1801,6 +1801,18 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 已建 `MBAdditiveLineRenderer`（仿 MBHeatmapRenderer）：ribbon mesh 隐藏 + 私有场景重绘到 half-float FBO + 合成 pass。**已验证**：密度累积通道正确（readback max=8、可视化密度图 1-4 梯度正确）、合成 quad 覆盖正确、clamp 求值链修复（`MBLayerEvaluator` 补 `line-blend-additive-clamp` 默认值）。**卡点**：世界坐标几何必须走引擎 RTE 相机路径（plain ShaderMaterial 渲染为空；需 clone 原材质 `onBeforeCompile` 只覆写 fragment）；端到端帧间行为不稳定（同代码不同轮次输出不同，疑 webpack filesystem 缓存 + 帧时序）。`MBMaterialPatchManager.enableAdditiveDualPass=false` 关闭（保持原 AdditiveBlending 行为，5 例维持 ~10.4k 失败）。下一轮建议：固定 `HARP_NO_HARD_SOURCE_CACHE=true` 复现矩阵 + 单帧逐步 dump FBO→composite 链。
 
+### 12.69 text-anchor 精度排查（2026-08-19 深夜，定位收敛未修）
+
+**已证伪/已验证清单**（埋点 `Placement.ts placePointLabelAtAnchor` 输出 placement/bounds/offset，已还原）：
+
+1. **对齐管线全链正确**：`technique.hAlignment='Left'/vAlignment='Below'`（top-left）→ `parseTechniqueHAlignValue` → `resolvePlacementAndAlignment`（DEFAULT_PLACEMENTS=[] 不覆盖）→ `hPlacementFromAlignment` → 实测 placement `h=0(Right) v=-1(Bottom)` = 文本在点右下方 ✓（mgl top-left 语义）；`computePointTextOffset` 边界数学正确。
+2. **字形 advance 正确**：PBF 解析 T/e/s/t/space advance = 13/13/11/9/6（24px em），与 mgl 同源；typesetter `(advanceX+tracking)×glyphScale(16/24)` 单次缩放正确。
+3. **无全局位移**：cur/exp 互相关最优平移 (-2,+2) 仅改善 ~0.6% → 非系统性偏移。
+4. **墨水总量相当**：cur 暗像素 14737 vs exp ~15630（-6%）→ 字号没有数量级错误（此前 AI 目测"3×/0.67×"均不可靠，放大裁剪测量噪声大）。
+5. **墨水重叠差**（mismatch 24021 ≈ 两图墨水总量-2×重叠）：标签级排布差异——换行行数/行距/垂直基线（`capHeight`/`base=17` 与 mgl baseline 的差异）或多标签间相对位置。
+
+**下一轮建议**：在 `LineTypesetter.arrangeGlyphs` dump 单标签的逐字形位置（catalog 坐标）+ 行数/行距，与 mgl `shaping.ts`（24px em、lineHeight=1.2×textSize、baseline ascender）逐项对表；重点核 `font.metrics.base=17`（§MBFontCatalogBuilder 的 SHAPING_DEFAULT_OFFSET 猜测）与 capHeight 对 `position.y += vAlign×capHeight×scale` 的影响。
+
 
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
