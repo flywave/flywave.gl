@@ -1658,7 +1658,19 @@ export class MBMaterialPatchManager {
             paint['fill-extrusion-translate'] ?? technique._translate ?? [0, 0],
             paint['fill-extrusion-translate-anchor'] ?? technique._translateAnchor ?? 'map',
         );
-        const hasTranslate = translate && (translate[0] !== 0 || translate[1] !== 0);
+        // px → world units (same as fill-translate): the shader adds uMBTranslate
+        // to world-space `transformed.xy`, so raw pixels would move ~2px at z14
+        // instead of the requested 10px.
+        const translateWorld: number[] | undefined = translate && (translate[0] !== 0 || translate[1] !== 0)
+            ? (() => {
+                const mapViewT = (this.m_dataSource as any).mapView;
+                const dZoom = mapViewT?.zoomLevel ?? 1;
+                const mppT = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                    (256 * Math.pow(2, dZoom));
+                return [translate[0] * mppT, -translate[1] * mppT];
+            })()
+            : undefined;
+        const hasTranslate = !!translateWorld && (translateWorld[0] !== 0 || translateWorld[1] !== 0);
         const patternTex = technique._patternName ? this.extractPatternTexture(technique._patternName) : undefined;
         const hasTerrain = !!(this.m_dataSource as any).m_environment?.terrainController?.centerDem;
         if (height === 0 && base === 0 && !verticalGradient && !hasTranslate && !patternTex && !hasTerrain && lineWidth === 0 && cutoffFadeRange === 0 && emissiveStrength <= 0) {
@@ -1719,7 +1731,7 @@ export class MBMaterialPatchManager {
             if (origOnCompile) origOnCompile.call(material, shader);
 
             if (hasTranslate) {
-                shader.uniforms.uMBTranslate = { value: new THREE.Vector2(translate[0], translate[1]) };
+                shader.uniforms.uMBTranslate = { value: new THREE.Vector2(translateWorld[0], translateWorld[1]) };
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
                     'uniform vec2 uMBTranslate;\nvoid main() {'
