@@ -1285,7 +1285,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 **表达式（image-fallback-nested，19 例）**：
 8. `MBExpressionEngine` 新增静态 `availableImages` 注册表：`["image",name]` 对不可用名返回 null → `coalesce` 链回退（mgl 语义）。`loadSpriteAtlas` 发布图集名、`addImage/removeImage` 增删。时序安全：`configure` 中 `await loadSpriteAtlas` 先于解码求值。
 
-**未动（调查项）**：line-gap-width（expected 全黑无法取证，mgl gap 语义待查源码）、dasharray×ribbon 双渲染疑云（SwiftShader 下 SolidLine 不栅格化但 dash 测试通过的原因未明）、不透明 ribbon 的 AA（需透明通道排序专项）。
+**未动（调查项）**：line-gap-width（expected 全黑无法取证，mgl gap 语义待查源码）、dasharray×ribbon 双渲染疑云（**✅ 已破解 2026-08-19，§12.62**——SolidLine dash 在 SwiftShader 不栅格化，dash 改在 ribbon 上渲染）、不透明 ribbon 的 AA（需透明通道排序专项）。
 
 ### 12.35 代码端闭环第三批：line-gradient / line-pattern 上 ribbon（2026-08-18，延后渲染验证）
 
@@ -1654,6 +1654,20 @@ if (border_color.a == 0.0) {                     // 未显式设 border-color
 - 全量批量（`mbstyle-linebatch`，117 例 line 域）：**8 passed**（line-join default/bevel/miter×2 + fill-outline default/function×2），与既有基线一致。
 
 **遗留**：line-blend-mode multiply 的 THREE MultiplyBlending（`dst*src`）vs mgl 输出预计算因子 `dst*(src.rgb+(1-src.a))` 语义差异，需渲染取证。
+
+### 12.62 line-dasharray 在 ribbon 上渲染 dash（2026-08-19，commit `3875e82b`）——破解"双渲染疑云"
+
+**疑云结局**：§12.34 的"dasharray×ribbon 双渲染疑云"现已定位——**SolidLineMaterial 的 USE_DASHED_LINE dash 在 SwiftShader 不栅格化**，可见的只有实心 ribbon（renderOrder +0.5 盖在 dash 的透明 gap 上），故 dash 线渲染成**实线**（取证：`long-segment` current 1 连续段 vs expected 5 段；current 全宽 512 列 1 段 vs expected 276 列 5 段）。
+
+**反证（避免错误修复）**：直接抑制 ribbon 使 dash 线**完全消失**（SolidLine 不渲染，`mbstyle-dash2` current 0 非白像素）——所以不能删 ribbon。
+
+**修复（把 dash 渲染在 ribbon 上，对齐 mgl `a_linesofar` 语义）**：
+1. **emitter**（`getOrCreateRibbonTechniqueIndex`）：ribbon technique 携带 `_dashWorld=[dashLen, gapLen]`——`dashValue × lineWidthPx × mpp`（mgl dash 是 line-width 的倍数）转世界米；cache key 加 `dash`。
+2. **patcher**（ribbon 注入）：`aRibbonLen` varying 做 `mod(vMBRibbonLen, size+gap)` 相位 + `fwidth` 边缘 AA（~1px）+ `gl_FragColor.a *= (1-smoothstep(size-edge, size+edge, phase))`；material 置 `transparent`（gap 混合而非黑块）。
+
+**验证**（line-dasharray 全量，Edge headless + SwiftShader）：zoom-history 6324→**387**、less-than-one 5889→**298**、long-segment 11550→**8171**、overscaled 2007→**347**、zoom-history-line-metrics 875→**154**、feature-dash-const-cap 1156→**516**、composite-dash-composite-cap 1132→592；**function/line-width-constant 88→4 PASS**。long-segment current 现出 6 段（原 1 段实线）。净改善巨大。
+
+**遗留（dash 周期/密度像素校准）**：zoom-history 14 vs 1 段、overscaled 31 vs 11 段（dashWorld 周期需对照 mgl `line_bucket.ts` dash 单位精修）；`zero-values` [0,0] 边界（hasDash 需 dashWorld[0]>0，[0,0] 应隐形未处理）；data-driven dasharray 的 line-width 求值（composite/property-function 系 +73/+77 轻微回退）。
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
