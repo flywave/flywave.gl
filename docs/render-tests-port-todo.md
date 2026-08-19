@@ -1862,6 +1862,14 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **§12.72 更正（2026-08-20，advance 盒宽在水平锚点实测显著）**：前文"advance 盒宽三类中性"的 fixture 选择（text-color/size 的 center 对齐、无尾空格单词）掩盖了效果——**凡含水平 anchor 分量的标签，advance 盒与 ink 盒差 = 尾字形 right-bearing + SDF border**。用 text-anchor 全分类 + icon-text-fit 回归批（65 例）复测（`HARP_NO_HARD_SOURCE_CACHE=true`，advanceBounds 代码同前）：left 21819→**15938**、right 23636→**17026**、top-left 24021→**21604**、bottom-left 22961→**19921**、top-right 25136→**23471**、bottom-right 25136→**20836**、property-function 1029→**990**；top/bottom/center 持平（纯垂直锚点不消费水平 extents，自洽）；icon-text-fit/*-text-anchor 系 10 例全部 -300~-700；**零回归**。改动保留（`updateAdvanceBounds` + `placeRun` 测量分支），mismatch 总量净 -25k。
 
+**§12.72 终章（2026-08-20，垂直行盒第三轮：dump 对表后证伪，text 垂直域关闭）**：按 §12.69/§12.72 建议做了逐字形 y dump（`placeRun` 测量分支埋点，text-anchor/center "Test Test Test"）：
+
+- `position.y` = **行栅格顶**（首行顶 = vAlign 位移后的 y）；'T' ink 顶 = 行顶 + (17−8)×0.667 = +6px —— **flywave 的逐字形垂直链与 mgl `SHAPING_DEFAULT_OFFSET −17` 精确一致**（catalog base=17 数值链核对成立）；
+- 按此帧推导 mgl 行栅格盒 `[行顶 − n×lineHeight, 行顶]`（修正了首轮错误的 `−base` 参照系）并实测：**全分类 +10~12k 变差**（center 10611→27687、left 15938→27327）→ **参考图实际锚定的就是 ink 盒**（垂直方向），与 vendored mgl 源码的 lineHeight 行盒不符——与 AA 公式实验同型的**参考图/源码版本漂移**（§12.52 先例第三次出现）。已回退。
+
+**结论**：text 垂直域残余（center 10611、top/bottom 16-19k）不是盒模型问题——逐字形放置已对齐 mgl、ink 盒即参考图行为；残余为 AA 边缘剖面（±10 灰度 × 数千边缘像素，两项 mgl 公式实验均变差）与标签集合差异（部分 label 未渲染/多渲染）。**除非拿到参考图对应版本的 mgl 源码，text 垂直/AA 域到此为止**，转入其他 §14 待办。
+
+
 
 
 
