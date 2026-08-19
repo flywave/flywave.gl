@@ -1391,7 +1391,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 
 **fill-outline（join body 切换）**：27→53 / 104→56 / 127→169——均值近似持平，miter join 在锐角环角略增差异，保留（一致性收益大于像素噪声）。
 
-**下轮优先**：line-gap-width 语义（aliasing 主源 + line-gap-width 分类 5 例）、line-trim-fade 渐隐变体、border 默认色核对（line-border/default 无 border-color 时 mgl 默认值待证）。
+**下轮优先**：line-gap-width 语义（aliasing 主源 + line-gap-width 分类 5 例）、line-trim-fade 渐隐变体、**border 默认色核对（line-border/default 无 border-color 时 mgl 默认值待证）→ ✅ 已完成（2026-08-19，§12.61，commit 7f49ae64/d9e9a813）**。
 
 ### 12.43 line-gap-width 定性 + trim-color/fade 实现（2026-08-18，commit `5cc43fcf` 后）
 
@@ -1622,6 +1622,29 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 **验证**：包内 `tsc --build` 零错误。mocha 单测因工作区模块链接缺失（`flywave-mapview/node_modules/@flywave/...` MODULE_NOT_FOUND，§10.1 同类环境问题）无法在本机执行——与本次改动无关。渲染验证（line-offset/literal 1180、elevated-line-offset、line-border 56837 主源、meters-offset）留待攒批 karma。
 
 **N8 顺带源码取证**（gradient-vector-tile 多 feature 进度，`line_bucket.ts:574-640/1031-1040`）：mgl 的 progress = `(totalFeatureLength · lineClips.start + distance) / totalFeatureLength`——分母是**瓦片内缓冲数据的整段 feature 长度**（clipLine 子段经 `subsegment.progress` Range 映射），我们的 cumDist 按**裁剪后碎片**归一化 0..1。跨瓦片/被裁剪的 feature 渐变与 per-progress 宽度都会错段。修法需 emitter 侧拿到裁剪前（含 buffer）的整段长度——依赖 vectortile 解码层是否保留 buffer 几何，**需一轮像素取证**再动代码，本批不动。
+
+### 12.61 line-border 默认色对齐 mgl（2026-08-19，代码落地，延后渲染验证）
+
+**背景**：§12.42 遗留的"border 默认色核对"——`line-border/default`(768px)/`width`/`gradient` 无 `line-border-color` 时，emitter 硬编码 `'#000000'` 渲染**黑色**边线，而 mgl 默认 `rgba(0,0,0,0)` 触发**从线色自动推导**。
+
+**mgl 源码对照**（`mapbox-gl-js/src/shaders/line.fragment.glsl:201-213`）：
+```glsl
+if (border_color.a == 0.0) {                     // 未显式设 border-color
+    Y = luminance(out_color / a); adjustment = Y>0 ? 0.5/Y : 0.45;
+    if (out_color.a > 0.25 && Y < 0.25)          // 暗色线 → 提亮
+        out_color.rgb += borderColor * (adjustment * (1.0 - alpha2));
+    else                                          // 亮色线 → 压暗
+        out_color.rgb *= (0.6 + 0.4 * alpha2);    // 外缘(alpha2→0) = ×0.6
+}
+```
+
+**实现**：
+1. **emitter**（`MBTileDataEmitter.deriveAutoBorderColor`）：`line-border-color` 为默认（`#000000`，等价 mgl `rgba(0,0,0,0)`）时按上式计算边界色——亮色线 `line × 0.6`、暗色线 luminance 提亮；显式色（含 `'black'`）原样。用于 `emitRibbonBorder` 的 `fill-color`。
+2. **patcher**（`MBMaterialPatchManager`）：border technique 打 `_isLineBorder`，对**渐变/图案** border 的 ramp/pattern 采样乘 `×0.6`（实心色已由 emitter 推导，不重复压暗）——对齐 mgl `RENDER_LINE_BORDER_GRADIENT` 的 `out_color.rgb *= (0.6+0.4*alpha2)`。
+
+**验证**：包内 `tsc --build` 零错误。渲染验证（line-border/default·width·gradient·pattern）留待攒批 karma。commit `7f49ae64` + `d9e9a813`。
+
+**遗留**：line-blend-mode multiply 的 THREE MultiplyBlending（`dst*src`）vs mgl 输出预计算因子 `dst*(src.rgb+(1-src.a))` 语义差异，需渲染取证。
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
