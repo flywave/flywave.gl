@@ -26,7 +26,9 @@
 >
 > **2026-08-19 快照（§12.65/§12.66 延后验证批落地，§12.67）**：translate×6 层 + line-blend-mode + text-anchor 共 79 用例实测——**circle-translate 5/5、fill-translate 5/5、fill-extrusion-translate 4/6、line-blend-mode/multiply 全绿（0-2px）**，§12.65 五项对齐全部兑现（+16 通过）；text-anchor/text-translate 仍全红但**与 baseline5 逐例像素一致（零回归）**，§12.66 排查确认为"text不渲染"域（G4/F13）而非对齐错误。runner 已修复 karma 结束后自动退出（无需手动 kill）。
 >
-> **2026-08-19 快照（§12.68 text 域解锁 + additive 双 pass 半成品）**：**text 整域"完全不渲染"根因修复**——harness 注入的 PBF FontCatalog 在主题重置时被 `updateFontCatalogs` 删除（`MapView.setFontCatalog` 现持久化注入并在 `resetTextRenderer` 后重注册）+ canvas 缺失期间 text element 状态卡死（`setFontCatalog` 现 `invalidateCache()` 强制重试）。text-anchor/translate/color/field/max-width/size 93 例实测**文本全部开始渲染**（icon-text-fit 文本段、poiTexts 46→61+），`text-anchor/center` 14476→10596、`text-color/default` 5774→4680、一批进入近失带（151-567px）；残余为字形位置/hAnchor 精度（下一步）。line-blend additive 双 pass 渲染器（`MBAdditiveLineRenderer`）已建：FBO 密度累积（clone 原材质顶点路径绕开 RTE 相机）+ mgl `sqrt(n/(n+1))` 合成曲线已数值验证（密度图逐通道正确），但端到端不稳定（帧间行为不一致），**用 `MBMaterialPatchManager.enableAdditiveDualPass=false` 关闭**，保留基础设施与排查链。
+> **2026-08-19 快照（§12.68 text 域解锁 + additive 双 pass 半成品）**：**text 整域"完全不渲染"根因修复**——harness 注入的 PBF FontCatalog 在主题重置时被 `updateFontCatalogs` 删除（`MapView.setFontCatalog` 现持久化注入并在 `resetTextRenderer` 后重注册）+ canvas 缺失期间 text element 状态卡死（`setFontCatalog` 现 `invalidateCache()` 强制重试）。text-anchor/translate/color/field/max-width/size 93 例实测**文本全部开始渲染**（icon-text-fit 文本段、poiTexts 46→61+），`text-anchor/center` 14476→10596、`text-color/default` 5774→4680、一批进入近失带（151-567px）；残余为字形位置/hAnchor 精度（下一步）。line-blend additive 双 pass 当时未稳定（详见 §12.71 落地）。
+
+> **2026-08-19 快照（§12.71 additive 落地 + §12.72 text 精度二分）**：line-blend-mode **0→6/6 全 PASS**（additive 双 pass 密度合成像素级一致，additive×5 全 0mm 含 auto-density mean×2 公式兑现；multiply 保持 2px）。§12.68 "帧间不稳定" 根因 = COMP_FRAG 重复行 GLSL 语法错误 + NoBlending 替换语义。text 精度首轮二分：mgl 源码 AA 公式（±0.84px smoothstep）实测变差已还原（参考图/源码版本漂移）；typesetter 盒宽改动三类中性（点标签 bounds 不走 typesetter globalBounds，下轮先定位真实消费链）。
 
 >
 > **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。
@@ -1837,6 +1839,22 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 4. 保留：clone 原材质 `onBeforeCompile` 只覆写 fragment（骑 RTE 相机顶点路径）、half-float FBO、私有场景 world-matrix 重绘、patcher 侧 `visible=false` + 注册。
 
 **验证**：line-blend-mode **6/6 全 PASS**（additive×5 + multiply，此前 1/6）；line-color/width/opacity 回归批 vs baseline5 **零回归**。调试注意：**必须 `HARP_NO_HARD_SOURCE_CACHE=true`**（filesystem 缓存会给出陈旧 bundle，是 §12.68 "帧间不稳定" 的主要元凶）。
+
+### 12.72 text AA 公式与盒宽路径实验（2026-08-19 深夜四，两项均证伪/中性，已还原）
+
+§12.70 收敛计划（"改 `TextMaterials.getOpacity` 与 `measureText` 行高/盒宽"）的首轮实测，二分法单变量验证：
+
+**1. SDF AA 公式对齐 mgl 源码——实测变差，已还原**：
+- 实现：`getOpacity` 改 `smoothstep(±0.105·distanceRange px, dist·toPixels)`（mgl `symbol.fragment.glsl` 精确公式：`gamma = EDGE_GAMMA/fontScale`，fontScale=size/24 与 toPixels 的尺寸依赖恰好相消 → **屏幕空间常数 ±0.84px**（dpr=1），替代原线性 ±0.5px clamp）。
+- 实测（vs 旧斜坡单变量对照）：真实参考图全变差——`text-color/default` 4680→5274（+594）、`literal` +516、`appearance/paint-text-color` PASS 0→62、`text-size/composite-function` PASS 0→19；逐像素剖面取证：新旧斜坡在真实参考上几乎重合（边缘 3px 过渡带内 ±10 灰度差），差异是数千边缘像素 × pixelmatch 阈值的累积。
+- **判定**：vendored mgl 源码的 AA 公式与参考图渲染版本疑似不一致（同 §12.52 参考图/源码版本漂移先例）；原线性 ±0.5px 斜坡经验上更贴合参考图，**保留原状**。text-size 系的"变差"（literal 61→217 等）实为对照**纯黑损坏参考**（§12.13：渲出字反扣分，不可修），非真实回归信号。
+- 附带基建发现：**karma webpack 解析 `@flywave/*` 到 `<root>/@flywave/*/src/*.ts` 源码**（非 lib）——改引擎包必须改 src 并用 `HARP_NO_HARD_SOURCE_CACHE=true`；只重建 lib 无效（曾致一轮 Δ+0 空跑）。
+
+**2. `updateAdvanceBounds` 盒宽（纯测量路径 advance 宽度）——三类中性**：
+- `LineTypesetter.placeRun` 的 globalBounds 分支改用 pen advance 水平 extents（字形墨水 quad 含 SDF border 会撑大锚点盒）。
+- 实测：text-color/text-size（Δ+0 逐例精确不变）与 text-anchor（center 10611 ≈ 基线 10596）**全部中性**——点标签放置路径**不消费** typesetter 的 globalBounds（TextElementsRenderer 侧另有 bounds 计算链）。改动无害保留，但**下一轮 text 盒宽工作应先定位 TextElement.bounds 的真实来源**（疑在 `TextElementsRenderer`/`Placement` 的 computePointText 内），否则 typesetter 侧修改到不了渲染。
+
+**遗留**（下轮 text 精度入口）：① TextElement.bounds 真实消费链定位（埋点 `Placement.placePointLabelAtAnchor` 的 bounds 来源）；② 垂直盒高/基线（`font.metrics.base=17` vs mgl ascender，§12.69 遗留）；③ AA 若再攻需先确认参考图对应的 mgl 版本公式。
 
 
 
