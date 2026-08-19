@@ -853,6 +853,8 @@ export class MapView extends EventDispatcher {
 
     private m_textElementsRenderer: TextElementsRenderer;
 
+    private readonly m_injectedFontCatalogs: Map<string, FontCatalog> = new Map();
+
     private m_forceCameraAspect: number | undefined = undefined;
 
     // type any as it returns different types depending on the environment
@@ -3923,6 +3925,11 @@ export class MapView extends EventDispatcher {
     ): Promise<void> {
         await this.m_textElementsRenderer.updateFontCatalogs(fontCatalogs);
         await this.m_textElementsRenderer.updateTextStyles(textStyles, defaultTextStyle);
+        // Re-apply catalogs injected via setFontCatalog — updateFontCatalogs removes
+        // canvases that are not part of the theme's font catalog list.
+        for (const [name, catalog] of this.m_injectedFontCatalogs) {
+            this.m_textElementsRenderer.setFontCatalog(name, catalog);
+        }
         this.update();
     }
 
@@ -3935,6 +3942,10 @@ export class MapView extends EventDispatcher {
      * @param catalog - Pre-built FontCatalog instance.
      */
     public setFontCatalog(name: string, catalog: FontCatalog): void {
+        // Remember explicitly injected catalogs so theme resets (resetTextRenderer
+        // -> updateFontCatalogs removes canvases not in the theme's catalog list)
+        // re-register them instead of silently dropping them.
+        this.m_injectedFontCatalogs.set(name, catalog);
         this.m_textElementsRenderer.setFontCatalog(name, catalog);
         this.update();
     }

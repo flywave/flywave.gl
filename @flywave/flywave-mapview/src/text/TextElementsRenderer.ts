@@ -1159,6 +1159,11 @@ export class TextElementsRenderer {
         const loadedTextCanvas = this.m_textCanvasFactory.createTextCanvas(catalog, name);
         this.m_textCanvases.set(name, loadedTextCanvas);
         this.m_textStyleCache.updateTextCanvases(this.m_textCanvases);
+        // A newly available canvas unlocks labels whose glyph initialization
+        // failed while the canvas was missing — discard the cached (stuck)
+        // element states so placement retries them.
+        this.invalidateCache();
+        this.m_isUpdatePending = true;
     }
 
     private updateGlyphDebugMesh() {

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { EarthConstants } from '@flywave/flywave-geoutils';
 import { MBStyleDataSource } from './MBStyleDataSource';
 import { createGuardrailMesh } from './ElevatedStructures';
+import { additiveRibbons } from './MBAdditiveLineRenderer';
 
 interface MaterialPatchState {
     patched: boolean;
@@ -17,6 +18,13 @@ const patternTextureCache = new Map<string, THREE.Texture>();
 let patternTextureCacheAtlas: unknown = null;
 
 export class MBMaterialPatchManager {
+    /**
+     * Route additive line ribbons through MBAdditiveLineRenderer's dual-pass
+     * density composite instead of direct AdditiveBlending. Off until the
+     * composite is stable (docs/render-tests-port-todo.md §12.68).
+     */
+    public static enableAdditiveDualPass = false;
+
     private m_patchedTiles = new WeakMap<object, MaterialPatchState>();
     /** Ground-radiance signature of the last patched lighting state. */
     private m_lastLightSig = '';
@@ -95,7 +103,28 @@ export class MBMaterialPatchManager {
             this.applyIconTextFit(obj, tech);
             this.patchIconObject(obj, tech);
             this.generateGuardrails(obj, tech, tile);
+            this.registerAdditiveRibbon(obj, tech);
         }
+    }
+
+    /**
+     * Additive line ribbons are rendered by MBAdditiveLineRenderer's offscreen
+     * density pass, not the main scene: hide the mesh here and register it.
+     * The renderer prunes registrations whose mesh left the scene.
+     *
+     * DISABLED (2026-08-19): the dual-pass composite is not yet stable (RTE
+     * camera / per-frame clip-range interactions, see §12.68) — keep the
+     * previous direct AdditiveBlending until the renderer is finished.
+     */
+    private registerAdditiveRibbon(obj: THREE.Object3D, technique: any): void {
+        if (!MBMaterialPatchManager.enableAdditiveDualPass) return;
+        if (!technique?._isLineRibbon) return;
+        if (technique._paint?.['line-blend-mode'] !== 'additive') return;
+        if (!(obj as any).isMesh) return;
+        obj.visible = false;
+        if ((obj as any).__mbAdditiveRegistered) return;
+        (obj as any).__mbAdditiveRegistered = true;
+        additiveRibbons.push({ mesh: obj as THREE.Mesh, technique });
     }
 
     /**

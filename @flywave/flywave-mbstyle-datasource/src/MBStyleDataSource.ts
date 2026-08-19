@@ -618,6 +618,7 @@ export class MBStyleDataSource extends TileDataSource {
     private m_terrainDraping: any = null;
     private m_symbolPlacement: any = null;
     private m_heatmapRenderer: any = null;
+    private m_additiveLineRenderer: any = null;
     private m_debugTileBoundaries = false;
     private m_debugLines: any = null;
     /** Clip polygons keyed by layer type: Map<layerType, polygonRing[]> */
@@ -1071,12 +1072,20 @@ export class MBStyleDataSource extends TileDataSource {
                 self.m_heatmapRenderer = new MBHeatmapRenderer(this.mapView, self);
             } catch {}
 
+            try {
+                const { MBAdditiveLineRenderer } = await import('./MBAdditiveLineRenderer');
+                self.m_additiveLineRenderer = new MBAdditiveLineRenderer(this.mapView, self);
+            } catch {}
+
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
                 patcher.patchTileMaterials();
                 if (placement) placement.run();
                 if (self.m_heatmapRenderer) {
                     self.m_heatmapRenderer.run();
+                }
+                if (self.m_additiveLineRenderer) {
+                    self.m_additiveLineRenderer.run();
                 }
                 if (self.m_debugTileBoundaries) self.drawTileBoundaries();
                 const tc = self.m_environment?.terrainController;
@@ -1651,6 +1660,7 @@ export class MBStyleDataSource extends TileDataSource {
      */
     override dispose(): void {
         this.m_heatmapRenderer?.dispose?.();
+        this.m_additiveLineRenderer?.dispose?.();
         this.m_heatmapRenderer = null;
         super.dispose();
     }

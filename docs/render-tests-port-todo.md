@@ -25,6 +25,8 @@
 > **2026-08-19 快照（代码对齐批 §12.66，测试延后）**：`fd1ff405` text-anchor 水平对齐按 anchor 水平分量推导（对齐 mgl `getAnchorAlignment`），修掉原 `text-justify` 误推导（'top-left' 本应 Left 却落到 Center）。顺带修正 line-translate viewport 注释（代码按 +bearing 旋转，原注释误写 -bearing）。tsc `--build` 绿、lib 重建含修正。待渲染验证：text-anchor（11 分类）。
 >
 > **2026-08-19 快照（§12.65/§12.66 延后验证批落地，§12.67）**：translate×6 层 + line-blend-mode + text-anchor 共 79 用例实测——**circle-translate 5/5、fill-translate 5/5、fill-extrusion-translate 4/6、line-blend-mode/multiply 全绿（0-2px）**，§12.65 五项对齐全部兑现（+16 通过）；text-anchor/text-translate 仍全红但**与 baseline5 逐例像素一致（零回归）**，§12.66 排查确认为"text不渲染"域（G4/F13）而非对齐错误。runner 已修复 karma 结束后自动退出（无需手动 kill）。
+>
+> **2026-08-19 快照（§12.68 text 域解锁 + additive 双 pass 半成品）**：**text 整域"完全不渲染"根因修复**——harness 注入的 PBF FontCatalog 在主题重置时被 `updateFontCatalogs` 删除（`MapView.setFontCatalog` 现持久化注入并在 `resetTextRenderer` 后重注册）+ canvas 缺失期间 text element 状态卡死（`setFontCatalog` 现 `invalidateCache()` 强制重试）。text-anchor/translate/color/field/max-width/size 93 例实测**文本全部开始渲染**（icon-text-fit 文本段、poiTexts 46→61+），`text-anchor/center` 14476→10596、`text-color/default` 5774→4680、一批进入近失带（151-567px）；残余为字形位置/hAnchor 精度（下一步）。line-blend additive 双 pass 渲染器（`MBAdditiveLineRenderer`）已建：FBO 密度累积（clone 原材质顶点路径绕开 RTE 相机）+ mgl `sqrt(n/(n+1))` 合成曲线已数值验证（密度图逐通道正确），但端到端不稳定（帧间行为不一致），**用 `MBMaterialPatchManager.enableAdditiveDualPass=false` 关闭**，保留基础设施与排查链。
 
 >
 > **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。
@@ -1775,6 +1777,31 @@ props.hAlignment = anchor.includes('left') ? 'Left'
 
 **runner 自动退出修复**（`scripts/run-mbstyle-render-tests.js`）：原脚本 karma 结束后等待 result server 退出（永不发生）→ 挂死需手动 kill。现 karma 结束即 `server.kill()` + 5s 兜底 `process.exit`，本轮 7 次运行全部自行退出。
 
+### 12.68 text 域"完全不渲染"根因修复 + additive 双 pass 半成品（2026-08-19）
+
+**A. text 不渲染根因（PlacementStats 埋点链定位）**：
+
+1. §12.67 的四轮埋点 + 本轮 `PlacementStats`（改 console 输出）：`poiIcons=46, poiTexts=0` → 文本分支从未进入。
+2. `addPointLabel` 埋点：text 元素 `textCanvas=false`（`TextElementStyle.textCanvas` undefined）→ `if (textCanvas && shouldRenderPointText)` 整块跳过。
+3. 时序定位（同一 style 对象 canvas 先 false 后 true）：harness 在 `addDataSource` 之后才注入 PBF FontCatalog（`mapView.setFontCatalog("default", catalog)`），**注入前渲染的帧里 text element 的 glyph 初始化失败后状态缓存永不重试**（`m_textElementStateCache` 里 uninitialized 元素被永久跳过）；且 canvas map 在注入前为空。次要问题：主题重置 `resetTextRenderer → updateFontCatalogs` 会删除不在主题目录表里的注入 canvas（`m_injectedFontCatalogs` 持久化修复）。
+
+**修复（flywave-mapview，两处）**：
+- `MapView.setFontCatalog`：注入目录记入 `m_injectedFontCatalogs`；`resetTextRenderer` 末尾重注册（防主题重置丢弃）。
+- `TextElementsRenderer.setFontCatalog`：新增 `invalidateCache()` + `m_isUpdatePending = true`——新 canvas 解锁之前初始化失败的标签，丢弃卡死的 element 状态强制重试。
+
+**验证**（93 例：text-anchor/translate + line-blend + icon-image + text-field）：
+- **text 全域开始渲染**（此前 text-anchor/text-translate 整类 0 文本）：`text-anchor/center` 14476→**10596**、`text-color/default` 5774→**4680**、近失带出现（text-color/property-function 227、missing-image 151、zoom-and-feature-dependent-composite 191、appearance/text-field 567、distance/layout-text-size 159）。
+- 锚点类（top-left 等）像素数上升（13-16k→19-26k）：错位文本比空白多扣分，**属预期中间态**——下一步攻 hAlignment/vAlignment 映射与字形基线（G4 精度）。
+- 零功能回归：icon-image/literal、image-expression 保持 PASS；`icon-image/token` 1678→425 改善；`icon-image/use-theme` 1613→3957（color-theme 域连带，LUT 未实现）。line-blend/multiply 保持 PASS。
+- 单测：15 个测试文件 265 passing（DebugLineNaNTest 为预存在的子路径导入环境问题，与本轮无关）；tsc 全绿。
+
+**B. line-blend-mode additive 双 pass（半成品，flag 关闭）**：
+
+mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，合成 `avg=rgb/密度, t=sqrt(n/(n+1)), out=avg·t`（`n=密度/line-blend-additive-clamp`，clamp=0 时用 GPU readback 的 max density）。直接 `AdditiveBlending` 无密度归一 → 恒过亮（实测 (100,220,254) vs 期望 (33,73,85)）。
+
+已建 `MBAdditiveLineRenderer`（仿 MBHeatmapRenderer）：ribbon mesh 隐藏 + 私有场景重绘到 half-float FBO + 合成 pass。**已验证**：密度累积通道正确（readback max=8、可视化密度图 1-4 梯度正确）、合成 quad 覆盖正确、clamp 求值链修复（`MBLayerEvaluator` 补 `line-blend-additive-clamp` 默认值）。**卡点**：世界坐标几何必须走引擎 RTE 相机路径（plain ShaderMaterial 渲染为空；需 clone 原材质 `onBeforeCompile` 只覆写 fragment）；端到端帧间行为不稳定（同代码不同轮次输出不同，疑 webpack filesystem 缓存 + 帧时序）。`MBMaterialPatchManager.enableAdditiveDualPass=false` 关闭（保持原 AdditiveBlending 行为，5 例维持 ~10.4k 失败）。下一轮建议：固定 `HARP_NO_HARD_SOURCE_CACHE=true` 复现矩阵 + 单帧逐步 dump FBO→composite 链。
+
+
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
@@ -2006,7 +2033,7 @@ props.hAlignment = anchor.includes('left') ? 'Left'
 
 - **F11. raster/image 双路径收口（G5）**：raster-opacity 121k（纹理未上屏）；image raster paint 忽略；双路径（env quad vs 逐瓦片）未收口。
 - **F12. fog/skybox/lights 验收（G7）**：**✅ 已验收（2026-08-17，§12.27）**——lighting-3d-mode 2→**10 通过**（ground 层光照全对齐，含 background/color-ambient/ambient-directional/pitched-45、emissive-strength*/background/fill/fill-outline、fill、fill-outline）、skybox 0→**1**（gradient/default）、fog 0 通过但近失 3（space-color-use-theme 39、fill-outline 418、line-gradient 591）（heatmap 已由 F3/§12.28 独立跟进：0/18→15/18）。**剩余**：fog 63 例整域待像素级对齐（空间色/2D 叠加）；skybox atmosphere 等子域；lighting 的 fill-pattern/stroke 子域 + bright-v9 pitch-*/fill-extrusion 6 个重型 3D 挂起未上报。
-- **F13. text SDF 精度（G4）**：63/258 期望图纯黑（引用损坏不可修）；SDF 亚像素 + halo（需改 TextCanvas 顶点格式）。
+- **F13. text SDF 精度（G4）**：63/258 期望图纯黑（引用损坏不可修）；SDF 亚像素 + halo（需改 TextCanvas 顶点格式）。**2026-08-19 更新（§12.68）**：整域"不渲染"根因已修（注入 catalog 持久化 + invalidateCache），text 全域开始渲染、center 系接近；下一步 = hAlignment/vAlignment 映射 + 字形基线/尺寸精度；additive 双 pass 渲染器基础设施就绪待稳定（`enableAdditiveDualPass` flag）。
 - **F14. model-layer / depth-occlusion（G8）**：崩溃已修（192 上报 0 DISCONNECTED）但内容不对齐（fill-extrusion--default 279994）；occlusion 软淡入在 patcher。
 - **F15. building roof-shape / conflation / 3d-intersections / terrain dynamic-exaggeration / color-theme**：§2.13–§2.15 全 ❌/🔧 域，engine 级。
 

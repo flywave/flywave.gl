@@ -82,6 +82,7 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'line-translate': [0, 0],
         'line-translate-anchor': 'map',
         'line-blend-mode': 'default',
+        'line-blend-additive-clamp': 0,
         'line-width-unit': 'pixels',
         // HD / extended line properties — processed so the patcher can consume them.
         'line-trim-offset': [0, 1],
