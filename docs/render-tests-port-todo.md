@@ -20,7 +20,7 @@
 >
 > **2026-08-19 快照（相机 bearing 符号，§12.64）**：`814fae16`+`e18ab549` 修复相机 bearing 符号反转（mapbox 顺时针 → flywave 逆时针 yawDeg），全视图 2·bearing 旋转消除。line-visibility/visible 12318→**4126**、line-translate-anchor map 20469→**1236** / viewport→**1274**、elevated 11659→**2303**。599 例非零 bearing 测试解锁整类 180° 旋转错误（代价 3 例对称 symbol 0→54-85px 侥幸暴露）。残余为线宽 AA（N5 专项）。
 >
-> **2026-08-19 快照（代码对齐批 §12.65，测试延后）**：`98aa2762`+`92f53811`+`0383f6fa` 三项 mgl 逻辑对齐——line-blend-mode multiply `premultipliedAlpha=true`（否则 three r178 不设 blendFunc，multiply 因子从不进 GL，交叉不累计）、fill-translate 与 fill-extrusion-translate px→world 单位（shader 把像素当世界米加，z14 仅 ~2px）。tsc 绿、55 passing。待渲染验证：multiply 1456、fill-translate-anchor 884、extrusion-translate。
+> **2026-08-19 快照（代码对齐批 §12.65，测试延后）**：`98aa2762`+`92f53811`+`0383f6fa`+`a6ab7eaf`+`15765cb3` 五项 mgl 逻辑对齐——line-blend-mode multiply `premultipliedAlpha=true`（否则 three r178 不设 blendFunc，multiply 因子从不进 GL，交叉不累计）、fill/fill-extrusion/circle-translate px→world 单位（shader 把像素当世界米加，z14 仅 ~2px）、icon/text-translate viewport anchor 按 +bearing 旋转。tsc 绿、55 passing。待渲染验证：multiply 1456、fill-translate-anchor 884、extrusion/circle-translate、icon/text-translate。
 
 >
 > **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。
@@ -1707,15 +1707,17 @@ if (border_color.a == 0.0) {                     // 未显式设 border-color
 
 **净影响**：599 例非零 bearing 测试此前全受 2·bearing 旋转污染（基线通过者仅 9，其中 3 为 blank visibility none、3 为对称 symbol）；修复解锁整类 180° 旋转错误，是系统级正确性修复。下一轮应重跑全量基线量化净增（N9）。
 
-### 12.65 代码对齐批：blend premultipliedAlpha + translate px→world 单位（2026-08-19，commits `98aa2762`+`92f53811`+`0383f6fa`，测试延后）
+### 12.65 代码对齐批：blend premultipliedAlpha + translate 单位/锚点（2026-08-19，commits `98aa2762`+`92f53811`+`0383f6fa`+`a6ab7eaf`+`15765cb3`，测试延后）
 
-**三项 line/fill/extrusion 域 mgl 逻辑对齐，均源码取证后改，测试攒批延后**：
+**五项 line/fill/extrusion/circle/symbol 域 mgl 逻辑对齐，均源码取证后改，测试攒批延后**：
 
 1. **line-blend-mode multiply——premultipliedAlpha=true**（`98aa2762`）：three r178 `MultiplyBlending` 要求 `premultipliedAlpha=true`，否则 `WebGLState` 不设 blendFunc（残留上次 REPLACE），multiply 因子从不进 GL → 交叉线不累计（current 恒 220 vs expected 重叠处 190/163）。修复 3 处 MultiplyBlending 材料（ribbon `patchFillMaterial`/SolidLine `patchLineMaterial`/`MapLineMaterial` 构造）。设后 blend func = `(DST_COLOR, ONE_MINUS_SRC_ALPHA)` → `dst*(C*a+1−a)`，恰为 mgl `line.fragment.glsl` `LINE_BLEND_MULTIPLY` 因子；opaque(a=1) 退化为 `dst·C`，精确复现 220→190→163。**additive 不动**（需 mgl 多 pass FBO 密度复合 `resolveMaxDensity`+readback，独立任务）。
 2. **fill-translate px→world 单位**（`92f53811`）：fill 几何不烘焙 translate，shader `uMBTranslate` 加到世界系 `transformed.xy`，但 `resolveTranslate` 返回像素 → z14 仅 ~2px 位移（expected 10px）→ fill-translate-anchor 884 近失。`patchFillMaterial` 换算 `[tx·mpp, -ty·mpp]`（同 line-translate 烘焙约定），uniform 用 world。**line-translate uniform 保持**（emitter 已几何烘焙，避免双加）。
 3. **fill-extrusion-translate px→world 单位**（`0383f6fa`）：同 fill-translate——extrusion 几何不烘焙，uniform 是唯一机制，同样的 px→world bug。修复同款。
+4. **circle-translate px→world 单位**（`a6ab7eaf`）：circle 点 emitter 不烘焙 translate（point 路径仅 symbol 烘焙），uniform 唯一机制，同款 px→world bug。修复同款。
+5. **icon/text-translate viewport anchor 按 +bearing 旋转**（`15765cb3`）：emitter 的 symbol translate 烘焙此前不处理 viewport anchor——mgl `painter.translatePosMatrix` 对 viewport 先按 +bearing 旋转 translate。补齐 icon/text-translate-anchor 的 viewport 旋转（line/fill/extrusion/circle 的 viewport 由 `resolveTranslate` 处理）。
 
-**状态**：tsc 绿；55 passing（2 既有失败无关）。待渲染验证：line-blend-mode/multiply（1456→近失）、fill-translate-anchor（884）、fill-extrusion-translate。
+**状态**：tsc 绿；55 passing（2 既有失败无关）。待渲染验证：line-blend-mode/multiply（1456→近失）、fill-translate-anchor（884）、fill-extrusion-translate、circle-translate、icon/text-translate。
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
