@@ -820,6 +820,12 @@ export class MBMaterialPatchManager {
             // note in docs/render-tests-port-todo.md §14).
             const widthPx = Number(technique._ribbonWidthPx ?? 1);
             const blurPx = Number(technique._ribbonBlurPx ?? 0);
+            // mgl darkens the line border by ×0.6 (auto-derived border is the
+            // line/gradient at the outer edge — line.fragment.glsl
+            // `out_color.rgb *= (0.6 + 0.4*alpha2)`). The solid-color border
+            // ribbon already carries the derived color in `fill-color`; for
+            // gradient borders the RAMP must be darkened instead.
+            const borderDarken = Number(technique._isLineBorder ? 0.6 : 1);
             // line-gradient: ramp texture sampled by the per-vertex
             // line-progress (aRibbonDist). Built once per technique and
             // cached on the material.
@@ -1003,14 +1009,14 @@ export class MBMaterialPatchManager {
                              ${patTex ? `vec4 mbPat = texture2D(uMBPat, vec2(vMBRibbonLen * uMBPatUScale, vMBRibbonEdge * 0.5 + 0.5));${patTex2 ? `
                                         vec4 mbPat2 = texture2D(uMBPat2, vec2(vMBRibbonLen * uMBPatUScale, vMBRibbonEdge * 0.5 + 0.5));
                                         mbPat = mix(mbPat, mbPat2, uMBPatFade);` : ''}
-                                        gl_FragColor = vec4(mbPat.rgb, mbPat.a * gl_FragColor.a);` : ''}
+                                         gl_FragColor = vec4(mbPat.rgb * ${borderDarken}, mbPat.a * gl_FragColor.a);` : ''}
                              // line-gradient: override the paint color with the
                              // ramp sampled at the line-progress coordinate
                              // (the ramp's own alpha channel multiplies too —
                              // stops like rgba(0,0,255,0) fade the line ends).
-                             ${rampTex ? `vec4 mbGrad = texture2D(uMBRamp, vec2(clamp(vMBRibbonDist, 0.0, 1.0), 0.5));
-                                         gl_FragColor.rgb = mbGrad.rgb;
-                                         gl_FragColor.a *= mbGrad.a;` : ''}
+                              ${rampTex ? `vec4 mbGrad = texture2D(uMBRamp, vec2(clamp(vMBRibbonDist, 0.0, 1.0), 0.5));
+                                          gl_FragColor.rgb = mbGrad.rgb * ${borderDarken};
+                                          gl_FragColor.a *= mbGrad.a;` : ''}
                              // Distance from the ribbon edge in px; the edge
                              // ramp is only applied for blurred lines (see
                              // the featherEnabled note above). mgl's line

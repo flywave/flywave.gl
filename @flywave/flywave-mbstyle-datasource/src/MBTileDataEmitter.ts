@@ -1676,6 +1676,11 @@ export class MBTileDataEmitter {
                 _paint: { ...paint, 'fill-color': borderColor },
                 _layout: layer.layout,
                 _isLineRibbon: true,
+                // The border ribbon renders UNDER the main line and, when the
+                // line uses a gradient, mgl darkens the border by ×0.6 (its
+                // auto-derived border is the gradient at the outer edge —
+                // line.fragment.glsl `out_color.rgb *= (0.6 + 0.4*alpha2)`).
+                _isLineBorder: true,
                 _ribbonWidthPx: Number(paint['line-border-width'] ?? 1),
                 _ribbonBlurPx: 0,
                 // mgl draws the border with the same line gradient as the
