@@ -1528,7 +1528,19 @@ export class MBTileDataEmitter {
                     cumDist.push(cumDist[i - 1] + d);
                 }
                 // Under meters the shader's px width needs the conversion.
-                this.emitRibbonFill(layer, worldPts, worldHalfWidth, cumDist,
+                // line-border: mgl draws the border as the OUTER ring of the
+                // line-width (the main color fills the inner region; see
+                // line.fragment.glsl border_width). Our two-ribbon approach
+                // draws the border ribbon UNDER the main ribbon, so the main
+                // ribbon must be NARROWED by the border width to reveal the
+                // ring — otherwise the border is fully covered and invisible
+                // (verified: thick-line-border rendered no black border).
+                const bwRawBorder = Number(layer.paint?.['line-border-width'] ?? 0);
+                const borderWorld = (bwRawBorder > 0 && !progressHalfWidths)
+                    ? (widthUnit === 'meters' ? bwRawBorder : bwRawBorder * metersPerPixel)
+                    : 0;
+                const mainHalfWidth = Math.max(worldHalfWidth - borderWorld, 0);
+                this.emitRibbonFill(layer, worldPts, mainHalfWidth, cumDist,
                     widthUnit === 'meters' ? lineWidthPx / metersPerPixel : undefined,
                     lineGeom, progressHalfWidths, offsetWorld);
                 // line-border: edge ribbons under the main line (constant
