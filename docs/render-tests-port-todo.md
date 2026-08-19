@@ -1813,6 +1813,21 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **下一轮建议**：在 `LineTypesetter.arrangeGlyphs` dump 单标签的逐字形位置（catalog 坐标）+ 行数/行距，与 mgl `shaping.ts`（24px em、lineHeight=1.2×textSize、baseline ascender）逐项对表；重点核 `font.metrics.base=17`（§MBFontCatalogBuilder 的 SHAPING_DEFAULT_OFFSET 猜测）与 capHeight 对 `position.y += vAlign×capHeight×scale` 的影响。
 
+### 12.70 text-anchor 精度第二轮（2026-08-19 深夜二，误差定位到 2-4px 盒差）
+
+**本轮实验矩阵**（全部 `HARP_NO_HARD_SOURCE_CACHE=true`）：
+
+| 实验 | 结果 | 结论 |
+|------|------|------|
+| 叠加分析（阈值扫描 th∈[80,180]） | th150 重叠 67%；th80 expOnly 7892 > curOnly 6507 | 定位基本正确（2/3 墨水重合）；误差 = AA 剖面差（我们羽化宽+核浅）+ 少量错位 |
+| `props.size ×1.5` 探针 | 24021→28743 变差 | 字号正确（此前"0.667×"目测系测量噪声证伪） |
+| `distanceScale=0`（mgl 恒定屏幕尺寸语义） | 中性（±30-770px 噪声级） | 保留（语义正确，远景标签防缩放） |
+| vAlignment Above/Below 互换 | top/bottom +9-16k 变差，立即回退 | 原映射正确：bounds 为 y-up 坐标系（min.y=-39,max.y=-3 在锚点下方），'top'→'Below'→Bottom placement 语义闭环 |
+| 墨水剖面（exp T≈10×13px vs cur T≈7×9px） | 与 1.5× 探针矛盾 → 测量窗口含相邻字母，作废 | — |
+
+**收敛判断**：text-anchor 残余（锚点类 10-34k）= 每标签 2-4px 的盒子尺寸差（我们盒 69×36 vs mgl 理论 65.3×38.4）经锚点偏移放大（水平 ±35px/垂直 ±18px 半盒位移 × 数百标签）+ SDF AA 剖面差（mgl `smoothstep(0.75±γ)` vs flywave `clamp((tex−0.5)×toPixels+0.5)`，γ≈0.84px vs 我们羽化 ~1.5px、核更浅）。两者都在 flywave-text-canvas 引擎内：bounds 计算需对表 mgl（trailing space/lineHeight 精确值），AA 需对齐 mgl EDGE_GAMMA=0.105/dpr 公式——**下一轮直接改 `TextMaterials.getOpacity` 与 `measureText` 的行高/盒宽**（有 §12.68 的文本渲染解锁作基线，可安全迭代）。
+
+
 
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）

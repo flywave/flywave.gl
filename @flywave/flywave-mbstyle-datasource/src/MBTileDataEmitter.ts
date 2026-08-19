@@ -785,6 +785,8 @@ export class MBTileDataEmitter {
                     // (NOT `mayOverlap`/`reserveSpace`); map `icon-allow-overlap` /
                     // `icon-ignore-placement` onto the native prop names.
                     props.iconMayOverlap = l['icon-allow-overlap'] === true;
+                    // Constant screen size, see the text technique above.
+                    props.distanceScale = 0;
                     props.mayOverlap = l['icon-allow-overlap'] === true;
                     props.iconReserveSpace = l['icon-ignore-placement'] !== true;
                     props.reserveSpace = l['icon-ignore-placement'] !== true;
@@ -864,13 +866,17 @@ export class MBTileDataEmitter {
                     props.hAlignment = anchor.includes('left') ? 'Left'
                         : anchor.includes('right') ? 'Right' : 'Center';
                     // Mapbox anchors align the text box edge to the point:
-                    // 'top' puts the box top at the point (text below it), which
-                    // is harp's "Below"; 'bottom' puts the box bottom at the
-                    // point (text above it), which is harp's "Above".
+                    // 'top' puts the box top at the point (text below it) —
+                    // flywave's "Below" placement (verified empirically: the
+                    // swap to "Above" regressed top/bottom anchors ~+9k px).
                     props.vAlignment = anchor.startsWith('top') ? 'Below'
                         : anchor.startsWith('bottom') ? 'Above' : 'Center';
                     if (typeof l['symbol-sort-key'] === 'number') props.priority = l['symbol-sort-key'];
                     props.mayOverlap = l['text-allow-overlap'] === true;
+                    // Mapbox labels keep a constant screen size regardless of
+                    // distance — disable flywave's perspective distance scaling
+                    // (default 0.5 shrinks off-center labels by up to ~25%).
+                    props.distanceScale = 0;
                     props.reserveSpace = l['text-ignore-placement'] !== true;
                     const textOffset = l['text-offset'] as number[] | undefined;
                     if (Array.isArray(textOffset)) {
@@ -1557,7 +1563,12 @@ export class MBTileDataEmitter {
                     (Number(layer.paint?.['line-blur'] ?? 0) !== 0) ||
                     // Offset lines displace ONLY via the ribbon shader path —
                     // the SolidLine copy would render undisplaced underneath.
-                    offsetWorld !== 0);
+                    offsetWorld !== 0 ||
+                    // Additive blend lines never render directly (mgl draws
+                    // them only through the offscreen density composite) — an
+                    // opaque SolidLine twin would underlie the composite and
+                    // double-accumulate in the density pass.
+                    layer.paint?.['line-blend-mode'] === 'additive');
                 if (!skipSolidLine) this.m_preExtrudedLines = true;
                 // Store interleaved vertex data + remapped indices
                 const stride = 13; // extrusionCoord(3)+position(3)+tangent(3)+biTangent(4)
