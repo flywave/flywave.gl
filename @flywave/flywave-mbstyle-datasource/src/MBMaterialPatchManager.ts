@@ -1871,6 +1871,7 @@ export class MBMaterialPatchManager {
                 shader.uniforms.uMBLightDirWorld = { value: lightDirWorld };
                 shader.uniforms.uMBLightColor = { value: lightColor };
                 shader.uniforms.uMBLightIntensity = { value: lightIntensity };
+                shader.uniforms.uMBPaintOpacity = { value: paintOpacity };
                 shader.uniforms.uMBViewToWorld = { value: viewToWorld };
                 shader.uniforms.uMBVerticalGradient = { value: verticalGradient ? 1 : 0 };
                 // Varyings must be declared at global scope — injecting the
@@ -1890,7 +1891,7 @@ export class MBMaterialPatchManager {
                     `#include <common>
                      varying float vMBHeight;
                      uniform vec3 uMBLightDirWorld; uniform vec3 uMBLightColor;
-                     uniform float uMBLightIntensity; uniform mat3 uMBViewToWorld;
+                     uniform float uMBLightIntensity; uniform mat3 uMBViewToWorld; uniform float uMBPaintOpacity;
                      uniform float uMBVerticalGradient;
                      uniform float uMBHeightBase; uniform float uMBHeightTop;
                      vec3 linearToSrgb(vec3 c) {
@@ -1929,6 +1930,12 @@ export class MBMaterialPatchManager {
                          }
                          vec3 mbResultSrgb = clamp(mbColor * mbNdotL * uMBLightColor, mix(vec3(0.0), vec3(0.3), 1.0 - uMBLightColor), vec3(1.0));
                          gl_FragColor.rgb = srgbToLinear(mbResultSrgb);
+                         // Force the blend weight: material-level opacity was
+                         // not reaching the fragment on this path (probed), the
+                         // onBeforeCompile injection is.
+                         if (uMBPaintOpacity < 1.0) {
+                             gl_FragColor.a = uMBPaintOpacity;
+                         }
                      }`
                 );
             }

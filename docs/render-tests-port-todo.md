@@ -1927,6 +1927,15 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **第六轮入口**：① `renderer.info` per-frame dump（draw calls + 材质）找真正渲染墙的材质实例；② 或在 onBeforeCompile 里同时改 alpha（shader 级修改有效已证）——把 `gl_FragColor.a` 乘 0.75 并设 blend 到正确值的 shader 级 workaround；③ mgl 语义 = 单次 0.75 blend，理想修法仍是找到材质级无效的原因。
 
+**§12.74 第六轮（2026-08-20 六，双 alpha 通道全部验证，GL 级之谜）**：
+
+1. **shader 级 alpha 强制**（`gl_FragColor.a = uMBPaintOpacity` 于注入块末尾，uniform 0.75）+ 材质级 CustomBlending 同时生效——**输出仍无混合**（墙 (11,13,13) 不变）。rgb 同块修改有效（多轮探针证明），alpha 同块修改无效——排除"块未执行"。
+2. **per-frame 材质状态 dump（渲染后立即读）**：`blending=5(CustomBlending) transparent=false opacity=0.75 depthWrite=true depthFunc=3(LessEqual) forced=undefined` ——渲染时材质状态**全部正确**，且无任何代码在帧间重置。
+3. **新认知（叠加语义）**：prepass 禁用后 LessEqual 深度正确剔除远墙，但墙后背景几乎无青色渗透（(11,15,15) vs 期望 (9,72,72)）——除 blend 失效外，**mgl 的两遍深度还有一个我们缺失的语义**：只保留最近表面（透明盒的"内部"完全不可见，墙后永远是地面青色）；我们的单 pass 深度写会因绘制顺序在屋顶/墙重叠处产生二次混合。
+4. **剩余谜团锁定在 GL/合成器级**：材质状态正确 + 片元 alpha 正确 + blend 因子正确 → 输出无混合。与 prepass-ON 时（有 50% 混合）对照，疑点收敛到：SwiftShader 对 `LessEqualDepth + CustomBlending + 非透明列表` 组合的 blend 状态应用 bug，或 composer RenderPass 的 overrideMaterial/state 干扰。**下一步需真机 GPU 或 WebGL inspector（Spector.js）级别取证**，headless 管道内已无更多可观测维度。
+
+**代码现状**：prepass 禁用 + CustomBlending + shader alpha 三层保险已提交（全部正确语义，blend 生效即对齐）；`fill-extrusion-opacity/literal` 70929（几何/颜色正确、混合待生效）。该域在 headless 环境到此为止，标记 **待真机验证**。
+
 
 
 
