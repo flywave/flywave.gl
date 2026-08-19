@@ -1,0 +1,254 @@
+Chunked run: 2 categories, 9 tests total.
+RenderingTestResultServer: start standaloneServer:  rendering-test-results/mbstyle-next
+RenderingTestResultServer: serving IBCT report at /ibct-report endpoint
+RenderingTestResultServer: accepting IBCT results at /ibct-feedback endpoint
+RenderingTestResultServer: listening on port localhost:8099!
+Batched into 1 karma runs.
+
+### [line-translate-anchor/, line-blend-mode/] ~9 tests ...
+tsconfig-paths-webpack-plugin: Using config file at /Users/xuning/Work/flywave.gl/tsconfig.karma.json
+Matched test files: [
+  '@flywave/flywave-mbstyle-datasource/test/MBStyleCompatRenderTest.ts',
+  {
+    pattern: 'node_modules/three/examples/jsm/libs/draco/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-3dtile-render/test/data/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-map-theme/resources/fonts/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-mbstyle-datasource/test/render-tests/**/expected.png',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-mbstyle-datasource/test/rendering/integration/**/*.*',
+    included: false
+  }
+]
+[33m19 08 2026 10:20:11.885:WARN [filelist]: [39mPattern "/Users/xuning/Work/flywave.gl/@flywave/flywave-3dtile-render/test/data/**/*.*" does not match any file.
+Webpack bundling...
+asset [1m[32mcommons.js[39m[22m 39.7 MiB [1m[32m[emitted][39m[22m (name: commons) (id hint: commons)
+asset [1m[32mruntime.js[39m[22m 16.4 KiB [1m[32m[emitted][39m[22m (name: runtime)
+asset [1m[32mMBStyleCompatRenderTest.706409308.js[39m[22m 516 bytes [1m[32m[emitted][39m[22m (name: MBStyleCompatRenderTest.706409308)
+Entrypoint [1mMBStyleCompatRenderTest.706409308[39m[22m 39.7 MiB = [1m[32mruntime.js[39m[22m 16.4 KiB [1m[32mcommons.js[39m[22m 39.7 MiB [1m[32mMBStyleCompatRenderTest.706409308.js[39m[22m 516 bytes
+webpack 5.99.9 compiled [1m[32msuccessfully[39m[22m in 4765 ms
+[33m19 08 2026 10:20:17.822:WARN [filelist]: [39mPattern "/Users/xuning/Work/flywave.gl/@flywave/flywave-3dtile-render/test/data/**/*.*" does not match any file.
+[32m19 08 2026 10:20:18.506:INFO [karma-server]: [39mKarma v6.4.4 server started at http://localhost:9876/
+[32m19 08 2026 10:20:18.506:INFO [launcher]: [39mLaunching browsers ChromeHeadlessNoSandbox with concurrency unlimited
+[32m19 08 2026 10:20:18.509:INFO [launcher]: [39mStarting browser ChromeHeadless
+[32m19 08 2026 10:20:20.291:INFO [Edge 151.0.0.0 (Mac OS 10.15.7)]: [39mConnected on socket v2HHVJ3ZocY7OVhTAAAB with id 58019790
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: [36m'RenderingTestHelper:', 'WebGlInfo', Object{vendor: 'Google Inc. (Google)', gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)'}[39m
+
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: 'RenderingTestHelper:', 'WebGlInfo', Object{vendor: 'Google Inc. (Google)', gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)'}
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: [36m'[MBStyleCompat] 3026 compatible tests loaded'[39m
+
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: '[MBStyleCompat] 3026 compatible tests loaded'
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: [36m'[MBStyleCompat] filtered to 12 tests matching "line-translate-anchor/", "line-blend-mode/"'[39m
+
+Edge 151.0.0.0 (Mac OS 10.15.7) LOG: '[MBStyleCompat] filtered to 12 tests matching "line-translate-anchor/", "line-blend-mode/"'
+
+[1A[2KEdge 151.0.0.0 (Mac OS 10.15.7): Executed 0 of 12[32m SUCCESS[39m (0 secs / 0 secs)
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.002,"platform":"web-Edge-151.0.0.0-MacOS","name":"line-blend-mode/additive"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 11045 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive.ibct-result.json
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/additive FAILED[39m
+	AssertionError: 11045 mismatched pixels, reference image: line-blend-mode/additive: expected 11045 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 1 of 12[31m (1 FAILED)[39m (skipped 3) (0 secs / 0.664 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/additive FAILED
+	AssertionError: 11045 mismatched pixels, reference image: line-blend-mode/additive: expected 11045 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.005,"platform":"web-Edge-151.0.0.0-MacOS","name":"line-blend-mode/additive-auto-density"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 10446 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-auto-density.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-auto-density.diff.png
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/additive-auto-density FAILED[39m
+	AssertionError: 10446 mismatched pixels, reference image: line-blend-mode/additive-auto-density: expected 10446 to be at most 82
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 2 of 12[31m (2 FAILED)[39m (skipped 3) (0 secs / 1.382 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/additive-auto-density FAILED
+	AssertionError: 10446 mismatched pixels, reference image: line-blend-mode/additive-auto-density: expected 10446 to be at most 82
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-auto-density.ibct-result.json
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.002,"platform":"web-Edge-151.0.0.0-MacOS","name":"line-blend-mode/additive-clamp-high"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 10378 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-clamp-high.current.png
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/additive-clamp-high FAILED[39m
+	AssertionError: 10378 mismatched pixels, reference image: line-blend-mode/additive-clamp-high: expected 10378 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 3 of 12[31m (3 FAILED)[39m (skipped 3) (0 secs / 2.002 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/additive-clamp-high FAILED
+	AssertionError: 10378 mismatched pixels, reference image: line-blend-mode/additive-clamp-high: expected 10378 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-clamp-high.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-clamp-high.ibct-result.json
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.002,"platform":"web-Edge-151.0.0.0-MacOS","name":"line-blend-mode/additive-clamp-low"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 10433 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-clamp-low.current.png
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/additive-clamp-low FAILED[39m
+	AssertionError: 10433 mismatched pixels, reference image: line-blend-mode/additive-clamp-low: expected 10433 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 4 of 12[31m (4 FAILED)[39m (skipped 3) (0 secs / 2.542 secs)
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-clamp-low.diff.png
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/additive-clamp-low FAILED
+	AssertionError: 10433 mismatched pixels, reference image: line-blend-mode/additive-clamp-low: expected 10433 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-clamp-low.ibct-result.json
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.002,"platform":"web-Edge-151.0.0.0-MacOS","name":"line-blend-mode/additive-clamp-medium"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 10330 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-clamp-medium.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-clamp-medium.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/additive-clamp-medium.ibct-result.json
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/additive-clamp-medium FAILED[39m
+	AssertionError: 10330 mismatched pixels, reference image: line-blend-mode/additive-clamp-medium: expected 10330 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 5 of 12[31m (5 FAILED)[39m (skipped 3) (0 secs / 3.103 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/additive-clamp-medium FAILED
+	AssertionError: 10330 mismatched pixels, reference image: line-blend-mode/additive-clamp-medium: expected 10330 to be at most 33
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+[1A[2KERROR: [36m'THREE.WebGLState: MultiplyBlending requires material.premultipliedAlpha = true'[39m
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 5 of 12[31m (5 FAILED)[39m (skipped 3) (0 secs / 3.103 secs)
+ERROR: 'THREE.WebGLState: MultiplyBlending requires material.premultipliedAlpha = true'
+[1A[2KERROR: [36m'THREE.WebGLState: MultiplyBlending requires material.premultipliedAlpha = true'[39m
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 5 of 12[31m (5 FAILED)[39m (skipped 3) (0 secs / 3.103 secs)
+ERROR: 'THREE.WebGLState: MultiplyBlending requires material.premultipliedAlpha = true'
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.0003,"platform":"web-Edge-151.0.0.0-MacOS","name":"line-blend-mode/multiply"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 1456 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/multiply.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/multiply.diff.png
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/multiply FAILED[39m
+	AssertionError: 1456 mismatched pixels, reference image: line-blend-mode/multiply: expected 1456 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 6 of 12[31m (6 FAILED)[39m (skipped 3) (0 secs / 3.638 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-blend-mode/multiply FAILED
+	AssertionError: 1456 mismatched pixels, reference image: line-blend-mode/multiply: expected 1456 to be at most 5
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-blend-mode/multiply.ibct-result.json
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-151.0.0.0-MacOS","name":"line-translate-anchor/map"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 20469 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-translate-anchor/map.current.png
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-translate-anchor/map FAILED[39m
+	AssertionError: 20469 mismatched pixels, reference image: line-translate-anchor/map: expected 20469 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 7 of 12[31m (7 FAILED)[39m (skipped 3) (0 secs / 4.236 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-translate-anchor/map FAILED
+	AssertionError: 20469 mismatched pixels, reference image: line-translate-anchor/map: expected 20469 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-translate-anchor/map.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-translate-anchor/map.ibct-result.json
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-151.0.0.0-MacOS","name":"line-translate-anchor/viewport"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 20254 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-translate-anchor/viewport.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-translate-anchor/viewport.diff.png
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-translate-anchor/viewport FAILED[39m
+	AssertionError: 20254 mismatched pixels, reference image: line-translate-anchor/viewport: expected 20254 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 8 of 12[31m (8 FAILED)[39m (skipped 3) (0 secs / 4.811 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-translate-anchor/viewport FAILED
+	AssertionError: 20254 mismatched pixels, reference image: line-translate-anchor/viewport: expected 20254 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-translate-anchor/viewport.ibct-result.json
+[33m19 08 2026 10:20:25.559:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/14-8801-5373.terrain.png
+[33m19 08 2026 10:20:25.560:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/14-8802-5373.terrain.png
+[33m19 08 2026 10:20:25.560:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/14-8803-5373.terrain.png
+[33m19 08 2026 10:20:25.561:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/14-8802-5375.terrain.png
+[33m19 08 2026 10:20:25.561:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/14-8803-5375.terrain.png
+[33m19 08 2026 10:20:25.562:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/14-8801-5375.terrain.png
+[33m19 08 2026 10:20:25.563:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/14-8801-5374.terrain.png
+[33m19 08 2026 10:20:25.563:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/14-8802-5374.terrain.png
+[33m19 08 2026 10:20:25.564:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/14-8803-5374.terrain.png
+[33m19 08 2026 10:20:25.573:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/14-8802-5374.terrain.png
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-151.0.0.0-MacOS","name":"line-translate-anchor/viewport-terrain"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 22896 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-translate-anchor/viewport-terrain.current.png
+[1A[2K[31mEdge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-translate-anchor/viewport-terrain FAILED[39m
+	AssertionError: 22896 mismatched pixels, reference image: line-translate-anchor/viewport-terrain: expected 22896 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+Edge 151.0.0.0 (Mac OS 10.15.7): Executed 9 of 12[31m (9 FAILED)[39m (skipped 3) (0 secs / 5.409 secs)
+Edge 151.0.0.0 (Mac OS 10.15.7) MBStyleDataSource render-tests compatibility line-translate-anchor/viewport-terrain FAILED
+	AssertionError: 22896 mismatched pixels, reference image: line-translate-anchor/viewport-terrain: expected 22896 to be at most 132
+	    at RenderingTestHelper.<anonymous> (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54428:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/var/folders/gx/d1wk6gpj7q9fjdhvyx4fvnjr0000gn/T/_karma_webpack_974644/commons.js:54316:58)
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-translate-anchor/viewport-terrain.diff.png
+[1A[2KEdge 151.0.0.0 (Mac OS 10.15.7): Executed 9 of 12[31m (9 FAILED)[39m (skipped 3) (5.434 secs / 5.409 secs)
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-next/web-Edge-151.0.0.0-MacOS/mbstyle-render-line-translate-anchor/viewport-terrain.ibct-result.json
+[31mTOTAL: 9 FAILED, 0 SUCCESS[39m
+TOTAL: 9 FAILED, 0 SUCCESS
+Handlebars: Access has been denied to resolve the property "statements" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "branches" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "functions" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "lines" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+
+=============================== Coverage summary ===============================
+Statements   : Unknown% ( 0/0 )
+Branches     : Unknown% ( 0/0 )
+Functions    : Unknown% ( 0/0 )
+Lines        : Unknown% ( 0/0 )
+================================================================================
+### batch karma exited with status 1
+
+=== Summary: 0 passed, 9 failed ===
+  FAIL line-blend-mode/additive-auto-density (10446 mismatched pixels)
+  FAIL line-blend-mode/additive-clamp-high (10378 mismatched pixels)
+  FAIL line-blend-mode/additive-clamp-low (10433 mismatched pixels)
+  FAIL line-blend-mode/additive-clamp-medium (10330 mismatched pixels)
+  FAIL line-blend-mode/additive (11045 mismatched pixels)
+  FAIL line-blend-mode/multiply (1456 mismatched pixels)
+  FAIL line-translate-anchor/map (20469 mismatched pixels)
+  FAIL line-translate-anchor/viewport-terrain (22896 mismatched pixels)
+  FAIL line-translate-anchor/viewport (20254 mismatched pixels)
+
+=== Chunked render-test evaluation complete ===
+Results saved to: rendering-test-results/mbstyle-next
+Open the HTML report:  http://localhost:8099/ibct-report
+(press Ctrl-C to stop the result server)

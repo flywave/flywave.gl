@@ -21,6 +21,8 @@
 > **2026-08-19 快照（相机 bearing 符号，§12.64）**：`814fae16`+`e18ab549` 修复相机 bearing 符号反转（mapbox 顺时针 → flywave 逆时针 yawDeg），全视图 2·bearing 旋转消除。line-visibility/visible 12318→**4126**、line-translate-anchor map 20469→**1236** / viewport→**1274**、elevated 11659→**2303**。599 例非零 bearing 测试解锁整类 180° 旋转错误（代价 3 例对称 symbol 0→54-85px 侥幸暴露）。残余为线宽 AA（N5 专项）。
 >
 > **2026-08-19 快照（代码对齐批 §12.65，测试延后）**：`98aa2762`+`92f53811`+`0383f6fa`+`a6ab7eaf`+`15765cb3` 五项 mgl 逻辑对齐——line-blend-mode multiply `premultipliedAlpha=true`（否则 three r178 不设 blendFunc，multiply 因子从不进 GL，交叉不累计）、fill/fill-extrusion/circle-translate px→world 单位（shader 把像素当世界米加，z14 仅 ~2px）、icon/text-translate viewport anchor 按 +bearing 旋转。tsc 绿、55 passing。待渲染验证：multiply 1456、fill-translate-anchor 884、extrusion/circle-translate、icon/text-translate。
+>
+> **2026-08-19 快照（代码对齐批 §12.66，测试延后）**：`fd1ff405` text-anchor 水平对齐按 anchor 水平分量推导（对齐 mgl `getAnchorAlignment`），修掉原 `text-justify` 误推导（'top-left' 本应 Left 却落到 Center）。顺带修正 line-translate viewport 注释（代码按 +bearing 旋转，原注释误写 -bearing）。tsc `--build` 绿、lib 重建含修正。待渲染验证：text-anchor（11 分类）。
 
 >
 > **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。
@@ -1718,6 +1720,32 @@ if (border_color.a == 0.0) {                     // 未显式设 border-color
 5. **icon/text-translate viewport anchor 按 +bearing 旋转**（`15765cb3`）：emitter 的 symbol translate 烘焙此前不处理 viewport anchor——mgl `painter.translatePosMatrix` 对 viewport 先按 +bearing 旋转 translate。补齐 icon/text-translate-anchor 的 viewport 旋转（line/fill/extrusion/circle 的 viewport 由 `resolveTranslate` 处理）。
 
 **状态**：tsc 绿；55 passing（2 既有失败无关）。待渲染验证：line-blend-mode/multiply（1456→近失）、fill-translate-anchor（884）、fill-extrusion-translate、circle-translate、icon/text-translate。
+
+### 12.66 代码对齐批：text-anchor 水平对齐（2026-08-19，commit `fd1ff405`，测试延后）
+
+**根因（对齐 mgl `symbol/shaping_shared.getAnchorAlignment`）**：
+
+`MBTileDataEmitter` 的 text 分支（`:855-864`）用 `text-justify` 推导 `props.hAlignment`：
+
+```js
+const justify = (l['text-justify'] ?? 'center');
+props.hAlignment = justify === 'left' ? 'Left' : justify === 'right' ? 'Right' : 'Center';
+```
+
+但 mgl `getAnchorAlignment(anchor)` **同时**从 anchor 的水平与垂直分量推导对齐——`text-justify` 只影响多行文本在盒子内部的 justification（本管线不 wrap，不支持），不参与文字盒相对锚点的水平对齐。证据（`mapbox-gl-js/src/symbol/shaping_shared.ts:63-83`）：`horizontalAlign` 由 anchor 是否含 `left/right` 决定（'left'→0、'right'→1、else .5），与 justify 无关。
+
+**修复**：`hAlignment` 改为按 anchor 水平分量推导：
+
+```js
+props.hAlignment = anchor.includes('left') ? 'Left'
+    : anchor.includes('right') ? 'Right' : 'Center';
+```
+
+方向校验：`flywave-text-canvas/TextStyle.ts` 枚举 `HorizontalAlignment.Left=0.0`（文本左缘贴锚点、向右延伸）= mgl `h=0`（anchor 'left'），`Right=-1.0` = mgl `h=1`（anchor 'right'），`Center=-0.5` = mgl `h=0.5`。故 anchor 含 `left`→`'Left'`、含 `right`→`'Right'`、否则 `'Center'`，与 mgl 一致。`vAlignment` 此前已按 anchor 垂直分量（`top`→`Below`/`bottom`→`Above`）推导，经验证正确（align 枚举 `VerticalAlignment.Above=0/Below=-1`），保持不变。
+
+**附带**：修正 `line-translate` viewport 注释（`:1434-1437`）——代码按 `+bearing` 旋转 tx/ty（与 mgl `translatePosMatrix` 的 tile-matrix 路径 `angle=-transform.angle=+bearing` 一致），原注释误写 `-bearing` 且给错结果 `[10,-10]`（应为 `[-10,10]`）。代码本身正确，仅注释修正。
+
+**状态**：tsc `--build` 绿；lib 重建含修正（`:570` 已生效）。**待渲染验证**：text-anchor（11 分类，§2.6 标 ⚠️）。预期 anchor='left'/'right' 及组合锚点（'top-left' 等）水平对齐由 Center 纠正为 Left/Right，单点文本位置对齐改善；text-size/color/field/opacity 等既通过项不受影响（hAlignment 此前依赖 justify，与这些无关）。
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
