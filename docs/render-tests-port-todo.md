@@ -170,7 +170,7 @@
 | line-visibility | 2 | ✅ | `MBLayerEvaluator.ts:443` |
 | line-border | 13 | 🔧 | patcher `:652-660` `outlineWidth/Color`（emitter 不产 `technique.outlineWidth`，native define 未编译），S1 |
 | line-border-gradient | 4 | ❌ | evaluator 存 raw（`MBLayerEvaluator.ts:458`），无 shader 消费者 |
-| line-blend-mode | 6 | ⚠️ | multiply ✅（0-2mm，§12.67）；additive 5 例未接线（ONE,ONE blendFunc） |
+| line-blend-mode | 6 | ✅ | **6/6 全 PASS（§12.71，additive 双 pass 密度归一落地）** |
 | line-emissive-strength | 3 | 🔧 | patcher `:740-750`，S1 |
 | line-width-unit | 6 | ⚠️ | `meters` 时 patcher `:559-576` 缩放（S1 不可达）；native 硬编码 `metricUnit:'Pixel'`（emitter `:318`）→ meters 语义错误 |
 | line-triangulation | 2 | ⚠️ | 无属性消费者；经预挤出 ribbon + SolidLine 近似 |
@@ -1825,7 +1825,19 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 | vAlignment Above/Below 互换 | top/bottom +9-16k 变差，立即回退 | 原映射正确：bounds 为 y-up 坐标系（min.y=-39,max.y=-3 在锚点下方），'top'→'Below'→Bottom placement 语义闭环 |
 | 墨水剖面（exp T≈10×13px vs cur T≈7×9px） | 与 1.5× 探针矛盾 → 测量窗口含相邻字母，作废 | — |
 
-**收敛判断**：text-anchor 残余（锚点类 10-34k）= 每标签 2-4px 的盒子尺寸差（我们盒 69×36 vs mgl 理论 65.3×38.4）经锚点偏移放大（水平 ±35px/垂直 ±18px 半盒位移 × 数百标签）+ SDF AA 剖面差（mgl `smoothstep(0.75±γ)` vs flywave `clamp((tex−0.5)×toPixels+0.5)`，γ≈0.84px vs 我们羽化 ~1.5px、核更浅）。两者都在 flywave-text-canvas 引擎内：bounds 计算需对表 mgl（trailing space/lineHeight 精确值），AA 需对齐 mgl EDGE_GAMMA=0.105/dpr 公式——**下一轮直接改 `TextMaterials.getOpacity` 与 `measureText` 的行高/盒宽**（有 §12.68 的文本渲染解锁作基线，可安全迭代）。
+**收敛判断**：text-anchor 残余（锚点类 10-34k）= 每标签 2-4px 的盒子尺寸差（我们盒 69×36 vs mgl 理论 65.3×38.4——**盒宽差恰好 = SDF border 6px×scale**：measureText 的 bounds 是含 3px border 的字形 quad 并集，mgl 用纯 advance 宽）经锚点偏移放大（水平 ±35px/垂直 ±18px 半盒位移 × 数百标签）+ SDF AA 剖面差（mgl `smoothstep(0.75±γ)` vs flywave `clamp((tex−0.5)×toPixels+0.5)`，γ≈0.84px vs 我们羽化 ~1.5px、核更浅）。两者都在 flywave-text-canvas 引擎内：bounds 需对表 mgl（trailing space/lineHeight 精确值），AA 需对齐 mgl EDGE_GAMMA=0.105/dpr 公式——**下一轮直接改 `TextMaterials.getOpacity` 与 `measureText` 的行高/盒宽**（有 §12.68 的文本渲染解锁作基线，可安全迭代）。
+
+### 12.71 line-blend-mode additive 双 pass 稳定落地：0→**6/6 全绿**（2026-08-19 深夜三）
+
+§12.68 的不稳定问题解决，`MBMaterialPatchManager.enableAdditiveDualPass=true` 正式启用。相对半成品版的关键修正：
+
+1. **合成 pass 改回加法混合**（`additiveAlphaWeighted` 同款 [SRC_ALPHA, ONE]）：`out=(avg·t, t)` 叠加到画布 → `dst += avg·t²`——与 mgl composite 的 colorMode 一致（此前 NoBlending 直接替换是错误来源之一）。
+2. **auto-density 用 CPU readPixels**：`max(meanOccupiedDensity×2, 1)`（mgl GPU reduce 的等价静态近似），隔帧读取；clamp>0 时直接用 clamp。
+3. **累积值改为 coverage 语义**：RGB=Σ(C·fa·cov)、A=Σ(cov)（AA coverage×opacity），对齐 mgl LINE_BLEND_ADDITIVE 的 premultiplied 输出。
+4. 保留：clone 原材质 `onBeforeCompile` 只覆写 fragment（骑 RTE 相机顶点路径）、half-float FBO、私有场景 world-matrix 重绘、patcher 侧 `visible=false` + 注册。
+
+**验证**：line-blend-mode **6/6 全 PASS**（additive×5 + multiply，此前 1/6）；line-color/width/opacity 回归批 vs baseline5 **零回归**。调试注意：**必须 `HARP_NO_HARD_SOURCE_CACHE=true`**（filesystem 缓存会给出陈旧 bundle，是 §12.68 "帧间不稳定" 的主要元凶）。
+
 
 
 

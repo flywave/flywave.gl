@@ -9,27 +9,43 @@ import { MapView } from '@flywave/flywave-mapview';
 import type { MBStyleDataSource } from './MBStyleDataSource';
 
 /**
- * Two-pass `line-blend-mode: additive` renderer (mgl draw_line.ts additive glass
- * mode). Direct THREE.AdditiveBlending cannot reproduce the mapbox composite:
- * mgl renders the lines into an offscreen FBO that accumulates
+ * Two-pass `line-blend-mode: additive` renderer, mirroring mgl
+ * `draw_line.ts`'s additive glass mode.
  *
- *   RGB: sum(C * fa) per line   (fa = line-color alpha)
- *   A:   sum(1) per line        (density)
+ * Direct THREE.AdditiveBlending cannot reproduce the mapbox composite: mgl
+ * renders the layer's lines into an offscreen FBO accumulating
  *
- * and composites with the curve (line_blend_composite.fragment.glsl):
+ *   RGB: src.rgb·src.a + dst  =  Σ(C·fa·cov)   (C = line color, fa = its alpha)
+ *   A:   src.a + dst          =  Σ(cov)        (density; AA coverage × opacity)
+ *
+ * (ColorMode.additiveAlphaWeightedUnboundedAlpha = [SRC_ALPHA, ONE, ONE, ONE]
+ * on a float FBO), then composites per layer with
+ * `line_blend_composite.fragment.glsl`:
  *
  *   avg = rgb / density
- *   n   = density / maxDensity  (maxDensity = line-blend-additive-clamp > 0,
- *                                else the accumulated max density)
+ *   n   = density / maxDensity
  *   t   = sqrt(n / (n + 1))
- *   out = avg * t               (alpha = t)
+ *   out = (avg·t, t)          drawn ADDITIVELY → dst + avg·t²
  *
- * The density normalization is what keeps overlaps from hard-clipping: a single
- * full-coverage line with clamp=1 renders at ~50% brightness, not 100%.
+ * maxDensity is `line-blend-additive-clamp` when > 0, otherwise
+ * `max(meanOccupiedDensity × 2, 1)` read back from the accumulation buffer
+ * (mgl reduces the FBO to 1×1 asynchronously; a synchronous readPixels of the
+ * alpha channel every other frame is equivalent for static scenes). Until a
+ * maxDensity is known, compositing is SKIPPED — mgl hides the layer rather
+ * than flashing at full brightness.
+ *
+ * Verified against the render-test references (§12.68): the `additive`
+ * fixture's single-line pixels are exactly avg·n/(n+1) = (51,40,0) and the
+ * 3-line crossing (76,60,0); the 8-line `additive-auto-density` fixture
+ * implies maxDensity ≈ 2.6 = mean(~1.3)·2.
  *
  * The additive ribbon meshes are hidden from the main scene by the material
- * patcher (visible=false, registered in {@link additiveRibbons}) and re-drawn
- * here every AfterRender.
+ * patcher (visible=false, registered in {@link additiveRibbons}); their
+ * SolidLine twins are not emitted at all (emitter skipSolidLine). Every
+ * AfterRender the registered ribbons are re-drawn into the density FBO with
+ * the mapview's relative-to-eye camera — tile objects are re-positioned
+ * camera-relative on the CPU each frame (TileObjectsRenderer), so their
+ * matrixWorld is valid with the RTE camera until the next frame.
  */
 export interface AdditiveRibbon {
     mesh: THREE.Mesh;
@@ -39,11 +55,11 @@ export interface AdditiveRibbon {
 /** Registry filled by MBMaterialPatchManager.patchTile each time it patches. */
 export const additiveRibbons: AdditiveRibbon[] = [];
 
-interface RibbonGroup {
-    key: string;
+interface AdditiveGroup {
+    layerId: string;
+    renderOrder: number;
+    clamp: number; // 0 = auto (mean occupied density × 2, min 1)
     meshes: THREE.Mesh[];
-    color: THREE.Vector4; // sRGB rgb + alpha, from the evaluated line-color
-    clamp: number; // 0 = auto (readback max density)
 }
 
 const COMP_VERT = /* glsl */ `
@@ -54,14 +70,15 @@ void main() {
 }
 `;
 
-// mgl line_blend_composite.fragment.glsl additive branch.
+// mgl line_blend_composite.fragment.glsl additive branch (t = sqrt(n/(n+1))).
+// Drawn with additiveAlphaWeighted blending, so the visible contribution is
+// avg·t² = avg·n/(n+1) over the background.
 const COMP_FRAG = /* glsl */ `
 uniform sampler2D uDensity;
 uniform float uMaxDensity;
 varying vec2 vUv;
 void main() {
     vec4 c = texture2D(uDensity, vUv);
-    if (c.a <= 0.0) {
     if (c.a <= 0.0) {
         discard;
     }
@@ -77,13 +94,16 @@ export class MBAdditiveLineRenderer {
     private m_rt: THREE.WebGLRenderTarget | null = null;
     private m_rtW = 0;
     private m_rtH = 0;
+    private m_rtHalfFloat = false;
     private m_scene = new THREE.Scene();
     private m_compScene = new THREE.Scene();
     private m_camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     private m_compMat: THREE.ShaderMaterial | null = null;
-    private m_materialCache = new Map<string, THREE.ShaderMaterial>();
     private m_tmpMeshes: THREE.Mesh[] = [];
-    private m_autoDensity = 0;
+    /** Accumulation material clones cached on their source material. */
+    private m_cloneSet = new Set<THREE.Material>();
+    /** layerId → cached auto maxDensity (readback result). */
+    private m_autoDensity = new Map<string, number>();
     private m_framesSinceReadback = 0;
 
     constructor(
@@ -91,17 +111,22 @@ export class MBAdditiveLineRenderer {
         private m_dataSource: MBStyleDataSource,
     ) {}
 
-    /** Run both additive passes. Call once per frame from AfterRender. */
+    /** Run the additive accumulation + composite passes (AfterRender). */
     run(): void {
         const renderer = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
         const canvas = (this.m_mapView as any).canvas as HTMLCanvasElement | undefined;
-        if (!renderer || !canvas || additiveRibbons.length === 0) return;        const w = canvas.width;
+        if (!renderer || !canvas || additiveRibbons.length === 0) return;
+        const w = canvas.width;
         const h = canvas.height;
         if (w === 0 || h === 0) return;
-        const camera = this.frameCamera();
+        const camera = (this.m_mapView as any).getRteCamera?.() as
+            | THREE.PerspectiveCamera
+            | undefined;
         if (!camera) return;
 
-        // Drop registrations whose mesh left the scene (tile evicted).
+        // Drop registrations whose mesh left the scene root (tile evicted;
+        // the scene root is rebuilt every frame, so a mesh that did not take
+        // part in this frame's render has no parent).
         for (let i = additiveRibbons.length - 1; i >= 0; i--) {
             if (!additiveRibbons[i].mesh.parent) additiveRibbons.splice(i, 1);
         }
@@ -124,39 +149,26 @@ export class MBAdditiveLineRenderer {
             renderer.setScissorTest(false);
 
             for (const g of groups) {
-                // Pass 1: accumulate this group's ribbons into the density FBO.
+                // Pass 1: accumulate this layer's ribbons into the density FBO.
                 renderer.setRenderTarget(this.m_rt);
                 renderer.setClearColor(0x000000, 0);
                 renderer.clear();
                 // The view-range solver tightens near/far around the visible
-                // tiles each frame; ribbon meshes can sit beyond `far` here
-                // (they render in the main pass through the tile depth range).
-                // Widening far only affects the depth mapping — perspective
-                // x/y are far-independent — so screen positions are unchanged.
-                const cam = camera as THREE.PerspectiveCamera;
-                const savedNear = cam.near;
-                const savedFar = cam.far;
-                let camStretched = false;
-                if (savedFar > 0) {
-                    // Stretch around the actual geometry distance.
-                    let maxDist = 0;
-                    const camPos = cam.position;
-                    for (const s of g.meshes) {
-                        s.updateMatrixWorld(true);
-                        const p = new THREE.Vector3().setFromMatrixPosition(s.matrixWorld);
-                        maxDist = Math.max(maxDist, p.distanceTo(camPos));
-                    }
-                    if (maxDist * 1.5 > savedFar) {
-                        cam.near = Math.max(savedNear * 0.25, 1);
-                        cam.far = maxDist * 2 + savedFar;
-                        cam.updateProjectionMatrix();
-                        camStretched = true;
-                    }
-                }
-                const mat = this.getAccumMaterial(g, g.meshes[0].material as THREE.Material);
+                // tiles each frame; ribbons can sit beyond `far` here (they
+                // render in the main pass through the tile depth range).
+                // Widening near/far only remaps the depth range — perspective
+                // x/y are near/far-independent — and the pass keeps depth
+                // testing off, so screen positions are unchanged.
+                const savedNear = camera.near;
+                const savedFar = camera.far;
+                camera.near = Math.max(savedNear * 0.01, 1);
+                camera.far = Math.max(savedFar * 10, 1e8);
+                camera.updateProjectionMatrix();
                 for (const src of g.meshes) {
-                    // Reuse the ribbon geometry at its world transform; the
-                    // private-scene copy keeps the tile mesh untouched.
+                    const mat = this.getAccumMaterial(src);
+                    // Reuse the ribbon geometry at its (camera-relative) world
+                    // transform; the private-scene copy keeps the tile mesh
+                    // untouched.
                     const mesh = new THREE.Mesh(src.geometry, mat);
                     mesh.matrixAutoUpdate = false;
                     mesh.matrix.copy(src.matrixWorld);
@@ -170,24 +182,36 @@ export class MBAdditiveLineRenderer {
                 renderer.render(this.m_scene, camera);
                 for (const m of this.m_tmpMeshes) this.m_scene.remove(m);
                 this.m_tmpMeshes.length = 0;
-                if (camStretched) {
-                    cam.near = savedNear;
-                    cam.far = savedFar;
-                    cam.updateProjectionMatrix();
-                }
+                camera.near = savedNear;
+                camera.far = savedFar;
+                camera.updateProjectionMatrix();
 
-                // maxDensity: explicit clamp or the accumulated max (readback).
+                // maxDensity: explicit clamp, or the mgl auto estimate
+                // max(mean occupied density × 2, 1) from a readback. Until a
+                // value is known the layer stays hidden (mgl skips compositing
+                // on the first frames rather than flash at full brightness).
                 let maxDensity = g.clamp;
                 if (maxDensity <= 0) {
-                    if (++this.m_framesSinceReadback >= 2 || this.m_autoDensity === 0) {
-                        this.m_autoDensity = this.readbackMaxDensity(renderer);
-                        this.m_framesSinceReadback = 0;
+                    if (!this.m_rtHalfFloat) {
+                        // mgl without float render targets: bounded alpha
+                        // (density saturates at 1) and maxDensity pinned to 1.
+                        maxDensity = 1;
+                    } else {
+                        const cached = this.m_autoDensity.get(g.layerId);
+                        if (
+                            cached === undefined ||
+                            ++this.m_framesSinceReadback >= 2
+                        ) {
+                            const mean = this.readbackMeanDensity(renderer);
+                            if (mean > 0) this.m_autoDensity.set(g.layerId, mean);
+                            this.m_framesSinceReadback = 0;
+                        }
+                        maxDensity = this.m_autoDensity.get(g.layerId) ?? 0;
                     }
-                    maxDensity = this.m_autoDensity;
                 }
-                if (maxDensity <= 0) continue; // mgl: skip until a density is known
+                if (maxDensity <= 0) continue;
 
-                // Pass 2: composite over the scene.
+                // Pass 2: composite over the scene (additive, mgl colorMode).
                 renderer.setRenderTarget(null);
                 if (this.m_compMat) {
                     this.m_compMat.uniforms.uDensity.value = this.m_rt!.texture;
@@ -205,90 +229,118 @@ export class MBAdditiveLineRenderer {
     dispose(): void {
         this.m_rt?.dispose();
         this.m_rt = null;
-        for (const m of this.m_materialCache.values()) m.dispose();
-        this.m_materialCache.clear();
+        for (const m of this.m_cloneSet) m.dispose();
+        this.m_cloneSet.clear();
         this.m_compMat?.dispose();
         this.m_compMat = null;
         additiveRibbons.length = 0;
+        this.m_autoDensity.clear();
     }
 
-    /**
-     * The camera the frame was actually rendered with: the relative-to-eye
-     * camera (MapRenderingManager), not the world-space `mapView.camera`.
-     * World-space geometry clips against the RTE near/far when rendered with
-     * the world camera, producing an empty pass.
-     */
-    private frameCamera(): THREE.PerspectiveCamera | undefined {
-        const mv = this.m_mapView as any;
-        return (mv.m_pointOfView ?? mv.m_rteCamera ?? mv.camera) as THREE.PerspectiveCamera | undefined;
-    }
-
-    private groupRibbons(): RibbonGroup[] {
-        const byKey = new Map<string, RibbonGroup>();
+    /** Group the registered ribbons by style layer (mgl: one FBO per layer). */
+    private groupRibbons(): AdditiveGroup[] {
+        const byLayer = new Map<string, AdditiveGroup>();
         for (const entry of additiveRibbons) {
             const paint = entry.technique?._paint ?? {};
-            const colorRaw = paint['line-color'] ?? '#000000';
-            const clamp = Number(paint['line-blend-additive-clamp'] ?? 0) || 0;
-            const rgba = MBAdditiveLineRenderer.parseColor(String(colorRaw));
-            const key = `${colorRaw}|${clamp}`;
-            let g = byKey.get(key);
+            const layerId = String(entry.technique?._layerId ?? 'unknown');
+            let g = byLayer.get(layerId);
             if (!g) {
                 g = {
-                    key,
+                    layerId,
+                    renderOrder: Number(
+                        entry.technique?.renderOrder ?? entry.technique?._renderOrder ?? 0,
+                    ),
+                    clamp: Number(paint['line-blend-additive-clamp'] ?? 0) || 0,
                     meshes: [],
-                    color: new THREE.Vector4(rgba[0], rgba[1], rgba[2], rgba[3]),
-                    clamp,
                 };
-                byKey.set(key, g);
+                byLayer.set(layerId, g);
             }
             g.meshes.push(entry.mesh);
         }
-        return [...byKey.values()];
+        return [...byLayer.values()].sort((a, b) => a.renderOrder - b.renderOrder);
     }
 
-    private getAccumMaterial(g: RibbonGroup, srcMaterial: THREE.Material): THREE.Material {
-        // Ride the original material's vertex path (the engine's materials do
-        // camera-relative positioning for the RTE render camera — a plain
-        // ShaderMaterial renders world-space geometry off-screen). Clone it and
-        // force the fragment output to the mgl accumulation values.
-        let mat = this.m_materialCache.get(g.key) as any;
-        if (!mat) {
-            const clone: any = srcMaterial.clone();
-            clone.transparent = true;
-            clone.depthTest = false;
-            clone.depthWrite = false;
-            clone.side = THREE.DoubleSide;
-            clone.blending = THREE.CustomBlending;
-            clone.blendSrc = THREE.SrcAlphaFactor;
-            clone.blendDst = THREE.OneFactor;
-            clone.blendSrcAlpha = THREE.OneFactor;
-            clone.blendDstAlpha = THREE.OneFactor;
-            clone.blendEquation = THREE.AddEquation;
-            clone.blendEquationAlpha = THREE.AddEquation;
-            const color = g.color;
-            clone.onBeforeCompile = (shader: any) => {
-                shader.uniforms.uMBAddColor = { value: color };
-                const idx = shader.fragmentShader.lastIndexOf('}');
-                shader.fragmentShader =
-                    'uniform vec4 uMBAddColor;\n' +
-                    shader.fragmentShader.slice(0, idx) +
-                    '\n    gl_FragColor = vec4(uMBAddColor.rgb * uMBAddColor.a, 1.0);\n' +
-                    shader.fragmentShader.slice(idx);
-            };
-            mat = clone;
-            this.m_materialCache.set(g.key, mat);
-        }
-        return mat;
+    /**
+     * Accumulation material for one ribbon mesh: a clone of the (patched)
+     * source material that keeps the engine vertex path — camera-relative
+     * positioning for the RTE render camera AND the patcher's ribbon
+     * injections (aRibbonEdge varying + uMBRibbonWidth) — but replaces the
+     * final fragment output with mgl's accumulation values:
+     *
+     *   rgb = C·fa (feature-alpha-premultiplied color, sRGB like the ramp
+     *               textures — the composite writes raw values to the canvas)
+     *   a   = cov  (AA coverage × line-opacity; mgl forces the composite
+     *               opacity to 1 for additive)
+     */
+    private getAccumMaterial(srcMesh: THREE.Mesh): THREE.Material {
+        const src = srcMesh.material as any;
+        const cached = src?.__mbAddAccumMat as THREE.Material | undefined;
+        if (cached) return cached;
+        const technique = (srcMesh as any).userData?.technique
+            ?? additiveRibbons.find(r => r.mesh === srcMesh)?.technique ?? {};
+        const clone: any = src.clone();
+        clone.transparent = true;
+        clone.depthTest = false;
+        clone.depthWrite = false;
+        clone.side = THREE.DoubleSide;
+        // ColorMode.additiveAlphaWeightedUnboundedAlpha (half-float RT) —
+        // rgb += src.rgb·src.a, a += src.a. On the ubyte fallback mgl uses the
+        // bounded variant whose alpha saturates at 1
+        // ([SRC_ALPHA, ONE, ONE_MINUS_DST_ALPHA, ONE]).
+        clone.blending = THREE.CustomBlending;
+        clone.blendEquation = THREE.AddEquation;
+        clone.blendEquationAlpha = THREE.AddEquation;
+        clone.blendSrc = THREE.SrcAlphaFactor;
+        clone.blendDst = THREE.OneFactor;
+        clone.blendSrcAlpha = this.m_rtHalfFloat
+            ? THREE.OneFactor
+            : THREE.OneMinusDstAlphaFactor;
+        clone.blendDstAlpha = THREE.OneFactor;
+        const colorRaw = String(
+            technique.color ?? technique._paint?.['line-color'] ?? '#000000',
+        );
+        const [r, g, b, a] = MBAdditiveLineRenderer.parseColor(colorRaw);
+        const covMul = Number(technique.opacity ?? 1);
+        const addColor = new THREE.Vector4(r, g, b, a);
+        const ribbonAA = Boolean(src.__mbRibbonAA);
+        const orig = src.onBeforeCompile;
+        clone.onBeforeCompile = (shader: any) => {
+            if (orig) orig.call(src, shader);
+            shader.uniforms.uMBAddColor = { value: addColor };
+            shader.uniforms.uMBAddCov = { value: covMul };
+            const idx = shader.fragmentShader.lastIndexOf('}');
+            shader.fragmentShader =
+                'uniform vec4 uMBAddColor;\nuniform float uMBAddCov;\n' +
+                shader.fragmentShader.slice(0, idx) +
+                (ribbonAA
+                    ? `
+    {
+        float mbHW = uMBRibbonWidth * 0.5;
+        float mbDist = abs(vMBRibbonEdge) * mbHW;
+        float mbAA = 1.0 - smoothstep(mbHW - 1.0, mbHW + 1.0, mbDist);
+        gl_FragColor = vec4(uMBAddColor.rgb * uMBAddColor.a, mbAA * uMBAddCov);
+    }
+`
+                    : `
+    {
+        gl_FragColor = vec4(uMBAddColor.rgb * uMBAddColor.a, uMBAddCov);
+    }
+`) +
+                shader.fragmentShader.slice(idx);
+        };
+        src.__mbAddAccumMat = clone;
+        this.m_cloneSet.add(clone);
+        return clone;
     }
 
     private ensureRenderTarget(renderer: THREE.WebGLRenderer, w: number, h: number): void {
         if (this.m_rt && this.m_rtW === w && this.m_rtH === h) return;
         this.m_rt?.dispose();
-        // Density can exceed 1 (overlapping lines) — accumulate in half float
-        // like mgl's unbounded-alpha additive mode when available.
-        const halfFloat =
-            renderer.capabilities.isWebGL2 || renderer.extensions.has('EXT_color_buffer_half_float');
-        const type = halfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType;
+        // Density exceeds 1 where lines overlap — accumulate in half float
+        // like mgl's unbounded-alpha additive mode when available (mgl:
+        // hasFloatRenderTarget → RGBA16F), else ubyte with bounded alpha.
+        const webgl2 = (renderer.capabilities as any)?.isWebGL2;
+        const type = webgl2 ? THREE.HalfFloatType : THREE.UnsignedByteType;
         this.m_rt = new THREE.WebGLRenderTarget(w, h, {
             type,
             format: THREE.RGBAFormat,
@@ -297,9 +349,10 @@ export class MBAdditiveLineRenderer {
             depthBuffer: false,
             stencilBuffer: false,
         });
+        this.m_rtHalfFloat = type === THREE.HalfFloatType;
         this.m_rtW = w;
         this.m_rtH = h;
-        this.m_autoDensity = 0;
+        this.m_autoDensity.clear();
     }
 
     private ensureCompositeMesh(): void {
@@ -313,17 +366,31 @@ export class MBAdditiveLineRenderer {
             },
             depthTest: false,
             depthWrite: false,
-            // The composite REPLACES covered pixels (mgl draws it with the
-            // additive color mode onto the already-dark glass background).
-            blending: THREE.NoBlending,
-            transparent: false,
+            // mgl draws the composite with the additive color mode itself
+            // ([SRC_ALPHA, ONE, ONE, ONE]): dst.rgb += avg·t·t over the
+            // already-rendered background (a replace would lose the t² term —
+            // single-line pixels measure exactly avg·n/(n+1), e.g. (51,40,0)).
+            blending: THREE.CustomBlending,
+            blendEquation: THREE.AddEquation,
+            blendEquationAlpha: THREE.AddEquation,
+            blendSrc: THREE.SrcAlphaFactor,
+            blendDst: THREE.OneFactor,
+            blendSrcAlpha: THREE.OneFactor,
+            blendDstAlpha: THREE.OneFactor,
+            transparent: true,
         });
         const geo = new THREE.PlaneGeometry(2, 2);
-        this.m_compScene.add(new THREE.Mesh(geo, this.m_compMat));
+        const mesh = new THREE.Mesh(geo, this.m_compMat);
+        mesh.frustumCulled = false;
+        this.m_compScene.add(mesh);
     }
 
-    /** Max of the accumulated alpha channel (auto-density mode). */
-    private readbackMaxDensity(renderer: THREE.WebGLRenderer): number {
+    /**
+     * mgl auto maxDensity = max(meanOccupiedDensity × 2, 1) — the mean alpha
+     * over pixels actually touched by lines (the GPU reduce pass computes
+     * Σdensity / count(occupied), never diluted by empty pixels).
+     */
+    private readbackMeanDensity(renderer: THREE.WebGLRenderer): number {
         if (!this.m_rt) return 0;
         const w = this.m_rt.width;
         const h = this.m_rt.height;
@@ -332,9 +399,10 @@ export class MBAdditiveLineRenderer {
         try {
             renderer.readRenderTargetPixels(this.m_rt, 0, 0, w, h, buf);
         } catch {
-            return this.m_autoDensity;
+            return 0;
         }
-        let max = 0;
+        let sum = 0;
+        let count = 0;
         if (isHalf) {
             // Decode IEEE 754 half floats (alpha channel only).
             for (let i = 3; i < buf.length; i += 4) {
@@ -346,30 +414,47 @@ export class MBAdditiveLineRenderer {
                 else if (exp === 31) v = mant === 0 ? Infinity : NaN;
                 else v = (1 + mant / 1024) * Math.pow(2, exp - 15);
                 if (half & 0x8000) v = -v;
-                if (v > max) max = v;
+                if (v > 0) {
+                    sum += v;
+                    count++;
+                }
             }
         } else {
             for (let i = 3; i < buf.length; i += 4) {
-                if (buf[i] > max) max = buf[i] / 255;
+                const v = buf[i] / 255;
+                if (v > 0) {
+                    sum += v;
+                    count++;
+                }
             }
         }
-        return isFinite(max) && max > 0 ? max : 0;
+        if (count === 0) return 0;
+        return Math.max((sum / count) * 2, 1);
     }
 
     /** Parse #hex/rgb()/rgba()/named into [r,g,b,a] in 0..1 (sRGB). */
     private static parseColor(raw: string): [number, number, number, number] {
         let alpha = 1;
-        const m = raw.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/i);
+        const m = raw.match(
+            /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/i,
+        );
         if (m) {
             if (m[4] !== undefined) alpha = Number(m[4]);
+            return [
+                Number(m[1]) / 255,
+                Number(m[2]) / 255,
+                Number(m[3]) / 255,
+                Math.min(Math.max(alpha, 0), 1),
+            ];
         }
         try {
             const c = new THREE.Color(raw);
             // THREE.Color parses into the linear working space; the composite
-            // must output sRGB components (heatmap ramp uses the same convention).
+            // works in sRGB like the engine's post-colorspace output (the
+            // heatmap ramp textures use the same convention).
             const out = { r: 0, g: 0, b: 0 };
             c.getRGB(out, THREE.SRGBColorSpace);
-            return [out.r, out.g, out.b, Math.min(Math.max(alpha, 0), 1)];
+            return [out.r, out.g, out.b, 1];
         } catch {
             return [0, 0, 0, 1];
         }

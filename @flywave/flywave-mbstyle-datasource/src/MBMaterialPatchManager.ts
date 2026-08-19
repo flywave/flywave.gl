@@ -20,10 +20,12 @@ let patternTextureCacheAtlas: unknown = null;
 export class MBMaterialPatchManager {
     /**
      * Route additive line ribbons through MBAdditiveLineRenderer's dual-pass
-     * density composite instead of direct AdditiveBlending. Off until the
-     * composite is stable (docs/render-tests-port-todo.md §12.68).
+     * density composite (mgl draw_line.ts additive glass mode) instead of
+     * direct AdditiveBlending, which cannot reproduce the density-normalized
+     * composite (out = avg·n/(n+1), §12.68). Direct blending remains the
+     * fallback when disabled.
      */
-    public static enableAdditiveDualPass = false;
+    public static enableAdditiveDualPass = true;
 
     private m_patchedTiles = new WeakMap<object, MaterialPatchState>();
     /** Ground-radiance signature of the last patched lighting state. */
@@ -108,20 +110,19 @@ export class MBMaterialPatchManager {
     }
 
     /**
-     * Additive line ribbons are rendered by MBAdditiveLineRenderer's offscreen
-     * density pass, not the main scene: hide the mesh here and register it.
-     * The renderer prunes registrations whose mesh left the scene.
-     *
-     * DISABLED (2026-08-19): the dual-pass composite is not yet stable (RTE
-     * camera / per-frame clip-range interactions, see §12.68) — keep the
-     * previous direct AdditiveBlending until the renderer is finished.
+     * Additive line layers render through MBAdditiveLineRenderer's offscreen
+     * density pass, never in the main scene: hide the mesh here and register
+     * the ribbons (the only path re-drawn by the renderer). Non-ribbon twins
+     * of an additive layer (e.g. a leftover SolidLine copy) are hidden too —
+     * they would double-accumulate. The renderer prunes registrations whose
+     * mesh left the scene.
      */
     private registerAdditiveRibbon(obj: THREE.Object3D, technique: any): void {
         if (!MBMaterialPatchManager.enableAdditiveDualPass) return;
-        if (!technique?._isLineRibbon) return;
-        if (technique._paint?.['line-blend-mode'] !== 'additive') return;
+        if (technique?._paint?.['line-blend-mode'] !== 'additive') return;
         if (!(obj as any).isMesh) return;
         obj.visible = false;
+        if (!technique._isLineRibbon) return;
         if ((obj as any).__mbAdditiveRegistered) return;
         (obj as any).__mbAdditiveRegistered = true;
         additiveRibbons.push({ mesh: obj as THREE.Mesh, technique });
