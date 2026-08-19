@@ -270,6 +270,17 @@ export class MBTileDataEmitter {
     }
 
     /**
+     * Mapbox camera bearing in degrees (style.bearing). Resolves
+     * `*-translate-anchor: viewport`, which rotates the translate by -bearing
+     * in the map frame (painter.translatePosMatrix). Static for render tests.
+     */
+    setBearing(bearing: number): void {
+        this.m_bearing = bearing;
+    }
+
+    private m_bearing: number = 0;
+
+    /**
      * Sprite size registry (name → px size) published by the datasource once
      * the sprite atlas is loaded (decoding happens after that await, so the
      * static is populated in time). Used to size `line-pattern` tiles.
@@ -1412,12 +1423,32 @@ export class MBTileDataEmitter {
                 // materials). Measured against mgl references: +x moves the
                 // rendering right, +y moves it DOWN (screen), so north is
                 // the NEGATIVE world-y direction in this frame.
+                //
+                // mgl `painter.translatePosMatrix`: for `*-translate-anchor:
+                // viewport` the translate is rotated by -bearing in the map
+                // frame before being applied (map anchor is unrotated). With
+                // bearing 90, viewport [10,10] becomes [10,-10] (map frame).
                 const translate = layer.paint?.['line-translate'] as number[] | undefined;
                 if (translate && (translate[0] !== 0 || translate[1] !== 0)) {
                     const mppT = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                         (256 * Math.pow(2, this.m_zoom + 1));
-                    const twx = translate[0] * mppT;
-                    const twy = -translate[1] * mppT;
+                    let tx = translate[0];
+                    let ty = translate[1];
+                    const anchor = layer.paint?.['line-translate-anchor'] ?? 'map';
+                    if (anchor === 'viewport' && this.m_bearing !== 0) {
+                        // mgl transform.angle = -bearing·π/180; translatePosMatrix
+                        // uses angle = -transform.angle = +bearing·π/180 for
+                        // viewport anchors, i.e. rotate the translate by +bearing.
+                        const ang = this.m_bearing * Math.PI / 180;
+                        const cos = Math.cos(ang);
+                        const sin = Math.sin(ang);
+                        const r0 = tx * cos - ty * sin;
+                        const r1 = tx * sin + ty * cos;
+                        tx = r0;
+                        ty = r1;
+                    }
+                    const twx = tx * mppT;
+                    const twy = -ty * mppT;
                     for (let i = 0; i < worldPts.length; i += 3) {
                         worldPts[i] += twx;
                         worldPts[i + 1] += twy;

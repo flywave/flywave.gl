@@ -311,6 +311,13 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_worldview: string = '';
     private m_center: [number, number] = [0, 0];
     /**
+     * Mapbox camera bearing in degrees. Needed to resolve `*-translate-anchor:
+     * viewport` — mapbox rotates the viewport-anchored translate by -bearing in
+     * the map frame (painter.translatePosMatrix). Shipped from the data source
+     * at configure time (sufficient for static render tests).
+     */
+    private m_bearing: number = 0;
+    /**
      * Mapbox camera zoom (fractional, without the flywave +1 offset). Set by
      * the data source from the live camera so zoom/camera expressions
      * (icon-size camera functions, dynamic-filter, …) evaluate at the actual
@@ -363,6 +370,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             if (Array.isArray(c) && c.length >= 2) {
                 this.m_center = [c[0], c[1]];
             }
+        }
+        if (customOptions?.bearing !== undefined) {
+            this.m_bearing = customOptions.bearing as number;
         }
         if (customOptions?.glyphMetrics !== undefined) {
             this.m_glyphMetrics = customOptions.glyphMetrics as Map<string, any>;
@@ -444,6 +454,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 : tileKey.level - this.m_storageLevelOffset - 1);
         const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
         const emitter = new MBTileDataEmitter(tileKey, decodeInfo, zoom);
+        // Bearing resolves `*-translate-anchor: viewport` (mapbox rotates the
+        // viewport translate by -bearing in the map frame).
+        emitter.setBearing(this.m_bearing);
         // Hand the cached real-font metrics to the emitter so text shaping
         // (line breaking, anchor placement) uses accurate advance widths.
         if (this.m_glyphMetrics.size > 0) {
