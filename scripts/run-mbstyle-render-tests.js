@@ -89,7 +89,11 @@ function main() {
         console.log(`Open the HTML report:  http://localhost:${port}/ibct-report`);
         console.log("(press Ctrl-C to stop the result server)");
 
+        // karma is done: shut the result server down so the process exits by itself.
+        server.kill();
         server.on("exit", () => process.exit(result.status ?? 0));
+        // Safety net in case the server takes longer than expected to exit.
+        setTimeout(() => process.exit(result.status ?? 0), 5000).unref();
     }, waitMs);
 }
 

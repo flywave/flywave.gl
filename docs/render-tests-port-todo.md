@@ -23,6 +23,8 @@
 > **2026-08-19 快照（代码对齐批 §12.65，测试延后）**：`98aa2762`+`92f53811`+`0383f6fa`+`a6ab7eaf`+`15765cb3` 五项 mgl 逻辑对齐——line-blend-mode multiply `premultipliedAlpha=true`（否则 three r178 不设 blendFunc，multiply 因子从不进 GL，交叉不累计）、fill/fill-extrusion/circle-translate px→world 单位（shader 把像素当世界米加，z14 仅 ~2px）、icon/text-translate viewport anchor 按 +bearing 旋转。tsc 绿、55 passing。待渲染验证：multiply 1456、fill-translate-anchor 884、extrusion/circle-translate、icon/text-translate。
 >
 > **2026-08-19 快照（代码对齐批 §12.66，测试延后）**：`fd1ff405` text-anchor 水平对齐按 anchor 水平分量推导（对齐 mgl `getAnchorAlignment`），修掉原 `text-justify` 误推导（'top-left' 本应 Left 却落到 Center）。顺带修正 line-translate viewport 注释（代码按 +bearing 旋转，原注释误写 -bearing）。tsc `--build` 绿、lib 重建含修正。待渲染验证：text-anchor（11 分类）。
+>
+> **2026-08-19 快照（§12.65/§12.66 延后验证批落地，§12.67）**：translate×6 层 + line-blend-mode + text-anchor 共 79 用例实测——**circle-translate 5/5、fill-translate 5/5、fill-extrusion-translate 4/6、line-blend-mode/multiply 全绿（0-2px）**，§12.65 五项对齐全部兑现（+16 通过）；text-anchor/text-translate 仍全红但**与 baseline5 逐例像素一致（零回归）**，§12.66 排查确认为"text不渲染"域（G4/F13）而非对齐错误。runner 已修复 karma 结束后自动退出（无需手动 kill）。
 
 >
 > **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。
@@ -130,8 +132,8 @@
 | fill-outline-color | 8 | 🔧 | patcher `patchFillMaterial:467,532-547`，S1 不可达 |
 | fill-pattern | 15 | 🔧 | emitter `:297-300` → patcher `:1544-1589`，S1 |
 | fill-pattern-cross-fade | 4 | 🔧 | 同 pattern，S1 |
-| fill-translate | 3 | 🔧 | patcher `:466,520-530`，S1 |
-| fill-translate-anchor | 2 | 🔧 | patcher `resolveTranslate:131-141`，S1 |
+| fill-translate | 3 | ✅ | patcher `:466,520-530`；**2026-08-19 实测 3/3+anchor 2/2 全 0mm（§12.67）** |
+| fill-translate-anchor | 2 | ✅ | patcher `resolveTranslate:131-141`；同上全绿 |
 | fill-antialias | 1 | ❌ | 仅死代码 `materials/MapFillMaterial.ts:124` |
 | fill-sort-key | 2 | ✅ | emitter `:271` 分组排序 |
 | fill-visibility | 2 | ✅ | `MBLayerEvaluator.ts:443` + emitter `:309` |
@@ -166,7 +168,7 @@
 | line-visibility | 2 | ✅ | `MBLayerEvaluator.ts:443` |
 | line-border | 13 | 🔧 | patcher `:652-660` `outlineWidth/Color`（emitter 不产 `technique.outlineWidth`，native define 未编译），S1 |
 | line-border-gradient | 4 | ❌ | evaluator 存 raw（`MBLayerEvaluator.ts:458`），无 shader 消费者 |
-| line-blend-mode | 6 | 🔧 | patcher `:597-606` `material.blending`，S1 |
+| line-blend-mode | 6 | ⚠️ | multiply ✅（0-2mm，§12.67）；additive 5 例未接线（ONE,ONE blendFunc） |
 | line-emissive-strength | 3 | 🔧 | patcher `:740-750`，S1 |
 | line-width-unit | 6 | ⚠️ | `meters` 时 patcher `:559-576` 缩放（S1 不可达）；native 硬编码 `metricUnit:'Pixel'`（emitter `:318`）→ meters 语义错误 |
 | line-triangulation | 2 | ⚠️ | 无属性消费者；经预挤出 ribbon + SolidLine 近似 |
@@ -186,8 +188,8 @@
 | circle-stroke-width | 5 | ❌ | 无消费者 |
 | circle-pitch-scale | 3 | 🔧 | patcher `:831-837` sizeAttenuation，S1（native shader 也不消费） |
 | circle-pitch-alignment | 4 | 🔧 | 同，S1 |
-| circle-translate | 3 | 🔧 | patcher `:839-847` 设 `uMBTranslate` 但不注入 shader 代码且 S1 不可达 |
-| circle-translate-anchor | 2 | 🔧 | 同 translate，S1 |
+| circle-translate | 3 | ✅ | 实测 3/3 全 0mm（§12.67，px→world + `uMBTranslate` 注入） |
+| circle-translate-anchor | 2 | ✅ | 同上 2/2 全绿 |
 | circle-sort-key | 3 | ✅ | emitter `:269-276` |
 | circle-geometry | 6 | ⚠️ | point/multipoint ✅；line/poly 被 `GEOMETRY_TYPE_MAP.circle=['point']`（`MBStyleSpec.ts:373`）过滤 → 4/6 空白 |
 | circle-camera-orthographic-projection | 1 | ❌ | 无正交相机 |
@@ -1747,6 +1749,33 @@ props.hAlignment = anchor.includes('left') ? 'Left'
 
 **状态**：tsc `--build` 绿；lib 重建含修正（`:570` 已生效）。**待渲染验证**：text-anchor（11 分类，§2.6 标 ⚠️）。预期 anchor='left'/'right' 及组合锚点（'top-left' 等）水平对齐由 Center 纠正为 Left/Right，单点文本位置对齐改善；text-size/color/field/opacity 等既通过项不受影响（hAlignment 此前依赖 justify，与这些无关）。
 
+### 12.67 §12.65/§12.66 延后验证批实测 + text-anchor 根因排查（2026-08-19）
+
+**验证批**（`rendering-test-results/mbstyle-n8a/`，Edge 150 headless + SwiftShader，filter `translate`+`line-blend-mode`+`text-anchor`，79 用例，**16 通过 / 59 失败**）：
+
+| 分类 | 结果 | 说明 |
+|------|------|------|
+| circle-translate（3）+ anchor（2） | **5/5 PASS（0mm）** | §12.65 px→world 单位换算兑现 |
+| fill-translate（3）+ anchor（2） | **5/5 PASS（0mm）** | 同上 |
+| fill-extrusion-translate | **4/6 PASS**（default/literal/anchor map+viewport 全 0-2px） | `function` 42506 / `literal-opacity` 67952 残余 = 半透明三 pass（F2 遗留）+ 数据驱动 |
+| line-blend-mode/multiply | **PASS（2px）** | §12.65 `premultipliedAlpha=true` 兑现；additive 系 5 例 ~10.3-11k 仍红（mgl additive=ONE,ONE blendFunc 未接线） |
+| appearance/paint-icon-translate | **PASS** | — |
+| line-translate / elevated-line-translate | 近失 754-5936 | 与 §12.64 相同（线宽 AA，N5 专项），无回归 |
+| icon-translate 系（5） | 2530-2850 | mvt 符号源渲染残留（§12.16 R4），较 §12.16 的 ~8000 改善 |
+| text-anchor（11）/ text-translate 系（5） | 全红 1035-16841 | 见下——"text 不渲染"域，与 baseline5 逐例像素一致（**fd1ff405 零回归**） |
+| icon-text-fit/*-text-anchor 系（10） | 1992-13299 | 同 text 不渲染（F7 遗留） |
+
+**text-anchor 根因排查（埋点四轮，已全部还原）**：
+
+1. **emission 正常**：`MBTileDataEmitter.getDecodedTile` 每瓦片 textGeometries=1、texts=104-120 条 "Test Test Test"。
+2. **TileGeometryCreator 正常**：`createTextElements` skip=0、noLabel=0——全部要素 `tile.addTextElement` 成功（isTextTechnique 通过、stringCatalog 命中）。
+3. **TextElementsRenderer 收到要素**：`createSortedGroupsForSorting` 4 瓦片、898 个 text element 进入排序组（shouldRenderText 通过）。
+4. **全部要素在 placement/字形渲染阶段被丢弃**（一个像素都未画出）。
+5. **排除项**：非 `text-max-width` wrap（实验关闭 wrappingMode 无变化）；非 PBF catalog 缺字形（space/字母均在，`GlyphPBFParser` 验证）；非 icon+text 双技术（text-only 的 `text-color/default` 同样 0 文本）；非 mvt 专属（geojson z0 的 60 例 text 同样全红）——**text 点放置整域性问题**（G4/F13 深水区），疑点收敛到 `TextElementsRenderer.placeTextElementGroup` 的 initialized/viewDistance/glyph 初始化链或 TextCanvas 与注入 PBF catalog 的时序。下一轮建议：开 `PRINT_LABEL_DEBUG_INFO` 的 `PlacementStats`（karma logger 级别需调到 debug 才可见）看 uninitialized/tooFar 占比。
+
+**runner 自动退出修复**（`scripts/run-mbstyle-render-tests.js`）：原脚本 karma 结束后等待 result server 退出（永不发生）→ 挂死需手动 kill。现 karma 结束即 `server.kill()` + 5s 兜底 `process.exit`，本轮 7 次运行全部自行退出。
+
+
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
 **背景**：SDF 图标（dot.sdf 等）在 loadSpriteAtlas 注册时被二值化成硬边位图，SDF 场被销毁 → halo（需要距离场外扩轮廓）无法绘制。icon-halo-* 12 例近失（44–100px）与 icon-rotate/runtime-styling 边缘抖动同根因。
@@ -1991,4 +2020,4 @@ props.hAlignment = anchor.includes('left') ? 'Left'
       → 更新本文件 §12.2x + §14 状态 → commit
 ```
 - karma webpack 有 filesystem 缓存，调试用 `HARP_NO_HARD_SOURCE_CACHE=true`。
-- 重跑前 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 清孤儿 `RenderingTestResultServer`。
+- **runner 已自动退出**（2026-08-19，§12.67）：karma 结束后自动 `server.kill()`，无需手动 kill；重跑前仍需 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 清孤儿进程。
