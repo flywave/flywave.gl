@@ -1402,7 +1402,7 @@ runtime-styling 64、geojson 17、combinations 10、appearance 7、feature-state
 - technique 携带 `_trimColor`（默认 'transparent'）+ `_trimFade` [in, out]；
 - patcher：discard 替换为混合——`t = max(smoothstep(start, start−fadeIn, d), smoothstep(end, end+fadeOut, d))`；trimColor.a=0 时折叠为 discard（兼容旧行为）；a=1 时 rgb 替换为 trimColor、边缘按 t 渐变。
 
-待验证：line-trim-offset line-pattern-trim-offset line-border line-gradient。
+待验证：line-trim-offset line-pattern-trim-offset line-border line-gradient。（**2026-08-19：line-border 已验证**——thick-line-border PASS 0，全族进入 600-2600px 近失带，残余为线 AA，见 §12.61）
 
 ### 12.44 代码端闭环第七批（2026-08-18，延后渲染验证）
 
@@ -1642,7 +1642,16 @@ if (border_color.a == 0.0) {                     // 未显式设 border-color
 1. **emitter**（`MBTileDataEmitter.deriveAutoBorderColor`）：`line-border-color` 为默认（`#000000`，等价 mgl `rgba(0,0,0,0)`）时按上式计算边界色——亮色线 `line × 0.6`、暗色线 luminance 提亮；显式色（含 `'black'`）原样。用于 `emitRibbonBorder` 的 `fill-color`。
 2. **patcher**（`MBMaterialPatchManager`）：border technique 打 `_isLineBorder`，对**渐变/图案** border 的 ramp/pattern 采样乘 `×0.6`（实心色已由 emitter 推导，不重复压暗）——对齐 mgl `RENDER_LINE_BORDER_GRADIENT` 的 `out_color.rgb *= (0.6+0.4*alpha2)`。
 
-**验证**：包内 `tsc --build` 零错误。渲染验证（line-border/default·width·gradient·pattern）留待攒批 karma。commit `7f49ae64` + `d9e9a813`。
+**12.61 续（几何修复，2026-08-19，commit `9e6d11ae`）——border 被主 ribbon 完全覆盖的根因**：
+- **取证**：`thick-line-border`（line-width 14 + border-width 6 black）expected 有黑边（black 1024px + blue 128px），但 current 纯蓝无黑边——因为 border ribbon 在**主 ribbon 之下**，被 14px 主线完全盖住（两 ribbon 方案）。mgl 在单一 shader pass 里把 border 画成 line-width 的**外环**（主色填内区，`line.fragment.glsl` border_width ring）。
+- **修复**：`processLineFeature` 计算 `borderWorld`（border-width × mpp，meters 直接米），主 ribbon 半宽收窄为 `hw − borderWorld`（无 border 时 `borderWorld=0` 不变）。border ribbon 位置不变（`shift = hw − borderHalf`），现在露出外环。
+
+**验证**（Edge headless + SwiftShader，`mbstyle-lborder2`/`mbstyle-lbreg`）：
+- **`line-border/thick-line-border` 1152 → PASS 0**（黑边现可见，逐像素一致）。
+- 其余改善：default 768→704、color 737→617、data-driven 1460→675、trim-offset 791→654、gap 4096→3840、elevated-line-border/data-driven 1124→339。
+- **零回归**：line-join default/bevel/miter + fill-outline default/function 保持 PASS；line-color 355 稳定；line-cap/color 无 border（borderWorld=0）不受影响（butt 355→410 为 SwiftShader 批次噪声）。
+- 残余（default/color/width/gradient 仍 fail）为**主线的线 AA 渲染差**（`line-color 337px` 同类，N5 透明通道排序专项），非 border 本身。
+- 全量批量（`mbstyle-linebatch`，117 例 line 域）：**8 passed**（line-join default/bevel/miter×2 + fill-outline default/function×2），与既有基线一致。
 
 **遗留**：line-blend-mode multiply 的 THREE MultiplyBlending（`dst*src`）vs mgl 输出预计算因子 `dst*(src.rgb+(1-src.a))` 语义差异，需渲染取证。
 
