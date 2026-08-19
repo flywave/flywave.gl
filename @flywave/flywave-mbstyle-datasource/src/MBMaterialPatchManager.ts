@@ -833,6 +833,10 @@ export class MBMaterialPatchManager {
             // ribbon must render the dash pattern itself.
             const dashWorld = technique._dashWorld as [number, number] | undefined;
             const hasDash = !!dashWorld && dashWorld[0] > 0 && dashWorld[1] >= 0;
+            // A dasharray whose DASH elements are all zero renders NOTHING
+            // (mgl's line atlas collapses the zero-length dash ranges leaving
+            // only gaps). Solid ribbon would be wrong — discard instead.
+            const dashInvisible = Boolean(technique._dashInvisible);
             // line-gradient: ramp texture sampled by the per-vertex
             // line-progress (aRibbonDist). Built once per technique and
             // cached on the material.
@@ -874,6 +878,18 @@ export class MBMaterialPatchManager {
             const displayZoom = mapView?.zoomLevel ?? 1;
             const mpp = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                 (256 * Math.pow(2, displayZoom));
+            // mgl anchors pattern/dash coordinates to the tile grid at
+            // floor(camera zoom) (`a_linesofar` in tile units, sampled with
+            // `u_tile_units_to_pixels` at tileZoom — transform.ts:568), so the
+            // on-screen period carries a 2^(zoom−floor(zoom)) factor. The
+            // ribbon tiles by WORLD distance; dividing the u-scale by 2^frac
+            // reproduces that anchor at fractional camera zooms. The pattern's
+            // aspect ratio is sized by `line-floorwidth` (line.vertex.glsl
+            // v_width), not the continuous width.
+            const fracZoom = displayZoom - Math.floor(displayZoom);
+            const fracInv = fracZoom > 0 ? 1 / Math.pow(2, fracZoom) : 1;
+            const floorWidthPx = Number(technique._ribbonFloorWidthPx ??
+                technique._ribbonWidthPx ?? 1);
             // v-coordinate scale: cross distance (world) per unit edge (±1)
             // divided by the pattern tile's world height.
             const patVScale = patTex && patternWorld
@@ -901,7 +917,7 @@ export class MBMaterialPatchManager {
             // those regions render as solid black. Blurred lines need it for
             // the center-fade alpha ramp. Dash lines need it so the dashed
             // gaps (alpha→0) blend instead of rendering as solid black.
-            if (patTex || rampTex || blurPx > 0 || hasDash) {
+            if (patTex || rampTex || blurPx > 0 || hasDash || dashInvisible) {
                 (material as any).transparent = true;
                 (material as any).depthWrite = false;
             }
@@ -959,11 +975,17 @@ export class MBMaterialPatchManager {
                         // mgl stretches the pattern vertically to the line
                         // width and keeps the aspect ratio along u: the
                         // horizontal tile period is patternW * lineW/patternH
-                        // in world units.
-                        shader.uniforms.uMBPatUScale = {
-                            value: patternWorld[1] /
-                                Math.max(patternWorld[0] * Math.max(widthPx * mpp, 1e-9), 1e-9),
-                        };
+                        // in world units, with the pattern sized by the FLOOR
+                        // line-width and anchored to the floor-zoom tile grid
+                        // (2^(zoom−floor) period factor). Under
+                        // line-width-unit:meters the width is already metric —
+                        // no px→world conversion (world units are meters).
+                        const patScale = (technique._layout?.['line-width-unit'] === 'meters')
+                            ? patternWorld[1] /
+                                Math.max(patternWorld[0] * Math.max(floorWidthPx, 1e-9), 1e-9) * fracInv
+                            : patternWorld[1] /
+                                Math.max(patternWorld[0] * Math.max(floorWidthPx * mpp, 1e-9), 1e-9) * fracInv;
+                        shader.uniforms.uMBPatUScale = { value: patScale };
                         shader.uniforms.uMBPatVScale = { value: patVScale };
                     }
                     if (translateWorld) {
@@ -1007,6 +1029,9 @@ export class MBMaterialPatchManager {
                         '#include <colorspace_fragment>',
                         `#include <colorspace_fragment>
                          {
+                             // A zero-dash dasharray renders nothing (mgl
+                             // collapses the zero-length dash ranges).
+                             ${dashInvisible ? `discard;` : ''}
                              // line-trim-offset: fragments outside [start,
                              // end] render in the trim color ('transparent'
                              // collapses to discard); the two edges fade over
@@ -1035,11 +1060,17 @@ export class MBMaterialPatchManager {
                               // units; the ribbon dashes along aRibbonLen
                               // (world meters) with uMBDashSize = [dashLen,
                               // gapLen] world units. Dash "on" for phase < dash,
-                              // AA-faded at the dash edge via fwidth (~1px).
+                              // AA-faded at BOTH dash edges (~1px) via
+                              // fwidth(aRibbonLen) — the world meters spanned
+                              // by one screen pixel. The former
+                              // fwidth(mod()) exploded at the phase wrap
+                              // (mod jumps dashLen→0), smearing a multi-period
+                              // fade over the whole line.
                               ${hasDash ? `float mbDashTotal = uMBDashSize.x + uMBDashSize.y;
                                   float mbDashPhase = mod(vMBRibbonLen, mbDashTotal);
-                                  float mbDashEdge = max(fwidth(mbDashPhase), 1e-5);
-                                  float mbDashA = 1.0 - smoothstep(uMBDashSize.x - mbDashEdge, uMBDashSize.x + mbDashEdge, mbDashPhase);
+                                  float mbDashIn = min(mbDashPhase, uMBDashSize.x - mbDashPhase);
+                                  float mbDashEdge = max(fwidth(vMBRibbonLen), 1e-5);
+                                  float mbDashA = clamp(mbDashIn / mbDashEdge, 0.0, 1.0);
                                   gl_FragColor.a *= mbDashA;` : ''}
                              // Distance from the ribbon edge in px; the edge
                              // ramp is only applied for blurred lines (see

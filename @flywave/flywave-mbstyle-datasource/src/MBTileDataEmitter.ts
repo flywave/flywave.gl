@@ -16,6 +16,7 @@ import { TileKey, webMercatorProjection } from '@flywave/flywave-geoutils';
 import * as THREE from 'three';
 
 import { EvaluatedLayer } from './MBLayerEvaluator';
+import { MBExpressionEngine, MBExpressionContext } from './MBExpressionEngine';
 import { ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
 import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
 import { createLineGeometry, LineGroup } from '@flywave/flywave-lines';
@@ -107,6 +108,18 @@ function interpProgressStops(stops: Array<[number, number]>, t: number): number 
         }
     }
     return stops[stops.length - 1][1];
+}
+
+/**
+ * Sum of the DASH elements (even indices) of a dasharray. mgl's line atlas
+ * collapses zero-length ranges: when every DASH is zero only gaps remain and
+ * the line renders nothing (round caps aside); when every GAP is zero only
+ * dashes remain → a solid line.
+ */
+function dashSumDash(dashArr: number[]): number {
+    let s = 0;
+    for (let i = 0; i < dashArr.length; i += 2) s += Number(dashArr[i]) || 0;
+    return s;
 }
 const EXTENTS = 4096;
 
@@ -1365,6 +1378,15 @@ export class MBTileDataEmitter {
     ): void {
         const needsResample = (this.m_decodeInfo.targetProjection as any)?.mbCustomProjection === true;
         for (const layer of matchedLayers) {
+            // A dasharray whose DASH elements are all zero renders nothing
+            // (mgl collapses the zero-length dash ranges in the line atlas,
+            // leaving only gaps) — the whole layer is invisible. This covers
+            // [0], [0,0] and [0,0,0,0] alike (empty array [] stays solid:
+            // mgl pushes a single 1 → a full line).
+            const dashArr = layer.paint?.['line-dasharray'] as number[] | undefined;
+            if (Array.isArray(dashArr) && dashArr.length >= 1 && dashSumDash(dashArr) <= 0) {
+                continue;
+            }
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
             this.m_currentZOffset = this.resolveZOffset(layer, properties, 'line');
             this.noteGeometryHeight(this.m_currentZOffset);
@@ -1547,7 +1569,7 @@ export class MBTileDataEmitter {
                 // injection keyed by technique._dashSize/_gapSize).
                 this.emitRibbonFill(layer, worldPts, mainHalfWidth, cumDist,
                     widthUnit === 'meters' ? lineWidthPx / metersPerPixel : undefined,
-                    lineGeom, progressHalfWidths, offsetWorld);
+                    lineGeom, progressHalfWidths, offsetWorld, properties);
                 // line-border: edge ribbons under the main line (constant
                 // width only — variable-width borders are not a test case).
                 if (!progressHalfWidths) {
@@ -1725,11 +1747,12 @@ export class MBTileDataEmitter {
         lineGeom?: { vertices: number[]; indices: number[] },
         hwPerPoint?: number[],
         offsetWorld = 0,
+        properties?: Record<string, any>,
     ): void {
         // Key by ribbon technique: see the fill key comment in
         // processFillFeature — groups sharing a geometry must use one technique,
         // otherwise every per-technique object draws the whole index buffer.
-        const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer);
+        const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer, properties);
         if (effectiveWidthPx !== undefined) {
             // meters-unit lines: the AA-feather ramp needs the width in px.
             (this.m_techniques[ribbonTechIdx] as any)._ribbonWidthPx = effectiveWidthPx;
@@ -2118,7 +2141,58 @@ export class MBTileDataEmitter {
         }
     }
 
-    private getOrCreateRibbonTechniqueIndex(layer: EvaluatedLayer): number {
+    /**
+     * The line-width used to scale the dash pattern — mgl's `line-floorwidth`:
+     * the `line-width` paint re-evaluated at `floor(camera zoom)` (see
+     * `LineFloorwidthProperty` / `useIntegerZoom`). The RIBBON is drawn at the
+     * continuous width, but the DASH period must use the floored width so it
+     * stays stable across fractional zooms. Falls back to the continuous value
+     * when the raw spec cannot be re-evaluated (data-driven without a feature
+     * or legacy shapes the engine does not model).
+     */
+    private evaluateFloorLineWidth(layer: EvaluatedLayer, properties?: Record<string, any>): number {
+        const continuous = Number(layer.paint?.['line-width'] ?? 1);
+        const raw = (layer as any).paintDefs?.['line-width']?.value;
+        if (raw === undefined || raw === null) return continuous;
+        try {
+            const ctx: MBExpressionContext = {
+                zoom: Math.max(0, Math.floor(this.m_zoom)),
+                feature: properties !== undefined
+                    ? { type: 'LineString', properties }
+                    : undefined,
+            };
+            const v = MBExpressionEngine.evaluate(raw, ctx);
+            const n = Number(v);
+            return Number.isFinite(n) && n >= 0 ? n : continuous;
+        } catch {
+            return continuous;
+        }
+    }
+
+    /**
+     * Convert a [dashLen, gapLen] dasharray to world units for the ribbon
+     * shader. The on-screen dash period is always `totalLength × widthPx`
+     * (mgl `a_linesofar` × `u_tile_units_to_pixels` in line-width units). For
+     * pixel lines the world ribbon spans `widthPx × mpp`, so the period is
+     * `dash × widthPx × mpp`; for `line-width-unit: meters` the ribbon (and
+     * the dash) are already in world meters, so the px→world conversion must
+     * NOT be applied (world units are meters at the equator).
+     */
+    private dashWorldFor(
+        layer: EvaluatedLayer,
+        dashArr: number[],
+        dashWidth: number,
+        mppDash: number,
+    ): [number, number] {
+        const widthUnit = layer.layout?.['line-width-unit'] ?? 'pixels';
+        const scale = widthUnit === 'meters' ? 1 : mppDash;
+        return [
+            dashArr[0] * dashWidth * scale,
+            dashArr[1] * dashWidth * scale,
+        ];
+    }
+
+    private getOrCreateRibbonTechniqueIndex(layer: EvaluatedLayer, properties?: Record<string, any>): number {
         // The ribbon-fill material carries the per-feature line color. Key the
         // technique by the resolved line color (plus opacity) so categorical /
         // data-driven line-colors produce one technique per distinct value —
@@ -2131,15 +2205,32 @@ export class MBTileDataEmitter {
         const patternName = layer.paint?.['line-pattern'] as string | undefined;
         const dashArr = layer.paint?.['line-dasharray'] as number[] | undefined;
         const hasDash = Array.isArray(dashArr) && dashArr.length >= 2;
-        const key = `${layer.id}:line-ribbon-tech:${String(color)}:${String(opacity)}:${gradient ? 'grad' : ''}:${patternName ?? ''}:${hasDash ? 'dash' : ''}`;
+        // mgl dashes the line along `a_linesofar` using `line-floorwidth` — the
+        // line-width evaluated at floor(camera zoom) (`LineFloorwidthProperty`,
+        // useIntegerZoom), NOT the continuous width the ribbon is drawn at.
+        // Re-evaluate the raw spec at floor(m_zoom) for this feature so the dash
+        // period stays stable across fractional zooms (mgl parity).
+        const dashWidth = this.evaluateFloorLineWidth(layer, properties);
+        // Data-driven dasharray / line-width must NOT share a technique — each
+        // distinct (dasharray, dashWidth) pair yields a different pattern.
+        const dashSig = hasDash ? `${JSON.stringify(dashArr)}@${dashWidth}` : '';
+        const key = `${layer.id}:line-ribbon-tech:${String(color)}:${String(opacity)}:${gradient ? 'grad' : ''}:${patternName ?? ''}:${hasDash ? `dash:${dashSig}` : ''}`;
         let idx = this.m_layerToTechniqueIndex.get(key);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
             this.m_layerToTechniqueIndex.set(key, idx);
             const paint = layer.paint ?? {};
             // Display-zoom px→world factor (world units are meters at equator).
+            // mgl anchors the dash (and pattern) coordinates to the TILE GRID
+            // at floor(camera zoom) — `a_linesofar` is in the tile's own units
+            // and `u_tile_units_to_pixels` is evaluated at `tileZoom` (the
+            // flooring in transform.ts:568). The on-screen period therefore
+            // scales by 2^(zoom − floor(zoom)); converting the dash to world
+            // meters with the FLOOR display zoom reproduces that factor when
+            // the camera sits at a fractional zoom (verified: long-segment
+            // [1,1]×50 at zoom 12.15 needs a 111px period, not 100px).
             const mppDash = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
-                (256 * Math.pow(2, this.m_zoom + 1));
+                (256 * Math.pow(2, Math.floor(this.m_zoom + 1)));
             // line-pattern: resolve the sprite's pixel size and convert to
             // world units at the decode display zoom so the patcher can tile
             // u = aRibbonLen / patternWorldW, v = cross / patternWorldH.
@@ -2197,15 +2288,18 @@ export class MBTileDataEmitter {
                 // line-dasharray: mgl dashes based on `a_linesofar` (accumulated
                 // distance along the feature) in line-width units. The SolidLine
                 // dash does NOT rasterize on SwiftShader, so the ribbon must
-                // carry the dash pattern. Convert the CSS-px dash (× line-width)
-                // to world meters at the display zoom so the patcher can
-                // `mod(aRibbonLen, size+gap) < size`.
-                ...(hasDash ? {
-                    _dashWorld: [
-                        dashArr[0] * (Number(paint['line-width'] ?? 1)) * mppDash,
-                        dashArr[1] * (Number(paint['line-width'] ?? 1)) * mppDash,
-                    ] as [number, number],
-                } : {}),
+                // carry the dash pattern. Convert the CSS-px dash (× the FLOOR
+                // line-width, `line-floorwidth`) to world meters at the display
+                // zoom so the patcher can `mod(aRibbonLen, size+gap) < size`.
+                // mgl collapses zero-length ranges in the line atlas: a zero
+                // DASH sum leaves only gaps → the line renders NOTHING; a zero
+                // GAP sum leaves only dashes → a solid line (no pattern).
+                // Single-element dasharrays (odd length) seam into a full line.
+                ...(Array.isArray(dashArr) && dashArr.length >= 1
+                    ? (dashSumDash(dashArr) <= 0
+                        ? { _dashInvisible: true }
+                        : (hasDash ? { _dashWorld: this.dashWorldFor(layer, dashArr, dashWidth, mppDash) } : {}))
+                    : {}),
                 // line-trim-offset / line-pattern-trim-offset [start, end] in
                 // line-progress units — the patcher discards/fades outside
                 // range. `line-trim-color` colors the trimmed-out parts
@@ -2224,6 +2318,10 @@ export class MBTileDataEmitter {
                 // matching mapbox's painter's algorithm for a single line layer.
                 _isLineRibbon: true,
                 _ribbonWidthPx: Number(paint['line-width'] ?? 1),
+                // mgl's line shaders size the dash AND the pattern aspect by
+                // `line-floorwidth` (line-width at floor zoom) — the patcher
+                // needs it for the u-tiling scale.
+                _ribbonFloorWidthPx: dashWidth,
                 // line-blur stays in CSS px even under line-width-unit:meters
                 // (fitted against the meters-blur reference: the alpha ramp
                 // matches clamp(1 - distCenter/blurPx) with the RAW value).
