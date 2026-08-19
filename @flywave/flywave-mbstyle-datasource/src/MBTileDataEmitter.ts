@@ -853,9 +853,16 @@ export class MBTileDataEmitter {
                         props.wrappingMode = 'Word';
                     }
                     props.rotation = ((l['text-rotate'] as number) ?? 0) * Math.PI / 180;
-                    const justify = (l['text-justify'] as string) ?? 'center';
-                    props.hAlignment = justify === 'left' ? 'Left' : justify === 'right' ? 'Right' : 'Center';
                     const anchor = (l['text-anchor'] as string) ?? 'center';
+                    // Mapbox derives BOTH horizontal and vertical alignment from
+                    // the anchor (symbol/shaping_shared.getAnchorAlignment) — the
+                    // horizontal alignment is NOT taken from `text-justify` (which
+                    // only justifies multi-line text inside the box and is
+                    // unsupported here). Anchor 'left'/'top-left'/'bottom-left'
+                    // → Left (box left edge at the point, text extends right),
+                    // 'right'/* → Right, everything else → Center.
+                    props.hAlignment = anchor.includes('left') ? 'Left'
+                        : anchor.includes('right') ? 'Right' : 'Center';
                     // Mapbox anchors align the text box edge to the point:
                     // 'top' puts the box top at the point (text below it), which
                     // is harp's "Below"; 'bottom' puts the box bottom at the
@@ -1425,9 +1432,11 @@ export class MBTileDataEmitter {
                 // the NEGATIVE world-y direction in this frame.
                 //
                 // mgl `painter.translatePosMatrix`: for `*-translate-anchor:
-                // viewport` the translate is rotated by -bearing in the map
-                // frame before being applied (map anchor is unrotated). With
-                // bearing 90, viewport [10,10] becomes [10,-10] (map frame).
+                // viewport` (tile-matrix path, inViewportPixelUnits=false) the
+                // translate is rotated by +bearing in the map frame before being
+                // applied (map anchor is unrotated). With bearing 90, viewport
+                // [10,10] becomes [-10,10] (map frame). See below for the
+                // matching rotation applied to tx/ty.
                 const translate = layer.paint?.['line-translate'] as number[] | undefined;
                 if (translate && (translate[0] !== 0 || translate[1] !== 0)) {
                     const mppT = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
