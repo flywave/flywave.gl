@@ -1976,6 +1976,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **发现 B（fog 剩余缺口定位）**：fog/default 等测试的顶部亮带（rows 0-8）是**远处雾化地图瓦片**（材质 fog），非大气穹顶（穹顶在这些用例中不可见——三组穹顶修改输出零变化）。
 - **发现 C（单位错误）**：我们的 scene.fog near/far = range×1000 **米**，但 mgl fog 深度空间是**相机归一化**（`mercatorFogMatrix`：p×`cameraWorldSizeForFog`/height/pixelsPerMercatorPixel——深度 ≈ 距离×像素密度/屏高，O(1~10)），range [2,11.5] 在该空间。**下一轮核心工作 = 把 near/far 换算到我们的米制世界**（需读 mgl `getWorldToCameraPosition`/`cameraWorldSizeForFog` 完成换算，或用 fog/default 单例数值定标：顶部亮带应在 rows 0-4、亮度 ~126）。
 
+**7. 单位修复落地（2026-08-20 三，`d12d5a2c`）**：`depth_fog = shift · dist/distCam`（shift=0.5/tan(fov/2)，distCam = camHeight/sin(90−pitch)，屏幕中心恰落在 range+shift 的 shift 处）→ `near/far_m = distCam·(range[i]+shift)/shift`。实测：**fog/default 2536→2280、empty-update 2910→2654**、high-color 族持平（1786/1822）。穹顶屏幕地平线参照（发现 6-①）实测令 high-color 族 +2k 已回退（uniform+onBeforeRender 保留待 fixture 定标；`uHorizonRefElev` 传 0 时 = 原真地平线行为）。fog 域 4 用例净 −512px，仍距 ~132 阈值远（残余为亮带宽度/亮度剖面 + 穹顶渐变），下一轮以 fog/default 亮带 rows0-4/亮度 126 为定标目标继续。
+
 
 
 
