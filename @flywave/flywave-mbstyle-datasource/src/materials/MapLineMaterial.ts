@@ -239,6 +239,10 @@ export class MapLineMaterial extends SolidLineMaterial {
                 break;
             case 'multiply':
                 this.blending = THREE.MultiplyBlending;
+                // three r178 requires premultipliedAlpha=true or MultiplyBlending
+                // leaves the blend func stale (no accumulation). With it set the
+                // func is (DST_COLOR, ONE_MINUS_SRC_ALPHA) → mgl's multiply factor.
+                this.premultipliedAlpha = true;
                 this.depthWrite = false;
                 break;
             default:

@@ -810,6 +810,13 @@ export class MBMaterialPatchManager {
                 material.blending = THREE.AdditiveBlending;
             } else if (blendMode === 'multiply') {
                 material.blending = THREE.MultiplyBlending;
+                // three r178 requires premultipliedAlpha=true for MultiplyBlending,
+                // else WebGLState leaves the blend func stale (fragment REPLACES
+                // dst instead of accumulating) — the multiply factor never reaches
+                // GL. With premultiplied the blend func is
+                // (DST_COLOR, ONE_MINUS_SRC_ALPHA) → dst*(C*a + 1−a), mgl's
+                // line.fragment.glsl LINE_BLEND_MULTIPLY factor.
+                (material as any).premultipliedAlpha = true;
             }
             // mgl-style ~1px alpha feather at the ribbon edges: the emitter
             // bakes a per-vertex edge coordinate (-1/+1 across the ribbon
@@ -1259,6 +1266,9 @@ export class MBMaterialPatchManager {
             modified = true;
         } else if (blendMode === 'multiply') {
             (material as any).blending = (THREE as any).MultiplyBlending;
+            // three r178 MultiplyBlending needs premultipliedAlpha=true or the
+            // blend func is left stale (no accumulation). See patchFillMaterial.
+            (material as any).premultipliedAlpha = true;
             (material as any).transparent = true;
             modified = true;
         }
