@@ -18,6 +18,8 @@
 >
 > **2026-08-19 快照（dash 校准，§12.63）**：`4d45e37b`+`a9f41ee7` 完成 §12.62 遗留三项——dash 周期单位（floorwidth + 2^frac 瓦片锚点）、zero-dash 隐形、data-driven 分键 + meters 单位 + 形状 SDF（butt/square/round cap 复刻 mgl line_atlas）。数值验证 period 与 expected.png 逐像素吻合。渲染验证攒批延后。
 >
+> **2026-08-19 快照（相机 bearing 符号，§12.64）**：`814fae16`+`e18ab549` 修复相机 bearing 符号反转（mapbox 顺时针 → flywave 逆时针 yawDeg），全视图 2·bearing 旋转消除。line-visibility/visible 12318→**4126**、line-translate-anchor map 20469→**1236** / viewport→**1274**、elevated 11659→**2303**。599 例非零 bearing 测试解锁整类 180° 旋转错误（代价 3 例对称 symbol 0→54-85px 侥幸暴露）。残余为线宽 AA（N5 专项）。
+>
 > **2026-08-17 更新（F1 落地——真因是 FOV 而非墙面几何）**：F1 排查**证伪了 §14 F1 的"墙面外扩 ~6px"假设**——mgl 默认 `fill-extrusion-line-width=0`（wallMode 关）且 `edge-radius=0`，默认墙面就在 footprint 上，与我们相同。真因：**flywave 默认 FOV 40°（`FovCalculation.ts:44`）vs mapbox 默认 36.87°（`transform.ts:247` 0.6435rad）**，焦距差 → 相机更近 → 透视更激进（近缘宽/远缘窄），数值模拟精确复现 expected（fov36.87：近墙顶 317.7 vs 实测 316、bbox 57.7..202.8 vs 58..202）与 current（fov40：330.4 vs 330）。修复：harness 建 MapView 时设 `fovCalculation:{type:'fixed',fov:36.86989764584402}`。收益（§12.29）：fill-extrusion-color 0→**3**（default/function/literal 全 0mm）、base 1→**5**、height 0→1、terrain 0→1、combinations 15→16、circle-color/radius function 各+1，**净 +11**；代价 2 例（circle-pitch-scale/viewport 系 40° 侥幸通过→215px 近失）。
 >
 > **2026-08-17 更新（F2a 落地——近裁剪面贴地，§12.30）**：property-function/zoom-and-property 半块方块缺南墙+屋顶的根因是**相机近平面按 maxElevation=0 求解贴在地面**，高出地面的挤出内容（最靠近相机一侧）被 GPU 近平面裁剪——同时解释 §12.6 C3 未解的"最靠近相机内容缺失"签名。修复：emitter 上报 `DecodedTile.maxGeometryHeight` + datasource 扫描样式设 `DataSource.maxGeometryHeight`（两级：解码后近平面/geoBox、解码前 cull box）。**fill-extrusion-color/property-function 8237→PASS(66px)、zoom-and-property 8171→PASS(1px)**，零回归。§14 F2a 勾除。
@@ -1683,6 +1685,24 @@ if (border_color.a == 0.0) {                     // 未显式设 border-color
 6. **pattern u 平铺同享 floor 锚点 + meters 分支**（§15 N4 int-zoom 连带，密度已是 floor 锚定）。
 
 **状态**：tsc 绿；MBExpressionEngineTest 43 passing、MBStyleDecoderPipelineTest 12 passing（2 既有失败无关）。渲染验证（line-dasharray 全量 + line-pattern 全量）攒批延后。
+
+### 12.64 相机 bearing 符号反转——全视图旋转 2·bearing（2026-08-19，commits `814fae16`+`e18ab549`）
+
+**排查入口**：line-translate-anchor（map/viewport/terrain）基线 20k。逐步排查证明 translate 几何烘焙正确（geometry 数据确实位移）、viewport 旋转逻辑按 mgl `painter.translatePosMatrix`（`+bearing`）实现正确——但即使 [0,0] translate 也 19.6k。对照 line-visibility/visible（同 Berlin 源、bearing 90、无 translate）亦 12.3k，判定**非 translate 问题**。
+
+**根因（探索代理全链路仿真取证）**：`MBStyleDataSource.applyCameraSettings` 把 mapbox **顺时针** `bearing` 直接传给 flywave **逆时针** `yawDeg`（`MapView.ts:2378/2405` "yaw is counter-clockwise"）→ 相机偏航错误符号 → **整个视图旋转 2·bearing**（bearing-90 测试旋转 180°，道路网络整体错位，非平移/缩放；`current = rot180(expected)` 逐像素证实）。其余（tile 解析、MVT y-flip、tile-center 放置、zoom、decodeInfo.center==tile.center）均正确。
+
+**修复**：`applyCameraSettings` 传 `-(style.bearing ?? 0)`。bearing-0 不受影响（2·0=0）。decoder 的 bearing（viewport translate 用）保持 **mapbox +bearing**（mgl translatePosMatrix 语义）。
+
+**验证**（Edge + SwiftShader）：
+- `line-visibility/visible` **12318→4126**、elevated **11659→2303**（残余 = 密集 Berlin 路网线宽/AA，N5 专项）。
+- `line-translate-anchor/map` **20469→1236**、viewport **20254→1274**、viewport-terrain 3971（terrain draping 残余）。
+- map vs viewport current 差异恢复（24→31247，expected 35127），viewport 旋转语义正确生效。
+- **translate 全族进近失带**（此前均 20k+）：line-translate/default 759、function 1126、literal 754、elevated-line-translate/default 754、literal 748、fill-translate-anchor/map 884、viewport 884、circle-translate-anchor/map 148、viewport 192、line-translate-anchor 1222/1261/3971。残余 = 线宽 AA + translate 定位微差。
+
+**代价（3 例 symbol 回归 0→54-85px）**：text-rotation-alignment/map|viewport|auto-symbol-placement-point（bearing 45）此前在错误 180° 旋转下"侥幸"通过（符号布局对称掩盖错误），修正后暴露真实 54-85px 小差（文本 SDF/放置，非系统性）。icon-rotation-alignment/pitch-alignment 等价 3 例 0→14px 仍通过。**判定正确**：保留错误符号以迁就 3 例对称侥幸是错的。
+
+**净影响**：599 例非零 bearing 测试此前全受 2·bearing 旋转污染（基线通过者仅 9，其中 3 为 blank visibility none、3 为对称 symbol）；修复解锁整类 180° 旋转错误，是系统级正确性修复。下一轮应重跑全量基线量化净增（N9）。
 
 ### 12.7 icon-halo SDF 渲染（2026-08-14）
 
