@@ -1918,6 +1918,15 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 2. **强制红色终值探针破译"恒定 137"之谜**：片元强制 `(1,0,0,0.75)` 输出后墙区 = `(255,137,137)`——**G/B 恒 137 与片元输出无关** = `(1−a_eff)·255` → **GL 画布中墙体为 premultiplied 且有效 alpha ≈ 0.4627**（捕获时合成白底：R = 0.4627·255+137 → 饱和 255，G/B = 137 恒定）。前几轮的"137 灰/0.5 混合"全部由此派生。
 3. **0.4627 的来源待定**（次轮一行埋点可定）：候选 ① **EqualDepth 双面画**：墙 quad 的 front/back 面（DoubleSide 或无剔除）深度相同 → 都通过 EQUAL → 两次 0.75 blend 得 0.5625（≠0.4627 但结构吻合）；② uniform `opacity` ≠ material.opacity（three refreshUniforms 链）；③ 两次 ×0.68（√0.4627）换算。验证法：`renderer.getContext()` readPixels 原始画布 alpha + 关闭 `flatShading/DoubleSide` 单变量对照。
 
+**§12.74 第五轮（2026-08-20 五，DepthPrePass 判罪 + 部分修复）**：
+
+1. **三探针定标 f(a)**：强制片元终值 `(0,1,0.5,a)`，a=0.4→有效 0.204、a=1.0→有效 0.5——两点精确拟合 **a_eff = 0.5·a**（即半透明内容与未混合背景做 50/50 平均）；a=0.75 点偏差（0.4627 vs 0.375）另有 R 通道 0.88 的分离证据（疑红边线材质叠加），但主体模型成立。
+2. **判定 DepthPrePass 为元凶**：emitter 给 technique 设 `enableDepthPrePass=false` 后，墙体 rgb 立即变为正确的近黑（(11,13,13)，期望 (12,12,12)@青底 (9,72,72)）——**SwiftShader 上 Less 深度预pass + EqualDepth 主pass 的双遍路径把半透明内容按 50% 合成**（机制细节未再深挖，工程绕过）。
+3. **接线**：prepass 禁用后 three 因 transparent=false 完全关混合 → patchExtrusionMaterial 对 opacity∈(0,1) 显式设 CustomBlending(SRC_ALPHA,1−SRC_ALPHA)（同 ribbon 手法，保持不透明 pass 顺序）。实测混合仍未生效（墙 (11,13,13) 未变 (9,72,72)）——**材质级属性对该 mesh 的输出无效（与此前"注入点 alpha 无效"同签名），仅 onBeforeCompile shader 修改有效**——疑 mesh 经 composer/克隆路径用别的材质实例渲染，下轮可用 renderer.info.render.calls 埋点定位。
+4. **净效果**：`fill-extrusion-opacity/literal` 80180→**70929**、function 80190→73069；extrusion 全家回归批（color/base/height/translucent 25 例）**零回归**（13 PASS 保持）。
+
+**第六轮入口**：① `renderer.info` per-frame dump（draw calls + 材质）找真正渲染墙的材质实例；② 或在 onBeforeCompile 里同时改 alpha（shader 级修改有效已证）——把 `gl_FragColor.a` 乘 0.75 并设 blend 到正确值的 shader 级 workaround；③ mgl 语义 = 单次 0.75 blend，理想修法仍是找到材质级无效的原因。
+
 
 
 
