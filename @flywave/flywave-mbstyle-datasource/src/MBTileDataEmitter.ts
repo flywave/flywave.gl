@@ -453,6 +453,44 @@ export class MBTileDataEmitter {
 
 
     /**
+     * mgl `line.fragment.glsl` auto-derived border color (used when
+     * `line-border-color` is left at its default `rgba(0,0,0,0)`): the border
+     * is not a separate color but a modulation of the line's own edge.
+     *
+     *   Y = luminance(out_color / a); adjustment = Y>0 ? 0.5/Y : 0.45
+     *   dark line (a>0.25 && Y<0.25): border = line + line*adjustment (brighten)
+     *   bright line (else)        : border = line * (0.6 + 0.4*alpha2) (darken)
+     *
+     * Our border is a thin ribbon at the line's outer edge (alpha2→0), so the
+     * effective border color is `line × 0.6` for a bright line and
+     * `line × (1 + 0.5/Y)` for a dark line. Returns the derived color as an
+     * `rgb(r, g, b)` string, or the explicit `borderColor` unchanged when it
+     * was explicitly provided.
+     */
+    private static deriveAutoBorderColor(borderColor: string | undefined, lineColor: any): string {
+        // Only derive when the style left line-border-color at its default
+        // (transparent in mgl). An explicitly-set color (including 'black')
+        // is used verbatim.
+        const auto = borderColor === undefined || borderColor === '#000000';
+        if (!auto) return borderColor;
+        const c = new THREE.Color(lineColor);
+        // out_color is premultiplied by its alpha; line opacity is folded in
+        // later, so luminance is computed on the raw (opaque) line color.
+        const Y = (c.r * 0.299 + c.g * 0.587 + c.b * 0.114);
+        const a = 1;
+        if (a > 0.25 && Y < 0.25) {
+            const adjustment = Y > 0 ? 0.5 / Y : 0.45;
+            const r = Math.min(255, Math.round(c.r * 255 * (1 + adjustment)));
+            const g = Math.min(255, Math.round(c.g * 255 * (1 + adjustment)));
+            const b = Math.min(255, Math.round(c.b * 255 * (1 + adjustment)));
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        // Bright line: darken toward 0.6× at the outer border edge.
+        const k = 0.6;
+        return `rgb(${Math.round(c.r * 255 * k)}, ${Math.round(c.g * 255 * k)}, ${Math.round(c.b * 255 * k)})`;
+    }
+
+    /**
      * Resolve the per-feature Z offset for a layer, combining:
      *   - the explicit `<type>-z-offset` paint/layout property, and
      *   - the `<type>-elevation-reference` layout property, which reads the
@@ -1573,7 +1611,13 @@ export class MBTileDataEmitter {
     ): void {
         const bwRaw = Number(layer.paint?.['line-border-width'] ?? 0);
         if (!(bwRaw > 0) || worldPts.length < 6) return;
-        const borderColor = layer.paint?.['line-border-color'] ?? '#000000';
+        // `line-border-color` default is `rgba(0,0,0,0)` in mgl — when left
+        // unset the border color is auto-derived from the line color (mgl
+        // `line.fragment.glsl` luminance modulation). An explicitly-set color
+        // (including 'black') is used verbatim.
+        const borderColor = MBTileDataEmitter.deriveAutoBorderColor(
+            layer.paint?.['line-border-color'] ?? '#000000',
+            layer.paint?.['line-color'] ?? '#000000');
         const meters = (layer.layout?.['line-width-unit'] ?? 'pixels') === 'meters';
         const bwWorld = meters ? bwRaw : bwRaw * metersPerPixel;
         const borderHalf = Math.min(bwWorld / 2, worldHalfWidth);
