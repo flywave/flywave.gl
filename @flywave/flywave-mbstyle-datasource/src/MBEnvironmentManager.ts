@@ -442,8 +442,26 @@ export class MBEnvironmentManager {
         // and (Mercator) it is multiplied by a horizon-blend that fades fog when
         // looking straight down.
         const rawRange: [number, number] = evalZoom(fog.range, [0.5, 10]);
-        const nearM = rawRange[0] * 1000;
-        const farM = rawRange[1] * 1000;
+        // mgl fog depth is CAMERA-NORMALIZED (mercatorFogMatrix scales the
+        // world by cameraWorldSizeForFog/height — depth ≈ distance ×
+        // pixelsPerMeter/height, O(1..10)). The FOV shift (0.5/tan(fov/2))
+        // added to both range ends makes the screen CENTER land exactly at
+        // depth = shift, i.e. depth_fog = shift · dist/distCam. Convert the
+        // fog range to our METRIC world: near/far_m =
+        // distCam · (range[i] + shift) / shift. distCam is derived from the
+        // orbit camera geometry (height above ground / elevation angle).
+        const cam = this.m_mapView?.camera as THREE.PerspectiveCamera | undefined;
+        let nearM = rawRange[0] * 1000;
+        let farM = rawRange[1] * 1000;
+        if (cam) {
+            const fovRad = (cam.fov ?? 36.87) * Math.PI / 180;
+            const shift = 0.5 / Math.tan(fovRad / 2);
+            const pitchDeg = Math.min(Math.max((this.m_mapView as any).pitch ?? 60, 0.1), 89.9);
+            const camHeight = Math.max(cam.position.z, 1);
+            const distCam = camHeight / Math.sin((90 - pitchDeg) * Math.PI / 180);
+            nearM = distCam * (rawRange[0] + shift) / shift;
+            farM = distCam * (rawRange[1] + shift) / shift;
+        }
         const rawColor = evalZoom(fog.color, '#ffffff');
         const color = new THREE.Color(rawColor);
         const alpha = typeof rawColor === 'string' && /^#[\da-fA-F]{8}$/.test(rawColor)
@@ -551,11 +569,15 @@ export class MBEnvironmentManager {
                         // Map fragments never see the dome (depth-tested away);
                         // rays below the TRUE horizon are always occluded.
                         if (elevation <= 0.0) discard;
-                        // Angle above the SCREEN-space horizon line — mgl's
-                        // mercator horizon_angle (atmosphere.fragment.glsl:44)
-                        // is 0 below the horizon dir and the acos of the dot
-                        // product with it above.
-                        float horizonAngle = max(elevation - uHorizonRefElev, 0.0) / 3.14159265359;
+                        // Angle above the horizon — measured from the TRUE
+                        // elevation-0 horizon. (A screen-space horizon-line
+                        // reference was tried per mgl atmosphere.vertex's
+                        // u_horizon frustum interpolation but regressed the
+                        // high-color fixtures ~2k px each; the dome is not
+                        // visible in the fog/default-family tests, so the
+                        // screen-horizon math needs its own fixture-driven
+                        // calibration before re-enabling.)
+                        float horizonAngle = elevation / 3.14159265359;
                         float t = exp(-horizonAngle / max(uFadeout, 0.0005));
                         vec3 c0 = mix(uSpaceColor, uHighColor, uHighAlpha);
                         vec3 c1 = mix(c0, uFogColor, uFogAlpha);
