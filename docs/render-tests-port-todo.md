@@ -1856,6 +1856,8 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **遗留**（下轮 text 精度入口）：① TextElement.bounds 真实消费链定位（埋点 `Placement.placePointLabelAtAnchor` 的 bounds 来源）；② 垂直盒高/基线（`font.metrics.base=17` vs mgl ascender，§12.69 遗留）；③ AA 若再攻需先确认参考图对应的 mgl 版本公式。
 
+**补充取证（2026-08-20 凌晨，mgl 源码确认垂直盒模型）**：① 项已核实——`Placement.placePointLabelAtAnchor`（`Placement.ts:652-664`）**确实走 `textCanvas.measureText(label.glyphs)` → 同一 typesetter globalBounds 路径**（advanceBounds 在 bundle 中确认执行），三类中性 = 这些 fixture 的 advance 盒与 ink 盒数值相同（无大侧 bearing/尾空格），非路径断链。② 项已从 mgl 源码锁定：**mgl shaped 盒高 = lineHeight×行数（非 ink！）**——`shaping.ts:707-712`：`height = y（每行累计 lineHeight）`，`top += −vAlign·height; bottom = top + height`；宽度 = `maxLineLength`（纯 advance）。盒内基线：有字体 ascender/descender 时**基线居中**——`glyphOffset = −ascender·scale`，`baselineOffset = (ascender−descender)/2·scale`（每行取最大 (ascender+descender) 的字形定基线，`shaping.ts:609-623`）；无基线时 `SHAPING_DEFAULT_OFFSET` 回退。**下轮改法**：纯测量 bounds 的垂直 extents 从 ink quad 改为 `[0, −lineHeight·glyphScale]`（y-up），并核对 flywave `font.metrics.lineHeight/base` 与 mgl ascender/descender 换算（PBF stack 元数据是否读入）。§12.70 的"盒 69×36 vs 65.3×38.4"中 38.4 = 1.2×32（lineHeight 制）与此吻合。
+
 
 
 
