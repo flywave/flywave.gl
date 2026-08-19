@@ -1860,6 +1860,8 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **② 项首轮实测证伪（同日凌晨，已回退）**：把纯测量 bounds 垂直扩展为行盒 `[−nLines·(metrics.lineHeight+leading)·scale, 0]`（数值链已核对：catalog lineHeight=1em + leading=(line-height−1)em → 每行恰 1.2×textSize = mgl）——实测**全面变差**：`text-anchor/center` 10611→20788（+10177）、bottom +11201、bottom-left/right +8-10k、`text-color/default` +3702、appearance/paint-text-color 62→236；top 系仅 +238-456（盒顶从 ink 顶 −3 → 0 的小位移）。**不对称签名说明 flywave 的墨水在行盒内的位置与 mgl 不同**（多行标签 bottom 系大恶化 → 行盒假设下 min.y 远超 ink 实际深度，或 lineCount 对显式换行/尾换行的计数与渲染行不符）——**下轮必须先 dump 单标签逐字形 y 坐标与 mgl 逐项对表**（§12.69 的原建议），不能再从公式直改。结论：text 域三假设（AA 公式/advance 盒宽/lineHeight 行盒）全部实测证伪或中性，残余差异在**基线在盒内的定位与多行排布**，属 flywave-text-canvas 深水区，需埋点对表专项。
 
+**§12.72 更正（2026-08-20，advance 盒宽在水平锚点实测显著）**：前文"advance 盒宽三类中性"的 fixture 选择（text-color/size 的 center 对齐、无尾空格单词）掩盖了效果——**凡含水平 anchor 分量的标签，advance 盒与 ink 盒差 = 尾字形 right-bearing + SDF border**。用 text-anchor 全分类 + icon-text-fit 回归批（65 例）复测（`HARP_NO_HARD_SOURCE_CACHE=true`，advanceBounds 代码同前）：left 21819→**15938**、right 23636→**17026**、top-left 24021→**21604**、bottom-left 22961→**19921**、top-right 25136→**23471**、bottom-right 25136→**20836**、property-function 1029→**990**；top/bottom/center 持平（纯垂直锚点不消费水平 extents，自洽）；icon-text-fit/*-text-anchor 系 10 例全部 -300~-700；**零回归**。改动保留（`updateAdvanceBounds` + `placeRun` 测量分支），mismatch 总量净 -25k。
+
 
 
 

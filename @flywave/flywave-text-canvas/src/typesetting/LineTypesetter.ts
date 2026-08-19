@@ -519,11 +519,26 @@ export class LineTypesetter implements Typesetter {
                 }
             } else {
                 if (globalBounds !== undefined) {
-                    TypesettingUtils.updateBounds(
-                        this.m_tempCorners,
-                        globalBounds,
-                        individualBounds
-                    );
+                    if (vertexBuffer === undefined) {
+                        // Pure measurement (label placement): use the pen
+                        // advance for horizontal extents — the ink quads
+                        // include the SDF border and would inflate the anchor
+                        // box by the border on each side (mapbox anchors on
+                        // the shaped advance width).
+                        TypesettingUtils.updateAdvanceBounds(
+                            position.x,
+                            position.x +
+                                (glyphData.advanceX + textLayoutStyle.tracking) * glyphScale,
+                            this.m_tempCorners,
+                            globalBounds
+                        );
+                    } else {
+                        TypesettingUtils.updateBounds(
+                            this.m_tempCorners,
+                            globalBounds,
+                            individualBounds
+                        );
+                    }
                 }
                 if (vertexBuffer !== undefined) {
                     geometry.addToBuffer(

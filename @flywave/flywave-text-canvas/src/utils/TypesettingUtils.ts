@@ -177,4 +177,29 @@ export namespace TypesettingUtils {
             Math.max(globalBounds.max.y, maxY)
         );
     }
+
+    /**
+     * Like [[updateBounds]], but the horizontal extents come from the pen
+     * advance (start/end of the glyph's advance) instead of the ink quad.
+     *
+     * Mapbox positions the text box for anchoring on the shaped advance
+     * width, while the ink quads include the SDF border padding — using
+     * quad extents inflates the box by the border on both sides and shifts
+     * every anchor placement by half that amount.
+     */
+    export function updateAdvanceBounds(
+        penX: number,
+        advanceEndX: number,
+        corners: THREE.Vector3[],
+        globalBounds: THREE.Box2
+    ): void {
+        const minY = Math.min(corners[0].y, corners[1].y, corners[2].y, corners[3].y);
+        const maxY = Math.max(corners[0].y, corners[1].y, corners[2].y, corners[3].y);
+
+        globalBounds.min.set(Math.min(globalBounds.min.x, penX), Math.min(globalBounds.min.y, minY));
+        globalBounds.max.set(
+            Math.max(globalBounds.max.x, advanceEndX),
+            Math.max(globalBounds.max.y, maxY)
+        );
+    }
 }
