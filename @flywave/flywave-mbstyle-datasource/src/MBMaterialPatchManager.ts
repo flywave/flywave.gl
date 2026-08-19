@@ -1531,6 +1531,19 @@ export class MBMaterialPatchManager {
 
     private patchCircleMaterial(material: THREE.Material, paint: any): void {
         const translate = this.resolveTranslate(paint['circle-translate'], paint['circle-translate-anchor']);
+        // Circle points are NOT baked with translate in the emitter (the point
+        // path only bakes for symbols), so the shader uniform is the sole
+        // mechanism. Convert px → world units like fill/line (transformed.xy is
+        // world-space meters); raw pixels would move ~2px at z14, not 10px.
+        const translateWorld: number[] | undefined = translate && (translate[0] !== 0 || translate[1] !== 0)
+            ? (() => {
+                const mapViewT = (this.m_dataSource as any).mapView;
+                const dZoom = mapViewT?.zoomLevel ?? 1;
+                const mppT = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                    (256 * Math.pow(2, dZoom));
+                return [translate[0] * mppT, -translate[1] * mppT];
+            })()
+            : undefined;
         const pitchScale = paint['circle-pitch-scale'];
         // pitch-alignment drives the same sizeAttenuation behavior when set
         // ('viewport' → screen-facing constant size, 'map' → scales with pitch).
@@ -1553,9 +1566,9 @@ export class MBMaterialPatchManager {
             modified = true;
         }
 
-        if (translate && (translate[0] !== 0 || translate[1] !== 0)) {
-            const tx = translate[0];
-            const ty = translate[1];
+        if (translateWorld && (translateWorld[0] !== 0 || translateWorld[1] !== 0)) {
+            const tx = translateWorld[0];
+            const ty = translateWorld[1];
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
