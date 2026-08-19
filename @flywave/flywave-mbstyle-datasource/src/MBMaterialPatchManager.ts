@@ -1118,12 +1118,26 @@ export class MBMaterialPatchManager {
             }
         }
         const translate = this.resolveTranslate(paint['fill-translate'], paint['fill-translate-anchor']);
+        // fill-translate is in PIXELS but the shader adds uMBTranslate to the
+        // world-space `transformed.xy`. Convert px → world units (meters) at the
+        // display zoom, same convention as the emitter's geometric line-translate
+        // bake (x east / y north → twy = -ty·mpp). Without this, adding raw px to
+        // meters moved the fill by ~2px at z14 instead of the requested 10px.
+        const translateWorld: number[] | undefined = translate && (translate[0] !== 0 || translate[1] !== 0)
+            ? (() => {
+                const mapViewT = (this.m_dataSource as any).mapView;
+                const dZoom = mapViewT?.zoomLevel ?? 1;
+                const mppT = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                    (256 * Math.pow(2, dZoom));
+                return [translate[0] * mppT, -translate[1] * mppT];
+            })()
+            : undefined;
         const outlineColor = paint['fill-outline-color'];
         const hasTerrain = !!this.centerDem;
         const hdElevation = technique?._hdElevation;
         const emissiveStrength = Number(paint['fill-emissive-strength'] ?? 0);
 
-        if ((!translate || (translate[0] === 0 && translate[1] === 0)) && !outlineColor && !hasTerrain && hdElevation === undefined && emissiveStrength <= 0) return;
+        if ((!translateWorld || (translateWorld[0] === 0 && translateWorld[1] === 0)) && !outlineColor && !hasTerrain && hdElevation === undefined && emissiveStrength <= 0) return;
 
         // Emissive: add a constant brightness boost to the fill color.
         // Only meaningful for lit (standard) materials — an unlit basic material
@@ -1175,8 +1189,8 @@ export class MBMaterialPatchManager {
         material.onBeforeCompile = (shader: any) => {
             if (origOnCompile) origOnCompile.call(material, shader);
 
-            if (translate && (translate[0] !== 0 || translate[1] !== 0)) {
-                shader.uniforms.uMBTranslate = { value: new THREE.Vector2(translate[0], translate[1]) };
+            if (translateWorld && (translateWorld[0] !== 0 || translateWorld[1] !== 0)) {
+                shader.uniforms.uMBTranslate = { value: new THREE.Vector2(translateWorld[0], translateWorld[1]) };
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
                     'uniform vec2 uMBTranslate;\nvoid main() {'
