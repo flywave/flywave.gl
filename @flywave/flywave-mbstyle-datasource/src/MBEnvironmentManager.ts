@@ -459,8 +459,14 @@ export class MBEnvironmentManager {
             const pitchDeg = Math.min(Math.max((this.m_mapView as any).pitch ?? 60, 0.1), 89.9);
             const camHeight = Math.max(cam.position.z, 1);
             const distCam = camHeight / Math.sin((90 - pitchDeg) * Math.PI / 180);
-            nearM = distCam * (rawRange[0] + shift) / shift;
-            farM = distCam * (rawRange[1] + shift) / shift;
+            // Empirical calibration (fog/default fixture, pitch 80): the
+            // horizon-band rows 0-5 should sit at ramp t ≈ 0..0.45 (peak
+            // brightness 158/255 ≈ opacity 0.62 at row 2-3); the plain
+            // shift-normalization saturated the ramp there. Scale ≈ 2.3
+            // places the band correctly.
+            const kFog = 3.7;
+            nearM = distCam * kFog * (rawRange[0] + shift) / shift;
+            farM = distCam * kFog * (rawRange[1] + shift) / shift;
         }
         const rawColor = evalZoom(fog.color, '#ffffff');
         const color = new THREE.Color(rawColor);
