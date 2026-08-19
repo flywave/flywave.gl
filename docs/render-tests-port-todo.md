@@ -1896,6 +1896,14 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 4. **实验**：默认 intensity 0.5→1 实测——`fill-extrusion-color/function、property-function、zoom-and-property` 三例回归（mid-NdotL 面受影响），opacity/literal 反而纹丝不动（见 5），**已回退**。
 5. **我们的独立缺陷（下一入口）**：半透明墙体 `(#ccc 应为灰)` 实际渲染 **(16,99,99) 青色调** —— R/G/B 不等说明 technique.color 不是灰；光源注入的因子只解释均匀变暗。疑点：半透明 extrusion 的材质/顶点色被地面 fill 层青色污染，或引擎 transparent 材质路径 vertex-color 混入（v_color/v_roof_color 渐变）。**下一轮先 dump 半透明 extrusion technique.color 与片元输入**，修掉青色调后再回到 intensity/两遍深度。
 
+**§12.74 补充取证（2026-08-20 二，dump 完成，三关键事实）**：
+
+1. **§12.74-3 的 intensity 推导被推翻**：v8.json 的 `fill-extrusion-color` 默认就是 **#000000**（非 #ccc）——期望暗墙 `(12,12,12)@α0.75` = 黑 paint + ambient 0.03 + 0.75 blend，**intensity=0.5 即可完整解释**，无版本漂移。
+2. **探针实验**（注入末行临时改为输出 `mbColor`）：墙体 R 通道立即正确（6≈期望 9）——**光照注入运行正常、paint 正确、R 通道已对齐**；残余 = G/B 通道被青色抬高 131/255：墙面像素的"背景可见权重"= **0.53 而非正确的 0.25** —— 即透明混合的等效 alpha ≈ 0.47 而非 0.75（疑 opacity 被乘两次 0.75²≈0.56 量级，或两层面叠加混合）。这是**混合语义缺陷，非颜色污染**（§12.74-5 的"青色调污染"假说证伪）。
+3. **引擎已有 mgl 两遍深度机制**：`DepthPrePass.ts`（`createDepthPrePassMaterial`：Less 深度 colorWrite-off 首遍 + 主材质 `EqualDepth` 混合二遍），gate = `technique.opacity ∈ (0,1)`（我们的 0.75 满足、应已激活）。dump 还发现同一 technique 挂 **3 个材质实例**（黑 0.75 主 / 黑 opacity=1 深度遍克隆 / **红 (255,0,0) 0.75 来源不明**——第三个红材质是下一轮头号疑点，可能与 2 的双重混合直接相关）。
+
+**下一轮入口**：① 查红材质来源（TileGeometryCreator 为 extruded-polygon 创建的 attachment 材质数组）；② 验证主材质实际 blend alpha（为何 0.47）：检查 `enforceBlending`/premultiplied 设置与引擎 extrusion shader 的 alpha 处理；③ R 通道已对齐意味着修好混合后该族有望整体转近失。
+
 
 
 
