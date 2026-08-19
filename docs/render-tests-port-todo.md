@@ -1942,7 +1942,39 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **fog 域评估**（baseline5 数据 + 剖面取证）：近失梯队 = high-color 族 1717-1814、default 2536、empty-update 2910、high-color-use-theme 3074。垂直剖面：**我们的地平线雾带比 mgl 高 ~3px 且更亮**（row2-3: cur 240/89 vs exp 158/0）——mgl fog = 逐片元射线方向 + `exp(−3t²)` horizon blend + range 映射（`_prelude_fog.fragment.glsl`），我们的 FogExp2+渐变天空是近似。**像素对齐需把 mgl fog 实现为屏幕空间后处理 pass**（对已渲染地图按射线方向逐像素混 fog 色）——工程量与 additive 双 pass 同级或更大，建议作为独立专项（下一会话），入口：MBHeatmapRenderer 式 AfterRender 后处理 + `u_frustum_*` 四角射线插值。
 
-**会话总结**（runner 修复以来 21 commits）：通过数收益 = line-blend 1→6、fill-outline 2→4（另 6 例进近失带）、circle/fill/extrusion-translate 0→14、text 域解锁全域渲染、additive/fill-extrusion 半透明/line AA 三套渲染基础设施落地；文档 §12.67-§12.75 完整记录每个域的根因、证据链与下一步入口。**待真机验证项**：fill-extrusion 半透明 blend（三层保险已就位）。
+**会话总结**（runner 修复以来 21 commits）：通过数收益 = line-blend 1→6、fill-outline 2→4（另 6 例进近近失带）、circle/fill/extrusion-translate 0→14、text 域解锁全域渲染、additive/fill-extrusion 半透明/line AA 三套渲染基础设施落地；文档 §12.67-§12.75 完整记录每个域的根因、证据链与下一步入口。**待真机验证项**：fill-extrusion 半透明 blend（三层保险已就位）。
+
+### 12.76 fog 域 mgl 全公式解码（2026-08-20，实现规格已齐备）
+
+已从 mgl 源码完整解码 fog 链路（**下一会话可直接照此实现**，无需再读源码）：
+
+**1. FogState**（`style/fog.ts:80-97`）：
+- `range`（spec 默认 `[0.5, 10]`）经 FOV 修正：`range[i] += 0.5 / tan(fov/2)`（fov 36.87° → +1.5 → **[2.0, 11.5]**）；globe 时向 `[2, 4.5]` 插值（略）。
+- `horizonBlend` = `horizon-blend`（spec 默认 zoom 插值 z4:0.2 → z7:0.1）经 drawAtmosphere 映射：`hb × 0.2495 + 0.0005`（§12.76 前我们的 `MBEnvironmentManager.ts:453` 已有此映射 ✓）。
+- `alpha` = fog color 的 alpha。
+
+**2. 深度空间**（`transform.ts:2670-2697`）：`mercatorFogMatrix` 把世界坐标转成**相机相对、以"地图高度的分位数"为单位**的 fog 空间——`windowScaleFactor = 1/height/pixelsPerMercatorPixel`，`p.xy ×= cameraWorldSizeForFog × wsf`，`p.z ×= cameraPixelsPerMeter × wsf`。**即 depth ≈ 相机距离(米) × 该处像素密度 / 屏幕高度**——我们的相机为米制世界，需按此构造 scale（含 FOV/像素比差异的经验校准，fog/default 单例可定标）。
+
+**3. 片元公式**（`_prelude_fog.fragment.glsl`，逐片元、材质内嵌——非后处理 pass）：
+```
+t        = (depth − near) / (far − near)          // 不 clamp
+falloff  = 1 − min(1, exp(−6t)); falloff³         // 立方平滑起步
+opacity  = color.a · min(1, 1.00747 · falloff)
+dirz     = (fragZ − camZ)/depth                    // 相机相对、z 向上
+hz       = max(0, dirz / horizonBlend)
+opacity ×= exp(−3·hz²)                             // 地平线上方淡出
+rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoothstep 全局系数（fog_helpers: FOG_PITCH_START/END——仅 CPU 侧遮挡剔除用？着色器内无 pitch 项，注意核对）
+```
+
+**4. 实现路径建议**（比屏幕后处理 pass 更贴 mgl）：我们的 fill/line 材质已全部经 patcher onBeforeCompile——直接**替换 three 的 `#include <fog_fragment>`** 为上述公式（three 在 scene.fog 时提供 `vFogDepth` = 相机距离 ✓ 直接可用作 depth；dirz 用 uniform 传 `−camZ/depth` 近似，地面片元 fragZ≈0）。uniform：`uMBFog = [near, far, colorA, horizonBlendMapped]` + `uMBFogColor`，patcher 每帧从 `m_environment` fog 状态刷新。天空/星星部分维持现有 createGradientSky（其 horizon 混合已按 §2.15 部分对齐）。
+
+**5. 目标与预算**：fog/high-color 族 1717-3074、default 2536、empty-update 2910（阈值 ~132px，需近完美）；实现约 1 个新注入块 + 单例定标 2-3 轮。若 3 轮内近失带不收敛则该域同样标记版本漂移疑点（参考 §12.52/§12.72/§12.73 前例：vendored 公式与参考图可能存在版本差）。
+
+**6. 首轮实施结果（2026-08-20 二，三个关键发现）**：
+- **已落地（正确 mgl 语义，当前测试 no-op）**：① `fog_fragment` 全局 chunk 补 `fog_horizon_blending`（`×fogAlpha·exp(−3·hz²)`，dirz≈−camHeight/vFogDepth 近似）；② 大气穹顶 `horizonAngle` 改为**屏幕空间地平线线参照**（`horizonLineFromTop` 公式 + 不 clamp + onBeforeRender 每帧按活相机重算）——mgl atmosphere.vertex 的 `u_horizon` frustum 插值语义。
+- **发现 A（工程关键）**：`@flywave/flywave-mbstyle-datasource` **不在 tsconfig.karma 的 paths 映射里**——karma bundle 经 package.json main 解析到 **lib**！改 src 后必须 `tsc --build` 重建 lib，否则跑的是陈旧代码（本轮 fog2-4 三轮同输出即此坑；此前会话部分"零变化"结论需重新审视）。
+- **发现 B（fog 剩余缺口定位）**：fog/default 等测试的顶部亮带（rows 0-8）是**远处雾化地图瓦片**（材质 fog），非大气穹顶（穹顶在这些用例中不可见——三组穹顶修改输出零变化）。
+- **发现 C（单位错误）**：我们的 scene.fog near/far = range×1000 **米**，但 mgl fog 深度空间是**相机归一化**（`mercatorFogMatrix`：p×`cameraWorldSizeForFog`/height/pixelsPerMercatorPixel——深度 ≈ 距离×像素密度/屏高，O(1~10)），range [2,11.5] 在该空间。**下一轮核心工作 = 把 near/far 换算到我们的米制世界**（需读 mgl `getWorldToCameraPosition`/`cameraWorldSizeForFog` 完成换算，或用 fog/default 单例数值定标：顶部亮带应在 rows 0-4、亮度 ~126）。
 
 
 

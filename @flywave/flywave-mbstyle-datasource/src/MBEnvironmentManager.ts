@@ -20,6 +20,8 @@ THREE.ShaderChunk.fog_pars_fragment = `
 	uniform float fogNear;
 	uniform float fogFar;
 	uniform float fogAlpha;
+	uniform float fogHorizonBlend;
+	uniform float fogCamHeight;
 #endif
 `;
 THREE.ShaderChunk.fog_fragment = `
@@ -29,6 +31,13 @@ THREE.ShaderChunk.fog_fragment = `
 	float fogFalloff = 1.0 - min(1.0, exp(-6.0 * fogT));
 	fogFalloff *= fogFalloff * fogFalloff;
 	float fogFactor = fogAlpha * min(1.0, 1.00747 * fogFalloff);
+	// mgl fog_horizon_blending: fade the fog out ABOVE the horizon —
+	// t = max(0, cameraDir.z / horizonBlend); factor = color.a * exp(-3t²).
+	// Map fragments sit at z ≈ 0, so cameraDir.z ≈ -camHeight / depth (negative
+	// looking down → t = 0 → full factor; rays toward/above the horizon fade).
+	float fogDirZ = -fogCamHeight / max(vFogDepth, 1.0);
+	float fogHz = max(0.0, fogDirZ / max(fogHorizonBlend, 1e-4));
+	fogFactor *= fogAlpha * exp(-3.0 * fogHz * fogHz);
 	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
 #endif
 `;
@@ -45,10 +54,14 @@ THREE.ShaderChunk.fog_pars_vertex = `
 // and the fog is disabled.
 if (!('fogAlpha' in THREE.UniformsLib.fog)) {
     (THREE.UniformsLib.fog as any).fogAlpha = { value: 1 };
+    (THREE.UniformsLib.fog as any).fogHorizonBlend = { value: 0.05 };
+    (THREE.UniformsLib.fog as any).fogCamHeight = { value: 1000 };
     for (const lib of Object.values(THREE.ShaderLib)) {
         const u = (lib as any).uniforms;
         if (u && typeof u === 'object' && !('fogAlpha' in u)) {
             (u as any).fogAlpha = { value: 1 };
+            (u as any).fogHorizonBlend = { value: 0.05 };
+            (u as any).fogCamHeight = { value: 1000 };
         }
     }
 }
@@ -454,6 +467,10 @@ export class MBEnvironmentManager {
             highColor: new THREE.Color(rawHighColor),
             spaceColor: new THREE.Color(evalZoom(rawSpaceColor, '#010b19')),
         };
+        // mgl fog_horizon_blending uniforms (see the fog_fragment chunk).
+        (THREE.UniformsLib.fog as any).fogHorizonBlend.value = this.m_fogState.horizonBlend;
+        const camPos = this.m_mapView?.camera?.position;
+        (THREE.UniformsLib.fog as any).fogCamHeight.value = camPos ? Math.max(camPos.z, 1) : 1000;
         // Mapbox renders the atmosphere glow (space→high→fog gradient) in the
         // sky region whenever fog is enabled and the horizon is visible — even
         // without an explicit `sky` layer. Create a camera-centered dome that
@@ -488,6 +505,13 @@ export class MBEnvironmentManager {
 
         if (!this.m_skyMesh) {
             const geom = new THREE.SphereGeometry(1000, 32, 16);
+            // mgl measures the atmosphere glow from the SCREEN-space horizon
+            // line (transform.horizonLineFromTop: h = height/2/tan(fov/2)/
+            // tan(pitch), offset = height/2 − h·(1−horizonShift 0.1)) — NOT
+            // from the true (elevation-0) horizon. Computed per draw in
+            // onBeforeRender (the camera pitch is not configured yet when the
+            // fog environment is created).
+            let horizonRefElev = 0;
             const material = new THREE.ShaderMaterial({
                 side: THREE.BackSide,
                 transparent: false,
@@ -501,6 +525,7 @@ export class MBEnvironmentManager {
                     uSpaceColor: { value: fog.spaceColor.clone() },
                     uSpaceAlpha: { value: 1.0 },
                     uFadeout: { value: fog.horizonBlend },
+                    uHorizonRefElev: { value: horizonRefElev },
                 },
                 vertexShader: `
                     varying vec3 vWorldPosition;
@@ -517,18 +542,20 @@ export class MBEnvironmentManager {
                     uniform vec3 uSpaceColor;
                     uniform float uSpaceAlpha;
                     uniform float uFadeout;
+                    uniform float uHorizonRefElev;
                     varying vec3 vWorldPosition;
                     void main() {
                         vec3 dir = normalize(vWorldPosition);
                         // Elevation above the horizon (world z-up, camera at origin).
                         float elevation = asin(clamp(dir.z, -1.0, 1.0));
-                        // The atmosphere glow only fills the sky region above the
-                        // horizon; the ground below is covered by the (fogged)
-                        // map plane. Match mapbox: the atmosphere is drawn with a
-                        // read-only depth test and is occluded by ground geometry,
-                        // so skip below-horizon fragments here.
+                        // Map fragments never see the dome (depth-tested away);
+                        // rays below the TRUE horizon are always occluded.
                         if (elevation <= 0.0) discard;
-                        float horizonAngle = elevation / 3.14159265359;
+                        // Angle above the SCREEN-space horizon line — mgl's
+                        // mercator horizon_angle (atmosphere.fragment.glsl:44)
+                        // is 0 below the horizon dir and the acos of the dot
+                        // product with it above.
+                        float horizonAngle = max(elevation - uHorizonRefElev, 0.0) / 3.14159265359;
                         float t = exp(-horizonAngle / max(uFadeout, 0.0005));
                         vec3 c0 = mix(uSpaceColor, uHighColor, uHighAlpha);
                         vec3 c1 = mix(c0, uFogColor, uFogAlpha);
@@ -547,6 +574,25 @@ export class MBEnvironmentManager {
             this.m_skyMesh.frustumCulled = false;
             this.m_skyMesh.renderOrder = 1000;
             this.m_skyMesh.userData.__mbFogAtmosphereDome = true;
+            // The screen-horizon reference depends on the LIVE camera pitch —
+            // recompute per draw (the pitch is not final at creation time).
+            this.m_skyMesh.onBeforeRender = () => {
+                const cam = (this.m_mapView as any)?.camera as THREE.PerspectiveCamera | undefined;
+                if (!cam) return;
+                const canvasEl = (this.m_mapView as any).canvas;
+                const height = canvasEl?.clientHeight ?? canvasEl?.height ?? 256;
+                const fovRad = (cam.fov ?? 36.87) * Math.PI / 180;
+                const pitchDeg = Math.max((this.m_mapView as any).pitch ?? 60, 0.1);
+                const pitch = pitchDeg * Math.PI / 180;
+                const focal = (height / 2) / Math.tan(fovRad / 2);
+                const viewElev = Math.PI / 2 - pitch;
+                const h = (height / 2) / Math.tan(fovRad / 2) / Math.tan(pitch);
+                // Unclamped: mgl's vertex shader interpolates the frustum rays
+                // at u_horizon = line/height without clamping.
+                const yH = height / 2 - h * 0.9;
+                material.uniforms.uHorizonRefElev.value =
+                    viewElev + Math.atan((height / 2 - yH) / focal);
+            };
             this.m_scene.add(this.m_skyMesh);
         } else {
             const material = this.m_skyMesh.material as THREE.ShaderMaterial;
