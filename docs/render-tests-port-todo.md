@@ -1886,6 +1886,17 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **方法论注**：line AA 与 text AA/垂直盒同型——vendored mgl 源码公式与参考图版本漂移（§12.52/§12.72 后第三、四例），mgl 公式直接落地均变差，经验校准（膨胀+硬边）反而有效。N5 残余（line-color 404、translate ~1025）为亚像素相位差，除非获取参考版本源码否则到此为止。
 
+### 12.74 fill-extrusion 半透明取证（2026-08-20，未修，证据链完整）
+
+目标 `fill-extrusion-opacity/literal/function`（80k）与 `fill-extrusion-translate/literal-opacity`（68k）。取证结论：
+
+1. **背景 alpha 非问题**：Z5 参考合成白仍在（`DomImageUtils.compareImages`），期望图 30k 透明像素合成白后与我们的白底匹配。
+2. **mgl 机制**（draw_fill_extrusion.ts:113-127）：半透明 extrusion = **两遍深度技巧**——第一遍只写深度不写色，第二遍 LEQUAL 只给"最近表面"着色（无穿透叠加/双重混合）。三 pass 深度排序的传闻实为两遍深度预pass。
+3. **参考图墙体签名**：暗墙面 = `(12,12,12) @ alpha≈191(=0.75)` —— **premultiplied**（`color *= u_opacity` + ONE,ONE_MINUS_SRC_ALPHA 混合）且 litWall ≈ 0.06（近黑）→ 反推 `u_lightintensity=1`（`mix(1−i, max(1−cv+i,1), NdotL)` 地板在 i=1 时为 0）。但 v8.json 默认 intensity=0.5 —— **版本漂移第五例**。
+4. **实验**：默认 intensity 0.5→1 实测——`fill-extrusion-color/function、property-function、zoom-and-property` 三例回归（mid-NdotL 面受影响），opacity/literal 反而纹丝不动（见 5），**已回退**。
+5. **我们的独立缺陷（下一入口）**：半透明墙体 `(#ccc 应为灰)` 实际渲染 **(16,99,99) 青色调** —— R/G/B 不等说明 technique.color 不是灰；光源注入的因子只解释均匀变暗。疑点：半透明 extrusion 的材质/顶点色被地面 fill 层青色污染，或引擎 transparent 材质路径 vertex-color 混入（v_color/v_roof_color 渐变）。**下一轮先 dump 半透明 extrusion technique.color 与片元输入**，修掉青色调后再回到 intensity/两遍深度。
+
+
 
 
 
