@@ -1681,6 +1681,22 @@ export class MBMaterialPatchManager {
     }
 
     private patchExtrusionMaterial(material: THREE.Material, paint: any, technique: any): void {
+        // Translucent extrusions blend once at paint opacity. The engine's
+        // DepthPrePass path composites at an effective 0.5×alpha (probe-measured
+        // on SwiftShader) and the prepass is disabled on the technique; without
+        // it three leaves blending off entirely (transparent=false), so enable
+        // it here — CustomBlending is honored on non-transparent materials and
+        // keeps the object in the opaque render list (order preserved).
+        const paintOpacity = Number(paint['fill-extrusion-opacity'] ?? technique.opacity ?? 1);
+        if (paintOpacity > 0 && paintOpacity < 1) {
+            (material as any).transparent = false;
+            (material as any).blending = THREE.CustomBlending;
+            (material as any).blendSrc = THREE.SrcAlphaFactor;
+            (material as any).blendDst = THREE.OneMinusSrcAlphaFactor;
+            (material as any).blendSrcAlpha = THREE.OneFactor;
+            (material as any).blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
+            (material as any).blendEquation = THREE.AddEquation;
+        }
         const height = technique.height ?? paint['fill-extrusion-height'] ?? 0;
         const base = technique.floorHeight ?? paint['fill-extrusion-base'] ?? 0;
         const verticalScale = paint['fill-extrusion-vertical-scale'] ?? 1;

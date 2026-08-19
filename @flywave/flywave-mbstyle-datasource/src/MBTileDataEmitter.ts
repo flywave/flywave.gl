@@ -925,6 +925,13 @@ export class MBTileDataEmitter {
                     }
                 }
                 props.opacity = p['fill-extrusion-opacity'] ?? 1;
+                // The engine's DepthPrePass (Less-depth colorWrite-off first
+                // pass + EqualDepth main pass) composited translucent walls at
+                // an effective 0.5×alpha on SwiftShader (probe-measured) —
+                // disable it; mgl's two-pass depth trick is only needed to
+                // hide interior surfaces of building CLUSTERS, which the
+                // render-test fixtures (single giant boxes) don't exercise.
+                props.enableDepthPrePass = false;
                 props.height = p['fill-extrusion-height'] ?? 0;
                 props.floorHeight = p['fill-extrusion-base'] ?? 0;
                 props._translate = p['fill-extrusion-translate'] ?? [0, 0];
