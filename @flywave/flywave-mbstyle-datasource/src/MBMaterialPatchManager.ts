@@ -826,6 +826,13 @@ export class MBMaterialPatchManager {
             // ribbon already carries the derived color in `fill-color`; for
             // gradient borders the RAMP must be darkened instead.
             const borderDarken = Number(technique._isLineBorder ? 0.6 : 1);
+            // line-dasharray: mgl dashes by `a_linesofar` (accumulated feature
+            // distance) in line-width units; the ribbon carries `aRibbonLen`
+            // (world meters) and `_dashWorld` = [dashLen, gapLen] in world units.
+            // The SolidLine dash does NOT rasterize on SwiftShader, so the
+            // ribbon must render the dash pattern itself.
+            const dashWorld = technique._dashWorld as [number, number] | undefined;
+            const hasDash = !!dashWorld && dashWorld[0] > 0 && dashWorld[1] >= 0;
             // line-gradient: ramp texture sampled by the per-vertex
             // line-progress (aRibbonDist). Built once per technique and
             // cached on the material.
@@ -892,8 +899,9 @@ export class MBMaterialPatchManager {
             // e.g. border-dot-13 is mostly TRANSPARENT with the "black" RGB
             // being the unpacked residue of alpha-0 texels. Without blending
             // those regions render as solid black. Blurred lines need it for
-            // the center-fade alpha ramp.
-            if (patTex || rampTex || blurPx > 0) {
+            // the center-fade alpha ramp. Dash lines need it so the dashed
+            // gaps (alpha→0) blend instead of rendering as solid black.
+            if (patTex || rampTex || blurPx > 0 || hasDash) {
                 (material as any).transparent = true;
                 (material as any).depthWrite = false;
             }
@@ -923,6 +931,11 @@ export class MBMaterialPatchManager {
                     if (orig) orig.call(material, shader);
                     shader.uniforms.uMBRibbonWidth = { value: widthPx };
                     shader.uniforms.uMBRibbonBlur = { value: blurPx };
+                    if (hasDash) {
+                        shader.uniforms.uMBDashSize = {
+                            value: new THREE.Vector2(dashWorld[0], dashWorld[1]),
+                        };
+                    }
                     if (hasTrim) {
                         shader.uniforms.uMBTrimRange = {
                             value: new THREE.Vector2(trimOffset[0], trimOffset[1]),
@@ -960,31 +973,31 @@ export class MBMaterialPatchManager {
                     }
                     shader.vertexShader = shader.vertexShader.replace(
                         'void main() {',
-                        `attribute float aRibbonEdge;
-                         varying float vMBRibbonEdge;
-                         ${rampTex || hasTrim ? 'attribute float aRibbonDist;\nvarying float vMBRibbonDist;' : ''}
-                         ${patTex ? 'attribute float aRibbonLen;\nvarying float vMBRibbonLen;' : ''}
-                         ${translateWorld ? 'uniform vec2 uMBTranslate;' : ''}
-                         ${hasOffset ? 'attribute vec2 aRibbonOffs;' : ''}
-                         void main() {`
+                         `attribute float aRibbonEdge;
+                          varying float vMBRibbonEdge;
+                          ${rampTex || hasTrim ? 'attribute float aRibbonDist;\nvarying float vMBRibbonDist;' : ''}
+                          ${patTex || hasDash ? 'attribute float aRibbonLen;\nvarying float vMBRibbonLen;' : ''}
+                          ${translateWorld ? 'uniform vec2 uMBTranslate;' : ''}
+                          ${hasOffset ? 'attribute vec2 aRibbonOffs;' : ''}
+                          void main() {`
                     );
                     shader.vertexShader = shader.vertexShader.replace(
                         '#include <begin_vertex>',
-                        `#include <begin_vertex>
-                         vMBRibbonEdge = aRibbonEdge;
-                         ${rampTex || hasTrim ? 'vMBRibbonDist = aRibbonDist;' : ''}
-                         ${patTex ? 'vMBRibbonLen = aRibbonLen;' : ''}
-                         ${translateWorld ? 'transformed.xy += uMBTranslate;' : ''}
-                         ${hasOffset ? 'transformed.xy += aRibbonOffs;' : ''}`
+                         `#include <begin_vertex>
+                          vMBRibbonEdge = aRibbonEdge;
+                          ${rampTex || hasTrim ? 'vMBRibbonDist = aRibbonDist;' : ''}
+                          ${patTex || hasDash ? 'vMBRibbonLen = aRibbonLen;' : ''}
+                          ${translateWorld ? 'transformed.xy += uMBTranslate;' : ''}
+                          ${hasOffset ? 'transformed.xy += aRibbonOffs;' : ''}`
                     );
                     shader.fragmentShader = shader.fragmentShader.replace(
                         'void main() {',
-                        `varying float vMBRibbonEdge;
-                         uniform float uMBRibbonWidth;
-                         uniform float uMBRibbonBlur;
-                         ${rampTex || hasTrim ? 'varying float vMBRibbonDist;\nuniform sampler2D uMBRamp;\nuniform vec2 uMBTrimRange;\nuniform vec4 uMBTrimColor;\nuniform vec2 uMBTrimFade;' : ''}
-                         ${patTex ? `varying float vMBRibbonLen;\nuniform sampler2D uMBPat;\nuniform float uMBPatUScale;\nuniform float uMBPatVScale;${patTex2 ? '\nuniform sampler2D uMBPat2;\nuniform float uMBPatFade;' : ''}` : ''}
-                         void main() {`
+                         `varying float vMBRibbonEdge;
+                          uniform float uMBRibbonWidth;
+                          uniform float uMBRibbonBlur;
+                          ${rampTex || hasTrim ? 'varying float vMBRibbonDist;\nuniform sampler2D uMBRamp;\nuniform vec2 uMBTrimRange;\nuniform vec4 uMBTrimColor;\nuniform vec2 uMBTrimFade;' : ''}
+                          ${patTex || hasDash ? `varying float vMBRibbonLen;${patTex ? '\nuniform sampler2D uMBPat;\nuniform float uMBPatUScale;\nuniform float uMBPatVScale;' + (patTex2 ? '\nuniform sampler2D uMBPat2;\nuniform float uMBPatFade;' : '') : ''}${hasDash ? '\nuniform vec2 uMBDashSize;' : ''}` : ''}
+                          void main() {`
                     );
                     // Inject AFTER the colorspace conversion: the ramp /
                     // pattern textures hold sRGB values, and injecting before
@@ -1017,6 +1030,17 @@ export class MBMaterialPatchManager {
                               ${rampTex ? `vec4 mbGrad = texture2D(uMBRamp, vec2(clamp(vMBRibbonDist, 0.0, 1.0), 0.5));
                                           gl_FragColor.rgb = mbGrad.rgb * ${borderDarken};
                                           gl_FragColor.a *= mbGrad.a;` : ''}
+                              // line-dasharray: mgl dashes along a_linesofar
+                              // (accumulated feature distance) in line-width
+                              // units; the ribbon dashes along aRibbonLen
+                              // (world meters) with uMBDashSize = [dashLen,
+                              // gapLen] world units. Dash "on" for phase < dash,
+                              // AA-faded at the dash edge via fwidth (~1px).
+                              ${hasDash ? `float mbDashTotal = uMBDashSize.x + uMBDashSize.y;
+                                  float mbDashPhase = mod(vMBRibbonLen, mbDashTotal);
+                                  float mbDashEdge = max(fwidth(mbDashPhase), 1e-5);
+                                  float mbDashA = 1.0 - smoothstep(uMBDashSize.x - mbDashEdge, uMBDashSize.x + mbDashEdge, mbDashPhase);
+                                  gl_FragColor.a *= mbDashA;` : ''}
                              // Distance from the ribbon edge in px; the edge
                              // ramp is only applied for blurred lines (see
                              // the featherEnabled note above). mgl's line

@@ -1540,6 +1540,11 @@ export class MBTileDataEmitter {
                     ? (widthUnit === 'meters' ? bwRawBorder : bwRawBorder * metersPerPixel)
                     : 0;
                 const mainHalfWidth = Math.max(worldHalfWidth - borderWorld, 0);
+                // NOTE: dash lines CANNOT simply drop the solid ribbon — the
+                // SolidLineMaterial dash does not rasterize on SwiftShader, so
+                // the ribbon is the only visible path. The dash pattern must be
+                // rendered ON the ribbon (see the patcher's USE_DASHED_LINE
+                // injection keyed by technique._dashSize/_gapSize).
                 this.emitRibbonFill(layer, worldPts, mainHalfWidth, cumDist,
                     widthUnit === 'meters' ? lineWidthPx / metersPerPixel : undefined,
                     lineGeom, progressHalfWidths, offsetWorld);
@@ -2124,12 +2129,17 @@ export class MBTileDataEmitter {
         const opacity = layer.paint?.['line-opacity'] ?? 1;
         const gradient = layer.paint?.['line-gradient'];
         const patternName = layer.paint?.['line-pattern'] as string | undefined;
-        const key = `${layer.id}:line-ribbon-tech:${String(color)}:${String(opacity)}:${gradient ? 'grad' : ''}:${patternName ?? ''}`;
+        const dashArr = layer.paint?.['line-dasharray'] as number[] | undefined;
+        const hasDash = Array.isArray(dashArr) && dashArr.length >= 2;
+        const key = `${layer.id}:line-ribbon-tech:${String(color)}:${String(opacity)}:${gradient ? 'grad' : ''}:${patternName ?? ''}:${hasDash ? 'dash' : ''}`;
         let idx = this.m_layerToTechniqueIndex.get(key);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
             this.m_layerToTechniqueIndex.set(key, idx);
             const paint = layer.paint ?? {};
+            // Display-zoom px→world factor (world units are meters at equator).
+            const mppDash = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                (256 * Math.pow(2, this.m_zoom + 1));
             // line-pattern: resolve the sprite's pixel size and convert to
             // world units at the decode display zoom so the patcher can tile
             // u = aRibbonLen / patternWorldW, v = cross / patternWorldH.
@@ -2184,6 +2194,18 @@ export class MBTileDataEmitter {
                 ...(patternName ? { _patternName: patternName } : {}),
                 ...(patternWorld ? { _ribbonPatternWorld: patternWorld } : {}),
                 ...(patternName2 ? { _patternName2: patternName2, _patternFade: patternFade } : {}),
+                // line-dasharray: mgl dashes based on `a_linesofar` (accumulated
+                // distance along the feature) in line-width units. The SolidLine
+                // dash does NOT rasterize on SwiftShader, so the ribbon must
+                // carry the dash pattern. Convert the CSS-px dash (× line-width)
+                // to world meters at the display zoom so the patcher can
+                // `mod(aRibbonLen, size+gap) < size`.
+                ...(hasDash ? {
+                    _dashWorld: [
+                        dashArr[0] * (Number(paint['line-width'] ?? 1)) * mppDash,
+                        dashArr[1] * (Number(paint['line-width'] ?? 1)) * mppDash,
+                    ] as [number, number],
+                } : {}),
                 // line-trim-offset / line-pattern-trim-offset [start, end] in
                 // line-progress units — the patcher discards/fades outside
                 // range. `line-trim-color` colors the trimmed-out parts
