@@ -957,6 +957,17 @@ export class MBMaterialPatchManager {
             if (patTex || rampTex || blurPx > 0 || hasDash || dashInvisible) {
                 (material as any).transparent = true;
                 (material as any).depthWrite = false;
+            } else {
+                // mgl's edge AA (smoothstep over the 0.5px-dilated quad) needs
+                // alpha blending. CustomBlending is honored by three even on
+                // non-transparent materials, so the ribbon STAYS in the opaque
+                // render list (painter's order preserved — moving it into the
+                // transparent list catastrophically reorders crossings) while
+                // the semi-transparent AA edge still blends.
+                (material as any).blending = THREE.CustomBlending;
+                (material as any).blendSrc = THREE.SrcAlphaFactor;
+                (material as any).blendDst = THREE.OneMinusSrcAlphaFactor;
+                (material as any).blendEquation = THREE.AddEquation;
             }
             if (!(material as any).__mbRibbonAA && widthPx > 0) {
                 (material as any).__mbRibbonAA = true;
@@ -1134,11 +1145,24 @@ export class MBMaterialPatchManager {
                                       mbDashA = clamp(1.0 - mbDist / max(uMBDashPx, 1e-5), 0.0, 1.0);
                                   }
                                   gl_FragColor.a *= mbDashA;` : ''}
-                             // Distance from the ribbon edge in px; the edge
-                             // ramp is only applied for blurred lines (see
-                             // the featherEnabled note above). mgl's line
-                             // blur fades linearly from the CENTER:
-                             // alpha = clamp(1 - distCenter/blur).
+                             // mgl line AA (line.fragment.glsl): the quad is
+                             // dilated by ANTIALIASING (0.5px @dpr1) per side
+                             // (the emitter bakes the dilation) and the edge is
+                             // faded with smoothstep(EDGE - pxStep, blur*scale
+                             // + EDGE + pxStep, delta) — with blur=0, dpr=1,
+                             // pxStep=fwidth(dist)≈1: smoothstep(-0.5, 1.5, d)
+                             // measured from the TRUE line edge (the ribbon's
+                             // outer 0.5px is the dilation).
+                             // Hard alpha cut at the DILATED ribbon boundary —
+                             // the ribbon carries mgl's +0.5px ANTIALIASING
+                             // dilation per side, so the visible width matches
+                             // the mgl quad. Soft ramps were tested (mgl
+                             // smoothstep(-0.5,1.5) and a linear ±0.5px
+                             // feather): both REGRESSED line-color/translate by
+                             // 1.1-8k px — the references are crisper than the
+                             // vendored mgl AA formula (version drift).
+                             float mbDistEdge = (1.0 - abs(vMBRibbonEdge)) * uMBRibbonWidth * 0.5 - 0.5;
+                             gl_FragColor.a *= step(-0.5, mbDistEdge);
                              ${featherEnabled ? `float mbDistCenter = abs(vMBRibbonEdge) * uMBRibbonWidth * 0.5;
                                  gl_FragColor.a *= clamp(1.0 - mbDistCenter / max(uMBRibbonBlur, 0.5), 0.0, 1.0);` : ''}
                          }`

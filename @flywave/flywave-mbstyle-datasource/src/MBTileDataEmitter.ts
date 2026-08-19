@@ -1613,14 +1613,20 @@ export class MBTileDataEmitter {
                     ? (widthUnit === 'meters' ? bwRawBorder : bwRawBorder * metersPerPixel)
                     : 0;
                 const mainHalfWidth = Math.max(worldHalfWidth - borderWorld, 0);
+                // mgl extrudes the line quad by ANTIALIASING (0.5px @dpr1) per
+                // side (v_width2 = width/2 + ANTIALIASING) and fades the extra
+                // with the edge smoothstep — dilate the ribbon the same way so
+                // the patcher's AA ramp has coverage. Zero-width lines must
+                // stay invisible (dilating them paints a 1px line).
+                const aaDilate = lineWidthPx > 0 ? 0.5 * metersPerPixel : 0;
+                const trueWidthPx = widthUnit === 'meters' ? lineWidthPx / metersPerPixel : lineWidthPx;
                 // NOTE: dash lines CANNOT simply drop the solid ribbon — the
                 // SolidLineMaterial dash does not rasterize on SwiftShader, so
                 // the ribbon is the only visible path. The dash pattern must be
                 // rendered ON the ribbon (see the patcher's USE_DASHED_LINE
                 // injection keyed by technique._dashSize/_gapSize).
-                this.emitRibbonFill(layer, worldPts, mainHalfWidth, cumDist,
-                    widthUnit === 'meters' ? lineWidthPx / metersPerPixel : undefined,
-                    lineGeom, progressHalfWidths, offsetWorld, properties);
+                this.emitRibbonFill(layer, worldPts, mainHalfWidth + aaDilate, cumDist,
+                    trueWidthPx > 0 ? trueWidthPx + 1 : 0, lineGeom, progressHalfWidths, offsetWorld, properties);
                 // line-border: edge ribbons under the main line (constant
                 // width only — variable-width borders are not a test case).
                 if (!progressHalfWidths) {
@@ -1805,7 +1811,8 @@ export class MBTileDataEmitter {
         // otherwise every per-technique object draws the whole index buffer.
         const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer, properties);
         if (effectiveWidthPx !== undefined) {
-            // meters-unit lines: the AA-feather ramp needs the width in px.
+            // Dilated ribbon width in px (true width + 2×0.5px AA dilation) —
+            // the patcher's edge AA ramp measures distances against it.
             (this.m_techniques[ribbonTechIdx] as any)._ribbonWidthPx = effectiveWidthPx;
         }
         const key = `${layer.id}:line-ribbon:${ribbonTechIdx}`;

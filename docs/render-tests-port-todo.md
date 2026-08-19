@@ -1869,6 +1869,24 @@ mgl additive 是离屏 FBO 管线：RGB 累积 `Σ(C·fa)`、A 累积密度，�
 
 **结论**：text 垂直域残余（center 10611、top/bottom 16-19k）不是盒模型问题——逐字形放置已对齐 mgl、ink 盒即参考图行为；残余为 AA 边缘剖面（±10 灰度 × 数千边缘像素，两项 mgl 公式实验均变差）与标签集合差异（部分 label 未渲染/多渲染）。**除非拿到参考图对应版本的 mgl 源码，text 垂直/AA 域到此为止**，转入其他 §14 待办。
 
+### 12.73 line AA（N5）：+0.5px 膨胀落地，fill-outline-color 2→4/8（2026-08-20）
+
+按 N5 专项实验矩阵（全部 `HARP_NO_HARD_SOURCE_CACHE=true`，单变量二分）：
+
+| 实验 | line-color/default | line-translate/default | 判定 |
+|------|--------------------|------------------------|------|
+| 基线（硬边、无膨胀） | 337 | 754 | — |
+| mgl 精确 AA：+0.5px/侧膨胀 + `smoothstep(-0.5,1.5,distEdge)`（line.fragment.glsl 精确公式）+ CustomBlending | 2602 | 8975 | **证伪**（参考图比公式脆） |
+| 膨胀 + 线性 ±0.5px 羽化 | 1484 | 1777 | 证伪 |
+| **膨胀 + 硬边**（`step` 于膨胀边界 = 可见宽 +1px） | 404 | 1025 | **采用** |
+
+**落地**：emitter 主 ribbon 半宽 + `0.5×mpp`（mgl `v_width2 = width/2 + ANTIALIASING` 语义）、`_ribbonWidthPx` 记膨胀后宽（zero-width 不膨胀，否则画出 1px 幽灵线——已加守卫并复测 4 例全回 PASS）；patcher 片元 `step(-0.5, distEdge)` 硬切 + **CustomBlending(SRC_ALPHA, ONE_MINUS_SRC_ALPHA)**（three 对非 transparent 材质也尊重非 NormalBlending——ribbon 留在不透明 pass 保 painter's order，AA/羽化若将来启用也能混合）。
+
+**收益**：`fill-outline-color/default`、`/function` **转 PASS（0mm）**，其余 6 例近失 53-195（原 12-192）；line-blend additive 保持 6/6。**代价**：line-color/translate 家族像素 +7~280（仍原失败态，无 PASS 损失）；`line-width/zero-width` ×4 加守卫后零回归。
+
+**方法论注**：line AA 与 text AA/垂直盒同型——vendored mgl 源码公式与参考图版本漂移（§12.52/§12.72 后第三、四例），mgl 公式直接落地均变差，经验校准（膨胀+硬边）反而有效。N5 残余（line-color 404、translate ~1025）为亚像素相位差，除非获取参考版本源码否则到此为止。
+
+
 
 
 
