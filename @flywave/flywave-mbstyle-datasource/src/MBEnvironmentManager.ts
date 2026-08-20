@@ -22,6 +22,10 @@ THREE.ShaderChunk.fog_pars_fragment = `
 	uniform float fogAlpha;
 	uniform float fogHorizonBlend;
 	uniform float fogCamHeight;
+	// mgl u_fog_vertical_limit (fog "vertical-range"): elevated content
+	// fades OUT of the fog between these heights (meters above ground).
+	uniform vec2 fogVertLimit;
+	varying float vFogHeight;
 #endif
 `;
 THREE.ShaderChunk.fog_fragment = `
@@ -38,6 +42,14 @@ THREE.ShaderChunk.fog_fragment = `
 	float fogDirZ = -fogCamHeight / max(vFogDepth, 1.0);
 	float fogHz = max(0.0, fogDirZ / max(fogHorizonBlend, 1e-4));
 	fogFactor *= fogAlpha * exp(-3.0 * fogHz * fogHz);
+	// mgl fog_apply_premultiplied(color, pos, heightMeters): vertical
+	// visibility fades the fog out for elevated fragments, and near-total
+	// fog (>0.9) fades the fade itself to avoid a hard cut at the cull
+	// distance.
+	float fogVertP = (fogVertLimit.x > 0.0 || fogVertLimit.y > 0.0)
+		? smoothstep(fogVertLimit.x, fogVertLimit.y, vFogHeight) : 0.0;
+	float fogOpLimit = 1.0 - smoothstep(0.9, 1.0, fogFactor);
+	fogFactor *= 1.0 - min(fogVertP, fogOpLimit);
 	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
 #endif
 `;
@@ -54,6 +66,7 @@ THREE.ShaderChunk.fog_pars_vertex = `
 THREE.ShaderChunk.fog_vertex = `
 #ifdef USE_FOG
 	vFogDepth = -mvPosition.z;
+	vFogHeight = mvPosition.z + cameraPosition.z;
 #endif
 `;
 // Make `fogAlpha` a standard fog uniform (alpha of the fog color) and feed it
@@ -66,12 +79,14 @@ if (!('fogAlpha' in THREE.UniformsLib.fog)) {
     (THREE.UniformsLib.fog as any).fogAlpha = { value: 1 };
     (THREE.UniformsLib.fog as any).fogHorizonBlend = { value: 0.05 };
     (THREE.UniformsLib.fog as any).fogCamHeight = { value: 1000 };
+    (THREE.UniformsLib.fog as any).fogVertLimit = { value: new THREE.Vector2(0, 0) };
     for (const lib of Object.values(THREE.ShaderLib)) {
         const u = (lib as any).uniforms;
         if (u && typeof u === 'object' && !('fogAlpha' in u)) {
             (u as any).fogAlpha = { value: 1 };
             (u as any).fogHorizonBlend = { value: 0.05 };
             (u as any).fogCamHeight = { value: 1000 };
+            (u as any).fogVertLimit = { value: new THREE.Vector2(0, 0) };
         }
     }
 }
@@ -564,8 +579,13 @@ export class MBEnvironmentManager {
             highColor: new THREE.Color(rawHighColor),
             spaceColor: new THREE.Color(evalZoom(rawSpaceColor, '#010b19')),
         };
-        // mgl fog_horizon_blending uniforms (see the fog_fragment chunk).
+        // mgl fog_horizon_blending + vertical-range uniforms (see the
+        // fog_fragment chunk). vertical-range default [0,0] = disabled;
+        // mgl orders the pair with min/max applied.
         (THREE.UniformsLib.fog as any).fogHorizonBlend.value = this.m_fogState.horizonBlend;
+        const vRange = evalZoom(fog['vertical-range'], [0, 0]) as [number, number];
+        (THREE.UniformsLib.fog as any).fogVertLimit.value.set(
+            Math.min(vRange[0] ?? 0, vRange[1] ?? 0), vRange[1] ?? 0);
         const camPos = this.m_mapView?.camera?.position;
         (THREE.UniformsLib.fog as any).fogCamHeight.value = camPos ? Math.max(camPos.z, 1) : 1000;
         // Mapbox renders the atmosphere glow (space→high→fog gradient) in the
