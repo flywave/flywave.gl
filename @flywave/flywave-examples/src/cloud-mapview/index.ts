@@ -53,18 +53,18 @@ const canvas = getMapCanvas();
 const mapView = new MapView({
     projection: ellipsoidProjection,
     target: new GeoCoordinates(35.0, 30.0, 300),
-    zoomLevel: 17,
-    tilt: 45,
+    // PARITY POSE: whole-globe nadir view (~19-20M m altitude) matching the
+    // takram clouds-basic session (35N/30E, 19,508 km). Read the exact
+    // altitude from the cam HUD after load and enter it on the takram side.
+    zoomLevel: 0,
+    tilt: 0,
     heading: 0,
     canvas: canvas,
-    theme: {
-        postEffects: {
-            antialiasing: "smaa"
-        },
+    theme: { 
         atmosphere: {
             enabled: true,
-            sunCastShadow: false,
-            clouds: { quality: "low" },
+            sunCastShadow: true,
+            clouds: { quality: "high" },
 
             sunTime: (() => {
                 const year = new Date().getFullYear();
@@ -114,11 +114,14 @@ internalsForHook.updateCameras = function (...args: unknown[]) {
     applyOverride();
 };
 
-const camPos = [4529606.670615005, 2614762.716348598, 3638805.5858316943];
-const camQuat = [
-    0.341611239061481, 3.177626864111724e-11, -0.42250890119681356, 0.8395165214314373
-];
-const camUp = [0.7094064060180906, 0.40957597947938945, 0.5735765582152];
+// PARITY POSE — fixed ECEF values, no lat/lon math.
+// Direction of 35N/30E, radius 25,879,000 m (= Earth ~6,371 km + 19,508 km
+// altitude), looking straight at the Earth center (origin). Same numbers as
+// the takram session (its rig resolves 35/30/19508000 to this same point).
+const camPos = [18358169, 10599098, 14843776];
+// View direction is radial (-normal), so up must be perpendicular: the north
+// tangent at that point.
+const camUp = [-0.49673, -0.28679, 0.81915];
 
 const applyOverride = () => {
     applyToneMappingOverride();
@@ -131,8 +134,8 @@ const applyOverride = () => {
     const rte = (mapView as unknown as MapViewInternals).getRteCamera?.();
 
     cam.position.set(camPos[0], camPos[1], camPos[2]);
-    cam.quaternion.set(camQuat[0], camQuat[1], camQuat[2], camQuat[3]);
     cam.up.set(camUp[0], camUp[1], camUp[2]);
+    cam.lookAt(0, 0, 0); // look at the Earth center
 
     // Apply heading rotation around camera up axis
     if (_headingOffset !== 0) {
@@ -142,9 +145,9 @@ const applyOverride = () => {
     }
 
     cam.rotation.order = "XYZ";
-    cam.fov = 75;
-    cam.near = 1;
-    cam.far = 4e5;
+    cam.fov = 50; // match takram Canvas default fov
+    cam.near = 1; // match takram camera near/far (globe visible at this range)
+    cam.far = 3e7;
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
 
@@ -153,9 +156,9 @@ const applyOverride = () => {
         rte.quaternion.copy(cam.quaternion);
         rte.up.copy(cam.up);
         rte.rotation.order = "XYZ";
-        rte.fov = 75;
+        rte.fov = 50;
         rte.near = 1;
-        rte.far = 4e5;
+        rte.far = 3e7;
         rte.aspect = cam.aspect;
         rte.updateProjectionMatrix();
         rte.updateMatrixWorld(true);

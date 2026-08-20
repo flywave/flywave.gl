@@ -249,7 +249,7 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
      * Whether the native WebGL antialiasing should be enabled. It is better to disable it if the
      * MapView's MSAA is enabled.
      *
-     * @default `true` for `pixelRatio` < `2.0`, `false` otherwise.
+     * @default `false` for `pixelRatio` < `2.0`, `false` otherwise.
      */
     enableNativeWebglAntialias?: boolean;
 
