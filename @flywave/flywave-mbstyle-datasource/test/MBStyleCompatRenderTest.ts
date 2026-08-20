@@ -468,6 +468,7 @@ async function processOperations(
                     // A config change can flip an expression-valued
                     // color-theme.data — re-resolve scoped themes.
                     (dataSource as any).loadImportThemes?.(style);
+                    await renderFrames(mapView, dataSource, 3);
                 }
                 break;
             }
@@ -493,16 +494,18 @@ async function processOperations(
                 break;
             }
             case "setColorTheme": {
-                // Decode the LUT and propagate to evaluator + environment
-                // (mgl map.setColorTheme). The async decode lands before the
-                // fixture's trailing wait captures the frame.
+                // The LUT decode + tile re-decode is async; mgl swaps a GPU
+                // uniform at draw time so its two-frame wait suffices — we
+                // need extra frames for the re-decode to land.
                 dataSource.setColorTheme(args[0] ?? null);
+                await renderFrames(mapView, dataSource, 4);
                 break;
             }
             case "setImportColorTheme": {
                 // mgl map.setImportColorTheme(importId, theme):
                 // args[0]=importId, args[1]=theme ({data}|null)
                 (dataSource as any).setImportColorTheme?.(args[0] ?? '', args[1] ?? null);
+                await renderFrames(mapView, dataSource, 4);
                 break;
             }
             case "easeTo": {

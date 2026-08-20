@@ -2440,6 +2440,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 **b82/b83 验收（color-theme 26 例，两轮一致）**：**净改善**——light-import-scope 244k→**114k**（lights 作用域主题化生效）、use-theme/constant-* 644→**1px**（差 1 像素过阈值 6）、import-override-style 244k→115k；**回归**——import-override-existing/remove 122k→197k（两例同值 = 末态均为"import 自身主题"，主题化图层渲染本身与 expected 偏差更大——但 use-theme 证明线层查表近乎完美，偏差必在其他通道）；config-bw/red/theme-from-config、add/update-*（3173-3964 簇）、model 族（trees-monochrome 59.7k/emission-bw 61k 不动——model 烘焙未生效，疑异步竞态或路径未达）、red-chicago 201k 不变。**下一阶段：逐 fixture 像素取证**（3211/3173/3964 共模簇 + model 烘焙路径核查 + import-override 偏差通道定位）。tsc 绿、单测 265 passing / 3 既有。
 
+**47. color-theme 二轮：背景通道 + decoder 内 evaluator + 竞态守卫（2026-08-20 五，b84-b88）**：
+
+- **像素取证破案 3211/3173/3964 共模簇**：差异 = **background 层颜色未主题化**（cur 紫 238,130,238 vs exp 灰 147——64×64 fixture 全图即背景）。背景走 clearColor 路径（applyBackgroundColor）且 quad 色来自 **decoder 内部自建 evaluator**（MBStyleDecoder.ts:348 configure 时 new，非 runtime evaluator）。
+- **修复**：① applyBackgroundColor 内 background-color 查 LUT（含 import scope + use-theme none）；② 主题传播到 decoder 内 evaluator（applyColorTheme/propagateScopedThemes/onChange configure 后三处重放）；③ harness 主题类 op（setColorTheme/setImportColorTheme/config 变更）后补 renderFrames；④ connect 期 loadColorTheme(style)=null 不得清掉运行时主题（m_themeInitialized 守卫）。
+- **兑现**：red-chicago 201648→**6702**（−97%，背景主题化）、red-3d-content 238067→**176045**。
+- **遗留（竞态未闭环）**：add/config-* 等仍紫——dbg 探针轮（renderFrames(4)）曾得 133 灰（近 exp 147）而 b86-88 复现紫，**applyColorTheme→clearColor→捕获间存在异步竞态**（主题解码/瓦片重解码 vs capture 帧序不确定）。确定修法 = applyColorTheme 后请求 mapView 额外渲染帧回调（渲染循环级），留下一批。import-override-existing/remove 197k、fog-import-scope 209k、model 族 60k 维持 §46 状态。
+
 **44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
 
 - **零 LOST PASS**；circle-color/stroke-color/stroke-width **全绿 5/5×3**、stroke-opacity 3/6、icon-halo-color 7/7、icon-halo-width 4/4、icon-color 4/5 维持——uColor/uStrokeColor 转 sRGB **零回归**（这些域本就按 mgl 语义校准，转换后灰阶类不受影响、彩阶类无 fixture 暴露差异）。

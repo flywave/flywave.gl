@@ -603,6 +603,10 @@ export class MBStyleDataSource extends TileDataSource {
     private m_colorThemeLut: import('./MBColorTheme').ColorThemeLut | null = null;
     /** Per-import-scope color-theme LUTs (mgl getLut(scope)). */
     private m_importLuts: Map<string, import('./MBColorTheme').ColorThemeLut | null> = new Map();
+    /** Loaded model scenes (for re-theming when LUTs resolve after load). */
+    private m_loadedModels: Array<{ model: any; layer: any }> = [];
+    /** True once any applyColorTheme ran (guards the initial null race). */
+    private m_themeInitialized = false;
     /** Non-SDF icon canvases registered in mapView.userImageCache (themed on LUT change). */
     private m_themedIconCanvases: HTMLCanvasElement[] = [];
     /** Pristine (pre-theme) pixels of each themed icon canvas. */
@@ -950,7 +954,9 @@ export class MBStyleDataSource extends TileDataSource {
             // and the environment (fog colors). Identity when absent.
             const { loadColorTheme } = require('./MBColorTheme');
             loadColorTheme(style).then((lut: any) => {
-                this.applyColorTheme(lut);
+                // A null (no root theme) must not clobber a theme applied
+                // meanwhile by a runtime setColorTheme op (async race).
+                if (lut || !this.m_themeInitialized) this.applyColorTheme(lut);
                 this.loadImportThemes(style);
             }).catch(() => {});
         }
@@ -963,6 +969,15 @@ export class MBStyleDataSource extends TileDataSource {
                 brightness: this.m_environment?.brightness ?? 0,
                 center: this.m_runtime!.style.center ?? [0, 0],
             } as any);
+            // configure() re-created the decoder's internal evaluator —
+            // re-apply the active color theme (root + scoped).
+            const decEval = (this.decoder as any).m_layerEvaluator;
+            if (decEval?.setColorTheme) {
+                decEval.setColorTheme(this.m_colorThemeLut);
+                for (const [scopeId, lut] of this.m_importLuts) {
+                    decEval.setColorThemeScope?.(scopeId, lut);
+                }
+            }
             if (this.mapView) {
                 this.mapView.markTilesDirty(this);
             }
@@ -1268,48 +1283,11 @@ export class MBStyleDataSource extends TileDataSource {
                     // material colors + texture maps (model-color-use-theme
                     // opt-out honored).
                     try {
-                        const useTheme = (layer as any).paint?.['model-color-use-theme'] ?? 'default';
-                        const modelLut = ((layer as any)._importScope
-                            && this.m_importLuts.has((layer as any)._importScope))
-                            ? this.m_importLuts.get((layer as any)._importScope)
-                            : this.m_colorThemeLut;
-                        if (modelLut && useTheme !== 'none') {
-                            const { applyColorTheme, applyColorThemeToPixels } = require('./MBColorTheme');
-                            const themed = new Set<any>();
-                            model.traverse((o: any) => {
-                                const mat = o.material;
-                                if (!mat || themed.has(mat)) return;
-                                themed.add(mat);
-                                for (const mk of ['color', 'emissive']) {
-                                    if (mat[mk] && mat[mk].isColor) {
-                                        const css = mat[mk].getStyle(THREE.SRGBColorSpace);
-                                        mat[mk].setStyle(applyColorTheme(modelLut, css), THREE.SRGBColorSpace);
-                                    }
-                                }
-                                for (const tk of ['map', 'emissiveMap']) {
-                                    const tex = mat[tk];
-                                    const img: any = tex?.image;
-                                    if (!tex || !img || tex.userData?.mbThemed) continue;
-                                    try {
-                                        const cv = document.createElement('canvas');
-                                        cv.width = img.width ?? img.videoWidth ?? 1;
-                                        cv.height = img.height ?? img.videoHeight ?? 1;
-                                        const cx = cv.getContext('2d')!;
-                                        cx.drawImage(img, 0, 0);
-                                        const id = cx.getImageData(0, 0, cv.width, cv.height);
-                                        applyColorThemeToPixels(modelLut, id.data);
-                                        cx.putImageData(id, 0, 0);
-                                        const nt = new THREE.Texture(cv);
-                                        nt.needsUpdate = true;
-                                        nt.flipY = tex.flipY;
-                                        (nt as any).userData = { mbThemed: true };
-                                        (nt as any).colorSpace = (tex as any).colorSpace;
-                                        (nt as any).wrapS = tex.wrapS; (nt as any).wrapT = tex.wrapT;
-                                        mat[tk] = nt;
-                                    } catch {}
-                                }
-                            });
-                        }
+                        // Theme from a PRISTINE snapshot so this is
+                        // idempotent and can be re-run when the (async)
+                        // import-scoped LUTs resolve after model load.
+                        this.m_loadedModels.push({ model, layer: layer as any });
+                        this.applyThemeToModel(model, layer as any);
                     } catch {}
                     const lng = def.position[0] ?? 0;
                     const lat = def.position[1] ?? 0;
@@ -1401,6 +1379,65 @@ export class MBStyleDataSource extends TileDataSource {
         }).catch(() => {});
     }
 
+    /** Theme a loaded glTF from its pristine snapshot (idempotent). */
+    private applyThemeToModel(model: any, layer: any): void {
+        try {
+            const useTheme = layer?.paint?.['model-color-use-theme'] ?? 'default';
+            const modelLut = (layer?._importScope && this.m_importLuts.has(layer._importScope))
+                ? this.m_importLuts.get(layer._importScope)
+                : this.m_colorThemeLut;
+            if (!modelLut || useTheme === 'none') return;
+            const { applyColorTheme, applyColorThemeToPixels } = require('./MBColorTheme');
+            model.traverse((o: any) => {
+                const mat = o.material;
+                if (!mat) return;
+                for (const mk of ['color', 'emissive']) {
+                    if (!mat[mk] || !mat[mk].isColor) continue;
+                    if (!mat.userData?._mbPristine?.[mk]) {
+                        mat.userData = mat.userData ?? {};
+                        mat.userData._mbPristine = mat.userData._mbPristine ?? {};
+                        mat.userData._mbPristine[mk] = mat[mk].clone();
+                    }
+                    const css = mat.userData._mbPristine[mk].getStyle(THREE.SRGBColorSpace);
+                    mat[mk].setStyle(applyColorTheme(modelLut, css), THREE.SRGBColorSpace);
+                }
+                for (const tk of ['map', 'emissiveMap']) {
+                    const tex = mat[tk];
+                    const img: any = tex?.image;
+                    if (!tex || !img) continue;
+                    if (!tex.userData?._mbPristineCanvas) {
+                        try {
+                            const cv = document.createElement('canvas');
+                            cv.width = img.width ?? img.videoWidth ?? 1;
+                            cv.height = img.height ?? img.videoHeight ?? 1;
+                            const cx = cv.getContext('2d')!;
+                            cx.drawImage(img, 0, 0);
+                            tex.userData = tex.userData ?? {};
+                            tex.userData._mbPristineCanvas = cv;
+                        } catch { continue; }
+                    }
+                    const pristine: HTMLCanvasElement = tex.userData._mbPristineCanvas;
+                    const cv = document.createElement('canvas');
+                    cv.width = pristine.width;
+                    cv.height = pristine.height;
+                    const cx = cv.getContext('2d')!;
+                    cx.drawImage(pristine, 0, 0);
+                    const id = cx.getImageData(0, 0, cv.width, cv.height);
+                    applyColorThemeToPixels(modelLut, id.data);
+                    cx.putImageData(id, 0, 0);
+                    const nt = new THREE.Texture(cv);
+                    nt.needsUpdate = true;
+                    nt.flipY = tex.flipY;
+                    (nt as any).colorSpace = (tex as any).colorSpace;
+                    (nt as any).wrapS = tex.wrapS;
+                    (nt as any).wrapT = tex.wrapT;
+                    (nt as any).userData = { _mbPristineCanvas: pristine };
+                    mat[tk] = nt;
+                }
+            });
+        } catch {}
+    }
+
     /** Load every per-import theme recorded by mergeImports. */
     private loadImportThemes(style: any): void {
         const { loadColorTheme } = require('./MBColorTheme');
@@ -1431,6 +1468,12 @@ export class MBStyleDataSource extends TileDataSource {
                 evaluator.setColorThemeScope?.(id, lut);
             }
         }
+        const decEval = (this.decoder as any).m_layerEvaluator;
+        if (decEval?.setColorThemeScope) {
+            for (const [id, lut] of this.m_importLuts) {
+                decEval.setColorThemeScope(id, lut);
+            }
+        }
         // Fog/lights resolve their theme from their OWN import scope when the
         // merged fog/lights came from an import (mgl fog.scope / light.scope).
         const fogScope = style?._fogImportScope;
@@ -1449,9 +1492,18 @@ export class MBStyleDataSource extends TileDataSource {
                 this.m_environment.applyFog(style?.fog, style?.zoom ?? 0);
             } catch {}
         }
+        // Background clear color picks up the (scoped) LUT as well.
+        try {
+            const st: any = style;
+            if (st && this.m_environment) this.applyBackgroundColor(st);
+        } catch {}
         // Re-bake sprites: an import-supplied sprite must pick up the import
         // LUT even when the root has no theme.
         this.bakeThemeIntoSprites(undefined);
+        // Re-theme models with the (now-resolved) scoped LUTs.
+        for (const { model, layer } of this.m_loadedModels) {
+            this.applyThemeToModel(model, layer);
+        }
         this.mapView?.markTilesDirty?.(this as any);
         this.mapView?.update?.();
     }
@@ -1465,9 +1517,20 @@ export class MBStyleDataSource extends TileDataSource {
      */
     private applyColorTheme(lut: import('./MBColorTheme').ColorThemeLut | null): void {
         this.m_colorThemeLut = lut;
+        this.m_themeInitialized = true;
         const { bumpThemeGeneration } = require('./MBColorTheme');
         this.m_runtime?.evaluator.setColorTheme(lut);
+        // The decoder owns its OWN internal MBLayerEvaluator (created per
+        // configure) — background/fill techniques come from it, so the LUT
+        // must reach it too.
+        (this.decoder as any).m_layerEvaluator?.setColorTheme?.(lut);
         this.m_environment?.setColorTheme(lut);
+        // The background renders as the clear color (not a layer material),
+        // so it must be re-resolved whenever the theme changes.
+        try {
+            const st: any = this.m_runtime?.style ?? (this.m_styleManager as any).m_style;
+            if (st && this.m_environment) this.applyBackgroundColor(st);
+        } catch {}
         this.bakeThemeIntoSprites(lut);
         this.mapView?.markTilesDirty?.(this as any);
         this.mapView?.update?.();
@@ -2006,6 +2069,21 @@ export class MBStyleDataSource extends TileDataSource {
                         } as any);
                         if (typeof evaluated === 'string') color = evaluated;
                     } catch {}
+                }
+                // Color-theme: the background goes through the same LUT as
+                // every other `-color` paint (mgl themes the background
+                // layer's clear color too); honor the layer's import scope.
+                if (paint['background-color-use-theme'] !== 'none') {
+                    const scope = (layer as any)._importScope;
+                    const lut = (scope && this.m_importLuts.has(scope))
+                        ? this.m_importLuts.get(scope)
+                        : this.m_colorThemeLut;
+                    if (lut) {
+                        try {
+                            const { applyColorTheme } = require('./MBColorTheme');
+                            color = applyColorTheme(lut, color);
+                        } catch {}
+                    }
                 }
                 if (this.mapView) {
                     const c = new THREE.Color(color);
