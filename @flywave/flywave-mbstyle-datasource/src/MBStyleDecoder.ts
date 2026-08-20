@@ -342,10 +342,35 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         return Promise.resolve();
     }
 
+    /** Active color-theme LUTs; re-applied whenever configure() rebuilds
+     * the internal evaluator so a style/config re-configure can never drop
+     * a runtime-applied theme (mgl keeps layer.lut across updates). */
+    private m_themeLut: any = null;
+    private m_scopedThemeLuts: Map<string, any> = new Map();
+
+    /** Root color-theme LUT for techniques emitted by this decoder. */
+    setColorTheme(lut: any, scoped?: Map<string, any>): void {
+        this.m_themeLut = lut ?? null;
+        if (scoped) this.m_scopedThemeLuts = scoped;
+        this.applyThemeToEvaluator();
+    }
+
+    private applyThemeToEvaluator(): void {
+        const ev: any = this.m_layerEvaluator;
+        if (!ev?.setColorTheme) return;
+        ev.setColorTheme(this.m_themeLut);
+        if (ev.setColorThemeScope) {
+            for (const [scope, lut] of this.m_scopedThemeLuts) {
+                ev.setColorThemeScope(scope, lut);
+            }
+        }
+    }
+
     configure(options?: DecoderOptions, customOptions?: OptionsMap): void {
         super.configure(options, customOptions);
         if (customOptions?.mbStyle) {
             this.m_layerEvaluator = new MBLayerEvaluator(customOptions.mbStyle as StyleSpecification);
+            this.applyThemeToEvaluator();
         }
         if (customOptions?.currentSourceId) {
             this.m_currentSourceId = customOptions.currentSourceId as string;

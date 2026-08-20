@@ -499,6 +499,10 @@ async function processOperations(
                 // need extra frames for the re-decode to land.
                 await dataSource.setColorTheme(args[0] ?? null);
                 await renderFrames(mapView, dataSource, 4);
+                // The theme re-decodes tiles asynchronously (CPU bake);
+                // let the reload settle before any trailing capture.
+                await new Promise((r) => setTimeout(r, 50));
+                await renderFrames(mapView, dataSource, 2);
                 break;
             }
             case "setImportColorTheme": {
@@ -506,6 +510,8 @@ async function processOperations(
                 // args[0]=importId, args[1]=theme ({data}|null)
                 (dataSource as any).setImportColorTheme?.(args[0] ?? '', args[1] ?? null);
                 await renderFrames(mapView, dataSource, 4);
+                await new Promise((r) => setTimeout(r, 50));
+                await renderFrames(mapView, dataSource, 2);
                 break;
             }
             case "easeTo": {

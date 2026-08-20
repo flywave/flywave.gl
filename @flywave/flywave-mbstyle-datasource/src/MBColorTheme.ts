@@ -40,7 +40,15 @@ function parseCssColor(c: string): [number, number, number, number] | null {
     }
     const m = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/);
     if (m) return [+m[1], +m[2], +m[3], m[4] !== undefined ? +m[4] : 1];
-    return null;
+    // Named CSS colors (violet/blue/white/...): THREE.Color parses them to
+    // LINEAR components under ColorManagement — convert back to sRGB 0-255.
+    try {
+        const named = new (require('three').Color)(c);
+        named.convertLinearToSRGB();
+        return [Math.round(named.r * 255), Math.round(named.g * 255), Math.round(named.b * 255), 1];
+    } catch {
+        return null;
+    }
 }
 
 /** Trilinear LUT lookup (mgl RenderColor constructor, non-premultiplied). */

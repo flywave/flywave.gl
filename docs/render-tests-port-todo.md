@@ -2445,7 +2445,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **像素取证破案 3211/3173/3964 共模簇**：差异 = **background 层颜色未主题化**（cur 紫 238,130,238 vs exp 灰 147——64×64 fixture 全图即背景）。背景走 clearColor 路径（applyBackgroundColor）且 quad 色来自 **decoder 内部自建 evaluator**（MBStyleDecoder.ts:348 configure 时 new，非 runtime evaluator）。
 - **修复**：① applyBackgroundColor 内 background-color 查 LUT（含 import scope + use-theme none）；② 主题传播到 decoder 内 evaluator（applyColorTheme/propagateScopedThemes/onChange configure 后三处重放）；③ harness 主题类 op（setColorTheme/setImportColorTheme/config 变更）后补 renderFrames；④ connect 期 loadColorTheme(style)=null 不得清掉运行时主题（m_themeInitialized 守卫）。
 - **兑现**：red-chicago 201648→**6702**（−97%，背景主题化）、red-3d-content 238067→**176045**。
-- **遗留（竞态未闭环）**：add/config-* 等仍紫——dbg 探针轮（renderFrames(4)）曾得 133 灰（近 exp 147）而 b86-90 复现紫，**applyColorTheme→clearColor→捕获间存在异步竞态**（主题解码/瓦片重解码 vs capture 帧序不确定；探针确证 connect 后 applyBackgroundColor 不再被调 = applyColorTheme 路径未达或其内部 try/catch 吞错；add 主题 PNG 1024×32 合法、表达式 node 单测通过——真因在渲染循环内序，需 render-loop 级探查）。setColorTheme 已改 awaitable（harness await 确定性传递）但未解。确定修法留档：applyColorTheme 后由 mapView 请求额外渲染帧回调 + 探查 applyColorTheme 内 catch 吞错点。import-override-existing/remove 197k、fog-import-scope 209k、model 族 60k 维持 §46 状态。
+**48. color-theme 三轮：命名色根因破案 + decoder 自持主题（2026-08-21，b91/b92）**：
+
+- **"竞态"证伪，真因 = `parseCssColor` 不识别命名 CSS 色**：'add' 的 background-color 是字面 `violet`——`applyColorTheme(lut,'violet')` 因 parse 返回 null 原样透传 → 全簇（add/config-*/icon-image-use-theme/remove/update-with-api）整图未主题化。BGTRACE 探针（globalThis trace + op 后抛出）锁定 `bg violet lut=true` 决定性证据。修复：parseCssColor 增加 THREE.Color 命名色回退（convertLinearToSRGB 后取 0-255）。
+- **decoder 自持主题（架构点）**：MBStyleDecoder 新增 setColorTheme(lut, scoped) 自存储，configure() 重建内部 evaluator 后自动重放——此前任何 configure（runtime onChange/环境更新）都会悄悄丢掉已应用的主题。连带 **red-3d-content 176k→32k**（model 重烘焙路径随主题重放生效）。
+- **b92 验收（color-theme 2→4 PASS，全簇近失化）**：add 3211→**135**、config-bw 3173→**97**、icon-image-use-theme 3174→**98**、update-config-import→98、config-red/theme-from-config/update-with-api → PASS 带、use-theme/data-driven 867→**323**。残差（bbox 15-27×15-48 = circle+文字区）= circle 色微偏（80 vs 69）与字形色（255 vs 120）精度项。
+- **遗留**：import-override 族（197k/249k/115k）、fog-import-scope 209k、trees-monochrome 59.7k/emission-bw 61k（model 烘焙对 red-3d 生效但对树模型未生效——疑 glTF 纹理路径差异）、update-config-base 3211（root 主题 config 变更路径）。tsc 绿、单测 265 passing / 3 既有。
 
 **44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
 

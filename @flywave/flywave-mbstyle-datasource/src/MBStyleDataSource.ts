@@ -970,14 +970,7 @@ export class MBStyleDataSource extends TileDataSource {
                 center: this.m_runtime!.style.center ?? [0, 0],
             } as any);
             // configure() re-created the decoder's internal evaluator —
-            // re-apply the active color theme (root + scoped).
-            const decEval = (this.decoder as any).m_layerEvaluator;
-            if (decEval?.setColorTheme) {
-                decEval.setColorTheme(this.m_colorThemeLut);
-                for (const [scopeId, lut] of this.m_importLuts) {
-                    decEval.setColorThemeScope?.(scopeId, lut);
-                }
-            }
+            // the decoder re-applies the stored theme itself now.
             if (this.mapView) {
                 this.mapView.markTilesDirty(this);
             }
@@ -1470,12 +1463,7 @@ export class MBStyleDataSource extends TileDataSource {
                 evaluator.setColorThemeScope?.(id, lut);
             }
         }
-        const decEval = (this.decoder as any).m_layerEvaluator;
-        if (decEval?.setColorThemeScope) {
-            for (const [id, lut] of this.m_importLuts) {
-                decEval.setColorThemeScope(id, lut);
-            }
-        }
+        (this.decoder as any).setColorTheme?.(this.m_colorThemeLut, this.m_importLuts);
         // Fog/lights resolve their theme from their OWN import scope when the
         // merged fog/lights came from an import (mgl fog.scope / light.scope).
         const fogScope = style?._fogImportScope;
@@ -1523,9 +1511,9 @@ export class MBStyleDataSource extends TileDataSource {
         const { bumpThemeGeneration } = require('./MBColorTheme');
         this.m_runtime?.evaluator.setColorTheme(lut);
         // The decoder owns its OWN internal MBLayerEvaluator (created per
-        // configure) — background/fill techniques come from it, so the LUT
-        // must reach it too.
-        (this.decoder as any).m_layerEvaluator?.setColorTheme?.(lut);
+        // configure) — background/fill techniques come from it. The decoder
+        // stores the theme itself and re-applies it across configure() calls.
+        (this.decoder as any).setColorTheme?.(lut, this.m_importLuts);
         this.m_environment?.setColorTheme(lut);
         // The background renders as the clear color (not a layer material),
         // so it must be re-resolved whenever the theme changes.
