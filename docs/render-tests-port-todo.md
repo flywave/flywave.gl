@@ -1996,6 +1996,21 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **改动**：① `MapCircleMaterial`（datasource 侧材质）片元整体重写为 mgl 逐行公式，uSize 改为 (radius+stroke)·2（**修了 stroke 内缩进填充区的旧 bug**——mgl 的 stroke 在 fill 半径之外），新增 uRadius/uDpr；② **主渲染路径**走引擎 `CirclePointsMaterial`（technique 'circles'），在 `MBMaterialPatchManager.patchCircleMaterial` onBeforeCompile 注入同一套 mgl 组合（仅当 blur≠0 或 stroke-width>0 时注入，默认 fwidth AA 路径不动），uniform uMBBlur/uMBRadiusPx/uMBStrokePx/uMBStrokeOpacity/uMBStrokeColor/uMBDpr(=1，size 与 gl_PointSize 同像素单位)；③ emitter `props.size` 同步扩到 (radius+stroke)·2。
 - **风险与批测重点**：① `size` 单位是否 CSS px vs 设备 px（uMBDpr=1 假设）；② 数据驱动 circle-radius（props.size 只取常量值，既有行为）；③ ground-lighting 注入与本注入的 gl_FragColor 行替换叠加（已兼容 diffuseColor→mbColor 替换）。批测：circle-blur / circle-stroke-color / circle-stroke-opacity / circle-stroke-width 各分类 + circle-color/circle-opacity 回归。
 
+**12. 攒批验收（2026-08-20 四，fog 4 轮隔离 + circle 对照批测）**：
+- **fog 域 4 轮隔离批测**（87 例 × 4，fog-batch{,-k37,-vd,-olddome,-final}）：
+  - **k=1 精确式回归**：fog/default 552→3342、fog/color 69k→126k——引擎的 dist/distCam 米制比值与 mgl 归一化空间存在系统比例差，k 必须保留；
+  - **fog_vertex 欧氏距离**：18/86 例微变，总像素 +9925，几乎无影响（k 也是视深下拟合的）→ **改回视深**（-mvPosition.z）；
+  - **穹顶屏幕地平线重写（§12.76-10）确证为大回归源**：回退旧真实海拔穹顶后总失配 1053 万→827 万（−226 万，fog/default 3342→1064、high-color 族 6.7k→1.8k、space-color 族 −7~8 万、line/sdf/raster −6~12 万）。**结论：mgl 逐片元屏幕地平线公式在本引擎的相机/深度语义下不成立**（疑与穹顶 1000m 深度交互、无 discard 后覆盖远瓦片），留档勿再直接启用，需先把穹顶改为 mgl 的"先画大气+瓦片覆盖"顺序语义；
+  - **distCam 精确式 vs pitch 属性启发式**：启发式全面恢复 §12.76-8 基线（fog/default 1064→**552**、empty 1438→926、fog/color 69147 ✓），且 2d/terrain 族额外改善（fog/2d/basic 33.7k→22.7k、terrain/basic 38.8k→28.2k、zoom-high 13.9k→9.3k）→ **用回启发式**（精确式数值差异 = 相机 rig 的 pitch 属性与实际视线方向小错位）；
+  - **pitch 因子（smoothstep 60°–65°，由视线反推）保留**：line-with-fog 124648→**88793**（§12.76-8 的 3 例回归之一收敛）、fog-fade 168k→160k；ground-shadow-fog 219k（基线 203k，+15k，原本 FAIL）；cutoff 族持平。
+  - **最终形态 = 旧穹顶（colorAlpha）+ 启发式 distCam + k=3.7 + 视深 fog_vertex + pitch 因子**；fog 域仍 1/86 PASS（unsupported-fog），关键近失：fog/default 552、empty 926、fill-outline 615、fill-color 600、line-gradient 591、background-color 1156、high-color 1725。
+- **circle 域 F10 验收**（circle-batch vs circle-baseline 禁用注入对照，8 分类 50 例）：
+  - **circle-blur**：literal 224→**0 PASS**、negative 332→**0 PASS**、blending 1631→856、literal-stroke 456→124、property-function 211→156（4→6/8 PASS）；
+  - **circle-stroke-opacity**：default/function/literal 356-360→**0 全 PASS**（0→3/6）；property-function/stroke-only 358-360 持平 = 数据驱动 stroke-opacity 未走逐要素属性（uniform 级，遗留）；
+  - **circle-stroke-color 5/5、circle-stroke-width 5/5 全 PASS**（F10 前无 stroke 支持）；circle-color 5/5、circle-opacity 3 例 FAIL 与 F10 前逐值相同（既有遗留，非回归）；circle-radius 5/6（projected 2262 既有）。
+  - **零回归确认**：对照批所有共同用例 delta ≤ 0 或 =0。
+- **circle-opacity/blending(295)/property-function(491)/zoom-and-property(488)** 记为既有遗留（与 F10 无关，疑 blend/数据驱动 opacity 通道）。
+
 
 
 
