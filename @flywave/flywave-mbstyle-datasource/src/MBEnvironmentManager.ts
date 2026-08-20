@@ -46,6 +46,15 @@ THREE.ShaderChunk.fog_pars_vertex = `
 	varying float vFogDepth;
 #endif
 `;
+// mgl fog depth is the Euclidean camera-to-fragment distance (length of the
+// fog-space position), not three's default view-space depth (-mvPosition.z).
+// Off-screen-center fragments differ by the view cos factor, which shifts the
+// horizon band on pitched views.
+THREE.ShaderChunk.fog_vertex = `
+#ifdef USE_FOG
+	vFogDepth = length(mvPosition.xyz);
+#endif
+`;
 // Make `fogAlpha` a standard fog uniform (alpha of the fog color) and feed it
 // from the scene fog object so the mapbox opacity ramp can scale by alpha.
 // `UniformsLib.fog` is the live template, but the per-shader `ShaderLib.*.uniforms`
@@ -456,23 +465,48 @@ export class MBEnvironmentManager {
         if (cam) {
             const fovRad = (cam.fov ?? 36.87) * Math.PI / 180;
             const shift = 0.5 / Math.tan(fovRad / 2);
-            const pitchDeg = Math.min(Math.max((this.m_mapView as any).pitch ?? 60, 0.1), 89.9);
-            const camHeight = Math.max(cam.position.z, 1);
-            const distCam = camHeight / Math.sin((90 - pitchDeg) * Math.PI / 180);
-            // Empirical calibration (fog/default fixture, pitch 80): the
-            // horizon-band rows 0-5 should sit at ramp t ≈ 0..0.45 (peak
-            // brightness 158/255 ≈ opacity 0.62 at row 2-3); the plain
-            // shift-normalization saturated the ramp there. Scale ≈ 2.3
-            // places the band correctly.
-            const kFog = 3.7;
-            nearM = distCam * kFog * (rawRange[0] + shift) / shift;
-            farM = distCam * kFog * (rawRange[1] + shift) / shift;
+            // Exact port of mgl mercatorFogMatrix semantics (transform.ts
+            // `_calcFogMatrices`): the fog matrix scales the world by
+            // metersToPixel = [cameraWorldSizeForFog, ..., cameraPixelsPerMeter]
+            // × windowScaleFactor, which algebraically reduces to a uniform
+            // `shift / distCam` (cameraWorldSizeForFog = height·shift/d and
+            // windowScaleFactor = 1/height). Hence mgl fog depth of a fragment
+            // is `shift · dist / distCam`, where distCam is the forward-ray
+            // parameter to the elevation plane (free_camera
+            // `getDistanceToElevation`: (z0 − camZ) / forward.z) — i.e. the
+            // camera-to-screen-center distance along the view ray. Composing
+            // with the shifted range gives
+            //   fogT = (dist − distCam·(r0+shift)/shift) / (distCam·(r1−r0)/shift)
+            // so scene.fog near/far are exactly those metric bounds — no
+            // calibration constant (replaces the empirical kFog=3.7, §12.76-8).
+            // Deriving distCam from the actual camera orientation (not the
+            // pitch property + height geometry) sidesteps any pitch-semantics
+            // mismatch between mapview and mgl.
+            const dir = cam.getWorldDirection(new THREE.Vector3());
+            const groundZ = 0;
+            const distCam = dir.z < -1e-6
+                ? (cam.position.z - groundZ) / -dir.z
+                : Math.max(cam.position.z, 1) * 100; // horizon/above: degenerate, mgl clamps to EPSILON
+            nearM = distCam * (rawRange[0] + shift) / shift;
+            farM = distCam * (rawRange[1] + shift) / shift;
         }
         const rawColor = evalZoom(fog.color, '#ffffff');
         const color = new THREE.Color(rawColor);
-        const alpha = typeof rawColor === 'string' && /^#[\da-fA-F]{8}$/.test(rawColor)
+        const colorAlpha = typeof rawColor === 'string' && /^#[\da-fA-F]{8}$/.test(rawColor)
             ? parseInt(rawColor.slice(7, 9), 16) / 255
             : 1;
+        // mgl only enables fog at high pitch: u_fog_color.a = getOpacity(pitch)
+        // = smoothstep(FOG_PITCH_START=60, FOG_PITCH_END=65, pitch) · color.a
+        // (painter.ts fogUniformValues). Compute pitch from the actual view
+        // direction (0 = straight down) so it can't drift from camera state.
+        let pitchFactor = 1;
+        if (cam) {
+            const dir = cam.getWorldDirection(new THREE.Vector3());
+            const pitchDeg = Math.acos(Math.min(1, Math.max(-1, -dir.z))) * 180 / Math.PI;
+            const s = Math.min(Math.max((pitchDeg - 60) / (65 - 60), 0), 1);
+            pitchFactor = s * s * (3 - 2 * s);
+        }
+        const alpha = pitchFactor * colorAlpha;
         this.m_fog = new THREE.Fog(color.getHex(), nearM, farM);
         // Feed the fog color alpha into the shared fog-uniform template so
         // recompiled materials pick up the mapbox opacity ramp's alpha scale.

@@ -4,16 +4,6 @@
     "description": "Utility classes for working with geospatial data",
     "main": "lib/src/index.js",
     "typings": "lib/src/index",
-    "exports": {
-        ".": {
-            "import": "./lib/src/index.js",
-            "require": "./lib/src/index.js"
-        },
-        "./*": {
-            "import": "./lib/src/*",
-            "require": "./lib/src/*"
-        }
-    },
     "scripts": {
         "build": "tsc --build $EXTRA_TSC_ARGS",
         "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",

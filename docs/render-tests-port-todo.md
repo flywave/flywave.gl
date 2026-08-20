@@ -1978,6 +1978,15 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 **8. 距离标定 kFog=3.7（2026-08-20 四，`00845036`）**：单位修复后 fog/default 亮带仍过饱和（row2 亮度 254 vs 期望 158 = ramp t≈0.42 目标 0.32），对 `distCam·(range+shift)/shift` 全局乘标定系数。二分 k=2.3→2.75→3.3→4.2，**k=3.7 最优**：`fog/default 2536→552`、`empty-update 2910→926`（亮度剖面 141,200→141,173 vs 期望 126,158）。**全 fog 域 87 例批测**：约 20 分类净改善（`fog/zoom-expression-low-zoom 124881→52690`、`fog/color 95395→69147`、`color-theme/fog-import-scope 186713→127726`、`model-layer/trees-light-aligned-fog 209012→149620` 等 −30k~−72k 级）；**3 例回归**（`model-layer/buildings-trees-shadows-fog-terrain-cutoff 565520→907035`、`ground-shadow-fog ×2 +88k`、`lighting-3d-mode/line-with-fog +36k`——低 pitch/阴影雾场景 k 全局值过浓，均原本 FAIL 无 PASS 损失）。**遗留**：① k 理想值随 pitch/zoom 变化（distCam 几何近似的误差），精确修法 = 完整移植 `mercatorFogMatrix`（cameraWorldSizeForFog 链）；② row0 恒 141 vs 126（不受 k 影响——sky/dome 或 clearColor 支路）；③ high-color 族（1786-3074，穹顶渐变）待穹顶屏幕地平线参照 fixture 定标。
 
+**9. mercatorFogMatrix 精确移植——kFog=3.7 废除（2026-08-20 四，代码侧落地，渲染验证延后）**：
+- **代数推导**（对照 mgl `transform.ts:_calcFogMatrices` + `free_camera.ts:getDistanceToElevation`）：fog 矩阵 = translate(−camPos) ∘ scale(`metersToPixel`·`windowScaleFactor`)，其中 `cameraWorldSizeForFog = _worldSizeFromZoom(_zoomFromMercatorZ(d)) = cameraToCenterDistance/d`（cameraToCenterDistance = height·shift），`windowScaleFactor = 1/height`（mercator 下 pixelsPerMercatorPixel=1）。两轴（xy 与 z）代数上**统一约简为 `shift/distCam`**——即 mgl fog 深度 = `shift · dist / distCam`（dist=相机到片元欧氏距离，distCam=**前向射线与地面高程平面的交点参数** `(z0−camZ)/forward.z`，非 pitch 属性几何近似）。与 fov 偏移 range 复合后：
+  `fogT = (dist − distCam·(r0+shift)/shift) / (distCam·(r1−r0)/shift)`
+  → scene.fog near/far **精确**取 `distCam·(r[i]+shift)/shift`（k=1）。k=3.7 正是旧 `camHeight/cos(pitch属性)` 估值的 distCam 偏差系数；改为从 `camera.getWorldDirection()` 实测射线交地面（z=0）后，任何 pitch 语义错位均被消除。
+- **改动**（`MBEnvironmentManager.ts`）：① distCam 精确计算 + kFog 删除；② `fog_vertex` chunk 覆盖为 `vFogDepth = length(mvPosition.xyz)`（mgl 用欧氏距离，three 默认 −mv.z 是视深，俯视中心外差一个视角余弦）；③ fogAlpha ×= `smoothstep(60°,65°,pitch)`（mgl `fog.getOpacity` FOG_PITCH_START/END——fog 仅高 pitch 可见，u_fog_color.a 携带该因子；我们 a² 结构不变，等效 P²·a²，与 mgl 完全一致），pitch 由实际视线方向反推 `acos(−dir.z)`，不用 pitch 属性。低 pitch 3 例回归（§12.76-8）预期由此收敛。
+- **验证状态**：tsc --noEmit / tsc --build 全绿；单测 265 passing / 3 failing（stash 对照 HEAD 相同 3 例，均为既有失败，与本次无关）。**渲染批测延后**（攒批策略），跑时重点：fog/default（预期 ≤552 或更好）、§12.76-8 的 3 例回归（buildings-trees-shadows-fog-terrain-cutoff、ground-shadow-fog ×2、line-with-fog）、fog 域 87 例 + color-theme/model-layer 连带域。
+- **环境修复（顺带）**：本 checkout 的 `flywave-geoutils` lib 未构建 + `exports` 映射（`./* → ./lib/src/*`）使 mapview lib 的**无扩展名深路径 require** 解析失败（`lib/src/lib/src/...` 双前缀），HEAD 上 `mocha ./lib/test/*Test.js` 本就跑不起来。已重建 geoutils lib 并移除其 `exports` 字段（回退 legacy 解析，含扩展名回退），单测恢复可跑。
+
+
 
 
 
