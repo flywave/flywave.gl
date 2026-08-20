@@ -16,6 +16,7 @@ const rasterTextureLoader = new THREE.TextureLoader();
 // Cache of cropped sprite sub-rect textures used for fill/line/extrusion patterns.
 const patternTextureCache = new Map<string, THREE.Texture>();
 let patternTextureCacheAtlas: unknown = null;
+let patternTextureCacheGen = -1;
 
 export class MBMaterialPatchManager {
     /**
@@ -2920,11 +2921,16 @@ export class MBMaterialPatchManager {
         const atlas = (this.m_dataSource as any).spriteAtlas;
         if (!atlas) return undefined;
         // setStyle can swap the sprite atlas (e.g. 1x → @2x) — drop stale
-        // extractions from a previous atlas so scales/textures refresh.
-        if (patternTextureCacheAtlas !== atlas) {
+        // extractions from a previous atlas so scales/textures refresh. The
+        // color-theme generation is part of the same invalidation: a LUT bake
+        // rewrites the atlas pixels the extractions were cut from.
+        const { themeGeneration } = require('./MBColorTheme');
+        const gen = themeGeneration();
+        if (patternTextureCacheAtlas !== atlas || patternTextureCacheGen !== gen) {
             for (const t of patternTextureCache.values()) t.dispose();
             patternTextureCache.clear();
             patternTextureCacheAtlas = atlas;
+            patternTextureCacheGen = gen;
         }
         const cached = patternTextureCache.get(patternName);
         if (cached) return cached;

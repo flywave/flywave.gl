@@ -15,6 +15,19 @@ export interface ColorThemeLut {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+/**
+ * Monotonic generation of the active theme. Bumped whenever a (possibly
+ * different) LUT is applied so texture caches keyed on it (pattern
+ * extractions, sprite bakes) invalidate together.
+ */
+let s_generation = 0;
+export function themeGeneration(): number {
+    return s_generation;
+}
+export function bumpThemeGeneration(): void {
+    s_generation++;
+}
+
 function parseCssColor(c: string): [number, number, number, number] | null {
     if (typeof c !== 'string') return null;
     const hex = c.replace('#', '');
@@ -78,6 +91,52 @@ export function applyColorTheme(
 
     const R = Math.round(lr), G = Math.round(lg), B = Math.round(lb);
     return a >= 1 ? `rgb(${R}, ${G}, ${B})` : `rgba(${R}, ${G}, ${B}, ${+a.toFixed(4)})`;
+}
+
+/**
+ * Transform an RGBA pixel buffer in place through the LUT (mgl
+ * `RGBAImage.copy(…, lut)` / `RenderColor` CPU path for sprite + pattern
+ * images). Input must be NON-premultiplied (sprite atlases are stored
+ * straight-alpha); alpha is preserved, only rgb is remapped. SDF icons never
+ * pass through here (mgl themes only the non-SDF shader branch).
+ */
+export function applyColorThemeToPixels(
+    lut: ColorThemeLut | null | undefined,
+    data: Uint8ClampedArray | Uint8Array,
+): void {
+    if (!lut) return;
+    const N = lut.n;
+    const N2 = N * N;
+    const table = lut.data;
+    for (let p = 0; p < data.length; p += 4) {
+        let r = (data[p] / 255) * (N - 1);
+        let g = (data[p + 1] / 255) * (N - 1);
+        let b = (data[p + 2] / 255) * (N - 1);
+        r = Math.max(0, Math.min(N - 1, r));
+        g = Math.max(0, Math.min(N - 1, g));
+        b = Math.max(0, Math.min(N - 1, b));
+        if (r === 0 && g === 0 && b === 0 && data[p + 3] === 0) continue; // fully transparent
+        const r0 = Math.floor(r), g0 = Math.floor(g), b0 = Math.floor(b);
+        const r1 = Math.ceil(r), g1 = Math.ceil(g), b1 = Math.ceil(b);
+        const rw = r - r0, gw = g - g0, bw = b - b0;
+        const i0 = (r0 + g0 * N2 + b0 * N) * 4;
+        const i1 = (r0 + g0 * N2 + b1 * N) * 4;
+        const i2 = (r0 + g1 * N2 + b0 * N) * 4;
+        const i3 = (r0 + g1 * N2 + b1 * N) * 4;
+        const i4 = (r1 + g0 * N2 + b0 * N) * 4;
+        const i5 = (r1 + g0 * N2 + b1 * N) * 4;
+        const i6 = (r1 + g1 * N2 + b0 * N) * 4;
+        const i7 = (r1 + g1 * N2 + b1 * N) * 4;
+        data[p] = lerp(
+            lerp(lerp(table[i0], table[i1], bw), lerp(table[i2], table[i3], bw), gw),
+            lerp(lerp(table[i4], table[i5], bw), lerp(table[i6], table[i7], bw), gw), rw);
+        data[p + 1] = lerp(
+            lerp(lerp(table[i0 + 1], table[i1 + 1], bw), lerp(table[i2 + 1], table[i3 + 1], bw), gw),
+            lerp(lerp(table[i4 + 1], table[i5 + 1], bw), lerp(table[i6 + 1], table[i7 + 1], bw), gw), rw);
+        data[p + 2] = lerp(
+            lerp(lerp(table[i0 + 2], table[i1 + 2], bw), lerp(table[i2 + 2], table[i3 + 2], bw), gw),
+            lerp(lerp(table[i4 + 2], table[i5 + 2], bw), lerp(table[i6 + 2], table[i7 + 2], bw), gw), rw);
+    }
 }
 
 /**

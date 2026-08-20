@@ -599,6 +599,12 @@ export class MBStyleDataSource extends TileDataSource {
     private m_styleParams: MBStyleDataSourceParameters;
     private m_delegatingProvider: DelegatingDataProvider;
     private m_spriteAtlas: SpriteAtlas | null = null;
+    /** Active color-theme LUT (null = identity); applied to paints, fog, and baked into sprite/pattern textures. */
+    private m_colorThemeLut: import('./MBColorTheme').ColorThemeLut | null = null;
+    /** Non-SDF icon canvases registered in mapView.userImageCache (themed on LUT change). */
+    private m_themedIconCanvases: HTMLCanvasElement[] = [];
+    /** Pristine (pre-theme) pixels of each themed icon canvas. */
+    private m_iconCanvasPristine = new WeakMap<HTMLCanvasElement, ImageData>();
     private m_runtime: MBStyleRuntime | null = null;
     private m_currentSourceId: string = '';
     private m_demTileUrl: string | null = null;
@@ -942,10 +948,7 @@ export class MBStyleDataSource extends TileDataSource {
             // and the environment (fog colors). Identity when absent.
             const { loadColorTheme } = require('./MBColorTheme');
             loadColorTheme(style).then((lut: any) => {
-                this.m_runtime?.evaluator.setColorTheme(lut);
-                this.m_environment?.setColorTheme(lut);
-                this.mapView?.markTilesDirty?.(this as any);
-                this.mapView?.update?.();
+                this.applyColorTheme(lut);
             }).catch(() => {});
         }
         this.m_runtime = new MBStyleRuntime(style, () => {
@@ -1307,11 +1310,41 @@ export class MBStyleDataSource extends TileDataSource {
     setColorTheme(theme: { data?: string | null } | null): void {
         const { loadColorTheme } = require('./MBColorTheme');
         loadColorTheme(theme?.data ? { 'color-theme': theme } : {}).then((lut: any) => {
-            this.m_runtime?.evaluator.setColorTheme(lut);
-            this.m_environment?.setColorTheme(lut);
-            this.mapView?.markTilesDirty?.(this as any);
-            this.mapView?.update?.();
+            this.applyColorTheme(lut);
         }).catch(() => {});
+    }
+
+    /**
+     * Propagate a (possibly null) color-theme LUT everywhere it matters:
+     * evaluator (paint colors), environment (fog), and baked into the sprite
+     * atlas + registered icon canvases (mgl themes sprite/pattern images via
+     * the GPU LUT on sample; we bake CPU-side). Bumping the theme generation
+     * invalidates pattern-texture extractions keyed on it.
+     */
+    private applyColorTheme(lut: import('./MBColorTheme').ColorThemeLut | null): void {
+        this.m_colorThemeLut = lut;
+        const { bumpThemeGeneration, applyColorThemeToPixels } = require('./MBColorTheme');
+        this.m_runtime?.evaluator.setColorTheme(lut);
+        this.m_environment?.setColorTheme(lut);
+        try {
+            this.m_spriteAtlas?.applyColorTheme(lut);
+            for (const cv of this.m_themedIconCanvases) {
+                const ctx = cv.getContext('2d');
+                if (!ctx) continue;
+                let pristine = this.m_iconCanvasPristine.get(cv);
+                if (!pristine) {
+                    pristine = ctx.getImageData(0, 0, cv.width, cv.height);
+                    this.m_iconCanvasPristine.set(cv, pristine);
+                }
+                const img = ctx.createImageData(pristine.width, pristine.height);
+                img.data.set(pristine.data);
+                applyColorThemeToPixels(lut, img.data);
+                ctx.putImageData(img, 0, 0);
+            }
+            bumpThemeGeneration();
+        } catch {}
+        this.mapView?.markTilesDirty?.(this as any);
+        this.mapView?.update?.();
     }
 
     /** Enable collision-box debug overlay (metadata.test.collisionDebug). */
@@ -1436,6 +1469,7 @@ export class MBStyleDataSource extends TileDataSource {
 
     private async loadSpriteAtlas(spriteUrl: string): Promise<void> {
         const spriteData = await this.m_styleManager.loadSprite(spriteUrl);
+        this.m_themedIconCanvases = [];
         if (spriteData) {
             const icons = new Map<string, any>();
             for (const [name, info] of Object.entries(spriteData.json)) {
@@ -1500,11 +1534,35 @@ export class MBStyleDataSource extends TileDataSource {
                                     continue;
                                 }
                                 userImageCache.addImage(name, canvas);
+                                // Non-SDF icons are themeable (mgl applies
+                                // the LUT to the sampled sprite texel).
+                                this.m_themedIconCanvases.push(canvas);
                             }
                         } catch {}
                     }
                 }
             }
+        }
+
+        // The color-theme may have decoded before the sprite atlas finished
+        // loading — bake it now so late atlases are themed too.
+        if (this.m_colorThemeLut && this.m_spriteAtlas) {
+            try {
+                this.m_spriteAtlas.applyColorTheme(this.m_colorThemeLut);
+                const { applyColorThemeToPixels, bumpThemeGeneration } = require('./MBColorTheme');
+                for (const cv of this.m_themedIconCanvases) {
+                    const ctx = cv.getContext('2d');
+                    if (!ctx) continue;
+                    this.m_iconCanvasPristine.set(cv, ctx.getImageData(0, 0, cv.width, cv.height));
+                    const img = ctx.createImageData(cv.width, cv.height);
+                    img.data.set(this.m_iconCanvasPristine.get(cv)!.data);
+                    applyColorThemeToPixels(this.m_colorThemeLut, img.data);
+                    ctx.putImageData(img, 0, 0);
+                }
+                bumpThemeGeneration();
+                this.mapView?.markTilesDirty?.(this as any);
+                this.mapView?.update?.();
+            } catch {}
         }
     }
 

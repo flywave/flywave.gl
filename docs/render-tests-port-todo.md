@@ -2369,3 +2369,19 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **运行环境备忘**：后台任务 cwd 会漂移（结果目录落在意外位置，`find` 定位）；跑前 `pkill -f "RenderingTestResultServe[r]"` 清孤儿沿用；改 src 后必须 `tsc --build` 重建 lib（本轮 pbf 安装后首建即踩 MBColorTheme 缺失）。
 
 **本批净转 PASS：map-projections 1 + circle-stroke-opacity 3 = 4 例（b76），heatmap 15 例恢复（b77），color-theme 进入近失带 ~6 例。**
+
+**39. 纯代码批五：sprite/pattern 纹理 color-theme 烘焙（2026-08-20 五，不跑测）**：
+
+**mgl 源码取证**（`_prelude.fragment.glsl:110`、`symbol.fragment.glsl:145`、`fill/line_pattern.fragment.glsl`、`util/image.ts copyImage`、`style-spec/util/color.ts RenderColor`）：
+- LUT 作用面 = **非 SDF sprite 采样 + pattern 采样**（GPU `APPLY_LUT_ON_GPU` + `applyLUT(u_lutTexture, out_color)`，先 unpremultiply 再查表再 premultiply）+ **paint 颜色**（CPU `RenderColor`，我们 §12.76-27 已接）+ **fog 颜色**（已接）。**raster 不走 LUT**（draw_raster 无 lut 绑定，证伪 raster 纹理主题嫌疑）。
+- CPU 路径（`RGBAImage.copy(…, lut)` 构建 atlas 时逐像素）与我们的 `applyColorTheme` 数学**逐行一致**（索引 r + g·N² + b·N、clamp、三线性、alpha 保留）——GPU 的 `.rbg` 通道交换是 Texture3D 内存布局差异，CPU 语义为准。
+
+**落地**：
+1. `MBColorTheme.applyColorThemeToPixels(lut, rgba)`：像素级 LUT（跳过全透明像素；非预乘输入，mgl atlas 直存语义）+ `themeGeneration()`/`bumpThemeGeneration()` 主题代数。
+2. `SpriteAtlas.applyColorTheme(lut)`：整卷 canvas 烘焙，pristine 快照支持换/撤主题不叠加；动态扩容快照按行拷贝防行错位；`addIcon` 后扩区域再快照。
+3. `MBStyleDataSource.applyColorTheme(lut)` 统一传播点：evaluator + environment + atlas 烘焙 + **userImageCache 注册的非 SDF icon 画布**（WeakMap pristine）+ bump 代数 + markTilesDirty；`loadSpriteAtlas` 完成时若主题先到则补烘焙（竞态覆盖）。
+4. `MBMaterialPatchManager.extractPatternTexture` 缓存键加主题代数（atlas 换代 + LUT 代数双失效）。
+5. SDF icon 不烘焙（mgl 仅非 SDF 分支查表；SDF 颜色来自 paint 走 CPU LUT ✓）。
+
+**目标**：color-theme/icon-image-use-theme 3174、pattern 系 use-theme 用例、mixed streets 主题样式的 sprite 色。
+**记档差距**：mgl 的 per-import 主题作用域（`setImportColorTheme`/`fog-import-scope`、`import-override-*` fixture）依赖 style-imports 子系统，我们暂为全局单一主题——待 import 语义专项。

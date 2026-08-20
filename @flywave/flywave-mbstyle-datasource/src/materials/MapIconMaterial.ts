@@ -38,6 +38,8 @@ export class SpriteAtlas {
     private m_cursorX = 0;
     private m_cursorY = 0;
     private m_rowHeight = 0;
+    private m_pristine: ImageData | null = null;
+    private m_themed = false;
 
     constructor(image: HTMLImageElement | ImageBitmap | HTMLCanvasElement, icons: Map<string, SpriteIconInfo>) {
         this.texture = new THREE.Texture(image);
@@ -103,6 +105,53 @@ export class SpriteAtlas {
     /** Remove an icon from the atlas (removeImage operation). */
     removeIcon(name: string): boolean {
         return this.icons.delete(name);
+    }
+
+    /**
+     * Bake the color-theme LUT into the whole atlas canvas (mgl themes
+     * sprite/pattern images on the CPU when building the atlas, or on the GPU
+     * when sampling — we bake CPU-side). A pristine snapshot is kept so the
+     * theme can be removed or swapped without reloading the sprite image.
+     * Passing null restores the unthemed pixels.
+     */
+    applyColorTheme(lut: import('../MBColorTheme').ColorThemeLut | null): void {
+        if (!this.m_ctx || !this.m_canvas) return;
+        const dirtyW = Math.max(this.m_cursorX, 1);
+        const dirtyH = Math.max(this.m_cursorY + this.m_rowHeight, 1);
+        if (!this.m_pristine) {
+            // Snapshot only the region that has content (canvas is
+            // over-allocated 2x for dynamic additions).
+            this.m_pristine = this.m_ctx.getImageData(0, 0, dirtyW, dirtyH);
+        } else if (dirtyW > this.m_pristine.width || dirtyH > this.m_pristine.height) {
+            // Icons were added since the snapshot — re-snapshot the larger
+            // region from the PRISTINE pixels plus the (never themed yet)
+            // newly added area. Newly added icons post-theme are rare; draw
+            // the old pristine back first so we snapshot clean pixels.
+            const old = this.m_pristine;
+            const grown = this.m_ctx.createImageData(dirtyW, dirtyH);
+            // Row-by-row copy — widths differ, a flat subarray copy would
+            // skew the rows.
+            for (let y = 0; y < old.height; y++) {
+                const src = y * old.width * 4;
+                const dst = y * grown.width * 4;
+                grown.data.set(old.data.subarray(src, src + old.width * 4), dst);
+            }
+            this.m_pristine = grown;
+        }
+        // Reset to pristine, then transform (so re-theming never stacks).
+        const snap = this.m_pristine;
+        const imgData = this.m_ctx.createImageData(snap.width, snap.height);
+        imgData.data.set(snap.data);
+        const { applyColorThemeToPixels } = require('../MBColorTheme');
+        applyColorThemeToPixels(lut, imgData.data);
+        this.m_ctx.putImageData(imgData, 0, 0);
+        this.m_themed = !!lut;
+        this.texture.needsUpdate = true;
+    }
+
+    /** True when a LUT is currently baked into the atlas pixels. */
+    get isThemed(): boolean {
+        return this.m_themed;
     }
 
     getIconUv(name: string): { uvMin: [number, number]; uvMax: [number, number] } | undefined {
