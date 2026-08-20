@@ -24,13 +24,7 @@ export class ToneMappingModule {
             exposure: 1,
             mode: "agx-punchy"
         };
-        // Theme loads asynchronously; getThemeSync() throws until ready
-        // (MapViewThemeManager contract) — must not abort the caller's init.
-        try {
-            this.syncFromTheme();
-        } catch {
-            mapView.ready.then(() => this.syncFromTheme()).catch(() => {});
-        }
+        this.syncFromTheme();
         this.setupControls();
     }
 

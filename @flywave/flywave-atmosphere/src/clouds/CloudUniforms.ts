@@ -52,7 +52,7 @@ export class CloudUniforms {
     shadowCascadeCount = uniform(1);
     shadowFar = uniform(50000.0);
     shadowTexelSize = uniform(new Vector2(1 / 512, 1 / 512));
-    shadowMaxIterationCount = uniform(10);
+    shadowMaxIterationCount = uniform(50);
     shadowMinStepSize = uniform(100.0);
     shadowMaxStepSize = uniform(1000.0);
     shadowMinTransmittance = uniform(1e-4);
@@ -132,6 +132,10 @@ export class CloudUniforms {
     // Per-sample sky/sun irradiance: 1 = accurate (call illuminance integrator
     // at every sample), 0 = fast (interpolate precomputed layer top/bottom).
     accurateSunSkyLight = uniform(1.0);
+
+    // Domain-warping turbulence on/off: 1 = sample turbulence texture and warp
+    // shape/detail positions, 0 = skip texture fetch (cheaper, less organic).
+    turbulenceEnabled = uniform(1.0);
 
     // Optical-depth tail scale: compensates shadow-density under-estimation
     // caused by early ray termination. Consumed via the BSM texture's alpha
@@ -301,8 +305,6 @@ export class CloudUniforms {
         const p = qualityPresets[preset];
         this.hazeEnabled.value = p.hazeEnabled ? 1 : 0;
         this.accuratePhaseFunction.value = p.accuratePhaseFunction ? 1 : 0;
-        this.accurateSunSkyLight.value = p.accurateSunSkyLight ? 1 : 0;
-        this.multiScatteringOctaves.value = p.multiScatteringOctaves;
         this.maxIterationCount.value = p.maxIterationCount;
         this.minStepSize.value = p.minStepSize;
         this.maxStepSize.value = p.maxStepSize;
@@ -313,15 +315,11 @@ export class CloudUniforms {
         this.minTransmittance.value = p.minTransmittance;
         this.maxIterationCountToGround.value = p.maxIterationCountToGround;
         this.maxIterationCountToSun.value = p.maxIterationCountToSun;
-        this.minSecondaryStepSize.value = p.minSecondaryStepSize;
-        this.secondaryStepScale.value = p.secondaryStepScale;
-        this.maxShadowLengthIterationCount.value = p.maxShadowLengthIterationCount;
-        this.minShadowLengthStepSize.value = p.minShadowLengthStepSize;
-        this.maxShadowLengthRayDistance.value = p.maxShadowLengthRayDistance;
         this.shadowCascadeCount.value = p.shadowCascadeCount;
         this.shadowMaxIterationCount.value = p.shadowMaxIterationCount;
         this.shadowMinStepSize.value = p.shadowMinStepSize;
         this.shadowMaxStepSize.value = p.shadowMaxStepSize;
         this.shadowMinTransmittance.value = p.shadowMinTransmittance;
+        this.maxShadowLengthIterationCount.value = p.maxShadowLengthIterationCount;
     }
 }

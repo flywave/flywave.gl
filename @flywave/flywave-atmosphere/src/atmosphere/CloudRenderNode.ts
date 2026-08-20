@@ -59,11 +59,12 @@ import { CloudLayers, type CloudLayerLike } from "../clouds/CloudLayer";
 import { CloudUniforms } from "../clouds/CloudUniforms";
 import { createCloudRenderer } from "../clouds/cloudTsl";
 import { CascadedShadowMaps } from "../clouds/CascadedShadowMaps";
-import { type QualityPreset, qualityPresets } from "../clouds/QualityPresets";
+import { type QualityPreset } from "../clouds/QualityPresets";
 import { stbn, stbnTexture, stbnFrameUniform } from "../tsl/STBNTextureNode";
 import { resolveResourceUrl } from "../resourceResolver";
 
 const SHADOW_CASCADE_COUNT = 3;
+const SHADOW_MAX_FAR = 100000;
 const SHADOW_MAP_SIZE = 512;
 
 const _varianceGamma = uniform(2.0);
@@ -163,19 +164,6 @@ export class CloudRenderNode extends TempNode {
     private m_resolutionScale = 4;
     private m_shadowTemporalPass = true;
     private m_lightShafts = true;
-    // Build-time sampling switches — reference: takram @define('SHAPE_DETAIL') /
-    // @define('TURBULENCE') (defaults true). Toggled via preset/config; changing
-    // re-creates the renderer Fns (shader recompile equivalent).
-    private m_shapeDetail = true;
-    private m_turbulence = true;
-    // Shadow map sizing — reference: takram defaults.shadow (cascadeCount 3,
-    // mapSize 512). Plumbed from preset/config like CloudsEffect.setShadowSize.
-    private m_shadowMapSize = SHADOW_MAP_SIZE;
-    private m_shadowCascadeCount = SHADOW_CASCADE_COUNT;
-    // Virtual camera fed to the cloud-shadow cascade (near=1 clone of the RTE
-    // camera) — keeps the cascade window at the camera like the reference rig
-    // without touching the real camera / depth / picking contract.
-    private m_shadowVirtualCamera: any = null;
     private cloudInitialized = false;
     private cloudRenderReady = false;
     // Config passed to setConfig() before textures finished loading
@@ -188,11 +176,7 @@ export class CloudRenderNode extends TempNode {
     private readonly cascadedShadowMaps = new CascadedShadowMaps({
         cascadeCount: SHADOW_CASCADE_COUNT,
         mapSize: new Vector2(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
-        // maxFar stays null (library default, reference parity): far = camera.far.
-        // A hard cap (the removed SHADOW_MAX_FAR = 1e5) made far < camera.near at
-        // orbital views (RTE cameras pull near up to viewing distance for depth
-        // precision), collapsing the practical-split arithmetic into garbage
-        // non-monotonic cascade intervals and degenerate ortho boxes.
+        maxFar: SHADOW_MAX_FAR,
         splitLambda: 0.6,
         fade: false
     });
@@ -280,7 +264,7 @@ export class CloudRenderNode extends TempNode {
 
     get shadowTextures(): Texture[] {
         return Array.from(
-            { length: this.m_shadowCascadeCount },
+            { length: SHADOW_CASCADE_COUNT },
             (_, i) => this.shadowResolvedMRT.textures[i]
         );
     }
@@ -348,7 +332,44 @@ export class CloudRenderNode extends TempNode {
         this.historyRT.textures[1].minFilter = LinearFilter;
         this.historyRT.textures[1].magFilter = LinearFilter;
         // Single MRT RT for all shadow cascades
-        this.createShadowTargets();
+        {
+            const sz = SHADOW_MAP_SIZE;
+            this.shadowMRT = new RenderTarget(sz, sz, {
+                depthBuffer: false,
+                type: HalfFloatType,
+                count: SHADOW_CASCADE_COUNT
+            });
+            this.shadowResolvedMRT = new RenderTarget(sz, sz, {
+                depthBuffer: false,
+                type: HalfFloatType,
+                count: SHADOW_CASCADE_COUNT
+            });
+            this.shadowHistoryMRT = new RenderTarget(sz, sz, {
+                depthBuffer: false,
+                type: HalfFloatType,
+                count: SHADOW_CASCADE_COUNT
+            });
+            for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                for (const rt of [this.shadowMRT, this.shadowResolvedMRT, this.shadowHistoryMRT]) {
+                    rt.textures[i].name = `c${i}`;
+                    rt.textures[i].minFilter = LinearFilter;
+                    rt.textures[i].magFilter = LinearFilter;
+                }
+                this.shadowNodes.push(texture(this.shadowResolvedMRT.textures[i]));
+                this.shadowHistoryNodes.push(texture(this.shadowHistoryMRT.textures[i]));
+            }
+        }
+
+        // Combined shadow atlas: cascades stacked vertically (for AtmosphereLightNode).
+        this.shadowArrayTexture = new RenderTarget(
+            SHADOW_MAP_SIZE,
+            SHADOW_MAP_SIZE * SHADOW_CASCADE_COUNT,
+            { depthBuffer: false, type: HalfFloatType }
+        );
+        this.shadowArrayTexture.texture.minFilter = LinearFilter;
+        this.shadowArrayTexture.texture.magFilter = LinearFilter;
+        this.shadowArrayTexture.texture.name = "Clouds [Shadow Atlas]";
+        this.shadowArrayNode = texture(this.shadowArrayTexture.texture);
 
         this.shadowMaterial.name = "Clouds [Shadow]";
 
@@ -364,118 +385,6 @@ export class CloudRenderNode extends TempNode {
         if (renderer != null) {
             this.ensureCloudInit(renderer).catch(() => {});
         }
-    }
-
-    /**
-     * (Re)creates the shadow cascade MRT render targets and the stacked
-     * shadow atlas. Reference: takram ShadowPass.initRenderTargets() — dispose
-     * and recreate on configuration change (their temporalPass toggle does the
-     * same); array RT depth resize maps to MRT count recreation here.
-     */
-    private createShadowTargets(): void {
-        this.shadowMRT?.dispose();
-        this.shadowResolvedMRT?.dispose();
-        this.shadowHistoryMRT?.dispose();
-        this.shadowArrayTexture?.dispose();
-
-        const sz = this.m_shadowMapSize;
-        const count = this.m_shadowCascadeCount;
-        this.shadowMRT = new RenderTarget(sz, sz, {
-            depthBuffer: false,
-            type: HalfFloatType,
-            count
-        });
-        this.shadowResolvedMRT = new RenderTarget(sz, sz, {
-            depthBuffer: false,
-            type: HalfFloatType,
-            count
-        });
-        this.shadowHistoryMRT = new RenderTarget(sz, sz, {
-            depthBuffer: false,
-            type: HalfFloatType,
-            count
-        });
-        this.shadowNodes.length = 0;
-        this.shadowHistoryNodes.length = 0;
-        for (let i = 0; i < count; i++) {
-            for (const rt of [this.shadowMRT, this.shadowResolvedMRT, this.shadowHistoryMRT]) {
-                rt.textures[i].name = `c${i}`;
-                rt.textures[i].minFilter = LinearFilter;
-                rt.textures[i].magFilter = LinearFilter;
-            }
-            this.shadowNodes.push(texture(this.shadowResolvedMRT.textures[i]));
-            this.shadowHistoryNodes.push(texture(this.shadowHistoryMRT.textures[i]));
-        }
-
-        // Combined shadow atlas: cascades stacked vertically (for AtmosphereLightNode).
-        this.shadowArrayTexture = new RenderTarget(sz, sz * count, {
-            depthBuffer: false,
-            type: HalfFloatType
-        });
-        this.shadowArrayTexture.texture.minFilter = LinearFilter;
-        this.shadowArrayTexture.texture.magFilter = LinearFilter;
-        this.shadowArrayTexture.texture.name = "Clouds [Shadow Atlas]";
-        this.shadowArrayNode = texture(this.shadowArrayTexture.texture);
-    }
-
-    /**
-     * Applies build-time sampling switches (shapeDetail / turbulence).
-     * Reference: takram @define('SHAPE_DETAIL') / @define('TURBULENCE') — a
-     * define change recompiles the materials; the TSL equivalent is
-     * re-creating the renderer Fns with the switches baked in and rebuilding
-     * the fragment nodes.
-     */
-    private applySamplingSwitches(options: { shapeDetail?: boolean; turbulence?: boolean }): void {
-        let changed = false;
-        if (options.shapeDetail != null && options.shapeDetail !== this.m_shapeDetail) {
-            this.m_shapeDetail = options.shapeDetail;
-            changed = true;
-        }
-        if (options.turbulence != null && options.turbulence !== this.m_turbulence) {
-            this.m_turbulence = options.turbulence;
-            changed = true;
-        }
-        if (changed) {
-            this.recreateCloudRenderer();
-        }
-    }
-
-    private recreateCloudRenderer(): void {
-        if (!this.cloudRenderReady) {
-            return;
-        }
-        const cr = createCloudRenderer(this.cloudUniforms, {
-            shapeDetail: this.m_shapeDetail,
-            turbulence: this.m_turbulence
-        }) as unknown as {
-            render: (a: any, b: any, c: any) => any;
-            shadowMarch: (cascadeIndex?: number) => any;
-        };
-        this.renderCloudsFn = cr.render;
-        this.shadowMarchFn = cr.shadowMarch;
-        this._fragmentNodesBuilt = false;
-    }
-
-    /**
-     * Applies shadow map size / cascade count. Reference: takram
-     * CloudsEffect watches shadowMaps.mapSize & cascadeCount and calls
-     * cloudsPass.setShadowSize (CloudsEffect.ts:461-470) → ShadowPass.setSize
-     * resizes/recreates the render targets.
-     */
-    private applyShadowMapSize(mapSize?: number, cascadeCount?: number): void {
-        const nextSize = mapSize ?? this.m_shadowMapSize;
-        const nextCount = cascadeCount ?? this.m_shadowCascadeCount;
-        if (nextSize === this.m_shadowMapSize && nextCount === this.m_shadowCascadeCount) {
-            return;
-        }
-        this.m_shadowMapSize = nextSize;
-        this.m_shadowCascadeCount = nextCount;
-        this.cascadedShadowMaps.cascadeCount = nextCount;
-        this.cascadedShadowMaps.mapSize.set(nextSize, nextSize);
-        this.createShadowTargets();
-        this.cloudUniforms.shadowCascadeCount.value = nextCount;
-        // Resolve material bakes per-cascade texture nodes — rebuild them.
-        this._fragmentNodesBuilt = false;
     }
 
     // OPTIMIZATION: Include cloudRenderReady state in cache key.
@@ -522,7 +431,6 @@ export class CloudRenderNode extends TempNode {
             minSecondaryStepSize: number;
             secondaryStepScale: number;
             shadowCascadeCount: number;
-            shadowMapSize: number;
             maxShadowFilterRadius: number;
             hazeEnabled: boolean;
             hazeDensityScale: number;
@@ -561,14 +469,6 @@ export class CloudRenderNode extends TempNode {
         }
         const u = this.cloudUniforms;
 
-        // Preset application: uniform values only. The extended branch that
-        // also applied build-time switches (applySamplingSwitches →
-        // recreateCloudRenderer → material rebuild) and shadow-map resizing
-        // (applyShadowMapSize → render-target recreation) broke ground cloud
-        // shadows — verified by bisection: with this one-liner the shadows are
-        // correct; with the extended branch they break (the rebuild/resize
-        // path leaves the BSM sampling chain in a bad state). Re-enable only
-        // after that path is fixed; uniform-based knobs keep working.
         if (config.quality != null) u.applyQualityPreset(config.quality);
         if (config.coverage != null) u.coverage.value = config.coverage;
         if (config.scatteringCoefficient != null)
@@ -607,9 +507,8 @@ export class CloudRenderNode extends TempNode {
         if (config.secondaryStepScale != null)
             u.secondaryStepScale.value = config.secondaryStepScale;
 
-        if (config.shadowCascadeCount != null || config.shadowMapSize != null) {
-            this.applyShadowMapSize(config.shadowMapSize ?? undefined, config.shadowCascadeCount);
-        }
+        if (config.shadowCascadeCount != null)
+            u.shadowCascadeCount.value = config.shadowCascadeCount;
         if (config.maxShadowFilterRadius != null)
             u.maxShadowFilterRadius.value = config.maxShadowFilterRadius;
 
@@ -681,13 +580,7 @@ export class CloudRenderNode extends TempNode {
                 1,
                 Math.min(8, Math.floor(config.multiScatteringOctaves))
             );
-        // Build-time sampling switches (reference: @define SHAPE_DETAIL/TURBULENCE)
-        if (config.shapeDetail != null || config.turbulence != null) {
-            this.applySamplingSwitches({
-                shapeDetail: config.shapeDetail ?? undefined,
-                turbulence: config.turbulence ?? undefined
-            });
-        }
+        if (config.turbulence != null) u.turbulenceEnabled.value = config.turbulence ? 1 : 0;
         if (config.opticalDepthTailScale != null)
             u.opticalDepthTailScale.value = config.opticalDepthTailScale;
         if (config.shapeDetail != null) {
@@ -759,17 +652,14 @@ export class CloudRenderNode extends TempNode {
             this.cloudUniforms.skyIrradianceMin.value.set(0.2, 0.4, 0.8);
             this.cloudUniforms.skyIrradianceMax.value.set(0.4, 0.6, 1.0);
 
-            const renderer2 = createCloudRenderer(this.cloudUniforms, {
-                shapeDetail: this.m_shapeDetail,
-                turbulence: this.m_turbulence
-            });
+            const renderer2 = createCloudRenderer(this.cloudUniforms);
             this.cloudRenderReady = true;
 
             if (typeof renderer2 === "object" && renderer2 !== null && "render" in renderer2) {
                 const cr = renderer2 as any;
                 this.renderCloudsFn = cr.render;
                 this.shadowMarchFn = cr.shadowMarch;
-                this.cloudUniforms.shadowCascadeCount.value = this.m_shadowCascadeCount;
+                this.cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
             }
 
             // Apply any config that arrived while textures were still loading,
@@ -946,25 +836,9 @@ export class CloudRenderNode extends TempNode {
             const cam = atmoCtx.camera as any;
             const w2e = atmoCtx.matrixWorldToECEF.value;
             if (cam && w2e) {
-                // Reference parity via a VIRTUAL camera: takram's cloud-shadow
-                // cascade always splits [near≈1, min(maxFar=1e5, camera.far)] —
-                // a window measured FROM the camera. The RTE camera's dynamic
-                // near is pulled up to viewing distance (depth precision), which
-                // would relocate that window onto the globe surface and make
-                // every BSM texel perform a real shell-crossing march (~16ms at
-                // orbital views, for shadows that are sub-pixel there). Feeding
-                // the cascade a near=1 clone keeps the window at the camera —
-                // identical shadow behavior to the reference at every altitude,
-                // without touching the real camera or the depth/picking
-                // contract.
-                if (this.m_shadowVirtualCamera == null) {
-                    this.m_shadowVirtualCamera = cam.clone();
-                }
-                const vcam = this.m_shadowVirtualCamera;
-                vcam.copy(cam);
-                vcam.near = 1;
-                vcam.far = Math.max(Math.min(cam.far, 100000), 2);
-                vcam.updateProjectionMatrix();
+                const origFar = cam.far;
+                cam.far = Math.max(cam.far, 100000);
+                cam.updateProjectionMatrix();
 
                 this.cloudUniforms.worldToECEF.value.copy(w2e);
                 this.cloudUniforms.ecefToWorld.value.copy(w2e).invert();
@@ -980,25 +854,28 @@ export class CloudRenderNode extends TempNode {
                 const zenithAngle = this.cloudUniforms.sunDirection.value.dot(surfaceNormal);
                 const shadowDistance = 1e6 * (1 - zenithAngle) + 1e3 * zenithAngle;
 
-                this.cascadedShadowMaps.update(vcam, sunWorld, undefined, shadowDistance);
+                this.cascadedShadowMaps.update(cam, sunWorld, undefined, shadowDistance);
 
-                this.cloudUniforms.shadowViewMatrix.value.copy(vcam.matrixWorldInverse);
-                this.cloudUniforms.shadowCameraNear.value = vcam.near;
+                this.cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
+                this.cloudUniforms.shadowCameraNear.value = cam.near;
                 this.cloudUniforms.shadowCameraFar.value = this.cascadedShadowMaps.far;
                 this.cloudUniforms.shadowFar.value = this.cascadedShadowMaps.far;
                 this.cloudUniforms.shadowTexelSize.value.set(
-                    1 / this.m_shadowMapSize,
-                    1 / this.m_shadowMapSize
+                    1 / SHADOW_MAP_SIZE,
+                    1 / SHADOW_MAP_SIZE
                 );
 
+                cam.far = origFar;
+                cam.updateProjectionMatrix();
+
                 // Wire previous frame cascade matrices for velocity reprojection.
-                for (let i = 0; i < this.m_shadowCascadeCount; i++) {
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                     this.cloudUniforms.reprojectionMatrices[i].value.copy(
                         this.prevShadowMatrices[i]
                     );
                 }
 
-                for (let i = 0; i < this.m_shadowCascadeCount; i++) {
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                     const cascade = this.cascadedShadowMaps.cascades[i];
                     this.cloudUniforms.shadowMatrices[i].value.copy(cascade.matrix);
                     this.cloudUniforms.inverseShadowMatrices[i].value.copy(cascade.inverseMatrix);
@@ -1006,7 +883,7 @@ export class CloudRenderNode extends TempNode {
                 }
 
                 // Single MRT pass: all cascades at once
-                this.shadowMRT.setSize(this.m_shadowMapSize, this.m_shadowMapSize);
+                this.shadowMRT.setSize(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
                 renderer.setRenderTarget(this.shadowMRT);
                 this.mesh.material = this.shadowMaterial;
                 this.mesh.render(renderer);
@@ -1015,7 +892,7 @@ export class CloudRenderNode extends TempNode {
                     // Bootstrap (or shadow TAA disabled): copy raw directly to
                     // resolved. When shadowTemporalPass is off, this raw copy
                     // runs every frame — faster, but noisier shadows.
-                    for (let i = 0; i < this.m_shadowCascadeCount; i++) {
+                    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                         renderer.copyTextureToTexture(
                             this.shadowMRT.textures[i],
                             this.shadowResolvedMRT.textures[i]
@@ -1034,8 +911,8 @@ export class CloudRenderNode extends TempNode {
                 }
 
                 // Copy resolved to atlas for AtmosphereLightNode
-                for (let i = 0; i < this.m_shadowCascadeCount; i++) {
-                    this._tmpAtlasOffset.set(0, i * this.m_shadowMapSize, 0);
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+                    this._tmpAtlasOffset.set(0, i * SHADOW_MAP_SIZE, 0);
                     renderer.copyTextureToTexture(
                         this.shadowResolvedMRT.textures[i],
                         this.shadowArrayTexture.texture,
@@ -1044,7 +921,7 @@ export class CloudRenderNode extends TempNode {
                     );
                 }
 
-                for (let i = 0; i < this.m_shadowCascadeCount; i++) {
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                     this.prevShadowMatrices[i].copy(this.cloudUniforms.shadowMatrices[i].value);
                 }
 
@@ -1054,7 +931,7 @@ export class CloudRenderNode extends TempNode {
                 atmoCtx.cloudShadowFar = this.cascadedShadowMaps.far;
                 atmoCtx.cloudShadowTopHeight = this.cloudUniforms.shadowTopHeight.value;
                 atmoCtx.cloudShadowArrayNode = this.shadowArrayNode;
-                for (let i = 0; i < this.m_shadowCascadeCount; i++) {
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                     atmoCtx.cloudShadowMatrices[i].copy(this.cloudUniforms.shadowMatrices[i].value);
                     atmoCtx.cloudShadowIntervals[i].copy(
                         this.cloudUniforms.shadowIntervals[i].value as Vector2
@@ -1161,7 +1038,7 @@ export class CloudRenderNode extends TempNode {
             const tmpShadow = this.shadowResolvedMRT;
             this.shadowResolvedMRT = this.shadowHistoryMRT;
             this.shadowHistoryMRT = tmpShadow;
-            for (let i = 0; i < this.m_shadowCascadeCount; i++) {
+            for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                 this.shadowNodes[i].value = this.shadowResolvedMRT.textures[i];
                 this.shadowHistoryNodes[i].value = this.shadowHistoryMRT.textures[i];
             }
@@ -1244,19 +1121,10 @@ export class CloudRenderNode extends TempNode {
 
         this.cloudUniforms.bottomRadius.value = parameters.bottomRadius;
 
-        // Fill ALL slots with valid texture nodes. TSL builds BOTH sides of
-        // uniform-gated If branches (e.g. the cascade-2 sample path gated by
-        // shadowCascadeCount > 2), so unused slots must still reference a live
-        // texture — otherwise, after a cascade-count shrink recreates the
-        // render targets, stale slots hold disposed textures and the node
-        // build throws "texture() expects a valid instance of THREE.Texture",
-        // killing the whole low-res pipeline. Runtime gates ensure the
-        // clamped fallback slots are never actually sampled.
-        for (let i = 0; i < 4; i++) {
-            this.cloudUniforms.shadowTextureNodes[i] =
-                this.shadowNodes[Math.min(i, this.m_shadowCascadeCount - 1)];
+        for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
+            this.cloudUniforms.shadowTextureNodes[i] = this.shadowNodes[i];
         }
-        this.cloudUniforms.shadowCascadeCount.value = this.m_shadowCascadeCount;
+        this.cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
 
         const u = this.cloudUniforms;
 
@@ -1586,12 +1454,12 @@ export class CloudRenderNode extends TempNode {
 
         // Combined shadow MRT: all cascades in 1 pass
         if (this.shadowMarchFn != null) {
-            this.cloudUniforms.shadowCascadeCount.value = this.m_shadowCascadeCount;
+            this.cloudUniforms.shadowCascadeCount.value = SHADOW_CASCADE_COUNT;
 
             // Shadow render: 1 MRT pass, all cascades
             {
                 const mrtEntries: Record<string, any> = {};
-                for (let i = 0; i < this.m_shadowCascadeCount; i++) {
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                     mrtEntries[`c${i}`] = this.shadowMarchFn(i)();
                 }
                 this.shadowMaterial.fragmentNode = mrt(mrtEntries);
@@ -1603,7 +1471,7 @@ export class CloudRenderNode extends TempNode {
             this.shadowResolveMaterial.name = "Clouds [Shadow Resolve]";
             {
                 const resolveEntries: Record<string, any> = {};
-                for (let i = 0; i < this.m_shadowCascadeCount; i++) {
+                for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
                     const shadowColorTex = texture(this.shadowMRT.textures[i]);
                     const shadowHistoryTex = this.shadowHistoryNodes[i];
 

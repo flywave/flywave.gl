@@ -191,19 +191,35 @@ export const shapeAlteringFunction = Fn(([heightFraction, bias]: [any, any]) => 
     return oneMinus(x.mul(x));
 });
 
-export const createSampleWeather = (u: CloudUniforms, options?: { shadow?: boolean }) =>
+export const createSampleWeather = (u: CloudUniforms) =>
     Fn(([uv, height, mipLevel]: [any, any, any]) => {
         // GLSL: textureLod(localWeatherTexture, uv * localWeatherRepeat + localWeatherOffset, mipLevel)
         const weatherUv = uv.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
         const weatherTex = textureLevel(u.localWeatherTexture, weatherUv, mipLevel);
-        const localWeather = exp(u.weatherExponents.mul(weatherTex.log())).toVar();
+        const localWeather = exp(u.weatherExponents.mul(weatherTex.log()));
 
-        // Reference: `#ifdef SHADOW → localWeather *= shadowLayerMask` — the
-        // shadow material compiles the same sampleWeather with the mask; this
-        // build-time option is the TSL equivalent of that define.
-        if (options?.shadow) {
-            localWeather.mulAssign(u.shadowLayerMask);
-        }
+        // heightFraction is needed for shapeAlteringFunction; compute locally (lightweight remap)
+        const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
+        const heightScale = shapeAlteringFunction(heightFraction, u.shapeAlteringBiases);
+        const factor = oneMinus(u.coverage.mul(heightScale));
+        const density = remapClamped(
+            mix(localWeather, vec4(1, 1, 1, 1), u.coverageFilterWidths),
+            factor,
+            factor.add(u.coverageFilterWidths)
+        );
+
+        return density;
+    });
+
+// Shadow-specific variant: multiplies localWeather by shadowLayerMask (#ifdef SHADOW)
+export const createSampleWeatherShadow = (u: CloudUniforms) =>
+    Fn(([uv, height, mipLevel]: [any, any, any]) => {
+        const weatherUv = uv.mul(u.localWeatherRepeat).add(u.localWeatherOffset);
+        const weatherTex = textureLevel(u.localWeatherTexture, weatherUv, mipLevel);
+        const localWeather = exp(u.weatherExponents.mul(weatherTex.log()));
+
+        // #ifdef SHADOW: localWeather *= shadowLayerMask;
+        localWeather.mulAssign(u.shadowLayerMask);
 
         const heightFraction = remapClamped(vec4(height), u.minLayerHeights, u.maxLayerHeights);
         const heightScale = shapeAlteringFunction(heightFraction, u.shapeAlteringBiases);
@@ -300,29 +316,8 @@ export const approximateMultipleScattering = Fn(([opticalDepth, cosTheta, u]: [a
 /*  Media sampling                                                             */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Build-time sampling switches — the TSL equivalent of the reference's
- * `@define('SHAPE_DETAIL')` / `@define('TURBULENCE')` (takram
- * CloudsMaterial/ShadowMaterial). Sections are included or omitted from the
- * node graph at build time (zero runtime cost when off); toggling requires
- * re-creating the renderer functions (equivalent of a shader recompile).
- */
-export interface CloudSamplingOptions {
-    shapeDetail?: boolean;
-    turbulence?: boolean;
-}
-
-export const cloudSamplingDefaults: Required<CloudSamplingOptions> = {
-    shapeDetail: true,
-    turbulence: true
-};
-
-export const createSampleMedia = (u: CloudUniforms, options?: CloudSamplingOptions) => {
+export const createSampleMedia = (u: CloudUniforms) => {
     const getLayerDensity = createGetLayerDensity(u);
-    const { shapeDetail, turbulence: turbulenceEnabled } = {
-        ...cloudSamplingDefaults,
-        ...options
-    };
 
     return Fn(
         ([heightFraction, density, position, uv, mipLevel, jitter, cameraPosition, surfaceNormal]: [
@@ -344,20 +339,19 @@ export const createSampleMedia = (u: CloudUniforms, options?: CloudSamplingOptio
             const localWeatherSpeed = length(u.localWeatherOffset);
             const evolution = surfaceNormal.negate().mul(localWeatherSpeed.mul(2e4));
 
-            // Turbulence (reference: clouds.glsl #ifdef TURBULENCE — build-time
-            // inclusion; `vec3 turbulence = vec3(0.0)` stays outside the ifdef).
-            const turbulence = (() => {
-                if (!turbulenceEnabled) {
-                    return vec3(0);
-                }
+            // Turbulence (match reference: no mip level, implicit derivatives).
+            // Guarded by a runtime uniform so the texture fetch can be skipped
+            // entirely when turbulence is disabled (cheaper, less organic clouds).
+            const turbulence = vec3(0).toVar();
+            If(u.turbulenceEnabled.greaterThan(float(0.5)), () => {
                 const turbulenceUv = uv.mul(u.localWeatherRepeat).mul(u.turbulenceRepeat);
                 const turbTex = texture(u.turbulenceTexture, turbulenceUv).rgb.mul(2).sub(1);
                 const turbWeight = dot(
                     density,
                     remapClamped(heightFraction, vec4(0.3, 0.3, 0.3, 0.3), vec4(0, 0, 0, 0))
                 );
-                return u.turbulenceDisplacement.mul(turbTex).mul(turbWeight);
-            })();
+                turbulence.assign(u.turbulenceDisplacement.mul(turbTex).mul(turbWeight));
+            });
 
             // Shape texture
             const shapePosition = position
@@ -370,12 +364,13 @@ export const createSampleMedia = (u: CloudUniforms, options?: CloudSamplingOptio
                 remapClamped(density, oneMinus(shape).mul(u.shapeAmounts), vec4(1, 1, 1, 1))
             );
 
-            // Shape detail (reference: clouds.glsl #ifdef SHAPE_DETAIL — build-time
-            // inclusion wrapping the fetch + mip/jitter runtime condition).
-            // Layer shapeDetailAmounts only modulate the modifier strength
-            // (clouds.glsl:161 `modifier = mix(vec4(0.0), modifier, shapeDetailAmounts)`),
-            // they do NOT gate the texture fetch.
-            if (shapeDetail) {
+            // Shape detail: only when any layer has shapeDetailAmount > 0 (matches reference #ifdef SHAPE_DETAIL)
+            const hasDetail = u.shapeDetailAmounts.x
+                .add(u.shapeDetailAmounts.y)
+                .add(u.shapeDetailAmounts.z)
+                .add(u.shapeDetailAmounts.w)
+                .greaterThan(0);
+            If(hasDetail, () => {
                 If(mipLevel.mul(0.5).add(jitter.sub(0.5).mul(0.5)).lessThan(0.5), () => {
                     const detailPosition = position
                         .add(turbulence)
@@ -397,7 +392,7 @@ export const createSampleMedia = (u: CloudUniforms, options?: CloudSamplingOptio
                         remapClamped(density.mul(2), modMixed.mul(0.5), vec4(1, 1, 1, 1))
                     );
                 });
-            }
+            });
 
             // Apply density profile
             const layerDensity = getLayerDensity(heightFraction);
@@ -421,9 +416,9 @@ export const createSampleMedia = (u: CloudUniforms, options?: CloudSamplingOptio
 /*  number of steps. Matches reference GLSL int(remap(...) - jitter) clamping. */
 /* -------------------------------------------------------------------------- */
 
-export const createMarchOpticalDepth = (u: CloudUniforms, options?: CloudSamplingOptions) => {
+export const createMarchOpticalDepth = (u: CloudUniforms) => {
     const sampleWeather = createSampleWeather(u);
-    const sampleMedia = createSampleMedia(u, options);
+    const sampleMedia = createSampleMedia(u);
 
     return Fn(
         ([rayOrigin, rayDirection, jitter, mipLevel, maxIterationCount]: [
@@ -579,13 +574,11 @@ const intersectStructuredPlanes = Fn(
 /*  mrt() at the top level, because TSL's mrt() cannot be returned from Fn().  */
 /* -------------------------------------------------------------------------- */
 
-export const createShadowMarchClouds = (
-    u: CloudUniforms,
-    cascadeIndex: number = 0,
-    options?: CloudSamplingOptions
-) => {
-    const sampleWeather = createSampleWeather(u, { shadow: true });
-    const sampleMedia = createSampleMedia(u, options);
+const SHADOW_MAX_ITERATIONS = 64; // Static upper bound for WGSL loop; dynamic break uses uniform
+
+export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number = 0) => {
+    const sampleWeather = createSampleWeatherShadow(u);
+    const sampleMedia = createSampleMedia(u);
     // Bake cascade index into shader (constant for compiled material)
     const invMat = u.inverseShadowMatrices[cascadeIndex];
     // Per-cascade mip level: [0.0, 0.5, 1.0, 2.0] (matching reference shadow.frag)
@@ -646,11 +639,13 @@ export const createShadowMarchClouds = (
         const transmittanceSum = float(0).toVar();
         const sampleCount = float(0).toVar();
 
-        // Reference: `for (int i = 0; i < maxIterationCount; ++i)` — the
-        // uniform IS the loop bound; every iteration (including gap-skip
-        // steps, via `continue`) consumes budget, exactly like the reference.
-        Loop({ start: 0, end: u.shadowMaxIterationCount, type: "int" }, () => {
+        const iterCount = float(0).toVar();
+
+        Loop({ start: 0, end: SHADOW_MAX_ITERATIONS, type: "int" }, () => {
             If(rayDistance.greaterThan(maxRayDistance), () => {
+                Break();
+            });
+            If(iterCount.greaterThanEqual(u.shadowMaxIterationCount), () => {
                 Break();
             });
 
@@ -665,6 +660,7 @@ export const createShadowMarchClouds = (
 
             If(isGap, () => {
                 rayDistance.addAssign(stepSize);
+                iterCount.addAssign(float(1));
             }).Else(() => {
                 const n = normalize(position);
                 const uv = getCubeSphereUvNormalized(n);
@@ -700,12 +696,15 @@ export const createShadowMarchClouds = (
                 });
 
                 rayDistance.addAssign(stepSize);
+                iterCount.addAssign(float(1));
             });
 
             If(transmittanceIntegral.lessThanEqual(u.shadowMinTransmittance), () => {
                 maxOpticalDepthTail.assign(
                     min(
-                        u.opticalDepthTailScale.mul(stepSize).mul(exp(float(1).sub(sampleCount))),
+                        u.opticalDepthTailScale
+                            .mul(stepSize)
+                            .mul(exp(float(1).sub(sampleCount))),
                         stepSize.mul(0.5)
                     )
                 );
@@ -1185,10 +1184,10 @@ const marchCloudsResultStruct = /*#__PURE__*/ struct(
     "MarchCloudsResult"
 );
 
-export const createMarchClouds = (u: CloudUniforms, options?: CloudSamplingOptions): any => {
+export const createMarchClouds = (u: CloudUniforms): any => {
     const sampleWeather = createSampleWeather(u);
-    const sampleMedia = createSampleMedia(u, options);
-    const marchOpticalDepth = createMarchOpticalDepth(u, options);
+    const sampleMedia = createSampleMedia(u);
+    const marchOpticalDepth = createMarchOpticalDepth(u);
     const getMipLevel = createGetMipLevel(u);
     const sampleShadowOpticalDepth = createSampleShadowOpticalDepth(u);
 
@@ -1313,7 +1312,11 @@ export const createMarchClouds = (u: CloudUniforms, options?: CloudSamplingOptio
                                 sunIrradiance.assign(accurateIrr.get("direct"));
                                 skyIrradiance.assign(accurateIrr.get("indirect"));
                             }).Else(() => {
-                                const heightAlpha = remapClamped(height, u.minHeight, u.maxHeight);
+                                const heightAlpha = remapClamped(
+                                    height,
+                                    u.minHeight,
+                                    u.maxHeight
+                                );
                                 sunIrradiance.assign(
                                     mix(minSunIrradiance, maxSunIrradiance, heightAlpha)
                                 );
@@ -1413,18 +1416,18 @@ const cloudRendererResultStruct = /*#__PURE__*/ struct(
     "CloudRendererResult"
 );
 
-export const createCloudRenderer = (u: CloudUniforms, options?: CloudSamplingOptions) => {
-    const marchClouds = createMarchClouds(u, options);
+export const createCloudRenderer = (u: CloudUniforms) => {
+    const marchClouds = createMarchClouds(u);
     const sampleWeather = createSampleWeather(u);
-    const sampleMedia = createSampleMedia(u, options);
-    const marchOpticalDepth = createMarchOpticalDepth(u, options);
+    const sampleMedia = createSampleMedia(u);
+    const marchOpticalDepth = createMarchOpticalDepth(u);
     const sampleShadowOpticalDepth = createSampleShadowOpticalDepth(u);
     const sampleShadowOpticalDepthSingle = createSampleShadowOpticalDepthSingle(u);
     const marchShadowLength = createMarchShadowLength(u, sampleShadowOpticalDepthSingle);
     const approximateHaze = createApproximateHaze(u);
     // Return a factory that produces a fresh Fn per cascade (bakes cascadeIndex in closure)
     const shadowMarchFactory = (cascadeIndex: number = 0) =>
-        createShadowMarchClouds(u, cascadeIndex, options);
+        createShadowMarchClouds(u, cascadeIndex);
 
     const render = Fn(([cameraPosition, rayDirection, sceneDistance]: [any, any, any]) => {
         const cosTheta = dot(u.sunDirection, rayDirection);
