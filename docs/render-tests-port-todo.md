@@ -2293,3 +2293,26 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **21. raster-color 细化（2026-08-20 四）**：ramp 过滤器跟随 raster-resampling（mgl configureRaster 同参绑定，nearest fixture 硬台阶）、ramp 采样对齐 mgl renderColorRamp 精确式（端点含尽 i/(N-1) + Math.floor；纹元中心实验无变化已回退）。nearest 988→**323 近失**（残余=bin 边界 0.25% 像素，float 精度级，阈值 ≈98 内未过）；expression 30424（interpolate 语义待查）。零回归。
 
 **22. 表达式引擎 interpolate 颜色插值修复（2026-08-20 四）**：`MBExpressionEngine` linear 分支只对 `#` 十六进制 stop 做颜色插值，**rgba() 字符串 stop 直接返回下界 stop**（不混合）——raster-color/expression 输出 99.9% 纯 stop 色（ramp 退化为三色）破案于此。修复：任意字符串 stop 对走 interpolateColor（parseColor 本就支持 rgba/命名色），interpolateColor 改返回 rgba() 并**保留 alpha 插值**（旧版硬编码 a=1）。结果：**raster-color/expression 30424→0 PASS**。引擎级修复，潜在惠及所有 rgba-stop interpolate 域；混合回归批（line-gradient/background/fill/circle/icon/text/heatmap-color 62 例）21 PASS、无异常值。遗留：raster-color/nearest 323（bin 边缘近失）。
+
+## 16. 会话总结（2026-08-20，§12.76-9 ~ §12.76-22，14 commits）
+
+> 按"代码对齐 mgl 源码优先、攒批后集中测试"策略推进。全部改动 tsc 全绿、单测 265 passing（3 既有失败不变）、每批零回归验证。
+
+**转 PASS 清单（本会话直接验证 ≥25 例）**：
+- **raster 域 +22**（§12.76-18/19/20/21/22）：像素对齐（alignedProjMatrix 语义）解锁 opacity/visibility/retina/亮度对比饱和色相全族；raster-alpha（base 色 linear/sRGB 转换缺失，G 通道 k=0.45 破案）；raster-color/expression（引擎 interpolate rgba() stop 不插值修复）。
+- **circle 域 +8**（§12.76-11/12，F10）：circle-blur literal/negative、stroke-color/width 全族、stroke-opacity 3 例。
+- **line 域 +2**（§12.76-14）：join:none ±elevated（mgl 方形帽外延语义）。
+- **fog 域**：回到 §12.76-8 基线且 line-with-fog 124648→88793（pitch 因子）；穹顶屏幕地平线重写被数据否决回退（-226 万像素）。
+
+**引擎/基础设施级修复（影响面超出单一域）**：
+1. `MBExpressionEngine.interpolate`：rgba() stop 颜色插值 + alpha 通道（此前返回下界不混合）；
+2. `flywave-geoutils` exports 修复（单测恢复可跑）；
+3. raster 像素吸附顶点注入（alignedProjMatrix 等价）。
+
+**部分 baseline6**（按用户指示中止，456/2810 上报——按测试数升序，小分类优先）：456 PASS 已超 baseline5 全量 375；含 runtime-styling 103、appearance 20、geojson 18、lighting-3d-mode 16、combinations 30。完整全量待下次补跑（大分类 text/symbol 系未跑）。
+
+**下一会话入口**：
+1. 补跑完整 baseline6（chunked runner，~1.5h）；
+2. raster 遗留：raster-array 源类型、resampling/filtering、globe colorization；
+3. line 遗留：round cap 月牙单要素重放（取证链已备：/tmp/mvt/dump.py + Y 翻转映射）、瓦片裁剪端点（§12.76-15）；
+4. `new THREE.Color(css)` 线性值误作 sRGB 的同族排查（§12.76-19 警示，如 uMBStrokeColor）。
