@@ -599,6 +599,37 @@ export class MBMaterialPatchManager {
         const saturation = paint['raster-saturation']; // [-1,1]
         const hue = paint['raster-hue-rotate'];        // degrees
         const colorVal = paint['raster-color'];        // [r,g,b] mix factor
+        // mgl RASTER_COLOR path (draw_raster.ts configureRaster +
+        // raster.fragment.glsl): when `raster-color` is set, the whole
+        // brightness/contrast/saturation chain is REPLACED by
+        //   t   = raster-color-mix[3] + dot(srgb(rgb), raster-color-mix[0..2])
+        //   col = ramp256(t)            (ramp spans raster-color-range)
+        //   col.a *= input.a
+        const hasRasterColor = colorVal !== undefined && colorVal !== null;
+        let rasMix: [number, number, number, number] = [0.2126, 0.7152, 0.0722, 0];
+        let rasRange: [number, number] = [0, 1];
+        let rasRampTex: THREE.Texture | null = null;
+        if (hasRasterColor) {
+            // technique._paint carries the LAYER-EVALUATED value (a constant
+            // color string) — the ramp needs the RAW expression, so pull it
+            // from the style manager (same channel as the background color).
+            let colorExpr = colorVal;
+            try {
+                const style = (this.m_dataSource as any).styleManager?.getStyle?.();
+                const rasterLayer = (style?.layers ?? []).find(
+                    (l: any) => l.type === 'raster' && Array.isArray(l.paint?.['raster-color']));
+                if (rasterLayer) colorExpr = rasterLayer.paint['raster-color'];
+            } catch {}
+            const cm = paint['raster-color-mix'];
+            if (Array.isArray(cm) && cm.length >= 4) {
+                rasMix = [Number(cm[0]) || 0, Number(cm[1]) || 0, Number(cm[2]) || 0, Number(cm[3]) || 0];
+            }
+            const cr = paint['raster-color-range'];
+            if (Array.isArray(cr) && cr.length >= 2) {
+                rasRange = [Number(cr[0]) || 0, Number(cr[1]) || 1];
+            }
+            rasRampTex = MBMaterialPatchManager.buildRasterColorRamp(colorExpr, rasRange);
+        }
         const hasAdjust =
             brightness[0] !== 0 || brightness[1] !== 1 ||
             contrast !== undefined || saturation !== undefined ||
@@ -713,6 +744,7 @@ export class MBMaterialPatchManager {
                 shader.uniforms.uMBRasPadPx = { value: padPx };
                 shader.uniforms.uMBRasFullPx = { value: [padPx[0], padPx[1]] };
                 shader.uniforms.uMBRasPadOn = { value: (texture as any).__mbNoPad ? 0 : 1 };
+                if (rasRampTex) shader.uniforms.uMBRasRamp = { value: rasRampTex };
                 const rasRes = new THREE.Vector2(512, 256);
                 shader.uniforms.uMBRasRes = { value: rasRes };
                 shader.vertexShader = shader.vertexShader.replace(
@@ -758,7 +790,7 @@ export class MBMaterialPatchManager {
                      uniform vec3 uMBRasBase;
                      uniform float uMBRasFar;
                      varying float vMBRasEyeDist;
-                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx; uniform float uMBRasPadOn;
+                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx; uniform float uMBRasPadOn;\n                     uniform sampler2D uMBRasRamp;
                      vec3 mbSrgbEnc(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
                      vec3 mbSrgbDec(vec3 c) { return mix(c / 12.92, pow((max(c, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
                      void main() {`,
@@ -793,6 +825,14 @@ export class MBMaterialPatchManager {
                      mbR += (mbAvg - mbR) * uMBRasSat;
                      mbR = (mbR - 0.5) * uMBRasContrast + 0.5;
                      mbR = mix(vec3(uMBRasBMin), vec3(uMBRasBMax), mbR);
+                     ${rasRampTex ? `
+                     // RASTER_COLOR path replaces the whole adjust chain above
+                     // (mgl raster.fragment.glsl #ifdef RASTER_COLOR).
+                     float rcT = (${rasMix[3].toFixed(6)} + dot(mbSrgbEnc(mbRasT.rgb), vec3(${rasMix[0].toFixed(6)}, ${rasMix[1].toFixed(6)}, ${rasMix[2].toFixed(6)})) - ${rasRange[0].toFixed(6)}) / ${Math.max(rasRange[1]-rasRange[0],1e-6).toFixed(6)};
+                     vec4 rcCol = texture2D(uMBRasRamp, vec2(clamp(rcT, 0.0, 1.0), 0.5));
+                     mbR = rcCol.rgb;
+                     mbRasT.a *= rcCol.a;
+                     ` : ''}
                      {
                          // Opaque sRGB-domain composite over the base color
                          // (the framebuffer blends in LINEAR — 0.5 over white
@@ -2574,6 +2614,56 @@ export class MBMaterialPatchManager {
             return stops.sort((a, b) => a.t - b.t);
         }
         return [];
+    }
+
+    /**
+     * Build the `raster-color` 256x1 ramp: evaluate the expression over the
+     * virtual `raster-value` property across raster-color-range (mgl
+     * renderColorRamp with evaluationKey 'rasterValue'). Straight alpha —
+     * the shader multiplies ramp.a by the tile's alpha itself.
+     */
+    static buildRasterColorRamp(expr: any, range: [number, number]): THREE.Texture {
+        const size = 256;
+        const data = new Uint8Array(size * 4);
+        const { MBExpressionEngine } = require('./MBExpressionEngine');
+        const rewritten = JSON.parse(JSON.stringify(expr), (k, v) => {
+            if (Array.isArray(v) && v.length === 1 && v[0] === 'raster-value') return ['get', 'rasterValue'];
+            return v;
+        });
+        for (let i = 0; i < size; i++) {
+            const t = range[0] + (i / (size - 1)) * (range[1] - range[0]);
+            let rgba: [number, number, number, number] = [255, 255, 255, 1];
+            try {
+                const out = MBExpressionEngine.evaluate(rewritten, {
+                    zoom: 0,
+                    feature: { properties: { rasterValue: t } } as any,
+                } as any);
+                if (typeof out === 'string') {
+                    rgba = MBMaterialPatchManager.parseColor(out);
+                } else if (out && typeof out === 'object' && 'r' in out) {
+                    const c = new THREE.Color();
+                    c.copy(out);
+                    c.convertLinearToSRGB();
+                    rgba = [Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255), 1];
+                } else if (Array.isArray(out)) {
+                    rgba = [
+                        Math.round((out[0] ?? 0) * 255),
+                        Math.round((out[1] ?? 0) * 255),
+                        Math.round((out[2] ?? 0) * 255),
+                        out[3] !== undefined ? out[3] : 1,
+                    ];
+                }
+            } catch { /* keep white */ }
+            data[i * 4 + 0] = rgba[0];
+            data[i * 4 + 1] = rgba[1];
+            data[i * 4 + 2] = rgba[2];
+            data[i * 4 + 3] = Math.round(Math.max(0, Math.min(1, rgba[3])) * 255);
+        }
+        const tex = new THREE.DataTexture(data, size, 1, THREE.RGBAFormat);
+        tex.magFilter = THREE.LinearFilter;
+        tex.minFilter = THREE.LinearFilter;
+        tex.needsUpdate = true;
+        return tex;
     }
 
     /**
