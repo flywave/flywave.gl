@@ -10,8 +10,14 @@
             "require": "./lib/src/index.js"
         },
         "./*": {
-            "import": "./lib/src/*",
-            "require": "./lib/src/*"
+            "import": [
+                "./lib/src/*.js",
+                "./lib/src/*/index.js"
+            ],
+            "require": [
+                "./lib/src/*.js",
+                "./lib/src/*/index.js"
+            ]
         }
     },
     "worker": {

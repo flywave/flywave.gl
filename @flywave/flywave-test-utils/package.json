@@ -7,12 +7,20 @@
     "typings": "lib/src/index.web",
     "exports": {
         ".": {
+            "node": "./lib/src/index.node.js",
             "import": "./lib/src/index.web.js",
-            "require": "./lib/src/index.web.js"
+            "require": "./lib/src/index.node.js",
+            "default": "./lib/src/index.web.js"
         },
         "./*": {
-            "import": "./lib/src/*",
-            "require": "./lib/src/*"
+            "import": [
+                "./lib/src/*.js",
+                "./lib/src/*/index.js"
+            ],
+            "require": [
+                "./lib/src/*.js",
+                "./lib/src/*/index.js"
+            ]
         }
     },
     "scripts": {

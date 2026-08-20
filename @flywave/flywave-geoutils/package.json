@@ -37,5 +37,21 @@
     },
     "publishConfig": {
         "access": "public"
+    },
+    "exports": {
+        ".": {
+            "import": "./lib/src/index.js",
+            "require": "./lib/src/index.js"
+        },
+        "./*": {
+            "import": [
+                "./lib/src/*.js",
+                "./lib/src/*/index.js"
+            ],
+            "require": [
+                "./lib/src/*.js",
+                "./lib/src/*/index.js"
+            ]
+        }
     }
 }

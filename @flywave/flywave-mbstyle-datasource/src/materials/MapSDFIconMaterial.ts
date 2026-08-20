@@ -102,9 +102,9 @@ export class MapSDFIconMaterial extends THREE.RawShaderMaterial {
 
     private applyParams() {
         const p = this.m_params;
-        this.uniforms.uColor.value.set(p['icon-color']);
+        this.uniforms.uColor.value.set(p['icon-color']).convertLinearToSRGB();
         this.uniforms.uOpacity.value = p['icon-opacity'];
-        this.uniforms.uHaloColor.value.set(p['icon-halo-color'] ?? 'rgba(0,0,0,0)');
+        this.uniforms.uHaloColor.value.set(p['icon-halo-color'] ?? 'rgba(0,0,0,0)').convertLinearToSRGB();
         this.uniforms.uHaloWidth.value = p['icon-halo-width'] ?? 0;
         this.uniforms.uHaloBlur.value = p['icon-halo-blur'] ?? 0;
         this.needsUpdate = true;

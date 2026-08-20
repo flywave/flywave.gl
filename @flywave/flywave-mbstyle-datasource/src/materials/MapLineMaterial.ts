@@ -266,7 +266,7 @@ export class MapLineMaterial extends SolidLineMaterial {
                 const [s1, c1] = stops[j + 1];
                 if (t >= s0 && t <= s1) {
                     const lt = (s1 - s0) > 0.001 ? (t - s0) / (s1 - s0) : 0;
-                    color.set(c0).lerp(new THREE.Color(c1), lt);
+                    color.set(c0).convertLinearToSRGB().lerp(new THREE.Color(c1).convertLinearToSRGB(), lt);
                     const idx = i * 4;
                     data[idx] = Math.round(color.r * 255);
                     data[idx + 1] = Math.round(color.g * 255);

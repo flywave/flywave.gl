@@ -497,7 +497,7 @@ export class MBTileDataEmitter {
         // is used verbatim.
         const auto = borderColor === undefined || borderColor === '#000000';
         if (!auto) return borderColor;
-        const c = new THREE.Color(lineColor);
+        const c = new THREE.Color(lineColor).convertLinearToSRGB();
         // out_color is premultiplied by its alpha; line opacity is folded in
         // later, so luminance is computed on the raw (opaque) line color.
         const Y = (c.r * 0.299 + c.g * 0.587 + c.b * 0.114);

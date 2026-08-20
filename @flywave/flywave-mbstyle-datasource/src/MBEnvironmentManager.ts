@@ -567,7 +567,7 @@ export class MBEnvironmentManager {
             : ['interpolate', ['linear'], ['zoom'], 4, '#010b19', 7, '#367ab9'];
         const rawHighColor = evalThemed(fog['high-color'], '#245cdf', 'high-color-use-theme');
         this.m_fogState = {
-            color: color.clone(),
+            color: color.clone().convertLinearToSRGB(),
             alpha,
             // Raw fog color alpha WITHOUT the pitch visibility factor — the
             // mgl atmosphere glow (drawAtmosphereGlow) consumes the property
@@ -576,8 +576,8 @@ export class MBEnvironmentManager {
             colorAlpha,
             // mapbox drawAtmosphere: horizonBlend = mapValue(horizon-blend, 0..1, 0.0005..0.25)
             horizonBlend: Number(evalZoom(rawHorizonBlend, 0.2)) * 0.2495 + 0.0005,
-            highColor: new THREE.Color(rawHighColor),
-            spaceColor: new THREE.Color(evalZoom(rawSpaceColor, '#010b19')),
+            highColor: new THREE.Color(rawHighColor).convertLinearToSRGB(),
+            spaceColor: new THREE.Color(evalZoom(rawSpaceColor, '#010b19')).convertLinearToSRGB(),
         };
         // mgl fog_horizon_blending + vertical-range uniforms (see the
         // fog_fragment chunk). vertical-range default [0,0] = disabled;
@@ -793,7 +793,7 @@ export class MBEnvironmentManager {
                     0.8, '#87ceeb', 1, 'white',
                 ]);
             } else if (typeof grad === 'string') {
-                solidColor = new THREE.Color(grad);
+                solidColor = new THREE.Color(grad).convertLinearToSRGB();
             }
         } catch {}
 
@@ -877,8 +877,8 @@ export class MBEnvironmentManager {
         const sunPos = sky['sky-atmosphere-sun'] ?? [0, 90];
         const azimuth = degToRad(sunPos[0]);
         const elevation = degToRad(sunPos[1]);
-        const sunColor = new THREE.Color(sky['sky-atmosphere-color'] ?? '#ffffff');
-        const haloColor = new THREE.Color(sky['sky-atmosphere-halo-color'] ?? '#88aacc');
+        const sunColor = new THREE.Color(sky['sky-atmosphere-color'] ?? '#ffffff').convertLinearToSRGB();
+        const haloColor = new THREE.Color(sky['sky-atmosphere-halo-color'] ?? '#88aacc').convertLinearToSRGB();
         const sunIntensity = sky['sky-atmosphere-sun-intensity'] ?? 1.0;
         const opacity = sky['sky-opacity'] ?? 0.8;
 

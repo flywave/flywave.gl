@@ -134,7 +134,7 @@ export class MapCircleMaterial extends THREE.ShaderMaterial {
 
     private applyPaint() {
         const p = this.m_paint;
-        this.uniforms.uColor.value.set(p['circle-color']);
+        this.uniforms.uColor.value.set(p['circle-color']).convertLinearToSRGB();
         this.uniforms.uOpacity.value = p['circle-opacity'];
         const radius = p['circle-radius'] ?? 5;
         const strokeWidth = p['circle-stroke-width'] ?? 0;
@@ -148,7 +148,7 @@ export class MapCircleMaterial extends THREE.ShaderMaterial {
         this.uniforms.uDpr.value = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
 
         if (p['circle-stroke-color']) {
-            this.uniforms.uStrokeColor.value.set(p['circle-stroke-color']);
+            this.uniforms.uStrokeColor.value.set(p['circle-stroke-color']).convertLinearToSRGB();
         }
 
         const translate = p['circle-translate'] as [number, number] | undefined;

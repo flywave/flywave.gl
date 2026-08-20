@@ -67,7 +67,9 @@ export class MapBuildingMaterial extends THREE.MeshStandardMaterial {
 
         const self = this;
         this.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
-            shader.uniforms.uRoofColor = { value: new THREE.Color(self.m_paint['building-roof-color']) };
+            shader.uniforms.uRoofColor = {
+                value: new THREE.Color(self.m_paint['building-roof-color']).convertLinearToSRGB(),
+            };
             shader.uniforms.uFacadeFloors = { value: self.m_paint['building-facade-floors'] };
             shader.uniforms.uFacadeUnitWidth = { value: self.m_paint['building-facade-unit-width'] };
             shader.uniforms.uEmissiveStrength = { value: self.m_paint['building-emissive-strength'] };

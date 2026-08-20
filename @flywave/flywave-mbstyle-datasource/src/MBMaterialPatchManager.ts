@@ -1167,6 +1167,8 @@ export class MBMaterialPatchManager {
                     const tcRaw = technique._trimColor as string | undefined;
                     if (tcRaw && tcRaw !== 'transparent') {
                         trimColor = new THREE.Color(tcRaw);
+                        // shader consumes sRGB numerics (post-colorspace injection)
+                        trimColor.convertLinearToSRGB();
                         trimAlpha = 1;
                     }
                     const tf = technique._trimFade as number[] | undefined;
@@ -1444,7 +1446,9 @@ export class MBMaterialPatchManager {
             }
 
             if (outlineColor) {
-                shader.uniforms.uMBOutlineColor = { value: new THREE.Color(outlineColor) };
+                shader.uniforms.uMBOutlineColor = {
+                        value: new THREE.Color(outlineColor).convertLinearToSRGB(),
+                    };
                 shader.uniforms.uMBOutlineWidth = { value: 1.0 };
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <colorspace_fragment>',
@@ -1578,7 +1582,8 @@ export class MBMaterialPatchManager {
         if (typeof borderWidth === 'number' && borderWidth > 0 && 'outlineWidth' in material) {
             (material as any).outlineWidth = borderWidth;
             if (borderColor !== undefined) {
-                (material as any).outlineColor = new THREE.Color(borderColor);
+                // SolidLineMaterial writes gl_FragColor directly (sRGB domain)
+                (material as any).outlineColor = new THREE.Color(borderColor).convertLinearToSRGB();
             }
             modified = true;
         }
@@ -2278,11 +2283,15 @@ export class MBMaterialPatchManager {
             if (origOnCompile) origOnCompile.call(material, shader);
             shader.uniforms.uMBHeightBase = { value: base };
             shader.uniforms.uMBHeightTop = { value: height };
-            shader.uniforms.uMBRoofColor = { value: new THREE.Color(roofColor) };
+            shader.uniforms.uMBRoofColor = {
+                        value: new THREE.Color(roofColor).convertLinearToSRGB(),
+                    };
             shader.uniforms.uMBFacadeFloors = { value: facadeFloors };
             shader.uniforms.uMBFacadeWidth = { value: facadeWidth };
             shader.uniforms.uMBAO = { value: aoIntensity };
-            shader.uniforms.uMBFloodColor = { value: new THREE.Color(floodColor) };
+            shader.uniforms.uMBFloodColor = {
+                        value: new THREE.Color(floodColor).convertLinearToSRGB(),
+                    };
             shader.uniforms.uMBFloodIntensity = { value: floodIntensity };
             if (use3DLights) {
                 const l3 = (this.m_dataSource as any).m_environment?.lighting3DState;
@@ -2431,8 +2440,12 @@ export class MBMaterialPatchManager {
                     // SDF rendering: the atlas alpha channel holds the signed
                     // distance. Fill the glyph with icon-color and draw a halo ring
                     // (icon-halo-color) when halo-width > 0.
-                    shader.uniforms.uMBIconColor = { value: new THREE.Color(iconColor) };
-                    shader.uniforms.uMBHaloColor = { value: new THREE.Color(haloColor) };
+                    shader.uniforms.uMBIconColor = {
+                        value: new THREE.Color(iconColor).convertLinearToSRGB(),
+                    };
+                    shader.uniforms.uMBHaloColor = {
+                        value: new THREE.Color(haloColor).convertLinearToSRGB(),
+                    };
                     shader.uniforms.uMBHaloWidth = { value: haloWidth / 16.0 };
                     shader.uniforms.uMBHaloBlur = { value: Math.max(haloBlur, 0.5) / 16.0 };
                     shader.fragmentShader = shader.fragmentShader.replace(

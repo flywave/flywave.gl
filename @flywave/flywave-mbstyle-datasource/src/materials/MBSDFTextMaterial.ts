@@ -138,8 +138,8 @@ export class MBSDFTextMaterial extends THREE.RawShaderMaterial {
 
     private applyPaint() {
         const p = this.m_paint;
-        this.uniforms.uColor.value.set(p['text-color']);
-        this.uniforms.uHaloColor.value.set(p['text-halo-color']);
+        this.uniforms.uColor.value.set(p['text-color']).convertLinearToSRGB();
+        this.uniforms.uHaloColor.value.set(p['text-halo-color']).convertLinearToSRGB();
         this.uniforms.uHaloWidth.value = p['text-halo-width'] ?? 1;
         this.uniforms.uHaloBlur.value = p['text-halo-blur'] ?? 0;
         this.uniforms.uOpacity.value = p['text-opacity'];
