@@ -1352,26 +1352,28 @@ export class MBStyleDataSource extends TileDataSource {
      * style.ts:4351-4356). theme=null falls back to the imported
      * stylesheet's own color-theme; theme={data:null} clears it.
      */
-    setImportColorTheme(importId: string, theme: { data?: string | any[] | null } | null): void {
+    setImportColorTheme(importId: string, theme: { data?: string | any[] | null } | null): Promise<void> {
         const { loadColorTheme } = require('./MBColorTheme');
         const style = this.m_runtime?.style as any;
+        // mgl: override=null falls back to the imported STYLESHEET's own
+        // color-theme (data['color-theme']) — NOT the import spec's, which is
+        // itself an override channel.
         if (!theme || theme.data === undefined || theme.data === null) {
-            const own = style?._importThemes?.[importId] ?? null;
+            const own = (style?.imports ?? []).find((i: any) => i.id === importId)?.data?.['color-theme'] ?? null;
             if (own && own.data) {
-                loadColorTheme({ 'color-theme': own, _config: style?._config }).then((lut: any) => {
+                return loadColorTheme({ 'color-theme': own, _config: style?._config }).then((lut: any) => {
                     this.m_importLuts.set(importId, lut);
                     this.propagateScopedThemes();
-                }).catch(() => {});
-            } else {
-                this.m_importLuts.set(importId, null);
-                this.propagateScopedThemes();
+                });
             }
-            return;
+            this.m_importLuts.set(importId, null);
+            this.propagateScopedThemes();
+            return Promise.resolve();
         }
-        loadColorTheme({ 'color-theme': theme, _config: style?._config }).then((lut: any) => {
+        return loadColorTheme({ 'color-theme': theme, _config: style?._config }).then((lut: any) => {
             this.m_importLuts.set(importId, lut ?? null);
             this.propagateScopedThemes();
-        }).catch(() => {});
+        });
     }
 
     /** Theme a loaded glTF from its pristine snapshot (idempotent). */

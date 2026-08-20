@@ -2450,7 +2450,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **"竞态"证伪，真因 = `parseCssColor` 不识别命名 CSS 色**：'add' 的 background-color 是字面 `violet`——`applyColorTheme(lut,'violet')` 因 parse 返回 null 原样透传 → 全簇（add/config-*/icon-image-use-theme/remove/update-with-api）整图未主题化。BGTRACE 探针（globalThis trace + op 后抛出）锁定 `bg violet lut=true` 决定性证据。修复：parseCssColor 增加 THREE.Color 命名色回退（convertLinearToSRGB 后取 0-255）。
 - **decoder 自持主题（架构点）**：MBStyleDecoder 新增 setColorTheme(lut, scoped) 自存储，configure() 重建内部 evaluator 后自动重放——此前任何 configure（runtime onChange/环境更新）都会悄悄丢掉已应用的主题。连带 **red-3d-content 176k→32k**（model 重烘焙路径随主题重放生效）。
 - **b92 验收（color-theme 2→4 PASS，全簇近失化）**：add 3211→**135**、config-bw 3173→**97**、icon-image-use-theme 3174→**98**、update-config-import→98、config-red/theme-from-config/update-with-api → PASS 带、use-theme/data-driven 867→**323**。残差（bbox 15-27×15-48 = circle+文字区）= circle 色微偏（80 vs 69）与字形色（255 vs 120）精度项。
-- **遗留**：import-override 族（197k/249k/115k）、fog-import-scope 209k、trees-monochrome 59.7k/emission-bw 61k（model 烘焙对 red-3d 生效但对树模型未生效——疑 glTF 纹理路径差异）、update-config-base 3211（root 主题 config 变更路径）。tsc 绿、单测 265 passing / 3 既有。
+**49. import-override 族四轮取证（2026-08-21，dbg7，留档）**：
+
+- **语义修正**：`setImportColorTheme(id, null)` 的回退目标 = 被导入**样式表自身的** `data['color-theme']`（mgl style.ts:1119 override=null → stylesheet 主题），而非 import spec 的 color-theme（spec 主题本身是 override 通道）——此前回退到 spec 主题属语义错误，已改为查 `style.imports[id].data['color-theme']`。setImportColorTheme 改 Promise 化（harness await 确定性传递）。
+- **import-override-style（无 op）已渲染主题图**（current 红色调 194,0,0）——spec 主题经 mergeImports→scoped LUT 链路生效，115k 残差为其他通道（sprite/符号或 fog）。
+- **existing/remove 白屏定性**：op 后地图整图空白（仅天际少量像素），像素数自 b82 起恒定不变、promise 化/decoder 重放均无影响、无异常抛出——指向 **op 触发的全量 markTilesDirty 对重型 import basemap 的瓦片重装载在捕获时未完成或失败**（需交互式浏览器 devtools 调试 tile 任务队列）。留档下一批：① tile reload settle 探查；② 考虑不重解码的绘制期主题化（mgl 语义：GPU LUT，无重解码）。
+- fog-import-scope 残差通道定位 = **天空/大气色未主题化**（cur 198,219,250 蓝 vs exp 灰——sky-gradient ramp/atmosphere sun/halo 未走 scoped LUT，mgl drawAtmosphere 用 fog.scope LUT）。trees-monochrome 同含天空通道（cur 全蓝）。下一批：applySky 三色（ramp/solid/sun/halo）接 scoped LUT。
 
 **44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
 

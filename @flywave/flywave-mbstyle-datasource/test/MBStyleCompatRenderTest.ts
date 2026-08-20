@@ -508,7 +508,7 @@ async function processOperations(
             case "setImportColorTheme": {
                 // mgl map.setImportColorTheme(importId, theme):
                 // args[0]=importId, args[1]=theme ({data}|null)
-                (dataSource as any).setImportColorTheme?.(args[0] ?? '', args[1] ?? null);
+                await (dataSource as any).setImportColorTheme?.(args[0] ?? '', args[1] ?? null);
                 await renderFrames(mapView, dataSource, 4);
                 await new Promise((r) => setTimeout(r, 50));
                 await renderFrames(mapView, dataSource, 2);
