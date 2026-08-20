@@ -27,7 +27,15 @@ export class AtmosphereModule {
         this.folder = gui.addFolder("🌤️ Atmosphere & Clouds");
         this.folder.close();
         this.currentData = this.createDefaultData();
-        this.syncFromTheme();
+        // Theme loads asynchronously; getThemeSync() throws "Style is not done
+        // loading" until it completes (MapViewThemeManager contract). Sync now
+        // when possible, otherwise once after ready — the throw must not abort
+        // the caller's (examples') remaining initialization sequence.
+        try {
+            this.syncFromTheme();
+        } catch {
+            mapView.ready.then(() => this.syncFromTheme()).catch(() => {});
+        }
         this.setupControls();
     }
 

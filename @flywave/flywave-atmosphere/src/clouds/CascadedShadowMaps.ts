@@ -100,7 +100,17 @@ export class CascadedShadowMaps {
         const cascadeCount = this.cascadeCount;
         const splits = this.splits;
         const far = this.far;
-        splitFrustum(this.splitMode, cascadeCount, camera.near, far, this.splitLambda, splits);
+        // Reference splits assume near ≪ far (their camera near = 1). RTE
+        // cameras pull near up to viewing distance, making near/far ≈ 1 and
+        // collapsing practical splits to ~[1, 1, 1] — all cascades then share
+        // nearly the same ortho box and the same region is marched 3×. Split
+        // in the thickness domain instead (nominal near = 1, far = thickness)
+        // to reproduce the reference distribution ([≈0.134, ≈0.28, 1] at
+        // λ=0.6, N=3) as fractions of the actual [near, far] span. Consumers
+        // (FrustumCorners.split corner lerp and the shader's slab-normalized
+        // cascade selection) share this fraction basis.
+        const thickness = Math.max(far - camera.near, 2);
+        splitFrustum(this.splitMode, cascadeCount, 1, thickness, this.splitLambda, splits);
         this.cameraFrustum.setFromCamera(camera.projectionMatrixInverse, far);
         this.cameraFrustum.split(splits, this.frusta);
 

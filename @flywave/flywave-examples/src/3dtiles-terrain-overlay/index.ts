@@ -35,13 +35,21 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     return new MapView({
         projection: ellipsoidProjection, // Use ellipsoid projection
         target: initialLocation, // Initial target position
-        zoomLevel: 1, // Initial zoom level
+        zoomLevel: 18, // Initial zoom level
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
         canvas: canvas, // Specify render canvas
         theme: {
+            postEffects: {
+                antialiasing: "taa"
+            },
             // extends: "resources/tilezen_base_globe.json"
             atmosphere:{
+                       clouds: {
+                    quality: "low"
+                },
+                enabled: true,
+                sunCastShadow: true,
                 sunTime:new Date().setHours(7,30)
             }
         }
@@ -84,18 +92,20 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
  */
 const createCesiumIonDataSource = (mapView: MapView): CesiumIonDataSource => {
     const cesiumIonDataSource = new CesiumIonDataSource({
+        castShadow:true,
+        receiveShadow:true,
         // Note: In production environments, this token should be managed using environment variables or configuration files
         accessToken: CESIUM_ION_TOKEN, // Use unified configured access token
         assetId: 75343 // Data asset ID
     });
 
-    cesiumIonDataSource.setTheme({
-        postEffects: {
-            translucentDepth: {
-                enabled: true
-            }
-        }
-    });
+    // cesiumIonDataSource.setTheme({
+    //     postEffects: {
+    //         translucentDepth: {
+    //             enabled: true
+    //         }
+    //     }
+    // });
 
     mapView.addDataSource(cesiumIonDataSource);
 

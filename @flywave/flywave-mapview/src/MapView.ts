@@ -2206,8 +2206,13 @@ export class MapView extends EventDispatcher {
      * @default `true` for `pixelRatio` < `2.0`, `false` otherwise.
      */
     get nativeWebglAntialiasEnabled(): boolean {
+        // The pipeline carries its own AA (TAA/SMAA in the VRM); the
+        // renderer-level MSAA is redundant. Also note three's
+        // `samples || antialias ? 4 : 0` precedence bug: passing
+        // samples: 0 still yields 4 — the only reliable way to disable
+        // native MSAA is antialias: false here.
         return this.m_options.enableNativeWebglAntialias === undefined
-            ? this.pixelRatio < 2.0
+            ? false
             : this.m_options.enableNativeWebglAntialias;
     }
 
@@ -3825,9 +3830,15 @@ export class MapView extends EventDispatcher {
 
         this.m_renderer.clear();
 
-        // clear the scenes
-        this.m_sceneRoot.children.length = 0;
-        this.m_overlaySceneRoot.children.length = 0;
+        // When the visible tile set is locked the scene graph is frozen as-is:
+        // no clearing, no re-attaching of tile objects, no anchor updates.
+        // Everything stays from the frame the lock was taken.
+        const sceneFrozen = this.lockVisibleTileSet;
+        if (!sceneFrozen) {
+            // clear the scenes
+            this.m_sceneRoot.children.length = 0;
+            this.m_overlaySceneRoot.children.length = 0;
+        }
 
         if (gatherStatistics) {
             setupTime = PerformanceTimer.now();
@@ -3857,34 +3868,36 @@ export class MapView extends EventDispatcher {
 
         const renderList = this.m_visibleTiles.dataSourceTileList;
 
-        // no need to check everything if we're not going to create text renderer.
-        renderList.forEach(({ zoomLevel, renderedTiles }) => {
-            renderedTiles.forEach(tile => {
-                this.m_tileObjectRenderer.render(
-                    tile,
-                    zoomLevel,
-                    this.zoomLevel,
-                    this.m_camera.position,
-                    this.m_sceneRoot
-                );
+        if (!sceneFrozen) {
+            // no need to check everything if we're not going to create text renderer.
+            renderList.forEach(({ zoomLevel, renderedTiles }) => {
+                renderedTiles.forEach(tile => {
+                    this.m_tileObjectRenderer.render(
+                        tile,
+                        zoomLevel,
+                        this.zoomLevel,
+                        this.m_camera.position,
+                        this.m_sceneRoot
+                    );
 
-                //We know that rendered tiles are visible (in the view frustum), so we update the
-                //frame number, note we don't do this for the visibleTiles because some may still be
-                //loading (and therefore aren't visible in the sense of being seen on the screen).
-                //Note also, this number isn't currently used anywhere so should be considered to be
-                //removed in the future (though could be good for debugging purposes).
-                tile.frameNumLastVisible = this.m_frameNumber;
+                    //We know that rendered tiles are visible (in the view frustum), so we update the
+                    //frame number, note we don't do this for the visibleTiles because some may still be
+                    //loading (and therefore aren't visible in the sense of being seen on the screen).
+                    //Note also, this number isn't currently used anywhere so should be considered to be
+                    //removed in the future (though could be good for debugging purposes).
+                    tile.frameNumLastVisible = this.m_frameNumber;
+                });
             });
-        });
 
-        this.m_mapAnchors.update(
-            this.projection,
-            this.camera.position,
-            this.m_sceneRoot,
-            this.m_overlaySceneRoot
-        );
+            this.m_mapAnchors.update(
+                this.projection,
+                this.camera.position,
+                this.m_sceneRoot,
+                this.m_overlaySceneRoot
+            );
 
-        this.m_animatedExtrusionHandler.update(this.zoomLevel);
+            this.m_animatedExtrusionHandler.update(this.zoomLevel);
+        }
 
         if (currentFrameEvent !== undefined) {
             // Make sure the counters all have a value.
