@@ -1969,6 +1969,10 @@ export class MBTileDataEmitter {
             // (end-offset fixtures measured +753~789px with it).
             const patternedNone = layer.paint?.['line-pattern'] !== undefined ||
                 layer.paint?.['line-dasharray'] !== undefined;
+            // mgl patternJoinNone = hasPattern && joinNone — the per-segment
+            // `a_linesofar` reset (below) applies to LINE-PATTERN only;
+            // dasharray lines keep the feature's accumulated phase.
+            const patternJoinNone = layer.paint?.['line-pattern'] !== undefined;
             const segCount = closed ? n : n - 1;
             // Straight runs are emitted as ONE rectangle (miter-equivalent):
             // walk a run start forward while the endpoint continues straight.
@@ -2007,8 +2011,21 @@ export class MBTileDataEmitter {
                     ax - nx * hwS, ay - ny * hwS, az,
                 );
                 geo.edge!.push(1, 1, -1, -1);
-                geo.dist!.push(distAt(s0), distAt(e), distAt(e), distAt(s0));
-                geo.len!.push(lenAt(s0), lenAt(e), lenAt(e), lenAt(s0));
+                if (patternJoinNone) {
+                    // mgl patternJoinNone resets `a_linesofar` per sub-segment
+                    // (addHalfVertex: lineSoFar - segmentStart) — dashes and
+                    // gradients restart at every split, they do NOT continue
+                    // the feature's accumulated phase.
+                    const segLen = Math.max(lenAt(e) - lenAt(s0), 1e-6);
+                    const d0 = 0, dE = 1;
+                    const l0 = 0, lE = lenAt(e) - lenAt(s0);
+                    void segLen;
+                    geo.dist!.push(d0, dE, dE, d0);
+                    geo.len!.push(l0, lE, lE, l0);
+                } else {
+                    geo.dist!.push(distAt(s0), distAt(e), distAt(e), distAt(s0));
+                    geo.len!.push(lenAt(s0), lenAt(e), lenAt(e), lenAt(s0));
+                }
                 geo.offs!.push(oS[0], oS[1], oE[0], oE[1], oE[0], oE[1], oS[0], oS[1]);
                 // CCW (viewed from +Z) for the FrontSide fill material.
                 geo.indices.push(base, base + 3, base + 2, base, base + 2, base + 1);
