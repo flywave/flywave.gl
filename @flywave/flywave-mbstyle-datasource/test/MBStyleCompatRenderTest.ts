@@ -1070,7 +1070,13 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         let catalogFontName = "";
                         for (const fontName of fontStacks) {
                             if (catalogFontName === "") catalogFontName = fontName;
-                            for (let range = 0; range < 2; range++) {
+                            // mgl loads glyph ranges on demand at placement
+                            // time; the static harness pre-fetches pages
+                            // 0..7 (Basic/Supplemental Latin, Greek, Cyrillic)
+                            // so fixture labels don't fall into the
+                            // replacement-glyph path. Missing pages are
+                            // skipped silently by the fetch guard below.
+                            for (let range = 0; range < 8; range++) {
                                 const start = range * 256;
                                 const end = start + 255;
                                 const url = glyphsUrl
@@ -1093,6 +1099,15 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                             // "default". Register under that name so the PBF
                             // catalog is actually used.
                             const catalog = buildFontCatalogFromPBF(catalogFontName, glyphs);
+                            // mgl semantics: a label whose char is missing
+                            // from the loaded pages renders that char blank —
+                            // the label survives. The native pipeline drops
+                            // the WHOLE label when any glyph is a replacement
+                            // (getGlyphs → undefined, and the Initialized
+                            // state never retries). The PBF builder's
+                            // replacement glyph is a transparent 1×1 canvas,
+                            // so showing it reproduces mgl exactly.
+                            mapView.textElementsRenderer.showReplacementGlyphs = true;
                             mapView.setFontCatalog("default", catalog);
                         }
                     } catch {}

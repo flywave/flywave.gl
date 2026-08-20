@@ -353,7 +353,22 @@ export class TextStyleCache {
 
     private initializeTextCanvas(style: TextElementStyle, textCanvases: TextCanvases): void {
         if (style.textCanvas) {
-            return;
+            // The cached canvas may be stale: re-injecting a font catalog
+            // (e.g. setFontCatalog) creates a NEW TextCanvas under the same
+            // name. Keeping the orphaned one would place labels into a canvas
+            // that is never rendered. Re-bind when the object is no longer in
+            // the live canvas map.
+            let live = false;
+            for (const [, canvas] of textCanvases) {
+                if (canvas === style.textCanvas) {
+                    live = true;
+                    break;
+                }
+            }
+            if (live) {
+                return;
+            }
+            style.textCanvas = undefined;
         }
         if (style.fontCatalog !== undefined) {
             const styledTextCanvas = textCanvases.get(style.fontCatalog);

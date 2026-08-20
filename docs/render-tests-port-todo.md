@@ -2400,3 +2400,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **记档差距**：① Douglas-Peucker tolerance 3 简化未实现（render-test 短线为主，简化近乎 no-op，若后续近失再补）；② 多边形路径未按 buffer 裁剪（mgl geojson-vt 对面也裁，fill 跨瓦片用例如有残差再补）；③ geojson-vt 的 per-zoom tolerance 缩放语义未还原。
 
 **待批测**：line-cap 全族（顶边长/短）、round-cap 月牙系、以及一切 geojson 源跨瓦片线用例（line-join/elevated-line 系既有点位也可能受益/回归，需零回归确认）。
+
+**41. 架构专项二：文本符号"整域空白"三链修复（2026-08-20 五，不跑测）**：
+
+**Explore 全扫取证（文本渲染链：MBTileDataEmitter.emitTextGeometry → TileGeometryCreator.createTextElements → TextElementsRenderer.placeTextElementGroup → TextCanvas.render）**，排名前三根因：
+
+1. **替换字形陷阱（label 级灭杀）**：`FontCatalog.getGlyphs`（FontCatalog.ts:567-576）遇到任一 replacement 字符且 `showReplacementGlyphs=false`（默认）→ 整个标签返回 undefined → `TextElementsRenderer.initializeGlyphs`（:1016-1018）的 `LoadingState.Initialized` 早退永不重试 → **标签永久消失**。harness 只预取 PBF 页 0-1，任何超出页 0-511 的字符（Latin-1 补充/引号变体等）即触发。mgl 语义 = 缺字符只空该字符、标签存活。**修复**：harness 注入 PBF 目录时 `showReplacementGlyphs = true`（PBF builder 的替换字形是透明 1×1 canvas，显示它恰等价 mgl 的"该字符空白"）；预取范围扩到页 0-7（Basic/Supplemental Latin + Greek + Cyrillic，fetch 失败静默跳过）。
+2. **孤儿 textCanvas**：`TextStyleCache.initializeTextCanvas`（TextStyleCache.ts:354-357）对 `style.textCanvas` 已设的样式盲早退——`setFontCatalog` 同名重建 canvas 后旧引用变孤儿，placement 正常但 `renderText` 只遍历新 `m_textCanvases` → **placed but never drawn**。**修复**：早退前校验缓存 canvas 是否仍在活跃 canvas map 中（对象同一性），失效则清空重绑。legacy 流程 canvas 持续有效时零行为变化。
+3. **viewDistance/图标路径记档**：`checkReadyForPlacement` 的 zoom 精确相等排除（Placement.ts:218）与 sprite atlas 未加载循环（:1773-1776）为次级嫌疑；调试开关 `PRINT_LABEL_DEBUG_INFO`（TextElementsRenderer.ts:136）可区分 uninitialized/tooFar/notDrawn，下轮批测若有残余再开。
+
+**注意**：`MBStyleSymbolPlacement` 仅作用于 tile.objects 的 'text'/'labeled-icon' 技术（legacy 对象路径），原生 TextElement 不受其影响——两套 placement 并存是记档的架构事实。
