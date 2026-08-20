@@ -1002,6 +1002,7 @@ export class MBTileDataEmitter {
                 props._rasterBrightnessMax = p['raster-brightness-max'] ?? 1;
                 props._rasterSaturation = p['raster-saturation'] ?? 0;
                 props._rasterContrast = p['raster-contrast'] ?? 0;
+                props._rasterElevation = p['raster-elevation'] ?? 0;
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'model':
@@ -1180,8 +1181,11 @@ export class MBTileDataEmitter {
                         new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
                     );
                     // Keep the resolved `fill-z-offset` (m_currentZOffset is
-                    // folded into `project()`); pushing 0 dropped it.
-                    geo.positions.push(w.x, w.y, w.z);
+                    // folded into `project()`); pushing 0 dropped it. mgl
+                    // `raster-elevation` lifts raster tiles above the ground
+                    // plane (meters, u_raster_elevation).
+                    const rasElev = Number((tech as any)._rasterElevation ?? 0);
+                    geo.positions.push(w.x, w.y, w.z + rasElev);
                     if (needsUv) {
                         if ((tech as any)._isRaster && rbMaxX > rbMinX && rbMaxY > rbMinY) {
                             geo.uvs.push(
