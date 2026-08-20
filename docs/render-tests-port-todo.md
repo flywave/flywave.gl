@@ -2316,3 +2316,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 2. raster 遗留：raster-array 源类型、resampling/filtering、globe colorization；
 3. line 遗留：round cap 月牙单要素重放（取证链已备：/tmp/mvt/dump.py + Y 翻转映射）、瓦片裁剪端点（§12.76-15）；
 4. `new THREE.Color(css)` 线性值误作 sRGB 的同族排查（§12.76-19 警示，如 uMBStrokeColor）。
+
+**23. 纯代码对比修复批（2026-08-20 四，不跑测）**：
+- **circle stroke 区 opacity 语义**（引擎注入 + MapCircleMaterial 双处）：mgl `out = mix(color·opacity, stroke·stroke_opacity, t)`——fill 的 circle-opacity **不缩放 stroke 区**。我们旧实现把 circle-opacity 乘进整个片元（含 stroke），`circle-opacity:0` 的 stroke-only 用例 stroke 被清零。改为 `alpha = opacity_t · mix(circleOpacity, strokeOpacity, color_t)`（数据驱动 stroke-opacity 三例同根）。
+- **image 源 raster 路径 base 色同族修复**（`MBEnvironmentManager.applyImageSources`）：`THREE.Color` 线性值误作 sRGB 的 §12.76-19 同族 bug（image/raster-opacity 7020、image/raster-visibility 31357 的嫌疑主项）。
+- **THREE.Color 审计结论**：全 patcher 排查后，trim/hillshade/circle-stroke/icon-halo/extrusion 系都在 `colorspace_fragment` 之前的线性域混色，线性值正确——**raster baseSrgb（已修）与 image baseSrgb（本批修）是仅有的 sRGB 域消费者**，同族清零。
+- **line-cap 瓦片裁剪端点定性修正**：发射器无 polyline 裁剪（VT 顶点本就是整数、mgl 亦在端点画帽）；§12.76-15 的顶边 mixed 长/短锁定为**引擎 clip volume 与 mgl 瓦片边界的亚像素语义差**（引擎层改动，需独立专项）。
+- **round cap 月牙代码对比结论**：mgl round 帽 = 方框四边形 + 片元 `length(v_normal)` 精确圆形化；我们的 K=8 扇形弦差仅 ~0.1px@r=5，不足以解释 1182px 月牙——月牙另有其因（结合 §12.76-17 的候选要素，疑与引擎 clip/顶点剔除相关），留档。
+- **raster-color/nearest 323**：对齐 mgl 采样式后仍差 bin 边缘 0.25% 像素——mgl 的 ramp 评估点 i/(N-1) 与采样半纹元中心天然错位（mgl 自身的不一致），叠加 mediump 精度，不再追。

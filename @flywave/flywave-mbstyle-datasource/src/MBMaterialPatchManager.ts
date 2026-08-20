@@ -1842,7 +1842,13 @@ export class MBMaterialPatchManager {
     float mbColorT = uMBStrokePx < 0.01 ? 0.0 : smoothstep(mbAAB, 0.0,
         mbExtrudeLength - uMBRadiusPx / max(uMBRadiusPx + uMBStrokePx, 1e-4));
     vec3 mbColor = mix(diffuseColor, uMBStrokeColor, mbColorT);
-    alpha *= mbOpacityT * mix(1.0, uMBStrokeOpacity, mbColorT);`
+    // mgl: out = mix(color*opacity, stroke_color*stroke_opacity, t) — the
+    // fill opacity must NOT scale the stroke region (circle-opacity:0 +
+    // stroke ("stroke-only" fixture) keeps the stroke fully opaque). Straight
+    // alpha equivalent: alpha = opacity_t * mix(opacity, strokeOpacity, t).
+    // NOTE: alpha still holds the engine's opacity at this point (the
+    // replaced block only reassigned it after).
+    alpha = mbOpacityT * mix(alpha, uMBStrokeOpacity, mbColorT);`
                 );
                 // Route the final color through mbColor (works for both the
                 // plain and the ground-lighting-patched gl_FragColor lines).

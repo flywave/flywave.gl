@@ -1434,8 +1434,13 @@ export class MBEnvironmentManager {
                     try {
                         const bgLayer = (style?.layers ?? []).find((l: any) => l.type === 'background');
                         if (bgLayer) {
+                            // THREE.Color parses CSS to LINEAR components —
+                            // the shader consumes sRGB numerics (same trap as
+                            // the per-tile raster path, §12.76-19: only the G
+                            // channel of e.g. orange visibly deviates).
                             const bc = new THREE.Color(bgLayer.paint?.['background-color'] ?? '#000000');
-                            baseSrgb = [bc.r, bc.g, bc.b];
+                            const bcSrgb = bc.clone().copyLinearToSRGB(bc.clone());
+                            baseSrgb = [bcSrgb.r, bcSrgb.g, bcSrgb.b];
                         }
                     } catch {}
                     const origCompile = material.onBeforeCompile;

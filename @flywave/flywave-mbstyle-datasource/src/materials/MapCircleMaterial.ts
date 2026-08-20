@@ -84,12 +84,12 @@ void main() {
     );
     // vAlpha carries circle-opacity (the visibility ring factor is 1 without
     // terrain occlusion in mgl).
-    vec4 out_color = mix(
-        vec4(uColor, 1.0) * vAlpha,
-        vec4(uStrokeColor, 1.0) * uStrokeOpacity,
-        color_t
-    );
-    gl_FragColor = out_color * opacity_t;
+    // mgl: mix(color*opacity, stroke*stroke_opacity, t) premultiplied,
+    // final = out * opacity_t. Straight-alpha equivalent — the fill opacity
+    // does not scale the stroke region (circle-opacity:0 keeps the stroke).
+    vec3 rgb = mix(uColor, uStrokeColor, color_t);
+    float a = opacity_t * mix(vAlpha, uStrokeOpacity, color_t);
+    gl_FragColor = vec4(rgb, a);
 }
 `;
 
