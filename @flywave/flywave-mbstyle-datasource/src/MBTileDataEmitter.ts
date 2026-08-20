@@ -1952,21 +1952,53 @@ export class MBTileDataEmitter {
         const miterLimit = Number(layer.layout?.['line-miter-limit'] ?? 2);
         const roundLimit = Number(layer.layout?.['line-round-limit'] ?? 1.05);
 
-        // `line-join: none` — mgl draws each segment as an independent
-        // rectangle: no corner join at all (visible gaps at turns).
+        // `line-join: none` — mgl (line_bucket.ts:714-743) draws each segment
+        // as an independent line whose split ends carry SQUARE caps: every
+        // middle corner (angle > 5°, COS_STRAIGHT_CORNER) closes the previous
+        // segment with endLeft=endRight=1 and starts the next with -1,-1 (a
+        // half-width extension along the segment direction), and the
+        // feature's LAST vertex also closes with 1,1. Only the feature's
+        // FIRST vertex stays butt (the (isPolygon || joinNone) ? 'butt' cap
+        // at line 709 applies to it — the joinNone block intercepts the end
+        // vertex first). Straight corners (< 5°) fall back to miter (the
+        // segments connect; keep them as one rectangle).
         if (join === 'none') {
+            const STRAIGHT_COS = Math.cos(5 * Math.PI / 180);
+            // Patterned none-lines (mgl patternJoinNone) keep the raw segment
+            // extent: the square-cap extension would shift the pattern phase
+            // (end-offset fixtures measured +753~789px with it).
+            const patternedNone = layer.paint?.['line-pattern'] !== undefined ||
+                layer.paint?.['line-dasharray'] !== undefined;
             const segCount = closed ? n : n - 1;
+            // Straight runs are emitted as ONE rectangle (miter-equivalent):
+            // walk a run start forward while the endpoint continues straight.
+            let runStart = 0;
             for (let s = 0; s < segCount; s++) {
                 const e = (s + 1) % n;
-                let ux = pts[e * 3] - pts[s * 3];
-                let uy = pts[e * 3 + 1] - pts[s * 3 + 1];
+                // Straight-corner fallback: collinear continuation → defer to
+                // the segment that ends at the run's real corner/end.
+                if (!closed && e < n - 1) {
+                    const ex1 = pts[(e + 1) * 3] - pts[e * 3];
+                    const ey1 = pts[(e + 1) * 3 + 1] - pts[e * 3 + 1];
+                    const l1 = Math.hypot(ex1, ey1) || 1;
+                    const ex0 = pts[e * 3] - pts[s * 3];
+                    const ey0 = pts[e * 3 + 1] - pts[s * 3 + 1];
+                    const l0 = Math.hypot(ex0, ey0) || 1;
+                    if ((ex1 / l1) * (ex0 / l0) + (ey1 / l1) * (ey0 / l0) > STRAIGHT_COS) continue;
+                }
+                const s0 = runStart;
+                runStart = e;
+                let ux = pts[e * 3] - pts[s0 * 3];
+                let uy = pts[e * 3 + 1] - pts[s0 * 3 + 1];
                 const l = Math.hypot(ux, uy) || 1;
                 ux /= l; uy /= l;
                 const nx = -uy, ny = ux; // left normal
-                const ax = pts[s * 3], ay = pts[s * 3 + 1], az = pts[s * 3 + 2];
-                const bx = pts[e * 3], by = pts[e * 3 + 1], bz = pts[e * 3 + 2];
-                const hwS = hwAt(s), hwE = hwAt(e);
-                const oS = offsAt(s), oE = offsAt(e);
+                const extS = patternedNone || (s0 === 0 && !closed) ? 0 : hwAt(s0); // butt at feature start
+                const extE = patternedNone ? 0 : hwAt(e);                            // square cap at every close
+                const ax = pts[s0 * 3] - ux * extS, ay = pts[s0 * 3 + 1] - uy * extS, az = pts[s0 * 3 + 2];
+                const bx = pts[e * 3] + ux * extE, by = pts[e * 3 + 1] + uy * extE, bz = pts[e * 3 + 2];
+                const hwS = hwAt(s0), hwE = hwAt(e);
+                const oS = offsAt(s0), oE = offsAt(e);
                 const base = geo.positions.length / 3;
                 geo.positions.push(
                     ax + nx * hwS, ay + ny * hwS, az,
@@ -1975,8 +2007,8 @@ export class MBTileDataEmitter {
                     ax - nx * hwS, ay - ny * hwS, az,
                 );
                 geo.edge!.push(1, 1, -1, -1);
-                geo.dist!.push(distAt(s), distAt(e), distAt(e), distAt(s));
-                geo.len!.push(lenAt(s), lenAt(e), lenAt(e), lenAt(s));
+                geo.dist!.push(distAt(s0), distAt(e), distAt(e), distAt(s0));
+                geo.len!.push(lenAt(s0), lenAt(e), lenAt(e), lenAt(s0));
                 geo.offs!.push(oS[0], oS[1], oE[0], oE[1], oE[0], oE[1], oS[0], oS[1]);
                 // CCW (viewed from +Z) for the FrontSide fill material.
                 geo.indices.push(base, base + 3, base + 2, base, base + 2, base + 1);

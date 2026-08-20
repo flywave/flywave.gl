@@ -2267,3 +2267,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 ```
 - karma webpack 有 filesystem 缓存，调试用 `HARP_NO_HARD_SOURCE_CACHE=true`。
 - **runner 已自动退出**（2026-08-19，§12.67）：karma 结束后自动 `server.kill()`，无需手动 kill；重跑前仍需 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 清孤儿进程。
+
+**14. line-join/cap 域首次验收 + join:none 语义修正（2026-08-20 四）**：
+- **首次验收**（§12.33 代码 08-18 落地后从未跑过）：line-join 域 6/11 PASS（bevel/miter/default ±elevated 各 1px 阈值内 PASS），line-cap/butt 449、round 1283、square 277，line-color 354-1595，fill-outline-color 族 0-195（default/function PASS）——**join 主体几何已对齐**，残余为 round 22px（亚像素 AA）、property-function 51px、transparent 族 1194-1426（半透明排序）。
+- **join:none 破案**：期望图比 bevel 高 ~4.5px（=半线宽）且**仅末端**（起点不外延）。对照 mgl `line_bucket.ts:709/714-743`：none 的中折角（>5°）收段用 `endLeft=endRight=1`（**方形帽外延**）、新段以 −1,−1 起段；**特征末端**同样 1,1 外延；仅特征**起点**走 709 行的 butt。近直线角（COS_STRAIGHT_CORNER 5°）回退 miter。我们旧实现是纯矩形（无外延）→ 端部各缺半线宽。
+- **修复**（`MBTileDataEmitter.ts` join-none 分支重写）：直线 run 合并 + 拆分点/末端方形帽外延（起点 butt）；**patterned none 除外**（首版外延使 line-pattern-trim-offset end-offset 三例 +753~789 回归——外延平移 pattern 相位；pattern 域保持原始段长）。
+- **结果**：line-join/none 与 elevated 版 238→**0 双 PASS**、none-transparent 1426→1202，4 例净改善零回归。遗留：none-transparent 1202（半透明排序族）、round 22（AA）。
