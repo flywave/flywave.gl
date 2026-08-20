@@ -472,7 +472,12 @@ export class MBExpressionEngine {
                             return a + (b - a) * t;
                         }
 
-                        if (typeof a === 'string' && typeof b === 'string' && a[0] === '#') {
+                        // Color interpolation for ANY parseable color strings —
+                        // hex AND rgba()/rgb()/named (interpolateColor's
+                        // parseColor handles them all; the old a[0]==='#'
+                        // guard made rgba() stops fall through to the LOWER
+                        // stop unblended, e.g. raster-color/expression).
+                        if (typeof a === 'string' && typeof b === 'string') {
                             return this.interpolateColor(a, b, t);
                         }
 
@@ -1027,7 +1032,8 @@ export class MBExpressionEngine {
         const ra = lerp(ca.r, cb.r);
         const ga = lerp(ca.g, cb.g);
         const ba = lerp(ca.b, cb.b);
-        return MBExpressionEngine.rgbToHex(ra, ga, ba, 1);
+        const aa = ca.a + (cb.a - ca.a) * t;
+        return `rgba(${ra}, ${ga}, ${ba}, ${+aa.toFixed(4)})`;
     }
 
     private static parseColor(c: string): { r: number; g: number; b: number; a: number } {
