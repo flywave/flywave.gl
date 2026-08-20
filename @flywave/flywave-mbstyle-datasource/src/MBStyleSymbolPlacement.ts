@@ -50,6 +50,36 @@ export class MBStyleSymbolPlacement {
         const symbols = this.collectSymbols(camera, w, h);
         if (symbols.length === 0) return;
 
+        // mgl fog symbol clipping (collision_index.ts:547): symbols whose fog
+        // opacity exceeds FOG_SYMBOL_CLIPPING_THRESHOLD (0.9) are not placed
+        // at all — the CPU-side opacity (fog_helpers.getFogOpacity) is
+        // min(1, 1.00747·falloff³) · smoothstep(60°,65°,pitch) · color.a over
+        // the fov-shifted range; our scene.fog near/far already carry the
+        // calibrated metric conversion, and fogAlpha the pitch·color alpha.
+        try {
+            const scene = (this.m_mapView as any).m_scene;
+            const fog = scene?.fog as { near: number; far: number } | null | undefined;
+            const fogAlpha = (THREE.UniformsLib.fog as any).fogAlpha?.value;
+            if (fog && typeof fogAlpha === 'number' && fogAlpha > 0 && fog.far > fog.near) {
+                const camPos = camera.position;
+                const fwd = camera.getWorldDirection(new THREE.Vector3());
+                const tmp = new THREE.Vector3();
+                for (const sym of symbols) {
+                    if (!sym.object) continue;
+                    sym.object.getWorldPosition(tmp);
+                    const depth = -tmp.sub(camPos).dot(fwd);
+                    const t = (depth - fog.near) / (fog.far - fog.near);
+                    if (t <= 0) continue;
+                    const falloff = 1 - Math.min(1, Math.exp(-6 * t));
+                    const opacity = Math.min(1, 1.00747 * falloff * falloff * falloff) * fogAlpha;
+                    if (opacity > 0.9) {
+                        sym.opacity = 0;
+                        sym.object.visible = false;
+                    }
+                }
+            }
+        } catch {}
+
         // Assign stable cross-tile IDs so fade opacity persists across frames/tiles.
         this.assignCrossTileIDs(symbols, zoom);
 

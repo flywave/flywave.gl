@@ -182,6 +182,9 @@ export class MBExpressionEngine {
         }
         if (levels.length === 0) return raw;
 
+        // mgl legacy `colorSpace` applies to both axes of the bilinear
+        // interpolation (property and zoom).
+        const colorSpace = (raw as any).colorSpace;
         // Interpolate the property within a single zoom level (linear).
         const interpolateProperty = (levelStops: Array<[number, any]>, p: number): any => {
             if (p <= levelStops[0][0]) return levelStops[0][1];
@@ -199,6 +202,9 @@ export class MBExpressionEngine {
                         (va[0] === '#' || MBExpressionEngine.isColorString(va)) &&
                         MBExpressionEngine.isColorString(vb)
                     ) {
+                        if (colorSpace === 'hcl' || colorSpace === 'lab') {
+                            return MBExpressionEngine.interpolateColorSpace(va, vb, t, colorSpace);
+                        }
                         return MBExpressionEngine.interpolateColor(va, vb, t);
                     }
                     return va;
@@ -229,6 +235,9 @@ export class MBExpressionEngine {
                     (ra[0] === '#' || MBExpressionEngine.isColorString(ra)) &&
                     MBExpressionEngine.isColorString(rb)
                 ) {
+                    if (colorSpace === 'hcl' || colorSpace === 'lab') {
+                        return MBExpressionEngine.interpolateColorSpace(ra, rb, curve, colorSpace);
+                    }
                     return MBExpressionEngine.interpolateColor(ra, rb, curve);
                 }
                 return ra;
