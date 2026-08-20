@@ -172,6 +172,10 @@ export class CloudRenderNode extends TempNode {
     // mapSize 512). Plumbed from preset/config like CloudsEffect.setShadowSize.
     private m_shadowMapSize = SHADOW_MAP_SIZE;
     private m_shadowCascadeCount = SHADOW_CASCADE_COUNT;
+    // Virtual camera fed to the cloud-shadow cascade (near=1 clone of the RTE
+    // camera) — keeps the cascade window at the camera like the reference rig
+    // without touching the real camera / depth / picking contract.
+    private m_shadowVirtualCamera: any = null;
     private cloudInitialized = false;
     private cloudRenderReady = false;
     // Config passed to setConfig() before textures finished loading
@@ -942,17 +946,25 @@ export class CloudRenderNode extends TempNode {
             const cam = atmoCtx.camera as any;
             const w2e = atmoCtx.matrixWorldToECEF.value;
             if (cam && w2e) {
-                const origFar = cam.far;
-                // Reference parity: takram splits [camera.near, min(maxFar=1e5,
-                // camera.far)] — a cap measured FROM the camera. Their cameras keep
-                // near ≈ 0 so it equals an absolute 100km. RTE cameras pull near up
-                // to viewing distance (depth precision), so express the same cap as
-                // a thickness from the near plane: ground views are identical to
-                // takram ([~0, 1e5]); orbital views yield a 100km slab at the globe
-                // instead of spanning the entire visible hemisphere, where limb
-                // texels at grazing sun angles marched the full iteration budget.
-                cam.far = Math.max(Math.min(cam.far, cam.near + 100000), 100000);
-                cam.updateProjectionMatrix();
+                // Reference parity via a VIRTUAL camera: takram's cloud-shadow
+                // cascade always splits [near≈1, min(maxFar=1e5, camera.far)] —
+                // a window measured FROM the camera. The RTE camera's dynamic
+                // near is pulled up to viewing distance (depth precision), which
+                // would relocate that window onto the globe surface and make
+                // every BSM texel perform a real shell-crossing march (~16ms at
+                // orbital views, for shadows that are sub-pixel there). Feeding
+                // the cascade a near=1 clone keeps the window at the camera —
+                // identical shadow behavior to the reference at every altitude,
+                // without touching the real camera or the depth/picking
+                // contract.
+                if (this.m_shadowVirtualCamera == null) {
+                    this.m_shadowVirtualCamera = cam.clone();
+                }
+                const vcam = this.m_shadowVirtualCamera;
+                vcam.copy(cam);
+                vcam.near = 1;
+                vcam.far = Math.max(Math.min(cam.far, 100000), 2);
+                vcam.updateProjectionMatrix();
 
                 this.cloudUniforms.worldToECEF.value.copy(w2e);
                 this.cloudUniforms.ecefToWorld.value.copy(w2e).invert();
@@ -968,19 +980,16 @@ export class CloudRenderNode extends TempNode {
                 const zenithAngle = this.cloudUniforms.sunDirection.value.dot(surfaceNormal);
                 const shadowDistance = 1e6 * (1 - zenithAngle) + 1e3 * zenithAngle;
 
-                this.cascadedShadowMaps.update(cam, sunWorld, undefined, shadowDistance);
+                this.cascadedShadowMaps.update(vcam, sunWorld, undefined, shadowDistance);
 
-                this.cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
-                this.cloudUniforms.shadowCameraNear.value = cam.near;
+                this.cloudUniforms.shadowViewMatrix.value.copy(vcam.matrixWorldInverse);
+                this.cloudUniforms.shadowCameraNear.value = vcam.near;
                 this.cloudUniforms.shadowCameraFar.value = this.cascadedShadowMaps.far;
                 this.cloudUniforms.shadowFar.value = this.cascadedShadowMaps.far;
                 this.cloudUniforms.shadowTexelSize.value.set(
                     1 / this.m_shadowMapSize,
                     1 / this.m_shadowMapSize
                 );
-
-                cam.far = origFar;
-                cam.updateProjectionMatrix();
 
                 // Wire previous frame cascade matrices for velocity reprojection.
                 for (let i = 0; i < this.m_shadowCascadeCount; i++) {
@@ -1235,8 +1244,17 @@ export class CloudRenderNode extends TempNode {
 
         this.cloudUniforms.bottomRadius.value = parameters.bottomRadius;
 
-        for (let i = 0; i < this.m_shadowCascadeCount; i++) {
-            this.cloudUniforms.shadowTextureNodes[i] = this.shadowNodes[i];
+        // Fill ALL slots with valid texture nodes. TSL builds BOTH sides of
+        // uniform-gated If branches (e.g. the cascade-2 sample path gated by
+        // shadowCascadeCount > 2), so unused slots must still reference a live
+        // texture — otherwise, after a cascade-count shrink recreates the
+        // render targets, stale slots hold disposed textures and the node
+        // build throws "texture() expects a valid instance of THREE.Texture",
+        // killing the whole low-res pipeline. Runtime gates ensure the
+        // clamped fallback slots are never actually sampled.
+        for (let i = 0; i < 4; i++) {
+            this.cloudUniforms.shadowTextureNodes[i] =
+                this.shadowNodes[Math.min(i, this.m_shadowCascadeCount - 1)];
         }
         this.cloudUniforms.shadowCascadeCount.value = this.m_shadowCascadeCount;
 
