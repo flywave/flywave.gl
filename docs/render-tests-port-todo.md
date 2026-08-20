@@ -2273,3 +2273,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **join:none 破案**：期望图比 bevel 高 ~4.5px（=半线宽）且**仅末端**（起点不外延）。对照 mgl `line_bucket.ts:709/714-743`：none 的中折角（>5°）收段用 `endLeft=endRight=1`（**方形帽外延**）、新段以 −1,−1 起段；**特征末端**同样 1,1 外延；仅特征**起点**走 709 行的 butt。近直线角（COS_STRAIGHT_CORNER 5°）回退 miter。我们旧实现是纯矩形（无外延）→ 端部各缺半线宽。
 - **修复**（`MBTileDataEmitter.ts` join-none 分支重写）：直线 run 合并 + 拆分点/末端方形帽外延（起点 butt）；**patterned none 除外**（首版外延使 line-pattern-trim-offset end-offset 三例 +753~789 回归——外延平移 pattern 相位；pattern 域保持原始段长）。
 - **结果**：line-join/none 与 elevated 版 238→**0 双 PASS**、none-transparent 1426→1202，4 例净改善零回归。遗留：none-transparent 1202（半透明排序族）、round 22（AA）。
+
+**15. line-cap 残差定位（2026-08-20 四，留档待攻）**：butt 449 / square 277 / round 1283。逐行取证（512×256）显示残差集中在**画布/瓦片顶边附近的 ~10 条线端点收尾**：如 row1 exp 两段 (0,4)+(6,16) 我们合并成 (0,17)（偏长）、row2 x261-268 我们 261-264（偏短）、row3 x45-46 整缺——同一张图有长有短，排除统一帽公式错误，指向**瓦片裁剪端点语义**：mgl 裁剪产生的中间端点按 `intermediateStartPoint/intermediateEndPoint` 走 capExt=0 的 butt（line_bucket.ts square 分支），而我们的 emitRibbonCaps 可能对裁剪后折线的首末点照常出帽/或裁剪线位置不同。入口：`emitRibbonCaps` 与瓦片裁剪（clipPolyline）交叠处的端点分类。round 1182 missing 大头同源（顶部 fan 帽整体偏位）。
