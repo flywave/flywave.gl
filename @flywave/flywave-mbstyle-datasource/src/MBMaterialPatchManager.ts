@@ -631,8 +631,14 @@ export class MBMaterialPatchManager {
             const style = (this.m_dataSource as any).styleManager?.getStyle?.();
             const bgLayer = (style?.layers ?? []).find((l: any) => l.type === 'background');
             if (bgLayer) {
-                const c = new THREE.Color(bgLayer.paint?.['background-color'] ?? '#000000');
-                baseSrgb = [c.r, c.g, c.b];
+                // THREE.Color parses CSS to LINEAR components (ColorManagement
+                // r152+) — the shader consumes sRGB numerics, so convert back.
+                // (raster-alpha exposed this: orange (255,165,0) passed linear
+                // G 0.39 where 0.647 was needed — only the G channel visibly
+                // deviated, R/B are 1.0/0.0 in both spaces.)
+                const lin = new THREE.Color(bgLayer.paint?.['background-color'] ?? '#000000');
+                const srgb = lin.clone().copyLinearToSRGB(lin.clone());
+                baseSrgb = [srgb.r, srgb.g, srgb.b];
             }
         } catch {}
         // mgl far-plane clip (far_z.ts farthestPixelDistanceOnPlane): the
@@ -706,6 +712,7 @@ export class MBMaterialPatchManager {
                     ?? [(texture as any).image?.width ?? 256, (texture as any).image?.height ?? 256];
                 shader.uniforms.uMBRasPadPx = { value: padPx };
                 shader.uniforms.uMBRasFullPx = { value: [padPx[0], padPx[1]] };
+                shader.uniforms.uMBRasPadOn = { value: (texture as any).__mbNoPad ? 0 : 1 };
                 const rasRes = new THREE.Vector2(512, 256);
                 shader.uniforms.uMBRasRes = { value: rasRes };
                 shader.vertexShader = shader.vertexShader.replace(
@@ -751,7 +758,7 @@ export class MBMaterialPatchManager {
                      uniform vec3 uMBRasBase;
                      uniform float uMBRasFar;
                      varying float vMBRasEyeDist;
-                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx;
+                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx; uniform float uMBRasPadOn;
                      vec3 mbSrgbEnc(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
                      vec3 mbSrgbDec(vec3 c) { return mix(c / 12.92, pow((max(c, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
                      void main() {`,
@@ -768,7 +775,7 @@ export class MBMaterialPatchManager {
                          return;
                      }
                      vec2 mbRasUV = uMBRasUvOff + vMBRasUv * uMBRasUvScl;
-                     vec2 mbRasSmp = (vec2(1.0) + mbRasUV * uMBRasFullPx) / (uMBRasFullPx + 2.0);
+                     vec2 mbRasSmp = mix(mbRasUV, (vec2(1.0) + mbRasUV * uMBRasFullPx) / (uMBRasFullPx + 2.0), uMBRasPadOn);
                      vec4 mbRasT = texture2D(uMBRasMap, mbRasSmp);
                      // mgl applies the raster paint adjustments on the sRGB
                      // texture values; the framebuffer is linear, so round
@@ -786,14 +793,16 @@ export class MBMaterialPatchManager {
                      mbR += (mbAvg - mbR) * uMBRasSat;
                      mbR = (mbR - 0.5) * uMBRasContrast + 0.5;
                      mbR = mix(vec3(uMBRasBMin), vec3(uMBRasBMax), mbR);
-                     if (${opacity.toFixed(3)} < 1.0) {
+                     {
                          // Opaque sRGB-domain composite over the base color
                          // (the framebuffer blends in LINEAR — 0.5 over white
                          // would render 196 where mgl references show 167).
+                         // ALWAYS alpha-composite: raster tiles may carry an
+                         // alpha channel (raster-alpha fixture) — mgl blends
+                         // tile.rgb·a over the underlying background; opaque
+                         // imagery (a=1) is the identity case.
                          vec3 mbMix = mix(uMBRasBase, mbR, ${opacity.toFixed(3)} * mbRasT.a);
                          gl_FragColor = vec4(mbSrgbDec(mbMix), 1.0);
-                     } else {
-                         gl_FragColor = vec4(mbSrgbDec(mbR), mbRasT.a);
                      }`,
                 );
             };
@@ -819,6 +828,39 @@ export class MBMaterialPatchManager {
                 if (typeof document !== 'undefined' && img) {
                     const w = img.width ?? img.naturalWidth;
                     const h = img.height ?? img.naturalHeight;
+                    // Canvas 2D stores pixels PREMULTIPLIED — a texture with
+                    // real transparency would come back with rgb·a baked in
+                    // and the shader's straight-alpha composite would
+                    // double-multiply (raster-alpha fixture: partial-alpha
+                    // pixels measured exactly a²-rgb). Tiles carrying alpha
+                    // skip the padding canvas and use the original image
+                    // directly (straight alpha, ClampToEdge at the border).
+                    const probe = document.createElement('canvas');
+                    probe.width = Math.min(w, 64); probe.height = Math.min(h, 64);
+                    const px = probe.getContext('2d')!;
+                    px.drawImage(img, 0, 0, probe.width, probe.height);
+                    let hasAlpha = false;
+                    try {
+                        const data = px.getImageData(0, 0, probe.width, probe.height).data;
+                        for (let i = 3; i < data.length; i += 4) {
+                            if (data[i] !== 255) { hasAlpha = true; break; }
+                        }
+                    } catch { /* tainted canvas — assume opaque */ }
+                    if (hasAlpha) {
+                        padded = new THREE.Texture(img);
+                        padded.colorSpace = THREE.SRGBColorSpace;
+                        padded.minFilter = filterType;
+                        padded.magFilter = filterType;
+                        (padded as any).__mbPadPx = [w, h];
+                        (padded as any).__mbNoPad = true;
+                        padded.needsUpdate = true;
+                        rasterTextureCache.set(url, padded);
+                        attach(padded);
+                        try {
+                            (this.m_dataSource as any).mapView?.update?.();
+                        } catch {}
+                        return;
+                    }
                     const cv = document.createElement('canvas');
                     cv.width = w + 2; cv.height = h + 2;
                     const cx = cv.getContext('2d')!;
