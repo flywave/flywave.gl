@@ -1354,18 +1354,19 @@ export class MBEnvironmentManager {
             if (source.type !== 'image' && source.type !== 'canvas') continue;
             if (!source.coordinates || source.coordinates.length < 4) continue;
 
-            // Merge the paints of the raster layers referencing this source —
-            // mgl applies raster-* paint to image-source rendering too.
-            const layerPaint: Record<string, any> = {};
-            let layerHidden = false;
+            // One quad PER raster layer referencing this source (mgl applies
+            // raster-* paints per layer — two layers can share an image
+            // source with different raster-elevation / opacity). Layers with
+            // visibility:none are skipped individually.
+            const rasterLayersForSource: any[] = [];
             for (const l of style.layers ?? []) {
                 const layer = l as any;
-                if (layer.type === 'raster' && layer.source === sourceId) {
-                    if (layer.layout?.visibility === 'none') layerHidden = true;
-                    Object.assign(layerPaint, layer.paint ?? {});
+                if (layer.type === 'raster' && layer.source === sourceId
+                    && layer.layout?.visibility !== 'none') {
+                    rasterLayersForSource.push(layer);
                 }
             }
-            if (layerHidden) continue;
+            if (rasterLayersForSource.length === 0) continue;
 
             // Canvas source: use the canvas element directly; Image source: fetch URL.
             let texture: THREE.Texture;
@@ -1389,7 +1390,11 @@ export class MBEnvironmentManager {
                 }
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
-                const resampling = layerPaint['raster-resampling'] ?? 'linear';
+                // NOTE: the texture is shared by all layers of this source;
+                // per-layer resampling on a shared source takes the first
+                // layer's value (rare combination).
+                const firstPaint = rasterLayersForSource[0]?.paint ?? {};
+                const resampling = firstPaint['raster-resampling'] ?? 'linear';
                 if (resampling === 'nearest') {
                     texture.minFilter = THREE.NearestFilter;
                     texture.magFilter = THREE.NearestFilter;
@@ -1486,6 +1491,9 @@ export class MBEnvironmentManager {
                     if (!(check(0) && check(1) && check(2) && check(3))) homography = null;
                 } catch { homography = null; }
 
+                for (const rasterLayer of rasterLayersForSource) {
+                const layerPaint = rasterLayer.paint ?? {};
+                const layerIdx = (style.layers ?? []).indexOf(rasterLayer);
                 const rasterOpacity = Number(layerPaint['raster-opacity'] ?? 1);
                 const material = new THREE.MeshBasicMaterial({
                     map: texture,
@@ -1632,22 +1640,29 @@ export class MBEnvironmentManager {
                 }
 
                 const mesh = new THREE.Mesh(geom, material) as any;
-                mesh.renderOrder = -90;
+                // Layer order preserves stacking; mgl `raster-elevation`
+                // lifts the tile (meters) above the ground plane.
+                mesh.renderOrder = -90 + layerIdx * 0.01;
                 mesh.frustumCulled = false;
-                mesh.anchor = { x: anchor.x, y: anchor.y, z: 0 };
+                mesh.anchor = {
+                    x: anchor.x, y: anchor.y,
+                    z: Number(layerPaint['raster-elevation'] ?? 0),
+                };
                 (this.m_mapView as any).mapAnchors?.add?.(mesh);
                 this.m_imageQuads.push(mesh);
                 // mgl `renderWorldCopies` (default on): repeat the image at
                 // ±equator world copies — image/wrap fixtures cross the
                 // antimeridian and expect the neighbours visible.
                 const Cw = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
+                const elevZ = Number(layerPaint['raster-elevation'] ?? 0);
                 for (const dx of [-Cw, Cw]) {
                     const m2 = new THREE.Mesh(geom, material) as any;
-                    m2.renderOrder = -90;
+                    m2.renderOrder = -90 + layerIdx * 0.01;
                     m2.frustumCulled = false;
-                    m2.anchor = { x: anchor.x + dx, y: anchor.y, z: 0 };
+                    m2.anchor = { x: anchor.x + dx, y: anchor.y, z: elevZ };
                     (this.m_mapView as any).mapAnchors?.add?.(m2);
                     this.m_imageQuads.push(m2);
+                }
                 }
                 // Image styles usually have no tile sources — the render loop
                 // has already stopped by the time the async image decode
