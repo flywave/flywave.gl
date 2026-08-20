@@ -706,14 +706,41 @@ export class MBMaterialPatchManager {
                     ?? [(texture as any).image?.width ?? 256, (texture as any).image?.height ?? 256];
                 shader.uniforms.uMBRasPadPx = { value: padPx };
                 shader.uniforms.uMBRasFullPx = { value: [padPx[0], padPx[1]] };
+                const rasRes = new THREE.Vector2(512, 256);
+                shader.uniforms.uMBRasRes = { value: rasRes };
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
-                    'varying vec2 vMBRasUv; varying float vMBRasEyeDist;\nvoid main() {',
+                    'varying vec2 vMBRasUv; varying float vMBRasEyeDist; uniform vec2 uMBRasRes;\nvoid main() {',
                 );
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <begin_vertex>',
                     '#include <begin_vertex>\nvMBRasUv = uv;\nvMBRasEyeDist = length((modelViewMatrix * vec4(transformed, 1.0)).xyz);',
                 );
+                // mgl renders raster layers with `alignedProjMatrix`
+                // (transform.ts: "pixel-aligned to avoid fractional pixels
+                // for raster tiles"): the projection is rounded so tile
+                // quads land on WHOLE framebuffer pixels. Without it 1:1
+                // texel sampling falls between texels and LINEAR filtering
+                // blends neighbors — a uniform ~0.7px blur over the whole
+                // tile (measured on raster-opacity/default). Snap the
+                // projected vertex to the pixel grid (equivalent to the
+                // matrix rounding for axis-aligned quads).
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <project_vertex>',
+                    `#include <project_vertex>
+                    {
+                        vec2 mbNdc = gl_Position.xy / max(gl_Position.w, 1e-6);
+                        vec2 mbPx = (mbNdc * 0.5 + 0.5) * uMBRasRes;
+                        mbPx = floor(mbPx + 0.5);
+                        mbNdc = mbPx / uMBRasRes * 2.0 - 1.0;
+                        gl_Position.xy = mbNdc * gl_Position.w;
+                    }`,
+                );
+                const origBefore = (material as any).onBeforeRender;
+                (material as any).onBeforeRender = (renderer: any, scene: any, camera: any, geometry: any, object: any, group: any) => {
+                    if (origBefore) origBefore(renderer, scene, camera, geometry, object, group);
+                    try { renderer.getSize(rasRes); } catch { /* keep last */ }
+                };
                 shader.fragmentShader = shader.fragmentShader.replace(
                     'void main() {',
                     `varying vec2 vMBRasUv;
