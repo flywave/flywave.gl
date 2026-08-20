@@ -1345,7 +1345,9 @@ export class MBStyleDataSource extends TileDataSource {
             return;
         }
         (this.m_runtime as any).m_runtimeThemeOverride = true;
-        loadColorTheme({ 'color-theme': theme }).then((lut: any) => {
+        // Returns a promise settling once the theme has (or has failed to)
+        // propagate, so callers can deterministically await before capture.
+        return loadColorTheme({ 'color-theme': theme }).then((lut: any) => {
             // mgl keeps the previous LUT when decoding a broken theme
             // (style.ts:1592-1600 correlation guard).
             if (lut) this.applyColorTheme(lut);

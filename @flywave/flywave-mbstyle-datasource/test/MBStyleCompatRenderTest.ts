@@ -497,7 +497,7 @@ async function processOperations(
                 // The LUT decode + tile re-decode is async; mgl swaps a GPU
                 // uniform at draw time so its two-frame wait suffices — we
                 // need extra frames for the re-decode to land.
-                dataSource.setColorTheme(args[0] ?? null);
+                await dataSource.setColorTheme(args[0] ?? null);
                 await renderFrames(mapView, dataSource, 4);
                 break;
             }

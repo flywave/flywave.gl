@@ -2445,7 +2445,7 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **像素取证破案 3211/3173/3964 共模簇**：差异 = **background 层颜色未主题化**（cur 紫 238,130,238 vs exp 灰 147——64×64 fixture 全图即背景）。背景走 clearColor 路径（applyBackgroundColor）且 quad 色来自 **decoder 内部自建 evaluator**（MBStyleDecoder.ts:348 configure 时 new，非 runtime evaluator）。
 - **修复**：① applyBackgroundColor 内 background-color 查 LUT（含 import scope + use-theme none）；② 主题传播到 decoder 内 evaluator（applyColorTheme/propagateScopedThemes/onChange configure 后三处重放）；③ harness 主题类 op（setColorTheme/setImportColorTheme/config 变更）后补 renderFrames；④ connect 期 loadColorTheme(style)=null 不得清掉运行时主题（m_themeInitialized 守卫）。
 - **兑现**：red-chicago 201648→**6702**（−97%，背景主题化）、red-3d-content 238067→**176045**。
-- **遗留（竞态未闭环）**：add/config-* 等仍紫——dbg 探针轮（renderFrames(4)）曾得 133 灰（近 exp 147）而 b86-88 复现紫，**applyColorTheme→clearColor→捕获间存在异步竞态**（主题解码/瓦片重解码 vs capture 帧序不确定）。确定修法 = applyColorTheme 后请求 mapView 额外渲染帧回调（渲染循环级），留下一批。import-override-existing/remove 197k、fog-import-scope 209k、model 族 60k 维持 §46 状态。
+- **遗留（竞态未闭环）**：add/config-* 等仍紫——dbg 探针轮（renderFrames(4)）曾得 133 灰（近 exp 147）而 b86-90 复现紫，**applyColorTheme→clearColor→捕获间存在异步竞态**（主题解码/瓦片重解码 vs capture 帧序不确定；探针确证 connect 后 applyBackgroundColor 不再被调 = applyColorTheme 路径未达或其内部 try/catch 吞错；add 主题 PNG 1024×32 合法、表达式 node 单测通过——真因在渲染循环内序，需 render-loop 级探查）。setColorTheme 已改 awaitable（harness await 确定性传递）但未解。确定修法留档：applyColorTheme 后由 mapView 请求额外渲染帧回调 + 探查 applyColorTheme 内 catch 吞错点。import-override-existing/remove 197k、fog-import-scope 209k、model 族 60k 维持 §46 状态。
 
 **44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
 
