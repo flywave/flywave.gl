@@ -484,7 +484,10 @@ async function processOperations(
                 break;
             }
             case "setColorTheme": {
-                // Best-effort: store theme color for reference.
+                // Decode the LUT and propagate to evaluator + environment
+                // (mgl map.setColorTheme). The async decode lands before the
+                // fixture's trailing wait captures the frame.
+                dataSource.setColorTheme(args[0] ?? null);
                 break;
             }
             case "easeTo": {

@@ -2358,3 +2358,14 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **36. tile 路径 raster-elevation（2026-08-20 四，不跑测）**：raster technique 新增 `_rasterElevation`（paint 'raster-elevation'，默认 0），fill quad 顶点 z += elevation（世界米，mgl u_raster_elevation 语义）。与 far-clip（uMBRasFar 眼距）的交互未调（抬升改变远裁剪几何，待数据）。
 
 **37. heatmap 地面投影椭圆核（2026-08-20 四，不跑测）**：mgl `heatmap.vertex` 在**瓦片空间**挤出核四边形再经透视矩阵投影——pitch 下地面圆变屏幕椭圆（pitch30 fixture 16181 的根因；我们旧实现是屏幕空间正圆）。泛化：kernel 四边形改为"参数空间圆 + 逐核屏幕共轭基"——CPU 投影 p 与 p±D（D = S·rPx·mpp，沿地图平面两轴）得基向量（密度缓冲 px），顶点 `px = center + u·bx + v·by`，片元高斯半径 `r = length((u,v)·S)` 在**参数空间各向同性**（地面单位），椭圆由基承载。零 pitch 自动退化为旧行为（bx=(half,0), by=(0,half)）。heatmap/antimeridian 与 projected 仍留（回绕基平移/自定义投影）。
+
+**38. §23–37 攒批验收 + 两处修复（2026-08-20 晚，`mbstyle-b76/b77/`）**：
+
+**b76 首轮批测**（19 分类 235 例，Edge150 headless + SwiftShader，`HARP_NO_HARD_SOURCE_CACHE=true`，重建 lib 后跑）——**发现 heatmap 全域崩塌（15/18 → 0/18）与 color-theme 0/20**，其余亮点：circle-stroke-opacity 3/6 转通过（default/literal/function PASS；property-function 系 358 近失）、fill-outline-color default PASS + 39–190 近失带（§25 生效）、map-projections/unsupported-fog PASS（fog 符号裁剪 §28 验证 ✓）、raster-array/raster-elevation/image 首次有渲染输出（近失带 25–60k 级，非空渲染）。
+
+- **heatmap 崩塌根因（§37 的 D 推导 2× 缩小）**：`D = half·mpp` 用 `mpp = EQUATOR/(512·2^zoomLevel)`，但 flywave `zoomLevel` 是 mapbox zoom **+1**（§12.76 注释自证）——基向量减半 → 全部 kernel 缩小一半 → 密度塌缩、渲染近空白（像素剖析：current 全白 + 散点 vs expected 品红渐变）。**修复**：废除解析 mpp，直接从相机推导——小世界偏移 ε（=2% 相机距离，保透视线性）投影得逐核 Jacobian，`f = half/(√(lx·ly)·ε)` 几何均值定地面半径；零 pitch 精确退化为旧 (half,0)/(0,half)，pitch 各向异性由投影基承载。**b77 验证：heatmap 15/18 全部恢复**（default/literal/function/opacity/intensity/weight/color 全 PASS；antimeridian 5668 / pitch30 15038 / projected 13060 维持 §37 前残余水平）。
+- **color-theme 0/20 根因（harness op 空转）**：fixture 全部经 runtime operation `setColorTheme {data:<base64 PNG>}` 下发，不走 style 的 `color-theme` 属性——`MBStyleCompatRenderTest` 的 case 是 best-effort 空桩。**修复**：`MBStyleDataSource.setColorTheme(theme)` 公开 API（复用 `loadColorTheme` 解码 → evaluator + environment 传播 → markTilesDirty）+ harness 接线。**b77 验证**：remove 135、render-with-broken-lut 98、add/config/update 系 3.2–4k 近失带（LUT 已生效）；import-override/red-chicago 等 122–244k 大残差为 streets fixture 的 text/symbol 域既有缺口（无主题同样不通过），非 LUT 问题。
+- **fog 0/20 定性**：baseline5 fog 本就 0 通过；fog/default 552→1128 为中间态测量漂移（Linux 环境噪声 + §27/28/34 均触碰 fog 材质，vertical-range 默认 [0,0] 已验证无 div0、guard 正确），非崩塌级回归，fog 域留待专项。
+- **运行环境备忘**：后台任务 cwd 会漂移（结果目录落在意外位置，`find` 定位）；跑前 `pkill -f "RenderingTestResultServe[r]"` 清孤儿沿用；改 src 后必须 `tsc --build` 重建 lib（本轮 pbf 安装后首建即踩 MBColorTheme 缺失）。
+
+**本批净转 PASS：map-projections 1 + circle-stroke-opacity 3 = 4 例（b76），heatmap 15 例恢复（b77），color-theme 进入近失带 ~6 例。**

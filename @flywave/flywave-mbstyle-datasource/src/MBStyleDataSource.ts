@@ -1297,6 +1297,23 @@ export class MBStyleDataSource extends TileDataSource {
         return this.m_runtime;
     }
 
+    /**
+     * Apply a Mapbox color-theme at runtime (test operation `setColorTheme`,
+     * equivalent of mgl map.setColorTheme). The theme is `{ data: <base64
+     * PNG> }` or `{ data: null }` to remove. Decodes asynchronously, then
+     * propagates the LUT to the evaluator (paints) and environment (fog
+     * colors) and re-renders.
+     */
+    setColorTheme(theme: { data?: string | null } | null): void {
+        const { loadColorTheme } = require('./MBColorTheme');
+        loadColorTheme(theme?.data ? { 'color-theme': theme } : {}).then((lut: any) => {
+            this.m_runtime?.evaluator.setColorTheme(lut);
+            this.m_environment?.setColorTheme(lut);
+            this.mapView?.markTilesDirty?.(this as any);
+            this.mapView?.update?.();
+        }).catch(() => {});
+    }
+
     /** Enable collision-box debug overlay (metadata.test.collisionDebug). */
     setCollisionDebug(enabled: boolean): void {
         if (this.m_symbolPlacement) {

@@ -240,14 +240,39 @@ export class MBHeatmapRenderer {
                 };
                 const base = projectToPx(k.x, k.y, k.z);
                 if (!base) continue;
-                const zoom = this.m_mapView.zoomLevel ?? 0;
-                const mpp = EarthConstants.EQUATORIAL_CIRCUMFERENCE / (512 * Math.pow(2, zoom));
-                const D = half * mpp;
-                const axPt = projectToPx(k.x + D, k.y, k.z);
-                const ayPt = projectToPx(k.x, k.y + D, k.z);
+                // Derive the ground→screen scale from the camera itself: a
+                // small world-space probe offset projected at the kernel gives
+                // the local pixels-per-meter Jacobian. The analytic
+                // metersPerPixel formula was off 2x (flywave zoomLevel is
+                // mapbox zoom + 1) and collapsed every kernel. The ground
+                // radius is chosen with the geometric-mean scale so the mean
+                // screen radius is exactly `half` px — zero pitch degenerates
+                // precisely to the old (half,0)/(0,half) basis.
+                const camDist = Math.hypot(
+                    camera.position.x - k.x, camera.position.y - k.y, camera.position.z - k.z);
+                const eps = Math.max(camDist * 0.02, 1e-6);
                 const sc = this.m_rtScale;
-                const bxAbs = axPt ? [(axPt[0] - base[0]) * sc, (axPt[1] - base[1]) * sc] : [half * sc, 0];
-                const byAbs = ayPt ? [(ayPt[0] - base[0]) * sc, (ayPt[1] - base[1]) * sc] : [0, half * sc];
+                const basisAt = (cx: number, cy: number, cbase: [number, number]): {
+                    bx: number[]; by: number[];
+                } => {
+                    const axPt = projectToPx(cx + eps, cy, k.z);
+                    const ayPt = projectToPx(cx, cy + eps, k.z);
+                    if (!axPt || !ayPt) return { bx: [half * sc, 0], by: [0, half * sc] };
+                    const exv = [axPt[0] - cbase[0], axPt[1] - cbase[1]];
+                    const eyv = [ayPt[0] - cbase[0], ayPt[1] - cbase[1]];
+                    const lx = Math.hypot(exv[0], exv[1]) / eps;
+                    const ly = Math.hypot(eyv[0], eyv[1]) / eps;
+                    if (!isFinite(lx) || !isFinite(ly) || lx <= 0 || ly <= 0) {
+                        return { bx: [half * sc, 0], by: [0, half * sc] };
+                    }
+                    // ground radius whose mean projected radius is `half` px
+                    const f = half / (Math.sqrt(lx * ly) * eps);
+                    return {
+                        bx: [exv[0] * f * sc, exv[1] * f * sc],
+                        by: [eyv[0] * f * sc, eyv[1] * f * sc],
+                    };
+                };
+                const { bx: bxAbs, by: byAbs } = basisAt(k.x, k.y, base);
                 emitKernel(base[0], base[1], bxAbs, byAbs);
                 // Wrapped world copies (± one world along x) — mgl renders the
                 // offscreen pass over all MultiTileIDs, including the
@@ -257,19 +282,13 @@ export class MBHeatmapRenderer {
                 // antimeridian shows cyan-vs-lime density differences).
                 const west = projectToPx(k.x - worldRepeatX, k.y, k.z);
                 if (west) {
-                    const wax = projectToPx(k.x - worldRepeatX + D, k.y, k.z);
-                    const way = projectToPx(k.x - worldRepeatX, k.y + D, k.z);
-                    emitKernel(west[0], west[1],
-                        wax ? [(wax[0] - west[0]) * sc, (wax[1] - west[1]) * sc] : bxAbs,
-                        way ? [(way[0] - west[0]) * sc, (way[1] - west[1]) * sc] : byAbs);
+                    const b = basisAt(k.x - worldRepeatX, k.y, west);
+                    emitKernel(west[0], west[1], b.bx, b.by);
                 }
                 const east = projectToPx(k.x + worldRepeatX, k.y, k.z);
                 if (east) {
-                    const eax = projectToPx(k.x + worldRepeatX + D, k.y, k.z);
-                    const eay = projectToPx(k.x + worldRepeatX, k.y + D, k.z);
-                    emitKernel(east[0], east[1],
-                        eax ? [(eax[0] - east[0]) * sc, (eax[1] - east[1]) * sc] : bxAbs,
-                        eay ? [(eay[0] - east[0]) * sc, (eay[1] - east[1]) * sc] : byAbs);
+                    const b = basisAt(k.x + worldRepeatX, k.y, east);
+                    emitKernel(east[0], east[1], b.bx, b.by);
                 }
             }
             if (g.px.length > maxCount) maxCount = g.px.length;
