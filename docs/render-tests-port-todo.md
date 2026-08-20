@@ -2011,6 +2011,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
   - **零回归确认**：对照批所有共同用例 delta ≤ 0 或 =0。
 - **circle-opacity/blending(295)/property-function(491)/zoom-and-property(488)** 记为既有遗留（与 F10 无关，疑 blend/数据驱动 opacity 通道）。
 
+**13. circle-opacity 边缘残差定性（2026-08-20 四）**：像素取证（expected 与 current 各按白底合成后逐像素比对）显示三例残差全部是**半透明圆边缘 AA 剖面差**（如 property-function (17,22) cur=152 vs exp=129——我方边缘偏浅），无色彩/位置错误。实验：把 mgl antialiasblur 剖面**无条件**注入所有 circle（替换引擎 fwidth AA）→ 三例反而 +17~28px、其余持平（circle-radius/antimeridian +2）→ 回退条件注入。混合语义已排除（mgl 预乘输出 + [ONE,1−SRC_ALPHA] 与我们直通 alpha + [SrcAlpha,1−Src_ALPHA] 数学等价）。**定性为 AA 剖面精度项**（与 §12.72 线 AA 专项同类），需要时再攻；数据驱动 circle-stroke-opacity 同理（uniform 级求值，非逐要素）。
+
 
 
 

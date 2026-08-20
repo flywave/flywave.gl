@@ -1681,7 +1681,9 @@ export class MBMaterialPatchManager {
 
         // Mapbox circle-blur / circle-stroke-* (mgl circle.fragment.glsl,
         // verbatim ramp composition). Only injected when one of the paint
-        // props is set so the default engine AA path stays untouched.
+        // props is set: an always-inject experiment (§12.76-13) measured the
+        // plain opacity-only cases slightly WORSE (+17~28px), so the default
+        // engine fwidth AA path stays untouched there.
         // Normalization: the point quad covers (radius + stroke_width) px
         // (enlarged in the emitter), so extrude_length = 1.0 at the outer
         // stroke edge and the fill↔stroke boundary sits at
