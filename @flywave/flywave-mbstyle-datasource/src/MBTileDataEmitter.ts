@@ -1765,7 +1765,11 @@ export class MBTileDataEmitter {
     }
 
     private getOrCreateBorderTechniqueIndex(layer: EvaluatedLayer, borderColor: any): number {
-        const key = `${layer.id}:line-border-tech:${String(borderColor)}`;
+        // Gradient stops are part of the key — runtime gradient updates must
+        // rebuild the border ramp together with the main line's.
+        const borderGradSig = layer.paint?.['line-gradient']
+            ? JSON.stringify(layer.paint['line-gradient']).slice(0, 512) : '';
+        const key = `${layer.id}:line-border-tech:${String(borderColor)}:${borderGradSig}`;
         let idx = this.m_layerToTechniqueIndex.get(key);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
@@ -2336,7 +2340,11 @@ export class MBTileDataEmitter {
         // Data-driven dasharray / line-width must NOT share a technique — each
         // distinct (dasharray, dashWidth) pair yields a different pattern.
         const dashSig = hasDash ? `${JSON.stringify(dashArr)}@${dashWidth}` : '';
-        const key = `${layer.id}:line-ribbon-tech:${String(color)}:${String(opacity)}:${gradient ? 'grad' : ''}:${patternName ?? ''}:${hasDash ? `dash:${dashSig}` : ''}`;
+        // The gradient STOPS are part of the key: a runtime
+        // setPaintProperty('line-gradient', …) must rebuild the ramp (a bare
+        // 'grad' marker would keep the first ramp forever).
+        const gradSig = gradient ? JSON.stringify(gradient).slice(0, 512) : '';
+        const key = `${layer.id}:line-ribbon-tech:${String(color)}:${String(opacity)}:${gradSig}:${patternName ?? ''}:${hasDash ? `dash:${dashSig}` : ''}`;
         let idx = this.m_layerToTechniqueIndex.get(key);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
