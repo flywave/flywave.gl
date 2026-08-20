@@ -2455,7 +2455,7 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **语义修正**：`setImportColorTheme(id, null)` 的回退目标 = 被导入**样式表自身的** `data['color-theme']`（mgl style.ts:1119 override=null → stylesheet 主题），而非 import spec 的 color-theme（spec 主题本身是 override 通道）——此前回退到 spec 主题属语义错误，已改为查 `style.imports[id].data['color-theme']`。setImportColorTheme 改 Promise 化（harness await 确定性传递）。
 - **import-override-style（无 op）已渲染主题图**（current 红色调 194,0,0）——spec 主题经 mergeImports→scoped LUT 链路生效，115k 残差为其他通道（sprite/符号或 fog）。
 - **existing/remove 白屏定性**：op 后地图整图空白（仅天际少量像素），像素数自 b82 起恒定不变、promise 化/decoder 重放均无影响、无异常抛出——指向 **op 触发的全量 markTilesDirty 对重型 import basemap 的瓦片重装载在捕获时未完成或失败**（需交互式浏览器 devtools 调试 tile 任务队列）。留档下一批：① tile reload settle 探查；② 考虑不重解码的绘制期主题化（mgl 语义：GPU LUT，无重解码）。
-- fog-import-scope 残差通道定位 = **天空/大气色未主题化**（cur 198,219,250 蓝 vs exp 灰——sky-gradient ramp/atmosphere sun/halo 未走 scoped LUT，mgl drawAtmosphere 用 fog.scope LUT）。trees-monochrome 同含天空通道（cur 全蓝）。下一批：applySky 三色（ramp/solid/sun/halo）接 scoped LUT。
+- fog-import-scope 残差通道定位 = **天空/大气色未主题化**（cur 198,219,250 蓝 vs exp 灰——mgl drawAtmosphere 用 fog.scope LUT）。**已落地**：applySky 三色接 scoped LUT（gradient ramp buildGradientTexture(grad,lut)、solid 色、atmosphere sun/halo + 各自 `-use-theme` opt-out；propagateScopedThemes 重放 applySky）——语义正确但对 fog-import-scope/trees 数值无变化（其蓝色 ≠ sky 层通道，疑 fog atmosphere dome 或 terrain 面，b93 后留续取证）。tsc 绿、单测 265 passing / 3 既有。
 
 **44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
 

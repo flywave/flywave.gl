@@ -1482,6 +1482,8 @@ export class MBStyleDataSource extends TileDataSource {
             try {
                 this.m_environment.applyLights(style?.lights, style?.light);
                 this.m_environment.applyFog(style?.fog, style?.zoom ?? 0);
+                this.m_environment.applySky(
+                    this.buildSkyFromLayers(style) ?? style?.sky, style?.fog);
             } catch {}
         }
         // Background clear color picks up the (scoped) LUT as well.

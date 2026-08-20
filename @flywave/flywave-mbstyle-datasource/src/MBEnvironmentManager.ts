@@ -813,18 +813,28 @@ export class MBEnvironmentManager {
         let solidColor = new THREE.Color('#88bbee');
         try {
             const { MBMaterialPatchManager } = require('./MBMaterialPatchManager');
+            // mgl themes the atmosphere with the FOG scope's LUT
+            // (draw_atmosphere.ts) — env.m_colorThemeLut already carries the
+            // fog-scoped LUT (see propagateScopedThemes).
+            const lut = (sky['sky-gradient-use-theme'] === 'none') ? undefined : this.m_colorThemeLut;
             const grad = sky['sky-gradient'];
             if (Array.isArray(grad) && grad[0] === 'interpolate') {
-                rampTexture = MBMaterialPatchManager.buildGradientTexture(grad);
+                rampTexture = MBMaterialPatchManager.buildGradientTexture(grad, lut ?? undefined);
             } else if (grad === 'interpolate' || grad === undefined) {
                 // Mapbox style-spec default sky-gradient:
                 //   ["interpolate",["linear"],["sky-radial-progress"],0.8,"#87ceeb",1,"white"]
                 rampTexture = MBMaterialPatchManager.buildGradientTexture([
                     'interpolate', ['linear'], ['sky-radial-progress'],
                     0.8, '#87ceeb', 1, 'white',
-                ]);
+                ], lut ?? undefined);
             } else if (typeof grad === 'string') {
                 solidColor = new THREE.Color(grad);
+                if (lut) {
+                    try {
+                        const { applyColorTheme } = require('./MBColorTheme');
+                        solidColor = new THREE.Color(applyColorTheme(lut, grad));
+                    } catch {}
+                }
             }
         } catch {}
 
@@ -908,8 +918,21 @@ export class MBEnvironmentManager {
         const sunPos = sky['sky-atmosphere-sun'] ?? [0, 90];
         const azimuth = degToRad(sunPos[0]);
         const elevation = degToRad(sunPos[1]);
-        const sunColor = new THREE.Color(sky['sky-atmosphere-color'] ?? '#ffffff');
-        const haloColor = new THREE.Color(sky['sky-atmosphere-halo-color'] ?? '#88aacc');
+        const themeSky = (v: string): string => {
+            if (!this.m_colorThemeLut || v === undefined) return v;
+            try {
+                const { applyColorTheme } = require('./MBColorTheme');
+                return applyColorTheme(this.m_colorThemeLut, v);
+            } catch { return v; }
+        };
+        const sunColor = new THREE.Color(
+            sky['sky-atmosphere-color-use-theme'] === 'none'
+                ? (sky['sky-atmosphere-color'] ?? '#ffffff')
+                : themeSky(sky['sky-atmosphere-color'] ?? '#ffffff'));
+        const haloColor = new THREE.Color(
+            sky['sky-atmosphere-halo-color-use-theme'] === 'none'
+                ? (sky['sky-atmosphere-halo-color'] ?? '#88aacc')
+                : themeSky(sky['sky-atmosphere-halo-color'] ?? '#88aacc'));
         const sunIntensity = sky['sky-atmosphere-sun-intensity'] ?? 1.0;
         const opacity = sky['sky-opacity'] ?? 0.8;
 
