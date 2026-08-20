@@ -2324,3 +2324,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **line-cap 瓦片裁剪端点定性修正**：发射器无 polyline 裁剪（VT 顶点本就是整数、mgl 亦在端点画帽）；§12.76-15 的顶边 mixed 长/短锁定为**引擎 clip volume 与 mgl 瓦片边界的亚像素语义差**（引擎层改动，需独立专项）。
 - **round cap 月牙代码对比结论**：mgl round 帽 = 方框四边形 + 片元 `length(v_normal)` 精确圆形化；我们的 K=8 扇形弦差仅 ~0.1px@r=5，不足以解释 1182px 月牙——月牙另有其因（结合 §12.76-17 的候选要素，疑与引擎 clip/顶点剔除相关），留档。
 - **raster-color/nearest 323**：对齐 mgl 采样式后仍差 bin 边缘 0.25% 像素——mgl 的 ramp 评估点 i/(N-1) 与采样半纹元中心天然错位（mgl 自身的不一致），叠加 mediump 精度，不再追。
+
+**24. 纯代码对比批二（2026-08-20 四，不跑测）**：
+- **hcl/lab 色彩空间插值移植**（`MBExpressionEngine`）：legacy function 的 `colorSpace: 'hcl'|'lab'` 此前忽略（按 sRGB 插值）——background-color/colorSpace-hcl(4096 全图) 破案。逐行移植 mgl `color_spaces.ts`（rgb↔lab↔hcl、D65 常数、interpolateHue 最短色相路径、NaN b 通道处理）。数值验证：rgb(118,0,118)→rgb(255,155,0) 中点 hcl=#e32853、lab=#bf5655，端点精确往返。lab 端点通道由 `bb` 命名避开与 b 参数遮蔽。
+- **fill-outline 残差定性**：mgl 用 gl.LINES 画多边形边 + 片元 `alpha = 1−smoothstep(0,1,dist)` 的 1px 屏幕空间衰减（fill_outline.fragment.glsl）——与我们的 ribbon 实现机制不同；53-195px 近失，需按 LINES+smoothstep 重写才可精确对齐，暂缓。
+- **image 源残差定性**（image/raster-visibility 31357 等）：mgl image 源经 raster 程序的投影矩阵做**任意四边形正确纹理映射**；我们是双三角形 UV 插值——非平行四边形坐标（本 fixture 旋转四边形）在对角线产生折痕。精确修法 = 顶点 shader 注入 4 角 homography；base 色已在 §12.76-23 修复。记档待攻。

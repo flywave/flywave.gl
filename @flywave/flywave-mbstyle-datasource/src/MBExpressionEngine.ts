@@ -140,6 +140,11 @@ export class MBExpressionEngine {
                     MBExpressionEngine.isColorString(a) &&
                     MBExpressionEngine.isColorString(b)
                 ) {
+                    // mgl legacy `colorSpace: 'hcl' | 'lab'` (function/convert.ts)
+                    const cs = (raw as any).colorSpace;
+                    if (cs === 'hcl' || cs === 'lab') {
+                        return this.interpolateColorSpace(a, b, curve, cs);
+                    }
                     return this.interpolateColor(a, b, curve);
                 }
                 return a;
@@ -1023,6 +1028,87 @@ export class MBExpressionEngine {
             return this.pointInGeometry(geom.coordinates[0], geom.coordinates[1], target);
         }
         return false;
+    }
+
+    // ---- mgl color_spaces.ts port (rgb <-> lab <-> hcl, D65) ----
+    private static readonly Xn = 0.950470;
+    private static readonly Zn = 1.088830;
+    private static readonly csT0 = 4 / 29;
+    private static readonly csT1 = 6 / 29;
+    private static readonly csT2 = 3 * (6 / 29) * (6 / 29);
+    private static readonly csT3 = (6 / 29) ** 3;
+
+    private static xyz2lab(t: number): number {
+        return t > MBExpressionEngine.csT3 ? Math.cbrt(t) : t / MBExpressionEngine.csT2 + MBExpressionEngine.csT0;
+    }
+    private static lab2xyz(t: number): number {
+        return t > MBExpressionEngine.csT1 ? t * t * t : MBExpressionEngine.csT2 * (t - MBExpressionEngine.csT0);
+    }
+    private static xyz2rgb(x: number): number {
+        return 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
+    }
+    private static rgb2xyz(x: number): number {
+        x /= 255;
+        return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+    }
+    private static rgbToLab(r: number, g: number, b: number): { l: number; a: number; bb: number } {
+        const rb = MBExpressionEngine.rgb2xyz(r), ga = MBExpressionEngine.rgb2xyz(g), bl = MBExpressionEngine.rgb2xyz(b);
+        const x = MBExpressionEngine.xyz2lab((0.4124564 * rb + 0.3575761 * ga + 0.1804375 * bl) / MBExpressionEngine.Xn);
+        const y = MBExpressionEngine.xyz2lab((0.2126729 * rb + 0.7151522 * ga + 0.0721750 * bl) / 1);
+        const z = MBExpressionEngine.xyz2lab((0.0193339 * rb + 0.1191920 * ga + 0.9503041 * bl) / MBExpressionEngine.Zn);
+        return { l: 116 * y - 16, a: 500 * (x - y), bb: 200 * (y - z) };
+    }
+    private static labToRgb(l: number, a: number, bb: number): [number, number, number] {
+        let y = (l + 16) / 116;
+        let x = isNaN(a) ? y : y + a / 500;
+        let z = isNaN(bb) ? y : y - bb / 200;
+        y = MBExpressionEngine.lab2xyz(y);
+        x = MBExpressionEngine.Xn * MBExpressionEngine.lab2xyz(x);
+        z = MBExpressionEngine.Zn * MBExpressionEngine.lab2xyz(z);
+        return [
+            MBExpressionEngine.xyz2rgb(3.2404542 * x - 1.5371385 * y - 0.4985314 * z),
+            MBExpressionEngine.xyz2rgb(-0.9692660 * x + 1.8760108 * y + 0.0415560 * z),
+            MBExpressionEngine.xyz2rgb(0.0556434 * x - 0.2040259 * y + 1.0572252 * z),
+        ];
+    }
+    /** mgl legacy-function `colorSpace: 'hcl' | 'lab'` interpolation. */
+    private static interpolateColorSpace(a: string, b: string, t: number, colorSpace: string): string {
+        const ca = MBExpressionEngine.parseColor(a);
+        const cb = MBExpressionEngine.parseColor(b);
+        const clamp255 = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+        if (colorSpace === 'lab') {
+            const la = MBExpressionEngine.rgbToLab(ca.r, ca.g, ca.b);
+            const lb = MBExpressionEngine.rgbToLab(cb.r, cb.g, cb.b);
+            const [r, g, bl] = MBExpressionEngine.labToRgb(
+                la.l + (lb.l - la.l) * t,
+                la.a + (lb.a - la.a) * t,
+                la.bb + (lb.bb - la.bb) * t);
+            const al = ca.a + (cb.a - ca.a) * t;
+            return al >= 1
+                ? MBExpressionEngine.rgbToHex(clamp255(r), clamp255(g), clamp255(bl), 1)
+                : `rgba(${clamp255(r)}, ${clamp255(g)}, ${clamp255(bl)}, ${+al.toFixed(4)})`;
+        }
+        if (colorSpace === 'hcl') {
+            const toHcl = (r: number, g: number, bb: number) => {
+                const { l, a, bb: b2 } = MBExpressionEngine.rgbToLab(r, g, bb);
+                const h = Math.atan2(b2, a) * 180 / Math.PI;
+                return { h: h < 0 ? h + 360 : h, c: Math.sqrt(a * a + b2 * b2), l };
+            };
+            const ha = toHcl(ca.r, ca.g, ca.b);
+            const hb = toHcl(cb.r, cb.g, cb.b);
+            // mgl interpolateHue (shortest hue path)
+            const d = hb.h - ha.h;
+            const dh = d > 180 || d < -180 ? d - 360 * Math.round(d / 360) : d;
+            const h = (ha.h + t * dh) * Math.PI / 180;
+            const c = ha.c + (hb.c - ha.c) * t;
+            const l = ha.l + (hb.l - ha.l) * t;
+            const [r, g, bl] = MBExpressionEngine.labToRgb(l, Math.cos(h) * c, Math.sin(h) * c);
+            const al = ca.a + (cb.a - ca.a) * t;
+            return al >= 1
+                ? MBExpressionEngine.rgbToHex(clamp255(r), clamp255(g), clamp255(bl), 1)
+                : `rgba(${clamp255(r)}, ${clamp255(g)}, ${clamp255(bl)}, ${+al.toFixed(4)})`;
+        }
+        return MBExpressionEngine.interpolateColor(a, b, t);
     }
 
     private static interpolateColor(a: string, b: string, t: number): string {
