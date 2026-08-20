@@ -2275,3 +2275,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **结果**：line-join/none 与 elevated 版 238→**0 双 PASS**、none-transparent 1426→1202，4 例净改善零回归。遗留：none-transparent 1202（半透明排序族）、round 22（AA）。
 
 **15. line-cap 残差定位（2026-08-20 四，留档待攻）**：butt 449 / square 277 / round 1283。逐行取证（512×256）显示残差集中在**画布/瓦片顶边附近的 ~10 条线端点收尾**：如 row1 exp 两段 (0,4)+(6,16) 我们合并成 (0,17)（偏长）、row2 x261-268 我们 261-264（偏短）、row3 x45-46 整缺——同一张图有长有短，排除统一帽公式错误，指向**瓦片裁剪端点语义**：mgl 裁剪产生的中间端点按 `intermediateStartPoint/intermediateEndPoint` 走 capExt=0 的 butt（line_bucket.ts square 分支），而我们的 emitRibbonCaps 可能对裁剪后折线的首末点照常出帽/或裁剪线位置不同。入口：`emitRibbonCaps` 与瓦片裁剪（clipPolyline）交叠处的端点分类。round 1182 missing 大头同源（顶部 fan 帽整体偏位）。
+
+**16. round join 判据修正 + round cap 月牙留档（2026-08-20 四）**：join-round 分支判据从"转角 ≥ roundLimit(1.05 rad≈60°)"改为 mgl 语义 **miterLength=1/cos(半转角) ≥ roundLimit**（≈35.5° 起画圆，line_bucket.ts:797）。本批 fixture 无 35.5°–60° 转角故数值持平（elevated-butt 连带 −43），保留为语义正确项。line-cap/round 的 1182px 缺失月牙（散布全图、聚簇 x64-128/x192-320, y160-224）非 join 判据所致，round cap fan（emitRibbonCaps K=8）几何核对无误，需 fixture 级逐顶点取证（疑 mgl fakeround/sharp-corner COS_HALF_SHARP_CORNER 裁剪或瓦片裁剪中间端帽），留档待攻。

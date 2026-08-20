@@ -2103,10 +2103,15 @@ export class MBTileDataEmitter {
             const oI = offsAt(i);
             const dot = pnx * nx + pny * ny;
             const mLen = dot > 1e-6 ? 1 / dot : Infinity;
-            // mgl `line-round-limit`: shallow turns round -> miter.
-            const turnAngle = Math.acos(Math.max(-1, Math.min(1,
-                dx[iN] * dx[i] + dy[iN] * dy[i])));
-            const useRound = join === 'round' && turnAngle >= roundLimit;
+            // mgl `line-round-limit` (line_bucket.ts): a round join splits to
+            // miter when miterLength = 1/cos(halfTurn) < roundLimit (default
+            // 1.05 ⇒ turns below ~35.5°), NOT when the turn angle itself
+            // reaches roundLimit (that would only round turns > 60°, leaving
+            // missing crescents in the 35.5°–60° band).
+            const cosHalfTurn = Math.max(0, Math.sqrt((1 + Math.max(-1, Math.min(1,
+                dx[iN] * dx[i] + dy[iN] * dy[i]))) / 2));
+            const useRound = join === 'round' &&
+                (cosHalfTurn <= 1e-6 || 1 / cosHalfTurn >= roundLimit);
             if (useRound) {
                 const cV = pushV(cx, cy, cz, 0, dI, lI, oI);
                 const a0 = Math.atan2(pny, pnx);
