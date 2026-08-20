@@ -145,7 +145,17 @@ export function applyColorThemeToPixels(
  */
 export async function loadColorTheme(style: any): Promise<ColorThemeLut | null> {
     const theme = style?.['color-theme'];
-    const dataUri = theme?.data;
+    let dataUri: any = theme?.data;
+    if (Array.isArray(dataUri)) {
+        // mgl resolves `color-theme.data` as an expression against the
+        // style/import config (["match", ["config", "colorTheme"], ...]).
+        try {
+            const { MBExpressionEngine } = require('./MBExpressionEngine');
+            dataUri = MBExpressionEngine.evaluate(dataUri, { _config: style?._config ?? {} } as any);
+        } catch {
+            dataUri = undefined;
+        }
+    }
     if (typeof dataUri !== 'string' || dataUri.length === 0) return null;
     try {
         const img = new Image();

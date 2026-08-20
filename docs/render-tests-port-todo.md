@@ -2432,6 +2432,14 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 **待批测**：circle-color/stroke 系（uColor 转换后现有 4-5 PASS 可能变化——mgl 语义应更近）、icon-color/halo 系、text-color/halo 系、SDF icon halo、building 立面/roof、line-border 色、line-trim-color、sky/atmosphere/fog 穹顶色域。
 
+**46. color-theme import/override 作用域语义落地（2026-08-20 五，mgl style.ts 逐行对照）**：
+
+**mgl 语义（子代理全扫 style.ts/lut.ts/3d-style 取证）**：每个 Style 实例（根 + 每 import fragment）各持 colorTheme/LUT；import spec 的 `"color-theme"` 为 override（style.ts:872），优先于被导入样式自身的根级 color-theme（:1119-1121）；`getLut(scope)` 逐作用域解析（:1626）；fog 用 **fog.scope** 的 LUT、lights 用**各自 scope** 的 LUT（3d-style/render/lights.ts:80）；model 整体 GPU LUT（draw_model.ts:170）；`data` 可为表达式（按 import config 求值，config-bw 族）；解码失败保留旧 LUT（:1592）。
+
+**落地**：① `mergeImports` 记录 `_importThemes[id] = imp['color-theme'] ?? data['color-theme']`、层打 `_importScope`、fog/lights 记来源 scope；② `MBLayerEvaluator` scoped LUT map（层按 importScope 解析，未标记回落根 LUT）；③ env fog/lights 各自 scope LUT（lights 颜色 css/数组两形态查表）；④ `loadColorTheme` 支持表达式 data（MBExpressionEngine match+config，node 单测验证通过）；⑤ `setImportColorTheme` 运行时 API + harness op + import-config 变更重解析；⑥ model 材质/纹理 CPU 烘焙（model-color-use-theme 尊重）；⑦ 解码失败保留旧 LUT、runtime setColorTheme 不被 rebuild 清除（m_runtimeThemeOverride）；⑧ sprite 烘焙 LUT 回退到首个非空 import LUT。
+
+**b82/b83 验收（color-theme 26 例，两轮一致）**：**净改善**——light-import-scope 244k→**114k**（lights 作用域主题化生效）、use-theme/constant-* 644→**1px**（差 1 像素过阈值 6）、import-override-style 244k→115k；**回归**——import-override-existing/remove 122k→197k（两例同值 = 末态均为"import 自身主题"，主题化图层渲染本身与 expected 偏差更大——但 use-theme 证明线层查表近乎完美，偏差必在其他通道）；config-bw/red/theme-from-config、add/update-*（3173-3964 簇）、model 族（trees-monochrome 59.7k/emission-bw 61k 不动——model 烘焙未生效，疑异步竞态或路径未达）、red-chicago 201k 不变。**下一阶段：逐 fixture 像素取证**（3211/3173/3964 共模簇 + model 烘焙路径核查 + import-override 偏差通道定位）。tsc 绿、单测 265 passing / 3 既有。
+
 **44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
 
 - **零 LOST PASS**；circle-color/stroke-color/stroke-width **全绿 5/5×3**、stroke-opacity 3/6、icon-halo-color 7/7、icon-halo-width 4/4、icon-color 4/5 维持——uColor/uStrokeColor 转 sRGB **零回归**（这些域本就按 mgl 语义校准，转换后灰阶类不受影响、彩阶类无 fixture 暴露差异）。

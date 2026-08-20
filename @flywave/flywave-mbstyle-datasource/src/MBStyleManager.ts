@@ -124,10 +124,14 @@ export class MBStyleManager {
         const mergedLayers: any[] = [...(this.m_style.layers ?? [])];
         const mergedSources: Record<string, any> = { ...(this.m_style.sources as any) };
         const configMap: Record<string, any> = {};
+        const importThemes: Record<string, any> = {};
 
         for (const imp of imports) {
             const data = imp.data;
             if (!data) continue;
+            // mgl: the import spec's "color-theme" overrides the imported
+            // stylesheet's own root-level theme (style.ts:872, 1119-1121).
+            importThemes[imp.id] = imp['color-theme'] ?? data['color-theme'] ?? null;
             // Collect config values for ["config", key] expressions.
             if (imp.config) {
                 for (const [k, v] of Object.entries(imp.config)) {
@@ -140,13 +144,19 @@ export class MBStyleManager {
                     if (!mergedSources[sid]) mergedSources[sid] = spec;
                 }
             }
-            // Append layers.
+            // Append layers. Tag each with its import id so downstream
+            // consumers (color-theme LUT scoping) can resolve per-scope
+            // themes the way mgl scopes a fragment Style per import.
             if (data.layers) {
-                mergedLayers.push(...data.layers);
+                for (const l of data.layers) {
+                    (l as any)._importScope = imp.id;
+                    mergedLayers.push(l);
+                }
             }
             // Use imported lights/sprite/glyphs if base lacks them.
             if (data.lights && !(this.m_style as any).lights) {
                 (this.m_style as any).lights = data.lights;
+                (this.m_style as any)._lightsImportScope = imp.id;
             }
             if (data.sprite && !this.m_style.sprite) {
                 this.m_style.sprite = data.sprite;
@@ -156,6 +166,7 @@ export class MBStyleManager {
             }
             if (data.fog && !(this.m_style as any).fog) {
                 (this.m_style as any).fog = data.fog;
+                (this.m_style as any)._fogImportScope = imp.id;
             }
             if (data.sky && !(this.m_style as any).sky) {
                 (this.m_style as any).sky = data.sky;
@@ -169,6 +180,8 @@ export class MBStyleManager {
         this.m_style.sources = mergedSources;
         // Store config for expression evaluation.
         (this.m_style as any)._config = configMap;
+        // Per-import color themes (null = no theme for that import).
+        (this.m_style as any)._importThemes = importThemes;
     }
 
     /**

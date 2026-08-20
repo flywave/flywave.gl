@@ -457,8 +457,17 @@ async function processOperations(
                             imp.config[key] = value;
                         }
                     }
+                    // Propagate config to the merged style's flat map too
+                    // (["config", key] expressions + color-theme.data resolve
+                    // against it after the merge).
+                    if ((style as any)._config) {
+                        (style as any)._config[key] = value;
+                    }
                     // Re-merge imports to propagate config.
                     dataSource.runtime?.setStyle(style);
+                    // A config change can flip an expression-valued
+                    // color-theme.data — re-resolve scoped themes.
+                    (dataSource as any).loadImportThemes?.(style);
                 }
                 break;
             }
@@ -488,6 +497,12 @@ async function processOperations(
                 // (mgl map.setColorTheme). The async decode lands before the
                 // fixture's trailing wait captures the frame.
                 dataSource.setColorTheme(args[0] ?? null);
+                break;
+            }
+            case "setImportColorTheme": {
+                // mgl map.setImportColorTheme(importId, theme):
+                // args[0]=importId, args[1]=theme ({data}|null)
+                (dataSource as any).setImportColorTheme?.(args[0] ?? '', args[1] ?? null);
                 break;
             }
             case "easeTo": {

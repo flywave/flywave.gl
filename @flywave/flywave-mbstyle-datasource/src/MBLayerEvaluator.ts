@@ -47,6 +47,8 @@ interface PreprocessedLayer {
     renderOrder: number;
     visibility: 'visible' | 'none';
     appearances: Array<{ name: string; condition: any; properties: Record<string, any> }> | undefined;
+    /** Import id this layer came from (color-theme scope), if any. */
+    importScope: string | undefined;
 }
 
 export interface PaintPropertyDef {
@@ -331,6 +333,13 @@ export class MBLayerEvaluator {
     /** Mapbox `color-theme` LUT (null = no theme, colors pass through). */
     private m_lut: ColorThemeLut | null = null;
 
+    /**
+     * Per-import-scope LUTs (mgl `getLut(scope)`): layers merged from a style
+     * import resolve their theme from the import's own color-theme, not the
+     * root's. Absent scope key falls back to the root LUT.
+     */
+    private m_scopedLuts: Map<string, ColorThemeLut | null> = new Map();
+
     constructor(style: StyleSpecification) {
         this.m_config = (style as any)._config ?? {};
         this.prepare(style);
@@ -338,6 +347,23 @@ export class MBLayerEvaluator {
 
     setColorTheme(lut: ColorThemeLut | null): void {
         this.m_lut = lut;
+    }
+
+    setColorThemeScope(scope: string, lut: ColorThemeLut | null): void {
+        this.m_scopedLuts.set(scope, lut);
+    }
+
+    get scopedColorThemes(): Map<string, ColorThemeLut | null> {
+        return new Map(this.m_scopedLuts);
+    }
+
+    /** Resolve the LUT for a layer (import scope if tagged, else root). */
+    private lutFor(pl: PreprocessedLayer): ColorThemeLut | null {
+        const scope = pl.importScope;
+        if (scope !== undefined && this.m_scopedLuts.has(scope)) {
+            return this.m_scopedLuts.get(scope) ?? null;
+        }
+        return this.m_lut;
     }
 
     get colorTheme(): ColorThemeLut | null {
@@ -373,6 +399,7 @@ export class MBLayerEvaluator {
                 renderOrder: index,
                 visibility,
                 appearances: (layer as any).appearances,
+                importScope: (layer as any)._importScope,
             };
 
             this.m_allLayers.push(pl);
@@ -504,10 +531,11 @@ export class MBLayerEvaluator {
                 // Mapbox color-theme LUT: transform color paints unless the
                 // property's `-use-theme` is 'none' (mgl applies the LUT to
                 // every evaluated color by default).
-                if (this.m_lut && typeof paint[key] === 'string' && /-color$/.test(key)
+                const layerLut = this.lutFor(pl);
+                if (layerLut && typeof paint[key] === 'string' && /-color$/.test(key)
                     && paint[`${key}-use-theme`] !== 'none'
                     && pl.paintDefs[`${key}-use-theme`]?.value !== 'none') {
-                    paint[key] = applyColorTheme(this.m_lut, paint[key] as string);
+                    paint[key] = applyColorTheme(layerLut, paint[key] as string);
                 }
             }
 

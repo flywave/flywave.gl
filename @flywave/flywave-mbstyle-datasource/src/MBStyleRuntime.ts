@@ -299,10 +299,19 @@ export class MBStyleRuntime {
 
     private rebuildEvaluator(): void {
         const prevLut = (this.m_evaluator as any).m_lut ?? null;
+        const prevScoped = (this.m_evaluator as any).scopedColorThemes
+            ?? new Map<string, any>();
         this.m_evaluator = new MBLayerEvaluator(this.m_style);
         this.m_evaluator.setColorTheme(prevLut);
+        for (const [scope, lut] of prevScoped) {
+            this.m_evaluator.setColorThemeScope(scope, lut);
+        }
         loadColorTheme(this.m_style).then(lut => {
-            this.m_evaluator.setColorTheme(lut);
+            // A runtime map.setColorTheme overrides the style JSON's theme
+            // until explicitly cleared (mgl colorThemeOverride precedence).
+            if (!(this as any).m_runtimeThemeOverride) {
+                this.m_evaluator.setColorTheme(lut);
+            }
             try { this.m_onChange(); } catch {}
         }).catch(() => {});
         this.m_onChange();

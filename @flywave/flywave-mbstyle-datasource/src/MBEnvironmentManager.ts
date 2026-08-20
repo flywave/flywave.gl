@@ -290,6 +290,35 @@ export class MBEnvironmentManager {
         this.m_colorThemeLut = lut;
     }
 
+    /**
+     * Lights resolve their theme from the LIGHT's own import scope (mgl
+     * `3d-style/render/lights.ts` uses `style.getLut(light.scope)`), which can
+     * differ from the fog/root LUT in one frame.
+     */
+    private m_lightsColorThemeLut: import('./MBColorTheme').ColorThemeLut | null = null;
+
+    setLightsColorTheme(lut: import('./MBColorTheme').ColorThemeLut | null): void {
+        this.m_lightsColorThemeLut = lut;
+    }
+
+    /** Theme a light color (accepts css string or sRGB [r,g,b] array). */
+    private themeLightColor(v: any): any {
+        if (!this.m_lightsColorThemeLut || v === undefined || v === null) return v;
+        try {
+            const { applyColorTheme } = require('./MBColorTheme');
+            if (typeof v === 'string') return applyColorTheme(this.m_lightsColorThemeLut, v);
+            if (Array.isArray(v) && v.length >= 3
+                && v.every((c: any) => typeof c === 'number' && c >= 0 && c <= 1)) {
+                const out = applyColorTheme(
+                    this.m_lightsColorThemeLut,
+                    `rgb(${Math.round(v[0] * 255)}, ${Math.round(v[1] * 255)}, ${Math.round(v[2] * 255)})`);
+                const m = out.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+                if (m) return [+m[1] / 255, +m[2] / 255, +m[3] / 255];
+            }
+        } catch {}
+        return v;
+    }
+
     applyLights(lights: Light3DProperties[] | undefined, legacyLight?: any): void {
         if (!this.m_scene) return;
         this.clearLights();
@@ -303,7 +332,8 @@ export class MBEnvironmentManager {
 
         if (!lights || lights.length === 0) {
             if (legacyLight) {
-                const legacyColor = new THREE.Color(legacyLight.color ?? '#ffffff');
+                const legacyColor = new THREE.Color(
+                    this.themeLightColor(legacyLight.color ?? '#ffffff'));
                 const legacyIntensity = legacyLight.intensity ?? 0.5;
                 this.m_ambientColor = legacyColor;
                 this.m_ambientIntensity = legacyIntensity;
@@ -340,7 +370,8 @@ export class MBEnvironmentManager {
         for (const light of lights) {
             // Mapbox 3D `lights` API objects are `{ type, id, properties: {...} }`.
             const p = (light as any).properties ?? light;
-            const color = MBEnvironmentManager.parseMBColor(p.color ?? '#ffffff');
+            const color = MBEnvironmentManager.parseMBColor(
+                this.themeLightColor(p.color ?? '#ffffff'));
             const intensity = p.intensity ?? 0.5;
             if (light.type === 'ambient') {
                 this.m_3DAmbient = { color, intensity };
