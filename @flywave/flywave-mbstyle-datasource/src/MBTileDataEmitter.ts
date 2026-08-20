@@ -2468,6 +2468,11 @@ export class MBTileDataEmitter {
                 // alpha (glFragColor = out_color * alpha * opacity).
                 opacity: paint['fill-opacity'] ?? 1,
                 _isFillOutline: true,
+                // Route through the ribbon patcher so the fragment gets the
+                // edge attribute — the mgl fillOutline alpha is
+                // 1 - smoothstep(0, 1, distPx) over a 2px-wide ribbon.
+                _isLineRibbon: true,
+                _ribbonWidthPx: 2,
             };
             this.m_techniques.push(technique as IndexedTechnique);
         }

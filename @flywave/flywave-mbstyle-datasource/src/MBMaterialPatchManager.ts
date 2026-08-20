@@ -1270,8 +1270,14 @@ export class MBMaterialPatchManager {
                              // feather): both REGRESSED line-color/translate by
                              // 1.1-8k px — the references are crisper than the
                              // vendored mgl AA formula (version drift).
+                             ${(technique as any)._isFillOutline ? `
+                             // mgl fillOutline (fill_outline.fragment.glsl):
+                             // alpha = 1 - smoothstep(0, 1, distPx) — a 1px
+                             // screen-space falloff from the boundary line.
+                             float mbOutlineDist = abs(vMBRibbonEdge) * uMBRibbonWidth * 0.5;
+                             gl_FragColor.a *= 1.0 - smoothstep(0.0, 1.0, mbOutlineDist);` : `
                              float mbDistEdge = (1.0 - abs(vMBRibbonEdge)) * uMBRibbonWidth * 0.5 - 0.5;
-                             gl_FragColor.a *= step(-0.5, mbDistEdge);
+                             gl_FragColor.a *= step(-0.5, mbDistEdge);`}
                              ${featherEnabled ? `float mbDistCenter = abs(vMBRibbonEdge) * uMBRibbonWidth * 0.5;
                                  gl_FragColor.a *= clamp(1.0 - mbDistCenter / max(uMBRibbonBlur, 0.5), 0.0, 1.0);` : ''}
                          }`
