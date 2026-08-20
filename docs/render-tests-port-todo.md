@@ -1986,6 +1986,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验证状态**：tsc --noEmit / tsc --build 全绿；单测 265 passing / 3 failing（stash 对照 HEAD 相同 3 例，均为既有失败，与本次无关）。**渲染批测延后**（攒批策略），跑时重点：fog/default（预期 ≤552 或更好）、§12.76-8 的 3 例回归（buildings-trees-shadows-fog-terrain-cutoff、ground-shadow-fog ×2、line-with-fog）、fog 域 87 例 + color-theme/model-layer 连带域。
 - **环境修复（顺带）**：本 checkout 的 `flywave-geoutils` lib 未构建 + `exports` 映射（`./* → ./lib/src/*`）使 mapview lib 的**无扩展名深路径 require** 解析失败（`lib/src/lib/src/...` 双前缀），HEAD 上 `mocha ./lib/test/*Test.js` 本就跑不起来。已重建 geoutils lib 并移除其 `exports` 字段（回退 legacy 解析，含扩展名回退），单测恢复可跑。
 
+**10. 大气穹顶屏幕空间地平线 mgl 精确重写（2026-08-20 四，代码侧落地，渲染验证延后）**：
+- **对照源**：`atmosphere.vertex.glsl`（v_ray_dir = 四角视锥方向双线性插值；v_horizon_dir = 在 u_horizon 高度分数处插值）、`atmosphere.fragment.glsl`（`dir.y < horizon_dir.y ? 0 : acos(dot(dir,horizon_dir))`，t = exp(−(angle/π)/fadeout）、`transform.horizonLineFromTop`（h = height/2/tan(fov/2)/tan(max(pitch,0.1°)) − centerOffset.y，offset = height/2 − h·(1−horizonShift 0.1)，clamp 到 ≥0）、`drawAtmosphereGlow`（u_fadeout_range = mapValue(horizon-blend, 0,1, 0.0005,0.25)；颜色 alpha 用**属性原值**，不带 pitch 因子）。
+- **改动**（`MBEnvironmentManager.ts` 穹顶重写）：① 角度不再用真实海拔 asin(dir.z)，改为逐片元从 gl_FragCoord 屏幕位置双线性插值视锥角方向 + 对屏幕地平线射线取 acos 夹角（世界 z-up，`dir.z < horizonDir.z` 判下方）；② 视锥四角方向与 u_horizon 每帧 onBeforeRender 计算（NDC 角点 unproject − 相机位置；pitch 由实际视线反推，不用 pitch 属性）；③ **取消 elevation≤0 discard**——mgl 在屏幕地平线以下输出 t=1 雾色（其大气先画、瓦片后覆盖；我们穹顶后画 + depthTest：近瓦片深度更近者胜出，比穹顶 1000m 远的瓦片显示 t≈1 雾色 = mgl fog-cull 远带同视觉）；④ fogState 新增 `colorAlpha`（属性原 alpha），穹顶用之（此前误用带 pitch 因子的 alpha）；⑤ 旧 uHorizonRefElev（真实海拔参照）路径删除。
+- **预期影响**：§12.76-8 遗留②（row0 恒 141 vs 126——真实地平线参照把渐变起点放低，row0 处 t 过大偏 fog 色）与③（high-color 族 1786-3074）的主嫌疑即此差异；此前"屏幕参照回归 ~2k px"的尝试是**标量参照角近似**（uHorizonRefElev 单值 + atan），本轮是 mgl 的**逐片元矢量插值**精确式，机制不同。批测重点：fog 域 87 例 + lighting-3d-mode/color-theme 连带域，回归即回退本条（独立 commit 可 revert）。
+
 
 
 

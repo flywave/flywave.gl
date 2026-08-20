@@ -520,6 +520,11 @@ export class MBEnvironmentManager {
         this.m_fogState = {
             color: color.clone(),
             alpha,
+            // Raw fog color alpha WITHOUT the pitch visibility factor — the
+            // mgl atmosphere glow (drawAtmosphereGlow) consumes the property
+            // alpha directly; only the map-material fog carries getOpacity's
+            // smoothstep(60°,65°,pitch).
+            colorAlpha,
             // mapbox drawAtmosphere: horizonBlend = mapValue(horizon-blend, 0..1, 0.0005..0.25)
             horizonBlend: Number(evalZoom(rawHorizonBlend, 0.2)) * 0.2495 + 0.0005,
             highColor: new THREE.Color(rawHighColor),
@@ -542,6 +547,7 @@ export class MBEnvironmentManager {
     private m_fogState: {
         color: THREE.Color;
         alpha: number;
+        colorAlpha: number;
         horizonBlend: number;
         highColor: THREE.Color;
         spaceColor: THREE.Color;
@@ -564,12 +570,13 @@ export class MBEnvironmentManager {
         if (!this.m_skyMesh) {
             const geom = new THREE.SphereGeometry(1000, 32, 16);
             // mgl measures the atmosphere glow from the SCREEN-space horizon
-            // line (transform.horizonLineFromTop: h = height/2/tan(fov/2)/
-            // tan(pitch), offset = height/2 − h·(1−horizonShift 0.1)) — NOT
-            // from the true (elevation-0) horizon. Computed per draw in
-            // onBeforeRender (the camera pitch is not configured yet when the
-            // fog environment is created).
-            let horizonRefElev = 0;
+            // line, not the true elevation-0 horizon: per-fragment ray dirs
+            // are bilinearly interpolated from the four frustum-corner
+            // directions (atmosphere.vertex.glsl) and the angle is taken to
+            // the horizon ray interpolated at u_horizon =
+            // horizonLineFromTop/height (transform.horizonLineFromTop:
+            // h = height/2/tan(fov/2)/tan(max(pitch,0.1)) − centerOffset.y,
+            // offset = height/2 − h·(1−horizonShift 0.1)).
             const material = new THREE.ShaderMaterial({
                 side: THREE.BackSide,
                 transparent: false,
@@ -577,18 +584,21 @@ export class MBEnvironmentManager {
                 depthTest: true,
                 uniforms: {
                     uFogColor: { value: fog.color.clone() },
-                    uFogAlpha: { value: fog.alpha },
+                    uFogAlpha: { value: fog.colorAlpha },
                     uHighColor: { value: fog.highColor.clone() },
                     uHighAlpha: { value: 1.0 },
                     uSpaceColor: { value: fog.spaceColor.clone() },
                     uSpaceAlpha: { value: 1.0 },
                     uFadeout: { value: fog.horizonBlend },
-                    uHorizonRefElev: { value: horizonRefElev },
+                    uFrustumTL: { value: new THREE.Vector3(0, 1, -1) },
+                    uFrustumTR: { value: new THREE.Vector3(1, 1, -1) },
+                    uFrustumBL: { value: new THREE.Vector3(0, -1, -1) },
+                    uFrustumBR: { value: new THREE.Vector3(1, -1, -1) },
+                    uViewport: { value: new THREE.Vector2(256, 256) },
+                    uHorizon: { value: 0.5 },
                 },
                 vertexShader: `
-                    varying vec3 vWorldPosition;
                     void main() {
-                        vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
                         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
                     }
                 `,
@@ -600,33 +610,47 @@ export class MBEnvironmentManager {
                     uniform vec3 uSpaceColor;
                     uniform float uSpaceAlpha;
                     uniform float uFadeout;
-                    uniform float uHorizonRefElev;
-                    varying vec3 vWorldPosition;
+                    uniform vec3 uFrustumTL;
+                    uniform vec3 uFrustumTR;
+                    uniform vec3 uFrustumBL;
+                    uniform vec3 uFrustumBR;
+                    uniform vec2 uViewport;
+                    uniform float uHorizon;
                     void main() {
-                        vec3 dir = normalize(vWorldPosition);
-                        // Elevation above the horizon (world z-up, camera at origin).
-                        float elevation = asin(clamp(dir.z, -1.0, 1.0));
-                        // Map fragments never see the dome (depth-tested away);
-                        // rays below the TRUE horizon are always occluded.
-                        if (elevation <= 0.0) discard;
-                        // Angle above the horizon — measured from the TRUE
-                        // elevation-0 horizon. (A screen-space horizon-line
-                        // reference was tried per mgl atmosphere.vertex's
-                        // u_horizon frustum interpolation but regressed the
-                        // high-color fixtures ~2k px each; the dome is not
-                        // visible in the fog/default-family tests, so the
-                        // screen-horizon math needs its own fixture-driven
-                        // calibration before re-enabling.)
-                        float horizonAngle = elevation / 3.14159265359;
-                        float t = exp(-horizonAngle / max(uFadeout, 0.0005));
+                        // atmosphere.vertex.glsl bilinear frustum-ray
+                        // interpolation, evaluated per fragment from the
+                        // screen position (gl_FragCoord.y is bottom-up, the
+                        // mgl quad's a_uv.y is top-down, so v is direct).
+                        vec2 uv = gl_FragCoord.xy / uViewport;
+                        vec3 ray = mix(
+                            mix(uFrustumTL, uFrustumTR, uv.x),
+                            mix(uFrustumBL, uFrustumBR, uv.x),
+                            uv.y);
+                        vec3 horizonRay = mix(
+                            mix(uFrustumTL, uFrustumBL, uHorizon),
+                            mix(uFrustumTR, uFrustumBR, uHorizon),
+                            uv.x);
+                        vec3 dir = normalize(ray);
+                        vec3 horizonDir = normalize(horizonRay);
+                        // mgl world is z-up: below the screen horizon line the
+                        // angle is 0 (full fog color), above it grows to the
+                        // zenith. Rendered over a clear color of space-color
+                        // with premultiplied weight t (folded in below).
+                        float angle = dir.z < horizonDir.z ?
+                            0.0 : max(acos(clamp(dot(dir, horizonDir), -1.0, 1.0)), 0.0);
+                        float t = exp(-(angle / 3.14159265359) / max(uFadeout, 0.0005));
                         vec3 c0 = mix(uSpaceColor, uHighColor, uHighAlpha);
                         vec3 c1 = mix(c0, uFogColor, uFogAlpha);
                         vec3 c2 = mix(c0, c1, t);
                         // Mapbox blends the gradient with premultiplied alpha
                         // over a clear color of space-color:
                         //   result = space*(1-t) + c2*t
-                        // Fold that in here so the dome is self-contained and
-                        // does not depend on the canvas clear color.
+                        // (atmosphere.fragment.glsl "c * t, t" with
+                        // ONE, ONE_MINUS_SRC_ALPHA). Near tiles win via the
+                        // depth test (dome at 1000 m), matching mgl where the
+                        // atmosphere is drawn first and tiles overwrite it;
+                        // farther-than-dome tiles show the t=1 fog color just
+                        // like mgl's fog-culled distance band.
                         vec3 col = mix(uSpaceColor, c2, t);
                         gl_FragColor = vec4(col, 1.0);
                     }
@@ -636,31 +660,41 @@ export class MBEnvironmentManager {
             this.m_skyMesh.frustumCulled = false;
             this.m_skyMesh.renderOrder = 1000;
             this.m_skyMesh.userData.__mbFogAtmosphereDome = true;
-            // The screen-horizon reference depends on the LIVE camera pitch —
-            // recompute per draw (the pitch is not final at creation time).
+            // The frustum rays and the horizon line depend on the LIVE camera
+            // — recompute per draw (the camera is not final at creation time).
             this.m_skyMesh.onBeforeRender = () => {
                 const cam = (this.m_mapView as any)?.camera as THREE.PerspectiveCamera | undefined;
                 if (!cam) return;
+                cam.updateMatrixWorld();
                 const canvasEl = (this.m_mapView as any).canvas;
+                const width = canvasEl?.clientWidth ?? canvasEl?.width ?? 256;
                 const height = canvasEl?.clientHeight ?? canvasEl?.height ?? 256;
+                const unproj = (x: number, y: number): THREE.Vector3 => {
+                    const p = new THREE.Vector3(x, y, 1).unproject(cam);
+                    return p.sub(cam.position).normalize();
+                };
+                material.uniforms.uFrustumTL.value.copy(unproj(-1, 1));
+                material.uniforms.uFrustumTR.value.copy(unproj(1, 1));
+                material.uniforms.uFrustumBL.value.copy(unproj(-1, -1));
+                material.uniforms.uFrustumBR.value.copy(unproj(1, -1));
+                material.uniforms.uViewport.value.set(width, height);
                 const fovRad = (cam.fov ?? 36.87) * Math.PI / 180;
-                const pitchDeg = Math.max((this.m_mapView as any).pitch ?? 60, 0.1);
-                const pitch = pitchDeg * Math.PI / 180;
-                const focal = (height / 2) / Math.tan(fovRad / 2);
-                const viewElev = Math.PI / 2 - pitch;
-                const h = (height / 2) / Math.tan(fovRad / 2) / Math.tan(pitch);
-                // Unclamped: mgl's vertex shader interpolates the frustum rays
-                // at u_horizon = line/height without clamping.
-                const yH = height / 2 - h * 0.9;
-                material.uniforms.uHorizonRefElev.value =
-                    viewElev + Math.atan((height / 2 - yH) / focal);
+                // Pitch from the actual view direction (0 = straight down);
+                // mgl horizonLineFromTop uses tan(max(pitch, 0.1°)) and
+                // _horizonShift = 0.1. centerOffset.y (padding) is 0 in the
+                // render-test harness.
+                const dir = cam.getWorldDirection(new THREE.Vector3());
+                const pitchRad = Math.max(Math.acos(Math.min(1, Math.max(-1, -dir.z))), 0.1 * Math.PI / 180);
+                const h = (height / 2) / Math.tan(fovRad / 2) / Math.tan(pitchRad);
+                const horizonFromTop = Math.max(0, height / 2 - h * 0.9);
+                material.uniforms.uHorizon.value = horizonFromTop / height;
             };
             this.m_scene.add(this.m_skyMesh);
         } else {
             const material = this.m_skyMesh.material as THREE.ShaderMaterial;
             if (material.uniforms) {
                 material.uniforms.uFogColor.value.copy(fog.color);
-                material.uniforms.uFogAlpha.value = fog.alpha;
+                material.uniforms.uFogAlpha.value = fog.colorAlpha;
                 material.uniforms.uHighColor.value.copy(fog.highColor);
                 material.uniforms.uSpaceColor.value.copy(fog.spaceColor);
                 material.uniforms.uFadeout.value = fog.horizonBlend;
