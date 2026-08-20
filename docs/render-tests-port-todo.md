@@ -2457,6 +2457,14 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **existing/remove 白屏定性**：op 后地图整图空白（仅天际少量像素），像素数自 b82 起恒定不变、promise 化/decoder 重放均无影响、无异常抛出——指向 **op 触发的全量 markTilesDirty 对重型 import basemap 的瓦片重装载在捕获时未完成或失败**（需交互式浏览器 devtools 调试 tile 任务队列）。留档下一批：① tile reload settle 探查；② 考虑不重解码的绘制期主题化（mgl 语义：GPU LUT，无重解码）。
 - fog-import-scope 残差通道定位 = **天空/大气色未主题化**（cur 198,219,250 蓝 vs exp 灰——mgl drawAtmosphere 用 fog.scope LUT）。**已落地**：applySky 三色接 scoped LUT（gradient ramp buildGradientTexture(grad,lut)、solid 色、atmosphere sun/halo + 各自 `-use-theme` opt-out；propagateScopedThemes 重放 applySky）——语义正确但对 fog-import-scope/trees 数值无变化（其蓝色 ≠ sky 层通道，疑 fog atmosphere dome 或 terrain 面，b93 后留续取证）。tsc 绿、单测 265 passing / 3 既有。
 
+**50. import-override 白屏五轮取证闭环（2026-08-21，dbg8-12/b94，根因定位）**：
+
+- **tile 重装载无问题**（探针：13 visible tiles、3 张带 162/104/132 objects、222 draw calls/84k tri）——本节的"重装载未完成"假设**证伪**。
+- **帧缓存逐点取证**（readPixels bl/c/tl + clearColor）：clearColor=**0x0000c2 = (0,0,194) ≈ expected tl (0,0,193)**——**import 作用域 lights 主题化已完全生效**。fixture 的 import 只带 lights+color-theme；mgl 语义 = 主题经 light.scope LUT 进入场景 radiance（根层 paint 不查 import LUT，根层 unthemed 是正确行为）——与我们现有架构一致。
+- **白屏真因 = 地形网格本体通道**：fixture terrain(0.5)+pitch70，画面主体是 terrain mesh；TerrainDraping 的 drape FBO 白色 alpha=1 clear（"无 drape 内容 = 保留地形色"），白色来自**地形 mesh 自身基色**（mgl 侧 void 区显示经 themed 光照的 draped 内容，expected bl=(193,193,193)）。修法方向（下一批）：① 地形 void 基色 = themed 背景 clear color（或把 background 层纳入 drape 渲染集）；② extrusion/地形材质 3D-lights 注入核对（white×themed radiance 应为灰）。
+- **mgl 对照结论**：`_reloadColorTheme`（style.ts:4311-4336）= layer.lut 重指 + clearTiles，无绘制期 GPU LUT 特例——我们的 CPU 重解码架构语义等价，**无需**改为 GPU LUT。setImportColorTheme 仅设 fragment 的 colorThemeOverride（:4351-4356）。
+- import-override-style 115k 同通道（无 op，静态即偏）；import-override-theme 249k 附加 op 主题差。b94 无探针确认数值稳定。
+
 **44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
 
 - **零 LOST PASS**；circle-color/stroke-color/stroke-width **全绿 5/5×3**、stroke-opacity 3/6、icon-halo-color 7/7、icon-halo-width 4/4、icon-color 4/5 维持——uColor/uStrokeColor 转 sRGB **零回归**（这些域本就按 mgl 语义校准，转换后灰阶类不受影响、彩阶类无 fixture 暴露差异）。
