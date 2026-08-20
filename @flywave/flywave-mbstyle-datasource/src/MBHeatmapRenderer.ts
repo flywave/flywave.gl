@@ -252,10 +252,25 @@ export class MBHeatmapRenderer {
                 // Wrapped world copies (± one world along x) — mgl renders the
                 // offscreen pass over all MultiTileIDs, including the
                 // antimeridian replicates.
+                // Wrapped copies compute their OWN basis — the screen
+                // Jacobian differs at the replicated position (heatmap/
+                // antimeridian shows cyan-vs-lime density differences).
                 const west = projectToPx(k.x - worldRepeatX, k.y, k.z);
-                if (west) emitKernel(west[0], west[1], bxAbs, byAbs);
+                if (west) {
+                    const wax = projectToPx(k.x - worldRepeatX + D, k.y, k.z);
+                    const way = projectToPx(k.x - worldRepeatX, k.y + D, k.z);
+                    emitKernel(west[0], west[1],
+                        wax ? [(wax[0] - west[0]) * sc, (wax[1] - west[1]) * sc] : bxAbs,
+                        way ? [(way[0] - west[0]) * sc, (way[1] - west[1]) * sc] : byAbs);
+                }
                 const east = projectToPx(k.x + worldRepeatX, k.y, k.z);
-                if (east) emitKernel(east[0], east[1], bxAbs, byAbs);
+                if (east) {
+                    const eax = projectToPx(k.x + worldRepeatX + D, k.y, k.z);
+                    const eay = projectToPx(k.x + worldRepeatX, k.y + D, k.z);
+                    emitKernel(east[0], east[1],
+                        eax ? [(eax[0] - east[0]) * sc, (eax[1] - east[1]) * sc] : bxAbs,
+                        eay ? [(eay[0] - east[0]) * sc, (eay[1] - east[1]) * sc] : byAbs);
+                }
             }
             if (g.px.length > maxCount) maxCount = g.px.length;
         }
