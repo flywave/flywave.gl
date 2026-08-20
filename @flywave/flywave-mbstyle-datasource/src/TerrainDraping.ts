@@ -221,7 +221,12 @@ export class TerrainDraping {
                 // the terrain color. The shader uses alpha-blend (mix), so
                 // alpha=1 on clear = "no drape content" = keep terrain color.
                 renderer.setRenderTarget(rt);
-                renderer.setClearColor(TerrainDraping.CLEAR_COLOR, 1.0);
+                // mgl renders the background INTO the terrain drape pass, so
+                // void areas show the (color-theme-aware) map background. Use
+                // the live clear color instead of white; alpha=1 keeps the
+                // "no drape content" blending semantics.
+                renderer.setClearColor(
+                    (this.m_mapView as any).clearColor ?? TerrainDraping.CLEAR_COLOR, 1.0);
                 renderer.clear();
                 renderer.render(scene, camera);
 

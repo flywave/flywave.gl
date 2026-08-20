@@ -2464,6 +2464,7 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **白屏真因 = 地形网格本体通道**：fixture terrain(0.5)+pitch70，画面主体是 terrain mesh；TerrainDraping 的 drape FBO 白色 alpha=1 clear（"无 drape 内容 = 保留地形色"），白色来自**地形 mesh 自身基色**（mgl 侧 void 区显示经 themed 光照的 draped 内容，expected bl=(193,193,193)）。修法方向（下一批）：① 地形 void 基色 = themed 背景 clear color（或把 background 层纳入 drape 渲染集）；② extrusion/地形材质 3D-lights 注入核对（white×themed radiance 应为灰）。
 - **mgl 对照结论**：`_reloadColorTheme`（style.ts:4311-4336）= layer.lut 重指 + clearTiles，无绘制期 GPU LUT 特例——我们的 CPU 重解码架构语义等价，**无需**改为 GPU LUT。setImportColorTheme 仅设 fragment 的 colorThemeOverride（:4351-4356）。
 - import-override-style 115k 同通道（无 op，静态即偏）；import-override-theme 249k 附加 op 主题差。b94 无探针确认数值稳定。
+- **补充（b95）**：drape FBO clear 改用（themed）mapView clearColor（mgl 语义：background 进 drape pass）——对 fixture 零变化（b94/b95 逐位一致 = drape 路径未参与）。网格取样确认真因升级：**cur 全图近全为天空蓝（center/3/4h 均 sky 色）、仅底部窄条白；exp center (0,0,59) 暗色地形+挤出物场景**——pitch70+terrain(0.5) 下我们的地形/挤出物几何没有进入视野（DEM 瓦片 13-1310-3166 存在），属**地形-相机-挤出物渲染专项**而非 color-theme 缺陷。drape clear 修改保留（语义更近 mgl）。
 
 **44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
 
