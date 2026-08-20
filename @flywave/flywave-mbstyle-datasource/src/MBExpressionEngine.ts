@@ -1033,6 +1033,9 @@ export class MBExpressionEngine {
         const ga = lerp(ca.g, cb.g);
         const ba = lerp(ca.b, cb.b);
         const aa = ca.a + (cb.a - ca.a) * t;
+        // Opaque stops keep the historical '#rrggbb' output format; partial
+        // alpha needs the rgba() form.
+        if (ca.a === 1 && cb.a === 1) return MBExpressionEngine.rgbToHex(ra, ga, ba, 1);
         return `rgba(${ra}, ${ga}, ${ba}, ${+aa.toFixed(4)})`;
     }
 
