@@ -2431,3 +2431,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **环境修复（顺带，§12.76-9 后遗症根治）**：全仓 20 个 `@flywave/*` 包的 `exports['./*']` 由 `'./lib/src/*'` 改为 `['./lib/src/*.js','./lib/src/*/index.js']` 数组回退——Node exports 目标**不做扩展名补全**，短路径深 import（如 `@flywave/flywave-geoutils/projection/EarthConstants`）在纯 Node（mocha）下全部解析失败；§12.76-9 的"移除 exports"方案只对旧版 lib 的 `lib/src/...` 全路径 import 有效，本仓源码已迁移到短路径后失效。test-utils 的 `.` 入口补 node/browser 条件（index.node.js / index.web.js）。tsc 全绿、单测 265 passing / 3 既有失败（stash 对照 HEAD 确认）。karma/webpack 对数组回退与 *.js 模式均支持（批测时验证）。
 
 **待批测**：circle-color/stroke 系（uColor 转换后现有 4-5 PASS 可能变化——mgl 语义应更近）、icon-color/halo 系、text-color/halo 系、SDF icon halo、building 立面/roof、line-border 色、line-trim-color、sky/atmosphere/fog 穹顶色域。
+
+**44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
+
+- **零 LOST PASS**；circle-color/stroke-color/stroke-width **全绿 5/5×3**、stroke-opacity 3/6、icon-halo-color 7/7、icon-halo-width 4/4、icon-color 4/5 维持——uColor/uStrokeColor 转 sRGB **零回归**（这些域本就按 mgl 语义校准，转换后灰阶类不受影响、彩阶类无 fixture 暴露差异）。
+- **skybox 域整体改善**：fill-extrusion-light 全 8 例 −4.6k~−7.6k（30k 级→29k 级，穹顶色转 sRGB 的贡献）、atmosphere-blend/fill-transparent −709、atmosphere-horizon −234；atmosphere-color/rayleigh/update +2k 内小回归（原 FAIL）。**fog 域未跑**（穹顶 fog 色 sRGB 化的 kFog 类风险待验证）。
+- **building 域连带改善**：clip-layer/default 79k→**23k**、lower-order-clipping 82k→**35k**（-50k 级，roof/flood 色转换）；conflation/cutoff-fade 系小改善。
+- **trimColor 转换被数据否决回退**：line-trim-offset pure-color 族 4 例 +1.1k~+1.55k（2070→3122 等）、trim-color-long-line 120→750——b80 后已回退该单点（其余 17 处保留），trimmed 段混色路径存在文档未明的空间语义（疑注入点实际在 colorspace 之前或双重转换），留档待专项取证。
+- **环境注意**：本会话中 mbstyle-baseline5 结果目录被外部删除（非本会话操作），对比基线降级为 baseline6-aborted-partial + b78/b79；后续如需全量基线需重跑。

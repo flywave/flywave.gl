@@ -1167,8 +1167,6 @@ export class MBMaterialPatchManager {
                     const tcRaw = technique._trimColor as string | undefined;
                     if (tcRaw && tcRaw !== 'transparent') {
                         trimColor = new THREE.Color(tcRaw);
-                        // shader consumes sRGB numerics (post-colorspace injection)
-                        trimColor.convertLinearToSRGB();
                         trimAlpha = 1;
                     }
                     const tf = technique._trimFade as number[] | undefined;
