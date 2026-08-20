@@ -335,7 +335,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     constructor() {
         super();
         this.m_omvAdapter = new OmvDataAdapter();
-        this.m_geoJsonAdapter = new GeoJsonDataAdapter();
+        this.m_geoJsonAdapter = new GeoJsonDataAdapter({ mglCompat: true });
     }
 
     connect(): Promise<void> {

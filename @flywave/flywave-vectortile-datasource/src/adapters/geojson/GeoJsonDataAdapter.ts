@@ -149,7 +149,31 @@ function convertPointGeometry(
     return geometry.coordinates.map(geoPoint => convertPoint(geoPoint, decodeInfo, new Vector3()));
 }
 
+export interface GeoJsonDataAdapterOptions {
+    /**
+     * Mapbox-gl-js compatibility mode: geojson-vt semantics as configured by
+     * mgl's GeoJSONSource — tile buffer of `128 * (EXTENT / tileSize)` =
+     * 1024 extent units (vs. the legacy 100-unit border), and integer
+     * quantization of tile-space vertices (geojson-vt `round: true`, and mgl
+     * `load_geometry`'s preparePoint both round). mgl additionally simplifies
+     * with Douglas-Peucker `tolerance = 0.375 * 8 = 3` extent units — not
+     * applied here (render-test fixtures are near-degenerate short lines
+     * where simplification is a no-op; recorded as a known gap).
+     */
+    mglCompat?: boolean;
+}
+
 export class GeoJsonDataAdapter implements DataAdapter {
+    private readonly m_border: number;
+    private readonly m_quantize: boolean;
+
+    constructor(options?: GeoJsonDataAdapterOptions) {
+        this.m_border = options?.mglCompat
+            ? 128 * (DEFAULT_EXTENTS / 512)
+            : 100; // legacy default, unchanged
+        this.m_quantize = options?.mglCompat === true;
+    }
+
     /**
      * @override
      */
@@ -180,15 +204,24 @@ export class GeoJsonDataAdapter implements DataAdapter {
 
                     const clippedGeometries: ILineGeometry[] = [];
 
-                    const DEFAULT_BORDER = 100;
+                    const border = this.m_border;
+                    if (this.m_quantize) {
+                        // geojson-vt stores sliced vertices as integers.
+                        for (const g of geometry) {
+                            for (const p of g.positions as any) {
+                                p.x = Math.round(p.x);
+                                p.y = Math.round(p.y);
+                            }
+                        }
+                    }
 
                     geometry.forEach(g => {
                         const clipped = clipLineString(
                             g.positions as any,
-                            -DEFAULT_BORDER,
-                            -DEFAULT_BORDER,
-                            DEFAULT_EXTENTS + DEFAULT_BORDER,
-                            DEFAULT_EXTENTS + DEFAULT_BORDER
+                            -border,
+                            -border,
+                            DEFAULT_EXTENTS + border,
+                            DEFAULT_EXTENTS + border
                         );
                         clipped.forEach(positions => {
                             clippedGeometries.push({ positions:positions  as any});

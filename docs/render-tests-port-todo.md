@@ -2385,3 +2385,18 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 **目标**：color-theme/icon-image-use-theme 3174、pattern 系 use-theme 用例、mixed streets 主题样式的 sprite 色。
 **记档差距**：mgl 的 per-import 主题作用域（`setImportColorTheme`/`fog-import-scope`、`import-override-*` fixture）依赖 style-imports 子系统，我们暂为全局单一主题——待 import 语义专项。
+
+**40. 架构专项：geojson 线瓦片裁剪 buffer 语义对齐（2026-08-20 五，不跑测）**：
+
+**取证链（双向证伪后命中）**：
+1. **引擎侧无裁剪实锤**（Explore 全扫 flywave-mapview）：mbstyle 线几何无 per-tile clip volume——`tileClip`（LinesChunks.ts:88）仅 legacy solid-line 的 `technique.clipping===true`（默认 false，mbstyle 从不设置）；`TileObjectsRenderer.ts:72` 对瓦片对象 `frustumCulled=false`（boundingSphere 不可能截断 quad）；`FrustumIntersection` 只做整瓦级 geoBox 剔除。**§12.76-15/23 的"引擎 clip volume 截断"假设证伪**。
+2. **mgl 侧真实语义**：MVT 路径 `load_geometry` **不裁剪**（仅 `Math.round(scale·x)` + ±16384 clamp）；line_bucket 主路径原样消费，仅 line-progress（line-gradient）路径裁 `EXTENT±10`（`clipLine`，elevation offset 时 ±2）。
+3. **真差异在 geojson 源**：mgl `GeoJSONSource` 走 geojson-vt，`buffer = 128·(4096/512) = 1024` EXTENT 单位（geojson_source.ts:159）+ Douglas-Peucker `tolerance = 3` + 整数量化（`round: true`）。**我们的 GeoJsonDataAdapter 硬编码 border=100**——瓦片边外 100–1024 单位的线段全被裁掉。
+4. **形态学对账**：顶边长/短差 = buffer 差（100 vs 1024）；**round-cap 月牙 1182px 同源**——我们的帽中心被 clipLineString 钳在 ±100 border，mgl 端点在 1024 buffer 内更远处，端点位置差 + 帽半径 = 月牙形 diff 区域（此前归因"引擎 clip/顶点剔除"错误，§12.76-23 修正）。
+
+**架构兼容落地（不影响既有功能）**：
+- `GeoJsonDataAdapter` 增加构造选项 `mglCompat`（默认 false = legacy border 100 原行为不变）：border = `128·(EXTENT/512)` = 1024 + 顶点整数量化（geojson-vt round 语义）。
+- `MBStyleDecoder` 以 `mglCompat: true` 构造 adapter——mbstyle 管线走 mgl 语义，legacy geojson datasource 零改动。
+- **记档差距**：① Douglas-Peucker tolerance 3 简化未实现（render-test 短线为主，简化近乎 no-op，若后续近失再补）；② 多边形路径未按 buffer 裁剪（mgl geojson-vt 对面也裁，fill 跨瓦片用例如有残差再补）；③ geojson-vt 的 per-zoom tolerance 缩放语义未还原。
+
+**待批测**：line-cap 全族（顶边长/短）、round-cap 月牙系、以及一切 geojson 源跨瓦片线用例（line-join/elevated-line 系既有点位也可能受益/回归，需零回归确认）。
