@@ -2472,6 +2472,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **现状**：地形 mesh 已建（画面底部白条 = 未打光的 MapTerrainMaterial 基色），但主体视野仍天空——**根因二待查**：pitch70 相机/地平线语义（mgl 相机在 terrain 上高度、我们的相机 rig pitch 与实际视线错位 §12.76-12 曾记录）或地形材质可见范围。连带：import-override-style 115k→138k（地形部分出现但白色不对，方向正确需打光/drape）。fog/terrain/basic（z12 256 源，公式不变路径）需零回归确认。
 - **下一步**：① 地形材质接 3D-lights/themed drape（白色基色 → themed 场景色）；② 相机 pitch70 视线与地平线对照 mgl transform（elevation-aware camera）；③ fog 域连带批测。tsc 绿、单测 265 passing / 3 既有。
 
+**52. 高 pitch 地形专项二轮：高程→裁剪面管道 + fog 近失漂移记档（2026-08-21，b97-b99/c01）**：
+
+- **裁剪面管道落地**：① TerrainController 新增 `maxElevation`（解码期逐像素最大高程 × exaggeration）；② MapView 新增 `maxGeometryHeight` 公共 setter（此前仅构造选项，readonly）；③ datasource 在 applyTerrain 后将地形高程喂给 `MapView.maxGeometryHeight`（VisibleTileSet.updateClipPlanes 从 MapView 级取值而非 per-datasource——DataSource.maxGeometryHeight 只进 FrustumIntersection 预解码剔除，不进裁剪面）。**地形 mesh 非 Tile，其高程此前对裁剪面完全不可见** = 架构缺口记录。
+- **b97/b98 验证**：import-override 族数值仍不变（existing 196917 逐位同）——far plane 假设对该 fixture 也未兑现；底部白条 = 未打光地形本体，画面主体天空 → 真因三候选：pitch 实际视线（§12.76-12 相机 rig 错位）、单一 z13 瓦片外无地形延伸、expected 中心 (0,0,59) 或为 themed 大气而非地形。需交互式对照。
+- **fog 域近失漂移记档（b99/c01，0 PASS 损失）**：fog/default 552→**1128**、2d/basic 22.7k→**45.5k**、terrain/basic 37.0k、color 78.0k——残差通道 = 黑色像素带（cur (0,0,0) vs exp (242,246,252)）+ 蓝通道微移，与 §12.76-8 精确式时代的 1064 量级相仿；applySky 重跑已加条件守卫（仅 LUT 存在时）但数值未恢复——回归在 §45-48 某提交引入，嫌疑：propagateScopedThemes 每次连接重放 applyFog/applyLights/markTilesDirty 的次生效应。留档待二分。
+- **color-theme 4 PASS 维持**（b96-98 全程零 PASS 回归）。
+
 **44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
 
 - **零 LOST PASS**；circle-color/stroke-color/stroke-width **全绿 5/5×3**、stroke-opacity 3/6、icon-halo-color 7/7、icon-halo-width 4/4、icon-color 4/5 维持——uColor/uStrokeColor 转 sRGB **零回归**（这些域本就按 mgl 语义校准，转换后灰阶类不受影响、彩阶类无 fixture 暴露差异）。

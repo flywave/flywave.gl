@@ -155,6 +155,18 @@ export class TerrainController {
 
     get meshCount(): number { return this.m_meshes.length; }
 
+    /**
+     * Maximum decoded elevation (already exaggeration-scaled) across loaded
+     * tiles. Consumers feed this into DataSource.maxGeometryHeight so the
+     * engine's clip-plane evaluation extends the far plane to the elevated
+     * horizon (mgl uses terrain elevation in transform's far-plane /
+     * horizon math; without it mid-range terrain at high pitch is clipped
+     * away behind the 0-elevation horizon).
+     */
+    get maxElevation(): number { return this.m_maxElevation * this.m_exaggeration; }
+    private m_maxElevation = 0;
+    private m_exaggeration = 1;
+
     /** Terrain meshes (read-only access for depth-occlusion pass). */
     get meshes(): readonly THREE.Mesh[] { return this.m_meshes; }
 
@@ -245,6 +257,8 @@ export class TerrainController {
         const prevDemTextures = [...this.m_demTextures];
         this.m_demTextures = [];
         this.dispose();
+        this.m_exaggeration = exaggeration;
+        this.m_maxElevation = 0;
         if (radius < 0) radius = 0;
 
         const lat = degToRad(center[1]);
@@ -302,6 +316,12 @@ export class TerrainController {
             const pngTexture = await loader.loadAsync(url);
             // Decode the PNG into an R32F elevation DataTexture.
             const demTex = decodeDemImage(pngTexture.image, 'mapbox');
+            try {
+                const h = demTex.image.data as Float32Array;
+                for (let i = 0; i < h.length; i++) {
+                    if (h[i] > this.m_maxElevation) this.m_maxElevation = h[i];
+                }
+            } catch {}
             this.m_demTextures.push(demTex);
 
             const material = new MapTerrainMaterial();

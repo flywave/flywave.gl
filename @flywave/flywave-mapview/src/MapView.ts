@@ -841,7 +841,7 @@ export class MapView extends EventDispatcher {
 
     private readonly m_mapAnchors: MapAnchors = new MapAnchors();
 
-    private readonly m_maxGeometryHeight: number = 0;
+    private m_maxGeometryHeight: number = 0;
     private readonly m_minGeometryHeight: number = 0;
 
     private m_animationCount: number = 0;
@@ -1018,6 +1018,9 @@ export class MapView extends EventDispatcher {
         if (options.maxGeometryHeight != undefined) {
             this.m_maxGeometryHeight = this.m_options.maxGeometryHeight;
         }
+
+        // (setter below also allows late configuration, e.g. when terrain
+        // elevation only becomes known after an async datasource connect)
         if (options.minGeometryHeight != undefined) {
             this.m_minGeometryHeight = this.m_options.minGeometryHeight;
         }
@@ -1701,6 +1704,17 @@ export class MapView extends EventDispatcher {
     /**
      * The color used to clear the view.
      */
+    /**
+     * Maximum geometry height (elevation) used by the clip-plane evaluation.
+     * Late-configurable: terrain datasources discover their DEM max elevation
+     * asynchronously after MapView construction; without this the far plane
+     * hugs the 0-elevation horizon and elevated mid-range terrain at high
+     * pitch is clipped away.
+     */
+    set maxGeometryHeight(height: number) {
+        this.m_maxGeometryHeight = height;
+    }
+
     get clearColor() {
         const rendererClearColor = this.m_renderer.getClearColor(cache.color);
         return rendererClearColor !== undefined ? rendererClearColor.getHex() : 0;

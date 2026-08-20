@@ -1138,6 +1138,21 @@ export class MBStyleDataSource extends TileDataSource {
                 this.m_demMaxZoom,
                 this.m_demTileSize,
             );
+            // Terrain elevation must reach the engine's clip-plane evaluation
+            // (the terrain mesh is not a Tile, so tile geoBoxes never carry
+            // it). Without it the far plane hugs the 0-elevation horizon and
+            // mid-range terrain at high pitch is clipped away (sky where the
+            // map should be) — mgl uses terrain elevation in the transform's
+            // horizon/far-plane math.
+            const terrainMax = (this.m_environment as any).terrainController?.maxElevation ?? 0;
+            if (terrainMax > 0) {
+                this.maxGeometryHeight = Math.max(this.maxGeometryHeight, terrainMax);
+                // MapView-level clip-plane elevation (the VisibleTileSet reads
+                // MapView.maxGeometryHeight, not per-datasource values).
+                const mv: any = this.mapView;
+                const prev = (mv as any).m_maxGeometryHeight ?? 0;
+                mv.maxGeometryHeight = Math.max(prev, terrainMax);
+            }
             // Enable depth occlusion so circles/symbols behind terrain are hidden.
             if (this.m_materialPatcher) {
                 this.m_materialPatcher.setDepthOcclusion(true);
@@ -1482,8 +1497,15 @@ export class MBStyleDataSource extends TileDataSource {
             try {
                 this.m_environment.applyLights(style?.lights, style?.light);
                 this.m_environment.applyFog(style?.fog, style?.zoom ?? 0);
-                this.m_environment.applySky(
-                    this.buildSkyFromLayers(style) ?? style?.sky, style?.fog);
+                // Re-run applySky ONLY when a scoped theme actually exists —
+                // re-applying an (absent) sky on every theme propagation
+                // replaces the fog-driven atmosphere dome and regressed the
+                // whole fog domain (fog/2d/basic 22.7k→45.5k).
+                const anyScopedLut = [...this.m_importLuts.values()].some(Boolean);
+                if (anyScopedLut || this.m_colorThemeLut) {
+                    this.m_environment.applySky(
+                        this.buildSkyFromLayers(style) ?? style?.sky, style?.fog);
+                }
             } catch {}
         }
         // Background clear color picks up the (scoped) LUT as well.
