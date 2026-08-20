@@ -745,6 +745,13 @@ export class MBMaterialPatchManager {
                 shader.uniforms.uMBRasFullPx = { value: [padPx[0], padPx[1]] };
                 shader.uniforms.uMBRasPadOn = { value: (texture as any).__mbNoPad ? 0 : 1 };
                 if (rasRampTex) shader.uniforms.uMBRasRamp = { value: rasRampTex };
+                const arrTex: any = (texture as any).__mbIsRasterArray ? texture : null;
+                if (arrTex) {
+                    shader.uniforms.uMBArrMix = { value: arrTex.__mbArrMix };
+                    shader.uniforms.uMBArrOff = { value: arrTex.__mbArrOffset };
+                    shader.uniforms.uMBArrTile = { value: arrTex.__mbArrTile };
+                    shader.uniforms.uMBArrBuf = { value: arrTex.__mbArrBuffer };
+                }
                 const rasRes = new THREE.Vector2(512, 256);
                 shader.uniforms.uMBRasRes = { value: rasRes };
                 shader.vertexShader = shader.vertexShader.replace(
@@ -790,7 +797,7 @@ export class MBMaterialPatchManager {
                      uniform vec3 uMBRasBase;
                      uniform float uMBRasFar;
                      varying float vMBRasEyeDist;
-                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx; uniform float uMBRasPadOn;\n                     uniform sampler2D uMBRasRamp;
+                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx; uniform float uMBRasPadOn;\n                     uniform sampler2D uMBRasRamp;\n                     uniform vec4 uMBArrMix; uniform float uMBArrOff; uniform float uMBArrTile; uniform float uMBArrBuf;
                      vec3 mbSrgbEnc(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
                      vec3 mbSrgbDec(vec3 c) { return mix(c / 12.92, pow((max(c, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
                      void main() {`,
@@ -828,10 +835,21 @@ export class MBMaterialPatchManager {
                      ${rasRampTex ? `
                      // RASTER_COLOR path replaces the whole adjust chain above
                      // (mgl raster.fragment.glsl #ifdef RASTER_COLOR).
-                     float rcT = (${rasMix[3].toFixed(6)} + dot(mbSrgbEnc(mbRasT.rgb), vec3(${rasMix[0].toFixed(6)}, ${rasMix[1].toFixed(6)}, ${rasMix[2].toFixed(6)})) - ${rasRange[0].toFixed(6)}) / ${Math.max(rasRange[1]-rasRange[0],1e-6).toFixed(6)};
+                     ${arrTex ? `
+                     // RASTER_ARRAY decode (draw_raster texture descriptor):
+                     // value = offset + dot(rgba, mix4); uv insets the 1px
+                     // band buffer; NODATA (vec4(1)) renders transparent.
+                     vec2 mbArrUv = (uMBArrBuf + (uMBRasUvOff + vMBRasUv * uMBRasUvScl) * uMBArrTile) / (uMBArrTile + 2.0 * uMBArrBuf);
+                     vec4 mbArr = texture2D(uMBRasMap, mbArrUv);
+                     float rcT = (uMBArrOff + dot(mbArr, uMBArrMix) - ${rasRange[0].toFixed(6)}) / ${Math.max(rasRange[1]-rasRange[0],1e-6).toFixed(6)};
                      vec4 rcCol = texture2D(uMBRasRamp, vec2(clamp(rcT, 0.0, 1.0), 0.5));
                      mbR = rcCol.rgb;
                      mbRasT.a *= rcCol.a;
+                     if (mbArr.r > 0.9999 && mbArr.g > 0.9999 && mbArr.b > 0.9999 && mbArr.a > 0.9999) mbRasT.a = 0.0;` : `
+                     float rcT = (${rasMix[3].toFixed(6)} + dot(mbSrgbEnc(mbRasT.rgb), vec3(${rasMix[0].toFixed(6)}, ${rasMix[1].toFixed(6)}, ${rasMix[2].toFixed(6)})) - ${rasRange[0].toFixed(6)}) / ${Math.max(rasRange[1]-rasRange[0],1e-6).toFixed(6)};
+                     vec4 rcCol = texture2D(uMBRasRamp, vec2(clamp(rcT, 0.0, 1.0), 0.5));
+                     mbR = rcCol.rgb;
+                     mbRasT.a *= rcCol.a;`}
                      ` : ''}
                      {
                          // Opaque sRGB-domain composite over the base color
@@ -852,6 +870,18 @@ export class MBMaterialPatchManager {
         const cached = rasterTextureCache.get(url);
         if (cached) {
             attach(cached);
+            return;
+        }
+
+        // raster-array (.mrt) tiles: decode with the vendored MapboxRasterTile
+        // (mgl raster_array_tile.ts semantics) — bandView RGBA + descriptor
+        // mix/offset REPLACE the paint colorization mix (draw_raster.ts
+        // getTextureDescriptor), value decodes as
+        //   offset + dot(rgba, [s, 256s, 65536s, 16777216s])
+        // and the ramp maps [raster-color-range] over it. NODATA = vec4(1)
+        // renders transparent (raTexture2D mask semantics).
+        if (url.endsWith('.mrt')) {
+            this.loadRasterArrayTexture(url, technique, material, attach, rect);
             return;
         }
 
@@ -2637,6 +2667,80 @@ export class MBMaterialPatchManager {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Decode a raster-array (.mrt) tile to a band-view RGBA texture
+     * (mgl raster_array_tile.ts updateTextureDescriptor). Attaches the array
+     * decode uniforms on the material's onBeforeCompile chain — see the
+     * RASTER_ARRAY branch injected alongside RASTER_COLOR in the fragment.
+     */
+    private loadRasterArrayTexture(
+        url: string,
+        technique: any,
+        material: THREE.Material,
+        attach: (texture: THREE.Texture) => void,
+        _rect: number[],
+    ): void {
+        (async () => {
+            const { MapboxRasterTile } = await import('./vendor/mrt');
+            const { PbfReader } = await import('pbf');
+            (MapboxRasterTile as any).setPbf(PbfReader as any);
+            const resp = await fetch(url);
+            const ab = await resp.arrayBuffer();
+
+            const mrt = new (MapboxRasterTile as any)(Infinity);
+            mrt.parseHeader(ab);
+
+            // source-layer: look the raster layer up in the style (the layer
+            // id rides on the technique).
+            let sourceLayer = '';
+            try {
+                const style = (this.m_dataSource as any).styleManager?.getStyle?.();
+                const layer = (style?.layers ?? []).find(
+                    (l: any) => l.id === technique._layerId || (l.type === 'raster' && l['source-layer']));
+                sourceLayer = layer?.['source-layer'] ?? Object.keys(mrt.layers)[0] ?? '';
+            } catch {}
+            const mrtLayer = mrt.getLayer(sourceLayer) ?? mrt.getLayer(Object.keys(mrt.layers)[0]);
+            if (!mrtLayer) return;
+
+            const bands = mrtLayer.getBandList();
+            const band = bands[0];
+            const range = mrtLayer.getDataRange([band]);
+            const batch = mrt.createDecodingTask(range);
+            const slice = ab.slice(range.firstByte, range.lastByte + 1);
+            const results = await (MapboxRasterTile as any).performDecoding(slice, batch);
+            batch.complete(null, results);
+            if (!mrtLayer.hasDataForBand(band)) return;
+
+            const view = mrtLayer.getBandView(band);
+            const size = view.tileSize + 2 * view.buffer;
+            const tex = new THREE.DataTexture(
+                new Uint8Array(view.bytes.buffer, view.bytes.byteOffset, view.bytes.byteLength),
+                size, size, THREE.RGBAFormat);
+            // Band bytes are an ENCODING, not colors — no sRGB, and mgl
+            // forces NEAREST for array sources (linear re-interpolation is
+            // done in-shader on the decoded values).
+            tex.colorSpace = THREE.NoColorSpace;
+            tex.minFilter = THREE.NearestFilter;
+            tex.magFilter = THREE.NearestFilter;
+            tex.needsUpdate = true;
+            (tex as any).__mbNoPad = true;
+            (tex as any).__mbPadPx = [size, size];
+            (tex as any).__mbIsRasterArray = true;
+            (tex as any).__mbArrMix = [
+                view.scale, view.scale * 256, view.scale * 65536, view.scale * 16777216,
+            ];
+            (tex as any).__mbArrOffset = view.offset;
+            (tex as any).__mbArrTile = view.tileSize;
+            (tex as any).__mbArrBuffer = view.buffer;
+
+            rasterTextureCache.set(url, tex);
+            attach(tex);
+            try {
+                (this.m_dataSource as any).mapView?.update?.();
+            } catch {}
+        })().catch(() => { /* keep the base color */ });
     }
 
     /**

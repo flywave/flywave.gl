@@ -34,15 +34,16 @@
     "license": "Apache-2.0",
     "dependencies": {
         "@flywave/flywave-datasource-protocol": "workspace:*",
+        "@flywave/flywave-fetch": "workspace:*",
         "@flywave/flywave-geoutils": "workspace:*",
+        "@flywave/flywave-lines": "workspace:*",
         "@flywave/flywave-mapview": "workspace:*",
         "@flywave/flywave-mapview-decoder": "workspace:*",
-        "@flywave/flywave-vectortile-datasource": "workspace:*",
-        "@flywave/flywave-utils": "workspace:*",
-        "@flywave/flywave-fetch": "workspace:*",
-        "@flywave/flywave-lines": "workspace:*",
         "@flywave/flywave-text-canvas": "workspace:*",
-        "earcut": "catalog:"
+        "@flywave/flywave-utils": "workspace:*",
+        "@flywave/flywave-vectortile-datasource": "workspace:*",
+        "earcut": "catalog:",
+        "pbf": "^5.1.0"
     },
     "devDependencies": {
         "@flywave/flywave-test-utils": "workspace:*",
