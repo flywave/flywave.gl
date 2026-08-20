@@ -631,6 +631,17 @@ export class MBMaterialPatchManager {
             }
             rasRampTex = MBMaterialPatchManager.buildRasterColorRamp(colorExpr, rasRange, resampling === 'nearest');
         }
+        if (!rasRampTex && String(technique._rasterTileUrl ?? '').endsWith('.mrt')) {
+            // mgl defines RASTER_COLOR for array sources even without the
+            // paint (draw_raster.ts `if (!isRasterColor) defines.push`) —
+            // the unbound ramp sampler then reads black with alpha 1.
+            const d = new Uint8Array([0, 0, 0, 255]);
+            const t = new THREE.DataTexture(d, 1, 1, THREE.RGBAFormat);
+            t.minFilter = THREE.NearestFilter;
+            t.magFilter = THREE.NearestFilter;
+            t.needsUpdate = true;
+            rasRampTex = t;
+        }
         const hasAdjust =
             brightness[0] !== 0 || brightness[1] !== 1 ||
             contrast !== undefined || saturation !== undefined ||
@@ -751,6 +762,7 @@ export class MBMaterialPatchManager {
                     shader.uniforms.uMBArrOff = { value: arrTex.__mbArrOffset };
                     shader.uniforms.uMBArrTile = { value: arrTex.__mbArrTile };
                     shader.uniforms.uMBArrBuf = { value: arrTex.__mbArrBuffer };
+                    shader.uniforms.uMBArrRes = { value: arrTex.__mbArrTile + 2 * arrTex.__mbArrBuffer };
                 }
                 const rasRes = new THREE.Vector2(512, 256);
                 shader.uniforms.uMBRasRes = { value: rasRes };
@@ -797,7 +809,7 @@ export class MBMaterialPatchManager {
                      uniform vec3 uMBRasBase;
                      uniform float uMBRasFar;
                      varying float vMBRasEyeDist;
-                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx; uniform float uMBRasPadOn;\n                     uniform sampler2D uMBRasRamp;\n                     uniform vec4 uMBArrMix; uniform float uMBArrOff; uniform float uMBArrTile; uniform float uMBArrBuf;
+                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx; uniform float uMBRasPadOn;\n                     uniform sampler2D uMBRasRamp;\n                     uniform vec4 uMBArrMix; uniform float uMBArrOff; uniform float uMBArrTile; uniform float uMBArrBuf; uniform float uMBArrRes;
                      vec3 mbSrgbEnc(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
                      vec3 mbSrgbDec(vec3 c) { return mix(c / 12.92, pow((max(c, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
                      void main() {`,
@@ -837,15 +849,45 @@ export class MBMaterialPatchManager {
                      // (mgl raster.fragment.glsl #ifdef RASTER_COLOR).
                      ${arrTex ? `
                      // RASTER_ARRAY decode (draw_raster texture descriptor):
-                     // value = offset + dot(rgba, mix4); uv insets the 1px
-                     // band buffer; NODATA (vec4(1)) renders transparent.
+                     // value = offset + dot(rgba, mix4); uv insets the band
+                     // buffer; NODATA (vec4(1)) renders transparent.
                      vec2 mbArrUv = (uMBArrBuf + (uMBRasUvOff + vMBRasUv * uMBRasUvScl) * uMBArrTile) / (uMBArrTile + 2.0 * uMBArrBuf);
+                     vec2 mbArrVal;
+                     ${resampling === 'linear' ? `
+                     // RASTER_ARRAY_LINEAR (raTexture2D_*_linear): bilinear
+                     // interpolation of the DECODED values — re-implements
+                     // sampling in-shader so the mix/offset decode applies
+                     // after interpolation (mgl _prelude_raster_array).
+                     vec2 mbLc = mbArrUv * uMBArrRes - 0.5;
+                     vec2 mbLf = fract(mbLc);
+                     mbLc = floor(mbLc);
+                     mbLc = clamp(mbLc, vec2(0.0), vec2(uMBArrRes - 2.0));
+                     ivec2 mbLi = ivec2(mbLc);
+                     vec4 mbLT[4];
+                     mbLT[0] = texelFetch(uMBRasMap, mbLi);
+                     mbLT[1] = texelFetch(uMBRasMap, mbLi + ivec2(1, 0));
+                     mbLT[2] = texelFetch(uMBRasMap, mbLi + ivec2(0, 1));
+                     mbLT[3] = texelFetch(uMBRasMap, mbLi + ivec2(1, 1));
+                     vec2 mbLV[4];
+                     for (int mbI = 0; mbI < 4; mbI++) {
+                         vec4 mbT = mbLT[mbI];
+                         mbLV[mbI] = (mbT.r > 0.9999 && mbT.g > 0.9999 && mbT.b > 0.9999 && mbT.a > 0.9999)
+                             ? vec2(0.0) : vec2(uMBArrOff + dot(mbT, uMBArrMix), 1.0);
+                     }
+                     vec2 mbL0 = mix(mbLV[0], mbLV[1], mbLf.x);
+                     vec2 mbL1 = mix(mbLV[2], mbLV[3], mbLf.x);
+                     mbArrVal = mix(mbL0, mbL1, mbLf.y);` : `
                      vec4 mbArr = texture2D(uMBRasMap, mbArrUv);
-                     float rcT = (uMBArrOff + dot(mbArr, uMBArrMix) - ${rasRange[0].toFixed(6)}) / ${Math.max(rasRange[1]-rasRange[0],1e-6).toFixed(6)};
+                     mbArrVal = (mbArr.r > 0.9999 && mbArr.g > 0.9999 && mbArr.b > 0.9999 && mbArr.a > 0.9999)
+                         ? vec2(uMBArrOff + dot(mbArr, uMBArrMix), 0.0)
+                         : vec2(uMBArrOff + dot(mbArr, uMBArrMix), 1.0);`}
+                     // mgl: fade to no-data via the interpolated mask —
+                     // divide the scalar by the mask sum first.
+                     if (mbArrVal.y > 0.0) mbArrVal.x /= mbArrVal.y;
+                     float rcT = (mbArrVal.x - ${rasRange[0].toFixed(6)}) / ${Math.max(rasRange[1]-rasRange[0],1e-6).toFixed(6)};
                      vec4 rcCol = texture2D(uMBRasRamp, vec2(clamp(rcT, 0.0, 1.0), 0.5));
                      mbR = rcCol.rgb;
-                     mbRasT.a *= rcCol.a;
-                     if (mbArr.r > 0.9999 && mbArr.g > 0.9999 && mbArr.b > 0.9999 && mbArr.a > 0.9999) mbRasT.a = 0.0;` : `
+                     mbRasT.a *= rcCol.a * mbArrVal.y;` : `
                      float rcT = (${rasMix[3].toFixed(6)} + dot(mbSrgbEnc(mbRasT.rgb), vec3(${rasMix[0].toFixed(6)}, ${rasMix[1].toFixed(6)}, ${rasMix[2].toFixed(6)})) - ${rasRange[0].toFixed(6)}) / ${Math.max(rasRange[1]-rasRange[0],1e-6).toFixed(6)};
                      vec4 rcCol = texture2D(uMBRasRamp, vec2(clamp(rcT, 0.0, 1.0), 0.5));
                      mbR = rcCol.rgb;
