@@ -2356,3 +2356,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **35. image 源逐层 quad + raster-elevation（2026-08-20 四，不跑测）**：`applyImageSources` 从"合并所有引用层 paint 的单 quad"重构为**每 raster 层一个 quad**（mgl paint 是逐层语义——raster-elevation fixture 两层共享 image 源、不同 elevation/亮度）；mesh.anchor.z = raster-elevation（世界米），renderOrder 按层序，visibility:none 逐层跳过。共享纹理的 per-layer resampling 取首层值（罕见组合，记档）。tile 路径的 raster-elevation（矢量瓦片 raster 层抬升）未做——emitter quad z 需接 paint，待数据反馈后补。
 
 **36. tile 路径 raster-elevation（2026-08-20 四，不跑测）**：raster technique 新增 `_rasterElevation`（paint 'raster-elevation'，默认 0），fill quad 顶点 z += elevation（世界米，mgl u_raster_elevation 语义）。与 far-clip（uMBRasFar 眼距）的交互未调（抬升改变远裁剪几何，待数据）。
+
+**37. heatmap 地面投影椭圆核（2026-08-20 四，不跑测）**：mgl `heatmap.vertex` 在**瓦片空间**挤出核四边形再经透视矩阵投影——pitch 下地面圆变屏幕椭圆（pitch30 fixture 16181 的根因；我们旧实现是屏幕空间正圆）。泛化：kernel 四边形改为"参数空间圆 + 逐核屏幕共轭基"——CPU 投影 p 与 p±D（D = S·rPx·mpp，沿地图平面两轴）得基向量（密度缓冲 px），顶点 `px = center + u·bx + v·by`，片元高斯半径 `r = length((u,v)·S)` 在**参数空间各向同性**（地面单位），椭圆由基承载。零 pitch 自动退化为旧行为（bx=(half,0), by=(0,half)）。heatmap/antimeridian 与 projected 仍留（回绕基平移/自定义投影）。

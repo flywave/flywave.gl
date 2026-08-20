@@ -27,6 +27,9 @@ interface HeatmapLayerGroup {
     raw: HeatmapKernel[];
     // Projected (drawing-buffer pixel space) per-point arrays.
     px: number[];
+    bx: number[];
+    by: number[];
+    s: number[];
     py: number[];
     half: number[];
     radiusPx: number[];
@@ -208,7 +211,11 @@ export class MBHeatmapRenderer {
                     S = Math.min(Math.sqrt(-2 * Math.log(ratio)) / 3, 32);
                 }
                 const half = Math.max(S * rPx, 1);
-                const emitKernel = (sx: number, sy: number) => {
+                // Ground-projection basis (mgl extrudes the kernel in tile
+                // space): the full-corner world offset along the map-plane
+                // axes, projected to screen, gives the conjugate diameters of
+                // the pitch ellipse. Zero pitch degenerates to (half,0)/(0,half).
+                const emitKernel = (sx: number, sy: number, bx: number[], by: number[]) => {
                     // Cull with the per-point quad half-size so large kernels
                     // straddling the screen edge still contribute.
                     if (sx < -half || sx > w + half || sy < -half || sy > h + half) return;
@@ -220,6 +227,9 @@ export class MBHeatmapRenderer {
                     g.half.push(half * s);
                     g.radiusPx.push(rPx * s);
                     g.weight.push(k.weight);
+                    g.bx.push(bx[0], bx[1]);
+                    g.by.push(by[0], by[1]);
+                    g.s.push(S);
                 };
                 const projectToPx = (x: number, y: number, z: number): [number, number] | null => {
                     this.m_v3.set(x, y, z).project(camera);
@@ -230,14 +240,22 @@ export class MBHeatmapRenderer {
                 };
                 const base = projectToPx(k.x, k.y, k.z);
                 if (!base) continue;
-                emitKernel(base[0], base[1]);
+                const zoom = this.m_mapView.zoomLevel ?? 0;
+                const mpp = EarthConstants.EQUATORIAL_CIRCUMFERENCE / (512 * Math.pow(2, zoom));
+                const D = half * mpp;
+                const axPt = projectToPx(k.x + D, k.y, k.z);
+                const ayPt = projectToPx(k.x, k.y + D, k.z);
+                const sc = this.m_rtScale;
+                const bxAbs = axPt ? [(axPt[0] - base[0]) * sc, (axPt[1] - base[1]) * sc] : [half * sc, 0];
+                const byAbs = ayPt ? [(ayPt[0] - base[0]) * sc, (ayPt[1] - base[1]) * sc] : [0, half * sc];
+                emitKernel(base[0], base[1], bxAbs, byAbs);
                 // Wrapped world copies (± one world along x) — mgl renders the
                 // offscreen pass over all MultiTileIDs, including the
                 // antimeridian replicates.
                 const west = projectToPx(k.x - worldRepeatX, k.y, k.z);
-                if (west) emitKernel(west[0], west[1]);
+                if (west) emitKernel(west[0], west[1], bxAbs, byAbs);
                 const east = projectToPx(k.x + worldRepeatX, k.y, k.z);
-                if (east) emitKernel(east[0], east[1]);
+                if (east) emitKernel(east[0], east[1], bxAbs, byAbs);
             }
             if (g.px.length > maxCount) maxCount = g.px.length;
         }
@@ -268,7 +286,7 @@ export class MBHeatmapRenderer {
                     this.m_kernelMat.uniforms.uIntensity.value = g.intensity;
                 }
                 if (this.m_kernelGeo && this.m_kernelMat && this.m_kernelMesh) {
-                    this.updateKernelGeometry(g.px.length, g.px, g.py, g.half, g.radiusPx, g.weight);
+                    this.updateKernelGeometry(g.px.length, g.px, g.py, g.half, g.radiusPx, g.weight, g.bx, g.by, g.s);
                     const mesh = this.m_kernelMesh;
                     this.m_scene.add(mesh);
                     renderer.render(this.m_scene, this.m_camera);
@@ -339,6 +357,7 @@ export class MBHeatmapRenderer {
                         ramp: texture,
                         raw: [],
                         px: [], py: [], half: [], radiusPx: [], weight: [],
+                        bx: [], by: [], s: [],
                     };
                     groups.set(layerId, g);
                 }
@@ -380,13 +399,20 @@ export class MBHeatmapRenderer {
         const positions = new Float32Array(count * 3 * 4);
         const centers = new Float32Array(count * 2 * 4);
         const weights = new Float32Array(count * 4);
-        const halfs = new Float32Array(count * 4);
-        const radiusPxs = new Float32Array(count * 4);
+        // Ground-projected kernels (mgl heatmap.vertex extrudes in TILE
+        // space, so at pitch the circle becomes a screen ellipse): the quad
+        // corner parameter (±1) maps through per-kernel screen basis
+        // vectors (full corner offsets in density-buffer px), and the
+        // fragment distance stays isotropic in the PARAMETER space.
+        const basisX = new Float32Array(count * 2 * 4);
+        const basisY = new Float32Array(count * 2 * 4);
+        const scales = new Float32Array(count * 4);
         geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geo.setAttribute('aCenter', new THREE.BufferAttribute(centers, 2));
         geo.setAttribute('aWeight', new THREE.BufferAttribute(weights, 1));
-        geo.setAttribute('aHalf', new THREE.BufferAttribute(halfs, 1));
-        geo.setAttribute('aRadiusPx', new THREE.BufferAttribute(radiusPxs, 1));
+        geo.setAttribute('aBasisX', new THREE.BufferAttribute(basisX, 2));
+        geo.setAttribute('aBasisY', new THREE.BufferAttribute(basisY, 2));
+        geo.setAttribute('aS', new THREE.BufferAttribute(scales, 1));
         const indices = new Uint32Array(count * 6);
         for (let i = 0; i < count; i++) {
             const b = i * 4;
@@ -416,37 +442,34 @@ export class MBHeatmapRenderer {
             vertexShader: `
                 attribute vec2 aCenter;
                 attribute float aWeight;
-                attribute float aHalf;
-                attribute float aRadiusPx;
+                attribute vec2 aBasisX;
+                attribute vec2 aBasisY;
+                attribute float aS;
                 uniform vec2 uViewport;
-                varying vec2 vCenter;
+                varying vec2 vParam;
                 varying float vWeight;
-                varying float vRadiusPx;
                 void main() {
                     vec2 corner = position.xy;
-                    vec2 px = aCenter + corner * aHalf;
+                    vec2 px = aCenter + corner.x * aBasisX + corner.y * aBasisY;
                     vec2 ndc = (px / uViewport) * 2.0 - 1.0;
                     ndc.y = -ndc.y;
                     gl_Position = vec4(ndc, 0.0, 1.0);
-                    vCenter = aCenter;
+                    // Parameter space is isotropic in GROUND units: the
+                    // projected ellipse comes from the basis, the Gaussian
+                    // radial falloff stays circular in (u, v).
+                    vParam = corner * aS;
                     vWeight = aWeight;
-                    vRadiusPx = aRadiusPx;
                 }
             `,
             fragmentShader: `
                 // mapbox heatmap kernel: val = weight * intensity * GAUSS_COEF
-                // * exp(-0.5 * 3^2 * r^2) with r = pixelDist / heatmap-radius.
+                // * exp(-0.5 * 3^2 * r^2), r in heatmap-radius units.
                 // GAUSS_COEF = 1/sqrt(2*PI) (mapbox constants).
-                uniform vec2 uViewport;
                 uniform float uIntensity;
-                varying vec2 vCenter;
+                varying vec2 vParam;
                 varying float vWeight;
-                varying float vRadiusPx;
                 void main() {
-                    // gl_FragCoord origin is bottom-left; flip y to match the
-                    // top-left pixel space the CPU projected the centers into.
-                    vec2 fc = vec2(gl_FragCoord.x, uViewport.y - gl_FragCoord.y);
-                    float r = length(fc - vCenter) / max(vRadiusPx, 0.0001);
+                    float r = length(vParam);
                     float val = vWeight * uIntensity * 0.398942 * exp(-0.5 * 9.0 * r * r);
                     // mapbox heatmap pass 1: density in the RED channel, alpha
                     // constant 1 (the composite pass reads the .r channel).
@@ -465,13 +488,15 @@ export class MBHeatmapRenderer {
         count: number,
         px: number[], py: number[],
         halfs: number[], radiusPxs: number[], pw: number[],
+        bxs: number[], bys: number[], ss: number[],
     ): void {
         const geo = this.m_kernelGeo!;
         const positions = geo.getAttribute('position') as THREE.BufferAttribute;
         const centers = geo.getAttribute('aCenter') as THREE.BufferAttribute;
         const weights = geo.getAttribute('aWeight') as THREE.BufferAttribute;
-        const aHalf = geo.getAttribute('aHalf') as THREE.BufferAttribute;
-        const aRadiusPx = geo.getAttribute('aRadiusPx') as THREE.BufferAttribute;
+        const aBasisX = geo.getAttribute('aBasisX') as THREE.BufferAttribute;
+        const aBasisY = geo.getAttribute('aBasisY') as THREE.BufferAttribute;
+        const aS = geo.getAttribute('aS') as THREE.BufferAttribute;
 
         const corners: Array<[number, number]> = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
         for (let i = 0; i < count; i++) {
@@ -480,15 +505,17 @@ export class MBHeatmapRenderer {
                 positions.setXYZ(vi, corners[c][0], corners[c][1], 0);
                 centers.setXY(vi, px[i], py[i]);
                 weights.setX(vi, pw[i]);
-                aHalf.setX(vi, halfs[i]);
-                aRadiusPx.setX(vi, radiusPxs[i]);
+                aBasisX.setXY(vi, bxs[i * 2], bxs[i * 2 + 1]);
+                aBasisY.setXY(vi, bys[i * 2], bys[i * 2 + 1]);
+                aS.setX(vi, ss[i]);
             }
         }
         positions.needsUpdate = true;
         centers.needsUpdate = true;
         weights.needsUpdate = true;
-        aHalf.needsUpdate = true;
-        aRadiusPx.needsUpdate = true;
+        aBasisX.needsUpdate = true;
+        aBasisY.needsUpdate = true;
+        aS.needsUpdate = true;
         geo.setDrawRange(0, count * 6);
 
         if (this.m_kernelMat) {
