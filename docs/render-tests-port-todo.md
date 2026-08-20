@@ -2410,3 +2410,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 3. **viewDistance/图标路径记档**：`checkReadyForPlacement` 的 zoom 精确相等排除（Placement.ts:218）与 sprite atlas 未加载循环（:1773-1776）为次级嫌疑；调试开关 `PRINT_LABEL_DEBUG_INFO`（TextElementsRenderer.ts:136）可区分 uninitialized/tooFar/notDrawn，下轮批测若有残余再开。
 
 **注意**：`MBStyleSymbolPlacement` 仅作用于 tile.objects 的 'text'/'labeled-icon' 技术（legacy 对象路径），原生 TextElement 不受其影响——两套 placement 并存是记档的架构事实。
+
+**42. §39–41 攒批验收（b79，2026-08-20）**：
+
+16 分类 213 用例批测（b79，对照 b78/baseline5 双基线），**零回归**，改善有限：
+
+- **§39 LUT sprite/pattern（部分兑现）**：`icon-image/use-theme` 3957→**1613**（-59%）、`params/color` 4243→**741**、`params/transparent-image` 1205→753。color-theme 大头（import-override 122k/244k、red-chicago 201k、fog-import-scope 209k、emission-bw 61k）**无变化**——这些是 import/override 作用域语义，非纹理 LUT 本身，留档下一专项。line-gradient/use-theme 2751、fill-pattern/color-theme 482 持平。
+- **§40 geojson 1024 buffer（适用面收窄）**：`line-cap/butt` 455→404 微改善。**重要修正**：line-cap fixture 是 **MVT 矢量源**（style.json `type:"vector"`）而非 geojson——§40 的"round-cap 月牙 = geojson border 100 vs 1024"形态学归因**证伪**（MVT 路径我们与 mgl 均不裁剪），月牙 1264px 维持未解，需回 §12.76-17 的单要素重放取证。`line-join/none` 与 `elevated-line-join/none` 238→**PASS**。
+- **§41 文本三链修复（无像素级变化）**：text-anchor/color/field/font 与 icon-text-fit 全域数值与 b78/baseline5 基本逐例一致（text-anchor/center 10596→10611、icon-text-fit 仍 0/42）——替换字形/孤儿 canvas 两条修复对这批 fixture 无影响（它们的字符都在页 0-1 内），残余是**字形位置/锚点精度**（G4/F13 主线不变）。
+- **§12.76-19 同族 sRGB 审计（Explore 全扫，代码未动，待下批）**：`new THREE.Color(css)` 线性值流入 **sRGB 域 shader** 的 A 级嫌疑 18 处——PM trim/outline/roof/flood/icon SDF 色（1169/1447/1581/2281/2285/2434）、MapCircle/SDFIcon/SDFText 材质 uColor/uStrokeColor、MapLine/MapHeatmap ramp（lerp 需在 sRGB 域）、MapBuilding uRoofColor、MBTileDataEmitter:500 autoBorder、MBEnvironmentManager fog 穹顶色（543/579-580/782/880-881——注意 fog 域当前数值是按线性色标定过的，改动可能需重定 kFog 类参数）。B 级（three 光照线性域正确）：uMBStrokeColor:1884、emissive、hillshade、uFloodColor 注入点、clearColor。修法模板 = PM:683 `copyLinearToSRGB` / `getRGB(..., SRGBColorSpace)`。**风险**：circle-color/icon-color 现有 PASS 项若因 fixture 灰阶侥幸，转换后可能回归——下批改时需带 circle/icon/text 色彩域对照。
