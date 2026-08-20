@@ -1394,6 +1394,59 @@ export class MBEnvironmentManager {
                 geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
                 geom.setIndex(new THREE.BufferAttribute(indices, 1));
 
+                // Projective (homography) texture mapping: mgl renders image
+                // sources through the raster program's normalize matrix, i.e.
+                // a true projective warp of the arbitrary corner quad. A plain
+                // two-triangle UV interpolation creases along the diagonal for
+                // non-parallelogram coordinates. Solve H: (world x,y,1) ->
+                // (u*w, v*w, w) from the 4 corner correspondences and let the
+                // GPU's perspective-correct interpolation do the warp:
+                // varying vec3 = H * world, fragment uv = varying.xy/z.
+                let homography: number[] | null = null;
+                try {
+                    const A: number[][] = [];
+                    const b: number[] = [];
+                    const quadUv = [[0, 1], [1, 1], [1, 0], [0, 0]];
+                    for (let i = 0; i < 4; i++) {
+                        const wx = [tl, tr, br, bl][i].x - anchor.x;
+                        const wy = [tl, tr, br, bl][i].y - anchor.y;
+                        const [u, v] = quadUv[i];
+                        // u = (h0 x + h1 y + h2) / (h6 x + h7 y + h8)
+                        A.push([wx, wy, 1, 0, 0, 0, -u * wx, -u * wy]); b.push(u);
+                        A.push([0, 0, 0, wx, wy, 1, -v * wx, -v * wy]); b.push(v);
+                    }
+                    // Gaussian elimination on the 8x8 system.
+                    const n = 8;
+                    for (let col = 0; col < n; col++) {
+                        let piv = col;
+                        for (let r = col + 1; r < n; r++) {
+                            if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+                        }
+                        [A[col], A[piv]] = [A[piv], A[col]];
+                        [b[col], b[piv]] = [b[piv], b[col]];
+                        const d = A[col][col] || 1e-12;
+                        for (let r = 0; r < n; r++) {
+                            if (r === col) continue;
+                            const f = A[r][col] / d;
+                            for (let c = col; c < n; c++) A[r][c] -= f * A[col][c];
+                            b[r] -= f * b[col];
+                        }
+                    }
+                    homography = [];
+                    for (let i = 0; i < n; i++) homography.push(b[i] / (A[i][i] || 1e-12));
+                    homography.push(1);
+                    // Sanity: corner round trip must be exact.
+                    const check = (i: number) => {
+                        const wx = [tl, tr, br, bl][i].x - anchor.x;
+                        const wy = [tl, tr, br, bl][i].y - anchor.y;
+                        const w = homography![6] * wx + homography![7] * wy + 1;
+                        const u = (homography![0] * wx + homography![1] * wy + homography![2]) / w;
+                        const v = (homography![3] * wx + homography![4] * wy + homography![5]) / w;
+                        return Math.abs(u - quadUv[i][0]) < 1e-6 && Math.abs(v - quadUv[i][1]) < 1e-6;
+                    };
+                    if (!(check(0) && check(1) && check(2) && check(3))) homography = null;
+                } catch { homography = null; }
+
                 const rasterOpacity = Number(layerPaint['raster-opacity'] ?? 1);
                 const material = new THREE.MeshBasicMaterial({
                     map: texture,
@@ -1401,6 +1454,54 @@ export class MBEnvironmentManager {
                     depthWrite: false,
                     transparent: false,
                 });
+
+                if (homography) {
+                    // Projective warp: replace the per-vertex uv with the
+                    // homography-mapped projective varying (interpolated
+                    // perspective-correctly by the GPU, matching mgl's
+                    // normalize-matrix image rendering).
+                    const homForShader = homography;
+                    const origHCompile = material.onBeforeCompile;
+                    material.onBeforeCompile = (shader: any) => {
+                        if (origHCompile) origHCompile.call(material, shader);
+                        shader.uniforms.uMBImgH = {
+                            value: new THREE.Matrix3(
+                                homForShader[0], homForShader[1], homForShader[2],
+                                homForShader[3], homForShader[4], homForShader[5],
+                                homForShader[6], homForShader[7], homForShader[8]),
+                        };
+                        shader.vertexShader = shader.vertexShader.replace(
+                            'void main() {',
+                            'uniform mat3 uMBImgH;\nvarying vec3 vMBImgUvw;\nvoid main() {'
+                        );
+                        shader.vertexShader = shader.vertexShader.replace(
+                            '#include <uv_vertex>',
+                            '#include <uv_vertex>\nvMBImgUvw = uMBImgH * vec3(position.xy, 1.0);'
+                        );
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            'void main() {',
+                            'varying vec3 vMBImgUvw;\nvoid main() {'
+                        );
+                        // Route the built-in map sampling through the warped
+                        // projective uv. The include marker is still unresolved
+                        // at onBeforeCompile time (three inlines chunks after),
+                        // so replace the marker with an inlined variant.
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            '#include <map_fragment>',
+                            `#ifdef USE_MAP
+                                vec4 sampledDiffuseColor = texture2D( map, vMBImgUvw.xy / vMBImgUvw.z );
+                                diffuseColor *= sampledDiffuseColor;
+                            #endif`
+                        );
+                        // The paint-injection path (hasPaint wrapper runs
+                        // BEFORE this one) samples vMapUv literally — swap it.
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            'vec4 imgT = texture2D(map, vMapUv);',
+                            'vec4 imgT = texture2D(map, vMBImgUvw.xy / vMBImgUvw.z);'
+                        );
+                    };
+                    material.needsUpdate = true;
+                }
 
                 // raster paints — the SAME mgl-exact chain as the per-tile
                 // raster path (MBMaterialPatchManager.patchRasterMaterial):

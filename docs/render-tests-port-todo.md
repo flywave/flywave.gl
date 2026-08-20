@@ -2331,3 +2331,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **image 源残差定性**（image/raster-visibility 31357 等）：mgl image 源经 raster 程序的投影矩阵做**任意四边形正确纹理映射**；我们是双三角形 UV 插值——非平行四边形坐标（本 fixture 旋转四边形）在对角线产生折痕。精确修法 = 顶点 shader 注入 4 角 homography；base 色已在 §12.76-23 修复。记档待攻。
 
 **25. fill-outline mgl 精确 alpha 落地（2026-08-20 四，不跑测）**：对照 `fill_outline.fragment.glsl`——outline 是 `alpha = 1−smoothstep(0,1,distPx)` 的 1px 屏幕空间衰减。改造：① outline technique 增加 `_isLineRibbon: true` + `_ribbonWidthPx: 2`，路由进 ribbon 注入拿到 vMBRibbonEdge varying（此前 outline 走纯 fill 材质、edge 属性根本没接到片元）；② ribbon 注入中 outline 场景替换基础硬切 alpha（`step(−0.5, edge)`）为 mgl 的 `1−smoothstep(0,1, |edge|·halfW)`（2px ribbon 的 halfW=1px，|edge|·halfW = 距中心线像素距离，严格等价）。待批测验证 fill-outline-color 8 例。
+
+**26. image 源投影校正纹理映射（2026-08-20 四，不跑测）**：§12.76-24 定性的"双三角形 UV 对角折痕"修复——4 角对应关系解 8×8 单应矩阵 H（高斯消元 + 角点往返校验，失败回退 UV 属性路径），顶点注入 `vMBImgUvw = H·(x,y,1)`、片元 `uv = vMBImgUvw.xy/zw`（GPU 透视校正插值完成任意四边形正确 warp，等价 mgl raster 程序的 normalize 矩阵语义；平面单应的 w 与透视投影 w 成比例，顶点直接给齐次坐标即可）。注意 onBeforeCompile 时 chunk 未内联，map 采样替换走 `#include <map_fragment>` 标记 + paint 注入的 imgT 字面量双路。待批测验证 image/raster-* 族。
