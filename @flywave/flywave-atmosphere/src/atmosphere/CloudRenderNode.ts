@@ -561,15 +561,15 @@ export class CloudRenderNode extends TempNode {
         }
         const u = this.cloudUniforms;
 
-        if (config.quality != null) {
-            u.applyQualityPreset(config.quality);
-            // Build-time switches & shadow sizing travel with the preset
-            // (reference: takram `set qualityPreset` assigns the shadow group
-            // and rendering flags, CloudsEffect.ts:509-514).
-            const preset = qualityPresets[config.quality];
-            this.applySamplingSwitches(preset);
-            this.applyShadowMapSize(preset.shadowMapSize, preset.shadowCascadeCount);
-        }
+        // Preset application: uniform values only. The extended branch that
+        // also applied build-time switches (applySamplingSwitches →
+        // recreateCloudRenderer → material rebuild) and shadow-map resizing
+        // (applyShadowMapSize → render-target recreation) broke ground cloud
+        // shadows — verified by bisection: with this one-liner the shadows are
+        // correct; with the extended branch they break (the rebuild/resize
+        // path leaves the BSM sampling chain in a bad state). Re-enable only
+        // after that path is fixed; uniform-based knobs keep working.
+        if (config.quality != null) u.applyQualityPreset(config.quality);
         if (config.coverage != null) u.coverage.value = config.coverage;
         if (config.scatteringCoefficient != null)
             u.scatteringCoefficient.value = config.scatteringCoefficient;
