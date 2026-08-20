@@ -1991,6 +1991,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **改动**（`MBEnvironmentManager.ts` 穹顶重写）：① 角度不再用真实海拔 asin(dir.z)，改为逐片元从 gl_FragCoord 屏幕位置双线性插值视锥角方向 + 对屏幕地平线射线取 acos 夹角（世界 z-up，`dir.z < horizonDir.z` 判下方）；② 视锥四角方向与 u_horizon 每帧 onBeforeRender 计算（NDC 角点 unproject − 相机位置；pitch 由实际视线反推，不用 pitch 属性）；③ **取消 elevation≤0 discard**——mgl 在屏幕地平线以下输出 t=1 雾色（其大气先画、瓦片后覆盖；我们穹顶后画 + depthTest：近瓦片深度更近者胜出，比穹顶 1000m 远的瓦片显示 t≈1 雾色 = mgl fog-cull 远带同视觉）；④ fogState 新增 `colorAlpha`（属性原 alpha），穹顶用之（此前误用带 pitch 因子的 alpha）；⑤ 旧 uHorizonRefElev（真实海拔参照）路径删除。
 - **预期影响**：§12.76-8 遗留②（row0 恒 141 vs 126——真实地平线参照把渐变起点放低，row0 处 t 过大偏 fog 色）与③（high-color 族 1786-3074）的主嫌疑即此差异；此前"屏幕参照回归 ~2k px"的尝试是**标量参照角近似**（uHorizonRefElev 单值 + atan），本轮是 mgl 的**逐片元矢量插值**精确式，机制不同。批测重点：fog 域 87 例 + lighting-3d-mode/color-theme 连带域，回归即回退本条（独立 commit 可 revert）。
 
+**11. F10 circle-blur/circle-stroke mgl 移植（2026-08-20 四，代码侧落地，渲染验证延后；`7128dd26` + `20726c60`）**：
+- **对照源**：mgl `circle.fragment.glsl` 的三段组合——`extrude_length = |extrude| + antialiasblur·(1−blur_positive)`；`antialiased_blur = −max(|blur|, antialiasblur)`；正 blur（向内柔化）与负 blur（向外发光）两条 opacity_t 公式；stroke 边界 `color_t = smoothstep(antialiased_blur, 0, extrude_length − radius/(radius+stroke_width))`；最终 `out·(visibility·opacity_t)`。`antialiasblur = 1/dpr/(radius+stroke_width)`（vertex 侧，与半径成反比的 1px 伪 AA）。
+- **改动**：① `MapCircleMaterial`（datasource 侧材质）片元整体重写为 mgl 逐行公式，uSize 改为 (radius+stroke)·2（**修了 stroke 内缩进填充区的旧 bug**——mgl 的 stroke 在 fill 半径之外），新增 uRadius/uDpr；② **主渲染路径**走引擎 `CirclePointsMaterial`（technique 'circles'），在 `MBMaterialPatchManager.patchCircleMaterial` onBeforeCompile 注入同一套 mgl 组合（仅当 blur≠0 或 stroke-width>0 时注入，默认 fwidth AA 路径不动），uniform uMBBlur/uMBRadiusPx/uMBStrokePx/uMBStrokeOpacity/uMBStrokeColor/uMBDpr(=1，size 与 gl_PointSize 同像素单位)；③ emitter `props.size` 同步扩到 (radius+stroke)·2。
+- **风险与批测重点**：① `size` 单位是否 CSS px vs 设备 px（uMBDpr=1 假设）；② 数据驱动 circle-radius（props.size 只取常量值，既有行为）；③ ground-lighting 注入与本注入的 gl_FragColor 行替换叠加（已兼容 diffuseColor→mbColor 替换）。批测：circle-blur / circle-stroke-color / circle-stroke-opacity / circle-stroke-width 各分类 + circle-color/circle-opacity 回归。
+
 
 
 
