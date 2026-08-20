@@ -1262,9 +1262,14 @@ export class MBEnvironmentManager {
         // above the source's `maxzoom` (reuse the maxzoom parent tile, overzoomed
         // by flywave), and offset one level for tileSize 512/514.
         const tileSizeOffset = demTileSize > 256 ? 1 : 0;
+        // mgl raster semantics: a tileSize-512/514 source's URL zoom is one
+        // below the display zoom (512-tile scheme), THEN capped at the
+        // source maxzoom — capping before the offset requests maxzoom-1 and
+        // 404s fixtures that ship only the maxzoom tile
+        // (e.g. 13-1310-3166.terrain.514.png at display z16.7).
         const terrainZoom = Math.max(
             0,
-            Math.min(Math.floor(zoom), demMaxZoom) - tileSizeOffset,
+            Math.min(Math.floor(zoom) - tileSizeOffset, demMaxZoom),
         );
         try {
             this.m_terrainController = new TerrainController(this.m_scene);

@@ -2466,6 +2466,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - import-override-style 115k 同通道（无 op，静态即偏）；import-override-theme 249k 附加 op 主题差。b94 无探针确认数值稳定。
 - **补充（b95）**：drape FBO clear 改用（themed）mapView clearColor（mgl 语义：background 进 drape pass）——对 fixture 零变化（b94/b95 逐位一致 = drape 路径未参与）。网格取样确认真因升级：**cur 全图近全为天空蓝（center/3/4h 均 sky 色）、仅底部窄条白；exp center (0,0,59) 暗色地形+挤出物场景**——pitch70+terrain(0.5) 下我们的地形/挤出物几何没有进入视野（DEM 瓦片 13-1310-3166 存在），属**地形-相机-挤出物渲染专项**而非 color-theme 缺陷。drape clear 修改保留（语义更近 mgl）。
 
+**51. 高 pitch 地形专项一轮：terrainZoom 公式修复（2026-08-21，b96）**：
+
+- **根因一（已修）**：applyTerrain 的 terrainZoom = `min(floor(zoom), maxzoom) − tileSizeOffset`——offset 在 cap **之后**，tileSize 514 + maxzoom 13 的 fixture（display z16.7）得 z12 → 邻块/中心全 404 → **无地形 mesh** → 穹顶铺满。mgl 语义：512/514 源的 URL zoom = display−1，**再** cap 到 maxzoom（z13，瓦片在位）。已改为 `min(floor(zoom) − offset, maxzoom)`；b96 log 确认 z13 请求发出、中心瓦片命中。
+- **现状**：地形 mesh 已建（画面底部白条 = 未打光的 MapTerrainMaterial 基色），但主体视野仍天空——**根因二待查**：pitch70 相机/地平线语义（mgl 相机在 terrain 上高度、我们的相机 rig pitch 与实际视线错位 §12.76-12 曾记录）或地形材质可见范围。连带：import-override-style 115k→138k（地形部分出现但白色不对，方向正确需打光/drape）。fog/terrain/basic（z12 256 源，公式不变路径）需零回归确认。
+- **下一步**：① 地形材质接 3D-lights/themed drape（白色基色 → themed 场景色）；② 相机 pitch70 视线与地平线对照 mgl transform（elevation-aware camera）；③ fog 域连带批测。tsc 绿、单测 265 passing / 3 既有。
+
 **44. §43 攒批验收（b80，2026-08-20 五）**：17 分类 ~150 例（building/fog 因 runner 中断未跑完，fog 域风险仍未验证）：
 
 - **零 LOST PASS**；circle-color/stroke-color/stroke-width **全绿 5/5×3**、stroke-opacity 3/6、icon-halo-color 7/7、icon-halo-width 4/4、icon-color 4/5 维持——uColor/uStrokeColor 转 sRGB **零回归**（这些域本就按 mgl 语义校准，转换后灰阶类不受影响、彩阶类无 fixture 暴露差异）。
