@@ -2439,3 +2439,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **building 域连带改善**：clip-layer/default 79k→**23k**、lower-order-clipping 82k→**35k**（-50k 级，roof/flood 色转换）；conflation/cutoff-fade 系小改善。
 - **trimColor 转换被数据否决回退**：line-trim-offset pure-color 族 4 例 +1.1k~+1.55k（2070→3122 等）、trim-color-long-line 120→750——b80 后已回退该单点（其余 17 处保留），trimmed 段混色路径存在文档未明的空间语义（疑注入点实际在 colorspace 之前或双重转换），留档待专项取证。
 - **环境注意**：本会话中 mbstyle-baseline5 结果目录被外部删除（非本会话操作），对比基线降级为 baseline6-aborted-partial + b78/b79；后续如需全量基线需重跑。
+
+**45. fog 域专项验收（b81）——穹顶色 sRGB 转换整体否决回退（2026-08-20 五）**：fog 63 例批测：fog/default 552→**1532**、fog/color 69k→**78k**、color-opacity 74k、fog/2d/basic 22.7k→**45.5k**、terrain/basic 28.2k→**42.9k** 全域劣化；仅 high-color 族微改善（1786→1717）。**结论：fog/sky 穹顶管线存在与颜色空间正交的亮度标定（distCam 启发式、clearColor radiance 等），按线性色 + 现有标定与 expected 更近——§43 的 5 处 MBEnvironmentManager 穹顶色转换（fogState.color/high/space、solidColor、sun/halo）已全部回退**，与 trimColor 同归"注入点空间语义未明"类，留档：如后续重写穹顶为 mgl 语义（先大气后瓦片覆盖顺序），需同步恢复 sRGB 色。材料/patcher/emitter 侧修复（circle/SDF/building/ramp/autoBorder）维持——b80 已证零回归。
