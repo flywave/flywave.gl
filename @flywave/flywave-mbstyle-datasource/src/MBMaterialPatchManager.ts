@@ -598,6 +598,7 @@ export class MBMaterialPatchManager {
         const contrast = paint['raster-contrast'];     // [-1,1]
         const saturation = paint['raster-saturation']; // [-1,1]
         const hue = paint['raster-hue-rotate'];        // degrees
+        const resampling = paint['raster-resampling'] ?? paint['raster-filtering'] ?? 'linear';
         const colorVal = paint['raster-color'];        // [r,g,b] mix factor
         // mgl RASTER_COLOR path (draw_raster.ts configureRaster +
         // raster.fragment.glsl): when `raster-color` is set, the whole
@@ -628,14 +629,13 @@ export class MBMaterialPatchManager {
             if (Array.isArray(cr) && cr.length >= 2) {
                 rasRange = [Number(cr[0]) || 0, Number(cr[1]) || 1];
             }
-            rasRampTex = MBMaterialPatchManager.buildRasterColorRamp(colorExpr, rasRange);
+            rasRampTex = MBMaterialPatchManager.buildRasterColorRamp(colorExpr, rasRange, resampling === 'nearest');
         }
         const hasAdjust =
             brightness[0] !== 0 || brightness[1] !== 1 ||
             contrast !== undefined || saturation !== undefined ||
             hue !== undefined || colorVal !== undefined;
 
-        const resampling = paint['raster-resampling'] ?? paint['raster-filtering'] ?? 'linear';
         const filterType = resampling === 'nearest'
             ? THREE.NearestFilter : THREE.LinearFilter;
         // visibility:'none' → raster should not render.
@@ -2622,7 +2622,7 @@ export class MBMaterialPatchManager {
      * renderColorRamp with evaluationKey 'rasterValue'). Straight alpha —
      * the shader multiplies ramp.a by the tile's alpha itself.
      */
-    static buildRasterColorRamp(expr: any, range: [number, number]): THREE.Texture {
+    static buildRasterColorRamp(expr: any, range: [number, number], nearest = false): THREE.Texture {
         const size = 256;
         const data = new Uint8Array(size * 4);
         const { MBExpressionEngine } = require('./MBExpressionEngine');
@@ -2631,6 +2631,8 @@ export class MBMaterialPatchManager {
             return v;
         });
         for (let i = 0; i < size; i++) {
+            // mgl renderColorRamp: endpoint-inclusive i/(N-1) progress,
+            // Math.floor on every channel.
             const t = range[0] + (i / (size - 1)) * (range[1] - range[0]);
             let rgba: [number, number, number, number] = [255, 255, 255, 1];
             try {
@@ -2654,14 +2656,17 @@ export class MBMaterialPatchManager {
                     ];
                 }
             } catch { /* keep white */ }
-            data[i * 4 + 0] = rgba[0];
-            data[i * 4 + 1] = rgba[1];
-            data[i * 4 + 2] = rgba[2];
-            data[i * 4 + 3] = Math.round(Math.max(0, Math.min(1, rgba[3])) * 255);
+            data[i * 4 + 0] = Math.floor(rgba[0]);
+            data[i * 4 + 1] = Math.floor(rgba[1]);
+            data[i * 4 + 2] = Math.floor(rgba[2]);
+            data[i * 4 + 3] = Math.floor(Math.max(0, Math.min(1, rgba[3])) * 255);
         }
         const tex = new THREE.DataTexture(data, size, 1, THREE.RGBAFormat);
-        tex.magFilter = THREE.LinearFilter;
-        tex.minFilter = THREE.LinearFilter;
+        // mgl binds the color ramp with the SAME filter as the input
+        // (configureRaster `resampling`) — the nearest fixtures show hard
+        // step edges, linear ramps blend between stops.
+        tex.magFilter = nearest ? THREE.NearestFilter : THREE.LinearFilter;
+        tex.minFilter = nearest ? THREE.NearestFilter : THREE.LinearFilter;
         tex.needsUpdate = true;
         return tex;
     }
