@@ -79,6 +79,17 @@ function localizeStyle(style: any): any {
     const s = JSON.parse(JSON.stringify(style));
     for (const [, src] of Object.entries(s.sources ?? {})) {
         const source = src as any;
+        // mgl's test harness (integration/lib/transform-request.js) rewrites
+        // api.mapbox.com tile URLs to the local `tiles/<id>/` fixtures. Mirror
+        // that for named `mapbox://` sources: raster → png, vector → mvt,
+        // raster-array → mrt (local fixtures use `{z}-{x}-{y}.{ext}` naming).
+        if (typeof source.url === 'string' && source.url.startsWith('mapbox://')) {
+            const id = source.url.replace('mapbox://', '').split('?')[0];
+            const ext = source.type === 'raster-array' ? 'mrt'
+                : source.type === 'raster' ? 'png' : 'mvt';
+            source.tiles = [`local://tiles/${id}/{z}-{x}-{y}.${ext}`];
+            delete source.url;
+        }
         if (source.tiles) {
             source.tiles = source.tiles.map((t: string) => localizeUrl(t));
         }
