@@ -172,6 +172,10 @@ export class CloudRenderNode extends TempNode {
     private pendingConfig: Record<string, unknown> | null = null;
     private renderCloudsFn: ((a: any, b: any, c: any) => any) | null = null;
     private shadowMarchFn: ((cascadeIndex?: number) => any) | null = null;
+    // Virtual camera for the cloud-shadow cascade — only used when the RTE
+    // camera's near is pathologically large (orbital views). See the guard in
+    // updateBefore's shadow section.
+    private m_shadowVirtualCamera: any = null;
 
     private readonly cascadedShadowMaps = new CascadedShadowMaps({
         cascadeCount: SHADOW_CASCADE_COUNT,
@@ -854,10 +858,41 @@ export class CloudRenderNode extends TempNode {
                 const zenithAngle = this.cloudUniforms.sunDirection.value.dot(surfaceNormal);
                 const shadowDistance = 1e6 * (1 - zenithAngle) + 1e3 * zenithAngle;
 
-                this.cascadedShadowMaps.update(cam, sunWorld, undefined, shadowDistance);
+                // Near pathology guard: above low-altitude views the RTE
+                // camera's dynamic near is pulled toward viewing distance
+                // (depth precision), relocating the cascade window
+                // [near, min(maxFar, far)] onto the globe surface — every BSM
+                // texel then performs a real shell-crossing march (the
+                // mid/high-altitude lag, ~16ms at orbital). Above the
+                // threshold, feed the cascade a near=1 clone so the window is
+                // measured FROM the camera like the reference rig — at those
+                // altitudes the 100km window still covers all ground where
+                // cloud shadows are visible (reference behavior). Street-level
+                // views (near < 5km) keep the real camera EXACTLY as before —
+                // the shadow behavior there is verified-correct.
+                const nearPathological = cam.near > 5000;
+                let cascadeCam = cam;
+                if (nearPathological) {
+                    if (this.m_shadowVirtualCamera == null) {
+                        this.m_shadowVirtualCamera = cam.clone();
+                    }
+                    const vcam = this.m_shadowVirtualCamera;
+                    vcam.copy(cam);
+                    vcam.near = 1;
+                    // Cap the window far like the reference (maxFar measured
+                    // from the camera): an uncapped cam.far at high/wide views
+                    // spans the whole visible range and the cascade boxes
+                    // cover hemisphere-scale ground — the lag this guard is
+                    // meant to prevent.
+                    vcam.far = Math.max(Math.min(cam.far, 100000), 2);
+                    vcam.updateProjectionMatrix();
+                    cascadeCam = vcam;
+                }
 
-                this.cloudUniforms.shadowViewMatrix.value.copy(cam.matrixWorldInverse);
-                this.cloudUniforms.shadowCameraNear.value = cam.near;
+                this.cascadedShadowMaps.update(cascadeCam, sunWorld, undefined, shadowDistance);
+
+                this.cloudUniforms.shadowViewMatrix.value.copy(cascadeCam.matrixWorldInverse);
+                this.cloudUniforms.shadowCameraNear.value = cascadeCam.near;
                 this.cloudUniforms.shadowCameraFar.value = this.cascadedShadowMaps.far;
                 this.cloudUniforms.shadowFar.value = this.cascadedShadowMaps.far;
                 this.cloudUniforms.shadowTexelSize.value.set(
