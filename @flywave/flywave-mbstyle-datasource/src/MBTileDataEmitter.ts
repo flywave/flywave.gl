@@ -671,8 +671,11 @@ export class MBTileDataEmitter {
                 props.color = p['circle-color'] ?? '#000000';
                 props.opacity = p['circle-opacity'] ?? 1;
                 // Mapbox circle-radius is the disc RADIUS in pixels; the native
-                // CirclePointsMaterial gl_PointSize is the disc DIAMETER.
-                props.size = (p['circle-radius'] ?? 5) * 2;
+                // CirclePointsMaterial gl_PointSize is the disc DIAMETER. The
+                // quad must also cover the stroke (mgl extrudes by
+                // radius + stroke_width — the stroke lies OUTSIDE the fill
+                // radius; the fragment patch renormalizes).
+                props.size = ((p['circle-radius'] ?? 5) + Number(p['circle-stroke-width'] ?? 0)) * 2;
                 props._translate = p['circle-translate'] ?? [0, 0];
                 props._translateAnchor = p['circle-translate-anchor'] ?? 'map';
                 if (l.visibility === 'none') props.enabled = false;

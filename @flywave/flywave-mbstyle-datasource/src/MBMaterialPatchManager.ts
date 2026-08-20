@@ -1678,6 +1678,72 @@ export class MBMaterialPatchManager {
             material.needsUpdate = true;
             modified = true;
         }
+
+        // Mapbox circle-blur / circle-stroke-* (mgl circle.fragment.glsl,
+        // verbatim ramp composition). Only injected when one of the paint
+        // props is set so the default engine AA path stays untouched.
+        // Normalization: the point quad covers (radius + stroke_width) px
+        // (enlarged in the emitter), so extrude_length = 1.0 at the outer
+        // stroke edge and the fill↔stroke boundary sits at
+        // radius / (radius + stroke_width).
+        const blur = Number(paint['circle-blur'] ?? 0) || 0;
+        const strokePx = Number(paint['circle-stroke-width'] ?? 0) || 0;
+        const strokeOpacity = Number(paint['circle-stroke-opacity'] ?? 1) || 1;
+        const radiusPx = Number(paint['circle-radius'] ?? 5) || 5;
+        const strokeColor = new THREE.Color(paint['circle-stroke-color'] ?? '#000000');
+        if (blur !== 0 || strokePx > 0) {
+            if ('size' in material) {
+                // Keep the quad in sync with the emitter's (r+s)·2 sizing.
+                (material as any).size = (radiusPx + strokePx) * 2;
+            }
+            const origOnCompile = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (origOnCompile) origOnCompile.call(material, shader);
+                shader.uniforms.uMBBlur = { value: blur };
+                shader.uniforms.uMBRadiusPx = { value: radiusPx };
+                shader.uniforms.uMBStrokePx = { value: strokePx };
+                shader.uniforms.uMBStrokeOpacity = { value: strokeOpacity };
+                shader.uniforms.uMBStrokeColor = { value: strokeColor };
+                // uMBDpr = 1: the engine's `size` uniform is in the same
+                // pixel units as gl_PointSize, so the 1/dpr device-pixel
+                // correction of mgl's antialiasblur does not apply here.
+                shader.uniforms.uMBDpr = { value: 1 };
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <common>',
+                    '#include <common>\n' +
+                    'uniform float uMBBlur;\nuniform float uMBRadiusPx;\n' +
+                    'uniform float uMBStrokePx;\nuniform float uMBStrokeOpacity;\n' +
+                    'uniform vec3 uMBStrokeColor;\nuniform float uMBDpr;'
+                );
+                // Replace the engine's fwidth AA block with the mgl
+                // blur/antialiasblur/stroke composition.
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    /float radius = 0\.5;[\s\S]*?alpha \*= threshold;/,
+                    `vec2 mbExtrude = gl_PointCoord * 2.0 - 1.0;
+    float mbAA = 1.0 / uMBDpr / max(uMBRadiusPx + uMBStrokePx, 1e-4);
+    float mbBlurPos = uMBBlur < 0.0 ? 0.0 : 1.0;
+    float mbExtrudeLength = length(mbExtrude) + mbAA * (1.0 - mbBlurPos);
+    float mbAAB = -max(abs(uMBBlur), mbAA);
+    float mbAABOp = smoothstep(0.0, mbAA, mbExtrudeLength - 1.0);
+    float mbOpacityT = mbBlurPos == 1.0 ?
+        smoothstep(0.0, -mbAAB, 1.0 - mbExtrudeLength) :
+        smoothstep(mbAAB, 0.0, mbExtrudeLength - 1.0) - mbAABOp;
+    float mbColorT = uMBStrokePx < 0.01 ? 0.0 : smoothstep(mbAAB, 0.0,
+        mbExtrudeLength - uMBRadiusPx / max(uMBRadiusPx + uMBStrokePx, 1e-4));
+    vec3 mbColor = mix(diffuseColor, uMBStrokeColor, mbColorT);
+    alpha *= mbOpacityT * mix(1.0, uMBStrokeOpacity, mbColorT);`
+                );
+                // Route the final color through mbColor (works for both the
+                // plain and the ground-lighting-patched gl_FragColor lines).
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    /gl_FragColor = vec4\(([^;]*diffuseColor[^;]*), alpha\);/,
+                    (_m: string, expr: string) =>
+                        `gl_FragColor = vec4(${expr.replace(/diffuseColor/g, 'mbColor')}, alpha);`
+                );
+            };
+            material.needsUpdate = true;
+            modified = true;
+        }
     }
 
     private patchExtrusionMaterial(material: THREE.Material, paint: any, technique: any): void {
