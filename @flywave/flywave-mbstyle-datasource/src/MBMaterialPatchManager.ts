@@ -1552,7 +1552,8 @@ export class MBMaterialPatchManager {
                 }
                 if ((hasGradient && !patternTex) || hasBorderGradient) {
                     const gradStops = hasBorderGradient ? borderGradientStops : gradientStops;
-                    const tex = MBMaterialPatchManager.buildGradientTexture(gradStops);
+                    const tex = MBMaterialPatchManager.buildGradientTexture(gradStops,
+                        paint['line-gradient-use-theme'] === 'none' ? undefined : this.colorThemeLut);
                     shader.uniforms.uMBGradient = { value: tex };
                     shader.fragmentShader = shader.fragmentShader.replace(
                         '#include <common>',
@@ -2446,7 +2447,8 @@ export class MBMaterialPatchManager {
         (material as any).blending = (THREE as any).AdditiveBlending;
 
         const colorStops = technique._heatmapColorStops;
-        const ramp = MBMaterialPatchManager.buildGradientTexture(colorStops);
+        const ramp = MBMaterialPatchManager.buildGradientTexture(colorStops,
+            this.colorThemeLut);
         const intensity = technique._heatmapIntensity ?? 1;
         const weight = technique._heatmapWeight ?? 1;
 
@@ -2628,6 +2630,15 @@ export class MBMaterialPatchManager {
         return [];
     }
 
+    /** Style color-theme LUT (null when the style has none). */
+    private get colorThemeLut(): any {
+        try {
+            return (this.m_dataSource as any).runtime?.evaluator?.colorTheme ?? null;
+        } catch {
+            return null;
+        }
+    }
+
     /**
      * Build the `raster-color` 256x1 ramp: evaluate the expression over the
      * virtual `raster-value` property across raster-color-range (mgl
@@ -2687,10 +2698,25 @@ export class MBMaterialPatchManager {
      * Build a 256x1 RGBA DataTexture from Mapbox color-expression stops:
      * `[[t, color], ...]`. Used by line-gradient and heatmap color ramps.
      */
-    static buildGradientTexture(stops: any): THREE.DataTexture {
+    static buildGradientTexture(stops: any, lut?: any): THREE.DataTexture {
         const size = 256;
         const data = new Uint8Array(size * 4);
-        const norm = MBMaterialPatchManager.normalizeGradientStops(stops);
+        let norm = MBMaterialPatchManager.normalizeGradientStops(stops);
+        if (lut) {
+            // Mapbox color-theme: the gradient ramp goes through the LUT too
+            // (mgl binds the LUT texture when sampling the gradient).
+            try {
+                const { applyColorTheme } = require('./MBColorTheme');
+                for (const st of norm) {
+                    const out = applyColorTheme(lut, `rgba(${st.r}, ${st.g}, ${st.b}, ${st.a})`);
+                    const m = out.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/);
+                    if (m) {
+                        st.r = +m[1]; st.g = +m[2]; st.b = +m[3];
+                        st.a = m[4] !== undefined ? +m[4] : 1;
+                    }
+                }
+            } catch {}
+        }
         if (norm.length === 0) {
             for (let i = 0; i < size; i++) { data[i*4+3] = 255; }
         } else {

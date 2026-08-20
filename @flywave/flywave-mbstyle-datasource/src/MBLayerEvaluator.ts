@@ -320,15 +320,28 @@ function isExpr(v: any): v is ExpressionSpecification {
     );
 }
 
+import { applyColorTheme, ColorThemeLut } from './MBColorTheme';
+
 export class MBLayerEvaluator {
     private m_layersBySource: Map<string, Map<string, PreprocessedLayer[]>> = new Map();
     private m_allLayers: PreprocessedLayer[] = [];
 
     private m_config: Record<string, any> = {};
 
+    /** Mapbox `color-theme` LUT (null = no theme, colors pass through). */
+    private m_lut: ColorThemeLut | null = null;
+
     constructor(style: StyleSpecification) {
         this.m_config = (style as any)._config ?? {};
         this.prepare(style);
+    }
+
+    setColorTheme(lut: ColorThemeLut | null): void {
+        this.m_lut = lut;
+    }
+
+    get colorTheme(): ColorThemeLut | null {
+        return this.m_lut;
     }
 
     private prepare(style: StyleSpecification) {
@@ -487,6 +500,14 @@ export class MBLayerEvaluator {
                     paint[key] = MBExpressionEngine.evaluate(def.value, ctx);
                 } else {
                     paint[key] = def.value;
+                }
+                // Mapbox color-theme LUT: transform color paints unless the
+                // property's `-use-theme` is 'none' (mgl applies the LUT to
+                // every evaluated color by default).
+                if (this.m_lut && typeof paint[key] === 'string' && /-color$/.test(key)
+                    && paint[`${key}-use-theme`] !== 'none'
+                    && pl.paintDefs[`${key}-use-theme`]?.value !== 'none') {
+                    paint[key] = applyColorTheme(this.m_lut, paint[key] as string);
                 }
             }
 

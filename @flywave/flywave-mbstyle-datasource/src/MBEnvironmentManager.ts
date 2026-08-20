@@ -264,8 +264,15 @@ export class MBEnvironmentManager {
     private m_rasterQuad: THREE.Mesh | null = null;
     private m_imageQuads: THREE.Mesh[] = [];
 
+    private m_colorThemeLut: import('./MBColorTheme').ColorThemeLut | null = null;
+
     constructor(private m_mapView: MapView) {
         this.m_scene = (m_mapView as any).m_scene ?? null;
+    }
+
+    /** Mapbox `color-theme` LUT (null = identity). */
+    setColorTheme(lut: import('./MBColorTheme').ColorThemeLut | null): void {
+        this.m_colorThemeLut = lut;
     }
 
     applyLights(lights: Light3DProperties[] | undefined, legacyLight?: any): void {
@@ -505,7 +512,19 @@ export class MBEnvironmentManager {
             nearM = distCam * kFog * (rawRange[0] + shift) / shift;
             farM = distCam * kFog * (rawRange[1] + shift) / shift;
         }
-        const rawColor = evalZoom(fog.color, '#ffffff');
+        const evalThemed = (value: any, fallback: any, useThemeKey: string): any => {
+            const v = evalZoom(value, fallback);
+            if (typeof v !== 'string') return v;
+            if (fog[useThemeKey] === 'none') return v;
+            if (this.m_colorThemeLut) {
+                try {
+                    const { applyColorTheme } = require('./MBColorTheme');
+                    return applyColorTheme(this.m_colorThemeLut, v);
+                } catch {}
+            }
+            return v;
+        };
+        const rawColor = evalThemed(fog.color, '#ffffff', 'color-use-theme');
         const color = new THREE.Color(rawColor);
         const colorAlpha = typeof rawColor === 'string' && /^#[\da-fA-F]{8}$/.test(rawColor)
             ? parseInt(rawColor.slice(7, 9), 16) / 255
@@ -529,9 +548,9 @@ export class MBEnvironmentManager {
         this.m_scene.fog = this.m_fog;
         const rawHorizonBlend = evalZoom(fog['horizon-blend'], ['interpolate', ['linear'], ['zoom'], 4, 0.2, 7, 0.1]);
         const rawSpaceColor = fog['space-color'] !== undefined
-            ? fog['space-color']
+            ? evalThemed(fog['space-color'], '#010b19', 'space-color-use-theme')
             : ['interpolate', ['linear'], ['zoom'], 4, '#010b19', 7, '#367ab9'];
-        const rawHighColor = evalZoom(fog['high-color'], '#245cdf');
+        const rawHighColor = evalThemed(fog['high-color'], '#245cdf', 'high-color-use-theme');
         this.m_fogState = {
             color: color.clone(),
             alpha,

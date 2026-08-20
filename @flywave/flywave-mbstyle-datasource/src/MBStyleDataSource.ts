@@ -937,6 +937,17 @@ export class MBStyleDataSource extends TileDataSource {
         this.pushMapboxZoom();
 
         // Create runtime styling API
+        {
+            // Mapbox color-theme LUT — propagate to the evaluator (paints)
+            // and the environment (fog colors). Identity when absent.
+            const { loadColorTheme } = require('./MBColorTheme');
+            loadColorTheme(style).then((lut: any) => {
+                this.m_runtime?.evaluator.setColorTheme(lut);
+                this.m_environment?.setColorTheme(lut);
+                this.mapView?.markTilesDirty?.(this as any);
+                this.mapView?.update?.();
+            }).catch(() => {});
+        }
         this.m_runtime = new MBStyleRuntime(style, () => {
             // On style change: reconfigure decoder and mark tiles dirty
             this.decoder.configure(undefined, {

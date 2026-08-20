@@ -1,5 +1,6 @@
 import { StyleSpecification, LayerSpecification } from './MBStyleSpec';
 import { MBLayerEvaluator } from './MBLayerEvaluator';
+import { loadColorTheme } from './MBColorTheme';
 
 interface ActiveTransition {
     layerId: string;
@@ -22,6 +23,12 @@ export class MBStyleRuntime {
         this.m_style = style;
         this.m_evaluator = new MBLayerEvaluator(style);
         this.m_onChange = onChange;
+        // Mapbox `color-theme` LUT — async decode; a null result (no theme /
+        // decode failure) keeps the identity transform.
+        loadColorTheme(style).then(lut => {
+            this.m_evaluator.setColorTheme(lut);
+            try { onChange(); } catch {}
+        }).catch(() => {});
     }
 
     get evaluator(): MBLayerEvaluator {
@@ -291,7 +298,13 @@ export class MBStyleRuntime {
     }
 
     private rebuildEvaluator(): void {
+        const prevLut = (this.m_evaluator as any).m_lut ?? null;
         this.m_evaluator = new MBLayerEvaluator(this.m_style);
+        this.m_evaluator.setColorTheme(prevLut);
+        loadColorTheme(this.m_style).then(lut => {
+            this.m_evaluator.setColorTheme(lut);
+            try { this.m_onChange(); } catch {}
+        }).catch(() => {});
         this.m_onChange();
     }
 }
