@@ -2623,3 +2623,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **k-lit 公式二次否决（机制阐明）**：material color 路径下 mismatch 计数全同——**MeshStandardMaterial 场景光照栈（π-trick ≈×2.3 恒定增益）抵消 CPU 预乘**（84→194、86→194）；emissive-flat 路径（§70）existing +2.4k。结论：地形亮度残差的真通道是 **per-fixture 的 themed 基色推导**（两族 exp 目标 193 未打光 vs 55 打光相反，源于不同 op LUT 对背景的映射）+ drape 内容，非全局光照公式。
 - **零净代码变更**：HEAD 复核逐位一致（fog-import-scope 164019、existing 158259、fog/default 1094、gradient/default 0 PASS）。tsc 绿、单测 265/3 既有。
 - **留档下一批**：① per-fixture 地形基色：对齐 mgl 的背景 LUT 作用域链（fog-import-scope exp 顶部红=背景 themed，我方 194 灰——背景通道）；② drape 内容可见化（道路/建筑的烘焙细节进入地形）；③ 会话总结与多会话基线表重制。
+
+**72. 背景 LUT 链洗清 + 残差真通道定案：地形覆盖 z=0 内容（2026-08-21，dbgBg1-3，零净代码变更）**：
+
+- **背景 LUT 作用域链洗清**：applyBackgroundColor 逐调用探针——背景层 scope=undefined（根层）✓、rootLut 加载后正确选用 ✓、`applyColorTheme(rootLut,'blue')=rgb(113,113,113)` 灰——与 mgl `RenderColor` 构造器逐行对照（归一化 rgb×(N−1) 直接三线性、无色彩空间转换）**完全一致**。mgl 的背景同样是灰！**exp 顶部红 = themed 大气穹顶**（我方 y8 (213,21,21)≈exp (255,0,0) 已对齐）——§71 留档的"背景 LUT 作用域链"嫌疑洗清。
+- **残差真通道定案**：fog-import-scope y300-500 cur=194（地形基色）vs exp=55/125/32（场景细节）——**抬升的地形（0-125m，pitch70 下更近相机）在深度上覆盖了 z=0 平面的道路/建筑内容**；mgl 语义内容贴地形表面。我方 drape 已激活但烘焙内容太淡（fill 灰 + 0.3 透明度道路），建筑为 3D 几何不参与 drape。
+- **留档下一批（真正的收窄路径）**：① **内容几何按 DEM 抬升**（mgl 语义：把 tile 对象的 z 加上地形高程——TerrainController 已有 m_centerDem + allDemTiles，在 TileObjectsRenderer 渲染时对对象 position.z 加采样高程）；② drape 内容强化（建筑顶面烘焙或高不透明度层）；③ 真大气散射模型。零净代码变更，HEAD 复核逐位一致，tsc 绿、单测 265/3 既有。
