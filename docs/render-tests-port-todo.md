@@ -2553,3 +2553,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **时序缺口修复**：瓦片内容（fill/道路/挤出物）在地形 mesh 建成后**异步**到达，而 bake 仅由 mesh 数/morph 触发——首烘后 FBO 永远停在空态。落地：onAfterRender 追踪 `m_sceneRoot.children.length` 变化 → requestBake（+2 extra frames）。**fog/terrain/equal-range 28476→25478（−3k）**。
 - **内容实况**：bake 日志证实现态 FBO **非均匀（uniform=false）**——fills（覆盖整瓦）+道路已实际烘焙；magenta 清色试验 0 像素 = 内容全覆盖清色（试验对可见性不再敏感）。**drape 激活 vs 休眠图像逐位一致** ⇒ pitch70 SF 系 fixture 中地形 mesh 仍被共面 z=0 内容层遮挡不可见（fog/terrain 域 §57 变化 +6k 的会话漂移复核维持二态结论：今日休眠=激活=33955）。
 - **结论与留档**：drape 管道全链路 LIVE（触发→烘焙→内容门→shader 采样），剩余 blocker = **内容-地形层序**（mgl 语义内容贴地形：地形高程处内容应抬升/地形应承载内容，二者非独立共面渲染）——属架构级 drape 决策（内容几何按 DEM 抬升 vs 地形纹理承载），留档专项。验收：fog/terrain equal-range −3k、其余逐位稳定、color-theme 近失族不变、零回归。tsc 绿、单测 265/3 既有。
+
+**62. 内容-地形层序专项一轮：color pass 排除链取证（2026-08-21，dbgVis1-9，纯取证零代码变更）**：
+
+- **五连排除**：① magenta 基色 + renderOrder=9999 + depthWrite 强制 → 0 像素（非深度序问题）；② vertexColors=false → 0 像素（非缺 color attribute）；③ `mesh.onBeforeRender` 计数（按 `renderer.getRenderTarget()` 区分）→ **depthPass=1..3, colorPass=0**——地形 mesh 仅被 TerrainDepthOcclusion 的深度 pass 绘制，**composer color pass 从未入列**（visible=true、parent=Scene、layers 1/1 匹配、RTE 相机 far=1e6、frustumCulled 球体在界内、shader 零错误、材质已编译）；④ 经 m_sceneRoot 路由（每帧重挂）亦 colorPass=0；⑤ 深度 pass 也在 ~3 帧后停止（DepthOcclusion 缓存深度目标）。
+- **结论收窄**：排除法终点 = **MapRenderingManager 的 composer（RenderPass/后处理链）对象纳入逻辑**对 m_scene 直加 mesh 存在与穹顶不同的处理（穹顶同在 m_scene 且上屏）。下一批直接读 composer/RenderPass/postprocessing 库源码的对象过滤（忽略列表/stencil-only pass/renderTarget 分流），或改从 TileObjectsRenderer 同路径注入地形（与瓦片对象同生共死）。
+- **零代码变更提交**：全部为 TEMP 探针已还原，HEAD=§61 状态复核逐位一致（fog/terrain/basic 33955、fog-import-scope 164907、existing 160950）。tsc 绿。
