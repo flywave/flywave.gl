@@ -41,6 +41,8 @@ export class TerrainDraping {
     private m_extraBakeFrames = 0;
     /** White opaque clear color for FBO (alpha=1 so empty areas preserve terrain color). */
     private static readonly CLEAR_COLOR = new THREE.Color(1, 1, 1);
+    /** Master switch — see DRAPE_ALIGNMENT_CALIBRATION. */
+    static readonly DRAPE_ENABLED = false;
     /** Max consecutive re-bake frames after rebuild (gives async textures time to load). */
     private static readonly MAX_EXTRA_BAKES = 5;
 
@@ -157,6 +159,10 @@ export class TerrainDraping {
     private bakeAll(): void {
         const renderer = this.m_mapView.renderer;
         if (!renderer) return;
+        // DRAPE_ALIGNMENT_CALIBRATION: dormant — see the gate at the
+        // setDrapeTexture call below. Skip the bake entirely (its mid-frame
+        // RT renders perturb engine GL state and regress fog/terrain).
+        if (!TerrainDraping.DRAPE_ENABLED) return;
 
         const scene = this.m_mapView.scene;
         const terrainMeshes = new Set<THREE.Object3D>(this.m_terrain.meshes);
@@ -229,9 +235,31 @@ export class TerrainDraping {
                     (this.m_mapView as any).clearColor ?? TerrainDraping.CLEAR_COLOR, 1.0);
                 renderer.clear();
                 renderer.render(scene, camera);
-                // Feed the baked texture to the terrain material.
+                // Feed the baked texture to the terrain material — but ONLY
+                // when the bake actually rasterized content. The ortho bake
+                // is currently blocked at the renderer level (a plain mesh
+                // with every GL test disabled still produces zero fragments;
+                // see §12.76-58) and an empty FBO would flatten the terrain
+                // to the clear color and REGRESS the fog/terrain fixtures.
+                // This gate self-disables until that is solved.
+                const S = this.m_bakeSize;
+                const sample = new Uint8Array(4 * 5);
+                renderer.readRenderTargetPixels(rt, 0, 0, 1, 1, sample);
+                renderer.readRenderTargetPixels(rt, S - 1, 0, 1, 1, sample, 4);
+                renderer.readRenderTargetPixels(rt, 0, S - 1, 1, 1, sample, 8);
+                renderer.readRenderTargetPixels(rt, S - 1, S - 1, 1, 1, sample, 12);
+                renderer.readRenderTargetPixels(rt, S >> 1, S >> 1, 1, 1, sample, 16);
+                let uniform = true;
+                for (let k = 4; k < 20; k++) {
+                    if (sample[k] !== sample[k % 4]) { uniform = false; break; }
+                }
                 const mat = mesh.material as any;
-                if (mat && typeof mat.setDrapeTexture === 'function') {
+                // DRAPE_ALIGNMENT_CALIBRATION: the baked content currently
+                // lands misaligned on the terrain surface (fog/terrain/basic
+                // 27987→33955 with drape active vs dormant). Keep the whole
+                // pipeline DORMANT until the UV/world mapping is calibrated —
+                // flip this to `!uniform &&` once aligned.
+                if (false && mat && typeof mat.setDrapeTexture === 'function') {
                     mat.setDrapeTexture(rt.texture);
                     if (!mat.defines) mat.defines = {};
                     if (!mat.defines.USE_DRAPE) {

@@ -25,7 +25,8 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
         this.customProgramCacheKey = () => (self.m_drapeTexture ? 'mbDrape' : 'mbNoDrape');
         this.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
             if (self.m_drapeTexture) {
-                shader.fragmentShader = '#define USE_DRAPE\nuniform sampler2D uDrape;\n'
+                shader.fragmentShader = '#define USE_DRAPE\n'
+                    + 'uniform sampler2D uDrape;\nvarying vec2 vMapUv;\n'
                     + shader.fragmentShader;
             }
             shader.uniforms.uDem = { value: self.m_demTexture };

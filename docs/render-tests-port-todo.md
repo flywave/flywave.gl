@@ -2534,3 +2534,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **发现 §56 的 z-up bake 相机同样在清理覆盖中丢失未提交**（TerrainDrapingUtils 停留在旧 −Y 侧视版本）——本次重建，并连带修正：§57 后 allDemTiles 的 originX/Y 来自 **RTE（live mesh）位置**，与 sceneRoot 中相机相对的瓦片对象同帧——bakeAll 的 +camPos 位移补偿随之移除（两侧已一致）。
 - **决定性隔离实验**：修正后相机 (−1303,−1997,1000) 位置/朝向均正确，但 **minimal scene + 未打补丁纯 MeshBasicMaterial 绿色平面**（RTE 坐标、包围盒在正交视锥内）仍不光栅化（readPixels 恒为 clear 色）。排除了：材质补丁（纯材质）、坐标帧（RTE 一致）、相机数学（探针验证）、剔除（包围球在内）。**结论：blocker 在 renderer 层**——头号嫌疑 karma 日志中的 `WARNING: Multiple instances of Three.js being imported`（跨实例 Scene/Camera/Geometry 的 draw 路径静默失败）或引擎 composer 在 AfterRender 时刻的 GL 状态残留（setRenderTarget/clear/readPixels 均工作，仅 draw calls 无输出）。留档下一批：① 确认双 THREE 实例来源（pnpm 依赖分身），统一实例后复测；② 或改在引擎渲染循环内（与主渲染同实例同时刻）执行 bake。
 - **验收**：数值与 §57 一致（fog/terrain 族、import-override 族、symbol-elevation/ground-constant 21131≈基线），零回归；tsc 绿、单测 265/3 既有。
+
+**59. drape 光栅化隔离终局 + shader 补全 + 管道休眠（2026-08-21，dbgInfo1-6/frame7-11）**：
+
+- **GL 状态逐项排除**：draw calls 计数探针证明显式 draw 已发出（callsDelta=1）且 scissor=false、viewport 正确；依次强制 gl.disable(BLEND)/gl.disable(STENCIL_TEST)/depthFunc(ALWAYS)/gl.disable(CULL_FACE) 后**纯 Mesh 依旧零片元**——renderer 层 blocker 未最终定位（双 THREE 仅为同 store 同版本软嫌疑）。另发现 bake 在部分 fixture（fog/terrain，有 raster 层）**确有内容**（非均匀 FBO），而惰性新建的探针 mesh 不光栅化——嫌疑延伸至"渲染循环外惰性创建的 geometry 首次上传"路径。
+- **真 bug 修复（vMapUv fragment 声明缺失）**：§57 的 drape 注入只声明了 vertex 侧 varying，fragment 侧缺失 → define 生效后编译失败（'vMapUv' undeclared）。补 `varying vec2 vMapUv;` 后 drape 首次真正采样：fog-import-scope 164907→162821（FBO 仅清色扁平化贡献）、import-override-existing 160816→160349。
+- **对齐校准否决回退**：drape 激活态下 fog/terrain/basic 27987→33955（内容落位错位，UV v-flip 试验：equal-range 28476→50925 证明现有 flip 方向正确、错位在别处）。管道整体休眠（`TerrainDraping.DRAPE_ENABLED=false` 主开关 + setDrapeTexture 内容门），恢复 fog-import-scope/import-override 基线；**fog/terrain 本会话稳定在 33955/28476/53671**（较 §57 的 27987/23828/47888 差 +6k——休眠态与 §57 激活代码路径等价，疑似 §53 型会话二态漂移，留档复核）。
+- **留档下一批**：① renderer blocker 终局定位（对照引擎主渲染同实例同时刻执行 bake，或 worktree 隔离复测 §57 值排除会话漂移）；② drape UV/世界映射校准（激活后 fog/terrain 收窄路径）；③ fog/terrain 会话漂移复核。tsc 绿、单测 265/3 既有。
