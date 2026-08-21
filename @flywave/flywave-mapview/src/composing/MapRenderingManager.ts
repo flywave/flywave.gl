@@ -178,6 +178,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_lensSunPosition: THREE.Vector3 = new THREE.Vector3();
 
     private m_lowResPixelRatio?: number;
+    private m_anyEffectEnabled = false;
     private m_lowResEffect?: LowResEffect;
 
     constructor(
@@ -331,6 +332,13 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
 
         this.m_composer.setSize(this.m_width, this.m_height);
+        this.m_anyEffectEnabled = Boolean(
+            (this.bloom.enabled && this.m_bloomEffect && this.m_bloomEffect.enabled)
+            || (this.outline.enabled && this.m_outlineEffect && this.m_outlineEffect.enabled)
+            || (this.vignette.enabled && this.m_vignetteEffect && this.m_vignetteEffect.enabled)
+            || (this.sepia.enabled && this.m_sepiaEffect && this.m_sepiaEffect.enabled)
+            || (this.sunGodRays.enabled && this.m_sunGodRaysEffect && this.m_sunGodRaysEffect.enabled)
+        );
     }
 
     private updateBloomOptions(): void {
@@ -356,7 +364,11 @@ export class MapRenderingManager implements IMapRenderingManager {
 
         this.updateEffects();
 
-        if (this.m_composer) {
+        // The postprocessing composer is pure overhead when no effect is
+        // enabled — and its render path empirically drops engine-external
+        // scene meshes (the mbstyle terrain mesh renders in the direct path
+        // but not through the composer). Bypass it when idle.
+        if (this.m_composer && this.m_anyEffectEnabled) {
             this.m_composer.render();
         } else {
             renderer.render(scene, camera);

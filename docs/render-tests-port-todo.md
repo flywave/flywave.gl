@@ -2587,3 +2587,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **帧 8 实况**：① 仅地形（隐藏其余）→ **256388 px**；② 全内容不隐藏 → **262144 px 全覆盖**（magenta 清色 0 残留）；③ draw 状态 dump（drawElements 包装探针）：98304 indices、depth LEQUAL/写开、stencil/blend/cull/scissor 全关、viewport 512²、FBO 绑定正常（draw 后 1 个 GL_INVALID_OPERATION 待查）；④ **直接画到 canvas（默认 FB）→ 捕获 PNG 含 22132 magenta px 且在后继引擎帧中存活**——捕获链保留地形。
 - **结论**：地形 mesh/材质/几何/RTE 相机/渲染顺序（内容 renderOrder=MIN_SAFE_INTEGER、depthWrite:false；地形 −100 后画覆盖）**全部正确**；canvas 默认 FB 的 readPixels 探针不可靠（1282）。谜团收敛至：**引擎自动逐帧渲染为何不含地形而等价手动渲染含**——指向渲染循环的帧调度（动画停止后捕获用的可能是陈旧 canvas 或重放渲染）。这正是需要真实交互式会话（Spector.js + devtools 断点在 MapView.render）的终局问题。
 - **零代码变更**：HEAD 复核逐位一致（fog/default 552、fog/terrain/basic 33955、fog-import-scope 164907、existing 160950）。tsc 绿。
+
+**67. 破案：composer 丢弃地形 + 空效旁路修复（2026-08-21，bypass1-3，引擎级修复）**：
+
+- **对照实证（帧门控探针修正后）**：同 fixture 同帧，材质 magenta 下 **composer 关闭（直渲）→ 捕获 PNG 22132 magenta px；composer 开启 → 0**——postprocessing EffectComposer 渲染路径丢弃引擎外部 scene mesh（mbstyle 地形）。机制源读排除：postprocessing RenderPass 为朴素 renderer.render（无对象过滤），stencil/MSAA/深度四种 RT 配置矩阵手工渲染全部正常——机制未明但实证稳定（与 §66"手动渲染含地形"互证：手动 = 直渲路径）。
+- **修复（flywave-mapview 引擎级）**：`MapRenderingManager.render` 在**无任何激活效果**（bloom/outline/vignette/sepia/godrays 全关，渲染测试常态）时旁路 composer 直渲——零效果后处理本为纯开销，且其路径丢弃地形。效果启用时 composer 照常（不影响 AA/效果用户）。
+- **验收（bypass1-3）**：**skybox/gradient/default 2136→0 新增 PASS**（composer 输出与直渲有亚像素差，直渲像素精确）；**import-override 族全收窄**：existing 160950→**158259**（−2.7k）、style→131934、theme→131909、fog-import-scope 164907→**164019**（地形首次进入这些 pitch70 fixture 的输出）；fog/color 69147→65842（−3.3k）、light-import-scope −0.3k；fog/2d/basic 22724→22953（+229 微）；**fog/default 552→1094（+542，确定性状态切换**——旁路改变渲染路径后落入 §53 二态的另一支，非随机）；fog/terrain 族 ±2k 内互有涨跌（basic +248、zero-exag +1.7k、inverted ≈ 53672 不变——其中 inverted 曾 53172→16217 出现过一次（bypass3 截断批次），疑同型状态翻转待复核）；color-theme 4 PASS 维持、近失族不变。tsc 绿、单测 265/3 既有。
+- **留档下一批**：① fog/terrain 族与 fog/default 在旁路态的基线重定（多会话复核哪些是确定性偏移）；② 地形上屏后 drape UV/世界映射校准真正开始（现地形可见，drape 内容效果可评估）；③ composer 丢弃 mesh 的机制溯源（向 flywave 上游报告）。
