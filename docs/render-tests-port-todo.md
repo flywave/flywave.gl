@@ -2601,3 +2601,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **残差构成（fog-import-scope 164019 像素取证）**：顶部 y8 cur(213,21,21)≈exp(255,0,0)——themed 大气穹顶已基本对齐；主残差 = ① y40 带 cur(194 灰=clearColor) vs exp(218,35,35 红)——**我们的天空带比 mgl 窄**（mgl horizon-blend 延伸到真地平线下）；② y300-500 cur(194 地形基色) vs exp(55/125 道路/建筑/山体阴影)——**地形基色区域缺 drape 内容与 3D-lit 细节**。
 - **两项否决**：① horizon-blend 带（−0.05 rad discard）**主题化后重试仍全域劣化**（fog-import-scope +1.5k、existing +1.7k、atmosphere-color +1.6k、fill-extrusion-light/north-east +5.5k）——假穹顶渐变 ≠ mgl 混合，确证需真大气散射模型，已回退；② composer 丢 mesh 机制源读至 EffectComposer.setRenderer（renderer.autoClear=false）与 RenderPass（朴素 renderer.render）——无对象过滤逻辑，机制不明但旁路修复已落地。
 - **留档下一批**：① 地形基色区域的 drape 内容/3D-lit 细节（y300-500 残差主体，drape UV 校准实做）；② 真大气散射模型（rayleigh/mie，同时解决 rayleigh/mie 族 47k-128k）；③ fog/terrain 多会话基线复核。零净代码变更（带试验已回退），tsc 绿、单测 265/3 既有。
+
+**69. drape 激活态实证 + 地形亮度标定否决记档（2026-08-21，dbgDrapeSt/dbgCC/flat1，零净代码变更）**：
+
+- **drape 激活实证（帧门控）**：帧 6-7 `hasTex=true`、FBO `uniform=false`（内容在）——**drape 全链路在旁路态正常工作**（bake→内容门→纹理注入），帧 8-9 的 hasTex=false 为 morph 重建后新材质的 bake 前一瞬（紧接重注入）。drape UV 对齐暂不可判：本 fixture 烘焙内容≈均匀 fill（道路 0.3 透明度太细），地形区视觉平坦。
+- **地形亮度取证**：clearColor=0x545454(84)，地形渲染 194（**过亮 2.3×**——MeshStandardMaterial 光照栈的 π-trick 双重照明），exp≈55 ≈ base·k（mgl 自然光照 k=amb·ADF+dir·NdotL≈0.54，color·k^(1/2.2)≈0.76·84≈64）。**平色（emissive-only=84）试验否决**：fog-import-scope 不变（164019）、import-override-existing 158259→160686（+2.4k——该 fixture 的 exp 地形≈193 未打光背景灰，两 fixture 目标相反）。
+- **结论**：地形亮度需按 mgl 公式 `k = ambColor·verticalFactor + dirColor·max(N·L,0)，lit = color·k^(1/2.2)`（N=平面法向 (0,0,1)，N·L=dirV.z）**逐 fixture 自适应**计算（与 lighting3DState 联动，CPU 烘进 emissive 或注入 injectGroundLighting 同款 shader），固定值无法同时满足两族——留档下一批实做。
+- **零净代码变更**：HEAD 复核逐位一致（fog-import-scope 164019、existing 158259、fog/default 1094、gradient/default 0 PASS、fog/terrain/basic 34203）。tsc 绿、单测 265/3 既有。
