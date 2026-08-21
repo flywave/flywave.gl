@@ -630,6 +630,8 @@ export class MBStyleDataSource extends TileDataSource {
     private m_terrainDraping: any = null;
     private m_symbolPlacement: any = null;
     private m_heatmapRenderer: any = null;
+    /** Per-feature GLTF instantiation channel for `model` layers (mgl parity). */
+    private m_modelRenderer: any = null;
     private m_additiveLineRenderer: any = null;
     private m_debugTileBoundaries = false;
     private m_debugLines: any = null;
@@ -1103,6 +1105,16 @@ export class MBStyleDataSource extends TileDataSource {
                 self.m_additiveLineRenderer = new MBAdditiveLineRenderer(this.mapView, self);
             } catch {}
 
+            // Per-feature GLTF model instantiation (mgl `model` layers over
+            // vector sources, resolved through the root `style.models`
+            // registry). `run()` early-returns when no decoded tile carries
+            // model placements, so non-model styles are unaffected.
+            try {
+                const { MBModelRenderer } = await import('./MBModelRenderer');
+                self.m_modelRenderer = new MBModelRenderer(this.mapView, self);
+                self.updateModelRegistry(style);
+            } catch {}
+
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
                 patcher.patchTileMaterials();
@@ -1112,6 +1124,9 @@ export class MBStyleDataSource extends TileDataSource {
                 }
                 if (self.m_additiveLineRenderer) {
                     self.m_additiveLineRenderer.run();
+                }
+                if (self.m_modelRenderer) {
+                    self.m_modelRenderer.run();
                 }
                 if (self.m_debugTileBoundaries) self.drawTileBoundaries();
                 const tc = self.m_environment?.terrainController;
@@ -1227,6 +1242,36 @@ export class MBStyleDataSource extends TileDataSource {
         return this.m_rasterTileUrl;
     }
 
+    /**
+     * Publish the modelId → url registry (root-level `style.models`, mgl v8
+     * semantic: `models: { oak: "local://models/oak1.glb", ... }`) plus any
+     * `models` maps on `type: "model"` sources, resolved and rewritten, to the
+     * MBModelRenderer — the per-feature instantiation channel for model
+     * layers over vector sources.
+     */
+    private updateModelRegistry(style: StyleSpecification): void {
+        if (!this.m_modelRenderer) return;
+        const LOCAL = '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/';
+        const resolveUrl = (u: string) => u?.replace(/^local:\/\//, LOCAL) ?? '';
+        const registry = new Map<string, string>();
+        const addEntry = (id: string, def: any) => {
+            const uri = typeof def === 'string' ? def : def?.uri;
+            if (typeof uri === 'string' && uri) registry.set(id, resolveUrl(uri));
+        };
+        const rootModels = (style as any).models;
+        if (rootModels && typeof rootModels === 'object') {
+            for (const [id, def] of Object.entries(rootModels)) addEntry(id, def);
+        }
+        for (const source of Object.values((style.sources as any) ?? {})) {
+            const models = (source as any)?.models;
+            if (models && typeof models === 'object') {
+                for (const [id, def] of Object.entries(models)) addEntry(id, def);
+            }
+        }
+        this.m_modelRenderer.setModelRegistry(registry);
+        this.m_modelRenderer.setLayers?.((style.layers ?? []) as any[]);
+    }
+
     private async loadModels(style: StyleSpecification): Promise<void> {
         const modelLayers = (style.layers ?? []).filter(
             (l: any) => l.type === 'model' && (l.layout?.visibility ?? 'visible') === 'visible',
@@ -1244,9 +1289,15 @@ export class MBStyleDataSource extends TileDataSource {
             const modelScale = layout['model-scale'] ?? 1;
             const modelRotation = layout['model-rotation'];
 
-            // Collect model definitions: inline `models` map in the layer, or
-            // from the referenced source.
-            const modelDefs: Array<{ url: string; position: number[] }> = [];
+            // Collect model definitions: inline `models` map in the layer, a
+            // `type: "model"` source's `models` registry, or from the
+            // referenced source's data/url.
+            const modelDefs: Array<{
+                url: string;
+                position: number[];
+                orientation?: number[];
+                scale?: number | number[];
+            }> = [];
 
             // Inline models (mapbox HD: layer.models = { id: { uri, position } })
             const inlineModels = (layer as any).models;
@@ -1254,6 +1305,27 @@ export class MBStyleDataSource extends TileDataSource {
                 for (const m of Object.values(inlineModels) as any[]) {
                     if (m.uri) {
                         modelDefs.push({ url: resolveUrl(m.uri), position: m.position ?? [] });
+                    }
+                }
+            }
+
+            // `type: "model"` source registry (mgl v8):
+            // sources.model.models = { id: { uri, position, orientation, scale } }
+            // — each entry is instantiated once at its own position.
+            if (modelDefs.length === 0) {
+                const sourceId = (layer as any).source;
+                const source = sourceId ? (style.sources as any)[sourceId] : null;
+                const sourceModels = source?.models;
+                if (sourceModels && typeof sourceModels === 'object') {
+                    for (const m of Object.values(sourceModels) as any[]) {
+                        if (m?.uri) {
+                            modelDefs.push({
+                                url: resolveUrl(m.uri),
+                                position: m.position ?? [],
+                                orientation: m.orientation,
+                                scale: m.scale,
+                            });
+                        }
                     }
                 }
             }
@@ -1311,19 +1383,23 @@ export class MBStyleDataSource extends TileDataSource {
                         model.position.set(worldPos.x, worldPos.y, (worldPos as any).z ?? z);
                     }
 
-                    // Scale: scalar or [x,y,z].
-                    if (Array.isArray(modelScale)) {
-                        model.scale.set(modelScale[0] ?? 1, modelScale[1] ?? 1, modelScale[2] ?? 1);
-                    } else {
-                        model.scale.setScalar(modelScale);
+                    // Scale: scalar or [x,y,z] — layout `model-scale` or the
+                    // source registry entry's own `scale`.
+                    const effScale = def.scale ?? modelScale;
+                    if (Array.isArray(effScale)) {
+                        model.scale.set(effScale[0] ?? 1, effScale[1] ?? 1, effScale[2] ?? 1);
+                    } else if (effScale !== undefined) {
+                        model.scale.setScalar(effScale);
                     }
 
-                    // Rotation: [x,y,z] Euler angles in degrees.
-                    if (Array.isArray(modelRotation)) {
+                    // Rotation: [x,y,z] Euler angles in degrees — layout
+                    // `model-rotation` or the registry entry's `orientation`.
+                    const effRotation = def.orientation ?? modelRotation;
+                    if (Array.isArray(effRotation)) {
                         model.rotation.set(
-                            (modelRotation[0] ?? 0) * Math.PI / 180,
-                            (modelRotation[1] ?? 0) * Math.PI / 180,
-                            (modelRotation[2] ?? 0) * Math.PI / 180,
+                            (effRotation[0] ?? 0) * Math.PI / 180,
+                            (effRotation[1] ?? 0) * Math.PI / 180,
+                            (effRotation[2] ?? 0) * Math.PI / 180,
                         );
                     }
 
@@ -1525,6 +1601,10 @@ export class MBStyleDataSource extends TileDataSource {
         for (const { model, layer } of this.m_loadedModels) {
             this.applyThemeToModel(model, layer);
         }
+        // …including the per-feature MBModelRenderer instances.
+        try {
+            this.m_modelRenderer?.retheme?.();
+        } catch {}
         this.mapView?.markTilesDirty?.(this as any);
         this.mapView?.update?.();
     }
@@ -1915,7 +1995,10 @@ export class MBStyleDataSource extends TileDataSource {
             } catch {}
         }
 
-        // Models: re-load.
+        // Models: re-load + refresh the per-feature renderer registry.
+        try {
+            this.updateModelRegistry(style);
+        } catch {}
         try {
             await this.loadModels(style);
         } catch {}

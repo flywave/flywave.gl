@@ -2691,3 +2691,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl 正确语义（style 结构实证）**：fixture 用**根级 `style.models` 注册表**（maple1/oak1…glb URL）+ 矢量源 `trees` 逐要素放置（feature.model 属性 → modelId 匹配）——即 tile emitter 的 `'model'` technique（props.modelId 已产出，§81 代码在案）+ 引擎侧按 modelId 从注册表实例化渲染。**缺口=引擎 modelId→GLTF 实例化渲染通道**（flywave-gltf 加载器在包内可用），自建 GLTF 层路径应迁移到该语义。
 - **验收**：零净代码变更，HEAD 逐位复核（fog/default 1094、gradient/atmosphere-rayleigh 0×2 PASS、fog-import-scope 164019、existing 158259）。tsc 绿、单测 265/3 既有。
 - **下一批**：引擎 modelId 实例化通道（tile 'model' technique → style.models 注册表 → GLTF 实例 + transform + 主题 GPU/CPU bake）——model-layer 全族（model-fog-default 等）与 color-theme model 族一起受益。
+
+**82. model 渠道代码落地：MBModelRenderer 逐要素 GLTF 实例化（2026-08-22，代码对齐批，渲染验证攒批延后）**：
+
+- **mgl 语义实证（fixture 结构）**：①`trees-lod-expression`——根级 `style.models` 注册表（`oak → "local://models/oak1.glb"`）+ model 层 `layout["model-id"]` 表达式（zoom step，逐要素可求值）+ 矢量源逐点放置；②`multiple-models-zero-terrain`——`type:"model"` 源的 `source.models` 注册表（每条 {uri, position, orientation, scale} 各实例化一次）。既有 loadModels 只认 inline layer.models / source.data·url 两种形态（§81 已证），两形态均未覆盖。
+- **实现三件套**：
+  1. **emitter**（MBTileDataEmitter）：`processPointFeature` 新增 model 层分支——逐点收集 `{worldPos, techniqueIdx, properties}` 到 `m_modelInstances`（绝对世界坐标，与 heatmap/text 同空间），导出到 `DecodedTile.modelInstances`；technique 扩充 `_modelRotation/_modelScale/_modelTranslation/_modelColor`（paint 求值值）。逐要素 modelId 靠 `evaluatedCacheKey`（layout 含求值后的 model-id）天然分 technique。
+  2. **MBModelRenderer**（新文件，MBHeatmapRenderer 同款瓦片缓存模式）：decodedTile 瞬态（几何加载完即清）→ 按 tile 缓存 placements + 瓦片离场剪枝（dispose 克隆 geometry，材质/纹理与原型共享）；GLTF 原型按 url 缓存（异步加载、逐帧重试、失败标记）；逐 placement 克隆实例 + 变换（rotation 度→Euler、scale 标量/[x,y,z]、translation 米——与 loadModels 同约定，单一换算点便于批测校准）+ `model-opacity`（<1 才 transparent+depthWrite false）+ `applyThemeToModel` CPU 主题烘焙（pristine 快照幂等）。
+  3. **dataSource**：`updateModelRegistry()`——根级 `style.models` + 全部 `source.models`（id→uri，local:// 重写）发布给 renderer（connect + setStyle 两处）；`loadModels` 扩充 `source.models` 分支（orientation/scale per-def 生效，layout 值为回退）；主题 LUT 重放循环（1601 处）追加 `m_modelRenderer.retheme()`。
+- **状态**：tsc 无新增错误（MBStyleDecoder:338 为 HEAD 既有）；单测 265 passing / 3 既有失败不变，零回归。**渲染验证攒批延后**——model-layer 全族（trees-*/landmark-*/multiple-models 等）待批测校准：轴向约定（glTF Y-up vs 引擎几何 z-up，换算点集中在 instantiate/loadModels 两处 Euler）、mgl `model-rotation` 默认 [0,0,90] 是否补默认值、模型尺寸米制换算（glb 原始单位）均为首批校准项。

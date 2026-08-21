@@ -322,6 +322,20 @@ export class MBTileDataEmitter {
     }> = [];
 
     /**
+     * Model-layer feature placements collected for the MBModelRenderer
+     * (per-feature GLTF instantiation channel). Positions are absolute world
+     * coordinates (same space as heatmap points / text geometries);
+     * `technique` indexes into `DecodedTile.techniques` whose `modelId`
+     * (evaluated `model-id` layout, already per-feature) resolves through the
+     * root-level `style.models` registry — the mgl semantic this mirrors.
+     */
+    private m_modelInstances: Array<{
+        x: number; y: number; z: number;
+        technique: number;
+        properties: Record<string, any>;
+    }> = [];
+
+    /**
      * Record a heatmap kernel point for the two-pass heatmap renderer.
      */
     addHeatmapPoint(
@@ -1008,7 +1022,15 @@ export class MBTileDataEmitter {
             case 'model':
                 props.technique = 'model';
                 props.modelId = l['model-id'] ?? properties?.['model-id'] ?? '';
-                props.opacity = 1;
+                props.opacity = p['model-opacity'] ?? 1;
+                // mgl paint-driven transform (style-spec v8 model layer):
+                // rotation degrees [x,y,z], scale (scalar or [x,y,z]),
+                // translation meters [x,y,z]. Consumed by MBModelRenderer.
+                props._modelRotation = p['model-rotation'] ?? l['model-rotation'];
+                props._modelScale = p['model-scale'] ?? l['model-scale'];
+                props._modelTranslation = p['model-translation'] ?? l['model-translation'];
+                props._modelColor = p['model-color'];
+                props._modelColorMixIntensity = p['model-color-mix-intensity'];
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'building':
@@ -2614,6 +2636,22 @@ export class MBTileDataEmitter {
                 const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties, mode);
                 const tech: any = this.m_techniques[techniqueIdx];
 
+                // Model layers: record per-feature placements for the
+                // MBModelRenderer instead of emitting native point geometry
+                // (the engine has no 'model' technique consumer; mgl
+                // instantiates a GLTF per feature at the feature position).
+                if (layer.type === 'model') {
+                    for (const pt of points) {
+                        const w = this.projectWorld(pt);
+                        this.m_modelInstances.push({
+                            x: w.x, y: w.y, z: w.z,
+                            technique: techniqueIdx,
+                            properties: { ...properties, $id: featureId ?? properties.$id ?? null },
+                        });
+                    }
+                    continue;
+                }
+
                 // Heatmap layers: collect kernels for the two-pass density→ramp
                 // renderer instead of the native circles points pipeline (which
                 // cannot accumulate overlapping densities).
@@ -2971,6 +3009,11 @@ export class MBTileDataEmitter {
         // Heatmap kernel points for the two-pass density→ramp renderer.
         if (this.m_heatmapPoints.length > 0) {
             (decodedTile as any).heatmapPoints = this.m_heatmapPoints;
+        }
+
+        // Model-layer per-feature placements for the MBModelRenderer.
+        if (this.m_modelInstances.length > 0) {
+            (decodedTile as any).modelInstances = this.m_modelInstances;
         }
 
         return decodedTile;
