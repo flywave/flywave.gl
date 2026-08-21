@@ -2580,3 +2580,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **方法论勘误**：dbgInfo3-4 的 magScene/magFresh 双 0 为探针时序缺陷（一次性 gate 在 op 前触发/黑底计数无意义）；§64 的 magenta-clear 法对照（IsoT3-9）仍为有效证据。colorMask 锁死假设否决（three 在每次 render 尾部强制 colorMask(true) 且无持久 lock 路径）。
 - **终局定性**：同一 draw（同 mesh/相机/矩阵/状态）在 m_scene 上下文中 0 片元、fresh Scene 中满幅——剩余解释指向 GL 状态机在 render() 调用序中的瞬时差异（本帧此时刻 vs 探针先前时刻）或 m_scene 上未枚举的引擎标记。**盲探针已穷尽，确认需交互式调试**：浏览器 devtools WebGL inspector / Spector.js 捕获 m_scene 渲染的逐 draw call 状态（depth/stencil/blend/scissor/帧缓冲绑定），或 RenderDoc 帧抓取。
 - **零代码变更**：HEAD 复核逐位一致（fog/default 552、fog-import-scope 164907、existing 160950）。tsc 绿。
+
+**66. 探针时序方法论修正 + 地形渲染链全面洗清（2026-08-21，dbgSpec/NoComp2/Full8/Canvas2，纯取证零代码变更）**：
+
+- **方法论修正（决定性）**：所有 op-gated 探针（§63 __mbNoComposer、§65 dbgInfo3-5、vis 系列部分）因 **WillRender 在 op 后不再分发** 而从未执行——此前基于它们的结论（"composer 排除""直渲仍 0"）全部作废。改为帧计数 gate 后真相浮现：
+- **帧 8 实况**：① 仅地形（隐藏其余）→ **256388 px**；② 全内容不隐藏 → **262144 px 全覆盖**（magenta 清色 0 残留）；③ draw 状态 dump（drawElements 包装探针）：98304 indices、depth LEQUAL/写开、stencil/blend/cull/scissor 全关、viewport 512²、FBO 绑定正常（draw 后 1 个 GL_INVALID_OPERATION 待查）；④ **直接画到 canvas（默认 FB）→ 捕获 PNG 含 22132 magenta px 且在后继引擎帧中存活**——捕获链保留地形。
+- **结论**：地形 mesh/材质/几何/RTE 相机/渲染顺序（内容 renderOrder=MIN_SAFE_INTEGER、depthWrite:false；地形 −100 后画覆盖）**全部正确**；canvas 默认 FB 的 readPixels 探针不可靠（1282）。谜团收敛至：**引擎自动逐帧渲染为何不含地形而等价手动渲染含**——指向渲染循环的帧调度（动画停止后捕获用的可能是陈旧 canvas 或重放渲染）。这正是需要真实交互式会话（Spector.js + devtools 断点在 MapView.render）的终局问题。
+- **零代码变更**：HEAD 复核逐位一致（fog/default 552、fog/terrain/basic 33955、fog-import-scope 164907、existing 160950）。tsc 绿。
