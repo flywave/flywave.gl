@@ -92,6 +92,16 @@ if (!('fogAlpha' in THREE.UniformsLib.fog)) {
     }
 }
 
+
+function evalThemedSafe(value: any, fallback: string, fog: FogSpec, styleZoom: number): any {
+    // evaluate zoom expression then apply nothing else (colors resolved by THREE.Color)
+    if (value === undefined) return fallback;
+    try {
+        const { MBExpressionEngine } = require('./MBExpressionEngine');
+        const out = MBExpressionEngine.evaluate(value, { zoom: styleZoom, feature: undefined } as any);
+        return out ?? fallback;
+    } catch { return value; }
+}
 export class MBEnvironmentManager {
     private m_ambientLight: THREE.AmbientLight | null = null;
     private m_directionalLight: THREE.DirectionalLight | null = null;
@@ -497,8 +507,13 @@ export class MBEnvironmentManager {
         if (!this.m_scene) return;
         const isGlobe = (this.m_mapView as any).projection?.type === 1;
         if (isGlobe) {
+            // Globe: no scene.fog — mgl draws a screen-space atmosphere glow
+            // around the globe limb (atmosphere.fragment.glsl with
+            // PROJECTION_GLOBE_VIEW) and shows the space color around it.
+            this.applyGlobeAtmosphere(fog, styleZoom);
             return;
         }
+        this.disposeGlobeAtmosphere();
         if (this.m_fog) {
             this.m_scene.fog = null;
             this.m_fog = null;
@@ -674,6 +689,169 @@ export class MBEnvironmentManager {
      * fragment's world position is the view direction; the elevation above the
      * horizon determines the gradient position.
      */
+    private m_globeAtmo: THREE.Mesh | null = null;
+
+    private disposeGlobeAtmosphere(): void {
+        if (this.m_globeAtmo) {
+            this.m_scene?.remove(this.m_globeAtmo);
+            (this.m_globeAtmo.geometry as THREE.BufferGeometry).dispose();
+            (this.m_globeAtmo.material as THREE.Material).dispose();
+            this.m_globeAtmo = null;
+        }
+    }
+
+    /**
+     * Globe atmosphere — port of mgl drawAtmosphereGlow with the
+     * PROJECTION_GLOBE_VIEW define (atmosphere.fragment/vertex.glsl): a
+     * screen-space quad computing, per fragment, the angle between the view
+     * ray and the globe limb and blending fog/high/space colors with an
+     * exponential falloff. Inside the globe the fragment is fully
+     * transparent so the map tiles show through.
+     */
+    private applyGlobeAtmosphere(fog: FogSpec | undefined, styleZoom: number): void {
+        if (!fog) {
+            this.disposeGlobeAtmosphere();
+            return;
+        }
+        const evalZoom = (value: any, fallback: any): any => {
+            if (value === undefined) return fallback;
+            try {
+                const { MBExpressionEngine } = require('./MBExpressionEngine');
+                const out = MBExpressionEngine.evaluate(value, { zoom: styleZoom, feature: undefined } as any);
+                return out ?? fallback;
+            } catch { return value; }
+        };
+        // Fog color alpha (property alpha, no pitch factor on globe).
+        const rawColor = evalZoom(fog.color, '#ffffff');
+        const colorAlpha = typeof rawColor === 'string' && /^#[\da-fA-F]{8}$/.test(rawColor)
+            ? parseInt(rawColor.slice(7, 9), 16) / 255 : 1;
+        const propAlpha = (raw: any): number => {
+            const s = String(raw ?? '');
+            const m = s.match(/rgba?\(\s*([\d.]+)\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)/);
+            if (m) return +m[2];
+            if (/^#[\da-fA-F]{8}$/.test(s)) return parseInt(s.slice(7, 9), 16) / 255;
+            return 1;
+        };
+        const rawHigh = evalThemedSafe(fog['high-color'], '#245cdf', fog, styleZoom);
+        const rawSpaceRaw = fog['space-color'] !== undefined ? fog['space-color'] : ['interpolate', ['linear'], ['zoom'], 4, '#010b19', 7, '#367ab9'];
+        const rawSpace = evalThemedSafe(rawSpaceRaw, '#010b19', fog, styleZoom);
+        const c = (raw: any, fallback: string): THREE.Color => {
+            try { return new THREE.Color(typeof raw === 'string' ? raw : fallback); }
+            catch { return new THREE.Color(fallback); }
+        };
+        const fogColor = c(rawColor, '#ffffff');
+        const highColor = c(rawHigh, '#245cdf');
+        const spaceColor = c(rawSpace, '#010b19');
+        // mapValue(horizon-blend, 0..1, 0.0005..0.25)
+        const hb = Number(evalZoom(fog['horizon-blend'], 0.2));
+        const fadeout = Math.min(0.25, Math.max(0.0005, hb * 0.2495 + 0.0005));
+
+        // Globe geometry in VIEW space (world origin = globe center).
+        // Force-fresh matrices: applyFog runs at connect before the engine
+        // has updated the camera world matrix (a stale matrixWorldInverse
+        // zeroes the globe center and the whole screen falls "outside").
+        const cam = this.m_mapView.camera;
+        cam.updateMatrixWorld(true);
+        const viewMatrix = new THREE.Matrix4().copy(cam.matrixWorld).invert();
+        const globeCenterView = new THREE.Vector3(0, 0, 0).applyMatrix4(viewMatrix);
+        const dc = Math.max(globeCenterView.length(), 1);
+        const R = EarthConstants.EQUATORIAL_RADIUS;
+        const distToHorizon = Math.sqrt(Math.max(dc * dc - R * R, 0));
+        const horizonAngle = Math.acos(Math.min(1, distToHorizon / dc));
+
+        // Space color as the clear backdrop (outside the globe) — its
+        // property alpha composites over the white test canvas (mgl renders
+        // the atmosphere premultiplied over a transparent framebuffer).
+        (this.m_mapView as any).clearColor = spaceColor.getHex();
+        (this.m_mapView as any).clearAlpha = propAlpha(rawSpace);
+
+        this.disposeGlobeAtmosphere();
+        const material = new THREE.ShaderMaterial({
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            // premultiplied output (c*t, t) with (ONE, ONE_MINUS_SRC_ALPHA)
+            blending: THREE.CustomBlending,
+            blendSrc: THREE.OneFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
+            uniforms: {
+                uGlobePos: { value: globeCenterView },
+                uGlobeRadius: { value: R },
+                uHorizonAngle: { value: horizonAngle },
+                uFadeout: { value: fadeout },
+                uTanHalfFov: { value: Math.tan((cam.fov * Math.PI / 180) / 2) },
+                uAspect: { value: (cam as THREE.PerspectiveCamera).aspect ?? 1 },
+                uFogColor: { value: new THREE.Vector4(fogColor.r, fogColor.g, fogColor.b, colorAlpha) },
+                uHighColor: { value: new THREE.Vector4(highColor.r, highColor.g, highColor.b, propAlpha(rawHigh)) },
+                uSpaceColor: { value: new THREE.Vector4(spaceColor.r, spaceColor.g, spaceColor.b, propAlpha(rawSpace)) },
+            },
+            vertexShader: `
+                varying vec2 vNdc;
+                void main() {
+                    vNdc = position.xy;
+                    gl_Position = vec4(position.xy, 0.99999, 1.0);
+                }
+            `,
+            fragmentShader: `
+                precision highp float;
+                uniform vec3 uGlobePos;
+                uniform float uGlobeRadius;
+                uniform float uHorizonAngle;
+                uniform float uFadeout;
+                uniform float uTanHalfFov;
+                uniform float uAspect;
+                uniform vec4 uFogColor;
+                uniform vec4 uHighColor;
+                uniform vec4 uSpaceColor;
+                varying vec2 vNdc;
+                #define PI 3.141592653589793
+                void main() {
+                    vec3 dir = normalize(vec3(vNdc.x * uTanHalfFov * uAspect, vNdc.y * uTanHalfFov, -1.0));
+                    float globe_pos_dot_dir = dot(uGlobePos, dir);
+                    vec3 closestPoint = globe_pos_dot_dir * dir;
+                    float distToCenter = length(closestPoint - uGlobePos);
+                    float normDist = distToCenter / uGlobeRadius;
+                    if (normDist < 0.98) {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+                        return;
+                    }
+                    float theta = asin(clamp(distToCenter / length(uGlobePos), -1.0, 1.0));
+                    float horizonAngle = globe_pos_dot_dir < 0.0
+                        ? PI - theta - uHorizonAngle : theta - uHorizonAngle;
+                    horizonAngle /= PI;
+                    float t = exp(-horizonAngle / uFadeout);
+                    // mgl color pass output: (c2 * t, t) premultiplied.
+                    vec3 c0 = mix(uSpaceColor.rgb, uHighColor.rgb, uHighColor.a);
+                    vec3 c1 = mix(c0, uFogColor.rgb, uFogColor.a);
+                    vec3 c2 = mix(c0, c1, t);
+                    gl_FragColor = vec4(c2 * t, t);
+                }
+            `,
+        });
+        this.m_globeAtmo = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        this.m_globeAtmo.frustumCulled = false;
+        this.m_globeAtmo.renderOrder = -2000;
+        // Refresh the globe geometry uniforms before each draw — the camera
+        // settles after connect (fov/aspect/distance all late-bound).
+        this.m_globeAtmo.onBeforeRender = () => {
+            const c = this.m_mapView.camera;
+            c.updateMatrixWorld(true);
+            const vm = new THREE.Matrix4().copy(c.matrixWorld).invert();
+            const gc = new THREE.Vector3(0, 0, 0).applyMatrix4(vm);
+            const d = Math.max(gc.length(), 1);
+            const dh = Math.sqrt(Math.max(d * d - R * R, 0));
+            material.uniforms.uGlobePos.value.copy(gc);
+            material.uniforms.uHorizonAngle.value = Math.acos(Math.min(1, dh / d));
+            material.uniforms.uTanHalfFov.value = Math.tan((c.fov * Math.PI / 180) / 2);
+            material.uniforms.uAspect.value = (c as THREE.PerspectiveCamera).aspect ?? 1;
+        };
+        this.m_scene!.add(this.m_globeAtmo);
+
+        if (fog['star-intensity'] && fog['star-intensity'] > 0) {
+            this.createStars(fog['star-intensity']);
+        }
+    }
+
     private createFogAtmosphereDome(): void {
         if (!this.m_scene || !this.m_fogState) return;
         const fog = this.m_fogState;
