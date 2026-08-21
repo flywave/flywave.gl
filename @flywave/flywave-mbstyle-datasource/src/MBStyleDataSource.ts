@@ -1145,6 +1145,9 @@ export class MBStyleDataSource extends TileDataSource {
             // map should be) — mgl uses terrain elevation in the transform's
             // horizon/far-plane math.
             const terrainMax = (this.m_environment as any).terrainController?.maxElevation ?? 0;
+            // The terrain meshes only exist now — re-run applyBackgroundColor
+            // so their base color picks up the (themed, lit) background.
+            try { this.applyBackgroundColor(style); } catch {}
             if (terrainMax > 0) {
                 this.maxGeometryHeight = Math.max(this.maxGeometryHeight, terrainMax);
                 // MapView-level clip-plane elevation (the VisibleTileSet reads
@@ -2129,6 +2132,15 @@ export class MBStyleDataSource extends TileDataSource {
                         (this.mapView as any).clearColor = c.getHex();
                     }
                     (this.mapView as any).clearAlpha = opacity;
+                    // The terrain surface shows the (themed, lit) background
+                    // color where no drape content exists — mgl renders the
+                    // background beneath the whole map, and the terrain mesh
+                    // composites over it (import-override high-pitch family:
+                    // un-lit white base → grey expected).
+                    try {
+                        this.m_environment?.terrainController?.setBaseColor(
+                            (this.mapView as any).clearColor as number);
+                    } catch {}
                 }
                 return;
             }

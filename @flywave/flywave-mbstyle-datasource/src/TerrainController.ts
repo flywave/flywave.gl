@@ -167,6 +167,18 @@ export class TerrainController {
     private m_maxElevation = 0;
     private m_exaggeration = 1;
 
+    /**
+     * Base (un-draped) terrain color. mgl renders the background layer
+     * beneath the whole map, so terrain surface with no drape content shows
+     * the (themed) background color instead of the material's white.
+     */
+    setBaseColor(hex: number): void {
+        for (const mesh of this.m_meshes) {
+            const mat = mesh.material as any;
+            if (mat?.color?.isColor) mat.color.setHex(hex);
+        }
+    }
+
     /** Terrain meshes (read-only access for depth-occlusion pass). */
     get meshes(): readonly THREE.Mesh[] { return this.m_meshes; }
 

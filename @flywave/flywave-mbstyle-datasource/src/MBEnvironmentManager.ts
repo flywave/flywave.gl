@@ -875,7 +875,11 @@ export class MBEnvironmentManager {
                     // camera (mapbox skyboxMatrix), so v_uv is the VIEW direction.
                     vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
                     vViewPosition = viewPos.xyz;
-                    gl_Position = projectionMatrix * viewPos;
+                    vec4 pos = projectionMatrix * viewPos;
+                    // mgl skybox: gl_Position = pos.xyww — sky at far-plane
+                    // depth so geometry always covers it.
+                    pos.z = pos.w * 0.99999;
+                    gl_Position = pos;
                 }
             `,
             fragmentShader: `
@@ -959,7 +963,13 @@ export class MBEnvironmentManager {
                 varying vec3 vWorldDir;
                 void main() {
                     vWorldDir = normalize(position);
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    vec4 pos = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    // mgl skybox vertex shader: gl_Position = pos.xyww — the
+                    // sky lives at the FAR plane (depth 1.0) so geometry
+                    // ALWAYS covers it regardless of distance. Our finite
+                    // radius previously depth-occluded distant terrain.
+                    pos.z = pos.w * 0.99999;
+                    gl_Position = pos;
                 }
             `,
             fragmentShader: `
@@ -970,10 +980,18 @@ export class MBEnvironmentManager {
                 uniform float uOpacity;
                 varying vec3 vWorldDir;
                 void main() {
-                    float d = dot(normalize(vWorldDir), normalize(uSunDir));
+                    // mgl draws the sky ONLY in the sky region (above the
+                    // horizon). World is z-up (same convention as the fog
+                    // atmosphere dome). At high pitch the horizon is
+                    // off-screen and no sky renders — without this discard
+                    // the dome paints the whole high-pitch terrain view blue
+                    // (import-override family).
+                    vec3 dir = normalize(vWorldDir);
+                    if (dir.z <= 0.0) discard;
+                    float d = dot(dir, normalize(uSunDir));
                     float sunGlow = pow(max(d, 0.0), 32.0);
                     float haloGlow = pow(max(d, 0.0), 4.0) * 0.3;
-                    float horizon = max(vWorldDir.y * 0.5 + 0.5, 0.0);
+                    float horizon = clamp(dir.z * 2.0, 0.0, 1.0);
                     vec3 sky = mix(vec3(0.4, 0.6, 0.9), vec3(0.7, 0.8, 1.0), horizon);
                     sky += uSunColor * sunGlow * uSunIntensity;
                     sky += uHaloColor * haloGlow;
@@ -983,6 +1001,12 @@ export class MBEnvironmentManager {
         });
 
         this.m_skyMesh = new THREE.Mesh(geom, material);
+        this.m_skyMesh.frustumCulled = false;
+        // NOTE: the engine renders through a camera-relative (RTE) scene
+        // root, so a mesh added at scene-local origin is already anchored at
+        // the camera — no repositioning needed (and copying the world-space
+        // camera position here would displace it by the full mercator
+        // world offset).
         this.m_scene!.add(this.m_skyMesh);
     }
 
