@@ -985,7 +985,11 @@ export class MBEnvironmentManager {
                     // atmosphere dome). At high pitch the horizon is
                     // off-screen and no sky renders — without this discard
                     // the dome paints the whole high-pitch terrain view blue
-                    // (import-override family).
+                    // (import-override family). NOTE: extending the cut
+                    // below the horizon by mgl's horizon-blend band (~0.05
+                    // rad) was tried and REGRESSED every fixture (our dome
+                    // gradient is not mgl's scattering model — more dome is
+                    // worse); revisit together with a real atmosphere model.
                     vec3 dir = normalize(vWorldDir);
                     if (dir.z <= 0.0) discard;
                     float d = dot(dir, normalize(uSunDir));

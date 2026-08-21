@@ -83,8 +83,17 @@ export class MBMaterialPatchManager {
 
             const state = this.m_patchedTiles.get(tile);
             // Re-patch when new objects were attached since the last pass (tiles
-            // grow asynchronously: background quad first, decoded points later).
-            if (state !== undefined && state.objectCount === tile.objects.length) continue;
+            // grow asynchronously: background quad first, decoded points later)
+            // OR when any current material is still unpatched — a re-decode
+            // (e.g. runtime theme op → markTilesDirty) rebuilds tile objects
+            // with FRESH materials at the SAME object count, which the count
+            // heuristic alone silently skipped (unlit extrusions after
+            // setImportColorTheme, §12.76-55).
+            let allPatched = true;
+            for (const obj of tile.objects ?? []) {
+                if (!(obj as any).material?.__mbPatched) { allPatched = false; break; }
+            }
+            if (state !== undefined && state.objectCount === tile.objects.length && allPatched) continue;
 
             this.patchTile(tile);
             this.m_patchedTiles.set(tile, { patched: true, objectCount: tile.objects.length });

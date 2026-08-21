@@ -512,7 +512,7 @@ async function processOperations(
                 await renderFrames(mapView, dataSource, 4);
                 await new Promise((r) => setTimeout(r, 50));
                 await renderFrames(mapView, dataSource, 2);
-                break;
+break;
             }
             case "easeTo": {
                 const target = args[0] ?? {};
