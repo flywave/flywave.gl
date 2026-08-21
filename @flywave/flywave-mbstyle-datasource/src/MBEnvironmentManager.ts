@@ -105,6 +105,9 @@ function evalThemedSafe(value: any, fallback: string, fog: FogSpec, styleZoom: n
 export class MBEnvironmentManager {
     private m_ambientLight: THREE.AmbientLight | null = null;
     private m_directionalLight: THREE.DirectionalLight | null = null;
+    /** mgl 3D-lights cast-shadows state (MBShadowRenderer). */
+    private m_shadowEnabled = false;
+    private m_shadowIntensity = 0;
     private m_hemisphereLight: THREE.HemisphereLight | null = null;
     private m_fog: THREE.Fog | null = null;
     private m_skyMesh: THREE.Mesh | null = null;
@@ -113,6 +116,12 @@ export class MBEnvironmentManager {
 
     /** Whether 3D lighting is active (affects vector-layer shading). */
     get hasLighting(): boolean { return this.m_directionalLight !== null; }
+
+    /** mgl 3D-lights shadow pass state; null when shadows are off. */
+    get shadowLightState(): { dir: [number, number, number]; intensity: number } | null {
+        if (!this.m_use3DLights || !this.m_shadowEnabled || this.m_shadowIntensity <= 0) return null;
+        return { dir: this.lighting3DState?.dir ?? [0, 0, 1], intensity: this.m_shadowIntensity };
+    }
 
     /**
      * True when the style uses the 3D `lights` API (`lighting-3d-mode` shader
@@ -455,6 +464,10 @@ export class MBEnvironmentManager {
                     this.m_directionalLight.shadow.camera.near = 0.1;
                     this.m_directionalLight.shadow.camera.far = 1000;
                 }
+                // mgl shadow state (shadow_renderer.ts reads these off the
+                // directional light each frame): enabled + intensity.
+                this.m_shadowEnabled = p['cast-shadow'] === true;
+                this.m_shadowIntensity = Number(p['shadow-intensity'] ?? 0);
                 // Kept out of the scene — see the ambient note above about
                 // double lighting of manually-injected materials.
             }

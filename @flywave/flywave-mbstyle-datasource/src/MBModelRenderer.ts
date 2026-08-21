@@ -24,6 +24,7 @@
 
 import * as THREE from 'three';
 import { Tile } from '@flywave/flywave-mapview';
+import { shadowCasters } from './MBShadowRenderer';
 
 interface ModelPlacement {
     x: number;
@@ -136,6 +137,7 @@ export class MBModelRenderer {
         // Clones share materials/textures with the cached prototypes, so only
         // their (also cloned) geometries are disposed here.
         group.traverse((o) => {
+            shadowCasters.delete(o);
             const mesh = o as THREE.Mesh;
             if (mesh.isMesh) mesh.geometry?.dispose?.();
         });
@@ -220,6 +222,14 @@ export class MBModelRenderer {
 
         model.userData._mbLayerId = technique._layerId;
         group.add(model);
+
+        // mgl shadow pass: models with model-cast-shadows (default true) are
+        // shadow casters; layer 1 is the shadow-camera mask.
+        const castShadows = technique._paint?.['model-cast-shadows'] !== false;
+        if (castShadows) {
+            model.layers.enable(1);
+            shadowCasters.add(model);
+        }
 
         // CPU theme bake (idempotent via pristine snapshots; the shared
         // materials make this cheap for repeated clones of one prototype).

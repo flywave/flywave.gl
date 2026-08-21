@@ -3,6 +3,7 @@ import { EarthConstants } from '@flywave/flywave-geoutils';
 import { MBStyleDataSource } from './MBStyleDataSource';
 import { createGuardrailMesh } from './ElevatedStructures';
 import { additiveRibbons } from './MBAdditiveLineRenderer';
+import { shadowCasters } from './MBShadowRenderer';
 
 interface MaterialPatchState {
     patched: boolean;
@@ -31,6 +32,7 @@ export class MBMaterialPatchManager {
     private m_patchedTiles = new WeakMap<object, MaterialPatchState>();
     /** Ground-radiance signature of the last patched lighting state. */
     private m_lastLightSig = '';
+    private m_lastShadowActive = false;
     private m_dataSource: MBStyleDataSource;
     /** When true (terrain active), symbols/circles test against terrain depth. */
     private m_depthOcclusion = false;
@@ -59,6 +61,25 @@ export class MBMaterialPatchManager {
 
     patchTileMaterials(): void {
         const tiles = this.m_dataSource.getDecodedTiles();
+
+        // Per-frame shadow uniforms for ground-fill receivers (mgl ground
+        // shadow): refreshed from MBShadowRenderer's latest depth pass.
+        const shadowState = (this.m_dataSource as any).m_shadowRenderer
+            ?.getShadowUniforms?.() ?? null;
+        if (shadowState || this.m_lastShadowActive) {
+            const identity = shadowState ? null : new THREE.Matrix4();
+            for (const tile of tiles) {
+                for (const obj of tile.objects ?? []) {
+                    const u = (obj as any).material?.__mbShadowUniforms;
+                    if (!u) continue;
+                    u.uMBShadowMap.value = shadowState?.map ?? null;
+                    if (shadowState) u.uMBShadowMatrix.value.copy(shadowState.matrix);
+                    else if (identity) u.uMBShadowMatrix.value.copy(identity);
+                    u.uMBShadowIntensity.value = shadowState?.intensity ?? 0;
+                }
+            }
+        }
+        this.m_lastShadowActive = !!shadowState;
 
         // Runtime `setLights` (render-test operations) changes the 3D-lights
         // state after materials were patched; force a recompile so the ground-
@@ -116,7 +137,53 @@ export class MBMaterialPatchManager {
             this.patchIconObject(obj, tech);
             this.generateGuardrails(obj, tech, tile);
             this.registerAdditiveRibbon(obj, tech);
+            this.setupTranslucentExtrusionDualPass(obj, tech);
+            this.registerShadowCaster(obj, tech);
         }
+    }
+
+    /**
+     * Extruded polygons cast shadows into the MBShadowRenderer depth pass
+     * (mgl shadow pass renders every extrusion bucket). Opt-in via layer 1 —
+     * the shadow camera renders that layer mask only.
+     */
+    private registerShadowCaster(obj: THREE.Object3D, technique: any): void {
+        if (technique?.name !== 'extruded-polygon') return;
+        if (!(obj as any).isMesh) return;
+        if (shadowCasters.has(obj)) return;
+        obj.layers.enable(1);
+        shadowCasters.add(obj);
+    }
+
+    /**
+     * mgl translucent fill-extrusion parity (draw_fill_extrusion.ts:113-128):
+     * with `fill-extrusion-opacity` in (0,1) the extrusions draw in two passes —
+     * first a color-disabled depth pass, then a color pass whose fragments must
+     * have EQUAL depth — so only the closest surface blends (no interior
+     * double-blend of back/front walls). mgl additionally stencils against
+     * coincident polygons (stencilModeFor3D); that guard is omitted here.
+     */
+    private setupTranslucentExtrusionDualPass(obj: THREE.Object3D, technique: any): void {
+        if (technique?.name !== 'extruded-polygon') return;
+        const opacity = Number(technique._paint?.['fill-extrusion-opacity']
+            ?? technique.opacity ?? 1);
+        if (!(opacity > 0 && opacity < 1)) return;
+        const mesh = obj as THREE.Mesh;
+        if (!mesh.isMesh || (mesh as any).__mbDualPass) return;
+        (mesh as any).__mbDualPass = true;
+
+        // Depth-only prepass as a child mesh (inherits the object transform),
+        // sorted just before the color pass.
+        const depthMat = new THREE.MeshBasicMaterial({ colorWrite: false });
+        const depthMesh = new THREE.Mesh(mesh.geometry, depthMat);
+        depthMesh.renderOrder = (mesh.renderOrder ?? 0) - 0.5;
+        depthMesh.raycast = () => {}; // not pickable
+        depthMesh.matrixAutoUpdate = false;
+        mesh.add(depthMesh);
+
+        // Color pass only shades fragments matching the prepass depth.
+        const mat = mesh.material as any;
+        if (mat && 'depthFunc' in mat) mat.depthFunc = THREE.EqualDepth;
     }
 
     /**
@@ -1474,7 +1541,63 @@ export class MBMaterialPatchManager {
                 );
             }
         };
+        // mgl ground shadow (_prelude_shadow / ground_shadow.fragment.glsl):
+        // ground fill layers multiply `mix(1 - shadowIntensity, 1, lit)` with
+        // the shadow-map depth comparison. Injected only when the style has
+        // cast-shadows 3D lights (see patchTileMaterials per-frame refresh).
+        if (!technique?._isLineRibbon && !technique?._isRaster && !technique?._isHillshade
+            && (this.m_dataSource as any).m_environment?.shadowLightState) {
+            this.injectGroundShadow(material as any);
+        }
         material.needsUpdate = true;
+    }
+
+    /**
+     * Shadow-map receiver injection for ground fill materials: adds a
+     * world-position varying and modulates the output color by the mgl ground
+     * shadow factor. Uniform values are refreshed every frame from
+     * MBShadowRenderer via `__mbShadowUniforms`.
+     */
+    private injectGroundShadow(material: any): void {
+        if (material.__mbShadowInjected) return;
+        material.__mbShadowInjected = true;
+        const orig = material.onBeforeCompile;
+        material.onBeforeCompile = (shader: any) => {
+            if (orig) orig.call(material, shader);
+            shader.uniforms.uMBShadowMap = { value: null };
+            shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
+            shader.uniforms.uMBShadowIntensity = { value: 0 };
+            material.__mbShadowUniforms = shader.uniforms;
+            shader.vertexShader = shader.vertexShader
+                .replace('#include <common>', '#include <common>\nvarying vec3 vMBWorldPos;')
+                .replace(
+                    '#include <project_vertex>',
+                    '#include <project_vertex>\n' +
+                    'vMBWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+                );
+            shader.fragmentShader = shader.fragmentShader
+                .replace(
+                    '#include <common>',
+                    '#include <common>\n' +
+                    'varying vec3 vMBWorldPos;\n' +
+                    'uniform sampler2D uMBShadowMap;\n' +
+                    'uniform mat4 uMBShadowMatrix;\n' +
+                    'uniform float uMBShadowIntensity;',
+                )
+                .replace(
+                    '#include <opaque_fragment>',
+                    `#include <opaque_fragment>
+                    if (uMBShadowIntensity > 0.0) {
+                        vec4 mbShadowUv = uMBShadowMatrix * vec4(vMBWorldPos, 1.0);
+                        if (mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
+                            mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
+                            float mbShadowDepth = texture2D(uMBShadowMap, mbShadowUv.xy).r;
+                            float mbLit = mbShadowUv.z <= mbShadowDepth + 0.0015 ? 1.0 : 0.0;
+                            gl_FragColor.rgb *= mix(1.0 - uMBShadowIntensity, 1.0, mbLit);
+                        }
+                    }`,
+                );
+        };
     }
 
     private patchLineMaterial(material: THREE.Material, paint: any, layout: any, technique: any): void {

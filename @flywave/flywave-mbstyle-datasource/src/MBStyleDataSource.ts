@@ -632,6 +632,8 @@ export class MBStyleDataSource extends TileDataSource {
     private m_heatmapRenderer: any = null;
     /** Per-feature GLTF instantiation channel for `model` layers (mgl parity). */
     private m_modelRenderer: any = null;
+    /** Standalone directional shadow pass (mgl shadow_renderer parity). */
+    private m_shadowRenderer: any = null;
     private m_additiveLineRenderer: any = null;
     private m_debugTileBoundaries = false;
     private m_debugLines: any = null;
@@ -1115,6 +1117,13 @@ export class MBStyleDataSource extends TileDataSource {
                 self.updateModelRegistry(style);
             } catch {}
 
+            // Standalone shadow pass (mgl shadow_renderer): active only when
+            // 3D lights carry cast-shadows + shadow-intensity > 0.
+            try {
+                const { MBShadowRenderer } = await import('./MBShadowRenderer');
+                self.m_shadowRenderer = new MBShadowRenderer(this.mapView, self);
+            } catch {}
+
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
                 patcher.patchTileMaterials();
@@ -1127,6 +1136,11 @@ export class MBStyleDataSource extends TileDataSource {
                 }
                 if (self.m_modelRenderer) {
                     self.m_modelRenderer.run();
+                }
+                if (self.m_shadowRenderer) {
+                    const sl = self.m_environment?.shadowLightState;
+                    self.m_shadowRenderer.setLightState(!!sl, sl?.intensity ?? 0);
+                    self.m_shadowRenderer.run();
                 }
                 if (self.m_debugTileBoundaries) self.drawTileBoundaries();
                 const tc = self.m_environment?.terrainController;
