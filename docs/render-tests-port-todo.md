@@ -2615,3 +2615,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **引擎内 draw 提交终局实证**：MapRenderingManager 旁路分支内嵌 info 探针——**帧 6-8 引擎自己的直渲包含地形 draw（calls=19, triangles=33762 = 32768 地形 + 内容）且 scene 内确认在位**；但强制 magenta 基色（清洁无覆盖路径）捕获 PNG 仍 0 像素。结合 §66 手绘 canvas 存活——引擎 draw 提交但像素消失，唯一未排查环节 = **主渲染之后的同帧操作（renderText / m_overlayScene 渲染）或捕获时序**。
 - **防御性修复落地（保留）**：TerrainDepthOcclusion 的 catch{} 原会跳过 `setRenderTarget(prev)` 恢复（异常时深度目标保持绑定 → 主渲染静默入深度目标）——恢复移入 finally。数值零变化（当前无异常触发），属正确性加固。
 - **留档下一批**：① 同帧主渲染后的 renderText/overlay 渲染排查（唯一剩余环节）；② 地形可见性打通后重做 mgl 光照公式（代码已验证过一遍，恢复即可）；③ 交互式会话终局确认。tsc 绿、单测 265/3 既有、零回归。
+
+**71. "地形不可见"最终翻案 + renderText/overlay 排除（2026-08-21，dbgVisG 复扫/lit2，零净代码变更）**：
+
+- **最终翻案**：dbgVisG（清洁强制 magenta）图像用宽松 reddish 滤波复扫——**3524 red-dominant 像素存在**！地形自 §67 旁路以来**一直可见**，只是被场景光照/雾染色为 (213,21,21) 类色，严格 magenta 滤镜（R>200∧B>200∧G<100）漏检——五个阶段（§62-70）的"不可见地形"结论为**探针滤波伪影**。§70 的"逐位不变"实为 mismatch 计数不变（像素仍差但同超阈值）。
+- **renderText/overlay 排除**：MapView.render 主渲染后仅 renderText（无标签 fixture 为 no-op）与 m_overlayScene（无 overlay 子对象不触发）——两嫌疑排除；§66 的 canvas 手绘存活与引擎 draw 提交（33762 tris）与"地形可见"新结论完全自洽。
+- **k-lit 公式二次否决（机制阐明）**：material color 路径下 mismatch 计数全同——**MeshStandardMaterial 场景光照栈（π-trick ≈×2.3 恒定增益）抵消 CPU 预乘**（84→194、86→194）；emissive-flat 路径（§70）existing +2.4k。结论：地形亮度残差的真通道是 **per-fixture 的 themed 基色推导**（两族 exp 目标 193 未打光 vs 55 打光相反，源于不同 op LUT 对背景的映射）+ drape 内容，非全局光照公式。
+- **零净代码变更**：HEAD 复核逐位一致（fog-import-scope 164019、existing 158259、fog/default 1094、gradient/default 0 PASS）。tsc 绿、单测 265/3 既有。
+- **留档下一批**：① per-fixture 地形基色：对齐 mgl 的背景 LUT 作用域链（fog-import-scope exp 顶部红=背景 themed，我方 194 灰——背景通道）；② drape 内容可见化（道路/建筑的烘焙细节进入地形）；③ 会话总结与多会话基线表重制。
