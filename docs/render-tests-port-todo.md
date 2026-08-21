@@ -2566,3 +2566,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **附带取证**：DEM 高程域 [0, 125.4]m 正值正常；WillRender RTE 监听器每帧运行（parent=Scene/visible=true 确认）；frustumCulled=false 试验无视觉变化（保留为防御性设置——共享 C/4 网格的惰性包围球与 RTE 逐帧剔除交互不佳，整视域 5km 瓦片本无需对象级剔除）。
 - **验收**：fog/default 552、fog/terrain/basic 33955、fog-import-scope 164907、existing 160950 逐位稳定（仅 +frustumCulled=false），零回归；tsc 绿、单测 265/3 既有。
 - **留档下一批**：① 读 FilterEffectPass/SelectiveBloomEffect(inverted)/PPOutlineEffect(xRay) 源码——effect 链是否丢弃主 pass 缓冲的部分内容；② 逐 pass 截图（composer 输入 buffer vs 输出）定位像素消失点；③ 深度 pass 相机与 RTE 相机差异排除。
+
+**64. 地形像素消失之谜收敛至 scene 级交互（2026-08-21，dbgNoComp/dbgIsoT2-9，纯取证零代码变更）**：
+
+- **§63 计数再修正**：`mapView.camera` 是**世界坐标相机**（探针 camPos=[6.4M,24.5M,193]）——此前"~1.8 draw/帧含 color pass"的推断不成立，两次 draw 均为离屏（深度遮挡 + drape bake RT）。composer 禁用直渲试验（__mbNoComposer）亦 0 magenta——排除 composer/effect 链。
+- **决定性对照（同一次运行内）**：**真实地形 mesh + RTE 相机（原点）+ fresh Scene → 256388 像素渲染成功**（mesh/材质/几何/RTE 监听器全部正确）；同一 mesh 留在 m_scene、隐藏其余全部子对象（sceneRoot/穹顶/灯光/相机，fog 强制 off、scene 变换恒等、无 background/environment/overrideMaterial）→ **0 像素**。差异仅剩"fresh Scene vs m_scene"本身。scene.onBeforeRender 为 three 内置 noop（红鲱鱼）。
+- **候选收敛**：m_scene 上未被枚举的状态（渲染层 mask 之外的内部标记、matrixWorldNeedsUpdate 时序、引擎在 render 调用链中经别的入口对 m_scene 的处理）。已达远程探针极限，**留档：需交互式 GPU 调试（RenderDoc / 浏览器 devtools WebGL inspector）逐 draw call 检查 m_scene 渲染时地形 draw 是否被提交及其深度/模板状态**。
+- **零代码变更**：全部 TEMP 探针还原，HEAD 复核逐位一致（fog/default 552、fog/terrain/basic 33955、fog-import-scope 164907、existing 160950）。tsc 绿、单测 265/3 既有。
