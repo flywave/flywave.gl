@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MapView } from '@flywave/flywave-mapview';
+import { MapView, MapViewEventNames } from '@flywave/flywave-mapview';
 import { EarthConstants } from '@flywave/flywave-geoutils';
 import { FogSpec, SkySpec, Light3DProperties } from './MBStyleSpec';
 import { MapTerrainMaterial, createTerrainGrid } from './materials/MapTerrainMaterial';
@@ -273,6 +273,7 @@ export class MBEnvironmentManager {
     }
     private m_terrainMesh: THREE.Mesh | null = null;
     private m_terrainController: TerrainController | null = null;
+    private m_terrainRteListener: (() => void) | null = null;
 
     /** Multi-tile terrain controller (null if no terrain or single-tile fallback). */
     get terrainController(): TerrainController | null { return this.m_terrainController; }
@@ -1279,6 +1280,11 @@ export class MBEnvironmentManager {
             this.m_terrainMesh = null;
         }
         if (this.m_terrainController) {
+            if (this.m_terrainRteListener) {
+                this.m_mapView.removeEventListener(
+                    MapViewEventNames.WillRender, this.m_terrainRteListener);
+                this.m_terrainRteListener = null;
+            }
             this.m_terrainController.dispose();
             this.m_terrainController = null;
         }
@@ -1309,7 +1315,17 @@ export class MBEnvironmentManager {
                 terrain.exaggeration ?? 1.0,
                 1, // radius → 3×3 grid around center
             );
-            if (this.m_terrainController.meshCount > 0) return;
+            if (this.m_terrainController.meshCount > 0) {
+                // RTE rendering: terrain meshes must live at world − camera
+                // every frame (see updateCameraRelative).
+                this.m_terrainRteListener = () => {
+                    const cam = this.m_mapView.camera;
+                    this.m_terrainController?.updateCameraRelative(cam.position);
+                };
+                this.m_mapView.addEventListener(
+                    MapViewEventNames.WillRender, this.m_terrainRteListener);
+                return;
+            }
             this.m_terrainController.dispose();
             this.m_terrainController = null;
         } catch {}

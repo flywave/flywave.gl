@@ -19,7 +19,15 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
         });
 
         const self = this;
+        // MeshStandardMaterial has no `defines` map (ShaderMaterial-only), so
+        // the drape path is enabled by prepending the define here — with a
+        // distinct program cache key so draped/undraped variants coexist.
+        this.customProgramCacheKey = () => (self.m_drapeTexture ? 'mbDrape' : 'mbNoDrape');
         this.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
+            if (self.m_drapeTexture) {
+                shader.fragmentShader = '#define USE_DRAPE\nuniform sampler2D uDrape;\n'
+                    + shader.fragmentShader;
+            }
             shader.uniforms.uDem = { value: self.m_demTexture };
             shader.uniforms.uDemPrev = { value: self.m_demPrevTexture };
             shader.uniforms.uDemLerp = { value: self.m_demLerp };
@@ -47,6 +55,9 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                     // RGB-encoded Mapbox terrain-rgb.
                     return (s.r * 65536.0 + s.g * 256.0 + s.b) * 0.1 - 10000.0;
                 }
+                #ifdef USE_DRAPE
+                varying vec2 vMapUv;
+                #endif
                 `
             );
 
@@ -63,6 +74,9 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                 }
                 elevation *= uExaggeration;
                 vec3 transformed = vec3(position.x, position.y, elevation);
+                #ifdef USE_DRAPE
+                vMapUv = uv;
+                #endif
                 `
             );
 
@@ -131,7 +145,7 @@ export function createTerrainGrid(
     height: number = 1,
     segments: number = 128,
 ): THREE.BufferGeometry {
+    // z-up world: plane in XY, elevation displaces along z in the shader.
     const geom = new THREE.PlaneGeometry(width, height, segments, segments);
-    geom.rotateX(-Math.PI / 2);
     return geom;
 }

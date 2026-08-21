@@ -76,19 +76,20 @@ export function createSkirtedGrid(
     segments: number,
     skirtHeight: number,
 ): THREE.BufferGeometry {
+    // Engine world is z-up (x = mercator X, y = mercator Y, z = elevation):
+    // keep the plane in XY — the terrain vertex shader displaces along z.
     const geo = new THREE.PlaneGeometry(size, size, segments, segments);
-    geo.rotateX(-Math.PI / 2); // lie flat on XZ plane
     const pos = geo.attributes.position as THREE.BufferAttribute;
     const count = pos.count;
     // Append a skirt ring: copy the border vertices and push them down.
     const borderIndices: number[] = [];
     for (let i = 0; i < count; i++) {
         const x = pos.getX(i);
-        const z = pos.getZ(i);
+        const y = pos.getY(i);
         const half = size / 2;
         const isBorder =
             Math.abs(x - (-half)) < 1e-6 || Math.abs(x - half) < 1e-6 ||
-            Math.abs(z - (-half)) < 1e-6 || Math.abs(z - half) < 1e-6;
+            Math.abs(y - (-half)) < 1e-6 || Math.abs(y - half) < 1e-6;
         if (isBorder) borderIndices.push(i);
     }
     const skirtVerts: number[] = [];
@@ -97,8 +98,8 @@ export function createSkirtedGrid(
     for (const bi of borderIndices) {
         const base = pos.getX(bi) !== undefined ? count + skirtVerts.length / 3 : 0;
         const sx = pos.getX(bi);
-        const sy = pos.getY(bi) - skirtHeight; // drop skirt vertex below
-        const sz = pos.getZ(bi);
+        const sy = pos.getY(bi);
+        const sz = pos.getZ(bi) - skirtHeight; // drop skirt vertex below (z-up)
         skirtVerts.push(sx, sy, sz);
         const su = uv.getX(bi);
         const sv = uv.getY(bi);
@@ -182,6 +183,20 @@ export class TerrainController {
     /** Terrain meshes (read-only access for depth-occlusion pass). */
     get meshes(): readonly THREE.Mesh[] { return this.m_meshes; }
 
+    /**
+     * The engine renders through a camera-relative (RTE) scene: meshes at
+     * absolute world coordinates fall outside the far plane and never
+     * rasterize. Keep each mesh at worldPos − cameraPosition, recomputed
+     * every frame before render.
+     */
+    updateCameraRelative(camPos: THREE.Vector3): void {
+        for (const mesh of this.m_meshes) {
+            const world = mesh.userData.__mbWorldPos as THREE.Vector3 | undefined;
+            if (!world) continue;
+            mesh.position.set(world.x - camPos.x, world.y - camPos.y, world.z - camPos.z);
+        }
+    }
+
     /** Center DEM tile info for fill-extrusion-terrain base elevation sampling. */
     get centerDem(): { texture: THREE.Texture; originX: number; originY: number; size: number } | null {
         return this.m_centerDem;
@@ -203,11 +218,11 @@ export class TerrainController {
             // unit-square-sized plane scaled to (tileSizeWorld / (C/4)).
             const tileWorldSize = mesh.scale.x * (EarthConstants.EQUATORIAL_CIRCUMFERENCE / 4);
             const cx = mesh.position.x;
-            const cz = mesh.position.z;
+            const cy = mesh.position.y;
             out.push({
                 texture: demTex,
                 originX: cx - tileWorldSize / 2,
-                originY: cz - tileWorldSize / 2,
+                originY: cy - tileWorldSize / 2,
                 size: tileWorldSize,
             });
         }
@@ -358,8 +373,10 @@ export class TerrainController {
             }
 
             const mesh = new THREE.Mesh(geo, material);
-            mesh.position.set(worldX, 0, worldY);
-            mesh.scale.set(tileSizeWorld / (C / 4), 1, tileSizeWorld / (C / 4));
+            // z-up world frame: mercator Y on the world Y axis, elevation on Z.
+            mesh.position.set(worldX, worldY, 0);
+            mesh.userData.__mbWorldPos = mesh.position.clone();
+            mesh.scale.set(tileSizeWorld / (C / 4), tileSizeWorld / (C / 4), 1);
             // Render terrain before other objects so its depth is written first,
             // enabling hardware depth occlusion for circles/symbols behind hills
             // (Scheme C in design-terrain-draping.md, no depth texture needed).
