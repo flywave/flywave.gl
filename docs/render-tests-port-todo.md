@@ -2684,3 +2684,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **取证方法**：Node 独立复刻 mgl skybox_capture 单射线解析（zenith·zenith·intensity30·fixture tints）= (209,211,128)，对照我方 CPU 立方体 +Y 面中心 (139,162,164)——红低蓝高 = **mie 项用了原始 BETA_M 而非 mgl 的 `BETA_M·tintM.rgb·tintM.a`**（halo tint (255,255,0,0.5) 应把蓝通道 mie 归零，我方蓝 164 vs mgl 128 正是漏乘所致）。修复一行：`betaM[c] = BETA_M·tintM[c]·tintM.w`。
 - **验收（vs §77 终态 atm4 基线，atmc2/3）**：**atmosphere-color 40543→1619（−96%）**、**atmosphere-mie 47887→1107**（§77 留档"疑 exp 出自不同版本"的 fixture 破案——非版本差异，是本行缺失）、**atmosphere-rayleigh 562→0 新增 PASS**、**intensity/high 45784→62**（近 PASS）、**fill-extrusion-light/north-east 34086→7160**、**3d-intersections/fog 136265→106809**；fog 域（default 1094、color 65842）、gradient/default 0、fog-import-scope 164019、existing 158259、blend 族（79668/78101 与 atm4 逐位同——此前误记 64650 为基线）全部逐位不变，**零回归**。tsc 绿、单测 265/3 既有。
 - **skybox/atmosphere 域现状**：rayleigh PASS、color/mie/horizon/intensity 均 1.1k-1.7k 近失带；残差主体仅剩 atmosphere-terrain 102564（几何覆盖域，§73-76 内容抬升线）与 blend/fill 族 78-80k（fill 复合层）。
+
+**81. §49 model 烘焙路径终局取证：自建 GLTF 路径全程死代码（2026-08-22，model1/dbgModel1-2/dbgTech，零净代码变更）**：
+
+- **决定性证据链**：① propagateScopedThemes 探针 `m_loadedModels.length=0`——§46-48 的 model CPU 烘焙（applyThemeToModel 材质/纹理 bake）对实际 fixture **从未执行**（loadModels 的 modelDefs 只认 inline layer.models / source.data·url 两种形态）；② trees-monochrome cur 全图单色 (107,107,107)、dark px 0 vs exp 12616——**树模型完全未渲染**，24611 残差=模型缺失而非色差；③ emission-bw cur 全白 vs exp 灰阶同理（emissive 模型缺席）。
+- **mgl 正确语义（style 结构实证）**：fixture 用**根级 `style.models` 注册表**（maple1/oak1…glb URL）+ 矢量源 `trees` 逐要素放置（feature.model 属性 → modelId 匹配）——即 tile emitter 的 `'model'` technique（props.modelId 已产出，§81 代码在案）+ 引擎侧按 modelId 从注册表实例化渲染。**缺口=引擎 modelId→GLTF 实例化渲染通道**（flywave-gltf 加载器在包内可用），自建 GLTF 层路径应迁移到该语义。
+- **验收**：零净代码变更，HEAD 逐位复核（fog/default 1094、gradient/atmosphere-rayleigh 0×2 PASS、fog-import-scope 164019、existing 158259）。tsc 绿、单测 265/3 既有。
+- **下一批**：引擎 modelId 实例化通道（tile 'model' technique → style.models 注册表 → GLTF 实例 + transform + 主题 GPU/CPU bake）——model-layer 全族（model-fog-default 等）与 color-theme model 族一起受益。
