@@ -2559,3 +2559,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **五连排除**：① magenta 基色 + renderOrder=9999 + depthWrite 强制 → 0 像素（非深度序问题）；② vertexColors=false → 0 像素（非缺 color attribute）；③ `mesh.onBeforeRender` 计数（按 `renderer.getRenderTarget()` 区分）→ **depthPass=1..3, colorPass=0**——地形 mesh 仅被 TerrainDepthOcclusion 的深度 pass 绘制，**composer color pass 从未入列**（visible=true、parent=Scene、layers 1/1 匹配、RTE 相机 far=1e6、frustumCulled 球体在界内、shader 零错误、材质已编译）；④ 经 m_sceneRoot 路由（每帧重挂）亦 colorPass=0；⑤ 深度 pass 也在 ~3 帧后停止（DepthOcclusion 缓存深度目标）。
 - **结论收窄**：排除法终点 = **MapRenderingManager 的 composer（RenderPass/后处理链）对象纳入逻辑**对 m_scene 直加 mesh 存在与穹顶不同的处理（穹顶同在 m_scene 且上屏）。下一批直接读 composer/RenderPass/postprocessing 库源码的对象过滤（忽略列表/stencil-only pass/renderTarget 分流），或改从 TileObjectsRenderer 同路径注入地形（与瓦片对象同生共死）。
 - **零代码变更提交**：全部为 TEMP 探针已还原，HEAD=§61 状态复核逐位一致（fog/terrain/basic 33955、fog-import-scope 164907、existing 160950）。tsc 绿。
+
+**63. §62 根因修正：mesh 实际每帧 ~2 次 draw——"composer 排除"证伪，像素在管线下游消失（2026-08-21，dbgCull/dbgDem/dbgTrack/dbgRt1-2）**：
+
+- **修正 §62 结论**：按 render target 分流的 onBeforeRender 计数原把"有 RT 绑定"误判为深度 pass——composer 主 pass 同样绑 RT。终局计数：**~1.8 draw/帧（10 帧 18 次）**，与"深度 pass + composer 主 pass 各一次"一致——**地形 mesh 确实被 composer color pass 绘制**，纳入逻辑无问题；magenta 基色仍 0 像素 ⇒ **像素在主 pass 之后消失**（候选：effect pass（SelectiveBloom inverted/PPOutlineEffect xRay）/输出合成/或顶点着色器在 color pass 的相机下定位错误——深度 pass 相机与 RTE 相机不同属仍未排除）。
+- **附带取证**：DEM 高程域 [0, 125.4]m 正值正常；WillRender RTE 监听器每帧运行（parent=Scene/visible=true 确认）；frustumCulled=false 试验无视觉变化（保留为防御性设置——共享 C/4 网格的惰性包围球与 RTE 逐帧剔除交互不佳，整视域 5km 瓦片本无需对象级剔除）。
+- **验收**：fog/default 552、fog/terrain/basic 33955、fog-import-scope 164907、existing 160950 逐位稳定（仅 +frustumCulled=false），零回归；tsc 绿、单测 265/3 既有。
+- **留档下一批**：① 读 FilterEffectPass/SelectiveBloomEffect(inverted)/PPOutlineEffect(xRay) 源码——effect 链是否丢弃主 pass 缓冲的部分内容；② 逐 pass 截图（composer 输入 buffer vs 输出）定位像素消失点；③ 深度 pass 相机与 RTE 相机差异排除。

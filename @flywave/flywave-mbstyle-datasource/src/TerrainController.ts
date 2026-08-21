@@ -381,6 +381,11 @@ export class TerrainController {
             // enabling hardware depth occlusion for circles/symbols behind hills
             // (Scheme C in design-terrain-draping.md, no depth texture needed).
             mesh.renderOrder = -100;
+            // The shared skirted grid is C/4-sized (~10M local units) scaled
+            // down per tile; the lazily-computed local bounding sphere
+            // interacts badly with per-frame RTE camera culling — the mesh
+            // is a whole-view 5km tile anyway, so skip object culling.
+            mesh.frustumCulled = false;
             this.m_meshes.push(mesh);
             this.m_scene.add(mesh);
         } catch {
