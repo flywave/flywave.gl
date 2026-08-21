@@ -202,7 +202,9 @@ export class TerrainController {
             if (n <= 0) continue;
             const u = Math.min(n - 1, Math.max(0, Math.floor(((worldX - minX) / size) * n)));
             const v = Math.min(n - 1, Math.max(0, Math.floor(((worldY - minY) / size) * n)));
-            // DEM rows run north→south (mercator y-down): row 0 = max Y.
+            // DEM rows run north→south (mercator y-down): row 0 = max Y —
+            // confirmed by axis calibration (direct v: fog-import-scope
+            // 192406→230109, much worse).
             const row = n - 1 - v;
             return d[row * n + u] * this.m_exaggeration;
         }

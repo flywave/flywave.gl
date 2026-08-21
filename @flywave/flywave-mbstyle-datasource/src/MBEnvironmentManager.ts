@@ -1329,10 +1329,12 @@ export class MBEnvironmentManager {
                 // import-override — mgl samples PER VERTEX (DisplacedBuffer
                 // geometry). Enable when per-vertex displacement lands.
                 try {
-                    // DORMANT: per-vertex CPU displacement (v1) regressed all
-                    // target fixtures (fog-import-scope +28k) — vertex-world
-                    // coordinate derivation needs calibration vs the engine's
-                    // geometry conventions. Hook + sampler retained.
+                    // DORMANT (v2 verdict): fine-geometry-only per-vertex lift
+                    // still regressed the road-bearing fixtures (+28k,
+                    // identical to v1 — all damage from road ribbons, coarse
+                    // fills contributed none). Axis flip CONFIRMED correct
+                    // (no-flip: 192406→230109). Remaining calibration needs
+                    // visual iteration — see §12.76-76.
                     (this.m_mapView.env as any).terrainElevationSampler = null;
                     (this.m_mapView.env as any).terrainElevationPerVertex = false;
                 } catch {}
