@@ -992,6 +992,11 @@ export class MBEnvironmentManager {
                     // gradient is not mgl's scattering model — more dome is
                     // worse); revisit together with a real atmosphere model.
                     vec3 dir = normalize(vWorldDir);
+                    // NOTE: extending the cut below the horizon by mgl's
+                    // horizon-blend band (~0.05 rad) was retried AFTER the
+                    // theming/bypass fixes and still regresses every fixture
+                    // (the fake dome gradient below the horizon is not mgl's
+                    // blend) — needs the real atmosphere model, see §12.76-54.
                     if (dir.z <= 0.0) discard;
                     float d = dot(dir, normalize(uSunDir));
                     float sunGlow = pow(max(d, 0.0), 32.0);

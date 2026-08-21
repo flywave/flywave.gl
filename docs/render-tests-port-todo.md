@@ -2594,3 +2594,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复（flywave-mapview 引擎级）**：`MapRenderingManager.render` 在**无任何激活效果**（bloom/outline/vignette/sepia/godrays 全关，渲染测试常态）时旁路 composer 直渲——零效果后处理本为纯开销，且其路径丢弃地形。效果启用时 composer 照常（不影响 AA/效果用户）。
 - **验收（bypass1-3）**：**skybox/gradient/default 2136→0 新增 PASS**（composer 输出与直渲有亚像素差，直渲像素精确）；**import-override 族全收窄**：existing 160950→**158259**（−2.7k）、style→131934、theme→131909、fog-import-scope 164907→**164019**（地形首次进入这些 pitch70 fixture 的输出）；fog/color 69147→65842（−3.3k）、light-import-scope −0.3k；fog/2d/basic 22724→22953（+229 微）；**fog/default 552→1094（+542，确定性状态切换**——旁路改变渲染路径后落入 §53 二态的另一支，非随机）；fog/terrain 族 ±2k 内互有涨跌（basic +248、zero-exag +1.7k、inverted ≈ 53672 不变——其中 inverted 曾 53172→16217 出现过一次（bypass3 截断批次），疑同型状态翻转待复核）；color-theme 4 PASS 维持、近失族不变。tsc 绿、单测 265/3 既有。
 - **留档下一批**：① fog/terrain 族与 fog/default 在旁路态的基线重定（多会话复核哪些是确定性偏移）；② 地形上屏后 drape UV/世界映射校准真正开始（现地形可见，drape 内容效果可评估）；③ composer 丢弃 mesh 的机制溯源（向 flywave 上游报告）。
+
+**68. 旁路态基线重定 + 残差构成分析 + 带/机制两项否决（2026-08-21，band1/verify68，零净代码变更）**：
+
+- **基线重定（①）**：旁路态数值确定性复核——fog/default 稳定 **1094**（552→1094 为确定性路径切换，非随机翻转；§53 二态的"另一支"被旁路固化）、fog/terrain 族 ±2k 内（inverted 曾现 16217 单次，疑同型，留多会话复核）、skybox/gradient/default **0（新增 PASS 稳定）**、import-override existing **158259**。
+- **残差构成（fog-import-scope 164019 像素取证）**：顶部 y8 cur(213,21,21)≈exp(255,0,0)——themed 大气穹顶已基本对齐；主残差 = ① y40 带 cur(194 灰=clearColor) vs exp(218,35,35 红)——**我们的天空带比 mgl 窄**（mgl horizon-blend 延伸到真地平线下）；② y300-500 cur(194 地形基色) vs exp(55/125 道路/建筑/山体阴影)——**地形基色区域缺 drape 内容与 3D-lit 细节**。
+- **两项否决**：① horizon-blend 带（−0.05 rad discard）**主题化后重试仍全域劣化**（fog-import-scope +1.5k、existing +1.7k、atmosphere-color +1.6k、fill-extrusion-light/north-east +5.5k）——假穹顶渐变 ≠ mgl 混合，确证需真大气散射模型，已回退；② composer 丢 mesh 机制源读至 EffectComposer.setRenderer（renderer.autoClear=false）与 RenderPass（朴素 renderer.render）——无对象过滤逻辑，机制不明但旁路修复已落地。
+- **留档下一批**：① 地形基色区域的 drape 内容/3D-lit 细节（y300-500 残差主体，drape UV 校准实做）；② 真大气散射模型（rayleigh/mie，同时解决 rayleigh/mie 族 47k-128k）；③ fog/terrain 多会话基线复核。零净代码变更（带试验已回退），tsc 绿、单测 265/3 既有。
