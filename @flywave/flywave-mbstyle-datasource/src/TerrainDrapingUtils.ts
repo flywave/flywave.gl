@@ -21,21 +21,24 @@ export function buildTileCamera(tile: {
     if (size <= 0) return null;
 
     const centerX = originX + size / 2;
-    const centerZ = originY + size / 2;
+    const centerY = originY + size / 2;
 
-    // Camera looks down Y axis at the XZ plane.
-    // left/right = X bounds, top/bottom = Z bounds.
+    // Camera looks down the Z axis (engine world is z-up: x = mercator X,
+    // y = mercator Y, z = elevation). A camera looking down Y renders the
+    // z-up scene edge-on and the bake comes out empty. The tile origins are
+    // camera-relative (RTE, live mesh positions) — matching the
+    // camera-relative tile objects rendered into the bake.
     const camera = new THREE.OrthographicCamera(
         originX,         // left
         originX + size,  // right
-        originY + size,  // top (max Z)
-        originY,         // bottom (min Z)
+        originY + size,  // top (max Y)
+        originY,         // bottom (min Y)
         1,               // near
         2000,            // far
     );
-    camera.position.set(centerX, 1000, centerZ);
-    camera.lookAt(centerX, 0, centerZ);
-    camera.up.set(0, 0, 1);
+    camera.position.set(centerX, centerY, 1000);
+    camera.lookAt(centerX, centerY, 0);
+    camera.up.set(0, 1, 0);
     camera.updateProjectionMatrix();
     return camera;
 }

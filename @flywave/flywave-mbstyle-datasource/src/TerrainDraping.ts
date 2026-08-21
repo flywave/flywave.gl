@@ -229,7 +229,6 @@ export class TerrainDraping {
                     (this.m_mapView as any).clearColor ?? TerrainDraping.CLEAR_COLOR, 1.0);
                 renderer.clear();
                 renderer.render(scene, camera);
-
                 // Feed the baked texture to the terrain material.
                 const mat = mesh.material as any;
                 if (mat && typeof mat.setDrapeTexture === 'function') {
