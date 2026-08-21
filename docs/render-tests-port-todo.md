@@ -2512,3 +2512,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复**：跳过条件加"当前对象材质全部已打补丁"检查（新材质 → 重访 → `__mbPatched` 守卫幂等）。
 - **验收（terrain5/6）**：**import-override-theme 232478→135333（−97k）**、existing/remove 185202→**160816**、style 135358→132182、building/faux-facade 93060→81769；fog 域逐位稳定（default 552、2d/basic 22724、color 69147、terrain/basic 22297）、color-theme 4 PASS 维持、近失族不变、**零回归**。tsc 绿、单测 265/3 既有。
 - **留档下一批**：① fog-import-scope 164907 残差 = 顶部红带 + 地形 drape 细节（tile 层不在 scene graph，TerrainDraping bakeAll 的 hasDrapableContent=false 跳过——架构缺口：引擎瓦片几何走自有渲染通道，需接 tileObjectRenderer 式 bake）；② atmosphere 真散射模型；③ 地形 mesh 覆盖范围与 DEM 支撑对齐。
+
+**56. TerrainDraping 三重基建缺陷修复（RTE 位移 + z-up bake 相机 + USE_DRAPE define，2026-08-21，dbgDrp1-8/drape1-5）**：
+
+- **破案链（探针逐层）**：① bakeAll 从未被注意的静默异常（自加探针 TDZ）排除后确认 bake 每帧运行、`setDrapeTexture` 到位；② readRenderTargetPixels 取证 FBO **恒为均匀 (23,23,23)**（仅 clear 色）；③ 三个独立缺陷：
+  - **RTE 位移**：引擎 TileObjectsRenderer 每帧设 `object.position = worldPos − cameraPosition`（相机相对渲染），而 bake 相机是世界坐标——整个瓦片层偏移数千万单位在正交视锥外。修复：bake 前对 m_sceneRoot 子对象 `position.add(camPos)`（finally 恢复）。
+  - **bake 相机轴向**：原 buildTileCamera 沿 −Y 俯视（地形 mesh 局部系），引擎世界 z-up（x=mercX, y=mercY, z=高程）下这是侧视。修复：改 z 轴俯视 `(centerX, centerY, 1000)` lookAt −Z、up=+Y、top/bottom=Y 界。
+  - **USE_DRAPE 从未生效（决定性）**：`MapTerrainMaterial` 继承 MeshStandardMaterial——**没有 `defines` 属性**（ShaderMaterial 专属），bakeAll 的 `mat.defines.USE_DRAPE=''` 只是设置了一个被 WebGL 编译器忽略的普通字段；且 fragment 注入用了从未声明的 `vMapUv`。修复：onBeforeCompile 按 `m_drapeTexture` 前置 `#define USE_DRAPE` + `customProgramCacheKey` 区分变体 + 顶点声明/赋值 `vMapUv`。
+  - bake 期间保留灯光（MeshStandardMaterial 瓦片内容无灯会烘成全黑）。
+- **验收（drape4/5 + stash 基线对照）**：fog/terrain、color-theme、import-override、symbol-elevation（raster+terrain，5 例 stash 对照逐位一致）**全部逐位不变**——drape 管道机械上已通（bake 运行、纹理注入、define 生效、零回归），但 FBO 内容仍恒均匀：瓦片对象虽位置/包围球在视锥内（探针确认 p/bs 正常、stencil 关闭），仍不在正交渲染中光栅化——**留续取证**：嫌疑 DisplacedBufferGeometry（顶点位移在 shader 内依赖主相机 uniform）或材质 onBeforeRender 钩子绑定主相机。fog-import-scope 164907 / import-override 160816 残差主通道仍在场景合成层（可见内容已由 §55 3D-lit 正常渲染）。tsc 绿、单测 265/3 既有。
