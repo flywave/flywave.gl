@@ -2643,3 +2643,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **否决（数据）**：全目标劣化——fog-import-scope 164019→**192406（+28k）**、existing 158259→166178（+8k）、fog/terrain/basic 34203→45418（+11k）、symbol-elevation/ground-constant 21148→33130（+12k）。顶点世界坐标推导（obj.position + camera + 局部顶点）与引擎几何约定（居中/缩放/瓦片局部原点）不符——位移落点系统性错位。**已回退休眠**（钩子 + sampleElevation + per-vertex 标志保留，正道 = 引擎 DisplacedBufferGeometry 接 DEM 的顶点着色器内采样，属引擎深改专项）。
 - **验收**：休眠态全部基线逐位一致（fog-import-scope 164019、existing 158259、fog/terrain/basic 34203、symbol-elevation 21148、fog/default 1094、gradient/default 0 PASS）零回归。tsc 绿（protocol lib 重建）、单测 265/3 既有。
 - **会话阶段性总结（§53-74，22 个提交）**：fog 域修复（fog/default 1128→552→旁路态 1094）、import-override 族 196917→158259（−19%）、color-theme 4 PASS 维持 + skybox/gradient/default 新增 PASS、drape 管道全链路上线、地形渲染双根因（帧错位+RTE）修复、composer 空效旁路引擎修复、内容抬升钩子基建。剩余大项：逐顶点抬升引擎深改、真大气散射、fog/globe 族、model 烘焙。
+
+**75. 顶点世界坐标约定标定（2026-08-21，dbgConv1-2，零净代码变更）**：
+
+- **约定标定（探针实证）**：fill quad 几何 bb=(±621, ±621, 0..12)（米级局部）、objScale=1、objPos=RTE 瓦片中心——**顶点世界坐标 = objPos(RTE) + camera + 顶点局部，与 §74 v1 实现完全一致**。v1 的 +28k 劣化因此排除坐标推导错误，嫌疑收敛到 **sampleElevation 的 DEM 轴向/边界细节**（行翻转 n−1−v 对北=+Y 还是 −Y 的假设、或 u/v 映射象限）——需可视化迭代校准（逐顶点高度 vs 地形表面对照），留档交互式会话实做。
+- **当前状态**：抬升管道三件套（钩子/采样器/per-vertex 标志）休眠待校准；全部基线逐位一致（fog-import-scope 164019、existing 158259、fog/terrain/basic 34203、fog/default 1094、gradient/default 0 PASS）零回归。tsc 绿、单测 265/3 既有。
+- **下一步优先级重排**：① sampleElevation 轴向校准（数据已备齐：bb/objPos/cam 实测值在案）→ 重启 per-vertex；② 真大气散射模型；③ fog/globe 族。
