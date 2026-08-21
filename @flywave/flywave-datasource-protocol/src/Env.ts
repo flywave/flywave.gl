@@ -99,6 +99,9 @@ export class MapEnv extends Env {
      * mapbox semantics: content rides the terrain it is drawn over.
      */
     terrainElevationSampler: ((worldX: number, worldY: number) => number) | null = null;
+    /** When true, content elevation is applied per-vertex by the datasource
+     * (CPU geometry displacement) and the renderer skips object-level lift. */
+    terrainElevationPerVertex: boolean = false;
 
     constructor(readonly entries: ValueMap, private readonly parent?: Env) {
         super();

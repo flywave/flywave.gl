@@ -1329,7 +1329,12 @@ export class MBEnvironmentManager {
                 // import-override — mgl samples PER VERTEX (DisplacedBuffer
                 // geometry). Enable when per-vertex displacement lands.
                 try {
+                    // DORMANT: per-vertex CPU displacement (v1) regressed all
+                    // target fixtures (fog-import-scope +28k) — vertex-world
+                    // coordinate derivation needs calibration vs the engine's
+                    // geometry conventions. Hook + sampler retained.
                     (this.m_mapView.env as any).terrainElevationSampler = null;
+                    (this.m_mapView.env as any).terrainElevationPerVertex = false;
                 } catch {}
                 // RTE rendering: terrain meshes must live at world − camera
                 // every frame (see updateCameraRelative).

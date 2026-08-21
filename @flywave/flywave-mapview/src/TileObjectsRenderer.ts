@@ -69,7 +69,7 @@ export class TileObjectRenderer {
                 // mapbox terrain semantics: content rides the terrain
                 // surface (elevation sampled at the object's world position).
                 const sampler = this.m_env.terrainElevationSampler;
-                if (sampler) {
+                if (sampler && !(this.m_env as any).terrainElevationPerVertex) {
                     const elev = sampler(
                         object.position.x + cameraPosition.x,
                         object.position.y + cameraPosition.y);
