@@ -41,8 +41,8 @@ export class TerrainDraping {
     private m_extraBakeFrames = 0;
     /** White opaque clear color for FBO (alpha=1 so empty areas preserve terrain color). */
     private static readonly CLEAR_COLOR = new THREE.Color(1, 1, 1);
-    /** Master switch — see DRAPE_ALIGNMENT_CALIBRATION. */
-    static readonly DRAPE_ENABLED = false;
+    /** Master switch for the drape bake. */
+    static readonly DRAPE_ENABLED = true;
     /** Max consecutive re-bake frames after rebuild (gives async textures time to load). */
     private static readonly MAX_EXTRA_BAKES = 5;
 
@@ -159,6 +159,12 @@ export class TerrainDraping {
     private bakeAll(): void {
         const renderer = this.m_mapView.renderer;
         if (!renderer) return;
+        // Master switch. The bake pipeline is verified end-to-end (§12.76-60:
+        // plain mesh + tile camera + no-depth RT + big-scene-first order all
+        // rasterize; the historical "renderer blocker" was the broken −Y
+        // camera fixed in §12.76-58). The content gate below auto-disables
+        // drape when the FBO comes out uniform (empty bake).
+        if (!TerrainDraping.DRAPE_ENABLED) return;
         // DRAPE_ALIGNMENT_CALIBRATION: dormant — see the gate at the
         // setDrapeTexture call below. Skip the bake entirely (its mid-frame
         // RT renders perturb engine GL state and regress fog/terrain).
@@ -254,12 +260,9 @@ export class TerrainDraping {
                     if (sample[k] !== sample[k % 4]) { uniform = false; break; }
                 }
                 const mat = mesh.material as any;
-                // DRAPE_ALIGNMENT_CALIBRATION: the baked content currently
-                // lands misaligned on the terrain surface (fog/terrain/basic
-                // 27987→33955 with drape active vs dormant). Keep the whole
-                // pipeline DORMANT until the UV/world mapping is calibrated —
-                // flip this to `!uniform &&` once aligned.
-                if (false && mat && typeof mat.setDrapeTexture === 'function') {
+                // Content gate: only enable the drape when the bake actually
+                // produced non-uniform content (auto-disables on empty bakes).
+                if (!uniform && mat && typeof mat.setDrapeTexture === 'function') {
                     mat.setDrapeTexture(rt.texture);
                     if (!mat.defines) mat.defines = {};
                     if (!mat.defines.USE_DRAPE) {

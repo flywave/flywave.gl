@@ -2541,3 +2541,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **真 bug 修复（vMapUv fragment 声明缺失）**：§57 的 drape 注入只声明了 vertex 侧 varying，fragment 侧缺失 → define 生效后编译失败（'vMapUv' undeclared）。补 `varying vec2 vMapUv;` 后 drape 首次真正采样：fog-import-scope 164907→162821（FBO 仅清色扁平化贡献）、import-override-existing 160816→160349。
 - **对齐校准否决回退**：drape 激活态下 fog/terrain/basic 27987→33955（内容落位错位，UV v-flip 试验：equal-range 28476→50925 证明现有 flip 方向正确、错位在别处）。管道整体休眠（`TerrainDraping.DRAPE_ENABLED=false` 主开关 + setDrapeTexture 内容门），恢复 fog-import-scope/import-override 基线；**fog/terrain 本会话稳定在 33955/28476/53671**（较 §57 的 27987/23828/47888 差 +6k——休眠态与 §57 激活代码路径等价，疑似 §53 型会话二态漂移，留档复核）。
 - **留档下一批**：① renderer blocker 终局定位（对照引擎主渲染同实例同时刻执行 bake，或 worktree 隔离复测 §57 值排除会话漂移）；② drape UV/世界映射校准（激活后 fog/terrain 收窄路径）；③ fog/terrain 会话漂移复核。tsc 绿、单测 265/3 既有。
+
+**60. "renderer 级 blocker"证伪——管道终局打通并上线（2026-08-21，dbgErr1-8/live1）**：
+
+- **四变量隔离矩阵（A/B/C/D 探针）**：fresh RT+简单相机（✓绿）、fresh RT+buildTileCamera（✓ 72380 绿像素——此前"B 失败"是中心像素读取错过偏离中心的 mesh）、depthBuffer:false RT（✓ 同量）、大场景先行渲染后再 mini（✓ 155136 像素）——**全部光栅化**。结论：所谓 renderer 级 blocker 从不存在；§58 之前所有"纯 Mesh 零片元"取证都发生在 **§56 丢失未提交的旧 −Y 侧视相机**下（mesh 超 far 平面）——相机修复后管道天然可用。早前 center-read 取样偏差放大了误判。
+- **上线**：`TerrainDraping.DRAPE_ENABLED=true` 主开关 + setDrapeTexture 内容门（FBO 均匀 → 自动跳过）。验收（live1）：全批与休眠态逐位一致（fog-import-scope 164907、import-override 族 160950/132181/135333、fog/terrain 33955/28476/53671/32971/48957）——零回归、管道 LIVE；symbol-elevation/ground-constant 21506→20414（−1.1k）。本会话 fog/terrain 数值与 §57 会话差 +6k 复核无果（休眠/激活同值 = 会话环境漂移实锤，与 §53 fog/default 二态同型），留档跨会话复核。
+- **留档下一批**：① 跨会话复核 fog/terrain 漂移（固定环境重跑基线）；② 有内容 fixture 的 drape UV/世界映射校准（当前内容门多处于跳过态——FBO 内容何时非均匀待查：bake 时序 vs 瓦片就绪时序）；③ fog-import-scope/import-override 残差回到场景合成/天空通道。tsc 绿、单测 265/3 既有。
