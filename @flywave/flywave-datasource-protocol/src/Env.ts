@@ -92,6 +92,14 @@ export class Env {
  * ```
  */
 export class MapEnv extends Env {
+    /**
+     * Optional terrain elevation sampler (world x/y → elevation in meters,
+     * z-up). When set (e.g. by the mbstyle datasource with its DEM), the
+     * TileObjectRenderer lifts tile objects onto the terrain surface —
+     * mapbox semantics: content rides the terrain it is drawn over.
+     */
+    terrainElevationSampler: ((worldX: number, worldY: number) => number) | null = null;
+
     constructor(readonly entries: ValueMap, private readonly parent?: Env) {
         super();
     }

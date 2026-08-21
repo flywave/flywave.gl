@@ -184,6 +184,32 @@ export class TerrainController {
     get meshes(): readonly THREE.Mesh[] { return this.m_meshes; }
 
     /**
+     * Terrain elevation (meters, exaggeration applied) at a WORLD x/y
+     * position — mgl `getElevationForLngLatZoom` semantics. Used to lift
+     * tile content onto the terrain surface.
+     */
+    sampleElevation(worldX: number, worldY: number): number {
+        for (let i = 0; i < this.m_meshes.length; i++) {
+            const mesh = this.m_meshes[i];
+            const world = mesh.userData.__mbWorldPos as THREE.Vector3 | undefined;
+            const demTex = this.m_demTextures[i];
+            if (!world || !demTex) continue;
+            const size = mesh.scale.x * (EarthConstants.EQUATORIAL_CIRCUMFERENCE / 4);
+            const minX = world.x - size / 2, minY = world.y - size / 2;
+            if (worldX < minX || worldX > minX + size || worldY < minY || worldY > minY + size) continue;
+            const d = demTex.image.data as Float32Array;
+            const n = Math.floor(Math.sqrt(d.length));
+            if (n <= 0) continue;
+            const u = Math.min(n - 1, Math.max(0, Math.floor(((worldX - minX) / size) * n)));
+            const v = Math.min(n - 1, Math.max(0, Math.floor(((worldY - minY) / size) * n)));
+            // DEM rows run north→south (mercator y-down): row 0 = max Y.
+            const row = n - 1 - v;
+            return d[row * n + u] * this.m_exaggeration;
+        }
+        return 0;
+    }
+
+    /**
      * The engine renders through a camera-relative (RTE) scene: meshes at
      * absolute world coordinates fall outside the far plane and never
      * rasterize. Keep each mesh at worldPos − cameraPosition, recomputed

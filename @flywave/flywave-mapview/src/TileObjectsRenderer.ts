@@ -66,6 +66,15 @@ export class TileObjectRenderer {
                 }
                 object.position.x += worldOffsetX;
                 object.position.sub(cameraPosition);
+                // mapbox terrain semantics: content rides the terrain
+                // surface (elevation sampled at the object's world position).
+                const sampler = this.m_env.terrainElevationSampler;
+                if (sampler) {
+                    const elev = sampler(
+                        object.position.x + cameraPosition.x,
+                        object.position.y + cameraPosition.y);
+                    if (elev > 0) object.position.z += elev;
+                }
                 if (tile.localTangentSpace) {
                     object.setRotationFromMatrix(tile.boundingBox.getRotationMatrix());
                 }

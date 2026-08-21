@@ -2629,3 +2629,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **背景 LUT 作用域链洗清**：applyBackgroundColor 逐调用探针——背景层 scope=undefined（根层）✓、rootLut 加载后正确选用 ✓、`applyColorTheme(rootLut,'blue')=rgb(113,113,113)` 灰——与 mgl `RenderColor` 构造器逐行对照（归一化 rgb×(N−1) 直接三线性、无色彩空间转换）**完全一致**。mgl 的背景同样是灰！**exp 顶部红 = themed 大气穹顶**（我方 y8 (213,21,21)≈exp (255,0,0) 已对齐）——§71 留档的"背景 LUT 作用域链"嫌疑洗清。
 - **残差真通道定案**：fog-import-scope y300-500 cur=194（地形基色）vs exp=55/125/32（场景细节）——**抬升的地形（0-125m，pitch70 下更近相机）在深度上覆盖了 z=0 平面的道路/建筑内容**；mgl 语义内容贴地形表面。我方 drape 已激活但烘焙内容太淡（fill 灰 + 0.3 透明度道路），建筑为 3D 几何不参与 drape。
 - **留档下一批（真正的收窄路径）**：① **内容几何按 DEM 抬升**（mgl 语义：把 tile 对象的 z 加上地形高程——TerrainController 已有 m_centerDem + allDemTiles，在 TileObjectsRenderer 渲染时对对象 position.z 加采样高程）；② drape 内容强化（建筑顶面烘焙或高不透明度层）；③ 真大气散射模型。零净代码变更，HEAD 复核逐位一致，tsc 绿、单测 265/3 既有。
+
+**73. 内容按 DEM 抬升实做（引擎级钩子 + 对象级否决留档）（2026-08-21，elev1-2）**：
+
+- **引擎级钩子落地（保留）**：① `MapEnv.terrainElevationSampler`（flywave-datasource-protocol）+ ② `TileObjectsRenderer.render` 定位后 `position.z += sampler(worldX, worldY)`（flywave-mapview，mgl 内容贴地形语义）+ ③ `TerrainController.sampleElevation(worldX, worldY)`（R32F CPU 采样 × exaggeration，行序 n−1−v 北→南已验证：直接 v 劣化 existing 157437→174570）。
+- **对象级抬升否决（留档）**：启用态验收——import-override existing/remove **158259→157437（−822，方向正确）**，但 fog/terrain/basic **34203→46427（+12k）**、symbol-elevation/ground-constant **21148→34851（+13.7k）**——对象级单点采样对跨地形起伏的道路/符号放置过粗（mgl 逐顶点：DisplacedBufferGeometry 位移）。**sampler 置 null 休眠**（引擎钩子与采样器保留待逐顶点版本）。
+- **验收**：休眠态全部基线逐位一致（fog-import-scope 164019、existing 158259、fog/terrain/basic 34203、symbol-elevation 21148、fog/default 1094、gradient/default 0 PASS）零回归。tsc 绿（protocol lib 重建）、单测 265/3 既有。
+- **留档下一批**：① 逐顶点内容抬升（引擎 DisplacedBufferGeometry 接 DEM 采样——mgl 正道）；② 或 drape 内容强化路径；③ 真大气散射模型。

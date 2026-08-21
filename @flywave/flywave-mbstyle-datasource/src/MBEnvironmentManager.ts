@@ -1321,6 +1321,16 @@ export class MBEnvironmentManager {
                 1, // radius → 3×3 grid around center
             );
             if (this.m_terrainController.meshCount > 0) {
+                // mapbox terrain semantics: content rides the terrain —
+                // world-space elevation sampler for the engine's
+                // TileObjectRenderer. DORMANT: object-level (single sample
+                // per tile object) lifting regressed fog/terrain (+12k) and
+                // symbol-elevation (+13.7k) vs its −0.8k gain on
+                // import-override — mgl samples PER VERTEX (DisplacedBuffer
+                // geometry). Enable when per-vertex displacement lands.
+                try {
+                    (this.m_mapView.env as any).terrainElevationSampler = null;
+                } catch {}
                 // RTE rendering: terrain meshes must live at world − camera
                 // every frame (see updateCameraRelative).
                 this.m_terrainRteListener = () => {
