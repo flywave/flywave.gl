@@ -137,9 +137,13 @@ export class MapHillshadeMaterial extends THREE.ShaderMaterial {
         this.uniforms.uIlluminationDirection.value = p['hillshade-illumination-direction'] ?? 335;
         this.uniforms.uOpacity.value = 1.0;
 
-        this.uniforms.uHighlightColor.value.set(p['hillshade-highlight-color'] ?? '#FFFFFF');
-        this.uniforms.uShadowColor.value.set(p['hillshade-shadow-color'] ?? '#000000');
-        this.uniforms.uAccentColor.value.set(p['hillshade-accent-color'] ?? '#000000');
+        // Custom ShaderMaterial writes gl_FragColor raw (no
+        // colorspace_fragment), so color uniforms must carry sRGB components
+        // — same convention as MapCircleMaterial/MapSDFIconMaterial. Default
+        // #FFF/#000 are transfer-invariant; styled colors are not.
+        this.uniforms.uHighlightColor.value.set(p['hillshade-highlight-color'] ?? '#FFFFFF').convertLinearToSRGB();
+        this.uniforms.uShadowColor.value.set(p['hillshade-shadow-color'] ?? '#000000').convertLinearToSRGB();
+        this.uniforms.uAccentColor.value.set(p['hillshade-accent-color'] ?? '#000000').convertLinearToSRGB();
     }
 
     dispose(): void {

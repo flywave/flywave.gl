@@ -222,7 +222,21 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'building-door-color': undefined,
     },
     model: {
+        // Defaults from style-spec v8.json paint_model.
         'model-opacity': 1,
+        'model-rotation': [0, 0, 0],
+        'model-scale': [1, 1, 1],
+        'model-translation': [0, 0, 0],
+        'model-color': '#ffffff',
+        'model-color-mix-intensity': 0,
+        'model-type': 'common-3d',
+        'model-cast-shadows': true,
+        'model-receive-shadows': true,
+        'model-ambient-occlusion-intensity': 1,
+        'model-emissive-strength': 0,
+        'model-roughness': 1,
+        'model-cutoff-fade-range': 0,
+        'model-elevation-reference': 'ground',
     },
 };
 

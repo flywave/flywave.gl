@@ -1175,7 +1175,10 @@ export class MBMaterialPatchManager {
                 if (hasTrim) {
                     const tcRaw = technique._trimColor as string | undefined;
                     if (tcRaw && tcRaw !== 'transparent') {
-                        trimColor = new THREE.Color(tcRaw);
+                        // Raw-output shader convention (see uMBOutlineColor):
+                        // CSS parse is linear under ColorManagement, convert
+                        // back to sRGB components for the mix uniform.
+                        trimColor = new THREE.Color(tcRaw).convertLinearToSRGB();
                         trimAlpha = 1;
                     }
                     const tf = technique._trimFade as number[] | undefined;
