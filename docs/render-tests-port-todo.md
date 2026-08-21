@@ -2678,3 +2678,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **尝试**：`calculateDistanceFromZoomLevel` 加 Spherical 分支直换 mgl 式 → **全黑屏**（fog/globe/high-color 全 0 像素）——引擎 sphere 管线（瓦片剔除/地平线/pitch 曲率钳制 `calculateDistanceToGroundFromZoomLevel`）与原距离标度深度耦合，简单换式使相机/瓦片几何失配。**已回退**。
 - **结论**：globe 距离标定属引擎 sphere 管线系统性 re-scale（需同步调整 tile cover/剔除/地平线/钳制全链），非单点公式替换——留档引擎专项（含 map-projections/globe 全族批测）。§78 状态保持（star-intensity −168k 等成果不变），复核逐位一致（high-color 36877、fog/default 1094、gradient/default 0 PASS、fog-import-scope 164019）零回归。tsc 绿、单测 265/3 既有。
 - **下一批优先级**：① §77 留档 atmosphere-color ~15% 亮度差（小项快修）；② §49 model 烘焙路径；③ globe 距离管线 re-scale 专项。
+
+**80. atmosphere ~15% 亮度差破案：Mie tint 缺失一行（2026-08-22，atmc1-3）**：
+
+- **取证方法**：Node 独立复刻 mgl skybox_capture 单射线解析（zenith·zenith·intensity30·fixture tints）= (209,211,128)，对照我方 CPU 立方体 +Y 面中心 (139,162,164)——红低蓝高 = **mie 项用了原始 BETA_M 而非 mgl 的 `BETA_M·tintM.rgb·tintM.a`**（halo tint (255,255,0,0.5) 应把蓝通道 mie 归零，我方蓝 164 vs mgl 128 正是漏乘所致）。修复一行：`betaM[c] = BETA_M·tintM[c]·tintM.w`。
+- **验收（vs §77 终态 atm4 基线，atmc2/3）**：**atmosphere-color 40543→1619（−96%）**、**atmosphere-mie 47887→1107**（§77 留档"疑 exp 出自不同版本"的 fixture 破案——非版本差异，是本行缺失）、**atmosphere-rayleigh 562→0 新增 PASS**、**intensity/high 45784→62**（近 PASS）、**fill-extrusion-light/north-east 34086→7160**、**3d-intersections/fog 136265→106809**；fog 域（default 1094、color 65842）、gradient/default 0、fog-import-scope 164019、existing 158259、blend 族（79668/78101 与 atm4 逐位同——此前误记 64650 为基线）全部逐位不变，**零回归**。tsc 绿、单测 265/3 既有。
+- **skybox/atmosphere 域现状**：rayleigh PASS、color/mie/horizon/intensity 均 1.1k-1.7k 近失带；残差主体仅剩 atmosphere-terrain 102564（几何覆盖域，§73-76 内容抬升线）与 blend/fill 族 78-80k（fill 复合层）。

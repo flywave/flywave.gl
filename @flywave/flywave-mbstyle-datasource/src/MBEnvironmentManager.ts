@@ -1304,6 +1304,9 @@ export class MBEnvironmentManager {
         const SAMPLE_STEPS = 10, DENSITY_STEPS = 4;
         const sun = [sunDir.x, sunDir.y, sunDir.z];
         const betaR = BETA_R.map((b, i) => b * [tintR.x, tintR.y, tintR.z][i] * tintR.w);
+        // mgl: beta_m = BETA_M * u_color_tint_m.rgb * u_color_tint_m.a —
+        // the halo tint scales (and can zero) the mie channel contribution.
+        const betaM = [tintM.x, tintM.y, tintM.z].map((c) => BETA_M * c * tintM.w);
         const rayExit = (o: number[], d: number[], r: number): number => {
             const b = 2 * (o[0] * d[0] + o[1] * d[1] + o[2] * d[2]);
             const c = o[0] * o[0] + o[1] * o[1] + o[2] * o[2] - r * r;
@@ -1355,9 +1358,9 @@ export class MBEnvironmentManager {
                 ((2 + MIE_G * MIE_G) *
                     Math.pow(1 + MIE_G * MIE_G - 2 * MIE_G * cosA, 1.5));
             return [
-                (sr[0] * phR * betaR[0] + sm[0] * phM * BETA_M) * sunIntensity,
-                (sr[1] * phR * betaR[1] + sm[1] * phM * BETA_M) * sunIntensity,
-                (sr[2] * phR * betaR[2] + sm[2] * phM * BETA_M) * sunIntensity,
+                (sr[0] * phR * betaR[0] + sm[0] * phM * betaM[0]) * sunIntensity,
+                (sr[1] * phR * betaR[1] + sm[1] * phM * betaM[1]) * sunIntensity,
+                (sr[2] * phR * betaR[2] + sm[2] * phM * betaM[2]) * sunIntensity,
             ];
         };
         const uncharted2 = (x: number): number => {
