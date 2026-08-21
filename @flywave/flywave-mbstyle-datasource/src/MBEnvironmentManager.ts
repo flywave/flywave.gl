@@ -56,6 +56,7 @@ THREE.ShaderChunk.fog_fragment = `
 THREE.ShaderChunk.fog_pars_vertex = `
 #ifdef USE_FOG
 	varying float vFogDepth;
+	varying float vFogHeight;
 #endif
 `;
 // mgl fog depth is the Euclidean camera-to-fragment distance — but the

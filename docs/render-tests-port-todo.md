@@ -2488,3 +2488,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **环境注意**：本会话中 mbstyle-baseline5 结果目录被外部删除（非本会话操作），对比基线降级为 baseline6-aborted-partial + b78/b79；后续如需全量基线需重跑。
 
 **45. fog 域专项验收（b81）——穹顶色 sRGB 转换整体否决回退（2026-08-20 五）**：fog 63 例批测：fog/default 552→**1532**、fog/color 69k→**78k**、color-opacity 74k、fog/2d/basic 22.7k→**45.5k**、terrain/basic 28.2k→**42.9k** 全域劣化；仅 high-color 族微改善（1786→1717）。**结论：fog/sky 穹顶管线存在与颜色空间正交的亮度标定（distCam 启发式、clearColor radiance 等），按线性色 + 现有标定与 expected 更近——§43 的 5 处 MBEnvironmentManager 穹顶色转换（fogState.color/high/space、solidColor、sun/halo）已全部回退**，与 trimColor 同归"注入点空间语义未明"类，留档：如后续重写穹顶为 mgl 语义（先大气后瓦片覆盖顺序），需同步恢复 sRGB 色。材料/patcher/emitter 侧修复（circle/SDF/building/ramp/autoBorder）维持——b80 已证零回归。
+
+**53. fog 域近失漂移破案：fog_pars_vertex 缺 vFogHeight 声明（2026-08-21，fogfix4/6，根因=shader 编译失败竞态）**：
+
+- **§52 留档的"§45-48 引入回归"证伪**：历史结果目录时间线取证（c03/c14/c23/c33 均 552 vs b99/c01/clean1 均 1128，同一 HEAD）证明该值**按会话二态翻转**，非提交回归；对 HEAD stash 对照重跑确认逐位复现 1128。
+- **像素取证**：1128 态 cur 在 rows 16-22 出现纯黑带（exp/c33 态为雾化背景白→灰渐变 255→12），即**雾化表面 material 整体编译失败渲染黑**。每轮 karma 日志均有 `THREE.WebGLProgram: VALIDATE_STATUS false — 0:578 'vFogHeight' : undeclared identifier`（此前未被注意）。
+- **根因**：我们 override 的 `THREE.ShaderChunk.fog_vertex` 赋值 `vFogHeight`，但 `fog_pars_vertex` 只声明了 `vFogDepth`——凡在 `scene.fog` 已设时编译（define USE_FOG）的材质（MeshBasicMaterial 系：背景面/图像 quad 等）vertex shader 编译失败 → 黑。翻转机制 = 材质首次编译与 scene.fog 赋值的时序竞态（先编译的程序变体无 USE_FOG 则不炸）。
+- **修复**：`fog_pars_vertex` 补 `varying float vFogHeight;` 一行。
+- **fogfix6 验收（fog 88 例 + color-theme 26 例）**：fog/default **1128→552**、fog/2d/basic 45497→**22724**、fog/terrain/basic 37010→**22297**（优于 §12.76-8 的 28.2k）、fog/color 77996→**69147**、high-color 族 1725/1786/1822 全恢复 §12.76-8 基线、fill-color 600/fill-outline 610/line-gradient 591/background-color 1156/empty-update 926 逐位一致；culling/opacity 21612→20378、red-chicago 6702→5554 小改善；**零回归**。color-theme 4 PASS 维持（config-red/theme-from-config 0 + add 135/config-bw 97），import-override 族不变（196917，独立专项）。vFogHeight shader error 0 条（余 6 条为 terrain vUv/* 既有无关错误）。
+- **连带落地（mgl 语义修正，无主题样式 no-op）**：① connect 的 loadColorTheme 微任务改为 `if (lut || m_themeInitialized)`——无根主题样式不再跑 applyColorTheme(null)（避免无谓 applyBackgroundColor/bumpThemeGeneration/markTilesDirty）；② `propagateScopedThemes` 加守卫：root+import 全部无 LUT 且从未传播过 → 直接 return（mgl `_reloadColorTheme` 只在有 LUT 时运行）——同时消除异步微任务重放 applyFog（用连接后相机状态）的理论风险。tsc 绿、单测 265 passing / 3 既有。
