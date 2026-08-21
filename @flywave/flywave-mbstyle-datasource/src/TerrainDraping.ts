@@ -99,6 +99,19 @@ export class TerrainDraping {
         const proj = (this.m_mapView as any).projection;
         if (proj?.type === 1 /* ProjectionType.Spherical */) return;
 
+        // Tile content (fills/roads/extrusions) loads ASYNCHRONOUSLY, long
+        // after the terrain meshes were built — the first bake runs on an
+        // empty scene and its FBO stays uniform (clear color only) forever.
+        // Re-bake whenever the scene root's camera-relative object set
+        // changes (new/removed tile objects).
+        const sceneRoot = (this.m_mapView as any).m_sceneRoot as THREE.Object3D | undefined;
+        const childCount = sceneRoot?.children.length ?? -1;
+        if (childCount !== this.m_lastSceneChildren) {
+            this.m_lastSceneChildren = childCount;
+            this.m_needsBake = true;
+            this.m_extraBakeFrames = Math.max(this.m_extraBakeFrames, 2);
+        }
+
         // Detect terrain rebuild (mesh count change → old FBOs are stale).
         const meshCount = this.m_terrain.meshes.length;
         if (meshCount !== this.m_lastMeshCount) {
@@ -142,6 +155,7 @@ export class TerrainDraping {
     };
 
     private m_lastMeshCount = 0;
+    private m_lastSceneChildren = -1;
 
     /**
      * Bake drape textures for all terrain tiles.

@@ -2547,3 +2547,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **四变量隔离矩阵（A/B/C/D 探针）**：fresh RT+简单相机（✓绿）、fresh RT+buildTileCamera（✓ 72380 绿像素——此前"B 失败"是中心像素读取错过偏离中心的 mesh）、depthBuffer:false RT（✓ 同量）、大场景先行渲染后再 mini（✓ 155136 像素）——**全部光栅化**。结论：所谓 renderer 级 blocker 从不存在；§58 之前所有"纯 Mesh 零片元"取证都发生在 **§56 丢失未提交的旧 −Y 侧视相机**下（mesh 超 far 平面）——相机修复后管道天然可用。早前 center-read 取样偏差放大了误判。
 - **上线**：`TerrainDraping.DRAPE_ENABLED=true` 主开关 + setDrapeTexture 内容门（FBO 均匀 → 自动跳过）。验收（live1）：全批与休眠态逐位一致（fog-import-scope 164907、import-override 族 160950/132181/135333、fog/terrain 33955/28476/53671/32971/48957）——零回归、管道 LIVE；symbol-elevation/ground-constant 21506→20414（−1.1k）。本会话 fog/terrain 数值与 §57 会话差 +6k 复核无果（休眠/激活同值 = 会话环境漂移实锤，与 §53 fog/default 二态同型），留档跨会话复核。
 - **留档下一批**：① 跨会话复核 fog/terrain 漂移（固定环境重跑基线）；② 有内容 fixture 的 drape UV/世界映射校准（当前内容门多处于跳过态——FBO 内容何时非均匀待查：bake 时序 vs 瓦片就绪时序）；③ fog-import-scope/import-override 残差回到场景合成/天空通道。tsc 绿、单测 265/3 既有。
+
+**61. bake 时序触发 + drape 内容实况取证（2026-08-21，dbgLive3/dbgMag/live2-3）**：
+
+- **时序缺口修复**：瓦片内容（fill/道路/挤出物）在地形 mesh 建成后**异步**到达，而 bake 仅由 mesh 数/morph 触发——首烘后 FBO 永远停在空态。落地：onAfterRender 追踪 `m_sceneRoot.children.length` 变化 → requestBake（+2 extra frames）。**fog/terrain/equal-range 28476→25478（−3k）**。
+- **内容实况**：bake 日志证实现态 FBO **非均匀（uniform=false）**——fills（覆盖整瓦）+道路已实际烘焙；magenta 清色试验 0 像素 = 内容全覆盖清色（试验对可见性不再敏感）。**drape 激活 vs 休眠图像逐位一致** ⇒ pitch70 SF 系 fixture 中地形 mesh 仍被共面 z=0 内容层遮挡不可见（fog/terrain 域 §57 变化 +6k 的会话漂移复核维持二态结论：今日休眠=激活=33955）。
+- **结论与留档**：drape 管道全链路 LIVE（触发→烘焙→内容门→shader 采样），剩余 blocker = **内容-地形层序**（mgl 语义内容贴地形：地形高程处内容应抬升/地形应承载内容，二者非独立共面渲染）——属架构级 drape 决策（内容几何按 DEM 抬升 vs 地形纹理承载），留档专项。验收：fog/terrain equal-range −3k、其余逐位稳定、color-theme 近失族不变、零回归。tsc 绿、单测 265/3 既有。
