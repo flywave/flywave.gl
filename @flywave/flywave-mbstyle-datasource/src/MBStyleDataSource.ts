@@ -1038,6 +1038,7 @@ export class MBStyleDataSource extends TileDataSource {
             // now that lighting3DState is configured so the background clear
             // color picks up the 3D-lights ground radiance.
             this.applyBackgroundColor(style);
+            this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style));
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
             // A `sky` layer's paint drives the skybox (gradient/atmosphere),
             // mirroring mapbox's sky_style_layer. The top-level `style.sky`
@@ -1499,6 +1500,7 @@ export class MBStyleDataSource extends TileDataSource {
         if (this.m_environment) {
             try {
                 this.m_environment.applyLights(style?.lights, style?.light);
+                this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style));
                 this.m_environment.applyFog(style?.fog, style?.zoom ?? 0);
                 // Re-run applySky ONLY when a scoped theme actually exists —
                 // re-applying an (absent) sky on every theme propagation
@@ -1891,6 +1893,7 @@ export class MBStyleDataSource extends TileDataSource {
         if (this.m_environment) {
             this.m_environment.applyLights((style as any).lights ?? (style as any).light ? [(style as any).light] : undefined);
             this.applyBackgroundColor(style);
+            this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style));
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
             this.m_environment.applySky(
                 this.buildSkyFromLayers(style) ?? style.sky,
@@ -2041,6 +2044,13 @@ export class MBStyleDataSource extends TileDataSource {
      * mirroring how mapbox renders a sky layer. Returns the merged spec or
      * `undefined` when no sky layer exists.
      */
+
+    /** A visible background layer acts as mgl's opaque below-horizon cover. */
+    private styleHasBackgroundLayer(style: any): boolean {
+        return (style?.layers ?? []).some((l: any) =>
+            l?.type === 'background' && (l?.layout?.visibility ?? 'visible') !== 'none');
+    }
+
     private buildSkyFromLayers(style: StyleSpecification): any {
         const skyLayers = (style.layers ?? []).filter((l: any) => l.type === 'sky');
         if (skyLayers.length === 0) return undefined;
@@ -2052,17 +2062,24 @@ export class MBStyleDataSource extends TileDataSource {
         for (const layer of skyLayers) {
             Object.assign(paint, (layer as any).paint ?? {});
         }
-        return {
-            'sky-type': paint['sky-type'] ?? 'gradient',
+        // Defaults from style-spec v8 paint_sky: sky-type atmosphere,
+        // sun-intensity 10, atmosphere/halo colors white; sky-atmosphere-sun
+        // defaults to the style light position (environment fallback), so it
+        // is only forwarded when the paint sets it.
+        const out: any = {
+            'sky-type': paint['sky-type'] ?? 'atmosphere',
             'sky-gradient': paint['sky-gradient'] ?? 'interpolate',
             'sky-gradient-center': paint['sky-gradient-center'] ?? [0, 0],
             'sky-gradient-radius': paint['sky-gradient-radius'] ?? 90,
             'sky-opacity': paint['sky-opacity'] ?? 1,
-            'sky-atmosphere-sun': paint['sky-atmosphere-sun'] ?? [0, 0],
-            'sky-atmosphere-sun-intensity': paint['sky-atmosphere-sun-intensity'] ?? 1,
-            'sky-atmosphere-color': paint['sky-atmosphere-color'] ?? '#88c6fc',
-            'sky-atmosphere-halo-color': paint['sky-atmosphere-halo-color'] ?? '#84a6c9',
+            'sky-atmosphere-sun-intensity': paint['sky-atmosphere-sun-intensity'] ?? 10,
+            'sky-atmosphere-color': paint['sky-atmosphere-color'] ?? '#ffffff',
+            'sky-atmosphere-halo-color': paint['sky-atmosphere-halo-color'] ?? '#ffffff',
         };
+        if (paint['sky-atmosphere-sun'] !== undefined) {
+            out['sky-atmosphere-sun'] = paint['sky-atmosphere-sun'];
+        }
+        return out;
     }
 
     private applyBackgroundColor(style: StyleSpecification): void {

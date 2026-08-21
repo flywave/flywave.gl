@@ -293,6 +293,17 @@ export class MBEnvironmentManager {
     }
 
     /**
+     * Whether the current style has a visible `background` layer. mgl draws
+     * the background as opaque tile geometry that depth-occludes the skybox
+     * below the horizon; our background is the clear color, so the
+     * atmosphere sky keeps a below-horizon cut only in that case.
+     */
+    setStyleHasBackground(has: boolean): void {
+        this.m_styleHasBackground = has;
+    }
+    private m_styleHasBackground = false;
+
+    /**
      * Lights resolve their theme from the LIGHT's own import scope (mgl
      * `3d-style/render/lights.ts` uses `style.getLut(light.scope)`), which can
      * differ from the fog/root LUT in one frame.
@@ -321,9 +332,21 @@ export class MBEnvironmentManager {
         return v;
     }
 
+    /**
+     * Last applied directional light position as [azimuthal, polar] degrees
+     * (mgl style light default [210, 30]). The atmosphere sky uses it as the
+     * sun-direction fallback when `sky-atmosphere-sun` is not set (mgl
+     * sky_style_layer.getCenter).
+     */
+    private m_lightAzimuthalPolar: [number, number] = [210, 30];
+
     applyLights(lights: Light3DProperties[] | undefined, legacyLight?: any): void {
         if (!this.m_scene) return;
         this.clearLights();
+        this.m_lightAzimuthalPolar =
+            Array.isArray(legacyLight?.position) && legacyLight.position.length >= 3
+                ? [legacyLight.position[1], legacyLight.position[2]]
+                : [210, 30];
         this.m_use3DLights = Array.isArray(lights) && lights.length > 0;
 
         const renderer = (this.m_mapView as any).renderer;
@@ -405,6 +428,7 @@ export class MBEnvironmentManager {
                     ? [rawDir[0], rawDir[1]]
                     : [210, 30];
                 this.m_3DDirectional = { color, intensity, direction };
+                this.m_lightAzimuthalPolar = [direction[0], direction[1]];
                 this.m_directionalColor = new THREE.Color(color[0], color[1], color[2]);
                 this.m_directionalIntensity = intensity;
                 this.m_directionalPolar = direction[1];
@@ -921,9 +945,28 @@ export class MBEnvironmentManager {
     }
 
     private createAtmosphereSky(sky: SkySpec): void {
-        const sunPos = sky['sky-atmosphere-sun'] ?? [0, 90];
+        // Faithful port of mgl's physical atmosphere:
+        //   capture  = skybox_capture.fragment.glsl (Rayleigh/Mie single
+        //              scattering, Bruneton constants, Uncharted-2 tonemap)
+        //   sampling = skybox.fragment.glsl main() (inverse of the cubemap's
+        //              pow-5 horizon warp, sun disk, fog_apply_sky_gradient)
+        // mgl pre-renders a 32×32 cubemap once and samples it per pixel; the
+        // composed lookup is computed per fragment here instead (static
+        // fixtures, no temporal reuse needed).
+        const sunPos = sky['sky-atmosphere-sun'] ?? this.m_lightAzimuthalPolar ?? [210, 30];
+        // Spec sun is [azimuth, polar] with polar 0 = zenith; mgl
+        // getCelestialDirection(az, altitude = 90 - polar) gives, in the
+        // y-up sky frame: (cos(alt)·sin(az), sin(alt), cos(alt)·cos(az)).
         const azimuth = degToRad(sunPos[0]);
-        const elevation = degToRad(sunPos[1]);
+        const altitude = degToRad(90 - (sunPos[1] ?? 0));
+        // The sky frame maps to our z-up world (x east, y north, z up) as
+        // sky(x,y,z) = world(x,z,y); the shader converts per fragment the
+        // same way, so keep the sun vector in the y-up sky frame.
+        const sunDir = new THREE.Vector3(
+            Math.cos(altitude) * Math.sin(azimuth),
+            Math.sin(altitude),
+            Math.cos(altitude) * Math.cos(azimuth),
+        );
         const themeSky = (v: string): string => {
             if (!this.m_colorThemeLut || v === undefined) return v;
             try {
@@ -931,22 +974,38 @@ export class MBEnvironmentManager {
                 return applyColorTheme(this.m_colorThemeLut, v);
             } catch { return v; }
         };
-        const sunColor = new THREE.Color(
-            sky['sky-atmosphere-color-use-theme'] === 'none'
-                ? (sky['sky-atmosphere-color'] ?? '#ffffff')
-                : themeSky(sky['sky-atmosphere-color'] ?? '#ffffff'));
-        const haloColor = new THREE.Color(
-            sky['sky-atmosphere-halo-color-use-theme'] === 'none'
-                ? (sky['sky-atmosphere-halo-color'] ?? '#88aacc')
-                : themeSky(sky['sky-atmosphere-halo-color'] ?? '#88aacc'));
-        const sunIntensity = sky['sky-atmosphere-sun-intensity'] ?? 1.0;
-        const opacity = sky['sky-opacity'] ?? 0.8;
-
-        const sunDir = new THREE.Vector3(
-            Math.cos(elevation) * Math.cos(azimuth),
-            Math.sin(elevation),
-            Math.cos(elevation) * Math.sin(azimuth),
-        );
+        // u_color_tint_r/m = property.toPremultipliedRenderColor(): rgb
+        // premultiplied by alpha, alpha carried separately (the shader
+        // multiplies by .a again — verbatim mgl behavior).
+        const parseTint = (raw: any, useThemeNone: boolean): THREE.Vector4 => {
+            const themed = useThemeNone ? raw : themeSky(raw);
+            const rgb = MBEnvironmentManager.parseMBColor(themed ?? '#ffffff');
+            let a = 1;
+            const s = String(themed ?? '');
+            if (/^#[\da-fA-F]{8}$/.test(s)) a = parseInt(s.slice(7, 9), 16) / 255;
+            else {
+                const m = s.match(/rgba?\(\s*([\d.]+)\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)/);
+                if (m) a = +m[2];
+            }
+            return new THREE.Vector4(rgb[0] * a, rgb[1] * a, rgb[2] * a, a);
+        };
+        const tintR = parseTint(
+            sky['sky-atmosphere-color'] ?? '#ffffff',
+            sky['sky-atmosphere-color-use-theme'] === 'none');
+        const tintM = parseTint(
+            sky['sky-atmosphere-halo-color'] ?? '#ffffff',
+            sky['sky-atmosphere-halo-color-use-theme'] === 'none');
+        const sunIntensity = sky['sky-atmosphere-sun-intensity'] ?? 10;
+        const opacity = sky['sky-opacity'] ?? 1;
+        // sky fog gradient (fog_apply_sky_gradient) — mgl applies it under
+        // the FOG define, i.e. when the style carries fog.
+        const fog = this.m_fogState;
+        // Precompute the 32×32 capture cubemap exactly like mgl's
+        // captureSkybox (the RGBA8 store + bilinear sampling shape the
+        // near-horizon knee and the smeared sun glow — a per-fragment
+        // evaluation does not reproduce them).
+        const cubemap = MBEnvironmentManager.captureAtmosphereCubemap(
+            sunDir, sunIntensity, tintR, tintM);
 
         const geom = new THREE.SphereGeometry(500, 32, 16);
         const material = new THREE.ShaderMaterial({
@@ -954,16 +1013,22 @@ export class MBEnvironmentManager {
             transparent: opacity < 1,
             depthWrite: false,
             uniforms: {
+                uCubemap: { value: cubemap },
                 uSunDir: { value: sunDir },
-                uSunColor: { value: sunColor },
-                uHaloColor: { value: haloColor },
-                uSunIntensity: { value: sunIntensity },
                 uOpacity: { value: opacity },
+                uFogColor: { value: fog ? fog.color.clone() : new THREE.Color(0, 0, 0) },
+                uFogAlpha: { value: fog ? fog.alpha : 0 },
+                uFogHorizonBlend: { value: fog ? fog.horizonBlend : 1 },
+                uHorizonCut: { value: this.m_styleHasBackground ? 1 : 0 },
             },
             vertexShader: `
                 varying vec3 vWorldDir;
                 void main() {
-                    vWorldDir = normalize(position);
+                    // modelMatrix (not raw position): the RTE scene root
+                    // carries the world transform, so the fog dome's
+                    // convention (modelMatrix * position).xyz is the true
+                    // world-space view direction.
+                    vWorldDir = normalize((modelMatrix * vec4(position, 1.0)).xyz);
                     vec4 pos = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
                     // mgl skybox vertex shader: gl_Position = pos.xyww — the
                     // sky lives at the FAR plane (depth 1.0) so geometry
@@ -974,38 +1039,50 @@ export class MBEnvironmentManager {
                 }
             `,
             fragmentShader: `
+                // Port of mgl skybox.fragment.glsl main(): sample the
+                // precomputed capture cubemap through the inverse of the
+                // pow-5 horizon warp, then fog gradient + sun disk.
+                precision highp float;
+                uniform samplerCube uCubemap;
                 uniform vec3 uSunDir;
-                uniform vec3 uSunColor;
-                uniform vec3 uHaloColor;
-                uniform float uSunIntensity;
                 uniform float uOpacity;
+                uniform vec3 uFogColor;
+                uniform float uFogAlpha;
+                uniform float uFogHorizonBlend;
+                uniform float uHorizonCut;
                 varying vec3 vWorldDir;
+
                 void main() {
-                    // mgl draws the sky ONLY in the sky region (above the
-                    // horizon). World is z-up (same convention as the fog
-                    // atmosphere dome). At high pitch the horizon is
-                    // off-screen and no sky renders — without this discard
-                    // the dome paints the whole high-pitch terrain view blue
-                    // (import-override family). NOTE: extending the cut
-                    // below the horizon by mgl's horizon-blend band (~0.05
-                    // rad) was tried and REGRESSED every fixture (our dome
-                    // gradient is not mgl's scattering model — more dome is
-                    // worse); revisit together with a real atmosphere model.
-                    vec3 dir = normalize(vWorldDir);
-                    // NOTE: extending the cut below the horizon by mgl's
-                    // horizon-blend band (~0.05 rad) was retried AFTER the
-                    // theming/bypass fixes and still regresses every fixture
-                    // (the fake dome gradient below the horizon is not mgl's
-                    // blend) — needs the real atmosphere model, see §12.76-54.
-                    if (dir.z <= 0.0) discard;
-                    float d = dot(dir, normalize(uSunDir));
-                    float sunGlow = pow(max(d, 0.0), 32.0);
-                    float haloGlow = pow(max(d, 0.0), 4.0) * 0.3;
-                    float horizon = clamp(dir.z * 2.0, 0.0, 1.0);
-                    vec3 sky = mix(vec3(0.4, 0.6, 0.9), vec3(0.7, 0.8, 1.0), horizon);
-                    sky += uSunColor * sunGlow * uSunIntensity;
-                    sky += uHaloColor * haloGlow;
-                    gl_FragColor = vec4(sky, uOpacity);
+                    vec3 w = normalize(vWorldDir);
+                    // world (z-up, x east, y north) → mgl sky frame (y-up):
+                    // sky(x, y, z) = world(x, z, y).
+                    vec3 v = vec3(w.x, w.z, w.y);
+                    // skybox.fragment main(): uv.y = map(pow(|v.y + 0.015|,
+                    // 1/5), 0..1, -1..1).
+                    vec3 uv = v;
+                    uv.y += 0.015;
+                    uv.y = pow(abs(uv.y), 0.2);
+                    uv.y = uv.y * 2.0 - 1.0;
+
+                    vec3 sky = textureCube(uCubemap, uv).rgb;
+
+                    // fog_apply_sky_gradient(v_uv.xzy, sky): fog_horizon_
+                    // blending's camera_dir.z is the up component (v.y).
+                    float t = max(0.0, v.y / max(uFogHorizonBlend, 1e-4));
+                    sky = mix(sky, uFogColor, uFogAlpha * exp(-3.0 * t * t));
+
+                    // Sun disk (~0.5° angular diameter) on the raw view ray.
+                    float cos_angle = dot(v, normalize(uSunDir));
+                    sky += 0.1 * smoothstep(
+                        0.99996192306 - 1e-5, 0.99996192306 + 1e-5, cos_angle);
+
+                    // mgl's skybox covers the full sphere; opaque content
+                    // (incl. the background layer's tiles) depth-occludes it.
+                    // Our background is the CLEAR color, so the below-horizon
+                    // cut is only kept when a background layer exists
+                    // (otherwise mgl shows sky below the horizon too).
+                    if (uHorizonCut > 0.5 && w.z <= 0.0) discard;
+                    gl_FragColor = vec4(sky * uOpacity, uOpacity);
                 }
             `,
         });
@@ -1018,6 +1095,148 @@ export class MBEnvironmentManager {
         // camera position here would displace it by the full mercator
         // world offset).
         this.m_scene!.add(this.m_skyMesh);
+    }
+
+    /**
+     * Precompute the atmosphere capture cubemap exactly like mgl
+     * `captureSkybox` (draw_sky.ts): 6 32×32 RGBA8 faces rendered with the
+     * skybox_capture shaders (Rayleigh/Mie single scattering + Uncharted-2
+     * tonemap). The RGBA8 store + bilinear sampling shape the near-horizon
+     * knee and the smeared sun glow — a per-fragment analytic evaluation
+     * does NOT reproduce them (verified numerically against the
+     * atmosphere-rayleigh/mie expected images).
+     *
+     * Face rotations mirror drawSkybox's `mat4.fromYRotation/fromXRotation`
+     * table applied to the quad a_pos = (s, t, 1) (s = framebuffer x,
+     * t = framebuffer y, both in [-1, 1] at texel centers). The capture
+     * vertex shader then flips y and remaps it to [0, 1] before the
+     * fragment's pow-5 + bias warp.
+     */
+    private static captureAtmosphereCubemap(
+        sunDir: THREE.Vector3,
+        sunIntensity: number,
+        tintR: THREE.Vector4,
+        tintM: THREE.Vector4,
+    ): THREE.CubeTexture {
+        const SIZE = 32;
+        const BETA_R = [5.5e-6, 13.0e-6, 22.4e-6];
+        const BETA_M = 21e-6;
+        const MIE_G = 0.76;
+        const HR = 8000.0, HM = 1200.0, RP = 6360e3, RA = 6420e3;
+        const SAMPLE_STEPS = 10, DENSITY_STEPS = 4;
+        const sun = [sunDir.x, sunDir.y, sunDir.z];
+        const betaR = BETA_R.map((b, i) => b * [tintR.x, tintR.y, tintR.z][i] * tintR.w);
+        const rayExit = (o: number[], d: number[], r: number): number => {
+            const b = 2 * (o[0] * d[0] + o[1] * d[1] + o[2] * d[2]);
+            const c = o[0] * o[0] + o[1] * o[1] + o[2] * o[2] - r * r;
+            return (-b + Math.sqrt(b * b - 4 * c)) / 2;
+        };
+        const densAt = (p: number[]): [number, number] => {
+            const h = Math.max(
+                Math.sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]) - RP, 0);
+            return [Math.exp(-h / HR), Math.exp(-h / HM)];
+        };
+        const origin = [0, RP, 0];
+        const march = (ray: number[]): number[] => {
+            const rayLen = rayExit(origin, ray, RA);
+            const step = rayLen / SAMPLE_STEPS;
+            let accR = 0, accM = 0;
+            const sr = [0, 0, 0], sm = [0, 0, 0];
+            for (let i = 0; i < SAMPLE_STEPS; i++) {
+                const p = [
+                    origin[0] + ray[0] * (i + 0.5) * step,
+                    origin[1] + ray[1] * (i + 0.5) * step,
+                    origin[2] + ray[2] * (i + 0.5) * step,
+                ];
+                const d = densAt(p);
+                accR += d[0] * step; accM += d[1] * step;
+                // density to atmosphere along the sun ray
+                const sunLen = rayExit(p, sun, RA);
+                const sstep = sunLen / DENSITY_STEPS;
+                let sR = 0, sM = 0;
+                for (let j = 0; j < DENSITY_STEPS; j++) {
+                    const q = [
+                        p[0] + sun[0] * (j + 0.5) * sstep,
+                        p[1] + sun[1] * (j + 0.5) * sstep,
+                        p[2] + sun[2] * (j + 0.5) * sstep,
+                    ];
+                    const dd = densAt(q);
+                    sR += dd[0] * sstep; sM += dd[1] * sstep;
+                }
+                for (let k = 0; k < 3; k++) {
+                    const ext = Math.exp(-(BETA_R[k] * tintR.w * (accR + sR) +
+                        BETA_M * tintM.w * (accM + sM)));
+                    sr[k] += d[0] * ext * step;
+                    sm[k] += d[1] * ext * step;
+                }
+            }
+            const cosA = ray[0] * sun[0] + ray[1] * sun[1] + ray[2] * sun[2];
+            const phR = (3 / (16 * Math.PI)) * (1 + cosA * cosA);
+            const phM = (3 / (8 * Math.PI)) *
+                ((1 - MIE_G * MIE_G) * (1 + cosA * cosA)) /
+                ((2 + MIE_G * MIE_G) *
+                    Math.pow(1 + MIE_G * MIE_G - 2 * MIE_G * cosA, 1.5));
+            return [
+                (sr[0] * phR * betaR[0] + sm[0] * phM * BETA_M) * sunIntensity,
+                (sr[1] * phR * betaR[1] + sm[1] * phM * BETA_M) * sunIntensity,
+                (sr[2] * phR * betaR[2] + sm[2] * phM * BETA_M) * sunIntensity,
+            ];
+        };
+        const uncharted2 = (x: number): number => {
+            const A = 0.15, B = 0.50, C = 0.10, D = 0.20, E = 0.02, F = 0.30;
+            return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+        };
+        // skybox_capture_program hardcodes u_luminance = 5e-5.
+        const exposure = Math.log2(2 / Math.pow(5e-5, 4));
+        const toByte = (x: number): number =>
+            Math.max(0, Math.min(255, Math.round(
+                255 * Math.min(1, uncharted2(exposure * x) * 1.0748724675633854))));
+
+        // Face rotations: drawSkyboxFace matrices applied to (s, t, 1).
+        const faces: ((s: number, t: number) => number[])[] = [
+            (s, t) => [-1, t, s],   // +x  Ry(-90°)
+            (s, t) => [1, t, -s],   // -x  Ry(+90°)
+            (s, t) => [s, 1, -t],   // +y  Rx(-90°)
+            (s, t) => [s, -1, t],   // -y  Rx(+90°)
+            (s, t) => [s, t, 1],    // +z  identity
+            (s, t) => [-s, t, -1],  // -z  Ry(180°)
+        ];
+        const images = faces.map((face) => {
+            const data = new Uint8Array(SIZE * SIZE * 4);
+            for (let j = 0; j < SIZE; j++) {
+                const t = (2 * (j + 0.5)) / SIZE - 1;
+                for (let i = 0; i < SIZE; i++) {
+                    const s = (2 * (i + 0.5)) / SIZE - 1;
+                    let p = face(s, t);
+                    // skybox_capture.vertex: y flip (GL bottom-left origin),
+                    // then remap [-1,1] → [0,1].
+                    p = [p[0], (-p[1] + 1) / 2, p[2]];
+                    // skybox_capture.fragment: pow-5 warp + bias, normalize.
+                    let ray = [p[0], Math.pow(p[1], 5) + 0.015, p[2]];
+                    const len = Math.sqrt(ray[0] * ray[0] + ray[1] * ray[1] + ray[2] * ray[2]);
+                    ray = [ray[0] / len, ray[1] / len, ray[2] / len];
+                    const col = march(ray);
+                    const o = (j * SIZE + i) * 4;
+                    data[o] = toByte(col[0]);
+                    data[o + 1] = toByte(col[1]);
+                    data[o + 2] = toByte(col[2]);
+                    data[o + 3] = 255;
+                }
+            }
+            // three's cube upload path requires each face to be a
+            // DataTexture (uploadCubeTexture reads image[i].isDataTexture).
+            const dt = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat);
+            dt.needsUpdate = true;
+            return dt;
+        });
+        const tex = new THREE.CubeTexture(images);
+        tex.format = THREE.RGBAFormat;
+        tex.type = THREE.UnsignedByteType;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        tex.needsUpdate = true;
+        return tex;
     }
 
     private createStars(intensity: number): void {
