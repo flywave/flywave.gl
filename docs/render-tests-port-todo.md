@@ -2608,3 +2608,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **地形亮度取证**：clearColor=0x545454(84)，地形渲染 194（**过亮 2.3×**——MeshStandardMaterial 光照栈的 π-trick 双重照明），exp≈55 ≈ base·k（mgl 自然光照 k=amb·ADF+dir·NdotL≈0.54，color·k^(1/2.2)≈0.76·84≈64）。**平色（emissive-only=84）试验否决**：fog-import-scope 不变（164019）、import-override-existing 158259→160686（+2.4k——该 fixture 的 exp 地形≈193 未打光背景灰，两 fixture 目标相反）。
 - **结论**：地形亮度需按 mgl 公式 `k = ambColor·verticalFactor + dirColor·max(N·L,0)，lit = color·k^(1/2.2)`（N=平面法向 (0,0,1)，N·L=dirV.z）**逐 fixture 自适应**计算（与 lighting3DState 联动，CPU 烘进 emissive 或注入 injectGroundLighting 同款 shader），固定值无法同时满足两族——留档下一批实做。
 - **零净代码变更**：HEAD 复核逐位一致（fog-import-scope 164019、existing 158259、fog/default 1094、gradient/default 0 PASS、fog/terrain/basic 34203）。tsc 绿、单测 265/3 既有。
+
+**70. 引擎内 draw 提交终局实证 + DepthOcclusion RT 恢复加固（2026-08-21，lit1/dbgEng/dbgVisG/rtfix1）**：
+
+- **mgl 光照公式实做与回退**：`k = amb·vFactor + dir·max(N·L,0)、lit = color·k^(1/2.2)`（N=(0,0,1)、N·L=dir.z）CPU 烘进 setBaseColor + emissive 平渲——**目标 fixture 逐位不变（fog-import-scope 164019）、existing +2.4k**（其 exp 地形≈未打光 193，与 fog-import-scope 的 55 目标相反）→ 回退。根因随后揭示：**地形像素本就未到达捕获 canvas**，任何基色标定在此前提上无效。
+- **引擎内 draw 提交终局实证**：MapRenderingManager 旁路分支内嵌 info 探针——**帧 6-8 引擎自己的直渲包含地形 draw（calls=19, triangles=33762 = 32768 地形 + 内容）且 scene 内确认在位**；但强制 magenta 基色（清洁无覆盖路径）捕获 PNG 仍 0 像素。结合 §66 手绘 canvas 存活——引擎 draw 提交但像素消失，唯一未排查环节 = **主渲染之后的同帧操作（renderText / m_overlayScene 渲染）或捕获时序**。
+- **防御性修复落地（保留）**：TerrainDepthOcclusion 的 catch{} 原会跳过 `setRenderTarget(prev)` 恢复（异常时深度目标保持绑定 → 主渲染静默入深度目标）——恢复移入 finally。数值零变化（当前无异常触发），属正确性加固。
+- **留档下一批**：① 同帧主渲染后的 renderText/overlay 渲染排查（唯一剩余环节）；② 地形可见性打通后重做 mgl 光照公式（代码已验证过一遍，恢复即可）；③ 交互式会话终局确认。tsc 绿、单测 265/3 既有、零回归。

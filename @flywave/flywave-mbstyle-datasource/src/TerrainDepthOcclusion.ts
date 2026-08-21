@@ -169,16 +169,19 @@ export class TerrainDepthOcclusion {
             }
         });
 
+        const prevTarget = renderer.getRenderTarget();
         try {
-            const prevTarget = renderer.getRenderTarget();
             renderer.setRenderTarget(this.m_depthTarget);
             renderer.clearDepth();
             renderer.render(scene, camera);
-            renderer.setRenderTarget(prevTarget);
         } catch {
             // Rendering the depth pass failed — skip this frame (hard occlusion
             // via depthTest still applies from Scheme C).
         } finally {
+            // ALWAYS restore the previous render target — an exception between
+            // bind and restore used to leave the depth target bound, so the
+            // engine's main render silently went into it instead of the canvas.
+            renderer.setRenderTarget(prevTarget);
             for (const obj of hidden) obj.visible = true;
         }
     };
