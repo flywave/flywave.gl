@@ -2573,3 +2573,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **决定性对照（同一次运行内）**：**真实地形 mesh + RTE 相机（原点）+ fresh Scene → 256388 像素渲染成功**（mesh/材质/几何/RTE 监听器全部正确）；同一 mesh 留在 m_scene、隐藏其余全部子对象（sceneRoot/穹顶/灯光/相机，fog 强制 off、scene 变换恒等、无 background/environment/overrideMaterial）→ **0 像素**。差异仅剩"fresh Scene vs m_scene"本身。scene.onBeforeRender 为 three 内置 noop（红鲱鱼）。
 - **候选收敛**：m_scene 上未被枚举的状态（渲染层 mask 之外的内部标记、matrixWorldNeedsUpdate 时序、引擎在 render 调用链中经别的入口对 m_scene 的处理）。已达远程探针极限，**留档：需交互式 GPU 调试（RenderDoc / 浏览器 devtools WebGL inspector）逐 draw call 检查 m_scene 渲染时地形 draw 是否被提交及其深度/模板状态**。
 - **零代码变更**：全部 TEMP 探针还原，HEAD 复核逐位一致（fog/default 552、fog/terrain/basic 33955、fog-import-scope 164907、existing 160950）。tsc 绿、单测 265/3 既有。
+
+**65. m_scene 内 draw 已提交实证 + 片元级压制定性终局（2026-08-21，dbgInfo2-5，纯取证零代码变更）**：
+
+- **draw 提交实证**：`renderer.info`（autoReset=false + reset 包裹）证实在 m_scene 中渲染（其余子对象全隐藏、仅地形可见）时 **calls=1、triangles=32768**（128×128×2 ✓ 完整网格）——遍历/纳入/剔除层面全部洗清，此前 fresh Scene（256k px 成功）vs m_scene（0 px）的差异定格为**片元级压制**。
+- **方法论勘误**：dbgInfo3-4 的 magScene/magFresh 双 0 为探针时序缺陷（一次性 gate 在 op 前触发/黑底计数无意义）；§64 的 magenta-clear 法对照（IsoT3-9）仍为有效证据。colorMask 锁死假设否决（three 在每次 render 尾部强制 colorMask(true) 且无持久 lock 路径）。
+- **终局定性**：同一 draw（同 mesh/相机/矩阵/状态）在 m_scene 上下文中 0 片元、fresh Scene 中满幅——剩余解释指向 GL 状态机在 render() 调用序中的瞬时差异（本帧此时刻 vs 探针先前时刻）或 m_scene 上未枚举的引擎标记。**盲探针已穷尽，确认需交互式调试**：浏览器 devtools WebGL inspector / Spector.js 捕获 m_scene 渲染的逐 draw call 状态（depth/stencil/blend/scissor/帧缓冲绑定），或 RenderDoc 帧抓取。
+- **零代码变更**：HEAD 复核逐位一致（fog/default 552、fog-import-scope 164907、existing 160950）。tsc 绿。
