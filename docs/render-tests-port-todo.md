@@ -2671,3 +2671,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实现**（MBEnvironmentManager.applyGlobeAtmosphere，替代 applyFog 的 globe 早退）：NDC 全屏 quad（far-depth、renderOrder −2000、预乘 CustomBlending、depthTest false）+ onBeforeRender 每帧刷新 globe 几何 uniform（dc/θhor/fov/aspect——connect 期 matrixWorldInverse 陈旧会致零心穿案）；clearColor=themed space-color（**alpha=space 属性 alpha**，白画布合成）；复用 createStars。
 - **验收（vs §77 基线）**：**star-intensity 220773→52681（−168k！）**、space-color-opacity 146841→**119763**（−27k，clearAlpha）、high-color 族 −1.5~2k、space-color −2k；fog/default 1094、gradient/default 0 PASS、fog-import-scope/existing 逐位不变零回归。tsc 绿、单测 265/3 既有。
 - **留档未解（globe 残差主项）**：**引擎 globe zoom→相机距离映射与 mgl 分歧**——实测 zoom0 下我方 dc=36.4M（5.7R）vs mgl exp 图像量得 ~4.5R（globe 直径 176/256px），globe 偏小 26%（limb 位置/地图可见范围整体偏移=当前 36k-141k 残差主体）。修法=引擎 sphere 投影的 calculateDistanceToGroundFromZoomLevel 换 mgl R 相对式（影响全部 globe fixture 的瓦片布局，需专项批测 map-projections/globe 族）。
+
+**79. globe zoom→距离映射标定尝试与否决（2026-08-22，globe5，零净代码变更）**：
+
+- **mgl 公式推导**：mgl globe 相机距离 = `ccd_px · C/(512·2^z)`（ccd_px = 0.5·canvasH/tan(fov/2)，worldSize=512·2^z）——256px 画布 z0 下 d≈4.71R（exp 图像量得 4.48-4.91R 区间一致）。
+- **尝试**：`calculateDistanceFromZoomLevel` 加 Spherical 分支直换 mgl 式 → **全黑屏**（fog/globe/high-color 全 0 像素）——引擎 sphere 管线（瓦片剔除/地平线/pitch 曲率钳制 `calculateDistanceToGroundFromZoomLevel`）与原距离标度深度耦合，简单换式使相机/瓦片几何失配。**已回退**。
+- **结论**：globe 距离标定属引擎 sphere 管线系统性 re-scale（需同步调整 tile cover/剔除/地平线/钳制全链），非单点公式替换——留档引擎专项（含 map-projections/globe 全族批测）。§78 状态保持（star-intensity −168k 等成果不变），复核逐位一致（high-color 36877、fog/default 1094、gradient/default 0 PASS、fog-import-scope 164019）零回归。tsc 绿、单测 265/3 既有。
+- **下一批优先级**：① §77 留档 atmosphere-color ~15% 亮度差（小项快修）；② §49 model 烘焙路径；③ globe 距离管线 re-scale 专项。
