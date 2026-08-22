@@ -68,87 +68,123 @@ class RasterTileDataProvider extends DataProvider {
         const x = tileKey.column;
         const y = tileKey.row;
 
-        const n = Math.pow(2, z);
-        const lngW = (x / n) * 360 - 180;
-        const lngE = ((x + 1) / n) * 360 - 180;
-        const latN = this.tile2lat(y, z);
-        const latS = this.tile2lat(y + 1, z);
-
-        // mgl overzooms from the closest available ancestor when a raster
-        // tile 404s (render-test satellite fixtures live at a lower level
-        // than the camera zoom, e.g. z12 fixtures under a z16 camera).
-        // Resolve the deepest existing ancestor and emit the parent URL plus
-        // the child's UV sub-rectangle inside the ancestor image.
         // mgl coveringTiles: `if (z < options.minzoom) return []` — below
         // the source minzoom NOTHING is drawn (zoomed-raster/underzoom's
         // expected is pure black). Overzoom clamps the request to maxzoom.
         if (z < this.m_minZoom) {
             return JSON.stringify({ type: 'FeatureCollection', features: [] });
         }
-        let srcZ = Math.min(z, this.m_maxZoom);
-        let srcX = Math.floor(x / Math.pow(2, z - srcZ));
-        let srcY = Math.floor(y / Math.pow(2, z - srcZ));
-        for (let zz = srcZ; zz >= 0; zz--) {
-            const shift = z - zz;
-            const u = this.m_tileUrlTemplate
-                .replace('{z}', String(zz))
-                .replace('{x}', String(Math.floor(x / Math.pow(2, shift))))
-                .replace('{y}', String(Math.floor(y / Math.pow(2, shift))));
-            // eslint-disable-next-line no-await-in-loop
-            const ok = await RasterTileDataProvider.tileExists(u);
-            if (ok) {
-                srcZ = zz;
-                srcX = Math.floor(x / Math.pow(2, shift));
-                srcY = Math.floor(y / Math.pow(2, shift));
-                break;
-            }
-            srcZ = zz - 1;
-        }
-        if (srcZ < 0) {
-            // No tile anywhere (not even z0) — keep the original request
-            // URL; the texture load will fail and the patcher paints the
-            // background color.
-            srcZ = Math.min(Math.max(z, this.m_minZoom), this.m_maxZoom);
-        }
-        const shift = z - srcZ;
-        const span = Math.pow(2, shift);
-        const rasterUrl = this.m_tileUrlTemplate
-            .replace('{z}', String(srcZ))
-            .replace('{x}', String(srcX))
-            .replace('{y}', String(srcY));
-        // Child's sub-rect in the ancestor IMAGE space (y top-down). Geometry
-        // UVs run (0,0)=tile north-west; with flipY texture upload the
-        // sampling transform is offset=(fx0, 1-fy0-fh), scale=(fw, fh).
-        const fw = 1 / span;
-        const fx0 = (x - srcX * span) * fw;
-        const fy0 = (y - srcY * span) * fw;
-        const uvRect = [fx0, 1 - fy0 - fw, fw, fw];
 
-        const geojson = {
-            type: 'FeatureCollection',
-            features: [{
+        const tileUrl = (zz: number, xx: number, yy: number) =>
+            this.m_tileUrlTemplate
+                .replace('{z}', String(zz))
+                .replace('{x}', String(xx))
+                .replace('{y}', String(yy));
+
+        // mgl overzooms from the closest available ancestor when a raster
+        // tile 404s (render-test satellite fixtures live at a lower level
+        // than the camera zoom, e.g. z12 fixtures under a z16 camera).
+        // Walk up from min(z, maxzoom) and resolve the deepest existing
+        // ancestor. Returns null when nothing exists down to z0.
+        const resolveAncestor = async (
+            zz: number, xx: number, yy: number
+        ): Promise<{ srcZ: number; srcX: number; srcY: number } | null> => {
+            const top = Math.min(zz, this.m_maxZoom);
+            for (let a = top; a >= 0; a--) {
+                const shift = zz - a;
+                const ax = Math.floor(xx / Math.pow(2, shift));
+                const ay = Math.floor(yy / Math.pow(2, shift));
+                // eslint-disable-next-line no-await-in-loop
+                if (await RasterTileDataProvider.tileExists(tileUrl(a, ax, ay))) {
+                    return { srcZ: a, srcX: ax, srcY: ay };
+                }
+            }
+            return null;
+        };
+
+        // One quad covering tile (zz,xx,yy), textured from the ancestor
+        // (sz,sx,sy) via the child's UV sub-rect in the ancestor image
+        // (y top-down). Geometry UVs run (0,0)=tile north-west; with flipY
+        // texture upload the sampling transform is
+        // offset=(fx0, 1-fy0-fw), scale=(fw, fh).
+        const buildFeature = (
+            zz: number, xx: number, yy: number,
+            sz: number, sx: number, sy: number
+        ) => {
+            const nn = Math.pow(2, zz);
+            const span = Math.pow(2, zz - sz);
+            const fw = 1 / span;
+            const fx0 = (xx - sx * span) * fw;
+            const fy0 = (yy - sy * span) * fw;
+            return {
                 type: 'Feature',
                 geometry: {
                     type: 'Polygon',
                     coordinates: [[
-                        [lngW, latN],
-                        [lngE, latN],
-                        [lngE, latS],
-                        [lngW, latS],
-                        [lngW, latN],
+                        [(xx / nn) * 360 - 180, this.tile2lat(yy, zz)],
+                        [((xx + 1) / nn) * 360 - 180, this.tile2lat(yy, zz)],
+                        [((xx + 1) / nn) * 360 - 180, this.tile2lat(yy + 1, zz)],
+                        [(xx / nn) * 360 - 180, this.tile2lat(yy + 1, zz)],
+                        [(xx / nn) * 360 - 180, this.tile2lat(yy, zz)],
                     ]],
                 },
                 properties: {
-                    _rasterTileUrl: rasterUrl,
-                    _rasterUvRect: uvRect,
-                    _tileCol: x,
-                    _tileRow: y,
-                    _tileZoom: z,
+                    _rasterTileUrl: tileUrl(sz, sx, sy),
+                    _rasterUvRect: [fx0, 1 - fy0 - fw, fw, fw],
+                    _tileCol: xx,
+                    _tileRow: yy,
+                    _tileZoom: zz,
                 },
-            }],
+            };
         };
 
-        return JSON.stringify(geojson);
+        // mgl raster sources round the source zoom (`roundZoom: true`,
+        // raster_tile_source.ts: coveringZoomLevel = round(zoom + 1) for a
+        // tileSize-256 source) while flywave schedules tiles at
+        // floor(zoomLevel). When the requested level 404s but children at
+        // z+1 exist (e.g. camera 18.6: mgl requests z20, we request z19),
+        // cover the quad with the four child tiles instead — per child,
+        // falling back to that child's deepest ancestor exactly like mgl's
+        // per-tile parent overzoom. Never descend past maxzoom.
+        if (z < this.m_maxZoom && !(await RasterTileDataProvider.tileExists(tileUrl(z, x, y)))) {
+            const childExists = await Promise.all([
+                RasterTileDataProvider.tileExists(tileUrl(z + 1, 2 * x, 2 * y)),
+                RasterTileDataProvider.tileExists(tileUrl(z + 1, 2 * x + 1, 2 * y)),
+                RasterTileDataProvider.tileExists(tileUrl(z + 1, 2 * x, 2 * y + 1)),
+                RasterTileDataProvider.tileExists(tileUrl(z + 1, 2 * x + 1, 2 * y + 1)),
+            ]);
+            if (childExists.some((e) => e)) {
+                const features = [];
+                for (let dy = 0; dy < 2; dy++) {
+                    for (let dx = 0; dx < 2; dx++) {
+                        const cz = z + 1;
+                        const cx = 2 * x + dx;
+                        const cy = 2 * y + dy;
+                        const anc = childExists[dy * 2 + dx]
+                            ? { srcZ: cz, srcX: cx, srcY: cy }
+                            // eslint-disable-next-line no-await-in-loop
+                            : await resolveAncestor(cz, cx, cy);
+                        if (anc) {
+                            features.push(buildFeature(cz, cx, cy, anc.srcZ, anc.srcX, anc.srcY));
+                        }
+                    }
+                }
+                if (features.length > 0) {
+                    return JSON.stringify({ type: 'FeatureCollection', features });
+                }
+            }
+        }
+
+        // Single-quad path: deepest ancestor of the requested tile itself.
+        const anc = await resolveAncestor(z, x, y);
+        const srcZ = anc ? anc.srcZ : Math.min(Math.max(z, this.m_minZoom), this.m_maxZoom);
+        const srcX = anc ? anc.srcX : Math.floor(x / Math.pow(2, z - srcZ));
+        const srcY = anc ? anc.srcY : Math.floor(y / Math.pow(2, z - srcZ));
+
+        return JSON.stringify({
+            type: 'FeatureCollection',
+            features: [buildFeature(z, x, y, srcZ, srcX, srcY)],
+        });
     }
 
     /** HEAD-probe cache: which tile URLs exist for the current template. */

@@ -1073,7 +1073,15 @@ export class MBTileDataEmitter {
             ? resolveTextField(layer.layout['icon-image'], properties ?? {})
             : '';
 
-        const cacheKey = `${layer.id}:${symbolMode ?? ''}:${textKey}:${iconKey}:${MBTileDataEmitter.evaluatedCacheKey(layer)}`;
+        // Raster features carry their per-feature texture identity (tile URL
+        // + ancestor sub-rect) in properties — two raster quads with the
+        // same layer paint MUST NOT share a technique, or the first
+        // feature's URL/uvRect wins for every quad (observed: one tile's
+        // texture smeared across all raster quads of a layer).
+        const rasterKey = layer.type === 'raster' && properties?._rasterTileUrl
+            ? `${properties._rasterTileUrl}:${(properties._rasterUvRect ?? []).join(',')}`
+            : '';
+        const cacheKey = `${layer.id}:${symbolMode ?? ''}:${textKey}:${iconKey}:${rasterKey}:${MBTileDataEmitter.evaluatedCacheKey(layer)}`;
         let idx = this.m_layerToTechniqueIndex.get(cacheKey);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
