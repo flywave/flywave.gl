@@ -792,8 +792,14 @@ export class MBMaterialPatchManager {
             }
         } catch {}
         const attach = (texture: THREE.Texture) => {
-            texture.minFilter = filterType;
+            // mgl mipmapped raster tiles — keep the mipmap min filter here
+            // too (this ran AFTER applyRasterFilters and silently reset it,
+            // voiding the mipmap parity fix).
+            texture.minFilter = filterType === THREE.NearestFilter
+                ? THREE.NearestMipmapNearestFilter
+                : THREE.LinearMipmapLinearFilter;
             texture.magFilter = filterType;
+            texture.generateMipmaps = true;
             // NOTE: premultiplyAlpha + CustomBlending(ONE, …) was tried to
             // match mgl's raster upload, but the premultiplied upload path
             // blanks the tiles entirely (raster-* ~110k full-image mismatch,
@@ -1005,8 +1011,27 @@ export class MBMaterialPatchManager {
         }
 
         rasterTextureLoader.load(url, (texture) => {
-            texture.minFilter = filterType;
-            texture.magFilter = filterType;
+            // mgl raster tiles use mipmapped textures (tile.ts:
+            // `new Texture(context, img, gl.RGBA8, {useMipmap: true})` →
+            // LINEAR_MIPMAP_LINEAR / NEAREST_MIPMAP_NEAREST, texture.js:82)
+            // plus anisotropic filtering at pitch > 20 (draw_raster.ts:201).
+            // Plain LINEAR aliases on minification (raster-filtering showed
+            // ±25/channel noise across whole tiles at 0.57x downscale).
+            const applyRasterFilters = (tex: THREE.Texture) => {
+                tex.minFilter = filterType === THREE.NearestFilter
+                    ? THREE.NearestMipmapNearestFilter
+                    : THREE.LinearMipmapLinearFilter;
+                tex.magFilter = filterType;
+                tex.generateMipmaps = true;
+                try {
+                    const maxAniso = (this.m_dataSource as any).mapView?.renderer
+                        ?.capabilities?.getMaxAnisotropy?.();
+                    if (typeof maxAniso === 'number' && maxAniso > 1) {
+                        tex.anisotropy = Math.min(4, maxAniso);
+                    }
+                } catch {}
+            };
+            applyRasterFilters(texture);
             // Pad the tile with a 1px replicated border so LINEAR filtering
             // at tile seams has neighbour texels (each tile is an isolated
             // texture; mgl samples from a padded atlas). The shader maps UVs
@@ -1038,8 +1063,7 @@ export class MBMaterialPatchManager {
                     if (hasAlpha) {
                         padded = new THREE.Texture(img);
                         padded.colorSpace = THREE.SRGBColorSpace;
-                        padded.minFilter = filterType;
-                        padded.magFilter = filterType;
+                        applyRasterFilters(padded);
                         (padded as any).__mbPadPx = [w, h];
                         (padded as any).__mbNoPad = true;
                         padded.needsUpdate = true;
@@ -1066,8 +1090,7 @@ export class MBMaterialPatchManager {
                     cx.drawImage(img, w - 1, h - 1, 1, 1, w + 1, h + 1, 1, 1);
                     padded = new THREE.CanvasTexture(cv);
                     padded.colorSpace = THREE.SRGBColorSpace;
-                    padded.minFilter = filterType;
-                    padded.magFilter = filterType;
+                    applyRasterFilters(padded);
                     (padded as any).__mbPadPx = [w, h];
                     padded.needsUpdate = true;
                 }
