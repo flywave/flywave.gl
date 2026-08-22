@@ -1215,6 +1215,7 @@ export class MBStyleDataSource extends TileDataSource {
                 self.m_shadowRenderer = new MBShadowRenderer(this.mapView, self);
             } catch {}
 
+
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
                 patcher.patchTileMaterials();
@@ -1228,6 +1229,7 @@ export class MBStyleDataSource extends TileDataSource {
                 if (self.m_modelRenderer) {
                     self.m_modelRenderer.run();
                 }
+
                 if (self.m_shadowRenderer) {
                     const sl = self.m_environment?.shadowLightState;
                     self.m_shadowRenderer.setLightState(!!sl, sl?.intensity ?? 0);

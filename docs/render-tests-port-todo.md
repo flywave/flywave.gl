@@ -2899,3 +2899,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **孪生 mesh（GREATER depthFunc + alpha·occlusionOpacity + renderOrder 1e6）三条挂载路径逐一实测**：① `obj.parent.add(twin)`——不渲染；② `obj.add(twin)` 子节点（extrusion dual-pass 同款模式）——**opaque magenta 探针 0 像素**，不渲染（推论：§84 的 translucent-extrusion 深度预 pass 子 mesh 很可能同样从未渲染，其验证一直"攒批延后"，fill-extrusion opacity 通过或另有原因）；③ `tile.objects.push + registerTileObject`（埋点确认注册成功、objects 22→30）——**仍不渲染**：引擎渲染列表在几何加载时快照，patcher 运行于挂载后，事后注入的对象永不进绘制。附带修复记录：GLSL uniform 必须全局域声明（colorspace include 内声明=函数域编译错）。
 - **架构定论（重要）**：**从 MaterialPatchManager 无法向场景注入任何新渲染体**——引擎对象生命周期（加载→注册→快照渲染）与 patcher（后置材质手术）正交。occlusion 双 pass、以及任何需要"额外 draw call"的 mgl 语义（阴影已有独立 renderer、additive 已有独立 renderer）都必须走**独立 Renderer + 帧循环挂载**模式（MBHeatmapRenderer/MBAdditiveLineRenderer/MBShadowRenderer 同款基建：自己的 scene + AfterRender 钩子 + mapAnchors 合成）。
 - **子域 A 最终方案（立项）**：MBOcclusionLineRenderer——收集 occlusion ribbon（mesh+材质引用），主渲染后以 GREATER depthFunc+淡出重画（需引擎主 pass 的深度缓冲保留，或以 depth texture 方式复用 MBShadowRenderer 的 RT 深度）。工程量：中（一个新 renderer 文件 + datasource 接线）。本轮全部实验代码已清理回退，基线逐值复原（6943/gradient 族原值）。
+
+**111. MBOcclusionLineRenderer 实施与第四条路径证伪（2026-08-23 一，零净变化）**：
+
+- **完整实施**：MBOcclusionLineRenderer（独立 scene + 几何克隆共享属性 + 变换同步活 mesh + GREATER/淡出材质 + AfterRender run，datasource 接线 patcher 注册）。
+- **第四条路径证伪（逐级探针）**：① `renderer.renderBufferDirect` 独立调用抛 `Cannot read properties of null (reading 'state')`（render state 仅在 render() 内准备）→ 改自有 scene+`renderer.render`；② 自有 scene 渲染**不进捕获画布**——探针（depthTest off + fade=1 的全强度过冲，等效 §109 抬升实验的 7049 信号）输出逐值 6943 不变；③ magenta 材质探针无效教训记档：ribbon 材质的 onBeforeCompile 完全重写 gl_FragColor，material.color 不生效。
+- **架构定论（最终）**：AfterRender 世界空间重投影无法到达捕获画布（MBHeatmapRenderer 的正交全屏四边形复合能存活、MBShadowRenderer 用自持 RT——世界空间二次绘制两者皆非）。**结论：line-occlusion 双 pass 需要引擎侧 API**（MapView 暴露 post-render hook 且保证画布时序，或 SceneComposer 式可编程 pass 列表）——归入"原架构"级改造，datasource 层四条路径全部穷尽（parent/child/registerTileObject/独立 renderer）。子域 A 14 例维持 6943 级现状冻结，待引擎侧立项。
+- **实验代码全部清理**（renderer 文件删除、注册与接线移除、探针移除），基线逐值复原。
