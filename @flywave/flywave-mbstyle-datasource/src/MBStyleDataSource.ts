@@ -654,6 +654,12 @@ export class MBStyleDataSource extends TileDataSource {
             concurrentDecoderScriptUrl: params.decoder ? undefined : params.decoderScriptUrl,
             minDataLevel: 0,
             maxDataLevel: 22,
+            // The DataSource default maxDisplayLevel (20) hides the whole
+            // source above camera zoom 20 (isHidden → no tiles at all), e.g.
+            // mapbox render-tests that style zoom ≥ 20 with a maxzoom-clamped
+            // raster source. Allow the full mapbox zoom range (+1 flywave
+            // offset) to display.
+            maxDisplayLevel: 25,
             storageLevelOffset: params.storageLevelOffset ?? -1,
         };
 

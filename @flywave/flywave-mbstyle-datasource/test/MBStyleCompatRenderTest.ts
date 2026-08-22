@@ -25,6 +25,7 @@ import { ALL_TESTS as INDEXED_TESTS } from "./render-tests-index";
 import { MBStyleDataSource } from "../src/MBStyleDataSource";
 import { MBStyleDecoder } from "../src/MBStyleDecoder";
 
+
 // Compare against the local expected.png that ships with each ported
 // render-test fixture (karma serves them under /base/), instead of the
 // default `/reference-image?` endpoint which needs an external result server.
@@ -1081,6 +1082,12 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     tileCacheSize: 0,
                     fontCatalog: fontCatalogUrl,
                     logarithmicDepthBuffer: false,
+                    // MapView's default maxZoomLevel (20) silently clamps the
+                    // style camera (mapbox zoom + 1) for zoom >= 20 tests —
+                    // e.g. raster-resampling (z20) rendered one level too far
+                    // out. mapbox supports zoom up to 24; leave headroom for
+                    // the +1 flywave offset.
+                    maxZoomLevel: 25,
                     // mapbox's default vertical fov (transform.ts:247
                     // 0.6435011087932844 rad = 36.87°); flywave's default is
                     // 40°. The fov drives the camera distance
