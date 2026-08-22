@@ -54,3 +54,13 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
   为 **1px 级放置/亚像素精度**，与 P1 排版深水区同根（原生 Placement/POI 管线），并入 P1 专项。
 - **结论**：P0 无独立快修项，主攻方向 = P1 text/symbol 排版引擎（text-offset 矩阵 30 例为最佳
   切入：同 bbox 结构、系统性 1px~半字宽偏移，疑 anchor×justify×offset 计算基准差）。
+
+## P1 执行记录（2026-08-22）
+- **text-offset 矩阵逐格取证**（literal 3×3 网格，per-cell 质心+墨量）：
+  - 质心差仅 **1-3px**（offset/anchor 基准基本正确，非主因）；
+  - **墨水量 cur 系统性偏少 5-40%**（如 cell(1,2) 1392 vs exp 1947）——主因指向
+    **字形栅格化/字号精度**（SDF 渲染的 gamma/coverage 或 text-size 求值差），即 F13 域；
+  - 部分格 n 相近仅 1px 级差（纯 AA 精度）。
+- **定性**：P1 需先攻 **glyph 精度**（SDF gamma/coverage/字号标定），而非 anchor×offset 矩阵；
+  建议方法论：单字形 fixture（text-field/diacritics 2264、text-font/camera-function 113 起步）
+  逐位对照，复用 §12.76-80 的 Node 独立复刻取证法。
