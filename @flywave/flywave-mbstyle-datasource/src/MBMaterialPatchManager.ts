@@ -1831,7 +1831,8 @@ export class MBMaterialPatchManager {
         const hasGradient = Array.isArray(gradientStops) && gradientStops.length > 1;
         const hasEmissive = typeof emissiveStrength === 'number' && emissiveStrength > 0;
         const patternTex = patternName ? this.extractPatternTexture(patternName) : undefined;
-        // line-occlusion-opacity: fade lines behind terrain (same as circles).
+        // line-occlusion-opacity (see the emitter's renderOrder lift for the
+        // mgl re-draw semantics).
         const lineOcclusionOpacity = Number(paint['line-occlusion-opacity'] ?? 0);
         const hasOcclusion = this.m_depthOcclusion && this.m_depthTexture && lineOcclusionOpacity >= 0;
         if (hasTranslate || hasGradient || hasBorderGradient || patternTex || hasEmissive || hasTrim || hasOcclusion) {

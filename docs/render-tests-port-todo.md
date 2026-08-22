@@ -2880,3 +2880,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **子域 D：fog/globe + globe 核心系**：globe 投影域（atmosphere/high-color 等）与 §93 记档 globe-heatmap 同域。
 - **子域 E：真实地形大值系（100k-250k）**：未采样，下批单跑取证。
 - **优先级建议**：A（根因明确、机制清晰、13 例）> C > B > D/E（大工程）。
+
+**108. §107 子域 A 攻坚——两机制证伪 + 取证修正（2026-08-22 二十一，零净变化）**：
+
+- **§107 根因修正（重要）**：重取证发现此前"下半线被 extrusion 深度吞掉"的读数含 **RGBA→RGB 假象**（expected 下半为 alpha=0 透明，RGB 读作黑；alpha 合成后真实失配 38707→**10013**，harness 上报 6943 为准）。真实残差集中 y<172 线/挤出区：蓝线大部分在（11955 vs exp 13788），缺口 ≈1.8k px 遮挡线 + 淡出差异。
+- **两修复尝试均证伪（逐值零效果）**：① SolidLine depthTest=false（针对"深度吞线"假说）——6943 不变，假说否定（线本就走 ribbon/SolidLine 双路，ribbon depthTest=false 本该可见）；② emitter renderOrder 抬升 +1000（mgl occlusion 重绘语义，把 occlusion 线抬到全部 3D 之上）——6943 不变。两处均回退，机制疑点收敛到：**线的可见性不受这两路径控制**（候选：TileGeometryCreator 组序/technique 创建时序未生效，或线对象在挤出后被别的通道裁掉）——需 patchTile 时 dump 对象实际 renderOrder 值与绘制序仿真才能定论。
+- **子域 A 状态**：真实残差 6943（非 29k），量级收窄但机制未破；两假说已排除留档防重复投入。下一入口：对象级绘制序仿真（引擎 TileObjectsRenderer stableSort 输入 dump）。
