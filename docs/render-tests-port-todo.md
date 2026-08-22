@@ -2983,3 +2983,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **连带补齐**：① addImage op 的 `.png` 路径分支（mgl handler 的 `new Image()` 语义）；② karma serve pattern 扩为 `image/*.*`（marker.png 404 破案）。
 - **验收**：**image/render-callback-with-symbol 29294→PASS**（368-385 批载噪声带）；icon-image/default/literal、image 族其余 PASS 基线不变（10 PASS 保持）。
 - **残余**：① image/render-callback（icon-only、`icon-allow-overlap` 未设）仍空白——疑 MBStyleSymbolPlacement 的碰撞门对 runtime 后补图标的交互（with-symbol 设了 allow-overlap:true 而通过），入口：placement 的 icon 解析时序；② styleimagemissing 72px 需 `on('styleimagemissing')` 事件 op（纯缺功能）；③ icon-image/token/property-function 425 为既有遗留。
+
+**123. styleimagemissing 事件 op 落地 + render-callback(icon-only) 深查（2026-08-23 十三）**：
+
+- **`on` op 实施（保留）**：`on('styleimagemissing', [[addImage...]])` 事件操作落地（嵌套 ops 原样执行——fixture 模板内带具体图标名）。styleimagemissing 从"纯缺功能"变为**可执行**：rocket 图标上屏，残余 72px（alpha 合成 118px）= 火箭 AA 边缘带（近失，阈值 ~24px）。
+- **render-callback(icon-only) 深查（三假说两排除）**：① 碰撞门——fixture 强制 `icon-allow-overlap:true` 无效，排除；② POI 发射——探针实证 labeled-icon 几何在 'dot' 名下正常发射（绝对世界坐标 (C/2,C/2)，与 with-symbol 同管线）；③ 缓存注册——§122 双写已生效（with-symbol PASS 为旁证）。**与 with-symbol 的唯一剩余差异**：数据点 [0,0] vs ±0.5°、单层 vs 双层。下轮入口：TextElementsRenderer 对"单 POI 无邻居"场景的可见性/初始化链（对比两 fixture 的 TextElement state dump）。
+- **家族回归**：10 PASS 保持（with-symbol 368 噪声带、default/literal 等不变）。

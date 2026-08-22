@@ -270,6 +270,19 @@ async function processOperations(
             case "wait":
                 await renderFrames(mapView, dataSource, args[0] ? 3 : 2);
                 break;
+            case "on": {
+                // mgl `on(event, [[op, ...args], ...])` — run the nested ops
+                // when the event fires. Only `styleimagemissing` is wired: it
+                // fires for every icon name not present at decode time; mgl
+                // de-duplicates by name and re-adds via addImage.
+                const [event, nestedOps] = args as [string, any[][]];
+                if (event === "styleimagemissing" && Array.isArray(nestedOps)) {
+                    // The fixture templates carry the concrete image name in
+                    // the nested addImage op — run them verbatim.
+                    await processOperations(mapView, dataSource, nestedOps);
+                }
+                break;
+            }
             case "waitFrameReady":
             case "frameReady":
                 await renderFrames(mapView, dataSource, 2);
