@@ -2906,3 +2906,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **第四条路径证伪（逐级探针）**：① `renderer.renderBufferDirect` 独立调用抛 `Cannot read properties of null (reading 'state')`（render state 仅在 render() 内准备）→ 改自有 scene+`renderer.render`；② 自有 scene 渲染**不进捕获画布**——探针（depthTest off + fade=1 的全强度过冲，等效 §109 抬升实验的 7049 信号）输出逐值 6943 不变；③ magenta 材质探针无效教训记档：ribbon 材质的 onBeforeCompile 完全重写 gl_FragColor，material.color 不生效。
 - **架构定论（最终）**：AfterRender 世界空间重投影无法到达捕获画布（MBHeatmapRenderer 的正交全屏四边形复合能存活、MBShadowRenderer 用自持 RT——世界空间二次绘制两者皆非）。**结论：line-occlusion 双 pass 需要引擎侧 API**（MapView 暴露 post-render hook 且保证画布时序，或 SceneComposer 式可编程 pass 列表）——归入"原架构"级改造，datasource 层四条路径全部穷尽（parent/child/registerTileObject/独立 renderer）。子域 A 14 例维持 6943 级现状冻结，待引擎侧立项。
 - **实验代码全部清理**（renderer 文件删除、注册与接线移除、探针移除），基线逐值复原。
+
+**112. 子域 E/C 取证盘点补全（2026-08-23 二）**：
+
+- **terrain/ 域批**（103 例命中，超时前采集 96 断言）：量级带 2.1k（circle/unoccluded）→231k（lighting-3d/terrain）。四子族定性（alpha 合成后真实值）：
+  - **E1 地形栅格亮度偏置**：circle/occluded（真值 11k）与 buildings-on-raster（17.7k）样本 cur 全图均匀 +30~40 亮于 exp（如 226 vs 215 基底）——地形上的 raster/symbol 内容整体过亮，疑 terrain draping 合成或光照因子；**主嫌疑 E1 是大值系共同底噪**。
+  - **E2 建筑物缺失**：buildings-on-raster 下半（y>128）红色建筑（215,115,106）整片缺失（cur 仍是栅格底色）——terrain 上 extrusion/building 的近裁剪/高度问题（§F2a 家族）。
+  - **E3 circle 遮挡系**：circle/occluded 家族（4.8-5.9k）= depth-occlusion 同机制（§111 冻结，circle 有 Scheme A 深度纹理路径可评估）。
+  - **C flat-roof/alignment 系**（47-155k）：roof 面与侧面颜色块错位（exp (0,128,0) 面 cur 出现在 exp (136,136,136) 位置）——extrusion×terrain 对齐 + 面光照错配；flat-roof-over-border 系（94-155k）最大，疑 tile 边界处屋顶裁剪。
+  - **lighting-3d-mode/terrain**（225k/231k）最大值：3D 灯光×地形组合。
+- **优先级建议**：E1（若为单一合成因子可解锁多例）> E2（近裁剪，有 §F2a 修法前科）> C > E3（引擎冻结连带）。下阶段首项：E1 的 draping/亮度链代码分析（TerrainDraping/terrain raster 材质注入）。
