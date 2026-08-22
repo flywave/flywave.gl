@@ -1547,16 +1547,22 @@ export class MBTileDataEmitter {
                 // CIRCUMFERENCE/(256 * 2^displayZoom) with displayZoom = m_zoom+1.
                 const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                     (256 * Math.pow(2, this.m_zoom + 1));
-                // `line-width-unit: meters` — the width is metric, no px→world
-                // conversion (world units are meters on the equator). NOTE:
-                // line-width-unit is a LAYOUT property.
+                // `line-width-unit: meters` — the width is metric. mgl
+                // converts with tileToMeter (mercator_coordinate.ts), which
+                // is LATITUDE-dependent: px per ground meter = equatorial
+                // px/m ÷ cos(lat). Our world units are equatorial mercator
+                // meters, so one ground meter = sec(lat) world units.
+                // NOTE: line-width-unit is a LAYOUT property.
                 const widthUnit = layer.layout?.['line-width-unit'] ?? 'pixels';
+                const geoBox: any = (this.m_decodeInfo as any).geoBox;
+                const latC = (Number(geoBox?.north ?? 0) + Number(geoBox?.south ?? 0)) / 2;
+                const secLat = 1 / Math.max(0.2, Math.cos(latC * Math.PI / 180));
                 // NOTE: blurring would want the ribbon geometry widened by
                 // the blur radius, but in dense road networks the widened
                 // ribbons overlap and stack into large black regions —
                 // reverted; the fade is clipped at the line edge instead.
                 const worldHalfWidth = widthUnit === 'meters'
-                    ? lineWidthPx / 2
+                    ? (lineWidthPx / 2) * secLat
                     : lineWidthPx * metersPerPixel / 2;
                 // Variable-width lines: `line-width` may itself be a
                 // line-progress interpolate (e.g. gradient-vector-tile:
@@ -1581,7 +1587,7 @@ export class MBTileDataEmitter {
                     }
                     if (total > 0) {
                         const halfOf = (w: number) =>
-                            widthUnit === 'meters' ? w / 2 : (w * metersPerPixel) / 2;
+                            widthUnit === 'meters' ? (w / 2) * secLat : (w * metersPerPixel) / 2;
                         // mgl line-progress on vector tiles is anchored to the
                         // FULL feature via the server-provided clip fractions
                         // (line_bucket.evaluateLineProgressFeatures:
@@ -1669,7 +1675,7 @@ export class MBTileDataEmitter {
                 // (verified: thick-line-border rendered no black border).
                 const bwRawBorder = Number(layer.paint?.['line-border-width'] ?? 0);
                 const borderWorld = (bwRawBorder > 0 && !progressHalfWidths)
-                    ? (widthUnit === 'meters' ? bwRawBorder : bwRawBorder * metersPerPixel)
+                    ? (widthUnit === 'meters' ? bwRawBorder * secLat : bwRawBorder * metersPerPixel)
                     : 0;
                 const mainHalfWidth = Math.max(worldHalfWidth - borderWorld, 0);
                 // mgl extrudes the line quad by ANTIALIASING (0.5px @dpr1) per
@@ -1678,7 +1684,8 @@ export class MBTileDataEmitter {
                 // the patcher's AA ramp has coverage. Zero-width lines must
                 // stay invisible (dilating them paints a 1px line).
                 const aaDilate = lineWidthPx > 0 ? 0.5 * metersPerPixel : 0;
-                const trueWidthPx = widthUnit === 'meters' ? lineWidthPx / metersPerPixel : lineWidthPx;
+                const trueWidthPx = widthUnit === 'meters'
+                    ? (lineWidthPx * secLat) / metersPerPixel : lineWidthPx;
                 // NOTE: dash lines CANNOT simply drop the solid ribbon — the
                 // SolidLineMaterial dash does not rasterize on SwiftShader, so
                 // the ribbon is the only visible path. The dash pattern must be
