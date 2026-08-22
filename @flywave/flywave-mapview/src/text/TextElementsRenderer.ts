@@ -1839,6 +1839,20 @@ export class TextElementsRenderer {
                 }
                 renderParams.fadeAnimationRunning =
                     renderParams.fadeAnimationRunning || textRenderState!.isFading();
+                // mgl anchors align the text INK box edge to the point; the
+                // engine aligns the line box — the descender half gaps
+                // bottom-anchored (mgl 'bottom' = Above) text by ~1px.
+                // mgl anchors align the text INK box edge to the anchor
+                // point; the engine aligns the LINE box, so bottom-anchored
+                // (VerticalAlignment.Above === 0) text sits ~1px low and
+                // top-anchored (Below === -1) ~1px high. Calibrated on the
+                // text-anchor fixture family.
+                const vAlign = pointLabel.layoutStyle?.verticalAlignment;
+                if (vAlign === 0) {
+                    tempPosition.y += 1.0;
+                } else if (vAlign === -1) {
+                    tempPosition.y -= 2.0;
+                }
                 if (
                     addTextBufferToCanvas(
                         labelState,
