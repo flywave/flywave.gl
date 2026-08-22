@@ -167,3 +167,13 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
   精度，对全部曲线杠杆免疫（宽度/斜率/重映射/S 曲线系数）。
 - **下会话**：墨差终极嫌疑收窄到 **TextCanvas 栅格化分辨率链**（glyph atlas 512² 上采样损失 vs
   mgl 每字形原生尺寸渲染）——需 Node 单字形离屏对照（P1 老入口）或 dpr/字号换算审计。
+
+## P1 执行记录 XI（2026-08-22）——墨差曲线线穷尽宣告
+- **最后两个宽度假设双向劣化**：`w=0.02625·tp`（tp↔size 线性换算，假设 tp≈96/size）——
+  center/bottom/text-color 全劣化；`w=2.52/sdfParams.z`（mgl 精确 gamma=0.105·24/size，
+  sdfParams.z 即字号）——halo-color 107→99 唯一改善，bottom 2027→5986 重大劣化。
+  **均已回退**，锁定 w=0.5/tp（HEAD）。
+- **结论**：墨差不在覆盖曲线任何参数形式（导数宽/固定宽/线性换算宽全试）——
+  剩余 ~9% 墨差的载体在曲线之外：终极嫌疑 = **atlas 纹理采样/栅格化链**
+  （512² atlas 双线性重采样对 SDF 峰值的软化）或 **合成链 fade/opacity 微损**。
+  必须走 Node 单字形离屏复刻（P1 老入口）——远程盲扫第十次排除后正式宣告穷尽。
