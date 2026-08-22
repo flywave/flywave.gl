@@ -2935,3 +2935,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **取证**：alignment-height-terrain（68k）失配中 cur 的挤出绿块占据 exp 的白/灰区域——挤出体**垂直位置错误**（陷地/悬空，屏上覆盖区错位）。flat-roof（48k）同为高度锚定错误的颜色块错位。
 - **根因（代码对照）**：mgl `fill-extrusion-height-alignment`/`base-alignment`（`"terrain"` 语义：fill_extrusion.vertex.glsl `u_height_type==1`——高度从地形表面起算，flat 顶取 centroid 地形高程）在我们管线**零引用未实现**——挤出高度按海平面绝对值求值，地形上建筑整体错位。fixture 带 `terrain {source rgbterrain, exaggeration 4}`。
 - **实施入口（已有基建可复用）**：patchExtrusionMaterial 的 `centerDem`（terrainController.centerDem，vertex 采样 uMBExtrusionDem 得 mbTerrainElev）正是锚定机制——需按 alignment 语义接线：`alignment=terrain` 时 z = terrainElev(centroid/逐顶) + height·exaggeration（flat 顶用 centroid 高程）；`base-alignment` 同理。另需排查该 fixture 下 centerDem 是否非空（DEM 源接线）。工程量：小-中（语义分支 + fixture 验证），是子域 C 13 例的收敛主径。
+
+**116. 子域 C 实施一轮——exag/flat 修复未兑现，全量回退（2026-08-23 六，零净变化）**：
+
+- **实施内容**：① uMBExtrusionExag 从硬编码 1 改为 terrainController 实际 exaggeration（fixture=4）；② height-alignment "flat"（mgl 默认）语义——顶面顶点（objectNormal.z>0.5）改用 CPU sampleElevation(几何 bbox 中心) 的 centroid 高程（单要素对象近似），base 保持逐顶点（默认 base-alignment terrain）；③ patchMaterial 线程 obj/mesh 以取几何。
+- **实测（9 例）**：alignment-height-terrain 68017→65921（−2k，噪声级）、and-base-flat +2k、**over-border-of-different-zoom 155k→192k（+37k 明确回归 ×2 例）**、flat-roof 族不变——flat 路径疑似未生效（疑 centerDem 在该 fixture 为 null 或 sampleElevation 0），exag 修正反致 over-border 系劣化（该系另有 overzoom DEM 混叠机制）。**全量 git 回退**，基线逐值复原（155341 ✓）。
+- **结论**：子域 C 非单一语义缺口的补齐可解——exag/alignment 语义与 over-border DEM 混叠、flat-roof AO、centroid 编码（mgl 用顶点属性 centroid_pos 携带，非 CPU uniform）相互咬合；正确实施需把 mgl 的 centroid_pos 顶点编码一并移植（emitter 烘焙时写入）。工程量升为中大，记档为子域 C 完整实施规格，本轮保持零净变化。
