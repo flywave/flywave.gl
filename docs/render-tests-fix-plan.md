@@ -148,3 +148,10 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
 - **下会话取证法**：debug 渲染单 label，打印我们链路每一步的 y 值（emitter projectWorld →
   POI position → screen xy → TextCanvas 绘制 y），对照 mgl anchor→screen 数学
   （mapbox-gl-js/src/symbol/projection.ts + symbol_layout.ts 的 textOffset/anchor 链）。
+
+## P1 执行记录 IX（2026-08-22）——S 曲线修复后 text 域广谱验证
+- 45 例抽样（15 域 × 3）：**13 PASS / 32 FAIL**。icon-* 域大半 PASS
+  （icon-color/halo-color/halo-width/halo-blur/rotate/opacity 7+ 例全绿）；
+  text-* 残差 31-600px 小差异带（property-function/literal 系，同 +1px/墨差类）。
+- 结论：S 曲线修复收益主要落在 icon 域转 PASS + text 域残差量级整体压缩；
+  剩余 31-600px 带与 +1px 投影链问题同根（P1 VIII 入口待做）。
