@@ -11,6 +11,17 @@ import { TextBufferObject } from "./TextBufferObject";
 import { TextRenderStyle } from "./TextStyle";
 
 export const MAX_CAPACITY = 65536;
+
+// Mapbox-gl glyph gamma mode (opt-in, default OFF — native rendering is
+// bit-identical). When enabled, the per-vertex `uv.w` slot (consumed only by
+// the BACKGROUND material as bgWeight) carries the label's fontScale
+// (textSize / catalogSize) so the foreground shader can apply mapbox's exact
+// per-symbol gamma (symbol.fragment.glsl: gamma = EDGE_GAMMA / fontScale).
+// Caveat: bg-text bold/smallcaps emulation weights are unavailable in this
+// mode (unused by mapbox styles).
+export class MglGammaMode {
+    static enabled = false;
+}
 export const VERTEX_BUFFER_STRIDE = 16;
 export const INDEX_BUFFER_STRIDE = 1;
 export const VERTICES_PER_QUAD = 4;
@@ -77,6 +88,8 @@ export class TextGeometry {
     private m_uvAttribute: THREE.InterleavedBufferAttribute;
     private m_colorAttribute: THREE.InterleavedBufferAttribute;
     private m_bgColorAttribute: THREE.InterleavedBufferAttribute;
+    /** Catalog em size used for the mgl fontScale (set by TextCanvas). */
+    m_catalogSize = 24;
     private m_indexBuffer: THREE.BufferAttribute;
 
     private m_geometry: THREE.BufferGeometry;
@@ -232,7 +245,11 @@ export class TextGeometry {
                 glyphData.dynamicTextureCoordinates[mirroredUVIdx].x,
                 glyphData.dynamicTextureCoordinates[mirroredUVIdx].y,
                 weight,
-                bgWeight
+                // mgl gamma mode: uv.w carries fontScale (per-symbol gamma,
+                // see MglGammaMode). Native mode keeps the background weight.
+                MglGammaMode.enabled
+                    ? Math.max(style.fontSize.size, 1e-3) / Math.max(this.m_catalogSize, 1)
+                    : bgWeight
             );
             this.m_colorAttribute.setXYZW(
                 baseVertex + i,
@@ -294,7 +311,9 @@ export class TextGeometry {
             buffer[vertexOffset + 4] = glyphData.dynamicTextureCoordinates[mirroredUVIdx].x;
             buffer[vertexOffset + 5] = glyphData.dynamicTextureCoordinates[mirroredUVIdx].y;
             buffer[vertexOffset + 6] = weight;
-            buffer[vertexOffset + 7] = bgWeight;
+            buffer[vertexOffset + 7] = MglGammaMode.enabled
+                ? Math.max(style.fontSize.size, 1e-3) / Math.max(this.m_catalogSize, 1)
+                : bgWeight;
 
             buffer[vertexOffset + 8] = style.color.r;
             buffer[vertexOffset + 9] = style.color.g;
@@ -392,7 +411,8 @@ export class TextGeometry {
                     glyph.dynamicTextureCoordinates[mirroredUVIdx].x,
                     glyph.dynamicTextureCoordinates[mirroredUVIdx].y,
                     w,
-                    (bw - w) / s + w
+                    // mgl gamma mode: uv.w is fontScale (pass through).
+                    MglGammaMode.enabled ? bw : (bw - w) / s + w
                 );
                 this.m_colorAttribute.setXYZW(
                     targetOffset + i * VERTICES_PER_QUAD + j,

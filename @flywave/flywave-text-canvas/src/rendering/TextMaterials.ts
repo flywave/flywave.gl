@@ -19,6 +19,8 @@ const SdfShaderChunks = {
         varying float vWeight;
         varying vec2 vUv;
         varying float vRotation;
+        // mgl per-symbol gamma (foreground only): fontScale from uv.w.
+        varying float vMglScale;
         `,
     sdf_varying_computation: `
         #if BG_TEXT
@@ -27,6 +29,7 @@ const SdfShaderChunks = {
         #else
         vColor = color;
         vWeight = uv.z;
+        vMglScale = uv.w;
         #endif
         vUv = vec2(uv.xy);
         vRotation = position.w;
@@ -69,9 +72,9 @@ const SdfShaderChunks = {
             float d = getDistance(uvOffset) + min(weight, 0.5 - 1.0 / sdfParams.w) - 0.5;
             float rampW = 0.5 / max(toPixels, 1e-4);
             if (uMglGammaScale > 0.0) {
-                // mgl gamma in normalized SDF units: 1px of signed distance
-                // spans 64/255 of the texture range.
-                rampW = (0.105 / uMglGammaScale) * (64.0 / 255.0);
+                // PER-SYMBOL mgl gamma (uv.w carries fontScale): exact
+                // symbol.fragment.glsl form per glyph quad.
+                rampW = (0.105 / max(vMglScale, 1e-3)) * (64.0 / 255.0);
             }
             // S-curve form of the same derivative-scaled ramp: mgl uses a
             // smoothstep around the edge, which saturates the stroke interior

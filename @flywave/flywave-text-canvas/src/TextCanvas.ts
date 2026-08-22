@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { FontCatalog } from "./rendering/FontCatalog";
 import { GlyphData } from "./rendering/GlyphData";
 import { TextBufferObject } from "./rendering/TextBufferObject";
-import { QUAD_VERTEX_MEMORY_FOOTPRINT, TextGeometry } from "./rendering/TextGeometry";
+import { QUAD_VERTEX_MEMORY_FOOTPRINT, TextGeometry, MglGammaMode } from "./rendering/TextGeometry";
 import { SdfTextMaterial } from "./rendering/TextMaterials";
 import { FontVariant, TextLayoutStyle, TextRenderStyle } from "./rendering/TextStyle";
 import { LineTypesetter } from "./typesetting/LineTypesetter";
@@ -335,6 +335,17 @@ export class TextCanvas {
             this.m_fontCatalog.distanceRange
         );
         bgMaterial.defines.MSDF = this.m_fontCatalog.type === "msdf" ? 1.0 : 0.0;
+        // mgl per-symbol gamma mode: publish the catalog em size to every
+        // layer's geometry (uv.w = fontSize / catalogSize) and switch the
+        // FOREGROUND material to the per-vertex gamma branch. The background
+        // material keeps the native path (uMglGammaScale stays 0).
+        for (const layer of this.m_layers ?? []) {
+            layer.storage.m_catalogSize = this.m_fontCatalog.size;
+        }
+        if (MglGammaMode.enabled) {
+            const fg = this.m_material as THREE.RawShaderMaterial;
+            if (fg?.uniforms?.uMglGammaScale) fg.uniforms.uMglGammaScale.value = 1.0;
+        }
     }
 
     /**

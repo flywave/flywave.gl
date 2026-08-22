@@ -16,6 +16,7 @@ export * from "./rendering/FontCatalog";
 export * from "./rendering/GlyphData";
 export * from "./rendering/TextStyle";
 export * from "./rendering/TextBufferObject";
+export * from "./rendering/TextGeometry";
 export * from "./TextCanvas";
 
 export * from "./utils/ContextualArabicConverter";
