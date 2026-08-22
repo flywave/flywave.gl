@@ -7,7 +7,6 @@ export { DEMTileMeshMaterial, defaultDEMTileMeshMaterial } from "./dem-terrain/D
 export {
     DEMTileBaseMaterial,
     DEMTileOverlayMaterial,
-    TerrainTileUniforms,
     type DEMLayerKind
 } from "./dem-terrain/DEMTileLayerMaterial";
 export { TerrainLayerMesh, TerrainTileState } from "./dem-terrain/TerrainLayerMesh";

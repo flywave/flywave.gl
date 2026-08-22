@@ -223,11 +223,17 @@ export abstract class ResourceProvider<
                                 resource.connectToDataSource(this.terrainSource!, parentKey);
                                 parentTile.resourceManager.setResource(resourceKey, resource);
 
-                                // Update memory usage; refresh only tiles
-                                // intersecting the resource's geoBox instead
-                                // of clearing the whole tile cache.
+                                // Update memory usage and overlays.
+                                // NOTE: intentionally UNFILTERED (legacy
+                                // behavior). A geoBox-filtered clear here
+                                // relied on resource.geoBox correctness and
+                                // on debounce argument semantics (only the
+                                // last call's geoBox survives the 100ms
+                                // window) — either can skip the initial
+                                // on-screen tiles, leaving them stuck in a
+                                // stale state until the camera moves.
                                 this.terrainSource!.updateMemoryUsage(parentTile);
-                                this.terrainSource!.updateTileOverlays(resource.geoBox);
+                                this.terrainSource!.updateTileOverlays();
 
                                 this.dispatchEvent({
                                     type: ResourceProviderEvents.onResourceLoaded,

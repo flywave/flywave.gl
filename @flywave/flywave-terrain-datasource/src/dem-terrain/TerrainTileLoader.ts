@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { TextElement } from "@flywave/flywave-mapview";
+import { webMercatorTerrainTilingScheme } from "@flywave/flywave-geoutils";
 import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";
 import { type TerrainResourceTile } from "../TerrainSource";
 import { type DEMTerrainSource } from "./DEMTerrainSource";
@@ -38,8 +39,6 @@ interface TargetLayer {
     texture?: THREE.Texture;
     uvTransform?: THREE.Vector4;
     opacity?: number;
-    projectorMatrix?: THREE.Matrix4;
-    cameraPos?: THREE.Vector3;
     blending?: THREE.Blending;
 }
 
@@ -104,20 +103,26 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
 
             const existing = meshes.get(target.key);
             if (existing && existing.layerKind === target.kind) {
+                existing.visible = true;
                 this.updateLayerMesh(existing, target);
                 continue;
             }
             if (existing) {
-                existing.dispose();
-                meshes.delete(target.key);
+                // Kind mismatch should not happen with stable layer keys; if
+                // it ever does, hide the old mesh (never dispose here).
+                existing.visible = false;
             }
             meshes.set(target.key, this.createLayerMesh(state, target));
         }
 
-        for (const key of Array.from(meshes.keys())) {
+        // Layers absent from the current target set (e.g. imagery resources
+        // briefly evicted and not yet reloaded) are HIDDEN, not disposed —
+        // material disposal is reserved for warm-cache overflow and source
+        // teardown. Disposing here turned the eviction/reload cycle into an
+        // infinite material-rebuild (TSL graph + WGSL compile) storm.
+        for (const [key, mesh] of meshes) {
             if (!seen.has(key)) {
-                meshes.get(key)!.dispose();
-                meshes.delete(key);
+                mesh.visible = false;
             }
         }
 
@@ -132,20 +137,33 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
     private ensureTileState(): TerrainTileState {
         let state = this.tile.layerTileState;
         if (!state) {
+            // Adopt meshes + state preserved from a previous incarnation of
+            // this tileKey (terrain-LRU eviction) — avoids material graph
+            // rebuilds when the camera returns to recently evicted tiles.
+            const preserved = this.dataSource.acquireLayerMeshes(this.tile.tileKey);
+            if (preserved) {
+                this.tile.adoptLayerMeshes(preserved);
+                state = preserved.state;
+            }
+        }
+        if (!state) {
             const geometryBuilder = this.dataSource.tileBaseGeometryBuilder;
             const geometryWithTransform = geometryBuilder.getTileGeometryWithTransform(
                 this.tile.tileKey
             );
             state = new TerrainTileState(
-                this.tile,
+                this.tile.tileKey,
                 this.dataSource.getTilingScheme(),
                 this.dataSource.getProjectionSwitchController(),
                 geometryBuilder,
                 geometryWithTransform
             );
-            state.setModifierManager(this.dataSource.getGroundModificationManager());
             this.tile.layerTileState = state;
         }
+        // Bind the CURRENT shadow tile incarnation — displacement must be
+        // computed against the same tile whose center the renderer adds back.
+        state.attachTile(this.tile);
+        state.setModifierManager(this.dataSource.getGroundModificationManager());
         return state;
     }
 
@@ -189,34 +207,46 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             });
         });
 
-        // Gray fallback only when no imagery provider is configured at all.
-        // While providers exist but nothing has loaded yet the tile renders
-        // nothing (same as the pre-refactor behavior) — avoids creating a
-        // throwaway material that would be replaced (and recompiled) as soon
-        // as the first imagery tile arrives.
-        if (!baseAssigned && providers.length === 0) {
+        // The lit base mesh ALWAYS exists with the stable key "base": without
+        // imagery loaded it renders the solid fallback color, and the first
+        // available imagery upgrades it in place (setImagery — zero rebuild).
+        // A base that pops in/out would rebuild materials in a loop during
+        // the eviction/reload cycle.
+        if (!baseAssigned) {
             targets.push({ key: "base", kind: "base" });
         }
 
-        this.collectProjectorLayers(targets);
+        this.collectProjectorLayers(state, targets);
 
         return targets;
     }
 
-    private collectProjectorLayers(targets: TargetLayer[]): void {
+    private collectProjectorLayers(state: TerrainTileState, targets: TargetLayer[]): void {
         const manager = this.dataSource.getProjectorOverlayManager();
         const resourceTile = manager.provider.getBestAvailableResourceTile(this.tile.tileKey);
         if (!resourceTile) return;
 
-        const cameraPos = manager.cameraPos;
         for (const entry of resourceTile.resource.value) {
+            // Same sampling path as satellite imagery: the UV transform MUST
+            // be computed in the imagery (web-mercator) projected space —
+            // the shader samples with the webMercatorY attribute, which is
+            // linear in mercator Y. Passing the terrain's own (sphere)
+            // tiling scheme here produces a latitude-linear transform and
+            // the decal lands in the wrong place (growing offset with
+            // latitude).
+            const transform = state.computeTextureUvTransform(
+                entry.geoBox,
+                manager.provider.tilingScheme ?? webMercatorTerrainTilingScheme
+            );
+            if (transform === false) continue;
+
+            entry.texture.flipY = this.dataSource.isYAxisDown;
             targets.push({
                 key: `proj:${entry.layerId}`,
                 kind: "projector",
                 texture: entry.texture,
+                uvTransform: transform,
                 opacity: entry.opacity,
-                projectorMatrix: entry.matrix,
-                cameraPos,
                 blending: projectorBlending(entry.blendMode)
             });
         }
@@ -224,56 +254,61 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
 
     private createLayerMesh(state: TerrainTileState, target: TargetLayer): TerrainLayerMesh {
         if (target.kind === "base") {
-            const material = new DEMTileBaseMaterial(state.uniforms, {
-                texture: target.texture,
-                uvTransform: target.uvTransform
-            });
-            return new TerrainLayerMesh(
+            const material = new DEMTileBaseMaterial();
+            const mesh = new TerrainLayerMesh(
                 state.geometryRef,
                 material,
                 state,
                 target.key,
                 target.kind
             );
+            mesh.setImagery(target.texture ?? null, target.uvTransform);
+            return mesh;
         }
 
+        // Imagery overlays and projector layers share the SAME overlay
+        // material graph — only blending may differ per layer.
         const material = new DEMTileOverlayMaterial(
-            state.uniforms,
-            target.kind === "projector" ? "projector" : "overlay",
-            {
-                texture: target.texture,
-                uvTransform: target.uvTransform,
-                opacity: target.opacity,
-                projectorMatrix: target.projectorMatrix,
-                cameraPos: target.cameraPos,
-                blendMode: target.blending
-            }
+            target.blending !== undefined ? { blending: target.blending } : undefined
         );
-        return new TerrainLayerMesh(state.geometryRef, material, state, target.key, target.kind);
+        const mesh = new TerrainLayerMesh(
+            state.geometryRef,
+            material,
+            state,
+            target.key,
+            target.kind
+        );
+        if (target.texture) {
+            mesh.setLayerTexture(target.texture);
+        }
+        if (target.uvTransform) {
+            mesh.setLayerUvTransform(target.uvTransform);
+        }
+        if (target.opacity !== undefined) {
+            mesh.setLayerOpacity(target.opacity);
+        }
+        return mesh;
     }
 
     private updateLayerMesh(mesh: TerrainLayerMesh, target: TargetLayer): void {
-        const material = mesh.material as DEMTileBaseMaterial | DEMTileOverlayMaterial;
         if (target.kind === "base") {
-            (material as DEMTileBaseMaterial).setImagery(
-                target.texture ?? null,
-                target.uvTransform
-            );
+            mesh.setImagery(target.texture ?? null, target.uvTransform);
             return;
         }
 
-        const overlayMaterial = material as DEMTileOverlayMaterial;
         if (target.texture) {
-            overlayMaterial.setLayerTexture(target.texture);
+            mesh.setLayerTexture(target.texture);
         }
         if (target.uvTransform) {
-            overlayMaterial.setUvTransform(target.uvTransform);
+            mesh.setLayerUvTransform(target.uvTransform);
         }
         if (target.opacity !== undefined) {
-            overlayMaterial.setOpacity(target.opacity);
+            mesh.setLayerOpacity(target.opacity);
         }
-        if (target.blending !== undefined) {
-            overlayMaterial.setLayerBlending(target.blending);
+        const material = mesh.material as DEMTileOverlayMaterial;
+        if (target.blending !== undefined && material.blending !== target.blending) {
+            material.blending = target.blending;
+            material.needsUpdate = true;
         }
     }
 }

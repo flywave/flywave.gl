@@ -2,8 +2,8 @@
 
 import {
     type TileGeometryBuilder,
-    type TileTransformation,
-    TileGeometryWithTransform
+    TileGeometryWithTransform,
+    type TileTransformation
 } from "@flywave/flywave-geometry";
 import { GeoBox, type TilingScheme, TileKey } from "@flywave/flywave-geoutils";
 import { type Tile } from "@flywave/flywave-mapview";
@@ -12,10 +12,11 @@ import * as THREE from "three/webgpu";
 
 import { type HeightMapModifierManager } from "../ground-modification-manager";
 import { ProjectionSwitchController } from "../ProjectionSwitchController";
-import { type DEMLayerKind, TerrainTileUniforms } from "./DEMTileLayerMaterial";
+import { type DEMLayerKind } from "./DEMTileLayerMaterial";
 
-const uDemUnpack0 = new Vector4(6553.6, 25.6, 0.1, 10000.0);
 const zAxis = new Vector3(0, 0, 1);
+const ORIGIN = new Vector3();
+const uDemUnpack0 = new Vector4(6553.6, 25.6, 0.1, 10000.0);
 
 function computeHeightMapPos(tileKey: TileKey, demTileKey: TileKey, yDown: boolean): Vector3 {
     tileKey = TileKey.fromRowColumnLevel(
@@ -39,19 +40,16 @@ function computeHeightMapPos(tileKey: TileKey, demTileKey: TileKey, yDown: boole
 }
 
 /**
- * Per-tile render state shared by all layer meshes of one
- * TerrainResourceTile.
+ * Per-tile render state shared by all layer meshes of one tile.
  *
- * Owns the shared {@link TerrainTileUniforms} and performs the per-frame
- * frame-idempotent update (projection interpolation, RTE displacement,
- * modifier refresh). All layer meshes' materials reference the same uniform
- * node instances, so one write here drives every layer.
+ * Computes the per-frame tile state once (projection interpolation, RTE
+ * displacement, modifier refresh — all change-guarded) and writes the results
+ * into each layer mesh's plain properties, which the shared material graphs
+ * read back at draw time via onObjectUpdate. One computation, N cheap copies.
  */
 export class TerrainTileState {
-    readonly uniforms: TerrainTileUniforms = new TerrainTileUniforms();
-    readonly quaternion: Quaternion = new Quaternion();
-
-    private readonly m_tile: Tile;
+    private readonly m_tileKey: TileKey;
+    private m_currentTile?: Tile;
     private readonly m_geometry: THREE.BufferGeometry;
     private readonly m_transformation: TileTransformation;
     private readonly m_targetZRotation: number;
@@ -64,7 +62,6 @@ export class TerrainTileState {
     private readonly m_selfGeoBox: GeoBox;
     private readonly m_uPatchPos: THREE.Matrix4 = new THREE.Matrix4();
     private readonly m_scratchInterpPos: Vector3 = new Vector3();
-    private m_uHeightMapPos?: Vector3;
 
     private m_modifierManager?: HeightMapModifierManager;
     private m_modifierVersion: number = -1;
@@ -73,16 +70,29 @@ export class TerrainTileState {
     private m_modifierOp: number = 0;
     private m_mergedTexture: DataTexture | null = null;
 
+    private m_heightMapTexture: THREE.Texture | null = null;
+    private m_heightMapPos: Vector4 = new Vector4(1, 0, 0, 0);
+    private m_texSize: Vector2 = new Vector2(1, 1);
+
     private m_lastProjFactor: number = Number.NaN;
+    private m_frameDirty: boolean = true;
+
+    readonly quaternion: Quaternion = new Quaternion();
+    readonly displacement: Vector3 = new Vector3();
+    readonly packCol0: Vector4 = new Vector4();
+    readonly patchPos0: Vector4 = new Vector4();
+    readonly patchPos1: Vector4 = new Vector4();
+    readonly patchPos2: Vector4 = new Vector4();
+    readonly patchPos3: Vector4 = new Vector4();
 
     constructor(
-        tile: Tile,
+        tileKey: TileKey,
         tilingScheme: TilingScheme,
         projectionSwitchController: ProjectionSwitchController,
         tilingSchemeTileGrid: TileGeometryBuilder,
         geometryWithTransform: TileGeometryWithTransform
     ) {
-        this.m_tile = tile;
+        this.m_tileKey = tileKey;
         this.m_geometry = geometryWithTransform.geometry;
         this.m_terrainTilingScheme = tilingScheme;
         this.m_projectionSwitchController = projectionSwitchController;
@@ -91,112 +101,153 @@ export class TerrainTileState {
         this.m_skirtHeight = geometryWithTransform.skirtHeight;
         this.m_isSimplePatch = geometryWithTransform.geometry.mode.is_simple_patch ?? false;
         this.m_yDown = tilingSchemeTileGrid.isYAxisDown();
-        this.m_selfGeoBox = this.m_terrainTilingScheme.getGeoBox(tile.tileKey);
+        this.m_selfGeoBox = this.m_terrainTilingScheme.getGeoBox(tileKey);
 
         this.m_targetZRotation =
-            (Math.PI * 2 * tile.tileKey.column) /
+            (Math.PI * 2 * tileKey.column) /
             this.m_tilingSchemeTileGrid
                 .getTilingScheme()
-                .subdivisionScheme.getLevelDimensionX(tile.tileKey.level);
+                .subdivisionScheme.getLevelDimensionX(tileKey.level);
 
-        this.applyStaticUniforms();
+        this.packCol0.set(0, 0, 0, this.m_isSimplePatch ? 1 : 0);
     }
 
     get tileKey(): TileKey {
-        return this.m_tile.tileKey;
+        return this.m_tileKey;
+    }
+
+    /**
+     * Bind the CURRENT shadow tile incarnation. The displacement must be
+     * computed against the very same tile whose center the renderer adds
+     * back (TileObjectsRenderer does `position = tile.center + displacement`
+     * live) — replicating the legacy mesh, which read `tile.center` every
+     * frame instead of snapshotting it.
+     */
+    attachTile(tile: Tile): void {
+        this.m_currentTile = tile;
     }
 
     get geometryRef(): THREE.BufferGeometry {
         return this.m_geometry;
     }
 
-    private applyStaticUniforms(): void {
-        this.uniforms.packCol0.value.set(0, 0, 0, this.m_isSimplePatch ? 1 : 0);
-        this.uniforms.skirtHeight.value = this.m_skirtHeight;
-    }
-
     setModifierManager(manager: HeightMapModifierManager): void {
         this.m_modifierManager = manager;
         this.m_modifierVersion = -1;
-        this.updateModifierState();
+        this.m_frameDirty = true;
     }
 
     setHeightMap(texture: THREE.Texture, demTileKey: TileKey): void {
-        this.m_uHeightMapPos = computeHeightMapPos(
-            this.m_tile.tileKey,
+        const pos = computeHeightMapPos(
+            this.m_tileKey,
             demTileKey,
             this.m_tilingSchemeTileGrid.isYAxisDown()
         );
         texture.flipY = this.m_yDown;
-        this.uniforms.setHeightMapTexture(texture);
+        this.m_heightMapTexture = texture;
         const img = texture.image as { width?: number; height?: number } | undefined;
         if (img && img.width) {
-            this.uniforms.texSize.value.set(img.width, img.height);
+            this.m_texSize.set(img.width, img.height);
         }
-        this.uniforms.heightMapPos.value.set(
-            this.m_uHeightMapPos.x,
-            this.m_uHeightMapPos.y,
-            this.m_uHeightMapPos.z,
-            0
-        );
-        this.uniforms.demUnpack.value.copy(uDemUnpack0);
+        this.m_heightMapPos.set(pos.x, pos.y, pos.z, 0);
+        this.m_frameDirty = true;
     }
 
-    /** Idempotent per-frame update; cheap no-op when nothing changed. */
+    /**
+     * Drop the elevation texture reference (e.g. when the owning tile is
+     * evicted from the terrain LRU and resourceManager.dispose() frees the
+     * DEM texture). Sampling a destroyed GPU texture yields undefined
+     * elevation (~1.6M m garbage) — the state must fall back to the
+     * "no DEM" branch until a fresh texture arrives via setHeightMap.
+     * Layer meshes/materials stay alive for warm-cache adoption.
+     */
+    invalidateElevation(): void {
+        this.m_heightMapTexture = null;
+        this.m_frameDirty = true;
+    }
+
+    /** Per-frame update — verbatim replica of the legacy updateProjectionTransform. */
     updateFrame(): void {
         const projectionFactor = this.m_projectionSwitchController.projectionFactor;
 
-        if (projectionFactor !== this.m_lastProjFactor) {
-            this.m_lastProjFactor = projectionFactor;
+        const hasRotation = this.m_transformation.interpolateTo(
+            projectionFactor,
+            this.m_scratchInterpPos,
+            this.m_uPatchPos
+        );
+        if (!hasRotation) {
+            this.m_uPatchPos.identity();
+        }
+        const e = this.m_uPatchPos.elements;
+        this.patchPos0.set(e[0], e[1], e[2], e[3]);
+        this.patchPos1.set(e[4], e[5], e[6], e[7]);
+        this.patchPos2.set(e[8], e[9], e[10], e[11]);
+        this.patchPos3.set(e[12], e[13], e[14], e[15]);
 
-            const hasRotation = this.m_transformation.interpolateTo(
-                projectionFactor,
-                this.m_scratchInterpPos,
-                this.m_uPatchPos
-            );
-            if (!hasRotation) {
-                this.m_uPatchPos.identity();
-            }
-            this.decomposePatchPos(this.m_uPatchPos);
-            this.uniforms.projectionFactor.value = projectionFactor;
-
-            this.quaternion.identity();
-            if (!this.m_isSimplePatch) {
-                const currentZRotation = this.m_targetZRotation * (1 - projectionFactor);
-                this.quaternion.setFromAxisAngle(zAxis, currentZRotation);
-            }
-
-            this.uniforms.displacement.copy(this.m_scratchInterpPos).sub(this.m_tile.center);
+        this.quaternion.identity();
+        if (!this.m_isSimplePatch) {
+            const currentZRotation = this.m_targetZRotation * (1 - projectionFactor);
+            this.quaternion.setFromAxisAngle(zAxis, currentZRotation);
         }
 
+        // Live tile center, read every frame — exactly like the legacy mesh
+        // (`this.m_tile.center`), so displacement self-cancels against the
+        // renderer's `tile.center + displacement` regardless of when/whether
+        // the tile's center value is (re)computed.
+        this.displacement
+            .copy(this.m_scratchInterpPos)
+            .sub(this.m_currentTile ? this.m_currentTile.center : ORIGIN);
+
+        this.m_lastProjFactor = projectionFactor;
         this.updateModifierState();
     }
 
-    private decomposePatchPos(mat: THREE.Matrix4): void {
-        const e = mat.elements;
-        this.uniforms.patchPos0.value.set(e[0], e[1], e[2], e[3]);
-        this.uniforms.patchPos1.value.set(e[4], e[5], e[6], e[7]);
-        this.uniforms.patchPos2.value.set(e[8], e[9], e[10], e[11]);
-        this.uniforms.patchPos3.value.set(e[12], e[13], e[14], e[15]);
+    /** Push the current tile state into one layer mesh's draw-time properties. */
+    writeTo(mesh: TerrainLayerMesh): void {
+        mesh.packCol0.copy(this.packCol0);
+        mesh.patchPos0.copy(this.patchPos0);
+        mesh.patchPos1.copy(this.patchPos1);
+        mesh.patchPos2.copy(this.patchPos2);
+        mesh.patchPos3.copy(this.patchPos3);
+        mesh.skirtHeight = this.m_skirtHeight;
+        mesh.projectionFactor = this.m_lastProjFactor;
+        mesh.displacement.copy(this.displacement);
+        mesh.quaternion.copy(this.quaternion);
+
+        // Legacy parity (HeightMapTerrainMesh.updateUniforms): without a DEM
+        // texture the unpack constants MUST be zero — decoding the 1×1 white
+        // dummy with real unpack constants yields ~1.6M m elevation and the
+        // tile launches into space.
+        if (this.m_heightMapTexture) {
+            mesh.heightMapTexture = this.m_heightMapTexture;
+            mesh.demUnpack.copy(uDemUnpack0);
+            mesh.heightMapPos.copy(this.m_heightMapPos);
+            mesh.texSize.copy(this.m_texSize);
+        } else {
+            mesh.heightMapTexture = null;
+            mesh.demUnpack.set(0, 0, 0, 0);
+            mesh.heightMapPos.set(1, 0, 0, 0);
+            mesh.texSize.set(1, 1);
+        }
+
+        if (this.m_modifierTexture) {
+            mesh.hasModifier = 1;
+            mesh.modifierTexture = this.m_modifierTexture;
+            mesh.modifierUVBounds.copy(this.m_modifierUVBounds);
+            mesh.modifierOp = this.m_modifierOp;
+        } else {
+            mesh.hasModifier = 0;
+            mesh.modifierTexture = null;
+        }
     }
 
     private updateModifierState(): void {
         if (!this.m_modifierManager) return;
-
         if (this.m_modifierVersion === this.m_modifierManager.version) return;
         this.m_modifierVersion = this.m_modifierManager.version;
 
         this.refreshModifierQuery();
-
-        if (this.m_modifierTexture) {
-            this.uniforms.hasModifier.value = 1;
-            this.uniforms.setModifierTexture(this.m_modifierTexture);
-            this.uniforms.modifierUVBounds.value.copy(this.m_modifierUVBounds);
-            this.uniforms.modifierOp.value = this.m_modifierOp;
-        } else {
-            this.uniforms.hasModifier.value = 0;
-            this.uniforms.setModifierTexture(null);
-        }
+        // values applied in writeTo()
     }
 
     private refreshModifierQuery(): void {
@@ -352,15 +403,39 @@ export class TerrainTileState {
 }
 
 /**
- * Thin layer mesh: shared tile geometry + one dedicated material instance.
- * Never owns its geometry (globally cached in TileGeometryBuilder); disposal
- * only releases the material.
+ * Thin layer mesh: shared tile geometry + one dedicated material instance
+ * (never shared between meshes). All per-mesh render data lives as PLAIN
+ * PROPERTIES here — the shared material graphs read them at draw time via
+ * onObjectUpdate, which is what lets every tile reuse ONE compiled pipeline.
+ * Never owns its geometry (globally cached in TileGeometryBuilder).
  */
 export class TerrainLayerMesh extends Mesh {
     public readonly isTerrainLayerMesh = true;
     public readonly layerKey: string;
     public readonly layerKind: DEMLayerKind;
-    public displacement: Vector3;
+
+    // --- Draw-time properties read by the shared material graphs ---
+    public heightMapTexture: THREE.Texture | null = null;
+    public modifierTexture: THREE.Texture | null = null;
+    public layerTexture: THREE.Texture | null = null;
+    public uvTransform: Vector4 = new Vector4(1, 1, 0, 0);
+    public opacity: number = 1;
+    public hasImagery: number = 0;
+    public fallbackColor: THREE.Color = new THREE.Color(0.5, 0.5, 0.5);
+    public packCol0: Vector4 = new Vector4();
+    public patchPos0: Vector4 = new Vector4();
+    public patchPos1: Vector4 = new Vector4();
+    public patchPos2: Vector4 = new Vector4();
+    public patchPos3: Vector4 = new Vector4();
+    public demUnpack: Vector4 = new Vector4();
+    public heightMapPos: Vector4 = new Vector4(1, 0, 0, 0);
+    public texSize: Vector2 = new Vector2(1, 1);
+    public skirtHeight: number = 0;
+    public projectionFactor: number = 0;
+    public modifierUVBounds: Vector4 = new Vector4();
+    public modifierOp: number = 0;
+    public hasModifier: number = 0;
+    public displacement: Vector3 = new Vector3();
 
     constructor(
         geometry: THREE.BufferGeometry,
@@ -373,8 +448,6 @@ export class TerrainLayerMesh extends Mesh {
 
         this.layerKey = layerKey;
         this.layerKind = layerKind;
-        this.displacement = tileState.uniforms.displacement;
-
         this.userData.tileKey = tileState.tileKey;
 
         if (layerKind === "base") {
@@ -389,8 +462,31 @@ export class TerrainLayerMesh extends Mesh {
 
         this.onBeforeRender = () => {
             tileState.updateFrame();
-            this.quaternion.copy(tileState.quaternion);
+            tileState.writeTo(this);
         };
+    }
+
+    /** Swap albedo imagery in place (plain property write, zero rebuilds). */
+    setImagery(tex: THREE.Texture | null, uvTransform?: THREE.Vector4) {
+        this.layerTexture = tex;
+        this.hasImagery = tex ? 1 : 0;
+        if (uvTransform) {
+            this.uvTransform.copy(uvTransform);
+        }
+    }
+
+    /** Swap decal texture / params in place. */
+    setLayerTexture(tex: THREE.Texture) {
+        this.layerTexture = tex;
+        this.hasImagery = 1;
+    }
+
+    setLayerOpacity(value: number) {
+        this.opacity = value;
+    }
+
+    setLayerUvTransform(transform: THREE.Vector4) {
+        this.uvTransform.copy(transform);
     }
 
     dispose(): void {

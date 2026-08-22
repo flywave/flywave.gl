@@ -59,6 +59,15 @@ import {
 } from "@flywave/flywave-geometry";
 
 /**
+ * Capacity (in tiles) of the warm layer-mesh cache that preserves materials
+ * across terrain-LRU eviction. Each entry holds 1-N materials with per-tile
+ * uniform nodes (small GPU footprint — the heavy bytes live in the provider
+ * LRU / resource manager), so a generous cap is cheap compared to rebuilding
+ * the per-material TSL node graphs.
+ */
+const MAX_PRESERVED_LAYER_MESH_TILES = 4096;
+
+/**
  * Configuration options for TerrainSource
  */
 export interface TerrainSourceOptions<DataProviderType extends DataProvider = DataProvider>
@@ -194,6 +203,37 @@ export class TerrainResourceTile extends Tile {
     }
 
     /**
+     * Detach the layer meshes + shared tile state for preservation across LRU
+     * eviction (the source-level warm mesh cache re-attaches them when the
+     * tile is re-created, avoiding material graph rebuilds). Returns null
+     * when there is nothing worth preserving.
+     */
+    extractLayerMeshes(): {
+        meshes: Map<string, TerrainLayerMesh>;
+        state: TerrainTileState;
+    } | null {
+        if (!this._layerMeshes || this._layerMeshes.size === 0 || !this._layerTileState) {
+            return null;
+        }
+        const preserved = { meshes: this._layerMeshes, state: this._layerTileState };
+        this._layerMeshes = null;
+        this._layerTileState = null;
+        return preserved;
+    }
+
+    /**
+     * Re-attach previously preserved layer meshes + tile state (from the warm
+     * mesh cache) onto this (new) tile instance.
+     */
+    adoptLayerMeshes(preserved: {
+        meshes: Map<string, TerrainLayerMesh>;
+        state: TerrainTileState;
+    }): void {
+        this._layerMeshes = preserved.meshes;
+        this._layerTileState = preserved.state;
+    }
+
+    /**
      * Remove web tile textures from a specific source
      * @param resourceKey - The resource identifier to remove
      */
@@ -279,6 +319,13 @@ export class ShadowTerrainResourceTile extends TerrainResourceTile {
 
     set layerTileState(state: TerrainTileState | null) {
         this.resTile.layerTileState = state;
+    }
+
+    adoptLayerMeshes(preserved: {
+        meshes: Map<string, TerrainLayerMesh>;
+        state: TerrainTileState;
+    }): void {
+        this.resTile.adoptLayerMeshes(preserved);
     }
 
     shouldDisposeObjectGeometry() {
@@ -406,6 +453,17 @@ export abstract class TerrainSource<
 
     private m_showDebugInfo: boolean = false;
     private m_debugObject?: Object3D = new Object3D();
+
+    /**
+     * Warm cache of layer meshes + tile state preserved across terrain-LRU
+     * eviction, keyed by tileKey morton code. Bounded FIFO — entries falling
+     * off the end are disposed for real.
+     */
+    private readonly m_layerMeshCache = new Map<
+        number,
+        { meshes: Map<string, TerrainLayerMesh>; state: TerrainTileState }
+    >();
+    private m_disposing: boolean = false;
 
     private stageConfigs: LoadingStage[] = [];
     /** Number of loading stages for progressive loading */
@@ -616,6 +674,17 @@ export abstract class TerrainSource<
         if (
             this.m_tileCache.add(tile, () => {
                 this.dequeueTileLoadingTask(tile);
+                // Eviction from the terrain LRU destroys the tile's data
+                // resources, but its layer meshes / materials are moved into
+                // the warm mesh cache first so a later re-creation of the
+                // same tileKey re-attaches them without any material graph
+                // rebuild (the LRU byte budget counts DEM resources, not
+                // materials — the churn of rebuilding per-material TSL graphs
+                // on every evict/return cycle caused severe hitches while
+                // panning once the byte budget started evicting).
+                if (!this.m_disposing) {
+                    this.preserveLayerMeshes(tile);
+                }
                 tile.dispose(true);
             })
         ) {
@@ -623,6 +692,47 @@ export abstract class TerrainSource<
             return true;
         }
         return false;
+    }
+
+    /**
+     * Move a tile's layer meshes + state into the warm mesh cache (FIFO,
+     * bounded). Called right before LRU eviction disposes the tile.
+     */
+    private preserveLayerMeshes(tile: TerrainResourceTile) {
+        const preserved = tile.extractLayerMeshes();
+        if (!preserved) return;
+
+        // The LRU eviction callback disposes the tile's resources right
+        // after this — the DEM height texture becomes invalid. Keep meshes +
+        // state (cheap, avoids material churn) but drop texture references
+        // so re-adopted tiles never sample a destroyed GPU texture.
+        preserved.state.invalidateElevation();
+
+        const key = tile.tileKey.mortonCode(this.getTilingScheme().mortonTileEncoding);
+        this.m_layerMeshCache.delete(key);
+        this.m_layerMeshCache.set(key, preserved);
+
+        while (this.m_layerMeshCache.size > MAX_PRESERVED_LAYER_MESH_TILES) {
+            const oldestKey = this.m_layerMeshCache.keys().next().value as number;
+            const oldest = this.m_layerMeshCache.get(oldestKey)!;
+            this.m_layerMeshCache.delete(oldestKey);
+            oldest.meshes.forEach(mesh => mesh.dispose());
+            oldest.state.dispose();
+        }
+    }
+
+    /**
+     * Take preserved layer meshes + state for a tileKey out of the warm mesh
+     * cache (if any), for adoption by a newly created tile. Ownership
+     * transfers to the caller — the entry is removed from the cache.
+     */
+    acquireLayerMeshes(tileKey: TileKey) {
+        const key = tileKey.mortonCode(this.getTilingScheme().mortonTileEncoding);
+        const preserved = this.m_layerMeshCache.get(key);
+        if (preserved) {
+            this.m_layerMeshCache.delete(key);
+        }
+        return preserved ?? null;
     }
 
     /**
@@ -876,7 +986,13 @@ export abstract class TerrainSource<
      * Cleans up resources and disposes of the terrain source
      */
     dispose(): void {
+        this.m_disposing = true;
         super.dispose();
         this.m_tileCache.removeAllTiles();
+        this.m_layerMeshCache.forEach(preserved => {
+            preserved.meshes.forEach(mesh => mesh.dispose());
+            preserved.state.dispose();
+        });
+        this.m_layerMeshCache.clear();
     }
 }

@@ -10,9 +10,85 @@ import {
     DEMTerrainSource,
     ArcGISTileProvider,
     type ProjectorOverlayManager,
+    type DEMTerrainSource as DEMTerrainSourceType,
     GUI
 } from "@flywave/flywave.gl";
-import { TextureLoader, ClampToEdgeWrapping } from "three/webgpu";
+import { TextureLoader, ClampToEdgeWrapping, Mesh, MeshBasicMaterial, CylinderGeometry, Group, Vector3, Texture } from "three/webgpu";
+import * as THREE from "three/webgpu";
+
+/**
+ * Debug: mark the four corners of the projector layer's geoBox with pillars
+ * whose axis points at the earth center (radial). Each pillar spans from
+ * 400 m below to 800 m above the terrain height so it pierces the surface
+ * and stays visible from any camera angle (depth test disabled).
+ */
+const addGeoBoxCornerMarkers = (
+    mapView: MapView,
+    demTerrain: DEMTerrainSourceType,
+    geoBox: GeoBox
+): void => {
+    const corners: Array<[number, number]> = [
+        [geoBox.southWest.latitude, geoBox.southWest.longitude],
+        [geoBox.southWest.latitude, geoBox.northEast.longitude],
+        [geoBox.northEast.latitude, geoBox.southWest.longitude],
+        [geoBox.northEast.latitude, geoBox.northEast.longitude]
+    ];
+
+    const makePillar = (radius: number, color: number) => {
+        // Cylinder spans y ∈ [-400, +800] after the translate below.
+        const geometry = new CylinderGeometry(radius, radius, 1200, 12);
+        geometry.translate(0, 200, 0);
+        const mesh = new Mesh(geometry, new MeshBasicMaterial({ color, depthTest: false }));
+        mesh.renderOrder = 999;
+        return mesh;
+    };
+
+    const orientRadial = (mesh: Mesh, lat: number, lon: number) => {
+        // Axis toward earth center = local +Y aligned with the radial
+        // direction of the projected world position.
+        const worldPos = sphereProjection.projectPoint(
+            new GeoCoordinates(lat, lon),
+            new Vector3()
+        );
+        const radial = worldPos.normalize();
+        mesh.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), radial);
+    };
+
+    const placeMarker = (lat: number, lon: number, radius: number, color: number, name: string) => {
+        const geo = new GeoCoordinates(lat, lon);
+        geo.altitude = (demTerrain.getElevationProvider()?.getHeight(geo) ?? 0) + 0;
+
+        const anchor: any = new Group();
+        anchor.geoPosition = geo;
+        const pillar = makePillar(radius, color);
+        pillar.name = name;
+        orientRadial(pillar, lat, lon);
+        anchor.add(pillar);
+        mapView.mapAnchors.add(anchor);
+    };
+
+    // Elevation may be undefined until the terrain loads — poll until every
+    // corner resolves, then place the markers exactly once.
+    const tryPlace = (attempt: number) => {
+        const heights = corners.map(([lat, lon]) =>
+            demTerrain.getElevationProvider()?.getHeight(new GeoCoordinates(lat, lon))
+        );
+        if (heights.some(h => h === undefined)) {
+            if (attempt < 60) {
+                setTimeout(() => tryPlace(attempt + 1), 500);
+            }
+            return;
+        }
+
+        corners.forEach(([lat, lon], i) => {
+            placeMarker(lat, lon, 20, 0xff0000, `trench-corner-${i}`);
+        });
+
+        const center = geoBox.center;
+        placeMarker(center.latitude, center.longitude, 35, 0x00ff00, "trench-center");
+    };
+    tryPlace(0);
+};
 
 const PROJECT_CONFIG = {
     PUMPED_STORAGE_3DTILES_URL: "/api/v1/tilesets/gkqj9pbfa7bt9dxex7t8hmp13a/tiles/tileset.json",
@@ -277,6 +353,33 @@ const addTrenchOverlay = (geoBox: GeoBox, manager: ProjectorOverlayManager): voi
             blendMode: "normal"
         });
 
+        // DEBUG: 4-quadrant checker (TL=red, TR=green, BL=blue, BR=yellow)
+        // covering the SAME geoBox. Read the actual (u,v)→world mapping
+        // directly: which quadrant lands where relative to the pillars.
+        const c = document.createElement("canvas");
+        c.width = c.height = 512;
+        const ctx = c.getContext("2d")!;
+        ctx.fillStyle = "#ff0000"; ctx.fillRect(0, 0, 256, 256); // TL
+        ctx.fillStyle = "#00ff00"; ctx.fillRect(256, 0, 256, 256); // TR
+        ctx.fillStyle = "#0000ff"; ctx.fillRect(0, 256, 256, 256); // BL
+        ctx.fillStyle = "#ffff00"; ctx.fillRect(256, 256, 256, 256); // BR
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 8;
+        ctx.strokeRect(4, 4, 504, 504);
+        ctx.beginPath();
+        ctx.moveTo(256, 0); ctx.lineTo(256, 512);
+        ctx.moveTo(0, 256); ctx.lineTo(512, 256);
+        ctx.stroke();
+        const checker = new THREE.Texture(c);
+        checker.needsUpdate = true;
+        checker.wrapS = checker.wrapT = ClampToEdgeWrapping;
+        manager.addLayer({
+            texture: checker,
+            geoBox,
+            opacity: 0.9,
+            blendMode: "normal"
+        });
+
         console.log("Projector layer added:", {
             center: [geoBox.center.latitude, geoBox.center.longitude]
         });
@@ -296,6 +399,7 @@ try {
     const overlayManager = demTerrain.getProjectorOverlayManager();
 
     addTrenchOverlay(trenchGeoBox, overlayManager);
+    addGeoBoxCornerMarkers(mapView, demTerrain, trenchGeoBox);
 
     (window as any).mapView = mapView;
     (window as any).overlayManager = overlayManager;
