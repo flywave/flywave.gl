@@ -2916,3 +2916,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
   - **C flat-roof/alignment 系**（47-155k）：roof 面与侧面颜色块错位（exp (0,128,0) 面 cur 出现在 exp (136,136,136) 位置）——extrusion×terrain 对齐 + 面光照错配；flat-roof-over-border 系（94-155k）最大，疑 tile 边界处屋顶裁剪。
   - **lighting-3d-mode/terrain**（225k/231k）最大值：3D 灯光×地形组合。
 - **优先级建议**：E1（若为单一合成因子可解锁多例）> E2（近裁剪，有 §F2a 修法前科）> C > E3（引擎冻结连带）。下阶段首项：E1 的 draping/亮度链代码分析（TerrainDraping/terrain raster 材质注入）。
+
+**113. E1 亮度偏置精化定性——drape bake 阻塞（2026-08-23 三）**：
+
+- **偏置模型量化**：失配像素按亮度分箱——中亮区 cur **+20**、高亮区 cur **−39**（对比度向均值收缩，ratio 1.12/0.82）——非加性/乘性单一因子，是**照明压平**特征。
+- **代码链定性**：mbstyle 的 TerrainDraping 正交烘焙被 §12.76-58 记档的引擎级问题阻塞（"renderer 层面 plain mesh 全 GL 测试禁用仍零 fragment"），**内容门自禁用 → drape 从未激活** → 地形显示引擎默认外观：`MapTerrainMaterial extends MeshStandardMaterial`（roughness 0.9）的 **PBR 照明**把内容对比度压向均值（与量化特征吻合）；mgl 的 terrain_raster 是**无照明的平铺 drape**。E1 根因 = drape bake 阻塞 + 未 drape 地形的 PBR 默认外观，**非单一合成因子**（§112 的乐观假设修正）。
+- **修复路径（二选一，均引擎侧）**：① 解阻塞 §12.76-58 正交烘焙（RT 渲染 scene mesh 零 fragment 的引擎 renderer 问题）；② mbstyle 侧给地形 mesh 换 unlit 平铺材质（drape 语义直连）——绕开 bake，直接在 patcher 可达的地形材质上做（需确认 mbstyle patcher 能否触及 terrain 数据源的对象，§110 结论同样适用则也需引擎钩子）。
+- **状态**：terrain 大值族维持现状；E1 攻坚转为上述两条路径的评估立项。
