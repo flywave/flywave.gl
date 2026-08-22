@@ -2970,3 +2970,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **逐层验证（node 直测 + 源码对照）**：① `measure-light` 表达式引擎输出正确（node 实测 rgba 嵌套→"#626262"（=255·(1−0.6168)）、case→"black"）；② `MBEnvironmentManager.brightness` 公式与 mgl `calculateLightsBrightness`（style.ts:2694）逐项一致（relLum W3C、polarIntensity=1−polar/90、(dir+amb)/2）；③ 灯光解析（lights 数组 direction[az,polar]）正确。
 - **残差定性**：global-brightness 核心 6 例（427-459px，阈值边缘）——失配像素为符号字形 AA 混色（cur/exp 字形色对土地色 #3399ff 的任何 alpha 混合均不可解释→非颜色误差是**字形覆盖/AA 差**），归并 TextCanvas 字形光栅化域（§91/§104）；atmosphere 系（42-52k）= fog 带域连带；icon-image 系（47-48k）= icon 域；terrain 系（43-49k）= terrain 外观域；globe 系（219-257k）= globe 投影域。
 - **结论**：measure-light **无独立缺陷**，§119 的"材质端未接"定性修正。探针已全部清理，零净变化。
+
+**121. render-callback harness op 实施——JS 图像管线打通至 atlas，末段 icon 重放置待查（2026-08-23 十一，基建保留）**：
+
+- **落地（保留）**：① harness `addImage` op 支持 `"./image/dot.js"` 模块路径（mgl operation-handlers 语义）：fetch vendored mgl checkout → 剥离 `export` → eval → onAdd+render 一次 → canvas 入 addImage（**像素级验证**：canvas (100,100)=(255,100,100)=粉芯 ✓）；② karma 新增 serve pattern `mapbox-gl-js/test/integration/image/*.js`；③ addImage 后 `markTilesDirty` 强制重解码。
+- **残段（待查）**：canvas→addIcon→atlas 链路已通但 icon 仍不上屏——嫌疑收敛到 **PoiRenderer/userImageCache 在重解码后的 icon 重解析**（初次解码时 'dot' 未注册被丢弃的路径未因 markTilesDirty 恢复）；与 styleimagemissing（72px 近失，on-styleimagemissing 事件→addImage 同族流）同根。下轮入口：MBStyleSymbolPlacement 的 icon 缓存失效逻辑。
+- **零回归**：icon-image/default 等不受影响，3 例基线不变（29294/29792/72）。

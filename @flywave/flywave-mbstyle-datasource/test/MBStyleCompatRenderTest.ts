@@ -380,7 +380,40 @@ async function processOperations(
             }
             case "addImage": {
                 if (args[1] && typeof document !== 'undefined') {
-                    // args[0] = name, args[1] = {width, height, data} or HTMLImage
+                    // args[0] = name, args[1] = {width, height, data}, HTMLImage,
+                    // or a "./image/dot.js" module path (mgl operation-handlers
+                    // imports the ES module and uses its `image` export — a
+                    // JS-GENERATED image with onAdd/render callbacks). Resolve
+                    // it against the vendored mapbox-gl-js checkout, strip the
+                    // export syntax, eval once (onAdd + one render pass) and
+                    // feed the drawn canvas to addImage.
+                    if (typeof args[1] === 'string' && args[1].endsWith('.js')) {
+                        try {
+                            const rel = args[1].replace('./', '');
+                            const jsUrl = `/base/mapbox-gl-js/test/integration/${rel}`;
+                            const res = await fetch(jsUrl);
+                            if (res.ok) {
+                                const text = await res.text();
+                                const body = text.replace(/export\s+const\s+image/, 'const image');
+                                const getImage = new Function(`${body}\nreturn image;`);
+                                const image = getImage();
+                                if (image && typeof image.onAdd === 'function') image.onAdd();
+                                if (image && typeof image.render === 'function') image.render();
+                                const canvas = image?.context?.canvas as HTMLCanvasElement | undefined;
+                                if (canvas) {
+                                    dataSource.addImage(args[0], canvas);
+                                    // The symbol placement decoded before the
+                                    // image existed (icon 'dot' unresolved →
+                                    // feature dropped). Force a re-decode so
+                                    // the icon resolves, then settle again.
+                                    (dataSource as any).mapView?.markTilesDirty?.(dataSource);
+                                    mapView.update();
+                                    break;
+                                }
+                            }
+                        } catch {}
+                        break;
+                    }
                     const imgData = args[1];
                     try {
                         const canvas = document.createElement('canvas');

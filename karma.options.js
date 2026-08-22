@@ -143,6 +143,13 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
                 pattern: "@flywave/flywave-mbstyle-datasource/test/rendering/integration/**/*.*",
                 included: false,
                 served: true
+            },
+            {
+                // mgl JS-generated test images (addImage "./image/dot.js" ops)
+                // fetched and evaled by the harness at runtime.
+                pattern: "mapbox-gl-js/test/integration/image/*.js",
+                included: false,
+                served: true
             }
             // {
             //     pattern: "@flywave/flywave-mapview/test/resources/*.*",
