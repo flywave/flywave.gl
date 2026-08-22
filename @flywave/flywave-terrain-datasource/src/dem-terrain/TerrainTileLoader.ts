@@ -11,6 +11,7 @@ import {
     type DEMLayerKind
 } from "./DEMTileLayerMaterial";
 import { TerrainLayerMesh, TerrainTileState } from "./TerrainLayerMesh";
+import { type ProjectorTileEntry, projectorBlending } from "../projector-overlay";
 import type * as THREE from "three/webgpu";
 
 /**
@@ -36,6 +37,10 @@ interface TargetLayer {
     kind: DEMLayerKind;
     texture?: THREE.Texture;
     uvTransform?: THREE.Vector4;
+    opacity?: number;
+    projectorMatrix?: THREE.Matrix4;
+    cameraPos?: THREE.Vector3;
+    blending?: THREE.Blending;
 }
 
 /**
@@ -174,7 +179,28 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             targets.push({ key: "base", kind: "base" });
         }
 
+        this.collectProjectorLayers(targets);
+
         return targets;
+    }
+
+    private collectProjectorLayers(targets: TargetLayer[]): void {
+        const manager = this.dataSource.getProjectorOverlayManager();
+        const resourceTile = manager.provider.getBestAvailableResourceTile(this.tile.tileKey);
+        if (!resourceTile) return;
+
+        const cameraPos = manager.cameraPos;
+        for (const entry of resourceTile.resource.value) {
+            targets.push({
+                key: `proj:${entry.layerId}`,
+                kind: "projector",
+                texture: entry.texture,
+                opacity: entry.opacity,
+                projectorMatrix: entry.matrix,
+                cameraPos,
+                blending: projectorBlending(entry.blendMode)
+            });
+        }
     }
 
     private createLayerMesh(state: TerrainTileState, target: TargetLayer): TerrainLayerMesh {
@@ -192,30 +218,43 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             );
         }
 
-        const material = new DEMTileOverlayMaterial(state.uniforms, "overlay", {
-            texture: target.texture,
-            uvTransform: target.uvTransform
-        });
+        const material = new DEMTileOverlayMaterial(
+            state.uniforms,
+            target.kind === "projector" ? "projector" : "overlay",
+            {
+                texture: target.texture,
+                uvTransform: target.uvTransform,
+                opacity: target.opacity,
+                projectorMatrix: target.projectorMatrix,
+                cameraPos: target.cameraPos,
+                blendMode: target.blending
+            }
+        );
         return new TerrainLayerMesh(state.geometryRef, material, state, target.key, target.kind);
     }
 
     private updateLayerMesh(mesh: TerrainLayerMesh, target: TargetLayer): void {
-        const material = mesh.material as
-            | DEMTileBaseMaterial
-            | DEMTileOverlayMaterial;
+        const material = mesh.material as DEMTileBaseMaterial | DEMTileOverlayMaterial;
         if (target.kind === "base") {
             (material as DEMTileBaseMaterial).setImagery(
                 target.texture ?? null,
                 target.uvTransform
             );
-        } else {
-            const overlayMaterial = material as DEMTileOverlayMaterial;
-            if (target.texture) {
-                overlayMaterial.setLayerTexture(target.texture);
-            }
-            if (target.uvTransform) {
-                overlayMaterial.setUvTransform(target.uvTransform);
-            }
+            return;
+        }
+
+        const overlayMaterial = material as DEMTileOverlayMaterial;
+        if (target.texture) {
+            overlayMaterial.setLayerTexture(target.texture);
+        }
+        if (target.uvTransform) {
+            overlayMaterial.setUvTransform(target.uvTransform);
+        }
+        if (target.opacity !== undefined) {
+            overlayMaterial.setOpacity(target.opacity);
+        }
+        if (target.blending !== undefined) {
+            overlayMaterial.setLayerBlending(target.blending);
         }
     }
 }

@@ -161,9 +161,7 @@ function buildTerrainPosition(u: TerrainTileUniforms, computeNormal: boolean) {
             const height = hi.add(skirtH);
             result.assign(bp.add(vec4(tn.mul(height), 0.0)));
         }).Else(() => {
-            result.assign(
-                tslMix(vec4(fPos, 1.0), vec4(mercatorPosition, 1.0), u.projectionFactor)
-            );
+            result.assign(tslMix(vec4(fPos, 1.0), vec4(mercatorPosition, 1.0), u.projectionFactor));
         });
 
         return result;
@@ -311,8 +309,8 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
     private m_textureNode: ReturnType<typeof texture> | null = null;
     private readonly m_uvTransform = uniform(new THREE.Vector4(1, 1, 0, 0));
     private readonly m_opacity = uniform(1);
-    private readonly m_projectorMatrix = uniform(new THREE.Matrix4());
-    private readonly m_cameraPos = uniform(new THREE.Vector3());
+    private readonly m_projectorMatrix: ReturnType<typeof uniform>;
+    private readonly m_cameraPos: ReturnType<typeof uniform>;
     private readonly m_kind: DEMLayerKind;
 
     constructor(
@@ -322,13 +320,31 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
             texture?: THREE.Texture;
             uvTransform?: THREE.Vector4;
             opacity?: number;
+            /**
+             * Shared projector matrix instance (typically the ProjectorLayer's
+             * own matrix). Mutating it in place updates this material with
+             * zero rebuilds.
+             */
             projectorMatrix?: THREE.Matrix4;
+            /**
+             * Shared camera-position instance (the manager's cameraPos,
+             * refreshed every frame for RTE correction).
+             */
             cameraPos?: THREE.Vector3;
+            blendMode?: THREE.Blending;
         }
     ) {
         super({ wireframe: false, transparent: true, blending: THREE.NormalBlending });
         this.depthWrite = false;
         this.m_kind = kind;
+        if (options?.blendMode !== undefined) {
+            this.blending = options.blendMode;
+        }
+
+        // Wrap the SHARED instances (not copies) so manager-side mutations
+        // propagate live through the uniform nodes.
+        this.m_projectorMatrix = uniform(options?.projectorMatrix ?? new THREE.Matrix4());
+        this.m_cameraPos = uniform(options?.cameraPos ?? new THREE.Vector3());
 
         const nodes = buildTerrainPosition(tileUniforms, false);
         this.positionNode = nodes.positionNode;
@@ -341,12 +357,6 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
         }
         if (options?.opacity !== undefined) {
             this.m_opacity.value = options.opacity;
-        }
-        if (options?.projectorMatrix) {
-            this.m_projectorMatrix.value = options.projectorMatrix;
-        }
-        if (options?.cameraPos) {
-            this.m_cameraPos.value = options.cameraPos;
         }
 
         const u = tileUniforms;
@@ -365,9 +375,7 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
                     .and(tUv.x.lessThanEqual(float(1.01)))
                     .and(tUv.y.greaterThanEqual(float(-0.01)))
                     .and(tUv.y.lessThanEqual(float(1.01)));
-                const texColor = this.m_textureNode
-                    ? this.m_textureNode.sample(tUv)
-                    : vec4(0);
+                const texColor = this.m_textureNode ? this.m_textureNode.sample(tUv) : vec4(0);
                 const a = texColor.a.mul(this.m_opacity).mul(select(inRange, 1, 0));
                 color.assign(vec4(texColor.rgb.mul(this.m_opacity), a));
             } else {
@@ -380,9 +388,7 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
                     .and(projUv.y.greaterThanEqual(0))
                     .and(projUv.y.lessThanEqual(1))
                     .and(projCoord.w.greaterThan(0));
-                const projColor = this.m_textureNode
-                    ? this.m_textureNode.sample(projUv)
-                    : vec4(0);
+                const projColor = this.m_textureNode ? this.m_textureNode.sample(projUv) : vec4(0);
                 const a = projColor.a.mul(this.m_opacity).mul(select(inProj, 1, 0));
                 color.assign(vec4(projColor.rgb.mul(this.m_opacity), a));
             }
@@ -410,6 +416,13 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
 
     setOpacity(value: number) {
         this.m_opacity.value = value;
+    }
+
+    setLayerBlending(blending: THREE.Blending) {
+        if (this.blending !== blending) {
+            this.blending = blending;
+            this.needsUpdate = true;
+        }
     }
 
     setUvTransform(transform: THREE.Vector4) {

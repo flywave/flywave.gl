@@ -121,10 +121,10 @@ export abstract class TerrainTileLoader<
         onDone: (doneState: TileLoaderState) => void,
         onError: (error: Error) => void
     ): void {
-        // Load resources from all web tile data sources
-
-        this.dataSource.getWebTileDataSources().forEach(dataSource => {
-            return dataSource.loadProgressiveTileResources(this.tile, abortSignal);
+        // Load resources from all per-tile layer providers (web imagery,
+        // projector overlay, …)
+        this.dataSource.getLayerProviders().forEach(layerProvider => {
+            return layerProvider.loadProgressiveTileResources(this.tile, abortSignal);
         });
 
         // Process all resource tile loaders

@@ -1,10 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type GeoBox, type Projection, sphereProjection } from "@flywave/flywave-geoutils";
+import { GeoBox, type Projection } from "@flywave/flywave-geoutils";
 import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import * as THREE from "three/webgpu";
 
-import { MAX_PROJECTOR_LAYERS, ProjectorState } from "./ProjectorState";
+import { ProjectorImageryProvider } from "./ProjectorImageryProvider";
 
 /**
  * Blend mode for compositing a projector layer over the base terrain color.
@@ -12,12 +12,19 @@ import { MAX_PROJECTOR_LAYERS, ProjectorState } from "./ProjectorState";
  * - `normal`: standard alpha blend (source-over)
  * - `multiply`: multiply source with destination (good for shadows / darkening)
  * - `add`: additive blend (good for glow / highlights)
- *
- * @note Blend mode is currently a per-layer metadata field; the DEM tile
- * shader implements `normal`-style alpha blending today. Multiply / add
- * modes will be wired into the shader in a follow-up.
  */
 export type ProjectorBlendMode = "normal" | "multiply" | "add";
+
+const BLENDING_BY_MODE: Record<ProjectorBlendMode, THREE.Blending> = {
+    normal: THREE.NormalBlending,
+    multiply: THREE.MultiplyBlending,
+    add: THREE.AdditiveBlending
+};
+
+/** Map a projector blend mode to a three blending constant. */
+export function projectorBlending(mode: ProjectorBlendMode): THREE.Blending {
+    return BLENDING_BY_MODE[mode] ?? THREE.NormalBlending;
+}
 
 /**
  * Options for {@link ProjectorOverlayManager.addLayer}.
@@ -35,8 +42,9 @@ export interface ProjectorLayerOptions {
 
 /**
  * Internal layer record. The `matrix` field is derived from `geoBox` and the
- * owning source's projection; callers mutate `geoBox` via
- * {@link ProjectorOverlayManager.updateLayer} and the matrix is recomputed.
+ * owning source's projection. It is a LIVE shared instance: every tile
+ * material of this layer wraps the same Matrix4 in a uniform node, so
+ * recomputing it in place (matrix.copy) updates all tiles with zero rebuilds.
  */
 export interface ProjectorLayer {
     readonly id: number;
@@ -48,26 +56,51 @@ export interface ProjectorLayer {
     readonly matrix: THREE.Matrix4;
 }
 
+function unionGeoBox(a: GeoBox, b: GeoBox): GeoBox {
+    const sw = new GeoBox(a.southWest.clone(), a.northEast.clone());
+    if (b.southWest.latitude < sw.southWest.latitude) {
+        sw.southWest.latitude = b.southWest.latitude;
+    }
+    if (b.southWest.longitude < sw.southWest.longitude) {
+        sw.southWest.longitude = b.southWest.longitude;
+    }
+    if (b.northEast.latitude > sw.northEast.latitude) {
+        sw.northEast.latitude = b.northEast.latitude;
+    }
+    if (b.northEast.longitude > sw.northEast.longitude) {
+        sw.northEast.longitude = b.northEast.longitude;
+    }
+    return sw;
+}
+
 /**
  * Owns the lifecycle of all projector layers for a single {@link TerrainSource}.
  *
- * Each TerrainSource instance holds one ProjectorOverlayManager. The manager
- * owns a {@link ProjectorState} object; tile meshes created by that source
- * carry a stable reference to the same state object, and the DEM tile material
- * reads from it every frame via TSL `onObjectUpdate`. As a result, every
- * mutation (add / remove / update layer, camera-position refresh for RTE)
- * propagates to all bound tiles on the next render without any re-binding.
+ * Layers flow through the same per-tile resource pipeline as web imagery:
+ * {@link ProjectorImageryProvider} evaluates geoBox intersections per tile and
+ * the terrain loader renders one unlit decal mesh per intersecting layer
+ * (see DEMTileOverlayMaterial's `projector` variant). There is no compile-time
+ * layer cap.
  *
- * Capacity is capped by {@link MAX_PROJECTOR_LAYERS} because the DEM tile
- * shader unrolls the per-layer sampling loop at compile time.
- *
- * Future layer types (canvas-drawn polylines, polygons, GeoJSON drapes,
- * vector tiles, heatmaps, …) can be added by giving them a texture + geoBox
- * pair; everything downstream is identical to a plain image layer.
+ * Mutations split into two cost tiers:
+ *  - Zero-rebuild: cameraPos refresh (every frame) and projector-matrix
+ *    updates, which mutate shared instances read live by material uniforms.
+ *  - Filtered rebuild: add / remove / texture / opacity / blendMode / geoBox
+ *    changes invalidate the provider's tile resources and re-create only the
+ *    tiles intersecting the affected geoBox (mesh/material cache makes the
+ *    rebuild itself a uniform write).
  */
 export class ProjectorOverlayManager {
-    /** Shared mutable state read by the DEM tile shader. */
-    readonly state: ProjectorState = new ProjectorState();
+    /**
+     * Main camera world position for RTE (camera-relative-to-earth) correction.
+     *
+     * Shared instance wrapped by every projector layer material uniform;
+     * refreshed every frame when {@link attachToMapView} is active.
+     */
+    readonly cameraPos: THREE.Vector3 = new THREE.Vector3();
+
+    /** Feeds layers into the terrain resource pipeline. */
+    readonly provider: ProjectorImageryProvider;
 
     private readonly layers = new Map<number, ProjectorLayer>();
     private nextId = 1;
@@ -80,14 +113,16 @@ export class ProjectorOverlayManager {
      *                     computed lazily once {@link setProjection} is called
      *                     (typically from {@link TerrainSource.connect}).
      */
-    constructor(private projection?: Projection) {}
+    constructor(private projection?: Projection) {
+        this.provider = new ProjectorImageryProvider();
+        this.provider.layerSource = () => this.getAllLayers();
+    }
 
     /**
      * Late-bind the geographic projection.
      *
-     * Called by the owning TerrainSource once it has been attached to a
-     * MapView. If the projection was already set this is a no-op; otherwise
-     * it recomputes every existing layer's projector matrix.
+     * Recomputes every existing layer's projector matrix in place (live
+     * shared instances — no tile rebuilds needed).
      */
     setProjection(projection: Projection): void {
         if (this.projection === projection) return;
@@ -95,21 +130,14 @@ export class ProjectorOverlayManager {
         for (const layer of this.layers.values()) {
             layer.matrix.copy(this._computeMatrix(layer.geoBox));
         }
-        this._sync();
     }
 
     /**
      * Add a new projector layer.
      *
-     * @returns the new layer id, or `-1` if the capacity has been reached.
+     * @returns the new layer id.
      */
     addLayer(opts: ProjectorLayerOptions): number {
-        if (this.layers.size >= MAX_PROJECTOR_LAYERS) {
-            console.warn(
-                `[ProjectorOverlayManager] MAX_PROJECTOR_LAYERS (${MAX_PROJECTOR_LAYERS}) reached; ignoring addLayer.`
-            );
-            return -1;
-        }
         const id = this.nextId++;
         const layer: ProjectorLayer = {
             id,
@@ -120,36 +148,56 @@ export class ProjectorOverlayManager {
             matrix: this.projection ? this._computeMatrix(opts.geoBox) : new THREE.Matrix4()
         };
         this.layers.set(id, layer);
-        this._sync();
+        this.provider.requestInvalidate(opts.geoBox);
         return id;
     }
 
     /** Remove a layer by id. @returns `true` if the layer existed. */
     removeLayer(id: number): boolean {
-        const ok = this.layers.delete(id);
-        if (ok) this._sync();
-        return ok;
+        const layer = this.layers.get(id);
+        if (!layer) return false;
+        this.layers.delete(id);
+        this.provider.requestInvalidate(layer.geoBox);
+        return true;
     }
 
     /**
      * Update one or more properties of an existing layer.
      *
-     * Changing `geoBox` recomputes the projector matrix; changing other
-     * fields is a cheap uniform write.
+     * Changing `geoBox` recomputes the projector matrix in place (zero
+     * rebuild for unaffected uniforms) and refreshes tiles intersecting the
+     * union of the old and new bounds; other field changes refresh tiles
+     * intersecting the layer box.
      */
     updateLayer(id: number, partial: Partial<ProjectorLayerOptions>): boolean {
         const layer = this.layers.get(id);
         if (!layer) return false;
-        if (partial.texture !== undefined) layer.texture = partial.texture;
+
+        let affected: GeoBox | undefined;
         if (partial.geoBox !== undefined) {
+            const previousBox = layer.geoBox;
             (layer as { geoBox: GeoBox }).geoBox = partial.geoBox;
             if (this.projection) {
                 layer.matrix.copy(this._computeMatrix(partial.geoBox));
             }
+            affected = unionGeoBox(previousBox, partial.geoBox);
         }
-        if (partial.opacity !== undefined) layer.opacity = partial.opacity;
-        if (partial.blendMode !== undefined) layer.blendMode = partial.blendMode;
-        this._sync();
+        if (partial.texture !== undefined && partial.texture !== layer.texture) {
+            layer.texture = partial.texture;
+            affected = affected ?? layer.geoBox;
+        }
+        if (partial.opacity !== undefined && partial.opacity !== layer.opacity) {
+            layer.opacity = partial.opacity;
+            affected = affected ?? layer.geoBox;
+        }
+        if (partial.blendMode !== undefined && partial.blendMode !== layer.blendMode) {
+            layer.blendMode = partial.blendMode;
+            affected = affected ?? layer.geoBox;
+        }
+
+        if (affected) {
+            this.provider.requestInvalidate(affected);
+        }
         return true;
     }
 
@@ -173,12 +221,13 @@ export class ProjectorOverlayManager {
 
     /** Remove every layer. */
     clear(): void {
+        if (this.layers.size === 0) return;
         this.layers.clear();
-        this._sync();
+        this.provider.requestInvalidate();
     }
 
     /**
-     * Push the current main-camera world position into the projector state.
+     * Push the current main-camera world position into {@link cameraPos}.
      *
      * flywave renders terrain in camera-relative space (RTE), so projector
      * matrices — which are in absolute world space — need the camera position
@@ -187,7 +236,7 @@ export class ProjectorOverlayManager {
      * Prefer {@link attachToMapView} for automatic updates.
      */
     updateCameraPos(pos: THREE.Vector3): void {
-        this.state.cameraPos.copy(pos);
+        this.cameraPos.copy(pos);
     }
 
     /**
@@ -234,27 +283,5 @@ export class ProjectorOverlayManager {
         const m = new THREE.Matrix4();
         m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
         return m;
-    }
-
-    /**
-     * Sync the layer list into {@link state} which the DEM tile shader samples.
-     * Called after every mutation.
-     */
-    private _sync(): void {
-        const arr = [...this.layers.values()];
-        const count = Math.min(arr.length, MAX_PROJECTOR_LAYERS);
-
-        for (let i = 0; i < count; i++) {
-            this.state.textures[i] = arr[i].texture;
-            this.state.matrices[i].copy(arr[i].matrix);
-            this.state.opacities[i] = arr[i].opacity;
-        }
-        // Clear stale slots beyond current count so residual textures from a
-        // removed layer don't leak into the shader.
-        for (let i = count; i < MAX_PROJECTOR_LAYERS; i++) {
-            this.state.textures[i] = null;
-            this.state.opacities[i] = 0;
-        }
-        this.state.count = count;
     }
 }

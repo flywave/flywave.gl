@@ -166,9 +166,7 @@ export class TerrainTileState {
                 this.quaternion.setFromAxisAngle(zAxis, currentZRotation);
             }
 
-            this.uniforms.displacement
-                .copy(this.m_scratchInterpPos)
-                .sub(this.m_tile.center);
+            this.uniforms.displacement.copy(this.m_scratchInterpPos).sub(this.m_tile.center);
         }
 
         this.updateModifierState();

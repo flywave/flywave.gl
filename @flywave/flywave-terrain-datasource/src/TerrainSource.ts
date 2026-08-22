@@ -44,12 +44,12 @@ import {
     HeightMapModifierManager,
     serializeHeightMapModifier
 } from "./ground-modification-manager";
-import { type IResourceProvider } from "./ResourceProvider";
+import { type IResourceProvider, type ResourceProvider } from "./ResourceProvider";
 import {
     ProjectionSwitchController,
     type ProjectionSwitchOptions
 } from "./ProjectionSwitchController";
-import { ProjectorOverlayManager } from "./projector-overlay";
+import { type ProjectorImageryProvider, ProjectorOverlayManager } from "./projector-overlay";
 import { TileLRUCache, TileResourceManager } from "./TileResourceManager";
 import { type WebTileLoaderOptions, WebImageryTileProvider } from "./WebImageryTileProvider";
 import {
@@ -118,6 +118,13 @@ export interface ITerrainSource<ProviderType extends DataProvider = DataProvider
 
     /** Gets all web tile data sources used by this terrain source */
     getWebTileDataSources(): WebImageryTileProvider[];
+
+    /**
+     * Gets all per-tile layer providers feeding the resource pipeline:
+     * web imagery providers plus the projector overlay provider. Terrain
+     * tile loaders iterate this for progressive resource loading.
+     */
+    getLayerProviders(): Array<ResourceProvider<any, ITerrainSource>>;
 
     getGroundModificationManager(): HeightMapModifierManager;
 
@@ -546,6 +553,14 @@ export abstract class TerrainSource<
         return this.m_materialProviders;
     }
 
+    /**
+     * Get all per-tile layer providers (web imagery + projector overlay).
+     * @returns Array of resource providers
+     */
+    getLayerProviders(): Array<ResourceProvider<any, ITerrainSource>> {
+        return [...this.m_materialProviders, this.m_projectorOverlayManager.provider];
+    }
+
     getGroundModificationManager(): HeightMapModifierManager {
         return this.m_groundModificationManager;
     }
@@ -672,9 +687,11 @@ export abstract class TerrainSource<
         if (this.showDebugInfo) this.mapView.scene.add(this.m_debugObject);
         // Setup ground modification sync after decoder is connected
         await this.setupGroundModificationSync();
-        // Now that this.projection is available, bind it to the projector
-        // overlay manager (computes matrices for any layers added before
-        // connect) and wire per-frame RTE correction to the MapView.
+        // Register the projector provider with this source so its per-tile
+        // resources enter the same pipeline as web imagery, then bind the
+        // projection (computes matrices for any layers added before connect)
+        // and wire per-frame RTE correction to the MapView.
+        await this.m_projectorOverlayManager.provider.register(this);
         this.m_projectorOverlayManager.setProjection(this.projection);
         this.m_projectorOverlayManager.attachToMapView(this.mapView);
     }
