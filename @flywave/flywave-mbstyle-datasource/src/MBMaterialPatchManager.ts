@@ -657,12 +657,34 @@ export class MBMaterialPatchManager {
         if (!!this.centerDem) this.injectTerrainDrape(material);
 
         const opacity = technique.opacity ?? 1;
+        // mgl blends raster-opacity against the RENDERED CONTENT below the
+        // layer. The in-shader opaque composite only knows the background
+        // color — with any non-background layer beneath (raster-masking:
+        // contour raster below a 0.5-opacity raster) it erases that content.
+        // Use REAL alpha blending when content sits below; keep the opaque
+        // composite for bottom-most rasters (calibrated on raster-opacity).
+        let rasRealBlend = false;
+        try {
+            const styleLayers: any[] = (this.m_dataSource as any).styleManager
+                ?.getStyle?.()?.layers ?? [];
+            const idx = styleLayers.findIndex(l => l.id === technique._layerId);
+            rasRealBlend = opacity < 1 && idx > 0
+                && styleLayers.slice(0, idx).some(l =>
+                    l.type !== 'background' && l.layout?.visibility !== 'none');
+        } catch {}
         if ('opacity' in material) {
-            // The injected shader composites raster-opacity over the base
-            // color opaquely (sRGB-domain, mgl semantics) — keep the material
-            // opaque so the linear-framebuffer blending can't interfere.
-            (material as any).opacity = 1;
-            (material as any).transparent = false;
+            if (rasRealBlend) {
+                (material as any).opacity = 1;
+                (material as any).transparent = true;
+                (material as any).depthWrite = false;
+            } else {
+                // The injected shader composites raster-opacity over the base
+                // color opaquely (sRGB-domain, mgl semantics) — keep the
+                // material opaque so the linear-framebuffer blending can't
+                // interfere.
+                (material as any).opacity = 1;
+                (material as any).transparent = false;
+            }
         }
 
         const paint = technique._paint ?? {};
@@ -984,8 +1006,13 @@ export class MBMaterialPatchManager {
                          // alpha channel (raster-alpha fixture) — mgl blends
                          // tile.rgb·a over the underlying background; opaque
                          // imagery (a=1) is the identity case.
-                         vec3 mbMix = mix(uMBRasBase, mbR, ${opacity.toFixed(3)} * mbRasT.a);
-                         gl_FragColor = vec4(mbSrgbDec(mbMix), 1.0);
+                         ${rasRealBlend
+                         ? `// Real blend onto rendered content below: the
+                            // framebuffer blends the sRGB-encoded output
+                            // (mgl numeric-space semantics).
+                            gl_FragColor = vec4(mbSrgbDec(mbR), ${opacity.toFixed(3)} * mbRasT.a);`
+                         : `vec3 mbMix = mix(uMBRasBase, mbR, ${opacity.toFixed(3)} * mbRasT.a);
+                            gl_FragColor = vec4(mbSrgbDec(mbMix), 1.0);`}
                      }`,
                 );
             };
@@ -1107,6 +1134,33 @@ export class MBMaterialPatchManager {
     }
 
     private patchFillMaterial(material: THREE.Material, paint: any, technique?: any): void {
+        // mgl fill-opacity blends against the rendered content below the
+        // fill layer. Non-ribbon fills with opacity < 1 need a REAL
+        // transparent material (an opaque quad erases everything beneath —
+        // observed on raster-masking: the 0.2 green fill hid the contour
+        // raster below it).
+        let fillRealBlend = false;
+        try {
+            if (!technique?._isLineRibbon && !technique?._isRaster && !technique?._isHillshade
+                && 'opacity' in material
+                && typeof technique?.opacity === 'number' && technique.opacity < 1) {
+                // Restrict to the raster-below topology (raster-masking): the
+                // unrestricted version regressed fill-translucent over
+                // circle/extrusion transparents (+43/+784) via transparent-
+                // pass reordering; fills over symbol/line/heatmap already
+                // failed identically before.
+                const styleLayers: any[] = (this.m_dataSource as any).styleManager
+                    ?.getStyle?.()?.layers ?? [];
+                const idx = styleLayers.findIndex(l => l.id === technique._layerId);
+                fillRealBlend = idx > 0 && styleLayers.slice(0, idx).some(l =>
+                    l.type === 'raster' && l.layout?.visibility !== 'none');
+            }
+        } catch {}
+        if (fillRealBlend) {
+            (material as any).opacity = technique.opacity;
+            (material as any).transparent = true;
+            (material as any).depthWrite = false;
+        }
         // Pre-extruded line ribbons: per-color meshes are coplanar; disable
         // depth testing so the drawn (feature) order decides which color wins
         // at crossings (mapbox painter's algorithm for one line layer).

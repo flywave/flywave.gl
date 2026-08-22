@@ -2811,3 +2811,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实验二（单层覆盖）**：按"mgl 每屏一格一瓦"在 provider 层只给 ideal 级发覆盖——round 版使 raster-filtering 4137→61255 **灾难回归**（引擎请求 floor(zoomLevel)，round 级被清空）；floor 版 masking 仍 82807 不变且图像出现大块白洞（引擎实际按多级混合显示，z14/z15/z16 各覆盖一部分屏区——单层化与引擎瓦片调度模型冲突）。**全部回退**（参数保留不接线）。
 - **masking 定性修正（§96 修正案）**：两层 raster 材质均正常 patch（埋点：layer raster/raster-transparent × 4 个瓦片 URL 全部在列），白洞与绿填充缺失的真实机制仍开放——下一入口：probe 引擎 DisplayTileLayer 的瓦片显示选择逻辑（为何三级调度各覆盖部分屏区）、以及 fill 层的对象在哪一级被哪一对象覆盖（可逐对象 dump renderOrder/level/材质做绘制序仿真）。
 - **零回归确认**：回退后 raster 全域 16 PASS/7 FAIL 与阶段前逐值一致（4137/26392/82807/3843/487/273/322）。
+
+**98. masking 破案：假不透明输出是真因（82807→55979，2026-08-22 十一）**：
+
+- **对象级 dump 仿真（决定性）**：patchTiles 处逐对象 dump（tile/level、renderOrder、layer、raster url、顶点数、材质 transparent）——**层序/层级/覆盖全部完美**（8 瓦片全 level 15，每瓦片 raster(ro1)→fill(ro2)→raster-transparent(ro3) 三对象齐整），推翻 §96/§97 的"跨瓦片层序"与"多级堆叠"假说（引擎多级显示仅加载过渡期，settle 后只显示 storage 级——VisibleTileSet.populateRenderedTiles 语义）。**真因：三层材质全部 transparent=false**——raster-opacity<1 走"对着背景色做 in-shader 不透明合成"的假透明（§12.76-19 校准产物），多层叠放时 raster2(0.5) 的合成只认识背景白，**把下层 contour 与绿 fill 全部盖掉**；fill(0.2) 同样不透明输出。
+- **修复（mgl 语义：真 alpha 混合到已渲染内容）**：① raster 层——style 中下方存在非 background 层时（hasContentBelow）切真混合（transparent=true + depthWrite=false + shader 输出 `vec4(sRGB(mbR), opacity·a)`，帧缓冲按 sRGB 编码值混合 = mgl 数值空间语义）；底层 raster 保持原 in-shader 合成（raster-opacity 族校准零回归）。② fill 层——opacity<1 且**下方有 raster 层**时真透明（不限拓扑版本曾回归 fill-translucent--circle +43/--fill-extrusion +784，经透明通道重排序；收窄后消除，fill-over-symbol 等保持既有失败值零变化）。
+- **验收**：raster-masking/overlapping-vector **82807→55979（−26.8k）**；raster-opacity/hue-rotate 族 18 PASS 零回归；fill-opacity×4 与 combinations×6 与控制组逐值一致。**残余 55979**：绿 fill 仍缺大块（下一入口：fillRealBlend 生效后绿值对比 + raster2 真混合下的 hue-90 色彩带核对——exp 的绿覆盖 60793px）。
+- **基建保留**：§97 的全局层序 opt-in（引擎+emitter 打标）保留（mgl 语义正确、默认零行为）。
