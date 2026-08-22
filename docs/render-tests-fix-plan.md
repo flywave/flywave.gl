@@ -43,3 +43,14 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
 
 ## 执行记录
 - 2026-08-22：基线落盘 + 本计划成立。
+
+## P0 执行记录（2026-08-22）
+- **alpha 透明 void 死路记档**：`text-variable-anchor/all-anchors-offset-zero`（23px）期望图为
+  透明空画布（alpha 噪声 ≤7）——试 `MapView alpha:true` 无效（void 由 theme clearColor 主导：
+  `MapViewEnvironment.updateClearColor` 空 theme → white + alpha1）；改 theme clearAlpha=0 属
+  全局语义变更风险大且 pixelmatch 对 rgb 仍敏感，收益仅 1 例，搁置。
+- **P0 其余 6 族定性**：slots 12 / icon-size 13 / icon-pitch-alignment 17 / icon-rotation-alignment 22
+  （此例位置整体不同，真几何差）/ text-line-height 34 / icon-rotate 46——cur/exp 内容 bbox 几乎重合，
+  为 **1px 级放置/亚像素精度**，与 P1 排版深水区同根（原生 Placement/POI 管线），并入 P1 专项。
+- **结论**：P0 无独立快修项，主攻方向 = P1 text/symbol 排版引擎（text-offset 矩阵 30 例为最佳
+  切入：同 bbox 结构、系统性 1px~半字宽偏移，疑 anchor×justify×offset 计算基准差）。
