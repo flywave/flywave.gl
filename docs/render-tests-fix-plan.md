@@ -90,3 +90,15 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
   （glyph fixtures 含 Open Sans Semibold 等全部栈）。
 - **下会话入口**：flywave-text-canvas 专项——getOpacity 的 toPixels 与 mgl gamma 等效宽度
   对照（Node 单字形独立复刻取证法，参照 §12.76-80）。
+
+## P1 执行记录 IV（2026-08-22）
+- **AA 斜率 cap 扫描**（TextMaterials.getOpacity toPixels 上限，重建 lib 验证路径生效）：
+  cap 2→7848 / 3→5517 / 4→4681(=基线) / 6,8→4681——**自然斜率 ≤4，任何约束均劣化**，第四条排除链。
+  实验已回退+lib 重建回基线（4681 复核）。
+- **cell(1,2) 深挖**（text-offset/literal 墨量亏缺最重格，文本 "offset -1,-1"）：
+  exp 比 cur 墨量 +36%（10500 vs 7725）、更黑（mean 79.9 vs 88.2）——同位置同字号，**系统性更粗**。
+  字体栈已排除（harness 合并目录 Semibold 优先、fixtures 全栈在位）。
+- **剩余假设**：① 字形 quad 像素尺寸换算差（size→px 基准，24px metric 换算）；② 预乘 alpha
+  合成损耗（TextCanvas 输出到主帧的混合路径）；③ mgl fixture 期望图生成时的 dpr/fontScale 细节。
+- **结论**：P1 需要 Node 单字形独立复刻取证（离屏渲染一字形对照 mgl 期望，隔离 TextCanvas 全链），
+  远程盲扫已穷尽四个参数杠杆（材质/atlas×2/重映射/AA 斜率）。
