@@ -197,11 +197,11 @@ class RasterTileDataProvider extends DataProvider {
         }
 
         // Single-quad path: deepest ancestor of the requested tile itself.
-        // NOTE: the deep chain is REQUIRED — raster-resampling/zoomed-raster
-        // expected imagery verified against z17 ancestors at z20 requests
-        // (removing it blanked those fixtures: resampling 0→115k+). The
-        // masking middle-band discrepancy (§99-§101) remains unexplained and
-        // needs a real mgl runner trace.
+        // NOTE (§102): mgl's exact ascent was probed live (one parent level
+        // per update cycle, gated by parentWasRequested state quirks). A
+        // simplified one-level rule fixed this fixture but broke the sibling
+        // masking fixtures — the deep chain stays until the full retain/
+        // ascent logic is ported.
         const anc = await resolveAncestor(z, x, y);
         const srcZ = anc ? anc.srcZ : Math.min(Math.max(z, this.m_minZoom), this.m_maxZoom);
         const srcX = anc ? anc.srcX : Math.floor(x / Math.pow(2, z - srcZ));

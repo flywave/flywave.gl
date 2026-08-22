@@ -2838,3 +2838,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **"mgl 404 留空"假说实验否决**：源码依据 = `_loadedParentTiles` 仅缓存已加载祖先、不主动请求（source_cache.ts:866-898），据此实现"子瓦片覆盖否则留空 + 仅 overzoom 钳位用祖先"两版——**批测灾难回归**：raster-resampling 0→115k-130k（全黑）、zoomed-raster 3843/487→124k/122k、fade 13k→57k、masking 反升至 87.7k。**结论：深祖先链是必要的**（resampling/zoomed 的期望 imagery 确证祖先绘制），"留空"假说错误——mgl 在这些 fixture 确实绘制深祖先。已回退（代码注释留档此结论防再犯）。
 - **masking 中段带悬念收窄**：mgl 深祖先绘制（resampling 确证）与 masking 中段带无覆盖（exp 确证）并存——差异必在**该 fixture 特有条件**（covering 单元格精确集合 2×1 vs 我们 8 瓦片的差异、或 contour 源的 404 响应差异）。**可靠破案仍需实跑 mgl runner**（dist 未构建，`npx rollup -c` 构建后 node 直跑单 fixture 打印请求序列，约数分钟——下会话独立任务）。
 - **状态**：全部回退至 §98 后基线（masking 55979、resampling PASS、其余逐值一致），零净变化零回归。
+
+**102. mgl SourceCache 实跑探针——covering/请求树实锤 + 一级回退规则否决（2026-08-22 十五，零净代码变化）**：
+
+- **实跑基建**：mapbox-gl-js vitest 浏览器模式探针（`test/unit/source/masking-probe.test.ts` + `vitest.probe.config.ts`，puppeteer chrome 注入；顺带清除 src 下 487 个陈旧编译 .js——mrt.esm.js 从 datasource vendor 副本恢复）。**探针可复用**，是今后一切"mgl 究竟怎么做"问题的 ground-truth 工具。
+- **covering 实锤**：masking fixture 的 mgl covering = **6 单元格**（5234/5235/5236 × 12657/12658，z15）。
+- **请求树实锤**（迭代 60 轮收敛后冻结）：`6×z15 → 4×z14（2617/2618×6328/6329，仅 2617-6329 存在）→ 仅 13-1309-3164（2618-6328 之父，404）——**13-1308-3164（存在！2617-6328 之父）从未被请求**`。即 mgl 的父级上升（update 内 retain 循环，`parentWasRequested` 门控）对 12657 行左列止步于 errored 的 z14，**该行渲染为空白**——这正是 exp 中段带浅色的根源，§99-§101 矛盾至此完全解释：mgl 深链存在但**不保证到达最深存在祖先**（上升是逐 update 迭代 + 状态门控的，与本 fixture 的异步时序交互后止步）。
+- **"一级父回退"简化规则否决**：按探针观察实施（范围内 404→仅试 z-1，否则空白；超 maxzoom 保留深链=钳位仿真；自查补上"自身存在"分支后 resampling/opacity 族恢复 PASS）——**masking 三兄弟 fixture（overlapping/overlapping-zoom/terrain）从 PASS 破坏为 49-51k**（它们依赖更深回退），overlapping-vector 55979→79621 反而更差（空白区域与 mgl 的实际上升终点仍不一致）。**全量回退至深链基线**（逐值复原：masking 55979、resampling/opacity PASS、兄弟 fixture PASS）。
+- **结论与下一入口**：mgl 的可见祖先是 **retain/ascent 算法 + 异步 404 时序**的涌现结果，无简单规则可表达；精确对齐需把 source_cache 的 retain/parentWasRequested 上升逻辑（含每次 404 后重触发 update 的迭代）**整体移植**到 RasterTileDataProvider（模拟多轮 update 的请求树，工程量中等）。此为 raster 域收敛 masking/overlapping-zoom 系的唯一可靠路径，记档立项。
