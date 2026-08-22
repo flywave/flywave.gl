@@ -155,3 +155,15 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
   text-* 残差 31-600px 小差异带（property-function/literal 系，同 +1px/墨差类）。
 - 结论：S 曲线修复收益主要落在 icon 域转 PASS + text 域残差量级整体压缩；
   剩余 31-600px 带与 +1px 投影链问题同根（P1 VIII 入口待做）。
+
+## P1 执行记录 X（2026-08-22）——锚点像素校准落地 + 组合锁定
+- **落地（48c9e485）**：POI 文本锚点像素校准 Above +1 / Below −2（layoutStyle.verticalAlignment
+  分支，mgl 墨盒 vs 引擎行盒对齐差）——bottom **15720→2027**（近阈值）、bottom-left→10361、
+  top **18336→11471**。Center 不动（10.3k 为纯墨差）。
+- **组合锁定**：y 校准 + S 曲线 w=0.5（HEAD 现状）优于 w=0.6/0.8 变体（bottom 2027 vs 2052/5438，
+  center 10323 vs 10383/11440）——宽度实验已回退。
+- **水平锚定 ±1 无感**（left 15117 双向同值）——残差由墨差主导，水平分量暂无独立问题。
+- **center 10.3k 深挖**：diff 全画布均匀分布（4025 px@thr60），无结构性缺失——纯逐 label 墨量/AA
+  精度，对全部曲线杠杆免疫（宽度/斜率/重映射/S 曲线系数）。
+- **下会话**：墨差终极嫌疑收窄到 **TextCanvas 栅格化分辨率链**（glyph atlas 512² 上采样损失 vs
+  mgl 每字形原生尺寸渲染）——需 Node 单字形离屏对照（P1 老入口）或 dpr/字号换算审计。
