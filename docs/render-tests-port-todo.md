@@ -2954,3 +2954,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **世界锚点实验**：tileKey→世界瓦片中心 − mesh 相机相对包围球中心，shader `mbWorldPos = position.xy + uMBExtrusionAnchor`——除 over-border-different-zoom **155k→192k（+37k 劣化）**外全部逐值不变（flat-roof 43063/alignment 66215/fog-terrain 28760）：这些 fixture 的挤出视觉不依赖该采样值（clamp-to-edge 垃圾采样恰被 exag=1 的既有校准吸收），而 over-border 系（多瓦片 DEM 混叠）对正确世界采样反而更差——155k 残差由**跨瓦片 DEM 拼接/过缩放机制**主导，世界正确化打破了与混叠的偶然抵消。
 - **诚实回退**：git 全量回退（§117 的 allDemTiles 修复已在 HEAD 保留），基线逐值复原（155341/43063/28760 ✓）。
 - **子域 C 收敛定论**：剩余 155k/66k 级需要 (a) 多瓦片 DEM 正确拼接（over-border 系）、(b) mgl centroid_pos 顶点编码（flat 顶）、(c) 与 exaggeration 的联合重校准——三者耦合，单点改动互为回归（§116/§118 两轮实证）。记档为子域 C 完整规格，避免再单点试错。
+
+**119. 新域取证盘点：image/video/custom-source + measure-light/lighting-3d（2026-08-23 九）**：
+
+- **image/render-callback 系（29.7k ×2）**：cur 全白 = 图像整体缺失——`render` 回调动态更新 image source 坐标的 harness 操作未支持（纯缺功能，harness op 一项）。
+- **measure-light 系（global-brightness 454/42k/52k、flood-light 75.8k、symbol 18.7k、hillshade 32.3k 等）**：cur 一致性偏亮（(158,217,255) vs (59,178,255)）——mgl measure-light（天空光按太阳位置测量并乘 content）未生效或亮度管线缺一环；表达式引擎已有 'measure-light' case 与 brightness 镜像，疑材质端未接。**中工程、多例回报**。
+- **lighting-3d-mode/line 系（33k-87k）**：色相/明度系统性差（3D 灯光模型公式族差），归 lighting-3d 校准域。
+- **custom-source 系（57k-215k，9 例）**：mgl CustomSource（每帧回调更新）未实现——大工程独立立项。
+- **globe/globe-video（238k）**：globe×video 双未支持叠加。
+- **子域 C 三耦合项风险评估**：联合改动涉及 emitter 顶点编码重写 + 多瓦片 DEM 拼接 + 全域重校准，风险高（§116/§118 两轮单点均回归），建议独立排期而非本轮继续。
+- **优先级**：measure-light 材质端排查（下一个最高 ROI 候选）> render-callback harness op（小）> lighting-3d 校准 > custom-source/globe-video（大工程）。
