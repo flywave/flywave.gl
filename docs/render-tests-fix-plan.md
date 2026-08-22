@@ -126,3 +126,16 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
 - **下会话入口**：① 逐 label 宽高审计脚本（连通域 w/h 直方图 cur vs exp，定位尺寸系统性
   偏差的具体 label 与其 layout 属性）；② dy −1.5 的基线/行高基准差（text-line-height 默认
   1.2 的行距换算）。
+
+## P1 执行记录 VII（2026-08-22）——逐 label 审计 + 1px 定位
+- **逐 label 连通域审计（text-anchor/bottom，86/92 匹配）**：**单行 label 几乎完美**
+  （w/h ratio 1.00、dy=+1dx=0）——放置/锚点/字号本身正确；残差 = **全 label 统一 +1px 垂直
+  偏移 + ~9% 墨差**（90 label × 周长 ≈ 13k 与 15.7k 总残差吻合）。多行 label 高度差 ~8px/119
+  （行距或换行差异，次要）。
+- **text-anchor 全族失败面**：bottom/left/top/center 10-20k 均匀分布——同根（1px+墨差），
+  非 anchor 语义错。
+- **+1px 排除**：offsetY 的 distanceRange/2−BORDER（=+1 恒定）假设试验（改 −g.top）——
+  bottom 15720→15685、其余不变 → 非主因，已回退。**+1px 定位于放置投影路径**
+  （TextElementsRenderer 屏幕投影/anchor 换算的取整差），mgl symbol 路径无取整
+  （quads/anchor/shaping 均无 round）——差异在我们侧的投影链，下会话入口。
+- **text-line-height/literal（显式 1.3）PASS**——显式行高路径正确，多行差异仅默认值场景。
