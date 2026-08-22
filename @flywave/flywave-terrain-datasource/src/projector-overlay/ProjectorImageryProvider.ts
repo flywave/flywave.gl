@@ -7,7 +7,7 @@ import {
 } from "@flywave/flywave-geoutils";
 import * as THREE from "three/webgpu";
 
-import { type ITerrainSource } from "../TerrainSource";
+import { type ITerrainSource, type TerrainResourceTile } from "../TerrainSource";
 import { ResourceProvider } from "../ResourceProvider";
 import { TileValidResource } from "../TileResourceManager";
 import { type ProjectorBlendMode, type ProjectorLayer } from "./ProjectorOverlayManager";
@@ -76,6 +76,22 @@ export class ProjectorImageryProvider extends ResourceProvider<
 
     ready(): boolean {
         return true;
+    }
+
+    /**
+     * With zero registered layers there is nothing to feed: skip the
+     * resource pipeline entirely. Otherwise the instant CPU resolve per tile
+     * would fire `updateTileOverlays` (→ full tile-cache clear) at the
+     * debounce rate for every tile, permanently.
+     */
+    public override async loadProgressiveTileResources(
+        tileKey: TerrainResourceTile,
+        abortSignal: AbortSignal
+    ): Promise<void> {
+        if (this.layerSource().length === 0) {
+            return;
+        }
+        return super.loadProgressiveTileResources(tileKey, abortSignal);
     }
 
     async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ProjectorTileResource> {

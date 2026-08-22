@@ -150,9 +150,11 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
     }
 
     private collectImageryLayers(state: TerrainTileState): TargetLayer[] {
+        const providers = this.dataSource.getWebTileDataSources();
         const targets: TargetLayer[] = [];
+        let baseAssigned = false;
 
-        this.dataSource.getWebTileDataSources().forEach(provider => {
+        providers.forEach(provider => {
             const webTile = provider.getBestAvailableResourceTile(this.tile.tileKey);
             if (!webTile) return;
 
@@ -164,18 +166,35 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
                 if (transform === false) return;
 
                 webTileEntry.texture.flipY = this.dataSource.isYAxisDown;
-                targets.push({
-                    key: `web:${provider.uuid}:${index}`,
-                    kind: "overlay",
-                    texture: webTileEntry.texture,
-                    uvTransform: transform
-                });
+                if (!baseAssigned) {
+                    // Stable "base" key: the lit base mesh never changes
+                    // identity — progressive resolution upgrades swap the
+                    // albedo texture / uv transform in place (zero material
+                    // rebuilds, zero pipeline recompiles).
+                    baseAssigned = true;
+                    targets.push({
+                        key: "base",
+                        kind: "base",
+                        texture: webTileEntry.texture,
+                        uvTransform: transform
+                    });
+                } else {
+                    targets.push({
+                        key: `web:${provider.uuid}:${index}`,
+                        kind: "overlay",
+                        texture: webTileEntry.texture,
+                        uvTransform: transform
+                    });
+                }
             });
         });
 
-        if (targets.length > 0) {
-            targets[0].kind = "base";
-        } else {
+        // Gray fallback only when no imagery provider is configured at all.
+        // While providers exist but nothing has loaded yet the tile renders
+        // nothing (same as the pre-refactor behavior) — avoids creating a
+        // throwaway material that would be replaced (and recompiled) as soon
+        // as the first imagery tile arrives.
+        if (!baseAssigned && providers.length === 0) {
             targets.push({ key: "base", kind: "base" });
         }
 

@@ -223,9 +223,11 @@ export abstract class ResourceProvider<
                                 resource.connectToDataSource(this.terrainSource!, parentKey);
                                 parentTile.resourceManager.setResource(resourceKey, resource);
 
-                                // Update memory usage and overlays
+                                // Update memory usage; refresh only tiles
+                                // intersecting the resource's geoBox instead
+                                // of clearing the whole tile cache.
                                 this.terrainSource!.updateMemoryUsage(parentTile);
-                                this.terrainSource!.updateTileOverlays();
+                                this.terrainSource!.updateTileOverlays(resource.geoBox);
 
                                 this.dispatchEvent({
                                     type: ResourceProviderEvents.onResourceLoaded,
