@@ -62,6 +62,14 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private readonly lastHitCenter: Vector3 = new Vector3();
     private readonly lastHitCenterClick: Vector3 = new Vector3();
     private readonly lastHitGravity: Vector3 = new Vector3();
+    // Google Earth 式右键旋转：按下瞬间在光标处一次 CPU 射线锁定支点，
+    // 手势及惯性尾巴期间绕该支点旋转（低频，符合碰撞锁哲学）。
+    private readonly m_rotatePivot: Vector3 = new Vector3();
+    private readonly m_rotateGravity: Vector3 = new Vector3();
+    private m_rotatePivotDistance: number = -1;
+    private m_rotateDragging: boolean = false;
+    private m_rotatePivotScreenX: number = 0;
+    private m_rotatePivotScreenY: number = 0;
     public smoothPan: boolean = true;
 
     private smoothZoom: number = 0;
@@ -425,6 +433,14 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private handleRotationOperations(mouseDown: boolean[], mouseX: number, mouseY: number): void {
         const rotationDamping = 0.1;
 
+        // 右键按下沿：在光标处捕获旋转支点（一次 CPU 射线 + 投影兜底）。
+        if (mouseDown[2] && !this.m_rotateDragging) {
+            this.m_rotateDragging = true;
+            this.captureRotatePivot(mouseX, mouseY);
+        } else if (!mouseDown[2]) {
+            this.m_rotateDragging = false;
+        }
+
         if (mouseDown[2] && this.mouseState.prevDown[2]) {
             const deltaX = mouseX - this.mouseState.x;
             const deltaY = mouseY - this.mouseState.y;
@@ -446,7 +462,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         }
 
         if (
-            this.lastHitCenterDistance > 0 &&
+            (this.lastHitCenterDistance > 0 || this.m_rotatePivotDistance > 0) &&
             (this.inertialDeltaX !== 0 || this.inertialDeltaY !== 0)
         ) {
             const rotationStep = 0.0045;
@@ -460,10 +476,14 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
                 pivotPoint = this.lastHitCenterClick || camPos;
             }
 
-            const gravityPoint = this.lastHitGravity;
+            let gravityPoint = this.lastHitGravity;
             if (this.cameraSwivel) {
                 pivotPoint = camPos;
                 this.getDistanceToGlobe(camPos, gravityPoint);
+            } else if (this.m_rotatePivotDistance > 0) {
+                // 右键旋转支点：按下位置锁定的世界点（手势 + 惯性尾巴）。
+                pivotPoint = this.m_rotatePivot;
+                gravityPoint = this.m_rotateGravity;
             }
 
             let tiltChange = this.inertialDeltaY * tiltStep;
@@ -483,6 +503,29 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
                 this.tiltLimit
             );
         }
+    }
+
+    /**
+     * 在右键按下位置捕获旋转支点：一次 CPU 射线（miss 走投影面兜底），
+     * 拿到世界点 + 重力法线。手势期间锁定不复碰撞。
+     */
+    private captureRotatePivot(mouseX: number, mouseY: number): void {
+        const target = new Vector3();
+        this.cameraTransform.unprojectToWorld(target, mouseX, mouseY, -1);
+        const origin = new Vector3();
+        this.cameraTransform.getOrigin(origin);
+
+        const hitPoint = new Vector3();
+        const dist = this.rayCastWorld(hitPoint, origin, target);
+        if (dist > 0) {
+            this.m_rotatePivot.copy(hitPoint);
+            this.getDistanceToGlobe(hitPoint, this.m_rotateGravity);
+            this.m_rotatePivotDistance = dist;
+        } else {
+            this.m_rotatePivotDistance = -1;
+        }
+        this.m_rotatePivotScreenX = this.windowEventHandler.lastMouseX;
+        this.m_rotatePivotScreenY = this.windowEventHandler.lastMouseY;
     }
 
     private applyTiltAndHeadingChanges(): void {
@@ -603,14 +646,10 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private updatePivotIndicator(mouseDown: boolean[]): void {
         if (this.m_pivotIndicator == null || !this.m_pivotIndicator.enabled) return;
 
-        if (mouseDown[2] && this.lastHitCenterDistance > 0) {
-            const { width, height } = this.mapView.getCanvasClientSize();
-            const cx = width / 2;
-            const cy = height / 2;
-            // 旋转期间不做 CPU 射线碰撞：lastHitCenter / lastHitGravity 已由
-            // updateCenter()/focusCenter() 每帧从 MapView 中心目标（GPU 深度
-            // 优先）刷新，这里只负责显示指示器。
-            this.m_pivotIndicator.show(cx, cy);
+        if (mouseDown[2] && this.m_rotateDragging && this.m_rotatePivotDistance > 0) {
+            // 指示器显示在右键按下的像素位置（支点在屏幕上的投影，
+            // 绕支点公转时该投影保持不动）。
+            this.m_pivotIndicator.show(this.m_rotatePivotScreenX, this.m_rotatePivotScreenY);
         } else {
             this.m_pivotIndicator.hide();
         }

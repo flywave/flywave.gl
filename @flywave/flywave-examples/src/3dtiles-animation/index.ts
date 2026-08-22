@@ -45,7 +45,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     return new MapView({
         projection: ellipsoidProjection, // Use ellipsoidal projection
         target: initialLocation, // Initial target position
-        zoomLevel: 4, // Initial zoom level
+        zoomLevel: 18, // Initial zoom level
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
         canvas: canvas, // Specify render canvas
@@ -104,20 +104,21 @@ const create3DTilesDataSource = (mapView: MapView): CesiumIonDataSource => {
     // Add data source to map view
     // mapView.addDataSource(cesiumIonDataSource);
 
-    // mapView.addDataSource(
-    //     new TileRenderDataSource({
-    //         url: "http://192.168.1.9/%E5%8C%85%E8%A5%BF3dtile/tileset.json",
-    //         receiveShadow: true,
-    //         errorTarget: 100, 
-    //         // wireframe:true,
-    //         castShadow: true,
-    //         shadowCastErrorThreshold:5000,
-    //         transform: new Matrix4().fromArray([
-    //             -0.337273, 0.00054, -0.941407, 0, -0.612574, 0.759208, 0.219899, 0, 0.714842,
-    //             0.650848, -0.25573, 0, 4565629.4, 4129077, -8011465.5, 1
-    //         ])
-    //     })
-    // );
+    mapView.addDataSource(
+        new TileRenderDataSource({
+            url: "http://192.168.1.9/%E5%8C%85%E8%A5%BF3dtile/tileset.json",
+            receiveShadow: true,
+            errorTarget: 100, 
+            // wireframe:true,
+            enableCameraCollision:true,
+            castShadow: true,
+            shadowCastErrorThreshold:5000,
+            transform: new Matrix4().fromArray([
+                -0.337273, 0.00054, -0.941407, 0, -0.612574, 0.759208, 0.219899, 0, 0.714842,
+                0.650848, -0.25573, 0, 4565629.4, 4129077, -8011465.5, 1
+            ])
+        })
+    );
 
     return cesiumIonDataSource;
 };
