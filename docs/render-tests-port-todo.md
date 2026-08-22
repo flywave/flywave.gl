@@ -2796,3 +2796,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **raster-filtering/no-pitch 残差 4137 定性**：与 mipmap 无关（±65 中性）——缩放 0.57× 平视场景，疑点收敛到 z19-404-回退的 4 子瓦片四边形接缝/半纹素 vs mgl 原生 z20 瓦片网格，与 raster-masking/overlapping-vector 82.8k（瓦片遮罩语义）、terrain/raster-fade 13.4k（terrain 淡入链）同列 raster 下一批入口。
 - **vector-tile 残差 11114（§94 方差根治后的稳定值）静态比对**：progressHalfWidths 与 mgl evaluateLineProgressFeatures 代数等价（clip 映射 + 半宽逐顶点求值均已对齐，含 Lpart/Lfull = end−start 一致性核验）——**taper 公式已对齐，残差在几何/瓦片接缝/投影链**（含 expected y105 黑带未定性），需下一批像素取证。
 - **globe-heatmap / TextGeometry 逐顶点 gamma 评估（不启动理由）**：两者均为引擎架构级——globe 投影下 kernel 基需 globe 表面向量基（mgl heatmap.vertex PROJECTION_GLOBE_VIEW 段），涉及 mapview 相机/投影接口；text 逐顶点 gamma 需 TextGeometry 顶点格式扩展（uv 通道重排）。建议单独立项，本会话记档入口。
+
+**96. raster 精度族三例定性 + masking 跨瓦片层序架构发现（2026-08-22 九，代码分析+取证批）**：
+
+- **raster-filtering/no-pitch 4137 定性（版本漂移类）**：失配像素呈**全局均匀 +24/通道亮度偏置**（无接缝带状分布，global mean +4.5）——mipmap 已对齐（mgl useMipmap/各向异性语义，§95）后残差为 **SwiftShader mipmap 生成 vs 参考 GPU 的盒滤波差异**（0.57× 缩小 LOD 混合带），与 §12.52/§12.72/§12.73 前例同类，环境级不可修，留档。
+- **raster-masking/overlapping-vector 82.8k → 跨瓦片层序架构缺口（本轮主发现）**：fixture = bg→raster(opaque contour)→fill(green 0.2)→raster2(0.5+hue90) 四层。取证：cur 绿色像素仅 5471 vs exp 60793——绿 fill 被上层 raster 遮住；埋点确认 flywave 同时调度 z14/z15/z16 三层瓦片（各自 404→最深祖先回退 z11/13/14/15 ✓ 覆盖完整），但 **引擎按瓦片分块渲染，高 z 瓦片的 raster(renderOrder=1) 迟于低 z 瓦片的 fill(renderOrder=2) 绘制**——mgl 是全局按 style 层序绘制。修复方向（下一阶段设计项）：mbstyle raster 四边形改走 MapAnchor 场景对象（同 image source 路径，按层 index 排序）或引擎侧跨瓦片 renderOrder 全局排序；fill/线层同理受影响（单源 fixture 不暴露）。
+- **gradient-vector-tile 11114 取证**：失配集中在两楔形带的**边缘行带**（yhist 75-150 主导）= taper 曲线数 px 级偏差（宽度插值位置/逐顶点求值点微差），非接缝非色映射（已对齐）；量级收敛中，优先级低于 masking。
+- **terrain/raster-fade 13.4k 静态定性**：mgl raster_fade.ts 在缩放过渡期对 parent/child 双纹理按 per-tile fade 权重混合（fade.mix/fade.opacity 双采样）——我们是单纹理无淡入链，需双纹理 + per-tile 权重（与 additive 双 pass 同级工程），留待专项；fog 带域维持 §12.75/§12.76 结论（屏幕空间后处理或 mgl 材质内嵌公式已落，残差为引擎相机语义标定）。
