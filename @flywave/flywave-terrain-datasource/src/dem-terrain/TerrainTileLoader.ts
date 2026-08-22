@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { TextElement } from "@flywave/flywave-mapview";
+import { webMercatorTerrainTilingScheme } from "@flywave/flywave-geoutils";
 import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";
 import { type TerrainResourceTile } from "../TerrainSource";
 import { type DEMTerrainSource } from "./DEMTerrainSource";
@@ -229,20 +230,37 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         if (!resourceTile) return;
 
         for (const entry of resourceTile.resource.value) {
+            // UV mode — same sampling path as satellite imagery. The UV
+            // transform MUST be computed in the imagery (web-mercator)
+            // projected space: the shader samples with the webMercatorY
+            // attribute, which is linear in mercator Y. Per-tile values were
+            // verified numerically exact (geoBox corners map to uv (0,0)/(1,1)).
+            // NOTE: never set texture.needsUpdate here — this runs on every
+            // tile rebuild and would re-upload the texture each pass.
+            const transform = state.computeTextureUvTransform(
+                entry.geoBox,
+                manager.provider.tilingScheme ?? webMercatorTerrainTilingScheme,
+                true // invertV — see TerrainTileState.computeTextureUvTransform
+            );
+            if (transform === false) continue;
+
+            // flipY follows the SAME convention as the proven DEM/imagery
+            // paths (see TerrainTileState.setHeightMap: texture.flipY =
+            // yDown, and computeHeightMapPos' row flip): uv.y/webMercatorY
+            // increase NORTHWARD (south = 0, north = 1) and the texture v
+            // axis then has v = 0 at the image BOTTOM (south) — matching the
+            // positive-scale signed-offset transform from
+            // computeTextureUvTransform(..., invertV = true).
+            // NOTE: never set texture.needsUpdate here — this runs on every
+            // tile rebuild and would re-upload the texture each pass.
             entry.texture.flipY = this.dataSource.isYAxisDown;
-            // World-space projector sampling (legacy DEMTileMeshMaterial
-            // approach, restored): the layer's orthographic projector matrix
-            // and the RTE camera-position correction are consumed directly by
-            // the shader — no tile-UV transform involved (the UV-transform
-            // mapping displayed incorrectly).
             targets.push({
                 key: `proj:${entry.layerId}`,
                 kind: "projector",
                 texture: entry.texture,
+                uvTransform: transform,
                 opacity: entry.opacity,
-                blending: projectorBlending(entry.blendMode),
-                projectorMatrix: entry.matrix,
-                projectorCameraPos: manager.cameraPos
+                blending: projectorBlending(entry.blendMode)
             });
         }
     }
@@ -261,12 +279,12 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             return mesh;
         }
 
-        // Imagery overlays and projector layers share the same overlay
-        // material CLASS — projector mode switches the color graph to
-        // world-space matrix sampling (see DEMTileOverlayMaterial).
+        // Imagery overlays AND projector layers share the imagery-mode
+        // (tile-UV × uvTransform) color graph. The world-space matrix mode
+        // stays available in DEMTileOverlayMaterial (constructor flag) for
+        // A/B comparison against the verified-correct matrix rendering.
         const material = new DEMTileOverlayMaterial(
-            target.blending !== undefined ? { blending: target.blending } : undefined,
-            target.kind === "projector"
+            target.blending !== undefined ? { blending: target.blending } : undefined
         );
         const mesh = new TerrainLayerMesh(
             state.geometryRef,

@@ -255,8 +255,9 @@ const s_sharedNodes = (() => {
 // visibility; vertex-only bindings are unstable under WebGPU after LOD splits.
 function withHeightMapVisibilityFix(color, nodes) {
     const demUv = nodes.tileUvToDemSample(nodes.texUv);
-    color.assign(color.add(texture(_heightMapTex, demUv).mul(0.0001)));
-    return color;
+    // Pure expression — assign would require an Fn() stack context, and the
+    // overlay materials call this from plain-expression colorNodes.
+    return color.add(texture(_heightMapTex, demUv).mul(0.0001));
 }
 
 // --- Base variant: lit, one imagery texture as albedo or solid fallback ---

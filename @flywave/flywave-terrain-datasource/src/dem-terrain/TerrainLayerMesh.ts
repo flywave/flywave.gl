@@ -331,10 +331,20 @@ export class TerrainTileState {
     /**
      * UV transform mapping tile UV space into an imagery tile's texture space.
      * Returns false when the transform is not finite.
+     *
+     * `invertV` (projector decals only): webMercatorY goes 0 at the tile's
+     * SOUTH edge → 1 at its NORTH edge, and the projection's world y axis is
+     * inverted (y-down). The correct continuous mapping (verified
+     * numerically, see the y-down branch below) is a POSITIVE scale with the
+     * SIGNED offset (imgMax.y − quantMax.y)/texSize.y — the decal's south
+     * edge relative to the tile's south edge. Satellite imagery does NOT use
+     * this: its ImageBitmap textures get a shader-side flipY and the
+     * original (absolute-value) form is already correct for them.
      */
     computeTextureUvTransform(
         imageryGeoBox: GeoBox,
-        imageryTilingScheme: TilingScheme
+        imageryTilingScheme: TilingScheme,
+        invertV: boolean = false
     ): THREE.Vector4 | false {
         const quantizedWorldBox = new THREE.Box3();
         quantizedWorldBox.expandByPoint(
@@ -380,7 +390,23 @@ export class TerrainTileState {
         let offsetY;
         if (this.m_tilingSchemeTileGrid.isYAxisDown()) {
             offsetX = Math.abs(quantizedWorldBox.min.x - imageryWorldBox.min.x) / textureSize.x;
-            offsetY = Math.abs(quantizedWorldBox.max.y - imageryWorldBox.max.y) / textureSize.y;
+            if (invertV) {
+                // Correct continuous mapping, verified numerically against
+                // the projection's y-down world (y' = −mercator):
+                //   webMercatorY w: 1 = tile NORTH, 0 = tile SOUTH;
+                //   tUv = (m − decalSouth)/decalHeight
+                //       = w·(tileHeight/decalHeight) + (tileSouth − decalSouth)/decalHeight
+                // i.e. POSITIVE scale + SIGNED offset
+                //   offsetY = (imgMax.y − quantMax.y) / texSize.y
+                // (world y-down: quantMax.y is the tile's SOUTH edge,
+                // imgMax.y the decal's SOUTH edge). The old Math.abs() form
+                // coincided with this only for the tile holding the decal's
+                // north edge — every tile further south lost the sign and
+                // its decal slice landed mirrored at the wrong end.
+                offsetY = (imageryWorldBox.max.y - quantizedWorldBox.max.y) / textureSize.y;
+            } else {
+                offsetY = Math.abs(quantizedWorldBox.max.y - imageryWorldBox.max.y) / textureSize.y;
+            }
         } else {
             offsetX = (quantizedWorldBox.min.x - imageryWorldBox.min.x) / textureSize.x;
             offsetY = (quantizedWorldBox.min.y - imageryWorldBox.min.y) / textureSize.y;
