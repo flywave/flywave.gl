@@ -2747,3 +2747,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **假阳性根因**：sweep 脚本 grep 用 `"SUCCESS"`（无行尾锚定）——karma 初始进度行 `Executed 0 of N SUCCESS (0 secs…)` 先于真实结果被 `head -1` 命中，失败用例全部被误读为 PASS。**§12.86 的 212/212、§12.87 的 51/92/180/283、§12.88 的 534/300 全部作废**（其中经 TOTAL 行单独核实过的 trees-lod/default/model-scale 等单测 PASS 仍有效）。
 - **真实基线**（rendering-test-results/baseline-2026-08-22/：195 例 cur+diff+json+report 落盘）：**34 PASS / 161 FAIL**。失败族：①text/symbol 排版域 ~90 例（text-offset/anchor/variable-anchor/icon-text-fit/symbol-placement 系——F4/F6/F7/F13 深水区）；②terrain/globe/occlusion（131k~564k）；③image/video/canvas/custom-source（79k~236k）；④raster 精度族（resampling/filtering/masking/elevation）；⑤fog color 族 65k；⑥lighting/measure-light；⑦近失快修带 <500px（slots 12/icon-size 13/icon-pitch-alignment 17/text-line-height 34 等 7 族）。
 - **方法论修正**：结果判定必须用 dump server（feedback-url → cur/diff/json 落盘）或 `grep -cE "SUCCESS$"`（spec 行行尾锚定，pass=2/fail=0）+ TOTAL 行交叉核对。
+
+**38. §12.76-23~37 攒批验收（2026-08-22，batch18-key 104 例，chunked 被中断但逐例结果已落盘）**：
+- **转 PASS（11 例）**：background-color/colorSpace-hcl 4096→0（hcl 移植 ✓）+ 全族 4 PASS；circle-stroke-opacity property-function 491→0、zoom-and-property 488→0、default PASS（stroke 区 opacity 语义 ✓）；fill-outline-color 2→4 PASS（default/multiply/opacity，fill 53→25、zoom-prop 195→33）；color-theme 4 PASS（config-red/theme-from-config/use-theme 2 例——LUT 线色生效）；image/raster-visibility 31357→**39 近 PASS**、image/default 39；icon-image expression/literal PASS。
+- **改善未过**：circle-stroke-opacity function/literal 356、stroke-only 360（半透明 AA 带残留）；color-theme add/remove 116（主题加载时序闪烁）；raster-array several-layers 60807→28731、band 60392→28706（**解码链半通**——数值减半，渲染差需逐像素取证）；fill-outline literal/function 56→100（smoothstep 全宽衰减略过冲，净域 +2 PASS 保留）。
+- **未生效待查**：image/raster-opacity 7020 不变（base 色修复未覆盖此例）；line-gradient/use-theme 2751 不变（gradient LUT 未触发——疑 ramp 构建先于 LUT 加载或 use-theme 键名不匹配）；fog/color-use-theme 65842（fog LUT 部分生效）。
+- **未跑完**：heatmap 分类（chunked 在 heatmap 前被终止）——投影椭圆核/回绕基（§12.76-37）待验。
+- 结论：**18 commit 全部保留**（无全域级回归），下一步入口按上表"未生效待查"三项 + raster-array 逐像素取证 + heatmap 补测。
