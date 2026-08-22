@@ -139,3 +139,12 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
   （TextElementsRenderer 屏幕投影/anchor 换算的取整差），mgl symbol 路径无取整
   （quads/anchor/shaping 均无 round）——差异在我们侧的投影链，下会话入口。
 - **text-line-height/literal（显式 1.3）PASS**——显式行高路径正确，多行差异仅默认值场景。
+
+## P1 执行记录 VIII（2026-08-22）——+1px 排除两项
+- TextShaping.startY 亚 em 微调（−0.0625em ≈ 1px@16）实验：bottom 15720→15717（噪声级）
+  → **非该路径**（fixture 文本走 POI/TextElement 链，TextShaping.ts 是另一路），已回退。
+- 结合 VII 的 offsetY 排除：+1px 定位收窄到 **POI 屏幕投影链**（emitter 世界坐标 →
+  TextElementsRenderer 投影 → TextCanvas 绘制坐标的某一步差 1px）。
+- **下会话取证法**：debug 渲染单 label，打印我们链路每一步的 y 值（emitter projectWorld →
+  POI position → screen xy → TextCanvas 绘制 y），对照 mgl anchor→screen 数学
+  （mapbox-gl-js/src/symbol/projection.ts + symbol_layout.ts 的 textOffset/anchor 链）。
