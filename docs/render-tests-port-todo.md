@@ -2886,3 +2886,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **§107 根因修正（重要）**：重取证发现此前"下半线被 extrusion 深度吞掉"的读数含 **RGBA→RGB 假象**（expected 下半为 alpha=0 透明，RGB 读作黑；alpha 合成后真实失配 38707→**10013**，harness 上报 6943 为准）。真实残差集中 y<172 线/挤出区：蓝线大部分在（11955 vs exp 13788），缺口 ≈1.8k px 遮挡线 + 淡出差异。
 - **两修复尝试均证伪（逐值零效果）**：① SolidLine depthTest=false（针对"深度吞线"假说）——6943 不变，假说否定（线本就走 ribbon/SolidLine 双路，ribbon depthTest=false 本该可见）；② emitter renderOrder 抬升 +1000（mgl occlusion 重绘语义，把 occlusion 线抬到全部 3D 之上）——6943 不变。两处均回退，机制疑点收敛到：**线的可见性不受这两路径控制**（候选：TileGeometryCreator 组序/technique 创建时序未生效，或线对象在挤出后被别的通道裁掉）——需 patchTile 时 dump 对象实际 renderOrder 值与绘制序仿真才能定论。
 - **子域 A 状态**：真实残差 6943（非 29k），量级收窄但机制未破；两假说已排除留档防重复投入。下一入口：对象级绘制序仿真（引擎 TileObjectsRenderer stableSort 输入 dump）。
+
+**109. 子域 A 绘制序仿真——机制全解 + 抬升实测与诚实回退（2026-08-22 二十二，零净变化）**：
+
+- **对象级 dump 仿真（20 对象全量）**：所有线对象（ribbon fill + solid-line 双路）**depthTest=false、几何 bbox 覆盖全场景**（y 35-181 含挤出区 64-134）——线从未被深度裁掉；真机制 = **不透明 extrusion 按绘制序覆盖先画的下层线**（line3 ro=0.5 < extrusion ro=3，extrusion 后画盖掉其遮挡区线段）；mgl 的 occlusion 重绘（painter `_lastOcclusionLayer` 后重画）使遮挡线以 0.5 淡出可见。
+- **§108 零效果之谜破案**：do5 轮的抬升未生效是 **ribbon technique 走独立创建点**（getOrCreateRibbonTechniqueIndex，非通用 getOrCreateTechniqueIndex）——补齐全部创建点（+occLiftOf helper，3 处）+ `--force` 重建（tsbuildinfo 陈旧二进制坑，fog 阶段同款）后 ro=1000.5 实测生效。
+- **抬升实测（家族 14 例）**：no-terrain 6943→7049、multiline-no-terrain 4608→**3367（−1241）**、其余 ±66~460 混合——**净≈零**：全不透明过冲（遮挡区全蓝）与隐藏的误差近似相等（mgl 遮挡区是 0.5 淡出）。**回退**（避免 renderOrder=1000 对 occlusion+symbol 样式的潜在副作用，保持零净变化）。
+- **正确解记档（下一入口）**：真双 pass——occlusion 线在抬升序 + 主 pass 全透明度（LEQUAL 正常）之外，**第二个 mesh 以 GREATER depthFunc + alpha·occlusionOpacity 画遮挡部分**（可复用 MBAdditiveLineRenderer 的双 mesh 模式与 DepthPrePass 基建）；工程量中等，是子域 A 14 例收敛的唯一精确路径。
