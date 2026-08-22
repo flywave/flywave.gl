@@ -29,6 +29,22 @@
 - raster-resampling 45k、raster-filtering 52k、raster-masking-vector 82k、
   raster-elevation(tiled) 92k/9k、zoomed-raster 3.8k、raster-array 28k（MRT 容器，大工程另立专项）
 
+**执行记录 I（2026-08-22，commit 143f1fe5）——raster-resampling 全族修复（45733/45857/49469 → 0，4/4 PASS）**
+- 症状：cur 比 exp 亮 1.4-1.6×、低相关（0.337）、列接缝。像素级取证：把 cur 与 exp
+  分别对 z17 tile（70421/42998）做中心裁剪模板匹配——cur 匹配 64px 裁剪（= 视口
+  覆盖 1/4 tile），exp 匹配 32px 裁剪（= mgl z20 正确几何）。即引擎整体差一个 zoom。
+- 根因（双重上限，均默认 20）：
+  1. `MapView` 默认 `maxZoomLevel=20` 静默截断相机——style.zoom 20 + flywave +1 = 21
+     被夹回 20（zoomLevel at capture 实测 20），渲染退一级；任何 ≥20 的 style.zoom 全中招。
+  2. 修 1 后全白：`DataSource` 默认 `maxDisplayLevel=20` 使 zoomLevel 21 时整个源
+     被 isHidden（getTile 一次都不调）。
+- 修复：harness `maxZoomLevel: 25` + datasource options `maxDisplayLevel: 25`（mapbox
+  上限 24 + flywave +1 偏移留余量）。
+- 回归：raster 全域批量跑（同页污染致个别假红），可疑项逐条单独重跑确认
+  raster-alpha/visibility/rotation 与基线一致；zoomed-raster/overzoom 487 待后续。
+- 教训：该特性只有 zoom≥20 的测试暴露（resampling 家族），同族 function/literal
+  连带全绿。
+
 ### P3 — terrain/globe/occlusion（6k~564k）
 - terrain 131k、globe 60k~239k（距离 re-scale 专项 §12.76-79 在案）、
   wireframe 442k、occlusion 564k、cross-source-elevation 6k
