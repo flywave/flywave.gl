@@ -2735,3 +2735,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **已扫域全绿**：hillshade + hillshade-*-color + line-trim-offset + elevated-line-trim-offset **51/51 PASS**（§12.83 两修复验收）；fill-extrusion 全族 **92/92 PASS**（含 §12.84 双 pass 的 opacity 用例与全部阴影相关 fixtures）；circle + fog + skybox + raster 主族 **180/180 PASS**；line+fill 大域扫描至 283/283 全 PASS 后按用户指示中止（无失败，剩 ~250 例待续扫，续扫命令在 /tmp/sweep5.sh 可再生）。
 - **累计逐测验证 818/818 全 PASS**（model-layer 212 + 51 + 92 + 180 + 283）。此前文档 §13/§14 的域级残差清单（text 除外）与逐测实证全面不符——历史"失败"主要来自同页多测批跑的负载劣化（§12.85/86 结论）。
 - **记档**：逐测独立 karma 启动单例 ~8-15s；全量 3026 例 ≈ 8-12h。建议后续以域为单位增量盘点剩余域（line 剩余、symbol/text、3d-intersections、terrain、projections 等）。
+
+**88. line+fill 域收官 + 第二批扩域（2026-08-22，纯验证批）**：
+
+- **line + fill 大域完整收官**：283（§12.87 中止点）+ 续扫 251 = **534/534 全 PASS**（elevated-line 全族 dasharray/pattern/gradient/join/cap/trim-offset/translate/width/visibility/pitch + fill 全族 outline/pattern/opacity/antialias/color 等）。
+- **第二批扩域（中止点全绿）**：background*/appearance/3d-intersections/geojson/combinations/runtime-styling/building/debug/feature-state 等 656 例扫至 **300/300 全 PASS** 后按用户指示中止（0 失败；剩 ~356 例待续扫，/tmp/sweep6.sh 可再生）。
+- **累计逐测验证 1369/1369 全 PASS**。运行约定记档：单批扫描宜 ≤300 例/次（~1h），避免超长后台任务。
