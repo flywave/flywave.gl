@@ -77,3 +77,16 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
   （前提：确认 fontcatalog SDF 的边缘编码是否已被归一化到 0.5；若已归一化则差异在 AA 宽度
   ——导数法 vs mgl 固定 gamma 的等效宽度标定）。
 - **本地 mgl 源码就位**：`mapbox-gl-js/` 仓库根完整 checkout——后续对齐优先直接读本地源。
+
+## P1 执行记录 III（2026-08-22）
+- **重映射系数参数扫描（真路径 MBFontCatalogBuilder.ts:197）**：[-64 基线(×1.0)] vs ×2/×1.5/×1.25/×0.75
+  ——text-offset 4669/8009/8356/8821/7914、text-color 4681/7947/8250/8721/7921、
+  halo-color 112/238/253/274/213。**×1.0 为局部最优**：内侧饱和不是墨量亏缺根因，任何
+  展宽/压缩都劣化。已回退全部实验（零净变更）。
+- **排除链更新**：①MBSDFTextMaterial 非路径；②MBGlyphLoader atlas 非路径（逐位无变化）；
+  ③MBFontCatalogBuilder 重映射系数非杠杆。剩余嫌疑：**TextMaterials.getOpacity 的导数 AA 宽度**
+  （flywave 屏幕导数 vs mgl 固定 gamma=0.105/fontScale——等效宽度标定需在 flywave-text-canvas
+  包做受控实验）或 **TextCanvas 栅格化字号换算**（size→px 基准）。字体栈回退已排除
+  （glyph fixtures 含 Open Sans Semibold 等全部栈）。
+- **下会话入口**：flywave-text-canvas 专项——getOpacity 的 toPixels 与 mgl gamma 等效宽度
+  对照（Node 单字形独立复刻取证法，参照 §12.76-80）。
