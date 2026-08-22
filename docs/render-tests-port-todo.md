@@ -2741,3 +2741,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **line + fill 大域完整收官**：283（§12.87 中止点）+ 续扫 251 = **534/534 全 PASS**（elevated-line 全族 dasharray/pattern/gradient/join/cap/trim-offset/translate/width/visibility/pitch + fill 全族 outline/pattern/opacity/antialias/color 等）。
 - **第二批扩域（中止点全绿）**：background*/appearance/3d-intersections/geojson/combinations/runtime-styling/building/debug/feature-state 等 656 例扫至 **300/300 全 PASS** 后按用户指示中止（0 失败；剩 ~356 例待续扫，/tmp/sweep6.sh 可再生）。
 - **累计逐测验证 1369/1369 全 PASS**。运行约定记档：单批扫描宜 ≤300 例/次（~1h），避免超长后台任务。
+
+**89. 重大更正：§12.86-88"全绿"作废 + 真实基线落盘（2026-08-22）**：
+
+- **假阳性根因**：sweep 脚本 grep 用 `"SUCCESS"`（无行尾锚定）——karma 初始进度行 `Executed 0 of N SUCCESS (0 secs…)` 先于真实结果被 `head -1` 命中，失败用例全部被误读为 PASS。**§12.86 的 212/212、§12.87 的 51/92/180/283、§12.88 的 534/300 全部作废**（其中经 TOTAL 行单独核实过的 trees-lod/default/model-scale 等单测 PASS 仍有效）。
+- **真实基线**（rendering-test-results/baseline-2026-08-22/：195 例 cur+diff+json+report 落盘）：**34 PASS / 161 FAIL**。失败族：①text/symbol 排版域 ~90 例（text-offset/anchor/variable-anchor/icon-text-fit/symbol-placement 系——F4/F6/F7/F13 深水区）；②terrain/globe/occlusion（131k~564k）；③image/video/canvas/custom-source（79k~236k）；④raster 精度族（resampling/filtering/masking/elevation）；⑤fog color 族 65k；⑥lighting/measure-light；⑦近失快修带 <500px（slots 12/icon-size 13/icon-pitch-alignment 17/text-line-height 34 等 7 族）。
+- **方法论修正**：结果判定必须用 dump server（feedback-url → cur/diff/json 落盘）或 `grep -cE "SUCCESS$"`（spec 行行尾锚定，pass=2/fail=0）+ TOTAL 行交叉核对。
