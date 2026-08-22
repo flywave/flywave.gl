@@ -60,7 +60,7 @@ import { TerrainDataSource, type DataSource } from "./DataSource";
 import { type ElevationProvider } from "./ElevationProvider";
 import { type ElevationRangeSource } from "./ElevationRangeSource";
 import { type DispatcherEvent, EventDispatcher } from "./EventDispatcher";
-import { type ICameraCollidable } from "./ICameraCollidable";
+
 import {
     type FovCalculation,
     DEFAULT_FOV_CALCULATION,
@@ -3576,22 +3576,17 @@ export class MapView extends EventDispatcher {
         }
     }
 
+    // updateLookAtSettings 是否已有一次可用值（GPU miss 时沿用旧值的前提）。
+    private m_lookAtInitialized: boolean = false;
+
     /**
      * Derive the look at settings (i.e. target, zoom, ...) from the current camera.
      */
     protected updateLookAtSettings() {
-        const collidables = this.dataSources.filter(
-            ds =>
-                ds.enableCameraCollision &&
-                typeof (ds as unknown as ICameraCollidable).raycast === "function"
-        ) as unknown as ICameraCollidable[];
-
-        // GPU depth fast-path: skip CPU raycast when available. pickDepth is
-        // rendered by the camera-relative render camera (at the origin) — the
-        // depth MUST be unprojected with that camera and the point shifted
-        // into the geo frame (render frame + (geoCamPos - renderCamPos)),
-        // otherwise m_targetWorldPos drifts by an Earth radius and the camera
-        // slowly sinks below ground.
+        // 中心点锁定零 CPU 碰撞：GPU 中心深度命中 → 用 GPU 值；miss
+        // （冷槽/天空/退化）→ 走 getTargetAndDistance 的纯数学分支
+        // （数学地面/球面求交 + elevation），不传 collidables，不对
+        // enableCameraCollision 数据源执行任何 raycast。
         const gpuDepth = this.mapRenderingManager?.readDepth(new THREE.Vector2(0, 0)) ?? null;
         let target: THREE.Vector3;
         let distance: number;
@@ -3621,12 +3616,22 @@ export class MapView extends EventDispatcher {
         if (gpuTargetUsed) {
             final = true;
             altitude = undefined;
+        } else if (this.m_lookAtInitialized) {
+            // GPU miss（冷槽/天空/贴面退化）：零 CPU 碰撞。目标点沿用
+            // 上一次的值（不落到数学地面），但距离/朝向/zoomLevel 用当前
+            // 相机位姿重算（纯数学）——保证与运动中的相机一致，不冻结
+            // 控制器的反馈环。
+            target = this.m_targetWorldPos.clone();
+            distance = this.camera.position.distanceTo(target);
+            final = true;
+            altitude = undefined;
         } else {
+            // 首次运行（还没有旧值可用）：纯数学初始化一次，不传
+            // collidables，不对数据源执行任何 raycast。
             const result = MapViewUtils.getTargetAndDistance(
                 this.projection,
                 this.camera,
-                this.elevationProvider,
-                collidables
+                this.elevationProvider
             );
             target = result.target;
             distance = result.distance;
@@ -3656,6 +3661,8 @@ export class MapView extends EventDispatcher {
         this.m_yaw = yaw;
         this.m_pitch = pitch;
         this.m_roll = roll;
+
+        this.m_lookAtInitialized = true;
     }
 
     /**

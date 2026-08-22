@@ -4,14 +4,7 @@ import { ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import { PickingRaycaster } from "@flywave/flywave-mapview/PickingRaycaster";
 import { type ICameraCollidable } from "@flywave/flywave-mapview";
-import type * as THREE from "three/webgpu";
-import {
-    type Intersection,
-    PerspectiveCamera,
-    Raycaster,
-    Vector2,
-    Vector3
-} from "three/webgpu";
+import { type Intersection, Vector2, Vector3 } from "three/webgpu";
 
 import { BaseMapControls, BaseMapControlsOptions, EventNames } from "./BaseMapControls";
 import { EllipsoidCameraTransform } from "./EllipsoidCameraTransform";
@@ -20,8 +13,9 @@ import { CameraTransform } from "./CameraTransform";
 
 export class MapControls extends BaseMapControls {
     /**
-     * 位置 → 唯一碰撞值：任何碰撞操作，鼠标 xy 不变 → 返回锁定值；
-     * 碰撞到值（GPU 深度）→ 锁定；xy 变化 → 重新碰撞。
+     * zoom 高频碰撞防护：滚轮连拍期间光标不动（±2px）→ 复用锁定的碰撞点，
+     * CPU 射线只在光标移动后执行一次并重新入锁；点击/拖拽/旋转等其他操作
+     * 走经典 CPU 射线路径，不消费锁。
      */
     private m_collisionLock: Vector3 | null = null;
     private m_collisionLockX: number = 0;
@@ -34,8 +28,10 @@ export class MapControls extends BaseMapControls {
         noFallback?: boolean
     ): number {
         const weh = this.windowEventHandler;
-        // 条件②：像素位置不变 → 锁定值生效
+
+        // zoom（滚轮）：光标未离开锁定像素 → 本拍零碰撞，直接复用锁定点。
         if (
+            noFallback &&
             this.m_collisionLock !== null &&
             Math.abs(weh.lastMouseX - this.m_collisionLockX) <= 2 &&
             Math.abs(weh.lastMouseY - this.m_collisionLockY) <= 2
@@ -44,27 +40,7 @@ export class MapControls extends BaseMapControls {
             return this.mapView.camera.position.distanceTo(this.m_collisionLock);
         }
 
-        // 条件③GPU碰撞开启 + 条件④碰撞到东西 → 锁定。（条件①：本方法只由鼠标操作触发）
-        const gpuDistance = this.rayCastGpuDepth(result);
-        if (gpuDistance > 0) {
-            this.m_collisionLock = result.clone();
-            this.m_collisionLockX = weh.lastMouseX;
-            this.m_collisionLockY = weh.lastMouseY;
-            return gpuDistance;
-        }
-
-        // zoom（滚轮）规则：没获取到有效的 GPU 碰撞点之前不执行任何摄像机
-        // 移动——光标下的目标是已渲染的，读取只需 1~2 帧，等待即可。
-        // 兜底只在 GPU 明确回答"该像素没有东西"（虚空）之后才允许接管。
-        if (noFallback && this.mapView.mapRenderingManager.gpuPicking) {
-            const gpuAnsweredEmpty =
-                Math.abs(weh.lastMouseX - this.m_gpuEmptyX) <= 2 &&
-                Math.abs(weh.lastMouseY - this.m_gpuEmptyY) <= 2;
-            if (!gpuAnsweredEmpty) {
-                return -1; // 等待 GPU 的答案，本拍不动相机
-            }
-        }
-
+        // 经典 CPU 射线检测（GPU 碰撞引入之前的原始实现）。
         const canvasClientSize = this.mapView.getCanvasClientSize();
         const rayCaster = new PickingRaycaster(
             new Vector2(canvasClientSize.width, canvasClientSize.height)
@@ -81,119 +57,21 @@ export class MapControls extends BaseMapControls {
         if (intersection.length > 0) {
             intersection.sort((a, b) => a.distance - b.distance);
             result.copy(intersection[0].point).add(this.mapView.camera.position);
+            if (noFallback) {
+                this.m_collisionLock = result.clone();
+                this.m_collisionLockX = weh.lastMouseX;
+                this.m_collisionLockY = weh.lastMouseY;
+            }
             return intersection[0].distance;
         }
-        return this.rayCastProjectionWorld(result, origin, target);
-    }
 
-    /**
-     * GPU depth collision: when enableGpuPicking is on, read the GPU depth at
-     * the cursor pixel — NDC via the system-standard
-     * MapView.getNormalizedScreenCoordinates — and unproject it; fall back to
-     * the CPU raycast on miss.
-     *
-     * pickDepth is rendered by the camera-relative render camera (at the
-     * origin) — the depth MUST be unprojected with that camera, then shifted
-     * into the geo frame the controls and CPU raycast use (same convention as
-     * the CPU path's `.add(camera.position)`).
-     */
-    private rayCastGpuDepth(result: Vector3): number {
-        const mrm = this.mapView.mapRenderingManager;
-        if (!mrm.gpuPicking) return -1;
-
-        const camera = this.mapView.camera;
-        if (!(camera instanceof PerspectiveCamera)) return -1;
-
-        const renderCam = mrm.viewRenderManager?.renderCamera;
-        if (!renderCam) return -1;
-
-        const ndc = this.mapView.getNormalizedScreenCoordinates(
-            this.windowEventHandler.lastMouseX,
-            this.windowEventHandler.lastMouseY
-        );
-
-        const gpuDepth = mrm.readDepth(ndc);
-
-        if (gpuDepth !== null && gpuDepth > 0 && gpuDepth < 1) {
-            const distance = this.buildGpuPoint(result, ndc, gpuDepth, camera, renderCam);
-            if (distance > 0) {
-                return distance;
-            }
-        }
-
-        // 读取失败：用可靠的直读路径异步再读一次；读到后直接写入锁，
-        // 下一拍锁定生效、zoom 启动。本拍返回 -1（继续等待）。
-        this.fetchGpuDepthAsync(ndc, camera, renderCam);
-        return -1;
-    }
-
-    private buildGpuPoint(
-        result: Vector3,
-        ndc: THREE.Vector2 | THREE.Vector3,
-        gpuDepth: number,
-        camera: PerspectiveCamera,
-        renderCam: THREE.Camera
-    ): number {
-        result
-            .set(ndc.x, ndc.y, gpuDepth * 2.0 - 1.0)
-            .unproject(renderCam)
-            .add(camera.position.clone().sub(renderCam.position));
-        const distance = camera.position.distanceTo(result);
-        // A hit closer than the near plane means the camera has reached
-        // (or is inside) the picked surface — the depth is degenerate.
-        if (distance < camera.near) {
-            return -1;
+        const distance = this.rayCastProjectionWorld(result, origin, target);
+        if (noFallback && distance > 0) {
+            this.m_collisionLock = result.clone();
+            this.m_collisionLockX = weh.lastMouseX;
+            this.m_collisionLockY = weh.lastMouseY;
         }
         return distance;
-    }
-
-    private m_gpuFetchBusy = false;
-    // Pixel where the GPU definitively answered "nothing here" (void/sky) —
-    // only there may the fallback drive the wheel zoom.
-    private m_gpuEmptyX = -9999;
-    private m_gpuEmptyY = -9999;
-
-    /**
-     * 读取失败继续等待：异步可靠直读光标像素深度，读到有效值后入锁
-     * （锁的 xy 用提交时的像素，防止解析期间光标移动导致点与 xy 错配）；
-     * 读到明确的空（虚空）则记录该像素，允许兜底接管滚轮。
-     */
-    private fetchGpuDepthAsync(
-        ndc: THREE.Vector2 | THREE.Vector3,
-        camera: PerspectiveCamera,
-        renderCam: THREE.Camera
-    ): void {
-        if (this.m_gpuFetchBusy) return;
-        const vrm = this.mapView.mapRenderingManager.viewRenderManager;
-        if (!vrm) return;
-        // 提交时刻的屏幕像素 —— 锁的 xy 必须和深度的像素同源
-        const { width, height } = this.mapView.getCanvasClientSize();
-        const pixelX = Math.round(((ndc.x + 1) / 2) * width);
-        const pixelY = Math.round(((1 - ndc.y) / 2) * height);
-        this.m_gpuFetchBusy = true;
-        vrm.readDepthAsync(ndc)
-            .then(depth => {
-                this.m_gpuFetchBusy = false;
-                if (depth === null || depth <= 0 || depth >= 1) {
-                    // GPU 明确回答该像素没有东西（虚空）——允许兜底
-                    this.m_gpuEmptyX = pixelX;
-                    this.m_gpuEmptyY = pixelY;
-                    return;
-                }
-                const point = new Vector3();
-                if (this.buildGpuPoint(point, ndc, depth, camera, renderCam) > 0) {
-                    // 读取到值 → 直接入锁（提交时的像素）
-                    this.m_collisionLock = point.clone();
-                    this.m_collisionLockX = pixelX;
-                    this.m_collisionLockY = pixelY;
-                    // A drag that started on the cold-pixel fallback anchor
-                    // swaps to the authoritative GPU point.
-                    this.rebasePanHit(point);
-                }
-            })
-            .catch(() => {
-                this.m_gpuFetchBusy = false;
-            });
     }
 
     protected getTilesRenderDataSources(): ICameraCollidable[] {
@@ -214,30 +92,7 @@ export class MapControls extends BaseMapControls {
             mapView.stopCameraAnimation();
         });
 
-        // Prewarm the depth slot under the cursor while hovering, so the
-        // pick at a click/wheel instant is a GPU hit (not a cold-slot miss
-        // falling to the math-surface fallback — which anchored drags away
-        // from the GPU point).
-        this.windowEventHandler.addEventListener("mousemove", () => this.prewarmGpuDepth());
-
         this.startAnimation();
-    }
-
-    private prewarmGpuDepth(): void {
-        const mrm = this.mapView.mapRenderingManager;
-        if (!mrm.gpuPicking) return;
-
-        const camera = this.mapView.camera;
-        if (!(camera instanceof PerspectiveCamera)) return;
-
-        const renderCam = mrm.viewRenderManager?.renderCamera;
-        if (!renderCam) return;
-
-        const ndc = this.mapView.getNormalizedScreenCoordinates(
-            this.windowEventHandler.lastMouseX,
-            this.windowEventHandler.lastMouseY
-        );
-        mrm.readDepth(ndc);
     }
 
     protected get cameraTransform(): CameraTransform {

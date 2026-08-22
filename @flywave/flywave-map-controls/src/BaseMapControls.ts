@@ -58,17 +58,6 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private isPanHit: boolean = false;
     private readonly panHit: Vector3 = new Vector3();
 
-    /**
-     * Re-anchors an active drag to the given world point. Used when a drag
-     * started on a cold-pixel fallback anchor and the (authoritative) GPU
-     * pick resolves a frame or two later — the drag swaps to the correct
-     * anchor instead of staying glued to the math-surface point.
-     */
-    protected rebasePanHit(point: Vector3): void {
-        if (this.isPanHit && this.windowEventHandler.mouseDown[0]) {
-            this.panHit.copy(point);
-        }
-    }
     private lastHitCenterDistance: number = -1;
     private readonly lastHitCenter: Vector3 = new Vector3();
     private readonly lastHitCenterClick: Vector3 = new Vector3();
@@ -367,13 +356,6 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
                 return hitDistance;
             } else {
                 this.isPanHit = false;
-                // A real wheel tick with no valid target (waiting for the GPU
-                // lock at a new cursor position) must invalidate the previous
-                // gesture's target — otherwise the zoom inertia tail keeps
-                // chasing the OLD locked point under the new cursor.
-                if (isWheel) {
-                    this.lastHitDistance = 0;
-                }
             }
         }
         return -1;
@@ -423,10 +405,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
                     damping = (this.limitZoomOut * 2 - distanceRatio) / this.limitZoomOut;
                 }
 
-                // Clamp the lerp factor: cumulative wheel bursts push it past
-                // 1, which overshoots THROUGH the target and diverges.
-                const f = Math.max(-0.9, Math.min(0.9, zoomDelta * damping));
-                this.cameraTransform.zoom(this.lastHit, f);
+                this.cameraTransform.zoom(this.lastHit, zoomDelta * damping);
             }
         }
 
@@ -626,25 +605,12 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
         if (mouseDown[2] && this.lastHitCenterDistance > 0) {
             const { width, height } = this.mapView.getCanvasClientSize();
-
-            const origin = new Vector3();
-            const target = new Vector3();
             const cx = width / 2;
             const cy = height / 2;
-            this.cameraTransform.unprojectToWorld(origin, cx, cy, 0);
-            this.cameraTransform.unprojectToWorld(target, cx, cy, -1);
-
-            const hitPoint = new Vector3();
-            const dist = this.rayCastWorld(hitPoint, origin, target);
-
-            if (dist > 0) {
-                this.lastHitCenter.copy(hitPoint);
-                this.lastHitCenterDistance = dist;
-                this.getDistanceToGlobe(hitPoint, this.lastHitGravity);
-                this.m_pivotIndicator.show(cx, cy);
-            } else {
-                this.m_pivotIndicator.hide();
-            }
+            // 旋转期间不做 CPU 射线碰撞：lastHitCenter / lastHitGravity 已由
+            // updateCenter()/focusCenter() 每帧从 MapView 中心目标（GPU 深度
+            // 优先）刷新，这里只负责显示指示器。
+            this.m_pivotIndicator.show(cx, cy);
         } else {
             this.m_pivotIndicator.hide();
         }
@@ -732,8 +698,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         isWheel: boolean
     ): number {
         if (!this.lockCenterPoint || !isWheel) {
-            // Wheel ticks must wait for a valid GPU collision point before
-            // any camera movement; clicks are one-shot and keep the fallback.
+            // isWheel（滚轮）→ MapControls 用碰撞锁防止 zoom 高频 CPU 射线。
             return this.rayCastWorld(result, origin, target, isWheel);
         } else {
             const cameraPos = new Vector3();
