@@ -2764,3 +2764,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **heatmap 域补测（§38 未跑完项）**：heatmap 核心（default/color/opacity/weight 等）**PASS**（含在 26 passed 内）；遗留 = radius 投影族（antimeridian 5.7k / pitch30 15k / projected 13.1k）、globe-heatmap（11.8k~118k）、fog/terrain/context-restore 组合、combinations/heatmap-translucent ×20（~4k 级半透明叠加序）。
 - **回归审计**：line-color/width/dasharray/pattern+fill-outline 批 193 例与 §12.89 基线同分布（elevated-line-color/default 403→446 噪声带，dasharray/default 56↔56 持平）；image 族 26 passed 含全部既有 PASS。
 - **方法论**：karma console LOG/ERROR 会打到 stdout——**shader 编译错误从此必须先查**（本域 20 例空白三周无人发现即因没人看 console）；单例诊断跑 `filter=<name>` ~20s。
+
+**91. gradient-vector-tile lineClips 移植 + text/symbol 域系统性定性（2026-08-22 五，代码分析批）**：
+
+- **mgl lineClips 机制移植**（`line_bucket.ts evaluateLineProgressFeatures`）：矢量瓦片在 lineMetrics 源下携带 `mapbox_clip_start/end` 特性属性（fixture `tiles/line_metrics/*.pbf` 实测含 mapbox_line_metrics/clip_start/clip_end 三键），mgl 的 line-progress = `(totalFeatureLength·start + distance)/totalFeatureLength`——**锚定全要素而非瓦片内重开**。我们的 ribbon `distAt` 原本每瓦片 0→1 重开（渐变中段跳变橙→蓝）。落地：emitter 主线 pass 提取 clip 属性 → `emitRibbonFill → emitRibbonBody` 新参 `progressClip`，`distAt = start + t·(end−start)`；**变宽 line-progress 求值同步映射**（progressHalfWidths 的 `sl/total` 先过同一 mapP，否则渐细位置错位）。验收：**8832/13616 → 6453 稳定**（单例三连跑一致；批跑中偶发 10617 为负载 flake §12.85 前科）。**残余定性**：渐变映射已对（沿线逐点色差 ≤2/255），剩两线整体 ~8px 垂直中心线偏移（col75 带 cur rows 8-19 vs exp 0-11，等厚纯平移——几何/线宽单位疑点）+ 期望图 y105 黑带定性待查；line-border-gradient 的 border ribbon 未接 clip（无 fixture 需求）。
+- **text/symbol 域（~90 例）系统性定性（关键结论：非排版接线问题）**：text-anchor 全族（10-18k 失配）逐行质心/范围比对——**位置基本正确**（质心差 ≤3px、字符范围一致）；失配像素 96% 距字形边缘 ≤2px、99.85% ≤4px → **主因 = TextCanvas 字形 AA/笔画渲染精度（F13）**，hAlignment/vAlignment/text-offset 接线无误。修复入口在引擎侧（flywave-text-canvas / mapview TextElementsRenderer 的亚像素定位 + SDF/AA 剖面 + halo 顶点格式），属"原架构"级专项（§12.69/§12.70 的 2-4px 盒差与此一致；§12.72 的 AA 公式实验已证伪单点修法）。
+- **fog/2d/line-gradient 591→827**：未查（低优先，fog 域连带）。

@@ -1582,8 +1582,23 @@ export class MBTileDataEmitter {
                     if (total > 0) {
                         const halfOf = (w: number) =>
                             widthUnit === 'meters' ? w / 2 : (w * metersPerPixel) / 2;
+                        // mgl line-progress on vector tiles is anchored to the
+                        // FULL feature via the server-provided clip fractions
+                        // (line_bucket.evaluateLineProgressFeatures:
+                        // (totalFeatureLength·start + distance)/totalFeatureLength
+                        // with lineClips from `mapbox_clip_start/end`).
+                        // Variable width must evaluate at the SAME mapped
+                        // progress or the taper lands in the wrong place.
+                        const cs = Number(properties?.['mapbox_clip_start']);
+                        const ce = Number(properties?.['mapbox_clip_end']);
+                        const clip: [number, number] | undefined =
+                            Number.isFinite(cs) && Number.isFinite(ce) && ce > cs
+                                ? [Math.max(0, cs), Math.min(1, ce)]
+                                : undefined;
+                        const mapP = (t: number) =>
+                            clip ? clip[0] + t * (clip[1] - clip[0]) : t;
                         progressHalfWidths = segLens.map(sl =>
-                            halfOf(interpProgressStops(pwStops, sl / total)));
+                            halfOf(interpProgressStops(pwStops, mapP(sl / total))));
                     }
                 }
                 // Bake extrusion into each vertex's position: pos += biTangent*hw*sign(ec.y)
@@ -1669,8 +1684,15 @@ export class MBTileDataEmitter {
                 // the ribbon is the only visible path. The dash pattern must be
                 // rendered ON the ribbon (see the patcher's USE_DASHED_LINE
                 // injection keyed by technique._dashSize/_gapSize).
+                const clipStart = Number(properties?.['mapbox_clip_start']);
+                const clipEnd = Number(properties?.['mapbox_clip_end']);
+                const progressClip: [number, number] | undefined =
+                    Number.isFinite(clipStart) && Number.isFinite(clipEnd) && clipEnd > clipStart
+                        ? [Math.max(0, clipStart), Math.min(1, clipEnd)]
+                        : undefined;
                 this.emitRibbonFill(layer, worldPts, mainHalfWidth + aaDilate, cumDist,
-                    trueWidthPx > 0 ? trueWidthPx + 1 : 0, lineGeom, progressHalfWidths, offsetWorld, properties);
+                    trueWidthPx > 0 ? trueWidthPx + 1 : 0, lineGeom, progressHalfWidths, offsetWorld, properties,
+                    progressClip);
                 // line-border: edge ribbons under the main line (constant
                 // width only — variable-width borders are not a test case).
                 if (!progressHalfWidths) {
@@ -1853,6 +1875,7 @@ export class MBTileDataEmitter {
         hwPerPoint?: number[],
         offsetWorld = 0,
         properties?: Record<string, any>,
+        progressClip?: [number, number],
     ): void {
         // Key by ribbon technique: see the fill key comment in
         // processFillFeature — groups sharing a geometry must use one technique,
@@ -1874,7 +1897,7 @@ export class MBTileDataEmitter {
         }
         const featureStart = geo.indices.length;
 
-        this.emitRibbonBody(layer, geo, worldPts, worldHalfWidth, cumDist, hwPerPoint, offsetWorld);
+        this.emitRibbonBody(layer, geo, worldPts, worldHalfWidth, cumDist, hwPerPoint, offsetWorld, progressClip);
         this.emitRibbonCaps(layer, geo, worldPts, worldHalfWidth, cumDist, hwPerPoint, offsetWorld);
 
         // Use a fill technique so the mapview creates a simple fill material.
@@ -1909,6 +1932,7 @@ export class MBTileDataEmitter {
         cumDist?: number[],
         hwPerPoint?: number[],
         offsetWorld = 0,
+        progressClip?: [number, number],
     ): void {
         const n0 = worldPts.length / 3;
         if (n0 < 2) return;
@@ -1980,7 +2004,12 @@ export class MBTileDataEmitter {
         }
         const distAt = (i: number) => {
             const t = rawD[((i % n) + n) % n];
-            return total > 0 ? t / total : 0;
+            const p = total > 0 ? t / total : 0;
+            // mgl anchors vector-tile line-progress to the FULL feature via
+            // `mapbox_clip_start/end` (lineClips) — the tile-clipped part maps
+            // into [start, end] instead of restarting at 0 (line_bucket.ts
+            // evaluateLineProgressFeatures).
+            return progressClip ? progressClip[0] + p * (progressClip[1] - progressClip[0]) : p;
         };
         // Absolute distance (world meters) for line-pattern tiling.
         const lenAt = (i: number) => rawD[((i % n) + n) % n];
@@ -2217,6 +2246,7 @@ export class MBTileDataEmitter {
         cumDist?: number[],
         hwPerPoint?: number[],
         offsetWorld = 0,
+        progressClip?: [number, number],
     ): void {
         const cap = layer.layout?.['line-cap'];
         if (cap !== 'round' && cap !== 'square') return;
