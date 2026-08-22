@@ -2947,3 +2947,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **§116 零效之谜破案**：DEM 数据本身健康（探针实测 min 70/max 155-200m），但 `sampleElevation` 恒返 0——`allDemTiles` 用 `mesh.position` 作世界坐标，而 `updateCameraRelative` **每帧把它改写为相机相对坐标**（世界真值在 `userData.__mbWorldPos`）。CPU 侧 DEM 采样全部落空 → §116 的 flat/uniform/exag 实施从未生效（也解释 over-border "回归"实为噪声重排）。修复：allDemTiles 改用 `__mbWorldPos`，探针复测采样 0→370/593m（exaggerated）✓。
 - **验收（保留修复，9+2 例）**：flat-roof 47807→**43063**、flat-roof-ao 69482→66041、flat-roof-over-border 94484→93336、alignment-height-terrain 68017→66215、**fog/terrain/basic 32123→28760**、2x-pixelratio-lines 5196→4692；over-border-different-zoom 155341 不变、circle/occluded +462（噪声带）——全域小改善无实质回归。
 - **遗留**：shader 侧 per-vertex 采样（uMBExtrusionDemOrigin 世界坐标 vs modelMatrix 语义）与 mgl centroid_pos 顶点编码仍是子域 C 完整收敛的剩余路径（§116 规格不变）。
+
+**118. shader per-vertex DEM 采样语义核查 + 世界锚点实验（2026-08-23 八，零净变化）**：
+
+- **语义核查（探针实锤）**：挤出 mesh worldPos=(323,470)=**相机相对**（RTE 场景根每帧重锚），而 `uMBExtrusionDemOrigin` 为世界米——`modelMatrix` 采样确属 §117 同族坐标错配。
+- **世界锚点实验**：tileKey→世界瓦片中心 − mesh 相机相对包围球中心，shader `mbWorldPos = position.xy + uMBExtrusionAnchor`——除 over-border-different-zoom **155k→192k（+37k 劣化）**外全部逐值不变（flat-roof 43063/alignment 66215/fog-terrain 28760）：这些 fixture 的挤出视觉不依赖该采样值（clamp-to-edge 垃圾采样恰被 exag=1 的既有校准吸收），而 over-border 系（多瓦片 DEM 混叠）对正确世界采样反而更差——155k 残差由**跨瓦片 DEM 拼接/过缩放机制**主导，世界正确化打破了与混叠的偶然抵消。
+- **诚实回退**：git 全量回退（§117 的 allDemTiles 修复已在 HEAD 保留），基线逐值复原（155341/43063/28760 ✓）。
+- **子域 C 收敛定论**：剩余 155k/66k 级需要 (a) 多瓦片 DEM 正确拼接（over-border 系）、(b) mgl centroid_pos 顶点编码（flat 顶）、(c) 与 exaggeration 的联合重校准——三者耦合，单点改动互为回归（§116/§118 两轮实证）。记档为子域 C 完整规格，避免再单点试错。
