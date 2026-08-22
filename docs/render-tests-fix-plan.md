@@ -102,3 +102,16 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
   合成损耗（TextCanvas 输出到主帧的混合路径）；③ mgl fixture 期望图生成时的 dpr/fontScale 细节。
 - **结论**：P1 需要 Node 单字形独立复刻取证（离屏渲染一字形对照 mgl 期望，隔离 TextCanvas 全链），
   远程盲扫已穷尽四个参数杠杆（材质/atlas×2/重映射/AA 斜率）。
+
+## P1 执行记录 V（2026-08-22）——✅ 破案：S 曲线覆盖
+- **根因定位**（数学+取证链）：mgl 用 smoothstep 围边的 S 曲线，**内边带（raw≥224）饱和为全覆盖**；
+  我们的线性斜坡在同带停留在部分 alpha（cell(1,2) 取证：exp 同高宽+8%、墨+36%、更黑）。
+  五条排除链（材质/双 atlas/重映射系数/cap 斜率/floor 斜率）后，第六实验命中：
+  **`smoothstep(-w, +w, d)`（w = 0.5/toPixels）= 原导数斜率的 S 曲线化**——保字号自适应，
+  同时内边带饱和。
+- **验收（A/B，全改善）**：text-color 4681→4469、text-offset 4669→4455、
+  halo-color 112→107、**line-height 34→15**、diacritics 2264→2038；广谱：
+  text-anchor/bottom 16807→15720、variable-anchor 6617→6336、symbol-placement/line 85299→84161、
+  text-rotate 103→103、halo-width 112→107；**非文本哨兵零回归**（heatmap/fog/skybox/icon 逐位不变；
+  trees-lod 一次 109156 为已知负载 flake，复测 3/3 PASS）。
+- **遗留**：text 域残差仍大（text-anchor ~15k 等）——S 曲线只收覆盖精度，放置/排版差异（P1 主项）仍在。

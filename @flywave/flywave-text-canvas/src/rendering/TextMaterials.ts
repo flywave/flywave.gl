@@ -59,8 +59,13 @@ const SdfShaderChunks = {
             float dy = dFdy(rotatedUVs.y) * sdfParams.y;
             float toPixels = sdfParams.w * inversesqrt( dx * dx + dy * dy );
 
-            float dist = getDistance(uvOffset) + min(weight, 0.5 - 1.0 / sdfParams.w) - 0.5;
-            return clamp(dist * toPixels + 0.5, 0.0, 1.0);
+            float d = getDistance(uvOffset) + min(weight, 0.5 - 1.0 / sdfParams.w) - 0.5;
+            // S-curve form of the same derivative-scaled ramp: mgl uses a
+            // smoothstep around the edge, which saturates the stroke interior
+            // to full coverage, while the linear ramp leaves near-edge band
+            // pixels at partial alpha (observed as systematic ink deficit).
+            float w = 0.5 / max(toPixels, 1e-4);
+            return smoothstep(-w, w, d);
         }
         `
 };
