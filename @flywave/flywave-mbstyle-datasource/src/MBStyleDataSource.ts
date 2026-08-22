@@ -1858,6 +1858,16 @@ export class MBStyleDataSource extends TileDataSource {
             const cur = (MBTileDataEmitter as any).s_spriteInfos as Map<string, any> | null;
             cur?.set(name, { width: w, height: h });
         }
+        // PoiRenderer looks icons up in mapView.userImageCache (theme+user
+        // caches) by technique imageTextureName — runtime addImage must
+        // register there too (the setStyle path does this at line ~1950),
+        // otherwise the icon geometry renders but never paints.
+        try {
+            const userImageCache = (this.mapView as any)?.userImageCache;
+            if (userImageCache && typeof userImageCache.addImage === 'function') {
+                userImageCache.addImage(name, image as any);
+            }
+        } catch {}
         return this.m_spriteAtlas?.addIcon(name, image as any) ?? false;
     }
 

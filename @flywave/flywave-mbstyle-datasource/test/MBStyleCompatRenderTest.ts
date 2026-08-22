@@ -414,6 +414,21 @@ async function processOperations(
                         } catch {}
                         break;
                     }
+                    if (typeof args[1] === 'string' && args[1].endsWith('.png')) {
+                        // mgl handler loads the PNG as an Image (localized
+                        // against the vendored mgl checkout).
+                        try {
+                            const rel2 = (args[1] as string).replace('./', '');
+                            const img = new Image();
+                            img.onload = () => {
+                                dataSource.addImage(args[0], img);
+                                (dataSource as any).mapView?.markTilesDirty?.(dataSource);
+                                mapView.update();
+                            };
+                            img.src = `/base/mapbox-gl-js/test/integration/${rel2}`;
+                        } catch {}
+                        break;
+                    }
                     const imgData = args[1];
                     try {
                         const canvas = document.createElement('canvas');
@@ -438,6 +453,21 @@ async function processOperations(
                 // Re-add the image (same as addImage but replaces existing).
                 if (args[1] && typeof document !== 'undefined') {
                     dataSource.removeImage(args[0]);
+                    if (typeof args[1] === 'string' && args[1].endsWith('.png')) {
+                        // mgl handler loads the PNG as an Image (localized
+                        // against the vendored mgl checkout).
+                        try {
+                            const rel2 = (args[1] as string).replace('./', '');
+                            const img = new Image();
+                            img.onload = () => {
+                                dataSource.addImage(args[0], img);
+                                (dataSource as any).mapView?.markTilesDirty?.(dataSource);
+                                mapView.update();
+                            };
+                            img.src = `/base/mapbox-gl-js/test/integration/${rel2}`;
+                        } catch {}
+                        break;
+                    }
                     const imgData = args[1];
                     try {
                         const canvas = document.createElement('canvas');

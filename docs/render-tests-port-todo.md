@@ -2976,3 +2976,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地（保留）**：① harness `addImage` op 支持 `"./image/dot.js"` 模块路径（mgl operation-handlers 语义）：fetch vendored mgl checkout → 剥离 `export` → eval → onAdd+render 一次 → canvas 入 addImage（**像素级验证**：canvas (100,100)=(255,100,100)=粉芯 ✓）；② karma 新增 serve pattern `mapbox-gl-js/test/integration/image/*.js`；③ addImage 后 `markTilesDirty` 强制重解码。
 - **残段（待查）**：canvas→addIcon→atlas 链路已通但 icon 仍不上屏——嫌疑收敛到 **PoiRenderer/userImageCache 在重解码后的 icon 重解析**（初次解码时 'dot' 未注册被丢弃的路径未因 markTilesDirty 恢复）；与 styleimagemissing（72px 近失，on-styleimagemissing 事件→addImage 同族流）同根。下轮入口：MBStyleSymbolPlacement 的 icon 缓存失效逻辑。
 - **零回归**：icon-image/default 等不受影响，3 例基线不变（29294/29792/72）。
+
+**122. runtime-addImage 末段破案——userImageCache 注册缺失（with-symbol 转 PASS，2026-08-23 十二）**：
+
+- **真因**：`MBStyleDataSource.addImage` 只写 SpriteAtlas；PoiRenderer 按 technique imageTextureName 从 **mapView.userImageCache** 查图——runtime 图标从未注册（setStyle 静态路径在 ~1950 行有此步骤）。修复：addImage 同步注册 userImageCache（sprite atlas + user cache 双写）。
+- **连带补齐**：① addImage op 的 `.png` 路径分支（mgl handler 的 `new Image()` 语义）；② karma serve pattern 扩为 `image/*.*`（marker.png 404 破案）。
+- **验收**：**image/render-callback-with-symbol 29294→PASS**（368-385 批载噪声带）；icon-image/default/literal、image 族其余 PASS 基线不变（10 PASS 保持）。
+- **残余**：① image/render-callback（icon-only、`icon-allow-overlap` 未设）仍空白——疑 MBStyleSymbolPlacement 的碰撞门对 runtime 后补图标的交互（with-symbol 设了 allow-overlap:true 而通过），入口：placement 的 icon 解析时序；② styleimagemissing 72px 需 `on('styleimagemissing')` 事件 op（纯缺功能）；③ icon-image/token/property-function 425 为既有遗留。

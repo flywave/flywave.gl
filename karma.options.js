@@ -145,9 +145,9 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
                 served: true
             },
             {
-                // mgl JS-generated test images (addImage "./image/dot.js" ops)
-                // fetched and evaled by the harness at runtime.
-                pattern: "mapbox-gl-js/test/integration/image/*.js",
+                // mgl test images (addImage "./image/*.js|.png" ops) fetched
+                // by the harness at runtime.
+                pattern: "mapbox-gl-js/test/integration/image/*.*",
                 included: false,
                 served: true
             }
