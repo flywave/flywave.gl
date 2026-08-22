@@ -38,6 +38,7 @@ import debounce from "lodash.debounce";
 import { Matrix4, Mesh, Object3D, type Material } from "three/webgpu";
 
 import { TERRAIN_TILE_DECODER_ID } from "./Constants";
+import { type TerrainLayerMesh, type TerrainTileState } from "./dem-terrain/TerrainLayerMesh";
 import { ExclusionManager } from "./ExclusionManager";
 import {
     HeightMapModifierManager,
@@ -143,6 +144,8 @@ export class TerrainResourceTile extends Tile {
     _distanceFromCamera: number = Number.MAX_SAFE_INTEGER;
     private readonly _resourceManager: TileResourceManager = new TileResourceManager();
     private _cachedMesh: Object3D | null = null;
+    private _layerMeshes: Map<string, TerrainLayerMesh> | null = null;
+    private _layerTileState: TerrainTileState | null = null;
 
     shouldDisposeObjectGeometry() {
         return false;
@@ -166,6 +169,21 @@ export class TerrainResourceTile extends Tile {
 
     set cachedMesh(mesh: Object3D | null) {
         this._cachedMesh = mesh;
+    }
+
+    get layerMeshes(): Map<string, TerrainLayerMesh> {
+        if (!this._layerMeshes) {
+            this._layerMeshes = new Map();
+        }
+        return this._layerMeshes;
+    }
+
+    get layerTileState(): TerrainTileState | null {
+        return this._layerTileState;
+    }
+
+    set layerTileState(state: TerrainTileState | null) {
+        this._layerTileState = state;
     }
 
     /**
@@ -207,6 +225,14 @@ export class TerrainResourceTile extends Tile {
             }
             this._cachedMesh = null;
         }
+        if (this._layerMeshes) {
+            this._layerMeshes.forEach(layerMesh => layerMesh.dispose());
+            this._layerMeshes = null;
+        }
+        if (this._layerTileState) {
+            this._layerTileState.dispose();
+            this._layerTileState = null;
+        }
         super.dispose();
         if (fromLru) {
             this._resourceManager.dispose();
@@ -234,6 +260,18 @@ export class ShadowTerrainResourceTile extends TerrainResourceTile {
 
     set cachedMesh(mesh: Object3D | null) {
         this.resTile.cachedMesh = mesh;
+    }
+
+    get layerMeshes(): Map<string, TerrainLayerMesh> {
+        return this.resTile.layerMeshes;
+    }
+
+    get layerTileState(): TerrainTileState | null {
+        return this.resTile.layerTileState;
+    }
+
+    set layerTileState(state: TerrainTileState | null) {
+        this.resTile.layerTileState = state;
     }
 
     shouldDisposeObjectGeometry() {
@@ -491,9 +529,13 @@ export abstract class TerrainSource<
      * @param tileSource - The web tile data provider to remove
      */
     removeWebTileDataSource(tileSource: WebTileDataProvider) {
-        this.m_materialProviders = this.m_materialProviders.filter(
+        const providers = this.m_materialProviders.filter(
             provider => provider.webTileProvider !== tileSource
         );
+        if (providers.length !== this.m_materialProviders.length) {
+            this.m_materialProviders = providers;
+            this.updateTileOverlays();
+        }
     }
 
     /**

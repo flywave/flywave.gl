@@ -5,8 +5,13 @@ import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";
 import { type TerrainResourceTile } from "../TerrainSource";
 import { type DEMTerrainSource } from "./DEMTerrainSource";
 import { type DemTileResource } from "./DEMTileProvider";
-import { HeightMapTerrainMesh } from "./DEMTileTerrainMesh";
-import { Color } from "three/webgpu";
+import {
+    DEMTileBaseMaterial,
+    DEMTileOverlayMaterial,
+    type DEMLayerKind
+} from "./DEMTileLayerMaterial";
+import { TerrainLayerMesh, TerrainTileState } from "./TerrainLayerMesh";
+import type * as THREE from "three/webgpu";
 
 /**
  * Resource tile loader for DEM (Digital Elevation Model) data
@@ -26,12 +31,21 @@ export class DemDataLoader extends ResourceTileLoader<DemTileResource, DEMTerrai
     }
 }
 
+interface TargetLayer {
+    key: string;
+    kind: DEMLayerKind;
+    texture?: THREE.Texture;
+    uvTransform?: THREE.Vector4;
+}
+
 /**
  * Terrain tile loader for height map based terrain
  *
- * This class extends TerrainTileLoader to handle the loading and rendering
- * of height map based terrain tiles. It manages the creation of terrain meshes
- * and the application of height maps, imagery textures, and overlay textures.
+ * Renders one tile as a stack of layer meshes sharing the tile's geometry and
+ * uniform state: a single lit base mesh (first imagery tile or solid color)
+ * plus one unlit decal mesh per additional imagery tile. Layer materials are
+ * never shared between tiles; meshes are cached per (tile, layerKey) and only
+ * recreated when the layer set itself changes.
  */
 export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMTerrainSource> {
     /**
@@ -56,59 +70,152 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
     }
 
     /**
-     * Implements the loading of the tile mesh
+     * Diff-based rebuild of the tile's layer meshes.
      *
-     * This method creates and configures the terrain mesh for this tile,
-     * applying height maps, imagery textures, and overlay textures as available.
+     * Existing (tileKey, layerKey) meshes are reused with their texture
+     * swapped in place; meshes are created or disposed only when the layer
+     * set changes.
      */
     loadTileMeshImpl() {
+        const state = this.ensureTileState();
+
         const demTile = this.dataSource
             .dataProvider()
             .getBestAvailableResourceTile(this.tile.tileKey);
-
-        const existingMesh = this.tile.cachedMesh as HeightMapTerrainMesh | null;
-
-        if (existingMesh) {
-            this.tile.objects.length = 0;
-            if (demTile && demTile.resource) {
-                const texture = demTile.resource.demData.getPixels();
-                if (texture) {
-                    existingMesh.setHeightMap(texture, demTile.tileKey);
-                }
+        if (demTile && demTile.resource) {
+            const texture = demTile.resource.demData.getPixels();
+            if (texture) {
+                state.setHeightMap(texture, demTile.tileKey);
             }
-            existingMesh.updateUniforms();
-            this.dataSource.getWebTileDataSources().forEach(webTiles => {
-                const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
-                if (!webTile) return;
-                existingMesh.setupImageryTexture(webTile.resource.value, webTiles.tilingScheme);
-            });
-            existingMesh.projectorState = this.dataSource.getProjectorOverlayManager().state;
-            this.tile.objects.push(existingMesh);
-            return;
         }
 
-        this.tile.clear();
-        this.dataSource.getWebTileDataSources().forEach(webTiles => {
-            const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
-            if (!webTile) return;
-            const terrainMesh = new HeightMapTerrainMesh(
+        const targets = this.collectImageryLayers(state);
+
+        const meshes = this.tile.layerMeshes;
+        const seen = new Set<string>();
+
+        for (const target of targets) {
+            seen.add(target.key);
+
+            const existing = meshes.get(target.key);
+            if (existing && existing.layerKind === target.kind) {
+                this.updateLayerMesh(existing, target);
+                continue;
+            }
+            if (existing) {
+                existing.dispose();
+                meshes.delete(target.key);
+            }
+            meshes.set(target.key, this.createLayerMesh(state, target));
+        }
+
+        for (const key of Array.from(meshes.keys())) {
+            if (!seen.has(key)) {
+                meshes.get(key)!.dispose();
+                meshes.delete(key);
+            }
+        }
+
+        this.tile.objects.length = 0;
+        targets.forEach((target, index) => {
+            const mesh = meshes.get(target.key)!;
+            mesh.renderOrder = index;
+            this.tile.objects.push(mesh);
+        });
+    }
+
+    private ensureTileState(): TerrainTileState {
+        let state = this.tile.layerTileState;
+        if (!state) {
+            const geometryBuilder = this.dataSource.tileBaseGeometryBuilder;
+            const geometryWithTransform = geometryBuilder.getTileGeometryWithTransform(
+                this.tile.tileKey
+            );
+            state = new TerrainTileState(
                 this.tile,
                 this.dataSource.getTilingScheme(),
                 this.dataSource.getProjectionSwitchController(),
-                this.dataSource.tileBaseGeometryBuilder
+                geometryBuilder,
+                geometryWithTransform
             );
-            terrainMesh.setModifierManager(this.dataSource.getGroundModificationManager());
-            if (demTile && demTile.resource) {
-                const texture = demTile.resource.demData.getPixels();
-                if (texture) {
-                    terrainMesh.setHeightMap(texture, demTile.tileKey);
-                }
-            }
-            terrainMesh.updateUniforms();
-            terrainMesh.setupImageryTexture(webTile.resource.value, webTiles.tilingScheme);
-            terrainMesh.projectorState = this.dataSource.getProjectorOverlayManager().state;
-            this.tile.cachedMesh = terrainMesh;
-            this.tile.objects.push(terrainMesh);
+            state.setModifierManager(this.dataSource.getGroundModificationManager());
+            this.tile.layerTileState = state;
+        }
+        return state;
+    }
+
+    private collectImageryLayers(state: TerrainTileState): TargetLayer[] {
+        const targets: TargetLayer[] = [];
+
+        this.dataSource.getWebTileDataSources().forEach(provider => {
+            const webTile = provider.getBestAvailableResourceTile(this.tile.tileKey);
+            if (!webTile) return;
+
+            webTile.resource.value.forEach((webTileEntry, index) => {
+                const transform = state.computeTextureUvTransform(
+                    webTileEntry.geoBox,
+                    provider.tilingScheme
+                );
+                if (transform === false) return;
+
+                webTileEntry.texture.flipY = this.dataSource.isYAxisDown;
+                targets.push({
+                    key: `web:${provider.uuid}:${index}`,
+                    kind: "overlay",
+                    texture: webTileEntry.texture,
+                    uvTransform: transform
+                });
+            });
         });
+
+        if (targets.length > 0) {
+            targets[0].kind = "base";
+        } else {
+            targets.push({ key: "base", kind: "base" });
+        }
+
+        return targets;
+    }
+
+    private createLayerMesh(state: TerrainTileState, target: TargetLayer): TerrainLayerMesh {
+        if (target.kind === "base") {
+            const material = new DEMTileBaseMaterial(state.uniforms, {
+                texture: target.texture,
+                uvTransform: target.uvTransform
+            });
+            return new TerrainLayerMesh(
+                state.geometryRef,
+                material,
+                state,
+                target.key,
+                target.kind
+            );
+        }
+
+        const material = new DEMTileOverlayMaterial(state.uniforms, "overlay", {
+            texture: target.texture,
+            uvTransform: target.uvTransform
+        });
+        return new TerrainLayerMesh(state.geometryRef, material, state, target.key, target.kind);
+    }
+
+    private updateLayerMesh(mesh: TerrainLayerMesh, target: TargetLayer): void {
+        const material = mesh.material as
+            | DEMTileBaseMaterial
+            | DEMTileOverlayMaterial;
+        if (target.kind === "base") {
+            (material as DEMTileBaseMaterial).setImagery(
+                target.texture ?? null,
+                target.uvTransform
+            );
+        } else {
+            const overlayMaterial = material as DEMTileOverlayMaterial;
+            if (target.texture) {
+                overlayMaterial.setLayerTexture(target.texture);
+            }
+            if (target.uvTransform) {
+                overlayMaterial.setUvTransform(target.uvTransform);
+            }
+        }
     }
 }
