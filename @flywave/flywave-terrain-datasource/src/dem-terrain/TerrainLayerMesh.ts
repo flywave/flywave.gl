@@ -12,7 +12,7 @@ import * as THREE from "three/webgpu";
 
 import { type HeightMapModifierManager } from "../ground-modification-manager";
 import { ProjectionSwitchController } from "../ProjectionSwitchController";
-import { type DEMLayerKind } from "./DEMTileLayerMaterial";
+import { type DEMLayerKind, emptyOpaqueTex } from "./DEMTileLayerMaterial";
 
 const zAxis = new Vector3(0, 0, 1);
 const ORIGIN = new Vector3();
@@ -436,6 +436,12 @@ export class TerrainLayerMesh extends Mesh {
     public modifierOp: number = 0;
     public hasModifier: number = 0;
     public displacement: Vector3 = new Vector3();
+    // Projector overlay (world-space sampling): live references owned by
+    // ProjectorOverlayManager — mutated in place (matrix recomputed on
+    // geoBox change, cameraPos refreshed every frame), read at draw time via
+    // the material's onObjectUpdate uniforms.
+    public projectorMatrix?: THREE.Matrix4;
+    public projectorCameraPos?: THREE.Vector3;
 
     constructor(
         geometry: THREE.BufferGeometry,
@@ -473,12 +479,25 @@ export class TerrainLayerMesh extends Mesh {
         if (uvTransform) {
             this.uvTransform.copy(uvTransform);
         }
+        // Rebind the per-material texture node IN PLACE (module-level shared
+        // texture nodes lose per-object values in this architecture — see
+        // DEMTileLayerMaterial). Reference guard: these setters fire on every
+        // tile-cache event; rebinding an unchanged texture would still
+        // trigger a binding refresh.
+        const mat = this.material as any;
+        if (mat.imageryTexNode && mat.imageryTexNode.value !== (tex ?? emptyOpaqueTex)) {
+            mat.imageryTexNode.value = tex ?? emptyOpaqueTex;
+        }
     }
 
     /** Swap decal texture / params in place. */
     setLayerTexture(tex: THREE.Texture) {
         this.layerTexture = tex;
         this.hasImagery = 1;
+        const mat = this.material as any;
+        if (mat.decalTexNode && mat.decalTexNode.value !== tex) {
+            mat.decalTexNode.value = tex;
+        }
     }
 
     setLayerOpacity(value: number) {

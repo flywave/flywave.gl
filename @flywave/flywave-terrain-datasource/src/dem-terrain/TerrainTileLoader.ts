@@ -1,7 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { TextElement } from "@flywave/flywave-mapview";
-import { webMercatorTerrainTilingScheme } from "@flywave/flywave-geoutils";
 import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";
 import { type TerrainResourceTile } from "../TerrainSource";
 import { type DEMTerrainSource } from "./DEMTerrainSource";
@@ -40,6 +39,9 @@ interface TargetLayer {
     uvTransform?: THREE.Vector4;
     opacity?: number;
     blending?: THREE.Blending;
+    /** Projector world-space sampling (live refs, mutated in place). */
+    projectorMatrix?: THREE.Matrix4;
+    projectorCameraPos?: THREE.Vector3;
 }
 
 /**
@@ -227,27 +229,20 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         if (!resourceTile) return;
 
         for (const entry of resourceTile.resource.value) {
-            // Same sampling path as satellite imagery: the UV transform MUST
-            // be computed in the imagery (web-mercator) projected space —
-            // the shader samples with the webMercatorY attribute, which is
-            // linear in mercator Y. Passing the terrain's own (sphere)
-            // tiling scheme here produces a latitude-linear transform and
-            // the decal lands in the wrong place (growing offset with
-            // latitude).
-            const transform = state.computeTextureUvTransform(
-                entry.geoBox,
-                manager.provider.tilingScheme ?? webMercatorTerrainTilingScheme
-            );
-            if (transform === false) continue;
-
             entry.texture.flipY = this.dataSource.isYAxisDown;
+            // World-space projector sampling (legacy DEMTileMeshMaterial
+            // approach, restored): the layer's orthographic projector matrix
+            // and the RTE camera-position correction are consumed directly by
+            // the shader — no tile-UV transform involved (the UV-transform
+            // mapping displayed incorrectly).
             targets.push({
                 key: `proj:${entry.layerId}`,
                 kind: "projector",
                 texture: entry.texture,
-                uvTransform: transform,
                 opacity: entry.opacity,
-                blending: projectorBlending(entry.blendMode)
+                blending: projectorBlending(entry.blendMode),
+                projectorMatrix: entry.matrix,
+                projectorCameraPos: manager.cameraPos
             });
         }
     }
@@ -266,10 +261,12 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             return mesh;
         }
 
-        // Imagery overlays and projector layers share the SAME overlay
-        // material graph — only blending may differ per layer.
+        // Imagery overlays and projector layers share the same overlay
+        // material CLASS — projector mode switches the color graph to
+        // world-space matrix sampling (see DEMTileOverlayMaterial).
         const material = new DEMTileOverlayMaterial(
-            target.blending !== undefined ? { blending: target.blending } : undefined
+            target.blending !== undefined ? { blending: target.blending } : undefined,
+            target.kind === "projector"
         );
         const mesh = new TerrainLayerMesh(
             state.geometryRef,
@@ -286,6 +283,12 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         }
         if (target.opacity !== undefined) {
             mesh.setLayerOpacity(target.opacity);
+        }
+        if (target.projectorMatrix) {
+            mesh.projectorMatrix = target.projectorMatrix;
+        }
+        if (target.projectorCameraPos) {
+            mesh.projectorCameraPos = target.projectorCameraPos;
         }
         return mesh;
     }
@@ -304,6 +307,14 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         }
         if (target.opacity !== undefined) {
             mesh.setLayerOpacity(target.opacity);
+        }
+        // Live refs — cheap to reassign every update; the manager mutates
+        // them in place (matrix on geoBox change, cameraPos every frame).
+        if (target.projectorMatrix) {
+            mesh.projectorMatrix = target.projectorMatrix;
+        }
+        if (target.projectorCameraPos) {
+            mesh.projectorCameraPos = target.projectorCameraPos;
         }
         const material = mesh.material as DEMTileOverlayMaterial;
         if (target.blending !== undefined && material.blending !== target.blending) {

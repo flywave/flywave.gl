@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { GeoBox, type Projection } from "@flywave/flywave-geoutils";
+import { GeoBox, GeoCoordinates, type Projection } from "@flywave/flywave-geoutils";
 import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import * as THREE from "three/webgpu";
 
@@ -253,10 +253,23 @@ export class ProjectorOverlayManager {
     /**
      * Compute the orthographic projector matrix for a geographic region.
      *
-     * The projector is placed along the surface normal at the geoBox center,
-     * looking at the world origin, with an ortho frustum exactly enclosing
-     * the geoBox's world-space extent. This matches the convention used by
-     * the DEM tile shader.
+     * The projector is an orthographic camera placed along the surface normal
+     * at the geoBox center, looking at the earth center. The decal texture's
+     * coverage is EXACTLY the geoBox when the frustum is derived as follows
+     * (the old implementation used world-axis |Δx|/|Δy| of the SW/NE corners
+     * plus a lookAt with an arbitrary up axis — at any latitude other than 0
+     * the projected box is rotated in world space, so that frustum had the
+     * wrong size, aspect AND rotation relative to the geoBox):
+     *
+     *   1. camera right axis = east direction of the box's center row
+     *      (project the midpoints of the west/east edges);
+     *   2. camera up axis    = orthonormalized north (cross of forward/right);
+     *   3. halfW/halfH       = max |corner − center| component along
+     *      right/up over ALL FOUR corners (exact enclosure, rotation-proof).
+     *
+     * Terrain elevation does not shift the sampled UV (ortho projection along
+     * the normal: UV depends only on the right/up components), so the decal's
+     * ground footprint equals the geoBox at any terrain height.
      */
     private _computeMatrix(geoBox: GeoBox): THREE.Matrix4 {
         if (!this.projection) {
@@ -264,19 +277,64 @@ export class ProjectorOverlayManager {
                 "ProjectorOverlayManager: cannot compute projector matrix before projection is set (call setProjection after connect)."
             );
         }
-        const sw = this.projection.projectPoint(geoBox.southWest, new THREE.Vector3());
-        const ne = this.projection.projectPoint(geoBox.northEast, new THREE.Vector3());
-        const center = this.projection.projectPoint(geoBox.center, new THREE.Vector3());
+        const project = (lat: number, lon: number) =>
+            this.projection!.projectPoint(new GeoCoordinates(lat, lon), new THREE.Vector3());
 
-        const halfW = Math.abs(ne.x - sw.x) / 2;
-        const halfH = Math.abs(ne.y - sw.y) / 2;
+        const center = project(
+            (geoBox.southWest.latitude + geoBox.northEast.latitude) / 2,
+            (geoBox.southWest.longitude + geoBox.northEast.longitude) / 2
+        );
+        const corners = [
+            project(geoBox.southWest.latitude, geoBox.southWest.longitude),
+            project(geoBox.southWest.latitude, geoBox.northEast.longitude),
+            project(geoBox.northEast.latitude, geoBox.southWest.longitude),
+            project(geoBox.northEast.latitude, geoBox.northEast.longitude)
+        ];
+
+        // Camera basis on the tangent plane at the box center.
+        const forward = center.clone().normalize().negate(); // toward earth center
+        const east = project(
+            (geoBox.southWest.latitude + geoBox.northEast.latitude) / 2,
+            geoBox.northEast.longitude
+        ).sub(
+            project(
+                (geoBox.southWest.latitude + geoBox.northEast.latitude) / 2,
+                geoBox.southWest.longitude
+            )
+        );
+        const right = east.clone().sub(forward.clone().multiplyScalar(east.dot(forward))).normalize();
+        const up = new THREE.Vector3().crossVectors(forward, right).normalize().negate();
+
+        // Exact enclosure of all four corners in the camera's local frame.
+        let halfW = 0;
+        let halfH = 0;
+        for (const corner of corners) {
+            const d = corner.clone().sub(center);
+            halfW = Math.max(halfW, Math.abs(d.dot(right)));
+            halfH = Math.max(halfH, Math.abs(d.dot(up)));
+        }
+        if (halfW === 0 || halfH === 0) {
+            halfW = halfH = Math.max(halfW, halfH) || 1;
+        }
+
         const dist = Math.max(halfW, halfH) * 2;
 
-        const normal = center.clone().normalize();
-
-        const cam = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, dist * 5);
-        cam.position.copy(normal).multiplyScalar(dist);
-        cam.lookAt(0, 0, 0);
+        const cam = new THREE.OrthographicCamera(
+            -halfW,
+            halfW,
+            halfH,
+            -halfH,
+            0.1,
+            dist * 5
+        );
+        // Fixed orientation: camera looks along `forward` (toward the earth
+        // center), +x = right (east), +y = up (north). The camera is pulled
+        // back along the outward normal by `dist` so the surface (and the
+        // terrain below/above it) stays inside [near, far].
+        const lookAt = center.clone().add(forward);
+        cam.position.copy(center).addScaledVector(forward, -dist);
+        cam.up.copy(up);
+        cam.lookAt(lookAt);
         cam.updateMatrixWorld();
         cam.updateProjectionMatrix();
 
