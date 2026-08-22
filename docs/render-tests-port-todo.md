@@ -2870,3 +2870,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实验（批跑）**：精确式（getWorldDirection 前向射线∩地面）×3.7——fog/2d（pitch 70）系改善（line-sdf 3628→1198、line-gradient 持平），但 fog/default（pitch 80）552→1094、fog/color（70）65842→69478 劣化；65° 分界组合后 default(80) 恢复但 color(70) 仍劣化——**同 pitch 70 下 fill 系改善与 color 系劣化并存 → 差异是内容依赖（各内容类型的深度/RTE 偏移语义不同），非纯 pitch 函数，任何 pitch 分界都不正确**。
 - **诚实回退**：代码逐字节复原（仅注释记档实验结论）。fog 的真正修复点不在 distCam 公式，而在**逐内容类型的深度语义**（RTE 相机偏移对不同瓦片内容的 vFogDepth 影响）——与 §12.76-12 "引擎米制比值与 mgl 归一化空间系统性错位"结论合流，列为 fog 域最终攻坚入口（需在 fog_fragment 的 vFogDepth 空间做逐内容校准或完整 RTE→相机的深度重推导）。
 - **方法论警示（重要）**：fog 域 A/B 必须用**单测独立 karma 启动**——fog1 批跑的 line-sdf=3628 与单跑 1198 差 3 倍（批内负载劣化读回，§12.86 前科）；本节所有批跑数字只作方向参考。
+
+**107. terrain/globe/occlusion 大簇取证盘点（2026-08-22 二十，子域立项）**：
+
+- **采样批**（"terrain/"/"globe/"/occlusion 过滤命中 52+ 例，超时前采集）：量级分布 1.2k（line-pattern-no-terrain）～250k（真实地形系）。
+- **子域 A：depth-occlusion/line 系（13+ 例，1.2k-13k）——根因已定位**：fixture 为 11 条 20px 线层 + 大 fill-extrusion，paint 携 `line-occlusion-opacity: 0.5`。mgl 语义 = **双 pass 遮挡淡出**（被 extrusion 遮住的部分按 occlusion-opacity 淡出绘制，未遮部分正常）；我们的 plain 线走 SolidLine 深度测试 → **被 extrusion 完全吞掉**（单跑取证：cur 内容 36300 vs exp 65536，缺 29236px 恰为线区域）。修复入口：patchLineMaterial/ribbon 路径移植 mgl 双 pass（GREATER 淡出 + LEQUAL 正常）或复用引擎深度纹理软淡出（circle 的 Scheme A 注入，2041 行区）。注意 ribbon 路径现 depthTest=false（painter's），需按 occlusion 场景重设计。
+- **子域 B：debug/terrain/collision-* 系（~10 例）**：cur 整图空白——collision box 调试渲染（mgl debug 模式画碰撞盒/遮挡盒）未实现，纯缺功能。
+- **子域 C：fill-extrusion-terrain 系（~13 例）**：flat-roof/alignment——几何接近色彩偏差（5.4k 例 bbox 全图但内容都在，光照/屋顶色带），属 extrusion×terrain 光照校准。
+- **子域 D：fog/globe + globe 核心系**：globe 投影域（atmosphere/high-color 等）与 §93 记档 globe-heatmap 同域。
+- **子域 E：真实地形大值系（100k-250k）**：未采样，下批单跑取证。
+- **优先级建议**：A（根因明确、机制清晰、13 例）> C > B > D/E（大工程）。
