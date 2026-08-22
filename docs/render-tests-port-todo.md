@@ -2825,3 +2825,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **机制定位**：视口 4 个 z15 单元格，仅 5235/12658 原生存在；中段行两格 (5234/5235,12657) 的**直接父级 z14-2617-6328 不在 fixture**、最深祖先 z13-1308-3164 存在——我们按深祖先链绘制（深绿覆盖），**mgl 期望图为浅色（无覆盖）**。
 - **矛盾记档（关键悬念）**：raster-filtering 族（卫星源，仅 z1+z20）已实证 mgl 深祖先回退到 **z1 世界图**且与我们逐像素对齐（§29/f6a3ee25），而本 fixture mgl 对 z13 祖先**不绘制**——两处 mgl 回退深度行为不一致，无法用同一规则解释。候选解释：① mgl 的 findLoadedParent 只用"已加载"缓存父级，请求树因 maxzoom/covering 细节不同未拉起 z13；② fixture 元数据（tileSize/buffer）差异；③ mgl 版本行为。**破案入口：实跑 mgl render-test runner（mapbox-gl-js 内置）对照其瓦片请求序列**，或对中段行改用"仅一级父回退"实验（预期 masking 转 PASS 但需 raster-filtering 护航——若其深链 z1 是经由"每级都请求"而非"深链查找"，两者可兼容）。
 - **状态**：本轮不再推进（fixture 语义矛盾需 mgl 实跑证据）；§98 修复保持（上下带逐值吻合、无回归）。
+
+**100. §99 矛盾的源码级裁决：mgl 深链回退确证（2026-08-22 十三）**：
+
+- **mgl source_cache.ts `_tileLoaded` 源码分析**：瓦片 404（isHttpNotFound）时 tile.state='errored' 并**重新触发 update()**——update 内 `_loadedParentTiles` 会请求理想瓦片的父级，父级再 404 则再 update，**逐级深链直至任一级加载成功**（"continue trying to load the parent tile until we find one that loads successfully"，source_cache.ts:301-318）。z1 深链（raster-filtering）与本 fixture 的 z13 链在源码语义下**行为应当一致**——我们的 RasterTileDataProvider 深祖先实现与 mgl 源码对齐 ✓。
+- **残余定性**：既然回退规则源码级一致，§99 观察到的"exp 中段带浅色无覆盖"只能来自**覆盖单元格几何差异**（mgl coveringTiles 在 512×256 视口/z14/roundZoom 下的单元格集合与我们 8 瓦片假设不同——mgl 512-tile 语义下 z14 视口可能仅 2×1 单元格）。**破案唯一可靠路径 = 实跑 mapbox-gl-js render-test runner 打印其 covering 单元格与请求序列**（独立任务，建议下会话首项）。
+- **结论**：masking 55979 保持（§98 修复 + 上下带逐值吻合不变）；深链回退实现不动（源码级正确，改一级回退反而背离 mgl）。
