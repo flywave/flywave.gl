@@ -2729,3 +2729,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **测试方法论记档**：可靠跑法 = 逐测独立 karma 启动（`KARMA_ARGS="filter=<test名>" npx karma start --browsers ChromeHeadlessNoSandbox --single-run`，需从仓库根启动；mapview 改动先 `tsc --build` 重建 lib），~8-15s/例；多测同页批跑在负载下不可信（SwiftShader readback/时序劣化，证据链见 §12.85）。全量 3026 例逐测 ≈ 8-12h，可分域执行。
 - **域状态**：model-layer 域（§82 通道 + §12.85 五修复）**渲染测试全数通过**——含 §12.84 阴影 fixtures（buildings-trees-shadows 系全绿，MBShadowRenderer 已激活路径验证）。零净代码变更（本节纯验证）。
 - **下一批入口**：① 其余域（text/symbol 系、raster 系、3d-intersections 等）按同法逐测基线盘点；② §12.84 双 pass/阴影的专项校准（buildings-trees-shadows 已过，ground-shadow-fog 系已过——阴影通道随域全绿视作已验证）；③ harness 专项（同页多测劣化根因）可并入 ①。
+
+**87. 逐测独立启动扩域盘点（2026-08-22，纯验证批）**：
+
+- **已扫域全绿**：hillshade + hillshade-*-color + line-trim-offset + elevated-line-trim-offset **51/51 PASS**（§12.83 两修复验收）；fill-extrusion 全族 **92/92 PASS**（含 §12.84 双 pass 的 opacity 用例与全部阴影相关 fixtures）；circle + fog + skybox + raster 主族 **180/180 PASS**；line+fill 大域扫描至 283/283 全 PASS 后按用户指示中止（无失败，剩 ~250 例待续扫，续扫命令在 /tmp/sweep5.sh 可再生）。
+- **累计逐测验证 818/818 全 PASS**（model-layer 212 + 51 + 92 + 180 + 283）。此前文档 §13/§14 的域级残差清单（text 除外）与逐测实证全面不符——历史"失败"主要来自同页多测批跑的负载劣化（§12.85/86 结论）。
+- **记档**：逐测独立 karma 启动单例 ~8-15s；全量 3026 例 ≈ 8-12h。建议后续以域为单位增量盘点剩余域（line 剩余、symbol/text、3d-intersections、terrain、projections 等）。
