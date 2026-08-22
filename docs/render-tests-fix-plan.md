@@ -45,6 +45,23 @@
 - 教训：该特性只有 zoom≥20 的测试暴露（resampling 家族），同族 function/literal
   连带全绿。
 
+**执行记录 II（2026-08-22，commit f6a3ee25）——raster-filtering no-pitch 52556→4072（corr 0.981）**
+- 双缺陷叠加：
+  1. **roundZoom 语义**：mgl raster 源 `roundZoom: true`（coveringZoomLevel =
+     round(zoom+1)，tileSize 256），flywave 按floor(zoomLevel) 调度——camera 18.6
+     时 mgl 请求 z20、我们请求 z19；z19 404 后走祖先链直接落到 z1（整屏平色）。
+     修复：getTile 请求级 404 且 z+1 子瓦片存在时，按 4 个子瓦片四边形覆盖，
+     每个子瓦片独立回退最深祖先（镜像 mgl per-tile parent overzoom；不越过
+     maxzoom 降级）。
+  2. **technique 缓存键缺 raster 身份**：`getOrCreateTechniqueIndex` 的键只含
+     layer paint——同层所有 raster feature 共享一个 technique，首 feature 的
+     `_rasterTileUrl/_rasterUvRect` 赢者通吃（一个 tile 纹理涂抹到全部 raster
+     四边形）。修复：raster 层缓存键追加 url+uvRect。
+- 残余 4072 px = 纹理滤波精度（corr 0.981、分布均匀无结构错位），与 zoomed-raster
+  （corr 0.97-0.995）同类，属 SwiftShader 双线性 vs 参考上采样差异，非结构缺陷。
+- 回归：resampling/alpha/masking/tms 单测复跑全绿，无回归。pitch-60 38628 待查
+  （俯视透视另有问题）。
+
 ### P3 — terrain/globe/occlusion（6k~564k）
 - terrain 131k、globe 60k~239k（距离 re-scale 专项 §12.76-79 在案）、
   wireframe 442k、occlusion 564k、cross-source-elevation 6k
