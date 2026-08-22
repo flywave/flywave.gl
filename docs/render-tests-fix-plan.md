@@ -64,3 +64,16 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
 - **定性**：P1 需先攻 **glyph 精度**（SDF gamma/coverage/字号标定），而非 anchor×offset 矩阵；
   建议方法论：单字形 fixture（text-field/diacritics 2264、text-font/camera-function 113 起步）
   逐位对照，复用 §12.76-80 的 Node 独立复刻取证法。
+
+## P1 执行记录 II（2026-08-22）
+- **MBSDFTextMaterial mgl 公式移植无效**（text 域数值纹丝不动）——该材质不在这些用例的
+  渲染路径（MBRenderLayer 侧备用）；实际路径 = 原生 `TextElementsRenderer` →
+  `flywave-text-canvas/TextMaterials.ts#getOpacity`（屏幕导数 AA，阈值 0.5，
+  `dist·toPixels+0.5` 覆盖曲线）。已回退实验改动。
+- **mgl 对照公式（mapbox-gl-js 本地源码 src/shaders/symbol.fragment.glsl:115-133）**：
+  `alpha = smoothstep(0.75 ± 0.105/fontScale, dist)`，fontScale=size/24，gamma_scale 相消；
+  halo：`buff=(6-halo_width/fontScale)/8`，`gamma=(halo_blur·1.19/8+0.105)/fontScale`。
+- **下一实验（引擎级，需专项批测护航）**：TextMaterials.getOpacity 的覆盖曲线改 mgl 语义
+  （前提：确认 fontcatalog SDF 的边缘编码是否已被归一化到 0.5；若已归一化则差异在 AA 宽度
+  ——导数法 vs mgl 固定 gamma 的等效宽度标定）。
+- **本地 mgl 源码就位**：`mapbox-gl-js/` 仓库根完整 checkout——后续对齐优先直接读本地源。
