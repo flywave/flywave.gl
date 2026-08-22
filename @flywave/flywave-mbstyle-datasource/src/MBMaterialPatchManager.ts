@@ -1120,7 +1120,7 @@ export class MBMaterialPatchManager {
             // `out_color.rgb *= (0.6 + 0.4*alpha2)`). The solid-color border
             // ribbon already carries the derived color in `fill-color`; for
             // gradient borders the RAMP must be darkened instead.
-            const borderDarken = Number(technique._isLineBorder ? 0.6 : 1);
+            const borderDarken = Number(technique._isLineBorder ? 0.6 : 1).toFixed(1);
             // line-dasharray: mgl dashes by `a_linesofar` (accumulated feature
             // distance) in line-width units; the ribbon carries `aRibbonLen`
             // (world meters) and `_dashWorld` = [dashLen, gapLen] in world units.
@@ -1133,12 +1133,41 @@ export class MBMaterialPatchManager {
             // only gaps). Solid ribbon would be wrong — discard instead.
             const dashInvisible = Boolean(technique._dashInvisible);
             // line-gradient: ramp texture sampled by the per-vertex
-            // line-progress (aRibbonDist). Built once per technique and
-            // cached on the material.
+            // line-progress (aRibbonDist). Cached on the material and keyed
+            // on the color-theme generation — the ramp colors go through the
+            // theme LUT (mgl binds the LUT when sampling the gradient), so a
+            // theme applied/changed after first compile must rebuild it. The
+            // texture object is kept and its pixels refreshed in place so
+            // already-compiled uMBRamp uniforms pick up the new ramp.
             const gradientStops = technique._lineGradientStops;
-            if (gradientStops && !(material as any).__mbRibbonRamp) {
-                (material as any).__mbRibbonRamp =
-                    MBMaterialPatchManager.buildGradientTexture(gradientStops);
+            if (gradientStops) {
+                const lut = paint?.['line-gradient-use-theme'] === 'none'
+                    ? undefined : this.colorThemeLut;
+                // Key the cache on LUT IDENTITY (not the global theme
+                // generation): the initial root theme is decoded
+                // asynchronously by MBStyleRuntime and lands AFTER the first
+                // tile decode, without a datasource applyColorTheme pass.
+                if (!(material as any).__mbRibbonRamp || (material as any).__mbRibbonRampLut !== lut) {
+                    const rebuilt = MBMaterialPatchManager.buildGradientTexture(gradientStops, lut);
+                    const prev = (material as any).__mbRibbonRamp as THREE.DataTexture | undefined;
+                    if (prev) {
+                        // Refresh the cached texture IN PLACE so
+                        // already-compiled uMBRamp uniforms (they hold the
+                        // texture object itself) pick up the re-themed ramp.
+                        const prevData = (prev.image as any)?.data as Uint8Array | undefined;
+                        const newData = (rebuilt.image as any)?.data as Uint8Array | undefined;
+                        if (prevData && newData && prevData.length === newData.length) {
+                            prevData.set(newData);
+                            prev.needsUpdate = true;
+                        } else {
+                            (material as any).__mbRibbonRamp = rebuilt;
+                        }
+                        rebuilt.dispose();
+                    } else {
+                        (material as any).__mbRibbonRamp = rebuilt;
+                    }
+                    (material as any).__mbRibbonRampLut = lut;
+                }
             }
             const rampTex = (material as any).__mbRibbonRamp as THREE.Texture | undefined;
             // line-pattern: extract a repeating tile texture + its world size.
@@ -1763,8 +1792,8 @@ export class MBMaterialPatchManager {
                 }
                 if ((hasGradient && !patternTex) || hasBorderGradient) {
                     const gradStops = hasBorderGradient ? borderGradientStops : gradientStops;
-                    const tex = MBMaterialPatchManager.buildGradientTexture(gradStops,
-                        paint['line-gradient-use-theme'] === 'none' ? undefined : this.colorThemeLut);
+                    const gradLut = paint['line-gradient-use-theme'] === 'none' ? undefined : this.colorThemeLut;
+                    const tex = MBMaterialPatchManager.buildGradientTexture(gradStops, gradLut);
                     shader.uniforms.uMBGradient = { value: tex };
                     shader.fragmentShader = shader.fragmentShader.replace(
                         '#include <common>',

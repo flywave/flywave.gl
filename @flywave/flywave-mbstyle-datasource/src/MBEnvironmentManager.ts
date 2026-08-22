@@ -2079,12 +2079,11 @@ export class MBEnvironmentManager {
                                 diffuseColor *= sampledDiffuseColor;
                             #endif`
                         );
-                        // The paint-injection path (hasPaint wrapper runs
-                        // BEFORE this one) samples vMapUv literally — swap it.
-                        shader.fragmentShader = shader.fragmentShader.replace(
-                            'vec4 imgT = texture2D(map, vMapUv);',
-                            'vec4 imgT = texture2D(map, vMBImgUvw.xy / vMBImgUvw.z);'
-                        );
+                        // NOTE: the paint-injection path below no longer
+                        // samples vMapUv literally — it generates the
+                        // projective expression directly when a homography
+                        // is active (a post-hoc string swap here would run
+                        // before that block is injected).
                     };
                     material.needsUpdate = true;
                 }
@@ -2155,8 +2154,11 @@ export class MBEnvironmentManager {
                              {
                                  // gl_FragColor is linear here (sRGB texture
                                  // decoded on sample); colorspace_fragment
-                                 // encodes after us.
-                                 vec4 imgT = texture2D(map, vMapUv);
+                                 // encodes after us. Sample through the
+                                 // projective uv when the homography warp is
+                                 // active (the plain vMapUv interpolation
+                                 // creases non-parallelogram quads).
+                                 vec4 imgT = texture2D(map, ${homography ? 'vMBImgUvw.xy / vMBImgUvw.z' : 'vMapUv'});
                                  vec3 mbR = mbImgSrgbEnc(imgT.rgb);
                                  // spin (mgl spinWeights)
                                  float ca = cos(uMBImgHue); float sa = sin(uMBImgHue);
