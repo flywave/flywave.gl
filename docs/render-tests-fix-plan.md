@@ -115,3 +115,14 @@ real-world 45k、sd-hd-conflation 60k、imports/3d-lighting-globe 186k 等）
   text-rotate 103→103、halo-width 112→107；**非文本哨兵零回归**（heatmap/fog/skybox/icon 逐位不变；
   trees-lod 一次 109156 为已知负载 flake，复测 3/3 PASS）。
 - **遗留**：text 域残差仍大（text-anchor ~15k 等）——S 曲线只收覆盖精度，放置/排版差异（P1 主项）仍在。
+
+## P1 执行记录 VI（2026-08-22）——S 曲线后的残差画像
+- **text-anchor/bottom 逐格取证（S 曲线后 15720）**：13 个内容格全格 cur 墨量仍少
+  **8-30%（中位 −13%）**、质心 dy≈−1.5±1（上移）、dx ±2.8 分散；全局相位相关仅 (1,0)px、
+  峰 0.76——差异分布式非全局。
+- **尺寸疑点**：cell(1,3) 柱run 高 cur max 14 vs exp 20（同 nominal text-size=16 默认、
+  无 zoom 函数、无 pixelRatio）——部分 label 实际渲染尺寸偏小，疑 **text-size→px 换算/字号
+  基准**（mgl 24px 基准 SDF 缩放链）在多行/多 label 场景取值不一致，需逐 label 尺寸审计。
+- **下会话入口**：① 逐 label 宽高审计脚本（连通域 w/h 直方图 cur vs exp，定位尺寸系统性
+  偏差的具体 label 与其 layout 属性）；② dy −1.5 的基线/行高基准差（text-line-height 默认
+  1.2 的行距换算）。
