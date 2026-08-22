@@ -2831,3 +2831,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl source_cache.ts `_tileLoaded` 源码分析**：瓦片 404（isHttpNotFound）时 tile.state='errored' 并**重新触发 update()**——update 内 `_loadedParentTiles` 会请求理想瓦片的父级，父级再 404 则再 update，**逐级深链直至任一级加载成功**（"continue trying to load the parent tile until we find one that loads successfully"，source_cache.ts:301-318）。z1 深链（raster-filtering）与本 fixture 的 z13 链在源码语义下**行为应当一致**——我们的 RasterTileDataProvider 深祖先实现与 mgl 源码对齐 ✓。
 - **残余定性**：既然回退规则源码级一致，§99 观察到的"exp 中段带浅色无覆盖"只能来自**覆盖单元格几何差异**（mgl coveringTiles 在 512×256 视口/z14/roundZoom 下的单元格集合与我们 8 瓦片假设不同——mgl 512-tile 语义下 z14 视口可能仅 2×1 单元格）。**破案唯一可靠路径 = 实跑 mapbox-gl-js render-test runner 打印其 covering 单元格与请求序列**（独立任务，建议下会话首项）。
 - **结论**：masking 55979 保持（§98 修复 + 上下带逐值吻合不变）；深链回退实现不动（源码级正确，改一级回退反而背离 mgl）。
+
+**101. mgl covering 解析 + 深回退"留空"实验否决（2026-08-22 十四，零净变化）**：
+
+- **covering 解析（python 移植 mgl coveringTiles 平视数学）**：masking fixture（center −122.48/37.84、zoom 14、512×256、pitch 0）的 mgl covering = z15（round(14+1)）**约 2×1 单元格**（512px 视口 = 2 个 256px z15 瓦片宽、1 高）——非此前假设的 4/8 瓦片；六格推演（含 ceil）中 (5234,12657)/(5235,12657) 的深祖先 z13 与 (5234,12658) 的 z14 在"mgl 留空"假说下恰可解释 exp 中段带浅色。
+- **"mgl 404 留空"假说实验否决**：源码依据 = `_loadedParentTiles` 仅缓存已加载祖先、不主动请求（source_cache.ts:866-898），据此实现"子瓦片覆盖否则留空 + 仅 overzoom 钳位用祖先"两版——**批测灾难回归**：raster-resampling 0→115k-130k（全黑）、zoomed-raster 3843/487→124k/122k、fade 13k→57k、masking 反升至 87.7k。**结论：深祖先链是必要的**（resampling/zoomed 的期望 imagery 确证祖先绘制），"留空"假说错误——mgl 在这些 fixture 确实绘制深祖先。已回退（代码注释留档此结论防再犯）。
+- **masking 中段带悬念收窄**：mgl 深祖先绘制（resampling 确证）与 masking 中段带无覆盖（exp 确证）并存——差异必在**该 fixture 特有条件**（covering 单元格精确集合 2×1 vs 我们 8 瓦片的差异、或 contour 源的 404 响应差异）。**可靠破案仍需实跑 mgl runner**（dist 未构建，`npx rollup -c` 构建后 node 直跑单 fixture 打印请求序列，约数分钟——下会话独立任务）。
+- **状态**：全部回退至 §98 后基线（masking 55979、resampling PASS、其余逐值一致），零净变化零回归。
