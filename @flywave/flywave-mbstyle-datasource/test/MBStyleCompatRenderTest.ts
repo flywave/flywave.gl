@@ -154,6 +154,24 @@ async function renderFrames(
         });
     }
 
+    // Multi-tile vector styles: sibling tiles decode asynchronously and can
+    // finish after the settled frame — poll until every cached tile's
+    // geometry is loaded (bounded), keeping real frames alive, so the
+    // capture includes all tiles (gradient-vector-tile raced this, varying
+    // 6453..19502 for identical code).
+    for (let i = 0; i < 30; i++) {
+        if (!(dataSource as any).tilesPending?.()) break;
+        await new Promise<void>((resolve) => {
+            const handler = () => {
+                mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
+                resolve();
+            };
+            mapView.addEventListener(MapViewEventNames.AfterRender, handler);
+            mapView.update();
+            setTimeout(resolve, 400);
+        });
+    }
+
     // Raster styles: tile textures attach asynchronously in the material
     // patcher — the settle logic above can complete before the texture-loaded
     // frame renders (observed as order-of-tests flakes: raster-opacity varied

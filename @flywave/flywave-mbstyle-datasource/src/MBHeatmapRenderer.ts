@@ -395,7 +395,18 @@ export class MBHeatmapRenderer {
                     };
                     groups.set(layerId, g);
                 }
-                g.raw.push(p);
+                // The engine loads several tile levels for the same area —
+                // one geojson/vector point feature is collected once per
+                // TILE, stacking identical kernels and multiplying the
+                // density (observed 3x on heatmap-radius/antimeridian: a
+                // single point rendered at peak red instead of mgl's
+                // GAUSS_COEF-scaled ~0.4 green). mgl loads one tile per
+                // area, so collapse exact same-position duplicates (the same
+                // feature re-collected from a sibling tile); wrapped world
+                // copies are emitted later per kernel and are unaffected.
+                if (!g.raw.some(q => q.x === p.x && q.y === p.y && q.z === p.z)) {
+                    g.raw.push(p);
+                }
             }
         }
         return groups;

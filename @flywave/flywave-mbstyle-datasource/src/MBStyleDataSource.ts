@@ -733,6 +733,23 @@ export class MBStyleDataSource extends TileDataSource {
     }
 
     /**
+     * True while any cached tile still has geometry loading. The render-test
+     * harness polls this so multi-tile styles (e.g. gradient-vector-tile,
+     * two sibling tiles decoded asynchronously) capture only after every
+     * tile's ribbon/geometry made it into a frame — the single settled-frame
+     * wait raced tile decoding (observed 6453..19502 mismatch variance for
+     * byte-identical code).
+     */
+    tilesPending(): boolean {
+        try {
+            return this.getDecodedTiles().some(t =>
+                !(t as any).disposed && !(t as any).allGeometryLoaded);
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Re-run source resolution + provider wiring after runtime `addSource` /
      * `removeSource`, so newly added sources' tiles actually load.
      */
