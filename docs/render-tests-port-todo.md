@@ -2923,3 +2923,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **代码链定性**：mbstyle 的 TerrainDraping 正交烘焙被 §12.76-58 记档的引擎级问题阻塞（"renderer 层面 plain mesh 全 GL 测试禁用仍零 fragment"），**内容门自禁用 → drape 从未激活** → 地形显示引擎默认外观：`MapTerrainMaterial extends MeshStandardMaterial`（roughness 0.9）的 **PBR 照明**把内容对比度压向均值（与量化特征吻合）；mgl 的 terrain_raster 是**无照明的平铺 drape**。E1 根因 = drape bake 阻塞 + 未 drape 地形的 PBR 默认外观，**非单一合成因子**（§112 的乐观假设修正）。
 - **修复路径（二选一，均引擎侧）**：① 解阻塞 §12.76-58 正交烘焙（RT 渲染 scene mesh 零 fragment 的引擎 renderer 问题）；② mbstyle 侧给地形 mesh 换 unlit 平铺材质（drape 语义直连）——绕开 bake，直接在 patcher 可达的地形材质上做（需确认 mbstyle patcher 能否触及 terrain 数据源的对象，§110 结论同样适用则也需引擎钩子）。
 - **状态**：terrain 大值族维持现状；E1 攻坚转为上述两条路径的评估立项。
+
+**114. E1 路径②实施与回退——unlit 注入实测（2026-08-23 四，零净变化）**：
+
+- **路径②可答性修正**：TerrainDraping **本就可触及**地形 mesh 材质（setDrapeTexture 同循环）——§110 注入限制不适用；且 E1 样本的影像存在证明 **drape 已激活**，偏置来自 `MapTerrainMaterial`（MeshStandard）对 drape 混合后 diffuseColor 的 PBR 照明。
+- **unlit 注入实施**（`gl_FragColor = vec4(diffuseColor.rgb, diffuseColor.a)` 替换 outgoingLight）：fog/terrain/basic 32123→34259（+2.1k 回归，fog 系此前校准依赖照明外观）、circle/unoccluded 2133→2745（+612）；occluded 单跑 4755 与注入前**逐值相同**（前述 5324→4755 "改善"实为批/单跑噪声）；flat-roof/C 系不变（机制不同）。**净劣化，回退**（回退后 occluded 单跑 4755 复核，证实 unlit 对该例零效果——5324 为批载值）。
+- **E1 终局定性**：地形外观无一致更优解——mgl 各 fixture 的期望图与我们的 PBR/雾校准互有咬合（fog/terrain 系按照明外观拟合过）；单点 unlit 是 redistribute 而非收敛。terrain 大值族的收敛需**逐子族**处理（C flat-roof 面错位、E2 近裁剪、fog/terrain 联动重校准），无全局单因子。E1 关闭，§112 优先级表修订为 C（面错位可独立分析）> E2 > E3。
