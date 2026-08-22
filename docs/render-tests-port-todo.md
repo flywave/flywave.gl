@@ -2893,3 +2893,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **§108 零效果之谜破案**：do5 轮的抬升未生效是 **ribbon technique 走独立创建点**（getOrCreateRibbonTechniqueIndex，非通用 getOrCreateTechniqueIndex）——补齐全部创建点（+occLiftOf helper，3 处）+ `--force` 重建（tsbuildinfo 陈旧二进制坑，fog 阶段同款）后 ro=1000.5 实测生效。
 - **抬升实测（家族 14 例）**：no-terrain 6943→7049、multiline-no-terrain 4608→**3367（−1241）**、其余 ±66~460 混合——**净≈零**：全不透明过冲（遮挡区全蓝）与隐藏的误差近似相等（mgl 遮挡区是 0.5 淡出）。**回退**（避免 renderOrder=1000 对 occlusion+symbol 样式的潜在副作用，保持零净变化）。
 - **正确解记档（下一入口）**：真双 pass——occlusion 线在抬升序 + 主 pass 全透明度（LEQUAL 正常）之外，**第二个 mesh 以 GREATER depthFunc + alpha·occlusionOpacity 画遮挡部分**（可复用 MBAdditiveLineRenderer 的双 mesh 模式与 DepthPrePass 基建）；工程量中等，是子域 A 14 例收敛的唯一精确路径。
+
+**110. 子域 A 真双 pass 实施——三条挂载路径全部证伪 + 引擎渲染架构定论（2026-08-22 二十三，零净变化）**：
+
+- **孪生 mesh（GREATER depthFunc + alpha·occlusionOpacity + renderOrder 1e6）三条挂载路径逐一实测**：① `obj.parent.add(twin)`——不渲染；② `obj.add(twin)` 子节点（extrusion dual-pass 同款模式）——**opaque magenta 探针 0 像素**，不渲染（推论：§84 的 translucent-extrusion 深度预 pass 子 mesh 很可能同样从未渲染，其验证一直"攒批延后"，fill-extrusion opacity 通过或另有原因）；③ `tile.objects.push + registerTileObject`（埋点确认注册成功、objects 22→30）——**仍不渲染**：引擎渲染列表在几何加载时快照，patcher 运行于挂载后，事后注入的对象永不进绘制。附带修复记录：GLSL uniform 必须全局域声明（colorspace include 内声明=函数域编译错）。
+- **架构定论（重要）**：**从 MaterialPatchManager 无法向场景注入任何新渲染体**——引擎对象生命周期（加载→注册→快照渲染）与 patcher（后置材质手术）正交。occlusion 双 pass、以及任何需要"额外 draw call"的 mgl 语义（阴影已有独立 renderer、additive 已有独立 renderer）都必须走**独立 Renderer + 帧循环挂载**模式（MBHeatmapRenderer/MBAdditiveLineRenderer/MBShadowRenderer 同款基建：自己的 scene + AfterRender 钩子 + mapAnchors 合成）。
+- **子域 A 最终方案（立项）**：MBOcclusionLineRenderer——收集 occlusion ribbon（mesh+材质引用），主渲染后以 GREATER depthFunc+淡出重画（需引擎主 pass 的深度缓冲保留，或以 depth texture 方式复用 MBShadowRenderer 的 RT 深度）。工程量：中（一个新 renderer 文件 + datasource 接线）。本轮全部实验代码已清理回退，基线逐值复原（6943/gradient 族原值）。
