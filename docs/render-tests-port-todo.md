@@ -2929,3 +2929,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **路径②可答性修正**：TerrainDraping **本就可触及**地形 mesh 材质（setDrapeTexture 同循环）——§110 注入限制不适用；且 E1 样本的影像存在证明 **drape 已激活**，偏置来自 `MapTerrainMaterial`（MeshStandard）对 drape 混合后 diffuseColor 的 PBR 照明。
 - **unlit 注入实施**（`gl_FragColor = vec4(diffuseColor.rgb, diffuseColor.a)` 替换 outgoingLight）：fog/terrain/basic 32123→34259（+2.1k 回归，fog 系此前校准依赖照明外观）、circle/unoccluded 2133→2745（+612）；occluded 单跑 4755 与注入前**逐值相同**（前述 5324→4755 "改善"实为批/单跑噪声）；flat-roof/C 系不变（机制不同）。**净劣化，回退**（回退后 occluded 单跑 4755 复核，证实 unlit 对该例零效果——5324 为批载值）。
 - **E1 终局定性**：地形外观无一致更优解——mgl 各 fixture 的期望图与我们的 PBR/雾校准互有咬合（fog/terrain 系按照明外观拟合过）；单点 unlit 是 redistribute 而非收敛。terrain 大值族的收敛需**逐子族**处理（C flat-roof 面错位、E2 近裁剪、fog/terrain 联动重校准），无全局单因子。E1 关闭，§112 优先级表修订为 C（面错位可独立分析）> E2 > E3。
+
+**115. 子域 C 根因定位——fill-extrusion-height/base-alignment 未实现（2026-08-23 五）**：
+
+- **取证**：alignment-height-terrain（68k）失配中 cur 的挤出绿块占据 exp 的白/灰区域——挤出体**垂直位置错误**（陷地/悬空，屏上覆盖区错位）。flat-roof（48k）同为高度锚定错误的颜色块错位。
+- **根因（代码对照）**：mgl `fill-extrusion-height-alignment`/`base-alignment`（`"terrain"` 语义：fill_extrusion.vertex.glsl `u_height_type==1`——高度从地形表面起算，flat 顶取 centroid 地形高程）在我们管线**零引用未实现**——挤出高度按海平面绝对值求值，地形上建筑整体错位。fixture 带 `terrain {source rgbterrain, exaggeration 4}`。
+- **实施入口（已有基建可复用）**：patchExtrusionMaterial 的 `centerDem`（terrainController.centerDem，vertex 采样 uMBExtrusionDem 得 mbTerrainElev）正是锚定机制——需按 alignment 语义接线：`alignment=terrain` 时 z = terrainElev(centroid/逐顶) + height·exaggeration（flat 顶用 centroid 高程）；`base-alignment` 同理。另需排查该 fixture 下 centerDem 是否非空（DEM 源接线）。工程量：小-中（语义分支 + fixture 验证），是子域 C 13 例的收敛主径。
