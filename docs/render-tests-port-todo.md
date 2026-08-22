@@ -2863,3 +2863,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **fog/2d 近失族定性修正**：放大取证（64px 视口裁剪放大）——exp 顶部有三个 fill 三角形（绿/粉/青拼块，range [-0.5,0.5] 白雾下淡彩保留），cur 仅绿三角清晰、粉/青**纯白**。非 fog 下 fill-color/function 族全 PASS → **非 symbol 域、非裁剪，是远处要素在 pitch 70 被过雾化**（fog 带 k=3.7 标定在 pitch 60 拟合，pitch 70 漂移）——§104 的"顶部局部特征"归因修正为 **fog 带随 pitch 漂移**，与 fog/color 65.8k 同一根因家族（§12.76-12 结论：distCam 启发式 vs 相机 rig pitch 属性错位）。收敛路径维持"相机语义标定/精确 mercatorFogMatrix 相机链修复"既有结论，不做盲 k 调参。
 - **terrain/raster-fade 双纹理链评估（不启动）**：mgl raster_fade.ts 需要 per-tile fade 权重 + parent/child 双采样混合，而我们每屏一格单纹理的架构下 parent/child 同时在屏的场景仅在缩放过渡帧出现——render-test 是静态 settle 快照，过渡态不进帧；该链主要影响的是运行时动画体验而非静态期望图。**降级为低优先**（terrain/raster-fade 13.4k 的主残差待重新取证归因）。
+
+**106. fog 带漂移根因攻坚——精确式×k 组合与内容依赖性发现（2026-08-22 十九，零净变化）**：
+
+- **假说**：§12.76-12 只测过 精确式×k=1（劣化）vs 启发式×k=3.7（基线）——k 同时折叠 distCam 语义与全局尺度两因素，**精确式×k=3.7 从未测过**。相机 rig 取证（setCameraGeolocationAndZoom→lookAtImpl 轨道式绕目标，pitch 属性与视线应一致）支持该组合。
+- **实验（批跑）**：精确式（getWorldDirection 前向射线∩地面）×3.7——fog/2d（pitch 70）系改善（line-sdf 3628→1198、line-gradient 持平），但 fog/default（pitch 80）552→1094、fog/color（70）65842→69478 劣化；65° 分界组合后 default(80) 恢复但 color(70) 仍劣化——**同 pitch 70 下 fill 系改善与 color 系劣化并存 → 差异是内容依赖（各内容类型的深度/RTE 偏移语义不同），非纯 pitch 函数，任何 pitch 分界都不正确**。
+- **诚实回退**：代码逐字节复原（仅注释记档实验结论）。fog 的真正修复点不在 distCam 公式，而在**逐内容类型的深度语义**（RTE 相机偏移对不同瓦片内容的 vFogDepth 影响）——与 §12.76-12 "引擎米制比值与 mgl 归一化空间系统性错位"结论合流，列为 fog 域最终攻坚入口（需在 fog_fragment 的 vFogDepth 空间做逐内容校准或完整 RTE→相机的深度重推导）。
+- **方法论警示（重要）**：fog 域 A/B 必须用**单测独立 karma 启动**——fog1 批跑的 line-sdf=3628 与单跑 1198 差 3 倍（批内负载劣化读回，§12.86 前科）；本节所有批跑数字只作方向参考。

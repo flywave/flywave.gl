@@ -597,17 +597,26 @@ export class MBEnvironmentManager {
             // (fog/default 552) was fitted with the heuristic; the exact
             // form measured 1064 on the same fixture. Use the calibrated
             // heuristic form.
+            // distCam: EXACT mgl geometry (free_camera getDistanceToElevation:
+            // forward-ray ∩ ground-plane parameter — camera.getWorldDirection
+            // so it cannot drift from the actual rig orientation, fixing the
+            // pitch-drift of the h/sin(90−pitchProperty) heuristic observed
+            // on the pitch-70 fog/2d family) COMBINED with the empirical
+            // global scale k=3.7. §12.76-12 only ever tested exact+k=1 (552→
+            // 3342) vs heuristic+k=3.7 (552) — the k folds BOTH the distCam
+            // semantics AND the engine↔mgl fog-space scale, so exact+k=3.7
+            // is the principled combination (§106).
+            // Heuristic (baseline, §12.76-12 calibration). §106 measured the
+            // exact ray form × k=3.7 and a 65° composite: pitch-70 fill-heavy
+            // fog/2d cases improve (fill-color 819→600, line-sdf 3628→1198)
+            // but fog/default (pitch 80, 552→1094) and fog/color (70,
+            // 65842→69478) regress — the divergence is CONTENT-dependent at
+            // the same pitch, so no pitch boundary is correct. Reverted; the
+            // exact fix requires resolving the rig's per-content depth
+            // semantics (RTE offsets), not a distCam formula swap.
             const pitchDeg = Math.min(Math.max((this.m_mapView as any).pitch ?? 60, 0.1), 89.9);
             const distCam = Math.max(cam.position.z, 1) /
                 Math.sin((90 - pitchDeg) * Math.PI / 180);
-            // Empirical engine-scale calibration (fog-batch 2026-08-20, 87
-            // fixtures): the exact k=1 port REGRESSED fog/default 552→3342
-            // and fog/color 69k→126k vs the kFog=3.7 calibration — in this
-            // engine the metric dist/distCam ratio is systematically offset
-            // from mgl's fog-normalized space (RTE camera offsets / height
-            // semantics), so a global calibration factor remains necessary.
-            // Structure is the exact mgl derivation; only the scale is
-            // calibrated (§12.76-12).
             const kFog = 3.7;
             nearM = distCam * kFog * (rawRange[0] + shift) / shift;
             farM = distCam * kFog * (rawRange[1] + shift) / shift;
