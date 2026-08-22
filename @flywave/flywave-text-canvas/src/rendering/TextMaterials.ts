@@ -34,6 +34,13 @@ const SdfShaderChunks = {
     sdf_frag_uniforms: `
         uniform sampler2D sdfTexture;
         uniform vec4 sdfParams;
+        // mgl (mapbox-gl-js) glyph gamma mode: when > 0 it carries the
+        // fontScale (textSize / catalogSize) and the AA half-ramp switches
+        // from the derivative-based width to mapbox's exact
+        // symbol.fragment.glsl form: gamma = EDGE_GAMMA(0.105/dpr)/fontScale
+        // (dpr = 1 for the render tests). 0.0 (default) keeps native
+        // behavior untouched.
+        uniform float uMglGammaScale;
         `,
     sdf_sampling_functions: `
         float median(float r, float g, float b) {
@@ -60,12 +67,17 @@ const SdfShaderChunks = {
             float toPixels = sdfParams.w * inversesqrt( dx * dx + dy * dy );
 
             float d = getDistance(uvOffset) + min(weight, 0.5 - 1.0 / sdfParams.w) - 0.5;
+            float rampW = 0.5 / max(toPixels, 1e-4);
+            if (uMglGammaScale > 0.0) {
+                // mgl gamma in normalized SDF units: 1px of signed distance
+                // spans 64/255 of the texture range.
+                rampW = (0.105 / uMglGammaScale) * (64.0 / 255.0);
+            }
             // S-curve form of the same derivative-scaled ramp: mgl uses a
             // smoothstep around the edge, which saturates the stroke interior
             // to full coverage, while the linear ramp leaves near-edge band
             // pixels at partial alpha (observed as systematic ink deficit).
-            float w = 0.5 / max(toPixels, 1e-4);
-            return smoothstep(-w, w, d);
+            return smoothstep(-rampW, rampW, d);
         }
         `
 };
@@ -313,7 +325,8 @@ export class SdfTextMaterial extends RawShaderMaterial {
                               params.size,
                               params.distanceRange
                           )
-                      )
+                      ),
+                      uMglGammaScale: new THREE.Uniform(0.0)
                   },
                   defines: {
                       MSDF: params.isMsdf ? 1.0 : 0.0,

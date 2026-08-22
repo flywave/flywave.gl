@@ -324,6 +324,7 @@ export class TextCanvas {
             this.m_fontCatalog.distanceRange
         );
         material.defines.MSDF = this.m_fontCatalog.type === "msdf" ? 1.0 : 0.0;
+        this.updateMglGammaScale();
 
         const bgMaterial = this.m_bgMaterial as THREE.RawShaderMaterial;
         bgMaterial.uniforms.sdfTexture.value = this.m_fontCatalog.texture;
@@ -383,6 +384,29 @@ export class TextCanvas {
 
     set textRenderStyle(style: TextRenderStyle) {
         this.m_currentTextRenderStyle.copy(style);
+        this.updateMglGammaScale();
+    }
+
+    /**
+     * Opt-in mapbox-gl-js glyph gamma mode (symbol.fragment.glsl): when
+     * enabled, every style change re-publishes the current fontScale
+     * (fontSize / catalogSize) to the SDF material so the AA half-ramp uses
+     * mapbox's exact gamma instead of the derivative-based width. Native
+     * rendering keeps the default (disabled) behavior.
+     */
+    static mglTextGammaEnabled = false;
+
+    private updateMglGammaScale(): void {
+        if (!TextCanvas.mglTextGammaEnabled) return;
+        const fontScale = this.m_fontCatalog && this.m_fontCatalog.size > 0
+            ? this.m_currentTextRenderStyle.fontSize.size / this.m_fontCatalog.size
+            : 0;
+        for (const mat of [this.m_material, this.m_bgMaterial]) {
+            const m = mat as THREE.RawShaderMaterial;
+            if (m?.uniforms?.uMglGammaScale) {
+                m.uniforms.uMglGammaScale.value = fontScale;
+            }
+        }
     }
 
     /**
