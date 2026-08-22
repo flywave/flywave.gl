@@ -22,7 +22,6 @@ import { type WebTile } from "../WebImageryTileProvider";
 import {
     emptyTexture as matEmptyTexture,
     emptyImageryTextures,
-    defaultDEMTileMeshMaterial,
     DEMTileMeshMaterial
 } from "./DEMTileMeshMaterial";
 import { ProjectionSwitchController } from "../ProjectionSwitchController";

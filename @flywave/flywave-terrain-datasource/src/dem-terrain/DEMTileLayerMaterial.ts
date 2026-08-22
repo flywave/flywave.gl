@@ -205,9 +205,10 @@ function buildTerrainPosition(u: TerrainTileUniforms, computeNormal: boolean) {
  */
 export class DEMTileBaseMaterial extends MeshStandardNodeMaterial {
     private readonly m_tileUniforms: TerrainTileUniforms;
-    private m_imageryNode: ReturnType<typeof texture> | null = null;
+    private readonly m_imageryNode: ReturnType<typeof texture>;
     private readonly m_uvTransform = uniform(new THREE.Vector4(1, 1, 0, 0));
     private readonly m_fallbackColor = uniform(new THREE.Color(0.5, 0.5, 0.5));
+    private readonly m_hasImagery = uniform(0);
     private readonly m_vTerrainNormal: ReturnType<typeof vec3>;
 
     constructor(
@@ -230,9 +231,12 @@ export class DEMTileBaseMaterial extends MeshStandardNodeMaterial {
         this.positionNode = nodes.positionNode;
         this.m_vTerrainNormal = nodes.vTerrainNormal;
 
-        const imageryNode = options?.texture ? texture(options.texture) : null;
-        if (imageryNode) {
-            this.m_imageryNode = imageryNode;
+        // The texture node ALWAYS exists in the graph (TSL closures resolve
+        // at graph-build time); imagery is swapped via `.value` and gated by
+        // the m_hasImagery uniform.
+        this.m_imageryNode = texture(options?.texture ?? emptyOpaqueTex);
+        if (options?.texture) {
+            this.m_hasImagery.value = 1;
             if (options.uvTransform) {
                 this.m_uvTransform.value.copy(options.uvTransform);
             }
@@ -251,10 +255,9 @@ export class DEMTileBaseMaterial extends MeshStandardNodeMaterial {
                 .and(tUv.x.lessThanEqual(float(1.01)))
                 .and(tUv.y.greaterThanEqual(float(-0.01)))
                 .and(tUv.y.lessThanEqual(float(1.01)));
-            const imageryColor = this.m_imageryNode
-                ? this.m_imageryNode.sample(tUv)
-                : vec4(this.m_fallbackColor, 1.0);
-            const color = select(inRange, imageryColor, vec4(this.m_fallbackColor, 1.0));
+            const imageryColor = this.m_imageryNode.sample(tUv);
+            const hasTex = this.m_hasImagery.equal(1).and(inRange);
+            const color = select(hasTex, imageryColor, vec4(this.m_fallbackColor, 1.0));
 
             // WORKAROUND (see DEMTileMeshMaterial): force VERTEX|FRAGMENT
             // visibility on the height-map binding; vertex-only bindings are
@@ -280,17 +283,8 @@ export class DEMTileBaseMaterial extends MeshStandardNodeMaterial {
      * Passing null removes imagery (solid fallback color).
      */
     setImagery(tex: THREE.Texture | null, uvTransform?: THREE.Vector4) {
-        if (!tex) {
-            this.m_imageryNode = null;
-            this.needsUpdate = true;
-            return;
-        }
-        if (!this.m_imageryNode) {
-            this.m_imageryNode = texture(tex);
-            this.needsUpdate = true;
-        } else {
-            this.m_imageryNode.value = tex;
-        }
+        this.m_imageryNode.value = tex ?? emptyOpaqueTex;
+        this.m_hasImagery.value = tex ? 1 : 0;
         if (uvTransform) {
             this.m_uvTransform.value.copy(uvTransform);
         }
@@ -306,7 +300,7 @@ export class DEMTileBaseMaterial extends MeshStandardNodeMaterial {
  *  - `projector`: world position (RTE-corrected) × orthographic projector matrix
  */
 export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
-    private m_textureNode: ReturnType<typeof texture> | null = null;
+    private readonly m_textureNode: ReturnType<typeof texture>;
     private readonly m_uvTransform = uniform(new THREE.Vector4(1, 1, 0, 0));
     private readonly m_opacity = uniform(1);
     private readonly m_projectorMatrix: ReturnType<typeof uniform>;
@@ -349,9 +343,9 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
         const nodes = buildTerrainPosition(tileUniforms, false);
         this.positionNode = nodes.positionNode;
 
-        if (options?.texture) {
-            this.m_textureNode = texture(options.texture);
-        }
+        // Texture node always exists in the graph (transparent 1×1 dummy by
+        // default renders nothing); textures are swapped via `.value`.
+        this.m_textureNode = texture(options?.texture ?? emptyTransparentTex);
         if (options?.uvTransform) {
             this.m_uvTransform.value.copy(options.uvTransform);
         }
@@ -375,7 +369,7 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
                     .and(tUv.x.lessThanEqual(float(1.01)))
                     .and(tUv.y.greaterThanEqual(float(-0.01)))
                     .and(tUv.y.lessThanEqual(float(1.01)));
-                const texColor = this.m_textureNode ? this.m_textureNode.sample(tUv) : vec4(0);
+                const texColor = this.m_textureNode.sample(tUv);
                 const a = texColor.a.mul(this.m_opacity).mul(select(inRange, 1, 0));
                 color.assign(vec4(texColor.rgb.mul(this.m_opacity), a));
             } else {
@@ -388,7 +382,7 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
                     .and(projUv.y.greaterThanEqual(0))
                     .and(projUv.y.lessThanEqual(1))
                     .and(projCoord.w.greaterThan(0));
-                const projColor = this.m_textureNode ? this.m_textureNode.sample(projUv) : vec4(0);
+                const projColor = this.m_textureNode.sample(projUv);
                 const a = projColor.a.mul(this.m_opacity).mul(select(inProj, 1, 0));
                 color.assign(vec4(projColor.rgb.mul(this.m_opacity), a));
             }
@@ -406,12 +400,7 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
 
     /** Swap decal texture in place. */
     setLayerTexture(tex: THREE.Texture) {
-        if (!this.m_textureNode) {
-            this.m_textureNode = texture(tex);
-            this.needsUpdate = true;
-        } else {
-            this.m_textureNode.value = tex;
-        }
+        this.m_textureNode.value = tex;
     }
 
     setOpacity(value: number) {

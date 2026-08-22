@@ -340,6 +340,11 @@ const s_nodes = buildNodes();
 /**
  * DEM tile mesh material for rendering terrain with height-map-based elevation.
  *
+ * @deprecated Legacy shared-singleton material consumed by
+ * {@link HeightMapTerrainMesh} (now only used by the quantized terrain path).
+ * The DEM terrain path renders one dedicated material instance per layer mesh
+ * instead — see {@link DEMTileBaseMaterial} / {@link DEMTileOverlayMaterial}.
+ *
  * All per-tile data is read directly from the mesh object at render time via
  * onObjectUpdate, so no per-tile properties exist on the material itself.
  * This ensures the shader is compiled only once and shared by all tiles.
