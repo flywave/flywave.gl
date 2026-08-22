@@ -2941,3 +2941,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实施内容**：① uMBExtrusionExag 从硬编码 1 改为 terrainController 实际 exaggeration（fixture=4）；② height-alignment "flat"（mgl 默认）语义——顶面顶点（objectNormal.z>0.5）改用 CPU sampleElevation(几何 bbox 中心) 的 centroid 高程（单要素对象近似），base 保持逐顶点（默认 base-alignment terrain）；③ patchMaterial 线程 obj/mesh 以取几何。
 - **实测（9 例）**：alignment-height-terrain 68017→65921（−2k，噪声级）、and-base-flat +2k、**over-border-of-different-zoom 155k→192k（+37k 明确回归 ×2 例）**、flat-roof 族不变——flat 路径疑似未生效（疑 centerDem 在该 fixture 为 null 或 sampleElevation 0），exag 修正反致 over-border 系劣化（该系另有 overzoom DEM 混叠机制）。**全量 git 回退**，基线逐值复原（155341 ✓）。
 - **结论**：子域 C 非单一语义缺口的补齐可解——exag/alignment 语义与 over-border DEM 混叠、flat-roof AO、centroid 编码（mgl 用顶点属性 centroid_pos 携带，非 CPU uniform）相互咬合；正确实施需把 mgl 的 centroid_pos 顶点编码一并移植（emitter 烘焙时写入）。工程量升为中大，记档为子域 C 完整实施规格，本轮保持零净变化。
+
+**117. 真因破案——allDemTiles 相机相对坐标污染（2026-08-23 七，保留修复）**：
+
+- **§116 零效之谜破案**：DEM 数据本身健康（探针实测 min 70/max 155-200m），但 `sampleElevation` 恒返 0——`allDemTiles` 用 `mesh.position` 作世界坐标，而 `updateCameraRelative` **每帧把它改写为相机相对坐标**（世界真值在 `userData.__mbWorldPos`）。CPU 侧 DEM 采样全部落空 → §116 的 flat/uniform/exag 实施从未生效（也解释 over-border "回归"实为噪声重排）。修复：allDemTiles 改用 `__mbWorldPos`，探针复测采样 0→370/593m（exaggerated）✓。
+- **验收（保留修复，9+2 例）**：flat-roof 47807→**43063**、flat-roof-ao 69482→66041、flat-roof-over-border 94484→93336、alignment-height-terrain 68017→66215、**fog/terrain/basic 32123→28760**、2x-pixelratio-lines 5196→4692；over-border-different-zoom 155341 不变、circle/occluded +462（噪声带）——全域小改善无实质回归。
+- **遗留**：shader 侧 per-vertex 采样（uMBExtrusionDemOrigin 世界坐标 vs modelMatrix 语义）与 mgl centroid_pos 顶点编码仍是子域 C 完整收敛的剩余路径（§116 规格不变）。

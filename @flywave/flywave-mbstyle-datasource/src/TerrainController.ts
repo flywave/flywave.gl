@@ -241,12 +241,15 @@ export class TerrainController {
             const mesh = this.m_meshes[i];
             const demTex = this.m_demTextures[i];
             if (!demTex || !mesh) continue;
-            // Reconstruct world bounds from mesh position + scale (XZ plane).
-            // The mesh is positioned at the tile center; its geometry is a
-            // unit-square-sized plane scaled to (tileSizeWorld / (C/4)).
+            // World bounds from the mesh's WORLD position — mesh.position is
+            // camera-relative (updateCameraRelative rewrites it every frame),
+            // so it must NOT be used as a world coordinate (§117: doing so
+            // made every DEM sample miss and return 0).
+            const world = mesh.userData.__mbWorldPos as THREE.Vector3 | undefined;
+            if (!world) continue;
             const tileWorldSize = mesh.scale.x * (EarthConstants.EQUATORIAL_CIRCUMFERENCE / 4);
-            const cx = mesh.position.x;
-            const cy = mesh.position.y;
+            const cx = world.x;
+            const cy = world.y;
             out.push({
                 texture: demTex,
                 originX: cx - tileWorldSize / 2,
