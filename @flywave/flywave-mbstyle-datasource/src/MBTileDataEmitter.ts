@@ -1096,6 +1096,10 @@ export class MBTileDataEmitter {
                 _layerId: layer.id,
                 _paint: layer.paint,
                 _layout: layer.layout,
+                // mgl layer ordering: style layer order must dominate the
+                // tile level in the engine's transparent-pass sort (see
+                // TileObjectsRenderer.painterSortStable).
+                _mbGlobalLayerOrder: true,
                 // Lines are pre-extruded in JS (position already contains the
                 // ribbon width); tell the material not to extrude again in GLSL.
                 _preExtrudedLines: preExtruded,
@@ -1848,6 +1852,7 @@ export class MBTileDataEmitter {
                 _layerId: layer.id,
                 _paint: { ...paint, 'fill-color': borderColor },
                 _layout: layer.layout,
+                _mbGlobalLayerOrder: true,
                 _isLineRibbon: true,
                 // The border ribbon renders UNDER the main line and, when the
                 // line uses a gradient, mgl darkens the border by ×0.6 (its
@@ -2479,6 +2484,7 @@ export class MBTileDataEmitter {
                 _layerId: layer.id,
                 _paint: paint,
                 _layout: layer.layout,
+                _mbGlobalLayerOrder: true,
                 // line-gradient: per-feature line-progress ramp consumed by
                 // the patcher (aRibbonDist varying → ramp texture sample).
                 ...(gradient ? { _lineGradientStops: gradient } : {}),
@@ -2558,6 +2564,7 @@ export class MBTileDataEmitter {
                 _layerId: layer.id,
                 _paint: paint,
                 _layout: layer.layout,
+                _mbGlobalLayerOrder: true,
                 color: color ?? '#000000',
                 // mgl multiplies the outline by fill-opacity (the `opacity`
                 // pragma in fill_outline shaders) and by the outline color's own

@@ -53,12 +53,23 @@ class RasterTileDataProvider extends DataProvider {
     private m_tileUrlTemplate: string;
     private m_minZoom: number;
     private m_maxZoom: number;
+    /**
+     * Ideal tile level getter (flywave zoomLevel of the camera). mgl draws
+     * ONE raster tile per screen cell (coveringZoomLevel = round(zoom + 1)),
+     * while the engine schedules multiple levels — emitting coverage quads
+     * at every level STACKS them (a 0.5-opacity raster layer then blends
+     * different-resolution ancestor copies, washing the map out; observed
+     * on raster-masking/overlapping-vector).
+     */
+    private m_idealLevel: (() => number) | undefined;
 
-    constructor(tileUrlTemplate: string, minZoom: number = 0, maxZoom: number = 22) {
+    constructor(tileUrlTemplate: string, minZoom: number = 0, maxZoom: number = 22,
+        idealLevel?: () => number) {
         super();
         this.m_tileUrlTemplate = tileUrlTemplate;
         this.m_minZoom = minZoom;
         this.m_maxZoom = maxZoom;
+        this.m_idealLevel = idealLevel;
     }
 
     ready(): boolean { return true; }
@@ -67,6 +78,16 @@ class RasterTileDataProvider extends DataProvider {
         const z = tileKey.level;
         const x = tileKey.column;
         const y = tileKey.row;
+
+        // Only the camera's ideal level produces coverage (mgl one-tile-per-
+        // cell semantics). Other engine-scheduled levels return empty so
+        // multi-level quads never stack on screen.
+        if (this.m_idealLevel) {
+            const ideal = Math.min(Math.max(this.m_idealLevel(), this.m_minZoom), this.m_maxZoom);
+            if (z !== ideal) {
+                return JSON.stringify({ type: 'FeatureCollection', features: [] });
+            }
+        }
 
         // mgl coveringTiles: `if (z < options.minzoom) return []` — below
         // the source minzoom NOTHING is drawn (zoomed-raster/underzoom's

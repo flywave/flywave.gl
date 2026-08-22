@@ -152,6 +152,18 @@ export class TileObjectRenderer {
             ) {
                 return stableSort(a, b);
             }
+            // Mapbox style compatibility: techniques flagged with
+            // `_mbGlobalLayerOrder` need STYLE layer order (renderOrder) to
+            // dominate the tile level — mapbox draws layers in style order
+            // regardless of which tile/level they come from (observed:
+            // a higher-level tile's raster layer covered a lower-level
+            // tile's fill layer that the style places above it).
+            if (
+                (mapObjectAdapterA?.technique as any)?._mbGlobalLayerOrder === true ||
+                (mapObjectAdapterB?.technique as any)?._mbGlobalLayerOrder === true
+            ) {
+                return stableSort(a, b);
+            }
             if (mapObjectAdapterA?.level !== undefined && mapObjectAdapterB?.level !== undefined) {
                 // Extruded buildings may interfere with landmarks, so we need to sort by
                 // renderOrder, see LandmarkDataSource.computeRenderOrder

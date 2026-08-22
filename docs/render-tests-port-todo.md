@@ -2803,3 +2803,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **raster-masking/overlapping-vector 82.8k → 跨瓦片层序架构缺口（本轮主发现）**：fixture = bg→raster(opaque contour)→fill(green 0.2)→raster2(0.5+hue90) 四层。取证：cur 绿色像素仅 5471 vs exp 60793——绿 fill 被上层 raster 遮住；埋点确认 flywave 同时调度 z14/z15/z16 三层瓦片（各自 404→最深祖先回退 z11/13/14/15 ✓ 覆盖完整），但 **引擎按瓦片分块渲染，高 z 瓦片的 raster(renderOrder=1) 迟于低 z 瓦片的 fill(renderOrder=2) 绘制**——mgl 是全局按 style 层序绘制。修复方向（下一阶段设计项）：mbstyle raster 四边形改走 MapAnchor 场景对象（同 image source 路径，按层 index 排序）或引擎侧跨瓦片 renderOrder 全局排序；fill/线层同理受影响（单源 fixture 不暴露）。
 - **gradient-vector-tile 11114 取证**：失配集中在两楔形带的**边缘行带**（yhist 75-150 主导）= taper 曲线数 px 级偏差（宽度插值位置/逐顶点求值点微差），非接缝非色映射（已对齐）；量级收敛中，优先级低于 masking。
 - **terrain/raster-fade 13.4k 静态定性**：mgl raster_fade.ts 在缩放过渡期对 parent/child 双纹理按 per-tile fade 权重混合（fade.mix/fade.opacity 双采样）——我们是单纹理无淡入链，需双纹理 + per-tile 权重（与 additive 双 pass 同级工程），留待专项；fog 带域维持 §12.75/§12.76 结论（屏幕空间后处理或 mgl 材质内嵌公式已落，残差为引擎相机语义标定）。
+
+**97. masking 层序修复实施批——三条线索实验与诚实回退（2026-08-22 十）**：
+
+- **落地保留（基础设施，零行为变化）**：① 引擎 `TileObjectsRenderer.painterSortStable` 增 opt-in 分支——technique 带 `_mbGlobalLayerOrder: true` 时 renderOrder（style 层序）优先于瓦片 level（埋点确认分支命中）；② emitter 全部四类 technique（通用/border/ribbon/outline）打上该 flag（mgl 语义：全局按 style 层序）；③ RasterTileDataProvider 增 `idealLevel` 参数（未接线）。
+- **实验一（层序 flag）**：masking 82807 **不变**——跨瓦片 level 排序非该 fixture 的主机制（probe 证明分支已生效但输出逐值相同）。
+- **实验二（单层覆盖）**：按"mgl 每屏一格一瓦"在 provider 层只给 ideal 级发覆盖——round 版使 raster-filtering 4137→61255 **灾难回归**（引擎请求 floor(zoomLevel)，round 级被清空）；floor 版 masking 仍 82807 不变且图像出现大块白洞（引擎实际按多级混合显示，z14/z15/z16 各覆盖一部分屏区——单层化与引擎瓦片调度模型冲突）。**全部回退**（参数保留不接线）。
+- **masking 定性修正（§96 修正案）**：两层 raster 材质均正常 patch（埋点：layer raster/raster-transparent × 4 个瓦片 URL 全部在列），白洞与绿填充缺失的真实机制仍开放——下一入口：probe 引擎 DisplayTileLayer 的瓦片显示选择逻辑（为何三级调度各覆盖部分屏区）、以及 fill 层的对象在哪一级被哪一对象覆盖（可逐对象 dump renderOrder/level/材质做绘制序仿真）。
+- **零回归确认**：回退后 raster 全域 16 PASS/7 FAIL 与阶段前逐值一致（4137/26392/82807/3843/487/273/322）。
