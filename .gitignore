@@ -18,3 +18,11 @@ mapbox-gl-js/
 chunked-render-tests.log
 full-render-tests.log
 smoke-render-tests.log
+# tsc 历史误产物：src/test 内与 .ts 同名的编译输出（karma 走 tsconfig.karma 直编 .ts）
+@flywave/flywave-mbstyle-datasource/src/*.js
+@flywave/flywave-mbstyle-datasource/src/*.js.map
+@flywave/flywave-mbstyle-datasource/src/*.d.ts
+@flywave/flywave-mbstyle-datasource/test/*.js
+@flywave/flywave-mbstyle-datasource/test/*.js.map
+@flywave/flywave-mbstyle-datasource/test/*.d.ts
+!@flywave/flywave-mbstyle-datasource/test/karma-worker.bundle.js
