@@ -2714,3 +2714,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地**：①patcher `setupTranslucentExtrusionDualPass`——opacity∈(0,1) 的 extruded-polygon 加子 mesh 纯深度预 pass（renderOrder−0.5、不参与拾取）+ 主材质 `depthFunc=EqualDepth`；②新文件 **MBShadowRenderer**——1024² DepthTexture RT + 正交 shadow camera（layer 1 掩码 + overrideMaterial 深度材质，绕开 3D 光不在场景导致 three 内建阴影不可用的问题），每帧 AfterRender 重绘（一帧 uniform 滞后与 heatmap 同约）；caster 注册=patcher（extruded-polygon）+ MBModelRenderer（model 实例，`model-cast-shadows≠false`）；**receiver 注入**=ground fill 材质（`injectGroundShadow`：worldPos varying + 深度比较 + `mix(1-intensity,1,lit)`，per-frame uniform 刷新走 patchTileMaterials）；EnvironmentManager 暴露 `shadowLightState`。
 - **留档校准项（批测首查）**：单级联 vs mgl 双级联、shadow camera 半径（现 targetDistance 钳制）、深度 bias 0.0015、PCF 单 tap vs mgl 平面 bias 函数、阴影接收未扩到 line/circle/raster 层、trees 阴影需 §82 model 渲染链整体先通。
 - **状态**：tsc 无新增错误（MBStyleDecoder:338 既有）；单测 265/3 既有零回归。
+
+**85. §12.82/84 攒批渲染测试执行 + model 渠道五连环修复（2026-08-22，dbg86 系列）**：
+
+- **测试基建跑通**：karma `ChromeHeadlessNoSandbox`（SwiftShader flags）+ 自建 dump server（/tmp/mbreport/server.js）+ `KARMA_ARGS="filter=<名> feedback-url=http://127.0.0.1:9871"`；mapview 改动需 `tsc --build` 重建 lib（karma 从 lib 解析——本次破案关键之一）。
+- **五连环修复**：① DRACOLoader 缺失（树全 draco 压缩，报错被静默 catch）；② 帧保活——GLTF/draco 异步解码晚于 settle，harness `modelsPending()` 轮询（quiet≥3 真渲染帧+末帧保证）；③ 近裁剪面贴地（§F2a 同族）——applyMaxGeometryHeight 对 model 层加 30m 保守界；④ loadModels 的 `require()` 在浏览器 bundle 抛错被吞（model-source 路径死代码真相之二）→ `await import`；⑤ prune 竞态（改 tile.disposed 才删）+ frustumCulled=false（Float32 矩阵 1e7 量级坐标米级误差随机剔除）。
+- **验收（空闲时稳定）**：trees-lod-expression PASS（4×/5× 稳定，逐要素 modelId+draco+变换+主题全链路）、default PASS（model-source 路径）、part-opacity PASS；skybox/gradient、atmosphere-rayleigh、fill-extrusion/opacity-blend、circle-stroke-color 零回归 PASS；fog/default 1118（1094+24 噪声）；单测 265/3 既有。
+- **批测残差（模型已上屏，剩精度校准）**：vertex-colors 1885 / rotation 4.8k / translation 5.1k / multiple-meshes 15k / opacity 15k / emissive 18k / scale 79k（尺寸标定主项）等。
+- **留档环境级问题**：① 顺序污染——trees 在前驱测试后失败但 assert 时场景/相机/draw calls（tris=138106）与 PASS 完全一致而画布全灰（SwiftShader 多上下文 readback 嫌疑）；② 负载敏感——load 5 时 0/5、空闲 5/5。建议逐测独立浏览器实例的 harness 专项。

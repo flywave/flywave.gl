@@ -331,7 +331,7 @@ export class MBTileDataEmitter {
      */
     private m_modelInstances: Array<{
         x: number; y: number; z: number;
-        technique: number;
+        technique: any;
         properties: Record<string, any>;
     }> = [];
 
@@ -2645,7 +2645,9 @@ export class MBTileDataEmitter {
                         const w = this.projectWorld(pt);
                         this.m_modelInstances.push({
                             x: w.x, y: w.y, z: w.z,
-                            technique: techniqueIdx,
+                            // Technique object reference (not index): the
+                            // decodedTile/techniques array is transient.
+                            technique: tech,
                             properties: { ...properties, $id: featureId ?? properties.$id ?? null },
                         });
                     }

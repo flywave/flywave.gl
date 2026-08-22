@@ -160,6 +160,52 @@ async function renderFrames(
     // one extra bounded frame so late texture attaches make it into the
     // capture. Text-perfect cases never carry raster layers, so the extra
     // update is safe.
+    const hasModel = ((dataSource as any).styleManager?.getStyle?.()?.layers ?? []).some(
+        (l: any) => l.type === "model",
+    );
+    if (hasModel) {
+        // Model layers: GLTF (+Draco) assets decode asynchronously and can
+        // finish after the settled frame — poll until MBModelRenderer has
+        // instantiated every placement (or time out), keeping frames alive.
+        // One EXTRA rendered frame is awaited after completion: instances are
+        // added during AfterRender (after the draw), so the frame that drew
+        // them follows the pending flag clearing.
+        // Wait until models are placed AND at least three quiet
+        // observations with REAL renders between them (renderer.info.render
+        // .frame only increases on actual draws — AfterRender can fire from
+        // queued frames predating the instantiation).
+        const frameCount = () => (mapView as any).renderer?.info?.render?.frame ?? 0;
+        let quietFrames = 0;
+        for (let i = 0; i < 60; i++) {
+            const pending = (dataSource as any).modelsPending?.();
+            quietFrames = pending ? 0 : quietFrames + 1;
+            if (quietFrames >= 3) break;
+            const before = frameCount();
+            await new Promise<void>((resolve) => {
+                const handler = () => {
+                    mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
+                    resolve();
+                };
+                mapView.addEventListener(MapViewEventNames.AfterRender, handler);
+                mapView.update();
+                setTimeout(resolve, 500);
+            });
+            if (frameCount() <= before) i--; // no real render — don't count it
+        }
+        // The self-scan inside modelsPending() can instantiate during the
+        // loop's final check (after the last draw) — render one more frame
+        // so late instances make it into the capture.
+        await new Promise<void>((resolve) => {
+            const handler = () => {
+                mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
+                resolve();
+            };
+            mapView.addEventListener(MapViewEventNames.AfterRender, handler);
+            mapView.update();
+            setTimeout(handler, 500);
+        });
+    }
+
     const hasRaster = ((dataSource as any).styleManager?.getStyle?.()?.layers ?? []).some(
         (l: any) => l.type === "raster",
     );

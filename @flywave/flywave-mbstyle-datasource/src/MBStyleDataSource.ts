@@ -634,6 +634,8 @@ export class MBStyleDataSource extends TileDataSource {
     private m_modelRenderer: any = null;
     /** Standalone directional shadow pass (mgl shadow_renderer parity). */
     private m_shadowRenderer: any = null;
+    /** Set when loadModels() (async GLTF placement path) has finished. */
+    private m_modelsLoaded = false;
     private m_additiveLineRenderer: any = null;
     private m_debugTileBoundaries = false;
     private m_debugLines: any = null;
@@ -734,11 +736,16 @@ export class MBStyleDataSource extends TileDataSource {
         let maxHeight = 0;
         for (const layer of style.layers ?? []) {
             const l = layer as any;
-            if (l.type !== 'fill-extrusion' && l.type !== 'building') continue;
+            if (l.type !== 'fill-extrusion' && l.type !== 'building' && l.type !== 'model') continue;
             maxHeight = Math.max(
                 maxHeight,
                 MBStyleDataSource.scanMaxNumber(l.paint?.['fill-extrusion-height'])
             );
+            // Model layers: the GLTF asset height is only known after load
+            // (MBModelRenderer refines this dynamically); until then use a
+            // conservative bound so the near clip plane does not cut the
+            // models closest to the camera (same failure mode as §F2a).
+            if (l.type === 'model') maxHeight = Math.max(maxHeight, 30);
         }
         if (maxHeight > 0) {
             this.maxGeometryHeight = Math.max(this.maxGeometryHeight, maxHeight);
@@ -1157,7 +1164,8 @@ export class MBStyleDataSource extends TileDataSource {
             });
         }
 
-        await this.loadModels(style);
+        this.m_modelsLoaded = false;
+        await this.loadModels(style).finally(() => { this.m_modelsLoaded = true; });
 
         if (this.m_environment && style.terrain) {
             await this.m_environment.applyTerrain(
@@ -1284,6 +1292,10 @@ export class MBStyleDataSource extends TileDataSource {
         }
         this.m_modelRenderer.setModelRegistry(registry);
         this.m_modelRenderer.setLayers?.((style.layers ?? []) as any[]);
+        // Placements only come from model layers over vector/geojson sources.
+        const expectPlacements = (style.layers ?? []).some((l: any) =>
+            l.type === 'model' && (style.sources as any)?.[l.source]?.type !== 'model');
+        this.m_modelRenderer.setExpectPlacements?.(expectPlacements);
     }
 
     private async loadModels(style: StyleSpecification): Promise<void> {
@@ -1367,7 +1379,7 @@ export class MBStyleDataSource extends TileDataSource {
             try {
                 const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
                 const loader = new GLTFLoader();
-                const { GeoCoordinates } = require('@flywave/flywave-geoutils');
+                const { GeoCoordinates } = await import('@flywave/flywave-geoutils');
                 const projection = (this.mapView as any).projection;
 
                 for (const def of modelDefs) {
@@ -1376,6 +1388,10 @@ export class MBStyleDataSource extends TileDataSource {
                     try { gltf = await loader.loadAsync(def.url); } catch { continue; }
 
                     const model = gltf.scene.clone(true);
+                    // Float32 frustum culling at world-scale coordinates is
+                    // meters-off and flips between frames (see
+                    // MBModelRenderer.instantiate) — rely on GPU clipping.
+                    model.traverse((o: any) => { o.frustumCulled = false; });
                     // mgl themes models on the GPU over the whole glTF
                     // (draw_model.ts APPLY_LUT_ON_GPU); we bake CPU-side into
                     // material colors + texture maps (model-color-use-theme
@@ -1427,6 +1443,21 @@ export class MBStyleDataSource extends TileDataSource {
      * Runtime styling API for dynamic style manipulation.
      * Usage: dataSource.runtime.setPaintProperty('water', 'fill-color', '#0000ff')
      */
+    /**
+     * True while MBModelRenderer still has unplaced model features (async
+     * GLTF/Draco loads) — the render-test harness polls this before capture.
+     */
+    modelsPending(): boolean {
+        const r = this.m_modelRenderer;
+        if (!r) return !this.m_modelsLoaded;
+        if (r.isLoading()) return true;
+        // Vector model layers deliver placements through the transient
+        // decoded-tile stash — run() may observe them only after the engine
+        // reports tiles settled, so wait for the first observation too.
+        if (r.expectPlacements && !r.sawPlacements?.()) return true;
+        return !this.m_modelsLoaded;
+    }
+
     get runtime(): MBStyleRuntime | null {
         return this.m_runtime;
     }
@@ -2013,9 +2044,11 @@ export class MBStyleDataSource extends TileDataSource {
         try {
             this.updateModelRegistry(style);
         } catch {}
+        this.m_modelsLoaded = false;
         try {
             await this.loadModels(style);
         } catch {}
+        this.m_modelsLoaded = true;
 
         // Re-configure the decoder with the new style + push glyph metrics.
         this.decoder.configure(undefined, {

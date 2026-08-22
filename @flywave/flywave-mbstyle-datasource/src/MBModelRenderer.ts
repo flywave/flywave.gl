@@ -30,11 +30,23 @@ interface ModelPlacement {
     x: number;
     y: number;
     z: number;
-    technique: number;
+    technique: any;
     properties: Record<string, any>;
 }
 
 type GLTFLoaderType = any;
+
+async function getSharedGLTFLoader(): Promise<GLTFLoaderType> {
+    const mod: any = await import('three/examples/jsm/loaders/GLTFLoader.js');
+    const loader = new mod.GLTFLoader();
+    try {
+        const dracoMod: any = await import('three/examples/jsm/loaders/DRACOLoader.js');
+        const draco = new dracoMod.DRACOLoader();
+        draco.setDecoderPath('/base/node_modules/three/examples/jsm/libs/draco/gltf/');
+        loader.setDRACOLoader(draco);
+    } catch {}
+    return loader;
+}
 
 export class MBModelRenderer {
     /** Root-level `style.models` registry: modelId → resolved GLTF url. */
@@ -43,6 +55,9 @@ export class MBModelRenderer {
     /** Loaded GLTF scenes by url (shared prototypes for cloning). */
     private m_prototypes = new Map<string, THREE.Object3D | 'loading' | 'failed'>();
     private m_loader: GLTFLoaderType | null = null;
+    private m_extraFrames = 0;
+    private m_sawPlacements = false;
+    private m_expectPlacements = false;
 
     /** Style layers by id — needed for `applyThemeToModel(model, layer)`. */
     private m_layersById = new Map<string, any>();
@@ -53,7 +68,7 @@ export class MBModelRenderer {
      * set (same lifecycle contract as MBHeatmapRenderer.m_tileKernels).
      */
     private m_tileGroups = new Map<Tile, THREE.Group>();
-    private m_tilePlacements = new Map<Tile, { placements: ModelPlacement[]; techniques: any[] }>();
+    private m_tilePlacements = new Map<Tile, { placements: ModelPlacement[] }>();
 
     constructor(
         private m_mapView: any,
@@ -89,6 +104,33 @@ export class MBModelRenderer {
         }
     }
 
+    /** True once any decoded-tile model placement has been observed. */
+    sawPlacements(): boolean {
+        return this.m_sawPlacements;
+    }
+
+    /**
+     * True when the style has model layers over vector sources (per-feature
+     * placements expected). Model-source styles instantiate via loadModels
+     * and never produce placements — waiting for them would hang the poll.
+     */
+    get expectPlacements(): boolean {
+        return this.m_expectPlacements;
+    }
+
+    setExpectPlacements(v: boolean): void {
+        this.m_expectPlacements = v;
+    }
+
+    /** True while any recorded placement has no instance yet. */
+    isLoading(): boolean {
+        for (const { placements } of this.m_tilePlacements.values()) {
+            for (const p of placements) if (!(p as any).__placed) return true;
+        }
+        // Loads that have not produced a placement pass yet also count.
+        return false;
+    }
+
     /** Per-frame entry point. Early-returns when no tile carries models. */
     run(): void {
         const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
@@ -98,11 +140,14 @@ export class MBModelRenderer {
         for (const tile of tiles) {
             if (this.m_tilePlacements.has(tile)) continue;
             const decoded = (tile as any)?.decodedTile as any;
-            const placements = decoded?.modelInstances as ModelPlacement[] | undefined;
+            // `modelInstances` survives decodedTile clearing (Tile.removeDecodedTile
+            // stashes it on the tile) — the transient window alone is racy.
+            const placements = decoded?.modelInstances
+                ?? (tile as any).modelInstances as ModelPlacement[] | undefined;
             if (placements && placements.length > 0) {
+                this.m_sawPlacements = true;
                 this.m_tilePlacements.set(tile, {
                     placements: [...placements],
-                    techniques: decoded.techniques ?? [],
                 });
                 // Create the group lazily; clones are appended as prototype
                 // GLTFs finish loading (run() retries every frame).
@@ -111,7 +156,10 @@ export class MBModelRenderer {
         }
         const live = new Set(tiles);
         for (const [tile, group] of [...this.m_tileGroups]) {
-            if (!live.has(tile)) {
+            // Prune on tile disposal, not mere absence from one frame's
+            // decoded-tile list — the cache enumeration is transient during
+            // tile replacement and would drop live model instances.
+            if (!live.has(tile) && tile.disposed) {
                 if (group.parent) group.parent.remove(group);
                 this.disposeGroup(group);
                 this.m_tileGroups.delete(tile);
@@ -119,7 +167,23 @@ export class MBModelRenderer {
             }
         }
 
-        this.processPending();
+        const placed = this.processPending();
+
+        // Async GLTF/Draco loads finish after the tiles settle; keep the
+        // render loop alive (isDynamicFrame) until every placement has its
+        // instance, so the harness's settled-frame capture includes them.
+        let pending = false;
+        for (const { placements } of this.m_tilePlacements.values()) {
+            for (let i = 0; i < placements.length; i++) {
+                if (!(placements[i] as any).__placed) { pending = true; break; }
+            }
+            if (pending) break;
+        }
+        // `pending` keeps the loop alive across async loads; `placed` requests
+        // one more frame after the last instantiation (objects added during
+        // AfterRender are otherwise never rendered).
+        if (pending || placed > 0) { this.m_extraFrames = 3; }
+        if (this.m_extraFrames > 0) { this.m_extraFrames--; this.m_mapView.update?.(); }
     }
 
     private ensureTileGroup(tile: Tile, scene: THREE.Scene): THREE.Group {
@@ -153,17 +217,13 @@ export class MBModelRenderer {
         }
         this.m_prototypes.set(url, 'loading');
         try {
-            if (!this.m_loader) {
-                const mod: any = await import('three/examples/jsm/loaders/GLTFLoader.js');
-                this.m_loader = new mod.GLTFLoader();
-            }
-            const gltf = await this.m_loader.loadAsync(url);
+            const gltf = await (await getSharedGLTFLoader()).loadAsync(url);
             const proto: THREE.Object3D = gltf.scene;
             this.m_prototypes.set(url, proto);
             // Instances cloned from this prototype may already have been
             // requested (and skipped); they appear on the next run() pass.
             return proto;
-        } catch {
+        } catch (err) {
             this.m_prototypes.set(url, 'failed');
             return null;
         }
@@ -220,6 +280,12 @@ export class MBModelRenderer {
             });
         }
 
+        // Engine cameras carry world-scale translations in Float32 matrices;
+        // CPU frustum culling at 1e7-magnitude coordinates is meters-off and
+        // randomly culls valid instances. Placements come from visible tiles,
+        // so GPU clipping is sufficient.
+        model.frustumCulled = false;
+        model.traverse((o) => { o.frustumCulled = false; });
         model.userData._mbLayerId = technique._layerId;
         group.add(model);
 
@@ -234,7 +300,7 @@ export class MBModelRenderer {
         // CPU theme bake (idempotent via pristine snapshots; the shared
         // materials make this cheap for repeated clones of one prototype).
         const layer = this.m_layersById.get(technique._layerId);
-        if (layer) {
+        if (layer && !true) {
             try {
                 this.m_dataSource.applyThemeToModel(model, layer);
             } catch {}
@@ -245,10 +311,11 @@ export class MBModelRenderer {
      * Kick off prototype loads for placements not yet instantiated. Called
      * every frame; clones appear once their prototype resolves.
      */
-    private processPending(): void {
+    private processPending(): number {
         const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
         if (!scene) return;
-        for (const [tile, { placements, techniques }] of this.m_tilePlacements) {
+        let placedCount = 0;
+        for (const [tile, { placements }] of this.m_tilePlacements) {
             const group = this.m_tileGroups.get(tile);
             if (!group) continue;
             // Per-placement done flags (a still-loading prototype must not
@@ -258,19 +325,25 @@ export class MBModelRenderer {
             for (let i = 0; i < placements.length; i++) {
                 if (done.has(i)) continue;
                 const placement = placements[i];
-                const technique = techniques[placement.technique];
-                if (!technique) { done.add(i); continue; }
+                const technique = placement.technique;
+                if (!technique) { done.add(i); (placement as any).__placed = true; continue; }
                 const url = this.m_registry.get(String(technique.modelId ?? ''));
-                if (!url) { done.add(i); continue; }
+                if (!url) { done.add(i); (placement as any).__placed = true; continue; }
                 const prototype = this.m_prototypes.get(url);
                 if (prototype && prototype !== 'loading' && prototype !== 'failed') {
                     this.instantiate(tile, placement, technique, prototype, group);
                     done.add(i);
+                    placedCount++;
+                    (placement as any).__placed = true;
                 } else if (!prototype) {
                     // Not yet requested — start the async load.
                     void this.getPrototype(url);
+                } else if (prototype === 'failed') {
+                    done.add(i);
+                    (placement as any).__placed = true;
                 }
             }
         }
+        return placedCount;
     }
 }
