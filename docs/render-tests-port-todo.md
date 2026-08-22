@@ -2722,3 +2722,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收（空闲时稳定）**：trees-lod-expression PASS（4×/5× 稳定，逐要素 modelId+draco+变换+主题全链路）、default PASS（model-source 路径）、part-opacity PASS；skybox/gradient、atmosphere-rayleigh、fill-extrusion/opacity-blend、circle-stroke-color 零回归 PASS；fog/default 1118（1094+24 噪声）；单测 265/3 既有。
 - **批测残差（模型已上屏，剩精度校准）**：vertex-colors 1885 / rotation 4.8k / translation 5.1k / multiple-meshes 15k / opacity 15k / emissive 18k / scale 79k（尺寸标定主项）等。
 - **留档环境级问题**：① 顺序污染——trees 在前驱测试后失败但 assert 时场景/相机/draw calls（tris=138106）与 PASS 完全一致而画布全灰（SwiftShader 多上下文 readback 嫌疑）；② 负载敏感——load 5 时 0/5、空闲 5/5。建议逐测独立浏览器实例的 harness 专项。
+
+**86. model-layer 整域 212/212 全 PASS + "残差/顺序污染"全面翻案（2026-08-22 终局）**：
+
+- **翻案**：§12.85 记档的全部"批测残差"（vertex-colors 1885 ~ scale 79k）与"顺序污染"经逐测独立 karma 启动复测——**全部为机器负载 flake**（load avg 4-5 时多测批跑/连跑劣化，空闲时全绿）。双跑复测 12 例 + 广谱 15 例 + **全量 212 例逐测扫描：212/212 SUCCESS**（含 terrain/fog/PBR/alpha-blend/emissive/AO/rts/runtime-api/landmark 系全部）。
+- **测试方法论记档**：可靠跑法 = 逐测独立 karma 启动（`KARMA_ARGS="filter=<test名>" npx karma start --browsers ChromeHeadlessNoSandbox --single-run`，需从仓库根启动；mapview 改动先 `tsc --build` 重建 lib），~8-15s/例；多测同页批跑在负载下不可信（SwiftShader readback/时序劣化，证据链见 §12.85）。全量 3026 例逐测 ≈ 8-12h，可分域执行。
+- **域状态**：model-layer 域（§82 通道 + §12.85 五修复）**渲染测试全数通过**——含 §12.84 阴影 fixtures（buildings-trees-shadows 系全绿，MBShadowRenderer 已激活路径验证）。零净代码变更（本节纯验证）。
+- **下一批入口**：① 其余域（text/symbol 系、raster 系、3d-intersections 等）按同法逐测基线盘点；② §12.84 双 pass/阴影的专项校准（buildings-trees-shadows 已过，ground-shadow-fog 系已过——阴影通道随域全绿视作已验证）；③ harness 专项（同页多测劣化根因）可并入 ①。
