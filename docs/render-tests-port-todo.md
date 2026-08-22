@@ -2818,3 +2818,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复（mgl 语义：真 alpha 混合到已渲染内容）**：① raster 层——style 中下方存在非 background 层时（hasContentBelow）切真混合（transparent=true + depthWrite=false + shader 输出 `vec4(sRGB(mbR), opacity·a)`，帧缓冲按 sRGB 编码值混合 = mgl 数值空间语义）；底层 raster 保持原 in-shader 合成（raster-opacity 族校准零回归）。② fill 层——opacity<1 且**下方有 raster 层**时真透明（不限拓扑版本曾回归 fill-translucent--circle +43/--fill-extrusion +784，经透明通道重排序；收窄后消除，fill-over-symbol 等保持既有失败值零变化）。
 - **验收**：raster-masking/overlapping-vector **82807→55979（−26.8k）**；raster-opacity/hue-rotate 族 18 PASS 零回归；fill-opacity×4 与 combinations×6 与控制组逐值一致。**残余 55979**：绿 fill 仍缺大块（下一入口：fillRealBlend 生效后绿值对比 + raster2 真混合下的 hue-90 色彩带核对——exp 的绿覆盖 60793px）。
 - **基建保留**：§97 的全局层序 opt-in（引擎+emitter 打标）保留（mgl 语义正确、默认零行为）。
+
+**99. masking 残余 55979 定位到"深祖先回退覆盖差"（2026-08-22 十二）**：
+
+- **逐带取证**：上下行带（y<60/y>170）cur 与 exp **逐像素级吻合**（(204,218,205) vs (203,218,205)）——§98 的真混合修复完全生效；残余 56k **全部集中在中段带（y 60-170）**：cur 深绿 (54,148,60) vs exp 浅绿 (204,230,204)。
+- **机制定位**：视口 4 个 z15 单元格，仅 5235/12658 原生存在；中段行两格 (5234/5235,12657) 的**直接父级 z14-2617-6328 不在 fixture**、最深祖先 z13-1308-3164 存在——我们按深祖先链绘制（深绿覆盖），**mgl 期望图为浅色（无覆盖）**。
+- **矛盾记档（关键悬念）**：raster-filtering 族（卫星源，仅 z1+z20）已实证 mgl 深祖先回退到 **z1 世界图**且与我们逐像素对齐（§29/f6a3ee25），而本 fixture mgl 对 z13 祖先**不绘制**——两处 mgl 回退深度行为不一致，无法用同一规则解释。候选解释：① mgl 的 findLoadedParent 只用"已加载"缓存父级，请求树因 maxzoom/covering 细节不同未拉起 z13；② fixture 元数据（tileSize/buffer）差异；③ mgl 版本行为。**破案入口：实跑 mgl render-test runner（mapbox-gl-js 内置）对照其瓦片请求序列**，或对中段行改用"仅一级父回退"实验（预期 masking 转 PASS 但需 raster-filtering 护航——若其深链 z1 是经由"每级都请求"而非"深链查找"，两者可兼容）。
+- **状态**：本轮不再推进（fixture 语义矛盾需 mgl 实跑证据）；§98 修复保持（上下带逐值吻合、无回归）。
