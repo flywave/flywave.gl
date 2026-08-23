@@ -3098,3 +3098,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **逐行覆盖剖面（alpha 合成后）**：cur 在 y=0、60-70、90-110、140 等行有内容而 exp 为空——**exp 的两条楔形线之间存在真正的空带**（y0 附近、60-110 中段、140 尾部），我们的对应区域被线覆盖。结合 §94（lineClips 逐瓦片 progress 锚定已修）与楔形宽度 30m→0.5m 的 taper：exp 空带 = **mgl 的线在低 progress 端宽度 30m、高 progress 端 0.5m，两条线在视口中只占部分行带**；cur 全行覆盖说明我们的 taper 起点宽度过大或 progress→宽度的映射整体偏移（30m×sec(lat)≈38m 世界 vs mgl 30m 直接？**sec(lat) 在 line-width-unit meters 的 line-progress 变宽路径可能双重施加**——§92 的 secLat 加在 halfOf，而 gradient-vector-tile 的 worldPts 已是 mercator 单位）。
 - **下轮入口**：二分验证——halfOf 的 secLat 在本 fixture 关闭后失配变化（一行实验）；若大幅降则收窄为"secLat 只应施加于固定宽路径"。
+
+**§144. secLat 双重施加假说 A/B 否决（2026-08-23 三十四，零净变化）**：gradient-vector-tile 的 progressHalfWidths halfOf secLat 关闭后**逐值不变 11114**（meters-default/border 也逐值复原）——secLat 非覆盖域错位因子。假说否决，实验清理回退，§142 接缝几何数值对照入口不变。
