@@ -239,7 +239,7 @@ export class TerrainDraping {
                 }
 
                 // Build orthographic top-down camera covering this tile.
-                const camera = buildTileCamera(tile);
+                const camera = buildTileCamera(tile, (this.m_mapView as any).camera?.position);
                 if (!camera) continue;
 
                 // Render: bake the non-terrain layers into the FBO.

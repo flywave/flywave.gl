@@ -3069,3 +3069,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl 相机-地形公式（源码新证据）**：`_updateSeaLevelZoom`（transform.ts:604）——**相机高度 = centerElevation(含 exaggeration)·pixelsPerMeter + cameraToCenterDistance**，zoom 距离从**地形表面**起算；我们 zoom 推导的 z=69m 从海平面起算，低 ~530m（实测）——"相机在地形之下"确证。
 - **两轮移植均 ~126k**：① z+=elev（§135）、② setCameraGeolocationAndZoom(center, elev) 重锚（本轮，mgl 语义精确复刻）——两者输出一致（126267/125490），**翻倍劣化的重新解读**：抬升相机**揭开了被地形遮挡的 60k 隐藏失配区**（66k 基线是在错误遮挡下的"较小可见错误"），即我们的地形网格本身（E1/drape 域）错得多——相机抬升是正确方向但暴露了下游更大的地形错误。
 - **该域最终架构定性**：fill-extrusion-terrain = 相机-地形锚定（本节已解）+ 地形网格呈现（E1/drape 冻结域）**两层叠加**——单独修相机会暴露地形层错误。收敛需先解 E1（drape bake/地形外观），再启用相机抬升。全程记档，本轮零净变化。
+
+**139. E1/drape 解阻塞专项——坐标系失配根因落地 + 烘焙仍空（2026-08-23 二十九）**：
+
+- **§12.76-58 零 fragment 根因（代码级定论）**：烘焙相机 `buildTileCamera` 以 `allDemTiles` 的**世界坐标**（~6.4M，§117 修复后语义）建正交相机，而 `renderer.render(scene, camera)` 画的**场景对象是相机相对（RTE，每帧重锚）**——相机在 6.4M 处看 ±300 相对坐标对象，**视锥内无一物**。旧注释"tile origins are camera-relative"是 §117 前的过时假设——**§117 的世界坐标修复反向破坏了烘焙**。
+- **修复（保留）**：buildTileCamera 增 `camPos` 参数，把瓦片边界平移到相机相对帧（`left−camPos.x` 等）——坐标系语义正确且无害（未触发烘焙时零行为）。
+- **烘焙仍空（corners 探针）**：`[255,255,255,255, 0,0,0,0]`——清色后**仍零内容**，内容门继续自禁用。坐标系修正后仍空 → **下一层阻塞**：场景对象可见性/材质在 RT 渲染路径的差异（疑引擎对象材质的 onBeforeRender/相机 uniform 依赖，或 fog/terrain/basic 的可烘焙内容本身被 `hasDrapableContent` 判定流程跳过）。视觉逐值不变（fog/terrain/basic 28760 ✓ 零回归）。
+- **状态**：坐标系修复保留（原则正确），烘焙解阻塞需再一层排查（RT 渲染路径的对象可见性 dump——scene.traverse 时可见 mesh 数与 renderer.info.render.calls 对照）。
