@@ -3760,3 +3760,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **双 census 实测**：① f6 覆盖瓦片 8×(z1: objects=0)；② **attach 点发生**（z1, geoms=0）——globe 上瓦片请求/解码/挂载链**全通**（§255 的"选择全通"延伸到 attach），但 decode 产出 0 几何：**注入闭包在 sphere 路径下未产出几何**（processPolygonFeature→evaluate→emitter 链内某环节丢弃——候选：evaluate 的 ctx.zoom 在 globe 派生 zoom 下命中 min/maxzoom、emitter 的 fill 几何构建对 sphere decodeInfo 的坐标、或注入闭包自身 catch 静默）。
 - **下轮一步**：globe 下注入闭包内打点（evaluate 返回的 matched 层数 + emitter 几何计数）——两分支一步区分。
 - 探针已清，工作树=提交态（76 commits）。
+
+**§257. globe 注入闭包终局——闭包从未被调用（gate/inj 双探针零输出）：decodeThemedTile 走了 early-return（m_layerEvaluator undefined）或 globe 由另一 decoder 实例服务（2026-08-24 一百四十五，零净变化记档）**：
+
+- **双探针实测**：注入闭包 gate 打点（emitBg/hasEval/zoom）在 globe 上**零输出**——闭包从未执行；结合 §256 attach 发生但 geoms=0 → decodeThemedTile 走了 `!m_layerEvaluator` 的 early-return（`{techniques:[],geometries:[]}`），或 globe 路径由**另一 decoder 实例**（configure 未带 mbStyle）服务。
+- **下轮一步**：configure 调用打点（mbStyle 有无 + 实例 id）区分两分支；若是 configure 缺 mbStyle → applyProjection 后重配即可修复。
+- 探针已清，工作树=提交态（77 commits）。
