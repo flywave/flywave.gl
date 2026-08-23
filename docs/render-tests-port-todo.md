@@ -3825,3 +3825,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **census**：§265 修复后 f6 = 8 瓦片（z1）中 **4 个 objects=1**——解码→attach→对象创建链全通（§265 的 decR geoms=1 与本节 objects=1 闭环）；另 4 个 0（疑早期帧空瓦片或覆盖边角，次要）。
 - **确凿最后一块**：对象存在但图像恒定——注入矩形（mercator extents 坐标）在 sphere 投影下的**放置错位/不可见**。下轮：读 TileGeometryCreator 对 fill 几何的 sphere 变换（tile.center/localTangentSpace/worldOffset 链），或探针打印对象的世界包围盒与视锥关系。
 - 探针已清，工作树=提交态（86 commits）。
+
+**§267. tile2world 球面重投影落地（保留）——图像未变；targetProjection 在解码时刻的类型与 tile.center 语义为剩余嫌疑（2026-08-24 一百五十五，保留修复）**：
+
+- **落地（保留，零回归）**：`tile2world` 新增 `ProjectionType.Spherical` 分支——mercator 平面坐标 → (lng,lat) → `proj.projectPoint` 球面点（与自定义投影分支同构）；mercator/geojson 族数值全部恒定 ✓。
+- **globe 图像未变**：剩余嫌疑——① 解码时刻 `decodeInfo.targetProjection` 仍是 mercator（decoder 构造/decodeTile 的 projection 参数在 globe 下传的是什么，一行日志可定）；② `tile.center` 在 sphere 下是球面切点而 `target.sub(center)` 用的 mercator 中心（语义不匹配，需对照引擎 sphere 瓦片的 center 计算）。
+- **下轮一步**：decodeThemedTile 打印 `projection.type`（globe 下期望 1）——若为 0 则修复 projection 传递即可闭环。
+- 工作树=提交态（87 commits）。

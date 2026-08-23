@@ -233,6 +233,19 @@ function tile2world(
     const R = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
 
     const proj: any = decodeInfo.targetProjection;
+    // §267: sphere projection — mercator-planar coords land at z=0 near the
+    // world origin, nowhere near the sphere surface. Reproject each corner
+    // through the sphere projection like the custom-projection branch.
+    if (proj?.type === 1 /* ProjectionType.Spherical */) {
+        const lng = ((left + px) / scale) * 360 - 180;
+        const lat = tileYToLat(top, py, scale);
+        const w = proj.projectPoint({ longitude: lng, latitude: lat, altitude: 0 });
+        target.x = w.x;
+        target.y = w.y;
+        target.z = (w as any).z ?? 0;
+        target.sub(decodeInfo.center);
+        return;
+    }
     if (proj?.mbCustomProjection === true) {
         // Reproject: tile-local → (lng, lat) → custom-projection world.
         const lng = ((left + px) / scale) * 360 - 180;
