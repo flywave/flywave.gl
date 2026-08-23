@@ -3164,3 +3164,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **对照结论**：mgl symbol 链（shaping/quads/projection/placement）**同样无像素取整**（唯一 round 是 globe wrap）——两侧均为全精度浮点，差异在**字形度量解析**（advance 宽度、baseline、bearing 的 PBF 值→px 换算族）与 SDF 光栅化本身，即 §104 最初的"字形光栅化端"定性经三轮收窄（§159 排除放置/取整 → §160 排除采样 UV → 本节排除角点取整）后**回到并细化原点**。
 - **实施规格（最终版）**：需逐 glyph 数值对照（同一字符的 advance/bearing/baseline 在我们 shaping 与 mgl quads.ts 的换算值差）——工作量大、影响 ~90+ 例，须专门会话。本轮零代码变更，四轮假说排除链完整记档。
+
+**§162. 字形度量映射静态审计（2026-08-23 五十二，零净变化）**：MBGlyphLoader 的 PBF 路径映射审计——`advance/24`、`left/top − 3px border`、`width/height + 6`、SDF 边 0.75→0.5 重映射（−64）：**与 mgl shaping 约定一致，映射公式无罪**。关键架构发现：字形度量有**两条独立消费路径**——①mbstyle 自带 TextShaping（布局 box 计算，用于 text-anchor 对齐，位置已验证正确）；②**引擎 LineTypesetter + 注入的 PBF catalog**（实际字形排布与渲染）——残差（~10k px 墨量差）来自 ② 的 catalog 度量消费与 mgl shaping 的换算差。数值级对照需在 ②（MBFontCatalogBuilder 与 LineTypesetter）进行，规格更新。Canvas 2D fallback（measureText 系统字体）仅 PBF 未加载时激活，text fixtures 均走 PBF。零代码变更，审计记档。
