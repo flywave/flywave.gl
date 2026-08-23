@@ -83,7 +83,7 @@ export class MBBackgroundFogRenderer {
         // Exception: explicit-sky-layer styles with a background layer
         // (horizon-blend family, pitch 85) — mgl fogs the background tiles
         // at any pitch and the expected images show the whitened band.
-        if (pitchDeg < 60 || (pitchDeg > 76 && !(state.hasBackground && state.hasSky))) return;
+        if (pitchDeg < 60 || (pitchDeg > 76 && !state.hasBackground)) return;
 
         this.ensureMesh();
         if (!this.m_mesh || !this.m_material) return;

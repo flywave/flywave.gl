@@ -654,7 +654,11 @@ export class MBMaterialPatchManager {
         // depth semantics). Append a compile-time multiplier to three's
         // fog_vertex so each technique category can carry its own factor.
         // Default: no entry = 1.0 = zero behavior change.
-        const fogScale = (MBMaterialPatchManager.fogContentScales as any)[techName];
+        // Raster tiles ride the 'fill' technique name — allow a separate
+        // raster key so raster fog can be calibrated independently.
+        const fogScaleKey = technique._rasterTileUrl ? 'raster' : techName;
+        const fogScale = (MBMaterialPatchManager.fogContentScales as any)[fogScaleKey] ??
+            (MBMaterialPatchManager.fogContentScales as any)[techName];
         if (typeof fogScale === 'number' && Number.isFinite(fogScale) && fogScale > 0 && fogScale !== 1) {
             const origFogCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
@@ -677,7 +681,11 @@ export class MBMaterialPatchManager {
      * 'circles', ...). Empty/1.0 = untouched — the calibration entry point
      * for the fog per-content-depth campaign (§106/§179).
      */
-    static fogContentScales: Record<string, number> = {};
+    static fogContentScales: Record<string, number> = {
+        // raster: 1.8 over-fogged fog/2d/basic (10476→11996) — the expected
+        // band decays faster than the ramp allows (slope, not scale). Left
+        // unset; the 'raster' key itself is wired (§190).
+    };
 
     private patchRasterMaterial(material: THREE.Material, technique: any): void {
         const url = technique._rasterTileUrl as string;

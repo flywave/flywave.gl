@@ -3339,3 +3339,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **row-37 定案（品红裁剪探针 + 权重三通道探针）**：① 品红探针证明 rows 37-38 由 **sky shader 本身绘制**（裁剪区从 row 39 起）；② 三通道探针（z/w/hb）证明 rows 37-38 的 `wdir.z ≤ 0`（我方相机**真地平线在 y≈36.2**）→ `fog_horizon_blending` 的 `t = max(0, z/hb)` 钳 0 → **满权重雾白**。mgl 同样满雾但被背景瓦片遮挡（瓦片顶边 ≈ y37.5-38）。
 - **修复实验与回退**：z≤0 权重置 0 + 裁剪线 0.997 → null 双例转 PASS，但 high/low 回归 512/424/428/277（其期望白带正好需要这段满雾）——**两族需求方向相反，根因是我方相机真地平线比 mgl 有效边界高 ~1.3px 的几何偏移**，shader 偏移无解；净残差 §188 态 588px < 实验态 1641px，**诚实回退 §188 提交态**（复核 12 PASS/2 FAIL 恒定 ✓）。根治入口（下轮）：相机的 pitch/focal 几何对齐（真地平线位置），非 shader 层。
 - **skybox 分类全量基线（`mbstyle-sky233`，33 例全捕获）**：**skybox/atmosphere-rayleigh 与 gradient/default 双例转 PASS**；§187/§188 修复连锁净改善——gradient/linear 868→512、atmosphere-mie 1107→654、atmosphere-horizon 1702→758、atmosphere-color 1619→835、intensity 族 ~1750→~1000、gradient/padding 32968→32075；小幅回归记档：atmosphere 202→1024、horizon-visibility/base 888→1016、fill-extrusion-light/above 6126→7148、compositing ±1.7k、gradient/south +663（疑 glow 底层合成与裁剪线联动，量级小暂缓）。skybox 大头（fill-extrusion-light 7-15k 族、compositing 50k、cubemap-bottom-face 105k）为既有独立缺口域。
+
+**§190. pitch-80 背景雾 quad 门放宽（hasBackground 即启用）+ raster 内容雾标定基建——fog 域净 −24.8k（2026-08-23 八十，保留修复）**：
+
+- **门放宽**：§181 的 >76 全跳门改为 `hasBackground && pitch>76` 即启用（不再要求显式 sky 层）——mgl 在任意 pitch 都雾化背景瓦片，s 表在 80° 线性插值（0.735@70→0.10@85 → s(80)≈0.31）。**验收**：fog/default 632→**255**、fog/2d/equal-range 22948→**10782**、fog/2d/inverted 53593→**41444**；代价记档：fog/2d/raster 32478→34396（+1.9k，quad 在该 fixture 净负，量级小于收益）。
+- **raster 内容雾标定（fog/2d/basic 10476 取证）**：basic 仅 raster 层（无 background → quad 不适用），y130 带内容雾不足（op 0.29 vs 期望 0.86）。落地 raster 专用 fogContentScales key（raster 技术此前骑 'fill' 名无法独立标定）；k=1.8 实测过冲（10476→11996，期望带衰减比 ramp 斜率快——斜率失配非尺度问题），值留空、key 基建保留。
+- **basic 剩余结构（下轮入口）**：天空区（rows 0-59 全宽差 ≈ 1/2 残差）= atmosphere quad 在 pitch 80 的渐变带偏亮（中带 t 偏大，疑 fadeout/角度基准细节），与 §189 相机几何专项同根；下半区 = 内容雾斜率失配。
+- 相机几何专项初查记档：harness fov 已 = mgl 36.87°（非 fov 差）；引擎 tilt→相机链在 lookAtImpl，pitch 85 下真地平线 y36.2 vs mgl 理论 36.9（~0.7px）——§189 的 ~1.3px 差主要来自 mgl 自身 horizon-shift/瓦片剔除边界语义叠层，非单纯相机差。
