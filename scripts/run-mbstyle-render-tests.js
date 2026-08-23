@@ -43,6 +43,18 @@ if (!process.env.CHROME_BIN) {
 function main() {
     // 1. Start the result server (writes results into outputDir).
     fs.mkdirSync(resultsRoot, { recursive: true });
+    // Purge corrupt/empty result JSONs BEFORE spawning the server — its
+    // loadSavedResults JSON.parse crashes on them and it dies silently,
+    // making every later capture stale (§174/§183).
+    try {
+        const { execSync } = require("child_process");
+        const files = execSync(
+            `find ${resultsRoot} -name '*.json' -size -2c`,
+            { encoding: "utf8" }
+        ).trim();
+        for (const f of files.split("\n").filter(Boolean)) fs.rmSync(f);
+        if (files) console.log(`Purged ${files.split("\n").length} empty result JSON(s)`);
+    } catch {}
     const server = spawn(process.execPath, [serverJs, outputDir], {
         cwd: root,
         env: {
