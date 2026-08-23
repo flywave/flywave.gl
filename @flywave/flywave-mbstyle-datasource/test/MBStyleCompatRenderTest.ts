@@ -404,7 +404,8 @@ async function processOperations(
                 } catch {}
                 break;
             }
-            case "setGeoJSONSourceData": {
+            case "setGeoJSONSourceData":
+            case "updateGeoJSONData": {
                 const sourceId = args[0];
                 const newData = args[1];
                 if (sourceId && newData) {
