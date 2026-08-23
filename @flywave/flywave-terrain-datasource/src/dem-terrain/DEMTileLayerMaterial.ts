@@ -12,7 +12,6 @@ import {
     float,
     mix as tslMix,
     normalize,
-    positionWorld,
     select,
     texture,
     transformNormalToView,
@@ -121,20 +120,6 @@ _modifierOp.onObjectUpdate(({ object }) => object.modifierOp ?? 0);
 
 const _hasModifier = uniform(0);
 _hasModifier.onObjectUpdate(({ object }) => object.hasModifier ?? 0);
-
-// Projector overlay (world-space orthographic projection sampling — the
-// legacy DEMTileMeshMaterial approach, proven correct before the UV-transform
-// rewrite). Per-mesh values live as plain properties on the layer mesh:
-// `projectorMatrix` (live Matrix4 reference owned by ProjectorOverlayManager)
-// and `projectorCameraPos` (live Vector3, RTE correction refreshed every
-// frame by ProjectorOverlayManager.attachToMapView).
-const _projectorMat = uniform(new THREE.Matrix4());
-_projectorMat.onObjectUpdate(({ object }) => object.projectorMatrix ?? _projectorMat.value);
-
-const _projectorCameraPos = uniform(new THREE.Vector3());
-_projectorCameraPos.onObjectUpdate(
-    ({ object }) => object.projectorCameraPos ?? _projectorCameraPos.value
-);
 
 /**
  * Shared vertex-stage terrain displacement graph.
@@ -318,27 +303,24 @@ export class DEMTileBaseMaterial extends MeshStandardNodeMaterial {
  * the decal's depth is bit-identical to the base surface — no z-fighting, no
  * polygon offset needed.
  *
- * Two sampling modes (constructor argument):
- *  - imagery (`projectorMode = false`): tile-UV × uvTransform (satellite
- *    overlays riding the tile grid).
- *  - projector (`projectorMode = true`): world-space orthographic projection
- *    matrix — the legacy DEMTileMeshMaterial approach, restored because the
- *    UV-transform mapping displayed incorrectly. RTE fix: positionWorld is
- *    camera-relative, the projector matrix works in absolute coordinates, so
- *    the per-frame camera world position is added back before projecting.
+ * Sampling is tile-UV × uvTransform for ALL decal kinds (satellite overlays
+ * and projector decals ride the identical path — the world-space orthographic
+ * projector-matrix mode was REMOVED: it depth-conflicted with the base
+ * surface at certain view angles, which is what originally motivated the
+ * UV-transform rewrite).
  *
  * The decal TEXTURE is per-material (module-level shared texture nodes lose
  * per-object values in this architecture — the "white decal" bug) and is
  * rebound IN PLACE via `.value =` by TerrainLayerMesh.setLayerTexture. The
  * colorNode is a PLAIN expression (no Fn wrapper): every material instance
- * generates byte-identical WGSL per mode, so all tiles share ONE compiled
- * pipeline per mode (per-material Fn colorNodes caused a recompile per tile).
+ * generates byte-identical WGSL, so all tiles share ONE compiled pipeline
+ * (per-material Fn colorNodes caused a recompile per tile).
  */
 export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
     /** Per-material decal texture node; rebind via `.value =` (in place). */
     public decalTexNode: any;
 
-    constructor(parameters?: THREE.MeshBasicMaterialParameters, projectorMode: boolean = false) {
+    constructor(parameters?: THREE.MeshBasicMaterialParameters) {
         super({
             wireframe: false,
             transparent: true,
@@ -348,45 +330,22 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
         this.depthWrite = false;
         this.positionNode = s_sharedNodes.positionNode;
 
-        if (projectorMode) {
-            // World-space projector sampling (legacy formula):
-            //   absWorld = positionWorld + cameraPos   (RTE correction)
-            //   projCoord = projectorMatrix × absWorld
-            //   uv = (projCoord.xy / w) * 0.5 + 0.5
-            // Fragments outside the projector frustum are fully transparent
-            // (alpha gate — no Discard, which needs a stack context).
-            const absWorld = positionWorld.add(_projectorCameraPos);
-            const projCoord = _projectorMat.mul(absWorld);
-            const projUv = projCoord.xy.div(projCoord.w).mul(0.5).add(0.5);
-            const inProj = projUv.x
-                .greaterThanEqual(0)
-                .and(projUv.x.lessThanEqual(1))
-                .and(projUv.y.greaterThanEqual(0))
-                .and(projUv.y.lessThanEqual(1))
-                .and(projCoord.w.greaterThan(0));
-            const gate = select(inProj, float(1), float(0));
-            this.decalTexNode = texture(emptyOpaqueTex, projUv);
-            const a = this.decalTexNode.a.mul(_opacity).mul(gate);
-            const color = vec4(this.decalTexNode.rgb.mul(_opacity), a).toVar();
-            this.colorNode = withHeightMapVisibilityFix(color, s_sharedNodes);
-        } else {
-            // Imagery overlay: tile-UV × uvTransform with a hard [0,1] gate.
-            const mapUv = vec2(s_sharedNodes.texUv.x, s_sharedNodes.webMercatorY);
-            const tUv = vec2(
-                mapUv.x.mul(_uvTransform.x).add(_uvTransform.z),
-                mapUv.y.mul(_uvTransform.y).add(_uvTransform.w)
-            );
-            const inRange = tUv.x
-                .greaterThanEqual(float(0))
-                .and(tUv.x.lessThanEqual(float(1)))
-                .and(tUv.y.greaterThanEqual(float(0)))
-                .and(tUv.y.lessThanEqual(float(1)));
-            const gate = select(inRange, float(1), float(0));
-            this.decalTexNode = texture(emptyOpaqueTex, tUv);
-            const a = this.decalTexNode.a.mul(_opacity).mul(gate);
-            const color = vec4(this.decalTexNode.rgb.mul(_opacity), a).toVar();
-            this.colorNode = withHeightMapVisibilityFix(color, s_sharedNodes);
-        }
+        // Tile-UV × uvTransform with a hard [0,1] gate.
+        const mapUv = vec2(s_sharedNodes.texUv.x, s_sharedNodes.webMercatorY);
+        const tUv = vec2(
+            mapUv.x.mul(_uvTransform.x).add(_uvTransform.z),
+            mapUv.y.mul(_uvTransform.y).add(_uvTransform.w)
+        );
+        const inRange = tUv.x
+            .greaterThanEqual(float(0))
+            .and(tUv.x.lessThanEqual(float(1)))
+            .and(tUv.y.greaterThanEqual(float(0)))
+            .and(tUv.y.lessThanEqual(float(1)));
+        const gate = select(inRange, float(1), float(0));
+        this.decalTexNode = texture(emptyOpaqueTex, tUv);
+        const a = this.decalTexNode.a.mul(_opacity).mul(gate);
+        const color = vec4(this.decalTexNode.rgb.mul(_opacity), a).toVar();
+        this.colorNode = withHeightMapVisibilityFix(color, s_sharedNodes);
     }
 }
 

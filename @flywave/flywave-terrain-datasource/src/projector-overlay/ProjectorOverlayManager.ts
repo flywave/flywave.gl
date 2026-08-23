@@ -1,7 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { GeoBox, GeoCoordinates, type Projection } from "@flywave/flywave-geoutils";
-import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
+import { GeoBox } from "@flywave/flywave-geoutils";
 import * as THREE from "three/webgpu";
 
 import { ProjectorImageryProvider } from "./ProjectorImageryProvider";
@@ -40,20 +39,13 @@ export interface ProjectorLayerOptions {
     blendMode?: ProjectorBlendMode;
 }
 
-/**
- * Internal layer record. The `matrix` field is derived from `geoBox` and the
- * owning source's projection. It is a LIVE shared instance: every tile
- * material of this layer wraps the same Matrix4 in a uniform node, so
- * recomputing it in place (matrix.copy) updates all tiles with zero rebuilds.
- */
+/** Internal layer record. */
 export interface ProjectorLayer {
     readonly id: number;
-    texture: THREE.Texture;
+    texture: import("three/webgpu").Texture;
     geoBox: GeoBox;
     opacity: number;
     blendMode: ProjectorBlendMode;
-    /** Derived projection × view matrix from the current geoBox + projection. */
-    readonly matrix: THREE.Matrix4;
 }
 
 function unionGeoBox(a: GeoBox, b: GeoBox): GeoBox {
@@ -82,54 +74,21 @@ function unionGeoBox(a: GeoBox, b: GeoBox): GeoBox {
  * (see DEMTileOverlayMaterial's `projector` variant). There is no compile-time
  * layer cap.
  *
- * Mutations split into two cost tiers:
- *  - Zero-rebuild: cameraPos refresh (every frame) and projector-matrix
- *    updates, which mutate shared instances read live by material uniforms.
- *  - Filtered rebuild: add / remove / texture / opacity / blendMode / geoBox
- *    changes invalidate the provider's tile resources and re-create only the
- *    tiles intersecting the affected geoBox (mesh/material cache makes the
- *    rebuild itself a uniform write).
+ * All layer mutations (add / remove / texture / opacity / blendMode / geoBox)
+ * invalidate the provider's tile resources and re-create only the tiles
+ * intersecting the affected geoBox (the mesh/material cache makes the rebuild
+ * itself a uniform write).
  */
 export class ProjectorOverlayManager {
-    /**
-     * Main camera world position for RTE (camera-relative-to-earth) correction.
-     *
-     * Shared instance wrapped by every projector layer material uniform;
-     * refreshed every frame when {@link attachToMapView} is active.
-     */
-    readonly cameraPos: THREE.Vector3 = new THREE.Vector3();
-
     /** Feeds layers into the terrain resource pipeline. */
     readonly provider: ProjectorImageryProvider;
 
     private readonly layers = new Map<number, ProjectorLayer>();
     private nextId = 1;
 
-    /**
-     * @param projection - Geographic → world-space projection used by the
-     *                     owning TerrainSource. May be `undefined` if the
-     *                     manager is created before its source is connected
-     *                     to a MapView; in that case projector matrices are
-     *                     computed lazily once {@link setProjection} is called
-     *                     (typically from {@link TerrainSource.connect}).
-     */
-    constructor(private projection?: Projection) {
+    constructor() {
         this.provider = new ProjectorImageryProvider();
         this.provider.layerSource = () => this.getAllLayers();
-    }
-
-    /**
-     * Late-bind the geographic projection.
-     *
-     * Recomputes every existing layer's projector matrix in place (live
-     * shared instances — no tile rebuilds needed).
-     */
-    setProjection(projection: Projection): void {
-        if (this.projection === projection) return;
-        this.projection = projection;
-        for (const layer of this.layers.values()) {
-            layer.matrix.copy(this._computeMatrix(layer.geoBox));
-        }
     }
 
     /**
@@ -144,8 +103,7 @@ export class ProjectorOverlayManager {
             texture: opts.texture,
             geoBox: opts.geoBox,
             opacity: opts.opacity ?? 1,
-            blendMode: opts.blendMode ?? "normal",
-            matrix: this.projection ? this._computeMatrix(opts.geoBox) : new THREE.Matrix4()
+            blendMode: opts.blendMode ?? "normal"
         };
         this.layers.set(id, layer);
         this.provider.requestInvalidate(opts.geoBox);
@@ -164,10 +122,9 @@ export class ProjectorOverlayManager {
     /**
      * Update one or more properties of an existing layer.
      *
-     * Changing `geoBox` recomputes the projector matrix in place (zero
-     * rebuild for unaffected uniforms) and refreshes tiles intersecting the
-     * union of the old and new bounds; other field changes refresh tiles
-     * intersecting the layer box.
+     * Changing `geoBox` refreshes tiles intersecting the union of the old
+     * and new bounds; other field changes refresh tiles intersecting the
+     * layer box.
      */
     updateLayer(id: number, partial: Partial<ProjectorLayerOptions>): boolean {
         const layer = this.layers.get(id);
@@ -177,9 +134,6 @@ export class ProjectorOverlayManager {
         if (partial.geoBox !== undefined) {
             const previousBox = layer.geoBox;
             (layer as { geoBox: GeoBox }).geoBox = partial.geoBox;
-            if (this.projection) {
-                layer.matrix.copy(this._computeMatrix(partial.geoBox));
-            }
             affected = unionGeoBox(previousBox, partial.geoBox);
         }
         if (partial.texture !== undefined && partial.texture !== layer.texture) {
@@ -226,120 +180,4 @@ export class ProjectorOverlayManager {
         this.provider.requestInvalidate();
     }
 
-    /**
-     * Push the current main-camera world position into {@link cameraPos}.
-     *
-     * flywave renders terrain in camera-relative space (RTE), so projector
-     * matrices — which are in absolute world space — need the camera position
-     * each frame to reconstruct absolute vertex coordinates inside the shader.
-     *
-     * Prefer {@link attachToMapView} for automatic updates.
-     */
-    updateCameraPos(pos: THREE.Vector3): void {
-        this.cameraPos.copy(pos);
-    }
-
-    /**
-     * Convenience wrapper: subscribe to `WillRender` and keep RTE correction
-     * in sync automatically. Called once by the owning TerrainSource during
-     * its `connect()` phase — user code does not normally need to call this.
-     */
-    attachToMapView(mapView: MapView): void {
-        mapView.addEventListener(MapViewEventNames.WillRender, () => {
-            this.updateCameraPos(mapView.camera.position);
-        });
-    }
-
-    /**
-     * Compute the orthographic projector matrix for a geographic region.
-     *
-     * The projector is an orthographic camera placed along the surface normal
-     * at the geoBox center, looking at the earth center. The decal texture's
-     * coverage is EXACTLY the geoBox when the frustum is derived as follows
-     * (the old implementation used world-axis |Δx|/|Δy| of the SW/NE corners
-     * plus a lookAt with an arbitrary up axis — at any latitude other than 0
-     * the projected box is rotated in world space, so that frustum had the
-     * wrong size, aspect AND rotation relative to the geoBox):
-     *
-     *   1. camera right axis = east direction of the box's center row
-     *      (project the midpoints of the west/east edges);
-     *   2. camera up axis    = orthonormalized north (cross of forward/right);
-     *   3. halfW/halfH       = max |corner − center| component along
-     *      right/up over ALL FOUR corners (exact enclosure, rotation-proof).
-     *
-     * Terrain elevation does not shift the sampled UV (ortho projection along
-     * the normal: UV depends only on the right/up components), so the decal's
-     * ground footprint equals the geoBox at any terrain height.
-     */
-    private _computeMatrix(geoBox: GeoBox): THREE.Matrix4 {
-        if (!this.projection) {
-            throw new Error(
-                "ProjectorOverlayManager: cannot compute projector matrix before projection is set (call setProjection after connect)."
-            );
-        }
-        const project = (lat: number, lon: number) =>
-            this.projection!.projectPoint(new GeoCoordinates(lat, lon), new THREE.Vector3());
-
-        const center = project(
-            (geoBox.southWest.latitude + geoBox.northEast.latitude) / 2,
-            (geoBox.southWest.longitude + geoBox.northEast.longitude) / 2
-        );
-        const corners = [
-            project(geoBox.southWest.latitude, geoBox.southWest.longitude),
-            project(geoBox.southWest.latitude, geoBox.northEast.longitude),
-            project(geoBox.northEast.latitude, geoBox.southWest.longitude),
-            project(geoBox.northEast.latitude, geoBox.northEast.longitude)
-        ];
-
-        // Camera basis on the tangent plane at the box center.
-        const forward = center.clone().normalize().negate(); // toward earth center
-        const east = project(
-            (geoBox.southWest.latitude + geoBox.northEast.latitude) / 2,
-            geoBox.northEast.longitude
-        ).sub(
-            project(
-                (geoBox.southWest.latitude + geoBox.northEast.latitude) / 2,
-                geoBox.southWest.longitude
-            )
-        );
-        const right = east.clone().sub(forward.clone().multiplyScalar(east.dot(forward))).normalize();
-        const up = new THREE.Vector3().crossVectors(forward, right).normalize().negate();
-
-        // Exact enclosure of all four corners in the camera's local frame.
-        let halfW = 0;
-        let halfH = 0;
-        for (const corner of corners) {
-            const d = corner.clone().sub(center);
-            halfW = Math.max(halfW, Math.abs(d.dot(right)));
-            halfH = Math.max(halfH, Math.abs(d.dot(up)));
-        }
-        if (halfW === 0 || halfH === 0) {
-            halfW = halfH = Math.max(halfW, halfH) || 1;
-        }
-
-        const dist = Math.max(halfW, halfH) * 2;
-
-        const cam = new THREE.OrthographicCamera(
-            -halfW,
-            halfW,
-            halfH,
-            -halfH,
-            0.1,
-            dist * 5
-        );
-        // Fixed orientation: camera looks along `forward` (toward the earth
-        // center), +x = right (east), +y = up (north). The camera is pulled
-        // back along the outward normal by `dist` so the surface (and the
-        // terrain below/above it) stays inside [near, far].
-        const lookAt = center.clone().add(forward);
-        cam.position.copy(center).addScaledVector(forward, -dist);
-        cam.up.copy(up);
-        cam.lookAt(lookAt);
-        cam.updateMatrixWorld();
-        cam.updateProjectionMatrix();
-
-        const m = new THREE.Matrix4();
-        m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-        return m;
-    }
 }

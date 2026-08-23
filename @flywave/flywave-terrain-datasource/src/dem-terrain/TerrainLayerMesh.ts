@@ -462,12 +462,6 @@ export class TerrainLayerMesh extends Mesh {
     public modifierOp: number = 0;
     public hasModifier: number = 0;
     public displacement: Vector3 = new Vector3();
-    // Projector overlay (world-space sampling): live references owned by
-    // ProjectorOverlayManager — mutated in place (matrix recomputed on
-    // geoBox change, cameraPos refreshed every frame), read at draw time via
-    // the material's onObjectUpdate uniforms.
-    public projectorMatrix?: THREE.Matrix4;
-    public projectorCameraPos?: THREE.Vector3;
 
     constructor(
         geometry: THREE.BufferGeometry,

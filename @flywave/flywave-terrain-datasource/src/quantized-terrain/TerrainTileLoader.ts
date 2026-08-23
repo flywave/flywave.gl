@@ -8,7 +8,7 @@ import { HeightMapTerrainMesh } from "../dem-terrain/DEMTileTerrainMesh";
 import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";
 import { type TerrainResourceTile } from "../TerrainSource";
 import { type WebTile } from "../WebImageryTileProvider";
-import { type ProjectorTileEntry, ProjectorState } from "../projector-overlay";
+import { type ProjectorTileEntry } from "../projector-overlay";
 import { type BaseQuantizedTerrainSource } from "./BaseQuantizedTerrainSource";
 import { QuantizedMesh } from "./quantized-mesh/QuantizedMesh";
 import { type QuantizedTerrainMesh } from "./quantized-mesh/QuantizedTerrainMesh";
@@ -352,7 +352,7 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
      * Collect the projector overlay layers intersecting this tile.
      *
      * Same source as the DEM path (ProjectorImageryProvider per-tile
-     * resources): entries carry the layer's live matrix/texture references.
+     * resources).
      */
     private collectProjectorEntries(): ProjectorTileEntry[] {
         const manager = this.dataSource.getProjectorOverlayManager();
@@ -362,39 +362,17 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
     }
 
     /**
-     * Attach projector layers to the intermediate (height-map) block via the
-     * legacy world-space matrix path — HeightMapTerrainMesh renders through
-     * DEMTileMeshMaterial, whose projectorState sampling was verified
-     * correct (the manager's projector matrices are the fixed
-     * exact-enclosure/east-north-aligned versions).
-     */
-    private setupIntermediateProjector(mesh: HeightMapTerrainMesh): void {
-        const manager = this.dataSource.getProjectorOverlayManager();
-        const entries = this.collectProjectorEntries();
-        if (entries.length === 0) return;
-
-        const state = new ProjectorState();
-        entries.forEach((entry, i) => {
-            state.textures[i] = entry.texture;
-            state.matrices[i] = entry.matrix; // live ref — manager mutates in place
-            state.opacities[i] = entry.opacity;
-        });
-        state.count = entries.length;
-        // ⚠️ RISK: live-reference hack — ProjectorState.cameraPos is declared
-        // readonly, but a snapshot copy would miss the manager's per-frame
-        // RTE refresh and decals would drift when the camera moves. Runtime
-        // reassignment of the property keeps the shader reading the live
-        // manager.cameraPos.
-        (state as any).cameraPos = manager.cameraPos;
-        (mesh as any).projectorState = state;
-    }
-
-    /**
      * Implementation of tile mesh loading for terrain data
      *
      * This method loads and configures the mesh objects for quantized terrain
      * data, including setting up imagery textures and overlay textures. It
      * handles both exact data loading and intermediate block creation.
+     *
+     * NOTE: intermediate (height-map fallback) blocks do NOT carry projector
+     * decals — the legacy world-space projector-matrix machinery was removed
+     * (it depth-conflicted with the base surface); decals only render on
+     * exact quantized meshes. Intermediate blocks are transient fallbacks, so
+     * decals pop back once the exact mesh loads.
      */
     loadTileMeshImpl() {
         this.tile.clear();
@@ -432,7 +410,6 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                     },
                     quantizedDataResource
                 );
-                this.setupIntermediateProjector(block);
                 this.tile.objects.push(block);
             } else {
                 if (!quantizedDataResource?.resource) return;

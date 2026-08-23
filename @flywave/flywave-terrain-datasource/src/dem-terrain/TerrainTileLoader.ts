@@ -40,9 +40,6 @@ interface TargetLayer {
     uvTransform?: THREE.Vector4;
     opacity?: number;
     blending?: THREE.Blending;
-    /** Projector world-space sampling (live refs, mutated in place). */
-    projectorMatrix?: THREE.Matrix4;
-    projectorCameraPos?: THREE.Vector3;
 }
 
 /**
@@ -280,9 +277,7 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         }
 
         // Imagery overlays AND projector layers share the imagery-mode
-        // (tile-UV × uvTransform) color graph. The world-space matrix mode
-        // stays available in DEMTileOverlayMaterial (constructor flag) for
-        // A/B comparison against the verified-correct matrix rendering.
+        // (tile-UV × uvTransform) color graph.
         const material = new DEMTileOverlayMaterial(
             target.blending !== undefined ? { blending: target.blending } : undefined
         );
@@ -302,12 +297,6 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         if (target.opacity !== undefined) {
             mesh.setLayerOpacity(target.opacity);
         }
-        if (target.projectorMatrix) {
-            mesh.projectorMatrix = target.projectorMatrix;
-        }
-        if (target.projectorCameraPos) {
-            mesh.projectorCameraPos = target.projectorCameraPos;
-        }
         return mesh;
     }
 
@@ -325,14 +314,6 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         }
         if (target.opacity !== undefined) {
             mesh.setLayerOpacity(target.opacity);
-        }
-        // Live refs — cheap to reassign every update; the manager mutates
-        // them in place (matrix on geoBox change, cameraPos every frame).
-        if (target.projectorMatrix) {
-            mesh.projectorMatrix = target.projectorMatrix;
-        }
-        if (target.projectorCameraPos) {
-            mesh.projectorCameraPos = target.projectorCameraPos;
         }
         const material = mesh.material as DEMTileOverlayMaterial;
         if (target.blending !== undefined && material.blending !== target.blending) {

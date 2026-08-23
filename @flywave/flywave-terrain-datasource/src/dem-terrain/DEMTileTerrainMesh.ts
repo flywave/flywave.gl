@@ -17,7 +17,6 @@ import {
 import * as THREE from "three/webgpu";
 
 import { type HeightMapModifierManager } from "../ground-modification-manager";
-import { type ProjectorState } from "../projector-overlay";
 import { type WebTile } from "../WebImageryTileProvider";
 import {
     emptyTexture as matEmptyTexture,
@@ -88,7 +87,6 @@ export class HeightMapTerrainMesh extends Mesh {
      * mutations (add / remove / update) and per-frame RTE camera-position
      * refreshes propagate to every tile automatically.
      */
-    public projectorState?: ProjectorState = undefined;
 
     // --- Internal state ---
     private m_uPatchPos: Matrix4 = new Matrix4();

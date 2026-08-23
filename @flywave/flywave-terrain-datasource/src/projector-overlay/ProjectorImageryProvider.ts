@@ -24,7 +24,6 @@ export interface ProjectorTileEntry {
     /** The layer's geographic extent — used to derive the tile-UV transform. */
     readonly geoBox: GeoBox;
     readonly texture: THREE.Texture;
-    readonly matrix: THREE.Matrix4;
     opacity: number;
     blendMode: ProjectorBlendMode;
 }
@@ -109,7 +108,6 @@ export class ProjectorImageryProvider extends ResourceProvider<
                 layerId: layer.id,
                 geoBox: layer.geoBox,
                 texture: layer.texture,
-                matrix: layer.matrix,
                 opacity: layer.opacity,
                 blendMode: layer.blendMode
             });

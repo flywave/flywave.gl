@@ -496,10 +496,7 @@ export abstract class TerrainSource<
         this.m_groundModificationManager = new HeightMapModifierManager();
 
         // Per-source projector overlay manager. Created eagerly so callers
-        // can add layers before connect(); the projection is bound lazily
-        // during connect() (via setProjection) once this.projection is
-        // available, at which point any pre-existing layers get their
-        // projector matrices computed.
+        // can add layers before connect().
         this.m_projectorOverlayManager = new ProjectorOverlayManager();
 
         this.m_projectionSwitchController = new ProjectionSwitchController(
@@ -798,12 +795,8 @@ export abstract class TerrainSource<
         // Setup ground modification sync after decoder is connected
         await this.setupGroundModificationSync();
         // Register the projector provider with this source so its per-tile
-        // resources enter the same pipeline as web imagery, then bind the
-        // projection (computes matrices for any layers added before connect)
-        // and wire per-frame RTE correction to the MapView.
+        // resources enter the same pipeline as web imagery.
         await this.m_projectorOverlayManager.provider.register(this);
-        this.m_projectorOverlayManager.setProjection(this.projection);
-        this.m_projectorOverlayManager.attachToMapView(this.mapView);
     }
 
     /**

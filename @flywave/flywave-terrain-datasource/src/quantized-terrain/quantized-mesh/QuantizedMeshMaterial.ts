@@ -5,7 +5,8 @@ import * as THREE from "three/webgpu";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { Fn, float, mix as tslMix, select, texture, uniform, uv as uvNode, attribute, vec2, vec4 } from "three/tsl";
 
-import { MAX_PROJECTOR_LAYERS } from "../../projector-overlay";
+/** Projector decal slots per material — fixed, the TSL loop unrolls it. */
+const MAX_PROJECTOR_LAYERS = 8;
 
 
 function dummyTex(): THREE.DataTexture {
