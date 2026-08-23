@@ -3545,3 +3545,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **路 B 结构性缺陷（代码分析定案）**：quad 直绘无深度（§218）→ 无法区分内容行/空隙行——激活 MB_RASTER_MGL_FOG 后内容像素 = chunk(mgl) + quad(s 表) **双重雾**（§216 实测 basic 19493 的机制即此）；quad 若也切 mgl 公式（§217 三量纲同切）双重依旧（两次 mgl ≠ 一次 mgl）。mgl 语义 = 内容行仅瓦片雾、空隙行仅背景瓦片雾——**需要每像素"有无内容"信息**，直绘通道不存在该信息。
 - **两条路的终态**：路 A（场景化）= 引擎 composing/Pass 链封锁（§220）；路 B（直绘+标定）= 结构性双重雾（本节）。**闭环的真正前提是引擎级改动**：① quad 作为 pass 链中的一个 Pass（在内容渲染后、合成前，深度可用）；或 ② 内容雾与背景雾的统一在 pass 内合成（引擎集成 mgl fog 语义）。datasource 层的战役在此告一段落——基建（mgl 公式/仿射/探针/钩子）与全部证据链就绪，待引擎接口。
 - **会话终态**：color 族 PASS / raster 32478 / basic 6504 / equal-range 6810 / inverted 37490 基线恒定，工作树=提交态。
+
+**§222. 深度之谜终局——composer 旁路发现 + z=0.5 探针阴性，深度失效机制需 WebGL 状态级调试（2026-08-24 一百一十一，零净变化）**：
+
+- **§218 修正**：引擎在**无效果时旁路 composer**（MapRenderingManager.render 直绘 `renderer.render(scene, camera)`）且全局 `autoClear=false`——多数测试走直绘路径，深度缓冲理论上应存在且保留。§218 的"后处理链合成无深度"仅适用于效果启用场景。
+- **z=0.5 二分探针阴性**：quad 深度改 0.5（近内容应遮挡）——raster 32478 逐位不变 → **深度在 AfterRender 直绘下依然失效**（即使直绘路径 + autoClear=false + material depthTest:true）。候选机制：文本渲染器的 RT 绑定泄漏、canvas 深度附着在二次 render 下的行为、three 状态机——需浏览器 WebGL 状态级调试（捕获 bindFramebuffer/glDepthFunc），超出源码考古。
+- **终局**：raster/culling 两域的闭环均落在引擎渲染状态机调查上（§221/§222 双记档）；datasource 层弹药（探针矩阵/公式链/钩子/三配置对照）全部就绪。基线恒定（color PASS / raster 32478 / basic 6504），工作树=提交态。
