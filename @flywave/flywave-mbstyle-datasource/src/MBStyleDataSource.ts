@@ -697,6 +697,8 @@ export class MBStyleDataSource extends TileDataSource {
     private m_shadowRenderer: any = null;
     /** Background fog gradient (mgl draw_background fog parity). */
     private m_backgroundFogRenderer: any = null;
+    /** mgl atmosphere glow screen-space quad (pitch > 76). */
+    private m_atmosphereRenderer: any = null;
     /** Set when loadModels() (async GLTF placement path) has finished. */
     private m_modelsLoaded = false;
     private m_additiveLineRenderer: any = null;
@@ -1229,6 +1231,16 @@ export class MBStyleDataSource extends TileDataSource {
                 );
             } catch {}
 
+            // mgl atmosphere glow as a screen-space quad (pitch > 76 where
+            // the engine's object filtering drops the legacy dome, §182b).
+            try {
+                const { MBAtmosphereRenderer } = await import('./MBAtmosphereRenderer');
+                const env1 = self.m_environment;
+                self.m_atmosphereRenderer = new MBAtmosphereRenderer(
+                    this.mapView,
+                    () => env1?.atmosphereState ?? null,
+                );
+            } catch {}
 
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
@@ -1244,6 +1256,9 @@ export class MBStyleDataSource extends TileDataSource {
                     self.m_modelRenderer.run();
                 }
 
+                if (self.m_atmosphereRenderer) {
+                    self.m_atmosphereRenderer.run();
+                }
                 if (self.m_backgroundFogRenderer) {
                     self.m_backgroundFogRenderer.run();
                 }

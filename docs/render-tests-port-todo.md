@@ -3299,3 +3299,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实施（已回退）**：`MBAtmosphereRenderer`——mgl `atmosphere.{vertex,fragment}` 逐行移植（frustum 四角射线双线性插值 + u_horizon 地平线插值 + 三色 stop + `t=exp(−(angle/π)/fadeout)` + 地平线下 discard 保护内容 + sRGB 编码），AfterRender 直绘通道（§180 已证可靠），gate pitch>76 与 dome（≤70）/背景雾（60-76）互补。
 - **实测**：quad 确实上屏（basic 22976→64288，整屏被 (122,255,255) 平色覆盖）——**discard 从未触发且输出恒色**：调试输出显示 ray.z/horizonDir.z 编码值乱序饱和、uHorizon 通道恒 0——**uniform/varying 到 shader 的映射链未通**（候选：材质 uniform 更新时序、PlaneGeometry uv 朝向、或与背景雾 quad 共用通道的状态互扰）。pitch-80 族捕获管线已恢复可靠（本轮又清理 2 个 ENOSPC 损坏 JSON——**损坏 JSON 会随批测再生，runner 需启动前清点**，§174 方法论再证实）。
 - **回退**：三文件逐字节复原，basic 22976 基线复核 ✓。**下轮入口**：① 最小化复现（空场景 + quad 单独渲染打 uniform 值断言）；② 或排查 three ShaderMaterial 在该 AfterRender 通道的 uniform 刷新时序（renderer.render 每帧重设 uniforms？）；③ dump server 启动前自动清点空/损坏 JSON（工程小、回报稳定）。
+
+**§184. atmosphere quad 最小化复现破案——clientHeight NaN 中毒 + 落地（2026-08-23 七十四，保留）**：
+
+- **最小化复现（映射诊断输出 a_uv/uHorizon）**：几何/varying 映射**完全正确**（u/v 逐像素线性 ✓），唯一断链 = **B 通道 uHorizon=0** → JS 侧 ground truth 断言：`canvas.clientHeight` 为 **0 而非 null**（离屏 canvas），`??` 回退不生效 → height=0 → uHorizon=NaN → 全部派生 uniform 中毒（§183"恒色覆盖/discard 失效"的完整解释）。改 `||` 真值回退后：**discard 正常（影像区保护 ✓）、天空渐变上屏**。dome 的 onBeforeRender 同款 `??` bug 一并修复。
+- **落地（保留）**：`MBAtmosphereRenderer` 干净版（mgl atmosphere 语义 + §180 直绘通道 + corner 射线 extractRotation 稳健化），gate pitch>76；env `atmosphereState` getter + datasource 接线。
+- **验收**：pitch-80 族一致小幅改善——basic 22976→22642、equal-range 23282→22948、inverted −321、default 1397（噪声带）；回归面零变化（fill-color 422/raster 32478/color 族 PASS+72509 恒定）。**天空已存在但过白**（期望 y0 深蓝 #367ab9 vs 我方 (168,255,255)）——shader 内 t 值近 1 异常（JS 侧 uniform 断言全对：uHorizon 0.262/fadeout 0.0255/角 z +0.14/−0.45），**下轮入口：shader 内 t/dot 中间量 GLSL 级调试**（候选：normalize 后 mix 的透视正确性——mgl 顶点插值 vs 我方片元混合在广角下不等价）。

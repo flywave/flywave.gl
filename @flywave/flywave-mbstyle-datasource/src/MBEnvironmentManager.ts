@@ -144,6 +144,29 @@ export class MBEnvironmentManager {
         };
     }
     private m_bgFogParams: { r0: number; r1: number; shift: number; distCam: number } | null = null;
+
+    /**
+     * Atmosphere glow state for the screen-space quad renderer (mgl
+     * draw_atmosphere: fog color + raw property alpha, high/space colors,
+     * horizon-blend mapped to [0.0005, 0.25]).
+     */
+    get atmosphereState(): {
+        fogColor: THREE.Color;
+        fogAlpha: number;
+        highColor: THREE.Color;
+        spaceColor: THREE.Color;
+        fadeout: number;
+    } | null {
+        const st = this.m_fogState;
+        if (!st) return null;
+        return {
+            fogColor: st.color,
+            fogAlpha: st.colorAlpha,
+            highColor: st.highColor,
+            spaceColor: st.spaceColor,
+            fadeout: st.horizonBlend,
+        };
+    }
     private m_skyMesh: THREE.Mesh | null = null;
     private m_stars: THREE.Points | null = null;
     private m_scene: THREE.Scene | null = null;
@@ -1004,7 +1027,7 @@ export class MBEnvironmentManager {
                 const cam = (this.m_mapView as any)?.camera as THREE.PerspectiveCamera | undefined;
                 if (!cam) return;
                 const canvasEl = (this.m_mapView as any).canvas;
-                const height = canvasEl?.clientHeight ?? canvasEl?.height ?? 256;
+                const height = canvasEl?.clientHeight || canvasEl?.height || 256;
                 const fovRad = (cam.fov ?? 36.87) * Math.PI / 180;
                 // MapView exposes the mgl pitch as `tilt` (there is no
                 // `pitch` property — the old `?? 60` fallback silently pinned
