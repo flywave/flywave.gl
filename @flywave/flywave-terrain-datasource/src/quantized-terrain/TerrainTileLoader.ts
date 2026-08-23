@@ -2,7 +2,7 @@
 
 import { type GeoBox, type TilingScheme, ProjectionType, TileKey } from "@flywave/flywave-geoutils";
 import { type MapView, type Tile, TextElement } from "@flywave/flywave-mapview";
-import { type BufferGeometry, type Material, Color, Object3D, Vector3 } from "three/webgpu";
+import { type BufferGeometry, type Material, Color, Mesh, Object3D, Vector3 } from "three/webgpu";
 
 import { HeightMapTerrainMesh } from "../dem-terrain/DEMTileTerrainMesh";
 import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";
@@ -10,7 +10,9 @@ import { type TerrainResourceTile } from "../TerrainSource";
 import { type WebTile } from "../WebImageryTileProvider";
 import { type ProjectorTileEntry } from "../projector-overlay";
 import { type BaseQuantizedTerrainSource } from "./BaseQuantizedTerrainSource";
-import { QuantizedMesh } from "./quantized-mesh/QuantizedMesh";
+import { QuantizedMesh, computeDecalUvTransform } from "./quantized-mesh/QuantizedMesh";
+import { QuantizedDecalMaterial } from "./quantized-mesh/QuantizedMeshMaterial";
+import { projectorBlending } from "../projector-overlay";
 import { type QuantizedTerrainMesh } from "./quantized-mesh/QuantizedTerrainMesh";
 import { QuantizedStratumMesh } from "./quantized-stratum-mesh/QuantizedStratumMesh";
 import { type QuantizedStratumResource } from "./quantized-stratum-mesh/QuantizedStratumResource";
@@ -362,17 +364,52 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
     }
 
     /**
+     * Attach one decal MESH per projector layer as a child of the terrain
+     * mesh — the layer×mesh architecture used by the DEM path: shared tile
+     * geometry (bit-identical depth), per-layer material instance with
+     * per-material texture/transform/opacity nodes set once at creation.
+     */
+    private attachDecalMeshes(
+        terrainMesh: Object3D & { geometry: BufferGeometry },
+        selfGeoBox: GeoBox
+    ): void {
+        const entries = this.collectProjectorEntries();
+        if (entries.length === 0) return;
+        const scheme =
+            this.dataSource.getProjectorOverlayManager().provider.tilingScheme;
+
+        for (const entry of entries) {
+            const transform = computeDecalUvTransform(selfGeoBox, entry.geoBox, scheme);
+            if (transform === false) continue;
+            // Same flipY convention as the DEM projector path; NEVER set
+            // needsUpdate here (hot path — re-uploads every tile rebuild).
+            entry.texture.flipY = true;
+
+            const material = new QuantizedDecalMaterial({
+                blending: projectorBlending(entry.blendMode)
+            });
+            material.decalTexNode.value = entry.texture;
+            material.uvTexTransform.value.copy(transform);
+            material.opacityUniform.value = entry.opacity;
+
+            const decal = new Mesh(terrainMesh.geometry, material);
+            decal.castShadow = false;
+            decal.receiveShadow = false;
+            decal.frustumCulled = false;
+            decal.raycast = () => {};
+            terrainMesh.add(decal);
+        }
+    }
+
+    /**
      * Implementation of tile mesh loading for terrain data
      *
      * This method loads and configures the mesh objects for quantized terrain
      * data, including setting up imagery textures and overlay textures. It
      * handles both exact data loading and intermediate block creation.
      *
-     * NOTE: intermediate (height-map fallback) blocks do NOT carry projector
-     * decals — the legacy world-space projector-matrix machinery was removed
-     * (it depth-conflicted with the base surface); decals only render on
-     * exact quantized meshes. Intermediate blocks are transient fallbacks, so
-     * decals pop back once the exact mesh loads.
+     * Projector decals render as per-layer decal meshes on BOTH paths (exact
+     * quantized meshes and height-map intermediate blocks).
      */
     loadTileMeshImpl() {
         this.tile.clear();
@@ -389,8 +426,6 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
         ) {
             needDemDraw = true;
         }
-
-        const projectorEntries = this.collectProjectorEntries();
 
         this.dataSource.getWebTileDataSources().forEach(webTiles => {
             const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
@@ -410,6 +445,7 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                     },
                     quantizedDataResource
                 );
+                this.attachDecalMeshes(block, this.tile.geoBox);
                 this.tile.objects.push(block);
             } else {
                 if (!quantizedDataResource?.resource) return;
@@ -424,25 +460,19 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                     },
                     this.dataSource.mapView
                 );
-                // Projector decals: UV-transform sampling with the signed
-                // offset (see QuantizedMesh.setupProjectorTextures).
-                if (projectorEntries.length > 0) {
-                    const inner = mesh.children[0] as any;
-                    if (inner?.setupProjectorTextures) {
-                        inner.setupProjectorTextures(
-                            projectorEntries,
-                            this.dataSource.getProjectorOverlayManager().provider.tilingScheme,
-                            this.dataSource.getTilingScheme()
-                        );
-                    }
-                }
+                // Per-layer decal meshes (layer×mesh, same as the DEM path).
+                const inner = mesh.children[0] as QuantizedMesh;
+                this.attachDecalMeshes(inner, inner.geoBox);
                 this.tile.objects.push(mesh);
             }
         });
 
         // Projector-only tiles (no web imagery provider produced an object):
         // still render the quantized mesh so decals have a surface.
-        if (projectorEntries.length > 0 && this.tile.objects.length === 0) {
+        if (
+            this.collectProjectorEntries().length > 0 &&
+            this.tile.objects.length === 0
+        ) {
             if (quantizedDataResource?.resource) {
                 const mesh = TileObjectMesh.makeMapViewQuantizedMesh(
                     {
@@ -455,14 +485,8 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                     },
                     this.dataSource.mapView
                 );
-                const inner = mesh.children[0] as any;
-                if (inner?.setupProjectorTextures) {
-                    inner.setupProjectorTextures(
-                        projectorEntries,
-                        this.dataSource.getProjectorOverlayManager().provider.tilingScheme,
-                        this.dataSource.getTilingScheme()
-                    );
-                }
+                const inner = mesh.children[0] as QuantizedMesh;
+                this.attachDecalMeshes(inner, inner.geoBox);
                 this.tile.objects.push(mesh);
             }
         }

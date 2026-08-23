@@ -2,11 +2,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import * as THREE from "three/webgpu";
-import { MeshStandardNodeMaterial } from "three/webgpu";
+import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 import { Fn, float, mix as tslMix, select, texture, uniform, uv as uvNode, attribute, vec2, vec4 } from "three/tsl";
-
-/** Projector decal slots per material — fixed, the TSL loop unrolls it. */
-const MAX_PROJECTOR_LAYERS = 8;
 
 
 function dummyTex(): THREE.DataTexture {
@@ -77,40 +74,6 @@ const _imageryTransform = [
 
 const _imageryCount = uniform(0).onObjectUpdate(({ object }) => object.imageryCount);
 
-// --- Projector overlay decals (alpha-blended over imagery) ---
-// Per-mesh data lives as plain array properties on the mesh (QuantizedMesh
-// .setupProjectorTextures); resolved per draw via onObjectUpdate, same
-// pattern as the imagery slots. Sampling rides the SAME tile-UV × transform
-// mapping as imagery — the transforms are computed on the CPU with the
-// SIGNED y offset (see QuantizedMesh.computeProjectorUvTransform), which is
-// the formula verified on the DEM path for arbitrary (multi-tile) geoBoxes.
-//
-// ⚠️ RISK (untested on this material): projector textures are user-created
-// canvas/image textures, NOT worker ImageBitmaps like the imagery slots.
-// The DEM path's "white decal" bug showed canvas textures can behave
-// differently through shared-node clone sampling (flipY is upload-time for
-// canvas but shader-side for ImageBitmap). If decals render white/mirrored
-// here, re-run the DEM calibration procedure (multi-tile geoBox + corner
-// pillars) before touching the transform math.
-const _projTex = Array.from({ length: MAX_PROJECTOR_LAYERS }, () => texture(emptyTexture));
-_projTex.forEach((node, i) => {
-    node.onObjectUpdate(({ object }) => object.projectorTextures?.[i] ?? emptyTexture);
-});
-
-const _projTransform = Array.from({ length: MAX_PROJECTOR_LAYERS }, () =>
-    uniform(new THREE.Vector4())
-);
-_projTransform.forEach((node, i) => {
-    node.onObjectUpdate(({ object }) => object.projectorTransforms?.[i] ?? node.value);
-});
-
-const _projOpacity = Array.from({ length: MAX_PROJECTOR_LAYERS }, () => uniform(0));
-_projOpacity.forEach((node, i) => {
-    node.onObjectUpdate(({ object }) => object.projectorOpacities?.[i] ?? 0);
-});
-
-const _projCount = uniform(0).onObjectUpdate(({ object }) => object.projectorCount ?? 0);
-
 const _waterMaskTex = texture(emptyTexture);
 _waterMaskTex.onObjectUpdate(({ object }) => object.waterMaskTexture ?? emptyTexture);
 
@@ -151,29 +114,6 @@ function buildNodes() {
                 .and(tUv.y.lessThanEqual(float(1.001)));
             const patchColor = texture(_imageryTex[i], tUv);
             color.assign(select(inRange.and(float(i).lessThan(_imageryCount)), patchColor, color));
-        }
-
-        // Projector decals: alpha-blend each layer over the imagery result
-        // (NOT select — decals must blend, e.g. checker at opacity 0.9).
-        // Frustum gate is [0,1] on the decal UV — coverage is exactly the
-        // layer's geoBox.
-        for (let i = 0; i < MAX_PROJECTOR_LAYERS; i++) {
-            const tUv = vec2(
-                mapUv.x.mul(_projTransform[i].x).add(_projTransform[i].z),
-                mapUv.y.mul(_projTransform[i].y).add(_projTransform[i].w)
-            );
-            const inRange = tUv.x
-                .greaterThanEqual(float(0.0))
-                .and(tUv.x.lessThanEqual(float(1.0)))
-                .and(tUv.y.greaterThanEqual(float(0.0)))
-                .and(tUv.y.lessThanEqual(float(1.0)));
-            const projColor = texture(_projTex[i], tUv);
-            const layerAlpha = projColor.a.mul(_projOpacity[i]);
-            const active = inRange
-                .and(float(i).lessThan(_projCount))
-                .and(layerAlpha.greaterThan(0.001));
-            const blended = tslMix(color, vec4(projColor.rgb, color.a), layerAlpha);
-            color.assign(select(active, blended, color));
         }
 
         return tslMix(color, vec4(1.0), float(0.1));
@@ -218,3 +158,55 @@ const defaultQuantizedMeshMaterial = new QuantizedMeshMaterial({
 }).markSharedSingleton();
 
 export { emptyTexture, emptyTransparentTex, emptyImageryTextures, defaultQuantizedMeshMaterial };
+
+// ---------------------------------------------------------------------------
+// Projector decal material — one MESH (and one material instance) per layer
+// per tile, mirroring the DEM layer×mesh pipeline. The decal mesh shares the
+// quantized tile geometry (worker geometry carries uv + webMercatorY), so its
+// depth is bit-identical to the base surface (depthWrite off, no z-fighting).
+//
+// The decal TEXTURE and the tile-UV transform are PER-MATERIAL nodes set once
+// at creation (quantized tiles rebuild their objects on every load — no
+// in-place updates needed). The colorNode is a PLAIN expression (no Fn
+// wrapper): every instance generates byte-identical WGSL → one shared
+// pipeline (per-material Fn colorNodes caused a recompile per tile — DEM
+// path lesson). Transform math: SIGNED south-anchor offset, see
+// computeDecalUvTransform in QuantizedMesh.ts.
+// ---------------------------------------------------------------------------
+export class QuantizedDecalMaterial extends MeshBasicNodeMaterial {
+    /** Decal texture node; value is set once at creation. */
+    public decalTexNode: any;
+    /** Tile-UV → decal-UV transform (x/y = scale, z/w = offset). */
+    public uvTexTransform: any;
+    /** Layer opacity. */
+    public opacityUniform: any;
+
+    constructor(parameters?: THREE.MeshBasicMaterialParameters) {
+        super({
+            wireframe: false,
+            transparent: true,
+            blending: THREE.NormalBlending,
+            ...parameters
+        });
+        this.depthWrite = false;
+
+        this.uvTexTransform = uniform(new THREE.Vector4(1, 1, 0, 0));
+        this.opacityUniform = uniform(1);
+
+        const texUv = uvNode();
+        const webMercatorY = attribute("webMercatorY", "float");
+        const tUv = vec2(
+            texUv.x.mul(this.uvTexTransform.x).add(this.uvTexTransform.z),
+            webMercatorY.mul(this.uvTexTransform.y).add(this.uvTexTransform.w)
+        );
+        const inRange = tUv.x
+            .greaterThanEqual(float(0))
+            .and(tUv.x.lessThanEqual(float(1)))
+            .and(tUv.y.greaterThanEqual(float(0)))
+            .and(tUv.y.lessThanEqual(float(1)));
+        const gate = select(inRange, float(1), float(0));
+        this.decalTexNode = texture(emptyTransparentTex, tUv);
+        const a = this.decalTexNode.a.mul(this.opacityUniform).mul(gate);
+        this.colorNode = vec4(this.decalTexNode.rgb.mul(this.opacityUniform), a).toVar();
+    }
+}
