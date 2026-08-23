@@ -3093,3 +3093,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **alpha 合成修正后的精化取证**：12067px 失配（此前 13654 为 RGB 误读）——样本点 cur 有渐变色而 exp **纯白**：失配主导是**线覆盖区域错位**（cur 的线覆盖了期望为空的区域——路径/几何级），非纯 taper 边缘带。§91 的"taper 边缘带数 px 偏差"定性偏轻：实际含**线覆盖域差**（路径重投影或瓦片间几何缝合级）。收敛入口：两瓦片接缝处的线几何 worldPos 对照 dump（emitter 的 ribbon 顶点 vs mgl 的 tile 内几何）。
 - **会话状态**：52+ 阶段全部提交；工作树干净；gradient-vector-tile 精化定性记档为本轮收尾。
+
+**143. gradient-vector-tile 覆盖域精测（2026-08-23 三十三，零净变化）**：
+
+- **逐行覆盖剖面（alpha 合成后）**：cur 在 y=0、60-70、90-110、140 等行有内容而 exp 为空——**exp 的两条楔形线之间存在真正的空带**（y0 附近、60-110 中段、140 尾部），我们的对应区域被线覆盖。结合 §94（lineClips 逐瓦片 progress 锚定已修）与楔形宽度 30m→0.5m 的 taper：exp 空带 = **mgl 的线在低 progress 端宽度 30m、高 progress 端 0.5m，两条线在视口中只占部分行带**；cur 全行覆盖说明我们的 taper 起点宽度过大或 progress→宽度的映射整体偏移（30m×sec(lat)≈38m 世界 vs mgl 30m 直接？**sec(lat) 在 line-width-unit meters 的 line-progress 变宽路径可能双重施加**——§92 的 secLat 加在 halfOf，而 gradient-vector-tile 的 worldPts 已是 mercator 单位）。
+- **下轮入口**：二分验证——halfOf 的 secLat 在本 fixture 关闭后失配变化（一行实验）；若大幅降则收窄为"secLat 只应施加于固定宽路径"。
