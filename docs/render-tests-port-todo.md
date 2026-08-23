@@ -3677,3 +3677,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地（保留）**：atmoQuad 的 contentStandDown 分支改为平雾色天空——uniforms 经正常路径设置（§241 首版 flat 因 stale 角射线/uHorizon 致 discard 失效全屏蓝，修复）；三色 stop = mix(clearColor, fogColor, α²)（sRGB），fadeout→∞ 强制 t≈1。
 - **验收**：**culling 四例净 −22482**（close 17524→9652、mid 9797→1925、opacity 25082→17594、far 5252→6002 微幅）；**geojson 全族零回归**（line/fill-color/line-gradient/heatmap/hillshade/fill-extrusion/high-color 全 PASS/恒定 ✓，symbols 双态带内）；far 残余 = 地平线位置偏移（§189 相机 horizon-shift 专项，sky 区下边界差 ~30px）。
 - **会话终态**：工作树=提交态（62 commits）。§232 新域（globe/terrain/switch-style）未及。
+
+**§243. far 6002 残差分解终局——非 sky 地平线偏移，而是地面雾边界 30px 差（kFog 标定域）（2026-08-24 一百三十一，零净变化记档）**：
+
+- **代码分析**：far 的 mgl 地平线在 row≈4（512 高/fov36.87/pitch70 下 h/2−0.9h≈4.4px）——几乎全屏在地面；期望 rows 0-55 蓝为**满雾瓦片**、70+ 米色为未雾近瓦片。我方蓝到 ~100 = **注入瓦片的引擎雾边界比 mgl 晚 30px**（kFog=3.7 的启发式 distCam 与 mgl fog 矩阵在远距的映射差）——非 sky quad 问题（其边界同样在 row≈4）。§189 horizon-shift 嫌疑排除，归入 **§215/§216 的 per-content 雾映射战役**（mgl 原生公式对注入 background 瓦片启用 + 三量纲同切即可，与 raster 同解）。
+- **会话真极限**（~5.5h/293M tokens，62 commits）。§232 新域（globe/terrain/switch-style）未及，维持断点清单。
