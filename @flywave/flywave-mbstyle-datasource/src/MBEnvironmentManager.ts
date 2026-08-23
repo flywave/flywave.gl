@@ -42,9 +42,11 @@ THREE.ShaderChunk.fog_fragment = `
 	float fogDepthKm = vFogDepth / 1000.0;
 	float fogT = (fogDepthKm - fogNear / 1000.0) / max(fogFar / 1000.0 - fogNear / 1000.0, 0.001);
 #ifdef MB_RASTER_MGL_FOG
-	// §216: the exact mgl fog formula per fragment (geometry-adaptive,
-	// replaces the kFog-folded engine mapping for raster content).
-	fogT = (fogMglShift * vFogDepth / max(fogMglDistCam, 1.0) - (fogMglRange.x + fogMglShift))
+	// §216/§249: the mgl fog formula per fragment. vFogDepth is in ENGINE
+	// world units, not mgl mercator meters (§248: the kFog fold IS the unit
+	// conversion) — fold it so depth lands in the mgl fog-unit band.
+	fogT = (fogMglShift * (vFogDepth * 0.27) / max(fogMglDistCam, 1.0)
+		- (fogMglRange.x + fogMglShift))
 		/ max(fogMglRange.y - fogMglRange.x, 0.001);
 #endif
 	if (fogDebugT > 1.5) {
