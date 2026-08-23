@@ -110,6 +110,35 @@ export class MBEnvironmentManager {
     private m_shadowIntensity = 0;
     private m_hemisphereLight: THREE.HemisphereLight | null = null;
     private m_fog: THREE.Fog | null = null;
+
+    /**
+     * Live fog state for the background-fog gradient renderer (mgl fogs the
+     * background like ground content — ray ∩ ground-plane distance).
+     */
+    get backgroundFogState(): {
+        enabled: boolean;
+        color: THREE.Color;
+        alpha: number;
+        /** mgl NORMALIZED fog depth params: T = smoothstep(r0, r1,
+         *  shift·distFwd/distCam) — the raw fog range over the
+         * forward-axis distance (fit-verified on fog/color, §180). */
+        r0: number;
+        r1: number;
+        shift: number;
+        distCam: number;
+    } | null {
+        if (!this.m_fog || !this.m_fogState || this.m_bgFogParams == null) return null;
+        return {
+            enabled: true,
+            color: this.m_fog.color,
+            alpha: this.m_fogState.alpha,
+            r0: this.m_bgFogParams.r0,
+            r1: this.m_bgFogParams.r1,
+            shift: this.m_bgFogParams.shift,
+            distCam: this.m_bgFogParams.distCam,
+        };
+    }
+    private m_bgFogParams: { r0: number; r1: number; shift: number; distCam: number } | null = null;
     private m_skyMesh: THREE.Mesh | null = null;
     private m_stars: THREE.Points | null = null;
     private m_scene: THREE.Scene | null = null;
@@ -620,6 +649,8 @@ export class MBEnvironmentManager {
             const kFog = 3.7;
             nearM = distCam * kFog * (rawRange[0] + shift) / shift;
             farM = distCam * kFog * (rawRange[1] + shift) / shift;
+            // Normalized (mgl-unit) params for the background gradient.
+            this.m_bgFogParams = { r0: rawRange[0], r1: rawRange[1], shift, distCam };
         }
         const evalThemed = (value: any, fallback: any, useThemeKey: string): any => {
             const v = evalZoom(value, fallback);
@@ -945,6 +976,12 @@ export class MBEnvironmentManager {
                         // Fold that in here so the dome is self-contained and
                         // does not depend on the canvas clear color.
                         vec3 col = mix(uSpaceColor, c2, t);
+                        // The uniforms carry LINEAR colors (THREE.Color working
+                        // space); this ShaderMaterial writes gl_FragColor raw,
+                        // so encode to sRGB or the dome renders linear² (fog
+                        // red (255,30,35) came out (255,3,4), §180).
+                        col = mix(col * 12.92, pow(col, vec3(1.0 / 2.4)) * 1.055 - 0.055,
+                            vec3(lessThanEqual(col, vec3(0.0031308))));
                         gl_FragColor = vec4(col, 1.0);
                     }
                 `,

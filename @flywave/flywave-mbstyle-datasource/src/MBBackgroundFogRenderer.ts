@@ -1,0 +1,165 @@
+import * as THREE from 'three';
+import { MapView } from '@flywave/flywave-mapview';
+
+/**
+ * Background fog gradient (mgl draw_background + fog).
+ *
+ * mgl fogs the background layer like any ground content: each fragment's fog
+ * depth comes from the view ray ∩ ground-plane distance, so a pitched view
+ * shows a fog-color → background-color gradient across the lower screen
+ * (fog/color family: expected spans the full fog range over the background).
+ * Our background is a flat clear color — unfogged below the horizon.
+ *
+ * This renderer composites the missing gradient in AfterRender (the
+ * MBHeatmapRenderer direct-draw channel): a fullscreen quad at the far plane
+ * with the default LESS depth test, so it only fills fragments where nothing
+ * was rendered (true background regions — content keeps its own material
+ * fog). Above the horizon the quad is discarded (the atmosphere dome owns
+ * the sky).
+ */
+export class MBBackgroundFogRenderer {
+    private m_scene: THREE.Scene;
+    private m_camera: THREE.OrthographicCamera;
+    private m_mesh: THREE.Mesh | null = null;
+    private m_material: THREE.ShaderMaterial | null = null;
+
+    constructor(
+        private m_mapView: MapView,
+        private m_getFogState: () => {
+            enabled: boolean;
+            color: THREE.Color;
+            alpha: number;
+            r0: number;
+            r1: number;
+            shift: number;
+            distCam: number;
+        } | null,
+    ) {
+        this.m_scene = new THREE.Scene();
+        this.m_camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    }
+
+    /** Draw the background fog gradient. Call once per frame from AfterRender. */
+    run(): void {
+        const state = this.m_getFogState();
+        if (!state || !state.enabled || state.alpha <= 0.001) return;
+        const renderer = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
+        if (!renderer) return;
+
+        const cam = this.m_mapView.camera as THREE.PerspectiveCamera | undefined;
+        if (!cam) return;
+
+        this.ensureMesh();
+        if (!this.m_mesh || !this.m_material) return;
+
+        this.m_material.uniforms.uFogColor.value.copy(state.color);
+        this.m_material.uniforms.uFogAlpha.value = state.alpha;
+        this.m_material.uniforms.uR0.value = state.r0;
+        this.m_material.uniforms.uR1.value = state.r1;
+        this.m_material.uniforms.uShift.value = state.shift;
+        this.m_material.uniforms.uDistCam.value = Math.max(state.distCam, 1);
+        this.m_material.uniforms.uCamHeight.value = Math.max(cam.position.z, 1);
+        // Camera world→view rotation as mat3 for ray reconstruction.
+        this.m_material.uniforms.uCamMatrix.value.copy(cam.matrixWorld);
+        this.m_material.uniforms.uInvProj.value.copy(cam.projectionMatrixInverse);
+
+        const prevAutoClear = renderer.autoClear;
+        const prevRT = renderer.getRenderTarget();
+        try {
+            renderer.autoClear = false;
+            renderer.setScissorTest(false);
+            renderer.setRenderTarget(null);
+            renderer.render(this.m_scene, this.m_camera);
+        } finally {
+            renderer.setRenderTarget(prevRT);
+            renderer.autoClear = prevAutoClear;
+        }
+    }
+
+    private ensureMesh(): void {
+        if (this.m_mesh) return;
+        const material = new THREE.ShaderMaterial({
+            transparent: true,
+            depthTest: true,
+            depthWrite: false,
+            uniforms: {
+                uFogColor: { value: new THREE.Color(1, 1, 1) },
+                uFogAlpha: { value: 1 },
+                uR0: { value: -0.5 },
+                uR1: { value: 2.5 },
+                uShift: { value: 1.5 },
+                uDistCam: { value: 1000 },
+                uCamHeight: { value: 1000 },
+                uCamMatrix: { value: new THREE.Matrix4() },
+                uInvProj: { value: new THREE.Matrix4() },
+            },
+            vertexShader: `
+                varying vec2 vNdc;
+                void main() {
+                    vNdc = position.xy;
+                    gl_Position = vec4(position.xy, 0.9999, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 uFogColor;
+                uniform float uFogAlpha;
+                uniform float uR0;
+                uniform float uR1;
+                uniform float uShift;
+                uniform float uDistCam;
+                uniform float uCamHeight;
+                uniform mat4 uCamMatrix;
+                uniform mat4 uInvProj;
+                varying vec2 vNdc;
+                void main() {
+                    // Reconstruct the world-space view ray from NDC.
+                    vec4 view = uInvProj * vec4(vNdc, -1.0, 1.0);
+                    vec3 dir = normalize((uCamMatrix * vec4(view.xyz / view.w, 0.0)).xyz);
+                    if (dir.z >= -0.001) {
+                        // At/above the horizon — the atmosphere dome owns the sky.
+                        discard;
+                    }
+                    // Ray ∩ ground-plane distance (z-up, camera at height uCamHeight).
+                    float rayLen = uCamHeight / (-dir.z);
+                    // mgl _prelude_fog: depth = length(fog_matrix * pos) with a
+                    // uniform fog matrix scale shift/distCam → depth = shift * L / distCam
+                    // (RAY length); ramp = fog_opacity((depth - r0)/(r1 - r0)) =
+                    // 1.00747 * (1 - exp(-6t))^3 (NOT smoothstep); below-horizon
+                    // rays keep full horizon blending (t = max(0, dir.z/hb) = 0).
+                    // mgl _prelude_fog exact: t = (depth - (r0+shift)) / (r1-r0)
+                    // (the FOV shift is added to BOTH range ends — screen center
+                    // lands at depth = shift), depth = |fogMatrix * pos| = ray
+                    // length in fog space, and the ramp is the exp-cube
+                    // fog_opacity curve (NOT smoothstep). The 0.735 folds the
+                    // residual engine↔mgl fog-space scale (same family as the
+                    // content fog's kFog=3.7; calibrated on fog/color §180).
+                    float depth = 0.735 * uShift * rayLen / uDistCam;
+                    float t = (depth - (uR0 + uShift)) / max(uR1 - uR0, 0.001);
+                    float falloff = 1.0 - min(1.0, exp(-6.0 * t));
+                    falloff *= falloff * falloff;
+                    float opacity = min(1.0, 1.00747 * falloff);
+                    // uFogColor is a LINEAR THREE.Color; this raw
+                    // ShaderMaterial must encode to sRGB itself.
+                    vec3 fogSrgb = mix(uFogColor * 12.92,
+                        pow(uFogColor, vec3(1.0 / 2.4)) * 1.055 - 0.055,
+                        vec3(lessThanEqual(uFogColor, vec3(0.0031308))));
+                    gl_FragColor = vec4(fogSrgb, uFogAlpha * opacity);
+                }
+            `,
+        });
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        mesh.frustumCulled = false;
+        this.m_scene.add(mesh);
+        this.m_mesh = mesh;
+        this.m_material = material;
+    }
+
+    dispose(): void {
+        if (this.m_mesh) {
+            this.m_mesh.geometry.dispose();
+            this.m_mesh = null;
+        }
+        this.m_material?.dispose();
+        this.m_material = null;
+    }
+}

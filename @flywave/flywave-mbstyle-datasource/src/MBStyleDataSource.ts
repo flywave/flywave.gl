@@ -695,6 +695,8 @@ export class MBStyleDataSource extends TileDataSource {
     private m_modelRenderer: any = null;
     /** Standalone directional shadow pass (mgl shadow_renderer parity). */
     private m_shadowRenderer: any = null;
+    /** Background fog gradient (mgl draw_background fog parity). */
+    private m_backgroundFogRenderer: any = null;
     /** Set when loadModels() (async GLTF placement path) has finished. */
     private m_modelsLoaded = false;
     private m_additiveLineRenderer: any = null;
@@ -1215,6 +1217,18 @@ export class MBStyleDataSource extends TileDataSource {
                 self.m_shadowRenderer = new MBShadowRenderer(this.mapView, self);
             } catch {}
 
+            // Background fog gradient (mgl draw_background + fog): a far-plane
+            // quad filling only un-rendered background fragments with the
+            // ray∩ground fog gradient. Early-returns when fog is off.
+            try {
+                const { MBBackgroundFogRenderer } = await import('./MBBackgroundFogRenderer');
+                const env0 = self.m_environment;
+                self.m_backgroundFogRenderer = new MBBackgroundFogRenderer(
+                    this.mapView,
+                    () => env0?.backgroundFogState ?? null,
+                );
+            } catch {}
+
 
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
@@ -1230,6 +1244,9 @@ export class MBStyleDataSource extends TileDataSource {
                     self.m_modelRenderer.run();
                 }
 
+                if (self.m_backgroundFogRenderer) {
+                    self.m_backgroundFogRenderer.run();
+                }
                 if (self.m_shadowRenderer) {
                     const sl = self.m_environment?.shadowLightState;
                     self.m_shadowRenderer.setLightState(!!sl, sl?.intensity ?? 0);
