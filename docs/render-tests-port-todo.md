@@ -3527,3 +3527,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **quad 场景化实验（回退）**：转为 m_scene 内 mesh（渲染目标内深度真实）——color 族崩至 73k：场景内渲染经过后处理链的**输出编码**（我们手写的 sRGB 编码被二次处理/色调映射），需要 material 的 colorspace 适配——独立工作量。回退保基线。
 - **raster 战役终局地图（下轮）**：① quad 场景化 + colorspace 适配（内容深度遮挡恢复后，quad 只补空隙——§217 的 mgl 三量纲同切在此之上做）；② 或维持直绘 + hasContentLayers 分域标定（两个已证伪方案之外的第三路）。
 - **复核**：color 族 PASS / raster 32478 / basic 6504 复原 ✓。
+
+**§219. quad 场景化第二轮（线性输出）——编码假设证伪，疑透明通道次序，回退（2026-08-24 一百零八，零净变化）**：
+
+- 场景化 mesh + 线性输出（去手写 sRGB 编码、交管线编码）：color 族崩值与 §218 **逐位相同**（73181）——编码假设证伪，breakage 在别处（首选嫌疑：material `transparent:true` 进透明通道后与内容/后处理的排序交互，或 raw gl_Position 在 RTE 相机链下的裁剪）。回退保基线。
+- **raster 战役终局地图更新**：场景化需先破透明通道次序问题（一轮引擎侧实验），或转第三路——直绘维持 + hasContentLayers 分域标定。两路均独立可推进，基建（mgl 公式/仿射/t-probe/filter 钩子）全部就绪。
+- **复核**：color 族 PASS / raster 32478 / basic 6504 复原 ✓。
