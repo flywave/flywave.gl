@@ -83,7 +83,11 @@ export class MBBackgroundFogRenderer {
         // Exception: explicit-sky-layer styles with a background layer
         // (horizon-blend family, pitch 85) — mgl fogs the background tiles
         // at any pitch and the expected images show the whitened band.
-        if (pitchDeg < 60 || (pitchDeg > 76 && !state.hasBackground)) return;
+        // The engine background plane carries the fog chunk with the a²
+        // semantics and the mgl tile ramp — above 76° it alone matches the
+        // expected band better (§190/§193 measurements); 60..76 keeps the
+        // calibrated quad (fog/color family).
+        if (pitchDeg < 60 || pitchDeg > 76) return;
 
         this.ensureMesh();
         if (!this.m_mesh || !this.m_material) return;

@@ -734,6 +734,10 @@ export class MBEnvironmentManager {
         // Feed the fog color alpha into the shared fog-uniform template so
         // recompiled materials pick up the mapbox opacity ramp's alpha scale.
         (THREE.UniformsLib.fog as any).fogAlpha.value = alpha;
+        for (const lib of Object.values(THREE.ShaderLib)) {
+            const u = (lib as any).uniforms;
+            if (u?.fogAlpha) u.fogAlpha.value = alpha;
+        }
         this.m_scene.fog = this.m_fog;
         const rawHorizonBlend = evalZoom(fog['horizon-blend'], ['interpolate', ['linear'], ['zoom'], 4, 0.2, 7, 0.1]);
         const rawSpaceColor = fog['space-color'] !== undefined
@@ -766,6 +770,10 @@ export class MBEnvironmentManager {
         // raw property (fogUniformValues semantics, pixel-verified on
         // fog/horizon-blend/gradient/low).
         (THREE.UniformsLib.fog as any).fogHorizonBlend.value = this.m_fogState.horizonBlend;
+        for (const lib of Object.values(THREE.ShaderLib)) {
+            const u = (lib as any).uniforms;
+            if (u?.fogHorizonBlend) u.fogHorizonBlend.value = this.m_fogState.horizonBlend;
+        }
         const vRange = evalZoom(fog['vertical-range'], [0, 0]) as [number, number];
         (THREE.UniformsLib.fog as any).fogVertLimit.value.set(
             Math.min(vRange[0] ?? 0, vRange[1] ?? 0), vRange[1] ?? 0);
@@ -962,6 +970,30 @@ export class MBEnvironmentManager {
         if (fog['star-intensity'] && fog['star-intensity'] > 0) {
             this.createStars(fog['star-intensity']);
         }
+    }
+
+    /**
+     * Per-frame sync of the extra fog uniforms (fogAlpha/fogHorizonBlend/
+     * fogVertLimit/fogCamHeight) into every fogged scene material.
+     * Materials clone UniformsLib.fog at creation, so assignments to the
+     * library AFTER creation (engine ground plane decoded asynchronously)
+     * never reach them — the plane then fogs with the stale snapshot
+     * (fog/color-opacity top band, §193).
+     */
+    syncFogUniforms(): void {
+        const lib = THREE.UniformsLib.fog as any;
+        if (!this.m_scene || !this.m_fog) return;
+        this.m_scene.traverse((obj: any) => {
+            const u = obj.material?.uniforms;
+            if (!u || u.fogAlpha === undefined) return;
+            u.fogAlpha.value = lib.fogAlpha.value;
+            if (u.fogHorizonBlend !== undefined) u.fogHorizonBlend.value = lib.fogHorizonBlend.value;
+            if (u.fogVertLimit !== undefined) u.fogVertLimit.value.copy(lib.fogVertLimit.value);
+            if (u.fogCamHeight !== undefined) u.fogCamHeight.value = lib.fogCamHeight.value;
+            if (u.fogNear !== undefined) u.fogNear.value = lib.fogNear.value;
+            if (u.fogFar !== undefined) u.fogFar.value = lib.fogFar.value;
+            if (u.fogColor !== undefined) u.fogColor.value.copy(lib.fogColor.value);
+        });
     }
 
     private createFogAtmosphereDome(): void {

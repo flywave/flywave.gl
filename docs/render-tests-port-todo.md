@@ -3361,3 +3361,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复 ②**：背景雾 quad 的有效 alpha 补齐 a²（`opacity *= uFogAlpha`，quad 只画地平线下、horizon_blending 因子恒为 a）。
 - **验收**：fog/color-opacity 75147→**19050**（y5+ 全带对齐 0.64 红）；fog/color/color-use-theme/default/high-color 全族/space-color-use-theme **PASS 恒定**（a=1 时 a²=1 零影响 ✓）。中途一次探针清除误删 quad 的 gl_FragColor 致 color 族瞬回 65k 基线——复核修复，提醒探针补丁用断言式脚本。
 - **color-opacity 剩余 19050 定性（下轮入口）**：顶部 ~5 行纯红 (255,30,35)——探针矩阵（quad 绿/dome 蓝/atmoQuad 青）全部缺席该带，非我方任何 painter；定性为**引擎背景平面 + THREE.Fog 路径**（three 内建 Fog 无 alpha 概念 → 满饱和红；mgl 期望 0.64）。引擎层改造项：背景平面的雾需走 a² 语义或让 quad 覆盖该带（边界上移）。fog/space-color 78px = 稀疏逐行噪声（阈值 65，近失记档）。
+
+**§193. 引擎背景平面 fog 通道打通——ShaderLib 静态 uniform 快照同步 + a² 语义闭环；equal-range/inverted/color-opacity 再改善（2026-08-24 八十三，保留修复）**：
+
+- **取证链（color-opacity 顶部纯红带）**：① 探针矩阵（quad 绿/dome 蓝/atmoQuad 青/全局 chunk ×0.5）证明红带来自**使用我们全局 fog chunk 的某内建材质**且其 fogFactor=1.0（×0.5 探针下变为 0.5 混合）——即 fogAlpha 到达该材质时恒为 1；② 代码定案：模块加载期把 fogAlpha 注入 `ShaderLib.*.uniforms` 时初值 1，而 `applyFog` 只写 `UniformsLib.fog`——**内建材质（引擎背景平面/MapMesh*）读的是 ShaderLib 静态快照**，运行期赋值永不到达（§12.76 时代注释其实已写明该分裂，但只修了一半）。
+- **修复**：① applyFog 的 fogAlpha/fogHorizonBlend 写入同步到全部 ShaderLib 副本（引擎平面/内建内容材质即刻获得正确 a 与 hb——此前 hb 恒为注入初值 0.05）；② 新增 `syncFogUniforms()`（AfterRender 逐帧遍历场景，覆盖异步创建材质的克隆 uniform）；③ 背景雾 quad 门回到 60..76（>76 时平面的 mgl tile ramp 单独更优，§190 的放宽在平面雾修复后变为双重雾）。
+- **验收**：color-opacity 19050→**13470**（顶部 5 行 0.64 红对齐）；fog/2d/equal-range 10782→**6810**、inverted 41444→**37490**（平面雾 + 门回调双赢）；fog/color/color-use-theme/default/high-color 全族/space-color-use-theme PASS 恒定 ✓；小代价记档：fog/default 255→377（平面 hb 从注入值 0.05 变为真实值的连带）。
+- **color-opacity 剩余 13470 定性（下轮）**：y8-20 平面(0.64)+quad(0.64) 双雾叠至 ~0.87——70° 带平面与 quad 的分工边界未定（quad 60-76 仍叠在平面之上），需二选一：quad 70° 段让位平面（fog/color 65842 回归风险已实证）或平面雾在 quad 生效时旁路。fog/2d/raster 34396 维持（32478↔34396 双态带内）。
