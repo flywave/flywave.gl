@@ -45,7 +45,7 @@ THREE.ShaderChunk.fog_fragment = `
 	// §216/§249: the mgl fog formula per fragment. vFogDepth is in ENGINE
 	// world units, not mgl mercator meters (§248: the kFog fold IS the unit
 	// conversion) — fold it so depth lands in the mgl fog-unit band.
-	fogT = (fogMglShift * (vFogDepth * 0.27) / max(fogMglDistCam, 1.0)
+	fogT = (fogMglShift * (vFogDepth * 0.15) / max(fogMglDistCam, 1.0)
 		- (fogMglRange.x + fogMglShift))
 		/ max(fogMglRange.y - fogMglRange.x, 0.001);
 #endif
