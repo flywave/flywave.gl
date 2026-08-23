@@ -3533,3 +3533,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - 场景化 mesh + 线性输出（去手写 sRGB 编码、交管线编码）：color 族崩值与 §218 **逐位相同**（73181）——编码假设证伪，breakage 在别处（首选嫌疑：material `transparent:true` 进透明通道后与内容/后处理的排序交互，或 raw gl_Position 在 RTE 相机链下的裁剪）。回退保基线。
 - **raster 战役终局地图更新**：场景化需先破透明通道次序问题（一轮引擎侧实验），或转第三路——直绘维持 + hasContentLayers 分域标定。两路均独立可推进，基建（mgl 公式/仿射/t-probe/filter 钩子）全部就绪。
 - **复核**：color 族 PASS / raster 32478 / basic 6504 复原 ✓。
+
+**§220. quad 场景化三配置定案——像素差非来自 quad，路 A 引擎级封锁，转路 B（2026-08-24 一百零九，零净变化）**：
+
+- **三配置实验**：场景化 mesh 在 transparent:true / linear 输出 / **opaque(false)** 三种截然不同的材质配置下 color 族崩值**逐位相同（73181）**——视觉回归与 quad 像素无关（quad 在场景路径根本未渲染或被后处理 Pass 链忽略），回归另有来源（场景扰动/pass 链行为）。路 A（场景化）需引擎 composing/Pass 源码级调查，超出 datasource 层。
+- **战役决策：转路 B**——直绘维持 + 分域标定：背景域（color 族 PASS 恒定的现状）不动；内容域（raster/basic/equal-range）的背景带由 quad 覆盖（现状），内容雾按 §215 正向公式在**渲染循环内**重映射（§216 的 MB_RASTER_MGL_FOG 已验证可激活于 basic 系材质——与 quad 的组合标定是剩余工作）。
+- **复核**：color/color-opacity PASS、raster 32478、basic 6504 复原 ✓。
