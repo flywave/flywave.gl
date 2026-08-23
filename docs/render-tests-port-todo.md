@@ -3748,3 +3748,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **双探针实测（即时准入 + 根瓦片 area）**：① 准入四关全过（enabled/ready/isVisible=true，zoomLevel=2 ∈ [1,25]）——候选①②排除；② **根瓦片 area=0.0917>0**、OBB 类型正确、distance=1——候选③排除。§253 三候选全灭。
 - **缺口下移**：瓦片请求链的更深处——`shouldSubdivide`（zoomLevels 与 ds 索引配对在 globe 派生 storageLevel 下可能错位）/ `canGetTile` 过滤 / 或瓦片虽请求但**球面解码→挂载**失败（注入矩形的 mercator 坐标在 sphere 变换下错位/对象被弃）。**下轮一步**：VisibleTileSet:1429 的 canGetTile 过滤前后各一条日志（计数进入/存活的瓦片键）。
 - 探针已清，工作树=提交态（74 commits）。
+
+**§255. canGetTile 双计数定案——globe 上瓦片选择全通（4/4 kept），§233"零调用"为仪表局限；缺口终收窄至球面几何放置（2026-08-24 一百四十三，零净变化记档）**：
+
+- **双计数实测**（修正 ds 名过滤器——datasource 名是 `anonymous-datasource#1` 非 mbstyle，首次跑日志零触发是仪表错误）：globe 上 canGetTile 循环**正常运行**（zoomLevel=2/dataZoom=1，candidates=4, kept=4）——瓦片选择全通。§233 的"getTile 零调用"结论是**仪表局限**（日志只在 GeoJSONDataProvider，bg-only 样式走其他 provider）——推翻。
+- **缺口终收窄**：瓦片被选择 → getTile/解码应发生 → **注入矩形的球面几何放置**（fill 管线的 decodeInfo/projection 变换在 sphere 下对 mercator extents 矩形的定位/剔除）是最后未验环节。**下轮一步**：sphere 下注入瓦片 attach 后的 objects 计数 + 屏幕投影采样（objects>0 但不渲染=球面剔除/变换；objects=0=TileGeometryCreator 弃）。
+- 探针已清，工作树=提交态（75 commits）。
