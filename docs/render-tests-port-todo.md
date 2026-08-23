@@ -3651,3 +3651,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **§236 注入基建保留**（geojson 门控零回归）；无效选项实验已回退。
 - **下轮入口（会话重启后首查）**：VisibleTileSet.processVisibleTiles 的 maxVisibleDataSourceTiles 截断日志（距离排序下 z7-11 最远最先被丢——与 §227 候选①完全吻合的最后一验）。
 - 会话极限（~5.1h/259M tokens）已至，工作树=提交态（58 commits）。
+
+**§238. maxVisibleDataSourceTiles 排除（cap=100）+ 注入 54/54 全层确认——断点终收窄至 Tile attach 消费点（2026-08-24 一百二十七，零净变化）**：
+
+- **候选①排除**：cap 默认 100（27 瓦片远未触顶）、maxTilesPerFrame=0（无限流）——截断假设否定。
+- **注入确认**：前 try 位注入 **54/54 全层**（z7-15 每层 8/8/8/8/8/6/4/2/2）——decoder 侧完整；z12-15 挂载 ✓ / **z7-11 的 Tile.objects 仍 0** → 断点终收窄至**引擎 Tile 对 decode 产物的消费点**（objects 创建/loadState/双实例路由——一行 setDecodedTile 消费侧日志即定案，引擎 Tile.ts 无 `setDecodedTile` 名，需按 decodedTile 属性写入点定位）。
+- **会话极限二次确认**（~5.2h/262M tokens），工作树=提交态（59 commits）。§232 清单的 globe/terrain/switch-style 新域本会话未及，维持待办。
