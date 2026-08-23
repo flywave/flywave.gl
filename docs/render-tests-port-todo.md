@@ -3216,3 +3216,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **决定性取证（debug/collision 逐盒对比）**：期望图**几乎无蓝盒**（连通域分析仅 1-4px AA 残点）——mgl 把该稠密 road_label fixture 几乎全部符号判为碰撞隐藏（红盒大面积合并簇）；我方红簇位置与期望大致吻合（如 326-409×66-109 vs exp 329-417×61-112），但引擎 `visible` 语义把大量符号判为蓝（我方多条 33×4 蓝盒）。
 - **终局定性**：该族主导残差 = **引擎 TextElementsRenderer 碰撞放置决策与 mgl 的放置集合差异**——无盒基线 28894 本身就是"内容差"（我方多渲染了 mgl 隐藏的标签）；盒画得再准也留着 ~28k 内容失配（本例阈值 2229）。盒渲染六层机制已验证可用（§170），**族收敛被引擎放置一致性阻塞**——与 text/symbol 冻结域同根但更深一层（此前 §91/§164 只定性了"位置正确+光栅化长尾"，稠密碰撞场景暴露**放置决策差**这一独立缺口）。
 - **诚实回退**：src 逐字节复原（盒 overlay 任何形态都净劣化）。**下轮真正入口（引擎侧立项）**：TextElementsRenderer 的碰撞放置算法对齐 mgl CollisionIndex（优先级排序 + 屏幕空间盒 + text/icon 双盒语义）——需引擎放置链可编程/可替换的 hook（§110 同族架构需求）。
+
+**§172. mgl-parity 碰撞放置强制实施——基础设施落地，验证受负载阻塞（2026-08-23 六十二，保留实现攒批延后）**：
+
+- **实施（保留，gate=collisionDebug 零外溢）**：`MBStyleSymbolPlacement.applyMglCollisionVisibility`——按 §171 定性实施放置对齐：收集引擎 TextElement（featureId+text 跨层级去重）→ 自有 shapeText 复算盒（em×fontSize、glyphMetrics 真实度量、mgl 锚点边缘语义、icon-text-fit 盒）→ 按优先级降序以自有 CollisionIndex 做 **mgl 语义双盒独立判定**（修复：CollisionIndex 的 x/y 是**左上角**而非中心——首版全蓝的根因）→ `TextElement.visible = 放置结果`（隐藏 mgl 会抑制的多余标签，§171 实测的主导残差方向）→ 同判定画盒（蓝 α0.25/红 α0.5，heatmap 同款 AfterRender 直绘通道）。
+- **验证状态（受阻塞）**：单例 debug/collision 跨 run 28494-29100（基线 28894 噪声带内，无回归）；盒像素 872→13px 跨 run 漂移、karma console 捕获间歇性 0 行——负载 6-9 时的 §12.85 已知 flake（空闲时 5/5 稳定前科）。**下轮首项=低负载（<3）复验**：①盒是否稳定上屏；②红/蓝分布 vs 期望（exp 红 994 采样/蓝≈0）；③el.visible 强制对内容差（基线 28894 中的"多渲染标签"）的收敛效果。若无效果则回退本实现。
+- **回归面**：gate 仅 collisionDebug fixtures（27 例）——其余 3000 例零路径变化；tsc 绿。

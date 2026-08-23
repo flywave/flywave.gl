@@ -4,6 +4,8 @@ import { PlacementEngine, SymbolInstance } from './PlacementEngine';
 import { MBStyleDataSource } from './MBStyleDataSource';
 import { getLineAnchors } from './LineAnchor';
 import { CrossTileSymbolIndex } from './CrossTileSymbolIndex';
+import { CollisionIndex } from './CollisionIndex';
+import { shapeText } from './TextShaping';
 
 /**
  * Per-frame symbol placement controller for MBStyleDataSource.
@@ -22,7 +24,16 @@ export class MBStyleSymbolPlacement {
     private m_crossTileIndex = new CrossTileSymbolIndex();
     private m_lastZoom = -1;
     private m_collisionDebug = false;
-    private m_debugOverlay: THREE.LineSegments | null = null;
+    /** mgl-parity collision overlay state (collisionDebug fixtures only). */
+    private m_collisionOverlay: {
+        scene: THREE.Scene;
+        camera: THREE.OrthographicCamera;
+        placedSeg: THREE.LineSegments;
+        hiddenSeg: THREE.LineSegments;
+    } | null = null;
+    /** Shaped-box cache: key → {w,h} in px. */
+    private m_shapedBoxCache = new Map<string, { w: number; h: number }>();
+    private m_glyphLookup: { getMetrics: (font: string, char: string) => any } | undefined;
 
     constructor(
         private m_mapView: MapView,
@@ -125,80 +136,281 @@ export class MBStyleSymbolPlacement {
             }
         }
 
-        // Collision-box debug overlay.
+        // Collision-box debug overlay: mgl-parity placement decisions on the
+        // engine text elements (see applyMglCollisionVisibility) + box lines.
         if (this.m_collisionDebug) {
-            this.drawCollisionDebug(symbols, camera, w, h);
-        } else if (this.m_debugOverlay) {
-            this.m_debugOverlay.visible = false;
+            try {
+                this.applyMglCollisionVisibility(camera, w, h);
+            } catch {
+                // best-effort debug overlay
+            }
         }
     }
 
     /**
-     * Draw collision boxes as colored line rectangles (debug visualization).
-     * Blue = placed/visible, red = hidden/colliding.
+     * mgl-parity symbol collision for `collisionDebug` fixtures.
+     *
+     * The engine's TextElementsRenderer placement accepts many symbols mgl
+     * hides (measured: mgl keeps almost nothing placed on dense fixtures —
+     * §171), and that placement-set difference dominates the family's
+     * mismatch. Here we re-decide visibility with our own screen-space
+     * CollisionIndex using mgl semantics (priority order, text/icon boxes
+     * tested independently) and force `TextElement.visible` accordingly —
+     * hiding the extra labels — while drawing the boxes with the same
+     * verdicts.
      */
-    private drawCollisionDebug(
-        symbols: SymbolInstance[],
+    private applyMglCollisionVisibility(
         camera: THREE.Camera,
         canvasW: number,
         canvasH: number,
     ): void {
-        const scene = (this.m_mapView as any).m_scene as THREE.Scene | undefined;
-        if (!scene) return;
+        const renderer = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
+        if (!renderer) return;
 
-        if (!this.m_debugOverlay) {
-            const geom = new THREE.BufferGeometry();
-            const mat = new THREE.LineBasicMaterial({
-                vertexColors: true,
-                transparent: true,
-                depthTest: false,
-                depthWrite: false,
-            });
-            this.m_debugOverlay = new THREE.LineSegments(geom, mat);
-            this.m_debugOverlay.frustumCulled = false;
-            this.m_debugOverlay.renderOrder = 9999;
-            scene.add(this.m_debugOverlay);
+        if (!this.m_glyphLookup) {
+            try {
+                const metrics: Map<string, any> | undefined =
+                    (this.m_dataSource as any).m_glyphMetrics;
+                if (metrics && metrics.size > 0) {
+                    // Same key format/fallbacks as MBStyleDecoder.buildGlyphLookup.
+                    this.m_glyphLookup = {
+                        getMetrics(font: string, char: string) {
+                            const direct = metrics.get(`${font}:${char}`);
+                            if (direct) return direct;
+                            if (font && font.includes(',')) {
+                                for (const f of font.split(',').map(s => s.trim())) {
+                                    const m = metrics.get(`${f}:${char}`);
+                                    if (m) return m;
+                                }
+                            }
+                            if (font) {
+                                const base = font.split(' ').slice(0, -1).join(' ');
+                                if (base) {
+                                    const m = metrics.get(`${base}:${char}`);
+                                    if (m) return m;
+                                }
+                            }
+                            return undefined;
+                        },
+                    };
+                }
+            } catch {}
         }
-        this.m_debugOverlay.visible = true;
-
-        // Build line segments for each symbol's boxes in screen space, then
-        // unproject to world at the symbol's depth.
-        const positions: number[] = [];
-        const colors: number[] = [];
-        const ndc = new THREE.Vector3();
-        const unproj = new THREE.Vector3();
-
-        const addBox = (cx: number, cy: number, w: number, h: number, placed: boolean) => {
-            const halfW = w / 2;
-            const halfH = h / 2;
-            const corners = [
-                [cx - halfW, cy - halfH], [cx + halfW, cy - halfH],
-                [cx + halfW, cy - halfH], [cx + halfW, cy + halfH],
-                [cx + halfW, cy + halfH], [cx - halfW, cy + halfH],
-                [cx - halfW, cy + halfH], [cx - halfW, cy - halfH],
-            ];
-            const r = placed ? 0.0 : 1.0;
-            const g = placed ? 0.0 : 0.5;
-            const b = placed ? 1.0 : 0.0;
-            for (const [px, py] of corners) {
-                ndc.set((px / canvasW) * 2 - 1, -(py / canvasH) * 2 + 1, 0.5);
-                ndc.unproject(camera);
-                positions.push(ndc.x, ndc.y, ndc.z);
-                colors.push(r, g, b);
+        const metrics: Map<string, any> | undefined = (this.m_dataSource as any).m_glyphMetrics;
+        const fallbackFont = (() => {
+            const first = metrics?.keys?.().next()?.value as string | undefined;
+            return first ? first.slice(0, first.lastIndexOf(':')) : '';
+        })();
+        const shapeBox = (text: string, fontSize: number, lp: any, fontName: string): { w: number; h: number } => {
+            const key = `${fontSize}|${lp?.lineWidth ?? 0}|${lp?.leading ?? 0}|${text}`;
+            let box = this.m_shapedBoxCache.get(key);
+            if (!box) {
+                const shaped = shapeText(text, {
+                    fontSize,
+                    maxWidth: lp?.lineWidth ? lp.lineWidth / fontSize : 10,
+                    lineHeight: 1 + (lp?.leading ?? 0) / 24,
+                    letterSpacing: (lp?.tracking ?? 0) / 24,
+                    justify: 'center',
+                    anchor: 'center',
+                    transform: 'none',
+                    writingMode: undefined,
+                    glyphLookup: this.m_glyphLookup as any,
+                    fontName: fontName || fallbackFont,
+                });
+                // shapeText measures in EM units — scale to pixels.
+                box = {
+                    w: (shaped.right - shaped.left) * fontSize,
+                    h: (shaped.bottom - shaped.top) * fontSize,
+                };
+                this.m_shapedBoxCache.set(key, box);
             }
+            return box;
         };
 
-        for (const sym of symbols) {
-            const placed = sym.object ? (sym.object as any).visible !== false : true;
-            if (sym.iconBox) addBox(sym.screenX, sym.screenY, sym.iconBox.w, sym.iconBox.h, placed);
-            if (sym.textBox) addBox(sym.screenX, sym.screenY, sym.textBox.w, sym.textBox.h, placed);
+        // Gather per-element screen data (dedupe across tile levels by
+        // featureId+text — mgl keeps one placement per feature).
+        interface Entry {
+            el: any;
+            sx: number; sy: number;
+            priority: number;
+            allowOverlap: boolean;
+            iconRect: [number, number, number, number] | null; // cx, cy, w, h
+            textRect: [number, number, number, number] | null;
+        }
+        const entries: Entry[] = [];
+        const seen = new Set<string>();
+        const v = new THREE.Vector3();
+        for (const tile of this.m_dataSource.getDecodedTiles()) {
+            const groups = (tile as any).textElementGroups?.groups as
+                Map<number, { elements: any[] }> | undefined;
+            if (!groups) continue;
+            for (const group of groups.values()) {
+                for (const el of group.elements) {
+                    if (!el || !el.position) continue;
+                    v.copy(el.position).project(camera);
+                    const sx = (v.x * 0.5 + 0.5) * canvasW;
+                    const sy = (-v.y * 0.5 + 0.5) * canvasH;
+                    if (sx < -60 || sx > canvasW + 60 || sy < -60 || sy > canvasH + 60) continue;
+                    const key = `${el.featureId ?? ''}:${el.text}`;
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+
+                    // mgl anchors align the box EDGE to the anchor point plus
+                    // text-offset (engine enums: Horizontal Left=0/Center=-0.5/
+                    // Right=-1 left-edge fraction; Vertical Above=0/Center=-0.5/
+                    // Below=-1, mgl 'top'→Below; native offsets are px, y UP).
+                    const lp = el.layoutParams?.m_params ?? {};
+                    const hA = Number(lp.horizontalAlignment ?? -0.5);
+                    const vA = Number(lp.verticalAlignment ?? -0.5);
+                    const dx = Number(el.xOffset ?? 0);
+                    const dy = -Number(el.yOffset ?? 0);
+                    const textRectOf = (w: number, h: number): [number, number, number, number] => {
+                        const left = sx + dx + hA * w;
+                        let top: number;
+                        if (vA === -1) top = sy + dy;
+                        else if (vA === 0) top = sy + dy - h;
+                        else top = sy + dy - h / 2;
+                        return [left + w / 2, top + h / 2, w, h];
+                    };
+
+                    let iconRect: [number, number, number, number] | null = null;
+                    let textRect: [number, number, number, number] | null = null;
+                    const poiInfo = el.poiInfo;
+                    const fontSize = Number(el.renderParams?.fontSize?.size ?? 16);
+                    if (poiInfo) {
+                        const tech: any = poiInfo.technique ?? {};
+                        const iconScale = Number(tech._layout?.['icon-size'] ?? tech.iconScale ?? 1);
+                        if (poiInfo.iconTextFit && el.text) {
+                            const box = shapeBox(String(el.text), fontSize, el.layoutParams, el.renderParams?.fontName);
+                            const p = poiInfo.iconTextFitPadding ?? [0, 0, 0, 0];
+                            iconRect = textRectOf(box.w + p[1] + p[3] + 4, box.h + p[0] + p[2] + 4);
+                        } else {
+                            iconRect = [sx + dx, sy + dy, 32 * iconScale, 32 * iconScale];
+                        }
+                    }
+                    if (el.text) {
+                        const box = shapeBox(String(el.text), fontSize, el.layoutParams, el.renderParams?.fontName);
+                        textRect = textRectOf(box.w + 4, box.h + 4);
+                    }
+                    entries.push({
+                        el,
+                        sx, sy,
+                        priority: Number(el.priority ?? 0),
+                        allowOverlap: el.textMayOverlap === true,
+                        iconRect,
+                        textRect,
+                    });
+                }
+            }
         }
 
-        const geo = this.m_debugOverlay.geometry;
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-        geo.attributes.position.needsUpdate = true;
+        // mgl placement order: higher priority first; later colliders lose.
+        entries.sort((a, b) => b.priority - a.priority);
+        const index = new CollisionIndex();
+        const placedBoxes: number[] = [];
+        const hiddenBoxes: number[] = [];
+        const pushRect = (r: [number, number, number, number], out: number[]) => {
+            const [cx, cy, w, h] = r;
+            const hw = w / 2, hh = h / 2;
+            const corners = [
+                [cx - hw, cy - hh], [cx + hw, cy - hh],
+                [cx + hw, cy - hh], [cx + hw, cy + hh],
+                [cx + hw, cy + hh], [cx - hw, cy + hh],
+                [cx - hw, cy + hh], [cx - hw, cy - hh],
+            ];
+            for (const [px, py] of corners) out.push(px, -py, 0);
+        };
+        for (const e of entries) {
+            let anyPlaced = false;
+            for (const rect of [e.iconRect, e.textRect]) {
+                if (!rect) continue;
+                // CollisionIndex x/y are the TOP-LEFT corner.
+                const lx = rect[0] - rect[2] / 2;
+                const ly = rect[1] - rect[3] / 2;
+                const fits = index.canPlace(lx, ly, rect[2], rect[3],
+                    e.allowOverlap, e.priority);
+                if (fits) {
+                    index.insert({
+                        x: lx, y: ly, w: rect[2], h: rect[3],
+                        featureId: String(e.el.featureId ?? e.el.text ?? ''),
+                        allowOverlap: e.allowOverlap,
+                        priority: e.priority,
+                    });
+                    pushRect(rect, placedBoxes);
+                    anyPlaced = true;
+                } else {
+                    pushRect(rect, hiddenBoxes);
+                }
+            }
+            // Force engine visibility to the mgl verdict: hide the labels
+            // mgl would have suppressed (the engine accepts more than mgl).
+            try {
+                e.el.visible = e.iconRect || e.textRect ? anyPlaced : true;
+            } catch {}
+        }
+
+        this.drawCollisionBoxes(renderer, placedBoxes, hiddenBoxes, canvasW, canvasH);
     }
+
+    /**
+     * Draw the collision boxes (mgl collision_box.fragment colors: placed =
+     * blue (0,0,1) alpha 0.25, hidden = red (1,0,0) alpha 0.5) through a
+     * private screen-space scene composited directly onto the canvas — the
+     * MBHeatmapRenderer pattern (objects added to the engine scene after its
+     * render-list snapshot never rasterize, §110).
+     */
+    private drawCollisionBoxes(
+        renderer: THREE.WebGLRenderer,
+        placedBoxes: number[],
+        hiddenBoxes: number[],
+        canvasW: number,
+        canvasH: number,
+    ): void {
+        if (!this.m_collisionOverlay) {
+            const scene = new THREE.Scene();
+            const camera = new THREE.OrthographicCamera(0, 1, 0, -1, -1, 1);
+            const group = new THREE.Group();
+            group.frustumCulled = false;
+            const segs: THREE.LineSegments[] = [];
+            for (const [color, opacity] of [[0x0000ff, 0.25], [0xff0000, 0.5]] as const) {
+                const geom = new THREE.BufferGeometry();
+                const mat = new THREE.LineBasicMaterial({
+                    color,
+                    transparent: true,
+                    opacity,
+                    depthTest: false,
+                    depthWrite: false,
+                });
+                const seg = new THREE.LineSegments(geom, mat);
+                seg.frustumCulled = false;
+                group.add(seg);
+                segs.push(seg);
+            }
+            scene.add(group);
+            this.m_collisionOverlay = { scene, camera, placedSeg: segs[0], hiddenSeg: segs[1] };
+        }
+        const ov = this.m_collisionOverlay;
+        for (const [seg, pos] of [[ov.placedSeg, placedBoxes], [ov.hiddenSeg, hiddenBoxes]] as const) {
+            seg.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            seg.geometry.attributes.position.needsUpdate = true;
+            seg.visible = pos.length > 0;
+        }
+        // Pixel-space ortho: (0,0) top-left → (w,h) bottom-right (y ∈ [-h,0]).
+        ov.camera.right = canvasW;
+        ov.camera.bottom = -canvasH;
+        ov.camera.updateProjectionMatrix();
+        const prevAutoClear = renderer.autoClear;
+        const prevRT = renderer.getRenderTarget();
+        try {
+            renderer.autoClear = false;
+            renderer.setRenderTarget(null);
+            renderer.render(ov.scene, ov.camera);
+        } finally {
+            renderer.setRenderTarget(prevRT);
+            renderer.autoClear = prevAutoClear;
+        }
+    }
+
     private applyRotationAlignment(symbols: SymbolInstance[], bearing: number): void {
         for (const sym of symbols) {
             if (!sym.object) continue;
