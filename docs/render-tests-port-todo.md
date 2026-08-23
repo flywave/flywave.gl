@@ -3136,3 +3136,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **方法论终训（本域第二次）**：覆盖类取证必须**同时报告 RGB 与 alpha**——不透明清色引擎的 alpha 恒满，alpha-only 判覆盖必伪。该 fixture 定性收官：29792→4846（−84%），残余为带内宽度精度项。
 
 **§154. 带内宽度精度实测（2026-08-23 四十四，零净变化）**：逐列带厚——**右半（第二瓦片区， clip [0.397,0.8]）cur≈exp（62-63 vs 64px ✓ 已对齐）**；**左半（第一瓦片区， clip [0,0.40]）cur 116px vs exp 65px（1.78× 过厚）**。且 exp 左右带厚均 ~64px 近恒定（若 mgl taper 生效右半应 ~42px——**mgl 期望图的可见厚度近似恒定于 30m×secLat≈62px**，即 mgl 在此 fixture 的变宽在视口内未显著收窄或求值点恒在低端）。我们的左半过厚疑因 feat0（clip 起点 0，w=30m 全宽 62px）与 feat1 ribbon（对角带）在左半叠加合并成 116px 连续带（期望两带间有空隙）。收敛方向：feat1 ribbon 的高度/位置或其宽度（clip [0.86,1]/[0,0.29] 双段）——下轮对 feat1 的带位置逐列对照。
+
+**§155. feat1 带位置对照——根因定案：multiLineMetricsIndex 未实现（2026-08-23 四十五，零净变化）**：
+
+- **子带结构（x30）**：cur 顶带 (6-58) ✓ 与 exp (5-59) 对齐；**第二带 cur (86-149)=64px vs exp (117-127)=11px**——feat1 的 ribbon 用了**错误的 clip 段**。
+- **根因（对照 mgl lineFeatureClips + pbf 属性）**：feat1 是**双子路径**（pbf paths=2），属性携带 `mapbox_clip_start_1=0.864 / mapbox_clip_end_1=1`（子路径 1 的段）与 `mapbox_clip_start=0 / mapbox_clip_end=0.29`（子路径 0）——mgl `lineFeatureClips(feature, multiLineMetricsIndex)` **按子路径索引**取 `_1` 后缀属性。我们的 clip 查找只读无后缀对（0→0.29，w≈23-30m→64px），把本应 **[0.86,1] 段（w≈5m→11px）**的子路径画厚了 6 倍。exp 的 11px 第二带与 w(0.86)≈5m×secLat×1.66px/m ≈ 11px 精确吻合。
+- **修复规格（明确）**：emitter 的 clip 查找支持 `mapbox_clip_start_${i}/end_${i}`（i=子路径序号，mgl line_bucket.ts:548-582）——processLineFeature 需把子路径索引传入（geojson 化时 path 展平处保留 index）。工程量小-中。该 fixture 预期 4846→近失带。
