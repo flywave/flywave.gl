@@ -3670,3 +3670,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实验①（重新启用 sky glow）**：§228 stand-down 确系有效承载——恢复 glow 后 far 5252→9387（glow 的 t 天顶衰减漏出 space 色 ≠ 期望纯蓝）。**实验②（stand-down + 平雾色天空，fadeout=1e9 强制 t≈1）**：close 17524→**9652** ✓ 但 far 5252→28361 / mid 9797→19177 / opacity→32288 ✗，且 fill-color 422→974、line-gradient 404→591 ✗——期望的天空行为随 fog range 逐 fixture 不同（紧 range 全饱和→纯色 ✓；宽 range 天空有结构）。
 - **定性**：sky 区正确着色 = **fog range 依赖的连续语义**（mgl 的 sky = 大气 glow × fog_apply_sky_gradient 的天顶衰减，其参数使紧 range 看似纯色）——需要的是 glow 参数（fadeout/颜色）在满雾时精确饱和的推导而非二值开关。**恢复 §240 态**（far 5252/close 17524/mid 9797 = 已知最优净额；fill-color 422/line-gradient 404 复原 ✓）。
 - **会话极限三次确认**（~5.3h/278M tokens），工作树=提交态（61 commits）。§232 清单新域（globe/terrain/switch-style）本会话未及。
+
+**§242. sky 区纯雾色闭环——a² 混合平雾色天空落地，culling 四例净 −22482（2026-08-24 一百三十，保留修复）**：
+
+- **公式定案（§241 入口推导）**：mgl 满雾 sky = **mix(bgColor, fogColor, α²)**——opacity 期望 (88,88,242) 精确 = beige×blue@0.64（a=0.8），与注入瓦片在地面的雾色完全一致（sky/ground 同源）。
+- **落地（保留）**：atmoQuad 的 contentStandDown 分支改为平雾色天空——uniforms 经正常路径设置（§241 首版 flat 因 stale 角射线/uHorizon 致 discard 失效全屏蓝，修复）；三色 stop = mix(clearColor, fogColor, α²)（sRGB），fadeout→∞ 强制 t≈1。
+- **验收**：**culling 四例净 −22482**（close 17524→9652、mid 9797→1925、opacity 25082→17594、far 5252→6002 微幅）；**geojson 全族零回归**（line/fill-color/line-gradient/heatmap/hillshade/fill-extrusion/high-color 全 PASS/恒定 ✓，symbols 双态带内）；far 残余 = 地平线位置偏移（§189 相机 horizon-shift 专项，sky 区下边界差 ~30px）。
+- **会话终态**：工作树=提交态（62 commits）。§232 新域（globe/terrain/switch-style）未及。

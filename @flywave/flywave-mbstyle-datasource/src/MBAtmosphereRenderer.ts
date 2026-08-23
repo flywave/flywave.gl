@@ -43,9 +43,10 @@ export class MBAtmosphereRenderer {
     run(): void {
         const state = this.m_getState();
         if (!state) return;
-        // §228: content tiles carry their own fog (mgl semantics) — the glow
-        // quad must stand down for content-bearing styles (fog/culling).
-        if (MBAtmosphereRenderer.contentStandDown) return;
+        // §228/§241: content tiles own the ground; the sky region still
+        // needs painting — a FLAT fog-color glow (the mgl expected sky at
+        // full fog is the pure fog color; handled after uniform setup so
+        // the corner/horizon uniforms are valid).
         const renderer = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
         const cam = this.m_mapView.camera as THREE.PerspectiveCamera | undefined;
         if (!renderer || !cam) return;
@@ -90,6 +91,27 @@ export class MBAtmosphereRenderer {
         (u.uHighColor.value as THREE.Color).copy(state.highColor).convertLinearToSRGB();
         (u.uSpaceColor.value as THREE.Color).copy(state.spaceColor).convertLinearToSRGB();
         u.uFadeout.value = Math.max(state.fadeout, 0.0005);
+        if (MBAtmosphereRenderer.contentStandDown) {
+            // §241: the mgl sky at full fog = the fogged-background color:
+            // mix(bgColor, fogColor, alpha²) — exactly what the injected
+            // tiles render on the ground (verified on fog/culling/opacity,
+            // expected (88,88,242) = beige×blue@0.64).
+            const fogSrgb = (u.uFogColor.value as THREE.Color).clone();
+            const a = Math.min(1, Math.max(0, state.fogAlpha));
+            const bg = new THREE.Color();
+            const hex = (this.m_mapView as any).clearColor as number | undefined;
+            bg.setHex(hex !== undefined ? hex : 0xffffff, THREE.SRGBColorSpace);
+            bg.convertLinearToSRGB();
+            const flatSrgb = new THREE.Color(
+                bg.r + (fogSrgb.r - bg.r) * (a * a),
+                bg.g + (fogSrgb.g - bg.g) * (a * a),
+                bg.b + (fogSrgb.b - bg.b) * (a * a));
+            (u.uHighColor.value as THREE.Color).copy(flatSrgb);
+            (u.uSpaceColor.value as THREE.Color).copy(flatSrgb);
+            (u.uFogColor.value as THREE.Color).copy(flatSrgb);
+            u.uFogAlpha.value = 1;
+            u.uFadeout.value = 1e9;
+        }
 
         const prevAutoClear = renderer.autoClear;
         const prevRT = renderer.getRenderTarget();
