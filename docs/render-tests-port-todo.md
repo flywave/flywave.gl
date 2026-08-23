@@ -3076,3 +3076,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复（保留）**：buildTileCamera 增 `camPos` 参数，把瓦片边界平移到相机相对帧（`left−camPos.x` 等）——坐标系语义正确且无害（未触发烘焙时零行为）。
 - **烘焙仍空（corners 探针）**：`[255,255,255,255, 0,0,0,0]`——清色后**仍零内容**，内容门继续自禁用。坐标系修正后仍空 → **下一层阻塞**：场景对象可见性/材质在 RT 渲染路径的差异（疑引擎对象材质的 onBeforeRender/相机 uniform 依赖，或 fog/terrain/basic 的可烘焙内容本身被 `hasDrapableContent` 判定流程跳过）。视觉逐值不变（fog/terrain/basic 28760 ✓ 零回归）。
 - **状态**：坐标系修复保留（原则正确），烘焙解阻塞需再一层排查（RT 渲染路径的对象可见性 dump——scene.traverse 时可见 mesh 数与 renderer.info.render.calls 对照）。
+
+**140. drape 烘焙解阻塞达成——§12.76-58 正式关闭（2026-08-23 三十）**：
+
+- **决定性证据**：① bake 时 **16 draw calls 实际执行**（renderer.info.render.calls 24→40）、19 可见 mesh；② 内容门五点采样 `[0,55,0,255, 0,0,0,0, ...]` → **uniform=false，门通过，drape 纹理正式应用**——§139 的"corners 仍空"是**误读**（只打了 8 字节即 2 个采样点，第 2 点 (0,0,0,0) 与白清色不同即已非均匀）。§12.76-58 "零 fragment" 之谜的完整解：**坐标系失配（§139 修复）是唯一阻塞**，修复后烘焙全通。
+- **视觉零变化之谜（待查，无害）**：drape 激活后 fog/terrain/basic、fill-extrusion-terrain 全部逐值不变——烘焙内容（背景绿等）与地形原有外观一致（这些 fixture 的 drapable 内容恰好等于 clear 色语义）或 drape 混合权重为 0。**零回归**（16 例基线逐值 ✓）。
+- **E1 域状态**：drape bake **解阻塞完成**（保留修复）；按 §138 两层路线，下一层 = 启用相机抬升（geoCenter 重锚）——上轮单独实测会揭开 60k 地形层失配，现 drape 已活，需重测抬升 + drape 组合。留为下轮入口。
