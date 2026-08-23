@@ -3799,3 +3799,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **第六次仪表错误**：§258 的 "dec 零调用" 的 python 正则 `dec id=., (\w+)` 与实际日志格式 `dec id=', 'vd52'` 失配——解析失败被误读为零调用。**真实状态未知**：decodeTile 在 globe 上大概率被调用（in-process）；geoms=0 的真因回到 §256 原点：decodeThemedTile 内部（evaluate/emitter/或注入前 early-return 的真实时序）。
 - **下轮入口（正本清源）**：一次性重放 §258 探针 + **修正的解析**（含 dec/cfg 双计数），并按 §256 的闭包内 matched/geoms 打点（主线程可见，in-process 无 worker 盲区）——一次运行收口 decode 链。
 - 工作树=提交态（82 commits）。
+
+**§263. decode 链一次性收口运行——dec 探针真零（原始计数验证，非解析错误）+ attach 属于本 ds：TileLoader↔decoder 实例配对为最后未验环节（2026-08-24 一百五十一，零净变化记档）**：
+
+- **修正探针（管道分隔标记，规避引号逗号解析坑）**：decodeTile 入口 + 注入闭包 before/after 几何计数——**原始 MBDBG 计数=0**（本非 §262 怀疑的解析错误，decodeTile 在 globe 上确实零调用）；attach 带数据源名 = **anonymous-datasource#1（本 ds）** 且 geoms=0。
+- **排除**：TileLoader 的空 payload 短路（§考查 onLoaded：bg-only 的 composite 返回非空 JSON 字符串，不触发 {} 短路）。
+- **最后未验环节**：TileLoader 构造参数中 `dataSource.decoder` 的**实例同一性**（TileFactory/options 传递链上 decoder 引用是否被替换或走了 ConcurrentDecoderFacade 备份分支）——一步：TileLoader 构造处打印 decoder 实例 id（与 §258 主线程 id 对照）。
+- 探针已清，工作树=提交态（83 commits）。
