@@ -382,7 +382,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 l.type === 'background' && (l.layout?.visibility ?? 'visible') !== 'none');
             const hasGeo = Object.values(style.sources ?? {}).some(
                 (src: any) => (src as any)?.type === 'geojson');
-            this.m_emitBackgroundTiles = hasBg && hasGeo;
+            // §252: globe bg-only styles — the tiles are the ONLY background
+            // carrier there (no clearColor+quad alternative on the sphere).
+            const isGlobe = (style as any).projection?.name === 'globe'
+                || (style as any).projection?.type === 'globe';
+            this.m_emitBackgroundTiles = hasBg && (hasGeo || isGlobe);
         }
         if (customOptions?.currentSourceId) {
             this.m_currentSourceId = customOptions.currentSourceId as string;

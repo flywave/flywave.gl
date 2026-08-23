@@ -3730,3 +3730,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **取证（fog/globe/space-color，512²、z1、globe 投影、bg-only 样式）**：253k/262k（97%）全图差——期望中带米色（globe 面上的 fogged 背景瓦片）+ 深蓝渐变（大气），我方整图深蓝渐变（globe 大气路径 §167-169 已有）——**背景层在 globe 投影下无任何几何**（`applyBackgroundColor` 只设 clearColor；bg-tile 注入（§236）走瓦片解码，globe 下引擎覆盖/解码是否到达未验证）。主缺口 = globe 的背景绘制（mgl 在 globe 上同样逐瓦片画 background），叠加既有大气渐变的标定。剩 6 例（high-color 36k 级、space-color-opacity 119k、star-intensity 52k）同族。
 - **terrain/switch-style 新域未及（会话十一次极限宣告）**。工作树=提交态（71 commits）。
+
+**§252. globe bg-tile 门放宽实验——瓦片未到达（数值恒定），globe 解码/覆盖路径独立缺口定案（2026-08-24 一百四十，保留门基建）**：
+
+- **实施**：bg-tile 注入门从 `hasBg && hasGeo` 放宽到 `hasBg && (hasGeo || style.projection.name==='globe')`（globe bg-only 样式瓦片是唯一背景载体）。
+- **实测**：globe 六例数值**逐位恒定**（141491/119763/52681/36877/35800/35192）——**瓦片解码/覆盖在 globe 投影下根本不发生**（引擎 globe 路径的瓦片请求/挂载独立于平面管线），与 §251 的"注入是否到达"疑问闭合为否定。**下轮入口**：引擎 globe 覆盖（sphere 投影的瓦片请求链）——独立于 datasource 的引擎战役。color 族 PASS / culling far 6002 零回归 ✓。
+- **会话十二次极限宣告后真终局**。工作树=提交态（72 commits）。
