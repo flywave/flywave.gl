@@ -691,13 +691,14 @@ export class MBMaterialPatchManager {
      * for the fog per-content-depth campaign (§106/§179).
      */
     static fogContentScales: Record<string, number | { slope: number; offset: number }> = {
-        // raster: §208/§209 two fit rounds both inconclusive — the slope-3
-        // probe contradicts the linear model (t3 saturated upper half, rows
-        // 190-210 imply negative near/R) and per-pixel masks catch only n=21
-        // pixels. Needs a controlled re-measure (quad off + unclamped range).
     };
 
     private patchRasterMaterial(material: THREE.Material, technique: any): void {
+        // §215: the t-space remap mechanism (MB_RASTER_TMAP define in the
+        // fog chunk) is proven active but its constants are camera-geometry
+        // dependent (zoom/pitch) — a static value regresses other raster
+        // fixtures (basic 6504→11614). Needs runtime-computed constants;
+        // left disabled.
         const url = technique._rasterTileUrl as string;
         if (!url) return;
 

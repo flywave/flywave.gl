@@ -3499,3 +3499,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl 语义终解**：期望图 rows 0-79 纯蓝 = **雾剔除边界内的瓦片满雾覆盖**（mgl 在 horizon 可见时瓦片覆盖到 cull 边界，线在其外全剔除）——我方瓦片覆盖止于视口语义，顶部无瓦片 → glow/space 露出。**根治 = 引擎 VisibleTileSet 的 horizon 覆盖语义**（mgl `shouldSplit/cover` 到 horizon）。
 - **content-gate 实验与回退**：有内容层时 quad 让位（mgl 语义）——far 9387→8643 ✓ 但 close/mid/opacity 各 +3~7k、raster 32478→100646（内容瓦片不能独立覆盖背景带）——**净损巨大回退**。保留：`hasContentLayers` 全链路基建（env/state/setter，默认不生效）。
 - **基线复核**：color 族 PASS / raster 32478 / culling 9387 复原 ✓。
+
+**§215. raster 正向计算闭环——噪声无关拟合成功与"常数为相机几何相关"的终局定性（2026-08-24 一百零四，机制保留/激活禁用）**：
+
+- **正向计算成功（替代否证的图像逆推）**：按 mgl 公式链解析推 t_mgl(y)——H=camToCenter/worldSize·C（z16/p70→1341m）、θ(y)=仰角修正（pitch 语义 90−pitch，首轮公式错误的更正）、depth=shift·d/distCam——与实测 t_ours(y)（tprobe310）拟合得 **t_mgl = 0.533·t_ours − 0.137（med|res|=0.026，n=13）**，噪声无关、与 §208 行中值轮（0.471/0.209）方向吻合。
+- **两版应用实验均回退**：① 顶点仿射换算（offset=−3195m）在引擎度量下符号/单位失准（raster 满白）；② **t 空间直接重映射**（fogT·0.533−0.137，per-technique define `MB_RASTER_TMAP`）机制验证有效（basic 响应 6504→11614）但**常数为相机几何相关**（zoom/pitch）——z16/p70 的拟合不可迁移到 basic（z12/p80），静态值净损。equal-range 曾在顶点仿射下 6810→3631（raster 内容雾修正的连带），随回退失去。
+- **终局定性（下轮入口）**：remap 常数需**运行时按相机几何计算**——s 与 C 均可由双相机模型（引擎 H_e=cam.position.z 与 mgl H_m=camToCenter/worldSize·C）解析导出（两者皆仿射于 d(y)），在 patch 时代入 define 字面量。机制三件套（顶点仿射/fogT-remap define/正向公式链）全部就绪。
+- **复核**：color 族 PASS / raster 32478 / basic 6504 / equal-range 6810 基线复原 ✓。
