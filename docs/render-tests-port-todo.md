@@ -3631,3 +3631,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **仪表错误修正**：§233 的"零调用"源于 regex 笔误（`{\>`）致日志未落 GeoJSONDataProvider——定点补打后 **54 次调用覆盖 z7-15 全层**（8/8/8/8/8/6/4/2/2 按层）。引擎请求与取数管线**完全正常**。
 - **缺口终收窄**：fetch ✓ → **decode→objects 环节**（引擎请求瓦片的解码产物 objects=0 vs datasource 私有 27 瓦片带对象）——下轮唯一入口：对照 MBStyleDecoder 对引擎请求瓦片 vs 私有分片瓦片的解码路径（decodeTile 入参/剪裁/technique 生成差异），一次对比即可锁定。
 - **复核**：color PASS / culling/far 4691 恒定 ✓，工作树=提交态（55 commits）。
+
+**§235. decode→objects 断点终极诊断——objects=0 合法（equator 线不交任何 cover 瓦片），缺失者是 background 层逐瓦片几何（2026-08-24 一百二十四，终局记档）**：
+
+- **代码分析定案**：GeoJSONDataProvider 返回全量 geojson → decoder 按瓦片剪裁——culling/far 的线在赤道（相机 0.1°N ≈ 11km 外，z15 瓦片 ~1.2km）**不与任何 cover 瓦片相交** → objects=0 完全合法；线的渲染来自 datasource 私有分片（含赤道瓦片）——双实例分歧真相大白（无 bug，是数据几何分布）。
+- **真正缺口**：mgl 期望的蓝瓦 = **background 层逐瓦片绘制**（draw_background 对每个瓦片画 quad，无 source 依赖）——我们只有 clearColor + quad overlay（§197 移除引擎背景平面后），引擎覆盖瓦片上没有任何几何可承载雾。
+- **修复方案（明确可实现）**：MBStyleDecoder.decodeThemedTile 在样式含 background 层时，为每个瓦片注入**合成全瓦片矩形 Feature**（经 processor 走 fill 管线承载 background-color + 瓦片雾）——mgl draw_background 的忠实移植；culling 四例 + raster 覆盖缺口（§221 汇合点）应一并受益。
+- **会话终态**：工作树=提交态（56 commits），culling 战役的因果链至此完全闭合（frozen→覆盖→空载→合法→background 缺失）。
