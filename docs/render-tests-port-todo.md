@@ -2996,3 +2996,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **有效二分（五轮，均经索引再生）**：icon-only 槽位上 ① overlap+ignore-placement ② 数据点移 ±0.5° ③ filter+properties ④ 追加 marker.png addImage op ⑤ **整套 with-symbol style 原样**——**全部 29792 全白失败**；而同一份 style 在 with-symbol 槽位 PASS（同页同跑双测对照：render-callback nonwhite=0 vs with-symbol nonwhite=30522）。
 - **悖论定案**：唯一剩余变量是**测试名本身**——同 style 异名异果。机制候选：karma 页内按名缓存的状态（`it()` 标题键控的 karma 过滤/dump-server 路径交互）或 harness 内未见的名键逻辑。**破案需 karma step-debug 会话**（断点 addImage op 与首帧渲染），本轮不再推进；§123 的"TextElementsRenderer 单要素链"假说 likewise 作废（⑤ 已含双要素仍白）。
 - **状态**：fixture 与索引已还原原状（基线复核 29792/with-symbol PASS ✓），零净变化。
+
+**126. icon 425 近失族定性——亚像素定位偏移（2026-08-23 十六，零净变化）**：
+
+- **取证（icon-image/token + property-function + text-color/property-function 218 同族）**：失配集中在图标内部（bbox 45-85×15-110），图标外框**逐像素一致**（exp/cur icon bbox 相同 10-39）；墨量比 cur/exp=0.977，但特定行/列（17-25 行、11-20 列）cur 更深——**分数像素级放置偏移**特征（图标整体移动 <1px），非尺寸/颜色错。
+- **定性**：与 §93/§104 text 字形残差同类——**光栅化亚像素定位长尾**（POI/字形 quad 的放置取整 vs mgl 的亚像素定位）。修复入口在 PoiRenderer/TextCanvas 的放置取整链（POI 世界坐标→屏幕像素的 floor/round 时点），属引擎精度专项，非样式层缺口。icon-image/token 425、property-function 425、text-color/property-function 218 记档归并此族。
+- **零净变化**。
