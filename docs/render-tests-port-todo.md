@@ -3564,3 +3564,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **三点探测**：z=0.5 与 0.8999 的 quad 行为逐位同基线（内容未遮挡）、z=0.9999 被全屏遮挡 → 阻挡者深度 ∈ (0.8999, 0.9999) 且内容深度不可与之分离（pitch70/z16 远距下内容深度同样压缩在 0.9+）——**overlay 深度遮挡在该几何下原理性不可用**（内容/天空/阻挡层深度同域）。
 - **终局结论（对 §221/§223 的统一）**：fog-over-content 的 overlay 方案（任何 z）在远距几何下不可行；**唯一正解 = 逐材质雾（mgl 语义本身）**——MB_RASTER_MGL_FOG 路径（§216 已验证可激活）+ quad 仅服务无内容背景域（color 族 PASS 现状）= 分域并存，无需深度。此组合此前未试（§216 实验时 quad 未分域）——**下轮一步实验：激活 MB_RASTER_MGL_FOG + quad 保持现状，测 raster/basic/equal-range**。
 - **复核**：color PASS / raster 32478 / basic 6504 恒定 ✓。
+
+**§225. 组合实验复核——§224 猜想证伪，双重雾实锤（2026-08-24 一百一十四，零净变化）**：
+
+- 激活 MB_RASTER_MGL_FOG + quad 现状（干净复跑）：basic 19493 / equal-range 23199 / raster 32478——与 §216 完全一致，**§224 的"未试组合"猜想证伪**（该组合即 §216 实验）。双重雾（内容 mgl 雾 + quad 叠加）实锤。
+- **raster 战役最终地图（四轮定案后闭合）**：overlay 深度遮挡原理性不可用（§224）+ 场景化被 pass 链封锁（§220）+ 逐材质雾与 quad 并存双重雾（§216/§225）→ **唯一剩余路径 = quad 在有内容瓦片的 fixture 上让位 + 内容瓦片自身的覆盖缺口由"瓦片覆盖延伸"（culling 同款引擎语义）补齐**——raster 与 culling 两域在引擎层汇合为同一需求：**VisibleTileSet 的 horizon/fog-cull 覆盖语义**。datasource 层四轮实验的全部证据链闭合。
+- **复核**：color PASS / raster 32478 / basic 6504 复原 ✓，工作树=提交态。
