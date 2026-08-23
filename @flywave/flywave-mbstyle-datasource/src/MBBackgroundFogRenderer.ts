@@ -50,6 +50,8 @@ export class MBBackgroundFogRenderer {
             r1: number;
             shift: number;
             distCam: number;
+            hasBackground: boolean;
+            hasSky: boolean;
         } | null,
     ) {
         this.m_scene = new THREE.Scene();
@@ -71,7 +73,10 @@ export class MBBackgroundFogRenderer {
         // pitch-70 family. Outside 60..75 the rig's pitch-80 sky/raster
         // geometry diverges from mgl and the quad only adds error (§181) —
         // skip it there (background keeps the flat clear color as before).
-        if (pitchDeg < 60 || pitchDeg > 76) return;
+        // Exception: explicit-sky-layer styles with a background layer
+        // (horizon-blend family, pitch 85) — mgl fogs the background tiles
+        // at any pitch and the expected images show the whitened band.
+        if (pitchDeg < 60 || (pitchDeg > 76 && !(state.hasBackground && state.hasSky))) return;
 
         this.ensureMesh();
         if (!this.m_mesh || !this.m_material) return;

@@ -1224,10 +1224,13 @@ export class MBStyleDataSource extends TileDataSource {
             // ray∩ground fog gradient. Early-returns when fog is off.
             try {
                 const { MBBackgroundFogRenderer } = await import('./MBBackgroundFogRenderer');
-                const env0 = self.m_environment;
+                // Query the CURRENT environment (self.m_environment) — a
+                // captured env0 goes stale when the environment is re-created
+                // on style re-application, and the quad then renders with the
+                // old fog/sky state (horizon-blend family, §186).
                 self.m_backgroundFogRenderer = new MBBackgroundFogRenderer(
                     this.mapView,
-                    () => env0?.backgroundFogState ?? null,
+                    () => self.m_environment?.backgroundFogState ?? null,
                 );
             } catch {}
 
@@ -1235,10 +1238,10 @@ export class MBStyleDataSource extends TileDataSource {
             // the engine's object filtering drops the legacy dome, §182b).
             try {
                 const { MBAtmosphereRenderer } = await import('./MBAtmosphereRenderer');
-                const env1 = self.m_environment;
+                // Same stale-env hazard as the background-fog quad above.
                 self.m_atmosphereRenderer = new MBAtmosphereRenderer(
                     this.mapView,
-                    () => env1?.atmosphereState ?? null,
+                    () => self.m_environment?.atmosphereState ?? null,
                 );
             } catch {}
 

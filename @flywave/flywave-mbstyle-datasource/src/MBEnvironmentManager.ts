@@ -120,13 +120,15 @@ export class MBEnvironmentManager {
         color: THREE.Color;
         alpha: number;
         /** mgl NORMALIZED fog depth params: T = smoothstep(r0, r1,
-         *  shift·distFwd/distCam) — the raw fog range over the
+         * shift·distFwd/distCam) — the raw fog range over the
          * forward-axis distance (fit-verified on fog/color, §180). */
         r0: number;
         r1: number;
         shift: number;
         distCam: number;
         bgAlpha: number;
+        hasBackground: boolean;
+        hasSky: boolean;
     } | null {
         if (!this.m_fog || !this.m_fogState || this.m_bgFogParams == null) return null;
         return {
@@ -141,6 +143,13 @@ export class MBEnvironmentManager {
             // fog/color-opacity expected mid-band is slightly lighter than
             // an 0.8 blend — residual alpha semantics, documented §181.
             bgAlpha: this.m_fogState.alpha,
+            // mgl fogs the background tiles at ANY pitch; the >76 extension
+            // is scoped to explicit-sky-layer styles (horizon-blend family)
+            // — §181 measured the pitch-80 quad as net-negative on the
+            // fog/2d family with the s=0.735 calibration, so keep those
+            // gated until s(pitch) is calibrated.
+            hasBackground: this.m_styleHasBackground,
+            hasSky: !!(this.m_skyMesh && !this.m_skyMesh.userData.__mbFogAtmosphereDome),
         };
     }
     private m_bgFogParams: { r0: number; r1: number; shift: number; distCam: number } | null = null;
@@ -159,6 +168,12 @@ export class MBEnvironmentManager {
     } | null {
         const st = this.m_fogState;
         if (!st) return null;
+        // An explicit sky layer supersedes the atmosphere glow: mgl draws
+        // the sky pass AFTER the atmosphere (painter.ts opaque→atmosphere→
+        // sky) at max depth, so the sky layer's fragments replace the glow
+        // wherever no opaque content drew (the whole sky region). The sky
+        // shaders themselves apply fog_apply_sky_gradient.
+        if (this.m_skyMesh && !this.m_skyMesh.userData.__mbFogAtmosphereDome) return null;
         return {
             fogColor: st.color,
             fogAlpha: st.colorAlpha,
@@ -729,12 +744,21 @@ export class MBEnvironmentManager {
             colorAlpha,
             // mapbox drawAtmosphere: horizonBlend = mapValue(horizon-blend, 0..1, 0.0005..0.25)
             horizonBlend: Number(evalZoom(rawHorizonBlend, 0.2)) * 0.2495 + 0.0005,
+            // fogUniformValues: u_fog_horizon_blend = the RAW horizon-blend
+            // property (0..1) — the mapValue mapping is ONLY for the
+            // atmosphere glow's u_fadeout_range, not the content/sky fog.
+            horizonBlendRaw: Number(evalZoom(rawHorizonBlend, 0.2)),
             highColor: new THREE.Color(rawHighColor),
             spaceColor: new THREE.Color(evalZoom(rawSpaceColor, '#010b19')),
         };
         // mgl fog_horizon_blending + vertical-range uniforms (see the
         // fog_fragment chunk). vertical-range default [0,0] = disabled;
         // mgl orders the pair with min/max applied.
+        // Content materials keep the MAPPED horizon blend — the kFog=3.7
+        // calibration was fitted with it (fog/2d/hillshade regresses
+        // 18k→27.7k with the raw value, §186). Only the sky shaders use the
+        // raw property (fogUniformValues semantics, pixel-verified on
+        // fog/horizon-blend/gradient/low).
         (THREE.UniformsLib.fog as any).fogHorizonBlend.value = this.m_fogState.horizonBlend;
         const vRange = evalZoom(fog['vertical-range'], [0, 0]) as [number, number];
         (THREE.UniformsLib.fog as any).fogVertLimit.value.set(
@@ -756,6 +780,7 @@ export class MBEnvironmentManager {
         alpha: number;
         colorAlpha: number;
         horizonBlend: number;
+        horizonBlendRaw: number;
         highColor: THREE.Color;
         spaceColor: THREE.Color;
     } | null = null;
@@ -935,6 +960,12 @@ export class MBEnvironmentManager {
 
     private createFogAtmosphereDome(): void {
         if (!this.m_scene || !this.m_fogState) return;
+        // An explicit sky layer supersedes the fog dome (mgl sky pass draws
+        // after the atmosphere glow). applySky removes the dome when the sky
+        // is applied, but applyFog re-entry paths (theme propagation, zoom
+        // updates) would recreate it ON TOP of the sky — never (re)create
+        // the dome while an explicit sky mesh is active.
+        if (this.m_skyMesh && !this.m_skyMesh.userData.__mbFogAtmosphereDome) return;
         const fog = this.m_fogState;
 
         if (!this.m_skyMesh) {
@@ -1009,8 +1040,6 @@ export class MBEnvironmentManager {
                         vec3 col = mix(uSpaceColor, c2, t);
                         // The uniforms carry LINEAR colors (THREE.Color working
                         // space); this ShaderMaterial writes gl_FragColor raw,
-                        // so encode to sRGB or the dome renders linear² (fog
-                        // red (255,30,35) came out (255,3,4), §180).
                         col = mix(col * 12.92, pow(col, vec3(1.0 / 2.4)) * 1.055 - 0.055,
                             vec3(lessThanEqual(col, vec3(0.0031308))));
                         gl_FragColor = vec4(col, 1.0);
@@ -1175,6 +1204,7 @@ export class MBEnvironmentManager {
         ).normalize();
         const radius = (sky['sky-gradient-radius'] ?? 90) * Math.PI / 180;
 
+        const fog = this.m_fogState;
         const material = new THREE.ShaderMaterial({
             side: THREE.BackSide,
             transparent: opacity < 1,
@@ -1186,6 +1216,15 @@ export class MBEnvironmentManager {
                 uRadius: { value: Math.max(radius, 1e-6) },
                 uSolidColor: { value: solidColor },
                 uHasRamp: { value: rampTexture ? 1 : 0 },
+                // fog_apply_sky_gradient (skybox_gradient.fragment.glsl FOG
+                // define) — same uniforms as the atmosphere-sky path.
+                uFogColor: { value: fog ? fog.color.clone() : new THREE.Color(0, 0, 0) },
+                uFogAlpha: { value: fog ? fog.alpha : 0 },
+                uFogHorizonBlend: { value: fog ? fog.horizonBlendRaw : 1 },
+                uHorizonCut: { value: this.m_styleHasBackground ? 1 : 0 },
+                // Camera world rotation (mat3): view ray (camera space) →
+                // world z-up ray for the fog horizon blend.
+                uCamRot: { value: new THREE.Matrix3() },
             },
             vertexShader: `
                 varying vec3 vViewPosition;
@@ -1208,6 +1247,11 @@ export class MBEnvironmentManager {
                 uniform float uRadius;
                 uniform vec3 uSolidColor;
                 uniform float uHasRamp;
+                uniform vec3 uFogColor;
+                uniform float uFogAlpha;
+                uniform float uFogHorizonBlend;
+                uniform float uHorizonCut;
+                uniform mat3 uCamRot;
                 varying vec3 vViewPosition;
                 void main() {
                     // dir is the camera-space view ray; uCenterDir is the celestial
@@ -1220,6 +1264,23 @@ export class MBEnvironmentManager {
                     if (uHasRamp > 0.5) {
                         col = texture(uRamp, vec2(progress, 0.5)).rgb;
                     }
+                    // fog_apply_sky_gradient: fog_horizon_blending(world dir)
+                    // = u_fog_color.a * exp(-3 * t * t), t = dir.z / hb.
+                    vec3 wdir = normalize(uCamRot * dir);
+                    if (uHorizonCut > 0.5 && wdir.z <= 0.0) {
+                        // mgl's background tiles cover the ground; our
+                        // background is the clear color, so cut here (same
+                        // as the atmosphere-sky path).
+                        discard;
+                    }
+                    float t = max(0.0, wdir.z / max(uFogHorizonBlend, 1e-4));
+                    // uFogColor is a LINEAR THREE.Color; the ramp texture is
+                    // stored in sRGB (output-as-is convention of this
+                    // material), so encode before mixing.
+                    vec3 fogSrgb = mix(uFogColor * 12.92,
+                        pow(max(uFogColor, vec3(0.0)), vec3(1.0 / 2.4)) * 1.055 - 0.055,
+                        vec3(lessThanEqual(uFogColor, vec3(0.0031308))));
+                    col = mix(col, fogSrgb, uFogAlpha * exp(-3.0 * t * t));
                     gl_FragColor = vec4(col, uOpacity);
                 }
             `,
@@ -1234,6 +1295,8 @@ export class MBEnvironmentManager {
             const viewMatrix = camera.matrixWorldInverse;
             const c = centerDir.clone().transformDirection(viewMatrix).normalize();
             (m.uniforms.uCenterDir.value as THREE.Vector3).copy(c);
+            // World rotation for the fog horizon blend's z-up ray.
+            (m.uniforms.uCamRot.value as THREE.Matrix3).setFromMatrix4(camera.matrixWorld);
         };
         this.m_scene!.add(this.m_skyMesh);
     }
@@ -1312,7 +1375,7 @@ export class MBEnvironmentManager {
                 uOpacity: { value: opacity },
                 uFogColor: { value: fog ? fog.color.clone() : new THREE.Color(0, 0, 0) },
                 uFogAlpha: { value: fog ? fog.alpha : 0 },
-                uFogHorizonBlend: { value: fog ? fog.horizonBlend : 1 },
+                uFogHorizonBlend: { value: fog ? fog.horizonBlendRaw : 1 },
                 uHorizonCut: { value: this.m_styleHasBackground ? 1 : 0 },
             },
             vertexShader: `
