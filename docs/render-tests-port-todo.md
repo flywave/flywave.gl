@@ -3779,3 +3779,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **定案**：attach 的瓦片**无标记** → 它来自 decodeThemedTile 的 `!m_layerEvaluator` early-return（标记在函数尾，早退不带）——**globe 的解码上下文（worker）未收到带 mbStyle 的 configure**（主线程 configure ✓ §258），即 applyProjection/projection 切换后 worker 侧 decoder 配置未传播/重置。
 - **下轮一步（接近修复）**：applyProjection 后向 decoder 重发 configure（mbStyle）或查 TileDecoderService 的 worker configure 传播在 projection 切换下的路径——一行级修复的候选。
 - 探针已清，工作树=提交态（79 commits）。
+
+**§260. configure 重发实验无效——worker 传播假说受挫，globe 解码产物来源仍未定（2026-08-24 一百四十八，零净变化记档）**：
+
+- **实施**：applyProjection 后重发 `decoder.configure(undefined, {mbStyle})`（§259 一行修复候选）——**globe 六例数值逐位恒定**（141491 等），主线程 configure 本已 ✓（§258），重发为无操作。零回归（color/culling/line 族恒定）。
+- **矛盾记档（下轮入口）**：§256 attach 发生（瓦片"已解码"）vs §258 我们的 decodeTile/§259 注入标记均缺席——globe 的空 decodedTile **来源不明**（候选：瓦片加载失败/取消后的空占位被 attach、TileDecoderService 代理不经过 MBStyleDecoder、或缓存复用）。**下轮一步**：Tile.ts attach 处打印 tileLoader 状态链（loadState/cancelled）+ tileDecoder 构造类名——区分"空占位"与"真解码空"。
+- 工作树=提交态（80 commits）。
