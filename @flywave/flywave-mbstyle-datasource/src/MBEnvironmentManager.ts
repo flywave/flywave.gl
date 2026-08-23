@@ -1041,7 +1041,7 @@ export class MBEnvironmentManager {
                         // The uniforms carry LINEAR colors (THREE.Color working
                         // space); this ShaderMaterial writes gl_FragColor raw,
                         col = mix(col * 12.92, pow(col, vec3(1.0 / 2.4)) * 1.055 - 0.055,
-                            vec3(lessThanEqual(col, vec3(0.0031308))));
+                            vec3(greaterThan(col, vec3(0.0031308))));
                         gl_FragColor = vec4(col, 1.0);
                     }
                 `,
@@ -1279,7 +1279,7 @@ export class MBEnvironmentManager {
                     // material), so encode before mixing.
                     vec3 fogSrgb = mix(uFogColor * 12.92,
                         pow(max(uFogColor, vec3(0.0)), vec3(1.0 / 2.4)) * 1.055 - 0.055,
-                        vec3(lessThanEqual(uFogColor, vec3(0.0031308))));
+                        vec3(greaterThan(uFogColor, vec3(0.0031308))));
                     col = mix(col, fogSrgb, uFogAlpha * exp(-3.0 * t * t));
                     gl_FragColor = vec4(col, uOpacity);
                 }

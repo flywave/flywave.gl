@@ -161,7 +161,7 @@ export class MBAtmosphereRenderer {
                     // Uniforms carry LINEAR THREE.Colors; encode to sRGB.
                     col = mix(col * 12.92,
                         pow(max(col, vec3(0.0)), vec3(1.0 / 2.4)) * 1.055 - 0.055,
-                        vec3(lessThanEqual(col, vec3(0.0031308))));
+                        vec3(greaterThan(col, vec3(0.0031308))));
                     gl_FragColor = vec4(col, 1.0);
                 }
             `,

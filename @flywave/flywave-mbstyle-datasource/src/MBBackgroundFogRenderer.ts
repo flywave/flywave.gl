@@ -177,7 +177,7 @@ export class MBBackgroundFogRenderer {
                     // ShaderMaterial must encode to sRGB itself.
                     vec3 fogSrgb = mix(uFogColor * 12.92,
                         pow(uFogColor, vec3(1.0 / 2.4)) * 1.055 - 0.055,
-                        vec3(lessThanEqual(uFogColor, vec3(0.0031308))));
+                        vec3(greaterThan(uFogColor, vec3(0.0031308))));
                     gl_FragColor = vec4(fogSrgb, uFogAlpha * opacity);
                 }
             `,
