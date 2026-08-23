@@ -3100,3 +3100,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **下轮入口**：二分验证——halfOf 的 secLat 在本 fixture 关闭后失配变化（一行实验）；若大幅降则收窄为"secLat 只应施加于固定宽路径"。
 
 **§144. secLat 双重施加假说 A/B 否决（2026-08-23 三十四，零净变化）**：gradient-vector-tile 的 progressHalfWidths halfOf secLat 关闭后**逐值不变 11114**（meters-default/border 也逐值复原）——secLat 非覆盖域错位因子。假说否决，实验清理回退，§142 接缝几何数值对照入口不变。
+
+**§145. gradient-vector-tile 决定性覆盖对照（2026-08-23 三十五，零净变化）**：
+
+- **期望覆盖模型（alpha>0 提取）**：mgl 的两条线是**窄行带**——顶带 y≈10-60（含 y60 仅 2px 的 taper 尖）、y75-105 **真空带**、底带 y≈110-130、y0/y135 空——与 30m（≈45px）→0.5m 的楔形语义完全一致。
+- **cur 覆盖**：**每行 150px 全覆盖（含期望的真空带）**——非 taper 偏差，是**线宽/重复级错误**：单一 30m→0.5m 对角线不可能覆盖 y75 空带，除非（a）宽度假宽度恒 30m 且线为对角（覆盖仍应有行带）→ 更可能是（b）**多副本叠加**（同线在多瓦片层级/多 tile 重绘，与 §94 heatmap 3× 重复同族）或（c）progress→宽度映射整体失效取 max 值 + 线自身跨度大。
+- **下轮入口（二选一即可定论）**：① 探针数该层 ribbon mesh 数与顶点总数（<5 分钟定 a/b/c）；② halfOf 输入 w 的 runtime 打点。
