@@ -3082,3 +3082,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **决定性证据**：① bake 时 **16 draw calls 实际执行**（renderer.info.render.calls 24→40）、19 可见 mesh；② 内容门五点采样 `[0,55,0,255, 0,0,0,0, ...]` → **uniform=false，门通过，drape 纹理正式应用**——§139 的"corners 仍空"是**误读**（只打了 8 字节即 2 个采样点，第 2 点 (0,0,0,0) 与白清色不同即已非均匀）。§12.76-58 "零 fragment" 之谜的完整解：**坐标系失配（§139 修复）是唯一阻塞**，修复后烘焙全通。
 - **视觉零变化之谜（待查，无害）**：drape 激活后 fog/terrain/basic、fill-extrusion-terrain 全部逐值不变——烘焙内容（背景绿等）与地形原有外观一致（这些 fixture 的 drapable 内容恰好等于 clear 色语义）或 drape 混合权重为 0。**零回归**（16 例基线逐值 ✓）。
 - **E1 域状态**：drape bake **解阻塞完成**（保留修复）；按 §138 两层路线，下一层 = 启用相机抬升（geoCenter 重锚）——上轮单独实测会揭开 60k 地形层失配，现 drape 已活，需重测抬升 + drape 组合。留为下轮入口。
+
+**141. 相机抬升 + drape 组合批测——组合否决，域冻结（2026-08-23 三十一，零净变化）**：
+
+- **组合实测（16 例）**：抬升后 fill-extrusion-terrain 全族 ~126k（同 §138 单独抬升值——**drape 对该域视觉零贡献**，与 §140 "零变化之谜"一致：drape 内容=背景色语义）；连带 fog/terrain 28760→38511、circle/occluded 5786→7021 劣化。
+- **关键新证据（构图分析）**：抬升后 cur **100% 灰**（整屏被烘焙内容/地形色覆盖）vs exp 50.5% 灰（半屏建筑+半屏背景）——抬升使**地形面充满全屏**（相机贴地形表面俯视），而 mgl 期望是**半屏天空/背景 + 半屏建筑**——mgl 的期望相机并非贴地表面视角（§138 公式的 `elevationAtCenter·pixelsPerMeter` 换算到我们的米制世界可能存在 pixelsPerMeter≈cos(lat)·worldSize 缩放差，600m×比例 ≠ 直接 +elev）。**组合否决，回退**。
+- **fill-extrusion-terrain 域冻结定论**：11 轮排查（§128-§141），已修/已解：对齐语义、drape 解阻塞；未解：相机-地形标度（mgl mercator z 单位换算）+ 地形呈现细节——需完整的 mgl transform 相机-地形标度移植（pixelsPerMeter/worldSize 链），记为引擎侧专项，与 fog RTE 深度语义、line-occlusion post-render API、TextCanvas 光栅化同列。
