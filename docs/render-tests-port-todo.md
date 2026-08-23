@@ -3471,3 +3471,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **slope-3 探针实测**：t3−3t 的行中值随行漂移（−1.68→−0.38）——上半 t3 全饱和（=1）无信息、rows 190-210 稳定段推出 **near/R≈−0.19（负值不可能）**——测量被污染（疑掩码混入 quad 像素/基色图与探针图的像素对应错位）。per-pixel 回归掩码过严（n=21）拟出近平坦 s=0.037，与行中值轮的 0.47 矛盾。
 - **两轮小结**：§208 行中值（s=0.47 过冲）与 §209 per-pixel（s=0.04）给出矛盾拟合——t_mgl 目标估计本身不稳定（高亮 imagery 上 op 的分母小、噪声放大）。**结论：该 imagery 不适合做 op 逆推目标**；正确路径是（下轮）① 选暗通道（B 通道）做 op、② 或用 mgl 原始深度模型正向计算 t_mgl（从 mgl fog 矩阵语义 + 相机几何直接推每行期望 t，绕开图像逆推）。
 - **基线复核**：raster 32478 / color 族 PASS ✓，工具链（fogDebugT 双模式 + 仿射注入）全部保留待用。
+
+**§210. culling 绿线渲染通道六路排除终局——仅剩 AfterRender 直绘通道未逐一排查，探针矩阵全记档（2026-08-24 一百，零净变化）**：
+
+- **本轮新增排除**（tileVisibilityFilter 打点 + 全帧瓦片普查 + 场景静态 Mesh 隐藏）：① filter 被咨询但所见瓦片 objs=0（z15/16392/16374 恰为线所在瓦片——线不以其 objects 形式渲染）；② 隐藏场景全部 4 个静态 Mesh 绿线恒定；③ 全帧瓦片键普查（flush 门限调试未及出数）。叠加 §204/§205/§206 的排除（tile.objects 隐藏/getDecodedTiles/visibleTiles/renderedTiles Map），**绿线不属于任何已检通道**——剩余唯一候选：**datasource 自己的 AfterRender 直绘渲染器群**（additiveLine/heatmap/quad 等直接 renderer.render 的场景，m_scene traverse 不覆盖其私有 scene），或 TileObjectsRenderer 每帧 add-then-remove 的瞬时对象窗口内路径。
+- **下轮入口（二选一优先）**：① 逐个禁用 datasource 的 AfterRender 渲染器（additiveLine/heatmap/shadow）二分定位；② 在 TileObjectsRenderer.render 的 rootNode.add 前后打点（引擎侧一行日志）。
+- **raster 拟合**：§209 已定案（imagery 不适合 op 逆推，正向计算路径），本阶段未重试。
+- **复核**：全部探针已清、color 族 PASS / raster 32478 / equal-range 6810 基线恒定，工作树=提交态。
