@@ -3806,3 +3806,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **排除**：TileLoader 的空 payload 短路（§考查 onLoaded：bg-only 的 composite 返回非空 JSON 字符串，不触发 {} 短路）。
 - **最后未验环节**：TileLoader 构造参数中 `dataSource.decoder` 的**实例同一性**（TileFactory/options 传递链上 decoder 引用是否被替换或走了 ConcurrentDecoderFacade 备份分支）——一步：TileLoader 构造处打印 decoder 实例 id（与 §258 主线程 id 对照）。
 - 探针已清，工作树=提交态（83 commits）。
+
+**§264. TileLoader decoder 同一性定案——构造时 decoder=MBStyleDecoder 且 evaluator 已就绪：与 dec 探针零调用构成硬矛盾，实例同一性排除（2026-08-24 一百五十二，零净变化记档）**：
+
+- **探针**：TileDataSource.create 构造处 = `MBStyleDecoder | hasE | cfg`——TileLoader 拿到的就是**已配置的本实例**（§263 的实例同一性候选排除；不存在 facade 备份分支替换）。
+- **硬矛盾记档（globe 战役的最终悬案）**：decoder 同一且已配置（§258/§264 双证）vs decodeTile 零调用（§263 管道标记原始计数双证）vs attach 有 decodedTile（§256/§261）——三者不能同时成立，唯一未审计的环节是 **Tile.loadAndDecode 的分支链**（Tile.ts:860 前的 cache/geometry-loader 快路可能在 decode 前构造空 decodedTile）。**下轮一步**：Tile.loadAndDecode 全函数体逐行审计 + tileLoader.loadAndDecode 调用前打点。
+- 探针已清，工作树=提交态（84 commits）。
