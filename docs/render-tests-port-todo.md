@@ -3170,3 +3170,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **§163. LineTypesetter/catalog 消费链静态推导收官（2026-08-23 五十三，零净变化）**：数值推导链——CatalogBuilder `offsetY = distanceRange/2 − top − border` → GlyphData `top = lineHeight − offsetY`（=23+g.top）→ LineTypesetter `verticalOffset = lineHeight − base − distanceRange/2`（=3）——**三级换算自洽闭合**（23+g.top−3 回到正确的 g.top+20 基线系），垂直定位公式无罪；残余嫌疑最终收敛到 **advance 的分数累积**（LineTypesetter 以 catalog px 累积 vs mgl 的浮点 advance 累积——每字符亚 px 累积差即可产生 0.977 墨量比与特定行列加深）与 SDF 光栅化本身。静态分析已穷尽（六轮），runtime 数值捕获（typesetter 逐 glyph 输出 vs mgl positionedGlyphs）是唯一剩余手段，须专门会话。零代码变更，推导链记档。
 
 **§164. text/icon 专项终局定性——七轮穷尽，光栅化精度终判（2026-08-23 五十四，零净变化）**：LineTypesetter 的 advance 累积实测确认为**全精度浮点**（`(advanceX + tracking) * scale`，全链含 TypesettingUtils.computeGlyphTransform 无任何 round/floor）——与 mgl positionedGlyphs 的浮点累积**数学等价**，§163 的"分数累积差"嫌疑亦排除。**终局定性**：text/icon 残差（墨量 0.977、特定行列亚像素差）= **24px catalog SDF 采样到 16px 渲染尺寸的光栅化质量差**（非整数缩放比 2/3 的双线性重采样 AA 剖面）——无公式级 bug 可修，属引擎光栅化精度长尾（与 §12.72/§96 漂移族同类）。七轮收窄链完整：放置取整→整数移位→采样 UV→角点取整→映射公式→垂直换算→advance 累积，全部排除。改进路径仅剩：按渲染尺寸重打包 catalog（24→16 专用 atlas，消除重采样）或 SDF 采样器升级（双四次），均为引擎级大工程。专项定案关闭。
+
+**§165. mercator z 标度换算公式破译（2026-08-23 五十五，零净变化，冻结专项解冻规格）**：
+
+- **mgl 公式链（源码定论）**：`pixelsPerMeter = mercatorZfromAltitude(1,lat)·worldSize = worldSize/(C·cos(lat))`——**1 米 = 1/(C·cos(lat)) mercator 单位**；在"世界=C 赤道米"的坐标系（我们的世界）中即 **z_world = h·sec(lat)**——与 §92 线宽 secLat **同一公式**。
+- **引擎现状缺口（代码级）**：`MapTerrainMaterial` 的 `elevation × uExaggeration` **无 sec(lat)**（地形与建筑抬升比 mgl 矮 ~26%@lat37.75）；而线宽已乘 secLat——**同一引擎内两种 z 惯例并存**，此即 §135 相机抬升"翻倍劣化"的标度根源（抬升量与地形矮化互相错位）。
+- **解冻实施规格（定稿）**：① `MapTerrainMaterial` 顶点 `elevation × uExaggeration × sec(centerLat)`（uniform 追加）；② patchExtrusion 的 `mbTerrainElev`/`uMBFlatEle` 同步乘 sec(lat)（建筑跟随）；③ sampleElevation CPU 采样同步；④ §138 相机重锚公式改 `elev×sec(lat)`；⑤ 全域护航批（fog/terrain 系此前按现标度校准过——fog 带 kFog=3.7 可能需重标定）。工程量中，风险=标度连锁。规格记档，待专门会话实施。
