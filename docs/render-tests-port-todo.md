@@ -3222,3 +3222,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实施（保留，gate=collisionDebug 零外溢）**：`MBStyleSymbolPlacement.applyMglCollisionVisibility`——按 §171 定性实施放置对齐：收集引擎 TextElement（featureId+text 跨层级去重）→ 自有 shapeText 复算盒（em×fontSize、glyphMetrics 真实度量、mgl 锚点边缘语义、icon-text-fit 盒）→ 按优先级降序以自有 CollisionIndex 做 **mgl 语义双盒独立判定**（修复：CollisionIndex 的 x/y 是**左上角**而非中心——首版全蓝的根因）→ `TextElement.visible = 放置结果`（隐藏 mgl 会抑制的多余标签，§171 实测的主导残差方向）→ 同判定画盒（蓝 α0.25/红 α0.5，heatmap 同款 AfterRender 直绘通道）。
 - **验证状态（受阻塞）**：单例 debug/collision 跨 run 28494-29100（基线 28894 噪声带内，无回归）；盒像素 872→13px 跨 run 漂移、karma console 捕获间歇性 0 行——负载 6-9 时的 §12.85 已知 flake（空闲时 5/5 稳定前科）。**下轮首项=低负载（<3）复验**：①盒是否稳定上屏；②红/蓝分布 vs 期望（exp 红 994 采样/蓝≈0）；③el.visible 强制对内容差（基线 28894 中的"多渲染标签"）的收敛效果。若无效果则回退本实现。
 - **回归面**：gate 仅 collisionDebug fixtures（27 例）——其余 3000 例零路径变化；tsc 绿。
+
+**§173. mgl-parity 放置复验攻坚——执行链全通但绘制通道零像素之谜未解，回退（2026-08-23 六十三，零净变化）**：
+
+- **三重 bug 修复后执行链全通**：① §172 实现从未运行——run() 早退条件在 §171 回退时被复原（symbols 恒空 → return 先于 debug 分支）；② 我的去重键 `${featureId}:${text}` 因 featureId=undefined 把 174 个同文本元素坍缩为 1（改屏坐标键）；③ harness 临时探针的 window.THREE 未定义异常每帧静默炸断 applyMgl（PlaneGeometry 假线索曾误导回退）。修复后：**162 entries（173 icon + 174 text rect）、盒判定 16 placed/8 hidden、renderer.render 执行 7608 次/批无异常**。
+- **通道零像素之谜（未解）**：heatmap 同构（NDC 正交相机 -1..1/near 0、setRenderTarget(null)、autoClear=false）的不透明品红 Mesh + LineSegments **零像素到达捕获画布**（低负载确定性复现）；`setScissorTest(false)` 补齐亦无效。与 heatmap composite 的真实差异未定位（MapView AfterRender 分发于 composer/文本绘制之后、理论上后绘持久）——**需 karma 非 headless 断点会话**（与 §124 render-callback 插槽疑云同类运行时谜）。
+- **el.visible 强制实测**：激活后 debug/collision 28894→42232（**劣化**）——我们的碰撞判定集与 mgl 放置集差异大（仅 16 放置 vs mgl 更多/更少），且引擎文本去重（同文本 173 特征仅 1 个文本元素，TextElementStateCache.deduplicateElement）使放置对齐的输入集本身残缺——**放置一致性缺口比 §171 定性更深（去重语义差异）**。
+- **回退至 §172 惰性状态**（applyMgl 因早退不执行、零外溢）；下轮入口：karma 非 headless 断点定位通道差异 + 引擎文本去重对 mgl 逐特征语义的缺口评估。
