@@ -3844,3 +3844,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **探针**：注入 background fill 的 technique 颜色强制 `#ff0000` —— **0/262144 红像素**——对象存在（§266 objects=1）、几何球面落点正确（§268 projection=1 分支激活）但**完全不上屏**。
 - **最后两候选**：① Tile 的 projectedBoundingBox/包围球错误（注入几何的局部坐标在球面下使 box 不交视锥 → frustumCulled 或 coverage 剔除）；② fill material 在 sphere 渲染路径不产生片元。**下轮一步**：对象渲染前打印其包围盒 vs 视锥（TileObjectsRenderer 渲染列表 addObject 打点），或临时 `frustumCulled=false` + 包围球放大二分。
 - 探针已清（红色回退为 background-color），工作树=提交态（89 commits）。
+
+**§270. frustumCulled=false + 包围球 1e9 二分——仍 0 红像素：剔除候选排除，球面局部切平面基（localTangentSpace 旋转）为头号嫌疑（2026-08-24 一百五十八，零净变化记档）**：
+
+- **二分**：frustumCulled=false + boundingSphere.radius=1e9（确认施加）+ 纯红 —— **仍 0 红像素**——§269 候选①（包围盒/视锥剔除）排除。三态收敛为：**对象在/几何对/剔除关/仍无片元** → 剩 material 顶点路径：头号嫌疑 = **sphere 瓦片的 localTangentSpace 语义**（TileObjectsRenderer 对 localTangentSpace 瓦片做 `setRotationFromMatrix(tile.boundingBox.getRotationMatrix())`——我们的注入偏移在世界轴系，未按切平面基旋转 → 顶点落在切平面之外/背面）。
+- **下轮一步**：注入顶点按瓦片切平面基变换（从 projectedBoundingBox 的旋转矩阵构造局部坐标），或临时绕过旋转验证。
+- 探针已清，工作树=提交态（90 commits）。
