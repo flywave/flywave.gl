@@ -561,6 +561,16 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private static normalizeGeoJson(data: any): any {
         if (!data || typeof data !== 'object') return data;
         if (data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+            // mgl treats a missing `properties` as {} — a bare undefined
+            // breaks the downstream POI icon chain (feature emits but the
+            // icon never paints; verified on image/render-callback where
+            // adding ANY properties object flips it to a pixel-perfect
+            // render, §125).
+            for (const f of data.features) {
+                if (f && typeof f === 'object' && f.properties === undefined) {
+                    f.properties = {};
+                }
+            }
             return data;
         }
         if (data.type === 'Feature') {
