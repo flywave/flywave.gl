@@ -3513,3 +3513,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **激活实验与禁用**：basic/equal-range 响应（19493/23199）但净负——mgl 原生 t 与背景雾 quad/引擎映射的**组合需重校准**（quad 的 s 表是在引擎映射下标定的）；且 **fog/2d/raster 的材质不含 `#include <fog_pars_fragment>` 锚点**（basic 含）——两类 raster 材质路径不同，需第二个注入锚。激活禁用、基建保留。
 - **终局路径（下轮）**：① 找 raster 材质的雾 chunk 锚点（读 MapMeshMaterials 的条件编译）；② 以 mgl 原生 t 为准重标定 quad 的 s 表（或 quad 一并切 mgl 公式——它有全部 uniform）；③ 而后 raster/basic/equal-range 三族应同时收敛。
 - **复核**：color 族 PASS / raster 32478 / basic 6504 / equal-range 6810 / inverted 37490 基线复原 ✓。
+
+**§217. 终局三步推进——锚点证全 + quad mgl 化的单位混用陷阱记档（2026-08-24 一百零六，零净变化）**：
+
+- **步骤①完成（锚点证全）**：注入锚点缺失假设**证伪**——raster 全部材质含 `#include <fog_pars_fragment>`（MISSING 日志 0 条）；fog/2d/raster 对内容雾改动无响应的真因 = **背景雾 quad 完全覆盖内容行**（raster 瓦片未以深度遮挡 quad——深度写入缺失或被 quad 的 depthTest 语义绕过），内容雾在之下不可见。
+- **步骤②实验（mgl 化 quad）与陷阱**：quad 的 depth 切 mgl 公式后 color 族崩至 78k——**单位混用**：rayLen 是引擎米制（uCamHeight=cam.position.z）、distCam_m 是 mgl 米制（H_m 链），比值差 kFog 级；补 camHeightMgl 切纯 mgl 量纲的 env 侧接线因断言脚本中止未落。**定性：s 表（0.735@70）与引擎单位是配套标定对，单独换公式必崩；正确迁移需 rayLen/distCam/camHeight 三者同切 mgl 量纲后重验**。已回退保基线。
+- **下轮入口**：① 三量纲同切 mgl（env 补 camHeightMgl/distCamMgl 字段——接线点已在 §217 脚本中验证）；② raster 瓦片的深度遮挡排查（为何 quad 覆盖内容行）——与 ①分别独立可推进。
+- **复核**：color 族 PASS / raster 32478 / basic 6504 / equal-range 6810 复原 ✓。
