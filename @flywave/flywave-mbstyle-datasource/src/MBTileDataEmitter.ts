@@ -86,8 +86,13 @@ function parseProgressStopsStatic(raw: any): Array<[number, number]> | undefined
     }
     while (Array.isArray(raw) && raw[0] === 'memo') raw = raw[1];
     if (!Array.isArray(raw) || raw[0] !== 'interpolate') return undefined;
-    const input = raw[1];
-    if (!Array.isArray(input) || !JSON.stringify(input).includes('line-progress')) return undefined;
+    // mgl interpolate form: [op, interpolation, input, t1, v1, …] — the
+    // input is raw[2] (e.g. ["line-progress"]); raw[1] is ["linear"]. The
+    // old check inspected raw[1] only, silently disabling the whole
+    // variable-width path for every standard fixture (§146).
+    const isProgress = (Array.isArray(raw[1]) && JSON.stringify(raw[1]).includes('line-progress')) ||
+        (Array.isArray(raw[2]) && JSON.stringify(raw[2]).includes('line-progress'));
+    if (!isProgress) return undefined;
     const stops: Array<[number, number]> = [];
     for (let i = 3; i + 1 < raw.length; i += 2) {
         const t = Number(raw[i]);
