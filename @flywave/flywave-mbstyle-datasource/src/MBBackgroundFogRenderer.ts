@@ -19,7 +19,14 @@ import { MapView } from '@flywave/flywave-mapview';
  */
 export class MBBackgroundFogRenderer {
     /** Per-pitch fog-space scale: [pitch, s] pairs, linear interpolation. */
-    static pitchScales: Array<[number, number]> = [[70, 0.735]];
+    /**
+     * Per-pitch fog-space scale: [pitch, s] pairs, linear interpolation.
+     * The 0.735 at 70° folds the rig's distCam-heuristic residual (§180);
+     * 85° was fitted on fog/horizon-blend null family — the expected band is a
+     * white strip within ~4px of the horizon plus a flat ~5% lift (the
+     * exp-cube ramp needs s≈0.26 there; s=1.0 whitens the whole band).
+     */
+    static pitchScales: Array<[number, number]> = [[70, 0.735], [85, 0.10]];
 
     static scaleForPitch(pitchDeg: number): number {
         const t = MBBackgroundFogRenderer.pitchScales;
@@ -95,6 +102,15 @@ export class MBBackgroundFogRenderer {
         // Camera world→view rotation as mat3 for ray reconstruction.
         this.m_material.uniforms.uCamMatrix.value.copy(cam.matrixWorld);
         this.m_material.uniforms.uInvProj.value.copy(cam.projectionMatrixInverse);
+        // Screen-horizon params (same semantics as the sky shaders, §188).
+        const cv = (this.m_mapView as any).canvas as HTMLCanvasElement | undefined;
+        this.m_material.uniforms.uHeight.value = cv?.clientHeight || cv?.height || 256;
+        this.m_material.uniforms.uFovRad.value = (cam.fov ?? 36.87) * Math.PI / 180;
+        // Use the tilt PROPERTY (same source as the sky shaders' horizon
+        // line) — the camera-derived pitch differs slightly and opens a 1px
+        // seam between the two cuts (§188).
+        this.m_material.uniforms.uPitchRad.value =
+            Math.max(((this.m_mapView as any).tilt as number | undefined) ?? pitchDeg, 0.1) * Math.PI / 180;
 
         const prevAutoClear = renderer.autoClear;
         const prevRT = renderer.getRenderTarget();
@@ -126,6 +142,9 @@ export class MBBackgroundFogRenderer {
                 uCamHeight: { value: 1000 },
                 uCamMatrix: { value: new THREE.Matrix4() },
                 uInvProj: { value: new THREE.Matrix4() },
+                uHeight: { value: 256 },
+                uFovRad: { value: 36.87 * Math.PI / 180 },
+                uPitchRad: { value: 60 * Math.PI / 180 },
             },
             vertexShader: `
                 varying vec2 vNdc;
@@ -145,13 +164,22 @@ export class MBBackgroundFogRenderer {
                 uniform float uCamHeight;
                 uniform mat4 uCamMatrix;
                 uniform mat4 uInvProj;
+                uniform float uHeight;
+                uniform float uFovRad;
+                uniform float uPitchRad;
                 varying vec2 vNdc;
                 void main() {
                     // Reconstruct the world-space view ray from NDC.
                     vec4 view = uInvProj * vec4(vNdc, -1.0, 1.0);
                     vec3 dir = normalize((uCamMatrix * vec4(view.xyz / view.w, 0.0)).xyz);
-                    if (dir.z >= -0.001) {
-                        // At/above the horizon — the atmosphere dome owns the sky.
+                    // mgl's background tiles (and their fog band) start at
+                    // the SCREEN horizon line (transform.horizonLineFromTop
+                    // with the 0.1 shift) — a few px BELOW the true horizon
+                    // (§188), matching the sky shaders' cut.
+                    float hPx = uHeight / 2.0 / tan(uFovRad / 2.0) / tan(max(uPitchRad, 0.1));
+                    float horizonFromTop = (uHeight / 2.0 - hPx * 0.9) / uHeight;
+                    if (vNdc.y * 0.5 + 0.5 > 0.99 - horizonFromTop) {
+                        // Above the screen horizon line — the sky owns it.
                         discard;
                     }
                     // Ray ∩ ground-plane distance (z-up, camera at height uCamHeight).

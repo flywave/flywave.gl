@@ -1147,6 +1147,62 @@ export class MBEnvironmentManager {
         }
     }
 
+    /**
+     * Shared GLSL for the atmosphere-glow under-composite (mgl draws the
+     * atmosphere glow before the sky pass; sky-opacity < 1 blends over
+     * glow→space, not over the map clear color). Expects the uGlow* uniforms
+     * and returns an sRGB color.
+     */
+    private static readonly GLOW_GLSL = `
+        uniform vec3 uGlowTl; uniform vec3 uGlowTr; uniform vec3 uGlowBr; uniform vec3 uGlowBl;
+        uniform float uGlowHorizon; uniform float uGlowFadeout;
+        uniform vec3 uGlowFogColor; uniform float uGlowFogAlpha;
+        uniform vec3 uGlowHighColor; uniform vec3 uGlowSpaceColor;
+        uniform vec2 uViewSize;
+        vec3 mbAtmosphereGlow(vec2 ndc) {
+            vec2 uv = ndc * 0.5 + 0.5;
+            vec3 ray = normalize(mix(
+                mix(uGlowTl, uGlowTr, uv.x),
+                mix(uGlowBl, uGlowBr, uv.x), 1.0 - uv.y));
+            vec3 hd = normalize(mix(
+                mix(uGlowTl, uGlowBl, uGlowHorizon),
+                mix(uGlowTr, uGlowBr, uGlowHorizon), uv.x));
+            float ang = max(acos(clamp(dot(ray, hd), -1.0, 1.0)), 0.0) / 3.14159265359;
+            float tg = exp(-ang / max(uGlowFadeout, 1e-4));
+            vec3 c0 = uGlowHighColor;
+            vec3 c1 = mix(c0, uGlowFogColor, uGlowFogAlpha);
+            vec3 c2 = mix(c0, c1, tg);
+            vec3 glowLin = mix(uGlowSpaceColor, c2, tg);
+            return mix(glowLin * 12.92,
+                pow(max(glowLin, vec3(0.0)), vec3(1.0 / 2.4)) * 1.055 - 0.055,
+                vec3(greaterThan(glowLin, vec3(0.0031308))));
+        }
+    `;
+
+    /** Per-frame uGlow* uniform update (corner rays + screen horizon line). */
+    private updateSkyGlowUniforms(material: THREE.ShaderMaterial, camera: THREE.Camera): void {
+        const cam = camera as THREE.PerspectiveCamera;
+        const u = material.uniforms;
+        cam.updateMatrixWorld(true);
+        const rot = new THREE.Matrix4().extractRotation(cam.matrixWorld);
+        const corner = (nx: number, ny: number): THREE.Vector3 =>
+            new THREE.Vector3(nx, ny, -1).applyMatrix4(cam.projectionMatrixInverse)
+                .applyMatrix4(rot).normalize();
+        (u.uGlowTl.value as THREE.Vector3).copy(corner(-1, 1));
+        (u.uGlowTr.value as THREE.Vector3).copy(corner(1, 1));
+        (u.uGlowBr.value as THREE.Vector3).copy(corner(1, -1));
+        (u.uGlowBl.value as THREE.Vector3).copy(corner(-1, -1));
+        // Screen-space horizon line (MBAtmosphereRenderer semantics, §184:
+        // off-DOM canvas clientHeight is 0 — truthy fallbacks).
+        const canvas = (this.m_mapView as any)?.canvas as HTMLCanvasElement | undefined;
+        const height = canvas?.clientHeight || canvas?.height || 256;
+        const fovRad = ((cam.fov ?? 36.87) * Math.PI) / 180;
+        const pitch = Math.max((this.m_mapView as any)?.tilt ?? 60, 0.1) * Math.PI / 180;
+        const h = (height / 2) / Math.tan(fovRad / 2) / Math.tan(pitch);
+        u.uGlowHorizon.value = (height / 2 - h * 0.9) / height;
+        (u.uViewSize.value as THREE.Vector2).set(canvas?.width || 512, canvas?.height || 256);
+    }
+
     private createGradientSky(sky: SkySpec): void {
         // Mapbox skybox_gradient: the color ramp is sampled by
         //   progress = acos(dot(dir, centerDirection)) / radius
@@ -1207,7 +1263,8 @@ export class MBEnvironmentManager {
         const fog = this.m_fogState;
         const material = new THREE.ShaderMaterial({
             side: THREE.BackSide,
-            transparent: opacity < 1,
+            // sky-opacity composites over the in-shader atmosphere glow.
+            transparent: false,
             depthWrite: false,
             uniforms: {
                 uOpacity: { value: opacity },
@@ -1225,6 +1282,20 @@ export class MBEnvironmentManager {
                 // Camera world rotation (mat3): view ray (camera space) →
                 // world z-up ray for the fog horizon blend.
                 uCamRot: { value: new THREE.Matrix3() },
+                // Atmosphere-glow under-composite (mgl draws the glow BEFORE
+                // the sky pass; a semi-transparent sky-opacity blends over
+                // glow→space, not over the map clear color).
+                uGlowTl: { value: new THREE.Vector3(0, 0, -1) },
+                uGlowTr: { value: new THREE.Vector3(0, 0, -1) },
+                uGlowBr: { value: new THREE.Vector3(0, 0, -1) },
+                uGlowBl: { value: new THREE.Vector3(0, 0, -1) },
+                uGlowHorizon: { value: 0.25 },
+                uGlowFadeout: { value: 0.025 },
+                uGlowFogColor: { value: new THREE.Color(1, 1, 1) },
+                uGlowFogAlpha: { value: fog ? fog.colorAlpha : 1 },
+                uGlowHighColor: { value: fog ? fog.highColor.clone() : new THREE.Color(0.14, 0.36, 0.87) },
+                uGlowSpaceColor: { value: fog ? fog.spaceColor.clone() : new THREE.Color(0.01, 0.04, 0.1) },
+                uViewSize: { value: new THREE.Vector2(512, 256) },
             },
             vertexShader: `
                 varying vec3 vViewPosition;
@@ -1243,6 +1314,7 @@ export class MBEnvironmentManager {
             fragmentShader: `
                 uniform float uOpacity;
                 uniform sampler2D uRamp;
+                ${MBEnvironmentManager.GLOW_GLSL}
                 uniform vec3 uCenterDir;
                 uniform float uRadius;
                 uniform vec3 uSolidColor;
@@ -1267,10 +1339,17 @@ export class MBEnvironmentManager {
                     // fog_apply_sky_gradient: fog_horizon_blending(world dir)
                     // = u_fog_color.a * exp(-3 * t * t), t = dir.z / hb.
                     vec3 wdir = normalize(uCamRot * dir);
-                    if (uHorizonCut > 0.5 && wdir.z <= 0.0) {
+                    vec2 ndcC = vec2(
+                        (gl_FragCoord.x * 2.0 - uViewSize.x) / uViewSize.x,
+                        (gl_FragCoord.y * 2.0 - uViewSize.y) / uViewSize.y);
+                    if (uHorizonCut > 0.5 &&
+                        (ndcC.y * 0.5 + 0.5) < 0.99 - uGlowHorizon) {
                         // mgl's background tiles cover the ground; our
-                        // background is the clear color, so cut here (same
-                        // as the atmosphere-sky path).
+                        // background is the clear color, so cut here. The
+                        // boundary is the SCREEN horizon line
+                        // (transform.horizonLineFromTop with the 0.1 shift),
+                        // not the true horizon — the expected sky reaches a
+                        // few px below the true horizon (§188).
                         discard;
                     }
                     float t = max(0.0, wdir.z / max(uFogHorizonBlend, 1e-4));
@@ -1281,7 +1360,11 @@ export class MBEnvironmentManager {
                         pow(max(uFogColor, vec3(0.0)), vec3(1.0 / 2.4)) * 1.055 - 0.055,
                         vec3(greaterThan(uFogColor, vec3(0.0031308))));
                     col = mix(col, fogSrgb, uFogAlpha * exp(-3.0 * t * t));
-                    gl_FragColor = vec4(col, uOpacity);
+                    // mgl composites sky-opacity over the atmosphere glow
+                    // (drawn before the sky pass), never over the map clear
+                    // color — bake the glow underneath, output opaque.
+                    col = mix(mbAtmosphereGlow(ndcC), col, uOpacity);
+                    gl_FragColor = vec4(col, 1.0);
                 }
             `,
         });
@@ -1297,6 +1380,7 @@ export class MBEnvironmentManager {
             (m.uniforms.uCenterDir.value as THREE.Vector3).copy(c);
             // World rotation for the fog horizon blend's z-up ray.
             (m.uniforms.uCamRot.value as THREE.Matrix3).setFromMatrix4(camera.matrixWorld);
+            this.updateSkyGlowUniforms(m, camera);
         };
         this.m_scene!.add(this.m_skyMesh);
     }
@@ -1367,7 +1451,8 @@ export class MBEnvironmentManager {
         const geom = new THREE.SphereGeometry(500, 32, 16);
         const material = new THREE.ShaderMaterial({
             side: THREE.BackSide,
-            transparent: opacity < 1,
+            // sky-opacity composites over the in-shader atmosphere glow.
+            transparent: false,
             depthWrite: false,
             uniforms: {
                 uCubemap: { value: cubemap },
@@ -1377,6 +1462,17 @@ export class MBEnvironmentManager {
                 uFogAlpha: { value: fog ? fog.alpha : 0 },
                 uFogHorizonBlend: { value: fog ? fog.horizonBlendRaw : 1 },
                 uHorizonCut: { value: this.m_styleHasBackground ? 1 : 0 },
+                uGlowTl: { value: new THREE.Vector3(0, 0, -1) },
+                uGlowTr: { value: new THREE.Vector3(0, 0, -1) },
+                uGlowBr: { value: new THREE.Vector3(0, 0, -1) },
+                uGlowBl: { value: new THREE.Vector3(0, 0, -1) },
+                uGlowHorizon: { value: 0.25 },
+                uGlowFadeout: { value: fog ? fog.horizonBlend : 0.025 },
+                uGlowFogColor: { value: fog ? fog.color.clone() : new THREE.Color(1, 1, 1) },
+                uGlowFogAlpha: { value: fog ? fog.colorAlpha : 1 },
+                uGlowHighColor: { value: fog ? fog.highColor.clone() : new THREE.Color(0.14, 0.36, 0.87) },
+                uGlowSpaceColor: { value: fog ? fog.spaceColor.clone() : new THREE.Color(0.01, 0.04, 0.1) },
+                uViewSize: { value: new THREE.Vector2(512, 256) },
             },
             vertexShader: `
                 varying vec3 vWorldDir;
@@ -1408,6 +1504,7 @@ export class MBEnvironmentManager {
                 uniform float uFogHorizonBlend;
                 uniform float uHorizonCut;
                 varying vec3 vWorldDir;
+                ${MBEnvironmentManager.GLOW_GLSL}
 
                 void main() {
                     vec3 w = normalize(vWorldDir);
@@ -1438,14 +1535,24 @@ export class MBEnvironmentManager {
                     // Our background is the CLEAR color, so the below-horizon
                     // cut is only kept when a background layer exists
                     // (otherwise mgl shows sky below the horizon too).
-                    if (uHorizonCut > 0.5 && w.z <= 0.0) discard;
-                    gl_FragColor = vec4(sky * uOpacity, uOpacity);
+                    vec2 ndcC = vec2(
+                        (gl_FragCoord.x * 2.0 - uViewSize.x) / uViewSize.x,
+                        (gl_FragCoord.y * 2.0 - uViewSize.y) / uViewSize.y);
+                    if (uHorizonCut > 0.5 &&
+                        (ndcC.y * 0.5 + 0.5) < 0.99 - uGlowHorizon) discard;
+                    // mgl composites sky-opacity over the atmosphere glow
+                    // (drawn before the sky pass) — bake it underneath.
+                    sky = mix(mbAtmosphereGlow(ndcC), sky, uOpacity);
+                    gl_FragColor = vec4(sky, 1.0);
                 }
             `,
         });
 
         this.m_skyMesh = new THREE.Mesh(geom, material);
         this.m_skyMesh.frustumCulled = false;
+        this.m_skyMesh.onBeforeRender = (_r: THREE.WebGLRenderer, _s: THREE.Scene, camera: THREE.Camera) => {
+            this.updateSkyGlowUniforms(this.m_skyMesh!.material as THREE.ShaderMaterial, camera);
+        };
         // NOTE: the engine renders through a camera-relative (RTE) scene
         // root, so a mesh added at scene-local origin is already anchored at
         // the camera — no repositioning needed (and copying the world-space
