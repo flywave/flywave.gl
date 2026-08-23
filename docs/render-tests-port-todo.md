@@ -3459,3 +3459,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **slope=3 测量运行与混淆定案**：图像差分拟合法在 raster fixture 上失效——k=1 基线的上半是**背景雾 quad 的白雾**（非未雾内容基线），行中值 op 的 target 侧混合了 quad 贡献，t_target 不可靠（y230 target 0.32 vs y210 0.0 的矛盾即此）。**方法论结论：校准需 shader 侧深度/t 打点**（fog_fragment 输出 t 到未用通道或 readPixels 探针），或测量运行时禁用 quad 的对照法。
 - **基线复核**：raster 32478（k=1 态复原）/ fog/color 族 PASS ✓。
 - **下轮入口**：① shader 侧 t-profile 打点工具 + raster 仿射两点拟合；② culling 渲染通道定位（§206 遗留）。
+
+**§208. shader 侧 t-profile 打点工具落地 + raster 仿射拟合首轮（2026-08-24 九十八，保留工具）**：
+
+- **工具（保留，默认关零影响）**：`fog_fragment` 新增 `fogDebugT` uniform 探针——mode 1 输出归一化雾坡位置 t（灰度）、mode 2 输出未雾基色；`MBEnvironmentManager.fogDebugTProbe` 静态开关，UniformsLib+ShaderLib 双同步。**首轮取数成功**：raster fixture 的 k=1 t-profile（rows 100-220: 1.0→0.016）与未雾基色图（row 230 纯橙 (255,165,0) 证实 mode 2 正确）。
+- **仿射拟合首轮（回退）**：行中值 t_mgl 目标拟合得 `t_mgl=0.471·t+0.209`，换算 {slope 0.471, offset −2141}（near/R=0.5、R≈4522m）——实测 raster 32478→**42747 过冲**，行中值目标在高亮 imagery 上散布 ±0.1（中段 0.38-0.47 跳变），两点拟合被噪声主导。**回退保基线**（32478 复原 ✓，color 族 PASS ✓）。
+- **拟合方法论修正（下轮）**：① t_mgl 目标改用 per-pixel 回归（排除饱和/暗像素后逐像素最小二乘，非行中值）；② near/R 用 slope=3 探针实测（t3−3t 的中值 = 2·near/R）替代风格参数推算；③ 拟合后先跑 t-probe 验证 t' 曲线贴合再上色。

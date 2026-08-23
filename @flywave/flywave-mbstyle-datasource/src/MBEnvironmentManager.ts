@@ -22,6 +22,10 @@ THREE.ShaderChunk.fog_pars_fragment = `
 	uniform float fogAlpha;
 	uniform float fogHorizonBlend;
 	uniform float fogCamHeight;
+	// Debug probe (§208): when >0.5 the fragment outputs its normalized fog
+	// ramp position t directly (grayscale) — shader-side t-profile tool for
+	// the per-content calibration campaign. Default 0 = zero behavior change.
+	uniform float fogDebugT;
 	// mgl u_fog_vertical_limit (fog "vertical-range"): elevated content
 	// fades OUT of the fog between these heights (meters above ground).
 	uniform vec2 fogVertLimit;
@@ -32,6 +36,14 @@ THREE.ShaderChunk.fog_fragment = `
 #ifdef USE_FOG
 	float fogDepthKm = vFogDepth / 1000.0;
 	float fogT = (fogDepthKm - fogNear / 1000.0) / max(fogFar / 1000.0 - fogNear / 1000.0, 0.001);
+	if (fogDebugT > 1.5) {
+		// mode 2: the UNFOGGED base color (for per-pixel mgl op targets).
+		return;
+	}
+	if (fogDebugT > 0.5) {
+		gl_FragColor = vec4(vec3(clamp(fogT, 0.0, 1.0)), 1.0);
+		return;
+	}
 	float fogFalloff = 1.0 - min(1.0, exp(-6.0 * fogT));
 	fogFalloff *= fogFalloff * fogFalloff;
 	float fogFactor = fogAlpha * min(1.0, 1.00747 * fogFalloff);
@@ -76,6 +88,7 @@ THREE.ShaderChunk.fog_vertex = `
 // were merged (copied) from it at three's module-load time, so they must be
 // patched too — otherwise the GLSL `uniform float fogAlpha;` default stays 0
 // and the fog is disabled.
+(THREE.UniformsLib.fog as any).fogDebugT = { value: 0 };
 if (!('fogAlpha' in THREE.UniformsLib.fog)) {
     (THREE.UniformsLib.fog as any).fogAlpha = { value: 1 };
     (THREE.UniformsLib.fog as any).fogHorizonBlend = { value: 0.05 };
@@ -103,6 +116,8 @@ function evalThemedSafe(value: any, fallback: string, fog: FogSpec, styleZoom: n
     } catch { return value; }
 }
 export class MBEnvironmentManager {
+    /** Debug: render the fog ramp position t as grayscale (§208 tool). */
+    static fogDebugTProbe: number = 0; // §208 tool: 1=t-profile, 2=unfogged base
     private m_ambientLight: THREE.AmbientLight | null = null;
     private m_directionalLight: THREE.DirectionalLight | null = null;
     /** mgl 3D-lights cast-shadows state (MBShadowRenderer). */
@@ -743,9 +758,13 @@ export class MBEnvironmentManager {
         // Feed the fog color alpha into the shared fog-uniform template so
         // recompiled materials pick up the mapbox opacity ramp's alpha scale.
         (THREE.UniformsLib.fog as any).fogAlpha.value = alpha;
+        const dbgT = MBEnvironmentManager.fogDebugTProbe;
+        (THREE.UniformsLib.fog as any).fogDebugT.value = dbgT;
         for (const lib of Object.values(THREE.ShaderLib)) {
             const u = (lib as any).uniforms;
             if (u?.fogAlpha) u.fogAlpha.value = alpha;
+            if (u?.fogDebugT !== undefined) u.fogDebugT.value = dbgT;
+            else if (dbgT) (u as any).fogDebugT = { value: dbgT };
         }
         this.m_scene.fog = this.m_fog;
         const rawHorizonBlend = evalZoom(fog['horizon-blend'], ['interpolate', ['linear'], ['zoom'], 4, 0.2, 7, 0.1]);
