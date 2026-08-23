@@ -3353,3 +3353,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复（三处 glow 合成统一 sRGB 域）**：MBAtmosphereRenderer（atmosphere quad）、dome、GLOW_GLSL（sky 底层合成）——uniforms `convertLinearToSRGB()`、片元删除编码、直接输出。sky 渐变雾带与 bg fog quad 的混合**保持原样**（fog 色 encode 后与 sRGB 值相同，gamma 域混合已正确）。
 - **验收（fog 全类 `mbstyle-srgb239/240`）——本批最大单次转 PASS 波**：**fog/default、fog/high-color 全族（high-color/-opacity/-transparent/-use-theme）、fog/space-color-use-theme 转 PASS**；fog/space-color 48851→**78**、fog/star-intensity 48851→**84**；fog/2d/basic 10476→**6504**（天空带修复）；fog/color/color-use-theme PASS 恒定 ✓ 零回归。
 - **color-opacity 75147 定性（下轮入口）**：fog rgba(255,30,35,0.8)——我方顶部满饱和纯红 (255,30,35)，期望 ~60% 红调（252,108,102）——fog color **alpha 语义**（0.8 应封顶混合权重）在某通道未生效，候选：dome c1 的 alpha 已折算但顶部的纯红来自别处（bg quad/clear 路径）。terrain 族新基线：basic 13731、equal-range 11134、inverted 44228、sky-composition 28601、zero-exaggeration 51639。
+
+**§192. fog color alpha 语义破案——rgba() 解析缺失 + mgl 双 alpha（a²）合成落地；color-opacity 75147→19050（2026-08-24 八十二，保留修复）**：
+
+- **数学定案先行**：期望顶部 (252,108,102) = 红 64% 叠 beige——**0.64 = 0.8²**。mgl 语义：`fog_opacity`（携带 color.a）× `fog_horizon_blending`（**再次携带 color.a**；俯视时 dir.z<0 → t=0 → 因子恰为 a）——内容雾有效权重 = a²·ramp。我们的内容 fog chunk 已含双 a ✓，但两处缺失：
+- **修复 ①**：`applyFog` 的 colorAlpha 解析只认 `#RRGGBBAA`——`rgba(255,30,35,0.8)` 的 alpha 被当 1（创建日志证实修复后 0.8 正确传递 dome/quad/内容）。
+- **修复 ②**：背景雾 quad 的有效 alpha 补齐 a²（`opacity *= uFogAlpha`，quad 只画地平线下、horizon_blending 因子恒为 a）。
+- **验收**：fog/color-opacity 75147→**19050**（y5+ 全带对齐 0.64 红）；fog/color/color-use-theme/default/high-color 全族/space-color-use-theme **PASS 恒定**（a=1 时 a²=1 零影响 ✓）。中途一次探针清除误删 quad 的 gl_FragColor 致 color 族瞬回 65k 基线——复核修复，提醒探针补丁用断言式脚本。
+- **color-opacity 剩余 19050 定性（下轮入口）**：顶部 ~5 行纯红 (255,30,35)——探针矩阵（quad 绿/dome 蓝/atmoQuad 青）全部缺席该带，非我方任何 painter；定性为**引擎背景平面 + THREE.Fog 路径**（three 内建 Fog 无 alpha 概念 → 满饱和红；mgl 期望 0.64）。引擎层改造项：背景平面的雾需走 a² 语义或让 quad 覆盖该带（边界上移）。fog/space-color 78px = 稀疏逐行噪声（阈值 65，近失记档）。

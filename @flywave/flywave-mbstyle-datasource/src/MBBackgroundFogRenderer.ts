@@ -201,6 +201,11 @@ export class MBBackgroundFogRenderer {
                     float falloff = 1.0 - min(1.0, exp(-6.0 * t));
                     falloff *= falloff * falloff;
                     float opacity = min(1.0, 1.00747 * falloff);
+                    // mgl content fog = fog_opacity (carries color.a) ×
+                    // fog_horizon_blending (carries color.a AGAIN; the
+                    // quad only paints below the horizon where the blend
+                    // factor is exactly a) — so the effective alpha is a².
+                    opacity *= uFogAlpha;
                     // uFogColor is a LINEAR THREE.Color; this raw
                     // ShaderMaterial must encode to sRGB itself.
                     vec3 fogSrgb = mix(uFogColor * 12.92,

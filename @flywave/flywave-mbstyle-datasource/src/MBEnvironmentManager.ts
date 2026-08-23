@@ -709,9 +709,15 @@ export class MBEnvironmentManager {
         };
         const rawColor = evalThemed(fog.color, '#ffffff', 'color-use-theme');
         const color = new THREE.Color(rawColor);
-        const colorAlpha = typeof rawColor === 'string' && /^#[\da-fA-F]{8}$/.test(rawColor)
-            ? parseInt(rawColor.slice(7, 9), 16) / 255
-            : 1;
+        const colorAlpha = (() => {
+            if (typeof rawColor !== 'string') return 1;
+            if (/^#[\da-fA-F]{8}$/.test(rawColor)) return parseInt(rawColor.slice(7, 9), 16) / 255;
+            // rgba(...) fog colors carry the alpha in the 4th slot too
+            // (fog/color-opacity, §192).
+            const m = rawColor.match(/rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)/);
+            if (m) return +m[1];
+            return 1;
+        })();
         // mgl only enables fog at high pitch: u_fog_color.a = getOpacity(pitch)
         // = smoothstep(FOG_PITCH_START=60, FOG_PITCH_END=65, pitch) · color.a
         // (painter.ts fogUniformValues). Compute pitch from the actual view
@@ -1037,8 +1043,6 @@ export class MBEnvironmentManager {
                         //   result = space*(1-t) + c2*t
                         // Fold that in here so the dome is self-contained and
                         // does not depend on the canvas clear color.
-                        // mgl mixes the glow colors as sRGB floats directly
-                        // (no color management) — uniforms pre-converted.
                         vec3 col = mix(uSpaceColor, c2, t);
                         gl_FragColor = vec4(col, 1.0);
                     }
