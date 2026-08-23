@@ -647,7 +647,37 @@ export class MBMaterialPatchManager {
                 }
                 break;
         }
+
+        // Per-content fog-depth scale (§106: the exact distCam form improves
+        // pitch-70 fill/line cases but regresses raster-heavy ones at the
+        // same pitch — the divergence is CONTENT-dependent, i.e. per-type RTE
+        // depth semantics). Append a compile-time multiplier to three's
+        // fog_vertex so each technique category can carry its own factor.
+        // Default: no entry = 1.0 = zero behavior change.
+        const fogScale = (MBMaterialPatchManager.fogContentScales as any)[techName];
+        if (typeof fogScale === 'number' && Number.isFinite(fogScale) && fogScale > 0 && fogScale !== 1) {
+            const origFogCompile = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (origFogCompile) origFogCompile.call(material, shader);
+                if (shader.vertexShader.includes('#include <fog_vertex>')) {
+                    shader.vertexShader = shader.vertexShader.replace(
+                        '#include <fog_vertex>',
+                        `#include <fog_vertex>
+                         vFogDepth *= ${fogScale.toFixed(4)};`
+                    );
+                }
+            };
+            material.needsUpdate = true;
+        }
     }
+
+    /**
+     * Per-technique fog-depth scale factors (compile-time `vFogDepth *= k`).
+     * Keys are technique names ('fill', 'solid-line', 'extruded-polygon',
+     * 'circles', ...). Empty/1.0 = untouched — the calibration entry point
+     * for the fog per-content-depth campaign (§106/§179).
+     */
+    static fogContentScales: Record<string, number> = {};
 
     private patchRasterMaterial(material: THREE.Material, technique: any): void {
         const url = technique._rasterTileUrl as string;

@@ -3262,3 +3262,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **最近邻对照（§177 记档的最后一层数据）**：全量 entry 坐标 dump（331 个，画布内 174）vs 期望红/蓝盒像素——**锚点仅 43% 在期望盒 3px 内（63%@8px，簇质心中位距 12.5px）**。即判定逻辑之外，**盒位置本身携带引擎符号放置的系统性 ~3-12px 偏移**——与 §91 text-anchor 质心差 ≤3px、§164 光栅化长尾**同源同量级**。
 - **域终局定性**：collisionDebug 族收敛 = ①引擎符号放置精度（锚点亚像素/投影链）+ ②mgl 碰撞判定集一致（§176：123蓝/363红 vs 全红）——两者均为**引擎侧放置链专项**，datasource 层判定 sim/盒几何（64×23 已同规格）/渲染通道（§174 修复后可验证）全部就绪并留档（39b6f65e + §176 校准）。**域关闭，归并引擎放置精度专项**（与 text/symbol ~90 例同根）。
 - **本会话 collisionDebug 攻坚总账（§170-§178，九轮）**：渲染通道破案（死代码→直绘→dump server 假象）、六层机制规格、判定 sim、盒 1px 级校准、锚点对照定案——全部可复现记档，零净代码变化（工作树干净）。
+
+**§179. fog 逐内容深度专项启动——逐 technique 编译期 vFogDepth 缩放基建 + 域基线矩阵（2026-08-23 六十九，保留基建零行为）**：
+
+- **基建（保留）**：`MBMaterialPatchManager.fogContentScales`（静态表：technique 名→缩放因子，`vFogDepth *= k` 编译期注入 fog_vertex，链式包裹各类型 patcher 的 onBeforeCompile）——**§106"精确 distCam 对 fill/line 改善、对 raster 同 pitch 劣化=内容依赖"结论的实施入口**。默认空表=1.0=零行为变化（fog 族基线矩阵落盘：fog/color 65842、fog/2d/raster 101665、symbols 97565、basic 22976、fill-color 600、line-sdf 1198、culling 8410-15995 等 25+ 例）。
+- **校准方法论（下轮入口）**：不做因子盲试——逐 fixture 雾带像素取证（带位置/宽度 vs 期望）推导每类的 (distCam 语义, k) 二元组；fill/line 可从 §106 双数据点（heuristic/exact 的 band 位置差）先验起步，raster/extrusion 需独立取证。fog/color 65k 族（三例同量级）为最大回报目标。
+- **tsc 绿**；collisionDebug 域 §178 已关闭（引擎放置精度归并）。
