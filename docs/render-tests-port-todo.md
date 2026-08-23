@@ -3437,3 +3437,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **决定性实验**：AfterRender 无条件隐藏 **全部 27 tiles 的 objects** → 图像逐像素不变 → **getDecodedTiles() 返回的对象集不是实际渲染集**（或引擎渲染列表构建路径绕过 `object.visible`）。culling 族"冻结"的本质 = 我们对该对象集的一切操作都无法触及真实渲染路径。harness `renderFrames` 渲染多帧+settle 等待已排除首帧时序假设。
 - **保留修正**：① `drawTileBoundaries` 坐标序 bug（(x,0,y)→(x,y,0)，z-up 世界）；② 边界线挂到 `m_sceneRoot`（RTE 锚点补偿，世界绝对坐标需经 sceneRoot 变换）——两者正确性独立于可见性问题。
 - **下轮入口（引擎链路取证）**：从 `mapView.visibleTileSet.dataSourceTileList` 或 TileObjectsRenderer 的 render-list 构建处反向定位绿线 mesh 的真实归属（datasource cache 的 tile.objects 可能被引擎 re-parent/复制），或直接 scene traverse 定位 LineMesh 后验证 visible 语义。
+
+**§205. culling 绿线归属取证终局——引擎瓦片生命周期五级排除，需读 VisibleTileSet 源码定案（2026-08-24 九十五，零净变化记档）**：
+
+- **五级取证链（全部排除）**：① m_scene traverse：仅 11 对象、0 line mesh（瓦片对象不进 scene graph，TileObjectsRenderer 每帧 add 到 rootNode）；② getDecodedTiles（dataSourceCache）：27 tiles，隐藏其 objects 图像不变（**陈旧实例集**）；③ visibleTileSet.dataSourceTileList[].visibleTiles：27 tiles 但 **objects=0**；④ renderedTiles：AfterRender 时刻已被清空（length=0）——渲染期短暂存在；⑤ 帧计数确认 AfterRender ≥3 帧仍在（非一次性时序问题）。
+- **结论**：绿线对象在渲染瞬间存在于 renderedTiles 的 tiles 中，但那些 Tile 实例与 datasourceCache/visibleTiles 可见的实例**均非同批**（解码异步 + 列表重建）——datasource 层无稳定句柄。**根治入口（引擎源码级）**：读 VisibleTileSet 的 renderedTiles 生命周期（何时填充/清空、Tile 实例从何而来），在 MapView 渲染循环为 datasource 提供渲染前回调或瓦片可见性 API——属引擎接口需求（同 §202 定案，本轮已把"对象在哪"收窄到 renderedTiles 生命周期）。
+- **基线复核**：回退后 fog/color 族 PASS、equal-range 6810、culling/far 9387 恒定 ✓，工作树干净。
+- **§201 raster 校准**：本轮未及（归属取证优先），维持待办。
