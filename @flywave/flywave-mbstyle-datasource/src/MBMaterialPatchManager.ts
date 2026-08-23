@@ -605,6 +605,17 @@ export class MBMaterialPatchManager {
         const techName = technique.name;
         const paint = technique._paint ?? {};
         const layout = technique._layout ?? {};
+        // §244: injected background tiles use the exact mgl fog formula.
+        if ((technique as any)._mbBgTile) {
+            const origBgCompile = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (origBgCompile) origBgCompile.call(material, shader);
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <fog_pars_fragment>',
+                    '#include <fog_pars_fragment>\n#define MB_RASTER_MGL_FOG 1');
+            };
+            material.needsUpdate = true;
+        }
 
         // Mapbox 3D `lights` API (lighting-3d-mode): 2D ground layers are lit as
         // `color * u_ground_radiance` (mix toward `color` by emissive-strength).

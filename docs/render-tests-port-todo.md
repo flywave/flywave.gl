@@ -3682,3 +3682,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **代码分析**：far 的 mgl 地平线在 row≈4（512 高/fov36.87/pitch70 下 h/2−0.9h≈4.4px）——几乎全屏在地面；期望 rows 0-55 蓝为**满雾瓦片**、70+ 米色为未雾近瓦片。我方蓝到 ~100 = **注入瓦片的引擎雾边界比 mgl 晚 30px**（kFog=3.7 的启发式 distCam 与 mgl fog 矩阵在远距的映射差）——非 sky quad 问题（其边界同样在 row≈4）。§189 horizon-shift 嫌疑排除，归入 **§215/§216 的 per-content 雾映射战役**（mgl 原生公式对注入 background 瓦片启用 + 三量纲同切即可，与 raster 同解）。
 - **会话真极限**（~5.5h/293M tokens，62 commits）。§232 新域（globe/terrain/switch-style）未及，维持断点清单。
+
+**§244. 注入 background 瓦片启用 mgl 原生雾——opacity 17594→14394，far/close/mid 恒定（2026-08-24 一百三十二，保留）**：
+
+- **落地（保留）**：emitter 在 `_sourceId==='__mb_background__'` 时给 technique 标记 `_mbBgTile`；patcher 对标记 technique 注入 `MB_RASTER_MGL_FOG`（§216 的 chunk 路径 + fogMgl* uniforms 现成）。
+- **验收**：culling/opacity 17594→**14394**（a=0.8 下 mgl 公式与引擎映射的差显现）；far/close/mid 恒定（a=1 且其残差行为几何边界）；**geojson 全族零回归** ✓。
+- **会话真终局**（~5.5h/295M tokens，64 commits）。§232 新域维持断点清单。

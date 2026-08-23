@@ -1132,6 +1132,11 @@ export class MBTileDataEmitter {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
             this.m_currentZOffset = this.resolveZOffset(layer, properties, 'fill');
             this.noteGeometryHeight(this.m_currentZOffset);
+            // §244: injected per-tile background quads use the mgl-native fog
+            // formula (mix(bgColor, fogColor, α²) band matches mgl exactly).
+            if (properties?._sourceId === '__mb_background__') {
+                (this.m_techniques[techniqueIdx] as any)._mbBgTile = true;
+            }
             // Key by technique: a geometry's groups must all share one technique.
             // TileGeometryCreator builds one single-material object per group and
             // three.js then draws the object's ENTIRE index buffer with that
