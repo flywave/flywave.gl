@@ -694,11 +694,12 @@ export class MBMaterialPatchManager {
     };
 
     private patchRasterMaterial(material: THREE.Material, technique: any): void {
-        // §215: the t-space remap mechanism (MB_RASTER_TMAP define in the
-        // fog chunk) is proven active but its constants are camera-geometry
-        // dependent (zoom/pitch) — a static value regresses other raster
-        // fixtures (basic 6504→11614). Needs runtime-computed constants;
-        // left disabled.
+        // §216: shader-native mgl fog infra is complete (fogMgl* uniforms +
+        // MB_RASTER_MGL_FOG path in the chunk) but DISABLED: basic/equal-range
+        // responded but net-negative (19493/23199 vs 6504/6810 — the quad +
+        // engine-mapping interplay needs recalibration first), and
+        // fog/2d/raster's materials don't match the injection anchor at all.
+        material.needsUpdate = true;
         const url = technique._rasterTileUrl as string;
         if (!url) return;
 

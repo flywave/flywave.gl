@@ -26,6 +26,11 @@ THREE.ShaderChunk.fog_pars_fragment = `
 	// ramp position t directly (grayscale) — shader-side t-profile tool for
 	// the per-content calibration campaign. Default 0 = zero behavior change.
 	uniform float fogDebugT;
+	// mgl-native fog params (§216): depth = shift*d/distCamMgl in mgl fog
+	// units; consumed by MB_RASTER_MGL_FOG materials.
+	uniform float fogMglShift;
+	uniform float fogMglDistCam;
+	uniform vec2 fogMglRange;
 	// mgl u_fog_vertical_limit (fog "vertical-range"): elevated content
 	// fades OUT of the fog between these heights (meters above ground).
 	uniform vec2 fogVertLimit;
@@ -36,6 +41,12 @@ THREE.ShaderChunk.fog_fragment = `
 #ifdef USE_FOG
 	float fogDepthKm = vFogDepth / 1000.0;
 	float fogT = (fogDepthKm - fogNear / 1000.0) / max(fogFar / 1000.0 - fogNear / 1000.0, 0.001);
+#ifdef MB_RASTER_MGL_FOG
+	// §216: the exact mgl fog formula per fragment (geometry-adaptive,
+	// replaces the kFog-folded engine mapping for raster content).
+	fogT = (fogMglShift * vFogDepth / max(fogMglDistCam, 1.0) - (fogMglRange.x + fogMglShift))
+		/ max(fogMglRange.y - fogMglRange.x, 0.001);
+#endif
 	if (fogDebugT > 1.5) {
 		// mode 2: the UNFOGGED base color (for per-pixel mgl op targets).
 		return;
@@ -814,6 +825,38 @@ export class MBEnvironmentManager {
             Math.min(vRange[0] ?? 0, vRange[1] ?? 0), vRange[1] ?? 0);
         const camPos = this.m_mapView?.camera?.position;
         (THREE.UniformsLib.fog as any).fogCamHeight.value = camPos ? Math.max(camPos.z, 1) : 1000;
+        // §216 mgl-native fog params: H_m = camToCenter/worldSize·C
+        // (mgl _mercatorZfromZoom chain), distCam_m = H_m/sin(90-pitch).
+        {
+            const cv = (this.m_mapView as any).canvas as HTMLCanvasElement | undefined;
+            const cam2 = this.m_mapView?.camera as THREE.PerspectiveCamera | undefined;
+            const hPx = cv?.clientHeight || cv?.height || 256;
+            const fovR = ((cam2?.fov ?? 36.87) * Math.PI) / 180;
+            const pitchD = Math.min(Math.max((this.m_mapView as any).tilt ?? 60, 0.1), 89.9);
+            const shift = 0.5 / Math.tan(fovR / 2);
+            const EarthC = 40075016.7;
+            const camToCenter = (0.5 * hPx) / Math.tan(fovR / 2) / Math.cos(pitchD * Math.PI / 180);
+            const worldSize = 512 * Math.pow(2, styleZoom);
+            const Hm = (camToCenter / worldSize) * EarthC;
+            const distCamM = Hm / Math.sin((90 - pitchD) * Math.PI / 180);
+            const lib2 = THREE.UniformsLib.fog as any;
+            if (!lib2.fogMglShift) {
+                lib2.fogMglShift = { value: shift };
+                lib2.fogMglDistCam = { value: distCamM };
+                lib2.fogMglRange = { value: new THREE.Vector2(rawRange[0], rawRange[1]) };
+                for (const lib of Object.values(THREE.ShaderLib)) {
+                    const u = (lib as any).uniforms;
+                    if (u && typeof u === 'object' && !u.fogMglShift) {
+                        u.fogMglShift = lib2.fogMglShift;
+                        u.fogMglDistCam = lib2.fogMglDistCam;
+                        u.fogMglRange = lib2.fogMglRange;
+                    }
+                }
+            }
+            lib2.fogMglShift.value = shift;
+            lib2.fogMglDistCam.value = distCamM;
+            (lib2.fogMglRange.value as THREE.Vector2).set(rawRange[0], rawRange[1]);
+        }
         // Mapbox renders the atmosphere glow (space→high→fog gradient) in the
         // sky region whenever fog is enabled and the horizon is visible — even
         // without an explicit `sky` layer. Create a camera-centered dome that

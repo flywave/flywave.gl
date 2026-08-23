@@ -3506,3 +3506,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **两版应用实验均回退**：① 顶点仿射换算（offset=−3195m）在引擎度量下符号/单位失准（raster 满白）；② **t 空间直接重映射**（fogT·0.533−0.137，per-technique define `MB_RASTER_TMAP`）机制验证有效（basic 响应 6504→11614）但**常数为相机几何相关**（zoom/pitch）——z16/p70 的拟合不可迁移到 basic（z12/p80），静态值净损。equal-range 曾在顶点仿射下 6810→3631（raster 内容雾修正的连带），随回退失去。
 - **终局定性（下轮入口）**：remap 常数需**运行时按相机几何计算**——s 与 C 均可由双相机模型（引擎 H_e=cam.position.z 与 mgl H_m=camToCenter/worldSize·C）解析导出（两者皆仿射于 d(y)），在 patch 时代入 define 字面量。机制三件套（顶点仿射/fogT-remap define/正向公式链）全部就绪。
 - **复核**：color 族 PASS / raster 32478 / basic 6504 / equal-range 6810 基线复原 ✓。
+
+**§216. 着色器内 mgl 原生雾全链落地（保留基建/激活禁用）——每像素精确公式绕开一切拟合（2026-08-24 一百零五）**：
+
+- **落地（保留）**：① fog chunk 新增 `MB_RASTER_MGL_FOG` 路径——`fogT = (fogMglShift·vFogDepth/fogMglDistCam − (r0+shift))/(r1−r0)`，**每像素按 mgl 公式精确计算**（fragment 已有 vFogDepth 视距，无需任何行拟合）；② applyFog 新增 mgl 相机模型 uniform 组（fogMglShift/fogMglDistCam/fogMglRange，H_m=camToCenter/worldSize·C 链，UniformsLib+ShaderLib 双同步）——**raster 校准的终态基础设施完整就位**。
+- **激活实验与禁用**：basic/equal-range 响应（19493/23199）但净负——mgl 原生 t 与背景雾 quad/引擎映射的**组合需重校准**（quad 的 s 表是在引擎映射下标定的）；且 **fog/2d/raster 的材质不含 `#include <fog_pars_fragment>` 锚点**（basic 含）——两类 raster 材质路径不同，需第二个注入锚。激活禁用、基建保留。
+- **终局路径（下轮）**：① 找 raster 材质的雾 chunk 锚点（读 MapMeshMaterials 的条件编译）；② 以 mgl 原生 t 为准重标定 quad 的 s 表（或 quad 一并切 mgl 公式——它有全部 uniform）；③ 而后 raster/basic/equal-range 三族应同时收敛。
+- **复核**：color 族 PASS / raster 32478 / basic 6504 / equal-range 6810 / inverted 37490 基线复原 ✓。
