@@ -3244,3 +3244,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **§173 定性修正**："同文本 173 特征仅 1 个文本元素"是**我方收集路径去重键 bug 的误读**（featureId=undefined 坍缩），引擎去重只影响**近距离同文本**的渲染去重——与 mgl 逐特征放置的差异仅在近距离场景成立，fixtures 基本未命中 → 放置一致性的真实缺口收敛回 §171 定性（碰撞判定集差异），去重非主因。
 - **落地（保留）**：emitter 对无 id 特征合成**世界坐标稳定 id**（`mbpos:x,y,z`——层级无关，同特征跨层级同 id=合法跨层去重，异特征不碰撞），`symbolFeatureId()` 接入 text/poi 发射。**A/B 实测零 delta**（text-anchor/icon-text-fit/sort-key 族逐值恒等；debug/collision 28894 基线不变）——语义正确的无害改进，消除近距离场景的潜在文本坍缩。
 - **批测**：debug/collision 单例 28894（基线恒等）、text-anchor 族 2068-16325（基线恒等）零回归。
+
+**§176. collisionDebug 校准首轮——最简例 1px 级 / 稠密族判定集差距定量，净劣化回退（2026-08-23 六十六，零净变化）**：
+
+- **恢复+校准实施**：§172 实现 + §174 四修复（早退/去重键/左上角/空帧保留）恢复，新增两项校准：① textRect 统一 −2px（mgl ink-box 边缘 vs 引擎 line-box，与 TextElementsRenderer 自身 ±2 校准同族）——**最简例 variable-icon-image-simple 1466→1015，盒 1 几何 (31,42,96,66) vs 期望 (31,42,96,65) 达 1px 级**；② 去重粗粒度 8px 桶（合并跨层级同特征重复 entries 348→~174）——族内仅边际（collision 45061→45004、pitched-wrapped 70392→69403）。
+- **稠密族定量（决定性）**：debug/collision 稠密帧判定 **123 placed/363 hidden**（双盒独立、优先级序、无异常）vs mgl 期望**几乎全红**（蓝≈0）——我们的盒在 spacing 20 的布点下重叠不足（mgl 文本盒因换行/逐锚点几何更大更密），放置集与 mgl 大偏；且 line-label 盒未实现（collision-lines 族值与无盒基线逐值恒等）。
+- **净劣化回退**：collision 28894→45004、pitched 11568→15947、pitched-wrapped 51755→69403（variable-icon 1030→1015 唯一改善）。**剩余校准规格**：mgl symbol_bucket 逐锚点几何（symbol-spacing 20 沿线锚点、text-max-width 换行盒、同优先级 tile 序 tie-break）+ line-label 盒（PathLabel 每锚点）——工程量中大，管线与判定 sim 已就绪（commit 链 39b6f65e + 本节校准可再恢复）。
