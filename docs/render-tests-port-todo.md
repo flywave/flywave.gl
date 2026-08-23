@@ -3142,3 +3142,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **子带结构（x30）**：cur 顶带 (6-58) ✓ 与 exp (5-59) 对齐；**第二带 cur (86-149)=64px vs exp (117-127)=11px**——feat1 的 ribbon 用了**错误的 clip 段**。
 - **根因（对照 mgl lineFeatureClips + pbf 属性）**：feat1 是**双子路径**（pbf paths=2），属性携带 `mapbox_clip_start_1=0.864 / mapbox_clip_end_1=1`（子路径 1 的段）与 `mapbox_clip_start=0 / mapbox_clip_end=0.29`（子路径 0）——mgl `lineFeatureClips(feature, multiLineMetricsIndex)` **按子路径索引**取 `_1` 后缀属性。我们的 clip 查找只读无后缀对（0→0.29，w≈23-30m→64px），把本应 **[0.86,1] 段（w≈5m→11px）**的子路径画厚了 6 倍。exp 的 11px 第二带与 w(0.86)≈5m×secLat×1.66px/m ≈ 11px 精确吻合。
 - **修复规格（明确）**：emitter 的 clip 查找支持 `mapbox_clip_start_${i}/end_${i}`（i=子路径序号，mgl line_bucket.ts:548-582）——processLineFeature 需把子路径索引传入（geojson 化时 path 展平处保留 index）。工程量小-中。该 fixture 预期 4846→近失带。
+
+**§157. gradient-vector-tile 转 PASS——渐变色 clip 同步修复（2026-08-23 四十七，保留修复）**：
+
+- **§156 残余 716 的取证**：失配集中在 y117-149（feat1 细带区）——**宽度已对但颜色错**（cur 蓝色 vs exp 橙/红 = progress 0.3 vs 0.86-1 的色相）：**渐变色 ramp 的 clip 查找（emitRibbonFill 前，line ~1703）仍读无后缀对**——宽度查找修了（§156）而色带查找漏修。
+- **修复**：第二处 clip 查找同步按 `__pathIdx` 取 `_N` 后缀。
+- **验收**：**gradient-vector-tile → PASS（19px，阈值内）**；line-gradient 全族 21 例**逐值零回归**。
+- **该 fixture 会话终账**：**29792 → PASS（19px，−99.9%）**——四层修复：§146 解析器索引、§94 lineClips 锚定、§156 per-子路径宽度 clip、§157 per-子路径色带 clip。

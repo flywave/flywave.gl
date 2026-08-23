@@ -1707,8 +1707,12 @@ export class MBTileDataEmitter {
                 // the ribbon is the only visible path. The dash pattern must be
                 // rendered ON the ribbon (see the patcher's USE_DASHED_LINE
                 // injection keyed by technique._dashSize/_gapSize).
-                const clipStart = Number(properties?.['mapbox_clip_start']);
-                const clipEnd = Number(properties?.['mapbox_clip_end']);
+                // Same per-sub-path clip semantics as the width lookup
+                // above — the gradient COLOR ramp must anchor to the sub-path's
+                // own segment (`_N` suffix), not the feature's first.
+                const __sfx2 = __pathIdx > 0 ? `_${__pathIdx}` : '';
+                const clipStart = Number(properties?.['mapbox_clip_start' + __sfx2]);
+                const clipEnd = Number(properties?.['mapbox_clip_end' + __sfx2]);
                 const progressClip: [number, number] | undefined =
                     Number.isFinite(clipStart) && Number.isFinite(clipEnd) && clipEnd > clipStart
                         ? [Math.max(0, clipStart), Math.min(1, clipEnd)]
