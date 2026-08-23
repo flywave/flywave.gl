@@ -6,6 +6,7 @@ import {
     MapControls,
     MapControlsUI,
     DEMTerrainSource,
+    QuantizedTerrainSource,
     ArcGISTileProvider,
     TileKey,
     TileKeyEntry,
@@ -41,6 +42,11 @@ import {
 const TILE_LEVEL = 13;
 const SITE = { lat: 22.39665174276315, lon: 109.0245571318964 };
 const TERRAIN_SOURCE_URL = "/api/v1/tilesets/pwobf37fk381ibm85id18xyq3a/tiles/source.json";
+// Quantized (Cesium terrain) 数据源 —— 填入你的 quantized tileset URL 并把
+// USE_QUANTIZED 改为 true，即可用同一套校准基准（四色象限 + 角柱 + 双瓦片）
+// 验证 quantized 路径的 projector 支持。
+const USE_QUANTIZED = false;
+const QUANTIZED_TERRAIN_URL = "<你的 quantized tileset.json 地址>";
 
 /**
  * Override VisibleTileSet so the terrain data source gets exactly ONE fixed
@@ -207,7 +213,9 @@ try {
     });
     new MapControlsUI(new MapControls(mapView));
 
-    const demTerrain = new DEMTerrainSource({ source: TERRAIN_SOURCE_URL });
+    const demTerrain = USE_QUANTIZED
+        ? new QuantizedTerrainSource({ url: QUANTIZED_TERRAIN_URL })
+        : new DEMTerrainSource({ source: TERRAIN_SOURCE_URL });
     mapView.setElevationSource(demTerrain);
     demTerrain.addWebTileDataSource(new ArcGISTileProvider({ minDataLevel: 0, maxDataLevel: 18 }));
 
@@ -223,7 +231,9 @@ try {
         )
     );
 
-    forceSingleTile(mapView, demTerrain.name, tileKey);
+    // ---- DEBUG: 强制固定瓦片（重载 VisibleTileSet 的瓦片选择）----
+    // forceSingleTile(mapView, demTerrain.name, tileKey);
+    // ---------------------------------------------------------------
 
     console.log("[single-tile] tileGeoBox:", tileBox);
     console.log("[single-tile] decalGeoBox (west half):", halfBox);
@@ -243,22 +253,23 @@ try {
     (window as any).overlayManager = overlayManager;
     (window as any).demTerrain = demTerrain;
 
-    // Per-second poll: turn "flashed once then gone" into data.
-    let frame = 0;
-    setInterval(() => {
-        const meshes: string[] = [];
-        mapView.scene.traverse((o: any) => {
-            if (o.isTerrainLayerMesh) {
-                const tk = o.userData.tileKey;
-                meshes.push(
-                    `${o.layerKey}:${tk ? tk.level + "/" + tk.column + "/" + tk.row : "?"}:${
-                        o.visible ? "v" : "h"
-                    }`
-                );
-            }
-        });
-        console.log(`[poll ${frame++}]`, meshes.join(" | ") || "(no terrain meshes)");
-    }, 1000);
+    // ---- DEBUG: 每秒轮询场景内地形层网格状态 ----
+    // let frame = 0;
+    // setInterval(() => {
+    //     const meshes: string[] = [];
+    //     mapView.scene.traverse((o: any) => {
+    //         if (o.isTerrainLayerMesh) {
+    //             const tk = o.userData.tileKey;
+    //             meshes.push(
+    //                 `${o.layerKey}:${tk ? tk.level + "/" + tk.column + "/" + tk.row : "?"}:${
+    //                     o.visible ? "v" : "h"
+    //                 }`
+    //             );
+    //         }
+    //     });
+    //     console.log(`[poll ${frame++}]`, meshes.join(" | ") || "(no terrain meshes)");
+    // }, 1000);
+    // ---------------------------------------------
 
     console.log(
         "[single-tile] expected: quadrants RED=NW GREEN=NE BLUE=SW YELLOW=SE, border on pillars"

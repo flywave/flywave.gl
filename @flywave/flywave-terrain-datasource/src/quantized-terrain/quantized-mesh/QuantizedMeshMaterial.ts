@@ -5,6 +5,8 @@ import * as THREE from "three/webgpu";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { Fn, float, mix as tslMix, select, texture, uniform, uv as uvNode, attribute, vec2, vec4 } from "three/tsl";
 
+import { MAX_PROJECTOR_LAYERS } from "../../projector-overlay";
+
 
 function dummyTex(): THREE.DataTexture {
     const t = new THREE.DataTexture(
@@ -74,6 +76,40 @@ const _imageryTransform = [
 
 const _imageryCount = uniform(0).onObjectUpdate(({ object }) => object.imageryCount);
 
+// --- Projector overlay decals (alpha-blended over imagery) ---
+// Per-mesh data lives as plain array properties on the mesh (QuantizedMesh
+// .setupProjectorTextures); resolved per draw via onObjectUpdate, same
+// pattern as the imagery slots. Sampling rides the SAME tile-UV × transform
+// mapping as imagery — the transforms are computed on the CPU with the
+// SIGNED y offset (see QuantizedMesh.computeProjectorUvTransform), which is
+// the formula verified on the DEM path for arbitrary (multi-tile) geoBoxes.
+//
+// ⚠️ RISK (untested on this material): projector textures are user-created
+// canvas/image textures, NOT worker ImageBitmaps like the imagery slots.
+// The DEM path's "white decal" bug showed canvas textures can behave
+// differently through shared-node clone sampling (flipY is upload-time for
+// canvas but shader-side for ImageBitmap). If decals render white/mirrored
+// here, re-run the DEM calibration procedure (multi-tile geoBox + corner
+// pillars) before touching the transform math.
+const _projTex = Array.from({ length: MAX_PROJECTOR_LAYERS }, () => texture(emptyTexture));
+_projTex.forEach((node, i) => {
+    node.onObjectUpdate(({ object }) => object.projectorTextures?.[i] ?? emptyTexture);
+});
+
+const _projTransform = Array.from({ length: MAX_PROJECTOR_LAYERS }, () =>
+    uniform(new THREE.Vector4())
+);
+_projTransform.forEach((node, i) => {
+    node.onObjectUpdate(({ object }) => object.projectorTransforms?.[i] ?? node.value);
+});
+
+const _projOpacity = Array.from({ length: MAX_PROJECTOR_LAYERS }, () => uniform(0));
+_projOpacity.forEach((node, i) => {
+    node.onObjectUpdate(({ object }) => object.projectorOpacities?.[i] ?? 0);
+});
+
+const _projCount = uniform(0).onObjectUpdate(({ object }) => object.projectorCount ?? 0);
+
 const _waterMaskTex = texture(emptyTexture);
 _waterMaskTex.onObjectUpdate(({ object }) => object.waterMaskTexture ?? emptyTexture);
 
@@ -114,6 +150,29 @@ function buildNodes() {
                 .and(tUv.y.lessThanEqual(float(1.001)));
             const patchColor = texture(_imageryTex[i], tUv);
             color.assign(select(inRange.and(float(i).lessThan(_imageryCount)), patchColor, color));
+        }
+
+        // Projector decals: alpha-blend each layer over the imagery result
+        // (NOT select — decals must blend, e.g. checker at opacity 0.9).
+        // Frustum gate is [0,1] on the decal UV — coverage is exactly the
+        // layer's geoBox.
+        for (let i = 0; i < MAX_PROJECTOR_LAYERS; i++) {
+            const tUv = vec2(
+                mapUv.x.mul(_projTransform[i].x).add(_projTransform[i].z),
+                mapUv.y.mul(_projTransform[i].y).add(_projTransform[i].w)
+            );
+            const inRange = tUv.x
+                .greaterThanEqual(float(0.0))
+                .and(tUv.x.lessThanEqual(float(1.0)))
+                .and(tUv.y.greaterThanEqual(float(0.0)))
+                .and(tUv.y.lessThanEqual(float(1.0)));
+            const projColor = texture(_projTex[i], tUv);
+            const layerAlpha = projColor.a.mul(_projOpacity[i]);
+            const active = inRange
+                .and(float(i).lessThan(_projCount))
+                .and(layerAlpha.greaterThan(0.001));
+            const blended = tslMix(color, vec4(projColor.rgb, color.a), layerAlpha);
+            color.assign(select(active, blended, color));
         }
 
         return tslMix(color, vec4(1.0), float(0.1));

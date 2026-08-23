@@ -8,6 +8,7 @@ import { HeightMapTerrainMesh } from "../dem-terrain/DEMTileTerrainMesh";
 import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";
 import { type TerrainResourceTile } from "../TerrainSource";
 import { type WebTile } from "../WebImageryTileProvider";
+import { type ProjectorTileEntry, ProjectorState } from "../projector-overlay";
 import { type BaseQuantizedTerrainSource } from "./BaseQuantizedTerrainSource";
 import { QuantizedMesh } from "./quantized-mesh/QuantizedMesh";
 import { type QuantizedTerrainMesh } from "./quantized-mesh/QuantizedTerrainMesh";
@@ -348,6 +349,47 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
     }
 
     /**
+     * Collect the projector overlay layers intersecting this tile.
+     *
+     * Same source as the DEM path (ProjectorImageryProvider per-tile
+     * resources): entries carry the layer's live matrix/texture references.
+     */
+    private collectProjectorEntries(): ProjectorTileEntry[] {
+        const manager = this.dataSource.getProjectorOverlayManager();
+        if (manager.count === 0) return [];
+        const resourceTile = manager.provider.getBestAvailableResourceTile(this.tile.tileKey);
+        return resourceTile ? resourceTile.resource.value : [];
+    }
+
+    /**
+     * Attach projector layers to the intermediate (height-map) block via the
+     * legacy world-space matrix path — HeightMapTerrainMesh renders through
+     * DEMTileMeshMaterial, whose projectorState sampling was verified
+     * correct (the manager's projector matrices are the fixed
+     * exact-enclosure/east-north-aligned versions).
+     */
+    private setupIntermediateProjector(mesh: HeightMapTerrainMesh): void {
+        const manager = this.dataSource.getProjectorOverlayManager();
+        const entries = this.collectProjectorEntries();
+        if (entries.length === 0) return;
+
+        const state = new ProjectorState();
+        entries.forEach((entry, i) => {
+            state.textures[i] = entry.texture;
+            state.matrices[i] = entry.matrix; // live ref — manager mutates in place
+            state.opacities[i] = entry.opacity;
+        });
+        state.count = entries.length;
+        // ⚠️ RISK: live-reference hack — ProjectorState.cameraPos is declared
+        // readonly, but a snapshot copy would miss the manager's per-frame
+        // RTE refresh and decals would drift when the camera moves. Runtime
+        // reassignment of the property keeps the shader reading the live
+        // manager.cameraPos.
+        (state as any).cameraPos = manager.cameraPos;
+        (mesh as any).projectorState = state;
+    }
+
+    /**
      * Implementation of tile mesh loading for terrain data
      *
      * This method loads and configures the mesh objects for quantized terrain
@@ -370,6 +412,8 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
             needDemDraw = true;
         }
 
+        const projectorEntries = this.collectProjectorEntries();
+
         this.dataSource.getWebTileDataSources().forEach(webTiles => {
             const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
             if (!webTile) return;
@@ -381,15 +425,15 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                 quantizedDataResource.resource.isGroundElevationModified ||
                 this.dataSource.getGroundModificationManager().getModifierCount() > 0
             ) {
-                this.tile.objects.push(
-                    this.makeIntermediateTerrainBlock(
-                        {
-                            webTiles: webTile.resource.value,
-                            webTingScheme: webTiles.tilingScheme
-                        },
-                        quantizedDataResource
-                    )
+                const block = this.makeIntermediateTerrainBlock(
+                    {
+                        webTiles: webTile.resource.value,
+                        webTingScheme: webTiles.tilingScheme
+                    },
+                    quantizedDataResource
                 );
+                this.setupIntermediateProjector(block);
+                this.tile.objects.push(block);
             } else {
                 if (!quantizedDataResource?.resource) return;
                 const mesh = TileObjectMesh.makeMapViewQuantizedMesh(
@@ -403,8 +447,47 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                     },
                     this.dataSource.mapView
                 );
+                // Projector decals: UV-transform sampling with the signed
+                // offset (see QuantizedMesh.setupProjectorTextures).
+                if (projectorEntries.length > 0) {
+                    const inner = mesh.children[0] as any;
+                    if (inner?.setupProjectorTextures) {
+                        inner.setupProjectorTextures(
+                            projectorEntries,
+                            this.dataSource.getProjectorOverlayManager().provider.tilingScheme,
+                            this.dataSource.getTilingScheme()
+                        );
+                    }
+                }
                 this.tile.objects.push(mesh);
             }
         });
+
+        // Projector-only tiles (no web imagery provider produced an object):
+        // still render the quantized mesh so decals have a surface.
+        if (projectorEntries.length > 0 && this.tile.objects.length === 0) {
+            if (quantizedDataResource?.resource) {
+                const mesh = TileObjectMesh.makeMapViewQuantizedMesh(
+                    {
+                        quantizedData: quantizedDataResource.resource,
+                        webTiles: [],
+                        webTingScheme: this.dataSource.getTilingScheme(),
+                        tile: this.tile,
+                        terrainSource: this.dataSource,
+                        quantizedTilingScheme: this.dataSource.getTilingScheme()
+                    },
+                    this.dataSource.mapView
+                );
+                const inner = mesh.children[0] as any;
+                if (inner?.setupProjectorTextures) {
+                    inner.setupProjectorTextures(
+                        projectorEntries,
+                        this.dataSource.getProjectorOverlayManager().provider.tilingScheme,
+                        this.dataSource.getTilingScheme()
+                    );
+                }
+                this.tile.objects.push(mesh);
+            }
+        }
     }
 }
