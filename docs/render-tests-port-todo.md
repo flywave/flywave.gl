@@ -3644,3 +3644,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地（保留）**：① evaluator 把 background 层注册为合成 fill 层（`__mb_background__` 保留源键，background paint→fill paint 映射，filter 需 `compile(undefined)`——裸 undefined 会让 evaluate 的 `pl.filter(ctx)` 崩）；② decoder `decodeThemedTile` 在 **try/catch 之前**注入合成全瓦片矩形（catch 对低层瓦片的特征解码抛出会提前 return 空瓦片——z7-11 的 38 次解码全部如此，注入因此漏掉；前移后 54 层全覆盖）；③ 门控 = 有 background 层 && 有 geojson 源（raster 域维持 clearColor+quad 标定管线）。
 - **验收**：geojson 雾族零回归（line 2680/fill-color 422/line-pattern 双态带内 ✓）；**culling 数值未变（4691）**——对象已挂（z12-15 共 8 瓦片 objects=1→注入生效）但视觉同基线：嫌疑 = 注入 quad 的雾未饱和（引擎 fog 映射在远距 t 低）或低层对象仍未挂（z7-11 的引擎 attach）。**下轮一步**：f6 对象普查复查（全层 objects）+ 注入 quad 的 fogT 探针（fogDebugT mode1）。
 - 会话极限（~5h/243M tokens）已至，工作树=提交态。
+
+**§237. 注入后对象普查与回退界实验——z7-11 引擎挂载仍零，quadTreeSearchDistanceUp 提升无效，会话极限终局（2026-08-24 一百二十六，零净变化）**：
+
+- **普查（§236 最后一步执行）**：注入 54 层全覆盖后 f6 对象普查 = z12-15 挂载（12:1×2/13:1/14:1/15:1×4）但 **z7-11 全 0**——低层瓦片的引擎挂载被回退界之外的条件阻断。**quadTreeSearchDistanceUp 3→10 实验：无效**（culling/geojson 族数值全部不变）——排除回退界嫌疑；剩余候选：maxVisibleDataSourceTiles 距离排序截断（§227 候选①）或 renderedTiles 填充的 findUp 方向条件。
+- **§236 注入基建保留**（geojson 门控零回归）；无效选项实验已回退。
+- **下轮入口（会话重启后首查）**：VisibleTileSet.processVisibleTiles 的 maxVisibleDataSourceTiles 截断日志（距离排序下 z7-11 最远最先被丢——与 §227 候选①完全吻合的最后一验）。
+- 会话极限（~5.1h/259M tokens）已至，工作树=提交态（58 commits）。
