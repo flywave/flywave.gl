@@ -3619,3 +3619,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 3. **fog/globe（14 万级）/ terrain / switch-style / space-color-opacity 新 fixture 族**：未取证的全新域（各自独立战役）。
 4. **skybox fill-extrusion-light（7-15k）/ compositing（50k）/ cubemap-bottom-face（105k）**：既有独立缺口域。
 5. **horizon-blend null 二例 588px**：相机 horizon-shift 语义专项（§189）。
+
+**§233. 引擎链终局取证——getTile 全 4 站点零调用，geojson 瓦片完全不经瓦片请求管线（2026-08-24 一百二十二，零净变化）**：
+
+- **打点（§232 首项执行）**：MBStyleDataSource 全部 4 个 `getTile` 定义加日志——culling/far 上**零调用**。geojson 源的数据瓦片由 datasource 内部自建（§202 所见"27 cache 瓦片带对象"即其私有分片），引擎覆盖瓦片（z7-15）的请求**永无服务**→ objects 永久 0 的构造性根因。
+- **修复定性**：需 datasource 为 geojson 实现**全层瓦片服务**（按 cover 层级对 geojson 数据重切——mgl 的 geojson-vt per-level 切片语义，§12.76-40 已有 mglCompat buffer 基础），或引擎为内存型源提供直挂路径——独立功能项。
+- **会话终态**：工作树=提交态（54 commits）。
