@@ -3792,3 +3792,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **缓存清除实验**：configure 重发 + clearTileCache——globe 六例逐位恒定（worker 侧状态不受主线程操作影响，二重印证 worker 假说）。零回归。
 - **下轮入口（globe 战役收口点）**：读 TileDecoderService 的 worker decoder 注册/配置传播代码（customOptions 如何到达 worker；globe/projection 切换是否重置 worker decoder）——这是最后一段未读代码。
 - 探针已清，工作树=提交态（81 commits）。
+
+**§262. TileDecoderService 读取定案——worker 假说死亡（harness 传 in-process decoder，m_options.decoder 分支无 worker）；§258 的 dec 零调用是第六次仪表错误（regex 解析失配）（2026-08-24 一百五十，零净变化记档）**：
+
+- **代码定案**：harness `new MBStyleDataSource({decoder: new MBStyleDecoder()})` → `TileDataSource` 构造走 `m_options.decoder` 分支（**in-process 实例，无 worker**）——§261 的 worker 克隆假说不成立；TileDecoderService/worker 路径在此配置下完全不参与。
+- **第六次仪表错误**：§258 的 "dec 零调用" 的 python 正则 `dec id=., (\w+)` 与实际日志格式 `dec id=', 'vd52'` 失配——解析失败被误读为零调用。**真实状态未知**：decodeTile 在 globe 上大概率被调用（in-process）；geoms=0 的真因回到 §256 原点：decodeThemedTile 内部（evaluate/emitter/或注入前 early-return 的真实时序）。
+- **下轮入口（正本清源）**：一次性重放 §258 探针 + **修正的解析**（含 dec/cfg 双计数），并按 §256 的闭包内 matched/geoms 打点（主线程可见，in-process 无 worker 盲区）——一次运行收口 decode 链。
+- 工作树=提交态（82 commits）。
