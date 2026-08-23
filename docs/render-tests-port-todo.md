@@ -3664,3 +3664,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **t 探针与 opacity-limit**：注入 quad 的 t=0.961（饱和 ✓）但 sky 区仍米色——真因 = **sky 区（地平线上）需要纯雾色**而 atmoQuad 被 §228 geojson stand-down 关闭；`fogOpLimit` 无条件应用被定为 mgl 不忠实（仅 vertical-range 变体有）并**修复②（保留）**：门控到 vertical-range——本批 fixtures 无视觉影响但语义正确。
 - **回归**：geojson 全族零回归（line/fill-color/heatmap/hillshade/fill-extrusion/high-color 全 PASS/恒定 ✓）；fill-pattern 1855→1919、symbols 双态带内。
 - **下轮**：sky 区纯雾色（far/opacity 的 +561/+6976 残差）——atmoQuad stand-down 需改为"仅在内容瓦片覆盖地面时让位地平线下部分"而非全屏让位，或 sky 区直接雾色填充。
+
+**§241. sky 区纯雾色两路实验与回退——glow 梯度/平雾色均非每 fixture 通解，恢复 §240 最优态（2026-08-24 一百二十九，零净变化）**：
+
+- **实验①（重新启用 sky glow）**：§228 stand-down 确系有效承载——恢复 glow 后 far 5252→9387（glow 的 t 天顶衰减漏出 space 色 ≠ 期望纯蓝）。**实验②（stand-down + 平雾色天空，fadeout=1e9 强制 t≈1）**：close 17524→**9652** ✓ 但 far 5252→28361 / mid 9797→19177 / opacity→32288 ✗，且 fill-color 422→974、line-gradient 404→591 ✗——期望的天空行为随 fog range 逐 fixture 不同（紧 range 全饱和→纯色 ✓；宽 range 天空有结构）。
+- **定性**：sky 区正确着色 = **fog range 依赖的连续语义**（mgl 的 sky = 大气 glow × fog_apply_sky_gradient 的天顶衰减，其参数使紧 range 看似纯色）——需要的是 glow 参数（fadeout/颜色）在满雾时精确饱和的推导而非二值开关。**恢复 §240 态**（far 5252/close 17524/mid 9797 = 已知最优净额；fill-color 422/line-gradient 404 复原 ✓）。
+- **会话极限三次确认**（~5.3h/278M tokens），工作树=提交态（61 commits）。§232 清单新域（globe/terrain/switch-style）本会话未及。
