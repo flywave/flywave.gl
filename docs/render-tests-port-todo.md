@@ -2989,3 +2989,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **`on` op 实施（保留）**：`on('styleimagemissing', [[addImage...]])` 事件操作落地（嵌套 ops 原样执行——fixture 模板内带具体图标名）。styleimagemissing 从"纯缺功能"变为**可执行**：rocket 图标上屏，残余 72px（alpha 合成 118px）= 火箭 AA 边缘带（近失，阈值 ~24px）。
 - **render-callback(icon-only) 深查（三假说两排除）**：① 碰撞门——fixture 强制 `icon-allow-overlap:true` 无效，排除；② POI 发射——探针实证 labeled-icon 几何在 'dot' 名下正常发射（绝对世界坐标 (C/2,C/2)，与 with-symbol 同管线）；③ 缓存注册——§122 双写已生效（with-symbol PASS 为旁证）。**与 with-symbol 的唯一剩余差异**：数据点 [0,0] vs ±0.5°、单层 vs 双层。下轮入口：TextElementsRenderer 对"单 POI 无邻居"场景的可见性/初始化链（对比两 fixture 的 TextElement state dump）。
 - **家族回归**：10 PASS 保持（with-symbol 368 噪声带、default/literal 等不变）。
+
+**124. render-callback icon-only 悖论定案——名字键控失败（2026-08-23 十四，零净变化）**：
+
+- **方法论修正（重要）**：harness 从 `render-tests-index.ts`（**内嵌 style 快照**）加载测试——直接改 mapbox-gl-js fixture style.json 是无效操作（§123 的 var1-var4 "二分"与碰撞门"排除"**全部作废**）；有效二分需 `node scripts/generate-mbstyle-test-index.js` 再生索引。
+- **有效二分（五轮，均经索引再生）**：icon-only 槽位上 ① overlap+ignore-placement ② 数据点移 ±0.5° ③ filter+properties ④ 追加 marker.png addImage op ⑤ **整套 with-symbol style 原样**——**全部 29792 全白失败**；而同一份 style 在 with-symbol 槽位 PASS（同页同跑双测对照：render-callback nonwhite=0 vs with-symbol nonwhite=30522）。
+- **悖论定案**：唯一剩余变量是**测试名本身**——同 style 异名异果。机制候选：karma 页内按名缓存的状态（`it()` 标题键控的 karma 过滤/dump-server 路径交互）或 harness 内未见的名键逻辑。**破案需 karma step-debug 会话**（断点 addImage op 与首帧渲染），本轮不再推进；§123 的"TextElementsRenderer 单要素链"假说 likewise 作废（⑤ 已含双要素仍白）。
+- **状态**：fixture 与索引已还原原状（基线复核 29792/with-symbol PASS ✓），零净变化。
