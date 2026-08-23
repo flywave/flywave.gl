@@ -2331,6 +2331,7 @@ export class MBMaterialPatchManager {
         const heightAlign = paint['fill-extrusion-height-alignment'] ?? 'flat';
         const baseAlign = paint['fill-extrusion-base-alignment'] ?? 'terrain';
         let flatEle: number | null = null;
+        let anchorWorld: [number, number] | null = null;
         if (centerDem && mesh?.geometry) {
             try {
                 const g = mesh.geometry;
@@ -2347,6 +2348,12 @@ export class MBMaterialPatchManager {
                     const cx = ax + g.boundingSphere.center.x;
                     const cy = ay + g.boundingSphere.center.y;
                     flatEle = terrainController?.sampleElevation?.(cx, cy) ?? null;
+                    // World anchor for the PER-VERTEX DEM sample: baked
+                    // positions are camera-relative (RTE) while the DEM
+                    // uniforms are in WORLD meters — sampling via
+                    // modelMatrix produced clamped garbage (§118). Recover
+                    // world = position.xy + (tileWorldCenter − meshLocalCenter).
+                    anchorWorld = [ax, ay];
                     // Gate: fully inside the center DEM tile (over-border
                     // fixtures span other DEM tiles where the single-tile
                     // sample is wrong).
@@ -2398,11 +2405,15 @@ export class MBMaterialPatchManager {
                 // base follows the terrain surface).
                 const useFlatTop = centerDem && heightAlign === 'flat' && flatEle !== null;
                 const useFlatBase = centerDem && baseAlign === 'flat' && flatEle !== null;
+                if (centerDem && anchorWorld) {
+                    shader.uniforms.uMBExtrusionAnchor = { value: new THREE.Vector2(anchorWorld[0], anchorWorld[1]) };
+                }
                 if (useFlatTop || useFlatBase) {
                     shader.uniforms.uMBFlatEle = { value: flatEle };
                 }
-                const terrainSample = centerDem
-                    ? `vec2 mbWorldPos = (modelMatrix * vec4(position, 1.0)).xy;
+                const terrainSample = centerDem && anchorWorld
+                    ? `uniform vec2 uMBExtrusionAnchor;
+                       vec2 mbWorldPos = position.xy + uMBExtrusionAnchor;
                        vec2 mbDemUv = (mbWorldPos - uMBExtrusionDemOrigin) / uMBExtrusionDemSize;
                        float mbTerrainElev = texture2D(uMBExtrusionDem, vec2(clamp(mbDemUv.x,0.0,1.0), clamp(mbDemUv.y,0.0,1.0))).r * uMBExtrusionExag;
                        uniform float uMBFlatEle;
