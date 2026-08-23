@@ -3625,3 +3625,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **打点（§232 首项执行）**：MBStyleDataSource 全部 4 个 `getTile` 定义加日志——culling/far 上**零调用**。geojson 源的数据瓦片由 datasource 内部自建（§202 所见"27 cache 瓦片带对象"即其私有分片），引擎覆盖瓦片（z7-15）的请求**永无服务**→ objects 永久 0 的构造性根因。
 - **修复定性**：需 datasource 为 geojson 实现**全层瓦片服务**（按 cover 层级对 geojson 数据重切——mgl 的 geojson-vt per-level 切片语义，§12.76-40 已有 mglCompat buffer 基础），或引擎为内存型源提供直挂路径——独立功能项。
 - **会话终态**：工作树=提交态（54 commits）。
+
+**§234. §233 推翻——geojson getTile 实际全层服务 54 次（z7-15），缺口收窄至 decode→objects（2026-08-24 一百二十三，零净变化）**：
+
+- **仪表错误修正**：§233 的"零调用"源于 regex 笔误（`{\>`）致日志未落 GeoJSONDataProvider——定点补打后 **54 次调用覆盖 z7-15 全层**（8/8/8/8/8/6/4/2/2 按层）。引擎请求与取数管线**完全正常**。
+- **缺口终收窄**：fetch ✓ → **decode→objects 环节**（引擎请求瓦片的解码产物 objects=0 vs datasource 私有 27 瓦片带对象）——下轮唯一入口：对照 MBStyleDecoder 对引擎请求瓦片 vs 私有分片瓦片的解码路径（decodeTile 入参/剪裁/technique 生成差异），一次对比即可锁定。
+- **复核**：color PASS / culling/far 4691 恒定 ✓，工作树=提交态（55 commits）。
