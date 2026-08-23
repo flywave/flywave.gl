@@ -3333,3 +3333,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **s(pitch=85) 校准**：null 期望剖面 = 地平线内 ~4px 白条 + 平坦 ~5% 提升——exp-cube ramp 拟合 s(85)≈0.10（表 [[70,0.735],[85,0.10]]），s=1/0.26/0.22/0.135 逐档实测收敛。**验收：null 族 y44+ 全对齐**。
 - **未解（记档，量级 266/322px≈0.5%）**：gradient/null 的 **row 37**（整行 512px，期望 skyblue 我们白）——对 sky 裁剪偏移（0.97/0.99/1.06）与 quad 偏移（0.99/1.012/1.03）的全部组合**不变**，且非 quad（禁用不变）、非 dome（纯红探针 0px）——某第五通道在两条裁剪线之间恒绘白，下轮候选：quad 材质 uniforms 快照时序 / gl_FragCoord 与视口半像素中心差 / karma 双浏览器读数。
 - **fog 抽检零回归**：color/color-use-theme PASS 恒定、default 632、basic 10476、color-opacity 75147 不变；symbols 4614↔2320 双态漂移同 hillshade 族。
+
+**§189. row-37 白线终局取证（探针定案）+ skybox 分类全量基线（2026-08-23 七十九，零净变化保留 §188 态）**：
+
+- **row-37 定案（品红裁剪探针 + 权重三通道探针）**：① 品红探针证明 rows 37-38 由 **sky shader 本身绘制**（裁剪区从 row 39 起）；② 三通道探针（z/w/hb）证明 rows 37-38 的 `wdir.z ≤ 0`（我方相机**真地平线在 y≈36.2**）→ `fog_horizon_blending` 的 `t = max(0, z/hb)` 钳 0 → **满权重雾白**。mgl 同样满雾但被背景瓦片遮挡（瓦片顶边 ≈ y37.5-38）。
+- **修复实验与回退**：z≤0 权重置 0 + 裁剪线 0.997 → null 双例转 PASS，但 high/low 回归 512/424/428/277（其期望白带正好需要这段满雾）——**两族需求方向相反，根因是我方相机真地平线比 mgl 有效边界高 ~1.3px 的几何偏移**，shader 偏移无解；净残差 §188 态 588px < 实验态 1641px，**诚实回退 §188 提交态**（复核 12 PASS/2 FAIL 恒定 ✓）。根治入口（下轮）：相机的 pitch/focal 几何对齐（真地平线位置），非 shader 层。
+- **skybox 分类全量基线（`mbstyle-sky233`，33 例全捕获）**：**skybox/atmosphere-rayleigh 与 gradient/default 双例转 PASS**；§187/§188 修复连锁净改善——gradient/linear 868→512、atmosphere-mie 1107→654、atmosphere-horizon 1702→758、atmosphere-color 1619→835、intensity 族 ~1750→~1000、gradient/padding 32968→32075；小幅回归记档：atmosphere 202→1024、horizon-visibility/base 888→1016、fill-extrusion-light/above 6126→7148、compositing ±1.7k、gradient/south +663（疑 glow 底层合成与裁剪线联动，量级小暂缓）。skybox 大头（fill-extrusion-light 7-15k 族、compositing 50k、cubemap-bottom-face 105k）为既有独立缺口域。
