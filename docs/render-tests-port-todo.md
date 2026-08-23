@@ -3452,3 +3452,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **culling 四例最终定性**：即使引擎钩子真实剔除瓦片，四例绿线 6464 仍恒定——其内容**完全绕过 renderedTiles 渲染循环**（候选：ancestor 替代瓦片路径 / 第二渲染通道）。datasource 侧激活已禁用（防 equal-range 回归），方法与语义完整保留（applyFogTileCulling 内注释了禁用原因）。
 - **复核**：equal-range 6810 / color 族 PASS / default 448 / culling 9387 基线复原 ✓。
 - **下轮入口**：① culling 内容的渲染通道定位（在 tileVisibilityFilter 内打点确认哪些瓦片经过，对比绿线归属）；② §201 raster 分段校准（连续两轮未及，优先级应升）。
+
+**§207. fogContentScales 仿射扩展落地 + raster 校准方法论定案——图像差分被 quad 复合混淆（2026-08-24 九十七，保留基建）**：
+
+- **仿射基建（保留）**：`fogContentScales` 值支持 `{slope, offset}`——注入式 `vFogDepth = d·slope − offset` 可**同时重拟合 fog near 与斜率**（此前的纯乘子只能缩放，§190 k=1.8 过冲的根源），raster 键已接。
+- **slope=3 测量运行与混淆定案**：图像差分拟合法在 raster fixture 上失效——k=1 基线的上半是**背景雾 quad 的白雾**（非未雾内容基线），行中值 op 的 target 侧混合了 quad 贡献，t_target 不可靠（y230 target 0.32 vs y210 0.0 的矛盾即此）。**方法论结论：校准需 shader 侧深度/t 打点**（fog_fragment 输出 t 到未用通道或 readPixels 探针），或测量运行时禁用 quad 的对照法。
+- **基线复核**：raster 32478（k=1 态复原）/ fog/color 族 PASS ✓。
+- **下轮入口**：① shader 侧 t-profile 打点工具 + raster 仿射两点拟合；② culling 渲染通道定位（§206 遗留）。

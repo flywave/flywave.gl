@@ -659,7 +659,16 @@ export class MBMaterialPatchManager {
         const fogScaleKey = technique._rasterTileUrl ? 'raster' : techName;
         const fogScale = (MBMaterialPatchManager.fogContentScales as any)[fogScaleKey] ??
             (MBMaterialPatchManager.fogContentScales as any)[techName];
-        if (typeof fogScale === 'number' && Number.isFinite(fogScale) && fogScale > 0 && fogScale !== 1) {
+        // Affine form { slope, offset }: vFogDepth' = slope*d − offset —
+        // refits BOTH the fog near (offset) and the slope, needed when the
+        // expected band decays at a different rate than the ramp allows
+        // (§201 raster slope mismatch; a plain multiplier can only scale).
+        const aff = (typeof fogScale === 'object' && fogScale !== null)
+            ? { slope: Number(fogScale.slope), offset: Number(fogScale.offset ?? 0) }
+            : (typeof fogScale === 'number' && Number.isFinite(fogScale) && fogScale > 0)
+                ? { slope: fogScale, offset: 0 }
+                : null;
+        if (aff && Number.isFinite(aff.slope) && aff.slope > 0 && (aff.slope !== 1 || aff.offset !== 0)) {
             const origFogCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origFogCompile) origFogCompile.call(material, shader);
@@ -667,7 +676,7 @@ export class MBMaterialPatchManager {
                     shader.vertexShader = shader.vertexShader.replace(
                         '#include <fog_vertex>',
                         `#include <fog_vertex>
-                         vFogDepth *= ${fogScale.toFixed(4)};`
+                         vFogDepth = vFogDepth * ${aff.slope.toFixed(6)} - ${aff.offset.toFixed(1)};`
                     );
                 }
             };
@@ -681,10 +690,11 @@ export class MBMaterialPatchManager {
      * 'circles', ...). Empty/1.0 = untouched — the calibration entry point
      * for the fog per-content-depth campaign (§106/§179).
      */
-    static fogContentScales: Record<string, number> = {
-        // raster: 1.8 over-fogged fog/2d/basic (10476→11996) — the expected
-        // band decays faster than the ramp allows (slope, not scale). Left
-        // unset; the 'raster' key itself is wired (§190).
+    static fogContentScales: Record<string, number | { slope: number; offset: number }> = {
+        // raster: affine knobs are wired ({slope, offset} refits near AND
+        // slope together) but image-difference fitting is confounded by the
+        // bg-fog quad compositing over the content (§207) — the calibration
+        // campaign needs shader-side depth/t logging instead. Left unset.
     };
 
     private patchRasterMaterial(material: THREE.Material, technique: any): void {
