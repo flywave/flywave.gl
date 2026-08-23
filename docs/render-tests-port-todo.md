@@ -3603,3 +3603,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **运行时打点（frame 5，culling/far）**：visibleTileSet 覆盖 27 瓦片跨 z7-z15（含地平线区的 z7/8 粗瓦片，覆盖本身完整！）**全部 objects=0**——geojson 解码从未给引擎覆盖瓦片挂对象；而绿线渲染自 dataSourceCache 的另一套瓦片实例（§202 曾见其 objects 非空）。**引擎存在双瓦片实例集分歧**（cache 实例携带对象并渲染 vs coverage 实例空载）——覆盖语义本身不缺，缺的是对象填充管线。
 - **culling 战役终态**：rows 0-60 米色的根因 = 地平线覆盖瓦片空载（非覆盖选择/远面/回退界问题——§227/§229 嫌疑全部排除）；修复需引擎瓦片解码-挂载链对齐（cache 实例与 coverage 实例的合流），独立引擎会话规模。far 4691（§228 成果）+ close/mid/opacity 维持。
 - **会话终态**：color PASS / culling/far 4691 / raster 32478 恒定 ✓，工作树=提交态（51 commits）。
+
+**§231. culling 战役会话终局——覆盖瓦片永久空载定案 + 绿线最终未知通道（2026-08-24 一百二十，零净变化）**：
+
+- **定案**：覆盖瓦片 objects 在 frame 4/5/7 **恒为 0**（非时序）；结合 §212（TileObjectsRenderer rootNode.add 零触发）与 §204（cache 对象全隐藏无效）——该 fixture 的渲染完全绕过 tile 管线与常规场景遍历。绿线的最终通道候选只剩 datasource 解码器直挂 sceneRoot 的瞬时对象或引擎内某直绘路径——会话内十五轮取证未穷尽，标记为"最终未知通道"。
+- **战役账本**：9387→4691（§228 geojson 让位）+ 完整因果链（覆盖完整/对象空载/双实例集/管线绕行）——datasource 层能做的全部完成；闭环需要引擎解码-挂载链源码级对齐（独立会话）。
+- **会话终态**：color PASS / culling/far 4691 / raster 32478 恒定 ✓，工作树=提交态（52 commits）。
