@@ -156,7 +156,11 @@ const browserTestsConfig = {
     },
     // @ts-ignore
     mode: process.env.NODE_ENV || "development",
-    cache: process.env.HARP_NO_HARD_SOURCE_CACHE
+    // MB_NO_WEBPACK_CACHE: bypass the filesystem cache entirely. The cache
+    // has served STALE bundles after source edits (same-state double runs
+    // flip between old/new code — §185), silently invalidating A/B
+    // forensics; enable for any debug/calibration session.
+    cache: process.env.HARP_NO_HARD_SOURCE_CACHE || process.env.MB_NO_WEBPACK_CACHE
         ? false
         : {
               type: "filesystem",
