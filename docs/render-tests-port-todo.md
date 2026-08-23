@@ -3742,3 +3742,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **引擎全链取证（Explore）**：瓦片请求链 = `isDataSourceEnabled`（enabled/ready/isVisible/connected 四关，MapView.ts:2140）→ VisibleTileSet 按瓦片方案分桶 → FrustumIntersection 单根瓦片（globe 无 wrap）→ `getTileKeyEntry`（OBB 视锥交，area=0 即弃）→ canGetTile → getTile。globe 下零调用的三个候选：**① 准入失败**（projection 切换重建 VisibleTileSet/清缓存与 connect/ready 时序竞态——applyProjection 直接换投影是首要嫌疑）；**② isVisible(zoomLevel) 拒绝**（globe 派生 zoom 超出 min/maxDisplayLevel）；**③ 根瓦片 OBB 不交视锥**（球面相机退化）。
 - **准入探针**：3s setTimeout 未及捕获帧前（测试早停）——改为 frame-hook 或即时读。**下轮一步**：applyProjection 换投影后即时输出四准入值 + 根瓦片 area。
 - 工作树=提交态（73 commits）。
+
+**§254. globe 三候选一步定案——准入全过 + 根瓦片 area>0，全排除；缺口下移至 subdivision/canGetTile/球面解码挂载（2026-08-24 一百四十二，零净变化记档）**：
+
+- **双探针实测（即时准入 + 根瓦片 area）**：① 准入四关全过（enabled/ready/isVisible=true，zoomLevel=2 ∈ [1,25]）——候选①②排除；② **根瓦片 area=0.0917>0**、OBB 类型正确、distance=1——候选③排除。§253 三候选全灭。
+- **缺口下移**：瓦片请求链的更深处——`shouldSubdivide`（zoomLevels 与 ds 索引配对在 globe 派生 storageLevel 下可能错位）/ `canGetTile` 过滤 / 或瓦片虽请求但**球面解码→挂载**失败（注入矩形的 mercator 坐标在 sphere 变换下错位/对象被弃）。**下轮一步**：VisibleTileSet:1429 的 canGetTile 过滤前后各一条日志（计数进入/存活的瓦片键）。
+- 探针已清，工作树=提交态（74 commits）。
