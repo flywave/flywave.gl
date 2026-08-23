@@ -3159,3 +3159,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **立项结论**：该专项的真实实施面 = TextCanvas 的 **glyph quad UV/atlas 半纹素对齐** +（text 域的）字形 hinting/光栅化——比"放置取整"更深一层。影响面大（text/symbol ~90 例 + icon 族），需在专门的引擎会话中以单 glyph 的 UV 对照起步。本轮零代码变更，评估记档。
 
 **§160. SDF 半纹素内缩 A/B 否决（2026-08-23 五十，零净变化）**：dynamicTextureCoordinates 的 +0.5/−0.5 内缩（texel 中心采样）实测——text-anchor 全族劣化（center 10313→10620、bottom 2068→9159）、icon 425 持平——**否决回退**，基线复核 ✓。结论：SDF 采样的 UV 推导（像素坐标/纹理尺寸）是正确约定；残差的亚像素差不在采样 UV，而在 **glyph quad 几何尺寸/位置的亚像素构成**（TextCanvas 字号换算 24→16 的舍入族或 PoiRenderer 的 quad 角点计算）——专项实施面再修正，留档。
+
+**§161. glyph quad 几何对照收官——mgl 亦无像素取整，专项定性为字形度量精度（2026-08-23 五十一，零净变化）**：
+
+- **对照结论**：mgl symbol 链（shaping/quads/projection/placement）**同样无像素取整**（唯一 round 是 globe wrap）——两侧均为全精度浮点，差异在**字形度量解析**（advance 宽度、baseline、bearing 的 PBF 值→px 换算族）与 SDF 光栅化本身，即 §104 最初的"字形光栅化端"定性经三轮收窄（§159 排除放置/取整 → §160 排除采样 UV → 本节排除角点取整）后**回到并细化原点**。
+- **实施规格（最终版）**：需逐 glyph 数值对照（同一字符的 advance/bearing/baseline 在我们 shaping 与 mgl quads.ts 的换算值差）——工作量大、影响 ~90+ 例，须专门会话。本轮零代码变更，四轮假说排除链完整记档。
