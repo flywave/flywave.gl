@@ -3832,3 +3832,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **globe 图像未变**：剩余嫌疑——① 解码时刻 `decodeInfo.targetProjection` 仍是 mercator（decoder 构造/decodeTile 的 projection 参数在 globe 下传的是什么，一行日志可定）；② `tile.center` 在 sphere 下是球面切点而 `target.sub(center)` 用的 mercator 中心（语义不匹配，需对照引擎 sphere 瓦片的 center 计算）。
 - **下轮一步**：decodeThemedTile 打印 `projection.type`（globe 下期望 1）——若为 0 则修复 projection 传递即可闭环。
 - 工作树=提交态（87 commits）。
+
+**§268. projection.type 定案——解码时刻 =1/SphereProjection（球面分支确实激活），图像仍恒定：剩余=注入 fill 的渲染侧（technique appearance/包围盒剔除）（2026-08-24 一百五十六，零净变化记档）**：
+
+- **定案**：decodeThemedTile 的 projection 参数在 globe 下 = **1(Spherical)/SphereProjection**（16 次解码一致）——§267 的球面重投影分支确实激活（emitter.project→tile2world 全部 fill 顶点经球面投影）。§267 嫌疑①排除。
+- **剩余（渲染侧）**：几何球面落点正确但像素恒定——候选：注入 fill technique 的 appearance/材质在 sphere 渲染路径不产生像素（如 transponder 需要的属性缺失）、或 Tile 包围盒（projectedBoundingBox）错误剔除。**下轮**：对象级像素归属探针（把注入 fill 的颜色强制纯红验证是否上屏）。
+- 探针已清，工作树=提交态（88 commits）。
