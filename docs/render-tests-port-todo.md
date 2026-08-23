@@ -3609,3 +3609,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **定案**：覆盖瓦片 objects 在 frame 4/5/7 **恒为 0**（非时序）；结合 §212（TileObjectsRenderer rootNode.add 零触发）与 §204（cache 对象全隐藏无效）——该 fixture 的渲染完全绕过 tile 管线与常规场景遍历。绿线的最终通道候选只剩 datasource 解码器直挂 sceneRoot 的瞬时对象或引擎内某直绘路径——会话内十五轮取证未穷尽，标记为"最终未知通道"。
 - **战役账本**：9387→4691（§228 geojson 让位）+ 完整因果链（覆盖完整/对象空载/双实例集/管线绕行）——datasource 层能做的全部完成；闭环需要引擎解码-挂载链源码级对齐（独立会话）。
 - **会话终态**：color PASS / culling/far 4691 / raster 32478 恒定 ✓，工作树=提交态（52 commits）。
+
+**§232. 会话收官——下一会话断点清单（2026-08-24 一百二十一）**：
+
+> 本会话（§186–§231，52 commits）datasource 层的取证与修复已穷尽。所有剩余域的根因均已定位并记档，闭环统一收敛到引擎（flywave-mapview）侧。下轮入口按 ROI 排序：
+
+1. **引擎瓦片请求/解码-挂载链对齐**（闭环 culling far 4691 + close/mid/opacity + raster 覆盖缺口）：覆盖瓦片 z7-15 在 visibleTiles 但 objects 永久 0——先打点 `MBStyleDataSource.getTileUrl/shouldRequest` 是否收到低层瓦片请求（疑 datasource 只服务显示层 ±1，mgl 全层请求祖先回退）；次查引擎 Tile 对象创建步骤（MapObjectAdapter/TileObjectsCreator）对低层瓦片是否执行。
+2. **引擎 pass 链集成**（raster/basic 6504/32478 终局）：quad 作为内容后、合成前的 Pass（§220-§225 四轮定案的唯一剩余路径），叠加 §217 三量纲同切。
+3. **fog/globe（14 万级）/ terrain / switch-style / space-color-opacity 新 fixture 族**：未取证的全新域（各自独立战役）。
+4. **skybox fill-extrusion-light（7-15k）/ compositing（50k）/ cubemap-bottom-face（105k）**：既有独立缺口域。
+5. **horizon-blend null 二例 588px**：相机 horizon-shift 语义专项（§189）。
