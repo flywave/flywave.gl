@@ -3597,3 +3597,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **分解**：§228 stand-down 后 rows 0-60 全宽米色（clear 色）vs 期望纯蓝（满雾瓦片）——**覆盖缺口实锤**（此前被 glow 渐变掩盖）；rows 60+ 仅余线形残差。
 - **far-override 复测（stand-down 后）**：culling 数值全部不变 → 覆盖视锥远面**确非限制器**（§227 双重否定）。新嫌疑：FrustumIntersection:244 面积剪枝跳过的 z15 细瓦片，其祖瓦片经 findUp 回退时受 **quadTreeSearchDistanceUp（默认 3）或 storageLevelOffset(-1)/maxDisplayLevel** 约束无法入列——需 VisibleTileSet 运行时打点（coverage 返回的近地平线瓦片键）定位，引擎会话规模。
 - **会话终态**：color PASS / culling/far 4691 / raster 32478 恒定 ✓，工作树=提交态（50 commits）。
+
+**§230. 覆盖打点定案——引擎覆盖瓦片 z7-15 全 objects=0，地平线瓦片从未被填充；双瓦片实例集分歧（2026-08-24 一百一十九，零净变化）**：
+
+- **运行时打点（frame 5，culling/far）**：visibleTileSet 覆盖 27 瓦片跨 z7-z15（含地平线区的 z7/8 粗瓦片，覆盖本身完整！）**全部 objects=0**——geojson 解码从未给引擎覆盖瓦片挂对象；而绿线渲染自 dataSourceCache 的另一套瓦片实例（§202 曾见其 objects 非空）。**引擎存在双瓦片实例集分歧**（cache 实例携带对象并渲染 vs coverage 实例空载）——覆盖语义本身不缺，缺的是对象填充管线。
+- **culling 战役终态**：rows 0-60 米色的根因 = 地平线覆盖瓦片空载（非覆盖选择/远面/回退界问题——§227/§229 嫌疑全部排除）；修复需引擎瓦片解码-挂载链对齐（cache 实例与 coverage 实例的合流），独立引擎会话规模。far 4691（§228 成果）+ close/mid/opacity 维持。
+- **会话终态**：color PASS / culling/far 4691 / raster 32478 恒定 ✓，工作树=提交态（51 commits）。
