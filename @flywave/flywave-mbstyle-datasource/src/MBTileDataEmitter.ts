@@ -1468,7 +1468,8 @@ export class MBTileDataEmitter {
             this.m_currentZOffset = this.resolveZOffset(layer, properties, 'line');
             this.noteGeometryHeight(this.m_currentZOffset);
 
-            for (const lineGeo of geometry) {
+            for (let __pathIdx = 0; __pathIdx < geometry.length; __pathIdx++) {
+                const lineGeo = geometry[__pathIdx];
                 // Convert tile-local to world. Under a non-Mercator custom
                 // projection, subdivide each segment first so straight
                 // geographic lines bend smoothly when reprojected (Albers,
@@ -1604,8 +1605,14 @@ export class MBTileDataEmitter {
                         // with lineClips from `mapbox_clip_start/end`).
                         // Variable width must evaluate at the SAME mapped
                         // progress or the taper lands in the wrong place.
-                        const cs = Number(properties?.['mapbox_clip_start']);
-                        const ce = Number(properties?.['mapbox_clip_end']);
+                        // mgl per-sub-path clips (line_bucket.ts
+                        // lineFeatureClips + multiLineMetricsIndex): sub-path
+                        // 0 reads the unsuffixed props, sub-path N reads the
+                        // `_N`-suffixed pair — multi-path line-metrics
+                        // features carry one clip segment per sub-path.
+                        const __suffix = __pathIdx > 0 ? `_${__pathIdx}` : '';
+                        const cs = Number(properties?.['mapbox_clip_start' + __suffix]);
+                        const ce = Number(properties?.['mapbox_clip_end' + __suffix]);
                         const clip: [number, number] | undefined =
                             Number.isFinite(cs) && Number.isFinite(ce) && ce > cs
                                 ? [Math.max(0, cs), Math.min(1, ce)]
