@@ -3305,3 +3305,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **最小化复现（映射诊断输出 a_uv/uHorizon）**：几何/varying 映射**完全正确**（u/v 逐像素线性 ✓），唯一断链 = **B 通道 uHorizon=0** → JS 侧 ground truth 断言：`canvas.clientHeight` 为 **0 而非 null**（离屏 canvas），`??` 回退不生效 → height=0 → uHorizon=NaN → 全部派生 uniform 中毒（§183"恒色覆盖/discard 失效"的完整解释）。改 `||` 真值回退后：**discard 正常（影像区保护 ✓）、天空渐变上屏**。dome 的 onBeforeRender 同款 `??` bug 一并修复。
 - **落地（保留）**：`MBAtmosphereRenderer` 干净版（mgl atmosphere 语义 + §180 直绘通道 + corner 射线 extractRotation 稳健化），gate pitch>76；env `atmosphereState` getter + datasource 接线。
 - **验收**：pitch-80 族一致小幅改善——basic 22976→22642、equal-range 23282→22948、inverted −321、default 1397（噪声带）；回归面零变化（fill-color 422/raster 32478/color 族 PASS+72509 恒定）。**天空已存在但过白**（期望 y0 深蓝 #367ab9 vs 我方 (168,255,255)）——shader 内 t 值近 1 异常（JS 侧 uniform 断言全对：uHorizon 0.262/fadeout 0.0255/角 z +0.14/−0.45），**下轮入口：shader 内 t/dot 中间量 GLSL 级调试**（候选：normalize 后 mix 的透视正确性——mgl 顶点插值 vs 我方片元混合在广角下不等价）。
+
+**§185. atmosphere 合成深挖——三量全验证正确 + bundle 缓存竞态实锤，止损回退（2026-08-23 七十五，零净变化）**：
+
+- **GLSL 级三量诊断（全对）**：① t 曲线逐行正确（y0=0.129 与手算 0.14 吻合、平滑至地平线 0.92）；② 三色 uniform 到达 shader 正确（space (0.035,0.196,0.486)=JS 侧逐位一致）；③ 合成路径执行（col=mix 后品红探针 17152px 覆盖天空带）——**但最终输出仍淡青 (168,255,255) 且无 mix 解**（(0.39,1,1) 不可由该 mix 族产生）。
+- **决定性异常（bundle 缓存竞态实锤）**：同代码态连跑两次输出 **22976 基线（quad 完全缺席）**，而数分钟前同位代码品红渲染成功；期间多轮"改 A 测得 B"的反常（分支顺序吞值、探针时序怪象）与之同源——**webpack filesystem cache 的陈旧 bundle 竞态**（此前 §183"探针设计缺陷"的部分结论需按此复核）。
+- **止损回退至 §184 提交态**（终验：basic 22642/fill-color 422/color 族恒定 ✓）。**下轮入口（环境修复先行）**：① karma webpack `cache: false`（或构建产物指纹）根治陈旧 bundle；② 其后重做合成 A/B（三量已证对，唯一剩余=最终输出被谁替换/竞态产物）；③ §184 状态本身或已在竞态下被低估/高估——环境修复后需全 fog 族重基线。
