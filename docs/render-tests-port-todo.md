@@ -3027,3 +3027,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **视图级破案（色彩构成统计）**：cur = **94.4% 绿背景 + 5.6% 灰建筑**（y187-193 底部窄条）vs exp = 49.4% 绿 + **50.5% 灰建筑**（y55-255 巨幅立面）——两图均**无地形影像**（本 style 无 raster 层，地形只以高程影响建筑）。**残差本体 = 建筑立面尺寸/位置**：mgl 的建筑在 pitch 65/zoom 17.5 下充满半屏，我们的只有底部窄条——**建筑沉没在 z=0 地面填充平面之下**（只露顶），mbTerrainElev 抬升未到达实际渲染的建筑 mesh（§127 的 begin_vertex 命中探针只证明"某材质"被注入，未证明是建筑 mesh 的材质——ExtrusionChunks 可能以独立材质实例渲染建筑）。
 - **下一入口（收窄）**：断点级验证"被注入的 MeshStandardMaterial 是否 = 建筑渲染材质"（renderer.info 或 onBeforeCompile 时打 mesh id 对照 patchTile 的 obj），若非——需在 ExtrusionChunks 材质路径重复注入。
 - **状态**：实验清理回退，基线逐值复原 ✓。
+
+**132. §131 材质身份嫌疑否决——建筑材质确证已注入（2026-08-23 二十二，零净变化）**：
+
+- **探针（flag 法）**：patchExtrusionMaterial 打 `__mbExtrPatched` 标记，捕获时遍历 scene 的 extruded-polygon mesh——**patched=true、MeshStandardMaterial** ✓（uMB uniforms 缺席是预期的——内建材质的注入 uniforms 存于编译期 shader.uniforms 而非 material.uniforms，此前的"无 uniforms"探针无效）。§131 的"注入材质≠渲染材质"嫌疑**否决**。
+- **管线级复核**：引擎 ExtrusionFeatureMixin 的 `insertShaderInclude(begin_vertex, extrusion_vertex)` 在 include 之后插入（include 保留，我们的 replace 仍命中）；`extrusionAxis.xyz·(ratio−1)` 在 ratio=1 时零贡献——注入管线自洽。
+- **剩余嫌疑（下轮入口）**：建筑底部窄条 = **世界 XY 位置错位或 z 计算实值偏离**——需数值级验证：shader 内把 mbH/mbTerrainElev 编码进顶点色或 readPixels 采样单像素反推（或将建筑 worldPos 与 DEM 采样值 CPU 对照）。另一候选：相机 rig 对高 z 内容的视锥处理（近裁剪/geoBox 提升未含地形抬升，`maxGeometryHeight` 只报了挤出高度未含 150m 地形——**裁剪面按无地形高度计算，地形抬升后的建筑上半部可能被近平面/geoBox 裁剪**——Tile.elevateGeoBox 语义需含 terrain lift）。此候选与"只露底部窄条"症状吻合（上部被裁）。
+- **状态**：探针清理回退，基线逐值复原 ✓。
