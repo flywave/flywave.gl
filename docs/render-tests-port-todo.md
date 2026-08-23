@@ -3539,3 +3539,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **三配置实验**：场景化 mesh 在 transparent:true / linear 输出 / **opaque(false)** 三种截然不同的材质配置下 color 族崩值**逐位相同（73181）**——视觉回归与 quad 像素无关（quad 在场景路径根本未渲染或被后处理 Pass 链忽略），回归另有来源（场景扰动/pass 链行为）。路 A（场景化）需引擎 composing/Pass 源码级调查，超出 datasource 层。
 - **战役决策：转路 B**——直绘维持 + 分域标定：背景域（color 族 PASS 恒定的现状）不动；内容域（raster/basic/equal-range）的背景带由 quad 覆盖（现状），内容雾按 §215 正向公式在**渲染循环内**重映射（§216 的 MB_RASTER_MGL_FOG 已验证可激活于 basic 系材质——与 quad 的组合标定是剩余工作）。
 - **复核**：color/color-opacity PASS、raster 32478、basic 6504 复原 ✓。
+
+**§221. raster 战役终局定性——路 B 的结构性双重雾限制，闭环需引擎 pass 链集成（2026-08-24 一百一十，终局记档）**：
+
+- **路 B 结构性缺陷（代码分析定案）**：quad 直绘无深度（§218）→ 无法区分内容行/空隙行——激活 MB_RASTER_MGL_FOG 后内容像素 = chunk(mgl) + quad(s 表) **双重雾**（§216 实测 basic 19493 的机制即此）；quad 若也切 mgl 公式（§217 三量纲同切）双重依旧（两次 mgl ≠ 一次 mgl）。mgl 语义 = 内容行仅瓦片雾、空隙行仅背景瓦片雾——**需要每像素"有无内容"信息**，直绘通道不存在该信息。
+- **两条路的终态**：路 A（场景化）= 引擎 composing/Pass 链封锁（§220）；路 B（直绘+标定）= 结构性双重雾（本节）。**闭环的真正前提是引擎级改动**：① quad 作为 pass 链中的一个 Pass（在内容渲染后、合成前，深度可用）；或 ② 内容雾与背景雾的统一在 pass 内合成（引擎集成 mgl fog 语义）。datasource 层的战役在此告一段落——基建（mgl 公式/仿射/探针/钩子）与全部证据链就绪，待引擎接口。
+- **会话终态**：color 族 PASS / raster 32478 / basic 6504 / equal-range 6810 / inverted 37490 基线恒定，工作树=提交态。
