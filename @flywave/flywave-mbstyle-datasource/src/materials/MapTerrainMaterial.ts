@@ -34,6 +34,11 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
             shader.uniforms.uDemLerp = { value: self.m_demLerp };
             shader.uniforms.uDemIsFloat = { value: self.m_demIsFloat ? 1.0 : 0.0 };
             shader.uniforms.uExaggeration = { value: self.m_exaggeration };
+            // mgl mercator z scale (§165): z_world = h·sec(lat) — one meter
+            // maps to sec(lat) equatorial-mercator world units. Lat comes from
+            // the mesh world position (mercator y) so each terrain tile uses
+            // its own latitude.
+            shader.uniforms.uMBZSecLat = { value: self.m_zSecLat };
             shader.uniforms.uDrape = { value: self.m_drapeTexture };
 
             shader.vertexShader = shader.vertexShader.replace(
@@ -45,6 +50,7 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                 uniform float uDemLerp;
                 uniform float uDemIsFloat;
                 uniform float uExaggeration;
+                uniform float uMBZSecLat;
                 uniform sampler2D uDrape;
 
                 float mbSampleElevation(sampler2D dem, vec2 uv) {
@@ -73,7 +79,7 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                     float prevElev = mbSampleElevation(uDemPrev, demUv);
                     elevation = mix(prevElev, elevation, uDemLerp);
                 }
-                elevation *= uExaggeration;
+                elevation *= uExaggeration * uMBZSecLat;
                 vec3 transformed = vec3(position.x, position.y, elevation);
                 #ifdef USE_DRAPE
                 vMapUv = uv;
@@ -128,6 +134,13 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
 
     setExaggeration(exaggeration: number): void {
         this.m_exaggeration = exaggeration;
+        this.needsUpdate = true;
+    }
+
+    private m_zSecLat = 1;
+    /** Mercator z scale factor sec(lat) for the tile's latitude. */
+    setZSecLat(secLat: number): void {
+        this.m_zSecLat = secLat > 0.2 && Number.isFinite(secLat) ? secLat : 1;
         this.needsUpdate = true;
     }
 

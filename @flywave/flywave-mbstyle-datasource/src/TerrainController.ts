@@ -167,6 +167,8 @@ export class TerrainController {
     get maxElevation(): number { return this.m_maxElevation * this.m_exaggeration; }
     private m_maxElevation = 0;
     private m_exaggeration = 1;
+    /** Sec(lat) applied to CPU elevation samples (matches mesh z scale). */
+    private m_sampleSecLat = 1;
 
     /**
      * Base (un-draped) terrain color. mgl renders the background layer
@@ -206,7 +208,7 @@ export class TerrainController {
             // confirmed by axis calibration (direct v: fog-import-scope
             // 192406→230109, much worse).
             const row = n - 1 - v;
-            return d[row * n + u] * this.m_exaggeration;
+            return d[row * n + u] * this.m_exaggeration * this.m_sampleSecLat;
         }
         return 0;
     }
@@ -386,12 +388,18 @@ export class TerrainController {
             material.setDemTexture(demTex);
             material.setDemIsFloat(true);  // R32F DataTexture (pre-decoded heights)
             material.setExaggeration(exaggeration);
-
             const geo = this.m_gridGeometry.clone();
             // Scale the shared tile-sized grid to this tile's world size.
             // Position: world tile origin (top-left in world Y-down).
             const worldX = (cxTile + dx) * tileSizeWorld + tileSizeWorld / 2;
             const worldY = C - (cyTile + dy) * tileSizeWorld - tileSizeWorld / 2;
+            // mgl mercator z scale (§165): tile latitude from its mercator
+            // world y → sec(lat). World y spans [0, C] north→south; lat from
+            // inverse mercator.
+            const latRad = 2 * Math.atan(Math.exp(Math.PI * (1 - 2 * worldY / C))) - Math.PI / 2;
+            const secLat = 1 / Math.max(0.2, Math.cos(latRad));
+            material.setZSecLat?.(secLat);
+            if (this.m_sampleSecLat === 1) this.m_sampleSecLat = secLat;
 
             // Record the center tile's DEM + world bounds for fill-extrusion-terrain.
             if (dx === 0 && dy === 0) {
