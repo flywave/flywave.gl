@@ -3591,3 +3591,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地（保留）**：`MBAtmosphereRenderer.contentStandDown` 静态门（datasource 按 **style 有 geojson 内容源** 设置——geojson 全球几何可覆盖至地平线；raster 源瓦片范围有限仍需 glow 补天空，第一版全内容让位致 basic 22976/equal-range 23282 回归后收窄）。
 - **验收**：**fog/culling/far 9387→4691（−50%）**；close 18356/mid 10629/opacity 18106（带内 ±，far 主改善）；**geojson 雾族零回归**（line/fill-color/heatmap/hillshade/fill-extrusion 逐值恒定，symbols 4278 双态带内）；raster/basic/equal-range 基线复原 ✓；color 族 PASS ✓。引擎 `frustumFarOverride`（§227）保留待用。
 - **下轮**：culling 剩余 4691 的分解（顶部行的瓦片雾 vs 期望纯蓝的差——内容雾映射精度，§215 正向公式可用）。
+
+**§229. culling/far 4691 分解——rows 0-60 米色=无瓦片（覆盖缺口实锤），far-override 无效，限制器在回退界/storageLevel（2026-08-24 一百一十八，零净变化）**：
+
+- **分解**：§228 stand-down 后 rows 0-60 全宽米色（clear 色）vs 期望纯蓝（满雾瓦片）——**覆盖缺口实锤**（此前被 glow 渐变掩盖）；rows 60+ 仅余线形残差。
+- **far-override 复测（stand-down 后）**：culling 数值全部不变 → 覆盖视锥远面**确非限制器**（§227 双重否定）。新嫌疑：FrustumIntersection:244 面积剪枝跳过的 z15 细瓦片，其祖瓦片经 findUp 回退时受 **quadTreeSearchDistanceUp（默认 3）或 storageLevelOffset(-1)/maxDisplayLevel** 约束无法入列——需 VisibleTileSet 运行时打点（coverage 返回的近地平线瓦片键）定位，引擎会话规模。
+- **会话终态**：color PASS / culling/far 4691 / raster 32478 恒定 ✓，工作树=提交态（50 commits）。
