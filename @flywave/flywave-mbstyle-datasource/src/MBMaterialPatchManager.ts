@@ -691,10 +691,10 @@ export class MBMaterialPatchManager {
      * for the fog per-content-depth campaign (§106/§179).
      */
     static fogContentScales: Record<string, number | { slope: number; offset: number }> = {
-        // raster: §208's first affine fit (slope .471, offset -2141) made
-        // fog/2d/raster WORSE (32478→42747) — the row-median t_mgl targets
-        // scatter ±0.1 on this bright imagery; per-pixel regression or a
-        // near/R measurement run (slope-3 probe) is needed before retrying.
+        // raster: §208/§209 two fit rounds both inconclusive — the slope-3
+        // probe contradicts the linear model (t3 saturated upper half, rows
+        // 190-210 imply negative near/R) and per-pixel masks catch only n=21
+        // pixels. Needs a controlled re-measure (quad off + unclamped range).
     };
 
     private patchRasterMaterial(material: THREE.Material, technique: any): void {

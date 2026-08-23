@@ -3465,3 +3465,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **工具（保留，默认关零影响）**：`fog_fragment` 新增 `fogDebugT` uniform 探针——mode 1 输出归一化雾坡位置 t（灰度）、mode 2 输出未雾基色；`MBEnvironmentManager.fogDebugTProbe` 静态开关，UniformsLib+ShaderLib 双同步。**首轮取数成功**：raster fixture 的 k=1 t-profile（rows 100-220: 1.0→0.016）与未雾基色图（row 230 纯橙 (255,165,0) 证实 mode 2 正确）。
 - **仿射拟合首轮（回退）**：行中值 t_mgl 目标拟合得 `t_mgl=0.471·t+0.209`，换算 {slope 0.471, offset −2141}（near/R=0.5、R≈4522m）——实测 raster 32478→**42747 过冲**，行中值目标在高亮 imagery 上散布 ±0.1（中段 0.38-0.47 跳变），两点拟合被噪声主导。**回退保基线**（32478 复原 ✓，color 族 PASS ✓）。
 - **拟合方法论修正（下轮）**：① t_mgl 目标改用 per-pixel 回归（排除饱和/暗像素后逐像素最小二乘，非行中值）；② near/R 用 slope=3 探针实测（t3−3t 的中值 = 2·near/R）替代风格参数推算；③ 拟合后先跑 t-probe 验证 t' 曲线贴合再上色。
+
+**§209. raster 仿射拟合第二轮——slope-3 实测与线性模型矛盾，两轮均未收敛（2026-08-24 九十九，记档）**：
+
+- **slope-3 探针实测**：t3−3t 的行中值随行漂移（−1.68→−0.38）——上半 t3 全饱和（=1）无信息、rows 190-210 稳定段推出 **near/R≈−0.19（负值不可能）**——测量被污染（疑掩码混入 quad 像素/基色图与探针图的像素对应错位）。per-pixel 回归掩码过严（n=21）拟出近平坦 s=0.037，与行中值轮的 0.47 矛盾。
+- **两轮小结**：§208 行中值（s=0.47 过冲）与 §209 per-pixel（s=0.04）给出矛盾拟合——t_mgl 目标估计本身不稳定（高亮 imagery 上 op 的分母小、噪声放大）。**结论：该 imagery 不适合做 op 逆推目标**；正确路径是（下轮）① 选暗通道（B 通道）做 op、② 或用 mgl 原始深度模型正向计算 t_mgl（从 mgl fog 矩阵语义 + 相机几何直接推每行期望 t，绕开图像逆推）。
+- **基线复核**：raster 32478 / color 族 PASS ✓，工具链（fogDebugT 双模式 + 仿射注入）全部保留待用。
