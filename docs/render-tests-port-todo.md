@@ -3725,3 +3725,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **精扫**：0.19→9978、0.23→10234、0.15→**9786**（全扫描 0.15/0.19/0.23/0.27/0.5 的单调最优）——**取 0.15**。
 - **终验**：culling 四例 = far 6002 / close 9652 / mid 1925 / opacity **9786**（vs 会话前基线 9387/17846/10119/15226——far +576 带内、close −8194、mid −194、opacity −5440，净 **−13.8k**）；geojson 族 + color 族零回归 ✓。
 - **§232 新域清单维持**（globe/terrain/switch-style 未及，会话十次极限宣告）。工作树=提交态（70 commits）。
+
+**§251. fog/globe 首例取证——背景层缺席于 globe 路径（253k/262k 全图差），背景几何是主缺口（2026-08-24 一百三十九，取证记档）**：
+
+- **取证（fog/globe/space-color，512²、z1、globe 投影、bg-only 样式）**：253k/262k（97%）全图差——期望中带米色（globe 面上的 fogged 背景瓦片）+ 深蓝渐变（大气），我方整图深蓝渐变（globe 大气路径 §167-169 已有）——**背景层在 globe 投影下无任何几何**（`applyBackgroundColor` 只设 clearColor；bg-tile 注入（§236）走瓦片解码，globe 下引擎覆盖/解码是否到达未验证）。主缺口 = globe 的背景绘制（mgl 在 globe 上同样逐瓦片画 background），叠加既有大气渐变的标定。剩 6 例（high-color 36k 级、space-color-opacity 119k、star-intensity 52k）同族。
+- **terrain/switch-style 新域未及（会话十一次极限宣告）**。工作树=提交态（71 commits）。
