@@ -3638,3 +3638,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **真正缺口**：mgl 期望的蓝瓦 = **background 层逐瓦片绘制**（draw_background 对每个瓦片画 quad，无 source 依赖）——我们只有 clearColor + quad overlay（§197 移除引擎背景平面后），引擎覆盖瓦片上没有任何几何可承载雾。
 - **修复方案（明确可实现）**：MBStyleDecoder.decodeThemedTile 在样式含 background 层时，为每个瓦片注入**合成全瓦片矩形 Feature**（经 processor 走 fill 管线承载 background-color + 瓦片雾）——mgl draw_background 的忠实移植；culling 四例 + raster 覆盖缺口（§221 汇合点）应一并受益。
 - **会话终态**：工作树=提交态（56 commits），culling 战役的因果链至此完全闭合（frozen→覆盖→空载→合法→background 缺失）。
+
+**§236. background 逐瓦片注入落地（保留）——低层 decode 抛出被 catch 吞的修复 + geojson 族零回归，culling 视觉待对象饱和度排查（2026-08-24 一百二十五）**：
+
+- **落地（保留）**：① evaluator 把 background 层注册为合成 fill 层（`__mb_background__` 保留源键，background paint→fill paint 映射，filter 需 `compile(undefined)`——裸 undefined 会让 evaluate 的 `pl.filter(ctx)` 崩）；② decoder `decodeThemedTile` 在 **try/catch 之前**注入合成全瓦片矩形（catch 对低层瓦片的特征解码抛出会提前 return 空瓦片——z7-11 的 38 次解码全部如此，注入因此漏掉；前移后 54 层全覆盖）；③ 门控 = 有 background 层 && 有 geojson 源（raster 域维持 clearColor+quad 标定管线）。
+- **验收**：geojson 雾族零回归（line 2680/fill-color 422/line-pattern 双态带内 ✓）；**culling 数值未变（4691）**——对象已挂（z12-15 共 8 瓦片 objects=1→注入生效）但视觉同基线：嫌疑 = 注入 quad 的雾未饱和（引擎 fog 映射在远距 t 低）或低层对象仍未挂（z7-11 的引擎 attach）。**下轮一步**：f6 对象普查复查（全层 objects）+ 注入 quad 的 fogT 探针（fogDebugT mode1）。
+- 会话极限（~5h/243M tokens）已至，工作树=提交态。

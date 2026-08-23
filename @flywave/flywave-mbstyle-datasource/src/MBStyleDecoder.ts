@@ -366,11 +366,23 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
     }
 
+    private m_emitBackgroundTiles = false;
+
     configure(options?: DecoderOptions, customOptions?: OptionsMap): void {
         super.configure(options, customOptions);
         if (customOptions?.mbStyle) {
-            this.m_layerEvaluator = new MBLayerEvaluator(customOptions.mbStyle as StyleSpecification);
+            const style = customOptions.mbStyle as StyleSpecification;
+            this.m_layerEvaluator = new MBLayerEvaluator(style);
             this.applyThemeToEvaluator();
+            // §236: emit the per-tile background fill only for geojson
+            // content styles (the coverage tiles then carry the fogged
+            // background like mgl's draw_background; raster styles keep the
+            // calibrated clearColor+quad pipeline).
+            const hasBg = (style.layers ?? []).some((l: any) =>
+                l.type === 'background' && (l.layout?.visibility ?? 'visible') !== 'none');
+            const hasGeo = Object.values(style.sources ?? {}).some(
+                (src: any) => (src as any)?.type === 'geojson');
+            this.m_emitBackgroundTiles = hasBg && hasGeo;
         }
         if (customOptions?.currentSourceId) {
             this.m_currentSourceId = customOptions.currentSourceId as string;
@@ -500,6 +512,23 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         );
         processor.setEmitter(emitter);
         processor.setFeatureStates(this.m_featureStates);
+
+        // §236: mgl draw_background paints a quad on EVERY tile — inject a
+        // synthetic full-extent rectangle through the fill pipeline so the
+        // engine's coverage tiles carry the (fogged) background geometry.
+        // Runs BEFORE the adapter try/catch: low-level tiles whose feature
+        // decode throws (catch returns early) still get the background.
+        if (this.m_emitBackgroundTiles) {
+            try {
+                const E = emitter.extents;
+                const rect = [{
+                    rings: [[new THREE.Vector2(0, 0), new THREE.Vector2(E, 0),
+                        new THREE.Vector2(E, E), new THREE.Vector2(0, E)]],
+                }];
+                processor.processPolygonFeature(
+                    '', E, rect as any, { _sourceId: '__mb_background__' }, 'mb-background-tile');
+            } catch {}
+        }
 
         try {
             // Determine data format and use appropriate adapter.

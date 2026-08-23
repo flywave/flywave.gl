@@ -340,6 +340,9 @@ import { applyColorTheme, ColorThemeLut } from './MBColorTheme';
 
 export class MBLayerEvaluator {
     private m_layersBySource: Map<string, Map<string, PreprocessedLayer[]>> = new Map();
+
+    /** Reserved source key for the per-tile background fill (§236). */
+    static readonly BACKGROUND_SOURCE = '__mb_background__';
     private m_allLayers: PreprocessedLayer[] = [];
 
     private m_config: Record<string, any> = {};
@@ -390,7 +393,40 @@ export class MBLayerEvaluator {
 
         style.layers.forEach((layer, index) => {
             const type = layer.type as LayerType;
-            if (type === 'background' || type === 'sky' as any) {
+            if (type === 'sky' as any) {
+                return;
+            }
+            if (type === 'background') {
+                // §236: register the background layer as a synthetic FILL
+                // layer under a reserved source key — the decoder injects a
+                // full-tile rectangle feature per decoded tile (mgl
+                // draw_background paints per tile). The fill pipeline then
+                // carries the tile fog chunk naturally.
+                const pl: PreprocessedLayer = {
+                    id: layer.id,
+                    type: 'fill',
+                    source: MBLayerEvaluator.BACKGROUND_SOURCE,
+                    sourceLayer: '',
+                    minzoom: undefined,
+                    maxzoom: undefined,
+                    filter: MBFilterCompiler.compile(undefined),
+                    paintDefs: this.preparePaint('fill', {
+                        'fill-color': (layer as any).paint?.['background-color'] ?? '#000000',
+                        'fill-opacity': (layer as any).paint?.['background-opacity'] ?? 1,
+                    }),
+                    layoutDefs: this.prepareLayout('fill', {}),
+                    renderOrder: index,
+                    visibility: ((layer as any).layout?.visibility ?? 'visible') === 'none' ? 'none' : 'visible',
+                    appearances: undefined,
+                    importScope: (layer as any)._importScope,
+                };
+                this.m_allLayers.push(pl);
+                if (!this.m_layersBySource.has(MBLayerEvaluator.BACKGROUND_SOURCE)) {
+                    this.m_layersBySource.set(MBLayerEvaluator.BACKGROUND_SOURCE, new Map());
+                }
+                const bg = this.m_layersBySource.get(MBLayerEvaluator.BACKGROUND_SOURCE)!;
+                if (!bg.has('')) bg.set('', []);
+                bg.get('')!.push(pl);
                 return;
             }
 
