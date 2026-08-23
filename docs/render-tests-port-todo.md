@@ -3400,3 +3400,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **fog 尾部补跑暴露的 §197 连带与修正**：① atmoQuad 门扩到 60° 后其 `depthTest:false` **越权涂装内容**（mgl drawAtmosphere 为 LEQUAL ReadOnly——被不透明内容深度遮挡）——改为 depthTest:true + z=0.9999 ✓；② quad 不透明模式在平面移除后**覆盖内容**（heatmap 29845）——回退透明混合 + 深度测试（平面已移除，深度正确分离背景 clear 与内容瓦片）——heatmap 29845→21800 ✓、line 3560→2680 ✓、line-sdf→426 ✓；**fog/color、color-opacity、color-use-theme、high-color 全族 PASS 恒定** ✓。
 - **culling 族破案（新功能缺口）**：fixture 设 `metadata.test.debug: true`——mgl 期望图的 (0,0,255) 纯蓝顶带 = **调试瓦片着色**（Painter debug 模式按 tile hash 纯色渲染），我们未实现 debug 渲染——4 例的残差主项即此（far 9387 等）。**下轮入口：debug 模式渲染**（瓦片哈希纯色 + 边界线，mgl painter._showDebug 路径）。
 - 尾部基线更新：line-pattern 7791（双态带）、raster 31720（−2.7k）、symbols 3794（−0.4k）、equal-range 6810 / inverted 37490 / default 448 恒定。
+
+**§199. debug 模式取证与红线落色——culling 族结构解构，内容缺失根因新立（2026-08-24 八十九，保留小修）**：
+
+- **mgl debug 语义链**：`metadata.test.debug` → harness `map.showTileBoundaries=true` → `draw_debug.ts` 逐瓦片 LINE_STRIP 边界线（默认源为**红色** (1,0,0)）。我方 overlay 已存在（setDebugTileBoundaries 已接线）但落色为品红——**修正为红色 0xff0000**。
+- **culling/far 期望图解构**：rows 0-28 纯蓝 (0,0,255)=fog 色满雾的背景瓦片（tile 顶边即屏幕地平线 y28，glow 从不可见——瓦片深度遮挡）、y29 红=瓦片边界线、rows 30+ 边界线噪声叠满雾蓝。对照我方：顶部 glow 渐变（54,121,186）+ 下半纯米色——**该 fixture 我方无任何内容瓦片渲染**（绿色 dash 线缺失、红线 0 像素=无 decoded tiles 供 overlay 遍历）——**culling 族首要根因是内容缺失**（geojson tiles 未达渲染，疑与该 fixture 的瓦片剔除/加载路径相关），debug 线与天空满雾语义在其后。四例数值维持（close 17846/far 9387/mid 10119/opacity 15226）。
+- **下轮入口**：① culling fixture 的 decoded tiles 缺失取证（getDecodedTiles 为空的链路）；② 天空区"满雾瓦片 vs glow"的可见域语义（瓦片深度遮挡 glow——与 §198 atmoQuad 深度测试同族，但此处瓦片缺席）。

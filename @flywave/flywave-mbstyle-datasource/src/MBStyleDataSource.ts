@@ -1934,7 +1934,7 @@ export class MBStyleDataSource extends TileDataSource {
         if (!this.m_debugLines) {
             const geom = new THREE.BufferGeometry();
             const mat = new THREE.LineBasicMaterial({
-                color: 0xff00ff, transparent: true, depthTest: false, depthWrite: false,
+                color: 0xff0000, transparent: true, depthTest: false, depthWrite: false,
             });
             this.m_debugLines = new THREE.LineSegments(geom, mat);
             this.m_debugLines.frustumCulled = false;
