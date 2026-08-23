@@ -3056,3 +3056,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **诊断实施与结果**：mbTerrainElev→蓝通道顶点色编码（varying vMBElevDiag + colorspace_fragment 注入）——**零编码像素**（全图无 R>G+30 混合）——注入未触发（疑 colorspace_fragment 标记被其他注入的时序消费，或 lib/flag 接线问题）。
 - **附带实值观察（sliver 直接读色）**：建筑可见部分为**纯灰 (136,136,136)** 平色（无编码、无光照渐变）——与 §131 视图统计互证：建筑以本色露出、**无任何地形/光照调制迹象**。
 - **该域状态**：六轮排查（材质/管线/geoBox/近平面/相机/色编码）全部未触发或否决——系统性指向 **mbTerrainElev 注入虽在材质上（patched=true）但编译产物未被建筑像素呈现**。下轮第一入口：**dump 编译后的完整 vertexShader 字符串**（onBeforeCompile 时 console.log 前 2KB）直接目检 mbH 是否在最终 GLSL 中。
+
+**137. vertexShader dump 定论——注入确在最终 GLSL（2026-08-23 二十七，零净变化）**：
+
+- **dump 结果（一步定论）**：编译后 vertexShader（len 2129）中 **mbTerrainElev@1243、mbH@1629 均在**，且 `mbTopEle = mbTerrainElev`（flat 分支未启用 = flatEle 为 null 的回退路径，逐顶点提升生效）——§136 的"编译产物未呈现"假说**否决**：注入完整存在于最终 GLSL。
+- **域内闭环状态**：建筑窄条七轮排查（材质/管线/geoBox/近平面/相机/色编码/VS dump）——注入链完整无缺口，但视觉仍是"底部窄条纯灰"。结合 §135 相机数据（cam.z=69m 低于山体）与 §131 视图统计（建筑 7k vs 期望 57k），**剩余唯一未验证环节 = 该 GLSL 是否为可见像素实际执行的 program**（2129 字节偏短——疑为 depth-prepass/shadow 变体先被 dump 去重截获，可见变体的 dump 需按 material.id 分次）。下轮入口：dump 按 material 实例去重（非全局一次），对照 renderer.info.programs 列表。
+- **状态**：探针清理回退，基线逐值复原 ✓（66215/57596/28760）。
