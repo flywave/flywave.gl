@@ -3386,3 +3386,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **三路实验全部无视觉效果、逐路回退**：① 背景平面 mesh.visible=false（applyFog 时 + syncFogUniforms 逐帧双保险）——无效，**TileObjectsRenderer 的逐帧剔除/可见性管理每帧覆写 obj.visible**；② quad 裁剪边界 0.99→1.02（+5 行）——无效且**考古发现 §189 的 `git checkout` 曾把 §188 的 0.997 边界静默复原为 0.99**（后续多轮"边界偏移实验"实际修改的是不存在的常量——部分历史结论需按此折扣）；③ 全局 fog chunk 末尾 `fogFactor≥0.9995 discard`（mgl 瓦片雾剔除的片元级近似）——无效。三路皆无效联合指向：rows 0-8 的 (251,107,102) 既非 quad（+5 行边界不动）也非响应我们 chunk 的平面（discard 不动）——该带的真正 painter 仍未定位（候选：TileObjectsRenderer 的独立渲染路径/RTE 深度预处理）。
 - **复核**：git checkout 回退到 §194 提交态后 fog/color/color-use-theme/default/high-color 全族 PASS 恒定、color-opacity 976/default 377 为真实基线（靜態捕獲疑虑排除——回退前后同值）。
 - **下轮入口**：① TileObjectsRenderer 渲染链取证（背景平面走哪条 draw 路径、材质从哪来）；② fog/2d/raster 34396 与 basic 6504 的天空/内容分解取证维持待办。
+
+**§197. 背景平面根治（harness 移除）+ atmoQuad ≥60 + quad 边界 1.0——fog/color 全族闭环转 PASS（2026-08-24 八十七，保留修复）**：
+
+- **TileObjectsRenderer 取证链闭环**：① 品红探针（chunk fogFactor>0.5 输出品红）证明 rows 0-4 的 painter 是使用我们 chunk 的背景平面（rows 5+ 被 quad 不透明合成覆盖）；② `mesh.visible=false`（applyFog + 逐帧）**无效的真因**：测试捕获的是**首帧**，AfterRender 的场景状态改动只影响下一帧（quad/dome 有效是因为它们在 AfterRender 里**直接 draw**）；③ 红探针证明 **dome 在 pitch 70 也不渲染**（§182b 的引擎对象过滤适用范围比记档更宽，此前的"70° 由 dome 负责"从未成立——fog/color 靠平面 fogFactor=1 的巧合通过）。
+- **三件套落地**：① harness `addBackgroundDatasource: false`（mgl 无引擎地面平面——背景=clear 色 + quad/dome 拥有雾带；改动限定 mbstyle harness，legacy 测试不受影响）；② atmoQuad 门 76→**60**（它是唯一可靠的天空 glow 通道——AfterRender 直接绘制、不受引擎对象过滤）；③ 背景雾 quad 裁剪边界偏移 0.99→**1.0**（与 dome/atmoQuad 的屏幕地平线线精确对接，消 2-3 行缝）。
+- **验收（fog 族）**：**fog/color、fog/color-opacity（976→PASS，75147→PASS 闭环）、fog/color-use-theme、fog/high-color 全族转 PASS**；连带改善：fill-extrusion-pattern 24376→8250、background-pattern 14790→10851、background-color 1688→1304、fill-extrusion-vertical-range 3304→2232；fill-outline/fill-color/fill-extrusion/basic/equal-range/inverted 恒定零回归；skybox 抽样 atmosphere 1024 恒定（其余被 175s 截断，待全量复跑）。fog/default 377→448（+71 微幅，平面移除的连带，PASS 差距内）。
+- **记档**：dome 渲染链（引擎对象过滤）在其覆盖域内已完全由 atmoQuad 取代，dome 代码保留但不依赖；skybox 全量与 fog 全类复跑（截断部分）为下轮首查项。

@@ -189,7 +189,7 @@ export class MBBackgroundFogRenderer {
                     // (§188), matching the sky shaders' cut.
                     float hPx = uHeight / 2.0 / tan(uFovRad / 2.0) / tan(max(uPitchRad, 0.1));
                     float horizonFromTop = (uHeight / 2.0 - hPx * 0.9) / uHeight;
-                    if (vNdc.y * 0.5 + 0.5 > 0.99 - horizonFromTop) {
+                    if (vNdc.y * 0.5 + 0.5 > 1.0 - horizonFromTop) {
                         // Above the screen horizon line — the sky owns it.
                         discard;
                     }

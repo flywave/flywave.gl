@@ -47,7 +47,11 @@ export class MBAtmosphereRenderer {
 
         const tilt = (this.m_mapView as any).tilt as number | undefined;
         const pitchDeg = tilt ?? 60;
-        if (pitchDeg <= 76) return;
+        // The engine's scene-object filtering drops the legacy dome from
+        // ~pitch 70 too (§197 red-probe: 0 px at 70) — this screen-space
+        // quad is the sole reliable glow channel from 60° up (it renders
+        // directly in AfterRender, outside the scene graph).
+        if (pitchDeg < 60) return;
 
         const canvas = (this.m_mapView as any).canvas as HTMLCanvasElement | undefined;
         // Off-DOM canvas: clientHeight is 0 (not null) — `??` keeps the 0 and

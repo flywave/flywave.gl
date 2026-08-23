@@ -1248,6 +1248,14 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 mapView = new MapView({
                     canvas,
                     context: ctx ?? undefined,
+                    // mgl has no engine ground plane: the background is the
+                    // CLEAR color and the background-fog quad/dome own the
+                    // fog bands. The engine plane's geometry reaches above
+                    // the screen horizon line and depth-blocks the dome
+                    // (fog/color-opacity top rows, §197) — and its fog rides
+                    // shared ShaderLib uniforms that cannot be bypassed
+                    // per-material (§194).
+                    addBackgroundDatasource: false,
                     theme: {},
                     preserveDrawingBuffer: true,
                     pixelRatio: metadata.pixelRatio ?? 1,
