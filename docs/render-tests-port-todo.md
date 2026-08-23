@@ -3688,3 +3688,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地（保留）**：emitter 在 `_sourceId==='__mb_background__'` 时给 technique 标记 `_mbBgTile`；patcher 对标记 technique 注入 `MB_RASTER_MGL_FOG`（§216 的 chunk 路径 + fogMgl* uniforms 现成）。
 - **验收**：culling/opacity 17594→**14394**（a=0.8 下 mgl 公式与引擎映射的差显现）；far/close/mid 恒定（a=1 且其残差行为几何边界）；**geojson 全族零回归** ✓。
 - **会话真终局**（~5.5h/295M tokens，64 commits）。§232 新域维持断点清单。
+
+**§245. raster pass 链集成前置定案——composer 仅在效果启用时运行，测试路径=直绘（含深度），quad 场景化的 §220 之谜即唯一战front（2026-08-24 一百三十三，零净变化）**：
+
+- **代码定案（§232① 前置）**：`MapRenderingManager.render` 仅在 `m_anyEffectEnabled` 时走 composer（RenderPass 链）——**这些 fog 测试无 bloom/outline 效果 → pass 集成根本不会运行**；直绘路径 `renderer.render(scene, camera)` 含真实深度（§222 已证）。因此 raster/basic 的正确集成路径是**场景 mesh**（§218-220 的路 A），被 §220 之谜（三配置崩值逐位同 73181=mesh 从未经该路径渲染）阻断——下轮唯一入口：为何 datasource 添加的场景 mesh 在直绘路径不渲染（首帧时序 vs 场景引用 vs 剔除），一行引擎渲染列表日志可定案。
+- **会话五次极限宣告后的最终收官**。工作树=提交态（65 commits，~5.5h/299M tokens）。
