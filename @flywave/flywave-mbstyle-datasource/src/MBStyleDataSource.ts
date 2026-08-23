@@ -1248,7 +1248,6 @@ export class MBStyleDataSource extends TileDataSource {
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
                 patcher.patchTileMaterials();
-                self.m_environment?.syncFogUniforms();
                 if (placement) placement.run();
                 if (self.m_heatmapRenderer) {
                     self.m_heatmapRenderer.run();
@@ -1939,7 +1938,10 @@ export class MBStyleDataSource extends TileDataSource {
             this.m_debugLines = new THREE.LineSegments(geom, mat);
             this.m_debugLines.frustumCulled = false;
             this.m_debugLines.renderOrder = 9998;
-            scene.add(this.m_debugLines);
+            // RTE: m_sceneRoot carries the negative world anchor — absolute
+            // world-space positions render camera-relative through it (§204).
+            const sceneRoot = (this.mapView as any).m_sceneRoot;
+            (sceneRoot ?? scene).add(this.m_debugLines);
         }
         this.m_debugLines.visible = true;
 
@@ -1959,7 +1961,8 @@ export class MBStyleDataSource extends TileDataSource {
             const y0 = C - (tk.row + 1) * ts;
             const y1 = C - tk.row * ts;
             // 4 edges
-            positions.push(x0, 0, y0, x1, 0, y0, x1, 0, y0, x1, 0, y1, x1, 0, y1, x0, 0, y1, x0, 0, y1, x0, 0, y0);
+            // World is z-up (x east, y north) — boundary rects on z=0.
+            positions.push(x0, y0, 0, x1, y0, 0, x1, y0, 0, x1, y1, 0, x1, y1, 0, x0, y1, 0, x0, y1, 0, x0, y0, 0);
         }
 
         const geo = this.m_debugLines.geometry;

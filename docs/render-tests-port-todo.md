@@ -3430,3 +3430,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **定性（待新会话复核）**：culling 族疑似（a）陈旧捕获（§174/§183 族的 fixture 级变体——结果 JSON 恒定跨代码态）或（b）其内容走不依赖 tile object 可见性的另一渲染路径。两种都与"剔除语义正确性"正交——语义移植已就绪（§202/§203 三版中 §203③ 最完整：RTE 补偿 + 无 kFog），但需先破冻结态才能校准验证。
 - **回退验证**：basic 6504 / equal-range 6810 基线复原 ✓。culling 语义实现的恢复路径已在本文档完整记录（条件 alpha≥0.999 && hb≥0.03、cull=start+(end−start)·0.78、AABB 最远角、RTE 世界相机）。
 - **§201 raster 校准**：本阶段未及（剔除冻结态排查优先），维持待办。
+
+**§204. culling 冻结态破案（清缓存全链重跑）——getDecodedTiles 对象集非渲染集，定案记档（2026-08-24 九十四，保留两处修正）**：
+
+- **清缓存重跑排除陈旧捕获**：`rm -rf /tmp/_karma_webpack_*` + 新结果目录 + 新鲜 bundle（drawTileBounds 日志证明新代码在跑）——绿线 6464/9387 恒定依旧，**非陈旧捕获**。
+- **决定性实验**：AfterRender 无条件隐藏 **全部 27 tiles 的 objects** → 图像逐像素不变 → **getDecodedTiles() 返回的对象集不是实际渲染集**（或引擎渲染列表构建路径绕过 `object.visible`）。culling 族"冻结"的本质 = 我们对该对象集的一切操作都无法触及真实渲染路径。harness `renderFrames` 渲染多帧+settle 等待已排除首帧时序假设。
+- **保留修正**：① `drawTileBoundaries` 坐标序 bug（(x,0,y)→(x,y,0)，z-up 世界）；② 边界线挂到 `m_sceneRoot`（RTE 锚点补偿，世界绝对坐标需经 sceneRoot 变换）——两者正确性独立于可见性问题。
+- **下轮入口（引擎链路取证）**：从 `mapView.visibleTileSet.dataSourceTileList` 或 TileObjectsRenderer 的 render-list 构建处反向定位绿线 mesh 的真实归属（datasource cache 的 tile.objects 可能被引擎 re-parent/复制），或直接 scene traverse 定位 LineMesh 后验证 visible 语义。
