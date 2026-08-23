@@ -3570,3 +3570,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - 激活 MB_RASTER_MGL_FOG + quad 现状（干净复跑）：basic 19493 / equal-range 23199 / raster 32478——与 §216 完全一致，**§224 的"未试组合"猜想证伪**（该组合即 §216 实验）。双重雾（内容 mgl 雾 + quad 叠加）实锤。
 - **raster 战役最终地图（四轮定案后闭合）**：overlay 深度遮挡原理性不可用（§224）+ 场景化被 pass 链封锁（§220）+ 逐材质雾与 quad 并存双重雾（§216/§225）→ **唯一剩余路径 = quad 在有内容瓦片的 fixture 上让位 + 内容瓦片自身的覆盖缺口由"瓦片覆盖延伸"（culling 同款引擎语义）补齐**——raster 与 culling 两域在引擎层汇合为同一需求：**VisibleTileSet 的 horizon/fog-cull 覆盖语义**。datasource 层四轮实验的全部证据链闭合。
 - **复核**：color PASS / raster 32478 / basic 6504 复原 ✓，工作树=提交态。
+
+**§226. 汇合点入口分析——远裁剪面非覆盖限制器，缺口在 VisibleTileSet 相交逻辑深处（2026-08-24 一百一十五，入口记档）**：
+
+- **入口排查**：引擎覆盖由视锥∩四叉树决定；`ClipPlanesEvaluator` 的 farMax = distance·6.0（farMaxRatio 默认 6）——z16/p70 下 distance≈1.3km → far≈8km，**大于地平线地面距离 ~3.7km**（H/tan(20°)）——远裁剪面不是覆盖缺口的限制器。`quadTreeSearchDistanceUp`（默认 3）是回退瓦片搜索非屏幕覆盖。
+- **缺口定位（下轮会话规模）**：覆盖缺口在 VisibleTileSet 的 frustum-geoBox 相交/shouldSplit 逻辑深处（高 pitch 下瓦片包围盒与视锥的求交语义 vs mgl 的 horizon 覆盖扩展）——需通读 VisibleTileSet.ts 覆盖计算（~1100 行核心）并对照 mgl `cover`/`shouldSplit` 的 horizon 分支，是独立引擎会话的工作量。
+- **会话终态**：color 族 PASS / raster 32478 / basic 6504 / equal-range 6810 恒定，工作树=提交态（46 commits）。
