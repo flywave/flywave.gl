@@ -3423,3 +3423,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl 语义移植完成**：`_updateFog` 条件（opacity≥1 && horizon-blend≥0.03）+ `cullDist = start+(end−start)·0.78`（FOV-shifted fog 单位）+ 瓦片 AABB 最远点距离（transform.ts:1644 逐行对照）；在 MBStyleDataSource 落地为 `applyFogTileCulling()`（AfterRender 逐帧 + fog 单位↔米制换算经 distCam·kFog/shift）。**保留**：backgroundFogState 新增 hbRaw 字段（后续校准可用）。
 - **实现无效与定案**：绿线 6464px 恒定——与 §196 平面隐藏同根：**引擎渲染循环逐帧重置 tile object 的 visible**（processTileObject 链路外另有覆写点）。瓦片级剔除需引擎侧入口（渲染循环尊重的持久 per-tile 标志，或 VisibleTileSet 过滤），datasource 层无法闭环——已回退死代码，语义移植记档待引擎接口。culling 四例数值维持（close 17846/far 9387/mid 10119/opacity 15226）。
 - **§201 raster 校准战役**：本阶段未及（引擎接口定案优先），维持待办。
+
+**§203. 瓦片剔除三轮实现与"冻结态"发现——culling 族对一切改动无响应，诚实回退（2026-08-24 九十三，零净变化记档）**：
+
+- **三轮实现**：① §202 版（kFog 换算）；② kFog 修正（cullMetric=纯 fog 矩阵语义，far fixture 手算 7.1km<线距 11km 应剔除）；③ RTE 相机世界坐标重构（sceneRoot 锚点补偿）。**日志证明剔除在运行**（27 tiles / hidden 17）且对 equal-range/basic/raster 产生真实影响（过度剔除 6810→23125 等）——**但 culling 四例的绿线 6464px 与四数值在全部实现+回退间完全恒定**。
+- **定性（待新会话复核）**：culling 族疑似（a）陈旧捕获（§174/§183 族的 fixture 级变体——结果 JSON 恒定跨代码态）或（b）其内容走不依赖 tile object 可见性的另一渲染路径。两种都与"剔除语义正确性"正交——语义移植已就绪（§202/§203 三版中 §203③ 最完整：RTE 补偿 + 无 kFog），但需先破冻结态才能校准验证。
+- **回退验证**：basic 6504 / equal-range 6810 基线复原 ✓。culling 语义实现的恢复路径已在本文档完整记录（条件 alpha≥0.999 && hb≥0.03、cull=start+(end−start)·0.78、AABB 最远角、RTE 世界相机）。
+- **§201 raster 校准**：本阶段未及（剔除冻结态排查优先），维持待办。
