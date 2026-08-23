@@ -513,12 +513,12 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         processor.setEmitter(emitter);
         processor.setFeatureStates(this.m_featureStates);
 
-        // §236: mgl draw_background paints a quad on EVERY tile — inject a
-        // synthetic full-extent rectangle through the fill pipeline so the
-        // engine's coverage tiles carry the (fogged) background geometry.
-        // Runs BEFORE the adapter try/catch: low-level tiles whose feature
-        // decode throws (catch returns early) still get the background.
-        if (this.m_emitBackgroundTiles) {
+        // §236: mgl draw_background paints a quad on EVERY tile. The adapter
+        // can THROW for low-level ancestor tiles — its catch used to return
+        // an empty tile, discarding this injection — so inject on BOTH the
+        // normal and the catch paths (§239).
+        const injectBackground = (): void => {
+            if (!this.m_emitBackgroundTiles) return;
             try {
                 const E = emitter.extents;
                 const rect = [{
@@ -528,7 +528,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 processor.processPolygonFeature(
                     '', E, rect as any, { _sourceId: '__mb_background__' }, 'mb-background-tile');
             } catch {}
-        }
+        };
 
         try {
             // Determine data format and use appropriate adapter.
@@ -575,10 +575,12 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     this.m_geoJsonAdapter.process(normalized, decodeInfo, processor);
                 }
             }
-        } catch (e) {
-            return { techniques: [], geometries: [] };
+        } catch {
+            injectBackground();
+            return emitter.getDecodedTile();
         }
 
+        injectBackground();
         return emitter.getDecodedTile();
     }
 

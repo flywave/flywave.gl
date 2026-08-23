@@ -71,7 +71,11 @@ THREE.ShaderChunk.fog_fragment = `
 	// distance.
 	float fogVertP = (fogVertLimit.x > 0.0 || fogVertLimit.y > 0.0)
 		? smoothstep(fogVertLimit.x, fogVertLimit.y, vFogHeight) : 0.0;
-	float fogOpLimit = 1.0 - smoothstep(0.9, 1.0, fogFactor);
+	// mgl applies the opacity limit ONLY in the vertical-range variant
+	// (fog_apply_premultiplied with heightMeters); unconditional use zeroed
+	// far tiles at t>0.9 (§240).
+	float fogOpLimit = (fogVertLimit.x > 0.0 || fogVertLimit.y > 0.0)
+		? 1.0 - smoothstep(0.9, 1.0, fogFactor) : 0.0;
 	fogFactor *= 1.0 - min(fogVertP, fogOpLimit);
 	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
 #endif

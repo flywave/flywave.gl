@@ -3657,3 +3657,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **候选①排除**：cap 默认 100（27 瓦片远未触顶）、maxTilesPerFrame=0（无限流）——截断假设否定。
 - **注入确认**：前 try 位注入 **54/54 全层**（z7-15 每层 8/8/8/8/8/6/4/2/2）——decoder 侧完整；z12-15 挂载 ✓ / **z7-11 的 Tile.objects 仍 0** → 断点终收窄至**引擎 Tile 对 decode 产物的消费点**（objects 创建/loadState/双实例路由——一行 setDecodedTile 消费侧日志即定案，引擎 Tile.ts 无 `setDecodedTile` 名，需按 decodedTile 属性写入点定位）。
 - **会话极限二次确认**（~5.2h/262M tokens），工作树=提交态（59 commits）。§232 清单的 globe/terrain/switch-style 新域本会话未及，维持待办。
+
+**§240. culling attach 断点定案与双重修复——catch 路径丢弃注入 + sky 区纯雾色缺口（2026-08-24 一百二十八，保留）**：
+
+- **attach 断点定案（§238 入口执行）**：引擎 attach 点日志 54 次——z7-11 全 geoms=0、z12 半数 0、z15 全 1。结合注入 54/54 确认：**注入成功但 adapter 的 catch 提前 return 空瓦片丢弃了它**（z7-11 的特征解码在注入后抛出）。**修复①（保留）**：注入改为闭包在正常与 catch 两路都执行——culling 四例首次视觉变动（close 18356→17524 ✓、mid 10629→9797 ✓、far 4691→5252 ✗、opacity 18106→25082 ✗，净改善）。
+- **t 探针与 opacity-limit**：注入 quad 的 t=0.961（饱和 ✓）但 sky 区仍米色——真因 = **sky 区（地平线上）需要纯雾色**而 atmoQuad 被 §228 geojson stand-down 关闭；`fogOpLimit` 无条件应用被定为 mgl 不忠实（仅 vertical-range 变体有）并**修复②（保留）**：门控到 vertical-range——本批 fixtures 无视觉影响但语义正确。
+- **回归**：geojson 全族零回归（line/fill-color/heatmap/hillshade/fill-extrusion/high-color 全 PASS/恒定 ✓）；fill-pattern 1855→1919、symbols 双态带内。
+- **下轮**：sky 区纯雾色（far/opacity 的 +561/+6976 残差）——atmoQuad stand-down 需改为"仅在内容瓦片覆盖地面时让位地平线下部分"而非全屏让位，或 sky 区直接雾色填充。
