@@ -3237,3 +3237,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **附带修复验证（保留在记档，src 已回退）**：① run() 早退条件（collisionDebug 不早退）；② 去重键改屏坐标（featureId=undefined 坍缩）；③ CollisionIndex 左上角语义；④ **entries=0 帧保留上帧盒几何**（重解码窗口清空 overlay 的 settle 帧正是捕获帧）；⑤ keep-last 修复后全族真实基线：collision 41936 / pitched 16145 / pitched-wrapped 69822（均劣于无盒基线 28894/11568/51755）——盒判定/几何需逐子族校准（红/蓝 verdict vs mgl、line-label 盒、pitch 缩放），**管线已可验证，校准工作从"不可验证"转为"可迭代"**。
 - **回退原因**：净劣化 + 未校准（诚实惯例）。§172 实现保留在提交历史（39b6f65e）可整体恢复。
 - **方法论终训（本域第三次）**：结果判定前必须核对 **current.png 时间戳 vs 当前时间**——dump server 会被损坏 JSON 静默崩掉（建议 runner 加 server 存活断言/启动时清点空 JSON）；与 §89 grep 锚定、§153 alpha 伪影同列。
+
+**§175. 去重语义评估收官——§173"输入集残缺"定性修正 + 位置稳定 id 落地（2026-08-23 六十五，保留修复零 delta）**：
+
+- **静态评估（TextElementStateCache 全链）**：去重按 `hasFeatureId()` 分叉——无 id 元素走 `findDuplicateByText`（同文本 + `getDedupSqDistTolerance(zoomLevel)` 屏幕距离内才算重复）；引擎元素组**完整保留全部特征元素**（§173 后期探针已证 174 个文本元素在组内）。
+- **§173 定性修正**："同文本 173 特征仅 1 个文本元素"是**我方收集路径去重键 bug 的误读**（featureId=undefined 坍缩），引擎去重只影响**近距离同文本**的渲染去重——与 mgl 逐特征放置的差异仅在近距离场景成立，fixtures 基本未命中 → 放置一致性的真实缺口收敛回 §171 定性（碰撞判定集差异），去重非主因。
+- **落地（保留）**：emitter 对无 id 特征合成**世界坐标稳定 id**（`mbpos:x,y,z`——层级无关，同特征跨层级同 id=合法跨层去重，异特征不碰撞），`symbolFeatureId()` 接入 text/poi 发射。**A/B 实测零 delta**（text-anchor/icon-text-fit/sort-key 族逐值恒等；debug/collision 28894 基线不变）——语义正确的无害改进，消除近距离场景的潜在文本坍缩。
+- **批测**：debug/collision 单例 28894（基线恒等）、text-anchor 族 2068-16325（基线恒等）零回归。

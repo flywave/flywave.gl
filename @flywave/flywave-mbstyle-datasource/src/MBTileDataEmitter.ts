@@ -2839,7 +2839,7 @@ export class MBTileDataEmitter {
                     }
                     if (tech.name === 'text' && tech.text) {
                         this.emitTextGeometry(techniqueIdx, ww, tech.text as string,
-                            { ...properties, $id: featureId ?? properties.$id ?? null });
+                            { ...properties, $id: this.symbolFeatureId(featureId, properties, ww) });
                     } else if (tech.name === 'labeled-icon') {
                         const iconName = tech.imageTexture as string;
                         const caption = (layer.layout['text-field'] && mode === 'icon')
@@ -2847,7 +2847,7 @@ export class MBTileDataEmitter {
                         this.emitPoiGeometry(techniqueIdx, ww,
                             iconName ?? '',
                             caption || undefined,
-                            { ...properties, $id: featureId ?? properties.$id ?? null });
+                            { ...properties, $id: this.symbolFeatureId(featureId, properties, ww) });
                     }
                 }
 
@@ -2865,6 +2865,26 @@ export class MBTileDataEmitter {
     }
 
     /** Emit a TextGeometry entry for the native TextElementsRenderer. */
+    /**
+     * Stable feature id for symbol (text/POI) elements. The engine's
+     * TextElementStateCache deduplicates elements WITHOUT a feature id by
+     * TEXT within a screen distance — collapsing every same-text feature to
+     * one label. mgl places point labels per FEATURE (cross-tile ids), so
+     * synthesize a position-stable id from the absolute world coordinates
+     * (level-independent, so the same feature keeps one id across tile
+     * levels — the legitimate cross-level dedup — while distinct features
+     * never collide).
+     */
+    private symbolFeatureId(
+        featureId: any,
+        properties: any,
+        worldPos: THREE.Vector3,
+    ): string | number | null {
+        const explicit = featureId ?? properties?.$id;
+        if (explicit !== undefined && explicit !== null && explicit !== '') return explicit;
+        return `mbpos:${worldPos.x.toFixed(2)},${worldPos.y.toFixed(2)},${worldPos.z.toFixed(2)}`;
+    }
+
     private emitTextGeometry(
         techniqueIdx: number,
         pos: THREE.Vector3,
