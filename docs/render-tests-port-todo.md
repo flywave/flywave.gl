@@ -3785,3 +3785,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实施**：applyProjection 后重发 `decoder.configure(undefined, {mbStyle})`（§259 一行修复候选）——**globe 六例数值逐位恒定**（141491 等），主线程 configure 本已 ✓（§258），重发为无操作。零回归（color/culling/line 族恒定）。
 - **矛盾记档（下轮入口）**：§256 attach 发生（瓦片"已解码"）vs §258 我们的 decodeTile/§259 注入标记均缺席——globe 的空 decodedTile **来源不明**（候选：瓦片加载失败/取消后的空占位被 attach、TileDecoderService 代理不经过 MBStyleDecoder、或缓存复用）。**下轮一步**：Tile.ts attach 处打印 tileLoader 状态链（loadState/cancelled）+ tileDecoder 构造类名——区分"空占位"与"真解码空"。
 - 工作树=提交态（80 commits）。
+
+**§261. attach 状态链定案 + 缓存清除实验无效——decoder 是 MBStyleDecoder（state Ready）但 geoms=0；configure+clearTileCache 均恒定：worker 克隆实例假说为唯一剩余解释（2026-08-24 一百四十九，零净变化记档）**：
+
+- **attach 状态链**：decoderCls=**MBStyleDecoder**、loaderCls=TileLoader、state=4(Ready)、geoms=0——不是空占位（真解码产物）；结合 §258 主线程 decodeTile 零调用 → **唯一剩余解释：解码在 worker 克隆的 MBStyleDecoder 实例上**（TileDecoderService 路径；主线程 decoder 引用只作类名/配置载体，§260 的主线程重发 configure 因此无效）。
+- **缓存清除实验**：configure 重发 + clearTileCache——globe 六例逐位恒定（worker 侧状态不受主线程操作影响，二重印证 worker 假说）。零回归。
+- **下轮入口（globe 战役收口点）**：读 TileDecoderService 的 worker decoder 注册/配置传播代码（customOptions 如何到达 worker；globe/projection 切换是否重置 worker decoder）——这是最后一段未读代码。
+- 探针已清，工作树=提交态（81 commits）。
