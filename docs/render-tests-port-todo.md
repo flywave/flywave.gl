@@ -3013,3 +3013,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **假说**：mgl 高程在 mercator z 单位（米→mercator 需 ×1/cos(lat)），我们 xy 为 mercator 米而 z 为原始米——预测 ×cos(lat)（降地形 21%）可露出被埋建筑。**实验（TerrainController.build 的 exaggeration ×cos(centerLat)）：13 例逐值零 delta**——与 §127/§128 的 flat/exag/anchor 三轮零 delta 汇成**系统性谜团**：对 TerrainController 高程链的四类独立修改（flat 高程、真 exag、世界锚点采样、整体比例）全部产生**字节级相同输出**。
 - **推论**：这些 fixture 的可见地形/遮挡**并非 TerrainController.build 路径渲染**（或有恒定旁路覆盖），此前对该域的所有代码侧分析对象可能有误。**唯一可靠破案入口 = 运行时调试器单例跟踪**（karma non-headless + 断点 scene graph，确认渲染地形的真实 mesh/material 来源）——非静态可解。全部实验已回退，基线逐值复原（66215/28760 ✓）。
+
+**130. §129 零 delta 谜破案——TerrainController 路径实为活跃（早前实验构建失败假象）（2026-08-23 二十，零净变化）**：
+
+- **运行时等效排查（探针三连）**：① `applyTerrain` 实际调用（terrain={rgbterrain, exag:4}、demUrl 有效、zoom 17.5）✓；② **terrain built meshes=2** ✓；③ scene graph dump（13 MeshBasic / 47 MeshStandard / 6 Shader；地形 z 在 vertex shader 位移故几何 z=[0,0] 属预期）✓。
+- **决定性对照**：exaggeration=0 探针 → **66215→126294（输出大变）**——TerrainController 路径**确证活跃**。§129 的"四类零 delta"实为**假象**：其中 cos(lat) 实验轮的首次 tsc 构建因 TS 报错失败、后续修正后又被 cwd 陷阱跳过重建——**至少该轮是陈旧二进制**；flat/exag/anchor 三轮（§127/§128）则可能是真实的零视觉 delta（高程变化不足以改变该 fixture 的遮蔽格局，66215→126294 的 exag=0 极端对照支持"变化存在但中庸幅度被噪声/遮蔽不变性吸收"）。
+- **方法论终训**：任何"零 delta"结论必须先做**极端值对照**（如参数置 0）证明实验通路本身畅通——本域教训记档。
+- **状态**：全部探针/实验清理回退，基线逐值复原（66215/57596/28760 ✓）。地形域下一入口不变：以 exag 扫描（0/0.5/1/2/4/8）绘制失配曲线定标相机-高程标度关系（cos(lat) 假说可用此法一次验证）。
