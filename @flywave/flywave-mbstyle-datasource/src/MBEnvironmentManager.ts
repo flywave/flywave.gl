@@ -939,9 +939,12 @@ export class MBEnvironmentManager {
                     uHorizonRefElev: { value: horizonRefElev },
                 },
                 vertexShader: `
-                    varying vec3 vWorldPosition;
+                    varying vec3 vLocalDir;
                     void main() {
-                        vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+                        // LOCAL sphere direction = ray from the dome center
+                        // (the camera) — the world matrix translation must
+                        // NOT skew the atmosphere elevation math (§182).
+                        vLocalDir = position;
                         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
                     }
                 `,
@@ -954,9 +957,9 @@ export class MBEnvironmentManager {
                     uniform float uSpaceAlpha;
                     uniform float uFadeout;
                     uniform float uHorizonRefElev;
-                    varying vec3 vWorldPosition;
+                    varying vec3 vLocalDir;
                     void main() {
-                        vec3 dir = normalize(vWorldPosition);
+                        vec3 dir = normalize(vLocalDir);
                         // Elevation above the horizon (world z-up, camera at origin).
                         float elevation = asin(clamp(dir.z, -1.0, 1.0));
                         // Map fragments never see the dome (depth-tested away);
@@ -1003,7 +1006,12 @@ export class MBEnvironmentManager {
                 const canvasEl = (this.m_mapView as any).canvas;
                 const height = canvasEl?.clientHeight ?? canvasEl?.height ?? 256;
                 const fovRad = (cam.fov ?? 36.87) * Math.PI / 180;
-                const pitchDeg = Math.max((this.m_mapView as any).pitch ?? 60, 0.1);
+                // MapView exposes the mgl pitch as `tilt` (there is no
+                // `pitch` property — the old `?? 60` fallback silently pinned
+                // the horizon reference to pitch 60, discarding the entire
+                // sky at pitch 80, §182).
+                const pitchDeg = Math.max((this.m_mapView as any).tilt
+                    ?? (this.m_mapView as any).pitch ?? 60, 0.1);
                 const pitch = pitchDeg * Math.PI / 180;
                 const focal = (height / 2) / Math.tan(fovRad / 2);
                 const viewElev = Math.PI / 2 - pitch;
@@ -1013,6 +1021,27 @@ export class MBEnvironmentManager {
                 const yH = height / 2 - h * 0.9;
                 material.uniforms.uHorizonRefElev.value =
                     viewElev + Math.atan((height / 2 - yH) / focal);
+                // Keep the dome INSIDE the far clip plane: at high pitch the
+                // engine's far plane can shrink below the dome's 1000-unit
+                // radius — vertices beyond `far` are projection-clipped even
+                // with frustumCulled=false, silently dropping the whole sky
+                // (fog/2d/basic pitch-80 white sky, §182).
+                // Camera-relative skysphere: RTE keeps the camera offset
+                // from the scene origin, so the dome must follow the camera
+                // or its fragment directions (and horizon reference) are
+                // skewed — at pitch 80 the whole sky fell into the
+                // below-horizon discard (§182).
+                const near = cam.near ?? 1;
+                const far = cam.far ?? 1000;
+                // The dome must sit between the clip planes: at high pitch
+                // the engine's near plane grows beyond the fixed 1000-unit
+                // radius and the whole dome is near-clipped away (white sky
+                // at pitch 80, §182).
+                const targetR = Math.min(far * 0.9, Math.max(near * 10, near + 100));
+                if (this.m_skyMesh) {
+                    this.m_skyMesh.position.copy(cam.position);
+                    this.m_skyMesh.scale.setScalar(targetR / 1000);
+                }
             };
             this.m_scene.add(this.m_skyMesh);
         } else {

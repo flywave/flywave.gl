@@ -3281,3 +3281,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地（保留）**：quad 限 **pitch 60-76**（symbols pitch 75 边界含入）——`MBBackgroundFogRenderer.pitchScales` 校准表基建（[70, 0.735] 单点，可扩展）+ `scaleForPitch` 线性插值；gate 外背景保持平色 clear（原行为）。
 - **alpha 语义核对**：fog/color-opacity 期望中带比 0.8 混合更浅（≈0.65）——纯雾顶假设证伪，bgAlpha=alpha 语义确认（残留记档）；顶部 (196,50,86) 疑似 atmosphere 混入，归 pitch-70 残差带。
 - **验收（fog/2d + fog/color 全批）**：**fog/color、color-use-theme PASS 保持**；symbols 97565→83235、raster −69k、heatmap −23k、fill-color 600→422、fill-outline 714→343、line 6391→2680、line-pattern −28k（低负载）、background-pattern −9.5k 等改善全保持；**回归清零**（basic 22976 ✓、equal-range 23282 ✓ 基线复原）；小残差记档：background-color +242、culling/close +1.1k（pitch-70 s 形状）、color-opacity +6.7k（alpha 语义）、inverted 放弃 pitch-80 增益。
+
+**§182. pitch-80 天空取证——四项 dome 语义修复（零回归保留）+ 渲染缺失未解记档（2026-08-23 七十二）**：
+
+- **代码分析（mgl atmosphere 全链）**：atmosphere 为**屏幕空间 quad**（frustum 角射线插值 + u_horizon 地平线插值）+ 三色 stop（space→high→fog）+ `t=exp(−(angle/π)/fadeout)` + premultiplied 合成；fadeout=horizon-blend 映射 [0.0005,0.25]。
+- **四项 dome 语义修复（保留，零回归验证）**：① **`mapView.pitch` 不存在**（dome 地平线参照被 `?? 60` 钉死在 pitch 60——正确访问器 `tilt`，探针实证 tilt=80 读到）；② 方向 varying 改**本地顶点方向**（世界矩阵平移会歪曲仰角数学）；③ dome **逐帧跟随相机**（RTE 相机偏离场景原点）；④ 半径 **near/far 自适应**（夹在裁剪面间）。
+- **未解（记档）**：pitch 80 basic 的 dome **仍不渲染**（品红探针 0 像素——但探针自身有缺陷：uniform 创建期快照、flag 晚于创建设置，判定不结论）；候选剩余：引擎高 pitch 下对场景对象的可见性管理/渲染列表筛选。**下轮入口：运行时 uniform 探针**（onBeforeRender 内直接改 uniform 或 material.color 探针——§111 教训：onBeforeCompile 重写 gl_FragColor 时 material.color 无效）。
+- **验收**：fog/2d + fog/color + skybox 全批逐值恒等（fill-color 422/raster 32478/symbols 83235/line-pattern 1721/skybox 202-101936 基线不变），fog/color 双 PASS 保持，零回归。
