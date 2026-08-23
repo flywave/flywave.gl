@@ -3819,3 +3819,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复（保留）**：空 delegate 时返回 `{mb:1}` 非空标记——decode 运行（decR 探针 16 次全 **geoms=1**，注入产出几何）；无注入门控的样式 decode 为空几何，视觉不变（fog/color 族 PASS 恒定 ✓、culling/line 零回归 ✓）。
 - **globe 视觉未变（记档）**：解码产出几何但图像恒定——注入 fill 几何的**球面放置**（mercator extents 在 sphere 变换下的定位）是真正最后一块，与 §255 时的预判一致。下轮：objects 计数复查（attach 后 objects 是否从 1 geom 创建）+ 几何球面投影。
 - 工作树=提交态（85 commits）。
+
+**§266. globe objects 复查——4/8 瓦片 objects=1（几何挂载成功），球面放置为确凿最后一块（2026-08-24 一百五十四，零净变化记档）**：
+
+- **census**：§265 修复后 f6 = 8 瓦片（z1）中 **4 个 objects=1**——解码→attach→对象创建链全通（§265 的 decR geoms=1 与本节 objects=1 闭环）；另 4 个 0（疑早期帧空瓦片或覆盖边角，次要）。
+- **确凿最后一块**：对象存在但图像恒定——注入矩形（mercator extents 坐标）在 sphere 投影下的**放置错位/不可见**。下轮：读 TileGeometryCreator 对 fill 几何的 sphere 变换（tile.center/localTangentSpace/worldOffset 链），或探针打印对象的世界包围盒与视锥关系。
+- 探针已清，工作树=提交态（86 commits）。
