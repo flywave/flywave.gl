@@ -3444,3 +3444,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **结论**：绿线对象在渲染瞬间存在于 renderedTiles 的 tiles 中，但那些 Tile 实例与 datasourceCache/visibleTiles 可见的实例**均非同批**（解码异步 + 列表重建）——datasource 层无稳定句柄。**根治入口（引擎源码级）**：读 VisibleTileSet 的 renderedTiles 生命周期（何时填充/清空、Tile 实例从何而来），在 MapView 渲染循环为 datasource 提供渲染前回调或瓦片可见性 API——属引擎接口需求（同 §202 定案，本轮已把"对象在哪"收窄到 renderedTiles 生命周期）。
 - **基线复核**：回退后 fog/color 族 PASS、equal-range 6810、culling/far 9387 恒定 ✓，工作树干净。
 - **§201 raster 校准**：本轮未及（归属取证优先），维持待办。
+
+**§206. 引擎渲染前瓦片过滤钩子落地——renderedTiles 是渲染瞬间 Map 的源码定案 + culling 内容绕过渲染循环的最终定性（2026-08-24 九十六，保留引擎钩子）**：
+
+- **源码定案（§205 收口）**：`VisibleTileSet.renderedTiles` 是 **`Map<number, Tile>`**——此前全部探针用数组式 `.length` 读取（Map 恒 undefined→0），即"冻结态"前半为探针 bug；mapSize=0 的无条件普查证明**该 Map 在渲染后被清空、仅渲染瞬间存在**——datasource 的 AfterRender 永远无法触及（后半为真时序壁垒）。
+- **引擎接口落地（保留）**：MapView 渲染循环新增 **opt-in `tileVisibilityFilter`**（`renderedTiles.forEach` 前查询，undefined=零行为变化）——瓦片级剔除的引擎通道就位。**验证生效**：equal-range 的瓦片确实经它被剔除（6810→23125 的过度剔除反证链路通）。
+- **culling 四例最终定性**：即使引擎钩子真实剔除瓦片，四例绿线 6464 仍恒定——其内容**完全绕过 renderedTiles 渲染循环**（候选：ancestor 替代瓦片路径 / 第二渲染通道）。datasource 侧激活已禁用（防 equal-range 回归），方法与语义完整保留（applyFogTileCulling 内注释了禁用原因）。
+- **复核**：equal-range 6810 / color 族 PASS / default 448 / culling 9387 基线复原 ✓。
+- **下轮入口**：① culling 内容的渲染通道定位（在 tileVisibilityFilter 内打点确认哪些瓦片经过，对比绿线归属）；② §201 raster 分段校准（连续两轮未及，优先级应升）。

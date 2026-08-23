@@ -3574,6 +3574,12 @@ export class MapView extends EventDispatcher {
         // no need to check everything if we're not going to create text renderer.
         renderList.forEach(({ zoomLevel, renderedTiles }) => {
             renderedTiles.forEach(tile => {
+                // Opt-in per-tile visibility veto (e.g. mgl tile-level fog
+                // culling, §206). Undefined filter = zero behavior change.
+                if ((this as any).tileVisibilityFilter !== undefined
+                    && !(this as any).tileVisibilityFilter(tile)) {
+                    return;
+                }
                 this.m_tileObjectRenderer.render(
                     tile,
                     zoomLevel,

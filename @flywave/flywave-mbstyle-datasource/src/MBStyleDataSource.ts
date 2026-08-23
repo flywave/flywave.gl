@@ -1970,6 +1970,54 @@ export class MBStyleDataSource extends TileDataSource {
         geo.attributes.position.needsUpdate = true;
     }
 
+    /**
+     * mgl tile-level fog culling (painter._updateFog + transform.ts:1644):
+     * full-opacity fog with horizon-blend >= 0.03 culls tiles whose farthest
+     * AABB point lies beyond start + (end-start)*0.78 (FOV-shifted fog
+     * units). Applied through the engine's opt-in tileVisibilityFilter —
+     * the renderedTiles Map only exists DURING the render pass (§206), so
+     * an AfterRender-time toggle can never reach it.
+     */
+    private applyFogTileCulling(): void {
+        // DISABLED (§206): the engine hook works (equal-range's tiles were
+        // culled through it) but the culling fixtures' content bypasses the
+        // renderedTiles loop entirely — activating this only regressed
+        // equal-range. Re-enable after locating those fixtures' render path.
+        return;
+        const state = (this.m_environment as any)?.backgroundFogState as any;
+        const mv: any = this.mapView as any;
+        if (!state || !mv) return;
+        if (!state.enabled || state.alpha < 0.999 || state.hbRaw < 0.03) {
+            mv.tileVisibilityFilter = undefined;
+            return;
+        }
+        const shift = state.shift as number;
+        const start = state.r0 + shift;
+        const end = state.r1 + shift;
+        const cullFogUnits = start + (end - start) * 0.78;
+        // Raw fog-matrix semantics (NO kFog — that folds the CONTENT fog
+        // calibration only): depth = shift * metricDist / distCam.
+        const cullMetric = cullFogUnits * state.distCam / shift;
+        const camPos = mv.camera?.position as { x: number; y: number; z: number } | undefined;
+        const sceneRoot = mv.m_sceneRoot?.position as { x: number; y: number } | undefined;
+        if (!camPos) return;
+        const cam = sceneRoot
+            ? { x: camPos.x - sceneRoot.x, y: camPos.y - sceneRoot.y, z: camPos.z }
+            : { x: camPos.x, y: camPos.y, z: camPos.z };
+        const EarthConstants = require('@flywave/flywave-geoutils').EarthConstants;
+        const C = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
+        mv.tileVisibilityFilter = (tile: any): boolean => {
+            const tk = tile?.tileKey;
+            if (!tk) return true;
+            const n = Math.pow(2, tk.level);
+            const ts = C / n;
+            const fx = Math.max(Math.abs(tk.column * ts - cam.x), Math.abs((tk.column + 1) * ts - cam.x));
+            const fy = Math.max(Math.abs(C - (tk.row + 1) * ts - cam.y), Math.abs(C - tk.row * ts - cam.y));
+            const d = Math.sqrt(fx * fx + fy * fy + cam.z * cam.z);
+            return d <= cullMetric;
+        };
+    }
+
     private async loadSpriteAtlas(spriteUrl: string): Promise<void> {
         const spriteData = await this.m_styleManager.loadSprite(spriteUrl);
         this.m_themedIconCanvases = [];
