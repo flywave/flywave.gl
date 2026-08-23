@@ -3157,3 +3157,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **取整点排查（全线无果）**：TextCanvas/TextGeometry/TextElementsRenderer/PoiRenderer/MBStyleSymbolPlacement 的放置链**均无 Math.round/floor**（唯一取整是 TextStyleCache 的 zoom floor，与像素无关）——§126 的"放置取整链"假说**排除**：位置是全精度浮点。
 - **移位量化（互相关）**：icon 425 的图标在整数像素粒度**最佳移位 (0,0)**——即位移 <1px（亚像素级）非整数偏移——指向 **SDF 纹理采样的半纹素约定**（mgl 的 glyph quad UV 与 texel 中心对齐方式 vs 我们的 atlas 采样）或 glyph quad 尺寸的亚像素差，非放置坐标问题。
 - **立项结论**：该专项的真实实施面 = TextCanvas 的 **glyph quad UV/atlas 半纹素对齐** +（text 域的）字形 hinting/光栅化——比"放置取整"更深一层。影响面大（text/symbol ~90 例 + icon 族），需在专门的引擎会话中以单 glyph 的 UV 对照起步。本轮零代码变更，评估记档。
+
+**§160. SDF 半纹素内缩 A/B 否决（2026-08-23 五十，零净变化）**：dynamicTextureCoordinates 的 +0.5/−0.5 内缩（texel 中心采样）实测——text-anchor 全族劣化（center 10313→10620、bottom 2068→9159）、icon 425 持平——**否决回退**，基线复核 ✓。结论：SDF 采样的 UV 推导（像素坐标/纹理尺寸）是正确约定；残差的亚像素差不在采样 UV，而在 **glyph quad 几何尺寸/位置的亚像素构成**（TextCanvas 字号换算 24→16 的舍入族或 PoiRenderer 的 quad 角点计算）——专项实施面再修正，留档。
