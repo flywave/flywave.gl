@@ -543,7 +543,13 @@ class DelegatingDataProvider extends DataProvider {
     }
 
     async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ArrayBufferLike | {}> {
-        if (!this.delegate) return new ArrayBuffer(0);
+        // §265: an EMPTY payload (ArrayBuffer(0)) trips TileLoader's
+        // empty-object short-circuit — decodeTile is never called and the
+        // per-tile background injection (globe bg-only styles) can't run.
+        // Return a non-empty marker object: decode runs, the geojson branch
+        // ignores it, and the injection fires. Styles WITHOUT the injection
+        // gate decode to empty geometry exactly as before.
+        if (!this.delegate) return { mb: 1 };
         try {
             return await this.delegate.getTile(tileKey, abortSignal);
         } catch {

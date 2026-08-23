@@ -3812,3 +3812,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **探针**：TileDataSource.create 构造处 = `MBStyleDecoder | hasE | cfg`——TileLoader 拿到的就是**已配置的本实例**（§263 的实例同一性候选排除；不存在 facade 备份分支替换）。
 - **硬矛盾记档（globe 战役的最终悬案）**：decoder 同一且已配置（§258/§264 双证）vs decodeTile 零调用（§263 管道标记原始计数双证）vs attach 有 decodedTile（§256/§261）——三者不能同时成立，唯一未审计的环节是 **Tile.loadAndDecode 的分支链**（Tile.ts:860 前的 cache/geometry-loader 快路可能在 decode 前构造空 decodedTile）。**下轮一步**：Tile.loadAndDecode 全函数体逐行审计 + tileLoader.loadAndDecode 调用前打点。
 - 探针已清，工作树=提交态（84 commits）。
+
+**§265. 三硬矛盾破案 + 解码管线打通——空 payload 短路（ArrayBuffer(0)→{} 短路）是根因；{mb:1} 标记落地，decode 16 次全 geoms=1（2026-08-24 一百五十三，保留修复）**：
+
+- **三硬矛盾破案**：bg-only 样式 `applySources` 不设 delegate → `DelegatingDataProvider.getTile` 返回 `ArrayBuffer(0)` → TileLoader.onLoaded 的**空 payload 短路**（byteLength===0）直接 onDecoded 空 tile——decodeTile 从未被调用（dec 零调用 ✓）、attach 有产物 ✓、decoder 同一且配置 ✓——三硬矛盾全部和解，§264 的"快路"猜测方向正确但位置在 TileLoader 而非 Tile。
+- **修复（保留）**：空 delegate 时返回 `{mb:1}` 非空标记——decode 运行（decR 探针 16 次全 **geoms=1**，注入产出几何）；无注入门控的样式 decode 为空几何，视觉不变（fog/color 族 PASS 恒定 ✓、culling/line 零回归 ✓）。
+- **globe 视觉未变（记档）**：解码产出几何但图像恒定——注入 fill 几何的**球面放置**（mercator extents 在 sphere 变换下的定位）是真正最后一块，与 §255 时的预判一致。下轮：objects 计数复查（attach 后 objects 是否从 1 geom 创建）+ 几何球面投影。
+- 工作树=提交态（85 commits）。
