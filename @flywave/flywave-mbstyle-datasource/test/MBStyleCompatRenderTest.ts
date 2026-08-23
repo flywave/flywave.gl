@@ -259,6 +259,36 @@ async function renderFrames(
     }
 }
 
+// mgl render-tests/utils.ts setupLayout: fixtures with metadata.test
+// .addFakeCanvas get a DOM canvas (id from the fixture) with the given
+// image drawn onto it — the canvas source then samples that element.
+async function setupFakeCanvas(testMeta: any): Promise<void> {
+    const cfg = testMeta?.addFakeCanvas;
+    if (!cfg || typeof document === "undefined") return;
+    const canvas = document.createElement("canvas");
+    canvas.id = cfg.id ?? "fake-canvas";
+    document.body.appendChild(canvas);
+    await drawFakeCanvasImage(canvas, cfg.image);
+}
+
+function drawFakeCanvasImage(canvas: HTMLCanvasElement, image: string): Promise<void> {
+    // mgl rewrites './image/x.png' → '/test/integration/image/x.png'
+    // (vendored checkout, served by karma).
+    const url = image.replace("./image/", "/base/mapbox-gl-js/test/integration/image/");
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const c2d = canvas.getContext("2d");
+            if (c2d) c2d.drawImage(img, 0, 0);
+            resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = url;
+    });
+}
+
 async function processOperations(
     mapView: MapView,
     dataSource: MBStyleDataSource,
@@ -572,6 +602,32 @@ async function processOperations(
                     try {
                         await (dataSource as any).reloadSources?.();
                     } catch {}
+                }
+                break;
+            }
+            case "updateFakeCanvas": {
+                // args: [sourceId, img1, img2] — mgl plays the source, draws
+                // img1 (canvas RESIZED to the image and the live texture
+                // picks it up), pauses, then draws img2. A paused canvas
+                // source does NOT re-upload its texture, so the capture
+                // compares against IMG1 — the second draw only matters for
+                // canvas side effects, never the rendered frame.
+                const srcDef = (dataSource.runtime?.style as any)?.sources?.[args[0]];
+                const canvasEl = typeof document !== "undefined"
+                    ? (document.getElementById(srcDef?.canvas ?? "fake-canvas") as HTMLCanvasElement | null)
+                    : null;
+                if (canvasEl) {
+                    await drawFakeCanvasImage(canvasEl, args[1]);
+                    // THREE.CanvasTexture uploads once — flag needsUpdate so
+                    // the redrawn pixels reach the GPU.
+                    const quads = (dataSource as any).m_environment?.m_imageQuads ?? [];
+                    for (const q of quads) {
+                        const tex = q?.material?.map;
+                        if (tex) tex.needsUpdate = true;
+                    }
+                    await renderFrames(mapView, dataSource, 3);
+                    await drawFakeCanvasImage(canvasEl, args[2]);
+                    await renderFrames(mapView, dataSource, 2);
                 }
                 break;
             }
@@ -1217,6 +1273,10 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 mapView.disableFading = true;
 
                 const style = localizeStyle(entry.style);
+                // Fake canvas must exist in the DOM before the datasource
+                // connects — canvas sources resolve the element by id at
+                // applyImageSources time.
+                await setupFakeCanvas((entry.style as any)?.metadata?.test);
                 // Apply scaleFactor metadata — multiplies icon-size and
                 // text-size to simulate HD/SD display scaling.
                 const scaleFactor = metadata.scaleFactor ?? 1;

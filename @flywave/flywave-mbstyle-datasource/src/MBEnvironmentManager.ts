@@ -1926,6 +1926,10 @@ export class MBEnvironmentManager {
                         : null;
                     if (!canvasEl) continue;
                     texture = new THREE.CanvasTexture(canvasEl);
+                    // Canvas pixels are sRGB-encoded; without this the raw
+                    // values pass through the renderer's linear→sRGB output
+                    // encode a second time (measured ~1.35× too bright).
+                    texture.colorSpace = THREE.SRGBColorSpace;
                 } else {
                     const imgUrl = (source.url ?? '').replace(
                         /^local:\/\//,

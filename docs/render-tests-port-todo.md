@@ -3189,3 +3189,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl 语义实证**：custom-source 8 例 fixture 的 `addCustomSource` handler（operation-handlers.js:117）= `{type:'custom', maxzoom:17, tileSize:256}`，其 loadTile 仅按 `{z}-{x}-{y}` 模板 fetch PNG→ImageBitmap——**与普通 raster source 模板逐字节等价**，无需实现 CustomSource API。
 - **落地**：harness `addCustomSource` op → `rt.addSource(id, {type:'raster', tiles:[localizeUrl(模板)], tileSize:256, maxzoom:17})` + `reloadSources()`（与 addSource op 同款接线）。
 - **验收**：**satellite 从整图缺失 → 4148px**（阈值 655px 近失——图像主体逐像素吻合，残余集中在 rows 76-93 全宽 18px 暗带 = z14 深祖先回退接缝族 §97-§103 已冻结域）；**terrain → 13375px**（中心 ±1 吻合，下部亮度差 163 vs 195 = E1 地形外观域 §113/§114 已冻结）；image/default 回归 PASS ✓。剩余 6 例（albers/equal-earth/equirectangular/lambert/natural-earth/winkel-tripel）依赖自定义投影引擎域，维持冻结记档。
+
+**§168. canvas 源域打通——fake-canvas 基建 + CanvasTexture 色域修复（2026-08-23 五十八，保留修复）**：
+
+- **缺口分析**：datasource 的 `applyImageSources` 本就支持 `type:'canvas'`（MBEnvironmentManager:1922，DOM canvas by id → CanvasTexture → 四边形 + homography 同 image 源）；缺的是 harness 侧 mgl 基建——`metadata.test.addFakeCanvas`（建 DOM canvas + 画初始图）与 `updateFakeCanvas` op。
+- **落地三件**：① harness `setupFakeCanvas`（addDataSource 前建 id canvas，画 `mapbox-gl-js/test/integration/image/<file>`）；② `updateFakeCanvas` op——**mgl 语义关键**：play 中画的 img1 上传纹理、`pause()` 后画的 img2 **不上传**（canvas_source 仅播放中重上传），期望图对比的是 img1（实测 update 期望=1.png 绿证实）；③ **CanvasTexture colorSpace=SRGBColorSpace**（datasource 修复）——canvas 像素为 sRGB 编码，缺此则原值经 renderer linear→sRGB 输出二次编码（实测 147→201、67→138 恰为 encode(linear(v))，~1.35× 过亮）。
+- **验收**：**canvas/default 158425→PASS**、**canvas/update→PASS**（pause 语义修正后）；image 族回归零变化（default PASS、projected/terrain 既有冻结值）。**update-resize 未过定性**：mgl 期望图主体洋红 (255,0,255)、仅中心 140px 区块为图像内容——mgl canvas-resize 特例语义（resize 后 canvas 清空 + 纹理上传时序交互的涌现结果），深挖性价比低记档；canvas/projected（albers）与 video 源（drone.mp4 资产未 vendored + 无 VideoTexture 链）维持冻结。
