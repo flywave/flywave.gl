@@ -3375,3 +3375,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **dome 裁剪对齐屏幕地平线**：dome 的 `elevation<=0`（真地平线）裁剪改为 `elevation<=uHorizonRefElev`（屏幕地平线线，§188 同源）——mgl 瓦片从屏幕线开始、dome 拥有其上全部（含真地平线下数行）。
 - **验收**：fog/color-opacity **75147→976**（§192 19050→13470→976；剩 976=顶部 2 行 dome 期望值 (196,50,86) 的混色细节，接近阈值 65 但未及）；fog/color/color-use-theme/default/high-color 全族 PASS 恒定；equal-range 6810/inverted 37490/space-color 78/fill-color 422 稳定；**culling/opacity 32410→17274 连带改善**（dome 裁剪对齐）。零回归。
 - **记档**：color-opacity 顶部 2 行 = dome 在屏幕线以上数行的 t≈1 段混色与期望 (196,50,86) 的残差（c1 0.8 混 vs 期望略深），量级 1k 内；fog/2d/raster 34396 双态带维持。
+
+**§195. color-opacity 976 残差终局定性——平面深度遮挡 dome，根治=引擎瓦片雾剔除（2026-08-24 八十五，零净变化记档）**：
+
+- **取证**：顶部 2 行期望 (196,50,86)/(204,46,79) = mgl atmosphere glow 的 t=0.919 精确复合（手算 mix(space,c1,0.919)=(198,48,82) ✓）。我方 rows 0-2 仍为平面雾 0.64——**引擎背景平面的几何覆盖到屏幕线以上且其深度遮挡 dome**（dome depthTest 对更近的平面失败）。mgl 的背景瓦片在雾剔除（`transform.getFogCullDistance` + horizon 可见时瓦片级剔除）下止于屏幕地平线线附近，其上无瓦片 → clear(space) + glow 可见。
+- **根治入口（引擎层，下轮）**：背景平面的雾剔除语义——按 fog cull 距离裁剪平面几何（或在 quad 生效带将平面几何上缘对齐屏幕线）。量级 ~1k px（2-3 行）。fog/space-color 78px 维持稀疏噪声定性（阈值 65，带内抖动）。
