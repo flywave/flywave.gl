@@ -3380,3 +3380,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **取证**：顶部 2 行期望 (196,50,86)/(204,46,79) = mgl atmosphere glow 的 t=0.919 精确复合（手算 mix(space,c1,0.919)=(198,48,82) ✓）。我方 rows 0-2 仍为平面雾 0.64——**引擎背景平面的几何覆盖到屏幕线以上且其深度遮挡 dome**（dome depthTest 对更近的平面失败）。mgl 的背景瓦片在雾剔除（`transform.getFogCullDistance` + horizon 可见时瓦片级剔除）下止于屏幕地平线线附近，其上无瓦片 → clear(space) + glow 可见。
 - **根治入口（引擎层，下轮）**：背景平面的雾剔除语义——按 fog cull 距离裁剪平面几何（或在 quad 生效带将平面几何上缘对齐屏幕线）。量级 ~1k px（2-3 行）。fog/space-color 78px 维持稀疏噪声定性（阈值 65，带内抖动）。
+
+**§196. color-opacity 976px 三路实验与诚实回退——引擎逐帧可见性管理 + 常量考古（2026-08-24 八十六，零净变化）**：
+
+- **三路实验全部无视觉效果、逐路回退**：① 背景平面 mesh.visible=false（applyFog 时 + syncFogUniforms 逐帧双保险）——无效，**TileObjectsRenderer 的逐帧剔除/可见性管理每帧覆写 obj.visible**；② quad 裁剪边界 0.99→1.02（+5 行）——无效且**考古发现 §189 的 `git checkout` 曾把 §188 的 0.997 边界静默复原为 0.99**（后续多轮"边界偏移实验"实际修改的是不存在的常量——部分历史结论需按此折扣）；③ 全局 fog chunk 末尾 `fogFactor≥0.9995 discard`（mgl 瓦片雾剔除的片元级近似）——无效。三路皆无效联合指向：rows 0-8 的 (251,107,102) 既非 quad（+5 行边界不动）也非响应我们 chunk 的平面（discard 不动）——该带的真正 painter 仍未定位（候选：TileObjectsRenderer 的独立渲染路径/RTE 深度预处理）。
+- **复核**：git checkout 回退到 §194 提交态后 fog/color/color-use-theme/default/high-color 全族 PASS 恒定、color-opacity 976/default 377 为真实基线（靜態捕獲疑虑排除——回退前后同值）。
+- **下轮入口**：① TileObjectsRenderer 渲染链取证（背景平面走哪条 draw 路径、材质从哪来）；② fog/2d/raster 34396 与 basic 6504 的天空/内容分解取证维持待办。
