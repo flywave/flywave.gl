@@ -3700,3 +3700,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **场景 mesh 实测（修正后）**：color/color-opacity PASS ✓、raster 32478 恒定（内容雾映射才是其残差）、**heatmap 21800→45176 回归**（quad 进入场景渲染次序，与 AfterRender 直绘的 heatmap 密度通道交互恶化）——净负，回退直绘。
 - **raster 内容启用 mgl 雾（场景 mesh 下双重雾已解）**：basic 19493/equal-range 23199/inverted 35660 全劣于基线——mgl 公式在引擎度量下仍需三量纲同切（§217），非双雾问题。
 - **会话真终局**。工作树=提交态（66 commits）。
+
+**§247. 三量纲同切首轮实测——color 族崩（s 表与引擎对是全局耦合），culling 有得有失，回退（2026-08-24 一百三十五，零净变化）**：
+
+- **实施与实测**：fog state 暴露 mgl 相机对（H_m/distCam_m，§216 公式链现成）+ quad 三量纲切换（rayLen 基=H_m、distCam=distCam_m、s=1）——color 族崩至 72k（**s 表与引擎单位对是全局耦合的标定对**，单独切 quad 必崩——§217 预判复现）；culling mixed（far 6002→5262 ✓、mid 1925→4449 ✗、close/opacity 劣）。
+- **定案**：三量纲同切必须与 **s 表重标定同时**进行（每 pitch 的 mgl 精确带位 vs 现标定带差 = 新 s 值），且影响 color 族已 PASS 的全局带——需要一次性重标定批（s 表全表重推 + 全族回归），独立会话规模。
+- **会话六次极限宣告后收官**。工作树=提交态（67 commits）。
