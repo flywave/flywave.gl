@@ -3772,3 +3772,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **双探针**：configure 打点 = 同一实例（id=vd52）先无 mbStyle 后带 mbStyle+globe ✓（配置链正确、无实例分叉）；**decodeTile override 零调用**——globe 的 tile 解码走引擎的另一入口（TileLoader 的 worker/startDecode 路径或 theming 包装），绕过我们的 override（mercator 平面路径走 override 故注入生效）。
 - **下轮一步**：decodeThemedTile 入口打点 + 读 TileLoader/TileDataSource 的 decode 分发代码定位 globe 入口（找到后把注入挂到公共入口或该入口）。
 - 探针已清，工作树=提交态（78 commits）。
+
+**§259. worker 安全标记定案——attach 的 decodedTile 无注入标记：decodeThemedTile 在解码上下文命中 `!m_layerEvaluator` early-return（globe 的 worker 侧 configure-with-mbStyle 缺失）（2026-08-24 一百四十七，零净变化记档）**：
+
+- **方法**：标记走数据面（decodedTile 附 `__mbInjZoom/__mbInjGeoms`，主线程 attach 打印）——绕过 worker console 不可见问题（§258 的"零调用"部分是仪表幻象：主线程日志可见、worker 日志不可见）。
+- **定案**：attach 的瓦片**无标记** → 它来自 decodeThemedTile 的 `!m_layerEvaluator` early-return（标记在函数尾，早退不带）——**globe 的解码上下文（worker）未收到带 mbStyle 的 configure**（主线程 configure ✓ §258），即 applyProjection/projection 切换后 worker 侧 decoder 配置未传播/重置。
+- **下轮一步（接近修复）**：applyProjection 后向 decoder 重发 configure（mbStyle）或查 TileDecoderService 的 worker configure 传播在 projection 切换下的路径——一行级修复的候选。
+- 探针已清，工作树=提交态（79 commits）。
