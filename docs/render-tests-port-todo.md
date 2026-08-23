@@ -3736,3 +3736,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实施**：bg-tile 注入门从 `hasBg && hasGeo` 放宽到 `hasBg && (hasGeo || style.projection.name==='globe')`（globe bg-only 样式瓦片是唯一背景载体）。
 - **实测**：globe 六例数值**逐位恒定**（141491/119763/52681/36877/35800/35192）——**瓦片解码/覆盖在 globe 投影下根本不发生**（引擎 globe 路径的瓦片请求/挂载独立于平面管线），与 §251 的"注入是否到达"疑问闭合为否定。**下轮入口**：引擎 globe 覆盖（sphere 投影的瓦片请求链）——独立于 datasource 的引擎战役。color 族 PASS / culling far 6002 零回归 ✓。
 - **会话十二次极限宣告后真终局**。工作树=提交态（72 commits）。
+
+**§253. globe 覆盖战役首轮——Explore 全链取证 + 准入探针（超时 3s 未及捕获帧），战役入口收窄为三候选（2026-08-24 一百四十一，零净变化记档）**：
+
+- **引擎全链取证（Explore）**：瓦片请求链 = `isDataSourceEnabled`（enabled/ready/isVisible/connected 四关，MapView.ts:2140）→ VisibleTileSet 按瓦片方案分桶 → FrustumIntersection 单根瓦片（globe 无 wrap）→ `getTileKeyEntry`（OBB 视锥交，area=0 即弃）→ canGetTile → getTile。globe 下零调用的三个候选：**① 准入失败**（projection 切换重建 VisibleTileSet/清缓存与 connect/ready 时序竞态——applyProjection 直接换投影是首要嫌疑）；**② isVisible(zoomLevel) 拒绝**（globe 派生 zoom 超出 min/maxDisplayLevel）；**③ 根瓦片 OBB 不交视锥**（球面相机退化）。
+- **准入探针**：3s setTimeout 未及捕获帧前（测试早停）——改为 frame-hook 或即时读。**下轮一步**：applyProjection 换投影后即时输出四准入值 + 根瓦片 area。
+- 工作树=提交态（73 commits）。
