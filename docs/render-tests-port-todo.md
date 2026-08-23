@@ -3838,3 +3838,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **定案**：decodeThemedTile 的 projection 参数在 globe 下 = **1(Spherical)/SphereProjection**（16 次解码一致）——§267 的球面重投影分支确实激活（emitter.project→tile2world 全部 fill 顶点经球面投影）。§267 嫌疑①排除。
 - **剩余（渲染侧）**：几何球面落点正确但像素恒定——候选：注入 fill technique 的 appearance/材质在 sphere 渲染路径不产生像素（如 transponder 需要的属性缺失）、或 Tile 包围盒（projectedBoundingBox）错误剔除。**下轮**：对象级像素归属探针（把注入 fill 的颜色强制纯红验证是否上屏）。
 - 探针已清，工作树=提交态（88 commits）。
+
+**§269. 纯红像素归属定案——0 红像素：注入 fill 在 globe 上根本没渲染（对象存在但不上屏），包围盒剔除/material 为最后两候选（2026-08-24 一百五十七，零净变化记档）**：
+
+- **探针**：注入 background fill 的 technique 颜色强制 `#ff0000` —— **0/262144 红像素**——对象存在（§266 objects=1）、几何球面落点正确（§268 projection=1 分支激活）但**完全不上屏**。
+- **最后两候选**：① Tile 的 projectedBoundingBox/包围球错误（注入几何的局部坐标在球面下使 box 不交视锥 → frustumCulled 或 coverage 剔除）；② fill material 在 sphere 渲染路径不产生片元。**下轮一步**：对象渲染前打印其包围盒 vs 视锥（TileObjectsRenderer 渲染列表 addObject 打点），或临时 `frustumCulled=false` + 包围球放大二分。
+- 探针已清（红色回退为 background-color），工作树=提交态（89 commits）。
