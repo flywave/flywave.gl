@@ -3229,3 +3229,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **通道零像素之谜（未解）**：heatmap 同构（NDC 正交相机 -1..1/near 0、setRenderTarget(null)、autoClear=false）的不透明品红 Mesh + LineSegments **零像素到达捕获画布**（低负载确定性复现）；`setScissorTest(false)` 补齐亦无效。与 heatmap composite 的真实差异未定位（MapView AfterRender 分发于 composer/文本绘制之后、理论上后绘持久）——**需 karma 非 headless 断点会话**（与 §124 render-callback 插槽疑云同类运行时谜）。
 - **el.visible 强制实测**：激活后 debug/collision 28894→42232（**劣化**）——我们的碰撞判定集与 mgl 放置集差异大（仅 16 放置 vs mgl 更多/更少），且引擎文本去重（同文本 173 特征仅 1 个文本元素，TextElementStateCache.deduplicateElement）使放置对齐的输入集本身残缺——**放置一致性缺口比 §171 定性更深（去重语义差异）**。
 - **回退至 §172 惰性状态**（applyMgl 因早退不执行、零外溢）；下轮入口：karma 非 headless 断点定位通道差异 + 引擎文本去重对 mgl 逐特征语义的缺口评估。
+
+**§174. 零像素之谜破案——dump server 损坏 JSON 静默崩溃致陈旧捕获（2026-08-23 六十四，零净变化）**：
+
+- **决定性实验链**：① `gl.readPixels` 同步读默认帧缓冲——盒线像素**存在**（(239,239,255) 蓝盒/(249,82,88) 红盒混合值）；② +50ms 异步 `toBlob` 重读——盒像素**存活**（SYNC 254 ≈ ASYNC 251）；③ 但落盘的 current.png 恒无盒——**文件时间戳停在 18:42**！
+- **根因**：`RenderingTestResultServer` 启动时 `loadSavedResults` 读到 **ENOSPC 时代写坏的 3 个 ibct-result.json（空文件）→ JSON.parse 崩溃 → server 死亡 → 浏览器 POST 'Failed to fetch' 落空 → 所有 current.png 陈旧**。§173 的"heatmap 同构通道零像素之谜"**完全是陈旧捕获假象**——渲染通道自始至终正常（NDC/像素空间相机、品红 Mesh near-面裁剪为独立小坑）。清理损坏 JSON 后：**捕获含盒（蓝 3444/红 9088px）实锤**。
+- **附带修复验证（保留在记档，src 已回退）**：① run() 早退条件（collisionDebug 不早退）；② 去重键改屏坐标（featureId=undefined 坍缩）；③ CollisionIndex 左上角语义；④ **entries=0 帧保留上帧盒几何**（重解码窗口清空 overlay 的 settle 帧正是捕获帧）；⑤ keep-last 修复后全族真实基线：collision 41936 / pitched 16145 / pitched-wrapped 69822（均劣于无盒基线 28894/11568/51755）——盒判定/几何需逐子族校准（红/蓝 verdict vs mgl、line-label 盒、pitch 缩放），**管线已可验证，校准工作从"不可验证"转为"可迭代"**。
+- **回退原因**：净劣化 + 未校准（诚实惯例）。§172 实现保留在提交历史（39b6f65e）可整体恢复。
+- **方法论终训（本域第三次）**：结果判定前必须核对 **current.png 时间戳 vs 当前时间**——dump server 会被损坏 JSON 静默崩掉（建议 runner 加 server 存活断言/启动时清点空 JSON）；与 §89 grep 锚定、§153 alpha 伪影同列。
