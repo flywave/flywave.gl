@@ -244,6 +244,17 @@ function tile2world(
         target.y = w.y;
         target.z = (w as any).z ?? 0;
         target.sub(decodeInfo.center);
+        // §271: sphere tiles render in localTangentSpace — the engine
+        // rotates the object by the tile's OrientedBox basis, so geometry
+        // must be expressed in that basis. Pre-apply the INVERSE rotation.
+        const bb: any = decodeInfo.projectedBoundingBox;
+        if (bb?.xAxis && bb.getRotationMatrix) {
+            const m = bb.getRotationMatrix();
+            const inv = m.clone().invert();
+            const off = new (require('three').Vector3)(target.x, target.y, target.z);
+            off.applyMatrix4(inv);
+            target.x = off.x; target.y = off.y; target.z = off.z;
+        }
         return;
     }
     if (proj?.mbCustomProjection === true) {
