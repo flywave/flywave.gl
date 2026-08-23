@@ -3406,3 +3406,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl debug 语义链**：`metadata.test.debug` → harness `map.showTileBoundaries=true` → `draw_debug.ts` 逐瓦片 LINE_STRIP 边界线（默认源为**红色** (1,0,0)）。我方 overlay 已存在（setDebugTileBoundaries 已接线）但落色为品红——**修正为红色 0xff0000**。
 - **culling/far 期望图解构**：rows 0-28 纯蓝 (0,0,255)=fog 色满雾的背景瓦片（tile 顶边即屏幕地平线 y28，glow 从不可见——瓦片深度遮挡）、y29 红=瓦片边界线、rows 30+ 边界线噪声叠满雾蓝。对照我方：顶部 glow 渐变（54,121,186）+ 下半纯米色——**该 fixture 我方无任何内容瓦片渲染**（绿色 dash 线缺失、红线 0 像素=无 decoded tiles 供 overlay 遍历）——**culling 族首要根因是内容缺失**（geojson tiles 未达渲染，疑与该 fixture 的瓦片剔除/加载路径相关），debug 线与天空满雾语义在其后。四例数值维持（close 17846/far 9387/mid 10119/opacity 15226）。
 - **下轮入口**：① culling fixture 的 decoded tiles 缺失取证（getDecodedTiles 为空的链路）；② 天空区"满雾瓦片 vs glow"的可见域语义（瓦片深度遮挡 glow——与 §198 atmoQuad 深度测试同族，但此处瓦片缺席）。
+
+**§200. culling 族终局解构——期望 0 绿像素=mgl 瓦片级雾剔除，需发射器级实现（2026-08-24 九十，零净变化记档）**：
+
+- **取证修正（§199 部分结论修正）**：内容瓦片**并未缺失**——绿 dash 线在我方渲染中存在（rows 0-100，6464px），此前采样点误导。期望图 **0 绿像素**：mgl 的瓦片级雾剔除（`transform.getFogCullDistance`，瓦片最远点超距→整瓦跳过，range [3.5,4.5] 下该线全部瓦片超距）把整条线剔除；近处背景瓦片米色可见（y80+）、远处满雾蓝（y0-79 瓦片顶边即地平线，glow 从不可见）。
+- **实现定性**：片元级 discard（§196 试过 0.9995 阈值）无法复现瓦片级语义——部分雾化的近段残片会留下。需要**发射器/瓦片级**剔除：在 MBTileDataEmitter 或 getDecodedTiles 链路按瓦片最远点距离（fog cull dist）跳过瓦片。与 mgl `transform.ts:1646-1700`（fogCullDistSq + overHorizonLine 剔除）对齐。
+- **连带**：fog/2d/raster 31720 与 basic 6504 的残差分解维持待办（本阶段未及）。
