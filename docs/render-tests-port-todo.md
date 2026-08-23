@@ -3520,3 +3520,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **步骤②实验（mgl 化 quad）与陷阱**：quad 的 depth 切 mgl 公式后 color 族崩至 78k——**单位混用**：rayLen 是引擎米制（uCamHeight=cam.position.z）、distCam_m 是 mgl 米制（H_m 链），比值差 kFog 级；补 camHeightMgl 切纯 mgl 量纲的 env 侧接线因断言脚本中止未落。**定性：s 表（0.735@70）与引擎单位是配套标定对，单独换公式必崩；正确迁移需 rayLen/distCam/camHeight 三者同切 mgl 量纲后重验**。已回退保基线。
 - **下轮入口**：① 三量纲同切 mgl（env 补 camHeightMgl/distCamMgl 字段——接线点已在 §217 脚本中验证）；② raster 瓦片的深度遮挡排查（为何 quad 覆盖内容行）——与 ①分别独立可推进。
 - **复核**：color 族 PASS / raster 32478 / basic 6504 / equal-range 6810 复原 ✓。
+
+**§218. 深度架构定案——引擎后处理链合成，默认帧缓冲无深度；quad 场景化遭遇编码链（2026-08-24 一百零七，零净变化）**：
+
+- **入口②定案**：引擎经 composing/Pass 后处理链合成——**默认帧缓冲无深度**，AfterRender 直绘的 depthTest 是死代码（raster 内容从未能遮挡 quad 的根因；§198 的"深度修复"实为安慰剂）。
+- **quad 场景化实验（回退）**：转为 m_scene 内 mesh（渲染目标内深度真实）——color 族崩至 73k：场景内渲染经过后处理链的**输出编码**（我们手写的 sRGB 编码被二次处理/色调映射），需要 material 的 colorspace 适配——独立工作量。回退保基线。
+- **raster 战役终局地图（下轮）**：① quad 场景化 + colorspace 适配（内容深度遮挡恢复后，quad 只补空隙——§217 的 mgl 三量纲同切在此之上做）；② 或维持直绘 + hasContentLayers 分域标定（两个已证伪方案之外的第三路）。
+- **复核**：color 族 PASS / raster 32478 / basic 6504 复原 ✓。
