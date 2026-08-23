@@ -3368,3 +3368,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复**：① applyFog 的 fogAlpha/fogHorizonBlend 写入同步到全部 ShaderLib 副本（引擎平面/内建内容材质即刻获得正确 a 与 hb——此前 hb 恒为注入初值 0.05）；② 新增 `syncFogUniforms()`（AfterRender 逐帧遍历场景，覆盖异步创建材质的克隆 uniform）；③ 背景雾 quad 门回到 60..76（>76 时平面的 mgl tile ramp 单独更优，§190 的放宽在平面雾修复后变为双重雾）。
 - **验收**：color-opacity 19050→**13470**（顶部 5 行 0.64 红对齐）；fog/2d/equal-range 10782→**6810**、inverted 41444→**37490**（平面雾 + 门回调双赢）；fog/color/color-use-theme/default/high-color 全族/space-color-use-theme PASS 恒定 ✓；小代价记档：fog/default 255→377（平面 hb 从注入值 0.05 变为真实值的连带）。
 - **color-opacity 剩余 13470 定性（下轮）**：y8-20 平面(0.64)+quad(0.64) 双雾叠至 ~0.87——70° 带平面与 quad 的分工边界未定（quad 60-76 仍叠在平面之上），需二选一：quad 70° 段让位平面（fog/color 65842 回归风险已实证）或平面雾在 quad 生效时旁路。fog/2d/raster 34396 维持（32478↔34396 双态带内）。
+
+**§194. color-opacity 闭环——quad 不透明合成模式 + dome 屏幕地平线裁剪；75147→976（2026-08-24 八十四，保留修复）**：
+
+- **双雾叠加的架构定案**：探针计数证明场景内建材质**无 per-material uniforms**（fogMat=0）——内建材质共享 ShaderLib 静态 uniform 对象，引擎背景平面的雾**无法单独旁路**（会连带内容瓦片）。70° 段平面+quad 双雾（0.64+0.64≈0.87）遂改为**quad 不透明合成**：有 background 层时 quad 直接输出完整 mgl 合成色 `mix(bgColor, fogColor, a²·ramp)`（bgColor=clearColor 的 sRGB 值，经 backgroundFogState 下发），把平面的双重雾整个盖掉——单一雾应用语义恢复。
+- **dome 裁剪对齐屏幕地平线**：dome 的 `elevation<=0`（真地平线）裁剪改为 `elevation<=uHorizonRefElev`（屏幕地平线线，§188 同源）——mgl 瓦片从屏幕线开始、dome 拥有其上全部（含真地平线下数行）。
+- **验收**：fog/color-opacity **75147→976**（§192 19050→13470→976；剩 976=顶部 2 行 dome 期望值 (196,50,86) 的混色细节，接近阈值 65 但未及）；fog/color/color-use-theme/default/high-color 全族 PASS 恒定；equal-range 6810/inverted 37490/space-color 78/fill-color 422 稳定；**culling/opacity 32410→17274 连带改善**（dome 裁剪对齐）。零回归。
+- **记档**：color-opacity 顶部 2 行 = dome 在屏幕线以上数行的 t≈1 段混色与期望 (196,50,86) 的残差（c1 0.8 混 vs 期望略深），量级 1k 内；fog/2d/raster 34396 双态带维持。

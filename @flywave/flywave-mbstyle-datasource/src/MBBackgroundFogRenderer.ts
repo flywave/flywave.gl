@@ -59,6 +59,7 @@ export class MBBackgroundFogRenderer {
             distCam: number;
             hasBackground: boolean;
             hasSky: boolean;
+            bgColor: THREE.Color | null;
         } | null,
     ) {
         this.m_scene = new THREE.Scene();
@@ -102,6 +103,8 @@ export class MBBackgroundFogRenderer {
         // Per-pitch scale table (two-point calibrated §180/§181): linear in
         // pitch, clamped at the ends.
         this.m_material.uniforms.uScale.value = MBBackgroundFogRenderer.scaleForPitch(pitchDeg);
+        this.m_material.uniforms.uOpaque.value = state.hasBackground ? 1 : 0;
+        if (state.bgColor) (this.m_material.uniforms.uBgColor.value as THREE.Color).copy(state.bgColor);
         this.m_material.uniforms.uCamHeight.value = Math.max(cam.position.z, 1);
         // Camera world→view rotation as mat3 for ray reconstruction.
         this.m_material.uniforms.uCamMatrix.value.copy(cam.matrixWorld);
@@ -147,6 +150,8 @@ export class MBBackgroundFogRenderer {
                 uCamMatrix: { value: new THREE.Matrix4() },
                 uInvProj: { value: new THREE.Matrix4() },
                 uHeight: { value: 256 },
+                uBgColor: { value: new THREE.Color(0.96, 0.96, 0.86) },
+                uOpaque: { value: 0 },
                 uFovRad: { value: 36.87 * Math.PI / 180 },
                 uPitchRad: { value: 60 * Math.PI / 180 },
             },
@@ -171,6 +176,8 @@ export class MBBackgroundFogRenderer {
                 uniform float uHeight;
                 uniform float uFovRad;
                 uniform float uPitchRad;
+                uniform vec3 uBgColor;
+                uniform float uOpaque;
                 varying vec2 vNdc;
                 void main() {
                     // Reconstruct the world-space view ray from NDC.
@@ -215,7 +222,16 @@ export class MBBackgroundFogRenderer {
                     vec3 fogSrgb = mix(uFogColor * 12.92,
                         pow(uFogColor, vec3(1.0 / 2.4)) * 1.055 - 0.055,
                         vec3(greaterThan(uFogColor, vec3(0.0031308))));
-                    gl_FragColor = vec4(fogSrgb, uFogAlpha * opacity);
+                    if (uOpaque > 0.5) {
+                        // Opaque composite: the engine background plane's own
+                        // fog (shared built-in uniforms, cannot be bypassed
+                        // per-material) would double-apply under the quad —
+                        // output the full mgl composite over the background
+                        // color instead (§194).
+                        gl_FragColor = vec4(mix(uBgColor, fogSrgb, uFogAlpha * opacity), 1.0);
+                    } else {
+                        gl_FragColor = vec4(fogSrgb, uFogAlpha * opacity);
+                    }
                 }
             `,
         });

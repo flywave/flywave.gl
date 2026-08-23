@@ -129,6 +129,7 @@ export class MBEnvironmentManager {
         bgAlpha: number;
         hasBackground: boolean;
         hasSky: boolean;
+        bgColor: THREE.Color | null;
     } | null {
         if (!this.m_fog || !this.m_fogState || this.m_bgFogParams == null) return null;
         return {
@@ -149,6 +150,12 @@ export class MBEnvironmentManager {
             // fog/2d family with the s=0.735 calibration, so keep those
             // gated until s(pitch) is calibrated.
             hasBackground: this.m_styleHasBackground,
+            // sRGB background clear color for the quad's opaque composite
+            // mode (§194).
+            bgColor: (() => {
+                const hex = (this.m_mapView as any)?.clearColor as number | undefined;
+                return hex !== undefined ? new THREE.Color(hex).convertLinearToSRGB() : null;
+            })(),
             hasSky: !!(this.m_skyMesh && !this.m_skyMesh.userData.__mbFogAtmosphereDome),
         };
     }
@@ -1054,9 +1061,11 @@ export class MBEnvironmentManager {
                         vec3 dir = normalize(vLocalDir);
                         // Elevation above the horizon (world z-up, camera at origin).
                         float elevation = asin(clamp(dir.z, -1.0, 1.0));
-                        // Map fragments never see the dome (depth-tested away);
-                        // rays below the TRUE horizon are always occluded.
-                        if (elevation <= 0.0) discard;
+                        // mgl's background tiles start at the SCREEN horizon
+                        // line (uHorizonRefElev carries its ray elevation) —
+                        // the dome owns everything above it, including the
+                        // few rows below the TRUE horizon (§194).
+                        if (elevation <= uHorizonRefElev) discard;
                         // Angle above the horizon — measured from the TRUE
                         // elevation-0 horizon. (A screen-space horizon-line
                         // reference was tried per mgl atmosphere.vertex's
