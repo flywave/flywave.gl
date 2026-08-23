@@ -3044,3 +3044,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **复核**：`MBStyleDataSource` 第 1276-1284 行**已有** terrain 构建后的异步重报——`applyTerrain` await 完成后 `terrainMax = terrainController.maxElevation`，同时写 `this.maxGeometryHeight` 与 **MapView 级 `mv.maxGeometryHeight`**（VisibleTileSet 读后者）——§133 提议的"构建后二次 applyMaxGeometryHeight"在 HEAD 已实现，geoBox/近平面嫌疑**正式关闭**。
 - **§131-§134 四嫌疑终局**：材质身份（否决，patched=true）、注入管线（自洽）、geoBox 同步期时序（本就无缺口——异步重报已在）、近平面（同 geoBox）——全部排除。建筑窄条的剩余解释收敛到**建筑的世界 XY/相机相对几何本身**（emitter 烘焙的 extruded polygon 顶点位置或相机 rig 的 RTE 偏移在高 z + 高 pitch 组合下的呈现）——需数值级对照（建筑顶点 worldPos vs 相机视锥的 Python/Node 重投影计算）才能定论，记档为该域最终入口。
+
+**135. 建筑窄条数值对照——相机高度假说实测否决（2026-08-23 二十五，零净变化）**：
+
+- **数值 dump（决定性数据）**：建筑 mesh 局部顶点（相机相对）z∈[0,8]、matrixWorld 平移 (324,−141,−69)、**相机 z=69m**——相机确实低于山体高程（~150m×4 exag）。「相机应升至地形表面」假说成立度貌似高。
+- **实测否决**：camera.position.z += sampleElevation(center) 后 13 例**全面翻倍劣化**（66215→129036、43063→127735 等）——mgl 期望图的相机**并非**位于地形表面上方；69m 相机高度下的当前构图反而更接近期望（66k 是更优基线）。建筑窄条的真因仍在建筑侧几何/高程呈现（§128 的"地形遮埋"框架下相机高度非杠杆）。
+- **状态**：修复回退，基线逐值复原（66215/57596/28760 ✓）。该域排除项累计：材质身份/注入管线/geoBox/近平面/相机高度五项——剩余入口回到**建筑顶点 z 的实值验证**（shader 内 mbTerrainElev 的实际数值，需顶点色编码或 transform feedback 级手段）。
