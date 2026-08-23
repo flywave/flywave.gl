@@ -1137,7 +1137,7 @@ export class MBStyleDataSource extends TileDataSource {
             // now that lighting3DState is configured so the background clear
             // color picks up the 3D-lights ground radiance.
             this.applyBackgroundColor(style);
-            this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style));
+            this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style), this.styleHasContentLayers(style));
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
             // A `sky` layer's paint drives the skybox (gradient/atmosphere),
             // mirroring mapbox's sky_style_layer. The top-level `style.sky`
@@ -1742,7 +1742,7 @@ export class MBStyleDataSource extends TileDataSource {
         if (this.m_environment) {
             try {
                 this.m_environment.applyLights(style?.lights, style?.light);
-                this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style));
+                this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style), this.styleHasContentLayers(style));
                 this.m_environment.applyFog(style?.fog, style?.zoom ?? 0);
                 // Re-run applySky ONLY when a scoped theme actually exists —
                 // re-applying an (absent) sky on every theme propagation
@@ -2201,7 +2201,7 @@ export class MBStyleDataSource extends TileDataSource {
         if (this.m_environment) {
             this.m_environment.applyLights((style as any).lights ?? (style as any).light ? [(style as any).light] : undefined);
             this.applyBackgroundColor(style);
-            this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style));
+            this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style), this.styleHasContentLayers(style));
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
             this.m_environment.applySky(
                 this.buildSkyFromLayers(style) ?? style.sky,
@@ -2362,6 +2362,13 @@ export class MBStyleDataSource extends TileDataSource {
     private styleHasBackgroundLayer(style: any): boolean {
         return (style?.layers ?? []).some((l: any) =>
             l?.type === 'background' && (l?.layout?.visibility ?? 'visible') !== 'none');
+    }
+
+    /** Any visible layer besides `background` — content tiles carry their
+     * own fog then (mgl semantics); the background-fog quad stands down. */
+    private styleHasContentLayers(style: any): boolean {
+        return (style?.layers ?? []).some((l: any) =>
+            l?.type !== 'background' && (l?.layout?.visibility ?? 'visible') !== 'none');
     }
 
     private buildSkyFromLayers(style: StyleSpecification): any {

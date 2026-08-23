@@ -146,6 +146,7 @@ export class MBEnvironmentManager {
         hasSky: boolean;
         bgColor: THREE.Color | null;
         hbRaw: number;
+        hasContentLayers: boolean;
     } | null {
         if (!this.m_fog || !this.m_fogState || this.m_bgFogParams == null) return null;
         return {
@@ -166,6 +167,10 @@ export class MBEnvironmentManager {
             // fog/2d family with the s=0.735 calibration, so keep those
             // gated until s(pitch) is calibrated.
             hasBackground: this.m_styleHasBackground,
+            // Any layer besides `background` — content tiles then carry
+            // their own fog (mgl semantics) and the quad would double-paint
+            // (fog/culling family, §214).
+            hasContentLayers: this.m_styleHasContentLayers,
             hbRaw: this.m_fogState.horizonBlendRaw,
             // sRGB background clear color for the quad's opaque composite
             // mode (§194).
@@ -413,10 +418,12 @@ export class MBEnvironmentManager {
      * below the horizon; our background is the clear color, so the
      * atmosphere sky keeps a below-horizon cut only in that case.
      */
-    setStyleHasBackground(has: boolean): void {
+    setStyleHasBackground(has: boolean, hasContent?: boolean): void {
         this.m_styleHasBackground = has;
+        this.m_styleHasContentLayers = hasContent ?? false;
     }
     private m_styleHasBackground = false;
+    private m_styleHasContentLayers = false;
 
     /**
      * Lights resolve their theme from the LIGHT's own import scope (mgl

@@ -3492,3 +3492,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **品红清洗（hook 首处 gl.clear）**：**23360/32768 (71%) 品红上屏**——AfterRender 写入确实到达捕获图像（捕获新鲜、非陈旧）；**非品红区 ~9408px ≈ 冻结差值 9387**——绿线与相关内容在我们的 hook 点**之后**绘制（同 hook 内更晚的渲染器，或引擎 hook 后通道）。
 - **通道收窄终态**：绿线 painter 在"AfterRender hook 首行之后"绘制，且不是 heatmap/additive/model/shadow（§211 禁用不变）、不是 atmosphere/bgFog（画雾蓝不画绿）。剩余候选：hook 内未禁用的 placement/debug 之外——**引擎在 AfterRender 事件后的补充绘制**（文本渲染器/overlay scene/MapRenderingManager 后处理）。
 - **下轮入口**：品红清洗移到 hook **末尾**（所有自研渲染器之后）——若绿线仍在则锁定引擎 hook 后通道（overlayScene/文本），一次性定位。
+
+**§214. culling 绿线 painter 破案终局——MBBackgroundFogRenderer 的渲染调用即机制载体；瓦片覆盖至雾剔除边界=引擎覆盖语义缺口（2026-08-24 一百零三，保留基建）**：
+
+- **hook 末尾清洗 100% 品红** → 绿线在 hook 内绘制；逐渲染器二分（以品红清洗为新鲜度锚）→ **绿线 painter = MBBackgroundFogRenderer 的渲染调用**（禁用它绿 0；仅禁 atmoQuad 绿 6464 恒定）。机制定性：quad 的 `renderer.render(私有scene)` 调用对该 fixture 的内容可见性有副作用（RTE 场景 flush/时序），非 quad 直接画绿（其颜色为雾蓝）。
+- **mgl 语义终解**：期望图 rows 0-79 纯蓝 = **雾剔除边界内的瓦片满雾覆盖**（mgl 在 horizon 可见时瓦片覆盖到 cull 边界，线在其外全剔除）——我方瓦片覆盖止于视口语义，顶部无瓦片 → glow/space 露出。**根治 = 引擎 VisibleTileSet 的 horizon 覆盖语义**（mgl `shouldSplit/cover` 到 horizon）。
+- **content-gate 实验与回退**：有内容层时 quad 让位（mgl 语义）——far 9387→8643 ✓ 但 close/mid/opacity 各 +3~7k、raster 32478→100646（内容瓦片不能独立覆盖背景带）——**净损巨大回退**。保留：`hasContentLayers` 全链路基建（env/state/setter，默认不生效）。
+- **基线复核**：color 族 PASS / raster 32478 / culling 9387 复原 ✓。

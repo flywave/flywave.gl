@@ -58,6 +58,7 @@ export class MBBackgroundFogRenderer {
             shift: number;
             distCam: number;
             hasBackground: boolean;
+            hasContentLayers?: boolean;
             hasSky: boolean;
             bgColor: THREE.Color | null;
         } | null,
