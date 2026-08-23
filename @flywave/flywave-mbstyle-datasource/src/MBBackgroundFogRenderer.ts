@@ -18,6 +18,22 @@ import { MapView } from '@flywave/flywave-mapview';
  * the sky).
  */
 export class MBBackgroundFogRenderer {
+    /** Per-pitch fog-space scale: [pitch, s] pairs, linear interpolation. */
+    static pitchScales: Array<[number, number]> = [[70, 0.735]];
+
+    static scaleForPitch(pitchDeg: number): number {
+        const t = MBBackgroundFogRenderer.pitchScales;
+        if (pitchDeg <= t[0][0]) return t[0][1];
+        if (pitchDeg >= t[t.length - 1][0]) return t[t.length - 1][1];
+        for (let i = 0; i + 1 < t.length; i++) {
+            if (pitchDeg >= t[i][0] && pitchDeg <= t[i + 1][0]) {
+                const f = (pitchDeg - t[i][0]) / (t[i + 1][0] - t[i][0]);
+                return t[i][1] + f * (t[i + 1][1] - t[i][1]);
+            }
+        }
+        return t[0][1];
+    }
+
     private m_scene: THREE.Scene;
     private m_camera: THREE.OrthographicCamera;
     private m_mesh: THREE.Mesh | null = null;
@@ -29,6 +45,7 @@ export class MBBackgroundFogRenderer {
             enabled: boolean;
             color: THREE.Color;
             alpha: number;
+            bgAlpha: number;
             r0: number;
             r1: number;
             shift: number;
@@ -48,16 +65,27 @@ export class MBBackgroundFogRenderer {
 
         const cam = this.m_mapView.camera as THREE.PerspectiveCamera | undefined;
         if (!cam) return;
+        const dir = cam.getWorldDirection(new THREE.Vector3());
+        const pitchDeg = Math.acos(Math.min(1, Math.max(-1, -dir.z))) * 180 / Math.PI;
+        // The gradient is calibrated (s table) for the fog/2d + fog/color
+        // pitch-70 family. Outside 60..75 the rig's pitch-80 sky/raster
+        // geometry diverges from mgl and the quad only adds error (§181) —
+        // skip it there (background keeps the flat clear color as before).
+        if (pitchDeg < 60 || pitchDeg > 76) return;
 
         this.ensureMesh();
         if (!this.m_mesh || !this.m_material) return;
 
         this.m_material.uniforms.uFogColor.value.copy(state.color);
-        this.m_material.uniforms.uFogAlpha.value = state.alpha;
+        this.m_material.uniforms.uFogAlpha.value =
+            Number.isFinite(state.bgAlpha) && state.bgAlpha > 0 ? state.bgAlpha : state.alpha;
         this.m_material.uniforms.uR0.value = state.r0;
         this.m_material.uniforms.uR1.value = state.r1;
         this.m_material.uniforms.uShift.value = state.shift;
         this.m_material.uniforms.uDistCam.value = Math.max(state.distCam, 1);
+        // Per-pitch scale table (two-point calibrated §180/§181): linear in
+        // pitch, clamped at the ends.
+        this.m_material.uniforms.uScale.value = MBBackgroundFogRenderer.scaleForPitch(pitchDeg);
         this.m_material.uniforms.uCamHeight.value = Math.max(cam.position.z, 1);
         // Camera world→view rotation as mat3 for ray reconstruction.
         this.m_material.uniforms.uCamMatrix.value.copy(cam.matrixWorld);
@@ -89,6 +117,7 @@ export class MBBackgroundFogRenderer {
                 uR1: { value: 2.5 },
                 uShift: { value: 1.5 },
                 uDistCam: { value: 1000 },
+                uScale: { value: 0.735 },
                 uCamHeight: { value: 1000 },
                 uCamMatrix: { value: new THREE.Matrix4() },
                 uInvProj: { value: new THREE.Matrix4() },
@@ -107,6 +136,7 @@ export class MBBackgroundFogRenderer {
                 uniform float uR1;
                 uniform float uShift;
                 uniform float uDistCam;
+                uniform float uScale;
                 uniform float uCamHeight;
                 uniform mat4 uCamMatrix;
                 uniform mat4 uInvProj;
@@ -133,7 +163,7 @@ export class MBBackgroundFogRenderer {
                     // fog_opacity curve (NOT smoothstep). The 0.735 folds the
                     // residual engine↔mgl fog-space scale (same family as the
                     // content fog's kFog=3.7; calibrated on fog/color §180).
-                    float depth = 0.735 * uShift * rayLen / uDistCam;
+                    float depth = uScale * uShift * rayLen / uDistCam;
                     float t = (depth - (uR0 + uShift)) / max(uR1 - uR0, 0.001);
                     float falloff = 1.0 - min(1.0, exp(-6.0 * t));
                     falloff *= falloff * falloff;

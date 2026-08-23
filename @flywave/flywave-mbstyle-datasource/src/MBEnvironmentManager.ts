@@ -126,6 +126,7 @@ export class MBEnvironmentManager {
         r1: number;
         shift: number;
         distCam: number;
+        bgAlpha: number;
     } | null {
         if (!this.m_fog || !this.m_fogState || this.m_bgFogParams == null) return null;
         return {
@@ -136,6 +137,10 @@ export class MBEnvironmentManager {
             r1: this.m_bgFogParams.r1,
             shift: this.m_bgFogParams.shift,
             distCam: this.m_bgFogParams.distCam,
+            // Same alpha as content fog (color.a × pitch factor). The
+            // fog/color-opacity expected mid-band is slightly lighter than
+            // an 0.8 blend — residual alpha semantics, documented §181.
+            bgAlpha: this.m_fogState.alpha,
         };
     }
     private m_bgFogParams: { r0: number; r1: number; shift: number; distCam: number } | null = null;
