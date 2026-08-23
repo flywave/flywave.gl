@@ -3478,3 +3478,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **下轮入口（二选一优先）**：① 逐个禁用 datasource 的 AfterRender 渲染器（additiveLine/heatmap/shadow）二分定位；② 在 TileObjectsRenderer.render 的 rootNode.add 前后打点（引擎侧一行日志）。
 - **raster 拟合**：§209 已定案（imagery 不适合 op 逆推，正向计算路径），本阶段未重试。
 - **复核**：全部探针已清、color 族 PASS / raster 32478 / equal-range 6810 基线恒定，工作树=提交态。
+
+**§211. culling 二分终局——AfterRender 渲染器群无辜，绿线唯一剩余通道=引擎渲染瞬时窗口（2026-08-24 一百零一，零净变化）**：
+
+- **二分实验**：一次性禁用 heatmap/additiveLine/model/shadow 四个 AfterRender 直绘渲染器——绿线 6464 恒定，**渲染器群无辜**。叠加 §210 的静态 Mesh 隐藏与六路排除，以及 hook306 的独立佐证（全量剔除时绿线仍在），绿线的渲染通道**只剩引擎 TileObjectsRenderer 每帧 add-then-remove 的瞬时对象窗口**——datasource 层一切手段（scene traverse / tile.objects / visibleTiles / renderedTiles Map / tileVisibilityFilter / 渲染器禁用）均无法触及。
+- **决定性仪器（下轮，引擎侧一行日志）**：在 `TileObjectsRenderer.render` 的 `rootNode.add(object)` 前打印 object 构造名 + tileKey——一次运行即锁定绿线 mesh 的真实来源与归属路径，随后按 §203 就绪语义（条件/cull 公式/AABB/RTE 相机）在该点接剔除。
+- **raster 正向计算路径**：已定位公式链入口（`_mercatorZfromZoom = cameraToCenterDistance/worldSize`、`_calcFogMatrices` 的 mercatorFogMatrix、cameraWorldSizeForFog/pixelsPerMeter 链）——忠实移植后即可解析推 t_mgl(y) 拟合仿射，替代已被否证的图像逆推。
+- **复核**：二分探针已清（git 复原 + tsc 绿 + color 族 PASS / raster 32478），工作树=提交态。
