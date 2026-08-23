@@ -3209,3 +3209,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **回退原因（诚实记账）**：全族批测**净劣化**——画盒比不画更差（debug/collision 28894→43679、pitched-wrapped 51755→75060 等）：red 盒子集（引擎 visible 语义 ≠ mgl placed 语义）、line-label 盒（PathLabel 锚点集）、pitch/分数缩放盒尺寸缩放族均未校准；阈值 4px 级要求逐像素。**全部 src 改动 git 回退**，本节为完整实施规格记档（六层机制已验证，剩余=子族校准，工程量中-大，与 text-anchor 校准同级别）。
 - **评估记档**：fitBounds（2 例）= mgl 通用 fallback `map.fitBounds(bounds, {pitch,zoom,padding})`，需 camera_for_bounds 精确移植（padding 不对称中心偏移 + pitch），低 ROI 暂缓；addCustomLayer（8 例）= 真 WebGL 渲染回调（custom-layer-js 族），引擎无对应 hook，冻结。
 - **环境**：/tmp/_karma_webpack_* 累积致 ENOSPC（每次运行 41MB 不清理）——已清理 13G 记档，测试失败先查磁盘。
+
+**§171. collisionDebug 族终局定性——主导残差=引擎放置决策差异（恢复实验+决定性证据，零净变化，2026-08-23 六十一）**：
+
+- **恢复实验**：按 §170 六层规格完整恢复实现（直绘通道/元素数据源/em 缩放/glyphLookup/锚点语义/fit 盒/引擎状态分类/去重），tsc 绿。
+- **决定性取证（debug/collision 逐盒对比）**：期望图**几乎无蓝盒**（连通域分析仅 1-4px AA 残点）——mgl 把该稠密 road_label fixture 几乎全部符号判为碰撞隐藏（红盒大面积合并簇）；我方红簇位置与期望大致吻合（如 326-409×66-109 vs exp 329-417×61-112），但引擎 `visible` 语义把大量符号判为蓝（我方多条 33×4 蓝盒）。
+- **终局定性**：该族主导残差 = **引擎 TextElementsRenderer 碰撞放置决策与 mgl 的放置集合差异**——无盒基线 28894 本身就是"内容差"（我方多渲染了 mgl 隐藏的标签）；盒画得再准也留着 ~28k 内容失配（本例阈值 2229）。盒渲染六层机制已验证可用（§170），**族收敛被引擎放置一致性阻塞**——与 text/symbol 冻结域同根但更深一层（此前 §91/§164 只定性了"位置正确+光栅化长尾"，稠密碰撞场景暴露**放置决策差**这一独立缺口）。
+- **诚实回退**：src 逐字节复原（盒 overlay 任何形态都净劣化）。**下轮真正入口（引擎侧立项）**：TextElementsRenderer 的碰撞放置算法对齐 mgl CollisionIndex（优先级排序 + 屏幕空间盒 + text/icon 双盒语义）——需引擎放置链可编程/可替换的 hook（§110 同族架构需求）。
