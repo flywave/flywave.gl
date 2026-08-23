@@ -3149,3 +3149,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复**：第二处 clip 查找同步按 `__pathIdx` 取 `_N` 后缀。
 - **验收**：**gradient-vector-tile → PASS（19px，阈值内）**；line-gradient 全族 21 例**逐值零回归**。
 - **该 fixture 会话终账**：**29792 → PASS（19px，−99.9%）**——四层修复：§146 解析器索引、§94 lineClips 锚定、§156 per-子路径宽度 clip、§157 per-子路径色带 clip。
+
+**§158. zoomed-raster 取证定性（2026-08-23 四十八，零净变化）**：underzoom **0px ✓**；fractional/overzoom 残差 = **全图均匀 ±20-48/通道亮度差**（无几何/接缝带）——与 raster-filtering/no-pitch 4137 同签名（§96 定性 SwiftShader mipmap 生成 vs 参考 GPU 的漂移类）。z17 min/max 钳位与覆盖语义已在前轮修复（§a06e2a04/143f1fe5），剩余为**重采样滤波精度项**（漂移类，环境级）。归并 raster 漂移族记档。
