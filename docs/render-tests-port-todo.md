@@ -3551,3 +3551,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **§218 修正**：引擎在**无效果时旁路 composer**（MapRenderingManager.render 直绘 `renderer.render(scene, camera)`）且全局 `autoClear=false`——多数测试走直绘路径，深度缓冲理论上应存在且保留。§218 的"后处理链合成无深度"仅适用于效果启用场景。
 - **z=0.5 二分探针阴性**：quad 深度改 0.5（近内容应遮挡）——raster 32478 逐位不变 → **深度在 AfterRender 直绘下依然失效**（即使直绘路径 + autoClear=false + material depthTest:true）。候选机制：文本渲染器的 RT 绑定泄漏、canvas 深度附着在二次 render 下的行为、three 状态机——需浏览器 WebGL 状态级调试（捕获 bindFramebuffer/glDepthFunc），超出源码考古。
 - **终局**：raster/culling 两域的闭环均落在引擎渲染状态机调查上（§221/§222 双记档）；datasource 层弹药（探针矩阵/公式链/钩子/三配置对照）全部就绪。基线恒定（color PASS / raster 32478 / basic 6504），工作树=提交态。
+
+**§223. WebGL 状态捕获与全屏深度写入者发现——AfterRender 末端 z=0.9999 全屏被深度遮挡（2026-08-24 一百一十二，零净变化）**：
+
+- **状态捕获（§222 入口执行）**：quad 绘制时刻 WebGL 状态健康——fb=null（默认帧缓冲）、depthTest=true、depthFunc=515(LESS)、depthMask=true——状态无异常，问题在**深度内容**。
+- **每帧末端深度测试品红 quad（z=0.9999）= 0 像素**：全屏（含天空区）被更近深度遮挡 → **某渲染器全屏写入深度**（候选：dome/atmoQuad 的 depthWrite 意外开启，或引擎天球/Celestia）——此前"quad 深度失效"的真相 = **被全屏深度写入者挡死**（不是无深度而是处处有深度）。一次性探针 0 品红另有解释（次帧被内容重绘覆盖）。
+- **下轮入口（一步之遥）**：审计 dome/atmoQuad/Celestia 的 depthWrite（grep 级）——关掉全屏深度写入者后，quad 的内容遮挡即可恢复，raster 战役的 §217 三量纲同切随即接线。
+- **复核**：color PASS / raster 32478 / basic 6504 恒定 ✓。
