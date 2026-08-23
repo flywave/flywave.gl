@@ -3417,3 +3417,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **fog/2d/raster 31720（67873@≥3）**：残差**全部位于下半内容区**（rows 96-255，上半天空区 0 差）——期望=同 satellite imagery 叠白雾（y230 (235,200,112)=橙×~20% 白、y153 (187,235,250)=~80% 白），我方近/中带内容雾显著不足。定性：**raster 内容雾的 depth↔行映射斜率失配**（§190 k=1.8 全局过冲的根因）——需按带拟合 near/far 或 fogContentScales['raster'] 的分段方案，属 §179 per-content 校准战役。
 - **fog/2d/basic**：本次聚合图缺失（fogtail279 未含），维持 6504 记档（上半=atmoQuad 渐变带偏亮疑 fadeout/角度细节 + 下半=raster 同族内容雾），与 raster 同战役可并案。
+
+**§202. 瓦片级雾剔除实现尝试与架构定案——引擎逐帧覆写 object 可见性，需引擎侧支持（2026-08-24 九十二，记档+小保留）**：
+
+- **mgl 语义移植完成**：`_updateFog` 条件（opacity≥1 && horizon-blend≥0.03）+ `cullDist = start+(end−start)·0.78`（FOV-shifted fog 单位）+ 瓦片 AABB 最远点距离（transform.ts:1644 逐行对照）；在 MBStyleDataSource 落地为 `applyFogTileCulling()`（AfterRender 逐帧 + fog 单位↔米制换算经 distCam·kFog/shift）。**保留**：backgroundFogState 新增 hbRaw 字段（后续校准可用）。
+- **实现无效与定案**：绿线 6464px 恒定——与 §196 平面隐藏同根：**引擎渲染循环逐帧重置 tile object 的 visible**（processTileObject 链路外另有覆写点）。瓦片级剔除需引擎侧入口（渲染循环尊重的持久 per-tile 标志，或 VisibleTileSet 过滤），datasource 层无法闭环——已回退死代码，语义移植记档待引擎接口。culling 四例数值维持（close 17846/far 9387/mid 10119/opacity 15226）。
+- **§201 raster 校准战役**：本阶段未及（引擎接口定案优先），维持待办。

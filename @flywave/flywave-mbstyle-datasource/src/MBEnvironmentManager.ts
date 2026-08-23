@@ -130,6 +130,7 @@ export class MBEnvironmentManager {
         hasBackground: boolean;
         hasSky: boolean;
         bgColor: THREE.Color | null;
+        hbRaw: number;
     } | null {
         if (!this.m_fog || !this.m_fogState || this.m_bgFogParams == null) return null;
         return {
@@ -150,6 +151,7 @@ export class MBEnvironmentManager {
             // fog/2d family with the s=0.735 calibration, so keep those
             // gated until s(pitch) is calibrated.
             hasBackground: this.m_styleHasBackground,
+            hbRaw: this.m_fogState.horizonBlendRaw,
             // sRGB background clear color for the quad's opaque composite
             // mode (§194).
             bgColor: (() => {
