@@ -3412,3 +3412,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **取证修正（§199 部分结论修正）**：内容瓦片**并未缺失**——绿 dash 线在我方渲染中存在（rows 0-100，6464px），此前采样点误导。期望图 **0 绿像素**：mgl 的瓦片级雾剔除（`transform.getFogCullDistance`，瓦片最远点超距→整瓦跳过，range [3.5,4.5] 下该线全部瓦片超距）把整条线剔除；近处背景瓦片米色可见（y80+）、远处满雾蓝（y0-79 瓦片顶边即地平线，glow 从不可见）。
 - **实现定性**：片元级 discard（§196 试过 0.9995 阈值）无法复现瓦片级语义——部分雾化的近段残片会留下。需要**发射器/瓦片级**剔除：在 MBTileDataEmitter 或 getDecodedTiles 链路按瓦片最远点距离（fog cull dist）跳过瓦片。与 mgl `transform.ts:1646-1700`（fogCullDistSq + overHorizonLine 剔除）对齐。
 - **连带**：fog/2d/raster 31720 与 basic 6504 的残差分解维持待办（本阶段未及）。
+
+**§201. raster/basic 残差分解定量（用图取证，零跑测）（2026-08-24 九十一，记档）**：
+
+- **fog/2d/raster 31720（67873@≥3）**：残差**全部位于下半内容区**（rows 96-255，上半天空区 0 差）——期望=同 satellite imagery 叠白雾（y230 (235,200,112)=橙×~20% 白、y153 (187,235,250)=~80% 白），我方近/中带内容雾显著不足。定性：**raster 内容雾的 depth↔行映射斜率失配**（§190 k=1.8 全局过冲的根因）——需按带拟合 near/far 或 fogContentScales['raster'] 的分段方案，属 §179 per-content 校准战役。
+- **fog/2d/basic**：本次聚合图缺失（fogtail279 未含），维持 6504 记档（上半=atmoQuad 渐变带偏亮疑 fadeout/角度细节 + 下半=raster 同族内容雾），与 raster 同战役可并案。
