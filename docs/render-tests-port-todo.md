@@ -3485,3 +3485,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **决定性仪器（下轮，引擎侧一行日志）**：在 `TileObjectsRenderer.render` 的 `rootNode.add(object)` 前打印 object 构造名 + tileKey——一次运行即锁定绿线 mesh 的真实来源与归属路径，随后按 §203 就绪语义（条件/cull 公式/AABB/RTE 相机）在该点接剔除。
 - **raster 正向计算路径**：已定位公式链入口（`_mercatorZfromZoom = cameraToCenterDistance/worldSize`、`_calcFogMatrices` 的 mercatorFogMatrix、cameraWorldSizeForFog/pixelsPerMeter 链）——忠实移植后即可解析推 t_mgl(y) 拟合仿射，替代已被否证的图像逆推。
 - **复核**：二分探针已清（git 复原 + tsc 绿 + color 族 PASS / raster 32478），工作树=提交态。
+
+**§212. 决定性仪器双打——add 点零触发 + 品红清洗证实捕获新鲜，绿线=hook 后绘制（2026-08-24 一百零二，零净变化记档）**：
+
+- **引擎 add 点日志**：`TileObjectsRenderer.render` 的 `rootNode.add` 在 culling/far **零触发**——瓦片对象管线整体空转（与 filter 所见瓦片 objs=0 一致）；每帧隐藏 m_scene 全部 Mesh 绿线也恒定。
+- **品红清洗（hook 首处 gl.clear）**：**23360/32768 (71%) 品红上屏**——AfterRender 写入确实到达捕获图像（捕获新鲜、非陈旧）；**非品红区 ~9408px ≈ 冻结差值 9387**——绿线与相关内容在我们的 hook 点**之后**绘制（同 hook 内更晚的渲染器，或引擎 hook 后通道）。
+- **通道收窄终态**：绿线 painter 在"AfterRender hook 首行之后"绘制，且不是 heatmap/additive/model/shadow（§211 禁用不变）、不是 atmosphere/bgFog（画雾蓝不画绿）。剩余候选：hook 内未禁用的 placement/debug 之外——**引擎在 AfterRender 事件后的补充绘制**（文本渲染器/overlay scene/MapRenderingManager 后处理）。
+- **下轮入口**：品红清洗移到 hook **末尾**（所有自研渲染器之后）——若绿线仍在则锁定引擎 hook 后通道（overlayScene/文本），一次性定位。
