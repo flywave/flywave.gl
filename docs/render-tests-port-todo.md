@@ -3151,3 +3151,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **该 fixture 会话终账**：**29792 → PASS（19px，−99.9%）**——四层修复：§146 解析器索引、§94 lineClips 锚定、§156 per-子路径宽度 clip、§157 per-子路径色带 clip。
 
 **§158. zoomed-raster 取证定性（2026-08-23 四十八，零净变化）**：underzoom **0px ✓**；fractional/overzoom 残差 = **全图均匀 ±20-48/通道亮度差**（无几何/接缝带）——与 raster-filtering/no-pitch 4137 同签名（§96 定性 SwiftShader mipmap 生成 vs 参考 GPU 的漂移类）。z17 min/max 钳位与覆盖语义已在前轮修复（§a06e2a04/143f1fe5），剩余为**重采样滤波精度项**（漂移类，环境级）。归并 raster 漂移族记档。
+
+**§159. TextCanvas/PoiRenderer 亚像素放置链评估（2026-08-23 四十九，零净变化）**：
+
+- **取整点排查（全线无果）**：TextCanvas/TextGeometry/TextElementsRenderer/PoiRenderer/MBStyleSymbolPlacement 的放置链**均无 Math.round/floor**（唯一取整是 TextStyleCache 的 zoom floor，与像素无关）——§126 的"放置取整链"假说**排除**：位置是全精度浮点。
+- **移位量化（互相关）**：icon 425 的图标在整数像素粒度**最佳移位 (0,0)**——即位移 <1px（亚像素级）非整数偏移——指向 **SDF 纹理采样的半纹素约定**（mgl 的 glyph quad UV 与 texel 中心对齐方式 vs 我们的 atlas 采样）或 glyph quad 尺寸的亚像素差，非放置坐标问题。
+- **立项结论**：该专项的真实实施面 = TextCanvas 的 **glyph quad UV/atlas 半纹素对齐** +（text 域的）字形 hinting/光栅化——比"放置取整"更深一层。影响面大（text/symbol ~90 例 + icon 族），需在专门的引擎会话中以单 glyph 的 UV 对照起步。本轮零代码变更，评估记档。
