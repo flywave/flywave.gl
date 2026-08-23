@@ -3346,3 +3346,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **raster 内容雾标定（fog/2d/basic 10476 取证）**：basic 仅 raster 层（无 background → quad 不适用），y130 带内容雾不足（op 0.29 vs 期望 0.86）。落地 raster 专用 fogContentScales key（raster 技术此前骑 'fill' 名无法独立标定）；k=1.8 实测过冲（10476→11996，期望带衰减比 ramp 斜率快——斜率失配非尺度问题），值留空、key 基建保留。
 - **basic 剩余结构（下轮入口）**：天空区（rows 0-59 全宽差 ≈ 1/2 残差）= atmosphere quad 在 pitch 80 的渐变带偏亮（中带 t 偏大，疑 fadeout/角度基准细节），与 §189 相机几何专项同根；下半区 = 内容雾斜率失配。
 - 相机几何专项初查记档：harness fov 已 = mgl 36.87°（非 fov 差）；引擎 tilt→相机链在 lookAtImpl，pitch 85 下真地平线 y36.2 vs mgl 理论 36.9（~0.7px）——§189 的 ~1.3px 差主要来自 mgl 自身 horizon-shift/瓦片剔除边界语义叠层，非单纯相机差。
+
+**§191. atmosphere glow 色彩空间破案——mgl 无色彩管理、三色混合在 sRGB 域直接进行；fog 域大面积转 PASS（2026-08-24 八十一，保留修复）**：
+
+- **取证链（fog/2d/basic pitch 80 天空带偏亮）**：① 红探针证 dome 在 80° 缺席（非双 glow）；② 三通道探针证 quad 运行时 angle/t/fadeout 与 mgl 理论**逐值一致**（y26 t=0.282 vs 理论 0.265）——**t 曲线无罪**；③ 手算 mgl 复合：mgl 的 atmosphere 三色（space/high/fog）是 **sRGB 浮点直接混合**（mgl 无色彩管理），我方按 linear 域混合后编码——linear 混合在 t<1 时显著偏亮（y26 R：gamma 域 61 vs linear 域 88，实测 93）。
+- **修复（三处 glow 合成统一 sRGB 域）**：MBAtmosphereRenderer（atmosphere quad）、dome、GLOW_GLSL（sky 底层合成）——uniforms `convertLinearToSRGB()`、片元删除编码、直接输出。sky 渐变雾带与 bg fog quad 的混合**保持原样**（fog 色 encode 后与 sRGB 值相同，gamma 域混合已正确）。
+- **验收（fog 全类 `mbstyle-srgb239/240`）——本批最大单次转 PASS 波**：**fog/default、fog/high-color 全族（high-color/-opacity/-transparent/-use-theme）、fog/space-color-use-theme 转 PASS**；fog/space-color 48851→**78**、fog/star-intensity 48851→**84**；fog/2d/basic 10476→**6504**（天空带修复）；fog/color/color-use-theme PASS 恒定 ✓ 零回归。
+- **color-opacity 75147 定性（下轮入口）**：fog rgba(255,30,35,0.8)——我方顶部满饱和纯红 (255,30,35)，期望 ~60% 红调（252,108,102）——fog color **alpha 语义**（0.8 应封顶混合权重）在某通道未生效，候选：dome c1 的 alpha 已折算但顶部的纯红来自别处（bg quad/clear 路径）。terrain 族新基线：basic 13731、equal-range 11134、inverted 44228、sky-composition 28601、zero-exaggeration 51639。

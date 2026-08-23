@@ -76,10 +76,10 @@ export class MBAtmosphereRenderer {
         (u.uBr.value as THREE.Vector3).copy(corner(1, -1));
         (u.uBl.value as THREE.Vector3).copy(corner(-1, -1));
         u.uHorizon.value = uHorizon;
-        (u.uFogColor.value as THREE.Color).copy(state.fogColor);
+        (u.uFogColor.value as THREE.Color).copy(state.fogColor).convertLinearToSRGB();
         u.uFogAlpha.value = state.fogAlpha;
-        (u.uHighColor.value as THREE.Color).copy(state.highColor);
-        (u.uSpaceColor.value as THREE.Color).copy(state.spaceColor);
+        (u.uHighColor.value as THREE.Color).copy(state.highColor).convertLinearToSRGB();
+        (u.uSpaceColor.value as THREE.Color).copy(state.spaceColor).convertLinearToSRGB();
         u.uFadeout.value = Math.max(state.fadeout, 0.0005);
 
         const prevAutoClear = renderer.autoClear;
@@ -158,10 +158,11 @@ export class MBAtmosphereRenderer {
                     // mgl blends the gradient premultiplied over a clear of
                     // space-color: result = space*(1-t) + c2*t.
                     vec3 col = mix(uSpaceColor, c2, t);
-                    // Uniforms carry LINEAR THREE.Colors; encode to sRGB.
-                    col = mix(col * 12.92,
-                        pow(max(col, vec3(0.0)), vec3(1.0 / 2.4)) * 1.055 - 0.055,
-                        vec3(greaterThan(col, vec3(0.0031308))));
+                    // mgl has NO color management — atmosphere colors are
+                    // sRGB floats mixed DIRECTLY (gamma space). Uniforms are
+                    // pre-converted (convertLinearToSRGB) so no encode here
+                    // (§191: linear-domain mixing rendered the mid band too
+                    // light on fog/2d/basic pitch 80).
                     gl_FragColor = vec4(col, 1.0);
                 }
             `,

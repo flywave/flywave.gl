@@ -983,11 +983,11 @@ export class MBEnvironmentManager {
                 depthWrite: false,
                 depthTest: true,
                 uniforms: {
-                    uFogColor: { value: fog.color.clone() },
+                    uFogColor: { value: fog.color.clone().convertLinearToSRGB() },
                     uFogAlpha: { value: fog.colorAlpha },
-                    uHighColor: { value: fog.highColor.clone() },
+                    uHighColor: { value: fog.highColor.clone().convertLinearToSRGB() },
                     uHighAlpha: { value: 1.0 },
-                    uSpaceColor: { value: fog.spaceColor.clone() },
+                    uSpaceColor: { value: fog.spaceColor.clone().convertLinearToSRGB() },
                     uSpaceAlpha: { value: 1.0 },
                     uFadeout: { value: fog.horizonBlend },
                     uHorizonRefElev: { value: horizonRefElev },
@@ -1037,11 +1037,9 @@ export class MBEnvironmentManager {
                         //   result = space*(1-t) + c2*t
                         // Fold that in here so the dome is self-contained and
                         // does not depend on the canvas clear color.
+                        // mgl mixes the glow colors as sRGB floats directly
+                        // (no color management) — uniforms pre-converted.
                         vec3 col = mix(uSpaceColor, c2, t);
-                        // The uniforms carry LINEAR colors (THREE.Color working
-                        // space); this ShaderMaterial writes gl_FragColor raw,
-                        col = mix(col * 12.92, pow(col, vec3(1.0 / 2.4)) * 1.055 - 0.055,
-                            vec3(greaterThan(col, vec3(0.0031308))));
                         gl_FragColor = vec4(col, 1.0);
                     }
                 `,
@@ -1172,10 +1170,9 @@ export class MBEnvironmentManager {
             vec3 c0 = uGlowHighColor;
             vec3 c1 = mix(c0, uGlowFogColor, uGlowFogAlpha);
             vec3 c2 = mix(c0, c1, tg);
-            vec3 glowLin = mix(uGlowSpaceColor, c2, tg);
-            return mix(glowLin * 12.92,
-                pow(max(glowLin, vec3(0.0)), vec3(1.0 / 2.4)) * 1.055 - 0.055,
-                vec3(greaterThan(glowLin, vec3(0.0031308))));
+            // mgl mixes the glow colors as sRGB floats directly (no color
+            // management) — the uGlow* uniforms are pre-converted.
+            return mix(uGlowSpaceColor, c2, tg);
         }
     `;
 
@@ -1291,10 +1288,10 @@ export class MBEnvironmentManager {
                 uGlowBl: { value: new THREE.Vector3(0, 0, -1) },
                 uGlowHorizon: { value: 0.25 },
                 uGlowFadeout: { value: 0.025 },
-                uGlowFogColor: { value: new THREE.Color(1, 1, 1) },
+                uGlowFogColor: { value: fog ? fog.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1) },
                 uGlowFogAlpha: { value: fog ? fog.colorAlpha : 1 },
-                uGlowHighColor: { value: fog ? fog.highColor.clone() : new THREE.Color(0.14, 0.36, 0.87) },
-                uGlowSpaceColor: { value: fog ? fog.spaceColor.clone() : new THREE.Color(0.01, 0.04, 0.1) },
+                uGlowHighColor: { value: fog ? fog.highColor.clone().convertLinearToSRGB() : new THREE.Color(0.14, 0.36, 0.87) },
+                uGlowSpaceColor: { value: fog ? fog.spaceColor.clone().convertLinearToSRGB() : new THREE.Color(0.01, 0.04, 0.1) },
                 uViewSize: { value: new THREE.Vector2(512, 256) },
             },
             vertexShader: `
@@ -1468,10 +1465,10 @@ export class MBEnvironmentManager {
                 uGlowBl: { value: new THREE.Vector3(0, 0, -1) },
                 uGlowHorizon: { value: 0.25 },
                 uGlowFadeout: { value: fog ? fog.horizonBlend : 0.025 },
-                uGlowFogColor: { value: fog ? fog.color.clone() : new THREE.Color(1, 1, 1) },
+                uGlowFogColor: { value: fog ? fog.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1) },
                 uGlowFogAlpha: { value: fog ? fog.colorAlpha : 1 },
-                uGlowHighColor: { value: fog ? fog.highColor.clone() : new THREE.Color(0.14, 0.36, 0.87) },
-                uGlowSpaceColor: { value: fog ? fog.spaceColor.clone() : new THREE.Color(0.01, 0.04, 0.1) },
+                uGlowHighColor: { value: fog ? fog.highColor.clone().convertLinearToSRGB() : new THREE.Color(0.14, 0.36, 0.87) },
+                uGlowSpaceColor: { value: fog ? fog.spaceColor.clone().convertLinearToSRGB() : new THREE.Color(0.01, 0.04, 0.1) },
                 uViewSize: { value: new THREE.Vector2(512, 256) },
             },
             vertexShader: `
