@@ -3754,3 +3754,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **双计数实测**（修正 ds 名过滤器——datasource 名是 `anonymous-datasource#1` 非 mbstyle，首次跑日志零触发是仪表错误）：globe 上 canGetTile 循环**正常运行**（zoomLevel=2/dataZoom=1，candidates=4, kept=4）——瓦片选择全通。§233 的"getTile 零调用"结论是**仪表局限**（日志只在 GeoJSONDataProvider，bg-only 样式走其他 provider）——推翻。
 - **缺口终收窄**：瓦片被选择 → getTile/解码应发生 → **注入矩形的球面几何放置**（fill 管线的 decodeInfo/projection 变换在 sphere 下对 mercator extents 矩形的定位/剔除）是最后未验环节。**下轮一步**：sphere 下注入瓦片 attach 后的 objects 计数 + 屏幕投影采样（objects>0 但不渲染=球面剔除/变换；objects=0=TileGeometryCreator 弃）。
 - 探针已清，工作树=提交态（75 commits）。
+
+**§256. globe 注入终局取证——attach 发生（8 瓦片 z1）但 geoms=0：decode 在 sphere 下运行、注入几何未被产出（2026-08-24 一百四十四，零净变化记档）**：
+
+- **双 census 实测**：① f6 覆盖瓦片 8×(z1: objects=0)；② **attach 点发生**（z1, geoms=0）——globe 上瓦片请求/解码/挂载链**全通**（§255 的"选择全通"延伸到 attach），但 decode 产出 0 几何：**注入闭包在 sphere 路径下未产出几何**（processPolygonFeature→evaluate→emitter 链内某环节丢弃——候选：evaluate 的 ctx.zoom 在 globe 派生 zoom 下命中 min/maxzoom、emitter 的 fill 几何构建对 sphere decodeInfo 的坐标、或注入闭包自身 catch 静默）。
+- **下轮一步**：globe 下注入闭包内打点（evaluate 返回的 matched 层数 + emitter 几何计数）——两分支一步区分。
+- 探针已清，工作树=提交态（76 commits）。
