@@ -3584,3 +3584,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实验（接线回退）**：datasource 侧接线（camera.far 扩大 + override=cullM·1.3）——culling/raster 数值全部不变 → **远面非实际限制器**（§226 判断修正）；嫌疑转移至 ③ **pitch>60° 面积剪枝**（地平线瓦片投影面积趋 0 被剪——mgl 无论面积全覆盖）。接线因未验证的全局影响回退（camera.far 改动会影响所有 fog 测试）。
 - **下轮入口**：面积剪枝的 mgl 语义对照（FrustumIntersection:244 的 pitch 分支放宽为 opt-in）+ §203 剔除接线。
 - **复核**：color 族 PASS / raster 32478 / culling 9387 复原 ✓。
+
+**§228. atmoQuad 内容让位（geojson 域）——culling/far 9387→4691 减半，零回归落地（2026-08-24 一百一十七，保留）**：
+
+- **推理链**：面积剪枝保留 overzoomed 父瓦片（覆盖不丢，§227 嫌疑排除）→ culling 顶部残差真因 = **atmoQuad 画在瓦片雾之上**（glow 无深度全屏覆盖）→ mgl 语义：有内容瓦片时瓦片自持雾、glow 让位。
+- **落地（保留）**：`MBAtmosphereRenderer.contentStandDown` 静态门（datasource 按 **style 有 geojson 内容源** 设置——geojson 全球几何可覆盖至地平线；raster 源瓦片范围有限仍需 glow 补天空，第一版全内容让位致 basic 22976/equal-range 23282 回归后收窄）。
+- **验收**：**fog/culling/far 9387→4691（−50%）**；close 18356/mid 10629/opacity 18106（带内 ±，far 主改善）；**geojson 雾族零回归**（line/fill-color/heatmap/hillshade/fill-extrusion 逐值恒定，symbols 4278 双态带内）；raster/basic/equal-range 基线复原 ✓；color 族 PASS ✓。引擎 `frustumFarOverride`（§227）保留待用。
+- **下轮**：culling 剩余 4691 的分解（顶部行的瓦片雾 vs 期望纯蓝的差——内容雾映射精度，§215 正向公式可用）。

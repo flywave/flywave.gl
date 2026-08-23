@@ -1138,6 +1138,17 @@ export class MBStyleDataSource extends TileDataSource {
             // color picks up the 3D-lights ground radiance.
             this.applyBackgroundColor(style);
             this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style), this.styleHasContentLayers(style));
+            try {
+                const { MBAtmosphereRenderer } = require('./MBAtmosphereRenderer');
+                // §228: stand down only when a geojson source's tiles can
+                // cover the ground to the horizon (world-wide geometry);
+                // raster sources have limited tile extent and still need
+                // the glow quad for their sky region.
+                const hasGeojsonContent = Object.values(style.sources ?? {}).some(
+                    (src: any) => (src as any)?.type === 'geojson');
+                MBAtmosphereRenderer.contentStandDown =
+                    this.styleHasContentLayers(style) && hasGeojsonContent;
+            } catch {}
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
             // A `sky` layer's paint drives the skybox (gradient/atmosphere),
             // mirroring mapbox's sky_style_layer. The top-level `style.sky`

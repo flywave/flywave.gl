@@ -18,6 +18,8 @@ import { MapView } from '@flywave/flywave-mapview';
  * background-fog quad 60-76, §181/§182).
  */
 export class MBAtmosphereRenderer {
+    /** Set by the datasource when the style has content layers (§228). */
+    static contentStandDown = false;
     private m_scene: THREE.Scene;
     private m_camera: THREE.OrthographicCamera;
     private m_mesh: THREE.Mesh | null = null;
@@ -41,6 +43,9 @@ export class MBAtmosphereRenderer {
     run(): void {
         const state = this.m_getState();
         if (!state) return;
+        // §228: content tiles carry their own fog (mgl semantics) — the glow
+        // quad must stand down for content-bearing styles (fog/culling).
+        if (MBAtmosphereRenderer.contentStandDown) return;
         const renderer = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
         const cam = this.m_mapView.camera as THREE.PerspectiveCamera | undefined;
         if (!renderer || !cam) return;
