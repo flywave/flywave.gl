@@ -3062,3 +3062,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **dump 结果（一步定论）**：编译后 vertexShader（len 2129）中 **mbTerrainElev@1243、mbH@1629 均在**，且 `mbTopEle = mbTerrainElev`（flat 分支未启用 = flatEle 为 null 的回退路径，逐顶点提升生效）——§136 的"编译产物未呈现"假说**否决**：注入完整存在于最终 GLSL。
 - **域内闭环状态**：建筑窄条七轮排查（材质/管线/geoBox/近平面/相机/色编码/VS dump）——注入链完整无缺口，但视觉仍是"底部窄条纯灰"。结合 §135 相机数据（cam.z=69m 低于山体）与 §131 视图统计（建筑 7k vs 期望 57k），**剩余唯一未验证环节 = 该 GLSL 是否为可见像素实际执行的 program**（2129 字节偏短——疑为 depth-prepass/shadow 变体先被 dump 去重截获，可见变体的 dump 需按 material.id 分次）。下轮入口：dump 按 material 实例去重（非全局一次），对照 renderer.info.programs 列表。
 - **状态**：探针清理回退，基线逐值复原 ✓（66215/57596/28760）。
+
+**138. program 可见性定论 + mgl 相机-地形公式移植两轮（2026-08-23 二十八，零净变化）**：
+
+- **program 可见性定论**：按 material 实例分次 dump——**165/167/169/171 四个 MeshStandardMaterial 变体全部含 mbH@1629**——注入在全部变体（含可见像素执行的 program），§137 剩余疑问关闭。
+- **mgl 相机-地形公式（源码新证据）**：`_updateSeaLevelZoom`（transform.ts:604）——**相机高度 = centerElevation(含 exaggeration)·pixelsPerMeter + cameraToCenterDistance**，zoom 距离从**地形表面**起算；我们 zoom 推导的 z=69m 从海平面起算，低 ~530m（实测）——"相机在地形之下"确证。
+- **两轮移植均 ~126k**：① z+=elev（§135）、② setCameraGeolocationAndZoom(center, elev) 重锚（本轮，mgl 语义精确复刻）——两者输出一致（126267/125490），**翻倍劣化的重新解读**：抬升相机**揭开了被地形遮挡的 60k 隐藏失配区**（66k 基线是在错误遮挡下的"较小可见错误"），即我们的地形网格本身（E1/drape 域）错得多——相机抬升是正确方向但暴露了下游更大的地形错误。
+- **该域最终架构定性**：fill-extrusion-terrain = 相机-地形锚定（本节已解）+ 地形网格呈现（E1/drape 冻结域）**两层叠加**——单独修相机会暴露地形层错误。收敛需先解 E1（drape bake/地形外观），再启用相机抬升。全程记档，本轮零净变化。
