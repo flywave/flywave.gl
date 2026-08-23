@@ -1392,6 +1392,17 @@ export class VisibleTileSet {
             );
             this.m_cameraOverride.updateProjectionMatrix();
             this.m_frustumIntersection.updateFrustum(this.m_cameraOverride.projectionMatrix);
+        } else if ((this.options as any).frustumFarOverride !== undefined) {
+            // Opt-in coverage extension (mgl covers tiles up to the fog-cull
+            // boundary BEYOND the tangent horizon; the default coverage far
+            // equals the tangent distance). Undefined = zero behavior change.
+            this.m_cameraOverride.copy(this.m_frustumIntersection.camera);
+            this.m_cameraOverride.far = Math.max(
+                this.m_cameraOverride.far,
+                (this.options as any).frustumFarOverride as number
+            );
+            this.m_cameraOverride.updateProjectionMatrix();
+            this.m_frustumIntersection.updateFrustum(this.m_cameraOverride.projectionMatrix);
         } else {
             this.m_frustumIntersection.updateFrustum();
         }

@@ -3576,3 +3576,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **入口排查**：引擎覆盖由视锥∩四叉树决定；`ClipPlanesEvaluator` 的 farMax = distance·6.0（farMaxRatio 默认 6）——z16/p70 下 distance≈1.3km → far≈8km，**大于地平线地面距离 ~3.7km**（H/tan(20°)）——远裁剪面不是覆盖缺口的限制器。`quadTreeSearchDistanceUp`（默认 3）是回退瓦片搜索非屏幕覆盖。
 - **缺口定位（下轮会话规模）**：覆盖缺口在 VisibleTileSet 的 frustum-geoBox 相交/shouldSplit 逻辑深处（高 pitch 下瓦片包围盒与视锥的求交语义 vs mgl 的 horizon 覆盖扩展）——需通读 VisibleTileSet.ts 覆盖计算（~1100 行核心）并对照 mgl `cover`/`shouldSplit` 的 horizon 分支，是独立引擎会话的工作量。
 - **会话终态**：color 族 PASS / raster 32478 / basic 6504 / equal-range 6810 恒定，工作树=提交态（46 commits）。
+
+**§227. 覆盖延伸首轮——引擎 frustumFarOverride opt-in 落地（保留）；限制器疑转移至 pitch>60° 面积剪枝（2026-08-24 一百一十六）**：
+
+- **Explore 代理分析（§226 入口执行）**：覆盖 = 3D 视锥∩瓦片世界包围盒（FrustumIntersection.compute 四叉树遍历）；五个候选限制器——① maxVisibleDataSourceTiles 距离排序截断、② 200k 安全断点、③ **pitch>60° 且面积<目标瓦片面积的剪枝**（§FrustumIntersection:244）、④ 远面=切线地平线距离的视锥测试、⑤ renderedTiles 回退界。
+- **落地（保留）**：引擎 VisibleTileSet 新增 **opt-in `frustumFarOverride`**（无 elevation 源时的远面外扩分支，undefined=零行为变化）——覆盖延伸的引擎接口就位。
+- **实验（接线回退）**：datasource 侧接线（camera.far 扩大 + override=cullM·1.3）——culling/raster 数值全部不变 → **远面非实际限制器**（§226 判断修正）；嫌疑转移至 ③ **pitch>60° 面积剪枝**（地平线瓦片投影面积趋 0 被剪——mgl 无论面积全覆盖）。接线因未验证的全局影响回退（camera.far 改动会影响所有 fog 测试）。
+- **下轮入口**：面积剪枝的 mgl 语义对照（FrustumIntersection:244 的 pitch 分支放宽为 opt-in）+ §203 剔除接线。
+- **复核**：color 族 PASS / raster 32478 / culling 9387 复原 ✓。
