@@ -102,8 +102,11 @@ export class MBAtmosphereRenderer {
     private ensureMesh(): void {
         if (this.m_mesh) return;
         const material = new THREE.ShaderMaterial({
+            // mgl drawAtmosphere: LEQUAL ReadOnly at max depth — the glow
+            // fails the depth test wherever opaque content drew, so it only
+            // fills sky gaps (§198; depthTest:false overpainted content).
             transparent: true,
-            depthTest: false,
+            depthTest: true,
             depthWrite: false,
             uniforms: {
                 uTl: { value: new THREE.Vector3(0, 0, -1) },
@@ -122,7 +125,7 @@ export class MBAtmosphereRenderer {
                 void main() {
                     // Same convention as the background-fog quad (§180).
                     vNdc = position.xy;
-                    gl_Position = vec4(position.xy, 0.0, 1.0);
+                    gl_Position = vec4(position.xy, 0.9999, 1.0);
                 }
             `,
             fragmentShader: `

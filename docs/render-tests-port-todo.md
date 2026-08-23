@@ -3393,3 +3393,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **三件套落地**：① harness `addBackgroundDatasource: false`（mgl 无引擎地面平面——背景=clear 色 + quad/dome 拥有雾带；改动限定 mbstyle harness，legacy 测试不受影响）；② atmoQuad 门 76→**60**（它是唯一可靠的天空 glow 通道——AfterRender 直接绘制、不受引擎对象过滤）；③ 背景雾 quad 裁剪边界偏移 0.99→**1.0**（与 dome/atmoQuad 的屏幕地平线线精确对接，消 2-3 行缝）。
 - **验收（fog 族）**：**fog/color、fog/color-opacity（976→PASS，75147→PASS 闭环）、fog/color-use-theme、fog/high-color 全族转 PASS**；连带改善：fill-extrusion-pattern 24376→8250、background-pattern 14790→10851、background-color 1688→1304、fill-extrusion-vertical-range 3304→2232；fill-outline/fill-color/fill-extrusion/basic/equal-range/inverted 恒定零回归；skybox 抽样 atmosphere 1024 恒定（其余被 175s 截断，待全量复跑）。fog/default 377→448（+71 微幅，平面移除的连带，PASS 差距内）。
 - **记档**：dome 渲染链（引擎对象过滤）在其覆盖域内已完全由 atmoQuad 取代，dome 代码保留但不依赖；skybox 全量与 fog 全类复跑（截断部分）为下轮首查项。
+
+**§198. §197 全域回归闭环 + atmoQuad 深度语义修正 + culling 族破案（debug 模式）（2026-08-24 八十八，保留修复）**：
+
+- **skybox 全量复跑（33/33 捕获）**：**零回归**——rayleigh/gradient-default PASS 保持，其余与 sky233 基线逐值一致（atmosphere-terrain 101875、compositing ~50k、fill-extrusion-light 7-15k）。
+- **fog 尾部补跑暴露的 §197 连带与修正**：① atmoQuad 门扩到 60° 后其 `depthTest:false` **越权涂装内容**（mgl drawAtmosphere 为 LEQUAL ReadOnly——被不透明内容深度遮挡）——改为 depthTest:true + z=0.9999 ✓；② quad 不透明模式在平面移除后**覆盖内容**（heatmap 29845）——回退透明混合 + 深度测试（平面已移除，深度正确分离背景 clear 与内容瓦片）——heatmap 29845→21800 ✓、line 3560→2680 ✓、line-sdf→426 ✓；**fog/color、color-opacity、color-use-theme、high-color 全族 PASS 恒定** ✓。
+- **culling 族破案（新功能缺口）**：fixture 设 `metadata.test.debug: true`——mgl 期望图的 (0,0,255) 纯蓝顶带 = **调试瓦片着色**（Painter debug 模式按 tile hash 纯色渲染），我们未实现 debug 渲染——4 例的残差主项即此（far 9387 等）。**下轮入口：debug 模式渲染**（瓦片哈希纯色 + 边界线，mgl painter._showDebug 路径）。
+- 尾部基线更新：line-pattern 7791（双态带）、raster 31720（−2.7k）、symbols 3794（−0.4k）、equal-range 6810 / inverted 37490 / default 448 恒定。

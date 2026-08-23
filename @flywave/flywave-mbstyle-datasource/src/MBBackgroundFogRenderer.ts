@@ -103,7 +103,10 @@ export class MBBackgroundFogRenderer {
         // Per-pitch scale table (two-point calibrated §180/§181): linear in
         // pitch, clamped at the ends.
         this.m_material.uniforms.uScale.value = MBBackgroundFogRenderer.scaleForPitch(pitchDeg);
-        this.m_material.uniforms.uOpaque.value = state.hasBackground ? 1 : 0;
+        // §198: with the engine plane removed, the quad's depth test alone
+        // separates background (clear color) from content tiles — transparent
+        // blending is correct again; opaque mode covered content (heatmap).
+        this.m_material.uniforms.uOpaque.value = 0;
         if (state.bgColor) (this.m_material.uniforms.uBgColor.value as THREE.Color).copy(state.bgColor);
         this.m_material.uniforms.uCamHeight.value = Math.max(cam.position.z, 1);
         // Camera world→view rotation as mat3 for ray reconstruction.
