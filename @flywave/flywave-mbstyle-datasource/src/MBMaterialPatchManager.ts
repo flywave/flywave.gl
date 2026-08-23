@@ -132,7 +132,7 @@ export class MBMaterialPatchManager {
             const material = (obj as any).material as THREE.Material;
             if (!material) continue;
 
-            this.patchMaterial(material, tech);
+            this.patchMaterial(material, tech, obj);
             this.applyIconTextFit(obj, tech);
             this.patchIconObject(obj, tech);
             this.generateGuardrails(obj, tech, tile);
@@ -598,7 +598,7 @@ export class MBMaterialPatchManager {
         material.needsUpdate = true;
     }
 
-    private patchMaterial(material: THREE.Material, technique: any): void {
+    private patchMaterial(material: THREE.Material, technique: any, obj?: THREE.Object3D): void {
         if ((material as any).__mbPatched) return;
         (material as any).__mbPatched = true;
 
@@ -643,7 +643,7 @@ export class MBMaterialPatchManager {
                 if (technique._layerId && paint['building-color']) {
                     this.patchBuildingMaterial(material, technique);
                 } else {
-                    this.patchExtrusionMaterial(material, paint, technique);
+                    this.patchExtrusionMaterial(material, paint, technique, obj as THREE.Mesh);
                 }
                 break;
         }
@@ -2188,7 +2188,7 @@ export class MBMaterialPatchManager {
         }
     }
 
-    private patchExtrusionMaterial(material: THREE.Material, paint: any, technique: any): void {
+    private patchExtrusionMaterial(material: THREE.Material, paint: any, technique: any, mesh?: THREE.Mesh): void {
         // Translucent extrusions blend once at paint opacity. The engine's
         // DepthPrePass path composites at an effective 0.5×alpha (probe-measured
         // on SwiftShader) and the prepass is disabled on the technique; without
@@ -2316,8 +2316,47 @@ export class MBMaterialPatchManager {
         const origOnCompile = material.onBeforeCompile;
         // Terrain DEM for fill-extrusion-terrain: buildings sit on the terrain
         // surface. Sample the center DEM tile at the vertex's world position.
-        const centerDem = (this.m_dataSource as any).m_environment?.terrainController?.centerDem;
-        const terrainExag = (this.m_dataSource as any).m_environment?.terrainController ? 1 : 0;
+        const terrainController = (this.m_dataSource as any).m_environment?.terrainController;
+        const centerDem = terrainController?.centerDem;
+        const terrainExag = terrainController ? (terrainController.exaggeration ?? 1) : 0;
+        // mgl height/base-alignment semantics (§118 full spec, joint pass):
+        //  - base-alignment "terrain" (DEFAULT): base vertices use PER-VERTEX
+        //    terrain elevation.
+        //  - height-alignment "flat" (DEFAULT): top vertices use the FEATURE
+        //    CENTROID elevation so roofs stay horizontal (fill_extrusion
+        //    .vertex.glsl is_flat_height); "terrain": per-vertex.
+        // The centroid elevation is CPU-sampled once per mesh via the tileKey
+        // world anchor (geometry bounding-sphere center); the top/base vertex
+        // split rides the baked `extrusionAxis` attribute (w==1 marks top).
+        const heightAlign = paint['fill-extrusion-height-alignment'] ?? 'flat';
+        const baseAlign = paint['fill-extrusion-base-alignment'] ?? 'terrain';
+        let flatEle: number | null = null;
+        if (centerDem && mesh?.geometry) {
+            try {
+                const g = mesh.geometry;
+                if (g.boundingSphere === null) g.computeBoundingSphere();
+                const tk: any = (mesh as any).userData?.tileKey;
+                if (tk && g.boundingSphere) {
+                    const C = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
+                    const n2 = Math.pow(2, tk.level);
+                    const wcx = (tk.column + 0.5) * C / n2;
+                    const wcy = C - (tk.row + 0.5) * C / n2;
+                    const ax = wcx - g.boundingSphere.center.x;
+                    const ay = wcy - g.boundingSphere.center.y;
+                    // bounding-sphere center is the feature centroid proxy.
+                    const cx = ax + g.boundingSphere.center.x;
+                    const cy = ay + g.boundingSphere.center.y;
+                    flatEle = terrainController?.sampleElevation?.(cx, cy) ?? null;
+                    // Gate: fully inside the center DEM tile (over-border
+                    // fixtures span other DEM tiles where the single-tile
+                    // sample is wrong).
+                    const radius = g.boundingSphere!.radius;
+                    const inX = cx - radius >= centerDem.originX && cx + radius <= centerDem.originX + centerDem.size;
+                    const inY = cy - radius >= centerDem.originY && cy + radius <= centerDem.originY + centerDem.size;
+                    if (!(inX && inY)) flatEle = null;
+                }
+            } catch {}
+        }
         material.onBeforeCompile = (shader: any) => {
             if (origOnCompile) origOnCompile.call(material, shader);
 
@@ -2357,15 +2396,24 @@ export class MBMaterialPatchManager {
             if (height > 0 || base > 0 || centerDem) {
                 // Add terrain elevation at the world position (so the building
                 // base follows the terrain surface).
+                const useFlatTop = centerDem && heightAlign === 'flat' && flatEle !== null;
+                const useFlatBase = centerDem && baseAlign === 'flat' && flatEle !== null;
+                if (useFlatTop || useFlatBase) {
+                    shader.uniforms.uMBFlatEle = { value: flatEle };
+                }
                 const terrainSample = centerDem
                     ? `vec2 mbWorldPos = (modelMatrix * vec4(position, 1.0)).xy;
                        vec2 mbDemUv = (mbWorldPos - uMBExtrusionDemOrigin) / uMBExtrusionDemSize;
-                       float mbTerrainElev = texture2D(uMBExtrusionDem, vec2(clamp(mbDemUv.x,0.0,1.0), clamp(mbDemUv.y,0.0,1.0))).r * uMBExtrusionExag;`
-                    : 'float mbTerrainElev = 0.0;';
+                       float mbTerrainElev = texture2D(uMBExtrusionDem, vec2(clamp(mbDemUv.x,0.0,1.0), clamp(mbDemUv.y,0.0,1.0))).r * uMBExtrusionExag;
+                       uniform float uMBFlatEle;
+                       float mbIsTop = extrusionAxis.w > 0.5 ? 1.0 : 0.0;
+                       float mbTopEle = ${useFlatTop ? 'uMBFlatEle' : 'mbTerrainElev'};
+                       float mbBaseEle = ${useFlatBase ? 'uMBFlatEle' : 'mbTerrainElev'};
+                       float mbH = position.z + mix(mbBaseEle, mbTopEle, mbIsTop);`
+                    : 'float mbH = position.z;';
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <begin_vertex>',
                     `${terrainSample}
-                     float mbH = position.z + mbTerrainElev;
                      vec3 transformed = vec3(position.x, position.y, mbH);`
                 );
             }

@@ -3002,3 +3002,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **取证（icon-image/token + property-function + text-color/property-function 218 同族）**：失配集中在图标内部（bbox 45-85×15-110），图标外框**逐像素一致**（exp/cur icon bbox 相同 10-39）；墨量比 cur/exp=0.977，但特定行/列（17-25 行、11-20 列）cur 更深——**分数像素级放置偏移**特征（图标整体移动 <1px），非尺寸/颜色错。
 - **定性**：与 §93/§104 text 字形残差同类——**光栅化亚像素定位长尾**（POI/字形 quad 的放置取整 vs mgl 的亚像素定位）。修复入口在 PoiRenderer/TextCanvas 的放置取整链（POI 世界坐标→屏幕像素的 floor/round 时点），属引擎精度专项，非样式层缺口。icon-image/token 425、property-function 425、text-color/property-function 218 记档归并此族。
 - **零净变化**。
+
+**127. 子域 C 三耦合项联合实施——对齐语义落地（保留，零视觉 delta 实测）（2026-08-23 十七）**：
+
+- **落地（保留）**：patchExtrusionMaterial 完整移植 mgl 高度/基准对齐语义——`height-alignment:"flat"`（默认）：**顶面顶点（extrusionAxis.w==1）用 CPU 采样要素 centroid 地形高程**（tileKey 世界锚 + sampleElevation，含中心瓦片包含门控防 over-border 误采样），`"terrain"` 逐顶点；`base-alignment:"terrain"`（默认）逐顶点、"flat" 用 centroid；**真实 exaggeration**（替代硬编码 1）；patchMaterial 链 mesh 线程化。flat 采样实测有效（探针 156.8m/148.2m，中心瓦片内）。
+- **关键实测（决定性）**：对 flat 开/关、exag 新/旧做四象限对照——**13 例全部逐值恒等**（flat-roof 43063、alignment-height-terrain 66215 等）——屋顶高程在像素级**不是**该族残差的主导项；§112 的"颜色块错位"定性修正为**光照/颜色主导**（flat-roof 系 roof 面色带 + AO）。§118 "三耦合项"中的 DEM 拼接与 centroid 编码已按语义落地，**exaggeration 重校准无需**（无视觉影响）。
+- **子域 C 剩余收敛入口（修订）**：fill-extrusion-terrain 残差 = **屋顶/侧面光照公式族**（与 §12.15/§12.31 的 extrusion 光照同域）——顶面色带错配 + AO 族（flat-roof-ao 66k）+ 跨缩放 DEM 的 over-border 系（192k）。零回归确认（fog/terrain 28760、occluded 5786、2x-pixelratio 4692 与基线逐值一致）。

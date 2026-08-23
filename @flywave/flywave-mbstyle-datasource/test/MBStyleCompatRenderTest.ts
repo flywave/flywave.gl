@@ -59,6 +59,7 @@ function discoverTests(): TestEntry[] {
     return INDEXED_TESTS.map((t) => ({ name: t.name, stylePath: "", style: t.style }));
 }
 
+(globalThis as any).__mbDiagNoFlat = true;
 const ALL_TESTS = discoverTests();
 console.log(`[MBStyleCompat] ${ALL_TESTS.length} compatible tests loaded`);
 
