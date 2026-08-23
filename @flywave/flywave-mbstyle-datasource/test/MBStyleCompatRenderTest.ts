@@ -575,6 +575,26 @@ async function processOperations(
                 }
                 break;
             }
+            case "addCustomSource": {
+                // mgl's handler (operation-handlers.js) registers a custom
+                // source whose loadTile just fetches the {z}/{x}/{y} URL
+                // template (maxzoom 17, tileSize 256) and decodes it as a
+                // PNG bitmap — byte-for-byte equivalent to a plain raster
+                // source with the same template, which our pipeline already
+                // serves.
+                if (rt && args[0] && typeof args[1] === "string") {
+                    rt.addSource(args[0], {
+                        type: "raster",
+                        tiles: [localizeUrl(args[1])],
+                        tileSize: 256,
+                        maxzoom: 17,
+                    });
+                    try {
+                        await (dataSource as any).reloadSources?.();
+                    } catch {}
+                }
+                break;
+            }
             case "removeSource": {
                 if (rt && args[0]) {
                     rt.removeSource(args[0]);
@@ -1350,7 +1370,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
 // These are handled in the default case of processOperations above,
 // but we list them here for documentation. The actual handling is inline.
 // Remaining no-op operations (from frequency analysis):
-// - addCustomLayer/addCustomSource (16): custom layer/source, skip
+// - addCustomSource now mapped to an equivalent raster source (inline)
 // - setSlot/moveImport/addImport/updateImport (6): import slot management
 // - on/updateFakeCanvas (2): event listener / fake canvas control
 // - addImport/updateImport now handled inline

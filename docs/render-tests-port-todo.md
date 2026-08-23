@@ -3176,3 +3176,16 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl 公式链（源码定论）**：`pixelsPerMeter = mercatorZfromAltitude(1,lat)·worldSize = worldSize/(C·cos(lat))`——**1 米 = 1/(C·cos(lat)) mercator 单位**；在"世界=C 赤道米"的坐标系（我们的世界）中即 **z_world = h·sec(lat)**——与 §92 线宽 secLat **同一公式**。
 - **引擎现状缺口（代码级）**：`MapTerrainMaterial` 的 `elevation × uExaggeration` **无 sec(lat)**（地形与建筑抬升比 mgl 矮 ~26%@lat37.75）；而线宽已乘 secLat——**同一引擎内两种 z 惯例并存**，此即 §135 相机抬升"翻倍劣化"的标度根源（抬升量与地形矮化互相错位）。
 - **解冻实施规格（定稿）**：① `MapTerrainMaterial` 顶点 `elevation × uExaggeration × sec(centerLat)`（uniform 追加）；② patchExtrusion 的 `mbTerrainElev`/`uMBFlatEle` 同步乘 sec(lat)（建筑跟随）；③ sampleElevation CPU 采样同步；④ §138 相机重锚公式改 `elev×sec(lat)`；⑤ 全域护航批（fog/terrain 系此前按现标度校准过——fog 带 kFog=3.7 可能需重标定）。工程量中，风险=标度连锁。规格记档，待专门会话实施。
+
+**§166. §165 规格落地——sec(lat) 地形 z 标度（fog/terrain −3.1k，相机重锚三度否决，2026-08-23 五十六，保留修复 d7219e20）**：
+
+- **落地（保留）**：① `MapTerrainMaterial` 顶点 `elevation × uExaggeration × uMBZSecLat`——逐 tile 由其 mercator 世界 y 反解纬度→sec(lat)（`setZSecLat`，clamp≥0.2），与 §92 线宽 secLat 同源统一，同一引擎 z 惯例归一；③ `sampleElevation` CPU 采样同步乘（`m_sampleSecLat` 取首个 tile 值，中心 tile 语义）。**验收**：fog/terrain/basic −3.1k（32123→~29k），terrain 域 13 例无劣化零回归。
+- **② 有意不接线**：patchExtrusion 逐顶点 `mbTerrainElev` 未乘 secLat——实测 fill-extrusion-terrain 全族对标度变化**免疫（同尺度耦合）**：建筑骑乘抬升与地形面同步缩放，遮蔽格局不变（§131 exag 扫描恒等现象同族）；不补乘以避免双重施加。
+- **④ 相机重锚三度否决**：`elev·sec(lat)` 抬升第三轮实测仍 ~126k（§141 构图定性不变——mgl 期望非贴地视角），重锚代码删除。相机-地形标度完整移植（pixelsPerMeter/worldSize 链）维持引擎侧冻结。
+- **⑤ fog 护航**：kFog=3.7 未重标定即零回归（fog 主残差为逐内容深度语义，§106 结论不受标度影响）。
+
+**§167. custom-source 域打通——addCustomSource op → 等价 raster source 映射（2026-08-23 五十七，保留修复）**：
+
+- **mgl 语义实证**：custom-source 8 例 fixture 的 `addCustomSource` handler（operation-handlers.js:117）= `{type:'custom', maxzoom:17, tileSize:256}`，其 loadTile 仅按 `{z}-{x}-{y}` 模板 fetch PNG→ImageBitmap——**与普通 raster source 模板逐字节等价**，无需实现 CustomSource API。
+- **落地**：harness `addCustomSource` op → `rt.addSource(id, {type:'raster', tiles:[localizeUrl(模板)], tileSize:256, maxzoom:17})` + `reloadSources()`（与 addSource op 同款接线）。
+- **验收**：**satellite 从整图缺失 → 4148px**（阈值 655px 近失——图像主体逐像素吻合，残余集中在 rows 76-93 全宽 18px 暗带 = z14 深祖先回退接缝族 §97-§103 已冻结域）；**terrain → 13375px**（中心 ±1 吻合，下部亮度差 163 vs 195 = E1 地形外观域 §113/§114 已冻结）；image/default 回归 PASS ✓。剩余 6 例（albers/equal-earth/equirectangular/lambert/natural-earth/winkel-tripel）依赖自定义投影引擎域，维持冻结记档。
