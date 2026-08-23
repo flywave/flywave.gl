@@ -3088,3 +3088,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **组合实测（16 例）**：抬升后 fill-extrusion-terrain 全族 ~126k（同 §138 单独抬升值——**drape 对该域视觉零贡献**，与 §140 "零变化之谜"一致：drape 内容=背景色语义）；连带 fog/terrain 28760→38511、circle/occluded 5786→7021 劣化。
 - **关键新证据（构图分析）**：抬升后 cur **100% 灰**（整屏被烘焙内容/地形色覆盖）vs exp 50.5% 灰（半屏建筑+半屏背景）——抬升使**地形面充满全屏**（相机贴地形表面俯视），而 mgl 期望是**半屏天空/背景 + 半屏建筑**——mgl 的期望相机并非贴地表面视角（§138 公式的 `elevationAtCenter·pixelsPerMeter` 换算到我们的米制世界可能存在 pixelsPerMeter≈cos(lat)·worldSize 缩放差，600m×比例 ≠ 直接 +elev）。**组合否决，回退**。
 - **fill-extrusion-terrain 域冻结定论**：11 轮排查（§128-§141），已修/已解：对齐语义、drape 解阻塞；未解：相机-地形标度（mgl mercator z 单位换算）+ 地形呈现细节——需完整的 mgl transform 相机-地形标度移植（pixelsPerMeter/worldSize 链），记为引擎侧专项，与 fog RTE 深度语义、line-occlusion post-render API、TextCanvas 光栅化同列。
+
+**122+ 收尾：gradient-vector-tile 残余精化取证（2026-08-23 三十二，零净变化）**：
+
+- **alpha 合成修正后的精化取证**：12067px 失配（此前 13654 为 RGB 误读）——样本点 cur 有渐变色而 exp **纯白**：失配主导是**线覆盖区域错位**（cur 的线覆盖了期望为空的区域——路径/几何级），非纯 taper 边缘带。§91 的"taper 边缘带数 px 偏差"定性偏轻：实际含**线覆盖域差**（路径重投影或瓦片间几何缝合级）。收敛入口：两瓦片接缝处的线几何 worldPos 对照 dump（emitter 的 ribbon 顶点 vs mgl 的 tile 内几何）。
+- **会话状态**：52+ 阶段全部提交；工作树干净；gradient-vector-tile 精化定性记档为本轮收尾。
