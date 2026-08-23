@@ -3288,3 +3288,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **四项 dome 语义修复（保留，零回归验证）**：① **`mapView.pitch` 不存在**（dome 地平线参照被 `?? 60` 钉死在 pitch 60——正确访问器 `tilt`，探针实证 tilt=80 读到）；② 方向 varying 改**本地顶点方向**（世界矩阵平移会歪曲仰角数学）；③ dome **逐帧跟随相机**（RTE 相机偏离场景原点）；④ 半径 **near/far 自适应**（夹在裁剪面间）。
 - **未解（记档）**：pitch 80 basic 的 dome **仍不渲染**（品红探针 0 像素——但探针自身有缺陷：uniform 创建期快照、flag 晚于创建设置，判定不结论）；候选剩余：引擎高 pitch 下对场景对象的可见性管理/渲染列表筛选。**下轮入口：运行时 uniform 探针**（onBeforeRender 内直接改 uniform 或 material.color 探针——§111 教训：onBeforeCompile 重写 gl_FragColor 时 material.color 无效）。
 - **验收**：fog/2d + fog/color + skybox 全批逐值恒等（fill-color 422/raster 32478/symbols 83235/line-pattern 1721/skybox 202-101936 基线不变），fog/color 双 PASS 保持，零回归。
+
+**§182b. 运行时探针补充定论——dome 在 pitch 80 连材质都不渲染；skybox 渐变非 dome（2026-08-23 七十二补，零净变化）**：
+
+- **运行时材质交换探针**（onBeforeRender 内直接换 MeshBasicMaterial 品红，绕开 uniform 快照缺陷）：skybox/atmosphere **202 逐值不变**——dome 在该 fixture 也从未渲染！**skybox 族的 atmosphere 渐变来自另一机制**（sky 层路径），此前"dome 在 skybox 可见"的假设推翻。
+- **收敛定性**：dome 仅在部分 fog fixture（pitch ≤70）渲染，pitch 80 连不透明基础材质都不出现——**引擎侧对场景对象的高 pitch 可见性管理/渲染筛选**为唯一剩余解释（frustumCulled=false 无效于该筛选）。下轮入口：读引擎 SceneComposer/渲染列表筛选代码定位剔除点；或直接放弃 dome 路线、按 mgl 语义改为 **AfterRender 屏幕空间 quad**（frustum 角射线 + u_horizon 插值，与 MBBackgroundFogRenderer 同通道——§180 已证该通道可靠）。
