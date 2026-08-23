@@ -3766,3 +3766,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **双探针实测**：注入闭包 gate 打点（emitBg/hasEval/zoom）在 globe 上**零输出**——闭包从未执行；结合 §256 attach 发生但 geoms=0 → decodeThemedTile 走了 `!m_layerEvaluator` 的 early-return（`{techniques:[],geometries:[]}`），或 globe 路径由**另一 decoder 实例**（configure 未带 mbStyle）服务。
 - **下轮一步**：configure 调用打点（mbStyle 有无 + 实例 id）区分两分支；若是 configure 缺 mbStyle → applyProjection 后重配即可修复。
 - 探针已清，工作树=提交态（77 commits）。
+
+**§258. configure/decode 身份探针定案——同一 decoder 实例（configure✓ mbStyle+globe），但 decodeTile override 在 globe 零调用：引擎走另一 decode 入口（2026-08-24 一百四十六，零净变化记档）**：
+
+- **双探针**：configure 打点 = 同一实例（id=vd52）先无 mbStyle 后带 mbStyle+globe ✓（配置链正确、无实例分叉）；**decodeTile override 零调用**——globe 的 tile 解码走引擎的另一入口（TileLoader 的 worker/startDecode 路径或 theming 包装），绕过我们的 override（mercator 平面路径走 override 故注入生效）。
+- **下轮一步**：decodeThemedTile 入口打点 + 读 TileLoader/TileDataSource 的 decode 分发代码定位 globe 入口（找到后把注入挂到公共入口或该入口）。
+- 探针已清，工作树=提交态（78 commits）。
