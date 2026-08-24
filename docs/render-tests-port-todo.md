@@ -4314,3 +4314,18 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **嫌疑收敛**：harness 的 renderFrames/settled 等待判定（error-overlap 的 wait op 场景：若 settled 判定在首批 allLoaded 后不再触发重绘等待，捕获帧冻结）——**回到 §277 的"operations 时序"原始判断**，需读 harness 等待逻辑与引擎 allVisibleTilesLoaded 的帧交互（下会话）。
 - **终态**：零代码改动、工作树=提交态。
 - **会话终局（§289-§337，68 提交）**：terrain 桶五层栈全就绪（相机/集合/LOD/门控/混层），冻结点最终指向捕获时序域；alignment/fog-globe 终案不变。
+
+**§338. harness 等待逻辑审计——renderFrames（update 重请求循环 ✓）、settled（FrameComplete/isDynamicFrame ✓）、raster 后置 10 周期纹理等待 ✓ 全部健全：捕获时序域排除；§334 的渲染不变性已解释（CAL 运行门控仍关→z16 全空），§336 组合恒定为残余未解（接线时序嫌疑：connect() 中旗标设置 vs idealLevel getter 建立顺序）——下会话以"§336 四件+门控三件同开 + 逐帧 census 对照"一次定位（2026-08-24 二百二十七，审计终章）**：
+
+- **审计**：harness 三段等待逻辑逐行验证健全（渲染循环持续、settled 判定合理、raster 后置充分）——§337 的捕获时序嫌疑排除。
+- **解释回填**：§334 渲染不变 = CAL 运行时 `m_multiLevelCoverage` 尚为 false（z16 请求被 idealLevel 门控清空）→ 集合变化不生效属预期；§336 全开组合仍逐位 218893 为**唯一真正未解**——嫌疑=connect() 接线时序（旗标在 idealLevel/datasource 构造后设置是否生效）与 mixed 交付条目的实际渲染路径。
+- **下会话一次定位**：§336 四件 + 门控三件同开，逐帧 census + renderedTiles 数量打点，对照 53-tile 参照——单一运行定位生效/未生效环节。
+- **终态**：零代码改动、工作树=提交态。
+
+---
+
+## 会话总结（§289-§338，70 提交，2026-08-24/25）
+
+**已落地修复**：secLat/secLat² 建筑高度链（alignment flat 族 −11%）、globe 固定雾距 [2,4.5]（star 底部蓝斑修复、面部雾剖面 ±0.05 吻合）、circle 圆心地形抬升（8 例净 −376）、raster drape 量纲修正、MIN_FOV 水平钳位 opt-out（窄画布相机复原 mgl，z=2576 逐位对拍）、raster/引擎 shouldSplit LOD 语义与标定（census 集合 52/52 收敛）、混层交付基础设施、coveringTiles 参照工具（含 bearing 约定修正与 TRACE 规格）。
+
+**三大域移交态**：alignment=逐面可见性几何差（§312，NdotL 分布无坏值）；fog/globe star=引擎球面 R_e/R_s 尺度差（§301）；terrain 整帧空白=§336 组合接线时序单点（五层栈全就绪）。每域均有量化验收指标与就绪工具。
