@@ -319,7 +319,12 @@ function tessellateForSphere(
         const longest = angles[0] >= angles[1] && angles[0] >= angles[2] ? 0 :
             angles[1] >= angles[2] ? 1 : 2;
         if (angles[longest] < SPHERE_TESSELLATION_MAX_ANGLE || depth >= SPHERE_TESSELLATION_MAX_DEPTH) {
-            outIndices.push(ia, ib, ic);
+            // The mercator frame is y-south/z-up while the sphere map is
+            // east→equatorial/north→z-up: the handedness flip turns camera-
+            // facing (front) mercator triangles into back faces on the
+            // sphere. Reverse the winding so fills face outward (mgl globe
+            // tile semantics; mirrors the engine ground plane's corner order).
+            outIndices.push(ia, ic, ib);
             continue;
         }
         // Split the longest edge (p,q) with opposite vertex r.

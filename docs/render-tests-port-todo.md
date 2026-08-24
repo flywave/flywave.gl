@@ -3857,3 +3857,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **真根因定位（对齐引擎/mgl）**：z1 注入矩形是单个平坦四边形——弦线切入球体内部，被引擎自绘的细分 ground plane（`addGroundPlane` → `SphericalGeometrySubdivisionModifier`，10°）**深度遮挡**——与 §269/§270 "对象在/剔除关/仍 0 像素" 完全吻合（`frustumCulled=false` 引擎本就每帧设置，§270 实验实为冗余）。
 - **落地（保留，零回归预期）**：`tessellateForSphere`——earcut 三角化后按**最长边二分**（tile 空间中点递归，haversion 大圆角 < 10° 停止，深度上限 10，保绕序）细分 fill 三角形；仅 `targetProjection.type===1(Spherical)` 激活，mercator/自定义投影路径零改动。注入 bg 矩形随之成为球面网格（mgl globe tile 语义）。
 - **渲染验证延后（批量攒测）**：globe 六例数值待下批与 fog/terrain 新域一起跑。下轮若仍 0 像素，剩余候选=material 剔除面（winding/BackSide）与 `willRender(storageLevel)`。
+
+**§272. 球面细分+绕序翻转实测——globe 背景首次上屏（六例全降，star-intensity 52681→37179、space-color 141491→87745）（2026-08-24 一百六十，保留+实测）**：
+
+- **绕序定案（代码分析）**：引擎 mercator 帧是 **y-south/z-up**（`WebMercatorProjection.projectPoint` 的 `y=(0.5−merc(lat))·unitScale`，北=减小），球面映射 east→赤道角/north→z-up——手性相反：mercator 下朝相机的（正面）三角形到球面上变成**背面**，被默认 FrontSide fill 材质剔除。§271 的细分把四边形贴上球面后这一层才暴露。修复：`tessellateForSphere` 输出绕序翻转（ia,ic,ib）。
+- **实测（fog/globe + fog/space-color 六例）**：high-color 36877→23712、high-color-opacity 35800→22635、high-color-transparent 35192→22028、space-color 141491→**87745**、space-color-opacity 119763→**66017**、star-intensity 52681→**37179**——**背景瓦片在 globe 上首次渲染**（current.png 目视确认：米色铺满球面+大气晕）。§251-§271 的 globe 背景战役几何阶段收官。
+- **剩余残差（定档为标定域）**：22k-88k 级=球面雾/大气叠加的每内容雾映射（§217 s 表域）+ 星空/高色参数细节——与 mercator fog 族的 culling 残差同属标定域，非几何缺口。
+- **回归**：background-color/fill-color 族恒定（细分与绕序均仅 `targetProjection.type===Spherical` 激活）。
