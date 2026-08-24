@@ -4307,3 +4307,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地（保留，默认关）**：引擎混层交付两件——FrustumIntersection 在 LOD 停止分支记录 `lodStoppedEntries`（compute 开头清零）+ VisibleTileSet `mixedLevelDelivery` opt-in 把低于 dataZoom 的停止带并入交付集。四件全开组合（m_multiLevelCoverage+mglDistanceLod 1.5+offset+1+mixedLevel）实测渲染**逐位 218893**。
 - **元信号（最重要）**：§306-§336 十一轮组合（层级/LOD/门控/集合/混层）该 fixture 输出恒定——**渲染冻结**：瓦片请求（census 52 次）从不转化为重绘，首帧后 tile 对象不更新/新建。嫌疑集中在 updateRenderList 的创建门控（VisibleTileSet:565 `const newTilesPerFrame = 0` 字面量与实际调度）或 tile 缓存对象一次性路径。**下会话第一探针**：tile 对象创建/销毁时间线 vs census 请求序（一次运行定位冻结点）。
 - **终态**：组合回退（218882 ✓）、引擎混层基础设施保留（默认关零影响）、tsc/build 干净。
+
+**§337. 冻结点审计终章——瓦片创建链验证无恙（getTileImpl: cache→factory→taskQueue 全通，52 请求均应建对象）；skipOverlappedTiles 排除（isFullyCovering=addGroundPlane=false 不触发）；渲染冻结嫌疑最终收窄到 **harness 捕获/等待时序**（renderFrames 的 settled 判定可能取首帧 allLoaded，wait op 后无再渲染）——与 §277 原始"operations 时序"分桶判断回环（2026-08-24 二百二十六，终审记档）**：
+
+- **审计**：① VisibleTileSet.getTileImpl 创建链逐行验证无恙（cacheable 路径 cache miss → dataSource.getTile → taskQueue → tileCache.set）；② maxTilesPerFrame=0 语义=忽略限制（非禁用）；③ skipOverlappedTiles 需 isFullyCovering=addGroundPlane——mbstyle 显式 false 不触发——排除。
+- **嫌疑收敛**：harness 的 renderFrames/settled 等待判定（error-overlap 的 wait op 场景：若 settled 判定在首批 allLoaded 后不再触发重绘等待，捕获帧冻结）——**回到 §277 的"operations 时序"原始判断**，需读 harness 等待逻辑与引擎 allVisibleTilesLoaded 的帧交互（下会话）。
+- **终态**：零代码改动、工作树=提交态。
+- **会话终局（§289-§337，68 提交）**：terrain 桶五层栈全就绪（相机/集合/LOD/门控/混层），冻结点最终指向捕获时序域；alignment/fog-globe 终案不变。
