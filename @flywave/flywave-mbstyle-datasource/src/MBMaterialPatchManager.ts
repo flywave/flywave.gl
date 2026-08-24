@@ -602,6 +602,24 @@ export class MBMaterialPatchManager {
         if ((material as any).__mbPatched) return;
         (material as any).__mbPatched = true;
 
+        // §273: materials clone UniformsLib.fog at class-definition time —
+        // before our module-load additions (fogGlobe*/fogMgl*) — so the GLSL
+        // uniforms exist but stay at their 0 defaults. Share the live lib
+        // objects via onBeforeCompile so per-frame updates propagate.
+        {
+            const fogLib = (THREE as any).UniformsLib.fog;
+            const origFogU = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (origFogU) origFogU.call(material, shader);
+                for (const key of ['fogGlobeMode', 'fogGlobeCenter', 'fogGlobeScale', 'fogGlobeRadius',
+                    'fogGlobeTransition', 'fogMglRange', 'fogMglShift', 'fogMglDistCam',
+                    'fogAlpha', 'fogHorizonBlend', 'fogVertLimit', 'fogCamHeight', 'fogDebugT']) {
+                    if (fogLib[key] && !shader.uniforms[key]) shader.uniforms[key] = fogLib[key];
+                }
+            };
+            material.needsUpdate = true;
+        }
+
         const techName = technique.name;
         const paint = technique._paint ?? {};
         const layout = technique._layout ?? {};

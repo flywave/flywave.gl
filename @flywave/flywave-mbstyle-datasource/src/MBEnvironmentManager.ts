@@ -34,7 +34,17 @@ THREE.ShaderChunk.fog_pars_fragment = `
 	// mgl u_fog_vertical_limit (fog "vertical-range"): elevated content
 	// fades OUT of the fog between these heights (meters above ground).
 	uniform vec2 fogVertLimit;
+	// mgl globe fog (fog_apply u_is_globe branch): t = mix(glow_progress,
+	// depth, u_globe_transition). glow_progress is the normalized SDF of the
+	// view ray to the globe center; depth/sdf are scaled from engine world
+	// units into mgl world units (globe radius = worldSize/2π − 1).
+	uniform float fogGlobeMode;
+	uniform vec3 fogGlobeCenter;
+	uniform float fogGlobeScale;
+	uniform float fogGlobeRadius;
+	uniform float fogGlobeTransition;
 	varying float vFogHeight;
+	varying vec3 vFogPos;
 #endif
 `;
 THREE.ShaderChunk.fog_fragment = `
@@ -49,6 +59,21 @@ THREE.ShaderChunk.fog_fragment = `
 		- (fogMglRange.x + fogMglShift))
 		/ max(fogMglRange.y - fogMglRange.x, 0.001);
 #endif
+	if (fogGlobeMode > 0.5) {
+		// mgl _prelude_fog.fragment.glsl globe branch:
+		//   glow = length(dot(c, dir)*dir - c) / globeRadius + π/2
+		//   t = mix(glow, depth, globeTransition)
+		// with dir = normalize(viewPos) and c = globe center in view space.
+		// glow is NORMALIZED by the globe radius (sphere radii, dimensionless);
+		// depth (used only during the mercator transition) is in mgl world
+		// units via fogGlobeScale (radius worldSize/2π − 1).
+		vec3 fogDir = normalize(vFogPos);
+		vec3 cp = dot(fogGlobeCenter, fogDir) * fogDir;
+		float fogGlow = length(cp - fogGlobeCenter) / max(fogGlobeRadius, 1.0) + 1.5707963;
+		float fogDepthMgl = length(vFogPos) * fogGlobeScale;
+		float t = mix(fogGlow, fogDepthMgl, fogGlobeTransition);
+		fogT = (t - fogMglRange.x) / max(fogMglRange.y - fogMglRange.x, 0.001);
+	}
 	if (fogDebugT > 1.5) {
 		// mode 2: the UNFOGGED base color (for per-pixel mgl op targets).
 		return;
@@ -64,9 +89,13 @@ THREE.ShaderChunk.fog_fragment = `
 	// t = max(0, cameraDir.z / horizonBlend); factor = color.a * exp(-3t²).
 	// Map fragments sit at z ≈ 0, so cameraDir.z ≈ -camHeight / depth (negative
 	// looking down → t = 0 → full factor; rays toward/above the horizon fade).
-	float fogDirZ = -fogCamHeight / max(vFogDepth, 1.0);
-	float fogHz = max(0.0, fogDirZ / max(fogHorizonBlend, 1e-4));
-	fogFactor *= fogAlpha * exp(-3.0 * fogHz * fogHz);
+	// The mgl GLOBE branch skips horizon blending entirely (fog_apply only
+	// applies it when u_is_globe == 0).
+	if (fogGlobeMode < 0.5) {
+		float fogDirZ = -fogCamHeight / max(vFogDepth, 1.0);
+		float fogHz = max(0.0, fogDirZ / max(fogHorizonBlend, 1e-4));
+		fogFactor *= fogAlpha * exp(-3.0 * fogHz * fogHz);
+	}
 	// mgl fog_apply_premultiplied(color, pos, heightMeters): vertical
 	// visibility fades the fog out for elevated fragments, and near-total
 	// fog (>0.9) fades the fade itself to avoid a hard cut at the cull
@@ -79,6 +108,12 @@ THREE.ShaderChunk.fog_fragment = `
 	float fogOpLimit = (fogVertLimit.x > 0.0 || fogVertLimit.y > 0.0)
 		? 1.0 - smoothstep(0.9, 1.0, fogFactor) : 0.0;
 	fogFactor *= 1.0 - min(fogVertP, fogOpLimit);
+	if (fogDebugT > 2.5) {
+		// mode 3 (§273): the final fog factor after every modifier —
+		// globe limb calibration probe.
+		gl_FragColor = vec4(vec3(fogFactor), 1.0);
+		return;
+	}
 	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
 #endif
 `;
@@ -86,6 +121,7 @@ THREE.ShaderChunk.fog_pars_vertex = `
 #ifdef USE_FOG
 	varying float vFogDepth;
 	varying float vFogHeight;
+	varying vec3 vFogPos;
 #endif
 `;
 // mgl fog depth is the Euclidean camera-to-fragment distance — but the
@@ -97,6 +133,7 @@ THREE.ShaderChunk.fog_vertex = `
 #ifdef USE_FOG
 	vFogDepth = -mvPosition.z;
 	vFogHeight = mvPosition.z + cameraPosition.z;
+	vFogPos = mvPosition.xyz;
 #endif
 `;
 // Make `fogAlpha` a standard fog uniform (alpha of the fog color) and feed it
@@ -111,6 +148,17 @@ if (!('fogAlpha' in THREE.UniformsLib.fog)) {
     (THREE.UniformsLib.fog as any).fogHorizonBlend = { value: 0.05 };
     (THREE.UniformsLib.fog as any).fogCamHeight = { value: 1000 };
     (THREE.UniformsLib.fog as any).fogVertLimit = { value: new THREE.Vector2(0, 0) };
+    (THREE.UniformsLib.fog as any).fogGlobeMode = { value: 0 };
+    (THREE.UniformsLib.fog as any).fogGlobeCenter = { value: new THREE.Vector3() };
+    (THREE.UniformsLib.fog as any).fogGlobeScale = { value: 1 };
+    (THREE.UniformsLib.fog as any).fogGlobeRadius = { value: EarthConstants.EQUATORIAL_RADIUS };
+    (THREE.UniformsLib.fog as any).fogGlobeTransition = { value: 0 };
+    // Registered eagerly: fogMgl* were historically added lazily by the
+    // mercator §216 block, but the globe path (§273) reads fogMglRange
+    // before any mercator fog ran.
+    (THREE.UniformsLib.fog as any).fogMglShift = { value: 1 };
+    (THREE.UniformsLib.fog as any).fogMglDistCam = { value: 1 };
+    (THREE.UniformsLib.fog as any).fogMglRange = { value: new THREE.Vector2(0.5, 10) };
     for (const lib of Object.values(THREE.ShaderLib)) {
         const u = (lib as any).uniforms;
         if (u && typeof u === 'object' && !('fogAlpha' in u)) {
@@ -118,6 +166,11 @@ if (!('fogAlpha' in THREE.UniformsLib.fog)) {
             (u as any).fogHorizonBlend = { value: 0.05 };
             (u as any).fogCamHeight = { value: 1000 };
             (u as any).fogVertLimit = { value: new THREE.Vector2(0, 0) };
+            (u as any).fogGlobeMode = (THREE.UniformsLib.fog as any).fogGlobeMode;
+            (u as any).fogGlobeCenter = (THREE.UniformsLib.fog as any).fogGlobeCenter;
+            (u as any).fogGlobeScale = (THREE.UniformsLib.fog as any).fogGlobeScale;
+            (u as any).fogGlobeRadius = (THREE.UniformsLib.fog as any).fogGlobeRadius;
+            (u as any).fogGlobeTransition = (THREE.UniformsLib.fog as any).fogGlobeTransition;
         }
     }
 }
@@ -636,17 +689,32 @@ export class MBEnvironmentManager {
         }
     }
 
+    private m_lastFogSpec: FogSpec | undefined;
+    private m_lastFogZoom = 0;
+
+    /**
+     * Re-applies the last fog configuration — projection switches (harness
+     * setProjection) change the fog branch (globe vs mercator) without a
+     * style change, so the atmosphere/fog setup must be rebuilt.
+     */
+    refreshFog(): void {
+        this.applyFog(this.m_lastFogSpec, this.m_lastFogZoom);
+    }
+
     applyFog(fog: FogSpec | undefined, styleZoom = 0): void {
         if (!this.m_scene) return;
+        this.m_lastFogSpec = fog;
+        this.m_lastFogZoom = styleZoom;
         const isGlobe = (this.m_mapView as any).projection?.type === 1;
         if (isGlobe) {
-            // Globe: no scene.fog — mgl draws a screen-space atmosphere glow
-            // around the globe limb (atmosphere.fragment.glsl with
-            // PROJECTION_GLOBE_VIEW) and shows the space color around it.
+            // Globe: screen-space atmosphere glow around the limb (mgl
+            // atmosphere.fragment.glsl) + space-color backdrop, PLUS content
+            // fog via the glow_progress ramp (§273, see applyGlobeAtmosphere).
             this.applyGlobeAtmosphere(fog, styleZoom);
             return;
         }
         this.disposeGlobeAtmosphere();
+        (THREE.UniformsLib.fog as any).fogGlobeMode.value = 0;
         if (this.m_fog) {
             this.m_scene.fog = null;
             this.m_fog = null;
@@ -770,8 +838,11 @@ export class MBEnvironmentManager {
         // = smoothstep(FOG_PITCH_START=60, FOG_PITCH_END=65, pitch) · color.a
         // (painter.ts fogUniformValues). Compute pitch from the actual view
         // direction (0 = straight down) so it can't drift from camera state.
+        // GLOBE skips the pitch factor (fog.ts getOpacity: isGlobe → 1.0).
+        const isSphereProj =
+            (this.m_mapView as any)?.projection?.type === 1 /* Spherical */;
         let pitchFactor = 1;
-        if (cam) {
+        if (cam && !isSphereProj) {
             const dir = cam.getWorldDirection(new THREE.Vector3());
             const pitchDeg = Math.acos(Math.min(1, Math.max(-1, -dir.z))) * 180 / Math.PI;
             const s = Math.min(Math.max((pitchDeg - 60) / (65 - 60), 0), 1);
@@ -915,6 +986,10 @@ export class MBEnvironmentManager {
     private applyGlobeAtmosphere(fog: FogSpec | undefined, styleZoom: number): void {
         if (!fog) {
             this.disposeGlobeAtmosphere();
+            if (this.m_fog) {
+                this.m_scene!.fog = null;
+                this.m_fog = null;
+            }
             return;
         }
         const evalZoom = (value: any, fallback: any): any => {
@@ -1051,9 +1126,55 @@ export class MBEnvironmentManager {
         };
         this.m_scene!.add(this.m_globeAtmo);
 
+        // §273: mgl globe also fogs the map CONTENT — fog_apply's
+        // u_is_globe branch ramps by glow_progress (view-ray SDF to the
+        // globe center, see the fog_fragment chunk). scene.fog makes the
+        // materials compile with USE_FOG; the shared uniforms carry the
+        // globe params (no pitch factor on globe, fog.ts getOpacity).
+        const rawRange = evalZoom(fog.range, [0.5, 10]) as [number, number];
+        this.m_fog = new THREE.Fog(fogColor.getHex(), 1, 2);
+        this.m_scene!.fog = this.m_fog;
+        const lib = THREE.UniformsLib.fog as any;
+        lib.fogAlpha.value = colorAlpha;
+        lib.fogColor.value.copy(fogColor);
+        (lib.fogMglRange.value as THREE.Vector2).set(
+            Math.min(rawRange[0] ?? 0.5, rawRange[1] ?? 4), rawRange[1] ?? 4);
+        lib.fogGlobeMode.value = 1;
+        lib.fogGlobeRadius.value = EarthConstants.EQUATORIAL_RADIUS;
+        const worldSize = 512 * Math.pow(2, styleZoom);
+        lib.fogGlobeScale.value =
+            (worldSize / 2 / Math.PI - 1) / EarthConstants.EQUATORIAL_RADIUS;
+        const gTr = Math.min(Math.max((styleZoom - 5) / (6 - 5), 0), 1);
+        lib.fogGlobeTransition.value = gTr * gTr * (3 - 2 * gTr);
+        this.updateGlobeFogCenter();
+        // Materials created before the projection switch compiled without
+        // USE_FOG (scene.fog was unset at their creation in the mercator
+        // phase) — the fog chunk is baked in at compile time, so force a
+        // recompile now that the globe content fog is active.
+        this.m_scene!.traverse((o: any) => {
+            const ms = o.material;
+            if (!ms) return;
+            (Array.isArray(ms) ? ms : [ms]).forEach((m: any) => (m.needsUpdate = true));
+        });
+
         if (fog['star-intensity'] && fog['star-intensity'] > 0) {
             this.createStars(fog['star-intensity']);
         }
+    }
+
+    /**
+     * Refreshes the view-space globe center for the globe content fog.
+     * Camera matrices settle late (fov/distance bound at first render), so
+     * this runs both at apply time and per frame from syncFogUniforms.
+     */
+    private updateGlobeFogCenter(): void {
+        const cam = this.m_mapView?.camera;
+        if (!cam) return;
+        cam.updateMatrixWorld(true);
+        const vm = new THREE.Matrix4().copy(cam.matrixWorld).invert();
+        ((THREE.UniformsLib.fog as any).fogGlobeCenter.value as THREE.Vector3)
+            .set(0, 0, 0)
+            .applyMatrix4(vm);
     }
 
     /**
@@ -1067,6 +1188,9 @@ export class MBEnvironmentManager {
     syncFogUniforms(): void {
         const lib = THREE.UniformsLib.fog as any;
         if (!this.m_scene || !this.m_fog) return;
+        if (lib.fogGlobeMode?.value > 0.5) {
+            this.updateGlobeFogCenter();
+        }
         this.m_scene.traverse((obj: any) => {
             const u = obj.material?.uniforms;
             if (!u || u.fogAlpha === undefined) return;
@@ -1077,6 +1201,12 @@ export class MBEnvironmentManager {
             if (u.fogNear !== undefined) u.fogNear.value = lib.fogNear.value;
             if (u.fogFar !== undefined) u.fogFar.value = lib.fogFar.value;
             if (u.fogColor !== undefined) u.fogColor.value.copy(lib.fogColor.value);
+            if (u.fogMglRange !== undefined) u.fogMglRange.value.copy(lib.fogMglRange.value);
+            if (u.fogGlobeMode !== undefined) u.fogGlobeMode.value = lib.fogGlobeMode.value;
+            if (u.fogGlobeCenter !== undefined) u.fogGlobeCenter.value.copy(lib.fogGlobeCenter.value);
+            if (u.fogGlobeScale !== undefined) u.fogGlobeScale.value = lib.fogGlobeScale.value;
+            if (u.fogGlobeRadius !== undefined) u.fogGlobeRadius.value = lib.fogGlobeRadius.value;
+            if (u.fogGlobeTransition !== undefined) u.fogGlobeTransition.value = lib.fogGlobeTransition.value;
         });
     }
 

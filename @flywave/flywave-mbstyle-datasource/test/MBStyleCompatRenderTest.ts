@@ -540,9 +540,14 @@ async function processOperations(
                 } else if (projName && projName !== "globe") {
                     const { MBMapProjection } = await import("../src/MBMapProjection");
                     const { parseProjection } = await import("../src/MBProjection");
-                    const config = parseProjection(typeof args[0] === "string" ? { name: args[0] } : args[0]);
+                    const config = parseProjection(typeof args[0] === "string" ? { name: projName } : args[0]);
                     (mapView as any).projection = new MBMapProjection(config);
                 }
+                // §273: the fog branch (globe atmosphere + glow-progress
+                // content fog vs mercator chain) depends on the projection —
+                // rebuild it after the swap.
+                const fogEnv = (dataSource as any).m_environment;
+                fogEnv?.refreshFog?.();
                 break;
             }
             case "setLights":

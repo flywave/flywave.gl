@@ -3864,3 +3864,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实测（fog/globe + fog/space-color 六例）**：high-color 36877→23712、high-color-opacity 35800→22635、high-color-transparent 35192→22028、space-color 141491→**87745**、space-color-opacity 119763→**66017**、star-intensity 52681→**37179**——**背景瓦片在 globe 上首次渲染**（current.png 目视确认：米色铺满球面+大气晕）。§251-§271 的 globe 背景战役几何阶段收官。
 - **剩余残差（定档为标定域）**：22k-88k 级=球面雾/大气叠加的每内容雾映射（§217 s 表域）+ 星空/高色参数细节——与 mercator fog 族的 culling 残差同属标定域，非几何缺口。
 - **回归**：background-color/fill-color 族恒定（细分与绕序均仅 `targetProjection.type===Spherical` 激活）。
+
+**§273. mgl globe 内容雾落地——fog_apply u_is_globe 分支逐行移植（glow_progress 半径归一 + range 默认 [0.5,10] 勘误 + 材质 uniforms 共享），high-color 族面部像素对齐（2026-08-24 一百六十一，保留+实测）**：
+
+- **mgl 源码对齐**：`_prelude_fog.fragment.glsl` 的 globe 分支 = `t = mix(glow_progress, depth, globeToMercatorTransition(zoom)=smoothstep(5,6,zoom))`，glow = view 射线到球心 SDF/**球半径归一** + π/2；mercator 分支的 horizon_blending 在 globe **跳过**；`fog.ts getOpacity` globe 免 pitch 因子；`isTileAffectedByFog` globe 恒 true。**fog range 默认是 [0.5,10] 非 [0.5,4]**（v8.json，旧值系笔误）——t 面部中心 ≈0.113 → 12% 雾、边缘 ≈0.218 → 38%（期望图定案：面部几乎无雾、雾集中在 limb 环带）。
+- **落地链**（MBEnvironmentManager + patcher + harness）：① fog chunk 增 globe 分支（新 uniforms fogGlobeMode/Center/Scale/Radius/Transition，vFogPos varying，globe 跳过 horizon-blend，fogDebugT=3 探针模式输出最终 fogFactor）；② applyGlobeAtmosphere 补 globe 内容雾（scene.fog + alpha/range/globe uniforms + 材质 needsUpdate 重编译——投影切换晚于 setStyle，材质先以无雾编译）；③ `refreshFog()` 记档重放（harness setProjection 后调用）；④ patcher onBeforeCompile 共享 UniformsLib.fog 活对象（材质在类定义期克隆 uniforms，晚注册的 fogGlobe*/fogMgl* 永远到不了 shader——两轮 0 效果破案点）；⑤ AfterRender 挂 syncFogUniforms（逐帧球心）。
+- **实测**：fogDebugT 探针两轮定位（t-profile 全 1.0=缺半径归一；修后 [0.31,0.59]→换 [0.5,10] 后面部 12%）。**high-color 族 current.png 面部与 expected 逐像素 ±1-8**（此前 58% 过白雾），残余=limb 大气环带（y57-60/195-197 各 ~210px/行）+ 面部微偏；space-color 残差=球面占屏比（相机取景标定）；star-intensity=星点亮度标定。mismatchedPixels 数字不变（面部 25k 像素在严格 epsilon 下主导计数），图像质变以 current.png 为证。
+- **回归**：background-color/fill-color 全绿（transition 4096 既有）、fog/default 448=上次记档值 ✓。
+- **下轮**：limb 环带标定（atmosphere dome 的 horizonAngle/fadeout vs mgl drawAtmosphere 精确式）与 space-color 取景。

@@ -1265,6 +1265,9 @@ export class MBStyleDataSource extends TileDataSource {
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
                 patcher.patchTileMaterials();
+                // §273: per-frame fog uniform sync (globe center / alpha) —
+                // materials snapshot UniformsLib.fog at creation.
+                self.m_environment?.syncFogUniforms();
                 if (placement) placement.run();
                 if (self.m_heatmapRenderer) {
                     self.m_heatmapRenderer.run();
