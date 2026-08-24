@@ -4074,3 +4074,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实测**：fogGlobeRadius=R_e（撤 §295 收缩）六例 = 934/258/223/372/223/232 vs 基线 934/258/211/372/211/233——star 逐位恒等（雾剖面本已 ±0.05 吻合，归一半径在其精度下惰性）、high-color 双例劣化 +12——候选证伪，回退复原（211 ✓ 工作树=提交态）。
 - **终案**：star 934 的带宽差（45 vs 33px）源于引擎球面 R_e 与 mgl 收缩球 R_s 的**几何尺度差**，shader 侧无标量可调（R/R_e 归一与 R 收缩均实测惰性或劣化）——唯一根治=引擎 globe 球面半径对齐 ws/2π−1（深引擎几何改动，独立会话规模）。
 - **ROI 终评**：fog/globe 族（211-934 vs 阈值 66-446）与 alignment flat 族（48k vs 135）当前路径均到边际；**建议下会话优先：terrain 新域（§277 分桶 3/99，整帧空白类疑管线断裂修一处可解锁多例）或未触碰族基线普查**。
+
+**§302. terrain 新域重基线 + circle 地形抬升落地——terrain 族 94 FAIL/5 PASS（§277 的 3/99 已过时，cache-invalidation 族已修）；circle 圆心单点抬升 8 例净 −376（2026-08-24 一百九十，保留+实测）**：
+
+- **重基线（批跑 99 例，6m55s）**：94 FAIL / 5 PASS——§277 记档的 3/99 过时；PASS=cache-invalidation 族（remove-layer/background-layer 等，terrain 主链已修）。失败主体：terrain/ 直下 45、circle 族 8、error-overlap 3、depth-buffer 5、hillshade-buffer 族、exaggeration-fog 族等。
+- **circle 抬升（mgl getElevationForLngLatZoom 语义）**：processPointFeature 的 circles 技术点 z += sampler 圆心单点采样（fill-extrusion §279 同源链路）。实测 8 例：3453→3364/5727→5758/3473→3463/3809→3572/17233→17228/6743→6757/5784→5779/5045→4970——**净 −376，方向正确幅度小**；红像素取证：unoccluded 红像素 32→110（期望 218，位置吻合）——抬升生效，剩余缺口的主体为 raster-on-terrain drape/地形形状域（每例 3-17k）。
+- **回归**：alignment 48992 逐位恒定 ✓（circles-only 门控零扰动）、tsc 干净。
+- **下轮入口**：circle 族剩余=卫星 raster 的 terrain drape 质量（buildTileCamera 烘焙分辨率/ seams）或 DEM 形状域；error-overlap 族（initializing/opaque/transparent-zoom14.5）疑 operations 时序，单例取证。

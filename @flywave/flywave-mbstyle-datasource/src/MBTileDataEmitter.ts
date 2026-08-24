@@ -3019,11 +3019,14 @@ export class MBTileDataEmitter {
 
                 for (const pt of points) {
                     const w = this.project(pt);
-                    geo.positions.push(w.x, w.y, w.z);
-
-                    // Emit native text/POI geometry for the TextElementsRenderer.
-                    // These are consumed as absolute world coordinates.
                     const ww = this.projectWorld(pt);
+                    // §302: mgl lifts circle centers onto the terrain surface
+                    // (single elevation sample at the center,
+                    // getElevationForLngLatZoom semantics) when terrain is on.
+                    if (this.m_terrainSampler && tech.name === 'circles') {
+                        w.z += this.m_terrainSampler(ww.x, ww.y);
+                    }
+                    geo.positions.push(w.x, w.y, w.z);
                     if (twx !== 0 || twy !== 0) {
                         ww.x += twx;
                         ww.y += twy;
