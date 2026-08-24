@@ -283,6 +283,16 @@ export class MBMaterialPatchManager {
      * multi-tile draping — features that span DEM tile boundaries sample from
      * each tile's local texture instead of being clamped to the center tile.
      */
+    /**
+     * §307: DEM textures store RAW meters while the terrain mesh lives at
+     * elev × exaggeration × secLat — the drape vertex injection must scale
+     * by the same factor or content sinks ~4x below the surface.
+     */
+    private get demZScale(): number {
+        const tc = (this.m_dataSource as any).m_environment?.terrainController;
+        return (tc?.m_exaggeration ?? 1); // SCALESCAN (temp): drop secLat
+    }
+
     private get allDemTiles(): Array<{ texture: THREE.Texture; originX: number; originY: number; size: number }> {
         const tc = (this.m_dataSource as any).m_environment?.terrainController;
         return tc ? (tc.allDemTiles as any[]) ?? [] : [];
@@ -504,9 +514,10 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBDrapeDem = { value: dem.texture };
             shader.uniforms.uMBDrapeOrigin = { value: new THREE.Vector2(dem.originX, dem.originY) };
             shader.uniforms.uMBDrapeSize = { value: dem.size };
+            shader.uniforms.uMBDrapeZScale = { value: this.demZScale };
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
-                `uniform sampler2D uMBDrapeDem;\nuniform vec2 uMBDrapeOrigin;\nuniform float uMBDrapeSize;\nvoid main() {`
+                `uniform sampler2D uMBDrapeDem;\nuniform vec2 uMBDrapeOrigin;\nuniform float uMBDrapeSize;\nuniform float uMBDrapeZScale;\nvoid main() {`
             );
             // Sample DEM at the vertex's world position and offset Z so the
             // geometry follows the terrain surface.
@@ -516,7 +527,7 @@ export class MBMaterialPatchManager {
                      vec2 mbWP = (modelMatrix * vec4(transformed, 1.0)).xy;
                      vec2 mbDU = (mbWP - uMBDrapeOrigin) / uMBDrapeSize;
                      mbDU = clamp(mbDU, vec2(0.0), vec2(1.0));
-                     transformed.z += texture2D(uMBDrapeDem, mbDU).r;
+                     transformed.z += texture2D(uMBDrapeDem, mbDU).r * uMBDrapeZScale;
                  }\n#include <project_vertex>`
             );
         };
@@ -544,6 +555,7 @@ export class MBMaterialPatchManager {
                 shader.uniforms[`uMBDrapeDem${i}`] = { value: tiles[i].texture };
             }
             shader.uniforms.uMBDrapeTileCount = { value: N };
+            shader.uniforms.uMBDrapeZScale = { value: this.demZScale }; // §307
             // Pack (originX, originY, size) per tile into a vec3 array uniform.
             const tileData = new Array<number>(N * 3);
             for (let i = 0; i < N; i++) {
@@ -554,7 +566,7 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBDrapeTiles = { value: tileData };
 
             // Build sampler / uniform declarations.
-            let decl = `uniform int uMBDrapeTileCount;\nuniform vec3 uMBDrapeTiles[${N}];\n`;
+            let decl = `uniform int uMBDrapeTileCount;\nuniform vec3 uMBDrapeTiles[${N}];\nuniform float uMBDrapeZScale;\n`;
             for (let i = 0; i < N; i++) decl += `uniform sampler2D uMBDrapeDem${i};\n`;
 
             shader.vertexShader = shader.vertexShader.replace(
@@ -591,7 +603,7 @@ export class MBMaterialPatchManager {
                      }
                      int dummy = idx;
                      ${samplerChain}
-                     transformed.z += mbElev;
+                     transformed.z += mbElev * uMBDrapeZScale; // §307
                  }\n#include <project_vertex>`
             );
         };

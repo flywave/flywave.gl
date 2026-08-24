@@ -4119,3 +4119,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **发现**：injectTerrainDrape（单 tile）/MultiTile 的顶点注入 `transformed.z += texture.r` —— DEM 纹理存原始米（decodeDemImage 无 exaggeration），而 TerrainController mesh z = elev×exaggeration×secLat——raster 四边形在真实高程、地形面在 4× 夸张高程，**全部 raster 内容系统性沉于地形之下**（有 mesh 区域）；无 mesh 区域理论上可见但观测为黑（待对象级验证，疑与 §280 的对象生命周期/剔除相关）。error-overlap 的整帧空白主因链修正为：**drape z 量纲差（本条）+ 无 mesh 区域的对象可见性（§305b 待查）**。
 - **修复点（下轮实施）**：注入改为 `texture.r × exaggeration × secLat`（与 mesh 同尺度，量纲参数需经 technique/uniform 传递）——一行级修正，可望解锁 error-overlap 桶及 circle 族 drape 质量大部。
 - **终态**：工作树=提交态（§306 后零改动）、无探针。
+
+**§308. §307 量纲修正落地（惰性）+ §306 符号错误定案回退——mgl 比例实为 log2(512/tileSize)=+1（tileSize-256 更近），§306 的 −1 反号且净回归（circle/occluded +4.4k vs error-overlap −0.9k），offset 复原 0（2026-08-24 一百九十七，§307 保留+§306 回退）**：
+
+- **§307 落地（保留）**：injectTerrainDrape 单/多 tile 的顶点注入补乘 `uMBDrapeZScale = exaggeration×secLat`（新 demZScale getter + uniform 传参）——error-overlap 三例与 circle 例全部惰性（该族 exaggeration=1、secLat 敏感例未触发），但量纲与 mesh 一致，对夸张 fixture 正确。
+- **§306 定案回退**：mgl `coveringZoomLevel = round(zoom + log2(512/sourceTileSize))`——tileSize-256 为 **+1**（我方 §306 读反为 −1）。实测净回归：circle/occluded 5758→10185（+4.4k，satellite 层级错位）vs error-overlap 兄弟 −0.9k——回退至 offset 0（circle 5758 ✓ / opaque 198247 基线 ✓ / alignment 48992 ✓ 全复原）。error-overlap 的 z14 改善与 mgl z16(+1) 语义矛盾，待 per-fixture census 复核后重审。
+- **终态**：tsc 干净、三例复原验证、工作树仅含 §307+§308 注释级改动。

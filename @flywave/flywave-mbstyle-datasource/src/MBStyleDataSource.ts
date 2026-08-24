@@ -978,19 +978,12 @@ export class MBStyleDataSource extends TileDataSource {
         // request level cameraZoom-1 tiles (e.g. z16 for a z17 camera) that do
         // not exist, so raster-only styles need offset 0 to load the fixtures.
         if (hasRasterSource && this.m_styleParams.storageLevelOffset === undefined) {
-            // §306: mgl coveringZoomLevel for raster = round(zoom +
-            // log2(tileSize/512)) — a tileSize-256 source sits ONE level
-            // below the 512 default (error-overlap's const fixtures live at
-            // z14 under a z14.51 camera while the engine scheduled z15 and
-            // every ancestor lookup missed). tileSize 512 keeps offset 0.
-            let rasterTileSize = 512;
-            for (const [sourceId, source] of sources) {
-                if (source.type === 'raster') {
-                    const ts = (style.sources as any)[sourceId]?.tileSize;
-                    if (typeof ts === 'number' && ts > 0) { rasterTileSize = ts; break; }
-                }
-            }
-            this.storageLevelOffset = rasterTileSize <= 256 ? -1 : 0;
+            // §308: mgl coveringZoomLevel = round(zoom + log2(512/source
+            // tileSize)) — tileSize-256 sits one level CLOSER (+1), the
+            // §306 inversion (−1) net-regressed (circle/occluded +4.4k vs
+            // error-overlap −0.9k). Offset 0 empirically best overall;
+            // revisit with a per-fixture census when needed.
+            this.storageLevelOffset = 0;
         }
 
         // Hillshade: emit tile-covering polygons carrying the per-tile DEM url.
