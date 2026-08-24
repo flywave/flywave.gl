@@ -10,8 +10,7 @@ import {
     ArcGISTileProvider,
     TileKey,
     TileKeyEntry,
-    type ProjectorOverlayManager,
-    type DEMTerrainSource as DEMTerrainSourceType,
+    type ProjectorOverlayManager, 
     type TilingScheme
 } from "@flywave/flywave.gl";
 import {
@@ -140,7 +139,7 @@ const makeCalibrationTexture = (): Texture => {
 
 const addPillars = (
     mapView: MapView,
-    demTerrain: DEMTerrainSourceType,
+    demTerrain: DEMTerrainSource,
     geoBox: GeoBox
 ): void => {
     const corners: Array<[number, number]> = [
@@ -247,7 +246,7 @@ try {
         blendMode: "normal"
     });
 
-    addPillars(mapView, demTerrain, halfBox);
+    addPillars(mapView, demTerrain as DEMTerrainSource, halfBox);
 
     (window as any).mapView = mapView;
     (window as any).overlayManager = overlayManager;
