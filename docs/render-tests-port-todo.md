@@ -4262,3 +4262,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **复算**：Node 直调 lib（target (0.01,0.005)/distance 4465/yaw 0/pitch 60）→ cam delta = (0.0, −3866.8) ✓ 纯南偏、零东移——§328 的"基底复合 x 偏移"假说证伪；updateLookAtSettings 亦确认只读不重放置。
 - **收敛**：东移来自**直接调用 getCameraPositionFromTargetCoordinates 且 yaw≠0** 的路径（lookAtImpl 监视点覆盖不到）——候选 Utils.ts:1056（相机动画，`-heading` 变体）与 zoomOnTargetPosition 系。**下会话第一动作**：在该函数入口打点（yaw 参数≠0 即日志+栈），一次运行即捕获调用者，随后按调用者语义修复。
 - **终态**：工作树=提交态（零代码改动）、无探针。
+
+**§330. 前提纠错终案——error-overlap 的 style.bearing = −45（数字、fixture 本有，§324 首次 dump 的键过滤漏看致后续全链误判）：相机 yaw+45/东移 3155m/heading−45 全部为 bearing−45 的正确几何！§324-§329 六节追凶链作废；参照集带 bearing 重算=52 tiles（z15 远带 x16387-16389 + z16 带 x32765+，西北象限与我方覆盖同域），真差集回到 ~3 刺东西向（x16379-16386 vs 有效 x16382-16389）（2026-08-24 二百一十九，前提纠错记档）**：
+
+- **纠错**：fixture bearing=−45 数字存在；我方 applyCameraSettings `bearing=−(−45)=+45` yaw、相机东移 sin45·groundDist、heading 读数 −45 —— **全部正确**。§326"东移 bug"、§328"基底复合"、§329"yaw≠0 调用者"六节链建立在漏看 bearing 的错误前提上，全部作废（数值仍有效：放置数学 ✓、相机 z 逐位 ✓、fov ✓）。
+- **参照集重算**：工具 BEARING=−45 → 52 tiles（z15 x16387-16389/y16377-16379 远带 + z16 x32765-32768 近带）——与我方 census（z15 x16379-16386/y16377-16384）同西北象限，真差集=~3 列东西向 + z15/z16 层级差 → 回到 §322 的 LOD/层级域（相机侧已无嫌疑）。
+- **教训记档**：取证 dump 的键过滤列表必须含全部相机字段（bearing/pitch/zoom/center 一次性全量），防六节级联误判。
+- **终态**：探针全清（CAMTRACE/BRG）、mapview lib 重建提交态、218882 复原 ✓、工作树仅工具 bearing 修正。

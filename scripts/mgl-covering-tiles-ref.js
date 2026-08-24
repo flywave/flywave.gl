@@ -4,7 +4,7 @@ const path = '/home/aninggo/work/flywave.gl/node_modules/.pnpm/gl-matrix@3.4.3/n
 const { mat4, vec3, vec4, quat } = require(path);
 
 // ---------- fixture camera ----------
-const CENTER_LNG = 0.005, CENTER_LAT = 0.01, ZOOM = 14.51, PITCH_DEG = 60, BEARING = 0;
+const CENTER_LNG = 0.005, CENTER_LAT = 0.01, ZOOM = 14.51, PITCH_DEG = 60, BEARING = -45;
 const WIDTH = 256, HEIGHT = 1024;          // error-overlap canvas
 const FOV = 0.6435011087932843;            // mgl default
 const SOURCE_TILE_SIZE = 256;              // color source
