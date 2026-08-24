@@ -4005,3 +4005,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **残差重定性（下轮主攻）**：期望顶部 24 行 = 黑 8141px（mgl 远场不渲染）+ 灰建筑 2206 + 绿 1941；我方 = 绿 10192（**地形 mesh 画满至屏顶**）。几何定案：顶行射线 6.6° 俯角→地面 ~592m（远场），mgl 在此 fog-cull/不渲染显黑，我方 terrain mesh（frustumCulled=false 整 z14 tile 1.9km）无远场裁剪画满——候选：① 地形 mesh 的 mgl fog/horizon 裁剪（超出雾范围不画）；② 26k 缺失中 blob 级取证=密集小建筑簇整簇缺（期望密集村庄 vs 我方稀疏大建筑）——与瓦片边界的相关性待查（blob0 右缘 x386-511 疑跨 10474/25337 边界）。
 - **终态**：基线复原 55026 ✓、tsc 干净、工作树=提交态（CAM/TILE/NDOTL/LIFT/EXAGH 五类探针全清）。
 - **下轮入口**：① blob 位置 vs z16 瓦片边界投影的相关性量化（若强相关→瓦片边界要素丢失：earcut 跨界/clip 语义）；② 地形 mesh fog-cull 对齐（mgl 远场黑 vs 我方画满，预期解锁顶部带）。
+
+**§293. 覆盖域终审——瓦片边界投影与期望黑带逐位吻合（y≈17 边界=mgl 覆盖缘），mgl 同为 2×2 覆盖；远场延伸三机制（pitch 剪枝豁免/frustumFar/根瓦片 tan 钳位）全惰性证伪（2026-08-24 一百八十，零净变化记档）**：
+
+- **瓦片边界投影定案**：手算投影（相机 147m 南、68.5m 高、fov 36.87、target 屏心）——z16 北边界 y≈16.6、东边界 x≈303；期望顶部黑带 0-19 与北边界逐位吻合 → **期望黑带 = mgl 覆盖缘（同样只有 2×2 z16 瓦片）**，远场覆盖理论证伪；缺失 blob（blob0 右带/b1,b2 跨 x303）与边界相关但瓦片均已解码。
+- **三机制惰性证伪（引擎实验，全部回退）**：① FrustumIntersection pitch>60° 面积剪枝 opt-out（pitchAreaPruneDisabled）；② VisibleTileSet options.frustumFarOverride=20000（§227 接口）；③ computeRequiredInitialRootTileKeys 的 totalAngleRad tan 负值钳位（fov36.87×aspect2+pitch65=98.7°→tan<0 根范围塌缩——**真实退化 bug 记档**，但本 fixture 无行为差）。三者逐个/组合应用结果 **逐位恒等 55026、census 恒 4 瓦片**——限制器不在覆盖侧。探针确认 wiring 执行（MB_OPT）。
+- **结论**：光照 ✓ 相机 ✓ 解码 ✓ 覆盖 ✓ 配准中性 ✓ 高度标量 ✓——alignment 残差的驱动在**已解码要素的渲染输出侧**（对象创建/深度/遮挡中的一环，同位密集簇整体缺失而瓦片有数）。下轮入口：**对象级取证**——对 blob1 区域（平地密集簇缺失）的要素做世界坐标→屏幕投影计算（纯 CPU，用已探针的相机参数），验证该簇要素解码后顶点落点是否在屏内；若在屏内则查 TileGeometryCreator/材质丢弃路径，若不在则查 emitter project() 的瓦片内坐标→世界变换（mvtYOffset/extents 换算）。
+- **终态**：工作树=提交态（引擎与 datasource 改动全回退、探针全清）、55026 复原 ✓、tsc 干净、mapview lib 已重建回提交态。
