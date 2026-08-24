@@ -3872,3 +3872,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实测**：fogDebugT 探针两轮定位（t-profile 全 1.0=缺半径归一；修后 [0.31,0.59]→换 [0.5,10] 后面部 12%）。**high-color 族 current.png 面部与 expected 逐像素 ±1-8**（此前 58% 过白雾），残余=limb 大气环带（y57-60/195-197 各 ~210px/行）+ 面部微偏；space-color 残差=球面占屏比（相机取景标定）；star-intensity=星点亮度标定。mismatchedPixels 数字不变（面部 25k 像素在严格 epsilon 下主导计数），图像质变以 current.png 为证。
 - **回归**：background-color/fill-color 全绿（transition 4096 既有）、fog/default 448=上次记档值 ✓。
 - **下轮**：limb 环带标定（atmosphere dome 的 horizonAngle/fadeout vs mgl drawAtmosphere 精确式）与 space-color 取景。
+
+**§274. globe 相机取景 mgl 精确式落地——d/R = ccd/(ws/2π−1)，六例再降 35-45%（space-color 87745→48918、high-color 23712→13265）（2026-08-24 一百六十二，保留+实测）**：
+
+- **破案链（三探针）**：① z0/z1 相机距离逐位相同（36434400）→ 疑 zoom 失效；② 假设 pr=2 补偿 → 无效（探针实锤 pr=1）；③ 真相=z0@256px 与 z1@512px 画布恰给同距（f 随画布翻倍抵消 zoom+1）。而**引擎的 d = R + f·EarthC/(256·2^zw) 是平面公式套球面**——曲率混合错误且随画布尺寸漂移；z0 的"面部匹配"是粗采样巧合（半径 68px vs 期望 82px）。
+- **mgl 精确式（transform.ts）**：`d/R = ccd/(worldSize/2π − 1)`，ccd=(h_css/2)/tan(fov/2)（CSS px），ws=512·2^zoom。落地：applyCameraSettings 在 sphere 下解出落在此距离的 flywave zoom（`zw = log2(f_dev·EarthC/(256·(d−R)))`）重调 setCameraGeolocationAndZoom——引擎内部相机状态保持自洽；`m_styleBoxZoom` 记录权威 style zoom 供 pushMapboxZoom（补偿后 zoomLevel getter 失真）。
+- **实测**：fog/globe+space-color 六例 87745→48918 / 66017→35938 / 23712→13265 / 22635→13088 / 22028→12919 / 37179→31519；**面部像素与期望 ±2-3**（此前 ±8）。回归：background-color/fill-color 全绿、fog 族恒定（transition 4096 / fog/default 448 均既有）✓。
+- **剩余（下轮入口）**：limb 大气环带——我方环带偏暗偏窄（y=32 行 52,52,115 vs 期望 130,130,183），即 dome 的环带展宽/亮度 vs mgl drawAtmosphere（fadeout 或 horizonAngle 边界条件的标定域）+ star-intensity 星点亮度。

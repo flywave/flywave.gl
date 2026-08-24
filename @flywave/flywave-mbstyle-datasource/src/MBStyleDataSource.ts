@@ -2578,6 +2578,38 @@ export class MBStyleDataSource extends TileDataSource {
             const { GeoCoordinates } = require('@flywave/flywave-geoutils');
             const geoCoord = new GeoCoordinates(center[1], center[0]);
             this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom, bearing, pitch);
+            // §274: sphere camera framing. mgl places the globe camera by
+            // d/R = ccd/(worldSize/2π − 1) with ccd = (h/2)/tan(fov/2) in CSS
+            // px and worldSize = 512·2^zoom (transform.ts _mercatorZfromZoom +
+            // globeRadius). The engine instead uses d = R + f_dev·EarthC/
+            // (256·2^zw) (a plane formula) — wrong curvature mixing that also
+            // drifts with canvas size. Solve for the flywave zoom whose
+            // distance lands on the mgl value and re-orient with it so the
+            // engine's internal camera state stays consistent.
+            if (this.mapView.projection?.type === 1 /* Spherical */) {
+                const cv = (this.mapView as any).canvas as HTMLCanvasElement | undefined;
+                const pr = ((this.mapView as any).m_pixelRatio ?? 1) || 1;
+                const hCss = (cv?.clientHeight || cv?.height || 256) / pr;
+                const fovR = ((this.mapView.camera?.fov ?? 36.87) * Math.PI) / 180;
+                const styleZ = typeof style.zoom === 'number' ? style.zoom : 0;
+                const ccd = hCss / 2 / Math.tan(fovR / 2);
+                const ws = 512 * Math.pow(2, styleZ);
+                const R = 6378137; // EQUATORIAL_RADIUS (sphereProjection)
+                const dTarget = (R * ccd) / (ws / (2 * Math.PI) - 1);
+                const fDev = (hCss * pr) / 2 / Math.tan(fovR / 2);
+                const dz = dTarget - R;
+                if (dz > 0) {
+                    const zw = Math.log2((fDev * 40075017) / (256 * dz));
+                    if (Number.isFinite(zw)) {
+                        const gc = new GeoCoordinates(center[1], center[0]);
+                        this.mapView.setCameraGeolocationAndZoom(gc, zw, bearing, pitch);
+                        // The engine zoomLevel getter now reports the
+                        // compensated zoom; the style zoom is authoritative
+                        // for the decoder's camera functions.
+                        (this as any).m_styleBoxZoom = styleZ;
+                    }
+                }
+            }
         } catch {}
     }
 
@@ -2590,11 +2622,16 @@ export class MBStyleDataSource extends TileDataSource {
     private pushMapboxZoom(): void {
         try {
             const camZoom = (this.mapView as any)?.zoomLevel;
-            if (typeof camZoom === 'number') {
-                (this.decoder as any).configure?.(undefined, {
-                    mapboxZoom: Math.max(0, camZoom - 1),
-                } as any);
-            }
+            // §274: after the sphere pixelRatio rescale the engine zoomLevel
+            // getter misreports (device-focal math on a logical-focal
+            // distance); prefer the recorded style zoom.
+            const boxZoom = (this as any).m_styleBoxZoom;
+            const mbZoom = boxZoom !== undefined && this.mapView.projection?.type === 1
+                ? boxZoom
+                : Math.max(0, camZoom - 1);
+            (this.decoder as any).configure?.(undefined, {
+                mapboxZoom: mbZoom,
+            } as any);
         } catch {}
     }
 
