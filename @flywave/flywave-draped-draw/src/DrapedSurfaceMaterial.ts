@@ -12,16 +12,11 @@ import {
     uniform,
     varying,
     vec3,
-    vec4,
-    cross,
-    mix,
-    normalize,
-    sign,
-    step
+    vec4
 } from "three/tsl";
 
 import { DrapedSurfaceMaterialOptions, DrapedTarget } from "./DrapedTarget";
-import { buildDrapedColorNode, metersPerPixel } from "./drapedFragment";
+import { buildDrapedColorNode } from "./drapedFragment";
 
 /**
  * Real (non-empty) stand-in bound until capture outputs exist. An empty
@@ -187,6 +182,8 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
             debug: this.debug,
             probe: this.probe,
             // Curtain no longer produces an eye-space fragment position; the
+            // convention-fit probes are prism-only, so default to a constant.
+            fragEye: varyings.fragEye ?? vec4(0),
             varyings
         };
     }
@@ -202,92 +199,37 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
  * purely in screen space — stable under any camera motion.
  */
 export class DrapedCurtainMaterial extends DrapedVolumeMaterialBase {
-    /**
-     * Expanded view-space vertex position, returned from
-     * {@link setupPositionView} — the NodeMaterial extension point that fully
-     * replaces the local→view transform (this is how sprites work too).
-     */
-    private expandedEc: any;
-
     constructor(options: DrapedSurfaceMaterialOptions) {
         super(options, "curtain");
 
-        // The shell is expanded in the vertex stage, so its winding is
-        // view-dependent — disable face culling exactly like Cesium's
-        // GroundPolylinePrimitive render state (`cull.enabled = false`).
-        this.side = THREE.DoubleSide;
-        // Occlusion is carried by the membership tests against the captured
-        // surface (the equivalent of Cesium's `writeDepthClamp` compositing),
-        // not by the hardware depth buffer — the shell hugs the datum while
-        // the painted track follows the terrain.
-        this.depthTest = false;
+        const aSegmentStart = customAttribute("aSegmentStart", "vec3");
+        const aForwardOffset = customAttribute("aForwardOffset", "vec3");
 
-        const aStartPos = customAttribute("aStartPos", "vec3");
-        const aEndPos = customAttribute("aEndPos", "vec3");
-        const aStartN = customAttribute("aStartPlaneNormal", "vec3");
-        const aEndN = customAttribute("aEndPlaneNormal", "vec3");
-        const aRightN = customAttribute("aRightNormal", "vec3");
-        const aSideSign = customAttribute("aSideSign", "float");
+        // Clip-space segment endpoints, interpolated across the panel.
+        // The directional offset rides modelViewMatrix with w=0: for rigid
+        // transforms this equals the normal-matrix rotation, and unlike
+        // `modelNormalMatrix` it is reliably updated even for basic
+        // materials without normals (a zero matrix here collapses both
+        // projected endpoints onto one point).
+        const ecStart = modelViewMatrix.mul(vec4(aSegmentStart, 1.0));
+        const ecEnd = ecStart.add(modelViewMatrix.mul(vec4(aForwardOffset, 0)));
+        const ndcStart = varying(cameraProjectionMatrix.mul(ecStart));
+        const ndcEnd = varying(cameraProjectionMatrix.mul(ecEnd));
 
-        // Eye-space endpoints and frame vectors. Direction vectors ride
-        // modelViewMatrix with w=0: for rigid transforms this equals the
-        // normal-matrix rotation, and unlike `modelNormalMatrix` it is
-        // reliably updated even for basic materials without normals.
-        const ecStart = modelViewMatrix.mul(vec4(aStartPos, 1.0)).xyz;
-        const ecEnd = ecStart.add(modelViewMatrix.mul(vec4(aEndPos.sub(aStartPos), 0)).xyz);
+        // Self-projection: where THIS fragment lands through the very same
+        // projection used for the endpoints. Must coincide with its own pixel.
+        const baseEC = modelViewMatrix.mul(vec4(positionLocal, 1.0));
+        const ndcSelf = varying(cameraProjectionMatrix.mul(baseEC));
 
-        const startNormalEc = modelViewMatrix.mul(vec4(aStartN, 0)).xyz;
-        const endNormalEc = modelViewMatrix.mul(vec4(aEndN, 0)).xyz;
-        const rightNormalEc = modelViewMatrix.mul(vec4(aRightN, 0)).xyz;
-
-        // Plane constants (n·p + w = 0), one lateral + one cap per endpoint.
-        const startW = startNormalEc.dot(ecStart).negate();
-        const endW = endNormalEc.dot(ecEnd).negate();
-        const rightW = rightNormalEc.dot(ecStart).negate();
-
-        const vStartPlane = varying(vec4(startNormalEc, startW));
-        const vEndPlane = varying(vec4(endNormalEc, endW));
-        const vRightPlane = varying(vec4(rightNormalEc, rightW));
-
-        // Eye-space endpoints for the tube-distance containment: unlike the
-        // three-plane corridor (which admits any height), the distance to the
-        // segment itself defines a camera-independent 3D region.
-        const vEcStart = varying(ecStart);
-        const vEcEnd = varying(ecEnd);
-
-        // Pick the closer cap plane relative to THIS vertex, then derive the
-        // expansion normal with two cross products — the exact ternary/cross
-        // chain of PolylineShadowVolumeVS.
-        const baseEC = modelViewMatrix.mul(vec4(positionLocal, 1.0)).xyz;
-        const dStart = startNormalEc.dot(baseEC).add(startW).abs();
-        const dEnd = endNormalEc.dot(baseEC).add(endW).abs();
-        const planeDirection = mix(endNormalEc, startNormalEc, step(dStart, dEnd));
-        const upOrDown = normalize(cross(rightNormalEc, planeDirection));
-        const normalEC = normalize(cross(planeDirection, upOrDown));
-
-        // Full pixel width converted to meters at this vertex, divided by the
-        // plain miter/right cosine — no abs, no clamp, as in the original.
-        const pushDistance = metersPerPixel(baseEC, this.pixelsPerMeterFactor)
-            .mul(this.halfWidthPx.mul(2))
-            .div(normalEC.dot(rightNormalEc));
-        const expandedEC = baseEC.add(normalEC.mul(sign(aSideSign)).mul(pushDistance));
-
+        this.positionNode = positionLocal;
         this.colorNode = buildDrapedColorNode(
             "curtain",
             this.fragmentContext({
-                startPlane: vStartPlane,
-                endPlane: vEndPlane,
-                rightPlane: vRightPlane,
-                ecStart: vEcStart,
-                ecEnd: vEcEnd
+                ndcStart,
+                ndcEnd,
+                ndcSelf
             })
         );
-
-        this.expandedEc = expandedEC;
-    }
-
-    public setupPositionView(/* builder */): any {
-        return this.expandedEc;
     }
 }
 
@@ -309,13 +251,16 @@ export class DrapedPrismMaterial extends DrapedVolumeMaterialBase {
         const vCornerA = varying(ecCornerA);
         const vCornerB = varying(ecCornerB);
         const vCornerC = varying(ecCornerC);
+        const vFragEye = varying(modelViewMatrix.mul(vec4(positionLocal, 1.0)).xyz);
+
         this.positionNode = positionLocal;
         this.colorNode = buildDrapedColorNode(
             "prism",
             this.fragmentContext({
                 cornerA: vCornerA,
                 cornerB: vCornerB,
-                cornerC: vCornerC
+                cornerC: vCornerC,
+                fragEye: vFragEye
             })
         );
     }

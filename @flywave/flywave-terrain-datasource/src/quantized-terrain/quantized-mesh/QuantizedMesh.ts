@@ -15,14 +15,25 @@ import { type WebTile } from "../../WebImageryTileProvider";
 import { type QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
 import { ProjectionSwitchController } from "../../ProjectionSwitchController";
 import {
-    QuantizedDecalMaterial,
-    QuantizedMeshMaterial,
-    emptyTexture
+    defaultQuantizedMeshMaterial,
+    emptyTexture,
+    emptyTransparentTex,
+    emptyImageryTextures
 } from "./QuantizedMeshMaterial";
 
 export class QuantizedMesh extends THREE.Mesh {
     // Draped-draw surface capture: this mesh provides ground surfaces.
     public readonly captureSurfaceType = SurfaceType.Terrain;
+    // --- Exposed properties (read by onObjectUpdate in QuantizedMeshMaterial) ---
+    public imageryTextures: THREE.Texture[] = [...emptyImageryTextures];
+    public imageryTransforms: THREE.Vector4[] = [
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0),
+        new THREE.Vector4(1, 1, 0, 0)
+    ];
+    public imageryCount: number = 0;
     public waterMaskTexture: THREE.Texture = emptyTexture;
     public waterMaskTranslationAndScale: THREE.Vector4 = new THREE.Vector4();
     public waterMaskNoisyTranslationAndScale: THREE.Vector4 = new THREE.Vector4();
@@ -41,10 +52,7 @@ export class QuantizedMesh extends THREE.Mesh {
         protected readonly projectionSwitchController: ProjectionSwitchController,
         protected readonly mapView?: MapView
     ) {
-        // Per-mesh material (layer×mesh architecture): the first imagery
-        // entry becomes this material's albedo; additional entries (and
-        // projector decals) ride decal child meshes — see setupImageryTexture.
-        super(undefined, new QuantizedMeshMaterial());
+        super(undefined, defaultQuantizedMeshMaterial);
         this.receiveShadow = true;
 
         this.setupFromQuantizedTerrainMesh(quantizedTerrainMesh);
@@ -60,48 +68,36 @@ export class QuantizedMesh extends THREE.Mesh {
         this.setupWaterMask(quantizedData);
     }
 
-    /**
-     * Layer×mesh imagery setup: the FIRST entry upgrades this mesh's own
-     * material in place; every additional entry (cross-tile stitching
-     * patches) becomes a decal child mesh sharing this geometry. The [0,1]
-     * UV gate limits each patch to its own geoBox, so spatially disjoint
-     * patches do not overlap.
-     */
     public setupImageryTexture(
         webTiles: WebTile[],
         webTingScheme: TilingScheme,
         quantizedTilingScheme: TilingScheme
     ): void {
-        const entries: Array<{ transform: THREE.Vector4; texture: THREE.Texture }> = [];
-        for (const tile of webTiles) {
+        const webTilesUnifrom: Array<{
+            transform: THREE.Vector4;
+            texture: THREE.Texture;
+        }> = [];
+        webTiles.map(tile => {
             const transform = this.computeTextureUvTransform(
                 tile.geoBox,
                 webTingScheme,
                 quantizedTilingScheme
             );
             if (transform !== false) {
-                entries.push({ texture: tile.texture, transform });
+                webTilesUnifrom.push({
+                    texture: tile.texture,
+                    transform
+                });
             }
+        });
+        for (let i = 0; i < 5; i++) {
+            this.imageryTextures[i] = null;
         }
-        if (entries.length === 0) return;
-
-        const base = this.material as QuantizedMeshMaterial;
-        base.imageryTexNode.value = entries[0].texture;
-        base.uvTexTransform.value.copy(entries[0].transform);
-
-        for (let i = 1; i < entries.length; i++) {
-            const material = new QuantizedDecalMaterial();
-            material.decalTexNode.value = entries[i].texture;
-            material.uvTexTransform.value.copy(entries[i].transform);
-            material.opacityUniform.value = 1;
-
-            const decal = new THREE.Mesh(this.geometry, material);
-            decal.castShadow = false;
-            decal.receiveShadow = false;
-            decal.frustumCulled = false;
-            decal.raycast = () => {};
-            this.add(decal);
-        }
+        webTilesUnifrom.forEach((item, index) => {
+            this.imageryTextures[index] = item.texture;
+            this.imageryTransforms[index].copy(item.transform);
+        });
+        this.imageryCount = webTilesUnifrom.length;
     }
 
     private setupWaterMask(waterResource: QuantizedTerrainMesh): void {

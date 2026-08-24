@@ -35,35 +35,28 @@ export interface CurtainGeometryResult {
 const EPSILON_NUDGE = 1e-5;
 
 /**
- * Vertex layout per segment (4 vertices, a thin quad spanning both endpoint
- * nodes; the vertex stage expands it into the shadow-volume shell, mirroring
- * Cesium's `PolylineShadowVolumeVS`):
+ * Vertex layout per segment (8 vertices, two vertical panels hinged on the
+ * centerline):
  *
  * ```
- * 0: start node (side +1)   2: end node (side +1)
- * 1: start node (side -1)   3: end node (side -1)
+ * 0: start bottom (right panel)   4: start bottom (left panel)
+ * 1: end   bottom (right panel)   5: end   bottom (left panel)
+ * 2: end   top    (right panel)   6: end   top    (left panel)
+ * 3: start top    (right panel)   7: start top    (left panel)
  * ```
  *
- * Attributes consumed by `DrapedCurtainMaterial`:
+ * Attributes consumed by `DrapedSurfaceMaterial`:
  *
- * - `position`: this vertex's own node (local frame)
- * - `aStartPos` / `aEndPos`: both segment endpoints (local frame)
- * - `aStartPlaneNormal` / `aEndPlaneNormal`: miter plane normals (local frame,
- *   unit travel directions at each joint)
+ * - `aSegmentStart` / `aForwardOffset`: segment endpoints in local frame
+ * - `aStartPlaneNormal` / `aEndPlaneNormal`: miter plane normals (local frame)
  * - `aRightNormal`: horizontal normal of the segment (local frame)
- * - `aSideSign`: `+1` / `-1`, which lateral half the vertex belongs to
+ * - `aSideSign`: `+1` for right-panel vertices, `-1` for left-panel ones
  */
 export function buildCurtainGeometry(options: CurtainGeometryOptions): CurtainGeometryResult {
     const raw = options.positions;
     if (raw.length < 2) {
         throw new Error("buildCurtainGeometry: at least two positions required");
     }
-
-    // Vertical span of the curtain around the (possibly datum-level) input
-    // nodes, in meters. Tall curtains let every ray crossing the segment's
-    // footprint reach the containment test, so the painted track follows the
-    // terrain even when the input altitudes are unknown (e.g. sea level).
-    const DEFAULT_RANGE = { min: -2000, max: 6000 };
 
     const loop = options.loop === true && raw.length > 2;
     const points = loop ? [...raw, raw[0].clone()] : raw.slice();
@@ -72,17 +65,16 @@ export function buildCurtainGeometry(options: CurtainGeometryOptions): CurtainGe
     const ranges: HeightRange[] = [];
     if (Array.isArray(options.heightRanges)) {
         for (let i = 0; i < segmentCount; i++) {
-            ranges.push(options.heightRanges[i] ?? DEFAULT_RANGE);
+            ranges.push(options.heightRanges[i] ?? { min: 0, max: 100 });
         }
     } else {
-        const shared = options.heightRanges ?? DEFAULT_RANGE;
+        const shared = options.heightRanges ?? { min: 0, max: 100 };
         for (let i = 0; i < segmentCount; i++) {
             ranges.push(shared);
         }
     }
 
-    // Per-joint miter directions (normalized bisector of incoming/outgoing),
-    // used as the cap-plane normals exactly like Cesium's start/end normals.
+    // Per-point horizontal directions (normalized, world frame).
     const directions: THREE.Vector3[] = [];
     for (let i = 0; i < points.length; i++) {
         const dIn =
@@ -104,6 +96,18 @@ export function buildCurtainGeometry(options: CurtainGeometryOptions): CurtainGe
         directions.push(bisector.normalize());
     }
 
+    // Arc length bookkeeping for along-line texture coordinates.
+    let totalLength = 0;
+    const segmentLengths: number[] = [];
+    for (let i = 0; i < segmentCount; i++) {
+        const length = points[i + 1].distanceTo(points[i]);
+        segmentLengths.push(length);
+        totalLength += length;
+    }
+    if (totalLength <= 0) {
+        totalLength = 1;
+    }
+
     const origin =
         options.origin !== undefined
             ? options.origin.clone()
@@ -112,71 +116,96 @@ export function buildCurtainGeometry(options: CurtainGeometryOptions): CurtainGe
                   .divideScalar(points.length);
     const toLocal = (p: THREE.Vector3) => p.clone().sub(origin);
 
-    const vertexFloats = segmentCount * 4 * 3;
+    const vertexFloats = segmentCount * 8 * 3;
     const positions = new Float32Array(vertexFloats);
-    const startPositions = new Float32Array(vertexFloats);
-    const endPositions = new Float32Array(vertexFloats);
+    const segmentStarts = new Float32Array(vertexFloats);
+    const forwardOffsets = new Float32Array(vertexFloats);
     const startNormals = new Float32Array(vertexFloats);
     const endNormals = new Float32Array(vertexFloats);
     const rightNormals = new Float32Array(vertexFloats);
-    const sideSigns = new Float32Array(segmentCount * 4);
+    const sideSigns = new Float32Array(segmentCount * 8);
 
+    let lengthSoFar = 0;
     for (let seg = 0; seg < segmentCount; seg++) {
-        const startLocal = toLocal(points[seg]);
-        const endLocal = toLocal(points[seg + 1]);
-
-        const forward = points[seg + 1].clone().sub(points[seg]);
-        const startUp = points[seg].clone().normalize();
-        const rightNormal = forward.clone().cross(startUp).normalize();
-
-        // Cap-plane normals must point INTO the segment: the start joint's
-        // bisector already does; the end one points away and is negated.
-        // Verified numerically: with this sign an interior point passes both
-        // cap tests and a point past the end is rejected.
-        const startPlaneNormal = directions[seg].clone();
-        const endPlaneNormal = directions[seg + 1].clone().negate();
-
-        // Quad corners: (own node, side) pairs; `position` duplicates whichever
-        // node this vertex sits on, while both endpoints ride along so the
-        // vertex stage can rebuild the full segment in eye space.
-        // Curtain corners: bottom/top rows offset radially from the node by
-        // the configured height range; the vertex stage adds the pixel-width
-        // expansion across the wall.
-        const startRadial = points[seg].clone().normalize();
-        const endRadial = points[seg + 1].clone().normalize();
+        const start = points[seg];
+        const end = points[seg + 1];
         const range = ranges[seg];
-        const ownWorld = [
-            points[seg].clone().addScaledVector(startRadial, range.min),
-            points[seg].clone().addScaledVector(startRadial, range.max),
-            points[seg + 1].clone().addScaledVector(endRadial, range.min),
-            points[seg + 1].clone().addScaledVector(endRadial, range.max)
-        ];
-        const ownPositions = ownWorld.map(toLocal);
-        const sideSignValues = [1, -1, 1, -1];
 
-        for (let j = 0; j < 4; j++) {
-            const write = (seg * 4 + j) * 3;
-            const own = ownPositions[j];
-            positions.set([own.x, own.y, own.z], write);
-            startPositions.set([startLocal.x, startLocal.y, startLocal.z], write);
-            endPositions.set([endLocal.x, endLocal.y, endLocal.z], write);
+        const forward = end.clone().sub(start);
+        const segmentLength = segmentLengths[seg];
+
+        const startUp = start.clone().normalize();
+        const endUp = end.clone().normalize();
+        const rightNormal = forward.clone().cross(startUp).normalize();
+        // Miter-plane normals are the unit travel directions themselves: the
+        // start/end caps are the planes through each endpoint perpendicular to
+        // the line. (Do NOT derive them as up×dir — that yields a horizontal
+        // vector, which silently disables the end constraints.)
+        const startPlaneNormal = directions[seg].clone();
+        const endPlaneNormal = directions[seg + 1].clone();
+
+        const localStart = toLocal(start);
+        const localForward = toLocal(end).sub(localStart);
+
+        const radialAt = (p: THREE.Vector3) => p.clone().normalize();
+        const startBottom = radialAt(start).multiplyScalar(start.length() + range.min);
+        const startTop = radialAt(start).multiplyScalar(start.length() + range.max);
+        const endBottom = radialAt(end).multiplyScalar(end.length() + range.min);
+        const endTop = radialAt(end).multiplyScalar(end.length() + range.max);
+
+        const sScale = Math.abs(segmentLength / totalLength);
+        void sScale;
+        const tBase = lengthSoFar / totalLength;
+        void tBase;
+
+        const cornerWorld = [
+            startBottom,
+            endBottom,
+            endTop,
+            startTop,
+            startBottom,
+            endBottom,
+            endTop,
+            startTop
+        ];
+        const sideSignValues = [1, 1, 1, 1, -1, -1, -1, -1];
+
+        for (let j = 0; j < 8; j++) {
+            const write = (seg * 8 + j) * 3;
+            const corner = toLocal(cornerWorld[j]);
+            // Nudge off the exact centerline so panels do not intersect the
+            // polyline itself and stay valid geometry for the pipeline.
+            const nudged = corner.addScaledVector(rightNormal, sideSignValues[j] * EPSILON_NUDGE);
+
+            positions.set([nudged.x, nudged.y, nudged.z], write);
+            segmentStarts.set([localStart.x, localStart.y, localStart.z], write);
+            forwardOffsets.set([localForward.x, localForward.y, localForward.z], write);
             startNormals.set([startPlaneNormal.x, startPlaneNormal.y, startPlaneNormal.z], write);
             endNormals.set([endPlaneNormal.x, endPlaneNormal.y, endPlaneNormal.z], write);
             rightNormals.set([rightNormal.x, rightNormal.y, rightNormal.z], write);
-            sideSigns[seg * 4 + j] = sideSignValues[j];
+
+            sideSigns[seg * 8 + j] = sideSignValues[j];
         }
+
+        lengthSoFar += segmentLength;
     }
 
-    const indices = new Uint32Array(segmentCount * 6);
+    // Two panels per segment; opposite winding between the sides so a single
+    // back-face culled pass leaves exactly one visible layer per view ray.
+    const indices = new Uint32Array(segmentCount * 12);
     for (let seg = 0; seg < segmentCount; seg++) {
-        const b = seg * 4;
-        indices.set([b, b + 1, b + 2, b + 1, b + 3, b + 2], seg * 6);
+        const base = seg * 8;
+        const write = seg * 12;
+        // Right panel (back faces point toward the left side).
+        indices.set([base + 0, base + 1, base + 2, base + 0, base + 2, base + 3], write);
+        // Left panel, mirrored winding.
+        indices.set([base + 7, base + 6, base + 5, base + 7, base + 5, base + 4], write + 6);
     }
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("aStartPos", new THREE.BufferAttribute(startPositions, 3));
-    geometry.setAttribute("aEndPos", new THREE.BufferAttribute(endPositions, 3));
+    geometry.setAttribute("aSegmentStart", new THREE.BufferAttribute(segmentStarts, 3));
+    geometry.setAttribute("aForwardOffset", new THREE.BufferAttribute(forwardOffsets, 3));
     geometry.setAttribute("aStartPlaneNormal", new THREE.BufferAttribute(startNormals, 3));
     geometry.setAttribute("aEndPlaneNormal", new THREE.BufferAttribute(endNormals, 3));
     geometry.setAttribute("aRightNormal", new THREE.BufferAttribute(rightNormals, 3));

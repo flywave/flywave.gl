@@ -111,14 +111,14 @@ try {
         target: DrapedTarget.Terrain
     });
 
-    const drapedPolygon = new DrapedPolygon(mapView, {
-        capturePass,
-        outerRing: POLYGON_OUTER,
-        heightRange: { min: -500, max: 2600 },
-        color: 0x00cc66,
-        opacity: 0.55,
-        target: DrapedTarget.Terrain
-    });
+    // const drapedPolygon = new DrapedPolygon(mapView, {
+    //     capturePass,
+    //     outerRing: POLYGON_OUTER,
+    //     heightRange: { min: -500, max: 2600 },
+    //     color: 0x00cc66,
+    //     opacity: 0.55,
+    //     target: DrapedTarget.Terrain
+    // });
 
     (window as unknown as { mapView: MapView }).mapView = mapView;
 
@@ -190,7 +190,10 @@ try {
         "1 type": 1,
         "2 depth": 2,
         "3 view dist": 3,
-        "4 containment": 4
+        "4 containment": 4,
+        "13 dist field": 13,
+        "14 degeneracy": 14,
+        "15 self proj": 15
     })
         .name("fs probe")
         .onChange((value: number) => {

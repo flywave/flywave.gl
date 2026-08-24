@@ -3,7 +3,7 @@
 export * from "./ground-modification-manager";
 export * from "./TerrainDecoderWorker";
 export * from "./dem-terrain/DEMTerrainSource";
-export { DEMTileMeshMaterial } from "./dem-terrain/DEMTileMeshMaterial";
+export { DEMTileMeshMaterial, defaultDEMTileMeshMaterial } from "./dem-terrain/DEMTileMeshMaterial";
 export {
     DEMTileBaseMaterial,
     DEMTileOverlayMaterial,
