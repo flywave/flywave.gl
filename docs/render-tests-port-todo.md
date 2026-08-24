@@ -3963,3 +3963,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **extrusionAxis.w 断路器（记档）**：把 vMBHeight 改为 `extrusionAxis.w`（mgl 的 t 0/1）后建筑整体消失（无编译错误日志）——该 attribute 在此材质路径不可用；已回退旧公式。
 - **实测**：回到 §284 状态（56961/58342/46272/44559），建筑可见。**墙面暗假说**：我方可见墙 = 背光面（51=0.5×0.84 渐变下限），期望 85 = 0.7×128 受光面（渐变 floor 0.7 ✓ 公式吻合）——**光向/viewport-anchor 旋转差**为下轮候选（我方默认 (0.2875,−0.498,0.996) 的方位未按视图旋转对齐）。
 - **回归**：与 §284 状态等价（fill-extrusion-opacity/default 9 PASS 族维持）。
+
+**§288. 光方位假说证伪（K=0/1/2/3 四点扫描全劣化）——alignment 残差重定性为可见建筑数量/几何投影差（期望 39k 建筑像素 vs 我方 17k）（2026-08-24 一百七十五，零净变化记档）**：
+
+- **mgl 源码定案**：`fillExtrusionUniformValues` 的 viewport-anchor 仅按 `−tr.angle`（bearing）旋转，bearing-0 fixture 无旋转；`u_lightpos` = sphericalPositionToCartesian([1.15,210,30]) = (0.2875,−0.498,0.996) **未归一化**——与我方默认逐位一致。
+- **扫描证伪**：lightDirWorld 绕 z 旋转 K·90°（K=1/2/3）→ 57745/59451/58238 全劣于 K=0=56961——墙面暗非光向差。**残差重定性**：期望建筑像素 39k vs 我方 17k——几何域（部分建筑被地形起伏遮挡/高度差/z 冲突），或墙-屋顶可见比例差。
+- **下轮入口**：单建筑级对比（挑 expected 与 current 各一栋同位建筑量高度/宽度像素），疑 exaggeration 的 sec(lat) 双重应用（mesh z 用 secLat 而 sampler 也乘——§279/§283 链）或 DEM 行翻转在部分瓦片错位。
