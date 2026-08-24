@@ -4212,3 +4212,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实测**：census 30→23 tiles、宽度 10→7（朝 mgl 的 2-4 迈进）；error-overlap 三例 +100/+899/+125（相机正确后马赛克残差微升=覆盖形状剩余差如实暴露）；circle/alignment（方画布）逐位恒定 ✓、star 934 恒定 ✓、fog/color 3 PASS ✓——**仅窄高画布受影响且方向正确**。
 - **剩余**：7 宽 vs mgl 2-4 宽——覆盖形状仍有引擎侧余量（extendedFrustumCulling/投影 scale 候选），下轮沿 §320 验收（宽度 ~4）继续。
 - **终态**：探针全清、工作树=本修复三文件、tsc/build 干净。
+
+**§322. 覆盖形状剩余差审计——maxGeometryHeight z 扩展惰性（census 逐位同 23/w7）：7 宽实为引擎 pre-LOD 基数，mgl 的 2-4 宽 z16 带是 LOD 停止后的近带产物——形状与 LOD 两缺失实为同一机制的两面，修复顺序定档=先 LOD（§319/320 完整语义已备）后形状复核（2026-08-24 二百一十一，零净变化记档）**：
+
+- **审计**：`setMaxGeometryHeight(1)` 探针（瓦片包围盒 z 扩展归零）→ census **逐位不变**（23 tiles/w7）——z 扩展非宽度驱动。宽度解读修正：引擎 7 宽（z15）= pre-LOD 全视锥基数；mgl 参照 2-4 宽是 **z16 带（LOD 停止后仅存近带）**——"形状差"大部分是 LOD 差的投影，两缺失同源。
+- **修复顺序定档（下轮）**：① 先落地 §319/320 的完整 shouldSplit LOD（fwd-from-tilt+兜底已验证零停止=安全基线，需补停止判定的数值对拍——用 ref 工具输出每瓦片停止级分布做规格）② LOD 生效后复测 census 形状，剩余差再审 extendedFrustumCulling/投影 scale。
+- **终态**：探针全清、218882（§321 态）复原 ✓、工作树=提交态。
