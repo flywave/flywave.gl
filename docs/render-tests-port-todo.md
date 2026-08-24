@@ -4245,3 +4245,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **EFC 证伪**：extendedFrustumCulling=false → census 24/宽 8（反宽）——角点 AABB 粗测非西向多余来源（回环位移才是）。
 - **修复点（下会话单点）**： Mercator `localTangentSpace` 翻转基底（yAxis=(0,−1,0)）下 extractAttitude 的 heading 提取修正（或 lookAt 重放置链不消费提取 heading）——修一处即解回环，覆盖集应回归居中（x16383-16385 域）。
 - **终态**：EFC/census 探针全清、218882 复原 ✓、工作树=提交态。
+
+**§327. §326 修复点预审——projection setter 回灌路径排除（error-overlap 无投影切换，lookAtImpl 调用面仅显式 setter/lookAt/bounds）：−45 假 heading 的消费路径未定位到，相机东移 3155m 的触发器需 heading 状态写监视点（栈回溯）追踪——下会话第一动作（2026-08-24 二百一十六，预审记档）**：
+
+- **预审**：MapView.js 的 lookAtImpl 全调用面 = projection setter（本 fixture 不触发）/setZoom/setTilt/setHeading/lookAt/fitBounds——applyCameraSettings 传 yaw=0 无偏移；东移 3155m（=sin45·groundDist）必有一次携带 yaw=45 的重放置，触发器未知。**下会话第一动作**：heading 值写监视点（Object.defineProperty 或 lookAtImpl 入参打点栈回溯）捕获触发路径，随后按 §326 修复点（提取修正或回灌切断）实施。
+- **终态**：工作树=提交态、无代码改动。
