@@ -3922,3 +3922,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **烘焙视锥放宽（保留）**：`buildTileCamera` 从 z=1000/near1/far2000 放宽到 z=6000/near1/far12000——覆盖抬升内容（必要条件），但图像恒定 → 视锥非根因。
 - **剩余候选（下轮，需 draw-call 级取证）**：① extrusion 材质（MapExtrusionMaterial 光照/双 pass）在正交烘焙 pass 的光栅化异常；② 主渲染中 extrusion 对象的深度写入/排序与 terrain mesh 冲突；③ TileGeometryCreator 对 extruded-polygon 几何的 boundingSphere/视锥剔除（对象级）。方法：renderer.info draw-call 打点按材质分类，或单对象 forceRender 实验。
 - **回归**：terrain PASS 族维持（background-layer/hide/remove ✓）、background-color 全绿（transition 4096 既有）✓。
+
+**§281. extrusion 上屏 draw-call 取证定案——`2 fbo / 0 main`：extrusion 只进烘焙 pass 从不进主渲染；WillRender 时刻对象不在 sceneRoot（引擎时序问题，非剔除/非材质）（2026-08-24 一百六十九，记档）**：
+
+- **onBeforeRender 探针（材质 patcher 挂 obj 级）**：整轮运行 extrusion mesh 仅 **2 次 fbo draw**（=drape 烘焙）+ **0 次主渲染 draw**；`frustumCulled=false` 强制后仍 0 main（排除 three.js 视锥剔除，即候选③死）。
+- **WillRender census**：主渲染前 extrusion 对象**不在 m_sceneRoot**（n=0），AfterRender 时存在（54 mesh）——对象在主渲染之后才挂入、且每帧被移除/重建——**引擎时序问题**。结合 fbo 烘焙能画到（同一帧 AfterRender），排除候选①（材质光栅化正常）——**候选②变体定案：extrusion 对象从不参与主渲染（时序/生命周期）**。
+- **下轮入口（需引擎源码级追查）**：Tile/upload 生命周期——extrusion 对象何时创建/挂载/移除（TileGeometryLoader 的每帧 upload 配额？delayRendering？对象在 AfterRender 后挂入而下一帧 WillRender 前被移除的路径）。方法：Tile.objects 的 add/remove 打点 + TileGeometryLoader 逐行审计。
+- **回归**：terrain PASS 族维持 ✓、background-color 全绿 ✓。探针已清，工作树=提交态。
