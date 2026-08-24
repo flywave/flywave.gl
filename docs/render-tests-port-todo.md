@@ -4102,3 +4102,8 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **管线断点定案**：DEM 侧 TerrainController 3×3 请求中心 (14, 8192, 8192)——fixture 只提供 14-8191-8191（center (0.005,0.01) 恰在 8191/8192 瓦片边界东侧）→ 8/9 404 → 地形 mesh 缺 → **TerrainDraping 烘焙链不启动 → raster 通路整体失效**（raster 依赖 drape 合成）。mgl 初始化态/无地形时 raster 仍平铺渲染（draw_raster 不依赖 terrain 就绪）——218780 整帧差 = raster 全灭。
 - **修复方向（下轮实施）**：drape 缺失兜底——terrain mesh 未建/DEM 缺失时 raster 四边形回落为常规平面 fill 渲染（mgl 无地形路径）；同时 TerrainController 的 DEM 请求可加祖先 fallback（对齐 raster 的 resolveAncestor 语义）。此修复可望解锁整帧空白桶多例（§277/§302 分桶）。
 - **终态**：探针全清、工作树=提交态、tsc 干净。
+
+**§305b. 勘误补充——DEM 3×3 中 1 片（14-8191-8191）存在故 meshCount=1、drape 局部运行；整帧空白主体=其余 8/9 区域无地形无 drape 且 raster 主通路未兜底（预期=mgl 平铺 raster 常显）（2026-08-24 一百九十四，勘误记档）**：
+
+- 勘误 §305 的"terrain mesh 未建"表述：const DEM 存在 14-8191-8191 一片 → meshCount=1 → drape 对该片运行；主体残差=其余 8/9 区域：无 mesh、无 drape、raster 兜底缺失。修复方向不变：**无 drape 区域的 raster 平面渲染兜底**（mgl 无地形路径），实施点=TerrainDraping/主 pass 的内容显隐逻辑（TerrainDraping.ts:195-215 的 hidden 机制）+ raster 四边形在无地形区域的直渲染。
+- 终态：工作树=提交态。
