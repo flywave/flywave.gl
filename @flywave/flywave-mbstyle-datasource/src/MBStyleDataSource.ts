@@ -1271,6 +1271,32 @@ export class MBStyleDataSource extends TileDataSource {
             } catch {}
 
             const placement = this.m_symbolPlacement;
+            this.mapView.addEventListener(MapViewEventNames.WillRender, () => {
+                // §282 probe: flag-free census — meshes with tall geometry
+                // (extrusion candidates) right before the main render.
+                const root = (this.mapView as any).m_sceneRoot as THREE.Object3D | undefined;
+                if (root && !(this as any).__mbCensused) {
+                    let tall = 0, flat = 0, vis = 0, layers = 0;
+                    root.traverse((o: any) => {
+                        if (o.layers && !o.layers.test?.(o.layers)) layers++;
+                        if (!o.isMesh) return;
+                        const g = o.geometry;
+                        if (!g?.attributes?.position) return;
+                        g.computeBoundingBox();
+                        const bb = g.boundingBox;
+                        if (bb && bb.max.z - bb.min.z > 100) {
+                            tall++;
+                            if (o.visible) vis++;
+                            if (o.parent) flat++;
+                        }
+                    });
+                    if (tall > 0) {
+                        (this as any).__mbCensused = true;
+                        // eslint-disable-next-line no-console
+                        console.log('MBDBG willCensus tall=' + tall + ' visible=' + vis + ' parented=' + flat);
+                    }
+                }
+            });
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
                 patcher.patchTileMaterials();
                 // §273: per-frame fog uniform sync (globe center / alpha) —
@@ -1331,6 +1357,26 @@ export class MBStyleDataSource extends TileDataSource {
             // mid-range terrain at high pitch is clipped away (sky where the
             // map should be) — mgl uses terrain elevation in the transform's
             // horizon/far-plane math.
+            // §283: mgl renders with the camera ON the elevated surface.
+            // Equivalent camera-relative geometry: shift the whole terrain
+            // mesh DOWN by the center elevation and hand out RELATIVE
+            // elevations — the camera/zoom/tile selection stay untouched
+            // (a direct camera lift drifted the engine zoomLevel and
+            // broke tile selection).
+            try {
+                const ctl2 = (this.m_environment as any).terrainController;
+                if (ctl2) {
+                    const lng = style.center?.[0] ?? 0, lat = style.center?.[1] ?? 0;
+                    const { mercatorProjection, GeoCoordinates } =
+                        require('@flywave/flywave-geoutils');
+                    const wp = mercatorProjection.projectPoint(
+                        new GeoCoordinates(lat, lng), new THREE.Vector3());
+                    const origin = ctl2.sampleElevation(wp.x, wp.y);
+                    if (Number.isFinite(origin) && origin !== 0) {
+                        ctl2.setElevationOrigin(origin);
+                    }
+                }
+            } catch {}
             // §279: hand the decoder a CPU elevation sampler so
             // fill-extrusion footprints ride the DEM surface (mgl
             // fill_extrusion.vertex.glsl getTerrainHeight).

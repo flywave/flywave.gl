@@ -1472,6 +1472,11 @@ export class MBTileDataEmitter {
         featureId: string | number | undefined,
         properties: Record<string, any>,
     ): void {
+        // §283: the per-vertex DEM lift is baked below — flag it so the
+        // material patcher's shader-side DEM add (§118) doesn't double-lift.
+        if (this.m_terrainSampler) {
+            (this.m_techniques[techniqueIdx] as any)._mbTerrainLifted = true;
+        }
         const rawHeight = layer.paint['fill-extrusion-height'] as number ?? 0;
         const rawFloor = layer.paint['fill-extrusion-base'] as number ?? 0;
         const floorHeight = rawFloor;

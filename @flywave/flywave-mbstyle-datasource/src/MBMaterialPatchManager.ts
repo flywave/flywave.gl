@@ -2396,7 +2396,13 @@ export class MBMaterialPatchManager {
         // Terrain DEM for fill-extrusion-terrain: buildings sit on the terrain
         // surface. Sample the center DEM tile at the vertex's world position.
         const terrainController = (this.m_dataSource as any).m_environment?.terrainController;
-        const centerDem = terrainController?.centerDem;
+        // §283: when the emitter already baked the per-vertex DEM lift, the
+        // shader-side add would double the elevation (buildings flew ~2×
+        // terrain height and left the frustum — the long "invisible
+        // extrusions" hunt).
+        const centerDem = technique._mbTerrainLifted === true
+            ? null
+            : terrainController?.centerDem;
         const terrainExag = terrainController ? (terrainController.exaggeration ?? 1) : 0;
         // mgl height/base-alignment semantics (§118 full spec, joint pass):
         //  - base-alignment "terrain" (DEFAULT): base vertices use PER-VERTEX

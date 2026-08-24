@@ -3929,3 +3929,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **WillRender census**：主渲染前 extrusion 对象**不在 m_sceneRoot**（n=0），AfterRender 时存在（54 mesh）——对象在主渲染之后才挂入、且每帧被移除/重建——**引擎时序问题**。结合 fbo 烘焙能画到（同一帧 AfterRender），排除候选①（材质光栅化正常）——**候选②变体定案：extrusion 对象从不参与主渲染（时序/生命周期）**。
 - **下轮入口（需引擎源码级追查）**：Tile/upload 生命周期——extrusion 对象何时创建/挂载/移除（TileGeometryLoader 的每帧 upload 配额？delayRendering？对象在 AfterRender 后挂入而下一帧 WillRender 前被移除的路径）。方法：Tile.objects 的 add/remove 打点 + TileGeometryLoader 逐行审计。
 - **回归**：terrain PASS 族维持 ✓、background-color 全绿 ✓。探针已清，工作树=提交态。
+
+**§283. extrusion-terrain 上屏破案——双重抬升（§279 emitter 逐顶点 + §118 shader DEM 采样）× 相机高度漂移；三修复落地，alignment 族 69536→59506/78186→58247/66215→44559/57596→46795（2026-08-24 一百七十，保留+实测）**：
+
+- **取证链定案**：① 换 MeshBasicMaterial 红色 → **50634 红像素**（几何/变换/挂载全对，对象确凿绘制）；② 换引擎原生材质 → 建筑灰像素 42555 渲染 ✓；③ 只有走 patchExtrusionMaterial → 零像素。**根因 = patcher 的 §118 shader DEM 采样（`mbH = position.z + terrainElev`）叠加 §279 emitter 已烘焙的逐顶点 ground → z≈2×地形 → 出视锥**。非 terrain fixture 无 ground 烘焙故双提升不存在（历史 PASS 不矛盾）。
+- **三修复**：① `_mbTerrainLifted` technique 标记——emitter 烘焙 ground 时打标，patcher 见标跳过 shader DEM 加法（保留 height uniforms 供垂直渐变）；② `TerrainController.setElevationOrigin`——整个 terrain mesh 下移中心海拔（mgl 相机贴面的相机相对等价），sampleElevation 发相对高程；相机/zoom/瓦片选择零扰动（直接抬相机会漂移 zoomLevel 破坏瓦片选择——道路全失的实验证伪了该路线）。
+- **实测**：alignment 族四例全降但未过（残余=光照标定/alignment 语义细化/base-flat 屋顶水平化——emitter 目前 per-vertex 同值，flat-top 未实现）。回归：background-color/fog-color/terrain cache-invalidation 全恒定 ✓。
+- **§281 的『0 main draws』结论记档为探针伪影**（patcher 挂的 probe 只存在于 AfterRender 补丁后、对象每帧可见）；真实路径：对象全程绘制，材质双提升致出视锥。

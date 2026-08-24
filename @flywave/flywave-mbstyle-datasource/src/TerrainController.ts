@@ -169,6 +169,17 @@ export class TerrainController {
     private m_exaggeration = 1;
     /** Sec(lat) applied to CPU elevation samples (matches mesh z scale). */
     private m_sampleSecLat = 1;
+    /**
+     * §283 z-origin (meters): the whole terrain mesh is shifted down by this
+     * so the surface at the map center sits near z=0 (camera-relative
+     * equivalence of mgl's camera-on-surface). sampleElevation hands out
+     * elevations RELATIVE to it.
+     */
+    private m_elevationOrigin = 0;
+
+    setElevationOrigin(origin: number): void {
+        this.m_elevationOrigin = origin;
+    }
 
     /**
      * Base (un-draped) terrain color. mgl renders the background layer
@@ -208,9 +219,10 @@ export class TerrainController {
             // confirmed by axis calibration (direct v: fog-import-scope
             // 192406→230109, much worse).
             const row = n - 1 - v;
-            return d[row * n + u] * this.m_exaggeration * this.m_sampleSecLat;
+            return d[row * n + u] * this.m_exaggeration * this.m_sampleSecLat
+                - this.m_elevationOrigin;
         }
-        return 0;
+        return -this.m_elevationOrigin;
     }
 
     /**
@@ -223,7 +235,8 @@ export class TerrainController {
         for (const mesh of this.m_meshes) {
             const world = mesh.userData.__mbWorldPos as THREE.Vector3 | undefined;
             if (!world) continue;
-            mesh.position.set(world.x - camPos.x, world.y - camPos.y, world.z - camPos.z);
+            mesh.position.set(world.x - camPos.x, world.y - camPos.y,
+                world.z - camPos.z - this.m_elevationOrigin);
         }
     }
 
