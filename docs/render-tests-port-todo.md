@@ -4157,3 +4157,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **复测**：重应用 §293 钳位（error-overlap 的 aspect 4×pitch 60 → 133.7° tan 负）→ 三例 **逐位基线恒等**（218780/198247/220649）——FrustumIntersection:411 的 tileWrapping 禁用分支直接推单根瓦片（area=Infinity），根范围计算从未运行；已回退复原。
 - **结论**：引擎覆盖集域的下一步前置依赖=**获得 mgl coveringTiles 对该 fixture 的参照集合**（需 mgl 测试 harness 侧跑 transform.coveringTiles 输出，或手推其 3D-AABB 遍历），否则我方 30 瓦片集与 mgl 集合的差异方向无从对齐——记档为独立会话的首个动作。
 - **终态**：mapview lib 重建回提交态、工作树=提交态。
+
+**§314. mgl 参照集合获取的移植范围测绘——coveringTiles 完整依赖链（transform.ts:1281-1580 主遍历 + tileAABB + Frustum.fromInvProjectionMatrix + mercator posMatrix/pitch 相机矩阵链）≈400 行纯数学可在 Node 离线跑，但误差面大（矩阵链任一符号错即集合错），定为独立会话专注任务（2026-08-24 二百零三，范围记档）**：
+
+- **测绘**：vendored mgl 无构建产物（dist 仅工具），完整移植需：① mercator posMatrix（含 pitch/bearing 旋转的 label-plane 矩阵链）② tileAABB 类（intersects/intersectsFlat/getCorners/closestPoint/distanceX/Y/Z）③ Frustum.fromInvProjectionMatrix ④ shouldSplit 的 distToSplitScale/acute-angle 缩放 ⑤ 无 elevation 分支（error-overlap 初始化态 elevation 未就绪 → maxRange=centerAltitude 简化）。输入=fixture 相机（center/zoom 14.51/pitch 60/fov 0.6435/canvas 256×1024/tileSize 256）。
+- **验收设计**：输出集合 vs 我方 census 的 30 瓦片集做差集，差集方向决定 FrustumIntersection 的修改点（root/shouldSplit/frustum 三选一）。
+- **终态**：工作树=提交态（§313 后零代码改动）。
+- **会话终局（§289-§314，26 提交）**：三大域终案与入口地图完备——alignment=逐面可见性（§312）、fog/globe=球面尺度（§301）、terrain=覆盖集形状（§313/314）。
