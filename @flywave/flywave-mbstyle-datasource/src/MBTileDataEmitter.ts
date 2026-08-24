@@ -244,17 +244,6 @@ function tile2world(
         target.y = w.y;
         target.z = (w as any).z ?? 0;
         target.sub(decodeInfo.center);
-        // §271: sphere tiles render in localTangentSpace — the engine
-        // rotates the object by the tile's OrientedBox basis, so geometry
-        // must be expressed in that basis. Pre-apply the INVERSE rotation.
-        const bb: any = decodeInfo.projectedBoundingBox;
-        if (bb?.xAxis && bb.getRotationMatrix) {
-            const m = bb.getRotationMatrix();
-            const inv = m.clone().invert();
-            const off = new (require('three').Vector3)(target.x, target.y, target.z);
-            off.applyMatrix4(inv);
-            target.x = off.x; target.y = off.y; target.z = off.z;
-        }
         return;
     }
     if (proj?.mbCustomProjection === true) {
@@ -273,6 +262,78 @@ function tile2world(
     target.y = ((top + py) / scale) * R;
     target.z = 0;
     target.sub(decodeInfo.center);
+}
+
+/**
+ * Tile-local coordinate → [lng, lat]. Shared by the sphere reprojection and
+ * the sphere tessellation below.
+ */
+function tileToLatLng(
+    extents: number, decodeInfo: DecodeInfo, px: number, py: number
+): [number, number] {
+    const { north, west } = decodeInfo.geoBox;
+    const N = Math.log2(extents);
+    const scale = Math.pow(2, decodeInfo.tileKey.level + N);
+    const top = lat2tile(north, decodeInfo.tileKey.level + N);
+    const left = Math.round(((west + 180) / 360) * scale);
+    return [((left + px) / scale) * 360 - 180, tileYToLat(top, py, scale)];
+}
+
+/** Great-circle angular distance between two [lng, lat] pairs (radians). */
+function greatCircleAngle(a: [number, number], b: [number, number]): number {
+    const toRad = Math.PI / 180;
+    const phi1 = a[1] * toRad, phi2 = b[1] * toRad;
+    const dPhi = (b[1] - a[1]) * toRad, dLambda = (b[0] - a[0]) * toRad;
+    const h = Math.sin(dPhi / 2) ** 2 +
+        Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLambda / 2) ** 2;
+    return 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * §271: on the sphere projection a flat tile quad's chord cuts through the
+ * globe and fails the depth test against the engine's own subdivided ground
+ * plane (addGroundPlane → SphericalGeometrySubdivisionModifier, 10°). mgl
+ * globe tiles are tessellated grids on the sphere — mirror that here by
+ * longest-edge bisection in tile space until every edge spans less than 10°
+ * on the sphere. Winding is preserved (both halves keep the parent order).
+ */
+const SPHERE_TESSELLATION_MAX_ANGLE = Math.PI / 18; // 10°, engine ground-plane value
+const SPHERE_TESSELLATION_MAX_DEPTH = 10;
+
+function tessellateForSphere(
+    verts: number[], indices: number[], extents: number, decodeInfo: DecodeInfo
+): { verts: number[]; indices: number[] } {
+    const outVerts = verts.slice();
+    const outIndices: number[] = [];
+    const stack: Array<[number, number, number, number]> = [];
+    for (let t = 0; t < indices.length; t += 3) {
+        stack.push([indices[t], indices[t + 1], indices[t + 2], 0]);
+    }
+    const angleOf = (i: number, j: number) =>
+        greatCircleAngle(
+            tileToLatLng(extents, decodeInfo, outVerts[i * 2], outVerts[i * 2 + 1]),
+            tileToLatLng(extents, decodeInfo, outVerts[j * 2], outVerts[j * 2 + 1]));
+    while (stack.length > 0) {
+        const [ia, ib, ic, depth] = stack.pop()!;
+        const angles = [angleOf(ia, ib), angleOf(ib, ic), angleOf(ic, ia)];
+        const longest = angles[0] >= angles[1] && angles[0] >= angles[2] ? 0 :
+            angles[1] >= angles[2] ? 1 : 2;
+        if (angles[longest] < SPHERE_TESSELLATION_MAX_ANGLE || depth >= SPHERE_TESSELLATION_MAX_DEPTH) {
+            outIndices.push(ia, ib, ic);
+            continue;
+        }
+        // Split the longest edge (p,q) with opposite vertex r.
+        const p = longest === 0 ? ia : longest === 1 ? ib : ic;
+        const q = longest === 0 ? ib : longest === 1 ? ic : ia;
+        const r = longest === 0 ? ic : longest === 1 ? ia : ib;
+        const m = outVerts.length / 2;
+        outVerts.push(
+            (outVerts[p * 2] + outVerts[q * 2]) / 2,
+            (outVerts[p * 2 + 1] + outVerts[q * 2 + 1]) / 2);
+        stack.push([p, m, r, depth + 1]);
+        stack.push([m, q, r, depth + 1]);
+    }
+    return { verts: outVerts, indices: outIndices };
 }
 
 export class MBTileDataEmitter {
@@ -1241,12 +1302,23 @@ export class MBTileDataEmitter {
                 // Triangulate with earcut
                 const triIndices = earcut(allVerts, holeIndices.length > 0 ? holeIndices : null, 2);
 
+                // §271: globe projection — subdivide the triangulation so the
+                // fill hugs the sphere instead of cutting through it.
+                let outVerts = allVerts;
+                let outIndices = triIndices;
+                if ((this.m_decodeInfo.targetProjection as any)?.type === 1 /* Spherical */) {
+                    const tess = tessellateForSphere(
+                        allVerts, triIndices, extents, this.m_decodeInfo);
+                    outVerts = tess.verts;
+                    outIndices = tess.indices;
+                }
+
                 // Project and store vertices
                 const startIdx = geo.positions.length / 3;
-                const vertCount2d = allVerts.length / 2;
+                const vertCount2d = outVerts.length / 2;
                 for (let i = 0; i < vertCount2d; i++) {
                     const w = this.project(
-                        new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
+                        new THREE.Vector2(outVerts[i * 2], outVerts[i * 2 + 1])
                     );
                     // Keep the resolved `fill-z-offset` (m_currentZOffset is
                     // folded into `project()`); pushing 0 dropped it. mgl
@@ -1257,18 +1329,18 @@ export class MBTileDataEmitter {
                     if (needsUv) {
                         if ((tech as any)._isRaster && rbMaxX > rbMinX && rbMaxY > rbMinY) {
                             geo.uvs.push(
-                                (allVerts[i * 2] - rbMinX) / (rbMaxX - rbMinX),
-                                (allVerts[i * 2 + 1] - rbMinY) / (rbMaxY - rbMinY),
+                                (outVerts[i * 2] - rbMinX) / (rbMaxX - rbMinX),
+                                (outVerts[i * 2 + 1] - rbMinY) / (rbMaxY - rbMinY),
                             );
                         } else {
-                            geo.uvs.push(allVerts[i * 2] / extents, allVerts[i * 2 + 1] / extents);
+                            geo.uvs.push(outVerts[i * 2] / extents, outVerts[i * 2 + 1] / extents);
                         }
                     }
                 }
 
                 // Store triangulated indices
-                for (let i = 0; i < triIndices.length; i++) {
-                    geo.indices.push(triIndices[i] + startIdx);
+                for (let i = 0; i < outIndices.length; i++) {
+                    geo.indices.push(outIndices[i] + startIdx);
                 }
             }
 

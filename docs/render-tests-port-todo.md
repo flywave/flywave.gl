@@ -3850,3 +3850,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **二分**：frustumCulled=false + boundingSphere.radius=1e9（确认施加）+ 纯红 —— **仍 0 红像素**——§269 候选①（包围盒/视锥剔除）排除。三态收敛为：**对象在/几何对/剔除关/仍无片元** → 剩 material 顶点路径：头号嫌疑 = **sphere 瓦片的 localTangentSpace 语义**（TileObjectsRenderer 对 localTangentSpace 瓦片做 `setRotationFromMatrix(tile.boundingBox.getRotationMatrix())`——我们的注入偏移在世界轴系，未按切平面基旋转 → 顶点落在切平面之外/背面）。
 - **下轮一步**：注入顶点按瓦片切平面基变换（从 projectedBoundingBox 的旋转矩阵构造局部坐标），或临时绕过旋转验证。
 - 探针已清，工作树=提交态（90 commits）。
+
+**§271. §270 切平面基嫌疑证伪 + 球面细分落地（保留，代码对齐、渲染验证延后）（2026-08-24 一百五十九）**：
+
+- **证伪 §270 头号嫌疑（代码定案）**：`MBStyleDataSource` 用 `new TileFactory(Tile)` 构造瓦片（MBStyleDataSource.ts:737 / TileDataSource.ts:267），`localTangentSpace` 从未设置 → 恒 false → `TileObjectsRenderer.ts:77` 的 `setRotationFromMatrix` 分支对我们瓦片**不执行**；引擎自家球面 ground plane（AddGroundPlane.toLocalTargetCoords）也只做 `reprojectPoint(...).sub(tile.center)` 无旋转（且 `decodeInfo.center`=`projectedBoundingBox.getCenter`=`tile.boundingBox.position`，中心同一）。上一提交 "u" 的逆旋转块因此**必错**，已回退（连同 #ff0000 探针回退 background-color）。
+- **真根因定位（对齐引擎/mgl）**：z1 注入矩形是单个平坦四边形——弦线切入球体内部，被引擎自绘的细分 ground plane（`addGroundPlane` → `SphericalGeometrySubdivisionModifier`，10°）**深度遮挡**——与 §269/§270 "对象在/剔除关/仍 0 像素" 完全吻合（`frustumCulled=false` 引擎本就每帧设置，§270 实验实为冗余）。
+- **落地（保留，零回归预期）**：`tessellateForSphere`——earcut 三角化后按**最长边二分**（tile 空间中点递归，haversion 大圆角 < 10° 停止，深度上限 10，保绕序）细分 fill 三角形；仅 `targetProjection.type===1(Spherical)` 激活，mercator/自定义投影路径零改动。注入 bg 矩形随之成为球面网格（mgl globe tile 语义）。
+- **渲染验证延后（批量攒测）**：globe 六例数值待下批与 fog/terrain 新域一起跑。下轮若仍 0 像素，剩余候选=material 剔除面（winding/BackSide）与 `willRender(storageLevel)`。

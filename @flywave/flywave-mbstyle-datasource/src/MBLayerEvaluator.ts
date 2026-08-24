@@ -411,7 +411,7 @@ export class MBLayerEvaluator {
                     maxzoom: undefined,
                     filter: MBFilterCompiler.compile(undefined),
                     paintDefs: this.preparePaint('fill', {
-                        'fill-color': '#ff0000', // §271 probe
+                        'fill-color': (layer as any).paint?.['background-color'] ?? '#000000',
                         'fill-opacity': (layer as any).paint?.['background-opacity'] ?? 1,
                     }),
                     layoutDefs: this.prepareLayout('fill', {}),
