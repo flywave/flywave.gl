@@ -4238,3 +4238,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **终审**：census 西向多余（x16379-16382）不来自朝向——剩余域回到 FrustumIntersection 视锥遍历本身（extendedFrustumCulling/投影 box 展开），需以 47-tile 参照差集=0 验收的引擎深改（独立会话）。
 - **终态**：探针全清、工作树=提交态、218882 复原 ✓。
 - **会话终局（§289-§325，50 提交）**：三大域终案与规格工具齐备——alignment=逐面几何（§312）、fog/globe=球面尺度（§301）、terrain=视锥遍历同构（§325 终点，含相机修复 §321/LOD 规格 §323/参照工具 §315 全套支撑）。阶段性修复：secLat 高度链（alignment −11%）、globe 固定雾距（star 蓝斑修复）、circle 抬升、MIN_FOV 相机修复、drape 量纲、覆盖 LOD 语义代码。
+
+**§326. 西向多余机制破案（heading 反馈回环）——引擎相机 x 偏东 3155m = sin(45°)·groundDist（与 §325 的 −45 假 heading 反馈回环位移量精确吻合）：extractAttitude 在 Mercator 翻转基底下的假 heading 被下次 lookAt 重放置以 yaw=+45 消费 → 相机东南移 → 覆盖集整体西移 ~2 瓦片；EFC 关闭证伪（24/宽8 反宽）；circle 逃逸=重放置循环次数少（2026-08-24 二百一十五，机制定案记档）**：
+
+- **数值破案**：§324 探针引擎相机 x=20041220 vs 目标 x=20038065（工具/mgl 相机 x 与目标一致）→ **偏东 3155m** = sin(45°)×4465m（groundDist）精确吻合——§325 的假 heading（−45）在 `MapView.js:660` 路径的重放置中以 `yaw=−heading=+45` 消费（`result.x += sin(yaw)·groundDistance`）→ 相机东移+视向西北 → 覆盖集西移。**§325 的"渲染实证相机正确"重新解读**：circle 逃逸该回环（重放置次数少，首次放置 heading=0 正确）；error-overlap 的 wait op 触发二次更新进入回环态。
+- **EFC 证伪**：extendedFrustumCulling=false → census 24/宽 8（反宽）——角点 AABB 粗测非西向多余来源（回环位移才是）。
+- **修复点（下会话单点）**： Mercator `localTangentSpace` 翻转基底（yAxis=(0,−1,0)）下 extractAttitude 的 heading 提取修正（或 lookAt 重放置链不消费提取 heading）——修一处即解回环，覆盖集应回归居中（x16383-16385 域）。
+- **终态**：EFC/census 探针全清、218882 复原 ✓、工作树=提交态。
