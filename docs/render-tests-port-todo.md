@@ -3891,3 +3891,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **移植**：`createStars` 重写——16000 星（mgl `createDefaultStarsParams`），球面均匀分布 seed 30（lon=2π·r、lat=acos(1−2r)−π/2），200 单位视空间半径；逐星 size/intensity seed 300（`1+0.01·range·(−0.5+r)`，size 先 intensity 后交错），u_right/u_up·size·0.15 billboard（逆旋转轴），fragment 0.6r 起线性衰减圆 ×aOpacity×star-intensity，premultiplied 白；朝向四元数 rotX(−pitch)·rotZ(−angle)·rotX(lat)·rotY(−lng) 每帧 onBeforeRender 更新。替换旧 2000 星 Math.random 版本。
 - **实测**：star-intensity 977 恒定但**残差定位改写**——diff 集中于 limb 行（y154-157/355-357 各 ~130px/行）而星区像素逐点吻合（(55,55,154) vs (52,52,152) 列采样）——**六例残差统一定案为 limb 环带亚像素级过冲**（环带像素我方一致 +5-8 R/G、silhouette 边缘 ±1px 处 tile/dome 0.98 切换点错位）。六例数值全部恒定（1245/1319/1487/251/361/977），star 移植零回归。
 - **下轮**：limb 过冲的候选=dome 与内容雾在 limb 重叠的次级混合差、或 0.98 AA 边界位移——若追求转 PASS 需亚像素级 dome/边界标定；ROI 更高的转向=terrain/switch-style 新域取证。
+
+**§277. terrain 新域首轮基线取证——3/99 PASS，主症状=整帧空白/纯色（管线断裂非地形精度），分桶记档（2026-08-24 一百六十五，取证记档）**：
+
+- **基线（terrain/ 全类 99 例上报）**：PASS 仅 3。按主色直方图分桶：
+  - **整帧单色/近单色桶（管线断裂）**：MAPS3D-1040/ambient-only（全 222 灰）、lines-elevated-dynamic-terrain 族（全 122 灰）、remove-layer/background-layer（全黑）、globe-high-exaggeration（473k/512k 单蓝）——**terrain 场景完全未渲染**，疑 fixture 的 operations 序列（setTerrain/等待/换源）触发异常或源加载失败中断整帧。
+  - **部分内容桶（60-220k）**：transparent/opaque-zoom14.5、flat-roof-over-border 族、alignment 族、hillshade-buffer 族——有渲染但地形/网格错位。
+  - 既有接近桶：hillshade 系（§此前已有修复）。
+- **下轮入口**：① 先取一例纯黑（background-layer，最简样式）跑 console 取证——整帧黑意味着异常发生在渲染早期（harness op 或 DEM 源 fetch）；② 对照 mgl `draw_terrain.ts`/`terrain/` 与 TerrainController 的激活条件差异（style.terrain vs setTerrain op、source 解析）；③ globe-terrain（globe-high-exaggeration 418k）独立桶。
+- **会话终局**：本轮含 §276 星场移植（3a17a792）。工作树=提交态（8 commits）。
