@@ -4081,3 +4081,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **circle 抬升（mgl getElevationForLngLatZoom 语义）**：processPointFeature 的 circles 技术点 z += sampler 圆心单点采样（fill-extrusion §279 同源链路）。实测 8 例：3453→3364/5727→5758/3473→3463/3809→3572/17233→17228/6743→6757/5784→5779/5045→4970——**净 −376，方向正确幅度小**；红像素取证：unoccluded 红像素 32→110（期望 218，位置吻合）——抬升生效，剩余缺口的主体为 raster-on-terrain drape/地形形状域（每例 3-17k）。
 - **回归**：alignment 48992 逐位恒定 ✓（circles-only 门控零扰动）、tsc 干净。
 - **下轮入口**：circle 族剩余=卫星 raster 的 terrain drape 质量（buildTileCamera 烘焙分辨率/ seams）或 DEM 形状域；error-overlap 族（initializing/opaque/transparent-zoom14.5）疑 operations 时序，单例取证。
+
+**§303. error-overlap 单例取证——cur (128,32,128)=z12 const 瓦片 (255,64,255) 的 50% 混合（overzoom 父子 cross-fade 嫌疑）+ 44% 全黑（覆盖差）；fixture 语义=terrain 初始化中的渲染态（2026-08-24 一百九十一，取证记档）**：
+
+- **fixture**：error-overlap/initializing-no-terrain-at-center——center (0.005,0.01) z14.51 pitch60、DEM z12-15 const 瓦片（含 14-8191-8191）、color const 瓦片 z10-15、`wait` op（捕获 terrain 未就绪帧）；期望主体 (166,178,231) 蓝紫混色。
+- **取证**：我方中心 (128,32,128) = **z12 const (255,64,255) 的 0.5×**——候选=raster overzoom 的父子 cross-fade 半途（raster-fade-duration=0 应立即全不透明）；全黑 44% = 我方瓦片覆盖缺（mgl 在 init 态覆盖更多 tile 或 DEM fallback 集不同）。resolveAncestor 深链已存在（MBStyleDataSource:110）但请求 z 与覆盖集待与 mgl `coveringTiles`（DEM/raster 分别的 roundZoom 与 maxzoom 语义）对照。
+- **下轮入口**：① raster fade 路径审计——fade-duration=0 时 overzoom 新瓦片应全不透明（查 raster-fade 实现/父子交叉淡化）；② 覆盖集对照（我方 resolveAncestor 请求的 (z,x,y) 集合 vs mgl coveringTiles 的集合，census 探针）；③ circle 族 drape 质量对照 mgl draw_terrain_raster（§302 入口②未动）。
+- **终态**：工作树=提交态（§302 提交后零改动）、无探针残留。
