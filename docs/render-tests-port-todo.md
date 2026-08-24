@@ -4088,3 +4088,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **取证**：我方中心 (128,32,128) = **z12 const (255,64,255) 的 0.5×**——候选=raster overzoom 的父子 cross-fade 半途（raster-fade-duration=0 应立即全不透明）；全黑 44% = 我方瓦片覆盖缺（mgl 在 init 态覆盖更多 tile 或 DEM fallback 集不同）。resolveAncestor 深链已存在（MBStyleDataSource:110）但请求 z 与覆盖集待与 mgl `coveringTiles`（DEM/raster 分别的 roundZoom 与 maxzoom 语义）对照。
 - **下轮入口**：① raster fade 路径审计——fade-duration=0 时 overzoom 新瓦片应全不透明（查 raster-fade 实现/父子交叉淡化）；② 覆盖集对照（我方 resolveAncestor 请求的 (z,x,y) 集合 vs mgl coveringTiles 的集合，census 探针）；③ circle 族 drape 质量对照 mgl draw_terrain_raster（§302 入口②未动）。
 - **终态**：工作树=提交态（§302 提交后零改动）、无探针残留。
+
+**§304. raster 缺失瓦片空返回实验证伪——error-overlap 基线实为 218780（整帧空白类，83% 像素差），空返回 +3.2k 无正向信号回退；fixture 核心问题=terrain 初始化态管线（raster 覆盖/DEM 未就绪帧），非单瓦片 404（2026-08-24 一百九十二，零净变化记档）**：
+
+- **实验**：`resolveAncestor` 兜底的 clamp 路径加"最终 URL 不存在→空 FeatureCollection"（mgl 缺源不画语义）——实测 221986 vs 基线 **218780**（+3.2k）无正向信号，回退（§102 的 clamp 兜底保留）。两版差异小说明该例的 218k 主体与单瓦片 404 无关——**整帧空白类的根因在初始化态管线**（wait op 捕获帧的 raster 覆盖集/DEM 就绪度/引擎时序），与 §277 分桶判断一致，单例深挖需引擎级时序取证（独立会话）。
+- **runner vs karma 口径记档**：runner 图像（200×100）部分有内容而 karma（512×512）83% 差——两管线捕获帧不同步，census 类取证需统一口径。
+- **终态**：工作树=提交态、fill-extrusion-opacity/default PASS ✓、tsc 干净。
+- **下轮入口**：① error-overlap 整帧空白的引擎时序取证（raster getTile 调用 census vs mgl coveringTiles 在 wait 帧的集合）；② circle 族 drape 质量对照 draw_terrain_raster（§302/303 入口未动）。
