@@ -4041,3 +4041,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **扫描**：R=R_e·(k−F)/k（k=ws/2π），F∈{0.5,1,1.5,2,2.5,3,4.5}——star-intensity 967/934/923/**903**/967/3038/8643，最优 F=2（−31px）但仅单例；F=2 复测其余五例：high-color 211→725、high-color-opacity 211→810、high-color-transparent 232→944、space-color 258→285、space-color-opacity 372→385 **全面劣化**——族级权衡明确，维持 F=1（mgl `tr.globeRadius = ws/2π−1` 字面，§285 定标一致）。已回退，基线复原 934 ✓ 工作树=提交态。
 - **结论**：star 顶部 limb 带（rows 155-167，~500px）对 R 收缩不敏感（±31px 级），真因在 band 内 t ramp 的次级差（theta−horizonAngle 在 0.98-1.0 环带的取值链，或 face 瓦片上缘 vs dome 掩码的重叠序）——亚像素标定域，与 §276 以来定性一致。
 - **下轮入口**：① band 首 1-2px 的 t 值直读探针（dome shader 输出 t 灰度 vs 期望像素反演的 t 曲线，逐像素对齐后定位公式级偏差）；② 或 ROI 转回 alignment/terrain 族。
+
+**§298. dome t 直读探针——顶带残差重定性=面部内容雾在远侧 limb 渐变不足（期望 65px 宽白雾带 vs 我方塌缩至 ~3px），非 dome t 标定（2026-08-24 一百八十五，零净变化记档）**：
+
+- **t 探针**（dome shader 输出 t 灰度）：x=256 列 t 曲线与期望膝盖对齐（155-156 行即达 1.0）；行 157 横向膝盖：左弧我方 239 vs 期望 233（滞后 6px）、右弧 272 vs 278（超前 6px）——轻微不对称；**行 160-170 期望暖白带（t≈1 等效）宽 ~65px（x211-309）而我方塌缩至 x255-257**——该区域为面部（beige 瓦片）+内容雾，非 dome。
+- **定性**：期望在面部远侧 limb（顶部）有大范围白雾（glow≈2.57→fogT 0.23→35% 白，[2,4.5] 距离下公式逐值吻合期望像素）；我方面部顶缘雾渐变未展开——**面部内容雾的 glow ramp 在远侧瓦片上取值不足**（候选：vFogPos/glowGlobeCenter 在面部顶缘碎片的视空间链、或该区域瓦片未走 globe fog chunk）。R 收缩域已证伪（§297）。
+- **终态**：探针全清、934 复原 ✓、工作树=提交态。
+- **下轮入口**：面部顶缘（rows 155-174）的内容雾取值链取证——用 §208 fogDebugT=3（最终 fogFactor 灰度）模式直读面部 fogFactor 分布，对照期望 35% 白雾带；疑点集中 bg 瓦片材质是否编译 USE_FOG 且 glow 分支生效（§296 后该链应已激活——若 fogFactor=0 则查 chunk 接线）。
