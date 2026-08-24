@@ -4185,3 +4185,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实测**：initializing **218780→207985（−10795，平台首次被撼动）**、opaque 198247→210866（+12619）、circle/occluded 5758→17173（+11415）——净 +13.2k 回归；/256 松阈值逐位同结果（停止集对阈值边界不敏感）。**机制方向证实，标定域不足**：mgl 的 zoomSplitDistance 分母是**源 tileSize**（256 源更松）、ccd 随**画布高度**——引擎全局单值无法覆盖多源多画布，需把源 tileSize 传入引擎（datasource→VisibleTileSet 参数化）后逐族标定。
 - **回退**：净回归全回退（工作树=§316 提交态，218782 ✓ 复原），机制代码与数据完整记档于此，下会话可直接重启。
 - **终态**：mapview lib 重建回提交态、tsc 干净。
+
+**§318. 源 tileSize 参数化重启（§317 续）——停止集与全局 /512 逐位相同（207985/210866/210133/17173/17622）：分母非判别因素，判别残差在 dz/meterToTile 单位链（mgl 的 cameraHeight 用 mercator-tile 单位×meterToTile，我方用引擎米制 z），净回归依旧全回退（2026-08-24 二百零七，终审记档）**：
+
+- **实施**：§317 机制以 `mglDistanceLodTileSize` 参数重启（datasource 按源 tileSize 256 传入，分母 ccd/256）——五例结果与 §317 全局 /512 **逐位相同**（除 unoccluded 3453→17622 更差）——**阈值分母对停止集零影响**（与 §317 的 /256 试验一致），证实判别残差不在阈值标定而在 **dz 单位链**：mgl 的 dz/cameraHeight = mercator z × numTiles × meterToTile（tile 单位且随 zoom 缩放），我方用引擎米制 camPos.z（固定米）——distToSplitScale 的尖角缩放在两单位制下取值不同，停止边界系统性偏移。
+- **回退**：净回归（−10.8k vs +21k）全回退，218782 ✓ 复原。**终审**：引擎 LOD 的下一步=把 dz 换算到 mgl tile 单位（camZ/C·secLat·2^z·meterToTile 语义）后以 47-tile 参照集直接验收停止集（census 差集=0 为门槛）——标定域收窄到单位换算一处，独立会话可直奔。
+- **终态**：mapview lib 重建提交态、工作树=提交态、tsc 干净。
