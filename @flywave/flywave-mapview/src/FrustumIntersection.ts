@@ -90,6 +90,9 @@ export class FrustumIntersection {
      */
     mglDistanceLod = false;
     mglDistanceLodTileSize = 512;
+    /** §336: entries that STOPPED subdividing this compute (LOD band) —
+     * delivered by VisibleTileSet in mixed-level mode. */
+    lodStoppedEntries: Array<unknown> = [];
     mglDistanceLodScale = 1;
 
     private readonly m_frustum: THREE.Frustum = new THREE.Frustum();
@@ -218,6 +221,7 @@ export class FrustumIntersection {
             }
         }
 
+        this.lodStoppedEntries = [];
         const workList = [...this.m_rootTileKeys.values()];
         // Safety cap against explosive subdivision at extreme pitch angles.
         // Without a bound this loop can expand to millions of tiles, blocking
@@ -312,6 +316,7 @@ export class FrustumIntersection {
                                     r / (1 / sT + (Math.pow(stretch, k + 1) - 1) / (stretch - 1) - 1);
                             }
                             if (d > distWorld * scaleF) {
+                                this.lodStoppedEntries.push(tileEntry);
                                 continue;
                             }
                         }

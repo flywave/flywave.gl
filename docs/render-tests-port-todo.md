@@ -4301,3 +4301,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **试验**：`m_multiLevelCoverage` 旗标放宽 idealLevel 门控 + LOD(1.5)+offset+1 全组合——渲染逐位 218893 恒定、circle 6440——门控非瓶颈；结合 §334（集合收敛渲染不变）**最终定案：引擎的瓦片交付管线只取 dataZoomLevel 单层**（processVisibleTiles/TileGeometryManager 按单 dataZoom 调度），LOD 停止带的 z15 瓦片从不进入渲染——混层交付（按 entries map 的每瓦片实际层级取用）是最后的引擎改动，之前所有层（相机/集合/LOD/门控/数据源）已全部就绪并验证。
 - **接线点**：`m_multiLevelCoverage`（datasource 旗标）+ `mglDistanceLod/Scale`（引擎 LOD）+ offset +1——混层交付落地后四件同开即可按 53-tile 参照闭环。
 - **终态**：组合回退（218882 ✓）、旗标保留默认 false、tsc 干净。
+
+**§336. 混层交付落地 + 渲染冻结元信号定案——FrustumIntersection.lodStoppedEntries + VisibleTileSet mixedLevelDelivery 合并交付（引擎侧完工）；四件全开（LOD 1.5+offset+1+门控放宽+混层）渲染仍逐位 218893：**自 §306 起该 fixture 对一切瓦片集变化输出恒定=渲染冻结在早期状态（新请求从不重绘）**——嫌疑=updateRenderList 的逐帧瓦片创建门控（newTilesPerFrame=0 字面量）或 tile 对象只建一次的缓存路径，下会话以"对象创建时间线 vs 52 次请求"探针直查（2026-08-24 二百二十五，落地+元信号定案）**：
+
+- **落地（保留，默认关）**：引擎混层交付两件——FrustumIntersection 在 LOD 停止分支记录 `lodStoppedEntries`（compute 开头清零）+ VisibleTileSet `mixedLevelDelivery` opt-in 把低于 dataZoom 的停止带并入交付集。四件全开组合（m_multiLevelCoverage+mglDistanceLod 1.5+offset+1+mixedLevel）实测渲染**逐位 218893**。
+- **元信号（最重要）**：§306-§336 十一轮组合（层级/LOD/门控/集合/混层）该 fixture 输出恒定——**渲染冻结**：瓦片请求（census 52 次）从不转化为重绘，首帧后 tile 对象不更新/新建。嫌疑集中在 updateRenderList 的创建门控（VisibleTileSet:565 `const newTilesPerFrame = 0` 字面量与实际调度）或 tile 缓存对象一次性路径。**下会话第一探针**：tile 对象创建/销毁时间线 vs census 请求序（一次运行定位冻结点）。
+- **终态**：组合回退（218882 ✓）、引擎混层基础设施保留（默认关零影响）、tsc/build 干净。

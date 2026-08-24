@@ -1430,7 +1430,22 @@ export class VisibleTileSet {
                 // at this zoom level.
                 const visibleTileKeys: TileKeyEntry[] = [];
                 const dataZoomLevel = dataSource.getDataZoomLevel(zoomLevel);
-                for (const tileKeyEntry of result.tileKeyEntries.get(dataZoomLevel)!.values()) {
+                const levelEntries = result.tileKeyEntries.get(dataZoomLevel)!;
+                // §336: mixed-level delivery — append the LOD-stopped band
+                // (tiles whose distance exceeded mgl's distToSplit; they live
+                // at LOWER levels and would otherwise never be scheduled).
+                if ((this.options as any).mixedLevelDelivery === true) {
+                    for (const stopped of (this.m_frustumIntersection as any)
+                        .lodStoppedEntries ?? []) {
+                        if ((stopped as any).tileKey.level < dataZoomLevel) {
+                            levelEntries.set(
+                                TileKeyUtils.getKeyForTileKeyAndOffset(
+                                    (stopped as any).tileKey, (stopped as any).offset),
+                                stopped as TileKeyEntry);
+                        }
+                    }
+                }
+                for (const tileKeyEntry of levelEntries.values()) {
                     if (dataSource.canGetTile(dataZoomLevel, tileKeyEntry.tileKey)) {
                         visibleTileKeys.push(tileKeyEntry);
                     }

@@ -1072,10 +1072,11 @@ export class MBStyleDataSource extends TileDataSource {
                     }
                     // §323: disabled — see §331: the residual root cause is the
                     // bearing sign mirror (below), not the LOD stack.
-                    // §335: gate relaxation proved inert — the engine only
-                    // DELIVERS tiles at dataZoomLevel, so the LOD band never
-                    // renders regardless. Mixed-level delivery is the final
-                    // engine change; keep off until then.
+                    // §336: mixed-level delivery landed in the engine but the
+                    // render STILL never changes — the fixture's output is
+                    // FROZEN at an early state (new tile requests never
+                    // repaint; see §336 doc entry). Keep off until the
+                    // repaint gating is fixed.
                     (vtsL.options as any).mglDistanceLod = false;
                     (vtsL.options as any).mglDistanceLodTileSize = lodTileSize;
                     mvL.update?.();
