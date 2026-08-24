@@ -63,7 +63,7 @@ const configureTerrain = (mapView: MapView): DEMTerrainSource => {
 /** A polyline crossing the valley and ridges near the initial camera target. */
 // Hard-coded input altitude for the test site (~few-hundred-meter terrain):
 // removes unknown-elevation from the problem space entirely, matching
-// Cesium's requirement that ground-polylines sit near the surface.
+// Ground-polylines are required to sit near the surface.
 const INPUT_ALTITUDE = 620;
 const LINE_POSITIONS = [
     new GeoCoordinates(36.4822, 118.166, INPUT_ALTITUDE),
@@ -74,7 +74,7 @@ const LINE_POSITIONS = [
 
 /** A quadrilateral fill spanning a slope, plus a small hill-top highlight.
  * Uses the configuration from when the fill was verified working:
- * nodes at 350 m with the tall Cesium-like span -500..+2600. */
+ * nodes at 350 m with the tall reference span -500..+2600. */
 const POLYGON_ALTITUDE = 350;
 const POLYGON_OUTER = [
     new GeoCoordinates(36.4808, 118.1702, POLYGON_ALTITUDE),
@@ -93,7 +93,6 @@ interface GuiParams {
     target: "terrain" | "model" | "both";
     debugVolume: boolean;
     fsProbe: number;
-    depthMode: string;
     rawLineGeom: boolean;
     depthGate: boolean;
     lineNoDepth: boolean;
@@ -128,8 +127,8 @@ try {
         capturePass,
         outerRing: POLYGON_OUTER,
         heightRange: { min: -500, max: 2600 },
-        color: 0xff00ff,
-        opacity: 0.9,
+        color: 0x00cc66,
+        opacity: 0.55,
         target: DrapedTarget.Terrain
     });
 
@@ -155,11 +154,8 @@ try {
         return true;
     };
     (window as unknown as { mapView: MapView }).mapView = mapView;
-    document.title = "draped-P8";
-    console.log("[example-build] P8 magenta-face");
 
     const params: GuiParams = {
-        depthMode: "raw (d)",
         lineWidth: 6,
         lineColor: "#ffdd00",
         showLine: true,
@@ -325,7 +321,7 @@ try {
         "fitSpan"
     ).name("② fit span (DEM)");
 
-    // Auto-fit once DEM tiles are ready (Cesium computes min/maxTerrainHeight
+    // Auto-fit once DEM tiles are ready (min/maxTerrainHeight
     // at geometry creation; ours is a one-time input-prep pass, expand-only).
 
     gui.add(params, "lineNoDepth")

@@ -37,7 +37,7 @@ const EPSILON_NUDGE = 1e-5;
 /**
  * Vertex layout per segment (4 vertices, a thin quad spanning both endpoint
  * nodes; the vertex stage expands it into the shadow-volume shell, mirroring
- * Cesium's `PolylineShadowVolumeVS`):
+ * the reference vertex stage):
  *
  * ```
  * 0: start node (side +1)   2: end node (side +1)
@@ -114,10 +114,10 @@ export function buildCurtainGeometry(options: CurtainGeometryOptions): CurtainGe
         const startPlaneNormal = directions[seg].clone();
         const endPlaneNormal = directions[seg + 1].clone().negate();
 
-        // Vertices sit exactly on the centerline nodes (Cesium packs a unit
+        // Vertices sit exactly on the centerline nodes (the reference packs a unit
         // miter push here instead; both are placeholders the vertex stage
         // overwrites with the real expansion).
-        // Vertical span of the shadow volume (the role Cesium's
+        // Vertical span of the shadow volume (the role of the
         // minTerrainHeight / maxTerrainHeight plays): walls must cover every
         // terrain height along the path, otherwise rasterization clips the
         // painted region regardless of fragment-stage membership.

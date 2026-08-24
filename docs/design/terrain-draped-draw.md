@@ -1,8 +1,8 @@
 # 贴地绘制（线/面）设计方案
 
 状态：设计定稿待评审
-关联：`terrain-layer-mesh-refactor.md`（贴图层基建）、Cesium `GroundPolylinePrimitive` /
-`GroundPrimitive` 源码分析（2026-08）
+关联：`terrain-layer-mesh-refactor.md`（贴图层基建）、参考实现 `GroundPolylinePrimitive` /
+`贴地体元` 源码分析（2026-08）
 
 ## 1. 目标
 
@@ -19,7 +19,7 @@
 |---|---|---|
 | CPU 高程插值（顶点贴地） | 否 | 地形渲染面是三角网，弦高误差（30m 间距、30° 坡 → 米级偏差）导致必然穿模；消除需顶点密度爆炸 |
 | 正交矩阵投影 decal | 否（已删除） | 与 base 表面深度冲突（见 `3d39ac7e` 提交说明），仓库已统一走 tile-UV 模式 |
-| 幕帘体积 + 深度反投影（线） | **采纳** | Cesium 验证过的方案，WebGPU 下可砍掉其大部分兼容包袱 |
+| 幕帘体积 + 深度反投影（线） | **采纳** | 参考实现 验证过的方案，WebGPU 下可砍掉其大部分兼容包袱 |
 | 光栅化纹理 + tile-UV overlay（面填充兜底） | 备用 | 保留为超大区域填充的低成本路线；主路线与线统一走深度重建 |
 
 ## 3. 总体架构
@@ -27,10 +27,10 @@
 ```
 组件 A：地表分类 prepass（MRT：深度 + 表面类型 id）
 组件 B：贴地线 = 幕帘体积几何 + TSL 深度反投影材质
-         （Cesium GroundPolyline 的 WebGPU 移植）
+         （参考实现 GroundPolyline 的 WebGPU 移植）
 组件 C：填充面 = earcut 棱柱体积 + 同一 FS 判定（与线统一）
          兜底 = tile-UV overlay（超大区域）；描边 = 组件 B 闭合跑一圈
-全程无 stencil（Cesium 两处 stencil 职责分别被解析判定与 MRT 类型通道取代）
+全程无 stencil（参考实现 两处 stencil 职责分别被解析判定与 MRT 类型通道取代）
 ```
 
 ## 4. 组件 A：地表分类 prepass（深度 + 表面类型）
@@ -52,8 +52,8 @@ RT——幕帘材质在 pass 内采样它属于同帧写读回环，不可用。
 2. 地形对象从 `VisibleTileSet` 取；overrideMaterial 仅写深度+类型（无着色开销）
 3. 随按需渲染自然停更（无动画帧不执行）
 
-表面类型 id 取代 Cesium stencil 的目标掩码职责（区分贴地形还是贴 3D Tiles），
-且是任意宽度通道——未来可扩展为 layerId，实现"只贴某路瓦片源"。Cesium stencil
+表面类型 id 取代 参考实现 stencil 的目标掩码职责（区分贴地形还是贴 3D Tiles），
+且是任意宽度通道——未来可扩展为 layerId，实现"只贴某路瓦片源"。参考实现 stencil
 的另一职责（体积内外标记）本方案不需要：按三角形建几何后 FS 解析判定（见 5.2、6）。
 
 备选（原型期可用）：直接采上一帧 `getDepthTexture()`。相机静止时完美，
@@ -72,9 +72,9 @@ interface SurfaceClassificationProvider {
 
 ## 5. 组件 B：贴地线（核心）
 
-### 5.1 几何：幕帘体积（移植 Cesium GroundPolylineGeometry）
+### 5.1 几何：幕帘体积（移植 参考实现 贴地线几何）
 
-折线细分后每段 8 顶点、36 索引（左/右 × 上/下 × 前/后对）。属性布局照搬 Cesium：
+折线细分后每段 8 顶点、36 索引（左/右 × 上/下 × 前/后对）。属性布局照搬 参考实现：
 
 | 属性（vec4 × 5） | 内容 |
 |---|---|
@@ -84,7 +84,7 @@ interface SurfaceClassificationProvider {
 | endNormalAndTexcoordNormX | 终 miter 平面法线 + s 归一化（符号编码左右侧别） |
 | rightNormalAndTexcoordNormY | 右平面法线 + t 归一化（>1 编码底顶点） |
 
-体积垂直跨度：取覆盖线段的**已加载 DEM 瓦片实际 min/max 高程**（比 Cesium 全球预编译表
+体积垂直跨度：取覆盖线段的**已加载 DEM 瓦片实际 min/max 高程**（比 参考实现 全球预编译表
 更紧、体积更小）；无数据时回退 [-11000, 9000]。锐角 miter 断裂阈值沿用 30°/150°。
 
 生成时机：Worker 或主线程 CREATE 任务组；编辑中增量重算最后一段。
@@ -95,10 +95,10 @@ VS：
 
 1. `czm_computePosition` 等价物：RTE 高低位合成 positionEC（仓库本就全程 RTE，铁律 1 天然满足）
 2. `metersPerPixel(positionEC)` 移植为 TSL 节点 → 把像素宽度换算成米沿 miter 法线展开
-   （Cesium VS 同款公式）
+   （参考实现 VS 同款公式）
 3. 底部顶点向下挤 `min(地形最低高程, geometricTolerance×距离)` 防 z-fighting
 
-FS（核心判定，Cesium PolylineShadowVolumeFS 的直译）：
+FS（核心判定，参考实现 阴影体着色器FS 的直译）：
 
 ```wgsl
 depth = texture(surfaceDepth, screenUV);          // 组件 A attachment 0
@@ -113,8 +113,8 @@ s,t 由三平面距离恢复 → 材质取色（纯色/渐变/虚线样式）
 
 ### 5.3 渲染状态与已知风险
 
-- 只画背面（防双绘）、不写深度、预乘 alpha 混合——照搬 Cesium
-- **无 stencil**：Cesium stencil 的两个职责分别被取代——体积内外标记由按三角形
+- 只画背面（防双绘）、不写深度、预乘 alpha 混合——照搬 参考实现
+- **无 stencil**：参考实现 stencil 的两个职责分别被取代——体积内外标记由按三角形
   几何 + FS 解析判定消灭；地形/3D Tiles 目标区分由 prepass 表面类型通道承担（MRT）
 - **深度钳制风险**：WebGPU 无 GL_DEPTH_CLAMP。幕帘穿近/远平面时会被裁剪。
   缓解：DEM 实际 min/max 让体积很紧 + 相机远时体积整体在锥内。P1 用极端俯仰角
@@ -129,7 +129,7 @@ s,t 由三平面距离恢复 → 材质取色（纯色/渐变/虚线样式）
 3. FS 与线共用核心：采 prepass 深度+类型 → 反投影地形点 → 类型过滤 →
    对"本三角形"做 3 次半平面内外测试 → 在内上色 : discard
 
-关键差异点（相对 Cesium GroundPrimitive）：Cesium 按实例批量几何、片元无法得知
+关键差异点（相对 参考实现 贴地体元）：参考实现 按实例批量几何、片元无法得知
 自身所属三角形，被迫用 stencil 正背面计数做体积内外标记；我们按三角形建几何、
 顶点进属性，判定退化为解析式，stencil 整体免除。
 
@@ -182,7 +182,7 @@ GPU pick 在 FS 判定通过后才写 pick id——discard 天然剔除幕帘体
 - 深度语义：`MapView` 开启 `reversedDepthBuffer`，three 将其实现进投影矩阵本身。
   重建必须**直接使用采样深度 + pass 后快照的 `projectionMatrix.invert()`**，
   禁止任何手动 `1 - d` 翻转（会双重翻转导致全灭）。
-- 体积跨度：对应 Cesium `minTerrainHeight/maxTerrainHeight`。竖向跨度必须覆盖
+- 体积跨度：对应 参考实现 `minTerrainHeight/maxTerrainHeight`。竖向跨度必须覆盖
   路径地形包络，否则栅格化裁剪显示区域；纯示例与引擎均验证。
 - 带宽锚定：半宽在顶点阶段按体积自身 `|z|·mpp` 求出后以 varying 插值；
   绝不能用重建点距离换算（远山 mpp 膨胀 → 远景泄漏）。

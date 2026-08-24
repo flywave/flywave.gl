@@ -71,12 +71,7 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
     protected readonly probe: any;
     private readonly depthGate: any;
     protected reconProjInvUniform: any;
-    readonly depthFlipUniform = uniform(0);
-    /** Cesium-style west/south membership planes (EYE space, per frame). */
-    readonly westPlaneEyeUniform = uniform(new THREE.Vector4());
-    readonly southPlaneEyeUniform = uniform(new THREE.Vector4());
-    readonly inverseExtentsUniform = uniform(new THREE.Vector2());
-    readonly diagUniform = uniform(0);
+    /** West/south membership planes (EYE space, updated per frame). */
     protected readonly depthTextureNode: any;
     protected readonly typeTextureNode: any;
 
@@ -168,24 +163,10 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
     }
 
     /** Toggle the along-ray terrain disambiguation (A/B debugging). */
-    public setDepthFlip(flip: number): void {
-        this.depthFlipUniform.value = flip;
-    }
 
-    /** Per-frame eye-space membership planes (Cesium v_westPlane analogue). */
-    public setPlanarFrame(westPlaneEye: THREE.Vector4, southPlaneEye: THREE.Vector4): void {
-        (this.westPlaneEyeUniform.value as THREE.Vector4).copy(westPlaneEye);
-        (this.southPlaneEyeUniform.value as THREE.Vector4).copy(southPlaneEye);
-    }
+    /** Per-frame eye-space membership planes. */
 
     /** Static per-geometry reciprocal extents. */
-    public setInverseExtents(v: THREE.Vector2): void {
-        (this.inverseExtentsUniform.value as THREE.Vector2).copy(v);
-    }
-
-    public setDiag(level: number): void {
-        this.diagUniform.value = level;
-    }
 
     public setDepthGateEnabled(enabled: boolean): void {
         this.depthGate.value = enabled ? 1 : 0;
@@ -235,11 +216,6 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
             probe: this.probe,
             depthGate: this.depthGate,
             reconProjInv: this.reconProjInvUniform,
-            depthFlip: this.depthFlipUniform,
-            diag: this.diagUniform,
-            westPlaneEye: this.westPlaneEyeUniform,
-            southPlaneEye: this.southPlaneEyeUniform,
-            inverseExtents: this.inverseExtentsUniform,
 
             // Curtain no longer produces an eye-space fragment position; the
             // convention-fit probes are prism-only, so default to a constant.
@@ -252,21 +228,18 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
 /**
  * Material for centerline curtains built by `buildCurtainGeometry`.
  *
- * Faithful port of Cesium's `PolylineShadowVolumeVS/FS` (GroundPolyline):
+ * Reference terrain-draped polyline material:
  * the vertex stage expands each segment quad along the closer miter plane's
  * in-frame normal by `metersPerPixel * width / dot(N, R)`; the fragment
  * stage reconstructs the visible surface from captured depth and tests it
  * against the segment's three bounding planes.
  */
 export class DrapedCurtainMaterial extends DrapedVolumeMaterialBase {
-    public static readonly BUILD = "v11-pure-tail";
-
     /** Expanded view-space position, returned via `setupPositionView`. */
     private expandedEc: any;
 
     constructor(options: DrapedSurfaceMaterialOptions) {
         super(options, "curtain");
-        console.log(`[curtain] material build ${DrapedCurtainMaterial.BUILD}`);
 
         // The shell is expanded in the vertex stage (winding is
         // view-dependent) and occlusion is carried by the membership tests,
@@ -305,7 +278,7 @@ export class DrapedCurtainMaterial extends DrapedVolumeMaterialBase {
         const vFragEye = varying(baseEC);
 
         // Closer cap plane for THIS vertex, then two cross products — the
-        // exact ternary/cross chain of PolylineShadowVolumeVS.
+        // exact ternary/cross chain of the reference vertex stage.
         const dStart = startNormalEc.dot(baseEC).add(startW).abs();
         const dEnd = endNormalEc.dot(baseEC).add(endW).abs();
         const planeDirection = mix(endNormalEc, startNormalEc, step(dStart, dEnd));
@@ -320,7 +293,7 @@ export class DrapedCurtainMaterial extends DrapedVolumeMaterialBase {
         const expandedEC = baseEC.add(normalEC.mul(sign(aSideSign)).mul(pushDistance));
 
         // Half band width in meters evaluated AT THE VOLUME and interpolated
-        // (Cesium anchors width at the line): never recompute it from the
+        // (width is anchored at the line): never recompute it from the
         // reconstructed surface point, whose distance inflates the band and
         // lets far terrain leak into the acceptance region.
         const vHalfWidthMeters = varying(
@@ -379,10 +352,10 @@ export class DrapedCurtainMaterial extends DrapedVolumeMaterialBase {
     }
 
     /**
-     * Cesium `czm_depthClamp` VS-half, ported to WebGPU clip conventions:
+     * Depth-clamp VS-half, adapted to WebGPU clip conventions:
      * force clip z into the middle of [0, w] so the near/far planes can
      * never clip the volume shell. The fragment stage keeps depth testing
-     * and writing disabled, mirroring PolylineShadowVolume's blend-only
+     * and writing disabled, matching the blend-only
      * output, so no FS depth compensation is required.
      */
 }
@@ -407,7 +380,9 @@ export class DrapedPrismMaterial extends DrapedVolumeMaterialBase {
         const vCornerC = varying(ecCornerC);
         const vFragEye = varying(modelViewMatrix.mul(vec4(positionLocal, 1.0)).xyz);
 
-        this.positionNode = positionLocal;
+        // Route through the custom vertex hooks (same structure as the
+        // curtain) so the depth-clamp below is guaranteed to be applied.
+        this.setupPositionView = () => positionLocal;
 
         this.colorNode = buildDrapedColorNode(
             "prism",
@@ -418,5 +393,17 @@ export class DrapedPrismMaterial extends DrapedVolumeMaterialBase {
                 fragEye: vFragEye
             })
         );
+    }
+
+    /**
+     * Depth clamp: park clip z in the
+     * middle of [0,w] so the near/far planes never clip the volume shell,
+     * eliminating close-range holes when the camera flies into it. Depth
+     * test/write stay disabled, matching the blend-only output.
+     */
+    public setupModelViewProjection(): any {
+        const mv = modelViewMatrix.mul(vec4(positionLocal, 1.0));
+        const clip = cameraProjectionMatrix.mul(mv);
+        return vec4(clip.x, clip.y, clip.w.mul(0.5), clip.w);
     }
 }

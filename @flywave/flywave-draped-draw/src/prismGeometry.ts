@@ -20,10 +20,9 @@ export interface PrismGeometryResult {
     geometry: THREE.BufferGeometry;
     origin: THREE.Vector3;
     /**
-     * Verbatim inputs of ShadowVolumeAppearanceVS: the bounding-rectangle
+     * Membership frame inputs: the bounding-rectangle
      * south-west corner (origin-relative), world-axis unit directions and
-     * extents. Eye-space planes are derived per frame, exactly as Cesium's
-     * vertex stage derives them from these batch-table entries.
+     * extents. Eye-space planes are derived per frame from these values.
      */
     planarFrame: {
         southWestCorner: THREE.Vector3;
@@ -110,7 +109,7 @@ export function buildPrismGeometry(options: PrismGeometryOptions): PrismGeometry
     const cornersB = new Float32Array(triangleCount * vertsPerTriangle * 3);
     const cornersC = new Float32Array(triangleCount * vertsPerTriangle * 3);
     // Bounding rectangle of every ring point on the tangent basis,
-    // packaged exactly like Cesium's batch-table entries.
+    // packaged exactly like the reference batch-table entries.
     const planar = flatOuter.map(([u, v]) => ({ u, v }));
     for (const ring of flatHoles) {
         for (const [u, v] of ring) planar.push({ u, v });

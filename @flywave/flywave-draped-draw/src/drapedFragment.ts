@@ -44,12 +44,6 @@ export interface DrapedFragmentContext {
     /** Eye-space position of the current fragment's vertex (interpolated). */
     fragEye: any;
     varyings: Record<string, any>;
-    /** Eye-space west membership plane (prism). */
-    westPlaneEye?: any;
-    /** Eye-space south membership plane (prism). */
-    southPlaneEye?: any;
-    /** 1/extents mapping plane distances into [0,1] (prism). */
-    inverseExtents?: any;
 }
 
 /**
@@ -128,7 +122,7 @@ export function buildDrapedColorNode(mode: "curtain" | "prism", context: DrapedF
         let probe15Color: any = vec4(0);
         let insideF: any;
         if (mode === "curtain") {
-            // Screen-space band (GroundPolyline-style): the vertex stage
+            // Screen-space band: the vertex stage
             // projects the segment endpoints to clip space; here the current
             // pixel's distance to that screen segment decides membership.
             // Constant width in pixels is guaranteed by construction and the

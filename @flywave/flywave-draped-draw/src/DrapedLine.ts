@@ -144,25 +144,6 @@ export class DrapedLine {
     }
 
     private readonly m_scratchSize = new THREE.Vector2();
-    private m_statusHud: HTMLDivElement | null = null;
-
-    private updateStatusHud(bound: boolean): void {
-        if (this.m_statusHud === null) {
-            this.m_statusHud = document.createElement("div");
-            this.m_statusHud.style.cssText =
-                "position:fixed;top:4px;left:6px;z-index:9999;font:12px monospace;" +
-                "color:#0f0;background:rgba(0,0,0,.55);padding:2px 6px;pointer-events:none";
-            document.body.appendChild(this.m_statusHud);
-        }
-        const flip = (this.material as unknown as { depthFlipUniform?: { value: number } })
-            .depthFlipUniform?.value;
-        this.m_statusHud.textContent =
-            `${
-                (this.material as unknown as { constructor?: { BUILD?: string } }).constructor
-                    ?.BUILD
-            } ` + `bound=${bound ? "Y" : "N"} vis=${this.m_mesh?.visible ? "Y" : "N"} flip=${flip}`;
-    }
-
     private syncBeforeRender(): void {
         if (this.m_rawView) {
             return; // plain-material inspection: keep whatever is on the mesh
