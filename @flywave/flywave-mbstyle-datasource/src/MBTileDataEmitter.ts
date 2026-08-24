@@ -1501,23 +1501,39 @@ export class MBTileDataEmitter {
             const ringCount = allVerts.length / 2;
 
             // Emit bottom + top vertices for every footprint vertex.
+            // §279/§284: lift the footprint onto the DEM surface with mgl
+            // alignment semantics (fill_extrusion.vertex.glsl is_flat_height
+            // / is_flat_base): "flat" uses the FEATURE CENTROID elevation so
+            // roofs/bases stay horizontal; "terrain" (base default) is
+            // per-vertex.
+            const heightAlign = (layer.paint as any)['fill-extrusion-height-alignment'] ?? 'flat';
+            const baseAlign = (layer.paint as any)['fill-extrusion-base-alignment'] ?? 'terrain';
+            const cw = this.m_decodeInfo.center;
+            const grounds: number[] = new Array(ringCount);
+            let centroidElev = 0;
+            if (this.m_terrainSampler) {
+                for (let i = 0; i < ringCount; i++) {
+                    const w = this.project(
+                        new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
+                    );
+                    grounds[i] = this.m_terrainSampler(w.x + cw.x, w.y + cw.y);
+                    centroidElev += grounds[i];
+                }
+                centroidElev /= Math.max(ringCount, 1);
+            }
             const baseVertex = geo.positions.length / 3;
             for (let i = 0; i < ringCount; i++) {
                 const w = this.project(
                     new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
                 );
-                // §279: lift the footprint onto the DEM surface (mgl
-                // getTerrainHeight per footprint vertex).
-                let ground = 0;
-                if (this.m_terrainSampler) {
-                    const cw = this.m_decodeInfo.center;
-                    ground = this.m_terrainSampler(w.x + cw.x, w.y + cw.y);
-                }
+                const ground = this.m_terrainSampler ? grounds[i] : 0;
+                const baseGround = baseAlign === 'flat' ? centroidElev : ground;
+                const topGround = heightAlign === 'flat' ? centroidElev : ground;
                 // bottom vertex
-                geo.positions.push(w.x, w.y, ground + floorHeight);
+                geo.positions.push(w.x, w.y, baseGround + floorHeight);
                 geo.extrusionAxis.push(0, 0, 0, 0);
                 // top vertex
-                geo.positions.push(w.x, w.y, ground + height);
+                geo.positions.push(w.x, w.y, topGround + height);
                 geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
             }
 

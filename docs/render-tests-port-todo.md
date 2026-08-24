@@ -3936,3 +3936,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **三修复**：① `_mbTerrainLifted` technique 标记——emitter 烘焙 ground 时打标，patcher 见标跳过 shader DEM 加法（保留 height uniforms 供垂直渐变）；② `TerrainController.setElevationOrigin`——整个 terrain mesh 下移中心海拔（mgl 相机贴面的相机相对等价），sampleElevation 发相对高程；相机/zoom/瓦片选择零扰动（直接抬相机会漂移 zoomLevel 破坏瓦片选择——道路全失的实验证伪了该路线）。
 - **实测**：alignment 族四例全降但未过（残余=光照标定/alignment 语义细化/base-flat 屋顶水平化——emitter 目前 per-vertex 同值，flat-top 未实现）。回归：background-color/fog-color/terrain cache-invalidation 全恒定 ✓。
 - **§281 的『0 main draws』结论记档为探针伪影**（patcher 挂的 probe 只存在于 AfterRender 补丁后、对象每帧可见）；真实路径：对象全程绘制，材质双提升致出视锥。
+
+**§284. mgl alignment 语义落地（flat-top/base-flat 质心海拔）——四例小降；残差定档=墙面光照标定（我方 51 vs 期望 85，屋顶 136✓135 已对）（2026-08-24 一百七十一，保留）**：
+
+- **落地**：emitExtrudedPolygon 按 mgl `is_flat_height`/`is_flat_base` 语义——height-alignment 'flat'（默认）顶点用**要素质心海拔**（屋顶水平），'terrain' 逐点；base-alignment 'terrain'（默认）逐点、'flat' 质心。逐 footprint 预采样数组 + 质心一次计算。
+- **实测**：56961/58342/46272/44559（前值 59506/58247/46795/44559）——小幅；**残差主体=墙面 Lambert 光照过暗**（51 vs 85，比值 0.6）+ 可见建筑数量差异（期望 39k 建筑像素 vs 我方 17k，疑遮挡/剔除差异）——光照标定域，需视觉迭代（同 §217 雾标定模式）。
+- 下轮：光照三参数（intensity/ambient/光位）扫描；或按用户优先级转 globe limb。
