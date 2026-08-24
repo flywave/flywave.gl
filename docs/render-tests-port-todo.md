@@ -4035,3 +4035,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实测**：face 像素 (245,245,220) 与期望逐位吻合（前 (247,247,227) 蓝斑清除）；karma 六例 934/258/211/372/211/233（前 928/258/211/372/211/232）——karma 计数近似恒定（其 metric 下蓝斑 Δ6-8 计入方式不同），但像素级取证确认修复。回归：fog/color 3 PASS ✓、background-color/default PASS ✓。
 - **调试记档（探针污染第二轮）**：本轮一度 28495/46486 假象——DOME-OFF 探针的 python 静默未命中（replace 无断言）致 dome 未还原 + try/catch 残留语法错；**教训：python 探针清除必须 assert 命中**（§291 第一轮教训的同型复发）。
 - **剩余**：star-intensity 934（karma metric）的残差构成待重新分解（蓝斑已除，应重摄影行剖面）；high-color 211/66、space-color 258/132 等仍差 2-3×。
+
+**§297. dome R 收缩微扫证伪——star 903 单例最优 F=2 但其余五例全面劣化（high-color 211→725 等），族级最优维持 mgl 字面 F=1；顶部 limb 带残差定性为非收缩域（2026-08-24 一百八十四，零净变化记档）**：
+
+- **扫描**：R=R_e·(k−F)/k（k=ws/2π），F∈{0.5,1,1.5,2,2.5,3,4.5}——star-intensity 967/934/923/**903**/967/3038/8643，最优 F=2（−31px）但仅单例；F=2 复测其余五例：high-color 211→725、high-color-opacity 211→810、high-color-transparent 232→944、space-color 258→285、space-color-opacity 372→385 **全面劣化**——族级权衡明确，维持 F=1（mgl `tr.globeRadius = ws/2π−1` 字面，§285 定标一致）。已回退，基线复原 934 ✓ 工作树=提交态。
+- **结论**：star 顶部 limb 带（rows 155-167，~500px）对 R 收缩不敏感（±31px 级），真因在 band 内 t ramp 的次级差（theta−horizonAngle 在 0.98-1.0 环带的取值链，或 face 瓦片上缘 vs dome 掩码的重叠序）——亚像素标定域，与 §276 以来定性一致。
+- **下轮入口**：① band 首 1-2px 的 t 值直读探针（dome shader 输出 t 灰度 vs 期望像素反演的 t 曲线，逐像素对齐后定位公式级偏差）；② 或 ROI 转回 alignment/terrain 族。
