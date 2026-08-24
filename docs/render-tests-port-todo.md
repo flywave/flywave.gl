@@ -4107,3 +4107,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - 勘误 §305 的"terrain mesh 未建"表述：const DEM 存在 14-8191-8191 一片 → meshCount=1 → drape 对该片运行；主体残差=其余 8/9 区域：无 mesh、无 drape、raster 兜底缺失。修复方向不变：**无 drape 区域的 raster 平面渲染兜底**（mgl 无地形路径），实施点=TerrainDraping/主 pass 的内容显隐逻辑（TerrainDraping.ts:195-215 的 hidden 机制）+ raster 四边形在无地形区域的直渲染。
 - 终态：工作树=提交态。
+
+**§306. raster tileSize-256 层级修正落地——storageLevelOffset 按 tileSize 定（mgl coveringZoom=round(zoom+log2(tileSize/512))），error-overlap 请求集 z15→z14 对齐 mgl，兄弟例 −916/−774（2026-08-24 一百九十五，保留+实测）**：
+
+- **落地**：raster-only 样式的 storageLevelOffset 从固定 0 改为 tileSize≤256→−1（512 维持 0）——mgl `coveringZoomLevel = round(zoom + log2(tileSize/512))`：tileSize-256 源在 z14.51 相机下请求 z14，我方原 z15（+1 flywave 偏移未按 tileSize 折算）。census 验证：请求集 30×z15（16377-16386，祖先链全 miss）→ **z14（8188-8191 带，与 mgl 覆盖集同域，const 瓦片/祖先可解析）**。
+- **实测**：error-overlap 三例 218780→218777 / 198247→197331 / 220649→219875——量级不变（主体仍=drape 依赖链，§305b 兜底未实施）但请求域已对齐。回归：raster-color 族 1F/1S 与基线逐位恒定 ✓（512 路径零扰动）、tsc 干净、探针全清。
+- **剩余**：§305b 的无 drape 平面兜底仍为整帧空白桶的解锁点（z14 修正后 raster 数据面已就绪，兜底实施即可见）。
