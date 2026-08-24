@@ -4276,3 +4276,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复点**：applyCameraSettings:2741 `bearing = −(style.bearing)` 的取负（§2736 注释称按 counter-clockwise 语义校准——该校准对正/负 bearing 不对称，负值镜像）；候选=去掉取负或统一 yaw 映射，**必须以 bearing 测试族（含既有 PASS 的正 bearing 例）回归裁决**，单一 fixture 修复有镜像回归风险。
 - **终态**：组合全部回退（218882 ✓）、census 探针全清、工作树=提交态。
 - **会话终局（§289-§331，59 提交）**：terrain 桶根因链最终定格=bearing 符号镜像（相机其余六项全对）+ LOD/层级域（规格就绪）——修复点单一带回归裁决要求；alignment/fog-globe 终案不变。
+
+**§332. 去取负试验证伪——applyCameraSettings 的取负（`−style.bearing`）是正确的（去负后 error-overlap 218882→228603/opaque →224730 劣化）：镜像位点不在 datasource 取负，而在引擎相机帧约定与参照工具 quat 约定之间——需工具对已知 bearing 的 PASS fixture 验证定向（下会话：选一个带 bearing 且当前 PASS 的测试，工具算其参照集并对拍 census，确定工具约定后重判 §331）（2026-08-24 二百二十一，证伪记档）**：
+
+- **试验**：`bearing = style.bearing`（去负）→ 两例劣化 ~10k/26k——取负规则对现有渲染是正确的（与 §2736 校准注释一致）；§331 的"引擎镜像"结论需再判——**镜像位点收窄到工具 quat 约定 vs 引擎相机帧**（工具 `rotateZ(−bearing)` 在 mercator y-down 帧的方向语义未独立验证）。
+- **下会话**：① 选带正 bearing 且 PASS 的 fixture，工具算参照集 vs census 对拍——若工具与引擎一致则 §331 镜像结论成立且修复在引擎帧；若不一致则工具约定反了、error-overlap 的差集重判。② 之后按 §323 LOD 栈复测。
+- **终态**：sign-test 回退（218882 ✓）、工作树=提交态。
