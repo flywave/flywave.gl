@@ -1142,10 +1142,18 @@ export class MBMaterialPatchManager {
                 tex.magFilter = filterType;
                 tex.generateMipmaps = true;
                 try {
-                    const maxAniso = (this.m_dataSource as any).mapView?.renderer
+                    // mgl enables anisotropic filtering ONLY beyond 20° pitch
+                    // (draw_raster.ts: "Enable trilinear filtering on tiles
+                    // only beyond 20 degrees of pitch, to prevent it from
+                    // compromising image crispness on flat or low tilted
+                    // maps") and then at the device MAX (not a capped 4).
+                    // Flat-view raster fixtures must sample un-filtered.
+                    const mapView = (this.m_dataSource as any).mapView;
+                    const maxAniso = mapView?.renderer
                         ?.capabilities?.getMaxAnisotropy?.();
-                    if (typeof maxAniso === 'number' && maxAniso > 1) {
-                        tex.anisotropy = Math.min(4, maxAniso);
+                    const tilt = Number(mapView?.tilt ?? 0);
+                    if (tilt > 20 && typeof maxAniso === 'number' && maxAniso > 1) {
+                        tex.anisotropy = maxAniso;
                     }
                 } catch {}
             };
