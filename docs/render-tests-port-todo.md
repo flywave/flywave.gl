@@ -4269,3 +4269,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **参照集重算**：工具 BEARING=−45 → 52 tiles（z15 x16387-16389/y16377-16379 远带 + z16 x32765-32768 近带）——与我方 census（z15 x16379-16386/y16377-16384）同西北象限，真差集=~3 列东西向 + z15/z16 层级差 → 回到 §322 的 LOD/层级域（相机侧已无嫌疑）。
 - **教训记档**：取证 dump 的键过滤列表必须含全部相机字段（bearing/pitch/zoom/center 一次性全量），防六节级联误判。
 - **终态**：探针全清（CAMTRACE/BRG）、mapview lib 重建提交态、218882 复原 ✓、工作树仅工具 bearing 修正。
+
+**§331. bearing 符号镜像终案——LOD+1 组合 census（38 tiles）对拍双参照：与 bearing −45 参照重合仅 8/52、与 **+45** 参照重合 30/38：引擎把 bearing −45 渲染成 +45 视向（镜像）=error-overlap 218k 的真根因；修复点=applyCameraSettings 的取负规则（`bearing = −style.bearing`）或引擎 yaw 语义，需 bearing 测试族回归裁决（2026-08-24 二百二十，终案记档）**：
+
+- **双参照对拍**：§330 纠错后的组合测量（LOD 启用+offset+1）census=38 tiles——x16379-16386（目标以西）vs mgl−45 参照 x16382-16389（偏东）：重合 8；而 **mgl+45 参照重合 30/38**——我方视向等效 mgl 的 +45，与 fixture 的 −45 镜像。
+- **修复点**：applyCameraSettings:2741 `bearing = −(style.bearing)` 的取负（§2736 注释称按 counter-clockwise 语义校准——该校准对正/负 bearing 不对称，负值镜像）；候选=去掉取负或统一 yaw 映射，**必须以 bearing 测试族（含既有 PASS 的正 bearing 例）回归裁决**，单一 fixture 修复有镜像回归风险。
+- **终态**：组合全部回退（218882 ✓）、census 探针全清、工作树=提交态。
+- **会话终局（§289-§331，59 提交）**：terrain 桶根因链最终定格=bearing 符号镜像（相机其余六项全对）+ LOD/层级域（规格就绪）——修复点单一带回归裁决要求；alignment/fog-globe 终案不变。

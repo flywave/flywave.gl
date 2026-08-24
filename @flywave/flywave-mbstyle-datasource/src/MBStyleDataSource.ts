@@ -1067,9 +1067,8 @@ export class MBStyleDataSource extends TileDataSource {
                             if (typeof ts === 'number' && ts > 0) { lodTileSize = ts; break; }
                         }
                     }
-                    // §323: disabled — full mgl-parity stack (camera+level+LOD)
-                    // still plateaued; re-enable after the engine frustum
-                    // traversal shape itself matches mgl (§324).
+                    // §323: disabled — see §331: the residual root cause is the
+                    // bearing sign mirror (below), not the LOD stack.
                     (vtsL.options as any).mglDistanceLod = false;
                     (vtsL.options as any).mglDistanceLodTileSize = lodTileSize;
                     mvL.update?.();
