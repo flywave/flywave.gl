@@ -4048,3 +4048,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **定性**：期望在面部远侧 limb（顶部）有大范围白雾（glow≈2.57→fogT 0.23→35% 白，[2,4.5] 距离下公式逐值吻合期望像素）；我方面部顶缘雾渐变未展开——**面部内容雾的 glow ramp 在远侧瓦片上取值不足**（候选：vFogPos/glowGlobeCenter 在面部顶缘碎片的视空间链、或该区域瓦片未走 globe fog chunk）。R 收缩域已证伪（§297）。
 - **终态**：探针全清、934 复原 ✓、工作树=提交态。
 - **下轮入口**：面部顶缘（rows 155-174）的内容雾取值链取证——用 §208 fogDebugT=3（最终 fogFactor 灰度）模式直读面部 fogFactor 分布，对照期望 35% 白雾带；疑点集中 bg 瓦片材质是否编译 USE_FOG 且 glow 分支生效（§296 后该链应已激活——若 fogFactor=0 则查 chunk 接线）。
+
+**§299. fogDebugT=3 直读——chunk fogFactor≈0.97 vs 实际面部近零雾的矛盾定案：面部可见颜色不走该 chunk（双表面/烘焙通路候选），顶带雾差在另一条链上（2026-08-24 一百八十六，零净变化记档）**：
+
+- **探针矛盾**：fogDebugT=3（fogFactor 灰度）下面部 x=256 列 fogFactor 0.96-1.0（全白雾级），但真实渲染同位置 (245,245,220) 近零雾——**运行该 chunk 的表面不是产出可见 beige 的表面**（候选：注入 bg 瓦片藏在引擎球面/其他表面之下，或 beige 来自 CPU 烘焙色而 chunk 表面被覆盖）。§296 的 fogGlobeRange 只修到了 dome 侧蓝斑（dome 与 chunk 无关），面部内容雾的真实通路仍未定位。
+- **定位残差链（下轮）**：对象级——对 rows 155-174 面部像素做 pick/对象识别（可临时给 bg 瓦片 technique 强制特征色区分表面归属），确定 beige 面的生产者后在其通路上对 glow ramp（[2,4.5] 距离、sdf 归一）做 §296 同款修正。
+- **终态**：探针全清、934 复原 ✓、tsc 干净、工作树=提交态。
