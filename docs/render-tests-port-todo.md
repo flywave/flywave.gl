@@ -4231,3 +4231,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **对拍（工具 vs 引擎探针）**：z **2576 = 2576 逐位吻合**——§321 相机修复后引擎相机高度与 mgl 完全一致；位置 xy 同域。dir 探针值 (−0.612,0.612,−0.5) 含 45° 水平分量 vs mgl 纯北向——但 `getWorldDirection` 未先 `updateMatrixWorld`（§319 已证会返回陈旧值），**dir 存疑不采信**；若复测后引擎朝向确实偏 45°，则 census 的西向多余（x16379-16382 vs mgl x16383-16385）直接由此解释——单点即可闭环。
 - **下会话单点入口**：① `cam.updateMatrixWorld(true)` 后复测 dir（或由 heading/tilt 析构）② 若朝向正确则西向多余回到视锥遍历（extendedFrustumCulling）域；规格工具（47-tile + TRACE）随时可对拍。
 - **终态**：探针全清、工作树=提交态、218882 复原 ✓。
+
+**§325. 朝向单点复核终审——heading 读数纬度耦合（error-overlap@lat0.01 → −45、circle@lat35.9 → −20）但 circle 渲染 2% 级吻合期望：相机实际正确，heading/dir 读数为 Mercator localTangentSpace 翻转基底（yAxis=(0,−1,0)）下的坐标系解释假象；census 西向多余非朝向域，回到 FrustumIntersection 视锥遍历本域（2026-08-24 二百一十四，终审记档）**：
+
+- **复核（updateMatrixWorld 后）**：error-overlap dir=(−0.612,0.612,−0.5)/heading −45；circle 同探针 heading −20——**纬度耦合的系统性读数**，但 circle/occluded 渲染仅 2% 差 → 相机视图实际正确（若真偏 20° 内容不可能对位）——heading/dir 为 Mercator 切空间翻转基底的解释差，**非真实朝向错误**。§324 的"朝向偏 45° 闭环"路径证伪。
+- **终审**：census 西向多余（x16379-16382）不来自朝向——剩余域回到 FrustumIntersection 视锥遍历本身（extendedFrustumCulling/投影 box 展开），需以 47-tile 参照差集=0 验收的引擎深改（独立会话）。
+- **终态**：探针全清、工作树=提交态、218882 复原 ✓。
+- **会话终局（§289-§325，50 提交）**：三大域终案与规格工具齐备——alignment=逐面几何（§312）、fog/globe=球面尺度（§301）、terrain=视锥遍历同构（§325 终点，含相机修复 §321/LOD 规格 §323/参照工具 §315 全套支撑）。阶段性修复：secLat 高度链（alignment −11%）、globe 固定雾距（star 蓝斑修复）、circle 抬升、MIN_FOV 相机修复、drape 量纲、覆盖 LOD 语义代码。
