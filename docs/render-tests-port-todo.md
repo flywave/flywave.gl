@@ -4125,3 +4125,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **§307 落地（保留）**：injectTerrainDrape 单/多 tile 的顶点注入补乘 `uMBDrapeZScale = exaggeration×secLat`（新 demZScale getter + uniform 传参）——error-overlap 三例与 circle 例全部惰性（该族 exaggeration=1、secLat 敏感例未触发），但量纲与 mesh 一致，对夸张 fixture 正确。
 - **§306 定案回退**：mgl `coveringZoomLevel = round(zoom + log2(512/sourceTileSize))`——tileSize-256 为 **+1**（我方 §306 读反为 −1）。实测净回归：circle/occluded 5758→10185（+4.4k，satellite 层级错位）vs error-overlap 兄弟 −0.9k——回退至 offset 0（circle 5758 ✓ / opaque 198247 基线 ✓ / alignment 48992 ✓ 全复原）。error-overlap 的 z14 改善与 mgl z16(+1) 语义矛盾，待 per-fixture census 复核后重审。
 - **终态**：tsc 干净、三例复原验证、工作树仅含 §307+§308 注释级改动。
+
+**§309. 无 mesh 区域 raster 可见性证伪 + 期望重定性——地形隐藏探针渲染逐位不变（黑/洋红=raster 对象自身的 z12 棋盘祖先），期望=多层级祖先拼图（z10 橙带 384-640 行/z11 黄/z13 青/z15 红各据区域），残差=覆盖集与逐瓦片最近祖先的拼图差（2026-08-24 一百九十八，零净变化记档）**：
+
+- **地形隐藏探针**：WillRender 中 mesh.visible=false 全隐藏 → 渲染**逐位不变**（黑 2445/洋红 2110 采样同分布、中心 (128,32,128) 恒定）——§305b 的"terrain 埋没 raster"假设证伪：黑/洋红就是 raster 四边形本身（z12 const 棋盘瓦片 255,64,255+黑 checker 的混采样；黑=404 clamp 兜底）。
+- **期望重定性**：expected（256×1024 高图）= **多层级祖先拼图**——z10 橙 (255,148,0) 大带（384-640 行）、z13 青 (0,253,255) 区、z15 红 (255,0,43)、z12 洋红区各自占据不同屏幕区域——mgl 的覆盖集（z16 round(+1) 语义）逐瓦片最近祖先落到不同层级；我方 z15 请求集的祖先解析与 mgl 覆盖集不重合（部分瓦片最近真祖先 404 → clamp 黑，如 (16386,16384) 的 z10 祖先 (512,512) 不存在而 mgl 覆盖集含 512-511 支系）。
+- **下轮入口（独立会话规模）**：覆盖集对齐——mgl `coveringTiles`（round(zoom+1) for tileSize-256）的精确 (x,y) 集合复刻（或请求层级 +1 试探），使逐瓦片最近祖先拼图与 mgl 同构；§306 的 z14 改善实为部分瓦片祖先命中的巧合，非语义对齐。
+- **终态**：探针全清、218780 复原 ✓、工作树=提交态。
