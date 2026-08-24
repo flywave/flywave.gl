@@ -64,6 +64,9 @@ class RasterTileDataProvider extends DataProvider {
     private m_idealLevel: (() => number) | undefined;
     /** §316: lazy mapView accessor (DataProviders have no mapView of their own). */
     m_mapViewRef?: () => any;
+    /** §335: mgl LOD mode — allow multi-level coverage (engine schedules a
+     * mixed z/z+1 set; the single-ideal-level gate would empty the LOD band). */
+    m_multiLevelCoverage = false;
 
     constructor(tileUrlTemplate: string, minZoom: number = 0, maxZoom: number = 22,
         idealLevel?: () => number) {
@@ -146,7 +149,7 @@ class RasterTileDataProvider extends DataProvider {
         // Only the camera's ideal level produces coverage (mgl one-tile-per-
         // cell semantics). Other engine-scheduled levels return empty so
         // multi-level quads never stack on screen.
-        if (this.m_idealLevel) {
+        if (this.m_idealLevel && !this.m_multiLevelCoverage) {
             const ideal = Math.min(Math.max(this.m_idealLevel(), this.m_minZoom), this.m_maxZoom);
             if (zReq !== ideal) {
                 return JSON.stringify({ type: 'FeatureCollection', features: [] });
@@ -1069,11 +1072,10 @@ export class MBStyleDataSource extends TileDataSource {
                     }
                     // §323: disabled — see §331: the residual root cause is the
                     // bearing sign mirror (below), not the LOD stack.
-                    // §334: calibration validated — scale 1.5 converges the
-                    // census set to the mgl reference (52/52, diff ~0), but
-                    // the RENDER is unchanged: the per-tile ANCESTOR mosaic
-                    // choice is the next domain, not the set. Keep off until
-                    // that lands (avoid the circle +664 regression).
+                    // §335: gate relaxation proved inert — the engine only
+                    // DELIVERS tiles at dataZoomLevel, so the LOD band never
+                    // renders regardless. Mixed-level delivery is the final
+                    // engine change; keep off until then.
                     (vtsL.options as any).mglDistanceLod = false;
                     (vtsL.options as any).mglDistanceLodTileSize = lodTileSize;
                     mvL.update?.();

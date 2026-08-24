@@ -4295,3 +4295,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **关键发现**：集合收敛后**渲染逐位不变**（218893）——证明整帧空白的最终瓶颈在**每瓦片的祖先马赛克选择**（datasource 端 resolveAncestor 在同集合下挑的层级与 mgl 不同，§309 的 z12 棋盘/z10 橙带差即此），非集合差。LOD 启用回退关闭（circle +664 回归风险），等马赛克域修复后一并启用。
 - **下会话入口**：resolveAncestor 与 mgl 逐瓦片层级挑选的对拍（用修正工具 TRACE 的停止级分布作为每瓦片期望层级，直接校准 datasource 端 mglLodLevel/resolveAncestor 的挑选）。
 - **终态**：临时启用/census 探针全清、knob 保留默认 1（零影响）、218882 复原 ✓、tsc/build 干净。
+
+**§335. 门控放宽证惰性 + 引擎混层交付定案——multi-level 门控旗标（m_multiLevelCoverage，默认 false）放宽后渲染仍逐位 218893：引擎只按 dataZoomLevel 单层交付瓦片，LOD 带从不渲染（无论集合/门控/层级如何）——**混层瓦片交付（VisibleTileSet 按每瓦片 LOD 级交付）为最终引擎深改点**；旗标作为未来接线点保留（2026-08-24 二百二十四，终审定档）**：
+
+- **试验**：`m_multiLevelCoverage` 旗标放宽 idealLevel 门控 + LOD(1.5)+offset+1 全组合——渲染逐位 218893 恒定、circle 6440——门控非瓶颈；结合 §334（集合收敛渲染不变）**最终定案：引擎的瓦片交付管线只取 dataZoomLevel 单层**（processVisibleTiles/TileGeometryManager 按单 dataZoom 调度），LOD 停止带的 z15 瓦片从不进入渲染——混层交付（按 entries map 的每瓦片实际层级取用）是最后的引擎改动，之前所有层（相机/集合/LOD/门控/数据源）已全部就绪并验证。
+- **接线点**：`m_multiLevelCoverage`（datasource 旗标）+ `mglDistanceLod/Scale`（引擎 LOD）+ offset +1——混层交付落地后四件同开即可按 53-tile 参照闭环。
+- **终态**：组合回退（218882 ✓）、旗标保留默认 false、tsc 干净。
