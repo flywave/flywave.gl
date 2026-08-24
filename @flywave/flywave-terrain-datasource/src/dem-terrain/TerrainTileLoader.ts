@@ -115,14 +115,18 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             meshes.set(target.key, this.createLayerMesh(state, target));
         }
 
-        // Layers absent from the current target set (e.g. imagery resources
-        // briefly evicted and not yet reloaded) are HIDDEN, not disposed —
-        // material disposal is reserved for warm-cache overflow and source
-        // teardown. Disposing here turned the eviction/reload cycle into an
-        // infinite material-rebuild (TSL graph + WGSL compile) storm.
+        // Layers absent from the current target set fall into two classes:
+        //  - TRANSIENT (imagery/projector resources briefly evicted and not
+        //    yet reloaded — frequent at high zoom levels while the camera
+        //    moves): the layer's SOURCE still exists, so KEEP the mesh
+        //    visible with its last texture. Hiding it here was the cause of
+        //    the high-level movement flicker (the pre-refactor pipeline
+        //    never dropped content during resource gaps — it skipped the
+        //    texture update and kept rendering the last-good imagery).
+        //  - REMOVED (web provider / projector layer actually deleted): hide.
         for (const [key, mesh] of meshes) {
             if (!seen.has(key)) {
-                mesh.visible = false;
+                mesh.visible = !this.layerSourceExists(key);
             }
         }
 
@@ -132,6 +136,13 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             mesh.renderOrder = index;
             this.tile.objects.push(mesh);
         });
+        // Kept-alive transient layers must ALSO stay in the render list —
+        // the renderer only draws tile.objects, visible alone does nothing.
+        for (const [key, mesh] of meshes) {
+            if (!seen.has(key) && mesh.visible) {
+                this.tile.objects.push(mesh);
+            }
+        }
     }
 
     private ensureTileState(): TerrainTileState {
@@ -300,9 +311,32 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         return mesh;
     }
 
+    /** Whether the layer's SOURCE (provider / projector layer) still exists. */
+    private layerSourceExists(key: string): boolean {
+        if (key === "base") return true;
+        if (key.startsWith("proj:")) {
+            return this.dataSource
+                .getProjectorOverlayManager()
+                .hasLayer(parseInt(key.slice(5), 10));
+        }
+        if (key.startsWith("web:")) {
+            // key format: web:<provider-uuid>:<index>
+            const uuid = key.slice(4, key.lastIndexOf(":"));
+            return this.dataSource
+                .getWebTileDataSources()
+                .some(provider => provider.uuid === uuid);
+        }
+        return false;
+    }
+
     private updateLayerMesh(mesh: TerrainLayerMesh, target: TargetLayer): void {
         if (target.kind === "base") {
-            mesh.setImagery(target.texture ?? null, target.uvTransform);
+            // Never DOWNGRADE to the gray fallback during transient imagery
+            // gaps (high-zoom movement churn): keep the last-good texture
+            // until a new one arrives — matches the pre-refactor pipeline.
+            if (target.texture !== undefined || mesh.layerTexture === null) {
+                mesh.setImagery(target.texture ?? null, target.uvTransform);
+            }
             return;
         }
 

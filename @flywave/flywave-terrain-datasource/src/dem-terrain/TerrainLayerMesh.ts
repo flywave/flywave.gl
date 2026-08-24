@@ -490,6 +490,16 @@ export class TerrainLayerMesh extends Mesh {
             tileState.updateFrame();
             tileState.writeTo(this);
         };
+
+        // Pre-compute the draw-time state BEFORE the first render. The
+        // renderer positions tile objects as `tile.center + displacement`
+        // during scene assembly — BEFORE onBeforeRender fires — so a mesh
+        // created with the default (0,0,0) displacement rendered its FIRST
+        // frame at the wrong position (one-frame flash on every newly
+        // created tile while the camera moves; the pre-refactor pipeline
+        // computed displacement at creation and never had this).
+        tileState.updateFrame();
+        tileState.writeTo(this);
     }
 
     /** Swap albedo imagery in place (plain property write, zero rebuilds). */
