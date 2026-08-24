@@ -1331,6 +1331,18 @@ export class MBStyleDataSource extends TileDataSource {
             // mid-range terrain at high pitch is clipped away (sky where the
             // map should be) — mgl uses terrain elevation in the transform's
             // horizon/far-plane math.
+            // §279: hand the decoder a CPU elevation sampler so
+            // fill-extrusion footprints ride the DEM surface (mgl
+            // fill_extrusion.vertex.glsl getTerrainHeight).
+            try {
+                const ctl = (this.m_environment as any).terrainController;
+                if (ctl) {
+                    this.decoder.configure(undefined, {
+                        terrainElevationSampler: (wx: number, wy: number) =>
+                            ctl.sampleElevation(wx, wy),
+                    } as any);
+                }
+            } catch {}
             const terrainMax = (this.m_environment as any).terrainController?.maxElevation ?? 0;
             // The terrain meshes only exist now — re-run applyBackgroundColor
             // so their base color picks up the (themed, lit) background.

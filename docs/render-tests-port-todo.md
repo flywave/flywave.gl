@@ -3908,3 +3908,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **根因③（runtime 不重放）**：`setPaintProperty` 走 `rebuildEvaluator`→onChange，但 onChange 从不重放 `applyBackgroundColor`（clear color + terrain 基色停在初始值）。修复：onChange 中补 `applyBackgroundColor(runtime.style)`。
 - **实测**：terrain/ 全类 3→**5 PASS**（background-layer 65535→0 ✓、hide-layer/remove-layer 0 ✓、连带 overlapping-zoom/terrain-world-copies 过）；fill-layer-change-color 171/show-layer 173 近失（drape 重烘焙后的标定级）；fill-extrusion-terrain 族未动（独立战役）。background-color/fog-color 族零回归 ✓。
 - **下轮**：fill-extrusion-terrain 族（alignment 60-78k/flat-roof 43-93k，9+ 例）与 lines-elevated 族——这些有部分内容渲染（非黑屏），属真实地形精度域；hillshade-buffer 族 63k。
+
+**§279. fill-extrusion 地形抬升落地（mgl getTerrainHeight 对齐）——抬升验证 ✓ 但对象仍不上屏，drape 烘焙视锥/剔除为剩余候选（2026-08-24 一百六十七，保留代码+记档）**：
+
+- **对齐落地（保留）**：fill-extrusion 顶点 z += DEM 高度——decoder 新增 `terrainElevationSampler` customOption → emitter `setTerrainSampler` → `emitExtrudedPolygon` 逐 footprint 顶点 `sampleElevation(world)`（含 exaggeration×secLat，与 terrain mesh 同尺度）加到 floor/height。数据源在 `applyTerrain` 后把 `TerrainController.sampleElevation` 注入 decoder。探针验证：alignment-base-flat 8 瓦片解码、逐顶点 ground≈1000m（exaggeration 4）✓。
+- **仍未上屏（记档）**：抬升后图像逐位不变（122k 绿地面、0 灰建筑）——建筑对象既不在 3D 场景也不在 drape 纹理中出现。剩余候选：① **TerrainDraping 烘焙相机**只覆盖 DEM 表面高度带，z=1000m 的 extrusion 在正交烘焙视锥外；② 对象被引擎剔除（tile boundingBox 未含抬升高度）；③ drape alpha=1 的背景区域盖住 3D 对象。需视觉迭代定位——独立会话规模。
+- **回归**：background-color/fog-color 族恒定（transition 4096 既有）✓。
+- **会话终局（12 commits）**：§271-§279。globe 251-1487 级、terrain 5 PASS、extrusion-terrain 抬升管线就位。

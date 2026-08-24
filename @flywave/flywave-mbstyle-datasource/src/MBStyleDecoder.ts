@@ -317,6 +317,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
      * at configure time (sufficient for static render tests).
      */
     private m_bearing: number = 0;
+    /** Terrain elevation sampler (world x/y -> meters, exaggeration applied). */
+    private m_terrainSampler: ((x: number, y: number) => number) | null = null;
     /**
      * Mapbox camera zoom (fractional, without the flywave +1 offset). Set by
      * the data source from the live camera so zoom/camera expressions
@@ -418,6 +420,14 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         if (customOptions?.glyphMetrics !== undefined) {
             this.m_glyphMetrics = customOptions.glyphMetrics as Map<string, any>;
         }
+        // §279: terrain elevation sampler (worldX, worldY) -> meters — lifts
+        // fill-extrusion vertices onto the DEM surface (mgl samples terrain
+        // height in fill_extrusion.vertex.glsl).
+        if ('terrainElevationSampler' in (customOptions ?? {})) {
+            this.m_terrainSampler =
+                customOptions!.terrainElevationSampler as
+                ((x: number, y: number) => number) | null;
+        }
         if (customOptions?.mapboxZoom !== undefined) {
             this.m_mapboxZoom = customOptions.mapboxZoom as number;
         }
@@ -502,6 +512,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         // (line breaking, anchor placement) uses accurate advance widths.
         if (this.m_glyphMetrics.size > 0) {
             emitter.setGlyphLookup(this.buildGlyphLookup());
+        }
+        if (this.m_terrainSampler) {
+            emitter.setTerrainSampler(this.m_terrainSampler);
         }
 
         const processor = new MBStyleDataProcessor(

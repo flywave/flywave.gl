@@ -365,6 +365,16 @@ export class MBTileDataEmitter {
     }
 
     /**
+     * Terrain elevation sampler (worldX, worldY → meters). When set,
+     * fill-extrusion footprints ride the DEM surface (mgl
+     * fill_extrusion.vertex.glsl getTerrainHeight semantics).
+     */
+    setTerrainSampler(sampler: (x: number, y: number) => number): void {
+        this.m_terrainSampler = sampler;
+    }
+    private m_terrainSampler: ((x: number, y: number) => number) | null = null;
+
+    /**
      * Mapbox camera bearing in degrees (style.bearing). Resolves
      * `*-translate-anchor: viewport`, which rotates the translate by -bearing
      * in the map frame (painter.translatePosMatrix). Static for render tests.
@@ -1491,11 +1501,18 @@ export class MBTileDataEmitter {
                 const w = this.project(
                     new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
                 );
+                // §279: lift the footprint onto the DEM surface (mgl
+                // getTerrainHeight per footprint vertex).
+                let ground = 0;
+                if (this.m_terrainSampler) {
+                    const cw = this.m_decodeInfo.center;
+                    ground = this.m_terrainSampler(w.x + cw.x, w.y + cw.y);
+                }
                 // bottom vertex
-                geo.positions.push(w.x, w.y, floorHeight);
+                geo.positions.push(w.x, w.y, ground + floorHeight);
                 geo.extrusionAxis.push(0, 0, 0, 0);
                 // top vertex
-                geo.positions.push(w.x, w.y, height);
+                geo.positions.push(w.x, w.y, ground + height);
                 geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
             }
 
