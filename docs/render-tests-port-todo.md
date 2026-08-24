@@ -4197,3 +4197,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **三点实测**：①欧氏最近点（§317/318）：initializing −10795/opaque +12619/circle +11415；②参数化分母（§318）：与①逐位同（分母非判别器）；③前向投影 min-corner dot(forward)（§319）：四例全部=基线（218782/198188/5758/3364，零停止零回归）。
 - **三角定位结论**：mgl 真值介于欧氏与前向之间——其角点遍历中 `closestElevation = |distanceXyz[2]|`（flat 时= cameraHeight 常量，非角点 z！）与 `dist = dot(distanceXyz, forward)` 组合后经 distToSplitScale(dz=closestElevation) 缩放的边界，及 nearest-to-center 兜底子句（closestPoint==centerPoint 强制分裂），我方两版均未复刻完整。**下会话直奔点**：在 scripts/mgl-covering-tiles-ref.js 中直接对拍（该工具已有全部 mgl 语义）——先让工具输出停止级分布，再在引擎侧复刻该分布（工具即规格）。
 - **回退**：全部回退至 §316 提交态（5758/218782 ✓）、mapview lib 重建、tsc 干净、工作树=提交态。
+
+**§320. §319 直奔点执行 + 覆盖形状终局表征——tilt/heading 析构前向 + nearest-to-center 兜底的完整 mgl shouldSplit 复刻仍零停止（探针 0 hit）；零停止解读=我方覆盖集根本没有远到阈值外的瓦片——**census 14 瓦片宽 vs 256px 窄画布视野 ~4 瓦片宽：引擎覆盖在窄画布下横向过宽（形状缺陷最终表征）**，LOD 是形状修复后的次级项（2026-08-24 二百零九，终审记档）**：
+
+- **执行**：§319 记档的完整语义复刻（fwd 由 tilt/heading 析构避免 getWorldDirection 矩阵陈旧、补 mgl nearest-to-center 兜底子句、源 tileSize 参数化）——停止计数探针 **0 hit**，四例纯基线。数值核验：中心瓦片前向距≈0（正确分裂）、远带需前向距>7.3km 才停止——我方覆盖集内所有瓦片前向距均 <7.3km = **覆盖集根本没有延伸到 mgl 停止分裂的远区**。
+- **终局表征**：我方 census 14 瓦片横向宽（x32756-32770）vs 256px 画布（hfov 9.4°）视野仅 ~4 瓦片宽——**引擎覆盖在窄高画布下横向系统性过宽**（FrustumIntersection 的视锥横向展开与画布 aspect 的关系疑点），且纵向不足（mgl 长带）。LOD（§317-§320 四轮）在形状修复前无从生效——欧氏变体的 −10.8k 是错向停止的巧合。
+- **下会话唯一入口**：FrustumIntersection 视锥/aspect 链审计（camera.aspect 与 canvas 256×1024 的传递、computeTileAreaAndDistance 的横向展开），以 census 宽度收敛到 ~4 瓦片为直接验收（无需跑 mgl）。
+- **终态**：全部回退至 §316 提交态（218782 ✓）、mapview lib 重建、tsc 干净、探针全清。
