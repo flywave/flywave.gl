@@ -33,7 +33,10 @@ const nearZ = HEIGHT / 50;
 
 // camera orientation: rotZ(-bearing) then rotX(-pitch), mgl left-handed
 const orientation = quat.identity([]);
-quat.rotateZ(orientation, orientation, -(BEARING * Math.PI / 180));
+// §333: +bearing (not −) — in the mercator y-down frame the composite maps
+// bearing b to compass +b with rotateZ(−b); mgl bearing b must face compass
+// b, hence rotateZ(+b). (Validated numerically: −b gave mirrored sets.)
+quat.rotateZ(orientation, orientation, BEARING * Math.PI / 180);
 quat.rotateX(orientation, orientation, -pitch);
 const camForward = vec3.transformQuat([], [0, 0, -1], orientation);
 

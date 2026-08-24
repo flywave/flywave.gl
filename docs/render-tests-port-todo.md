@@ -4282,3 +4282,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **试验**：`bearing = style.bearing`（去负）→ 两例劣化 ~10k/26k——取负规则对现有渲染是正确的（与 §2736 校准注释一致）；§331 的"引擎镜像"结论需再判——**镜像位点收窄到工具 quat 约定 vs 引擎相机帧**（工具 `rotateZ(−bearing)` 在 mercator y-down 帧的方向语义未独立验证）。
 - **下会话**：① 选带正 bearing 且 PASS 的 fixture，工具算参照集 vs census 对拍——若工具与引擎一致则 §331 镜像结论成立且修复在引擎帧；若不一致则工具约定反了、error-overlap 的差集重判。② 之后按 §323 LOD 栈复测。
 - **终态**：sign-test 回退（218882 ✓）、工作树=提交态。
+
+**§333. 工具 bearing 约定修正 + §331 镜像结论撤销——工具 `rotateZ(−bearing)` 在 mercator y-down 帧复合下把 bearing b 映射到罗盘 +b（数值验证：bearing −45 → 罗盘 +45），改为 rotateZ(+bearing) 后：修正参照 53 tiles 与我方 LOD+1 组合 census 重合 30/38——引擎方向正确，镜像结论撤销；真差集=我方多 8 个 z15/mgl 多 23 个 z16（层级/LOD 域，§322 定性维持）（2026-08-24 二百二十二，工具修正+重判记档）**：
+
+- **验证（纯数值）**：工具 quat `rotateZ(−b)·rotX(−pitch)` 对 (0,0,−1) 的前向——bearing −45 → 罗盘 +45（镜像）。修正为 rotateZ(+b) 后 bearing b → 罗盘 b ✓。**§331 的"引擎把 −45 渲染成 +45"实为工具镜像**；§332 的"去负劣化"与之自洽（引擎正确）。
+- **重判**：修正参照（53）与我方组合 census（38）重合 30；差集=我方 z15 冗余 8 + mgl z16 带 23——**纯层级/LOD 差**，回到 §322/§323 域（LOD 栈实施质量），相机/方向全部结案。
+- **终态**：工具已修正入库（rotateZ(+bearing) 注释含验证依据）、工作树=提交态。
