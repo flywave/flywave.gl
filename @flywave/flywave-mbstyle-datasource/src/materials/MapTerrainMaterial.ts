@@ -12,7 +12,10 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
 
     constructor() {
         super({
-            vertexColors: true,
+            // No vertexColors: the grid geometry carries no color attribute,
+            // so a missing attribute would default vColor to black and void
+            // the material/setBaseColor color entirely (terrain rendered
+            // black whenever no drape texture covered it).
             side: THREE.DoubleSide,
             roughness: 0.9,
             metalness: 0.0,

@@ -3900,3 +3900,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
   - 既有接近桶：hillshade 系（§此前已有修复）。
 - **下轮入口**：① 先取一例纯黑（background-layer，最简样式）跑 console 取证——整帧黑意味着异常发生在渲染早期（harness op 或 DEM 源 fetch）；② 对照 mgl `draw_terrain.ts`/`terrain/` 与 TerrainController 的激活条件差异（style.terrain vs setTerrain op、source 解析）；③ globe-terrain（globe-high-exaggeration 418k）独立桶。
 - **会话终局**：本轮含 §276 星场移植（3a17a792）。工作树=提交态（8 commits）。
+
+**§278. terrain 黑屏根因三连修——vertexColors 幽灵属性 × drape 陈旧烘焙 × 背景 runtime 不重放，terrain 3→5 PASS（cache-invalidation 0→3）（2026-08-24 一百六十六，保留+实测）**：
+
+- **根因①（黑屏主力）**：`MapTerrainMaterial` 构造带 `vertexColors: true` 但 terrain 网格几何**没有 color 属性**——WebGL 缺失属性默认 (0,0,0) → vColor 黑 → `setBaseColor` 的材质色被乘没——无 drape 覆盖时（background-only 样式）terrain 整面黑。删除 vertexColors。
+- **根因②（drape 陈旧）**：TerrainDraping 只在 terrain 网格数/形变事件烘焙——`setPaintProperty` 改背景色后 FBO 仍是旧色（background-layer 全图旧蓝 vs 期望全绿）。修复：`applyBackgroundColor` 变色时 `requestBake()`，并推广到 runtime onChange（任何样式改动都可能改 drape 内容，惰性烘焙无额外开销）。
+- **根因③（runtime 不重放）**：`setPaintProperty` 走 `rebuildEvaluator`→onChange，但 onChange 从不重放 `applyBackgroundColor`（clear color + terrain 基色停在初始值）。修复：onChange 中补 `applyBackgroundColor(runtime.style)`。
+- **实测**：terrain/ 全类 3→**5 PASS**（background-layer 65535→0 ✓、hide-layer/remove-layer 0 ✓、连带 overlapping-zoom/terrain-world-copies 过）；fill-layer-change-color 171/show-layer 173 近失（drape 重烘焙后的标定级）；fill-extrusion-terrain 族未动（独立战役）。background-color/fog-color 族零回归 ✓。
+- **下轮**：fill-extrusion-terrain 族（alignment 60-78k/flat-roof 43-93k，9+ 例）与 lines-elevated 族——这些有部分内容渲染（非黑屏），属真实地形精度域；hillshade-buffer 族 63k。

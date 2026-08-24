@@ -1076,6 +1076,14 @@ export class MBStyleDataSource extends TileDataSource {
             } as any);
             // configure() re-created the decoder's internal evaluator —
             // the decoder re-applies the stored theme itself now.
+            // §278: runtime paint edits on the background layer must also
+            // refresh the clear color + terrain base color (mgl repaints the
+            // background on setPaintProperty; cache-invalidation fixtures).
+            // Any style change can alter drape content (fill colors, layer
+            // visibility, ...) — flag a re-bake, the AfterRender listener
+            // bakes lazily.
+            this.applyBackgroundColor(this.m_runtime!.style);
+            this.m_terrainDraping?.requestBake?.();
             if (this.mapView) {
                 this.mapView.markTilesDirty(this);
             }
@@ -2497,6 +2505,10 @@ export class MBStyleDataSource extends TileDataSource {
                     try {
                         this.m_environment?.terrainController?.setBaseColor(
                             (this.mapView as any).clearColor as number);
+                        // §278: the drape bake must re-capture the new
+                        // background (mgl repaints it under the content on
+                        // setPaintProperty; stale bakes froze the old color).
+                        this.m_terrainDraping?.requestBake?.();
                     } catch {}
                 }
                 return;
