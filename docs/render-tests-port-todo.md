@@ -4250,3 +4250,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 - **预审**：MapView.js 的 lookAtImpl 全调用面 = projection setter（本 fixture 不触发）/setZoom/setTilt/setHeading/lookAt/fitBounds——applyCameraSettings 传 yaw=0 无偏移；东移 3155m（=sin45·groundDist）必有一次携带 yaw=45 的重放置，触发器未知。**下会话第一动作**：heading 值写监视点（Object.defineProperty 或 lookAtImpl 入参打点栈回溯）捕获触发路径，随后按 §326 修复点（提取修正或回灌切断）实施。
 - **终态**：工作树=提交态、无代码改动。
+
+**§328. heading 写监视点终审——lookAtImpl 全程零非零 heading 调用：回灌假说证伪，相机东移 3155m 源于初始放置的四元数框架内部（getCameraRotationAtTarget 翻转基底与 pitch 复合的坐标效应），非重放置消费——修复域定档为放置数学的基底语义（独立深改，下会话直奔 getCameraPositionFromTargetCoordinates/getCameraRotationAtTarget 的 x 偏移复算）（2026-08-24 二百一十七，终审记档）**：
+
+- **监视点**：lookAtImpl 入参打点（|heading|>0.1 即日志+栈）——**零命中**：全部调用 heading=0/undefined，§326 的"回灌消费"路径证伪；相机东移在**初始放置内部**产生（heading=0 时 `result.x += sin(0)·g` 不偏移 → 偏移必然来自四元数/变换链的其他效应——getCameraRotationAtTarget 的翻转基底 makeBasis((1,0,0),(0,−1,0),(0,0,−1)) 与 rotX(pitch) 复合的坐标耦合）。
+- **下会话直奔点**：getCameraPositionFromTargetCoordinates/getCameraRotationAtTarget 的 x 偏移数值复算（heading=0, pitch=60 输入下手算期望 vs 实测 3155m），定位基底复合的具体项；修复后 census 居中验收（x16383-16385）。
+- **终态**：监视点全清、mapview lib 重建提交态、218882 复原 ✓、工作树=提交态。
