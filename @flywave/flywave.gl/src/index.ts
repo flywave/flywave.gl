@@ -13,6 +13,7 @@ import { MapView as RawMapView, MapViewOptions } from "@flywave/flywave-mapview"
 
 export * from "@flywave/flywave-mapview";
 export * from "@flywave/flywave-mapview-decoder";
+export * from "@flywave/flywave-draped-draw";
 export * from "@flywave/flywave-terrain-datasource";
 export * from "@flywave/flywave-map-controls";
 export * from "@flywave/flywave-3dtile-datasource";

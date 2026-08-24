@@ -2,6 +2,7 @@
 
 import { type Projection } from "@flywave/flywave-geoutils";
 import { createThreeSceneFromGLTF } from "@flywave/flywave-gltf";
+import { SurfaceType } from "@flywave/flywave-mapview";
 import { ExtendedFrustum } from "@flywave/flywave-utils/ExtendedFrustum";
 import {
     type Camera,
@@ -1000,6 +1001,9 @@ export abstract class TilesRenderer extends TilesRendererBase {
         const geometry: BufferGeometry[] = [];
         const textures: Texture[] = [];
         scene.traverse((c: Mesh) => {
+            // Draped-draw surface capture: tileset models are drape targets.
+            (c as unknown as { captureSurfaceType?: number }).captureSurfaceType =
+                SurfaceType.Model;
             if (c.geometry) geometry.push(c.geometry);
             if (c.material) {
                 if (Array.isArray(c.material)) {

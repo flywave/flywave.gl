@@ -8,6 +8,7 @@ import {
     ProjectionType
 } from "@flywave/flywave-geoutils";
 import { MapView } from "@flywave/flywave-mapview";
+import { SurfaceType } from "@flywave/flywave-mapview";
 import * as THREE from "three/webgpu";
 
 import { type WebTile } from "../../WebImageryTileProvider";
@@ -21,6 +22,8 @@ import {
 } from "./QuantizedMeshMaterial";
 
 export class QuantizedMesh extends THREE.Mesh {
+    // Draped-draw surface capture: this mesh provides ground surfaces.
+    public readonly captureSurfaceType = SurfaceType.Terrain;
     // --- Exposed properties (read by onObjectUpdate in QuantizedMeshMaterial) ---
     public imageryTextures: THREE.Texture[] = [...emptyImageryTextures];
     public imageryTransforms: THREE.Vector4[] = [

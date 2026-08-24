@@ -9,6 +9,7 @@ import { GeoBox, type TilingScheme, TileKey } from "@flywave/flywave-geoutils";
 import { type Tile } from "@flywave/flywave-mapview";
 import { DataTexture, Mesh, Quaternion, RGBAFormat, Vector2, Vector3, Vector4 } from "three/webgpu";
 import * as THREE from "three/webgpu";
+import { SurfaceType } from "@flywave/flywave-mapview";
 
 import { type HeightMapModifierManager } from "../ground-modification-manager";
 import { ProjectionSwitchController } from "../ProjectionSwitchController";
@@ -437,6 +438,8 @@ export class TerrainTileState {
  */
 export class TerrainLayerMesh extends Mesh {
     public readonly isTerrainLayerMesh = true;
+    // Draped-draw surface capture: this mesh provides ground surfaces.
+    public readonly captureSurfaceType = SurfaceType.Terrain;
     public readonly layerKey: string;
     public readonly layerKind: DEMLayerKind;
 

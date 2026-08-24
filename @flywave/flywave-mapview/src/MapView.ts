@@ -73,6 +73,7 @@ import { TileGeometryManager } from "./geometry/TileGeometryManager";
 import { MapViewImageCache } from "./image/MapViewImageCache";
 import { type IntersectParams } from "./IntersectParams";
 import { MapAnchors } from "./MapAnchors";
+import { SurfaceCapturePass } from "./surface-capture/SurfaceCapturePass";
 import { MapViewEnvironment } from "./MapViewEnvironment";
 import { type MapViewFog } from "./MapViewFog";
 import { MapViewTaskScheduler } from "./MapViewTaskScheduler";
@@ -947,6 +948,10 @@ export class MapView extends EventDispatcher {
     private readonly m_themeManager: MapViewThemeManager;
     private readonly m_sceneEnvironment: MapViewEnvironment;
 
+    /** Lazily created surface capture pass (see {@link MapView.surfaceCapture}). */
+    private m_surfaceCapturePass?: SurfaceCapturePass;
+
+
     // `true` if dispose() has been called on `MapView`.
     private m_disposed = false;
 
@@ -1382,6 +1387,7 @@ export class MapView extends EventDispatcher {
         for (const dataSource of this.m_tileDataSources) {
             dataSource.dispose();
         }
+        this.m_surfaceCapturePass?.dispose();
         this.m_visibleTiles.clearTileCache();
         this.m_textElementsRenderer.clearRenderStates();
 
@@ -3542,6 +3548,18 @@ export class MapView extends EventDispatcher {
 
     public getRteCamera(): THREE.PerspectiveCamera {
         return this.m_rteCamera;
+    }
+
+    /**
+     * Per-frame surface capture (depth + surface type) for ground-draped
+     * rendering. Created on first access; the pass renders itself during the
+     * `WillRender` phase and costs nothing while no meshes are tagged.
+     */
+    public get surfaceCapture(): SurfaceCapturePass {
+        if (this.m_surfaceCapturePass === undefined) {
+            this.m_surfaceCapturePass = new SurfaceCapturePass(this);
+        }
+        return this.m_surfaceCapturePass;
     }
 
     /**
