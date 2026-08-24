@@ -262,16 +262,25 @@ export class FrustumIntersection {
                 continue;
             }
 
-            // §323: mgl shouldSplit distance LOD — the z-difference term is
+            // §323/§343: mgl shouldSplit distance LOD — the z-difference term is
             // +cameraHeight (NOT the corner z): mgl transform.ts replaces
             // distanceXyz[2] with cameraHeight in the flat case.
+            // Unit chain (validated offline node-by-node against the mgl
+            // reference tool, scripts/lod-mirror-check.js — 0 mismatches at
+            // bearing 0 and -45, mglDistanceLodScale=1):
+            //   - forward = direction from camera to target:
+            //       (−sin(yaw)·sin(tilt), cos(yaw)·sin(tilt), −cos(tilt))
+            //     matching getCameraPositionFromTargetCoordinates (yaw=-heading).
+            //   - mgl's z tile-units are cos(lat)-compressed relative to its x/y
+            //     tile-units; flywave's z is true meters while x/y are projected
+            //     mercator meters, so the z-term and dz use altitude/cos(lat).
             if (this.mglDistanceLod && uniqueZoomLevels.size > 0) {
                 const maxZoomLod = Math.max(...uniqueZoomLevels);
                 if (tileKey.level < maxZoomLod) {
                     const cam = this.m_camera;
                     const ccdPx =
                         0.5 / Math.tan((cam.fov * Math.PI) / 180 / 2) *
-                        (this.mapView as any).canvas?.height;
+                        this.mapView.viewportHeight;
                     if (ccdPx > 0) {
                         const C = 40075016.686;
                         const distWorld =
@@ -280,27 +289,34 @@ export class FrustumIntersection {
                             (this.mglDistanceLodScale ?? 1);
                         const mv = this.mapView as any;
                         const tiltRad = ((mv.tilt ?? 0) * Math.PI) / 180;
-                        const headRad = ((mv.heading ?? 0) * Math.PI) / 180;
-                        const elev = Math.PI / 2 - tiltRad;
+                        const yawRad = (-(mv.heading ?? 0) * Math.PI) / 180;
+                        const sinT = Math.sin(tiltRad);
+                        const cosT = Math.cos(tiltRad);
                         const fwd = {
-                            x: Math.sin(headRad) * Math.cos(elev),
-                            y: Math.cos(headRad) * Math.cos(elev),
-                            z: Math.sin(elev),
+                            x: -Math.sin(yawRad) * sinT,
+                            y: Math.cos(yawRad) * sinT,
+                            z: -cosT
                         };
                         const camPos = cam.position;
-                        const camH = Math.abs(camPos.z);
+                        // mgl z tile-units are cos(lat)-compressed vs x/y —
+                        // flywave z is true meters, x/y projected meters.
+                        let cosLat = 1;
+                        try {
+                            const lat = mv.geoCenter?.latitudeInRadians;
+                            if (typeof lat === 'number') cosLat = Math.max(Math.cos(lat), 1e-6);
+                        } catch {}
+                        const camH = Math.abs(camPos.z) / cosLat;
                         const box = cache.tileBounds as THREE.Box3;
                         let d = Infinity;
                         for (let ci = 0; ci < 2; ci++)
-                        for (let cj = 0; cj < 2; cj++)
-                        for (let ck = 0; ck < 2; ck++) {
+                        for (let cj = 0; cj < 2; cj++) {
                             const dist2 =
                                 ((ci ? box.max.x : box.min.x) - camPos.x) * fwd.x +
                                 ((cj ? box.max.y : box.min.y) - camPos.y) * fwd.y +
                                 camH * fwd.z;
                             if (dist2 < d) d = dist2;
                         }
-                        const centerWorld = (mv as any).m_targetWorldPos;
+                        const centerWorld = mv.worldTarget;
                         const containsCenter =
                             centerWorld &&
                             centerWorld.x >= box.min.x && centerWorld.x <= box.max.x &&

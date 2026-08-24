@@ -4354,3 +4354,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **黑源定案方向**：渲染侧材质复用——同 URL 的多 uvRect 塌缩为单 technique（`_rasterUvRect` 仅首建生效）→ 修复=technique 键加 uvRect（或 uvRect 移入 per-geometry attribute）。§309 的"z12 棋盘可见"=首建者恰好是 z12 系；其余全黑 ✓ 自洽。
 - **下会话单点**：getOrCreateTechniqueIndex 的 raster 键从 URL 改为 URL+uvRect 四元组——一处改动 + error-overlap 三例复测。
 - **终态**：UV 探针全清、218882 复原 ✓、工作树=提交态。
+
+**§343. LOD 公式精确复刻（离线逐节点对拍 0 mismatch）+ §342 前提纠错——新工具 scripts/lod-mirror-check.js 以 mgl 参照（§333 修正版 rotateZ(+bearing)）为规格复刻引擎侧米制公式：fwd=相机→目标方向 (−sin(yaw)·sinT, cos(yaw)·sinT, −cosT)（原代码两处符号错：z 分量 +cosT、x 分量 sin(heading) 未取负）+ z 项/dz 除以 cos(lat)（mgl z tile 单位被 cosLat 压缩 vs x/y，flywave z 为真实米而 x/y 为投影米）→ **bearing 0 与 −45 双点全遍历 0 mismatch、scale=1 精确停止集（6 z15 stop）**，取代 §334 的经验 mglDistanceLodScale=1.5 补偿（旧公式的符号/单位残差被旋钮吸收）；引擎代码已按公式修正（yaw=−heading、camH=|camPos.z|/cosLat、viewportHeight 取 ccd、worldTarget 公有访问器），默认关（mglDistanceLod=false 零行为变化）、tsc/build 绿。**§342 前提纠错**：getOrCreateTechniqueIndex 的 raster 键自 f6a3ee25 起已含 URL+uvRect 四元组——"同 URL 塌缩单 technique"假设与提交态代码不符，黑源需重判（候选：材质/纹理加载时序、注入采样器的 rect uniform 生效路径，或首帧 clamp 兜底与后到纹理的合成次序），§342 记档的"键加 uvRect"修复点已存在勿重复实施（2026-08-25 二百三十二，公式修正+前提纠错记档）**：
+
+- **对拍方法**：mirror 脚本把 mgl 的 0..2^z tile 单位 aabb/相机换算到 flywave 投影米（x,y 乘 C/2^z；y 翻转到 north-up；z 项=真实高度/cosLat），同一遍历内逐节点比较 SPLIT/STOP——bearing 0：111 节点 0 mismatch/6 stop（z15）；bearing −45：125 节点 0 mismatch/6 stop。工具入库可对任意 fixture 复算。
+- **修正明细（FrustumIntersection §323 块）**：①fwd 由 tilt/heading 析构改为 yaw 基（yaw=−heading，与 getCameraPositionFromTargetCoordinates 的相机放置数学同源）；②z 项与 dz 用 camPos.z/cosLat（geoCenter 纬度）；③ccd 用 mapView.viewportHeight（原 canvas?.height 私有访问）；④中心兜底用公有 worldTarget。mglDistanceLodScale 旋钮保留（默认 1=精确语义）。
+- **验证**：mglDistanceLod=false 门控下零运行时影响（纯公式替换）；tsc --build 绿。LOD 开启端的渲染验证与 §342 黑源重判合并为下会话单点：先跑 (URL,uvRect)→实际采样打点（§342 原计划）确认/否定渲染侧塌缩真实位置，再开四件组合复测 error-overlap。
+- **终态**：工作树=本修正（FrustumIntersection + mirror 工具 + 文档）、mapview lib 重建、LOD 默认关。
