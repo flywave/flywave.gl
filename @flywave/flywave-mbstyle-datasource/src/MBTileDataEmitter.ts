@@ -1529,9 +1529,28 @@ export class MBTileDataEmitter {
                         new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
                     );
                     grounds[i] = this.m_terrainSampler(w.x + cw.x, w.y + cw.y);
-                    centroidElev += grounds[i];
                 }
-                centroidElev /= Math.max(ringCount, 1);
+                // mgl samples the DEM AT the polygon's area centroid (bucket
+                // encodes centroid pos; shader flatElevation samples that
+                // point) — not the average of per-vertex elevations (§290).
+                let area = 0, cx = 0, cy = 0;
+                for (let i = 0; i < ringCount; i++) {
+                    const j = (i + 1) % ringCount;
+                    const cross =
+                        allVerts[i * 2] * allVerts[j * 2 + 1] -
+                        allVerts[j * 2] * allVerts[i * 2 + 1];
+                    area += cross;
+                    cx += (allVerts[i * 2] + allVerts[j * 2]) * cross;
+                    cy += (allVerts[i * 2 + 1] + allVerts[j * 2 + 1]) * cross;
+                }
+                if (Math.abs(area) > 1e-9) {
+                    const wc = this.project(
+                        new THREE.Vector2(cx / (3 * area), cy / (3 * area))
+                    );
+                    centroidElev = this.m_terrainSampler(wc.x + cw.x, wc.y + cw.y);
+                } else {
+                    centroidElev = grounds.reduce((a, b) => a + b, 0) / Math.max(ringCount, 1);
+                }
             }
             const baseVertex = geo.positions.length / 3;
             for (let i = 0; i < ringCount; i++) {

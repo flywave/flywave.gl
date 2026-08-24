@@ -221,13 +221,25 @@ export class TerrainController {
             const d = demTex.image.data as Float32Array;
             const n = Math.floor(Math.sqrt(d.length));
             if (n <= 0) continue;
-            const u = Math.min(n - 1, Math.max(0, Math.floor(((worldX - minX) / size) * n)));
-            const v = Math.min(n - 1, Math.max(0, Math.floor(((worldY - minY) / size) * n)));
+            const u = Math.min(n - 1, Math.max(0, ((worldX - minX) / size) * n));
+            const v = Math.min(n - 1, Math.max(0, ((worldY - minY) / size) * n));
             // DEM rows run north→south (mercator y-down): row 0 = max Y —
             // confirmed by axis calibration (direct v: fog-import-scope
             // 192406→230109, much worse).
-            const row = n - 1 - v;
-            return d[row * n + u] * this.m_exaggeration * this.m_sampleSecLat
+            // Bilinear like mgl's currentElevation (fill_extrusion vertex
+            // shader mixes 4 texels) so CPU-sampled building bases match the
+            // GPU terrain grid (linear texture filtering) instead of sinking
+            // up to half a DEM cell under it (§290).
+            const u0 = Math.min(n - 1, Math.floor(u)), u1 = Math.min(n - 1, u0 + 1);
+            const v0 = Math.min(n - 1, Math.floor(v)), v1 = Math.min(n - 1, v0 + 1);
+            const fu = u - u0, fv = v - v0;
+            const r0 = n - 1 - v0, r1 = n - 1 - v1;
+            const elev =
+                d[r0 * n + u0] * (1 - fu) * (1 - fv) +
+                d[r0 * n + u1] * fu * (1 - fv) +
+                d[r1 * n + u0] * (1 - fu) * fv +
+                d[r1 * n + u1] * fu * fv;
+            return elev * this.m_exaggeration * this.m_sampleSecLat
                 - this.m_elevationOrigin;
         }
         return -this.m_elevationOrigin;

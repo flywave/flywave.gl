@@ -3977,3 +3977,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实测**：alignment 族 = 54761/53585/43600/44557（前 56961/58342/46272/44559，−2199/−4757/−2672/−2）。方向正确但幅度小——**残差主体仍是可见建筑数量/几何投影差**（§288 定性维持），非高度标量。
 - **回归**：fill-extrusion-opacity/default PASS ✓；opacity/function、literal 失败为遗留（半透明双 pass 未对齐，§2713 记档）；background-pitch-alignment/viewport-terrain 失败经 stash 基线对照为**预存在**（非本改动回归）✓。tsc --noEmit 干净。
 - **下轮入口**：① 可见建筑数量差（期望建筑像素 39k vs 我方 17k）——优先查 pitch 65 下 mgl 的 expanded tile coverage/3D 瓦片选取 vs 我方 VisibleTileSet；② mgl shader 的 base sink（非 flat base=0 → ele−5 tile 单位）与 flat-height 下限（max(c_ele+h, ele+base+2)）量级亚米、暂缓；③ 墙面光照 51 vs 85 标定（§287 遗留）。
+
+**§290. DEM 采样对齐双落地（bilinear + 面积质心单点采样）——alignment 族累计四例全降（55026/53611/41396/42241，§288 基线 56961/58342/46272/44559）（2026-08-24 一百七十七，保留+实测）**：
+
+- **bilinear（mgl currentElevation 定案）**：mgl 填充拉伸顶点着色器对 DEM 做 4-texel 双线性（`mix(mix(tl,tr,f.x),mix(bl,br,f.x),f.y)`；float 格式走 linear 过滤单采样）——GPU terrain 网格同为线性插值，我方 CPU sampleElevation 的 nearest（floor）使建筑基面偏离可见地形面最多半 DEM 格 → 上坡侧墙体被地形遮住。已改双线性（行翻转语义保留）。
+- **面积质心（mgl flatElevation 定案）**：mgl 'flat' 对齐的高程 = **多边形面积质心处的单点 DEM 采样**（bucket 编码 centroid pos，shader 在该点采样），非逐顶点均值——§284 的均值实现已替换为 exterior ring shoelace 面积质心单点采样（退化环回退均值）。
+- **实测**：secLat（§289）后 = 54761/53585/43600/44557 → +bilinear = 55766/54307/41396/42209（height-terrain 族 −2.2k/−2.3k，flat 族 +1k 微劣化）→ +面积质心 = **55026/53611/41396/42241**（flat 族收复，height 族维持）——对 §288 基线累计 −1.9k~−4.9k。flat 族对 bilinear 的残余敏感（±250 噪声级）疑 GPU 网格节点采样方式差异，暂按 mgl 字面语义保留。
+- **回归**：fill-extrusion-opacity/default PASS ✓；tsc --noEmit 干净。
+- **下轮入口**（§288 定性维持：可见建筑数量 39k vs 17k 为主）：pitch 65 下 mgl coveringTiles 的 3D/地形扩展覆盖 vs 我方 VisibleTileSet 瓦片选取——需瓦片数 census 对照（我方解码瓦片数 vs mgl coveringTiles 长度）；其次墙面光照 51 vs 85 标定（§287）。
