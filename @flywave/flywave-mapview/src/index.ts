@@ -28,6 +28,7 @@ export * from "./CameraUtils";
 export * from "./ClipPlanesEvaluator";
 export * from "./ColorCache";
 export * from "./composing";
+export * from "./surface-capture";
 export * from "./ConcurrentDecoderFacade";
 export * from "./ConcurrentTilerFacade";
 export * from "./copyrights/CopyrightElementHandler";

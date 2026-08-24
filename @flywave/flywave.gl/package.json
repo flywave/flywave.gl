@@ -61,6 +61,7 @@
         "@flywave/flywave-datasource-protocol": "workspace:*",
         "@flywave/flywave-draw-controls": "workspace:*",
         "@flywave/flywave-features-datasource": "workspace:*",
+        "@flywave/flywave-draped-draw": "workspace:*",
         "@flywave/flywave-geojson-datasource": "workspace:*",
         "@flywave/flywave-geometry": "workspace:*",
         "@flywave/flywave-geoutils": "workspace:*",

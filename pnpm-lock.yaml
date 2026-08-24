@@ -802,6 +802,64 @@ importers:
         specifier: 'catalog:'
         version: 5.8.2
 
+  '@flywave/flywave-draped-draw':
+    dependencies:
+      '@flywave/flywave-geoutils':
+        specifier: workspace:*
+        version: link:../flywave-geoutils
+      '@flywave/flywave-mapview':
+        specifier: workspace:*
+        version: link:../flywave-mapview
+      earcut:
+        specifier: 'catalog:'
+        version: 2.2.4
+      three:
+        specifier: ^0.185.0
+        version: 0.185.1
+    devDependencies:
+      '@flywave/flywave-test-utils':
+        specifier: workspace:*
+        version: link:../flywave-test-utils
+      '@types/chai':
+        specifier: 'catalog:'
+        version: 4.3.20
+      '@types/earcut':
+        specifier: 'catalog:'
+        version: 2.1.4
+      '@types/mocha':
+        specifier: 'catalog:'
+        version: 10.0.10
+      '@types/node':
+        specifier: 'catalog:'
+        version: 16.18.126
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.185.0
+      chai:
+        specifier: 'catalog:'
+        version: 4.5.0
+      copyfiles:
+        specifier: 'catalog:'
+        version: 2.4.1
+      cross-env:
+        specifier: 'catalog:'
+        version: 7.0.3
+      eslint-plugin-simple-import-sort:
+        specifier: ^12.1.1
+        version: 12.1.1(eslint@8.57.1)
+      mocha:
+        specifier: 'catalog:'
+        version: 11.7.5
+      sinon:
+        specifier: 'catalog:'
+        version: 9.2.4
+      source-map-support:
+        specifier: 'catalog:'
+        version: 0.5.21
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.2
+
   '@flywave/flywave-draw-controls':
     devDependencies:
       '@flywave/flywave-test-utils':
@@ -2150,6 +2208,9 @@ importers:
       '@flywave/flywave-datasource-protocol':
         specifier: workspace:*
         version: link:../flywave-datasource-protocol
+      '@flywave/flywave-draped-draw':
+        specifier: workspace:*
+        version: link:../flywave-draped-draw
       '@flywave/flywave-draw-controls':
         specifier: workspace:*
         version: link:../flywave-draw-controls
@@ -17605,7 +17666,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
 
   '@types/bonjour@3.5.13':
     dependencies:
@@ -17613,7 +17674,7 @@ snapshots:
 
   '@types/chai-as-promised@7.1.8':
     dependencies:
-      '@types/chai': 4.3.20
+      '@types/chai': 5.2.3
 
   '@types/chai-as-promised@8.0.2':
     dependencies:
@@ -17633,7 +17694,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
 
   '@types/copy-webpack-plugin@8.0.1(webpack-cli@6.0.1)':
     dependencies:
@@ -17648,7 +17709,7 @@ snapshots:
 
   '@types/cors@2.8.19':
     dependencies:
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
 
   '@types/d3-array@3.2.2': {}
 
@@ -17795,7 +17856,7 @@ snapshots:
 
   '@types/express-serve-static-core@4.19.8':
     dependencies:
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
       '@types/qs': 6.14.0
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -17940,18 +18001,18 @@ snapshots:
 
   '@types/sax@1.2.7':
     dependencies:
-      '@types/node': 17.0.45
+      '@types/node': 25.1.0
 
   '@types/semver@7.7.1': {}
 
   '@types/send@0.17.6':
     dependencies:
       '@types/mime': 1.3.5
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
 
   '@types/serve-index@1.9.4':
     dependencies:
@@ -17960,7 +18021,7 @@ snapshots:
   '@types/serve-static@1.15.10':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
       '@types/send': 0.17.6
 
   '@types/sharp@0.25.1':
@@ -18015,7 +18076,7 @@ snapshots:
 
   '@types/xml2js@0.4.14':
     dependencies:
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -20123,7 +20184,7 @@ snapshots:
   engine.io@6.6.5:
     dependencies:
       '@types/cors': 2.8.19
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
       accepts: 1.3.8
       base64id: 2.0.0
       cookie: 0.7.2
@@ -22090,7 +22151,7 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
@@ -24861,7 +24922,7 @@ snapshots:
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
       '@types/long': 4.0.2
-      '@types/node': 16.18.126
+      '@types/node': 25.1.0
       long: 4.0.0
 
   protocols@2.0.2: {}

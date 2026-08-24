@@ -3,7 +3,7 @@
 // height-map/HeightMapTerrainMesh.ts
 import { type TileGeometryBuilder, type TileTransformation } from "@flywave/flywave-geometry";
 import { GeoBox, type TilingScheme, ProjectionType, TileKey } from "@flywave/flywave-geoutils";
-import { MapView, Tile } from "@flywave/flywave-mapview";
+import { MapView, SurfaceType, Tile } from "@flywave/flywave-mapview";
 import {
     DataTexture,
     LinearFilter,
@@ -59,6 +59,8 @@ function computeHeightMapPos(tileKey: TileKey, demTileKey: TileKey, yDown: boole
 
 export class HeightMapTerrainMesh extends Mesh {
     public readonly isHeightMapTerrainMesh = true;
+    // Draped-draw surface capture: this mesh provides ground surfaces.
+    public readonly captureSurfaceType = SurfaceType.Terrain;
 
     // --- Exposed properties (read by onObjectUpdate in DEMTileMeshMaterial) ---
     public heightMapTexture: THREE.Texture = matEmptyTexture;
