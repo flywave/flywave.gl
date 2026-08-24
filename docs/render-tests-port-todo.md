@@ -4204,3 +4204,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **终局表征**：我方 census 14 瓦片横向宽（x32756-32770）vs 256px 画布（hfov 9.4°）视野仅 ~4 瓦片宽——**引擎覆盖在窄高画布下横向系统性过宽**（FrustumIntersection 的视锥横向展开与画布 aspect 的关系疑点），且纵向不足（mgl 长带）。LOD（§317-§320 四轮）在形状修复前无从生效——欧氏变体的 −10.8k 是错向停止的巧合。
 - **下会话唯一入口**：FrustumIntersection 视锥/aspect 链审计（camera.aspect 与 canvas 256×1024 的传递、computeTileAreaAndDistance 的横向展开），以 census 宽度收敛到 ~4 瓦片为直接验收（无需跑 mgl）。
 - **终态**：全部回退至 §316 提交态（218782 ✓）、mapview lib 重建、tsc 干净、探针全清。
+
+**§321. 视锥 aspect 审计破案+修复落地——引擎 MIN_FOV_DEG=10 水平钳位把窄高画布（256×1024）的 hfov 9.53° 钳到 10° → 重算 vfov 36.87→38.575（实测逐位吻合）→ 覆盖横向过宽；opt-out 落地后 fov 复原 36.87、census 30→23/宽度 10→7 瓦片收敛（2026-08-24 二百一十，保留+实测）**：
+
+- **破案（ASP 探针）**：aspect=0.25 ✓ 画布 256×1024 ✓ 但 **fov=38.575≠36.87**——`setCameraParams` 的水平 fov 钳位（MIN_FOV_DEG=10）：256px 宽画布的 hfov=9.53°<10° 被抬到 10°→ focal 重算→ vfov 38.575（python 数值验证 MIN=10 → 38.575 精确命中）。水平视野比画布实际宽 5%+ 焦距系统性偏短 = §320 的 14 瓦片宽根因第一环。
+- **落地（保留）**：`setVerticalFov/setCameraParams` 增 `clampHorizontalFov` 参数（默认 true=零行为变化），MapView 从 `fovCalculation.clampHorizontal` 透传，compat harness 对全部测试设 `clampHorizontal: false`（mgl 无此钳位）。探针确认 fov 复原 36.8699 ✓。
+- **实测**：census 30→23 tiles、宽度 10→7（朝 mgl 的 2-4 迈进）；error-overlap 三例 +100/+899/+125（相机正确后马赛克残差微升=覆盖形状剩余差如实暴露）；circle/alignment（方画布）逐位恒定 ✓、star 934 恒定 ✓、fog/color 3 PASS ✓——**仅窄高画布受影响且方向正确**。
+- **剩余**：7 宽 vs mgl 2-4 宽——覆盖形状仍有引擎侧余量（extendedFrustumCulling/投影 scale 候选），下轮沿 §320 验收（宽度 ~4）继续。
+- **终态**：探针全清、工作树=本修复三文件、tsc/build 干净。

@@ -4007,13 +4007,17 @@ export class MapView extends EventDispatcher {
         const fovRad = THREE.MathUtils.degToRad(fovCalculation.fov);
 
         if (fovCalculation.type === "fixed") {
-            CameraUtils.setVerticalFov(this.m_camera, fovRad, height);
+            CameraUtils.setVerticalFov(
+                this.m_camera, fovRad, height,
+                (this.m_options.fovCalculation as any).clampHorizontal !== false);
             return;
         }
 
         let focalLength = CameraUtils.getFocalLength(this.m_camera);
         if (focalLength === undefined) {
-            CameraUtils.setVerticalFov(this.m_camera, fovRad, height);
+            CameraUtils.setVerticalFov(
+                this.m_camera, fovRad, height,
+                (this.m_options.fovCalculation as any).clampHorizontal !== false);
             focalLength = CameraUtils.getFocalLength(this.m_camera);
         }
         CameraUtils.setFocalLength(this.m_camera, focalLength!, height);

@@ -68,12 +68,13 @@ function setCameraParams(
     ppalPoint: Vector2Like,
     focalLength: number,
     viewportHeight: number,
-    verticalFov: number
+    verticalFov: number,
+    clampHorizontalFov = true
 ): void {
     const viewportWidth = viewportHeight * camera.aspect;
     let hFov = computeFov(focalLength, ppalPoint.x, viewportWidth);
 
-    if (hFov < MIN_FOV_RAD || hFov > MAX_FOV_RAD) {
+    if (clampHorizontalFov && (hFov < MIN_FOV_RAD || hFov > MAX_FOV_RAD)) {
         // Invalid horizontal fov, clamp and compute again focal length and vertical fov.
         hFov = THREE.MathUtils.clamp(hFov, MIN_FOV_RAD, MAX_FOV_RAD);
         const focalLength = computeFocalLengthFromFov(hFov, viewportWidth, ppalPoint.x);
@@ -238,13 +239,14 @@ export namespace CameraUtils {
     export function setVerticalFov(
         camera: THREE.PerspectiveCamera,
         verticalFov: number,
-        viewportHeight: number
+        viewportHeight: number,
+        clampHorizontalFov = true
     ): number {
         verticalFov = THREE.MathUtils.clamp(verticalFov, MIN_FOV_RAD, MAX_FOV_RAD);
         const ppalPoint = getPrincipalPoint(camera);
         const focalLength = computeFocalLengthFromFov(verticalFov, viewportHeight, ppalPoint.y);
 
-        setCameraParams(camera, ppalPoint, focalLength, viewportHeight, verticalFov);
+        setCameraParams(camera, ppalPoint, focalLength, viewportHeight, verticalFov, clampHorizontalFov);
 
         // vertical fov might change in setCameraParams due to horizontal fov restrictions.
         return getVerticalFov(camera);

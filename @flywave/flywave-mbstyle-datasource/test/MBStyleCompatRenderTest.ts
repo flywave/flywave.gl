@@ -1279,7 +1279,15 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     // (focalLength-based), so the default changes the
                     // perspective ratio: pitched views render near edges too
                     // wide / far edges too narrow vs mapbox baselines.
-                    fovCalculation: { type: 'fixed', fov: 36.86989764584402 },
+                    // clampHorizontal: false — the engine's MIN_FOV_DEG=10
+                    // horizontal clamp distorts narrow canvases (256x1024:
+                    // hfov 9.53° clamped to 10° → vfov 36.87→38.575, coverage
+                    // 14 tiles wide vs the ~4-tile view). mgl has no such
+                    // clamp (§321).
+                    fovCalculation: {
+                        type: 'fixed', fov: 36.86989764584402,
+                        clampHorizontal: false,
+                    } as any,
                 });
 
                 // render-tests capture a static frame shortly after load; disable
