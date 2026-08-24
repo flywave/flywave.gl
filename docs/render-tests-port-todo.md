@@ -4256,3 +4256,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **监视点**：lookAtImpl 入参打点（|heading|>0.1 即日志+栈）——**零命中**：全部调用 heading=0/undefined，§326 的"回灌消费"路径证伪；相机东移在**初始放置内部**产生（heading=0 时 `result.x += sin(0)·g` 不偏移 → 偏移必然来自四元数/变换链的其他效应——getCameraRotationAtTarget 的翻转基底 makeBasis((1,0,0),(0,−1,0),(0,0,−1)) 与 rotX(pitch) 复合的坐标耦合）。
 - **下会话直奔点**：getCameraPositionFromTargetCoordinates/getCameraRotationAtTarget 的 x 偏移数值复算（heading=0, pitch=60 输入下手算期望 vs 实测 3155m），定位基底复合的具体项；修复后 census 居中验收（x16383-16385）。
 - **终态**：监视点全清、mapview lib 重建提交态、218882 复原 ✓、工作树=提交态。
+
+**§329. §328 直奔点数值复算——getCameraPositionFromTargetCoordinates 在 heading=0/pitch=60 下 x 偏移=0.0（Node 直调 lib 实测）：放置数学正确、翻转基底复合假说证伪；东移 3155m 必来自某处 yaw≠0 的直接调用（绕过 lookAtImpl params 的 getCameraPositionFromTargetCoordinates 调用面——Utils.ts:1056 动画/zoomOnTargetPosition 的 −heading 变体），下会话以该函数本身打点（非 lookAt 打点）捕获（2026-08-24 二百一十八，数值复算记档）**：
+
+- **复算**：Node 直调 lib（target (0.01,0.005)/distance 4465/yaw 0/pitch 60）→ cam delta = (0.0, −3866.8) ✓ 纯南偏、零东移——§328 的"基底复合 x 偏移"假说证伪；updateLookAtSettings 亦确认只读不重放置。
+- **收敛**：东移来自**直接调用 getCameraPositionFromTargetCoordinates 且 yaw≠0** 的路径（lookAtImpl 监视点覆盖不到）——候选 Utils.ts:1056（相机动画，`-heading` 变体）与 zoomOnTargetPosition 系。**下会话第一动作**：在该函数入口打点（yaw 参数≠0 即日志+栈），一次运行即捕获调用者，随后按调用者语义修复。
+- **终态**：工作树=提交态（零代码改动）、无探针。
