@@ -4178,3 +4178,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实测**：LOD 探针确认降级方向正确（8 瓦片 z15→z14，西/远带，与 mgl 远带同向）；error-overlap 218780→218782/opaque 198247→198188（−59）/unoccluded 3453→3364（−89）、circle 5758 恒定；**+1+LOD 组合仍 218k 平台**——我方引擎底集（77 z16 宽块）≠mgl 底集（47 混合），datasource 只能在引擎调度的瓦片上装饰，无法增删瓦片（空返回 §304 已证伪）。
 - **终审**：整帧空白桶的真修复=引擎 VisibleTileSet 的集合形状+LOD（对照 scripts/mgl-covering-tiles-ref.js 的 47-tile 参照），datasource 侧全部路径（层级/LOD/空返回/祖先链）已四轮穷尽记档。
 - **回归**：raster-color 1F/1S 与基线恒定 ✓、tsc 干净。保留：LOD 机制（mgl 语义正确+净正向）。
+
+**§317. 引擎级 shouldSplit 距离 LOD 首试——FrustumIntersection opt-in 落地并首次撼动 218k 平台（initializing −10795！），但 opaque +12.6k/circle +11.4k 净回归回退：全局 opt-in 的阈值标定不足（mgl 阈值绑定源 tileSize/画布，引擎侧为全局），需按源参数化（2026-08-24 二百零六，机制验证+回退记档）**：
+
+- **落地**：FrustumIntersection 细分循环 opt-in `mglDistanceLod`（closest-point 距离 + distToSplitScale 尖角缩放 + `C/2^l·ccd/512` 阈值；停止的瓦片留在原级=mgl 混合 LOD），VisibleTileSet options 同步，datasource raster 场景启用。
+- **实测**：initializing **218780→207985（−10795，平台首次被撼动）**、opaque 198247→210866（+12619）、circle/occluded 5758→17173（+11415）——净 +13.2k 回归；/256 松阈值逐位同结果（停止集对阈值边界不敏感）。**机制方向证实，标定域不足**：mgl 的 zoomSplitDistance 分母是**源 tileSize**（256 源更松）、ccd 随**画布高度**——引擎全局单值无法覆盖多源多画布，需把源 tileSize 传入引擎（datasource→VisibleTileSet 参数化）后逐族标定。
+- **回退**：净回归全回退（工作树=§316 提交态，218782 ✓ 复原），机制代码与数据完整记档于此，下会话可直接重启。
+- **终态**：mapview lib 重建回提交态、tsc 干净。
