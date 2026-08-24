@@ -3879,3 +3879,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl 精确式（transform.ts）**：`d/R = ccd/(worldSize/2π − 1)`，ccd=(h_css/2)/tan(fov/2)（CSS px），ws=512·2^zoom。落地：applyCameraSettings 在 sphere 下解出落在此距离的 flywave zoom（`zw = log2(f_dev·EarthC/(256·(d−R)))`）重调 setCameraGeolocationAndZoom——引擎内部相机状态保持自洽；`m_styleBoxZoom` 记录权威 style zoom 供 pushMapboxZoom（补偿后 zoomLevel getter 失真）。
 - **实测**：fog/globe+space-color 六例 87745→48918 / 66017→35938 / 23712→13265 / 22635→13088 / 22028→12919 / 37179→31519；**面部像素与期望 ±2-3**（此前 ±8）。回归：background-color/fill-color 全绿、fog 族恒定（transition 4096 / fog/default 448 均既有）✓。
 - **剩余（下轮入口）**：limb 大气环带——我方环带偏暗偏窄（y=32 行 52,52,115 vs 期望 130,130,183），即 dome 的环带展宽/亮度 vs mgl drawAtmosphere（fadeout 或 horizonAngle 边界条件的标定域）+ star-intensity 星点亮度。
+
+**§275. §274 公式修正——globe_utils calculateGlobePosMatrix 破案：d/R = 1 + 2π·ccd·conv/ws（45° 归一 conv=sec(lat)/√2），六例数量级下降（space-color 48918→251、star-intensity 31519→977）（2026-08-24 一百六十三，保留+实测）**：
+
+- **§274 公式的缺口**：上一轮的 d/R=ccd/(ws/2π−1) 与像素反演（mgl 有效 d≈4.37R vs 公式 4.76R）差 1.09×。破案于 `globe_util.ts calculateGlobePosMatrix`：mgl 把球心放在平面 z=−ws/2π（ Mercator 平面切于北极！），相机在 z=ccd·conv——**d/R = 1 + 2π·ccd·conv/ws**，其中 conv=`pixelSpaceConversion`=sec(lat)/interp(√2, sec(lat), t)=sec(lat)/√2（GLOBE_SCALE_MATCH_LATITUDE=45° 归一，globe zoom 段 t=0）。z0@256px：4.326 ✓ 与像素反演 4.376 吻合（差值=测量精度）。
+- **实测**：fog/globe+space-color 六例 = **1245/1319/1487/251/361/977**（§274 后 13.3k/13.1k/12.9k/48.9k/35.9k/31.5k）——数量级下降，全部逼近阈值（space-color 距 PASS 仅 ~120px）。dome hAng 12.10°→13.35° 实证。回归：background-color/fill-color/fog-color 族全绿、transition/fog-default 既有恒定 ✓。
+- **剩余（下轮）**：star-intensity 977=星点亮度/密度；high-color 族 ~1.3k=limb 环带细节（fadeout 或环形渐变的次级差）；space-color 251/361=临界残差（可能是抗锯齿/±1 像素边界）。
