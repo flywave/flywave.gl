@@ -122,7 +122,10 @@ export class SurfaceCapturePass {
                 depthBuffer: true,
                 stencilBuffer: false
             });
-            const depthTexture = new THREE.DepthTexture(width, height);
+            // 32-bit float depth: the draped membership tests reconstruct
+            // world positions from this buffer, where meter-level lateral
+            // error at grazing angles eats narrow bands alive.
+            const depthTexture = new THREE.DepthTexture(width, height, THREE.FloatType);
             depthTexture.minFilter = THREE.NearestFilter;
             depthTexture.magFilter = THREE.NearestFilter;
             target.depthTexture = depthTexture;

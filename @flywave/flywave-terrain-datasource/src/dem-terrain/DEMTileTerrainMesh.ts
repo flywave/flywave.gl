@@ -20,21 +20,13 @@ import { type HeightMapModifierManager } from "../ground-modification-manager";
 import { type WebTile } from "../WebImageryTileProvider";
 import {
     emptyTexture as matEmptyTexture,
-    emptyImageryTextures,
     DEMTileMeshMaterial
 } from "./DEMTileMeshMaterial";
+import { DEMTileOverlayMaterial } from "./DEMTileLayerMaterial";
 import { ProjectionSwitchController } from "../ProjectionSwitchController";
 
 const uDemUnpack0 = new Vector4(6553.6, 25.6, 0.1, 10000.0);
 const uDemUnpack1 = new Vector4(0.0, 0.0, 0, 0);
-
-const _identityImageryTransforms = [
-    new Vector4(1, 1, 0, 0),
-    new Vector4(1, 1, 0, 0),
-    new Vector4(1, 1, 0, 0),
-    new Vector4(1, 1, 0, 0),
-    new Vector4(1, 1, 0, 0)
-];
 
 function computeHeightMapPos(tileKey: TileKey, demTileKey: TileKey, yDown: boolean): Vector3 {
     tileKey = TileKey.fromRowColumnLevel(
@@ -65,8 +57,6 @@ export class HeightMapTerrainMesh extends Mesh {
     // --- Exposed properties (read by onObjectUpdate in DEMTileMeshMaterial) ---
     public heightMapTexture: THREE.Texture = matEmptyTexture;
     public modifierTexture: THREE.Texture | null = null;
-    public imageryTextures: THREE.Texture[] = [...emptyImageryTextures];
-    public imageryTransforms: THREE.Vector4[] = _identityImageryTransforms.map(v => v.clone());
     public packCol0: Vector4 = new Vector4();
     public demUnpack: Vector4 = new Vector4();
     public heightMapPos: Vector4 = new Vector4(1, 0, 0, 0);
@@ -80,7 +70,6 @@ export class HeightMapTerrainMesh extends Mesh {
     public modifierUVBounds: Vector4 = new Vector4();
     public modifierOp: number = 0;
     public hasModifier: number = 0;
-    public imageryCount: number = 0;
 
     /**
      * Per-source projector overlay state. Bound once at mesh creation to the
@@ -359,29 +348,42 @@ export class HeightMapTerrainMesh extends Mesh {
         }
     }
 
+    /**
+     * Layer×mesh imagery setup: the FIRST entry upgrades this mesh's own
+     * DEMTileMeshMaterial albedo in place; every additional entry (cross-tile
+     * stitching patches) becomes an overlay child mesh with
+     * DEMTileOverlayMaterial sharing this geometry (bit-identical depth,
+     * depthWrite off). The [0,1] UV gate limits each patch to its own
+     * geoBox, so spatially disjoint patches do not overlap.
+     */
     public setupImageryTexture(webTiles: WebTile[], webTingScheme: TilingScheme): void {
-        const webTilesUnifrom: Array<{
-            transform: THREE.Vector4;
-            texture: THREE.Texture;
-        }> = [];
-        webTiles.map(tile => {
+        const entries: Array<{ transform: THREE.Vector4; texture: THREE.Texture }> = [];
+        for (const tile of webTiles) {
             const transform = this.computeTextureUvTransform(tile.geoBox, webTingScheme);
             if (transform !== false) {
                 tile.texture.flipY = this.m_yDown;
-                webTilesUnifrom.push({
-                    texture: tile.texture,
-                    transform
-                });
+                entries.push({ texture: tile.texture, transform });
             }
-        });
-        for (let i = 0; i < 5; i++) {
-            this.imageryTextures[i] = null;
         }
-        webTilesUnifrom.forEach((item, index) => {
-            this.imageryTextures[index] = item.texture;
-            this.imageryTransforms[index].copy(item.transform);
-        });
-        this.imageryCount = webTilesUnifrom.length;
+        if (entries.length === 0) return;
+
+        const base = this.material as DEMTileMeshMaterial;
+        base.imageryTexNode.value = entries[0].texture;
+        base.uvTexTransform.value.copy(entries[0].transform);
+
+        for (let i = 1; i < entries.length; i++) {
+            const material = new DEMTileOverlayMaterial();
+            material.decalTexNode.value = entries[i].texture;
+            const decal = new Mesh(this.geometry, material);
+            decal.castShadow = false;
+            decal.receiveShadow = false;
+            decal.frustumCulled = false;
+            decal.raycast = () => {};
+            // Shared-uniform inputs read via onObjectUpdate from the mesh.
+            (decal as any).uvTransform = entries[i].transform.clone();
+            (decal as any).opacity = 1;
+            this.add(decal);
+        }
     }
 
     private computeTextureUvTransform(

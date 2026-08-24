@@ -8,17 +8,15 @@ import {
     abs,
     cameraProjectionMatrixInverse,
     cross,
-    clamp,
     float,
     max,
     min,
     mix,
-    screenSize,
     screenUV,
     step,
-    vec2,
     vec3,
-    vec4
+    vec4,
+    clamp
 } from "three/tsl";
 
 /**
@@ -40,8 +38,6 @@ export interface DrapedFragmentContext {
     allowModel: any;
     debug: any;
     probe: any;
-    /** Eye-space position of the current fragment's vertex (interpolated). */
-    fragEye: any;
     varyings: Record<string, any>;
 }
 
@@ -64,7 +60,7 @@ export interface DrapedFragmentContext {
  *     1 — sampled surface type on a red scale (`type / 2`)
  *     2 — raw captured depth on a grayscale
  *     3 — reconstructed view-space distance, kilometers on a grayscale
- *     4+ — containment result: white = inside, dark purple = outside
+ *     4 — containment result: white = inside, dark purple = outside
  */
 export function buildDrapedColorNode(mode: "curtain" | "prism", context: DrapedFragmentContext) {
     return Fn(() => {
@@ -97,73 +93,34 @@ export function buildDrapedColorNode(mode: "curtain" | "prism", context: DrapedF
         const viewH = cameraProjectionMatrixInverse.mul(vec4(ndc, 1));
         const groundView = viewH.div(viewH.w).xyz;
 
-        // Convention-fit probes (5..8): rebuild the ground point with each
-        // candidate uv/depth convention and color by how close it lands to
-        // this very fragment. Green (<100 m) marks the correct convention —
-        // the volume hugs the terrain, so a valid reconstruction is near.
-        // 5: flipY + z=2d-1 · 6: no flip + z=2d-1 · 7: flipY + z=d · 8: no flip + z=d
-        const groundWith = (flipY: any, zLinear: any) => {
-            const yGL = screenUV.y.mul(2).sub(1);
-            const y = mix(yGL, screenUV.y.oneMinus().mul(2).sub(1), flipY);
-            const z = mix(depth.mul(2).sub(1), depth, zLinear);
-            const vh = cameraProjectionMatrixInverse.mul(vec4(vec3(ndc.x, y, z), 1));
-            return vh.div(vh.w).xyz;
-        };
-        const fitColor = (flipY: number, zLinear: number) => {
-            const delta = groundWith(float(flipY), float(zLinear)).sub(context.fragEye).length();
-            const c = mix(vec4(0.8, 0, 0, 1), vec4(0.8, 0.6, 0, 1), step(delta, float(500)));
-            return mix(c, vec4(0, 0.85, 0, 1), step(delta, float(100)));
-        };
-
         // Geometry-specific containment, as a 0/1 mask.
-        let probe13Color: any = vec4(0);
-        let probe14Color: any = vec4(0);
-        let probe15Color: any = vec4(0);
         let insideF: any;
         if (mode === "curtain") {
-            // Screen-space band (GroundPolyline-style): the vertex stage
-            // projects the segment endpoints to clip space; here the current
-            // pixel's distance to that screen segment decides membership.
-            // Constant width in pixels is guaranteed by construction and the
-            // result is immune to view angle or reconstruction precision.
-            const toScreenUv = (n: any) =>
-                vec2(
-                    n.x.div(n.w).mul(0.5).add(0.5),
-                    n.y.div(n.w).mul(-0.5).add(0.5) // NDC y-up → screenUV y-down
-                );
-            const uvStart = toScreenUv(context.varyings.ndcStart);
-            const uvEnd = toScreenUv(context.varyings.ndcEnd);
-
-            const segDelta = uvEnd.sub(uvStart);
-            const denom = segDelta.dot(segDelta).max(1e-12);
-            const t = screenUV.sub(uvStart).dot(segDelta).div(denom).clamp(0, 1);
-            const closest = uvStart.add(segDelta.mul(t));
-
-            // Aspect-correct pixel distance between this fragment and the segment.
-            const deltaPx = closest.sub(screenUV).mul(screenSize);
-
-            // Probes 13/14 — curtain instrumentation:
-            // 13: distance field, grayscale over 64 px (dark ridge = the band)
-            // 14: degeneracy check — green while the projected endpoints are
-            //     distinct, red when they collapse (attribute/projection fault)
-            // Probe 15 — self-projection consistency: re-project this very
-            // fragment and compare against its own pixel. R channel glows with
-            // X-axis error, G with Y-axis error (8 px full scale); black means
-            // our NDC→screenUV mapping is exactly the renderer's.
-            const selfUv = toScreenUv(context.varyings.ndcSelf);
-            const dSelfPx = selfUv.sub(screenUV).mul(screenSize);
-            probe15Color = vec4(
-                clamp(dSelfPx.x.abs().div(8), 0, 1),
-                clamp(dSelfPx.y.abs().div(8), 0, 1),
-                0,
-                1
+            // Faithful port of PolylineShadowVolumeFS: measure the
+            // reconstructed ground point against the segment's three bounding
+            // planes (lateral right plane + two miter cap planes). Outside
+            // any of them the fragment is not part of the line.
+            //
+            //   |widthwise| > halfMaxWidth  OR  dStart < 0  OR  dEnd < 0
+            //
+            // where halfMaxWidth = halfWidthPx * metersPerPixel(reconstructed).
+            const halfMaxWidth = context.halfWidthPx.mul(
+                metersPerPixel(groundView, context.pixelsPerMeterFactor)
             );
 
-            const g13 = float(0.9).sub(clamp(deltaPx.length().div(float(64)), 0, 1).mul(0.9));
-            probe13Color = vec4(g13, g13, g13, 1);
-            probe14Color = mix(vec4(0.7, 0, 0, 1), vec4(0, 0.85, 0, 1), step(float(1e-10), denom));
+            // Tube containment: distance from the reconstructed ground point
+            // to the segment itself (endpoints clamped to [0,1] along it).
+            // Unlike a corridor of planes this region cannot slide across
+            // slopes as the camera moves.
+            const segStart = context.varyings.ecStart;
+            const segEnd = context.varyings.ecEnd;
+            const segDelta = segEnd.sub(segStart);
+            const denom = segDelta.dot(segDelta).max(1e-12);
+            const t = clamp(groundView.sub(segStart).dot(segDelta).div(denom), 0, 1);
+            const closest = segStart.add(segDelta.mul(t));
+            const distanceToSegment = groundView.sub(closest).length();
 
-            insideF = float(1).sub(step(context.halfWidthPx, deltaPx.length()));
+            insideF = step(distanceToSegment, halfMaxWidth);
         } else {
             // Containment within the fragment's own footprint triangle via
             // sign tests of scaled triple products (no tangent frame needed).
@@ -188,13 +145,7 @@ export function buildDrapedColorNode(mode: "curtain" | "prism", context: DrapedF
         // Probe color selection: later mixes win, so lowest probe wins.
         const km = groundView.z.abs().mul(0.001);
 
-        let color = fitColor(0, 1); // probe 8 fallback base
-        color = mix(color, fitColor(1, 1), rangeMask(probe, 6.5, 7.5)); // 7
-        color = mix(color, fitColor(0, 0), rangeMask(probe, 5.5, 6.5)); // 6
-        color = mix(color, fitColor(1, 0), rangeMask(probe, 4.5, 5.5)); // 5
-        color = mix(color, probe14Color, rangeMask(probe, 13.5, 14.5)); // 14
-        color = mix(color, probe13Color, rangeMask(probe, 12.5, 13.5)); // 13
-        color = mix(color, probe15Color, rangeMask(probe, 14.5, 15.5)); // 15
+        let color = vec4(0);
         color = mix(
             color,
             mix(vec4(0.45, 0, 0.45, 1), vec4(1, 1, 1, 1), insideF),

@@ -17,6 +17,8 @@ function dummyTex(): THREE.DataTexture {
     t.minFilter = THREE.LinearFilter;
     t.magFilter = THREE.LinearFilter;
     t.generateMipmaps = false;
+    t.wrapS = THREE.ClampToEdgeWrapping;
+    t.wrapT = THREE.ClampToEdgeWrapping;
     t.needsUpdate = true;
     return t;
 }
@@ -38,140 +40,58 @@ function transparentTex(): THREE.DataTexture {
 
 const emptyTexture = dummyTex();
 const emptyTransparentTex = transparentTex();
-const emptyImageryTextures = [dummyTex(), dummyTex(), dummyTex(), dummyTex(), dummyTex()];
-
-const _imageryTex = [
-    texture(emptyImageryTextures[0]),
-    texture(emptyImageryTextures[1]),
-    texture(emptyImageryTextures[2]),
-    texture(emptyImageryTextures[3]),
-    texture(emptyImageryTextures[4])
-];
-
-_imageryTex[0].onObjectUpdate(({ object }) => object.imageryTextures[0] ?? emptyImageryTextures[0]);
-_imageryTex[1].onObjectUpdate(({ object }) => object.imageryTextures[1] ?? emptyImageryTextures[1]);
-_imageryTex[2].onObjectUpdate(({ object }) => object.imageryTextures[2] ?? emptyImageryTextures[2]);
-_imageryTex[3].onObjectUpdate(({ object }) => object.imageryTextures[3] ?? emptyImageryTextures[3]);
-_imageryTex[4].onObjectUpdate(({ object }) => object.imageryTextures[4] ?? emptyImageryTextures[4]);
-
-const _imageryTransform = [
-    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ object }) => object.imageryTransforms[0]
-    ),
-    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ object }) => object.imageryTransforms[1]
-    ),
-    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ object }) => object.imageryTransforms[2]
-    ),
-    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ object }) => object.imageryTransforms[3]
-    ),
-    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ object }) => object.imageryTransforms[4]
-    )
-];
-
-const _imageryCount = uniform(0).onObjectUpdate(({ object }) => object.imageryCount);
-
-const _waterMaskTex = texture(emptyTexture);
-_waterMaskTex.onObjectUpdate(({ object }) => object.waterMaskTexture ?? emptyTexture);
-
-const _waterMaskTranslationAndScale = uniform(new THREE.Vector4()).onObjectUpdate(
-    ({ object }) => object.waterMaskTranslationAndScale
-);
-
-const _waterMaskNoisyTranslationAndScale = uniform(new THREE.Vector4()).onObjectUpdate(
-    ({ object }) => object.waterMaskNoisyTranslationAndScale
-);
-
-const _normalSampler = texture(emptyTexture);
-_normalSampler.onObjectUpdate(({ object }) => object.normalSampler ?? emptyTexture);
-
-const _frameNumber = uniform(0.0).onObjectUpdate(({ object }) => object.frameNumber);
-
-const _clipUvTransform = uniform(new THREE.Vector3(1, 0, 0)).onObjectUpdate(
-    ({ object }) => object.clipUvTransform
-);
-
-function buildNodes() {
-    const texUv = uvNode();
-    const webMercatorY = attribute("webMercatorY", "float");
-    const mapUv = vec2(texUv.x, webMercatorY);
-
-    const colorNode = Fn(() => {
-        const color = vec4(0.0).toVar();
-
-        for (let i = 0; i < 5; i++) {
-            const tUv = vec2(
-                mapUv.x.mul(_imageryTransform[i].x).add(_imageryTransform[i].z),
-                mapUv.y.mul(_imageryTransform[i].y).add(_imageryTransform[i].w)
-            );
-            const inRange = tUv.x
-                .greaterThanEqual(float(-0.001))
-                .and(tUv.x.lessThanEqual(float(1.001)))
-                .and(tUv.y.greaterThanEqual(float(-0.001)))
-                .and(tUv.y.lessThanEqual(float(1.001)));
-            const patchColor = texture(_imageryTex[i], tUv);
-            color.assign(select(inRange.and(float(i).lessThan(_imageryCount)), patchColor, color));
-        }
-
-        return tslMix(color, vec4(1.0), float(0.1));
-    })();
-
-    return { colorNode };
-}
-
-const s_nodes = buildNodes();
-
-/**
- * Quantized mesh material for rendering Cesium-style quantized-mesh terrain.
- *
- * All per-tile data is read directly from the mesh object at render time via
- * onObjectUpdate, so no per-tile properties exist on the material itself.
- * This ensures the shader is compiled only once and shared by all tiles.
- */
-export class QuantizedMeshMaterial extends MeshStandardNodeMaterial {
-    public defines: Record<string, unknown> = {};
-    private _isSharedSingleton?: boolean;
-
-    constructor(parameters?: THREE.MeshStandardMaterialParameters) {
-        super(parameters);
-        this.colorNode = s_nodes.colorNode;
-    }
-
-    dispose() {
-        if (this._isSharedSingleton) return;
-        super.dispose();
-    }
-
-    markSharedSingleton(): this {
-        this._isSharedSingleton = true;
-        return this;
-    }
-}
-
-const defaultQuantizedMeshMaterial = new QuantizedMeshMaterial({
-    wireframe: false,
-    transparent: false,
-    blending: THREE.NoBlending
-}).markSharedSingleton();
-
-export { emptyTexture, emptyTransparentTex, emptyImageryTextures, defaultQuantizedMeshMaterial };
 
 // ---------------------------------------------------------------------------
-// Projector decal material — one MESH (and one material instance) per layer
-// per tile, mirroring the DEM layer×mesh pipeline. The decal mesh shares the
-// quantized tile geometry (worker geometry carries uv + webMercatorY), so its
-// depth is bit-identical to the base surface (depthWrite off, no z-fighting).
+// BASE material — one imagery texture per mesh (layer×mesh architecture, same
+// as the DEM pipeline). The first imagery entry of a tile is the base albedo;
+// every ADDITIONAL entry (cross-tile stitching patches, projector decals)
+// rides its own decal mesh with QuantizedDecalMaterial below, sharing the
+// tile geometry.
 //
-// The decal TEXTURE and the tile-UV transform are PER-MATERIAL nodes set once
+// The imagery texture and tile-UV transform are PER-MATERIAL nodes set once
 // at creation (quantized tiles rebuild their objects on every load — no
 // in-place updates needed). The colorNode is a PLAIN expression (no Fn
 // wrapper): every instance generates byte-identical WGSL → one shared
 // pipeline (per-material Fn colorNodes caused a recompile per tile — DEM
-// path lesson). Transform math: SIGNED south-anchor offset, see
-// computeDecalUvTransform in QuantizedMesh.ts.
+// path lesson). This replaces the old 5-slot imagery arrays of the shared
+// singleton material.
+// ---------------------------------------------------------------------------
+export class QuantizedMeshMaterial extends MeshStandardNodeMaterial {
+    /** Base albedo imagery texture node; value set once at creation. */
+    public imageryTexNode: any;
+    /** Tile-UV → imagery-UV transform (x/y = scale, z/w = offset). */
+    public uvTexTransform: any;
+
+    constructor(parameters?: THREE.MeshStandardMaterialParameters) {
+        super({ wireframe: false, transparent: false, blending: THREE.NoBlending, ...parameters });
+
+        this.uvTexTransform = uniform(new THREE.Vector4(1, 1, 0, 0));
+
+        const texUv = uvNode();
+        const webMercatorY = attribute("webMercatorY", "float");
+        const tUv = vec2(
+            texUv.x.mul(this.uvTexTransform.x).add(this.uvTexTransform.z),
+            webMercatorY.mul(this.uvTexTransform.y).add(this.uvTexTransform.w)
+        );
+        this.imageryTexNode = texture(emptyTexture, tUv);
+        this.colorNode = tslMix(this.imageryTexNode, vec4(1.0), float(0.1));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Decal material — one MESH (and one material instance) per layer per tile,
+// mirroring the DEM layer×mesh pipeline. Used for projector decals AND for
+// additional imagery entries (cross-tile stitching patches) of a tile; the
+// decal mesh shares the quantized tile geometry (worker geometry carries
+// uv + webMercatorY), so its depth is bit-identical to the base surface
+// (depthWrite off, no z-fighting).
+//
+// The decal TEXTURE and the tile-UV transform are PER-MATERIAL nodes set once
+// at creation. The colorNode is a PLAIN expression (no Fn wrapper): every
+// instance generates byte-identical WGSL → one shared pipeline. Transform
+// math for projector decals: SIGNED south-anchor offset, see
+// computeDecalUvTransform in QuantizedMesh.ts; imagery entries use the
+// tile-aligned variant via QuantizedMesh.computeTextureUvTransform.
 // ---------------------------------------------------------------------------
 export class QuantizedDecalMaterial extends MeshBasicNodeMaterial {
     /** Decal texture node; value is set once at creation. */
@@ -210,3 +130,5 @@ export class QuantizedDecalMaterial extends MeshBasicNodeMaterial {
         this.colorNode = vec4(this.decalTexNode.rgb.mul(this.opacityUniform), a).toVar();
     }
 }
+
+export { emptyTexture, emptyTransparentTex };

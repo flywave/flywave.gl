@@ -45,8 +45,6 @@ function dummyTex(): THREE.DataTexture {
 }
 
 const emptyTexture = dummyTex();
-const emptyImageryTextures = [dummyTex(), dummyTex(), dummyTex(), dummyTex(), dummyTex()];
-
 // Height-map texture node (shared singleton across all DEM tiles).
 // Primarily consumed by positionNode (vertex stage) for terrain displacement.
 // IMPORTANT: also referenced in colorNode (fragment stage) — see WORKAROUND
@@ -57,56 +55,6 @@ _heightMapTex.onObjectUpdate(({ object }) => object.heightMapTexture ?? emptyTex
 const _modifierTex = texture(emptyTexture);
 _modifierTex.onObjectUpdate(({ object }) => object.modifierTexture ?? emptyTexture);
 
-const _imageryTex = [
-    texture(emptyImageryTextures[0]),
-    texture(emptyImageryTextures[1]),
-    texture(emptyImageryTextures[2]),
-    texture(emptyImageryTextures[3]),
-    texture(emptyImageryTextures[4])
-];
-
-_imageryTex[0].onObjectUpdate(({ object }) => object.imageryTextures[0] ?? emptyImageryTextures[0]);
-_imageryTex[1].onObjectUpdate(({ object }) => object.imageryTextures[1] ?? emptyImageryTextures[1]);
-_imageryTex[2].onObjectUpdate(({ object }) => object.imageryTextures[2] ?? emptyImageryTextures[2]);
-_imageryTex[3].onObjectUpdate(({ object }) => object.imageryTextures[3] ?? emptyImageryTextures[3]);
-_imageryTex[4].onObjectUpdate(({ object }) => object.imageryTextures[4] ?? emptyImageryTextures[4]);
-
-const _imageryTransform = [
-    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ object }) => object.imageryTransforms[0]
-    ),
-    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ object }) => object.imageryTransforms[1]
-    ),
-    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ object }) => object.imageryTransforms[2]
-    ),
-    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ object }) => object.imageryTransforms[3]
-    ),
-    uniform(new THREE.Vector4(1, 1, 0, 0)).onObjectUpdate(
-        ({ object }) => object.imageryTransforms[4]
-    )
-];
-
-const _packCol0 = uniform(new THREE.Vector4()).onObjectUpdate(({ object }) => object.packCol0);
-const _demUnpack = uniform(new THREE.Vector4()).onObjectUpdate(({ object }) => object.demUnpack);
-const _heightMapPos = uniform(new THREE.Vector4(1, 0, 0, 0)).onObjectUpdate(
-    ({ object }) => object.heightMapPos
-);
-const _patchPos0 = uniform(new THREE.Vector4()).onObjectUpdate(({ object }) => object.patchPos0);
-const _patchPos1 = uniform(new THREE.Vector4()).onObjectUpdate(({ object }) => object.patchPos1);
-const _patchPos2 = uniform(new THREE.Vector4()).onObjectUpdate(({ object }) => object.patchPos2);
-const _patchPos3 = uniform(new THREE.Vector4()).onObjectUpdate(({ object }) => object.patchPos3);
-const _texSize = uniform(new THREE.Vector2(1, 1)).onObjectUpdate(({ object }) => object.texSize);
-const _skirtHeight = uniform(0.0).onObjectUpdate(({ object }) => object.skirtHeight);
-const _projFactor = uniform(0.0).onObjectUpdate(({ object }) => object.projectionFactor);
-const _modifierUVBounds = uniform(new THREE.Vector4()).onObjectUpdate(
-    ({ object }) => object.modifierUVBounds
-);
-const _modifierOp = uniform(0).onObjectUpdate(({ object }) => object.modifierOp);
-const _hasModifier = uniform(0).onObjectUpdate(({ object }) => object.hasModifier);
-const _imageryCount = uniform(0).onObjectUpdate(({ object }) => object.imageryCount);
 
 function buildNodes() {
     const webMercatorY = attribute("webMercatorY", "float");
@@ -203,24 +151,6 @@ function buildNodes() {
         return finalPos;
     })();
 
-    const colorNode = Fn(() => {
-        const mapUv = vec2(texUv.x, webMercatorY);
-        const color = vec4(0.0).toVar();
-
-        for (let i = 0; i < 5; i++) {
-            const tUv = vec2(
-                mapUv.x.mul(_imageryTransform[i].x).add(_imageryTransform[i].z),
-                mapUv.y.mul(_imageryTransform[i].y).add(_imageryTransform[i].w)
-            );
-            const inRange = tUv.x
-                .greaterThanEqual(float(-0.01))
-                .and(tUv.x.lessThanEqual(float(1.01)))
-                .and(tUv.y.greaterThanEqual(float(-0.01)))
-                .and(tUv.y.lessThanEqual(float(1.01)));
-            const patchColor = texture(_imageryTex[i], tUv);
-            color.assign(select(inRange.and(float(i).lessThan(_imageryCount)), patchColor, color));
-        }
-
         // ---------------------------------------------------------------------------
         // WORKAROUND: WebGPU vertex-only texture binding instability
         // ---------------------------------------------------------------------------
@@ -251,13 +181,14 @@ function buildNodes() {
         //   texture bindings, or if the height-map is moved to a mechanism
         //   that does not rely on vertex-stage texture sampling.
         // ---------------------------------------------------------------------------
-        const _demUvForVisibility = tileUvToDemSample(texUv);
-        color.assign(color.add(texture(_heightMapTex, _demUvForVisibility).mul(0.0001)));
+        // (see the WORKAROUND comment above — exposed as an expression so
+        // per-material colorNodes can add it without an Fn stack context)
+        const demVisibilityFix = texture(
+            _heightMapTex,
+            tileUvToDemSample(texUv)
+        ).mul(0.0001);
 
-        return color;
-    })();
-
-    return { positionNode, colorNode, vTerrainNormal };
+    return { positionNode, demVisibilityFix, vTerrainNormal };
 }
 
 const s_nodes = buildNodes();
@@ -278,10 +209,31 @@ export class DEMTileMeshMaterial extends MeshStandardNodeMaterial {
     public allowOverride: boolean = false;
     private _isSharedSingleton?: boolean;
 
+    /** Base albedo imagery texture node; set once by the mesh. */
+    public imageryTexNode: any;
+    /** Tile-UV → imagery-UV transform (x/y = scale, z/w = offset). */
+    public uvTexTransform: any;
+
     constructor(parameters?: THREE.MeshStandardMaterialParameters) {
         super(parameters);
-        this.colorNode = s_nodes.colorNode;
         this.positionNode = s_nodes.positionNode;
+
+        // Layer×mesh: ONE imagery texture per material (the old 5-slot
+        // arrays are gone — additional entries ride decal child meshes with
+        // DEMTileOverlayMaterial, see HeightMapTerrainMesh
+        // .setupImageryTexture). Plain-expression colorNode → byte-identical
+        // WGSL per instance → one shared pipeline.
+        this.uvTexTransform = uniform(new THREE.Vector4(1, 1, 0, 0));
+        const texUv = uvNode();
+        const webMercatorY = attribute("webMercatorY", "float");
+        const tUv = vec2(
+            texUv.x.mul(this.uvTexTransform.x).add(this.uvTexTransform.z),
+            webMercatorY.mul(this.uvTexTransform.y).add(this.uvTexTransform.w)
+        );
+        this.imageryTexNode = texture(emptyTexture, tUv);
+        this.colorNode = this.imageryTexNode
+            .add(s_nodes.demVisibilityFix)
+            .toVar();
     }
 
     public setupNormal(builder: unknown) {
@@ -300,10 +252,4 @@ export class DEMTileMeshMaterial extends MeshStandardNodeMaterial {
     }
 }
 
-const defaultDEMTileMeshMaterial = new DEMTileMeshMaterial({
-    wireframe: false,
-    transparent: false,
-    blending: THREE.NoBlending
-}).markSharedSingleton();
-
-export { emptyTexture, emptyImageryTextures, defaultDEMTileMeshMaterial };
+export { emptyTexture };
