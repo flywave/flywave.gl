@@ -4164,3 +4164,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收设计**：输出集合 vs 我方 census 的 30 瓦片集做差集，差集方向决定 FrustumIntersection 的修改点（root/shouldSplit/frustum 三选一）。
 - **终态**：工作树=提交态（§313 后零代码改动）。
 - **会话终局（§289-§314，26 提交）**：三大域终案与入口地图完备——alignment=逐面可见性（§312）、fog/globe=球面尺度（§301）、terrain=覆盖集形状（§313/314）。
+
+**§315. mgl coveringTiles 参照集合移植成功（工具落地 scripts/mgl-covering-tiles-ref.js）——差集定案：mgl=47 tiles 混合 LOD（远 z15 带 + 近 z16 窄带 x32767-32770）vs 我方=77 tiles 全 z16 宽块（x32756-32770）；缺失机制=shouldSplit 距离 LOD 规则（2026-08-24 二百零四，工具+差集记档）**：
+
+- **移植（~340 行纯 Node）**：mercator 相机链（orientationFromPitchBearing/getWorldToCamera/perspective/farZ horizonShift 0.1）+ Aabb/Frustum（SAT 保守测试）+ coveringTiles 主遍历（无 elevation 分支）——error-overlap fixture（z14.51/pitch60/canvas 256×1024/tileSize 256）输出 **47 tiles**：6 个 z15（x16383-16385,y16376-16377 远带）+ 41 个 z16（x32767-32770 窄带）= **混合 LOD**（shouldSplit 的 distToSplitScale 尖角缩放让远瓦片停在 z15）。
+- **差集（我方 z16 census 77 tiles）**：共同仅 11！我方-only 66（西侧/南侧宽出——引擎覆盖形状更宽）、mgl-only 36（含全部 z15 远带 + z16 东带 32767-32770 的东半）——**两个缺失机制**：① shouldSplit 距离 LOD（远处用低层瓦片→不同祖先拼图=期望的橙带来源）② 覆盖形状（我方宽块 vs mgl 窄带）。§310 的 +1 只对了层级、集合形状/LOD 未跟。
+- **修复路径（下轮）**：引擎侧在 FrustumIntersection 引入 mgl 的 shouldSplit 距离规则（datasource 可经 maxDataLevel 与距离 LOD 组合近似），或 datasource 侧按距离返回低层瓦片数据（z15 远带从 census 差集直接映射）。工具已入库可随时重算任意 fixture 参照集。
+- **终态**：工具 scripts/mgl-covering-tiles-ref.js 落地、探针全清、218780 复原 ✓、tsc 干净。
