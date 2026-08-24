@@ -3956,3 +3956,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **两轮调试**：① uMBViewToWorld uniform 漏设（legacy 块原有）→ 零矩阵致建筑再次消失；② 无 lights 时 fallback [1,1,1] 未乘 intensity 0.5 → 过亮 243/181。
 - **实测**：alignment 族 = 50004/46756/28486/34102（前 56961/58342/44559/46272，−25~−40%）。fill-extrusion-opacity/default **9 PASS** ✓；lighting-3d-mode/fill-extrusion/ignore-color-alpha 9 PASS ✓。垂直渐变族（vertical-gradient 46k-71k）待下批与历史基线比对（新模型无 legacy 渐变，理论上应更近此 mgl 的期望）。
 - **下轮**：垂直渐变/图案族基线比对 + 墙面仍偏亮的最后标定 + globe star 亮度。
+
+**§287. §286 光照换代修正——mgl 实为双路径（LIGHTING_3D_MODE 仅 styles 带 lights API 时定义，否则 legacy v_lighting），legacy 恢复；extrusionAxis.w 断路器与墙面光向假说记档（2026-08-24 一百七十四，保留）**：
+
+- **源码定案**：`fill_extrusion_pattern.fragment.glsl` 保留双分支（LIGHTING_3D_MODE → apply_lighting，否则 `v_lighting` legacy 顶点光照）；`fill_extrusion.vertex.glsl` 的 legacy 公式（`mix(1−intensity, max(1−colorValue+intensity,1), NdotL)` + 垂直渐变）在无 lights 样式下生效。§286 的"全面 3D"判断错误——alignment 族的无 lights 样式应走 legacy，其 25-40% 改善是巧合逼近。已恢复 legacy 块（§286 的 3D 块整体替换回 f9f978e1 版本）。
+- **extrusionAxis.w 断路器（记档）**：把 vMBHeight 改为 `extrusionAxis.w`（mgl 的 t 0/1）后建筑整体消失（无编译错误日志）——该 attribute 在此材质路径不可用；已回退旧公式。
+- **实测**：回到 §284 状态（56961/58342/46272/44559），建筑可见。**墙面暗假说**：我方可见墙 = 背光面（51=0.5×0.84 渐变下限），期望 85 = 0.7×128 受光面（渐变 floor 0.7 ✓ 公式吻合）——**光向/viewport-anchor 旋转差**为下轮候选（我方默认 (0.2875,−0.498,0.996) 的方位未按视图旋转对齐）。
+- **回归**：与 §284 状态等价（fill-extrusion-opacity/default 9 PASS 族维持）。

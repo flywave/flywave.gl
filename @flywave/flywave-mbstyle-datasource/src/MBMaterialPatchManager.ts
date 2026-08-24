@@ -2514,38 +2514,39 @@ export class MBMaterialPatchManager {
                 );
             }
 
-            // Mapbox fill-extrusion lighting — LIGHTING_3D model
-            // (_prelude_lighting.glsl apply_lighting; this mgl version uses it
-            // for ALL fill-extrusion, the legacy 1−intensity/colorValue model
-            // is gone):
-            //   NdotL⁺ = max(dot(n, dir), 0)
-            //   ambientFactor = mix(1−0.3·dirLum, 1, min(NdotL+1, 1)) · mix(0.92, 1, nz·0.5+0.5)
-            //   k = ambientColorLinear·ambientFactor + dirColorLinear·NdotL⁺
-            //   result_srgb = paint_srgb · k^(1/2.2)
-            // Colors come from lighting3DState (defaults: white ambient 0.5,
-            // directional [210,30] white 0.5).
+            // Mapbox fill-extrusion lighting (legacy light model): ambient 0.03 +
+            // NdotL with luminance-adjusted intensity, plus a per-face vertical
+            // gradient for side surfaces. Computed on the sRGB paint color.
+            // Skipped when the style uses the 3D `lights` API (LIGHTING_3D_MODE
+            // shader path handles those separately).
             if (!use3DLights) {
-                const ls3d = (this.m_dataSource as any).m_environment?.lighting3DState;
-                // Defaults match lightsUniformValues with the style-spec
-                // defaults (white ambient/directional at intensity 0.5 —
-                // linear [0.5, 0.5, 0.5]).
-                const ambLin = ls3d?.ambientColorLinear ?? [0.5, 0.5, 0.5];
-                const dirLin = ls3d?.directionalColorLinear ?? [0.5, 0.5, 0.5];
-                shader.uniforms.uMBAmbColorLinear = { value: new THREE.Vector3(...ambLin) };
-                shader.uniforms.uMBDirColorLinear = { value: new THREE.Vector3(...dirLin) };
-                shader.uniforms.uMBLightDirWorld = { value: lightDirWorld.clone().normalize() };
-                shader.uniforms.uMBViewToWorld = { value: viewToWorld };
+                shader.uniforms.uMBLightDirWorld = { value: lightDirWorld };
+                shader.uniforms.uMBLightColor = { value: lightColor };
+                shader.uniforms.uMBLightIntensity = { value: lightIntensity };
                 shader.uniforms.uMBPaintOpacity = { value: paintOpacity };
+                shader.uniforms.uMBViewToWorld = { value: viewToWorld };
+                shader.uniforms.uMBVerticalGradient = { value: verticalGradient ? 1 : 0 };
+
+                // Varyings must be declared at global scope — injecting the
+                // declaration next to the assignment (inside main()) is a GLSL
+                // compile error.
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
-                    'void main() {'
+                    'varying float vMBHeight;\nvoid main() {'
+                );
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <fog_vertex>',
+                    `#include <fog_vertex>
+                     vMBHeight = (transformed.z - uMBHeightBase) / max(uMBHeightTop - uMBHeightBase, 0.001);`
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <common>',
                     `#include <common>
-                     uniform vec3 uMBAmbColorLinear; uniform vec3 uMBDirColorLinear;
-                     uniform vec3 uMBLightDirWorld; uniform mat3 uMBViewToWorld;
-                     uniform float uMBPaintOpacity;
+                     varying float vMBHeight;
+                     uniform vec3 uMBLightDirWorld; uniform vec3 uMBLightColor;
+                     uniform float uMBLightIntensity; uniform mat3 uMBViewToWorld; uniform float uMBPaintOpacity;
+                     uniform float uMBVerticalGradient;
+                     uniform float uMBHeightBase; uniform float uMBHeightTop;
                      vec3 linearToSrgb(vec3 c) {
                          return mix(pow(c, vec3(1.0 / 2.4)) * 1.055 - 0.055, c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308))));
                      }
@@ -2557,18 +2558,34 @@ export class MBMaterialPatchManager {
                     '#include <colorspace_fragment>',
                     `#include <colorspace_fragment>
                      {
-                         // gl_FragColor.rgb is the LINEAR paint color at this
-                         // point; the mapbox lighting math runs on sRGB values.
-                         vec3 mbPaintSrgb = linearToSrgb(clamp(gl_FragColor.rgb, 0.0, 1.0));
+                         // The renderer's output color space is linear (the
+                         // mapview captures to sRGB only at compositing time), so
+                         // gl_FragColor.rgb at this point is the LINEAR paint color.
+                         // Mapbox's fill-extrusion lighting is computed on the
+                         // sRGB paint values and yields an sRGB result; convert the
+                         // input to sRGB, do the mapbox math, then linearize the
+                         // output so the final capture reproduces the sRGB result.
+                         vec3 mbPaintSrgb = linearToSrgb(gl_FragColor.rgb);
+                         float mbColorValue = dot(mbPaintSrgb, vec3(0.2126, 0.7152, 0.0722));
+                         vec3 mbColor = mbPaintSrgb + vec3(0.03);
+                         // Flat normal: FLAT_SHADED so vNormal is undefined; use
+                         // screen-space derivatives, rotated into world space.
                          vec3 mbViewN = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
                          vec3 mbWorldN = normalize(uMBViewToWorld * mbViewN);
-                         float mbNdotL = max(dot(mbWorldN, uMBLightDirWorld), 0.0);
-                         float mbDirLum = dot(uMBDirColorLinear, vec3(0.2126, 0.7152, 0.0722));
-                         float mbAmbFactor = mix(1.0 - 0.3 * min(mbDirLum, 1.0), 1.0, min(mbNdotL + 1.0, 1.0));
-                         mbAmbFactor *= mix(0.92, 1.0, mbWorldN.z * 0.5 + 0.5);
-                         vec3 mbK = uMBAmbColorLinear * mbAmbFactor + uMBDirColorLinear * mbNdotL;
-                         vec3 mbResultSrgb = clamp(mbPaintSrgb * pow(max(mbK, vec3(0.0)), vec3(1.0 / 2.2)), vec3(0.0), vec3(1.0));
+                         // Roof normals point up (mapbox encodes roof as (0,0,1)
+                         // with normal.y == 0, i.e. no vertical gradient); walls are
+                         // horizontal. Detect via the world-space vertical component.
+                         float mbNdotL = clamp(dot(mbWorldN, uMBLightDirWorld), 0.0, 1.0);
+                         mbNdotL = mix(1.0 - uMBLightIntensity, max(1.0 - mbColorValue + uMBLightIntensity, 1.0), mbNdotL);
+                         if (abs(mbWorldN.z) < 0.5) {
+                             float mbR = mix(0.7, 0.98, 1.0 - uMBLightIntensity);
+                             mbNdotL *= (1.0 - uMBVerticalGradient) + uMBVerticalGradient * clamp((vMBHeight + uMBHeightBase) * pow(uMBHeightTop / 150.0, 0.5), mbR, 1.0);
+                         }
+                         vec3 mbResultSrgb = clamp(mbColor * mbNdotL * uMBLightColor, mix(vec3(0.0), vec3(0.3), 1.0 - uMBLightColor), vec3(1.0));
                          gl_FragColor.rgb = srgbToLinear(mbResultSrgb);
+                         // Force the blend weight: material-level opacity was
+                         // not reaching the fragment on this path (probed), the
+                         // onBeforeCompile injection is.
                          if (uMBPaintOpacity < 1.0) {
                              gl_FragColor.a = uMBPaintOpacity;
                          }
