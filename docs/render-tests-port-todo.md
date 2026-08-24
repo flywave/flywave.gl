@@ -4020,3 +4020,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **分化与分支落地**：secLat² 全应用 → height-terrain 族劣化 +9k（per-vertex 路径只需 secLat¹）——按 `fill-extrusion-height-alignment` 分支：'flat'（默认）额外 ×m_terrainHeightScale，'terrain' 不加。
 - **实测**：alignment 四例 = **48992/47710/41396/42241**（§290 基线 55026/53611/41396/42241——flat 族 −6k，terrain 族逐位恒定）。回归：fill-extrusion-opacity/default PASS ✓、fill-extrusion-vertical-gradient 三例与基线**逐位恒等**（无 terrain → scale=1 零扰动）✓、tsc 干净。
 - **下轮**：flat 族剩余 48k 的分解（顶部黑带相关 + 遮挡），或转 globe star/其他族。
+
+**§295. fog/globe star-intensity 928 残差重定位——星区/深面逐点吻合，主体=底部中心 nadir 蓝斑（~64×128 区 ΔB≈+6）+ limb 亚像素环带；fogGlobeRadius 收缩对齐落地（惰性）（2026-08-24 一百八十二，保留+记档）**：
+
+- **逐行残差剖面（star-intensity）**：>8 差异像素分布 rows 155-254 每行 12-48px（合计 928）——**非仅 §276 记档的 4 行 limb 带**；均值 Δ 网格定位：**+6 蓝斑集中于底部中心 nadir 区（x192-320/y192-256）**，其余全屏 ±1-2 亚像素级；上半天球（星区/太空）逐位吻合。
+- **nadir 蓝斑性质**：期望 (246,245,220)=纯 beige+~0.5% 白雾，我方 (247,247,226)=beige+~3% 白 + ΔB6——蓝色源候选=内容雾与 dome 在 nadir 的混合差（mgl glow 公式在 nadir 理论 12% 白但期望仅 ~0.5% → mgl 的 background 层面部雾另有通路/限幅，公式级差异待查）；limb 环带 ±1-2 为既有亚像素域。
+- **落地（保留）**：`fogGlobeRadius` 从全尺寸 EQUATORIAL_RADIUS 改为 dome 同款收缩 R（mgl fog prelude 与 atmosphere 同用 u_globe_radius=tr.globeRadius=ws/2π−1）——语义对齐，实测惰性（star/space/high-color 三例逐位恒定 928/258/211，蓝斑路径不在该 uniform）。回归：fog/color 3 PASS ✓、fog/space-color 2 失败经基线对照为预存在 ✓。
+- **fog/globe 六例现值**：211/258/928/211/372/232（阈值 66/132/446/66/132/66）——star 928 中 ~500-800 为 nadir 蓝斑（若破案可及 ~446 阈值临界）。
+- **下轮入口**：nadir 蓝斑的来源取证——mgl background 层在 globe 面部的雾通路（draw_background 的 fog defines/uniforms 与 opacity_limit），对照我方 bg tile 的 MB_RASTER_MGL_FOG+globe glow 分支在 nadir 的计算链；或 ROI 转回 alignment/terrain 族。

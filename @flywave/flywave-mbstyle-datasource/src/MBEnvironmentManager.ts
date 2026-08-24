@@ -1145,7 +1145,12 @@ export class MBEnvironmentManager {
         (lib.fogMglRange.value as THREE.Vector2).set(
             Math.min(rawRange[0] ?? 0.5, rawRange[1] ?? 4), rawRange[1] ?? 4);
         lib.fogGlobeMode.value = 1;
-        lib.fogGlobeRadius.value = EarthConstants.EQUATORIAL_RADIUS;
+        // §295: mgl's fog prelude normalizes the glow_progress SDF by the
+        // SAME u_globe_radius as the atmosphere dome (tr.globeRadius =
+        // ws/2π − 1, the §285 one-pixel AA shrink). Using the full
+        // EQUATORIAL_RADIUS here left the face fog ramp ~1px past the dome
+        // boundary — a blue high-color bleed across the near-limb face.
+        lib.fogGlobeRadius.value = R;
         const worldSize = 512 * Math.pow(2, styleZoom);
         lib.fogGlobeScale.value =
             (worldSize / 2 / Math.PI - 1) / EarthConstants.EQUATORIAL_RADIUS;
