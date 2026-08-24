@@ -978,11 +978,12 @@ export class MBStyleDataSource extends TileDataSource {
         // request level cameraZoom-1 tiles (e.g. z16 for a z17 camera) that do
         // not exist, so raster-only styles need offset 0 to load the fixtures.
         if (hasRasterSource && this.m_styleParams.storageLevelOffset === undefined) {
-            // §308: mgl coveringZoomLevel = round(zoom + log2(512/source
-            // tileSize)) — tileSize-256 sits one level CLOSER (+1), the
-            // §306 inversion (−1) net-regressed (circle/occluded +4.4k vs
-            // error-overlap −0.9k). Offset 0 empirically best overall;
-            // revisit with a per-fixture census when needed.
+            // §310: mgl coveringZoomLevel = round(zoom + log2(512/tileSize))
+            // gives +1 for tileSize-256 — tried, measured, REVERTED: the
+            // per-level scan (−1/0/+1) leaves error-overlap at its 218k
+            // plateau (the residual is the covering SET SHAPE vs mgl's 3D
+            // AABB traversal, not the level) while +1 net-regressed the
+            // circle fixtures (+664). Offset 0 stays.
             this.storageLevelOffset = 0;
         }
 

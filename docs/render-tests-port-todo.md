@@ -4132,3 +4132,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **期望重定性**：expected（256×1024 高图）= **多层级祖先拼图**——z10 橙 (255,148,0) 大带（384-640 行）、z13 青 (0,253,255) 区、z15 红 (255,0,43)、z12 洋红区各自占据不同屏幕区域——mgl 的覆盖集（z16 round(+1) 语义）逐瓦片最近祖先落到不同层级；我方 z15 请求集的祖先解析与 mgl 覆盖集不重合（部分瓦片最近真祖先 404 → clamp 黑，如 (16386,16384) 的 z10 祖先 (512,512) 不存在而 mgl 覆盖集含 512-511 支系）。
 - **下轮入口（独立会话规模）**：覆盖集对齐——mgl `coveringTiles`（round(zoom+1) for tileSize-256）的精确 (x,y) 集合复刻（或请求层级 +1 试探），使逐瓦片最近祖先拼图与 mgl 同构；§306 的 z14 改善实为部分瓦片祖先命中的巧合，非语义对齐。
 - **终态**：探针全清、218780 复原 ✓、工作树=提交态。
+
+**§310. 覆盖集层级扫描终审——+1（mgl 字面 log2(512/256)）实测净回归（circle/occluded +664）且 error-overlap 三例 218k 平台不动：残差为覆盖集【形状】而非【层级】，层级三轮扫描（−1/0/+1）全部记档，offset 维持 0（2026-08-24 一百九十九，零净变化记档）**：
+
+- **+1 实测**：initializing 218780→218771（噪声）/opaque +28/transparent +74/**circle-occluded 5758→6422（+664）**/circle-unoccluded −88——净回归，回退 offset 0（circle-occluded 5758 复原 ✓）。
+- **终审结论**：error-overlap 的 218k 平台对请求层级完全不敏感（三轮 −1/0/+1 均 ~218k）——**残差是覆盖集形状**（我方 VisibleTileSet 的 30 瓦片集 vs mgl 3D-AABB 遍历在 pitch 60 的更大集合），修一层不解锁。真修复=mgl coveringTiles 的 AABB+elevation-range 遍历复刻（引擎级，同 §293 记档的 FrustumIntersection 深改），或按 §227/§293 的惰性经验需重审（pitch>60 面积剪枝的豁免在 error-overlap 未单测过——下轮可单例验证 pitch 剪枝豁免对本族的效果）。
+- **终态**：工作树=提交态（仅 §310 注释级更新）、5758 复原 ✓、tsc 干净。
