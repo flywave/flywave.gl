@@ -319,6 +319,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_bearing: number = 0;
     /** Terrain elevation sampler (world x/y -> meters, exaggeration applied). */
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
+    private m_terrainHeightScale = 1;
     /**
      * Mapbox camera zoom (fractional, without the flywave +1 offset). Set by
      * the data source from the live camera so zoom/camera expressions
@@ -428,6 +429,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 customOptions!.terrainElevationSampler as
                 ((x: number, y: number) => number) | null;
         }
+        // §289: sec(lat) factor for style meters → world-z (same scale the
+        // sampler bakes into ground elevations).
+        if (customOptions?.terrainHeightScale !== undefined) {
+            this.m_terrainHeightScale = customOptions.terrainHeightScale as number;
+        }
         if (customOptions?.mapboxZoom !== undefined) {
             this.m_mapboxZoom = customOptions.mapboxZoom as number;
         }
@@ -515,6 +521,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
         if (this.m_terrainSampler) {
             emitter.setTerrainSampler(this.m_terrainSampler);
+            emitter.setTerrainHeightScale(this.m_terrainHeightScale);
         }
 
         const processor = new MBStyleDataProcessor(

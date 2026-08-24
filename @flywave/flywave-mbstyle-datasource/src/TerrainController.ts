@@ -193,6 +193,14 @@ export class TerrainController {
         }
     }
 
+    /**
+     * The sec(lat) factor baked into sampleElevation output. mgl's
+     * mercatorZfromAltitude applies this same factor to ALL z coordinates —
+     * building heights must be scaled identically or they render
+     * ~sec(lat)× too short (§289).
+     */
+    get sampleSecLat(): number { return this.m_sampleSecLat; }
+
     /** Terrain meshes (read-only access for depth-occlusion pass). */
     get meshes(): readonly THREE.Mesh[] { return this.m_meshes; }
 

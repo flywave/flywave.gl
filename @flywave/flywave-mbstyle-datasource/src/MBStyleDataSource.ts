@@ -1386,6 +1386,7 @@ export class MBStyleDataSource extends TileDataSource {
                     this.decoder.configure(undefined, {
                         terrainElevationSampler: (wx: number, wy: number) =>
                             ctl.sampleElevation(wx, wy),
+                        terrainHeightScale: ctl.sampleSecLat ?? 1,
                     } as any);
                 }
             } catch {}

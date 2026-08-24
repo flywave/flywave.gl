@@ -375,6 +375,18 @@ export class MBTileDataEmitter {
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
 
     /**
+     * Multiplier converting style meters (fill-extrusion height/base) to
+     * world-z units. mgl scales every z coordinate by sec(lat)
+     * (mercatorZfromAltitude) — the same factor sampleElevation bakes into
+     * ground heights — so building heights must use it too (§289).
+     */
+    setTerrainHeightScale(scale: number): void {
+        this.m_terrainHeightScale =
+            Number.isFinite(scale) && scale > 0.2 ? scale : 1;
+    }
+    private m_terrainHeightScale = 1;
+
+    /**
      * Mapbox camera bearing in degrees (style.bearing). Resolves
      * `*-translate-anchor: viewport`, which rotates the translate by -bearing
      * in the map frame (painter.translatePosMatrix). Static for render tests.
@@ -1479,9 +1491,9 @@ export class MBTileDataEmitter {
         }
         const rawHeight = layer.paint['fill-extrusion-height'] as number ?? 0;
         const rawFloor = layer.paint['fill-extrusion-base'] as number ?? 0;
-        const floorHeight = rawFloor;
+        const floorHeight = rawFloor * this.m_terrainHeightScale;
         // Avoid fully flat extrusions (normal computation / shader issues).
-        const height = Math.max(rawFloor + 1, rawHeight);
+        const height = Math.max(rawFloor + 1, rawHeight) * this.m_terrainHeightScale;
         this.noteGeometryHeight(height + this.m_currentZOffset);
 
         for (const polygon of geometry) {

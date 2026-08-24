@@ -3969,3 +3969,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl 源码定案**：`fillExtrusionUniformValues` 的 viewport-anchor 仅按 `−tr.angle`（bearing）旋转，bearing-0 fixture 无旋转；`u_lightpos` = sphericalPositionToCartesian([1.15,210,30]) = (0.2875,−0.498,0.996) **未归一化**——与我方默认逐位一致。
 - **扫描证伪**：lightDirWorld 绕 z 旋转 K·90°（K=1/2/3）→ 57745/59451/58238 全劣于 K=0=56961——墙面暗非光向差。**残差重定性**：期望建筑像素 39k vs 我方 17k——几何域（部分建筑被地形起伏遮挡/高度差/z 冲突），或墙-屋顶可见比例差。
 - **下轮入口**：单建筑级对比（挑 expected 与 current 各一栋同位建筑量高度/宽度像素），疑 exaggeration 的 sec(lat) 双重应用（mesh z 用 secLat 而 sampler 也乘——§279/§283 链）或 DEM 行翻转在部分瓦片错位。
+
+**§289. sec(lat) 建筑高度落地（mgl mercatorZfromAltitude 全 z 统一缩放）——alignment 族四例全小降（56961→54761/58342→53585/46272→43600/44559→44557），残差主体仍为可见建筑数量（2026-08-24 一百七十六，保留+实测）**：
+
+- **代码定案（mgl 源码）**：`mercatorZfromAltitude = meters / circumferenceAtLatitude(lat)` = meters×sec(lat)/C——sec(lat) 作用于**所有 z 坐标**（DEM 高度与建筑高度同为 meters→matrix-z 的同一缩放，transform.pixelsPerMeter 链）；`u_exaggeration` 只乘 DEM（高度不夸大，u_vertical_scale 为独立 paint 默认 1）。我方 sampleElevation（§279）把 secLat 烘焙进 ground，但 emitter 的 `fill-extrusion-height/base` 用原始 meters 叠加——建筑矮 ~sec(lat)（37.75° 处 1.265×）。
+- **落地**：TerrainController 暴露 `sampleSecLat` → decoder 新 customOption `terrainHeightScale` → emitter `setTerrainHeightScale`——emitExtrudedPolygon 的 floorHeight/height（含 anti-flat +1 与 noteGeometryHeight 包围盒）统一 ×secLat。非 terrain 路径 sampler 未设 → scale=1 零扰动。
+- **实测**：alignment 族 = 54761/53585/43600/44557（前 56961/58342/46272/44559，−2199/−4757/−2672/−2）。方向正确但幅度小——**残差主体仍是可见建筑数量/几何投影差**（§288 定性维持），非高度标量。
+- **回归**：fill-extrusion-opacity/default PASS ✓；opacity/function、literal 失败为遗留（半透明双 pass 未对齐，§2713 记档）；background-pitch-alignment/viewport-terrain 失败经 stash 基线对照为**预存在**（非本改动回归）✓。tsc --noEmit 干净。
+- **下轮入口**：① 可见建筑数量差（期望建筑像素 39k vs 我方 17k）——优先查 pitch 65 下 mgl 的 expanded tile coverage/3D 瓦片选取 vs 我方 VisibleTileSet；② mgl shader 的 base sink（非 flat base=0 → ele−5 tile 单位）与 flat-height 下限（max(c_ele+h, ele+base+2)）量级亚米、暂缓；③ 墙面光照 51 vs 85 标定（§287 遗留）。
