@@ -1034,7 +1034,12 @@ export class MBEnvironmentManager {
         const viewMatrix = new THREE.Matrix4().copy(cam.matrixWorld).invert();
         const globeCenterView = new THREE.Vector3(0, 0, 0).applyMatrix4(viewMatrix);
         const dc = Math.max(globeCenterView.length(), 1);
-        const R = EarthConstants.EQUATORIAL_RADIUS;
+        // mgl globeRadius = ws/(2π) − 1 (transform.ts): a one-pixel-space
+        // shrink for custom AA — without it the dome silhouette sits ~1px
+        // outside mgl's and saturates the limb (§285).
+        const wsGlobe = 512 * Math.pow(2, styleZoom);
+        const R = EarthConstants.EQUATORIAL_RADIUS *
+            (wsGlobe / (2 * Math.PI) - 1) / (wsGlobe / (2 * Math.PI));
         const distToHorizon = Math.sqrt(Math.max(dc * dc - R * R, 0));
         const horizonAngle = Math.acos(Math.min(1, distToHorizon / dc));
 

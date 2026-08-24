@@ -3942,3 +3942,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地**：emitExtrudedPolygon 按 mgl `is_flat_height`/`is_flat_base` 语义——height-alignment 'flat'（默认）顶点用**要素质心海拔**（屋顶水平），'terrain' 逐点；base-alignment 'terrain'（默认）逐点、'flat' 质心。逐 footprint 预采样数组 + 质心一次计算。
 - **实测**：56961/58342/46272/44559（前值 59506/58247/46795/44559）——小幅；**残差主体=墙面 Lambert 光照过暗**（51 vs 85，比值 0.6）+ 可见建筑数量差异（期望 39k 建筑像素 vs 我方 17k，疑遮挡/剔除差异）——光照标定域，需视觉迭代（同 §217 雾标定模式）。
 - 下轮：光照三参数（intensity/ambient/光位）扫描；或按用户优先级转 globe limb。
+
+**§285. globe limb 半径收缩破案——mgl globeRadius=ws/2π−1 的一像素 AA 收缩未移植，high-color 族 1245-1487→211-232（6 倍降）（2026-08-24 一百七十二，保留+实测）**：
+
+- **根因**：mgl `transform.globeRadius = worldSize/2π − 1`（一像素空间的 AA 收缩），我方 dome/雾半径直用 R_e——剪影外扩 ~1px，limb 行中心像素饱和 255（dome t→1 区域压过面部）。像素取证：饱和白 + 环带 +10 亮度 + 期望面部早 1-2px 出现。
+- **落地**：applyGlobeAtmosphere 的 R 换算 `(ws/2π−1)/(ws/2π)·R_e`（含 distToHorizon/normDist/theta 全链）。**扫描定标**：0.5→271 / **1.0→211（最优，mgl 字面值）** / 1.2→212 / 1.5→268——1.0 为原则值兼最优，保留。
+- **实测**：fog/globe 六例 = **211/211/232/258/372/928**（前 1245/1319/1487/251/361/977——high-color 族 6 倍降，space-color 微幅回摆 251→258 在扫描噪声内）。fog/space-color（mercator）78 PASS 恒定 ✓。回归：background-color 全绿（transition 4096 既有）✓。
+- **剩余**：star-intensity 928 为主（星点亮度标定）+ 环带 ~±5 的最后亚像素差。距 PASS 阈值（65-445 按各例）仍差 2-14 倍，后续为逐例微标定。
