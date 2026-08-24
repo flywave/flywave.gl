@@ -3885,3 +3885,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **§274 公式的缺口**：上一轮的 d/R=ccd/(ws/2π−1) 与像素反演（mgl 有效 d≈4.37R vs 公式 4.76R）差 1.09×。破案于 `globe_util.ts calculateGlobePosMatrix`：mgl 把球心放在平面 z=−ws/2π（ Mercator 平面切于北极！），相机在 z=ccd·conv——**d/R = 1 + 2π·ccd·conv/ws**，其中 conv=`pixelSpaceConversion`=sec(lat)/interp(√2, sec(lat), t)=sec(lat)/√2（GLOBE_SCALE_MATCH_LATITUDE=45° 归一，globe zoom 段 t=0）。z0@256px：4.326 ✓ 与像素反演 4.376 吻合（差值=测量精度）。
 - **实测**：fog/globe+space-color 六例 = **1245/1319/1487/251/361/977**（§274 后 13.3k/13.1k/12.9k/48.9k/35.9k/31.5k）——数量级下降，全部逼近阈值（space-color 距 PASS 仅 ~120px）。dome hAng 12.10°→13.35° 实证。回归：background-color/fill-color/fog-color 族全绿、transition/fog-default 既有恒定 ✓。
 - **剩余（下轮）**：star-intensity 977=星点亮度/密度；high-color 族 ~1.3k=limb 环带细节（fadeout 或环形渐变的次级差）；space-color 251/361=临界残差（可能是抗锯齿/±1 像素边界）。
+
+**§276. mgl 星场逐行移植（drawStars 16000 星 mulberry32(30/300) 确定性生成 + 视空间 billboard + 0.6r 线性衰减圆）——星域像素对齐，六例残差定案为 limb 亚像素级（2026-08-24 一百六十四，保留+实测）**：
+
+- **移植**：`createStars` 重写——16000 星（mgl `createDefaultStarsParams`），球面均匀分布 seed 30（lon=2π·r、lat=acos(1−2r)−π/2），200 单位视空间半径；逐星 size/intensity seed 300（`1+0.01·range·(−0.5+r)`，size 先 intensity 后交错），u_right/u_up·size·0.15 billboard（逆旋转轴），fragment 0.6r 起线性衰减圆 ×aOpacity×star-intensity，premultiplied 白；朝向四元数 rotX(−pitch)·rotZ(−angle)·rotX(lat)·rotY(−lng) 每帧 onBeforeRender 更新。替换旧 2000 星 Math.random 版本。
+- **实测**：star-intensity 977 恒定但**残差定位改写**——diff 集中于 limb 行（y154-157/355-357 各 ~130px/行）而星区像素逐点吻合（(55,55,154) vs (52,52,152) 列采样）——**六例残差统一定案为 limb 环带亚像素级过冲**（环带像素我方一致 +5-8 R/G、silhouette 边缘 ±1px 处 tile/dome 0.98 切换点错位）。六例数值全部恒定（1245/1319/1487/251/361/977），star 移植零回归。
+- **下轮**：limb 过冲的候选=dome 与内容雾在 limb 重叠的次级混合差、或 0.98 AA 边界位移——若追求转 PASS 需亚像素级 dome/边界标定；ROI 更高的转向=terrain/switch-style 新域取证。

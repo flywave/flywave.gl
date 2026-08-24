@@ -282,7 +282,7 @@ export class MBEnvironmentManager {
         };
     }
     private m_skyMesh: THREE.Mesh | null = null;
-    private m_stars: THREE.Points | null = null;
+    private m_stars: THREE.Mesh | null = null;
     private m_scene: THREE.Scene | null = null;
 
     /** Whether 3D lighting is active (affects vector-layer shading). */
@@ -1955,52 +1955,137 @@ export class MBEnvironmentManager {
         return tex;
     }
 
+    /**
+     * Star field — port of mgl drawAtmosphere.drawStars (draw_atmosphere.ts
+     * + stars.vertex/fragment.glsl). 16000 stars at a fixed 200-unit
+     * view-space radius, deterministic via mulberry32(30) (sphere positions)
+     * and mulberry32(300) (per-star size/intensity in the 100/200 ranges ×
+     * 0.01, interleaved size-then-intensity). Rendered as view-space quads
+     * aligned to u_right/u_up·size·0.15, faded circle shape (linear from
+     * 0.6·r), premultiplied white, intensity ×= fog star-intensity.
+     */
     private createStars(intensity: number): void {
-        const count = 2000;
-        const positions = new Float32Array(count * 3);
-        const sizes = new Float32Array(count);
-        for (let i = 0; i < count; i++) {
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos(Math.random() * 2 - 1);
-            const r = 400;
-            positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-            positions[i * 3 + 1] = r * Math.cos(phi);
-            positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-            sizes[i] = Math.random() * 2 + 0.5;
+        const mulberry32 = (a: number): (() => number) => () => {
+            a |= 0;
+            a = (a + 0x6d2b79f5) | 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+        const STARS_COUNT = 16000;
+        const SIZE_MULTIPLIER = 0.15;
+        const SIZE_RANGE = 100;
+        const INTENSITY_RANGE = 200;
+
+        const pRand = mulberry32(30);
+        const sRand = mulberry32(300);
+        const pos = new Float32Array(STARS_COUNT * 4 * 3);
+        const uv = new Float32Array(STARS_COUNT * 4 * 2);
+        const size = new Float32Array(STARS_COUNT * 4);
+        const opac = new Float32Array(STARS_COUNT * 4);
+        const idx = new Uint32Array(STARS_COUNT * 6);
+        const quadUv = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+        for (let i = 0; i < STARS_COUNT; i++) {
+            const lon = 2 * Math.PI * pRand();
+            const lat = Math.acos(1 - 2 * pRand()) - Math.PI * 0.5;
+            const sx = 200 * Math.cos(lat) * Math.cos(lon);
+            const sy = 200 * Math.cos(lat) * Math.sin(lon);
+            const sz = 200 * Math.sin(lat);
+            const sz2 = Math.max(0, 1 + 0.01 * SIZE_RANGE * (-0.5 + sRand()));
+            const si = Math.max(0, 1 + 0.01 * INTENSITY_RANGE * (-0.5 + sRand()));
+            for (let c = 0; c < 4; c++) {
+                const v = i * 4 + c;
+                pos[v * 3] = sx; pos[v * 3 + 1] = sy; pos[v * 3 + 2] = sz;
+                uv[v * 2] = quadUv[c][0]; uv[v * 2 + 1] = quadUv[c][1];
+                size[v] = sz2; opac[v] = si;
+            }
+            const b = i * 4, o = i * 6;
+            idx[o] = b; idx[o + 1] = b + 1; idx[o + 2] = b + 2;
+            idx[o + 3] = b; idx[o + 4] = b + 2; idx[o + 5] = b + 3;
         }
         const geom = new THREE.BufferGeometry();
-        geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geom.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+        geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geom.setAttribute('aUv', new THREE.BufferAttribute(uv, 2));
+        geom.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+        geom.setAttribute('aOpacity', new THREE.BufferAttribute(opac, 1));
+        geom.setIndex(new THREE.BufferAttribute(idx, 1));
 
         const material = new THREE.ShaderMaterial({
             transparent: true,
+            depthTest: false,
             depthWrite: false,
+            blending: THREE.CustomBlending,
+            blendSrc: THREE.OneFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
             uniforms: {
                 uIntensity: { value: intensity },
+                uRot: { value: new THREE.Matrix3() },
+                uRight: { value: new THREE.Vector3(0.15, 0, 0) },
+                uUp: { value: new THREE.Vector3(0, 0.15, 0) },
             },
             vertexShader: `
+                attribute vec2 aUv;
                 attribute float aSize;
+                attribute float aOpacity;
+                uniform mat3 uRot;
+                uniform vec3 uRight;
+                uniform vec3 uUp;
                 uniform float uIntensity;
-                varying float vAlpha;
+                varying vec2 vUv;
+                varying float vInt;
                 void main() {
-                    vAlpha = uIntensity;
-                    vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
-                    gl_PointSize = aSize * (300.0 / -mvPos.z);
-                    gl_Position = projectionMatrix * mvPos;
+                    vUv = aUv;
+                    vInt = aOpacity * uIntensity;
+                    // View-space only (mgl starsProjMatrix = perspective, no
+                    // model transform): rotate the fixed 200-unit sphere into
+                    // the map orientation and billboard along u_right/u_up.
+                    vec3 p = uRot * position;
+                    p += aUv.x * uRight * aSize + aUv.y * uUp * aSize;
+                    gl_Position = projectionMatrix * vec4(p, 1.0);
                 }
             `,
             fragmentShader: `
-                varying float vAlpha;
+                varying vec2 vUv;
+                varying float vInt;
                 void main() {
-                    float d = length(gl_PointCoord - vec2(0.5));
-                    if (d > 0.5) discard;
-                    float alpha = (1.0 - d * 2.0) * vAlpha;
-                    gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
+                    // mgl shapeCircle: linear fade starting at 0.6·radius.
+                    float d = length(vUv);
+                    float alpha = 1.0 - clamp((d - 0.6) / 0.4, 0.0, 1.0);
+                    alpha *= vInt;
+                    gl_FragColor = vec4(vec3(alpha), alpha);
                 }
             `,
         });
 
-        this.m_stars = new THREE.Points(geom, material);
+        this.m_stars = new THREE.Mesh(geom, material);
+        this.m_stars.frustumCulled = false;
+        this.m_stars.renderOrder = -2100;
+        // Refresh the orientation from the live view (mgl orientation quat:
+        // rotX(-pitch)·rotZ(-angle)·rotX(lat)·rotY(-lng), applied to the ECEF
+        // star sphere; u_right/u_up = inverse-rotated axes × sizeMultiplier).
+        this.m_stars.onBeforeRender = () => {
+            const mv = this.m_mapView as any;
+            const cam = this.m_mapView?.camera as THREE.PerspectiveCamera | undefined;
+            if (!mv || !cam) return;
+            const pitch = (mv.tilt ?? 0) * Math.PI / 180;
+            const angle = 0;
+            const lat = (mv.geoCenter?.latitude ?? 0) * Math.PI / 180;
+            const lng = (mv.geoCenter?.longitude ?? 0) * Math.PI / 180;
+            const q = new THREE.Quaternion()
+                .setFromAxisAngle(new THREE.Vector3(1, 0, 0), -pitch)
+                .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -angle))
+                .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), lat))
+                .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -lng));
+            const m4 = new THREE.Matrix4().makeRotationFromQuaternion(q);
+            (material.uniforms.uRot.value as THREE.Matrix3).setFromMatrix4(m4);
+            // mgl computes camera up/right through the INVERSE modelview (in
+            // view space), i.e. the rotated frame's axes in eye space.
+            const inv = m4.clone().invert();
+            (material.uniforms.uRight.value as THREE.Vector3)
+                .set(1, 0, 0).applyMatrix4(inv).multiplyScalar(SIZE_MULTIPLIER);
+            (material.uniforms.uUp.value as THREE.Vector3)
+                .set(0, 1, 0).applyMatrix4(inv).multiplyScalar(SIZE_MULTIPLIER);
+        };
         this.m_scene!.add(this.m_stars);
     }
 
