@@ -4171,3 +4171,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **差集（我方 z16 census 77 tiles）**：共同仅 11！我方-only 66（西侧/南侧宽出——引擎覆盖形状更宽）、mgl-only 36（含全部 z15 远带 + z16 东带 32767-32770 的东半）——**两个缺失机制**：① shouldSplit 距离 LOD（远处用低层瓦片→不同祖先拼图=期望的橙带来源）② 覆盖形状（我方宽块 vs mgl 窄带）。§310 的 +1 只对了层级、集合形状/LOD 未跟。
 - **修复路径（下轮）**：引擎侧在 FrustumIntersection 引入 mgl 的 shouldSplit 距离规则（datasource 可经 maxDataLevel 与距离 LOD 组合近似），或 datasource 侧按距离返回低层瓦片数据（z15 远带从 census 差集直接映射）。工具已入库可随时重算任意 fixture 参照集。
 - **终态**：工具 scripts/mgl-covering-tiles-ref.js 落地、探针全清、218780 复原 ✓、tsc 干净。
+
+**§316. mgl shouldSplit 距离 LOD 落地（datasource 侧）——mglLodLevel 仿真+降级生效（8 远瓦片 z15→z14 与 mgl 远带方向一致），但 218k 平台不动：datasource 装饰已穷尽，覆盖集形状差必须引擎侧改；LOD 机制保留（净小幅正向）（2026-08-24 二百零五，保留+实测）**：
+
+- **落地**：RasterTileDataProvider 新增 `mglLodLevel`（ccd/tileSize 距离阈 + distToSplitScale 尖角缩放的 shouldSplit 仿真，top-down 定级）+ `m_mapViewRef` 接线（DataProvider 无 mapView）——远瓦片在 resolveAncestor 前降级（z/x/y 右移）；idealLevel 门控改用请求层级（降级瓦片不被清空）。
+- **实测**：LOD 探针确认降级方向正确（8 瓦片 z15→z14，西/远带，与 mgl 远带同向）；error-overlap 218780→218782/opaque 198247→198188（−59）/unoccluded 3453→3364（−89）、circle 5758 恒定；**+1+LOD 组合仍 218k 平台**——我方引擎底集（77 z16 宽块）≠mgl 底集（47 混合），datasource 只能在引擎调度的瓦片上装饰，无法增删瓦片（空返回 §304 已证伪）。
+- **终审**：整帧空白桶的真修复=引擎 VisibleTileSet 的集合形状+LOD（对照 scripts/mgl-covering-tiles-ref.js 的 47-tile 参照），datasource 侧全部路径（层级/LOD/空返回/祖先链）已四轮穷尽记档。
+- **回归**：raster-color 1F/1S 与基线恒定 ✓、tsc 干净。保留：LOD 机制（mgl 语义正确+净正向）。

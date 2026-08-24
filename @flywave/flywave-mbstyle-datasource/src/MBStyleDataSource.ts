@@ -62,6 +62,8 @@ class RasterTileDataProvider extends DataProvider {
      * on raster-masking/overlapping-vector).
      */
     private m_idealLevel: (() => number) | undefined;
+    /** §316: lazy mapView accessor (DataProviders have no mapView of their own). */
+    m_mapViewRef?: () => any;
 
     constructor(tileUrlTemplate: string, minZoom: number = 0, maxZoom: number = 22,
         idealLevel?: () => number) {
@@ -74,17 +76,79 @@ class RasterTileDataProvider extends DataProvider {
 
     ready(): boolean { return true; }
 
+    /**
+     * §316: emulate mgl coveringTiles' shouldSplit distance LOD — distant
+     * tiles stop subdividing (mgl renders them at a LOWER level, whose
+     * closest-ancestor mosaic differs; scripts/mgl-covering-tiles-ref.js is
+     * the reference). Returns the highest level <= z that mgl's traversal
+     * would use for this tile's area, or z when unknown camera state.
+     */
+    private mglLodLevel(z: number, x: number, y: number): number {
+        try {
+            const mv = this.m_mapViewRef?.() as any;
+            const cam = mv?.camera;
+            const canvas = mv?.canvas;
+            if (!cam || !canvas) return z;
+            const C = 40075016.686;
+            const fovRad = (cam.fov ?? 36.87) * Math.PI / 180;
+            const ccdPx = 0.5 / Math.tan(fovRad / 2) * canvas.height;
+            const zoomSplitTiles = ccdPx / 512; // ccd/tileSize, tile units at z
+            const camMerc = [cam.position.x / C, cam.position.y / C, cam.position.z / C];
+            // distToSplitScale (mgl transform.ts): acute-angle adaptive stretch
+            const scale = (dz: number, d: number): number => {
+                const s = 0.707, stretch = 1.1;
+                if (d * s < dz) return 1.0;
+                const r = d / dz;
+                const k = r - 1 / s;
+                return r / (1 / s + (Math.pow(stretch, k + 1) - 1) / (stretch - 1) - 1);
+            };
+            // Walk top-down: the level where the ancestor stops splitting is
+            // mgl's render level for this tile's area.
+            for (let l = 1; l <= z; l++) {
+                const shift = z - l;
+                const lx = x >> shift, ly = y >> shift;
+                // would the l-1 parent split into l?
+                const pshift = z - (l - 1);
+                const px = x >> pshift, py = y >> pshift;
+                const n = Math.pow(2, l - 1);
+                // tile extent in mercator units
+                const minX = px / n, maxX = (px + 1) / n, minY = py / n, maxY = (py + 1) / n;
+                let closest = Infinity;
+                // closest point on AABB to camera (mgl corner-dot approximated by clamped point)
+                const qx = Math.max(Math.min(maxX, camMerc[0]), minX);
+                const qy = Math.max(Math.min(maxY, camMerc[1]), minY);
+                const dmerc = Math.hypot(qx - camMerc[0], qy - camMerc[1], -camMerc[2]);
+                // distToSplit in mercator units: tiles at level z are the unit
+                const distTiles = (1 << (z - (l - 1))) * zoomSplitTiles;
+                const distMerc = distTiles / Math.pow(2, z);
+                const dzMerc = Math.max(Math.abs(camMerc[2]), 1e-9);
+                if (!(dmerc * scale(dzMerc, dmerc) < distMerc)) {
+                    return l - 1;
+                }
+            }
+            return z;
+        } catch {
+            return z;
+        }
+    }
+
     async getTile(tileKey: TileKey): Promise<ArrayBufferLike | {}> {
-        const z = tileKey.level;
-        const x = tileKey.column;
-        const y = tileKey.row;
+        const zReq = tileKey.level;
+        const xReq = tileKey.column;
+        const yReq = tileKey.row;
+        // §316: demote far tiles to mgl's LOD level before resolving — the
+        // ancestor mosaic then matches mgl's mixed-LOD covering.
+        const lod = this.mglLodLevel(zReq, xReq, yReq);
+        const z = lod;
+        const x = lod === zReq ? xReq : xReq >> (zReq - lod);
+        const y = lod === zReq ? yReq : yReq >> (zReq - lod);
 
         // Only the camera's ideal level produces coverage (mgl one-tile-per-
         // cell semantics). Other engine-scheduled levels return empty so
         // multi-level quads never stack on screen.
         if (this.m_idealLevel) {
             const ideal = Math.min(Math.max(this.m_idealLevel(), this.m_minZoom), this.m_maxZoom);
-            if (z !== ideal) {
+            if (zReq !== ideal) {
                 return JSON.stringify({ type: 'FeatureCollection', features: [] });
             }
         }
@@ -963,8 +1027,10 @@ export class MBStyleDataSource extends TileDataSource {
                 const tileUrl = tiles[0] ?? source.tileUrls[0] ?? '';
                 if (tileUrl) {
                     const resolvedUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
-                    composite.add(sourceId, new RasterTileDataProvider(resolvedUrl,
-                        rasterSpec?.minzoom ?? 0, rasterSpec?.maxzoom ?? 22));
+                    const rasterProvider = new RasterTileDataProvider(resolvedUrl,
+                        rasterSpec?.minzoom ?? 0, rasterSpec?.maxzoom ?? 22);
+                    rasterProvider.m_mapViewRef = () => (this as any).mapView;
+                    composite.add(sourceId, rasterProvider);
                     this.m_rasterTileUrl = resolvedUrl;
                     if (!currentSourceId) currentSourceId = sourceId;
                 }
