@@ -43,6 +43,7 @@ THREE.ShaderChunk.fog_pars_fragment = `
 	uniform float fogGlobeScale;
 	uniform float fogGlobeRadius;
 	uniform float fogGlobeTransition;
+	uniform vec2 fogGlobeRange;
 	varying float vFogHeight;
 	varying vec3 vFogPos;
 #endif
@@ -72,7 +73,9 @@ THREE.ShaderChunk.fog_fragment = `
 		float fogGlow = length(cp - fogGlobeCenter) / max(fogGlobeRadius, 1.0) + 1.5707963;
 		float fogDepthMgl = length(vFogPos) * fogGlobeScale;
 		float t = mix(fogGlow, fogDepthMgl, fogGlobeTransition);
-		fogT = (t - fogMglRange.x) / max(fogMglRange.y - fogMglRange.x, 0.001);
+		// §296: on globe, mgl Fog.state uses the globeFixedFogRange [2, 4.5]
+		// (transition-interpolated) — NOT the raw mercator [0.5, 10].
+		fogT = (t - fogGlobeRange.x) / max(fogGlobeRange.y - fogGlobeRange.x, 0.001);
 	}
 	if (fogDebugT > 1.5) {
 		// mode 2: the UNFOGGED base color (for per-pixel mgl op targets).
@@ -153,6 +156,9 @@ if (!('fogAlpha' in THREE.UniformsLib.fog)) {
     (THREE.UniformsLib.fog as any).fogGlobeScale = { value: 1 };
     (THREE.UniformsLib.fog as any).fogGlobeRadius = { value: EarthConstants.EQUATORIAL_RADIUS };
     (THREE.UniformsLib.fog as any).fogGlobeTransition = { value: 0 };
+    // §296: mgl Fog.state globe range (globeFixedFogRange [2,4.5] ↔
+    // fov-adjusted style range, by the globe→mercator transition).
+    (THREE.UniformsLib.fog as any).fogGlobeRange = { value: new THREE.Vector2(2, 4.5) };
     // Registered eagerly: fogMgl* were historically added lazily by the
     // mercator §216 block, but the globe path (§273) reads fogMglRange
     // before any mercator fog ran.
@@ -171,6 +177,7 @@ if (!('fogAlpha' in THREE.UniformsLib.fog)) {
             (u as any).fogGlobeScale = (THREE.UniformsLib.fog as any).fogGlobeScale;
             (u as any).fogGlobeRadius = (THREE.UniformsLib.fog as any).fogGlobeRadius;
             (u as any).fogGlobeTransition = (THREE.UniformsLib.fog as any).fogGlobeTransition;
+            (u as any).fogGlobeRange = (THREE.UniformsLib.fog as any).fogGlobeRange;
         }
     }
 }
@@ -1156,6 +1163,17 @@ export class MBEnvironmentManager {
             (worldSize / 2 / Math.PI - 1) / EarthConstants.EQUATORIAL_RADIUS;
         const gTr = Math.min(Math.max((styleZoom - 5) / (6 - 5), 0), 1);
         lib.fogGlobeTransition.value = gTr * gTr * (3 - 2 * gTr);
+        // §296: mgl Fog.state uses a FIXED [2, 4.5] range on globe
+        // (globeFixedFogRange), interpolated toward the fov-adjusted
+        // mercator range ([r0, r1] + 0.5/tan(fov/2)) by the globe→mercator
+        // transition. Our globe branch was using the raw [0.5, 10] — the
+        // face fog ramp fired far too early (12% white at the nadir where
+        // mgl's fogT < 0 = no fog).
+        const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+        const fovShift = 0.5 / Math.tan((cam.fov * Math.PI / 180) / 2);
+        (lib as any).fogGlobeRange.value.set(
+            lerp(2, (rawRange[0] ?? 0.5) + fovShift, gTr),
+            lerp(4.5, (rawRange[1] ?? 10) + fovShift, gTr));
         this.updateGlobeFogCenter();
         // Materials created before the projection switch compiled without
         // USE_FOG (scene.fog was unset at their creation in the mercator
@@ -1217,6 +1235,7 @@ export class MBEnvironmentManager {
             if (u.fogGlobeScale !== undefined) u.fogGlobeScale.value = lib.fogGlobeScale.value;
             if (u.fogGlobeRadius !== undefined) u.fogGlobeRadius.value = lib.fogGlobeRadius.value;
             if (u.fogGlobeTransition !== undefined) u.fogGlobeTransition.value = lib.fogGlobeTransition.value;
+            if ((u as any).fogGlobeRange !== undefined) (u as any).fogGlobeRange.value.copy((lib as any).fogGlobeRange.value);
         });
     }
 

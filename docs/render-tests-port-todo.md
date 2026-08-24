@@ -4028,3 +4028,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地（保留）**：`fogGlobeRadius` 从全尺寸 EQUATORIAL_RADIUS 改为 dome 同款收缩 R（mgl fog prelude 与 atmosphere 同用 u_globe_radius=tr.globeRadius=ws/2π−1）——语义对齐，实测惰性（star/space/high-color 三例逐位恒定 928/258/211，蓝斑路径不在该 uniform）。回归：fog/color 3 PASS ✓、fog/space-color 2 失败经基线对照为预存在 ✓。
 - **fog/globe 六例现值**：211/258/928/211/372/232（阈值 66/132/446/66/132/66）——star 928 中 ~500-800 为 nadir 蓝斑（若破案可及 ~446 阈值临界）。
 - **下轮入口**：nadir 蓝斑的来源取证——mgl background 层在 globe 面部的雾通路（draw_background 的 fog defines/uniforms 与 opacity_limit），对照我方 bg tile 的 MB_RASTER_MGL_FOG+globe glow 分支在 nadir 的计算链；或 ROI 转回 alignment/terrain 族。
+
+**§296. globe 固定雾距落地（mgl Fog.state globeFixedFogRange [2,4.5]）——star-intensity 底部蓝斑破案修复（face 逐位吻合期望），六例 karma 数值近似恒定（934/258/211/372/211/233）（2026-08-24 一百八十三，保留+实测）**：
+
+- **破案链**：§295 蓝斑（底部 face ΔB≈+6）→ dome-off 探针实证蓝斑 100% 来自 dome 覆盖 face → 但 dome 掩码 normDist<0.98 应拒绝 face 像素 → 真凶为 **mgl Fog.state 在 globe 用固定 [2,4.5] 雾距**（`globeFixedFogRange`，globe→mercator transition 插值到 fov 调整值 [r+0.5/tan(fov/2)]）而我方用原始 [0.5,10]——面部雾 ramp 全域过早触发（nadir 12% 白 vs mgl fogT<0=零雾）。落地：新 uniform `fogGlobeRange`（chunk globe 分支专用，注册/sync 全链接线）。
+- **实测**：face 像素 (245,245,220) 与期望逐位吻合（前 (247,247,227) 蓝斑清除）；karma 六例 934/258/211/372/211/233（前 928/258/211/372/211/232）——karma 计数近似恒定（其 metric 下蓝斑 Δ6-8 计入方式不同），但像素级取证确认修复。回归：fog/color 3 PASS ✓、background-color/default PASS ✓。
+- **调试记档（探针污染第二轮）**：本轮一度 28495/46486 假象——DOME-OFF 探针的 python 静默未命中（replace 无断言）致 dome 未还原 + try/catch 残留语法错；**教训：python 探针清除必须 assert 命中**（§291 第一轮教训的同型复发）。
+- **剩余**：star-intensity 934（karma metric）的残差构成待重新分解（蓝斑已除，应重摄影行剖面）；high-color 211/66、space-color 258/132 等仍差 2-3×。

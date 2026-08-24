@@ -612,7 +612,7 @@ export class MBMaterialPatchManager {
             material.onBeforeCompile = (shader: any) => {
                 if (origFogU) origFogU.call(material, shader);
                 for (const key of ['fogGlobeMode', 'fogGlobeCenter', 'fogGlobeScale', 'fogGlobeRadius',
-                    'fogGlobeTransition', 'fogMglRange', 'fogMglShift', 'fogMglDistCam',
+                    'fogGlobeTransition', 'fogGlobeRange', 'fogMglRange', 'fogMglShift', 'fogMglDistCam',
                     'fogAlpha', 'fogHorizonBlend', 'fogVertLimit', 'fogCamHeight', 'fogDebugT']) {
                     if (fogLib[key] && !shader.uniforms[key]) shader.uniforms[key] = fogLib[key];
                 }
