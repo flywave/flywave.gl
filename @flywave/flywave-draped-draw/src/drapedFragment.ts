@@ -2,6 +2,7 @@
 
 import { SurfaceType } from "@flywave/flywave-mapview";
 import {
+    dot,
     Discard,
     Fn,
     If,
@@ -43,6 +44,12 @@ export interface DrapedFragmentContext {
     /** Eye-space position of the current fragment's vertex (interpolated). */
     fragEye: any;
     varyings: Record<string, any>;
+    /** Eye-space west membership plane (prism). */
+    westPlaneEye?: any;
+    /** Eye-space south membership plane (prism). */
+    southPlaneEye?: any;
+    /** 1/extents mapping plane distances into [0,1] (prism). */
+    inverseExtents?: any;
 }
 
 /**

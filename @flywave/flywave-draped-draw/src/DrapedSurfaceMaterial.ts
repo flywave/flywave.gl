@@ -3,11 +3,25 @@
 import { SurfaceCapturePass } from "@flywave/flywave-mapview";
 import * as THREE from "three/webgpu";
 import {
+    Discard,
+    If,
+    div,
+    min,
+    Fn,
+    abs,
     attribute,
     cameraProjectionMatrix,
+    clamp,
+    cross,
+    float,
+    max,
+    mix,
     modelViewMatrix,
+    normalize,
     positionLocal,
     screenUV,
+    sign,
+    step,
     texture,
     uniform,
     varying,
@@ -16,7 +30,7 @@ import {
 } from "three/tsl";
 
 import { DrapedSurfaceMaterialOptions, DrapedTarget } from "./DrapedTarget";
-import { buildDrapedColorNode } from "./drapedFragment";
+import { buildDrapedColorNode, metersPerPixel } from "./drapedFragment";
 
 /**
  * Real (non-empty) stand-in bound until capture outputs exist. An empty
@@ -55,6 +69,14 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
     protected readonly allowModel: any;
     protected readonly debug: any;
     protected readonly probe: any;
+    private readonly depthGate: any;
+    protected reconProjInvUniform: any;
+    readonly depthFlipUniform = uniform(0);
+    /** Cesium-style west/south membership planes (EYE space, per frame). */
+    readonly westPlaneEyeUniform = uniform(new THREE.Vector4());
+    readonly southPlaneEyeUniform = uniform(new THREE.Vector4());
+    readonly inverseExtentsUniform = uniform(new THREE.Vector2());
+    readonly diagUniform = uniform(0);
     protected readonly depthTextureNode: any;
     protected readonly typeTextureNode: any;
 
@@ -80,6 +102,8 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
         this.applyDebugState(options.debugShowVolume === true);
         this.probe = uniform(0);
 
+        this.depthGate = uniform(options.debugRawMaterial === true ? 0 : 1);
+        this.reconProjInvUniform = uniform(new THREE.Matrix4());
         this.depthTextureNode = texture(PLACEHOLDER_TEXTURE, screenUV);
         this.typeTextureNode = texture(PLACEHOLDER_TEXTURE, screenUV);
     }
@@ -96,6 +120,10 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
         }
         if (this.typeTextureNode.value !== typeTexture) {
             this.typeTextureNode.value = typeTexture;
+        }
+        const snap = (capturePass as unknown as { reconProjInv?: THREE.Matrix4 }).reconProjInv;
+        if (snap) {
+            (this.reconProjInvUniform.value as THREE.Matrix4).copy(snap);
         }
         return true;
     }
@@ -137,6 +165,30 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
      */
     public setProbe(value: number): void {
         this.probe.value = value;
+    }
+
+    /** Toggle the along-ray terrain disambiguation (A/B debugging). */
+    public setDepthFlip(flip: number): void {
+        this.depthFlipUniform.value = flip;
+    }
+
+    /** Per-frame eye-space membership planes (Cesium v_westPlane analogue). */
+    public setPlanarFrame(westPlaneEye: THREE.Vector4, southPlaneEye: THREE.Vector4): void {
+        (this.westPlaneEyeUniform.value as THREE.Vector4).copy(westPlaneEye);
+        (this.southPlaneEyeUniform.value as THREE.Vector4).copy(southPlaneEye);
+    }
+
+    /** Static per-geometry reciprocal extents. */
+    public setInverseExtents(v: THREE.Vector2): void {
+        (this.inverseExtentsUniform.value as THREE.Vector2).copy(v);
+    }
+
+    public setDiag(level: number): void {
+        this.diagUniform.value = level;
+    }
+
+    public setDepthGateEnabled(enabled: boolean): void {
+        this.depthGate.value = enabled ? 1 : 0;
     }
 
     /**
@@ -181,6 +233,14 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
             allowModel: this.allowModel,
             debug: this.debug,
             probe: this.probe,
+            depthGate: this.depthGate,
+            reconProjInv: this.reconProjInvUniform,
+            depthFlip: this.depthFlipUniform,
+            diag: this.diagUniform,
+            westPlaneEye: this.westPlaneEyeUniform,
+            southPlaneEye: this.southPlaneEyeUniform,
+            inverseExtents: this.inverseExtentsUniform,
+
             // Curtain no longer produces an eye-space fragment position; the
             // convention-fit probes are prism-only, so default to a constant.
             fragEye: varyings.fragEye ?? vec4(0),
@@ -190,47 +250,141 @@ abstract class DrapedVolumeMaterialBase extends THREE.MeshBasicNodeMaterial {
 }
 
 /**
- * Material for centerline curtain volumes built by `buildCurtainGeometry`.
+ * Material for centerline curtains built by `buildCurtainGeometry`.
  *
- * Screen-space band rendering (GroundPolyline-style): the vertex stage
- * projects the segment endpoints to clip space; the fragment stage measures
- * the pixel's distance to that screen segment at the configured width.
- * Coverage comes from the tall centerline panels, while membership is decided
- * purely in screen space — stable under any camera motion.
+ * Faithful port of Cesium's `PolylineShadowVolumeVS/FS` (GroundPolyline):
+ * the vertex stage expands each segment quad along the closer miter plane's
+ * in-frame normal by `metersPerPixel * width / dot(N, R)`; the fragment
+ * stage reconstructs the visible surface from captured depth and tests it
+ * against the segment's three bounding planes.
  */
 export class DrapedCurtainMaterial extends DrapedVolumeMaterialBase {
+    public static readonly BUILD = "v11-pure-tail";
+
+    /** Expanded view-space position, returned via `setupPositionView`. */
+    private expandedEc: any;
+
     constructor(options: DrapedSurfaceMaterialOptions) {
         super(options, "curtain");
+        console.log(`[curtain] material build ${DrapedCurtainMaterial.BUILD}`);
 
-        const aSegmentStart = customAttribute("aSegmentStart", "vec3");
-        const aForwardOffset = customAttribute("aForwardOffset", "vec3");
+        // The shell is expanded in the vertex stage (winding is
+        // view-dependent) and occlusion is carried by the membership tests,
+        // so culling is disabled and hardware depth testing is off.
+        this.side = THREE.DoubleSide;
+        this.depthTest = false;
 
-        // Clip-space segment endpoints, interpolated across the panel.
-        // The directional offset rides modelViewMatrix with w=0: for rigid
-        // transforms this equals the normal-matrix rotation, and unlike
-        // `modelNormalMatrix` it is reliably updated even for basic
-        // materials without normals (a zero matrix here collapses both
-        // projected endpoints onto one point).
-        const ecStart = modelViewMatrix.mul(vec4(aSegmentStart, 1.0));
-        const ecEnd = ecStart.add(modelViewMatrix.mul(vec4(aForwardOffset, 0)));
-        const ndcStart = varying(cameraProjectionMatrix.mul(ecStart));
-        const ndcEnd = varying(cameraProjectionMatrix.mul(ecEnd));
+        const aStartPos = customAttribute("aStartPos", "vec3");
+        const aEndPos = customAttribute("aEndPos", "vec3");
+        const aStartN = customAttribute("aStartPlaneNormal", "vec3");
+        const aEndN = customAttribute("aEndPlaneNormal", "vec3");
+        const aRightN = customAttribute("aRightNormal", "vec3");
+        const aSideSign = customAttribute("aSideSign", "float");
 
-        // Self-projection: where THIS fragment lands through the very same
-        // projection used for the endpoints. Must coincide with its own pixel.
-        const baseEC = modelViewMatrix.mul(vec4(positionLocal, 1.0));
-        const ndcSelf = varying(cameraProjectionMatrix.mul(baseEC));
+        // Eye-space endpoints and frame vectors. Direction vectors ride
+        // modelViewMatrix with w=0; `modelNormalMatrix` stays zero on basic
+        // materials without normals.
+        const ecStart = modelViewMatrix.mul(vec4(aStartPos, 1.0)).xyz;
+        const ecEnd = ecStart.add(modelViewMatrix.mul(vec4(aEndPos.sub(aStartPos), 0)).xyz);
 
-        this.positionNode = positionLocal;
-        this.colorNode = buildDrapedColorNode(
-            "curtain",
-            this.fragmentContext({
-                ndcStart,
-                ndcEnd,
-                ndcSelf
-            })
+        const startNormalEc = modelViewMatrix.mul(vec4(aStartN, 0)).xyz;
+        const endNormalEc = modelViewMatrix.mul(vec4(aEndN, 0)).xyz;
+        const rightNormalEc = modelViewMatrix.mul(vec4(aRightN, 0)).xyz;
+
+        const startW = startNormalEc.dot(ecStart).negate();
+        const endW = endNormalEc.dot(ecEnd).negate();
+        const rightW = rightNormalEc.dot(ecStart).negate();
+
+        const baseEC = modelViewMatrix.mul(vec4(positionLocal, 1.0)).xyz;
+
+        const vStartPlane = varying(vec4(startNormalEc, startW));
+        const vEndPlane = varying(vec4(endNormalEc, endW));
+        const vRightPlane = varying(vec4(rightNormalEc, rightW));
+
+        // Wall fragment's own eye position, for along-ray disambiguation.
+        const vFragEye = varying(baseEC);
+
+        // Closer cap plane for THIS vertex, then two cross products — the
+        // exact ternary/cross chain of PolylineShadowVolumeVS.
+        const dStart = startNormalEc.dot(baseEC).add(startW).abs();
+        const dEnd = endNormalEc.dot(baseEC).add(endW).abs();
+        const planeDirection = mix(endNormalEc, startNormalEc, step(dStart, dEnd));
+        const upOrDown = normalize(cross(rightNormalEc, planeDirection));
+        const normalEC = normalize(cross(planeDirection, upOrDown));
+
+        // Full pixel width in meters at this vertex divided by the plain
+        // miter/right cosine — no abs, no clamp, as in the original.
+        const pushDistance = metersPerPixel(baseEC, this.pixelsPerMeterFactor)
+            .mul(this.halfWidthPx.mul(2))
+            .div(normalEC.dot(rightNormalEc));
+        const expandedEC = baseEC.add(normalEC.mul(sign(aSideSign)).mul(pushDistance));
+
+        // Half band width in meters evaluated AT THE VOLUME and interpolated
+        // (Cesium anchors width at the line): never recompute it from the
+        // reconstructed surface point, whose distance inflates the band and
+        // lets far terrain leak into the acceptance region.
+        const vHalfWidthMeters = varying(
+            this.pixelsPerMeterFactor.mul(baseEC.z.abs()).mul(this.halfWidthPx)
         );
+
+        this.expandedEc = expandedEC;
+
+        // VERBATIM transplant of the validated pure-reference fragment body
+        // (draped-pure example). Deliberately bypasses the shared
+        // buildDrapedColorNode assembly until the discrepancy is found.
+        const reconProjInvLocal = uniform(new THREE.Matrix4());
+        this.reconProjInvUniform = reconProjInvLocal;
+        const skyRevUniform = uniform(0);
+
+        this.colorNode = Fn(() => {
+            const depthSample = this.depthTextureNode.r;
+            const ndc = vec3(
+                screenUV.x.mul(2).sub(1),
+                screenUV.y.oneMinus().mul(2).sub(1),
+                depthSample
+            );
+            const viewH = reconProjInvLocal.mul(vec4(ndc, 1));
+            const groundView = viewH.div(viewH.w).xyz;
+
+            const halfMaxWidth = vHalfWidthMeters;
+            const widthDist = abs(vRightPlane.xyz.dot(groundView).add(vRightPlane.w));
+            const dFromStart = vStartPlane.xyz.dot(groundView).add(vStartPlane.w);
+            const dFromEnd = vEndPlane.xyz.dot(groundView).add(vEndPlane.w);
+
+            const isSky = mix(
+                step(float(0.9999), depthSample),
+                step(depthSample, float(0.0001)),
+                skyRevUniform
+            );
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const hwAny: any = halfMaxWidth;
+            const insideF: any = float(1)
+                .sub(step(hwAny, widthDist))
+                .mul(step(float(0), dFromStart))
+                .mul(step(float(0), dFromEnd))
+                .mul(float(1).sub(isSky));
+
+            const painted = vec4(vec3(1.0, 0.85, 0.0).mul(insideF), insideF);
+            return mix(painted, vec4(1, 0, 1, 1), step(float(0.5), this.debug));
+        })();
     }
+
+    /**
+     * NodeMaterial extension point (the same mechanism sprites use): return
+     * the expanded view-space position instead of `modelViewMatrix * local`.
+     */
+    public setupPositionView(/* builder */): any {
+        return this.expandedEc;
+    }
+
+    /**
+     * Cesium `czm_depthClamp` VS-half, ported to WebGPU clip conventions:
+     * force clip z into the middle of [0, w] so the near/far planes can
+     * never clip the volume shell. The fragment stage keeps depth testing
+     * and writing disabled, mirroring PolylineShadowVolume's blend-only
+     * output, so no FS depth compensation is required.
+     */
 }
 
 /**
@@ -254,6 +408,7 @@ export class DrapedPrismMaterial extends DrapedVolumeMaterialBase {
         const vFragEye = varying(modelViewMatrix.mul(vec4(positionLocal, 1.0)).xyz);
 
         this.positionNode = positionLocal;
+
         this.colorNode = buildDrapedColorNode(
             "prism",
             this.fragmentContext({

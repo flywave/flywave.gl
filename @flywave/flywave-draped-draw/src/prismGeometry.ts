@@ -19,6 +19,18 @@ export interface PrismGeometryOptions {
 export interface PrismGeometryResult {
     geometry: THREE.BufferGeometry;
     origin: THREE.Vector3;
+    /**
+     * Verbatim inputs of ShadowVolumeAppearanceVS: the bounding-rectangle
+     * south-west corner (origin-relative), world-axis unit directions and
+     * extents. Eye-space planes are derived per frame, exactly as Cesium's
+     * vertex stage derives them from these batch-table entries.
+     */
+    planarFrame: {
+        southWestCorner: THREE.Vector3;
+        eastWard: THREE.Vector3;
+        northWard: THREE.Vector3;
+        extents: THREE.Vector2;
+    };
 }
 
 /**
@@ -97,6 +109,19 @@ export function buildPrismGeometry(options: PrismGeometryOptions): PrismGeometry
     const cornersA = new Float32Array(triangleCount * vertsPerTriangle * 3);
     const cornersB = new Float32Array(triangleCount * vertsPerTriangle * 3);
     const cornersC = new Float32Array(triangleCount * vertsPerTriangle * 3);
+    // Bounding rectangle of every ring point on the tangent basis,
+    // packaged exactly like Cesium's batch-table entries.
+    const planar = flatOuter.map(([u, v]) => ({ u, v }));
+    for (const ring of flatHoles) {
+        for (const [u, v] of ring) planar.push({ u, v });
+    }
+    const minU = Math.min(...planar.map(q => q.u));
+    const maxU = Math.max(...planar.map(q => q.u));
+    const minV = Math.min(...planar.map(q => q.v));
+    const maxV = Math.max(...planar.map(q => q.v));
+    const extentU = Math.max(maxU - minU, 1e-6);
+    const extentV = Math.max(maxV - minV, 1e-6);
+
     const indices = new Uint32Array(triangleCount * 24);
 
     for (let t = 0; t < triangleCount; t++) {
@@ -153,5 +178,17 @@ export function buildPrismGeometry(options: PrismGeometryOptions): PrismGeometry
     geometry.setAttribute("aCornerC", new THREE.BufferAttribute(cornersC, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-    return { geometry, origin };
+    return {
+        geometry,
+        origin,
+        planarFrame: {
+            southWestCorner: east
+                .clone()
+                .multiplyScalar(minU)
+                .add(north.clone().multiplyScalar(minV)),
+            eastWard: east.clone(),
+            northWard: north.clone(),
+            extents: new THREE.Vector2(extentU, extentV)
+        }
+    };
 }

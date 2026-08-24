@@ -176,3 +176,24 @@ GPU pick 在 FS 判定通过后才写 pick id——discard 天然剔除幕帘体
    缓解：DEM 实际 min/max 让体积很紧；不达标再用 WGSL 写 gl_FragDepth 兜底
 4. 半分辨率深度的边缘锯齿——线宽 < 2px 时可能露馅，回退全分辨率即可
 5. quantized 中间块贴图缺口（已接受，见第 6 节兜底路线说明）
+
+## 实证结论（2026-08-24 定版）
+
+- 深度语义：`MapView` 开启 `reversedDepthBuffer`，three 将其实现进投影矩阵本身。
+  重建必须**直接使用采样深度 + pass 后快照的 `projectionMatrix.invert()`**，
+  禁止任何手动 `1 - d` 翻转（会双重翻转导致全灭）。
+- 体积跨度：对应 Cesium `minTerrainHeight/maxTerrainHeight`。竖向跨度必须覆盖
+  路径地形包络，否则栅格化裁剪显示区域；纯示例与引擎均验证。
+- 带宽锚定：半宽在顶点阶段按体积自身 `|z|·mpp` 求出后以 varying 插值；
+  绝不能用重建点距离换算（远山 mpp 膨胀 → 远景泄漏）。
+- 混合约定：`CustomBlending(One, OneMinusSrcAlpha)` 要求**预乘 alpha**
+  （rgb 先乘 mask），否则被拒像素以加性方式漏色。
+- 相机入体/掠射角加固：
+  - `DoubleSide + depthTest=false + depthWrite=false`：相机穿入体积仍正确；
+  - 推距分母做保号幅度钳制 `sign(d)·max(|d|,1e-3)`，杜绝退化角度下顶点爆炸；
+  - `frustumCulled=false`、`renderOrder=2` 保证任意视角不剔除、混合顺序正确；
+  - 天空剔除走捕获**类型纹理**（globe 尺度下清除深度阈值不可靠）。
+- 共享片元组装层（fragmentContext/buildDrapedColorNode）曾破坏幕帘路径，
+  幕帘现内嵌纯净参考实现；prism 路径继续使用共享层（已验收）。
+- 高程基准：DEM `getHeight` 与渲染位移存在区域性系统差（实测 ~+200m），
+  DEM 仅可用于起伏/跨度，绝对高度须另行标定或由用户给定。
