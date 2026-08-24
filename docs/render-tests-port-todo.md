@@ -4095,3 +4095,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **runner vs karma 口径记档**：runner 图像（200×100）部分有内容而 karma（512×512）83% 差——两管线捕获帧不同步，census 类取证需统一口径。
 - **终态**：工作树=提交态、fill-extrusion-opacity/default PASS ✓、tsc 干净。
 - **下轮入口**：① error-overlap 整帧空白的引擎时序取证（raster getTile 调用 census vs mgl coveringTiles 在 wait 帧的集合）；② circle 族 drape 质量对照 draw_terrain_raster（§302/303 入口未动）。
+
+**§305. 整帧空白类根因定案（census）——wait 帧引擎请求 30 个 z15 raster 瓦片（祖先链可覆盖），但 DEM 中心瓦片 (14,8192) 不存在（fixture 仅 8191 系）→ terrain mesh 未建 → drape 烘焙不发生 → raster 整体不可见；mgl 初始化态 raster 平铺渲染（2026-08-24 一百九十三，取证定案记档）**：
+
+- **census（MB_RCENSUS 探针）**：wait 帧请求集 = 30 × z15（16377-16386 带），const fixture 仅 3 个 z15 存在，其余可由 z14/z13 祖先覆盖（resolveAncestor 链在）——**raster 数据面不是瓶颈**。
+- **管线断点定案**：DEM 侧 TerrainController 3×3 请求中心 (14, 8192, 8192)——fixture 只提供 14-8191-8191（center (0.005,0.01) 恰在 8191/8192 瓦片边界东侧）→ 8/9 404 → 地形 mesh 缺 → **TerrainDraping 烘焙链不启动 → raster 通路整体失效**（raster 依赖 drape 合成）。mgl 初始化态/无地形时 raster 仍平铺渲染（draw_raster 不依赖 terrain 就绪）——218780 整帧差 = raster 全灭。
+- **修复方向（下轮实施）**：drape 缺失兜底——terrain mesh 未建/DEM 缺失时 raster 四边形回落为常规平面 fill 渲染（mgl 无地形路径）；同时 TerrainController 的 DEM 请求可加祖先 fallback（对齐 raster 的 resolveAncestor 语义）。此修复可望解锁整帧空白桶多例（§277/§302 分桶）。
+- **终态**：探针全清、工作树=提交态、tsc 干净。
