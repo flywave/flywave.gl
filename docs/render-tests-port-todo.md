@@ -4191,3 +4191,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实施**：§317 机制以 `mglDistanceLodTileSize` 参数重启（datasource 按源 tileSize 256 传入，分母 ccd/256）——五例结果与 §317 全局 /512 **逐位相同**（除 unoccluded 3453→17622 更差）——**阈值分母对停止集零影响**（与 §317 的 /256 试验一致），证实判别残差不在阈值标定而在 **dz 单位链**：mgl 的 dz/cameraHeight = mercator z × numTiles × meterToTile（tile 单位且随 zoom 缩放），我方用引擎米制 camPos.z（固定米）——distToSplitScale 的尖角缩放在两单位制下取值不同，停止边界系统性偏移。
 - **回退**：净回归（−10.8k vs +21k）全回退，218782 ✓ 复原。**终审**：引擎 LOD 的下一步=把 dz 换算到 mgl tile 单位（camZ/C·secLat·2^z·meterToTile 语义）后以 47-tile 参照集直接验收停止集（census 差集=0 为门槛）——标定域收窄到单位换算一处，独立会话可直奔。
 - **终态**：mapview lib 重建提交态、工作树=提交态、tsc 干净。
+
+**§319. 前向投影距离变体（§317/318 三点三角定位终审）——欧氏最近点=过停止（initializing −10.8k/其余 +12k）、源 tileSize 参数化=停止集逐位同欧氏、前向投影=零停止（纯基线）：判别器在 mgl 角点遍历的 `|distanceXyz[2]|=cameraHeight 常量` 与前向距离的组合细节，三点数据齐备回退（2026-08-24 二百零八，终审记档）**：
+
+- **三点实测**：①欧氏最近点（§317/318）：initializing −10795/opaque +12619/circle +11415；②参数化分母（§318）：与①逐位同（分母非判别器）；③前向投影 min-corner dot(forward)（§319）：四例全部=基线（218782/198188/5758/3364，零停止零回归）。
+- **三角定位结论**：mgl 真值介于欧氏与前向之间——其角点遍历中 `closestElevation = |distanceXyz[2]|`（flat 时= cameraHeight 常量，非角点 z！）与 `dist = dot(distanceXyz, forward)` 组合后经 distToSplitScale(dz=closestElevation) 缩放的边界，及 nearest-to-center 兜底子句（closestPoint==centerPoint 强制分裂），我方两版均未复刻完整。**下会话直奔点**：在 scripts/mgl-covering-tiles-ref.js 中直接对拍（该工具已有全部 mgl 语义）——先让工具输出停止级分布，再在引擎侧复刻该分布（工具即规格）。
+- **回退**：全部回退至 §316 提交态（5758/218782 ✓）、mapview lib 重建、tsc 干净、工作树=提交态。
