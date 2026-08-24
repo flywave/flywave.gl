@@ -4113,3 +4113,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地**：raster-only 样式的 storageLevelOffset 从固定 0 改为 tileSize≤256→−1（512 维持 0）——mgl `coveringZoomLevel = round(zoom + log2(tileSize/512))`：tileSize-256 源在 z14.51 相机下请求 z14，我方原 z15（+1 flywave 偏移未按 tileSize 折算）。census 验证：请求集 30×z15（16377-16386，祖先链全 miss）→ **z14（8188-8191 带，与 mgl 覆盖集同域，const 瓦片/祖先可解析）**。
 - **实测**：error-overlap 三例 218780→218777 / 198247→197331 / 220649→219875——量级不变（主体仍=drape 依赖链，§305b 兜底未实施）但请求域已对齐。回归：raster-color 族 1F/1S 与基线逐位恒定 ✓（512 路径零扰动）、tsc 干净、探针全清。
 - **剩余**：§305b 的无 drape 平面兜底仍为整帧空白桶的解锁点（z14 修正后 raster 数据面已就绪，兜底实施即可见）。
+
+**§307. §305b 兜底前置取证——raster drape 注入的 z 量纲差发现：`transformed.z += texture2D(dem).r` 为原始米，未乘 exaggeration×secLat（mesh 侧为 elev×exag×secLat ~4 倍）——raster 四边形系统性低于地形面被埋没；单 tile 路径 UV clamp 到边缘值的次级问题同存（2026-08-24 一百九十六，取证记档）**：
+
+- **发现**：injectTerrainDrape（单 tile）/MultiTile 的顶点注入 `transformed.z += texture.r` —— DEM 纹理存原始米（decodeDemImage 无 exaggeration），而 TerrainController mesh z = elev×exaggeration×secLat——raster 四边形在真实高程、地形面在 4× 夸张高程，**全部 raster 内容系统性沉于地形之下**（有 mesh 区域）；无 mesh 区域理论上可见但观测为黑（待对象级验证，疑与 §280 的对象生命周期/剔除相关）。error-overlap 的整帧空白主因链修正为：**drape z 量纲差（本条）+ 无 mesh 区域的对象可见性（§305b 待查）**。
+- **修复点（下轮实施）**：注入改为 `texture.r × exaggeration × secLat`（与 mesh 同尺度，量纲参数需经 technique/uniform 传递）——一行级修正，可望解锁 error-overlap 桶及 circle 族 drape 质量大部。
+- **终态**：工作树=提交态（§306 后零改动）、无探针。
