@@ -4329,3 +4329,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **已落地修复**：secLat/secLat² 建筑高度链（alignment flat 族 −11%）、globe 固定雾距 [2,4.5]（star 底部蓝斑修复、面部雾剖面 ±0.05 吻合）、circle 圆心地形抬升（8 例净 −376）、raster drape 量纲修正、MIN_FOV 水平钳位 opt-out（窄画布相机复原 mgl，z=2576 逐位对拍）、raster/引擎 shouldSplit LOD 语义与标定（census 集合 52/52 收敛）、混层交付基础设施、coveringTiles 参照工具（含 bearing 约定修正与 TRACE 规格）。
 
 **三大域移交态**：alignment=逐面可见性几何差（§312，NdotL 分布无坏值）；fog/globe star=引擎球面 R_e/R_s 尺度差（§301）；terrain 整帧空白=§336 组合接线时序单点（五层栈全就绪）。每域均有量化验收指标与就绪工具。
+
+**§339. 一次定位法执行 + §336 冻结结论撤销——renderedTiles 时间线 0→8→13→37→42→47（管线活跃）、census 52（集合就位）、相机正确：**渲染从未冻结，218893 是真实的像素级渲染差异**——§334 原判（每瓦片祖先马赛克选择）确证为最终域；§336/§338 的"冻结/时序"结论撤销（2026-08-24 二百二十八，一次定位+结论撤销记档）**：
+
+- **一次定位数据**：全栈同开（四件+门控）——renderedTiles **0→8→13→37→42→47** 增长、census 52、引擎侧五层全部生效；218893 不变 → 管线活跃、集合正确、相机正确，**残差=每瓦片从哪层祖先取纹理**（const 集下 z16/z15 请求的最近祖先与 mgl covering 集的逐瓦片层级挑选不同——datasource resolveAncestor 独立解析 vs mgl 按覆盖集层级）。
+- **结论修正**：§336"渲染冻结"、§338"接线时序"撤销；最终域回归 §334 原判——**datasource 端祖先层级挑选按 TRACE 停止级规格校准**（下会话：把 §334 的 52-tile 参照（含每瓦片层级）直接作为 resolveAncestor 的期望输出校准 mglLodLevel）。
+- **终态**：全栈回退（218882 ✓）、探针全清、工作树=提交态。
