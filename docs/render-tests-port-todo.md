@@ -4288,3 +4288,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验证（纯数值）**：工具 quat `rotateZ(−b)·rotX(−pitch)` 对 (0,0,−1) 的前向——bearing −45 → 罗盘 +45（镜像）。修正为 rotateZ(+b) 后 bearing b → 罗盘 b ✓。**§331 的"引擎把 −45 渲染成 +45"实为工具镜像**；§332 的"去负劣化"与之自洽（引擎正确）。
 - **重判**：修正参照（53）与我方组合 census（38）重合 30；差集=我方 z15 冗余 8 + mgl z16 带 23——**纯层级/LOD 差**，回到 §322/§323 域（LOD 栈实施质量），相机/方向全部结案。
 - **终态**：工具已修正入库（rotateZ(+bearing) 注释含验证依据）、工作树=提交态。
+
+**§334. LOD 阈值校准命中——mglDistanceLodScale=1.5 使 census 集合完全收敛（52/52、ours-only 0、mgl-only 1，对修正参照差集≈0 ✓ 验收达标）但渲染逐位不变（218893）：瓦片【集合】非最终瓶颈，每瓦片【祖先马赛克选择】（datasource resolveAncestor 的层级挑选）为下一域——knob 已入库（默认 1 零影响），启用待马赛克域落地（2026-08-24 二百二十三，校准命中+域移交记档）**：
+
+- **校准**：新增 `mglDistanceLodScale` 阈值倍率 knob（引擎 opt-in 链）——1.5 时组合（LOD+offset+1）census=52 tiles，与修正 53-tile 参照 **common 52 / ours-only 0 / mgl-only 1** —— §333 的差集验收（≈0）达成。
+- **关键发现**：集合收敛后**渲染逐位不变**（218893）——证明整帧空白的最终瓶颈在**每瓦片的祖先马赛克选择**（datasource 端 resolveAncestor 在同集合下挑的层级与 mgl 不同，§309 的 z12 棋盘/z10 橙带差即此），非集合差。LOD 启用回退关闭（circle +664 回归风险），等马赛克域修复后一并启用。
+- **下会话入口**：resolveAncestor 与 mgl 逐瓦片层级挑选的对拍（用修正工具 TRACE 的停止级分布作为每瓦片期望层级，直接校准 datasource 端 mglLodLevel/resolveAncestor 的挑选）。
+- **终态**：临时启用/census 探针全清、knob 保留默认 1（零影响）、218882 复原 ✓、tsc/build 干净。

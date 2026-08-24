@@ -90,6 +90,7 @@ export class FrustumIntersection {
      */
     mglDistanceLod = false;
     mglDistanceLodTileSize = 512;
+    mglDistanceLodScale = 1;
 
     private readonly m_frustum: THREE.Frustum = new THREE.Frustum();
     // used to project global coordinates into camera local coordinates
@@ -271,7 +272,8 @@ export class FrustumIntersection {
                         const C = 40075016.686;
                         const distWorld =
                             (C / Math.pow(2, tileKey.level)) *
-                            (ccdPx / this.mglDistanceLodTileSize);
+                            (ccdPx / this.mglDistanceLodTileSize) *
+                            (this.mglDistanceLodScale ?? 1);
                         const mv = this.mapView as any;
                         const tiltRad = ((mv.tilt ?? 0) * Math.PI) / 180;
                         const headRad = ((mv.heading ?? 0) * Math.PI) / 180;

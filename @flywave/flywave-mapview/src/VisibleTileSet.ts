@@ -1411,6 +1411,7 @@ export class VisibleTileSet {
         const fi: any = this.m_frustumIntersection;
         fi.mglDistanceLod = (this.options as any).mglDistanceLod === true;
         fi.mglDistanceLodTileSize = (this.options as any).mglDistanceLodTileSize ?? 512;
+        fi.mglDistanceLodScale = (this.options as any).mglDistanceLodScale ?? 1;
         // For each bucket of data sources with same tiling scheme, calculate frustum intersection
         // once using the maximum display level.
         for (const [tilingScheme, bucket] of dataSourceBuckets) {

@@ -1069,6 +1069,11 @@ export class MBStyleDataSource extends TileDataSource {
                     }
                     // §323: disabled — see §331: the residual root cause is the
                     // bearing sign mirror (below), not the LOD stack.
+                    // §334: calibration validated — scale 1.5 converges the
+                    // census set to the mgl reference (52/52, diff ~0), but
+                    // the RENDER is unchanged: the per-tile ANCESTOR mosaic
+                    // choice is the next domain, not the set. Keep off until
+                    // that lands (avoid the circle +664 regression).
                     (vtsL.options as any).mglDistanceLod = false;
                     (vtsL.options as any).mglDistanceLodTileSize = lodTileSize;
                     mvL.update?.();
