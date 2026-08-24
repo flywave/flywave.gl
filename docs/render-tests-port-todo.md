@@ -4151,3 +4151,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **终案**：alignment flat 族 48k = ①绿面缺失（8.5k，建筑未渲染/被遮处期望有建筑）②受光/背光面的空间分布差（期望的受光面在我们处是背光或反之——建筑朝向/可见面集合的几何差）——均为逐面级几何域，需 §288 记档的单建筑对比视觉迭代（独立会话）。
 - **终态**：探针全清、48992 复原 ✓、工作树=提交态。
 - **会话级 ROI 终评**：三大主导残差均已到"引擎级改动或视觉迭代会话"域（alignment=逐面几何、fog/globe=球面尺度、terrain=覆盖集形状）——建议新会话按"单域单会话"模式推进，本会话的 24 个阶段记档提供完整入口地图。
+
+**§313. 根瓦片 tan 退化钳位复测（error-overlap 域）——三例逐位惰性定案：tileWrapping 禁用路径下 computeRequiredInitialRootTileKeys 的范围数学根本不执行（单根瓦片直入），§293 的钳位对本族同源无效；引擎覆盖集复刻的前置=先跑通 mgl coveringTiles 的参照集合（2026-08-24 二百零二，零净变化记档）**：
+
+- **复测**：重应用 §293 钳位（error-overlap 的 aspect 4×pitch 60 → 133.7° tan 负）→ 三例 **逐位基线恒等**（218780/198247/220649）——FrustumIntersection:411 的 tileWrapping 禁用分支直接推单根瓦片（area=Infinity），根范围计算从未运行；已回退复原。
+- **结论**：引擎覆盖集域的下一步前置依赖=**获得 mgl coveringTiles 对该 fixture 的参照集合**（需 mgl 测试 harness 侧跑 transform.coveringTiles 输出，或手推其 3D-AABB 遍历），否则我方 30 瓦片集与 mgl 集合的差异方向无从对齐——记档为独立会话的首个动作。
+- **终态**：mapview lib 重建回提交态、工作树=提交态。
