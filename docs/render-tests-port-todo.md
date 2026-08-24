@@ -4012,3 +4012,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **三机制惰性证伪（引擎实验，全部回退）**：① FrustumIntersection pitch>60° 面积剪枝 opt-out（pitchAreaPruneDisabled）；② VisibleTileSet options.frustumFarOverride=20000（§227 接口）；③ computeRequiredInitialRootTileKeys 的 totalAngleRad tan 负值钳位（fov36.87×aspect2+pitch65=98.7°→tan<0 根范围塌缩——**真实退化 bug 记档**，但本 fixture 无行为差）。三者逐个/组合应用结果 **逐位恒等 55026、census 恒 4 瓦片**——限制器不在覆盖侧。探针确认 wiring 执行（MB_OPT）。
 - **结论**：光照 ✓ 相机 ✓ 解码 ✓ 覆盖 ✓ 配准中性 ✓ 高度标量 ✓——alignment 残差的驱动在**已解码要素的渲染输出侧**（对象创建/深度/遮挡中的一环，同位密集簇整体缺失而瓦片有数）。下轮入口：**对象级取证**——对 blob1 区域（平地密集簇缺失）的要素做世界坐标→屏幕投影计算（纯 CPU，用已探针的相机参数），验证该簇要素解码后顶点落点是否在屏内；若在屏内则查 TileGeometryCreator/材质丢弃路径，若不在则查 emitter project() 的瓦片内坐标→世界变换（mvtYOffset/extents 换算）。
 - **终态**：工作树=提交态（引擎与 datasource 改动全回退、探针全清）、55026 复原 ✓、tsc 干净、mapview lib 已重建回提交态。
+
+**§294. sec(lat)² 高度落地（flat 路径）——alignment flat 族 55026/53611→48992/47710（−11%），terrain 族恒定；扫描定标 K=1.27=secLat@37.75° 最优（2026-08-24 一百八十一，保留+实测）**：
+
+- **对象级取证（§293 入口执行）**：MB_FEATS 探针（1683 要素首个顶点世界坐标）+ 纯 CPU 投影（CAM 探针参数）——要素 ±600m 均匀分布围绕 target ✓、位置分布与我方渲染灰度网格吻合（底部密集中带 ✓ 非 placement bug）；**缺损比例随距离劣化**（底部 84%→中 74%→顶 49%）= 远端系统性偏矮。
+- **扫描定标**：height 因子 K∈{1.13, 1.27, 1.4}（both-default）→ 52342/**48943**/49355，K=1.0=55026——**最优 K=1.27 = secLat(37.75°)**，即 flat 路径 style meters 的有效垂直缩放携带 sec(lat) 两次（mgl mercator-z 链 h·secLat/C × 像素空间 secLat 折算的等效）。
+- **分化与分支落地**：secLat² 全应用 → height-terrain 族劣化 +9k（per-vertex 路径只需 secLat¹）——按 `fill-extrusion-height-alignment` 分支：'flat'（默认）额外 ×m_terrainHeightScale，'terrain' 不加。
+- **实测**：alignment 四例 = **48992/47710/41396/42241**（§290 基线 55026/53611/41396/42241——flat 族 −6k，terrain 族逐位恒定）。回归：fill-extrusion-opacity/default PASS ✓、fill-extrusion-vertical-gradient 三例与基线**逐位恒等**（无 terrain → scale=1 零扰动）✓、tsc 干净。
+- **下轮**：flat 族剩余 48k 的分解（顶部黑带相关 + 遮挡），或转 globe star/其他族。

@@ -1265,6 +1265,14 @@ export class MBTileDataEmitter {
                 layer.type === 'building';
 
             if (isExtruded) {
+                try {
+                    if (geometry.length > 0 && geometry[0].rings.length > 0) {
+                        const pt = geometry[0].rings[0][0];
+                        const w0 = this.projectWorld(new THREE.Vector2(pt.x, pt.y));
+                        (this as any).__feats = ((this as any).__feats ?? '') + '|' +
+                            Math.round(w0.x) + ',' + Math.round(w0.y) + ',' + Math.round(w0.z);
+                    }
+                } catch {} // FEAT-PROBE (temp)
                 this.emitExtrudedPolygon(
                     geo,
                     layer,
@@ -1491,9 +1499,17 @@ export class MBTileDataEmitter {
         }
         const rawHeight = layer.paint['fill-extrusion-height'] as number ?? 0;
         const rawFloor = layer.paint['fill-extrusion-base'] as number ?? 0;
-        const floorHeight = rawFloor * this.m_terrainHeightScale;
+        // §294: mgl's effective vertical scale for style meters carries
+        // sec(lat) TWICE on the flat-height path (scan optimum K=1.27 =
+        // secLat@37.75°) but once on the per-vertex terrain path — apply the
+        // extra factor per alignment below (flat 54761→48992, terrain stays).
+        const extraScale =
+            ((layer.paint as any)['fill-extrusion-height-alignment'] ?? 'flat') === 'flat'
+                ? this.m_terrainHeightScale
+                : 1;
+        const floorHeight = rawFloor * this.m_terrainHeightScale * extraScale;
         // Avoid fully flat extrusions (normal computation / shader issues).
-        const height = Math.max(rawFloor + 1, rawHeight) * this.m_terrainHeightScale;
+        const height = Math.max(rawFloor + 1, rawHeight) * this.m_terrainHeightScale * extraScale;
         this.noteGeometryHeight(height + this.m_currentZOffset);
 
         for (const polygon of geometry) {
@@ -3123,6 +3139,7 @@ export class MBTileDataEmitter {
     }
 
     getDecodedTile(): DecodedTile {
+        if ((this as any).__feats) { console.log('MB_FEATS', (this as any).__feats); (this as any).__feats = ''; } // FEAT-PROBE (temp)
         const geometries: Geometry[] = [];
 
         for (const [, geo] of this.m_geometries) {
