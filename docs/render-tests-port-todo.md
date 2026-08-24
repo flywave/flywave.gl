@@ -4138,3 +4138,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **+1 实测**：initializing 218780→218771（噪声）/opaque +28/transparent +74/**circle-occluded 5758→6422（+664）**/circle-unoccluded −88——净回归，回退 offset 0（circle-occluded 5758 复原 ✓）。
 - **终审结论**：error-overlap 的 218k 平台对请求层级完全不敏感（三轮 −1/0/+1 均 ~218k）——**残差是覆盖集形状**（我方 VisibleTileSet 的 30 瓦片集 vs mgl 3D-AABB 遍历在 pitch 60 的更大集合），修一层不解锁。真修复=mgl coveringTiles 的 AABB+elevation-range 遍历复刻（引擎级，同 §293 记档的 FrustumIntersection 深改），或按 §227/§293 的惰性经验需重审（pitch>60 面积剪枝的豁免在 error-overlap 未单测过——下轮可单例验证 pitch 剪枝豁免对本族的效果）。
 - **终态**：工作树=提交态（仅 §310 注释级更新）、5758 复原 ✓、tsc 干净。
+
+**§311. alignment flat 族残差重分类（§294 后）——类别翻转：暗墙 49%（9801）> 绿遮挡 43%（8486）> 色差 8%，顶部两带最重（5634/3914）——主导可动域从遮挡转回 §287 光照（2026-08-24 二百，取证记档）**：
+
+- **重分类**（both-default，runner 采集）：缺失类 dark 9801 / green 8486 / color 1501——与 §292 时代（绿 64% 主导）**翻转**：secLat² 增高后墙面面积扩大，暗墙（<40 亮度）成为最大类；顶部两带（远端）最重与距离劣化定性一致。§292 的"南墙受光 0.75"探针结论为 pre-§294 状态，增高后的墙面亮度分布需重测（NdotL dump 复跑）。
+- **下轮入口**：① NdotL/法线转储探针复跑（§292 工具现成）验证 secLat² 后暗墙构成（背光面正常 vs 渐变下限过深 vs AO）；② 绿遮挡 8486 的 per-blob 复查（§288 的单建筑对比未做）。
+- **终态**：工作树=提交态、探针全清。
