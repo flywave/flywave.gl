@@ -42,12 +42,14 @@ export function buildTileCamera(
     // Camera looks down the Z axis (engine world is z-up: x = mercator X,
     // y = mercator Y, z = elevation). A camera looking down Y renders the
     // z-up scene edge-on and the bake comes out empty.
+    // §280: generous z window — terrain-exaggerated content (extrusions
+    // lifted onto a ×4 DEM reach z≈1000+) must stay inside the bake frustum.
     const camera = new THREE.OrthographicCamera(
         left, right, top, bottom,
-        1,    // near
-        2000, // far
+        1,
+        12000,
     );
-    camera.position.set(centerX, centerY, 1000);
+    camera.position.set(centerX, centerY, 6000);
     camera.lookAt(centerX, centerY, 0);
     camera.up.set(0, 1, 0);
     camera.updateProjectionMatrix();

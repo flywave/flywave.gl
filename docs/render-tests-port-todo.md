@@ -3915,3 +3915,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **仍未上屏（记档）**：抬升后图像逐位不变（122k 绿地面、0 灰建筑）——建筑对象既不在 3D 场景也不在 drape 纹理中出现。剩余候选：① **TerrainDraping 烘焙相机**只覆盖 DEM 表面高度带，z=1000m 的 extrusion 在正交烘焙视锥外；② 对象被引擎剔除（tile boundingBox 未含抬升高度）；③ drape alpha=1 的背景区域盖住 3D 对象。需视觉迭代定位——独立会话规模。
 - **回归**：background-color/fog-color 族恒定（transition 4096 既有）✓。
 - **会话终局（12 commits）**：§271-§279。globe 251-1487 级、terrain 5 PASS、extrusion-terrain 抬升管线就位。
+
+**§280. extrusion-terrain 上屏追查——对象确凿存在（54 mesh、z[0,1188] 正确）、道路 drape ✓、建筑双层（3D 主渲染+drape 烘焙）均不显示；烘焙视锥已放宽（z±6000）仍恒定（2026-08-24 一百六十八，保留+记档）**：
+
+- **census 定案**：场景非 terrain mesh=54、局部 z 范围 [0,1188]（= DEM 1000 + 建筑高度）——**几何/抬升/对象创建全链正确**。道路（line ribbon, z=0）经 drape 烘焙可见（136 灰 7367px ✓）；建筑在主 3D 渲染与 drape 烘焙两层都不出现。
+- **烘焙视锥放宽（保留）**：`buildTileCamera` 从 z=1000/near1/far2000 放宽到 z=6000/near1/far12000——覆盖抬升内容（必要条件），但图像恒定 → 视锥非根因。
+- **剩余候选（下轮，需 draw-call 级取证）**：① extrusion 材质（MapExtrusionMaterial 光照/双 pass）在正交烘焙 pass 的光栅化异常；② 主渲染中 extrusion 对象的深度写入/排序与 terrain mesh 冲突；③ TileGeometryCreator 对 extruded-polygon 几何的 boundingSphere/视锥剔除（对象级）。方法：renderer.info draw-call 打点按材质分类，或单对象 forceRender 实验。
+- **回归**：terrain PASS 族维持（background-layer/hide/remove ✓）、background-color 全绿（transition 4096 既有）✓。
