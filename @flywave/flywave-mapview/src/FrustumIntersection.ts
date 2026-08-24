@@ -80,6 +80,17 @@ interface IntersectionResult {
  * Computes the tiles intersected by the frustum defined by the current camera setup.
  */
 export class FrustumIntersection {
+
+    /**
+     * Opt-in mgl coveringTiles shouldSplit distance LOD (§317-§323):
+     * forward-projected corner distance where the z-difference is replaced
+     * by +cameraHeight (mgl transform.ts `distanceXyz[2] = cameraHeight`),
+     * vs C/2^level · ccd/sourceTileSize, distToSplitScale-scaled, with the
+     * nearest-to-center fallback.
+     */
+    mglDistanceLod = false;
+    mglDistanceLodTileSize = 512;
+
     private readonly m_frustum: THREE.Frustum = new THREE.Frustum();
     // used to project global coordinates into camera local coordinates
     private readonly m_viewProjectionMatrix = new THREE.Matrix4();
@@ -244,6 +255,66 @@ export class FrustumIntersection {
             const pitch = MapViewUtils.extractAttitude(this.mapView, this.m_camera).pitch;
             if (tileEntry.area < targetTileArea && (this.m_enableMixedLod || pitch > Math.PI / 3)) {
                 continue;
+            }
+
+            // §323: mgl shouldSplit distance LOD — the z-difference term is
+            // +cameraHeight (NOT the corner z): mgl transform.ts replaces
+            // distanceXyz[2] with cameraHeight in the flat case.
+            if (this.mglDistanceLod && uniqueZoomLevels.size > 0) {
+                const maxZoomLod = Math.max(...uniqueZoomLevels);
+                if (tileKey.level < maxZoomLod) {
+                    const cam = this.m_camera;
+                    const ccdPx =
+                        0.5 / Math.tan((cam.fov * Math.PI) / 180 / 2) *
+                        (this.mapView as any).canvas?.height;
+                    if (ccdPx > 0) {
+                        const C = 40075016.686;
+                        const distWorld =
+                            (C / Math.pow(2, tileKey.level)) *
+                            (ccdPx / this.mglDistanceLodTileSize);
+                        const mv = this.mapView as any;
+                        const tiltRad = ((mv.tilt ?? 0) * Math.PI) / 180;
+                        const headRad = ((mv.heading ?? 0) * Math.PI) / 180;
+                        const elev = Math.PI / 2 - tiltRad;
+                        const fwd = {
+                            x: Math.sin(headRad) * Math.cos(elev),
+                            y: Math.cos(headRad) * Math.cos(elev),
+                            z: Math.sin(elev),
+                        };
+                        const camPos = cam.position;
+                        const camH = Math.abs(camPos.z);
+                        const box = cache.tileBounds as THREE.Box3;
+                        let d = Infinity;
+                        for (let ci = 0; ci < 2; ci++)
+                        for (let cj = 0; cj < 2; cj++)
+                        for (let ck = 0; ck < 2; ck++) {
+                            const dist2 =
+                                ((ci ? box.max.x : box.min.x) - camPos.x) * fwd.x +
+                                ((cj ? box.max.y : box.min.y) - camPos.y) * fwd.y +
+                                camH * fwd.z;
+                            if (dist2 < d) d = dist2;
+                        }
+                        const centerWorld = (mv as any).m_targetWorldPos;
+                        const containsCenter =
+                            centerWorld &&
+                            centerWorld.x >= box.min.x && centerWorld.x <= box.max.x &&
+                            centerWorld.y >= box.min.y && centerWorld.y <= box.max.y;
+                        if (!containsCenter && d > 0) {
+                            const dz = Math.max(camH, 1e-6);
+                            const sT = 0.707, stretch = 1.1;
+                            let scaleF = 1.0;
+                            if (d * sT >= dz) {
+                                const r = d / dz;
+                                const k = r - 1 / sT;
+                                scaleF =
+                                    r / (1 / sT + (Math.pow(stretch, k + 1) - 1) / (stretch - 1) - 1);
+                            }
+                            if (d > distWorld * scaleF) {
+                                continue;
+                            }
+                        }
+                    }
+                }
             }
 
             const tileKeyAndOffset = TileKeyUtils.getKeyForTileKeyAndOffset(tileKey, offset);

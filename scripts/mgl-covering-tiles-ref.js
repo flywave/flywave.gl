@@ -206,6 +206,10 @@ function coveringTiles(options) {
         }
         let distToSplit = (1 << (maxZoom - it.zoom)) * zoomSplitDistance;
         distToSplit *= distToSplitScale(Math.max(closestElev, cameraHeight), closest);
+        if (process.env.MGL_LOD_TRACE && it.zoom >= 13) {
+            console.log('TRACE', it.zoom, it.x, it.y, 'd=', closest.toFixed(1),
+                'thr=', distToSplit.toFixed(1), closest < distToSplit ? 'SPLIT' : 'STOP');
+        }
         if (closest < distToSplit) return true;
         const cp = it.aabb.closestPoint(centerPoint);
         return cp[0] === centerPoint[0] && cp[1] === centerPoint[1];

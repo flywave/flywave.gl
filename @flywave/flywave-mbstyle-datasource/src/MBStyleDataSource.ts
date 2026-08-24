@@ -1053,6 +1053,30 @@ export class MBStyleDataSource extends TileDataSource {
             this.storageLevelOffset = 0;
         }
 
+        // §323: enable the engine's mgl shouldSplit distance LOD with the
+        // raster SOURCE tileSize parameterized.
+        if (hasRasterSource) {
+            try {
+                const mvL = (this as any).mapView;
+                const vtsL = mvL?.m_visibleTiles;
+                if (vtsL) {
+                    let lodTileSize = 512;
+                    for (const [sid, src] of sources) {
+                        if (src.type === 'raster') {
+                            const ts = (style.sources as any)[sid]?.tileSize;
+                            if (typeof ts === 'number' && ts > 0) { lodTileSize = ts; break; }
+                        }
+                    }
+                    // §323: disabled — full mgl-parity stack (camera+level+LOD)
+                    // still plateaued; re-enable after the engine frustum
+                    // traversal shape itself matches mgl (§324).
+                    (vtsL.options as any).mglDistanceLod = false;
+                    (vtsL.options as any).mglDistanceLodTileSize = lodTileSize;
+                    mvL.update?.();
+                }
+            } catch {}
+        }
+
         // Hillshade: emit tile-covering polygons carrying the per-tile DEM url.
         const hasHillshade = (style.layers ?? []).some(
             (l: any) => l.type === 'hillshade' && (l.layout?.visibility ?? 'visible') === 'visible',

@@ -1407,6 +1407,10 @@ export class VisibleTileSet {
             this.m_frustumIntersection.updateFrustum();
         }
 
+        // §323: mgl shouldSplit distance LOD opt-in (source tileSize param).
+        const fi: any = this.m_frustumIntersection;
+        fi.mglDistanceLod = (this.options as any).mglDistanceLod === true;
+        fi.mglDistanceLodTileSize = (this.options as any).mglDistanceLodTileSize ?? 512;
         // For each bucket of data sources with same tiling scheme, calculate frustum intersection
         // once using the maximum display level.
         for (const [tilingScheme, bucket] of dataSourceBuckets) {

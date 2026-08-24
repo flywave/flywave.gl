@@ -4218,3 +4218,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **审计**：`setMaxGeometryHeight(1)` 探针（瓦片包围盒 z 扩展归零）→ census **逐位不变**（23 tiles/w7）——z 扩展非宽度驱动。宽度解读修正：引擎 7 宽（z15）= pre-LOD 全视锥基数；mgl 参照 2-4 宽是 **z16 带（LOD 停止后仅存近带）**——"形状差"大部分是 LOD 差的投影，两缺失同源。
 - **修复顺序定档（下轮）**：① 先落地 §319/320 的完整 shouldSplit LOD（fwd-from-tilt+兜底已验证零停止=安全基线，需补停止判定的数值对拍——用 ref 工具输出每瓦片停止级分布做规格）② LOD 生效后复测 census 形状，剩余差再审 extendedFrustumCulling/投影 scale。
 - **终态**：探针全清、218882（§321 态）复原 ✓、工作树=提交态。
+
+**§323. shouldSplit 完整规格破案（+cameraHeight z 项）与全栈组合终审——ref 工具 TRACE 输出每瓦片停止判定（z15 远带 d=13-14.8 > thr=11 STOP）；落地 +cameraHeight 修正后引擎 LOD 仍零停止→根因=引擎数据层 z15 为终层、LOD 决策（15→16）不发生；相机+层级 +1+正确 LOD 三件全栈组合（218893/199108/6412）仍 218k 平台——**引擎视锥遍历形状本身与 mgl 不同构**为最后深改点（2026-08-24 二百一十二，规格+终审记档）**：
+
+- **规格破案（ref 工具 TRACE）**：mgl 停止判定的 z 项是 **+cameraHeight 常量**（`distanceXyz[2] = cameraHeight`）而非角点 z——我方 §320 用角点 z（相机下方为负）→ d 系统性偏小零停止。落地修正（FrustumIntersection §323 语义完整版，opt-in 默认关）。
+- **终层洞察**：引擎数据层 z15=遍历终层，LOD 的 15→16 决策在引擎内不发生（z15 瓦片本就"停在 15"）——**mgl 远带 z15 与我方 z15 同级，LOD 在 offset-0 下天然一致**；组合 offset+1（基线 z16）+正确 LOD 后仍 218k 平台+circle +654。
+- **终审**：相机（§321 ✓）+层级（+1）+LOD（§323 语义 ✓）三件全栈后残差不变 → **引擎视锥/AABB 遍历的集合生成与 mgl frustum 不同构**（77 宽 vs 47 窄的来源）=最后深改点，超出本会话边际。全栈数据记档，LOD 代码保留（opt-in 关闭零扰动）。
+- **终态**：offset 0 复原（218882/5758/48992 ✓）、tsc 干净、探针全清。
