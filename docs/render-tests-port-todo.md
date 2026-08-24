@@ -3949,3 +3949,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **落地**：applyGlobeAtmosphere 的 R 换算 `(ws/2π−1)/(ws/2π)·R_e`（含 distToHorizon/normDist/theta 全链）。**扫描定标**：0.5→271 / **1.0→211（最优，mgl 字面值）** / 1.2→212 / 1.5→268——1.0 为原则值兼最优，保留。
 - **实测**：fog/globe 六例 = **211/211/232/258/372/928**（前 1245/1319/1487/251/361/977——high-color 族 6 倍降，space-color 微幅回摆 251→258 在扫描噪声内）。fog/space-color（mercator）78 PASS 恒定 ✓。回归：background-color 全绿（transition 4096 既有）✓。
 - **剩余**：star-intensity 928 为主（星点亮度标定）+ 环带 ~±5 的最后亚像素差。距 PASS 阈值（65-445 按各例）仍差 2-14 倍，后续为逐例微标定。
+
+**§286. fill-extrusion 光照换代——vendored mgl 已全面用 LIGHTING_3D 模型（apply_lighting），legacy 1−intensity/colorValue 公式废弃；alignment 族 44559-58342→28486-50004（2026-08-24 一百七十三，保留）**：
+
+- **代码对齐定案**：本仓 vendored mgl（3d-style/ + _prelude_lighting.glsl）的 fill_extrusion.fragment 对**所有**路径走 `apply_lighting(color, normal)`（NdotL⁺ + ambientFactor(vertical 0.92 + directional 0.3 折减) + linearProduct k^(1/2.2)）——legacy light 公式已不存在。patchExtrusionMaterial 的 legacy 注入整体替换为该模型，颜色取 `lighting3DState`（无 lights 样式时默认 ambient/directional 白 ×0.5 linear）。
+- **两轮调试**：① uMBViewToWorld uniform 漏设（legacy 块原有）→ 零矩阵致建筑再次消失；② 无 lights 时 fallback [1,1,1] 未乘 intensity 0.5 → 过亮 243/181。
+- **实测**：alignment 族 = 50004/46756/28486/34102（前 56961/58342/44559/46272，−25~−40%）。fill-extrusion-opacity/default **9 PASS** ✓；lighting-3d-mode/fill-extrusion/ignore-color-alpha 9 PASS ✓。垂直渐变族（vertical-gradient 46k-71k）待下批与历史基线比对（新模型无 legacy 渐变，理论上应更近此 mgl 的期望）。
+- **下轮**：垂直渐变/图案族基线比对 + 墙面仍偏亮的最后标定 + globe star 亮度。
